@@ -70,7 +70,6 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
   const shelvedLots = [
     { id: uuid(), partId: partByNo["RES-0603-10K"].id, dateCode: "2404", lotCode: "L240401", originCountry: "JP", shelfCode: "A-01-01", boxId: null as string | null, totalQty: 5000, allocatedQty: 0 },
     { id: uuid(), partId: partByNo["CAP-0805-100N"].id, dateCode: "2404", lotCode: "L240402", originCountry: "JP", shelfCode: "A-01-02", boxId: null, totalQty: 3000, allocatedQty: 0 },
-    { id: uuid(), partId: partByNo["IC-LM358DR"].id, dateCode: "2403", lotCode: "L240301", originCountry: "MY", shelfCode: "B-01-01", boxId: null, totalQty: 800, allocatedQty: 0 },
     { id: uuid(), partId: partByNo["CON-PH2.0-4P"].id, dateCode: "2403", lotCode: "L240302", originCountry: "TW", shelfCode: "B-02-01", boxId: null, totalQty: 2000, allocatedQty: 0 },
   ] as const;
   await db.insert(schema.inventoryLots).values(shelvedLots.map((lot) => ({ ...lot })));
@@ -192,7 +191,7 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
 
   const pickingItemRecords = [
     // TN-240701-001
-    { id: uuid(), pickingOrderId: pickingOrderByRef["TN-240701-001"].id, partId: partByNo["RES-0603-10K"].id, qty: 600, pickedQty: 0, allocatedQty: 0, requiredDateCode: ">=2405" as string | null, sourceShelfCode: null as string | null },
+    { id: uuid(), pickingOrderId: pickingOrderByRef["TN-240701-001"].id, partId: partByNo["RES-0603-10K"].id, qty: 600, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null as string | null },
     { id: uuid(), pickingOrderId: pickingOrderByRef["TN-240701-001"].id, partId: partByNo["CAP-0805-100N"].id, qty: 200, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
     // TN-240701-002
     { id: uuid(), pickingOrderId: pickingOrderByRef["TN-240701-002"].id, partId: partByNo["RES-0603-10K"].id, qty: 20000, pickedQty: 0, allocatedQty: 0, requiredDateCode: ">=2405", sourceShelfCode: null },
