@@ -1,8 +1,17 @@
 <template>
-  <div v-if="modelValue" class="modal-overlay" @click.self="close">
+  <div
+    v-if="modelValue"
+    class="modal-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="scan-modal-title"
+    tabindex="-1"
+    @click.self="close"
+    @keydown.esc="close"
+  >
     <div class="modal">
       <div class="modal__header">
-        <h3>Scan label</h3>
+        <h3 id="scan-modal-title">Scan label</h3>
         <button class="modal__close" aria-label="Close" @click="close">×</button>
       </div>
 
@@ -13,10 +22,12 @@
           <p v-else-if="presetsError" class="empty" style="color: var(--danger);">{{ presetsError }}</p>
           <div v-else-if="presets.length === 0" class="empty">No scan presets available.</div>
           <div v-else class="options">
-            <div
+            <button
               v-for="preset in presets"
               :key="preset.id"
+              type="button"
               class="option"
+              :disabled="matchResult.status === 'scanning' || matchResult.status === 'applying'"
               @click="onPresetClick(preset)"
             >
               <div class="letter">📷</div>
@@ -24,12 +35,12 @@
                 <h3>{{ preset.rawText }}</h3>
                 <p>{{ preset.parsed.partNo }} · qty {{ preset.parsed.qty }}</p>
               </div>
-            </div>
+            </button>
           </div>
         </template>
 
         <template v-else-if="matchResult.status === 'single'">
-          <div class="card" style="border-left: 4px solid #16a34a;">
+          <div class="card" style="border-left: 4px solid var(--success, #16a34a);">
             <p><strong>{{ matchResult.picking.pickingOrderRefNo }}</strong></p>
             <p class="subtitle">Match found — applying pick…</p>
           </div>
@@ -38,10 +49,12 @@
         <template v-else-if="matchResult.status === 'multiple'">
           <p class="subtitle">Multiple orders need this item. Choose one.</p>
           <div class="options">
-            <div
+            <button
               v-for="candidate in matchResult.picking"
               :key="candidate.pickingItemId"
+              type="button"
               class="option"
+              :disabled="matchResult.status === 'scanning' || matchResult.status === 'applying'"
               @click="onCandidateClick(candidate)"
             >
               <div class="letter">📦</div>
@@ -49,16 +62,24 @@
                 <h3>{{ candidate.pickingOrderRefNo }}</h3>
                 <p>Ship to: {{ candidate.shipTo || "—" }} · still needs {{ candidate.remainingQty }}</p>
               </div>
-            </div>
+            </button>
           </div>
         </template>
 
         <template v-else-if="matchResult.status === 'no_match'">
-          <div class="card" style="border-left: 4px solid #dc2626;">
+          <div class="card" style="border-left: 4px solid var(--danger);">
             <p><strong>No match</strong></p>
             <p class="subtitle">{{ matchResult.reason }}</p>
           </div>
-          <button class="btn" style="width: 100%; margin-top: 1rem;" @click="resetState">Try again</button>
+          <button
+            type="button"
+            class="btn"
+            style="width: 100%; margin-top: 1rem;"
+            :disabled="matchResult.status === 'scanning' || matchResult.status === 'applying'"
+            @click="resetState"
+          >
+            Try again
+          </button>
         </template>
 
         <template v-else-if="matchResult.status === 'applying'">
@@ -66,19 +87,34 @@
         </template>
 
         <template v-else-if="matchResult.status === 'success'">
-          <div class="card" style="border-left: 4px solid #16a34a;">
+          <div class="card" style="border-left: 4px solid var(--success, #16a34a);">
             <p><strong>Pick applied</strong></p>
             <p class="subtitle">{{ matchResult.qty }} pcs added to {{ matchResult.pickingOrderRefNo }}</p>
           </div>
-          <button class="btn" style="width: 100%; margin-top: 1rem;" @click="close">Done</button>
+          <button
+            type="button"
+            class="btn"
+            style="width: 100%; margin-top: 1rem;"
+            @click="close"
+          >
+            Done
+          </button>
         </template>
 
         <template v-else-if="matchResult.status === 'error'">
-          <div class="card" style="border-left: 4px solid #dc2626;">
+          <div class="card" style="border-left: 4px solid var(--danger);">
             <p><strong>Error</strong></p>
             <p class="subtitle">{{ matchResult.message }}</p>
           </div>
-          <button class="btn" style="width: 100%; margin-top: 1rem;" @click="resetState">Try again</button>
+          <button
+            type="button"
+            class="btn"
+            style="width: 100%; margin-top: 1rem;"
+            :disabled="matchResult.status === 'scanning' || matchResult.status === 'applying'"
+            @click="resetState"
+          >
+            Try again
+          </button>
         </template>
       </div>
     </div>
@@ -99,7 +135,7 @@ const emit = defineEmits<{
   (e: "applied"): void;
 }>();
 
-const db = await useDb();
+const db = useDb();
 const currentUser = await useCurrentUser();
 const { generatePresets, scan } = useMockOcr();
 const { matchResult, match, apply, reset } = useOcrPicking();
@@ -131,12 +167,16 @@ async function loadPresets() {
 }
 
 async function onPresetClick(preset: MockPreset) {
+  if (!currentUser) {
+    matchResult.value = { status: "error", message: "No operator user found" };
+    return;
+  }
   const parsed = scan(preset);
   await match(db, props.receivingOrderId, parsed);
 
   if (matchResult.value.status === "single") {
     const { receiving, picking } = matchResult.value;
-    await apply(db, receiving, picking, currentUser?.id ?? "");
+    await apply(db, receiving, picking, currentUser.id);
     if (matchResult.value.status === "success") {
       emit("applied");
     }
@@ -144,8 +184,12 @@ async function onPresetClick(preset: MockPreset) {
 }
 
 async function onCandidateClick(candidate: PickingCandidate) {
+  if (!currentUser) {
+    matchResult.value = { status: "error", message: "No operator user found" };
+    return;
+  }
   if (matchResult.value.status !== "multiple") return;
-  await apply(db, matchResult.value.receiving, candidate, currentUser?.id ?? "");
+  await apply(db, matchResult.value.receiving, candidate, currentUser.id);
   if (matchResult.value.status === "success") {
     emit("applied");
   }
@@ -205,6 +249,12 @@ function close() {
   color: var(--muted);
 }
 
+.modal__close:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: var(--radius);
+}
+
 .modal__body {
   padding: 1rem;
 }
@@ -231,15 +281,28 @@ function close() {
   display: flex;
   gap: 0.75rem;
   align-items: center;
+  width: 100%;
+  text-align: left;
   padding: 0.75rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
   cursor: pointer;
+  font: inherit;
 }
 
-.option:hover {
+.option:hover:not(:disabled) {
   border-color: var(--primary);
+}
+
+.option:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.option:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .option .letter {
@@ -255,5 +318,11 @@ function close() {
   margin: 0.25rem 0 0;
   font-size: 0.8125rem;
   color: var(--muted);
+}
+
+/* Neutralize global .card hover transform inside this modal */
+.modal__body .card:hover {
+  transform: none;
+  box-shadow: var(--shadow);
 }
 </style>
