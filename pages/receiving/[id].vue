@@ -40,7 +40,7 @@
 
       </div>
 
-      <div v-if="order.status === 'in_hand' && remainingQty > 0" style="position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 60;">
+      <div v-if="order.status === 'in_hand' && remainingQty > 0 && view === 'picking'" style="position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 60;">
         <button
           class="btn"
           style="border-radius: 9999px; width: 3.5rem; height: 3.5rem; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow);"

@@ -44,32 +44,35 @@ export async function findReceivingCandidates(
 
   return db
     .execute(sql`
-      SELECT
-        rii.id AS receiving_invoice_item_id,
-        p.id AS part_id,
-        p.part_no,
-        rii.date_code,
-        rii.lot_code,
-        rii.origin_country,
-        (rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(alloc.allocated_qty, 0)) AS available_qty
-      FROM receiving_orders ro
-      JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
-      JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
-      JOIN parts p ON p.id = rii.part_id
-      LEFT JOIN (
-        SELECT receiving_invoice_item_id, SUM(qty) AS allocated_qty
-        FROM allocations
-        WHERE receiving_invoice_item_id IS NOT NULL
-        GROUP BY receiving_invoice_item_id
-      ) alloc ON alloc.receiving_invoice_item_id = rii.id
-      WHERE ro.id = ${receivingOrderId}
-        AND ro.status = 'in_hand'
-        AND p.part_no = ${parsed.partNo}
-        AND (rii.date_code IS NOT DISTINCT FROM ${parsed.dateCode})
-        AND (rii.lot_code IS NOT DISTINCT FROM ${parsed.lotCode})
-        AND (rii.origin_country IS NOT DISTINCT FROM ${parsed.originCountry})
-        AND rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(alloc.allocated_qty, 0) >= ${qty}
-      ORDER BY rii.date_code, rii.lot_code
+      WITH normalized AS (
+        SELECT
+          rii.id AS receiving_invoice_item_id,
+          p.id AS part_id,
+          p.part_no,
+          UPPER(TRIM(rii.date_code)) AS date_code,
+          REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(UPPER(TRIM(rii.lot_code)), 'O', '0'), 'I', '1'), 'L', '1'), 'Z', '2'), 'S', '5') AS lot_code,
+          UPPER(TRIM(rii.origin_country)) AS origin_country,
+          (rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(alloc.allocated_qty, 0)) AS available_qty
+        FROM receiving_orders ro
+        JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
+        JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
+        JOIN parts p ON p.id = rii.part_id
+        LEFT JOIN (
+          SELECT receiving_invoice_item_id, SUM(qty) AS allocated_qty
+          FROM allocations
+          WHERE receiving_invoice_item_id IS NOT NULL
+          GROUP BY receiving_invoice_item_id
+        ) alloc ON alloc.receiving_invoice_item_id = rii.id
+        WHERE ro.id = ${receivingOrderId}
+          AND ro.status = 'in_hand'
+          AND rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(alloc.allocated_qty, 0) >= ${qty}
+      )
+      SELECT * FROM normalized
+      WHERE UPPER(TRIM(part_no)) = ${parsed.partNo}
+        AND (date_code IS NOT DISTINCT FROM ${parsed.dateCode})
+        AND (lot_code IS NOT DISTINCT FROM ${parsed.lotCode})
+        AND (origin_country IS NOT DISTINCT FROM ${parsed.originCountry})
+      ORDER BY date_code, lot_code
     `)
     .then((r) =>
       (r.rows ?? []).map((row) => ({
@@ -103,7 +106,7 @@ export async function findPickingCandidates(
         po.ship_to,
         pi.qty AS required_qty,
         pi.picked_qty,
-        (pi.qty - pi.picked_qty - pi.allocated_qty) AS remaining_qty
+        (pi.qty - pi.picked_qty) AS remaining_qty
       FROM picking_orders po
       JOIN picking_items pi ON pi.picking_order_id = po.id
       WHERE po.id IN (
@@ -118,7 +121,7 @@ export async function findPickingCandidates(
       )
         AND pi.part_id = ${partId}
         AND po.status != 'finished'
-        AND (pi.qty - pi.picked_qty - pi.allocated_qty) >= ${qty}
+        AND (pi.qty - pi.picked_qty) > 0
       ORDER BY po.ref_no
     `)
     .then((r) =>
@@ -171,7 +174,7 @@ export async function applyOcrPick(
     if (pickingItem.partId !== receivingItem.partId) {
       throw new Error("Receiving item and picking item do not match the same part");
     }
-    const remaining = pickingItem.qty - pickingItem.pickedQty - pickingItem.allocatedQty;
+    const remaining = pickingItem.qty - pickingItem.pickedQty;
     if (qty > remaining) throw new Error("Quantity exceeds picking order need");
 
     const [allocation] = await tx

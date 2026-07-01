@@ -3,6 +3,9 @@ export default defineNuxtConfig({
   ssr: false,
   devtools: { enabled: true },
   compatibilityDate: "2024-06-30",
+  experimental: {
+    appManifest: false,
+  },
   app: {
     head: {
       title: "Warehouse Web Demo",

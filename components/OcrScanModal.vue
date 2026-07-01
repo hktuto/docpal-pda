@@ -1,144 +1,109 @@
 <template>
-  <Teleport to="body">
-    <div
-      v-if="modelValue"
-      class="modal-overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="scan-modal-title"
-      @click.self="close"
-    >
-      <div
-        ref="modalRef"
-        class="modal"
-        tabindex="-1"
-      >
-        <div class="modal__header">
-          <h3 id="scan-modal-title">Scan label</h3>
-          <button type="button" class="modal__close" aria-label="Close" @click="close">×</button>
-        </div>
+  <div v-if="modelValue" class="modal-overlay" @click.self="close">
+    <div class="modal">
+      <div class="modal__header">
+        <h3>Scan label</h3>
+        <button class="modal__close" aria-label="Close" @click="close">×</button>
+      </div>
 
-        <div class="modal__body">
-          <div v-if="localError">
-            <div class="card card--danger">
-              <p><strong>Error</strong></p>
-              <p class="subtitle">{{ localError }}</p>
-            </div>
-            <button
-              type="button"
-              class="btn btn--full"
-              @click="resetState"
-            >
-              Try again
-            </button>
+      <div class="modal__body">
+        <template v-if="matchResult.status === 'idle' || matchResult.status === 'scanning'">
+          <p class="subtitle">Enter label details to simulate an OCR scan.</p>
+
+          <div class="form">
+            <label class="field">
+              <span>Part No. <span class="required">*</span></span>
+              <input v-model="form.partNo" type="text" placeholder="e.g. IC-LM358DR" />
+            </label>
+            <label class="field">
+              <span>Date Code</span>
+              <input v-model="form.dateCode" type="text" placeholder="e.g. 2406" />
+            </label>
+            <label class="field">
+              <span>Lot Code</span>
+              <input v-model="form.lotCode" type="text" placeholder="e.g. L240603" />
+            </label>
+            <label class="field">
+              <span>Origin Country</span>
+              <input v-model="form.originCountry" type="text" placeholder="e.g. MY" />
+            </label>
+            <label class="field">
+              <span>Qty <span class="required">*</span></span>
+              <input v-model.number="form.qty" type="number" min="1" placeholder="e.g. 400" />
+            </label>
           </div>
 
-          <template v-else-if="matchResult.status === 'idle' || matchResult.status === 'scanning'">
-            <p class="subtitle">Tap a predefined label to simulate OCR capture.</p>
-            <p v-if="presetsLoading" class="empty">Loading presets…</p>
-            <p v-else-if="presetsError" class="empty" style="color: var(--danger);">{{ presetsError }}</p>
-            <div v-else-if="presets.length === 0" class="empty">No scan presets available.</div>
-            <div v-else class="options">
-              <button
-                v-for="preset in presets"
-                :key="preset.id"
-                type="button"
-                class="option"
-                :disabled="matchResult.status === 'scanning' || matchResult.status === 'applying'"
-                @click="onPresetClick(preset)"
-              >
-                <div class="letter">📷</div>
-                <div class="content">
-                  <h3>{{ preset.rawText }}</h3>
-                  <p>{{ preset.parsed.partNo }} · qty {{ preset.parsed.qty }}</p>
-                </div>
-              </button>
-            </div>
-          </template>
+          <p v-if="parseError" class="error">{{ parseError }}</p>
 
-          <template v-else-if="matchResult.status === 'single'">
-            <div class="card card--success">
-              <p><strong>{{ matchResult.picking.pickingOrderRefNo }}</strong></p>
-              <p class="subtitle">Match found — applying pick…</p>
-            </div>
-          </template>
+          <button
+            class="btn"
+            style="width: 100%; margin-top: 1rem;"
+            :disabled="scanning"
+            @click="onScanClick"
+          >
+            {{ scanning ? "Scanning…" : "Scan" }}
+          </button>
+        </template>
 
-          <template v-else-if="matchResult.status === 'multiple'">
-            <p class="subtitle">Multiple orders need this item. Choose one.</p>
-            <div class="options">
-              <button
-                v-for="candidate in matchResult.picking"
-                :key="candidate.pickingItemId"
-                type="button"
-                class="option"
-                :disabled="matchResult.status === 'scanning' || matchResult.status === 'applying'"
-                @click="onCandidateClick(candidate)"
-              >
-                <div class="letter">📦</div>
-                <div class="content">
-                  <h3>{{ candidate.pickingOrderRefNo }}</h3>
-                  <p>Ship to: {{ candidate.shipTo || "—" }} · still needs {{ candidate.remainingQty }}</p>
-                </div>
-              </button>
-            </div>
-          </template>
+        <template v-else-if="matchResult.status === 'single'">
+          <div class="card" style="border-left: 4px solid #16a34a;">
+            <p><strong>{{ matchResult.picking.pickingOrderRefNo }}</strong></p>
+            <p class="subtitle">Match found — applying pick…</p>
+          </div>
+        </template>
 
-          <template v-else-if="matchResult.status === 'no_match'">
-            <div class="card card--danger">
-              <p><strong>No match</strong></p>
-              <p class="subtitle">{{ matchResult.reason }}</p>
-            </div>
-            <button
-              type="button"
-              class="btn btn--full"
-              :disabled="matchResult.status === 'scanning' || matchResult.status === 'applying'"
-              @click="resetState"
+        <template v-else-if="matchResult.status === 'multiple'">
+          <p class="subtitle">Multiple orders need this item. Choose one.</p>
+          <div class="options">
+            <div
+              v-for="candidate in matchResult.picking"
+              :key="candidate.pickingItemId"
+              class="option"
+              @click="onCandidateClick(candidate)"
             >
-              Try again
-            </button>
-          </template>
-
-          <template v-else-if="matchResult.status === 'applying'">
-            <p class="empty">Applying pick…</p>
-          </template>
-
-          <template v-else-if="matchResult.status === 'success'">
-            <div class="card card--success">
-              <p><strong>Pick applied</strong></p>
-              <p class="subtitle">{{ matchResult.qty }} pcs added to {{ matchResult.pickingOrderRefNo }}</p>
+              <div class="letter">📦</div>
+              <div class="content">
+                <h3>{{ candidate.pickingOrderRefNo }}</h3>
+                <p>Ship to: {{ candidate.shipTo || "—" }} · still needs {{ candidate.remainingQty }}</p>
+              </div>
             </div>
-            <button
-              type="button"
-              class="btn btn--full"
-              @click="close"
-            >
-              Done
-            </button>
-          </template>
+          </div>
+        </template>
 
-          <template v-else-if="matchResult.status === 'error'">
-            <div class="card card--danger">
-              <p><strong>Error</strong></p>
-              <p class="subtitle">{{ matchResult.message }}</p>
-            </div>
-            <button
-              type="button"
-              class="btn btn--full"
-              :disabled="matchResult.status === 'scanning' || matchResult.status === 'applying'"
-              @click="resetState"
-            >
-              Try again
-            </button>
-          </template>
-        </div>
+        <template v-else-if="matchResult.status === 'no_match'">
+          <div class="card" style="border-left: 4px solid #dc2626;">
+            <p><strong>No match</strong></p>
+            <p class="subtitle">{{ matchResult.reason }}</p>
+          </div>
+          <button class="btn" style="width: 100%; margin-top: 1rem;" @click="resetState">Try again</button>
+        </template>
+
+        <template v-else-if="matchResult.status === 'applying'">
+          <p class="empty">Applying pick…</p>
+        </template>
+
+        <template v-else-if="matchResult.status === 'success'">
+          <div class="card" style="border-left: 4px solid #16a34a;">
+            <p><strong>Pick applied</strong></p>
+            <p class="subtitle">{{ matchResult.qty }} pcs added to {{ matchResult.pickingOrderRefNo }}</p>
+          </div>
+          <button class="btn" style="width: 100%; margin-top: 1rem;" @click="close">Done</button>
+        </template>
+
+        <template v-else-if="matchResult.status === 'error'">
+          <div class="card" style="border-left: 4px solid #dc2626;">
+            <p><strong>Error</strong></p>
+            <p class="subtitle">{{ matchResult.message }}</p>
+          </div>
+          <button class="btn" style="width: 100%; margin-top: 1rem;" @click="resetState">Try again</button>
+        </template>
       </div>
     </div>
-  </Teleport>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, nextTick } from "vue";
-import type { MockPreset } from "~/composables/useMockOcr";
+import type { OcrInput } from "~/composables/useMockOcr";
 import type { PickingCandidate } from "~/db/ocrPicking";
 
 const props = defineProps<{
@@ -151,54 +116,58 @@ const emit = defineEmits<{
   (e: "applied"): void;
 }>();
 
-const db = useDb();
-const currentUserPromise = useCurrentUser();
-const { generatePresets, scan } = useMockOcr();
+const db = await useDb();
+const currentUser = await useCurrentUser();
+const { parseManual } = useMockOcr();
 const { matchResult, match, apply, reset } = useOcrPicking();
 
-const presets = ref<MockPreset[]>([]);
-const presetsLoading = ref(false);
-const presetsError = ref<string | null>(null);
-const localError = ref<string | null>(null);
-const modalRef = ref<HTMLElement | null>(null);
+const defaultForm: OcrInput = {
+  partNo: "",
+  dateCode: "",
+  lotCode: "",
+  originCountry: "",
+  qty: "",
+};
+
+const form = ref<OcrInput>({ ...defaultForm });
+const parseError = ref<string | null>(null);
+const scanning = ref(false);
 
 watch(
   () => props.modelValue,
-  async (open) => {
+  (open) => {
     if (open) {
-      localError.value = null;
-      reset();
-      loadPresets();
-      await nextTick();
-      modalRef.value?.focus();
+      resetState();
     }
   }
 );
 
-async function loadPresets() {
-  presetsLoading.value = true;
-  presetsError.value = null;
-  try {
-    presets.value = await generatePresets(db, props.receivingOrderId);
-  } catch (e: any) {
-    presetsError.value = e?.message ?? "Failed to load presets";
-  } finally {
-    presetsLoading.value = false;
-  }
+function resetState() {
+  reset();
+  form.value = { ...defaultForm };
+  parseError.value = null;
+  scanning.value = false;
 }
 
-async function onPresetClick(preset: MockPreset) {
-  const user = await currentUserPromise;
-  if (!user) {
-    localError.value = "No operator user found";
+async function onScanClick() {
+  parseError.value = null;
+  scanning.value = true;
+
+  let parsed;
+  try {
+    parsed = parseManual(form.value);
+  } catch (e: any) {
+    parseError.value = e?.message ?? "Invalid input";
+    scanning.value = false;
     return;
   }
-  const parsed = scan(preset);
+
   await match(db, props.receivingOrderId, parsed);
+  scanning.value = false;
 
   if (matchResult.value.status === "single") {
     const { receiving, picking } = matchResult.value;
-    await apply(db, receiving, picking, user.id);
+    await apply(db, receiving, picking, currentUser?.id ?? "");
     if (matchResult.value.status === "success") {
       emit("applied");
     }
@@ -206,38 +175,16 @@ async function onPresetClick(preset: MockPreset) {
 }
 
 async function onCandidateClick(candidate: PickingCandidate) {
-  const user = await currentUserPromise;
-  if (!user) {
-    localError.value = "No operator user found";
-    return;
-  }
   if (matchResult.value.status !== "multiple") return;
-  await apply(db, matchResult.value.receiving, candidate, user.id);
+  await apply(db, matchResult.value.receiving, candidate, currentUser?.id ?? "");
   if (matchResult.value.status === "success") {
     emit("applied");
   }
 }
 
-function resetState() {
-  localError.value = null;
-  reset();
-  loadPresets();
-}
-
 function close() {
-  localError.value = null;
   emit("update:modelValue", false);
 }
-
-function onKeydown(event: KeyboardEvent) {
-  if (!props.modelValue) return;
-  if (event.key === "Escape") {
-    close();
-  }
-}
-
-onMounted(() => window.addEventListener("keydown", onKeydown));
-onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 </script>
 
 <style scoped>
@@ -263,10 +210,6 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
   overflow-y: auto;
 }
 
-.modal:focus {
-  outline: none;
-}
-
 .modal__header {
   display: flex;
   justify-content: space-between;
@@ -288,12 +231,6 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
   color: var(--muted);
 }
 
-.modal__close:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-  border-radius: var(--radius);
-}
-
 .modal__body {
   padding: 1rem;
 }
@@ -310,6 +247,42 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
   padding: 1rem 0;
 }
 
+.error {
+  color: var(--danger);
+  font-size: 0.875rem;
+  margin: 0.75rem 0 0;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.field span {
+  color: var(--muted);
+}
+
+.field input {
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.9375rem;
+}
+
+.required {
+  color: var(--danger);
+}
+
 .options {
   display: flex;
   flex-direction: column;
@@ -320,28 +293,15 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
   display: flex;
   gap: 0.75rem;
   align-items: center;
-  width: 100%;
-  text-align: left;
   padding: 0.75rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
   cursor: pointer;
-  font: inherit;
 }
 
-.option:hover:not(:disabled) {
+.option:hover {
   border-color: var(--primary);
-}
-
-.option:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.option:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
 }
 
 .option .letter {
@@ -357,24 +317,5 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
   margin: 0.25rem 0 0;
   font-size: 0.8125rem;
   color: var(--muted);
-}
-
-.card--success {
-  border-left: 4px solid var(--success, #16a34a);
-}
-
-.card--danger {
-  border-left: 4px solid var(--danger);
-}
-
-.btn--full {
-  width: 100%;
-  margin-top: 1rem;
-}
-
-/* Neutralize global .card hover transform inside this modal */
-.modal__body .card:hover {
-  transform: none;
-  box-shadow: var(--shadow);
 }
 </style>
