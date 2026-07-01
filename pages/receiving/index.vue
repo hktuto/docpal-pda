@@ -43,6 +43,13 @@
           <span v-if="ro.remaining_qty > 0" class="badge" style="margin-top: 0.25rem; background: #dcfce7; color: #166534;">
             {{ ro.remaining_qty }} remaining
           </span>
+          <span
+            v-if="ro.pending_picking_orders > 0"
+            class="badge"
+            style="margin-top: 0.25rem; background: #dbeafe; color: #1e40af;"
+          >
+            {{ ro.pending_picking_orders }} picking order{{ ro.pending_picking_orders === 1 ? '' : 's' }}
+          </span>
         </div>
       </div>
     </NuxtLink>
@@ -63,6 +70,7 @@ interface ReceivingOrderRow {
   delivery_date: string | null;
   supplier_name: string | null;
   remaining_qty: number;
+  pending_picking_orders: number;
 }
 
 const filters: { label: string; value: Filter }[] = [
@@ -92,7 +100,41 @@ const query = computed(() => {
              COALESCE(alloc.allocated_qty, 0)
         ELSE 0
       END
-    ), 0) AS remaining_qty
+    ), 0) AS remaining_qty,
+    COALESCE((
+      SELECT COUNT(DISTINCT po_id)
+      FROM (
+        SELECT po.id AS po_id
+        FROM allocations a
+        JOIN picking_items pi ON pi.id = a.picking_item_id
+        JOIN picking_orders po ON po.id = pi.picking_order_id
+        WHERE a.receiving_invoice_item_id IN (
+          SELECT rii2.id
+          FROM receiving_invoices ri2
+          JOIN receiving_invoice_items rii2 ON rii2.receiving_invoice_id = ri2.id
+          WHERE ri2.receiving_order_id = ro.id
+        )
+        AND a.qty > 0
+        AND po.status IN ('pending', 'picking')
+
+        UNION ALL
+
+        SELECT po.id AS po_id
+        FROM allocations a
+        JOIN picking_items pi ON pi.id = a.picking_item_id
+        JOIN picking_orders po ON po.id = pi.picking_order_id
+        JOIN inventory_lots il ON il.id = a.inventory_lot_id
+        JOIN inventory_lot_sources ils ON ils.inventory_lot_id = il.id
+        WHERE ils.receiving_invoice_item_id IN (
+          SELECT rii2.id
+          FROM receiving_invoices ri2
+          JOIN receiving_invoice_items rii2 ON rii2.receiving_invoice_id = ri2.id
+          WHERE ri2.receiving_order_id = ro.id
+        )
+        AND a.qty > 0
+        AND po.status IN ('pending', 'picking')
+      ) pending_po_ids
+    ), 0) AS pending_picking_orders
   FROM receiving_orders ro
   LEFT JOIN suppliers s ON s.id = ro.supplier_id
   LEFT JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
