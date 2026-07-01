@@ -49,7 +49,7 @@ export async function findReceivingCandidates(
           rii.id AS receiving_invoice_item_id,
           p.id AS part_id,
           p.part_no,
-          UPPER(TRIM(rii.date_code)) AS date_code,
+          REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(UPPER(TRIM(rii.date_code)), 'O', '0'), 'I', '1'), 'L', '1'), 'Z', '2'), 'S', '5') AS date_code,
           REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(UPPER(TRIM(rii.lot_code)), 'O', '0'), 'I', '1'), 'L', '1'), 'Z', '2'), 'S', '5') AS lot_code,
           UPPER(TRIM(rii.origin_country)) AS origin_country,
           (rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(alloc.allocated_qty, 0)) AS available_qty
@@ -69,9 +69,9 @@ export async function findReceivingCandidates(
       )
       SELECT * FROM normalized
       WHERE UPPER(TRIM(part_no)) = ${parsed.partNo}
-        AND (date_code IS NOT DISTINCT FROM ${parsed.dateCode})
-        AND (lot_code IS NOT DISTINCT FROM ${parsed.lotCode})
-        AND (origin_country IS NOT DISTINCT FROM ${parsed.originCountry})
+        AND (date_code IS NOT DISTINCT FROM COALESCE(${parsed.dateCode}, date_code))
+        AND (lot_code IS NOT DISTINCT FROM COALESCE(${parsed.lotCode}, lot_code))
+        AND (origin_country IS NOT DISTINCT FROM COALESCE(${parsed.originCountry}, origin_country))
       ORDER BY date_code, lot_code
     `)
     .then((r) =>
@@ -146,10 +146,11 @@ export async function applyOcrPick(
   lotCode: string | null,
   originCountry: string | null,
   actorId: string
-): Promise<{ allocationId: string; materializedAllocationId: string }> {
+): Promise<void> {
   if (!Number.isInteger(qty) || qty <= 0) {
     throw new Error("Qty must be a positive integer");
   }
+  if (!actorId) throw new Error("Actor is required");
 
   return db.transaction(async (tx) => {
     const [receivingItem] = await tx
@@ -177,33 +178,61 @@ export async function applyOcrPick(
     const remaining = pickingItem.qty - pickingItem.pickedQty;
     if (qty > remaining) throw new Error("Quantity exceeds picking order need");
 
-    const [allocation] = await tx
-      .insert(schema.allocations)
-      .values({
-        id: uuid(),
-        pickingItemId,
-        receivingInvoiceItemId,
-        qty,
-      })
-      .returning();
+    // Prefer already-allocated links so the scan acts as a pick confirmation
+    // rather than creating extra allocations.
+    const existingAllocations = await tx
+      .select()
+      .from(schema.allocations)
+      .where(
+        sql`${schema.allocations.receivingInvoiceItemId} = ${receivingInvoiceItemId}
+          AND ${schema.allocations.pickingItemId} = ${pickingItemId}`
+      )
+      .orderBy(schema.allocations.id);
 
-    await tx
-      .update(schema.pickingItems)
-      .set({ allocatedQty: sql`${schema.pickingItems.allocatedQty} + ${qty}` })
-      .where(eq(schema.pickingItems.id, pickingItemId));
+    let left = qty;
+    for (const allocation of existingAllocations) {
+      if (left <= 0) break;
+      const use = Math.min(left, allocation.qty);
+      const materializedAllocationId = await materializeReceivingAllocation(
+        db,
+        allocation.id,
+        use,
+        dateCode,
+        lotCode,
+        originCountry,
+        tx
+      );
+      await confirmAllocationPicked(db, materializedAllocationId, use, actorId, tx);
+      left -= use;
+    }
 
-    const materializedAllocationId = await materializeReceivingAllocation(
-      db,
-      allocation.id,
-      qty,
-      dateCode,
-      lotCode,
-      originCountry,
-      tx
-    );
+    if (left > 0) {
+      const [newAllocation] = await tx
+        .insert(schema.allocations)
+        .values({
+          id: uuid(),
+          pickingItemId,
+          receivingInvoiceItemId,
+          qty: left,
+        })
+        .returning();
 
-    await confirmAllocationPicked(db, materializedAllocationId, qty, actorId, tx);
+      await tx
+        .update(schema.pickingItems)
+        .set({ allocatedQty: sql`${schema.pickingItems.allocatedQty} + ${left}` })
+        .where(eq(schema.pickingItems.id, pickingItemId));
 
-    return { allocationId: allocation.id, materializedAllocationId };
+      const materializedAllocationId = await materializeReceivingAllocation(
+        db,
+        newAllocation.id,
+        left,
+        dateCode,
+        lotCode,
+        originCountry,
+        tx
+      );
+
+      await confirmAllocationPicked(db, materializedAllocationId, left, actorId, tx);
+    }
   });
 }

@@ -1,19 +1,27 @@
 <template>
-  <div v-if="modelValue" class="modal-overlay" @click.self="close">
+  <div
+    v-if="modelValue"
+    class="modal-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="scan-title"
+    @click.self="!isBusy && close()"
+    @keydown.esc="!isBusy && close()"
+  >
     <div class="modal">
       <div class="modal__header">
-        <h3>Scan label</h3>
-        <button class="modal__close" aria-label="Close" @click="close">×</button>
+        <h3 id="scan-title">Scan label</h3>
+        <button class="modal__close" aria-label="Close" :disabled="isBusy" @click="close">×</button>
       </div>
 
       <div class="modal__body">
         <template v-if="matchResult.status === 'idle' || matchResult.status === 'scanning'">
           <p class="subtitle">Enter label details to simulate an OCR scan.</p>
 
-          <div class="form">
+          <form class="form" @submit.prevent="onScanClick">
             <label class="field">
               <span>Part No. <span class="required">*</span></span>
-              <input v-model="form.partNo" type="text" placeholder="e.g. IC-LM358DR" />
+              <input ref="firstInput" v-model="form.partNo" type="text" placeholder="e.g. IC-LM358DR" />
             </label>
             <label class="field">
               <span>Date Code</span>
@@ -31,18 +39,18 @@
               <span>Qty <span class="required">*</span></span>
               <input v-model.number="form.qty" type="number" min="1" placeholder="e.g. 400" />
             </label>
-          </div>
 
-          <p v-if="parseError" class="error">{{ parseError }}</p>
+            <p v-if="parseError" class="error">{{ parseError }}</p>
 
-          <button
-            class="btn"
-            style="width: 100%; margin-top: 1rem;"
-            :disabled="scanning"
-            @click="onScanClick"
-          >
-            {{ scanning ? "Scanning…" : "Scan" }}
-          </button>
+            <button
+              type="submit"
+              class="btn"
+              style="width: 100%; margin-top: 1rem;"
+              :disabled="scanning"
+            >
+              {{ scanning ? "Scanning…" : "Scan" }}
+            </button>
+          </form>
         </template>
 
         <template v-else-if="matchResult.status === 'single'">
@@ -132,12 +140,18 @@ const defaultForm: OcrInput = {
 const form = ref<OcrInput>({ ...defaultForm });
 const parseError = ref<string | null>(null);
 const scanning = ref(false);
+const isBusy = computed(() => {
+  const status = matchResult.value.status;
+  return status === "scanning" || status === "applying";
+});
+const firstInput = ref<HTMLInputElement | null>(null);
 
 watch(
   () => props.modelValue,
   (open) => {
     if (open) {
       resetState();
+      nextTick(() => firstInput.value?.focus());
     }
   }
 );
@@ -149,8 +163,20 @@ function resetState() {
   scanning.value = false;
 }
 
+function ensureActor(): string | null {
+  if (!currentUser?.id) {
+    parseError.value = "Operator not signed in";
+    return null;
+  }
+  return currentUser.id;
+}
+
 async function onScanClick() {
   parseError.value = null;
+
+  const actorId = ensureActor();
+  if (!actorId) return;
+
   scanning.value = true;
 
   let parsed;
@@ -167,7 +193,7 @@ async function onScanClick() {
 
   if (matchResult.value.status === "single") {
     const { receiving, picking } = matchResult.value;
-    await apply(db, receiving, picking, currentUser?.id ?? "");
+    await apply(db, receiving, picking, actorId);
     if (matchResult.value.status === "success") {
       emit("applied");
     }
@@ -176,7 +202,9 @@ async function onScanClick() {
 
 async function onCandidateClick(candidate: PickingCandidate) {
   if (matchResult.value.status !== "multiple") return;
-  await apply(db, matchResult.value.receiving, candidate, currentUser?.id ?? "");
+  const actorId = ensureActor();
+  if (!actorId) return;
+  await apply(db, matchResult.value.receiving, candidate, actorId);
   if (matchResult.value.status === "success") {
     emit("applied");
   }
