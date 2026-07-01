@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { v4 as uuid } from "uuid";
 import * as schema from "./schema";
@@ -37,6 +37,11 @@ export async function findReceivingCandidates(
   receivingOrderId: string,
   parsed: OcrParseResult
 ): Promise<ReceivingCandidate[]> {
+  const qty = parsed.qty;
+  if (!Number.isInteger(qty) || qty <= 0) {
+    throw new Error("Qty must be a positive integer");
+  }
+
   return db
     .execute(sql`
       SELECT
@@ -63,8 +68,7 @@ export async function findReceivingCandidates(
         AND (rii.date_code IS NOT DISTINCT FROM ${parsed.dateCode})
         AND (rii.lot_code IS NOT DISTINCT FROM ${parsed.lotCode})
         AND (rii.origin_country IS NOT DISTINCT FROM ${parsed.originCountry})
-        AND rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(alloc.allocated_qty, 0) > 0
-        AND rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(alloc.allocated_qty, 0) >= ${parsed.qty}
+        AND rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(alloc.allocated_qty, 0) >= ${qty}
       ORDER BY rii.date_code, rii.lot_code
     `)
     .then((r) =>
@@ -76,7 +80,7 @@ export async function findReceivingCandidates(
         lotCode: row.lot_code != null ? String(row.lot_code) : null,
         originCountry: row.origin_country != null ? String(row.origin_country) : null,
         availableQty: Number(row.available_qty),
-      })) as ReceivingCandidate[]
+      }))
     );
 }
 
@@ -86,6 +90,10 @@ export async function findPickingCandidates(
   partId: string,
   qty: number
 ): Promise<PickingCandidate[]> {
+  if (!Number.isInteger(qty) || qty <= 0) {
+    throw new Error("Qty must be a positive integer");
+  }
+
   return db
     .execute(sql`
       SELECT DISTINCT
@@ -122,7 +130,7 @@ export async function findPickingCandidates(
         requiredQty: Number(row.required_qty),
         pickedQty: Number(row.picked_qty),
         remainingQty: Number(row.remaining_qty),
-      })) as PickingCandidate[]
+      }))
     );
 }
 
@@ -149,6 +157,10 @@ export async function applyOcrPick(
       qty,
     })
     .returning();
+
+  await db.update(schema.pickingItems)
+    .set({ allocatedQty: sql`${schema.pickingItems.allocatedQty} + ${qty}` })
+    .where(eq(schema.pickingItems.id, pickingItemId));
 
   const materializedAllocationId = await materializeReceivingAllocation(
     db,
