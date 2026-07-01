@@ -207,6 +207,17 @@ export async function applyOcrPick(
     }
 
     if (left > 0) {
+      // Re-check unallocated demand after any existing allocations were confirmed.
+      const [currentPickingItem] = await tx
+        .select()
+        .from(schema.pickingItems)
+        .where(eq(schema.pickingItems.id, pickingItemId));
+      if (!currentPickingItem) throw new Error("Picking item not found");
+      const unallocatedDemand = currentPickingItem.qty - currentPickingItem.pickedQty - currentPickingItem.allocatedQty;
+      if (left > unallocatedDemand) {
+        throw new Error("Quantity exceeds unallocated picking order need");
+      }
+
       const [newAllocation] = await tx
         .insert(schema.allocations)
         .values({
