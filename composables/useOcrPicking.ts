@@ -31,62 +31,76 @@ export function useOcrPicking() {
     receivingOrderId: string,
     parsed: OcrParseResult
   ) {
+    if (
+      matchResult.value.status === "scanning" ||
+      matchResult.value.status === "applying"
+    ) {
+      return;
+    }
+
     scannedQty.value = parsed.qty;
     matchResult.value = { status: "scanning" };
 
-    const receivingCandidates = await findReceivingCandidates(
-      db,
-      receivingOrderId,
-      parsed
-    );
+    try {
+      const receivingCandidates = await findReceivingCandidates(
+        db,
+        receivingOrderId,
+        parsed
+      );
 
-    if (receivingCandidates.length === 0) {
+      if (receivingCandidates.length === 0) {
+        matchResult.value = {
+          status: "no_match",
+          reason: "No matching stock in receiving area.",
+        };
+        return;
+      }
+
+      const receiving = receivingCandidates[0];
+
+      if (parsed.qty > receiving.availableQty) {
+        matchResult.value = {
+          status: "no_match",
+          reason: "Quantity exceeds available stock.",
+        };
+        return;
+      }
+
+      const pickingCandidates = await findPickingCandidates(
+        db,
+        receivingOrderId,
+        receiving.partId,
+        parsed.qty
+      );
+
+      if (pickingCandidates.length === 0) {
+        matchResult.value = {
+          status: "no_match",
+          reason: "No linked picking order needs this item.",
+        };
+        return;
+      }
+
+      if (pickingCandidates.length === 1) {
+        matchResult.value = {
+          status: "single",
+          receiving,
+          picking: pickingCandidates[0],
+        };
+        return;
+      }
+
       matchResult.value = {
-        status: "no_match",
-        reason: "No matching stock in receiving area.",
-      };
-      return;
-    }
-
-    const receiving = receivingCandidates[0];
-
-    if (parsed.qty > receiving.availableQty) {
-      matchResult.value = {
-        status: "no_match",
-        reason: "Quantity exceeds available stock.",
-      };
-      return;
-    }
-
-    const pickingCandidates = await findPickingCandidates(
-      db,
-      receivingOrderId,
-      receiving.partId,
-      parsed.qty
-    );
-
-    if (pickingCandidates.length === 0) {
-      matchResult.value = {
-        status: "no_match",
-        reason: "No linked picking order needs this item.",
-      };
-      return;
-    }
-
-    if (pickingCandidates.length === 1) {
-      matchResult.value = {
-        status: "single",
+        status: "multiple",
         receiving,
-        picking: pickingCandidates[0],
+        picking: pickingCandidates,
       };
-      return;
+    } catch (e: any) {
+      matchResult.value = {
+        status: "error",
+        message: e?.message ?? "Failed to match label",
+      };
     }
-
-    matchResult.value = {
-      status: "multiple",
-      receiving,
-      picking: pickingCandidates,
-    };
   }
 
   async function apply(
@@ -95,11 +109,21 @@ export function useOcrPicking() {
     picking: PickingCandidate,
     actorId: string
   ) {
+    if (matchResult.value.status === "applying") {
+      return;
+    }
+
     matchResult.value = { status: "applying" };
     try {
-      const qty = Math.min(scannedQty.value, receiving.availableQty, picking.remainingQty);
+      const qty = scannedQty.value;
       if (!Number.isInteger(qty) || qty <= 0) {
         throw new Error("Invalid quantity to apply");
+      }
+      if (qty > receiving.availableQty) {
+        throw new Error("Quantity no longer available in receiving");
+      }
+      if (qty > picking.remainingQty) {
+        throw new Error("Quantity exceeds picking order need");
       }
       await applyOcrPick(
         db,
