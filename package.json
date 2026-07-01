@@ -1,0 +1,22 @@
+{
+  "name": "web-demo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "node .output/server/index.mjs",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@electric-sql/pglite": "^0.3.0",
+    "@electric-sql/pglite-vue": "^0.2.0",
+    "drizzle-orm": "^0.45.0",
+    "nuxt": "^3.12.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/uuid": "^9.0.8"
+  }
+}
