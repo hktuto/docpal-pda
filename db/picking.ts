@@ -42,9 +42,13 @@ export async function materializeReceivingAllocation(
   qty: number,
   dateCode: string | null,
   lotCode: string | null,
-  originCountry: string | null
-) {
-  return db.transaction(async (tx) => {
+  originCountry: string | null,
+  tx?: PgliteDatabase<typeof schema>
+): Promise<string> {
+  if (tx) return materialize(tx);
+  return db.transaction(materialize);
+
+  async function materialize(tx: PgliteDatabase<typeof schema>): Promise<string> {
     const allocation = await tx.query.allocations.findFirst({
       where: eq(schema.allocations.id, allocationId),
       with: { pickingItem: true, receivingInvoiceItem: { with: { invoice: true } } },
@@ -100,16 +104,20 @@ export async function materializeReceivingAllocation(
         .where(eq(schema.allocations.id, allocationId));
       return allocationId;
     }
-  });
+  }
 }
 
 export async function confirmAllocationPicked(
   db: PgliteDatabase<typeof schema>,
   allocationId: string,
   qty: number,
-  actorId: string
-) {
-  await db.transaction(async (tx) => {
+  actorId: string,
+  tx?: PgliteDatabase<typeof schema>
+): Promise<void> {
+  if (tx) return confirm(tx);
+  return db.transaction(confirm);
+
+  async function confirm(tx: PgliteDatabase<typeof schema>): Promise<void> {
     const allocation = await tx.query.allocations.findFirst({
       where: eq(schema.allocations.id, allocationId),
       with: { pickingItem: true, inventoryLot: true, receivingInvoiceItem: true },
@@ -220,7 +228,7 @@ export async function confirmAllocationPicked(
       metadata: JSON.stringify({ allocationId, qty }),
       createdAt: new Date(),
     });
-  });
+  }
 }
 
 export async function reportPickingItemMismatch(

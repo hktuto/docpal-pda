@@ -148,30 +148,59 @@ export async function applyOcrPick(
     throw new Error("Qty must be a positive integer");
   }
 
-  const [allocation] = await db
-    .insert(schema.allocations)
-    .values({
-      id: uuid(),
-      pickingItemId,
-      receivingInvoiceItemId,
+  return db.transaction(async (tx) => {
+    const [receivingItem] = await tx
+      .select()
+      .from(schema.receivingInvoiceItems)
+      .where(eq(schema.receivingInvoiceItems.id, receivingInvoiceItemId));
+    if (!receivingItem) throw new Error("Receiving invoice item not found");
+
+    const allocatedResult = await tx
+      .select({ total: sql<number>`coalesce(sum(${schema.allocations.qty}), 0)`.mapWith(Number) })
+      .from(schema.allocations)
+      .where(eq(schema.allocations.receivingInvoiceItemId, receivingInvoiceItemId));
+    const allocated = allocatedResult[0]?.total ?? 0;
+    const available = receivingItem.receivedQty - receivingItem.pickedQty - receivingItem.putAwayQty - allocated;
+    if (qty > available) throw new Error("Insufficient available quantity");
+
+    const [pickingItem] = await tx
+      .select()
+      .from(schema.pickingItems)
+      .where(eq(schema.pickingItems.id, pickingItemId));
+    if (!pickingItem) throw new Error("Picking item not found");
+    if (pickingItem.partId !== receivingItem.partId) {
+      throw new Error("Receiving item and picking item do not match the same part");
+    }
+    const remaining = pickingItem.qty - pickingItem.pickedQty - pickingItem.allocatedQty;
+    if (qty > remaining) throw new Error("Quantity exceeds picking order need");
+
+    const [allocation] = await tx
+      .insert(schema.allocations)
+      .values({
+        id: uuid(),
+        pickingItemId,
+        receivingInvoiceItemId,
+        qty,
+      })
+      .returning();
+
+    await tx
+      .update(schema.pickingItems)
+      .set({ allocatedQty: sql`${schema.pickingItems.allocatedQty} + ${qty}` })
+      .where(eq(schema.pickingItems.id, pickingItemId));
+
+    const materializedAllocationId = await materializeReceivingAllocation(
+      db,
+      allocation.id,
       qty,
-    })
-    .returning();
+      dateCode,
+      lotCode,
+      originCountry,
+      tx
+    );
 
-  await db.update(schema.pickingItems)
-    .set({ allocatedQty: sql`${schema.pickingItems.allocatedQty} + ${qty}` })
-    .where(eq(schema.pickingItems.id, pickingItemId));
+    await confirmAllocationPicked(db, materializedAllocationId, qty, actorId, tx);
 
-  const materializedAllocationId = await materializeReceivingAllocation(
-    db,
-    allocation.id,
-    qty,
-    dateCode,
-    lotCode,
-    originCountry
-  );
-
-  await confirmAllocationPicked(db, materializedAllocationId, qty, actorId);
-
-  return { allocationId: allocation.id, materializedAllocationId };
+    return { allocationId: allocation.id, materializedAllocationId };
+  });
 }
