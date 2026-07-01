@@ -1,127 +1,143 @@
 <template>
-  <div
-    v-if="modelValue"
-    class="modal-overlay"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="scan-modal-title"
-    tabindex="-1"
-    @click.self="close"
-    @keydown.esc="close"
-  >
-    <div class="modal">
-      <div class="modal__header">
-        <h3 id="scan-modal-title">Scan label</h3>
-        <button class="modal__close" aria-label="Close" @click="close">×</button>
-      </div>
+  <Teleport to="body">
+    <div
+      v-if="modelValue"
+      class="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="scan-modal-title"
+      @click.self="close"
+    >
+      <div
+        ref="modalRef"
+        class="modal"
+        tabindex="-1"
+      >
+        <div class="modal__header">
+          <h3 id="scan-modal-title">Scan label</h3>
+          <button class="modal__close" aria-label="Close" @click="close">×</button>
+        </div>
 
-      <div class="modal__body">
-        <template v-if="matchResult.status === 'idle' || matchResult.status === 'scanning'">
-          <p class="subtitle">Tap a predefined label to simulate OCR capture.</p>
-          <p v-if="presetsLoading" class="empty">Loading presets…</p>
-          <p v-else-if="presetsError" class="empty" style="color: var(--danger);">{{ presetsError }}</p>
-          <div v-else-if="presets.length === 0" class="empty">No scan presets available.</div>
-          <div v-else class="options">
+        <div class="modal__body">
+          <div v-if="localError">
+            <div class="card card--danger">
+              <p><strong>Error</strong></p>
+              <p class="subtitle">{{ localError }}</p>
+            </div>
             <button
-              v-for="preset in presets"
-              :key="preset.id"
               type="button"
-              class="option"
-              :disabled="matchResult.status === 'scanning' || matchResult.status === 'applying'"
-              @click="onPresetClick(preset)"
+              class="btn btn--full"
+              @click="resetState"
             >
-              <div class="letter">📷</div>
-              <div class="content">
-                <h3>{{ preset.rawText }}</h3>
-                <p>{{ preset.parsed.partNo }} · qty {{ preset.parsed.qty }}</p>
-              </div>
+              Try again
             </button>
           </div>
-        </template>
 
-        <template v-else-if="matchResult.status === 'single'">
-          <div class="card" style="border-left: 4px solid var(--success, #16a34a);">
-            <p><strong>{{ matchResult.picking.pickingOrderRefNo }}</strong></p>
-            <p class="subtitle">Match found — applying pick…</p>
-          </div>
-        </template>
+          <template v-else-if="matchResult.status === 'idle' || matchResult.status === 'scanning'">
+            <p class="subtitle">Tap a predefined label to simulate OCR capture.</p>
+            <p v-if="presetsLoading" class="empty">Loading presets…</p>
+            <p v-else-if="presetsError" class="empty" style="color: var(--danger);">{{ presetsError }}</p>
+            <div v-else-if="presets.length === 0" class="empty">No scan presets available.</div>
+            <div v-else class="options">
+              <button
+                v-for="preset in presets"
+                :key="preset.id"
+                type="button"
+                class="option"
+                :disabled="matchResult.status === 'scanning' || matchResult.status === 'applying'"
+                @click="onPresetClick(preset)"
+              >
+                <div class="letter">📷</div>
+                <div class="content">
+                  <h3>{{ preset.rawText }}</h3>
+                  <p>{{ preset.parsed.partNo }} · qty {{ preset.parsed.qty }}</p>
+                </div>
+              </button>
+            </div>
+          </template>
 
-        <template v-else-if="matchResult.status === 'multiple'">
-          <p class="subtitle">Multiple orders need this item. Choose one.</p>
-          <div class="options">
+          <template v-else-if="matchResult.status === 'single'">
+            <div class="card card--success">
+              <p><strong>{{ matchResult.picking.pickingOrderRefNo }}</strong></p>
+              <p class="subtitle">Match found — applying pick…</p>
+            </div>
+          </template>
+
+          <template v-else-if="matchResult.status === 'multiple'">
+            <p class="subtitle">Multiple orders need this item. Choose one.</p>
+            <div class="options">
+              <button
+                v-for="candidate in matchResult.picking"
+                :key="candidate.pickingItemId"
+                type="button"
+                class="option"
+                :disabled="matchResult.status === 'scanning' || matchResult.status === 'applying'"
+                @click="onCandidateClick(candidate)"
+              >
+                <div class="letter">📦</div>
+                <div class="content">
+                  <h3>{{ candidate.pickingOrderRefNo }}</h3>
+                  <p>Ship to: {{ candidate.shipTo || "—" }} · still needs {{ candidate.remainingQty }}</p>
+                </div>
+              </button>
+            </div>
+          </template>
+
+          <template v-else-if="matchResult.status === 'no_match'">
+            <div class="card card--danger">
+              <p><strong>No match</strong></p>
+              <p class="subtitle">{{ matchResult.reason }}</p>
+            </div>
             <button
-              v-for="candidate in matchResult.picking"
-              :key="candidate.pickingItemId"
               type="button"
-              class="option"
+              class="btn btn--full"
               :disabled="matchResult.status === 'scanning' || matchResult.status === 'applying'"
-              @click="onCandidateClick(candidate)"
+              @click="resetState"
             >
-              <div class="letter">📦</div>
-              <div class="content">
-                <h3>{{ candidate.pickingOrderRefNo }}</h3>
-                <p>Ship to: {{ candidate.shipTo || "—" }} · still needs {{ candidate.remainingQty }}</p>
-              </div>
+              Try again
             </button>
-          </div>
-        </template>
+          </template>
 
-        <template v-else-if="matchResult.status === 'no_match'">
-          <div class="card" style="border-left: 4px solid var(--danger);">
-            <p><strong>No match</strong></p>
-            <p class="subtitle">{{ matchResult.reason }}</p>
-          </div>
-          <button
-            type="button"
-            class="btn"
-            style="width: 100%; margin-top: 1rem;"
-            :disabled="matchResult.status === 'scanning' || matchResult.status === 'applying'"
-            @click="resetState"
-          >
-            Try again
-          </button>
-        </template>
+          <template v-else-if="matchResult.status === 'applying'">
+            <p class="empty">Applying pick…</p>
+          </template>
 
-        <template v-else-if="matchResult.status === 'applying'">
-          <p class="empty">Applying pick…</p>
-        </template>
+          <template v-else-if="matchResult.status === 'success'">
+            <div class="card card--success">
+              <p><strong>Pick applied</strong></p>
+              <p class="subtitle">{{ matchResult.qty }} pcs added to {{ matchResult.pickingOrderRefNo }}</p>
+            </div>
+            <button
+              type="button"
+              class="btn btn--full"
+              @click="close"
+            >
+              Done
+            </button>
+          </template>
 
-        <template v-else-if="matchResult.status === 'success'">
-          <div class="card" style="border-left: 4px solid var(--success, #16a34a);">
-            <p><strong>Pick applied</strong></p>
-            <p class="subtitle">{{ matchResult.qty }} pcs added to {{ matchResult.pickingOrderRefNo }}</p>
-          </div>
-          <button
-            type="button"
-            class="btn"
-            style="width: 100%; margin-top: 1rem;"
-            @click="close"
-          >
-            Done
-          </button>
-        </template>
-
-        <template v-else-if="matchResult.status === 'error'">
-          <div class="card" style="border-left: 4px solid var(--danger);">
-            <p><strong>Error</strong></p>
-            <p class="subtitle">{{ matchResult.message }}</p>
-          </div>
-          <button
-            type="button"
-            class="btn"
-            style="width: 100%; margin-top: 1rem;"
-            :disabled="matchResult.status === 'scanning' || matchResult.status === 'applying'"
-            @click="resetState"
-          >
-            Try again
-          </button>
-        </template>
+          <template v-else-if="matchResult.status === 'error'">
+            <div class="card card--danger">
+              <p><strong>Error</strong></p>
+              <p class="subtitle">{{ matchResult.message }}</p>
+            </div>
+            <button
+              type="button"
+              class="btn btn--full"
+              :disabled="matchResult.status === 'scanning' || matchResult.status === 'applying'"
+              @click="resetState"
+            >
+              Try again
+            </button>
+          </template>
+        </div>
       </div>
     </div>
-  </div>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
+import { ref, watch, onMounted, onUnmounted, nextTick } from "vue";
 import type { MockPreset } from "~/composables/useMockOcr";
 import type { PickingCandidate } from "~/db/ocrPicking";
 
@@ -136,20 +152,25 @@ const emit = defineEmits<{
 }>();
 
 const db = useDb();
-const currentUser = await useCurrentUser();
+const currentUserPromise = useCurrentUser();
 const { generatePresets, scan } = useMockOcr();
 const { matchResult, match, apply, reset } = useOcrPicking();
 
 const presets = ref<MockPreset[]>([]);
 const presetsLoading = ref(false);
 const presetsError = ref<string | null>(null);
+const localError = ref<string | null>(null);
+const modalRef = ref<HTMLElement | null>(null);
 
 watch(
   () => props.modelValue,
-  (open) => {
+  async (open) => {
     if (open) {
+      localError.value = null;
       reset();
       loadPresets();
+      await nextTick();
+      modalRef.value?.focus();
     }
   }
 );
@@ -167,8 +188,9 @@ async function loadPresets() {
 }
 
 async function onPresetClick(preset: MockPreset) {
-  if (!currentUser) {
-    matchResult.value = { status: "error", message: "No operator user found" };
+  const user = await currentUserPromise;
+  if (!user) {
+    localError.value = "No operator user found";
     return;
   }
   const parsed = scan(preset);
@@ -176,7 +198,7 @@ async function onPresetClick(preset: MockPreset) {
 
   if (matchResult.value.status === "single") {
     const { receiving, picking } = matchResult.value;
-    await apply(db, receiving, picking, currentUser.id);
+    await apply(db, receiving, picking, user.id);
     if (matchResult.value.status === "success") {
       emit("applied");
     }
@@ -184,25 +206,37 @@ async function onPresetClick(preset: MockPreset) {
 }
 
 async function onCandidateClick(candidate: PickingCandidate) {
-  if (!currentUser) {
-    matchResult.value = { status: "error", message: "No operator user found" };
+  const user = await currentUserPromise;
+  if (!user) {
+    localError.value = "No operator user found";
     return;
   }
   if (matchResult.value.status !== "multiple") return;
-  await apply(db, matchResult.value.receiving, candidate, currentUser.id);
+  await apply(db, matchResult.value.receiving, candidate, user.id);
   if (matchResult.value.status === "success") {
     emit("applied");
   }
 }
 
 function resetState() {
+  localError.value = null;
   reset();
   loadPresets();
 }
 
 function close() {
+  localError.value = null;
   emit("update:modelValue", false);
 }
+
+function onKeydown(event: KeyboardEvent) {
+  if (event.key === "Escape") {
+    close();
+  }
+}
+
+onMounted(() => window.addEventListener("keydown", onKeydown));
+onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 </script>
 
 <style scoped>
@@ -226,6 +260,10 @@ function close() {
   max-width: 420px;
   max-height: 90vh;
   overflow-y: auto;
+}
+
+.modal:focus {
+  outline: none;
 }
 
 .modal__header {
@@ -318,6 +356,19 @@ function close() {
   margin: 0.25rem 0 0;
   font-size: 0.8125rem;
   color: var(--muted);
+}
+
+.card--success {
+  border-left: 4px solid var(--success, #16a34a);
+}
+
+.card--danger {
+  border-left: 4px solid var(--danger);
+}
+
+.btn--full {
+  width: 100%;
+  margin-top: 1rem;
 }
 
 /* Neutralize global .card hover transform inside this modal */
