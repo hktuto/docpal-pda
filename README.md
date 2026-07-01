@@ -14,6 +14,7 @@ The demo models an event-driven warehouse with two overlapping workflows that sh
 2. The worker confirms the order is here.
 3. The system creates receiving-area inventory lots and immediately tries to allocate them to any not-yet-fully-targeted picking orders.
 4. The worker can open the receiving order in **Picking view** to see which picking orders need goods from this shipment, pick them out, and reduce the receiving-area stock.
+   - The worker can also use the **scan button** on the Picking tab to type label data (part number, quantity, date/lot code, and origin country). The system matches the input to linked receiving and picking records and applies the pick automatically.
 5. If any stock is left over, the worker can **Shelve (put away)** the remainder into a shelf box. The system logs where every item went.
 6. When a picking order is fully picked, a measuring task is created so the goods can be packed into shipping boxes.
 
@@ -25,7 +26,7 @@ The demo models an event-driven warehouse with two overlapping workflows that sh
 
 ### Supporting actions
 
-- **Receiving** — confirm arrivals, report mismatches, and create receiving-area inventory lots.
+- **Receiving** — confirm arrivals, report mismatches, create receiving-area inventory lots, and see at a glance how many picking orders still need stock from each receiving order.
 - **Picking** — collect allocated items from shelves or directly from receiving-area lots.
 - **Picking by receiving** — look at one receiving order and see every picking order consuming its stock.
 - **Shelve / Put-away** — move unallocated receiving-area stock into a shelf box; this creates new shelved inventory for future picking.
@@ -150,7 +151,7 @@ transition_logs                   (all status changes)
 | `/` | Login |
 | `/home` | Main menu |
 | `/receiving` | List receiving orders (filter: All / Pending / In hand) |
-| `/receiving/:id` | Receiving order detail with Receiving and Picking views |
+| `/receiving/:id` | Receiving order detail; **Receiving** view shows invoices/items, **Picking** view shows linked picking orders and the scan modal |
 | `/picking` | List active picking orders |
 | `/picking/:id` | Picking order detail / mark picked |
 | `/picking-by-receiving` | List in-hand receiving orders and drill into picking usage |
@@ -168,7 +169,6 @@ transition_logs                   (all status changes)
 ## Running the demo
 
 ```bash
-cd apps/web-demo
 pnpm install
 pnpm run dev
 ```
@@ -195,24 +195,32 @@ The database lives in the browser's IndexedDB. Use the **⋮ → Reset local DB*
 ## Project structure
 
 ```
-apps/web-demo/
 ├── app.vue                  # PGlite bootstrap, schema init, seed, auth restore
 ├── assets/css/main.css      # Global styles
-├── components/AppHeader.vue # Header with back button, reset DB, logout
+├── components/
+│   ├── AppHeader.vue        # Header with back button, reset DB, logout
+│   └── OcrScanModal.vue     # Typed-label scan modal for OCR-assisted picking
 ├── composables/
 │   ├── useAuth.ts           # Login/logout/restore
 │   ├── useCurrentUser.ts    # Current operator helper
-│   └── useDb.ts             # Drizzle client from provided PGlite
+│   ├── useDb.ts             # Drizzle client from provided PGlite
+│   ├── useMockOcr.ts        # Parses typed label input for the scan modal
+│   └── useOcrPicking.ts     # Matches scanned input to receiving/picking records
 ├── db/
 │   ├── allocate.ts          # Allocation logic (shelved first, then arrivals)
 │   ├── goodsVerify.ts       # Goods verify DB helpers
 │   ├── init.ts              # Raw Postgres DDL for first-time bootstrap
 │   ├── measuring.ts         # Measuring / shipping box helpers
+│   ├── ocrPicking.ts        # OCR-assisted picking matching and apply logic
 │   ├── picking.ts           # Picking DB helpers
 │   ├── putAway.ts           # Put-away DB helpers
 │   ├── receiving.ts         # Receiving DB helpers
 │   ├── schema.ts            # Drizzle pg-core table definitions
 │   └── seed.ts              # Demo users, suppliers, parts, orders, inventory
+├── docs/
+│   └── superpowers/         # Design specs and implementation plans
+│       ├── specs/
+│       └── plans/
 ├── layouts/default.vue
 ├── pages/
 │   ├── index.vue            # Login page
@@ -234,4 +242,5 @@ apps/web-demo/
 - **Single-browser database.** Because PGlite stores data in IndexedDB, each browser has its own isolated demo database.
 - **No migrations.** The schema is created once from `db/init.ts` when the `users` table does not exist. Schema changes require clearing IndexedDB.
 - **Allocation is greedy.** It fills shelved lots first, then receiving-area lots, without partial date-code relaxation or FIFO beyond the required date code filter.
-- **Scanning is typed input.** There is no camera/barcode integration; the operator types part numbers into a text field.
+- **Scanning is typed input.** There is no camera/barcode integration yet; the operator types part numbers and label data into a text field. The parsing logic normalizes input and applies simple OCR-style substitutions (e.g. `O` → `0`) so the demo can simulate real scan errors.
+- **No automated test suite.** Verification is currently manual browser testing plus `pnpm nuxt prepare` for TypeScript generation.
