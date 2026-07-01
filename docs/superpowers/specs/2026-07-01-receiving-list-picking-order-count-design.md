@@ -23,28 +23,25 @@ receiving_order
 ```
 
 ### Inclusion rule
-A picking order is counted as pending if at least one of its `picking_items` satisfies:
-```
-allocation.qty > picking_item.pickedQty
-```
-If all allocations for a picking order are fully picked, that picking order is not counted.
+An allocation counts as pending if `allocation.qty > 0`. Fully-picked allocations are removed or reduced by the picking flow, so any allocation row with positive quantity still represents outstanding demand.
+
+The count includes both direct allocations (`allocations.receiving_invoice_item_id`) and allocations linked indirectly through `inventory_lots` / `inventory_lot_sources`.
 
 ## UI Design
 Add a small badge on the receiving list card, positioned with the existing status/date/remaining badges on the right side.
 
 - The badge is only rendered when the count is greater than zero.
-- Text: `1 picking` or `2 pickings` (pluralized).
+- Text: `1 picking order` or `N picking orders` (pluralized).
 - Style: existing `.badge` class with a new color to distinguish it from the "remaining qty" badge.
 
 ## Query Design
 Extend the existing SQL in `pages/receiving/index.vue` to compute `pending_picking_orders` per receiving order.
 
-The query uses a correlated subquery or CTE joining:
-- `receiving_invoice_items` (rii)
-- `allocations` (a)
-- `picking_items` (pi)
+The query uses a correlated subquery with a `UNION ALL` of two allocation paths:
+1. Direct allocations: `allocations.receiving_invoice_item_id` → `receiving_invoice_items`.
+2. Lot-source allocations: `allocations.inventory_lot_id` → `inventory_lots` → `inventory_lot_sources` → `receiving_invoice_items`.
 
-It counts distinct `picking_order_id` where `a.qty > pi.picked_qty`.
+The outer query wraps the union in `COUNT(DISTINCT po_id)` and filters by `picking_orders.status IN ('pending', 'picking')`.
 
 The `useLiveQuery` hook keeps the count reactive as allocations and pick quantities change.
 
