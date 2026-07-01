@@ -112,6 +112,7 @@
 
 <script setup lang="ts">
 import type { OcrInput } from "~/composables/useMockOcr";
+import type { MatchResult } from "~/composables/useOcrPicking";
 import type { PickingCandidate } from "~/db/ocrPicking";
 
 const props = defineProps<{
@@ -194,7 +195,8 @@ async function onScanClick() {
   if (matchResult.value.status === "single") {
     const { receiving, picking } = matchResult.value;
     await apply(db, receiving, picking, actorId);
-    if (matchResult.value.status === "success") {
+    const current = matchResult.value as MatchResult;
+    if (current.status === "success") {
       emit("applied");
     }
   }
@@ -205,7 +207,8 @@ async function onCandidateClick(candidate: PickingCandidate) {
   const actorId = ensureActor();
   if (!actorId) return;
   await apply(db, matchResult.value.receiving, candidate, actorId);
-  if (matchResult.value.status === "success") {
+  const current = matchResult.value as MatchResult;
+  if (current.status === "success") {
     emit("applied");
   }
 }

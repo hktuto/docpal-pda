@@ -49,9 +49,9 @@ export async function findReceivingCandidates(
           rii.id AS receiving_invoice_item_id,
           p.id AS part_id,
           p.part_no,
-          REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(UPPER(TRIM(rii.date_code)), 'O', '0'), 'I', '1'), 'L', '1'), 'Z', '2'), 'S', '5') AS date_code,
-          REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(UPPER(TRIM(rii.lot_code)), 'O', '0'), 'I', '1'), 'L', '1'), 'Z', '2'), 'S', '5') AS lot_code,
-          UPPER(TRIM(rii.origin_country)) AS origin_country,
+          REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REGEXP_REPLACE(UPPER(TRIM(rii.date_code)), '\s+', ' ', 'g'), 'O', '0'), 'I', '1'), 'L', '1'), 'Z', '2'), 'S', '5') AS date_code,
+          REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REGEXP_REPLACE(UPPER(TRIM(rii.lot_code)), '\s+', ' ', 'g'), 'O', '0'), 'I', '1'), 'L', '1'), 'Z', '2'), 'S', '5') AS lot_code,
+          REGEXP_REPLACE(UPPER(TRIM(rii.origin_country)), '\s+', ' ', 'g') AS origin_country,
           (rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(alloc.allocated_qty, 0)) AS available_qty
         FROM receiving_orders ro
         JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
@@ -68,7 +68,7 @@ export async function findReceivingCandidates(
           AND rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(alloc.allocated_qty, 0) >= ${qty}
       )
       SELECT * FROM normalized
-      WHERE UPPER(TRIM(part_no)) = ${parsed.partNo}
+      WHERE REGEXP_REPLACE(UPPER(TRIM(part_no)), '\s+', ' ', 'g') = ${parsed.partNo}
         AND (date_code IS NOT DISTINCT FROM COALESCE(${parsed.dateCode}, date_code))
         AND (lot_code IS NOT DISTINCT FROM COALESCE(${parsed.lotCode}, lot_code))
         AND (origin_country IS NOT DISTINCT FROM COALESCE(${parsed.originCountry}, origin_country))
