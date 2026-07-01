@@ -1,0 +1,164 @@
+import { sql } from "drizzle-orm";
+import type { PgliteDatabase } from "drizzle-orm/pglite";
+import { v4 as uuid } from "uuid";
+import * as schema from "./schema";
+import { materializeReceivingAllocation, confirmAllocationPicked } from "./picking";
+
+export interface OcrParseResult {
+  partNo: string;
+  dateCode: string | null;
+  lotCode: string | null;
+  originCountry: string | null;
+  qty: number;
+}
+
+export interface ReceivingCandidate {
+  receivingInvoiceItemId: string;
+  partId: string;
+  partNo: string;
+  dateCode: string | null;
+  lotCode: string | null;
+  originCountry: string | null;
+  availableQty: number;
+}
+
+export interface PickingCandidate {
+  pickingOrderId: string;
+  pickingOrderRefNo: string;
+  pickingItemId: string;
+  shipTo: string | null;
+  requiredQty: number;
+  pickedQty: number;
+  remainingQty: number;
+}
+
+export async function findReceivingCandidates(
+  db: PgliteDatabase<typeof schema>,
+  receivingOrderId: string,
+  parsed: OcrParseResult
+): Promise<ReceivingCandidate[]> {
+  return db
+    .execute(sql`
+      SELECT
+        rii.id AS receiving_invoice_item_id,
+        p.id AS part_id,
+        p.part_no,
+        rii.date_code,
+        rii.lot_code,
+        rii.origin_country,
+        (rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(alloc.allocated_qty, 0)) AS available_qty
+      FROM receiving_orders ro
+      JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
+      JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
+      JOIN parts p ON p.id = rii.part_id
+      LEFT JOIN (
+        SELECT receiving_invoice_item_id, SUM(qty) AS allocated_qty
+        FROM allocations
+        WHERE receiving_invoice_item_id IS NOT NULL
+        GROUP BY receiving_invoice_item_id
+      ) alloc ON alloc.receiving_invoice_item_id = rii.id
+      WHERE ro.id = ${receivingOrderId}
+        AND ro.status = 'in_hand'
+        AND p.part_no = ${parsed.partNo}
+        AND (rii.date_code IS NOT DISTINCT FROM ${parsed.dateCode})
+        AND (rii.lot_code IS NOT DISTINCT FROM ${parsed.lotCode})
+        AND (rii.origin_country IS NOT DISTINCT FROM ${parsed.originCountry})
+        AND rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(alloc.allocated_qty, 0) >= ${parsed.qty}
+      ORDER BY rii.date_code, rii.lot_code
+    `)
+    .then((r) =>
+      (r.rows ?? []).map((row) => ({
+        receivingInvoiceItemId: String(row.receiving_invoice_item_id),
+        partId: String(row.part_id),
+        partNo: String(row.part_no),
+        dateCode: row.date_code ? String(row.date_code) : null,
+        lotCode: row.lot_code ? String(row.lot_code) : null,
+        originCountry: row.origin_country ? String(row.origin_country) : null,
+        availableQty: Number(row.available_qty),
+      })) as ReceivingCandidate[]
+    );
+}
+
+export async function findPickingCandidates(
+  db: PgliteDatabase<typeof schema>,
+  receivingOrderId: string,
+  partId: string,
+  qty: number
+): Promise<PickingCandidate[]> {
+  return db
+    .execute(sql`
+      SELECT DISTINCT
+        po.id AS picking_order_id,
+        po.ref_no AS picking_order_ref_no,
+        pi.id AS picking_item_id,
+        po.ship_to,
+        pi.qty AS required_qty,
+        pi.picked_qty,
+        (pi.qty - pi.picked_qty - pi.allocated_qty) AS remaining_qty
+      FROM picking_orders po
+      JOIN picking_items pi ON pi.picking_order_id = po.id
+      WHERE po.id IN (
+        SELECT DISTINCT po2.id
+        FROM receiving_orders ro
+        JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
+        JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
+        JOIN allocations a ON a.receiving_invoice_item_id = rii.id
+        JOIN picking_items pi2 ON pi2.id = a.picking_item_id
+        JOIN picking_orders po2 ON po2.id = pi2.picking_order_id
+        WHERE ro.id = ${receivingOrderId}
+      )
+        AND pi.part_id = ${partId}
+        AND po.status != 'finished'
+        AND (pi.qty - pi.picked_qty - pi.allocated_qty) >= ${qty}
+      ORDER BY po.ref_no
+    `)
+    .then((r) =>
+      (r.rows ?? []).map((row) => ({
+        pickingOrderId: String(row.picking_order_id),
+        pickingOrderRefNo: String(row.picking_order_ref_no),
+        pickingItemId: String(row.picking_item_id),
+        shipTo: row.ship_to ? String(row.ship_to) : null,
+        requiredQty: Number(row.required_qty),
+        pickedQty: Number(row.picked_qty),
+        remainingQty: Number(row.remaining_qty),
+      })) as PickingCandidate[]
+    );
+}
+
+export async function applyOcrPick(
+  db: PgliteDatabase<typeof schema>,
+  receivingInvoiceItemId: string,
+  pickingItemId: string,
+  qty: number,
+  dateCode: string | null,
+  lotCode: string | null,
+  originCountry: string | null,
+  actorId: string
+): Promise<{ allocationId: string; materializedAllocationId: string }> {
+  if (!Number.isInteger(qty) || qty <= 0) {
+    throw new Error("Qty must be a positive integer");
+  }
+
+  const [allocation] = await db
+    .insert(schema.allocations)
+    .values({
+      id: uuid(),
+      pickingItemId,
+      receivingInvoiceItemId,
+      qty,
+    })
+    .returning();
+
+  const materializedAllocationId = await materializeReceivingAllocation(
+    db,
+    allocation.id,
+    qty,
+    dateCode,
+    lotCode,
+    originCountry
+  );
+
+  await confirmAllocationPicked(db, materializedAllocationId, qty, actorId);
+
+  return { allocationId: allocation.id, materializedAllocationId };
+}
