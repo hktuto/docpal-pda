@@ -15,7 +15,7 @@
       >
         <div class="modal__header">
           <h3 id="scan-modal-title">Scan label</h3>
-          <button class="modal__close" aria-label="Close" @click="close">×</button>
+          <button type="button" class="modal__close" aria-label="Close" @click="close">×</button>
         </div>
 
         <div class="modal__body">
@@ -230,6 +230,7 @@ function close() {
 }
 
 function onKeydown(event: KeyboardEvent) {
+  if (!props.modelValue) return;
   if (event.key === "Escape") {
     close();
   }
