@@ -63,6 +63,7 @@ export async function findReceivingCandidates(
         AND (rii.date_code IS NOT DISTINCT FROM ${parsed.dateCode})
         AND (rii.lot_code IS NOT DISTINCT FROM ${parsed.lotCode})
         AND (rii.origin_country IS NOT DISTINCT FROM ${parsed.originCountry})
+        AND rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(alloc.allocated_qty, 0) > 0
         AND rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(alloc.allocated_qty, 0) >= ${parsed.qty}
       ORDER BY rii.date_code, rii.lot_code
     `)
@@ -71,9 +72,9 @@ export async function findReceivingCandidates(
         receivingInvoiceItemId: String(row.receiving_invoice_item_id),
         partId: String(row.part_id),
         partNo: String(row.part_no),
-        dateCode: row.date_code ? String(row.date_code) : null,
-        lotCode: row.lot_code ? String(row.lot_code) : null,
-        originCountry: row.origin_country ? String(row.origin_country) : null,
+        dateCode: row.date_code != null ? String(row.date_code) : null,
+        lotCode: row.lot_code != null ? String(row.lot_code) : null,
+        originCountry: row.origin_country != null ? String(row.origin_country) : null,
         availableQty: Number(row.available_qty),
       })) as ReceivingCandidate[]
     );
@@ -117,7 +118,7 @@ export async function findPickingCandidates(
         pickingOrderId: String(row.picking_order_id),
         pickingOrderRefNo: String(row.picking_order_ref_no),
         pickingItemId: String(row.picking_item_id),
-        shipTo: row.ship_to ? String(row.ship_to) : null,
+        shipTo: row.ship_to != null ? String(row.ship_to) : null,
         requiredQty: Number(row.required_qty),
         pickedQty: Number(row.picked_qty),
         remainingQty: Number(row.remaining_qty),
