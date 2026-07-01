@@ -37,6 +37,20 @@
             Shelve remaining stock
           </NuxtLink>
         </div>
+
+        <div v-if="order.status === 'in_hand'" style="position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 50;">
+          <button
+            class="btn"
+            style="border-radius: 9999px; width: 3.5rem; height: 3.5rem; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow);"
+            aria-label="Scan label"
+            @click="scanOpen = true"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 0 0" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </button>
+        </div>
       </div>
 
       <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
@@ -165,12 +179,19 @@
           </div>
         </div>
       </template>
+
+      <OcrScanModal
+        v-model="scanOpen"
+        :receiving-order-id="orderId"
+        @applied="load"
+      />
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { sql } from "drizzle-orm";
+import OcrScanModal from "~/components/OcrScanModal.vue";
 import {
   getReceivingOrderDetail,
   updateReceivingItemMismatch,
@@ -196,6 +217,7 @@ const pickingRows = ref<PickingByReceivingRow[]>([]);
 const form = ref<Record<string, { actualQty: number; note: string }>>({});
 const saving = ref<Record<string, boolean>>({});
 const confirming = ref(false);
+const scanOpen = ref(false);
 const view = ref<"receiving" | "picking">("receiving");
 
 const views = [
