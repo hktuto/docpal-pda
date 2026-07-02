@@ -113,9 +113,19 @@
         </div>
 
         <div style="margin-top: 0.75rem;">
+          <select
+            v-model="targetBoxSelections[lot.receiving_invoice_item_id]"
+            :disabled="scanning"
+            style="min-width: 10rem; margin-right: 0.5rem;"
+          >
+            <option value="">Select target box</option>
+            <option v-for="box in openBoxes" :key="box.id" :value="box.id">
+              {{ box.id }} — {{ box.shelfCode || "—" }}
+            </option>
+          </select>
           <button
             class="btn btn--small"
-            :disabled="!hasOpenBox"
+            :disabled="!hasOpenBox || scanning || !targetBoxSelections[lot.receiving_invoice_item_id]"
             @click="openScan(lot)"
           >
             Scan
@@ -127,16 +137,23 @@
       </div>
     </template>
 
-    <PutAwayScanModal
-      v-model="scanOpen"
-      :item="scanItem"
-      :boxes="boxes"
-      @applied="load"
+    <LabelScanReviewModal
+      v-if="review?.status === 'review'"
+      v-model="reviewOpen"
+      :image-path="review.capture.imagePath"
+      :text="review.capture.text"
+      :parsed="review.parsed"
+      :match-result="review.matchResult"
+      :context="{ task: 'put-away', receivingItem: scanItem, targetBoxId: scanBoxId }"
+      @applied="onApplied"
+      @retake="onRetake"
     />
   </div>
 </template>
 
 <script setup lang="ts">
+import { useLabelScan, type LabelScanResult } from "~/composables/useLabelScan";
+import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import * as schema from "~/db/schema";
 import { getReceivingOrderDetail } from "~/db/receiving";
 import {
@@ -167,10 +184,15 @@ const selectedShelf = ref("");
 const creating = ref(false);
 const closing = ref(false);
 
-const scanOpen = ref(false);
 const scanItem = ref<any>(null);
+const scanBoxId = ref<string>("");
+const targetBoxSelections = ref<Record<string, string>>({});
+const { scan, scanning } = useLabelScan();
+const reviewOpen = ref(false);
+const review = ref<LabelScanResult | null>(null);
 
-const hasOpenBox = computed(() => boxes.value.some((b) => b.status === "open"));
+const openBoxes = computed(() => boxes.value.filter((b) => b.status === "open"));
+const hasOpenBox = computed(() => openBoxes.value.length > 0);
 
 async function load() {
   pending.value = true;
@@ -237,9 +259,32 @@ async function closeBox(boxId: string) {
   }
 }
 
-function openScan(lot: PutAwayLot) {
+async function openScan(lot: PutAwayLot) {
   scanItem.value = lot;
-  scanOpen.value = true;
+  scanBoxId.value = targetBoxSelections.value[lot.receiving_invoice_item_id] ?? "";
+  if (!scanBoxId.value) {
+    error.value = "Select a target box";
+    return;
+  }
+  const result = await scan({ task: 'put-away', receivingItem: lot, targetBoxId: scanBoxId.value });
+  if (result.status === 'applied') {
+    await load();
+  } else if (result.status === 'review') {
+    review.value = result;
+    reviewOpen.value = true;
+  } else if (result.status === 'error') {
+    error.value = result.message;
+  }
+}
+
+async function onApplied() {
+  reviewOpen.value = false;
+  await load();
+}
+
+async function onRetake() {
+  reviewOpen.value = false;
+  await openScan(scanItem.value);
 }
 
 function onVisible() {
