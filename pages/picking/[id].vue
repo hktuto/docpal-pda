@@ -144,7 +144,7 @@
                 <span>{{ allocation.qty }}</span>
               </div>
               <div style="margin-top: 0.5rem;">
-                <button class="btn btn--small" @click="openScan(allocation, item)">Scan</button>
+                <button class="btn btn--small" :disabled="scanning" @click="openScan(allocation, item)">Scan</button>
               </div>
             </template>
 
@@ -163,7 +163,7 @@
                 <span>{{ allocation.qty }}</span>
               </div>
               <div style="margin-top: 0.5rem;">
-                <button class="btn btn--small" @click="openScan(allocation, item)">Scan</button>
+                <button class="btn btn--small" :disabled="scanning" @click="openScan(allocation, item)">Scan</button>
               </div>
             </template>
           </div>
@@ -253,17 +253,23 @@
       </div>
     </template>
 
-    <PickingScanModal
-      v-model="scanOpen"
-      :allocation="scanAllocation"
-      :item="scanItem"
-      @applied="load"
+    <LabelScanReviewModal
+      v-if="review?.status === 'review'"
+      v-model="reviewOpen"
+      :image-path="review.capture.imagePath"
+      :text="review.capture.text"
+      :parsed="review.parsed"
+      :match-result="review.matchResult"
+      :context="{ task: 'picking', allocation: scanAllocation, item: scanItem }"
+      @applied="onApplied"
+      @retake="onRetake"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import PickingScanModal from "~/components/PickingScanModal.vue";
+import { useLabelScan, type LabelScanResult } from "~/composables/useLabelScan";
+import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import {
   getPickingOrderDetail,
   createShippingBoxForPickingOrder,
@@ -294,9 +300,11 @@ const finishing = ref(false);
 const transitionLogs = ref<Record<string, any[]>>({});
 const expandedItems = ref<Set<string>>(new Set());
 const headerExpanded = ref(false);
-const scanOpen = ref(false);
 const scanAllocation = ref<any>(null);
 const scanItem = ref<any>(null);
+const { scan, scanning } = useLabelScan();
+const reviewOpen = ref(false);
+const review = ref<LabelScanResult | null>(null);
 const boxSelections = ref<Record<string, string>>({});
 
 const allItemsFullyBoxed = computed(
@@ -372,10 +380,28 @@ function toggleExpand(itemId: string) {
   expandedItems.value = next;
 }
 
-function openScan(allocation: any, item: any) {
+async function openScan(allocation: any, item: any) {
   scanAllocation.value = allocation;
   scanItem.value = item;
-  scanOpen.value = true;
+  const result = await scan({ task: 'picking', allocation, item });
+  if (result.status === 'applied') {
+    await load();
+  } else if (result.status === 'review') {
+    review.value = result;
+    reviewOpen.value = true;
+  } else if (result.status === 'error') {
+    error.value = result.message;
+  }
+}
+
+async function onApplied() {
+  reviewOpen.value = false;
+  await load();
+}
+
+async function onRetake() {
+  reviewOpen.value = false;
+  await openScan(scanAllocation.value, scanItem.value);
 }
 
 async function createBox() {
