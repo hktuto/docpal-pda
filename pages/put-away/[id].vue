@@ -208,6 +208,14 @@ async function load() {
     lots.value = lotsData;
     shelves.value = shelvesData;
     boxes.value = boxesData;
+
+    const openBoxIds = new Set(boxesData.filter((b) => b.status === 'open').map((b) => b.id));
+    scanBoxId.value = '';
+    for (const key of Object.keys(targetBoxSelections.value)) {
+      if (!openBoxIds.has(targetBoxSelections.value[key])) {
+        delete targetBoxSelections.value[key];
+      }
+    }
   } catch (e: any) {
     error.value = e?.message ?? String(e);
   } finally {
@@ -264,6 +272,10 @@ async function openScan(lot: PutAwayLot) {
   scanBoxId.value = targetBoxSelections.value[lot.receiving_invoice_item_id] ?? "";
   if (!scanBoxId.value) {
     error.value = "Select a target box";
+    return;
+  }
+  if (!openBoxes.value.some((b) => b.id === scanBoxId.value)) {
+    error.value = "Selected box is no longer open";
     return;
   }
   const result = await scan({ task: 'put-away', receivingItem: lot, targetBoxId: scanBoxId.value });

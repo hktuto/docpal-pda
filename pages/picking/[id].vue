@@ -144,7 +144,7 @@
                 <span>{{ allocation.qty }}</span>
               </div>
               <div style="margin-top: 0.5rem;">
-                <button class="btn btn--small" :disabled="scanning" @click="openScan(allocation, item)">Scan</button>
+                <button class="btn btn--small" :disabled="scanning" @click="openScan(allocation)">Scan</button>
               </div>
             </template>
 
@@ -163,7 +163,7 @@
                 <span>{{ allocation.qty }}</span>
               </div>
               <div style="margin-top: 0.5rem;">
-                <button class="btn btn--small" :disabled="scanning" @click="openScan(allocation, item)">Scan</button>
+                <button class="btn btn--small" :disabled="scanning" @click="openScan(allocation)">Scan</button>
               </div>
             </template>
           </div>
@@ -260,7 +260,7 @@
       :text="review.capture.text"
       :parsed="review.parsed"
       :match-result="review.matchResult"
-      :context="{ task: 'picking', allocation: scanAllocation, item: scanItem }"
+      :context="{ task: 'picking', allocation: scanAllocation }"
       @applied="onApplied"
       @retake="onRetake"
     />
@@ -301,7 +301,6 @@ const transitionLogs = ref<Record<string, any[]>>({});
 const expandedItems = ref<Set<string>>(new Set());
 const headerExpanded = ref(false);
 const scanAllocation = ref<any>(null);
-const scanItem = ref<any>(null);
 const { scan, scanning } = useLabelScan();
 const reviewOpen = ref(false);
 const review = ref<LabelScanResult | null>(null);
@@ -380,10 +379,9 @@ function toggleExpand(itemId: string) {
   expandedItems.value = next;
 }
 
-async function openScan(allocation: any, item: any) {
+async function openScan(allocation: any) {
   scanAllocation.value = allocation;
-  scanItem.value = item;
-  const result = await scan({ task: 'picking', allocation, item });
+  const result = await scan({ task: 'picking', allocation });
   if (result.status === 'applied') {
     await load();
   } else if (result.status === 'review') {
@@ -401,7 +399,7 @@ async function onApplied() {
 
 async function onRetake() {
   reviewOpen.value = false;
-  await openScan(scanAllocation.value, scanItem.value);
+  await openScan(scanAllocation.value);
 }
 
 async function createBox() {
