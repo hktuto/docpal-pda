@@ -213,8 +213,7 @@ The database lives in the browser's IndexedDB. Use the **⋮ → Reset local DB*
 │   ├── useAuth.ts           # Login/logout/restore
 │   ├── useCurrentUser.ts    # Current operator helper
 │   ├── useDb.ts             # Drizzle client from provided PGlite
-│   ├── useMockOcr.ts        # Parses typed label input for the scan modal
-│   └── useOcrPicking.ts     # Matches scanned input to receiving/picking records
+│   └── useMockOcr.ts        # Parses typed label input for the scan modal
 ├── db/
 │   ├── allocate.ts          # Allocation logic (shelved first, then arrivals)
 │   ├── goodsVerify.ts       # Goods verify DB helpers
