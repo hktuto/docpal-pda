@@ -43,9 +43,15 @@ export interface CameraStreamCaptureResult {
   selectedRect?: DetectedRectangle;
 }
 
+export interface LabelScanCapture {
+  imagePath: string;
+  text: string;
+}
+
 export interface RectangleDetectionPlugin {
   detectRectangles(options: DetectRectanglesOptions): Promise<DetectRectanglesResult>;
   startCameraStream(): Promise<CameraStreamCaptureResult>;
+  scanLabel(): Promise<LabelScanCapture>;
   addListener(
     eventName: string,
     listenerFunc: (event: unknown) => void,
@@ -63,6 +69,9 @@ export const RectangleDetection = registerPlugin<RectangleDetectionPlugin>(
         },
         async startCameraStream(): Promise<CameraStreamCaptureResult> {
           throw new Error('RectangleDetection camera stream is not available in the browser.');
+        },
+        async scanLabel(): Promise<LabelScanCapture> {
+          throw new Error('RectangleDetection label scan is not available in the browser.');
         },
         async addListener() {
           return { remove: () => {} } as PluginListenerHandle;
@@ -87,8 +96,13 @@ export function useRectangleDetection() {
     return RectangleDetection.startCameraStream();
   }
 
+  async function scanLabel(): Promise<LabelScanCapture> {
+    return RectangleDetection.scanLabel();
+  }
+
   return {
     detectRectangles,
     startCameraStream,
+    scanLabel,
   };
 }

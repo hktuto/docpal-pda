@@ -99,6 +99,13 @@ public class RectangleDetectionPlugin extends Plugin {
     startActivityForResult(call, intent, "streamResult");
   }
 
+  @PluginMethod
+  public void scanLabel(PluginCall call) {
+    Intent intent = new Intent(getActivity(), RectangleCameraActivity.class);
+    intent.putExtra(RectangleCameraActivity.EXTRA_MODE, RectangleCameraActivity.MODE_LABEL_SCAN);
+    startActivityForResult(call, intent, "scanLabelResult");
+  }
+
   @ActivityCallback
   private void streamResult(PluginCall call, ActivityResult result) {
     if (call == null) {
@@ -131,6 +138,20 @@ public class RectangleDetectionPlugin extends Plugin {
         }
       }
 
+      call.resolve(capture);
+    } else {
+      call.reject("Cancelled");
+    }
+  }
+
+  @ActivityCallback
+  private void scanLabelResult(PluginCall call, ActivityResult result) {
+    if (call == null) return;
+    if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
+      Intent data = result.getData();
+      JSObject capture = new JSObject();
+      capture.put("imagePath", data.getStringExtra("imagePath"));
+      capture.put("text", data.getStringExtra("text"));
       call.resolve(capture);
     } else {
       call.reject("Cancelled");
