@@ -1,11 +1,11 @@
 <template>
   <div>
-    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+    <div class="filters">
       <button
         v-for="opt in filters"
         :key="opt.value"
-        class="btn btn--small"
-        :style="filter === opt.value ? 'background: var(--primary-hover);' : 'background: var(--bg); color: var(--text); border-color: var(--border);'"
+        class="filter-chip"
+        :class="{ 'filter-chip--active': filter === opt.value }"
         @click="filter = opt.value"
       >
         {{ opt.label }}
@@ -20,48 +20,44 @@
     />
 
     <p v-if="loading" class="empty">Loading…</p>
+    <p v-else-if="loadError" class="empty" style="color: var(--danger);">Error: {{ loadError }}</p>
     <p v-else-if="rows.length === 0" class="empty">No receiving orders found.</p>
 
     <NuxtLink
       v-for="ro in rows"
       :key="ro.id"
       :to="`/receiving/${ro.id}`"
-      class="card"
+      class="card list-card"
     >
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
-        <div>
-          <p class="card__title">{{ ro.ref_no }}</p>
-          <p class="card__meta">
-            {{ ro.supplier_name || "No supplier" }}
-          </p>
-        </div>
-        <div style="text-align: right;">
-          <span class="badge">{{ ro.status }}</span>
-          <p class="card__meta" style="margin-top: 0.25rem;">
-            {{ ro.delivery_date ? new Date(ro.delivery_date).toLocaleDateString() : "No date" }}
-          </p>
-          <span v-if="ro.remaining_items > 0" class="badge" style="margin-top: 0.25rem; background: #dcfce7; color: #166534;">
-            {{ ro.remaining_items }} item{{ ro.remaining_items === 1 ? '' : 's' }} remaining
-          </span>
-          <span
-            v-if="ro.pending_picking_orders > 0"
-            class="badge"
-            style="margin-top: 0.25rem; background: #dbeafe; color: #1e40af;"
-          >
-            {{ ro.pending_picking_orders }} picking order{{ ro.pending_picking_orders === 1 ? '' : 's' }}
-          </span>
-        </div>
+      <div class="list-card__header">
+        <span class="list-card__title">{{ ro.ref_no }}</span>
+        <span class="badge" :class="badgeClass(ro.status)">{{ ro.status }}</span>
+      </div>
+      <p class="list-card__meta">
+        {{ ro.supplier_name || "No supplier" }}
+      </p>
+      <div class="list-card__footer">
+        <span class="list-card__date">
+          {{ ro.delivery_date ? new Date(ro.delivery_date).toLocaleDateString() : "No date" }}
+        </span>
+        <span v-if="ro.remaining_items > 0" class="badge badge--info">
+          {{ ro.remaining_items }} remaining
+        </span>
+        <span
+          v-if="ro.pending_picking_orders > 0"
+          class="badge badge--info"
+        >
+          {{ ro.pending_picking_orders }} picking
+        </span>
       </div>
     </NuxtLink>
   </div>
 </template>
 
 <script setup lang="ts">
-import { useLiveQuery } from "@electric-sql/pglite-vue";
-
 definePageMeta({ title: "Receiving" });
 
-type Filter = "all" | "pending" | "in_hand";
+type Filter = "all" | "pending" | "in_hand" | "clear";
 
 interface ReceivingOrderRow {
   id: string;
@@ -77,6 +73,7 @@ const filters: { label: string; value: Filter }[] = [
   { label: "All", value: "all" },
   { label: "Pending", value: "pending" },
   { label: "In hand", value: "in_hand" },
+  { label: "Clear", value: "clear" },
 ];
 
 const filter = ref<Filter>("in_hand");
@@ -86,6 +83,7 @@ const query = computed(() => {
   let where = "1=1";
   if (filter.value === "pending") where = "ro.status = 'pending'";
   if (filter.value === "in_hand") where = "ro.status = 'in_hand'";
+  if (filter.value === "clear") where = "ro.status = 'clear'";
 
   return `SELECT
     ro.id,
@@ -148,17 +146,130 @@ const query = computed(() => {
   ORDER BY ro.delivery_date;`;
 });
 
-const result = useLiveQuery<ReceivingOrderRow>(query);
+const db = await useDb();
+
+const rawRows = ref<ReceivingOrderRow[]>([]);
+const loading = ref(true);
+const loadError = ref<string | null>(null);
+
+async function load() {
+  loading.value = true;
+  loadError.value = null;
+  try {
+    const result = await db.execute(query.value);
+    rawRows.value = result.rows as ReceivingOrderRow[];
+  } catch (e: any) {
+    loadError.value = e?.message ?? String(e);
+    rawRows.value = [];
+  } finally {
+    loading.value = false;
+  }
+}
 
 const rows = computed(() => {
-  const raw = result.rows.value ?? [];
   const term = search.value.trim().toLowerCase();
-  if (!term) return raw;
-  return raw.filter(
+  if (!term) return rawRows.value;
+  return rawRows.value.filter(
     (r) =>
       r.ref_no.toLowerCase().includes(term) ||
       (r.supplier_name?.toLowerCase().includes(term) ?? false)
   );
 });
-const loading = computed(() => result.rows.value === undefined);
+
+watch(filter, load);
+
+onMounted(() => {
+  load();
+  document.addEventListener("visibilitychange", onVisible);
+  window.addEventListener("focus", onVisible);
+});
+
+onUnmounted(() => {
+  document.removeEventListener("visibilitychange", onVisible);
+  window.removeEventListener("focus", onVisible);
+});
+
+function onVisible() {
+  if (document.visibilityState === "visible") {
+    load();
+  }
+}
+
+function badgeClass(status: string) {
+  if (status === "pending") return "badge--pending";
+  if (status === "in_hand") return "badge--in-hand";
+  if (status === "clear") return "badge--finished";
+  return "";
+}
 </script>
+
+<style scoped>
+.filters {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.filter-chip {
+  flex-shrink: 0;
+  padding: 0.45rem 1rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.filter-chip--active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.list-card {
+  display: block;
+  text-decoration: none;
+}
+
+.list-card:hover {
+  text-decoration: none;
+}
+
+.list-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.list-card__title {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.list-card__meta {
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin: 0 0 0.75rem;
+}
+
+.list-card__footer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.list-card__date {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  margin-right: auto;
+}
+</style>
