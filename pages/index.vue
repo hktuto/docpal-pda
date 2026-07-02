@@ -65,66 +65,6 @@
         <p class="menu-card__meta">Weigh and pack boxes</p>
       </NuxtLink>
 
-      <NuxtLink to="/ocr-demo" class="menu-card">
-        <div class="menu-card__icon menu-card__icon--demo">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2Z"/>
-            <circle cx="12" cy="13" r="4"/>
-          </svg>
-        </div>
-        <p class="menu-card__title">Camera OCR</p>
-        <p class="menu-card__meta">On-device text recognition</p>
-      </NuxtLink>
-
-      <NuxtLink to="/subject-segmentation-demo" class="menu-card">
-        <div class="menu-card__icon menu-card__icon--demo">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <circle cx="12" cy="10" r="3"/>
-            <path d="M7 18a5 5 0 0 1 10 0"/>
-          </svg>
-        </div>
-        <p class="menu-card__title">Segmentation</p>
-        <p class="menu-card__meta">Isolate subjects in photos</p>
-      </NuxtLink>
-
-      <NuxtLink to="/object-detection-demo" class="menu-card">
-        <div class="menu-card__icon menu-card__icon--demo">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 3h18v18H3z"/>
-            <path d="M8 12h8"/>
-            <path d="M12 8v8"/>
-          </svg>
-        </div>
-        <p class="menu-card__title">Object Detection</p>
-        <p class="menu-card__meta">Detect objects with ML Kit</p>
-      </NuxtLink>
-
-      <NuxtLink to="/document-scanner-demo" class="menu-card">
-        <div class="menu-card__icon menu-card__icon--demo">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/>
-            <path d="M14 2v6h6"/>
-            <path d="M16 13H8"/>
-            <path d="M16 17H8"/>
-            <path d="M10 9H8"/>
-          </svg>
-        </div>
-        <p class="menu-card__title">Document Scanner</p>
-        <p class="menu-card__meta">Crop labels with ML Kit</p>
-      </NuxtLink>
-
-      <NuxtLink to="/opencv-rectangle-demo" class="menu-card">
-        <div class="menu-card__icon menu-card__icon--demo">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 3h18v18H3z"/>
-            <path d="M3 9h18"/>
-            <path d="M9 21V9"/>
-          </svg>
-        </div>
-        <p class="menu-card__title">OpenCV Rectangles</p>
-        <p class="menu-card__meta">Offline label rectangle finder</p>
-      </NuxtLink>
     </div>
   </div>
 </template>
@@ -205,7 +145,6 @@ const { currentUser } = useAuth();
 .menu-card__icon--putaway { background: linear-gradient(135deg, #f59e0b, #d97706); }
 .menu-card__icon--verify { background: linear-gradient(135deg, #10b981, #059669); }
 .menu-card__icon--measuring { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
-.menu-card__icon--demo { background: linear-gradient(135deg, #64748b, #475569); }
 
 .menu-card__title {
   margin: 0 0 0.25rem;
