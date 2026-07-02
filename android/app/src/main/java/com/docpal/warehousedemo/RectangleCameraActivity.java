@@ -6,12 +6,10 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.ImageFormat;
 import android.os.Bundle;
-import android.os.SystemClock;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.Surface;
 import android.widget.Button;
-import android.widget.TextView;
 import android.widget.Toast;
 import androidx.activity.ComponentActivity;
 import androidx.annotation.NonNull;
@@ -27,12 +25,10 @@ import androidx.camera.view.PreviewView;
 import androidx.core.content.ContextCompat;
 import com.google.common.util.concurrent.ListenableFuture;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.opencv.android.OpenCVLoader;
@@ -59,11 +55,9 @@ public class RectangleCameraActivity extends ComponentActivity {
 
   private PreviewView previewView;
   private RectangleOverlayView overlayView;
-  private TextView fpsText;
   private Button cancelButton;
   private Button captureButton;
   private ExecutorService analysisExecutor;
-  private final MovingAverage fpsAverage = new MovingAverage(10);
 
   private ImageCapture imageCapture;
   private volatile int streamWidth = 0;
@@ -95,7 +89,6 @@ public class RectangleCameraActivity extends ComponentActivity {
 
     previewView = findViewById(R.id.previewView);
     overlayView = findViewById(R.id.overlayView);
-    fpsText = findViewById(R.id.fpsText);
     cancelButton = findViewById(R.id.cancelButton);
     captureButton = findViewById(R.id.captureButton);
 
@@ -203,7 +196,6 @@ public class RectangleCameraActivity extends ComponentActivity {
       rotated = rotateMat(captured, rotationDegrees);
       captured.release();
     }
-    saveDebugMat(rotated.clone(), "rotated");
 
     int originalWidth = rotated.width();
     int originalHeight = rotated.height();
@@ -239,7 +231,6 @@ public class RectangleCameraActivity extends ComponentActivity {
         ByteBuffer buffer = image.getPlanes()[0].getBuffer();
         byte[] bytes = new byte[buffer.remaining()];
         buffer.get(bytes);
-        saveDebugBytes(bytes, "raw_jpeg");
 
         Mat decoded = Imgcodecs.imdecode(new MatOfByte(bytes), Imgcodecs.IMREAD_GRAYSCALE);
         if (decoded == null || decoded.empty()) {
@@ -269,26 +260,6 @@ public class RectangleCameraActivity extends ComponentActivity {
     } finally {
       image.close();
     }
-  }
-
-  private void saveDebugBytes(byte[] bytes, String suffix) {
-    try {
-      File file = new File(getCacheDir(), "debug_" + suffix + "_" + System.currentTimeMillis() + ".jpg");
-      try (FileOutputStream fos = new FileOutputStream(file)) {
-        fos.write(bytes);
-      }
-      Log.d(TAG, "Saved debug bytes: " + file.getAbsolutePath());
-    } catch (IOException e) {
-      Log.e(TAG, "Failed to save debug bytes", e);
-    }
-  }
-
-  private void saveDebugMat(Mat mat, String suffix) {
-    File file = new File(getCacheDir(), "debug_" + suffix + "_" + System.currentTimeMillis() + ".jpg");
-    Mat encoded = RectangleCropper.toRgbForEncoding(mat);
-    Imgcodecs.imwrite(file.getAbsolutePath(), encoded);
-    encoded.release();
-    Log.d(TAG, "Saved debug mat: " + file.getAbsolutePath());
   }
 
   private void processTapCapture(
@@ -437,18 +408,6 @@ public class RectangleCameraActivity extends ComponentActivity {
 
     overlayView.setImageSize(result.width, result.height);
     overlayView.setRectangles(result.rectangles);
-
-    double instantFps = result.processTimeMs > 0 ? 1000.0 / result.processTimeMs : 0;
-    fpsAverage.add(instantFps);
-    fpsText.setText(
-      String.format(
-        Locale.US,
-        "FPS: %.1f | proc: %d ms | rects: %d",
-        fpsAverage.getAverage(),
-        result.processTimeMs,
-        result.rectangles.size()
-      )
-    );
   }
 
   private void startPicker(String imagePath, int width, int height, String rectanglesJson) {
@@ -490,13 +449,11 @@ public class RectangleCameraActivity extends ComponentActivity {
   private static class DetectionResult {
     final int width;
     final int height;
-    final long processTimeMs;
     final List<RectangleDetector.RectResult> rectangles;
 
-    DetectionResult(int width, int height, long processTimeMs, List<RectangleDetector.RectResult> rectangles) {
+    DetectionResult(int width, int height, List<RectangleDetector.RectResult> rectangles) {
       this.width = width;
       this.height = height;
-      this.processTimeMs = processTimeMs;
       this.rectangles = rectangles;
     }
   }
@@ -516,8 +473,6 @@ public class RectangleCameraActivity extends ComponentActivity {
 
     @Override
     public void analyze(@NonNull ImageProxy image) {
-      long start = SystemClock.elapsedRealtime();
-
       ImageProxy.PlaneProxy yPlane = image.getPlanes()[0];
       Mat gray = new Mat(
         image.getHeight(),
@@ -532,12 +487,10 @@ public class RectangleCameraActivity extends ComponentActivity {
       gray.release();
 
       List<RectangleDetector.RectResult> rectangles = RectangleDetector.detect(rotated, options);
-      long processTimeMs = SystemClock.elapsedRealtime() - start;
 
       DetectionResult result = new DetectionResult(
         rotated.width(),
         rotated.height(),
-        processTimeMs,
         rectangles
       );
 
@@ -569,32 +522,4 @@ public class RectangleCameraActivity extends ComponentActivity {
     return dst;
   }
 
-  private static class MovingAverage {
-
-    private final List<Double> values;
-    private final int size;
-
-    MovingAverage(int size) {
-      this.size = size;
-      this.values = new ArrayList<>();
-    }
-
-    void add(double value) {
-      values.add(value);
-      if (values.size() > size) {
-        values.remove(0);
-      }
-    }
-
-    double getAverage() {
-      if (values.isEmpty()) {
-        return 0;
-      }
-      double sum = 0;
-      for (double v : values) {
-        sum += v;
-      }
-      return sum / values.size();
-    }
-  }
 }
