@@ -586,6 +586,8 @@ async function openScan(itemId?: string) {
   } else if (result.status === 'review') {
     review.value = result;
     reviewOpen.value = true;
+  } else if (result.status === 'error') {
+    error.value = result.message;
   }
 }
 
