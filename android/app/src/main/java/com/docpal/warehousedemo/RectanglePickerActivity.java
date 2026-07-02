@@ -184,15 +184,25 @@ public class RectanglePickerActivity extends ComponentActivity {
         .addOnSuccessListener(visionText -> {
           String text = visionText.getText();
           Log.d(TAG, "OCR text: " + text);
+          closeTextRecognizer(recognizer);
           finishWithResult(imagePath, width, height, rectanglesJson, selectedRectJson, text);
         })
         .addOnFailureListener(e -> {
           Log.e(TAG, "OCR failed", e);
+          closeTextRecognizer(recognizer);
           finishWithResult(imagePath, width, height, rectanglesJson, selectedRectJson, "");
         });
     } catch (IOException e) {
       Log.e(TAG, "Failed to load image for OCR", e);
       finishWithResult(imagePath, width, height, rectanglesJson, selectedRectJson, "");
+    }
+  }
+
+  private void closeTextRecognizer(TextRecognizer recognizer) {
+    try {
+      recognizer.close();
+    } catch (Exception e) {
+      Log.e(TAG, "Failed to close TextRecognizer", e);
     }
   }
 
