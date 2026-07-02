@@ -33,9 +33,11 @@ public class RectangleCropper {
       File directory,
       String prefix) throws IOException {
     Mat cropped = crop(source, rect);
+    Mat encoded = toRgbForEncoding(cropped);
     File file = File.createTempFile(prefix, ".jpg", directory);
-    boolean ok = Imgcodecs.imwrite(file.getAbsolutePath(), cropped);
+    boolean ok = Imgcodecs.imwrite(file.getAbsolutePath(), encoded);
     cropped.release();
+    encoded.release();
     if (!ok) {
       throw new IOException("Failed to write cropped image to " + file.getAbsolutePath());
     }
@@ -105,6 +107,31 @@ public class RectangleCropper {
   }
 
   /**
+   * Converts a Mat to RGB before JPEG encoding.
+   * OpenCV Mats from {@code Utils.bitmapToMat} are RGBA, Mats from
+   * {@code Imgcodecs.imread} are BGR, and browsers/Android ImageViews expect
+   * RGB JPEGs. Grayscale Mats are passed through unchanged.
+   */
+  public static Mat toRgbForEncoding(Mat src) {
+    Mat dst = new Mat();
+    switch (src.channels()) {
+      case 1:
+        src.copyTo(dst);
+        break;
+      case 3:
+        Imgproc.cvtColor(src, dst, Imgproc.COLOR_BGR2RGB);
+        break;
+      case 4:
+        Imgproc.cvtColor(src, dst, Imgproc.COLOR_RGBA2RGB);
+        break;
+      default:
+        src.copyTo(dst);
+        break;
+    }
+    return dst;
+  }
+
+  /**
    * Orders four points as top-left, top-right, bottom-right, bottom-left.
    */
   public static Point[] orderPoints(Point[] points) {
@@ -116,8 +143,8 @@ public class RectangleCropper {
     Point topLeft = sorted[0];
     Point bottomRight = sorted[3];
 
-    // top-right has the smallest difference, bottom-left the largest.
-    java.util.Arrays.sort(sorted, (a, b) -> Double.compare(a.x - a.y, b.x - b.y));
+    // top-right has the smallest (y - x), bottom-left the largest.
+    java.util.Arrays.sort(sorted, (a, b) -> Double.compare(a.y - a.x, b.y - b.x));
     Point topRight = sorted[0];
     Point bottomLeft = sorted[3];
 
@@ -145,7 +172,9 @@ public class RectangleCropper {
 
   public static File matToFile(Mat mat, int quality, File directory, String prefix) throws IOException {
     File file = File.createTempFile(prefix, ".jpg", directory);
-    boolean ok = Imgcodecs.imwrite(file.getAbsolutePath(), mat);
+    Mat encoded = toRgbForEncoding(mat);
+    boolean ok = Imgcodecs.imwrite(file.getAbsolutePath(), encoded);
+    encoded.release();
     if (!ok) {
       throw new IOException("Failed to write image to " + file.getAbsolutePath());
     }
@@ -153,9 +182,11 @@ public class RectangleCropper {
   }
 
   public static String matToBase64(Mat mat, int quality) {
+    Mat encoded = toRgbForEncoding(mat);
     MatOfByte buffer = new MatOfByte();
     MatOfInt params = new MatOfInt(Imgcodecs.IMWRITE_JPEG_QUALITY, quality);
-    Imgcodecs.imencode(".jpg", mat, buffer, params);
+    Imgcodecs.imencode(".jpg", encoded, buffer, params);
+    encoded.release();
     params.release();
     byte[] bytes = buffer.toArray();
     buffer.release();

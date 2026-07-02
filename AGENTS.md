@@ -29,6 +29,37 @@ pnpm cap:android:dev   # sync Android to the running `pnpm dev` server for live 
 
 For Android live reload, run `pnpm dev` in one terminal, then run `pnpm cap:android:dev` in another. The helper script finds your machine's LAN IP and points the Android WebView at `http://<ip>:3000`. Make sure the Android device and dev machine are on the same network.
 
+### Native Android build / install on a connected device
+
+When the web assets have changed, regenerate and sync first:
+
+```bash
+pnpm generate
+npx cap sync android
+```
+
+Then build and install the debug APK (from the `android` directory):
+
+```bash
+export JAVA_HOME='/c/Program Files/Android/Android Studio/jbr'
+export PATH="$JAVA_HOME/bin:$PATH"
+./gradlew :app:installDebug
+```
+
+If `adb` is not on your `PATH`, use the SDK recorded in `android/local.properties`. On this machine that is:
+
+```bash
+'/d/android/platform-tools/adb.exe' devices
+'/d/android/platform-tools/adb.exe' shell run-as com.docpal.warehousedemo ls cache/
+```
+
+To clear old debug/output images from the app cache:
+
+```bash
+'/d/android/platform-tools/adb.exe' shell \
+  "run-as com.docpal.warehousedemo sh -c 'rm -f cache/debug_* cache/rectangle_*'"
+```
+
 ## Code conventions
 
 - Follow existing patterns. Make minimal, focused changes.
@@ -40,7 +71,16 @@ For Android live reload, run `pnpm dev` in one terminal, then run `pnpm cap:andr
 
 ## Testing
 
-There is no automated test suite yet. Verify work with:
+There is a small Android unit-test suite for the OpenCV crop logic. Run it with:
+
+```bash
+cd android
+export JAVA_HOME='/c/Program Files/Android/Android Studio/jbr'
+export PATH="$JAVA_HOME/bin:$PATH"
+./gradlew :app:testDebugUnitTest
+```
+
+Also verify work with:
 
 1. `pnpm nuxt prepare` — ensure types generate without errors.
 2. Manual browser check — log in as `operator` / `DocPal2026!`, navigate through the affected flows, and confirm behavior.

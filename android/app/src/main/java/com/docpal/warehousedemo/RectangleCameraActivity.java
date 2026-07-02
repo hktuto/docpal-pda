@@ -4,10 +4,7 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.ImageFormat;
-import android.graphics.Matrix;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.util.Log;
@@ -39,7 +36,6 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.opencv.android.OpenCVLoader;
-import org.opencv.android.Utils;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
@@ -234,17 +230,15 @@ public class RectangleCameraActivity extends ComponentActivity {
         buffer.get(bytes);
         saveDebugBytes(bytes, "raw_jpeg");
 
-        BitmapFactory.Options options = new BitmapFactory.Options();
-        options.inPreferredConfig = Bitmap.Config.ARGB_8888;
-        Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length, options);
-        if (bitmap == null) {
+        Mat decoded = Imgcodecs.imdecode(new MatOfByte(bytes), Imgcodecs.IMREAD_GRAYSCALE);
+        if (decoded == null || decoded.empty()) {
           Log.e(TAG, "Failed to decode JPEG capture");
           return null;
         }
 
-        Mat decoded = bitmapToMatRotated(bitmap, rotationDegrees);
-        bitmap.recycle();
-        return decoded;
+        Mat rotated = rotateMat(decoded, rotationDegrees);
+        decoded.release();
+        return rotated;
       } else if (format == ImageFormat.YUV_420_888 && image.getPlanes().length >= 1) {
         ImageProxy.PlaneProxy yPlane = image.getPlanes()[0];
         Mat gray = new Mat(
@@ -266,26 +260,6 @@ public class RectangleCameraActivity extends ComponentActivity {
     }
   }
 
-  private Mat bitmapToMatRotated(Bitmap bitmap, int rotationDegrees) {
-    Matrix matrix = new Matrix();
-    matrix.postRotate(rotationDegrees);
-
-    Bitmap rotated = Bitmap.createBitmap(
-      bitmap,
-      0,
-      0,
-      bitmap.getWidth(),
-      bitmap.getHeight(),
-      matrix,
-      true
-    );
-
-    Mat mat = new Mat();
-    Utils.bitmapToMat(rotated, mat);
-    rotated.recycle();
-    return mat;
-  }
-
   private void saveDebugBytes(byte[] bytes, String suffix) {
     try {
       File file = new File(getCacheDir(), "debug_" + suffix + "_" + System.currentTimeMillis() + ".jpg");
@@ -300,7 +274,9 @@ public class RectangleCameraActivity extends ComponentActivity {
 
   private void saveDebugMat(Mat mat, String suffix) {
     File file = new File(getCacheDir(), "debug_" + suffix + "_" + System.currentTimeMillis() + ".jpg");
-    Imgcodecs.imwrite(file.getAbsolutePath(), mat);
+    Mat encoded = RectangleCropper.toRgbForEncoding(mat);
+    Imgcodecs.imwrite(file.getAbsolutePath(), encoded);
+    encoded.release();
     Log.d(TAG, "Saved debug mat: " + file.getAbsolutePath());
   }
 
@@ -492,9 +468,15 @@ public class RectangleCameraActivity extends ComponentActivity {
   @Override
   protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
     super.onActivityResult(requestCode, resultCode, data);
-    if (requestCode == PICKER_REQUEST_CODE && resultCode == Activity.RESULT_OK && data != null) {
+    if (requestCode != PICKER_REQUEST_CODE) {
+      return;
+    }
+    if (resultCode == Activity.RESULT_OK && data != null) {
       setResult(Activity.RESULT_OK, data);
       finish();
+    } else if (resultCode == Activity.RESULT_CANCELED) {
+      // User cancelled the picker; release the capture lock so they can try again.
+      resetCaptureState();
     }
   }
 

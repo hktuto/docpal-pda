@@ -251,4 +251,4 @@ The database lives in the browser's IndexedDB. Use the **⋮ → Reset local DB*
 - **No migrations.** The schema is created once from `db/init.ts` when the `users` table does not exist. Schema changes require clearing IndexedDB.
 - **Allocation is greedy.** It fills shelved lots first, then receiving-area lots, without partial date-code relaxation or FIFO beyond the required date code filter.
 - **Scanning is typed input.** There is no camera/barcode integration yet; the operator types part numbers and label data into a text field. The parsing logic normalizes input and applies simple OCR-style substitutions (e.g. `O` → `0`) so the demo can simulate real scan errors.
-- **No automated test suite.** Verification is currently manual browser testing plus `pnpm nuxt prepare` for TypeScript generation.
+- **Limited automated tests.** There is a small Android unit-test suite for the OpenCV crop logic (`./gradlew :app:testDebugUnitTest`). Most verification is still manual browser testing plus `pnpm nuxt prepare` for TypeScript generation.
