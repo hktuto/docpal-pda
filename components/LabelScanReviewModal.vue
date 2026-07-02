@@ -5,13 +5,13 @@
     role="dialog"
     aria-modal="true"
     aria-labelledby="review-title"
-    @click.self="!applying && close()"
-    @keydown.esc="!applying && close()"
+    @click.self="!applying && !matching && close()"
+    @keydown.esc="!applying && !matching && close()"
   >
     <div class="modal">
       <div class="modal__header">
         <h3 id="review-title">Review scan</h3>
-        <button class="modal__close" aria-label="Close" :disabled="applying" @click="close">×</button>
+        <button type="button" class="modal__close" aria-label="Close" :disabled="applying || matching" @click="close">×</button>
       </div>
 
       <div class="modal__body">
@@ -51,12 +51,12 @@
 
         <div class="match-section">
           <template v-if="localMatchResult.type === 'single'">
-            <div class="card" style="border-left: 4px solid #16a34a;">
+            <div class="card card--success">
               <p><strong>1 match found</strong></p>
             </div>
             <button
-              class="btn"
-              style="width: 100%; margin-top: 1rem;"
+              type="button"
+              class="btn btn--full"
               :disabled="applying"
               @click="applyRecord(localMatchResult.apply)"
             >
@@ -67,10 +67,12 @@
           <template v-else-if="localMatchResult.type === 'multiple'">
             <p class="subtitle">Multiple matches found. Choose one.</p>
             <div class="options">
-              <div
+              <button
                 v-for="(record, index) in localMatchResult.records"
                 :key="index"
+                type="button"
                 class="option"
+                :disabled="applying || matching"
                 @click="applyRecord(record.apply)"
               >
                 <div class="letter">📦</div>
@@ -78,18 +80,18 @@
                   <h3>Match {{ index + 1 }}</h3>
                   <p>{{ formatRecord(record.record) }}</p>
                 </div>
-              </div>
+              </button>
             </div>
           </template>
 
           <template v-else-if="localMatchResult.type === 'none'">
-            <div class="card" style="border-left: 4px solid #dc2626;">
+            <div class="card card--danger">
               <p><strong>No match found</strong></p>
             </div>
           </template>
 
           <template v-else-if="localMatchResult.type === 'error'">
-            <div class="card" style="border-left: 4px solid #dc2626;">
+            <div class="card card--danger">
               <p><strong>Error</strong></p>
               <p class="subtitle">{{ localMatchResult.message }}</p>
             </div>
@@ -99,10 +101,10 @@
         <p v-if="applyError" class="error">{{ applyError }}</p>
 
         <div class="actions">
-          <button class="btn btn--secondary" :disabled="applying" @click="emit('retake')">Retake</button>
-          <button class="btn btn--secondary" :disabled="applying" @click="close">Cancel</button>
-          <button class="btn" :disabled="applying" @click="findMatch">
-            {{ applying ? "Matching…" : "Find match" }}
+          <button type="button" class="btn btn--secondary" :disabled="applying || matching" @click="emit('retake')">Retake</button>
+          <button type="button" class="btn btn--secondary" :disabled="applying || matching" @click="close">Cancel</button>
+          <button type="button" class="btn" :disabled="applying || matching" @click="findMatch">
+            {{ matching ? "Matching…" : "Find match" }}
           </button>
         </div>
       </div>
@@ -134,6 +136,7 @@ const { matchReceiving, matchPicking, matchPutAway, matchMeasuring, matchGoodsVe
 const localMatchResult = ref<ScanMatchResult>(props.matchResult);
 const editable = ref<OcrInput>({ ...props.parsed });
 const applying = ref(false);
+const matching = ref(false);
 const applyError = ref<string | null>(null);
 
 const imageSrc = computed(() => {
@@ -145,12 +148,15 @@ watch(() => props.matchResult, (v) => { localMatchResult.value = v; });
 watch(() => props.parsed, (v) => { editable.value = { ...v }; });
 
 async function findMatch() {
+  matching.value = true;
   applyError.value = null;
   try {
     const result = await runMatcher();
     localMatchResult.value = result;
   } catch (e: any) {
     localMatchResult.value = { type: 'error', message: e?.message ?? 'Match failed' };
+  } finally {
+    matching.value = false;
   }
 }
 
@@ -326,6 +332,14 @@ function formatRecord(record: unknown): string {
   margin: 0;
 }
 
+.card--success {
+  border-left: 4px solid #16a34a;
+}
+
+.card--danger {
+  border-left: 4px solid #dc2626;
+}
+
 .options {
   display: flex;
   flex-direction: column;
@@ -336,15 +350,24 @@ function formatRecord(record: unknown): string {
   display: flex;
   gap: 0.75rem;
   align-items: center;
+  width: 100%;
   padding: 0.75rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
+  color: var(--text);
+  font-size: 1rem;
+  text-align: left;
   cursor: pointer;
 }
 
-.option:hover {
+.option:hover:not(:disabled) {
   border-color: var(--primary);
+}
+
+.option:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .option .letter {
@@ -391,5 +414,10 @@ function formatRecord(record: unknown): string {
   background: var(--surface);
   color: var(--text);
   border-color: var(--border);
+}
+
+.btn--full {
+  width: 100%;
+  margin-top: 1rem;
 }
 </style>
