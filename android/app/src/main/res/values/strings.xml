@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Warehouse PDA</string>
+    <string name="title_activity_main">Warehouse PDA</string>
+    <string name="package_name">com.docpal.warehousedemo</string>
+    <string name="custom_url_scheme">com.docpal.warehousedemo</string>
+</resources>
