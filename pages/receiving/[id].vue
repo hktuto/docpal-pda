@@ -49,6 +49,7 @@
           class="btn"
           style="border-radius: 9999px; width: 3.5rem; height: 3.5rem; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow);"
           aria-label="Scan label"
+          :disabled="scanning"
           @click="openScan()"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -259,6 +260,7 @@
             <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
               <button
                 class="btn btn--small"
+                :disabled="scanning"
                 @click="openScan(pi.id)"
               >
                 Scan
@@ -286,11 +288,16 @@
         </div>
       </template>
 
-      <OcrScanModal
-        v-model="scanOpen"
-        :receiving-order-id="orderId"
-        :picking-item-id="scanItemId"
-        @applied="load"
+      <LabelScanReviewModal
+        v-if="review?.status === 'review'"
+        v-model="reviewOpen"
+        :image-path="review.capture.imagePath"
+        :text="review.capture.text"
+        :parsed="review.parsed"
+        :match-result="review.matchResult"
+        :context="{ task: 'receiving', receivingOrderId: orderId, pickingItemId: scanPickingItemId }"
+        @applied="onApplied"
+        @retake="onRetake"
       />
     </template>
   </div>
@@ -298,7 +305,8 @@
 
 <script setup lang="ts">
 import { noopDecoder, sql } from "drizzle-orm";
-import OcrScanModal from "~/components/OcrScanModal.vue";
+import { useLabelScan, type LabelScanResult } from "~/composables/useLabelScan";
+import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import {
   getReceivingOrderDetail,
   updateReceivingItemMismatch,
@@ -329,8 +337,10 @@ const pickingRows = ref<PickingByReceivingRow[]>([]);
 const form = ref<Record<string, { actualQty: number; note: string }>>({});
 const saving = ref<Record<string, boolean>>({});
 const confirming = ref(false);
-const scanOpen = ref(false);
-const scanItemId = ref<string | undefined>(undefined);
+const { scan, scanning } = useLabelScan();
+const reviewOpen = ref(false);
+const review = ref<LabelScanResult | null>(null);
+const scanPickingItemId = ref<string | undefined>(undefined);
 const view = ref<"receiving" | "picking">("receiving");
 const headerExpanded = ref(false);
 const transitionLogs = ref<Record<string, any[]>>({});
@@ -564,9 +574,29 @@ function toggleExpand(itemId: string) {
   expandedItems.value = next;
 }
 
-function openScan(itemId?: string) {
-  scanItemId.value = itemId;
-  scanOpen.value = true;
+async function openScan(itemId?: string) {
+  scanPickingItemId.value = itemId;
+  const result = await scan({
+    task: 'receiving',
+    receivingOrderId: orderId,
+    pickingItemId: itemId,
+  });
+  if (result.status === 'applied') {
+    await load();
+  } else if (result.status === 'review') {
+    review.value = result;
+    reviewOpen.value = true;
+  }
+}
+
+async function onApplied() {
+  reviewOpen.value = false;
+  await load();
+}
+
+async function onRetake() {
+  reviewOpen.value = false;
+  await openScan(scanPickingItemId.value);
 }
 
 async function saveMismatch(itemId: string) {
