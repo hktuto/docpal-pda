@@ -60,11 +60,17 @@
           <span class="detail-label">Required date code</span>
           <span>{{ item.requiredDateCode || "—" }}</span>
         </div>
+        <div class="detail-row">
+          <span class="detail-label">Status</span>
+          <span class="badge" :class="{ 'badge--finished': item.pickedQty >= item.qty }">
+            {{ item.pickedQty >= item.qty ? "Finished" : "Picking" }}
+          </span>
+        </div>
 
-        <div v-if="item.allocations?.length" style="margin-top: 0.75rem;">
+        <div v-if="item.allocations?.filter(a => a.qty > 0).length" style="margin-top: 0.75rem;">
           <h3 style="margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--muted);">Allocations</h3>
           <div
-            v-for="allocation in item.allocations"
+            v-for="allocation in item.allocations.filter(a => a.qty > 0)"
             :key="allocation.id"
             class="lot"
           >
@@ -148,6 +154,27 @@
           </div>
         </div>
 
+        <div style="margin-top: 0.75rem;">
+          <button class="btn btn--small" @click="toggleExpand(item.id)">
+            {{ expandedItems.has(item.id) ? "Hide scan records" : "Show scan records" }}
+            ({{ (transitionLogs[item.id] || []).length }})
+          </button>
+
+          <div v-if="expandedItems.has(item.id)" style="margin-top: 0.5rem;">
+            <p v-if="!(transitionLogs[item.id] || []).length" class="card__meta">No scan records.</p>
+            <ul v-else style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--muted);">
+              <li v-for="log in transitionLogs[item.id]" :key="log.id" style="margin-bottom: 0.35rem;">
+                {{ new Date(log.createdAt).toLocaleString() }}
+                · {{ log.actorName || "System" }}
+                · {{ log.fromState || "—" }} → {{ log.toState }}
+                <span v-if="log.metadata">
+                  · {{ JSON.parse(log.metadata).qty ?? JSON.parse(log.metadata).note }}
+                </span>
+              </li>
+            </ul>
+          </div>
+        </div>
+
         <div v-if="order.status !== 'finished'" style="margin-top: 0.75rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
           <input
             v-model="notes[item.id]"
@@ -171,6 +198,7 @@ import {
   materializeReceivingAllocation,
   reportPickingItemMismatch,
   finishPickingOrder,
+  getPickingItemTransitionLogs,
 } from "~/db/picking";
 
 definePageMeta({ title: "Picking Detail" });
@@ -191,6 +219,8 @@ const finishing = ref(false);
 const receivingForm = ref<
   Record<string, { dateCode: string; lotCode: string; originCountry: string; qty: number }>
 >({});
+const transitionLogs = ref<Record<string, any[]>>({});
+const expandedItems = ref<Set<string>>(new Set());
 
 const allItemsFullyPicked = computed(
   () => order.value?.items?.every((i: any) => i.pickedQty >= i.qty) ?? false
@@ -218,12 +248,32 @@ async function load() {
       }
       notes.value = nextNotes;
       receivingForm.value = nextForm;
+
+      const itemIds = data.items.map((i: any) => i.id);
+      const logs = await getPickingItemTransitionLogs(db, itemIds);
+      const nextLogs: Record<string, any[]> = {};
+      for (const log of logs) {
+        const list = nextLogs[log.entityId] ?? [];
+        list.push(log);
+        nextLogs[log.entityId] = list;
+      }
+      transitionLogs.value = nextLogs;
     }
   } catch (e: any) {
     error.value = e?.message ?? String(e);
   } finally {
     pending.value = false;
   }
+}
+
+function toggleExpand(itemId: string) {
+  const next = new Set(expandedItems.value);
+  if (next.has(itemId)) {
+    next.delete(itemId);
+  } else {
+    next.add(itemId);
+  }
+  expandedItems.value = next;
 }
 
 async function markPicked(allocationId: string, qty: number) {
@@ -322,5 +372,10 @@ onMounted(load);
 
 .card--done {
   border-left: 4px solid #16a34a;
+}
+
+.badge--finished {
+  background: #dcfce7;
+  color: #166534;
 }
 </style>

@@ -14,7 +14,10 @@ The demo models an event-driven warehouse with two overlapping workflows that sh
 2. The worker confirms the order is here.
 3. The system creates receiving-area inventory lots and immediately tries to allocate them to any not-yet-fully-targeted picking orders.
 4. The worker can open the receiving order in **Picking view** to see which picking orders need goods from this shipment, pick them out, and reduce the receiving-area stock.
-   - The worker can also use the **scan button** on the Picking tab to type label data (part number, quantity, date/lot code, and origin country). The system matches the input to linked receiving and picking records and applies the pick automatically.
+   - Each line has its own **Scan** button, so the worker can scan directly into that picking item without choosing from multiple orders.
+   - The worker can also use the global **scan button** on the Picking tab to type label data (part number, quantity, date/lot code, and origin country). The system matches the input to linked receiving and picking records and applies the pick automatically.
+   - A **search box** filters the linked picking orders by order number, part number, date code, or lot code.
+   - Each picking order number is a link to the full picking order detail page.
 5. If any stock is left over, the worker can **Shelve (put away)** the remainder into a shelf box. The system logs where every item went.
 6. When a picking order is fully picked, a measuring task is created so the goods can be packed into shipping boxes.
 
@@ -26,7 +29,7 @@ The demo models an event-driven warehouse with two overlapping workflows that sh
 
 ### Supporting actions
 
-- **Receiving** — confirm arrivals, report mismatches, create receiving-area inventory lots, and see at a glance how many picking orders still need stock from each receiving order.
+- **Receiving** — confirm arrivals, report mismatches, create receiving-area inventory lots, see at a glance how many picking orders still need stock from each receiving order, and pick directly into linked picking orders from the Picking view.
 - **Picking** — collect allocated items from shelves or directly from receiving-area lots.
 - **Picking by receiving** — look at one receiving order and see every picking order consuming its stock.
 - **Shelve / Put-away** — move unallocated receiving-area stock into a shelf box; this creates new shelved inventory for future picking.
@@ -112,6 +115,9 @@ transition_logs                   (all status changes)
 
 - On the receiving order detail page, the operator can switch to **Picking view**.
 - This view groups the receiving order's stock by the related picking orders and shows exactly which items and quantities need to be picked out of this shipment.
+- Each picking item has a **Scan** button that applies the typed label directly to that item, avoiding the multi-order chooser.
+- A **search box** filters the list by picking order number, part number, date code, or lot code.
+- Each picking order number links to the full picking order detail page.
 - Picking here reduces the same receiving-area lots as the normal picking flow.
 
 ### Shelving / Put-away
@@ -151,7 +157,7 @@ transition_logs                   (all status changes)
 | `/` | Login |
 | `/home` | Main menu |
 | `/receiving` | List receiving orders (filter: All / Pending / In hand) |
-| `/receiving/:id` | Receiving order detail; **Receiving** view shows invoices/items, **Picking** view shows linked picking orders and the scan modal |
+| `/receiving/:id` | Receiving order detail; **Receiving** view shows invoices/items, **Picking** view shows linked picking orders, per-item scan, search, and order links |
 | `/picking` | List active picking orders |
 | `/picking/:id` | Picking order detail / mark picked |
 | `/picking-by-receiving` | List in-hand receiving orders and drill into picking usage |

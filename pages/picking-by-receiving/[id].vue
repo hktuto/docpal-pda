@@ -57,15 +57,42 @@
                 <span>{{ item.requiredQty }} / {{ item.pickedQty }}</span>
               </div>
               <div class="detail-row">
+                <span class="detail-label">Status</span>
+                <span class="badge" :class="{ 'badge--finished': item.pickedQty >= item.requiredQty }">
+                  {{ item.pickedQty >= item.requiredQty ? "Finished" : "Picking" }}
+                </span>
+              </div>
+              <div v-if="item.locations.filter(l => l.allocatedQty > 0).length" class="detail-row">
                 <span class="detail-label">Pick locations</span>
               </div>
-              <ul style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--muted);">
-                <li v-for="loc in item.locations" :key="loc.allocationId">
+              <ul v-if="item.locations.filter(l => l.allocatedQty > 0).length" style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--muted);">
+                <li v-for="loc in item.locations.filter(l => l.allocatedQty > 0)" :key="loc.allocationId">
                   {{ loc.shelfCode || loc.boxId || "Receiving area" }}
                   · {{ loc.dateCode || "—" }} / {{ loc.lotCode || "—" }} / {{ loc.originCountry || "—" }}
                   · qty {{ loc.allocatedQty }}
                 </li>
               </ul>
+
+              <div style="margin-top: 0.5rem;">
+                <button class="btn btn--small" @click="toggleExpand(item.id)">
+                  {{ expandedItems.has(item.id) ? "Hide scan records" : "Show scan records" }}
+                  ({{ (transitionLogs[item.id] || []).length }})
+                </button>
+
+                <div v-if="expandedItems.has(item.id)" style="margin-top: 0.5rem;">
+                  <p v-if="!(transitionLogs[item.id] || []).length" class="card__meta">No scan records.</p>
+                  <ul v-else style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--muted);">
+                    <li v-for="log in transitionLogs[item.id]" :key="log.id" style="margin-bottom: 0.35rem;">
+                      {{ new Date(log.createdAt).toLocaleString() }}
+                      · {{ log.actorName || "System" }}
+                      · {{ log.fromState || "—" }} → {{ log.toState }}
+                      <span v-if="log.metadata">
+                        · {{ JSON.parse(log.metadata).qty ?? JSON.parse(log.metadata).note }}
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -79,6 +106,7 @@
 import { getReceivingOrderDetail } from "~/db/receiving";
 import {
   getPickingOrdersByReceivingOrder,
+  getPickingItemTransitionLogs,
   type PickingByReceivingRow,
 } from "~/db/picking";
 
@@ -93,6 +121,8 @@ const pending = ref(true);
 const error = ref<string | null>(null);
 const receivingOrder = ref<Awaited<ReturnType<typeof getReceivingOrderDetail>> | null>(null);
 const rows = ref<PickingByReceivingRow[]>([]);
+const transitionLogs = ref<Record<string, any[]>>({});
+const expandedItems = ref<Set<string>>(new Set());
 
 let mounted = false;
 
@@ -159,6 +189,16 @@ const groupedOrders = computed<GroupedOrder[]>(() => {
   return Array.from(map.values());
 });
 
+function toggleExpand(itemId: string) {
+  const next = new Set(expandedItems.value);
+  if (next.has(itemId)) {
+    next.delete(itemId);
+  } else {
+    next.add(itemId);
+  }
+  expandedItems.value = next;
+}
+
 async function load() {
   try {
     const [orderData, linkedRows] = await Promise.all([
@@ -168,6 +208,16 @@ async function load() {
     if (!mounted) return;
     receivingOrder.value = orderData;
     rows.value = linkedRows;
+
+    const itemIds = Array.from(new Set(linkedRows.map((r) => r.picking_item_id)));
+    const logs = itemIds.length ? await getPickingItemTransitionLogs(db, itemIds) : [];
+    const nextLogs: Record<string, any[]> = {};
+    for (const log of logs) {
+      const list = nextLogs[log.entityId] ?? [];
+      list.push(log);
+      nextLogs[log.entityId] = list;
+    }
+    transitionLogs.value = nextLogs;
   } catch (e: any) {
     if (!mounted) return;
     error.value = e?.message ?? String(e);
@@ -214,5 +264,10 @@ onUnmounted(() => {
   border-radius: var(--radius);
   padding: 0.75rem;
   margin-bottom: 0.5rem;
+}
+
+.badge--finished {
+  background: #dcfce7;
+  color: #166534;
 }
 </style>

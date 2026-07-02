@@ -29,7 +29,8 @@ export function useOcrPicking() {
   async function match(
     db: PgliteDatabase<typeof schema>,
     receivingOrderId: string,
-    parsed: OcrParseResult
+    parsed: OcrParseResult,
+    pickingItemId?: string
   ) {
     if (
       matchResult.value.status === "scanning" ||
@@ -66,17 +67,25 @@ export function useOcrPicking() {
         return;
       }
 
-      const pickingCandidates = await findPickingCandidates(
+      let pickingCandidates = await findPickingCandidates(
         db,
         receivingOrderId,
         receiving.partId,
         parsed.qty
       );
 
+      if (pickingItemId) {
+        pickingCandidates = pickingCandidates.filter(
+          (c) => c.pickingItemId === pickingItemId
+        );
+      }
+
       if (pickingCandidates.length === 0) {
         matchResult.value = {
           status: "no_match",
-          reason: "No linked picking order needs this item.",
+          reason: pickingItemId
+            ? "This picking item does not match the scanned label."
+            : "No linked picking order needs this item.",
         };
         return;
       }

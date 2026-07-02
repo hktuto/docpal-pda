@@ -4,19 +4,30 @@
   "type": "module",
   "scripts": {
     "build": "nuxt build",
-    "dev": "nuxt dev",
+    "dev": "nuxt dev --host 0.0.0.0",
     "generate": "nuxt generate",
     "preview": "node .output/server/index.mjs",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "cap:sync": "cap sync",
+    "cap:android": "nuxt generate && cap sync android && cap open android",
+    "cap:android:dev": "node scripts/cap-android-dev.mjs"
   },
   "dependencies": {
+    "@capacitor-mlkit/subject-segmentation": "^8.1.0",
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/camera": "^8.2.0",
+    "@capacitor/cli": "^8.4.1",
+    "@capacitor/core": "^8.4.1",
     "@electric-sql/pglite": "^0.3.0",
     "@electric-sql/pglite-vue": "^0.2.0",
+    "@pantrist/capacitor-plugin-ml-kit-text-recognition": "^8.0.0",
     "drizzle-orm": "^0.45.0",
     "nuxt": "^3.12.0",
+    "sass": "^1.101.0",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
-    "@types/uuid": "^9.0.8"
+    "@types/uuid": "^9.0.8",
+    "typescript": "^6.0.3"
   }
 }

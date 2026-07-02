@@ -29,6 +29,11 @@
       <p class="card__title">Measuring</p>
       <p class="card__meta">Weigh and pack shipping boxes.</p>
     </NuxtLink>
+
+    <NuxtLink to="/ocr-demo" class="card">
+      <p class="card__title">Camera OCR demo</p>
+      <p class="card__meta">Take a photo and run on-device text recognition.</p>
+    </NuxtLink>
   </div>
 </template>
 

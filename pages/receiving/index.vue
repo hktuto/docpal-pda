@@ -40,8 +40,8 @@
           <p class="card__meta" style="margin-top: 0.25rem;">
             {{ ro.delivery_date ? new Date(ro.delivery_date).toLocaleDateString() : "No date" }}
           </p>
-          <span v-if="ro.remaining_qty > 0" class="badge" style="margin-top: 0.25rem; background: #dcfce7; color: #166534;">
-            {{ ro.remaining_qty }} remaining
+          <span v-if="ro.remaining_items > 0" class="badge" style="margin-top: 0.25rem; background: #dcfce7; color: #166534;">
+            {{ ro.remaining_items }} item{{ ro.remaining_items === 1 ? '' : 's' }} remaining
           </span>
           <span
             v-if="ro.pending_picking_orders > 0"
@@ -69,7 +69,7 @@ interface ReceivingOrderRow {
   status: string;
   delivery_date: string | null;
   supplier_name: string | null;
-  remaining_qty: number;
+  remaining_items: number;
   pending_picking_orders: number;
 }
 
@@ -93,14 +93,12 @@ const query = computed(() => {
     ro.status,
     ro.delivery_date,
     s.name AS supplier_name,
-    COALESCE(SUM(
-      CASE
-        WHEN ro.status = 'in_hand'
-        THEN rii.received_qty - rii.picked_qty - rii.put_away_qty -
-             COALESCE(alloc.allocated_qty, 0)
-        ELSE 0
-      END
-    ), 0) AS remaining_qty,
+    COALESCE(COUNT(DISTINCT CASE
+      WHEN ro.status = 'in_hand'
+        AND (rii.received_qty - rii.picked_qty - rii.put_away_qty -
+             COALESCE(alloc.allocated_qty, 0)) > 0
+      THEN rii.id
+    END), 0) AS remaining_items,
     COALESCE((
       SELECT COUNT(DISTINCT po_id)
       FROM (

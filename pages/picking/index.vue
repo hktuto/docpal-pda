@@ -14,7 +14,7 @@
     </div>
 
     <p v-if="loading" class="empty">Loading…</p>
-    <p v-else-if="rows.length === 0" class="empty">No picking orders need action.</p>
+    <p v-else-if="rows.length === 0" class="empty">No picking orders found.</p>
 
     <NuxtLink
       v-for="po in rows"
@@ -61,8 +61,7 @@ const result = useLiveQuery<PickingOrderRow>(
   `SELECT po.id, po.ref_no, po.status, po.delivery_date, po.ship_to, s.name AS supplier_name
    FROM picking_orders po
    LEFT JOIN suppliers s ON po.supplier_id = s.id
-   WHERE po.status != 'finished'
-   ORDER BY po.delivery_date;`
+   ORDER BY CASE WHEN po.status = 'finished' THEN 1 ELSE 0 END, po.delivery_date;`
 );
 
 const rows = computed(() => {

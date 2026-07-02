@@ -168,28 +168,15 @@ export async function confirmAllocationPicked(
             .where(eq(schema.receivingInvoiceItems.id, source.receivingInvoiceItemId));
 
           const newSourceQty = source.qty - apply;
-          if (newSourceQty > 0) {
-            await tx
-              .update(schema.inventoryLotSources)
-              .set({ qty: newSourceQty })
-              .where(eq(schema.inventoryLotSources.id, source.id));
-          } else {
-            await tx
-              .delete(schema.inventoryLotSources)
-              .where(eq(schema.inventoryLotSources.id, source.id));
-          }
+          await tx
+            .update(schema.inventoryLotSources)
+            .set({ qty: newSourceQty })
+            .where(eq(schema.inventoryLotSources.id, source.id));
           remaining -= apply;
         }
 
-        // Clean up empty receiving-area lots after a full pick.
-        if (qty === allocation.qty) {
-          await tx
-            .delete(schema.inventoryLotSources)
-            .where(eq(schema.inventoryLotSources.inventoryLotId, lot.id));
-          await tx
-            .delete(schema.inventoryLots)
-            .where(eq(schema.inventoryLots.id, lot.id));
-        }
+        // Keep empty receiving-area lots as history so the receiving view can
+        // still show which picking orders consumed its stock.
       }
     }
 
@@ -209,14 +196,12 @@ export async function confirmAllocationPicked(
       })
       .where(eq(schema.pickingItems.id, item.id));
 
-    if (qty < allocation.qty) {
-      await tx
-        .update(schema.allocations)
-        .set({ qty: sql`${schema.allocations.qty} - ${qty}` })
-        .where(eq(schema.allocations.id, allocationId));
-    } else {
-      await tx.delete(schema.allocations).where(eq(schema.allocations.id, allocationId));
-    }
+    // Reduce allocation to zero instead of deleting so the receiving-side
+    // picking view can keep showing the historical link after a full pick.
+    await tx
+      .update(schema.allocations)
+      .set({ qty: sql`${schema.allocations.qty} - ${qty}` })
+      .where(eq(schema.allocations.id, allocationId));
 
     await tx.insert(schema.transitionLogs).values({
       id: uuid(),
@@ -228,6 +213,8 @@ export async function confirmAllocationPicked(
       metadata: JSON.stringify({ allocationId, qty }),
       createdAt: new Date(),
     });
+
+    await maybeAutoFinishPickingOrder(db, item.pickingOrderId, actorId, tx);
   }
 }
 
@@ -247,6 +234,54 @@ export async function reportPickingItemMismatch(
     metadata: JSON.stringify({ note: note.trim() }),
     createdAt: new Date(),
   });
+}
+
+export async function maybeAutoFinishPickingOrder(
+  db: PgliteDatabase<typeof schema>,
+  pickingOrderId: string,
+  actorId: string,
+  tx?: PgliteDatabase<typeof schema>
+): Promise<void> {
+  if (tx) return finish(tx);
+  return db.transaction(finish);
+
+  async function finish(tx: PgliteDatabase<typeof schema>): Promise<void> {
+    const order = await tx.query.pickingOrders.findFirst({
+      where: eq(schema.pickingOrders.id, pickingOrderId),
+      with: { items: true },
+    });
+
+    if (!order || order.status === "finished") return;
+    if (order.items.length === 0) return;
+
+    const allPicked = order.items.every((i) => i.pickedQty >= i.qty);
+    if (!allPicked) return;
+
+    const now = new Date();
+
+    await tx
+      .update(schema.pickingOrders)
+      .set({ status: "finished", updatedAt: now })
+      .where(eq(schema.pickingOrders.id, pickingOrderId));
+
+    await tx.insert(schema.measuringTasks).values({
+      id: uuid(),
+      pickingOrderId,
+      status: "pending",
+      createdAt: now,
+    });
+
+    await tx.insert(schema.transitionLogs).values({
+      id: uuid(),
+      entityType: "picking_order",
+      entityId: pickingOrderId,
+      fromState: "picking",
+      toState: "finished",
+      actorId,
+      metadata: JSON.stringify({ auto: true }),
+      createdAt: now,
+    });
+  }
 }
 
 export async function finishPickingOrder(
@@ -292,6 +327,43 @@ export async function finishPickingOrder(
       createdAt: now,
     });
   });
+}
+
+export async function getPickingItemTransitionLogs(
+  db: PgliteDatabase<typeof schema>,
+  pickingItemIds: string[]
+) {
+  if (pickingItemIds.length === 0) return [];
+
+  // UUIDs only contain hex and dashes, so simple quoting is safe here.
+  // PGlite's Drizzle driver has trouble with multiple parameters inside IN (...),
+  // so we inline the id list as raw SQL.
+  const idList = pickingItemIds.map((id) => `'${id}'`).join(", ");
+  const result = await db.execute(sql`
+    SELECT
+      tl.id,
+      tl.entity_id,
+      tl.from_state,
+      tl.to_state,
+      tl.metadata,
+      tl.created_at,
+      u.display_name AS actor_name
+    FROM transition_logs tl
+    LEFT JOIN users u ON u.id = tl.actor_id
+    WHERE tl.entity_type = 'picking_item'
+      AND tl.entity_id IN (${sql.raw(idList)})
+    ORDER BY tl.created_at DESC
+  `);
+
+  return ((result.rows ?? []) as any[]).map((row) => ({
+    id: row.id,
+    entityId: row.entity_id,
+    fromState: row.from_state,
+    toState: row.to_state,
+    metadata: row.metadata,
+    createdAt: row.created_at,
+    actorName: row.actor_name,
+  }));
 }
 
 export async function getInHandReceivingOrdersWithSupplier(

@@ -118,6 +118,7 @@ import type { PickingCandidate } from "~/db/ocrPicking";
 const props = defineProps<{
   modelValue: boolean;
   receivingOrderId: string;
+  pickingItemId?: string;
 }>();
 
 const emit = defineEmits<{
@@ -189,7 +190,7 @@ async function onScanClick() {
     return;
   }
 
-  await match(db, props.receivingOrderId, parsed);
+  await match(db, props.receivingOrderId, parsed, props.pickingItemId);
   scanning.value = false;
 
   if (matchResult.value.status === "single") {

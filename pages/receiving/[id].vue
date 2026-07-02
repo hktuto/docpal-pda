@@ -4,48 +4,63 @@
     <p v-else-if="error" class="empty" style="color: var(--danger);">Error: {{ error }}</p>
 
     <template v-else-if="order">
-      <div class="card" style="margin-bottom: 1.5rem;">
-        <div class="detail-row">
-          <span class="detail-label">RO No.</span>
-          <span class="card__title">{{ order.refNo }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Status</span>
-          <span class="badge">{{ order.status }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Supplier</span>
-          <span>{{ order.supplier?.name || "—" }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Delivery date</span>
-          <span>{{ order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : "—" }}</span>
-        </div>
-        <div v-if="order.status === 'in_hand' && remainingQty > 0" class="detail-row">
-          <span class="detail-label">Remaining in receiving area</span>
-          <span>{{ remainingQty }} pcs</span>
-        </div>
-
-        <div v-if="order.status === 'pending'" style="margin-top: 1rem;">
-          <button class="btn" @click="confirmArrival" :disabled="confirming">
-            {{ confirming ? "Confirming…" : "Confirm arrived" }}
+      <div
+        class="card"
+        :class="{ 'card--flush-top': route.meta.props?.noPadding }"
+        style="margin-bottom: 1.5rem;"
+      >
+        <div class="card-header" @click="headerExpanded = !headerExpanded">
+          <div class="detail-row" style="flex: 1; border-bottom: none; padding: 0; justify-content: flex-start;align-items: center;">
+            <span class="detail-label">RO No.</span>
+            <span class="card__title" style="margin:0;">{{ order.refNo }}</span>
+          </div>
+          <div class="detail-row" style="border-bottom: none; padding: 0;">
+            <span class="detail-label">Status</span>
+            <span class="badge">{{ order.status }}</span>
+          </div>
+          <button
+            class="toggle-btn"
+            aria-label="Toggle order details"
+            @click.stop="headerExpanded = !headerExpanded"
+          >
+            {{ headerExpanded ? "▲" : "▼" }}
           </button>
         </div>
 
-        <div v-if="order.status === 'in_hand' && remainingQty > 0" style="margin-top: 0.75rem;">
-          <NuxtLink :to="`/put-away/${order.id}`" class="btn btn--small">
-            Shelve remaining stock
-          </NuxtLink>
-        </div>
+        <template v-if="headerExpanded">
+          <div class="detail-row">
+            <span class="detail-label">Supplier</span>
+            <span>{{ order.supplier?.name || "—" }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Delivery date</span>
+            <span>{{ order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : "—" }}</span>
+          </div>
+          <div v-if="order.status === 'in_hand' && remainingItems > 0" class="detail-row">
+            <span class="detail-label">Remaining items</span>
+            <span>{{ remainingItems }} item{{ remainingItems === 1 ? '' : 's' }}</span>
+          </div>
 
+          <div v-if="order.status === 'pending'" style="margin-top: 1rem;">
+            <button class="btn" @click="confirmArrival" :disabled="confirming">
+              {{ confirming ? "Confirming…" : "Confirm arrived" }}
+            </button>
+          </div>
+
+          <div v-if="order.status === 'in_hand' && remainingItems > 0" style="margin-top: 0.75rem;">
+            <NuxtLink :to="`/put-away/${order.id}`" class="btn btn--small">
+                Put away remaining stock
+            </NuxtLink>
+          </div>
+        </template>
       </div>
 
-      <div v-if="order.status === 'in_hand' && remainingQty > 0 && view === 'picking'" style="position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 60;">
+      <div v-if="order.status === 'in_hand' && remainingItems > 0 && view === 'picking'" style="position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 60;">
         <button
           class="btn"
           style="border-radius: 9999px; width: 3.5rem; height: 3.5rem; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow);"
           aria-label="Scan label"
-          @click="scanOpen = true"
+          @click="openScan()"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
@@ -93,17 +108,7 @@
               <span>{{ item.qty }}</span>
             </div>
             <div class="detail-row">
-              <span class="detail-label">Received</span>
-              <input
-                v-if="order.status === 'pending'"
-                v-model.number="form[item.id].actualQty"
-                type="number"
-                style="width: 6rem;"
-              />
-              <span v-else>{{ item.receivedQty }}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Allocated</span>
+              <span class="detail-label">Reserved</span>
               <span>{{ allocatedByItem[item.id] || 0 }}</span>
             </div>
             <div class="detail-row">
@@ -125,6 +130,12 @@
 
             <div v-if="order.status === 'pending'" style="margin-top: 0.75rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
               <input
+                v-model.number="form[item.id].actualQty"
+                type="number"
+                placeholder="Actual qty"
+                style="width: 6rem;"
+              />
+              <input
                 v-model="form[item.id].note"
                 type="text"
                 placeholder="Mismatch note"
@@ -144,14 +155,20 @@
 
       <template v-else>
         <h2>Picking view</h2>
-        <p v-if="groupedPickingOrders.length === 0" class="empty">
+        <input
+          v-model="searchQuery"
+          type="text"
+          placeholder="Search picking orders or parts…"
+          style="width: 100%; margin-bottom: 1rem;"
+        />
+        <p v-if="filteredGroupedPickingOrders.length === 0" class="empty">
           No picking orders are linked to this receiving order yet.
         </p>
 
-        <div v-for="po in groupedPickingOrders" :key="po.id" class="card" style="margin-bottom: 1.5rem;">
+        <div v-for="po in filteredGroupedPickingOrders" :key="po.id" class="card" style="margin-bottom: 1.5rem;">
           <div class="detail-row">
             <span class="detail-label">Picking order</span>
-            <span class="card__title">{{ po.ref_no }}</span>
+            <NuxtLink :to="`/picking/${po.id}`" class="card__title">{{ po.ref_no }}</NuxtLink>
           </div>
           <div class="detail-row">
             <span class="detail-label">Status</span>
@@ -168,15 +185,48 @@
               <span>{{ pi.required_qty }} / {{ pi.picked_qty }}</span>
             </div>
             <div class="detail-row">
+              <span class="detail-label">Status</span>
+              <span class="badge" :class="{ 'badge--finished': pi.picked_qty >= pi.required_qty }">
+                {{ pi.picked_qty >= pi.required_qty ? "Finished" : "Picking" }}
+              </span>
+            </div>
+            <div v-if="pi.locations.filter(l => l.allocated_qty > 0).length" class="detail-row">
               <span class="detail-label">Allocated lots</span>
             </div>
-            <ul style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--muted);">
-              <li v-for="(loc, idx) in pi.locations" :key="idx">
+            <ul v-if="pi.locations.filter(l => l.allocated_qty > 0).length" style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--muted);">
+              <li v-for="(loc, idx) in pi.locations.filter(l => l.allocated_qty > 0)" :key="idx">
                 {{ loc.shelf_code || loc.box_id || "Receiving area" }}
                 · {{ loc.date_code || "—" }} / {{ loc.lot_code || "—" }} / {{ loc.origin_country || "—" }}
                 · qty {{ loc.allocated_qty }}
               </li>
             </ul>
+
+            <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <button
+                class="btn btn--small"
+                @click="openScan(pi.id)"
+              >
+                Scan
+              </button>
+              <button class="btn btn--small" @click="toggleExpand(pi.id)">
+                {{ expandedItems.has(pi.id) ? "Hide scan records" : "Show scan records" }}
+                ({{ (transitionLogs[pi.id] || []).length }})
+              </button>
+
+              <div v-if="expandedItems.has(pi.id)" style="width: 100%; margin-top: 0.5rem;">
+                <p v-if="!(transitionLogs[pi.id] || []).length" class="card__meta">No scan records.</p>
+                <ul v-else style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--muted);">
+                  <li v-for="log in transitionLogs[pi.id]" :key="log.id" style="margin-bottom: 0.35rem;">
+                    {{ new Date(log.createdAt).toLocaleString() }}
+                    · {{ log.actorName || "System" }}
+                    · {{ log.fromState || "—" }} → {{ log.toState }}
+                    <span v-if="log.metadata">
+                      · {{ JSON.parse(log.metadata).qty ?? JSON.parse(log.metadata).note }}
+                    </span>
+                  </li>
+                </ul>
+              </div>
+            </div>
           </div>
         </div>
       </template>
@@ -184,6 +234,7 @@
       <OcrScanModal
         v-model="scanOpen"
         :receiving-order-id="orderId"
+        :picking-item-id="scanItemId"
         @applied="load"
       />
     </template>
@@ -191,7 +242,7 @@
 </template>
 
 <script setup lang="ts">
-import { sql } from "drizzle-orm";
+import { noopDecoder, sql } from "drizzle-orm";
 import OcrScanModal from "~/components/OcrScanModal.vue";
 import {
   getReceivingOrderDetail,
@@ -200,10 +251,11 @@ import {
 } from "~/db/receiving";
 import {
   getPickingOrdersByReceivingOrder,
+  getPickingItemTransitionLogs,
   type PickingByReceivingRow,
 } from "~/db/picking";
 
-definePageMeta({ title: "Receiving Detail" });
+definePageMeta({ title: "Receiving Detail", props: { noPadding: true } });
 
 const route = useRoute();
 const orderId = route.params.id as string;
@@ -219,7 +271,12 @@ const form = ref<Record<string, { actualQty: number; note: string }>>({});
 const saving = ref<Record<string, boolean>>({});
 const confirming = ref(false);
 const scanOpen = ref(false);
+const scanItemId = ref<string | undefined>(undefined);
 const view = ref<"receiving" | "picking">("receiving");
+const headerExpanded = ref(false);
+const transitionLogs = ref<Record<string, any[]>>({});
+const expandedItems = ref<Set<string>>(new Set());
+const searchQuery = ref("");
 
 const views = [
   { label: "Receiving", value: "receiving" as const },
@@ -285,47 +342,71 @@ const groupedPickingOrders = computed<GroupedOrder[]>(() => {
   return Array.from(map.values());
 });
 
-const remainingQty = ref(0);
+const filteredGroupedPickingOrders = computed<GroupedOrder[]>(() => {
+  const query = searchQuery.value.trim().toLowerCase();
+  if (!query) return groupedPickingOrders.value;
+  return groupedPickingOrders.value.filter((po) => {
+    const orderMatch = po.ref_no.toLowerCase().includes(query);
+    const itemMatch = po.items.some(
+      (pi) =>
+        pi.part_no.toLowerCase().includes(query) ||
+        pi.locations.some(
+          (loc) =>
+            (loc.date_code ?? "").toLowerCase().includes(query) ||
+            (loc.lot_code ?? "").toLowerCase().includes(query)
+        )
+    );
+    return orderMatch || itemMatch;
+  });
+});
+
+const remainingItems = ref(0);
 const allocatedByItem = ref<Record<string, number>>({});
 
 async function load() {
   try {
-    const [orderData, linkedRows, remainingResult, allocatedResult] = await Promise.all([
-      getReceivingOrderDetail(db, orderId),
-      getPickingOrdersByReceivingOrder(db, orderId),
-      db.execute(
-        sql`SELECT COALESCE(SUM(
-                CASE
-                  WHEN ro.status = 'in_hand'
-                  THEN rii.received_qty - rii.picked_qty - rii.put_away_qty -
-                       COALESCE(alloc.allocated_qty, 0)
-                  ELSE 0
-                END
-              ), 0) AS qty
-            FROM receiving_orders ro
-            JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
-            JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
-            LEFT JOIN (
-              SELECT receiving_invoice_item_id, SUM(qty) AS allocated_qty
-              FROM allocations
-              WHERE receiving_invoice_item_id IS NOT NULL
-              GROUP BY receiving_invoice_item_id
-            ) alloc ON alloc.receiving_invoice_item_id = rii.id
-            WHERE ro.id = ${orderId}`
-      ),
-      db.execute(
-        sql`SELECT rii.id AS receiving_invoice_item_id, COALESCE(SUM(a.qty), 0) AS allocated_qty
-            FROM receiving_invoice_items rii
-            JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-            JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
-            LEFT JOIN allocations a ON a.receiving_invoice_item_id = rii.id
-            WHERE ro.id = ${orderId}
-            GROUP BY rii.id`
-      ),
-    ]);
+    const orderData = await getReceivingOrderDetail(db, orderId);
+    const linkedRows = await getPickingOrdersByReceivingOrder(db, orderId);
+    const remainingResult = await db.execute(
+      sql`SELECT COUNT(DISTINCT CASE
+                WHEN ro.status = 'in_hand'
+                  AND (rii.received_qty - rii.picked_qty - rii.put_away_qty -
+                       COALESCE(alloc.allocated_qty, 0)) > 0
+                THEN rii.id
+              END) AS qty
+          FROM receiving_orders ro
+          JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
+          JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
+          LEFT JOIN (
+            SELECT receiving_invoice_item_id, SUM(qty) AS allocated_qty
+            FROM allocations
+            WHERE receiving_invoice_item_id IS NOT NULL
+            GROUP BY receiving_invoice_item_id
+          ) alloc ON alloc.receiving_invoice_item_id = rii.id
+          WHERE ro.id = ${orderId}`
+    );
+    const allocatedResult = await db.execute(
+      sql`SELECT rii.id AS receiving_invoice_item_id, COALESCE(SUM(a.qty), 0) AS allocated_qty
+          FROM receiving_invoice_items rii
+          JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+          JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
+          LEFT JOIN allocations a ON a.receiving_invoice_item_id = rii.id
+          WHERE ro.id = ${orderId}
+          GROUP BY rii.id`
+    );
     order.value = orderData;
     pickingRows.value = linkedRows;
-    remainingQty.value = Number((remainingResult.rows[0] as any)?.qty ?? 0);
+    remainingItems.value = Number((remainingResult.rows[0] as any)?.qty ?? 0);
+
+    const itemIds = Array.from(new Set(linkedRows.map((r) => r.picking_item_id)));
+    const logs = itemIds.length ? await getPickingItemTransitionLogs(db, itemIds) : [];
+    const nextLogs: Record<string, any[]> = {};
+    for (const log of logs) {
+      const list = nextLogs[log.entityId] ?? [];
+      list.push(log);
+      nextLogs[log.entityId] = list;
+    }
+    transitionLogs.value = nextLogs;
     const nextAllocated: Record<string, number> = {};
     for (const row of (allocatedResult.rows ?? []) as any[]) {
       nextAllocated[row.receiving_invoice_item_id] = Number(row.allocated_qty);
@@ -348,6 +429,21 @@ async function load() {
   } finally {
     pending.value = false;
   }
+}
+
+function toggleExpand(itemId: string) {
+  const next = new Set(expandedItems.value);
+  if (next.has(itemId)) {
+    next.delete(itemId);
+  } else {
+    next.add(itemId);
+  }
+  expandedItems.value = next;
+}
+
+function openScan(itemId?: string) {
+  scanItemId.value = itemId;
+  scanOpen.value = true;
 }
 
 async function saveMismatch(itemId: string) {
@@ -419,5 +515,35 @@ onMounted(load);
   border-radius: 9999px;
   background: #fee2e2;
   color: #991b1b;
+}
+
+.badge--finished {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  cursor: pointer;
+}
+
+.card-header .detail-row {
+  gap: 0.5rem;
+}
+
+.toggle-btn {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 0.875rem;
+  cursor: pointer;
+  padding: 0.25rem;
+}
+
+.card.card--flush-top {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 </style>

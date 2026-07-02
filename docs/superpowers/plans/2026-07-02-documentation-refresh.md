@@ -25,7 +25,7 @@
 **Files:**
 - Modify: `README.md`
 
-- [ ] **Step 1: Fix running instructions path**
+- [x] **Step 1: Fix running instructions path**
 
 Replace:
 ```markdown
@@ -44,7 +44,7 @@ pnpm run dev
 ```
 ```
 
-- [ ] **Step 2: Fix project structure root path**
+- [x] **Step 2: Fix project structure root path**
 
 Replace:
 ```markdown
@@ -61,7 +61,7 @@ With:
 ```
 ```
 
-- [ ] **Step 3: Add OCR-assisted picking to Workflow A**
+- [x] **Step 3: Add OCR-assisted picking to Workflow A**
 
 After the sentence in Workflow A step 4 ("The worker can open the receiving order in **Picking view** to see which picking orders need goods from this shipment, pick them out, and reduce the receiving-area stock."), add:
 
@@ -69,7 +69,7 @@ After the sentence in Workflow A step 4 ("The worker can open the receiving orde
 The worker can also use the **scan button** on the Picking tab to type label data (part number, quantity, date/lot code, and origin country). The system matches the input to linked receiving and picking records and applies the pick automatically.
 ```
 
-- [ ] **Step 4: Add pending picking order count badge**
+- [x] **Step 4: Add pending picking order count badge**
 
 In the **Receiving** bullet under **Supporting actions**, replace:
 ```markdown
@@ -81,7 +81,7 @@ With:
 - **Receiving** — confirm arrivals, report mismatches, create receiving-area inventory lots, and see at a glance how many picking orders still need stock from each receiving order.
 ```
 
-- [ ] **Step 5: Update routes table**
+- [x] **Step 5: Update routes table**
 
 Replace the `/receiving/:id` row:
 ```markdown
@@ -93,7 +93,7 @@ With:
 | `/receiving/:id` | Receiving order detail; **Receiving** view shows invoices/items, **Picking** view shows linked picking orders and the scan modal |
 ```
 
-- [ ] **Step 6: Update project structure**
+- [x] **Step 6: Update project structure**
 
 Replace the `composables/` entry:
 ```markdown
@@ -158,7 +158,7 @@ Add a `docs/` entry after the `db/` block:
 │       └── plans/
 ```
 
-- [ ] **Step 7: Update limitations**
+- [x] **Step 7: Update limitations**
 
 Replace:
 ```markdown
@@ -171,7 +171,7 @@ With:
 - **No automated test suite.** Verification is currently manual browser testing plus `pnpm nuxt prepare` for TypeScript generation.
 ```
 
-- [ ] **Step 8: Commit README changes**
+- [x] **Step 8: Commit README changes**
 
 ```bash
 git add README.md
@@ -185,7 +185,7 @@ git commit -m "docs(README): refresh paths, features, and project structure"
 **Files:**
 - Create: `docs/database-relations.md`
 
-- [ ] **Step 1: Write the file**
+- [x] **Step 1: Write the file**
 
 Create `docs/database-relations.md` with the following content:
 
@@ -269,7 +269,7 @@ erDiagram
 4. **Removed.** When an allocation is fully picked, it is deleted.
 ```
 
-- [ ] **Step 2: Commit the new file**
+- [x] **Step 2: Commit the new file**
 
 ```bash
 git add docs/database-relations.md
@@ -283,7 +283,7 @@ git commit -m "docs: add database relations reference"
 **Files:**
 - Create: `AGENTS.md`
 
-- [ ] **Step 1: Write the file**
+- [x] **Step 1: Write the file**
 
 Create `AGENTS.md` at the project root with the following content:
 
@@ -342,7 +342,7 @@ For non-trivial changes:
 - **No camera OCR.** Scanning is typed input; the demo parses and normalizes text to simulate OCR behavior.
 ```
 
-- [ ] **Step 2: Commit the new file**
+- [x] **Step 2: Commit the new file**
 
 ```bash
 git add AGENTS.md
