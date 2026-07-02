@@ -5,13 +5,19 @@ import androidx.activity.ComponentActivity;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.net.Uri;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.annotation.Nullable;
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.text.TextRecognition;
+import com.google.mlkit.vision.text.TextRecognizer;
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
@@ -25,7 +31,9 @@ public class RectanglePickerActivity extends ComponentActivity {
   public static final String EXTRA_WIDTH = "width";
   public static final String EXTRA_HEIGHT = "height";
   public static final String EXTRA_RECTANGLES_JSON = "rectanglesJson";
+  public static final String EXTRA_IS_LABEL_SCAN = "isLabelScan";
 
+  private static final String TAG = "RectanglePicker";
   private static final int JPEG_QUALITY = 95;
   private static final int DISPLAY_MAX_DIMENSION = 2048;
   private static final String CROP_FILE_PREFIX = "rectangle_picker_crop_";
@@ -40,6 +48,7 @@ public class RectanglePickerActivity extends ComponentActivity {
   private int imageWidth;
   private int imageHeight;
   private List<RectangleDetector.RectResult> rectangles;
+  private boolean isLabelScan = false;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -68,6 +77,7 @@ public class RectanglePickerActivity extends ComponentActivity {
     imageWidth = intent.getIntExtra(EXTRA_WIDTH, 0);
     imageHeight = intent.getIntExtra(EXTRA_HEIGHT, 0);
     String rectanglesJson = intent.getStringExtra(EXTRA_RECTANGLES_JSON);
+    isLabelScan = intent.getBooleanExtra(EXTRA_IS_LABEL_SCAN, false);
 
     if (imagePath == null || imageWidth == 0 || imageHeight == 0) {
       Toast.makeText(this, "Invalid capture data", Toast.LENGTH_SHORT).show();
@@ -113,25 +123,76 @@ public class RectanglePickerActivity extends ComponentActivity {
     Mat sourceMat = Imgcodecs.imread(imagePath);
     if (sourceMat.empty()) {
       Toast.makeText(this, "Failed to load full image", Toast.LENGTH_SHORT).show();
+      finish();
       return;
     }
 
     try {
       File cropFile = RectangleCropper.cropToFile(sourceMat, rect, JPEG_QUALITY, getCacheDir(), CROP_FILE_PREFIX);
       String selectedRectJson = RectangleResultJson.toJsonObject(rect).toString();
+      String rectanglesJson = RectangleResultJson.toJson(rectangles);
 
-      Intent resultIntent = new Intent();
-      resultIntent.putExtra("imagePath", cropFile.getAbsolutePath());
-      resultIntent.putExtra("width", rect.boundingBox.width);
-      resultIntent.putExtra("height", rect.boundingBox.height);
-      resultIntent.putExtra("rectanglesJson", RectangleResultJson.toJson(rectangles));
-      resultIntent.putExtra("selectedRect", selectedRectJson);
-      setResult(Activity.RESULT_OK, resultIntent);
+      if (isLabelScan) {
+        runOcrAndFinish(cropFile.getAbsolutePath(), rect.boundingBox.width, rect.boundingBox.height, rectanglesJson, selectedRectJson);
+      } else {
+        finishWithResult(cropFile.getAbsolutePath(), rect.boundingBox.width, rect.boundingBox.height, rectanglesJson, selectedRectJson);
+      }
     } catch (IOException e) {
       Toast.makeText(this, "Failed to save crop: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+      finish();
     } finally {
       sourceMat.release();
-      finish();
+    }
+  }
+
+  private void finishWithResult(
+      String imagePath,
+      int width,
+      int height,
+      @Nullable String rectanglesJson,
+      @Nullable String selectedRectJson) {
+    finishWithResult(imagePath, width, height, rectanglesJson, selectedRectJson, "");
+  }
+
+  private void finishWithResult(
+      String imagePath,
+      int width,
+      int height,
+      @Nullable String rectanglesJson,
+      @Nullable String selectedRectJson,
+      @Nullable String text) {
+    Intent resultIntent = new Intent();
+    resultIntent.putExtra("imagePath", imagePath);
+    resultIntent.putExtra("width", width);
+    resultIntent.putExtra("height", height);
+    if (rectanglesJson != null) {
+      resultIntent.putExtra("rectanglesJson", rectanglesJson);
+    }
+    if (selectedRectJson != null) {
+      resultIntent.putExtra("selectedRect", selectedRectJson);
+    }
+    resultIntent.putExtra("text", text != null ? text : "");
+    setResult(Activity.RESULT_OK, resultIntent);
+    finish();
+  }
+
+  private void runOcrAndFinish(String imagePath, int width, int height, String rectanglesJson, String selectedRectJson) {
+    try {
+      InputImage inputImage = InputImage.fromFilePath(this, Uri.fromFile(new File(imagePath)));
+      TextRecognizer recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+      recognizer.process(inputImage)
+        .addOnSuccessListener(visionText -> {
+          String text = visionText.getText();
+          Log.d(TAG, "OCR text: " + text);
+          finishWithResult(imagePath, width, height, rectanglesJson, selectedRectJson, text);
+        })
+        .addOnFailureListener(e -> {
+          Log.e(TAG, "OCR failed", e);
+          finishWithResult(imagePath, width, height, rectanglesJson, selectedRectJson, "");
+        });
+    } catch (IOException e) {
+      Log.e(TAG, "Failed to load image for OCR", e);
+      finishWithResult(imagePath, width, height, rectanglesJson, selectedRectJson, "");
     }
   }
 
