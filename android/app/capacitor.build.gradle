@@ -9,11 +9,7 @@ android {
 
 apply from: "../capacitor-cordova-android-plugins/cordova.variables.gradle"
 dependencies {
-    implementation project(':capacitor-mlkit-subject-segmentation')
     implementation project(':capacitor-app')
-    implementation project(':capacitor-camera')
-    implementation project(':capgo-capacitor-document-scanner')
-    implementation project(':pantrist-capacitor-plugin-ml-kit-text-recognition')
 
 }
 

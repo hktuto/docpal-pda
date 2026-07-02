@@ -4,48 +4,28 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-patchedDependencies:
-  '@capacitor-mlkit/subject-segmentation@8.1.0':
-    hash: a4caaeff995465798cfe583be9ebcf4d7f08477fc80d22cafcd206d78f21072a
-    path: patches/@capacitor-mlkit__subject-segmentation@8.1.0.patch
-  '@pantrist/capacitor-plugin-ml-kit-text-recognition@8.0.0':
-    hash: 625757f2612fc1ed48d40254acc7214185fa1aad56cea748fa882d97816cdc12
-    path: patches/@pantrist__capacitor-plugin-ml-kit-text-recognition@8.0.0.patch
-
 importers:
 
   .:
     dependencies:
-      '@capacitor-mlkit/subject-segmentation':
-        specifier: ^8.1.0
-        version: 8.1.0(patch_hash=a4caaeff995465798cfe583be9ebcf4d7f08477fc80d22cafcd206d78f21072a)(@capacitor/core@8.4.1)
       '@capacitor/android':
         specifier: ^8.4.1
         version: 8.4.1(@capacitor/core@8.4.1)
       '@capacitor/app':
         specifier: ^8.1.0
         version: 8.1.0(@capacitor/core@8.4.1)
-      '@capacitor/camera':
-        specifier: ^8.2.0
-        version: 8.2.0(@capacitor/core@8.4.1)
       '@capacitor/cli':
         specifier: ^8.4.1
         version: 8.4.1
       '@capacitor/core':
         specifier: ^8.4.1
         version: 8.4.1
-      '@capgo/capacitor-document-scanner':
-        specifier: ^8.3.33
-        version: 8.3.33(@capacitor/core@8.4.1)
       '@electric-sql/pglite':
         specifier: ^0.3.0
         version: 0.3.16
       '@electric-sql/pglite-vue':
         specifier: ^0.2.0
         version: 0.2.34(@electric-sql/pglite@0.3.16)(vue@3.5.39(typescript@6.0.3))
-      '@pantrist/capacitor-plugin-ml-kit-text-recognition':
-        specifier: ^8.0.0
-        version: 8.0.0(patch_hash=625757f2612fc1ed48d40254acc7214185fa1aad56cea748fa882d97816cdc12)(@capacitor/core@8.4.1)
       drizzle-orm:
         specifier: ^0.45.0
         version: 0.45.2(@electric-sql/pglite@0.3.16)
@@ -200,11 +180,6 @@ packages:
       commander:
         optional: true
 
-  '@capacitor-mlkit/subject-segmentation@8.1.0':
-    resolution: {integrity: sha512-oXNTwpcwBkxP1xGeWxPV62vZ2UcYorLSv/w9Q6HKBqVWqEyDFyy8U9y0UsHyuDNmYpJqGvA6TtfwNXhGQ/Emog==}
-    peerDependencies:
-      '@capacitor/core': '>=8.0.0'
-
   '@capacitor/android@8.4.1':
     resolution: {integrity: sha512-igtDCJ7QQn0P2qHFD9p4KXaa6V1b2PRNt+MxjVwtjTm/BJvqmiazOJq6rPjwFSZnfHm6iFoZk8TfzHd44pyBGw==}
     peerDependencies:
@@ -215,11 +190,6 @@ packages:
     peerDependencies:
       '@capacitor/core': '>=8.0.0'
 
-  '@capacitor/camera@8.2.0':
-    resolution: {integrity: sha512-hYfrT6xpL936qoEkIpJzSnb0fQCaTkOux1cXzGBfH8QLOGqr6gSLiWZlZz/fqMPmMKJMNRBqlTQkj5fuMhVZog==}
-    peerDependencies:
-      '@capacitor/core': '>=8.0.0'
-
   '@capacitor/cli@8.4.1':
     resolution: {integrity: sha512-t7F2s7fFHCq113xgrggrmK6ctV0/8E5YfLNVLfPHp4GCTDO+tly9fZvWPf2/sOI8lMm18dLT43qbXLRTz/OZgw==}
     engines: {node: '>=22.0.0'}
@@ -227,11 +197,6 @@ packages:
 
   '@capacitor/core@8.4.1':
     resolution: {integrity: sha512-xqhOGLbTAYeOWK+IDUNSjQJAPapQjRHrIcgk9PYp52or9zFTaaMko31uNi16N6W+CRJ8VrRram6fOYILkBG2Hg==}
-
-  '@capgo/capacitor-document-scanner@8.3.33':
-    resolution: {integrity: sha512-wl9+guknfT4g3X1tX6zatV8wJiXSOy7hlKMlgTz5YUUIeBDs5qCsAxTXl1pQ5ZPj/ignzXrpdR12zD32N6AuxA==}
-    peerDependencies:
-      '@capacitor/core': '>=8.0.0'
 
   '@clack/core@1.4.2':
     resolution: {integrity: sha512-0Ty/1Gfm+Kb07sXcuESjyKfwEhSy4Ns1AgeEisHb/bDY5fWme0tTeTkU14T1Gmcs17YIjB/teiDe4uaCghbYqQ==}
@@ -982,11 +947,6 @@ packages:
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [win32]
-
-  '@pantrist/capacitor-plugin-ml-kit-text-recognition@8.0.0':
-    resolution: {integrity: sha512-Iq+iLH+WXiCb/mnVCEI+/Cx7o31FTKpPqCUvCKm6fjmCecxbiinQzEtD+ewYQLP8k0yTldLLX72Fa/NxlLgwUA==}
-    peerDependencies:
-      '@capacitor/core': '>=8.0.0'
 
   '@parcel/watcher-android-arm64@2.5.6':
     resolution: {integrity: sha512-YQxSS34tPF/6ZG7r/Ih9xy+kP/WwediEUsqmtf0cuCV5TPPKw/PQHRhueUo6JdeFJaqV3pyjm0GdYjZotbRt/A==}
@@ -3926,19 +3886,11 @@ snapshots:
       cac: 6.7.14
       citty: 0.2.2
 
-  '@capacitor-mlkit/subject-segmentation@8.1.0(patch_hash=a4caaeff995465798cfe583be9ebcf4d7f08477fc80d22cafcd206d78f21072a)(@capacitor/core@8.4.1)':
-    dependencies:
-      '@capacitor/core': 8.4.1
-
   '@capacitor/android@8.4.1(@capacitor/core@8.4.1)':
     dependencies:
       '@capacitor/core': 8.4.1
 
   '@capacitor/app@8.1.0(@capacitor/core@8.4.1)':
-    dependencies:
-      '@capacitor/core': 8.4.1
-
-  '@capacitor/camera@8.2.0(@capacitor/core@8.4.1)':
     dependencies:
       '@capacitor/core': 8.4.1
 
@@ -3967,10 +3919,6 @@ snapshots:
   '@capacitor/core@8.4.1':
     dependencies:
       tslib: 2.8.1
-
-  '@capgo/capacitor-document-scanner@8.3.33(@capacitor/core@8.4.1)':
-    dependencies:
-      '@capacitor/core': 8.4.1
 
   '@clack/core@1.4.2':
     dependencies:
@@ -4758,10 +4706,6 @@ snapshots:
 
   '@oxc-transform/binding-win32-x64-msvc@0.132.0':
     optional: true
-
-  '@pantrist/capacitor-plugin-ml-kit-text-recognition@8.0.0(patch_hash=625757f2612fc1ed48d40254acc7214185fa1aad56cea748fa882d97816cdc12)(@capacitor/core@8.4.1)':
-    dependencies:
-      '@capacitor/core': 8.4.1
 
   '@parcel/watcher-android-arm64@2.5.6':
     optional: true
