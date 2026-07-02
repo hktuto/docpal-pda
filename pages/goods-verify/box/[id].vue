@@ -43,6 +43,7 @@
           class="btn"
           style="border-radius: 9999px; width: 3.5rem; height: 3.5rem; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow);"
           aria-label="Scan item"
+          :disabled="scanning"
           @click="openScan"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -74,23 +75,30 @@
           <span>{{ item.verified ? (item.verifiedAt ? new Date(item.verifiedAt).toLocaleString() : "Yes") : "No" }}</span>
         </div>
         <div v-if="!item.verified && box.status !== 'verified'" style="margin-top: 0.75rem;">
-          <button class="btn btn--small" @click="openScanFor(item)">Scan</button>
+          <button class="btn btn--small" :disabled="scanning" @click="openScanFor(item)">Scan</button>
         </div>
       </div>
     </template>
 
     <p v-else class="empty">Box not found.</p>
 
-    <GoodsVerifyScanModal
-      v-model="scanOpen"
-      :box-id="boxId"
-      :items="box?.items ?? []"
-      @applied="onScanApplied"
+    <LabelScanReviewModal
+      v-if="review?.status === 'review'"
+      v-model="reviewOpen"
+      :image-path="review.capture.imagePath"
+      :text="review.capture.text"
+      :parsed="review.parsed"
+      :match-result="review.matchResult"
+      :context="{ task: 'goods-verify', items: box?.items ?? [] }"
+      @applied="onApplied"
+      @retake="onRetake"
     />
   </div>
 </template>
 
 <script setup lang="ts">
+import { useLabelScan, type LabelScanResult } from "~/composables/useLabelScan";
+import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import {
   getShelfBoxDetail,
   markShelfBoxVerified,
@@ -110,8 +118,10 @@ const pending = ref(true);
 const error = ref<string | null>(null);
 const box = ref<ShelfBoxDetail | null>(null);
 const marking = ref(false);
-const scanOpen = ref(false);
 const headerExpanded = ref(false);
+const { scan, scanning } = useLabelScan();
+const reviewOpen = ref(false);
+const review = ref<LabelScanResult | null>(null);
 
 const allVerified = computed(() =>
   box.value ? box.value.items.every((item) => item.verified) : false
@@ -155,12 +165,31 @@ async function markVerified() {
   }
 }
 
-function openScan() {
-  scanOpen.value = true;
+async function openScan() {
+  if (!box.value) return;
+  const result = await scan({ task: 'goods-verify', items: box.value.items });
+  if (result.status === 'applied') {
+    await onScanApplied();
+  } else if (result.status === 'review') {
+    review.value = result;
+    reviewOpen.value = true;
+  } else if (result.status === 'error') {
+    error.value = result.message;
+  }
 }
 
-function openScanFor(item: ShelfBoxItemDetail) {
-  scanOpen.value = true;
+async function openScanFor(item: ShelfBoxItemDetail) {
+  await openScan();
+}
+
+async function onApplied() {
+  reviewOpen.value = false;
+  await onScanApplied();
+}
+
+async function onRetake() {
+  reviewOpen.value = false;
+  await openScan();
 }
 
 async function onScanApplied() {
