@@ -1,80 +1,88 @@
-import { eq } from "drizzle-orm";
-import type { PgliteDatabase } from "drizzle-orm/pglite";
-import { useDb } from "./useDb";
-import { useMockOcr } from "./useMockOcr";
-import type { OcrInput } from "./useMockOcr";
-import { useCurrentUser } from "./useCurrentUser";
+import { useDb } from './useDb';
+import { useMockOcr } from './useMockOcr';
+import { useCurrentUser } from './useCurrentUser';
+import type { OcrInput } from './useMockOcr';
+import type { PickingCandidate } from '~/db/ocrPicking';
+import type { PutAwayLot } from '~/db/putAway';
 import {
   findReceivingCandidates,
   findPickingCandidates,
   applyOcrPick,
-} from "~/db/ocrPicking";
+} from '~/db/ocrPicking';
 import {
   materializeReceivingAllocation,
   scanAllocationToPackage,
-} from "~/db/picking";
-import { addItemToShelfBox, getPutAwayLots } from "~/db/putAway";
+} from '~/db/picking';
+import { addItemToShelfBox } from '~/db/putAway';
 import {
   findMatchingUnverifiedPackage,
   verifyPickingPackageForMeasuring,
-} from "~/db/measuring";
-import { verifyShelfBoxItem, getShelfBoxDetail } from "~/db/goodsVerify";
-import * as schema from "~/db/schema";
+} from '~/db/measuring';
+import { verifyShelfBoxItem } from '~/db/goodsVerify';
 
-export type ScanMatchResult =
-  | { type: "single"; record: unknown; apply: () => Promise<void> }
-  | { type: "multiple"; records: unknown[] }
-  | { type: "none" }
-  | { type: "error"; message: string };
+export type ScanTask = 'receiving' | 'picking' | 'put-away' | 'measuring' | 'goods-verify';
 
-export type ScanTask =
-  | "receiving"
-  | "picking"
-  | "put-away"
-  | "measuring"
-  | "goods-verify";
+interface PickingAllocation {
+  id: string;
+  qty: number;
+  receivingInvoiceItem?: unknown;
+}
+
+interface BoxItem {
+  id: string;
+  verified: boolean;
+  part?: { partNo: string | null } | null;
+}
+
+function rawCode(value: unknown): string | null {
+  if (value == null) return null;
+  const s = String(value).trim();
+  return s || null;
+}
 
 export interface ScanTaskContext {
   task: ScanTask;
+  // receiving / picking
   receivingOrderId?: string;
-  allocationId?: string;
+  pickingItemId?: string;
+  // picking
+  allocation?: PickingAllocation;
+  // put-away
+  receivingItem?: PutAwayLot;
+  targetBoxId?: string;
+  // measuring
   boxId?: string;
+  targetPackageId?: string;
+  // goods-verify
   shelfBoxId?: string;
-  targetBoxId?: string; // for put-away
-  pickingItemId?: string; // for receiving
-  targetPackageId?: string; // for measuring
+  items?: BoxItem[];
 }
 
+export interface ScanMatchRecord {
+  record: unknown;
+  apply: () => Promise<void>;
+}
+
+export type ScanMatchResult =
+  | { type: 'single'; record: unknown; apply: () => Promise<void> }
+  | { type: 'multiple'; records: ScanMatchRecord[] }
+  | { type: 'none' }
+  | { type: 'error'; message: string };
+
 export interface ScanMatchers {
-  matchReceiving(
-    receivingOrderId: string,
-    pickingItemId: string | undefined,
-    parsed: OcrInput
-  ): Promise<ScanMatchResult>;
-  matchPicking(allocationId: string, parsed: OcrInput): Promise<ScanMatchResult>;
-  matchPutAway(
-    receivingOrderId: string,
-    targetBoxId: string,
-    parsed: OcrInput
-  ): Promise<ScanMatchResult>;
-  matchMeasuring(
-    boxId: string,
-    targetPackageId: string | undefined,
-    parsed: OcrInput
-  ): Promise<ScanMatchResult>;
-  matchGoodsVerify(
-    shelfBoxId: string,
-    parsed: OcrInput
-  ): Promise<ScanMatchResult>;
+  matchReceiving(receivingOrderId: string, pickingItemId: string | undefined, parsed: OcrInput): Promise<ScanMatchResult>;
+  matchPicking(allocation: PickingAllocation, parsed: OcrInput): Promise<ScanMatchResult>;
+  matchPutAway(receivingItem: PutAwayLot, targetBoxId: string, parsed: OcrInput): Promise<ScanMatchResult>;
+  matchMeasuring(boxId: string, targetPackageId: string | undefined, parsed: OcrInput): Promise<ScanMatchResult>;
+  matchGoodsVerify(items: BoxItem[], parsed: OcrInput): Promise<ScanMatchResult>;
 }
 
 export function useScanMatchers(): ScanMatchers {
   const db = useDb();
   const { parseManual } = useMockOcr();
 
-  async function getActorId(): Promise<string | null> {
-    const user = await useCurrentUser();
-    return user?.id ?? null;
+  function error(message: string): ScanMatchResult {
+    return { type: 'error', message };
   }
 
   async function matchReceiving(
@@ -83,255 +91,193 @@ export function useScanMatchers(): ScanMatchers {
     parsed: OcrInput
   ): Promise<ScanMatchResult> {
     try {
-      const actorId = await getActorId();
-      if (!actorId) return { type: "error", message: "No authenticated user" };
+      const currentUser = await useCurrentUser();
+      if (!currentUser?.id) return error('Operator not signed in');
 
       const p = parseManual(parsed);
-      const receiving = await findReceivingCandidates(db, receivingOrderId, p);
-      if (receiving.length === 0) return { type: "none" };
+      const receivingCandidates = await findReceivingCandidates(db, receivingOrderId, p);
+      if (receivingCandidates.length === 0) return { type: 'none' };
+      const receiving = receivingCandidates[0];
+      if (p.qty > receiving.availableQty) return { type: 'none' };
 
-      const item = receiving[0];
-      if (p.qty > item.availableQty) return { type: "none" };
-
-      let picking = await findPickingCandidates(
-        db,
-        receivingOrderId,
-        item.partId,
-        p.qty
-      );
-      if (picking.length === 0) return { type: "none" };
-
+      let pickingCandidates = await findPickingCandidates(db, receivingOrderId, receiving.partId, p.qty);
       if (pickingItemId) {
-        picking = picking.filter((c) => c.pickingItemId === pickingItemId);
+        pickingCandidates = pickingCandidates.filter((c) => c.pickingItemId === pickingItemId);
       }
+      if (pickingCandidates.length === 0) return { type: 'none' };
 
-      if (picking.length === 0) return { type: "none" };
+      const applyFor = (picking: PickingCandidate) => async () => {
+        const actorId = (await useCurrentUser())?.id;
+        if (!actorId) throw new Error('Operator not signed in');
+        const qty = p.qty;
+        if (!Number.isInteger(qty) || qty <= 0) throw new Error('Invalid quantity to apply');
+        if (qty > receiving.availableQty) throw new Error('Quantity no longer available in receiving');
+        if (qty > picking.remainingQty) throw new Error('Quantity exceeds picking order need');
+        await applyOcrPick(
+          db,
+          receiving.receivingInvoiceItemId,
+          picking.pickingItemId,
+          qty,
+          receiving.dateCode,
+          receiving.lotCode,
+          receiving.coo,
+          receiving.cow,
+          actorId
+        );
+      };
 
-      if (picking.length === 1) {
-        return {
-          type: "single",
-          record: { receiving: item, picking: picking[0] },
-          apply: () =>
-            applyOcrPick(
-              db,
-              item.receivingInvoiceItemId,
-              picking[0].pickingItemId,
-              p.qty,
-              item.dateCode,
-              item.lotCode,
-              item.coo,
-              item.cow,
-              actorId
-            ),
-        };
+      if (pickingCandidates.length === 1) {
+        const picking = pickingCandidates[0];
+        return { type: 'single', record: { receiving, picking }, apply: applyFor(picking) };
       }
 
       return {
-        type: "multiple",
-        records: picking.map((candidate) => ({
-          receiving: item,
-          picking: candidate,
-        })),
+        type: 'multiple',
+        records: pickingCandidates.map((picking) => ({ record: { receiving, picking }, apply: applyFor(picking) })),
       };
     } catch (e: any) {
-      return {
-        type: "error",
-        message: e?.message ?? "Receiving match failed",
-      };
+      return error(e?.message ?? 'Receiving match failed');
     }
   }
 
-  async function matchPicking(
-    allocationId: string,
-    parsed: OcrInput
-  ): Promise<ScanMatchResult> {
+  async function matchPicking(allocation: PickingAllocation, parsed: OcrInput): Promise<ScanMatchResult> {
     try {
-      const actorId = await getActorId();
-      if (!actorId) return { type: "error", message: "No authenticated user" };
+      const currentUser = await useCurrentUser();
+      if (!currentUser?.id) return error('Operator not signed in');
 
-      const p = parseManual(parsed);
+      const qty = typeof parsed.qty === 'number' ? parsed.qty : Number(parsed.qty);
+      if (!Number.isInteger(qty) || qty <= 0) return error('Qty must be a positive integer');
+      if (!allocation?.qty) return error('Invalid allocation');
+      if (qty > allocation.qty) return error('Qty exceeds allocated quantity');
 
-      const allocation = await db.query.allocations.findFirst({
-        where: eq(schema.allocations.id, allocationId),
-      });
+      const dateCode = rawCode(parsed.dateCode);
+      const lotCode = rawCode(parsed.lotCode);
+      const coo = rawCode(parsed.coo);
+      const cow = rawCode(parsed.cow);
 
-      if (!allocation) return { type: "none" };
-      if (p.qty <= 0 || p.qty > allocation.qty) {
-        return { type: "error", message: "Qty exceeds allocated quantity" };
-      }
+      const isReceivingAllocation = !!allocation?.receivingInvoiceItem;
 
-      if (allocation.receivingInvoiceItemId) {
-        return {
-          type: "single",
-          record: { allocation },
-          apply: async () => {
+      return {
+        type: 'single',
+        record: allocation,
+        apply: async () => {
+          const actorId = (await useCurrentUser())?.id;
+          if (!actorId) throw new Error('Operator not signed in');
+          if (isReceivingAllocation) {
             const materializedId = await materializeReceivingAllocation(
               db,
               allocation.id,
-              p.qty,
-              p.dateCode,
-              p.lotCode,
-              p.coo,
-              p.cow
+              qty,
+              dateCode,
+              lotCode,
+              coo,
+              cow
             );
-            await scanAllocationToPackage(db, materializedId, p.qty, actorId);
-          },
-        };
-      }
-
-      if (allocation.inventoryLotId) {
-        return {
-          type: "single",
-          record: { allocation },
-          apply: () => scanAllocationToPackage(db, allocation.id, p.qty, actorId),
-        };
-      }
-
-      return { type: "error", message: "Allocation has no source" };
-    } catch (e: any) {
-      return {
-        type: "error",
-        message: e?.message ?? "Picking match failed",
+            await scanAllocationToPackage(db, materializedId, qty, actorId);
+          } else {
+            await scanAllocationToPackage(db, allocation.id, qty, actorId);
+          }
+        },
       };
+    } catch (e: any) {
+      return error(e?.message ?? 'Picking match failed');
     }
   }
 
-  async function matchPutAway(
-    receivingOrderId: string,
-    targetBoxId: string,
-    parsed: OcrInput
-  ): Promise<ScanMatchResult> {
-    try {
-      const actorId = await getActorId();
-      if (!actorId) return { type: "error", message: "No authenticated user" };
-
-      if (!targetBoxId) {
-        return { type: "error", message: "Missing target box" };
-      }
-
-      const p = parseManual(parsed);
-
-      const lots = await getPutAwayLots(db, receivingOrderId);
-      const matches = lots.filter((lot) => {
-        if ((lot.part_no ?? "").trim().toUpperCase() !== p.partNo) return false;
-        if (p.qty > lot.available_qty) return false;
-        if (
-          p.dateCode &&
-          (lot.date_code ?? "").trim().toUpperCase() !== p.dateCode
-        ) {
-          return false;
-        }
-        if (
-          p.lotCode &&
-          (lot.lot_code ?? "").trim().toUpperCase() !== p.lotCode
-        ) {
-          return false;
-        }
-        if (p.coo && (lot.coo ?? "").trim().toUpperCase() !== p.coo)
-          return false;
-        if (p.cow && (lot.cow ?? "").trim().toUpperCase() !== p.cow)
-          return false;
-        return true;
-      });
-
-      if (matches.length === 0) return { type: "none" };
-      if (matches.length > 1) return { type: "multiple", records: matches };
-
-      const lot = matches[0];
-
-      return {
-        type: "single",
-        record: { lot },
-        apply: () =>
-          addItemToShelfBox(
-            db,
-            targetBoxId,
-            lot.receiving_invoice_item_id,
-            p.qty,
-            p.dateCode,
-            p.lotCode,
-            p.coo,
-            p.cow,
-            actorId
-          ),
-      };
-    } catch (e: any) {
-      return {
-        type: "error",
-        message: e?.message ?? "Put-away match failed",
-      };
-    }
-  }
-
-  async function matchMeasuring(
-    boxId: string,
-    targetPackageId: string | undefined,
-    parsed: OcrInput
-  ): Promise<ScanMatchResult> {
+  async function matchPutAway(receivingItem: PutAwayLot, targetBoxId: string, parsed: OcrInput): Promise<ScanMatchResult> {
     try {
       const currentUser = await useCurrentUser();
-      if (!currentUser?.id) {
-        return { type: "error", message: "No authenticated user" };
-      }
+      if (!currentUser?.id) return error('Operator not signed in');
 
-      const p = parseManual(parsed);
-      const input = {
-        partNo: p.partNo,
-        dateCode: p.dateCode ?? "",
-        lotCode: p.lotCode ?? "",
-        coo: p.coo ?? "",
-        cow: p.cow ?? "",
-        qty: p.qty,
+      if (!targetBoxId) return error('Select an open box');
+      const qty = typeof parsed.qty === 'number' ? parsed.qty : Number(parsed.qty);
+      if (!Number.isInteger(qty) || qty <= 0) return error('Qty must be a positive integer');
+      if (!receivingItem?.receiving_invoice_item_id) return error('Invalid receiving item');
+      if (qty > (receivingItem.available_qty ?? 0)) return error('Quantity exceeds available quantity');
+
+      const dateCode = rawCode(parsed.dateCode);
+      const lotCode = rawCode(parsed.lotCode);
+      const coo = rawCode(parsed.coo);
+      const cow = rawCode(parsed.cow);
+
+      return {
+        type: 'single',
+        record: receivingItem,
+        apply: async () => {
+          const actorId = (await useCurrentUser())?.id;
+          if (!actorId) throw new Error('Operator not signed in');
+          await addItemToShelfBox(
+            db,
+            targetBoxId,
+            receivingItem.receiving_invoice_item_id,
+            qty,
+            dateCode,
+            lotCode,
+            coo,
+            cow,
+            actorId
+          );
+        },
       };
+    } catch (e: any) {
+      return error(e?.message ?? 'Put-away match failed');
+    }
+  }
+
+  async function matchMeasuring(boxId: string, targetPackageId: string | undefined, parsed: OcrInput): Promise<ScanMatchResult> {
+    const currentUser = await useCurrentUser();
+    if (!currentUser?.id) return error('Operator not signed in');
+
+    try {
+      if (!parsed.partNo?.trim()) return error('Part No. is required');
+      const qty = typeof parsed.qty === 'number' ? parsed.qty : Number(parsed.qty);
+      if (!Number.isInteger(qty) || qty <= 0) return error('Qty must be a positive integer');
 
       const matched = await findMatchingUnverifiedPackage(
         db,
         boxId,
-        input,
+        {
+          partNo: parsed.partNo,
+          dateCode: parsed.dateCode ?? '',
+          lotCode: parsed.lotCode ?? '',
+          coo: parsed.coo ?? '',
+          cow: parsed.cow ?? '',
+          qty,
+        },
         targetPackageId
       );
-      if (!matched) return { type: "none" };
+
+      if (!matched) return { type: 'none' };
 
       return {
-        type: "single",
-        record: { package: matched },
-        apply: () =>
-          verifyPickingPackageForMeasuring(db, matched.id, currentUser.id),
+        type: 'single',
+        record: matched,
+        apply: async () => {
+          const actorId = (await useCurrentUser())?.id;
+          if (!actorId) throw new Error('Operator not signed in');
+          await verifyPickingPackageForMeasuring(db, matched.id, actorId);
+        },
       };
     } catch (e: any) {
-      return {
-        type: "error",
-        message: e?.message ?? "Measuring match failed",
-      };
+      return error(e?.message ?? 'Measuring match failed');
     }
   }
 
-  async function matchGoodsVerify(
-    shelfBoxId: string,
-    parsed: OcrInput
-  ): Promise<ScanMatchResult> {
+  async function matchGoodsVerify(items: BoxItem[], parsed: OcrInput): Promise<ScanMatchResult> {
     try {
-      const p = parseManual(parsed);
+      const partNo = parsed.partNo?.trim() ?? '';
+      if (!partNo) return error('Part No. is required');
 
-      const box = await getShelfBoxDetail(db, shelfBoxId);
-      if (!box) return { type: "error", message: "Shelf box not found" };
-
-      const item = box.items.find(
-        (i) => !i.verified && (i.part?.partNo || "") === p.partNo
-      );
-
-      if (!item) return { type: "none" };
+      const item = items.find((i) => !i.verified && (i.part?.partNo || '') === partNo);
+      if (!item) return { type: 'none' };
 
       return {
-        type: "single",
-        record: { item },
+        type: 'single',
+        record: item,
         apply: () => verifyShelfBoxItem(db, item.id),
       };
     } catch (e: any) {
-      return {
-        type: "error",
-        message: e?.message ?? "Goods verify match failed",
-      };
+      return error(e?.message ?? 'Goods verify match failed');
     }
   }
 
