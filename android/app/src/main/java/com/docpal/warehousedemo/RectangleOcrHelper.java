@@ -26,6 +26,9 @@ public class RectangleOcrHelper {
       int height,
       @Nullable String rectanglesJson,
       @Nullable String selectedRectJson) {
+    if (activity.isFinishing() || activity.isDestroyed()) {
+      return;
+    }
     try {
       InputImage inputImage = InputImage.fromFilePath(activity, Uri.fromFile(new File(imagePath)));
       TextRecognizer recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
@@ -37,11 +40,19 @@ public class RectangleOcrHelper {
         .addOnSuccessListener(visionText -> {
           String text = visionText.getText();
           Log.d(TAG, "OCR text: " + text);
+          if (activity.isFinishing() || activity.isDestroyed()) {
+            closeActiveRecognizer();
+            return;
+          }
           closeActiveRecognizer();
           finishWithResult(activity, imagePath, width, height, rectanglesJson, selectedRectJson, text);
         })
         .addOnFailureListener(e -> {
           Log.e(TAG, "OCR failed", e);
+          if (activity.isFinishing() || activity.isDestroyed()) {
+            closeActiveRecognizer();
+            return;
+          }
           closeActiveRecognizer();
           finishWithResult(activity, imagePath, width, height, rectanglesJson, selectedRectJson, "");
         });
@@ -84,6 +95,9 @@ public class RectangleOcrHelper {
       @Nullable String rectanglesJson,
       @Nullable String selectedRectJson,
       @Nullable String text) {
+    if (activity.isFinishing() || activity.isDestroyed()) {
+      return;
+    }
     Intent resultIntent = new Intent();
     resultIntent.putExtra("imagePath", imagePath);
     resultIntent.putExtra("width", width);
