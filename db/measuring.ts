@@ -1,7 +1,16 @@
-import { eq, and, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { v4 as uuid } from "uuid";
 import * as schema from "./schema";
+
+export interface PackageVerificationInput {
+  partNo: string;
+  dateCode: string;
+  lotCode: string;
+  coo: string;
+  cow: string;
+  qty: number;
+}
 
 export interface MeasuringTaskSummary {
   id: string;
@@ -48,7 +57,8 @@ export interface MeasuringTaskDetail {
           partId: string;
           dateCode: string | null;
           lotCode: string | null;
-          originCountry: string | null;
+          coo: string | null;
+          cow: string | null;
           shelfCode: string | null;
           boxId: string | null;
           totalQty: number;
@@ -68,13 +78,20 @@ export interface MeasuringTaskDetail {
     destinationCountry: string | null;
     boxSize: string | null;
     createdAt: Date;
-    items: Array<{
+    packages: Array<{
       id: string;
-      shippingBoxId: string;
-      pickingItemId: string | null;
-      partId: string;
+      pickingItemId: string;
       qty: number;
-      part: typeof schema.parts.$inferSelect | null;
+      dateCode: string | null;
+      lotCode: string | null;
+      coo: string | null;
+      cow: string | null;
+      verified: boolean;
+      pickingItem: {
+        id: string;
+        partId: string;
+        part: typeof schema.parts.$inferSelect | null;
+      } | null;
     }>;
   }>;
 }
@@ -101,12 +118,12 @@ export async function getMeasuringTasks(
   const packedItemsSubquery = db
     .select({
       measuringTaskId: schema.shippingBoxes.measuringTaskId,
-      packedItems: sql<number>`sum(${schema.shippingBoxItems.qty})`.as("packed_items"),
+      packedItems: sql<number>`sum(${schema.pickingPackages.qty})`.as("packed_items"),
     })
-    .from(schema.shippingBoxItems)
+    .from(schema.pickingPackages)
     .innerJoin(
       schema.shippingBoxes,
-      eq(schema.shippingBoxItems.shippingBoxId, schema.shippingBoxes.id)
+      eq(schema.pickingPackages.shippingBoxId, schema.shippingBoxes.id)
     )
     .groupBy(schema.shippingBoxes.measuringTaskId)
     .as("packed_items");
@@ -162,91 +179,104 @@ export async function getMeasuringTaskDetail(
       },
       shippingBoxes: {
         with: {
-          items: { with: { part: true } },
+          packages: { with: { pickingItem: { with: { part: true } } } },
         },
       },
     },
   }) as Promise<MeasuringTaskDetail | undefined>;
 }
 
-export async function createShippingBox(
+export async function getShippingBoxForMeasuring(
   db: PgliteDatabase<typeof schema>,
-  measuringTaskId: string
-): Promise<typeof schema.shippingBoxes.$inferSelect> {
-  const task = await db.query.measuringTasks.findFirst({
-    where: eq(schema.measuringTasks.id, measuringTaskId),
+  shippingBoxId: string
+) {
+  return db.query.shippingBoxes.findFirst({
+    where: eq(schema.shippingBoxes.id, shippingBoxId),
+    with: {
+      measuringTask: {
+        with: {
+          pickingOrder: { with: { supplier: true } },
+        },
+      },
+      packages: { with: { pickingItem: { with: { part: true } } } },
+    },
   });
-  if (!task) throw new Error("Measuring task not found");
-
-  const [box] = await db
-    .insert(schema.shippingBoxes)
-    .values({
-      id: uuid(),
-      pickingOrderId: task.pickingOrderId,
-      measuringTaskId,
-      status: "open",
-      createdAt: new Date(),
-    })
-    .returning();
-
-  if (!box) throw new Error("Failed to create shipping box");
-  return box;
 }
 
-export async function addItemToShippingBox(
+export type ShippingBoxForMeasuring = NonNullable<
+  Awaited<ReturnType<typeof getShippingBoxForMeasuring>>
+>;
+
+export async function findMatchingUnverifiedPackage(
   db: PgliteDatabase<typeof schema>,
   shippingBoxId: string,
-  pickingItemId: string,
-  qty: number
-): Promise<typeof schema.shippingBoxItems.$inferSelect> {
-  if (!Number.isInteger(qty) || qty <= 0) {
-    throw new Error("Qty must be a positive integer");
-  }
+  input: PackageVerificationInput,
+  targetPackageId?: string
+) {
+  const rows = await db.query.pickingPackages.findMany({
+    where: and(
+      eq(schema.pickingPackages.shippingBoxId, shippingBoxId),
+      eq(schema.pickingPackages.verified, false)
+    ),
+    with: { pickingItem: { with: { part: true } } },
+  });
 
-  return db.transaction(async (tx) => {
-    const [box] = await tx
-      .select()
-      .from(schema.shippingBoxes)
-      .where(eq(schema.shippingBoxes.id, shippingBoxId));
-    if (!box) throw new Error("Shipping box not found");
-    if (box.status !== "open") throw new Error("Shipping box is not open");
+  const normalize = (value: string | null | undefined) =>
+    (value ?? "").toString().trim().toLowerCase();
 
-    const [pickingItem] = await tx
-      .select()
-      .from(schema.pickingItems)
-      .where(eq(schema.pickingItems.id, pickingItemId));
-    if (!pickingItem) throw new Error("Picking item not found");
-    if (pickingItem.pickingOrderId !== box.pickingOrderId) {
-      throw new Error("Picking item does not belong to this order");
+  const partNo = normalize(input.partNo);
+  const dateCode = normalize(input.dateCode);
+  const lotCode = normalize(input.lotCode);
+  const coo = normalize(input.coo);
+  const cow = normalize(input.cow);
+
+  return (
+    rows.find((pkg) => {
+      if (targetPackageId && pkg.id !== targetPackageId) return false;
+      if (!pkg.pickingItem?.part) return false;
+      if (normalize(pkg.pickingItem.part.partNo) !== partNo) return false;
+      if (normalize(pkg.dateCode) !== dateCode) return false;
+      if (normalize(pkg.lotCode) !== lotCode) return false;
+      if (normalize(pkg.coo) !== coo) return false;
+      if (normalize(pkg.cow) !== cow) return false;
+      return pkg.qty === input.qty;
+    }) ?? null
+  );
+}
+
+export async function verifyPickingPackageForMeasuring(
+  db: PgliteDatabase<typeof schema>,
+  packageId: string,
+  actorId: string
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const pkg = await tx.query.pickingPackages.findFirst({
+      where: eq(schema.pickingPackages.id, packageId),
+      with: { shippingBox: { with: { measuringTask: true } } },
+    });
+    if (!pkg) throw new Error("Package not found");
+    if (!pkg.shippingBoxId) throw new Error("Package is not in a shipping box");
+    if (pkg.shippingBox?.status !== "open") throw new Error("Box is not open");
+    if (pkg.shippingBox.measuringTask?.status !== "pending") {
+      throw new Error("Measuring task is not pending");
     }
-    if (qty > pickingItem.pickedQty) {
-      throw new Error("Qty exceeds picked quantity");
-    }
+    if (pkg.verified) throw new Error("Package is already verified");
 
-    const [packedResult] = await tx
-      .select({
-        total: sql<number>`coalesce(sum(${schema.shippingBoxItems.qty}), 0)`.mapWith(Number),
-      })
-      .from(schema.shippingBoxItems)
-      .where(eq(schema.shippingBoxItems.pickingItemId, pickingItemId));
-    const packedQty = packedResult?.total ?? 0;
-    if (packedQty + qty > pickingItem.pickedQty) {
-      throw new Error("Total packed quantity would exceed picked quantity");
-    }
+    await tx
+      .update(schema.pickingPackages)
+      .set({ verified: true })
+      .where(eq(schema.pickingPackages.id, packageId));
 
-    const [item] = await tx
-      .insert(schema.shippingBoxItems)
-      .values({
-        id: uuid(),
-        shippingBoxId,
-        pickingItemId,
-        partId: pickingItem.partId,
-        qty,
-      })
-      .returning();
-
-    if (!item) throw new Error("Failed to add item to shipping box");
-    return item;
+    await tx.insert(schema.transitionLogs).values({
+      id: uuid(),
+      entityType: "picking_package",
+      entityId: packageId,
+      fromState: "unverified",
+      toState: "verified",
+      actorId,
+      metadata: JSON.stringify({ shippingBoxId: pkg.shippingBoxId }),
+      createdAt: new Date(),
+    });
   });
 }
 
@@ -302,12 +332,32 @@ export async function closeShippingBox(
     if (!box) throw new Error("Shipping box not found");
     if (box.status !== "open") throw new Error("Shipping box is not open");
 
-    const [itemCount] = await tx
-      .select({ count: sql<number>`count(*)`.mapWith(Number) })
-      .from(schema.shippingBoxItems)
-      .where(eq(schema.shippingBoxItems.shippingBoxId, shippingBoxId));
-    if (!itemCount || itemCount.count === 0) {
+    const packages = await tx
+      .select()
+      .from(schema.pickingPackages)
+      .where(eq(schema.pickingPackages.shippingBoxId, shippingBoxId));
+    if (packages.length === 0) {
       throw new Error("Cannot close an empty shipping box");
+    }
+    if (packages.some((p) => !p.verified)) {
+      throw new Error("All packages must be verified before closing the box");
+    }
+
+    if (
+      box.grossWeight === null ||
+      box.netWeight === null ||
+      box.boxSize === null ||
+      box.boxSize.trim() === "" ||
+      box.destinationCountry === null ||
+      box.destinationCountry.trim() === ""
+    ) {
+      throw new Error("Box measurements are incomplete");
+    }
+    if (box.grossWeight <= 0 || box.netWeight <= 0) {
+      throw new Error("Weights must be greater than zero");
+    }
+    if (box.grossWeight < box.netWeight) {
+      throw new Error("Gross weight must be greater than or equal to net weight");
     }
 
     await tx
@@ -338,7 +388,7 @@ export async function completeMeasuringTask(
       where: eq(schema.measuringTasks.id, measuringTaskId),
       with: {
         pickingOrder: { with: { items: true } },
-        shippingBoxes: { with: { items: true } },
+        shippingBoxes: { with: { packages: true } },
       },
     });
     if (!task) throw new Error("Measuring task not found");
@@ -347,13 +397,15 @@ export async function completeMeasuringTask(
     const openBox = task.shippingBoxes.find((b) => b.status !== "closed");
     if (openBox) throw new Error("All shipping boxes must be closed before completing");
 
-    const items = task.pickingOrder?.items ?? [];
-    for (const item of items) {
-      const packedQty = task.shippingBoxes
-        .flatMap((b) => b.items)
-        .filter((i) => i.pickingItemId === item.id)
-        .reduce((sum, i) => sum + i.qty, 0);
-      if (packedQty !== item.pickedQty) {
+    const packedByItem: Record<string, number> = {};
+    for (const box of task.shippingBoxes) {
+      for (const pkg of box.packages) {
+        packedByItem[pkg.pickingItemId] = (packedByItem[pkg.pickingItemId] ?? 0) + pkg.qty;
+      }
+    }
+
+    for (const item of task.pickingOrder?.items ?? []) {
+      if ((packedByItem[item.id] ?? 0) !== item.pickedQty) {
         throw new Error(`Picking item ${item.id} is not fully packed`);
       }
     }

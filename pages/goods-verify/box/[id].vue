@@ -1,58 +1,56 @@
 <template>
   <div>
+    <div style="margin-bottom: 1rem;">
+      <NuxtLink :to="`/goods-verify/shelf/${box?.shelfCode ?? ''}`" class="btn btn--small">
+        ← Shelf boxes
+      </NuxtLink>
+    </div>
+
     <p v-if="pending" class="empty">Loading…</p>
     <p v-else-if="error" class="empty" style="color: var(--danger);">Error: {{ error }}</p>
 
     <template v-else-if="box">
-      <div class="card" style="margin-bottom: 1.5rem;">
-        <div class="detail-row">
-          <span class="detail-label">Box</span>
-          <span class="card__title">{{ box.id }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Shelf</span>
-          <span>{{ box.shelfCode || "—" }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Status</span>
-          <span class="badge">{{ box.status }}</span>
-        </div>
-      </div>
-
-      <template v-if="box.status !== 'verified'">
-        <div class="card" style="margin-bottom: 1.5rem;">
-          <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-            <input
-              v-model="scanPartNo"
-              type="text"
-              placeholder="Scan part number"
-              style="flex: 1; min-width: 10rem;"
-              :disabled="verifying"
-              @keydown.enter="verifyScan"
-            />
-            <button
-              class="btn"
-              :disabled="verifying || !scanPartNo.trim()"
-              @click="verifyScan"
-            >
-              {{ verifying ? "Verifying…" : "Verify" }}
-            </button>
-          </div>
-        </div>
-
-        <div
-          v-if="allVerified"
-          style="margin-bottom: 1.5rem;"
-        >
+      <DetailHeader
+        v-model="headerExpanded"
+        :title="`Box ${box.id}`"
+        :status="box.status"
+        :badge-class="badgeClass(box.status)"
+        :flush-top="route.meta.props?.noPadding"
+        style="margin-bottom: 1.5rem;"
+      >
+        <template #actions>
           <button
-            class="btn"
+            v-if="box.status !== 'verified' && allVerified"
+            class="btn btn--small"
             :disabled="marking"
             @click="markVerified"
           >
             {{ marking ? "Marking…" : "Mark box verified" }}
           </button>
+        </template>
+
+        <div class="detail-row">
+          <span class="detail-label">Shelf</span>
+          <span>{{ box.shelfCode || "—" }}</span>
         </div>
-      </template>
+      </DetailHeader>
+
+      <div
+        v-if="box.status !== 'verified'"
+        style="position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 60;"
+      >
+        <button
+          class="btn"
+          style="border-radius: 9999px; width: 3.5rem; height: 3.5rem; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow);"
+          aria-label="Scan item"
+          @click="openScan"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+        </button>
+      </div>
 
       <h2 style="margin-top: 0; margin-bottom: 1rem; font-size: 1rem;">Expected items</h2>
       <p v-if="box.items.length === 0" class="empty" style="padding: 0;">No items in this box.</p>
@@ -73,37 +71,47 @@
         </div>
         <div class="detail-row">
           <span class="detail-label">Verified</span>
-          <span>{{ item.verified ? "Yes" : "No" }}</span>
+          <span>{{ item.verified ? (item.verifiedAt ? new Date(item.verifiedAt).toLocaleString() : "Yes") : "No" }}</span>
+        </div>
+        <div v-if="!item.verified && box.status !== 'verified'" style="margin-top: 0.75rem;">
+          <button class="btn btn--small" @click="openScanFor(item)">Scan</button>
         </div>
       </div>
     </template>
 
     <p v-else class="empty">Box not found.</p>
+
+    <GoodsVerifyScanModal
+      v-model="scanOpen"
+      :box-id="boxId"
+      :items="box?.items ?? []"
+      @applied="onScanApplied"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import {
   getShelfBoxDetail,
-  verifyShelfBoxItem,
   markShelfBoxVerified,
   type ShelfBoxDetail,
+  type ShelfBoxItemDetail,
 } from "~/db/goodsVerify";
 
-definePageMeta({ title: "Verify Box" });
+definePageMeta({ title: "Verify Box", props: { noPadding: true } });
 
 const route = useRoute();
 const boxId = route.params.id as string;
 
-const db = useDb();
+const db = await useDb();
 const currentUser = await useCurrentUser();
 
 const pending = ref(true);
 const error = ref<string | null>(null);
 const box = ref<ShelfBoxDetail | null>(null);
-const scanPartNo = ref("");
-const verifying = ref(false);
 const marking = ref(false);
+const scanOpen = ref(false);
+const headerExpanded = ref(false);
 
 const allVerified = computed(() =>
   box.value ? box.value.items.every((item) => item.verified) : false
@@ -121,31 +129,11 @@ async function load() {
   }
 }
 
-async function verifyScan() {
-  if (!box.value) return;
-  const partNo = scanPartNo.value.trim();
-  if (!partNo) return;
-
-  const item = box.value.items.find(
-    (i) => !i.verified && i.part?.partNo === partNo
-  );
-
-  if (!item) {
-    error.value = "No unverified item matches that part number";
-    return;
-  }
-
-  error.value = null;
-  verifying.value = true;
-  try {
-    await verifyShelfBoxItem(db, item.id);
-    scanPartNo.value = "";
-    await load();
-  } catch (e: any) {
-    error.value = e?.message ?? String(e);
-  } finally {
-    verifying.value = false;
-  }
+function badgeClass(status: string) {
+  if (status === "open") return "badge--pending";
+  if (status === "closed") return "badge--in-hand";
+  if (status === "verified") return "badge--finished";
+  return "";
 }
 
 async function markVerified() {
@@ -167,14 +155,45 @@ async function markVerified() {
   }
 }
 
-onMounted(load);
+function openScan() {
+  scanOpen.value = true;
+}
+
+function openScanFor(item: ShelfBoxItemDetail) {
+  scanOpen.value = true;
+}
+
+async function onScanApplied() {
+  await load();
+  if (
+    box.value &&
+    box.value.status !== "verified" &&
+    allVerified.value &&
+    currentUser
+  ) {
+    await markVerified();
+  }
+}
+
+function onVisible() {
+  if (document.visibilityState === "visible") {
+    load();
+  }
+}
+
+onMounted(() => {
+  load();
+  document.addEventListener("visibilitychange", onVisible);
+  window.addEventListener("focus", onVisible);
+});
+
+onUnmounted(() => {
+  document.removeEventListener("visibilitychange", onVisible);
+  window.removeEventListener("focus", onVisible);
+});
 </script>
 
 <style scoped>
-.card--done {
-  border-left: 4px solid #22c55e;
-}
-
 .detail-row {
   display: flex;
   justify-content: space-between;
@@ -193,5 +212,24 @@ onMounted(load);
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;
+}
+
+.card--done {
+  border-left: 4px solid #22c55e;
+}
+
+.badge--pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badge--in-hand {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.badge--finished {
+  background: #dcfce7;
+  color: #166534;
 }
 </style>

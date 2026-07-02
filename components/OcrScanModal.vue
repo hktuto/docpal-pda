@@ -32,8 +32,12 @@
               <input v-model="form.lotCode" type="text" placeholder="e.g. L240603" />
             </label>
             <label class="field">
-              <span>Origin Country</span>
-              <input v-model="form.originCountry" type="text" placeholder="e.g. MY" />
+              <span>COO</span>
+              <input v-model="form.coo" type="text" placeholder="e.g. MY" />
+            </label>
+            <label class="field">
+              <span>COW</span>
+              <input v-model="form.cow" type="text" placeholder="e.g. USA" />
             </label>
             <label class="field">
               <span>Qty <span class="required">*</span></span>
@@ -56,7 +60,7 @@
         <template v-else-if="matchResult.status === 'single'">
           <div class="card" style="border-left: 4px solid #16a34a;">
             <p><strong>{{ matchResult.picking.pickingOrderRefNo }}</strong></p>
-            <p class="subtitle">Match found — applying pick…</p>
+            <p class="subtitle">Match found — scanning package…</p>
           </div>
         </template>
 
@@ -87,15 +91,18 @@
         </template>
 
         <template v-else-if="matchResult.status === 'applying'">
-          <p class="empty">Applying pick…</p>
+          <p class="empty">Scanning package…</p>
         </template>
 
         <template v-else-if="matchResult.status === 'success'">
           <div class="card" style="border-left: 4px solid #16a34a;">
-            <p><strong>Pick applied</strong></p>
-            <p class="subtitle">{{ matchResult.qty }} pcs added to {{ matchResult.pickingOrderRefNo }}</p>
+            <p><strong>Package scanned</strong></p>
+            <p class="subtitle">{{ matchResult.qty }} pcs scanned for {{ matchResult.pickingOrderRefNo }}</p>
           </div>
-          <button class="btn" style="width: 100%; margin-top: 1rem;" @click="close">Done</button>
+          <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+            <button class="btn" style="flex: 1;" @click="resetState">Scan again</button>
+            <button class="btn" style="flex: 1;" @click="close">Finish</button>
+          </div>
         </template>
 
         <template v-else-if="matchResult.status === 'error'">
@@ -135,7 +142,8 @@ const defaultForm: OcrInput = {
   partNo: "",
   dateCode: "",
   lotCode: "",
-  originCountry: "",
+  coo: "",
+  cow: "",
   qty: "",
 };
 

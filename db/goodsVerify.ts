@@ -15,6 +15,8 @@ export interface ShelfBoxSummary {
   status: (typeof schema.boxStatus)[number];
   itemCount: number;
   verifiedCount: number;
+  lastCheckAt: Date | null;
+  checkedToday: boolean;
 }
 
 export interface ShelfBoxDetail {
@@ -46,10 +48,10 @@ export async function getShelvesWithBoxes(
     .select({
       code: schema.shelves.code,
       zone: schema.shelves.zone,
-      boxCount: sql<number>`count(${schema.shelfBoxes.id})`.mapWith(Number),
+      boxCount: sql<number>`coalesce(count(${schema.shelfBoxes.id}), 0)`.mapWith(Number),
     })
     .from(schema.shelves)
-    .innerJoin(schema.shelfBoxes, eq(schema.shelfBoxes.shelfCode, schema.shelves.code))
+    .leftJoin(schema.shelfBoxes, eq(schema.shelfBoxes.shelfCode, schema.shelves.code))
     .groupBy(schema.shelves.code, schema.shelves.zone)
     .orderBy(schema.shelves.code);
 }
@@ -58,21 +60,35 @@ export async function getShelfBoxesByShelf(
   db: PgliteDatabase<typeof schema>,
   shelfCode: string
 ): Promise<ShelfBoxSummary[]> {
-  return db
-    .select({
-      id: schema.shelfBoxes.id,
-      shelfCode: schema.shelfBoxes.shelfCode,
-      status: schema.shelfBoxes.status,
-      itemCount: sql<number>`count(${schema.shelfBoxItems.id})`.mapWith(Number),
-      verifiedCount: sql<number>`sum(case when ${schema.shelfBoxItems.verified} then 1 else 0 end)`.mapWith(
-        Number
-      ),
-    })
-    .from(schema.shelfBoxes)
-    .leftJoin(schema.shelfBoxItems, eq(schema.shelfBoxItems.shelfBoxId, schema.shelfBoxes.id))
-    .where(eq(schema.shelfBoxes.shelfCode, shelfCode))
-    .groupBy(schema.shelfBoxes.id, schema.shelfBoxes.shelfCode, schema.shelfBoxes.status)
-    .orderBy(schema.shelfBoxes.createdAt);
+  const result = await db.execute(sql`
+    SELECT
+      sb.id,
+      sb.shelf_code,
+      sb.status,
+      sb.created_at,
+      COUNT(sbi.id) AS item_count,
+      SUM(CASE WHEN sbi.verified THEN 1 ELSE 0 END) AS verified_count,
+      MAX(sbi.verified_at) AS last_check_at,
+      CASE
+        WHEN DATE_TRUNC('day', MAX(sbi.verified_at)) = DATE_TRUNC('day', NOW())
+        THEN true ELSE false
+      END AS checked_today
+    FROM shelf_boxes sb
+    LEFT JOIN shelf_box_items sbi ON sbi.shelf_box_id = sb.id
+    WHERE sb.shelf_code = ${shelfCode}
+    GROUP BY sb.id, sb.shelf_code, sb.status, sb.created_at
+    ORDER BY sb.created_at DESC
+  `);
+
+  return (result.rows ?? []).map((row) => ({
+    id: String(row.id),
+    shelfCode: row.shelf_code as string | null,
+    status: String(row.status) as (typeof schema.boxStatus)[number],
+    itemCount: Number(row.item_count ?? 0),
+    verifiedCount: Number(row.verified_count ?? 0),
+    lastCheckAt: row.last_check_at ? new Date(String(row.last_check_at)) : null,
+    checkedToday: Boolean(row.checked_today),
+  }));
 }
 
 export async function getShelfBoxDetail(

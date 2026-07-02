@@ -4,15 +4,14 @@
     <p v-else-if="error" class="empty" style="color: var(--danger);">Error: {{ error }}</p>
 
     <template v-else-if="order">
-      <div class="card" style="margin-bottom: 1.5rem;">
-        <div class="detail-row">
-          <span class="detail-label">RO No.</span>
-          <span class="card__title">{{ order.refNo }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Status</span>
-          <span class="badge">{{ order.status }}</span>
-        </div>
+      <DetailHeader
+        v-model="headerExpanded"
+        :title="order.refNo"
+        :status="order.status"
+        :badge-class="badgeClass(order.status)"
+        :flush-top="route.meta.props?.noPadding"
+        style="margin-bottom: 1.5rem;"
+      >
         <div class="detail-row">
           <span class="detail-label">Supplier</span>
           <span>{{ order.supplier?.name || "—" }}</span>
@@ -21,63 +20,76 @@
           <span class="detail-label">Delivery date</span>
           <span>{{ order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : "—" }}</span>
         </div>
-      </div>
+      </DetailHeader>
 
-      <div v-if="!box" class="card" style="margin-bottom: 1.5rem;">
-        <h2 style="margin-top: 0; margin-bottom: 1rem;">New shelf box</h2>
-        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+      <div class="card" style="margin-bottom: 1.5rem;">
+        <h2 style="margin-top: 0; margin-bottom: 1rem;">Shelf boxes</h2>
+
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem;">
           <select v-model="selectedShelf" style="flex: 1; min-width: 10rem;" :disabled="creating">
             <option value="">Select a shelf</option>
             <option v-for="shelf in shelves" :key="shelf.code" :value="shelf.code">
               {{ shelf.zone ? `${shelf.code} — ${shelf.zone}` : shelf.code }}
             </option>
           </select>
-          <button class="btn" @click="createBox" :disabled="creating || !selectedShelf">
+          <button class="btn" :disabled="creating || !selectedShelf" @click="createBox">
             {{ creating ? "Creating…" : "Create box" }}
           </button>
         </div>
-      </div>
 
-      <div v-else class="card" style="margin-bottom: 1.5rem;">
-        <div class="detail-row">
-          <span class="detail-label">Box</span>
-          <span class="card__title">{{ box.id }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Shelf</span>
-          <span>{{ box.shelfCode || "—" }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Status</span>
-          <span class="badge">{{ box.status }}</span>
-        </div>
+        <p v-if="boxes.length === 0" class="empty" style="padding: 0;">No boxes yet.</p>
 
-        <h3 style="margin: 1rem 0 0.5rem; font-size: 0.875rem; color: var(--muted);">Items in box</h3>
-        <p v-if="!box.items?.length" class="empty" style="padding: 0;">No items in this box yet.</p>
         <div
-          v-for="item in box.items"
-          :key="item.id"
-          class="lot"
+          v-for="box in boxes"
+          :key="box.id"
+          class="card"
+          style="margin-bottom: 0.75rem;"
+          :class="{ 'card--done': box.status !== 'open' }"
         >
           <div class="detail-row">
-            <span class="detail-label">Part</span>
-            <span>{{ item.part?.partNo || "—" }}</span>
+            <span class="detail-label">Box</span>
+            <span class="card__title">{{ box.id }}</span>
           </div>
           <div class="detail-row">
-            <span class="detail-label">Qty</span>
-            <span>{{ item.qty }}</span>
+            <span class="detail-label">Shelf</span>
+            <span>{{ box.shelfCode || "—" }}</span>
           </div>
-        </div>
+          <div class="detail-row">
+            <span class="detail-label">Status</span>
+            <span class="badge" :class="badgeClass(box.status)">{{ box.status }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Items</span>
+            <span>{{ box.items?.length || 0 }} lines · {{ boxTotalQty(box) }} pcs</span>
+          </div>
 
-        <div v-if="box.status === 'open'" style="margin-top: 1rem;">
-          <button class="btn" @click="closeBox" :disabled="closing || !box.items?.length">
-            {{ closing ? "Closing…" : "Close box" }}
-          </button>
+          <div v-if="box.items?.length" style="margin-top: 0.5rem;">
+            <p style="margin: 0 0 0.25rem; font-size: 0.8125rem; color: var(--muted);">Contents:</p>
+            <div
+              v-for="item in box.items"
+              :key="item.id"
+              class="lot"
+            >
+              <span>{{ item.part?.partNo || "—" }}</span>
+              <span style="color: var(--muted);">× {{ item.qty }}</span>
+            </div>
+          </div>
+
+          <div v-if="box.status === 'open'" style="margin-top: 1rem;">
+            <button
+              class="btn"
+              :disabled="closing || !box.items?.length"
+              @click="closeBox(box.id)"
+            >
+              {{ closing ? "Closing…" : "Close box" }}
+            </button>
+          </div>
         </div>
       </div>
 
-      <h2>Available receiving-area lots</h2>
+      <h2 style="margin-top: 0; margin-bottom: 1rem; font-size: 1rem;">Available receiving-area lots</h2>
       <p v-if="lots.length === 0" class="empty">No lots available for put-away.</p>
+
       <div
         v-for="lot in lots"
         :key="lot.receiving_invoice_item_id"
@@ -88,75 +100,59 @@
           <span class="card__title">{{ lot.part_no || "—" }}</span>
         </div>
         <div class="detail-row">
-          <span class="detail-label">Date code</span>
-          <input
-            v-model="dateCodes[lot.receiving_invoice_item_id]"
-            placeholder="Date code"
-            style="flex: 1; min-width: 6rem;"
-            :disabled="puttingAway[lot.receiving_invoice_item_id]"
-          />
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Lot code</span>
-          <input
-            v-model="lotCodes[lot.receiving_invoice_item_id]"
-            placeholder="Lot code"
-            style="flex: 1; min-width: 6rem;"
-            :disabled="puttingAway[lot.receiving_invoice_item_id]"
-          />
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Origin</span>
-          <input
-            v-model="originCountries[lot.receiving_invoice_item_id]"
-            placeholder="Origin country"
-            style="flex: 1; min-width: 6rem;"
-            :disabled="puttingAway[lot.receiving_invoice_item_id]"
-          />
-        </div>
-        <div class="detail-row">
           <span class="detail-label">Available qty</span>
           <span>{{ lot.available_qty }}</span>
         </div>
-        <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-          <input
-            v-model.number="qtys[lot.receiving_invoice_item_id]"
-            type="number"
-            min="1"
-            :max="lot.available_qty"
-            placeholder="Qty"
-            style="flex: 1; min-width: 4rem;"
-            :disabled="puttingAway[lot.receiving_invoice_item_id]"
-          />
+        <div class="detail-row">
+          <span class="detail-label">Date / Lot</span>
+          <span>{{ lot.date_code || "—" }} / {{ lot.lot_code || "—" }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">COO / COW</span>
+          <span>{{ lot.coo || "—" }} / {{ lot.cow || "—" }}</span>
+        </div>
+
+        <div style="margin-top: 0.75rem;">
           <button
             class="btn btn--small"
-            @click="putAway(lot)"
-            :disabled="puttingAway[lot.receiving_invoice_item_id] || !box || box.status !== 'open' || !canPutAway(lot)"
+            :disabled="!hasOpenBox"
+            @click="openScan(lot)"
           >
-            {{ puttingAway[lot.receiving_invoice_item_id] ? "Saving…" : "Put away" }}
+            Scan
           </button>
+          <p v-if="!hasOpenBox" style="margin: 0.5rem 0 0; font-size: 0.8125rem; color: var(--muted);">
+            Create an open box first.
+          </p>
         </div>
       </div>
     </template>
+
+    <PutAwayScanModal
+      v-model="scanOpen"
+      :item="scanItem"
+      :boxes="boxes"
+      @applied="load"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { and, eq } from "drizzle-orm";
 import * as schema from "~/db/schema";
 import { getReceivingOrderDetail } from "~/db/receiving";
 import {
   getPutAwayLots,
   createShelfBox,
-  addItemToShelfBox,
   closeShelfBox,
+  getShelfBoxesForReceivingOrder,
 } from "~/db/putAway";
 import type { PutAwayLot } from "~/db/putAway";
 
-definePageMeta({ title: "Put-away Detail" });
+definePageMeta({ title: "Put-away Detail", props: { noPadding: true } });
 
 const route = useRoute();
 const orderId = route.params.id as string;
+
+const headerExpanded = ref(false);
 
 const db = await useDb();
 const currentUser = await useCurrentUser();
@@ -166,39 +162,30 @@ const error = ref<string | null>(null);
 const order = ref<any>(null);
 const lots = ref<PutAwayLot[]>([]);
 const shelves = ref<typeof schema.shelves.$inferSelect[]>([]);
+const boxes = ref<any[]>([]);
 const selectedShelf = ref("");
-const box = ref<any>(null);
-const qtys = ref<Record<string, number>>({});
-const dateCodes = ref<Record<string, string>>({});
-const lotCodes = ref<Record<string, string>>({});
-const originCountries = ref<Record<string, string>>({});
 const creating = ref(false);
-const puttingAway = ref<Record<string, boolean>>({});
 const closing = ref(false);
 
+const scanOpen = ref(false);
+const scanItem = ref<any>(null);
+
+const hasOpenBox = computed(() => boxes.value.some((b) => b.status === "open"));
+
 async function load() {
+  pending.value = true;
+  error.value = null;
   try {
-    const [orderData, lotsData, shelvesData, existingBox] = await Promise.all([
+    const [orderData, lotsData, shelvesData, boxesData] = await Promise.all([
       getReceivingOrderDetail(db, orderId),
       getPutAwayLots(db, orderId),
       db.query.shelves.findMany(),
-      db.query.shelfBoxes.findFirst({
-        where: and(
-          eq(schema.shelfBoxes.receivingOrderId, orderId),
-          eq(schema.shelfBoxes.status, "open")
-        ),
-        with: { items: { with: { part: true } } },
-      }),
+      getShelfBoxesForReceivingOrder(db, orderId),
     ]);
     order.value = orderData;
     lots.value = lotsData;
     shelves.value = shelvesData;
-    box.value = existingBox ?? null;
-    for (const lot of lotsData) {
-      dateCodes.value[lot.receiving_invoice_item_id] = lot.date_code ?? "";
-      lotCodes.value[lot.receiving_invoice_item_id] = lot.lot_code ?? "";
-      originCountries.value[lot.receiving_invoice_item_id] = lot.origin_country ?? "";
-    }
+    boxes.value = boxesData;
   } catch (e: any) {
     error.value = e?.message ?? String(e);
   } finally {
@@ -206,31 +193,27 @@ async function load() {
   }
 }
 
-async function loadBox() {
-  if (!box.value) return;
-  try {
-    const refreshed = await db.query.shelfBoxes.findFirst({
-      where: eq(schema.shelfBoxes.id, box.value.id),
-      with: { items: { with: { part: true } } },
-    });
-    box.value = refreshed;
-  } catch (e: any) {
-    error.value = e?.message ?? String(e);
-  }
+function boxTotalQty(box: any) {
+  return (box.items || []).reduce((sum: number, item: any) => sum + (item.qty || 0), 0);
 }
 
-function canPutAway(lot: PutAwayLot) {
-  const qty = Number(qtys.value[lot.receiving_invoice_item_id]) || 0;
-  return qty > 0 && Number.isInteger(qty) && qty <= lot.available_qty;
+function badgeClass(status: string) {
+  if (status === "open" || status === "pending") return "badge--pending";
+  if (["closed", "verified", "finished", "completed", "in_hand", "clear"].includes(status)) return "badge--finished";
+  return "";
 }
 
 async function createBox() {
   if (!selectedShelf.value) return;
+  if (!currentUser?.id) {
+    error.value = "Operator not signed in";
+    return;
+  }
   creating.value = true;
   try {
-    const created = await createShelfBox(db, orderId, selectedShelf.value);
-    box.value = created;
-    await loadBox();
+    await createShelfBox(db, orderId, selectedShelf.value, currentUser.id);
+    selectedShelf.value = "";
+    await load();
   } catch (e: any) {
     error.value = e?.message ?? String(e);
   } finally {
@@ -238,45 +221,15 @@ async function createBox() {
   }
 }
 
-async function putAway(lot: PutAwayLot) {
-  if (!box.value) return;
-  const receivingInvoiceItemId = lot.receiving_invoice_item_id;
-  const qty = Number(qtys.value[receivingInvoiceItemId]) || 0;
-  if (!Number.isInteger(qty) || qty <= 0) {
-    error.value = "Qty must be a positive integer";
+async function closeBox(boxId: string) {
+  if (!currentUser?.id) {
+    error.value = "Operator not signed in";
     return;
   }
-  if (qty > lot.available_qty) {
-    error.value = "Quantity exceeds available quantity";
-    return;
-  }
-  puttingAway.value[receivingInvoiceItemId] = true;
-  try {
-    await addItemToShelfBox(
-      db,
-      box.value.id,
-      receivingInvoiceItemId,
-      qty,
-      dateCodes.value[receivingInvoiceItemId] === "" ? null : dateCodes.value[receivingInvoiceItemId],
-      lotCodes.value[receivingInvoiceItemId] === "" ? null : lotCodes.value[receivingInvoiceItemId],
-      originCountries.value[receivingInvoiceItemId] === "" ? null : originCountries.value[receivingInvoiceItemId]
-    );
-    qtys.value[receivingInvoiceItemId] = 0;
-    await Promise.all([load(), loadBox()]);
-  } catch (e: any) {
-    error.value = e?.message ?? String(e);
-  } finally {
-    puttingAway.value[receivingInvoiceItemId] = false;
-  }
-}
-
-async function closeBox() {
-  if (!box.value) return;
   closing.value = true;
   try {
-    if (!currentUser) throw new Error("No operator user found");
-    await closeShelfBox(db, box.value.id, currentUser.id);
-    await loadBox();
+    await closeShelfBox(db, boxId, currentUser.id);
+    await load();
   } catch (e: any) {
     error.value = e?.message ?? String(e);
   } finally {
@@ -284,7 +237,27 @@ async function closeBox() {
   }
 }
 
-onMounted(load);
+function openScan(lot: PutAwayLot) {
+  scanItem.value = lot;
+  scanOpen.value = true;
+}
+
+function onVisible() {
+  if (document.visibilityState === "visible") {
+    load();
+  }
+}
+
+onMounted(() => {
+  load();
+  document.addEventListener("visibilitychange", onVisible);
+  window.addEventListener("focus", onVisible);
+});
+
+onUnmounted(() => {
+  document.removeEventListener("visibilitychange", onVisible);
+  window.removeEventListener("focus", onVisible);
+});
 </script>
 
 <style scoped>
@@ -309,9 +282,29 @@ onMounted(load);
 }
 
 .lot {
-  background: var(--bg);
-  border-radius: var(--radius);
-  padding: 0.75rem;
-  margin-bottom: 0.5rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.35rem 0;
+  font-size: 0.875rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.lot:last-child {
+  border-bottom: none;
+}
+
+.badge--pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badge--finished {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.card--done {
+  border-left: 4px solid #22c55e;
 }
 </style>

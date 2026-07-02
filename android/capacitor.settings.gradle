@@ -3,10 +3,16 @@ include ':capacitor-android'
 project(':capacitor-android').projectDir = new File('../node_modules/.pnpm/@capacitor+android@8.4.1_@capacitor+core@8.4.1/node_modules/@capacitor/android/capacitor')
 
 include ':capacitor-mlkit-subject-segmentation'
-project(':capacitor-mlkit-subject-segmentation').projectDir = new File('../node_modules/.pnpm/@capacitor-mlkit+subject-se_eea1666d87e529edbe348cb4359e6011/node_modules/@capacitor-mlkit/subject-segmentation/android')
+project(':capacitor-mlkit-subject-segmentation').projectDir = new File('../node_modules/.pnpm/@capacitor-mlkit+subject-se_0efd4c3a3cceef76b8fdded377788bd9/node_modules/@capacitor-mlkit/subject-segmentation/android')
+
+include ':capacitor-app'
+project(':capacitor-app').projectDir = new File('../node_modules/.pnpm/@capacitor+app@8.1.0_@capacitor+core@8.4.1/node_modules/@capacitor/app/android')
 
 include ':capacitor-camera'
 project(':capacitor-camera').projectDir = new File('../node_modules/.pnpm/@capacitor+camera@8.2.0_@capacitor+core@8.4.1/node_modules/@capacitor/camera/android')
 
+include ':capgo-capacitor-document-scanner'
+project(':capgo-capacitor-document-scanner').projectDir = new File('../node_modules/.pnpm/@capgo+capacitor-document-s_e85756907e798e144ec6c28a70ae0d79/node_modules/@capgo/capacitor-document-scanner/android')
+
 include ':pantrist-capacitor-plugin-ml-kit-text-recognition'
-project(':pantrist-capacitor-plugin-ml-kit-text-recognition').projectDir = new File('../node_modules/.pnpm/@pantrist+capacitor-plugin-_583bd3872ea2d59f67aa4e6289265b70/node_modules/@pantrist/capacitor-plugin-ml-kit-text-recognition/android')
+project(':pantrist-capacitor-plugin-ml-kit-text-recognition').projectDir = new File('../node_modules/.pnpm/@pantrist+capacitor-plugin-_09a19a215118bc3e039c8a9560155808/node_modules/@pantrist/capacitor-plugin-ml-kit-text-recognition/android')

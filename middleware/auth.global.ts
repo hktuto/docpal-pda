@@ -2,14 +2,14 @@ export default defineNuxtRouteMiddleware((to) => {
   const { currentUser } = useAuth();
 
   // Login page is the only public route.
-  if (to.path === "/") {
+  if (to.path === "/login") {
     if (currentUser.value) {
-      return navigateTo("/home");
+      return navigateTo("/");
     }
     return;
   }
 
   if (!currentUser.value) {
-    return navigateTo("/");
+    return navigateTo("/login");
   }
 });

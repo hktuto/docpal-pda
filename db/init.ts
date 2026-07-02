@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS parts (
   part_no TEXT NOT NULL UNIQUE,
   internal_code TEXT,
   description TEXT,
-  default_origin_country TEXT
+  default_coo TEXT
 );
 
 CREATE TABLE IF NOT EXISTS shelves (
@@ -64,7 +64,8 @@ CREATE TABLE IF NOT EXISTS receiving_invoice_items (
   box_id TEXT,
   date_code TEXT,
   lot_code TEXT,
-  origin_country TEXT,
+  coo TEXT,
+  cow TEXT,
   reported_mismatch BOOLEAN DEFAULT FALSE,
   mismatch_note TEXT
 );
@@ -77,6 +78,7 @@ CREATE TABLE IF NOT EXISTS picking_orders (
   po_no TEXT,
   required_date_code_notice TEXT,
   ship_to TEXT,
+  destination_country TEXT,
   status TEXT NOT NULL DEFAULT 'pending',
   created_at TIMESTAMP NOT NULL,
   updated_at TIMESTAMP NOT NULL
@@ -102,7 +104,8 @@ CREATE TABLE IF NOT EXISTS inventory_lots (
   part_id TEXT NOT NULL REFERENCES parts(id),
   date_code TEXT,
   lot_code TEXT,
-  origin_country TEXT,
+  coo TEXT,
+  cow TEXT,
   shelf_code TEXT REFERENCES shelves(code),
   box_id TEXT,
   total_qty INTEGER NOT NULL DEFAULT 0,
@@ -111,7 +114,7 @@ CREATE TABLE IF NOT EXISTS inventory_lots (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS inventory_lots_unique_lot
-  ON inventory_lots(part_id, date_code, lot_code, origin_country, shelf_code, box_id)
+  ON inventory_lots(part_id, date_code, coo, cow, shelf_code, box_id)
   WHERE shelf_code IS NOT NULL OR box_id IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_inventory_lots_part ON inventory_lots(part_id);
@@ -165,6 +168,26 @@ CREATE TABLE IF NOT EXISTS shipping_boxes (
 );
 
 CREATE INDEX IF NOT EXISTS idx_shipping_boxes_task ON shipping_boxes(measuring_task_id);
+
+CREATE TABLE IF NOT EXISTS picking_packages (
+  id TEXT PRIMARY KEY,
+  picking_item_id TEXT NOT NULL REFERENCES picking_items(id) ON DELETE CASCADE,
+  picking_order_id TEXT NOT NULL REFERENCES picking_orders(id) ON DELETE CASCADE,
+  source_type TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  qty INTEGER NOT NULL,
+  shipping_box_id TEXT REFERENCES shipping_boxes(id),
+  date_code TEXT,
+  lot_code TEXT,
+  coo TEXT,
+  cow TEXT,
+  verified BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_picking_packages_item ON picking_packages(picking_item_id);
+CREATE INDEX IF NOT EXISTS idx_picking_packages_order ON picking_packages(picking_order_id);
+CREATE INDEX IF NOT EXISTS idx_picking_packages_box ON picking_packages(shipping_box_id);
 
 CREATE TABLE IF NOT EXISTS shipping_box_items (
   id TEXT PRIMARY KEY,

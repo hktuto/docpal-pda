@@ -14,6 +14,7 @@ erDiagram
     parts ||--o{ picking_items : "describes"
     parts ||--o{ inventory_lots : "describes"
     parts ||--o{ shipping_box_items : "describes"
+    parts ||--o{ picking_packages : "describes"
     parts ||--o{ shelf_box_items : "describes"
     shelves ||--o{ inventory_lots : "locates"
     shelves ||--o{ shelf_boxes : "locates"
@@ -29,9 +30,12 @@ erDiagram
     picking_orders ||--o{ measuring_tasks : "creates"
     picking_orders ||--o{ shipping_boxes : "contains"
     picking_items ||--o{ allocations : "reserves"
+    picking_items ||--o{ picking_packages : "scanned_as"
     picking_items ||--o{ shipping_box_items : "packed_into"
+    picking_orders ||--o{ picking_packages : "owns"
     measuring_tasks ||--o{ shipping_boxes : "creates"
     shipping_boxes ||--o{ shipping_box_items : "contains"
+    shipping_boxes ||--o{ picking_packages : "contains"
     shelf_boxes ||--o{ shelf_box_items : "contains"
 ```
 
@@ -51,9 +55,10 @@ erDiagram
 | `picking_orders` | Outgoing shipments to customers | `supplier_id` → `suppliers` |
 | `picking_items` | Lines to pick within a picking order | `picking_order_id`, `part_id` |
 | `allocations` | Reservation of stock for a picking item | `picking_item_id`, `inventory_lot_id` (optional), `receiving_invoice_item_id` (optional) |
+| `picking_packages` | Physical packages scanned and then boxed | `picking_item_id`, `picking_order_id`, `shipping_box_id` (optional) |
 | `measuring_tasks` | Packing task created when a picking order is finished | `picking_order_id` |
 | `shipping_boxes` | Boxes used to ship a finished picking order | `picking_order_id`, `measuring_task_id` |
-| `shipping_box_items` | Items packed into a shipping box | `shipping_box_id`, `picking_item_id`, `part_id` |
+| `shipping_box_items` | Deprecated summary of items packed into a shipping box | `shipping_box_id`, `picking_item_id`, `part_id` |
 | `shelf_boxes` | Boxes created during put-away | `receiving_order_id`, `shelf_code` |
 | `shelf_box_items` | Items moved into a shelf box | `shelf_box_id`, `receiving_invoice_item_id`, `part_id` |
 | `transition_logs` | Audit log of status changes | `actor_id` → `users` |
@@ -66,12 +71,14 @@ erDiagram
 - **Picking → inventory.** A `picking_item` reserves stock through `allocations`. An allocation points to either:
   - An `inventory_lot` (shelved, shelf-box, or receiving-area lot), or
   - A `receiving_invoice_item` (direct reservation before the lot is materialized).
-- **Boxes.** `shelf_boxes` group items moved into storage; `shipping_boxes` group items packed for a customer.
-- **State changes.** Every status change for `receiving_orders`, `picking_orders`, `shelf_boxes`, `shipping_boxes`, and `measuring_tasks` is recorded in `transition_logs`.
+- **Packages and boxes.** Scanning an allocation creates a `picking_packages` row. The operator then assigns packages to `shipping_boxes`. `picking_items.picked_qty` is the sum of boxed package quantities.
+- **Boxes.** `shelf_boxes` group items moved into storage; `shipping_boxes` group packages packed for a customer.
+- **State changes.** Every status change for `receiving_orders`, `picking_orders`, `picking_items`, `shelf_boxes`, `shipping_boxes`, and `measuring_tasks` is recorded in `transition_logs`.
 
 ## Allocation lifecycle
 
 1. **Created.** When stock becomes available or a new picking order arrives, `db/allocate.ts` creates `allocations` rows reserving quantity for each picking item.
-2. **Materialized.** Before picking from a receiving-area allocation, `db/picking.ts` creates a dedicated `inventory_lots` row and moves or splits the allocation onto that lot.
-3. **Picked.** `db/picking.ts` confirms the picked quantity, reduces the allocation, and updates `picking_items.picked_qty` and `inventory_lots` totals.
-4. **Removed.** When an allocation is fully picked, it is deleted.
+2. **Materialized.** Before scanning from a receiving-area allocation, `db/picking.ts` creates a dedicated `inventory_lots` row and moves or splits the allocation onto that lot.
+3. **Scanned.** `db/picking.ts` scans the allocation, creates a `picking_packages` row, reduces the allocation, and updates `inventory_lots` totals. `picking_items.picked_qty` is not changed yet.
+4. **Boxed.** The operator assigns the package to a `shipping_box`. `db/picking.ts` updates `picking_packages.shipping_box_id` and recalculates `picking_items.picked_qty`.
+5. **Removed.** When an allocation is fully scanned, its quantity reaches zero; the row is kept for historical traceability.

@@ -4,56 +4,45 @@
     <p v-else-if="error" class="empty" style="color: var(--danger);">Error: {{ error }}</p>
 
     <template v-else-if="order">
-      <div
-        class="card"
-        :class="{ 'card--flush-top': route.meta.props?.noPadding }"
+      <DetailHeader
+        v-model="headerExpanded"
+        :title="order.refNo"
+        :status="order.status"
+        :badge-class="badgeClass(order.status)"
+        :flush-top="route.meta.props?.noPadding"
         style="margin-bottom: 1.5rem;"
       >
-        <div class="card-header" @click="headerExpanded = !headerExpanded">
-          <div class="detail-row" style="flex: 1; border-bottom: none; padding: 0; justify-content: flex-start;align-items: center;">
-            <span class="detail-label">RO No.</span>
-            <span class="card__title" style="margin:0;">{{ order.refNo }}</span>
-          </div>
-          <div class="detail-row" style="border-bottom: none; padding: 0;">
-            <span class="detail-label">Status</span>
-            <span class="badge">{{ order.status }}</span>
-          </div>
+        <template #actions>
           <button
-            class="toggle-btn"
-            aria-label="Toggle order details"
-            @click.stop="headerExpanded = !headerExpanded"
+            v-if="order.status === 'pending'"
+            class="btn btn--small"
+            :disabled="confirming"
+            @click="confirmArrival"
           >
-            {{ headerExpanded ? "▲" : "▼" }}
+            {{ confirming ? "Confirming…" : "Confirm arrived" }}
           </button>
-        </div>
-
-        <template v-if="headerExpanded">
-          <div class="detail-row">
-            <span class="detail-label">Supplier</span>
-            <span>{{ order.supplier?.name || "—" }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Delivery date</span>
-            <span>{{ order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : "—" }}</span>
-          </div>
-          <div v-if="order.status === 'in_hand' && remainingItems > 0" class="detail-row">
-            <span class="detail-label">Remaining items</span>
-            <span>{{ remainingItems }} item{{ remainingItems === 1 ? '' : 's' }}</span>
-          </div>
-
-          <div v-if="order.status === 'pending'" style="margin-top: 1rem;">
-            <button class="btn" @click="confirmArrival" :disabled="confirming">
-              {{ confirming ? "Confirming…" : "Confirm arrived" }}
-            </button>
-          </div>
-
-          <div v-if="order.status === 'in_hand' && remainingItems > 0" style="margin-top: 0.75rem;">
-            <NuxtLink :to="`/put-away/${order.id}`" class="btn btn--small">
-                Put away remaining stock
-            </NuxtLink>
-          </div>
+          <NuxtLink
+            v-if="order.status === 'in_hand' && remainingItems > 0"
+            :to="`/put-away/${order.id}`"
+            class="btn btn--small"
+          >
+            Put away remaining stock
+          </NuxtLink>
         </template>
-      </div>
+
+        <div class="detail-row">
+          <span class="detail-label">Supplier</span>
+          <span>{{ order.supplier?.name || "—" }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Delivery date</span>
+          <span>{{ order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : "—" }}</span>
+        </div>
+        <div v-if="order.status === 'in_hand' && remainingItems > 0" class="detail-row">
+          <span class="detail-label">Remaining items</span>
+          <span>{{ remainingItems }} item{{ remainingItems === 1 ? '' : 's' }}</span>
+        </div>
+      </DetailHeader>
 
       <div v-if="order.status === 'in_hand' && remainingItems > 0 && view === 'picking'" style="position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 60;">
         <button
@@ -69,12 +58,12 @@
         </button>
       </div>
 
-      <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+      <div class="view-tabs">
         <button
           v-for="opt in views"
           :key="opt.value"
-          class="btn btn--small"
-          :style="view === opt.value ? 'background: var(--primary-hover);' : 'background: var(--bg); color: var(--text); border-color: var(--border);'"
+          class="filter-chip"
+          :class="{ 'filter-chip--active': view === opt.value }"
           @click="view = opt.value"
         >
           {{ opt.label }}
@@ -83,7 +72,7 @@
       </div>
 
       <template v-if="view === 'receiving'">
-        <h2>Invoices & Items</h2>
+        <h2 class="section-title">Invoices & Items</h2>
         <div v-for="invoice in order.invoices" :key="invoice.id" style="margin-bottom: 1.5rem;">
           <h3 style="margin-bottom: 0.5rem; color: var(--muted);">
             Invoice {{ invoice.invoiceNo }}
@@ -124,8 +113,8 @@
               <span>{{ item.receivedQty - item.pickedQty - item.putAwayQty - (allocatedByItem[item.id] || 0) }}</span>
             </div>
             <div class="detail-row">
-              <span class="detail-label">Date / Lot / Origin</span>
-              <span>{{ item.dateCode }} / {{ item.lotCode }} / {{ item.originCountry }}</span>
+              <span class="detail-label">Date / Lot / COO / COW</span>
+              <span>{{ item.dateCode }} / {{ item.lotCode }} / {{ item.coo }} / {{ item.cow }}</span>
             </div>
 
             <div v-if="order.status === 'pending'" style="margin-top: 0.75rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
@@ -154,7 +143,7 @@
       </template>
 
       <template v-else>
-        <h2>Picking view</h2>
+        <h2 class="section-title">Picking view</h2>
         <input
           v-model="searchQuery"
           type="text"
@@ -175,19 +164,42 @@
             <span class="badge">{{ po.status }}</span>
           </div>
 
+          <div v-if="po.status !== 'finished'" style="margin-top: 0.75rem;">
+            <button
+              class="btn btn--small"
+              :disabled="creatingBox[po.id]"
+              @click="createBox(po.id)"
+            >
+              {{ creatingBox[po.id] ? "Creating…" : "Create box" }}
+            </button>
+          </div>
+
+          <div v-if="(boxesByOrder[po.id] || []).length" style="margin-top: 0.75rem;">
+            <h3 style="margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--muted);">Boxes</h3>
+            <div
+              v-for="box in boxesByOrder[po.id]"
+              :key="box.id"
+              class="lot"
+              style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;"
+            >
+              <span style="font-size: 0.875rem; font-weight: 600;">{{ box.id }}</span>
+              <span class="badge">{{ box.status }}</span>
+            </div>
+          </div>
+
           <div v-for="pi in po.items" :key="pi.id" class="lot" style="margin-top: 0.75rem;">
             <div class="detail-row">
               <span class="detail-label">Part</span>
               <span>{{ pi.part_no }}</span>
             </div>
             <div class="detail-row">
-              <span class="detail-label">Required / picked</span>
-              <span>{{ pi.required_qty }} / {{ pi.picked_qty }}</span>
+              <span class="detail-label">Required / scanned / boxed</span>
+              <span>{{ pi.required_qty }} / {{ pi.scanned_qty }} / {{ pi.boxed_qty }}</span>
             </div>
             <div class="detail-row">
               <span class="detail-label">Status</span>
-              <span class="badge" :class="{ 'badge--finished': pi.picked_qty >= pi.required_qty }">
-                {{ pi.picked_qty >= pi.required_qty ? "Finished" : "Picking" }}
+              <span class="badge" :class="{ 'badge--finished': pi.boxed_qty >= pi.required_qty }">
+                {{ pi.boxed_qty >= pi.required_qty ? "Finished" : "Picking" }}
               </span>
             </div>
             <div v-if="pi.locations.filter(l => l.allocated_qty > 0).length" class="detail-row">
@@ -196,10 +208,53 @@
             <ul v-if="pi.locations.filter(l => l.allocated_qty > 0).length" style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--muted);">
               <li v-for="(loc, idx) in pi.locations.filter(l => l.allocated_qty > 0)" :key="idx">
                 {{ loc.shelf_code || loc.box_id || "Receiving area" }}
-                · {{ loc.date_code || "—" }} / {{ loc.lot_code || "—" }} / {{ loc.origin_country || "—" }}
+                · {{ loc.date_code || "—" }} / {{ loc.lot_code || "—" }} / {{ loc.coo || "—" }} / {{ loc.cow || "—" }}
                 · qty {{ loc.allocated_qty }}
               </li>
             </ul>
+
+            <div v-if="packagesByItem[pi.id]?.length" style="margin-top: 0.75rem;">
+              <h3 style="margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--muted);">Packages</h3>
+              <div
+                v-for="pkg in packagesByItem[pi.id]"
+                :key="pkg.id"
+                class="lot"
+                style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; justify-content: space-between;"
+              >
+                <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                  <span style="font-size: 0.875rem;">
+                    {{ pkg.qty }} pcs · {{ pkg.dateCode || "—" }} / {{ pkg.lotCode || "—" }} / {{ pkg.coo || "—" }} / {{ pkg.cow || "—" }}
+                  </span>
+                  <span style="font-size: 0.75rem; color: var(--muted);">
+                    <template v-if="pkg.shippingBoxId">
+                      In box {{ pkg.shippingBoxId }}
+                    </template>
+                    <template v-else>Unboxed</template>
+                  </span>
+                </div>
+                <div v-if="!pkg.shippingBoxId" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                  <select v-model="boxSelections[pkg.id]" :disabled="addingPackage[pkg.id]" style="min-width: 8rem;">
+                    <option value="">Select box</option>
+                    <option v-for="box in openBoxesForOrder(po.id)" :key="box.id" :value="box.id">{{ box.id }}</option>
+                  </select>
+                  <button
+                    class="btn btn--small"
+                    :disabled="addingPackage[pkg.id] || !boxSelections[pkg.id]"
+                    @click="addToBox(pkg.id)"
+                  >
+                    {{ addingPackage[pkg.id] ? "Adding…" : "Add to box" }}
+                  </button>
+                </div>
+                <button
+                  v-else-if="boxById(pkg.shippingBoxId)?.status === 'open'"
+                  class="btn btn--small"
+                  :disabled="removingPackage[pkg.id]"
+                  @click="removeFromBox(pkg.id)"
+                >
+                  {{ removingPackage[pkg.id] ? "Removing…" : "Remove from box" }}
+                </button>
+              </div>
+            </div>
 
             <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
               <button
@@ -209,12 +264,12 @@
                 Scan
               </button>
               <button class="btn btn--small" @click="toggleExpand(pi.id)">
-                {{ expandedItems.has(pi.id) ? "Hide scan records" : "Show scan records" }}
+                {{ expandedItems.has(pi.id) ? "Hide picking logs" : "Show picking logs" }}
                 ({{ (transitionLogs[pi.id] || []).length }})
               </button>
 
               <div v-if="expandedItems.has(pi.id)" style="width: 100%; margin-top: 0.5rem;">
-                <p v-if="!(transitionLogs[pi.id] || []).length" class="card__meta">No scan records.</p>
+                <p v-if="!(transitionLogs[pi.id] || []).length" class="card__meta">No picking logs.</p>
                 <ul v-else style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--muted);">
                   <li v-for="log in transitionLogs[pi.id]" :key="log.id" style="margin-bottom: 0.35rem;">
                     {{ new Date(log.createdAt).toLocaleString() }}
@@ -252,8 +307,12 @@ import {
 import {
   getPickingOrdersByReceivingOrder,
   getPickingItemTransitionLogs,
+  createShippingBoxForPickingOrder,
+  addPackageToBox,
+  removePackageFromBox,
   type PickingByReceivingRow,
 } from "~/db/picking";
+import * as schema from "~/db/schema";
 
 definePageMeta({ title: "Receiving Detail", props: { noPadding: true } });
 
@@ -277,6 +336,12 @@ const headerExpanded = ref(false);
 const transitionLogs = ref<Record<string, any[]>>({});
 const expandedItems = ref<Set<string>>(new Set());
 const searchQuery = ref("");
+const packagesByItem = ref<Record<string, (typeof schema.pickingPackages.$inferSelect)[]>>({});
+const boxesByOrder = ref<Record<string, (typeof schema.shippingBoxes.$inferSelect)[]>>({});
+const creatingBox = ref<Record<string, boolean>>({});
+const addingPackage = ref<Record<string, boolean>>({});
+const removingPackage = ref<Record<string, boolean>>({});
+const boxSelections = ref<Record<string, string>>({});
 
 const views = [
   { label: "Receiving", value: "receiving" as const },
@@ -289,12 +354,15 @@ interface GroupedItem {
   part_no: string;
   required_qty: number;
   picked_qty: number;
+  scanned_qty: number;
+  boxed_qty: number;
   locations: Array<{
     shelf_code: string | null;
     box_id: string | null;
     date_code: string | null;
     lot_code: string | null;
-    origin_country: string | null;
+    coo: string | null;
+    cow: string | null;
     allocated_qty: number;
   }>;
 }
@@ -326,6 +394,8 @@ const groupedPickingOrders = computed<GroupedOrder[]>(() => {
         part_no: row.part_no,
         required_qty: row.required_qty,
         picked_qty: row.picked_qty,
+        scanned_qty: row.scanned_qty,
+        boxed_qty: row.boxed_qty,
         locations: [],
       };
       po.items.push(item);
@@ -335,7 +405,8 @@ const groupedPickingOrders = computed<GroupedOrder[]>(() => {
       box_id: row.box_id,
       date_code: row.date_code,
       lot_code: row.lot_code,
-      origin_country: row.origin_country,
+      coo: row.coo,
+      cow: row.cow,
       allocated_qty: row.allocated_qty,
     });
   }
@@ -399,6 +470,8 @@ async function load() {
     remainingItems.value = Number((remainingResult.rows[0] as any)?.qty ?? 0);
 
     const itemIds = Array.from(new Set(linkedRows.map((r) => r.picking_item_id)));
+    const orderIds = Array.from(new Set(linkedRows.map((r) => r.picking_order_id)));
+
     const logs = itemIds.length ? await getPickingItemTransitionLogs(db, itemIds) : [];
     const nextLogs: Record<string, any[]> = {};
     for (const log of logs) {
@@ -407,6 +480,56 @@ async function load() {
       nextLogs[log.entityId] = list;
     }
     transitionLogs.value = nextLogs;
+
+    const packageResult = itemIds.length
+      ? await db.execute(sql`
+          SELECT * FROM picking_packages
+          WHERE picking_item_id IN (${sql.raw(itemIds.map((id) => `'${id}'`).join(", "))})
+          ORDER BY created_at
+        `)
+      : { rows: [] };
+    const nextPackages: Record<string, any[]> = {};
+    const nextBoxSelections: Record<string, string> = {};
+    for (const raw of (packageResult.rows ?? []) as any[]) {
+      const pkg = {
+        id: raw.id,
+        pickingItemId: raw.picking_item_id,
+        pickingOrderId: raw.picking_order_id,
+        sourceType: raw.source_type,
+        sourceId: raw.source_id,
+        qty: raw.qty,
+        shippingBoxId: raw.shipping_box_id,
+        dateCode: raw.date_code,
+        lotCode: raw.lot_code,
+        coo: raw.coo,
+        cow: raw.cow,
+        createdAt: raw.created_at,
+      };
+      const list = nextPackages[pkg.pickingItemId] ?? [];
+      list.push(pkg);
+      nextPackages[pkg.pickingItemId] = list;
+      if (!pkg.shippingBoxId) {
+        nextBoxSelections[pkg.id] = boxSelections.value[pkg.id] ?? "";
+      }
+    }
+    packagesByItem.value = nextPackages;
+
+    const boxResult = orderIds.length
+      ? await db.execute(sql`
+          SELECT * FROM shipping_boxes
+          WHERE picking_order_id IN (${sql.raw(orderIds.map((id) => `'${id}'`).join(", "))})
+          ORDER BY id
+        `)
+      : { rows: [] };
+    const nextBoxes: Record<string, any[]> = {};
+    for (const box of (boxResult.rows ?? []) as any[]) {
+      const list = nextBoxes[box.picking_order_id] ?? [];
+      list.push(box);
+      nextBoxes[box.picking_order_id] = list;
+    }
+    boxesByOrder.value = nextBoxes;
+    boxSelections.value = nextBoxSelections;
+
     const nextAllocated: Record<string, number> = {};
     for (const row of (allocatedResult.rows ?? []) as any[]) {
       nextAllocated[row.receiving_invoice_item_id] = Number(row.allocated_qty);
@@ -472,10 +595,85 @@ async function confirmArrival() {
   }
 }
 
+async function createBox(pickingOrderId: string) {
+  creatingBox.value[pickingOrderId] = true;
+  try {
+    if (!currentUser) throw new Error("No operator user found");
+    await createShippingBoxForPickingOrder(db, pickingOrderId, currentUser.id);
+    await load();
+  } catch (e: any) {
+    error.value = e?.message ?? String(e);
+  } finally {
+    creatingBox.value[pickingOrderId] = false;
+  }
+}
+
+async function addToBox(packageId: string) {
+  const boxId = boxSelections.value[packageId];
+  if (!boxId) return;
+  addingPackage.value[packageId] = true;
+  try {
+    if (!currentUser) throw new Error("No operator user found");
+    await addPackageToBox(db, packageId, boxId, currentUser.id);
+    await load();
+  } catch (e: any) {
+    error.value = e?.message ?? String(e);
+  } finally {
+    addingPackage.value[packageId] = false;
+  }
+}
+
+async function removeFromBox(packageId: string) {
+  removingPackage.value[packageId] = true;
+  try {
+    if (!currentUser) throw new Error("No operator user found");
+    await removePackageFromBox(db, packageId, currentUser.id);
+    await load();
+  } catch (e: any) {
+    error.value = e?.message ?? String(e);
+  } finally {
+    removingPackage.value[packageId] = false;
+  }
+}
+
+function openBoxesForOrder(pickingOrderId: string) {
+  return (boxesByOrder.value[pickingOrderId] ?? []).filter((b) => b.status === "open");
+}
+
+function boxById(boxId: string | null | undefined) {
+  if (!boxId) return undefined;
+  for (const boxes of Object.values(boxesByOrder.value)) {
+    const box = boxes.find((b) => b.id === boxId);
+    if (box) return box;
+  }
+  return undefined;
+}
+
+function badgeClass(status: string) {
+  if (status === "pending") return "badge--pending";
+  if (status === "in_hand") return "badge--in-hand";
+  if (status === "clear") return "badge--finished";
+  return "";
+}
+
 onMounted(load);
 </script>
 
 <style scoped>
+.view-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.tab-badge {
+  font-size: 0.75rem;
+  opacity: 0.8;
+  margin-left: 0.25rem;
+}
+
 .detail-row {
   display: flex;
   justify-content: space-between;
@@ -517,33 +715,4 @@ onMounted(load);
   color: #991b1b;
 }
 
-.badge--finished {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.card-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  cursor: pointer;
-}
-
-.card-header .detail-row {
-  gap: 0.5rem;
-}
-
-.toggle-btn {
-  background: transparent;
-  border: none;
-  color: var(--muted);
-  font-size: 0.875rem;
-  cursor: pointer;
-  padding: 0.25rem;
-}
-
-.card.card--flush-top {
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
-}
 </style>

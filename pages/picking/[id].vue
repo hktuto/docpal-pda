@@ -4,11 +4,36 @@
     <p v-else-if="error" class="empty" style="color: var(--danger);">Error: {{ error }}</p>
 
     <template v-else-if="order">
-      <div class="card" style="margin-bottom: 1.5rem;">
-        <div class="detail-row">
-          <span class="detail-label">Status</span>
-          <span class="badge">{{ order.status }}</span>
-        </div>
+      <DetailHeader
+        v-model="headerExpanded"
+        :title="order.refNo"
+        :status="order.status"
+        :flush-top="route.meta.props?.noPadding"
+        style="margin-bottom: 1.5rem;"
+      >
+        <template #actions>
+          <template v-if="order.status !== 'finished'">
+            <button class="btn btn--small" :disabled="creatingBox" @click="createBox">
+              {{ creatingBox ? "Creating…" : "Create box" }}
+            </button>
+            <button
+              v-if="allItemsFullyBoxed"
+              class="btn btn--small"
+              :disabled="finishing"
+              @click="finish"
+            >
+              {{ finishing ? "Finishing…" : "Finish picking" }}
+            </button>
+          </template>
+          <NuxtLink
+            v-if="order.status === 'finished' && order.measuringTask"
+            :to="`/measuring/${order.measuringTask.id}`"
+            class="btn btn--small"
+          >
+            Measuring
+          </NuxtLink>
+        </template>
+
         <div class="detail-row">
           <span class="detail-label">Supplier</span>
           <span>{{ order.supplier?.name || "—" }}</span>
@@ -29,20 +54,42 @@
           <span class="detail-label">Date-code notice</span>
           <span>{{ order.requiredDateCodeNotice || "—" }}</span>
         </div>
+      </DetailHeader>
 
-        <div v-if="order.status !== 'finished' && allItemsFullyPicked" style="margin-top: 1rem;">
-          <button class="btn" @click="finish" :disabled="finishing">
-            {{ finishing ? "Finishing…" : "Finish picking" }}
-          </button>
+      <h2 class="section-title">Boxes</h2>
+      <p v-if="!order.shippingBoxes?.length" class="empty" style="margin-bottom: 1.5rem;">No boxes yet.</p>
+      <div
+        v-for="box in order.shippingBoxes"
+        :key="box.id"
+        class="card"
+        style="margin-bottom: 1rem;"
+        :class="{ 'card--done': box.status !== 'open' }"
+      >
+        <div class="detail-row">
+          <span class="detail-label">Box ID</span>
+          <span class="card__title">{{ box.id }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Status</span>
+          <span class="badge">{{ box.status }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Packages</span>
+          <span>{{ box.packages?.length ?? 0 }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Qty</span>
+          <span>{{ box.packages?.reduce((sum, p) => sum + p.qty, 0) ?? 0 }}</span>
         </div>
       </div>
 
-      <h2>Items</h2>
+      <h2 class="section-title">Items</h2>
       <div
         v-for="item in order.items"
         :key="item.id"
         class="card"
         :class="{ 'card--done': item.pickedQty >= item.qty }"
+        style="margin-bottom: 1.5rem;"
       >
         <div class="detail-row">
           <span class="detail-label">Part</span>
@@ -53,7 +100,11 @@
           <span>{{ item.qty }}</span>
         </div>
         <div class="detail-row">
-          <span class="detail-label">Picked qty</span>
+          <span class="detail-label">Scanned qty</span>
+          <span>{{ scannedQty(item) }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Boxed qty</span>
           <span>{{ item.pickedQty }}</span>
         </div>
         <div class="detail-row">
@@ -67,10 +118,10 @@
           </span>
         </div>
 
-        <div v-if="item.allocations?.filter(a => a.qty > 0).length" style="margin-top: 0.75rem;">
-          <h3 style="margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--muted);">Allocations</h3>
+        <div v-if="item.allocations?.filter((a: any) => a.qty > 0).length && order.status !== 'finished' && item.pickedQty < item.qty" style="margin-top: 0.75rem;">
+          <h3 class="subsection-title">Allocations</h3>
           <div
-            v-for="allocation in item.allocations.filter(a => a.qty > 0)"
+            v-for="allocation in item.allocations.filter((a: any) => a.qty > 0)"
             :key="allocation.id"
             class="lot"
           >
@@ -80,25 +131,20 @@
                 <span>{{ allocation.inventoryLot.shelfCode || allocation.inventoryLot.boxId || "Receiving area" }}</span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Date / Lot / Origin</span>
+                <span class="detail-label">Date / Lot / COO / COW</span>
                 <span>
                   {{ allocation.inventoryLot.dateCode || "—" }} /
                   {{ allocation.inventoryLot.lotCode || "—" }} /
-                  {{ allocation.inventoryLot.originCountry || "—" }}
+                  {{ allocation.inventoryLot.coo || "—" }} /
+                  {{ allocation.inventoryLot.cow || "—" }}
                 </span>
               </div>
               <div class="detail-row">
                 <span class="detail-label">Allocated qty</span>
                 <span>{{ allocation.qty }}</span>
               </div>
-              <div v-if="order.status !== 'finished' && item.pickedQty < item.qty" style="margin-top: 0.5rem;">
-                <button
-                  class="btn btn--small"
-                  @click="markPicked(allocation.id, allocation.qty)"
-                  :disabled="picking[allocation.id]"
-                >
-                  {{ picking[allocation.id] ? "Saving…" : "Mark picked" }}
-                </button>
+              <div style="margin-top: 0.5rem;">
+                <button class="btn btn--small" @click="openScan(allocation, item)">Scan</button>
               </div>
             </template>
 
@@ -116,52 +162,70 @@
                 <span class="detail-label">Allocated qty</span>
                 <span>{{ allocation.qty }}</span>
               </div>
-              <div
-                v-if="order.status !== 'finished' && item.pickedQty < item.qty"
-                style="margin-top: 0.5rem; display: grid; gap: 0.5rem;"
-              >
-                <input
-                  v-model="receivingForm[allocation.id].dateCode"
-                  type="text"
-                  placeholder="Date code"
-                />
-                <input
-                  v-model="receivingForm[allocation.id].lotCode"
-                  type="text"
-                  placeholder="Lot code"
-                />
-                <input
-                  v-model="receivingForm[allocation.id].originCountry"
-                  type="text"
-                  placeholder="Origin country"
-                />
-                <input
-                  v-model.number="receivingForm[allocation.id].qty"
-                  type="number"
-                  min="1"
-                  :max="allocation.qty"
-                  placeholder="Qty"
-                />
-                <button
-                  class="btn btn--small"
-                  @click="markPickedFromReceiving(allocation.id)"
-                  :disabled="picking[allocation.id]"
-                >
-                  {{ picking[allocation.id] ? "Saving…" : "Materialize and mark picked" }}
-                </button>
+              <div style="margin-top: 0.5rem;">
+                <button class="btn btn--small" @click="openScan(allocation, item)">Scan</button>
               </div>
             </template>
           </div>
         </div>
 
+        <div v-if="unboxedPackages(item).length" style="margin-top: 0.75rem;">
+          <h3 class="subsection-title">Unboxed packages</h3>
+          <div
+            v-for="pkg in unboxedPackages(item)"
+            :key="pkg.id"
+            class="lot"
+            style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; justify-content: space-between;"
+          >
+            <span style="font-size: 0.875rem;">
+              {{ pkg.qty }} pcs · {{ pkg.dateCode || "—" }} / {{ pkg.lotCode || "—" }} / {{ pkg.coo || "—" }} / {{ pkg.cow || "—" }}
+            </span>
+            <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+              <select v-model="boxSelections[pkg.id]" :disabled="adding[pkg.id]" style="min-width: 8rem;">
+                <option value="">Select box</option>
+                <option v-for="box in openBoxes" :key="box.id" :value="box.id">{{ box.id }}</option>
+              </select>
+              <button
+                class="btn btn--small"
+                @click="addToBox(pkg.id)"
+                :disabled="adding[pkg.id] || !boxSelections[pkg.id]"
+              >
+                {{ adding[pkg.id] ? "Adding…" : "Add to box" }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="boxedPackages(item).length" style="margin-top: 0.75rem;">
+          <h3 style="margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--muted);">Boxed packages</h3>
+          <div
+            v-for="pkg in boxedPackages(item)"
+            :key="pkg.id"
+            class="lot"
+            style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; justify-content: space-between;"
+          >
+            <span style="font-size: 0.875rem;">
+              {{ pkg.qty }} pcs · {{ pkg.shippingBoxId }}
+            </span>
+            <button
+              v-if="boxById[pkg.shippingBoxId!]?.status === 'open'"
+              class="btn btn--small"
+              @click="removeFromBox(pkg.id)"
+              :disabled="removing[pkg.id]"
+            >
+              {{ removing[pkg.id] ? "Removing…" : "Remove" }}
+            </button>
+          </div>
+        </div>
+
         <div style="margin-top: 0.75rem;">
           <button class="btn btn--small" @click="toggleExpand(item.id)">
-            {{ expandedItems.has(item.id) ? "Hide scan records" : "Show scan records" }}
+            {{ expandedItems.has(item.id) ? "Hide picking logs" : "Show picking logs" }}
             ({{ (transitionLogs[item.id] || []).length }})
           </button>
 
           <div v-if="expandedItems.has(item.id)" style="margin-top: 0.5rem;">
-            <p v-if="!(transitionLogs[item.id] || []).length" class="card__meta">No scan records.</p>
+            <p v-if="!(transitionLogs[item.id] || []).length" class="card__meta">No picking logs.</p>
             <ul v-else style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--muted);">
               <li v-for="log in transitionLogs[item.id]" :key="log.id" style="margin-bottom: 0.35rem;">
                 {{ new Date(log.createdAt).toLocaleString() }}
@@ -188,20 +252,29 @@
         </div>
       </div>
     </template>
+
+    <PickingScanModal
+      v-model="scanOpen"
+      :allocation="scanAllocation"
+      :item="scanItem"
+      @applied="load"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
+import PickingScanModal from "~/components/PickingScanModal.vue";
 import {
   getPickingOrderDetail,
-  confirmAllocationPicked,
-  materializeReceivingAllocation,
+  createShippingBoxForPickingOrder,
+  addPackageToBox,
+  removePackageFromBox,
   reportPickingItemMismatch,
   finishPickingOrder,
   getPickingItemTransitionLogs,
 } from "~/db/picking";
 
-definePageMeta({ title: "Picking Detail" });
+definePageMeta({ title: "Picking Detail", props: { noPadding: true } });
 
 const route = useRoute();
 const orderId = route.params.id as string;
@@ -213,18 +286,46 @@ const pending = ref(true);
 const error = ref<string | null>(null);
 const order = ref<any>(null);
 const notes = ref<Record<string, string>>({});
-const picking = ref<Record<string, boolean>>({});
+const adding = ref<Record<string, boolean>>({});
+const removing = ref<Record<string, boolean>>({});
 const reporting = ref<Record<string, boolean>>({});
+const creatingBox = ref(false);
 const finishing = ref(false);
-const receivingForm = ref<
-  Record<string, { dateCode: string; lotCode: string; originCountry: string; qty: number }>
->({});
 const transitionLogs = ref<Record<string, any[]>>({});
 const expandedItems = ref<Set<string>>(new Set());
+const headerExpanded = ref(false);
+const scanOpen = ref(false);
+const scanAllocation = ref<any>(null);
+const scanItem = ref<any>(null);
+const boxSelections = ref<Record<string, string>>({});
 
-const allItemsFullyPicked = computed(
+const allItemsFullyBoxed = computed(
   () => order.value?.items?.every((i: any) => i.pickedQty >= i.qty) ?? false
 );
+
+const openBoxes = computed(() =>
+  (order.value?.shippingBoxes ?? []).filter((b: any) => b.status === "open")
+);
+
+const boxById = computed(() => {
+  const map: Record<string, any> = {};
+  for (const box of order.value?.shippingBoxes ?? []) {
+    map[box.id] = box;
+  }
+  return map;
+});
+
+function scannedQty(item: any) {
+  return (item.packages ?? []).reduce((sum: number, p: any) => sum + p.qty, 0);
+}
+
+function unboxedPackages(item: any) {
+  return (item.packages ?? []).filter((p: any) => !p.shippingBoxId);
+}
+
+function boxedPackages(item: any) {
+  return (item.packages ?? []).filter((p: any) => p.shippingBoxId);
+}
 
 async function load() {
   try {
@@ -232,22 +333,17 @@ async function load() {
     order.value = data;
     if (data) {
       const nextNotes: Record<string, string> = {};
-      const nextForm: Record<string, { dateCode: string; lotCode: string; originCountry: string; qty: number }> = {};
+      const nextBoxSelections: Record<string, string> = {};
       for (const item of data.items) {
         nextNotes[item.id] = notes.value[item.id] ?? "";
-        for (const allocation of item.allocations ?? []) {
-          if (allocation.receivingInvoiceItem) {
-            nextForm[allocation.id] = receivingForm.value[allocation.id] ?? {
-              dateCode: "",
-              lotCode: "",
-              originCountry: "",
-              qty: allocation.qty,
-            };
+        for (const pkg of item.packages ?? []) {
+          if (!pkg.shippingBoxId) {
+            nextBoxSelections[pkg.id] = boxSelections.value[pkg.id] ?? "";
           }
         }
       }
       notes.value = nextNotes;
-      receivingForm.value = nextForm;
+      boxSelections.value = nextBoxSelections;
 
       const itemIds = data.items.map((i: any) => i.id);
       const logs = await getPickingItemTransitionLogs(db, itemIds);
@@ -276,39 +372,50 @@ function toggleExpand(itemId: string) {
   expandedItems.value = next;
 }
 
-async function markPicked(allocationId: string, qty: number) {
-  picking.value[allocationId] = true;
+function openScan(allocation: any, item: any) {
+  scanAllocation.value = allocation;
+  scanItem.value = item;
+  scanOpen.value = true;
+}
+
+async function createBox() {
+  creatingBox.value = true;
   try {
     if (!currentUser) throw new Error("No operator user found");
-    await confirmAllocationPicked(db, allocationId, qty, currentUser.id);
+    await createShippingBoxForPickingOrder(db, orderId, currentUser.id);
     await load();
   } catch (e: any) {
     error.value = e?.message ?? String(e);
   } finally {
-    picking.value[allocationId] = false;
+    creatingBox.value = false;
   }
 }
 
-async function markPickedFromReceiving(allocationId: string) {
-  const form = receivingForm.value[allocationId];
-  if (!form) return;
-  picking.value[allocationId] = true;
+async function addToBox(packageId: string) {
+  const boxId = boxSelections.value[packageId];
+  if (!boxId) return;
+  adding.value[packageId] = true;
   try {
     if (!currentUser) throw new Error("No operator user found");
-    const materializedAllocationId = await materializeReceivingAllocation(
-      db,
-      allocationId,
-      form.qty,
-      form.dateCode || null,
-      form.lotCode || null,
-      form.originCountry || null
-    );
-    await confirmAllocationPicked(db, materializedAllocationId, form.qty, currentUser.id);
+    await addPackageToBox(db, packageId, boxId, currentUser.id);
     await load();
   } catch (e: any) {
     error.value = e?.message ?? String(e);
   } finally {
-    picking.value[allocationId] = false;
+    adding.value[packageId] = false;
+  }
+}
+
+async function removeFromBox(packageId: string) {
+  removing.value[packageId] = true;
+  try {
+    if (!currentUser) throw new Error("No operator user found");
+    await removePackageFromBox(db, packageId, currentUser.id);
+    await load();
+  } catch (e: any) {
+    error.value = e?.message ?? String(e);
+  } finally {
+    removing.value[packageId] = false;
   }
 }
 
@@ -374,8 +481,4 @@ onMounted(load);
   border-left: 4px solid #16a34a;
 }
 
-.badge--finished {
-  background: #dcfce7;
-  color: #166534;
-}
 </style>

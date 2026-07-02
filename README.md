@@ -13,13 +13,15 @@ The demo models an event-driven warehouse with two overlapping workflows that sh
 1. A supplier shipment arrives as a `receiving_order` with invoices and items.
 2. The worker confirms the order is here.
 3. The system creates receiving-area inventory lots and immediately tries to allocate them to any not-yet-fully-targeted picking orders.
-4. The worker can open the receiving order in **Picking view** to see which picking orders need goods from this shipment, pick them out, and reduce the receiving-area stock.
+4. The worker can open the receiving order in **Picking view** to see which picking orders need goods from this shipment and scan packages out of the receiving-area stock.
    - Each line has its own **Scan** button, so the worker can scan directly into that picking item without choosing from multiple orders.
-   - The worker can also use the global **scan button** on the Picking tab to type label data (part number, quantity, date/lot code, and origin country). The system matches the input to linked receiving and picking records and applies the pick automatically.
+   - The worker can also use the global **scan button** on the Picking tab to type label data (part number, quantity, date/lot code, and origin country). The system matches the input to linked receiving and picking records and creates a scanned package.
    - A **search box** filters the linked picking orders by order number, part number, date code, or lot code.
    - Each picking order number is a link to the full picking order detail page.
-5. If any stock is left over, the worker can **Shelve (put away)** the remainder into a shelf box. The system logs where every item went.
-6. When a picking order is fully picked, a measuring task is created so the goods can be packed into shipping boxes.
+5. On the picking order detail page the worker creates shipping boxes. The system auto-generates box IDs such as `BOX-HK1-WWYY000001`.
+6. The worker adds scanned packages into boxes. Once every package for a picking item is in a box, the item is finished.
+7. If any stock is left over, the worker can **Shelve (put away)** the remainder into a shelf box. The system logs where every item went.
+8. When a picking order is fully boxed, a measuring task is created so the boxes can be weighed and closed.
 
 ### Workflow B: a picking order arrives first
 
@@ -44,8 +46,8 @@ The demo models an event-driven warehouse with two overlapping workflows that sh
 - **UI:** Vue 3, plain CSS
 - **Database:** PGlite — WebAssembly build of Postgres running in the browser
 - **ORM:** Drizzle ORM with the `drizzle-orm/pglite` driver
-- **Reactive queries:** `@electric-sql/pglite-vue` (`useLiveQuery`)
 - **Persistence:** IndexedDB via PGlite (`idb://warehouse-demo-pglite`)
+- **List pages:** Manual `db.execute` queries that reload on mount and when the app regains visibility (Capacitor does not support `useLiveQuery`).
 
 ---
 
@@ -65,11 +67,11 @@ receiving_orders
 
 picking_orders
 └── picking_items
-    └── allocations                (picking_item → inventory_lot)
+    ├── allocations                (picking_item → inventory_lot, reserved not yet scanned)
+    └── picking_packages           (physical packages scanned then boxed)
 
 measuring_tasks
-└── shipping_boxes
-    └── shipping_box_items
+└── shipping_boxes                 (created in picking, packed with picking_packages)
 
 shelf_boxes                       (created during put-away)
 └── shelf_box_items               (verified during goods verify)
@@ -81,8 +83,9 @@ transition_logs                   (all status changes)
 
 - **Inventory is location-aware.** A located lot is unique by `(part_id, date_code, lot_code, origin_country, shelf_code, box_id)`. Receiving-area lots (`shelf_code = NULL, box_id = NULL`) are created per materialized allocation so each one has a single `inventory_lot_sources` link; once put away they become located lots and merge by the unique key.
 - **Traceability.** `inventory_lot_sources` links every lot back to the originating `receiving_invoice_item`.
-- **Allocations drive picking.** When a receiving order becomes `in_hand`, pending picking orders are allocated against matching lots. Shelved lots are consumed first; receiving-area lots are used only when shelved stock is insufficient.
-- **State transitions are logged.** Every status change for receiving orders, picking orders, shelf boxes, shipping boxes, and measuring tasks writes a row to `transition_logs`.
+- **Allocations reserve stock; packages track physical units.** When a receiving order becomes `in_hand`, pending picking orders are allocated against matching lots. Scanning an allocation creates a `picking_packages` row and consumes source stock. Boxing a package assigns it to a `shipping_box` and marks quantity as picked.
+- **Shipping boxes are created during picking.** Box IDs are auto-generated as `BOX-HK1-WWYY######` (warehouse `HK1`, ISO week, two-digit year, per-week sequence).
+- **State transitions are logged.** Every status change for receiving orders, picking orders, shelf boxes, shipping boxes, picking items, and measuring tasks writes a row to `transition_logs`.
 
 ---
 
@@ -108,8 +111,11 @@ transition_logs                   (all status changes)
 ### Picking
 
 - The operator opens a picking order and sees its allocated lots.
-- Confirming a pick records the quantity in `picking_items.picked_qty` and logs the transition.
-- When every item is fully picked, the operator finishes the order. The system creates a `measuring_tasks` row with status `pending`.
+- **Scan package** consumes the allocation and source stock, then creates a `picking_packages` row with `shipping_box_id = NULL`. The package is now "scanned".
+- The operator creates one or more `shipping_boxes`. The system auto-generates the box ID as `BOX-HK1-WWYY######`.
+- **Add to box** sets `picking_packages.shipping_box_id` and recalculates `picking_items.picked_qty` as the sum of boxed package quantities.
+- Once `picking_items.picked_qty` reaches the required quantity, the item is finished.
+- When every item is fully boxed, the operator finishes the order. The system creates a `measuring_tasks` row with status `pending`.
 
 ### Picking directly from a receiving order
 
@@ -118,7 +124,7 @@ transition_logs                   (all status changes)
 - Each picking item has a **Scan** button that applies the typed label directly to that item, avoiding the multi-order chooser.
 - A **search box** filters the list by picking order number, part number, date code, or lot code.
 - Each picking order number links to the full picking order detail page.
-- Picking here reduces the same receiving-area lots as the normal picking flow.
+- Picking here creates scanned packages against the same receiving-area lots as the normal picking flow. The worker then opens the picking order detail page to box them.
 
 ### Shelving / Put-away
 
@@ -141,12 +147,11 @@ transition_logs                   (all status changes)
 
 ### Measuring
 
-- When a picking order is finished, a pending `measuring_tasks` row exists.
-- The operator creates one or more `shipping_boxes`.
+- When a picking order is finished, a pending `measuring_tasks` row exists and the shipping boxes were already created and packed during picking.
 - For each open box the operator can set gross/net weight, destination country, and box size.
-- The operator selects a picking item and quantity and packs it into the box. The system ensures the total packed quantity never exceeds the picked quantity.
-- When a box is full, the operator closes it. The system logs `shipping_box:{id} open → closed`.
-- When all picked items are packed and all shipping boxes are closed, the operator can complete the measuring task. The system sets `measuring_tasks.status = 'completed'` and logs the transition.
+- The operator reviews the packages already inside each box.
+- When a box is ready, the operator closes it. The system logs `shipping_box:{id} open → closed`.
+- When all shipping boxes are closed and every picking item is fully packed, the operator can complete the measuring task. The system sets `measuring_tasks.status = 'completed'` and logs the transition.
 
 ---
 
@@ -154,21 +159,19 @@ transition_logs                   (all status changes)
 
 | Path | Purpose |
 |------|---------|
-| `/` | Login |
-| `/home` | Main menu |
+| `/` | Main menu |
+| `/login` | Login |
 | `/receiving` | List receiving orders (filter: All / Pending / In hand) |
 | `/receiving/:id` | Receiving order detail; **Receiving** view shows invoices/items, **Picking** view shows linked picking orders, per-item scan, search, and order links |
 | `/picking` | List active picking orders |
-| `/picking/:id` | Picking order detail / mark picked |
-| `/picking-by-receiving` | List in-hand receiving orders and drill into picking usage |
-| `/picking-by-receiving/:id` | Picking orders using a receiving order's stock |
+| `/picking/:id` | Picking order detail: scan packages, create boxes, add packages to boxes |
 | `/put-away` | List receiving orders ready for put-away |
 | `/put-away/:id` | Create shelf box and move receiving-area stock |
 | `/goods-verify` | List shelves with shelf boxes |
 | `/goods-verify/shelf/:code` | List shelf boxes on a shelf |
 | `/goods-verify/box/:id` | Verify items in a shelf box |
 | `/measuring` | List pending measuring tasks |
-| `/measuring/:id` | Pack and measure shipping boxes |
+| `/measuring/:id` | Review, weigh, and close shipping boxes |
 
 ---
 
@@ -221,7 +224,7 @@ The database lives in the browser's IndexedDB. Use the **⋮ → Reset local DB*
 │   ├── picking.ts           # Picking DB helpers
 │   ├── putAway.ts           # Put-away DB helpers
 │   ├── receiving.ts         # Receiving DB helpers
-│   ├── schema.ts            # Drizzle pg-core table definitions
+│   ├── schema.ts            # Drizzle pg-core table definitions (includes picking_packages)
 │   └── seed.ts              # Demo users, suppliers, parts, orders, inventory
 ├── docs/
 │   └── superpowers/         # Design specs and implementation plans
@@ -233,7 +236,6 @@ The database lives in the browser's IndexedDB. Use the **⋮ → Reset local DB*
 │   ├── home.vue             # Menu
 │   ├── receiving/
 │   ├── picking/
-│   ├── picking-by-receiving/
 │   ├── put-away/
 │   ├── goods-verify/
 │   └── measuring/

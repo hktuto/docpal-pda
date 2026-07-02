@@ -6,57 +6,72 @@
       aria-label="Go back"
       @click="goBack"
     >
-      ←
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m15 18-6-6 6-6"/>
+      </svg>
     </button>
-    <div v-else class="app-header__spacer" />
+    <NuxtLink v-else to="/" class="app-header__logo" aria-label="Home">
+      <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M8 8C8 5.79086 9.79086 4 12 4H28C30.2091 4 32 5.79086 32 8V32C32 34.2091 30.2091 36 28 36H12C9.79086 36 8 34.2091 8 32V8Z" fill="#00BFA5"/>
+        <path d="M14 14H26V18H14V14Z" fill="white"/>
+        <path d="M14 22H22V26H14V22Z" fill="white" fill-opacity="0.7"/>
+      </svg>
+    </NuxtLink>
 
     <h1 class="app-header__title">{{ title }}</h1>
 
-    <div class="app-header__menu">
+    <div class="app-header__actions">
       <button
-        class="app-header__menu-btn"
-        aria-label="Menu"
-        @click="menuOpen = !menuOpen"
+        class="app-header__action app-header__action--reset"
+        aria-label="Reset local DB"
+        title="Reset local DB"
+        @click="resetDb"
       >
-        ⋮
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+          <path d="M3 3v5h5"/>
+        </svg>
       </button>
-      <div v-if="menuOpen" class="app-header__dropdown">
-        <button @click="resetDb">Reset local DB</button>
-        <button @click="logout">Logout</button>
-      </div>
+      <button
+        class="app-header__action"
+        aria-label="Logout"
+        title="Logout"
+        @click="logout"
+      >
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/>
+          <line x1="21" x2="9" y1="12" y2="12"/>
+        </svg>
+      </button>
     </div>
   </header>
 </template>
 
 <script setup lang="ts">
-import { injectPGlite } from "@electric-sql/pglite-vue";
-
 const route = useRoute();
 const router = useRouter();
 const { logout: authLogout } = useAuth();
-const pg = injectPGlite();
+const pg = useNuxtApp().$pglite;
 
 const title = computed(() => (route.meta.title as string) || "Warehouse");
-const showBack = computed(() => route.path !== "/home" && route.path !== "/");
-const menuOpen = ref(false);
+const showBack = computed(() => route.path !== "/");
 
 function goBack() {
   if (window.history.length > 1) {
     router.back();
   } else {
-    navigateTo("/home");
+    navigateTo("/");
   }
 }
 
 function logout() {
   authLogout();
-  menuOpen.value = false;
-  navigateTo("/");
+  navigateTo("/login");
 }
 
 async function resetDb() {
   if (!confirm("Reset all local data? This cannot be undone.")) return;
-  menuOpen.value = false;
 
   if (pg) {
     await pg.close();
@@ -74,3 +89,34 @@ async function resetDb() {
   window.location.reload();
 }
 </script>
+
+<style scoped>
+.app-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.app-header__logo {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.375rem;
+  border-radius: var(--radius);
+}
+
+.app-header__logo:hover {
+  background: var(--bg);
+}
+
+.app-header__logo svg {
+  width: 100%;
+  height: 100%;
+}
+
+.app-header__action--reset {
+  color: var(--muted);
+}
+</style>

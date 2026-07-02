@@ -11,8 +11,8 @@ This is a client-side Nuxt 3 proof-of-concept for warehouse mobile/Android flows
 - **Camera OCR:** `@capacitor/camera` + `@pantrist/capacitor-plugin-ml-kit-text-recognition`
 - **Database:** PGlite — WebAssembly build of Postgres running in the browser
 - **ORM:** Drizzle ORM with the `drizzle-orm/pglite` driver
-- **Reactive queries:** `@electric-sql/pglite-vue` (`useLiveQuery`)
 - **Persistence:** IndexedDB via PGlite (`idb://warehouse-demo-pglite`)
+- **List pages:** Manual `db.execute` queries that reload on mount and when the app regains visibility (Capacitor does not support `useLiveQuery`).
 
 ## Common commands
 
@@ -34,7 +34,7 @@ For Android live reload, run `pnpm dev` in one terminal, then run `pnpm cap:andr
 - Follow existing patterns. Make minimal, focused changes.
 - Keep files small and single-responsibility.
 - Put database helpers in `db/` and Vue composables in `composables/`.
-- Use `useLiveQuery` for reactive list pages.
+- Use manual `db.execute` queries for list pages and reload on `onMounted` plus `visibilitychange`/`focus` events so Capacitor behaves correctly.
 - Inline raw SQL is acceptable for list queries when Drizzle relations are cumbersome.
 - Prefer explicit, readable names over clever abstractions.
 

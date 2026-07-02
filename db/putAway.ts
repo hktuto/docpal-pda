@@ -1,7 +1,40 @@
-import { eq, sql, isNull } from "drizzle-orm";
+import { eq, sql, isNull, desc } from "drizzle-orm";
 import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { v4 as uuid } from "uuid";
 import * as schema from "./schema";
+import { tryMarkReceivingOrderClear } from "./receiving";
+
+function getIsoWeek(date: Date): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+}
+
+async function generateShelfBoxId(
+  tx: PgliteDatabase<typeof schema>,
+  locationCode = "HK1"
+): Promise<string> {
+  const now = new Date();
+  const week = String(getIsoWeek(now)).padStart(2, "0");
+  const year = String(now.getFullYear() % 100).padStart(2, "0");
+  const prefix = `SBOX-${locationCode}-${week}${year}`;
+
+  const existing = await tx
+    .select({ id: schema.shelfBoxes.id })
+    .from(schema.shelfBoxes)
+    .where(sql`${schema.shelfBoxes.id} LIKE ${prefix + "%"}`);
+
+  let maxSeq = 0;
+  const regex = new RegExp(`^${prefix.replace(/[-]/g, "\\-")}([0-9]{6})$`);
+  for (const row of existing) {
+    const match = row.id.match(regex);
+    if (match) maxSeq = Math.max(maxSeq, parseInt(match[1], 10));
+  }
+
+  return `${prefix}${String(maxSeq + 1).padStart(6, "0")}`;
+}
 
 export interface PutAwayCandidate {
   id: string;
@@ -17,7 +50,8 @@ export interface PutAwayLot {
   part_no: string | null;
   date_code: string | null;
   lot_code: string | null;
-  origin_country: string | null;
+  coo: string | null;
+  cow: string | null;
   available_qty: number;
 }
 
@@ -65,7 +99,8 @@ export async function getPutAwayLots(
       p.part_no,
       rii.date_code,
       rii.lot_code,
-      rii.origin_country,
+      rii.coo,
+      rii.cow,
       (rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(alloc.allocated_qty, 0)) AS available_qty
     FROM receiving_orders ro
     JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
@@ -93,20 +128,38 @@ export async function getPutAwayLots(
 export async function createShelfBox(
   db: PgliteDatabase<typeof schema>,
   receivingOrderId: string,
-  shelfCode: string
+  shelfCode: string,
+  actorId: string,
+  locationCode = "HK1"
 ): Promise<typeof schema.shelfBoxes.$inferSelect> {
-  const now = new Date();
-  const [box] = await db
-    .insert(schema.shelfBoxes)
-    .values({
+  return db.transaction(async (tx) => {
+    const now = new Date();
+    const boxId = await generateShelfBoxId(tx, locationCode);
+
+    const [box] = await tx
+      .insert(schema.shelfBoxes)
+      .values({
+        id: boxId,
+        receivingOrderId,
+        shelfCode,
+        status: "open",
+        createdAt: now,
+      })
+      .returning();
+
+    await tx.insert(schema.transitionLogs).values({
       id: uuid(),
-      receivingOrderId,
-      shelfCode,
-      status: "open",
+      entityType: "shelf_box",
+      entityId: boxId,
+      fromState: null,
+      toState: "open",
+      actorId,
+      metadata: JSON.stringify({ receivingOrderId, shelfCode }),
       createdAt: now,
-    })
-    .returning();
-  return box;
+    });
+
+    return box;
+  });
 }
 
 export async function addItemToShelfBox(
@@ -116,7 +169,9 @@ export async function addItemToShelfBox(
   qty: number,
   dateCode: string | null,
   lotCode: string | null,
-  originCountry: string | null
+  coo: string | null,
+  cow: string | null,
+  actorId: string
 ) {
   if (!Number.isInteger(qty) || qty <= 0) {
     throw new Error("Qty must be a positive integer");
@@ -158,7 +213,8 @@ export async function addItemToShelfBox(
           eq(il.boxId, shelfBoxId),
           dateCode != null ? eq(il.dateCode, dateCode) : isNull(il.dateCode),
           lotCode != null ? eq(il.lotCode, lotCode) : isNull(il.lotCode),
-          originCountry != null ? eq(il.originCountry, originCountry) : isNull(il.originCountry)
+          coo != null ? eq(il.coo, coo) : isNull(il.coo),
+          cow != null ? eq(il.cow, cow) : isNull(il.cow)
         ),
     });
 
@@ -176,7 +232,8 @@ export async function addItemToShelfBox(
         partId: invoiceItem.partId,
         dateCode,
         lotCode,
-        originCountry,
+        coo,
+        cow,
         shelfCode: box.shelfCode,
         boxId: shelfBoxId,
         totalQty: qty,
@@ -223,6 +280,10 @@ export async function addItemToShelfBox(
       })
       .returning();
 
+    if (invoice.receivingOrderId) {
+      await tryMarkReceivingOrderClear(tx, invoice.receivingOrderId, actorId);
+    }
+
     return shelfBoxItem;
   });
 }
@@ -253,6 +314,10 @@ export async function closeShelfBox(
       .set({ status: "closed" })
       .where(eq(schema.shelfBoxes.id, shelfBoxId));
 
+    if (box.receivingOrderId) {
+      await tryMarkReceivingOrderClear(tx, box.receivingOrderId, actorId);
+    }
+
     await tx.insert(schema.transitionLogs).values({
       id: uuid(),
       entityType: "shelf_box",
@@ -263,5 +328,21 @@ export async function closeShelfBox(
       metadata: null,
       createdAt: new Date(),
     });
+  });
+}
+
+export async function getShelfBoxesForReceivingOrder(
+  db: PgliteDatabase<typeof schema>,
+  receivingOrderId: string
+) {
+  return db.query.shelfBoxes.findMany({
+    where: eq(schema.shelfBoxes.receivingOrderId, receivingOrderId),
+    orderBy: (sb, { sql }) => [
+      sql`case when ${sb.status} = 'open' then 0 else 1 end`,
+      desc(sb.createdAt),
+    ],
+    with: {
+      items: { with: { part: true } },
+    },
   });
 }

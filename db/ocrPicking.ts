@@ -2,13 +2,14 @@ import { eq, sql } from "drizzle-orm";
 import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { v4 as uuid } from "uuid";
 import * as schema from "./schema";
-import { materializeReceivingAllocation, confirmAllocationPicked } from "./picking";
+import { materializeReceivingAllocation, scanAllocationToPackage } from "./picking";
 
 export interface OcrParseResult {
   partNo: string;
   dateCode: string | null;
   lotCode: string | null;
-  originCountry: string | null;
+  coo: string | null;
+  cow: string | null;
   qty: number;
 }
 
@@ -18,7 +19,8 @@ export interface ReceivingCandidate {
   partNo: string;
   dateCode: string | null;
   lotCode: string | null;
-  originCountry: string | null;
+  coo: string | null;
+  cow: string | null;
   availableQty: number;
 }
 
@@ -51,7 +53,8 @@ export async function findReceivingCandidates(
           p.part_no,
           REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REGEXP_REPLACE(UPPER(TRIM(rii.date_code)), '\s+', ' ', 'g'), 'O', '0'), 'I', '1'), 'L', '1'), 'Z', '2'), 'S', '5') AS date_code,
           REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REGEXP_REPLACE(UPPER(TRIM(rii.lot_code)), '\s+', ' ', 'g'), 'O', '0'), 'I', '1'), 'L', '1'), 'Z', '2'), 'S', '5') AS lot_code,
-          REGEXP_REPLACE(UPPER(TRIM(rii.origin_country)), '\s+', ' ', 'g') AS origin_country,
+          REGEXP_REPLACE(UPPER(TRIM(rii.coo)), '\s+', ' ', 'g') AS coo,
+          REGEXP_REPLACE(UPPER(TRIM(rii.cow)), '\s+', ' ', 'g') AS cow,
           (rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(alloc.allocated_qty, 0)) AS available_qty
         FROM receiving_orders ro
         JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
@@ -71,7 +74,8 @@ export async function findReceivingCandidates(
       WHERE REGEXP_REPLACE(UPPER(TRIM(part_no)), '\s+', ' ', 'g') = ${parsed.partNo}
         AND (date_code IS NOT DISTINCT FROM COALESCE(${parsed.dateCode}, date_code))
         AND (lot_code IS NOT DISTINCT FROM COALESCE(${parsed.lotCode}, lot_code))
-        AND (origin_country IS NOT DISTINCT FROM COALESCE(${parsed.originCountry}, origin_country))
+        AND (coo IS NOT DISTINCT FROM COALESCE(${parsed.coo}, coo))
+        AND (cow IS NOT DISTINCT FROM COALESCE(${parsed.cow}, cow))
       ORDER BY date_code, lot_code
     `)
     .then((r) =>
@@ -81,7 +85,8 @@ export async function findReceivingCandidates(
         partNo: String(row.part_no),
         dateCode: row.date_code != null ? String(row.date_code) : null,
         lotCode: row.lot_code != null ? String(row.lot_code) : null,
-        originCountry: row.origin_country != null ? String(row.origin_country) : null,
+        coo: row.coo != null ? String(row.coo) : null,
+        cow: row.cow != null ? String(row.cow) : null,
         availableQty: Number(row.available_qty),
       }))
     );
@@ -144,7 +149,8 @@ export async function applyOcrPick(
   qty: number,
   dateCode: string | null,
   lotCode: string | null,
-  originCountry: string | null,
+  coo: string | null,
+  cow: string | null,
   actorId: string
 ): Promise<void> {
   if (!Number.isInteger(qty) || qty <= 0) {
@@ -159,14 +165,6 @@ export async function applyOcrPick(
       .where(eq(schema.receivingInvoiceItems.id, receivingInvoiceItemId));
     if (!receivingItem) throw new Error("Receiving invoice item not found");
 
-    const allocatedResult = await tx
-      .select({ total: sql<number>`coalesce(sum(${schema.allocations.qty}), 0)`.mapWith(Number) })
-      .from(schema.allocations)
-      .where(eq(schema.allocations.receivingInvoiceItemId, receivingInvoiceItemId));
-    const allocated = allocatedResult[0]?.total ?? 0;
-    const available = receivingItem.receivedQty - receivingItem.pickedQty - receivingItem.putAwayQty - allocated;
-    if (qty > available) throw new Error("Insufficient available quantity");
-
     const [pickingItem] = await tx
       .select()
       .from(schema.pickingItems)
@@ -175,17 +173,26 @@ export async function applyOcrPick(
     if (pickingItem.partId !== receivingItem.partId) {
       throw new Error("Receiving item and picking item do not match the same part");
     }
-    const remaining = pickingItem.qty - pickingItem.pickedQty;
+
+    const scannedResult = await tx
+      .select({
+        total: sql<number>`coalesce(sum(${schema.pickingPackages.qty}), 0)`.mapWith(Number),
+      })
+      .from(schema.pickingPackages)
+      .where(eq(schema.pickingPackages.pickingItemId, pickingItemId));
+    const scannedNotBoxed = scannedResult[0]?.total ?? 0;
+    const remaining = pickingItem.qty - pickingItem.pickedQty - scannedNotBoxed;
     if (qty > remaining) throw new Error("Quantity exceeds picking order need");
 
-    // Prefer already-allocated links so the scan acts as a pick confirmation
+    // Prefer already-allocated links so the scan acts as a package confirmation
     // rather than creating extra allocations.
     const existingAllocations = await tx
       .select()
       .from(schema.allocations)
       .where(
         sql`${schema.allocations.receivingInvoiceItemId} = ${receivingInvoiceItemId}
-          AND ${schema.allocations.pickingItemId} = ${pickingItemId}`
+          AND ${schema.allocations.pickingItemId} = ${pickingItemId}
+          AND ${schema.allocations.qty} > 0`
       )
       .orderBy(schema.allocations.id);
 
@@ -199,21 +206,22 @@ export async function applyOcrPick(
         use,
         dateCode,
         lotCode,
-        originCountry,
+        coo,
+        cow,
         tx
       );
-      await confirmAllocationPicked(db, materializedAllocationId, use, actorId, tx);
+      await scanAllocationToPackage(db, materializedAllocationId, use, actorId, tx);
       left -= use;
     }
 
     if (left > 0) {
-      // Re-check unallocated demand after any existing allocations were confirmed.
+      // Re-check unallocated demand after any existing allocations were scanned.
       const [currentPickingItem] = await tx
         .select()
         .from(schema.pickingItems)
         .where(eq(schema.pickingItems.id, pickingItemId));
       if (!currentPickingItem) throw new Error("Picking item not found");
-      const unallocatedDemand = currentPickingItem.qty - currentPickingItem.pickedQty - currentPickingItem.allocatedQty;
+      const unallocatedDemand = currentPickingItem.qty - currentPickingItem.pickedQty - currentPickingItem.allocatedQty - scannedNotBoxed;
       if (left > unallocatedDemand) {
         throw new Error("Quantity exceeds unallocated picking order need");
       }
@@ -239,11 +247,12 @@ export async function applyOcrPick(
         left,
         dateCode,
         lotCode,
-        originCountry,
+        coo,
+        cow,
         tx
       );
 
-      await confirmAllocationPicked(db, materializedAllocationId, left, actorId, tx);
+      await scanAllocationToPackage(db, materializedAllocationId, left, actorId, tx);
     }
   });
 }

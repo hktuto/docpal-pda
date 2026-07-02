@@ -4,7 +4,8 @@ export interface OcrInput {
   partNo: string;
   dateCode: string;
   lotCode: string;
-  originCountry: string;
+  coo: string;
+  cow: string;
   qty: number | "";
 }
 
@@ -23,7 +24,8 @@ export function useMockOcr() {
       partNo: normalize(input.partNo),
       dateCode: input.dateCode ? normalizeCode(input.dateCode) : null,
       lotCode: input.lotCode ? normalizeCode(input.lotCode) : null,
-      originCountry: input.originCountry ? normalize(input.originCountry) : null,
+      coo: input.coo ? normalize(input.coo) : null,
+      cow: input.cow ? normalize(input.cow) : null,
       qty,
     };
   }

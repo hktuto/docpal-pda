@@ -141,7 +141,8 @@ export function useOcrPicking() {
         qty,
         receiving.dateCode,
         receiving.lotCode,
-        receiving.originCountry,
+        receiving.coo,
+        receiving.cow,
         actorId
       );
       matchResult.value = {

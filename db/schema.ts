@@ -25,7 +25,7 @@ export const parts = pgTable("parts", {
   partNo: text("part_no").notNull().unique(),        // customer part-id
   internalCode: text("internal_code"),                // e.g. KOA item code
   description: text("description"),
-  defaultOriginCountry: text("default_origin_country"),
+  defaultCoo: text("default_coo"),
 });
 
 export const shelves = pgTable("shelves", {
@@ -37,7 +37,7 @@ export const shelves = pgTable("shelves", {
 // Receiving
 // ------------------------------------------------------------------
 
-export const receivingOrderStatus = ["pending", "in_hand", "completed"] as const;
+export const receivingOrderStatus = ["pending", "in_hand", "clear"] as const;
 
 export const receivingOrders = pgTable("receiving_orders", {
   id: text("id").primaryKey(),
@@ -75,7 +75,8 @@ export const receivingInvoiceItems = pgTable("receiving_invoice_items", {
   boxId: text("box_id"),                               // optional pre-printed box id
   dateCode: text("date_code"),
   lotCode: text("lot_code"),
-  originCountry: text("origin_country"),
+  coo: text("coo"),
+  cow: text("cow"),
   reportedMismatch: boolean("reported_mismatch").default(false),
   mismatchNote: text("mismatch_note"),
 });
@@ -94,6 +95,7 @@ export const pickingOrders = pgTable("picking_orders", {
   poNo: text("po_no"),                                 // may match receiving PO
   requiredDateCodeNotice: text("required_date_code_notice"),
   shipTo: text("ship_to"),
+  destinationCountry: text("destination_country"),
   status: text("status", { enum: pickingOrderStatus }).notNull().default("pending"),
   createdAt: timestamp("created_at").notNull(),
   updatedAt: timestamp("updated_at").notNull(),
@@ -106,10 +108,32 @@ export const pickingItems = pgTable("picking_items", {
     .references(() => pickingOrders.id, { onDelete: "cascade" }),
   partId: text("part_id").notNull().references(() => parts.id),
   qty: integer("qty").notNull(),
-  pickedQty: integer("picked_qty").notNull().default(0),
+  pickedQty: integer("picked_qty").notNull().default(0), // boxed quantity
   allocatedQty: integer("allocated_qty").notNull().default(0),
   requiredDateCode: text("required_date_code"),
   sourceShelfCode: text("source_shelf_code"),
+});
+
+export const packageSourceType = ["receiving_invoice_item", "inventory_lot"] as const;
+
+export const pickingPackages = pgTable("picking_packages", {
+  id: text("id").primaryKey(),
+  pickingItemId: text("picking_item_id")
+    .notNull()
+    .references(() => pickingItems.id, { onDelete: "cascade" }),
+  pickingOrderId: text("picking_order_id")
+    .notNull()
+    .references(() => pickingOrders.id, { onDelete: "cascade" }),
+  sourceType: text("source_type", { enum: packageSourceType }).notNull(),
+  sourceId: text("source_id").notNull(),
+  qty: integer("qty").notNull(),
+  shippingBoxId: text("shipping_box_id").references(() => shippingBoxes.id),
+  dateCode: text("date_code"),
+  lotCode: text("lot_code"),
+  coo: text("coo"),
+  cow: text("cow"),
+  verified: boolean("verified").notNull().default(false),
+  createdAt: timestamp("created_at").notNull(),
 });
 
 // ------------------------------------------------------------------
@@ -121,7 +145,8 @@ export const inventoryLots = pgTable("inventory_lots", {
   partId: text("part_id").notNull().references(() => parts.id),
   dateCode: text("date_code"),
   lotCode: text("lot_code"),
-  originCountry: text("origin_country"),
+  coo: text("coo"),
+  cow: text("cow"),
   shelfCode: text("shelf_code").references(() => shelves.code),
   boxId: text("box_id"),                               // matches shipping_boxes.id or shelf_boxes.id, or null
   totalQty: integer("total_qty").notNull().default(0),
@@ -130,10 +155,10 @@ export const inventoryLots = pgTable("inventory_lots", {
     .notNull()
     .generatedAlwaysAs(sql`total_qty - allocated_qty`),
 }, (t) => ({
-  // one lot per unique part + date + lot + origin + location combination
+  // one lot per unique part + date + COO + COW + location combination
   // receiving-area lots (no location) may be duplicated so each allocation owns its own lot
   uniqueLot: uniqueIndex("inventory_lots_unique_lot")
-    .on(t.partId, t.dateCode, t.lotCode, t.originCountry, t.shelfCode, t.boxId)
+    .on(t.partId, t.dateCode, t.coo, t.cow, t.shelfCode, t.boxId)
     .where(sql`${t.shelfCode} is not null or ${t.boxId} is not null`),
 }));
 
@@ -269,6 +294,7 @@ export const receivingInvoiceItemsRelations = relations(receivingInvoiceItems, (
 export const pickingOrdersRelations = relations(pickingOrders, ({ one, many }) => ({
   supplier: one(suppliers, { fields: [pickingOrders.supplierId], references: [suppliers.id] }),
   items: many(pickingItems),
+  packages: many(pickingPackages),
   measuringTask: one(measuringTasks, { fields: [pickingOrders.id], references: [measuringTasks.pickingOrderId] }),
   shippingBoxes: many(shippingBoxes),
 }));
@@ -277,7 +303,14 @@ export const pickingItemsRelations = relations(pickingItems, ({ one, many }) => 
   pickingOrder: one(pickingOrders, { fields: [pickingItems.pickingOrderId], references: [pickingOrders.id] }),
   part: one(parts, { fields: [pickingItems.partId], references: [parts.id] }),
   allocations: many(allocations),
+  packages: many(pickingPackages),
   shippingBoxItems: many(shippingBoxItems),
+}));
+
+export const pickingPackagesRelations = relations(pickingPackages, ({ one }) => ({
+  pickingItem: one(pickingItems, { fields: [pickingPackages.pickingItemId], references: [pickingItems.id] }),
+  pickingOrder: one(pickingOrders, { fields: [pickingPackages.pickingOrderId], references: [pickingOrders.id] }),
+  shippingBox: one(shippingBoxes, { fields: [pickingPackages.shippingBoxId], references: [shippingBoxes.id] }),
 }));
 
 export const inventoryLotsRelations = relations(inventoryLots, ({ one, many }) => ({
@@ -306,6 +339,7 @@ export const shippingBoxesRelations = relations(shippingBoxes, ({ one, many }) =
   pickingOrder: one(pickingOrders, { fields: [shippingBoxes.pickingOrderId], references: [pickingOrders.id] }),
   measuringTask: one(measuringTasks, { fields: [shippingBoxes.measuringTaskId], references: [measuringTasks.id] }),
   items: many(shippingBoxItems),
+  packages: many(pickingPackages),
 }));
 
 export const shippingBoxItemsRelations = relations(shippingBoxItems, ({ one }) => ({

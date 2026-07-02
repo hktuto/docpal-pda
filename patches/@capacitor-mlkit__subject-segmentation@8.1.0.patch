@@ -1,0 +1,13 @@
+diff --git a/android/src/main/java/io/capawesome/capacitorjs/plugins/mlkit/subjectsegmentation/SubjectSegmentationPlugin.java b/android/src/main/java/io/capawesome/capacitorjs/plugins/mlkit/subjectsegmentation/SubjectSegmentationPlugin.java
+index 3e06d9e34583f44dfb7119aa0306b2904a6c9c0b..1674918b3f6efe7a31e7f71e687ca0a72d2c76ed 100644
+--- a/android/src/main/java/io/capawesome/capacitorjs/plugins/mlkit/subjectsegmentation/SubjectSegmentationPlugin.java
++++ b/android/src/main/java/io/capawesome/capacitorjs/plugins/mlkit/subjectsegmentation/SubjectSegmentationPlugin.java
+@@ -111,7 +111,7 @@ public class SubjectSegmentationPlugin extends Plugin {
+     }
+ 
+     @PluginMethod
+-    public void isSubjectSegmentationScannerModuleAvailable(PluginCall call) {
++    public void isGoogleSubjectSegmentationModuleAvailable(PluginCall call) {
+         try {
+             implementation.isSubjectSegmentationScannerModuleAvailable(
+                 new IsGoogleSubjectSegmentationModuleAvailableResultCallback() {

@@ -1,6 +1,6 @@
 <template>
   <div>
-    <p class="card__meta" style="margin-bottom: 1rem;">
+    <p class="page-hint">
       Receiving orders with stock still in the receiving area.
     </p>
 
@@ -12,21 +12,17 @@
       v-for="ro in rows"
       :key="ro.id"
       :to="`/put-away/${ro.id}`"
-      class="card"
+      class="card list-card"
     >
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
-        <div>
-          <p class="card__title">{{ ro.ref_no }}</p>
-          <p class="card__meta">
-            {{ ro.supplier_name || "No supplier" }}
-          </p>
-        </div>
-        <div style="text-align: right;">
-          <span class="badge">{{ ro.status }}</span>
-          <p class="card__meta" style="margin-top: 0.25rem;">
-            {{ ro.available_qty }} available
-          </p>
-        </div>
+      <div class="list-card__header">
+        <span class="list-card__title">{{ ro.ref_no }}</span>
+        <span class="badge" :class="badgeClass(ro.status)">{{ ro.status }}</span>
+      </div>
+      <p class="list-card__meta">
+        {{ ro.supplier_name || "No supplier" }}
+      </p>
+      <div class="list-card__footer">
+        <span class="list-card__date">{{ ro.available_qty }} available</span>
       </div>
     </NuxtLink>
   </div>
@@ -53,5 +49,75 @@ async function load() {
   }
 }
 
-onMounted(load);
+function badgeClass(status: string) {
+  if (status === "in_hand" || status === "pending") return "badge--pending";
+  if (["closed", "verified", "finished", "completed", "clear"].includes(status)) return "badge--finished";
+  return "";
+}
+
+function onVisible() {
+  if (document.visibilityState === "visible") {
+    load();
+  }
+}
+
+onMounted(() => {
+  load();
+  document.addEventListener("visibilitychange", onVisible);
+  window.addEventListener("focus", onVisible);
+});
+
+onUnmounted(() => {
+  document.removeEventListener("visibilitychange", onVisible);
+  window.removeEventListener("focus", onVisible);
+});
 </script>
+
+<style scoped>
+.page-hint {
+  margin: -0.25rem 0 1rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.list-card {
+  display: block;
+  text-decoration: none;
+}
+
+.list-card:hover {
+  text-decoration: none;
+}
+
+.list-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.list-card__title {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.list-card__meta {
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin: 0 0 0.75rem;
+}
+
+.list-card__footer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.list-card__date {
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+</style>
