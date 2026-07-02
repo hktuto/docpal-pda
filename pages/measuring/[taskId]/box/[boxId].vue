@@ -9,6 +9,7 @@
           class="btn"
           style="border-radius: 9999px; width: 3.5rem; height: 3.5rem; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow);"
           aria-label="Scan item"
+          :disabled="scanning"
           @click="openScan()"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -80,7 +81,7 @@
             </span>
           </div>
           <div v-if="box.status === 'open' && !pkg.verified" style="margin-top: 0.5rem;">
-            <button class="btn btn--small" @click="openScan(pkg.id)">Scan</button>
+            <button class="btn btn--small" :disabled="scanning" @click="openScan(pkg.id)">Scan</button>
           </div>
         </div>
       </div>
@@ -105,11 +106,16 @@
         </div>
       </div>
 
-      <MeasuringScanModal
-        v-model="scanOpen"
-        :box-id="boxId"
-        :target-package-id="scanPackageId"
-        @applied="onScanApplied"
+      <LabelScanReviewModal
+        v-if="review?.status === 'review'"
+        v-model="reviewOpen"
+        :image-path="review.capture.imagePath"
+        :text="review.capture.text"
+        :parsed="review.parsed"
+        :match-result="review.matchResult"
+        :context="{ task: 'measuring', boxId, targetPackageId: scanTargetPackageId }"
+        @applied="onApplied"
+        @retake="onRetake"
       />
 
       <BoxMeasurementsModal
@@ -129,7 +135,8 @@ import {
   getShippingBoxForMeasuring,
   type ShippingBoxForMeasuring,
 } from "~/db/measuring";
-import MeasuringScanModal from "~/components/MeasuringScanModal.vue";
+import { useLabelScan, type LabelScanResult } from "~/composables/useLabelScan";
+import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import BoxMeasurementsModal from "~/components/BoxMeasurementsModal.vue";
 
 definePageMeta({ title: "Measure Box", props: { noPadding: true } });
@@ -143,10 +150,12 @@ const db = await useDb();
 const pending = ref(true);
 const error = ref<string | null>(null);
 const box = ref<ShippingBoxForMeasuring | null>(null);
-const scanOpen = ref(false);
-const scanPackageId = ref<string | undefined>(undefined);
+const scanTargetPackageId = ref<string | undefined>(undefined);
 const measureOpen = ref(false);
 const headerExpanded = ref(false);
+const { scan, scanning } = useLabelScan();
+const reviewOpen = ref(false);
+const review = ref<LabelScanResult | null>(null);
 
 async function load() {
   try {
@@ -184,9 +193,27 @@ const measurementInitialValues = computed(() => {
   };
 });
 
-function openScan(packageId?: string) {
-  scanPackageId.value = packageId;
-  scanOpen.value = true;
+async function openScan(packageId?: string) {
+  scanTargetPackageId.value = packageId;
+  const result = await scan({ task: 'measuring', boxId, targetPackageId: packageId });
+  if (result.status === 'applied') {
+    await onScanApplied();
+  } else if (result.status === 'review') {
+    review.value = result;
+    reviewOpen.value = true;
+  } else if (result.status === 'error') {
+    error.value = result.message;
+  }
+}
+
+async function onApplied() {
+  reviewOpen.value = false;
+  await onScanApplied();
+}
+
+async function onRetake() {
+  reviewOpen.value = false;
+  await openScan(scanTargetPackageId.value);
 }
 
 async function onScanApplied() {
