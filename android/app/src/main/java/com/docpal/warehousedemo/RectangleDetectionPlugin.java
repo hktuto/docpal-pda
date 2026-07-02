@@ -151,7 +151,8 @@ public class RectangleDetectionPlugin extends Plugin {
       Intent data = result.getData();
       JSObject capture = new JSObject();
       capture.put("imagePath", data.getStringExtra("imagePath"));
-      capture.put("text", data.getStringExtra("text"));
+      String text = data.getStringExtra("text");
+      capture.put("text", text != null ? text : "");
       call.resolve(capture);
     } else {
       call.reject("Cancelled");
