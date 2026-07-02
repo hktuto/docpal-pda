@@ -207,8 +207,7 @@ The database lives in the browser's IndexedDB. Use the **⋮ → Reset local DB*
 ├── app.vue                  # PGlite bootstrap, schema init, seed, auth restore
 ├── assets/css/main.css      # Global styles
 ├── components/
-│   ├── AppHeader.vue        # Header with back button, reset DB, logout
-│   └── OcrScanModal.vue     # Typed-label scan modal for OCR-assisted picking
+│   └── AppHeader.vue        # Header with back button, reset DB, logout
 ├── composables/
 │   ├── useAuth.ts           # Login/logout/restore
 │   ├── useCurrentUser.ts    # Current operator helper
