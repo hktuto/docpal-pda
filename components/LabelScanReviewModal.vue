@@ -205,6 +205,11 @@ function formatRecord(record: unknown): string {
   if (record == null) return '—';
   if (typeof record === 'object') {
     const obj = record as Record<string, unknown>;
+    if (typeof obj.picking === 'object' && obj.picking !== null) {
+      const picking = obj.picking as Record<string, unknown>;
+      if (typeof picking.pickingOrderRefNo === 'string') return picking.pickingOrderRefNo;
+      return 'Picking order';
+    }
     if (typeof obj.pickingOrderRefNo === 'string') return obj.pickingOrderRefNo;
     if (typeof obj.partNo === 'string') return obj.partNo;
     if (typeof obj.id === 'string') return obj.id;

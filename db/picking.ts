@@ -30,6 +30,7 @@ export async function getPickingOrderDetail(
             with: {
               inventoryLot: { with: { part: true } },
               receivingInvoiceItem: { with: { invoice: { with: { receivingOrder: true } } } },
+              pickingItem: { with: { part: true } },
             },
           },
           packages: true,

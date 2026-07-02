@@ -26,6 +26,7 @@ interface PickingAllocation {
   id: string;
   qty: number;
   receivingInvoiceItem?: unknown;
+  pickingItem?: { part?: { partNo: string | null } | null } | null;
 }
 
 interface BoxItem {
@@ -79,7 +80,7 @@ export interface ScanMatchers {
 
 export function useScanMatchers(): ScanMatchers {
   const db = useDb();
-  const { parseManual } = useMockOcr();
+  const { parseManual, normalize } = useMockOcr();
 
   function error(message: string): ScanMatchResult {
     return { type: 'error', message };
@@ -145,6 +146,11 @@ export function useScanMatchers(): ScanMatchers {
       const currentUser = await useCurrentUser();
       if (!currentUser?.id) return error('Operator not signed in');
 
+      const scannedPartNo = normalize(parsed.partNo ?? '');
+      const expectedPartNo = normalize(allocation?.pickingItem?.part?.partNo ?? '');
+      if (!scannedPartNo) return { type: 'none' };
+      if (scannedPartNo !== expectedPartNo) return error('Scanned part does not match allocation');
+
       const qty = typeof parsed.qty === 'number' ? parsed.qty : Number(parsed.qty);
       if (!Number.isInteger(qty) || qty <= 0) return error('Qty must be a positive integer');
       if (!allocation?.qty) return error('Invalid allocation');
@@ -188,6 +194,11 @@ export function useScanMatchers(): ScanMatchers {
     try {
       const currentUser = await useCurrentUser();
       if (!currentUser?.id) return error('Operator not signed in');
+
+      const scannedPartNo = normalize(parsed.partNo ?? '');
+      const expectedPartNo = normalize(receivingItem.part_no ?? '');
+      if (!scannedPartNo) return { type: 'none' };
+      if (scannedPartNo !== expectedPartNo) return error('Scanned part does not match item');
 
       if (!targetBoxId) return error('Select an open box');
       const qty = typeof parsed.qty === 'number' ? parsed.qty : Number(parsed.qty);
