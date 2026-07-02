@@ -1,0 +1,395 @@
+<template>
+  <div
+    v-if="modelValue"
+    class="modal-overlay"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="review-title"
+    @click.self="!applying && close()"
+    @keydown.esc="!applying && close()"
+  >
+    <div class="modal">
+      <div class="modal__header">
+        <h3 id="review-title">Review scan</h3>
+        <button class="modal__close" aria-label="Close" :disabled="applying" @click="close">×</button>
+      </div>
+
+      <div class="modal__body">
+        <div class="preview">
+          <img v-if="imageSrc" :src="imageSrc" alt="Captured label" />
+          <div v-else class="placeholder">No image</div>
+        </div>
+
+        <p class="subtitle">Edit OCR fields and find a matching record.</p>
+
+        <form class="form" @submit.prevent="findMatch">
+          <label class="field">
+            <span>Part No.</span>
+            <input v-model="editable.partNo" type="text" placeholder="e.g. IC-LM358DR" />
+          </label>
+          <label class="field">
+            <span>Date Code</span>
+            <input v-model="editable.dateCode" type="text" placeholder="e.g. 2406" />
+          </label>
+          <label class="field">
+            <span>Lot Code</span>
+            <input v-model="editable.lotCode" type="text" placeholder="e.g. L240603" />
+          </label>
+          <label class="field">
+            <span>COO</span>
+            <input v-model="editable.coo" type="text" placeholder="e.g. MY" />
+          </label>
+          <label class="field">
+            <span>COW</span>
+            <input v-model="editable.cow" type="text" placeholder="e.g. USA" />
+          </label>
+          <label class="field">
+            <span>Qty</span>
+            <input v-model.number="editable.qty" type="number" min="1" placeholder="e.g. 400" />
+          </label>
+        </form>
+
+        <div class="match-section">
+          <template v-if="localMatchResult.type === 'single'">
+            <div class="card" style="border-left: 4px solid #16a34a;">
+              <p><strong>1 match found</strong></p>
+            </div>
+            <button
+              class="btn"
+              style="width: 100%; margin-top: 1rem;"
+              :disabled="applying"
+              @click="applyRecord(localMatchResult.apply)"
+            >
+              {{ applying ? "Applying…" : "Apply" }}
+            </button>
+          </template>
+
+          <template v-else-if="localMatchResult.type === 'multiple'">
+            <p class="subtitle">Multiple matches found. Choose one.</p>
+            <div class="options">
+              <div
+                v-for="(record, index) in localMatchResult.records"
+                :key="index"
+                class="option"
+                @click="applyRecord(record.apply)"
+              >
+                <div class="letter">📦</div>
+                <div class="content">
+                  <h3>Match {{ index + 1 }}</h3>
+                  <p>{{ formatRecord(record.record) }}</p>
+                </div>
+              </div>
+            </div>
+          </template>
+
+          <template v-else-if="localMatchResult.type === 'none'">
+            <div class="card" style="border-left: 4px solid #dc2626;">
+              <p><strong>No match found</strong></p>
+            </div>
+          </template>
+
+          <template v-else-if="localMatchResult.type === 'error'">
+            <div class="card" style="border-left: 4px solid #dc2626;">
+              <p><strong>Error</strong></p>
+              <p class="subtitle">{{ localMatchResult.message }}</p>
+            </div>
+          </template>
+        </div>
+
+        <p v-if="applyError" class="error">{{ applyError }}</p>
+
+        <div class="actions">
+          <button class="btn btn--secondary" :disabled="applying" @click="emit('retake')">Retake</button>
+          <button class="btn btn--secondary" :disabled="applying" @click="close">Cancel</button>
+          <button class="btn" :disabled="applying" @click="findMatch">
+            {{ applying ? "Matching…" : "Find match" }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { Capacitor } from '@capacitor/core';
+import type { OcrInput } from '~/composables/useMockOcr';
+import { useScanMatchers, type ScanMatchResult, type ScanTaskContext } from '~/composables/useScanMatchers';
+
+const props = defineProps<{
+  modelValue: boolean;
+  imagePath: string;
+  text: string;
+  parsed: OcrInput;
+  matchResult: ScanMatchResult;
+  context: ScanTaskContext;
+}>();
+
+const emit = defineEmits<{
+  (e: 'update:modelValue', value: boolean): void;
+  (e: 'applied'): void;
+  (e: 'retake'): void;
+}>();
+
+const { matchReceiving, matchPicking, matchPutAway, matchMeasuring, matchGoodsVerify } = useScanMatchers();
+const localMatchResult = ref<ScanMatchResult>(props.matchResult);
+const editable = ref<OcrInput>({ ...props.parsed });
+const applying = ref(false);
+const applyError = ref<string | null>(null);
+
+const imageSrc = computed(() => {
+  if (!props.imagePath) return '';
+  return Capacitor.convertFileSrc(props.imagePath);
+});
+
+watch(() => props.matchResult, (v) => { localMatchResult.value = v; });
+watch(() => props.parsed, (v) => { editable.value = { ...v }; });
+
+async function findMatch() {
+  applyError.value = null;
+  try {
+    const result = await runMatcher();
+    localMatchResult.value = result;
+  } catch (e: any) {
+    localMatchResult.value = { type: 'error', message: e?.message ?? 'Match failed' };
+  }
+}
+
+async function runMatcher(): Promise<ScanMatchResult> {
+  const ctx = props.context;
+  switch (ctx.task) {
+    case 'receiving':
+      if (!ctx.receivingOrderId) return { type: 'error', message: 'Missing receiving order ID' };
+      return matchReceiving(ctx.receivingOrderId, ctx.pickingItemId, editable.value);
+    case 'picking':
+      if (!ctx.allocation) return { type: 'error', message: 'Missing allocation' };
+      return matchPicking(ctx.allocation, editable.value);
+    case 'put-away':
+      if (!ctx.receivingItem) return { type: 'error', message: 'Missing receiving item' };
+      if (!ctx.targetBoxId) return { type: 'error', message: 'Missing target box' };
+      return matchPutAway(ctx.receivingItem, ctx.targetBoxId, editable.value);
+    case 'measuring':
+      if (!ctx.boxId) return { type: 'error', message: 'Missing box ID' };
+      return matchMeasuring(ctx.boxId, ctx.targetPackageId, editable.value);
+    case 'goods-verify':
+      if (!ctx.items) return { type: 'error', message: 'Missing box items' };
+      return matchGoodsVerify(ctx.items, editable.value);
+    default:
+      return { type: 'error', message: 'Unknown scan task' };
+  }
+}
+
+async function applyRecord(apply: () => Promise<void>) {
+  applying.value = true;
+  applyError.value = null;
+  try {
+    await apply();
+    emit('applied');
+  } catch (e: any) {
+    applyError.value = e?.message ?? 'Apply failed';
+  } finally {
+    applying.value = false;
+  }
+}
+
+function close() {
+  emit('update:modelValue', false);
+}
+
+function formatRecord(record: unknown): string {
+  if (record == null) return '—';
+  if (typeof record === 'object') {
+    const obj = record as Record<string, unknown>;
+    if (typeof obj.pickingOrderRefNo === 'string') return obj.pickingOrderRefNo;
+    if (typeof obj.partNo === 'string') return obj.partNo;
+    if (typeof obj.id === 'string') return obj.id;
+  }
+  return String(record);
+}
+</script>
+
+<style scoped>
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 100;
+}
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  width: 100%;
+  max-width: 420px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal__header h3 {
+  margin: 0;
+}
+
+.modal__close {
+  background: transparent;
+  border: none;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.modal__body {
+  padding: 1rem;
+}
+
+.preview {
+  margin-bottom: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.preview img {
+  width: 100%;
+  display: block;
+}
+
+.placeholder {
+  padding: 2rem;
+  text-align: center;
+  color: var(--muted);
+}
+
+.subtitle {
+  color: var(--muted);
+  font-size: 0.875rem;
+  margin: 0 0 1rem;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.field span {
+  color: var(--muted);
+}
+
+.field input {
+  padding: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.9375rem;
+}
+
+.error {
+  color: var(--danger);
+  font-size: 0.875rem;
+  margin: 0.75rem 0 0;
+}
+
+.match-section {
+  margin-top: 1rem;
+}
+
+.card {
+  padding: 0.75rem;
+  background: var(--bg);
+  border-radius: var(--radius);
+}
+
+.card p {
+  margin: 0;
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.option {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.option:hover {
+  border-color: var(--primary);
+}
+
+.option .letter {
+  font-size: 1.25rem;
+}
+
+.option .content h3 {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.option .content p {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--muted);
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.actions .btn {
+  flex: 1;
+}
+
+.btn {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius);
+  background: var(--primary);
+  color: #fff;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn--secondary {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--border);
+}
+</style>
