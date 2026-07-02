@@ -5,7 +5,6 @@ import androidx.activity.ComponentActivity;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -14,10 +13,6 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.annotation.Nullable;
-import com.google.mlkit.vision.common.InputImage;
-import com.google.mlkit.vision.text.TextRecognition;
-import com.google.mlkit.vision.text.TextRecognizer;
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
@@ -49,6 +44,7 @@ public class RectanglePickerActivity extends ComponentActivity {
   private int imageHeight;
   private List<RectangleDetector.RectResult> rectangles;
   private boolean isLabelScan = false;
+  private RectangleOcrHelper ocrHelper;
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -98,6 +94,7 @@ public class RectanglePickerActivity extends ComponentActivity {
     imageView.setImageBitmap(displayBitmap);
     overlayView.setImageSize(imageWidth, imageHeight);
     overlayView.setRectangles(rectangles);
+    ocrHelper = new RectangleOcrHelper();
 
     if (rectangles.isEmpty()) {
       helpText.setText("No rectangles found");
@@ -133,9 +130,9 @@ public class RectanglePickerActivity extends ComponentActivity {
       String rectanglesJson = RectangleResultJson.toJson(rectangles);
 
       if (isLabelScan) {
-        runOcrAndFinish(cropFile.getAbsolutePath(), rect.boundingBox.width, rect.boundingBox.height, rectanglesJson, selectedRectJson);
+        ocrHelper.runOcrAndFinish(this, cropFile.getAbsolutePath(), rect.boundingBox.width, rect.boundingBox.height, rectanglesJson, selectedRectJson);
       } else {
-        finishWithResult(cropFile.getAbsolutePath(), rect.boundingBox.width, rect.boundingBox.height, rectanglesJson, selectedRectJson);
+        RectangleOcrHelper.finishWithResult(this, cropFile.getAbsolutePath(), rect.boundingBox.width, rect.boundingBox.height, rectanglesJson, selectedRectJson);
       }
     } catch (IOException e) {
       Toast.makeText(this, "Failed to save crop: " + e.getMessage(), Toast.LENGTH_SHORT).show();
@@ -145,72 +142,14 @@ public class RectanglePickerActivity extends ComponentActivity {
     }
   }
 
-  private void finishWithResult(
-      String imagePath,
-      int width,
-      int height,
-      @Nullable String rectanglesJson,
-      @Nullable String selectedRectJson) {
-    finishWithResult(imagePath, width, height, rectanglesJson, selectedRectJson, "");
-  }
-
-  private void finishWithResult(
-      String imagePath,
-      int width,
-      int height,
-      @Nullable String rectanglesJson,
-      @Nullable String selectedRectJson,
-      @Nullable String text) {
-    Intent resultIntent = new Intent();
-    resultIntent.putExtra("imagePath", imagePath);
-    resultIntent.putExtra("width", width);
-    resultIntent.putExtra("height", height);
-    if (rectanglesJson != null) {
-      resultIntent.putExtra("rectanglesJson", rectanglesJson);
-    }
-    if (selectedRectJson != null) {
-      resultIntent.putExtra("selectedRect", selectedRectJson);
-    }
-    resultIntent.putExtra("text", text != null ? text : "");
-    setResult(Activity.RESULT_OK, resultIntent);
-    finish();
-  }
-
-  private void runOcrAndFinish(String imagePath, int width, int height, String rectanglesJson, String selectedRectJson) {
-    try {
-      InputImage inputImage = InputImage.fromFilePath(this, Uri.fromFile(new File(imagePath)));
-      TextRecognizer recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
-      recognizer.process(inputImage)
-        .addOnSuccessListener(visionText -> {
-          String text = visionText.getText();
-          Log.d(TAG, "OCR text: " + text);
-          closeTextRecognizer(recognizer);
-          finishWithResult(imagePath, width, height, rectanglesJson, selectedRectJson, text);
-        })
-        .addOnFailureListener(e -> {
-          Log.e(TAG, "OCR failed", e);
-          closeTextRecognizer(recognizer);
-          finishWithResult(imagePath, width, height, rectanglesJson, selectedRectJson, "");
-        });
-    } catch (IOException e) {
-      Log.e(TAG, "Failed to load image for OCR", e);
-      finishWithResult(imagePath, width, height, rectanglesJson, selectedRectJson, "");
-    }
-  }
-
-  private void closeTextRecognizer(TextRecognizer recognizer) {
-    try {
-      recognizer.close();
-    } catch (Exception e) {
-      Log.e(TAG, "Failed to close TextRecognizer", e);
-    }
-  }
-
   @Override
   protected void onDestroy() {
     super.onDestroy();
     if (displayBitmap != null && !displayBitmap.isRecycled()) {
       displayBitmap.recycle();
+    }
+    if (ocrHelper != null) {
+      ocrHelper.cancel();
     }
   }
 

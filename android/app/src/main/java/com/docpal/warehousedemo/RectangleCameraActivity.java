@@ -5,7 +5,6 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.ImageFormat;
-import android.net.Uri;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.util.Log;
@@ -27,10 +26,6 @@ import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
 import androidx.core.content.ContextCompat;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.mlkit.vision.common.InputImage;
-import com.google.mlkit.vision.text.TextRecognition;
-import com.google.mlkit.vision.text.TextRecognizer;
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -73,6 +68,7 @@ public class RectangleCameraActivity extends ComponentActivity {
   private ImageCapture imageCapture;
   private volatile int streamWidth = 0;
   private volatile int streamHeight = 0;
+  private RectangleOcrHelper ocrHelper;
 
   private enum CaptureMode {
     NONE,
@@ -122,6 +118,7 @@ public class RectangleCameraActivity extends ComponentActivity {
 
     previewView.setScaleType(PreviewView.ScaleType.FIT_CENTER);
     analysisExecutor = Executors.newSingleThreadExecutor();
+    ocrHelper = new RectangleOcrHelper();
     startCamera();
   }
 
@@ -277,9 +274,9 @@ public class RectangleCameraActivity extends ComponentActivity {
   private void saveDebugBytes(byte[] bytes, String suffix) {
     try {
       File file = new File(getCacheDir(), "debug_" + suffix + "_" + System.currentTimeMillis() + ".jpg");
-      FileOutputStream fos = new FileOutputStream(file);
-      fos.write(bytes);
-      fos.close();
+      try (FileOutputStream fos = new FileOutputStream(file)) {
+        fos.write(bytes);
+      }
       Log.d(TAG, "Saved debug bytes: " + file.getAbsolutePath());
     } catch (IOException e) {
       Log.e(TAG, "Failed to save debug bytes", e);
@@ -309,9 +306,9 @@ public class RectangleCameraActivity extends ComponentActivity {
 
       runOnUiThread(() -> {
         if (isLabelScan) {
-          runOcrAndFinish(cropFile.getAbsolutePath(), originalWidth, originalHeight, null, selectedRectJson);
+          ocrHelper.runOcrAndFinish(this, cropFile.getAbsolutePath(), originalWidth, originalHeight, null, selectedRectJson);
         } else {
-          finishWithResult(cropFile.getAbsolutePath(), originalWidth, originalHeight, null, selectedRectJson);
+          RectangleOcrHelper.finishWithResult(this, cropFile.getAbsolutePath(), originalWidth, originalHeight, null, selectedRectJson);
         }
       });
     } catch (IOException e) {
@@ -454,67 +451,6 @@ public class RectangleCameraActivity extends ComponentActivity {
     );
   }
 
-  private void finishWithResult(
-      String imagePath,
-      int width,
-      int height,
-      @Nullable String rectanglesJson,
-      @Nullable String selectedRectJson) {
-    finishWithResult(imagePath, width, height, rectanglesJson, selectedRectJson, "");
-  }
-
-  private void finishWithResult(
-      String imagePath,
-      int width,
-      int height,
-      @Nullable String rectanglesJson,
-      @Nullable String selectedRectJson,
-      @Nullable String text) {
-    Intent resultIntent = new Intent();
-    resultIntent.putExtra("imagePath", imagePath);
-    resultIntent.putExtra("width", width);
-    resultIntent.putExtra("height", height);
-    if (rectanglesJson != null) {
-      resultIntent.putExtra("rectanglesJson", rectanglesJson);
-    }
-    if (selectedRectJson != null) {
-      resultIntent.putExtra("selectedRect", selectedRectJson);
-    }
-    resultIntent.putExtra("text", text != null ? text : "");
-    setResult(Activity.RESULT_OK, resultIntent);
-    finish();
-  }
-
-  private void runOcrAndFinish(String imagePath, int width, int height, String rectanglesJson, String selectedRectJson) {
-    try {
-      InputImage inputImage = InputImage.fromFilePath(this, Uri.fromFile(new File(imagePath)));
-      TextRecognizer recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
-      recognizer.process(inputImage)
-        .addOnSuccessListener(visionText -> {
-          String text = visionText.getText();
-          Log.d(TAG, "OCR text: " + text);
-          closeTextRecognizer(recognizer);
-          finishWithResult(imagePath, width, height, rectanglesJson, selectedRectJson, text);
-        })
-        .addOnFailureListener(e -> {
-          Log.e(TAG, "OCR failed", e);
-          closeTextRecognizer(recognizer);
-          finishWithResult(imagePath, width, height, rectanglesJson, selectedRectJson, "");
-        });
-    } catch (IOException e) {
-      Log.e(TAG, "Failed to load image for OCR", e);
-      finishWithResult(imagePath, width, height, rectanglesJson, selectedRectJson, "");
-    }
-  }
-
-  private void closeTextRecognizer(TextRecognizer recognizer) {
-    try {
-      recognizer.close();
-    } catch (Exception e) {
-      Log.e(TAG, "Failed to close TextRecognizer", e);
-    }
-  }
-
   private void startPicker(String imagePath, int width, int height, String rectanglesJson) {
     Intent intent = new Intent(this, RectanglePickerActivity.class);
     intent.putExtra(RectanglePickerActivity.EXTRA_IMAGE_PATH, imagePath);
@@ -545,6 +481,9 @@ public class RectangleCameraActivity extends ComponentActivity {
     super.onDestroy();
     if (analysisExecutor != null) {
       analysisExecutor.shutdown();
+    }
+    if (ocrHelper != null) {
+      ocrHelper.cancel();
     }
   }
 
