@@ -22,7 +22,7 @@
 
         <label class="field field--raw">
           <span>OCR raw text</span>
-          <textarea :value="text" readonly rows="3" class="raw-text" />
+          <textarea :value="rawText" readonly rows="5" class="raw-text" />
         </label>
 
         <p class="subtitle">Edit OCR fields and find a matching record.</p>
@@ -126,10 +126,32 @@ const props = defineProps<{
   modelValue: boolean;
   imagePath: string;
   text: string;
+  barcodes: string;
   parsed: OcrInput;
   matchResult: ScanMatchResult;
   context: ScanTaskContext;
 }>();
+
+const rawText = computed(() => {
+  const lines: string[] = [];
+  if (props.text) {
+    lines.push(props.text);
+  }
+  if (props.barcodes && props.barcodes !== '[]') {
+    try {
+      const parsed = JSON.parse(props.barcodes) as Array<{ value?: string; format?: string }>;
+      const barcodeLines = parsed
+        .map((b) => `[${b.format ?? 'BARCODE'}] ${b.value ?? ''}`)
+        .filter(Boolean);
+      if (barcodeLines.length > 0) {
+        lines.push('', 'Barcodes:', ...barcodeLines);
+      }
+    } catch {
+      lines.push('', 'Barcodes:', props.barcodes);
+    }
+  }
+  return lines.join('\n');
+});
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void;

@@ -87,6 +87,7 @@
       v-model="reviewOpen"
       :image-path="review.capture.imagePath"
       :text="review.capture.text"
+      :barcodes="review.capture.barcodes"
       :parsed="review.parsed"
       :match-result="review.matchResult"
       :context="{ task: 'goods-verify', items: box?.items ?? [] }"

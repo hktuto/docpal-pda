@@ -132,7 +132,7 @@
               </template>
 
               <template v-else>
-                <button class="btn btn--small" :disabled="saving[item.id]" @click="openReportIssue(item)">Report issue</button>
+                <button class="btn btn--small btn--danger" :disabled="saving[item.id]" @click="openReportIssue(item)">Report issue</button>
               </template>
             </div>
           </div>
@@ -289,6 +289,7 @@
         v-model="reviewOpen"
         :image-path="review.capture.imagePath"
         :text="review.capture.text"
+        :barcodes="review.capture.barcodes"
         :parsed="review.parsed"
         :match-result="review.matchResult"
         :context="{ task: 'receiving', receivingOrderId: orderId, pickingItemId: scanPickingItemId }"
@@ -471,8 +472,7 @@ const lockedByItem = computed(() => {
   if (!order.value) return map;
   for (const invoice of order.value.invoices) {
     for (const item of invoice.items) {
-      const allocated = allocatedByItem.value[item.id] ?? 0;
-      map[item.id] = item.pickedQty > 0 || item.putAwayQty > 0 || allocated > 0;
+      map[item.id] = item.pickedQty > 0 || item.putAwayQty > 0;
     }
   }
   return map;
