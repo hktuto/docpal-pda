@@ -21,7 +21,7 @@ Generated from `scripts/seed-extraction-summary.json` after re-running `node scr
 | 11 | MINEBEAMITSUMI -MCI | `MINEBE` | 2 PDFs | Invoice/packing list 4102291257; 2 motor components (1 part number). |
 | 12 | MMC | `MMC` | 5 PDFs | 2 readable invoice/packing-list pairs (JMY 00422-25HWC) + 3 empty PDFs; 4,000 thermistors. |
 | 13 | NCC | `NCC` | 2 PDFs | Invoice/packing list HCC0780458; capacitors and varistors (5+ part numbers). |
-| 14 | NDK | `NDK` | 1 PDF | Invoice/packing list 14519; 3,000 crystal units (1 part number). |
+| 14 | NDK | `NDK` | 1 PDF | Invoice/packing list 14519; 5,000 crystal units (1 part number). |
 | 15 | NIDEC | `NIDEC` | 3 docs | XLSX packing list H2-07865A has 1 line item; 2 accompanying PDFs are empty. |
 | 16 | NITSUKO | `NITSUK` | 1 PDF | Packing list; extracted text empty. |
 | 17 | OKAYA -MCI | `OKAYA` | 1 PDF | Invoice/packing list SI25002441; 22,000 across-the-line capacitors (2 part numbers). |
@@ -37,6 +37,31 @@ Generated from `scripts/seed-extraction-summary.json` after re-running `node scr
 
 ---
 
+## Guidance notes for seed data
+
+### COO normalization
+
+Full country names are normalized to 2-letter codes in the seed:
+
+| Full name | Code |
+|-----------|------|
+| China | CN |
+| Japan | JP |
+| India | IN |
+| Germany | DE |
+| Republic of Korea | KR |
+| Malaysia | MY |
+| Indonesia | ID |
+| USA | US |
+
+### Country of warehousing (COW)
+
+For all receiving items and shelf lots, use `cow: "USA"` as the default (consistent with existing seed).
+
+### Receiving-order status
+
+Recommend the first two receiving orders (KOA and ABLIC) be seeded with `status: "in_hand"` and the third (DIOTEC) with `status: "pending"` so the receiving list shows actionable work.
+
 ## 2. Recommended receiving-order suppliers
 
 These three suppliers have the clearest, most complete line-item data, English text, and reliable quantities.
@@ -48,11 +73,11 @@ These three suppliers have the clearest, most complete line-item data, English t
 
 | Line | Part number | Quantity | PO number | COO |
 |------|-------------|----------|-----------|-----|
-| 1 | `RK73B1JTTD181G` | 15,000 | `1180200568STD` | China |
-| 2 | `RK73H2ATTD1372F` | 40,000 | `1180200568STD` | China |
-| 3 | `RK73H1JTTD1501F` | 5,000 | `1180200859STD` | China |
-| 4 | `RK73H1JTTD2202F` | 5,000 | `1180200859STD` | China |
-| 5 | `RK73H2ATTD1002F` | 70,000 | `1180201327STD` | China |
+| 1 | `RK73B1JTTD181G` | 15,000 | `1180200568STD` | CN |
+| 2 | `RK73H2ATTD1372F` | 40,000 | `1180200568STD` | CN |
+| 3 | `RK73H1JTTD1501F` | 5,000 | `1180200859STD` | CN |
+| 4 | `RK73H1JTTD2202F` | 5,000 | `1180200859STD` | CN |
+| 5 | `RK73H2ATTD1002F` | 70,000 | `1180201327STD` | CN |
 
 ### 2.2 ABLIC (code `ABLIC`)
 - **Selected document:** `INV NO. 1080082369.pdf`
@@ -61,40 +86,41 @@ These three suppliers have the clearest, most complete line-item data, English t
 
 | Line | Part number | Quantity | PO number | COO |
 |------|-------------|----------|-----------|-----|
-| 1 | `S-1206B18-M3T1U` | 3,000 | `1180200571W` | Japan |
-| 2 | `S-80860CNNB-B9LT2U` | 3,000 | `1180200214` | Japan |
-| 3 | `S-8240ADJ-I6T1U` | 5,000 | `1180201399` | Japan |
-| 4 | `S-8240ADJ-I6T1U` | 15,000 | `1180201399` | Japan |
+| 1 | `S-1206B18-M3T1U` | 3,000 | `1180200571W` | JP |
+| 2 | `S-80860CNNB-B9LT2U` | 3,000 | `1180200214` | JP |
+| 3 | `S-8240ADJ-I6T1U` | 5,000 | `1180201399` | JP |
+| 4 | `S-8240ADJ-I6T1U` | 5,000 | `1180201399` | JP |
+| 5 | `S-8240ADJ-I6T1U` | 5,000 | `1180201399` | JP |
 
 ### 2.3 DIOTEC (code `DIOTEC`)
 - **Selected document:** `INV NO. RE52600142.pdf`
 - **Invoice number:** `52600142`
-- **Document notes:** Structured lines with delivery-note references; origin codes present (IN/CN/DE). Quantities below are from the invoice lines.
+- **Document notes:** Structured lines with delivery-note references; origin codes present (IN/CN/DE). `DBI25-16A` uses the packing-list total.
 
 | Line | Part number | Quantity | PO / reference | Origin |
 |------|-------------|----------|----------------|--------|
-| 1 | `DBI25-16A` | 300 | `1180200536` | India |
-| 2 | `MM1Z4733A` | 75,000 | `1180200595` | China |
-| 3 | `SL1M` | 300,000 | `1180200706` | China |
-| 4 | `SMF51CA` | 12,000 | `1180201274` | China |
-| 5 | `Z1SMA1020` | 7,500 | `1180201290` | Germany |
+| 1 | `DBI25-16A` | 900 | `1180200536` | IN |
+| 2 | `MM1Z4733A` | 75,000 | `1180200595` | CN |
+| 3 | `SL1M` | 300,000 | `1180200706` | CN |
+| 4 | `SMF51CA` | 12,000 | `1180201274` | CN |
+| 5 | `Z1SMA1020` | 7,500 | `1180201290` | DE |
 
 ---
 
 ## 3. Recommended pre-existing shelf-inventory parts
 
-Parts selected from suppliers **not** used as the primary receiving orders above. COO is taken from the document.
+Parts selected from suppliers **not** used as the primary receiving orders above. COO is taken from the document and normalized to a 2-letter code.
 
-| Supplier code | Part number | Default COO | Source document |
-|---------------|-------------|-------------|-----------------|
-| `IK` | `IL34063ADT` | Republic of Korea | `Commercial Invoice(260429E) for Weltronics_ CI, PL.pdf` |
-| `KYOCER` | `CX2016SA20000D0HSSCC` | Japan | `INV_C227916.pdf` |
-| `NCC` | `NCC-TND14V-471KB00AAA0` | Indonesia | `INVOICE-HCC0780458_1327001.pdf` |
-| `NDK` | `NX8045GB` | China | `14519.pdf` |
-| `SEIKO` | `Q-SPT7P0327620C5GF` | Malaysia | `WCL Macau-PL_SIH 20260603.pdf` |
-| `OKAYA` | `OKAYA-RE104-L` | China | `SI25002441.pdf` |
-| `SHINDE` | `D1FL20U` | Japan | `SSE0002181 SI002077 -W006.pdf` |
-| `MINEBE` | `04028DA12RBUFB` | China | `散箱发票-4102291257.pdf` |
+| Supplier code | Part number | Quantity | Default COO | Source document |
+|---------------|-------------|----------|-------------|-----------------|
+| `IK` | `IL34063ADT` | 5,000 | KR | `Commercial Invoice(260429E) for Weltronics_ CI, PL.pdf` |
+| `KYOCER` | `CX2016SA20000D0HSSCC` | 5,000 | JP | `INV_C227916.pdf` |
+| `NCC` | `NCC-TND14V-471KB00AAA0` | 5,000 | ID | `INVOICE-HCC0780458_1327001.pdf` |
+| `NDK` | `NX8045GB` | 5,000 | CN | `14519.pdf` |
+| `SEIKO` | `Q-SPT7P0327620C5GF` | 5,000 | MY | `WCL Macau-PL_SIH 20260603.pdf` |
+| `OKAYA` | `OKAYA-RE104-L` | 5,000 | CN | `SI25002441.pdf` |
+| `SHINDE` | `D1FL20U` | 5,000 | JP | `SSE0002181 SI002077 -W006.pdf` |
+| `MINEBE` | `04028DA12RBUFB` | 10 | CN | `散箱发票-4102291257.pdf` |
 
 ---
 
@@ -142,8 +168,9 @@ Quantities are chosen so each pick is well below the available stock from the re
 
 ## 5. Data gaps / assumptions
 
-- **ABLIC `S-8240ADJ-I6T1U`:** appears twice on the invoice with the same PO (`1180201399`); combined quantity is 20,000.
-- **DIOTEC `DBI25-16A`:** the invoice line shows 300 but the packing list totals 900 across several PO references. Stock should use the packing-list total (900) if a single SKU is needed.
+- **ABLIC `S-8240ADJ-I6T1U`:** appears three times on the invoice with the same PO (`1180201399`); combined quantity is 15,000.
+- **DIOTEC `DBI25-16A`:** the seeded receiving quantity uses the packing-list total of 900 across several PO references.
+- **M-TRON supplier code:** the derivation script produces code `M` from the supplier name; this is handled automatically.
 - **DIOTEC quantities rounded:** the packing list rounds some carton quantities (e.g., `SL1M 120,000` per carton × cartons). The CSV/invoice totals were used where available.
 - **KOA part numbers normalised:** the `KOA+` prefix from the customer part-number column was dropped; the KOA item code is used as the part number.
 - **NCC / OKAYA / SEIKO part numbers:** vendor/customer P/N from the document was used rather than the internal drawing/model numbers.
