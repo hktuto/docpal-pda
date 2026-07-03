@@ -1,23 +1,15 @@
 <template>
   <div>
-    <p v-if="pending" class="empty">Loading…</p>
-    <p v-else-if="error" class="empty" style="color: var(--danger);">Error: {{ error }}</p>
+    <EmptyState v-if="pending">Loading…</EmptyState>
+    <EmptyState v-else-if="error" error>Error: {{ error }}</EmptyState>
 
     <template v-else-if="box">
-      <div v-if="box.status === 'open'" style="position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 60;">
-        <button
-          class="btn"
-          style="border-radius: 9999px; width: 3.5rem; height: 3.5rem; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow);"
-          aria-label="Scan item"
-          :disabled="scanning"
-          @click="openScan()"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-            <circle cx="12" cy="13" r="4"/>
-          </svg>
-        </button>
-      </div>
+      <ScanFab
+        v-if="box.status === 'open'"
+        :loading="scanning"
+        aria-label="Scan item"
+        @click="openScan()"
+      />
 
       <div style="margin-bottom: 1rem;">
         <NuxtLink :to="`/measuring/${taskId}`" class="btn btn--small">← Back to task</NuxtLink>
@@ -40,14 +32,8 @@
           </button>
         </template>
 
-        <div class="detail-row">
-          <span class="detail-label">Picking order</span>
-          <span>{{ box.measuringTask?.pickingOrder?.refNo || "—" }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Destination</span>
-          <span>{{ box.measuringTask?.pickingOrder?.destinationCountry || "—" }}</span>
-        </div>
+        <DetailRow label="Picking order" :value="box.measuringTask?.pickingOrder?.refNo" />
+        <DetailRow label="Destination" :value="box.measuringTask?.pickingOrder?.destinationCountry" />
       </DetailHeader>
 
       <div class="card" style="margin-bottom: 1.5rem;">
@@ -60,26 +46,16 @@
           :key="pkg.id"
           class="packed-item"
         >
-          <div class="detail-row">
-            <span class="detail-label">Part</span>
-            <span>{{ pkg.pickingItem?.part?.partNo || "—" }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Qty</span>
-            <span>{{ pkg.qty }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Date / Lot / Origin</span>
-            <span>
-              {{ pkg.dateCode || "—" }} / {{ pkg.lotCode || "—" }} / {{ pkg.coo || "—" }} / {{ pkg.cow || "—" }}
-            </span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Status</span>
-            <span class="badge" :class="{ 'badge--finished': pkg.verified }">
+          <DetailRow label="Part" :value="pkg.pickingItem?.part?.partNo" />
+          <DetailRow label="Qty" :value="pkg.qty" />
+          <DetailRow label="Date / Lot / Origin">
+            {{ pkg.dateCode || "—" }} / {{ pkg.lotCode || "—" }} / {{ pkg.coo || "—" }} / {{ pkg.cow || "—" }}
+          </DetailRow>
+          <DetailRow label="Status">
+            <StatusBadge :status="pkg.verified ? 'verified' : 'pending'">
               {{ pkg.verified ? "Verified" : "Pending" }}
-            </span>
-          </div>
+            </StatusBadge>
+          </DetailRow>
           <div v-if="box.status === 'open' && !pkg.verified" style="margin-top: 0.5rem;">
             <button class="btn btn--small" :disabled="scanning" @click="openScan(pkg.id)">Scan</button>
           </div>
@@ -88,22 +64,10 @@
 
       <div v-if="box.status === 'closed'" class="card" style="margin-bottom: 1.5rem;">
         <h3 style="margin: 0 0 0.75rem; font-size: 0.875rem; color: var(--muted);">Box measurements</h3>
-        <div class="detail-row">
-          <span class="detail-label">Box size</span>
-          <span>{{ box.boxSize || "—" }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Net weight</span>
-          <span>{{ box.netWeight ?? "—" }} kg</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Gross weight</span>
-          <span>{{ box.grossWeight ?? "—" }} kg</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Destination country</span>
-          <span>{{ box.destinationCountry || "—" }}</span>
-        </div>
+        <DetailRow label="Box size" :value="box.boxSize" />
+        <DetailRow label="Net weight" :value="box.netWeight != null ? `${box.netWeight} kg` : '— kg'" />
+        <DetailRow label="Gross weight" :value="box.grossWeight != null ? `${box.grossWeight} kg` : '— kg'" />
+        <DetailRow label="Destination country" :value="box.destinationCountry" />
       </div>
 
       <LabelScanReviewModal
@@ -137,9 +101,21 @@ import {
   getShippingBoxForMeasuring,
   type ShippingBoxForMeasuring,
 } from "~/db/measuring";
-import { useLabelScan, createManualReview, type LabelScanResult } from "~/composables/useLabelScan";
+import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import BoxMeasurementsModal from "~/components/BoxMeasurementsModal.vue";
+
+async function onScanApplied() {
+  await load();
+  if (allVerified.value && box.value?.status === "open") {
+    measureOpen.value = true;
+  }
+}
+
+async function onRetake() {
+  reviewOpen.value = false;
+  await openScan(scanTargetPackageId.value);
+}
 
 definePageMeta({ title: "Measure Box", props: { noPadding: true } });
 
@@ -155,9 +131,17 @@ const box = ref<ShippingBoxForMeasuring | null>(null);
 const scanTargetPackageId = ref<string | undefined>(undefined);
 const measureOpen = ref(false);
 const headerExpanded = ref(false);
-const { scan, scanning } = useLabelScan();
-const reviewOpen = ref(false);
-const review = ref<LabelScanResult | null>(null);
+
+const {
+  scan,
+  scanning,
+  review,
+  reviewOpen,
+  handleResult,
+  onApplied,
+} = useLabelScanReview({ onApplied: onScanApplied });
+
+useVisibleReload(load);
 
 async function load() {
   try {
@@ -196,55 +180,19 @@ const measurementInitialValues = computed(() => {
 });
 
 async function openScan(packageId?: string) {
+  if (!box.value) return;
   scanTargetPackageId.value = packageId;
-  const result = await scan({ task: 'measuring', boxId, targetPackageId: packageId });
-  if (result.status === 'applied') {
-    await onScanApplied();
-  } else if (result.status === 'review') {
-    review.value = result;
-    reviewOpen.value = true;
-  } else if (result.status === 'manual') {
-    review.value = createManualReview();
-    scanTargetPackageId.value = packageId;
-    reviewOpen.value = true;
-  } else if (result.status === 'error') {
+  const result = await scan({
+    task: "measuring",
+    boxId,
+    targetPackageId: packageId,
+  });
+  if (result.status === "error") {
     error.value = result.message;
+  } else {
+    await handleResult(result);
   }
 }
-
-async function onApplied() {
-  reviewOpen.value = false;
-  await onScanApplied();
-}
-
-async function onRetake() {
-  reviewOpen.value = false;
-  await openScan(scanTargetPackageId.value);
-}
-
-async function onScanApplied() {
-  await load();
-  if (allVerified.value && box.value?.status === "open") {
-    measureOpen.value = true;
-  }
-}
-
-function onVisible() {
-  if (document.visibilityState === "visible") {
-    load();
-  }
-}
-
-onMounted(() => {
-  load();
-  document.addEventListener("visibilitychange", onVisible);
-  window.addEventListener("focus", onVisible);
-});
-
-onUnmounted(() => {
-  document.removeEventListener("visibilitychange", onVisible);
-  window.removeEventListener("focus", onVisible);
-});
 </script>
 
 <style scoped>
@@ -273,11 +221,6 @@ onUnmounted(() => {
   border-radius: var(--radius);
   padding: 0.75rem;
   margin-bottom: 0.5rem;
-}
-
-.subtitle {
-  color: var(--muted);
-  font-size: 0.875rem;
 }
 
 .badge--finished {

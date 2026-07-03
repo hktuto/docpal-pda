@@ -1,8 +1,9 @@
 <template>
   <div class="scan-fab">
     <button
+      type="button"
       class="btn"
-      aria-label="Scan label"
+      :aria-label="ariaLabel"
       :disabled="loading"
       @click="$emit('click')"
     >
@@ -15,9 +16,12 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
+withDefaults(defineProps<{
   loading?: boolean;
-}>();
+  ariaLabel?: string;
+}>(), {
+  ariaLabel: "Scan label",
+});
 
 defineEmits<{
   click: [];
