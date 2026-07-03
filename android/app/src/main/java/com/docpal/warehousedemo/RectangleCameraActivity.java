@@ -137,8 +137,30 @@ public class RectangleCameraActivity extends ComponentActivity {
       return;
     }
     sTorchOn = !sTorchOn;
-    camera.getCameraControl().enableTorch(sTorchOn);
+    applyTorchState();
     updateFlashIcon();
+  }
+
+  private void applyTorchState() {
+    if (camera == null) {
+      return;
+    }
+    ListenableFuture<Void> future = camera.getCameraControl().enableTorch(sTorchOn);
+    future.addListener(
+      () -> {
+        try {
+          future.get();
+        } catch (Exception e) {
+          Log.e(TAG, "Failed to set torch state", e);
+          runOnUiThread(() ->
+            Toast
+              .makeText(RectangleCameraActivity.this, "Flash error: " + e.getMessage(), Toast.LENGTH_SHORT)
+              .show()
+          );
+        }
+      },
+      ContextCompat.getMainExecutor(RectangleCameraActivity.this)
+    );
   }
 
   private void updateFlashIcon() {
@@ -422,7 +444,7 @@ public class RectangleCameraActivity extends ComponentActivity {
     );
 
     if (camera != null && camera.getCameraInfo().hasFlashUnit()) {
-      camera.getCameraControl().enableTorch(sTorchOn);
+      applyTorchState();
       updateFlashIcon();
       flashButton.setVisibility(android.view.View.VISIBLE);
     } else {
