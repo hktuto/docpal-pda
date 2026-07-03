@@ -62,7 +62,7 @@
 <script setup lang="ts">
 definePageMeta({ title: "Picking" });
 
-interface PickingOrderRow {
+interface PickingOrderRow extends Record<string, unknown> {
   id: string;
   ref_no: string;
   status: string;
@@ -116,7 +116,9 @@ const rows = computed(() => {
 });
 
 const selectedOrders = computed(() =>
-  rawRows.value.filter((r) => selectedIds.value.has(r.id))
+  rawRows.value
+    .filter((r) => selectedIds.value.has(r.id))
+    .map((r) => ({ id: r.id, ref_no: r.ref_no, totalQty: r.total_qty }))
 );
 
 const hasSelection = computed(() => selectedOrders.value.length > 0);
@@ -169,8 +171,11 @@ async function onReportSaved(payload: {
     selectedIds.value = new Set();
     modalOpen.value = false;
     await load();
-    if (result.skipped > 0) {
-      reportMessage.value = `${result.reported} issue(s) reported; ${result.skipped} order(s) skipped because they were already finished or had an issue.`;
+    if (result.reported > 0) {
+      reportMessage.value =
+        result.skipped > 0
+          ? `${result.reported} issue(s) reported; ${result.skipped} order(s) skipped.`
+          : `${result.reported} issue(s) reported.`;
     }
   } catch (e: any) {
     loadError.value = e?.message ?? String(e);
@@ -226,6 +231,11 @@ function onVisible() {
   font-size: 1.0625rem;
   font-weight: 700;
   color: var(--text);
+  text-decoration: none;
+}
+
+.list-card__title:hover {
+  text-decoration: underline;
 }
 
 .list-card__meta {
@@ -264,15 +274,6 @@ function onVisible() {
   background: var(--surface);
   border-top: 1px solid var(--border);
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
-}
-
-.list-card__title {
-  color: var(--text);
-  text-decoration: none;
-}
-
-.list-card__title:hover {
-  text-decoration: underline;
 }
 
 .card--disabled {
