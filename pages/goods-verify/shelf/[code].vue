@@ -53,6 +53,8 @@
 <script setup lang="ts">
 import { getShelfBoxesByShelf, type ShelfBoxSummary } from "~/db/goodsVerify";
 
+const { badgeClass } = useStatusBadge();
+
 definePageMeta({ title: "Shelf Boxes" });
 
 const route = useRoute();
@@ -86,13 +88,6 @@ const filteredBoxes = computed(() => {
   );
 });
 
-function badgeClass(status: string) {
-  if (status === "open") return "badge--pending";
-  if (status === "closed") return "badge--in-hand";
-  if (status === "verified") return "badge--finished";
-  return "";
-}
-
 onMounted(() => {
   load();
   document.addEventListener("visibilitychange", onVisible);
@@ -112,22 +107,4 @@ function onVisible() {
 </script>
 
 <style scoped>
-.badge--pending {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.badge--in-hand {
-  background: #dbeafe;
-  color: #1e40af;
-}
-
-.badge--finished {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.card--done {
-  border-left: 4px solid #22c55e;
-}
 </style>

@@ -31,6 +31,8 @@
 <script setup lang="ts">
 import { getPutAwayCandidates, type PutAwayCandidate } from "~/db/putAway";
 
+const { badgeClass } = useStatusBadge();
+
 definePageMeta({ title: "Put-away" });
 
 const db = await useDb();
@@ -47,12 +49,6 @@ async function load() {
   } finally {
     pending.value = false;
   }
-}
-
-function badgeClass(status: string) {
-  if (status === "in_hand" || status === "pending") return "badge--pending";
-  if (["closed", "verified", "finished", "completed", "clear"].includes(status)) return "badge--finished";
-  return "";
 }
 
 function onVisible() {

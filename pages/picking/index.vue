@@ -60,6 +60,8 @@
 </template>
 
 <script setup lang="ts">
+const { badgeClass } = useStatusBadge();
+
 definePageMeta({ title: "Picking" });
 
 interface PickingOrderRow extends Record<string, unknown> {
@@ -182,13 +184,6 @@ async function onReportSaved(payload: {
   } finally {
     reporting.value = false;
   }
-}
-
-function badgeClass(status: string) {
-  if (status === "finished") return "badge--finished";
-  if (status === "pending") return "badge--pending";
-  if (status === "issue") return "badge--danger";
-  return "";
 }
 
 onMounted(() => {

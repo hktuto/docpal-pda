@@ -55,6 +55,8 @@
 </template>
 
 <script setup lang="ts">
+const { badgeClass } = useStatusBadge();
+
 definePageMeta({ title: "Receiving" });
 
 type Filter = "all" | "pending" | "in_hand" | "clear";
@@ -195,12 +197,6 @@ function onVisible() {
   }
 }
 
-function badgeClass(status: string) {
-  if (status === "pending") return "badge--pending";
-  if (status === "in_hand") return "badge--in-hand";
-  if (status === "clear") return "badge--finished";
-  return "";
-}
 </script>
 
 <style scoped>
