@@ -129,48 +129,12 @@
 </template>
 
 <script setup lang="ts">
-import * as schema from "~/db/schema";
-
-interface GroupedItem {
-  id: string;
-  part_id: string;
-  part_no: string;
-  required_qty: number;
-  picked_qty: number;
-  scanned_qty: number;
-  boxed_qty: number;
-  locations: Array<{
-    shelf_code: string | null;
-    box_id: string | null;
-    date_code: string | null;
-    lot_code: string | null;
-    coo: string | null;
-    cow: string | null;
-    allocated_qty: number;
-  }>;
-}
-
-interface GroupedOrder {
-  id: string;
-  ref_no: string;
-  status: string;
-  items: GroupedItem[];
-}
-
-interface TransitionLog {
-  id: string;
-  entityId: string;
-  fromState: string | null;
-  toState: string;
-  metadata: string | null;
-  createdAt: Date | string;
-  actorName?: string | null;
-}
+import { GroupedItem, GroupedOrder, TransitionLog, DisplayBox, DisplayPackage } from "./types";
 
 const props = defineProps<{
   filteredGroupedPickingOrders: GroupedOrder[];
-  boxesByOrder: Record<string, (typeof schema.shippingBoxes.$inferSelect)[]>;
-  packagesByItem: Record<string, (typeof schema.pickingPackages.$inferSelect)[]>;
+  boxesByOrder: Record<string, DisplayBox[]>;
+  packagesByItem: Record<string, DisplayPackage[]>;
   transitionLogs: Record<string, TransitionLog[]>;
   boxSelections: Record<string, string>;
   creatingBox: Record<string, boolean>;

@@ -116,6 +116,15 @@ import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import ReportIssueModal from "~/components/ReportIssueModal.vue";
 import {
+  DisplayReceivingItem,
+  DisplayReceivingOrder,
+  GroupedItem,
+  GroupedOrder,
+  TransitionLog,
+  DisplayPackage,
+  DisplayBox,
+} from "~/components/receiving/types";
+import {
   getReceivingOrderDetail,
   updateReceivingItemMismatch,
   confirmReceivingOrderArrived,
@@ -128,7 +137,6 @@ import {
   removePackageFromBox,
   type PickingByReceivingRow,
 } from "~/db/picking";
-import * as schema from "~/db/schema";
 
 definePageMeta({ title: "Receiving Detail", props: { noPadding: true } });
 
@@ -140,22 +148,6 @@ const currentUser = await useCurrentUser();
 
 const pending = ref(true);
 const error = ref<string | null>(null);
-type DisplayReceivingItem = typeof schema.receivingInvoiceItems.$inferSelect;
-
-interface DisplayReceivingOrder {
-  id: string;
-  refNo: string;
-  status: string;
-  supplier?: typeof schema.suppliers.$inferSelect | null;
-  deliveryDate: Date | null;
-  arrivedAt: Date | null;
-  arrivedBy: string | null;
-  invoices: Array<
-    Omit<typeof schema.receivingInvoices.$inferSelect, "receivingOrderId"> & {
-      items: DisplayReceivingItem[];
-    }
-  >;
-}
 
 const order = ref<DisplayReceivingOrder | null>(null);
 const pickingRows = ref<PickingByReceivingRow[]>([]);
@@ -174,11 +166,11 @@ async function onRetake() {
 const scanPickingItemId = ref<string | undefined>(undefined);
 const view = ref<"receiving" | "picking">("receiving");
 const headerExpanded = ref(false);
-const transitionLogs = ref<Record<string, any[]>>({});
+const transitionLogs = ref<Record<string, TransitionLog[]>>({});
 const expandedItems = ref<Set<string>>(new Set());
 const searchQuery = ref("");
-const packagesByItem = ref<Record<string, (typeof schema.pickingPackages.$inferSelect)[]>>({});
-const boxesByOrder = ref<Record<string, (typeof schema.shippingBoxes.$inferSelect)[]>>({});
+const packagesByItem = ref<Record<string, DisplayPackage[]>>({});
+const boxesByOrder = ref<Record<string, DisplayBox[]>>({});
 const creatingBox = ref<Record<string, boolean>>({});
 const addingPackage = ref<Record<string, boolean>>({});
 const removingPackage = ref<Record<string, boolean>>({});
@@ -190,32 +182,6 @@ const views = [
   { label: "Receiving", value: "receiving" as const },
   { label: "Picking", value: "picking" as const },
 ];
-
-interface GroupedItem {
-  id: string;
-  part_id: string;
-  part_no: string;
-  required_qty: number;
-  picked_qty: number;
-  scanned_qty: number;
-  boxed_qty: number;
-  locations: Array<{
-    shelf_code: string | null;
-    box_id: string | null;
-    date_code: string | null;
-    lot_code: string | null;
-    coo: string | null;
-    cow: string | null;
-    allocated_qty: number;
-  }>;
-}
-
-interface GroupedOrder {
-  id: string;
-  ref_no: string;
-  status: string;
-  items: GroupedItem[];
-}
 
 const groupedPickingOrders = computed<GroupedOrder[]>(() => {
   const map = new Map<string, GroupedOrder>();
@@ -351,7 +317,7 @@ async function load() {
         : Promise.resolve({ rows: [] }),
     ]);
 
-    const nextLogs: Record<string, any[]> = {};
+    const nextLogs: Record<string, TransitionLog[]> = {};
     for (const log of logs) {
       const list = nextLogs[log.entityId] ?? [];
       list.push(log);
@@ -359,10 +325,10 @@ async function load() {
     }
     transitionLogs.value = nextLogs;
 
-    const nextPackages: Record<string, any[]> = {};
+    const nextPackages: Record<string, DisplayPackage[]> = {};
     const nextBoxSelections: Record<string, string> = {};
     for (const raw of (packageResult.rows ?? []) as any[]) {
-      const pkg = {
+      const pkg: DisplayPackage = {
         id: raw.id,
         pickingItemId: raw.picking_item_id,
         pickingOrderId: raw.picking_order_id,
@@ -383,11 +349,16 @@ async function load() {
     }
     packagesByItem.value = nextPackages;
 
-    const nextBoxes: Record<string, any[]> = {};
+    const nextBoxes: Record<string, DisplayBox[]> = {};
     for (const box of (boxResult.rows ?? []) as any[]) {
-      const list = nextBoxes[box.picking_order_id] ?? [];
-      list.push(box);
-      nextBoxes[box.picking_order_id] = list;
+      const displayBox: DisplayBox = {
+        id: box.id,
+        pickingOrderId: box.picking_order_id,
+        status: box.status,
+      };
+      const list = nextBoxes[displayBox.pickingOrderId] ?? [];
+      list.push(displayBox);
+      nextBoxes[displayBox.pickingOrderId] = list;
     }
     boxesByOrder.value = nextBoxes;
     boxSelections.value = nextBoxSelections;

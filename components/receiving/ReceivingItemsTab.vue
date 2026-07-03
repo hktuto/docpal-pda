@@ -50,21 +50,7 @@
 </template>
 
 <script setup lang="ts">
-import * as schema from "~/db/schema";
-
-type DisplayReceivingItem = typeof schema.receivingInvoiceItems.$inferSelect & {
-  part?: typeof schema.parts.$inferSelect | null;
-};
-
-interface DisplayReceivingOrder {
-  id: string;
-  status: string;
-  invoices: Array<
-    Omit<typeof schema.receivingInvoices.$inferSelect, "receivingOrderId"> & {
-      items: DisplayReceivingItem[];
-    }
-  >;
-}
+import { DisplayReceivingItem, DisplayReceivingOrder } from "./types";
 
 defineProps<{
   order: DisplayReceivingOrder;

@@ -200,9 +200,4 @@ async function openScan(packageId?: string) {
   padding: 0.75rem;
   margin-bottom: 0.5rem;
 }
-
-.badge--finished {
-  background: #dcfce7;
-  color: #166534;
-}
 </style>
