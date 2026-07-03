@@ -43,9 +43,10 @@ async function readPdf(filePath) {
   }
 }
 
-function readXlsx(filePath) {
+async function readXlsx(filePath) {
   try {
-    const workbook = xlsx.readFile(filePath);
+    const buffer = await fs.readFile(filePath);
+    const workbook = xlsx.read(buffer, { type: "buffer" });
     const sheets = {};
     for (const sheetName of workbook.SheetNames) {
       sheets[sheetName] = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], {
