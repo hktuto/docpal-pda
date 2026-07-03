@@ -37,6 +37,7 @@ public class RectanglePickerActivity extends ComponentActivity {
   private RectangleOverlayView overlayView;
   private TextView helpText;
   private Button cancelButton;
+  private Button fullImageButton;
 
   private Bitmap displayBitmap;
   private String imagePath;
@@ -55,11 +56,14 @@ public class RectanglePickerActivity extends ComponentActivity {
     overlayView = findViewById(R.id.overlayView);
     helpText = findViewById(R.id.helpText);
     cancelButton = findViewById(R.id.cancelButton);
+    fullImageButton = findViewById(R.id.fullImageButton);
 
     cancelButton.setOnClickListener(v -> {
       setResult(Activity.RESULT_CANCELED);
       finish();
     });
+
+    fullImageButton.setOnClickListener(v -> processFullImage());
 
     overlayView.setOnTouchListener((v, event) -> {
       if (event.getAction() == MotionEvent.ACTION_DOWN) {
@@ -139,6 +143,14 @@ public class RectanglePickerActivity extends ComponentActivity {
       finish();
     } finally {
       sourceMat.release();
+    }
+  }
+
+  private void processFullImage() {
+    if (isLabelScan) {
+      ocrHelper.runOcrAndFinish(this, imagePath, imageWidth, imageHeight, null, null);
+    } else {
+      RectangleOcrHelper.finishWithResult(this, imagePath, imageWidth, imageHeight, null, null, "", "[]");
     }
   }
 
