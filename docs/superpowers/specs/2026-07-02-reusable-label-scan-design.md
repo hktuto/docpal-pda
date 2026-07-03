@@ -1,5 +1,7 @@
 # Reusable Label Scan Flow — Design
 
+> **Status:** Implemented and later cleaned up. The demo pages, `detectRectangles`/`startCameraStream`, and the old manual `*ScanModal.vue` components were removed after migration. The production flow uses `RectangleDetection.scanLabel()` and the shared `LabelScanReviewModal`.
+
 Date: 2026-07-02
 
 ## 1. Goal
@@ -25,11 +27,10 @@ Replace the five manual `*ScanModal.vue` components with a single, reusable came
 - Shared `LabelScanReviewModal.vue` component.
 - Migration of the five task pages to the new flow.
 - Deletion of the obsolete manual modals after migration.
-- Hide the demo/testing pages from the home menu so only production warehouse flows are visible. Pages to hide: OCR Demo, Document Scanner Demo, Object Detection Demo, OpenCV Rectangle Stream, Subject Segmentation Demo.
+- Delete the demo/testing pages and their support code (they were later removed entirely rather than just hidden). Pages to delete: OCR Demo, Document Scanner Demo, Object Detection Demo, OpenCV Rectangle Stream, Subject Segmentation Demo.
 
 ### Out of scope
 
-- Still-image `detectRectangles()` keeps its current behavior.
 - Color output remains grayscale as decided in the rectangle-stream fixes.
 
 ## 3. User flow
@@ -116,7 +117,7 @@ recognizer.process(inputImage)
     .addOnFailureListener(e -> finishWithResult(imagePath, ""));
 ```
 
-The dependency `com.google.mlkit:text-recognition:16.0.1` is already available via the patched `@pantrist/capacitor-plugin-ml-kit-text-recognition` plugin.
+The dependency `com.google.mlkit:text-recognition:16.0.1` is declared directly in `android/app/build.gradle`.
 
 ### 4.4 Cancellation
 
@@ -162,8 +163,6 @@ Extend the registered plugin interface:
 
 ```ts
 interface RectangleDetectionPlugin {
-  detectRectangles(options: DetectRectanglesOptions): Promise<DetectRectanglesResult>;
-  startCameraStream(): Promise<CameraStreamCaptureResult>;
   scanLabel(): Promise<LabelScanCapture>;
   // ... listeners
 }
@@ -192,10 +191,10 @@ Keep the parser dumb and permissive; the review modal lets the user fix mistakes
 
 ### 5.4 `useScanMatchers()`
 
-New composable. Exposes one matcher per task. Each matcher is stateless and calls the existing DB helpers directly, so `useLabelScan` does not depend on the reactive `useOcrPicking` composable.
+New composable. Exposes one matcher per task. Each matcher is stateless and calls the existing DB helpers directly.
 
 - Each matcher first calls `useMockOcr().parseManual(parsed)` to validate `qty` and normalize codes.
-- `matchReceiving` and `matchPicking` use `findReceivingCandidates`, `findPickingCandidates`, and `applyOcrPick` from `db/ocrPicking.ts`.
+- `matchReceiving` and `matchPicking` call `findReceivingCandidates`, `findPickingCandidates`, and `applyOcrPick` in `db/ocrPicking.ts` directly.
 - `matchPutAway`, `matchMeasuring`, and `matchGoodsVerify` mirror the validation/queries currently inside `PutAwayScanModal.vue`, `MeasuringScanModal.vue`, and `GoodsVerifyScanModal.vue`.
 
 ```ts
@@ -319,7 +318,7 @@ async function onRetake() {
 
 Migration order:
 
-1. Receiving (`pages/receiving/[id].vue`) — simplest because `useOcrPicking` already exists.
+1. Receiving (`pages/receiving/[id].vue`).
 2. Picking (`pages/picking/[id].vue`).
 3. Put-away (`pages/put-away/[id].vue`).
 4. Measuring (`pages/measuring/[taskId]/box/[boxId].vue`).
@@ -366,6 +365,8 @@ Delete the old manual modals only after all pages are migrated and tested.
 - `pages/goods-verify/box/[id].vue`
 
 ### Delete (after migration)
+
+These modals were deleted during the cleanup.
 
 - `components/OcrScanModal.vue`
 - `components/PickingScanModal.vue`
