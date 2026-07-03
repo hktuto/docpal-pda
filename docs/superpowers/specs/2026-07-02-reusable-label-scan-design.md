@@ -195,7 +195,7 @@ New composable. Exposes one matcher per task. Each matcher is stateless and call
 
 - Each matcher first calls `useMockOcr().parseManual(parsed)` to validate `qty` and normalize codes.
 - `matchReceiving` and `matchPicking` call `findReceivingCandidates`, `findPickingCandidates`, and `applyOcrPick` in `db/ocrPicking.ts` directly.
-- `matchPutAway`, `matchMeasuring`, and `matchGoodsVerify` mirror the validation/queries currently inside `PutAwayScanModal.vue`, `MeasuringScanModal.vue`, and `GoodsVerifyScanModal.vue`.
+- `matchPutAway`, `matchMeasuring`, and `matchGoodsVerify` mirror the validation/queries that were previously inside the now-deleted manual modals.
 
 ```ts
 export interface ScanMatchers {
