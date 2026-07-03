@@ -1,23 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item>
-        <shape android:shape="oval">
-            <solid android:color="#CCFFFFFF" />
-            <size
-                android:width="80dp"
-                android:height="80dp" />
-        </shape>
-    </item>
-    <item
-        android:left="8dp"
-        android:top="8dp"
-        android:right="8dp"
-        android:bottom="8dp">
-        <shape android:shape="oval">
-            <solid android:color="#FFFFFFFF" />
-            <size
-                android:width="64dp"
-                android:height="64dp" />
-        </shape>
-    </item>
-</layer-list>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="80dp"
+    android:height="80dp"
+    android:viewportWidth="80"
+    android:viewportHeight="80">
+    <path
+        android:fillColor="#CCFFFFFF"
+        android:pathData="M40,0 A40,40 0 1,1 40,80 A40,40 0 1,1 40,0" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M40,14 A26,26 0 1,1 40,66 A26,26 0 1,1 40,14" />
+</vector>
