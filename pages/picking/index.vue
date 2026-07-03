@@ -9,16 +9,27 @@
 
     <p v-if="loading" class="empty">Loading…</p>
     <p v-else-if="loadError" class="empty" style="color: var(--danger);">Error: {{ loadError }}</p>
+    <p v-else-if="reportMessage" class="empty" style="color: #92400e;">{{ reportMessage }}</p>
     <p v-else-if="rows.length === 0" class="empty">No picking orders found.</p>
 
-    <NuxtLink
+    <div
       v-for="po in rows"
       :key="po.id"
-      :to="`/picking/${po.id}`"
       class="card list-card"
+      :class="{ 'card--disabled': !isSelectable(po.status) }"
     >
       <div class="list-card__header">
-        <span class="list-card__title">{{ po.ref_no }}</span>
+        <div style="display: flex; align-items: flex-start; gap: 0.75rem; flex: 1;">
+          <input
+            v-if="isSelectable(po.status)"
+            type="checkbox"
+            :checked="selectedIds.has(po.id)"
+            @change="toggleSelection(po.id)"
+          />
+          <NuxtLink :to="`/picking/${po.id}`" class="list-card__title">
+            {{ po.ref_no }}
+          </NuxtLink>
+        </div>
         <span class="badge" :class="badgeClass(po.status)">{{ po.status }}</span>
       </div>
       <p class="list-card__meta">
@@ -30,7 +41,21 @@
         </span>
         <span class="list-card__ship">Ship to: {{ po.ship_to || "—" }}</span>
       </div>
-    </NuxtLink>
+    </div>
+
+    <div v-if="hasSelection" class="bulk-actions">
+      <span>{{ selectedOrders.length }} selected</span>
+      <button class="btn btn--small btn--danger" @click="openModal">
+        Report issue
+      </button>
+    </div>
+
+    <PickingIssueReportModal
+      v-model="modalOpen"
+      :orders="selectedOrders"
+      :saving="reporting"
+      @saved="onReportSaved"
+    />
   </div>
 </template>
 
@@ -44,21 +69,29 @@ interface PickingOrderRow {
   delivery_date: string | null;
   supplier_name: string | null;
   ship_to: string | null;
+  total_qty: number;
 }
 
 const db = await useDb();
+const currentUser = await useCurrentUser();
 
 const search = ref("");
 const rawRows = ref<PickingOrderRow[]>([]);
 const loading = ref(true);
 const loadError = ref<string | null>(null);
+const reportMessage = ref<string | null>(null);
+const selectedIds = ref<Set<string>>(new Set());
+const modalOpen = ref(false);
+const reporting = ref(false);
 
 async function load() {
   loading.value = true;
   loadError.value = null;
+  reportMessage.value = null;
   try {
     const result = await db.execute<PickingOrderRow>(
-      `SELECT po.id, po.ref_no, po.status, po.delivery_date, po.ship_to, s.name AS supplier_name
+      `SELECT po.id, po.ref_no, po.status, po.delivery_date, po.ship_to, s.name AS supplier_name,
+        (SELECT COALESCE(SUM(pi.qty), 0) FROM picking_items pi WHERE pi.picking_order_id = po.id) AS total_qty
        FROM picking_orders po
        LEFT JOIN suppliers s ON po.supplier_id = s.id
        ORDER BY CASE WHEN po.status = 'finished' THEN 1 ELSE 0 END, po.delivery_date;`
@@ -82,6 +115,77 @@ const rows = computed(() => {
   );
 });
 
+const selectedOrders = computed(() =>
+  rawRows.value.filter((r) => selectedIds.value.has(r.id))
+);
+
+const hasSelection = computed(() => selectedOrders.value.length > 0);
+
+function isSelectable(status: string) {
+  return status !== "finished" && status !== "issue";
+}
+
+function toggleSelection(id: string) {
+  const next = new Set(selectedIds.value);
+  if (next.has(id)) {
+    next.delete(id);
+  } else {
+    next.add(id);
+  }
+  selectedIds.value = next;
+}
+
+function openModal() {
+  if (!hasSelection.value) return;
+  modalOpen.value = true;
+}
+
+async function onReportSaved(payload: {
+  reason: "insufficient_stock" | "cannot_divide" | "merge" | "other";
+  qty: number | null;
+  packSize: number | null;
+  note: string | null;
+  remarks: Record<string, string>;
+}) {
+  reporting.value = true;
+  try {
+    if (!currentUser) throw new Error("No operator user found");
+    const { reportPickingOrderIssues } = await import("~/db/picking");
+    const entries = selectedOrders.value.map((o) => ({
+      orderId: o.id,
+      remark: payload.remarks[o.id]?.trim() || null,
+    }));
+    const result = await reportPickingOrderIssues(
+      db,
+      entries,
+      {
+        reason: payload.reason,
+        qty: payload.qty,
+        packSize: payload.packSize,
+        note: payload.note,
+      },
+      currentUser.id
+    );
+    selectedIds.value = new Set();
+    modalOpen.value = false;
+    await load();
+    if (result.skipped > 0) {
+      reportMessage.value = `${result.reported} issue(s) reported; ${result.skipped} order(s) skipped because they were already finished or had an issue.`;
+    }
+  } catch (e: any) {
+    loadError.value = e?.message ?? String(e);
+  } finally {
+    reporting.value = false;
+  }
+}
+
+function badgeClass(status: string) {
+  if (status === "finished") return "badge--finished";
+  if (status === "pending") return "badge--pending";
+  if (status === "issue") return "badge--danger";
+  return "";
+}
+
 onMounted(() => {
   load();
   document.addEventListener("visibilitychange", onVisible);
@@ -97,12 +201,6 @@ function onVisible() {
   if (document.visibilityState === "visible") {
     load();
   }
-}
-
-function badgeClass(status: string) {
-  if (status === "finished") return "badge--finished";
-  if (status === "pending") return "badge--pending";
-  return "";
 }
 </script>
 
@@ -151,5 +249,37 @@ function badgeClass(status: string) {
 
 .list-card__ship {
   margin-left: auto;
+}
+
+.bulk-actions {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.list-card__title {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.list-card__title:hover {
+  text-decoration: underline;
+}
+
+.card--disabled {
+  opacity: 0.65;
+}
+
+.list-card:last-child {
+  margin-bottom: 5rem;
 }
 </style>
