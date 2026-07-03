@@ -292,6 +292,7 @@
         :barcodes="review.capture.barcodes"
         :parsed="review.parsed"
         :match-result="review.matchResult"
+        :mode="review.capture.imagePath ? 'review' : 'manual'"
         :context="{ task: 'receiving', receivingOrderId: orderId, pickingItemId: scanPickingItemId }"
         @applied="onApplied"
         @retake="onRetake"
@@ -310,7 +311,7 @@
 
 <script setup lang="ts">
 import { sql } from "drizzle-orm";
-import { useLabelScan, type LabelScanResult } from "~/composables/useLabelScan";
+import { useLabelScan, createManualReview, type LabelScanResult } from "~/composables/useLabelScan";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import ReportIssueModal from "~/components/ReportIssueModal.vue";
 import {
@@ -640,6 +641,10 @@ async function openScan(itemId?: string) {
     await load();
   } else if (result.status === 'review') {
     review.value = result;
+    reviewOpen.value = true;
+  } else if (result.status === 'manual') {
+    review.value = createManualReview();
+    scanPickingItemId.value = itemId;
     reviewOpen.value = true;
   } else if (result.status === 'error') {
     error.value = result.message;
