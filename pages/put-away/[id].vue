@@ -46,7 +46,7 @@
     </template>
 
     <LabelScanReviewModal
-      v-if="review && (review.status === 'review' || review.status === 'manual')"
+      v-if="review?.status === 'review'"
       v-model="reviewOpen"
       :image-path="review.capture.imagePath"
       :text="review.capture.text"
@@ -105,7 +105,6 @@ const boxes = ref<ShelfBox[]>([]);
 const creating = ref(false);
 const closing = ref(false);
 const cancellingBox = ref<Record<string, boolean>>({});
-const lastOrderId = ref<string>(orderId);
 
 const scanLot = ref<PutAwayLot | null>(null);
 const scanBoxId = ref<string>("");
@@ -123,12 +122,6 @@ async function load() {
   pending.value = true;
   error.value = null;
   try {
-    if (lastOrderId.value !== orderId) {
-      lastOrderId.value = orderId;
-      targetBoxSelections.value = {};
-      expandedItemBoxes.value = new Set();
-    }
-
     const [orderData, lotsData, shelvesData, boxesData] = await Promise.all([
       getReceivingOrderDetail(db, orderId),
       getPutAwayLots(db, orderId),
@@ -174,6 +167,7 @@ function openNewBoxDialog() {
 }
 
 async function createBoxFromDialog(shelfCode: string) {
+  error.value = null;
   if (!currentUser?.id) {
     error.value = "Operator not signed in";
     return;
@@ -191,6 +185,7 @@ async function createBoxFromDialog(shelfCode: string) {
 }
 
 async function closeBox(boxId: string) {
+  error.value = null;
   if (!currentUser?.id) {
     error.value = "Operator not signed in";
     return;
@@ -207,6 +202,7 @@ async function closeBox(boxId: string) {
 }
 
 async function cancelBox(boxId: string) {
+  error.value = null;
   if (!currentUser?.id) {
     error.value = "Operator not signed in";
     return;
