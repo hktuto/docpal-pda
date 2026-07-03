@@ -633,7 +633,7 @@ function toggleExpand(itemId: string) {
 async function openScan(itemId?: string) {
   scanPickingItemId.value = itemId;
   const result = await scan({
-    task: 'receiving',
+    task: "receiving",
     receivingOrderId: orderId,
     pickingItemId: itemId,
   });
@@ -644,7 +644,6 @@ async function openScan(itemId?: string) {
     reviewOpen.value = true;
   } else if (result.status === 'manual') {
     review.value = createManualReview();
-    scanPickingItemId.value = itemId;
     reviewOpen.value = true;
   } else if (result.status === 'error') {
     error.value = result.message;
