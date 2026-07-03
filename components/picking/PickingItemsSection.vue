@@ -126,7 +126,7 @@
             · {{ log.actorName || "System" }}
             · {{ log.fromState || "—" }} → {{ log.toState }}
             <span v-if="log.metadata">
-              · {{ JSON.parse(log.metadata).qty ?? JSON.parse(log.metadata).note }}
+              · {{ logMetadataText(log.metadata) }}
             </span>
           </li>
         </ul>
@@ -187,11 +187,9 @@ function updateBoxSelection(packageId: string, value: string) {
   emit("update:boxSelections", { ...props.boxSelections, [packageId]: value });
 }
 
-function issueReasonLabel(reason: any) {
-  if (reason === "insufficient_stock") return "Insufficient stock";
-  if (reason === "cannot_divide") return "Cannot divide quantity";
-  if (reason === "merge") return "Merge orders";
-  if (reason === "other") return "Other";
-  return "—";
+function logMetadataText(metadata: string | null): string | number | undefined {
+  if (!metadata) return undefined;
+  const parsed = JSON.parse(metadata);
+  return parsed.qty ?? parsed.note;
 }
 </script>

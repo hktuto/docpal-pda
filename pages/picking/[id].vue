@@ -1,7 +1,7 @@
 <template>
   <div>
-    <p v-if="pending" class="empty">Loading…</p>
-    <p v-else-if="error" class="empty" style="color: var(--danger);">Error: {{ error }}</p>
+    <EmptyState v-if="pending">Loading…</EmptyState>
+    <EmptyState v-else-if="error" error>Error: {{ error }}</EmptyState>
 
     <template v-else-if="order">
       <DetailHeader
@@ -32,116 +32,34 @@
           </NuxtLink>
         </template>
 
-        <div class="detail-row">
-          <span class="detail-label">Supplier</span>
-          <span>{{ order.supplier?.name || "—" }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Delivery date</span>
-          <span>{{ order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : "—" }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">PO No.</span>
-          <span>{{ order.poNo || "—" }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Ship to</span>
-          <span>{{ order.shipTo || "—" }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Date-code notice</span>
-          <span>{{ order.requiredDateCodeNotice || "—" }}</span>
-        </div>
+        <DetailRow label="Supplier" :value="order.supplier?.name" />
+        <DetailRow label="Delivery date" :value="order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : null" />
+        <DetailRow label="PO No." :value="order.poNo" />
+        <DetailRow label="Ship to" :value="order.shipTo" />
+        <DetailRow label="Date-code notice" :value="order.requiredDateCodeNotice" />
       </DetailHeader>
 
       <div v-if="order.status === 'issue'" class="card card--danger" style="margin-bottom: 1.5rem;">
-        <div class="detail-row">
-          <span class="detail-label">Issue reason</span>
-          <span>{{ issueReasonLabel(order.issueReason) }}</span>
-        </div>
-        <div v-if="order.issueQty != null" class="detail-row">
-          <span class="detail-label">Actual qty available</span>
-          <span>{{ order.issueQty }}</span>
-        </div>
-        <div v-if="order.issuePackSize != null" class="detail-row">
-          <span class="detail-label">Pack size</span>
-          <span>{{ order.issuePackSize }}</span>
-        </div>
-        <div v-if="order.issueRemark" class="detail-row">
-          <span class="detail-label">Remark</span>
-          <span>{{ order.issueRemark }}</span>
-        </div>
-        <div v-if="order.issueNote" class="detail-row">
-          <span class="detail-label">Note</span>
-          <span>{{ order.issueNote }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Reported</span>
-          <span>
-            {{ order.issueReportedAt ? new Date(order.issueReportedAt).toLocaleString() : "—" }}
-            by {{ order.issueReportedByUser?.displayName || order.issueReportedBy || "—" }}
-          </span>
-        </div>
+        <DetailRow label="Issue reason" :value="issueReasonLabel(order.issueReason)" />
+        <DetailRow v-if="order.issueQty != null" label="Actual qty available" :value="order.issueQty" />
+        <DetailRow v-if="order.issuePackSize != null" label="Pack size" :value="order.issuePackSize" />
+        <DetailRow v-if="order.issueRemark" label="Remark" :value="order.issueRemark" />
+        <DetailRow v-if="order.issueNote" label="Note" :value="order.issueNote" />
+        <DetailRow label="Reported">
+          {{ order.issueReportedAt ? new Date(order.issueReportedAt).toLocaleString() : "—" }}
+          by {{ order.issueReportedByUser?.displayName || order.issueReportedBy || "—" }}
+        </DetailRow>
       </div>
 
-      <div class="section-title" style="display: flex; justify-content: space-between; align-items: center;">
-        <h2 style="margin: 0;">Boxes({{ order.shippingBoxes?.length ?? 0 }})</h2>
-        <div style="display: flex; gap: 0.5rem; align-items: center;">
-          <button
-            v-if="order.status !== 'finished' && order.status !== 'issue'"
-            class="btn btn--small"
-            :disabled="creatingBox"
-            @click="createBox"
-          >
-            {{ creatingBox ? "Creating…" : "New box" }}
-          </button>
-          <button
-            class="btn btn--small btn--ghost"
-            :aria-expanded="boxesExpanded"
-            @click="boxesExpanded = !boxesExpanded"
-          >
-            {{ boxesExpanded ? "Hide" : "Show" }}
-          </button>
-        </div>
-      </div>
-
-      <div v-if="boxesExpanded" style="margin-bottom: 1.5rem;">
-        <p v-if="!order.shippingBoxes?.length" class="empty">No boxes yet.</p>
-
-        <div
-          v-for="box in order.shippingBoxes"
-          :key="box.id"
-          class="card"
-          style="margin-bottom: 1rem;"
-          :class="{ 'card--done': box.status !== 'open' }"
-        >
-          <div class="detail-row">
-            <span class="detail-label">Box ID</span>
-            <span class="card__title">{{ box.id }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Status</span>
-            <span class="badge">{{ box.status }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Packages</span>
-            <span>{{ box.packages?.length ?? 0 }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Qty</span>
-            <span>{{ box.packages?.reduce((sum, p) => sum + p.qty, 0) ?? 0 }}</span>
-          </div>
-          <div v-if="box.status === 'open' && (box.packages?.length ?? 0) === 0" style="margin-top: 1rem;">
-            <button
-              class="btn btn--small btn--danger"
-              :disabled="cancellingBox[box.id]"
-              @click="cancelBox(box.id)"
-            >
-              {{ cancellingBox[box.id] ? "Canceling…" : "Cancel box" }}
-            </button>
-          </div>
-        </div>
-      </div>
+      <PickingBoxesSection
+        v-model:expanded="boxesExpanded"
+        :boxes="order.shippingBoxes"
+        :actionable="order.status !== 'finished' && order.status !== 'issue'"
+        :creating-box="creatingBox"
+        :cancelling-box="cancellingBox"
+        @create-box="createBox"
+        @cancel-box="cancelBox"
+      />
 
       <PickingItemsSection
         v-model:expanded-items="expandedItems"
@@ -176,7 +94,9 @@
 </template>
 
 <script setup lang="ts">
-import { useLabelScan, createManualReview, type LabelScanResult } from "~/composables/useLabelScan";
+import { useVisibleReload } from "~/composables/useVisibleReload";
+import { useStatusBadge } from "~/composables/useStatusBadge";
+import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import {
   getPickingOrderDetail,
@@ -210,20 +130,17 @@ const expandedItems = ref<Set<string>>(new Set());
 const headerExpanded = ref(false);
 const boxesExpanded = ref(false);
 const scanAllocation = ref<any>(null);
-const { scan, scanning } = useLabelScan();
-const reviewOpen = ref(false);
-const review = ref<LabelScanResult | null>(null);
+const { scan, scanning, review, reviewOpen, onApplied } = useLabelScanReview({
+  onApplied: load,
+});
 const boxSelections = ref<Record<string, string>>({});
 
 const allItemsFullyBoxed = computed(
   () => order.value?.items?.every((i: any) => i.pickedQty >= i.qty) ?? false
 );
 
-const headerBadgeClass = computed(() => {
-  if (order.value?.status === "finished") return "badge--finished";
-  if (order.value?.status === "issue") return "badge--danger";
-  return "";
-});
+const { badgeClass } = useStatusBadge();
+const headerBadgeClass = computed(() => badgeClass(order.value?.status));
 
 function issueReasonLabel(reason: PickingIssueReason | null) {
   if (reason === "insufficient_stock") return "Insufficient stock";
@@ -271,24 +188,10 @@ async function load() {
 
 async function openScan(allocation: any) {
   scanAllocation.value = allocation;
-  const result = await scan({ task: 'picking', allocation });
-  if (result.status === 'applied') {
-    await load();
-  } else if (result.status === 'review') {
-    review.value = result;
-    reviewOpen.value = true;
-  } else if (result.status === 'manual') {
-    review.value = createManualReview();
-    scanAllocation.value = allocation;
-    reviewOpen.value = true;
-  } else if (result.status === 'error') {
+  const result = await scan({ task: "picking", allocation });
+  if (result.status === "error") {
     error.value = result.message;
   }
-}
-
-async function onApplied() {
-  reviewOpen.value = false;
-  await load();
 }
 
 async function onRetake() {
@@ -364,22 +267,7 @@ async function finish() {
   }
 }
 
-onMounted(() => {
-  load();
-  document.addEventListener("visibilitychange", onVisible);
-  window.addEventListener("focus", onVisible);
-});
-
-onUnmounted(() => {
-  document.removeEventListener("visibilitychange", onVisible);
-  window.removeEventListener("focus", onVisible);
-});
-
-function onVisible() {
-  if (document.visibilityState === "visible") {
-    load();
-  }
-}
+useVisibleReload(load);
 </script>
 
 <style scoped>
