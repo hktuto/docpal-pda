@@ -1,5 +1,7 @@
 # Documentation Refresh Design
 
+> **Status:** Archived. The documentation refresh was completed and later updated again during the cleanup to remove references to deleted demo pages and components.
+
 ## Goal
 Bring project documentation up to date so new users and coding agents can understand the app, its data model, and how to work on it.
 

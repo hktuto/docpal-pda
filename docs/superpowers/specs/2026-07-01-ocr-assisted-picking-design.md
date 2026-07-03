@@ -1,5 +1,7 @@
 # OCR-Assisted Picking from Receiving Area
 
+> **Status:** Archived. This was the initial typed-input OCR design. It was later replaced by the native camera-OCR label-scan flow (`useLabelScan`, `useScanMatchers`, `LabelScanReviewModal`).
+
 ## Context
 
 This demo warehouse PDA app tracks receiving orders, put-away, inventory lots, allocations, and picking orders. Operators currently pick items manually from the picking order detail page. This design adds an OCR-assisted picking shortcut from the **receiving order detail page** so an operator can scan a physical label in the receiving area and immediately apply it to a linked picking order.

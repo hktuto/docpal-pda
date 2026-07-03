@@ -1,5 +1,7 @@
 # OCR-Assisted Picking Implementation Plan
 
+> **Status:** Completed. This plan was executed and later superseded by the reusable native label-scan flow (`useLabelScan`, `useScanMatchers`, `LabelScanReviewModal`). The `OcrScanModal` component and `useOcrPicking` composable referenced here were removed during cleanup.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a floating scan button to the receiving order detail page that lets the operator pick a predefined label, match it to linked picking orders, and apply the pick.

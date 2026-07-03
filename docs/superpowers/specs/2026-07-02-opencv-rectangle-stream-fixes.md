@@ -1,5 +1,7 @@
 # OpenCV Rectangle Stream — Post-Implementation Fixes
 
+> **Status:** Archived. The rectangle stream demo mode and `detectRectangles`/`startCameraStream` methods were removed during cleanup; only the label-scan camera mode remains.
+
 Date: 2026-07-02
 
 ## 1. White screen / broken dev server (`pnpm dev`)

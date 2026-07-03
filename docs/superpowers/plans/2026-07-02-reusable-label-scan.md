@@ -1,5 +1,7 @@
 # Reusable Label Scan Flow — Implementation Plan
 
+> **Status:** Completed. This plan was executed successfully. Some implementation details evolved during development (e.g., `useOcrPicking` was replaced by `useScanMatchers`, and the demo pages were later deleted entirely rather than just hidden).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add a native `RectangleDetection.scanLabel()` method that crops a label, runs OCR, and returns `{ imagePath, text }`; build reusable web composables and a shared review modal; migrate the five task scan flows to use it; and hide the demo pages from the home menu.

@@ -1,5 +1,7 @@
 # Documentation Refresh Implementation Plan
 
+> **Status:** Completed. This plan was executed and later superseded by a further README/AGENTS cleanup that removed references to deleted demo pages and components.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Update the project documentation so users and coding agents can understand the app, its data model, and how to work on it.

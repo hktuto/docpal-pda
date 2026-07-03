@@ -1,5 +1,7 @@
 # Android OCR ML Kit Patch
 
+> **Status:** Archived. The Pantrist plugin and Camera OCR demo page were removed in favor of the native `RectangleCameraActivity` + ML Kit text recognition flow. This patch is no longer needed.
+
 ## Context
 
 The demo uses `@pantrist/capacitor-plugin-ml-kit-text-recognition` to run on-device text recognition from photos taken with `@capacitor/camera`. On Android, the plugin's default dependency is the **dynamic/unbundled** ML Kit text-recognition module, which is downloaded and executed by Google Play Services at runtime.

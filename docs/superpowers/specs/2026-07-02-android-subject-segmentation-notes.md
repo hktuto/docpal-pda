@@ -1,5 +1,7 @@
 # Android Subject Segmentation Notes
 
+> **Status:** Archived. The subject segmentation demo page and plugin dependency were removed during cleanup.
+
 ## Plugin
 
 `@capacitor-mlkit/subject-segmentation@8.1.0`

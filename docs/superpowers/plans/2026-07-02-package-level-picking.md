@@ -1,5 +1,7 @@
 # Package-Level Picking with Auto-Generated Shipping Boxes
 
+> **Status:** Completed. This plan was executed. Some later refactors may have changed minor details; refer to the current source for the latest implementation.
+
 ## Goal
 Change the picking flow so operators scan individual physical packages (e.g. ten 2k reels) into a scanned pool, create shipping boxes with auto-generated IDs (`BOX-HK1-WWYY000001`), add scanned packages into boxes, and finish a picking item once all of its required quantity is boxed.
 
