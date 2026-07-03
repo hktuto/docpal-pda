@@ -1,5 +1,5 @@
 import { ref } from 'vue';
-import { RectangleDetection, type LabelScanCapture } from './useRectangleDetection';
+import { RectangleDetection, SCAN_NOT_AVAILABLE_MESSAGE, type LabelScanCapture } from './useRectangleDetection';
 import { useRecognizedTextParser } from './useRecognizedTextParser';
 import { runScanMatcher, type ScanTaskContext, type ScanMatchResult } from './useScanMatchers';
 import type { OcrInput } from './useMockOcr';
@@ -72,5 +72,5 @@ function isCancellationError(err: unknown): boolean {
 
 function isBrowserUnavailableError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
-  return message.toLowerCase().includes('not available in the browser');
+  return message === SCAN_NOT_AVAILABLE_MESSAGE;
 }
