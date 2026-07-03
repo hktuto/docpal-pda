@@ -283,17 +283,6 @@
           </div>
         </div>
 
-        <div v-if="order.status !== 'finished' && order.status !== 'issue'" style="margin-top: 0.75rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-          <input
-            v-model="notes[item.id]"
-            type="text"
-            placeholder="Report mismatch note"
-            style="flex: 1; min-width: 8rem;"
-          />
-          <button class="btn btn--small" @click="saveMismatch(item.id)" :disabled="reporting[item.id]">
-            {{ reporting[item.id] ? "Saving…" : "Save mismatch" }}
-          </button>
-        </div>
       </div>
     </template>
 
@@ -320,7 +309,6 @@ import {
   createShippingBoxForPickingOrder,
   addPackageToBox,
   removePackageFromBox,
-  reportPickingItemMismatch,
   finishPickingOrder,
   getPickingItemTransitionLogs,
 } from "~/db/picking";
@@ -337,10 +325,8 @@ const currentUser = await useCurrentUser();
 const pending = ref(true);
 const error = ref<string | null>(null);
 const order = ref<any>(null);
-const notes = ref<Record<string, string>>({});
 const adding = ref<Record<string, boolean>>({});
 const removing = ref<Record<string, boolean>>({});
-const reporting = ref<Record<string, boolean>>({});
 const creatingBox = ref(false);
 const finishing = ref(false);
 const transitionLogs = ref<Record<string, any[]>>({});
@@ -400,17 +386,14 @@ async function load() {
     const data = await getPickingOrderDetail(db, orderId);
     order.value = data;
     if (data) {
-      const nextNotes: Record<string, string> = {};
       const nextBoxSelections: Record<string, string> = {};
       for (const item of data.items) {
-        nextNotes[item.id] = notes.value[item.id] ?? "";
         for (const pkg of item.packages ?? []) {
           if (!pkg.shippingBoxId) {
             nextBoxSelections[pkg.id] = boxSelections.value[pkg.id] ?? "";
           }
         }
       }
-      notes.value = nextNotes;
       boxSelections.value = nextBoxSelections;
 
       const itemIds = data.items.map((i: any) => i.id);
@@ -502,20 +485,6 @@ async function removeFromBox(packageId: string) {
     error.value = e?.message ?? String(e);
   } finally {
     removing.value[packageId] = false;
-  }
-}
-
-async function saveMismatch(itemId: string) {
-  reporting.value[itemId] = true;
-  try {
-    if (!currentUser) throw new Error("No operator user found");
-    await reportPickingItemMismatch(db, itemId, notes.value[itemId], currentUser.id);
-    notes.value[itemId] = "";
-    await load();
-  } catch (e: any) {
-    error.value = e?.message ?? String(e);
-  } finally {
-    reporting.value[itemId] = false;
   }
 }
 
