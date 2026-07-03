@@ -6,8 +6,8 @@
       </NuxtLink>
     </div>
 
-    <p v-if="pending" class="empty">Loading…</p>
-    <p v-else-if="error" class="empty" style="color: var(--danger);">Error: {{ error }}</p>
+    <EmptyState v-if="pending">Loading…</EmptyState>
+    <EmptyState v-else-if="error" error>Error: {{ error }}</EmptyState>
 
     <template v-else-if="box">
       <DetailHeader
@@ -29,32 +29,18 @@
           </button>
         </template>
 
-        <div class="detail-row">
-          <span class="detail-label">Shelf</span>
-          <span>{{ box.shelfCode || "—" }}</span>
-        </div>
+        <DetailRow label="Shelf" :value="box.shelfCode" />
       </DetailHeader>
 
-      <div
+      <ScanFab
         v-if="box.status !== 'verified'"
-        style="position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 60;"
-      >
-        <button
-          class="btn"
-          style="border-radius: 9999px; width: 3.5rem; height: 3.5rem; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow);"
-          aria-label="Scan item"
-          :disabled="scanning"
-          @click="openScan"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-            <circle cx="12" cy="13" r="4"/>
-          </svg>
-        </button>
-      </div>
+        :loading="scanning"
+        aria-label="Scan item"
+        @click="openScan()"
+      />
 
       <h2 style="margin-top: 0; margin-bottom: 1rem; font-size: 1rem;">Expected items</h2>
-      <p v-if="box.items.length === 0" class="empty" style="padding: 0;">No items in this box.</p>
+      <EmptyState v-if="box.items.length === 0" style="padding: 0;">No items in this box.</EmptyState>
 
       <div
         v-for="item in box.items"
@@ -62,25 +48,20 @@
         class="card"
         :class="{ 'card--done': item.verified }"
       >
-        <div class="detail-row">
-          <span class="detail-label">Part</span>
-          <span class="card__title">{{ item.part?.partNo || "—" }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Qty</span>
-          <span>{{ item.qty }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Verified</span>
-          <span>{{ item.verified ? (item.verifiedAt ? new Date(item.verifiedAt).toLocaleString() : "Yes") : "No" }}</span>
-        </div>
+        <DetailRow label="Part" :value="item.part?.partNo" />
+        <DetailRow label="Qty" :value="item.qty" />
+        <DetailRow label="Verified">
+          <StatusBadge :status="item.verified ? 'verified' : 'pending'">
+            {{ item.verified ? (item.verifiedAt ? new Date(item.verifiedAt).toLocaleString() : "Yes") : "No" }}
+          </StatusBadge>
+        </DetailRow>
         <div v-if="!item.verified && box.status !== 'verified'" style="margin-top: 0.75rem;">
-          <button class="btn btn--small" :disabled="scanning" @click="openScan">Scan</button>
+          <button class="btn btn--small" :disabled="scanning" @click="openScan()">Scan</button>
         </div>
       </div>
     </template>
 
-    <p v-else class="empty">Box not found.</p>
+    <EmptyState v-else>Box not found.</EmptyState>
 
     <LabelScanReviewModal
       v-if="review?.status === 'review'"
@@ -99,13 +80,25 @@
 </template>
 
 <script setup lang="ts">
-import { useLabelScan, createManualReview, type LabelScanResult } from "~/composables/useLabelScan";
+import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import {
   getShelfBoxDetail,
   markShelfBoxVerified,
   type ShelfBoxDetail,
 } from "~/db/goodsVerify";
+
+async function onScanApplied() {
+  await load();
+  if (box.value && box.value.status !== "verified" && allVerified.value) {
+    await markVerified();
+  }
+}
+
+async function onRetake() {
+  reviewOpen.value = false;
+  await openScan();
+}
 
 definePageMeta({ title: "Verify Box", props: { noPadding: true } });
 
@@ -120,12 +113,22 @@ const error = ref<string | null>(null);
 const box = ref<ShelfBoxDetail | null>(null);
 const marking = ref(false);
 const headerExpanded = ref(false);
-const { scan, scanning } = useLabelScan();
-const reviewOpen = ref(false);
-const review = ref<LabelScanResult | null>(null);
+const {
+  scan,
+  scanning,
+  review,
+  reviewOpen,
+  handleResult,
+  onApplied,
+} = useLabelScanReview({ onApplied: onScanApplied });
 
-const allVerified = computed(() =>
-  box.value ? box.value.items.every((item) => item.verified) : false
+const { badgeClass } = useStatusBadge();
+
+const allVerified = computed(
+  () =>
+    !!box.value &&
+    box.value.items.length > 0 &&
+    box.value.items.every((item) => item.verified)
 );
 
 async function load() {
@@ -140,12 +143,7 @@ async function load() {
   }
 }
 
-function badgeClass(status: string) {
-  if (status === "open") return "badge--pending";
-  if (status === "closed") return "badge--in-hand";
-  if (status === "verified") return "badge--finished";
-  return "";
-}
+useVisibleReload(load);
 
 async function markVerified() {
   if (!box.value) return;
@@ -168,58 +166,15 @@ async function markVerified() {
 
 async function openScan() {
   if (!box.value) return;
-  const result = await scan({ task: 'goods-verify', items: box.value.items });
-  if (result.status === 'applied') {
-    await onScanApplied();
-  } else if (result.status === 'review') {
-    review.value = result;
-    reviewOpen.value = true;
-  } else if (result.status === 'manual') {
-    review.value = createManualReview();
-    reviewOpen.value = true;
-  } else if (result.status === 'error') {
+  const result = await scan({ task: "goods-verify", items: box.value.items });
+  if (result.status === "error") {
     error.value = result.message;
+  } else if (result.status === "cancelled") {
+    // silently ignore
+  } else {
+    await handleResult(result);
   }
 }
-
-async function onApplied() {
-  reviewOpen.value = false;
-  await onScanApplied();
-}
-
-async function onRetake() {
-  reviewOpen.value = false;
-  await openScan();
-}
-
-async function onScanApplied() {
-  await load();
-  if (
-    box.value &&
-    box.value.status !== "verified" &&
-    allVerified.value &&
-    currentUser
-  ) {
-    await markVerified();
-  }
-}
-
-function onVisible() {
-  if (document.visibilityState === "visible") {
-    load();
-  }
-}
-
-onMounted(() => {
-  load();
-  document.addEventListener("visibilitychange", onVisible);
-  window.addEventListener("focus", onVisible);
-});
-
-onUnmounted(() => {
-  document.removeEventListener("visibilitychange", onVisible);
-  window.removeEventListener("focus", onVisible);
-});
 </script>
 
 <style scoped>
