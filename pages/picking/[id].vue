@@ -131,6 +131,15 @@
             <span class="detail-label">Qty</span>
             <span>{{ box.packages?.reduce((sum, p) => sum + p.qty, 0) ?? 0 }}</span>
           </div>
+          <div v-if="box.status === 'open' && (box.packages?.length ?? 0) === 0" style="margin-top: 1rem;">
+            <button
+              class="btn btn--small btn--danger"
+              :disabled="cancellingBox[box.id]"
+              @click="cancelBox(box.id)"
+            >
+              {{ cancellingBox[box.id] ? "Cancelling…" : "Cancel box" }}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -322,6 +331,7 @@ import {
   createShippingBoxForPickingOrder,
   addPackageToBox,
   removePackageFromBox,
+  cancelShippingBox,
   finishPickingOrder,
   getPickingItemTransitionLogs,
 } from "~/db/picking";
@@ -341,6 +351,7 @@ const order = ref<any>(null);
 const adding = ref<Record<string, boolean>>({});
 const removing = ref<Record<string, boolean>>({});
 const creatingBox = ref(false);
+const cancellingBox = ref<Record<string, boolean>>({});
 const finishing = ref(false);
 const transitionLogs = ref<Record<string, any[]>>({});
 const expandedItems = ref<Set<string>>(new Set());
@@ -474,6 +485,19 @@ async function createBox() {
     error.value = e?.message ?? String(e);
   } finally {
     creatingBox.value = false;
+  }
+}
+
+async function cancelBox(boxId: string) {
+  cancellingBox.value[boxId] = true;
+  try {
+    if (!currentUser) throw new Error("No operator user found");
+    await cancelShippingBox(db, boxId, currentUser.id);
+    await load();
+  } catch (e: any) {
+    error.value = e?.message ?? String(e);
+  } finally {
+    cancellingBox.value[boxId] = false;
   }
 }
 
