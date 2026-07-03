@@ -467,7 +467,8 @@ export async function createShippingBoxForPickingOrder(
 
 export async function cancelShippingBox(
   db: PgliteDatabase<typeof schema>,
-  boxId: string
+  boxId: string,
+  actorId: string
 ): Promise<void> {
   return db.transaction(async (tx) => {
     const box = await tx.query.shippingBoxes.findFirst({
@@ -487,6 +488,17 @@ export async function cancelShippingBox(
       .from(schema.shippingBoxItems)
       .where(eq(schema.shippingBoxItems.shippingBoxId, boxId));
     if (itemResult[0]?.count > 0) throw new Error("Box is not empty");
+
+    await tx.insert(schema.transitionLogs).values({
+      id: uuid(),
+      entityType: "shipping_box",
+      entityId: boxId,
+      fromState: box.status,
+      toState: "cancelled",
+      actorId,
+      metadata: JSON.stringify({ pickingOrderId: box.pickingOrderId }),
+      createdAt: new Date(),
+    });
 
     await tx.delete(schema.shippingBoxes).where(eq(schema.shippingBoxes.id, boxId));
   });
