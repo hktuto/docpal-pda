@@ -60,6 +60,17 @@ export const receivingInvoices = pgTable("receiving_invoices", {
   supplierId: text("supplier_id").references(() => suppliers.id),
 });
 
+export const mismatchReasons = [
+  "not_found",
+  "damaged",
+  "qty_mismatch",
+  "wrong_part",
+  "over_shipment",
+  "quality_rejection",
+] as const;
+
+export type MismatchReason = (typeof mismatchReasons)[number];
+
 export const receivingInvoiceItems = pgTable("receiving_invoice_items", {
   id: text("id").primaryKey(),
   receivingInvoiceId: text("receiving_invoice_id")
@@ -77,7 +88,10 @@ export const receivingInvoiceItems = pgTable("receiving_invoice_items", {
   lotCode: text("lot_code"),
   coo: text("coo"),
   cow: text("cow"),
-  reportedMismatch: boolean("reported_mismatch").default(false),
+  reportedMismatch: boolean("reported_mismatch").notNull().default(false),
+  mismatchReason: text("mismatch_reason", { enum: mismatchReasons }),
+  mismatchQty: integer("mismatch_qty"),
+  wrongPartNo: text("wrong_part_no"),
   mismatchNote: text("mismatch_note"),
 });
 

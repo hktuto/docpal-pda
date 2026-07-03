@@ -20,6 +20,11 @@
           <div v-else class="placeholder">No image</div>
         </div>
 
+        <label class="field field--raw">
+          <span>OCR raw text</span>
+          <textarea :value="text" readonly rows="3" class="raw-text" />
+        </label>
+
         <p class="subtitle">Edit OCR fields and find a matching record.</p>
 
         <form class="form" @submit.prevent="findMatch">
@@ -283,13 +288,25 @@ function formatRecord(record: unknown): string {
   color: var(--muted);
 }
 
-.field input {
+.field input,
+.field textarea {
   padding: 0.5rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg);
   color: var(--text);
   font-size: 0.9375rem;
+}
+
+.field textarea {
+  resize: vertical;
+  min-height: 4rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.raw-text[readonly] {
+  background: var(--bg);
+  cursor: text;
 }
 
 .error {

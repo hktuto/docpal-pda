@@ -10,6 +10,17 @@
         <path d="m15 18-6-6 6-6"/>
       </svg>
     </button>
+    <NuxtLink
+      v-if="showBack"
+      to="/"
+      class="app-header__home"
+      aria-label="Home"
+    >
+      <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        <polyline points="9 22 9 12 15 12 15 22"/>
+      </svg>
+    </NuxtLink>
     <NuxtLink v-else to="/" class="app-header__logo" aria-label="Home">
       <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M8 8C8 5.79086 9.79086 4 12 4H28C30.2091 4 32 5.79086 32 8V32C32 34.2091 30.2091 36 28 36H12C9.79086 36 8 34.2091 8 32V8Z" fill="#00BFA5"/>

@@ -118,26 +118,22 @@
               <span>{{ item.dateCode }} / {{ item.lotCode }} / {{ item.coo }} / {{ item.cow }}</span>
             </div>
 
-            <div v-if="order.status === 'pending'" style="margin-top: 0.75rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-              <input
-                v-model.number="form[item.id].actualQty"
-                type="number"
-                placeholder="Actual qty"
-                style="width: 6rem;"
-              />
-              <input
-                v-model="form[item.id].note"
-                type="text"
-                placeholder="Mismatch note"
-                style="flex: 1; min-width: 8rem;"
-              />
-              <button class="btn btn--small" @click="saveMismatch(item.id)" :disabled="saving[item.id]">
-                Save mismatch
-              </button>
-            </div>
+            <div v-if="order.status === 'pending' || order.status === 'in_hand'" style="margin-top: 0.75rem;">
+              <template v-if="lockedByItem[item.id]">
+                <p class="mismatch-locked">Locked: stock already in use.</p>
+              </template>
 
-            <div v-else-if="item.reportedMismatch" class="mismatch-badge">
-              Mismatch reported
+              <template v-else-if="item.reportedMismatch">
+                <div class="mismatch-summary">
+                  <span class="mismatch-badge">{{ formatMismatchSummary(item) }}</span>
+                  <span v-if="item.mismatchNote" class="mismatch-note">{{ item.mismatchNote }}</span>
+                  <button class="btn btn--small" :disabled="saving[item.id]" @click="openReportIssue(item)">Edit issue</button>
+                </div>
+              </template>
+
+              <template v-else>
+                <button class="btn btn--small" :disabled="saving[item.id]" @click="openReportIssue(item)">Report issue</button>
+              </template>
             </div>
           </div>
         </div>
@@ -299,6 +295,13 @@
         @applied="onApplied"
         @retake="onRetake"
       />
+
+      <ReportIssueModal
+        :is-open="reportModalOpen"
+        :item="reportModalItem"
+        @confirm="onConfirmIssue"
+        @cancel="closeReportIssue"
+      />
     </template>
   </div>
 </template>
@@ -307,6 +310,7 @@
 import { sql } from "drizzle-orm";
 import { useLabelScan, type LabelScanResult } from "~/composables/useLabelScan";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
+import ReportIssueModal from "~/components/ReportIssueModal.vue";
 import {
   getReceivingOrderDetail,
   updateReceivingItemMismatch,
@@ -332,9 +336,25 @@ const currentUser = await useCurrentUser();
 
 const pending = ref(true);
 const error = ref<string | null>(null);
-const order = ref<any>(null);
+type DisplayReceivingItem = typeof schema.receivingInvoiceItems.$inferSelect;
+
+interface DisplayReceivingOrder {
+  id: string;
+  refNo: string;
+  status: string;
+  supplier?: typeof schema.suppliers.$inferSelect | null;
+  deliveryDate: Date | null;
+  arrivedAt: Date | null;
+  arrivedBy: string | null;
+  invoices: Array<
+    Omit<typeof schema.receivingInvoices.$inferSelect, "receivingOrderId"> & {
+      items: DisplayReceivingItem[];
+    }
+  >;
+}
+
+const order = ref<DisplayReceivingOrder | null>(null);
 const pickingRows = ref<PickingByReceivingRow[]>([]);
-const form = ref<Record<string, { actualQty: number; note: string }>>({});
 const saving = ref<Record<string, boolean>>({});
 const confirming = ref(false);
 const { scan, scanning } = useLabelScan();
@@ -352,6 +372,8 @@ const creatingBox = ref<Record<string, boolean>>({});
 const addingPackage = ref<Record<string, boolean>>({});
 const removingPackage = ref<Record<string, boolean>>({});
 const boxSelections = ref<Record<string, string>>({});
+const reportModalOpen = ref(false);
+const reportModalItem = ref<DisplayReceivingItem | null>(null);
 
 const views = [
   { label: "Receiving", value: "receiving" as const },
@@ -444,6 +466,18 @@ const filteredGroupedPickingOrders = computed<GroupedOrder[]>(() => {
 const remainingItems = ref(0);
 const allocatedByItem = ref<Record<string, number>>({});
 
+const lockedByItem = computed(() => {
+  const map: Record<string, boolean> = {};
+  if (!order.value) return map;
+  for (const invoice of order.value.invoices) {
+    for (const item of invoice.items) {
+      const allocated = allocatedByItem.value[item.id] ?? 0;
+      map[item.id] = item.pickedQty > 0 || item.putAwayQty > 0 || allocated > 0;
+    }
+  }
+  return map;
+});
+
 async function load() {
   try {
     // Phase 1: independent primary queries can be started together.
@@ -479,7 +513,6 @@ async function load() {
       ),
     ]);
 
-    order.value = orderData;
     pickingRows.value = linkedRows;
     remainingItems.value = Number((remainingResult.rows[0] as any)?.qty ?? 0);
 
@@ -565,17 +598,18 @@ async function load() {
       nextAllocated[row.receiving_invoice_item_id] = Number(row.allocated_qty);
     }
     allocatedByItem.value = nextAllocated;
+
     if (orderData) {
-      const nextForm: Record<string, { actualQty: number; note: string }> = {};
-      for (const invoice of orderData.invoices) {
-        for (const item of invoice.items) {
-          nextForm[item.id] = {
-            actualQty: form.value[item.id]?.actualQty ?? (item.reportedMismatch ? item.receivedQty : item.qty),
-            note: form.value[item.id]?.note ?? (item.mismatchNote || ""),
+      order.value = {
+        ...orderData,
+        invoices: orderData.invoices.map((invoice) => {
+          const { receivingOrderId: _ignored, ...invoiceRest } = invoice;
+          return {
+            ...invoiceRest,
+            items: invoice.items as DisplayReceivingItem[],
           };
-        }
-      }
-      form.value = nextForm;
+        }),
+      };
     }
   } catch (e: any) {
     error.value = e?.message ?? String(e);
@@ -621,16 +655,62 @@ async function onRetake() {
   await openScan(scanPickingItemId.value);
 }
 
-async function saveMismatch(itemId: string) {
-  saving.value[itemId] = true;
+function formatMismatchSummary(item: DisplayReceivingItem): string {
+  switch (item.mismatchReason) {
+    case "not_found":
+      return "Not found";
+    case "damaged":
+      return `Damaged: ${item.mismatchQty} of ${item.qty}`;
+    case "quality_rejection":
+      return `Quality rejection: ${item.mismatchQty} of ${item.qty}`;
+    case "qty_mismatch":
+      return `Quantity mismatch: received ${item.mismatchQty} of ${item.qty}`;
+    case "over_shipment":
+      return `Over shipment: +${item.mismatchQty}`;
+    case "wrong_part":
+      return `Wrong part: ${item.wrongPartNo} × ${item.mismatchQty}`;
+    default:
+      return "Mismatch reported";
+  }
+}
+
+function openReportIssue(item: DisplayReceivingItem) {
+  reportModalItem.value = item;
+  reportModalOpen.value = true;
+}
+
+function closeReportIssue() {
+  reportModalOpen.value = false;
+  reportModalItem.value = null;
+}
+
+async function onConfirmIssue(payload: {
+  reason: schema.MismatchReason | null;
+  mismatchQty: number | null;
+  wrongPartNo: string | null;
+  note: string;
+}) {
+  if (!currentUser || !reportModalItem.value) return;
+  saving.value[reportModalItem.value.id] = true;
+  error.value = null;
   try {
-    const { actualQty, note } = form.value[itemId];
-    await updateReceivingItemMismatch(db, itemId, actualQty, note);
+    await updateReceivingItemMismatch(
+      db,
+      reportModalItem.value.id,
+      currentUser.id,
+      payload.reason,
+      payload.mismatchQty,
+      payload.wrongPartNo,
+      payload.note
+    );
+    closeReportIssue();
     await load();
   } catch (e: any) {
     error.value = e?.message ?? String(e);
   } finally {
-    saving.value[itemId] = false;
+    if (reportModalItem.value) {
+      saving.value[reportModalItem.value.id] = false;
+    }
   }
 }
 
@@ -708,7 +788,22 @@ function badgeClass(status: string) {
   return "";
 }
 
-onMounted(load);
+onMounted(() => {
+  load();
+  document.addEventListener("visibilitychange", onVisible);
+  window.addEventListener("focus", onVisible);
+});
+
+onUnmounted(() => {
+  document.removeEventListener("visibilitychange", onVisible);
+  window.removeEventListener("focus", onVisible);
+});
+
+function onVisible() {
+  if (document.visibilityState === "visible") {
+    load();
+  }
+}
 </script>
 
 <style scoped>
@@ -758,13 +853,30 @@ onMounted(load);
 
 .mismatch-badge {
   display: inline-block;
-  margin-top: 0.75rem;
   padding: 0.25rem 0.625rem;
   font-size: 0.75rem;
   font-weight: 600;
   border-radius: 9999px;
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--danger-soft);
+  color: var(--danger);
 }
 
+.mismatch-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.mismatch-note {
+  font-size: 0.875rem;
+  color: var(--muted);
+  flex: 1;
+}
+
+.mismatch-locked {
+  font-size: 0.875rem;
+  color: var(--danger);
+  margin: 0;
+}
 </style>

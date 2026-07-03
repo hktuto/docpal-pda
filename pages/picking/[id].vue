@@ -53,12 +53,16 @@
         </div>
       </DetailHeader>
 
-      <h2 class="section-title" style="display: flex; justify-content: space-between; align-items: center;">
-        Boxes
-        <button class="btn btn--small btn--ghost" @click="boxesExpanded = !boxesExpanded">
+      <div class="section-title" style="display: flex; justify-content: space-between; align-items: center;">
+        <h2 style="margin: 0;">Boxes</h2>
+        <button
+          class="btn btn--small btn--ghost"
+          :aria-expanded="boxesExpanded"
+          @click="boxesExpanded = !boxesExpanded"
+        >
           {{ boxesExpanded ? "Hide" : `Show ${order.shippingBoxes?.length ?? 0}` }}
         </button>
-      </h2>
+      </div>
 
       <div v-if="boxesExpanded" style="margin-bottom: 1.5rem;">
         <button

@@ -189,6 +189,16 @@ Then open the local URL and log in with one of the demo accounts:
 | `operator` | `DocPal2026!` |
 | `admin` | `DocPalAdmin2026!` |
 
+### Scanning demo labels
+
+The Camera OCR demo needs `public/ocr-labels.html` to be present in the build. It is a standalone on-screen label sheet; display it on a monitor or another device and point the Android camera at each label instead of printing physical labels. Open it at:
+
+```text
+http://<dev-server-ip>:3000/ocr-labels.html
+```
+
+See `docs/superpowers/specs/2026-07-02-ocr-demo-labels.md` for full details.
+
 ### Production build
 
 ```bash

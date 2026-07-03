@@ -184,6 +184,7 @@ a:hover {
 }
 
 .app-header__back,
+.app-header__home,
 .app-header__action {
   width: 2.25rem;
   height: 2.25rem;
@@ -197,9 +198,11 @@ a:hover {
   border-radius: var(--radius);
   color: var(--text);
   cursor: pointer;
+  text-decoration: none;
 }
 
 .app-header__back:hover,
+.app-header__home:hover,
 .app-header__action:hover {
   background: var(--bg);
 }
