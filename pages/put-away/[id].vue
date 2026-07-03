@@ -102,18 +102,17 @@
                 </div>
               </div>
 
-              <div v-if="box.status === 'open'" style="margin-top: 1rem;">
+              <div v-if="box.status === 'open'" style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
                 <button
+                  v-if="box.items?.length"
                   class="btn"
-                  :disabled="closing || !box.items?.length"
+                  :disabled="closing"
                   @click="closeBox(box.id)"
                 >
                   {{ closing ? "Closing…" : "Close box" }}
                 </button>
-              </div>
-
-              <div v-if="box.status === 'open' && (box.items?.length ?? 0) === 0" style="margin-top: 1rem;">
                 <button
+                  v-else
                   class="btn btn--small btn--danger"
                   :disabled="cancellingBox[box.id]"
                   @click="cancelBox(box.id)"
@@ -355,9 +354,12 @@ async function closeBox(boxId: string) {
 }
 
 async function cancelBox(boxId: string) {
+  if (!currentUser?.id) {
+    error.value = "Operator not signed in";
+    return;
+  }
   cancellingBox.value[boxId] = true;
   try {
-    if (!currentUser) throw new Error("No operator user found");
     await cancelShelfBox(db, boxId, currentUser.id);
     await load();
   } catch (e: any) {
