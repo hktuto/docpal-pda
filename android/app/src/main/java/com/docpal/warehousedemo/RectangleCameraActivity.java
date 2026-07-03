@@ -68,6 +68,8 @@ public class RectangleCameraActivity extends ComponentActivity {
   private volatile int streamWidth = 0;
   private volatile int streamHeight = 0;
   private RectangleOcrHelper ocrHelper;
+  private RectangleTracker rectangleTracker;
+  private volatile List<RectangleTracker.TrackedRect> currentTrackedRects = new ArrayList<>();
 
   private enum CaptureMode {
     NONE,
@@ -119,6 +121,7 @@ public class RectangleCameraActivity extends ComponentActivity {
     previewView.setScaleType(PreviewView.ScaleType.FIT_CENTER);
     analysisExecutor = Executors.newSingleThreadExecutor();
     ocrHelper = new RectangleOcrHelper();
+    rectangleTracker = new RectangleTracker();
     startCamera();
   }
 
@@ -177,10 +180,10 @@ public class RectangleCameraActivity extends ComponentActivity {
       return false;
     }
 
-    for (RectangleDetector.RectResult rect : overlayView.getRectangles()) {
-      if (RectangleCropper.isPointInPolygon(imagePoint.x, imagePoint.y, rect.points)) {
+    for (RectangleTracker.TrackedRect tracked : currentTrackedRects) {
+      if (RectangleCropper.isPointInPolygon(imagePoint.x, imagePoint.y, tracked.rect.points)) {
         captureMode = CaptureMode.TAP_RECT;
-        pendingTapRect = rect;
+        pendingTapRect = tracked.rect;
         takePicture();
         return true;
       }
@@ -456,8 +459,16 @@ public class RectangleCameraActivity extends ComponentActivity {
     streamWidth = result.width;
     streamHeight = result.height;
 
+    List<RectangleTracker.TrackedRect> tracked = rectangleTracker.update(result.rectangles);
+    currentTrackedRects = tracked;
+
+    List<RectangleDetector.RectResult> rects = new ArrayList<>(tracked.size());
+    for (RectangleTracker.TrackedRect t : tracked) {
+      rects.add(t.rect);
+    }
+
     overlayView.setImageSize(result.width, result.height);
-    overlayView.setRectangles(result.rectangles);
+    overlayView.setRectangles(rects);
   }
 
   private void startPicker(String imagePath, int width, int height, String rectanglesJson) {
@@ -493,6 +504,9 @@ public class RectangleCameraActivity extends ComponentActivity {
     }
     if (ocrHelper != null) {
       ocrHelper.cancel();
+    }
+    if (rectangleTracker != null) {
+      rectangleTracker.clear();
     }
   }
 
