@@ -8,6 +8,7 @@ import org.opencv.core.MatOfPoint;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
+import org.opencv.core.RotatedRect;
 import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 
@@ -36,6 +37,8 @@ public class RectangleDetector {
     public double minAspectRatio = 0.25;
     public double maxAspectRatio = 4.0;
     public double approximationEpsilon = 0.02;
+    public int maxPolygonPoints = 8;
+    public double minRectangularity = 0.7;
   }
 
   public static List<RectResult> detect(Mat gray, Options options) {
@@ -63,27 +66,39 @@ public class RectangleDetector {
       MatOfPoint2f approx = new MatOfPoint2f();
       Imgproc.approxPolyDP(contour2f, approx, options.approximationEpsilon * arcLength, true);
 
-      if (approx.total() == 4) {
-        MatOfPoint approxPoints = new MatOfPoint(approx.toArray());
-        if (Imgproc.isContourConvex(approxPoints)) {
-          Point[] points = approx.toArray();
-          Rect boundingBox = Imgproc.boundingRect(approxPoints);
-          double boxArea = boundingBox.width * (double) boundingBox.height;
-          if (boxArea <= 0) {
-            continue;
-          }
+      long pointCount = approx.total();
+      if (pointCount >= 4 && pointCount <= options.maxPolygonPoints) {
+        RotatedRect minRect = Imgproc.minAreaRect(contour2f);
+        Point[] rotatedPoints = new Point[4];
+        minRect.points(rotatedPoints);
 
-          double aspectRatio = boundingBox.width / (double) boundingBox.height;
-          if (aspectRatio < options.minAspectRatio || aspectRatio > options.maxAspectRatio) {
-            continue;
-          }
-
-          double rectangularity = area / boxArea;
-          double areaScore = Math.min(1.0, area / (imageArea * 0.25));
-          double score = rectangularity * 0.6 + areaScore * 0.4;
-
-          result.add(new RectResult(points, boundingBox, score));
+        Rect boundingBox = boundingRectOfPoints(rotatedPoints);
+        double boxArea = boundingBox.width * (double) boundingBox.height;
+        if (boxArea <= 0) {
+          contour2f.release();
+          approx.release();
+          continue;
         }
+
+        double aspectRatio = minRect.size.width / Math.max(minRect.size.height, 1.0);
+        if (aspectRatio < options.minAspectRatio || aspectRatio > options.maxAspectRatio) {
+          contour2f.release();
+          approx.release();
+          continue;
+        }
+
+        double minRectArea = minRect.size.width * minRect.size.height;
+        double rectangularity = minRectArea > 0 ? area / minRectArea : 0.0;
+        if (rectangularity < options.minRectangularity) {
+          contour2f.release();
+          approx.release();
+          continue;
+        }
+
+        double areaScore = Math.min(1.0, area / (imageArea * 0.25));
+        double score = rectangularity * 0.6 + areaScore * 0.4;
+
+        result.add(new RectResult(rotatedPoints, boundingBox, score));
       }
 
       contour2f.release();
@@ -100,5 +115,23 @@ public class RectangleDetector {
       return result.subList(0, options.maxResults);
     }
     return result;
+  }
+
+  private static Rect boundingRectOfPoints(Point[] points) {
+    int minX = Integer.MAX_VALUE;
+    int minY = Integer.MAX_VALUE;
+    int maxX = Integer.MIN_VALUE;
+    int maxY = Integer.MIN_VALUE;
+
+    for (Point p : points) {
+      int x = (int) Math.round(p.x);
+      int y = (int) Math.round(p.y);
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+
+    return new Rect(minX, minY, maxX - minX, maxY - minY);
   }
 }

@@ -304,6 +304,7 @@ function badgeClass(status: string) {
 
 function openNewBoxDialog() {
   newBoxDialogOpen.value = true;
+  boxesExpanded.value = true;
 }
 
 async function createBoxFromDialog(shelfCode: string) {
