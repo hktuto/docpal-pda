@@ -561,39 +561,4 @@ function onVisible() {
 </script>
 
 <style scoped>
-.detail-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.35rem 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.detail-row:last-child {
-  border-bottom: none;
-}
-
-.detail-label {
-  font-size: 0.8125rem;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.lot {
-  background: var(--bg);
-  border-radius: var(--radius);
-  padding: 0.75rem;
-  margin-bottom: 0.5rem;
-}
-
-.card--done {
-  border-left: 4px solid #16a34a;
-}
-
-.card--danger {
-  border-left: 4px solid var(--danger);
-}
-
 </style>
