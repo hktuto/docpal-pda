@@ -1,6 +1,7 @@
 package com.docpal.warehousedemo;
 
 import android.util.Log;
+import androidx.annotation.Nullable;
 import com.google.mlkit.vision.barcode.BarcodeScanner;
 import com.google.mlkit.vision.barcode.BarcodeScanning;
 import com.google.mlkit.vision.barcode.common.Barcode;
@@ -8,8 +9,8 @@ import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -22,18 +23,28 @@ public class OcrBarcodeProcessor {
     void onResult(String text, String barcodesJson);
   }
 
+  @Nullable
+  private TextRecognizer textRecognizer;
+  @Nullable
+  private BarcodeScanner barcodeScanner;
+  private final AtomicBoolean finished = new AtomicBoolean(false);
+
   public void process(InputImage image, ResultListener listener) {
-    TextRecognizer textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
-    BarcodeScanner barcodeScanner = BarcodeScanning.getClient();
+    if (finished.get()) {
+      return;
+    }
+
+    textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+    barcodeScanner = BarcodeScanning.getClient();
 
     final String[] textResult = { "" };
     final String[] barcodeResult = { "[]" };
-    final boolean[] textDone = { false };
-    final boolean[] barcodeDone = { false };
+    final AtomicBoolean textDone = new AtomicBoolean(false);
+    final AtomicBoolean barcodeDone = new AtomicBoolean(false);
 
     Runnable maybeFinish = () -> {
-      if (textDone[0] && barcodeDone[0]) {
-        close(textRecognizer, barcodeScanner);
+      if (textDone.get() && barcodeDone.get() && finished.compareAndSet(false, true)) {
+        close();
         listener.onResult(textResult[0], barcodeResult[0]);
       }
     };
@@ -41,26 +52,50 @@ public class OcrBarcodeProcessor {
     textRecognizer.process(image)
       .addOnSuccessListener(visionText -> {
         textResult[0] = visionText.getText();
-        textDone[0] = true;
+        textDone.set(true);
         maybeFinish.run();
       })
       .addOnFailureListener(e -> {
         Log.e(TAG, "Text recognition failed", e);
-        textDone[0] = true;
+        textDone.set(true);
         maybeFinish.run();
       });
 
     barcodeScanner.process(image)
       .addOnSuccessListener(barcodes -> {
         barcodeResult[0] = barcodesToJson(barcodes);
-        barcodeDone[0] = true;
+        barcodeDone.set(true);
         maybeFinish.run();
       })
       .addOnFailureListener(e -> {
         Log.e(TAG, "Barcode scanning failed", e);
-        barcodeDone[0] = true;
+        barcodeDone.set(true);
         maybeFinish.run();
       });
+  }
+
+  public synchronized void cancel() {
+    finished.set(true);
+    close();
+  }
+
+  private synchronized void close() {
+    if (textRecognizer != null) {
+      try {
+        textRecognizer.close();
+      } catch (Exception e) {
+        Log.e(TAG, "Failed to close text recognizer", e);
+      }
+      textRecognizer = null;
+    }
+    if (barcodeScanner != null) {
+      try {
+        barcodeScanner.close();
+      } catch (Exception e) {
+        Log.e(TAG, "Failed to close barcode scanner", e);
+      }
+      barcodeScanner = null;
+    }
   }
 
   private static String barcodesToJson(List<Barcode> barcodes) {
@@ -77,18 +112,5 @@ public class OcrBarcodeProcessor {
       }
     }
     return array.toString();
-  }
-
-  private static void close(TextRecognizer textRecognizer, BarcodeScanner barcodeScanner) {
-    try {
-      textRecognizer.close();
-    } catch (Exception e) {
-      Log.e(TAG, "Failed to close text recognizer", e);
-    }
-    try {
-      barcodeScanner.close();
-    } catch (Exception e) {
-      Log.e(TAG, "Failed to close barcode scanner", e);
-    }
   }
 }
