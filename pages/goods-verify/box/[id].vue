@@ -172,20 +172,3 @@ async function openScan() {
   // applied/review/manual are handled by useLabelScanReview.
 }
 </script>
-
-<style scoped>
-.badge--pending {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.badge--in-hand {
-  background: #dbeafe;
-  color: #1e40af;
-}
-
-.badge--finished {
-  background: #dcfce7;
-  color: #166534;
-}
-</style>
