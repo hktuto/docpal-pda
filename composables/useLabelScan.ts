@@ -7,8 +7,18 @@ import type { OcrInput } from './useMockOcr';
 export type LabelScanResult =
   | { status: 'applied' }
   | { status: 'review'; capture: LabelScanCapture; parsed: OcrInput; matchResult: ScanMatchResult }
+  | { status: 'manual' }
   | { status: 'cancelled' }
   | { status: 'error'; message: string };
+
+export function createManualReview(): Extract<LabelScanResult, { status: 'review' }> {
+  return {
+    status: 'review',
+    capture: { imagePath: '', text: '', barcodes: '[]' },
+    parsed: { partNo: '', dateCode: '', lotCode: '', coo: '', cow: '', qty: '' },
+    matchResult: { type: 'none' },
+  };
+}
 
 export function useLabelScan() {
   const scanning = ref(false);
@@ -41,6 +51,9 @@ export function useLabelScan() {
       if (isCancellationError(e)) {
         return { status: 'cancelled' };
       }
+      if (isBrowserUnavailableError(e)) {
+        return { status: 'manual' };
+      }
       const message = e instanceof Error ? e.message : String(e);
       error.value = message;
       return { status: 'error', message };
@@ -55,4 +68,9 @@ export function useLabelScan() {
 function isCancellationError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
   return message.toLowerCase().includes('cancel');
+}
+
+function isBrowserUnavailableError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.toLowerCase().includes('not available in the browser');
 }
