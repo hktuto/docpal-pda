@@ -8,6 +8,7 @@ import androidx.annotation.Nullable;
 import com.google.mlkit.vision.common.InputImage;
 import java.io.File;
 import java.io.IOException;
+import java.lang.ref.WeakReference;
 
 public class RectangleOcrHelper {
 
@@ -26,22 +27,29 @@ public class RectangleOcrHelper {
     if (activity.isFinishing() || activity.isDestroyed()) {
       return;
     }
+
+    // Cancel any in-flight processor before starting a new one.
+    cancel();
+
     try {
       InputImage inputImage = InputImage.fromFilePath(activity, Uri.fromFile(new File(imagePath)));
       OcrBarcodeProcessor processor = new OcrBarcodeProcessor();
       synchronized (this) {
         activeProcessor = processor;
       }
+
+      WeakReference<Activity> activityRef = new WeakReference<>(activity);
       processor.process(inputImage, (text, barcodesJson) -> {
         synchronized (RectangleOcrHelper.this) {
           if (activeProcessor == processor) {
             activeProcessor = null;
           }
         }
-        if (activity.isFinishing() || activity.isDestroyed()) {
+        Activity currentActivity = activityRef.get();
+        if (currentActivity == null || currentActivity.isFinishing() || currentActivity.isDestroyed()) {
           return;
         }
-        finishWithResult(activity, imagePath, width, height, rectanglesJson, selectedRectJson, text, barcodesJson);
+        finishWithResult(currentActivity, imagePath, width, height, rectanglesJson, selectedRectJson, text, barcodesJson);
       });
     } catch (IOException e) {
       Log.e(TAG, "Failed to load image for OCR", e);
