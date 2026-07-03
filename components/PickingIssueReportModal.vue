@@ -5,36 +5,47 @@
     role="dialog"
     aria-modal="true"
     aria-labelledby="issue-title"
-    @click.self="close"
-    @keydown.esc="close"
+    @click.self="!saving && close()"
+    @keydown.esc="!saving && close()"
   >
     <div class="modal">
       <div class="modal__header">
         <h3 id="issue-title">Report picking issue</h3>
-        <button type="button" class="modal__close" aria-label="Close" @click="close">×</button>
+        <button type="button" class="modal__close" aria-label="Close" :disabled="saving" @click="close">×</button>
       </div>
 
       <div class="modal__body">
-        <form @submit.prevent="submit">
+        <form class="form" @submit.prevent="submit">
           <label class="field">
             <span>Issue reason</span>
-            <select v-model="reason">
-              <option value="insufficient_stock">Insufficient stock</option>
-              <option value="cannot_divide">Cannot divide quantity</option>
-              <option value="merge">Merge orders</option>
-              <option value="other">Other</option>
+            <select v-model="reason" :disabled="saving">
+              <option v-for="r in pickingIssueReasons" :key="r" :value="r">{{ reasonLabels[r] }}</option>
             </select>
           </label>
 
           <label v-if="reason === 'insufficient_stock'" class="field">
             <span>Actual qty available</span>
-            <input v-model.number="qty" type="number" min="0" step="1" placeholder="e.g. 5" />
+            <input
+              v-model.number="qty"
+              type="number"
+              min="0"
+              step="1"
+              placeholder="e.g. 5"
+              :disabled="saving"
+            />
             <span v-if="errors.qty" class="error">{{ errors.qty }}</span>
           </label>
 
           <label v-if="reason === 'cannot_divide'" class="field">
             <span>Pack size</span>
-            <input v-model.number="packSize" type="number" min="1" step="1" placeholder="e.g. 20000" />
+            <input
+              v-model.number="packSize"
+              type="number"
+              min="1"
+              step="1"
+              placeholder="e.g. 20000"
+              :disabled="saving"
+            />
             <span v-if="errors.packSize" class="error">{{ errors.packSize }}</span>
           </label>
 
@@ -45,19 +56,30 @@
                 <strong>{{ o.ref_no }}</strong>
                 <span v-if="reason === 'cannot_divide'" class="muted">Requested: {{ o.totalQty }}</span>
               </div>
-              <input v-model="remarks[o.id]" type="text" placeholder="Remark for this order" />
+              <input
+                v-model="remarks[o.id]"
+                type="text"
+                placeholder="Remark for this order"
+                :aria-label="`Remark for ${o.ref_no}`"
+                :disabled="saving"
+              />
             </div>
           </div>
 
           <label class="field">
             <span>Common note</span>
-            <textarea v-model="note" rows="2" placeholder="Note applied to all selected orders" />
+            <textarea
+              v-model="note"
+              rows="2"
+              placeholder="Note applied to all selected orders"
+              :disabled="saving"
+            />
           </label>
 
           <div v-if="errors.reason" class="error">{{ errors.reason }}</div>
 
           <div class="actions">
-            <button type="button" class="btn btn--secondary" @click="close">Cancel</button>
+            <button type="button" class="btn btn--secondary" :disabled="saving" @click="close">Cancel</button>
             <button type="submit" class="btn" :disabled="saving">
               {{ saving ? "Saving…" : "Save issue" }}
             </button>
@@ -69,7 +91,7 @@
 </template>
 
 <script setup lang="ts">
-import type { PickingIssueReason } from "~/db/schema";
+import { pickingIssueReasons, type PickingIssueReason } from "~/db/schema";
 
 interface OrderOption {
   id: string;
@@ -96,19 +118,26 @@ const emit = defineEmits<{
 }>();
 
 const reason = ref<PickingIssueReason>("insufficient_stock");
-const qty = ref<number | null>(null);
-const packSize = ref<number | null>(null);
+const qty = ref<number | "" | null>("");
+const packSize = ref<number | "" | null>("");
 const note = ref("");
 const remarks = ref<Record<string, string>>({});
 const errors = ref<Record<string, string>>({});
+
+const reasonLabels: Record<PickingIssueReason, string> = {
+  insufficient_stock: "Insufficient stock",
+  cannot_divide: "Cannot divide quantity",
+  merge: "Merge orders",
+  other: "Other",
+};
 
 watch(
   () => props.modelValue,
   (open) => {
     if (open) {
       reason.value = "insufficient_stock";
-      qty.value = null;
-      packSize.value = null;
+      qty.value = "";
+      packSize.value = "";
       note.value = "";
       errors.value = {};
       const next: Record<string, string> = {};
@@ -122,6 +151,7 @@ watch(
 );
 
 function close() {
+  if (props.saving) return;
   emit("update:modelValue", false);
   emit("cancelled");
 }
@@ -132,12 +162,22 @@ function validate(): boolean {
     errors.value.reason = "Select at least two orders to request a merge";
   }
   if (reason.value === "insufficient_stock") {
-    if (qty.value == null || qty.value < 0) {
+    if (
+      qty.value === "" ||
+      qty.value == null ||
+      qty.value < 0 ||
+      !Number.isInteger(qty.value)
+    ) {
       errors.value.qty = "Enter a valid available quantity";
     }
   }
   if (reason.value === "cannot_divide") {
-    if (packSize.value == null || packSize.value <= 0) {
+    if (
+      packSize.value === "" ||
+      packSize.value == null ||
+      packSize.value <= 0 ||
+      !Number.isInteger(packSize.value)
+    ) {
       errors.value.packSize = "Enter a valid pack size";
     }
   }
@@ -153,12 +193,19 @@ function validate(): boolean {
 
 function submit() {
   if (!validate()) return;
+
+  const trimmedRemarks: Record<string, string> = {};
+  for (const [id, value] of Object.entries(remarks.value)) {
+    const trimmed = value.trim();
+    if (trimmed) trimmedRemarks[id] = trimmed;
+  }
+
   emit("saved", {
     reason: reason.value,
-    qty: reason.value === "insufficient_stock" ? qty.value : null,
-    packSize: reason.value === "cannot_divide" ? packSize.value : null,
+    qty: reason.value === "insufficient_stock" ? (qty.value === "" ? null : qty.value) : null,
+    packSize: reason.value === "cannot_divide" ? (packSize.value === "" ? null : packSize.value) : null,
     note: note.value.trim() || null,
-    remarks: remarks.value,
+    remarks: trimmedRemarks,
   });
 }
 </script>
@@ -196,7 +243,6 @@ function submit() {
 
 .modal__header h3 {
   margin: 0;
-  font-size: 1.0625rem;
 }
 
 .modal__close {
@@ -204,37 +250,41 @@ function submit() {
   border: none;
   font-size: 1.5rem;
   line-height: 1;
-  color: var(--muted);
   cursor: pointer;
+  color: var(--muted);
 }
 
 .modal__body {
   padding: 1rem;
 }
 
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  margin-bottom: 1rem;
+  gap: 0.25rem;
+  font-size: 0.875rem;
 }
 
 .field > span:first-child {
-  font-size: 0.8125rem;
-  font-weight: 600;
   color: var(--muted);
-  text-transform: uppercase;
 }
 
 .field input,
 .field select,
 .field textarea {
   width: 100%;
-  padding: 0.625rem 0.875rem;
+  padding: 0.5rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  font-size: 1rem;
-  background: var(--surface);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.9375rem;
 }
 
 .remark-row {
@@ -259,13 +309,14 @@ function submit() {
 
 .error {
   color: var(--danger);
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
+  margin: 0.75rem 0 0;
 }
 
 .actions {
   display: flex;
   gap: 0.5rem;
-  margin-top: 1rem;
+  margin-top: 0.5rem;
 }
 
 .actions .btn {
@@ -279,7 +330,6 @@ function submit() {
   background: var(--primary);
   color: #fff;
   font-size: 0.9375rem;
-  font-weight: 600;
   cursor: pointer;
 }
 
