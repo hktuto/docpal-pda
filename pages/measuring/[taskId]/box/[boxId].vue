@@ -114,6 +114,7 @@
         :barcodes="review.capture.barcodes"
         :parsed="review.parsed"
         :match-result="review.matchResult"
+        :mode="review.capture.imagePath ? 'review' : 'manual'"
         :context="{ task: 'measuring', boxId, targetPackageId: scanTargetPackageId }"
         @applied="onApplied"
         @retake="onRetake"
@@ -136,7 +137,7 @@ import {
   getShippingBoxForMeasuring,
   type ShippingBoxForMeasuring,
 } from "~/db/measuring";
-import { useLabelScan, type LabelScanResult } from "~/composables/useLabelScan";
+import { useLabelScan, createManualReview, type LabelScanResult } from "~/composables/useLabelScan";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import BoxMeasurementsModal from "~/components/BoxMeasurementsModal.vue";
 
@@ -201,6 +202,10 @@ async function openScan(packageId?: string) {
     await onScanApplied();
   } else if (result.status === 'review') {
     review.value = result;
+    reviewOpen.value = true;
+  } else if (result.status === 'manual') {
+    review.value = createManualReview();
+    scanTargetPackageId.value = packageId;
     reviewOpen.value = true;
   } else if (result.status === 'error') {
     error.value = result.message;
