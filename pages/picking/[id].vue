@@ -14,9 +14,6 @@
       >
         <template #actions>
           <template v-if="order.status !== 'finished' && order.status !== 'issue'">
-            <button class="btn btn--small" :disabled="creatingBox" @click="createBox">
-              {{ creatingBox ? "Creating…" : "Create box" }}
-            </button>
             <button
               v-if="allItemsFullyBoxed"
               class="btn btn--small"
@@ -89,13 +86,23 @@
 
       <div class="section-title" style="display: flex; justify-content: space-between; align-items: center;">
         <h2 style="margin: 0;">Boxes({{ order.shippingBoxes?.length ?? 0 }})</h2>
-        <button
-          class="btn btn--small btn--ghost"
-          :aria-expanded="boxesExpanded"
-          @click="boxesExpanded = !boxesExpanded"
-        >
-          {{ boxesExpanded ? "Hide" : "Show" }}
-        </button>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <button
+            v-if="order.status !== 'finished' && order.status !== 'issue'"
+            class="btn btn--small"
+            :disabled="creatingBox"
+            @click="createBox"
+          >
+            {{ creatingBox ? "Creating…" : "New box" }}
+          </button>
+          <button
+            class="btn btn--small btn--ghost"
+            :aria-expanded="boxesExpanded"
+            @click="boxesExpanded = !boxesExpanded"
+          >
+            {{ boxesExpanded ? "Hide" : "Show" }}
+          </button>
+        </div>
       </div>
 
       <div v-if="boxesExpanded" style="margin-bottom: 1.5rem;">
