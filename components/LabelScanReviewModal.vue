@@ -10,7 +10,7 @@
   >
     <div class="modal">
       <div class="modal__header">
-        <h3 id="review-title">Review scan</h3>
+        <h3 id="review-title">{{ mode === 'manual' ? 'Manual entry' : 'Review scan' }}</h3>
         <button type="button" class="modal__close" aria-label="Close" :disabled="applying || matching" @click="close">×</button>
       </div>
 
@@ -106,7 +106,15 @@
         <p v-if="applyError" class="error">{{ applyError }}</p>
 
         <div class="actions">
-          <button type="button" class="btn btn--secondary" :disabled="applying || matching" @click="emit('retake')">Retake</button>
+          <button
+            v-if="mode !== 'manual'"
+            type="button"
+            class="btn btn--secondary"
+            :disabled="applying || matching"
+            @click="emit('retake')"
+          >
+            Retake
+          </button>
           <button type="button" class="btn btn--secondary" :disabled="applying || matching" @click="close">Cancel</button>
           <button type="button" class="btn" :disabled="applying || matching" @click="findMatch">
             {{ matching ? "Matching…" : "Find match" }}
@@ -130,6 +138,7 @@ const props = defineProps<{
   parsed: OcrInput;
   matchResult: ScanMatchResult;
   context: ScanTaskContext;
+  mode?: 'review' | 'manual';
 }>();
 
 const rawText = computed(() => {
