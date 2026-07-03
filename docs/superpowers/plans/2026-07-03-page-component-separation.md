@@ -1,6 +1,8 @@
 # Page Component Separation Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Status:** Implemented on 2026-07-03. All tasks below are complete; see the git log for the per-task commits.
+>
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Make the largest Nuxt detail pages thin controllers by extracting shared presentational primitives and page-specific components, without changing routes, user-facing behavior, or data flow.
 
@@ -70,7 +72,7 @@ Files to modify:
 
 **Why:** Every Capacitor detail/list page repeats the same `onMounted`/`onUnmounted` + `visibilitychange`/`focus` wiring.
 
-- [ ] **Step 1: Write the composable**
+- [x] **Step 1: Write the composable**
 
 ```ts
 export function useVisibleReload(load: () => void | Promise<void>) {
@@ -93,12 +95,12 @@ export function useVisibleReload(load: () => void | Promise<void>) {
 }
 ```
 
-- [ ] **Step 2: Verify with `pnpm nuxt prepare`**
+- [x] **Step 2: Verify with `pnpm nuxt prepare`**
 
 Run: `pnpm nuxt prepare`
 Expected: no TypeScript errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add composables/useVisibleReload.ts
@@ -112,7 +114,7 @@ git commit -m "feat: add useVisibleReload composable for Capacitor detail pages"
 
 **Why:** `badgeClass(status)` is duplicated in `pages/receiving/[id].vue`, `pages/receiving/index.vue`, `pages/put-away/[id].vue`, `pages/put-away/index.vue`, `pages/picking/index.vue`, `pages/goods-verify/box/[id].vue`, and `pages/goods-verify/shelf/[code].vue`. The global CSS already has `.badge--pending`, `.badge--in-hand`, `.badge--finished`, and `.badge--danger`; we just need one function.
 
-- [ ] **Step 1: Write the composable**
+- [x] **Step 1: Write the composable**
 
 ```ts
 export function useStatusBadge() {
@@ -131,12 +133,12 @@ export function useStatusBadge() {
 }
 ```
 
-- [ ] **Step 2: Verify with `pnpm nuxt prepare`**
+- [x] **Step 2: Verify with `pnpm nuxt prepare`**
 
 Run: `pnpm nuxt prepare`
 Expected: no errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add composables/useStatusBadge.ts
@@ -150,7 +152,7 @@ git commit -m "feat: add useStatusBadge composable"
 
 **Why:** The scan → review/manual modal wiring is repeated in `receiving/[id].vue`, `picking/[id].vue`, `put-away/[id].vue`, `measuring/[taskId]/box/[boxId].vue`, and `goods-verify/box/[id].vue`. Extract the common state and handlers so pages only provide the scan call and success callback.
 
-- [ ] **Step 1: Write the composable**
+- [x] **Step 1: Write the composable**
 
 ```ts
 import { useLabelScan, createManualReview, type LabelScanResult } from "~/composables/useLabelScan";
@@ -192,12 +194,12 @@ export function useLabelScanReview(options: UseLabelScanReviewOptions = {}) {
 }
 ```
 
-- [ ] **Step 2: Verify with `pnpm nuxt prepare`**
+- [x] **Step 2: Verify with `pnpm nuxt prepare`**
 
 Run: `pnpm nuxt prepare`
 Expected: no errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add composables/useLabelScanReview.ts
@@ -211,7 +213,7 @@ git commit -m "feat: add useLabelScanReview composable"
 
 **Why:** The pattern `<div class="detail-row"><span class="detail-label">Label</span><span>Value</span></div>` appears 30+ times across detail pages.
 
-- [ ] **Step 1: Write the component**
+- [x] **Step 1: Write the component**
 
 ```vue
 <template>
@@ -236,12 +238,12 @@ const displayValue = computed(() => {
 </script>
 ```
 
-- [ ] **Step 2: Verify with `pnpm nuxt prepare`**
+- [x] **Step 2: Verify with `pnpm nuxt prepare`**
 
 Run: `pnpm nuxt prepare`
 Expected: no errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add components/DetailRow.vue
@@ -255,7 +257,7 @@ git commit -m "feat: add DetailRow component"
 
 **Why:** Centralize badge markup and class logic. Pages that currently compute a class can just pass the status string.
 
-- [ ] **Step 1: Write the component**
+- [x] **Step 1: Write the component**
 
 ```vue
 <template>
@@ -273,12 +275,12 @@ const { badgeClass } = useStatusBadge();
 </script>
 ```
 
-- [ ] **Step 2: Verify with `pnpm nuxt prepare`**
+- [x] **Step 2: Verify with `pnpm nuxt prepare`**
 
 Run: `pnpm nuxt prepare`
 Expected: no errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add components/StatusBadge.vue
@@ -292,7 +294,7 @@ git commit -m "feat: add StatusBadge component"
 
 **Why:** The fixed-position circular scan button is copied inline in `receiving/[id].vue`, `picking/[id].vue`, `put-away/[id].vue`, `measuring/[taskId]/box/[boxId].vue`, and `goods-verify/box/[id].vue`.
 
-- [ ] **Step 1: Write the component**
+- [x] **Step 1: Write the component**
 
 ```vue
 <template>
@@ -342,12 +344,12 @@ defineEmits<{
 </style>
 ```
 
-- [ ] **Step 2: Verify with `pnpm nuxt prepare`**
+- [x] **Step 2: Verify with `pnpm nuxt prepare`**
 
 Run: `pnpm nuxt prepare`
 Expected: no errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add components/ScanFab.vue
@@ -361,7 +363,7 @@ git commit -m "feat: add ScanFab component"
 
 **Why:** The loading/error/empty trifecta is repeated on every page with slight styling differences.
 
-- [ ] **Step 1: Write the component**
+- [x] **Step 1: Write the component**
 
 ```vue
 <template>
@@ -387,12 +389,12 @@ const inlineStyle = computed(() => (props.error ? { color: "var(--danger)" } : u
 </style>
 ```
 
-- [ ] **Step 2: Verify with `pnpm nuxt prepare`**
+- [x] **Step 2: Verify with `pnpm nuxt prepare`**
 
 Run: `pnpm nuxt prepare`
 Expected: no errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add components/EmptyState.vue
@@ -414,7 +416,7 @@ Do these first because they are low-risk and prove the primitives work before to
 
 **Goal:** Replace inline detail rows with `<DetailRow>`, inline scan FAB with `<ScanFab>`, inline loading/error with `<EmptyState>`, inline badge with `<StatusBadge>`, and lifecycle wiring with `useVisibleReload`. Remove scoped `.detail-row`, `.detail-label`, `.badge--finished`, and FAB styles.
 
-- [ ] **Step 1: Update imports and script top**
+- [x] **Step 1: Update imports and script top**
 
 Keep:
 
@@ -466,7 +468,7 @@ const {
 } = useLabelScanReview({ onApplied: onScanApplied });
 ```
 
-- [ ] **Step 2: Replace lifecycle wiring**
+- [x] **Step 2: Replace lifecycle wiring**
 
 Remove the existing `onMounted`/`onUnmounted`/`onVisible` block and add:
 
@@ -474,7 +476,7 @@ Remove the existing `onMounted`/`onUnmounted`/`onVisible` block and add:
 useVisibleReload(load);
 ```
 
-- [ ] **Step 3: Replace `openScan` scan-result handling**
+- [x] **Step 3: Replace `openScan` scan-result handling**
 
 Change `openScan` to:
 
@@ -497,7 +499,7 @@ async function openScan(packageId?: string) {
 
 Remove the old page-level `onScanApplied` function if it was defined elsewhere in the script (the hoisted definition above replaces it).
 
-- [ ] **Step 4: Replace template blocks**
+- [x] **Step 4: Replace template blocks**
 
 Loading/error block:
 
@@ -524,16 +526,16 @@ Status badge for package:
 
 Replace each `<div class="detail-row">…</div>` with `<DetailRow label="…" :value="…" />`.
 
-- [ ] **Step 5: Remove scoped styles**
+- [x] **Step 5: Remove scoped styles**
 
 Remove only the inline floating scan button styles (the button is now `<ScanFab>`). Keep `.detail-row`, `.detail-label`, and `.badge--finished`; they are removed globally in Task 23.
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 Run: `pnpm nuxt prepare && pnpm generate`
 Expected: build succeeds.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add pages/measuring/[taskId]/box/[boxId].vue
@@ -547,7 +549,7 @@ git commit -m "refactor: adopt shared primitives in measuring box page"
 
 **Goal:** Same as Task 8: adopt `useVisibleReload`, `useLabelScanReview`, `<DetailRow>`, `<StatusBadge>`, `<ScanFab>`, and `<EmptyState>`. Remove duplicated `badgeClass` and scoped badge/detail styles.
 
-- [ ] **Step 1: Update imports and script top**
+- [x] **Step 1: Update imports and script top**
 
 Keep:
 
@@ -598,7 +600,7 @@ const {
 } = useLabelScanReview({ onApplied: onScanApplied });
 ```
 
-- [ ] **Step 2: Replace lifecycle wiring**
+- [x] **Step 2: Replace lifecycle wiring**
 
 Remove `onMounted`/`onUnmounted`/`onVisible` and add:
 
@@ -606,7 +608,7 @@ Remove `onMounted`/`onUnmounted`/`onVisible` and add:
 useVisibleReload(load);
 ```
 
-- [ ] **Step 3: Replace `openScan` scan-result handling**
+- [x] **Step 3: Replace `openScan` scan-result handling**
 
 ```ts
 async function openScan() {
@@ -624,7 +626,7 @@ async function openScan() {
 
 Remove the old page-level `onScanApplied` definition (the hoisted definition above replaces it).
 
-- [ ] **Step 4: Replace template blocks**
+- [x] **Step 4: Replace template blocks**
 
 Use `<EmptyState>`, `<ScanFab>`, `<StatusBadge>`, and `<DetailRow>` as in Task 8.
 
@@ -636,16 +638,16 @@ Use `<EmptyState>`, `<ScanFab>`, `<StatusBadge>`, and `<DetailRow>` as in Task 8
 
 Prefer replacing the local function with `const { badgeClass } = useStatusBadge();` and keeping the existing `:badge-class="badgeClass(box.status)"` prop usage. The local `badgeClass` can be removed entirely once the scoped badge styles are removed in Task 23.
 
-- [ ] **Step 5: Remove scoped styles**
+- [x] **Step 5: Remove scoped styles**
 
 Remove only the inline floating scan button styles. Keep `.detail-row`, `.detail-label`, `.badge--pending`, `.badge--in-hand`, `.badge--finished`, and `.card--done`; they are removed globally in Task 23.
 
-- [ ] **Step 6: Verify**
+- [x] **Step 6: Verify**
 
 Run: `pnpm nuxt prepare && pnpm generate`
 Expected: build succeeds.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add pages/goods-verify/box/[id].vue
@@ -681,7 +683,7 @@ const emit = defineEmits<{
 }>();
 ```
 
-- [ ] **Step 1: Write the component**
+- [x] **Step 1: Write the component**
 
 ```vue
 <template>
@@ -817,12 +819,12 @@ function formatMismatchSummary(item: DisplayReceivingItem): string {
 </style>
 ```
 
-- [ ] **Step 2: Verify with `pnpm nuxt prepare`**
+- [x] **Step 2: Verify with `pnpm nuxt prepare`**
 
 Run: `pnpm nuxt prepare`
 Expected: no errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add components/receiving/ReceivingItemsTab.vue
@@ -870,7 +872,7 @@ const emit = defineEmits<{
 }>();
 ```
 
-- [ ] **Step 1: Write the component**
+- [x] **Step 1: Write the component**
 
 Move the picking tab template and the helper functions `openBoxesForOrder` and `boxById` into the component. Keep the local computed/utility logic that is only used by this tab.
 
@@ -1034,12 +1036,12 @@ function toggleExpand(itemId: string) {
 }
 ```
 
-- [ ] **Step 2: Verify with `pnpm nuxt prepare`**
+- [x] **Step 2: Verify with `pnpm nuxt prepare`**
 
 Run: `pnpm nuxt prepare`
 Expected: no errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add components/receiving/ReceivingPickingTab.vue
@@ -1053,7 +1055,7 @@ git commit -m "feat: add ReceivingPickingTab component"
 
 **Goal:** Reduce the page to route handling, top-level load orchestration, tab state, scan entry point, and mismatch modal wiring.
 
-- [ ] **Step 1: Update imports**
+- [x] **Step 1: Update imports**
 
 Add:
 
@@ -1071,7 +1073,7 @@ Remove:
 import { useLabelScan, createManualReview, type LabelScanResult } from "~/composables/useLabelScan";
 ```
 
-- [ ] **Step 2: Replace scan-review state**
+- [x] **Step 2: Replace scan-review state**
 
 Replace:
 
@@ -1095,7 +1097,7 @@ async function onRetake() {
 }
 ```
 
-- [ ] **Step 3: Replace lifecycle wiring**
+- [x] **Step 3: Replace lifecycle wiring**
 
 Remove the existing `onMounted`/`onUnmounted`/`onVisible` block and add:
 
@@ -1103,7 +1105,7 @@ Remove the existing `onMounted`/`onUnmounted`/`onVisible` block and add:
 useVisibleReload(load);
 ```
 
-- [ ] **Step 4: Simplify `openScan`**
+- [x] **Step 4: Simplify `openScan`**
 
 ```ts
 async function openScan(itemId?: string) {
@@ -1122,7 +1124,7 @@ async function openScan(itemId?: string) {
 
 Remove the old page-level `onApplied` function (it now comes from the composable). Keep `onRetake` as defined above.
 
-- [ ] **Step 5: Replace tab templates**
+- [x] **Step 5: Replace tab templates**
 
 Replace the `view === 'receiving'` block with:
 
@@ -1161,7 +1163,7 @@ Replace the `view === 'picking'` block with:
 />
 ```
 
-- [ ] **Step 6: Replace scan FAB**
+- [x] **Step 6: Replace scan FAB**
 
 ```vue
 <ScanFab
@@ -1171,27 +1173,27 @@ Replace the `view === 'picking'` block with:
 />
 ```
 
-- [ ] **Step 7: Replace loading/error with EmptyState**
+- [x] **Step 7: Replace loading/error with EmptyState**
 
 ```vue
 <EmptyState v-if="pending">Loading…</EmptyState>
 <EmptyState v-else-if="error" error>Error: {{ error }}</EmptyState>
 ```
 
-- [ ] **Step 8: Replace header detail rows**
+- [x] **Step 8: Replace header detail rows**
 
 Use `<DetailRow>` for Supplier, Delivery date, and Remaining items.
 
-- [ ] **Step 9: Remove scoped styles**
+- [x] **Step 9: Remove scoped styles**
 
 Keep `.detail-row`, `.detail-label`, `.lot`, `.badge--pending`, `.badge--in-hand`, and `.badge--finished`; they are removed globally in Task 23. Keep `.view-tabs`, `.tab-badge`, `.card--mismatch`, and mismatch styles (defined in `ReceivingItemsTab`).
 
-- [ ] **Step 10: Verify**
+- [x] **Step 10: Verify**
 
 Run: `pnpm nuxt prepare && pnpm generate`
 Expected: build succeeds and page is under ~250 lines.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add pages/receiving/[id].vue components/receiving/ReceivingItemsTab.vue components/receiving/ReceivingPickingTab.vue
@@ -1230,16 +1232,16 @@ const emit = defineEmits<{
 }>();
 ```
 
-- [ ] **Step 1: Write the component**
+- [x] **Step 1: Write the component**
 
 Move the existing boxes section template and `boxTotalQty` helper into the component. Replace inline detail rows with `<DetailRow>` and inline status badges with `<StatusBadge>`.
 
-- [ ] **Step 2: Verify with `pnpm nuxt prepare`**
+- [x] **Step 2: Verify with `pnpm nuxt prepare`**
 
 Run: `pnpm nuxt prepare`
 Expected: no errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add components/picking/PickingBoxesSection.vue
@@ -1281,16 +1283,16 @@ const emit = defineEmits<{
 }>();
 ```
 
-- [ ] **Step 1: Write the component**
+- [x] **Step 1: Write the component**
 
 Move the existing items section template and the helper functions `scannedQty`, `unboxedPackages`, `boxedPackages`, and `toggleExpand` into the component. Use `<DetailRow>` and `<StatusBadge>`.
 
-- [ ] **Step 2: Verify with `pnpm nuxt prepare`**
+- [x] **Step 2: Verify with `pnpm nuxt prepare`**
 
 Run: `pnpm nuxt prepare`
 Expected: no errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add components/picking/PickingItemsSection.vue
@@ -1304,7 +1306,7 @@ git commit -m "feat: add PickingItemsSection component"
 
 **Goal:** Reduce the page to route, load, actions, and scan orchestration.
 
-- [ ] **Step 1: Update imports**
+- [x] **Step 1: Update imports**
 
 Add:
 
@@ -1322,7 +1324,7 @@ Remove:
 import { useLabelScan, createManualReview, type LabelScanResult } from "~/composables/useLabelScan";
 ```
 
-- [ ] **Step 2: Replace scan-review state and lifecycle**
+- [x] **Step 2: Replace scan-review state and lifecycle**
 
 Replace `useLabelScan` usage with:
 
@@ -1341,7 +1343,7 @@ Remove `onMounted`/`onUnmounted`/`onVisible` and add:
 useVisibleReload(load);
 ```
 
-- [ ] **Step 3: Use `useStatusBadge` for `headerBadgeClass`**
+- [x] **Step 3: Use `useStatusBadge` for `headerBadgeClass`**
 
 Replace the computed `headerBadgeClass` with:
 
@@ -1350,11 +1352,11 @@ const { badgeClass } = useStatusBadge();
 const headerBadgeClass = computed(() => badgeClass(order.value?.status));
 ```
 
-- [ ] **Step 4: Replace issue reason label**
+- [x] **Step 4: Replace issue reason label**
 
 Keep `issueReasonLabel` in the page or move it to the component. For now, keep it in the page and pass the label string into a future `IssueSummary` component if extracted later. In this plan, leave the issue banner inline.
 
-- [ ] **Step 5: Replace boxes and items sections**
+- [x] **Step 5: Replace boxes and items sections**
 
 ```vue
 <PickingBoxesSection
@@ -1383,20 +1385,20 @@ Keep `issueReasonLabel` in the page or move it to the component. For now, keep i
 />
 ```
 
-- [ ] **Step 6: Replace loading/error and scan FAB**
+- [x] **Step 6: Replace loading/error and scan FAB**
 
 Use `<EmptyState>` and `<ScanFab>` as in Task 12.
 
-- [ ] **Step 7: Remove scoped styles**
+- [x] **Step 7: Remove scoped styles**
 
 Keep `.detail-row`, `.detail-label`, `.lot`, `.card--done`, and `.card--danger`; they are removed globally in Task 23.
 
-- [ ] **Step 8: Verify**
+- [x] **Step 8: Verify**
 
 Run: `pnpm nuxt prepare && pnpm generate`
 Expected: build succeeds and page is under ~250 lines.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add pages/picking/[id].vue components/picking/PickingBoxesSection.vue components/picking/PickingItemsSection.vue
@@ -1440,16 +1442,16 @@ const emit = defineEmits<{
 }>();
 ```
 
-- [ ] **Step 1: Write the component**
+- [x] **Step 1: Write the component**
 
 Move the shelf-boxes template and `boxTotalQty` helper into the component. Use `<DetailRow>` and `<StatusBadge>`.
 
-- [ ] **Step 2: Verify with `pnpm nuxt prepare`**
+- [x] **Step 2: Verify with `pnpm nuxt prepare`**
 
 Run: `pnpm nuxt prepare`
 Expected: no errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add components/put-away/ShelfBoxesPanel.vue
@@ -1483,16 +1485,16 @@ const emit = defineEmits<{
 }>();
 ```
 
-- [ ] **Step 1: Write the component**
+- [x] **Step 1: Write the component**
 
 Move the lots list template and `shelfLabel` helper into the component. Use `<DetailRow>`.
 
-- [ ] **Step 2: Verify with `pnpm nuxt prepare`**
+- [x] **Step 2: Verify with `pnpm nuxt prepare`**
 
 Run: `pnpm nuxt prepare`
 Expected: no errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add components/put-away/PutAwayLotsPanel.vue
@@ -1506,7 +1508,7 @@ git commit -m "feat: add PutAwayLotsPanel component"
 
 **Goal:** Reduce the page to route handling, `load()`, and action orchestration.
 
-- [ ] **Step 1: Update imports**
+- [x] **Step 1: Update imports**
 
 Add:
 
@@ -1524,7 +1526,7 @@ Remove:
 import { useLabelScan, createManualReview, type LabelScanResult } from "~/composables/useLabelScan";
 ```
 
-- [ ] **Step 2: Replace scan-review state and lifecycle**
+- [x] **Step 2: Replace scan-review state and lifecycle**
 
 Replace `useLabelScan` usage with:
 
@@ -1543,7 +1545,7 @@ Remove `onMounted`/`onUnmounted`/`onVisible` and add:
 useVisibleReload(load);
 ```
 
-- [ ] **Step 3: Use `useStatusBadge`**
+- [x] **Step 3: Use `useStatusBadge`**
 
 ```ts
 const { badgeClass } = useStatusBadge();
@@ -1551,7 +1553,7 @@ const { badgeClass } = useStatusBadge();
 
 Keep passing `badgeClass(order.status)` to `DetailHeader`.
 
-- [ ] **Step 4: Replace panels**
+- [x] **Step 4: Replace panels**
 
 ```vue
 <ShelfBoxesPanel
@@ -1576,20 +1578,20 @@ Keep passing `badgeClass(order.status)` to `DetailHeader`.
 />
 ```
 
-- [ ] **Step 5: Replace loading/error and scan FAB**
+- [x] **Step 5: Replace loading/error and scan FAB**
 
 Use `<EmptyState>` and `<ScanFab>`.
 
-- [ ] **Step 6: Remove scoped styles**
+- [x] **Step 6: Remove scoped styles**
 
 Keep `.detail-row`, `.detail-label`, `.lot`, `.badge--pending`, and `.badge--finished`; they are removed globally in Task 23.
 
-- [ ] **Step 7: Verify**
+- [x] **Step 7: Verify**
 
 Run: `pnpm nuxt prepare && pnpm generate`
 Expected: build succeeds and page is under ~200 lines.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add pages/put-away/[id].vue components/put-away/ShelfBoxesPanel.vue components/put-away/PutAwayLotsPanel.vue
@@ -1605,7 +1607,7 @@ git commit -m "refactor: split put-away detail into panel components"
 **Files:**
 - Modify: `pages/receiving/index.vue`
 
-- [ ] **Step 1: Replace local `badgeClass` with `useStatusBadge`**
+- [x] **Step 1: Replace local `badgeClass` with `useStatusBadge`**
 
 Remove the local `badgeClass` function and add:
 
@@ -1613,12 +1615,12 @@ Remove the local `badgeClass` function and add:
 const { badgeClass } = useStatusBadge();
 ```
 
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
 
 Run: `pnpm nuxt prepare`
 Expected: no errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add pages/receiving/index.vue
@@ -1630,11 +1632,11 @@ git commit -m "refactor: use shared useStatusBadge in receiving list"
 **Files:**
 - Modify: `pages/put-away/index.vue`
 
-- [ ] **Step 1: Replace local `badgeClass` with `useStatusBadge`**
+- [x] **Step 1: Replace local `badgeClass` with `useStatusBadge`**
 
 Same as Task 19.
 
-- [ ] **Step 2: Verify and commit**
+- [x] **Step 2: Verify and commit**
 
 ```bash
 pnpm nuxt prepare
@@ -1647,11 +1649,11 @@ git commit -m "refactor: use shared useStatusBadge in put-away list"
 **Files:**
 - Modify: `pages/picking/index.vue`
 
-- [ ] **Step 1: Replace local `badgeClass` with `useStatusBadge`**
+- [x] **Step 1: Replace local `badgeClass` with `useStatusBadge`**
 
 Same as Task 19.
 
-- [ ] **Step 2: Verify and commit**
+- [x] **Step 2: Verify and commit**
 
 ```bash
 pnpm nuxt prepare
@@ -1664,7 +1666,7 @@ git commit -m "refactor: use shared useStatusBadge in picking list"
 **Files:**
 - Modify: `pages/goods-verify/shelf/[code].vue`
 
-- [ ] **Step 1: Replace local `badgeClass` and scoped badge styles**
+- [x] **Step 1: Replace local `badgeClass` and scoped badge styles**
 
 Remove the local `badgeClass` function and the scoped `.badge--pending`, `.badge--in-hand`, `.badge--finished` styles. Add:
 
@@ -1672,7 +1674,7 @@ Remove the local `badgeClass` function and the scoped `.badge--pending`, `.badge
 const { badgeClass } = useStatusBadge();
 ```
 
-- [ ] **Step 2: Verify and commit**
+- [x] **Step 2: Verify and commit**
 
 ```bash
 pnpm nuxt prepare
@@ -1689,7 +1691,7 @@ git commit -m "refactor: use shared useStatusBadge in goods-verify shelf page"
 **Files:**
 - Modify: `assets/css/main.css`
 
-- [ ] **Step 1: Append global utility styles**
+- [x] **Step 1: Append global utility styles**
 
 Add at the end of `assets/css/main.css`:
 
@@ -1729,7 +1731,7 @@ Add at the end of `assets/css/main.css`:
 }
 ```
 
-- [ ] **Step 2: Remove scoped copies from all detail pages**
+- [x] **Step 2: Remove scoped copies from all detail pages**
 
 Remove the following scoped style blocks from each page now that the global utilities exist:
 
@@ -1748,12 +1750,12 @@ grep -n "\.detail-row {" pages/**/*.vue
 
 Expected: no matches inside page files (the global copy in `main.css` is fine).
 
-- [ ] **Step 3: Verify**
+- [x] **Step 3: Verify**
 
 Run: `pnpm nuxt prepare && pnpm generate`
 Expected: build succeeds.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add assets/css/main.css
@@ -1766,23 +1768,23 @@ git commit -m "refactor: move detail-row, lot, and done/danger card modifiers to
 
 ### Task 24: Static checks
 
-- [ ] **Step 1: Type check**
+- [x] **Step 1: Type check**
 
 Run: `pnpm nuxt prepare`
 Expected: exits 0.
 
-- [ ] **Step 2: Production build**
+- [x] **Step 2: Production build**
 
 Run: `pnpm generate`
 Expected: exits 0 and produces `.output/public`.
 
 ### Task 25: Manual browser verification
 
-- [ ] **Step 1: Start dev server**
+- [x] **Step 1: Start dev server**
 
 Run: `pnpm dev`
 
-- [ ] **Step 2: Log in and exercise flows**
+- [x] **Step 2: Log in and exercise flows**
 
 Log in as `operator` / `DocPal2026!` and verify on each affected page:
 
@@ -1821,7 +1823,7 @@ Log in as `operator` / `DocPal2026!` and verify on each affected page:
 
 ### Task 26: Final commit
 
-- [ ] **Step 1: Commit verification notes if any**
+- [x] **Step 1: Commit verification notes if any**
 
 If any manual fixes were needed, commit them with a clear message. Otherwise, the work is already committed task-by-task.
 

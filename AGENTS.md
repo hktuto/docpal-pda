@@ -63,7 +63,8 @@ To clear old debug/output images from the app cache:
 - Follow existing patterns. Make minimal, focused changes.
 - Keep files small and single-responsibility.
 - Put database helpers in `db/` and Vue composables in `composables/`.
-- Use manual `db.execute` queries for list pages and reload on `onMounted` plus `visibilitychange`/`focus` events so Capacitor behaves correctly.
+- Use manual `db.execute` queries for list pages and reload on `onMounted` plus `visibilitychange`/`focus` events so Capacitor behaves correctly. Prefer the shared `useVisibleReload(load)` composable for this lifecycle wiring.
+- Use shared presentation primitives on detail pages: `DetailRow`, `StatusBadge`, `ScanFab`, `EmptyState`, and composables `useStatusBadge`, `useLabelScanReview`. Keep page-specific sub-views in `components/<page>/`.
 - Inline raw SQL is acceptable for list queries when Drizzle relations are cumbersome.
 - Prefer explicit, readable names over clever abstractions.
 

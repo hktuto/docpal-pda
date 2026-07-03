@@ -219,20 +219,37 @@ The database lives in the browser's IndexedDB. Use the **⋮ → Reset local DB*
 │   └── css/main.css         # Global styles
 ├── capacitor.config.ts      # Capacitor native shell configuration
 ├── components/
-│   ├── AppHeader.vue        # Header with back button, reset DB, logout
+│   ├── AppHeader.vue             # Header with back button, reset DB, logout
 │   ├── BoxMeasurementsModal.vue  # Edit shipping box weight/size/destination
-│   ├── DetailHeader.vue     # Reusable detail page header and status chip
-│   └── LabelScanReviewModal.vue  # Review camera-scanned label matches
+│   ├── DetailHeader.vue          # Reusable detail page header and status chip
+│   ├── DetailRow.vue             # Label/value row used across detail pages
+│   ├── EmptyState.vue            # Loading/error/empty message
+│   ├── LabelScanReviewModal.vue  # Review camera-scanned label matches
+│   ├── ScanFab.vue               # Floating circular scan button
+│   ├── StatusBadge.vue           # Status badge with centralized class mapping
+│   ├── picking/                  # Picking detail sub-views
+│   │   ├── PickingBoxesSection.vue
+│   │   ├── PickingIssueBanner.vue
+│   │   └── PickingItemsSection.vue
+│   ├── put-away/                 # Put-away detail sub-views
+│   │   ├── PutAwayLotsPanel.vue
+│   │   └── ShelfBoxesPanel.vue
+│   └── receiving/                # Receiving detail sub-views
+│       ├── ReceivingItemsTab.vue
+│       └── ReceivingPickingTab.vue
 ├── composables/
 │   ├── useAndroidBackButton.ts   # Handle Android hardware back button
-│   ├── useAuth.ts           # Login/logout/restore
-│   ├── useCurrentUser.ts    # Current operator helper
-│   ├── useDb.ts             # Drizzle client from provided PGlite
-│   ├── useLabelScan.ts      # Scan label parsing and matching state
-│   ├── useMockOcr.ts        # Parses typed label input for the scan modal
-│   ├── useRecognizedTextParser.ts  # Normalize and parse OCR text
-│   ├── useRectangleDetection.ts    # Native Android rectangle/label detection
-│   └── useScanMatchers.ts   # Matching utilities for scan results
+│   ├── useAuth.ts                # Login/logout/restore
+│   ├── useCurrentUser.ts         # Current operator helper
+│   ├── useDb.ts                  # Drizzle client from provided PGlite
+│   ├── useLabelScan.ts           # Scan label parsing and matching state
+│   ├── useLabelScanReview.ts     # Shared scan-review modal state machine
+│   ├── useMockOcr.ts             # Parses typed label input for the scan modal
+│   ├── useRecognizedTextParser.ts # Normalize and parse OCR text
+│   ├── useRectangleDetection.ts   # Native Android rectangle/label detection
+│   ├── useScanMatchers.ts        # Matching utilities for scan results
+│   ├── useStatusBadge.ts         # Centralized badge class helper
+│   └── useVisibleReload.ts       # Capacitor-friendly reload-on-foreground lifecycle
 ├── constants/               # App constants
 │   └── pocOptions.ts
 ├── db/
