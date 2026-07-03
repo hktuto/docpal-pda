@@ -164,14 +164,14 @@ export async function cancelShelfBox(
     const box = await tx.query.shelfBoxes.findFirst({
       where: eq(schema.shelfBoxes.id, boxId),
     });
-    if (!box) throw new Error("Box not found");
-    if (box.status !== "open") throw new Error("Box is not open");
+    if (!box) throw new Error("Shelf box not found");
+    if (box.status !== "open") throw new Error("Shelf box is not open");
 
     const itemResult = await tx
       .select({ count: sql<number>`count(*)`.mapWith(Number) })
       .from(schema.shelfBoxItems)
       .where(eq(schema.shelfBoxItems.shelfBoxId, boxId));
-    if (itemResult[0]?.count > 0) throw new Error("Box is not empty");
+    if ((itemResult[0]?.count ?? 0) > 0) throw new Error("Shelf box is not empty");
 
     await tx.insert(schema.transitionLogs).values({
       id: uuid(),
