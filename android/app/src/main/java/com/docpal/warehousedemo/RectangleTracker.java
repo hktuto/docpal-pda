@@ -26,7 +26,10 @@ public class RectangleTracker {
   private int nextId = 1;
   private final List<TrackedRect> trackedRects = new ArrayList<>();
 
-  public List<TrackedRect> update(List<RectangleDetector.RectResult> detections) {
+  public synchronized List<TrackedRect> update(List<RectangleDetector.RectResult> detections) {
+    if (detections == null) {
+      return new ArrayList<>();
+    }
     long now = System.currentTimeMillis();
 
     List<RectangleDetector.RectResult> unmatchedDetections = new ArrayList<>(detections);
@@ -81,7 +84,7 @@ public class RectangleTracker {
     return result;
   }
 
-  public void clear() {
+  public synchronized void clear() {
     trackedRects.clear();
   }
 
