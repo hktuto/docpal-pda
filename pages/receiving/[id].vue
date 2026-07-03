@@ -127,12 +127,12 @@
                 <div class="mismatch-summary">
                   <span class="mismatch-badge">{{ formatMismatchSummary(item) }}</span>
                   <span v-if="item.mismatchNote" class="mismatch-note">{{ item.mismatchNote }}</span>
-                  <button class="btn btn--small" :disabled="saving[item.id]" @click="openReportIssue(item)">Edit issue</button>
+                  <button class="btn btn--small btn--danger" :disabled="saving[item.id]" @click="openReportIssue(item)">Edit issue</button>
                 </div>
               </template>
 
               <template v-else>
-                <button class="btn btn--small btn--danger" :disabled="saving[item.id]" @click="openReportIssue(item)">Report issue</button>
+                <button class="btn btn--small" :disabled="saving[item.id]" @click="openReportIssue(item)">Report issue</button>
               </template>
             </div>
           </div>
@@ -298,10 +298,11 @@
       />
 
       <ReportIssueModal
-        :is-open="reportModalOpen"
+        :model-value="reportModalOpen"
         :item="reportModalItem"
+        :saving="reportModalItem ? saving[reportModalItem.id] ?? false : false"
+        @update:model-value="onReportModalModelValueUpdate"
         @confirm="onConfirmIssue"
-        @cancel="closeReportIssue"
       />
     </template>
   </div>
@@ -472,7 +473,8 @@ const lockedByItem = computed(() => {
   if (!order.value) return map;
   for (const invoice of order.value.invoices) {
     for (const item of invoice.items) {
-      map[item.id] = item.pickedQty > 0 || item.putAwayQty > 0;
+      const allocated = allocatedByItem.value[item.id] ?? 0;
+      map[item.id] = item.pickedQty > 0 || item.putAwayQty > 0 || allocated > 0;
     }
   }
   return map;
@@ -684,6 +686,11 @@ function closeReportIssue() {
   reportModalItem.value = null;
 }
 
+function onReportModalModelValueUpdate(v: boolean) {
+  reportModalOpen.value = v;
+  if (!v) reportModalItem.value = null;
+}
+
 async function onConfirmIssue(payload: {
   reason: schema.MismatchReason | null;
   mismatchQty: number | null;
@@ -691,12 +698,13 @@ async function onConfirmIssue(payload: {
   note: string;
 }) {
   if (!currentUser || !reportModalItem.value) return;
-  saving.value[reportModalItem.value.id] = true;
+  const itemId = reportModalItem.value.id;
+  saving.value[itemId] = true;
   error.value = null;
   try {
     await updateReceivingItemMismatch(
       db,
-      reportModalItem.value.id,
+      itemId,
       currentUser.id,
       payload.reason,
       payload.mismatchQty,
@@ -708,9 +716,7 @@ async function onConfirmIssue(payload: {
   } catch (e: any) {
     error.value = e?.message ?? String(e);
   } finally {
-    if (reportModalItem.value) {
-      saving.value[reportModalItem.value.id] = false;
-    }
+    saving.value[itemId] = false;
   }
 }
 

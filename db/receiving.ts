@@ -175,13 +175,7 @@ export async function canEditReceivingItemMismatch(
   });
   if (!item) return false;
 
-  const allocatedResult = await dbOrTx
-    .select({ total: sql<number>`coalesce(sum(${schema.allocations.qty}), 0)`.mapWith(Number) })
-    .from(schema.allocations)
-    .where(eq(schema.allocations.receivingInvoiceItemId, itemId));
-
-  const allocated = allocatedResult[0]?.total ?? 0;
-  return item.pickedQty === 0 && item.putAwayQty === 0 && allocated === 0;
+  return item.pickedQty === 0 && item.putAwayQty === 0;
 }
 
 export async function updateReceivingItemMismatch(
@@ -196,6 +190,8 @@ export async function updateReceivingItemMismatch(
   const trimmedWrongPartNo = wrongPartNo?.trim() || null;
   const trimmedNote = note.trim() || null;
 
+  let receivingOrderId: string | null = null;
+
   await db.transaction(async (tx) => {
     const item = await tx.query.receivingInvoiceItems.findFirst({
       where: eq(schema.receivingInvoiceItems.id, itemId),
@@ -208,7 +204,7 @@ export async function updateReceivingItemMismatch(
 
     const editable = await canEditReceivingItemMismatch(tx, itemId, item);
     if (!editable) {
-      throw new Error("Cannot edit mismatch: stock already allocated, picked, or put away");
+      throw new Error("Cannot edit mismatch: stock already picked or put away");
     }
 
     validateMismatchInputs(item.qty, reason, mismatchQty, trimmedWrongPartNo);
@@ -266,10 +262,65 @@ export async function updateReceivingItemMismatch(
       createdAt: now,
     });
 
-    if (item.invoice?.receivingOrderId) {
-      await tryMarkReceivingOrderClear(tx, item.invoice.receivingOrderId, actorId);
+    // Trim allocations if the new received quantity reduces availability.
+    // pickedQty and putAwayQty are guaranteed zero here (canEditReceivingItemMismatch),
+    // so available == receivedQty.
+    const newAvailable = receivedQty;
+    const allocatedResult = await tx
+      .select({
+        total: sql<number>`coalesce(sum(${schema.allocations.qty}), 0)`.mapWith(Number),
+      })
+      .from(schema.allocations)
+      .where(eq(schema.allocations.receivingInvoiceItemId, itemId));
+
+    const totalAllocated = allocatedResult[0]?.total ?? 0;
+
+    if (totalAllocated > newAvailable) {
+      const excess = totalAllocated - newAvailable;
+      const allocationsToTrim = await tx
+        .select()
+        .from(schema.allocations)
+        .where(eq(schema.allocations.receivingInvoiceItemId, itemId))
+        .orderBy(sql`${schema.allocations.id} DESC`);
+
+      let remaining = excess;
+      for (const allocation of allocationsToTrim) {
+        if (remaining <= 0) break;
+        const cut = Math.min(remaining, allocation.qty);
+
+        if (cut >= allocation.qty) {
+          await tx.delete(schema.allocations).where(eq(schema.allocations.id, allocation.id));
+        } else {
+          await tx
+            .update(schema.allocations)
+            .set({ qty: sql`${schema.allocations.qty} - ${cut}` })
+            .where(eq(schema.allocations.id, allocation.id));
+        }
+
+        await tx
+          .update(schema.pickingItems)
+          .set({ allocatedQty: sql`${schema.pickingItems.allocatedQty} - ${cut}` })
+          .where(eq(schema.pickingItems.id, allocation.pickingItemId));
+
+        if (allocation.inventoryLotId) {
+          await tx
+            .update(schema.inventoryLots)
+            .set({ allocatedQty: sql`${schema.inventoryLots.allocatedQty} - ${cut}` })
+            .where(eq(schema.inventoryLots.id, allocation.inventoryLotId));
+        }
+
+        remaining -= cut;
+      }
     }
+
+    receivingOrderId = item.invoice?.receivingOrderId ?? null;
   });
+
+  // Reallocate freed stock to pending picking orders, then re-evaluate clear status.
+  await allocatePendingPickingOrders(db);
+  if (receivingOrderId) {
+    await tryMarkReceivingOrderClear(db, receivingOrderId, actorId);
+  }
 }
 
 export async function confirmReceivingOrderArrived(
