@@ -3,14 +3,7 @@ import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { v4 as uuid } from "uuid";
 import * as schema from "./schema";
 import { tryMarkReceivingOrderClear } from "./receiving";
-
-function getIsoWeek(date: Date): number {
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-  const dayNum = d.getUTCDay() || 7;
-  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
-}
+import { getIsoWeek } from "./date";
 
 async function generateShelfBoxId(
   tx: PgliteDatabase<typeof schema>,
