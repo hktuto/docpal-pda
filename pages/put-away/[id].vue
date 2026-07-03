@@ -23,66 +23,77 @@
       </DetailHeader>
 
       <div class="card" style="margin-bottom: 1.5rem;">
-        <h2 style="margin-top: 0; margin-bottom: 1rem;">Shelf boxes</h2>
-
-        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem;">
-          <select v-model="selectedShelf" style="flex: 1; min-width: 10rem;" :disabled="creating">
-            <option value="">Select a shelf</option>
-            <option v-for="shelf in shelves" :key="shelf.code" :value="shelf.code">
-              {{ shelf.zone ? `${shelf.code} — ${shelf.zone}` : shelf.code }}
-            </option>
-          </select>
-          <button class="btn" :disabled="creating || !selectedShelf" @click="createBox">
-            {{ creating ? "Creating…" : "Create box" }}
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+          <h2 style="margin: 0;">Shelf boxes</h2>
+          <button
+            class="btn btn--small btn--ghost"
+            :aria-expanded="boxesExpanded"
+            @click="boxesExpanded = !boxesExpanded"
+          >
+            {{ boxesExpanded ? "Hide" : `Show ${boxes.length}` }}
           </button>
         </div>
 
-        <p v-if="boxes.length === 0" class="empty" style="padding: 0;">No boxes yet.</p>
-
-        <div
-          v-for="box in boxes"
-          :key="box.id"
-          class="card"
-          style="margin-bottom: 0.75rem;"
-          :class="{ 'card--done': box.status !== 'open' }"
-        >
-          <div class="detail-row">
-            <span class="detail-label">Box</span>
-            <span class="card__title">{{ box.id }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Shelf</span>
-            <span>{{ box.shelfCode || "—" }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Status</span>
-            <span class="badge" :class="badgeClass(box.status)">{{ box.status }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Items</span>
-            <span>{{ box.items?.length || 0 }} lines · {{ boxTotalQty(box) }} pcs</span>
-          </div>
-
-          <div v-if="box.items?.length" style="margin-top: 0.5rem;">
-            <p style="margin: 0 0 0.25rem; font-size: 0.8125rem; color: var(--muted);">Contents:</p>
-            <div
-              v-for="item in box.items"
-              :key="item.id"
-              class="lot"
-            >
-              <span>{{ item.part?.partNo || "—" }}</span>
-              <span style="color: var(--muted);">× {{ item.qty }}</span>
-            </div>
-          </div>
-
-          <div v-if="box.status === 'open'" style="margin-top: 1rem;">
-            <button
-              class="btn"
-              :disabled="closing || !box.items?.length"
-              @click="closeBox(box.id)"
-            >
-              {{ closing ? "Closing…" : "Close box" }}
+        <div v-if="boxesExpanded">
+          <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem;">
+            <select v-model="selectedShelf" style="flex: 1; min-width: 10rem;" :disabled="creating">
+              <option value="">Select a shelf</option>
+              <option v-for="shelf in shelves" :key="shelf.code" :value="shelf.code">
+                {{ shelf.zone ? `${shelf.code} — ${shelf.zone}` : shelf.code }}
+              </option>
+            </select>
+            <button class="btn" :disabled="creating || !selectedShelf" @click="createBox">
+              {{ creating ? "Creating…" : "Create box" }}
             </button>
+          </div>
+
+          <p v-if="boxes.length === 0" class="empty" style="padding: 0;">No boxes yet.</p>
+
+          <div
+            v-for="box in boxes"
+            :key="box.id"
+            class="card"
+            style="margin-bottom: 0.75rem;"
+            :class="{ 'card--done': box.status !== 'open' }"
+          >
+            <div class="detail-row">
+              <span class="detail-label">Box</span>
+              <span class="card__title">{{ box.id }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Shelf</span>
+              <span>{{ box.shelfCode || "—" }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Status</span>
+              <span class="badge" :class="badgeClass(box.status)">{{ box.status }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Items</span>
+              <span>{{ box.items?.length || 0 }} lines · {{ boxTotalQty(box) }} pcs</span>
+            </div>
+
+            <div v-if="box.items?.length" style="margin-top: 0.5rem;">
+              <p style="margin: 0 0 0.25rem; font-size: 0.8125rem; color: var(--muted);">Contents:</p>
+              <div
+                v-for="item in box.items"
+                :key="item.id"
+                class="lot"
+              >
+                <span>{{ item.part?.partNo || "—" }}</span>
+                <span style="color: var(--muted);">× {{ item.qty }}</span>
+              </div>
+            </div>
+
+            <div v-if="box.status === 'open'" style="margin-top: 1rem;">
+              <button
+                class="btn"
+                :disabled="closing || !box.items?.length"
+                @click="closeBox(box.id)"
+              >
+                {{ closing ? "Closing…" : "Close box" }}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -170,6 +181,7 @@ const route = useRoute();
 const orderId = route.params.id as string;
 
 const headerExpanded = ref(false);
+const boxesExpanded = ref(false);
 
 const db = await useDb();
 const currentUser = await useCurrentUser();
