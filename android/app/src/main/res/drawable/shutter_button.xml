@@ -4,20 +4,20 @@
         <shape android:shape="oval">
             <solid android:color="#CCFFFFFF" />
             <size
-                android:width="72dp"
-                android:height="72dp" />
+                android:width="80dp"
+                android:height="80dp" />
         </shape>
     </item>
     <item
-        android:left="6dp"
-        android:top="6dp"
-        android:right="6dp"
-        android:bottom="6dp">
+        android:left="8dp"
+        android:top="8dp"
+        android:right="8dp"
+        android:bottom="8dp">
         <shape android:shape="oval">
-            <stroke
-                android:width="3dp"
-                android:color="#FFFFFF" />
             <solid android:color="#FFFFFFFF" />
+            <size
+                android:width="64dp"
+                android:height="64dp" />
         </shape>
     </item>
 </layer-list>
