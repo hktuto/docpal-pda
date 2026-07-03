@@ -47,7 +47,7 @@ async function openScan(itemId?: string) {
     review.value = {
       status: 'review',
       capture: { imagePath: '', text: '', barcodes: '[]' },
-      parsed: {},
+      parsed: { partNo: '', dateCode: '', lotCode: '', coo: '', cow: '', qty: '' },
       matchResult: { type: 'none' },
     };
     scanPickingItemId.value = itemId;
