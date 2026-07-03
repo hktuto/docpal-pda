@@ -1,0 +1,227 @@
+<template>
+  <h2 class="section-title">Picking view</h2>
+  <input
+    :value="searchQuery"
+    type="text"
+    placeholder="Search picking orders or parts…"
+    style="width: 100%; margin-bottom: 1rem;"
+    @input="emit('update:searchQuery', ($event.target as HTMLInputElement).value)"
+  />
+  <p v-if="filteredGroupedPickingOrders.length === 0" class="empty">
+    No picking orders are linked to this receiving order yet.
+  </p>
+
+  <div v-for="po in filteredGroupedPickingOrders" :key="po.id" class="card" style="margin-bottom: 1.5rem;">
+    <DetailRow label="Picking order">
+      <NuxtLink :to="`/picking/${po.id}`" class="card__title">{{ po.ref_no }}</NuxtLink>
+    </DetailRow>
+    <DetailRow label="Status">
+      <StatusBadge :status="po.status" />
+    </DetailRow>
+
+    <div v-if="po.status !== 'finished'" style="margin-top: 0.75rem;">
+      <button class="btn btn--small" :disabled="creatingBox[po.id]" @click="emit('create-box', po.id)">
+        {{ creatingBox[po.id] ? "Creating…" : "Create box" }}
+      </button>
+    </div>
+
+    <div v-if="(boxesByOrder[po.id] || []).length" style="margin-top: 0.75rem;">
+      <h3 style="margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--muted);">Boxes</h3>
+      <div
+        v-for="box in boxesByOrder[po.id]"
+        :key="box.id"
+        class="lot"
+        style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;"
+      >
+        <span style="font-size: 0.875rem; font-weight: 600;">{{ box.id }}</span>
+        <StatusBadge :status="box.status" />
+      </div>
+    </div>
+
+    <div v-for="pi in po.items" :key="pi.id" class="lot" style="margin-top: 0.75rem;">
+      <DetailRow label="Part" :value="pi.part_no" />
+      <DetailRow label="Required / scanned / boxed" :value="`${pi.required_qty} / ${pi.scanned_qty} / ${pi.boxed_qty}`" />
+      <DetailRow label="Status">
+        <StatusBadge :status="pi.boxed_qty >= pi.required_qty ? 'finished' : 'picking'">
+          {{ pi.boxed_qty >= pi.required_qty ? "Finished" : "Picking" }}
+        </StatusBadge>
+      </DetailRow>
+      <div v-if="allocatedLocations(pi).length" class="detail-row">
+        <span class="detail-label">Allocated lots</span>
+      </div>
+      <ul v-if="allocatedLocations(pi).length" style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--muted);">
+        <li v-for="(loc, idx) in allocatedLocations(pi)" :key="idx">
+          {{ loc.shelf_code || loc.box_id || "Receiving area" }}
+          · {{ loc.date_code || "—" }} / {{ loc.lot_code || "—" }} / {{ loc.coo || "—" }} / {{ loc.cow || "—" }}
+          · qty {{ loc.allocated_qty }}
+        </li>
+      </ul>
+
+      <div v-if="packagesByItem[pi.id]?.length" style="margin-top: 0.75rem;">
+        <h3 style="margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--muted);">Packages</h3>
+        <div
+          v-for="pkg in packagesByItem[pi.id]"
+          :key="pkg.id"
+          class="lot"
+          style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; justify-content: space-between;"
+        >
+          <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+            <span style="font-size: 0.875rem;">
+              {{ pkg.qty }} pcs · {{ pkg.dateCode || "—" }} / {{ pkg.lotCode || "—" }} / {{ pkg.coo || "—" }} / {{ pkg.cow || "—" }}
+            </span>
+            <span style="font-size: 0.75rem; color: var(--muted);">
+              <template v-if="pkg.shippingBoxId">In box {{ pkg.shippingBoxId }}</template>
+              <template v-else>Unboxed</template>
+            </span>
+          </div>
+          <div v-if="!pkg.shippingBoxId" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <select
+              :value="boxSelections[pkg.id]"
+              :disabled="addingPackage[pkg.id]"
+              style="min-width: 8rem;"
+              @change="updateBoxSelection(pkg.id, ($event.target as HTMLSelectElement).value)"
+            >
+              <option value="">Select box</option>
+              <option v-for="box in openBoxesForOrder(po.id)" :key="box.id" :value="box.id">{{ box.id }}</option>
+            </select>
+            <button
+              class="btn btn--small"
+              :disabled="addingPackage[pkg.id] || !boxSelections[pkg.id]"
+              @click="emit('add-to-box', pkg.id)"
+            >
+              {{ addingPackage[pkg.id] ? "Adding…" : "Add to box" }}
+            </button>
+          </div>
+          <button
+            v-else-if="boxById(pkg.shippingBoxId)?.status === 'open'"
+            class="btn btn--small"
+            :disabled="removingPackage[pkg.id]"
+            @click="emit('remove-from-box', pkg.id)"
+          >
+            {{ removingPackage[pkg.id] ? "Removing…" : "Remove from box" }}
+          </button>
+        </div>
+      </div>
+
+      <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+        <button class="btn btn--small" :disabled="scanning" @click="emit('scan', pi.id)">Scan</button>
+        <button class="btn btn--small" @click="toggleExpand(pi.id)">
+          {{ expandedItems.has(pi.id) ? "Hide picking logs" : "Show picking logs" }}
+          ({{ (transitionLogs[pi.id] || []).length }})
+        </button>
+
+        <div v-if="expandedItems.has(pi.id)" style="width: 100%; margin-top: 0.5rem;">
+          <p v-if="!(transitionLogs[pi.id] || []).length" class="card__meta">No picking logs.</p>
+          <ul v-else style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--muted);">
+            <li v-for="log in transitionLogs[pi.id]" :key="log.id" style="margin-bottom: 0.35rem;">
+              {{ new Date(log.createdAt).toLocaleString() }}
+              · {{ log.actorName || "System" }}
+              · {{ log.fromState || "—" }} → {{ log.toState }}
+              <span v-if="log.metadata">
+                · {{ logMetadataText(log.metadata) }}
+              </span>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import * as schema from "~/db/schema";
+
+interface GroupedItem {
+  id: string;
+  part_id: string;
+  part_no: string;
+  required_qty: number;
+  picked_qty: number;
+  scanned_qty: number;
+  boxed_qty: number;
+  locations: Array<{
+    shelf_code: string | null;
+    box_id: string | null;
+    date_code: string | null;
+    lot_code: string | null;
+    coo: string | null;
+    cow: string | null;
+    allocated_qty: number;
+  }>;
+}
+
+interface GroupedOrder {
+  id: string;
+  ref_no: string;
+  status: string;
+  items: GroupedItem[];
+}
+
+interface TransitionLog {
+  id: string;
+  entityId: string;
+  fromState: string | null;
+  toState: string;
+  metadata: string | null;
+  createdAt: Date | string;
+  actorName?: string | null;
+}
+
+const props = defineProps<{
+  filteredGroupedPickingOrders: GroupedOrder[];
+  boxesByOrder: Record<string, (typeof schema.shippingBoxes.$inferSelect)[]>;
+  packagesByItem: Record<string, (typeof schema.pickingPackages.$inferSelect)[]>;
+  transitionLogs: Record<string, TransitionLog[]>;
+  boxSelections: Record<string, string>;
+  creatingBox: Record<string, boolean>;
+  addingPackage: Record<string, boolean>;
+  removingPackage: Record<string, boolean>;
+  scanning: boolean;
+  expandedItems: Set<string>;
+  searchQuery: string;
+}>();
+
+const emit = defineEmits<{
+  "update:searchQuery": [value: string];
+  "update:expandedItems": [value: Set<string>];
+  "update:boxSelections": [value: Record<string, string>];
+  "create-box": [pickingOrderId: string];
+  "add-to-box": [packageId: string];
+  "remove-from-box": [packageId: string];
+  scan: [pickingItemId?: string];
+}>();
+
+function openBoxesForOrder(pickingOrderId: string) {
+  return (props.boxesByOrder[pickingOrderId] ?? []).filter((b) => b.status === "open");
+}
+
+function boxById(boxId: string | null | undefined) {
+  if (!boxId) return undefined;
+  for (const boxes of Object.values(props.boxesByOrder)) {
+    const box = boxes.find((b) => b.id === boxId);
+    if (box) return box;
+  }
+  return undefined;
+}
+
+function updateBoxSelection(packageId: string, value: string) {
+  emit("update:boxSelections", { ...props.boxSelections, [packageId]: value });
+}
+
+function toggleExpand(itemId: string) {
+  const next = new Set(props.expandedItems);
+  if (next.has(itemId)) next.delete(itemId);
+  else next.add(itemId);
+  emit("update:expandedItems", next);
+}
+
+function allocatedLocations(item: GroupedItem) {
+  return item.locations.filter((l) => l.allocated_qty > 0);
+}
+
+function logMetadataText(metadata: string | null): string | number | undefined {
+  if (!metadata) return undefined;
+  const parsed = JSON.parse(metadata);
+  return parsed.qty ?? parsed.note;
+}
+</script>
