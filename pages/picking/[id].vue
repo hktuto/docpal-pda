@@ -213,7 +213,7 @@
           </div>
         </div>
 
-        <div v-if="unboxedPackages(item).length" style="margin-top: 0.75rem;">
+        <div v-if="unboxedPackages(item).length && order.status !== 'finished' && order.status !== 'issue'" style="margin-top: 0.75rem;">
           <h3 class="subsection-title">Unboxed packages</h3>
           <div
             v-for="pkg in unboxedPackages(item)"
@@ -240,7 +240,7 @@
           </div>
         </div>
 
-        <div v-if="boxedPackages(item).length" style="margin-top: 0.75rem;">
+        <div v-if="boxedPackages(item).length && order.status !== 'finished' && order.status !== 'issue'" style="margin-top: 0.75rem;">
           <h3 style="margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--muted);">Boxed packages</h3>
           <div
             v-for="pkg in boxedPackages(item)"
@@ -324,6 +324,7 @@ import {
   finishPickingOrder,
   getPickingItemTransitionLogs,
 } from "~/db/picking";
+import { type PickingIssueReason } from "~/db/schema";
 
 definePageMeta({ title: "Picking Detail", props: { noPadding: true } });
 
@@ -362,7 +363,7 @@ const headerBadgeClass = computed(() => {
   return "";
 });
 
-function issueReasonLabel(reason: string | null) {
+function issueReasonLabel(reason: PickingIssueReason | null) {
   if (reason === "insufficient_stock") return "Insufficient stock";
   if (reason === "cannot_divide") return "Cannot divide quantity";
   if (reason === "merge") return "Merge orders";
@@ -531,7 +532,22 @@ async function finish() {
   }
 }
 
-onMounted(load);
+onMounted(() => {
+  load();
+  document.addEventListener("visibilitychange", onVisible);
+  window.addEventListener("focus", onVisible);
+});
+
+onUnmounted(() => {
+  document.removeEventListener("visibilitychange", onVisible);
+  window.removeEventListener("focus", onVisible);
+});
+
+function onVisible() {
+  if (document.visibilityState === "visible") {
+    load();
+  }
+}
 </script>
 
 <style scoped>
@@ -567,7 +583,7 @@ onMounted(load);
 }
 
 .card--danger {
-  border-left: 4px solid #dc2626;
+  border-left: 4px solid var(--danger);
 }
 
 </style>
