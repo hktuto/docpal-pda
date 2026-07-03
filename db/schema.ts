@@ -123,8 +123,8 @@ export const pickingOrders = pgTable("picking_orders", {
   issueReason: text("issue_reason", { enum: pickingIssueReasons }),
   issueQty: integer("issue_qty"),
   issuePackSize: integer("issue_pack_size"),
-  issueNote: text("issue_note"),
-  issueRemark: text("issue_remark"),
+  issueNote: text("issue_note"),     // common note applied to all selected orders
+  issueRemark: text("issue_remark"), // per-order remark
   issueReportedAt: timestamp("issue_reported_at"),
   issueReportedBy: text("issue_reported_by").references(() => users.id),
   createdAt: timestamp("created_at").notNull(),
