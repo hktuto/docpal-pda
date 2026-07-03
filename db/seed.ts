@@ -197,7 +197,7 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
   const pickingOrderRecords = [
     { id: uuid(), refNo: "PICK-001", supplierId: supplierByCode.KOA.id, deliveryDate: now, poNo: "PO-PICK-001", requiredDateCodeNotice: null as string | null, shipTo: "US", destinationCountry: "USA", status: "pending" as const, createdAt: now, updatedAt: now },
     { id: uuid(), refNo: "PICK-002", supplierId: supplierByCode.ABLIC.id, deliveryDate: now, poNo: "PO-PICK-002", requiredDateCodeNotice: null, shipTo: "CN", destinationCountry: "China", status: "pending" as const, createdAt: now, updatedAt: now },
-    { id: uuid(), refNo: "PICK-003", supplierId: supplierByCode.DIOTEC.id, deliveryDate: now, poNo: "PO-PICK-003", requiredDateCodeNotice: null, shipTo: "US", destinationCountry: "USA", status: "pending" as const, createdAt: now, updatedAt: now },
+    { id: uuid(), refNo: "PICK-003", supplierId: supplierByCode.OKAYA.id, deliveryDate: now, poNo: "PO-PICK-003", requiredDateCodeNotice: null, shipTo: "US", destinationCountry: "USA", status: "pending" as const, createdAt: now, updatedAt: now },
     { id: uuid(), refNo: "PICK-004", supplierId: supplierByCode.KYOCER.id, deliveryDate: now, poNo: "PO-PICK-004", requiredDateCodeNotice: null, shipTo: "CN", destinationCountry: "China", status: "pending" as const, createdAt: now, updatedAt: now },
     { id: uuid(), refNo: "PICK-005", supplierId: supplierByCode.IK.id, deliveryDate: now, poNo: "PO-PICK-005", requiredDateCodeNotice: null, shipTo: "US", destinationCountry: "USA", status: "pending" as const, createdAt: now, updatedAt: now },
   ] as const;
@@ -215,12 +215,11 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
     // PICK-002 (ABLIC)
     { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-002"].id, partId: partByNo["S-1206B18-M3T1U"].id, qty: 100, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
     { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-002"].id, partId: partByNo["S-8240ADJ-I6T1U"].id, qty: 500, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
-    { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-002"].id, partId: partByNo["SL1M"].id, qty: 2000, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
-    // PICK-003 (DIOTEC)
-    { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-003"].id, partId: partByNo["DBI25-16A"].id, qty: 50, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
-    { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-003"].id, partId: partByNo["Z1SMA1020"].id, qty: 200, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
+    { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-002"].id, partId: partByNo["D1FL20U"].id, qty: 100, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
+    // PICK-003 (OKAYA)
     { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-003"].id, partId: partByNo["OKAYA-RE104-L"].id, qty: 500, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
     { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-003"].id, partId: partByNo["D1FL20U"].id, qty: 100, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
+    { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-003"].id, partId: partByNo["IL34063ADT"].id, qty: 200, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
     // PICK-004 (KYOCER)
     { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-004"].id, partId: partByNo["NX8045GB"].id, qty: 50, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
     { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-004"].id, partId: partByNo["CX2016SA20000D0HSSCC"].id, qty: 100, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },

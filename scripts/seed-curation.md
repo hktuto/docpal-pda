@@ -148,8 +148,8 @@ Pre-existing parts on shelves.
 | refNo | supplierCode | poNo | shipTo | destinationCountry | items |
 |-------|--------------|------|--------|--------------------|-------|
 | PICK-001 | KOA | PO-PICK-001 | US | USA | RK73H2ATTD1372F × 500, RK73H1JTTD1501F × 200, RK73H2ATTD1002F × 1000 |
-| PICK-002 | ABLIC | PO-PICK-002 | CN | China | S-1206B18-M3T1U × 100, S-8240ADJ-I6T1U × 500, SL1M × 2000 |
-| PICK-003 | DIOTEC | PO-PICK-003 | US | USA | DBI25-16A × 50, Z1SMA1020 × 200, OKAYA-RE104-L × 500, D1FL20U × 100 |
+| PICK-002 | ABLIC | PO-PICK-002 | CN | China | S-1206B18-M3T1U × 100, S-8240ADJ-I6T1U × 500, D1FL20U × 100 |
+| PICK-003 | OKAYA | PO-PICK-003 | US | USA | OKAYA-RE104-L × 500, D1FL20U × 100, IL34063ADT × 200 |
 | PICK-004 | KYOCER | PO-PICK-004 | CN | China | NX8045GB × 50, CX2016SA20000D0HSSCC × 100, Q-SPT7P0327620C5GF × 120 |
 | PICK-005 | IK | PO-PICK-005 | US | USA | IL34063ADT × 200, NCC-TND14V-471KB00AAA0 × 250, 04028DA12RBUFB × 1 |
 
@@ -160,6 +160,6 @@ Pre-existing parts on shelves.
 - **Part coverage:** All 21 receiving/shelf/picking part numbers appear exactly once in the Parts list.
 - **Picking coverage:** Every picking quantity is well below the available receiving + shelf stock:
   - KOA stock covers pick 1 (e.g. RK73H2ATTD1002F: 70,000 vs pick 1,000).
-  - ABLIC/DIOTEC stock covers pick 2 (S-8240ADJ-I6T1U: 15,000 vs pick 500; SL1M: 300,000 vs pick 2,000).
-  - DIOTEC/shelf stock covers pick 3 (DBI25-16A: 900 vs pick 50; OKAYA-RE104-L: 5,000 vs pick 500).
+  - ABLIC stock covers pick 2 (S-8240ADJ-I6T1U: 15,000 vs pick 500); shelf stock covers D1FL20U (5,000 vs pick 100).
+  - Shelf stock covers pick 3 (OKAYA-RE104-L: 5,000 vs pick 500; D1FL20U: 5,000 vs pick 100; IL34063ADT: 5,000 vs pick 200).
   - Shelf stock covers picks 4 and 5 (e.g. NX8045GB: 5,000 vs pick 50; 04028DA12RBUFB: 10 vs pick 1).
