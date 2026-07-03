@@ -12,10 +12,7 @@
         style="margin-bottom: 1.5rem;"
       >
         <template #actions>
-          <template v-if="order.status !== 'finished'">
-            <button class="btn btn--small" :disabled="creatingBox" @click="createBox">
-              {{ creatingBox ? "Creating…" : "Create box" }}
-            </button>
+          <template v-if="order.status !== 'finished' && order.status !== 'issue'">
             <button
               v-if="allItemsFullyBoxed"
               class="btn btn--small"
@@ -56,30 +53,49 @@
         </div>
       </DetailHeader>
 
-      <h2 class="section-title">Boxes</h2>
-      <p v-if="!order.shippingBoxes?.length" class="empty" style="margin-bottom: 1.5rem;">No boxes yet.</p>
-      <div
-        v-for="box in order.shippingBoxes"
-        :key="box.id"
-        class="card"
-        style="margin-bottom: 1rem;"
-        :class="{ 'card--done': box.status !== 'open' }"
-      >
-        <div class="detail-row">
-          <span class="detail-label">Box ID</span>
-          <span class="card__title">{{ box.id }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Status</span>
-          <span class="badge">{{ box.status }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Packages</span>
-          <span>{{ box.packages?.length ?? 0 }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Qty</span>
-          <span>{{ box.packages?.reduce((sum, p) => sum + p.qty, 0) ?? 0 }}</span>
+      <h2 class="section-title" style="display: flex; justify-content: space-between; align-items: center;">
+        Boxes
+        <button class="btn btn--small btn--ghost" @click="boxesExpanded = !boxesExpanded">
+          {{ boxesExpanded ? "Hide" : `Show ${order.shippingBoxes?.length ?? 0}` }}
+        </button>
+      </h2>
+
+      <div v-if="boxesExpanded" style="margin-bottom: 1.5rem;">
+        <button
+          v-if="order.status !== 'finished' && order.status !== 'issue'"
+          class="btn btn--small"
+          style="margin-bottom: 1rem;"
+          :disabled="creatingBox"
+          @click="createBox"
+        >
+          {{ creatingBox ? "Creating…" : "Create box" }}
+        </button>
+
+        <p v-if="!order.shippingBoxes?.length" class="empty">No boxes yet.</p>
+
+        <div
+          v-for="box in order.shippingBoxes"
+          :key="box.id"
+          class="card"
+          style="margin-bottom: 1rem;"
+          :class="{ 'card--done': box.status !== 'open' }"
+        >
+          <div class="detail-row">
+            <span class="detail-label">Box ID</span>
+            <span class="card__title">{{ box.id }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Status</span>
+            <span class="badge">{{ box.status }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Packages</span>
+            <span>{{ box.packages?.length ?? 0 }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">Qty</span>
+            <span>{{ box.packages?.reduce((sum, p) => sum + p.qty, 0) ?? 0 }}</span>
+          </div>
         </div>
       </div>
 
@@ -219,7 +235,7 @@
         </div>
 
         <div style="margin-top: 0.75rem;">
-          <button class="btn btn--small" @click="toggleExpand(item.id)">
+          <button class="btn btn--small btn--ghost" @click="toggleExpand(item.id)">
             {{ expandedItems.has(item.id) ? "Hide picking logs" : "Show picking logs" }}
             ({{ (transitionLogs[item.id] || []).length }})
           </button>
@@ -300,6 +316,7 @@ const finishing = ref(false);
 const transitionLogs = ref<Record<string, any[]>>({});
 const expandedItems = ref<Set<string>>(new Set());
 const headerExpanded = ref(false);
+const boxesExpanded = ref(false);
 const scanAllocation = ref<any>(null);
 const { scan, scanning } = useLabelScan();
 const reviewOpen = ref(false);
