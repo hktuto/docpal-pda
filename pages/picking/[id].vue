@@ -137,7 +137,7 @@
               :disabled="cancellingBox[box.id]"
               @click="cancelBox(box.id)"
             >
-              {{ cancellingBox[box.id] ? "Cancelling…" : "Cancel box" }}
+              {{ cancellingBox[box.id] ? "Canceling…" : "Cancel box" }}
             </button>
           </div>
         </div>
