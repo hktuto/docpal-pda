@@ -528,19 +528,6 @@ async function removeFromBox(packageId: string) {
   }
 }
 
-function openBoxesForOrder(pickingOrderId: string) {
-  return (boxesByOrder.value[pickingOrderId] ?? []).filter((b) => b.status === "open");
-}
-
-function boxById(boxId: string | null | undefined) {
-  if (!boxId) return undefined;
-  for (const boxes of Object.values(boxesByOrder.value)) {
-    const box = boxes.find((b) => b.id === boxId);
-    if (box) return box;
-  }
-  return undefined;
-}
-
 useVisibleReload(load);
 </script>
 
