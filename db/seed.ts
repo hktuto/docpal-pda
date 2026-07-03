@@ -67,12 +67,13 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
   ] as const;
   await db.insert(schema.shelves).values(shelfRecords);
 
+  const demoShelfBoxId = uuid();
+
   const shelvedLots = [
-    { id: uuid(), partId: partByNo["RES-0603-10K"].id, dateCode: "2404", lotCode: "L240401", coo: "JP", cow: "USA", shelfCode: "A-01-01", boxId: null as string | null, totalQty: 5000, allocatedQty: 0 },
+    { id: uuid(), partId: partByNo["RES-0603-10K"].id, dateCode: "2404", lotCode: "L240401", coo: "JP", cow: "USA", shelfCode: "A-01-01", boxId: demoShelfBoxId as string | null, totalQty: 5000, allocatedQty: 0 },
     { id: uuid(), partId: partByNo["CAP-0805-100N"].id, dateCode: "2404", lotCode: "L240402", coo: "JP", cow: "USA", shelfCode: "A-01-02", boxId: null, totalQty: 3000, allocatedQty: 0 },
     { id: uuid(), partId: partByNo["CON-PH2.0-4P"].id, dateCode: "2403", lotCode: "L240302", coo: "TW", cow: "USA", shelfCode: "B-02-01", boxId: null, totalQty: 2000, allocatedQty: 0 },
   ] as const;
-  await db.insert(schema.inventoryLots).values(shelvedLots.map((lot) => ({ ...lot })));
 
   // Receiving orders
   const receivingOrderRecords = [
@@ -137,6 +138,16 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
     (typeof receivingOrderRecords)[number]["refNo"],
     (typeof receivingOrderRecords)[number]
   >;
+
+  await db.insert(schema.shelfBoxes).values({
+    id: demoShelfBoxId,
+    receivingOrderId: receivingOrderByRef["RO-240701-001"].id,
+    shelfCode: "A-01-01",
+    status: "open",
+    createdAt: now,
+  });
+
+  await db.insert(schema.inventoryLots).values(shelvedLots.map((lot) => ({ ...lot })));
 
   const invoiceRecords = [
     { id: uuid(), receivingOrderId: receivingOrderByRef["RO-240701-001"].id, invoiceNo: "INV-ALP-240701-001", supplierId: supplierByCode.ALP.id },

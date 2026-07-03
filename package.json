@@ -10,7 +10,10 @@
     "postinstall": "nuxt prepare",
     "cap:sync": "cap sync",
     "cap:android": "nuxt generate && cap sync android && cap open android",
-    "cap:android:dev": "node scripts/cap-android-dev.mjs"
+    "cap:android:dev": "node scripts/cap-android-dev.mjs",
+    "assets:prepare": "node scripts/generate-native-assets.mjs",
+    "assets:generate": "npx capacitor-assets generate --android --assetPath resources",
+    "assets:android": "pnpm assets:prepare && pnpm assets:generate"
   },
   "dependencies": {
     "@capacitor/android": "^8.4.1",
@@ -23,7 +26,9 @@
     "uuid": "^9.0.1"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@types/uuid": "^9.0.8",
+    "sharp": "^0.35.3",
     "typescript": "^6.0.3"
   }
 }
