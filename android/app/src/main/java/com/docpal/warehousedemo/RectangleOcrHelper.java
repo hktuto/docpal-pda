@@ -6,9 +6,6 @@ import android.net.Uri;
 import android.util.Log;
 import androidx.annotation.Nullable;
 import com.google.mlkit.vision.common.InputImage;
-import com.google.mlkit.vision.text.TextRecognition;
-import com.google.mlkit.vision.text.TextRecognizer;
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 import java.io.File;
 import java.io.IOException;
 
@@ -17,7 +14,7 @@ public class RectangleOcrHelper {
   private static final String TAG = "RectangleOcrHelper";
 
   @Nullable
-  private TextRecognizer activeRecognizer;
+  private OcrBarcodeProcessor activeProcessor;
 
   public void runOcrAndFinish(
       Activity activity,
@@ -31,49 +28,35 @@ public class RectangleOcrHelper {
     }
     try {
       InputImage inputImage = InputImage.fromFilePath(activity, Uri.fromFile(new File(imagePath)));
-      TextRecognizer recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+      OcrBarcodeProcessor processor = new OcrBarcodeProcessor();
       synchronized (this) {
-        activeRecognizer = recognizer;
+        activeProcessor = processor;
       }
-      recognizer
-        .process(inputImage)
-        .addOnSuccessListener(visionText -> {
-          String text = visionText.getText();
-          Log.d(TAG, "OCR text: " + text);
-          if (activity.isFinishing() || activity.isDestroyed()) {
-            closeActiveRecognizer();
-            return;
+      processor.process(inputImage, (text, barcodesJson) -> {
+        synchronized (RectangleOcrHelper.this) {
+          if (activeProcessor == processor) {
+            activeProcessor = null;
           }
-          closeActiveRecognizer();
-          finishWithResult(activity, imagePath, width, height, rectanglesJson, selectedRectJson, text);
-        })
-        .addOnFailureListener(e -> {
-          Log.e(TAG, "OCR failed", e);
-          if (activity.isFinishing() || activity.isDestroyed()) {
-            closeActiveRecognizer();
-            return;
-          }
-          closeActiveRecognizer();
-          finishWithResult(activity, imagePath, width, height, rectanglesJson, selectedRectJson, "");
-        });
+        }
+        if (activity.isFinishing() || activity.isDestroyed()) {
+          return;
+        }
+        finishWithResult(activity, imagePath, width, height, rectanglesJson, selectedRectJson, text, barcodesJson);
+      });
     } catch (IOException e) {
       Log.e(TAG, "Failed to load image for OCR", e);
-      finishWithResult(activity, imagePath, width, height, rectanglesJson, selectedRectJson, "");
+      finishWithResult(activity, imagePath, width, height, rectanglesJson, selectedRectJson, "", "[]");
     }
   }
 
   public void cancel() {
-    closeActiveRecognizer();
-  }
-
-  private synchronized void closeActiveRecognizer() {
-    if (activeRecognizer != null) {
-      try {
-        activeRecognizer.close();
-      } catch (Exception e) {
-        Log.e(TAG, "Failed to close TextRecognizer", e);
-      }
-      activeRecognizer = null;
+    OcrBarcodeProcessor processor;
+    synchronized (this) {
+      processor = activeProcessor;
+      activeProcessor = null;
+    }
+    if (processor != null) {
+      processor.cancel();
     }
   }
 
@@ -84,7 +67,7 @@ public class RectangleOcrHelper {
       int height,
       @Nullable String rectanglesJson,
       @Nullable String selectedRectJson) {
-    finishWithResult(activity, imagePath, width, height, rectanglesJson, selectedRectJson, "");
+    finishWithResult(activity, imagePath, width, height, rectanglesJson, selectedRectJson, "", "[]");
   }
 
   public static void finishWithResult(
@@ -94,7 +77,19 @@ public class RectangleOcrHelper {
       int height,
       @Nullable String rectanglesJson,
       @Nullable String selectedRectJson,
-      @Nullable String text) {
+      String text) {
+    finishWithResult(activity, imagePath, width, height, rectanglesJson, selectedRectJson, text, "[]");
+  }
+
+  public static void finishWithResult(
+      Activity activity,
+      String imagePath,
+      int width,
+      int height,
+      @Nullable String rectanglesJson,
+      @Nullable String selectedRectJson,
+      String text,
+      String barcodesJson) {
     if (activity.isFinishing() || activity.isDestroyed()) {
       return;
     }
@@ -109,6 +104,7 @@ public class RectangleOcrHelper {
       resultIntent.putExtra("selectedRect", selectedRectJson);
     }
     resultIntent.putExtra("text", text != null ? text : "");
+    resultIntent.putExtra("barcodes", barcodesJson != null ? barcodesJson : "[]");
     activity.setResult(Activity.RESULT_OK, resultIntent);
     activity.finish();
   }
