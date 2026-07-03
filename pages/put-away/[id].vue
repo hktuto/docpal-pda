@@ -1,7 +1,7 @@
 <template>
   <div>
-    <p v-if="pending" class="empty">Loading…</p>
-    <p v-else-if="error" class="empty" style="color: var(--danger);">Error: {{ error }}</p>
+    <EmptyState v-if="pending">Loading…</EmptyState>
+    <EmptyState v-else-if="error" error>Error: {{ error }}</EmptyState>
 
     <template v-else-if="order">
       <DetailHeader
@@ -10,16 +10,10 @@
         :status="order.status"
         :badge-class="badgeClass(order.status)"
         :flush-top="route.meta.props?.noPadding"
-        style="margin-bottom: 1.5rem;"
+        class="detail-header"
       >
-        <div class="detail-row">
-          <span class="detail-label">Supplier</span>
-          <span>{{ order.supplier?.name || "—" }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Delivery date</span>
-          <span>{{ order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : "—" }}</span>
-        </div>
+        <DetailRow label="Supplier" :value="order.supplier?.name" />
+        <DetailRow label="Delivery date" :value="order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : null" />
       </DetailHeader>
 
       <ShelfBoxesPanel
@@ -60,7 +54,7 @@
       :parsed="review.parsed"
       :match-result="review.matchResult"
       :mode="review.capture.imagePath ? 'review' : 'manual'"
-      :context="{ task: 'put-away', receivingItem: scanItem ?? undefined, targetBoxId: scanBoxId }"
+      :context="{ task: 'put-away', receivingItem: scanLot ?? undefined, targetBoxId: scanBoxId }"
       @applied="onApplied"
       @retake="onRetake"
     />
@@ -68,7 +62,9 @@
 </template>
 
 <script setup lang="ts">
-import { useLabelScan, createManualReview, type LabelScanResult } from "~/composables/useLabelScan";
+import { useVisibleReload } from "~/composables/useVisibleReload";
+import { useStatusBadge } from "~/composables/useStatusBadge";
+import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import SelectShelfDialog from "~/components/SelectShelfDialog.vue";
 import ShelfBoxesPanel from "~/components/put-away/ShelfBoxesPanel.vue";
@@ -111,12 +107,13 @@ const closing = ref(false);
 const cancellingBox = ref<Record<string, boolean>>({});
 const lastOrderId = ref<string>(orderId);
 
-const scanItem = ref<PutAwayLot | null>(null);
+const scanLot = ref<PutAwayLot | null>(null);
 const scanBoxId = ref<string>("");
 const targetBoxSelections = ref<Record<string, string>>({});
-const { scan, scanning } = useLabelScan();
-const reviewOpen = ref(false);
-const review = ref<LabelScanResult | null>(null);
+const { scan, scanning, review, reviewOpen, onApplied } = useLabelScanReview({ onApplied: load });
+const { badgeClass } = useStatusBadge();
+
+useVisibleReload(load);
 
 function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
@@ -169,12 +166,6 @@ async function load() {
   } finally {
     pending.value = false;
   }
-}
-
-function badgeClass(status: string) {
-  if (status === "open" || status === "pending") return "badge--pending";
-  if (["closed", "verified", "finished", "completed", "in_hand", "clear"].includes(status)) return "badge--finished";
-  return "";
 }
 
 function openNewBoxDialog() {
@@ -233,7 +224,7 @@ async function cancelBox(boxId: string) {
 
 async function openScan(lot: PutAwayLot) {
   error.value = null;
-  scanItem.value = lot;
+  scanLot.value = lot;
   scanBoxId.value = targetBoxSelections.value[lot.receiving_invoice_item_id] ?? "";
   if (!scanBoxId.value) {
     error.value = "Select a target box";
@@ -244,66 +235,24 @@ async function openScan(lot: PutAwayLot) {
     return;
   }
   const result = await scan({ task: 'put-away', receivingItem: lot, targetBoxId: scanBoxId.value });
-  if (result.status === 'applied') {
-    await load();
-  } else if (result.status === 'review') {
-    review.value = result;
-    reviewOpen.value = true;
-  } else if (result.status === 'manual') {
-    review.value = createManualReview();
-    scanItem.value = lot;
-    scanBoxId.value = targetBoxSelections.value[lot.receiving_invoice_item_id] ?? '';
-    reviewOpen.value = true;
-  } else if (result.status === 'error') {
+  if (result.status === 'error') {
     error.value = result.message;
   }
 }
 
-async function onApplied() {
-  reviewOpen.value = false;
-  await load();
-}
-
 async function onRetake() {
   reviewOpen.value = false;
-  const item = scanItem.value;
-  if (!item) {
+  const lot = scanLot.value;
+  if (!lot) {
     error.value = "No scan item to retake";
     return;
   }
-  await openScan(item);
+  await openScan(lot);
 }
-
-function onVisible() {
-  if (document.visibilityState === "visible") {
-    load();
-  }
-}
-
-onMounted(() => {
-  load();
-  document.addEventListener("visibilitychange", onVisible);
-  window.addEventListener("focus", onVisible);
-});
-
-onUnmounted(() => {
-  document.removeEventListener("visibilitychange", onVisible);
-  window.removeEventListener("focus", onVisible);
-});
 </script>
 
 <style scoped>
-.badge--pending {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.badge--finished {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.card--done {
-  border-left: 4px solid #22c55e;
+.detail-header {
+  margin-bottom: 1.5rem;
 }
 </style>
