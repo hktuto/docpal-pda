@@ -3,6 +3,7 @@ import { registerPlugin } from '@capacitor/core';
 export interface LabelScanCapture {
   imagePath: string;
   text: string;
+  barcodes: string;
 }
 
 export interface RectangleDetectionPlugin {

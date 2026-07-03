@@ -31,6 +31,8 @@ public class RectangleDetectionPlugin extends Plugin {
       capture.put("imagePath", data.getStringExtra("imagePath"));
       String text = data.getStringExtra("text");
       capture.put("text", text != null ? text : "");
+      String barcodes = data.getStringExtra("barcodes");
+      capture.put("barcodes", barcodes != null ? barcodes : "[]");
       call.resolve(capture);
     } else {
       call.reject("Cancelled");
