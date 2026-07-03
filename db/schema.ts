@@ -99,7 +99,16 @@ export const receivingInvoiceItems = pgTable("receiving_invoice_items", {
 // Picking
 // ------------------------------------------------------------------
 
-export const pickingOrderStatus = ["pending", "picking", "finished"] as const;
+export const pickingOrderStatus = ["pending", "picking", "finished", "issue"] as const;
+
+export const pickingIssueReasons = [
+  "insufficient_stock",
+  "cannot_divide",
+  "merge",
+  "other",
+] as const;
+
+export type PickingIssueReason = (typeof pickingIssueReasons)[number];
 
 export const pickingOrders = pgTable("picking_orders", {
   id: text("id").primaryKey(),
@@ -111,6 +120,13 @@ export const pickingOrders = pgTable("picking_orders", {
   shipTo: text("ship_to"),
   destinationCountry: text("destination_country"),
   status: text("status", { enum: pickingOrderStatus }).notNull().default("pending"),
+  issueReason: text("issue_reason", { enum: pickingIssueReasons }),
+  issueQty: integer("issue_qty"),
+  issuePackSize: integer("issue_pack_size"),
+  issueNote: text("issue_note"),
+  issueRemark: text("issue_remark"),
+  issueReportedAt: timestamp("issue_reported_at"),
+  issueReportedBy: text("issue_reported_by").references(() => users.id),
   createdAt: timestamp("created_at").notNull(),
   updatedAt: timestamp("updated_at").notNull(),
 });
@@ -307,6 +323,7 @@ export const receivingInvoiceItemsRelations = relations(receivingInvoiceItems, (
 
 export const pickingOrdersRelations = relations(pickingOrders, ({ one, many }) => ({
   supplier: one(suppliers, { fields: [pickingOrders.supplierId], references: [suppliers.id] }),
+  issueReportedByUser: one(users, { fields: [pickingOrders.issueReportedBy], references: [users.id] }),
   items: many(pickingItems),
   packages: many(pickingPackages),
   measuringTask: one(measuringTasks, { fields: [pickingOrders.id], references: [measuringTasks.pickingOrderId] }),
