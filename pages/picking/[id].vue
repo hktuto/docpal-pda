@@ -179,7 +179,12 @@
             <template v-if="allocation.inventoryLot">
               <div class="detail-row">
                 <span class="detail-label">Location</span>
-                <span>{{ allocation.inventoryLot.shelfCode || allocation.inventoryLot.boxId || "Receiving area" }}</span>
+                <span v-if="allocation.inventoryLot.shelfCode && allocation.inventoryLot.boxId">
+                  {{ allocation.inventoryLot.shelfCode }} / {{ allocation.inventoryLot.boxId }}
+                </span>
+                <span v-else-if="allocation.inventoryLot.shelfCode">{{ allocation.inventoryLot.shelfCode }}</span>
+                <span v-else-if="allocation.inventoryLot.boxId">{{ allocation.inventoryLot.boxId }}</span>
+                <span v-else>Receiving area</span>
               </div>
               <div class="detail-row">
                 <span class="detail-label">Date / Lot / COO / COW</span>
@@ -301,6 +306,7 @@
       :barcodes="review.capture.barcodes"
       :parsed="review.parsed"
       :match-result="review.matchResult"
+      :mode="review.capture.imagePath ? 'review' : 'manual'"
       :context="{ task: 'picking', allocation: scanAllocation }"
       @applied="onApplied"
       @retake="onRetake"
@@ -309,7 +315,7 @@
 </template>
 
 <script setup lang="ts">
-import { useLabelScan, type LabelScanResult } from "~/composables/useLabelScan";
+import { useLabelScan, createManualReview, type LabelScanResult } from "~/composables/useLabelScan";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import {
   getPickingOrderDetail,
@@ -437,6 +443,10 @@ async function openScan(allocation: any) {
     await load();
   } else if (result.status === 'review') {
     review.value = result;
+    reviewOpen.value = true;
+  } else if (result.status === 'manual') {
+    review.value = createManualReview();
+    scanAllocation.value = allocation;
     reviewOpen.value = true;
   } else if (result.status === 'error') {
     error.value = result.message;
