@@ -230,8 +230,8 @@ The database lives in the browser's IndexedDB. Use the **⋮ → Reset local DB*
 │       └── plans/
 ├── layouts/default.vue
 ├── pages/
-│   ├── index.vue            # Login page
-│   ├── home.vue             # Menu
+│   ├── login.vue            # Login page
+│   ├── index.vue            # Menu / home page
 │   ├── receiving/
 │   ├── picking/
 │   ├── put-away/
