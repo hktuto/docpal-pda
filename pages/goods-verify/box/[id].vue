@@ -75,7 +75,7 @@
           <span>{{ item.verified ? (item.verifiedAt ? new Date(item.verifiedAt).toLocaleString() : "Yes") : "No" }}</span>
         </div>
         <div v-if="!item.verified && box.status !== 'verified'" style="margin-top: 0.75rem;">
-          <button class="btn btn--small" :disabled="scanning" @click="openScanFor(item)">Scan</button>
+          <button class="btn btn--small" :disabled="scanning" @click="openScan">Scan</button>
         </div>
       </div>
     </template>
@@ -103,7 +103,6 @@ import {
   getShelfBoxDetail,
   markShelfBoxVerified,
   type ShelfBoxDetail,
-  type ShelfBoxItemDetail,
 } from "~/db/goodsVerify";
 
 definePageMeta({ title: "Verify Box", props: { noPadding: true } });
@@ -176,10 +175,6 @@ async function openScan() {
   } else if (result.status === 'error') {
     error.value = result.message;
   }
-}
-
-async function openScanFor(item: ShelfBoxItemDetail) {
-  await openScan();
 }
 
 async function onApplied() {
