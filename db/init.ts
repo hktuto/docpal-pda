@@ -82,6 +82,13 @@ CREATE TABLE IF NOT EXISTS picking_orders (
   required_date_code_notice TEXT,
   ship_to TEXT,
   destination_country TEXT,
+  issue_reason TEXT,
+  issue_qty INTEGER,
+  issue_pack_size INTEGER,
+  issue_note TEXT,
+  issue_remark TEXT,
+  issue_reported_at TIMESTAMP,
+  issue_reported_by TEXT REFERENCES users(id),
   status TEXT NOT NULL DEFAULT 'pending',
   created_at TIMESTAMP NOT NULL,
   updated_at TIMESTAMP NOT NULL
