@@ -465,6 +465,33 @@ export async function createShippingBoxForPickingOrder(
   });
 }
 
+export async function cancelShippingBox(
+  db: PgliteDatabase<typeof schema>,
+  boxId: string
+): Promise<void> {
+  return db.transaction(async (tx) => {
+    const box = await tx.query.shippingBoxes.findFirst({
+      where: eq(schema.shippingBoxes.id, boxId),
+    });
+    if (!box) throw new Error("Box not found");
+    if (box.status !== "open") throw new Error("Box is not open");
+
+    const packageResult = await tx
+      .select({ count: sql<number>`count(*)`.mapWith(Number) })
+      .from(schema.pickingPackages)
+      .where(eq(schema.pickingPackages.shippingBoxId, boxId));
+    if (packageResult[0]?.count > 0) throw new Error("Box is not empty");
+
+    const itemResult = await tx
+      .select({ count: sql<number>`count(*)`.mapWith(Number) })
+      .from(schema.shippingBoxItems)
+      .where(eq(schema.shippingBoxItems.shippingBoxId, boxId));
+    if (itemResult[0]?.count > 0) throw new Error("Box is not empty");
+
+    await tx.delete(schema.shippingBoxes).where(eq(schema.shippingBoxes.id, boxId));
+  });
+}
+
 async function refreshPickingItemPickedQty(
   tx: PgliteDatabase<typeof schema>,
   pickingItemId: string
