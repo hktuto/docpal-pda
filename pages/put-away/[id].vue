@@ -171,8 +171,10 @@
       v-model="reviewOpen"
       :image-path="review.capture.imagePath"
       :text="review.capture.text"
+      :barcodes="review.capture.barcodes"
       :parsed="review.parsed"
       :match-result="review.matchResult"
+      :mode="review.capture.imagePath ? 'review' : 'manual'"
       :context="{ task: 'put-away', receivingItem: scanItem, targetBoxId: scanBoxId }"
       @applied="onApplied"
       @retake="onRetake"
@@ -181,7 +183,7 @@
 </template>
 
 <script setup lang="ts">
-import { useLabelScan, type LabelScanResult } from "~/composables/useLabelScan";
+import { useLabelScan, createManualReview, type LabelScanResult } from "~/composables/useLabelScan";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import SelectShelfDialog from "~/components/SelectShelfDialog.vue";
 import * as schema from "~/db/schema";
@@ -356,6 +358,11 @@ async function openScan(lot: PutAwayLot) {
     await load();
   } else if (result.status === 'review') {
     review.value = result;
+    reviewOpen.value = true;
+  } else if (result.status === 'manual') {
+    review.value = createManualReview();
+    scanItem.value = lot;
+    scanBoxId.value = targetBoxSelections.value[lot.receiving_invoice_item_id] ?? '';
     reviewOpen.value = true;
   } else if (result.status === 'error') {
     error.value = result.message;
