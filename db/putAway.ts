@@ -357,6 +357,8 @@ export async function closeShelfBox(
   });
 }
 
+export type ShelfBox = Awaited<ReturnType<typeof getShelfBoxesForReceivingOrder>>[number];
+
 export async function getShelfBoxesForReceivingOrder(
   db: PgliteDatabase<typeof schema>,
   receivingOrderId: string

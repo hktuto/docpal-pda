@@ -94,15 +94,20 @@
 </template>
 
 <script setup lang="ts">
+import * as schema from "~/db/schema";
+import { type ShelfBox } from "~/db/putAway";
+
+type Shelf = typeof schema.shelves.$inferSelect;
+
 interface Props {
-  boxes: any[];
+  boxes: ShelfBox[];
   boxesExpanded: boolean;
   actionable: boolean;
   creating: boolean;
   closing: boolean;
   cancellingBox: Record<string, boolean>;
   expandedItemBoxes: Set<string>;
-  shelves?: any[];
+  shelves?: Shelf[];
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -128,7 +133,7 @@ const isExpandedItemBoxes = computed({
 });
 
 const boxesByShelf = computed(() => {
-  const map: Record<string, any[]> = {};
+  const map: Record<string, ShelfBox[]> = {};
   for (const box of props.boxes) {
     const code = box.shelfCode ?? "Unassigned";
     if (!map[code]) map[code] = [];
@@ -142,8 +147,8 @@ function shelfLabel(code: string) {
   return shelf?.zone ? `${shelf.code} — ${shelf.zone}` : shelf?.code ?? code;
 }
 
-function boxTotalQty(box: any) {
-  return (box.items || []).reduce((sum: number, item: any) => sum + (item.qty || 0), 0);
+function boxTotalQty(box: ShelfBox) {
+  return (box.items || []).reduce((sum, item) => sum + (item.qty || 0), 0);
 }
 
 function toggleItemVisibility(boxId: string) {

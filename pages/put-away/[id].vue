@@ -27,7 +27,7 @@
         v-model:expanded-item-boxes="expandedItemBoxes"
         :boxes="boxes"
         :shelves="shelves"
-        :actionable="order.status !== 'finished' && order.status !== 'issue'"
+        :actionable="order.status !== 'clear'"
         :creating="creating"
         :closing="closing"
         :cancelling-box="cancellingBox"
@@ -93,7 +93,7 @@
     </template>
 
     <LabelScanReviewModal
-      v-if="review?.status === 'review'"
+      v-if="review && (review.status === 'review' || review.status === 'manual')"
       v-model="reviewOpen"
       :image-path="review.capture.imagePath"
       :text="review.capture.text"
@@ -101,7 +101,7 @@
       :parsed="review.parsed"
       :match-result="review.matchResult"
       :mode="review.capture.imagePath ? 'review' : 'manual'"
-      :context="{ task: 'put-away', receivingItem: scanItem, targetBoxId: scanBoxId }"
+      :context="{ task: 'put-away', receivingItem: scanItem ?? undefined, targetBoxId: scanBoxId }"
       @applied="onApplied"
       @retake="onRetake"
     />
@@ -114,15 +114,18 @@ import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import SelectShelfDialog from "~/components/SelectShelfDialog.vue";
 import ShelfBoxesPanel from "~/components/put-away/ShelfBoxesPanel.vue";
 import * as schema from "~/db/schema";
-import { getReceivingOrderDetail } from "~/db/receiving";
 import {
   getPutAwayLots,
   createShelfBox,
   closeShelfBox,
   cancelShelfBox,
   getShelfBoxesForReceivingOrder,
+  type ShelfBox,
 } from "~/db/putAway";
 import type { PutAwayLot } from "~/db/putAway";
+import { getReceivingOrderDetail } from "~/db/receiving";
+
+type ReceivingOrderDetail = NonNullable<Awaited<ReturnType<typeof getReceivingOrderDetail>>>;
 
 definePageMeta({ title: "Put-away Detail", props: { noPadding: true } });
 
@@ -139,15 +142,16 @@ const currentUser = await useCurrentUser();
 
 const pending = ref(true);
 const error = ref<string | null>(null);
-const order = ref<any>(null);
+const order = ref<ReceivingOrderDetail | null>(null);
 const lots = ref<PutAwayLot[]>([]);
 const shelves = ref<typeof schema.shelves.$inferSelect[]>([]);
-const boxes = ref<any[]>([]);
+const boxes = ref<ShelfBox[]>([]);
 const creating = ref(false);
 const closing = ref(false);
 const cancellingBox = ref<Record<string, boolean>>({});
+const lastOrderId = ref<string>(orderId);
 
-const scanItem = ref<any>(null);
+const scanItem = ref<PutAwayLot | null>(null);
 const scanBoxId = ref<string>("");
 const targetBoxSelections = ref<Record<string, string>>({});
 const { scan, scanning } = useLabelScan();
@@ -157,42 +161,54 @@ const review = ref<LabelScanResult | null>(null);
 const openBoxes = computed(() => boxes.value.filter((b) => b.status === "open"));
 const hasOpenBox = computed(() => openBoxes.value.length > 0);
 
-watch(
-  () => boxes.value,
-  (boxList) => {
-    const next = new Set<string>();
-    for (const b of boxList) {
-      if (b.status === "open") next.add(b.id);
-    }
-    expandedItemBoxes.value = next;
-  },
-  { immediate: true, deep: true }
-);
+function errorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
 
 async function load() {
   pending.value = true;
   error.value = null;
   try {
+    if (lastOrderId.value !== orderId) {
+      lastOrderId.value = orderId;
+      targetBoxSelections.value = {};
+      expandedItemBoxes.value = new Set();
+    }
+
     const [orderData, lotsData, shelvesData, boxesData] = await Promise.all([
       getReceivingOrderDetail(db, orderId),
       getPutAwayLots(db, orderId),
       db.query.shelves.findMany(),
       getShelfBoxesForReceivingOrder(db, orderId),
     ]);
+    if (!orderData) {
+      error.value = "Receiving order not found";
+      return;
+    }
     order.value = orderData;
     lots.value = lotsData;
     shelves.value = shelvesData;
+
+    const previousBoxIds = new Set(boxes.value.map((b) => b.id));
     boxes.value = boxesData;
 
-    const openBoxIds = new Set(boxesData.filter((b) => b.status === 'open').map((b) => b.id));
-    scanBoxId.value = '';
-    for (const key of Object.keys(targetBoxSelections.value)) {
-      if (!openBoxIds.has(targetBoxSelections.value[key])) {
-        delete targetBoxSelections.value[key];
+    const openBoxIds = new Set(boxesData.filter((b) => b.status === "open").map((b) => b.id));
+    if (!reviewOpen.value) {
+      scanBoxId.value = "";
+      targetBoxSelections.value = Object.fromEntries(
+        Object.entries(targetBoxSelections.value).filter(([, boxId]) => openBoxIds.has(boxId))
+      );
+    }
+
+    const nextExpanded = new Set(expandedItemBoxes.value);
+    for (const b of boxesData) {
+      if (b.status === "open" && !previousBoxIds.has(b.id)) {
+        nextExpanded.add(b.id);
       }
     }
-  } catch (e: any) {
-    error.value = e?.message ?? String(e);
+    expandedItemBoxes.value = nextExpanded;
+  } catch (e) {
+    error.value = errorMessage(e);
   } finally {
     pending.value = false;
   }
@@ -219,8 +235,8 @@ async function createBoxFromDialog(shelfCode: string) {
     await createShelfBox(db, orderId, shelfCode, currentUser.id);
     await load();
     boxesExpanded.value = true;
-  } catch (e: any) {
-    error.value = e?.message ?? String(e);
+  } catch (e) {
+    error.value = errorMessage(e);
   } finally {
     creating.value = false;
   }
@@ -235,8 +251,8 @@ async function closeBox(boxId: string) {
   try {
     await closeShelfBox(db, boxId, currentUser.id);
     await load();
-  } catch (e: any) {
-    error.value = e?.message ?? String(e);
+  } catch (e) {
+    error.value = errorMessage(e);
   } finally {
     closing.value = false;
   }
@@ -251,14 +267,15 @@ async function cancelBox(boxId: string) {
   try {
     await cancelShelfBox(db, boxId, currentUser.id);
     await load();
-  } catch (e: any) {
-    error.value = e?.message ?? String(e);
+  } catch (e) {
+    error.value = errorMessage(e);
   } finally {
     cancellingBox.value[boxId] = false;
   }
 }
 
 async function openScan(lot: PutAwayLot) {
+  error.value = null;
   scanItem.value = lot;
   scanBoxId.value = targetBoxSelections.value[lot.receiving_invoice_item_id] ?? "";
   if (!scanBoxId.value) {
@@ -292,7 +309,12 @@ async function onApplied() {
 
 async function onRetake() {
   reviewOpen.value = false;
-  await openScan(scanItem.value);
+  const item = scanItem.value;
+  if (!item) {
+    error.value = "No scan item to retake";
+    return;
+  }
+  await openScan(item);
 }
 
 function onVisible() {
