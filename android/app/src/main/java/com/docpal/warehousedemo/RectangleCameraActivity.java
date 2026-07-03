@@ -9,11 +9,12 @@ import android.os.Bundle;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.Surface;
-import android.widget.Button;
+import android.widget.ImageButton;
 import android.widget.Toast;
 import androidx.activity.ComponentActivity;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.camera.core.Camera;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageCapture;
@@ -55,9 +56,13 @@ public class RectangleCameraActivity extends ComponentActivity {
 
   private PreviewView previewView;
   private RectangleOverlayView overlayView;
-  private Button cancelButton;
-  private Button captureButton;
+  private ImageButton cancelButton;
+  private ImageButton captureButton;
+  private ImageButton flashButton;
   private ExecutorService analysisExecutor;
+
+  private static boolean sTorchOn = true;
+  private Camera camera;
 
   private ImageCapture imageCapture;
   private volatile int streamWidth = 0;
@@ -91,9 +96,11 @@ public class RectangleCameraActivity extends ComponentActivity {
     overlayView = findViewById(R.id.overlayView);
     cancelButton = findViewById(R.id.cancelButton);
     captureButton = findViewById(R.id.captureButton);
+    flashButton = findViewById(R.id.flashButton);
 
     cancelButton.setOnClickListener(v -> finish());
     captureButton.setOnClickListener(v -> onShutterClicked());
+    flashButton.setOnClickListener(v -> toggleTorch());
 
     overlayView.setOnTouchListener((v, event) -> {
       if (event.getAction() == MotionEvent.ACTION_DOWN) {
@@ -123,6 +130,19 @@ public class RectangleCameraActivity extends ComponentActivity {
     captureButton.setEnabled(false);
     Toast.makeText(this, "Capturing…", Toast.LENGTH_SHORT).show();
     takePicture();
+  }
+
+  private void toggleTorch() {
+    if (camera == null) {
+      return;
+    }
+    sTorchOn = !sTorchOn;
+    camera.getCameraControl().enableTorch(sTorchOn);
+    updateFlashIcon();
+  }
+
+  private void updateFlashIcon() {
+    flashButton.setImageResource(sTorchOn ? R.drawable.ic_flash_on : R.drawable.ic_flash_off);
   }
 
   private boolean onOverlayTouched(float x, float y) {
@@ -393,13 +413,21 @@ public class RectangleCameraActivity extends ComponentActivity {
       .build();
 
     CameraSelector cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
-    cameraProvider.bindToLifecycle(
+    camera = cameraProvider.bindToLifecycle(
       this,
       cameraSelector,
       preview,
       imageAnalysis,
       imageCapture
     );
+
+    if (camera != null && camera.getCameraInfo().hasFlashUnit()) {
+      camera.getCameraControl().enableTorch(sTorchOn);
+      updateFlashIcon();
+      flashButton.setVisibility(android.view.View.VISIBLE);
+    } else {
+      flashButton.setVisibility(android.view.View.GONE);
+    }
   }
 
   private void onDetectionResult(DetectionResult result) {
