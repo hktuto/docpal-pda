@@ -7,7 +7,6 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        registerPlugin(ObjectDetectionPlugin.class);
         registerPlugin(RectangleDetectionPlugin.class);
         super.onCreate(savedInstanceState);
     }

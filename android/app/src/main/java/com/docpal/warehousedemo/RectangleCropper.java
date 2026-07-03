@@ -1,11 +1,8 @@
 package com.docpal.warehousedemo;
 
-import android.util.Base64;
 import java.io.File;
 import java.io.IOException;
 import org.opencv.core.Mat;
-import org.opencv.core.MatOfByte;
-import org.opencv.core.MatOfInt;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
@@ -18,13 +15,6 @@ import org.opencv.imgproc.Imgproc;
  * Works with both grayscale and colour Mats.
  */
 public class RectangleCropper {
-
-  public static String cropToBase64(Mat source, RectangleDetector.RectResult rect, int quality) {
-    Mat cropped = crop(source, rect);
-    String base64 = matToBase64(cropped, quality);
-    cropped.release();
-    return base64;
-  }
 
   public static File cropToFile(
       Mat source,
@@ -179,18 +169,6 @@ public class RectangleCropper {
       throw new IOException("Failed to write image to " + file.getAbsolutePath());
     }
     return file;
-  }
-
-  public static String matToBase64(Mat mat, int quality) {
-    Mat encoded = toRgbForEncoding(mat);
-    MatOfByte buffer = new MatOfByte();
-    MatOfInt params = new MatOfInt(Imgcodecs.IMWRITE_JPEG_QUALITY, quality);
-    Imgcodecs.imencode(".jpg", encoded, buffer, params);
-    encoded.release();
-    params.release();
-    byte[] bytes = buffer.toArray();
-    buffer.release();
-    return Base64.encodeToString(bytes, Base64.NO_WRAP);
   }
 
   private static double distance(Point a, Point b) {

@@ -304,7 +304,7 @@
 </template>
 
 <script setup lang="ts">
-import { noopDecoder, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { useLabelScan, type LabelScanResult } from "~/composables/useLabelScan";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import {

@@ -22,6 +22,30 @@ import { verifyShelfBoxItem } from '~/db/goodsVerify';
 
 export type ScanTask = 'receiving' | 'picking' | 'put-away' | 'measuring' | 'goods-verify';
 
+export async function runScanMatcher(ctx: ScanTaskContext, parsed: OcrInput): Promise<ScanMatchResult> {
+  const matchers = useScanMatchers();
+  switch (ctx.task) {
+    case 'receiving':
+      if (!ctx.receivingOrderId) return { type: 'error', message: 'Missing receiving order ID' };
+      return matchers.matchReceiving(ctx.receivingOrderId, ctx.pickingItemId, parsed);
+    case 'picking':
+      if (!ctx.allocation) return { type: 'error', message: 'Missing allocation' };
+      return matchers.matchPicking(ctx.allocation, parsed);
+    case 'put-away':
+      if (!ctx.receivingItem) return { type: 'error', message: 'Missing receiving item' };
+      if (!ctx.targetBoxId) return { type: 'error', message: 'Missing target box' };
+      return matchers.matchPutAway(ctx.receivingItem, ctx.targetBoxId, parsed);
+    case 'measuring':
+      if (!ctx.boxId) return { type: 'error', message: 'Missing box ID' };
+      return matchers.matchMeasuring(ctx.boxId, ctx.targetPackageId, parsed);
+    case 'goods-verify':
+      if (!ctx.items) return { type: 'error', message: 'Missing box items' };
+      return matchers.matchGoodsVerify(ctx.items, parsed);
+    default:
+      return { type: 'error', message: 'Unknown scan task' };
+  }
+}
+
 interface PickingAllocation {
   id: string;
   qty: number;

@@ -1,7 +1,7 @@
 import { ref } from 'vue';
 import { RectangleDetection, type LabelScanCapture } from './useRectangleDetection';
 import { useRecognizedTextParser } from './useRecognizedTextParser';
-import { useScanMatchers, type ScanTaskContext, type ScanMatchResult } from './useScanMatchers';
+import { runScanMatcher, type ScanTaskContext, type ScanMatchResult } from './useScanMatchers';
 import type { OcrInput } from './useMockOcr';
 
 export type LabelScanResult =
@@ -14,7 +14,6 @@ export function useLabelScan() {
   const scanning = ref(false);
   const error = ref<string | null>(null);
   const { parseRecognizedText } = useRecognizedTextParser();
-  const matchers = useScanMatchers();
 
   async function scan(context: ScanTaskContext): Promise<LabelScanResult> {
     scanning.value = true;
@@ -25,7 +24,7 @@ export function useLabelScan() {
       const parsed = parseRecognizedText(capture.text);
       console.log('[useLabelScan]', { imagePath: capture.imagePath, text: capture.text, parsed });
 
-      const matchResult = await runMatcher(context, parsed);
+      const matchResult = await runScanMatcher(context, parsed);
 
       if (matchResult.type === 'error') {
         error.value = matchResult.message;
@@ -47,29 +46,6 @@ export function useLabelScan() {
       return { status: 'error', message };
     } finally {
       scanning.value = false;
-    }
-  }
-
-  async function runMatcher(context: ScanTaskContext, parsed: OcrInput): Promise<ScanMatchResult> {
-    switch (context.task) {
-      case 'receiving':
-        if (!context.receivingOrderId) return { type: 'error', message: 'Missing receiving order ID' };
-        return matchers.matchReceiving(context.receivingOrderId, context.pickingItemId, parsed);
-      case 'picking':
-        if (!context.allocation) return { type: 'error', message: 'Missing allocation' };
-        return matchers.matchPicking(context.allocation, parsed);
-      case 'put-away':
-        if (!context.receivingItem) return { type: 'error', message: 'Missing receiving item' };
-        if (!context.targetBoxId) return { type: 'error', message: 'Missing target box' };
-        return matchers.matchPutAway(context.receivingItem, context.targetBoxId, parsed);
-      case 'measuring':
-        if (!context.boxId) return { type: 'error', message: 'Missing box ID' };
-        return matchers.matchMeasuring(context.boxId, context.targetPackageId, parsed);
-      case 'goods-verify':
-        if (!context.items) return { type: 'error', message: 'Missing box items' };
-        return matchers.matchGoodsVerify(context.items, parsed);
-      default:
-        return { type: 'error', message: 'Unknown scan task' };
     }
   }
 

@@ -115,7 +115,7 @@
 <script setup lang="ts">
 import { Capacitor } from '@capacitor/core';
 import type { OcrInput } from '~/composables/useMockOcr';
-import { useScanMatchers, type ScanMatchResult, type ScanTaskContext } from '~/composables/useScanMatchers';
+import { runScanMatcher, type ScanMatchResult, type ScanTaskContext } from '~/composables/useScanMatchers';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -132,7 +132,6 @@ const emit = defineEmits<{
   (e: 'retake'): void;
 }>();
 
-const { matchReceiving, matchPicking, matchPutAway, matchMeasuring, matchGoodsVerify } = useScanMatchers();
 const localMatchResult = ref<ScanMatchResult>(props.matchResult);
 const editable = ref<OcrInput>({ ...props.parsed });
 const applying = ref(false);
@@ -151,36 +150,12 @@ async function findMatch() {
   matching.value = true;
   applyError.value = null;
   try {
-    const result = await runMatcher();
+    const result = await runScanMatcher(props.context, editable.value);
     localMatchResult.value = result;
   } catch (e: any) {
     localMatchResult.value = { type: 'error', message: e?.message ?? 'Match failed' };
   } finally {
     matching.value = false;
-  }
-}
-
-async function runMatcher(): Promise<ScanMatchResult> {
-  const ctx = props.context;
-  switch (ctx.task) {
-    case 'receiving':
-      if (!ctx.receivingOrderId) return { type: 'error', message: 'Missing receiving order ID' };
-      return matchReceiving(ctx.receivingOrderId, ctx.pickingItemId, editable.value);
-    case 'picking':
-      if (!ctx.allocation) return { type: 'error', message: 'Missing allocation' };
-      return matchPicking(ctx.allocation, editable.value);
-    case 'put-away':
-      if (!ctx.receivingItem) return { type: 'error', message: 'Missing receiving item' };
-      if (!ctx.targetBoxId) return { type: 'error', message: 'Missing target box' };
-      return matchPutAway(ctx.receivingItem, ctx.targetBoxId, editable.value);
-    case 'measuring':
-      if (!ctx.boxId) return { type: 'error', message: 'Missing box ID' };
-      return matchMeasuring(ctx.boxId, ctx.targetPackageId, editable.value);
-    case 'goods-verify':
-      if (!ctx.items) return { type: 'error', message: 'Missing box items' };
-      return matchGoodsVerify(ctx.items, editable.value);
-    default:
-      return { type: 'error', message: 'Unknown scan task' };
   }
 }
 

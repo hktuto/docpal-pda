@@ -13,10 +13,8 @@
 </template>
 
 
-<style lang="scss" scoped>
-.container{
-    &.no-padding{
-        padding-top: 0px;
-    }
+<style scoped>
+.container.no-padding {
+  padding-top: 0;
 }
 </style>

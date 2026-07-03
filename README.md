@@ -205,16 +205,26 @@ The database lives in the browser's IndexedDB. Use the **⋮ → Reset local DB*
 
 ```
 ├── app.vue                  # PGlite bootstrap, schema init, seed, auth restore
-├── assets/css/main.css      # Global styles
+├── assets/                  # Global styles and static assets
+│   └── css/main.css         # Global styles
+├── capacitor.config.ts      # Capacitor native shell configuration
 ├── components/
 │   ├── AppHeader.vue        # Header with back button, reset DB, logout
-│   └── OcrScanModal.vue     # Typed-label scan modal for OCR-assisted picking
+│   ├── BoxMeasurementsModal.vue  # Edit shipping box weight/size/destination
+│   ├── DetailHeader.vue     # Reusable detail page header and status chip
+│   └── LabelScanReviewModal.vue  # Review camera-scanned label matches
 ├── composables/
+│   ├── useAndroidBackButton.ts   # Handle Android hardware back button
 │   ├── useAuth.ts           # Login/logout/restore
 │   ├── useCurrentUser.ts    # Current operator helper
 │   ├── useDb.ts             # Drizzle client from provided PGlite
+│   ├── useLabelScan.ts      # Scan label parsing and matching state
 │   ├── useMockOcr.ts        # Parses typed label input for the scan modal
-│   └── useOcrPicking.ts     # Matches scanned input to receiving/picking records
+│   ├── useRecognizedTextParser.ts  # Normalize and parse OCR text
+│   ├── useRectangleDetection.ts    # Native Android rectangle/label detection
+│   └── useScanMatchers.ts   # Matching utilities for scan results
+├── constants/               # App constants
+│   └── pocOptions.ts
 ├── db/
 │   ├── allocate.ts          # Allocation logic (shelved first, then arrivals)
 │   ├── goodsVerify.ts       # Goods verify DB helpers
@@ -230,15 +240,24 @@ The database lives in the browser's IndexedDB. Use the **⋮ → Reset local DB*
 │   └── superpowers/         # Design specs and implementation plans
 │       ├── specs/
 │       └── plans/
-├── layouts/default.vue
+├── layouts/                 # Nuxt layouts
+│   └── default.vue
+├── middleware/              # Nuxt route middleware
+│   └── auth.global.ts       # Global auth guard
+├── nuxt.config.ts           # Nuxt configuration
 ├── pages/
-│   ├── index.vue            # Login page
-│   ├── home.vue             # Menu
+│   ├── login.vue            # Login page
+│   ├── index.vue            # Menu / home page
 │   ├── receiving/
 │   ├── picking/
 │   ├── put-away/
 │   ├── goods-verify/
 │   └── measuring/
+├── patches/                 # pnpm package patches
+├── plugins/                 # Nuxt client plugins
+│   └── pglite.client.ts     # PGlite client plugin
+├── public/                  # Static public assets
+├── scripts/                 # Build/dev helper scripts
 └── package.json
 ```
 
@@ -250,5 +269,5 @@ The database lives in the browser's IndexedDB. Use the **⋮ → Reset local DB*
 - **Single-browser database.** Because PGlite stores data in IndexedDB, each browser has its own isolated demo database.
 - **No migrations.** The schema is created once from `db/init.ts` when the `users` table does not exist. Schema changes require clearing IndexedDB.
 - **Allocation is greedy.** It fills shelved lots first, then receiving-area lots, without partial date-code relaxation or FIFO beyond the required date code filter.
-- **Scanning is typed input.** There is no camera/barcode integration yet; the operator types part numbers and label data into a text field. The parsing logic normalizes input and applies simple OCR-style substitutions (e.g. `O` → `0`) so the demo can simulate real scan errors.
+- **Scanning supports camera input.** Camera/barcode integration is implemented via the native Android `RectangleDetection.scanLabel()` flow. On supported devices the operator can scan a label with the camera; the detected text is parsed and matched to receiving and picking records just like typed input. A typed-input fallback is still available for browsers and testing. The parsing logic normalizes input and applies simple OCR-style substitutions (e.g. `O` → `0`) so the demo can simulate real scan errors.
 - **Limited automated tests.** There is a small Android unit-test suite for the OpenCV crop logic (`./gradlew :app:testDebugUnitTest`). Most verification is still manual browser testing plus `pnpm nuxt prepare` for TypeScript generation.

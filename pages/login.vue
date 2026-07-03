@@ -48,9 +48,6 @@
         </button>
       </form>
 
-      <div class="login__footer">
-        <a href="#" @click.prevent>Forgot password?</a>
-      </div>
     </div>
   </div>
 </template>

@@ -7,8 +7,6 @@ This is a client-side Nuxt 3 proof-of-concept for warehouse mobile/Android flows
 - **Framework:** Nuxt 3 (`ssr: false`)
 - **UI:** Vue 3, plain CSS
 - **Mobile shell:** Capacitor (Android platform added)
-- **Subject segmentation:** `@capacitor-mlkit/subject-segmentation` (Google ML Kit)
-- **Camera OCR:** `@capacitor/camera` + `@pantrist/capacitor-plugin-ml-kit-text-recognition`
 - **Database:** PGlite — WebAssembly build of Postgres running in the browser
 - **ORM:** Drizzle ORM with the `drizzle-orm/pglite` driver
 - **Persistence:** IndexedDB via PGlite (`idb://warehouse-demo-pglite`)
@@ -98,7 +96,6 @@ For non-trivial changes:
 - **No migrations.** The schema is created once from `db/init.ts` when the `users` table does not exist. Schema changes require clearing IndexedDB.
 - **Demo passwords only.** Passwords are stored as plain-text hashes in the seed file.
 - **Per-browser database.** PGlite stores data in IndexedDB, so each browser has its own isolated demo database.
-- **Camera OCR.** A real camera OCR flow is available on Android via `useCameraOcr` and the `/ocr-demo` page. It uses `@capacitor/camera` and `@pantrist/capacitor-plugin-ml-kit-text-recognition`.
-- **Subject segmentation.** ML Kit subject segmentation is available via `useSubjectSegmentation` on Android. It requires the Google Subject Segmentation Play Services module, which is downloaded on first use.
+- **Native scanning.** The Android native `RectangleDetection.scanLabel()` flow is still used for camera-based label capture where implemented.
 - **Capacitor web assets.** Run `pnpm generate` before `pnpm cap:sync` so the native apps receive the latest static build from `.output/public`. For dev live reload, use `pnpm cap:android:dev` instead.
 - **Android only.** iOS platform is not configured.
