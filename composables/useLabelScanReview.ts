@@ -5,7 +5,7 @@ export interface UseLabelScanReviewOptions {
 }
 
 export function useLabelScanReview(options: UseLabelScanReviewOptions = {}) {
-  const { scan, scanning, error } = useLabelScan();
+  const { scan: rawScan, scanning } = useLabelScan();
   const reviewOpen = ref(false);
   const review = ref<LabelScanResult | null>(null);
 
@@ -18,9 +18,15 @@ export function useLabelScanReview(options: UseLabelScanReviewOptions = {}) {
     } else if (result.status === "manual") {
       review.value = createManualReview();
       reviewOpen.value = true;
-    } else if (result.status === "error") {
-      error.value = result.message;
     }
+  }
+
+  async function scan(context: Parameters<typeof rawScan>[0]) {
+    const result = await rawScan(context);
+    if (result.status !== "cancelled" && result.status !== "error") {
+      await handleResult(result);
+    }
+    return result;
   }
 
   async function onApplied() {
@@ -31,10 +37,8 @@ export function useLabelScanReview(options: UseLabelScanReviewOptions = {}) {
   return {
     scan,
     scanning,
-    error,
     review,
     reviewOpen,
-    handleResult,
     onApplied,
   };
 }

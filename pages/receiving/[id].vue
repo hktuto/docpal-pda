@@ -1,7 +1,7 @@
 <template>
   <div>
-    <p v-if="pending" class="empty">Loading…</p>
-    <p v-else-if="error" class="empty" style="color: var(--danger);">Error: {{ error }}</p>
+    <EmptyState v-if="pending">Loading…</EmptyState>
+    <EmptyState v-else-if="error" error>Error: {{ error }}</EmptyState>
 
     <template v-else-if="order">
       <DetailHeader
@@ -30,34 +30,16 @@
           </NuxtLink>
         </template>
 
-        <div class="detail-row">
-          <span class="detail-label">Supplier</span>
-          <span>{{ order.supplier?.name || "—" }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Delivery date</span>
-          <span>{{ order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : "—" }}</span>
-        </div>
-        <div v-if="order.status === 'in_hand' && remainingItems > 0" class="detail-row">
-          <span class="detail-label">Remaining items</span>
-          <span>{{ remainingItems }} item{{ remainingItems === 1 ? '' : 's' }}</span>
-        </div>
+        <DetailRow label="Supplier" :value="order.supplier?.name" />
+        <DetailRow label="Delivery date" :value="order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : null" />
+        <DetailRow v-if="order.status === 'in_hand' && remainingItems > 0" label="Remaining items" :value="`${remainingItems} item${remainingItems === 1 ? '' : 's'}`" />
       </DetailHeader>
 
-      <div v-if="order.status === 'in_hand' && remainingItems > 0 && view === 'picking'" style="position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 60;">
-        <button
-          class="btn"
-          style="border-radius: 9999px; width: 3.5rem; height: 3.5rem; padding: 0; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow);"
-          aria-label="Scan label"
-          :disabled="scanning"
-          @click="openScan()"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-            <circle cx="12" cy="13" r="4"/>
-          </svg>
-        </button>
-      </div>
+      <ScanFab
+        v-if="order.status === 'in_hand' && remainingItems > 0 && view === 'picking'"
+        :loading="scanning"
+        @click="openScan()"
+      />
 
       <div class="view-tabs">
         <button
@@ -72,217 +54,32 @@
         </button>
       </div>
 
-      <template v-if="view === 'receiving'">
-        <h2 class="section-title">Invoices & Items</h2>
-        <div v-for="invoice in order.invoices" :key="invoice.id" style="margin-bottom: 1.5rem;">
-          <h3 style="margin-bottom: 0.5rem; color: var(--muted);">
-            Invoice {{ invoice.invoiceNo }}
-          </h3>
+      <ReceivingItemsTab
+        v-if="view === 'receiving'"
+        :order="order"
+        :allocated-by-item="allocatedByItem"
+        :saving="saving"
+        @report-issue="openReportIssue"
+      />
 
-          <div
-            v-for="item in invoice.items"
-            :key="item.id"
-            class="card"
-            :class="{ 'card--mismatch': item.reportedMismatch }"
-          >
-            <div class="detail-row">
-              <span class="detail-label">Part</span>
-              <span class="card__title">{{ item.part?.partNo }}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">PO / Line</span>
-              <span>{{ item.poNo }} / {{ item.poLine }}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Expected</span>
-              <span>{{ item.qty }}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Reserved</span>
-              <span>{{ allocatedByItem[item.id] || 0 }}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Picked</span>
-              <span>{{ item.pickedQty }}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Put away</span>
-              <span>{{ item.putAwayQty }}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Available</span>
-              <span>{{ item.receivedQty - item.pickedQty - item.putAwayQty - (allocatedByItem[item.id] || 0) }}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Date / Lot / COO / COW</span>
-              <span>{{ item.dateCode }} / {{ item.lotCode }} / {{ item.coo }} / {{ item.cow }}</span>
-            </div>
-
-            <div v-if="order.status === 'pending' || order.status === 'in_hand'" style="margin-top: 0.75rem;">
-              <template v-if="lockedByItem[item.id]">
-                <p class="mismatch-locked">Locked: stock already in use.</p>
-              </template>
-
-              <template v-else-if="item.reportedMismatch">
-                <div class="mismatch-summary">
-                  <span class="mismatch-badge">{{ formatMismatchSummary(item) }}</span>
-                  <span v-if="item.mismatchNote" class="mismatch-note">{{ item.mismatchNote }}</span>
-                  <button class="btn btn--small btn--danger" :disabled="saving[item.id]" @click="openReportIssue(item)">Edit issue</button>
-                </div>
-              </template>
-
-              <template v-else>
-                <button class="btn btn--small btn--danger" :disabled="saving[item.id]" @click="openReportIssue(item)">Report issue</button>
-              </template>
-            </div>
-          </div>
-        </div>
-      </template>
-
-      <template v-else>
-        <h2 class="section-title">Picking view</h2>
-        <input
-          v-model="searchQuery"
-          type="text"
-          placeholder="Search picking orders or parts…"
-          style="width: 100%; margin-bottom: 1rem;"
-        />
-        <p v-if="filteredGroupedPickingOrders.length === 0" class="empty">
-          No picking orders are linked to this receiving order yet.
-        </p>
-
-        <div v-for="po in filteredGroupedPickingOrders" :key="po.id" class="card" style="margin-bottom: 1.5rem;">
-          <div class="detail-row">
-            <span class="detail-label">Picking order</span>
-            <NuxtLink :to="`/picking/${po.id}`" class="card__title">{{ po.ref_no }}</NuxtLink>
-          </div>
-          <div class="detail-row">
-            <span class="detail-label">Status</span>
-            <span class="badge">{{ po.status }}</span>
-          </div>
-
-          <div v-if="po.status !== 'finished'" style="margin-top: 0.75rem;">
-            <button
-              class="btn btn--small"
-              :disabled="creatingBox[po.id]"
-              @click="createBox(po.id)"
-            >
-              {{ creatingBox[po.id] ? "Creating…" : "Create box" }}
-            </button>
-          </div>
-
-          <div v-if="(boxesByOrder[po.id] || []).length" style="margin-top: 0.75rem;">
-            <h3 style="margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--muted);">Boxes</h3>
-            <div
-              v-for="box in boxesByOrder[po.id]"
-              :key="box.id"
-              class="lot"
-              style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;"
-            >
-              <span style="font-size: 0.875rem; font-weight: 600;">{{ box.id }}</span>
-              <span class="badge">{{ box.status }}</span>
-            </div>
-          </div>
-
-          <div v-for="pi in po.items" :key="pi.id" class="lot" style="margin-top: 0.75rem;">
-            <div class="detail-row">
-              <span class="detail-label">Part</span>
-              <span>{{ pi.part_no }}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Required / scanned / boxed</span>
-              <span>{{ pi.required_qty }} / {{ pi.scanned_qty }} / {{ pi.boxed_qty }}</span>
-            </div>
-            <div class="detail-row">
-              <span class="detail-label">Status</span>
-              <span class="badge" :class="{ 'badge--finished': pi.boxed_qty >= pi.required_qty }">
-                {{ pi.boxed_qty >= pi.required_qty ? "Finished" : "Picking" }}
-              </span>
-            </div>
-            <div v-if="pi.locations.filter(l => l.allocated_qty > 0).length" class="detail-row">
-              <span class="detail-label">Allocated lots</span>
-            </div>
-            <ul v-if="pi.locations.filter(l => l.allocated_qty > 0).length" style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--muted);">
-              <li v-for="(loc, idx) in pi.locations.filter(l => l.allocated_qty > 0)" :key="idx">
-                {{ loc.shelf_code || loc.box_id || "Receiving area" }}
-                · {{ loc.date_code || "—" }} / {{ loc.lot_code || "—" }} / {{ loc.coo || "—" }} / {{ loc.cow || "—" }}
-                · qty {{ loc.allocated_qty }}
-              </li>
-            </ul>
-
-            <div v-if="packagesByItem[pi.id]?.length" style="margin-top: 0.75rem;">
-              <h3 style="margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--muted);">Packages</h3>
-              <div
-                v-for="pkg in packagesByItem[pi.id]"
-                :key="pkg.id"
-                class="lot"
-                style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; justify-content: space-between;"
-              >
-                <div style="display: flex; flex-direction: column; gap: 0.25rem;">
-                  <span style="font-size: 0.875rem;">
-                    {{ pkg.qty }} pcs · {{ pkg.dateCode || "—" }} / {{ pkg.lotCode || "—" }} / {{ pkg.coo || "—" }} / {{ pkg.cow || "—" }}
-                  </span>
-                  <span style="font-size: 0.75rem; color: var(--muted);">
-                    <template v-if="pkg.shippingBoxId">
-                      In box {{ pkg.shippingBoxId }}
-                    </template>
-                    <template v-else>Unboxed</template>
-                  </span>
-                </div>
-                <div v-if="!pkg.shippingBoxId" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-                  <select v-model="boxSelections[pkg.id]" :disabled="addingPackage[pkg.id]" style="min-width: 8rem;">
-                    <option value="">Select box</option>
-                    <option v-for="box in openBoxesForOrder(po.id)" :key="box.id" :value="box.id">{{ box.id }}</option>
-                  </select>
-                  <button
-                    class="btn btn--small"
-                    :disabled="addingPackage[pkg.id] || !boxSelections[pkg.id]"
-                    @click="addToBox(pkg.id)"
-                  >
-                    {{ addingPackage[pkg.id] ? "Adding…" : "Add to box" }}
-                  </button>
-                </div>
-                <button
-                  v-else-if="boxById(pkg.shippingBoxId)?.status === 'open'"
-                  class="btn btn--small"
-                  :disabled="removingPackage[pkg.id]"
-                  @click="removeFromBox(pkg.id)"
-                >
-                  {{ removingPackage[pkg.id] ? "Removing…" : "Remove from box" }}
-                </button>
-              </div>
-            </div>
-
-            <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-              <button
-                class="btn btn--small"
-                :disabled="scanning"
-                @click="openScan(pi.id)"
-              >
-                Scan
-              </button>
-              <button class="btn btn--small" @click="toggleExpand(pi.id)">
-                {{ expandedItems.has(pi.id) ? "Hide picking logs" : "Show picking logs" }}
-                ({{ (transitionLogs[pi.id] || []).length }})
-              </button>
-
-              <div v-if="expandedItems.has(pi.id)" style="width: 100%; margin-top: 0.5rem;">
-                <p v-if="!(transitionLogs[pi.id] || []).length" class="card__meta">No picking logs.</p>
-                <ul v-else style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--muted);">
-                  <li v-for="log in transitionLogs[pi.id]" :key="log.id" style="margin-bottom: 0.35rem;">
-                    {{ new Date(log.createdAt).toLocaleString() }}
-                    · {{ log.actorName || "System" }}
-                    · {{ log.fromState || "—" }} → {{ log.toState }}
-                    <span v-if="log.metadata">
-                      · {{ JSON.parse(log.metadata).qty ?? JSON.parse(log.metadata).note }}
-                    </span>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-      </template>
+      <ReceivingPickingTab
+        v-else
+        :filtered-grouped-picking-orders="filteredGroupedPickingOrders"
+        :boxes-by-order="boxesByOrder"
+        :packages-by-item="packagesByItem"
+        :transition-logs="transitionLogs"
+        v-model:search-query="searchQuery"
+        v-model:expanded-items="expandedItems"
+        v-model:box-selections="boxSelections"
+        :creating-box="creatingBox"
+        :adding-package="addingPackage"
+        :removing-package="removingPackage"
+        :scanning="scanning"
+        @create-box="createBox"
+        @add-to-box="addToBox"
+        @remove-from-box="removeFromBox"
+        @scan="openScan"
+      />
 
       <LabelScanReviewModal
         v-if="review?.status === 'review'"
@@ -311,7 +108,11 @@
 
 <script setup lang="ts">
 import { sql } from "drizzle-orm";
-import { useLabelScan, createManualReview, type LabelScanResult } from "~/composables/useLabelScan";
+import ReceivingItemsTab from "~/components/receiving/ReceivingItemsTab.vue";
+import ReceivingPickingTab from "~/components/receiving/ReceivingPickingTab.vue";
+import { useVisibleReload } from "~/composables/useVisibleReload";
+import { useStatusBadge } from "~/composables/useStatusBadge";
+import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import ReportIssueModal from "~/components/ReportIssueModal.vue";
 import {
@@ -360,9 +161,16 @@ const order = ref<DisplayReceivingOrder | null>(null);
 const pickingRows = ref<PickingByReceivingRow[]>([]);
 const saving = ref<Record<string, boolean>>({});
 const confirming = ref(false);
-const { scan, scanning } = useLabelScan();
-const reviewOpen = ref(false);
-const review = ref<LabelScanResult | null>(null);
+const { badgeClass } = useStatusBadge();
+const { scan, scanning, review, reviewOpen, onApplied } = useLabelScanReview({
+  onApplied: load,
+});
+
+async function onRetake() {
+  reviewOpen.value = false;
+  await openScan(scanPickingItemId.value);
+}
+
 const scanPickingItemId = ref<string | undefined>(undefined);
 const view = ref<"receiving" | "picking">("receiving");
 const headerExpanded = ref(false);
@@ -468,17 +276,6 @@ const filteredGroupedPickingOrders = computed<GroupedOrder[]>(() => {
 
 const remainingItems = ref(0);
 const allocatedByItem = ref<Record<string, number>>({});
-
-const lockedByItem = computed(() => {
-  const map: Record<string, boolean> = {};
-  if (!order.value) return map;
-  for (const invoice of order.value.invoices) {
-    for (const item of invoice.items) {
-      map[item.id] = item.pickedQty > 0 || item.putAwayQty > 0;
-    }
-  }
-  return map;
-});
 
 async function load() {
   try {
@@ -620,16 +417,6 @@ async function load() {
   }
 }
 
-function toggleExpand(itemId: string) {
-  const next = new Set(expandedItems.value);
-  if (next.has(itemId)) {
-    next.delete(itemId);
-  } else {
-    next.add(itemId);
-  }
-  expandedItems.value = next;
-}
-
 async function openScan(itemId?: string) {
   scanPickingItemId.value = itemId;
   const result = await scan({
@@ -637,46 +424,10 @@ async function openScan(itemId?: string) {
     receivingOrderId: orderId,
     pickingItemId: itemId,
   });
-  if (result.status === 'applied') {
-    await load();
-  } else if (result.status === 'review') {
-    review.value = result;
-    reviewOpen.value = true;
-  } else if (result.status === 'manual') {
-    review.value = createManualReview();
-    reviewOpen.value = true;
-  } else if (result.status === 'error') {
+  if (result.status === "error") {
     error.value = result.message;
   }
-}
-
-async function onApplied() {
-  reviewOpen.value = false;
-  await load();
-}
-
-async function onRetake() {
-  reviewOpen.value = false;
-  await openScan(scanPickingItemId.value);
-}
-
-function formatMismatchSummary(item: DisplayReceivingItem): string {
-  switch (item.mismatchReason) {
-    case "not_found":
-      return "Not found";
-    case "damaged":
-      return `Damaged: ${item.mismatchQty} of ${item.qty}`;
-    case "quality_rejection":
-      return `Quality rejection: ${item.mismatchQty} of ${item.qty}`;
-    case "qty_mismatch":
-      return `Quantity mismatch: received ${item.mismatchQty} of ${item.qty}`;
-    case "over_shipment":
-      return `Over shipment: +${item.mismatchQty}`;
-    case "wrong_part":
-      return `Wrong part: ${item.wrongPartNo} × ${item.mismatchQty}`;
-    default:
-      return "Mismatch reported";
-  }
+  // applied/review/manual are handled by useLabelScanReview.
 }
 
 function openReportIssue(item: DisplayReceivingItem) {
@@ -790,29 +541,7 @@ function boxById(boxId: string | null | undefined) {
   return undefined;
 }
 
-function badgeClass(status: string) {
-  if (status === "pending") return "badge--pending";
-  if (status === "in_hand") return "badge--in-hand";
-  if (status === "clear") return "badge--finished";
-  return "";
-}
-
-onMounted(() => {
-  load();
-  document.addEventListener("visibilitychange", onVisible);
-  window.addEventListener("focus", onVisible);
-});
-
-onUnmounted(() => {
-  document.removeEventListener("visibilitychange", onVisible);
-  window.removeEventListener("focus", onVisible);
-});
-
-function onVisible() {
-  if (document.visibilityState === "visible") {
-    load();
-  }
-}
+useVisibleReload(load);
 </script>
 
 <style scoped>

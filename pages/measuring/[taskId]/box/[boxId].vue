@@ -137,7 +137,6 @@ const {
   scanning,
   review,
   reviewOpen,
-  handleResult,
   onApplied,
 } = useLabelScanReview({ onApplied: onScanApplied });
 
@@ -189,9 +188,8 @@ async function openScan(packageId?: string) {
   });
   if (result.status === "error") {
     error.value = result.message;
-  } else {
-    await handleResult(result);
   }
+  // applied/review/manual are handled by useLabelScanReview.
 }
 </script>
 

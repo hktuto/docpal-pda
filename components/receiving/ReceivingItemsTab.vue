@@ -11,7 +11,9 @@
       class="card"
       :class="{ 'card--mismatch': item.reportedMismatch }"
     >
-      <DetailRow label="Part" :value="item.part?.partNo" />
+      <DetailRow label="Part">
+        <span class="card__title">{{ item.part?.partNo }}</span>
+      </DetailRow>
       <DetailRow label="PO / Line" :value="`${item.poNo} / ${item.poLine}`" />
       <DetailRow label="Expected" :value="item.qty" />
       <DetailRow label="Reserved" :value="allocatedByItem[item.id] || 0" />
@@ -50,14 +52,13 @@
 <script setup lang="ts">
 import * as schema from "~/db/schema";
 
-type DisplayReceivingItem = typeof schema.receivingInvoiceItems.$inferSelect;
+type DisplayReceivingItem = typeof schema.receivingInvoiceItems.$inferSelect & {
+  part?: typeof schema.parts.$inferSelect | null;
+};
 
 interface DisplayReceivingOrder {
   id: string;
-  refNo: string;
   status: string;
-  supplier?: typeof schema.suppliers.$inferSelect | null;
-  deliveryDate: Date | null;
   invoices: Array<
     Omit<typeof schema.receivingInvoices.$inferSelect, "receivingOrderId"> & {
       items: DisplayReceivingItem[];
@@ -65,7 +66,7 @@ interface DisplayReceivingOrder {
   >;
 }
 
-const props = defineProps<{
+defineProps<{
   order: DisplayReceivingOrder;
   allocatedByItem: Record<string, number>;
   saving: Record<string, boolean>;

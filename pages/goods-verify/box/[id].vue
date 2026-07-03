@@ -118,7 +118,6 @@ const {
   scanning,
   review,
   reviewOpen,
-  handleResult,
   onApplied,
 } = useLabelScanReview({ onApplied: onScanApplied });
 
@@ -169,11 +168,8 @@ async function openScan() {
   const result = await scan({ task: "goods-verify", items: box.value.items });
   if (result.status === "error") {
     error.value = result.message;
-  } else if (result.status === "cancelled") {
-    // silently ignore
-  } else {
-    await handleResult(result);
   }
+  // applied/review/manual are handled by useLabelScanReview.
 }
 </script>
 
