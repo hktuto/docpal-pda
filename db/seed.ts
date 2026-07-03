@@ -6,7 +6,6 @@ import { allocatePickingOrder } from "./allocate";
 
 export async function seedDb(db: PgliteDatabase<typeof schema>) {
   const now = new Date();
-  const days = (n: number) => new Date(now.getTime() + n * 24 * 60 * 60 * 1000);
 
   // Demo only: passwords are stored as-is so the local demo can compare them directly.
   const userOperator = {
@@ -29,11 +28,32 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
   await db.insert(schema.users).values([userOperator, userAdmin]);
 
   const supplierRecords = [
-    { id: uuid(), code: "ALP", name: "Alpha Electronics" },
-    { id: uuid(), code: "BET", name: "Beta Semiconductor" },
-    { id: uuid(), code: "GAM", name: "Gamma Precision" },
-    { id: uuid(), code: "DEL", name: "Delta Components" },
-    { id: uuid(), code: "EPS", name: "Epsilon Connectors" },
+    { id: uuid(), code: "ABLIC", name: "ABLIC" },
+    { id: uuid(), code: "DAITO", name: "DAITO" },
+    { id: uuid(), code: "DEXERI", name: "DEXERIALS -MCI" },
+    { id: uuid(), code: "DIOTEC", name: "DIOTEC" },
+    { id: uuid(), code: "HINODE", name: "HINODE -MCI" },
+    { id: uuid(), code: "ICHAUS", name: "ICHAUS -MCI" },
+    { id: uuid(), code: "IK", name: "IK Semicon" },
+    { id: uuid(), code: "KOA", name: "KOA" },
+    { id: uuid(), code: "KYOCER", name: "KYOCERA -MCI" },
+    { id: uuid(), code: "M", name: "M-TRON" },
+    { id: uuid(), code: "MINEBE", name: "MINEBEAMITSUMI -MCI" },
+    { id: uuid(), code: "MMC", name: "MMC" },
+    { id: uuid(), code: "NCC", name: "NCC" },
+    { id: uuid(), code: "NDK", name: "NDK" },
+    { id: uuid(), code: "NIDEC", name: "NIDEC" },
+    { id: uuid(), code: "NITSUKO", name: "NITSUKO" },
+    { id: uuid(), code: "OKAYA", name: "OKAYA -MCI" },
+    { id: uuid(), code: "SEIKO", name: "SEIKO -MCI & MCE" },
+    { id: uuid(), code: "SEMIKR", name: "SEMIKRON -MCI" },
+    { id: uuid(), code: "SEMITE", name: "SEMITEC" },
+    { id: uuid(), code: "SHINDE", name: "Shindengen" },
+    { id: uuid(), code: "SUMITO", name: "SUMITOMO -MCI" },
+    { id: uuid(), code: "TE", name: "TE -MCI" },
+    { id: uuid(), code: "VINA", name: "VINA -MCE" },
+    { id: uuid(), code: "YAMAIC", name: "YAMAICHI -MCE" },
+    { id: uuid(), code: "YAMA1", name: "YAMAICHI -MCI" },
   ] as const;
   await db.insert(schema.suppliers).values(supplierRecords);
   const supplierByCode = Object.fromEntries(supplierRecords.map((s) => [s.code, s])) as Record<
@@ -42,13 +62,27 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
   >;
 
   const partRecords = [
-    { id: uuid(), partNo: "RES-0603-10K", internalCode: "RES-0603-10K", description: "Resistor 10K 0603", defaultCoo: "JP" },
-    { id: uuid(), partNo: "CAP-0805-100N", internalCode: "CAP-0805-100N", description: "Cap 100nF 0805", defaultCoo: "JP" },
-    { id: uuid(), partNo: "IC-LM358DR", internalCode: "IC-LM358DR", description: "Op-amp", defaultCoo: "MY" },
-    { id: uuid(), partNo: "MOS-IRLML6244", internalCode: "MOS-IRLML6244", description: "MOSFET", defaultCoo: "MY" },
-    { id: uuid(), partNo: "MCU-STM32F103", internalCode: "MCU-STM32F103", description: "MCU", defaultCoo: "CN" },
-    { id: uuid(), partNo: "SNS-BMP280", internalCode: "SNS-BMP280", description: "Pressure sensor", defaultCoo: "DE" },
-    { id: uuid(), partNo: "CON-PH2.0-4P", internalCode: "CON-PH2.0-4P", description: "4-pin connector", defaultCoo: "TW" },
+    { id: uuid(), partNo: "RK73B1JTTD181G", internalCode: "", description: "", defaultCoo: "CN" },
+    { id: uuid(), partNo: "RK73H2ATTD1372F", internalCode: "", description: "", defaultCoo: "CN" },
+    { id: uuid(), partNo: "RK73H1JTTD1501F", internalCode: "", description: "", defaultCoo: "CN" },
+    { id: uuid(), partNo: "RK73H1JTTD2202F", internalCode: "", description: "", defaultCoo: "CN" },
+    { id: uuid(), partNo: "RK73H2ATTD1002F", internalCode: "", description: "", defaultCoo: "CN" },
+    { id: uuid(), partNo: "S-1206B18-M3T1U", internalCode: "", description: "", defaultCoo: "JP" },
+    { id: uuid(), partNo: "S-80860CNNB-B9LT2U", internalCode: "", description: "", defaultCoo: "JP" },
+    { id: uuid(), partNo: "S-8240ADJ-I6T1U", internalCode: "", description: "", defaultCoo: "JP" },
+    { id: uuid(), partNo: "DBI25-16A", internalCode: "", description: "", defaultCoo: "IN" },
+    { id: uuid(), partNo: "MM1Z4733A", internalCode: "", description: "", defaultCoo: "CN" },
+    { id: uuid(), partNo: "SL1M", internalCode: "", description: "", defaultCoo: "CN" },
+    { id: uuid(), partNo: "SMF51CA", internalCode: "", description: "", defaultCoo: "CN" },
+    { id: uuid(), partNo: "Z1SMA1020", internalCode: "", description: "", defaultCoo: "DE" },
+    { id: uuid(), partNo: "IL34063ADT", internalCode: "", description: "", defaultCoo: "KR" },
+    { id: uuid(), partNo: "CX2016SA20000D0HSSCC", internalCode: "", description: "", defaultCoo: "JP" },
+    { id: uuid(), partNo: "NCC-TND14V-471KB00AAA0", internalCode: "", description: "", defaultCoo: "ID" },
+    { id: uuid(), partNo: "NX8045GB", internalCode: "", description: "", defaultCoo: "CN" },
+    { id: uuid(), partNo: "Q-SPT7P0327620C5GF", internalCode: "", description: "", defaultCoo: "MY" },
+    { id: uuid(), partNo: "OKAYA-RE104-L", internalCode: "", description: "", defaultCoo: "CN" },
+    { id: uuid(), partNo: "D1FL20U", internalCode: "", description: "", defaultCoo: "JP" },
+    { id: uuid(), partNo: "04028DA12RBUFB", internalCode: "", description: "", defaultCoo: "CN" },
   ] as const;
   await db.insert(schema.parts).values(partRecords);
   const partByNo = Object.fromEntries(partRecords.map((p) => [p.partNo, p])) as Record<
@@ -59,28 +93,37 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
   const shelfRecords = [
     { code: "A-01-01", zone: "A" },
     { code: "A-01-02", zone: "A" },
-    { code: "A-02-01", zone: "A" },
-    { code: "A-02-02", zone: "A" },
+    { code: "A-01-03", zone: "A" },
+    { code: "A-01-04", zone: "A" },
+    { code: "A-01-05", zone: "A" },
+    { code: "A-01-06", zone: "A" },
+    { code: "A-01-07", zone: "A" },
+    { code: "A-01-08", zone: "A" },
     { code: "B-01-01", zone: "B" },
     { code: "B-02-01", zone: "B" },
     { code: "B-02-02", zone: "B" },
   ] as const;
   await db.insert(schema.shelves).values(shelfRecords);
 
-  const demoShelfBoxId = uuid();
-
-  const shelvedLots = [
-    { id: uuid(), partId: partByNo["RES-0603-10K"].id, dateCode: "2404", lotCode: "L240401", coo: "JP", cow: "USA", shelfCode: "A-01-01", boxId: demoShelfBoxId as string | null, totalQty: 5000, allocatedQty: 0 },
-    { id: uuid(), partId: partByNo["CAP-0805-100N"].id, dateCode: "2404", lotCode: "L240402", coo: "JP", cow: "USA", shelfCode: "A-01-02", boxId: null, totalQty: 3000, allocatedQty: 0 },
-    { id: uuid(), partId: partByNo["CON-PH2.0-4P"].id, dateCode: "2403", lotCode: "L240302", coo: "TW", cow: "USA", shelfCode: "B-02-01", boxId: null, totalQty: 2000, allocatedQty: 0 },
+  // Pre-existing shelf inventory from Section 4 of the seed curation.
+  const preExistingLots = [
+    { id: uuid(), partId: partByNo["IL34063ADT"].id, dateCode: null as string | null, lotCode: null as string | null, coo: "KR", cow: "USA", shelfCode: "A-01-01", boxId: null as string | null, totalQty: 5000, allocatedQty: 0 },
+    { id: uuid(), partId: partByNo["CX2016SA20000D0HSSCC"].id, dateCode: null, lotCode: null, coo: "JP", cow: "USA", shelfCode: "A-01-02", boxId: null, totalQty: 5000, allocatedQty: 0 },
+    { id: uuid(), partId: partByNo["NCC-TND14V-471KB00AAA0"].id, dateCode: null, lotCode: null, coo: "ID", cow: "USA", shelfCode: "A-01-03", boxId: null, totalQty: 5000, allocatedQty: 0 },
+    { id: uuid(), partId: partByNo["NX8045GB"].id, dateCode: null, lotCode: null, coo: "CN", cow: "USA", shelfCode: "A-01-04", boxId: null, totalQty: 5000, allocatedQty: 0 },
+    { id: uuid(), partId: partByNo["Q-SPT7P0327620C5GF"].id, dateCode: null, lotCode: null, coo: "MY", cow: "USA", shelfCode: "A-01-05", boxId: null, totalQty: 5000, allocatedQty: 0 },
+    { id: uuid(), partId: partByNo["OKAYA-RE104-L"].id, dateCode: null, lotCode: null, coo: "CN", cow: "USA", shelfCode: "A-01-06", boxId: null, totalQty: 5000, allocatedQty: 0 },
+    { id: uuid(), partId: partByNo["D1FL20U"].id, dateCode: null, lotCode: null, coo: "JP", cow: "USA", shelfCode: "A-01-07", boxId: null, totalQty: 5000, allocatedQty: 0 },
+    { id: uuid(), partId: partByNo["04028DA12RBUFB"].id, dateCode: null, lotCode: null, coo: "CN", cow: "USA", shelfCode: "A-01-08", boxId: null, totalQty: 10, allocatedQty: 0 },
   ] as const;
+  await db.insert(schema.inventoryLots).values(preExistingLots.map((lot) => ({ ...lot })));
 
   // Receiving orders
   const receivingOrderRecords = [
     {
       id: uuid(),
-      refNo: "RO-240701-001",
-      supplierId: supplierByCode.ALP.id,
+      refNo: "04958058-W-01",
+      supplierId: supplierByCode.KOA.id,
       deliveryDate: now,
       status: "in_hand" as const,
       arrivedAt: now,
@@ -90,8 +133,8 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
     },
     {
       id: uuid(),
-      refNo: "RO-240701-002",
-      supplierId: supplierByCode.BET.id,
+      refNo: "1080082369",
+      supplierId: supplierByCode.ABLIC.id,
       deliveryDate: now,
       status: "in_hand" as const,
       arrivedAt: now,
@@ -101,34 +144,12 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
     },
     {
       id: uuid(),
-      refNo: "RO-240705-001",
-      supplierId: supplierByCode.GAM.id,
-      deliveryDate: days(4),
+      refNo: "52600142",
+      supplierId: supplierByCode.DIOTEC.id,
+      deliveryDate: now,
       status: "pending" as const,
       arrivedAt: null as Date | null,
       arrivedBy: null as string | null,
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: uuid(),
-      refNo: "RO-240710-001",
-      supplierId: supplierByCode.DEL.id,
-      deliveryDate: days(9),
-      status: "pending" as const,
-      arrivedAt: null as Date | null,
-      arrivedBy: null as string | null,
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: uuid(),
-      refNo: "RO-240615-001",
-      supplierId: supplierByCode.EPS.id,
-      deliveryDate: days(-15),
-      status: "in_hand" as const,
-      arrivedAt: now,
-      arrivedBy: userOperator.id,
       createdAt: now,
       updatedAt: now,
     },
@@ -139,25 +160,10 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
     (typeof receivingOrderRecords)[number]
   >;
 
-  await db.insert(schema.shelfBoxes).values({
-    id: demoShelfBoxId,
-    receivingOrderId: receivingOrderByRef["RO-240701-001"].id,
-    shelfCode: "A-01-01",
-    status: "open",
-    createdAt: now,
-  });
-
-  await db.insert(schema.inventoryLots).values(shelvedLots.map((lot) => ({ ...lot })));
-
   const invoiceRecords = [
-    { id: uuid(), receivingOrderId: receivingOrderByRef["RO-240701-001"].id, invoiceNo: "INV-ALP-240701-001", supplierId: supplierByCode.ALP.id },
-    { id: uuid(), receivingOrderId: receivingOrderByRef["RO-240701-001"].id, invoiceNo: "INV-ALP-240701-002", supplierId: supplierByCode.ALP.id },
-    { id: uuid(), receivingOrderId: receivingOrderByRef["RO-240701-002"].id, invoiceNo: "INV-BET-240701-001", supplierId: supplierByCode.BET.id },
-    { id: uuid(), receivingOrderId: receivingOrderByRef["RO-240701-002"].id, invoiceNo: "INV-BET-240701-002", supplierId: supplierByCode.BET.id },
-    { id: uuid(), receivingOrderId: receivingOrderByRef["RO-240701-002"].id, invoiceNo: "INV-BET-240701-003", supplierId: supplierByCode.BET.id },
-    { id: uuid(), receivingOrderId: receivingOrderByRef["RO-240705-001"].id, invoiceNo: "INV-GAM-240705-001", supplierId: supplierByCode.GAM.id },
-    { id: uuid(), receivingOrderId: receivingOrderByRef["RO-240710-001"].id, invoiceNo: "INV-DEL-240710-001", supplierId: supplierByCode.DEL.id },
-    { id: uuid(), receivingOrderId: receivingOrderByRef["RO-240615-001"].id, invoiceNo: "INV-EPS-240615-001", supplierId: supplierByCode.EPS.id },
+    { id: uuid(), receivingOrderId: receivingOrderByRef["04958058-W-01"].id, invoiceNo: "04958058-W-01", supplierId: supplierByCode.KOA.id },
+    { id: uuid(), receivingOrderId: receivingOrderByRef["1080082369"].id, invoiceNo: "1080082369", supplierId: supplierByCode.ABLIC.id },
+    { id: uuid(), receivingOrderId: receivingOrderByRef["52600142"].id, invoiceNo: "52600142", supplierId: supplierByCode.DIOTEC.id },
   ] as const;
   await db.insert(schema.receivingInvoices).values(invoiceRecords);
   const invoiceByNo = Object.fromEntries(invoiceRecords.map((inv) => [inv.invoiceNo, inv])) as Record<
@@ -166,20 +172,22 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
   >;
 
   const receivingInvoiceItemRecords = [
-    // ALP RO-240701-001
-    { id: uuid(), receivingInvoiceId: invoiceByNo["INV-ALP-240701-001"].id, partId: partByNo["RES-0603-10K"].id, poNo: "PO-ALP-240701-001", poLine: "1", qty: 40000, receivedQty: 40000, pickedQty: 0, putAwayQty: 0, boxId: null as string | null, dateCode: null as string | null, lotCode: null as string | null, coo: "JP", cow: "USA", reportedMismatch: false, mismatchNote: null as string | null },
-    { id: uuid(), receivingInvoiceId: invoiceByNo["INV-ALP-240701-001"].id, partId: partByNo["CAP-0805-100N"].id, poNo: "PO-ALP-240701-001", poLine: "2", qty: 5000, receivedQty: 5000, pickedQty: 0, putAwayQty: 0, boxId: null, dateCode: "2406", lotCode: "L240601", coo: "JP", cow: "USA", reportedMismatch: false, mismatchNote: null },
-    { id: uuid(), receivingInvoiceId: invoiceByNo["INV-ALP-240701-002"].id, partId: partByNo["CAP-0805-100N"].id, poNo: "PO-ALP-240701-001", poLine: "3", qty: 2000, receivedQty: 2000, pickedQty: 0, putAwayQty: 0, boxId: null, dateCode: "2406", lotCode: "L240602", coo: "JP", cow: "USA", reportedMismatch: false, mismatchNote: null },
-    // BET RO-240701-002
-    { id: uuid(), receivingInvoiceId: invoiceByNo["INV-BET-240701-001"].id, partId: partByNo["IC-LM358DR"].id, poNo: "PO-BET-240701-001", poLine: "1", qty: 1000, receivedQty: 1000, pickedQty: 0, putAwayQty: 0, boxId: null, dateCode: "2406", lotCode: "L240603", coo: "MY", cow: "USA", reportedMismatch: false, mismatchNote: null },
-    { id: uuid(), receivingInvoiceId: invoiceByNo["INV-BET-240701-002"].id, partId: partByNo["MOS-IRLML6244"].id, poNo: "PO-BET-240701-001", poLine: "2", qty: 800, receivedQty: 800, pickedQty: 0, putAwayQty: 0, boxId: null, dateCode: "2406", lotCode: "L240604", coo: "MY", cow: "USA", reportedMismatch: false, mismatchNote: null },
-    { id: uuid(), receivingInvoiceId: invoiceByNo["INV-BET-240701-003"].id, partId: partByNo["SNS-BMP280"].id, poNo: "PO-BET-240701-001", poLine: "3", qty: 300, receivedQty: 300, pickedQty: 0, putAwayQty: 0, boxId: null, dateCode: "2406", lotCode: "L240605", coo: "DE", cow: "USA", reportedMismatch: false, mismatchNote: null },
-    // GAM RO-240705-001 (pending)
-    { id: uuid(), receivingInvoiceId: invoiceByNo["INV-GAM-240705-001"].id, partId: partByNo["SNS-BMP280"].id, poNo: "PO-GAM-240705-001", poLine: "1", qty: 500, receivedQty: 0, pickedQty: 0, putAwayQty: 0, boxId: null, dateCode: null as string | null, lotCode: null as string | null, coo: "DE", cow: "USA", reportedMismatch: false, mismatchNote: null },
-    // DEL RO-240710-001 (pending)
-    { id: uuid(), receivingInvoiceId: invoiceByNo["INV-DEL-240710-001"].id, partId: partByNo["MCU-STM32F103"].id, poNo: "PO-DEL-240710-001", poLine: "1", qty: 80000, receivedQty: 0, pickedQty: 0, putAwayQty: 0, boxId: null, dateCode: null as string | null, lotCode: null as string | null, coo: "CN", cow: "USA", reportedMismatch: false, mismatchNote: null },
-    // EPS RO-240615-001
-    { id: uuid(), receivingInvoiceId: invoiceByNo["INV-EPS-240615-001"].id, partId: partByNo["CON-PH2.0-4P"].id, poNo: "PO-EPS-240615-001", poLine: "1", qty: 3000, receivedQty: 3000, pickedQty: 0, putAwayQty: 0, boxId: null, dateCode: "2404", lotCode: "L240403", coo: "TW", cow: "USA", reportedMismatch: false, mismatchNote: null },
+    // KOA 04958058-W-01
+    { id: uuid(), receivingInvoiceId: invoiceByNo["04958058-W-01"].id, partId: partByNo["RK73B1JTTD181G"].id, poNo: "1180200568STD", poLine: "1", qty: 15000, receivedQty: 15000, pickedQty: 0, putAwayQty: 0, boxId: null as string | null, dateCode: null as string | null, lotCode: null as string | null, coo: "CN", cow: "USA", reportedMismatch: false, mismatchNote: null as string | null },
+    { id: uuid(), receivingInvoiceId: invoiceByNo["04958058-W-01"].id, partId: partByNo["RK73H2ATTD1372F"].id, poNo: "1180200568STD", poLine: "2", qty: 40000, receivedQty: 40000, pickedQty: 0, putAwayQty: 0, boxId: null, dateCode: null, lotCode: null, coo: "CN", cow: "USA", reportedMismatch: false, mismatchNote: null },
+    { id: uuid(), receivingInvoiceId: invoiceByNo["04958058-W-01"].id, partId: partByNo["RK73H1JTTD1501F"].id, poNo: "1180200859STD", poLine: "3", qty: 5000, receivedQty: 5000, pickedQty: 0, putAwayQty: 0, boxId: null, dateCode: null, lotCode: null, coo: "CN", cow: "USA", reportedMismatch: false, mismatchNote: null },
+    { id: uuid(), receivingInvoiceId: invoiceByNo["04958058-W-01"].id, partId: partByNo["RK73H1JTTD2202F"].id, poNo: "1180200859STD", poLine: "4", qty: 5000, receivedQty: 5000, pickedQty: 0, putAwayQty: 0, boxId: null, dateCode: null, lotCode: null, coo: "CN", cow: "USA", reportedMismatch: false, mismatchNote: null },
+    { id: uuid(), receivingInvoiceId: invoiceByNo["04958058-W-01"].id, partId: partByNo["RK73H2ATTD1002F"].id, poNo: "1180201327STD", poLine: "5", qty: 70000, receivedQty: 70000, pickedQty: 0, putAwayQty: 0, boxId: null, dateCode: null, lotCode: null, coo: "CN", cow: "USA", reportedMismatch: false, mismatchNote: null },
+    // ABLIC 1080082369
+    { id: uuid(), receivingInvoiceId: invoiceByNo["1080082369"].id, partId: partByNo["S-1206B18-M3T1U"].id, poNo: "1180200571W", poLine: "1", qty: 3000, receivedQty: 3000, pickedQty: 0, putAwayQty: 0, boxId: null, dateCode: null, lotCode: null, coo: "JP", cow: "USA", reportedMismatch: false, mismatchNote: null },
+    { id: uuid(), receivingInvoiceId: invoiceByNo["1080082369"].id, partId: partByNo["S-80860CNNB-B9LT2U"].id, poNo: "1180200214", poLine: "2", qty: 3000, receivedQty: 3000, pickedQty: 0, putAwayQty: 0, boxId: null, dateCode: null, lotCode: null, coo: "JP", cow: "USA", reportedMismatch: false, mismatchNote: null },
+    { id: uuid(), receivingInvoiceId: invoiceByNo["1080082369"].id, partId: partByNo["S-8240ADJ-I6T1U"].id, poNo: "1180201399", poLine: "3", qty: 15000, receivedQty: 15000, pickedQty: 0, putAwayQty: 0, boxId: null, dateCode: null, lotCode: null, coo: "JP", cow: "USA", reportedMismatch: false, mismatchNote: null },
+    // DIOTEC 52600142 (pending)
+    { id: uuid(), receivingInvoiceId: invoiceByNo["52600142"].id, partId: partByNo["DBI25-16A"].id, poNo: "1180200536", poLine: "1", qty: 900, receivedQty: 0, pickedQty: 0, putAwayQty: 0, boxId: null, dateCode: null, lotCode: null, coo: "IN", cow: "USA", reportedMismatch: false, mismatchNote: null },
+    { id: uuid(), receivingInvoiceId: invoiceByNo["52600142"].id, partId: partByNo["MM1Z4733A"].id, poNo: "1180200595", poLine: "2", qty: 75000, receivedQty: 0, pickedQty: 0, putAwayQty: 0, boxId: null, dateCode: null, lotCode: null, coo: "CN", cow: "USA", reportedMismatch: false, mismatchNote: null },
+    { id: uuid(), receivingInvoiceId: invoiceByNo["52600142"].id, partId: partByNo["SL1M"].id, poNo: "1180200706", poLine: "3", qty: 300000, receivedQty: 0, pickedQty: 0, putAwayQty: 0, boxId: null, dateCode: null, lotCode: null, coo: "CN", cow: "USA", reportedMismatch: false, mismatchNote: null },
+    { id: uuid(), receivingInvoiceId: invoiceByNo["52600142"].id, partId: partByNo["SMF51CA"].id, poNo: "1180201274", poLine: "4", qty: 12000, receivedQty: 0, pickedQty: 0, putAwayQty: 0, boxId: null, dateCode: null, lotCode: null, coo: "CN", cow: "USA", reportedMismatch: false, mismatchNote: null },
+    { id: uuid(), receivingInvoiceId: invoiceByNo["52600142"].id, partId: partByNo["Z1SMA1020"].id, poNo: "1180201290", poLine: "5", qty: 7500, receivedQty: 0, pickedQty: 0, putAwayQty: 0, boxId: null, dateCode: null, lotCode: null, coo: "DE", cow: "USA", reportedMismatch: false, mismatchNote: null },
   ] as const;
   await db.insert(schema.receivingInvoiceItems).values(receivingInvoiceItemRecords);
 
@@ -187,12 +195,11 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
   // Allocations are made against receiving_invoice_items directly.
 
   const pickingOrderRecords = [
-    { id: uuid(), refNo: "TN-240701-001", supplierId: supplierByCode.ALP.id, deliveryDate: now, poNo: "SO-240701-001", requiredDateCodeNotice: null as string | null, shipTo: "US", destinationCountry: "USA", status: "pending" as const, createdAt: now, updatedAt: now },
-    { id: uuid(), refNo: "TN-240701-002", supplierId: supplierByCode.ALP.id, deliveryDate: now, poNo: "SO-240701-002", requiredDateCodeNotice: null, shipTo: "ZH", destinationCountry: "China", status: "pending" as const, createdAt: now, updatedAt: now },
-    { id: uuid(), refNo: "TN-240701-003", supplierId: supplierByCode.ALP.id, deliveryDate: now, poNo: "SO-240701-003", requiredDateCodeNotice: null, shipTo: "SH", destinationCountry: "China", status: "pending" as const, createdAt: now, updatedAt: now },
-    { id: uuid(), refNo: "TN-240701-004", supplierId: supplierByCode.ALP.id, deliveryDate: now, poNo: "SO-240701-004", requiredDateCodeNotice: null, shipTo: "BJ", destinationCountry: "China", status: "pending" as const, createdAt: now, updatedAt: now },
-    { id: uuid(), refNo: "TN-240701-005", supplierId: supplierByCode.BET.id, deliveryDate: now, poNo: "SO-240701-005", requiredDateCodeNotice: null, shipTo: "US", destinationCountry: "USA", status: "pending" as const, createdAt: now, updatedAt: now },
-    { id: uuid(), refNo: "TN-240705-001", supplierId: supplierByCode.GAM.id, deliveryDate: days(4), poNo: "SO-240705-001", requiredDateCodeNotice: null, shipTo: "DE", destinationCountry: "Germany", status: "pending" as const, createdAt: now, updatedAt: now },
+    { id: uuid(), refNo: "PICK-001", supplierId: supplierByCode.KOA.id, deliveryDate: now, poNo: "PO-PICK-001", requiredDateCodeNotice: null as string | null, shipTo: "US", destinationCountry: "USA", status: "pending" as const, createdAt: now, updatedAt: now },
+    { id: uuid(), refNo: "PICK-002", supplierId: supplierByCode.ABLIC.id, deliveryDate: now, poNo: "PO-PICK-002", requiredDateCodeNotice: null, shipTo: "CN", destinationCountry: "China", status: "pending" as const, createdAt: now, updatedAt: now },
+    { id: uuid(), refNo: "PICK-003", supplierId: supplierByCode.DIOTEC.id, deliveryDate: now, poNo: "PO-PICK-003", requiredDateCodeNotice: null, shipTo: "US", destinationCountry: "USA", status: "pending" as const, createdAt: now, updatedAt: now },
+    { id: uuid(), refNo: "PICK-004", supplierId: supplierByCode.KYOCER.id, deliveryDate: now, poNo: "PO-PICK-004", requiredDateCodeNotice: null, shipTo: "CN", destinationCountry: "China", status: "pending" as const, createdAt: now, updatedAt: now },
+    { id: uuid(), refNo: "PICK-005", supplierId: supplierByCode.IK.id, deliveryDate: now, poNo: "PO-PICK-005", requiredDateCodeNotice: null, shipTo: "US", destinationCountry: "USA", status: "pending" as const, createdAt: now, updatedAt: now },
   ] as const;
   await db.insert(schema.pickingOrders).values(pickingOrderRecords);
   const pickingOrderByRef = Object.fromEntries(pickingOrderRecords.map((po) => [po.refNo, po])) as Record<
@@ -201,30 +208,34 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
   >;
 
   const pickingItemRecords = [
-    // TN-240701-001
-    { id: uuid(), pickingOrderId: pickingOrderByRef["TN-240701-001"].id, partId: partByNo["RES-0603-10K"].id, qty: 600, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null as string | null },
-    { id: uuid(), pickingOrderId: pickingOrderByRef["TN-240701-001"].id, partId: partByNo["CAP-0805-100N"].id, qty: 200, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
-    // TN-240701-002
-    { id: uuid(), pickingOrderId: pickingOrderByRef["TN-240701-002"].id, partId: partByNo["RES-0603-10K"].id, qty: 20000, pickedQty: 0, allocatedQty: 0, requiredDateCode: ">=2405", sourceShelfCode: null },
-    // TN-240701-003
-    { id: uuid(), pickingOrderId: pickingOrderByRef["TN-240701-003"].id, partId: partByNo["RES-0603-10K"].id, qty: 1200, pickedQty: 0, allocatedQty: 0, requiredDateCode: ">=2405", sourceShelfCode: null },
-    // TN-240701-004
-    { id: uuid(), pickingOrderId: pickingOrderByRef["TN-240701-004"].id, partId: partByNo["RES-0603-10K"].id, qty: 800, pickedQty: 0, allocatedQty: 0, requiredDateCode: ">=2405", sourceShelfCode: null },
-    // TN-240701-005
-    { id: uuid(), pickingOrderId: pickingOrderByRef["TN-240701-005"].id, partId: partByNo["IC-LM358DR"].id, qty: 400, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
-    { id: uuid(), pickingOrderId: pickingOrderByRef["TN-240701-005"].id, partId: partByNo["MOS-IRLML6244"].id, qty: 200, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
-    // TN-240705-001
-    { id: uuid(), pickingOrderId: pickingOrderByRef["TN-240705-001"].id, partId: partByNo["SNS-BMP280"].id, qty: 200, pickedQty: 0, allocatedQty: 0, requiredDateCode: ">2406", sourceShelfCode: null },
+    // PICK-001 (KOA)
+    { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-001"].id, partId: partByNo["RK73H2ATTD1372F"].id, qty: 500, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null as string | null },
+    { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-001"].id, partId: partByNo["RK73H1JTTD1501F"].id, qty: 200, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
+    { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-001"].id, partId: partByNo["RK73H2ATTD1002F"].id, qty: 1000, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
+    // PICK-002 (ABLIC)
+    { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-002"].id, partId: partByNo["S-1206B18-M3T1U"].id, qty: 100, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
+    { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-002"].id, partId: partByNo["S-8240ADJ-I6T1U"].id, qty: 500, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
+    { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-002"].id, partId: partByNo["SL1M"].id, qty: 2000, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
+    // PICK-003 (DIOTEC)
+    { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-003"].id, partId: partByNo["DBI25-16A"].id, qty: 50, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
+    { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-003"].id, partId: partByNo["Z1SMA1020"].id, qty: 200, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
+    { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-003"].id, partId: partByNo["OKAYA-RE104-L"].id, qty: 500, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
+    { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-003"].id, partId: partByNo["D1FL20U"].id, qty: 100, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
+    // PICK-004 (KYOCER)
+    { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-004"].id, partId: partByNo["NX8045GB"].id, qty: 50, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
+    { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-004"].id, partId: partByNo["CX2016SA20000D0HSSCC"].id, qty: 100, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
+    { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-004"].id, partId: partByNo["Q-SPT7P0327620C5GF"].id, qty: 120, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
+    // PICK-005 (IK)
+    { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-005"].id, partId: partByNo["IL34063ADT"].id, qty: 200, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
+    { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-005"].id, partId: partByNo["NCC-TND14V-471KB00AAA0"].id, qty: 250, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
+    { id: uuid(), pickingOrderId: pickingOrderByRef["PICK-005"].id, partId: partByNo["04028DA12RBUFB"].id, qty: 1, pickedQty: 0, allocatedQty: 0, requiredDateCode: null, sourceShelfCode: null },
   ] as const;
   await db.insert(schema.pickingItems).values(pickingItemRecords);
 
   // Allocate picking orders that can be satisfied from shelf stock or in-hand receiving orders.
-  // Order 6 (TN-240705-001) stays unallocated until the GAM shipment arrives.
-  await allocatePickingOrder(db, pickingOrderByRef["TN-240701-001"].id);
-  await allocatePickingOrder(db, pickingOrderByRef["TN-240701-002"].id);
-  await allocatePickingOrder(db, pickingOrderByRef["TN-240701-003"].id);
-  await allocatePickingOrder(db, pickingOrderByRef["TN-240701-004"].id);
-  await allocatePickingOrder(db, pickingOrderByRef["TN-240701-005"].id);
+  for (const po of pickingOrderRecords) {
+    await allocatePickingOrder(db, po.id);
+  }
 }
 
 // Demo only: passwords are stored as-is so the local demo can compare them directly.
