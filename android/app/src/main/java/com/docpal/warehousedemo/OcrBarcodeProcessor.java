@@ -24,9 +24,9 @@ public class OcrBarcodeProcessor {
   }
 
   @Nullable
-  private TextRecognizer textRecognizer;
+  private volatile TextRecognizer textRecognizer;
   @Nullable
-  private BarcodeScanner barcodeScanner;
+  private volatile BarcodeScanner barcodeScanner;
   private final AtomicBoolean finished = new AtomicBoolean(false);
 
   public void process(InputImage image, ResultListener listener) {
@@ -36,6 +36,11 @@ public class OcrBarcodeProcessor {
 
     textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
     barcodeScanner = BarcodeScanning.getClient();
+
+    if (finished.get()) {
+      close();
+      return;
+    }
 
     final String[] textResult = { "" };
     final String[] barcodeResult = { "[]" };
