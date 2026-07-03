@@ -8,11 +8,15 @@
         v-model="headerExpanded"
         :title="order.refNo"
         :status="order.status"
+        :badge-class="headerBadgeClass"
         :flush-top="route.meta.props?.noPadding"
         style="margin-bottom: 1.5rem;"
       >
         <template #actions>
           <template v-if="order.status !== 'finished' && order.status !== 'issue'">
+            <button class="btn btn--small" :disabled="creatingBox" @click="createBox">
+              {{ creatingBox ? "Creating…" : "Create box" }}
+            </button>
             <button
               v-if="allItemsFullyBoxed"
               class="btn btn--small"
@@ -53,25 +57,45 @@
         </div>
       </DetailHeader>
 
+      <div v-if="order.status === 'issue'" class="card card--danger" style="margin-bottom: 1.5rem;">
+        <div class="detail-row">
+          <span class="detail-label">Issue reason</span>
+          <span>{{ issueReasonLabel(order.issueReason) }}</span>
+        </div>
+        <div v-if="order.issueQty != null" class="detail-row">
+          <span class="detail-label">Actual qty available</span>
+          <span>{{ order.issueQty }}</span>
+        </div>
+        <div v-if="order.issuePackSize != null" class="detail-row">
+          <span class="detail-label">Pack size</span>
+          <span>{{ order.issuePackSize }}</span>
+        </div>
+        <div v-if="order.issueRemark" class="detail-row">
+          <span class="detail-label">Remark</span>
+          <span>{{ order.issueRemark }}</span>
+        </div>
+        <div v-if="order.issueNote" class="detail-row">
+          <span class="detail-label">Note</span>
+          <span>{{ order.issueNote }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Reported</span>
+          <span>
+            {{ order.issueReportedAt ? new Date(order.issueReportedAt).toLocaleString() : "—" }}
+            by {{ order.issueReportedByUser?.displayName || order.issueReportedBy || "—" }}
+          </span>
+        </div>
+      </div>
+
       <div class="section-title" style="display: flex; justify-content: space-between; align-items: center;">
         <h2 style="margin: 0;">Boxes({{ order.shippingBoxes?.length ?? 0 }})</h2>
-        <div style="display: flex; gap: 0.5rem; align-items: center;">
-          <button
-            v-if="order.status !== 'finished' && order.status !== 'issue'"
-            class="btn btn--small"
-            :disabled="creatingBox"
-            @click="createBox"
-          >
-            {{ creatingBox ? "Creating…" : "New box" }}
-          </button>
-          <button
-            class="btn btn--small btn--ghost"
-            :aria-expanded="boxesExpanded"
-            @click="boxesExpanded = !boxesExpanded"
-          >
-            {{ boxesExpanded ? "Hide" : "Show" }}
-          </button>
-        </div>
+        <button
+          class="btn btn--small btn--ghost"
+          :aria-expanded="boxesExpanded"
+          @click="boxesExpanded = !boxesExpanded"
+        >
+          {{ boxesExpanded ? "Hide" : "Show" }}
+        </button>
       </div>
 
       <div v-if="boxesExpanded" style="margin-bottom: 1.5rem;">
@@ -138,7 +162,7 @@
           </span>
         </div>
 
-        <div v-if="item.allocations?.filter((a: any) => a.qty > 0).length && order.status !== 'finished' && item.pickedQty < item.qty" style="margin-top: 0.75rem;">
+        <div v-if="item.allocations?.filter((a: any) => a.qty > 0).length && order.status !== 'finished' && order.status !== 'issue' && item.pickedQty < item.qty" style="margin-top: 0.75rem;">
           <h3 class="subsection-title">Allocations</h3>
           <div
             v-for="allocation in item.allocations.filter((a: any) => a.qty > 0)"
@@ -259,7 +283,7 @@
           </div>
         </div>
 
-        <div v-if="order.status !== 'finished'" style="margin-top: 0.75rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+        <div v-if="order.status !== 'finished' && order.status !== 'issue'" style="margin-top: 0.75rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
           <input
             v-model="notes[item.id]"
             type="text"
@@ -331,6 +355,20 @@ const boxSelections = ref<Record<string, string>>({});
 const allItemsFullyBoxed = computed(
   () => order.value?.items?.every((i: any) => i.pickedQty >= i.qty) ?? false
 );
+
+const headerBadgeClass = computed(() => {
+  if (order.value?.status === "finished") return "badge--finished";
+  if (order.value?.status === "issue") return "badge--danger";
+  return "";
+});
+
+function issueReasonLabel(reason: string | null) {
+  if (reason === "insufficient_stock") return "Insufficient stock";
+  if (reason === "cannot_divide") return "Cannot divide quantity";
+  if (reason === "merge") return "Merge orders";
+  if (reason === "other") return "Other";
+  return "—";
+}
 
 const openBoxes = computed(() =>
   (order.value?.shippingBoxes ?? []).filter((b: any) => b.status === "open")
@@ -426,6 +464,7 @@ async function onRetake() {
 
 async function createBox() {
   creatingBox.value = true;
+  boxesExpanded.value = true;
   try {
     if (!currentUser) throw new Error("No operator user found");
     await createShippingBoxForPickingOrder(db, orderId, currentUser.id);
@@ -525,6 +564,10 @@ onMounted(load);
 
 .card--done {
   border-left: 4px solid #16a34a;
+}
+
+.card--danger {
+  border-left: 4px solid #dc2626;
 }
 
 </style>
