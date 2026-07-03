@@ -446,35 +446,39 @@ const allocatedByItem = ref<Record<string, number>>({});
 
 async function load() {
   try {
-    const orderData = await getReceivingOrderDetail(db, orderId);
-    const linkedRows = await getPickingOrdersByReceivingOrder(db, orderId);
-    const remainingResult = await db.execute(
-      sql`SELECT COUNT(DISTINCT CASE
-                WHEN ro.status = 'in_hand'
-                  AND (rii.received_qty - rii.picked_qty - rii.put_away_qty -
-                       COALESCE(alloc.allocated_qty, 0)) > 0
-                THEN rii.id
-              END) AS qty
-          FROM receiving_orders ro
-          JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
-          JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
-          LEFT JOIN (
-            SELECT receiving_invoice_item_id, SUM(qty) AS allocated_qty
-            FROM allocations
-            WHERE receiving_invoice_item_id IS NOT NULL
-            GROUP BY receiving_invoice_item_id
-          ) alloc ON alloc.receiving_invoice_item_id = rii.id
-          WHERE ro.id = ${orderId}`
-    );
-    const allocatedResult = await db.execute(
-      sql`SELECT rii.id AS receiving_invoice_item_id, COALESCE(SUM(a.qty), 0) AS allocated_qty
-          FROM receiving_invoice_items rii
-          JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-          JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
-          LEFT JOIN allocations a ON a.receiving_invoice_item_id = rii.id
-          WHERE ro.id = ${orderId}
-          GROUP BY rii.id`
-    );
+    // Phase 1: independent primary queries can be started together.
+    const [orderData, linkedRows, remainingResult, allocatedResult] = await Promise.all([
+      getReceivingOrderDetail(db, orderId),
+      getPickingOrdersByReceivingOrder(db, orderId),
+      db.execute(
+        sql`SELECT COUNT(DISTINCT CASE
+                  WHEN ro.status = 'in_hand'
+                    AND (rii.received_qty - rii.picked_qty - rii.put_away_qty -
+                         COALESCE(alloc.allocated_qty, 0)) > 0
+                  THEN rii.id
+                END) AS qty
+            FROM receiving_orders ro
+            JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
+            JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
+            LEFT JOIN (
+              SELECT receiving_invoice_item_id, SUM(qty) AS allocated_qty
+              FROM allocations
+              WHERE receiving_invoice_item_id IS NOT NULL
+              GROUP BY receiving_invoice_item_id
+            ) alloc ON alloc.receiving_invoice_item_id = rii.id
+            WHERE ro.id = ${orderId}`
+      ),
+      db.execute(
+        sql`SELECT rii.id AS receiving_invoice_item_id, COALESCE(SUM(a.qty), 0) AS allocated_qty
+            FROM receiving_invoice_items rii
+            JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+            JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
+            LEFT JOIN allocations a ON a.receiving_invoice_item_id = rii.id
+            WHERE ro.id = ${orderId}
+            GROUP BY rii.id`
+      ),
+    ]);
+
     order.value = orderData;
     pickingRows.value = linkedRows;
     remainingItems.value = Number((remainingResult.rows[0] as any)?.qty ?? 0);
@@ -482,7 +486,39 @@ async function load() {
     const itemIds = Array.from(new Set(linkedRows.map((r) => r.picking_item_id)));
     const orderIds = Array.from(new Set(linkedRows.map((r) => r.picking_order_id)));
 
-    const logs = itemIds.length ? await getPickingItemTransitionLogs(db, itemIds) : [];
+    // Phase 2: child lookups depend only on the IDs above.
+    const idList = itemIds.map((id) => `'${id}'`).join(", ");
+    const orderIdList = orderIds.map((id) => `'${id}'`).join(", ");
+
+    const [logs, packageResult, boxResult] = await Promise.all([
+      itemIds.length ? getPickingItemTransitionLogs(db, itemIds) : Promise.resolve([]),
+      itemIds.length
+        ? db.execute(sql`
+            SELECT id,
+                   picking_item_id,
+                   picking_order_id,
+                   qty,
+                   shipping_box_id,
+                   date_code,
+                   lot_code,
+                   coo,
+                   cow,
+                   created_at
+            FROM picking_packages
+            WHERE picking_item_id IN (${sql.raw(idList)})
+            ORDER BY created_at
+          `)
+        : Promise.resolve({ rows: [] }),
+      orderIds.length
+        ? db.execute(sql`
+            SELECT id, picking_order_id, status
+            FROM shipping_boxes
+            WHERE picking_order_id IN (${sql.raw(orderIdList)})
+            ORDER BY id
+          `)
+        : Promise.resolve({ rows: [] }),
+    ]);
+
     const nextLogs: Record<string, any[]> = {};
     for (const log of logs) {
       const list = nextLogs[log.entityId] ?? [];
@@ -491,13 +527,6 @@ async function load() {
     }
     transitionLogs.value = nextLogs;
 
-    const packageResult = itemIds.length
-      ? await db.execute(sql`
-          SELECT * FROM picking_packages
-          WHERE picking_item_id IN (${sql.raw(itemIds.map((id) => `'${id}'`).join(", "))})
-          ORDER BY created_at
-        `)
-      : { rows: [] };
     const nextPackages: Record<string, any[]> = {};
     const nextBoxSelections: Record<string, string> = {};
     for (const raw of (packageResult.rows ?? []) as any[]) {
@@ -505,8 +534,6 @@ async function load() {
         id: raw.id,
         pickingItemId: raw.picking_item_id,
         pickingOrderId: raw.picking_order_id,
-        sourceType: raw.source_type,
-        sourceId: raw.source_id,
         qty: raw.qty,
         shippingBoxId: raw.shipping_box_id,
         dateCode: raw.date_code,
@@ -524,13 +551,6 @@ async function load() {
     }
     packagesByItem.value = nextPackages;
 
-    const boxResult = orderIds.length
-      ? await db.execute(sql`
-          SELECT * FROM shipping_boxes
-          WHERE picking_order_id IN (${sql.raw(orderIds.map((id) => `'${id}'`).join(", "))})
-          ORDER BY id
-        `)
-      : { rows: [] };
     const nextBoxes: Record<string, any[]> = {};
     for (const box of (boxResult.rows ?? []) as any[]) {
       const list = nextBoxes[box.picking_order_id] ?? [];

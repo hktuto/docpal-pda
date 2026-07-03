@@ -189,6 +189,13 @@ CREATE INDEX IF NOT EXISTS idx_picking_packages_item ON picking_packages(picking
 CREATE INDEX IF NOT EXISTS idx_picking_packages_order ON picking_packages(picking_order_id);
 CREATE INDEX IF NOT EXISTS idx_picking_packages_box ON picking_packages(shipping_box_id);
 
+CREATE INDEX IF NOT EXISTS idx_receiving_invoice_items_invoice ON receiving_invoice_items(receiving_invoice_id);
+CREATE INDEX IF NOT EXISTS idx_receiving_invoice_items_part ON receiving_invoice_items(part_id);
+CREATE INDEX IF NOT EXISTS idx_picking_items_part ON picking_items(part_id);
+CREATE INDEX IF NOT EXISTS idx_allocations_receiving_item ON allocations(receiving_invoice_item_id);
+CREATE INDEX IF NOT EXISTS idx_shipping_boxes_order ON shipping_boxes(picking_order_id);
+CREATE INDEX IF NOT EXISTS idx_transition_logs_created_at ON transition_logs(created_at);
+
 CREATE TABLE IF NOT EXISTS shipping_box_items (
   id TEXT PRIMARY KEY,
   shipping_box_id TEXT NOT NULL REFERENCES shipping_boxes(id) ON DELETE CASCADE,
