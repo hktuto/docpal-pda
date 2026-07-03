@@ -42,54 +42,13 @@
         @selected="createBoxFromDialog"
       />
 
-      <h2 style="margin-top: 0; margin-bottom: 1rem; font-size: 1rem;">Available receiving-area lots</h2>
-      <p v-if="lots.length === 0" class="empty">No lots available for put-away.</p>
-
-      <div
-        v-for="lot in lots"
-        :key="lot.receiving_invoice_item_id"
-        class="card"
-      >
-        <div class="detail-row">
-          <span class="detail-label">Part</span>
-          <span class="card__title">{{ lot.part_no || "—" }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Available qty</span>
-          <span>{{ lot.available_qty }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">Date / Lot</span>
-          <span>{{ lot.date_code || "—" }} / {{ lot.lot_code || "—" }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">COO / COW</span>
-          <span>{{ lot.coo || "—" }} / {{ lot.cow || "—" }}</span>
-        </div>
-
-        <div style="margin-top: 0.75rem;">
-          <select
-            v-model="targetBoxSelections[lot.receiving_invoice_item_id]"
-            :disabled="scanning"
-            style="min-width: 10rem; margin-right: 0.5rem;"
-          >
-            <option value="">Select target box</option>
-            <option v-for="box in openBoxes" :key="box.id" :value="box.id">
-              {{ box.id }} — {{ box.shelfCode || "—" }}
-            </option>
-          </select>
-          <button
-            class="btn btn--small"
-            :disabled="!hasOpenBox || scanning || !targetBoxSelections[lot.receiving_invoice_item_id]"
-            @click="openScan(lot)"
-          >
-            Scan
-          </button>
-          <p v-if="!hasOpenBox" style="margin: 0.5rem 0 0; font-size: 0.8125rem; color: var(--muted);">
-            Create an open box first.
-          </p>
-        </div>
-      </div>
+      <PutAwayLotsPanel
+        v-model:target-box-selections="targetBoxSelections"
+        :lots="lots"
+        :boxes="boxes"
+        :scanning="scanning"
+        @scan="openScan"
+      />
     </template>
 
     <LabelScanReviewModal
@@ -113,6 +72,7 @@ import { useLabelScan, createManualReview, type LabelScanResult } from "~/compos
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import SelectShelfDialog from "~/components/SelectShelfDialog.vue";
 import ShelfBoxesPanel from "~/components/put-away/ShelfBoxesPanel.vue";
+import PutAwayLotsPanel from "~/components/put-away/PutAwayLotsPanel.vue";
 import * as schema from "~/db/schema";
 import {
   getPutAwayLots,
@@ -157,9 +117,6 @@ const targetBoxSelections = ref<Record<string, string>>({});
 const { scan, scanning } = useLabelScan();
 const reviewOpen = ref(false);
 const review = ref<LabelScanResult | null>(null);
-
-const openBoxes = computed(() => boxes.value.filter((b) => b.status === "open"));
-const hasOpenBox = computed(() => openBoxes.value.length > 0);
 
 function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
@@ -282,7 +239,7 @@ async function openScan(lot: PutAwayLot) {
     error.value = "Select a target box";
     return;
   }
-  if (!openBoxes.value.some((b) => b.id === scanBoxId.value)) {
+  if (!boxes.value.some((b) => b.id === scanBoxId.value && b.status === "open")) {
     error.value = "Selected box is no longer open";
     return;
   }
