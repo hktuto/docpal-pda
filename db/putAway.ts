@@ -155,6 +155,39 @@ export async function createShelfBox(
   });
 }
 
+export async function cancelShelfBox(
+  db: PgliteDatabase<typeof schema>,
+  boxId: string,
+  actorId: string
+): Promise<void> {
+  return db.transaction(async (tx) => {
+    const box = await tx.query.shelfBoxes.findFirst({
+      where: eq(schema.shelfBoxes.id, boxId),
+    });
+    if (!box) throw new Error("Box not found");
+    if (box.status !== "open") throw new Error("Box is not open");
+
+    const itemResult = await tx
+      .select({ count: sql<number>`count(*)`.mapWith(Number) })
+      .from(schema.shelfBoxItems)
+      .where(eq(schema.shelfBoxItems.shelfBoxId, boxId));
+    if (itemResult[0]?.count > 0) throw new Error("Box is not empty");
+
+    await tx.insert(schema.transitionLogs).values({
+      id: uuid(),
+      entityType: "shelf_box",
+      entityId: boxId,
+      fromState: box.status,
+      toState: "cancelled",
+      actorId,
+      metadata: JSON.stringify({ receivingOrderId: box.receivingOrderId, shelfCode: box.shelfCode }),
+      createdAt: new Date(),
+    });
+
+    await tx.delete(schema.shelfBoxes).where(eq(schema.shelfBoxes.id, boxId));
+  });
+}
+
 export async function addItemToShelfBox(
   db: PgliteDatabase<typeof schema>,
   shelfBoxId: string,
