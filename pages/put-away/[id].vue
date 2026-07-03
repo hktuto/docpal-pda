@@ -111,6 +111,16 @@
                   {{ closing ? "Closing…" : "Close box" }}
                 </button>
               </div>
+
+              <div v-if="box.status === 'open' && (box.items?.length ?? 0) === 0" style="margin-top: 1rem;">
+                <button
+                  class="btn btn--small btn--danger"
+                  :disabled="cancellingBox[box.id]"
+                  @click="cancelBox(box.id)"
+                >
+                  {{ cancellingBox[box.id] ? "Canceling…" : "Cancel box" }}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -192,6 +202,7 @@ import {
   getPutAwayLots,
   createShelfBox,
   closeShelfBox,
+  cancelShelfBox,
   getShelfBoxesForReceivingOrder,
 } from "~/db/putAway";
 import type { PutAwayLot } from "~/db/putAway";
@@ -217,6 +228,7 @@ const shelves = ref<typeof schema.shelves.$inferSelect[]>([]);
 const boxes = ref<any[]>([]);
 const creating = ref(false);
 const closing = ref(false);
+const cancellingBox = ref<Record<string, boolean>>({});
 
 const scanItem = ref<any>(null);
 const scanBoxId = ref<string>("");
@@ -339,6 +351,19 @@ async function closeBox(boxId: string) {
     error.value = e?.message ?? String(e);
   } finally {
     closing.value = false;
+  }
+}
+
+async function cancelBox(boxId: string) {
+  cancellingBox.value[boxId] = true;
+  try {
+    if (!currentUser) throw new Error("No operator user found");
+    await cancelShelfBox(db, boxId, currentUser.id);
+    await load();
+  } catch (e: any) {
+    error.value = e?.message ?? String(e);
+  } finally {
+    cancellingBox.value[boxId] = false;
   }
 }
 
