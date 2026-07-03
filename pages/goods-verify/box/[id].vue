@@ -90,6 +90,7 @@
       :barcodes="review.capture.barcodes"
       :parsed="review.parsed"
       :match-result="review.matchResult"
+      :mode="review.capture.imagePath ? 'review' : 'manual'"
       :context="{ task: 'goods-verify', items: box?.items ?? [] }"
       @applied="onApplied"
       @retake="onRetake"
@@ -98,7 +99,7 @@
 </template>
 
 <script setup lang="ts">
-import { useLabelScan, type LabelScanResult } from "~/composables/useLabelScan";
+import { useLabelScan, createManualReview, type LabelScanResult } from "~/composables/useLabelScan";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import {
   getShelfBoxDetail,
@@ -172,6 +173,9 @@ async function openScan() {
     await onScanApplied();
   } else if (result.status === 'review') {
     review.value = result;
+    reviewOpen.value = true;
+  } else if (result.status === 'manual') {
+    review.value = createManualReview();
     reviewOpen.value = true;
   } else if (result.status === 'error') {
     error.value = result.message;
