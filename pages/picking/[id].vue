@@ -10,7 +10,7 @@
         :status="order.status"
         :badge-class="headerBadgeClass"
         :flush-top="route.meta.props?.noPadding"
-        style="margin-bottom: 1.5rem;"
+        class="detail-header"
       >
         <template #actions>
           <template v-if="order.status !== 'finished' && order.status !== 'issue'">
@@ -39,22 +39,12 @@
         <DetailRow label="Date-code notice" :value="order.requiredDateCodeNotice" />
       </DetailHeader>
 
-      <div v-if="order.status === 'issue'" class="card card--danger" style="margin-bottom: 1.5rem;">
-        <DetailRow label="Issue reason" :value="issueReasonLabel(order.issueReason)" />
-        <DetailRow v-if="order.issueQty != null" label="Actual qty available" :value="order.issueQty" />
-        <DetailRow v-if="order.issuePackSize != null" label="Pack size" :value="order.issuePackSize" />
-        <DetailRow v-if="order.issueRemark" label="Remark" :value="order.issueRemark" />
-        <DetailRow v-if="order.issueNote" label="Note" :value="order.issueNote" />
-        <DetailRow label="Reported">
-          {{ order.issueReportedAt ? new Date(order.issueReportedAt).toLocaleString() : "—" }}
-          by {{ order.issueReportedByUser?.displayName || order.issueReportedBy || "—" }}
-        </DetailRow>
-      </div>
+      <PickingIssueBanner v-if="order.status === 'issue'" :order="order" />
 
       <PickingBoxesSection
         v-model:expanded="boxesExpanded"
         :boxes="order.shippingBoxes"
-        :actionable="order.status !== 'finished' && order.status !== 'issue'"
+        :actionable="actionable"
         :creating-box="creatingBox"
         :cancelling-box="cancellingBox"
         @create-box="createBox"
@@ -65,7 +55,7 @@
         v-model:expanded-items="expandedItems"
         v-model:box-selections="boxSelections"
         :items="order.items ?? []"
-        :order="order"
+        :actionable="actionable"
         :transition-logs="transitionLogs"
         :adding="adding"
         :removing="removing"
@@ -98,6 +88,9 @@ import { useVisibleReload } from "~/composables/useVisibleReload";
 import { useStatusBadge } from "~/composables/useStatusBadge";
 import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
+import PickingBoxesSection from "~/components/picking/PickingBoxesSection.vue";
+import PickingItemsSection from "~/components/picking/PickingItemsSection.vue";
+import PickingIssueBanner from "~/components/picking/PickingIssueBanner.vue";
 import {
   getPickingOrderDetail,
   createShippingBoxForPickingOrder,
@@ -106,53 +99,59 @@ import {
   cancelShippingBox,
   finishPickingOrder,
   getPickingItemTransitionLogs,
+  type PickingOrderDetail,
+  type PickingItemTransitionLog,
 } from "~/db/picking";
-import { type PickingIssueReason } from "~/db/schema";
+
+type PickingItem = PickingOrderDetail["items"][number];
+type Allocation = PickingItem["allocations"][number];
+type ShippingBox = PickingOrderDetail["shippingBoxes"][number];
 
 definePageMeta({ title: "Picking Detail", props: { noPadding: true } });
 
 const route = useRoute();
 const orderId = route.params.id as string;
-
 const db = await useDb();
 const currentUser = await useCurrentUser();
 
 const pending = ref(true);
 const error = ref<string | null>(null);
-const order = ref<any>(null);
+const order = ref<PickingOrderDetail | null>(null);
 const adding = ref<Record<string, boolean>>({});
 const removing = ref<Record<string, boolean>>({});
 const creatingBox = ref(false);
 const cancellingBox = ref<Record<string, boolean>>({});
 const finishing = ref(false);
-const transitionLogs = ref<Record<string, any[]>>({});
+const transitionLogs = ref<Record<string, PickingItemTransitionLog[]>>({});
 const expandedItems = ref<Set<string>>(new Set());
 const headerExpanded = ref(false);
 const boxesExpanded = ref(false);
-const scanAllocation = ref<any>(null);
+const scanAllocation = ref<Allocation | null>(null);
+const boxSelections = ref<Record<string, string>>({});
+
 const { scan, scanning, review, reviewOpen, onApplied } = useLabelScanReview({
   onApplied: load,
 });
-const boxSelections = ref<Record<string, string>>({});
-
+const { badgeClass } = useStatusBadge();
 const allItemsFullyBoxed = computed(
-  () => order.value?.items?.every((i: any) => i.pickedQty >= i.qty) ?? false
+  () => order.value?.items?.every((i) => i.pickedQty >= i.qty) ?? false
+);
+const headerBadgeClass = computed(() => badgeClass(order.value?.status));
+const openBoxes = computed(() =>
+  (order.value?.shippingBoxes ?? []).filter((b) => b.status === "open")
+);
+const actionable = computed(
+  () => order.value?.status !== "finished" && order.value?.status !== "issue"
 );
 
-const { badgeClass } = useStatusBadge();
-const headerBadgeClass = computed(() => badgeClass(order.value?.status));
-
-function issueReasonLabel(reason: PickingIssueReason | null) {
-  if (reason === "insufficient_stock") return "Insufficient stock";
-  if (reason === "cannot_divide") return "Cannot divide quantity";
-  if (reason === "merge") return "Merge orders";
-  if (reason === "other") return "Other";
-  return "—";
+function currentUserId(): string {
+  if (!currentUser) throw new Error("No operator user found");
+  return currentUser.id;
 }
 
-const openBoxes = computed(() =>
-  (order.value?.shippingBoxes ?? []).filter((b: any) => b.status === "open")
-);
+function errorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
 
 async function load() {
   try {
@@ -169,9 +168,9 @@ async function load() {
       }
       boxSelections.value = nextBoxSelections;
 
-      const itemIds = data.items.map((i: any) => i.id);
+      const itemIds = data.items.map((i) => i.id);
       const logs = await getPickingItemTransitionLogs(db, itemIds);
-      const nextLogs: Record<string, any[]> = {};
+      const nextLogs: Record<string, PickingItemTransitionLog[]> = {};
       for (const log of logs) {
         const list = nextLogs[log.entityId] ?? [];
         list.push(log);
@@ -179,14 +178,14 @@ async function load() {
       }
       transitionLogs.value = nextLogs;
     }
-  } catch (e: any) {
-    error.value = e?.message ?? String(e);
+  } catch (e) {
+    error.value = errorMessage(e);
   } finally {
     pending.value = false;
   }
 }
 
-async function openScan(allocation: any) {
+async function openScan(allocation: Allocation) {
   scanAllocation.value = allocation;
   const result = await scan({ task: "picking", allocation });
   if (result.status === "error") {
@@ -196,6 +195,7 @@ async function openScan(allocation: any) {
 
 async function onRetake() {
   reviewOpen.value = false;
+  if (!scanAllocation.value) return;
   await openScan(scanAllocation.value);
 }
 
@@ -203,11 +203,10 @@ async function createBox() {
   creatingBox.value = true;
   boxesExpanded.value = true;
   try {
-    if (!currentUser) throw new Error("No operator user found");
-    await createShippingBoxForPickingOrder(db, orderId, currentUser.id);
+    await createShippingBoxForPickingOrder(db, orderId, currentUserId());
     await load();
-  } catch (e: any) {
-    error.value = e?.message ?? String(e);
+  } catch (e) {
+    error.value = errorMessage(e);
   } finally {
     creatingBox.value = false;
   }
@@ -216,11 +215,10 @@ async function createBox() {
 async function cancelBox(boxId: string) {
   cancellingBox.value[boxId] = true;
   try {
-    if (!currentUser) throw new Error("No operator user found");
-    await cancelShippingBox(db, boxId, currentUser.id);
+    await cancelShippingBox(db, boxId, currentUserId());
     await load();
-  } catch (e: any) {
-    error.value = e?.message ?? String(e);
+  } catch (e) {
+    error.value = errorMessage(e);
   } finally {
     cancellingBox.value[boxId] = false;
   }
@@ -231,11 +229,10 @@ async function addToBox(packageId: string) {
   if (!boxId) return;
   adding.value[packageId] = true;
   try {
-    if (!currentUser) throw new Error("No operator user found");
-    await addPackageToBox(db, packageId, boxId, currentUser.id);
+    await addPackageToBox(db, packageId, boxId, currentUserId());
     await load();
-  } catch (e: any) {
-    error.value = e?.message ?? String(e);
+  } catch (e) {
+    error.value = errorMessage(e);
   } finally {
     adding.value[packageId] = false;
   }
@@ -244,11 +241,10 @@ async function addToBox(packageId: string) {
 async function removeFromBox(packageId: string) {
   removing.value[packageId] = true;
   try {
-    if (!currentUser) throw new Error("No operator user found");
-    await removePackageFromBox(db, packageId, currentUser.id);
+    await removePackageFromBox(db, packageId, currentUserId());
     await load();
-  } catch (e: any) {
-    error.value = e?.message ?? String(e);
+  } catch (e) {
+    error.value = errorMessage(e);
   } finally {
     removing.value[packageId] = false;
   }
@@ -257,11 +253,10 @@ async function removeFromBox(packageId: string) {
 async function finish() {
   finishing.value = true;
   try {
-    if (!currentUser) throw new Error("No operator user found");
-    await finishPickingOrder(db, orderId, currentUser.id);
+    await finishPickingOrder(db, orderId, currentUserId());
     await load();
-  } catch (e: any) {
-    error.value = e?.message ?? String(e);
+  } catch (e) {
+    error.value = errorMessage(e);
   } finally {
     finishing.value = false;
   }
@@ -271,4 +266,7 @@ useVisibleReload(load);
 </script>
 
 <style scoped>
+.detail-header {
+  margin-bottom: 1.5rem;
+}
 </style>

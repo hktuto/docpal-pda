@@ -1,7 +1,7 @@
 <template>
-  <div class="section-title" style="display: flex; justify-content: space-between; align-items: center;">
-    <h2 style="margin: 0;">Boxes({{ boxes?.length ?? 0 }})</h2>
-    <div style="display: flex; gap: 0.5rem; align-items: center;">
+  <div class="section-title boxes-header">
+    <h2 class="boxes-title">Boxes ({{ boxes?.length ?? 0 }})</h2>
+    <div class="boxes-actions">
       <button
         v-if="actionable"
         class="btn btn--small"
@@ -20,14 +20,13 @@
     </div>
   </div>
 
-  <div v-if="expanded" style="margin-bottom: 1.5rem;">
+  <div v-if="expanded" class="boxes-list">
     <p v-if="!boxes?.length" class="empty">No boxes yet.</p>
 
     <div
       v-for="box in boxes"
       :key="box.id"
-      class="card"
-      style="margin-bottom: 1rem;"
+      class="card box-card"
       :class="{ 'card--done': box.status !== 'open' }"
     >
       <DetailRow label="Box ID">
@@ -38,7 +37,7 @@
       </DetailRow>
       <DetailRow label="Packages" :value="box.packages?.length ?? 0" />
       <DetailRow label="Qty" :value="boxTotalQty(box)" />
-      <div v-if="box.status === 'open' && (box.packages?.length ?? 0) === 0" style="margin-top: 1rem;">
+      <div v-if="box.status === 'open' && (box.packages?.length ?? 0) === 0" class="box-cancel">
         <button
           class="btn btn--small btn--danger"
           :disabled="cancellingBox[box.id]"
@@ -52,8 +51,10 @@
 </template>
 
 <script setup lang="ts">
+import { type PickingOrderDetail } from "~/db/picking";
+
 const props = defineProps<{
-  boxes: any[];
+  boxes: PickingOrderDetail["shippingBoxes"];
   actionable: boolean;
   creatingBox: boolean;
   cancellingBox: Record<string, boolean>;
@@ -71,7 +72,37 @@ const expanded = computed({
   set: (value) => emit("update:expanded", value),
 });
 
-function boxTotalQty(box: any) {
-  return (box.packages ?? []).reduce((sum: number, p: any) => sum + p.qty, 0);
+function boxTotalQty(box: PickingOrderDetail["shippingBoxes"][number]) {
+  return (box.packages ?? []).reduce((sum, p) => sum + p.qty, 0);
 }
 </script>
+
+<style scoped>
+.boxes-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.boxes-title {
+  margin: 0;
+}
+
+.boxes-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.boxes-list {
+  margin-bottom: 1.5rem;
+}
+
+.box-card {
+  margin-bottom: 1rem;
+}
+
+.box-cancel {
+  margin-top: 1rem;
+}
+</style>

@@ -16,6 +16,8 @@ export async function getPickingOrdersWithSupplier(
   });
 }
 
+export type PickingOrderDetail = NonNullable<Awaited<ReturnType<typeof getPickingOrderDetail>>>;
+
 export async function getPickingOrderDetail(
   db: PgliteDatabase<typeof schema>,
   id: string
@@ -738,15 +740,31 @@ export async function finishPickingOrder(
   });
 }
 
+export interface PickingItemTransitionLog {
+  id: string;
+  entityId: string;
+  fromState: string | null;
+  toState: string;
+  metadata: string | null;
+  createdAt: Date | string;
+  actorName: string | null;
+}
+
 export async function getPickingItemTransitionLogs(
   db: PgliteDatabase<typeof schema>,
   pickingItemIds: string[]
-) {
+): Promise<PickingItemTransitionLog[]> {
   if (pickingItemIds.length === 0) return [];
 
-  // UUIDs only contain hex and dashes, so simple quoting is safe here.
+  // Validate UUID shape before inlining. The caller is expected to pass primary keys,
+  // but this guard keeps the raw SQL safe from accidental misuse.
+  const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+  for (const id of pickingItemIds) {
+    if (!uuidRegex.test(id)) throw new Error(`Invalid picking item id: ${id}`);
+  }
+
   // PGlite's Drizzle driver has trouble with multiple parameters inside IN (...),
-  // so we inline the id list as raw SQL.
+  // so we inline the validated UUID list as raw SQL.
   const idList = pickingItemIds.map((id) => `'${id}'`).join(", ");
   const result = await db.execute(sql`
     SELECT

@@ -3,9 +3,8 @@
   <div
     v-for="item in items"
     :key="item.id"
-    class="card"
+    class="card item-card"
     :class="{ 'card--done': item.pickedQty >= item.qty }"
-    style="margin-bottom: 1.5rem;"
   >
     <DetailRow label="Part">
       <span class="card__title">{{ item.part?.partNo || "—" }}</span>
@@ -20,10 +19,10 @@
       </StatusBadge>
     </DetailRow>
 
-    <div v-if="item.allocations?.filter((a: any) => a.qty > 0).length && order.status !== 'finished' && order.status !== 'issue' && item.pickedQty < item.qty" style="margin-top: 0.75rem;">
+    <div v-if="activeAllocations(item).length && actionable && item.pickedQty < item.qty" class="allocations">
       <h3 class="subsection-title">Allocations</h3>
       <div
-        v-for="allocation in item.allocations.filter((a: any) => a.qty > 0)"
+        v-for="allocation in activeAllocations(item)"
         :key="allocation.id"
         class="lot"
       >
@@ -37,13 +36,10 @@
             <span v-else>Receiving area</span>
           </DetailRow>
           <DetailRow label="Date / Lot / COO / COW">
-            {{ allocation.inventoryLot.dateCode || "—" }} /
-            {{ allocation.inventoryLot.lotCode || "—" }} /
-            {{ allocation.inventoryLot.coo || "—" }} /
-            {{ allocation.inventoryLot.cow || "—" }}
+            {{ formatLotFields(allocation.inventoryLot) }}
           </DetailRow>
           <DetailRow label="Allocated qty" :value="allocation.qty" />
-          <div style="margin-top: 0.5rem;">
+          <div class="allocation-actions">
             <button class="btn btn--small" :disabled="scanning" @click="emit('scan', allocation)">Scan</button>
           </div>
         </template>
@@ -56,26 +52,25 @@
             </span>
           </DetailRow>
           <DetailRow label="Allocated qty" :value="allocation.qty" />
-          <div style="margin-top: 0.5rem;">
+          <div class="allocation-actions">
             <button class="btn btn--small" :disabled="scanning" @click="emit('scan', allocation)">Scan</button>
           </div>
         </template>
       </div>
     </div>
 
-    <div v-if="unboxedPackages(item).length && order.status !== 'finished' && order.status !== 'issue'" style="margin-top: 0.75rem;">
+    <div v-if="unboxedPackages(item).length && actionable" class="unboxed-packages">
       <h3 class="subsection-title">Unboxed packages</h3>
       <div
         v-for="pkg in unboxedPackages(item)"
         :key="pkg.id"
-        class="lot"
-        style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; justify-content: space-between;"
+        class="lot package-row"
       >
-        <span style="font-size: 0.875rem;">
-          {{ pkg.qty }} pcs · {{ pkg.dateCode || "—" }} / {{ pkg.lotCode || "—" }} / {{ pkg.coo || "—" }} / {{ pkg.cow || "—" }}
+        <span class="package-info">
+          {{ pkg.qty }} pcs · {{ formatLotFields(pkg) }}
         </span>
-        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-          <select :value="boxSelections[pkg.id]" :disabled="adding[pkg.id]" style="min-width: 8rem;" @change="updateBoxSelection(pkg.id, ($event.target as HTMLSelectElement).value)">
+        <div class="package-actions">
+          <select :value="boxSelections[pkg.id]" :disabled="adding[pkg.id]" class="box-select" @change="updateBoxSelection(pkg.id, ($event.target as HTMLSelectElement).value)">
             <option value="">Select box</option>
             <option v-for="box in openBoxes" :key="box.id" :value="box.id">{{ box.id }}</option>
           </select>
@@ -90,19 +85,18 @@
       </div>
     </div>
 
-    <div v-if="boxedPackages(item).length && order.status !== 'finished' && order.status !== 'issue'" style="margin-top: 0.75rem;">
-      <h3 style="margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--muted);">Boxed packages</h3>
+    <div v-if="boxedPackages(item).length && actionable" class="boxed-packages">
+      <h3 class="boxed-title">Boxed packages</h3>
       <div
         v-for="pkg in boxedPackages(item)"
         :key="pkg.id"
-        class="lot"
-        style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; justify-content: space-between;"
+        class="lot package-row"
       >
-        <span style="font-size: 0.875rem;">
+        <span class="package-info">
           {{ pkg.qty }} pcs · {{ pkg.shippingBoxId }}
         </span>
         <button
-          v-if="boxById[pkg.shippingBoxId!]?.status === 'open'"
+          v-if="openBoxById[pkg.shippingBoxId!]?.status === 'open'"
           class="btn btn--small"
           :disabled="removing[pkg.id]"
           @click="emit('remove-from-box', pkg.id)"
@@ -112,16 +106,16 @@
       </div>
     </div>
 
-    <div style="margin-top: 0.75rem;">
+    <div class="logs-toggle">
       <button class="btn btn--small btn--ghost" @click="toggleExpand(item.id)">
         {{ expandedItems.has(item.id) ? "Hide picking logs" : "Show picking logs" }}
         ({{ (transitionLogs[item.id] || []).length }})
       </button>
 
-      <div v-if="expandedItems.has(item.id)" style="margin-top: 0.5rem;">
+      <div v-if="expandedItems.has(item.id)" class="logs-list">
         <p v-if="!(transitionLogs[item.id] || []).length" class="card__meta">No picking logs.</p>
-        <ul v-else style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--muted);">
-          <li v-for="log in transitionLogs[item.id]" :key="log.id" style="margin-bottom: 0.35rem;">
+        <ul v-else>
+          <li v-for="log in transitionLogs[item.id]" :key="log.id">
             {{ new Date(log.createdAt).toLocaleString() }}
             · {{ log.actorName || "System" }}
             · {{ log.fromState || "—" }} → {{ log.toState }}
@@ -136,44 +130,55 @@
 </template>
 
 <script setup lang="ts">
+import { type PickingOrderDetail, type PickingItemTransitionLog } from "~/db/picking";
+
+type PickingItem = PickingOrderDetail["items"][number];
+type Allocation = PickingItem["allocations"][number];
+type Package = PickingItem["packages"][number];
+type ShippingBox = PickingOrderDetail["shippingBoxes"][number];
+
 const props = defineProps<{
-  items: any[];
-  order: any;
-  transitionLogs: Record<string, any[]>;
+  items: PickingOrderDetail["items"];
+  actionable: boolean;
+  transitionLogs: Record<string, PickingItemTransitionLog[]>;
   expandedItems: Set<string>;
   boxSelections: Record<string, string>;
   adding: Record<string, boolean>;
   removing: Record<string, boolean>;
   scanning: boolean;
-  openBoxes: any[];
+  openBoxes: PickingOrderDetail["shippingBoxes"];
 }>();
 
 const emit = defineEmits<{
   "update:expandedItems": [value: Set<string>];
   "update:boxSelections": [value: Record<string, string>];
-  scan: [allocation: any];
+  scan: [allocation: Allocation];
   "add-to-box": [packageId: string];
   "remove-from-box": [packageId: string];
 }>();
 
-const boxById = computed(() => {
-  const map: Record<string, any> = {};
-  for (const box of props.order?.shippingBoxes ?? []) {
+const openBoxById = computed(() => {
+  const map: Record<string, ShippingBox> = {};
+  for (const box of props.openBoxes) {
     map[box.id] = box;
   }
   return map;
 });
 
-function scannedQty(item: any) {
-  return (item.packages ?? []).reduce((sum: number, p: any) => sum + p.qty, 0);
+function scannedQty(item: PickingItem) {
+  return (item.packages ?? []).reduce((sum, p) => sum + p.qty, 0);
 }
 
-function unboxedPackages(item: any) {
-  return (item.packages ?? []).filter((p: any) => !p.shippingBoxId);
+function activeAllocations(item: PickingItem) {
+  return (item.allocations ?? []).filter((a) => a.qty > 0);
 }
 
-function boxedPackages(item: any) {
-  return (item.packages ?? []).filter((p: any) => p.shippingBoxId);
+function unboxedPackages(item: PickingItem) {
+  return (item.packages ?? []).filter((p) => !p.shippingBoxId);
+}
+
+function boxedPackages(item: PickingItem) {
+  return (item.packages ?? []).filter((p) => p.shippingBoxId);
 }
 
 function toggleExpand(itemId: string) {
@@ -187,9 +192,78 @@ function updateBoxSelection(packageId: string, value: string) {
   emit("update:boxSelections", { ...props.boxSelections, [packageId]: value });
 }
 
+function formatLotFields(source: { dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null }): string {
+  return `${source.dateCode || "—"} / ${source.lotCode || "—"} / ${source.coo || "—"} / ${source.cow || "—"}`;
+}
+
 function logMetadataText(metadata: string | null): string | number | undefined {
   if (!metadata) return undefined;
-  const parsed = JSON.parse(metadata);
-  return parsed.qty ?? parsed.note;
+  try {
+    const parsed = JSON.parse(metadata);
+    return parsed.qty ?? parsed.note;
+  } catch {
+    return "—";
+  }
 }
 </script>
+
+<style scoped>
+.allocations,
+.unboxed-packages,
+.boxed-packages,
+.logs-toggle {
+  margin-top: 0.75rem;
+}
+
+.package-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.package-info {
+  font-size: 0.875rem;
+}
+
+.package-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.allocation-actions {
+  margin-top: 0.5rem;
+}
+
+.boxed-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.logs-list {
+  margin-top: 0.5rem;
+}
+
+.logs-list ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.logs-list li {
+  margin-bottom: 0.35rem;
+}
+
+.item-card {
+  margin-bottom: 1.5rem;
+}
+
+.box-select {
+  min-width: 8rem;
+}
+</style>
