@@ -106,7 +106,7 @@ const route = useRoute();
 const boxId = route.params.id as string;
 
 const db = await useDb();
-const currentUser = await useCurrentUser();
+const { currentUser } = useAuth();
 
 const pending = ref(true);
 const error = ref<string | null>(null);
@@ -121,7 +121,7 @@ const {
   onApplied,
 } = useLabelScanReview({ onApplied: onScanApplied });
 
-const { badgeClass } = useStatusBadge();
+import { badgeClass } from "~/composables/useStatusBadge";
 
 const allVerified = computed(
   () =>
@@ -146,7 +146,7 @@ useVisibleReload(load);
 
 async function markVerified() {
   if (!box.value) return;
-  if (!currentUser) {
+  if (!currentUser.value) {
     error.value = "No operator user found";
     return;
   }
@@ -154,7 +154,7 @@ async function markVerified() {
   error.value = null;
   marking.value = true;
   try {
-    await markShelfBoxVerified(db, box.value.id, currentUser.id);
+    await markShelfBoxVerified(db, box.value.id, currentUser.value.id);
     await load();
   } catch (e: any) {
     error.value = e?.message ?? String(e);

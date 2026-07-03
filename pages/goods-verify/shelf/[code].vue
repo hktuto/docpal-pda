@@ -52,8 +52,8 @@
 
 <script setup lang="ts">
 import { getShelfBoxesByShelf, type ShelfBoxSummary } from "~/db/goodsVerify";
-
-const { badgeClass } = useStatusBadge();
+import { badgeClass } from "~/composables/useStatusBadge";
+import { useVisibleReload } from "~/composables/useVisibleReload";
 
 definePageMeta({ title: "Shelf Boxes" });
 
@@ -88,22 +88,7 @@ const filteredBoxes = computed(() => {
   );
 });
 
-onMounted(() => {
-  load();
-  document.addEventListener("visibilitychange", onVisible);
-  window.addEventListener("focus", onVisible);
-});
-
-onUnmounted(() => {
-  document.removeEventListener("visibilitychange", onVisible);
-  window.removeEventListener("focus", onVisible);
-});
-
-function onVisible() {
-  if (document.visibilityState === "visible") {
-    load();
-  }
-}
+useVisibleReload(load);
 </script>
 
 <style scoped>

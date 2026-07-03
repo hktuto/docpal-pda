@@ -111,7 +111,7 @@ import { sql } from "drizzle-orm";
 import ReceivingItemsTab from "~/components/receiving/ReceivingItemsTab.vue";
 import ReceivingPickingTab from "~/components/receiving/ReceivingPickingTab.vue";
 import { useVisibleReload } from "~/composables/useVisibleReload";
-import { useStatusBadge } from "~/composables/useStatusBadge";
+import { badgeClass } from "~/composables/useStatusBadge";
 import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import ReportIssueModal from "~/components/ReportIssueModal.vue";
@@ -144,7 +144,7 @@ const route = useRoute();
 const orderId = route.params.id as string;
 
 const db = await useDb();
-const currentUser = await useCurrentUser();
+const { currentUser } = useAuth();
 
 const pending = ref(true);
 const error = ref<string | null>(null);
@@ -153,7 +153,6 @@ const order = ref<DisplayReceivingOrder | null>(null);
 const pickingRows = ref<PickingByReceivingRow[]>([]);
 const saving = ref<Record<string, boolean>>({});
 const confirming = ref(false);
-const { badgeClass } = useStatusBadge();
 const { scan, scanning, review, reviewOpen, onApplied } = useLabelScanReview({
   onApplied: load,
 });
@@ -422,7 +421,7 @@ async function onConfirmIssue(payload: {
   wrongPartNo: string | null;
   note: string;
 }) {
-  if (!currentUser || !reportModalItem.value) return;
+  if (!currentUser.value || !reportModalItem.value) return;
   const itemId = reportModalItem.value.id;
   saving.value[itemId] = true;
   error.value = null;
@@ -430,7 +429,7 @@ async function onConfirmIssue(payload: {
     await updateReceivingItemMismatch(
       db,
       itemId,
-      currentUser.id,
+      currentUser.value.id,
       payload.reason,
       payload.mismatchQty,
       payload.wrongPartNo,
@@ -448,8 +447,8 @@ async function onConfirmIssue(payload: {
 async function confirmArrival() {
   confirming.value = true;
   try {
-    if (!currentUser) throw new Error("No operator user found");
-    await confirmReceivingOrderArrived(db, orderId, currentUser.id);
+    if (!currentUser.value) throw new Error("No operator user found");
+    await confirmReceivingOrderArrived(db, orderId, currentUser.value.id);
     await load();
   } catch (e: any) {
     error.value = e?.message ?? String(e);
@@ -461,8 +460,8 @@ async function confirmArrival() {
 async function createBox(pickingOrderId: string) {
   creatingBox.value[pickingOrderId] = true;
   try {
-    if (!currentUser) throw new Error("No operator user found");
-    await createShippingBoxForPickingOrder(db, pickingOrderId, currentUser.id);
+    if (!currentUser.value) throw new Error("No operator user found");
+    await createShippingBoxForPickingOrder(db, pickingOrderId, currentUser.value.id);
     await load();
   } catch (e: any) {
     error.value = e?.message ?? String(e);
@@ -476,8 +475,8 @@ async function addToBox(packageId: string) {
   if (!boxId) return;
   addingPackage.value[packageId] = true;
   try {
-    if (!currentUser) throw new Error("No operator user found");
-    await addPackageToBox(db, packageId, boxId, currentUser.id);
+    if (!currentUser.value) throw new Error("No operator user found");
+    await addPackageToBox(db, packageId, boxId, currentUser.value.id);
     await load();
   } catch (e: any) {
     error.value = e?.message ?? String(e);
@@ -489,8 +488,8 @@ async function addToBox(packageId: string) {
 async function removeFromBox(packageId: string) {
   removingPackage.value[packageId] = true;
   try {
-    if (!currentUser) throw new Error("No operator user found");
-    await removePackageFromBox(db, packageId, currentUser.id);
+    if (!currentUser.value) throw new Error("No operator user found");
+    await removePackageFromBox(db, packageId, currentUser.value.id);
     await load();
   } catch (e: any) {
     error.value = e?.message ?? String(e);

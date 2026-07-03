@@ -83,7 +83,7 @@ const emit = defineEmits<{
 }>();
 
 const db = await useDb();
-const currentUser = await useCurrentUser();
+const { currentUser } = useAuth();
 
 const defaultForm: MeasurementForm = {
   boxSize: "",
@@ -161,9 +161,9 @@ async function onFinish() {
   finishing.value = true;
   errorMessage.value = null;
   try {
-    if (!currentUser) throw new Error("No operator user found");
+    if (!currentUser.value) throw new Error("No operator user found");
     await persist();
-    await closeShippingBox(db, props.boxId, currentUser.id);
+    await closeShippingBox(db, props.boxId, currentUser.value.id);
     emit("finished");
     close();
   } catch (e: any) {

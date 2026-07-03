@@ -1,6 +1,6 @@
 import { useDb } from './useDb';
-import { useMockOcr } from './useMockOcr';
-import { useCurrentUser } from './useCurrentUser';
+import { parseManual, normalize } from './useMockOcr';
+import { useAuth } from './useAuth';
 import type { OcrInput } from './useMockOcr';
 import type { PickingCandidate } from '~/db/ocrPicking';
 import type { PutAwayLot } from '~/db/putAway';
@@ -104,7 +104,7 @@ export interface ScanMatchers {
 
 export function useScanMatchers(): ScanMatchers {
   const db = useDb();
-  const { parseManual, normalize } = useMockOcr();
+  const { currentUser } = useAuth();
 
   function error(message: string): ScanMatchResult {
     return { type: 'error', message };
@@ -116,8 +116,8 @@ export function useScanMatchers(): ScanMatchers {
     parsed: OcrInput
   ): Promise<ScanMatchResult> {
     try {
-      const currentUser = await useCurrentUser();
-      if (!currentUser?.id) return error('Operator not signed in');
+      const user = currentUser.value;
+      if (!user?.id) return error('Operator not signed in');
 
       const p = parseManual(parsed);
       const receivingCandidates = await findReceivingCandidates(db, receivingOrderId, p);
@@ -132,7 +132,7 @@ export function useScanMatchers(): ScanMatchers {
       if (pickingCandidates.length === 0) return { type: 'none' };
 
       const applyFor = (picking: PickingCandidate) => async () => {
-        const actorId = (await useCurrentUser())?.id;
+        const actorId = currentUser.value?.id;
         if (!actorId) throw new Error('Operator not signed in');
         const qty = p.qty;
         if (!Number.isInteger(qty) || qty <= 0) throw new Error('Invalid quantity to apply');
@@ -167,8 +167,8 @@ export function useScanMatchers(): ScanMatchers {
 
   async function matchPicking(allocation: PickingAllocation, parsed: OcrInput): Promise<ScanMatchResult> {
     try {
-      const currentUser = await useCurrentUser();
-      if (!currentUser?.id) return error('Operator not signed in');
+      const user = currentUser.value;
+      if (!user?.id) return error('Operator not signed in');
 
       const scannedPartNo = normalize(parsed.partNo ?? '');
       const expectedPartNo = normalize(allocation?.pickingItem?.part?.partNo ?? '');
@@ -191,7 +191,7 @@ export function useScanMatchers(): ScanMatchers {
         type: 'single',
         record: allocation,
         apply: async () => {
-          const actorId = (await useCurrentUser())?.id;
+          const actorId = currentUser.value?.id;
           if (!actorId) throw new Error('Operator not signed in');
           if (isReceivingAllocation) {
             const materializedId = await materializeReceivingAllocation(
@@ -216,8 +216,8 @@ export function useScanMatchers(): ScanMatchers {
 
   async function matchPutAway(receivingItem: PutAwayLot, targetBoxId: string, parsed: OcrInput): Promise<ScanMatchResult> {
     try {
-      const currentUser = await useCurrentUser();
-      if (!currentUser?.id) return error('Operator not signed in');
+      const user = currentUser.value;
+      if (!user?.id) return error('Operator not signed in');
 
       const scannedPartNo = normalize(parsed.partNo ?? '');
       const expectedPartNo = normalize(receivingItem.part_no ?? '');
@@ -239,7 +239,7 @@ export function useScanMatchers(): ScanMatchers {
         type: 'single',
         record: receivingItem,
         apply: async () => {
-          const actorId = (await useCurrentUser())?.id;
+          const actorId = currentUser.value?.id;
           if (!actorId) throw new Error('Operator not signed in');
           await addItemToShelfBox(
             db,
@@ -260,8 +260,8 @@ export function useScanMatchers(): ScanMatchers {
   }
 
   async function matchMeasuring(boxId: string, targetPackageId: string | undefined, parsed: OcrInput): Promise<ScanMatchResult> {
-    const currentUser = await useCurrentUser();
-    if (!currentUser?.id) return error('Operator not signed in');
+    const user = currentUser.value;
+    if (!user?.id) return error('Operator not signed in');
 
     try {
       if (!parsed.partNo?.trim()) return error('Part No. is required');
@@ -288,7 +288,7 @@ export function useScanMatchers(): ScanMatchers {
         type: 'single',
         record: matched,
         apply: async () => {
-          const actorId = (await useCurrentUser())?.id;
+          const actorId = currentUser.value?.id;
           if (!actorId) throw new Error('Operator not signed in');
           await verifyPickingPackageForMeasuring(db, matched.id, actorId);
         },

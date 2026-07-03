@@ -60,7 +60,8 @@
 </template>
 
 <script setup lang="ts">
-const { badgeClass } = useStatusBadge();
+import { badgeClass } from "~/composables/useStatusBadge";
+import { useVisibleReload } from "~/composables/useVisibleReload";
 
 definePageMeta({ title: "Picking" });
 
@@ -75,7 +76,7 @@ interface PickingOrderRow extends Record<string, unknown> {
 }
 
 const db = await useDb();
-const currentUser = await useCurrentUser();
+const { currentUser } = useAuth();
 
 const search = ref("");
 const rawRows = ref<PickingOrderRow[]>([]);
@@ -153,7 +154,7 @@ async function onReportSaved(payload: {
 }) {
   reporting.value = true;
   try {
-    if (!currentUser) throw new Error("No operator user found");
+    if (!currentUser.value) throw new Error("No operator user found");
     const { reportPickingOrderIssues } = await import("~/db/picking");
     const entries = selectedOrders.value.map((o) => ({
       orderId: o.id,
@@ -168,7 +169,7 @@ async function onReportSaved(payload: {
         packSize: payload.packSize,
         note: payload.note,
       },
-      currentUser.id
+      currentUser.value.id
     );
     selectedIds.value = new Set();
     modalOpen.value = false;
@@ -186,74 +187,18 @@ async function onReportSaved(payload: {
   }
 }
 
-onMounted(() => {
-  load();
-  document.addEventListener("visibilitychange", onVisible);
-  window.addEventListener("focus", onVisible);
-});
-
-onUnmounted(() => {
-  document.removeEventListener("visibilitychange", onVisible);
-  window.removeEventListener("focus", onVisible);
-});
-
-function onVisible() {
-  if (document.visibilityState === "visible") {
-    load();
-  }
-}
+useVisibleReload(load);
 </script>
 
 <style scoped>
-.list-card {
-  display: block;
-  text-decoration: none;
-}
-
-.list-card:hover {
-  text-decoration: none;
-}
-
-.list-card__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 0.75rem;
-  margin-bottom: 0.35rem;
-}
-
-.list-card__title {
-  font-size: 1.0625rem;
-  font-weight: 700;
-  color: var(--text);
-  text-decoration: none;
-}
-
 .list-card__title:hover {
   text-decoration: underline;
 }
 
-.list-card__meta {
-  font-size: 0.875rem;
-  color: var(--muted);
-  margin: 0 0 0.75rem;
-}
-
-.list-card__footer {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.list-card__date,
-.list-card__ship {
-  font-size: 0.8125rem;
-  color: var(--muted);
-}
-
 .list-card__ship {
   margin-left: auto;
+  font-size: 0.8125rem;
+  color: var(--muted);
 }
 
 .bulk-actions {

@@ -85,7 +85,7 @@
 
 <script setup lang="ts">
 import { useVisibleReload } from "~/composables/useVisibleReload";
-import { useStatusBadge } from "~/composables/useStatusBadge";
+import { badgeClass } from "~/composables/useStatusBadge";
 import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import PickingBoxesSection from "~/components/picking/PickingBoxesSection.vue";
@@ -112,7 +112,7 @@ definePageMeta({ title: "Picking Detail", props: { noPadding: true } });
 const route = useRoute();
 const orderId = route.params.id as string;
 const db = await useDb();
-const currentUser = await useCurrentUser();
+const { currentUser } = useAuth();
 
 const pending = ref(true);
 const error = ref<string | null>(null);
@@ -132,7 +132,6 @@ const boxSelections = ref<Record<string, string>>({});
 const { scan, scanning, review, reviewOpen, onApplied } = useLabelScanReview({
   onApplied: load,
 });
-const { badgeClass } = useStatusBadge();
 const allItemsFullyBoxed = computed(
   () => order.value?.items?.every((i) => i.pickedQty >= i.qty) ?? false
 );
@@ -145,13 +144,11 @@ const actionable = computed(
 );
 
 function currentUserId(): string {
-  if (!currentUser) throw new Error("No operator user found");
-  return currentUser.id;
+  if (!currentUser.value) throw new Error("No operator user found");
+  return currentUser.value.id;
 }
 
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
+import { errorMessage } from "~/composables/errorMessage";
 
 async function load() {
   try {

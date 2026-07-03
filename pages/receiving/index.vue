@@ -55,7 +55,8 @@
 </template>
 
 <script setup lang="ts">
-const { badgeClass } = useStatusBadge();
+import { badgeClass } from "~/composables/useStatusBadge";
+import { useVisibleReload } from "~/composables/useVisibleReload";
 
 definePageMeta({ title: "Receiving" });
 
@@ -179,24 +180,7 @@ const rows = computed(() => {
 });
 
 watch(filter, load);
-
-onMounted(() => {
-  load();
-  document.addEventListener("visibilitychange", onVisible);
-  window.addEventListener("focus", onVisible);
-});
-
-onUnmounted(() => {
-  document.removeEventListener("visibilitychange", onVisible);
-  window.removeEventListener("focus", onVisible);
-});
-
-function onVisible() {
-  if (document.visibilityState === "visible") {
-    load();
-  }
-}
-
+useVisibleReload(load);
 </script>
 
 <style scoped>
@@ -227,45 +211,4 @@ function onVisible() {
   color: #fff;
 }
 
-.list-card {
-  display: block;
-  text-decoration: none;
-}
-
-.list-card:hover {
-  text-decoration: none;
-}
-
-.list-card__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 0.75rem;
-  margin-bottom: 0.35rem;
-}
-
-.list-card__title {
-  font-size: 1.0625rem;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.list-card__meta {
-  font-size: 0.875rem;
-  color: var(--muted);
-  margin: 0 0 0.75rem;
-}
-
-.list-card__footer {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.list-card__date {
-  font-size: 0.8125rem;
-  color: var(--muted);
-  margin-right: auto;
-}
 </style>

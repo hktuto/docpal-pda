@@ -1,6 +1,6 @@
 import { ref } from 'vue';
 import { RectangleDetection, SCAN_NOT_AVAILABLE_MESSAGE, type LabelScanCapture } from './useRectangleDetection';
-import { useRecognizedTextParser } from './useRecognizedTextParser';
+import { parseRecognizedText } from './useRecognizedTextParser';
 import { runScanMatcher, type ScanTaskContext, type ScanMatchResult } from './useScanMatchers';
 import type { OcrInput } from './useMockOcr';
 
@@ -22,12 +22,9 @@ export function createManualReview(): Extract<LabelScanResult, { status: 'review
 
 export function useLabelScan() {
   const scanning = ref(false);
-  const error = ref<string | null>(null);
-  const { parseRecognizedText } = useRecognizedTextParser();
 
   async function scan(context: ScanTaskContext): Promise<LabelScanResult> {
     scanning.value = true;
-    error.value = null;
 
     try {
       const capture = await RectangleDetection.scanLabel();
@@ -37,7 +34,6 @@ export function useLabelScan() {
       const matchResult = await runScanMatcher(context, parsed);
 
       if (matchResult.type === 'error') {
-        error.value = matchResult.message;
         return { status: 'error', message: matchResult.message };
       }
 
@@ -55,14 +51,13 @@ export function useLabelScan() {
         return { status: 'manual' };
       }
       const message = e instanceof Error ? e.message : String(e);
-      error.value = message;
       return { status: 'error', message };
     } finally {
       scanning.value = false;
     }
   }
 
-  return { scan, scanning, error };
+  return { scan, scanning };
 }
 
 function isCancellationError(err: unknown): boolean {

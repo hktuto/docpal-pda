@@ -86,7 +86,7 @@ const route = useRoute();
 const taskId = route.params.id as string;
 
 const db = await useDb();
-const currentUser = await useCurrentUser();
+const { currentUser } = useAuth();
 
 const pending = ref(true);
 const error = ref<string | null>(null);
@@ -117,8 +117,8 @@ const canComplete = computed(() => {
 async function complete() {
   completing.value = true;
   try {
-    if (!currentUser) throw new Error("No operator user found");
-    await completeMeasuringTask(db, taskId, currentUser.id);
+    if (!currentUser.value) throw new Error("No operator user found");
+    await completeMeasuringTask(db, taskId, currentUser.value.id);
     await load();
   } catch (e: any) {
     error.value = e?.message ?? String(e);

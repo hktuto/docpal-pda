@@ -5,9 +5,9 @@
 </template>
 
 <script setup lang="ts">
-const props = defineProps<{
+import { badgeClass } from "~/composables/useStatusBadge";
+
+defineProps<{
   status: string;
 }>();
-
-const { badgeClass } = useStatusBadge();
 </script>

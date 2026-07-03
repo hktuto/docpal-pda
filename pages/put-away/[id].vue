@@ -63,7 +63,7 @@
 
 <script setup lang="ts">
 import { useVisibleReload } from "~/composables/useVisibleReload";
-import { useStatusBadge } from "~/composables/useStatusBadge";
+import { badgeClass } from "~/composables/useStatusBadge";
 import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import SelectShelfDialog from "~/components/SelectShelfDialog.vue";
@@ -94,7 +94,7 @@ const newBoxDialogOpen = ref(false);
 const expandedItemBoxes = ref<Set<string>>(new Set());
 
 const db = await useDb();
-const currentUser = await useCurrentUser();
+const { currentUser } = useAuth();
 
 const pending = ref(true);
 const error = ref<string | null>(null);
@@ -110,13 +110,10 @@ const scanLot = ref<PutAwayLot | null>(null);
 const scanBoxId = ref<string>("");
 const targetBoxSelections = ref<Record<string, string>>({});
 const { scan, scanning, review, reviewOpen, onApplied } = useLabelScanReview({ onApplied: load });
-const { badgeClass } = useStatusBadge();
 
 useVisibleReload(load);
 
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
+import { errorMessage } from "~/composables/errorMessage";
 
 async function load() {
   pending.value = true;
@@ -168,13 +165,13 @@ function openNewBoxDialog() {
 
 async function createBoxFromDialog(shelfCode: string) {
   error.value = null;
-  if (!currentUser?.id) {
+  if (!currentUser.value?.id) {
     error.value = "Operator not signed in";
     return;
   }
   creating.value = true;
   try {
-    await createShelfBox(db, orderId, shelfCode, currentUser.id);
+    await createShelfBox(db, orderId, shelfCode, currentUser.value.id);
     await load();
     boxesExpanded.value = true;
   } catch (e) {
@@ -186,13 +183,13 @@ async function createBoxFromDialog(shelfCode: string) {
 
 async function closeBox(boxId: string) {
   error.value = null;
-  if (!currentUser?.id) {
+  if (!currentUser.value?.id) {
     error.value = "Operator not signed in";
     return;
   }
   closing.value = true;
   try {
-    await closeShelfBox(db, boxId, currentUser.id);
+    await closeShelfBox(db, boxId, currentUser.value.id);
     await load();
   } catch (e) {
     error.value = errorMessage(e);
@@ -203,13 +200,13 @@ async function closeBox(boxId: string) {
 
 async function cancelBox(boxId: string) {
   error.value = null;
-  if (!currentUser?.id) {
+  if (!currentUser.value?.id) {
     error.value = "Operator not signed in";
     return;
   }
   cancellingBox.value[boxId] = true;
   try {
-    await cancelShelfBox(db, boxId, currentUser.id);
+    await cancelShelfBox(db, boxId, currentUser.value.id);
     await load();
   } catch (e) {
     error.value = errorMessage(e);

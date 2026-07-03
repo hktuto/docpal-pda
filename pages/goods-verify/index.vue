@@ -30,6 +30,7 @@
 
 <script setup lang="ts">
 import { getShelvesWithBoxes, type ShelfWithBoxCount } from "~/db/goodsVerify";
+import { useVisibleReload } from "~/composables/useVisibleReload";
 
 definePageMeta({ title: "Goods Verify" });
 
@@ -63,51 +64,11 @@ const rows = computed(() => {
   );
 });
 
-onMounted(() => {
-  load();
-  document.addEventListener("visibilitychange", onVisible);
-  window.addEventListener("focus", onVisible);
-});
-
-onUnmounted(() => {
-  document.removeEventListener("visibilitychange", onVisible);
-  window.removeEventListener("focus", onVisible);
-});
-
-function onVisible() {
-  if (document.visibilityState === "visible") {
-    load();
-  }
-}
+useVisibleReload(load);
 </script>
 
 <style scoped>
-.list-card {
-  display: block;
-  text-decoration: none;
-}
-
-.list-card:hover {
-  text-decoration: none;
-}
-
-.list-card__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 0.75rem;
-  margin-bottom: 0.35rem;
-}
-
-.list-card__title {
-  font-size: 1.0625rem;
-  font-weight: 700;
-  color: var(--text);
-}
-
 .list-card__meta {
-  font-size: 0.875rem;
-  color: var(--muted);
   margin: 0;
 }
 </style>

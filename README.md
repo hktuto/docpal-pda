@@ -240,7 +240,6 @@ The database lives in the browser's IndexedDB. Use the **⋮ → Reset local DB*
 ├── composables/
 │   ├── useAndroidBackButton.ts   # Handle Android hardware back button
 │   ├── useAuth.ts                # Login/logout/restore
-│   ├── useCurrentUser.ts         # Current operator helper
 │   ├── useDb.ts                  # Drizzle client from provided PGlite
 │   ├── useLabelScan.ts           # Scan label parsing and matching state
 │   ├── useLabelScanReview.ts     # Shared scan-review modal state machine
