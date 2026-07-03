@@ -54,27 +54,27 @@
       </DetailHeader>
 
       <div class="section-title" style="display: flex; justify-content: space-between; align-items: center;">
-        <h2 style="margin: 0;">Boxes</h2>
-        <button
-          class="btn btn--small btn--ghost"
-          :aria-expanded="boxesExpanded"
-          @click="boxesExpanded = !boxesExpanded"
-        >
-          {{ boxesExpanded ? "Hide" : `Show ${order.shippingBoxes?.length ?? 0}` }}
-        </button>
+        <h2 style="margin: 0;">Boxes({{ order.shippingBoxes?.length ?? 0 }})</h2>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <button
+            v-if="order.status !== 'finished' && order.status !== 'issue'"
+            class="btn btn--small"
+            :disabled="creatingBox"
+            @click="createBox"
+          >
+            {{ creatingBox ? "Creating…" : "New box" }}
+          </button>
+          <button
+            class="btn btn--small btn--ghost"
+            :aria-expanded="boxesExpanded"
+            @click="boxesExpanded = !boxesExpanded"
+          >
+            {{ boxesExpanded ? "Hide" : "Show" }}
+          </button>
+        </div>
       </div>
 
       <div v-if="boxesExpanded" style="margin-bottom: 1.5rem;">
-        <button
-          v-if="order.status !== 'finished' && order.status !== 'issue'"
-          class="btn btn--small"
-          style="margin-bottom: 1rem;"
-          :disabled="creatingBox"
-          @click="createBox"
-        >
-          {{ creatingBox ? "Creating…" : "Create box" }}
-        </button>
-
         <p v-if="!order.shippingBoxes?.length" class="empty">No boxes yet.</p>
 
         <div
