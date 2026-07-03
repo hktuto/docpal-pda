@@ -150,17 +150,13 @@ async function findMatch() {
   matching.value = true;
   applyError.value = null;
   try {
-    const result = await runMatcher();
+    const result = await runScanMatcher(props.context, editable.value);
     localMatchResult.value = result;
   } catch (e: any) {
     localMatchResult.value = { type: 'error', message: e?.message ?? 'Match failed' };
   } finally {
     matching.value = false;
   }
-}
-
-async function runMatcher(): Promise<ScanMatchResult> {
-  return runScanMatcher(props.context, editable.value);
 }
 
 async function applyRecord(apply: () => Promise<void>) {

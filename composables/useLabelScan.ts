@@ -24,7 +24,7 @@ export function useLabelScan() {
       const parsed = parseRecognizedText(capture.text);
       console.log('[useLabelScan]', { imagePath: capture.imagePath, text: capture.text, parsed });
 
-      const matchResult = await runMatcher(context, parsed);
+      const matchResult = await runScanMatcher(context, parsed);
 
       if (matchResult.type === 'error') {
         error.value = matchResult.message;
@@ -47,10 +47,6 @@ export function useLabelScan() {
     } finally {
       scanning.value = false;
     }
-  }
-
-  async function runMatcher(context: ScanTaskContext, parsed: OcrInput): Promise<ScanMatchResult> {
-    return runScanMatcher(context, parsed);
   }
 
   return { scan, scanning, error };
