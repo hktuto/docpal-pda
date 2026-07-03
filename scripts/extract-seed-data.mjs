@@ -21,7 +21,7 @@ function isSkippedFile(fileName) {
   return (
     lower === "thumbs.db" ||
     lower === ".ds_store" ||
-    lower.startsWith("~lock.")
+    lower.startsWith(".~lock.")
   );
 }
 
@@ -119,13 +119,14 @@ async function main() {
     });
   }
 
-  // Disambiguate duplicate supplier codes by appending a number.
+  // Disambiguate duplicate supplier codes by appending a number to the
+  // first four characters of the base code.
   const seen = new Set();
   for (const supplier of suppliers) {
     let code = supplier.code;
     let suffix = 1;
     while (seen.has(code)) {
-      code = `${supplier.code}${suffix}`;
+      code = `${supplier.code.slice(0, 4)}${suffix}`;
       suffix += 1;
     }
     seen.add(code);
