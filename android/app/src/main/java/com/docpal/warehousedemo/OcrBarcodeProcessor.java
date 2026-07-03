@@ -110,7 +110,7 @@ public class OcrBarcodeProcessor {
         JSONObject obj = new JSONObject();
         String value = barcode.getRawValue();
         obj.put("value", value != null ? value : "");
-        obj.put("format", barcode.getFormat());
+        obj.put("format", String.valueOf(barcode.getFormat()));
         array.put(obj);
       } catch (JSONException e) {
         // ignore individual barcode serialization errors
