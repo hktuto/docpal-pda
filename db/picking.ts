@@ -2,6 +2,7 @@ import { eq, and, sql, inArray } from "drizzle-orm";
 import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { v4 as uuid } from "uuid";
 import * as schema from "./schema";
+import type { PickingIssueReason } from "./schema";
 import { tryMarkReceivingOrderClear } from "./receiving";
 import { getIsoWeek } from "./date";
 
@@ -23,6 +24,7 @@ export async function getPickingOrderDetail(
     where: eq(schema.pickingOrders.id, id),
     with: {
       supplier: true,
+      issueReportedByUser: true,
       measuringTask: true,
       items: {
         with: {
@@ -140,6 +142,11 @@ export async function scanAllocationToPackage(
 
     const item = allocation.pickingItem;
     const lot = allocation.inventoryLot;
+
+    const order = await tx.query.pickingOrders.findFirst({
+      where: eq(schema.pickingOrders.id, item.pickingOrderId),
+    });
+    if (order?.status === "issue") throw new Error("Picking order has an open issue");
 
     const scannedResult = await tx
       .select({
@@ -313,6 +320,97 @@ export async function reportPickingItemMismatch(
   });
 }
 
+export interface PickingOrderIssueEntry {
+  orderId: string;
+  remark?: string | null;
+}
+
+export interface PickingOrderIssueInput {
+  reason: PickingIssueReason;
+  qty?: number | null;
+  packSize?: number | null;
+  note?: string | null;
+}
+
+export async function reportPickingOrderIssues(
+  db: PgliteDatabase<typeof schema>,
+  entries: PickingOrderIssueEntry[],
+  input: PickingOrderIssueInput,
+  actorId: string
+): Promise<{ reported: number; skipped: number }> {
+  if (entries.length === 0) throw new Error("No orders selected");
+  if (input.reason === "merge" && entries.length < 2) {
+    throw new Error("Select at least two orders to request a merge");
+  }
+  if (input.reason === "insufficient_stock" && (input.qty == null || input.qty < 0)) {
+    throw new Error("Actual quantity is required");
+  }
+  if (input.reason === "cannot_divide" && (input.packSize == null || input.packSize <= 0)) {
+    throw new Error("Pack size is required");
+  }
+
+  const orderIds = entries.map((e) => e.orderId);
+  const idList = orderIds.map((id) => `'${id}'`).join(", ");
+
+  return db.transaction(async (tx) => {
+    const result = await tx.execute(sql`
+      SELECT po.id, po.ref_no, po.status,
+        (SELECT COALESCE(SUM(pi.qty), 0) FROM picking_items pi WHERE pi.picking_order_id = po.id) AS total_qty
+      FROM picking_orders po
+      WHERE po.id IN (${sql.raw(idList)})
+    `);
+    const rows = (result.rows ?? []) as any[];
+    const reportable = rows.filter((r) => r.status === "pending" || r.status === "picking");
+    if (reportable.length === 0) throw new Error("No reportable orders selected");
+
+    const remarkByOrderId = new Map(entries.map((e) => [e.orderId, e.remark?.trim() || null]));
+    const now = new Date();
+    let reported = 0;
+
+    for (const row of reportable) {
+      const totalQty = Number(row.total_qty) || 0;
+      if (input.reason === "insufficient_stock" && input.qty! >= totalQty) {
+        throw new Error(`Actual qty for ${row.ref_no} must be less than requested qty`);
+      }
+
+      await tx.execute(sql`
+        UPDATE picking_orders
+        SET status = 'issue',
+            issue_reason = ${input.reason},
+            issue_qty = ${input.reason === "insufficient_stock" ? input.qty : null},
+            issue_pack_size = ${input.reason === "cannot_divide" ? input.packSize : null},
+            issue_note = ${input.note?.trim() || null},
+            issue_remark = ${remarkByOrderId.get(row.id) || null},
+            issue_reported_at = ${now.toISOString()},
+            issue_reported_by = ${actorId},
+            updated_at = ${now.toISOString()}
+        WHERE id = ${row.id}
+      `);
+
+      await tx.insert(schema.transitionLogs).values({
+        id: uuid(),
+        entityType: "picking_order",
+        entityId: row.id,
+        fromState: row.status,
+        toState: "issue",
+        actorId,
+        metadata: JSON.stringify({
+          reason: input.reason,
+          qty: input.qty,
+          packSize: input.packSize,
+          note: input.note,
+          remark: remarkByOrderId.get(row.id),
+        }),
+        createdAt: now,
+      });
+
+      reported++;
+    }
+
+    return { reported, skipped: orderIds.length - reportable.length };
+  });
+}
+
 export async function createShippingBoxForPickingOrder(
   db: PgliteDatabase<typeof schema>,
   pickingOrderId: string,
@@ -325,6 +423,7 @@ export async function createShippingBoxForPickingOrder(
     });
     if (!order) throw new Error("Picking order not found");
     if (order.status === "finished") throw new Error("Picking order is already finished");
+    if (order.status === "issue") throw new Error("Picking order has an open issue");
 
     const now = new Date();
     const week = String(getIsoWeek(now)).padStart(2, "0");
@@ -407,6 +506,12 @@ export async function addPackageToBox(
     });
     if (!box) throw new Error("Box not found");
     if (box.status !== "open") throw new Error("Box is not open");
+    if (box.pickingOrderId) {
+      const order = await tx.query.pickingOrders.findFirst({
+        where: eq(schema.pickingOrders.id, box.pickingOrderId),
+      });
+      if (order?.status === "issue") throw new Error("Picking order has an open issue");
+    }
     if (box.pickingOrderId !== pkg.pickingOrderId) {
       throw new Error("Package does not belong to this picking order");
     }
@@ -451,6 +556,12 @@ export async function removePackageFromBox(
     });
     if (!box || box.status !== "open") {
       throw new Error("Box is not open");
+    }
+    if (box.pickingOrderId) {
+      const order = await tx.query.pickingOrders.findFirst({
+        where: eq(schema.pickingOrders.id, box.pickingOrderId),
+      });
+      if (order?.status === "issue") throw new Error("Picking order has an open issue");
     }
 
     const shippingBoxId = pkg.shippingBoxId;
@@ -546,6 +657,7 @@ export async function finishPickingOrder(
     if (!order) throw new Error("Picking order not found");
     if (order.status === "finished") throw new Error("Order is already finished");
     if (order.items.length === 0) throw new Error("No items to pick");
+    if (order.status === "issue") throw new Error("Picking order has an open issue");
 
     const allPicked = order.items.every((i) => i.pickedQty >= i.qty);
     if (!allPicked) throw new Error("Not all items are fully boxed");
