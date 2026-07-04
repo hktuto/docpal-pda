@@ -1,7 +1,5 @@
 <template>
   <div class="stock-search">
-    <AppHeader :title="$t('stockSearch.title')" />
-
     <div class="filters">
       <input
         v-model="keyword"
@@ -87,7 +85,6 @@
 </template>
 
 <script setup lang="ts">
-import AppHeader from "~/components/AppHeader.vue";
 import EmptyState from "~/components/EmptyState.vue";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { useErrorMessage } from "~/composables/errorMessage";

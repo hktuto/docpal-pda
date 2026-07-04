@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { sql, inArray } from "drizzle-orm";
 import type { PgliteDatabase } from "drizzle-orm/pglite";
 import * as schema from "./schema";
 
@@ -83,35 +83,26 @@ export async function getInventoryLotsForParts(
 ): Promise<StockSearchInventoryLot[]> {
   if (partIds.length === 0) return [];
 
-  const result = await db.execute(sql`
-    SELECT
-      part_id,
-      date_code,
-      lot_code,
-      coo,
-      cow,
-      shelf_code,
-      box_id,
-      total_qty,
-      allocated_qty,
-      available_qty
-    FROM inventory_lots
-    WHERE part_id = ANY(${partIds}::text[])
-    ORDER BY shelf_code NULLS LAST, box_id NULLS LAST
-  `);
+  const rows = await db.query.inventoryLots.findMany({
+    where: inArray(schema.inventoryLots.partId, partIds),
+    orderBy: [
+      sql`${schema.inventoryLots.shelfCode} NULLS LAST`,
+      sql`${schema.inventoryLots.boxId} NULLS LAST`,
+    ],
+  });
 
-  return result.rows.map((row) => ({
-    partId: String(row.part_id),
-    dateCode: row.date_code ? String(row.date_code) : null,
-    lotCode: row.lot_code ? String(row.lot_code) : null,
-    coo: row.coo ? String(row.coo) : null,
-    cow: row.cow ? String(row.cow) : null,
-    shelfCode: row.shelf_code ? String(row.shelf_code) : null,
-    boxId: row.box_id ? String(row.box_id) : null,
-    totalQty: Number(row.total_qty),
-    allocatedQty: Number(row.allocated_qty),
-    availableQty: Number(row.available_qty),
-    locationLabel: buildLocationLabel(row.shelf_code, row.box_id),
+  return rows.map((row) => ({
+    partId: row.partId,
+    dateCode: row.dateCode,
+    lotCode: row.lotCode,
+    coo: row.coo,
+    cow: row.cow,
+    shelfCode: row.shelfCode,
+    boxId: row.boxId,
+    totalQty: row.totalQty,
+    allocatedQty: row.allocatedQty,
+    availableQty: row.availableQty,
+    locationLabel: buildLocationLabel(row.shelfCode, row.boxId),
   }));
 }
 
