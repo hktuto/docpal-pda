@@ -1,7 +1,4 @@
 export default {
-  app: {
-    name: "仓库 PDA",
-  },
   meta: {
     warehouse: "仓库",
     receiving: "收货",
@@ -15,31 +12,12 @@ export default {
     goodsVerifyBox: "盘点箱子",
     measuring: "测量",
     measuringDetail: "测量详情",
-    measureBox: "测量箱子",
+    measureBox: "测量箱子"
   },
   actions: {
     scan: "扫描",
-    save: "保存",
     cancel: "取消",
-    confirm: "确认",
-    apply: "应用",
-    retake: "重拍",
-    findMatch: "查找匹配",
     close: "关闭",
-    create: "创建",
-    add: "添加",
-    remove: "移除",
-    new: "新建",
-    view: "查看",
-    edit: "编辑",
-    report: "上报",
-    finish: "完成",
-    complete: "完成",
-    open: "打开",
-    reset: "重置",
-    logout: "退出登录",
-    back: "返回",
-    home: "首页",
     show: "显示",
     hide: "隐藏",
     toggleDetails: "切换详情",
@@ -49,28 +27,12 @@ export default {
     saving: "保存中…",
     confirming: "确认中…",
     finishing: "完成中…",
-    completing: "完成中…",
     creating: "创建中…",
-    adding: "添加中…",
-    removing: "移除中…",
     canceling: "取消中…",
-    matching: "匹配中…",
-    closing: "关闭中…",
-    marking: "标记中…",
-    reportIssue: "上报问题",
     saveIssue: "保存问题",
-    saveBoxDetails: "保存箱子详情",
-    finishBox: "完成箱子",
     enterMeasurements: "输入测量数据",
-    viewBox: "查看箱子",
     viewPickingOrder: "查看拣货单",
-    putAwayRemaining: "上架剩余库存",
-    selectShelf: "选择货架",
-    selectBox: "选择箱子",
-    createBox: "创建箱子",
-    addToBox: "添加到箱子",
-    removeFromBox: "从箱子移除",
-    markVerified: "标记箱子已盘点",
+    putAwayRemaining: "上架剩余库存"
   },
   common: {
     loading: "加载中…",
@@ -78,12 +40,9 @@ export default {
     noData: "—",
     stateNone: "—",
     searchByRefOrSupplier: "按单号或供应商搜索…",
-    searchShelfCodeOrZone: "按货架编码或区域搜索…",
-    searchBoxIdOrStatus: "按箱号或状态搜索…",
     searchPickingOrdersOrParts: "按拣货单或料号搜索…",
     all: "全部",
     pending: "待处理",
-    clear: "清除",
     noSupplier: "无供应商",
     noDate: "无日期",
     today: "今天",
@@ -100,24 +59,16 @@ export default {
     backToAllShelves: "← 全部货架",
     backToShelfBoxes: "← 货架箱子",
     backToTask: "← 返回任务",
-    selected: "已选",
     selectedCount: "已选 {count} 项",
-    shipTo: "收货方：{destination}",
-    lastCheck: "上次盘点：",
-    required: "必填",
     packagesVerified: "包裹 — 已盘点 {verified} / {total}",
     noPackages: "该箱子内无包裹。",
     noBoxes: "暂无箱子。",
     noLots: "无可用于上架的批次。",
-    noLogs: "暂无拣货日志。",
     noPickingOrdersLinked: "此收货单尚未关联拣货单。",
-    noShelves: "未找到货架。",
     noReceivingOrders: "未找到收货单。",
     noPickingOrders: "未找到拣货单。",
     noPendingMeasuringTasks: "暂无待处理的测量任务。",
     noReceivingOrdersNeedPutAway: "没有需要上架的收货单。",
-    noShippingBoxes: "暂无发货箱。",
-    noItemsInBox: "此箱子内无物品。",
     invoiceTitle: "发票 {no}",
     inBox: "在箱 {id} 中",
     unboxed: "未装箱",
@@ -128,8 +79,7 @@ export default {
     shelfFormat: "{code} — {zone}",
     boxFormat: "{box} — {shelf}",
     reportedBy: "由 {name} 上报",
-    requested: "需求：{qty}",
-    kg: "千克",
+    kg: "千克"
   },
   home: {
     greeting: "你好，{name}",
@@ -140,8 +90,8 @@ export default {
       picking: { title: "拣货", desc: "扫描、装箱并完成订单" },
       putAway: { title: "上架", desc: "将库存移至货架" },
       goodsVerify: { title: "盘点", desc: "核对货架箱子内容" },
-      measuring: { title: "测量", desc: "称重并打包箱子" },
-    },
+      measuring: { title: "测量", desc: "称重并打包箱子" }
+    }
   },
   login: {
     brand: "DocPal",
@@ -149,13 +99,10 @@ export default {
     username: "用户名",
     password: "密码",
     placeholderUsername: "operator",
-    placeholderPassword: "••••••••",
-    errorInvalidCredentials: "用户名或密码错误",
-    errorFallback: "登录失败",
+    placeholderPassword: "••••••••"
   },
   receiving: {
     title: "收货",
-    hint: "尚有库存停留在收货区的收货单。",
     remaining: "剩余 {count}",
     detail: {
       title: "收货详情",
@@ -164,8 +111,7 @@ export default {
       remainingItems: "剩余项",
       tabReceiving: "收货",
       tabPicking: "拣货",
-      confirmArrived: "确认到货",
-      confirming: "确认中…",
+      confirmArrived: "确认到货"
     },
     itemsTab: {
       title: "发票与明细",
@@ -186,13 +132,11 @@ export default {
         qty_mismatch: "数量不符：收到 {qty}",
         over_shipment: "超发：+{qty}",
         wrong_part: "错料：{part}",
-        reported: "已上报异常",
-      },
+        reported: "已上报异常"
+      }
     },
     pickingTab: {
       title: "拣货视图",
-      searchPlaceholder: "搜索拣货单或料号…",
-      empty: "此收货单尚未关联拣货单。",
       pickingOrder: "拣货单",
       status: "状态",
       requiredScannedBoxed: "需求 / 已扫描 / 已装箱",
@@ -200,8 +144,6 @@ export default {
       receivingArea: "收货区",
       boxes: "箱子",
       packages: "包裹",
-      inBox: "在箱 {id} 中",
-      unboxed: "未装箱",
       selectBox: "选择箱子",
       createBox: "创建箱子",
       creating: "创建中…",
@@ -212,10 +154,8 @@ export default {
       scan: "扫描",
       hideLogs: "隐藏拣货日志",
       showLogs: "显示拣货日志",
-      noLogs: "暂无拣货日志。",
-      actorSystem: "系统",
-      stateNone: "—",
-    },
+      noLogs: "暂无拣货日志。"
+    }
   },
   picking: {
     title: "拣货",
@@ -230,7 +170,7 @@ export default {
       shipTo: "收货方",
       dateCodeNotice: "日期代码提示",
       finishPicking: "完成拣货",
-      measuring: "测量",
+      measuring: "测量"
     },
     itemsSection: {
       title: "明细",
@@ -257,7 +197,7 @@ export default {
       hideLogs: "隐藏拣货日志",
       showLogs: "显示拣货日志",
       noLogs: "暂无拣货日志。",
-      actorSystem: "系统",
+      actorSystem: "系统"
     },
     boxesSection: {
       title: "箱子 ({count})",
@@ -266,7 +206,7 @@ export default {
       status: "状态",
       packages: "包裹",
       qty: "数量",
-      cancelBox: "取消箱子",
+      cancelBox: "取消箱子"
     },
     issueBanner: {
       issueReason: "问题原因",
@@ -274,13 +214,13 @@ export default {
       packSize: "包装规格",
       remark: "备注",
       note: "备注",
-      reported: "已上报",
+      reported: "已上报"
     },
     issueReasons: {
       insufficient_stock: "库存不足",
       cannot_divide: "不可拆分数量",
       merge: "合并订单",
-      other: "其他",
+      other: "其他"
     },
     issueModal: {
       title: "上报拣货问题",
@@ -299,9 +239,9 @@ export default {
         mergeMinOrders: "请选择至少两个订单以申请合并",
         validAvailableQty: "请输入有效的可用数量",
         validPackSize: "请输入有效的包装规格",
-        noteOrRemark: "请输入备注或至少一条订单备注",
-      },
-    },
+        noteOrRemark: "请输入备注或至少一条订单备注"
+      }
+    }
   },
   putAway: {
     title: "上架",
@@ -310,7 +250,7 @@ export default {
     detail: {
       title: "上架详情",
       supplier: "供应商",
-      deliveryDate: "交货日期",
+      deliveryDate: "交货日期"
     },
     shelfBoxesPanel: {
       title: "货架箱子({count})",
@@ -325,7 +265,7 @@ export default {
       closeBox: "关闭箱子",
       closing: "关闭中…",
       cancelBox: "取消箱子",
-      canceling: "取消中…",
+      canceling: "取消中…"
     },
     lotsPanel: {
       title: "可用收货区批次",
@@ -333,8 +273,8 @@ export default {
       availableQty: "可用数量",
       dateLot: "日期 / 批次",
       cooCow: "产地 / 晶圆产地",
-      selectTargetBox: "选择目标箱子",
-    },
+      selectTargetBox: "选择目标箱子"
+    }
   },
   goodsVerify: {
     title: "盘点",
@@ -347,7 +287,7 @@ export default {
       searchPlaceholder: "按箱号或状态搜索…",
       empty: "此货架上没有箱子。",
       verified: "已盘点",
-      lastCheck: "上次盘点：{datetime}",
+      lastCheck: "上次盘点：{datetime}"
     },
     box: {
       title: "盘点箱子",
@@ -360,8 +300,8 @@ export default {
       noItems: "此箱子内无物品。",
       part: "料号",
       qty: "数量",
-      verified: "已盘点",
-    },
+      verified: "已盘点"
+    }
   },
   measuring: {
     title: "测量",
@@ -379,7 +319,7 @@ export default {
       viewBox: "查看箱子",
       openBox: "打开箱子",
       completeMeasuring: "完成测量",
-      completing: "完成中…",
+      completing: "完成中…"
     },
     measureBox: {
       title: "测量箱子",
@@ -396,8 +336,8 @@ export default {
       netWeight: "净重",
       grossWeight: "毛重",
       destinationCountry: "目的国家/地区",
-      boxNotFound: "未找到箱子",
-    },
+      boxNotFound: "未找到箱子"
+    }
   },
   boxMeasurementsModal: {
     title: "箱子测量",
@@ -414,7 +354,7 @@ export default {
     saveBoxDetails: "保存箱子详情",
     saving: "保存中…",
     finishBox: "完成箱子",
-    finishing: "完成中…",
+    finishing: "完成中…"
   },
   labelScanReviewModal: {
     titleManual: "手动录入",
@@ -450,7 +390,7 @@ export default {
     findMatch: "查找匹配",
     matching: "匹配中…",
     matchFailed: "匹配失败",
-    applyFailed: "应用失败",
+    applyFailed: "应用失败"
   },
   reportIssueModal: {
     titleEdit: "编辑问题",
@@ -468,22 +408,22 @@ export default {
       qty_mismatch: "数量不符",
       wrong_part: "发错料",
       over_shipment: "超发",
-      quality_rejection: "质量拒收",
+      quality_rejection: "质量拒收"
     },
     qtyPlaceholders: {
       damaged: "损坏数量",
-      actual_received: "实际收到数量",
+      actual_received: "实际收到数量"
     },
     qtyLabels: {
       damaged: "损坏数量",
       qty_mismatch: "实际收货数量",
       wrong_part: "错料数量",
       over_shipment: "超发数量",
-      quality_rejection: "拒收数量",
+      quality_rejection: "拒收数量"
     },
     cancel: "取消",
     confirm: "确认",
-    saving: "保存中…",
+    saving: "保存中…"
   },
   selectShelfDialog: {
     title: "选择货架",
@@ -491,20 +431,20 @@ export default {
     shelf: "货架",
     defaultOption: "选择货架",
     cancel: "取消",
-    confirm: "确认",
+    confirm: "确认"
   },
   appHeader: {
     goBack: "返回",
     home: "首页",
     resetDb: "重置本地数据库",
     logout: "退出登录",
-    resetConfirm: "重置所有本地数据？此操作无法撤销。",
+    resetConfirm: "重置所有本地数据？此操作无法撤销。"
   },
   languageSwitcher: {
     label: "语言",
     enUS: "English",
     zhCN: "简体中文",
-    zhHK: "繁體中文（香港）",
+    zhHK: "繁體中文（香港）"
   },
   errors: {
     picking_item_not_found: "未找到拣货项",
@@ -606,29 +546,29 @@ export default {
     shelf_box_item_not_found: "未找到货架箱子物品",
     shelf_box_already_verified: "货架箱子已盘点",
     shelf_box_has_no_items: "货架箱子没有可盘点的物品",
-    not_all_shelf_box_items_verified: "并非所有货架箱子物品都已盘点",
+    not_all_shelf_box_items_verified: "并非所有货架箱子物品都已盘点"
   },
   status: {
     receiving: {
       pending: "待处理",
       in_hand: "已收货",
-      clear: "已完成",
+      clear: "已完成"
     },
     picking: {
       pending: "待处理",
       picking: "拣货中",
       finished: "已完成",
-      issue: "异常",
+      issue: "异常"
     },
     box: {
       open: "打开",
       closed: "已关闭",
-      verified: "已盘点",
+      verified: "已盘点"
     },
     measuring: {
       pending: "待处理",
-      completed: "已完成",
-    },
+      completed: "已完成"
+    }
   },
   countryLabels: {
     "Australia": "澳大利亚",
@@ -668,7 +608,7 @@ export default {
     "Thailand": "泰国",
     "United Kingdom": "英国",
     "USA": "美国",
-    "Vietnam": "越南",
+    "Vietnam": "越南"
   },
   logStates: {
     pending: "待处理",
@@ -692,6 +632,6 @@ export default {
     qty_mismatch: "数量不符",
     wrong_part: "错料",
     over_shipment: "超发",
-    quality_rejection: "质量拒收",
+    quality_rejection: "质量拒收"
   },
 } as const;

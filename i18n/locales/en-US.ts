@@ -1,7 +1,4 @@
 export default {
-  app: {
-    name: "Warehouse PDA",
-  },
   meta: {
     warehouse: "Warehouse",
     receiving: "Receiving",
@@ -15,31 +12,12 @@ export default {
     goodsVerifyBox: "Verify Box",
     measuring: "Measuring",
     measuringDetail: "Measuring Detail",
-    measureBox: "Measure Box",
+    measureBox: "Measure Box"
   },
   actions: {
     scan: "Scan",
-    save: "Save",
     cancel: "Cancel",
-    confirm: "Confirm",
-    apply: "Apply",
-    retake: "Retake",
-    findMatch: "Find match",
     close: "Close",
-    create: "Create",
-    add: "Add",
-    remove: "Remove",
-    new: "New",
-    view: "View",
-    edit: "Edit",
-    report: "Report",
-    finish: "Finish",
-    complete: "Complete",
-    open: "Open",
-    reset: "Reset",
-    logout: "Logout",
-    back: "Back",
-    home: "Home",
     show: "Show",
     hide: "Hide",
     toggleDetails: "Toggle details",
@@ -49,28 +27,12 @@ export default {
     saving: "Saving…",
     confirming: "Confirming…",
     finishing: "Finishing…",
-    completing: "Completing…",
     creating: "Creating…",
-    adding: "Adding…",
-    removing: "Removing…",
     canceling: "Canceling…",
-    matching: "Matching…",
-    closing: "Closing…",
-    marking: "Marking…",
-    reportIssue: "Report issue",
     saveIssue: "Save issue",
-    saveBoxDetails: "Save box details",
-    finishBox: "Finish box",
     enterMeasurements: "Enter measurements",
-    viewBox: "View box",
     viewPickingOrder: "View picking order",
-    putAwayRemaining: "Put away remaining stock",
-    selectShelf: "Select shelf",
-    selectBox: "Select box",
-    createBox: "Create box",
-    addToBox: "Add to box",
-    removeFromBox: "Remove from box",
-    markVerified: "Mark box verified",
+    putAwayRemaining: "Put away remaining stock"
   },
   common: {
     loading: "Loading…",
@@ -78,12 +40,9 @@ export default {
     noData: "—",
     stateNone: "—",
     searchByRefOrSupplier: "Search by ref or supplier…",
-    searchShelfCodeOrZone: "Search shelf code or zone…",
-    searchBoxIdOrStatus: "Search box ID or status…",
     searchPickingOrdersOrParts: "Search picking orders or parts…",
     all: "All",
     pending: "Pending",
-    clear: "Clear",
     noSupplier: "No supplier",
     noDate: "No date",
     today: "Today",
@@ -100,24 +59,16 @@ export default {
     backToAllShelves: "← All shelves",
     backToShelfBoxes: "← Shelf boxes",
     backToTask: "← Back to task",
-    selected: "selected",
     selectedCount: "{count} selected",
-    shipTo: "Ship to: {destination}",
-    lastCheck: "Last check:",
-    required: "Required",
     packagesVerified: "Packages — {verified} / {total} verified",
     noPackages: "No packages in this box.",
     noBoxes: "No boxes yet.",
     noLots: "No lots available for put-away.",
-    noLogs: "No picking logs.",
     noPickingOrdersLinked: "No picking orders are linked to this receiving order yet.",
-    noShelves: "No shelves found.",
     noReceivingOrders: "No receiving orders found.",
     noPickingOrders: "No picking orders found.",
     noPendingMeasuringTasks: "No pending measuring tasks.",
     noReceivingOrdersNeedPutAway: "No receiving orders need put-away.",
-    noShippingBoxes: "No shipping boxes yet.",
-    noItemsInBox: "No items in this box.",
     invoiceTitle: "Invoice {no}",
     inBox: "In box {id}",
     unboxed: "Unboxed",
@@ -128,8 +79,7 @@ export default {
     shelfFormat: "{code} — {zone}",
     boxFormat: "{box} — {shelf}",
     reportedBy: "by {name}",
-    requested: "Requested: {qty}",
-    kg: "kg",
+    kg: "kg"
   },
   home: {
     greeting: "Hello, {name}",
@@ -140,8 +90,8 @@ export default {
       picking: { title: "Picking", desc: "Scan, box, and finish orders" },
       putAway: { title: "Put-away", desc: "Move stock to shelves" },
       goodsVerify: { title: "Goods Verify", desc: "Verify shelf box contents" },
-      measuring: { title: "Measuring", desc: "Weigh and pack boxes" },
-    },
+      measuring: { title: "Measuring", desc: "Weigh and pack boxes" }
+    }
   },
   login: {
     brand: "DocPal",
@@ -149,13 +99,10 @@ export default {
     username: "Username",
     password: "Password",
     placeholderUsername: "operator",
-    placeholderPassword: "••••••••",
-    errorInvalidCredentials: "Invalid username or password",
-    errorFallback: "Login failed",
+    placeholderPassword: "••••••••"
   },
   receiving: {
     title: "Receiving",
-    hint: "Receiving orders with stock still in the receiving area.",
     remaining: "{count} remaining",
     detail: {
       title: "Receiving Detail",
@@ -164,8 +111,7 @@ export default {
       remainingItems: "Remaining items",
       tabReceiving: "Receiving",
       tabPicking: "Picking",
-      confirmArrived: "Confirm arrived",
-      confirming: "Confirming…",
+      confirmArrived: "Confirm arrived"
     },
     itemsTab: {
       title: "Invoices & Items",
@@ -186,13 +132,11 @@ export default {
         qty_mismatch: "Quantity mismatch: received {qty}",
         over_shipment: "Over shipment: +{qty}",
         wrong_part: "Wrong part: {part}",
-        reported: "Mismatch reported",
-      },
+        reported: "Mismatch reported"
+      }
     },
     pickingTab: {
       title: "Picking view",
-      searchPlaceholder: "Search picking orders or parts…",
-      empty: "No picking orders are linked to this receiving order yet.",
       pickingOrder: "Picking order",
       status: "Status",
       requiredScannedBoxed: "Required / scanned / boxed",
@@ -200,8 +144,6 @@ export default {
       receivingArea: "Receiving area",
       boxes: "Boxes",
       packages: "Packages",
-      inBox: "In box {id}",
-      unboxed: "Unboxed",
       selectBox: "Select box",
       createBox: "Create box",
       creating: "Creating…",
@@ -212,10 +154,8 @@ export default {
       scan: "Scan",
       hideLogs: "Hide picking logs",
       showLogs: "Show picking logs",
-      noLogs: "No picking logs.",
-      actorSystem: "System",
-      stateNone: "—",
-    },
+      noLogs: "No picking logs."
+    }
   },
   picking: {
     title: "Picking",
@@ -230,7 +170,7 @@ export default {
       shipTo: "Ship to",
       dateCodeNotice: "Date-code notice",
       finishPicking: "Finish picking",
-      measuring: "Measuring",
+      measuring: "Measuring"
     },
     itemsSection: {
       title: "Items",
@@ -257,7 +197,7 @@ export default {
       hideLogs: "Hide picking logs",
       showLogs: "Show picking logs",
       noLogs: "No picking logs.",
-      actorSystem: "System",
+      actorSystem: "System"
     },
     boxesSection: {
       title: "Boxes ({count})",
@@ -266,7 +206,7 @@ export default {
       status: "Status",
       packages: "Packages",
       qty: "Qty",
-      cancelBox: "Cancel box",
+      cancelBox: "Cancel box"
     },
     issueBanner: {
       issueReason: "Issue reason",
@@ -274,13 +214,13 @@ export default {
       packSize: "Pack size",
       remark: "Remark",
       note: "Note",
-      reported: "Reported",
+      reported: "Reported"
     },
     issueReasons: {
       insufficient_stock: "Insufficient stock",
       cannot_divide: "Cannot divide quantity",
       merge: "Merge orders",
-      other: "Other",
+      other: "Other"
     },
     issueModal: {
       title: "Report picking issue",
@@ -299,9 +239,9 @@ export default {
         mergeMinOrders: "Select at least two orders to request a merge",
         validAvailableQty: "Enter a valid available quantity",
         validPackSize: "Enter a valid pack size",
-        noteOrRemark: "Enter a note or at least one remark",
-      },
-    },
+        noteOrRemark: "Enter a note or at least one remark"
+      }
+    }
   },
   putAway: {
     title: "Put-away",
@@ -310,7 +250,7 @@ export default {
     detail: {
       title: "Put-away Detail",
       supplier: "Supplier",
-      deliveryDate: "Delivery date",
+      deliveryDate: "Delivery date"
     },
     shelfBoxesPanel: {
       title: "Shelf boxes ({count})",
@@ -325,7 +265,7 @@ export default {
       closeBox: "Close box",
       closing: "Closing…",
       cancelBox: "Cancel box",
-      canceling: "Canceling…",
+      canceling: "Canceling…"
     },
     lotsPanel: {
       title: "Available receiving-area lots",
@@ -333,8 +273,8 @@ export default {
       availableQty: "Available qty",
       dateLot: "Date / Lot",
       cooCow: "COO / COW",
-      selectTargetBox: "Select target box",
-    },
+      selectTargetBox: "Select target box"
+    }
   },
   goodsVerify: {
     title: "Goods Verify",
@@ -347,7 +287,7 @@ export default {
       searchPlaceholder: "Search box ID or status…",
       empty: "No boxes on this shelf.",
       verified: "verified",
-      lastCheck: "Last check: {datetime}",
+      lastCheck: "Last check: {datetime}"
     },
     box: {
       title: "Verify Box",
@@ -360,8 +300,8 @@ export default {
       noItems: "No items in this box.",
       part: "Part",
       qty: "Qty",
-      verified: "Verified",
-    },
+      verified: "Verified"
+    }
   },
   measuring: {
     title: "Measuring",
@@ -379,7 +319,7 @@ export default {
       viewBox: "View box",
       openBox: "Open box",
       completeMeasuring: "Complete measuring",
-      completing: "Completing…",
+      completing: "Completing…"
     },
     measureBox: {
       title: "Measure Box",
@@ -396,8 +336,8 @@ export default {
       netWeight: "Net weight",
       grossWeight: "Gross weight",
       destinationCountry: "Destination country",
-      boxNotFound: "Box not found",
-    },
+      boxNotFound: "Box not found"
+    }
   },
   boxMeasurementsModal: {
     title: "Box measurements",
@@ -414,7 +354,7 @@ export default {
     saveBoxDetails: "Save box details",
     saving: "Saving…",
     finishBox: "Finish box",
-    finishing: "Finishing…",
+    finishing: "Finishing…"
   },
   labelScanReviewModal: {
     titleManual: "Manual entry",
@@ -450,7 +390,7 @@ export default {
     findMatch: "Find match",
     matching: "Matching…",
     matchFailed: "Match failed",
-    applyFailed: "Apply failed",
+    applyFailed: "Apply failed"
   },
   reportIssueModal: {
     titleEdit: "Edit issue",
@@ -468,22 +408,22 @@ export default {
       qty_mismatch: "Quantity mismatch",
       wrong_part: "Wrong part shipped",
       over_shipment: "Over shipment",
-      quality_rejection: "Quality rejection",
+      quality_rejection: "Quality rejection"
     },
     qtyPlaceholders: {
       damaged: "Damaged qty",
-      actual_received: "Actual received qty",
+      actual_received: "Actual received qty"
     },
     qtyLabels: {
       damaged: "Damaged qty",
       qty_mismatch: "Actual received qty",
       wrong_part: "Wrong part qty",
       over_shipment: "Extra qty",
-      quality_rejection: "Rejected qty",
+      quality_rejection: "Rejected qty"
     },
     cancel: "Cancel",
     confirm: "Confirm",
-    saving: "Saving…",
+    saving: "Saving…"
   },
   selectShelfDialog: {
     title: "Select shelf",
@@ -491,20 +431,20 @@ export default {
     shelf: "Shelf",
     defaultOption: "Select a shelf",
     cancel: "Cancel",
-    confirm: "Confirm",
+    confirm: "Confirm"
   },
   appHeader: {
     goBack: "Go back",
     home: "Home",
     resetDb: "Reset local DB",
     logout: "Logout",
-    resetConfirm: "Reset all local data? This cannot be undone.",
+    resetConfirm: "Reset all local data? This cannot be undone."
   },
   languageSwitcher: {
     label: "Language",
     enUS: "English",
     zhCN: "简体中文",
-    zhHK: "繁體中文（香港）",
+    zhHK: "繁體中文（香港）"
   },
   errors: {
     picking_item_not_found: "Picking item not found",
@@ -606,29 +546,29 @@ export default {
     shelf_box_item_not_found: "Shelf box item not found",
     shelf_box_already_verified: "Shelf box is already verified",
     shelf_box_has_no_items: "Shelf box has no items to verify",
-    not_all_shelf_box_items_verified: "Not all shelf box items are verified",
+    not_all_shelf_box_items_verified: "Not all shelf box items are verified"
   },
   status: {
     receiving: {
       pending: "Pending",
       in_hand: "In hand",
-      clear: "Clear",
+      clear: "Clear"
     },
     picking: {
       pending: "Pending",
       picking: "Picking",
       finished: "Finished",
-      issue: "Issue",
+      issue: "Issue"
     },
     box: {
       open: "Open",
       closed: "Closed",
-      verified: "Verified",
+      verified: "Verified"
     },
     measuring: {
       pending: "Pending",
-      completed: "Completed",
-    },
+      completed: "Completed"
+    }
   },
   countryLabels: {
     "Australia": "Australia",
@@ -668,7 +608,7 @@ export default {
     "Thailand": "Thailand",
     "United Kingdom": "United Kingdom",
     "USA": "USA",
-    "Vietnam": "Vietnam",
+    "Vietnam": "Vietnam"
   },
   logStates: {
     pending: "Pending",
@@ -692,6 +632,6 @@ export default {
     qty_mismatch: "Quantity mismatch",
     wrong_part: "Wrong part",
     over_shipment: "Over shipment",
-    quality_rejection: "Quality rejection",
+    quality_rejection: "Quality rejection"
   },
 } as const;

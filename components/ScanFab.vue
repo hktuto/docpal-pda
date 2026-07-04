@@ -3,7 +3,7 @@
     <button
       type="button"
       class="btn"
-      :aria-label="ariaLabel"
+      :aria-label="ariaLabel ?? t('actions.scan')"
       :disabled="loading"
       @click="$emit('click')"
     >
@@ -22,7 +22,7 @@ withDefaults(defineProps<{
   loading?: boolean;
   ariaLabel?: string;
 }>(), {
-  ariaLabel: () => t('actions.scan'),
+  ariaLabel: undefined,
 });
 
 defineEmits<{
