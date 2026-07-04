@@ -1,33 +1,49 @@
 <template>
   <div class="stock-search">
-    <div class="filters">
-      <input
-        v-model="keyword"
-        type="search"
-        class="search-input"
-        :placeholder="$t('stockSearch.searchPlaceholder')"
-      />
+    <div
+      class="filters-panel card"
+      :class="{ 'filters-panel--flush-top': route.meta.props?.noPadding }"
+    >
+      <div class="filters-panel__header" @click="filtersExpanded = !filtersExpanded">
+        <input
+          v-model="keyword"
+          type="search"
+          class="search-input filters-panel__search"
+          :placeholder="$t('stockSearch.searchPlaceholder')"
+          @click.stop
+        />
+        <button
+          type="button"
+          class="filters-panel__toggle"
+          :aria-label="$t('actions.toggleDetails')"
+          @click.stop="filtersExpanded = !filtersExpanded"
+        >
+          {{ filtersExpanded ? '▲' : '▼' }}
+        </button>
+      </div>
 
-      <label class="field">
-        <span>{{ $t('stockSearch.filterSupplier') }}</span>
-        <select v-model="selectedSupplierId">
-          <option value="">{{ $t('stockSearch.allSuppliers') }}</option>
-          <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.name }}</option>
-        </select>
-      </label>
+      <div v-if="filtersExpanded" class="filters-panel__body">
+        <label class="field">
+          <span>{{ $t('stockSearch.filterSupplier') }}</span>
+          <select v-model="selectedSupplierId">
+            <option value="">{{ $t('stockSearch.allSuppliers') }}</option>
+            <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.name }}</option>
+          </select>
+        </label>
 
-      <label class="field">
-        <span>{{ $t('stockSearch.filterItem') }}</span>
-        <select v-model="selectedPartId" :disabled="!selectedSupplierId">
-          <option value="">{{ $t('stockSearch.allItems') }}</option>
-          <option v-for="p in supplierParts" :key="p.id" :value="p.id">{{ p.partNo }}</option>
-        </select>
-      </label>
+        <label class="field">
+          <span>{{ $t('stockSearch.filterItem') }}</span>
+          <select v-model="selectedPartId" :disabled="!selectedSupplierId">
+            <option value="">{{ $t('stockSearch.allItems') }}</option>
+            <option v-for="p in supplierParts" :key="p.id" :value="p.id">{{ p.partNo }}</option>
+          </select>
+        </label>
 
-      <label class="field field--checkbox">
-        <input v-model="onlyWithInventory" type="checkbox" />
-        <span>{{ $t('stockSearch.onlyWithInventory') }}</span>
-      </label>
+        <label class="field field--checkbox">
+          <input v-model="onlyWithInventory" type="checkbox" />
+          <span>{{ $t('stockSearch.onlyWithInventory') }}</span>
+        </label>
+      </div>
     </div>
 
     <EmptyState v-if="pending">{{ $t('common.loading') }}</EmptyState>
@@ -99,9 +115,10 @@ import {
   type StockSearchInventoryLot,
 } from "~/db/stockSearch";
 
-definePageMeta({ title: "meta.stockSearch" });
+definePageMeta({ title: "meta.stockSearch", props: { noPadding: true } });
 
 const { t } = useI18n();
+const route = useRoute();
 const db = await useDb();
 const errorMessage = useErrorMessage();
 
@@ -119,6 +136,7 @@ const keyword = ref("");
 const selectedSupplierId = ref("");
 const selectedPartId = ref("");
 const onlyWithInventory = ref(false);
+const filtersExpanded = ref(false);
 
 const lowerKeyword = computed(() => keyword.value.trim().toLowerCase());
 
@@ -238,14 +256,49 @@ useVisibleReload(load);
 
 <style scoped>
 .stock-search {
-  padding: 1rem;
+  padding: 0 1rem 1rem;
 }
 
-.filters {
+.filters-panel {
+  margin-bottom: 1rem;
+  background: var(--surface);
+}
+
+.filters-panel--flush-top {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.filters-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+}
+
+.filters-panel__search {
+  flex: 1;
+  min-width: 0;
+}
+
+.filters-panel__toggle {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 0.875rem;
+  cursor: pointer;
+  padding: 0.25rem;
+}
+
+.filters-panel__body {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  margin-bottom: 1rem;
+  padding: 0 1rem 0.75rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
 }
 
 .search-input {
@@ -292,7 +345,7 @@ useVisibleReload(load);
 
 .supplier-card__header {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   width: 100%;
   padding: 0.75rem 1rem;
@@ -305,6 +358,8 @@ useVisibleReload(load);
 }
 
 .supplier-card__counts {
+  margin-left: auto;
+  margin-right: 0.75rem;
   color: var(--muted);
   font-size: 0.875rem;
 }

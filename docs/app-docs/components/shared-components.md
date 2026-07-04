@@ -44,7 +44,7 @@ Circular floating action button that triggers a scan or primary action.
 
 `components/LanguageSwitcher.vue`
 
-Dropdown/button to switch the app language.
+Inline buttons to switch the app language.
 
 ## Modals
 

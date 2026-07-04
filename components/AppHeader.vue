@@ -31,15 +31,22 @@
 
     <h1 class="app-header__title">{{ title }}</h1>
 
-    <details class="app-header__menu">
-      <summary class="app-header__menu-toggle" :aria-label="t('appHeader.menu')" :title="t('appHeader.menu')">
+    <div ref="menuRef" class="app-header__menu">
+      <button
+        type="button"
+        class="app-header__menu-toggle"
+        :aria-label="t('appHeader.menu')"
+        :title="t('appHeader.menu')"
+        :aria-expanded="menuOpen"
+        @click="menuOpen = !menuOpen"
+      >
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="6" r="1.5"/>
           <circle cx="12" cy="12" r="1.5"/>
           <circle cx="12" cy="18" r="1.5"/>
         </svg>
-      </summary>
-      <div class="app-header__menu-body">
+      </button>
+      <div v-if="menuOpen" class="app-header__menu-body">
         <div class="app-header__menu-row">
           <LanguageSwitcher />
         </div>
@@ -59,7 +66,7 @@
           <span>{{ t('appHeader.logout') }}</span>
         </button>
       </div>
-    </details>
+    </div>
   </header>
 </template>
 
@@ -69,6 +76,22 @@ const route = useRoute();
 const router = useRouter();
 const { logout: authLogout } = useAuth();
 const pg = useNuxtApp().$pglite;
+
+const menuOpen = ref(false);
+const menuRef = ref<HTMLElement | null>(null);
+
+function closeMenuOnOutsideClick(event: MouseEvent) {
+  if (
+    menuOpen.value &&
+    menuRef.value &&
+    !menuRef.value.contains(event.target as Node)
+  ) {
+    menuOpen.value = false;
+  }
+}
+
+onMounted(() => document.addEventListener("click", closeMenuOnOutsideClick));
+onUnmounted(() => document.removeEventListener("click", closeMenuOnOutsideClick));
 
 const title = computed(() => {
   const metaTitle = route.meta.title as string | undefined;
@@ -122,9 +145,9 @@ async function resetDb() {
   justify-content: center;
   width: 2.25rem;
   height: 2.25rem;
+  border: none;
   border-radius: var(--radius);
   cursor: pointer;
-  list-style: none;
   color: var(--text);
   background: transparent;
 }

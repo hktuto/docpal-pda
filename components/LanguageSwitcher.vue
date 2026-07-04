@@ -1,16 +1,19 @@
 <template>
   <div class="language-switcher">
-    <label :for="selectId" class="sr-only">{{ $t('languageSwitcher.label') }}</label>
-    <select
-      :id="selectId"
-      :value="locale"
-      class="language-switcher__select"
-      @change="onChange"
-    >
-      <option value="en-US">{{ $t('languageSwitcher.enUS') }}</option>
-      <option value="zh-CN">{{ $t('languageSwitcher.zhCN') }}</option>
-      <option value="zh-HK">{{ $t('languageSwitcher.zhHK') }}</option>
-    </select>
+    <span class="language-switcher__label">{{ $t('languageSwitcher.label') }}</span>
+    <div class="language-switcher__options">
+      <button
+        v-for="loc in SUPPORTED_LOCALES"
+        :key="loc"
+        type="button"
+        class="language-switcher__option"
+        :class="{ 'language-switcher__option--active': locale === loc }"
+        :aria-pressed="locale === loc"
+        @click="setLocale(loc)"
+      >
+        {{ $t(`languageSwitcher.${loc.replace('-', '')}`) }}
+      </button>
+    </div>
   </div>
 </template>
 
@@ -18,39 +21,45 @@
 import { SUPPORTED_LOCALES } from "~/composables/useLocalePreference";
 
 const { locale, setLocale } = useI18n();
-const selectId = useId();
-
-function onChange(event: Event) {
-  const value = (event.target as HTMLSelectElement).value;
-  if ((SUPPORTED_LOCALES as readonly string[]).includes(value)) {
-    setLocale(value);
-  }
-}
 </script>
 
 <style scoped>
 .language-switcher {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 0.25rem;
+  width: 100%;
 }
 
-.language-switcher__select {
-  appearance: none;
-  background: var(--surface);
+.language-switcher__label {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.language-switcher__options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.language-switcher__option {
+  width: 100%;
+  padding: 0.5rem 0.625rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  background: var(--surface);
   color: var(--text);
-  padding: 0.375rem 1.75rem 0.375rem 0.625rem;
   font-size: 0.875rem;
-  line-height: 1.25rem;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 0.375rem center;
-  background-size: 1rem;
+  cursor: pointer;
 }
 
-.language-switcher__select:focus {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
+.language-switcher__option:hover {
+  background: var(--bg);
+}
+
+.language-switcher__option--active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #fff;
 }
 </style>
