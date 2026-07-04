@@ -8,7 +8,7 @@
         :class="{ 'filter-chip--active': filter === opt.value }"
         @click="filter = opt.value"
       >
-        {{ opt.label }}
+        {{ $t(opt.labelKey) }}
       </button>
     </div>
 
@@ -16,12 +16,12 @@
       v-model="search"
       class="search"
       type="text"
-      placeholder="Search by ref or supplier…"
+      :placeholder="$t('common.searchByRefOrSupplier')"
     />
 
-    <p v-if="loading" class="empty">Loading…</p>
-    <p v-else-if="loadError" class="empty" style="color: var(--danger);">Error: {{ loadError }}</p>
-    <p v-else-if="rows.length === 0" class="empty">No receiving orders found.</p>
+    <p v-if="loading" class="empty">{{ $t('common.loading') }}</p>
+    <p v-else-if="loadError" class="empty" style="color: var(--danger);">{{ $t('common.errorPrefix', { message: loadError }) }}</p>
+    <p v-else-if="rows.length === 0" class="empty">{{ $t('common.noReceivingOrders') }}</p>
 
     <NuxtLink
       v-for="ro in rows"
@@ -31,23 +31,23 @@
     >
       <div class="list-card__header">
         <span class="list-card__title">{{ ro.ref_no }}</span>
-        <span class="badge" :class="badgeClass(ro.status)">{{ ro.status }}</span>
+        <span class="badge" :class="badgeClass(ro.status)">{{ statusLabel.receiving(ro.status) }}</span>
       </div>
       <p class="list-card__meta">
-        {{ ro.supplier_name || "No supplier" }}
+        {{ ro.supplier_name || $t('common.noSupplier') }}
       </p>
       <div class="list-card__footer">
         <span class="list-card__date">
-          {{ ro.delivery_date ? new Date(ro.delivery_date).toLocaleDateString() : "No date" }}
+          {{ ro.delivery_date ? new Date(ro.delivery_date).toLocaleDateString() : $t('common.noDate') }}
         </span>
         <span v-if="ro.remaining_items > 0" class="badge badge--info">
-          {{ ro.remaining_items }} remaining
+          {{ $t('receiving.remaining', { count: ro.remaining_items }) }}
         </span>
         <span
           v-if="ro.pending_picking_orders > 0"
           class="badge badge--info"
         >
-          {{ ro.pending_picking_orders }} picking
+          {{ ro.pending_picking_orders }} {{ $t('status.picking.picking') }}
         </span>
       </div>
     </NuxtLink>
@@ -58,7 +58,11 @@
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 
-definePageMeta({ title: "Receiving" });
+const { t } = useI18n();
+const statusLabel = useStatusLabel();
+const errorMessage = useErrorMessage();
+
+useHead({ title: t("receiving.title") });
 
 type Filter = "all" | "pending" | "in_hand" | "clear";
 
@@ -72,11 +76,11 @@ interface ReceivingOrderRow {
   pending_picking_orders: number;
 }
 
-const filters: { label: string; value: Filter }[] = [
-  { label: "All", value: "all" },
-  { label: "Pending", value: "pending" },
-  { label: "In hand", value: "in_hand" },
-  { label: "Clear", value: "clear" },
+const filters: { labelKey: string; value: Filter }[] = [
+  { labelKey: "common.all", value: "all" },
+  { labelKey: "status.receiving.pending", value: "pending" },
+  { labelKey: "status.receiving.in_hand", value: "in_hand" },
+  { labelKey: "status.receiving.clear", value: "clear" },
 ];
 
 const filter = ref<Filter>("in_hand");
@@ -162,7 +166,7 @@ async function load() {
     const result = await db.execute(query.value);
     rawRows.value = result.rows as ReceivingOrderRow[];
   } catch (e: any) {
-    loadError.value = e?.message ?? String(e);
+    loadError.value = errorMessage(e);
     rawRows.value = [];
   } finally {
     loading.value = false;

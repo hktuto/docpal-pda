@@ -1,7 +1,7 @@
 <template>
   <div>
-    <EmptyState v-if="pending">Loading…</EmptyState>
-    <EmptyState v-else-if="error" error>Error: {{ error }}</EmptyState>
+    <EmptyState v-if="pending">{{ $t('common.loading') }}</EmptyState>
+    <EmptyState v-else-if="error" error>{{ $t('common.errorPrefix', { message: error }) }}</EmptyState>
 
     <template v-else-if="order">
       <DetailHeader
@@ -19,20 +19,24 @@
             :disabled="confirming"
             @click="confirmArrival"
           >
-            {{ confirming ? "Confirming…" : "Confirm arrived" }}
+            {{ confirming ? $t('actions.confirming') : $t('receiving.detail.confirmArrived') }}
           </button>
           <NuxtLink
             v-if="order.status === 'in_hand' && remainingItems > 0"
             :to="`/put-away/${order.id}`"
             class="btn btn--small"
           >
-            Put away remaining stock
+            {{ $t('actions.putAwayRemaining') }}
           </NuxtLink>
         </template>
 
-        <DetailRow label="Supplier" :value="order.supplier?.name" />
-        <DetailRow label="Delivery date" :value="order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : null" />
-        <DetailRow v-if="order.status === 'in_hand' && remainingItems > 0" label="Remaining items" :value="`${remainingItems} item${remainingItems === 1 ? '' : 's'}`" />
+        <DetailRow :label="$t('receiving.detail.supplier')" :value="order.supplier?.name" />
+        <DetailRow :label="$t('receiving.detail.deliveryDate')" :value="order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : null" />
+        <DetailRow
+          v-if="order.status === 'in_hand' && remainingItems > 0"
+          :label="$t('receiving.detail.remainingItems')"
+          :value="`${remainingItems} ${remainingItems === 1 ? $t('common.item') : $t('common.items')}`"
+        />
       </DetailHeader>
 
       <ScanFab
@@ -49,7 +53,7 @@
           :class="{ 'filter-chip--active': view === opt.value }"
           @click="view = opt.value"
         >
-          {{ opt.label }}
+          {{ $t(opt.labelKey) }}
           <span v-if="opt.value === 'picking'" class="tab-badge">({{ groupedPickingOrders.length }})</span>
         </button>
       </div>
@@ -137,8 +141,14 @@ import {
   removePackageFromBox,
   type PickingByReceivingRow,
 } from "~/db/picking";
+import { I18nError } from "~/composables/i18nError";
 
-definePageMeta({ title: "Receiving Detail", props: { noPadding: true } });
+definePageMeta({ props: { noPadding: true } });
+
+const { t } = useI18n();
+const errorMessage = useErrorMessage();
+
+useHead({ title: t("receiving.detail.title") });
 
 const route = useRoute();
 const orderId = route.params.id as string;
@@ -178,8 +188,8 @@ const reportModalOpen = ref(false);
 const reportModalItem = ref<DisplayReceivingItem | null>(null);
 
 const views = [
-  { label: "Receiving", value: "receiving" as const },
-  { label: "Picking", value: "picking" as const },
+  { labelKey: "receiving.detail.tabReceiving", value: "receiving" as const },
+  { labelKey: "receiving.detail.tabPicking", value: "picking" as const },
 ];
 
 const groupedPickingOrders = computed<GroupedOrder[]>(() => {
@@ -381,7 +391,7 @@ async function load() {
       };
     }
   } catch (e: any) {
-    error.value = e?.message ?? String(e);
+    error.value = errorMessage(e);
   } finally {
     pending.value = false;
   }
@@ -438,7 +448,7 @@ async function onConfirmIssue(payload: {
     closeReportIssue();
     await load();
   } catch (e: any) {
-    error.value = e?.message ?? String(e);
+    error.value = errorMessage(e);
   } finally {
     saving.value[itemId] = false;
   }
@@ -447,11 +457,11 @@ async function onConfirmIssue(payload: {
 async function confirmArrival() {
   confirming.value = true;
   try {
-    if (!currentUser.value) throw new Error("No operator user found");
+    if (!currentUser.value) throw new I18nError("no_operator_user_found");
     await confirmReceivingOrderArrived(db, orderId, currentUser.value.id);
     await load();
   } catch (e: any) {
-    error.value = e?.message ?? String(e);
+    error.value = errorMessage(e);
   } finally {
     confirming.value = false;
   }
@@ -460,11 +470,11 @@ async function confirmArrival() {
 async function createBox(pickingOrderId: string) {
   creatingBox.value[pickingOrderId] = true;
   try {
-    if (!currentUser.value) throw new Error("No operator user found");
+    if (!currentUser.value) throw new I18nError("no_operator_user_found");
     await createShippingBoxForPickingOrder(db, pickingOrderId, currentUser.value.id);
     await load();
   } catch (e: any) {
-    error.value = e?.message ?? String(e);
+    error.value = errorMessage(e);
   } finally {
     creatingBox.value[pickingOrderId] = false;
   }
@@ -475,11 +485,11 @@ async function addToBox(packageId: string) {
   if (!boxId) return;
   addingPackage.value[packageId] = true;
   try {
-    if (!currentUser.value) throw new Error("No operator user found");
+    if (!currentUser.value) throw new I18nError("no_operator_user_found");
     await addPackageToBox(db, packageId, boxId, currentUser.value.id);
     await load();
   } catch (e: any) {
-    error.value = e?.message ?? String(e);
+    error.value = errorMessage(e);
   } finally {
     addingPackage.value[packageId] = false;
   }
@@ -488,11 +498,11 @@ async function addToBox(packageId: string) {
 async function removeFromBox(packageId: string) {
   removingPackage.value[packageId] = true;
   try {
-    if (!currentUser.value) throw new Error("No operator user found");
+    if (!currentUser.value) throw new I18nError("no_operator_user_found");
     await removePackageFromBox(db, packageId, currentUser.value.id);
     await load();
   } catch (e: any) {
-    error.value = e?.message ?? String(e);
+    error.value = errorMessage(e);
   } finally {
     removingPackage.value[packageId] = false;
   }
