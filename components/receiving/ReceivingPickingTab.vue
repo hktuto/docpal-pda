@@ -131,7 +131,6 @@
 <script setup lang="ts">
 import { GroupedItem, GroupedOrder, TransitionLog, DisplayBox, DisplayPackage } from "./types";
 
-const { t } = useI18n();
 const statusLabel = useStatusLabel();
 
 const props = defineProps<{

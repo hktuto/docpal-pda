@@ -142,6 +142,7 @@ import {
   type PickingByReceivingRow,
 } from "~/db/picking";
 import { I18nError } from "~/composables/i18nError";
+import * as schema from "~/db/schema";
 
 definePageMeta({ props: { noPadding: true } });
 
