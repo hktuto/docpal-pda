@@ -158,11 +158,12 @@
 <script setup lang="ts">
 import { Capacitor } from '@capacitor/core';
 import type { OcrInput } from '~/composables/useMockOcr';
-import { runScanMatcher, type ScanMatchResult, type ScanTaskContext } from '~/composables/useScanMatchers';
+import { runScanMatcher, useScanMatchers, type ScanMatchResult, type ScanTaskContext } from '~/composables/useScanMatchers';
 import type { CandidateOptions } from '~/utils/parseOcrScan';
 
 const { t } = useI18n();
 const getErrorMessage = useErrorMessage();
+const matchers = useScanMatchers();
 
 const props = defineProps<{
   modelValue: boolean;
@@ -242,7 +243,7 @@ async function findMatch() {
   matching.value = true;
   applyError.value = null;
   try {
-    const result = await runScanMatcher(props.context, editable.value);
+    const result = await runScanMatcher(props.context, editable.value, matchers);
     localMatchResult.value = result;
   } catch (e: any) {
     localMatchResult.value = { type: 'error', message: e?.message ? getErrorMessage(e) : t('labelScanReviewModal.matchFailed') };
