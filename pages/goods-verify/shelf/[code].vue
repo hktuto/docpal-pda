@@ -17,6 +17,7 @@
     />
 
     <p v-if="loading" class="empty">{{ $t('common.loading') }}</p>
+    <div v-else-if="error" class="error">{{ $t('common.errorPrefix', { message: error }) }}</div>
     <p v-else-if="boxes.length === 0" class="empty">{{ $t('goodsVerify.shelf.empty') }}</p>
 
     <NuxtLink
@@ -54,11 +55,13 @@ import { getShelfBoxesByShelf, type ShelfBoxSummary } from "~/db/goodsVerify";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useStatusLabel } from "~/composables/useStatusLabel";
 import { useVisibleReload } from "~/composables/useVisibleReload";
+import { useErrorMessage } from "~/composables/errorMessage";
 
 const { t } = useI18n();
 useHead({ title: t('goodsVerify.shelf.title') });
 
 const statusLabel = useStatusLabel();
+const errorMessage = useErrorMessage();
 const route = useRoute();
 const shelfCode = route.params.code as string;
 
@@ -66,14 +69,16 @@ const db = await useDb();
 
 const boxes = ref<ShelfBoxSummary[]>([]);
 const loading = ref(true);
+const error = ref<string | null>(null);
 const search = ref("");
 
 async function load() {
   loading.value = true;
+  error.value = null;
   try {
     boxes.value = await getShelfBoxesByShelf(db, shelfCode);
-  } catch (e: any) {
-    console.error(e);
+  } catch (e: unknown) {
+    error.value = errorMessage(e);
     boxes.value = [];
   } finally {
     loading.value = false;
