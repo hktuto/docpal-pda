@@ -6,6 +6,8 @@ node_modules
 .output
 dist
 .DS_Store
+Thumbs.db
+.~lock*
 .idea
 # .vscode
 .vitest-reporter-html
