@@ -201,6 +201,7 @@ async function openScan(packageId?: string) {
     task: "measuring",
     boxId,
     targetPackageId: packageId,
+    targets: scanTargets.value,
   });
   if (result.status === "error") {
     error.value = result.message;

@@ -186,7 +186,11 @@ async function markVerified() {
 
 async function openScan() {
   if (!box.value) return;
-  const result = await scan({ task: "goods-verify", items: box.value.items });
+  const result = await scan({
+    task: "goods-verify",
+    items: box.value.items,
+    targets: scanTargets.value,
+  });
   if (result.status === "error") {
     error.value = result.message;
   }

@@ -412,7 +412,8 @@ async function openScan(itemId?: string) {
   const result = await scan({
     task: "receiving",
     receivingOrderId: orderId,
-    pickingItemId: itemId,
+    pickingItemId: scanPickingItemId.value,
+    targets: scanTargets.value,
   });
   if (result.status === "error") {
     error.value = result.message;

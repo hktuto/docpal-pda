@@ -195,7 +195,11 @@ async function load() {
 
 async function openScan(allocation: Allocation) {
   scanAllocation.value = allocation;
-  const result = await scan({ task: "picking", allocation });
+  const result = await scan({
+    task: "picking",
+    allocation: scanAllocation.value,
+    targets: scanTargets.value,
+  });
   if (result.status === "error") {
     error.value = result.message;
   }
