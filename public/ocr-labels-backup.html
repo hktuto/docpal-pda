@@ -1,0 +1,2008 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Warehouse PDA — OCR Demo Labels</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --text: #111111;
+      --border: #000000;
+      --muted: #555555;
+      --accent: #2563eb;
+      --section-bg: rgba(255, 255, 255, 0.35);
+      --carton: #c7a87e;
+      --diotec-orange: #d04a02;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 1rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      background-color: var(--carton);
+      background-image:
+        repeating-linear-gradient(45deg, transparent, transparent 12px, rgba(0, 0, 0, 0.04) 12px, rgba(0, 0, 0, 0.04) 24px),
+        repeating-linear-gradient(-45deg, transparent, transparent 12px, rgba(255, 255, 255, 0.06) 12px, rgba(255, 255, 255, 0.06) 24px);
+      color: var(--text);
+    }
+
+    .no-print {
+      max-width: 800px;
+      margin: 0 auto 1.5rem;
+    }
+
+    h1 { font-size: 1.25rem; margin: 0 0 0.25rem; }
+    p { margin: 0 0 1rem; color: var(--muted); font-size: 0.875rem; }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    .section {
+      background: var(--section-bg);
+      border: 1px solid rgba(0, 0, 0, 0.15);
+      border-radius: 0;
+      padding: 1rem;
+    }
+
+    .section__title {
+      font-size: 1.1rem;
+      font-weight: bold;
+      margin: 0 0 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .subsection { margin-bottom: 1.5rem; }
+    .subsection:last-child { margin-bottom: 0; }
+    .subsection__title {
+      font-size: 0.9rem;
+      color: var(--muted);
+      margin: 0 0 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    .label {
+      background: var(--bg);
+      border: 3px solid var(--border);
+      border-radius: 0;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      min-height: 260px;
+      box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.15);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .label:last-child { margin-bottom: 0; }
+
+    .label__target {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+      background: #f3f4f6;
+      padding: 0.25rem 0.5rem;
+      border: 1px solid #e5e7eb;
+      z-index: 1;
+    }
+
+    .label__qty {
+      font-size: 2.5rem;
+      font-weight: bold;
+      line-height: 1;
+      color: var(--accent);
+    }
+
+    .barcode {
+      height: 28px;
+      width: 100%;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='28' viewBox='0 0 120 28'%3E%3Cg fill='%23000'%3E%3Crect x='0' width='3' height='28'/%3E%3Crect x='5' width='1' height='28'/%3E%3Crect x='8' width='2' height='28'/%3E%3Crect x='12' width='4' height='28'/%3E%3Crect x='18' width='1' height='28'/%3E%3Crect x='22' width='3' height='28'/%3E%3Crect x='27' width='2' height='28'/%3E%3Crect x='32' width='1' height='28'/%3E%3Crect x='36' width='4' height='28'/%3E%3Crect x='42' width='2' height='28'/%3E%3Crect x='47' width='1' height='28'/%3E%3Crect x='51' width='3' height='28'/%3E%3Crect x='56' width='2' height='28'/%3E%3Crect x='61' width='1' height='28'/%3E%3Crect x='65' width='4' height='28'/%3E%3Crect x='72' width='2' height='28'/%3E%3Crect x='77' width='1' height='28'/%3E%3Crect x='81' width='3' height='28'/%3E%3Crect x='87' width='2' height='28'/%3E%3Crect x='92' width='1' height='28'/%3E%3Crect x='96' width='4' height='28'/%3E%3Crect x='103' width='2' height='28'/%3E%3Crect x='108' width='3' height='28'/%3E%3Crect x='114' width='1' height='28'/%3E%3Crect x='118' width='2' height='28'/%3E%3C/g%3E%3C/svg%3E");
+      background-repeat: repeat-x;
+      background-size: auto 100%;
+    }
+
+    .qr-placeholder {
+      width: 80px;
+      height: 80px;
+      flex-shrink: 0;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Crect fill='%23fff' width='80' height='80'/%3E%3Cg fill='%23000'%3E%3Crect x='4' y='4' width='22' height='22'/%3E%3Crect x='8' y='8' width='14' height='14' fill='%23fff'/%3E%3Crect x='11' y='11' width='8' height='8'/%3E%3Crect x='54' y='4' width='22' height='22'/%3E%3Crect x='58' y='8' width='14' height='14' fill='%23fff'/%3E%3Crect x='61' y='11' width='8' height='8'/%3E%3Crect x='4' y='54' width='22' height='22'/%3E%3Crect x='8' y='58' width='14' height='14' fill='%23fff'/%3E%3Crect x='11' y='61' width='8' height='8'/%3E%3Crect x='30' y='4' width='6' height='6'/%3E%3Crect x='40' y='4' width='6' height='6'/%3E%3Crect x='34' y='14' width='6' height='6'/%3E%3Crect x='44' y='14' width='6' height='6'/%3E%3Crect x='30' y='24' width='6' height='6'/%3E%3Crect x='40' y='24' width='6' height='6'/%3E%3Crect x='50' y='30' width='6' height='6'/%3E%3Crect x='60' y='34' width='6' height='6'/%3E%3Crect x='30' y='34' width='6' height='6'/%3E%3Crect x='4' y='34' width='6' height='6'/%3E%3Crect x='14' y='40' width='6' height='6'/%3E%3Crect x='24' y='44' width='6' height='6'/%3E%3Crect x='40' y='40' width='6' height='6'/%3E%3Crect x='50' y='44' width='6' height='6'/%3E%3Crect x='64' y='44' width='6' height='6'/%3E%3Crect x='30' y='54' width='6' height='6'/%3E%3Crect x='44' y='54' width='6' height='6'/%3E%3Crect x='54' y='58' width='6' height='6'/%3E%3Crect x='64' y='64' width='6' height='6'/%3E%3Crect x='34' y='64' width='6' height='6'/%3E%3Crect x='44' y='70' width='6' height='6'/%3E%3Crect x='54' y='70' width='6' height='6'/%3E%3Crect x='70' y='70' width='6' height='6'/%3E%3C/g%3E%3C/svg%3E");
+      background-size: contain;
+      background-repeat: no-repeat;
+      background-position: center;
+    }
+
+    /* KOA */
+    .label--koa { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; border-color: #000; }
+    .label--koa .label__koa-rohs { position: absolute; top: 0.75rem; right: 0.75rem; font-size: 1.4rem; font-weight: bold; font-family: Arial, Helvetica, sans-serif; }
+    .label--koa .label__koa-order { font-size: 1.1rem; font-weight: bold; }
+    .label--koa .label__koa-po { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.25rem; }
+    .label--koa .label__koa-field { display: flex; flex-direction: column; gap: 0.1rem; }
+    .label--koa .label__koa-row { display: grid; grid-template-columns: 1.2fr 1fr; gap: 1rem; }
+    .label--koa .label__koa-label { font-size: 0.95rem; font-weight: bold; letter-spacing: 0.02em; }
+    .label--koa .label__koa-value { font-size: 1.1rem; font-weight: bold; }
+    .label--koa .label__qty { font-size: 2.2rem; color: var(--accent); }
+    .label--koa .label__koa-markings { display: flex; justify-content: space-between; font-size: 1.05rem; font-weight: bold; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd; padding: 0.4rem 0; margin: 0.25rem 0; }
+    .label--koa .label__koa-bottom { display: flex; align-items: center; gap: 1rem; margin-top: 0.25rem; }
+    .label--koa .label__koa-enc { font-size: 0.72rem; color: var(--muted); word-break: break-all; flex: 1; line-height: 1.3; }
+    .label--koa .label__koa-footer { text-align: right; font-weight: bold; font-size: 0.9rem; margin-top: auto; }
+
+    /* ABLIC */
+    .label--ablic { font-family: Arial, Helvetica, sans-serif; border-color: #000; }
+    .label--ablic .label__ablic-brand { position: absolute; top: 0.75rem; right: 0.75rem; font-size: 1.3rem; font-weight: bold; letter-spacing: 0.08em; }
+    .label--ablic .label__ablic-brand::before { content: "▲"; display: inline-block; margin-right: 0.25rem; font-size: 1rem; }
+    .label--ablic .label__ablic-order { font-size: 1rem; font-weight: bold; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    .label--ablic .label__ablic-po { font-size: 0.8rem; color: var(--muted); margin-bottom: 0.25rem; }
+    .label--ablic .label__ablic-main { display: grid; grid-template-columns: 1fr auto; gap: 1.5rem; align-items: start; }
+    .label--ablic .label__ablic-col { display: flex; flex-direction: column; gap: 0.35rem; }
+    .label--ablic .label__ablic-field { display: flex; flex-direction: column; gap: 0.05rem; }
+    .label--ablic .label__ablic-label { font-size: 1.05rem; font-weight: bold; }
+    .label--ablic .label__ablic-value { font-size: 1.15rem; font-weight: bold; }
+    .label--ablic .label__qty { font-size: 2rem; color: var(--accent); }
+    .label--ablic .label__ablic-side { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; min-width: 90px; }
+    .label--ablic .label__ablic-rohs { font-size: 1.1rem; font-weight: bold; text-align: center; }
+    .label--ablic .label__ablic-date { font-size: 1.1rem; font-weight: bold; }
+
+    /* DIOTEC */
+    .label--diotec { font-family: Arial, Helvetica, sans-serif; border-color: var(--diotec-orange); border-width: 4px; }
+    .label--diotec .label__diotec-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; border-bottom: 2px solid #eee; padding-bottom: 0.5rem; }
+    .label--diotec .label__diotec-part { font-size: 2.2rem; font-weight: bold; }
+    .label--diotec .label__diotec-qty { display: flex; align-items: baseline; gap: 0.35rem; }
+    .label--diotec .label__qty { font-size: 2.6rem; color: var(--accent); }
+    .label--diotec .label__diotec-unit { font-size: 1.1rem; color: var(--muted); font-weight: bold; }
+    .label--diotec .label__diotec-order { font-size: 0.8rem; color: var(--muted); }
+    .label--diotec .label__diotec-body { display: grid; grid-template-columns: auto 1fr; gap: 1.5rem; align-items: center; margin: 0.5rem 0; }
+    .label--diotec .label__diotec-info { display: flex; flex-direction: column; gap: 0.25rem; }
+    .label--diotec .label__diotec-line { font-size: 1rem; }
+    .label--diotec .label__diotec-label { font-weight: bold; }
+    .label--diotec .label__diotec-brand { text-align: right; font-size: 1.1rem; font-weight: bold; color: var(--diotec-orange); margin-top: auto; }
+
+    /* Picking */
+    .label--picking { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; border-color: var(--accent); border-width: 3px; align-items: stretch; }
+    .label--picking .label__picking-order { font-size: 1.2rem; font-weight: bold; margin-bottom: 0.25rem; }
+    .label--picking .label__picking-grid { display: grid; grid-template-columns: 1fr auto; gap: 0.5rem 1rem; }
+    .label--picking .label__picking-field { display: contents; }
+    .label--picking .label__picking-label { font-size: 0.85rem; color: var(--muted); text-align: right; }
+    .label--picking .label__picking-value { font-size: 1rem; font-weight: bold; }
+    .label--picking .label__qty { font-size: 2rem; color: var(--accent); }
+    .label--picking .label__picking-origin { font-size: 0.85rem; color: var(--muted); margin: 0.25rem 0; }
+
+    @media print {
+      body { background: var(--bg); padding: 0; }
+      .no-print { display: none; }
+      .container { max-width: none; }
+      .section { border: none; background: transparent; padding: 0; }
+      .label { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <div class="no-print">
+    <h1>OCR Demo Labels</h1>
+    <p>Show this page on a screen and scan each label with the Camera OCR demo. The large number is the demo scan quantity; the small target shows the seeded order quantity.</p>
+  </div>
+
+  <div class="container">
+    <section class="section">
+      <div class="section__title">Receiving Labels</div>
+<div class="subsection">
+        <div class="subsection__title">04958058-W-01 — KOA</div>
+<div class="label label--koa">
+  <div class="label__target">Target: 15000</div>
+  <div class="label__koa-rohs">RoHS</div>
+  <div class="label__koa-order">04958058-W-01</div>
+  <div class="label__koa-po">PO: 1180200568STD · Line 1</div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(P)CUSTOMER P/N:</div>
+    <div class="label__koa-value">RK73B1JTTD181G</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(Q)QUANTITY:</div>
+    <div class="label__koa-value label__qty">5000</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-row">
+    <div class="label__koa-field">
+      <div class="label__koa-label">(1T)TRACE CODE:</div>
+      <div class="label__koa-value">9827T377-1</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+    <div class="label__koa-field">
+      <div class="label__koa-label">(D)DATE CODE:</div>
+      <div class="label__koa-value">2544</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(1P)MPN:</div>
+    <div class="label__koa-value">RK73B1JTTD181G</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-markings">
+    <span>RK73B1JTTD181G F</span>
+    <span>180 F KWY Y001A3</span>
+  </div>
+
+  <div class="label__koa-bottom">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__koa-enc">;RK73B1JTTD181G::Q:5000:T:9827T377-1:D:2544:KOA+RK73B1JTTD181G::::</div>
+  </div>
+
+  <div class="label__koa-footer">KOA MADE IN CN</div>
+</div>
+<div class="label label--koa">
+  <div class="label__target">Target: 15000</div>
+  <div class="label__koa-rohs">RoHS</div>
+  <div class="label__koa-order">04958058-W-01</div>
+  <div class="label__koa-po">PO: 1180200568STD · Line 1</div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(P)CUSTOMER P/N:</div>
+    <div class="label__koa-value">RK73B1JTTD181G</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(Q)QUANTITY:</div>
+    <div class="label__koa-value label__qty">5000</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-row">
+    <div class="label__koa-field">
+      <div class="label__koa-label">(1T)TRACE CODE:</div>
+      <div class="label__koa-value">9827T377-2</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+    <div class="label__koa-field">
+      <div class="label__koa-label">(D)DATE CODE:</div>
+      <div class="label__koa-value">2544</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(1P)MPN:</div>
+    <div class="label__koa-value">RK73B1JTTD181G</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-markings">
+    <span>RK73B1JTTD181G F</span>
+    <span>180 F KWY Y001A3</span>
+  </div>
+
+  <div class="label__koa-bottom">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__koa-enc">;RK73B1JTTD181G::Q:5000:T:9827T377-2:D:2544:KOA+RK73B1JTTD181G::::</div>
+  </div>
+
+  <div class="label__koa-footer">KOA MADE IN CN</div>
+</div>
+<div class="label label--koa">
+  <div class="label__target">Target: 15000</div>
+  <div class="label__koa-rohs">RoHS</div>
+  <div class="label__koa-order">04958058-W-01</div>
+  <div class="label__koa-po">PO: 1180200568STD · Line 1</div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(P)CUSTOMER P/N:</div>
+    <div class="label__koa-value">RK73B1JTTD181G</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(Q)QUANTITY:</div>
+    <div class="label__koa-value label__qty">5000</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-row">
+    <div class="label__koa-field">
+      <div class="label__koa-label">(1T)TRACE CODE:</div>
+      <div class="label__koa-value">9827T377-3</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+    <div class="label__koa-field">
+      <div class="label__koa-label">(D)DATE CODE:</div>
+      <div class="label__koa-value">2544</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(1P)MPN:</div>
+    <div class="label__koa-value">RK73B1JTTD181G</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-markings">
+    <span>RK73B1JTTD181G F</span>
+    <span>180 F KWY Y001A3</span>
+  </div>
+
+  <div class="label__koa-bottom">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__koa-enc">;RK73B1JTTD181G::Q:5000:T:9827T377-3:D:2544:KOA+RK73B1JTTD181G::::</div>
+  </div>
+
+  <div class="label__koa-footer">KOA MADE IN CN</div>
+</div>
+<div class="label label--koa">
+  <div class="label__target">Target: 40000</div>
+  <div class="label__koa-rohs">RoHS</div>
+  <div class="label__koa-order">04958058-W-01</div>
+  <div class="label__koa-po">PO: 1180200568STD · Line 2</div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(P)CUSTOMER P/N:</div>
+    <div class="label__koa-value">RK73H2ATTD1372F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(Q)QUANTITY:</div>
+    <div class="label__koa-value label__qty">10000</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-row">
+    <div class="label__koa-field">
+      <div class="label__koa-label">(1T)TRACE CODE:</div>
+      <div class="label__koa-value">9827T378-1</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+    <div class="label__koa-field">
+      <div class="label__koa-label">(D)DATE CODE:</div>
+      <div class="label__koa-value">2544</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(1P)MPN:</div>
+    <div class="label__koa-value">RK73H2ATTD1372F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-markings">
+    <span>RK73H2ATTD1372F F</span>
+    <span>13K7 F KWY Y001A3</span>
+  </div>
+
+  <div class="label__koa-bottom">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__koa-enc">;RK73H2ATTD1372F::Q:10000:T:9827T378-1:D:2544:KOA+RK73H2ATTD1372F::::</div>
+  </div>
+
+  <div class="label__koa-footer">KOA MADE IN CN</div>
+</div>
+<div class="label label--koa">
+  <div class="label__target">Target: 40000</div>
+  <div class="label__koa-rohs">RoHS</div>
+  <div class="label__koa-order">04958058-W-01</div>
+  <div class="label__koa-po">PO: 1180200568STD · Line 2</div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(P)CUSTOMER P/N:</div>
+    <div class="label__koa-value">RK73H2ATTD1372F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(Q)QUANTITY:</div>
+    <div class="label__koa-value label__qty">10000</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-row">
+    <div class="label__koa-field">
+      <div class="label__koa-label">(1T)TRACE CODE:</div>
+      <div class="label__koa-value">9827T378-2</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+    <div class="label__koa-field">
+      <div class="label__koa-label">(D)DATE CODE:</div>
+      <div class="label__koa-value">2544</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(1P)MPN:</div>
+    <div class="label__koa-value">RK73H2ATTD1372F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-markings">
+    <span>RK73H2ATTD1372F F</span>
+    <span>13K7 F KWY Y001A3</span>
+  </div>
+
+  <div class="label__koa-bottom">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__koa-enc">;RK73H2ATTD1372F::Q:10000:T:9827T378-2:D:2544:KOA+RK73H2ATTD1372F::::</div>
+  </div>
+
+  <div class="label__koa-footer">KOA MADE IN CN</div>
+</div>
+<div class="label label--koa">
+  <div class="label__target">Target: 40000</div>
+  <div class="label__koa-rohs">RoHS</div>
+  <div class="label__koa-order">04958058-W-01</div>
+  <div class="label__koa-po">PO: 1180200568STD · Line 2</div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(P)CUSTOMER P/N:</div>
+    <div class="label__koa-value">RK73H2ATTD1372F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(Q)QUANTITY:</div>
+    <div class="label__koa-value label__qty">10000</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-row">
+    <div class="label__koa-field">
+      <div class="label__koa-label">(1T)TRACE CODE:</div>
+      <div class="label__koa-value">9827T378-3</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+    <div class="label__koa-field">
+      <div class="label__koa-label">(D)DATE CODE:</div>
+      <div class="label__koa-value">2544</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(1P)MPN:</div>
+    <div class="label__koa-value">RK73H2ATTD1372F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-markings">
+    <span>RK73H2ATTD1372F F</span>
+    <span>13K7 F KWY Y001A3</span>
+  </div>
+
+  <div class="label__koa-bottom">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__koa-enc">;RK73H2ATTD1372F::Q:10000:T:9827T378-3:D:2544:KOA+RK73H2ATTD1372F::::</div>
+  </div>
+
+  <div class="label__koa-footer">KOA MADE IN CN</div>
+</div>
+<div class="label label--koa">
+  <div class="label__target">Target: 40000</div>
+  <div class="label__koa-rohs">RoHS</div>
+  <div class="label__koa-order">04958058-W-01</div>
+  <div class="label__koa-po">PO: 1180200568STD · Line 2</div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(P)CUSTOMER P/N:</div>
+    <div class="label__koa-value">RK73H2ATTD1372F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(Q)QUANTITY:</div>
+    <div class="label__koa-value label__qty">10000</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-row">
+    <div class="label__koa-field">
+      <div class="label__koa-label">(1T)TRACE CODE:</div>
+      <div class="label__koa-value">9827T378-4</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+    <div class="label__koa-field">
+      <div class="label__koa-label">(D)DATE CODE:</div>
+      <div class="label__koa-value">2544</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(1P)MPN:</div>
+    <div class="label__koa-value">RK73H2ATTD1372F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-markings">
+    <span>RK73H2ATTD1372F F</span>
+    <span>13K7 F KWY Y001A3</span>
+  </div>
+
+  <div class="label__koa-bottom">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__koa-enc">;RK73H2ATTD1372F::Q:10000:T:9827T378-4:D:2544:KOA+RK73H2ATTD1372F::::</div>
+  </div>
+
+  <div class="label__koa-footer">KOA MADE IN CN</div>
+</div>
+<div class="label label--koa">
+  <div class="label__target">Target: 5000</div>
+  <div class="label__koa-rohs">RoHS</div>
+  <div class="label__koa-order">04958058-W-01</div>
+  <div class="label__koa-po">PO: 1180200859STD · Line 3</div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(P)CUSTOMER P/N:</div>
+    <div class="label__koa-value">RK73H1JTTD1501F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(Q)QUANTITY:</div>
+    <div class="label__koa-value label__qty">2500</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-row">
+    <div class="label__koa-field">
+      <div class="label__koa-label">(1T)TRACE CODE:</div>
+      <div class="label__koa-value">9827T379-1</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+    <div class="label__koa-field">
+      <div class="label__koa-label">(D)DATE CODE:</div>
+      <div class="label__koa-value">2544</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(1P)MPN:</div>
+    <div class="label__koa-value">RK73H1JTTD1501F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-markings">
+    <span>RK73H1JTTD1501F F</span>
+    <span>1K5 F KWY Y001A3</span>
+  </div>
+
+  <div class="label__koa-bottom">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__koa-enc">;RK73H1JTTD1501F::Q:2500:T:9827T379-1:D:2544:KOA+RK73H1JTTD1501F::::</div>
+  </div>
+
+  <div class="label__koa-footer">KOA MADE IN CN</div>
+</div>
+<div class="label label--koa">
+  <div class="label__target">Target: 5000</div>
+  <div class="label__koa-rohs">RoHS</div>
+  <div class="label__koa-order">04958058-W-01</div>
+  <div class="label__koa-po">PO: 1180200859STD · Line 3</div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(P)CUSTOMER P/N:</div>
+    <div class="label__koa-value">RK73H1JTTD1501F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(Q)QUANTITY:</div>
+    <div class="label__koa-value label__qty">2500</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-row">
+    <div class="label__koa-field">
+      <div class="label__koa-label">(1T)TRACE CODE:</div>
+      <div class="label__koa-value">9827T379-2</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+    <div class="label__koa-field">
+      <div class="label__koa-label">(D)DATE CODE:</div>
+      <div class="label__koa-value">2544</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(1P)MPN:</div>
+    <div class="label__koa-value">RK73H1JTTD1501F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-markings">
+    <span>RK73H1JTTD1501F F</span>
+    <span>1K5 F KWY Y001A3</span>
+  </div>
+
+  <div class="label__koa-bottom">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__koa-enc">;RK73H1JTTD1501F::Q:2500:T:9827T379-2:D:2544:KOA+RK73H1JTTD1501F::::</div>
+  </div>
+
+  <div class="label__koa-footer">KOA MADE IN CN</div>
+</div>
+<div class="label label--koa">
+  <div class="label__target">Target: 5000</div>
+  <div class="label__koa-rohs">RoHS</div>
+  <div class="label__koa-order">04958058-W-01</div>
+  <div class="label__koa-po">PO: 1180200859STD · Line 4</div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(P)CUSTOMER P/N:</div>
+    <div class="label__koa-value">RK73H1JTTD2202F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(Q)QUANTITY:</div>
+    <div class="label__koa-value label__qty">2500</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-row">
+    <div class="label__koa-field">
+      <div class="label__koa-label">(1T)TRACE CODE:</div>
+      <div class="label__koa-value">9827T380-1</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+    <div class="label__koa-field">
+      <div class="label__koa-label">(D)DATE CODE:</div>
+      <div class="label__koa-value">2544</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(1P)MPN:</div>
+    <div class="label__koa-value">RK73H1JTTD2202F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-markings">
+    <span>RK73H1JTTD2202F F</span>
+    <span>22K F KWY Y001A3</span>
+  </div>
+
+  <div class="label__koa-bottom">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__koa-enc">;RK73H1JTTD2202F::Q:2500:T:9827T380-1:D:2544:KOA+RK73H1JTTD2202F::::</div>
+  </div>
+
+  <div class="label__koa-footer">KOA MADE IN CN</div>
+</div>
+<div class="label label--koa">
+  <div class="label__target">Target: 5000</div>
+  <div class="label__koa-rohs">RoHS</div>
+  <div class="label__koa-order">04958058-W-01</div>
+  <div class="label__koa-po">PO: 1180200859STD · Line 4</div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(P)CUSTOMER P/N:</div>
+    <div class="label__koa-value">RK73H1JTTD2202F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(Q)QUANTITY:</div>
+    <div class="label__koa-value label__qty">2500</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-row">
+    <div class="label__koa-field">
+      <div class="label__koa-label">(1T)TRACE CODE:</div>
+      <div class="label__koa-value">9827T380-2</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+    <div class="label__koa-field">
+      <div class="label__koa-label">(D)DATE CODE:</div>
+      <div class="label__koa-value">2544</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(1P)MPN:</div>
+    <div class="label__koa-value">RK73H1JTTD2202F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-markings">
+    <span>RK73H1JTTD2202F F</span>
+    <span>22K F KWY Y001A3</span>
+  </div>
+
+  <div class="label__koa-bottom">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__koa-enc">;RK73H1JTTD2202F::Q:2500:T:9827T380-2:D:2544:KOA+RK73H1JTTD2202F::::</div>
+  </div>
+
+  <div class="label__koa-footer">KOA MADE IN CN</div>
+</div>
+<div class="label label--koa">
+  <div class="label__target">Target: 70000</div>
+  <div class="label__koa-rohs">RoHS</div>
+  <div class="label__koa-order">04958058-W-01</div>
+  <div class="label__koa-po">PO: 1180201327STD · Line 5</div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(P)CUSTOMER P/N:</div>
+    <div class="label__koa-value">RK73H2ATTD1002F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(Q)QUANTITY:</div>
+    <div class="label__koa-value label__qty">14000</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-row">
+    <div class="label__koa-field">
+      <div class="label__koa-label">(1T)TRACE CODE:</div>
+      <div class="label__koa-value">9827T381-1</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+    <div class="label__koa-field">
+      <div class="label__koa-label">(D)DATE CODE:</div>
+      <div class="label__koa-value">2544</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(1P)MPN:</div>
+    <div class="label__koa-value">RK73H2ATTD1002F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-markings">
+    <span>RK73H2ATTD1002F F</span>
+    <span>10K F KWY Y001A3</span>
+  </div>
+
+  <div class="label__koa-bottom">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__koa-enc">;RK73H2ATTD1002F::Q:14000:T:9827T381-1:D:2544:KOA+RK73H2ATTD1002F::::</div>
+  </div>
+
+  <div class="label__koa-footer">KOA MADE IN CN</div>
+</div>
+<div class="label label--koa">
+  <div class="label__target">Target: 70000</div>
+  <div class="label__koa-rohs">RoHS</div>
+  <div class="label__koa-order">04958058-W-01</div>
+  <div class="label__koa-po">PO: 1180201327STD · Line 5</div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(P)CUSTOMER P/N:</div>
+    <div class="label__koa-value">RK73H2ATTD1002F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(Q)QUANTITY:</div>
+    <div class="label__koa-value label__qty">14000</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-row">
+    <div class="label__koa-field">
+      <div class="label__koa-label">(1T)TRACE CODE:</div>
+      <div class="label__koa-value">9827T381-2</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+    <div class="label__koa-field">
+      <div class="label__koa-label">(D)DATE CODE:</div>
+      <div class="label__koa-value">2544</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(1P)MPN:</div>
+    <div class="label__koa-value">RK73H2ATTD1002F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-markings">
+    <span>RK73H2ATTD1002F F</span>
+    <span>10K F KWY Y001A3</span>
+  </div>
+
+  <div class="label__koa-bottom">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__koa-enc">;RK73H2ATTD1002F::Q:14000:T:9827T381-2:D:2544:KOA+RK73H2ATTD1002F::::</div>
+  </div>
+
+  <div class="label__koa-footer">KOA MADE IN CN</div>
+</div>
+<div class="label label--koa">
+  <div class="label__target">Target: 70000</div>
+  <div class="label__koa-rohs">RoHS</div>
+  <div class="label__koa-order">04958058-W-01</div>
+  <div class="label__koa-po">PO: 1180201327STD · Line 5</div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(P)CUSTOMER P/N:</div>
+    <div class="label__koa-value">RK73H2ATTD1002F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(Q)QUANTITY:</div>
+    <div class="label__koa-value label__qty">14000</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-row">
+    <div class="label__koa-field">
+      <div class="label__koa-label">(1T)TRACE CODE:</div>
+      <div class="label__koa-value">9827T381-3</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+    <div class="label__koa-field">
+      <div class="label__koa-label">(D)DATE CODE:</div>
+      <div class="label__koa-value">2544</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(1P)MPN:</div>
+    <div class="label__koa-value">RK73H2ATTD1002F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-markings">
+    <span>RK73H2ATTD1002F F</span>
+    <span>10K F KWY Y001A3</span>
+  </div>
+
+  <div class="label__koa-bottom">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__koa-enc">;RK73H2ATTD1002F::Q:14000:T:9827T381-3:D:2544:KOA+RK73H2ATTD1002F::::</div>
+  </div>
+
+  <div class="label__koa-footer">KOA MADE IN CN</div>
+</div>
+<div class="label label--koa">
+  <div class="label__target">Target: 70000</div>
+  <div class="label__koa-rohs">RoHS</div>
+  <div class="label__koa-order">04958058-W-01</div>
+  <div class="label__koa-po">PO: 1180201327STD · Line 5</div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(P)CUSTOMER P/N:</div>
+    <div class="label__koa-value">RK73H2ATTD1002F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(Q)QUANTITY:</div>
+    <div class="label__koa-value label__qty">14000</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-row">
+    <div class="label__koa-field">
+      <div class="label__koa-label">(1T)TRACE CODE:</div>
+      <div class="label__koa-value">9827T381-4</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+    <div class="label__koa-field">
+      <div class="label__koa-label">(D)DATE CODE:</div>
+      <div class="label__koa-value">2544</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(1P)MPN:</div>
+    <div class="label__koa-value">RK73H2ATTD1002F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-markings">
+    <span>RK73H2ATTD1002F F</span>
+    <span>10K F KWY Y001A3</span>
+  </div>
+
+  <div class="label__koa-bottom">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__koa-enc">;RK73H2ATTD1002F::Q:14000:T:9827T381-4:D:2544:KOA+RK73H2ATTD1002F::::</div>
+  </div>
+
+  <div class="label__koa-footer">KOA MADE IN CN</div>
+</div>
+<div class="label label--koa">
+  <div class="label__target">Target: 70000</div>
+  <div class="label__koa-rohs">RoHS</div>
+  <div class="label__koa-order">04958058-W-01</div>
+  <div class="label__koa-po">PO: 1180201327STD · Line 5</div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(P)CUSTOMER P/N:</div>
+    <div class="label__koa-value">RK73H2ATTD1002F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(Q)QUANTITY:</div>
+    <div class="label__koa-value label__qty">14000</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-row">
+    <div class="label__koa-field">
+      <div class="label__koa-label">(1T)TRACE CODE:</div>
+      <div class="label__koa-value">9827T381-5</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+    <div class="label__koa-field">
+      <div class="label__koa-label">(D)DATE CODE:</div>
+      <div class="label__koa-value">2544</div>
+      <div class="barcode" aria-hidden="true"></div>
+    </div>
+  </div>
+
+  <div class="label__koa-field">
+    <div class="label__koa-label">(1P)MPN:</div>
+    <div class="label__koa-value">RK73H2ATTD1002F</div>
+    <div class="barcode" aria-hidden="true"></div>
+  </div>
+
+  <div class="label__koa-markings">
+    <span>RK73H2ATTD1002F F</span>
+    <span>10K F KWY Y001A3</span>
+  </div>
+
+  <div class="label__koa-bottom">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__koa-enc">;RK73H2ATTD1002F::Q:14000:T:9827T381-5:D:2544:KOA+RK73H2ATTD1002F::::</div>
+  </div>
+
+  <div class="label__koa-footer">KOA MADE IN CN</div>
+</div>
+      </div>
+<div class="subsection">
+        <div class="subsection__title">1080082369 — ABLIC</div>
+<div class="label label--ablic">
+  <div class="label__target">Target: 3000</div>
+  <div class="label__ablic-brand">ABLIC</div>
+  <div class="label__ablic-order">1080082369</div>
+  <div class="label__ablic-po">PO: 1180200571W · Line 1</div>
+
+  <div class="label__ablic-main">
+    <div class="label__ablic-col">
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">TYPE:</div>
+        <div class="label__ablic-value">S-1206B18-M3T1U</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">QTY:</div>
+        <div class="label__ablic-value label__qty">1500</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">LOT:</div>
+        <div class="label__ablic-value">VTCJ9X17324-0134-A</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">CODE:</div>
+        <div class="label__ablic-value">S-1206B18-M3T1U</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+    </div>
+    <div class="label__ablic-side">
+      <div class="label__ablic-rohs">RoHS H/F MSL-1</div>
+      <div class="qr-placeholder" aria-hidden="true"></div>
+      <div class="label__ablic-date">201910</div>
+    </div>
+  </div>
+</div>
+<div class="label label--ablic">
+  <div class="label__target">Target: 3000</div>
+  <div class="label__ablic-brand">ABLIC</div>
+  <div class="label__ablic-order">1080082369</div>
+  <div class="label__ablic-po">PO: 1180200571W · Line 1</div>
+
+  <div class="label__ablic-main">
+    <div class="label__ablic-col">
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">TYPE:</div>
+        <div class="label__ablic-value">S-1206B18-M3T1U</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">QTY:</div>
+        <div class="label__ablic-value label__qty">1500</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">LOT:</div>
+        <div class="label__ablic-value">VTCJ9X17324-0134-B</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">CODE:</div>
+        <div class="label__ablic-value">S-1206B18-M3T1U</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+    </div>
+    <div class="label__ablic-side">
+      <div class="label__ablic-rohs">RoHS H/F MSL-1</div>
+      <div class="qr-placeholder" aria-hidden="true"></div>
+      <div class="label__ablic-date">201910</div>
+    </div>
+  </div>
+</div>
+<div class="label label--ablic">
+  <div class="label__target">Target: 3000</div>
+  <div class="label__ablic-brand">ABLIC</div>
+  <div class="label__ablic-order">1080082369</div>
+  <div class="label__ablic-po">PO: 1180200214 · Line 2</div>
+
+  <div class="label__ablic-main">
+    <div class="label__ablic-col">
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">TYPE:</div>
+        <div class="label__ablic-value">S-80860CNNB-B9LT2U</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">QTY:</div>
+        <div class="label__ablic-value label__qty">1500</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">LOT:</div>
+        <div class="label__ablic-value">VTCJ9X17325-0271-A</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">CODE:</div>
+        <div class="label__ablic-value">S-80860CNNB-B9LT2U</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+    </div>
+    <div class="label__ablic-side">
+      <div class="label__ablic-rohs">RoHS H/F MSL-1</div>
+      <div class="qr-placeholder" aria-hidden="true"></div>
+      <div class="label__ablic-date">201910</div>
+    </div>
+  </div>
+</div>
+<div class="label label--ablic">
+  <div class="label__target">Target: 3000</div>
+  <div class="label__ablic-brand">ABLIC</div>
+  <div class="label__ablic-order">1080082369</div>
+  <div class="label__ablic-po">PO: 1180200214 · Line 2</div>
+
+  <div class="label__ablic-main">
+    <div class="label__ablic-col">
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">TYPE:</div>
+        <div class="label__ablic-value">S-80860CNNB-B9LT2U</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">QTY:</div>
+        <div class="label__ablic-value label__qty">1500</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">LOT:</div>
+        <div class="label__ablic-value">VTCJ9X17325-0271-B</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">CODE:</div>
+        <div class="label__ablic-value">S-80860CNNB-B9LT2U</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+    </div>
+    <div class="label__ablic-side">
+      <div class="label__ablic-rohs">RoHS H/F MSL-1</div>
+      <div class="qr-placeholder" aria-hidden="true"></div>
+      <div class="label__ablic-date">201910</div>
+    </div>
+  </div>
+</div>
+<div class="label label--ablic">
+  <div class="label__target">Target: 15000</div>
+  <div class="label__ablic-brand">ABLIC</div>
+  <div class="label__ablic-order">1080082369</div>
+  <div class="label__ablic-po">PO: 1180201399 · Line 3</div>
+
+  <div class="label__ablic-main">
+    <div class="label__ablic-col">
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">TYPE:</div>
+        <div class="label__ablic-value">S-8240ADJ-I6T1U</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">QTY:</div>
+        <div class="label__ablic-value label__qty">5000</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">LOT:</div>
+        <div class="label__ablic-value">VTCJ9X17326-0408-A</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">CODE:</div>
+        <div class="label__ablic-value">S-8240ADJ-I6T1U</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+    </div>
+    <div class="label__ablic-side">
+      <div class="label__ablic-rohs">RoHS H/F MSL-1</div>
+      <div class="qr-placeholder" aria-hidden="true"></div>
+      <div class="label__ablic-date">201910</div>
+    </div>
+  </div>
+</div>
+<div class="label label--ablic">
+  <div class="label__target">Target: 15000</div>
+  <div class="label__ablic-brand">ABLIC</div>
+  <div class="label__ablic-order">1080082369</div>
+  <div class="label__ablic-po">PO: 1180201399 · Line 3</div>
+
+  <div class="label__ablic-main">
+    <div class="label__ablic-col">
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">TYPE:</div>
+        <div class="label__ablic-value">S-8240ADJ-I6T1U</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">QTY:</div>
+        <div class="label__ablic-value label__qty">5000</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">LOT:</div>
+        <div class="label__ablic-value">VTCJ9X17326-0408-B</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">CODE:</div>
+        <div class="label__ablic-value">S-8240ADJ-I6T1U</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+    </div>
+    <div class="label__ablic-side">
+      <div class="label__ablic-rohs">RoHS H/F MSL-1</div>
+      <div class="qr-placeholder" aria-hidden="true"></div>
+      <div class="label__ablic-date">201910</div>
+    </div>
+  </div>
+</div>
+<div class="label label--ablic">
+  <div class="label__target">Target: 15000</div>
+  <div class="label__ablic-brand">ABLIC</div>
+  <div class="label__ablic-order">1080082369</div>
+  <div class="label__ablic-po">PO: 1180201399 · Line 3</div>
+
+  <div class="label__ablic-main">
+    <div class="label__ablic-col">
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">TYPE:</div>
+        <div class="label__ablic-value">S-8240ADJ-I6T1U</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">QTY:</div>
+        <div class="label__ablic-value label__qty">5000</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">LOT:</div>
+        <div class="label__ablic-value">VTCJ9X17326-0408-C</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+      <div class="label__ablic-field">
+        <div class="label__ablic-label">CODE:</div>
+        <div class="label__ablic-value">S-8240ADJ-I6T1U</div>
+        <div class="barcode" aria-hidden="true"></div>
+      </div>
+    </div>
+    <div class="label__ablic-side">
+      <div class="label__ablic-rohs">RoHS H/F MSL-1</div>
+      <div class="qr-placeholder" aria-hidden="true"></div>
+      <div class="label__ablic-date">201910</div>
+    </div>
+  </div>
+</div>
+      </div>
+<div class="subsection">
+        <div class="subsection__title">52600142 — DIOTEC</div>
+<div class="label label--diotec">
+  <div class="label__target">Target: 900</div>
+  <div class="label__diotec-header">
+    <div class="label__diotec-part">DBI25-16A</div>
+    <div class="label__diotec-qty"><span class="label__qty">QTY: 300</span><span class="label__diotec-unit">pcs</span></div>
+  </div>
+  <div class="label__diotec-order">52600142 · PO: 1180200536 · Line 1</div>
+
+  <div class="label__diotec-body">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__diotec-info">
+      <div class="label__diotec-line"><span class="label__diotec-label">PART NO:</span> <span class="label__diotec-value">DBI25-16A</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Date Code:</span> <span class="label__diotec-value">2025-10-29</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Lot#:</span> <span class="label__diotec-value">S12235-A</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">MS-Level:</span> <span class="label__diotec-value">1</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Made in</span> <span class="label__diotec-value">IN</span></div>
+    </div>
+  </div>
+
+  <div class="label__diotec-brand">Diotec Semiconductor</div>
+</div>
+<div class="label label--diotec">
+  <div class="label__target">Target: 900</div>
+  <div class="label__diotec-header">
+    <div class="label__diotec-part">DBI25-16A</div>
+    <div class="label__diotec-qty"><span class="label__qty">QTY: 300</span><span class="label__diotec-unit">pcs</span></div>
+  </div>
+  <div class="label__diotec-order">52600142 · PO: 1180200536 · Line 1</div>
+
+  <div class="label__diotec-body">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__diotec-info">
+      <div class="label__diotec-line"><span class="label__diotec-label">PART NO:</span> <span class="label__diotec-value">DBI25-16A</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Date Code:</span> <span class="label__diotec-value">2025-10-29</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Lot#:</span> <span class="label__diotec-value">S12235-B</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">MS-Level:</span> <span class="label__diotec-value">1</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Made in</span> <span class="label__diotec-value">IN</span></div>
+    </div>
+  </div>
+
+  <div class="label__diotec-brand">Diotec Semiconductor</div>
+</div>
+<div class="label label--diotec">
+  <div class="label__target">Target: 900</div>
+  <div class="label__diotec-header">
+    <div class="label__diotec-part">DBI25-16A</div>
+    <div class="label__diotec-qty"><span class="label__qty">QTY: 300</span><span class="label__diotec-unit">pcs</span></div>
+  </div>
+  <div class="label__diotec-order">52600142 · PO: 1180200536 · Line 1</div>
+
+  <div class="label__diotec-body">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__diotec-info">
+      <div class="label__diotec-line"><span class="label__diotec-label">PART NO:</span> <span class="label__diotec-value">DBI25-16A</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Date Code:</span> <span class="label__diotec-value">2025-10-29</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Lot#:</span> <span class="label__diotec-value">S12235-C</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">MS-Level:</span> <span class="label__diotec-value">1</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Made in</span> <span class="label__diotec-value">IN</span></div>
+    </div>
+  </div>
+
+  <div class="label__diotec-brand">Diotec Semiconductor</div>
+</div>
+<div class="label label--diotec">
+  <div class="label__target">Target: 75000</div>
+  <div class="label__diotec-header">
+    <div class="label__diotec-part">MM1Z4733A</div>
+    <div class="label__diotec-qty"><span class="label__qty">QTY: 15000</span><span class="label__diotec-unit">pcs</span></div>
+  </div>
+  <div class="label__diotec-order">52600142 · PO: 1180200595 · Line 2</div>
+
+  <div class="label__diotec-body">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__diotec-info">
+      <div class="label__diotec-line"><span class="label__diotec-label">PART NO:</span> <span class="label__diotec-value">MM1Z4733A</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Date Code:</span> <span class="label__diotec-value">2025-10-29</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Lot#:</span> <span class="label__diotec-value">S12236-A</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">MS-Level:</span> <span class="label__diotec-value">1</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Made in</span> <span class="label__diotec-value">CN</span></div>
+    </div>
+  </div>
+
+  <div class="label__diotec-brand">Diotec Semiconductor</div>
+</div>
+<div class="label label--diotec">
+  <div class="label__target">Target: 75000</div>
+  <div class="label__diotec-header">
+    <div class="label__diotec-part">MM1Z4733A</div>
+    <div class="label__diotec-qty"><span class="label__qty">QTY: 15000</span><span class="label__diotec-unit">pcs</span></div>
+  </div>
+  <div class="label__diotec-order">52600142 · PO: 1180200595 · Line 2</div>
+
+  <div class="label__diotec-body">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__diotec-info">
+      <div class="label__diotec-line"><span class="label__diotec-label">PART NO:</span> <span class="label__diotec-value">MM1Z4733A</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Date Code:</span> <span class="label__diotec-value">2025-10-29</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Lot#:</span> <span class="label__diotec-value">S12236-B</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">MS-Level:</span> <span class="label__diotec-value">1</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Made in</span> <span class="label__diotec-value">CN</span></div>
+    </div>
+  </div>
+
+  <div class="label__diotec-brand">Diotec Semiconductor</div>
+</div>
+<div class="label label--diotec">
+  <div class="label__target">Target: 75000</div>
+  <div class="label__diotec-header">
+    <div class="label__diotec-part">MM1Z4733A</div>
+    <div class="label__diotec-qty"><span class="label__qty">QTY: 15000</span><span class="label__diotec-unit">pcs</span></div>
+  </div>
+  <div class="label__diotec-order">52600142 · PO: 1180200595 · Line 2</div>
+
+  <div class="label__diotec-body">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__diotec-info">
+      <div class="label__diotec-line"><span class="label__diotec-label">PART NO:</span> <span class="label__diotec-value">MM1Z4733A</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Date Code:</span> <span class="label__diotec-value">2025-10-29</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Lot#:</span> <span class="label__diotec-value">S12236-C</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">MS-Level:</span> <span class="label__diotec-value">1</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Made in</span> <span class="label__diotec-value">CN</span></div>
+    </div>
+  </div>
+
+  <div class="label__diotec-brand">Diotec Semiconductor</div>
+</div>
+<div class="label label--diotec">
+  <div class="label__target">Target: 75000</div>
+  <div class="label__diotec-header">
+    <div class="label__diotec-part">MM1Z4733A</div>
+    <div class="label__diotec-qty"><span class="label__qty">QTY: 15000</span><span class="label__diotec-unit">pcs</span></div>
+  </div>
+  <div class="label__diotec-order">52600142 · PO: 1180200595 · Line 2</div>
+
+  <div class="label__diotec-body">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__diotec-info">
+      <div class="label__diotec-line"><span class="label__diotec-label">PART NO:</span> <span class="label__diotec-value">MM1Z4733A</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Date Code:</span> <span class="label__diotec-value">2025-10-29</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Lot#:</span> <span class="label__diotec-value">S12236-D</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">MS-Level:</span> <span class="label__diotec-value">1</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Made in</span> <span class="label__diotec-value">CN</span></div>
+    </div>
+  </div>
+
+  <div class="label__diotec-brand">Diotec Semiconductor</div>
+</div>
+<div class="label label--diotec">
+  <div class="label__target">Target: 75000</div>
+  <div class="label__diotec-header">
+    <div class="label__diotec-part">MM1Z4733A</div>
+    <div class="label__diotec-qty"><span class="label__qty">QTY: 15000</span><span class="label__diotec-unit">pcs</span></div>
+  </div>
+  <div class="label__diotec-order">52600142 · PO: 1180200595 · Line 2</div>
+
+  <div class="label__diotec-body">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__diotec-info">
+      <div class="label__diotec-line"><span class="label__diotec-label">PART NO:</span> <span class="label__diotec-value">MM1Z4733A</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Date Code:</span> <span class="label__diotec-value">2025-10-29</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Lot#:</span> <span class="label__diotec-value">S12236-E</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">MS-Level:</span> <span class="label__diotec-value">1</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Made in</span> <span class="label__diotec-value">CN</span></div>
+    </div>
+  </div>
+
+  <div class="label__diotec-brand">Diotec Semiconductor</div>
+</div>
+<div class="label label--diotec">
+  <div class="label__target">Target: 300000</div>
+  <div class="label__diotec-header">
+    <div class="label__diotec-part">SL1M</div>
+    <div class="label__diotec-qty"><span class="label__qty">QTY: 50000</span><span class="label__diotec-unit">pcs</span></div>
+  </div>
+  <div class="label__diotec-order">52600142 · PO: 1180200706 · Line 3</div>
+
+  <div class="label__diotec-body">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__diotec-info">
+      <div class="label__diotec-line"><span class="label__diotec-label">PART NO:</span> <span class="label__diotec-value">SL1M</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Date Code:</span> <span class="label__diotec-value">2025-10-29</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Lot#:</span> <span class="label__diotec-value">S12237-A</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">MS-Level:</span> <span class="label__diotec-value">1</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Made in</span> <span class="label__diotec-value">CN</span></div>
+    </div>
+  </div>
+
+  <div class="label__diotec-brand">Diotec Semiconductor</div>
+</div>
+<div class="label label--diotec">
+  <div class="label__target">Target: 300000</div>
+  <div class="label__diotec-header">
+    <div class="label__diotec-part">SL1M</div>
+    <div class="label__diotec-qty"><span class="label__qty">QTY: 50000</span><span class="label__diotec-unit">pcs</span></div>
+  </div>
+  <div class="label__diotec-order">52600142 · PO: 1180200706 · Line 3</div>
+
+  <div class="label__diotec-body">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__diotec-info">
+      <div class="label__diotec-line"><span class="label__diotec-label">PART NO:</span> <span class="label__diotec-value">SL1M</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Date Code:</span> <span class="label__diotec-value">2025-10-29</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Lot#:</span> <span class="label__diotec-value">S12237-B</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">MS-Level:</span> <span class="label__diotec-value">1</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Made in</span> <span class="label__diotec-value">CN</span></div>
+    </div>
+  </div>
+
+  <div class="label__diotec-brand">Diotec Semiconductor</div>
+</div>
+<div class="label label--diotec">
+  <div class="label__target">Target: 300000</div>
+  <div class="label__diotec-header">
+    <div class="label__diotec-part">SL1M</div>
+    <div class="label__diotec-qty"><span class="label__qty">QTY: 50000</span><span class="label__diotec-unit">pcs</span></div>
+  </div>
+  <div class="label__diotec-order">52600142 · PO: 1180200706 · Line 3</div>
+
+  <div class="label__diotec-body">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__diotec-info">
+      <div class="label__diotec-line"><span class="label__diotec-label">PART NO:</span> <span class="label__diotec-value">SL1M</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Date Code:</span> <span class="label__diotec-value">2025-10-29</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Lot#:</span> <span class="label__diotec-value">S12237-C</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">MS-Level:</span> <span class="label__diotec-value">1</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Made in</span> <span class="label__diotec-value">CN</span></div>
+    </div>
+  </div>
+
+  <div class="label__diotec-brand">Diotec Semiconductor</div>
+</div>
+<div class="label label--diotec">
+  <div class="label__target">Target: 300000</div>
+  <div class="label__diotec-header">
+    <div class="label__diotec-part">SL1M</div>
+    <div class="label__diotec-qty"><span class="label__qty">QTY: 50000</span><span class="label__diotec-unit">pcs</span></div>
+  </div>
+  <div class="label__diotec-order">52600142 · PO: 1180200706 · Line 3</div>
+
+  <div class="label__diotec-body">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__diotec-info">
+      <div class="label__diotec-line"><span class="label__diotec-label">PART NO:</span> <span class="label__diotec-value">SL1M</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Date Code:</span> <span class="label__diotec-value">2025-10-29</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Lot#:</span> <span class="label__diotec-value">S12237-D</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">MS-Level:</span> <span class="label__diotec-value">1</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Made in</span> <span class="label__diotec-value">CN</span></div>
+    </div>
+  </div>
+
+  <div class="label__diotec-brand">Diotec Semiconductor</div>
+</div>
+<div class="label label--diotec">
+  <div class="label__target">Target: 300000</div>
+  <div class="label__diotec-header">
+    <div class="label__diotec-part">SL1M</div>
+    <div class="label__diotec-qty"><span class="label__qty">QTY: 50000</span><span class="label__diotec-unit">pcs</span></div>
+  </div>
+  <div class="label__diotec-order">52600142 · PO: 1180200706 · Line 3</div>
+
+  <div class="label__diotec-body">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__diotec-info">
+      <div class="label__diotec-line"><span class="label__diotec-label">PART NO:</span> <span class="label__diotec-value">SL1M</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Date Code:</span> <span class="label__diotec-value">2025-10-29</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Lot#:</span> <span class="label__diotec-value">S12237-E</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">MS-Level:</span> <span class="label__diotec-value">1</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Made in</span> <span class="label__diotec-value">CN</span></div>
+    </div>
+  </div>
+
+  <div class="label__diotec-brand">Diotec Semiconductor</div>
+</div>
+<div class="label label--diotec">
+  <div class="label__target">Target: 300000</div>
+  <div class="label__diotec-header">
+    <div class="label__diotec-part">SL1M</div>
+    <div class="label__diotec-qty"><span class="label__qty">QTY: 50000</span><span class="label__diotec-unit">pcs</span></div>
+  </div>
+  <div class="label__diotec-order">52600142 · PO: 1180200706 · Line 3</div>
+
+  <div class="label__diotec-body">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__diotec-info">
+      <div class="label__diotec-line"><span class="label__diotec-label">PART NO:</span> <span class="label__diotec-value">SL1M</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Date Code:</span> <span class="label__diotec-value">2025-10-29</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Lot#:</span> <span class="label__diotec-value">S12237-F</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">MS-Level:</span> <span class="label__diotec-value">1</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Made in</span> <span class="label__diotec-value">CN</span></div>
+    </div>
+  </div>
+
+  <div class="label__diotec-brand">Diotec Semiconductor</div>
+</div>
+<div class="label label--diotec">
+  <div class="label__target">Target: 12000</div>
+  <div class="label__diotec-header">
+    <div class="label__diotec-part">SMF51CA</div>
+    <div class="label__diotec-qty"><span class="label__qty">QTY: 3000</span><span class="label__diotec-unit">pcs</span></div>
+  </div>
+  <div class="label__diotec-order">52600142 · PO: 1180201274 · Line 4</div>
+
+  <div class="label__diotec-body">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__diotec-info">
+      <div class="label__diotec-line"><span class="label__diotec-label">PART NO:</span> <span class="label__diotec-value">SMF51CA</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Date Code:</span> <span class="label__diotec-value">2025-10-29</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Lot#:</span> <span class="label__diotec-value">S12238-A</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">MS-Level:</span> <span class="label__diotec-value">1</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Made in</span> <span class="label__diotec-value">CN</span></div>
+    </div>
+  </div>
+
+  <div class="label__diotec-brand">Diotec Semiconductor</div>
+</div>
+<div class="label label--diotec">
+  <div class="label__target">Target: 12000</div>
+  <div class="label__diotec-header">
+    <div class="label__diotec-part">SMF51CA</div>
+    <div class="label__diotec-qty"><span class="label__qty">QTY: 3000</span><span class="label__diotec-unit">pcs</span></div>
+  </div>
+  <div class="label__diotec-order">52600142 · PO: 1180201274 · Line 4</div>
+
+  <div class="label__diotec-body">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__diotec-info">
+      <div class="label__diotec-line"><span class="label__diotec-label">PART NO:</span> <span class="label__diotec-value">SMF51CA</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Date Code:</span> <span class="label__diotec-value">2025-10-29</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Lot#:</span> <span class="label__diotec-value">S12238-B</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">MS-Level:</span> <span class="label__diotec-value">1</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Made in</span> <span class="label__diotec-value">CN</span></div>
+    </div>
+  </div>
+
+  <div class="label__diotec-brand">Diotec Semiconductor</div>
+</div>
+<div class="label label--diotec">
+  <div class="label__target">Target: 12000</div>
+  <div class="label__diotec-header">
+    <div class="label__diotec-part">SMF51CA</div>
+    <div class="label__diotec-qty"><span class="label__qty">QTY: 3000</span><span class="label__diotec-unit">pcs</span></div>
+  </div>
+  <div class="label__diotec-order">52600142 · PO: 1180201274 · Line 4</div>
+
+  <div class="label__diotec-body">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__diotec-info">
+      <div class="label__diotec-line"><span class="label__diotec-label">PART NO:</span> <span class="label__diotec-value">SMF51CA</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Date Code:</span> <span class="label__diotec-value">2025-10-29</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Lot#:</span> <span class="label__diotec-value">S12238-C</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">MS-Level:</span> <span class="label__diotec-value">1</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Made in</span> <span class="label__diotec-value">CN</span></div>
+    </div>
+  </div>
+
+  <div class="label__diotec-brand">Diotec Semiconductor</div>
+</div>
+<div class="label label--diotec">
+  <div class="label__target">Target: 12000</div>
+  <div class="label__diotec-header">
+    <div class="label__diotec-part">SMF51CA</div>
+    <div class="label__diotec-qty"><span class="label__qty">QTY: 3000</span><span class="label__diotec-unit">pcs</span></div>
+  </div>
+  <div class="label__diotec-order">52600142 · PO: 1180201274 · Line 4</div>
+
+  <div class="label__diotec-body">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__diotec-info">
+      <div class="label__diotec-line"><span class="label__diotec-label">PART NO:</span> <span class="label__diotec-value">SMF51CA</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Date Code:</span> <span class="label__diotec-value">2025-10-29</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Lot#:</span> <span class="label__diotec-value">S12238-D</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">MS-Level:</span> <span class="label__diotec-value">1</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Made in</span> <span class="label__diotec-value">CN</span></div>
+    </div>
+  </div>
+
+  <div class="label__diotec-brand">Diotec Semiconductor</div>
+</div>
+<div class="label label--diotec">
+  <div class="label__target">Target: 7500</div>
+  <div class="label__diotec-header">
+    <div class="label__diotec-part">Z1SMA1020</div>
+    <div class="label__diotec-qty"><span class="label__qty">QTY: 2500</span><span class="label__diotec-unit">pcs</span></div>
+  </div>
+  <div class="label__diotec-order">52600142 · PO: 1180201290 · Line 5</div>
+
+  <div class="label__diotec-body">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__diotec-info">
+      <div class="label__diotec-line"><span class="label__diotec-label">PART NO:</span> <span class="label__diotec-value">Z1SMA1020</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Date Code:</span> <span class="label__diotec-value">2025-10-29</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Lot#:</span> <span class="label__diotec-value">S12239-A</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">MS-Level:</span> <span class="label__diotec-value">1</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Made in</span> <span class="label__diotec-value">DE</span></div>
+    </div>
+  </div>
+
+  <div class="label__diotec-brand">Diotec Semiconductor</div>
+</div>
+<div class="label label--diotec">
+  <div class="label__target">Target: 7500</div>
+  <div class="label__diotec-header">
+    <div class="label__diotec-part">Z1SMA1020</div>
+    <div class="label__diotec-qty"><span class="label__qty">QTY: 2500</span><span class="label__diotec-unit">pcs</span></div>
+  </div>
+  <div class="label__diotec-order">52600142 · PO: 1180201290 · Line 5</div>
+
+  <div class="label__diotec-body">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__diotec-info">
+      <div class="label__diotec-line"><span class="label__diotec-label">PART NO:</span> <span class="label__diotec-value">Z1SMA1020</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Date Code:</span> <span class="label__diotec-value">2025-10-29</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Lot#:</span> <span class="label__diotec-value">S12239-B</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">MS-Level:</span> <span class="label__diotec-value">1</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Made in</span> <span class="label__diotec-value">DE</span></div>
+    </div>
+  </div>
+
+  <div class="label__diotec-brand">Diotec Semiconductor</div>
+</div>
+<div class="label label--diotec">
+  <div class="label__target">Target: 7500</div>
+  <div class="label__diotec-header">
+    <div class="label__diotec-part">Z1SMA1020</div>
+    <div class="label__diotec-qty"><span class="label__qty">QTY: 2500</span><span class="label__diotec-unit">pcs</span></div>
+  </div>
+  <div class="label__diotec-order">52600142 · PO: 1180201290 · Line 5</div>
+
+  <div class="label__diotec-body">
+    <div class="qr-placeholder" aria-hidden="true"></div>
+    <div class="label__diotec-info">
+      <div class="label__diotec-line"><span class="label__diotec-label">PART NO:</span> <span class="label__diotec-value">Z1SMA1020</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Date Code:</span> <span class="label__diotec-value">2025-10-29</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Lot#:</span> <span class="label__diotec-value">S12239-C</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">MS-Level:</span> <span class="label__diotec-value">1</span></div>
+      <div class="label__diotec-line"><span class="label__diotec-label">Made in</span> <span class="label__diotec-value">DE</span></div>
+    </div>
+  </div>
+
+  <div class="label__diotec-brand">Diotec Semiconductor</div>
+</div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section__title">Picking Labels</div>
+<div class="subsection">
+        <div class="subsection__title">PICK-001 — KOA</div>
+<div class="label label--picking">
+  <div class="label__target">Target: 500</div>
+  <div class="label__picking-order">PICK-001</div>
+  <div class="label__picking-grid">
+    <div class="label__picking-field">
+      <span class="label__picking-label">PART NO:</span>
+      <span class="label__picking-value">RK73H2ATTD1372F</span>
+    </div>
+    <div class="label__picking-field label__picking-field--qty">
+      <span class="label__picking-label">QTY:</span>
+      <span class="label__picking-value label__qty">500</span>
+    </div>
+    <div class="label__picking-field">
+      <span class="label__picking-label">LOT:</span>
+      <span class="label__picking-value">9827T378</span>
+    </div>
+  </div>
+  <div class="label__picking-origin">Made in CN</div>
+  <div class="barcode" aria-hidden="true"></div>
+</div>
+<div class="label label--picking">
+  <div class="label__target">Target: 200</div>
+  <div class="label__picking-order">PICK-001</div>
+  <div class="label__picking-grid">
+    <div class="label__picking-field">
+      <span class="label__picking-label">PART NO:</span>
+      <span class="label__picking-value">RK73H1JTTD1501F</span>
+    </div>
+    <div class="label__picking-field label__picking-field--qty">
+      <span class="label__picking-label">QTY:</span>
+      <span class="label__picking-value label__qty">200</span>
+    </div>
+    <div class="label__picking-field">
+      <span class="label__picking-label">LOT:</span>
+      <span class="label__picking-value">9827T379</span>
+    </div>
+  </div>
+  <div class="label__picking-origin">Made in CN</div>
+  <div class="barcode" aria-hidden="true"></div>
+</div>
+<div class="label label--picking">
+  <div class="label__target">Target: 1000</div>
+  <div class="label__picking-order">PICK-001</div>
+  <div class="label__picking-grid">
+    <div class="label__picking-field">
+      <span class="label__picking-label">PART NO:</span>
+      <span class="label__picking-value">RK73H2ATTD1002F</span>
+    </div>
+    <div class="label__picking-field label__picking-field--qty">
+      <span class="label__picking-label">QTY:</span>
+      <span class="label__picking-value label__qty">1000</span>
+    </div>
+    <div class="label__picking-field">
+      <span class="label__picking-label">LOT:</span>
+      <span class="label__picking-value">9827T381</span>
+    </div>
+  </div>
+  <div class="label__picking-origin">Made in CN</div>
+  <div class="barcode" aria-hidden="true"></div>
+</div>
+      </div>
+<div class="subsection">
+        <div class="subsection__title">PICK-002 — ABLIC</div>
+<div class="label label--picking">
+  <div class="label__target">Target: 100</div>
+  <div class="label__picking-order">PICK-002</div>
+  <div class="label__picking-grid">
+    <div class="label__picking-field">
+      <span class="label__picking-label">PART NO:</span>
+      <span class="label__picking-value">S-1206B18-M3T1U</span>
+    </div>
+    <div class="label__picking-field label__picking-field--qty">
+      <span class="label__picking-label">QTY:</span>
+      <span class="label__picking-value label__qty">100</span>
+    </div>
+    <div class="label__picking-field">
+      <span class="label__picking-label">LOT:</span>
+      <span class="label__picking-value">VTCJ9X17324-0134</span>
+    </div>
+  </div>
+  <div class="label__picking-origin">Made in JP</div>
+  <div class="barcode" aria-hidden="true"></div>
+</div>
+<div class="label label--picking">
+  <div class="label__target">Target: 500</div>
+  <div class="label__picking-order">PICK-002</div>
+  <div class="label__picking-grid">
+    <div class="label__picking-field">
+      <span class="label__picking-label">PART NO:</span>
+      <span class="label__picking-value">S-8240ADJ-I6T1U</span>
+    </div>
+    <div class="label__picking-field label__picking-field--qty">
+      <span class="label__picking-label">QTY:</span>
+      <span class="label__picking-value label__qty">500</span>
+    </div>
+    <div class="label__picking-field">
+      <span class="label__picking-label">LOT:</span>
+      <span class="label__picking-value">VTCJ9X17326-0408</span>
+    </div>
+  </div>
+  <div class="label__picking-origin">Made in JP</div>
+  <div class="barcode" aria-hidden="true"></div>
+</div>
+<div class="label label--picking">
+  <div class="label__target">Target: 100</div>
+  <div class="label__picking-order">PICK-002</div>
+  <div class="label__picking-grid">
+    <div class="label__picking-field">
+      <span class="label__picking-label">PART NO:</span>
+      <span class="label__picking-value">D1FL20U</span>
+    </div>
+    <div class="label__picking-field label__picking-field--qty">
+      <span class="label__picking-label">QTY:</span>
+      <span class="label__picking-value label__qty">100</span>
+    </div>
+    <div class="label__picking-field">
+      <span class="label__picking-label">LOT:</span>
+      <span class="label__picking-value">D1F240701</span>
+    </div>
+  </div>
+  <div class="label__picking-origin">Made in JP</div>
+  <div class="barcode" aria-hidden="true"></div>
+</div>
+      </div>
+<div class="subsection">
+        <div class="subsection__title">PICK-003 — OKAYA / IK</div>
+<div class="label label--picking">
+  <div class="label__target">Target: 500</div>
+  <div class="label__picking-order">PICK-003</div>
+  <div class="label__picking-grid">
+    <div class="label__picking-field">
+      <span class="label__picking-label">PART NO:</span>
+      <span class="label__picking-value">OKAYA-RE104-L</span>
+    </div>
+    <div class="label__picking-field label__picking-field--qty">
+      <span class="label__picking-label">QTY:</span>
+      <span class="label__picking-value label__qty">500</span>
+    </div>
+    <div class="label__picking-field">
+      <span class="label__picking-label">LOT:</span>
+      <span class="label__picking-value">OKY240701</span>
+    </div>
+  </div>
+  <div class="label__picking-origin">Made in CN</div>
+  <div class="barcode" aria-hidden="true"></div>
+</div>
+<div class="label label--picking">
+  <div class="label__target">Target: 100</div>
+  <div class="label__picking-order">PICK-003</div>
+  <div class="label__picking-grid">
+    <div class="label__picking-field">
+      <span class="label__picking-label">PART NO:</span>
+      <span class="label__picking-value">D1FL20U</span>
+    </div>
+    <div class="label__picking-field label__picking-field--qty">
+      <span class="label__picking-label">QTY:</span>
+      <span class="label__picking-value label__qty">100</span>
+    </div>
+    <div class="label__picking-field">
+      <span class="label__picking-label">LOT:</span>
+      <span class="label__picking-value">D1F240701</span>
+    </div>
+  </div>
+  <div class="label__picking-origin">Made in JP</div>
+  <div class="barcode" aria-hidden="true"></div>
+</div>
+<div class="label label--picking">
+  <div class="label__target">Target: 200</div>
+  <div class="label__picking-order">PICK-003</div>
+  <div class="label__picking-grid">
+    <div class="label__picking-field">
+      <span class="label__picking-label">PART NO:</span>
+      <span class="label__picking-value">IL34063ADT</span>
+    </div>
+    <div class="label__picking-field label__picking-field--qty">
+      <span class="label__picking-label">QTY:</span>
+      <span class="label__picking-value label__qty">200</span>
+    </div>
+    <div class="label__picking-field">
+      <span class="label__picking-label">LOT:</span>
+      <span class="label__picking-value">IK240701</span>
+    </div>
+  </div>
+  <div class="label__picking-origin">Made in KR</div>
+  <div class="barcode" aria-hidden="true"></div>
+</div>
+      </div>
+<div class="subsection">
+        <div class="subsection__title">PICK-004 — KYOCERA / NDK / M-TRON</div>
+<div class="label label--picking">
+  <div class="label__target">Target: 50</div>
+  <div class="label__picking-order">PICK-004</div>
+  <div class="label__picking-grid">
+    <div class="label__picking-field">
+      <span class="label__picking-label">PART NO:</span>
+      <span class="label__picking-value">NX8045GB</span>
+    </div>
+    <div class="label__picking-field label__picking-field--qty">
+      <span class="label__picking-label">QTY:</span>
+      <span class="label__picking-value label__qty">50</span>
+    </div>
+    <div class="label__picking-field">
+      <span class="label__picking-label">LOT:</span>
+      <span class="label__picking-value">NDK240701</span>
+    </div>
+  </div>
+  <div class="label__picking-origin">Made in CN</div>
+  <div class="barcode" aria-hidden="true"></div>
+</div>
+<div class="label label--picking">
+  <div class="label__target">Target: 100</div>
+  <div class="label__picking-order">PICK-004</div>
+  <div class="label__picking-grid">
+    <div class="label__picking-field">
+      <span class="label__picking-label">PART NO:</span>
+      <span class="label__picking-value">CX2016SA20000D0HSSCC</span>
+    </div>
+    <div class="label__picking-field label__picking-field--qty">
+      <span class="label__picking-label">QTY:</span>
+      <span class="label__picking-value label__qty">100</span>
+    </div>
+    <div class="label__picking-field">
+      <span class="label__picking-label">LOT:</span>
+      <span class="label__picking-value">NDK240702</span>
+    </div>
+  </div>
+  <div class="label__picking-origin">Made in JP</div>
+  <div class="barcode" aria-hidden="true"></div>
+</div>
+<div class="label label--picking">
+  <div class="label__target">Target: 120</div>
+  <div class="label__picking-order">PICK-004</div>
+  <div class="label__picking-grid">
+    <div class="label__picking-field">
+      <span class="label__picking-label">PART NO:</span>
+      <span class="label__picking-value">Q-SPT7P0327620C5GF</span>
+    </div>
+    <div class="label__picking-field label__picking-field--qty">
+      <span class="label__picking-label">QTY:</span>
+      <span class="label__picking-value label__qty">120</span>
+    </div>
+    <div class="label__picking-field">
+      <span class="label__picking-label">LOT:</span>
+      <span class="label__picking-value">MTR240701</span>
+    </div>
+  </div>
+  <div class="label__picking-origin">Made in MY</div>
+  <div class="barcode" aria-hidden="true"></div>
+</div>
+      </div>
+<div class="subsection">
+        <div class="subsection__title">PICK-005 — IK / NCC</div>
+<div class="label label--picking">
+  <div class="label__target">Target: 200</div>
+  <div class="label__picking-order">PICK-005</div>
+  <div class="label__picking-grid">
+    <div class="label__picking-field">
+      <span class="label__picking-label">PART NO:</span>
+      <span class="label__picking-value">IL34063ADT</span>
+    </div>
+    <div class="label__picking-field label__picking-field--qty">
+      <span class="label__picking-label">QTY:</span>
+      <span class="label__picking-value label__qty">200</span>
+    </div>
+    <div class="label__picking-field">
+      <span class="label__picking-label">LOT:</span>
+      <span class="label__picking-value">IK240702</span>
+    </div>
+  </div>
+  <div class="label__picking-origin">Made in KR</div>
+  <div class="barcode" aria-hidden="true"></div>
+</div>
+<div class="label label--picking">
+  <div class="label__target">Target: 250</div>
+  <div class="label__picking-order">PICK-005</div>
+  <div class="label__picking-grid">
+    <div class="label__picking-field">
+      <span class="label__picking-label">PART NO:</span>
+      <span class="label__picking-value">NCC-TND14V-471KB00AAA0</span>
+    </div>
+    <div class="label__picking-field label__picking-field--qty">
+      <span class="label__picking-label">QTY:</span>
+      <span class="label__picking-value label__qty">250</span>
+    </div>
+    <div class="label__picking-field">
+      <span class="label__picking-label">LOT:</span>
+      <span class="label__picking-value">NCC240701</span>
+    </div>
+  </div>
+  <div class="label__picking-origin">Made in ID</div>
+  <div class="barcode" aria-hidden="true"></div>
+</div>
+<div class="label label--picking">
+  <div class="label__target">Target: 1</div>
+  <div class="label__picking-order">PICK-005</div>
+  <div class="label__picking-grid">
+    <div class="label__picking-field">
+      <span class="label__picking-label">PART NO:</span>
+      <span class="label__picking-value">04028DA12RBUFB</span>
+    </div>
+    <div class="label__picking-field label__picking-field--qty">
+      <span class="label__picking-label">QTY:</span>
+      <span class="label__picking-value label__qty">1</span>
+    </div>
+    <div class="label__picking-field">
+      <span class="label__picking-label">LOT:</span>
+      <span class="label__picking-value">YAM240701</span>
+    </div>
+  </div>
+  <div class="label__picking-origin">Made in CN</div>
+  <div class="barcode" aria-hidden="true"></div>
+</div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>
