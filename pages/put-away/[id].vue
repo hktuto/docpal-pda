@@ -7,7 +7,7 @@
       <DetailHeader
         v-model="headerExpanded"
         :title="order.refNo"
-        :status="order.status"
+        :status="headerStatus"
         :badge-class="badgeClass(order.status)"
         :flush-top="route.meta.props?.noPadding"
         class="detail-header"
@@ -64,6 +64,7 @@
 <script setup lang="ts">
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { badgeClass } from "~/composables/useStatusBadge";
+import { useStatusLabel } from "~/composables/useStatusLabel";
 import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import { useErrorMessage } from "~/composables/errorMessage";
 import { I18nError } from "~/composables/i18nError";
@@ -99,6 +100,11 @@ const headerExpanded = ref(false);
 const boxesExpanded = ref(false);
 const newBoxDialogOpen = ref(false);
 const expandedItemBoxes = ref<Set<string>>(new Set());
+
+const statusLabel = useStatusLabel();
+const headerStatus = computed(() =>
+  order.value ? statusLabel.receiving(order.value.status) : ""
+);
 
 const db = await useDb();
 const { currentUser } = useAuth();
