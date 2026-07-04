@@ -1,11 +1,17 @@
 <template>
-  <div v-if="showChips" class="candidate-chips">
+  <div
+    v-if="showChips"
+    class="candidate-chips"
+    role="group"
+    :aria-label="label"
+  >
     <button
-      v-for="candidate in candidates"
-      :key="candidate"
+      v-for="(candidate, index) in candidates"
+      :key="index"
       type="button"
       class="candidate-chip"
       :class="{ 'candidate-chip--active': candidate === modelValue }"
+      :aria-pressed="candidate === modelValue"
       @click="emit('update:modelValue', candidate)"
     >
       {{ candidate }}
@@ -17,6 +23,7 @@
 const props = defineProps<{
   modelValue: string;
   candidates: string[];
+  label?: string;
 }>();
 
 const emit = defineEmits<{
@@ -42,10 +49,20 @@ const showChips = computed(() => props.candidates.length > 1);
   color: var(--text);
   font-size: 0.8125rem;
   cursor: pointer;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .candidate-chip:hover:not(.candidate-chip--active) {
   border-color: var(--primary);
+}
+
+.candidate-chip:focus-visible {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(0, 191, 165, 0.15);
 }
 
 .candidate-chip--active {
