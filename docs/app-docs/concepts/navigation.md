@@ -12,6 +12,8 @@ The home screen (`pages/index.vue`) shows the main menu cards:
 
 Tap a card to enter that flow.
 
+![Home screen](../user-menu/assets/home-page.png)
+
 ## App header
 
 `components/AppHeader.vue` appears on most screens and provides:
@@ -29,6 +31,8 @@ Most flows follow a list → detail pattern:
 2. Tapping an item opens a detail page.
 3. The detail page shows header information and action rows.
 4. A floating action button (`ScanFab`) often opens a scan or action modal.
+
+![Example detail page](../flows/receiving/assets/receiving-detail.png)
 
 ## Common UI patterns
 

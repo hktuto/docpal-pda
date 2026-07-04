@@ -9,6 +9,10 @@ Use the Measuring flow when a picking order status becomes finished and a measur
 ## Concept
 
 1. The operator opens the Measuring list.
+
+   ![Measuring list](./assets/measuring-list.png)
+   *Measuring list (empty state when no tasks are ready)*
+
 2. The operator selects a measuring task.
 3. The task detail shows the picking order and items to pack.
 4. The operator creates shipping boxes.

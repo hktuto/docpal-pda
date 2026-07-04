@@ -4,6 +4,8 @@
 
 From the home screen, tap **Goods Verify**. The list shows pending verification tasks.
 
+![Goods verify list](./assets/goods-verify-list.png)
+
 ## 2. Select a task
 
 Tap the task to open the detail page.
@@ -11,6 +13,8 @@ Tap the task to open the detail page.
 ## 3. Review expected items
 
 The detail shows the items to verify, usually with part number, quantity, and expected location.
+
+![Goods verify shelf detail](./assets/goods-verify-shelf.png)
 
 ## 4. Verify each item
 

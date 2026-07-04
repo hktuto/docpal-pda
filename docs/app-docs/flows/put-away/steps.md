@@ -4,6 +4,8 @@
 
 From the home screen, tap **Put-away**. The list shows orders/tasks waiting to be put away.
 
+![Put-away list](./assets/put-away-list.png)
+
 ## 2. Select a task
 
 Tap the task to open the detail page.
@@ -11,6 +13,8 @@ Tap the task to open the detail page.
 ## 3. Review available items
 
 The detail shows the receiving-area items that can be moved.
+
+![Put-away detail](./assets/put-away-detail.png)
 
 ## 4. Choose a destination shelf
 

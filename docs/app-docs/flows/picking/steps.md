@@ -4,9 +4,13 @@
 
 From the home screen, tap **Picking**. The list shows open picking orders with status and summary information.
 
+![Picking list](./assets/picking-list.png)
+
 ## 2. Select a picking order
 
 Tap the order you want to work on. The detail page opens.
+
+![Picking detail](./assets/picking-detail.png)
 
 ## 3. Review allocated lines
 

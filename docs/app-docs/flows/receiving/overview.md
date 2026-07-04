@@ -9,7 +9,13 @@ Use the Receiving flow when a supplier shipment arrives at the warehouse.
 ## Concept
 
 1. The operator opens the Receiving list.
+
+   ![Receiving list](./assets/receiving-list.png)
+
 2. The operator selects a receiving order.
+
+   ![Receiving detail](./assets/receiving-detail.png)
+
 3. The order detail shows invoices and invoice items.
 4. The operator confirms quantities and reports any mismatches.
 5. Confirmed items create receiving-area inventory lots.

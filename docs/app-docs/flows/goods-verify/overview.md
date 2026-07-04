@@ -9,7 +9,9 @@ Use the Goods Verify flow when an explicit verification step is required for inc
 ## Concept
 
 1. The operator opens the Goods Verify list.
+   ![Goods verify list](./assets/goods-verify-list.png)
 2. The operator selects a verification task.
+   ![Goods verify shelf detail](./assets/goods-verify-shelf.png)
 3. The app shows the expected goods.
 4. The operator scans or confirms each item.
 5. The verification result is recorded.

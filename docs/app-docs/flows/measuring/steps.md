@@ -4,6 +4,8 @@
 
 From the home screen, tap **Measuring**. The list shows measuring tasks for finished picking orders.
 
+![Measuring list](./assets/measuring-list.png)
+
 ## 2. Select a measuring task
 
 Tap the task to open the detail page.

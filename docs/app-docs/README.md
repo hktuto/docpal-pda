@@ -5,6 +5,7 @@ This manual explains the warehouse PDA demo app for **operators and trainers**, 
 ## Quick links
 
 - [Concepts](./concepts/overview.md) — what the app is, who uses it, and how it is organized.
+- [User Menu](./user-menu/index.md) — login and home screen reference.
 - [Flows](./flows/index.md) — step-by-step guides for each warehouse operation.
 - [Components](./components/shared-components.md) — shared UI building blocks.
 - [Composables](./composables/index.md) — reusable Vue logic.
@@ -12,7 +13,7 @@ This manual explains the warehouse PDA demo app for **operators and trainers**, 
 
 ## For operators and trainers
 
-Start with [Concepts → Overview](./concepts/overview.md), then follow the flow you need:
+Start with [Concepts → Overview](./concepts/overview.md) and the [User Menu](./user-menu/index.md), then follow the flow you need:
 
 1. [Picking](./flows/picking/overview.md)
 2. [Receiving](./flows/receiving/overview.md)

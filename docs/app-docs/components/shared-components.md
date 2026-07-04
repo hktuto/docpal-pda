@@ -2,6 +2,8 @@
 
 These components are reused across multiple flows.
 
+![Shared components in context](../flows/receiving/assets/receiving-detail.png)
+
 ## AppHeader
 
 `components/AppHeader.vue`

@@ -9,7 +9,12 @@ Use the Put-away flow after receiving has created receiving-area inventory and t
 ## Concept
 
 1. The operator opens the Put-away list.
+
+   ![Put-away list](./assets/put-away-list.png)
+
 2. The operator selects a put-away task or receiving order.
+
+   ![Put-away detail](./assets/put-away-detail.png)
 3. The app shows items available to move.
 4. The operator scans or selects a shelf destination.
 5. The operator moves items into a shelf box.

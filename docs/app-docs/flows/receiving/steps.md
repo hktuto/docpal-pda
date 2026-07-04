@@ -4,9 +4,13 @@
 
 From the home screen, tap **Receiving**. The list shows receiving orders with status and a pending picking-order count badge.
 
+![Receiving list](./assets/receiving-list.png)
+
 ## 2. Select a receiving order
 
 Tap the order you want to receive. The detail page opens on the Receiving view.
+
+![Receiving detail](./assets/receiving-detail.png)
 
 ## 3. Review invoices and items
 
