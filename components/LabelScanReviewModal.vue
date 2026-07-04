@@ -31,32 +31,56 @@
           <label class="field">
             <span>{{ $t('labelScanReviewModal.partNo') }}</span>
             <input v-model="editable.partNo" type="text" :placeholder="$t('labelScanReviewModal.placeholderPartNo')" />
-            <CandidateChips v-model="editable.partNo" :candidates="partNoCandidates" />
+            <CandidateChips
+              v-model="editable.partNo"
+              :candidates="partNoCandidates"
+              :label="$t('labelScanReviewModal.partNo')"
+            />
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.dateCode') }}</span>
             <input v-model="editable.dateCode" type="text" :placeholder="$t('labelScanReviewModal.placeholderDateCode')" />
-            <CandidateChips v-model="editable.dateCode" :candidates="dateCodeCandidates" />
+            <CandidateChips
+              v-model="editable.dateCode"
+              :candidates="dateCodeCandidates"
+              :label="$t('labelScanReviewModal.dateCode')"
+            />
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.lotCode') }}</span>
             <input v-model="editable.lotCode" type="text" :placeholder="$t('labelScanReviewModal.placeholderLotCode')" />
-            <CandidateChips v-model="editable.lotCode" :candidates="lotCodeCandidates" />
+            <CandidateChips
+              v-model="editable.lotCode"
+              :candidates="lotCodeCandidates"
+              :label="$t('labelScanReviewModal.lotCode')"
+            />
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.coo') }}</span>
             <input v-model="editable.coo" type="text" :placeholder="$t('labelScanReviewModal.placeholderCoo')" />
-            <CandidateChips v-model="editable.coo" :candidates="cooCandidates" />
+            <CandidateChips
+              v-model="editable.coo"
+              :candidates="cooCandidates"
+              :label="$t('labelScanReviewModal.coo')"
+            />
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.cow') }}</span>
             <input v-model="editable.cow" type="text" :placeholder="$t('labelScanReviewModal.placeholderCow')" />
-            <CandidateChips v-model="editable.cow" :candidates="cowCandidates" />
+            <CandidateChips
+              v-model="editable.cow"
+              :candidates="cowCandidates"
+              :label="$t('labelScanReviewModal.cow')"
+            />
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.qty') }}</span>
             <input v-model.number="editable.qty" type="number" min="1" :placeholder="$t('labelScanReviewModal.placeholderQty')" />
-            <CandidateChips v-model="qtyChipValue" :candidates="qtyCandidates" />
+            <CandidateChips
+              v-model="qtyChipValue"
+              :candidates="qtyCandidates"
+              :label="$t('labelScanReviewModal.qty')"
+            />
           </label>
         </form>
 
@@ -193,7 +217,12 @@ const qtyCandidates = computed(() => props.options.qtys.map(String));
 const qtyChipValue = computed({
   get: () => String(editable.value.qty),
   set: (v) => {
-    editable.value.qty = v === "" ? "" : Number(v);
+    if (v === "") {
+      editable.value.qty = "";
+    } else {
+      const n = Number(v);
+      editable.value.qty = Number.isNaN(n) ? "" : n;
+    }
   },
 });
 

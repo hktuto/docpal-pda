@@ -23,7 +23,7 @@
 const props = defineProps<{
   modelValue: string;
   candidates: string[];
-  label?: string;
+  label: string;
 }>();
 
 const emit = defineEmits<{
