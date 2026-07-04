@@ -342,17 +342,14 @@ export default {
     noZone: "No zone",
     shelf: {
       title: "Shelf Boxes",
-      back: "← All shelves",
       intro: "Boxes on shelf {shelfCode}.",
       searchPlaceholder: "Search box ID or status…",
       empty: "No boxes on this shelf.",
       verified: "verified",
       lastCheck: "Last check: {datetime}",
-      today: "Today",
     },
     box: {
       title: "Verify Box",
-      back: "← Shelf boxes",
       notFound: "Box not found.",
       boxTitle: "Box {id}",
       markVerified: "Mark box verified",
@@ -363,9 +360,6 @@ export default {
       part: "Part",
       qty: "Qty",
       verified: "Verified",
-      yes: "Yes",
-      no: "No",
-      scan: "Scan",
     },
   },
   measuring: {

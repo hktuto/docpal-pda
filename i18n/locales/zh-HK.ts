@@ -342,17 +342,14 @@ export default {
     noZone: "無區域",
     shelf: {
       title: "貨架箱號",
-      back: "← 全部貨架",
       intro: "貨架 {shelfCode} 上的箱號。",
       searchPlaceholder: "按箱號或狀態搜尋…",
       empty: "此貨架上沒有箱號。",
       verified: "已查貨",
       lastCheck: "上次查貨：{datetime}",
-      today: "今日",
     },
     box: {
       title: "查貨箱",
-      back: "← 貨架箱號",
       notFound: "找不到該箱號。",
       boxTitle: "箱號 {id}",
       markVerified: "標記箱號已查貨",
@@ -363,9 +360,6 @@ export default {
       part: "料號",
       qty: "數量",
       verified: "已查貨",
-      yes: "是",
-      no: "否",
-      scan: "掃描",
     },
   },
   measuring: {

@@ -342,17 +342,14 @@ export default {
     noZone: "无区域",
     shelf: {
       title: "货架箱子",
-      back: "← 全部货架",
       intro: "货架 {shelfCode} 上的箱子。",
       searchPlaceholder: "按箱号或状态搜索…",
       empty: "此货架上没有箱子。",
       verified: "已盘点",
       lastCheck: "上次盘点：{datetime}",
-      today: "今天",
     },
     box: {
       title: "盘点箱子",
-      back: "← 货架箱子",
       notFound: "未找到该箱子。",
       boxTitle: "箱子 {id}",
       markVerified: "标记箱子已盘点",
@@ -363,9 +360,6 @@ export default {
       part: "料号",
       qty: "数量",
       verified: "已盘点",
-      yes: "是",
-      no: "否",
-      scan: "扫描",
     },
   },
   measuring: {
