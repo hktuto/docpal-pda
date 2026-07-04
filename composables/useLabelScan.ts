@@ -1,11 +1,25 @@
-import { ref } from 'vue';
-import { RectangleDetection, SCAN_NOT_AVAILABLE_MESSAGE, type LabelScanCapture } from './useRectangleDetection';
-import { parseRecognizedText } from './useRecognizedTextParser';
-import { runScanMatcher, type ScanTaskContext, type ScanMatchResult } from './useScanMatchers';
-import { I18nError } from '~/composables/i18nError';
-import { useErrorMessage } from '~/composables/errorMessage';
-import type { OcrInput } from './useMockOcr';
-import type { CandidateOptions } from '~/utils/parseOcrScan';
+import { ref } from "vue";
+import {
+  RectangleDetection,
+  SCAN_NOT_AVAILABLE_MESSAGE,
+  type LabelScanCapture,
+} from "./useRectangleDetection";
+import { runScanMatcher, type ScanTaskContext, type ScanMatchResult } from "./useScanMatchers";
+import { I18nError } from "~/composables/i18nError";
+import { useErrorMessage } from "~/composables/errorMessage";
+import { parseAndIdentify, type CandidateOptions, type RawOcrCapture } from "~/utils/parseOcrScan";
+import { ocrResultToInput } from "~/utils/ocrResultToInput";
+import type { OcrInput } from "./useMockOcr";
+
+function parseBarcodes(barcodesJson: string): RawOcrCapture["barcodes"] {
+  try {
+    const parsed = JSON.parse(barcodesJson);
+    if (Array.isArray(parsed)) return parsed;
+  } catch {
+    // ignore malformed barcode JSON
+  }
+  return [];
+}
 
 export type LabelScanResult =
   | { status: 'applied' }
@@ -39,8 +53,18 @@ export function useLabelScan() {
 
     try {
       const capture = await RectangleDetection.scanLabel();
-      const parsed = parseRecognizedText(capture.text);
-      console.log('[useLabelScan]', { imagePath: capture.imagePath, text: capture.text, parsed });
+      const barcodes = parseBarcodes(capture.barcodes);
+      const parsedResult = parseAndIdentify(
+        { text: capture.text, barcodes },
+        context.targets ?? []
+      );
+      const parsed = ocrResultToInput(parsedResult.parsed);
+      console.log("[useLabelScan]", {
+        imagePath: capture.imagePath,
+        text: capture.text,
+        parsedResult,
+        parsed,
+      });
 
       const matchResult = await runScanMatcher(context, parsed);
 
@@ -57,7 +81,7 @@ export function useLabelScan() {
         status: 'review',
         capture,
         parsed,
-        options: { itemIds: [], qtys: [], coos: [], dateCodes: [], lotCodes: [], cows: [] },
+        options: parsedResult.options,
         matchResult,
       };
     } catch (e: unknown) {
