@@ -1,7 +1,7 @@
 import type { OcrInput } from '~/composables/useMockOcr';
-import type { OcrParseResult } from '~/utils/parseOcrScan';
+import type { ParsedFields } from '~/utils/parseOcrScan';
 
-export function ocrResultToInput(parsed: OcrParseResult['parsed']): OcrInput {
+export function ocrResultToInput(parsed: ParsedFields): OcrInput {
   return {
     partNo: parsed.itemId ?? '',
     dateCode: parsed.dateCode ?? '',

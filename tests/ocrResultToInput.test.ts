@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { ocrResultToInput } from '../utils/ocrResultToInput';
-import type { OcrParseResult } from '../utils/parseOcrScan';
+import type { ParsedFields } from '../utils/parseOcrScan';
 
 describe('ocrResultToInput', () => {
   it('maps all parsed fields to the matcher input shape', () => {
-    const parsed: OcrParseResult['parsed'] = {
+    const parsed: ParsedFields = {
       itemId: 'RK73B1JTTD181G',
       qty: 5000,
       coo: 'JP',
@@ -24,7 +24,7 @@ describe('ocrResultToInput', () => {
   });
 
   it('defaults missing values to empty strings and empty qty', () => {
-    const parsed: OcrParseResult['parsed'] = {
+    const parsed: ParsedFields = {
       itemId: null,
     };
 
@@ -39,7 +39,7 @@ describe('ocrResultToInput', () => {
   });
 
   it('defaults individual missing fields to empty strings', () => {
-    const parsed: OcrParseResult['parsed'] = {
+    const parsed: ParsedFields = {
       itemId: 'RK73B1JTTD181G',
       qty: undefined,
       coo: 'JP',
@@ -55,6 +55,18 @@ describe('ocrResultToInput', () => {
       coo: 'JP',
       cow: '',
       qty: '',
+    });
+  });
+
+  it('passes through empty strings and zero qty unchanged', () => {
+    const parsed: ParsedFields = { itemId: '', qty: 0 };
+    expect(ocrResultToInput(parsed)).toEqual({
+      partNo: '',
+      dateCode: '',
+      lotCode: '',
+      coo: '',
+      cow: '',
+      qty: 0,
     });
   });
 });
