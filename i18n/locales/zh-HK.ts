@@ -238,6 +238,7 @@ export default {
       scannedQty: "已掃描數量",
       boxedQty: "已裝箱數量",
       requiredDateCode: "需求日期代碼",
+      dateLotCooCow: "日期 / 批次 / 產地 / 晶圓產地",
       status: "狀態",
       allocations: "分配",
       location: "位置",

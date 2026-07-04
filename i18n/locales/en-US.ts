@@ -238,6 +238,7 @@ export default {
       scannedQty: "Scanned qty",
       boxedQty: "Boxed qty",
       requiredDateCode: "Required date code",
+      dateLotCooCow: "Date / Lot / COO / COW",
       status: "Status",
       allocations: "Allocations",
       location: "Location",
