@@ -1,9 +1,5 @@
 <template>
   <div>
-    <div style="margin-bottom: 1rem;">
-      <NuxtLink to="/goods-verify" class="btn btn--small">{{ $t('common.backToAllShelves') }}</NuxtLink>
-    </div>
-
     <p class="card__meta" style="margin-bottom: 1rem;">
       {{ $t('goodsVerify.shelf.intro', { shelfCode }) }}
     </p>

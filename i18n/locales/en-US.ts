@@ -438,6 +438,7 @@ export default {
   appHeader: {
     goBack: "Go back",
     home: "Home",
+    menu: "Menu",
     resetDb: "Reset local DB",
     logout: "Logout",
     resetConfirm: "Reset all local data? This cannot be undone."
@@ -619,11 +620,13 @@ export default {
     allItems: "All items",
     filterSupplier: "Supplier",
     filterItem: "Item",
-    onlyWithInventory: "Only items with inventory",
+    onlyWithInventory: "Only with inventory",
     noResults: "No results found.",
     noItems: "No items for this supplier.",
     noInventory: "No inventory",
     totalQty: "Total: {qty}",
+    supplierCounts: "{withInventory} / {total} items",
+    lotQty: "{available} / {total}",
     location: "Location",
     shelf: "Shelf",
     box: "Box",

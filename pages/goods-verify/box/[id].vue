@@ -1,11 +1,5 @@
 <template>
   <div>
-    <div style="margin-bottom: 1rem;">
-      <NuxtLink :to="`/goods-verify/shelf/${box?.shelfCode ?? ''}`" class="btn btn--small">
-        {{ $t('common.backToShelfBoxes') }}
-      </NuxtLink>
-    </div>
-
     <EmptyState v-if="pending">{{ $t('common.loading') }}</EmptyState>
     <EmptyState v-else-if="error" error>{{ $t('common.errorPrefix', { message: error }) }}</EmptyState>
 

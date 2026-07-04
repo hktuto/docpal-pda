@@ -48,11 +48,13 @@
           @click="toggleSupplier(supplier.id)"
         >
           <span class="supplier-card__name">{{ supplier.name }}</span>
+          <span class="supplier-card__counts">{{ $t('stockSearch.supplierCounts', { withInventory: supplier.partsWithInventory, total: supplier.totalParts }) }}</span>
           <span class="supplier-card__chevron">{{ expandedSupplierId === supplier.id ? '▾' : '▸' }}</span>
         </button>
 
         <div v-if="expandedSupplierId === supplier.id" class="supplier-card__body">
-          <EmptyState v-if="supplierPartInventory.length === 0">{{ $t('stockSearch.noItems') }}</EmptyState>
+          <EmptyState v-if="loadingSupplierId === supplier.id">{{ $t('common.loading') }}</EmptyState>
+          <EmptyState v-else-if="supplierPartInventory.length === 0">{{ $t('stockSearch.noItems') }}</EmptyState>
 
           <div
             v-for="item in supplierPartInventory"
@@ -71,7 +73,7 @@
             <ul v-else class="part-item__lots">
               <li v-for="(lot, index) in item.lots" :key="index" class="lot-row">
                 <span class="lot-row__location">{{ lot.locationLabel }}</span>
-                <span class="lot-row__qty">{{ lot.availableQty }} / {{ lot.totalQty }}</span>
+                <span class="lot-row__qty">{{ $t('stockSearch.lotQty', { available: lot.availableQty, total: lot.totalQty }) }}</span>
                 <span v-if="lot.dateCode || lot.lotCode" class="lot-row__meta">
                   {{ lot.dateCode }} / {{ lot.lotCode }}
                 </span>
@@ -89,10 +91,10 @@ import EmptyState from "~/components/EmptyState.vue";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { useErrorMessage } from "~/composables/errorMessage";
 import {
-  getAllSuppliers,
+  getSuppliersWithInventoryStats,
   getPartsBySupplierId,
   getInventoryLotsForParts,
-  type StockSearchSupplier,
+  type StockSearchSupplierWithStats,
   type StockSearchPart,
   type StockSearchInventoryLot,
 } from "~/db/stockSearch";
@@ -107,10 +109,11 @@ useHead({ title: t("stockSearch.title") });
 
 const pending = ref(true);
 const error = ref<string | null>(null);
-const suppliers = ref<StockSearchSupplier[]>([]);
+const suppliers = ref<StockSearchSupplierWithStats[]>([]);
 const partsBySupplier = ref<Record<string, StockSearchPart[]>>({});
 const lotsByPart = ref<Record<string, StockSearchInventoryLot[]>>({});
 const expandedSupplierId = ref<string | null>(null);
+const loadingSupplierId = ref<string | null>(null);
 
 const keyword = ref("");
 const selectedSupplierId = ref("");
@@ -136,6 +139,10 @@ const filteredSuppliers = computed(() => {
         (p.description?.toLowerCase().includes(lowerKeyword.value) ?? false)
       )
     );
+  }
+
+  if (onlyWithInventory.value) {
+    list = list.filter((s) => s.partsWithInventory > 0);
   }
 
   return list;
@@ -174,7 +181,7 @@ async function load() {
   pending.value = true;
   error.value = null;
   try {
-    suppliers.value = await getAllSuppliers(db);
+    suppliers.value = await getSuppliersWithInventoryStats(db);
   } catch (e) {
     error.value = errorMessage(e);
   } finally {
@@ -191,6 +198,7 @@ async function toggleSupplier(supplierId: string) {
   expandedSupplierId.value = supplierId;
 
   if (!partsBySupplier.value[supplierId]) {
+    loadingSupplierId.value = supplierId;
     try {
       const parts = await getPartsBySupplierId(db, supplierId);
       partsBySupplier.value[supplierId] = parts;
@@ -209,6 +217,8 @@ async function toggleSupplier(supplierId: string) {
     } catch (e) {
       error.value = errorMessage(e);
       expandedSupplierId.value = null;
+    } finally {
+      loadingSupplierId.value = null;
     }
   }
 }
@@ -292,6 +302,11 @@ useVisibleReload(load);
   font-size: 1rem;
   text-align: left;
   cursor: pointer;
+}
+
+.supplier-card__counts {
+  color: var(--muted);
+  font-size: 0.875rem;
 }
 
 .supplier-card__body {

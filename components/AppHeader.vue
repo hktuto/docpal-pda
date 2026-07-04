@@ -31,32 +31,35 @@
 
     <h1 class="app-header__title">{{ title }}</h1>
 
-    <div class="app-header__actions">
-      <LanguageSwitcher />
-      <button
-        class="app-header__action app-header__action--reset"
-        :aria-label="t('appHeader.resetDb')"
-        :title="t('appHeader.resetDb')"
-        @click="resetDb"
-      >
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-          <path d="M3 3v5h5"/>
+    <details class="app-header__menu">
+      <summary class="app-header__menu-toggle" :aria-label="t('appHeader.menu')" :title="t('appHeader.menu')">
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="6" r="1.5"/>
+          <circle cx="12" cy="12" r="1.5"/>
+          <circle cx="12" cy="18" r="1.5"/>
         </svg>
-      </button>
-      <button
-        class="app-header__action"
-        :aria-label="t('appHeader.logout')"
-        :title="t('appHeader.logout')"
-        @click="logout"
-      >
-        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-          <polyline points="16 17 21 12 16 7"/>
-          <line x1="21" x2="9" y1="12" y2="12"/>
-        </svg>
-      </button>
-    </div>
+      </summary>
+      <div class="app-header__menu-body">
+        <div class="app-header__menu-row">
+          <LanguageSwitcher />
+        </div>
+        <button class="app-header__menu-row app-header__menu-row--danger" @click="resetDb">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+            <path d="M3 3v5h5"/>
+          </svg>
+          <span>{{ t('appHeader.resetDb') }}</span>
+        </button>
+        <button class="app-header__menu-row" @click="logout">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" x2="9" y1="12" y2="12"/>
+          </svg>
+          <span>{{ t('appHeader.logout') }}</span>
+        </button>
+      </div>
+    </details>
   </header>
 </template>
 
@@ -109,10 +112,72 @@ async function resetDb() {
 </script>
 
 <style scoped>
-.app-header__actions {
+.app-header__menu {
+  position: relative;
+}
+
+.app-header__menu-toggle {
   display: flex;
   align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  list-style: none;
+  color: var(--text);
+  background: transparent;
+}
+
+.app-header__menu-toggle::-webkit-details-marker {
+  display: none;
+}
+
+.app-header__menu-toggle:hover {
+  background: var(--bg);
+}
+
+.app-header__menu-body {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  min-width: 12rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
   gap: 0.25rem;
+  z-index: 100;
+}
+
+.app-header__menu-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text);
+  font-size: 0.875rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.app-header__menu-row:hover {
+  background: var(--bg);
+}
+
+.app-header__menu-row--danger {
+  color: var(--danger);
+}
+
+.app-header__menu-row--danger:hover {
+  background: #fef2f2;
 }
 
 .app-header__logo {

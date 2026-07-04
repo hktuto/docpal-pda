@@ -438,6 +438,7 @@ export default {
   appHeader: {
     goBack: "返回",
     home: "主頁",
+    menu: "選單",
     resetDb: "重設本地資料庫",
     logout: "登出",
     resetConfirm: "重設所有本地資料？此操作無法復原。"
@@ -619,11 +620,13 @@ export default {
     allItems: "全部物料",
     filterSupplier: "供應商",
     filterItem: "物料",
-    onlyWithInventory: "僅顯示有庫存的物料",
+    onlyWithInventory: "僅顯示有庫存",
     noResults: "未找到結果。",
     noItems: "該供應商暫無物料。",
     noInventory: "無庫存",
     totalQty: "合計：{qty}",
+    supplierCounts: "{withInventory} / {total} 項物料",
+    lotQty: "可用 {available} / 共 {total}",
     location: "位置",
     shelf: "貨架",
     box: "箱子",

@@ -10,6 +10,11 @@ export interface StockSearchSupplier {
   name: string;
 }
 
+export interface StockSearchSupplierWithStats extends StockSearchSupplier {
+  totalParts: number;
+  partsWithInventory: number;
+}
+
 export interface StockSearchPart {
   id: string;
   partNo: string;
@@ -42,6 +47,59 @@ export async function getAllSuppliers(db: DbType): Promise<StockSearchSupplier[]
   return db.query.suppliers.findMany({
     orderBy: (suppliers, { asc }) => asc(suppliers.name),
   });
+}
+
+export async function getSuppliersWithInventoryStats(
+  db: DbType
+): Promise<StockSearchSupplierWithStats[]> {
+  const result = await db.execute(sql`
+    WITH supplier_parts AS (
+      SELECT DISTINCT p.id AS part_id, ro.supplier_id
+      FROM parts p
+      JOIN receiving_invoice_items rii ON rii.part_id = p.id
+      JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+      JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
+      WHERE ro.supplier_id IS NOT NULL
+
+      UNION
+
+      SELECT DISTINCT p.id AS part_id, po.supplier_id
+      FROM parts p
+      JOIN picking_items pi ON pi.part_id = p.id
+      JOIN picking_orders po ON po.id = pi.picking_order_id
+      WHERE po.supplier_id IS NOT NULL
+    ),
+    inventory_parts AS (
+      SELECT DISTINCT il.part_id, sp.supplier_id
+      FROM inventory_lots il
+      JOIN supplier_parts sp ON sp.part_id = il.part_id
+      WHERE il.total_qty > 0
+    )
+    SELECT
+      s.id,
+      s.code,
+      s.name,
+      COALESCE((
+        SELECT COUNT(DISTINCT part_id)
+        FROM supplier_parts sp
+        WHERE sp.supplier_id = s.id
+      ), 0) AS total_parts,
+      COALESCE((
+        SELECT COUNT(DISTINCT part_id)
+        FROM inventory_parts ip
+        WHERE ip.supplier_id = s.id
+      ), 0) AS parts_with_inventory
+    FROM suppliers s
+    ORDER BY s.name
+  `);
+
+  return (result.rows ?? []).map((row) => ({
+    id: String(row.id),
+    code: String(row.code),
+    name: String(row.name),
+    totalParts: Number(row.total_parts ?? 0),
+    partsWithInventory: Number(row.parts_with_inventory ?? 0),
+  }));
 }
 
 export async function getPartsBySupplierId(
