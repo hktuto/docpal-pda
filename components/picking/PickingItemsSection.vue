@@ -118,7 +118,7 @@
           <li v-for="log in transitionLogs[item.id]" :key="log.id">
             {{ new Date(log.createdAt).toLocaleString() }}
             · {{ log.actorName || $t('picking.itemsSection.actorSystem') }}
-            · {{ log.fromState || $t('common.noData') }} → {{ log.toState }}
+            · {{ logStateLabel(log.fromState) }} → {{ logStateLabel(log.toState) }}
             <span v-if="log.metadata">
               · {{ logMetadataText(log.metadata) }}
             </span>
@@ -131,6 +131,7 @@
 
 <script setup lang="ts">
 import { type PickingOrderDetail, type PickingItemTransitionLog } from "~/db/picking";
+import { useLogStateLabel } from "~/composables/useLogStateLabel";
 
 type PickingItem = PickingOrderDetail["items"][number];
 type Allocation = PickingItem["allocations"][number];
@@ -159,6 +160,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const statusLabel = useStatusLabel();
+const logStateLabel = useLogStateLabel();
 
 const openBoxById = computed(() => {
   const map: Record<string, ShippingBox> = {};

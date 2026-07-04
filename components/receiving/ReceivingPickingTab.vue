@@ -116,7 +116,7 @@
             <li v-for="log in transitionLogs[pi.id]" :key="log.id" style="margin-bottom: 0.35rem;">
               {{ new Date(log.createdAt).toLocaleString() }}
               · {{ log.actorName || $t('common.actorSystem') }}
-              · {{ log.fromState ? statusLabel.picking(log.fromState) : $t('common.stateNone') }} → {{ statusLabel.picking(log.toState) }}
+              · {{ logStateLabel(log.fromState) }} → {{ logStateLabel(log.toState) }}
               <span v-if="log.metadata">
                 · {{ logMetadataText(log.metadata) }}
               </span>
@@ -130,8 +130,10 @@
 
 <script setup lang="ts">
 import { GroupedItem, GroupedOrder, TransitionLog, DisplayBox, DisplayPackage } from "./types";
+import { useLogStateLabel } from "~/composables/useLogStateLabel";
 
 const statusLabel = useStatusLabel();
+const logStateLabel = useLogStateLabel();
 
 const props = defineProps<{
   filteredGroupedPickingOrders: GroupedOrder[];
