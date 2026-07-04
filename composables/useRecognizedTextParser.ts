@@ -5,18 +5,18 @@ export function parseRecognizedText(text: string): OcrInput {
   const full = lines.join(" ").toUpperCase();
 
   const partNo =
-    extract(full, /\b(?:PN|PART\s+NO|PART\s+#|P\/N)[:\s]+([A-Z0-9\-]+)/) ||
+    extract(full, /\b(?:PN|PART\s+NO|PART\s+#|P\/N|MPN|TYPE)[:\s]+([A-Z0-9\-]+)/) ||
     extractPartNoFallback(full) ||
     "";
 
   const dateCode =
-    extract(full, /\b(?:DT|DATE\s*CODE?)[:\s]*([A-Z0-9]+)/) ||
-    extract(full, /\b(?:MFG\s*DATE|DATE)[:\s]*([A-Z0-9]+)/) ||
+    extract(full, /\b(?:DT|DATE\s*CODE?)[:\s]*([A-Z0-9\-]+)/) ||
+    extract(full, /\b(?:MFG\s*DATE|DATE)[:\s]*([A-Z0-9\-]+)/) ||
     "";
 
   const lotCode =
-    extract(full, /\b(?:LOT|LOT\s*NO?)[:\s]*([A-Z0-9]+)/) ||
-    extract(full, /\b(?:BATCH)[:\s]*([A-Z0-9]+)/) ||
+    extract(full, /\b(?:LOT|LOT\s*NO?|LOT#)[:\s]*([A-Z0-9\-]+)/) ||
+    extract(full, /\b(?:BATCH)[:\s]*([A-Z0-9\-]+)/) ||
     "";
 
   const coo =
@@ -24,7 +24,7 @@ export function parseRecognizedText(text: string): OcrInput {
     extract(full, /\bMADE\s+IN\s+([A-Z]{2,3})\b/) ||
     "";
 
-  const cow = extract(full, /\b(?:COW|COW\s*CODE?)[:\s]*([A-Z0-9]+)/) || "";
+  const cow = extract(full, /\b(?:COW|COW\s*CODE?)[:\s]*([A-Z0-9\-]+)/) || "";
 
   const qtyStr =
     extract(full, /\b(?:QTY|QUANTITY)[:\s]+(\d+)\b/) ||
