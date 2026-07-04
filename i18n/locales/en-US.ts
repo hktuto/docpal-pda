@@ -312,7 +312,7 @@ export default {
       deliveryDate: "Delivery date",
     },
     shelfBoxesPanel: {
-      title: "Shelf boxes({count})",
+      title: "Shelf boxes ({count})",
       newBox: "New box",
       creating: "Creating…",
       box: "Box",
