@@ -61,6 +61,9 @@ Page and component locations mapped to source files.
 | OCR result → `OcrInput` mapper | `utils/ocrResultToInput.ts` |
 | OCR-assisted picking DB helpers | `db/ocrPicking.ts` |
 
+- `composables/useLabelScan.ts` — orchestrates native scan; in browsers falls back to `window.prompt()` + JSON.
+- `utils/parseBrowserScanPromptJson.ts` — validates prompt JSON and converts it to `LabelScanCapture`.
+
 ## Database helpers
 
 | Helper | Source file |

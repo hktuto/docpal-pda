@@ -25,3 +25,16 @@ Typical label fields:
 - The demo normalizes common OCR errors (for example, `O` → `0`).
 - If the input does not match exactly one record, the operator must review or correct it.
 - When the scanner detects more than one possible value for a field (for example, multiple date codes or countries of origin), the review modal shows the alternatives as a row of chips below the input. Tap a chip to switch the field to that value.
+
+## Browser testing
+
+When running the app in a browser, tapping Scan opens a `prompt()` instead of the camera. Paste a JSON string with `text` (OCR text) and `barcodes` (array of `{ value, format }`) to simulate a captured label:
+
+```json
+{
+  "text": "PART: RK73B1JTTD181G\\nQTY: 5000",
+  "barcodes": [{ "value": "RK73B1JTTD181G", "format": "CODE_128" }]
+}
+```
+
+The app then runs the same parse, match, and review pipeline used on Android.
