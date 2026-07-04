@@ -53,7 +53,13 @@ export function useLabelScan() {
         return { status: 'applied' };
       }
 
-      return { status: 'review', capture, parsed, matchResult };
+      return {
+        status: 'review',
+        capture,
+        parsed,
+        options: { itemIds: [], qtys: [], coos: [], dateCodes: [], lotCodes: [], cows: [] },
+        matchResult,
+      };
     } catch (e: unknown) {
       if (isCancellationError(e)) {
         return { status: 'cancelled' };
