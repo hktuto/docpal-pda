@@ -39,4 +39,33 @@ describe('parseBrowserScanPromptJson', () => {
     expect(result).not.toBeNull();
     expect(result!.barcodes).toBe('[]');
   });
+
+  it('defaults missing barcodes to an empty array', () => {
+    const result = parseBrowserScanPromptJson(JSON.stringify({
+      text: 'X',
+    }));
+    expect(result).not.toBeNull();
+    expect(result!.barcodes).toBe('[]');
+  });
+
+  it('returns null when a barcode entry is null', () => {
+    expect(parseBrowserScanPromptJson(JSON.stringify({
+      text: 'X',
+      barcodes: [null],
+    }))).toBeNull();
+  });
+
+  it('returns null when a barcode entry is a number', () => {
+    expect(parseBrowserScanPromptJson(JSON.stringify({
+      text: 'X',
+      barcodes: [42],
+    }))).toBeNull();
+  });
+
+  it('returns null when a barcode entry is a string', () => {
+    expect(parseBrowserScanPromptJson(JSON.stringify({
+      text: 'X',
+      barcodes: ['string'],
+    }))).toBeNull();
+  });
 });
