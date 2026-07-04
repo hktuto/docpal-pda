@@ -43,7 +43,7 @@
         </div>
         <div class="detail-row">
           <span class="detail-label">{{ $t('measuring.detail.status') }}</span>
-          <StatusBadge :status="box.status" :label="boxStatusLabel.box(box.status)" />
+          <StatusBadge :status="box.status" :label="statusLabel.box(box.status)" />
         </div>
         <div class="detail-row">
           <span class="detail-label">{{ $t('measuring.detail.packages') }}</span>
@@ -87,7 +87,6 @@ definePageMeta({ title: "meta.measuringDetail", props: { noPadding: true } });
 
 const { t } = useI18n();
 const statusLabel = useStatusLabel();
-const boxStatusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 
 useHead({ title: t('measuring.detail.title') });

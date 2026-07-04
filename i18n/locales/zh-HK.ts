@@ -366,7 +366,7 @@ export default {
   measuring: {
     title: "測量",
     hint: "已準備好測量及包裝的揀貨單。",
-    packed: "已包裝 {count}",
+    packed: "已包裝 {count} / {total}",
     detail: {
       title: "測量詳情",
       supplier: "供應商",

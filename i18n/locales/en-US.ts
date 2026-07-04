@@ -366,7 +366,7 @@ export default {
   measuring: {
     title: "Measuring",
     hint: "Picking orders ready for measuring and packing.",
-    packed: "{count} packed",
+    packed: "{count} / {total} packed",
     detail: {
       title: "Measuring Detail",
       supplier: "Supplier",

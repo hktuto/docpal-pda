@@ -23,7 +23,7 @@
       </p>
       <div class="list-card__footer">
         <span class="list-card__date">
-          {{ $t('measuring.packed', { count: task.packed_items }) }}
+          {{ $t('measuring.packed', { count: task.packed_items, total: task.total_items }) }}
         </span>
       </div>
     </NuxtLink>
