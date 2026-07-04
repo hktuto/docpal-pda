@@ -12,7 +12,8 @@ export default {
     goodsVerifyBox: "Verify Box",
     measuring: "Measuring",
     measuringDetail: "Measuring Detail",
-    measureBox: "Measure Box"
+    measureBox: "Measure Box",
+    stockSearch: "Stock Search"
   },
   actions: {
     scan: "Scan",
@@ -90,7 +91,8 @@ export default {
       picking: { title: "Picking", desc: "Scan, box, and finish orders" },
       putAway: { title: "Put-away", desc: "Move stock to shelves" },
       goodsVerify: { title: "Goods Verify", desc: "Verify shelf box contents" },
-      measuring: { title: "Measuring", desc: "Weigh and pack boxes" }
+      measuring: { title: "Measuring", desc: "Weigh and pack boxes" },
+      stockSearch: { title: "Stock Search", desc: "Search inventory by supplier or item" }
     }
   },
   login: {
@@ -609,6 +611,23 @@ export default {
     "United Kingdom": "United Kingdom",
     "USA": "USA",
     "Vietnam": "Vietnam"
+  },
+  stockSearch: {
+    title: "Stock Search",
+    searchPlaceholder: "Search supplier or item...",
+    allSuppliers: "All suppliers",
+    allItems: "All items",
+    filterSupplier: "Supplier",
+    filterItem: "Item",
+    onlyWithInventory: "Only items with inventory",
+    noResults: "No results found.",
+    noItems: "No items for this supplier.",
+    noInventory: "No inventory",
+    totalQty: "Total: {qty}",
+    location: "Location",
+    shelf: "Shelf",
+    box: "Box",
+    receivingArea: "Receiving area"
   },
   logStates: {
     pending: "Pending",

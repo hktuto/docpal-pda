@@ -65,6 +65,19 @@
         <p class="menu-card__meta">{{ $t('home.menu.measuring.desc') }}</p>
       </NuxtLink>
 
+      <NuxtLink to="/stock-search" class="menu-card">
+        <div class="menu-card__icon menu-card__icon--stock-search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/>
+            <path d="m21 21-4.3-4.3"/>
+            <path d="M11 8v6"/>
+            <path d="M8 11h6"/>
+          </svg>
+        </div>
+        <p class="menu-card__title">{{ $t('home.menu.stockSearch.title') }}</p>
+        <p class="menu-card__meta">{{ $t('home.menu.stockSearch.desc') }}</p>
+      </NuxtLink>
+
     </div>
   </div>
 </template>
@@ -148,6 +161,7 @@ const { currentUser } = useAuth();
 .menu-card__icon--putaway { background: linear-gradient(135deg, #f59e0b, #d97706); }
 .menu-card__icon--verify { background: linear-gradient(135deg, #10b981, #059669); }
 .menu-card__icon--measuring { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+.menu-card__icon--stock-search { background: linear-gradient(135deg, #ec4899, #db2777); }
 
 .menu-card__title {
   margin: 0 0 0.25rem;

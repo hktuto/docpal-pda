@@ -12,7 +12,8 @@ export default {
     goodsVerifyBox: "盘点箱子",
     measuring: "测量",
     measuringDetail: "测量详情",
-    measureBox: "测量箱子"
+    measureBox: "测量箱子",
+    stockSearch: "库存查询"
   },
   actions: {
     scan: "扫描",
@@ -90,7 +91,8 @@ export default {
       picking: { title: "拣货", desc: "扫描、装箱并完成订单" },
       putAway: { title: "上架", desc: "将库存移至货架" },
       goodsVerify: { title: "盘点", desc: "核对货架箱子内容" },
-      measuring: { title: "测量", desc: "称重并打包箱子" }
+      measuring: { title: "测量", desc: "称重并打包箱子" },
+      stockSearch: { title: "库存查询", desc: "按供应商或物料查询库存" }
     }
   },
   login: {
@@ -609,6 +611,23 @@ export default {
     "United Kingdom": "英国",
     "USA": "美国",
     "Vietnam": "越南"
+  },
+  stockSearch: {
+    title: "库存查询",
+    searchPlaceholder: "搜索供应商或物料...",
+    allSuppliers: "全部供应商",
+    allItems: "全部物料",
+    filterSupplier: "供应商",
+    filterItem: "物料",
+    onlyWithInventory: "仅显示有库存的物料",
+    noResults: "未找到结果。",
+    noItems: "该供应商暂无物料。",
+    noInventory: "无库存",
+    totalQty: "合计：{qty}",
+    location: "位置",
+    shelf: "货架",
+    box: "箱子",
+    receivingArea: "收货区"
   },
   logStates: {
     pending: "待处理",

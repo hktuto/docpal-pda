@@ -19,6 +19,7 @@ Start with [Concepts → Overview](./concepts/overview.md), then follow the flow
 3. [Put-away](./flows/put-away/overview.md)
 4. [Measuring](./flows/measuring/overview.md)
 5. [Goods verify](./flows/goods-verify/overview.md)
+6. [Stock Search](./flows/stock-search/overview.md)
 
 ## For AI agents
 

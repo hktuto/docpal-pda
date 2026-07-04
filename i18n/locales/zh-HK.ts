@@ -12,7 +12,8 @@ export default {
     goodsVerifyBox: "查貨箱",
     measuring: "測量",
     measuringDetail: "測量詳情",
-    measureBox: "測量箱"
+    measureBox: "測量箱",
+    stockSearch: "庫存查詢"
   },
   actions: {
     scan: "掃描",
@@ -90,7 +91,8 @@ export default {
       picking: { title: "揀貨", desc: "掃描、裝箱並完成訂單" },
       putAway: { title: "上架", desc: "將庫存移至貨架" },
       goodsVerify: { title: "查貨", desc: "核對貨架箱號內容" },
-      measuring: { title: "測量", desc: "秤重並裝箱" }
+      measuring: { title: "測量", desc: "秤重並裝箱" },
+      stockSearch: { title: "庫存查詢", desc: "按供應商或物料查詢庫存" }
     }
   },
   login: {
@@ -609,6 +611,23 @@ export default {
     "United Kingdom": "英國",
     "USA": "美國",
     "Vietnam": "越南"
+  },
+  stockSearch: {
+    title: "庫存查詢",
+    searchPlaceholder: "搜索供應商或物料...",
+    allSuppliers: "全部供應商",
+    allItems: "全部物料",
+    filterSupplier: "供應商",
+    filterItem: "物料",
+    onlyWithInventory: "僅顯示有庫存的物料",
+    noResults: "未找到結果。",
+    noItems: "該供應商暫無物料。",
+    noInventory: "無庫存",
+    totalQty: "合計：{qty}",
+    location: "位置",
+    shelf: "貨架",
+    box: "箱子",
+    receivingArea: "收貨區"
   },
   logStates: {
     pending: "待處理",

@@ -18,6 +18,7 @@ Page and component locations mapped to source files.
 | Measuring detail | `/measuring/:id` | `pages/measuring/[id].vue` or equivalent |
 | Goods verify list | `/goods-verify` | `pages/goods-verify/index.vue` |
 | Goods verify detail | `/goods-verify/:id` | `pages/goods-verify/[id].vue` or equivalent |
+| Stock Search | `/stock-search` | `pages/stock-search/index.vue` |
 
 ## Layouts and global UI
 

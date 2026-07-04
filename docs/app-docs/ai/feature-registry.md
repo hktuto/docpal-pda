@@ -20,6 +20,7 @@ Machine-readable index of features in the warehouse PDA demo. Use this page to l
 | Box measurements | Measuring | Shipped | `components/BoxMeasurementsModal.vue`, `db/measuring.ts` | [ai-scope](../flows/measuring/ai-scope.md) |
 | Goods verify list | Goods Verify | Shipped | `pages/goods-verify/index.vue` | [ai-scope](../flows/goods-verify/ai-scope.md) |
 | Goods verify detail | Goods Verify | Shipped | `pages/goods-verify/[id].vue` or equivalent | [ai-scope](../flows/goods-verify/ai-scope.md) |
+| Stock Search | — | Shipped | `pages/stock-search/index.vue`, `db/stockSearch.ts` | [ai-scope](../flows/stock-search/ai-scope.md) |
 | Login | Auth | Shipped | `pages/login.vue`, `composables/useAuth.ts` | [roles](../concepts/roles.md) |
 | Language switcher | Shared | Shipped | `components/LanguageSwitcher.vue`, `composables/useLocalePreference.ts`, `i18n/` | [navigation](../concepts/navigation.md) |
 
