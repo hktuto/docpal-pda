@@ -19,7 +19,7 @@
     >
       <div class="list-card__header">
         <span class="list-card__title">{{ shelf.code }}</span>
-        <span class="badge badge--info">{{ shelf.box_count }} {{ $t(shelf.box_count === 1 ? 'common.box' : 'common.boxes') }}</span>
+        <span class="badge badge--info">{{ shelf.boxCount }} {{ $t(shelf.boxCount === 1 ? 'common.box' : 'common.boxes') }}</span>
       </div>
       <p class="list-card__meta">
         {{ shelf.zone || $t('goodsVerify.noZone') }}

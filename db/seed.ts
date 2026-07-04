@@ -118,6 +118,62 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
   ] as const;
   await db.insert(schema.inventoryLots).values(preExistingLots);
 
+  // Pre-existing shelf boxes so the goods-verify flow has boxes to check.
+  const preExistingShelfBoxes = [
+    { id: "SBOX-SEED-001", receivingOrderId: null as string | null, shelfCode: "A-01-01", status: "open" as const, createdAt: now },
+    { id: "SBOX-SEED-002", receivingOrderId: null as string | null, shelfCode: "A-01-02", status: "closed" as const, createdAt: now },
+    { id: "SBOX-SEED-003", receivingOrderId: null as string | null, shelfCode: "B-01-01", status: "open" as const, createdAt: now },
+  ] as const;
+  await db.insert(schema.shelfBoxes).values(preExistingShelfBoxes);
+
+  await db.insert(schema.shelfBoxItems).values([
+    {
+      id: uuid(),
+      shelfBoxId: "SBOX-SEED-001",
+      receivingInvoiceItemId: null as string | null,
+      partId: partByNo["RK73B1JTTD181G"].id,
+      qty: 1000,
+      verified: false,
+      verifiedAt: null as Date | null,
+    },
+    {
+      id: uuid(),
+      shelfBoxId: "SBOX-SEED-001",
+      receivingInvoiceItemId: null as string | null,
+      partId: partByNo["RK73H2ATTD1372F"].id,
+      qty: 500,
+      verified: true,
+      verifiedAt: now,
+    },
+    {
+      id: uuid(),
+      shelfBoxId: "SBOX-SEED-002",
+      receivingInvoiceItemId: null as string | null,
+      partId: partByNo["S-1206B18-M3T1U"].id,
+      qty: 500,
+      verified: true,
+      verifiedAt: now,
+    },
+    {
+      id: uuid(),
+      shelfBoxId: "SBOX-SEED-003",
+      receivingInvoiceItemId: null as string | null,
+      partId: partByNo["S-8240ADJ-I6T1U"].id,
+      qty: 200,
+      verified: false,
+      verifiedAt: null as Date | null,
+    },
+    {
+      id: uuid(),
+      shelfBoxId: "SBOX-SEED-003",
+      receivingInvoiceItemId: null as string | null,
+      partId: partByNo["D1FL20U"].id,
+      qty: 100,
+      verified: false,
+      verifiedAt: null as Date | null,
+    },
+  ]);
+
   // Receiving orders
   const receivingOrderRecords = [
     {
