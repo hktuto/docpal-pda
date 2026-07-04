@@ -65,6 +65,7 @@
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useLabelScanReview } from "~/composables/useLabelScanReview";
+import { useErrorMessage } from "~/composables/errorMessage";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import SelectShelfDialog from "~/components/SelectShelfDialog.vue";
 import ShelfBoxesPanel from "~/components/put-away/ShelfBoxesPanel.vue";
@@ -95,6 +96,7 @@ const expandedItemBoxes = ref<Set<string>>(new Set());
 
 const db = await useDb();
 const { currentUser } = useAuth();
+const errorMessage = useErrorMessage();
 
 const pending = ref(true);
 const error = ref<string | null>(null);
@@ -112,8 +114,6 @@ const targetBoxSelections = ref<Record<string, string>>({});
 const { scan, scanning, review, reviewOpen, onApplied } = useLabelScanReview({ onApplied: load });
 
 useVisibleReload(load);
-
-import { errorMessage } from "~/composables/errorMessage";
 
 async function load() {
   pending.value = true;

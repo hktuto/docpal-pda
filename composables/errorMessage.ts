@@ -13,7 +13,3 @@ export function useErrorMessage() {
     return String(e);
   };
 }
-
-export function errorMessage(e: unknown): string {
-  return useErrorMessage()(e);
-}

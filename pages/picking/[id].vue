@@ -87,6 +87,7 @@
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useLabelScanReview } from "~/composables/useLabelScanReview";
+import { useErrorMessage } from "~/composables/errorMessage";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import PickingBoxesSection from "~/components/picking/PickingBoxesSection.vue";
 import PickingItemsSection from "~/components/picking/PickingItemsSection.vue";
@@ -113,6 +114,7 @@ const route = useRoute();
 const orderId = route.params.id as string;
 const db = await useDb();
 const { currentUser } = useAuth();
+const errorMessage = useErrorMessage();
 
 const pending = ref(true);
 const error = ref<string | null>(null);
@@ -147,8 +149,6 @@ function currentUserId(): string {
   if (!currentUser.value) throw new Error("No operator user found");
   return currentUser.value.id;
 }
-
-import { errorMessage } from "~/composables/errorMessage";
 
 async function load() {
   try {
