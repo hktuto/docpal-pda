@@ -218,7 +218,7 @@ export function extractPartNoCandidates(text: string, barcodes: OcrBarcode[]): s
     }
   }
 
-  // Also try joining adjacent short tokens that may have been split (e.g. "RK73H1ETTP 1001F")
+  // Also try joining adjacent short tokens that may have been split (e.g. 'RK73H1ETTP 1001F')
   const words = normalizedText.split(/\s+/);
   for (let i = 0; i < words.length - 1; i++) {
     const joined = words[i] + words[i + 1];

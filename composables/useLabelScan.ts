@@ -67,12 +67,6 @@ export function useLabelScan() {
         context.targets ?? []
       );
       const parsed = ocrResultToInput(parsedResult.parsed);
-      console.log('[useLabelScan]', {
-        imagePath: capture.imagePath,
-        text: capture.text,
-        parsedResult,
-        parsed,
-      });
 
       const matchResult = await runScanMatcher(context, parsed);
 

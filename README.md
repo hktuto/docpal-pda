@@ -252,7 +252,6 @@ The database lives in the browser's IndexedDB. Use the **⋮ → Reset local DB*
 │   ├── useLabelScan.ts           # Scan label parsing and matching state
 │   ├── useLabelScanReview.ts     # Shared scan-review modal state machine
 │   ├── useMockOcr.ts             # Parses typed label input for the scan modal
-│   ├── useRecognizedTextParser.ts # Normalize and parse OCR text
 │   ├── useRectangleDetection.ts   # Native Android rectangle/label detection
 │   ├── useScanMatchers.ts        # Matching utilities for scan results
 │   ├── useStatusBadge.ts         # Centralized badge class helper
