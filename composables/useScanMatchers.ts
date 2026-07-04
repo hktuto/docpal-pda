@@ -23,27 +23,31 @@ import { verifyShelfBoxItem } from '~/db/goodsVerify';
 
 export type ScanTask = 'receiving' | 'picking' | 'put-away' | 'measuring' | 'goods-verify';
 
-export async function runScanMatcher(ctx: ScanTaskContext, parsed: OcrInput): Promise<ScanMatchResult> {
-  const matchers = useScanMatchers();
+export async function runScanMatcher(
+  ctx: ScanTaskContext,
+  parsed: OcrInput,
+  matchers?: ScanMatchers
+): Promise<ScanMatchResult> {
+  const m = matchers ?? useScanMatchers();
   switch (ctx.task) {
     case 'receiving':
-      if (!ctx.receivingOrderId) return matchers.error('missing_receiving_order_id');
-      return matchers.matchReceiving(ctx.receivingOrderId, ctx.pickingItemId, parsed);
+      if (!ctx.receivingOrderId) return m.error('missing_receiving_order_id');
+      return m.matchReceiving(ctx.receivingOrderId, ctx.pickingItemId, parsed);
     case 'picking':
-      if (!ctx.allocation) return matchers.error('missing_allocation');
-      return matchers.matchPicking(ctx.allocation, parsed);
+      if (!ctx.allocation) return m.error('missing_allocation');
+      return m.matchPicking(ctx.allocation, parsed);
     case 'put-away':
-      if (!ctx.receivingItem) return matchers.error('missing_receiving_item');
-      if (!ctx.targetBoxId) return matchers.error('missing_target_box');
-      return matchers.matchPutAway(ctx.receivingItem, ctx.targetBoxId, parsed);
+      if (!ctx.receivingItem) return m.error('missing_receiving_item');
+      if (!ctx.targetBoxId) return m.error('missing_target_box');
+      return m.matchPutAway(ctx.receivingItem, ctx.targetBoxId, parsed);
     case 'measuring':
-      if (!ctx.boxId) return matchers.error('missing_box_id');
-      return matchers.matchMeasuring(ctx.boxId, ctx.targetPackageId, parsed);
+      if (!ctx.boxId) return m.error('missing_box_id');
+      return m.matchMeasuring(ctx.boxId, ctx.targetPackageId, parsed);
     case 'goods-verify':
-      if (!ctx.items) return matchers.error('missing_box_items');
-      return matchers.matchGoodsVerify(ctx.items, parsed);
+      if (!ctx.items) return m.error('missing_box_items');
+      return m.matchGoodsVerify(ctx.items, parsed);
     default:
-      return matchers.error('unknown_scan_task');
+      return m.error('unknown_scan_task');
   }
 }
 

@@ -4,7 +4,7 @@ import {
   SCAN_NOT_AVAILABLE_MESSAGE,
   type LabelScanCapture,
 } from './useRectangleDetection';
-import { runScanMatcher, type ScanTaskContext, type ScanMatchResult } from './useScanMatchers';
+import { runScanMatcher, useScanMatchers, type ScanTaskContext, type ScanMatchResult } from './useScanMatchers';
 import { I18nError } from '~/composables/i18nError';
 import { useErrorMessage } from '~/composables/errorMessage';
 import { parseAndIdentify, type CandidateOptions, type RawOcrCapture } from '~/utils/parseOcrScan';
@@ -42,40 +42,41 @@ export type LabelScanResult =
   | { status: 'cancelled' }
   | { status: 'error'; message: string };
 
-async function processCapture(
-  capture: LabelScanCapture,
-  context: ScanTaskContext
-): Promise<LabelScanResult> {
-  const barcodes = parseBarcodes(capture.barcodes);
-  const parsedResult = parseAndIdentify(
-    { text: capture.text, barcodes },
-    context.targets ?? []
-  );
-  const parsed = ocrResultToInput(parsedResult.parsed);
-
-  const matchResult = await runScanMatcher(context, parsed);
-
-  if (matchResult.type === 'error') {
-    return { status: 'error', message: matchResult.message };
-  }
-
-  if (matchResult.type === 'single') {
-    await matchResult.apply();
-    return { status: 'applied' };
-  }
-
-  return {
-    status: 'review',
-    capture,
-    parsed,
-    options: parsedResult.options,
-    matchResult,
-  };
-}
-
 export function useLabelScan() {
   const scanning = ref(false);
   const errorMessage = useErrorMessage();
+  const matchers = useScanMatchers();
+
+  async function processCapture(
+    capture: LabelScanCapture,
+    context: ScanTaskContext
+  ): Promise<LabelScanResult> {
+    const barcodes = parseBarcodes(capture.barcodes);
+    const parsedResult = parseAndIdentify(
+      { text: capture.text, barcodes },
+      context.targets ?? []
+    );
+    const parsed = ocrResultToInput(parsedResult.parsed);
+
+    const matchResult = await runScanMatcher(context, parsed, matchers);
+
+    if (matchResult.type === 'error') {
+      return { status: 'error', message: matchResult.message };
+    }
+
+    if (matchResult.type === 'single') {
+      await matchResult.apply();
+      return { status: 'applied' };
+    }
+
+    return {
+      status: 'review',
+      capture,
+      parsed,
+      options: parsedResult.options,
+      matchResult,
+    };
+  }
 
   async function scan(context: ScanTaskContext): Promise<LabelScanResult> {
     scanning.value = true;
