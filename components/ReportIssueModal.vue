@@ -135,6 +135,11 @@ function qtyPlaceholder(reason: MismatchReason | ""): string {
 }
 
 function qtyLabel(reason: MismatchReason | ""): string {
+  if (!reason) return "";
+  if (reason === "not_found") return "";
+  const key = `reportIssueModal.qtyLabels.${reason}`;
+  const label = t(key);
+  if (label !== key) return label;
   return qtyPlaceholder(reason);
 }
 

@@ -486,6 +486,13 @@ export default {
       damaged: "损坏数量",
       actual_received: "实际收到数量",
     },
+    qtyLabels: {
+      damaged: "损坏数量",
+      qty_mismatch: "实际收货数量",
+      wrong_part: "错料数量",
+      over_shipment: "超发数量",
+      quality_rejection: "拒收数量",
+    },
     cancel: "取消",
     confirm: "确认",
     saving: "保存中…",

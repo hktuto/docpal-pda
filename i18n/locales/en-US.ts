@@ -486,6 +486,13 @@ export default {
       damaged: "Damaged qty",
       actual_received: "Actual received qty",
     },
+    qtyLabels: {
+      damaged: "Damaged qty",
+      qty_mismatch: "Actual received qty",
+      wrong_part: "Wrong part qty",
+      over_shipment: "Extra qty",
+      quality_rejection: "Rejected qty",
+    },
     cancel: "Cancel",
     confirm: "Confirm",
     saving: "Saving…",
