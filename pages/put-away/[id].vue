@@ -238,7 +238,12 @@ async function openScan(lot: PutAwayLot) {
     error.value = errorMessage(new I18nError("selected_box_not_open"));
     return;
   }
-  const result = await scan({ task: 'put-away', receivingItem: lot, targetBoxId: scanBoxId.value });
+  const result = await scan({
+    task: 'put-away',
+    receivingItem: lot,
+    targetBoxId: scanBoxId.value,
+    targets: lot.part_no ? [lot.part_no] : [],
+  });
   if (result.status === 'error') {
     error.value = result.message;
   }

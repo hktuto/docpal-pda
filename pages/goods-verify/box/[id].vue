@@ -74,7 +74,7 @@
       :options="review.options"
       :match-result="review.matchResult"
       :mode="review.capture.imagePath ? 'review' : 'manual'"
-      :context="{ task: 'goods-verify', items: box?.items ?? [] }"
+      :context="{ task: 'goods-verify', items: box?.items ?? [], targets: scanTargets }"
       @applied="onApplied"
       @retake="onRetake"
     />
@@ -142,6 +142,14 @@ const allVerified = computed(
     box.value.items.length > 0 &&
     box.value.items.every((item) => item.verified)
 );
+
+const scanTargets = computed(() => {
+  if (!box.value) return [];
+  return box.value.items
+    .filter((item) => !item.verified)
+    .map((item) => item.part?.partNo)
+    .filter((partNo): partNo is string => !!partNo);
+});
 
 async function load() {
   pending.value = true;

@@ -95,7 +95,7 @@
         :options="review.options"
         :match-result="review.matchResult"
         :mode="review.capture.imagePath ? 'review' : 'manual'"
-        :context="{ task: 'receiving', receivingOrderId: orderId, pickingItemId: scanPickingItemId }"
+        :context="{ task: 'receiving', receivingOrderId: orderId, pickingItemId: scanPickingItemId, targets: scanTargets }"
         @applied="onApplied"
         @retake="onRetake"
       />
@@ -249,6 +249,14 @@ const filteredGroupedPickingOrders = computed<GroupedOrder[]>(() => {
     );
     return orderMatch || itemMatch;
   });
+});
+
+const scanTargets = computed(() => {
+  if (!order.value) return [];
+  return order.value.invoices
+    .flatMap((invoice) => invoice.items)
+    .map((item) => item.part?.partNo)
+    .filter((partNo): partNo is string => !!partNo);
 });
 
 const remainingItems = ref(0);

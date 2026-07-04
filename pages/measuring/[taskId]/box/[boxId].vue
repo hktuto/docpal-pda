@@ -81,7 +81,7 @@
         :options="review.options"
         :match-result="review.matchResult"
         :mode="review.capture.imagePath ? 'review' : 'manual'"
-        :context="{ task: 'measuring', boxId, targetPackageId: scanTargetPackageId }"
+        :context="{ task: 'measuring', boxId, targetPackageId: scanTargetPackageId, targets: scanTargets }"
         @applied="onApplied"
         @retake="onRetake"
       />
@@ -184,6 +184,14 @@ const measurementInitialValues = computed(() => {
     grossWeight: b.grossWeight?.toString() ?? "",
     destinationCountry: b.destinationCountry ?? "",
   };
+});
+
+const scanTargets = computed(() => {
+  if (!box.value) return [];
+  return box.value.packages
+    .filter((pkg) => !pkg.verified)
+    .map((pkg) => pkg.pickingItem?.part?.partNo)
+    .filter((partNo): partNo is string => !!partNo);
 });
 
 async function openScan(packageId?: string) {

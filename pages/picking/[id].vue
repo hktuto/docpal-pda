@@ -77,7 +77,7 @@
       :options="review.options"
       :match-result="review.matchResult"
       :mode="review.capture.imagePath ? 'review' : 'manual'"
-      :context="{ task: 'picking', allocation: scanAllocation }"
+      :context="{ task: 'picking', allocation: scanAllocation, targets: scanTargets }"
       @applied="onApplied"
       @retake="onRetake"
     />
@@ -151,6 +151,10 @@ const openBoxes = computed(() =>
 const actionable = computed(
   () => order.value?.status !== "finished" && order.value?.status !== "issue"
 );
+const scanTargets = computed(() => {
+  const partNo = scanAllocation.value?.pickingItem?.part?.partNo;
+  return partNo ? [partNo] : [];
+});
 
 function currentUserId(): string {
   if (!currentUser.value) throw new I18nError("no_operator_user_found");
