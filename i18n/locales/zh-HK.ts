@@ -562,6 +562,7 @@ export default {
     allocation_not_found: "找不到分配",
     allocation_not_against_receiving_item: "分配未針對收貨項目",
     invalid_materialize_quantity: "物化數量無效",
+    invalid_receiving_item: "無效的收貨項目",
     invalid_scan_quantity: "掃描數量無效",
     picking_order_has_open_issue: "揀貨單存在未解決問題",
     scan_quantity_exceeds_required: "掃描數量超過需求數量",
