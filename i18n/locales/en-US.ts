@@ -519,6 +519,7 @@ export default {
     zhHK: "繁體中文（香港）",
   },
   errors: {
+    picking_item_not_found: "Picking item not found",
     operator_not_signed_in: "Operator not signed in",
     quantity_not_available_receiving: "Quantity no longer available in receiving",
     quantity_exceeds_picking_need: "Quantity exceeds picking order need",

@@ -7,7 +7,7 @@
     </div>
 
     <EmptyState v-if="pending">Loading…</EmptyState>
-    <EmptyState v-else-if="error" error>Error: {{ error }}</EmptyState>
+    <EmptyState v-else-if="error" error>{{ $t('common.errorPrefix', { message: error }) }}</EmptyState>
 
     <template v-else-if="box">
       <DetailHeader
@@ -82,6 +82,7 @@
 <script setup lang="ts">
 import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import { useErrorMessage } from "~/composables/errorMessage";
+import { I18nError } from "~/composables/i18nError";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import {
   getShelfBoxDetail,
@@ -149,7 +150,7 @@ useVisibleReload(load);
 async function markVerified() {
   if (!box.value) return;
   if (!currentUser.value) {
-    error.value = "No operator user found";
+    error.value = errorMessage(new I18nError("no_operator_user_found"));
     return;
   }
 

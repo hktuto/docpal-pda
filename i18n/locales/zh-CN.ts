@@ -519,6 +519,7 @@ export default {
     zhHK: "繁體中文（香港）",
   },
   errors: {
+    picking_item_not_found: "未找到拣货项",
     operator_not_signed_in: "操作员未登录",
     quantity_not_available_receiving: "收货区数量不再可用",
     quantity_exceeds_picking_need: "数量超出拣货单需求",

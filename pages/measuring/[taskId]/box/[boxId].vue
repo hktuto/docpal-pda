@@ -1,7 +1,7 @@
 <template>
   <div>
     <EmptyState v-if="pending">Loading…</EmptyState>
-    <EmptyState v-else-if="error" error>Error: {{ error }}</EmptyState>
+    <EmptyState v-else-if="error" error>{{ $t('common.errorPrefix', { message: error }) }}</EmptyState>
 
     <template v-else-if="box">
       <ScanFab
@@ -125,6 +125,7 @@ const taskId = route.params.taskId as string;
 const boxId = route.params.boxId as string;
 
 const db = await useDb();
+const { t } = useI18n();
 const errorMessage = useErrorMessage();
 
 const pending = ref(true);
@@ -148,7 +149,7 @@ async function load() {
   try {
     const data = await getShippingBoxForMeasuring(db, boxId);
     if (!data) {
-      error.value = "Box not found";
+      error.value = t('measuring.measureBox.boxNotFound');
       box.value = null;
     } else {
       box.value = data;

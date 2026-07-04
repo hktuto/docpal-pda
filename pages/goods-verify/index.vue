@@ -8,7 +8,7 @@
     />
 
     <p v-if="loading" class="empty">Loading…</p>
-    <p v-else-if="loadError" class="empty" style="color: var(--danger);">Error: {{ loadError }}</p>
+    <p v-else-if="loadError" class="empty" style="color: var(--danger);">{{ $t('common.errorPrefix', { message: loadError }) }}</p>
     <p v-else-if="rows.length === 0" class="empty">No shelves found.</p>
 
     <NuxtLink

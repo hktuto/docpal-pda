@@ -1,7 +1,7 @@
 <template>
   <div>
     <p v-if="pending" class="empty">Loading…</p>
-    <p v-else-if="error" class="empty" style="color: var(--danger);">Error: {{ error }}</p>
+    <p v-else-if="error" class="empty" style="color: var(--danger);">{{ $t('common.errorPrefix', { message: error }) }}</p>
 
     <template v-else-if="task">
       <DetailHeader
@@ -80,6 +80,7 @@
 <script setup lang="ts">
 import { getMeasuringTaskDetail, completeMeasuringTask, type MeasuringTaskDetail } from "~/db/measuring";
 import { useErrorMessage } from "~/composables/errorMessage";
+import { I18nError } from "~/composables/i18nError";
 
 definePageMeta({ title: "Measuring Detail", props: { noPadding: true } });
 
@@ -120,7 +121,7 @@ const canComplete = computed(() => {
 async function complete() {
   completing.value = true;
   try {
-    if (!currentUser.value) throw new Error("No operator user found");
+    if (!currentUser.value) throw new I18nError("no_operator_user_found");
     await completeMeasuringTask(db, taskId, currentUser.value.id);
     await load();
   } catch (e: unknown) {
