@@ -220,8 +220,7 @@ export default {
     title: "Picking",
     shipTo: "Ship to: {destination}",
     reportIssue: "Report issue",
-    issueReported: "{count} issue(s) reported",
-    ordersSkipped: "{count} order(s) skipped.",
+    issueReportSummary: "{reported} issue(s) reported, {skipped} order(s) skipped.",
     detail: {
       title: "Picking Detail",
       supplier: "Supplier",

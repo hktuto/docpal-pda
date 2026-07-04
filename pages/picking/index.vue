@@ -30,7 +30,7 @@
             {{ po.ref_no }}
           </NuxtLink>
         </div>
-        <span class="badge" :class="badgeClass(po.status)">{{ statusLabel.picking(po.status) }}</span>
+        <StatusBadge :status="po.status" :label="statusLabel.picking(po.status)" />
       </div>
       <p class="list-card__meta">
         {{ po.supplier_name || $t('common.noSupplier') }}
@@ -61,7 +61,6 @@
 
 <script setup lang="ts">
 import { I18nError } from "~/composables/i18nError";
-import { badgeClass } from "~/composables/useStatusBadge";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 
 const { t } = useI18n();
@@ -180,10 +179,10 @@ async function onReportSaved(payload: {
     modalOpen.value = false;
     await load();
     if (result.reported > 0) {
-      reportMessage.value =
-        result.skipped > 0
-          ? `${t('picking.issueReported', { count: result.reported })} ${t('picking.ordersSkipped', { count: result.skipped })}`
-          : t('picking.issueReported', { count: result.reported });
+      reportMessage.value = t('picking.issueReportSummary', {
+        reported: result.reported,
+        skipped: result.skipped,
+      });
     }
   } catch (e) {
     loadError.value = errorMessage(e);

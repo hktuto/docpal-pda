@@ -220,8 +220,7 @@ export default {
     title: "拣货",
     shipTo: "收货方：{destination}",
     reportIssue: "上报问题",
-    issueReported: "已上报 {count} 个问题",
-    ordersSkipped: "已跳过 {count} 个订单。",
+    issueReportSummary: "已上报 {reported} 个问题，跳过 {skipped} 个订单。",
     detail: {
       title: "拣货详情",
       supplier: "供应商",

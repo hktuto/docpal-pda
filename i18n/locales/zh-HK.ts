@@ -220,8 +220,7 @@ export default {
     title: "揀貨",
     shipTo: "收貨方：{destination}",
     reportIssue: "匯報問題",
-    issueReported: "已匯報 {count} 個問題",
-    ordersSkipped: "已跳過 {count} 張訂單。",
+    issueReportSummary: "已上報 {reported} 個問題，跳過 {skipped} 張訂單。",
     detail: {
       title: "揀貨詳情",
       supplier: "供應商",

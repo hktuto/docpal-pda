@@ -7,7 +7,7 @@
       </div>
       <button
         class="detail-header__toggle"
-        aria-label="Toggle details"
+        :aria-label="$t('actions.toggleDetails')"
         @click.stop="toggle"
       >
         {{ expanded ? "▲" : "▼" }}
