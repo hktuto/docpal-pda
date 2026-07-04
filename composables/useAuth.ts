@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { PgliteDatabase } from "drizzle-orm/pglite";
 import * as schema from "~/db/schema";
+import { I18nError } from "~/composables/i18nError";
 
 const STORAGE_KEY = "warehouse-user-id";
 
@@ -20,7 +21,7 @@ export function useAuth() {
     });
 
     if (!user || user.passwordHash !== password) {
-      throw new Error("Invalid username or password");
+      throw new I18nError("invalid_username_or_password");
     }
 
     currentUser.value = user;

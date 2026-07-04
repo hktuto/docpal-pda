@@ -1,8 +1,8 @@
 <template>
   <div>
     <div class="welcome">
-      <p class="welcome__greeting">Hello, {{ currentUser?.name || "Operator" }}</p>
-      <h2 class="welcome__title">What would you like to do?</h2>
+      <p class="welcome__greeting">{{ $t('home.greeting', { name: currentUser?.name || 'Operator' }) }}</p>
+      <h2 class="welcome__title">{{ $t('home.prompt') }}</h2>
     </div>
 
     <div class="menu-grid">
@@ -14,8 +14,8 @@
             <path d="M12 22V12"/>
           </svg>
         </div>
-        <p class="menu-card__title">Receiving</p>
-        <p class="menu-card__meta">Confirm arrivals and stock</p>
+        <p class="menu-card__title">{{ $t('home.menu.receiving.title') }}</p>
+        <p class="menu-card__meta">{{ $t('home.menu.receiving.desc') }}</p>
       </NuxtLink>
 
       <NuxtLink to="/picking" class="menu-card">
@@ -26,8 +26,8 @@
             <path d="M19 21V3"/>
           </svg>
         </div>
-        <p class="menu-card__title">Picking</p>
-        <p class="menu-card__meta">Scan, box, and finish orders</p>
+        <p class="menu-card__title">{{ $t('home.menu.picking.title') }}</p>
+        <p class="menu-card__meta">{{ $t('home.menu.picking.desc') }}</p>
       </NuxtLink>
 
       <NuxtLink to="/put-away" class="menu-card">
@@ -38,8 +38,8 @@
             <path d="M12 3v6"/>
           </svg>
         </div>
-        <p class="menu-card__title">Put-away</p>
-        <p class="menu-card__meta">Move stock to shelves</p>
+        <p class="menu-card__title">{{ $t('home.menu.putAway.title') }}</p>
+        <p class="menu-card__meta">{{ $t('home.menu.putAway.desc') }}</p>
       </NuxtLink>
 
       <NuxtLink to="/goods-verify" class="menu-card">
@@ -49,8 +49,8 @@
             <path d="m9 12 2 2 4-4"/>
           </svg>
         </div>
-        <p class="menu-card__title">Goods Verify</p>
-        <p class="menu-card__meta">Verify shelf box contents</p>
+        <p class="menu-card__title">{{ $t('home.menu.goodsVerify.title') }}</p>
+        <p class="menu-card__meta">{{ $t('home.menu.goodsVerify.desc') }}</p>
       </NuxtLink>
 
       <NuxtLink to="/measuring" class="menu-card">
@@ -61,8 +61,8 @@
             <path d="M9 10h6"/>
           </svg>
         </div>
-        <p class="menu-card__title">Measuring</p>
-        <p class="menu-card__meta">Weigh and pack boxes</p>
+        <p class="menu-card__title">{{ $t('home.menu.measuring.title') }}</p>
+        <p class="menu-card__meta">{{ $t('home.menu.measuring.desc') }}</p>
       </NuxtLink>
 
     </div>
@@ -70,7 +70,8 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ title: "Warehouse" });
+const { t } = useI18n();
+useHead({ title: t("meta.warehouse") });
 
 const { currentUser } = useAuth();
 </script>

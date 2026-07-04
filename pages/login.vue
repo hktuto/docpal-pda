@@ -7,27 +7,27 @@
           <path d="M14 14H26V18H14V14Z" fill="white"/>
           <path d="M14 22H22V26H14V22Z" fill="white" fill-opacity="0.7"/>
         </svg>
-        <span class="login__brand-name">DocPal</span>
+        <span class="login__brand-name">{{ $t('login.brand') }}</span>
       </div>
-      <p class="login__subtitle">Warehouse PDA</p>
+      <p class="login__subtitle">{{ $t('login.subtitle') }}</p>
 
       <form class="login__form" @submit.prevent="onSubmit">
         <label>
-          <span>Username</span>
-          <input v-model="username" type="text" placeholder="operator" />
+          <span>{{ $t('login.username') }}</span>
+          <input v-model="username" type="text" :placeholder="$t('login.placeholderUsername')" />
         </label>
         <label>
-          <span>Password</span>
+          <span>{{ $t('login.password') }}</span>
           <div class="login__password">
             <input
               v-model="password"
               :type="showPassword ? 'text' : 'password'"
-              placeholder="••••••••"
+              :placeholder="$t('login.placeholderPassword')"
             />
             <button
               type="button"
               class="login__toggle"
-              aria-label="Toggle password visibility"
+              :aria-label="$t('actions.togglePassword')"
               @click="showPassword = !showPassword"
             >
               <svg v-if="showPassword" class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -44,7 +44,7 @@
         </label>
         <p v-if="error" class="login__error">{{ error }}</p>
         <button type="submit" class="btn login__submit" :disabled="submitting">
-          {{ submitting ? "Signing in…" : "Sign in" }}
+          {{ submitting ? $t('actions.signingIn') : $t('actions.signIn') }}
         </button>
       </form>
 
@@ -53,10 +53,16 @@
 </template>
 
 <script setup lang="ts">
+import { useErrorMessage } from "~/composables/errorMessage";
+
 definePageMeta({ layout: false });
+
+const { t } = useI18n();
+useHead({ title: t('login.brand') });
 
 const db = await useDb();
 const { login } = useAuth();
+const errorMessage = useErrorMessage();
 
 const username = ref("operator");
 const password = ref("DocPal2026!");
@@ -71,7 +77,7 @@ async function onSubmit() {
     await login(db, username.value.trim(), password.value);
     await navigateTo("/");
   } catch (e: any) {
-    error.value = e?.message ?? "Login failed";
+    error.value = errorMessage(e);
   } finally {
     submitting.value = false;
   }
