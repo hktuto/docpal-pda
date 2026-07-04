@@ -1,0 +1,28 @@
+# Picking Steps
+
+## 1. Open the picking list
+
+From the home screen, tap **Picking**. The list shows open picking orders with status and summary information.
+
+## 2. Select a picking order
+
+Tap the order you want to work on. The detail page opens.
+
+## 3. Review allocated lines
+
+The detail page shows each picking item, the required quantity, and where the stock is allocated from (lot or receiving-area item).
+
+## 4. Pick each line
+
+- Tap a line or the scan button.
+- Confirm the part number and quantity.
+- Confirm the source location.
+- The picked quantity is recorded and the allocation is reduced or removed.
+
+## 5. Handle issues
+
+If the quantity is wrong, the item is damaged, or stock cannot be found, use the issue-reporting flow. See [Issue reporting](./issue-reporting.md).
+
+## 6. Finish the order
+
+When all lines are fully picked, the order status changes to finished and a measuring task may be created.

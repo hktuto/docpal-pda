@@ -4,6 +4,14 @@ A client-side Nuxt 3 proof-of-concept for the DocPal warehouse mobile/Android fl
 
 ---
 
+## Documentation
+
+- [App documentation (manual + AI lookup)](./docs/app-docs/README.md) — training guides for operators and a feature registry for coding agents.
+- [Database relations](./docs/database-relations.md) — ER diagram and table reference.
+- [Agent instructions](./AGENTS.md) — conventions and commands for coding agents.
+
+---
+
 ## What it demonstrates
 
 The demo models an event-driven warehouse with two overlapping workflows that share the same inventory.
