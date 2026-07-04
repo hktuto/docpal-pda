@@ -1,4 +1,4 @@
-import { useLabelScan, createManualReview, type LabelScanResult } from "~/composables/useLabelScan";
+import { useLabelScan, type LabelScanResult } from "~/composables/useLabelScan";
 
 export interface UseLabelScanReviewOptions {
   onApplied?: () => void | Promise<void>;
@@ -14,9 +14,6 @@ export function useLabelScanReview(options: UseLabelScanReviewOptions = {}) {
       await options.onApplied?.();
     } else if (result.status === "review") {
       review.value = result;
-      reviewOpen.value = true;
-    } else if (result.status === "manual") {
-      review.value = createManualReview();
       reviewOpen.value = true;
     }
   }

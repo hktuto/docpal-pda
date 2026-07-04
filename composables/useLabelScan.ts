@@ -39,19 +39,8 @@ export type LabelScanResult =
       options: CandidateOptions;
       matchResult: ScanMatchResult;
     }
-  | { status: 'manual' }
   | { status: 'cancelled' }
   | { status: 'error'; message: string };
-
-export function createManualReview(): Extract<LabelScanResult, { status: 'review' }> {
-  return {
-    status: 'review',
-    capture: { imagePath: '', text: '', barcodes: '[]' },
-    parsed: { partNo: '', dateCode: '', lotCode: '', coo: '', cow: '', qty: '' },
-    options: { itemIds: [], qtys: [], coos: [], dateCodes: [], lotCodes: [], cows: [] },
-    matchResult: { type: 'none' },
-  };
-}
 
 async function processCapture(
   capture: LabelScanCapture,
@@ -90,25 +79,30 @@ export function useLabelScan() {
 
   async function scan(context: ScanTaskContext): Promise<LabelScanResult> {
     scanning.value = true;
-
     try {
-      const capture = await RectangleDetection.scanLabel();
-      return await processCapture(capture, context);
-    } catch (e: unknown) {
-      if (isCancellationError(e)) {
-        return { status: 'cancelled' };
-      }
-      if (isBrowserUnavailableError(e)) {
-        const raw = window.prompt('Paste scan JSON (text + barcodes):');
-        if (raw === null) {
+      let capture: LabelScanCapture;
+      try {
+        capture = await RectangleDetection.scanLabel();
+      } catch (e: unknown) {
+        if (isCancellationError(e)) {
           return { status: 'cancelled' };
         }
-        const capture = parseBrowserScanPromptJson(raw);
-        if (!capture) {
-          return { status: 'error', message: 'Invalid scan JSON' };
+        if (isBrowserUnavailableError(e)) {
+          const raw = window.prompt('Paste scan JSON (text + barcodes):');
+          if (raw === null) {
+            return { status: 'cancelled' };
+          }
+          const simulated = parseBrowserScanPromptJson(raw);
+          if (!simulated) {
+            return { status: 'error', message: 'Invalid scan JSON' };
+          }
+          capture = simulated;
+        } else {
+          throw e;
         }
-        return await processCapture(capture, context);
       }
+      return await processCapture(capture, context);
+    } catch (e: unknown) {
       const message = e instanceof I18nError ? errorMessage(e) : (e instanceof Error ? e.message : String(e));
       return { status: 'error', message };
     } finally {
