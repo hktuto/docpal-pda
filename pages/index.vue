@@ -70,6 +70,8 @@
 </template>
 
 <script setup lang="ts">
+definePageMeta({ title: "meta.warehouse" });
+
 const { t } = useI18n();
 useHead({ title: t("meta.warehouse") });
 

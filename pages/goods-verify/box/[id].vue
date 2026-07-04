@@ -96,7 +96,7 @@ import { useStatusLabel } from "~/composables/useStatusLabel";
 const { t } = useI18n();
 useHead({ title: t('goodsVerify.box.title') });
 
-definePageMeta({ props: { noPadding: true } });
+definePageMeta({ title: "meta.goodsVerifyBox", props: { noPadding: true } });
 
 async function onScanApplied() {
   await load();

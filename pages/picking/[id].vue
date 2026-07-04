@@ -109,7 +109,7 @@ type PickingItem = PickingOrderDetail["items"][number];
 type Allocation = PickingItem["allocations"][number];
 type ShippingBox = PickingOrderDetail["shippingBoxes"][number];
 
-definePageMeta({ props: { noPadding: true } });
+definePageMeta({ title: "meta.pickingDetail", props: { noPadding: true } });
 
 const route = useRoute();
 const orderId = route.params.id as string;

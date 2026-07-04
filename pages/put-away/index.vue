@@ -33,6 +33,8 @@ import { getPutAwayCandidates, type PutAwayCandidate } from "~/db/putAway";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 
+definePageMeta({ title: "meta.putAway" });
+
 const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();

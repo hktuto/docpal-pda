@@ -67,7 +67,14 @@ const router = useRouter();
 const { logout: authLogout } = useAuth();
 const pg = useNuxtApp().$pglite;
 
-const title = computed(() => (route.meta.title as string) || t("meta.warehouse"));
+const title = computed(() => {
+  const metaTitle = route.meta.title as string | undefined;
+  if (metaTitle && metaTitle.includes(".")) {
+    const translated = t(metaTitle);
+    return translated || t("meta.warehouse");
+  }
+  return metaTitle || t("meta.warehouse");
+});
 const showBack = computed(() => route.path !== "/");
 
 function goBack() {

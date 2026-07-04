@@ -86,7 +86,7 @@ import { getReceivingOrderDetail } from "~/db/receiving";
 
 type ReceivingOrderDetail = NonNullable<Awaited<ReturnType<typeof getReceivingOrderDetail>>>;
 
-definePageMeta({ props: { noPadding: true } });
+definePageMeta({ title: "meta.putAwayDetail", props: { noPadding: true } });
 
 const { t } = useI18n();
 const errorMessage = useErrorMessage();

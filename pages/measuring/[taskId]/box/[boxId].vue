@@ -123,6 +123,8 @@ const route = useRoute();
 const taskId = route.params.taskId as string;
 const boxId = route.params.boxId as string;
 
+definePageMeta({ title: "meta.measureBox", props: { noPadding: true } });
+
 const db = await useDb();
 const { t } = useI18n();
 const boxStatusLabel = useStatusLabel();

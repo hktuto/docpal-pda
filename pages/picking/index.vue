@@ -63,6 +63,8 @@
 import { I18nError } from "~/composables/i18nError";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 
+definePageMeta({ title: "meta.picking" });
+
 const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();

@@ -83,6 +83,8 @@ import { getMeasuringTaskDetail, completeMeasuringTask, type MeasuringTaskDetail
 import { useErrorMessage } from "~/composables/errorMessage";
 import { I18nError } from "~/composables/i18nError";
 
+definePageMeta({ title: "meta.measuringDetail", props: { noPadding: true } });
+
 const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const boxStatusLabel = useStatusLabel();

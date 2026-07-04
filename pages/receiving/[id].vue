@@ -144,7 +144,7 @@ import {
 import { I18nError } from "~/composables/i18nError";
 import * as schema from "~/db/schema";
 
-definePageMeta({ props: { noPadding: true } });
+definePageMeta({ title: "meta.receivingDetail", props: { noPadding: true } });
 
 const { t } = useI18n();
 const errorMessage = useErrorMessage();

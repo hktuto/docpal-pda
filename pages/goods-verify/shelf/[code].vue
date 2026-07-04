@@ -57,6 +57,8 @@ import { useStatusLabel } from "~/composables/useStatusLabel";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { useErrorMessage } from "~/composables/errorMessage";
 
+definePageMeta({ title: "meta.goodsVerifyShelf" });
+
 const { t } = useI18n();
 useHead({ title: t('goodsVerify.shelf.title') });
 

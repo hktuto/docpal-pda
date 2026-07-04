@@ -33,6 +33,8 @@ import { getShelvesWithBoxes, type ShelfWithBoxCount } from "~/db/goodsVerify";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { useErrorMessage } from "~/composables/errorMessage";
 
+definePageMeta({ title: "meta.goodsVerify" });
+
 const { t } = useI18n();
 useHead({ title: t('goodsVerify.title') });
 
