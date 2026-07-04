@@ -1,5 +1,5 @@
 const STORAGE_KEY = "warehouse-locale";
-const SUPPORTED_LOCALES = ["en-US", "zh-CN", "zh-HK"] as const;
+export const SUPPORTED_LOCALES = ["en-US", "zh-CN", "zh-HK"] as const;
 type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
 export function useLocalePreference() {
@@ -17,7 +17,9 @@ export function useLocalePreference() {
   }
 
   watch(locale, (code) => {
-    persist(code as SupportedLocale);
+    if (SUPPORTED_LOCALES.includes(code as SupportedLocale)) {
+      persist(code as SupportedLocale);
+    }
   });
 
   return {

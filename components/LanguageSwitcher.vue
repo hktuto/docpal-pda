@@ -15,14 +15,14 @@
 </template>
 
 <script setup lang="ts">
-const SUPPORTED = ["en-US", "zh-CN", "zh-HK"] as const;
+import { SUPPORTED_LOCALES } from "~/composables/useLocalePreference";
 
 const { locale, setLocale } = useI18n();
 const selectId = useId();
 
 function onChange(event: Event) {
   const value = (event.target as HTMLSelectElement).value;
-  if ((SUPPORTED as readonly string[]).includes(value)) {
+  if ((SUPPORTED_LOCALES as readonly string[]).includes(value)) {
     setLocale(value);
   }
 }

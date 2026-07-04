@@ -3,7 +3,7 @@
     <button
       v-if="showBack"
       class="app-header__back"
-      aria-label="Go back"
+      :aria-label="t('appHeader.goBack')"
       @click="goBack"
     >
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -14,14 +14,14 @@
       v-if="showBack"
       to="/"
       class="app-header__home"
-      aria-label="Home"
+      :aria-label="t('appHeader.home')"
     >
       <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
         <polyline points="9 22 9 12 15 12 15 22"/>
       </svg>
     </NuxtLink>
-    <NuxtLink v-else to="/" class="app-header__logo" aria-label="Home">
+    <NuxtLink v-else to="/" class="app-header__logo" :aria-label="t('appHeader.home')">
       <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M8 8C8 5.79086 9.79086 4 12 4H28C30.2091 4 32 5.79086 32 8V32C32 34.2091 30.2091 36 28 36H12C9.79086 36 8 34.2091 8 32V8Z" fill="#00BFA5"/>
         <path d="M14 14H26V18H14V14Z" fill="white"/>
@@ -35,8 +35,8 @@
       <LanguageSwitcher />
       <button
         class="app-header__action app-header__action--reset"
-        aria-label="Reset local DB"
-        title="Reset local DB"
+        :aria-label="t('appHeader.resetDb')"
+        :title="t('appHeader.resetDb')"
         @click="resetDb"
       >
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -46,8 +46,8 @@
       </button>
       <button
         class="app-header__action"
-        aria-label="Logout"
-        title="Logout"
+        :aria-label="t('appHeader.logout')"
+        :title="t('appHeader.logout')"
         @click="logout"
       >
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -61,12 +61,13 @@
 </template>
 
 <script setup lang="ts">
+const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const { logout: authLogout } = useAuth();
 const pg = useNuxtApp().$pglite;
 
-const title = computed(() => (route.meta.title as string) || "Warehouse");
+const title = computed(() => (route.meta.title as string) || t("meta.warehouse"));
 const showBack = computed(() => route.path !== "/");
 
 function goBack() {
@@ -83,7 +84,7 @@ function logout() {
 }
 
 async function resetDb() {
-  if (!confirm("Reset all local data? This cannot be undone.")) return;
+  if (!confirm(t("appHeader.resetConfirm"))) return;
 
   if (pg) {
     await pg.close();
