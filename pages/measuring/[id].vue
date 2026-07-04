@@ -1,13 +1,14 @@
 <template>
   <div>
-    <p v-if="pending" class="empty">Loading…</p>
+    <p v-if="pending" class="empty">{{ $t('common.loading') }}</p>
     <p v-else-if="error" class="empty" style="color: var(--danger);">{{ $t('common.errorPrefix', { message: error }) }}</p>
 
     <template v-else-if="task">
       <DetailHeader
         v-model="headerExpanded"
-        :title="task.pickingOrder?.refNo || '—'"
+        :title="task.pickingOrder?.refNo || $t('common.noData')"
         :status="task.status"
+        :label="statusLabel.measuring(task.status)"
         :flush-top="route.meta.props?.noPadding"
         style="margin-bottom: 1.5rem;"
       >
@@ -17,18 +18,18 @@
             :to="`/picking/${task.pickingOrderId}`"
             class="btn btn--small"
           >
-            View picking order
+            {{ $t('actions.viewPickingOrder') }}
           </NuxtLink>
         </template>
 
         <div class="detail-row">
-          <span class="detail-label">Supplier</span>
-          <span>{{ task.pickingOrder?.supplier?.name || "—" }}</span>
+          <span class="detail-label">{{ $t('measuring.detail.supplier') }}</span>
+          <span>{{ task.pickingOrder?.supplier?.name || $t('common.noData') }}</span>
         </div>
       </DetailHeader>
 
-      <h2 class="section-title">Boxes</h2>
-      <p v-if="!task.shippingBoxes.length" class="empty">No shipping boxes yet.</p>
+      <h2 class="section-title">{{ $t('measuring.detail.boxes') }}</h2>
+      <p v-if="!task.shippingBoxes.length" class="empty">{{ $t('measuring.detail.noBoxes') }}</p>
 
       <div
         v-for="box in task.shippingBoxes"
@@ -37,23 +38,23 @@
         style="margin-bottom: 1.5rem;"
       >
         <div class="detail-row">
-          <span class="detail-label">Box</span>
+          <span class="detail-label">{{ $t('measuring.detail.box') }}</span>
           <span class="card__title">{{ box.id }}</span>
         </div>
         <div class="detail-row">
-          <span class="detail-label">Status</span>
-          <span class="badge">{{ box.status }}</span>
+          <span class="detail-label">{{ $t('measuring.detail.status') }}</span>
+          <StatusBadge :status="box.status" :label="boxStatusLabel.box(box.status)" />
         </div>
         <div class="detail-row">
-          <span class="detail-label">Packages</span>
-          <span>{{ verifiedCount(box) }} / {{ box.packages.length }} verified</span>
+          <span class="detail-label">{{ $t('measuring.detail.packages') }}</span>
+          <span>{{ $t('common.packagesVerified', { verified: verifiedCount(box), total: box.packages.length }) }}</span>
         </div>
         <div class="detail-row">
-          <span class="detail-label">Measurements</span>
+          <span class="detail-label">{{ $t('measuring.detail.measurements') }}</span>
           <span style="text-align: right; font-size: 0.8125rem;">
-            {{ box.boxSize || "—" }}
-            · {{ box.grossWeight ?? "—" }} / {{ box.netWeight ?? "—" }} kg
-            · {{ box.destinationCountry || "—" }}
+            {{ box.boxSize || $t('common.noData') }}
+            · {{ box.grossWeight ?? $t('common.noData') }} / {{ box.netWeight ?? $t('common.noData') }} kg
+            · {{ box.destinationCountry || $t('common.noData') }}
           </span>
         </div>
 
@@ -63,14 +64,14 @@
             class="btn"
             :class="{ 'btn--small': box.status === 'closed' }"
           >
-            {{ box.status === 'closed' ? "View box" : "Open box" }}
+            {{ box.status === 'closed' ? $t('measuring.detail.viewBox') : $t('measuring.detail.openBox') }}
           </NuxtLink>
         </div>
       </div>
 
       <div v-if="canComplete" style="margin-top: 1.5rem;">
         <button class="btn" @click="complete" :disabled="completing">
-          {{ completing ? "Completing…" : "Complete measuring" }}
+          {{ completing ? $t('measuring.detail.completing') : $t('measuring.detail.completeMeasuring') }}
         </button>
       </div>
     </template>
@@ -82,9 +83,12 @@ import { getMeasuringTaskDetail, completeMeasuringTask, type MeasuringTaskDetail
 import { useErrorMessage } from "~/composables/errorMessage";
 import { I18nError } from "~/composables/i18nError";
 
-definePageMeta({ title: "Measuring Detail", props: { noPadding: true } });
-
+const { t } = useI18n();
+const statusLabel = useStatusLabel();
+const boxStatusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
+
+useHead({ title: t('measuring.detail.title') });
 
 const route = useRoute();
 const taskId = route.params.id as string;

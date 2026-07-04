@@ -1,12 +1,12 @@
 <template>
   <div>
     <p class="page-hint">
-      Picking orders ready for measuring and packing.
+      {{ $t('measuring.hint') }}
     </p>
 
-    <p v-if="loading" class="empty">Loading…</p>
+    <p v-if="loading" class="empty">{{ $t('common.loading') }}</p>
     <p v-else-if="loadError" class="empty" style="color: var(--danger);">{{ $t('common.errorPrefix', { message: loadError }) }}</p>
-    <p v-else-if="rows.length === 0" class="empty">No pending measuring tasks.</p>
+    <p v-else-if="rows.length === 0" class="empty">{{ $t('common.noPendingMeasuringTasks') }}</p>
 
     <NuxtLink
       v-for="task in rows"
@@ -16,14 +16,14 @@
     >
       <div class="list-card__header">
         <span class="list-card__title">{{ task.picking_order_ref }}</span>
-        <span class="badge badge--pending">{{ task.status }}</span>
+        <StatusBadge :status="task.status" :label="statusLabel.measuring(task.status)" />
       </div>
       <p class="list-card__meta">
-        {{ task.supplier_name || "No supplier" }}
+        {{ task.supplier_name || $t('common.noSupplier') }}
       </p>
       <div class="list-card__footer">
         <span class="list-card__date">
-          {{ task.packed_items }} / {{ task.total_items }} packed
+          {{ $t('measuring.packed', { count: task.packed_items }) }}
         </span>
       </div>
     </NuxtLink>
@@ -34,9 +34,11 @@
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { useErrorMessage } from "~/composables/errorMessage";
 
-definePageMeta({ title: "Measuring" });
-
+const { t } = useI18n();
+const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
+
+useHead({ title: t('measuring.title') });
 
 interface MeasuringRow {
   id: string;

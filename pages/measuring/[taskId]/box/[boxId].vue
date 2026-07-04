@@ -1,24 +1,25 @@
 <template>
   <div>
-    <EmptyState v-if="pending">Loading…</EmptyState>
+    <EmptyState v-if="pending">{{ $t('common.loading') }}</EmptyState>
     <EmptyState v-else-if="error" error>{{ $t('common.errorPrefix', { message: error }) }}</EmptyState>
 
     <template v-else-if="box">
       <ScanFab
         v-if="box.status === 'open'"
         :loading="scanning"
-        aria-label="Scan item"
+        :aria-label="$t('actions.scan')"
         @click="openScan()"
       />
 
       <div style="margin-bottom: 1rem;">
-        <NuxtLink :to="`/measuring/${taskId}`" class="btn btn--small">← Back to task</NuxtLink>
+        <NuxtLink :to="`/measuring/${taskId}`" class="btn btn--small">{{ $t('common.backToTask') }}</NuxtLink>
       </div>
 
       <DetailHeader
         v-model="headerExpanded"
-        :title="`Box ${box.id}`"
+        :title="`${t('measuring.detail.box')} ${box.id}`"
         :status="box.status"
+        :label="boxStatusLabel.box(box.status)"
         :flush-top="route.meta.props?.noPadding"
         style="margin-bottom: 1.5rem;"
       >
@@ -28,46 +29,46 @@
             class="btn btn--small"
             @click="measureOpen = true"
           >
-            Enter measurements
+            {{ $t('actions.enterMeasurements') }}
           </button>
         </template>
 
-        <DetailRow label="Picking order" :value="box.measuringTask?.pickingOrder?.refNo" />
-        <DetailRow label="Destination" :value="box.measuringTask?.pickingOrder?.destinationCountry" />
+        <DetailRow :label="$t('measuring.measureBox.pickingOrder')" :value="box.measuringTask?.pickingOrder?.refNo" />
+        <DetailRow :label="$t('measuring.measureBox.destination')" :value="box.measuringTask?.pickingOrder?.destinationCountry" />
       </DetailHeader>
 
       <div class="card" style="margin-bottom: 1.5rem;">
         <h3 style="margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--muted);">
-          Packages — {{ verifiedCount }} / {{ box.packages.length }} verified
+          {{ $t('measuring.measureBox.packagesVerified', { verified: verifiedCount, total: box.packages.length }) }}
         </h3>
-        <p v-if="!box.packages.length" class="empty" style="padding: 0;">No packages in this box.</p>
+        <p v-if="!box.packages.length" class="empty" style="padding: 0;">{{ $t('common.noPackages') }}</p>
         <div
           v-for="pkg in box.packages"
           :key="pkg.id"
           class="packed-item"
         >
-          <DetailRow label="Part" :value="pkg.pickingItem?.part?.partNo" />
-          <DetailRow label="Qty" :value="pkg.qty" />
-          <DetailRow label="Date / Lot / Origin">
-            {{ pkg.dateCode || "—" }} / {{ pkg.lotCode || "—" }} / {{ pkg.coo || "—" }} / {{ pkg.cow || "—" }}
+          <DetailRow :label="$t('measuring.measureBox.part')" :value="pkg.pickingItem?.part?.partNo" />
+          <DetailRow :label="$t('measuring.measureBox.qty')" :value="pkg.qty" />
+          <DetailRow :label="$t('measuring.measureBox.dateLotOrigin')">
+            {{ pkg.dateCode || $t('common.noData') }} / {{ pkg.lotCode || $t('common.noData') }} / {{ pkg.coo || $t('common.noData') }} / {{ pkg.cow || $t('common.noData') }}
           </DetailRow>
-          <DetailRow label="Status">
+          <DetailRow :label="$t('measuring.measureBox.status')">
             <StatusBadge :status="pkg.verified ? 'verified' : 'pending'">
-              {{ pkg.verified ? "Verified" : "Pending" }}
+              {{ pkg.verified ? $t('common.verified') : $t('common.pending') }}
             </StatusBadge>
           </DetailRow>
           <div v-if="box.status === 'open' && !pkg.verified" style="margin-top: 0.5rem;">
-            <button class="btn btn--small" :disabled="scanning" @click="openScan(pkg.id)">Scan</button>
+            <button class="btn btn--small" :disabled="scanning" @click="openScan(pkg.id)">{{ $t('actions.scan') }}</button>
           </div>
         </div>
       </div>
 
       <div v-if="box.status === 'closed'" class="card" style="margin-bottom: 1.5rem;">
-        <h3 style="margin: 0 0 0.75rem; font-size: 0.875rem; color: var(--muted);">Box measurements</h3>
-        <DetailRow label="Box size" :value="box.boxSize" />
-        <DetailRow label="Net weight" :value="box.netWeight != null ? `${box.netWeight} kg` : '— kg'" />
-        <DetailRow label="Gross weight" :value="box.grossWeight != null ? `${box.grossWeight} kg` : '— kg'" />
-        <DetailRow label="Destination country" :value="box.destinationCountry" />
+        <h3 style="margin: 0 0 0.75rem; font-size: 0.875rem; color: var(--muted);">{{ $t('measuring.measureBox.measurements') }}</h3>
+        <DetailRow :label="$t('measuring.measureBox.boxSize')" :value="box.boxSize" />
+        <DetailRow :label="$t('measuring.measureBox.netWeight')" :value="box.netWeight != null ? `${box.netWeight} kg` : `${$t('common.noData')} kg`" />
+        <DetailRow :label="$t('measuring.measureBox.grossWeight')" :value="box.grossWeight != null ? `${box.grossWeight} kg` : `${$t('common.noData')} kg`" />
+        <DetailRow :label="$t('measuring.measureBox.destinationCountry')" :value="box.destinationCountry" />
       </div>
 
       <LabelScanReviewModal
@@ -118,15 +119,16 @@ async function onRetake() {
   await openScan(scanTargetPackageId.value);
 }
 
-definePageMeta({ title: "Measure Box", props: { noPadding: true } });
-
 const route = useRoute();
 const taskId = route.params.taskId as string;
 const boxId = route.params.boxId as string;
 
 const db = await useDb();
 const { t } = useI18n();
+const boxStatusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
+
+useHead({ title: t('measuring.measureBox.title') });
 
 const pending = ref(true);
 const error = ref<string | null>(null);
