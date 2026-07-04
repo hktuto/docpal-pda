@@ -13,6 +13,7 @@
       <DetailHeader
         v-model="headerExpanded"
         :title="$t('goodsVerify.box.boxTitle', { id: box.id })"
+        :label="headerStatus"
         :status="box.status"
         :badge-class="badgeClass(box.status)"
         :flush-top="route.meta.props?.noPadding"
@@ -90,6 +91,7 @@ import {
   type ShelfBoxDetail,
 } from "~/db/goodsVerify";
 import { badgeClass } from "~/composables/useStatusBadge";
+import { useStatusLabel } from "~/composables/useStatusLabel";
 
 const { t } = useI18n();
 useHead({ title: t('goodsVerify.box.title') });
@@ -114,6 +116,11 @@ const boxId = route.params.id as string;
 const db = await useDb();
 const { currentUser } = useAuth();
 const errorMessage = useErrorMessage();
+const statusLabel = useStatusLabel();
+
+const headerStatus = computed(() =>
+  box.value ? statusLabel.box(box.value.status) : ""
+);
 
 const pending = ref(true);
 const error = ref<string | null>(null);
