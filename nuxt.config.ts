@@ -10,12 +10,26 @@ export default defineNuxtConfig({
   },
   app: {
     head: {
-      title: "Warehouse Web Demo",
+      title: "Warehouse PDA",
       viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
     },
   },
   css: ["~/assets/css/main.css"],
-  $development:{
+  modules: ["@nuxtjs/i18n"],
+  i18n: {
+    restructureDir: "",
+    strategy: "no_prefix",
+    defaultLocale: "zh-HK",
+    locales: [
+      { code: "en-US", name: "English", file: "en-US.ts" },
+      { code: "zh-CN", name: "简体中文", file: "zh-CN.ts" },
+      { code: "zh-HK", name: "繁體中文（香港）", file: "zh-HK.ts" },
+    ],
+    langDir: "i18n/locales/",
+    detectBrowserLanguage: false,
+    vueI18n: "./i18n/config.ts",
+  },
+  $development: {
     hooks: {
       // Workaround for Nuxt 3.21 + Vite 7 bug where `ssr: false` dev server
       // crashes with "No entry found in rollupOptions.input" when the client
@@ -38,16 +52,13 @@ export default defineNuxtConfig({
       },
     },
   },
-
-
   vite: {
     optimizeDeps: {
       // Exclude PGlite packages from optimization (they contain WASM files)
       exclude: [
-        '@electric-sql/pglite',
-        '@electric-sql/pglite/live',
+        "@electric-sql/pglite",
+        "@electric-sql/pglite/live",
       ],
-
-    }
-  }
+    },
+  },
 });
