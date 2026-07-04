@@ -230,7 +230,6 @@ export default {
       shipTo: "Ship to",
       dateCodeNotice: "Date-code notice",
       finishPicking: "Finish picking",
-      finishing: "Finishing…",
       measuring: "Measuring",
     },
     itemsSection: {
@@ -262,9 +261,6 @@ export default {
     boxesSection: {
       title: "Boxes ({count})",
       newBox: "New box",
-      hide: "Hide",
-      show: "Show",
-      empty: "No boxes yet.",
       boxId: "Box ID",
       status: "Status",
       packages: "Packages",

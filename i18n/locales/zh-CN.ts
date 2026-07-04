@@ -230,7 +230,6 @@ export default {
       shipTo: "收货方",
       dateCodeNotice: "日期代码提示",
       finishPicking: "完成拣货",
-      finishing: "完成中…",
       measuring: "测量",
     },
     itemsSection: {
@@ -262,9 +261,6 @@ export default {
     boxesSection: {
       title: "箱子 ({count})",
       newBox: "新建箱子",
-      hide: "隐藏",
-      show: "显示",
-      empty: "暂无箱子。",
       boxId: "箱号",
       status: "状态",
       packages: "包裹",
