@@ -7,7 +7,7 @@
     <DetailRow v-if="order.issueNote" :label="$t('picking.issueBanner.note')" :value="order.issueNote" />
     <DetailRow :label="$t('picking.issueBanner.reported')">
       {{ order.issueReportedAt ? new Date(order.issueReportedAt).toLocaleString() : $t('common.noData') }}
-      by {{ order.issueReportedByUser?.displayName || order.issueReportedBy || $t('common.noData') }}
+      {{ $t('common.reportedBy', { name: order.issueReportedByUser?.displayName || order.issueReportedBy || $t('common.noData') }) }}
     </DetailRow>
   </div>
 </template>

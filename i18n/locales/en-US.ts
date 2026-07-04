@@ -112,6 +112,7 @@ export default {
     noPickingOrdersLinked: "No picking orders are linked to this receiving order yet.",
     noShelves: "No shelves found.",
     noReceivingOrders: "No receiving orders found.",
+    noPickingOrders: "No picking orders found.",
     noPendingMeasuringTasks: "No pending measuring tasks.",
     noReceivingOrdersNeedPutAway: "No receiving orders need put-away.",
     noShippingBoxes: "No shipping boxes yet.",
@@ -298,6 +299,8 @@ export default {
       remarkAriaLabel: "Remark for {ref}",
       commonNote: "Common note",
       commonNotePlaceholder: "Note applied to all selected orders",
+      actualQtyPlaceholder: "e.g. 5",
+      packSizePlaceholder: "e.g. 20000",
       validation: {
         mergeMinOrders: "Select at least two orders to request a merge",
         validAvailableQty: "Enter a valid available quantity",

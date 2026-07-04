@@ -112,6 +112,7 @@ export default {
     noPickingOrdersLinked: "此收貨單尚未連結揀貨單。",
     noShelves: "找不到貨架。",
     noReceivingOrders: "找不到收貨單。",
+    noPickingOrders: "未找到揀貨單。",
     noPendingMeasuringTasks: "暫無待處理的測量任務。",
     noReceivingOrdersNeedPutAway: "沒有需要上架的收貨單。",
     noShippingBoxes: "暫無出貨箱。",
@@ -298,6 +299,8 @@ export default {
       remarkAriaLabel: "{ref} 的備註",
       commonNote: "通用備註",
       commonNotePlaceholder: "套用至所有已選訂單的備註",
+      actualQtyPlaceholder: "例如：5",
+      packSizePlaceholder: "例如：20000",
       validation: {
         mergeMinOrders: "請選擇至少兩張訂單以申請合併",
         validAvailableQty: "請輸入有效的可用數量",

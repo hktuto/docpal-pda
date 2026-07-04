@@ -1,6 +1,6 @@
 <template>
   <span class="badge" :class="badgeClass(status)">
-    <slot>{{ status }}</slot>
+    <slot>{{ label || status }}</slot>
   </span>
 </template>
 
@@ -9,5 +9,6 @@ import { badgeClass } from "~/composables/useStatusBadge";
 
 defineProps<{
   status: string;
+  label?: string;
 }>();
 </script>

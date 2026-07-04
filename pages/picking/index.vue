@@ -10,7 +10,7 @@
     <p v-if="loading" class="empty">{{ $t('common.loading') }}</p>
     <p v-else-if="loadError" class="empty" style="color: var(--danger);">{{ $t('common.errorPrefix', { message: loadError }) }}</p>
     <p v-else-if="reportMessage" class="empty" style="color: #92400e;">{{ reportMessage }}</p>
-    <p v-else-if="rows.length === 0" class="empty">{{ $t('common.noReceivingOrders') }}</p>
+    <p v-else-if="rows.length === 0" class="empty">{{ $t('common.noPickingOrders') }}</p>
 
     <div
       v-for="po in rows"

@@ -30,7 +30,7 @@
               type="number"
               min="0"
               step="1"
-              placeholder="e.g. 5"
+              :placeholder="$t('picking.issueModal.actualQtyPlaceholder')"
               :disabled="saving"
             />
             <span v-if="errors.qty" class="error">{{ errors.qty }}</span>
@@ -43,7 +43,7 @@
               type="number"
               min="1"
               step="1"
-              placeholder="e.g. 20000"
+              :placeholder="$t('picking.issueModal.packSizePlaceholder')"
               :disabled="saving"
             />
             <span v-if="errors.packSize" class="error">{{ errors.packSize }}</span>

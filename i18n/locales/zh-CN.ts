@@ -112,6 +112,7 @@ export default {
     noPickingOrdersLinked: "此收货单尚未关联拣货单。",
     noShelves: "未找到货架。",
     noReceivingOrders: "未找到收货单。",
+    noPickingOrders: "未找到拣货单。",
     noPendingMeasuringTasks: "暂无待处理的测量任务。",
     noReceivingOrdersNeedPutAway: "没有需要上架的收货单。",
     noShippingBoxes: "暂无发货箱。",
@@ -298,6 +299,8 @@ export default {
       remarkAriaLabel: "{ref} 的备注",
       commonNote: "通用备注",
       commonNotePlaceholder: "适用于所有已选订单的备注",
+      actualQtyPlaceholder: "例如：5",
+      packSizePlaceholder: "例如：20000",
       validation: {
         mergeMinOrders: "请选择至少两个订单以申请合并",
         validAvailableQty: "请输入有效的可用数量",
