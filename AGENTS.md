@@ -92,6 +92,32 @@ For non-trivial changes:
 2. Write an implementation plan in `docs/superpowers/plans/YYYY-MM-DD-<feature>.md`.
 3. Implement, verify, and commit.
 
+## Documentation system
+
+The project maintains a dual-audience documentation system under `docs/app-docs/`:
+
+- **Human training manual** for operators and trainers.
+- **AI lookup reference** for coding agents.
+
+### How agents should use it
+
+- Start with `docs/app-docs/README.md` for the table of contents.
+- Use `docs/app-docs/ai/feature-registry.md` to locate which files implement a feature.
+- Use `docs/app-docs/ai/code-map.md` for page/component ↔ source-file mappings.
+- Read the relevant flow's `ai-scope.md` before changing behavior so you know boundaries and known limitations.
+
+### How agents should maintain it
+
+When you add, remove, or significantly change a feature:
+
+1. Update the relevant `docs/app-docs/flows/<flow>/` files:
+   - `overview.md` for concept changes.
+   - `steps.md` for operator-step changes.
+   - `ai-scope.md` for scope, key files, limitations, and related specs.
+2. Update `docs/app-docs/ai/feature-registry.md` and `docs/app-docs/ai/code-map.md` if files or features changed.
+3. Use `docs/app-docs/ai/scope-remark-template.md` as the format for new AI scope blocks.
+4. Do not duplicate `README.md` or `AGENTS.md`; link to them instead.
+
 ## Demo limitations to keep in mind
 
 - **No migrations.** The schema is created once from `db/init.ts` when the `users` table does not exist. Schema changes require clearing IndexedDB.
