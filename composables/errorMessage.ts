@@ -5,11 +5,15 @@ export function useErrorMessage() {
 
   return function errorMessage(e: unknown): string {
     if (e instanceof I18nError) {
-      return t(`errors.${e.code}`, (e.params ?? {}) as Record<string, unknown>);
+      return t(`errors.${e.code}`, e.params ?? {});
     }
     if (e instanceof Error) {
       return e.message;
     }
     return String(e);
   };
+}
+
+export function errorMessage(e: unknown): string {
+  return useErrorMessage()(e);
 }

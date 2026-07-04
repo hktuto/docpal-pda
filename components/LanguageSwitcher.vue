@@ -15,12 +15,16 @@
 </template>
 
 <script setup lang="ts">
+const SUPPORTED = ["en-US", "zh-CN", "zh-HK"] as const;
+
 const { locale, setLocale } = useI18n();
 const selectId = useId();
 
 function onChange(event: Event) {
-  const target = event.target as HTMLSelectElement;
-  setLocale(target.value);
+  const value = (event.target as HTMLSelectElement).value;
+  if ((SUPPORTED as readonly string[]).includes(value)) {
+    setLocale(value);
+  }
 }
 </script>
 

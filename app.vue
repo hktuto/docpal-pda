@@ -6,4 +6,8 @@
 
 <script setup lang="ts">
 useAndroidBackButton();
+
+onMounted(() => {
+  useLocalePreference().restore();
+});
 </script>
