@@ -31,26 +31,32 @@
           <label class="field">
             <span>{{ $t('labelScanReviewModal.partNo') }}</span>
             <input v-model="editable.partNo" type="text" :placeholder="$t('labelScanReviewModal.placeholderPartNo')" />
+            <CandidateChips v-model="editable.partNo" :candidates="partNoCandidates" />
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.dateCode') }}</span>
             <input v-model="editable.dateCode" type="text" :placeholder="$t('labelScanReviewModal.placeholderDateCode')" />
+            <CandidateChips v-model="editable.dateCode" :candidates="dateCodeCandidates" />
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.lotCode') }}</span>
             <input v-model="editable.lotCode" type="text" :placeholder="$t('labelScanReviewModal.placeholderLotCode')" />
+            <CandidateChips v-model="editable.lotCode" :candidates="lotCodeCandidates" />
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.coo') }}</span>
             <input v-model="editable.coo" type="text" :placeholder="$t('labelScanReviewModal.placeholderCoo')" />
+            <CandidateChips v-model="editable.coo" :candidates="cooCandidates" />
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.cow') }}</span>
             <input v-model="editable.cow" type="text" :placeholder="$t('labelScanReviewModal.placeholderCow')" />
+            <CandidateChips v-model="editable.cow" :candidates="cowCandidates" />
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.qty') }}</span>
             <input v-model.number="editable.qty" type="number" min="1" :placeholder="$t('labelScanReviewModal.placeholderQty')" />
+            <CandidateChips v-model="qtyChipValue" :candidates="qtyCandidates" />
           </label>
         </form>
 
@@ -176,6 +182,21 @@ const emit = defineEmits<{
 
 const localMatchResult = ref<ScanMatchResult>(props.matchResult);
 const editable = ref<OcrInput>({ ...props.parsed });
+
+const partNoCandidates = computed(() => props.options.itemIds);
+const dateCodeCandidates = computed(() => props.options.dateCodes);
+const lotCodeCandidates = computed(() => props.options.lotCodes);
+const cooCandidates = computed(() => props.options.coos);
+const cowCandidates = computed(() => props.options.cows);
+const qtyCandidates = computed(() => props.options.qtys.map(String));
+
+const qtyChipValue = computed({
+  get: () => String(editable.value.qty),
+  set: (v) => {
+    editable.value.qty = v === "" ? "" : Number(v);
+  },
+});
+
 const applying = ref(false);
 const matching = ref(false);
 const applyError = ref<string | null>(null);
