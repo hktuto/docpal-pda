@@ -76,6 +76,7 @@ export default {
     loading: "Loading…",
     errorPrefix: "Error: {message}",
     noData: "—",
+    stateNone: "—",
     searchByRefOrSupplier: "Search by ref or supplier…",
     searchShelfCodeOrZone: "Search shelf code or zone…",
     searchBoxIdOrStatus: "Search box ID or status…",

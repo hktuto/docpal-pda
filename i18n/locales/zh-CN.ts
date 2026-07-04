@@ -76,6 +76,7 @@ export default {
     loading: "加载中…",
     errorPrefix: "错误：{message}",
     noData: "—",
+    stateNone: "—",
     searchByRefOrSupplier: "按单号或供应商搜索…",
     searchShelfCodeOrZone: "按货架编码或区域搜索…",
     searchBoxIdOrStatus: "按箱号或状态搜索…",
