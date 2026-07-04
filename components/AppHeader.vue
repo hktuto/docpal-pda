@@ -32,6 +32,7 @@
     <h1 class="app-header__title">{{ title }}</h1>
 
     <div class="app-header__actions">
+      <LanguageSwitcher />
       <button
         class="app-header__action app-header__action--reset"
         aria-label="Reset local DB"
