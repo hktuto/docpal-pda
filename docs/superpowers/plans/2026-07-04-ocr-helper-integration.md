@@ -35,16 +35,16 @@
 - Create: `utils/ocrResultToInput.ts`
 - Create: `tests/ocrResultToInput.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 import { describe, it, expect } from 'vitest';
 import { ocrResultToInput } from '../utils/ocrResultToInput';
-import type { OcrParseResult } from '../utils/parseOcrScan';
+import type { ParsedFields } from '../utils/parseOcrScan';
 
 describe('ocrResultToInput', () => {
   it('maps parsed fields to OcrInput', () => {
-    const parsed: OcrParseResult['parsed'] = {
+    const parsed: ParsedFields = {
       itemId: 'RK73B1JTTD181G',
       qty: 5000,
       dateCode: '2544',
@@ -64,7 +64,7 @@ describe('ocrResultToInput', () => {
   });
 
   it('uses empty defaults for missing values', () => {
-    const parsed: OcrParseResult['parsed'] = { itemId: null };
+    const parsed: ParsedFields = { itemId: null };
     const result = ocrResultToInput(parsed);
 
     expect(result.partNo).toBe('');
@@ -77,23 +77,23 @@ describe('ocrResultToInput', () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm vitest run tests/ocrResultToInput.test.ts`
 
 Expected: FAIL with "ocrResultToInput is not defined" or module not found.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```ts
 import type { OcrInput } from "~/composables/useMockOcr";
-import type { OcrParseResult } from "~/utils/parseOcrScan";
+import type { ParsedFields } from "~/utils/parseOcrScan";
 
 /**
  * Convert the helper's best-guess parsed fields into the OcrInput shape
  * consumed by the matchers and the review modal.
  */
-export function ocrResultToInput(parsed: OcrParseResult["parsed"]): OcrInput {
+export function ocrResultToInput(parsed: ParsedFields): OcrInput {
   return {
     partNo: parsed.itemId ?? "",
     dateCode: parsed.dateCode ?? "",
@@ -105,13 +105,13 @@ export function ocrResultToInput(parsed: OcrParseResult["parsed"]): OcrInput {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm vitest run tests/ocrResultToInput.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/ocrResultToInput.test.ts utils/ocrResultToInput.ts
@@ -125,7 +125,7 @@ git commit -m "feat(scan): add ocrResultToInput mapping utility with tests"
 **Files:**
 - Create: `components/CandidateChips.vue`
 
-- [ ] **Step 1: Write the component**
+- [x] **Step 1: Write the component**
 
 ```vue
 <template>
@@ -186,13 +186,13 @@ const showChips = computed(() => props.candidates.length > 1);
 </style>
 ```
 
-- [ ] **Step 2: Verify with type check**
+- [x] **Step 2: Verify with type check**
 
 Run: `pnpm nuxt prepare`
 
 Expected: succeeds. The component has no runtime dependencies beyond Vue and existing CSS variables.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add components/CandidateChips.vue
@@ -208,7 +208,7 @@ git commit -m "feat(scan): add CandidateChips component"
 - Modify: `composables/useLabelScan.ts`
 - Modify: `components/LabelScanReviewModal.vue`
 
-- [ ] **Step 1: Add `targets` to `ScanTaskContext`**
+- [x] **Step 1: Add `targets` to `ScanTaskContext`**
 
 In `composables/useScanMatchers.ts`, update the interface:
 
@@ -228,7 +228,7 @@ export interface ScanTaskContext {
 }
 ```
 
-- [ ] **Step 2: Update `LabelScanResult` and imports in `useLabelScan.ts`**
+- [x] **Step 2: Update `LabelScanResult` and imports in `useLabelScan.ts`**
 
 Add the import at the top of `composables/useLabelScan.ts`:
 
@@ -253,7 +253,7 @@ export type LabelScanResult =
   | { status: "error"; message: string };
 ```
 
-- [ ] **Step 3: Update `createManualReview` defaults**
+- [x] **Step 3: Update `createManualReview` defaults**
 
 In `composables/useLabelScan.ts`, update `createManualReview` to include empty `options`:
 
@@ -269,7 +269,7 @@ export function createManualReview(): Extract<LabelScanResult, { status: "review
 }
 ```
 
-- [ ] **Step 4: Update `LabelScanReviewModal.vue` props**
+- [x] **Step 4: Update `LabelScanReviewModal.vue` props**
 
 Add the prop:
 
@@ -293,13 +293,13 @@ Add the import:
 import type { CandidateOptions } from "~/utils/parseOcrScan";
 ```
 
-- [ ] **Step 5: Run type check**
+- [x] **Step 5: Run type check**
 
 Run: `pnpm nuxt prepare`
 
 Expected: succeeds (other type errors from unimplemented integration are acceptable at this point).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add composables/useScanMatchers.ts composables/useLabelScan.ts components/LabelScanReviewModal.vue
@@ -313,7 +313,7 @@ git commit -m "feat(scan): add targets and options to scan type contracts"
 **Files:**
 - Modify: `composables/useLabelScan.ts`
 
-- [ ] **Step 1: Add helper imports and conversion utilities**
+- [x] **Step 1: Add helper imports and conversion utilities**
 
 Replace the existing imports at the top of `composables/useLabelScan.ts` with:
 
@@ -332,7 +332,7 @@ import { ocrResultToInput } from "~/utils/ocrResultToInput";
 import type { OcrInput } from "./useMockOcr";
 ```
 
-- [ ] **Step 2: Add barcode parsing helper**
+- [x] **Step 2: Add barcode parsing helper**
 
 Add above `useLabelScan`:
 
@@ -348,7 +348,7 @@ function parseBarcodes(barcodesJson: string): RawOcrCapture["barcodes"] {
 }
 ```
 
-- [ ] **Step 3: Replace parser call in `scan()`**
+- [x] **Step 3: Replace parser call in `scan()`**
 
 Replace:
 
@@ -374,7 +374,7 @@ console.log("[useLabelScan]", {
 });
 ```
 
-- [ ] **Step 4: Return options from review branch**
+- [x] **Step 4: Return options from review branch**
 
 Replace:
 
@@ -394,7 +394,7 @@ return {
 };
 ```
 
-- [ ] **Step 5: Remove obsolete `parseRecognizedText` import**
+- [x] **Step 5: Remove obsolete `parseRecognizedText` import**
 
 Delete the line:
 
@@ -402,13 +402,13 @@ Delete the line:
 import { parseRecognizedText } from "./useRecognizedTextParser";
 ```
 
-- [ ] **Step 6: Run type check**
+- [x] **Step 6: Run type check**
 
 Run: `pnpm nuxt prepare`
 
 Expected: succeeds.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add composables/useLabelScan.ts
@@ -422,7 +422,7 @@ git commit -m "feat(scan): use parseAndIdentify in live scan flow"
 **Files:**
 - Modify: `components/LabelScanReviewModal.vue`
 
-- [ ] **Step 1: Add computed candidates**
+- [x] **Step 1: Add computed candidates**
 
 After the `editable` ref, add:
 
@@ -447,7 +447,7 @@ const qtyChipValue = computed({
 });
 ```
 
-- [ ] **Step 2: Add chips below each field**
+- [x] **Step 2: Add chips below each field**
 
 Update the form block in the template:
 
@@ -510,13 +510,13 @@ Update the form block in the template:
 </form>
 ```
 
-- [ ] **Step 3: Run type check**
+- [x] **Step 3: Run type check**
 
 Run: `pnpm nuxt prepare`
 
 Expected: succeeds.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add components/LabelScanReviewModal.vue
@@ -536,7 +536,7 @@ git commit -m "feat(scan): render candidate chips in review modal"
 
 ### Task 6a: Receiving page
 
-- [ ] **Step 1: Compute target part numbers**
+- [x] **Step 1: Compute target part numbers**
 
 In `pages/receiving/[id].vue`, add a computed target list near the other computed properties:
 
@@ -552,7 +552,7 @@ const scanTargets = computed(() => {
 
 Adjust `item.part?.partNo` to match the actual shape of `DisplayReceivingItem` if different.
 
-- [ ] **Step 2: Pass targets to `scan()`**
+- [x] **Step 2: Pass targets to `scan()`**
 
 Update the `scan()` call in `openScan` so the context includes `targets`:
 
@@ -567,7 +567,7 @@ const result = await scan({
 
 The `:context` binding on `LabelScanReviewModal` stays unchanged; `targets` is consumed by `useLabelScan.scan()`, not by the modal.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add pages/receiving/[id].vue
@@ -576,7 +576,7 @@ git commit -m "feat(scan): pass target part numbers from receiving page"
 
 ### Task 6b: Picking page
 
-- [ ] **Step 1: Compute target part number**
+- [x] **Step 1: Compute target part number**
 
 In `pages/picking/[id].vue`, add:
 
@@ -587,7 +587,7 @@ const scanTargets = computed(() => {
 });
 ```
 
-- [ ] **Step 2: Pass targets to `scan()`**
+- [x] **Step 2: Pass targets to `scan()`**
 
 Update the `scan()` call so the context includes `targets`:
 
@@ -601,7 +601,7 @@ const result = await scan({
 
 The `:context` binding on `LabelScanReviewModal` stays unchanged.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add pages/picking/[id].vue
@@ -610,7 +610,7 @@ git commit -m "feat(scan): pass target part number from picking page"
 
 ### Task 6c: Put-away page
 
-- [ ] **Step 1: Compute target part number**
+- [x] **Step 1: Compute target part number**
 
 In `pages/put-away/[id].vue`, the `openScan` function already receives `lot: PutAwayLot`. Use it inline:
 
@@ -623,7 +623,7 @@ const result = await scan({
 });
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add pages/put-away/[id].vue
@@ -632,7 +632,7 @@ git commit -m "feat(scan): pass target part number from put-away page"
 
 ### Task 6d: Measuring page
 
-- [ ] **Step 1: Compute target part numbers**
+- [x] **Step 1: Compute target part numbers**
 
 In `pages/measuring/[taskId]/box/[boxId].vue`, add:
 
@@ -646,7 +646,7 @@ const scanTargets = computed(() => {
 });
 ```
 
-- [ ] **Step 2: Pass targets to `scan()`**
+- [x] **Step 2: Pass targets to `scan()`**
 
 Update the `scan()` call so the context includes `targets`:
 
@@ -661,7 +661,7 @@ const result = await scan({
 
 The `:context` binding on `LabelScanReviewModal` stays unchanged.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add pages/measuring/[taskId]/box/[boxId].vue
@@ -670,7 +670,7 @@ git commit -m "feat(scan): pass target part numbers from measuring page"
 
 ### Task 6e: Goods-verify page
 
-- [ ] **Step 1: Compute target part numbers**
+- [x] **Step 1: Compute target part numbers**
 
 In `pages/goods-verify/box/[id].vue`, add:
 
@@ -684,7 +684,7 @@ const scanTargets = computed(() => {
 });
 ```
 
-- [ ] **Step 2: Pass targets to `scan()`**
+- [x] **Step 2: Pass targets to `scan()`**
 
 Update the `scan()` call so the context includes `targets`:
 
@@ -698,7 +698,7 @@ const result = await scan({
 
 The `:context` binding on `LabelScanReviewModal` stays unchanged.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add pages/goods-verify/box/[id].vue
@@ -714,23 +714,23 @@ git commit -m "feat(scan): pass target part numbers from goods-verify page"
 - Modify: `docs/app-docs/ai/feature-registry.md` (if feature entry needs updating)
 - Modify: `docs/app-docs/ai/code-map.md` (if code map needs updating)
 
-- [ ] **Step 1: Run unit tests**
+- [x] **Step 1: Run unit tests**
 
 Run: `pnpm vitest run`
 
 Expected: all tests pass, including new `ocrResultToInput` tests.
 
-- [ ] **Step 2: Run type generation**
+- [x] **Step 2: Run type generation**
 
 Run: `pnpm nuxt prepare`
 
 Expected: succeeds with no errors.
 
-- [ ] **Step 3: Run lint / format if configured**
+- [x] **Step 3: Run lint / format if configured**
 
 Run: `pnpm lint` if it exists; otherwise skip.
 
-- [ ] **Step 4: Update operator docs**
+- [x] **Step 4: Update operator docs**
 
 In `docs/app-docs/flows/picking/label-scan.md`, add a short paragraph under "Known behavior":
 
@@ -738,7 +738,7 @@ In `docs/app-docs/flows/picking/label-scan.md`, add a short paragraph under "Kno
 - When the scanner detects more than one possible value for a field (for example, multiple date codes or countries of origin), the review modal shows the alternatives as a row of chips below the input. Tap a chip to switch the field to that value.
 ```
 
-- [ ] **Step 5: Update AI code map**
+- [x] **Step 5: Update AI code map**
 
 In `docs/app-docs/ai/code-map.md`, ensure the scan flow entries mention:
 
@@ -747,7 +747,7 @@ In `docs/app-docs/ai/code-map.md`, ensure the scan flow entries mention:
 
 Make minimal edits only if the existing entries are now misleading.
 
-- [ ] **Step 6: Manual browser check**
+- [x] **Step 6: Manual browser check**
 
 Run: `pnpm dev`
 
@@ -759,7 +759,7 @@ Log in as `operator` / `DocPal2026!`. For at least two flows (e.g., receiving an
 4. Click **Find match** and confirm the matcher uses the selected value.
 5. Verify retake and cancel still work.
 
-- [ ] **Step 7: Commit docs and final verification**
+- [x] **Step 7: Commit docs and final verification**
 
 ```bash
 git add docs/app-docs/flows/picking/label-scan.md docs/app-docs/ai/code-map.md docs/superpowers/plans/2026-07-04-ocr-helper-integration.md
@@ -784,5 +784,5 @@ git commit -m "docs(scan): document candidate chips and update code map"
 
 3. **Type consistency:**
    - `CandidateOptions` is imported from `~/utils/parseOcrScan` consistently.
-   - `OcrInput` fields map correctly from `OcrParseResult["parsed"]`.
+   - `OcrInput` fields map correctly from `ParsedFields`.
    - `qtyChipValue` converts between number and string for `CandidateChips`.
