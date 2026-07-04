@@ -77,7 +77,7 @@
       :options="review.options"
       :match-result="review.matchResult"
       :mode="review.capture.imagePath ? 'review' : 'manual'"
-      :context="{ task: 'picking', allocation: scanAllocation, targets: scanTargets }"
+      :context="{ task: 'picking', allocation: scanAllocation }"
       @applied="onApplied"
       @retake="onRetake"
     />

@@ -95,7 +95,7 @@
         :options="review.options"
         :match-result="review.matchResult"
         :mode="review.capture.imagePath ? 'review' : 'manual'"
-        :context="{ task: 'receiving', receivingOrderId: orderId, pickingItemId: scanPickingItemId, targets: scanTargets }"
+        :context="{ task: 'receiving', receivingOrderId: orderId, pickingItemId: scanPickingItemId }"
         @applied="onApplied"
         @retake="onRetake"
       />

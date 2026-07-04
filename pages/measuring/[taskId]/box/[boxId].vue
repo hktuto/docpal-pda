@@ -81,7 +81,7 @@
         :options="review.options"
         :match-result="review.matchResult"
         :mode="review.capture.imagePath ? 'review' : 'manual'"
-        :context="{ task: 'measuring', boxId, targetPackageId: scanTargetPackageId, targets: scanTargets }"
+        :context="{ task: 'measuring', boxId, targetPackageId: scanTargetPackageId }"
         @applied="onApplied"
         @retake="onRetake"
       />

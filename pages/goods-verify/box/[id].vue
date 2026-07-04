@@ -74,7 +74,7 @@
       :options="review.options"
       :match-result="review.matchResult"
       :mode="review.capture.imagePath ? 'review' : 'manual'"
-      :context="{ task: 'goods-verify', items: box?.items ?? [], targets: scanTargets }"
+      :context="{ task: 'goods-verify', items: box?.items ?? [] }"
       @applied="onApplied"
       @retake="onRetake"
     />
