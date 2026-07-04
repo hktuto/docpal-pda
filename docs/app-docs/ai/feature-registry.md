@@ -6,7 +6,7 @@ Machine-readable index of features in the warehouse PDA demo. Use this page to l
 |---------|------|--------|-----------|-----------|
 | Picking list | Picking | Shipped | `pages/picking/index.vue` | [ai-scope](../flows/picking/ai-scope.md) |
 | Picking detail | Picking | Shipped | `pages/picking/[id].vue` or equivalent | [ai-scope](../flows/picking/ai-scope.md) |
-| OCR-assisted picking | Picking / Receiving | Shipped | `composables/useLabelScan.ts`, `composables/useScanMatchers.ts`, `db/ocrPicking.ts`, `components/LabelScanReviewModal.vue` | [ai-scope](../flows/picking/ai-scope.md) |
+| OCR-assisted picking | Picking / Receiving | Shipped | `composables/useLabelScan.ts`, `composables/useScanMatchers.ts`, `db/ocrPicking.ts`, `components/LabelScanReviewModal.vue`, `utils/parseOcrScan.ts`, `utils/ocrResultToInput.ts`, `components/CandidateChips.vue` | [ai-scope](../flows/picking/ai-scope.md) |
 | Picking issue reporting | Picking | Shipped | `components/PickingIssueReportModal.vue`, `components/ReportIssueModal.vue` | [ai-scope](../flows/picking/ai-scope.md) |
 | Receiving list | Receiving | Shipped | `pages/receiving/index.vue` | [ai-scope](../flows/receiving/ai-scope.md) |
 | Receiving detail | Receiving | Shipped | `pages/receiving/[id].vue` or equivalent | [ai-scope](../flows/receiving/ai-scope.md) |

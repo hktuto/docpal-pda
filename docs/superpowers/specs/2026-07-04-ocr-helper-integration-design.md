@@ -125,7 +125,7 @@ parseAndIdentify(capture, context.targets)
 | Measuring | Part numbers of unverified packages in the box |
 | Goods-verify | Part numbers of unverified items in the shelf box |
 
-If building a target list is impractical for a flow in the first iteration, pass `[]`. The helper still extracts field candidates, but part-number matching is skipped and the review modal opens.
+If building a target list is impractical for a flow in the first iteration, pass `[]`. The helper still extracts field candidates, but part-number matching is skipped and the review modal opens. The `targets` array is supplied to `useLabelScan.scan()` via `ScanTaskContext`; it is not an independent prop of `LabelScanReviewModal`.
 
 ## UI design
 

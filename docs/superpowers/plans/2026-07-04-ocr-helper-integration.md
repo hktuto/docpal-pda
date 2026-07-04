@@ -755,6 +755,10 @@ In `docs/app-docs/flows/picking/label-scan.md`, add a short paragraph under "Kno
 - When the scanner detects more than one possible value for a field (for example, multiple date codes or countries of origin), the review modal shows the alternatives as a row of chips below the input. Tap a chip to switch the field to that value.
 ```
 
+- [x] **Step 4b: Update feature registry**
+
+In `docs/app-docs/ai/feature-registry.md`, add `utils/parseOcrScan.ts`, `utils/ocrResultToInput.ts`, and `components/CandidateChips.vue` to the OCR-assisted picking key-files list.
+
 - [x] **Step 5: Update AI code map**
 
 In `docs/app-docs/ai/code-map.md`, ensure the scan flow entries mention:
@@ -779,7 +783,7 @@ Log in as `operator` / `DocPal2026!`. For at least two flows (e.g., receiving an
 - [x] **Step 7: Commit docs and final verification**
 
 ```bash
-git add docs/app-docs/flows/picking/label-scan.md docs/app-docs/ai/code-map.md docs/superpowers/plans/2026-07-04-ocr-helper-integration.md
+git add docs/app-docs/flows/picking/label-scan.md docs/app-docs/ai/feature-registry.md docs/app-docs/ai/code-map.md docs/superpowers/plans/2026-07-04-ocr-helper-integration.md
 git commit -m "docs(scan): document candidate chips and update code map"
 ```
 
