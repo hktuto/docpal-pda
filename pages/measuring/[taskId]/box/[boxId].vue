@@ -78,6 +78,7 @@
         :text="review.capture.text"
         :barcodes="review.capture.barcodes"
         :parsed="review.parsed"
+        :options="review.options"
         :match-result="review.matchResult"
         :mode="review.capture.imagePath ? 'review' : 'manual'"
         :context="{ task: 'measuring', boxId, targetPackageId: scanTargetPackageId }"
