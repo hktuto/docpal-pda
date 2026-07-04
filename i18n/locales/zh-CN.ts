@@ -219,7 +219,6 @@ export default {
   picking: {
     title: "拣货",
     shipTo: "收货方：{destination}",
-    selectedCount: "已选 {count} 项",
     reportIssue: "上报问题",
     issueReported: "已上报 {count} 个问题",
     ordersSkipped: "已跳过 {count} 个订单。",
@@ -259,12 +258,10 @@ export default {
       showLogs: "显示拣货日志",
       noLogs: "暂无拣货日志。",
       actorSystem: "系统",
-      stateNone: "—",
     },
     boxesSection: {
       title: "箱子 ({count})",
       newBox: "新建箱子",
-      creating: "创建中…",
       hide: "隐藏",
       show: "显示",
       empty: "暂无箱子。",
@@ -273,7 +270,6 @@ export default {
       packages: "包裹",
       qty: "数量",
       cancelBox: "取消箱子",
-      canceling: "取消中…",
     },
     issueBanner: {
       issueReason: "问题原因",

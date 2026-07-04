@@ -219,7 +219,6 @@ export default {
   picking: {
     title: "揀貨",
     shipTo: "收貨方：{destination}",
-    selectedCount: "已選 {count} 項",
     reportIssue: "匯報問題",
     issueReported: "已匯報 {count} 個問題",
     ordersSkipped: "已跳過 {count} 張訂單。",
@@ -259,12 +258,10 @@ export default {
       showLogs: "顯示揀貨記錄",
       noLogs: "暫無揀貨記錄。",
       actorSystem: "系統",
-      stateNone: "—",
     },
     boxesSection: {
       title: "箱號 ({count})",
       newBox: "新增箱號",
-      creating: "建立中…",
       hide: "隱藏",
       show: "顯示",
       empty: "暫無箱號。",
@@ -273,7 +270,6 @@ export default {
       packages: "包裹",
       qty: "數量",
       cancelBox: "取消箱號",
-      canceling: "取消中…",
     },
     issueBanner: {
       issueReason: "問題原因",

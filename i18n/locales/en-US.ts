@@ -219,7 +219,6 @@ export default {
   picking: {
     title: "Picking",
     shipTo: "Ship to: {destination}",
-    selectedCount: "{count} selected",
     reportIssue: "Report issue",
     issueReported: "{count} issue(s) reported",
     ordersSkipped: "{count} order(s) skipped.",
@@ -259,12 +258,10 @@ export default {
       showLogs: "Show picking logs",
       noLogs: "No picking logs.",
       actorSystem: "System",
-      stateNone: "—",
     },
     boxesSection: {
       title: "Boxes ({count})",
       newBox: "New box",
-      creating: "Creating…",
       hide: "Hide",
       show: "Show",
       empty: "No boxes yet.",
@@ -273,7 +270,6 @@ export default {
       packages: "Packages",
       qty: "Qty",
       cancelBox: "Cancel box",
-      canceling: "Canceling…",
     },
     issueBanner: {
       issueReason: "Issue reason",

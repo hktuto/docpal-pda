@@ -14,9 +14,10 @@
     <DetailRow :label="$t('picking.itemsSection.boxedQty')" :value="item.pickedQty" />
     <DetailRow :label="$t('picking.itemsSection.requiredDateCode')" :value="item.requiredDateCode || $t('common.noData')" />
     <DetailRow :label="$t('picking.itemsSection.status')">
-      <StatusBadge :status="item.pickedQty >= item.qty ? 'finished' : 'picking'">
-        {{ item.pickedQty >= item.qty ? statusLabel.picking('finished') : statusLabel.picking('picking') }}
-      </StatusBadge>
+      <StatusBadge
+        :status="item.pickedQty >= item.qty ? 'finished' : 'picking'"
+        :label="item.pickedQty >= item.qty ? statusLabel.picking('finished') : statusLabel.picking('picking')"
+      />
     </DetailRow>
 
     <div v-if="activeAllocations(item).length && actionable && item.pickedQty < item.qty" class="allocations">
