@@ -10,54 +10,54 @@
   >
     <div class="modal">
       <div class="modal__header">
-        <h3 id="review-title">{{ mode === 'manual' ? 'Manual entry' : 'Review scan' }}</h3>
-        <button type="button" class="modal__close" aria-label="Close" :disabled="applying || matching" @click="close">×</button>
+        <h3 id="review-title">{{ mode === 'manual' ? $t('labelScanReviewModal.titleManual') : $t('labelScanReviewModal.titleReview') }}</h3>
+        <button type="button" class="modal__close" :aria-label="$t('labelScanReviewModal.close')" :disabled="applying || matching" @click="close">×</button>
       </div>
 
       <div class="modal__body">
         <div class="preview">
-          <img v-if="imageSrc" :src="imageSrc" alt="Captured label" />
-          <div v-else class="placeholder">No image</div>
+          <img v-if="imageSrc" :src="imageSrc" :alt="$t('labelScanReviewModal.capturedLabelAlt')" />
+          <div v-else class="placeholder">{{ $t('labelScanReviewModal.noImage') }}</div>
         </div>
 
         <label class="field field--raw">
-          <span>OCR raw text</span>
+          <span>{{ $t('labelScanReviewModal.ocrRawText') }}</span>
           <textarea :value="rawText" readonly rows="5" class="raw-text" />
         </label>
 
-        <p class="subtitle">Edit OCR fields and find a matching record.</p>
+        <p class="subtitle">{{ $t('labelScanReviewModal.editSubtitle') }}</p>
 
         <form class="form" @submit.prevent="findMatch">
           <label class="field">
-            <span>Part No.</span>
-            <input v-model="editable.partNo" type="text" placeholder="e.g. IC-LM358DR" />
+            <span>{{ $t('labelScanReviewModal.partNo') }}</span>
+            <input v-model="editable.partNo" type="text" :placeholder="$t('labelScanReviewModal.placeholderPartNo')" />
           </label>
           <label class="field">
-            <span>Date Code</span>
-            <input v-model="editable.dateCode" type="text" placeholder="e.g. 2406" />
+            <span>{{ $t('labelScanReviewModal.dateCode') }}</span>
+            <input v-model="editable.dateCode" type="text" :placeholder="$t('labelScanReviewModal.placeholderDateCode')" />
           </label>
           <label class="field">
-            <span>Lot Code</span>
-            <input v-model="editable.lotCode" type="text" placeholder="e.g. L240603" />
+            <span>{{ $t('labelScanReviewModal.lotCode') }}</span>
+            <input v-model="editable.lotCode" type="text" :placeholder="$t('labelScanReviewModal.placeholderLotCode')" />
           </label>
           <label class="field">
-            <span>COO</span>
-            <input v-model="editable.coo" type="text" placeholder="e.g. MY" />
+            <span>{{ $t('labelScanReviewModal.coo') }}</span>
+            <input v-model="editable.coo" type="text" :placeholder="$t('labelScanReviewModal.placeholderCoo')" />
           </label>
           <label class="field">
-            <span>COW</span>
-            <input v-model="editable.cow" type="text" placeholder="e.g. USA" />
+            <span>{{ $t('labelScanReviewModal.cow') }}</span>
+            <input v-model="editable.cow" type="text" :placeholder="$t('labelScanReviewModal.placeholderCow')" />
           </label>
           <label class="field">
-            <span>Qty</span>
-            <input v-model.number="editable.qty" type="number" min="1" placeholder="e.g. 400" />
+            <span>{{ $t('labelScanReviewModal.qty') }}</span>
+            <input v-model.number="editable.qty" type="number" min="1" :placeholder="$t('labelScanReviewModal.placeholderQty')" />
           </label>
         </form>
 
         <div class="match-section">
           <template v-if="localMatchResult.type === 'single'">
             <div class="card card--success">
-              <p><strong>1 match found</strong></p>
+              <p><strong>{{ $t('labelScanReviewModal.matchSingle') }}</strong></p>
             </div>
             <button
               type="button"
@@ -65,12 +65,12 @@
               :disabled="applying"
               @click="applyRecord(localMatchResult.apply)"
             >
-              {{ applying ? "Applying…" : "Apply" }}
+              {{ applying ? $t('labelScanReviewModal.applying') : $t('labelScanReviewModal.apply') }}
             </button>
           </template>
 
           <template v-else-if="localMatchResult.type === 'multiple'">
-            <p class="subtitle">Multiple matches found. Choose one.</p>
+            <p class="subtitle">{{ $t('labelScanReviewModal.matchMultiple') }}</p>
             <div class="options">
               <button
                 v-for="(record, index) in localMatchResult.records"
@@ -82,7 +82,7 @@
               >
                 <div class="letter">📦</div>
                 <div class="content">
-                  <h3>Match {{ index + 1 }}</h3>
+                  <h3>{{ $t('labelScanReviewModal.matchN', { n: index + 1 }) }}</h3>
                   <p>{{ formatRecord(record.record) }}</p>
                 </div>
               </button>
@@ -91,13 +91,13 @@
 
           <template v-else-if="localMatchResult.type === 'none'">
             <div class="card card--danger">
-              <p><strong>No match found</strong></p>
+              <p><strong>{{ $t('labelScanReviewModal.matchNone') }}</strong></p>
             </div>
           </template>
 
           <template v-else-if="localMatchResult.type === 'error'">
             <div class="card card--danger">
-              <p><strong>Error</strong></p>
+              <p><strong>{{ $t('labelScanReviewModal.error') }}</strong></p>
               <p class="subtitle">{{ localMatchResult.message }}</p>
             </div>
           </template>
@@ -113,11 +113,11 @@
             :disabled="applying || matching"
             @click="emit('retake')"
           >
-            Retake
+            {{ $t('labelScanReviewModal.retake') }}
           </button>
-          <button type="button" class="btn btn--secondary" :disabled="applying || matching" @click="close">Cancel</button>
+          <button type="button" class="btn btn--secondary" :disabled="applying || matching" @click="close">{{ $t('labelScanReviewModal.cancel') }}</button>
           <button type="button" class="btn" :disabled="applying || matching" @click="findMatch">
-            {{ matching ? "Matching…" : "Find match" }}
+            {{ matching ? $t('labelScanReviewModal.matching') : $t('labelScanReviewModal.findMatch') }}
           </button>
         </div>
       </div>
@@ -129,6 +129,9 @@
 import { Capacitor } from '@capacitor/core';
 import type { OcrInput } from '~/composables/useMockOcr';
 import { runScanMatcher, type ScanMatchResult, type ScanTaskContext } from '~/composables/useScanMatchers';
+
+const { t } = useI18n();
+const getErrorMessage = useErrorMessage();
 
 const props = defineProps<{
   modelValue: boolean;
@@ -149,14 +152,15 @@ const rawText = computed(() => {
   if (props.barcodes && props.barcodes !== '[]') {
     try {
       const parsed = JSON.parse(props.barcodes) as Array<{ value?: string; format?: string }>;
+      const barcodePlaceholder = t('labelScanReviewModal.barcodePlaceholder');
       const barcodeLines = parsed
-        .map((b) => `[${b.format ?? 'BARCODE'}] ${b.value ?? ''}`)
+        .map((b) => `[${b.format ?? barcodePlaceholder}] ${b.value ?? ''}`)
         .filter(Boolean);
       if (barcodeLines.length > 0) {
-        lines.push('', 'Barcodes:', ...barcodeLines);
+        lines.push('', t('labelScanReviewModal.barcodes'), ...barcodeLines);
       }
     } catch {
-      lines.push('', 'Barcodes:', props.barcodes);
+      lines.push('', t('labelScanReviewModal.barcodes'), props.barcodes);
     }
   }
   return lines.join('\n');
@@ -189,7 +193,7 @@ async function findMatch() {
     const result = await runScanMatcher(props.context, editable.value);
     localMatchResult.value = result;
   } catch (e: any) {
-    localMatchResult.value = { type: 'error', message: e?.message ?? 'Match failed' };
+    localMatchResult.value = { type: 'error', message: e?.message ? getErrorMessage(e) : t('labelScanReviewModal.matchFailed') };
   } finally {
     matching.value = false;
   }
@@ -202,7 +206,7 @@ async function applyRecord(apply: () => Promise<void>) {
     await apply();
     emit('applied');
   } catch (e: any) {
-    applyError.value = e?.message ?? 'Apply failed';
+    applyError.value = e?.message ? getErrorMessage(e) : t('labelScanReviewModal.applyFailed');
   } finally {
     applying.value = false;
   }
@@ -213,13 +217,13 @@ function close() {
 }
 
 function formatRecord(record: unknown): string {
-  if (record == null) return '—';
+  if (record == null) return t('common.noData');
   if (typeof record === 'object') {
     const obj = record as Record<string, unknown>;
     if (typeof obj.picking === 'object' && obj.picking !== null) {
       const picking = obj.picking as Record<string, unknown>;
       if (typeof picking.pickingOrderRefNo === 'string') return picking.pickingOrderRefNo;
-      return 'Picking order';
+      return t('receiving.pickingTab.pickingOrder');
     }
     if (typeof obj.pickingOrderRefNo === 'string') return obj.pickingOrderRefNo;
     if (typeof obj.partNo === 'string') return obj.partNo;

@@ -3,7 +3,7 @@
     <div class="detail-header" @click="toggle">
       <div class="detail-header__main">
         <span class="detail-header__title">{{ title }}</span>
-        <span class="badge" :class="badgeClass">{{ status }}</span>
+        <span class="badge" :class="badgeClass">{{ label || status }}</span>
       </div>
       <button
         class="detail-header__toggle"
@@ -28,6 +28,7 @@
 interface Props {
   title: string;
   status: string;
+  label?: string;
   badgeClass?: string;
   flushTop?: boolean;
   modelValue: boolean;

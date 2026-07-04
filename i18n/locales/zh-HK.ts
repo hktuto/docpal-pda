@@ -433,6 +433,7 @@ export default {
     titleReview: "複核掃描",
     close: "關閉",
     noImage: "沒有圖片",
+    capturedLabelAlt: "已拍攝標籤",
     ocrRawText: "OCR 原始文字",
     barcodes: "條碼：",
     barcodePlaceholder: "[BARCODE]",
@@ -460,6 +461,8 @@ export default {
     cancel: "取消",
     findMatch: "尋找配對",
     matching: "配對中…",
+    matchFailed: "配對失敗",
+    applyFailed: "套用失敗",
   },
   reportIssueModal: {
     titleEdit: "編輯問題",

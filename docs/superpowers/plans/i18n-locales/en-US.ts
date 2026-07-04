@@ -445,6 +445,7 @@ export default {
     titleReview: "Review scan",
     close: "Close",
     noImage: "No image",
+    capturedLabelAlt: "Captured label",
     ocrRawText: "OCR raw text",
     barcodes: "Barcodes:",
     barcodePlaceholder: "[BARCODE]",
@@ -472,6 +473,8 @@ export default {
     cancel: "Cancel",
     findMatch: "Find match",
     matching: "Matching…",
+    matchFailed: "Match failed",
+    applyFailed: "Apply failed",
   },
   reportIssueModal: {
     titleEdit: "Edit issue",

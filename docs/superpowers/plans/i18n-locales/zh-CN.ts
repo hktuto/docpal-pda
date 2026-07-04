@@ -445,6 +445,7 @@ export default {
     titleReview: "复核扫描",
     close: "关闭",
     noImage: "无图片",
+    capturedLabelAlt: "已拍摄标签",
     ocrRawText: "OCR 原始文本",
     barcodes: "条码：",
     barcodePlaceholder: "[BARCODE]",
@@ -472,6 +473,8 @@ export default {
     cancel: "取消",
     findMatch: "查找匹配",
     matching: "匹配中…",
+    matchFailed: "匹配失败",
+    applyFailed: "应用失败",
   },
   reportIssueModal: {
     titleEdit: "编辑问题",

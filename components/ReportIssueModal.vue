@@ -11,15 +11,15 @@
     <div class="modal">
       <div class="modal__header">
         <h3 id="report-issue-title">{{ title }}</h3>
-        <button type="button" class="modal__close" aria-label="Close" :disabled="isBusy" @click="onCancel">×</button>
+        <button type="button" class="modal__close" :aria-label="$t('reportIssueModal.close')" :disabled="isBusy" @click="onCancel">×</button>
       </div>
 
       <div class="modal__body">
         <form class="form" @submit.prevent="onConfirm">
           <label class="field">
-            <span>Reason</span>
+            <span>{{ $t('reportIssueModal.reason') }}</span>
             <select v-model="reason" :disabled="isBusy">
-              <option value="">—</option>
+              <option value="">{{ $t('reportIssueModal.defaultOption') }}</option>
               <option v-for="r in mismatchReasons" :key="r" :value="r">{{ formatReason(r) }}</option>
             </select>
           </label>
@@ -38,21 +38,21 @@
           </label>
 
           <label v-if="reason === 'wrong_part'" class="field">
-            <span>Wrong part number</span>
-            <input v-model="wrongPartNo" type="text" placeholder="Scan or type" :disabled="isBusy" />
+            <span>{{ $t('reportIssueModal.wrongPartNumber') }}</span>
+            <input v-model="wrongPartNo" type="text" :placeholder="$t('reportIssueModal.placeholderScanOrType')" :disabled="isBusy" />
           </label>
 
           <label class="field">
-            <span>Note</span>
-            <input v-model="note" type="text" placeholder="Mismatch note" :disabled="isBusy" />
+            <span>{{ $t('reportIssueModal.note') }}</span>
+            <input v-model="note" type="text" :placeholder="$t('reportIssueModal.placeholderMismatchNote')" :disabled="isBusy" />
           </label>
 
           <p v-if="validationError" class="error">{{ validationError }}</p>
 
           <div class="actions">
-            <button type="button" class="btn btn--secondary" :disabled="isBusy" @click="onCancel">Cancel</button>
+            <button type="button" class="btn btn--secondary" :disabled="isBusy" @click="onCancel">{{ $t('reportIssueModal.cancel') }}</button>
             <button type="submit" class="btn" :disabled="isBusy">
-              {{ isBusy ? "Saving…" : "Confirm" }}
+              {{ isBusy ? $t('reportIssueModal.saving') : $t('reportIssueModal.confirm') }}
             </button>
           </div>
         </form>
@@ -65,6 +65,9 @@
 import { validateMismatchInputs } from "~/db/receiving";
 import { mismatchReasons, type MismatchReason } from "~/db/schema";
 import * as schema from "~/db/schema";
+
+const { t } = useI18n();
+const getErrorMessage = useErrorMessage();
 
 type DisplayReceivingItem = typeof schema.receivingInvoiceItems.$inferSelect;
 
@@ -92,7 +95,7 @@ const validationError = ref<string | null>(null);
 const openedForEdit = ref(false);
 
 const isBusy = computed(() => props.saving);
-const title = computed(() => openedForEdit.value ? "Edit issue" : "Report issue");
+const title = computed(() => openedForEdit.value ? t('reportIssueModal.titleEdit') : t('reportIssueModal.titleReport'));
 
 function resetForm() {
   openedForEdit.value = !!props.item?.reportedMismatch;
@@ -114,17 +117,8 @@ watch(() => props.modelValue, (open) => {
   if (open) resetForm();
 }, { immediate: true });
 
-const reasonLabels: Record<MismatchReason, string> = {
-  not_found: "Not found",
-  damaged: "Damaged",
-  qty_mismatch: "Quantity mismatch",
-  wrong_part: "Wrong part shipped",
-  over_shipment: "Over shipment",
-  quality_rejection: "Quality rejection",
-};
-
 function formatReason(reason: MismatchReason): string {
-  return reasonLabels[reason];
+  return t(`reportIssueModal.reasons.${reason}`);
 }
 
 function showMismatchQty(reason: MismatchReason | ""): boolean {
@@ -132,21 +126,16 @@ function showMismatchQty(reason: MismatchReason | ""): boolean {
   return reason !== "not_found";
 }
 
-const mismatchQtyLabels: Record<MismatchReason, { label: string; placeholder: string }> = {
-  not_found: { label: "Qty", placeholder: "Qty" },
-  damaged: { label: "Damaged qty", placeholder: "Damaged qty" },
-  qty_mismatch: { label: "Actual received qty", placeholder: "Actual received qty" },
-  wrong_part: { label: "Wrong part qty", placeholder: "Wrong part qty" },
-  over_shipment: { label: "Extra qty", placeholder: "Extra qty" },
-  quality_rejection: { label: "Rejected qty", placeholder: "Rejected qty" },
-};
-
 function qtyPlaceholder(reason: MismatchReason | ""): string {
-  return reason ? mismatchQtyLabels[reason].placeholder : "Qty";
+  if (!reason) return "";
+  if (reason === "damaged" || reason === "quality_rejection") {
+    return t('reportIssueModal.qtyPlaceholders.damaged');
+  }
+  return t('reportIssueModal.qtyPlaceholders.actual_received');
 }
 
 function qtyLabel(reason: MismatchReason | ""): string {
-  return reason ? mismatchQtyLabels[reason].label : "Qty";
+  return qtyPlaceholder(reason);
 }
 
 function toNumberOrNull(v: unknown): number | null {
@@ -179,7 +168,7 @@ function onConfirm() {
       note: note.value.trim(),
     });
   } catch (e: any) {
-    validationError.value = e?.message ?? String(e);
+    validationError.value = getErrorMessage(e);
   }
 }
 </script>

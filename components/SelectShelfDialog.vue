@@ -10,25 +10,25 @@
   >
     <div class="modal">
       <div class="modal__header">
-        <h3 id="shelf-title">Select shelf</h3>
-        <button type="button" class="modal__close" aria-label="Close" @click="close">×</button>
+        <h3 id="shelf-title">{{ $t('selectShelfDialog.title') }}</h3>
+        <button type="button" class="modal__close" :aria-label="$t('selectShelfDialog.close')" @click="close">×</button>
       </div>
 
       <div class="modal__body">
         <label class="field">
-          <span>Shelf</span>
+          <span>{{ $t('selectShelfDialog.shelf') }}</span>
           <select v-model="selectedShelf">
-            <option value="">Select a shelf</option>
+            <option value="">{{ $t('selectShelfDialog.defaultOption') }}</option>
             <option v-for="shelf in shelves" :key="shelf.code" :value="shelf.code">
-              {{ shelf.zone ? `${shelf.code} — ${shelf.zone}` : shelf.code }}
+              {{ shelf.zone ? $t('common.shelfFormat', { code: shelf.code, zone: shelf.zone }) : shelf.code }}
             </option>
           </select>
         </label>
 
         <div class="actions">
-          <button type="button" class="btn btn--secondary" @click="close">Cancel</button>
+          <button type="button" class="btn btn--secondary" @click="close">{{ $t('selectShelfDialog.cancel') }}</button>
           <button type="button" class="btn" :disabled="!selectedShelf" @click="confirm">
-            Confirm
+            {{ $t('selectShelfDialog.confirm') }}
           </button>
         </div>
       </div>
@@ -37,6 +37,8 @@
 </template>
 
 <script setup lang="ts">
+useI18n();
+
 interface Shelf {
   code: string;
   zone: string | null;

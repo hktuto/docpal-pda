@@ -16,11 +16,13 @@
 </template>
 
 <script setup lang="ts">
+const { t } = useI18n();
+
 withDefaults(defineProps<{
   loading?: boolean;
   ariaLabel?: string;
 }>(), {
-  ariaLabel: "Scan label",
+  ariaLabel: () => t('actions.scan'),
 });
 
 defineEmits<{

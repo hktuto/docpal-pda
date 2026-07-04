@@ -6,6 +6,8 @@
 </template>
 
 <script setup lang="ts">
+const { t } = useI18n();
+
 const props = defineProps<{
   label: string;
   value?: string | number | null;
@@ -13,7 +15,7 @@ const props = defineProps<{
 
 const displayValue = computed(() => {
   if (props.value === null || props.value === undefined || props.value === "") {
-    return "—";
+    return t('common.noData');
   }
   return String(props.value);
 });

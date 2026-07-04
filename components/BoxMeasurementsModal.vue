@@ -10,46 +10,46 @@
   >
     <div class="modal">
       <div class="modal__header">
-        <h3 id="measure-title">Box measurements</h3>
-        <button class="modal__close" aria-label="Close" :disabled="isBusy" @click="close">×</button>
+        <h3 id="measure-title">{{ $t('boxMeasurementsModal.title') }}</h3>
+        <button class="modal__close" :aria-label="$t('boxMeasurementsModal.close')" :disabled="isBusy" @click="close">×</button>
       </div>
 
       <div class="modal__body">
         <form class="form" @submit.prevent="onSave">
           <label class="field">
-            <span>Box size <span class="required">*</span></span>
+            <span>{{ $t('boxMeasurementsModal.boxSize') }} <span class="required">{{ $t('boxMeasurementsModal.required') }}</span></span>
             <select v-model="form.boxSize" :disabled="isBusy">
-              <option value="">Select box size</option>
+              <option value="">{{ $t('boxMeasurementsModal.placeholderBoxSize') }}</option>
               <option v-for="size in boxSizeOptions" :key="size" :value="size">{{ size }}</option>
             </select>
           </label>
 
           <label class="field">
-            <span>Net weight (kg) <span class="required">*</span></span>
-            <input v-model="form.netWeight" type="number" step="0.01" placeholder="e.g. 1.20" :disabled="isBusy" />
+            <span>{{ $t('boxMeasurementsModal.netWeight') }} <span class="required">{{ $t('boxMeasurementsModal.required') }}</span></span>
+            <input v-model="form.netWeight" type="number" step="0.01" :placeholder="$t('boxMeasurementsModal.placeholderNetWeight')" :disabled="isBusy" />
           </label>
 
           <label class="field">
-            <span>Gross weight (kg) <span class="required">*</span></span>
-            <input v-model="form.grossWeight" type="number" step="0.01" placeholder="e.g. 1.45" :disabled="isBusy" />
+            <span>{{ $t('boxMeasurementsModal.grossWeight') }} <span class="required">{{ $t('boxMeasurementsModal.required') }}</span></span>
+            <input v-model="form.grossWeight" type="number" step="0.01" :placeholder="$t('boxMeasurementsModal.placeholderGrossWeight')" :disabled="isBusy" />
           </label>
 
           <label class="field">
-            <span>Destination country <span class="required">*</span></span>
+            <span>{{ $t('boxMeasurementsModal.destinationCountry') }} <span class="required">{{ $t('boxMeasurementsModal.required') }}</span></span>
             <select v-model="form.destinationCountry" :disabled="isBusy">
-              <option value="">Select country</option>
-              <option v-for="country in countryOptions" :key="country" :value="country">{{ country }}</option>
+              <option value="">{{ $t('boxMeasurementsModal.placeholderCountry') }}</option>
+              <option v-for="country in countryOptions" :key="country" :value="country">{{ countryName(country) }}</option>
             </select>
           </label>
 
-          <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
+          <p v-if="errorText" class="error">{{ errorText }}</p>
 
           <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem;">
             <button type="submit" class="btn btn--small" :disabled="isBusy || !isValid">
-              {{ saving ? "Saving…" : "Save box details" }}
+              {{ saving ? $t('boxMeasurementsModal.saving') : $t('boxMeasurementsModal.saveBoxDetails') }}
             </button>
             <button type="button" class="btn" :disabled="isBusy || !isValid" @click="onFinish">
-              {{ finishing ? "Finishing…" : "Finish box" }}
+              {{ finishing ? $t('boxMeasurementsModal.finishing') : $t('boxMeasurementsModal.finishBox') }}
             </button>
           </div>
         </form>
@@ -59,8 +59,17 @@
 </template>
 
 <script setup lang="ts">
+import { I18nError } from "~/composables/i18nError";
 import { updateShippingBox, closeShippingBox } from "~/db/measuring";
 import { boxSizeOptions, countryOptions } from "~/constants/pocOptions";
+
+const { t } = useI18n();
+const getErrorMessage = useErrorMessage();
+
+const countryLabels = computed(() => t('countryLabels') as Record<string, string>);
+function countryName(value: string) {
+  return countryLabels.value[value] ?? value;
+}
 
 interface MeasurementForm {
   boxSize: string;
@@ -95,7 +104,7 @@ const defaultForm: MeasurementForm = {
 const form = ref<MeasurementForm>({ ...defaultForm });
 const saving = ref(false);
 const finishing = ref(false);
-const errorMessage = ref<string | null>(null);
+const errorText = ref<string | null>(null);
 
 const isBusy = computed(() => saving.value || finishing.value);
 
@@ -114,7 +123,7 @@ watch(
   () => props.modelValue,
   (open) => {
     if (open) {
-      errorMessage.value = null;
+      errorText.value = null;
       form.value = {
         boxSize: props.initialValues?.boxSize ?? "",
         netWeight: props.initialValues?.netWeight ?? "",
@@ -145,12 +154,12 @@ async function persist() {
 async function onSave() {
   if (!isValid.value) return;
   saving.value = true;
-  errorMessage.value = null;
+  errorText.value = null;
   try {
     await persist();
     emit("saved");
   } catch (e: any) {
-    errorMessage.value = e?.message ?? String(e);
+    errorText.value = getErrorMessage(e);
   } finally {
     saving.value = false;
   }
@@ -159,15 +168,15 @@ async function onSave() {
 async function onFinish() {
   if (!isValid.value) return;
   finishing.value = true;
-  errorMessage.value = null;
+  errorText.value = null;
   try {
-    if (!currentUser.value) throw new Error("No operator user found");
+    if (!currentUser.value) throw new I18nError("no_operator_user_found");
     await persist();
     await closeShippingBox(db, props.boxId, currentUser.value.id);
     emit("finished");
     close();
   } catch (e: any) {
-    errorMessage.value = e?.message ?? String(e);
+    errorText.value = getErrorMessage(e);
   } finally {
     finishing.value = false;
   }
