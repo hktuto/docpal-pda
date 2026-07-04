@@ -1,4 +1,4 @@
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { v4 as uuid } from "uuid";
 import * as schema from "./schema";
@@ -156,7 +156,12 @@ export async function scanAllocationToPackage(
         total: sql<number>`coalesce(sum(${schema.pickingPackages.qty}), 0)`.mapWith(Number),
       })
       .from(schema.pickingPackages)
-      .where(eq(schema.pickingPackages.pickingItemId, item.id));
+      .where(
+        and(
+          eq(schema.pickingPackages.pickingItemId, item.id),
+          isNull(schema.pickingPackages.shippingBoxId)
+        )
+      );
     const scannedNotBoxed = scannedResult[0]?.total ?? 0;
     const alreadyCommitted = item.pickedQty + scannedNotBoxed;
     if (alreadyCommitted + qty > item.qty) {

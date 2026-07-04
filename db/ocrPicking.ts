@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, and, sql, isNull } from "drizzle-orm";
 import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { v4 as uuid } from "uuid";
 import { I18nError } from "~/composables/i18nError";
@@ -180,7 +180,12 @@ export async function applyOcrPick(
         total: sql<number>`coalesce(sum(${schema.pickingPackages.qty}), 0)`.mapWith(Number),
       })
       .from(schema.pickingPackages)
-      .where(eq(schema.pickingPackages.pickingItemId, pickingItemId));
+      .where(
+        and(
+          eq(schema.pickingPackages.pickingItemId, pickingItemId),
+          isNull(schema.pickingPackages.shippingBoxId)
+        )
+      );
     const scannedNotBoxed = scannedResult[0]?.total ?? 0;
     const remaining = pickingItem.qty - pickingItem.pickedQty - scannedNotBoxed;
     if (qty > remaining) throw new I18nError("quantity_exceeds_picking_need");
