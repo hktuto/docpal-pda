@@ -2,17 +2,17 @@
   <div>
     <div style="margin-bottom: 1rem;">
       <NuxtLink :to="`/goods-verify/shelf/${box?.shelfCode ?? ''}`" class="btn btn--small">
-        ← Shelf boxes
+        {{ $t('common.backToShelfBoxes') }}
       </NuxtLink>
     </div>
 
-    <EmptyState v-if="pending">Loading…</EmptyState>
+    <EmptyState v-if="pending">{{ $t('common.loading') }}</EmptyState>
     <EmptyState v-else-if="error" error>{{ $t('common.errorPrefix', { message: error }) }}</EmptyState>
 
     <template v-else-if="box">
       <DetailHeader
         v-model="headerExpanded"
-        :title="`Box ${box.id}`"
+        :title="$t('goodsVerify.box.boxTitle', { id: box.id })"
         :status="box.status"
         :badge-class="badgeClass(box.status)"
         :flush-top="route.meta.props?.noPadding"
@@ -25,22 +25,22 @@
             :disabled="marking"
             @click="markVerified"
           >
-            {{ marking ? "Marking…" : "Mark box verified" }}
+            {{ marking ? $t('goodsVerify.box.marking') : $t('goodsVerify.box.markVerified') }}
           </button>
         </template>
 
-        <DetailRow label="Shelf" :value="box.shelfCode" />
+        <DetailRow :label="$t('goodsVerify.box.shelf')" :value="box.shelfCode" />
       </DetailHeader>
 
       <ScanFab
         v-if="box.status !== 'verified'"
         :loading="scanning"
-        aria-label="Scan item"
+        :aria-label="$t('actions.scan')"
         @click="openScan()"
       />
 
-      <h2 style="margin-top: 0; margin-bottom: 1rem; font-size: 1rem;">Expected items</h2>
-      <EmptyState v-if="box.items.length === 0" style="padding: 0;">No items in this box.</EmptyState>
+      <h2 style="margin-top: 0; margin-bottom: 1rem; font-size: 1rem;">{{ $t('goodsVerify.box.expectedItems') }}</h2>
+      <EmptyState v-if="box.items.length === 0" style="padding: 0;">{{ $t('goodsVerify.box.noItems') }}</EmptyState>
 
       <div
         v-for="item in box.items"
@@ -48,20 +48,20 @@
         class="card"
         :class="{ 'card--done': item.verified }"
       >
-        <DetailRow label="Part" :value="item.part?.partNo" />
-        <DetailRow label="Qty" :value="item.qty" />
-        <DetailRow label="Verified">
+        <DetailRow :label="$t('goodsVerify.box.part')" :value="item.part?.partNo" />
+        <DetailRow :label="$t('goodsVerify.box.qty')" :value="item.qty" />
+        <DetailRow :label="$t('goodsVerify.box.verified')">
           <StatusBadge :status="item.verified ? 'verified' : 'pending'">
-            {{ item.verified ? (item.verifiedAt ? new Date(item.verifiedAt).toLocaleString() : "Yes") : "No" }}
+            {{ item.verified ? (item.verifiedAt ? new Date(item.verifiedAt).toLocaleString() : $t('common.yes')) : $t('common.no') }}
           </StatusBadge>
         </DetailRow>
         <div v-if="!item.verified && box.status !== 'verified'" style="margin-top: 0.75rem;">
-          <button class="btn btn--small" :disabled="scanning" @click="openScan()">Scan</button>
+          <button class="btn btn--small" :disabled="scanning" @click="openScan()">{{ $t('actions.scan') }}</button>
         </div>
       </div>
     </template>
 
-    <EmptyState v-else>Box not found.</EmptyState>
+    <EmptyState v-else>{{ $t('goodsVerify.box.notFound') }}</EmptyState>
 
     <LabelScanReviewModal
       v-if="review?.status === 'review'"
@@ -89,6 +89,12 @@ import {
   markShelfBoxVerified,
   type ShelfBoxDetail,
 } from "~/db/goodsVerify";
+import { badgeClass } from "~/composables/useStatusBadge";
+
+const { t } = useI18n();
+useHead({ title: t('goodsVerify.box.title') });
+
+definePageMeta({ props: { noPadding: true } });
 
 async function onScanApplied() {
   await load();
@@ -101,8 +107,6 @@ async function onRetake() {
   reviewOpen.value = false;
   await openScan();
 }
-
-definePageMeta({ title: "Verify Box", props: { noPadding: true } });
 
 const route = useRoute();
 const boxId = route.params.id as string;
@@ -123,8 +127,6 @@ const {
   reviewOpen,
   onApplied,
 } = useLabelScanReview({ onApplied: onScanApplied });
-
-import { badgeClass } from "~/composables/useStatusBadge";
 
 const allVerified = computed(
   () =>

@@ -1,23 +1,23 @@
 <template>
   <div>
     <div style="margin-bottom: 1rem;">
-      <NuxtLink to="/goods-verify" class="btn btn--small">← All shelves</NuxtLink>
+      <NuxtLink to="/goods-verify" class="btn btn--small">{{ $t('common.backToAllShelves') }}</NuxtLink>
     </div>
 
     <p class="card__meta" style="margin-bottom: 1rem;">
-      Boxes on shelf {{ shelfCode }}.
+      {{ $t('goodsVerify.shelf.intro', { shelfCode }) }}
     </p>
 
     <input
       v-model="search"
       class="search"
       type="text"
-      placeholder="Search box ID or status…"
+      :placeholder="$t('goodsVerify.shelf.searchPlaceholder')"
       style="margin-bottom: 1rem;"
     />
 
-    <p v-if="loading" class="empty">Loading…</p>
-    <p v-else-if="boxes.length === 0" class="empty">No boxes on this shelf.</p>
+    <p v-if="loading" class="empty">{{ $t('common.loading') }}</p>
+    <p v-else-if="boxes.length === 0" class="empty">{{ $t('goodsVerify.shelf.empty') }}</p>
 
     <NuxtLink
       v-for="box in filteredBoxes"
@@ -30,19 +30,18 @@
         <div>
           <p class="card__title">{{ box.id }}</p>
           <p class="card__meta">
-            {{ box.verifiedCount }} / {{ box.itemCount }} verified
+            {{ box.verifiedCount }} / {{ box.itemCount }} {{ $t('goodsVerify.shelf.verified') }}
           </p>
           <p class="card__meta">
-            Last check:
             <span :style="{ color: box.checkedToday ? '#16a34a' : 'inherit' }">
-              {{ box.lastCheckAt ? new Date(box.lastCheckAt).toLocaleString() : "—" }}
+              {{ $t('goodsVerify.shelf.lastCheck', { datetime: box.lastCheckAt ? new Date(box.lastCheckAt).toLocaleString() : $t('common.noData') }) }}
             </span>
           </p>
         </div>
         <div style="text-align: right;">
-          <span class="badge" :class="badgeClass(box.status)">{{ box.status }}</span>
+          <span class="badge" :class="badgeClass(box.status)">{{ statusLabel.box(box.status) }}</span>
           <p v-if="box.checkedToday" class="badge" style="margin-top: 0.25rem; background: #dcfce7; color: #166534;">
-            Today
+            {{ $t('common.today') }}
           </p>
         </div>
       </div>
@@ -53,10 +52,13 @@
 <script setup lang="ts">
 import { getShelfBoxesByShelf, type ShelfBoxSummary } from "~/db/goodsVerify";
 import { badgeClass } from "~/composables/useStatusBadge";
+import { useStatusLabel } from "~/composables/useStatusLabel";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 
-definePageMeta({ title: "Shelf Boxes" });
+const { t } = useI18n();
+useHead({ title: t('goodsVerify.shelf.title') });
 
+const statusLabel = useStatusLabel();
 const route = useRoute();
 const shelfCode = route.params.code as string;
 

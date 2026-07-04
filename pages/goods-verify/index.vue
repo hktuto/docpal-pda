@@ -4,12 +4,12 @@
       v-model="search"
       class="search"
       type="text"
-      placeholder="Search shelf code or zone…"
+      :placeholder="$t('goodsVerify.searchPlaceholder')"
     />
 
-    <p v-if="loading" class="empty">Loading…</p>
+    <p v-if="loading" class="empty">{{ $t('common.loading') }}</p>
     <p v-else-if="loadError" class="empty" style="color: var(--danger);">{{ $t('common.errorPrefix', { message: loadError }) }}</p>
-    <p v-else-if="rows.length === 0" class="empty">No shelves found.</p>
+    <p v-else-if="rows.length === 0" class="empty">{{ $t('goodsVerify.empty') }}</p>
 
     <NuxtLink
       v-for="shelf in rows"
@@ -19,10 +19,10 @@
     >
       <div class="list-card__header">
         <span class="list-card__title">{{ shelf.code }}</span>
-        <span class="badge badge--info">{{ shelf.box_count }} {{ shelf.box_count === 1 ? "box" : "boxes" }}</span>
+        <span class="badge badge--info">{{ shelf.box_count }} {{ $t(shelf.box_count === 1 ? 'common.box' : 'common.boxes') }}</span>
       </div>
       <p class="list-card__meta">
-        {{ shelf.zone || "No zone" }}
+        {{ shelf.zone || $t('goodsVerify.noZone') }}
       </p>
     </NuxtLink>
   </div>
@@ -33,7 +33,8 @@ import { getShelvesWithBoxes, type ShelfWithBoxCount } from "~/db/goodsVerify";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { useErrorMessage } from "~/composables/errorMessage";
 
-definePageMeta({ title: "Goods Verify" });
+const { t } = useI18n();
+useHead({ title: t('goodsVerify.title') });
 
 const errorMessage = useErrorMessage();
 
