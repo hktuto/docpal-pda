@@ -9,6 +9,7 @@ import { I18nError } from '~/composables/i18nError';
 import { useErrorMessage } from '~/composables/errorMessage';
 import { parseAndIdentify, type CandidateOptions, type RawOcrCapture } from '~/utils/parseOcrScan';
 import { ocrResultToInput } from '~/utils/ocrResultToInput';
+import { parseBrowserScanPromptJson } from '~/utils/parseBrowserScanPromptJson';
 import type { OcrInput } from './useMockOcr';
 
 function parseBarcodes(barcodesJson: string): RawOcrCapture['barcodes'] {
@@ -52,6 +53,37 @@ export function createManualReview(): Extract<LabelScanResult, { status: 'review
   };
 }
 
+async function processCapture(
+  capture: LabelScanCapture,
+  context: ScanTaskContext
+): Promise<LabelScanResult> {
+  const barcodes = parseBarcodes(capture.barcodes);
+  const parsedResult = parseAndIdentify(
+    { text: capture.text, barcodes },
+    context.targets ?? []
+  );
+  const parsed = ocrResultToInput(parsedResult.parsed);
+
+  const matchResult = await runScanMatcher(context, parsed);
+
+  if (matchResult.type === 'error') {
+    return { status: 'error', message: matchResult.message };
+  }
+
+  if (matchResult.type === 'single') {
+    await matchResult.apply();
+    return { status: 'applied' };
+  }
+
+  return {
+    status: 'review',
+    capture,
+    parsed,
+    options: parsedResult.options,
+    matchResult,
+  };
+}
+
 export function useLabelScan() {
   const scanning = ref(false);
   const errorMessage = useErrorMessage();
@@ -61,37 +93,21 @@ export function useLabelScan() {
 
     try {
       const capture = await RectangleDetection.scanLabel();
-      const barcodes = parseBarcodes(capture.barcodes);
-      const parsedResult = parseAndIdentify(
-        { text: capture.text, barcodes },
-        context.targets ?? []
-      );
-      const parsed = ocrResultToInput(parsedResult.parsed);
-
-      const matchResult = await runScanMatcher(context, parsed);
-
-      if (matchResult.type === 'error') {
-        return { status: 'error', message: matchResult.message };
-      }
-
-      if (matchResult.type === 'single') {
-        await matchResult.apply();
-        return { status: 'applied' };
-      }
-
-      return {
-        status: 'review',
-        capture,
-        parsed,
-        options: parsedResult.options,
-        matchResult,
-      };
+      return await processCapture(capture, context);
     } catch (e: unknown) {
       if (isCancellationError(e)) {
         return { status: 'cancelled' };
       }
       if (isBrowserUnavailableError(e)) {
-        return { status: 'manual' };
+        const raw = window.prompt('Paste scan JSON (text + barcodes):');
+        if (raw === null) {
+          return { status: 'cancelled' };
+        }
+        const capture = parseBrowserScanPromptJson(raw);
+        if (!capture) {
+          return { status: 'error', message: 'Invalid scan JSON' };
+        }
+        return await processCapture(capture, context);
       }
       const message = e instanceof I18nError ? errorMessage(e) : (e instanceof Error ? e.message : String(e));
       return { status: 'error', message };
