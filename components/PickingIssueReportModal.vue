@@ -10,21 +10,21 @@
   >
     <div class="modal">
       <div class="modal__header">
-        <h3 id="issue-title">Report picking issue</h3>
-        <button type="button" class="modal__close" aria-label="Close" :disabled="saving" @click="close">×</button>
+        <h3 id="issue-title">{{ $t('picking.issueModal.title') }}</h3>
+        <button type="button" class="modal__close" :aria-label="$t('actions.close')" :disabled="saving" @click="close">×</button>
       </div>
 
       <div class="modal__body">
         <form class="form" @submit.prevent="submit">
           <label class="field">
-            <span>Issue reason</span>
+            <span>{{ $t('picking.issueModal.issueReason') }}</span>
             <select v-model="reason" :disabled="saving">
-              <option v-for="r in pickingIssueReasons" :key="r" :value="r">{{ reasonLabels[r] }}</option>
+              <option v-for="r in pickingIssueReasons" :key="r" :value="r">{{ $t(`picking.issueReasons.${r}`) }}</option>
             </select>
           </label>
 
           <label v-if="reason === 'insufficient_stock'" class="field">
-            <span>Actual qty available</span>
+            <span>{{ $t('picking.issueModal.actualQtyAvailable') }}</span>
             <input
               v-model.number="qty"
               type="number"
@@ -37,7 +37,7 @@
           </label>
 
           <label v-if="reason === 'cannot_divide'" class="field">
-            <span>Pack size</span>
+            <span>{{ $t('picking.issueModal.packSize') }}</span>
             <input
               v-model.number="packSize"
               type="number"
@@ -50,28 +50,28 @@
           </label>
 
           <div class="field">
-            <span>Per-order remarks</span>
+            <span>{{ $t('picking.issueModal.perOrderRemarks') }}</span>
             <div v-for="o in orders" :key="o.id" class="remark-row">
               <div class="remark-header">
                 <strong>{{ o.ref_no }}</strong>
-                <span v-if="reason === 'cannot_divide'" class="muted">Requested: {{ o.totalQty }}</span>
+                <span v-if="reason === 'cannot_divide'" class="muted">{{ $t('picking.issueModal.requested', { qty: o.totalQty }) }}</span>
               </div>
               <input
                 v-model="remarks[o.id]"
                 type="text"
-                placeholder="Remark for this order"
-                :aria-label="`Remark for ${o.ref_no}`"
+                :placeholder="$t('picking.issueModal.remarkPlaceholder')"
+                :aria-label="$t('picking.issueModal.remarkAriaLabel', { ref: o.ref_no })"
                 :disabled="saving"
               />
             </div>
           </div>
 
           <label class="field">
-            <span>Common note</span>
+            <span>{{ $t('picking.issueModal.commonNote') }}</span>
             <textarea
               v-model="note"
               rows="2"
-              placeholder="Note applied to all selected orders"
+              :placeholder="$t('picking.issueModal.commonNotePlaceholder')"
               :disabled="saving"
             />
           </label>
@@ -79,9 +79,9 @@
           <div v-if="errors.reason" class="error">{{ errors.reason }}</div>
 
           <div class="actions">
-            <button type="button" class="btn btn--secondary" :disabled="saving" @click="close">Cancel</button>
+            <button type="button" class="btn btn--secondary" :disabled="saving" @click="close">{{ $t('actions.cancel') }}</button>
             <button type="submit" class="btn" :disabled="saving">
-              {{ saving ? "Saving…" : "Save issue" }}
+              {{ saving ? $t('actions.saving') : $t('actions.saveIssue') }}
             </button>
           </div>
         </form>
@@ -117,19 +117,14 @@ const emit = defineEmits<{
   (e: "cancelled"): void;
 }>();
 
+const { t } = useI18n();
+
 const reason = ref<PickingIssueReason>("insufficient_stock");
 const qty = ref<number | "" | null>("");
 const packSize = ref<number | "" | null>("");
 const note = ref("");
 const remarks = ref<Record<string, string>>({});
 const errors = ref<Record<string, string>>({});
-
-const reasonLabels: Record<PickingIssueReason, string> = {
-  insufficient_stock: "Insufficient stock",
-  cannot_divide: "Cannot divide quantity",
-  merge: "Merge orders",
-  other: "Other",
-};
 
 watch(
   () => props.modelValue,
@@ -159,7 +154,7 @@ function close() {
 function validate(): boolean {
   errors.value = {};
   if (reason.value === "merge" && props.orders.length < 2) {
-    errors.value.reason = "Select at least two orders to request a merge";
+    errors.value.reason = t('picking.issueModal.validation.mergeMinOrders');
   }
   if (reason.value === "insufficient_stock") {
     if (
@@ -168,7 +163,7 @@ function validate(): boolean {
       qty.value < 0 ||
       !Number.isInteger(qty.value)
     ) {
-      errors.value.qty = "Enter a valid available quantity";
+      errors.value.qty = t('picking.issueModal.validation.validAvailableQty');
     }
   }
   if (reason.value === "cannot_divide") {
@@ -178,7 +173,7 @@ function validate(): boolean {
       packSize.value <= 0 ||
       !Number.isInteger(packSize.value)
     ) {
-      errors.value.packSize = "Enter a valid pack size";
+      errors.value.packSize = t('picking.issueModal.validation.validPackSize');
     }
   }
   if (
@@ -186,7 +181,7 @@ function validate(): boolean {
     !note.value.trim() &&
     !Object.values(remarks.value).some((r) => r.trim())
   ) {
-    errors.value.reason = "Enter a note or at least one remark";
+    errors.value.reason = t('picking.issueModal.validation.noteOrRemark');
   }
   return Object.keys(errors.value).length === 0;
 }

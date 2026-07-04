@@ -1,13 +1,13 @@
 <template>
   <div>
-    <EmptyState v-if="pending">Loading…</EmptyState>
-    <EmptyState v-else-if="error" error>Error: {{ error }}</EmptyState>
+    <EmptyState v-if="pending">{{ $t('common.loading') }}</EmptyState>
+    <EmptyState v-else-if="error" error>{{ $t('common.errorPrefix', { message: error }) }}</EmptyState>
 
     <template v-else-if="order">
       <DetailHeader
         v-model="headerExpanded"
         :title="order.refNo"
-        :status="order.status"
+        :status="headerStatus"
         :badge-class="headerBadgeClass"
         :flush-top="route.meta.props?.noPadding"
         class="detail-header"
@@ -20,7 +20,7 @@
               :disabled="finishing"
               @click="finish"
             >
-              {{ finishing ? "Finishing…" : "Finish picking" }}
+              {{ finishing ? $t('actions.finishing') : $t('picking.detail.finishPicking') }}
             </button>
           </template>
           <NuxtLink
@@ -28,15 +28,15 @@
             :to="`/measuring/${order.measuringTask.id}`"
             class="btn btn--small"
           >
-            Measuring
+            {{ $t('picking.detail.measuring') }}
           </NuxtLink>
         </template>
 
-        <DetailRow label="Supplier" :value="order.supplier?.name" />
-        <DetailRow label="Delivery date" :value="order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : null" />
-        <DetailRow label="PO No." :value="order.poNo" />
-        <DetailRow label="Ship to" :value="order.shipTo" />
-        <DetailRow label="Date-code notice" :value="order.requiredDateCodeNotice" />
+        <DetailRow :label="$t('picking.detail.supplier')" :value="order.supplier?.name" />
+        <DetailRow :label="$t('picking.detail.deliveryDate')" :value="order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : null" />
+        <DetailRow :label="$t('picking.detail.poNo')" :value="order.poNo" />
+        <DetailRow :label="$t('picking.detail.shipTo')" :value="order.shipTo" />
+        <DetailRow :label="$t('picking.detail.dateCodeNotice')" :value="order.requiredDateCodeNotice" />
       </DetailHeader>
 
       <PickingIssueBanner v-if="order.status === 'issue'" :order="order" />
@@ -88,6 +88,7 @@ import { useVisibleReload } from "~/composables/useVisibleReload";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import { useErrorMessage } from "~/composables/errorMessage";
+import { I18nError } from "~/composables/i18nError";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import PickingBoxesSection from "~/components/picking/PickingBoxesSection.vue";
 import PickingItemsSection from "~/components/picking/PickingItemsSection.vue";
@@ -108,13 +109,17 @@ type PickingItem = PickingOrderDetail["items"][number];
 type Allocation = PickingItem["allocations"][number];
 type ShippingBox = PickingOrderDetail["shippingBoxes"][number];
 
-definePageMeta({ title: "Picking Detail", props: { noPadding: true } });
+definePageMeta({ props: { noPadding: true } });
 
 const route = useRoute();
 const orderId = route.params.id as string;
 const db = await useDb();
 const { currentUser } = useAuth();
+const { t } = useI18n();
+const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
+
+useHead({ title: t("picking.detail.title") });
 
 const pending = ref(true);
 const error = ref<string | null>(null);
@@ -138,6 +143,7 @@ const allItemsFullyBoxed = computed(
   () => order.value?.items?.every((i) => i.pickedQty >= i.qty) ?? false
 );
 const headerBadgeClass = computed(() => badgeClass(order.value?.status));
+const headerStatus = computed(() => statusLabel.picking(order.value?.status ?? ""));
 const openBoxes = computed(() =>
   (order.value?.shippingBoxes ?? []).filter((b) => b.status === "open")
 );
@@ -146,7 +152,7 @@ const actionable = computed(
 );
 
 function currentUserId(): string {
-  if (!currentUser.value) throw new Error("No operator user found");
+  if (!currentUser.value) throw new I18nError("no_operator_user_found");
   return currentUser.value.id;
 }
 

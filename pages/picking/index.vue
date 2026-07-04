@@ -4,13 +4,13 @@
       v-model="search"
       class="search"
       type="text"
-      placeholder="Search by ref or supplier…"
+      :placeholder="$t('common.searchByRefOrSupplier')"
     />
 
-    <p v-if="loading" class="empty">Loading…</p>
-    <p v-else-if="loadError" class="empty" style="color: var(--danger);">Error: {{ loadError }}</p>
+    <p v-if="loading" class="empty">{{ $t('common.loading') }}</p>
+    <p v-else-if="loadError" class="empty" style="color: var(--danger);">{{ $t('common.errorPrefix', { message: loadError }) }}</p>
     <p v-else-if="reportMessage" class="empty" style="color: #92400e;">{{ reportMessage }}</p>
-    <p v-else-if="rows.length === 0" class="empty">No picking orders found.</p>
+    <p v-else-if="rows.length === 0" class="empty">{{ $t('common.noReceivingOrders') }}</p>
 
     <div
       v-for="po in rows"
@@ -30,23 +30,23 @@
             {{ po.ref_no }}
           </NuxtLink>
         </div>
-        <span class="badge" :class="badgeClass(po.status)">{{ po.status }}</span>
+        <span class="badge" :class="badgeClass(po.status)">{{ statusLabel.picking(po.status) }}</span>
       </div>
       <p class="list-card__meta">
-        {{ po.supplier_name || "No supplier" }}
+        {{ po.supplier_name || $t('common.noSupplier') }}
       </p>
       <div class="list-card__footer">
         <span class="list-card__date">
-          {{ po.delivery_date ? new Date(po.delivery_date).toLocaleDateString() : "No date" }}
+          {{ po.delivery_date ? new Date(po.delivery_date).toLocaleDateString() : $t('common.noDate') }}
         </span>
-        <span class="list-card__ship">Ship to: {{ po.ship_to || "—" }}</span>
+        <span class="list-card__ship">{{ $t('picking.shipTo', { destination: po.ship_to || $t('common.noData') }) }}</span>
       </div>
     </div>
 
     <div v-if="hasSelection" class="bulk-actions">
-      <span>{{ selectedOrders.length }} selected</span>
+      <span>{{ $t('common.selectedCount', { count: selectedOrders.length }) }}</span>
       <button class="btn btn--small btn--danger" @click="openModal">
-        Report issue
+        {{ $t('picking.reportIssue') }}
       </button>
     </div>
 
@@ -60,10 +60,15 @@
 </template>
 
 <script setup lang="ts">
+import { I18nError } from "~/composables/i18nError";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 
-definePageMeta({ title: "Picking" });
+const { t } = useI18n();
+const statusLabel = useStatusLabel();
+const errorMessage = useErrorMessage();
+
+useHead({ title: t("picking.title") });
 
 interface PickingOrderRow extends Record<string, unknown> {
   id: string;
@@ -100,8 +105,8 @@ async function load() {
        ORDER BY CASE WHEN po.status = 'finished' THEN 1 ELSE 0 END, po.delivery_date;`
     );
     rawRows.value = result.rows ?? [];
-  } catch (e: any) {
-    loadError.value = e?.message ?? String(e);
+  } catch (e) {
+    loadError.value = errorMessage(e);
     rawRows.value = [];
   } finally {
     loading.value = false;
@@ -154,7 +159,7 @@ async function onReportSaved(payload: {
 }) {
   reporting.value = true;
   try {
-    if (!currentUser.value) throw new Error("No operator user found");
+    if (!currentUser.value) throw new I18nError("no_operator_user_found");
     const { reportPickingOrderIssues } = await import("~/db/picking");
     const entries = selectedOrders.value.map((o) => ({
       orderId: o.id,
@@ -177,11 +182,11 @@ async function onReportSaved(payload: {
     if (result.reported > 0) {
       reportMessage.value =
         result.skipped > 0
-          ? `${result.reported} issue(s) reported; ${result.skipped} order(s) skipped.`
-          : `${result.reported} issue(s) reported.`;
+          ? `${t('picking.issueReported', { count: result.reported })} ${t('picking.ordersSkipped', { count: result.skipped })}`
+          : t('picking.issueReported', { count: result.reported });
     }
-  } catch (e: any) {
-    loadError.value = e?.message ?? String(e);
+  } catch (e) {
+    loadError.value = errorMessage(e);
   } finally {
     reporting.value = false;
   }

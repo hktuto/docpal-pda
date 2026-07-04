@@ -1,6 +1,6 @@
 <template>
   <div class="section-title boxes-header">
-    <h2 class="boxes-title">Boxes ({{ boxes?.length ?? 0 }})</h2>
+    <h2 class="boxes-title">{{ $t('picking.boxesSection.title', { count: boxes?.length ?? 0 }) }}</h2>
     <div class="boxes-actions">
       <button
         v-if="actionable"
@@ -8,20 +8,20 @@
         :disabled="creatingBox"
         @click="$emit('create-box')"
       >
-        {{ creatingBox ? "Creating…" : "New box" }}
+        {{ creatingBox ? $t('actions.creating') : $t('picking.boxesSection.newBox') }}
       </button>
       <button
         class="btn btn--small btn--ghost"
         :aria-expanded="expanded"
         @click="expanded = !expanded"
       >
-        {{ expanded ? "Hide" : "Show" }}
+        {{ expanded ? $t('actions.hide') : $t('actions.show') }}
       </button>
     </div>
   </div>
 
   <div v-if="expanded" class="boxes-list">
-    <p v-if="!boxes?.length" class="empty">No boxes yet.</p>
+    <p v-if="!boxes?.length" class="empty">{{ $t('common.noBoxes') }}</p>
 
     <div
       v-for="box in boxes"
@@ -29,21 +29,21 @@
       class="card box-card"
       :class="{ 'card--done': box.status !== 'open' }"
     >
-      <DetailRow label="Box ID">
+      <DetailRow :label="$t('picking.boxesSection.boxId')">
         <span class="card__title">{{ box.id }}</span>
       </DetailRow>
-      <DetailRow label="Status">
+      <DetailRow :label="$t('picking.boxesSection.status')">
         <StatusBadge :status="box.status" />
       </DetailRow>
-      <DetailRow label="Packages" :value="box.packages?.length ?? 0" />
-      <DetailRow label="Qty" :value="boxTotalQty(box)" />
+      <DetailRow :label="$t('picking.boxesSection.packages')" :value="box.packages?.length ?? 0" />
+      <DetailRow :label="$t('picking.boxesSection.qty')" :value="boxTotalQty(box)" />
       <div v-if="box.status === 'open' && (box.packages?.length ?? 0) === 0" class="box-cancel">
         <button
           class="btn btn--small btn--danger"
           :disabled="cancellingBox[box.id]"
           @click="$emit('cancel-box', box.id)"
         >
-          {{ cancellingBox[box.id] ? "Canceling…" : "Cancel box" }}
+          {{ cancellingBox[box.id] ? $t('actions.canceling') : $t('picking.boxesSection.cancelBox') }}
         </button>
       </div>
     </div>

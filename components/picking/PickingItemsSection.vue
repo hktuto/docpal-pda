@@ -1,77 +1,77 @@
 <template>
-  <h2 class="section-title">Items</h2>
+  <h2 class="section-title">{{ $t('picking.itemsSection.title') }}</h2>
   <div
     v-for="item in items"
     :key="item.id"
     class="card item-card"
     :class="{ 'card--done': item.pickedQty >= item.qty }"
   >
-    <DetailRow label="Part">
-      <span class="card__title">{{ item.part?.partNo || "—" }}</span>
+    <DetailRow :label="$t('picking.itemsSection.part')">
+      <span class="card__title">{{ item.part?.partNo || $t('common.noData') }}</span>
     </DetailRow>
-    <DetailRow label="Required qty" :value="item.qty" />
-    <DetailRow label="Scanned qty" :value="scannedQty(item)" />
-    <DetailRow label="Boxed qty" :value="item.pickedQty" />
-    <DetailRow label="Required date code" :value="item.requiredDateCode || '—'" />
-    <DetailRow label="Status">
+    <DetailRow :label="$t('picking.itemsSection.requiredQty')" :value="item.qty" />
+    <DetailRow :label="$t('picking.itemsSection.scannedQty')" :value="scannedQty(item)" />
+    <DetailRow :label="$t('picking.itemsSection.boxedQty')" :value="item.pickedQty" />
+    <DetailRow :label="$t('picking.itemsSection.requiredDateCode')" :value="item.requiredDateCode || $t('common.noData')" />
+    <DetailRow :label="$t('picking.itemsSection.status')">
       <StatusBadge :status="item.pickedQty >= item.qty ? 'finished' : 'picking'">
-        {{ item.pickedQty >= item.qty ? "Finished" : "Picking" }}
+        {{ item.pickedQty >= item.qty ? statusLabel.picking('finished') : statusLabel.picking('picking') }}
       </StatusBadge>
     </DetailRow>
 
     <div v-if="activeAllocations(item).length && actionable && item.pickedQty < item.qty" class="allocations">
-      <h3 class="subsection-title">Allocations</h3>
+      <h3 class="subsection-title">{{ $t('picking.itemsSection.allocations') }}</h3>
       <div
         v-for="allocation in activeAllocations(item)"
         :key="allocation.id"
         class="lot"
       >
         <template v-if="allocation.inventoryLot">
-          <DetailRow label="Location">
+          <DetailRow :label="$t('picking.itemsSection.location')">
             <span v-if="allocation.inventoryLot.shelfCode && allocation.inventoryLot.boxId">
               {{ allocation.inventoryLot.shelfCode }} / {{ allocation.inventoryLot.boxId }}
             </span>
             <span v-else-if="allocation.inventoryLot.shelfCode">{{ allocation.inventoryLot.shelfCode }}</span>
             <span v-else-if="allocation.inventoryLot.boxId">{{ allocation.inventoryLot.boxId }}</span>
-            <span v-else>Receiving area</span>
+            <span v-else>{{ $t('picking.itemsSection.receivingArea') }}</span>
           </DetailRow>
-          <DetailRow label="Date / Lot / COO / COW">
+          <DetailRow :label="$t('picking.itemsSection.dateLotCooCow')">
             {{ formatLotFields(allocation.inventoryLot) }}
           </DetailRow>
-          <DetailRow label="Allocated qty" :value="allocation.qty" />
+          <DetailRow :label="$t('picking.itemsSection.allocatedQty')" :value="allocation.qty" />
           <div class="allocation-actions">
-            <button class="btn btn--small" :disabled="scanning" @click="emit('scan', allocation)">Scan</button>
+            <button class="btn btn--small" :disabled="scanning" @click="emit('scan', allocation)">{{ $t('picking.itemsSection.scan') }}</button>
           </div>
         </template>
 
         <template v-else-if="allocation.receivingInvoiceItem">
-          <DetailRow label="Source">
-            Receiving area
+          <DetailRow :label="$t('picking.itemsSection.source')">
+            {{ $t('picking.itemsSection.receivingArea') }}
             <span v-if="allocation.receivingInvoiceItem.invoice?.receivingOrder?.refNo">
               ({{ allocation.receivingInvoiceItem.invoice.receivingOrder.refNo }})
             </span>
           </DetailRow>
-          <DetailRow label="Allocated qty" :value="allocation.qty" />
+          <DetailRow :label="$t('picking.itemsSection.allocatedQty')" :value="allocation.qty" />
           <div class="allocation-actions">
-            <button class="btn btn--small" :disabled="scanning" @click="emit('scan', allocation)">Scan</button>
+            <button class="btn btn--small" :disabled="scanning" @click="emit('scan', allocation)">{{ $t('picking.itemsSection.scan') }}</button>
           </div>
         </template>
       </div>
     </div>
 
     <div v-if="unboxedPackages(item).length && actionable" class="unboxed-packages">
-      <h3 class="subsection-title">Unboxed packages</h3>
+      <h3 class="subsection-title">{{ $t('picking.itemsSection.unboxedPackages') }}</h3>
       <div
         v-for="pkg in unboxedPackages(item)"
         :key="pkg.id"
         class="lot package-row"
       >
         <span class="package-info">
-          {{ pkg.qty }} pcs · {{ formatLotFields(pkg) }}
+          {{ pkg.qty }} {{ $t('common.pcs') }} · {{ formatLotFields(pkg) }}
         </span>
         <div class="package-actions">
           <select :value="boxSelections[pkg.id]" :disabled="adding[pkg.id]" class="box-select" @change="updateBoxSelection(pkg.id, ($event.target as HTMLSelectElement).value)">
-            <option value="">Select box</option>
+            <option value="">{{ $t('picking.itemsSection.selectBox') }}</option>
             <option v-for="box in openBoxes" :key="box.id" :value="box.id">{{ box.id }}</option>
           </select>
           <button
@@ -79,21 +79,21 @@
             :disabled="adding[pkg.id] || !boxSelections[pkg.id]"
             @click="emit('add-to-box', pkg.id)"
           >
-            {{ adding[pkg.id] ? "Adding…" : "Add to box" }}
+            {{ adding[pkg.id] ? $t('picking.itemsSection.adding') : $t('picking.itemsSection.addToBox') }}
           </button>
         </div>
       </div>
     </div>
 
     <div v-if="boxedPackages(item).length && actionable" class="boxed-packages">
-      <h3 class="boxed-title">Boxed packages</h3>
+      <h3 class="boxed-title">{{ $t('picking.itemsSection.boxedPackages') }}</h3>
       <div
         v-for="pkg in boxedPackages(item)"
         :key="pkg.id"
         class="lot package-row"
       >
         <span class="package-info">
-          {{ pkg.qty }} pcs · {{ pkg.shippingBoxId }}
+          {{ pkg.qty }} {{ $t('common.pcs') }} · {{ pkg.shippingBoxId }}
         </span>
         <button
           v-if="openBoxById[pkg.shippingBoxId!]?.status === 'open'"
@@ -101,24 +101,24 @@
           :disabled="removing[pkg.id]"
           @click="emit('remove-from-box', pkg.id)"
         >
-          {{ removing[pkg.id] ? "Removing…" : "Remove" }}
+          {{ removing[pkg.id] ? $t('picking.itemsSection.removing') : $t('picking.itemsSection.remove') }}
         </button>
       </div>
     </div>
 
     <div class="logs-toggle">
       <button class="btn btn--small btn--ghost" @click="toggleExpand(item.id)">
-        {{ expandedItems.has(item.id) ? "Hide picking logs" : "Show picking logs" }}
+        {{ expandedItems.has(item.id) ? $t('picking.itemsSection.hideLogs') : $t('picking.itemsSection.showLogs') }}
         ({{ (transitionLogs[item.id] || []).length }})
       </button>
 
       <div v-if="expandedItems.has(item.id)" class="logs-list">
-        <p v-if="!(transitionLogs[item.id] || []).length" class="card__meta">No picking logs.</p>
+        <p v-if="!(transitionLogs[item.id] || []).length" class="card__meta">{{ $t('picking.itemsSection.noLogs') }}</p>
         <ul v-else>
           <li v-for="log in transitionLogs[item.id]" :key="log.id">
             {{ new Date(log.createdAt).toLocaleString() }}
-            · {{ log.actorName || "System" }}
-            · {{ log.fromState || "—" }} → {{ log.toState }}
+            · {{ log.actorName || $t('picking.itemsSection.actorSystem') }}
+            · {{ log.fromState || $t('common.noData') }} → {{ log.toState }}
             <span v-if="log.metadata">
               · {{ logMetadataText(log.metadata) }}
             </span>
@@ -157,6 +157,9 @@ const emit = defineEmits<{
   "remove-from-box": [packageId: string];
 }>();
 
+const { t } = useI18n();
+const statusLabel = useStatusLabel();
+
 const openBoxById = computed(() => {
   const map: Record<string, ShippingBox> = {};
   for (const box of props.openBoxes) {
@@ -193,7 +196,7 @@ function updateBoxSelection(packageId: string, value: string) {
 }
 
 function formatLotFields(source: { dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null }): string {
-  return `${source.dateCode || "—"} / ${source.lotCode || "—"} / ${source.coo || "—"} / ${source.cow || "—"}`;
+  return `${source.dateCode || t('common.noData')} / ${source.lotCode || t('common.noData')} / ${source.coo || t('common.noData')} / ${source.cow || t('common.noData')}`;
 }
 
 function logMetadataText(metadata: string | null): string | number | undefined {
@@ -202,7 +205,7 @@ function logMetadataText(metadata: string | null): string | number | undefined {
     const parsed = JSON.parse(metadata);
     return parsed.qty ?? parsed.note;
   } catch {
-    return "—";
+    return t('common.noData');
   }
 }
 </script>
