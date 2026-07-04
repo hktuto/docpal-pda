@@ -17,7 +17,7 @@
 
       <DetailHeader
         v-model="headerExpanded"
-        :title="`${t('measuring.detail.box')} ${box.id}`"
+        :title="t('measuring.measureBox.boxTitle', { id: box.id })"
         :status="box.status"
         :label="boxStatusLabel.box(box.status)"
         :flush-top="route.meta.props?.noPadding"
@@ -66,8 +66,8 @@
       <div v-if="box.status === 'closed'" class="card" style="margin-bottom: 1.5rem;">
         <h3 style="margin: 0 0 0.75rem; font-size: 0.875rem; color: var(--muted);">{{ $t('measuring.measureBox.measurements') }}</h3>
         <DetailRow :label="$t('measuring.measureBox.boxSize')" :value="box.boxSize" />
-        <DetailRow :label="$t('measuring.measureBox.netWeight')" :value="box.netWeight != null ? `${box.netWeight} kg` : `${$t('common.noData')} kg`" />
-        <DetailRow :label="$t('measuring.measureBox.grossWeight')" :value="box.grossWeight != null ? `${box.grossWeight} kg` : `${$t('common.noData')} kg`" />
+        <DetailRow :label="$t('measuring.measureBox.netWeight')" :value="box.netWeight != null ? `${box.netWeight} ${$t('common.kg')}` : `${$t('common.noData')} ${$t('common.kg')}`" />
+        <DetailRow :label="$t('measuring.measureBox.grossWeight')" :value="box.grossWeight != null ? `${box.grossWeight} ${$t('common.kg')}` : `${$t('common.noData')} ${$t('common.kg')}`" />
         <DetailRow :label="$t('measuring.measureBox.destinationCountry')" :value="box.destinationCountry" />
       </div>
 

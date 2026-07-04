@@ -53,7 +53,7 @@
           <span class="detail-label">{{ $t('measuring.detail.measurements') }}</span>
           <span style="text-align: right; font-size: 0.8125rem;">
             {{ box.boxSize || $t('common.noData') }}
-            · {{ box.grossWeight ?? $t('common.noData') }} / {{ box.netWeight ?? $t('common.noData') }} kg
+            · {{ box.grossWeight ?? $t('common.noData') }} / {{ box.netWeight ?? $t('common.noData') }} {{ $t('common.kg') }}
             · {{ box.destinationCountry || $t('common.noData') }}
           </span>
         </div>

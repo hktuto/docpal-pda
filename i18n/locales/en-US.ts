@@ -129,6 +129,7 @@ export default {
     boxFormat: "{box} — {shelf}",
     reportedBy: "by {name}",
     requested: "Requested: {qty}",
+    kg: "kg",
   },
   home: {
     greeting: "Hello, {name}",
@@ -384,6 +385,7 @@ export default {
     },
     measureBox: {
       title: "Measure Box",
+      boxTitle: "Box {id}",
       back: "← Back to task",
       enterMeasurements: "Enter measurements",
       pickingOrder: "Picking order",

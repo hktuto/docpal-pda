@@ -129,6 +129,7 @@ export default {
     boxFormat: "{box} — {shelf}",
     reportedBy: "由 {name} 匯報",
     requested: "需求：{qty}",
+    kg: "千克",
   },
   home: {
     greeting: "你好，{name}",
@@ -384,6 +385,7 @@ export default {
     },
     measureBox: {
       title: "測量箱號",
+      boxTitle: "箱號 {id}",
       back: "← 返回任務",
       enterMeasurements: "輸入測量資料",
       pickingOrder: "揀貨單",
