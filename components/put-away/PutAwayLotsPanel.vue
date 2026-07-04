@@ -1,24 +1,24 @@
 <template>
   <div class="lots-panel">
-    <h2 class="section-title">Available receiving-area lots</h2>
-    <p v-if="lots.length === 0" class="empty">No lots available for put-away.</p>
+    <h2 class="section-title">{{ $t('putAway.lotsPanel.title') }}</h2>
+    <p v-if="lots.length === 0" class="empty">{{ $t('common.noLots') }}</p>
 
     <div
       v-for="lot in lots"
       :key="lot.receiving_invoice_item_id"
       class="card"
     >
-      <DetailRow label="Part">
-        <span class="card__title">{{ lot.part_no || "—" }}</span>
+      <DetailRow :label="$t('putAway.lotsPanel.part')">
+        <span class="card__title">{{ lot.part_no || $t('common.noData') }}</span>
       </DetailRow>
-      <DetailRow label="Available qty">
+      <DetailRow :label="$t('putAway.lotsPanel.availableQty')">
         <span>{{ lot.available_qty }}</span>
       </DetailRow>
-      <DetailRow label="Date / Lot">
-        <span>{{ lot.date_code || "—" }} / {{ lot.lot_code || "—" }}</span>
+      <DetailRow :label="$t('putAway.lotsPanel.dateLot')">
+        <span>{{ lot.date_code || $t('common.noData') }} / {{ lot.lot_code || $t('common.noData') }}</span>
       </DetailRow>
-      <DetailRow label="COO / COW">
-        <span>{{ lot.coo || "—" }} / {{ lot.cow || "—" }}</span>
+      <DetailRow :label="$t('putAway.lotsPanel.cooCow')">
+        <span>{{ lot.coo || $t('common.noData') }} / {{ lot.cow || $t('common.noData') }}</span>
       </DetailRow>
 
       <div class="lot-actions">
@@ -28,9 +28,9 @@
           :disabled="scanning"
           @change="onBoxChange(lot.receiving_invoice_item_id, ($event.target as HTMLSelectElement).value)"
         >
-          <option value="">Select target box</option>
+          <option value="">{{ $t('putAway.lotsPanel.selectTargetBox') }}</option>
           <option v-for="box in openBoxes" :key="box.id" :value="box.id">
-            {{ box.id }} — {{ box.shelfCode || "—" }}
+            {{ $t('common.boxFormat', { box: box.id, shelf: box.shelfCode || $t('common.noData') }) }}
           </option>
         </select>
         <button
@@ -38,10 +38,10 @@
           :disabled="!hasOpenBox || scanning || !targetBoxSelections[lot.receiving_invoice_item_id]"
           @click="emit('scan', lot)"
         >
-          Scan
+          {{ $t('actions.scan') }}
         </button>
         <p v-if="!hasOpenBox" class="helper-text">
-          Create an open box first.
+          {{ $t('common.createOpenBoxFirst') }}
         </p>
       </div>
     </div>

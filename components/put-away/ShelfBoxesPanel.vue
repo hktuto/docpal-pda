@@ -1,7 +1,7 @@
 <template>
   <div class="card shelf-boxes-panel">
     <div class="section-header">
-      <h2 class="section-title">Shelf boxes({{ boxes.length }})</h2>
+      <h2 class="section-title">{{ $t('putAway.shelfBoxesPanel.title', { count: boxes.length }) }}</h2>
       <div class="section-actions">
         <button
           v-if="actionable"
@@ -9,20 +9,20 @@
           :disabled="creating"
           @click="emit('new-box')"
         >
-          {{ creating ? "Creating…" : "New box" }}
+          {{ creating ? $t('putAway.shelfBoxesPanel.creating') : $t('putAway.shelfBoxesPanel.newBox') }}
         </button>
         <button
           class="btn btn--small btn--ghost"
           :aria-expanded="isBoxesExpanded"
           @click="isBoxesExpanded = !isBoxesExpanded"
         >
-          {{ isBoxesExpanded ? "Hide" : "Show" }}
+          {{ isBoxesExpanded ? $t('actions.hide') : $t('actions.show') }}
         </button>
       </div>
     </div>
 
     <div v-if="isBoxesExpanded">
-      <p v-if="boxes.length === 0" class="empty no-padding">No boxes yet.</p>
+      <p v-if="boxes.length === 0" class="empty no-padding">{{ $t('common.noBoxes') }}</p>
 
       <div
         v-for="(group, shelfCode) in boxesByShelf"
@@ -37,24 +37,24 @@
           class="card box-card"
           :class="{ 'card--done': box.status !== 'open' }"
         >
-          <DetailRow label="Box">
+          <DetailRow :label="$t('putAway.shelfBoxesPanel.box')">
             <span class="card__title">{{ box.id }}</span>
           </DetailRow>
-          <DetailRow label="Status">
-            <StatusBadge :status="box.status" />
+          <DetailRow :label="$t('putAway.shelfBoxesPanel.status')">
+            <StatusBadge :status="box.status" :label="statusLabel.box(box.status)" />
           </DetailRow>
-          <DetailRow label="Items">
-            <span>{{ box.items?.length || 0 }} lines · {{ boxTotalQty(box) }} pcs</span>
+          <DetailRow :label="$t('putAway.shelfBoxesPanel.items')">
+            <span>{{ box.items?.length || 0 }} {{ box.items?.length === 1 ? $t('common.line') : $t('common.lines') }} · {{ boxTotalQty(box) }} {{ $t('common.pcs') }}</span>
           </DetailRow>
 
           <div v-if="box.items?.length" class="box-contents">
             <div class="contents-header">
-              <p class="contents-label">Contents</p>
+              <p class="contents-label">{{ $t('putAway.shelfBoxesPanel.contents') }}</p>
               <button
                 class="btn btn--small btn--ghost"
                 @click="toggleItemVisibility(box.id)"
               >
-                {{ isExpandedItemBoxes.has(box.id) ? "Hide items" : "Show items" }}
+                {{ isExpandedItemBoxes.has(box.id) ? $t('putAway.shelfBoxesPanel.hideItems') : $t('putAway.shelfBoxesPanel.showItems') }}
               </button>
             </div>
             <div v-if="isExpandedItemBoxes.has(box.id)">
@@ -63,7 +63,7 @@
                 :key="item.id"
                 class="lot"
               >
-                <span>{{ item.part?.partNo || "—" }}</span>
+                <span>{{ item.part?.partNo || $t('common.noData') }}</span>
                 <span class="lot-qty">× {{ item.qty }}</span>
               </div>
             </div>
@@ -76,7 +76,7 @@
               :disabled="closing"
               @click="emit('close-box', box.id)"
             >
-              {{ closing ? "Closing…" : "Close box" }}
+              {{ closing ? $t('putAway.shelfBoxesPanel.closing') : $t('putAway.shelfBoxesPanel.closeBox') }}
             </button>
             <button
               v-else
@@ -84,7 +84,7 @@
               :disabled="cancellingBox[box.id]"
               @click="emit('cancel-box', box.id)"
             >
-              {{ cancellingBox[box.id] ? "Canceling…" : "Cancel box" }}
+              {{ cancellingBox[box.id] ? $t('putAway.shelfBoxesPanel.canceling') : $t('putAway.shelfBoxesPanel.cancelBox') }}
             </button>
           </div>
         </div>
@@ -122,6 +122,9 @@ const emit = defineEmits<{
   "cancel-box": [boxId: string];
 }>();
 
+const { t } = useI18n();
+const statusLabel = useStatusLabel();
+
 const isBoxesExpanded = computed({
   get: () => props.boxesExpanded,
   set: (value) => emit("update:boxesExpanded", value),
@@ -135,7 +138,7 @@ const isExpandedItemBoxes = computed({
 const boxesByShelf = computed(() => {
   const map: Record<string, ShelfBox[]> = {};
   for (const box of props.boxes) {
-    const code = box.shelfCode ?? "Unassigned";
+    const code = box.shelfCode ?? t('common.unassigned');
     if (!map[code]) map[code] = [];
     map[code].push(box);
   }
@@ -144,7 +147,10 @@ const boxesByShelf = computed(() => {
 
 function shelfLabel(code: string) {
   const shelf = props.shelves.find((s) => s.code === code);
-  return shelf?.zone ? `${shelf.code} — ${shelf.zone}` : shelf?.code ?? code;
+  if (shelf?.zone) {
+    return t('common.shelfFormat', { code: shelf.code, zone: shelf.zone });
+  }
+  return shelf?.code ?? code;
 }
 
 function boxTotalQty(box: ShelfBox) {

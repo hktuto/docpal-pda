@@ -1,12 +1,12 @@
 <template>
   <div>
     <p class="page-hint">
-      Receiving orders with stock still in the receiving area.
+      {{ $t('putAway.hint') }}
     </p>
 
-    <p v-if="pending" class="empty">Loading…</p>
-    <p v-else-if="error" class="empty" style="color: var(--danger);">Error: {{ error }}</p>
-    <p v-else-if="rows.length === 0" class="empty">No receiving orders need put-away.</p>
+    <p v-if="pending" class="empty">{{ $t('common.loading') }}</p>
+    <p v-else-if="error" class="empty" style="color: var(--danger);">{{ $t('common.errorPrefix', { message: error }) }}</p>
+    <p v-else-if="rows.length === 0" class="empty">{{ $t('common.noReceivingOrdersNeedPutAway') }}</p>
 
     <NuxtLink
       v-for="ro in rows"
@@ -16,13 +16,13 @@
     >
       <div class="list-card__header">
         <span class="list-card__title">{{ ro.ref_no }}</span>
-        <span class="badge" :class="badgeClass(ro.status)">{{ ro.status }}</span>
+        <span class="badge" :class="badgeClass(ro.status)">{{ statusLabel.receiving(ro.status) }}</span>
       </div>
       <p class="list-card__meta">
-        {{ ro.supplier_name || "No supplier" }}
+        {{ ro.supplier_name || $t('common.noSupplier') }}
       </p>
       <div class="list-card__footer">
-        <span class="list-card__date">{{ ro.available_qty }} available</span>
+        <span class="list-card__date">{{ $t('putAway.available', { count: ro.available_qty }) }}</span>
       </div>
     </NuxtLink>
   </div>
@@ -33,7 +33,11 @@ import { getPutAwayCandidates, type PutAwayCandidate } from "~/db/putAway";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 
-definePageMeta({ title: "Put-away" });
+const { t } = useI18n();
+const statusLabel = useStatusLabel();
+const errorMessage = useErrorMessage();
+
+useHead({ title: t("putAway.title") });
 
 const db = await useDb();
 
@@ -45,7 +49,7 @@ async function load() {
   try {
     rows.value = await getPutAwayCandidates(db);
   } catch (e: any) {
-    error.value = e?.message ?? String(e);
+    error.value = errorMessage(e);
   } finally {
     pending.value = false;
   }

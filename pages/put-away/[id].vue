@@ -1,7 +1,7 @@
 <template>
   <div>
-    <EmptyState v-if="pending">Loading…</EmptyState>
-    <EmptyState v-else-if="error" error>Error: {{ error }}</EmptyState>
+    <EmptyState v-if="pending">{{ $t('common.loading') }}</EmptyState>
+    <EmptyState v-else-if="error" error>{{ $t('common.errorPrefix', { message: error }) }}</EmptyState>
 
     <template v-else-if="order">
       <DetailHeader
@@ -12,8 +12,8 @@
         :flush-top="route.meta.props?.noPadding"
         class="detail-header"
       >
-        <DetailRow label="Supplier" :value="order.supplier?.name" />
-        <DetailRow label="Delivery date" :value="order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : null" />
+        <DetailRow :label="$t('putAway.detail.supplier')" :value="order.supplier?.name" />
+        <DetailRow :label="$t('putAway.detail.deliveryDate')" :value="order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : null" />
       </DetailHeader>
 
       <ShelfBoxesPanel
@@ -66,6 +66,7 @@ import { useVisibleReload } from "~/composables/useVisibleReload";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import { useErrorMessage } from "~/composables/errorMessage";
+import { I18nError } from "~/composables/i18nError";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import SelectShelfDialog from "~/components/SelectShelfDialog.vue";
 import ShelfBoxesPanel from "~/components/put-away/ShelfBoxesPanel.vue";
@@ -84,7 +85,12 @@ import { getReceivingOrderDetail } from "~/db/receiving";
 
 type ReceivingOrderDetail = NonNullable<Awaited<ReturnType<typeof getReceivingOrderDetail>>>;
 
-definePageMeta({ title: "Put-away Detail", props: { noPadding: true } });
+definePageMeta({ props: { noPadding: true } });
+
+const { t } = useI18n();
+const errorMessage = useErrorMessage();
+
+useHead({ title: t("putAway.detail.title") });
 
 const route = useRoute();
 const orderId = route.params.id as string;
@@ -96,7 +102,6 @@ const expandedItemBoxes = ref<Set<string>>(new Set());
 
 const db = await useDb();
 const { currentUser } = useAuth();
-const errorMessage = useErrorMessage();
 
 const pending = ref(true);
 const error = ref<string | null>(null);
@@ -126,8 +131,7 @@ async function load() {
       getShelfBoxesForReceivingOrder(db, orderId),
     ]);
     if (!orderData) {
-      error.value = "Receiving order not found";
-      return;
+      throw new I18nError("receiving_order_not_found");
     }
     order.value = orderData;
     lots.value = lotsData;
@@ -166,7 +170,7 @@ function openNewBoxDialog() {
 async function createBoxFromDialog(shelfCode: string) {
   error.value = null;
   if (!currentUser.value?.id) {
-    error.value = "Operator not signed in";
+    error.value = errorMessage(new I18nError("operator_not_signed_in"));
     return;
   }
   creating.value = true;
@@ -184,7 +188,7 @@ async function createBoxFromDialog(shelfCode: string) {
 async function closeBox(boxId: string) {
   error.value = null;
   if (!currentUser.value?.id) {
-    error.value = "Operator not signed in";
+    error.value = errorMessage(new I18nError("operator_not_signed_in"));
     return;
   }
   closing.value = true;
@@ -201,7 +205,7 @@ async function closeBox(boxId: string) {
 async function cancelBox(boxId: string) {
   error.value = null;
   if (!currentUser.value?.id) {
-    error.value = "Operator not signed in";
+    error.value = errorMessage(new I18nError("operator_not_signed_in"));
     return;
   }
   cancellingBox.value[boxId] = true;
@@ -220,11 +224,11 @@ async function openScan(lot: PutAwayLot) {
   scanLot.value = lot;
   scanBoxId.value = targetBoxSelections.value[lot.receiving_invoice_item_id] ?? "";
   if (!scanBoxId.value) {
-    error.value = "Select a target box";
+    error.value = errorMessage(new I18nError("select_target_box"));
     return;
   }
   if (!boxes.value.some((b) => b.id === scanBoxId.value && b.status === "open")) {
-    error.value = "Selected box is no longer open";
+    error.value = errorMessage(new I18nError("selected_box_not_open"));
     return;
   }
   const result = await scan({ task: 'put-away', receivingItem: lot, targetBoxId: scanBoxId.value });
@@ -237,7 +241,7 @@ async function onRetake() {
   reviewOpen.value = false;
   const lot = scanLot.value;
   if (!lot) {
-    error.value = "No scan item to retake";
+    error.value = errorMessage(new I18nError("no_scan_item_to_retake"));
     return;
   }
   await openScan(lot);
