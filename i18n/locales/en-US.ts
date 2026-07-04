@@ -130,6 +130,7 @@ export default {
   },
   home: {
     greeting: "Hello, {name}",
+    operatorFallback: "Operator",
     prompt: "What would you like to do?",
     menu: {
       receiving: { title: "Receiving", desc: "Confirm arrivals and stock" },

@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="welcome">
-      <p class="welcome__greeting">{{ $t('home.greeting', { name: currentUser?.name || 'Operator' }) }}</p>
+      <p class="welcome__greeting">{{ $t('home.greeting', { name: currentUser?.name || $t('home.operatorFallback') }) }}</p>
       <h2 class="welcome__title">{{ $t('home.prompt') }}</h2>
     </div>
 

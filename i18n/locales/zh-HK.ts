@@ -130,6 +130,7 @@ export default {
   },
   home: {
     greeting: "你好，{name}",
+    operatorFallback: "操作員",
     prompt: "請選擇要執行的操作？",
     menu: {
       receiving: { title: "收貨", desc: "確認到貨及庫存" },
