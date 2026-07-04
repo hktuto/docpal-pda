@@ -1,6 +1,7 @@
 import { eq, sql } from "drizzle-orm";
 import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { v4 as uuid } from "uuid";
+import { I18nError } from "~/composables/i18nError";
 import * as schema from "./schema";
 import { materializeReceivingAllocation, scanAllocationToPackage } from "./picking";
 
@@ -41,7 +42,7 @@ export async function findReceivingCandidates(
 ): Promise<ReceivingCandidate[]> {
   const qty = parsed.qty;
   if (!Number.isInteger(qty) || qty <= 0) {
-    throw new Error("Qty must be a positive integer");
+    throw new I18nError("qty_must_be_positive_integer");
   }
 
   return db
@@ -99,7 +100,7 @@ export async function findPickingCandidates(
   qty: number
 ): Promise<PickingCandidate[]> {
   if (!Number.isInteger(qty) || qty <= 0) {
-    throw new Error("Qty must be a positive integer");
+    throw new I18nError("qty_must_be_positive_integer");
   }
 
   return db
@@ -154,24 +155,24 @@ export async function applyOcrPick(
   actorId: string
 ): Promise<void> {
   if (!Number.isInteger(qty) || qty <= 0) {
-    throw new Error("Qty must be a positive integer");
+    throw new I18nError("qty_must_be_positive_integer");
   }
-  if (!actorId) throw new Error("Actor is required");
+  if (!actorId) throw new I18nError("actor_required");
 
   return db.transaction(async (tx) => {
     const [receivingItem] = await tx
       .select()
       .from(schema.receivingInvoiceItems)
       .where(eq(schema.receivingInvoiceItems.id, receivingInvoiceItemId));
-    if (!receivingItem) throw new Error("Receiving invoice item not found");
+    if (!receivingItem) throw new I18nError("receiving_invoice_item_not_found");
 
     const [pickingItem] = await tx
       .select()
       .from(schema.pickingItems)
       .where(eq(schema.pickingItems.id, pickingItemId));
-    if (!pickingItem) throw new Error("Picking item not found");
+    if (!pickingItem) throw new I18nError("picking_item_not_found");
     if (pickingItem.partId !== receivingItem.partId) {
-      throw new Error("Receiving item and picking item do not match the same part");
+      throw new I18nError("receiving_picking_part_mismatch");
     }
 
     const scannedResult = await tx
@@ -182,7 +183,7 @@ export async function applyOcrPick(
       .where(eq(schema.pickingPackages.pickingItemId, pickingItemId));
     const scannedNotBoxed = scannedResult[0]?.total ?? 0;
     const remaining = pickingItem.qty - pickingItem.pickedQty - scannedNotBoxed;
-    if (qty > remaining) throw new Error("Quantity exceeds picking order need");
+    if (qty > remaining) throw new I18nError("quantity_exceeds_picking_need");
 
     // Prefer already-allocated links so the scan acts as a package confirmation
     // rather than creating extra allocations.
@@ -220,10 +221,10 @@ export async function applyOcrPick(
         .select()
         .from(schema.pickingItems)
         .where(eq(schema.pickingItems.id, pickingItemId));
-      if (!currentPickingItem) throw new Error("Picking item not found");
+      if (!currentPickingItem) throw new I18nError("picking_item_not_found");
       const unallocatedDemand = currentPickingItem.qty - currentPickingItem.pickedQty - currentPickingItem.allocatedQty - scannedNotBoxed;
       if (left > unallocatedDemand) {
-        throw new Error("Quantity exceeds unallocated picking order need");
+        throw new I18nError("quantity_exceeds_unallocated_picking_need");
       }
 
       const [newAllocation] = await tx

@@ -81,6 +81,7 @@
 
 <script setup lang="ts">
 import { useLabelScanReview } from "~/composables/useLabelScanReview";
+import { useErrorMessage } from "~/composables/errorMessage";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import {
   getShelfBoxDetail,
@@ -107,6 +108,7 @@ const boxId = route.params.id as string;
 
 const db = await useDb();
 const { currentUser } = useAuth();
+const errorMessage = useErrorMessage();
 
 const pending = ref(true);
 const error = ref<string | null>(null);
@@ -135,8 +137,8 @@ async function load() {
   error.value = null;
   try {
     box.value = await getShelfBoxDetail(db, boxId);
-  } catch (e: any) {
-    error.value = e?.message ?? String(e);
+  } catch (e: unknown) {
+    error.value = errorMessage(e);
   } finally {
     pending.value = false;
   }
@@ -156,8 +158,8 @@ async function markVerified() {
   try {
     await markShelfBoxVerified(db, box.value.id, currentUser.value.id);
     await load();
-  } catch (e: any) {
-    error.value = e?.message ?? String(e);
+  } catch (e: unknown) {
+    error.value = errorMessage(e);
   } finally {
     marking.value = false;
   }

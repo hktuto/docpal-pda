@@ -32,8 +32,11 @@
 
 <script setup lang="ts">
 import { useVisibleReload } from "~/composables/useVisibleReload";
+import { useErrorMessage } from "~/composables/errorMessage";
 
 definePageMeta({ title: "Measuring" });
+
+const errorMessage = useErrorMessage();
 
 interface MeasuringRow {
   id: string;
@@ -72,8 +75,8 @@ async function load() {
        ORDER BY po.ref_no;`
     );
     rawRows.value = result.rows ?? [];
-  } catch (e: any) {
-    loadError.value = e?.message ?? String(e);
+  } catch (e: unknown) {
+    loadError.value = errorMessage(e);
     rawRows.value = [];
   } finally {
     loading.value = false;

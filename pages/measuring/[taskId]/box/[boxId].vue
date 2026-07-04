@@ -102,6 +102,7 @@ import {
   type ShippingBoxForMeasuring,
 } from "~/db/measuring";
 import { useLabelScanReview } from "~/composables/useLabelScanReview";
+import { useErrorMessage } from "~/composables/errorMessage";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import BoxMeasurementsModal from "~/components/BoxMeasurementsModal.vue";
 
@@ -124,6 +125,7 @@ const taskId = route.params.taskId as string;
 const boxId = route.params.boxId as string;
 
 const db = await useDb();
+const errorMessage = useErrorMessage();
 
 const pending = ref(true);
 const error = ref<string | null>(null);
@@ -152,8 +154,8 @@ async function load() {
       box.value = data;
       error.value = null;
     }
-  } catch (e: any) {
-    error.value = e?.message ?? String(e);
+  } catch (e: unknown) {
+    error.value = errorMessage(e);
   } finally {
     pending.value = false;
   }

@@ -31,8 +31,11 @@
 <script setup lang="ts">
 import { getShelvesWithBoxes, type ShelfWithBoxCount } from "~/db/goodsVerify";
 import { useVisibleReload } from "~/composables/useVisibleReload";
+import { useErrorMessage } from "~/composables/errorMessage";
 
 definePageMeta({ title: "Goods Verify" });
+
+const errorMessage = useErrorMessage();
 
 const db = await useDb();
 
@@ -46,8 +49,8 @@ async function load() {
   loadError.value = null;
   try {
     rawRows.value = await getShelvesWithBoxes(db);
-  } catch (e: any) {
-    loadError.value = e?.message ?? String(e);
+  } catch (e: unknown) {
+    loadError.value = errorMessage(e);
     rawRows.value = [];
   } finally {
     loading.value = false;

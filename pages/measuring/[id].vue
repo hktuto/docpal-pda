@@ -79,8 +79,11 @@
 
 <script setup lang="ts">
 import { getMeasuringTaskDetail, completeMeasuringTask, type MeasuringTaskDetail } from "~/db/measuring";
+import { useErrorMessage } from "~/composables/errorMessage";
 
 definePageMeta({ title: "Measuring Detail", props: { noPadding: true } });
+
+const errorMessage = useErrorMessage();
 
 const route = useRoute();
 const taskId = route.params.id as string;
@@ -98,8 +101,8 @@ async function load() {
   try {
     const data = await getMeasuringTaskDetail(db, taskId);
     task.value = data ?? null;
-  } catch (e: any) {
-    error.value = e?.message ?? String(e);
+  } catch (e: unknown) {
+    error.value = errorMessage(e);
   } finally {
     pending.value = false;
   }
@@ -120,8 +123,8 @@ async function complete() {
     if (!currentUser.value) throw new Error("No operator user found");
     await completeMeasuringTask(db, taskId, currentUser.value.id);
     await load();
-  } catch (e: any) {
-    error.value = e?.message ?? String(e);
+  } catch (e: unknown) {
+    error.value = errorMessage(e);
   } finally {
     completing.value = false;
   }

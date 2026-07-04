@@ -2,6 +2,8 @@ import { ref } from 'vue';
 import { RectangleDetection, SCAN_NOT_AVAILABLE_MESSAGE, type LabelScanCapture } from './useRectangleDetection';
 import { parseRecognizedText } from './useRecognizedTextParser';
 import { runScanMatcher, type ScanTaskContext, type ScanMatchResult } from './useScanMatchers';
+import { I18nError } from '~/composables/i18nError';
+import { useErrorMessage } from '~/composables/errorMessage';
 import type { OcrInput } from './useMockOcr';
 
 export type LabelScanResult =
@@ -22,6 +24,7 @@ export function createManualReview(): Extract<LabelScanResult, { status: 'review
 
 export function useLabelScan() {
   const scanning = ref(false);
+  const errorMessage = useErrorMessage();
 
   async function scan(context: ScanTaskContext): Promise<LabelScanResult> {
     scanning.value = true;
@@ -50,7 +53,7 @@ export function useLabelScan() {
       if (isBrowserUnavailableError(e)) {
         return { status: 'manual' };
       }
-      const message = e instanceof Error ? e.message : String(e);
+      const message = e instanceof I18nError ? errorMessage(e) : (e instanceof Error ? e.message : String(e));
       return { status: 'error', message };
     } finally {
       scanning.value = false;
