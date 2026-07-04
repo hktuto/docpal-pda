@@ -48,6 +48,19 @@ Page and component locations mapped to source files.
 | PickingIssueReportModal | `components/PickingIssueReportModal.vue` |
 | SelectShelfDialog | `components/SelectShelfDialog.vue` |
 
+## Scan / OCR flow
+
+| Component / helper | Source file |
+|--------------------|-------------|
+| Review modal | `components/LabelScanReviewModal.vue` |
+| Candidate chips UI | `components/CandidateChips.vue` |
+| Scan orchestration | `composables/useLabelScan.ts` |
+| Review state wrapper | `composables/useLabelScanReview.ts` |
+| Matchers | `composables/useScanMatchers.ts` |
+| OCR parser and candidate extraction | `utils/parseOcrScan.ts` |
+| OCR result → `OcrInput` mapper | `utils/ocrResultToInput.ts` |
+| OCR-assisted picking DB helpers | `db/ocrPicking.ts` |
+
 ## Database helpers
 
 | Helper | Source file |

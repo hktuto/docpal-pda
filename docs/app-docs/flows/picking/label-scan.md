@@ -24,3 +24,4 @@ Typical label fields:
 
 - The demo normalizes common OCR errors (for example, `O` → `0`).
 - If the input does not match exactly one record, the operator must review or correct it.
+- When the scanner detects more than one possible value for a field (for example, multiple date codes or countries of origin), the review modal shows the alternatives as a row of chips below the input. Tap a chip to switch the field to that value.
