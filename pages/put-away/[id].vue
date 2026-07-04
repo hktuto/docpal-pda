@@ -10,7 +10,7 @@
         :status="headerStatus"
         :badge-class="badgeClass(order.status)"
         :flush-top="route.meta.props?.noPadding"
-        class="detail-header"
+        style="margin-bottom: 1.5rem;"
       >
         <DetailRow :label="$t('putAway.detail.supplier')" :value="order.supplier?.name" />
         <DetailRow :label="$t('putAway.detail.deliveryDate')" :value="order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : null" />
@@ -261,7 +261,4 @@ async function onRetake() {
 </script>
 
 <style scoped>
-.detail-header {
-  margin-bottom: 1.5rem;
-}
 </style>

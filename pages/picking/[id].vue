@@ -10,7 +10,7 @@
         :status="headerStatus"
         :badge-class="headerBadgeClass"
         :flush-top="route.meta.props?.noPadding"
-        class="detail-header"
+        style="margin-bottom: 1.5rem;"
       >
         <template #actions>
           <template v-if="order.status !== 'finished' && order.status !== 'issue'">
@@ -278,7 +278,4 @@ useVisibleReload(load);
 </script>
 
 <style scoped>
-.detail-header {
-  margin-bottom: 1.5rem;
-}
 </style>
