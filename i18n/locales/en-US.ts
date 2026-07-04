@@ -306,7 +306,6 @@ export default {
     title: "Put-away",
     hint: "Receiving orders with stock still in the receiving area.",
     available: "{count} available",
-    empty: "No receiving orders need put-away.",
     detail: {
       title: "Put-away Detail",
       supplier: "Supplier",
@@ -319,8 +318,6 @@ export default {
       box: "Box",
       status: "Status",
       items: "Items",
-      lines: "lines",
-      pcs: "pcs",
       contents: "Contents",
       hideItems: "Hide items",
       showItems: "Show items",

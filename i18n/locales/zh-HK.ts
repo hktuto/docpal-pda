@@ -306,7 +306,6 @@ export default {
     title: "上架",
     hint: "仍有庫存留在收貨區的收貨單。",
     available: "可用 {count}",
-    empty: "沒有需要上架的收貨單。",
     detail: {
       title: "上架詳情",
       supplier: "供應商",
@@ -319,8 +318,6 @@ export default {
       box: "箱",
       status: "狀態",
       items: "項目",
-      lines: "行",
-      pcs: "件",
       contents: "內容",
       hideItems: "隱藏項目",
       showItems: "顯示項目",
