@@ -1,20 +1,28 @@
-import { ref } from "vue";
+import { ref } from 'vue';
 import {
   RectangleDetection,
   SCAN_NOT_AVAILABLE_MESSAGE,
   type LabelScanCapture,
-} from "./useRectangleDetection";
-import { runScanMatcher, type ScanTaskContext, type ScanMatchResult } from "./useScanMatchers";
-import { I18nError } from "~/composables/i18nError";
-import { useErrorMessage } from "~/composables/errorMessage";
-import { parseAndIdentify, type CandidateOptions, type RawOcrCapture } from "~/utils/parseOcrScan";
-import { ocrResultToInput } from "~/utils/ocrResultToInput";
-import type { OcrInput } from "./useMockOcr";
+} from './useRectangleDetection';
+import { runScanMatcher, type ScanTaskContext, type ScanMatchResult } from './useScanMatchers';
+import { I18nError } from '~/composables/i18nError';
+import { useErrorMessage } from '~/composables/errorMessage';
+import { parseAndIdentify, type CandidateOptions, type RawOcrCapture } from '~/utils/parseOcrScan';
+import { ocrResultToInput } from '~/utils/ocrResultToInput';
+import type { OcrInput } from './useMockOcr';
 
-function parseBarcodes(barcodesJson: string): RawOcrCapture["barcodes"] {
+function parseBarcodes(barcodesJson: string): RawOcrCapture['barcodes'] {
   try {
     const parsed = JSON.parse(barcodesJson);
-    if (Array.isArray(parsed)) return parsed;
+    if (Array.isArray(parsed)) {
+      return parsed.filter(
+        (b): b is { value: string; format: string } =>
+          typeof b === 'object' &&
+          b !== null &&
+          typeof (b as { value?: unknown }).value === 'string' &&
+          typeof (b as { format?: unknown }).format === 'string'
+      );
+    }
   } catch {
     // ignore malformed barcode JSON
   }
@@ -59,7 +67,7 @@ export function useLabelScan() {
         context.targets ?? []
       );
       const parsed = ocrResultToInput(parsedResult.parsed);
-      console.log("[useLabelScan]", {
+      console.log('[useLabelScan]', {
         imagePath: capture.imagePath,
         text: capture.text,
         parsedResult,
