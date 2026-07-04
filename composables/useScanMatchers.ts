@@ -68,6 +68,7 @@ function rawCode(value: unknown): string | null {
 
 export interface ScanTaskContext {
   task: ScanTask;
+  targets?: string[];
   // receiving / picking
   receivingOrderId?: string;
   pickingItemId?: string;

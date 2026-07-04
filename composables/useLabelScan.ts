@@ -5,10 +5,17 @@ import { runScanMatcher, type ScanTaskContext, type ScanMatchResult } from './us
 import { I18nError } from '~/composables/i18nError';
 import { useErrorMessage } from '~/composables/errorMessage';
 import type { OcrInput } from './useMockOcr';
+import type { CandidateOptions } from '~/utils/parseOcrScan';
 
 export type LabelScanResult =
   | { status: 'applied' }
-  | { status: 'review'; capture: LabelScanCapture; parsed: OcrInput; matchResult: ScanMatchResult }
+  | {
+      status: 'review';
+      capture: LabelScanCapture;
+      parsed: OcrInput;
+      options: CandidateOptions;
+      matchResult: ScanMatchResult;
+    }
   | { status: 'manual' }
   | { status: 'cancelled' }
   | { status: 'error'; message: string };
@@ -18,6 +25,7 @@ export function createManualReview(): Extract<LabelScanResult, { status: 'review
     status: 'review',
     capture: { imagePath: '', text: '', barcodes: '[]' },
     parsed: { partNo: '', dateCode: '', lotCode: '', coo: '', cow: '', qty: '' },
+    options: { itemIds: [], qtys: [], coos: [], dateCodes: [], lotCodes: [], cows: [] },
     matchResult: { type: 'none' },
   };
 }

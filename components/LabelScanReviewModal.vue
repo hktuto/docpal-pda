@@ -129,6 +129,7 @@
 import { Capacitor } from '@capacitor/core';
 import type { OcrInput } from '~/composables/useMockOcr';
 import { runScanMatcher, type ScanMatchResult, type ScanTaskContext } from '~/composables/useScanMatchers';
+import type { CandidateOptions } from '~/utils/parseOcrScan';
 
 const { t } = useI18n();
 const getErrorMessage = useErrorMessage();
@@ -139,6 +140,7 @@ const props = defineProps<{
   text: string;
   barcodes: string;
   parsed: OcrInput;
+  options: CandidateOptions;
   matchResult: ScanMatchResult;
   context: ScanTaskContext;
   mode?: 'review' | 'manual';
