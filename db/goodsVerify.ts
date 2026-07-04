@@ -2,6 +2,7 @@ import { eq, sql } from "drizzle-orm";
 import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { v4 as uuid } from "uuid";
 import * as schema from "./schema";
+import { I18nError } from "~/composables/i18nError";
 
 export interface ShelfWithBoxCount {
   code: string;
@@ -144,7 +145,7 @@ export async function verifyShelfBoxItem(
     .where(eq(schema.shelfBoxItems.id, shelfBoxItemId))
     .returning();
 
-  if (!updated) throw new Error("Shelf box item not found");
+  if (!updated) throw new I18nError("shelf_box_item_not_found");
   return updated;
 }
 
@@ -161,12 +162,12 @@ export async function markShelfBoxVerified(
       },
     });
 
-    if (!box) throw new Error("Shelf box not found");
-    if (box.status === "verified") throw new Error("Shelf box is already verified");
-    if (box.items.length === 0) throw new Error("Shelf box has no items to verify");
+    if (!box) throw new I18nError("shelf_box_not_found");
+    if (box.status === "verified") throw new I18nError("shelf_box_already_verified");
+    if (box.items.length === 0) throw new I18nError("shelf_box_has_no_items");
 
     const allVerified = box.items.every((item) => item.verified);
-    if (!allVerified) throw new Error("Not all shelf box items are verified");
+    if (!allVerified) throw new I18nError("not_all_shelf_box_items_verified");
 
     await tx
       .update(schema.shelfBoxes)

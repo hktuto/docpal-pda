@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { v4 as uuid } from "uuid";
 import * as schema from "./schema";
+import { I18nError } from "~/composables/i18nError";
 
 export interface PackageVerificationInput {
   partNo: string;
@@ -254,13 +255,13 @@ export async function verifyPickingPackageForMeasuring(
       where: eq(schema.pickingPackages.id, packageId),
       with: { shippingBox: { with: { measuringTask: true } } },
     });
-    if (!pkg) throw new Error("Package not found");
-    if (!pkg.shippingBoxId) throw new Error("Package is not in a shipping box");
-    if (pkg.shippingBox?.status !== "open") throw new Error("Box is not open");
+    if (!pkg) throw new I18nError("package_not_found");
+    if (!pkg.shippingBoxId) throw new I18nError("package_not_in_shipping_box");
+    if (pkg.shippingBox?.status !== "open") throw new I18nError("box_is_not_open");
     if (pkg.shippingBox.measuringTask?.status !== "pending") {
-      throw new Error("Measuring task is not pending");
+      throw new I18nError("measuring_task_is_not_pending");
     }
-    if (pkg.verified) throw new Error("Package is already verified");
+    if (pkg.verified) throw new I18nError("package_already_verified");
 
     await tx
       .update(schema.pickingPackages)
@@ -285,7 +286,7 @@ function normalizeWeight(value: number | string | null | undefined): number | nu
   if (value === null || value === "") return null;
   if (typeof value === "string") {
     const num = Number(value);
-    if (Number.isNaN(num)) throw new Error("Weight must be a number");
+    if (Number.isNaN(num)) throw new I18nError("weight_must_be_number");
     return num;
   }
   return value;
@@ -315,7 +316,7 @@ export async function updateShippingBox(
     .set(set)
     .where(eq(schema.shippingBoxes.id, shippingBoxId))
     .returning();
-  if (!box) throw new Error("Shipping box not found");
+  if (!box) throw new I18nError("shipping_box_not_found");
   return box;
 }
 
@@ -329,18 +330,18 @@ export async function closeShippingBox(
       .select()
       .from(schema.shippingBoxes)
       .where(eq(schema.shippingBoxes.id, shippingBoxId));
-    if (!box) throw new Error("Shipping box not found");
-    if (box.status !== "open") throw new Error("Shipping box is not open");
+    if (!box) throw new I18nError("shipping_box_not_found");
+    if (box.status !== "open") throw new I18nError("shipping_box_is_not_open");
 
     const packages = await tx
       .select()
       .from(schema.pickingPackages)
       .where(eq(schema.pickingPackages.shippingBoxId, shippingBoxId));
     if (packages.length === 0) {
-      throw new Error("Cannot close an empty shipping box");
+      throw new I18nError("cannot_close_empty_shipping_box");
     }
     if (packages.some((p) => !p.verified)) {
-      throw new Error("All packages must be verified before closing the box");
+      throw new I18nError("all_packages_must_be_verified");
     }
 
     if (
@@ -351,13 +352,13 @@ export async function closeShippingBox(
       box.destinationCountry === null ||
       box.destinationCountry.trim() === ""
     ) {
-      throw new Error("Box measurements are incomplete");
+      throw new I18nError("box_measurements_incomplete");
     }
     if (box.grossWeight <= 0 || box.netWeight <= 0) {
-      throw new Error("Weights must be greater than zero");
+      throw new I18nError("weights_must_be_greater_than_zero");
     }
     if (box.grossWeight < box.netWeight) {
-      throw new Error("Gross weight must be greater than or equal to net weight");
+      throw new I18nError("gross_weight_must_be_greater_than_or_equal_to_net_weight");
     }
 
     await tx
@@ -391,11 +392,11 @@ export async function completeMeasuringTask(
         shippingBoxes: { with: { packages: true } },
       },
     });
-    if (!task) throw new Error("Measuring task not found");
-    if (task.status !== "pending") throw new Error("Measuring task is not pending");
+    if (!task) throw new I18nError("measuring_task_not_found");
+    if (task.status !== "pending") throw new I18nError("measuring_task_is_not_pending");
 
     const openBox = task.shippingBoxes.find((b) => b.status !== "closed");
-    if (openBox) throw new Error("All shipping boxes must be closed before completing");
+    if (openBox) throw new I18nError("all_shipping_boxes_must_be_closed");
 
     const packedByItem: Record<string, number> = {};
     for (const box of task.shippingBoxes) {
@@ -406,7 +407,7 @@ export async function completeMeasuringTask(
 
     for (const item of task.pickingOrder?.items ?? []) {
       if ((packedByItem[item.id] ?? 0) !== item.pickedQty) {
-        throw new Error(`Picking item ${item.id} is not fully packed`);
+        throw new I18nError("picking_item_not_fully_packed", { item_id: item.id });
       }
     }
 

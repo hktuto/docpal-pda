@@ -1,6 +1,7 @@
 import { useDb } from './useDb';
 import { parseManual, normalize } from './useMockOcr';
 import { useAuth } from './useAuth';
+import { I18nError } from '~/composables/i18nError';
 import type { OcrInput } from './useMockOcr';
 import type { PickingCandidate } from '~/db/ocrPicking';
 import type { PutAwayLot } from '~/db/putAway';
@@ -26,23 +27,23 @@ export async function runScanMatcher(ctx: ScanTaskContext, parsed: OcrInput): Pr
   const matchers = useScanMatchers();
   switch (ctx.task) {
     case 'receiving':
-      if (!ctx.receivingOrderId) return { type: 'error', message: 'Missing receiving order ID' };
+      if (!ctx.receivingOrderId) return matchers.error('missing_receiving_order_id');
       return matchers.matchReceiving(ctx.receivingOrderId, ctx.pickingItemId, parsed);
     case 'picking':
-      if (!ctx.allocation) return { type: 'error', message: 'Missing allocation' };
+      if (!ctx.allocation) return matchers.error('missing_allocation');
       return matchers.matchPicking(ctx.allocation, parsed);
     case 'put-away':
-      if (!ctx.receivingItem) return { type: 'error', message: 'Missing receiving item' };
-      if (!ctx.targetBoxId) return { type: 'error', message: 'Missing target box' };
+      if (!ctx.receivingItem) return matchers.error('missing_receiving_item');
+      if (!ctx.targetBoxId) return matchers.error('missing_target_box');
       return matchers.matchPutAway(ctx.receivingItem, ctx.targetBoxId, parsed);
     case 'measuring':
-      if (!ctx.boxId) return { type: 'error', message: 'Missing box ID' };
+      if (!ctx.boxId) return matchers.error('missing_box_id');
       return matchers.matchMeasuring(ctx.boxId, ctx.targetPackageId, parsed);
     case 'goods-verify':
-      if (!ctx.items) return { type: 'error', message: 'Missing box items' };
+      if (!ctx.items) return matchers.error('missing_box_items');
       return matchers.matchGoodsVerify(ctx.items, parsed);
     default:
-      return { type: 'error', message: 'Unknown scan task' };
+      return matchers.error('unknown_scan_task');
   }
 }
 
@@ -100,14 +101,22 @@ export interface ScanMatchers {
   matchPutAway(receivingItem: PutAwayLot, targetBoxId: string, parsed: OcrInput): Promise<ScanMatchResult>;
   matchMeasuring(boxId: string, targetPackageId: string | undefined, parsed: OcrInput): Promise<ScanMatchResult>;
   matchGoodsVerify(items: BoxItem[], parsed: OcrInput): Promise<ScanMatchResult>;
+  error(err: I18nError): ScanMatchResult;
+  error(code: string, params?: Record<string, unknown>): ScanMatchResult;
 }
 
 export function useScanMatchers(): ScanMatchers {
   const db = useDb();
   const { currentUser } = useAuth();
+  const { t } = useI18n();
 
-  function error(message: string): ScanMatchResult {
-    return { type: 'error', message };
+  function error(err: I18nError): ScanMatchResult;
+  function error(code: string, params?: Record<string, unknown>): ScanMatchResult;
+  function error(arg: I18nError | string, params?: Record<string, unknown>): ScanMatchResult {
+    if (arg instanceof I18nError) {
+      return { type: 'error', message: t(`errors.${arg.code}`, (arg.params ?? {}) as Record<string, unknown>) };
+    }
+    return { type: 'error', message: t(`errors.${arg}`, params ?? {}) };
   }
 
   async function matchReceiving(
@@ -117,7 +126,7 @@ export function useScanMatchers(): ScanMatchers {
   ): Promise<ScanMatchResult> {
     try {
       const user = currentUser.value;
-      if (!user?.id) return error('Operator not signed in');
+      if (!user?.id) return error('operator_not_signed_in');
 
       const p = parseManual(parsed);
       const receivingCandidates = await findReceivingCandidates(db, receivingOrderId, p);
@@ -133,11 +142,11 @@ export function useScanMatchers(): ScanMatchers {
 
       const applyFor = (picking: PickingCandidate) => async () => {
         const actorId = currentUser.value?.id;
-        if (!actorId) throw new Error('Operator not signed in');
+        if (!actorId) throw new I18nError('operator_not_signed_in');
         const qty = p.qty;
-        if (!Number.isInteger(qty) || qty <= 0) throw new Error('Invalid quantity to apply');
-        if (qty > receiving.availableQty) throw new Error('Quantity no longer available in receiving');
-        if (qty > picking.remainingQty) throw new Error('Quantity exceeds picking order need');
+        if (!Number.isInteger(qty) || qty <= 0) throw new I18nError('invalid_quantity_to_apply');
+        if (qty > receiving.availableQty) throw new I18nError('quantity_not_available_receiving');
+        if (qty > picking.remainingQty) throw new I18nError('quantity_exceeds_picking_need');
         await applyOcrPick(
           db,
           receiving.receivingInvoiceItemId,
@@ -161,24 +170,24 @@ export function useScanMatchers(): ScanMatchers {
         records: pickingCandidates.map((picking) => ({ record: { receiving, picking }, apply: applyFor(picking) })),
       };
     } catch (e: any) {
-      return error(e?.message ?? 'Receiving match failed');
+      return e instanceof I18nError ? error(e) : error(new I18nError('unknown_match_failed', { task: 'receiving' }));
     }
   }
 
   async function matchPicking(allocation: PickingAllocation, parsed: OcrInput): Promise<ScanMatchResult> {
     try {
       const user = currentUser.value;
-      if (!user?.id) return error('Operator not signed in');
+      if (!user?.id) return error('operator_not_signed_in');
 
       const scannedPartNo = normalize(parsed.partNo ?? '');
       const expectedPartNo = normalize(allocation?.pickingItem?.part?.partNo ?? '');
       if (!scannedPartNo) return { type: 'none' };
-      if (scannedPartNo !== expectedPartNo) return error('Scanned part does not match allocation');
+      if (scannedPartNo !== expectedPartNo) return error('scanned_part_does_not_match_allocation');
 
       const qty = typeof parsed.qty === 'number' ? parsed.qty : Number(parsed.qty);
-      if (!Number.isInteger(qty) || qty <= 0) return error('Qty must be a positive integer');
-      if (!allocation?.qty) return error('Invalid allocation');
-      if (qty > allocation.qty) return error('Qty exceeds allocated quantity');
+      if (!Number.isInteger(qty) || qty <= 0) return error('qty_must_be_positive_integer');
+      if (!allocation?.qty) return error('invalid_allocation');
+      if (qty > allocation.qty) return error('qty_exceeds_allocated');
 
       const dateCode = rawCode(parsed.dateCode);
       const lotCode = rawCode(parsed.lotCode);
@@ -192,7 +201,7 @@ export function useScanMatchers(): ScanMatchers {
         record: allocation,
         apply: async () => {
           const actorId = currentUser.value?.id;
-          if (!actorId) throw new Error('Operator not signed in');
+          if (!actorId) throw new I18nError('operator_not_signed_in');
           if (isReceivingAllocation) {
             const materializedId = await materializeReceivingAllocation(
               db,
@@ -210,25 +219,25 @@ export function useScanMatchers(): ScanMatchers {
         },
       };
     } catch (e: any) {
-      return error(e?.message ?? 'Picking match failed');
+      return e instanceof I18nError ? error(e) : error(new I18nError('unknown_match_failed', { task: 'picking' }));
     }
   }
 
   async function matchPutAway(receivingItem: PutAwayLot, targetBoxId: string, parsed: OcrInput): Promise<ScanMatchResult> {
     try {
       const user = currentUser.value;
-      if (!user?.id) return error('Operator not signed in');
+      if (!user?.id) return error('operator_not_signed_in');
 
       const scannedPartNo = normalize(parsed.partNo ?? '');
       const expectedPartNo = normalize(receivingItem.part_no ?? '');
       if (!scannedPartNo) return { type: 'none' };
-      if (scannedPartNo !== expectedPartNo) return error('Scanned part does not match item');
+      if (scannedPartNo !== expectedPartNo) return error('scanned_part_does_not_match_item');
 
-      if (!targetBoxId) return error('Select an open box');
+      if (!targetBoxId) return error('select_open_box');
       const qty = typeof parsed.qty === 'number' ? parsed.qty : Number(parsed.qty);
-      if (!Number.isInteger(qty) || qty <= 0) return error('Qty must be a positive integer');
-      if (!receivingItem?.receiving_invoice_item_id) return error('Invalid receiving item');
-      if (qty > (receivingItem.available_qty ?? 0)) return error('Quantity exceeds available quantity');
+      if (!Number.isInteger(qty) || qty <= 0) return error('qty_must_be_positive_integer');
+      if (!receivingItem?.receiving_invoice_item_id) return error('invalid_receiving_item');
+      if (qty > (receivingItem.available_qty ?? 0)) return error('quantity_exceeds_available');
 
       const dateCode = rawCode(parsed.dateCode);
       const lotCode = rawCode(parsed.lotCode);
@@ -240,7 +249,7 @@ export function useScanMatchers(): ScanMatchers {
         record: receivingItem,
         apply: async () => {
           const actorId = currentUser.value?.id;
-          if (!actorId) throw new Error('Operator not signed in');
+          if (!actorId) throw new I18nError('operator_not_signed_in');
           await addItemToShelfBox(
             db,
             targetBoxId,
@@ -255,18 +264,18 @@ export function useScanMatchers(): ScanMatchers {
         },
       };
     } catch (e: any) {
-      return error(e?.message ?? 'Put-away match failed');
+      return e instanceof I18nError ? error(e) : error(new I18nError('unknown_match_failed', { task: 'put-away' }));
     }
   }
 
   async function matchMeasuring(boxId: string, targetPackageId: string | undefined, parsed: OcrInput): Promise<ScanMatchResult> {
     const user = currentUser.value;
-    if (!user?.id) return error('Operator not signed in');
+    if (!user?.id) return error('operator_not_signed_in');
 
     try {
-      if (!parsed.partNo?.trim()) return error('Part No. is required');
+      if (!parsed.partNo?.trim()) return error('part_no_required');
       const qty = typeof parsed.qty === 'number' ? parsed.qty : Number(parsed.qty);
-      if (!Number.isInteger(qty) || qty <= 0) return error('Qty must be a positive integer');
+      if (!Number.isInteger(qty) || qty <= 0) return error('qty_must_be_positive_integer');
 
       const matched = await findMatchingUnverifiedPackage(
         db,
@@ -289,19 +298,19 @@ export function useScanMatchers(): ScanMatchers {
         record: matched,
         apply: async () => {
           const actorId = currentUser.value?.id;
-          if (!actorId) throw new Error('Operator not signed in');
+          if (!actorId) throw new I18nError('operator_not_signed_in');
           await verifyPickingPackageForMeasuring(db, matched.id, actorId);
         },
       };
     } catch (e: any) {
-      return error(e?.message ?? 'Measuring match failed');
+      return e instanceof I18nError ? error(e) : error(new I18nError('unknown_match_failed', { task: 'measuring' }));
     }
   }
 
   async function matchGoodsVerify(items: BoxItem[], parsed: OcrInput): Promise<ScanMatchResult> {
     try {
       const partNo = parsed.partNo?.trim() ?? '';
-      if (!partNo) return error('Part No. is required');
+      if (!partNo) return error('part_no_required');
 
       const item = items.find((i) => !i.verified && (i.part?.partNo || '') === partNo);
       if (!item) return { type: 'none' };
@@ -312,7 +321,7 @@ export function useScanMatchers(): ScanMatchers {
         apply: () => verifyShelfBoxItem(db, item.id),
       };
     } catch (e: any) {
-      return error(e?.message ?? 'Goods verify match failed');
+      return e instanceof I18nError ? error(e) : error(new I18nError('unknown_match_failed', { task: 'goods-verify' }));
     }
   }
 
@@ -322,5 +331,6 @@ export function useScanMatchers(): ScanMatchers {
     matchPutAway,
     matchMeasuring,
     matchGoodsVerify,
+    error,
   };
 }

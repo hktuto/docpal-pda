@@ -4,6 +4,7 @@ import { v4 as uuid } from "uuid";
 import * as schema from "./schema";
 import { tryMarkReceivingOrderClear } from "./receiving";
 import { getIsoWeek } from "./date";
+import { I18nError } from "~/composables/i18nError";
 
 async function generateShelfBoxId(
   tx: PgliteDatabase<typeof schema>,
@@ -164,14 +165,14 @@ export async function cancelShelfBox(
     const box = await tx.query.shelfBoxes.findFirst({
       where: eq(schema.shelfBoxes.id, boxId),
     });
-    if (!box) throw new Error("Shelf box not found");
-    if (box.status !== "open") throw new Error("Shelf box is not open");
+    if (!box) throw new I18nError("shelf_box_not_found");
+    if (box.status !== "open") throw new I18nError("shelf_box_is_not_open");
 
     const itemResult = await tx
       .select({ count: sql<number>`count(*)`.mapWith(Number) })
       .from(schema.shelfBoxItems)
       .where(eq(schema.shelfBoxItems.shelfBoxId, boxId));
-    if ((itemResult[0]?.count ?? 0) > 0) throw new Error("Shelf box is not empty");
+    if ((itemResult[0]?.count ?? 0) > 0) throw new I18nError("shelf_box_is_not_empty");
 
     await tx.insert(schema.transitionLogs).values({
       id: uuid(),
@@ -200,27 +201,27 @@ export async function addItemToShelfBox(
   actorId: string
 ) {
   if (!Number.isInteger(qty) || qty <= 0) {
-    throw new Error("Qty must be a positive integer");
+    throw new I18nError("qty_must_be_positive_integer");
   }
 
   return db.transaction(async (tx) => {
     const [box] = await tx.select().from(schema.shelfBoxes).where(eq(schema.shelfBoxes.id, shelfBoxId));
-    if (!box) throw new Error("Shelf box not found");
-    if (box.status !== "open") throw new Error("Shelf box is not open");
+    if (!box) throw new I18nError("shelf_box_not_found");
+    if (box.status !== "open") throw new I18nError("shelf_box_is_not_open");
 
     const [invoiceItem] = await tx
       .select()
       .from(schema.receivingInvoiceItems)
       .where(eq(schema.receivingInvoiceItems.id, receivingInvoiceItemId));
-    if (!invoiceItem) throw new Error("Invoice item not found");
+    if (!invoiceItem) throw new I18nError("invoice_item_not_found");
 
     const [invoice] = await tx
       .select()
       .from(schema.receivingInvoices)
       .where(eq(schema.receivingInvoices.id, invoiceItem.receivingInvoiceId));
-    if (!invoice) throw new Error("Invoice not found");
+    if (!invoice) throw new I18nError("invoice_not_found");
     if (invoice.receivingOrderId !== box.receivingOrderId) {
-      throw new Error("Item does not belong to this receiving order");
+      throw new I18nError("item_does_not_belong_to_receiving_order");
     }
 
     const allocatedResult = await tx
@@ -229,7 +230,7 @@ export async function addItemToShelfBox(
       .where(eq(schema.allocations.receivingInvoiceItemId, receivingInvoiceItemId));
     const allocated = allocatedResult[0]?.total ?? 0;
     const available = invoiceItem.receivedQty - invoiceItem.pickedQty - invoiceItem.putAwayQty - allocated;
-    if (qty > available) throw new Error("Insufficient available quantity");
+    if (qty > available) throw new I18nError("insufficient_available_quantity");
 
     const existing = await tx.query.inventoryLots.findFirst({
       where: (il, { and, eq }) =>
@@ -324,15 +325,15 @@ export async function closeShelfBox(
       .select()
       .from(schema.shelfBoxes)
       .where(eq(schema.shelfBoxes.id, shelfBoxId));
-    if (!box) throw new Error("Shelf box not found");
-    if (box.status !== "open") throw new Error("Shelf box is not open");
+    if (!box) throw new I18nError("shelf_box_not_found");
+    if (box.status !== "open") throw new I18nError("shelf_box_is_not_open");
 
     const [itemsCount] = await tx
       .select({ count: sql<number>`count(*)`.mapWith(Number) })
       .from(schema.shelfBoxItems)
       .where(eq(schema.shelfBoxItems.shelfBoxId, shelfBoxId));
     if ((itemsCount?.count ?? 0) === 0) {
-      throw new Error("Cannot close an empty shelf box");
+      throw new I18nError("cannot_close_empty_shelf_box");
     }
 
     await tx

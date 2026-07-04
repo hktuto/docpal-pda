@@ -5,6 +5,7 @@ import * as schema from "./schema";
 import type { PickingIssueReason } from "./schema";
 import { tryMarkReceivingOrderClear } from "./receiving";
 import { getIsoWeek } from "./date";
+import { I18nError } from "~/composables/i18nError";
 
 export async function getPickingOrdersWithSupplier(
   db: PgliteDatabase<typeof schema>
@@ -69,9 +70,9 @@ export async function materializeReceivingAllocation(
       with: { pickingItem: true, receivingInvoiceItem: { with: { invoice: true } } },
     });
 
-    if (!allocation) throw new Error("Allocation not found");
-    if (!allocation.receivingInvoiceItemId) throw new Error("Allocation is not against a receiving item");
-    if (qty <= 0 || qty > allocation.qty) throw new Error("Invalid materialize quantity");
+    if (!allocation) throw new I18nError("allocation_not_found");
+    if (!allocation.receivingInvoiceItemId) throw new I18nError("allocation_not_against_receiving_item");
+    if (qty <= 0 || qty > allocation.qty) throw new I18nError("invalid_materialize_quantity");
 
     const invoiceItem = allocation.receivingInvoiceItem!;
 
@@ -139,8 +140,8 @@ export async function scanAllocationToPackage(
       with: { pickingItem: true, inventoryLot: true, receivingInvoiceItem: true },
     });
 
-    if (!allocation) throw new Error("Allocation not found");
-    if (qty <= 0 || qty > allocation.qty) throw new Error("Invalid scan quantity");
+    if (!allocation) throw new I18nError("allocation_not_found");
+    if (qty <= 0 || qty > allocation.qty) throw new I18nError("invalid_scan_quantity");
 
     const item = allocation.pickingItem;
     const lot = allocation.inventoryLot;
@@ -148,7 +149,7 @@ export async function scanAllocationToPackage(
     const order = await tx.query.pickingOrders.findFirst({
       where: eq(schema.pickingOrders.id, item.pickingOrderId),
     });
-    if (order?.status === "issue") throw new Error("Picking order has an open issue");
+    if (order?.status === "issue") throw new I18nError("picking_order_has_open_issue");
 
     const scannedResult = await tx
       .select({
@@ -159,7 +160,7 @@ export async function scanAllocationToPackage(
     const scannedNotBoxed = scannedResult[0]?.total ?? 0;
     const alreadyCommitted = item.pickedQty + scannedNotBoxed;
     if (alreadyCommitted + qty > item.qty) {
-      throw new Error("Scan quantity exceeds required quantity");
+      throw new I18nError("scan_quantity_exceeds_required");
     }
 
     let sourceType: (typeof schema.packageSourceType)[number];
@@ -170,8 +171,8 @@ export async function scanAllocationToPackage(
     let cow: string | null = null;
 
     if (lot) {
-      if (lot.allocatedQty < qty) throw new Error("Insufficient allocated quantity");
-      if (lot.totalQty < qty) throw new Error("Insufficient lot quantity");
+      if (lot.allocatedQty < qty) throw new I18nError("insufficient_allocated_quantity");
+      if (lot.totalQty < qty) throw new I18nError("insufficient_lot_quantity");
 
       await tx
         .update(schema.inventoryLots)
@@ -189,7 +190,7 @@ export async function scanAllocationToPackage(
         });
 
         const totalSourceQty = sources.reduce((sum, s) => sum + s.qty, 0);
-        if (totalSourceQty < qty) throw new Error("Insufficient source quantity");
+        if (totalSourceQty < qty) throw new I18nError("insufficient_source_quantity");
 
         let remaining = qty;
         const affectedReceivingItemIds: string[] = [];
@@ -236,7 +237,7 @@ export async function scanAllocationToPackage(
     } else if (allocation.receivingInvoiceItem) {
       const invoiceItem = allocation.receivingInvoiceItem;
       const available = invoiceItem.receivedQty - invoiceItem.pickedQty - invoiceItem.putAwayQty;
-      if (available < qty) throw new Error("Insufficient receiving quantity");
+      if (available < qty) throw new I18nError("insufficient_receiving_quantity");
 
       await tx
         .update(schema.receivingInvoiceItems)
@@ -258,7 +259,7 @@ export async function scanAllocationToPackage(
       coo = invoiceItem.coo;
       cow = invoiceItem.cow;
     } else {
-      throw new Error("Allocation has no source");
+      throw new I18nError("allocation_has_no_source");
     }
 
     // Reduce allocation instead of deleting so the receiving-side picking view
@@ -340,15 +341,15 @@ export async function reportPickingOrderIssues(
   input: PickingOrderIssueInput,
   actorId: string
 ): Promise<{ reported: number; skipped: number }> {
-  if (entries.length === 0) throw new Error("No orders selected");
+  if (entries.length === 0) throw new I18nError("no_orders_selected");
   if (input.reason === "merge" && entries.length < 2) {
-    throw new Error("Select at least two orders to request a merge");
+    throw new I18nError("select_at_least_two_orders_to_merge");
   }
   if (input.reason === "insufficient_stock" && (input.qty == null || input.qty < 0)) {
-    throw new Error("Actual quantity is required");
+    throw new I18nError("actual_quantity_required");
   }
   if (input.reason === "cannot_divide" && (input.packSize == null || input.packSize <= 0)) {
-    throw new Error("Pack size is required");
+    throw new I18nError("pack_size_required");
   }
 
   const orderIds = entries.map((e) => e.orderId);
@@ -363,7 +364,7 @@ export async function reportPickingOrderIssues(
     `);
     const rows = (result.rows ?? []) as any[];
     const reportable = rows.filter((r) => r.status === "pending" || r.status === "picking");
-    if (reportable.length === 0) throw new Error("No reportable orders selected");
+    if (reportable.length === 0) throw new I18nError("no_reportable_orders_selected");
 
     const remarkByOrderId = new Map(entries.map((e) => [e.orderId, e.remark?.trim() || null]));
     const now = new Date();
@@ -372,7 +373,7 @@ export async function reportPickingOrderIssues(
     for (const row of reportable) {
       const totalQty = Number(row.total_qty) || 0;
       if (input.reason === "insufficient_stock" && input.qty! >= totalQty) {
-        throw new Error(`Actual qty for ${row.ref_no} must be less than requested qty`);
+        throw new I18nError("actual_qty_must_be_less_than_requested", { ref_no: row.ref_no });
       }
 
       await tx.execute(sql`
@@ -423,9 +424,9 @@ export async function createShippingBoxForPickingOrder(
     const order = await tx.query.pickingOrders.findFirst({
       where: eq(schema.pickingOrders.id, pickingOrderId),
     });
-    if (!order) throw new Error("Picking order not found");
-    if (order.status === "finished") throw new Error("Picking order is already finished");
-    if (order.status === "issue") throw new Error("Picking order has an open issue");
+    if (!order) throw new I18nError("picking_order_not_found");
+    if (order.status === "finished") throw new I18nError("picking_order_already_finished");
+    if (order.status === "issue") throw new I18nError("picking_order_has_open_issue");
 
     const now = new Date();
     const week = String(getIsoWeek(now)).padStart(2, "0");
@@ -476,20 +477,20 @@ export async function cancelShippingBox(
     const box = await tx.query.shippingBoxes.findFirst({
       where: eq(schema.shippingBoxes.id, boxId),
     });
-    if (!box) throw new Error("Box not found");
-    if (box.status !== "open") throw new Error("Box is not open");
+    if (!box) throw new I18nError("box_not_found");
+    if (box.status !== "open") throw new I18nError("box_is_not_open");
 
     const packageResult = await tx
       .select({ count: sql<number>`count(*)`.mapWith(Number) })
       .from(schema.pickingPackages)
       .where(eq(schema.pickingPackages.shippingBoxId, boxId));
-    if (packageResult[0]?.count > 0) throw new Error("Box is not empty");
+    if (packageResult[0]?.count > 0) throw new I18nError("box_is_not_empty");
 
     const itemResult = await tx
       .select({ count: sql<number>`count(*)`.mapWith(Number) })
       .from(schema.shippingBoxItems)
       .where(eq(schema.shippingBoxItems.shippingBoxId, boxId));
-    if (itemResult[0]?.count > 0) throw new Error("Box is not empty");
+    if (itemResult[0]?.count > 0) throw new I18nError("box_is_not_empty");
 
     await tx.insert(schema.transitionLogs).values({
       id: uuid(),
@@ -539,22 +540,22 @@ export async function addPackageToBox(
       where: eq(schema.pickingPackages.id, packageId),
       with: { pickingItem: true },
     });
-    if (!pkg) throw new Error("Package not found");
-    if (pkg.shippingBoxId) throw new Error("Package is already in a box");
+    if (!pkg) throw new I18nError("package_not_found");
+    if (pkg.shippingBoxId) throw new I18nError("package_already_in_box");
 
     const box = await tx.query.shippingBoxes.findFirst({
       where: eq(schema.shippingBoxes.id, shippingBoxId),
     });
-    if (!box) throw new Error("Box not found");
-    if (box.status !== "open") throw new Error("Box is not open");
+    if (!box) throw new I18nError("box_not_found");
+    if (box.status !== "open") throw new I18nError("box_is_not_open");
     if (box.pickingOrderId) {
       const order = await tx.query.pickingOrders.findFirst({
         where: eq(schema.pickingOrders.id, box.pickingOrderId),
       });
-      if (order?.status === "issue") throw new Error("Picking order has an open issue");
+      if (order?.status === "issue") throw new I18nError("picking_order_has_open_issue");
     }
     if (box.pickingOrderId !== pkg.pickingOrderId) {
-      throw new Error("Package does not belong to this picking order");
+      throw new I18nError("package_does_not_belong_to_picking_order");
     }
 
     await tx
@@ -589,20 +590,20 @@ export async function removePackageFromBox(
       where: eq(schema.pickingPackages.id, packageId),
       with: { pickingItem: true },
     });
-    if (!pkg) throw new Error("Package not found");
-    if (!pkg.shippingBoxId) throw new Error("Package is not in a box");
+    if (!pkg) throw new I18nError("package_not_found");
+    if (!pkg.shippingBoxId) throw new I18nError("package_not_in_box");
 
     const box = await tx.query.shippingBoxes.findFirst({
       where: eq(schema.shippingBoxes.id, pkg.shippingBoxId),
     });
     if (!box || box.status !== "open") {
-      throw new Error("Box is not open");
+      throw new I18nError("box_is_not_open");
     }
     if (box.pickingOrderId) {
       const order = await tx.query.pickingOrders.findFirst({
         where: eq(schema.pickingOrders.id, box.pickingOrderId),
       });
-      if (order?.status === "issue") throw new Error("Picking order has an open issue");
+      if (order?.status === "issue") throw new I18nError("picking_order_has_open_issue");
     }
 
     const shippingBoxId = pkg.shippingBoxId;
@@ -695,13 +696,13 @@ export async function finishPickingOrder(
       with: { items: true },
     });
 
-    if (!order) throw new Error("Picking order not found");
-    if (order.status === "finished") throw new Error("Order is already finished");
-    if (order.items.length === 0) throw new Error("No items to pick");
-    if (order.status === "issue") throw new Error("Picking order has an open issue");
+    if (!order) throw new I18nError("picking_order_not_found");
+    if (order.status === "finished") throw new I18nError("order_already_finished");
+    if (order.items.length === 0) throw new I18nError("no_items_to_pick");
+    if (order.status === "issue") throw new I18nError("picking_order_has_open_issue");
 
     const allPicked = order.items.every((i) => i.pickedQty >= i.qty);
-    if (!allPicked) throw new Error("Not all items are fully boxed");
+    if (!allPicked) throw new I18nError("not_all_items_fully_boxed");
 
     const now = new Date();
 
@@ -760,7 +761,7 @@ export async function getPickingItemTransitionLogs(
   // but this guard keeps the raw SQL safe from accidental misuse.
   const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
   for (const id of pickingItemIds) {
-    if (!uuidRegex.test(id)) throw new Error(`Invalid picking item id: ${id}`);
+    if (!uuidRegex.test(id)) throw new I18nError("invalid_picking_item_id", { id });
   }
 
   // PGlite's Drizzle driver has trouble with multiple parameters inside IN (...),

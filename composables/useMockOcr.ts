@@ -1,3 +1,4 @@
+import { I18nError } from "~/composables/i18nError";
 import type { OcrParseResult } from "~/db/ocrPicking";
 
 export interface OcrInput {
@@ -16,7 +17,7 @@ export interface OcrInput {
 export function parseManual(input: OcrInput): OcrParseResult {
   const qty = typeof input.qty === "number" ? input.qty : Number(input.qty);
   if (!Number.isInteger(qty) || qty <= 0) {
-    throw new Error("Qty must be a positive integer");
+    throw new I18nError("qty_must_be_positive_integer");
   }
 
   return {

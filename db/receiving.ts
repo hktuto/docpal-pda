@@ -3,6 +3,7 @@ import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { v4 as uuid } from "uuid";
 import * as schema from "./schema";
 import { allocatePendingPickingOrders } from "./allocate";
+import { I18nError } from "~/composables/i18nError";
 
 export async function tryMarkReceivingOrderClear(
   tx: PgliteDatabase<typeof schema>,
@@ -117,7 +118,7 @@ export function computeReceivedQty(
     case "wrong_part":
       return 0;
     default:
-      throw new Error(`Unhandled mismatch reason: ${reason}`);
+      throw new I18nError("unhandled_mismatch_reason", { reason });
   }
 }
 
@@ -130,38 +131,38 @@ export function validateMismatchInputs(
   if (!reason) return;
 
   if (reason === "not_found" && mismatchQty !== null) {
-    throw new Error("not_found mismatch cannot include a quantity");
+    throw new I18nError("not_found_mismatch_cannot_include_qty");
   }
 
   const qty = mismatchQty ?? 0;
 
   if (!Number.isInteger(qty) || qty < 0) {
-    throw new Error("Quantity must be a non-negative integer");
+    throw new I18nError("quantity_must_be_non_negative_integer");
   }
 
   if (reason === "damaged" || reason === "quality_rejection") {
     if (qty > expectedQty) {
-      throw new Error("Damaged/rejected quantity cannot exceed expected quantity");
+      throw new I18nError("damaged_rejected_quantity_exceeds_expected");
     }
   }
 
   if (reason === "over_shipment" || reason === "wrong_part") {
     if (qty <= 0) {
-      throw new Error("Quantity must be greater than 0");
+      throw new I18nError("quantity_must_be_greater_than_zero");
     }
   }
 
   if (reason === "wrong_part" && (!wrongPartNo || wrongPartNo.trim() === "")) {
-    throw new Error("Wrong part number is required");
+    throw new I18nError("wrong_part_number_required");
   }
 
   if (reason === "qty_mismatch" && (mismatchQty === null || mismatchQty < 0)) {
-    throw new Error("Quantity mismatch requires a valid received quantity");
+    throw new I18nError("quantity_mismatch_requires_valid_received_qty");
   }
 
   const receivedQty = computeReceivedQty(expectedQty, reason, mismatchQty);
   if (receivedQty < 0) {
-    throw new Error("Computed received quantity cannot be negative");
+    throw new I18nError("computed_received_quantity_cannot_be_negative");
   }
 }
 
@@ -199,12 +200,12 @@ export async function updateReceivingItemMismatch(
     });
 
     if (!item) {
-      throw new Error("Receiving invoice item not found");
+      throw new I18nError("receiving_invoice_item_not_found");
     }
 
     const editable = await canEditReceivingItemMismatch(tx, itemId, item);
     if (!editable) {
-      throw new Error("Cannot edit mismatch: stock already picked or put away");
+      throw new I18nError("cannot_edit_mismatch_stock_in_use");
     }
 
     validateMismatchInputs(item.qty, reason, mismatchQty, trimmedWrongPartNo);
@@ -335,9 +336,9 @@ export async function confirmReceivingOrderArrived(
     with: { invoices: { with: { items: true } } },
   });
 
-  if (!order) throw new Error("Receiving order not found");
+  if (!order) throw new I18nError("receiving_order_not_found");
   if (order.status !== "pending") {
-    throw new Error(`Receiving order is already ${order.status}`);
+    throw new I18nError("receiving_order_already_status", { status: order.status });
   }
 
   await db.transaction(async (tx) => {
