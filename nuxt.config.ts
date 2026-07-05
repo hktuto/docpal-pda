@@ -55,10 +55,7 @@ export default defineNuxtConfig({
   vite: {
     optimizeDeps: {
       // Exclude PGlite packages from optimization (they contain WASM files)
-      exclude: [
-        "@electric-sql/pglite",
-        "@electric-sql/pglite/live",
-      ],
+      exclude: ["@electric-sql/pglite"],
     },
   },
 });

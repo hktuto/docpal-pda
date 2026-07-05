@@ -28,7 +28,6 @@ Page and component locations mapped to source files.
 | App header | `components/AppHeader.vue` |
 | Language switcher | `components/LanguageSwitcher.vue` |
 | Toast notifications | `components/ToastHost.vue`, `composables/useToast.ts` |
-| Loading overlay | `components/LoadingOverlay.vue` |
 | Inline spinner | `components/InlineSpinner.vue` |
 
 ## Shared detail primitives

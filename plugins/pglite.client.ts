@@ -1,5 +1,4 @@
 import { PGlite } from "@electric-sql/pglite";
-import { live } from "@electric-sql/pglite/live";
 import { drizzle } from "drizzle-orm/pglite";
 import * as schema from "~/db/schema";
 import { createTablesSql } from "~/db/init";
@@ -8,7 +7,7 @@ import { seedDb, ensureDemoPasswords } from "~/db/seed";
 const DATA_DIR = "idb://warehouse-demo-pglite";
 
 export default defineNuxtPlugin(async () => {
-  const pg = new PGlite(DATA_DIR, { extensions: { live } });
+  const pg = new PGlite(DATA_DIR);
 
   await pg.waitReady;
 

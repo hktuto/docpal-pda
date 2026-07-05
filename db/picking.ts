@@ -310,24 +310,6 @@ export async function scanAllocationToPackage(
   }
 }
 
-export async function reportPickingItemMismatch(
-  db: PgliteDatabase<typeof schema>,
-  pickingItemId: string,
-  note: string,
-  actorId: string
-) {
-  await db.insert(schema.transitionLogs).values({
-    id: uuid(),
-    entityType: "picking_item",
-    entityId: pickingItemId,
-    fromState: "picking",
-    toState: "mismatch_reported",
-    actorId,
-    metadata: JSON.stringify({ note: note.trim() }),
-    createdAt: new Date(),
-  });
-}
-
 export interface PickingOrderIssueEntry {
   orderId: string;
   remark?: string | null;
@@ -797,16 +779,6 @@ export async function getPickingItemTransitionLogs(
     createdAt: row.created_at,
     actorName: row.actor_name,
   }));
-}
-
-export async function getInHandReceivingOrdersWithSupplier(
-  db: PgliteDatabase<typeof schema>
-) {
-  return db.query.receivingOrders.findMany({
-    where: eq(schema.receivingOrders.status, "in_hand"),
-    orderBy: (ro, { asc }) => [asc(ro.deliveryDate)],
-    with: { supplier: true },
-  });
 }
 
 export interface PickingByReceivingRow {

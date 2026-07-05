@@ -43,12 +43,6 @@ export interface StockSearchSupplierPart {
   totalQty: number;
 }
 
-export async function getAllSuppliers(db: DbType): Promise<StockSearchSupplier[]> {
-  return db.query.suppliers.findMany({
-    orderBy: (suppliers, { asc }) => asc(suppliers.name),
-  });
-}
-
 export async function getSuppliersWithInventoryStats(
   db: DbType
 ): Promise<StockSearchSupplierWithStats[]> {

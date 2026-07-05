@@ -24,7 +24,6 @@ Machine-readable index of features in the warehouse PDA demo. Use this page to l
 | Login | Auth | Shipped | `pages/login.vue`, `composables/useAuth.ts` | [roles](../concepts/roles.md) |
 | Language switcher | Shared | Shipped | `components/LanguageSwitcher.vue`, `composables/useLocalePreference.ts`, `i18n/` | [navigation](../concepts/navigation.md) |
 | Measuring task created toast | Picking / Shared | Shipped | `components/ToastHost.vue`, `composables/useToast.ts`, `pages/picking/[id].vue` | [picking ai-scope](../flows/picking/ai-scope.md) |
-| Loading overlay | Shared | Shipped | `components/LoadingOverlay.vue` | [receiving ai-scope](../flows/receiving/ai-scope.md) |
 
 ## Status legend
 
