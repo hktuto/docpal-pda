@@ -41,7 +41,14 @@
           </DetailRow>
           <DetailRow :label="$t('picking.itemsSection.allocatedQty')" :value="allocation.qty" />
           <div class="allocation-actions">
-            <button class="btn btn--small" :disabled="scanning" @click="emit('scan', allocation)">{{ $t('picking.itemsSection.scan') }}</button>
+            <button class="btn btn--small" :disabled="scanning" @click="emit('scan', allocation)">
+  <template v-if="scanning">
+    <InlineSpinner /> {{ $t('picking.itemsSection.scan') }}
+  </template>
+  <template v-else>
+    {{ $t('picking.itemsSection.scan') }}
+  </template>
+</button>
           </div>
         </template>
 
@@ -54,7 +61,14 @@
           </DetailRow>
           <DetailRow :label="$t('picking.itemsSection.allocatedQty')" :value="allocation.qty" />
           <div class="allocation-actions">
-            <button class="btn btn--small" :disabled="scanning" @click="emit('scan', allocation)">{{ $t('picking.itemsSection.scan') }}</button>
+            <button class="btn btn--small" :disabled="scanning" @click="emit('scan', allocation)">
+  <template v-if="scanning">
+    <InlineSpinner /> {{ $t('picking.itemsSection.scan') }}
+  </template>
+  <template v-else>
+    {{ $t('picking.itemsSection.scan') }}
+  </template>
+</button>
           </div>
         </template>
       </div>
@@ -80,7 +94,12 @@
             :disabled="adding[pkg.id] || !boxSelections[pkg.id]"
             @click="emit('add-to-box', pkg.id)"
           >
-            {{ adding[pkg.id] ? $t('picking.itemsSection.adding') : $t('picking.itemsSection.addToBox') }}
+            <template v-if="adding[pkg.id]">
+              <InlineSpinner /> {{ $t('picking.itemsSection.adding') }}
+            </template>
+            <template v-else>
+              {{ $t('picking.itemsSection.addToBox') }}
+            </template>
           </button>
         </div>
       </div>
@@ -102,7 +121,12 @@
           :disabled="removing[pkg.id]"
           @click="emit('remove-from-box', pkg.id)"
         >
-          {{ removing[pkg.id] ? $t('picking.itemsSection.removing') : $t('picking.itemsSection.remove') }}
+          <template v-if="removing[pkg.id]">
+            <InlineSpinner /> {{ $t('picking.itemsSection.removing') }}
+          </template>
+          <template v-else>
+            {{ $t('picking.itemsSection.remove') }}
+          </template>
         </button>
       </div>
     </div>
