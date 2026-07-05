@@ -85,6 +85,7 @@
 </template>
 
 <script setup lang="ts">
+import { useToast } from "~/composables/useToast";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useLabelScanReview } from "~/composables/useLabelScanReview";
@@ -140,6 +141,7 @@ const boxSelections = ref<Record<string, string>>({});
 const { scan, scanning, review, reviewOpen, onApplied } = useLabelScanReview({
   onApplied: load,
 });
+const { showToast } = useToast();
 const allItemsFullyBoxed = computed(
   () => order.value?.items?.every((i) => i.pickedQty >= i.qty) ?? false
 );
@@ -267,6 +269,14 @@ async function finish() {
   try {
     await finishPickingOrder(db, orderId, currentUserId());
     await load();
+    if (order.value?.measuringTask) {
+      showToast(t("picking.detail.measuringTaskCreated"), {
+        action: {
+          label: t("picking.detail.goToMeasuring"),
+          to: `/measuring/${order.value.measuringTask.id}`,
+        },
+      });
+    }
   } catch (e) {
     error.value = errorMessage(e);
   } finally {
