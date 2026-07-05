@@ -60,11 +60,11 @@ Page and component locations mapped to source files.
 | Review state wrapper | `composables/useLabelScanReview.ts` |
 | Matchers | `composables/useScanMatchers.ts` |
 | OCR parser and candidate extraction | `utils/parseOcrScan.ts` |
-| OCR result → `OcrInput` mapper | `utils/ocrResultToInput.ts` |
+| OCR result → `OcrInput` mapper | `composables/useLabelScan.ts` |
 | OCR-assisted picking DB helpers | `db/ocrPicking.ts` |
 
 - `composables/useLabelScan.ts` — orchestrates native scan; in browsers falls back to `window.prompt()` + JSON.
-- `utils/parseBrowserScanPromptJson.ts` — validates prompt JSON and converts it to `LabelScanCapture`.
+- `composables/useLabelScan.ts` — validates prompt JSON and converts it to `LabelScanCapture` in browser fallback mode.
 
 ## Database helpers
 
