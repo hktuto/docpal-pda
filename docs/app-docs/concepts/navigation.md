@@ -38,6 +38,5 @@ Most flows follow a list → detail pattern:
 
 - **DetailHeader** — order/task title, status badge, and summary.
 - **DetailRow** — a labeled value row used throughout detail pages.
-- **StatusBadge** — colored badge showing a task/order state.
 - **EmptyState** — shown when a list has no items.
 - **ScanFab** — circular floating button that triggers a scan or action.

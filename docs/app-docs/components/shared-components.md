@@ -22,12 +22,6 @@ Page header for detail pages: title, status badge, and summary row.
 
 Simple labeled-value row used throughout detail pages.
 
-## StatusBadge
-
-`components/StatusBadge.vue`
-
-Colored badge showing an entity status. Driven by `composables/useStatusBadge.ts`.
-
 ## EmptyState
 
 `components/EmptyState.vue`

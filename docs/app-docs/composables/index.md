@@ -15,9 +15,6 @@ Composables live in `composables/` and contain reusable Vue logic.
 | `useStatusBadge.ts` | Status badge styling/state helper. |
 | `useStatusLabel.ts` | Status label helper. |
 | `useVisibleReload.ts` | Reload data on mount and visibility/focus events for Capacitor. |
-| `useAndroidBackButton.ts` | Handle Android hardware back button. |
-| `useLocalePreference.ts` | Persist and restore language preference. |
-| `useLogStateLabel.ts` | Helper for state-label logging. |
 | `useLabelScanReview.ts` | Review-modal state for label scans. |
 
 ## Agent note

@@ -36,7 +36,7 @@ Page and component locations mapped to source files.
 |-----------|-------------|
 | DetailHeader | `components/DetailHeader.vue` |
 | DetailRow | `components/DetailRow.vue` |
-| StatusBadge | `components/StatusBadge.vue` |
+| Status badge (inline) | `composables/useStatusBadge.ts` |
 | EmptyState | `components/EmptyState.vue` |
 | ScanFab | `components/ScanFab.vue` |
 

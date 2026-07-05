@@ -22,7 +22,7 @@ Machine-readable index of features in the warehouse PDA demo. Use this page to l
 | Goods verify detail | Goods Verify | Shipped | `pages/goods-verify/[id].vue` or equivalent | [ai-scope](../flows/goods-verify/ai-scope.md) |
 | Stock Search | — | Shipped | `pages/stock-search/index.vue`, `db/stockSearch.ts` | [ai-scope](../flows/stock-search/ai-scope.md) |
 | Login | Auth | Shipped | `pages/login.vue`, `composables/useAuth.ts` | [roles](../concepts/roles.md) |
-| Language switcher | Shared | Shipped | `components/LanguageSwitcher.vue`, `composables/useLocalePreference.ts`, `i18n/` | [navigation](../concepts/navigation.md) |
+| Language switcher | Shared | Shipped | `components/LanguageSwitcher.vue`, `app.vue`, `i18n/` | [navigation](../concepts/navigation.md) |
 | Measuring task created toast | Picking / Shared | Shipped | `components/ToastHost.vue`, `composables/useToast.ts`, `pages/picking/[id].vue` | [picking ai-scope](../flows/picking/ai-scope.md) |
 
 ## Status legend

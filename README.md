@@ -234,7 +234,6 @@ The database lives in the browser's IndexedDB. Use the **⋮ → Reset local DB*
 │   ├── EmptyState.vue            # Loading/error/empty message
 │   ├── LabelScanReviewModal.vue  # Review camera-scanned label matches
 │   ├── ScanFab.vue               # Floating circular scan button
-│   ├── StatusBadge.vue           # Status badge with centralized class mapping
 │   ├── picking/                  # Picking detail sub-views
 │   │   ├── PickingBoxesSection.vue
 │   │   ├── PickingIssueBanner.vue
@@ -246,7 +245,6 @@ The database lives in the browser's IndexedDB. Use the **⋮ → Reset local DB*
 │       ├── ReceivingItemsTab.vue
 │       └── ReceivingPickingTab.vue
 ├── composables/
-│   ├── useAndroidBackButton.ts   # Handle Android hardware back button
 │   ├── useAuth.ts                # Login/logout/restore
 │   ├── useDb.ts                  # Drizzle client from provided PGlite
 │   ├── useLabelScan.ts           # Scan label parsing and matching state
