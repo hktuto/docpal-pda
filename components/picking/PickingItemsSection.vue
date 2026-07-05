@@ -42,13 +42,13 @@
           <DetailRow :label="$t('picking.itemsSection.allocatedQty')" :value="allocation.qty" />
           <div class="allocation-actions">
             <button class="btn btn--small" :disabled="scanning" @click="emit('scan', allocation)">
-  <template v-if="scanning">
-    <InlineSpinner /> {{ $t('picking.itemsSection.scan') }}
-  </template>
-  <template v-else>
-    {{ $t('picking.itemsSection.scan') }}
-  </template>
-</button>
+              <template v-if="scanning">
+                <InlineSpinner /> {{ $t('picking.itemsSection.scan') }}
+              </template>
+              <template v-else>
+                {{ $t('picking.itemsSection.scan') }}
+              </template>
+            </button>
           </div>
         </template>
 
@@ -62,13 +62,13 @@
           <DetailRow :label="$t('picking.itemsSection.allocatedQty')" :value="allocation.qty" />
           <div class="allocation-actions">
             <button class="btn btn--small" :disabled="scanning" @click="emit('scan', allocation)">
-  <template v-if="scanning">
-    <InlineSpinner /> {{ $t('picking.itemsSection.scan') }}
-  </template>
-  <template v-else>
-    {{ $t('picking.itemsSection.scan') }}
-  </template>
-</button>
+              <template v-if="scanning">
+                <InlineSpinner /> {{ $t('picking.itemsSection.scan') }}
+              </template>
+              <template v-else>
+                {{ $t('picking.itemsSection.scan') }}
+              </template>
+            </button>
           </div>
         </template>
       </div>
