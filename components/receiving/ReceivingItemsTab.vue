@@ -37,12 +37,26 @@
           <div class="mismatch-summary">
             <span class="mismatch-badge">{{ formatMismatchSummary(item) }}</span>
             <span v-if="item.mismatchNote" class="mismatch-note">{{ item.mismatchNote }}</span>
-            <button class="btn btn--small btn--danger" :disabled="saving[item.id]" @click="emit('report-issue', item)">{{ $t('receiving.itemsTab.editIssue') }}</button>
+            <button class="btn btn--small btn--danger" :disabled="saving[item.id]" @click="emit('report-issue', item)">
+              <template v-if="saving[item.id]">
+                <InlineSpinner /> {{ $t('actions.saving') }}
+              </template>
+              <template v-else>
+                {{ $t('receiving.itemsTab.editIssue') }}
+              </template>
+            </button>
           </div>
         </template>
 
         <template v-else>
-          <button class="btn btn--small btn--danger" :disabled="saving[item.id]" @click="emit('report-issue', item)">{{ $t('receiving.itemsTab.reportIssue') }}</button>
+          <button class="btn btn--small btn--danger" :disabled="saving[item.id]" @click="emit('report-issue', item)">
+            <template v-if="saving[item.id]">
+              <InlineSpinner /> {{ $t('actions.saving') }}
+            </template>
+            <template v-else>
+              {{ $t('receiving.itemsTab.reportIssue') }}
+            </template>
+          </button>
         </template>
       </div>
     </div>
