@@ -199,13 +199,13 @@ Then open the local URL and log in with one of the demo accounts:
 
 ### Scanning demo labels
 
-The Camera OCR demo needs `public/ocr-labels.html` to be present in the build. It is a standalone on-screen label sheet; display it on a monitor or another device and point the Android camera at each label instead of printing physical labels. Open it at:
+The Camera OCR demo needs `public/ocr-labels.html` to be present in the build. It is now a 7-step demo flow helper that guides you through receiving → picking → measuring → put-away → goods verify; scan labels only on the steps marked "Scan step". The old flat label catalog is preserved at `public/ocr-labels-backup.html`. Display the page on a monitor or another device and point the Android camera at each label instead of printing physical labels. Open it at:
 
 ```text
 http://<dev-server-ip>:3000/ocr-labels.html
 ```
 
-See `docs/superpowers/specs/2026-07-02-ocr-demo-labels.md` for full details.
+See `docs/superpowers/specs/2026-07-04-ocr-labels-demo-flow-design.md` for full details.
 
 ### Production build
 

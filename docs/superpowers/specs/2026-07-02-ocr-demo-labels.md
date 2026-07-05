@@ -1,8 +1,10 @@
-# OCR Demo Labels
+# OCR Demo Labels (legacy flat catalog)
+
+> **Superseded:** `public/ocr-labels.html` was redesigned on 2026-07-04 as a 7-step demo flow helper. The old flat catalog is preserved at `public/ocr-labels-backup.html`. See `docs/superpowers/specs/2026-07-04-ocr-labels-demo-flow-design.md` for the current design.
 
 ## Purpose
 
-`public/ocr-labels.html` is a standalone, on-screen label sheet used to test the Camera OCR demo. Instead of printing labels, you display this page on a monitor or another device and point the Android camera at each label.
+`public/ocr-labels-backup.html` is a standalone, on-screen label sheet used to test the Camera OCR demo. Instead of printing labels, you display this page on a monitor or another device and point the Android camera at each label.
 
 ## How to use
 
@@ -10,7 +12,7 @@
 2. Open the label page in a desktop browser:
 
    ```text
-   http://<dev-server-ip>:3000/ocr-labels.html
+   http://<dev-server-ip>:3000/ocr-labels-backup.html
    ```
 
 3. In the Android app, open the **Camera OCR Demo** page.
