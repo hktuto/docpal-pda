@@ -4,8 +4,8 @@ import { v4 as uuid } from "uuid";
 import * as schema from "./schema";
 import type { PickingIssueReason } from "./schema";
 import { tryMarkReceivingOrderClear } from "./receiving";
-import { getIsoWeek } from "./date";
 import { I18nError } from "~/composables/i18nError";
+import { generateLocationBoxId, getLocationBoxIdPrefix } from "~/utils/ids";
 
 export async function getPickingOrdersWithSupplier(
   db: PgliteDatabase<typeof schema>
@@ -408,6 +408,8 @@ export async function createShippingBoxForPickingOrder(
   locationCode = "HK1"
 ): Promise<string> {
   return db.transaction(async (tx) => {
+    const now = new Date();
+
     const order = await tx.query.pickingOrders.findFirst({
       where: eq(schema.pickingOrders.id, pickingOrderId),
     });
@@ -415,23 +417,14 @@ export async function createShippingBoxForPickingOrder(
     if (order.status === "finished") throw new I18nError("picking_order_already_finished");
     if (order.status === "issue") throw new I18nError("picking_order_has_open_issue");
 
-    const now = new Date();
-    const week = String(getIsoWeek(now)).padStart(2, "0");
-    const year = String(now.getFullYear() % 100).padStart(2, "0");
-    const prefix = `BOX-${locationCode}-${week}${year}`;
+    const prefix = getLocationBoxIdPrefix("BOX", locationCode);
 
     const existing = await tx
       .select({ id: schema.shippingBoxes.id })
       .from(schema.shippingBoxes)
       .where(sql`${schema.shippingBoxes.id} LIKE ${prefix + "%"}`);
 
-    let maxSeq = 0;
-    const regex = new RegExp(`^${prefix.replace(/[-]/g, "\\-")}([0-9]{6})$`);
-    for (const row of existing) {
-      const match = row.id.match(regex);
-      if (match) maxSeq = Math.max(maxSeq, parseInt(match[1], 10));
-    }
-    const boxId = `${prefix}${String(maxSeq + 1).padStart(6, "0")}`;
+    const boxId = generateLocationBoxId("BOX", locationCode, existing.map((r) => r.id));
 
     await tx.insert(schema.shippingBoxes).values({
       id: boxId,

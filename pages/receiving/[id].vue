@@ -119,6 +119,7 @@
 
 <script setup lang="ts">
 import { sql } from "drizzle-orm";
+import { availableReceivingQtySql, allocationsCte } from "~/db/helpers";
 import ReceivingItemsTab from "~/components/receiving/ReceivingItemsTab.vue";
 import ReceivingPickingTab from "~/components/receiving/ReceivingPickingTab.vue";
 import { useVisibleReload } from "~/composables/useVisibleReload";
@@ -277,19 +278,13 @@ async function load() {
       db.execute(
         sql`SELECT COUNT(DISTINCT CASE
                   WHEN ro.status = 'in_hand'
-                    AND (rii.received_qty - rii.picked_qty - rii.put_away_qty -
-                         COALESCE(alloc.allocated_qty, 0)) > 0
+                    AND (${availableReceivingQtySql}) > 0
                   THEN rii.id
                 END) AS qty
             FROM receiving_orders ro
             JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
             JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
-            LEFT JOIN (
-              SELECT receiving_invoice_item_id, SUM(qty) AS allocated_qty
-              FROM allocations
-              WHERE receiving_invoice_item_id IS NOT NULL
-              GROUP BY receiving_invoice_item_id
-            ) alloc ON alloc.receiving_invoice_item_id = rii.id
+            LEFT JOIN (${allocationsCte()}) alloc ON alloc.receiving_invoice_item_id = rii.id
             WHERE ro.id = ${orderId}`
       ),
       db.execute(

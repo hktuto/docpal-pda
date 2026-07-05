@@ -3,31 +3,22 @@ import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { v4 as uuid } from "uuid";
 import * as schema from "./schema";
 import { tryMarkReceivingOrderClear } from "./receiving";
-import { getIsoWeek } from "./date";
 import { I18nError } from "~/composables/i18nError";
+import { generateLocationBoxId, getLocationBoxIdPrefix } from "~/utils/ids";
+import { availableReceivingQtySql, allocationsCte } from "./helpers";
 
 async function generateShelfBoxId(
   tx: PgliteDatabase<typeof schema>,
   locationCode = "HK1"
 ): Promise<string> {
-  const now = new Date();
-  const week = String(getIsoWeek(now)).padStart(2, "0");
-  const year = String(now.getFullYear() % 100).padStart(2, "0");
-  const prefix = `SBOX-${locationCode}-${week}${year}`;
+  const prefix = getLocationBoxIdPrefix("SBOX", locationCode);
 
   const existing = await tx
     .select({ id: schema.shelfBoxes.id })
     .from(schema.shelfBoxes)
     .where(sql`${schema.shelfBoxes.id} LIKE ${prefix + "%"}`);
 
-  let maxSeq = 0;
-  const regex = new RegExp(`^${prefix.replace(/[-]/g, "\\-")}([0-9]{6})$`);
-  for (const row of existing) {
-    const match = row.id.match(regex);
-    if (match) maxSeq = Math.max(maxSeq, parseInt(match[1], 10));
-  }
-
-  return `${prefix}${String(maxSeq + 1).padStart(6, "0")}`;
+  return generateLocationBoxId("SBOX", locationCode, existing.map((r) => r.id));
 }
 
 export interface PutAwayCandidate {
@@ -58,21 +49,15 @@ export async function getPutAwayCandidates(
       ro.ref_no,
       ro.status,
       s.name AS supplier_name,
-      SUM(rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(alloc.allocated_qty, 0)) AS available_qty
+      SUM(${availableReceivingQtySql}) AS available_qty
     FROM receiving_orders ro
     JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
     JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
     LEFT JOIN suppliers s ON s.id = ro.supplier_id
-    LEFT JOIN (
-      SELECT receiving_invoice_item_id, SUM(qty) AS allocated_qty
-      FROM allocations
-      WHERE receiving_invoice_item_id IS NOT NULL
-      GROUP BY receiving_invoice_item_id
-    ) alloc ON alloc.receiving_invoice_item_id = rii.id
+    LEFT JOIN (${allocationsCte()}) alloc ON alloc.receiving_invoice_item_id = rii.id
     WHERE ro.status = 'in_hand'
     GROUP BY ro.id, ro.ref_no, ro.status, s.name
-    HAVING SUM(rii.received_qty - rii.picked_qty - rii.put_away_qty -
-               COALESCE(alloc.allocated_qty, 0)) > 0
+    HAVING SUM(${availableReceivingQtySql}) > 0
     ORDER BY ro.ref_no;
   `).then((r) =>
     (r.rows ?? []).map((row) => ({
@@ -95,21 +80,15 @@ export async function getPutAwayLots(
       rii.lot_code,
       rii.coo,
       rii.cow,
-      (rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(alloc.allocated_qty, 0)) AS available_qty
+      (${availableReceivingQtySql}) AS available_qty
     FROM receiving_orders ro
     JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
     JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
     JOIN parts p ON p.id = rii.part_id
-    LEFT JOIN (
-      SELECT receiving_invoice_item_id, SUM(qty) AS allocated_qty
-      FROM allocations
-      WHERE receiving_invoice_item_id IS NOT NULL
-      GROUP BY receiving_invoice_item_id
-    ) alloc ON alloc.receiving_invoice_item_id = rii.id
+    LEFT JOIN (${allocationsCte()}) alloc ON alloc.receiving_invoice_item_id = rii.id
     WHERE ro.id = ${receivingOrderId}
       AND ro.status = 'in_hand'
-      AND rii.received_qty - rii.picked_qty - rii.put_away_qty -
-          COALESCE(alloc.allocated_qty, 0) > 0
+      AND ${availableReceivingQtySql} > 0
     ORDER BY p.part_no, rii.date_code;
   `).then((r) =>
     (r.rows ?? []).map((row) => ({

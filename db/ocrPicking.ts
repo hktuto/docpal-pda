@@ -4,6 +4,7 @@ import { v4 as uuid } from "uuid";
 import { I18nError } from "~/composables/i18nError";
 import * as schema from "./schema";
 import { materializeReceivingAllocation, scanAllocationToPackage } from "./picking";
+import { availableReceivingQtySql, allocationsCte } from "./helpers";
 
 export interface OcrParseResult {
   partNo: string;
@@ -56,20 +57,15 @@ export async function findReceivingCandidates(
           REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REGEXP_REPLACE(UPPER(TRIM(rii.lot_code)), '\s+', ' ', 'g'), 'O', '0'), 'I', '1'), 'L', '1'), 'Z', '2'), 'S', '5') AS lot_code,
           REGEXP_REPLACE(UPPER(TRIM(rii.coo)), '\s+', ' ', 'g') AS coo,
           REGEXP_REPLACE(UPPER(TRIM(rii.cow)), '\s+', ' ', 'g') AS cow,
-          (rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(alloc.allocated_qty, 0)) AS available_qty
+          (${availableReceivingQtySql}) AS available_qty
         FROM receiving_orders ro
         JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
         JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
         JOIN parts p ON p.id = rii.part_id
-        LEFT JOIN (
-          SELECT receiving_invoice_item_id, SUM(qty) AS allocated_qty
-          FROM allocations
-          WHERE receiving_invoice_item_id IS NOT NULL
-          GROUP BY receiving_invoice_item_id
-        ) alloc ON alloc.receiving_invoice_item_id = rii.id
+        LEFT JOIN (${allocationsCte()}) alloc ON alloc.receiving_invoice_item_id = rii.id
         WHERE ro.id = ${receivingOrderId}
           AND ro.status = 'in_hand'
-          AND rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(alloc.allocated_qty, 0) >= ${qty}
+          AND ${availableReceivingQtySql} >= ${qty}
       )
       SELECT * FROM normalized
       WHERE REGEXP_REPLACE(UPPER(TRIM(part_no)), '\s+', ' ', 'g') = ${parsed.partNo}

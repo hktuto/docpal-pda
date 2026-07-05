@@ -55,8 +55,10 @@
 </template>
 
 <script setup lang="ts">
+import { sql } from "drizzle-orm";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useVisibleReload } from "~/composables/useVisibleReload";
+import { availableReceivingQtySql, allocationsCte } from "~/db/helpers";
 
 definePageMeta({ title: "meta.receiving" });
 
@@ -94,7 +96,7 @@ const query = computed(() => {
   if (filter.value === "in_hand") where = "ro.status = 'in_hand'";
   if (filter.value === "clear") where = "ro.status = 'clear'";
 
-  return `SELECT
+  return sql`SELECT
     ro.id,
     ro.ref_no,
     ro.status,
@@ -102,8 +104,7 @@ const query = computed(() => {
     s.name AS supplier_name,
     COALESCE(COUNT(DISTINCT CASE
       WHEN ro.status = 'in_hand'
-        AND (rii.received_qty - rii.picked_qty - rii.put_away_qty -
-             COALESCE(alloc.allocated_qty, 0)) > 0
+        AND (${availableReceivingQtySql}) > 0
       THEN rii.id
     END), 0) AS remaining_items,
     COALESCE((
@@ -144,13 +145,8 @@ const query = computed(() => {
   LEFT JOIN suppliers s ON s.id = ro.supplier_id
   LEFT JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
   LEFT JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
-  LEFT JOIN (
-    SELECT receiving_invoice_item_id, SUM(qty) AS allocated_qty
-    FROM allocations
-    WHERE receiving_invoice_item_id IS NOT NULL
-    GROUP BY receiving_invoice_item_id
-  ) alloc ON alloc.receiving_invoice_item_id = rii.id
-  WHERE ${where}
+  LEFT JOIN (${allocationsCte()}) alloc ON alloc.receiving_invoice_item_id = rii.id
+  WHERE ${sql.raw(where)}
   GROUP BY ro.id, ro.ref_no, ro.status, ro.delivery_date, s.name
   ORDER BY ro.delivery_date;`;
 });
