@@ -113,7 +113,8 @@ export default {
       remainingItems: "剩餘項目",
       tabReceiving: "收貨",
       tabPicking: "揀貨",
-      confirmArrived: "確認到貨"
+      confirmArrived: "確認到貨",
+      confirmingArrival: "確認收貨中…",
     },
     itemsTab: {
       title: "發票與項目",

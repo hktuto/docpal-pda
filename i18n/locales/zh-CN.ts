@@ -113,7 +113,8 @@ export default {
       remainingItems: "剩余项",
       tabReceiving: "收货",
       tabPicking: "拣货",
-      confirmArrived: "确认到货"
+      confirmArrived: "确认到货",
+      confirmingArrival: "确认收货中…",
     },
     itemsTab: {
       title: "发票与明细",

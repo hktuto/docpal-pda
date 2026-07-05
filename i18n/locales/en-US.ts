@@ -113,7 +113,8 @@ export default {
       remainingItems: "Remaining items",
       tabReceiving: "Receiving",
       tabPicking: "Picking",
-      confirmArrived: "Confirm arrived"
+      confirmArrived: "Confirm arrived",
+      confirmingArrival: "Confirming arrival…",
     },
     itemsTab: {
       title: "Invoices & Items",
