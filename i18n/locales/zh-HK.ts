@@ -172,7 +172,9 @@ export default {
       shipTo: "收貨方",
       dateCodeNotice: "日期代碼提示",
       finishPicking: "完成揀貨",
-      measuring: "測量"
+      measuring: "測量",
+      measuringTaskCreated: "測量任務已建立",
+      goToMeasuring: "前往測量"
     },
     itemsSection: {
       title: "項目",

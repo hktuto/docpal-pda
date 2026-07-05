@@ -172,7 +172,9 @@ export default {
       shipTo: "收货方",
       dateCodeNotice: "日期代码提示",
       finishPicking: "完成拣货",
-      measuring: "测量"
+      measuring: "测量",
+      measuringTaskCreated: "测量任务已创建",
+      goToMeasuring: "前往测量"
     },
     itemsSection: {
       title: "明细",

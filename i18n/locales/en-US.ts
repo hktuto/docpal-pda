@@ -172,7 +172,9 @@ export default {
       shipTo: "Ship to",
       dateCodeNotice: "Date-code notice",
       finishPicking: "Finish picking",
-      measuring: "Measuring"
+      measuring: "Measuring",
+      measuringTaskCreated: "Measuring task created",
+      goToMeasuring: "Go to measuring"
     },
     itemsSection: {
       title: "Items",
