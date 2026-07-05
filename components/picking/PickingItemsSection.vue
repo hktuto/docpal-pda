@@ -159,6 +159,7 @@
 <script setup lang="ts">
 import { type PickingOrderDetail, type PickingItemTransitionLog } from "~/db/picking";
 import { badgeClass } from "~/composables/useStatusBadge";
+import { logMetadataText } from "~/utils/log";
 
 type PickingItem = PickingOrderDetail["items"][number];
 type Allocation = PickingItem["allocations"][number];
@@ -229,15 +230,6 @@ function formatLotFields(source: { dateCode: string | null; lotCode: string | nu
   return `${source.dateCode || t('common.noData')} / ${source.lotCode || t('common.noData')} / ${source.coo || t('common.noData')} / ${source.cow || t('common.noData')}`;
 }
 
-function logMetadataText(metadata: string | null): string | number | undefined {
-  if (!metadata) return undefined;
-  try {
-    const parsed = JSON.parse(metadata);
-    return parsed.qty ?? parsed.note;
-  } catch {
-    return t('common.noData');
-  }
-}
 </script>
 
 <style scoped>

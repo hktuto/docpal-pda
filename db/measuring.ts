@@ -3,6 +3,7 @@ import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { v4 as uuid } from "uuid";
 import * as schema from "./schema";
 import { I18nError } from "~/composables/i18nError";
+import { normalizeString } from "~/utils/text";
 
 export interface PackageVerificationInput {
   partNo: string;
@@ -302,12 +303,6 @@ function normalizeWeight(value: number | string | null | undefined): number | nu
     if (Number.isNaN(num)) throw new I18nError("weight_must_be_number");
     return num;
   }
-  return value;
-}
-
-function normalizeString(value: string | null | undefined): string | null | undefined {
-  if (value === undefined) return undefined;
-  if (value === null || value.trim() === "") return null;
   return value;
 }
 

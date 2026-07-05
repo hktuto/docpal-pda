@@ -41,7 +41,7 @@
         <span class="badge" :class="badgeClass(box.status)">{{ statusLabel.box(box.status) }}</span>
       </DetailRow>
       <DetailRow :label="$t('picking.boxesSection.packages')" :value="box.packages?.length ?? 0" />
-      <DetailRow :label="$t('picking.boxesSection.qty')" :value="boxTotalQty(box)" />
+      <DetailRow :label="$t('picking.boxesSection.qty')" :value="boxTotalQty(box.packages ?? [])" />
       <div v-if="box.status === 'open' && (box.packages?.length ?? 0) === 0" class="box-cancel">
         <button
           class="btn btn--small btn--danger"
@@ -58,6 +58,7 @@
 <script setup lang="ts">
 import { type PickingOrderDetail } from "~/db/picking";
 import { badgeClass } from "~/composables/useStatusBadge";
+import { boxTotalQty } from "~/utils/box";
 
 const statusLabel = useStatusLabel();
 
@@ -80,9 +81,6 @@ const expanded = computed({
   set: (value) => emit("update:expanded", value),
 });
 
-function boxTotalQty(box: PickingOrderDetail["shippingBoxes"][number]) {
-  return (box.packages ?? []).reduce((sum, p) => sum + p.qty, 0);
-}
 </script>
 
 <style scoped>

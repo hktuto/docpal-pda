@@ -149,6 +149,7 @@
 <script setup lang="ts">
 import { GroupedItem, GroupedOrder, TransitionLog, DisplayBox, DisplayPackage } from "./types";
 import { badgeClass } from "~/composables/useStatusBadge";
+import { logMetadataText } from "~/utils/log";
 
 const { t } = useI18n();
 const statusLabel = useStatusLabel();
@@ -207,9 +208,4 @@ function allocatedLocations(item: GroupedItem) {
   return item.locations.filter((l) => l.allocated_qty > 0);
 }
 
-function logMetadataText(metadata: string | null): string | number | undefined {
-  if (!metadata) return undefined;
-  const parsed = JSON.parse(metadata);
-  return parsed.qty ?? parsed.note;
-}
 </script>

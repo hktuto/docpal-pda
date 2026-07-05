@@ -44,7 +44,7 @@
             <span class="badge" :class="badgeClass(box.status)">{{ statusLabel.box(box.status) }}</span>
           </DetailRow>
           <DetailRow :label="$t('putAway.shelfBoxesPanel.items')">
-            <span>{{ box.items?.length || 0 }} {{ box.items?.length === 1 ? $t('common.line') : $t('common.lines') }} · {{ boxTotalQty(box) }} {{ $t('common.pcs') }}</span>
+            <span>{{ box.items?.length || 0 }} {{ box.items?.length === 1 ? $t('common.line') : $t('common.lines') }} · {{ boxTotalQty(box.items ?? []) }} {{ $t('common.pcs') }}</span>
           </DetailRow>
 
           <div v-if="box.items?.length" class="box-contents">
@@ -97,6 +97,7 @@
 import * as schema from "~/db/schema";
 import { type ShelfBox } from "~/db/putAway";
 import { badgeClass } from "~/composables/useStatusBadge";
+import { boxTotalQty } from "~/utils/box";
 
 type Shelf = typeof schema.shelves.$inferSelect;
 
@@ -152,10 +153,6 @@ function shelfLabel(code: string) {
     return t('common.shelfFormat', { code: shelf.code, zone: shelf.zone });
   }
   return shelf?.code ?? code;
-}
-
-function boxTotalQty(box: ShelfBox) {
-  return (box.items || []).reduce((sum, item) => sum + (item.qty || 0), 0);
 }
 
 function toggleItemVisibility(boxId: string) {

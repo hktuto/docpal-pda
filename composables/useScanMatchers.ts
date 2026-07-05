@@ -20,6 +20,7 @@ import {
   verifyPickingPackageForMeasuring,
 } from '~/db/measuring';
 import { verifyShelfBoxItem } from '~/db/goodsVerify';
+import { rawCode } from '~/utils/text';
 
 export type ScanTask = 'receiving' | 'picking' | 'put-away' | 'measuring' | 'goods-verify';
 
@@ -62,12 +63,6 @@ interface BoxItem {
   id: string;
   verified: boolean;
   part?: { partNo: string | null } | null;
-}
-
-function rawCode(value: unknown): string | null {
-  if (value == null) return null;
-  const s = String(value).trim();
-  return s || null;
 }
 
 export interface ScanTaskContext {
