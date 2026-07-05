@@ -8,7 +8,12 @@
         :disabled="creatingBox"
         @click="$emit('create-box')"
       >
-        {{ creatingBox ? $t('actions.creating') : $t('picking.boxesSection.newBox') }}
+        <template v-if="creatingBox">
+          <InlineSpinner /> {{ $t('actions.creating') }}
+        </template>
+        <template v-else>
+          {{ $t('picking.boxesSection.newBox') }}
+        </template>
       </button>
       <button
         class="btn btn--small btn--ghost"
