@@ -95,7 +95,12 @@
               :disabled="applying"
               @click="applyRecord(localMatchResult.apply)"
             >
-              {{ applying ? $t('labelScanReviewModal.applying') : $t('labelScanReviewModal.apply') }}
+              <template v-if="applying">
+                <InlineSpinner /> {{ $t('labelScanReviewModal.applying') }}
+              </template>
+              <template v-else>
+                {{ $t('labelScanReviewModal.apply') }}
+              </template>
             </button>
           </template>
 
@@ -110,7 +115,10 @@
                 :disabled="applying || matching"
                 @click="applyRecord(record.apply)"
               >
-                <div class="letter">📦</div>
+                <div class="letter">
+                  <template v-if="applying"><InlineSpinner /></template>
+                  <template v-else>📦</template>
+                </div>
                 <div class="content">
                   <h3>{{ $t('labelScanReviewModal.matchN', { n: index + 1 }) }}</h3>
                   <p>{{ formatRecord(record.record) }}</p>
@@ -147,7 +155,12 @@
           </button>
           <button type="button" class="btn btn--secondary" :disabled="applying || matching" @click="close">{{ $t('labelScanReviewModal.cancel') }}</button>
           <button type="button" class="btn" :disabled="applying || matching" @click="findMatch">
-            {{ matching ? $t('labelScanReviewModal.matching') : $t('labelScanReviewModal.findMatch') }}
+            <template v-if="matching">
+              <InlineSpinner /> {{ $t('labelScanReviewModal.matching') }}
+            </template>
+            <template v-else>
+              {{ $t('labelScanReviewModal.findMatch') }}
+            </template>
           </button>
         </div>
       </div>
