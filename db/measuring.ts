@@ -222,12 +222,21 @@ export async function findMatchingUnverifiedPackage(
     with: { pickingItem: { with: { part: true } } },
   });
 
+  // Match semantics mirror receiving: empty values on either side act as wildcards,
+  // and values are normalized consistently with OCR parsing.
   const normalize = (value: string | null | undefined) =>
-    (value ?? "").toString().trim().toLowerCase();
+    (value ?? "").toString().trim().toUpperCase().replace(/\s+/g, " ");
+  const normalizeCode = (value: string | null | undefined) =>
+    normalize(value)
+      .replace(/O/g, "0")
+      .replace(/I/g, "1")
+      .replace(/L/g, "1")
+      .replace(/Z/g, "2")
+      .replace(/S/g, "5");
 
   const partNo = normalize(input.partNo);
-  const dateCode = normalize(input.dateCode);
-  const lotCode = normalize(input.lotCode);
+  const dateCode = normalizeCode(input.dateCode);
+  const lotCode = normalizeCode(input.lotCode);
   const coo = normalize(input.coo);
   const cow = normalize(input.cow);
 
@@ -236,14 +245,14 @@ export async function findMatchingUnverifiedPackage(
       if (targetPackageId && pkg.id !== targetPackageId) return false;
       if (!pkg.pickingItem?.part) return false;
       if (normalize(pkg.pickingItem.part.partNo) !== partNo) return false;
-      const pkgDateCode = normalize(pkg.dateCode);
-      if (pkgDateCode && pkgDateCode !== dateCode) return false;
-      const pkgLotCode = normalize(pkg.lotCode);
-      if (pkgLotCode && pkgLotCode !== lotCode) return false;
+      const pkgDateCode = normalizeCode(pkg.dateCode);
+      if (dateCode && pkgDateCode && dateCode !== pkgDateCode) return false;
+      const pkgLotCode = normalizeCode(pkg.lotCode);
+      if (lotCode && pkgLotCode && lotCode !== pkgLotCode) return false;
       const pkgCoo = normalize(pkg.coo);
-      if (pkgCoo && pkgCoo !== coo) return false;
+      if (coo && pkgCoo && coo !== pkgCoo) return false;
       const pkgCow = normalize(pkg.cow);
-      if (pkgCow && pkgCow !== cow) return false;
+      if (cow && pkgCow && cow !== pkgCow) return false;
       return pkg.qty === input.qty;
     }) ?? null
   );

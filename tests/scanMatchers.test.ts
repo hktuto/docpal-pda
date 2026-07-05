@@ -225,4 +225,19 @@ describe('findMatchingUnverifiedPackage empty-field wildcard', () => {
 
     expect(matched).toBeNull();
   });
+
+  it('matches when the scan has empty date/lot and the package provides values', async () => {
+    const input: PackageVerificationInput = {
+      partNo: 'RK73B1JTTD181G',
+      dateCode: '',
+      lotCode: '',
+      coo: 'CN',
+      cow: 'USA',
+      qty: 100,
+    };
+
+    const matched = await findMatchingUnverifiedPackage(db, shippingBoxId, input);
+
+    expect(matched).not.toBeNull();
+  });
 });
