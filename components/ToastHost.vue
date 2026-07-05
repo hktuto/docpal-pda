@@ -1,15 +1,20 @@
 <template>
   <Teleport to="body">
     <div class="toast-host">
-      <TransitionGroup name="toast" tag="div" class="toast-list">
+      <TransitionGroup
+        name="toast"
+        tag="div"
+        class="toast-list"
+        aria-live="polite"
+        aria-atomic="false"
+      >
         <div
           v-for="toast in toasts"
           :key="toast.id"
           class="toast"
           role="status"
-          aria-live="polite"
         >
-          <span class="toast__message">{{ toast.message }}</span>
+          <span>{{ toast.message }}</span>
           <NuxtLink
             v-if="toast.action"
             :to="toast.action.to"
@@ -54,7 +59,8 @@ const { toasts, dismissToast } = useToast();
   background: var(--surface);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
+  border-radius: var(--radius);
+  /* Stronger shadow than --shadow so the overlay toast pops above content. */
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   display: flex;
   align-items: center;
@@ -71,6 +77,14 @@ const { toasts, dismissToast } = useToast();
 .toast-enter-active,
 .toast-leave-active {
   transition: all 0.2s ease;
+}
+
+.toast-leave-active {
+  position: absolute;
+}
+
+.toast-move {
+  transition: transform 0.2s ease;
 }
 
 .toast-enter-from,
