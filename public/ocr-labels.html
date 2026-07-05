@@ -186,11 +186,15 @@
     }
 
     .barcode {
-      height: 24px;
+      height: 28px;
       width: 100%;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='28' viewBox='0 0 120 28'%3E%3Cg fill='%23000'%3E%3Crect x='0' width='3' height='28'/%3E%3Crect x='5' width='1' height='28'/%3E%3Crect x='8' width='2' height='28'/%3E%3Crect x='12' width='4' height='28'/%3E%3Crect x='18' width='1' height='28'/%3E%3Crect x='22' width='3' height='28'/%3E%3Crect x='27' width='2' height='28'/%3E%3Crect x='32' width='1' height='28'/%3E%3Crect x='36' width='4' height='28'/%3E%3Crect x='42' width='2' height='28'/%3E%3Crect x='47' width='1' height='28'/%3E%3Crect x='51' width='3' height='28'/%3E%3Crect x='56' width='2' height='28'/%3E%3Crect x='61' width='1' height='28'/%3E%3Crect x='65' width='4' height='28'/%3E%3Crect x='72' width='2' height='28'/%3E%3Crect x='77' width='1' height='28'/%3E%3Crect x='81' width='3' height='28'/%3E%3Crect x='87' width='2' height='28'/%3E%3Crect x='92' width='1' height='28'/%3E%3Crect x='96' width='4' height='28'/%3E%3Crect x='103' width='2' height='28'/%3E%3Crect x='108' width='3' height='28'/%3E%3Crect x='114' width='1' height='28'/%3E%3Crect x='118' width='2' height='28'/%3E%3C/g%3E%3C/svg%3E");
-      background-repeat: repeat-x;
-      background-size: auto 100%;
+      display: block;
+    }
+
+    .barcode svg {
+      width: 100%;
+      height: 100%;
+      display: block;
     }
 
     .qr-placeholder {
@@ -211,7 +215,7 @@
     .label--koa .label__koa-field { display: flex; flex-direction: column; gap: 0.1rem; }
     .label--koa .label__koa-row { display: grid; grid-template-columns: 1.2fr 1fr; gap: 1rem; }
     .label--koa .label__koa-label { font-size: 0.85rem; font-weight: bold; letter-spacing: 0.02em; }
-    .label--koa .label__koa-value { font-size: 1rem; font-weight: bold; }
+    .label--koa .label__koa-value { font-size: 1.35rem; font-weight: bold; }
     .label--koa .label__qty { font-size: 2rem; color: var(--accent); }
     .label--koa .label__koa-markings { display: flex; justify-content: space-between; font-size: 0.95rem; font-weight: bold; border-top: 1px solid #ddd; border-bottom: 1px solid #ddd; padding: 0.35rem 0; margin: 0.2rem 0; }
     .label--koa .label__koa-bottom { display: flex; align-items: center; gap: 1rem; margin-top: 0.25rem; }
@@ -288,29 +292,29 @@
           <div class="label__koa-field">
             <div class="label__koa-label">(P)CUSTOMER P/N:</div>
             <div class="label__koa-value">RK73H2ATTD1372F</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-field">
             <div class="label__koa-label">(Q)QUANTITY:</div>
             <div class="label__koa-value label__qty">500</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-row">
             <div class="label__koa-field">
               <div class="label__koa-label">(1T)TRACE CODE:</div>
               <div class="label__koa-value">9827T378-P1</div>
-              <div class="barcode" aria-hidden="true"></div>
+              <svg class="barcode" aria-hidden="true"></svg>
             </div>
             <div class="label__koa-field">
               <div class="label__koa-label">(D)DATE CODE:</div>
               <div class="label__koa-value">2544</div>
-              <div class="barcode" aria-hidden="true"></div>
+              <svg class="barcode" aria-hidden="true"></svg>
             </div>
           </div>
           <div class="label__koa-field">
             <div class="label__koa-label">(1P)MPN:</div>
             <div class="label__koa-value">RK73H2ATTD1372F</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-markings">
             <span>RK73H2ATTD1372F F</span>
@@ -331,29 +335,29 @@
           <div class="label__koa-field">
             <div class="label__koa-label">(P)CUSTOMER P/N:</div>
             <div class="label__koa-value">RK73H1JTTD1501F</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-field">
             <div class="label__koa-label">(Q)QUANTITY:</div>
             <div class="label__koa-value label__qty">200</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-row">
             <div class="label__koa-field">
               <div class="label__koa-label">(1T)TRACE CODE:</div>
               <div class="label__koa-value">9827T379-P1</div>
-              <div class="barcode" aria-hidden="true"></div>
+              <svg class="barcode" aria-hidden="true"></svg>
             </div>
             <div class="label__koa-field">
               <div class="label__koa-label">(D)DATE CODE:</div>
               <div class="label__koa-value">2544</div>
-              <div class="barcode" aria-hidden="true"></div>
+              <svg class="barcode" aria-hidden="true"></svg>
             </div>
           </div>
           <div class="label__koa-field">
             <div class="label__koa-label">(1P)MPN:</div>
             <div class="label__koa-value">RK73H1JTTD1501F</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-markings">
             <span>RK73H1JTTD1501F F</span>
@@ -374,29 +378,29 @@
           <div class="label__koa-field">
             <div class="label__koa-label">(P)CUSTOMER P/N:</div>
             <div class="label__koa-value">RK73H2ATTD1002F</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-field">
             <div class="label__koa-label">(Q)QUANTITY:</div>
             <div class="label__koa-value label__qty">1000</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-row">
             <div class="label__koa-field">
               <div class="label__koa-label">(1T)TRACE CODE:</div>
               <div class="label__koa-value">9827T381-P1</div>
-              <div class="barcode" aria-hidden="true"></div>
+              <svg class="barcode" aria-hidden="true"></svg>
             </div>
             <div class="label__koa-field">
               <div class="label__koa-label">(D)DATE CODE:</div>
               <div class="label__koa-value">2544</div>
-              <div class="barcode" aria-hidden="true"></div>
+              <svg class="barcode" aria-hidden="true"></svg>
             </div>
           </div>
           <div class="label__koa-field">
             <div class="label__koa-label">(1P)MPN:</div>
             <div class="label__koa-value">RK73H2ATTD1002F</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-markings">
             <span>RK73H2ATTD1002F F</span>
@@ -442,29 +446,29 @@
           <div class="label__koa-field">
             <div class="label__koa-label">(P)CUSTOMER P/N:</div>
             <div class="label__koa-value">RK73H2ATTD1372F</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-field">
             <div class="label__koa-label">(Q)QUANTITY:</div>
             <div class="label__koa-value label__qty">500</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-row">
             <div class="label__koa-field">
               <div class="label__koa-label">(1T)TRACE CODE:</div>
               <div class="label__koa-value">9827T378-P1</div>
-              <div class="barcode" aria-hidden="true"></div>
+              <svg class="barcode" aria-hidden="true"></svg>
             </div>
             <div class="label__koa-field">
               <div class="label__koa-label">(D)DATE CODE:</div>
               <div class="label__koa-value">2544</div>
-              <div class="barcode" aria-hidden="true"></div>
+              <svg class="barcode" aria-hidden="true"></svg>
             </div>
           </div>
           <div class="label__koa-field">
             <div class="label__koa-label">(1P)MPN:</div>
             <div class="label__koa-value">RK73H2ATTD1372F</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-markings">
             <span>RK73H2ATTD1372F F</span>
@@ -485,29 +489,29 @@
           <div class="label__koa-field">
             <div class="label__koa-label">(P)CUSTOMER P/N:</div>
             <div class="label__koa-value">RK73H1JTTD1501F</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-field">
             <div class="label__koa-label">(Q)QUANTITY:</div>
             <div class="label__koa-value label__qty">200</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-row">
             <div class="label__koa-field">
               <div class="label__koa-label">(1T)TRACE CODE:</div>
               <div class="label__koa-value">9827T379-P1</div>
-              <div class="barcode" aria-hidden="true"></div>
+              <svg class="barcode" aria-hidden="true"></svg>
             </div>
             <div class="label__koa-field">
               <div class="label__koa-label">(D)DATE CODE:</div>
               <div class="label__koa-value">2544</div>
-              <div class="barcode" aria-hidden="true"></div>
+              <svg class="barcode" aria-hidden="true"></svg>
             </div>
           </div>
           <div class="label__koa-field">
             <div class="label__koa-label">(1P)MPN:</div>
             <div class="label__koa-value">RK73H1JTTD1501F</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-markings">
             <span>RK73H1JTTD1501F F</span>
@@ -528,29 +532,29 @@
           <div class="label__koa-field">
             <div class="label__koa-label">(P)CUSTOMER P/N:</div>
             <div class="label__koa-value">RK73H2ATTD1002F</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-field">
             <div class="label__koa-label">(Q)QUANTITY:</div>
             <div class="label__koa-value label__qty">1000</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-row">
             <div class="label__koa-field">
               <div class="label__koa-label">(1T)TRACE CODE:</div>
               <div class="label__koa-value">9827T381-P1</div>
-              <div class="barcode" aria-hidden="true"></div>
+              <svg class="barcode" aria-hidden="true"></svg>
             </div>
             <div class="label__koa-field">
               <div class="label__koa-label">(D)DATE CODE:</div>
               <div class="label__koa-value">2544</div>
-              <div class="barcode" aria-hidden="true"></div>
+              <svg class="barcode" aria-hidden="true"></svg>
             </div>
           </div>
           <div class="label__koa-field">
             <div class="label__koa-label">(1P)MPN:</div>
             <div class="label__koa-value">RK73H2ATTD1002F</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-markings">
             <span>RK73H2ATTD1002F F</span>
@@ -584,29 +588,29 @@
           <div class="label__koa-field">
             <div class="label__koa-label">(P)CUSTOMER P/N:</div>
             <div class="label__koa-value">RK73B1JTTD181G</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-field">
             <div class="label__koa-label">(Q)QUANTITY:</div>
             <div class="label__koa-value label__qty">15000</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-row">
             <div class="label__koa-field">
               <div class="label__koa-label">(1T)TRACE CODE:</div>
               <div class="label__koa-value">9827T377-R1</div>
-              <div class="barcode" aria-hidden="true"></div>
+              <svg class="barcode" aria-hidden="true"></svg>
             </div>
             <div class="label__koa-field">
               <div class="label__koa-label">(D)DATE CODE:</div>
               <div class="label__koa-value">2544</div>
-              <div class="barcode" aria-hidden="true"></div>
+              <svg class="barcode" aria-hidden="true"></svg>
             </div>
           </div>
           <div class="label__koa-field">
             <div class="label__koa-label">(1P)MPN:</div>
             <div class="label__koa-value">RK73B1JTTD181G</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-markings">
             <span>RK73B1JTTD181G F</span>
@@ -627,29 +631,29 @@
           <div class="label__koa-field">
             <div class="label__koa-label">(P)CUSTOMER P/N:</div>
             <div class="label__koa-value">RK73H2ATTD1372F</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-field">
             <div class="label__koa-label">(Q)QUANTITY:</div>
             <div class="label__koa-value label__qty">39500</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-row">
             <div class="label__koa-field">
               <div class="label__koa-label">(1T)TRACE CODE:</div>
               <div class="label__koa-value">9827T378-R1</div>
-              <div class="barcode" aria-hidden="true"></div>
+              <svg class="barcode" aria-hidden="true"></svg>
             </div>
             <div class="label__koa-field">
               <div class="label__koa-label">(D)DATE CODE:</div>
               <div class="label__koa-value">2544</div>
-              <div class="barcode" aria-hidden="true"></div>
+              <svg class="barcode" aria-hidden="true"></svg>
             </div>
           </div>
           <div class="label__koa-field">
             <div class="label__koa-label">(1P)MPN:</div>
             <div class="label__koa-value">RK73H2ATTD1372F</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-markings">
             <span>RK73H2ATTD1372F F</span>
@@ -670,29 +674,29 @@
           <div class="label__koa-field">
             <div class="label__koa-label">(P)CUSTOMER P/N:</div>
             <div class="label__koa-value">RK73H1JTTD1501F</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-field">
             <div class="label__koa-label">(Q)QUANTITY:</div>
             <div class="label__koa-value label__qty">4800</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-row">
             <div class="label__koa-field">
               <div class="label__koa-label">(1T)TRACE CODE:</div>
               <div class="label__koa-value">9827T379-R1</div>
-              <div class="barcode" aria-hidden="true"></div>
+              <svg class="barcode" aria-hidden="true"></svg>
             </div>
             <div class="label__koa-field">
               <div class="label__koa-label">(D)DATE CODE:</div>
               <div class="label__koa-value">2544</div>
-              <div class="barcode" aria-hidden="true"></div>
+              <svg class="barcode" aria-hidden="true"></svg>
             </div>
           </div>
           <div class="label__koa-field">
             <div class="label__koa-label">(1P)MPN:</div>
             <div class="label__koa-value">RK73H1JTTD1501F</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-markings">
             <span>RK73H1JTTD1501F F</span>
@@ -713,29 +717,29 @@
           <div class="label__koa-field">
             <div class="label__koa-label">(P)CUSTOMER P/N:</div>
             <div class="label__koa-value">RK73H1JTTD2202F</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-field">
             <div class="label__koa-label">(Q)QUANTITY:</div>
             <div class="label__koa-value label__qty">5000</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-row">
             <div class="label__koa-field">
               <div class="label__koa-label">(1T)TRACE CODE:</div>
               <div class="label__koa-value">9827T380-R1</div>
-              <div class="barcode" aria-hidden="true"></div>
+              <svg class="barcode" aria-hidden="true"></svg>
             </div>
             <div class="label__koa-field">
               <div class="label__koa-label">(D)DATE CODE:</div>
               <div class="label__koa-value">2544</div>
-              <div class="barcode" aria-hidden="true"></div>
+              <svg class="barcode" aria-hidden="true"></svg>
             </div>
           </div>
           <div class="label__koa-field">
             <div class="label__koa-label">(1P)MPN:</div>
             <div class="label__koa-value">RK73H1JTTD2202F</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-markings">
             <span>RK73H1JTTD2202F F</span>
@@ -756,29 +760,29 @@
           <div class="label__koa-field">
             <div class="label__koa-label">(P)CUSTOMER P/N:</div>
             <div class="label__koa-value">RK73H2ATTD1002F</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-field">
             <div class="label__koa-label">(Q)QUANTITY:</div>
             <div class="label__koa-value label__qty">69000</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-row">
             <div class="label__koa-field">
               <div class="label__koa-label">(1T)TRACE CODE:</div>
               <div class="label__koa-value">9827T381-R1</div>
-              <div class="barcode" aria-hidden="true"></div>
+              <svg class="barcode" aria-hidden="true"></svg>
             </div>
             <div class="label__koa-field">
               <div class="label__koa-label">(D)DATE CODE:</div>
               <div class="label__koa-value">2544</div>
-              <div class="barcode" aria-hidden="true"></div>
+              <svg class="barcode" aria-hidden="true"></svg>
             </div>
           </div>
           <div class="label__koa-field">
             <div class="label__koa-label">(1P)MPN:</div>
             <div class="label__koa-value">RK73H2ATTD1002F</div>
-            <div class="barcode" aria-hidden="true"></div>
+            <svg class="barcode" aria-hidden="true"></svg>
           </div>
           <div class="label__koa-markings">
             <span>RK73H2ATTD1002F F</span>
@@ -805,5 +809,54 @@
       </div>
     </section>
   </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      // Generate real Code 128 barcodes for each field value.
+      document.querySelectorAll('.label__koa-field').forEach(function (field) {
+        var valueEl = field.querySelector('.label__koa-value');
+        var barcodeEl = field.querySelector('.barcode');
+        if (valueEl && barcodeEl) {
+          var value = valueEl.textContent.trim();
+          try {
+            JsBarcode(barcodeEl, value, {
+              format: 'CODE128',
+              width: 1.5,
+              height: 28,
+              displayValue: false,
+              margin: 0,
+              background: 'transparent'
+            });
+          } catch (e) {
+            // Fallback: leave the element empty if the value cannot be encoded.
+            barcodeEl.textContent = '';
+          }
+        }
+      });
+
+      // Generate real QR codes from the encoded footer string.
+      document.querySelectorAll('.label--koa').forEach(function (label) {
+        var encEl = label.querySelector('.label__koa-enc');
+        var qrEl = label.querySelector('.qr-placeholder');
+        if (encEl && qrEl) {
+          var value = encEl.textContent.trim();
+          QRCode.toString(value, { type: 'svg', width: 64, margin: 0, errorCorrectionLevel: 'M' })
+            .then(function (svg) {
+              qrEl.innerHTML = svg;
+              var svgEl = qrEl.querySelector('svg');
+              if (svgEl) {
+                svgEl.setAttribute('width', '64');
+                svgEl.setAttribute('height', '64');
+              }
+            })
+            .catch(function () {
+              qrEl.textContent = '';
+            });
+        }
+      });
+    });
+  </script>
 </body>
 </html>
