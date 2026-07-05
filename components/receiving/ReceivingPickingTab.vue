@@ -21,7 +21,12 @@
 
     <div v-if="po.status !== 'finished'" style="margin-top: 0.75rem;">
       <button class="btn btn--small" :disabled="creatingBox[po.id]" @click="emit('create-box', po.id)">
-        {{ creatingBox[po.id] ? $t('receiving.pickingTab.creating') : $t('receiving.pickingTab.createBox') }}
+        <template v-if="creatingBox[po.id]">
+          <InlineSpinner /> {{ $t('receiving.pickingTab.creating') }}
+        </template>
+        <template v-else>
+          {{ $t('receiving.pickingTab.createBox') }}
+        </template>
       </button>
     </div>
 
@@ -89,7 +94,12 @@
               :disabled="addingPackage[pkg.id] || !boxSelections[pkg.id]"
               @click="emit('add-to-box', pkg.id)"
             >
-              {{ addingPackage[pkg.id] ? $t('receiving.pickingTab.adding') : $t('receiving.pickingTab.addToBox') }}
+              <template v-if="addingPackage[pkg.id]">
+                <InlineSpinner /> {{ $t('receiving.pickingTab.adding') }}
+              </template>
+              <template v-else>
+                {{ $t('receiving.pickingTab.addToBox') }}
+              </template>
             </button>
           </div>
           <button
@@ -98,7 +108,12 @@
             :disabled="removingPackage[pkg.id]"
             @click="emit('remove-from-box', pkg.id)"
           >
-            {{ removingPackage[pkg.id] ? $t('receiving.pickingTab.removing') : $t('receiving.pickingTab.removeFromBox') }}
+            <template v-if="removingPackage[pkg.id]">
+              <InlineSpinner /> {{ $t('receiving.pickingTab.removing') }}
+            </template>
+            <template v-else>
+              {{ $t('receiving.pickingTab.removeFromBox') }}
+            </template>
           </button>
         </div>
       </div>
