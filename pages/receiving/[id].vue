@@ -19,7 +19,12 @@
             :disabled="confirming"
             @click="confirmArrival"
           >
-            {{ confirming ? $t('actions.confirming') : $t('receiving.detail.confirmArrived') }}
+            <template v-if="confirming">
+              <InlineSpinner /> {{ $t('actions.confirming') }}
+            </template>
+            <template v-else>
+              {{ $t('receiving.detail.confirmArrived') }}
+            </template>
           </button>
           <NuxtLink
             v-if="order.status === 'in_hand' && remainingItems > 0"
@@ -109,10 +114,6 @@
       />
     </template>
 
-    <LoadingOverlay
-      v-if="confirming"
-      :label="$t('receiving.detail.confirmingArrival')"
-    />
   </div>
 </template>
 
@@ -125,7 +126,6 @@ import { badgeClass } from "~/composables/useStatusBadge";
 import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import ReportIssueModal from "~/components/ReportIssueModal.vue";
-import LoadingOverlay from "~/components/LoadingOverlay.vue";
 import {
   DisplayReceivingItem,
   DisplayReceivingOrder,
