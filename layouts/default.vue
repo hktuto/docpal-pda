@@ -9,6 +9,7 @@
     <main :class="['container', { 'no-padding': $route?.meta?.props?.noPadding }]">
       <slot />
     </main>
+    <ToastHost />
   </div>
 </template>
 
