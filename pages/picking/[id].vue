@@ -20,7 +20,12 @@
               :disabled="finishing"
               @click="finish"
             >
-              {{ finishing ? $t('actions.finishing') : $t('picking.detail.finishPicking') }}
+              <template v-if="finishing">
+                <InlineSpinner /> {{ $t('actions.finishing') }}
+              </template>
+              <template v-else>
+                {{ $t('picking.detail.finishPicking') }}
+              </template>
             </button>
           </template>
           <NuxtLink
