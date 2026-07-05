@@ -205,7 +205,7 @@ The Camera OCR demo needs `public/ocr-labels.html` to be present in the build. I
 http://<dev-server-ip>:3000/ocr-labels.html
 ```
 
-See `docs/superpowers/specs/2026-07-04-ocr-labels-demo-flow-design.md` for full details.
+The page loads [JsBarcode](https://github.com/lindell/JsBarcode) and [node-qrcode](https://github.com/soldair/node-qrcode) from a CDN to render real Code 128 barcodes and QR codes, so the display device needs internet access. See `docs/superpowers/specs/2026-07-04-ocr-labels-demo-flow-design.md` for full details.
 
 ### Production build
 

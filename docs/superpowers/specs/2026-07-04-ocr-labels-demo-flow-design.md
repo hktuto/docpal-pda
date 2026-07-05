@@ -95,5 +95,8 @@ All quantities are derived from `db/seed.ts`:
 
 ## Notes
 
-- Keep the page static HTML/CSS; no JavaScript is required.
+- The page is mostly static HTML/CSS, but it loads two small CDN scripts to render real barcodes/QR codes on page load:
+  - [JsBarcode](https://github.com/lindell/JsBarcode) for Code 128 linear barcodes.
+  - [node-qrcode](https://github.com/soldair/node-qrcode) for the bottom-left QR codes.
+- The display device must have internet access so the CDN scripts can load. The Android camera only looks at the screen; it does not load the page.
 - The backup file preserves the old flat catalog so ad-hoc scanning of other orders or parts still works.

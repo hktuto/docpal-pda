@@ -4,9 +4,9 @@
 
 **Goal:** Replace the flat `public/ocr-labels.html` catalog with a 7-step demo script page, keeping the old page as `public/ocr-labels-backup.html`.
 
-**Architecture:** A single static HTML/CSS file in `public/` with numbered demo-step cards. Scan steps embed supplier-style labels whose quantities match the seeded `PICK-001` needs and the leftover stock on `04958058-W-01`. No JavaScript.
+**Architecture:** A single HTML/CSS file in `public/` with numbered demo-step cards. Scan steps embed supplier-style labels whose quantities match the seeded `PICK-001` needs and the leftover stock on `04958058-W-01`. The page loads two small CDN scripts to render real Code 128 barcodes and QR codes on each label.
 
-**Tech Stack:** Static HTML5, CSS.
+**Tech Stack:** Static HTML5, CSS, plus [JsBarcode](https://github.com/lindell/JsBarcode) and [node-qrcode](https://github.com/soldair/node-qrcode) loaded from CDN.
 
 ---
 
@@ -868,6 +868,8 @@ Replace the entire contents of `public/ocr-labels.html` with the following:
 </html>
 ```
 
+> **Implementation note:** The committed page renders real barcodes and QR codes using JsBarcode and qrcode loaded from CDN (`<script src="...">` tags before the closing `</body>`). Each label contains multiple Code 128 barcodes (one per data line) and a bottom-left QR code encoding the full `;MPN::Q:...` string.
+
 - [ ] **Step 2: Validate the file has seven step sections**
 
 Run:
@@ -927,6 +929,8 @@ Open `http://localhost:3000/ocr-labels.html`.
 - Step 3 labels show quantities 500, 200, 1000.
 - Step 5 labels show quantities 500, 200, 1000.
 - Step 6 labels show quantities 15000, 39500, 4800, 5000, 69000.
+- Each data line on a KOA label is rendered as a real Code 128 barcode.
+- Each KOA label has a bottom-left QR code that encodes the full `;MPN::Q:...` string.
 - Clicking the step-nav links scrolls to each section.
 - Link to `ocr-labels-backup.html` works.
 
@@ -948,7 +952,7 @@ Use the browser print preview. The step navigator and header should be hidden; l
 | Scan steps show correct picking quantities (500/200/1000) | Task 2 Step 3 labels |
 | Measuring re-uses picking labels | Task 2 Step 5 labels |
 | Put-away shows remaining stock quantities | Task 2 Step 6 labels |
-| No JavaScript, static HTML/CSS | Task 2 HTML |
+| Real Code 128 / QR barcodes via CDN | Task 2 HTML + Task 3 Step 3 |
 | Print-friendly | Task 2 CSS + Task 3 Step 4 |
 
 **2. Placeholder scan**
