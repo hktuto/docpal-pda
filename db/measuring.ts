@@ -236,10 +236,14 @@ export async function findMatchingUnverifiedPackage(
       if (targetPackageId && pkg.id !== targetPackageId) return false;
       if (!pkg.pickingItem?.part) return false;
       if (normalize(pkg.pickingItem.part.partNo) !== partNo) return false;
-      if (normalize(pkg.dateCode) !== dateCode) return false;
-      if (normalize(pkg.lotCode) !== lotCode) return false;
-      if (normalize(pkg.coo) !== coo) return false;
-      if (normalize(pkg.cow) !== cow) return false;
+      const pkgDateCode = normalize(pkg.dateCode);
+      if (pkgDateCode && pkgDateCode !== dateCode) return false;
+      const pkgLotCode = normalize(pkg.lotCode);
+      if (pkgLotCode && pkgLotCode !== lotCode) return false;
+      const pkgCoo = normalize(pkg.coo);
+      if (pkgCoo && pkgCoo !== coo) return false;
+      const pkgCow = normalize(pkg.cow);
+      if (pkgCow && pkgCow !== cow) return false;
       return pkg.qty === input.qty;
     }) ?? null
   );

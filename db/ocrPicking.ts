@@ -73,10 +73,10 @@ export async function findReceivingCandidates(
       )
       SELECT * FROM normalized
       WHERE REGEXP_REPLACE(UPPER(TRIM(part_no)), '\s+', ' ', 'g') = ${parsed.partNo}
-        AND (date_code IS NOT DISTINCT FROM COALESCE(${parsed.dateCode}, date_code))
-        AND (lot_code IS NOT DISTINCT FROM COALESCE(${parsed.lotCode}, lot_code))
-        AND (coo IS NOT DISTINCT FROM COALESCE(${parsed.coo}, coo))
-        AND (cow IS NOT DISTINCT FROM COALESCE(${parsed.cow}, cow))
+        AND (date_code IS NULL OR date_code = '' OR date_code IS NOT DISTINCT FROM COALESCE(${parsed.dateCode}, date_code))
+        AND (lot_code IS NULL OR lot_code = '' OR lot_code IS NOT DISTINCT FROM COALESCE(${parsed.lotCode}, lot_code))
+        AND (coo IS NULL OR coo = '' OR coo IS NOT DISTINCT FROM COALESCE(${parsed.coo}, coo))
+        AND (cow IS NULL OR cow = '' OR cow IS NOT DISTINCT FROM COALESCE(${parsed.cow}, cow))
       ORDER BY date_code, lot_code
     `)
     .then((r) =>
