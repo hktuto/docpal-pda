@@ -30,7 +30,7 @@
             {{ po.ref_no }}
           </NuxtLink>
         </div>
-        <StatusBadge :status="po.status" :label="statusLabel.picking(po.status)" />
+        <span class="badge" :class="badgeClass(po.status)">{{ statusLabel.picking(po.status) }}</span>
       </div>
       <p class="list-card__meta">
         {{ po.supplier_name || $t('common.noSupplier') }}
@@ -62,6 +62,7 @@
 <script setup lang="ts">
 import { I18nError } from "~/composables/i18nError";
 import { useVisibleReload } from "~/composables/useVisibleReload";
+import { badgeClass } from "~/composables/useStatusBadge";
 
 definePageMeta({ title: "meta.picking" });
 

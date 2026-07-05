@@ -41,7 +41,7 @@
             <span class="card__title">{{ box.id }}</span>
           </DetailRow>
           <DetailRow :label="$t('putAway.shelfBoxesPanel.status')">
-            <StatusBadge :status="box.status" :label="statusLabel.box(box.status)" />
+            <span class="badge" :class="badgeClass(box.status)">{{ statusLabel.box(box.status) }}</span>
           </DetailRow>
           <DetailRow :label="$t('putAway.shelfBoxesPanel.items')">
             <span>{{ box.items?.length || 0 }} {{ box.items?.length === 1 ? $t('common.line') : $t('common.lines') }} · {{ boxTotalQty(box) }} {{ $t('common.pcs') }}</span>
@@ -96,6 +96,7 @@
 <script setup lang="ts">
 import * as schema from "~/db/schema";
 import { type ShelfBox } from "~/db/putAway";
+import { badgeClass } from "~/composables/useStatusBadge";
 
 type Shelf = typeof schema.shelves.$inferSelect;
 

@@ -46,9 +46,9 @@
         <DetailRow :label="$t('goodsVerify.box.part')" :value="item.part?.partNo" />
         <DetailRow :label="$t('goodsVerify.box.qty')" :value="item.qty" />
         <DetailRow :label="$t('goodsVerify.box.verified')">
-          <StatusBadge :status="item.verified ? 'verified' : 'pending'">
+          <span class="badge" :class="badgeClass(item.verified ? 'verified' : 'pending')">
             {{ item.verified ? (item.verifiedAt ? new Date(item.verifiedAt).toLocaleString() : $t('common.yes')) : $t('common.no') }}
-          </StatusBadge>
+          </span>
         </DetailRow>
         <div v-if="!item.verified && box.status !== 'verified'" style="margin-top: 0.75rem;">
           <button class="btn btn--small" :disabled="scanning" @click="openScan()">{{ $t('actions.scan') }}</button>

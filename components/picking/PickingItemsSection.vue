@@ -14,10 +14,12 @@
     <DetailRow :label="$t('picking.itemsSection.boxedQty')" :value="item.pickedQty" />
     <DetailRow :label="$t('picking.itemsSection.requiredDateCode')" :value="item.requiredDateCode || $t('common.noData')" />
     <DetailRow :label="$t('picking.itemsSection.status')">
-      <StatusBadge
-        :status="item.pickedQty >= item.qty ? 'finished' : 'picking'"
-        :label="item.pickedQty >= item.qty ? statusLabel.picking('finished') : statusLabel.picking('picking')"
-      />
+      <span
+        class="badge"
+        :class="badgeClass(item.pickedQty >= item.qty ? 'finished' : 'picking')"
+      >
+        {{ item.pickedQty >= item.qty ? statusLabel.picking('finished') : statusLabel.picking('picking') }}
+      </span>
     </DetailRow>
 
     <div v-if="activeAllocations(item).length && actionable && item.pickedQty < item.qty" class="allocations">
@@ -156,7 +158,7 @@
 
 <script setup lang="ts">
 import { type PickingOrderDetail, type PickingItemTransitionLog } from "~/db/picking";
-import { useLogStateLabel } from "~/composables/useLogStateLabel";
+import { badgeClass } from "~/composables/useStatusBadge";
 
 type PickingItem = PickingOrderDetail["items"][number];
 type Allocation = PickingItem["allocations"][number];
@@ -185,7 +187,8 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const statusLabel = useStatusLabel();
-const logStateLabel = useLogStateLabel();
+const logStateLabel = (code: string | null | undefined) =>
+  code ? t(`logStates.${code}`) : t("common.stateNone");
 
 const openBoxById = computed(() => {
   const map: Record<string, ShippingBox> = {};

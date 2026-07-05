@@ -43,7 +43,7 @@
         </div>
         <div class="detail-row">
           <span class="detail-label">{{ $t('measuring.detail.status') }}</span>
-          <StatusBadge :status="box.status" :label="statusLabel.box(box.status)" />
+          <span class="badge" :class="badgeClass(box.status)">{{ statusLabel.box(box.status) }}</span>
         </div>
         <div class="detail-row">
           <span class="detail-label">{{ $t('measuring.detail.packages') }}</span>
@@ -82,6 +82,7 @@
 import { getMeasuringTaskDetail, completeMeasuringTask, type MeasuringTaskDetail } from "~/db/measuring";
 import { useErrorMessage } from "~/composables/errorMessage";
 import { I18nError } from "~/composables/i18nError";
+import { badgeClass } from "~/composables/useStatusBadge";
 
 definePageMeta({ title: "meta.measuringDetail", props: { noPadding: true } });
 

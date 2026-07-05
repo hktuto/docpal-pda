@@ -18,7 +18,7 @@
 </template>
 
 <script setup lang="ts">
-import { SUPPORTED_LOCALES } from "~/composables/useLocalePreference";
+const SUPPORTED_LOCALES = ["en-US", "zh-CN", "zh-HK"] as const;
 
 const { locale, setLocale } = useI18n();
 </script>

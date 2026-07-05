@@ -37,16 +37,13 @@
 </template>
 
 <script setup lang="ts">
-useI18n();
+import * as schema from "~/db/schema";
 
-interface Shelf {
-  code: string;
-  zone: string | null;
-}
+useI18n();
 
 const props = defineProps<{
   modelValue: boolean;
-  shelves: Shelf[];
+  shelves: (typeof schema.shelves.$inferSelect)[];
 }>();
 
 const emit = defineEmits<{

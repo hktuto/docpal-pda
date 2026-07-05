@@ -26,9 +26,9 @@ export type ScanTask = 'receiving' | 'picking' | 'put-away' | 'measuring' | 'goo
 export async function runScanMatcher(
   ctx: ScanTaskContext,
   parsed: OcrInput,
-  matchers?: ScanMatchers
+  matchers: ScanMatchers
 ): Promise<ScanMatchResult> {
-  const m = matchers ?? useScanMatchers();
+  const m = matchers;
   switch (ctx.task) {
     case 'receiving':
       if (!ctx.receivingOrderId) return m.error('missing_receiving_order_id');

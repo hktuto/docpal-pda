@@ -16,7 +16,7 @@
       <NuxtLink :to="`/picking/${po.id}`" class="card__title">{{ po.ref_no }}</NuxtLink>
     </DetailRow>
     <DetailRow :label="$t('receiving.pickingTab.status')">
-      <StatusBadge :status="po.status">{{ statusLabel.picking(po.status) }}</StatusBadge>
+      <span class="badge" :class="badgeClass(po.status)">{{ statusLabel.picking(po.status) }}</span>
     </DetailRow>
 
     <div v-if="po.status !== 'finished'" style="margin-top: 0.75rem;">
@@ -39,7 +39,7 @@
         style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;"
       >
         <span style="font-size: 0.875rem; font-weight: 600;">{{ box.id }}</span>
-        <StatusBadge :status="box.status">{{ statusLabel.box(box.status) }}</StatusBadge>
+        <span class="badge" :class="badgeClass(box.status)">{{ statusLabel.box(box.status) }}</span>
       </div>
     </div>
 
@@ -47,9 +47,12 @@
       <DetailRow :label="$t('receiving.itemsTab.part')" :value="pi.part_no" />
       <DetailRow :label="$t('receiving.pickingTab.requiredScannedBoxed')" :value="`${pi.required_qty} / ${pi.scanned_qty} / ${pi.boxed_qty}`" />
       <DetailRow :label="$t('receiving.pickingTab.status')">
-        <StatusBadge :status="pi.boxed_qty >= pi.required_qty ? 'finished' : 'picking'">
+        <span
+          class="badge"
+          :class="badgeClass(pi.boxed_qty >= pi.required_qty ? 'finished' : 'picking')"
+        >
           {{ pi.boxed_qty >= pi.required_qty ? statusLabel.picking('finished') : statusLabel.picking('picking') }}
-        </StatusBadge>
+        </span>
       </DetailRow>
       <div v-if="allocatedLocations(pi).length" class="detail-row">
         <span class="detail-label">{{ $t('receiving.pickingTab.allocatedLots') }}</span>
@@ -145,10 +148,12 @@
 
 <script setup lang="ts">
 import { GroupedItem, GroupedOrder, TransitionLog, DisplayBox, DisplayPackage } from "./types";
-import { useLogStateLabel } from "~/composables/useLogStateLabel";
+import { badgeClass } from "~/composables/useStatusBadge";
 
+const { t } = useI18n();
 const statusLabel = useStatusLabel();
-const logStateLabel = useLogStateLabel();
+const logStateLabel = (code: string | null | undefined) =>
+  code ? t(`logStates.${code}`) : t("common.stateNone");
 
 const props = defineProps<{
   filteredGroupedPickingOrders: GroupedOrder[];

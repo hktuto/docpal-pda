@@ -53,9 +53,9 @@
             {{ pkg.dateCode || $t('common.noData') }} / {{ pkg.lotCode || $t('common.noData') }} / {{ pkg.coo || $t('common.noData') }} / {{ pkg.cow || $t('common.noData') }}
           </DetailRow>
           <DetailRow :label="$t('measuring.measureBox.status')">
-            <StatusBadge :status="pkg.verified ? 'verified' : 'pending'">
+            <span class="badge" :class="badgeClass(pkg.verified ? 'verified' : 'pending')">
               {{ pkg.verified ? $t('common.verified') : $t('common.pending') }}
-            </StatusBadge>
+            </span>
           </DetailRow>
           <div v-if="box.status === 'open' && !pkg.verified" style="margin-top: 0.5rem;">
             <button class="btn btn--small" :disabled="scanning" @click="openScan(pkg.id)">{{ $t('actions.scan') }}</button>
@@ -107,6 +107,7 @@ import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import { useErrorMessage } from "~/composables/errorMessage";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import BoxMeasurementsModal from "~/components/BoxMeasurementsModal.vue";
+import { badgeClass } from "~/composables/useStatusBadge";
 
 async function onScanApplied() {
   await load();

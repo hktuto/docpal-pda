@@ -16,7 +16,7 @@
     >
       <div class="list-card__header">
         <span class="list-card__title">{{ task.picking_order_ref }}</span>
-        <StatusBadge :status="task.status" :label="statusLabel.measuring(task.status)" />
+        <span class="badge" :class="badgeClass(task.status)">{{ statusLabel.measuring(task.status) }}</span>
       </div>
       <p class="list-card__meta">
         {{ task.supplier_name || $t('common.noSupplier') }}
@@ -33,6 +33,7 @@
 <script setup lang="ts">
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { useErrorMessage } from "~/composables/errorMessage";
+import { badgeClass } from "~/composables/useStatusBadge";
 
 definePageMeta({ title: "meta.measuring" });
 

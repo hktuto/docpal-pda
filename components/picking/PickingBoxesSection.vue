@@ -38,7 +38,7 @@
         <span class="card__title">{{ box.id }}</span>
       </DetailRow>
       <DetailRow :label="$t('picking.boxesSection.status')">
-        <StatusBadge :status="box.status" :label="statusLabel.box(box.status)" />
+        <span class="badge" :class="badgeClass(box.status)">{{ statusLabel.box(box.status) }}</span>
       </DetailRow>
       <DetailRow :label="$t('picking.boxesSection.packages')" :value="box.packages?.length ?? 0" />
       <DetailRow :label="$t('picking.boxesSection.qty')" :value="boxTotalQty(box)" />
@@ -57,6 +57,7 @@
 
 <script setup lang="ts">
 import { type PickingOrderDetail } from "~/db/picking";
+import { badgeClass } from "~/composables/useStatusBadge";
 
 const statusLabel = useStatusLabel();
 
