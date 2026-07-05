@@ -7,9 +7,7 @@ import {
 import { runScanMatcher, useScanMatchers, type ScanTaskContext, type ScanMatchResult } from './useScanMatchers';
 import { I18nError } from '~/composables/i18nError';
 import { useErrorMessage } from '~/composables/errorMessage';
-import { parseAndIdentify, type CandidateOptions, type RawOcrCapture } from '~/utils/parseOcrScan';
-import { ocrResultToInput } from '~/utils/ocrResultToInput';
-import { parseBrowserScanPromptJson } from '~/utils/parseBrowserScanPromptJson';
+import { parseAndIdentify, type CandidateOptions, type RawOcrCapture, type OcrBarcode, type ParsedFields } from '~/utils/parseOcrScan';
 import type { OcrInput } from './useMockOcr';
 
 function parseBarcodes(barcodesJson: string): RawOcrCapture['barcodes'] {
@@ -112,6 +110,49 @@ export function useLabelScan() {
   }
 
   return { scan, scanning };
+}
+
+export function ocrResultToInput(parsed: ParsedFields): OcrInput {
+  return {
+    partNo: parsed.itemId ?? '',
+    dateCode: parsed.dateCode ?? '',
+    lotCode: parsed.lotCode ?? '',
+    coo: parsed.coo ?? '',
+    cow: parsed.cow ?? '',
+    qty: parsed.qty ?? '',
+  };
+}
+
+function isBarcodeItem(b: unknown): b is OcrBarcode {
+  return (
+    typeof b === 'object' &&
+    b !== null &&
+    typeof (b as Record<string, unknown>).value === 'string' &&
+    typeof (b as Record<string, unknown>).format === 'string'
+  );
+}
+
+export function parseBrowserScanPromptJson(raw: string): LabelScanCapture | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+
+  if (!parsed || typeof parsed !== 'object') return null;
+
+  const obj = parsed as Record<string, unknown>;
+  if (typeof obj.text !== 'string') return null;
+
+  const barcodes = Array.isArray(obj.barcodes) ? obj.barcodes : [];
+  if (!barcodes.every(isBarcodeItem)) return null;
+
+  return {
+    imagePath: '',
+    text: obj.text,
+    barcodes: JSON.stringify(barcodes),
+  };
 }
 
 function isCancellationError(err: unknown): boolean {
