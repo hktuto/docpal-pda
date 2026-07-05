@@ -108,6 +108,11 @@
         @confirm="onConfirmIssue"
       />
     </template>
+
+    <LoadingOverlay
+      v-if="confirming"
+      :label="$t('receiving.detail.confirmingArrival')"
+    />
   </div>
 </template>
 
@@ -120,6 +125,7 @@ import { badgeClass } from "~/composables/useStatusBadge";
 import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import ReportIssueModal from "~/components/ReportIssueModal.vue";
+import LoadingOverlay from "~/components/LoadingOverlay.vue";
 import {
   DisplayReceivingItem,
   DisplayReceivingOrder,
