@@ -57,8 +57,6 @@ export default {
     yes: "是",
     no: "否",
     verified: "已查貨",
-    backToAllShelves: "← 全部貨架",
-    backToShelfBoxes: "← 貨架箱號",
     backToTask: "← 返回任務",
     selectedCount: "已選 {count} 項",
     packagesVerified: "包裹 — 已查貨 {verified} / {total}",
@@ -114,7 +112,6 @@ export default {
       tabReceiving: "收貨",
       tabPicking: "揀貨",
       confirmArrived: "確認到貨",
-      confirmingArrival: "確認收貨中…",
     },
     itemsTab: {
       title: "發票與項目",
@@ -285,7 +282,6 @@ export default {
     title: "查貨",
     searchPlaceholder: "按貨架編號或區域搜尋…",
     empty: "找不到貨架。",
-    noZone: "無區域",
     shelf: {
       title: "貨架箱號",
       intro: "貨架 {shelfCode} 上的箱號。",
@@ -477,7 +473,6 @@ export default {
     no_scan_item_to_retake: "沒有可重拍的掃描項目",
     box_not_found: "找不到箱號",
     invalid_username_or_password: "用戶名稱或密碼不正確",
-    login_failed: "登入失敗",
     unknown_match_failed: "{task} 配對失敗",
     missing_receiving_order_id: "缺少收貨單 ID",
     missing_allocation: "缺少分配",
@@ -630,10 +625,6 @@ export default {
     totalQty: "合計：{qty}",
     supplierCounts: "{withInventory} / {total} 項物料",
     lotQty: "可用 {available} / 共 {total}",
-    location: "位置",
-    shelf: "貨架",
-    box: "箱子",
-    receivingArea: "收貨區"
   },
   logStates: {
     pending: "待處理",

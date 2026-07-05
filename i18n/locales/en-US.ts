@@ -57,8 +57,6 @@ export default {
     yes: "Yes",
     no: "No",
     verified: "Verified",
-    backToAllShelves: "← All shelves",
-    backToShelfBoxes: "← Shelf boxes",
     backToTask: "← Back to task",
     selectedCount: "{count} selected",
     packagesVerified: "Packages — {verified} / {total} verified",
@@ -114,7 +112,6 @@ export default {
       tabReceiving: "Receiving",
       tabPicking: "Picking",
       confirmArrived: "Confirm arrived",
-      confirmingArrival: "Confirming arrival…",
     },
     itemsTab: {
       title: "Invoices & Items",
@@ -285,7 +282,6 @@ export default {
     title: "Goods Verify",
     searchPlaceholder: "Search shelf code or zone…",
     empty: "No shelves found.",
-    noZone: "No zone",
     shelf: {
       title: "Shelf Boxes",
       intro: "Boxes on shelf {shelfCode}.",
@@ -477,7 +473,6 @@ export default {
     no_scan_item_to_retake: "No scan item to retake",
     box_not_found: "Box not found",
     invalid_username_or_password: "Invalid username or password",
-    login_failed: "Login failed",
     unknown_match_failed: "{task} match failed",
     missing_receiving_order_id: "Missing receiving order ID",
     missing_allocation: "Missing allocation",
@@ -630,10 +625,6 @@ export default {
     totalQty: "Total: {qty}",
     supplierCounts: "{withInventory} / {total} items",
     lotQty: "{available} / {total}",
-    location: "Location",
-    shelf: "Shelf",
-    box: "Box",
-    receivingArea: "Receiving area"
   },
   logStates: {
     pending: "Pending",
