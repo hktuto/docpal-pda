@@ -110,8 +110,6 @@ export function useScanMatchers(): ScanMatchers {
   const { currentUser } = useAuth();
   const { t } = useI18n();
 
-  function error(err: I18nError): ScanMatchResult;
-  function error(code: string, params?: Record<string, unknown>): ScanMatchResult;
   function error(arg: I18nError | string, params?: Record<string, unknown>): ScanMatchResult {
     if (arg instanceof I18nError) {
       return { type: 'error', message: t(`errors.${arg.code}`, (arg.params ?? {}) as Record<string, unknown>) };

@@ -7,10 +7,8 @@ import { I18nError } from "~/composables/i18nError";
 import { generateLocationBoxId, getLocationBoxIdPrefix } from "~/utils/ids";
 import { availableReceivingQtySql, allocationsCte } from "./helpers";
 
-async function generateShelfBoxId(
-  tx: PgliteDatabase<typeof schema>,
-  locationCode = "HK1"
-): Promise<string> {
+async function generateShelfBoxId(tx: PgliteDatabase<typeof schema>): Promise<string> {
+  const locationCode = "HK1";
   const prefix = getLocationBoxIdPrefix("SBOX", locationCode);
 
   const existing = await tx
@@ -102,12 +100,11 @@ export async function createShelfBox(
   db: PgliteDatabase<typeof schema>,
   receivingOrderId: string,
   shelfCode: string,
-  actorId: string,
-  locationCode = "HK1"
+  actorId: string
 ): Promise<typeof schema.shelfBoxes.$inferSelect> {
   return db.transaction(async (tx) => {
     const now = new Date();
-    const boxId = await generateShelfBoxId(tx, locationCode);
+    const boxId = await generateShelfBoxId(tx);
 
     const [box] = await tx
       .insert(schema.shelfBoxes)

@@ -404,9 +404,9 @@ export async function reportPickingOrderIssues(
 export async function createShippingBoxForPickingOrder(
   db: PgliteDatabase<typeof schema>,
   pickingOrderId: string,
-  actorId: string,
-  locationCode = "HK1"
+  actorId: string
 ): Promise<string> {
+  const locationCode = "HK1";
   return db.transaction(async (tx) => {
     const now = new Date();
 

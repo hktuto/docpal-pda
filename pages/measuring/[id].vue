@@ -83,6 +83,7 @@ import { getMeasuringTaskDetail, completeMeasuringTask, type MeasuringTaskDetail
 import { useErrorMessage } from "~/composables/errorMessage";
 import { I18nError } from "~/composables/i18nError";
 import { badgeClass } from "~/composables/useStatusBadge";
+import { useVisibleReload } from "~/composables/useVisibleReload";
 
 definePageMeta({ title: "meta.measuringDetail", props: { noPadding: true } });
 
@@ -137,22 +138,7 @@ async function complete() {
   }
 }
 
-function onVisible() {
-  if (document.visibilityState === "visible") {
-    load();
-  }
-}
-
-onMounted(() => {
-  load();
-  document.addEventListener("visibilitychange", onVisible);
-  window.addEventListener("focus", onVisible);
-});
-
-onUnmounted(() => {
-  document.removeEventListener("visibilitychange", onVisible);
-  window.removeEventListener("focus", onVisible);
-});
+useVisibleReload(load);
 </script>
 
 <style scoped>

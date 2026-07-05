@@ -144,8 +144,7 @@ function qtyLabel(reason: MismatchReason | ""): string {
 }
 
 function toNumberOrNull(v: unknown): number | null {
-  if (v === "" || v === null || v === undefined || Number.isNaN(Number(v))) return null;
-  const n = Number(v);
+  const n = v === "" || v == null ? NaN : Number(v);
   return Number.isFinite(n) ? n : null;
 }
 
