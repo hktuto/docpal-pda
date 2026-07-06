@@ -12,20 +12,20 @@ Tap the task to open the detail page.
 
 ## 3. Review available items
 
-The detail shows the receiving-area items that can be moved.
+The detail shows receiving-area items waiting to be put away, with total, scanned, and boxed quantities.
 
-![Put-away detail](./assets/put-away-detail.png)
+## 4. Scan physical pieces
 
-## 4. Choose a destination shelf
+For each item, tap **Scan piece** and scan a physical label. Each scan records one piece with its own quantity, date code, lot code, COO, and COW. Repeat until the scanned quantity reaches the item total.
 
-Tap the shelf selection action or scan the shelf barcode/label.
+## 5. Create a shelf box
 
-## 5. Move items
+Tap **New box**, select a shelf, and confirm. The box appears in the shelf boxes panel.
 
-- Enter the quantity to move.
-- Confirm the move.
-- The system creates or updates a shelf box and moves the inventory lot to the shelf.
+## 6. Assign pieces to boxes
 
-## 6. Finish
+Under each item, select an open box from the dropdown next to an unboxed scan and tap **Add to box**. You can also remove a scan or remove a piece from a box while the box is still open.
 
-When all items are put away, the task/order status is updated.
+## 7. Close the box
+
+Tap **Close box** when the box contains all the pieces you want to store. The inventory lot is updated with the shelf location.

@@ -16,9 +16,10 @@ Use the Put-away flow after receiving has created receiving-area inventory and t
 
    ![Put-away detail](./assets/put-away-detail.png)
 3. The app shows items available to move.
-4. The operator scans or selects a shelf destination.
-5. The operator moves items into a shelf box.
-6. The inventory lot is updated with the new shelf location.
+4. The operator scans each physical piece of an item; scanned pieces accumulate under that item.
+5. The operator creates a shelf box on a selected shelf.
+6. The operator assigns whole scanned pieces to the shelf box.
+7. The operator closes the box when done; the inventory lot is updated with the new shelf location.
 
 ## Related guides
 

@@ -50,6 +50,13 @@ Page and component locations mapped to source files.
 | PickingIssueReportModal | `components/PickingIssueReportModal.vue` |
 | SelectShelfDialog | `components/SelectShelfDialog.vue` |
 
+## Put-away
+
+| Component | Source file |
+|-----------|-------------|
+| Put-away lots panel | `components/put-away/PutAwayLotsPanel.vue` |
+| Shelf boxes panel | `components/put-away/ShelfBoxesPanel.vue` |
+
 ## Scan / OCR flow
 
 | Component / helper | Source file |

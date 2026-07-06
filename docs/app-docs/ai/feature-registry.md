@@ -13,7 +13,7 @@ Machine-readable index of features in the warehouse PDA demo. Use this page to l
 | Receiving mismatch | Receiving | Shipped | `components/ReportIssueModal.vue`, `db/receiving.ts` | [ai-scope](../flows/receiving/ai-scope.md) |
 | Pending picking count badge | Receiving | Shipped | `pages/receiving/index.vue`, `db/receiving.ts` | [ai-scope](../flows/receiving/ai-scope.md) |
 | Put-away list | Put-away | Shipped | `pages/put-away/index.vue` | [ai-scope](../flows/put-away/ai-scope.md) |
-| Put-away detail | Put-away | Shipped | `pages/put-away/[id].vue` or equivalent | [ai-scope](../flows/put-away/ai-scope.md) |
+| Put-away detail | Put-away | Shipped | `pages/put-away/[id].vue`, `components/put-away/PutAwayLotsPanel.vue`, `components/put-away/ShelfBoxesPanel.vue` | [ai-scope](../flows/put-away/ai-scope.md) |
 | Shelf selection | Put-away | Shipped | `components/SelectShelfDialog.vue` | [ai-scope](../flows/put-away/ai-scope.md) |
 | Measuring list | Measuring | Shipped | `pages/measuring/index.vue` | [ai-scope](../flows/measuring/ai-scope.md) |
 | Measuring detail | Measuring | Shipped | `pages/measuring/[id].vue` or equivalent | [ai-scope](../flows/measuring/ai-scope.md) |
