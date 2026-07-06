@@ -7,7 +7,8 @@ import { seedDb, ensureDemoPasswords } from "~/db/seed";
 const DATA_DIR = "idb://warehouse-demo-pglite";
 
 export default defineNuxtPlugin(async () => {
-  const pg = new PGlite(DATA_DIR);
+  // change to use in-memory
+  const pg = new PGlite();
 
   await pg.waitReady;
 
