@@ -733,6 +733,7 @@ export async function addAllUnboxedPackagesToBox(
     });
     if (!box) throw new I18nError("box_not_found");
     if (box.status !== "open") throw new I18nError("box_is_not_open");
+    if (!box.pickingOrderId) throw new I18nError("shipping_box_not_associated");
 
     const packages = await tx.query.pickingPackages.findMany({
       where: and(

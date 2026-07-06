@@ -556,6 +556,7 @@ export default {
     weight_must_be_number: "重量必須為數字",
     shipping_box_not_found: "找不到出貨箱",
     shipping_box_is_not_open: "出貨箱未開啟",
+    shipping_box_not_associated: "出貨箱未關聯揀貨單",
     cannot_close_empty_shipping_box: "無法關閉空出貨箱",
     all_packages_must_be_verified: "關閉箱號前所有包裹必須已查貨",
     box_measurements_incomplete: "箱號測量資料不完整",

@@ -281,8 +281,10 @@ describe('addPackageToBox', () => {
   it('throws when the package is already in a box', async () => {
     await addPackageToBox(db, packageId, shippingBoxId, actorId);
 
-    await expect(addPackageToBox(db, packageId, shippingBoxId, actorId))
-      .rejects.toThrow('package_already_in_box');
+    await expectI18nError(
+      addPackageToBox(db, packageId, shippingBoxId, actorId),
+      'package_already_in_box',
+    );
   });
 
   it('throws when the box is not open', async () => {
@@ -320,8 +322,10 @@ describe('addPackageToBox', () => {
       createdAt: now,
     });
 
-    await expect(addPackageToBox(db, packageId, otherBoxId, actorId))
-      .rejects.toThrow('package_does_not_belong_to_picking_order');
+    await expectI18nError(
+      addPackageToBox(db, packageId, otherBoxId, actorId),
+      'package_does_not_belong_to_picking_order',
+    );
   });
 
   it('throws when the picking order has an open issue', async () => {

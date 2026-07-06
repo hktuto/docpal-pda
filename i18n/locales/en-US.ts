@@ -556,6 +556,7 @@ export default {
     weight_must_be_number: "Weight must be a number",
     shipping_box_not_found: "Shipping box not found",
     shipping_box_is_not_open: "Shipping box is not open",
+    shipping_box_not_associated: "Shipping box is not associated with a picking order",
     cannot_close_empty_shipping_box: "Cannot close an empty shipping box",
     all_packages_must_be_verified: "All packages must be verified before closing the box",
     box_measurements_incomplete: "Box measurements are incomplete",
