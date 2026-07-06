@@ -124,4 +124,27 @@ describe('addAllUnboxedPackagesToBox', () => {
 
     expect(added).toBe(0);
   });
+
+  it('throws and rolls back when the box is not open', async () => {
+    await db.update(schema.shippingBoxes)
+      .set({ status: 'closed' })
+      .where(eq(schema.shippingBoxes.id, shippingBoxId));
+
+    await expect(addAllUnboxedPackagesToBox(db, shippingBoxId, actorId))
+      .rejects.toThrow();
+
+    const boxed = await db.query.pickingPackages.findMany({
+      where: eq(schema.pickingPackages.shippingBoxId, shippingBoxId),
+    });
+    expect(boxed).toHaveLength(0);
+  });
+
+  it('updates picking item picked quantities', async () => {
+    await addAllUnboxedPackagesToBox(db, shippingBoxId, actorId);
+
+    const item = await db.query.pickingItems.findFirst({
+      where: eq(schema.pickingItems.id, pickingItemId),
+    });
+    expect(item?.pickedQty).toBe(200);
+  });
 });
