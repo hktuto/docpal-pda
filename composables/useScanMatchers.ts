@@ -14,7 +14,7 @@ import {
   materializeReceivingAllocation,
   scanAllocationToPackage,
 } from '~/db/picking';
-import { addItemToShelfBox } from '~/db/putAway';
+import { recordPutAwayScan } from '~/db/putAway';
 import {
   findMatchingUnverifiedPackage,
   verifyPickingPackageForMeasuring,
@@ -39,8 +39,7 @@ export async function runScanMatcher(
       return m.matchPicking(ctx.allocation, parsed);
     case 'put-away':
       if (!ctx.receivingItem) return m.error('missing_receiving_item');
-      if (!ctx.targetBoxId) return m.error('missing_target_box');
-      return m.matchPutAway(ctx.receivingItem, ctx.targetBoxId, parsed);
+      return m.matchPutAway(ctx.receivingItem, parsed);
     case 'measuring':
       if (!ctx.boxId) return m.error('missing_box_id');
       return m.matchMeasuring(ctx.boxId, ctx.targetPackageId, parsed);
@@ -75,7 +74,6 @@ export interface ScanTaskContext {
   allocation?: PickingAllocation;
   // put-away
   receivingItem?: PutAwayLot;
-  targetBoxId?: string;
   // measuring
   boxId?: string;
   targetPackageId?: string;
@@ -100,7 +98,7 @@ export type ScanMatchResult =
 export interface ScanMatchers {
   matchReceiving(receivingOrderId: string, pickingItemId: string | undefined, parsed: OcrInput): Promise<ScanMatchResult>;
   matchPicking(allocation: PickingAllocation, parsed: OcrInput): Promise<ScanMatchResult>;
-  matchPutAway(receivingItem: PutAwayLot, targetBoxId: string, parsed: OcrInput): Promise<ScanMatchResult>;
+  matchPutAway(receivingItem: PutAwayLot, parsed: OcrInput): Promise<ScanMatchResult>;
   matchMeasuring(boxId: string, targetPackageId: string | undefined, parsed: OcrInput): Promise<ScanMatchResult>;
   matchGoodsVerify(items: BoxItem[], parsed: OcrInput): Promise<ScanMatchResult>;
   error(err: I18nError): ScanMatchResult;
@@ -223,7 +221,7 @@ export function useScanMatchers(): ScanMatchers {
     }
   }
 
-  async function matchPutAway(receivingItem: PutAwayLot, targetBoxId: string, parsed: OcrInput): Promise<ScanMatchResult> {
+  async function matchPutAway(receivingItem: PutAwayLot, parsed: OcrInput): Promise<ScanMatchResult> {
     try {
       const user = currentUser.value;
       if (!user?.id) return error('operator_not_signed_in');
@@ -233,7 +231,6 @@ export function useScanMatchers(): ScanMatchers {
       if (!scannedPartNo) return { type: 'none' };
       if (scannedPartNo !== expectedPartNo) return error('scanned_part_does_not_match_item');
 
-      if (!targetBoxId) return error('select_open_box');
       const qty = typeof parsed.qty === 'number' ? parsed.qty : Number(parsed.qty);
       if (!Number.isInteger(qty) || qty <= 0) return error('qty_must_be_positive_integer');
       if (!receivingItem?.receiving_invoice_item_id) return error('invalid_receiving_item');
@@ -250,16 +247,14 @@ export function useScanMatchers(): ScanMatchers {
         apply: async () => {
           const actorId = currentUser.value?.id;
           if (!actorId) throw new I18nError('operator_not_signed_in');
-          await addItemToShelfBox(
+          await recordPutAwayScan(
             db,
-            targetBoxId,
             receivingItem.receiving_invoice_item_id,
             qty,
             dateCode,
             lotCode,
             coo,
-            cow,
-            actorId
+            cow
           );
         },
       };
