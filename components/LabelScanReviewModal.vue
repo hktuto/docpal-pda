@@ -30,7 +30,7 @@
         <form class="form" @submit.prevent="findMatch">
           <label class="field">
             <span>{{ $t('labelScanReviewModal.partNo') }}</span>
-            <input v-model="editable.partNo" type="text" :placeholder="$t('labelScanReviewModal.placeholderPartNo')" />
+            <input @focus="selectAll" v-model="editable.partNo" type="text" :placeholder="$t('labelScanReviewModal.placeholderPartNo')" />
             <CandidateChips
               v-model="editable.partNo"
               :candidates="partNoCandidates"
@@ -39,7 +39,7 @@
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.dateCode') }}</span>
-            <input v-model="editable.dateCode" type="text" :placeholder="$t('labelScanReviewModal.placeholderDateCode')" />
+            <input @focus="selectAll" v-model="editable.dateCode" type="text" :placeholder="$t('labelScanReviewModal.placeholderDateCode')" />
             <CandidateChips
               v-model="editable.dateCode"
               :candidates="dateCodeCandidates"
@@ -48,7 +48,7 @@
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.lotCode') }}</span>
-            <input v-model="editable.lotCode" type="text" :placeholder="$t('labelScanReviewModal.placeholderLotCode')" />
+            <input @focus="selectAll" v-model="editable.lotCode" type="text" :placeholder="$t('labelScanReviewModal.placeholderLotCode')" />
             <CandidateChips
               v-model="editable.lotCode"
               :candidates="lotCodeCandidates"
@@ -57,7 +57,7 @@
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.coo') }}</span>
-            <input v-model="editable.coo" type="text" :placeholder="$t('labelScanReviewModal.placeholderCoo')" />
+            <input @focus="selectAll" v-model="editable.coo" type="text" :placeholder="$t('labelScanReviewModal.placeholderCoo')" />
             <CandidateChips
               v-model="editable.coo"
               :candidates="cooCandidates"
@@ -66,7 +66,7 @@
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.cow') }}</span>
-            <input v-model="editable.cow" type="text" :placeholder="$t('labelScanReviewModal.placeholderCow')" />
+            <input @focus="selectAll" v-model="editable.cow" type="text" :placeholder="$t('labelScanReviewModal.placeholderCow')" />
             <CandidateChips
               v-model="editable.cow"
               :candidates="cowCandidates"
@@ -75,7 +75,7 @@
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.qty') }}</span>
-            <input v-model.number="editable.qty" type="number" min="1" :placeholder="$t('labelScanReviewModal.placeholderQty')" />
+            <input @focus="selectAll" v-model.number="editable.qty" type="number" min="1" :placeholder="$t('labelScanReviewModal.placeholderQty')" />
             <CandidateChips
               v-model="qtyChipValue"
               :candidates="qtyCandidates"
@@ -280,6 +280,11 @@ async function applyRecord(apply: () => Promise<void>) {
 
 function close() {
   emit('update:modelValue', false);
+}
+
+function selectAll(event: FocusEvent) {
+  const target = event.target as HTMLInputElement;
+  target.select();
 }
 
 function formatRecord(record: unknown): string {
