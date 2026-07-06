@@ -693,6 +693,7 @@ export async function addPackageToBox(
         where: eq(schema.pickingOrders.id, box.pickingOrderId),
       });
       if (order?.status === "issue") throw new I18nError("picking_order_has_open_issue");
+      if (order?.status === "finished") throw new I18nError("picking_order_already_finished");
     }
     if (box.pickingOrderId !== pkg.pickingOrderId) {
       throw new I18nError("package_does_not_belong_to_picking_order");
@@ -725,6 +726,7 @@ export async function addAllUnboxedPackagesToBox(
   shippingBoxId: string,
   actorId: string
 ): Promise<number> {
+  if (!actorId) throw new I18nError("actor_required");
   return db.transaction(async (tx) => {
     const box = await tx.query.shippingBoxes.findFirst({
       where: eq(schema.shippingBoxes.id, shippingBoxId),

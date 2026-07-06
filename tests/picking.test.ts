@@ -6,6 +6,7 @@ import { v4 as uuid } from 'uuid';
 import * as schema from '../db/schema';
 import { createTablesSql } from '../db/init';
 import { addAllUnboxedPackagesToBox, addPackageToBox } from '../db/picking';
+import { I18nError } from '../composables/i18nError';
 
 async function createTestDb() {
   const pg = new PGlite();
@@ -13,6 +14,17 @@ async function createTestDb() {
   await pg.exec(createTablesSql);
   const db = drizzle(pg, { schema });
   return db;
+}
+
+async function expectI18nError(promise: Promise<unknown>, code: string) {
+  await expect(promise).rejects.toThrow();
+  try {
+    await promise;
+    throw new Error('Expected promise to reject');
+  } catch (e) {
+    expect(e).toBeInstanceOf(I18nError);
+    expect((e as I18nError).code).toBe(code);
+  }
 }
 
 describe('addAllUnboxedPackagesToBox', () => {
@@ -130,8 +142,26 @@ describe('addAllUnboxedPackagesToBox', () => {
       .set({ status: 'closed' })
       .where(eq(schema.shippingBoxes.id, shippingBoxId));
 
-    await expect(addAllUnboxedPackagesToBox(db, shippingBoxId, actorId))
-      .rejects.toThrow('box_is_not_open');
+    await expectI18nError(
+      addAllUnboxedPackagesToBox(db, shippingBoxId, actorId),
+      'box_is_not_open',
+    );
+
+    const boxed = await db.query.pickingPackages.findMany({
+      where: eq(schema.pickingPackages.shippingBoxId, shippingBoxId),
+    });
+    expect(boxed).toHaveLength(0);
+  });
+
+  it('throws when the picking order is already finished', async () => {
+    await db.update(schema.pickingOrders)
+      .set({ status: 'finished' })
+      .where(eq(schema.pickingOrders.id, pickingOrderId));
+
+    await expectI18nError(
+      addAllUnboxedPackagesToBox(db, shippingBoxId, actorId),
+      'picking_order_already_finished',
+    );
 
     const boxed = await db.query.pickingPackages.findMany({
       where: eq(schema.pickingPackages.shippingBoxId, shippingBoxId),
@@ -260,8 +290,10 @@ describe('addPackageToBox', () => {
       .set({ status: 'closed' })
       .where(eq(schema.shippingBoxes.id, shippingBoxId));
 
-    await expect(addPackageToBox(db, packageId, shippingBoxId, actorId))
-      .rejects.toThrow('box_is_not_open');
+    await expectI18nError(
+      addPackageToBox(db, packageId, shippingBoxId, actorId),
+      'box_is_not_open',
+    );
   });
 
   it('throws when the package does not belong to the box picking order', async () => {
@@ -290,5 +322,45 @@ describe('addPackageToBox', () => {
 
     await expect(addPackageToBox(db, packageId, otherBoxId, actorId))
       .rejects.toThrow('package_does_not_belong_to_picking_order');
+  });
+
+  it('throws when the picking order has an open issue', async () => {
+    await db.update(schema.pickingOrders)
+      .set({ status: 'issue' })
+      .where(eq(schema.pickingOrders.id, pickingOrderId));
+
+    await expectI18nError(
+      addPackageToBox(db, packageId, shippingBoxId, actorId),
+      'picking_order_has_open_issue',
+    );
+  });
+
+  it('throws when the picking order is already finished', async () => {
+    await db.update(schema.pickingOrders)
+      .set({ status: 'finished' })
+      .where(eq(schema.pickingOrders.id, pickingOrderId));
+
+    await expectI18nError(
+      addPackageToBox(db, packageId, shippingBoxId, actorId),
+      'picking_order_already_finished',
+    );
+  });
+
+  it('auto-finishes the picking order when the last required quantity is boxed', async () => {
+    await db.update(schema.pickingItems)
+      .set({ qty: 100 })
+      .where(eq(schema.pickingItems.id, pickingItemId));
+
+    await addPackageToBox(db, packageId, shippingBoxId, actorId);
+
+    const order = await db.query.pickingOrders.findFirst({
+      where: eq(schema.pickingOrders.id, pickingOrderId),
+    });
+    expect(order?.status).toBe('finished');
+
+    const task = await db.query.measuringTasks.findFirst({
+      where: eq(schema.measuringTasks.pickingOrderId, pickingOrderId),
+    });
+    expect(task).toBeTruthy();
   });
 });
