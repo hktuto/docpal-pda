@@ -3,7 +3,7 @@ import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { v4 as uuid } from "uuid";
 import * as schema from "./schema";
 import type { PickingIssueReason } from "./schema";
-import { tryMarkReceivingOrderClear } from "./receiving";
+import { tryMarkReceivingOrderClear, tryMarkReceivingOrderInHand } from "./receiving";
 import { I18nError } from "~/composables/i18nError";
 import { generateLocationBoxId, getLocationBoxIdPrefix } from "~/utils/ids";
 
@@ -308,6 +308,161 @@ export async function scanAllocationToPackage(
 
     return packageId;
   }
+}
+
+export async function removeScannedPackage(
+  db: PgliteDatabase<typeof schema>,
+  packageId: string,
+  actorId: string
+): Promise<void> {
+  if (!actorId) throw new I18nError("actor_required");
+
+  return db.transaction(async (tx) => {
+    const pkg = await tx.query.pickingPackages.findFirst({
+      where: eq(schema.pickingPackages.id, packageId),
+      with: { pickingItem: true },
+    });
+    if (!pkg) throw new I18nError("package_not_found");
+    if (pkg.shippingBoxId) throw new I18nError("package_already_in_box");
+
+    const item = pkg.pickingItem;
+    if (!item) throw new I18nError("picking_item_not_found");
+
+    const order = await tx.query.pickingOrders.findFirst({
+      where: eq(schema.pickingOrders.id, item.pickingOrderId),
+    });
+    if (order?.status === "issue") throw new I18nError("picking_order_has_open_issue");
+
+    const qty = pkg.qty;
+
+    if (pkg.sourceType === "inventory_lot") {
+      const lot = await tx.query.inventoryLots.findFirst({
+        where: eq(schema.inventoryLots.id, pkg.sourceId),
+        with: { sources: true },
+      });
+      if (!lot) throw new I18nError("inventory_lot_not_found");
+
+      await tx
+        .update(schema.inventoryLots)
+        .set({
+          totalQty: sql`${schema.inventoryLots.totalQty} + ${qty}`,
+          allocatedQty: sql`${schema.inventoryLots.allocatedQty} + ${qty}`,
+        })
+        .where(eq(schema.inventoryLots.id, lot.id));
+
+      if (lot.shelfCode === null && lot.boxId === null) {
+        let remaining = qty;
+        for (const source of lot.sources) {
+          if (remaining <= 0) break;
+          await tx
+            .update(schema.inventoryLotSources)
+            .set({ qty: sql`${schema.inventoryLotSources.qty} + ${remaining}` })
+            .where(eq(schema.inventoryLotSources.id, source.id));
+          await tx
+            .update(schema.receivingInvoiceItems)
+            .set({ pickedQty: sql`${schema.receivingInvoiceItems.pickedQty} - ${remaining}` })
+            .where(eq(schema.receivingInvoiceItems.id, source.receivingInvoiceItemId));
+          remaining = 0;
+        }
+      }
+
+      const [allocation] = await tx
+        .select()
+        .from(schema.allocations)
+        .where(
+          and(
+            eq(schema.allocations.inventoryLotId, lot.id),
+            eq(schema.allocations.pickingItemId, item.id)
+          )
+        );
+      if (allocation) {
+        await tx
+          .update(schema.allocations)
+          .set({ qty: sql`${schema.allocations.qty} + ${qty}` })
+          .where(eq(schema.allocations.id, allocation.id));
+      } else {
+        await tx.insert(schema.allocations).values({
+          id: uuid(),
+          pickingItemId: item.id,
+          inventoryLotId: lot.id,
+          qty,
+        });
+      }
+    } else if (pkg.sourceType === "receiving_invoice_item") {
+      await tx
+        .update(schema.receivingInvoiceItems)
+        .set({ pickedQty: sql`${schema.receivingInvoiceItems.pickedQty} - ${qty}` })
+        .where(eq(schema.receivingInvoiceItems.id, pkg.sourceId));
+
+      const [allocation] = await tx
+        .select()
+        .from(schema.allocations)
+        .where(
+          and(
+            eq(schema.allocations.receivingInvoiceItemId, pkg.sourceId),
+            eq(schema.allocations.pickingItemId, item.id)
+          )
+        );
+      if (allocation) {
+        await tx
+          .update(schema.allocations)
+          .set({ qty: sql`${schema.allocations.qty} + ${qty}` })
+          .where(eq(schema.allocations.id, allocation.id));
+      } else {
+        await tx.insert(schema.allocations).values({
+          id: uuid(),
+          pickingItemId: item.id,
+          receivingInvoiceItemId: pkg.sourceId,
+          qty,
+        });
+      }
+    } else {
+      throw new I18nError("unknown_package_source_type");
+    }
+
+    await tx
+      .update(schema.pickingItems)
+      .set({ allocatedQty: sql`${schema.pickingItems.allocatedQty} + ${qty}` })
+      .where(eq(schema.pickingItems.id, item.id));
+
+    await tx.delete(schema.pickingPackages).where(eq(schema.pickingPackages.id, packageId));
+
+    await tx.insert(schema.transitionLogs).values({
+      id: uuid(),
+      entityType: "picking_item",
+      entityId: item.id,
+      fromState: "scanned",
+      toState: "removed",
+      actorId,
+      metadata: JSON.stringify({ packageId, qty }),
+      createdAt: new Date(),
+    });
+
+    await refreshPickingItemPickedQty(tx, item.id);
+
+    let receivingOrderId: string | null = null;
+    if (pkg.sourceType === "receiving_invoice_item") {
+      const [inv] = await tx
+        .select({ receivingOrderId: schema.receivingInvoices.receivingOrderId })
+        .from(schema.receivingInvoiceItems)
+        .innerJoin(
+          schema.receivingInvoices,
+          eq(schema.receivingInvoiceItems.receivingInvoiceId, schema.receivingInvoices.id)
+        )
+        .where(eq(schema.receivingInvoiceItems.id, pkg.sourceId));
+      receivingOrderId = inv?.receivingOrderId ?? null;
+    } else if (pkg.sourceType === "inventory_lot") {
+      const source = await tx.query.inventoryLotSources.findFirst({
+        where: eq(schema.inventoryLotSources.inventoryLotId, pkg.sourceId),
+        with: { receivingInvoiceItem: { with: { invoice: true } } },
+      });
+      receivingOrderId = source?.receivingInvoiceItem?.invoice?.receivingOrderId ?? null;
+    }
+
+    if (receivingOrderId) {
+      await tryMarkReceivingOrderInHand(tx, receivingOrderId, actorId);
+    }
+  });
 }
 
 export interface PickingOrderIssueEntry {

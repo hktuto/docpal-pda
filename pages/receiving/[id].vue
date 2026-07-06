@@ -87,6 +87,7 @@
         @create-box="createBox"
         @add-to-box="addToBox"
         @remove-from-box="removeFromBox"
+        @remove-scanned-package="removeScannedPackageHandler"
         @scan="openScan"
       />
 
@@ -147,6 +148,7 @@ import {
   createShippingBoxForPickingOrder,
   addPackageToBox,
   removePackageFromBox,
+  removeScannedPackage,
   type PickingByReceivingRow,
 } from "~/db/picking";
 import { I18nError } from "~/composables/i18nError";
@@ -513,6 +515,19 @@ async function removeFromBox(packageId: string) {
   try {
     if (!currentUser.value) throw new I18nError("no_operator_user_found");
     await removePackageFromBox(db, packageId, currentUser.value.id);
+    await load();
+  } catch (e: any) {
+    error.value = errorMessage(e);
+  } finally {
+    removingPackage.value[packageId] = false;
+  }
+}
+
+async function removeScannedPackageHandler(packageId: string) {
+  removingPackage.value[packageId] = true;
+  try {
+    if (!currentUser.value) throw new I18nError("no_operator_user_found");
+    await removeScannedPackage(db, packageId, currentUser.value.id);
     await load();
   } catch (e: any) {
     error.value = errorMessage(e);

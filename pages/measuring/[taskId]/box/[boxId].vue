@@ -11,9 +11,6 @@
         @click="openScan()"
       />
 
-      <div style="margin-bottom: 1rem;">
-        <NuxtLink :to="`/measuring/${taskId}`" class="btn btn--small">{{ $t('common.backToTask') }}</NuxtLink>
-      </div>
 
       <DetailHeader
         v-model="headerExpanded"

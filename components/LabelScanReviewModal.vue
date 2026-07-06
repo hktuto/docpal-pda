@@ -20,11 +20,6 @@
           <div v-else class="placeholder">{{ $t('labelScanReviewModal.noImage') }}</div>
         </div>
 
-        <label class="field field--raw">
-          <span>{{ $t('labelScanReviewModal.ocrRawText') }}</span>
-          <textarea :value="rawText" readonly rows="5" class="raw-text" />
-        </label>
-
         <p class="subtitle">{{ $t('labelScanReviewModal.editSubtitle') }}</p>
 
         <form class="form" @submit.prevent="findMatch">
@@ -189,28 +184,6 @@ const props = defineProps<{
   context: ScanTaskContext;
   mode?: 'review' | 'manual';
 }>();
-
-const rawText = computed(() => {
-  const lines: string[] = [];
-  if (props.text) {
-    lines.push(props.text);
-  }
-  if (props.barcodes && props.barcodes !== '[]') {
-    try {
-      const parsed = JSON.parse(props.barcodes) as Array<{ value?: string; format?: string }>;
-      const barcodePlaceholder = t('labelScanReviewModal.barcodePlaceholder');
-      const barcodeLines = parsed
-        .map((b) => `[${b.format ?? barcodePlaceholder}] ${b.value ?? ''}`)
-        .filter(Boolean);
-      if (barcodeLines.length > 0) {
-        lines.push('', t('labelScanReviewModal.barcodes'), ...barcodeLines);
-      }
-    } catch {
-      lines.push('', t('labelScanReviewModal.barcodes'), props.barcodes);
-    }
-  }
-  return lines.join('\n');
-});
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void;
@@ -408,11 +381,6 @@ function formatRecord(record: unknown): string {
   resize: vertical;
   min-height: 4rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-
-.raw-text[readonly] {
-  background: var(--bg);
-  cursor: text;
 }
 
 .error {

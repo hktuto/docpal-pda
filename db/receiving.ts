@@ -60,6 +60,61 @@ export async function tryMarkReceivingOrderClear(
   });
 }
 
+export async function tryMarkReceivingOrderInHand(
+  tx: PgliteDatabase<typeof schema>,
+  orderId: string,
+  actorId: string
+): Promise<void> {
+  const order = await tx.query.receivingOrders.findFirst({
+    where: eq(schema.receivingOrders.id, orderId),
+    with: { invoices: { with: { items: true } } },
+  });
+  if (!order || order.status !== "clear") return;
+
+  const itemIds = order.invoices.flatMap((inv) => inv.items.map((i) => i.id));
+  if (itemIds.length === 0) return;
+
+  const allocatedRows = await tx
+    .select({
+      receivingInvoiceItemId: schema.allocations.receivingInvoiceItemId,
+      total: sql<number>`coalesce(sum(${schema.allocations.qty}), 0)`.mapWith(Number),
+    })
+    .from(schema.allocations)
+    .where(inArray(schema.allocations.receivingInvoiceItemId, itemIds))
+    .groupBy(schema.allocations.receivingInvoiceItemId);
+
+  const allocatedMap = new Map(
+    allocatedRows.map((r) => [r.receivingInvoiceItemId, r.total])
+  );
+
+  const hasAvailable = order.invoices.some((inv) =>
+    inv.items.some((item) => {
+      const allocated = allocatedMap.get(item.id) ?? 0;
+      const available = item.receivedQty - item.pickedQty - item.putAwayQty - allocated;
+      return available > 0;
+    })
+  );
+
+  if (!hasAvailable) return;
+
+  const now = new Date();
+  await tx
+    .update(schema.receivingOrders)
+    .set({ status: "in_hand", updatedAt: now })
+    .where(eq(schema.receivingOrders.id, orderId));
+
+  await tx.insert(schema.transitionLogs).values({
+    id: uuid(),
+    entityType: "receiving_order",
+    entityId: orderId,
+    fromState: order.status,
+    toState: "in_hand",
+    actorId,
+    metadata: null,
+    createdAt: now,
+  });
+}
+
 export async function getReceivingOrdersWithSupplier(
   db: PgliteDatabase<typeof schema>
 ) {

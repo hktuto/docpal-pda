@@ -85,7 +85,7 @@
           <div v-if="!pkg.shippingBoxId" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
             <select
               :value="boxSelections[pkg.id]"
-              :disabled="addingPackage[pkg.id]"
+              :disabled="addingPackage[pkg.id] || removingPackage[pkg.id]"
               style="min-width: 8rem;"
               @change="updateBoxSelection(pkg.id, ($event.target as HTMLSelectElement).value)"
             >
@@ -94,7 +94,7 @@
             </select>
             <button
               class="btn btn--small"
-              :disabled="addingPackage[pkg.id] || !boxSelections[pkg.id]"
+              :disabled="addingPackage[pkg.id] || removingPackage[pkg.id] || !boxSelections[pkg.id]"
               @click="emit('add-to-box', pkg.id)"
             >
               <template v-if="addingPackage[pkg.id]">
@@ -102,6 +102,18 @@
               </template>
               <template v-else>
                 {{ $t('receiving.pickingTab.addToBox') }}
+              </template>
+            </button>
+            <button
+              class="btn btn--small btn--secondary"
+              :disabled="addingPackage[pkg.id] || removingPackage[pkg.id]"
+              @click="emit('remove-scanned-package', pkg.id)"
+            >
+              <template v-if="removingPackage[pkg.id]">
+                <InlineSpinner /> {{ $t('receiving.pickingTab.removingScanned') }}
+              </template>
+              <template v-else>
+                {{ $t('receiving.pickingTab.removeScanned') }}
               </template>
             </button>
           </div>
@@ -177,6 +189,7 @@ const emit = defineEmits<{
   "create-box": [pickingOrderId: string];
   "add-to-box": [packageId: string];
   "remove-from-box": [packageId: string];
+  "remove-scanned-package": [packageId: string];
   scan: [pickingItemId?: string];
 }>();
 
