@@ -241,3 +241,9 @@ describe('findMatchingUnverifiedPackage empty-field wildcard', () => {
     expect(matched).not.toBeNull();
   });
 });
+
+// TODO: put-away matcher tests
+// useScanMatchers relies on Nuxt runtime composables (useDb, useAuth, useI18n),
+// which are not trivially mockable in this in-memory PGlite test harness.
+// The put-away scan path is covered directly in tests/putAway.test.ts by
+// exercising recordPutAwayScan, which is the DB helper invoked by matchPutAway.
