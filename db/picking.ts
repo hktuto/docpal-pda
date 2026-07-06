@@ -668,9 +668,14 @@ export async function addPackageToBox(
   db: PgliteDatabase<typeof schema>,
   packageId: string,
   shippingBoxId: string,
-  actorId: string
+  actorId: string,
+  tx?: PgliteDatabase<typeof schema>
 ) {
-  return db.transaction(async (tx) => {
+  if (!actorId) throw new I18nError("actor_required");
+  if (tx) return add(tx);
+  return db.transaction(add);
+
+  async function add(tx: PgliteDatabase<typeof schema>) {
     const pkg = await tx.query.pickingPackages.findFirst({
       where: eq(schema.pickingPackages.id, packageId),
       with: { pickingItem: true },
@@ -711,8 +716,8 @@ export async function addPackageToBox(
       createdAt: new Date(),
     });
 
-    await maybeAutoFinishPickingOrder(db, pkg.pickingOrderId, actorId, tx);
-  });
+    await maybeAutoFinishPickingOrder(tx, pkg.pickingOrderId, actorId, tx);
+  }
 }
 
 export async function addAllUnboxedPackagesToBox(
@@ -735,7 +740,7 @@ export async function addAllUnboxedPackagesToBox(
     });
 
     for (const pkg of packages) {
-      await addPackageToBox(tx, pkg.id, shippingBoxId, actorId);
+      await addPackageToBox(tx, pkg.id, shippingBoxId, actorId, tx);
     }
 
     return packages.length;
