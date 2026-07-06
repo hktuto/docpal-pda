@@ -177,6 +177,25 @@ describe('addAllUnboxedPackagesToBox', () => {
     });
     expect(item?.pickedQty).toBe(200);
   });
+
+  it('auto-finishes the picking order once after batching the final packages', async () => {
+    await db.update(schema.pickingItems)
+      .set({ qty: 200 })
+      .where(eq(schema.pickingItems.id, pickingItemId));
+
+    const added = await addAllUnboxedPackagesToBox(db, shippingBoxId, actorId);
+    expect(added).toBe(2);
+
+    const order = await db.query.pickingOrders.findFirst({
+      where: eq(schema.pickingOrders.id, pickingOrderId),
+    });
+    expect(order?.status).toBe('finished');
+
+    const task = await db.query.measuringTasks.findFirst({
+      where: eq(schema.measuringTasks.pickingOrderId, pickingOrderId),
+    });
+    expect(task).toBeTruthy();
+  });
 });
 
 describe('addPackageToBox', () => {
@@ -296,6 +315,27 @@ describe('addPackageToBox', () => {
       addPackageToBox(db, packageId, shippingBoxId, actorId),
       'box_is_not_open',
     );
+  });
+
+  it('throws when the shipping box is not associated with a picking order', async () => {
+    const orphanBoxId = uuid();
+    const now = new Date();
+    await db.insert(schema.shippingBoxes).values({
+      id: orphanBoxId,
+      pickingOrderId: null,
+      status: 'open',
+      createdAt: now,
+    });
+
+    await expectI18nError(
+      addPackageToBox(db, packageId, orphanBoxId, actorId),
+      'shipping_box_not_associated',
+    );
+
+    const pkg = await db.query.pickingPackages.findFirst({
+      where: eq(schema.pickingPackages.id, packageId),
+    });
+    expect(pkg?.shippingBoxId).toBeNull();
   });
 
   it('throws when the package does not belong to the box picking order', async () => {

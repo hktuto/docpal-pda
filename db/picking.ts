@@ -669,7 +669,8 @@ export async function addPackageToBox(
   packageId: string,
   shippingBoxId: string,
   actorId: string,
-  tx?: PgliteDatabase<typeof schema>
+  tx?: PgliteDatabase<typeof schema>,
+  skipAutoFinish?: boolean
 ) {
   if (!actorId) throw new I18nError("actor_required");
   if (tx) return add(tx);
@@ -688,6 +689,7 @@ export async function addPackageToBox(
     });
     if (!box) throw new I18nError("box_not_found");
     if (box.status !== "open") throw new I18nError("box_is_not_open");
+    if (!box.pickingOrderId) throw new I18nError("shipping_box_not_associated");
     if (box.pickingOrderId) {
       const order = await tx.query.pickingOrders.findFirst({
         where: eq(schema.pickingOrders.id, box.pickingOrderId),
@@ -717,7 +719,9 @@ export async function addPackageToBox(
       createdAt: new Date(),
     });
 
-    await maybeAutoFinishPickingOrder(tx, pkg.pickingOrderId, actorId, tx);
+    if (!skipAutoFinish) {
+      await maybeAutoFinishPickingOrder(tx, pkg.pickingOrderId, actorId, tx);
+    }
   }
 }
 
@@ -743,7 +747,11 @@ export async function addAllUnboxedPackagesToBox(
     });
 
     for (const pkg of packages) {
-      await addPackageToBox(tx, pkg.id, shippingBoxId, actorId, tx);
+      await addPackageToBox(tx, pkg.id, shippingBoxId, actorId, tx, true);
+    }
+
+    if (box.pickingOrderId) {
+      await maybeAutoFinishPickingOrder(tx, box.pickingOrderId, actorId, tx);
     }
 
     return packages.length;
