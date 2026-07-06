@@ -37,11 +37,18 @@
       />
 
       <PutAwayLotsPanel
-        v-model:target-box-selections="targetBoxSelections"
+        v-model:box-selections="boxSelections"
+        v-model:expanded-items="expandedItems"
         :lots="lots"
+        :scans="scans"
         :boxes="boxes"
         :scanning="scanning"
+        :adding-scan="addingScan"
+        :removing-scan="removingScan"
         @scan="openScan"
+        @add-to-box="addScanToBox"
+        @remove-from-box="removeScanFromBoxHandler"
+        @remove-scan="removeScanHandler"
       />
     </template>
 
@@ -55,7 +62,7 @@
       :options="review.options"
       :match-result="review.matchResult"
       :mode="review.capture.imagePath ? 'review' : 'manual'"
-      :context="{ task: 'put-away', receivingItem: scanLot ?? undefined, targetBoxId: scanBoxId }"
+      :context="{ task: 'put-away', receivingItem: scanLot ?? undefined }"
       @applied="onApplied"
       @retake="onRetake"
     />
@@ -76,11 +83,16 @@ import PutAwayLotsPanel from "~/components/put-away/PutAwayLotsPanel.vue";
 import * as schema from "~/db/schema";
 import {
   getPutAwayLots,
+  getPutAwayScansForReceivingOrder,
+  assignScanToBox,
+  removeScanFromBox,
+  removeScannedPiece,
   createShelfBox,
   closeShelfBox,
   cancelShelfBox,
   getShelfBoxesForReceivingOrder,
   type ShelfBox,
+  type PutAwayScan,
 } from "~/db/putAway";
 import type { PutAwayLot } from "~/db/putAway";
 import { getReceivingOrderDetail } from "~/db/receiving";
@@ -121,9 +133,58 @@ const closing = ref(false);
 const cancellingBox = ref<Record<string, boolean>>({});
 
 const scanLot = ref<PutAwayLot | null>(null);
-const scanBoxId = ref<string>("");
-const targetBoxSelections = ref<Record<string, string>>({});
+const scans = ref<PutAwayScan[]>([]);
+const addingScan = ref<Record<string, boolean>>({});
+const removingScan = ref<Record<string, boolean>>({});
+const boxSelections = ref<Record<string, string>>({});
+const expandedItems = ref<Set<string>>(new Set());
 const { scan, scanning, review, reviewOpen, onApplied } = useLabelScanReview({ onApplied: load });
+
+function currentUserId(): string {
+  if (!currentUser.value?.id) throw new I18nError("operator_not_signed_in");
+  return currentUser.value.id;
+}
+
+async function addScanToBox(scanId: string) {
+  const boxId = boxSelections.value[scanId];
+  if (!boxId) return;
+  addingScan.value[scanId] = true;
+  error.value = null;
+  try {
+    await assignScanToBox(db, scanId, boxId, currentUserId());
+    await load();
+  } catch (e) {
+    error.value = errorMessage(e);
+  } finally {
+    addingScan.value[scanId] = false;
+  }
+}
+
+async function removeScanFromBoxHandler(scanId: string) {
+  removingScan.value[scanId] = true;
+  error.value = null;
+  try {
+    await removeScanFromBox(db, scanId, currentUserId());
+    await load();
+  } catch (e) {
+    error.value = errorMessage(e);
+  } finally {
+    removingScan.value[scanId] = false;
+  }
+}
+
+async function removeScanHandler(scanId: string) {
+  removingScan.value[scanId] = true;
+  error.value = null;
+  try {
+    await removeScannedPiece(db, scanId);
+    await load();
+  } catch (e) {
+    error.value = errorMessage(e);
+  } finally {
+    removingScan.value[scanId] = false;
+  }
+}
 
 useVisibleReload(load);
 
@@ -131,11 +192,12 @@ async function load() {
   pending.value = true;
   error.value = null;
   try {
-    const [orderData, lotsData, shelvesData, boxesData] = await Promise.all([
+    const [orderData, lotsData, shelvesData, boxesData, scansData] = await Promise.all([
       getReceivingOrderDetail(db, orderId),
       getPutAwayLots(db, orderId),
       db.query.shelves.findMany(),
       getShelfBoxesForReceivingOrder(db, orderId),
+      getPutAwayScansForReceivingOrder(db, orderId),
     ]);
     if (!orderData) {
       throw new I18nError("receiving_order_not_found");
@@ -146,15 +208,7 @@ async function load() {
 
     const previousBoxIds = new Set(boxes.value.map((b) => b.id));
     boxes.value = boxesData;
-
-    const openBoxIds = new Set(boxesData.filter((b) => b.status === "open").map((b) => b.id));
-    if (!reviewOpen.value) {
-      scanBoxId.value = "";
-      targetBoxSelections.value = Object.fromEntries(
-        Object.entries(targetBoxSelections.value).filter(([, boxId]) => openBoxIds.has(boxId))
-      );
-    }
-
+    scans.value = scansData;
     const nextExpanded = new Set(expandedItemBoxes.value);
     for (const b of boxesData) {
       if (b.status === "open" && !previousBoxIds.has(b.id)) {
@@ -176,13 +230,9 @@ function openNewBoxDialog() {
 
 async function createBoxFromDialog(shelfCode: string) {
   error.value = null;
-  if (!currentUser.value?.id) {
-    error.value = errorMessage(new I18nError("operator_not_signed_in"));
-    return;
-  }
   creating.value = true;
   try {
-    await createShelfBox(db, orderId, shelfCode, currentUser.value.id);
+    await createShelfBox(db, orderId, shelfCode, currentUserId());
     await load();
     boxesExpanded.value = true;
   } catch (e) {
@@ -194,13 +244,9 @@ async function createBoxFromDialog(shelfCode: string) {
 
 async function closeBox(boxId: string) {
   error.value = null;
-  if (!currentUser.value?.id) {
-    error.value = errorMessage(new I18nError("operator_not_signed_in"));
-    return;
-  }
   closing.value = true;
   try {
-    await closeShelfBox(db, boxId, currentUser.value.id);
+    await closeShelfBox(db, boxId, currentUserId());
     await load();
   } catch (e) {
     error.value = errorMessage(e);
@@ -211,13 +257,9 @@ async function closeBox(boxId: string) {
 
 async function cancelBox(boxId: string) {
   error.value = null;
-  if (!currentUser.value?.id) {
-    error.value = errorMessage(new I18nError("operator_not_signed_in"));
-    return;
-  }
   cancellingBox.value[boxId] = true;
   try {
-    await cancelShelfBox(db, boxId, currentUser.value.id);
+    await cancelShelfBox(db, boxId, currentUserId());
     await load();
   } catch (e) {
     error.value = errorMessage(e);
@@ -229,19 +271,9 @@ async function cancelBox(boxId: string) {
 async function openScan(lot: PutAwayLot) {
   error.value = null;
   scanLot.value = lot;
-  scanBoxId.value = targetBoxSelections.value[lot.receiving_invoice_item_id] ?? "";
-  if (!scanBoxId.value) {
-    error.value = errorMessage(new I18nError("select_target_box"));
-    return;
-  }
-  if (!boxes.value.some((b) => b.id === scanBoxId.value && b.status === "open")) {
-    error.value = errorMessage(new I18nError("selected_box_not_open"));
-    return;
-  }
   const result = await scan({
     task: 'put-away',
     receivingItem: lot,
-    targetBoxId: scanBoxId.value,
     targets: lot.part_no ? [lot.part_no] : [],
   });
   if (result.status === 'error') {
