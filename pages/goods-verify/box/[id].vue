@@ -184,6 +184,7 @@ async function openScan() {
     task: "goods-verify",
     items: box.value.items,
     targets: scanTargets.value,
+    confirmSingleMatch: true,
   });
   if (result.status === "error") {
     error.value = result.message;

@@ -62,7 +62,7 @@ export function useLabelScan() {
       return { status: 'error', message: matchResult.message };
     }
 
-    if (matchResult.type === 'single') {
+    if (matchResult.type === 'single' && !context.confirmSingleMatch) {
       await matchResult.apply();
       return { status: 'applied' };
     }

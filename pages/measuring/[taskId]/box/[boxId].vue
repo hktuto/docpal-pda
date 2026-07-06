@@ -203,6 +203,7 @@ async function openScan(packageId?: string) {
     boxId,
     targetPackageId: packageId,
     targets: scanTargets.value,
+    confirmSingleMatch: true,
   });
   if (result.status === "error") {
     error.value = result.message;

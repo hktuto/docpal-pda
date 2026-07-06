@@ -82,6 +82,8 @@ export interface ScanTaskContext {
   // goods-verify
   shelfBoxId?: string;
   items?: BoxItem[];
+  // when true, even a single match opens the review dialog instead of auto-applying
+  confirmSingleMatch?: boolean;
 }
 
 export interface ScanMatchRecord {

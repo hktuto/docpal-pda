@@ -415,6 +415,7 @@ async function openScan(itemId?: string) {
     receivingOrderId: orderId,
     pickingItemId: scanPickingItemId.value,
     targets: scanTargets.value,
+    confirmSingleMatch: true,
   });
   if (result.status === "error") {
     error.value = result.message;
