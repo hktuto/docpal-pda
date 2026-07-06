@@ -232,6 +232,22 @@ CREATE TABLE IF NOT EXISTS shelf_box_items (
 
 CREATE INDEX IF NOT EXISTS idx_shelf_box_items_box ON shelf_box_items(shelf_box_id);
 
+CREATE TABLE IF NOT EXISTS put_away_scans (
+  id TEXT PRIMARY KEY,
+  receiving_invoice_item_id TEXT NOT NULL REFERENCES receiving_invoice_items(id) ON DELETE CASCADE,
+  part_id TEXT NOT NULL REFERENCES parts(id),
+  qty INTEGER NOT NULL,
+  date_code TEXT,
+  lot_code TEXT,
+  coo TEXT,
+  cow TEXT,
+  shelf_box_id TEXT REFERENCES shelf_boxes(id) ON DELETE CASCADE,
+  created_at TIMESTAMP NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_put_away_scans_item ON put_away_scans(receiving_invoice_item_id);
+CREATE INDEX IF NOT EXISTS idx_put_away_scans_box ON put_away_scans(shelf_box_id);
+
 CREATE TABLE IF NOT EXISTS transition_logs (
   id TEXT PRIMARY KEY,
   entity_type TEXT NOT NULL,

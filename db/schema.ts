@@ -283,6 +283,23 @@ export const shelfBoxItems = pgTable("shelf_box_items", {
   verifiedAt: timestamp("verified_at"),
 });
 
+export const putAwayScans = pgTable("put_away_scans", {
+  id: text("id").primaryKey(),
+  receivingInvoiceItemId: text("receiving_invoice_item_id")
+    .notNull()
+    .references(() => receivingInvoiceItems.id, { onDelete: "cascade" }),
+  partId: text("part_id")
+    .notNull()
+    .references(() => parts.id),
+  qty: integer("qty").notNull(),
+  dateCode: text("date_code"),
+  lotCode: text("lot_code"),
+  coo: text("coo"),
+  cow: text("cow"),
+  shelfBoxId: text("shelf_box_id").references(() => shelfBoxes.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").notNull(),
+});
+
 // ------------------------------------------------------------------
 // Transition logs
 // ------------------------------------------------------------------
@@ -318,6 +335,7 @@ export const receivingInvoiceItemsRelations = relations(receivingInvoiceItems, (
   part: one(parts, { fields: [receivingInvoiceItems.partId], references: [parts.id] }),
   inventoryLotSources: many(inventoryLotSources),
   shelfBoxItems: many(shelfBoxItems),
+  putAwayScans: many(putAwayScans),
   allocations: many(allocations),
 }));
 
@@ -383,10 +401,17 @@ export const shelfBoxesRelations = relations(shelfBoxes, ({ one, many }) => ({
   receivingOrder: one(receivingOrders, { fields: [shelfBoxes.receivingOrderId], references: [receivingOrders.id] }),
   shelf: one(shelves, { fields: [shelfBoxes.shelfCode], references: [shelves.code] }),
   items: many(shelfBoxItems),
+  putAwayScans: many(putAwayScans),
 }));
 
 export const shelfBoxItemsRelations = relations(shelfBoxItems, ({ one }) => ({
   shelfBox: one(shelfBoxes, { fields: [shelfBoxItems.shelfBoxId], references: [shelfBoxes.id] }),
   receivingInvoiceItem: one(receivingInvoiceItems, { fields: [shelfBoxItems.receivingInvoiceItemId], references: [receivingInvoiceItems.id] }),
   part: one(parts, { fields: [shelfBoxItems.partId], references: [parts.id] }),
+}));
+
+export const putAwayScansRelations = relations(putAwayScans, ({ one }) => ({
+  receivingInvoiceItem: one(receivingInvoiceItems, { fields: [putAwayScans.receivingInvoiceItemId], references: [receivingInvoiceItems.id] }),
+  shelfBox: one(shelfBoxes, { fields: [putAwayScans.shelfBoxId], references: [shelfBoxes.id] }),
+  part: one(parts, { fields: [putAwayScans.partId], references: [parts.id] }),
 }));
