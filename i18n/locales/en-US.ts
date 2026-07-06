@@ -272,12 +272,27 @@ export default {
       canceling: "Canceling…"
     },
     lotsPanel: {
-      title: "Available receiving-area lots",
+      title: "Items to put away",
       part: "Part",
-      availableQty: "Available qty",
+      totalQty: "Total",
+      scannedQty: "Scanned",
+      boxedQty: "Boxed",
       dateLot: "Date / Lot",
       cooCow: "COO / COW",
-      selectTargetBox: "Select target box"
+      scans: "Scanned pieces",
+      noScans: "No scanned pieces yet",
+      selectBox: "Select box",
+      addToBox: "Add to box",
+      addingToBox: "Adding…",
+      removeFromBox: "Remove from box",
+      removingFromBox: "Removing…",
+      removeScan: "Remove scan",
+      removingScan: "Removing…",
+      scan: "Scan piece",
+      expandScans: "Show pieces",
+      collapseScans: "Hide pieces",
+      availableQty: "Available",
+      selectTargetBox: "Select target box",
     }
   },
   goodsVerify: {

@@ -272,12 +272,27 @@ export default {
       canceling: "取消中…"
     },
     lotsPanel: {
-      title: "可用收货区批次",
+      title: "待上架物品",
       part: "料号",
-      availableQty: "可用数量",
+      totalQty: "总数",
+      scannedQty: "已扫描",
+      boxedQty: "已装箱",
       dateLot: "日期 / 批次",
       cooCow: "产地 / 晶圆产地",
-      selectTargetBox: "选择目标箱子"
+      scans: "已扫描件",
+      noScans: "尚未扫描任何件",
+      selectBox: "选择箱子",
+      addToBox: "添加到箱子",
+      addingToBox: "加入中…",
+      removeFromBox: "从箱子移除",
+      removingFromBox: "移除中…",
+      removeScan: "移除扫描",
+      removingScan: "移除中…",
+      scan: "扫描件",
+      expandScans: "显示件",
+      collapseScans: "隐藏件",
+      availableQty: "可用数量",
+      selectTargetBox: "选择目标箱",
     }
   },
   goodsVerify: {
