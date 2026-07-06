@@ -715,6 +715,34 @@ export async function addPackageToBox(
   });
 }
 
+export async function addAllUnboxedPackagesToBox(
+  db: PgliteDatabase<typeof schema>,
+  shippingBoxId: string,
+  actorId: string
+): Promise<number> {
+  const box = await db.query.shippingBoxes.findFirst({
+    where: eq(schema.shippingBoxes.id, shippingBoxId),
+  });
+  if (!box) throw new I18nError("box_not_found");
+  if (box.status !== "open") throw new I18nError("box_is_not_open");
+
+  const packages = await db.query.pickingPackages.findMany({
+    where: and(
+      eq(schema.pickingPackages.pickingOrderId, box.pickingOrderId),
+      isNull(schema.pickingPackages.shippingBoxId)
+    ),
+  });
+
+  if (packages.length === 0) return 0;
+
+  return db.transaction(async (tx) => {
+    for (const pkg of packages) {
+      await addPackageToBox(tx, pkg.id, shippingBoxId, actorId);
+    }
+    return packages.length;
+  });
+}
+
 export async function removePackageFromBox(
   db: PgliteDatabase<typeof schema>,
   packageId: string,
