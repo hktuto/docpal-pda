@@ -11,6 +11,7 @@ import {
   removeScanFromBox,
   removeScannedPiece,
   cancelShelfBox,
+  getPutAwayCandidates,
 } from '../db/putAway';
 
 async function createTestDb() {
@@ -216,5 +217,22 @@ describe('put-away scan flow', () => {
     await expect(cancelShelfBox(db, shelfBoxId, actorId)).rejects.toThrow(
       'shelf_box_is_not_empty'
     );
+  });
+
+  it('list still shows order when all quantity is scanned but unboxed', async () => {
+    await recordPutAwayScan(
+      db,
+      receivingInvoiceItemId,
+      10000,
+      '2544',
+      'LOT1',
+      'CN',
+      'USA'
+    );
+
+    const candidates = await getPutAwayCandidates(db);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].id).toBe(receivingOrderId);
+    expect(candidates[0].available_qty).toBe(0);
   });
 });

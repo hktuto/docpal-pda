@@ -112,15 +112,22 @@ export async function getPutAwayCandidates(
       ro.ref_no,
       ro.status,
       s.name AS supplier_name,
-      SUM(${availableReceivingQtySql}) AS available_qty
+      SUM(${availableReceivingQtySql}) AS available_qty,
+      COALESCE(SUM(unboxed.unboxed_qty), 0) AS unboxed_qty
     FROM receiving_orders ro
     JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
     JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
     LEFT JOIN suppliers s ON s.id = ro.supplier_id
     LEFT JOIN (${allocationsCte()}) alloc ON alloc.receiving_invoice_item_id = rii.id
+    LEFT JOIN (
+      SELECT receiving_invoice_item_id, SUM(qty) AS unboxed_qty
+      FROM put_away_scans
+      WHERE shelf_box_id IS NULL
+      GROUP BY receiving_invoice_item_id
+    ) unboxed ON unboxed.receiving_invoice_item_id = rii.id
     WHERE ro.status = 'in_hand'
     GROUP BY ro.id, ro.ref_no, ro.status, s.name
-    HAVING SUM(${availableReceivingQtySql}) > 0
+    HAVING SUM(${availableReceivingQtySql}) > 0 OR COALESCE(SUM(unboxed.unboxed_qty), 0) > 0
     ORDER BY ro.ref_no;
   `).then((r) =>
     (r.rows ?? []).map((row) => ({
