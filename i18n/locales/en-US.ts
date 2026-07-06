@@ -279,7 +279,6 @@ export default {
       boxedQty: "Boxed",
       dateLot: "Date / Lot",
       cooCow: "COO / COW",
-      scans: "Scanned pieces",
       noScans: "No scanned pieces yet",
       selectBox: "Select box",
       addToBox: "Add to box",
@@ -291,8 +290,6 @@ export default {
       scan: "Scan piece",
       expandScans: "Show pieces",
       collapseScans: "Hide pieces",
-      availableQty: "Available",
-      selectTargetBox: "Select target box",
     }
   },
   goodsVerify: {

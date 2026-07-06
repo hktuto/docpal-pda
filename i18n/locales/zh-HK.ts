@@ -279,7 +279,6 @@ export default {
       boxedQty: "已裝箱",
       dateLot: "日期 / 批次",
       cooCow: "產地 / 晶圓產地",
-      scans: "已掃描件",
       noScans: "尚未掃描任何件",
       selectBox: "選擇箱號",
       addToBox: "加入箱號",
@@ -291,8 +290,6 @@ export default {
       scan: "掃描件",
       expandScans: "顯示件",
       collapseScans: "隱藏件",
-      availableQty: "可用數量",
-      selectTargetBox: "選擇目標箱",
     }
   },
   goodsVerify: {
