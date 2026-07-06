@@ -1,4 +1,4 @@
-import { eq, sql, isNull, desc } from "drizzle-orm";
+import { eq, sql, isNull, desc, and } from "drizzle-orm";
 import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { v4 as uuid } from "uuid";
 import * as schema from "./schema";
@@ -35,7 +35,72 @@ export interface PutAwayLot {
   lot_code: string | null;
   coo: string | null;
   cow: string | null;
+  total_qty: number;
   available_qty: number;
+  scanned_qty: number;
+  boxed_qty: number;
+}
+
+export type PutAwayScan = typeof schema.putAwayScans.$inferSelect;
+
+export async function recordPutAwayScan(
+  db: PgliteDatabase<typeof schema>,
+  receivingInvoiceItemId: string,
+  qty: number,
+  dateCode: string | null,
+  lotCode: string | null,
+  coo: string | null,
+  cow: string | null
+): Promise<typeof schema.putAwayScans.$inferSelect> {
+  if (!Number.isInteger(qty) || qty <= 0) {
+    throw new I18nError("qty_must_be_positive_integer");
+  }
+
+  return db.transaction(async (tx) => {
+    const [item] = await tx
+      .select()
+      .from(schema.receivingInvoiceItems)
+      .where(eq(schema.receivingInvoiceItems.id, receivingInvoiceItemId));
+    if (!item) throw new I18nError("invoice_item_not_found");
+
+    const allocatedResult = await tx
+      .select({ total: sql<number>`coalesce(sum(${schema.allocations.qty}), 0)`.mapWith(Number) })
+      .from(schema.allocations)
+      .where(eq(schema.allocations.receivingInvoiceItemId, receivingInvoiceItemId));
+    const allocated = allocatedResult[0]?.total ?? 0;
+
+    const unboxedResult = await tx
+      .select({ total: sql<number>`coalesce(sum(${schema.putAwayScans.qty}), 0)`.mapWith(Number) })
+      .from(schema.putAwayScans)
+      .where(
+        and(
+          eq(schema.putAwayScans.receivingInvoiceItemId, receivingInvoiceItemId),
+          isNull(schema.putAwayScans.shelfBoxId)
+        )
+      );
+    const unboxed = unboxedResult[0]?.total ?? 0;
+
+    const remaining = item.receivedQty - item.pickedQty - allocated - item.putAwayQty - unboxed;
+    if (qty > remaining) throw new I18nError("scanned_qty_exceeds_total");
+
+    const [scan] = await tx
+      .insert(schema.putAwayScans)
+      .values({
+        id: uuid(),
+        receivingInvoiceItemId,
+        partId: item.partId,
+        qty,
+        dateCode,
+        lotCode,
+        coo,
+        cow,
+        shelfBoxId: null,
+        createdAt: new Date(),
+      })
+      .returning();
+
+    return scan;
+  });
 }
 
 export async function getPutAwayCandidates(
@@ -78,22 +143,317 @@ export async function getPutAwayLots(
       rii.lot_code,
       rii.coo,
       rii.cow,
-      (${availableReceivingQtySql}) AS available_qty
+      rii.qty AS total_qty,
+      (${availableReceivingQtySql}) AS available_qty,
+      COALESCE(SUM(pas.qty), 0) AS scanned_qty,
+      COALESCE(SUM(CASE WHEN pas.shelf_box_id IS NOT NULL THEN pas.qty ELSE 0 END), 0) AS boxed_qty
     FROM receiving_orders ro
     JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
     JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
     JOIN parts p ON p.id = rii.part_id
+    LEFT JOIN put_away_scans pas ON pas.receiving_invoice_item_id = rii.id
     LEFT JOIN (${allocationsCte()}) alloc ON alloc.receiving_invoice_item_id = rii.id
     WHERE ro.id = ${receivingOrderId}
       AND ro.status = 'in_hand'
-      AND ${availableReceivingQtySql} > 0
+    GROUP BY rii.id, p.id, p.part_no, rii.date_code, rii.lot_code, rii.coo, rii.cow, rii.qty,
+             alloc.allocated_qty, alloc.unboxed_scanned_qty
+    HAVING (${availableReceivingQtySql}) > 0
+       OR COALESCE(SUM(CASE WHEN pas.shelf_box_id IS NULL THEN pas.qty ELSE 0 END), 0) > 0
     ORDER BY p.part_no, rii.date_code;
   `).then((r) =>
     (r.rows ?? []).map((row) => ({
       ...row,
+      total_qty: Number(row.total_qty ?? 0),
       available_qty: Number(row.available_qty ?? 0),
+      scanned_qty: Number(row.scanned_qty ?? 0),
+      boxed_qty: Number(row.boxed_qty ?? 0),
     })) as PutAwayLot[]
   );
+}
+
+export async function getPutAwayScansForReceivingOrder(
+  db: PgliteDatabase<typeof schema>,
+  receivingOrderId: string
+): Promise<PutAwayScan[]> {
+  const result = await db.execute(sql`
+    SELECT
+      pas.id,
+      pas.receiving_invoice_item_id AS "receivingInvoiceItemId",
+      pas.part_id AS "partId",
+      pas.qty,
+      pas.date_code AS "dateCode",
+      pas.lot_code AS "lotCode",
+      pas.coo,
+      pas.cow,
+      pas.shelf_box_id AS "shelfBoxId",
+      pas.created_at AS "createdAt"
+    FROM put_away_scans pas
+    JOIN receiving_invoice_items rii ON rii.id = pas.receiving_invoice_item_id
+    JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+    WHERE ri.receiving_order_id = ${receivingOrderId}
+    ORDER BY pas.created_at DESC
+  `);
+  return (result.rows ?? []).map((row) => ({
+    id: String(row.id),
+    receivingInvoiceItemId: String(row.receivingInvoiceItemId),
+    partId: String(row.partId),
+    qty: Number(row.qty),
+    dateCode: row.dateCode as string | null,
+    lotCode: row.lotCode as string | null,
+    coo: row.coo as string | null,
+    cow: row.cow as string | null,
+    shelfBoxId: row.shelfBoxId as string | null,
+    createdAt: new Date(String(row.createdAt)),
+  })) as PutAwayScan[];
+}
+
+export async function assignScanToBox(
+  db: PgliteDatabase<typeof schema>,
+  scanId: string,
+  shelfBoxId: string,
+  actorId: string
+): Promise<void> {
+  return db.transaction(async (tx) => {
+    const [scan] = await tx
+      .select()
+      .from(schema.putAwayScans)
+      .where(eq(schema.putAwayScans.id, scanId));
+    if (!scan) throw new I18nError("put_away_scan_not_found");
+    if (scan.shelfBoxId) throw new I18nError("put_away_scan_already_boxed");
+
+    const [box] = await tx
+      .select()
+      .from(schema.shelfBoxes)
+      .where(eq(schema.shelfBoxes.id, shelfBoxId));
+    if (!box) throw new I18nError("shelf_box_not_found");
+    if (box.status !== "open") throw new I18nError("shelf_box_is_not_open");
+
+    const [item] = await tx
+      .select()
+      .from(schema.receivingInvoiceItems)
+      .where(eq(schema.receivingInvoiceItems.id, scan.receivingInvoiceItemId));
+    if (!item) throw new I18nError("invoice_item_not_found");
+
+    const [invoice] = await tx
+      .select()
+      .from(schema.receivingInvoices)
+      .where(eq(schema.receivingInvoices.id, item.receivingInvoiceId));
+    if (!invoice) throw new I18nError("invoice_not_found");
+    if (invoice.receivingOrderId !== box.receivingOrderId) {
+      throw new I18nError("item_does_not_belong_to_receiving_order");
+    }
+
+    await tx
+      .update(schema.putAwayScans)
+      .set({ shelfBoxId })
+      .where(eq(schema.putAwayScans.id, scanId));
+
+    const existing = await tx.query.inventoryLots.findFirst({
+      where: (il, { and, eq }) =>
+        and(
+          eq(il.partId, item.partId),
+          eq(il.shelfCode, box.shelfCode),
+          eq(il.boxId, shelfBoxId),
+          scan.dateCode != null ? eq(il.dateCode, scan.dateCode) : isNull(il.dateCode),
+          scan.lotCode != null ? eq(il.lotCode, scan.lotCode) : isNull(il.lotCode),
+          scan.coo != null ? eq(il.coo, scan.coo) : isNull(il.coo),
+          scan.cow != null ? eq(il.cow, scan.cow) : isNull(il.cow)
+        ),
+    });
+
+    let targetLotId: string;
+    if (existing) {
+      targetLotId = existing.id;
+      await tx
+        .update(schema.inventoryLots)
+        .set({ totalQty: sql`${schema.inventoryLots.totalQty} + ${scan.qty}` })
+        .where(eq(schema.inventoryLots.id, targetLotId));
+    } else {
+      targetLotId = uuid();
+      await tx.insert(schema.inventoryLots).values({
+        id: targetLotId,
+        partId: item.partId,
+        dateCode: scan.dateCode,
+        lotCode: scan.lotCode,
+        coo: scan.coo,
+        cow: scan.cow,
+        shelfCode: box.shelfCode,
+        boxId: shelfBoxId,
+        totalQty: scan.qty,
+        allocatedQty: 0,
+      });
+    }
+
+    const sourceLink = await tx.query.inventoryLotSources.findFirst({
+      where: (ils, { and }) =>
+        and(
+          eq(ils.inventoryLotId, targetLotId),
+          eq(ils.receivingInvoiceItemId, scan.receivingInvoiceItemId)
+        ),
+    });
+
+    if (sourceLink) {
+      await tx
+        .update(schema.inventoryLotSources)
+        .set({ qty: sql`${schema.inventoryLotSources.qty} + ${scan.qty}` })
+        .where(eq(schema.inventoryLotSources.id, sourceLink.id));
+    } else {
+      await tx.insert(schema.inventoryLotSources).values({
+        id: uuid(),
+        inventoryLotId: targetLotId,
+        receivingInvoiceItemId: scan.receivingInvoiceItemId,
+        qty: scan.qty,
+      });
+    }
+
+    await tx
+      .update(schema.receivingInvoiceItems)
+      .set({ putAwayQty: sql`${schema.receivingInvoiceItems.putAwayQty} + ${scan.qty}` })
+      .where(eq(schema.receivingInvoiceItems.id, scan.receivingInvoiceItemId));
+
+    const summary = await tx.query.shelfBoxItems.findFirst({
+      where: (sbi, { and, eq }) =>
+        and(
+          eq(sbi.shelfBoxId, shelfBoxId),
+          eq(sbi.receivingInvoiceItemId, scan.receivingInvoiceItemId),
+          eq(sbi.partId, item.partId)
+        ),
+    });
+
+    if (summary) {
+      await tx
+        .update(schema.shelfBoxItems)
+        .set({ qty: sql`${schema.shelfBoxItems.qty} + ${scan.qty}` })
+        .where(eq(schema.shelfBoxItems.id, summary.id));
+    } else {
+      await tx.insert(schema.shelfBoxItems).values({
+        id: uuid(),
+        shelfBoxId,
+        receivingInvoiceItemId: scan.receivingInvoiceItemId,
+        partId: item.partId,
+        qty: scan.qty,
+        verified: false,
+      });
+    }
+
+    if (invoice.receivingOrderId) {
+      await tryMarkReceivingOrderClear(tx, invoice.receivingOrderId, actorId);
+    }
+  });
+}
+
+export async function removeScanFromBox(
+  db: PgliteDatabase<typeof schema>,
+  scanId: string,
+  actorId: string
+): Promise<void> {
+  return db.transaction(async (tx) => {
+    const [scan] = await tx
+      .select()
+      .from(schema.putAwayScans)
+      .where(eq(schema.putAwayScans.id, scanId));
+    if (!scan) throw new I18nError("put_away_scan_not_found");
+    if (!scan.shelfBoxId) throw new I18nError("put_away_scan_not_boxed");
+
+    const shelfBoxId = scan.shelfBoxId;
+
+    const [box] = await tx
+      .select()
+      .from(schema.shelfBoxes)
+      .where(eq(schema.shelfBoxes.id, shelfBoxId));
+    if (!box) throw new I18nError("shelf_box_not_found");
+    if (box.status !== "open") throw new I18nError("shelf_box_is_not_open");
+
+    await tx
+      .update(schema.putAwayScans)
+      .set({ shelfBoxId: null })
+      .where(eq(schema.putAwayScans.id, scanId));
+
+    const existing = await tx.query.inventoryLots.findFirst({
+      where: (il, { and, eq }) =>
+        and(
+          eq(il.partId, scan.partId),
+          eq(il.shelfCode, box.shelfCode),
+          eq(il.boxId, shelfBoxId),
+          scan.dateCode != null ? eq(il.dateCode, scan.dateCode) : isNull(il.dateCode),
+          scan.lotCode != null ? eq(il.lotCode, scan.lotCode) : isNull(il.lotCode),
+          scan.coo != null ? eq(il.coo, scan.coo) : isNull(il.coo),
+          scan.cow != null ? eq(il.cow, scan.cow) : isNull(il.cow)
+        ),
+    });
+    if (!existing) throw new I18nError("inventory_lot_not_found");
+
+    await tx
+      .update(schema.inventoryLots)
+      .set({ totalQty: sql`${schema.inventoryLots.totalQty} - ${scan.qty}` })
+      .where(eq(schema.inventoryLots.id, existing.id));
+
+    if (existing.totalQty - scan.qty <= 0) {
+      await tx.delete(schema.inventoryLots).where(eq(schema.inventoryLots.id, existing.id));
+    }
+
+    const sourceLink = await tx.query.inventoryLotSources.findFirst({
+      where: (ils, { and }) =>
+        and(
+          eq(ils.inventoryLotId, existing.id),
+          eq(ils.receivingInvoiceItemId, scan.receivingInvoiceItemId)
+        ),
+    });
+    if (sourceLink) {
+      if (sourceLink.qty - scan.qty <= 0) {
+        await tx.delete(schema.inventoryLotSources).where(eq(schema.inventoryLotSources.id, sourceLink.id));
+      } else {
+        await tx
+          .update(schema.inventoryLotSources)
+          .set({ qty: sql`${schema.inventoryLotSources.qty} - ${scan.qty}` })
+          .where(eq(schema.inventoryLotSources.id, sourceLink.id));
+      }
+    }
+
+    await tx
+      .update(schema.receivingInvoiceItems)
+      .set({ putAwayQty: sql`${schema.receivingInvoiceItems.putAwayQty} - ${scan.qty}` })
+      .where(eq(schema.receivingInvoiceItems.id, scan.receivingInvoiceItemId));
+
+    const summary = await tx.query.shelfBoxItems.findFirst({
+      where: (sbi, { and, eq }) =>
+        and(
+          eq(sbi.shelfBoxId, shelfBoxId),
+          eq(sbi.receivingInvoiceItemId, scan.receivingInvoiceItemId),
+          eq(sbi.partId, scan.partId)
+        ),
+    });
+    if (!summary) throw new I18nError("shelf_box_item_not_found");
+
+    if (summary.qty - scan.qty <= 0) {
+      await tx.delete(schema.shelfBoxItems).where(eq(schema.shelfBoxItems.id, summary.id));
+    } else {
+      await tx
+        .update(schema.shelfBoxItems)
+        .set({ qty: sql`${schema.shelfBoxItems.qty} - ${scan.qty}` })
+        .where(eq(schema.shelfBoxItems.id, summary.id));
+    }
+
+    if (box.receivingOrderId) {
+      await tryMarkReceivingOrderClear(tx, box.receivingOrderId, actorId);
+    }
+  });
+}
+
+export async function removeScannedPiece(
+  db: PgliteDatabase<typeof schema>,
+  scanId: string
+): Promise<void> {
+  return db.transaction(async (tx) => {
+    const [scan] = await tx
+      .select()
+      .from(schema.putAwayScans)
+      .where(eq(schema.putAwayScans.id, scanId));
+    if (!scan) throw new I18nError("put_away_scan_not_found");
+    if (scan.shelfBoxId) throw new I18nError("put_away_scan_already_boxed");
+
+    await tx.delete(schema.putAwayScans).where(eq(schema.putAwayScans.id, scanId));
+  });
 }
 
 export async function createShelfBox(
@@ -144,11 +504,11 @@ export async function cancelShelfBox(
     if (!box) throw new I18nError("shelf_box_not_found");
     if (box.status !== "open") throw new I18nError("shelf_box_is_not_open");
 
-    const itemResult = await tx
+    const [itemsCount] = await tx
       .select({ count: sql<number>`count(*)`.mapWith(Number) })
       .from(schema.shelfBoxItems)
       .where(eq(schema.shelfBoxItems.shelfBoxId, boxId));
-    if ((itemResult[0]?.count ?? 0) > 0) throw new I18nError("shelf_box_is_not_empty");
+    if ((itemsCount?.count ?? 0) > 0) throw new I18nError("shelf_box_is_not_empty");
 
     await tx.insert(schema.transitionLogs).values({
       id: uuid(),
