@@ -73,6 +73,8 @@ export type MismatchReason = (typeof mismatchReasons)[number];
 
 export const mismatchStatuses = ["pending", "confirmed", "cancelled"] as const;
 
+export type MismatchStatus = (typeof mismatchStatuses)[number];
+
 export const receivingItemMismatches = pgTable("receiving_item_mismatches", {
   id: text("id").primaryKey(),
   receivingInvoiceItemId: text("receiving_invoice_item_id")
