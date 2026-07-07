@@ -2,6 +2,7 @@ import { eq, sql, inArray, and, ne, desc } from "drizzle-orm";
 import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { v4 as uuid } from "uuid";
 import * as schema from "./schema";
+import { tryMarkReceivingOrderClear, tryMarkReceivingOrderInHand } from "~/db/receiving";
 import { I18nError } from "~/composables/i18nError";
 
 export function computeReceivedQty(
@@ -201,6 +202,16 @@ export async function reportReceivingItemMismatch(
       .set({ receivedQty: effectiveReceivedQty })
       .where(eq(schema.receivingInvoiceItems.id, receivingInvoiceItemId));
 
+    const invoice = await tx.query.receivingInvoices.findFirst({
+      where: eq(schema.receivingInvoices.id, item.receivingInvoiceId),
+      columns: { receivingOrderId: true },
+    });
+    const receivingOrderId = invoice?.receivingOrderId;
+    if (receivingOrderId) {
+      await tryMarkReceivingOrderClear(tx, receivingOrderId, actorId);
+      await tryMarkReceivingOrderInHand(tx, receivingOrderId, actorId);
+    }
+
     await tx.insert(schema.transitionLogs).values({
       id: uuid(),
       entityType: "receiving_item_mismatch",
@@ -259,6 +270,16 @@ export async function editReceivingItemMismatch(
       .update(schema.receivingInvoiceItems)
       .set({ receivedQty: effectiveReceivedQty })
       .where(eq(schema.receivingInvoiceItems.id, mismatch.receivingInvoiceItemId));
+
+    const invoice = await tx.query.receivingInvoices.findFirst({
+      where: eq(schema.receivingInvoices.id, item.receivingInvoiceId),
+      columns: { receivingOrderId: true },
+    });
+    const receivingOrderId = invoice?.receivingOrderId;
+    if (receivingOrderId) {
+      await tryMarkReceivingOrderClear(tx, receivingOrderId, actorId);
+      await tryMarkReceivingOrderInHand(tx, receivingOrderId, actorId);
+    }
 
     await tx.insert(schema.transitionLogs).values({
       id: uuid(),
@@ -335,6 +356,16 @@ export async function cancelReceivingItemMismatch(
       .update(schema.receivingInvoiceItems)
       .set({ receivedQty: mismatch.previousReceivedQty })
       .where(eq(schema.receivingInvoiceItems.id, mismatch.receivingInvoiceItemId));
+
+    const invoice = await tx.query.receivingInvoices.findFirst({
+      where: eq(schema.receivingInvoices.id, item.receivingInvoiceId),
+      columns: { receivingOrderId: true },
+    });
+    const receivingOrderId = invoice?.receivingOrderId;
+    if (receivingOrderId) {
+      await tryMarkReceivingOrderClear(tx, receivingOrderId, actorId);
+      await tryMarkReceivingOrderInHand(tx, receivingOrderId, actorId);
+    }
 
     await tx.insert(schema.transitionLogs).values({
       id: uuid(),

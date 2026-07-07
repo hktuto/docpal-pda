@@ -193,6 +193,8 @@ export async function getPutAwayScansForReceivingOrder(
       pas.coo,
       pas.cow,
       pas.shelf_box_id AS "shelfBoxId",
+      pas.verified,
+      pas.verified_at AS "verifiedAt",
       pas.created_at AS "createdAt"
     FROM put_away_scans pas
     JOIN receiving_invoice_items rii ON rii.id = pas.receiving_invoice_item_id
@@ -210,6 +212,8 @@ export async function getPutAwayScansForReceivingOrder(
     coo: row.coo as string | null,
     cow: row.cow as string | null,
     shelfBoxId: row.shelfBoxId as string | null,
+    verified: Boolean(row.verified),
+    verifiedAt: row.verifiedAt ? new Date(String(row.verifiedAt)) : null,
     createdAt: new Date(String(row.createdAt)),
   })) as PutAwayScan[];
 }

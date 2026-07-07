@@ -83,6 +83,7 @@ Page and component locations mapped to source files.
 | Picking | `db/picking.ts` |
 | OCR-assisted picking | `db/ocrPicking.ts` |
 | Receiving | `db/receiving.ts` |
+| Receiving mismatch | `db/mismatch.ts` |
 | Put-away | `db/putAway.ts` |
 | Measuring | `db/measuring.ts` |
 | Goods verify | `db/goodsVerify.ts` |

@@ -10,7 +10,7 @@ Machine-readable index of features in the warehouse PDA demo. Use this page to l
 | Picking issue reporting | Picking | Shipped | `components/PickingIssueReportModal.vue`, `components/ReportIssueModal.vue` | [ai-scope](../flows/picking/ai-scope.md) |
 | Receiving list | Receiving | Shipped | `pages/receiving/index.vue` | [ai-scope](../flows/receiving/ai-scope.md) |
 | Receiving detail | Receiving | Shipped | `pages/receiving/[id].vue` or equivalent | [ai-scope](../flows/receiving/ai-scope.md) |
-| Receiving mismatch | Receiving | Shipped | `components/ReportIssueModal.vue`, `db/receiving.ts` | [ai-scope](../flows/receiving/ai-scope.md) |
+| Receiving mismatch | Receiving | Shipped | `components/ReportIssueModal.vue`, `db/mismatch.ts`, `db/receiving.ts` | [ai-scope](../flows/receiving/ai-scope.md) |
 | Pending picking count badge | Receiving | Shipped | `pages/receiving/index.vue`, `db/receiving.ts` | [ai-scope](../flows/receiving/ai-scope.md) |
 | Put-away list | Put-away | Shipped | `pages/put-away/index.vue` | [ai-scope](../flows/put-away/ai-scope.md) |
 | Put-away detail | Put-away | Shipped | `pages/put-away/[id].vue`, `components/put-away/PutAwayLotsPanel.vue`, `components/put-away/ShelfBoxesPanel.vue` | [ai-scope](../flows/put-away/ai-scope.md) |

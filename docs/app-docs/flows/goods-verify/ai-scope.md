@@ -6,6 +6,7 @@
 - Show task detail with expected items.
 - Scan/type part numbers for verification.
 - Record verification results and discrepancies.
+- Shelf-box contents are sourced from `put_away_scans` (shared with put-away).
 
 ## Out of scope
 
