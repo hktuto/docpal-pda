@@ -293,7 +293,7 @@ describe('findUnverifiedBoxItemByPartNo', () => {
     const item = makeShelfBoxItem({ part: { id: uuid(), partNo: 'RK73B1JTTD181G', description: 'Test Resistor' } });
     const items = [item];
 
-    const result = findUnverifiedBoxItemByPartNo(items, normalize('  rk73b1jttd181g  '));
+    const result = findUnverifiedBoxItemByPartNo(items, '  rk73b1jttd181g  ');
 
     expect(result).toBe(item);
   });

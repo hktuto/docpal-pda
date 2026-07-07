@@ -102,8 +102,9 @@ export function findUnverifiedBoxItemByPartNo(
   items: ShelfBoxItemDetail[],
   scannedPartNo: string
 ): ShelfBoxItemDetail | undefined {
+  const normalizedScannedPartNo = normalize(scannedPartNo);
   return items.find((i) =>
-    !i.verified && normalize(i.part?.partNo ?? '') === scannedPartNo
+    !i.verified && normalize(i.part?.partNo ?? '') === normalizedScannedPartNo
   );
 }
 
@@ -306,6 +307,9 @@ export function useScanMatchers(): ScanMatchers {
 
   async function matchGoodsVerify(items: ShelfBoxItemDetail[], parsed: OcrInput): Promise<ScanMatchResult> {
     try {
+      const user = currentUser.value;
+      if (!user?.id) return error('operator_not_signed_in');
+
       const scannedPartNo = normalize(parsed.partNo ?? '');
       if (!scannedPartNo) return error('part_no_required');
 
