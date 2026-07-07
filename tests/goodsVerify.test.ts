@@ -10,8 +10,11 @@ import {
   getShelfBoxDetail,
   verifyShelfBoxScans,
   markShelfBoxVerified,
+  type ShelfBoxItemDetail,
 } from '../db/goodsVerify';
 import { I18nError } from '../composables/i18nError';
+import { findUnverifiedBoxItemByPartNo } from '../composables/useScanMatchers';
+import { normalize } from '../composables/useMockOcr';
 
 async function createTestDb() {
   const pg = new PGlite();
@@ -249,5 +252,58 @@ describe('goods verify', () => {
       where: eq(schema.shelfBoxes.id, boxId),
     });
     expect(box?.status).toBe('verified');
+  });
+});
+
+function makeShelfBoxItem(overrides: Partial<ShelfBoxItemDetail> = {}): ShelfBoxItemDetail {
+  return {
+    id: uuid(),
+    shelfBoxId: uuid(),
+    receivingInvoiceItemId: null,
+    partId: uuid(),
+    qty: 1000,
+    verified: false,
+    verifiedAt: null,
+    part: { id: uuid(), partNo: 'RK73B1JTTD181G', description: 'Test Resistor' },
+    ...overrides,
+  };
+}
+
+describe('findUnverifiedBoxItemByPartNo', () => {
+  it('finds the only unverified item matching the scanned part number', () => {
+    const item = makeShelfBoxItem({ part: { id: uuid(), partNo: 'RK73B1JTTD181G', description: 'Test Resistor' } });
+    const items = [item];
+
+    const result = findUnverifiedBoxItemByPartNo(items, normalize('RK73B1JTTD181G'));
+
+    expect(result).toBe(item);
+  });
+
+  it('skips already-verified items', () => {
+    const verifiedItem = makeShelfBoxItem({ verified: true, verifiedAt: new Date() });
+    const unverifiedItem = makeShelfBoxItem();
+    const items = [verifiedItem, unverifiedItem];
+
+    const result = findUnverifiedBoxItemByPartNo(items, normalize('RK73B1JTTD181G'));
+
+    expect(result).toBe(unverifiedItem);
+  });
+
+  it('matches regardless of case and whitespace differences', () => {
+    const item = makeShelfBoxItem({ part: { id: uuid(), partNo: 'RK73B1JTTD181G', description: 'Test Resistor' } });
+    const items = [item];
+
+    const result = findUnverifiedBoxItemByPartNo(items, normalize('  rk73b1jttd181g  '));
+
+    expect(result).toBe(item);
+  });
+
+  it('returns undefined when no item matches', () => {
+    const item = makeShelfBoxItem({ part: { id: uuid(), partNo: 'RK73B1JTTD182G', description: 'Other Resistor' } });
+    const items = [item];
+
+    const result = findUnverifiedBoxItemByPartNo(items, normalize('RK73B1JTTD181G'));
+
+    expect(result).toBeUndefined();
   });
 });

@@ -19,7 +19,7 @@ import {
   findMatchingUnverifiedPackage,
   verifyPickingPackageForMeasuring,
 } from '~/db/measuring';
-import { verifyShelfBoxScans } from '~/db/goodsVerify';
+import { verifyShelfBoxScans, type ShelfBoxItemDetail } from '~/db/goodsVerify';
 import { rawCode } from '~/utils/text';
 
 export type ScanTask = 'receiving' | 'picking' | 'put-away' | 'measuring' | 'goods-verify';
@@ -58,14 +58,6 @@ interface PickingAllocation {
   pickingItem?: { part?: { partNo: string | null } | null } | null;
 }
 
-interface BoxItem {
-  id: string;
-  shelfBoxId: string;
-  partId: string;
-  verified: boolean;
-  part?: { partNo: string | null } | null;
-}
-
 export interface ScanTaskContext {
   task: ScanTask;
   targets?: string[];
@@ -80,8 +72,7 @@ export interface ScanTaskContext {
   boxId?: string;
   targetPackageId?: string;
   // goods-verify
-  shelfBoxId?: string;
-  items?: BoxItem[];
+  items?: ShelfBoxItemDetail[];
   // when true, even a single match opens the review dialog instead of auto-applying
   confirmSingleMatch?: boolean;
 }
@@ -102,9 +93,18 @@ export interface ScanMatchers {
   matchPicking(allocation: PickingAllocation, parsed: OcrInput): Promise<ScanMatchResult>;
   matchPutAway(receivingItem: PutAwayLot, parsed: OcrInput): Promise<ScanMatchResult>;
   matchMeasuring(boxId: string, targetPackageId: string | undefined, parsed: OcrInput): Promise<ScanMatchResult>;
-  matchGoodsVerify(items: BoxItem[], parsed: OcrInput): Promise<ScanMatchResult>;
+  matchGoodsVerify(items: ShelfBoxItemDetail[], parsed: OcrInput): Promise<ScanMatchResult>;
   error(err: I18nError): ScanMatchResult;
   error(code: string, params?: Record<string, unknown>): ScanMatchResult;
+}
+
+export function findUnverifiedBoxItemByPartNo(
+  items: ShelfBoxItemDetail[],
+  scannedPartNo: string
+): ShelfBoxItemDetail | undefined {
+  return items.find((i) =>
+    !i.verified && normalize(i.part?.partNo ?? '') === scannedPartNo
+  );
 }
 
 export function useScanMatchers(): ScanMatchers {
@@ -304,16 +304,13 @@ export function useScanMatchers(): ScanMatchers {
     }
   }
 
-  async function matchGoodsVerify(items: BoxItem[], parsed: OcrInput): Promise<ScanMatchResult> {
+  async function matchGoodsVerify(items: ShelfBoxItemDetail[], parsed: OcrInput): Promise<ScanMatchResult> {
     try {
-      const partNo = parsed.partNo?.trim() ?? '';
-      if (!partNo) return error('part_no_required');
+      const scannedPartNo = normalize(parsed.partNo ?? '');
+      if (!scannedPartNo) return error('part_no_required');
 
-      const normalizedPartNo = normalize(partNo);
-      const item = items.find((i) =>
-        !i.verified && normalize(i.part?.partNo ?? '') === normalizedPartNo
-      );
-      if (!item) return { type: 'none' };
+      const item = findUnverifiedBoxItemByPartNo(items, scannedPartNo);
+      if (!item) return error('part_not_found_in_box');
 
       return {
         type: 'single',
