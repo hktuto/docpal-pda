@@ -126,52 +126,12 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
   ] as const;
   await db.insert(schema.shelfBoxes).values(preExistingShelfBoxes);
 
-  await db.insert(schema.shelfBoxItems).values([
-    {
-      id: uuid(),
-      shelfBoxId: "SBOX-SEED-001",
-      receivingInvoiceItemId: null as string | null,
-      partId: partByNo["RK73B1JTTD181G"].id,
-      qty: 1000,
-      verified: false,
-      verifiedAt: null as Date | null,
-    },
-    {
-      id: uuid(),
-      shelfBoxId: "SBOX-SEED-001",
-      receivingInvoiceItemId: null as string | null,
-      partId: partByNo["RK73H2ATTD1372F"].id,
-      qty: 500,
-      verified: true,
-      verifiedAt: now,
-    },
-    {
-      id: uuid(),
-      shelfBoxId: "SBOX-SEED-002",
-      receivingInvoiceItemId: null as string | null,
-      partId: partByNo["S-1206B18-M3T1U"].id,
-      qty: 500,
-      verified: true,
-      verifiedAt: now,
-    },
-    {
-      id: uuid(),
-      shelfBoxId: "SBOX-SEED-003",
-      receivingInvoiceItemId: null as string | null,
-      partId: partByNo["S-8240ADJ-I6T1U"].id,
-      qty: 200,
-      verified: false,
-      verifiedAt: null as Date | null,
-    },
-    {
-      id: uuid(),
-      shelfBoxId: "SBOX-SEED-003",
-      receivingInvoiceItemId: null as string | null,
-      partId: partByNo["D1FL20U"].id,
-      qty: 100,
-      verified: false,
-      verifiedAt: null as Date | null,
-    },
+  await db.insert(schema.putAwayScans).values([
+    { id: uuid(), shelfBoxId: "SBOX-SEED-001", receivingInvoiceItemId: null, partId: partByNo["RK73B1JTTD181G"].id, qty: 1000, dateCode: "", lotCode: "", coo: "CN", cow: "USA", verified: false, verifiedAt: null, createdAt: now },
+    { id: uuid(), shelfBoxId: "SBOX-SEED-001", receivingInvoiceItemId: null, partId: partByNo["RK73H2ATTD1372F"].id, qty: 500, dateCode: "", lotCode: "", coo: "CN", cow: "USA", verified: true, verifiedAt: now, createdAt: now },
+    { id: uuid(), shelfBoxId: "SBOX-SEED-002", receivingInvoiceItemId: null, partId: partByNo["S-1206B18-M3T1U"].id, qty: 500, dateCode: "", lotCode: "", coo: "JP", cow: "USA", verified: true, verifiedAt: now, createdAt: now },
+    { id: uuid(), shelfBoxId: "SBOX-SEED-003", receivingInvoiceItemId: null, partId: partByNo["S-8240ADJ-I6T1U"].id, qty: 200, dateCode: "", lotCode: "", coo: "JP", cow: "USA", verified: false, verifiedAt: null, createdAt: now },
+    { id: uuid(), shelfBoxId: "SBOX-SEED-003", receivingInvoiceItemId: null, partId: partByNo["D1FL20U"].id, qty: 100, dateCode: "", lotCode: "", coo: "JP", cow: "USA", verified: false, verifiedAt: null, createdAt: now },
   ]);
 
   // Receiving orders
@@ -244,8 +204,6 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
       lotCode: "" as string | null,
       coo: "CN",
       cow: "USA",
-      reportedMismatch: false,
-      mismatchNote: null as string | null,
     },
     {
       id: uuid(),
@@ -262,8 +220,6 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
       lotCode: "",
       coo: "CN",
       cow: "USA",
-      reportedMismatch: false,
-      mismatchNote: null,
     },
     {
       id: uuid(),
@@ -280,8 +236,6 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
       lotCode: "",
       coo: "CN",
       cow: "USA",
-      reportedMismatch: false,
-      mismatchNote: null,
     },
     {
       id: uuid(),
@@ -298,8 +252,6 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
       lotCode: "",
       coo: "CN",
       cow: "USA",
-      reportedMismatch: false,
-      mismatchNote: null,
     },
     {
       id: uuid(),
@@ -316,8 +268,6 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
       lotCode: "",
       coo: "CN",
       cow: "USA",
-      reportedMismatch: false,
-      mismatchNote: null,
     },
     // ABLIC 1080082369
     {
@@ -335,8 +285,6 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
       lotCode: "",
       coo: "JP",
       cow: "USA",
-      reportedMismatch: false,
-      mismatchNote: null,
     },
     {
       id: uuid(),
@@ -353,8 +301,6 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
       lotCode: "",
       coo: "JP",
       cow: "USA",
-      reportedMismatch: false,
-      mismatchNote: null,
     },
     {
       id: uuid(),
@@ -371,8 +317,6 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
       lotCode: "",
       coo: "JP",
       cow: "USA",
-      reportedMismatch: false,
-      mismatchNote: null,
     },
     // DIOTEC 52600142 (pending)
     {
@@ -390,8 +334,6 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
       lotCode: "",
       coo: "IN",
       cow: "USA",
-      reportedMismatch: false,
-      mismatchNote: null,
     },
     {
       id: uuid(),
@@ -408,8 +350,6 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
       lotCode: "",
       coo: "CN",
       cow: "USA",
-      reportedMismatch: false,
-      mismatchNote: null,
     },
     {
       id: uuid(),
@@ -426,8 +366,6 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
       lotCode: "",
       coo: "CN",
       cow: "USA",
-      reportedMismatch: false,
-      mismatchNote: null,
     },
     {
       id: uuid(),
@@ -444,8 +382,6 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
       lotCode: "",
       coo: "CN",
       cow: "USA",
-      reportedMismatch: false,
-      mismatchNote: null,
     },
     {
       id: uuid(),
@@ -462,11 +398,47 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
       lotCode: "",
       coo: "DE",
       cow: "USA",
-      reportedMismatch: false,
-      mismatchNote: null,
     },
-  ] as const;
+  ];
+
+  const [sampleItem] = receivingInvoiceItemRecords;
+  const [sampleItem2] = receivingInvoiceItemRecords.slice(1);
+
+  sampleItem.receivedQty = sampleItem.qty - 100;
+  sampleItem2.receivedQty = 1000;
+
   await db.insert(schema.receivingInvoiceItems).values(receivingInvoiceItemRecords);
+
+  await db.insert(schema.receivingItemMismatches).values([
+    {
+      id: uuid(),
+      receivingInvoiceItemId: sampleItem.id,
+      reason: "damaged",
+      mismatchQty: 100,
+      wrongPartNo: null,
+      note: "Seeded pending mismatch",
+      status: "pending",
+      effectiveReceivedQty: sampleItem.qty - 100,
+      previousReceivedQty: sampleItem.qty,
+      reportedBy: userOperator.id,
+      reportedAt: now,
+    },
+    {
+      id: uuid(),
+      receivingInvoiceItemId: sampleItem2.id,
+      reason: "qty_mismatch",
+      mismatchQty: 1000,
+      wrongPartNo: null,
+      note: "Seeded confirmed mismatch",
+      status: "confirmed",
+      effectiveReceivedQty: 1000,
+      previousReceivedQty: sampleItem2.qty,
+      reportedBy: userOperator.id,
+      reportedAt: now,
+      confirmedBy: userAdmin.id,
+      confirmedAt: now,
+    },
+  ]);
 
   // Note: in-hand receiving orders intentionally do NOT create inventory_lots here.
   // Allocations are made against receiving_invoice_items directly.

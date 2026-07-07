@@ -281,9 +281,10 @@ export const shelfBoxes = pgTable("shelf_boxes", {
 
 export const putAwayScans = pgTable("put_away_scans", {
   id: text("id").primaryKey(),
-  receivingInvoiceItemId: text("receiving_invoice_item_id")
-    .notNull()
-    .references(() => receivingInvoiceItems.id, { onDelete: "cascade" }),
+  receivingInvoiceItemId: text("receiving_invoice_item_id").references(
+    () => receivingInvoiceItems.id,
+    { onDelete: "cascade" }
+  ),
   partId: text("part_id")
     .notNull()
     .references(() => parts.id),

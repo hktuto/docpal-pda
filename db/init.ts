@@ -228,7 +228,7 @@ CREATE INDEX IF NOT EXISTS idx_shelf_boxes_shelf ON shelf_boxes(shelf_code);
 
 CREATE TABLE IF NOT EXISTS put_away_scans (
   id TEXT PRIMARY KEY,
-  receiving_invoice_item_id TEXT NOT NULL REFERENCES receiving_invoice_items(id) ON DELETE CASCADE,
+  receiving_invoice_item_id TEXT REFERENCES receiving_invoice_items(id) ON DELETE CASCADE,
   part_id TEXT NOT NULL REFERENCES parts(id),
   qty INTEGER NOT NULL,
   date_code TEXT,
