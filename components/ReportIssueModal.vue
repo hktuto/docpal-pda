@@ -63,7 +63,7 @@
 <script setup lang="ts">
 import { validateMismatchInputs } from "~/db/mismatch";
 import { mismatchReasons, type MismatchReason } from "~/db/schema";
-import { DisplayReceivingItem } from "~/components/receiving/types";
+import type { DisplayReceivingItem } from "~/components/receiving/types";
 
 const { t } = useI18n();
 const getErrorMessage = useErrorMessage();

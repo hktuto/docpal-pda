@@ -111,7 +111,7 @@
       <ReportIssueModal
         :model-value="reportModalOpen"
         :item="reportModalItem"
-        :saving="saving.reportIssue ?? false"
+        :saving="saving[reportModalItem?.id ?? ''] ?? false"
         @update:model-value="onReportModalModelValueUpdate"
         @confirm="onConfirmIssue"
       />
@@ -444,11 +444,6 @@ function openReportIssue(item: DisplayReceivingItem) {
   reportModalOpen.value = true;
 }
 
-function closeReportIssue() {
-  reportModalOpen.value = false;
-  reportModalItem.value = null;
-}
-
 function onReportModalModelValueUpdate(v: boolean) {
   reportModalOpen.value = v;
   if (!v) reportModalItem.value = null;
@@ -462,7 +457,7 @@ async function onConfirmIssue(payload: {
   isEdit: boolean;
 }) {
   if (!currentUser.value || !reportModalItem.value) return;
-  saving.value.reportIssue = true;
+  saving.value[reportModalItem.value.id] = true;
   error.value = null;
   try {
     const item = reportModalItem.value;
@@ -492,7 +487,7 @@ async function onConfirmIssue(payload: {
   } catch (e: any) {
     error.value = errorMessage(e);
   } finally {
-    saving.value.reportIssue = false;
+    saving.value[reportModalItem.value.id] = false;
   }
 }
 

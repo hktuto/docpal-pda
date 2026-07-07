@@ -123,6 +123,13 @@ export default {
       putAway: "Put away",
       available: "Available",
       dateLotCooCow: "Date / Lot / COO / COW",
+      confirmMismatch: "Confirm",
+      cancelMismatch: "Cancel",
+      mismatchStatus: {
+        pending: "Pending confirmation",
+        confirmed: "Confirmed",
+        cancelled: "Cancelled",
+      },
       editIssue: "Edit issue",
       reportIssue: "Report issue",
       mismatch: {

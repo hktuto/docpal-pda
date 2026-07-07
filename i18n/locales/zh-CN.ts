@@ -123,6 +123,13 @@ export default {
       putAway: "已上架",
       available: "可用",
       dateLotCooCow: "日期 / 批次 / 产地 / 晶圆产地",
+      confirmMismatch: "确认",
+      cancelMismatch: "取消",
+      mismatchStatus: {
+        pending: "待确认",
+        confirmed: "已确认",
+        cancelled: "已取消",
+      },
       editIssue: "编辑问题",
       reportIssue: "上报问题",
       mismatch: {
