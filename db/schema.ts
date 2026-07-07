@@ -71,6 +71,28 @@ export const mismatchReasons = [
 
 export type MismatchReason = (typeof mismatchReasons)[number];
 
+export const mismatchStatuses = ["pending", "confirmed", "cancelled"] as const;
+
+export const receivingItemMismatches = pgTable("receiving_item_mismatches", {
+  id: text("id").primaryKey(),
+  receivingInvoiceItemId: text("receiving_invoice_item_id")
+    .notNull()
+    .references(() => receivingInvoiceItems.id, { onDelete: "cascade" }),
+  reason: text("reason", { enum: mismatchReasons }).notNull(),
+  mismatchQty: integer("mismatch_qty"),
+  wrongPartNo: text("wrong_part_no"),
+  note: text("note"),
+  status: text("status", { enum: mismatchStatuses }).notNull().default("pending"),
+  effectiveReceivedQty: integer("effective_received_qty").notNull(),
+  previousReceivedQty: integer("previous_received_qty").notNull(),
+  reportedBy: text("reported_by").references(() => users.id),
+  reportedAt: timestamp("reported_at").notNull(),
+  confirmedBy: text("confirmed_by").references(() => users.id),
+  confirmedAt: timestamp("confirmed_at"),
+  cancelledBy: text("cancelled_by").references(() => users.id),
+  cancelledAt: timestamp("cancelled_at"),
+});
+
 export const receivingInvoiceItems = pgTable("receiving_invoice_items", {
   id: text("id").primaryKey(),
   receivingInvoiceId: text("receiving_invoice_id")
@@ -88,11 +110,6 @@ export const receivingInvoiceItems = pgTable("receiving_invoice_items", {
   lotCode: text("lot_code"),
   coo: text("coo"),
   cow: text("cow"),
-  reportedMismatch: boolean("reported_mismatch").notNull().default(false),
-  mismatchReason: text("mismatch_reason", { enum: mismatchReasons }),
-  mismatchQty: integer("mismatch_qty"),
-  wrongPartNo: text("wrong_part_no"),
-  mismatchNote: text("mismatch_note"),
 });
 
 // ------------------------------------------------------------------
@@ -248,16 +265,6 @@ export const shippingBoxes = pgTable("shipping_boxes", {
   createdAt: timestamp("created_at").notNull(),
 });
 
-export const shippingBoxItems = pgTable("shipping_box_items", {
-  id: text("id").primaryKey(),
-  shippingBoxId: text("shipping_box_id")
-    .notNull()
-    .references(() => shippingBoxes.id, { onDelete: "cascade" }),
-  pickingItemId: text("picking_item_id").references(() => pickingItems.id),
-  partId: text("part_id").notNull().references(() => parts.id),
-  qty: integer("qty").notNull(),
-});
-
 // ------------------------------------------------------------------
 // Shelf boxes (put-away / goods verify)
 // ------------------------------------------------------------------
@@ -268,19 +275,6 @@ export const shelfBoxes = pgTable("shelf_boxes", {
   shelfCode: text("shelf_code").references(() => shelves.code),
   status: text("status", { enum: boxStatus }).notNull().default("open"),
   createdAt: timestamp("created_at").notNull(),
-});
-
-export const shelfBoxItems = pgTable("shelf_box_items", {
-  id: text("id").primaryKey(),
-  shelfBoxId: text("shelf_box_id")
-    .notNull()
-    .references(() => shelfBoxes.id, { onDelete: "cascade" }),
-  receivingInvoiceItemId: text("receiving_invoice_item_id")
-    .references(() => receivingInvoiceItems.id),
-  partId: text("part_id").notNull().references(() => parts.id),
-  qty: integer("qty").notNull(),
-  verified: boolean("verified").default(false),
-  verifiedAt: timestamp("verified_at"),
 });
 
 export const putAwayScans = pgTable("put_away_scans", {
@@ -297,6 +291,8 @@ export const putAwayScans = pgTable("put_away_scans", {
   coo: text("coo"),
   cow: text("cow"),
   shelfBoxId: text("shelf_box_id").references(() => shelfBoxes.id, { onDelete: "cascade" }),
+  verified: boolean("verified").notNull().default(false),
+  verifiedAt: timestamp("verified_at"),
   createdAt: timestamp("created_at").notNull(),
 });
 
@@ -334,9 +330,16 @@ export const receivingInvoiceItemsRelations = relations(receivingInvoiceItems, (
   invoice: one(receivingInvoices, { fields: [receivingInvoiceItems.receivingInvoiceId], references: [receivingInvoices.id] }),
   part: one(parts, { fields: [receivingInvoiceItems.partId], references: [parts.id] }),
   inventoryLotSources: many(inventoryLotSources),
-  shelfBoxItems: many(shelfBoxItems),
   putAwayScans: many(putAwayScans),
   allocations: many(allocations),
+  mismatches: many(receivingItemMismatches),
+}));
+
+export const receivingItemMismatchesRelations = relations(receivingItemMismatches, ({ one }) => ({
+  receivingInvoiceItem: one(receivingInvoiceItems, { fields: [receivingItemMismatches.receivingInvoiceItemId], references: [receivingInvoiceItems.id] }),
+  reportedByUser: one(users, { fields: [receivingItemMismatches.reportedBy], references: [users.id] }),
+  confirmedByUser: one(users, { fields: [receivingItemMismatches.confirmedBy], references: [users.id] }),
+  cancelledByUser: one(users, { fields: [receivingItemMismatches.cancelledBy], references: [users.id] }),
 }));
 
 export const pickingOrdersRelations = relations(pickingOrders, ({ one, many }) => ({
@@ -353,7 +356,6 @@ export const pickingItemsRelations = relations(pickingItems, ({ one, many }) => 
   part: one(parts, { fields: [pickingItems.partId], references: [parts.id] }),
   allocations: many(allocations),
   packages: many(pickingPackages),
-  shippingBoxItems: many(shippingBoxItems),
 }));
 
 export const pickingPackagesRelations = relations(pickingPackages, ({ one }) => ({
@@ -387,27 +389,13 @@ export const measuringTasksRelations = relations(measuringTasks, ({ one, many })
 export const shippingBoxesRelations = relations(shippingBoxes, ({ one, many }) => ({
   pickingOrder: one(pickingOrders, { fields: [shippingBoxes.pickingOrderId], references: [pickingOrders.id] }),
   measuringTask: one(measuringTasks, { fields: [shippingBoxes.measuringTaskId], references: [measuringTasks.id] }),
-  items: many(shippingBoxItems),
   packages: many(pickingPackages),
-}));
-
-export const shippingBoxItemsRelations = relations(shippingBoxItems, ({ one }) => ({
-  shippingBox: one(shippingBoxes, { fields: [shippingBoxItems.shippingBoxId], references: [shippingBoxes.id] }),
-  pickingItem: one(pickingItems, { fields: [shippingBoxItems.pickingItemId], references: [pickingItems.id] }),
-  part: one(parts, { fields: [shippingBoxItems.partId], references: [parts.id] }),
 }));
 
 export const shelfBoxesRelations = relations(shelfBoxes, ({ one, many }) => ({
   receivingOrder: one(receivingOrders, { fields: [shelfBoxes.receivingOrderId], references: [receivingOrders.id] }),
   shelf: one(shelves, { fields: [shelfBoxes.shelfCode], references: [shelves.code] }),
-  items: many(shelfBoxItems),
   putAwayScans: many(putAwayScans),
-}));
-
-export const shelfBoxItemsRelations = relations(shelfBoxItems, ({ one }) => ({
-  shelfBox: one(shelfBoxes, { fields: [shelfBoxItems.shelfBoxId], references: [shelfBoxes.id] }),
-  receivingInvoiceItem: one(receivingInvoiceItems, { fields: [shelfBoxItems.receivingInvoiceItemId], references: [receivingInvoiceItems.id] }),
-  part: one(parts, { fields: [shelfBoxItems.partId], references: [parts.id] }),
 }));
 
 export const putAwayScansRelations = relations(putAwayScans, ({ one }) => ({
