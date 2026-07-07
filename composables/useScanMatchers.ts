@@ -19,7 +19,7 @@ import {
   findMatchingUnverifiedPackage,
   verifyPickingPackageForMeasuring,
 } from '~/db/measuring';
-import { verifyShelfBoxItem } from '~/db/goodsVerify';
+import { verifyShelfBoxScans } from '~/db/goodsVerify';
 import { rawCode } from '~/utils/text';
 
 export type ScanTask = 'receiving' | 'picking' | 'put-away' | 'measuring' | 'goods-verify';
@@ -60,6 +60,8 @@ interface PickingAllocation {
 
 interface BoxItem {
   id: string;
+  shelfBoxId: string;
+  partId: string;
   verified: boolean;
   part?: { partNo: string | null } | null;
 }
@@ -313,7 +315,7 @@ export function useScanMatchers(): ScanMatchers {
       return {
         type: 'single',
         record: item,
-        apply: () => verifyShelfBoxItem(db, item.id),
+        apply: () => verifyShelfBoxScans(db, item.shelfBoxId, item.partId),
       };
     } catch (e: any) {
       return e instanceof I18nError ? error(e) : error(new I18nError('unknown_match_failed', { task: 'goods-verify' }));

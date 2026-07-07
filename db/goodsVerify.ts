@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and } from "drizzle-orm";
 import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { v4 as uuid } from "uuid";
 import * as schema from "./schema";
@@ -62,22 +62,29 @@ export async function getShelfBoxesByShelf(
   shelfCode: string
 ): Promise<ShelfBoxSummary[]> {
   const result = await db.execute(sql`
+    WITH box_items AS (
+      SELECT shelf_box_id, part_id, bool_and(verified) AS fully_verified
+      FROM put_away_scans
+      GROUP BY shelf_box_id, part_id
+    ),
+    last_checks AS (
+      SELECT shelf_box_id, MAX(verified_at) AS last_check_at
+      FROM put_away_scans
+      GROUP BY shelf_box_id
+    )
     SELECT
       sb.id,
       sb.shelf_code,
       sb.status,
       sb.created_at,
-      COUNT(sbi.id) AS item_count,
-      SUM(CASE WHEN sbi.verified THEN 1 ELSE 0 END) AS verified_count,
-      MAX(sbi.verified_at) AS last_check_at,
-      CASE
-        WHEN DATE_TRUNC('day', MAX(sbi.verified_at)) = DATE_TRUNC('day', NOW())
-        THEN true ELSE false
-      END AS checked_today
+      COUNT(bi.part_id) AS item_count,
+      COUNT(CASE WHEN bi.fully_verified THEN 1 END) AS verified_count,
+      lc.last_check_at
     FROM shelf_boxes sb
-    LEFT JOIN shelf_box_items sbi ON sbi.shelf_box_id = sb.id
+    LEFT JOIN box_items bi ON bi.shelf_box_id = sb.id
+    LEFT JOIN last_checks lc ON lc.shelf_box_id = sb.id
     WHERE sb.shelf_code = ${shelfCode}
-    GROUP BY sb.id, sb.shelf_code, sb.status, sb.created_at
+    GROUP BY sb.id, sb.shelf_code, sb.status, sb.created_at, lc.last_check_at
     ORDER BY sb.created_at DESC
   `);
 
@@ -88,7 +95,9 @@ export async function getShelfBoxesByShelf(
     itemCount: Number(row.item_count ?? 0),
     verifiedCount: Number(row.verified_count ?? 0),
     lastCheckAt: row.last_check_at ? new Date(String(row.last_check_at)) : null,
-    checkedToday: Boolean(row.checked_today),
+    checkedToday: row.last_check_at
+      ? new Date(String(row.last_check_at)).toDateString() === new Date().toDateString()
+      : false,
   }));
 }
 
@@ -96,57 +105,67 @@ export async function getShelfBoxDetail(
   db: PgliteDatabase<typeof schema>,
   shelfBoxId: string
 ): Promise<ShelfBoxDetail | null> {
-  const result = await db.query.shelfBoxes.findFirst({
+  const box = await db.query.shelfBoxes.findFirst({
     where: eq(schema.shelfBoxes.id, shelfBoxId),
     with: {
       shelf: true,
-      receivingOrder: {
-        columns: {
-          id: true,
-          refNo: true,
-        },
-      },
-      items: {
-        with: {
-          part: {
-            columns: {
-              id: true,
-              partNo: true,
-              description: true,
-            },
-          },
-        },
-      },
+      receivingOrder: { columns: { id: true, refNo: true } },
     },
   });
+  if (!box) return null;
 
-  if (!result) return null;
+  const itemsResult = await db.execute(sql`
+    SELECT
+      part_id AS partId,
+      SUM(qty) AS qty,
+      bool_and(verified) AS verified,
+      MAX(verified_at) AS verifiedAt
+    FROM put_away_scans
+    WHERE shelf_box_id = ${shelfBoxId}
+    GROUP BY part_id
+  `);
 
-  const { shelf, receivingOrder, items, ...box } = result;
+  const items = await Promise.all(
+    (itemsResult.rows ?? []).map(async (row) => {
+      const part = await db.query.parts.findFirst({
+        where: eq(schema.parts.id, String(row.partId)),
+        columns: { id: true, partNo: true, description: true },
+      });
+      return {
+        id: `${shelfBoxId}-${row.partId}`,
+        shelfBoxId,
+        receivingInvoiceItemId: null,
+        partId: String(row.partId),
+        qty: Number(row.qty ?? 0),
+        verified: Boolean(row.verified),
+        verifiedAt: row.verifiedAt ? new Date(String(row.verifiedAt)) : null,
+        part: part ?? null,
+      };
+    })
+  );
 
   return {
     ...box,
-    shelf: shelf ?? null,
-    receivingOrder: receivingOrder ?? null,
-    items: items.map((item) => ({
-      ...item,
-      part: item.part ?? null,
-    })),
+    shelf: box.shelf ?? null,
+    receivingOrder: box.receivingOrder ?? null,
+    items,
   };
 }
 
-export async function verifyShelfBoxItem(
+export async function verifyShelfBoxScans(
   db: PgliteDatabase<typeof schema>,
-  shelfBoxItemId: string
-): Promise<typeof schema.shelfBoxItems.$inferSelect> {
-  const [updated] = await db
-    .update(schema.shelfBoxItems)
+  shelfBoxId: string,
+  partId: string
+): Promise<void> {
+  await db
+    .update(schema.putAwayScans)
     .set({ verified: true, verifiedAt: new Date() })
-    .where(eq(schema.shelfBoxItems.id, shelfBoxItemId))
-    .returning();
-
-  if (!updated) throw new I18nError("shelf_box_item_not_found");
-  return updated;
+    .where(
+      and(
+        eq(schema.putAwayScans.shelfBoxId, shelfBoxId),
+        eq(schema.putAwayScans.partId, partId)
+      )
+    );
 }
 
 export async function markShelfBoxVerified(
@@ -157,16 +176,16 @@ export async function markShelfBoxVerified(
   await db.transaction(async (tx) => {
     const box = await tx.query.shelfBoxes.findFirst({
       where: eq(schema.shelfBoxes.id, shelfBoxId),
-      with: {
-        items: true,
-      },
     });
 
     if (!box) throw new I18nError("shelf_box_not_found");
     if (box.status === "verified") throw new I18nError("shelf_box_already_verified");
-    if (box.items.length === 0) throw new I18nError("shelf_box_has_no_items");
 
-    const allVerified = box.items.every((item) => item.verified);
+    const scans = await tx.query.putAwayScans.findMany({
+      where: eq(schema.putAwayScans.shelfBoxId, shelfBoxId),
+    });
+    if (scans.length === 0) throw new I18nError("shelf_box_has_no_items");
+    const allVerified = scans.every((scan) => scan.verified);
     if (!allVerified) throw new I18nError("not_all_shelf_box_items_verified");
 
     await tx
