@@ -9,7 +9,6 @@
       v-for="item in invoice.items"
       :key="item.id"
       class="card"
-      :class="{ 'card--mismatch': item.reportedMismatch }"
     >
       <DetailRow :label="$t('receiving.itemsTab.part')">
         <span class="card__title">{{ item.part?.partNo }}</span>
@@ -33,18 +32,49 @@
           <p class="mismatch-locked">{{ $t('common.locked') }}</p>
         </template>
 
-        <template v-else-if="item.reportedMismatch">
+        <template v-else-if="item.mismatch">
           <div class="mismatch-summary">
             <span class="mismatch-badge">{{ formatMismatchSummary(item) }}</span>
-            <span v-if="item.mismatchNote" class="mismatch-note">{{ item.mismatchNote }}</span>
-            <button class="btn btn--small btn--danger" :disabled="saving[item.id]" @click="emit('report-issue', item)">
-              <template v-if="saving[item.id]">
-                <InlineSpinner /> {{ $t('actions.saving') }}
-              </template>
-              <template v-else>
-                {{ $t('receiving.itemsTab.editIssue') }}
-              </template>
-            </button>
+            <span class="mismatch-badge mismatch-badge--status">{{ $t(`receiving.itemsTab.mismatchStatus.${item.mismatch.status}`) }}</span>
+            <span v-if="item.mismatch.note" class="mismatch-note">{{ item.mismatch.note }}</span>
+
+            <template v-if="item.mismatch.status === 'pending' && currentUser?.id !== item.mismatch.reportedBy">
+              <button
+                class="btn btn--small"
+                :disabled="saving[item.mismatch.id]"
+                @click="emit('confirm-mismatch', item.mismatch.id)"
+              >
+                <template v-if="saving[item.mismatch.id]">
+                  <InlineSpinner /> {{ $t('actions.saving') }}
+                </template>
+                <template v-else>
+                  {{ $t('receiving.itemsTab.confirmMismatch') }}
+                </template>
+              </button>
+              <button
+                class="btn btn--small btn--danger"
+                :disabled="saving[item.mismatch.id]"
+                @click="emit('cancel-mismatch', item.mismatch.id)"
+              >
+                <template v-if="saving[item.mismatch.id]">
+                  <InlineSpinner /> {{ $t('actions.saving') }}
+                </template>
+                <template v-else>
+                  {{ $t('receiving.itemsTab.cancelMismatch') }}
+                </template>
+              </button>
+            </template>
+
+            <template v-else-if="item.mismatch.status === 'pending' && currentUser?.id === item.mismatch.reportedBy">
+              <button class="btn btn--small btn--danger" :disabled="saving[item.id]" @click="emit('report-issue', item)">
+                <template v-if="saving[item.id]">
+                  <InlineSpinner /> {{ $t('actions.saving') }}
+                </template>
+                <template v-else>
+                  {{ $t('receiving.itemsTab.editIssue') }}
+                </template>
+              </button>
+            </template>
           </div>
         </template>
 
@@ -67,6 +97,7 @@
 import { DisplayReceivingItem, DisplayReceivingOrder } from "./types";
 
 const { t } = useI18n();
+const { currentUser } = useAuth();
 
 defineProps<{
   order: DisplayReceivingOrder;
@@ -76,22 +107,26 @@ defineProps<{
 
 const emit = defineEmits<{
   "report-issue": [item: DisplayReceivingItem];
+  "confirm-mismatch": [mismatchId: string];
+  "cancel-mismatch": [mismatchId: string];
 }>();
 
 function formatMismatchSummary(item: DisplayReceivingItem): string {
-  switch (item.mismatchReason) {
+  const mismatch = item.mismatch;
+  if (!mismatch) return "";
+  switch (mismatch.reason) {
     case "not_found":
       return t("receiving.itemsTab.mismatch.not_found");
     case "damaged":
-      return t("receiving.itemsTab.mismatch.damaged", { qty: item.mismatchQty ?? 0 });
+      return t("receiving.itemsTab.mismatch.damaged", { qty: mismatch.mismatchQty ?? 0 });
     case "quality_rejection":
-      return t("receiving.itemsTab.mismatch.quality_rejection", { qty: item.mismatchQty ?? 0 });
+      return t("receiving.itemsTab.mismatch.quality_rejection", { qty: mismatch.mismatchQty ?? 0 });
     case "qty_mismatch":
-      return t("receiving.itemsTab.mismatch.qty_mismatch", { qty: item.mismatchQty ?? 0 });
+      return t("receiving.itemsTab.mismatch.qty_mismatch", { qty: mismatch.mismatchQty ?? 0 });
     case "over_shipment":
-      return t("receiving.itemsTab.mismatch.over_shipment", { qty: item.mismatchQty ?? 0 });
+      return t("receiving.itemsTab.mismatch.over_shipment", { qty: mismatch.mismatchQty ?? 0 });
     case "wrong_part":
-      return t("receiving.itemsTab.mismatch.wrong_part", { part: item.wrongPartNo ?? "" });
+      return t("receiving.itemsTab.mismatch.wrong_part", { part: mismatch.wrongPartNo ?? "" });
     default:
       return t("receiving.itemsTab.mismatch.reported");
   }
@@ -99,10 +134,6 @@ function formatMismatchSummary(item: DisplayReceivingItem): string {
 </script>
 
 <style scoped>
-.card--mismatch {
-  border-left: 4px solid var(--danger);
-}
-
 .mismatch-badge {
   display: inline-block;
   padding: 0.25rem 0.625rem;

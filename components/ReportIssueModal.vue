@@ -19,7 +19,6 @@
           <label class="field">
             <span>{{ $t('reportIssueModal.reason') }}</span>
             <select v-model="reason" :disabled="isBusy">
-              <option value="">{{ $t('reportIssueModal.defaultOption') }}</option>
               <option v-for="r in mismatchReasons" :key="r" :value="r">{{ formatReason(r) }}</option>
             </select>
           </label>
@@ -62,14 +61,12 @@
 </template>
 
 <script setup lang="ts">
-import { validateMismatchInputs } from "~/db/receiving";
-import { mismatchReasons, type MismatchReason } from "~/db/schema";
-import * as schema from "~/db/schema";
+import { validateMismatchInputs } from "~/db/mismatch";
+import { mismatchReasons, type MismatchReason } from "~/services/types";
+import { DisplayReceivingItem } from "~/components/receiving/types";
 
 const { t } = useI18n();
 const getErrorMessage = useErrorMessage();
-
-type DisplayReceivingItem = typeof schema.receivingInvoiceItems.$inferSelect;
 
 const props = defineProps<{
   modelValue: boolean;
@@ -79,10 +76,11 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "confirm", payload: {
-    reason: MismatchReason | null;
+    reason: MismatchReason;
     mismatchQty: number | null;
     wrongPartNo: string | null;
     note: string;
+    isEdit: boolean;
   }): void;
   (e: "update:modelValue", value: boolean): void;
 }>();
@@ -98,13 +96,13 @@ const isBusy = computed(() => props.saving);
 const title = computed(() => openedForEdit.value ? t('reportIssueModal.titleEdit') : t('reportIssueModal.titleReport'));
 
 function resetForm() {
-  openedForEdit.value = !!props.item?.reportedMismatch;
+  openedForEdit.value = !!props.item?.mismatch;
   validationError.value = null;
-  if (props.item) {
-    reason.value = props.item.mismatchReason || "";
-    mismatchQty.value = props.item.mismatchQty ?? null;
-    wrongPartNo.value = props.item.wrongPartNo || "";
-    note.value = props.item.mismatchNote || "";
+  if (props.item?.mismatch) {
+    reason.value = props.item.mismatch.reason;
+    mismatchQty.value = props.item.mismatch.mismatchQty ?? null;
+    wrongPartNo.value = props.item.mismatch.wrongPartNo || "";
+    note.value = props.item.mismatch.note || "";
   } else {
     reason.value = "";
     mismatchQty.value = null;
@@ -158,7 +156,10 @@ function onConfirm() {
 
   try {
     const selectedReason = reason.value || null;
-    const qty = selectedReason && selectedReason !== "not_found"
+    if (!selectedReason) {
+      throw new I18nError("mismatch_reason_required");
+    }
+    const qty = selectedReason !== "not_found"
       ? toNumberOrNull(mismatchQty.value)
       : null;
     const partNo = selectedReason === "wrong_part" ? wrongPartNo.value.trim() || null : null;
@@ -170,6 +171,7 @@ function onConfirm() {
       mismatchQty: qty,
       wrongPartNo: partNo,
       note: note.value.trim(),
+      isEdit: openedForEdit.value,
     });
   } catch (e: any) {
     validationError.value = getErrorMessage(e);

@@ -69,6 +69,8 @@
         :allocated-by-item="allocatedByItem"
         :saving="saving"
         @report-issue="openReportIssue"
+        @confirm-mismatch="confirmMismatch"
+        @cancel-mismatch="cancelMismatch"
       />
 
       <ReceivingPickingTab
@@ -109,7 +111,7 @@
       <ReportIssueModal
         :model-value="reportModalOpen"
         :item="reportModalItem"
-        :saving="reportModalItem ? saving[reportModalItem.id] ?? false : false"
+        :saving="saving.reportIssue ?? false"
         @update:model-value="onReportModalModelValueUpdate"
         @confirm="onConfirmIssue"
       />
@@ -139,9 +141,15 @@ import {
 } from "~/components/receiving/types";
 import {
   getReceivingOrderDetail,
-  updateReceivingItemMismatch,
   confirmReceivingOrderArrived,
 } from "~/db/receiving";
+import {
+  getActiveMismatchesForItems,
+  reportReceivingItemMismatch,
+  editReceivingItemMismatch,
+  confirmReceivingItemMismatch,
+  cancelReceivingItemMismatch,
+} from "~/db/mismatch";
 import {
   getPickingOrdersByReceivingOrder,
   getPickingItemTransitionLogs,
@@ -392,13 +400,19 @@ async function load() {
     allocatedByItem.value = nextAllocated;
 
     if (orderData) {
+      const allItemIds = orderData.invoices.flatMap((inv) => inv.items.map((i) => i.id));
+      const activeMismatches = await getActiveMismatchesForItems(db, allItemIds);
+
       order.value = {
         ...orderData,
         invoices: orderData.invoices.map((invoice) => {
           const { receivingOrderId: _ignored, ...invoiceRest } = invoice;
           return {
             ...invoiceRest,
-            items: invoice.items as DisplayReceivingItem[],
+            items: invoice.items.map((item) => ({
+              ...item,
+              mismatch: activeMismatches.get(item.id) ?? null,
+            })) as DisplayReceivingItem[],
           };
         }),
       };
@@ -441,31 +455,72 @@ function onReportModalModelValueUpdate(v: boolean) {
 }
 
 async function onConfirmIssue(payload: {
-  reason: schema.MismatchReason | null;
+  reason: schema.MismatchReason;
   mismatchQty: number | null;
   wrongPartNo: string | null;
   note: string;
+  isEdit: boolean;
 }) {
   if (!currentUser.value || !reportModalItem.value) return;
-  const itemId = reportModalItem.value.id;
-  saving.value[itemId] = true;
+  saving.value.reportIssue = true;
   error.value = null;
   try {
-    await updateReceivingItemMismatch(
-      db,
-      itemId,
-      currentUser.value.id,
-      payload.reason,
-      payload.mismatchQty,
-      payload.wrongPartNo,
-      payload.note
-    );
-    closeReportIssue();
+    const item = reportModalItem.value;
+    if (payload.isEdit && item.mismatch) {
+      await editReceivingItemMismatch(
+        db,
+        item.mismatch.id,
+        currentUser.value.id,
+        payload.reason,
+        payload.mismatchQty,
+        payload.wrongPartNo,
+        payload.note
+      );
+    } else {
+      await reportReceivingItemMismatch(
+        db,
+        item.id,
+        currentUser.value.id,
+        payload.reason,
+        payload.mismatchQty,
+        payload.wrongPartNo,
+        payload.note
+      );
+    }
+    reportModalOpen.value = false;
     await load();
   } catch (e: any) {
     error.value = errorMessage(e);
   } finally {
-    saving.value[itemId] = false;
+    saving.value.reportIssue = false;
+  }
+}
+
+async function confirmMismatch(mismatchId: string) {
+  if (!currentUser.value) return;
+  saving.value[mismatchId] = true;
+  error.value = null;
+  try {
+    await confirmReceivingItemMismatch(db, mismatchId, currentUser.value.id);
+    await load();
+  } catch (e: any) {
+    error.value = errorMessage(e);
+  } finally {
+    saving.value[mismatchId] = false;
+  }
+}
+
+async function cancelMismatch(mismatchId: string) {
+  if (!currentUser.value) return;
+  saving.value[mismatchId] = true;
+  error.value = null;
+  try {
+    await cancelReceivingItemMismatch(db, mismatchId, currentUser.value.id);
+    await load();
+  } catch (e: any) {
+    error.value = errorMessage(e);
+  } finally {
+    saving.value[mismatchId] = false;
   }
 }
 
