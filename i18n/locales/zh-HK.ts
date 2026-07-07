@@ -419,7 +419,6 @@ export default {
     titleReport: "匯報問題",
     close: "關閉",
     reason: "原因",
-    defaultOption: "—",
     wrongPartNumber: "料號錯誤",
     note: "備註",
     placeholderScanOrType: "掃描或輸入",

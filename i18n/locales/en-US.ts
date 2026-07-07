@@ -419,7 +419,6 @@ export default {
     titleReport: "Report issue",
     close: "Close",
     reason: "Reason",
-    defaultOption: "—",
     wrongPartNumber: "Wrong part number",
     note: "Note",
     placeholderScanOrType: "Scan or type",

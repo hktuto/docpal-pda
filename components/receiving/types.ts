@@ -2,10 +2,7 @@ import * as schema from "~/db/schema";
 
 export type DisplayReceivingItem = typeof schema.receivingInvoiceItems.$inferSelect & {
   part?: typeof schema.parts.$inferSelect | null;
-  mismatch?: (typeof schema.receivingItemMismatches.$inferSelect & {
-    reportedByUser?: typeof schema.users.$inferSelect | null;
-    confirmedByUser?: typeof schema.users.$inferSelect | null;
-  }) | null;
+  mismatch?: typeof schema.receivingItemMismatches.$inferSelect | null;
 };
 
 export interface DisplayReceivingOrder {
