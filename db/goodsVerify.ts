@@ -116,33 +116,32 @@ export async function getShelfBoxDetail(
 
   const itemsResult = await db.execute(sql`
     SELECT
-      part_id AS partId,
-      SUM(qty) AS qty,
-      bool_and(verified) AS verified,
-      MAX(verified_at) AS verifiedAt
-    FROM put_away_scans
-    WHERE shelf_box_id = ${shelfBoxId}
-    GROUP BY part_id
+      pas.part_id AS partId,
+      p.part_no,
+      p.description,
+      SUM(pas.qty) AS qty,
+      bool_and(pas.verified) AS verified,
+      MAX(pas.verified_at) AS verifiedAt
+    FROM put_away_scans pas
+    JOIN parts p ON p.id = pas.part_id
+    WHERE pas.shelf_box_id = ${shelfBoxId}
+    GROUP BY pas.part_id, p.part_no, p.description
   `);
 
-  const items = await Promise.all(
-    (itemsResult.rows ?? []).map(async (row) => {
-      const part = await db.query.parts.findFirst({
-        where: eq(schema.parts.id, String(row.partId)),
-        columns: { id: true, partNo: true, description: true },
-      });
-      return {
-        id: `${shelfBoxId}-${row.partId}`,
-        shelfBoxId,
-        receivingInvoiceItemId: null,
-        partId: String(row.partId),
-        qty: Number(row.qty ?? 0),
-        verified: Boolean(row.verified),
-        verifiedAt: row.verifiedAt ? new Date(String(row.verifiedAt)) : null,
-        part: part ?? null,
-      };
-    })
-  );
+  const items = (itemsResult.rows ?? []).map((row) => ({
+    id: `${shelfBoxId}-${row.partId}`,
+    shelfBoxId,
+    receivingInvoiceItemId: null,
+    partId: String(row.partId),
+    qty: Number(row.qty ?? 0),
+    verified: Boolean(row.verified),
+    verifiedAt: row.verifiedAt ? new Date(String(row.verifiedAt)) : null,
+    part: {
+      id: String(row.partId),
+      partNo: row.part_no as string | null,
+      description: row.description as string | null,
+    },
+  }));
 
   return {
     ...box,
@@ -157,7 +156,7 @@ export async function verifyShelfBoxScans(
   shelfBoxId: string,
   partId: string
 ): Promise<void> {
-  await db
+  const result = await db
     .update(schema.putAwayScans)
     .set({ verified: true, verifiedAt: new Date() })
     .where(
@@ -165,7 +164,10 @@ export async function verifyShelfBoxScans(
         eq(schema.putAwayScans.shelfBoxId, shelfBoxId),
         eq(schema.putAwayScans.partId, partId)
       )
-    );
+    )
+    .returning({ id: schema.putAwayScans.id });
+
+  if (result.length === 0) throw new I18nError("shelf_box_item_not_found");
 }
 
 export async function markShelfBoxVerified(

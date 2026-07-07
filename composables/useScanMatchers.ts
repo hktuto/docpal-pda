@@ -309,7 +309,10 @@ export function useScanMatchers(): ScanMatchers {
       const partNo = parsed.partNo?.trim() ?? '';
       if (!partNo) return error('part_no_required');
 
-      const item = items.find((i) => !i.verified && (i.part?.partNo || '') === partNo);
+      const normalizedPartNo = normalize(partNo);
+      const item = items.find((i) =>
+        !i.verified && normalize(i.part?.partNo ?? '') === normalizedPartNo
+      );
       if (!item) return { type: 'none' };
 
       return {
