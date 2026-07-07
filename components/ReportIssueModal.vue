@@ -63,6 +63,7 @@
 <script setup lang="ts">
 import { validateMismatchInputs } from "~/db/mismatch";
 import { mismatchReasons, type MismatchReason } from "~/db/schema";
+import { I18nError } from "~/composables/i18nError";
 import type { DisplayReceivingItem } from "~/components/receiving/types";
 
 const { t } = useI18n();

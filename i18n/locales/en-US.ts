@@ -511,7 +511,6 @@ export default {
     quantity_mismatch_requires_valid_received_qty: "Quantity mismatch requires a valid received quantity",
     computed_received_quantity_cannot_be_negative: "Computed received quantity cannot be negative",
     receiving_invoice_item_not_found: "Receiving invoice item not found",
-    cannot_edit_mismatch_stock_in_use: "Cannot edit mismatch: stock already picked or put away",
     mismatch_reason_required: "Mismatch reason is required",
     mismatch_qty_below_consumed_stock: "Mismatch quantity would reduce available stock below already consumed quantity",
     confirmed_mismatch_already_exists: "A confirmed mismatch already exists for this item",

@@ -511,7 +511,6 @@ export default {
     quantity_mismatch_requires_valid_received_qty: "数量不符需要有效的收货数量",
     computed_received_quantity_cannot_be_negative: "计算出的收货数量不能为负数",
     receiving_invoice_item_not_found: "未找到收货发票项",
-    cannot_edit_mismatch_stock_in_use: "无法编辑异常：库存已被拣货或上架",
     mismatch_reason_required: "请选择差异原因",
     mismatch_qty_below_consumed_stock: "差异数量会导致可用库存低于已分配或已拣货数量",
     confirmed_mismatch_already_exists: "此项已存在已确认的差异",
