@@ -621,12 +621,6 @@ export async function cancelShippingBox(
       .where(eq(schema.pickingPackages.shippingBoxId, boxId));
     if (packageResult[0]?.count > 0) throw new I18nError("box_is_not_empty");
 
-    const itemResult = await tx
-      .select({ count: sql<number>`count(*)`.mapWith(Number) })
-      .from(schema.shippingBoxItems)
-      .where(eq(schema.shippingBoxItems.shippingBoxId, boxId));
-    if (itemResult[0]?.count > 0) throw new I18nError("box_is_not_empty");
-
     await tx.insert(schema.transitionLogs).values({
       id: uuid(),
       entityType: "shipping_box",
