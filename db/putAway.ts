@@ -318,31 +318,6 @@ export async function assignScanToBox(
       .set({ putAwayQty: sql`${schema.receivingInvoiceItems.putAwayQty} + ${scan.qty}` })
       .where(eq(schema.receivingInvoiceItems.id, scan.receivingInvoiceItemId));
 
-    const summary = await tx.query.shelfBoxItems.findFirst({
-      where: (sbi, { and, eq }) =>
-        and(
-          eq(sbi.shelfBoxId, shelfBoxId),
-          eq(sbi.receivingInvoiceItemId, scan.receivingInvoiceItemId),
-          eq(sbi.partId, item.partId)
-        ),
-    });
-
-    if (summary) {
-      await tx
-        .update(schema.shelfBoxItems)
-        .set({ qty: sql`${schema.shelfBoxItems.qty} + ${scan.qty}` })
-        .where(eq(schema.shelfBoxItems.id, summary.id));
-    } else {
-      await tx.insert(schema.shelfBoxItems).values({
-        id: uuid(),
-        shelfBoxId,
-        receivingInvoiceItemId: scan.receivingInvoiceItemId,
-        partId: item.partId,
-        qty: scan.qty,
-        verified: false,
-      });
-    }
-
     if (invoice.receivingOrderId) {
       await tryMarkReceivingOrderClear(tx, invoice.receivingOrderId, actorId);
     }
@@ -418,28 +393,14 @@ export async function removeScanFromBox(
     }
 
     await tx
+      .update(schema.putAwayScans)
+      .set({ verified: false, verifiedAt: null })
+      .where(eq(schema.putAwayScans.id, scanId));
+
+    await tx
       .update(schema.receivingInvoiceItems)
       .set({ putAwayQty: sql`${schema.receivingInvoiceItems.putAwayQty} - ${scan.qty}` })
       .where(eq(schema.receivingInvoiceItems.id, scan.receivingInvoiceItemId));
-
-    const summary = await tx.query.shelfBoxItems.findFirst({
-      where: (sbi, { and, eq }) =>
-        and(
-          eq(sbi.shelfBoxId, shelfBoxId),
-          eq(sbi.receivingInvoiceItemId, scan.receivingInvoiceItemId),
-          eq(sbi.partId, scan.partId)
-        ),
-    });
-    if (!summary) throw new I18nError("shelf_box_item_not_found");
-
-    if (summary.qty - scan.qty <= 0) {
-      await tx.delete(schema.shelfBoxItems).where(eq(schema.shelfBoxItems.id, summary.id));
-    } else {
-      await tx
-        .update(schema.shelfBoxItems)
-        .set({ qty: sql`${schema.shelfBoxItems.qty} - ${scan.qty}` })
-        .where(eq(schema.shelfBoxItems.id, summary.id));
-    }
 
     if (box.receivingOrderId) {
       await tryMarkReceivingOrderClear(tx, box.receivingOrderId, actorId);
@@ -513,8 +474,8 @@ export async function cancelShelfBox(
 
     const [itemsCount] = await tx
       .select({ count: sql<number>`count(*)`.mapWith(Number) })
-      .from(schema.shelfBoxItems)
-      .where(eq(schema.shelfBoxItems.shelfBoxId, boxId));
+      .from(schema.putAwayScans)
+      .where(eq(schema.putAwayScans.shelfBoxId, boxId));
     if ((itemsCount?.count ?? 0) > 0) throw new I18nError("shelf_box_is_not_empty");
 
     await tx.insert(schema.transitionLogs).values({
@@ -547,8 +508,8 @@ export async function closeShelfBox(
 
     const [itemsCount] = await tx
       .select({ count: sql<number>`count(*)`.mapWith(Number) })
-      .from(schema.shelfBoxItems)
-      .where(eq(schema.shelfBoxItems.shelfBoxId, shelfBoxId));
+      .from(schema.putAwayScans)
+      .where(eq(schema.putAwayScans.shelfBoxId, shelfBoxId));
     if ((itemsCount?.count ?? 0) === 0) {
       throw new I18nError("cannot_close_empty_shelf_box");
     }
@@ -581,14 +542,52 @@ export async function getShelfBoxesForReceivingOrder(
   db: PgliteDatabase<typeof schema>,
   receivingOrderId: string
 ) {
-  return db.query.shelfBoxes.findMany({
+  const boxes = await db.query.shelfBoxes.findMany({
     where: eq(schema.shelfBoxes.receivingOrderId, receivingOrderId),
     orderBy: (sb, { sql }) => [
       sql`case when ${sb.status} = 'open' then 0 else 1 end`,
       desc(sb.createdAt),
     ],
-    with: {
-      items: { with: { part: true } },
-    },
   });
+
+  if (boxes.length === 0) return [];
+
+  const boxIds = boxes.map((b) => b.id);
+  const idList = boxIds.map((id) => `'${id}'`).join(", ");
+
+  const itemsResult = await db.execute(sql`
+    SELECT
+      pas.shelf_box_id AS shelf_box_id,
+      pas.part_id AS part_id,
+      p.part_no,
+      SUM(pas.qty) AS qty,
+      bool_and(pas.verified) AS verified
+    FROM put_away_scans pas
+    JOIN parts p ON p.id = pas.part_id
+    WHERE pas.shelf_box_id IN (${sql.raw(idList)})
+    GROUP BY pas.shelf_box_id, pas.part_id, p.part_no
+  `);
+
+  const itemsByBox = new Map<
+    string,
+    { id: string; partId: string; part: { partNo: string | null }; qty: number; verified: boolean }[]
+  >();
+
+  for (const row of (itemsResult.rows ?? []) as any[]) {
+    const boxId = String(row.shelf_box_id);
+    const list = itemsByBox.get(boxId) ?? [];
+    list.push({
+      id: `${boxId}-${row.part_id}`,
+      partId: String(row.part_id),
+      part: { partNo: row.part_no as string | null },
+      qty: Number(row.qty ?? 0),
+      verified: Boolean(row.verified),
+    });
+    itemsByBox.set(boxId, list);
+  }
+
+  return boxes.map((box) => ({
+    ...box,
+    items: itemsByBox.get(box.id) ?? [],
+  }));
 }

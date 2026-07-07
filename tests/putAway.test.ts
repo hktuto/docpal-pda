@@ -146,11 +146,13 @@ describe('put-away scan flow', () => {
       .where(eq(schema.receivingInvoiceItems.id, receivingInvoiceItemId));
     expect(updatedItem.putAwayQty).toBe(5000);
 
-    const boxItems = await db.query.shelfBoxItems.findMany({
-      where: eq(schema.shelfBoxItems.shelfBoxId, shelfBoxId),
+    const scans = await db.query.putAwayScans.findMany({
+      where: eq(schema.putAwayScans.shelfBoxId, shelfBoxId),
     });
-    expect(boxItems).toHaveLength(1);
-    expect(boxItems[0].qty).toBe(5000);
+    expect(scans).toHaveLength(1);
+    expect(scans[0].qty).toBe(5000);
+    expect(scans[0].verified).toBe(false);
+    expect(scans[0].verifiedAt).toBeNull();
 
     const lots = await db.query.inventoryLots.findMany();
     expect(lots).toHaveLength(1);
@@ -169,6 +171,12 @@ describe('put-away scan flow', () => {
       'USA'
     );
     await assignScanToBox(db, scan.id, shelfBoxId, actorId);
+
+    await db
+      .update(schema.putAwayScans)
+      .set({ verified: true, verifiedAt: new Date() })
+      .where(eq(schema.putAwayScans.id, scan.id));
+
     await removeScanFromBox(db, scan.id, actorId);
 
     const [updatedItem] = await db
@@ -177,10 +185,13 @@ describe('put-away scan flow', () => {
       .where(eq(schema.receivingInvoiceItems.id, receivingInvoiceItemId));
     expect(updatedItem.putAwayQty).toBe(0);
 
-    const boxItems = await db.query.shelfBoxItems.findMany({
-      where: eq(schema.shelfBoxItems.shelfBoxId, shelfBoxId),
-    });
-    expect(boxItems).toHaveLength(0);
+    const [updatedScan] = await db
+      .select()
+      .from(schema.putAwayScans)
+      .where(eq(schema.putAwayScans.id, scan.id));
+    expect(updatedScan.shelfBoxId).toBeNull();
+    expect(updatedScan.verified).toBe(false);
+    expect(updatedScan.verifiedAt).toBeNull();
 
     const lots = await db.query.inventoryLots.findMany();
     expect(lots).toHaveLength(0);
