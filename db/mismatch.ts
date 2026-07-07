@@ -318,7 +318,7 @@ export async function cancelReceivingItemMismatch(
     if (mismatch.status !== "pending") throw new I18nError("only_pending_mismatch_can_be_cancelled");
     if (mismatch.reportedBy === actorId) throw new I18nError("reporter_cannot_cancel_own_mismatch");
 
-    await assertCanApplyMismatchQty(tx, mismatch.receivingInvoiceItemId, mismatch.effectiveReceivedQty);
+    await assertCanApplyMismatchQty(tx, mismatch.receivingInvoiceItemId, mismatch.previousReceivedQty);
 
     const item = await tx.query.receivingInvoiceItems.findFirst({
       where: eq(schema.receivingInvoiceItems.id, mismatch.receivingInvoiceItemId),

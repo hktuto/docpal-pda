@@ -7,6 +7,7 @@ import * as schema from '../db/schema';
 import { createTablesSql } from '../db/init';
 import {
   reportReceivingItemMismatch,
+  editReceivingItemMismatch,
   confirmReceivingItemMismatch,
   cancelReceivingItemMismatch,
   getActiveMismatchForItem,
@@ -147,11 +148,85 @@ describe('receiving item mismatch', () => {
     expect(await getActiveMismatchForItem(db, itemId)).toBeNull();
   });
 
-  it('blocks cancellation when stock is already consumed beyond effective qty', async () => {
+  it('blocks cancellation when stock already consumed beyond previous received qty', async () => {
+    const itemId = await createReceivingItem(db, partId, 100);
+    await reportReceivingItemMismatch(db, itemId, actorId, 'damaged', 30, null, '');
+    await db.update(schema.receivingInvoiceItems).set({ pickedQty: 110 }).where(eq(schema.receivingInvoiceItems.id, itemId));
+    const mismatch = await getActiveMismatchForItem(db, itemId);
+    await expect(cancelReceivingItemMismatch(db, mismatch!.id, otherActorId)).rejects.toThrow(I18nError);
+  });
+
+  it('edits a pending mismatch and updates received_qty', async () => {
+    const itemId = await createReceivingItem(db, partId, 100);
+    await reportReceivingItemMismatch(db, itemId, actorId, 'damaged', 30, null, '');
+    const mismatch = await getActiveMismatchForItem(db, itemId);
+    await editReceivingItemMismatch(db, mismatch!.id, actorId, 'damaged', 10, null, 'less damage');
+
+    const updated = await getActiveMismatchForItem(db, itemId);
+    expect(updated?.effectiveReceivedQty).toBe(90);
+
+    const item = await db.query.receivingInvoiceItems.findFirst({
+      where: eq(schema.receivingInvoiceItems.id, itemId),
+    });
+    expect(item?.receivedQty).toBe(90);
+  });
+
+  it('blocks edit by a non-reporter', async () => {
+    const itemId = await createReceivingItem(db, partId, 100);
+    await reportReceivingItemMismatch(db, itemId, actorId, 'damaged', 30, null, '');
+    const mismatch = await getActiveMismatchForItem(db, itemId);
+    await expect(editReceivingItemMismatch(db, mismatch!.id, otherActorId, 'damaged', 10, null, '')).rejects.toThrow(I18nError);
+  });
+
+  it('blocks edit when mismatch is not pending', async () => {
+    const itemId = await createReceivingItem(db, partId, 100);
+    await reportReceivingItemMismatch(db, itemId, actorId, 'damaged', 30, null, '');
+    const mismatch = await getActiveMismatchForItem(db, itemId);
+    await confirmReceivingItemMismatch(db, mismatch!.id, otherActorId);
+    await expect(editReceivingItemMismatch(db, mismatch!.id, actorId, 'damaged', 10, null, '')).rejects.toThrow(I18nError);
+  });
+
+  it('blocks confirm when mismatch is not pending', async () => {
+    const itemId = await createReceivingItem(db, partId, 100);
+    await reportReceivingItemMismatch(db, itemId, actorId, 'damaged', 30, null, '');
+    const mismatch = await getActiveMismatchForItem(db, itemId);
+    await cancelReceivingItemMismatch(db, mismatch!.id, otherActorId);
+    await expect(confirmReceivingItemMismatch(db, mismatch!.id, otherActorId)).rejects.toThrow(I18nError);
+  });
+
+  it('blocks cancel when mismatch is not pending', async () => {
+    const itemId = await createReceivingItem(db, partId, 100);
+    await reportReceivingItemMismatch(db, itemId, actorId, 'damaged', 30, null, '');
+    const mismatch = await getActiveMismatchForItem(db, itemId);
+    await confirmReceivingItemMismatch(db, mismatch!.id, otherActorId);
+    await expect(cancelReceivingItemMismatch(db, mismatch!.id, otherActorId)).rejects.toThrow(I18nError);
+  });
+
+  it('blocks reporting when stock already consumed beyond effective qty', async () => {
+    const itemId = await createReceivingItem(db, partId, 100);
+    await db.update(schema.receivingInvoiceItems).set({ pickedQty: 80 }).where(eq(schema.receivingInvoiceItems.id, itemId));
+    await expect(reportReceivingItemMismatch(db, itemId, actorId, 'damaged', 30, null, '')).rejects.toThrow(I18nError);
+  });
+
+  it('blocks reporting when a confirmed mismatch already exists', async () => {
+    const itemId = await createReceivingItem(db, partId, 100);
+    await reportReceivingItemMismatch(db, itemId, actorId, 'damaged', 30, null, '');
+    const mismatch = await getActiveMismatchForItem(db, itemId);
+    await confirmReceivingItemMismatch(db, mismatch!.id, otherActorId);
+    await expect(reportReceivingItemMismatch(db, itemId, actorId, 'damaged', 10, null, '')).rejects.toThrow(I18nError);
+  });
+
+  it('allows cancel reversion when consumed is between effective and previous qty', async () => {
     const itemId = await createReceivingItem(db, partId, 100);
     await reportReceivingItemMismatch(db, itemId, actorId, 'damaged', 30, null, '');
     await db.update(schema.receivingInvoiceItems).set({ pickedQty: 80 }).where(eq(schema.receivingInvoiceItems.id, itemId));
     const mismatch = await getActiveMismatchForItem(db, itemId);
-    await expect(cancelReceivingItemMismatch(db, mismatch!.id, otherActorId)).rejects.toThrow(I18nError);
+    await cancelReceivingItemMismatch(db, mismatch!.id, otherActorId);
+
+    const item = await db.query.receivingInvoiceItems.findFirst({
+      where: eq(schema.receivingInvoiceItems.id, itemId),
+    });
+    expect(item?.receivedQty).toBe(100);
+    expect(await getActiveMismatchForItem(db, itemId)).toBeNull();
   });
 });
