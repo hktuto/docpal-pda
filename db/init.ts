@@ -65,13 +65,29 @@ CREATE TABLE IF NOT EXISTS receiving_invoice_items (
   date_code TEXT,
   lot_code TEXT,
   coo TEXT,
-  cow TEXT,
-  reported_mismatch BOOLEAN NOT NULL DEFAULT FALSE,
-  mismatch_reason TEXT,
+  cow TEXT
+);
+
+CREATE TABLE IF NOT EXISTS receiving_item_mismatches (
+  id TEXT PRIMARY KEY,
+  receiving_invoice_item_id TEXT NOT NULL REFERENCES receiving_invoice_items(id) ON DELETE CASCADE,
+  reason TEXT NOT NULL,
   mismatch_qty INTEGER,
   wrong_part_no TEXT,
-  mismatch_note TEXT
+  note TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  effective_received_qty INTEGER NOT NULL,
+  previous_received_qty INTEGER NOT NULL,
+  reported_by TEXT REFERENCES users(id),
+  reported_at TIMESTAMP NOT NULL,
+  confirmed_by TEXT REFERENCES users(id),
+  confirmed_at TIMESTAMP,
+  cancelled_by TEXT REFERENCES users(id),
+  cancelled_at TIMESTAMP
 );
+
+CREATE INDEX IF NOT EXISTS idx_receiving_item_mismatches_item ON receiving_item_mismatches(receiving_invoice_item_id);
+CREATE INDEX IF NOT EXISTS idx_receiving_item_mismatches_status ON receiving_item_mismatches(status);
 
 CREATE TABLE IF NOT EXISTS picking_orders (
   id TEXT PRIMARY KEY,
@@ -199,16 +215,6 @@ CREATE INDEX IF NOT EXISTS idx_picking_packages_item ON picking_packages(picking
 CREATE INDEX IF NOT EXISTS idx_picking_packages_order ON picking_packages(picking_order_id);
 CREATE INDEX IF NOT EXISTS idx_picking_packages_box ON picking_packages(shipping_box_id);
 
-CREATE TABLE IF NOT EXISTS shipping_box_items (
-  id TEXT PRIMARY KEY,
-  shipping_box_id TEXT NOT NULL REFERENCES shipping_boxes(id) ON DELETE CASCADE,
-  picking_item_id TEXT REFERENCES picking_items(id),
-  part_id TEXT NOT NULL REFERENCES parts(id),
-  qty INTEGER NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_shipping_box_items_box ON shipping_box_items(shipping_box_id);
-
 CREATE TABLE IF NOT EXISTS shelf_boxes (
   id TEXT PRIMARY KEY,
   receiving_order_id TEXT REFERENCES receiving_orders(id),
@@ -220,18 +226,6 @@ CREATE TABLE IF NOT EXISTS shelf_boxes (
 CREATE INDEX IF NOT EXISTS idx_shelf_boxes_order ON shelf_boxes(receiving_order_id);
 CREATE INDEX IF NOT EXISTS idx_shelf_boxes_shelf ON shelf_boxes(shelf_code);
 
-CREATE TABLE IF NOT EXISTS shelf_box_items (
-  id TEXT PRIMARY KEY,
-  shelf_box_id TEXT NOT NULL REFERENCES shelf_boxes(id) ON DELETE CASCADE,
-  receiving_invoice_item_id TEXT REFERENCES receiving_invoice_items(id),
-  part_id TEXT NOT NULL REFERENCES parts(id),
-  qty INTEGER NOT NULL,
-  verified BOOLEAN DEFAULT FALSE,
-  verified_at TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_shelf_box_items_box ON shelf_box_items(shelf_box_id);
-
 CREATE TABLE IF NOT EXISTS put_away_scans (
   id TEXT PRIMARY KEY,
   receiving_invoice_item_id TEXT NOT NULL REFERENCES receiving_invoice_items(id) ON DELETE CASCADE,
@@ -242,6 +236,8 @@ CREATE TABLE IF NOT EXISTS put_away_scans (
   coo TEXT,
   cow TEXT,
   shelf_box_id TEXT REFERENCES shelf_boxes(id) ON DELETE CASCADE,
+  verified BOOLEAN NOT NULL DEFAULT FALSE,
+  verified_at TIMESTAMP,
   created_at TIMESTAMP NOT NULL
 );
 
