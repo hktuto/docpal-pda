@@ -1,17 +1,11 @@
 import * as schema from "~/db/schema";
-import type {
-  PickingByReceivingRow,
-  PickingPackage,
-  ShippingBox,
-  TransitionLog,
-} from "~/services/types";
 
 export type DisplayReceivingItem = typeof schema.receivingInvoiceItems.$inferSelect & {
   part?: typeof schema.parts.$inferSelect | null;
-  mismatch?: typeof schema.receivingItemMismatches.$inferSelect & {
+  mismatch?: (typeof schema.receivingItemMismatches.$inferSelect & {
     reportedByUser?: typeof schema.users.$inferSelect | null;
     confirmedByUser?: typeof schema.users.$inferSelect | null;
-  } | null;
+  }) | null;
 };
 
 export interface DisplayReceivingOrder {
@@ -27,11 +21,34 @@ export interface DisplayReceivingOrder {
   >;
 }
 
-export type DisplayPackage = PickingPackage;
+export interface DisplayPackage {
+  id: string;
+  pickingItemId: string;
+  pickingOrderId: string;
+  qty: number;
+  shippingBoxId: string | null;
+  dateCode: string | null;
+  lotCode: string | null;
+  coo: string | null;
+  cow: string | null;
+  createdAt: Date | string;
+}
 
-export type DisplayBox = ShippingBox;
+export interface DisplayBox {
+  id: string;
+  pickingOrderId: string;
+  status: string;
+}
 
-export type { TransitionLog, PickingByReceivingRow };
+export interface TransitionLog {
+  id: string;
+  entityId: string;
+  fromState: string | null;
+  toState: string;
+  metadata: string | null;
+  createdAt: Date | string;
+  actorName: string | null;
+}
 
 export interface GroupedItem {
   id: string;
