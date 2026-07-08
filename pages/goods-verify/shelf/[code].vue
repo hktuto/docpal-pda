@@ -47,11 +47,12 @@
 </template>
 
 <script setup lang="ts">
-import { getShelfBoxesByShelf, type ShelfBoxSummary } from "~/db/goodsVerify";
+import { useWarehouse } from "~/composables/useWarehouse";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useStatusLabel } from "~/composables/useStatusLabel";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { useErrorMessage } from "~/composables/errorMessage";
+import type { GoodsVerifyShelfBoxSummary } from "~/services/types";
 
 definePageMeta({ title: "meta.goodsVerifyShelf" });
 
@@ -60,12 +61,11 @@ useHead({ title: t('goodsVerify.shelf.title') });
 
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
+const warehouse = useWarehouse();
 const route = useRoute();
 const shelfCode = route.params.code as string;
 
-const db = await useDb();
-
-const boxes = ref<ShelfBoxSummary[]>([]);
+const boxes = ref<GoodsVerifyShelfBoxSummary[]>([]);
 const loading = ref(true);
 const error = ref<string | null>(null);
 const search = ref("");
@@ -74,7 +74,7 @@ async function load() {
   loading.value = true;
   error.value = null;
   try {
-    boxes.value = await getShelfBoxesByShelf(db, shelfCode);
+    boxes.value = await warehouse.getShelfBoxes(shelfCode);
   } catch (e: unknown) {
     error.value = errorMessage(e);
     boxes.value = [];

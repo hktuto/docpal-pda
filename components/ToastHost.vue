@@ -30,9 +30,9 @@
 </template>
 
 <script setup lang="ts">
-import { useToast } from "~/composables/useToast";
+import { useToastState, dismissToast } from '~/composables/useToast';
 
-const { toasts, dismissToast } = useToast();
+const { toasts } = useToastState();
 </script>
 
 <style scoped>

@@ -7,8 +7,7 @@ import { seedDb, ensureDemoPasswords } from "~/db/seed";
 const DATA_DIR = "idb://warehouse-demo-pglite";
 
 export default defineNuxtPlugin(async () => {
-  // change to use in-memory
-  const pg = new PGlite();
+  const pg = new PGlite(DATA_DIR);
 
   await pg.waitReady;
 
@@ -37,10 +36,6 @@ export default defineNuxtPlugin(async () => {
 
   // Always make sure the demo accounts use the current demo passwords.
   await ensureDemoPasswords(db);
-
-  // Restore the authenticated user from localStorage before the app mounts.
-  const auth = useAuth();
-  await auth.restore(db);
 
   return {
     provide: {

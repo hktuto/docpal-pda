@@ -72,6 +72,7 @@ Page and component locations mapped to source files.
 
 - `composables/useLabelScan.ts` — orchestrates native scan; in browsers falls back to `window.prompt()` + JSON.
 - `composables/useLabelScan.ts` — validates prompt JSON and converts it to `LabelScanCapture` in browser fallback mode.
+- `composables/useScanMatchers.ts` — candidate search reads (`findReceivingCandidates`, `findPickingCandidates`) use `useDb()` and `db/ocrPicking.ts` directly; only the matched write actions go through `WarehouseService`.
 
 ## Database helpers
 

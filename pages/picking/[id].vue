@@ -95,33 +95,25 @@ import { useVisibleReload } from "~/composables/useVisibleReload";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import { useErrorMessage } from "~/composables/errorMessage";
-import { I18nError } from "~/composables/i18nError";
+import { useWarehouse } from "~/composables/useWarehouse";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import PickingBoxesSection from "~/components/picking/PickingBoxesSection.vue";
 import PickingItemsSection from "~/components/picking/PickingItemsSection.vue";
 import PickingIssueBanner from "~/components/picking/PickingIssueBanner.vue";
-import {
-  getPickingOrderDetail,
-  createShippingBoxForPickingOrder,
-  addPackageToBox,
-  removePackageFromBox,
-  cancelShippingBox,
-  finishPickingOrder,
-  getPickingItemTransitionLogs,
-  type PickingOrderDetail,
-  type PickingItemTransitionLog,
-} from "~/db/picking";
+import type {
+  PickingOrderDetail,
+  PickingAllocation,
+  PickingItemTransitionLog,
+} from "~/services/types";
 
 type PickingItem = PickingOrderDetail["items"][number];
-type Allocation = PickingItem["allocations"][number];
 type ShippingBox = PickingOrderDetail["shippingBoxes"][number];
 
 definePageMeta({ title: "meta.pickingDetail", props: { noPadding: true } });
 
 const route = useRoute();
 const orderId = route.params.id as string;
-const db = await useDb();
-const { currentUser } = useAuth();
+const warehouse = useWarehouse();
 const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
@@ -140,7 +132,7 @@ const transitionLogs = ref<Record<string, PickingItemTransitionLog[]>>({});
 const expandedItems = ref<Set<string>>(new Set());
 const headerExpanded = ref(false);
 const boxesExpanded = ref(false);
-const scanAllocation = ref<Allocation | null>(null);
+const scanAllocation = ref<PickingAllocation | null>(null);
 const boxSelections = ref<Record<string, string>>({});
 
 const { scan, scanning, review, reviewOpen, onApplied } = useLabelScanReview({
@@ -163,36 +155,29 @@ const scanTargets = computed(() => {
   return partNo ? [partNo] : [];
 });
 
-function currentUserId(): string {
-  if (!currentUser.value) throw new I18nError("no_operator_user_found");
-  return currentUser.value.id;
-}
-
 async function load() {
   try {
-    const data = await getPickingOrderDetail(db, orderId);
+    const data = await warehouse.getPickingOrder(orderId);
     order.value = data;
-    if (data) {
-      const nextBoxSelections: Record<string, string> = {};
-      for (const item of data.items) {
-        for (const pkg of item.packages ?? []) {
-          if (!pkg.shippingBoxId) {
-            nextBoxSelections[pkg.id] = boxSelections.value[pkg.id] ?? "";
-          }
+    const nextBoxSelections: Record<string, string> = {};
+    for (const item of data.items) {
+      for (const pkg of item.packages ?? []) {
+        if (!pkg.shippingBoxId) {
+          nextBoxSelections[pkg.id] = boxSelections.value[pkg.id] ?? "";
         }
       }
-      boxSelections.value = nextBoxSelections;
-
-      const itemIds = data.items.map((i) => i.id);
-      const logs = await getPickingItemTransitionLogs(db, itemIds);
-      const nextLogs: Record<string, PickingItemTransitionLog[]> = {};
-      for (const log of logs) {
-        const list = nextLogs[log.entityId] ?? [];
-        list.push(log);
-        nextLogs[log.entityId] = list;
-      }
-      transitionLogs.value = nextLogs;
     }
+    boxSelections.value = nextBoxSelections;
+
+    const itemIds = data.items.map((i) => i.id);
+    const logs = await warehouse.getPickingItemTransitionLogs(itemIds);
+    const nextLogs: Record<string, PickingItemTransitionLog[]> = {};
+    for (const log of logs) {
+      const list = nextLogs[log.entityId] ?? [];
+      list.push(log);
+      nextLogs[log.entityId] = list;
+    }
+    transitionLogs.value = nextLogs;
   } catch (e) {
     error.value = errorMessage(e);
   } finally {
@@ -200,7 +185,7 @@ async function load() {
   }
 }
 
-async function openScan(allocation: Allocation) {
+async function openScan(allocation: PickingAllocation) {
   scanAllocation.value = allocation;
   const result = await scan({
     task: "picking",
@@ -208,7 +193,7 @@ async function openScan(allocation: Allocation) {
     targets: scanTargets.value,
   });
   if (result.status === "error") {
-    error.value = result.message;
+    showToast(result.message);
   }
 }
 
@@ -222,7 +207,7 @@ async function createBox() {
   creatingBox.value = true;
   boxesExpanded.value = true;
   try {
-    await createShippingBoxForPickingOrder(db, orderId, currentUserId());
+    await warehouse.createShippingBoxForPickingOrder(orderId);
     await load();
   } catch (e) {
     error.value = errorMessage(e);
@@ -234,7 +219,7 @@ async function createBox() {
 async function cancelBox(boxId: string) {
   cancellingBox.value[boxId] = true;
   try {
-    await cancelShippingBox(db, boxId, currentUserId());
+    await warehouse.cancelShippingBox(boxId);
     await load();
   } catch (e) {
     error.value = errorMessage(e);
@@ -248,7 +233,7 @@ async function addToBox(packageId: string) {
   if (!boxId) return;
   adding.value[packageId] = true;
   try {
-    await addPackageToBox(db, packageId, boxId, currentUserId());
+    await warehouse.addPackageToBox(packageId, boxId);
     await load();
   } catch (e) {
     error.value = errorMessage(e);
@@ -260,7 +245,7 @@ async function addToBox(packageId: string) {
 async function removeFromBox(packageId: string) {
   removing.value[packageId] = true;
   try {
-    await removePackageFromBox(db, packageId, currentUserId());
+    await warehouse.removePackageFromBox(packageId);
     await load();
   } catch (e) {
     error.value = errorMessage(e);
@@ -272,7 +257,7 @@ async function removeFromBox(packageId: string) {
 async function finish() {
   finishing.value = true;
   try {
-    await finishPickingOrder(db, orderId, currentUserId());
+    await warehouse.finishPickingOrder(orderId);
     await load();
     if (order.value?.measuringTask) {
       showToast(t("picking.detail.measuringTaskCreated"), {

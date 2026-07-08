@@ -1,47 +1,31 @@
-import { eq } from "drizzle-orm";
-import type { PgliteDatabase } from "drizzle-orm/pglite";
-import * as schema from "~/db/schema";
-import { I18nError } from "~/composables/i18nError";
+import { createAuthService } from "~/services/auth";
+import type { User } from "~/services/types";
 
 const STORAGE_KEY = "warehouse-user-id";
 
 export function useAuth() {
-  const currentUser = useState<typeof schema.users.$inferSelect | null>(
-    "auth-user",
-    () => null
-  );
+  const currentUser = useState<User | null>("auth-user", () => null);
 
-  async function login(
-    db: PgliteDatabase<typeof schema>,
-    username: string,
-    password: string
-  ) {
-    const user = await db.query.users.findFirst({
-      where: eq(schema.users.username, username),
-    });
+  const authService = createAuthService({
+    adapter: useRuntimeConfig().public.warehouseAdapter as "pglite" | "api",
+    apiBaseUrl: useRuntimeConfig().public.apiBaseUrl as string | undefined,
+  });
 
-    if (!user || user.passwordHash !== password) {
-      throw new I18nError("invalid_username_or_password");
-    }
-
+  async function login(username: string, password: string) {
+    const user = await authService.login(username, password);
     currentUser.value = user;
     localStorage.setItem(STORAGE_KEY, user.id);
     return user;
   }
 
-  function logout() {
+  async function logout() {
+    await authService.logout();
     currentUser.value = null;
     localStorage.removeItem(STORAGE_KEY);
   }
 
-  async function restore(db: PgliteDatabase<typeof schema>) {
-    const id = localStorage.getItem(STORAGE_KEY);
-    if (!id) return;
-
-    const user = await db.query.users.findFirst({
-      where: eq(schema.users.id, id),
-    });
-
+  async function restore() {
+    const user = await authService.getCurrentUser();
     if (user) {
       currentUser.value = user;
     } else {

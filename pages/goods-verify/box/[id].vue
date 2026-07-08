@@ -78,15 +78,12 @@
 <script setup lang="ts">
 import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import { useErrorMessage } from "~/composables/errorMessage";
-import { I18nError } from "~/composables/i18nError";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
-import {
-  getShelfBoxDetail,
-  markShelfBoxVerified,
-  type ShelfBoxDetail,
-} from "~/db/goodsVerify";
+import { useWarehouse } from "~/composables/useWarehouse";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useStatusLabel } from "~/composables/useStatusLabel";
+import { useToast } from "~/composables/useToast";
+import type { GoodsVerifyShelfBoxDetail } from "~/services/types";
 
 const { t } = useI18n();
 useHead({ title: t('goodsVerify.box.title') });
@@ -108,10 +105,10 @@ async function onRetake() {
 const route = useRoute();
 const boxId = route.params.id as string;
 
-const db = await useDb();
-const { currentUser } = useAuth();
+const warehouse = useWarehouse();
 const errorMessage = useErrorMessage();
 const statusLabel = useStatusLabel();
+const { showToast } = useToast();
 
 const headerStatus = computed(() =>
   box.value ? statusLabel.box(box.value.status) : ""
@@ -119,7 +116,7 @@ const headerStatus = computed(() =>
 
 const pending = ref(true);
 const error = ref<string | null>(null);
-const box = ref<ShelfBoxDetail | null>(null);
+const box = ref<GoodsVerifyShelfBoxDetail | null>(null);
 const marking = ref(false);
 const headerExpanded = ref(false);
 const {
@@ -149,7 +146,7 @@ async function load() {
   pending.value = true;
   error.value = null;
   try {
-    box.value = await getShelfBoxDetail(db, boxId);
+    box.value = await warehouse.getShelfBox(boxId);
   } catch (e: unknown) {
     error.value = errorMessage(e);
   } finally {
@@ -161,15 +158,11 @@ useVisibleReload(load);
 
 async function markVerified() {
   if (!box.value) return;
-  if (!currentUser.value) {
-    error.value = errorMessage(new I18nError("no_operator_user_found"));
-    return;
-  }
 
   error.value = null;
   marking.value = true;
   try {
-    await markShelfBoxVerified(db, box.value.id, currentUser.value.id);
+    await warehouse.markShelfBoxVerified(box.value.id);
     await load();
   } catch (e: unknown) {
     error.value = errorMessage(e);
@@ -187,7 +180,7 @@ async function openScan() {
     confirmSingleMatch: true,
   });
   if (result.status === "error") {
-    error.value = result.message;
+    showToast(result.message);
   }
   // applied/review/manual are handled by useLabelScanReview.
 }

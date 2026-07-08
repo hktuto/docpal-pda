@@ -32,6 +32,7 @@
 - Typed input simulates scanning; the Android native `RectangleDetection.scanLabel()` path is used in some camera flows but not all.
 - Matching depends on normalized text and may require manual review.
 - No backend validation; all logic runs client-side in PGlite.
+- OCR scan candidate search (`findReceivingCandidates` / `findPickingCandidates`) is intentionally local-only in `composables/useScanMatchers.ts`; it is not exposed through `WarehouseService` and has no API equivalent.
 
 ## Related specs/plans
 

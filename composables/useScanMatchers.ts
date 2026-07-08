@@ -6,7 +6,6 @@ import { findReceivingCandidates, findPickingCandidates } from '~/db/ocrPicking'
 import { I18nError } from '~/composables/i18nError';
 import type { OcrInput } from './useMockOcr';
 import type {
-  OcrParseResult,
   ReceivingCandidate,
   PickingCandidate,
   PutAwayLot,

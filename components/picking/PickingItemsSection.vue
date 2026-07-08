@@ -157,7 +157,7 @@
 </template>
 
 <script setup lang="ts">
-import { type PickingOrderDetail, type PickingItemTransitionLog } from "~/db/picking";
+import type { PickingOrderDetail, PickingItemTransitionLog } from "~/services/types";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { logMetadataText } from "~/utils/log";
 

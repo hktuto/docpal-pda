@@ -59,12 +59,12 @@
 </template>
 
 <script setup lang="ts">
-import { I18nError } from "~/composables/i18nError";
-import { updateShippingBox, closeShippingBox } from "~/db/measuring";
+import { useWarehouse } from "~/composables/useWarehouse";
 import { boxSizeOptions, countryOptions } from "~/constants/pocOptions";
 
 const { t } = useI18n();
 const getErrorMessage = useErrorMessage();
+const warehouse = useWarehouse();
 
 const countryLabels = computed(() => t('countryLabels') as Record<string, string>);
 function countryName(value: string) {
@@ -90,9 +90,6 @@ const emit = defineEmits<{
   (e: "saved"): void;
   (e: "finished"): void;
 }>();
-
-const db = await useDb();
-const { currentUser } = useAuth();
 
 const defaultForm: MeasurementForm = {
   boxSize: "",
@@ -143,7 +140,7 @@ function close() {
 }
 
 async function persist() {
-  await updateShippingBox(db, props.boxId, {
+  await warehouse.updateShippingBox(props.boxId, {
     boxSize: form.value.boxSize,
     netWeight: form.value.netWeight,
     grossWeight: form.value.grossWeight,
@@ -170,9 +167,8 @@ async function onFinish() {
   finishing.value = true;
   errorText.value = null;
   try {
-    if (!currentUser.value) throw new I18nError("no_operator_user_found");
     await persist();
-    await closeShippingBox(db, props.boxId, currentUser.value.id);
+    await warehouse.closeShippingBox(props.boxId);
     emit("finished");
     close();
   } catch (e: any) {

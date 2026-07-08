@@ -13,8 +13,7 @@
 </template>
 
 <script setup lang="ts">
-import { type PickingIssueReason } from "~/db/schema";
-import { type PickingOrderDetail } from "~/db/picking";
+import type { PickingIssueReason, PickingOrderDetail } from "~/services/types";
 
 defineProps<{
   order: PickingOrderDetail;

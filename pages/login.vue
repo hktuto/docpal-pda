@@ -60,7 +60,6 @@ definePageMeta({ layout: false });
 const { t } = useI18n();
 useHead({ title: t('login.brand') });
 
-const db = await useDb();
 const { login } = useAuth();
 const errorMessage = useErrorMessage();
 
@@ -74,7 +73,7 @@ async function onSubmit() {
   error.value = null;
   submitting.value = true;
   try {
-    await login(db, username.value.trim(), password.value);
+    await login(username.value.trim(), password.value);
     await navigateTo("/");
   } catch (e: any) {
     error.value = errorMessage(e);

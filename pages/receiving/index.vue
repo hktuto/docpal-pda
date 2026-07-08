@@ -30,24 +30,24 @@
       class="card list-card"
     >
       <div class="list-card__header">
-        <span class="list-card__title">{{ ro.ref_no }}</span>
+        <span class="list-card__title">{{ ro.refNo }}</span>
         <span class="badge" :class="badgeClass(ro.status)">{{ statusLabel.receiving(ro.status) }}</span>
       </div>
       <p class="list-card__meta">
-        {{ ro.supplier_name || $t('common.noSupplier') }}
+        {{ ro.supplierName || $t('common.noSupplier') }}
       </p>
       <div class="list-card__footer">
         <span class="list-card__date">
-          {{ ro.delivery_date ? new Date(ro.delivery_date).toLocaleDateString() : $t('common.noDate') }}
+          {{ ro.deliveryDate ? new Date(ro.deliveryDate).toLocaleDateString() : $t('common.noDate') }}
         </span>
-        <span v-if="ro.remaining_items > 0" class="badge badge--info">
-          {{ $t('receiving.remaining', { count: ro.remaining_items }) }}
+        <span v-if="ro.remainingItems > 0" class="badge badge--info">
+          {{ $t('receiving.remaining', { count: ro.remainingItems }) }}
         </span>
         <span
-          v-if="ro.pending_picking_orders > 0"
+          v-if="ro.pendingPickingOrders > 0"
           class="badge badge--info"
         >
-          {{ ro.pending_picking_orders }} {{ $t('status.picking.picking') }}
+          {{ ro.pendingPickingOrders }} {{ $t('status.picking.picking') }}
         </span>
       </div>
     </NuxtLink>
@@ -55,105 +55,31 @@
 </template>
 
 <script setup lang="ts">
-import { sql } from "drizzle-orm";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useVisibleReload } from "~/composables/useVisibleReload";
-import { availableReceivingQtySql, allocationsCte } from "~/db/helpers";
+import { useWarehouse } from "~/composables/useWarehouse";
+import type { ReceivingFilter, ReceivingOrderSummary } from "~/services/types";
 
 definePageMeta({ title: "meta.receiving" });
 
 const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
+const warehouse = useWarehouse();
 
 useHead({ title: t("receiving.title") });
 
-type Filter = "all" | "pending" | "in_hand" | "clear";
-
-interface ReceivingOrderRow {
-  id: string;
-  ref_no: string;
-  status: string;
-  delivery_date: string | null;
-  supplier_name: string | null;
-  remaining_items: number;
-  pending_picking_orders: number;
-}
-
-const filters: { labelKey: string; value: Filter }[] = [
+const filters: { labelKey: string; value: ReceivingFilter }[] = [
   { labelKey: "common.all", value: "all" },
   { labelKey: "status.receiving.pending", value: "pending" },
   { labelKey: "status.receiving.in_hand", value: "in_hand" },
   { labelKey: "status.receiving.clear", value: "clear" },
 ];
 
-const filter = ref<Filter>("in_hand");
+const filter = ref<ReceivingFilter>("in_hand");
 const search = ref("");
 
-const query = computed(() => {
-  let where = "1=1";
-  if (filter.value === "pending") where = "ro.status = 'pending'";
-  if (filter.value === "in_hand") where = "ro.status = 'in_hand'";
-  if (filter.value === "clear") where = "ro.status = 'clear'";
-
-  return sql`SELECT
-    ro.id,
-    ro.ref_no,
-    ro.status,
-    ro.delivery_date,
-    s.name AS supplier_name,
-    COALESCE(COUNT(DISTINCT CASE
-      WHEN ro.status = 'in_hand'
-        AND (${availableReceivingQtySql}) > 0
-      THEN rii.id
-    END), 0) AS remaining_items,
-    COALESCE((
-      SELECT COUNT(DISTINCT po_id)
-      FROM (
-        SELECT po.id AS po_id
-        FROM allocations a
-        JOIN picking_items pi ON pi.id = a.picking_item_id
-        JOIN picking_orders po ON po.id = pi.picking_order_id
-        WHERE a.receiving_invoice_item_id IN (
-          SELECT rii2.id
-          FROM receiving_invoices ri2
-          JOIN receiving_invoice_items rii2 ON rii2.receiving_invoice_id = ri2.id
-          WHERE ri2.receiving_order_id = ro.id
-        )
-        AND a.qty > 0
-        AND po.status IN ('pending', 'picking')
-
-        UNION ALL
-
-        SELECT po.id AS po_id
-        FROM allocations a
-        JOIN picking_items pi ON pi.id = a.picking_item_id
-        JOIN picking_orders po ON po.id = pi.picking_order_id
-        JOIN inventory_lots il ON il.id = a.inventory_lot_id
-        JOIN inventory_lot_sources ils ON ils.inventory_lot_id = il.id
-        WHERE ils.receiving_invoice_item_id IN (
-          SELECT rii2.id
-          FROM receiving_invoices ri2
-          JOIN receiving_invoice_items rii2 ON rii2.receiving_invoice_id = ri2.id
-          WHERE ri2.receiving_order_id = ro.id
-        )
-        AND a.qty > 0
-        AND po.status IN ('pending', 'picking')
-      ) pending_po_ids
-    ), 0) AS pending_picking_orders
-  FROM receiving_orders ro
-  LEFT JOIN suppliers s ON s.id = ro.supplier_id
-  LEFT JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
-  LEFT JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
-  LEFT JOIN (${allocationsCte()}) alloc ON alloc.receiving_invoice_item_id = rii.id
-  WHERE ${sql.raw(where)}
-  GROUP BY ro.id, ro.ref_no, ro.status, ro.delivery_date, s.name
-  ORDER BY ro.delivery_date;`;
-});
-
-const db = await useDb();
-
-const rawRows = ref<ReceivingOrderRow[]>([]);
+const rawRows = ref<ReceivingOrderSummary[]>([]);
 const loading = ref(true);
 const loadError = ref<string | null>(null);
 
@@ -161,8 +87,7 @@ async function load() {
   loading.value = true;
   loadError.value = null;
   try {
-    const result = await db.execute(query.value);
-    rawRows.value = result.rows as ReceivingOrderRow[];
+    rawRows.value = await warehouse.getReceivingOrders(filter.value);
   } catch (e: any) {
     loadError.value = errorMessage(e);
     rawRows.value = [];
@@ -176,8 +101,8 @@ const rows = computed(() => {
   if (!term) return rawRows.value;
   return rawRows.value.filter(
     (r) =>
-      r.ref_no.toLowerCase().includes(term) ||
-      (r.supplier_name?.toLowerCase().includes(term) ?? false)
+      r.refNo.toLowerCase().includes(term) ||
+      (r.supplierName?.toLowerCase().includes(term) ?? false)
   );
 });
 

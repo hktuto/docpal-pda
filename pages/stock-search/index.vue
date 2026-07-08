@@ -106,20 +106,18 @@
 import EmptyState from "~/components/EmptyState.vue";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { useErrorMessage } from "~/composables/errorMessage";
-import {
-  getSuppliersWithInventoryStats,
-  getPartsBySupplierId,
-  getInventoryLotsForParts,
-  type StockSearchSupplierWithStats,
-  type StockSearchPart,
-  type StockSearchInventoryLot,
-} from "~/db/stockSearch";
+import { useWarehouse } from "~/composables/useWarehouse";
+import type {
+  StockSearchSupplierWithStats,
+  StockSearchPart,
+  StockSearchInventoryLot,
+} from "~/services/types";
 
 definePageMeta({ title: "meta.stockSearch", props: { noPadding: true } });
 
 const { t } = useI18n();
 const route = useRoute();
-const db = await useDb();
+const warehouse = useWarehouse();
 const errorMessage = useErrorMessage();
 
 useHead({ title: t("stockSearch.title") });
@@ -199,7 +197,7 @@ async function load() {
   pending.value = true;
   error.value = null;
   try {
-    suppliers.value = await getSuppliersWithInventoryStats(db);
+    suppliers.value = await warehouse.getSuppliersWithInventoryStats();
   } catch (e) {
     error.value = errorMessage(e);
   } finally {
@@ -218,12 +216,12 @@ async function toggleSupplier(supplierId: string) {
   if (!partsBySupplier.value[supplierId]) {
     loadingSupplierId.value = supplierId;
     try {
-      const parts = await getPartsBySupplierId(db, supplierId);
+      const parts = await warehouse.getPartsBySupplier(supplierId);
       partsBySupplier.value[supplierId] = parts;
 
       const partIds = parts.map((p) => p.id);
       if (partIds.length > 0) {
-        const lots = await getInventoryLotsForParts(db, partIds);
+        const lots = await warehouse.getInventoryLotsForParts(partIds);
         const nextLots: Record<string, StockSearchInventoryLot[]> = {};
         for (const lot of lots) {
           const list = nextLots[lot.partId] ?? [];

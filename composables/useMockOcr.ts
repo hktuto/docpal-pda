@@ -1,5 +1,5 @@
 import { I18nError } from "~/composables/i18nError";
-import type { OcrParseResult } from "~/db/ocrPicking";
+import type { OcrParseResult } from "~/services/types";
 
 export interface OcrInput {
   partNo: string;

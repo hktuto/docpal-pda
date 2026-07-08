@@ -79,25 +79,23 @@
 </template>
 
 <script setup lang="ts">
-import { getMeasuringTaskDetail, completeMeasuringTask, type MeasuringTaskDetail } from "~/db/measuring";
 import { useErrorMessage } from "~/composables/errorMessage";
-import { I18nError } from "~/composables/i18nError";
+import { useWarehouse } from "~/composables/useWarehouse";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useVisibleReload } from "~/composables/useVisibleReload";
+import type { MeasuringTaskDetail } from "~/services/types";
 
 definePageMeta({ title: "meta.measuringDetail", props: { noPadding: true } });
 
 const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
+const warehouse = useWarehouse();
 
 useHead({ title: t('measuring.detail.title') });
 
 const route = useRoute();
 const taskId = route.params.id as string;
-
-const db = await useDb();
-const { currentUser } = useAuth();
 
 const pending = ref(true);
 const error = ref<string | null>(null);
@@ -107,7 +105,7 @@ const completing = ref(false);
 
 async function load() {
   try {
-    const data = await getMeasuringTaskDetail(db, taskId);
+    const data = await warehouse.getMeasuringTask(taskId);
     task.value = data ?? null;
   } catch (e: unknown) {
     error.value = errorMessage(e);
@@ -128,8 +126,7 @@ const canComplete = computed(() => {
 async function complete() {
   completing.value = true;
   try {
-    if (!currentUser.value) throw new I18nError("no_operator_user_found");
-    await completeMeasuringTask(db, taskId, currentUser.value.id);
+    await warehouse.completeMeasuringTask(taskId);
     await load();
   } catch (e: unknown) {
     error.value = errorMessage(e);

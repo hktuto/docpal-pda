@@ -32,6 +32,7 @@
 
 - Demo-only data; no real supplier integration.
 - Mismatch resolution rules are simplified.
+- OCR-assisted picking from the Picking view uses local scan candidate search (`findReceivingCandidates` / `findPickingCandidates` in `composables/useScanMatchers.ts`) that is not part of `WarehouseService` and has no API equivalent.
 
 ## Related specs/plans
 

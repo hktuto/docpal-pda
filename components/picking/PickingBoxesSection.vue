@@ -56,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { type PickingOrderDetail } from "~/db/picking";
+import type { PickingOrderDetail } from "~/services/types";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { boxTotalQty } from "~/utils/box";
 

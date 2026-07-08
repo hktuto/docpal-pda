@@ -4,7 +4,7 @@ import { drizzle } from 'drizzle-orm/pglite';
 import { v4 as uuid } from 'uuid';
 import * as schema from '../db/schema';
 import { createTablesSql } from '../db/init';
-import { findReceivingCandidates, type OcrParseResult } from '../db/ocrPicking';
+import { findReceivingCandidates, type OcrParsedFields } from '../db/ocrPicking';
 import { findMatchingUnverifiedPackage, type PackageVerificationInput } from '../db/measuring';
 
 async function createTestDb() {
@@ -85,7 +85,7 @@ describe('findReceivingCandidates empty-field wildcard', () => {
   });
 
   it('matches when the receiving item has empty date/lot and the scan provides values', async () => {
-    const parsed: OcrParseResult = {
+    const parsed: OcrParsedFields = {
       partNo: 'RK73B1JTTD181G',
       dateCode: '2544',
       lotCode: 'LOT123',
@@ -101,7 +101,7 @@ describe('findReceivingCandidates empty-field wildcard', () => {
   });
 
   it('still requires coo/cow to match when the receiving item provides them', async () => {
-    const parsed: OcrParseResult = {
+    const parsed: OcrParsedFields = {
       partNo: 'RK73B1JTTD181G',
       dateCode: '2544',
       lotCode: 'LOT123',

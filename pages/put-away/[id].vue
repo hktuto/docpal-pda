@@ -76,33 +76,25 @@ import { useStatusLabel } from "~/composables/useStatusLabel";
 import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import { useErrorMessage } from "~/composables/errorMessage";
 import { I18nError } from "~/composables/i18nError";
+import { useWarehouse } from "~/composables/useWarehouse";
+import { useToast } from "~/composables/useToast";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import SelectShelfDialog from "~/components/SelectShelfDialog.vue";
 import ShelfBoxesPanel from "~/components/put-away/ShelfBoxesPanel.vue";
 import PutAwayLotsPanel from "~/components/put-away/PutAwayLotsPanel.vue";
-import * as schema from "~/db/schema";
-import {
-  getPutAwayLots,
-  getPutAwayScansForReceivingOrder,
-  assignScanToBox,
-  removeScanFromBox,
-  removeScannedPiece,
-  createShelfBox,
-  closeShelfBox,
-  cancelShelfBox,
-  getShelfBoxesForReceivingOrder,
-  type ShelfBox,
-  type PutAwayScan,
-} from "~/db/putAway";
-import type { PutAwayLot } from "~/db/putAway";
-import { getReceivingOrderDetail } from "~/db/receiving";
-
-type ReceivingOrderDetail = NonNullable<Awaited<ReturnType<typeof getReceivingOrderDetail>>>;
+import type {
+  PutAwayLot,
+  PutAwayScan,
+  ShelfBox,
+  Shelf,
+  ReceivingOrderDetail,
+} from "~/services/types";
 
 definePageMeta({ title: "meta.putAwayDetail", props: { noPadding: true } });
 
 const { t } = useI18n();
 const errorMessage = useErrorMessage();
+const { showToast } = useToast();
 
 useHead({ title: t("putAway.detail.title") });
 
@@ -119,14 +111,13 @@ const headerStatus = computed(() =>
   order.value ? statusLabel.receiving(order.value.status) : ""
 );
 
-const db = await useDb();
-const { currentUser } = useAuth();
+const warehouse = useWarehouse();
 
 const pending = ref(true);
 const error = ref<string | null>(null);
 const order = ref<ReceivingOrderDetail | null>(null);
 const lots = ref<PutAwayLot[]>([]);
-const shelves = ref<typeof schema.shelves.$inferSelect[]>([]);
+const shelves = ref<Shelf[]>([]);
 const boxes = ref<ShelfBox[]>([]);
 const creating = ref(false);
 const closing = ref(false);
@@ -140,18 +131,13 @@ const boxSelections = ref<Record<string, string>>({});
 const expandedItems = ref<Set<string>>(new Set());
 const { scan, scanning, review, reviewOpen, onApplied } = useLabelScanReview({ onApplied: load });
 
-function currentUserId(): string {
-  if (!currentUser.value?.id) throw new I18nError("operator_not_signed_in");
-  return currentUser.value.id;
-}
-
 async function addScanToBox(scanId: string) {
   const boxId = boxSelections.value[scanId];
   if (!boxId) return;
   addingScan.value[scanId] = true;
   error.value = null;
   try {
-    await assignScanToBox(db, scanId, boxId, currentUserId());
+    await warehouse.assignPutAwayScanToBox(scanId, boxId);
     await load();
   } catch (e) {
     error.value = errorMessage(e);
@@ -164,7 +150,7 @@ async function removeScanFromBoxHandler(scanId: string) {
   removingScan.value[scanId] = true;
   error.value = null;
   try {
-    await removeScanFromBox(db, scanId, currentUserId());
+    await warehouse.removePutAwayScanFromBox(scanId);
     await load();
   } catch (e) {
     error.value = errorMessage(e);
@@ -177,7 +163,7 @@ async function removeScanHandler(scanId: string) {
   removingScan.value[scanId] = true;
   error.value = null;
   try {
-    await removeScannedPiece(db, scanId);
+    await warehouse.removePutAwayScannedPiece(scanId);
     await load();
   } catch (e) {
     error.value = errorMessage(e);
@@ -193,15 +179,12 @@ async function load() {
   error.value = null;
   try {
     const [orderData, lotsData, shelvesData, boxesData, scansData] = await Promise.all([
-      getReceivingOrderDetail(db, orderId),
-      getPutAwayLots(db, orderId),
-      db.query.shelves.findMany(),
-      getShelfBoxesForReceivingOrder(db, orderId),
-      getPutAwayScansForReceivingOrder(db, orderId),
+      warehouse.getReceivingOrder(orderId),
+      warehouse.getPutAwayLots(orderId),
+      warehouse.getShelves(),
+      warehouse.getShelfBoxesForReceivingOrder(orderId),
+      warehouse.getPutAwayScans(orderId),
     ]);
-    if (!orderData) {
-      throw new I18nError("receiving_order_not_found");
-    }
     order.value = orderData;
     lots.value = lotsData;
     shelves.value = shelvesData;
@@ -232,7 +215,7 @@ async function createBoxFromDialog(shelfCode: string) {
   error.value = null;
   creating.value = true;
   try {
-    await createShelfBox(db, orderId, shelfCode, currentUserId());
+    await warehouse.createShelfBox(orderId, shelfCode);
     await load();
     boxesExpanded.value = true;
   } catch (e) {
@@ -246,7 +229,7 @@ async function closeBox(boxId: string) {
   error.value = null;
   closing.value = true;
   try {
-    await closeShelfBox(db, boxId, currentUserId());
+    await warehouse.closeShelfBox(boxId);
     await load();
   } catch (e) {
     error.value = errorMessage(e);
@@ -259,7 +242,7 @@ async function cancelBox(boxId: string) {
   error.value = null;
   cancellingBox.value[boxId] = true;
   try {
-    await cancelShelfBox(db, boxId, currentUserId());
+    await warehouse.cancelShelfBox(boxId);
     await load();
   } catch (e) {
     error.value = errorMessage(e);
@@ -274,10 +257,10 @@ async function openScan(lot: PutAwayLot) {
   const result = await scan({
     task: 'put-away',
     receivingItem: lot,
-    targets: lot.part_no ? [lot.part_no] : [],
+    targets: lot.partNo ? [lot.partNo] : [],
   });
   if (result.status === 'error') {
-    error.value = result.message;
+    showToast(result.message);
   }
 }
 

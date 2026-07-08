@@ -5,41 +5,18 @@ import { I18nError } from "~/composables/i18nError";
 import * as schema from "./schema";
 import { materializeReceivingAllocation, scanAllocationToPackage } from "./picking";
 import { availableReceivingQtySql, allocationsCte } from "./helpers";
+import type {
+  OcrParsedFields,
+  ReceivingCandidate,
+  PickingCandidate,
+} from "~/services/types";
 
-export interface OcrParseResult {
-  partNo: string;
-  dateCode: string | null;
-  lotCode: string | null;
-  coo: string | null;
-  cow: string | null;
-  qty: number;
-}
-
-export interface ReceivingCandidate {
-  receivingInvoiceItemId: string;
-  partId: string;
-  partNo: string;
-  dateCode: string | null;
-  lotCode: string | null;
-  coo: string | null;
-  cow: string | null;
-  availableQty: number;
-}
-
-export interface PickingCandidate {
-  pickingOrderId: string;
-  pickingOrderRefNo: string;
-  pickingItemId: string;
-  shipTo: string | null;
-  requiredQty: number;
-  pickedQty: number;
-  remainingQty: number;
-}
+export type { OcrParsedFields, ReceivingCandidate, PickingCandidate } from "~/services/types";
 
 export async function findReceivingCandidates(
   db: PgliteDatabase<typeof schema>,
   receivingOrderId: string,
-  parsed: OcrParseResult
+  parsed: OcrParsedFields
 ): Promise<ReceivingCandidate[]> {
   const qty = parsed.qty;
   if (!Number.isInteger(qty) || qty <= 0) {

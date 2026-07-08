@@ -27,19 +27,19 @@
             @change="toggleSelection(po.id)"
           />
           <NuxtLink :to="`/picking/${po.id}`" class="list-card__title">
-            {{ po.ref_no }}
+            {{ po.refNo }}
           </NuxtLink>
         </div>
         <span class="badge" :class="badgeClass(po.status)">{{ statusLabel.picking(po.status) }}</span>
       </div>
       <p class="list-card__meta">
-        {{ po.supplier_name || $t('common.noSupplier') }}
+        {{ po.supplierName || $t('common.noSupplier') }}
       </p>
       <div class="list-card__footer">
         <span class="list-card__date">
-          {{ po.delivery_date ? new Date(po.delivery_date).toLocaleDateString() : $t('common.noDate') }}
+          {{ po.deliveryDate ? new Date(po.deliveryDate).toLocaleDateString() : $t('common.noDate') }}
         </span>
-        <span class="list-card__ship">{{ $t('picking.shipTo', { destination: po.ship_to || $t('common.noData') }) }}</span>
+        <span class="list-card__ship">{{ $t('picking.shipTo', { destination: po.shipTo || $t('common.noData') }) }}</span>
       </div>
     </div>
 
@@ -60,33 +60,22 @@
 </template>
 
 <script setup lang="ts">
-import { I18nError } from "~/composables/i18nError";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { badgeClass } from "~/composables/useStatusBadge";
+import { useWarehouse } from "~/composables/useWarehouse";
+import type { PickingOrderSummary, PickingIssueReason } from "~/services/types";
 
 definePageMeta({ title: "meta.picking" });
 
 const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
+const warehouse = useWarehouse();
 
 useHead({ title: t("picking.title") });
 
-interface PickingOrderRow extends Record<string, unknown> {
-  id: string;
-  ref_no: string;
-  status: string;
-  delivery_date: string | null;
-  supplier_name: string | null;
-  ship_to: string | null;
-  total_qty: number;
-}
-
-const db = await useDb();
-const { currentUser } = useAuth();
-
 const search = ref("");
-const rawRows = ref<PickingOrderRow[]>([]);
+const rawRows = ref<PickingOrderSummary[]>([]);
 const loading = ref(true);
 const loadError = ref<string | null>(null);
 const reportMessage = ref<string | null>(null);
@@ -99,14 +88,7 @@ async function load() {
   loadError.value = null;
   reportMessage.value = null;
   try {
-    const result = await db.execute<PickingOrderRow>(
-      `SELECT po.id, po.ref_no, po.status, po.delivery_date, po.ship_to, s.name AS supplier_name,
-        (SELECT COALESCE(SUM(pi.qty), 0) FROM picking_items pi WHERE pi.picking_order_id = po.id) AS total_qty
-       FROM picking_orders po
-       LEFT JOIN suppliers s ON po.supplier_id = s.id
-       ORDER BY CASE WHEN po.status = 'finished' THEN 1 ELSE 0 END, po.delivery_date;`
-    );
-    rawRows.value = result.rows ?? [];
+    rawRows.value = await warehouse.getPickingOrders();
   } catch (e) {
     loadError.value = errorMessage(e);
     rawRows.value = [];
@@ -120,15 +102,15 @@ const rows = computed(() => {
   if (!term) return rawRows.value;
   return rawRows.value.filter(
     (r) =>
-      r.ref_no.toLowerCase().includes(term) ||
-      (r.supplier_name?.toLowerCase().includes(term) ?? false)
+      r.refNo.toLowerCase().includes(term) ||
+      (r.supplierName?.toLowerCase().includes(term) ?? false)
   );
 });
 
 const selectedOrders = computed(() =>
   rawRows.value
     .filter((r) => selectedIds.value.has(r.id))
-    .map((r) => ({ id: r.id, ref_no: r.ref_no, totalQty: r.total_qty }))
+    .map((r) => ({ id: r.id, refNo: r.refNo, totalQty: r.totalQty }))
 );
 
 const hasSelection = computed(() => selectedOrders.value.length > 0);
@@ -153,7 +135,7 @@ function openModal() {
 }
 
 async function onReportSaved(payload: {
-  reason: "insufficient_stock" | "cannot_divide" | "merge" | "other";
+  reason: PickingIssueReason;
   qty: number | null;
   packSize: number | null;
   note: string | null;
@@ -161,23 +143,16 @@ async function onReportSaved(payload: {
 }) {
   reporting.value = true;
   try {
-    if (!currentUser.value) throw new I18nError("no_operator_user_found");
-    const { reportPickingOrderIssues } = await import("~/db/picking");
     const entries = selectedOrders.value.map((o) => ({
       orderId: o.id,
       remark: payload.remarks[o.id]?.trim() || null,
     }));
-    const result = await reportPickingOrderIssues(
-      db,
-      entries,
-      {
-        reason: payload.reason,
-        qty: payload.qty,
-        packSize: payload.packSize,
-        note: payload.note,
-      },
-      currentUser.value.id
-    );
+    const result = await warehouse.reportPickingOrderIssues(entries, {
+      reason: payload.reason,
+      qty: payload.qty,
+      packSize: payload.packSize,
+      note: payload.note,
+    });
     selectedIds.value = new Set();
     modalOpen.value = false;
     await load();

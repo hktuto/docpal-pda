@@ -96,15 +96,14 @@
 </template>
 
 <script setup lang="ts">
-import {
-  getShippingBoxForMeasuring,
-  type ShippingBoxForMeasuring,
-} from "~/db/measuring";
 import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import { useErrorMessage } from "~/composables/errorMessage";
+import { useWarehouse } from "~/composables/useWarehouse";
+import { useToast } from "~/composables/useToast";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import BoxMeasurementsModal from "~/components/BoxMeasurementsModal.vue";
 import { badgeClass } from "~/composables/useStatusBadge";
+import type { ShippingBoxForMeasuring } from "~/services/types";
 
 async function onScanApplied() {
   await load();
@@ -124,10 +123,11 @@ const boxId = route.params.boxId as string;
 
 definePageMeta({ title: "meta.measureBox", props: { noPadding: true } });
 
-const db = await useDb();
+const warehouse = useWarehouse();
 const { t } = useI18n();
 const boxStatusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
+const { showToast } = useToast();
 
 useHead({ title: t('measuring.measureBox.title') });
 
@@ -150,14 +150,9 @@ useVisibleReload(load);
 
 async function load() {
   try {
-    const data = await getShippingBoxForMeasuring(db, boxId);
-    if (!data) {
-      error.value = t('measuring.measureBox.boxNotFound');
-      box.value = null;
-    } else {
-      box.value = data;
-      error.value = null;
-    }
+    const data = await warehouse.getShippingBoxForMeasuring(boxId);
+    box.value = data;
+    error.value = null;
   } catch (e: unknown) {
     error.value = errorMessage(e);
   } finally {
@@ -203,7 +198,7 @@ async function openScan(packageId?: string) {
     confirmSingleMatch: true,
   });
   if (result.status === "error") {
-    error.value = result.message;
+    showToast(result.message);
   }
   // applied/review/manual are handled by useLabelScanReview.
 }

@@ -26,9 +26,10 @@
 </template>
 
 <script setup lang="ts">
-import { getShelvesWithBoxes, type ShelfWithBoxCount } from "~/db/goodsVerify";
+import { useWarehouse } from "~/composables/useWarehouse";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { useErrorMessage } from "~/composables/errorMessage";
+import type { ShelfWithBoxCount } from "~/services/types";
 
 definePageMeta({ title: "meta.goodsVerify" });
 
@@ -36,8 +37,7 @@ const { t } = useI18n();
 useHead({ title: t('goodsVerify.title') });
 
 const errorMessage = useErrorMessage();
-
-const db = await useDb();
+const warehouse = useWarehouse();
 
 const rawRows = ref<ShelfWithBoxCount[]>([]);
 const loading = ref(true);
@@ -48,7 +48,7 @@ async function load() {
   loading.value = true;
   loadError.value = null;
   try {
-    rawRows.value = await getShelvesWithBoxes(db);
+    rawRows.value = await warehouse.getShelvesWithBoxes();
   } catch (e: unknown) {
     loadError.value = errorMessage(e);
     rawRows.value = [];

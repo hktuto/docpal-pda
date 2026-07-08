@@ -58,4 +58,10 @@ export default defineNuxtConfig({
       exclude: ["@electric-sql/pglite"],
     },
   },
+  runtimeConfig: {
+    public: {
+      warehouseAdapter: "pglite", // "pglite" | "api"
+      apiBaseUrl: "",             // e.g. "https://warehouse-api.example.com/api/v1"
+    },
+  },
 });

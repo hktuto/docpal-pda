@@ -15,33 +15,33 @@
       class="card list-card"
     >
       <div class="list-card__header">
-        <span class="list-card__title">{{ ro.ref_no }}</span>
+        <span class="list-card__title">{{ ro.refNo }}</span>
         <span class="badge" :class="badgeClass(ro.status)">{{ statusLabel.receiving(ro.status) }}</span>
       </div>
       <p class="list-card__meta">
-        {{ ro.supplier_name || $t('common.noSupplier') }}
+        {{ ro.supplierName || $t('common.noSupplier') }}
       </p>
       <div class="list-card__footer">
-        <span class="list-card__date">{{ $t('putAway.available', { count: ro.available_qty }) }}</span>
+        <span class="list-card__date">{{ $t('putAway.available', { count: ro.availableQty }) }}</span>
       </div>
     </NuxtLink>
   </div>
 </template>
 
 <script setup lang="ts">
-import { getPutAwayCandidates, type PutAwayCandidate } from "~/db/putAway";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useVisibleReload } from "~/composables/useVisibleReload";
+import { useWarehouse } from "~/composables/useWarehouse";
+import type { PutAwayCandidate } from "~/services/types";
 
 definePageMeta({ title: "meta.putAway" });
 
 const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
+const warehouse = useWarehouse();
 
 useHead({ title: t("putAway.title") });
-
-const db = await useDb();
 
 const pending = ref(true);
 const error = ref<string | null>(null);
@@ -49,7 +49,7 @@ const rows = ref<PutAwayCandidate[]>([]);
 
 async function load() {
   try {
-    rows.value = await getPutAwayCandidates(db);
+    rows.value = await warehouse.getPutAwayCandidates();
   } catch (e: any) {
     error.value = errorMessage(e);
   } finally {

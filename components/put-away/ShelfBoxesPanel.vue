@@ -94,12 +94,9 @@
 </template>
 
 <script setup lang="ts">
-import * as schema from "~/db/schema";
-import { type ShelfBox } from "~/db/putAway";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { boxTotalQty } from "~/utils/box";
-
-type Shelf = typeof schema.shelves.$inferSelect;
+import type { ShelfBox, Shelf } from "~/services/types";
 
 interface Props {
   boxes: ShelfBox[];

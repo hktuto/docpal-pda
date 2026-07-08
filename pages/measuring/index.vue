@@ -15,15 +15,15 @@
       class="card list-card"
     >
       <div class="list-card__header">
-        <span class="list-card__title">{{ task.picking_order_ref }}</span>
+        <span class="list-card__title">{{ task.pickingOrderRef }}</span>
         <span class="badge" :class="badgeClass(task.status)">{{ statusLabel.measuring(task.status) }}</span>
       </div>
       <p class="list-card__meta">
-        {{ task.supplier_name || $t('common.noSupplier') }}
+        {{ task.supplierName || $t('common.noSupplier') }}
       </p>
       <div class="list-card__footer">
         <span class="list-card__date">
-          {{ $t('measuring.packed', { count: task.packed_items, total: task.total_items }) }}
+          {{ $t('measuring.packed', { count: task.packedItems, total: task.totalItems }) }}
         </span>
       </div>
     </NuxtLink>
@@ -33,28 +33,20 @@
 <script setup lang="ts">
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { useErrorMessage } from "~/composables/errorMessage";
+import { useWarehouse } from "~/composables/useWarehouse";
 import { badgeClass } from "~/composables/useStatusBadge";
+import type { MeasuringTaskSummary } from "~/services/types";
 
 definePageMeta({ title: "meta.measuring" });
 
 const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
+const warehouse = useWarehouse();
 
 useHead({ title: t('measuring.title') });
 
-interface MeasuringRow {
-  id: string;
-  status: string;
-  picking_order_ref: string | null;
-  supplier_name: string | null;
-  total_items: number;
-  packed_items: number;
-}
-
-const db = await useDb();
-
-const rawRows = ref<MeasuringRow[]>([]);
+const rawRows = ref<MeasuringTaskSummary[]>([]);
 const loading = ref(true);
 const loadError = ref<string | null>(null);
 
@@ -62,24 +54,7 @@ async function load() {
   loading.value = true;
   loadError.value = null;
   try {
-    const result = await db.execute<MeasuringRow>(
-      `SELECT mt.id,
-              mt.status,
-              po.ref_no AS picking_order_ref,
-              s.name AS supplier_name,
-              COALESCE(SUM(pi.qty), 0) AS total_items,
-              COALESCE(SUM(pkg.qty), 0) AS packed_items
-       FROM measuring_tasks mt
-       INNER JOIN picking_orders po ON po.id = mt.picking_order_id
-       LEFT JOIN suppliers s ON s.id = po.supplier_id
-       LEFT JOIN picking_items pi ON pi.picking_order_id = po.id
-       LEFT JOIN shipping_boxes sb ON sb.measuring_task_id = mt.id
-       LEFT JOIN picking_packages pkg ON pkg.shipping_box_id = sb.id
-       WHERE mt.status = 'pending'
-       GROUP BY mt.id, mt.status, po.ref_no, s.name
-       ORDER BY po.ref_no;`
-    );
-    rawRows.value = result.rows ?? [];
+    rawRows.value = await warehouse.getMeasuringTasks();
   } catch (e: unknown) {
     loadError.value = errorMessage(e);
     rawRows.value = [];

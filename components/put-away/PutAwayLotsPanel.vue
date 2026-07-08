@@ -5,26 +5,26 @@
 
     <div
       v-for="lot in lots"
-      :key="lot.receiving_invoice_item_id"
+      :key="lot.receivingInvoiceItemId"
       class="card"
     >
       <DetailRow :label="$t('putAway.lotsPanel.part')">
-        <span class="card__title">{{ lot.part_no || $t('common.noData') }}</span>
+        <span class="card__title">{{ lot.partNo || $t('common.noData') }}</span>
       </DetailRow>
       <DetailRow :label="$t('putAway.lotsPanel.dateLot')">
-        <span>{{ lot.date_code || $t('common.noData') }} / {{ lot.lot_code || $t('common.noData') }}</span>
+        <span>{{ lot.dateCode || $t('common.noData') }} / {{ lot.lotCode || $t('common.noData') }}</span>
       </DetailRow>
       <DetailRow :label="$t('putAway.lotsPanel.cooCow')">
         <span>{{ lot.coo || $t('common.noData') }} / {{ lot.cow || $t('common.noData') }}</span>
       </DetailRow>
       <DetailRow :label="$t('putAway.lotsPanel.totalQty')">
-        <span>{{ lot.total_qty }}</span>
+        <span>{{ lot.totalQty }}</span>
       </DetailRow>
       <DetailRow :label="$t('putAway.lotsPanel.scannedQty')">
-        <span>{{ lot.scanned_qty }}</span>
+        <span>{{ lot.scannedQty }}</span>
       </DetailRow>
       <DetailRow :label="$t('putAway.lotsPanel.boxedQty')">
-        <span>{{ lot.boxed_qty }}</span>
+        <span>{{ lot.boxedQty }}</span>
       </DetailRow>
 
       <div class="lot-actions">
@@ -37,18 +37,18 @@
         </button>
         <button
           class="btn btn--small btn--ghost"
-          @click="toggleExpand(lot.receiving_invoice_item_id)"
+          @click="toggleExpand(lot.receivingInvoiceItemId)"
         >
-          {{ expandedItems.has(lot.receiving_invoice_item_id) ? $t('putAway.lotsPanel.collapseScans') : $t('putAway.lotsPanel.expandScans') }}
+          {{ expandedItems.has(lot.receivingInvoiceItemId) ? $t('putAway.lotsPanel.collapseScans') : $t('putAway.lotsPanel.expandScans') }}
         </button>
       </div>
 
-      <div v-if="expandedItems.has(lot.receiving_invoice_item_id)" class="scans-list">
-        <p v-if="!scansByItem[lot.receiving_invoice_item_id]?.length" class="empty">
+      <div v-if="expandedItems.has(lot.receivingInvoiceItemId)" class="scans-list">
+        <p v-if="!scansByItem[lot.receivingInvoiceItemId]?.length" class="empty">
           {{ $t('putAway.lotsPanel.noScans') }}
         </p>
         <div
-          v-for="scan in scansByItem[lot.receiving_invoice_item_id]"
+          v-for="scan in scansByItem[lot.receivingInvoiceItemId]"
           :key="scan.id"
           class="scan-row"
         >
@@ -120,9 +120,8 @@
 </template>
 
 <script setup lang="ts">
-import type { PutAwayLot, ShelfBox } from "~/db/putAway";
-import type { PutAwayScan } from "~/db/putAway";
 import InlineSpinner from "~/components/InlineSpinner.vue";
+import type { PutAwayLot, PutAwayScan, ShelfBox } from "~/services/types";
 
 interface Props {
   lots: PutAwayLot[];

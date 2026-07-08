@@ -20,7 +20,9 @@
 
 - `pages/measuring/` — list and detail pages.
 - `components/BoxMeasurementsModal.vue` — measurement entry.
-- `db/measuring.ts` — measuring DB helpers.
+- `services/warehouse.ts` — service interface.
+- `services/adapters/pgliteWarehouse.ts` — PGlite service implementation.
+- `db/measuring.ts` — measuring DB helpers (called only by the adapter).
 
 ## Known limitations
 

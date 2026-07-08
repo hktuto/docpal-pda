@@ -224,7 +224,7 @@ export interface GroupedOrder {
 // OCR scan matching
 // ------------------------------------------------------------------
 
-export interface OcrParseResult {
+export interface OcrParsedFields {
   partNo: string;
   dateCode: string | null;
   lotCode: string | null;

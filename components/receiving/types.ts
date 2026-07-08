@@ -1,22 +1,20 @@
-import * as schema from "~/db/schema";
+import type {
+  ReceivingOrderDetail,
+  ReceivingItem,
+  ReceivingItemMismatch,
+} from "~/services/types";
 
-export type DisplayReceivingItem = typeof schema.receivingInvoiceItems.$inferSelect & {
-  part?: typeof schema.parts.$inferSelect | null;
-  mismatch?: typeof schema.receivingItemMismatches.$inferSelect | null;
+export type DisplayReceivingItem = ReceivingItem & {
+  mismatch?: ReceivingItemMismatch | null;
 };
 
-export interface DisplayReceivingOrder {
-  id: string;
-  refNo: string;
-  status: string;
-  supplier?: typeof schema.suppliers.$inferSelect | null;
-  deliveryDate: Date | null;
+export type DisplayReceivingOrder = ReceivingOrderDetail & {
   invoices: Array<
-    Omit<typeof schema.receivingInvoices.$inferSelect, "receivingOrderId"> & {
+    Omit<NonNullable<ReceivingOrderDetail["invoices"]>[number], "receivingOrderId" | "items"> & {
       items: DisplayReceivingItem[];
     }
   >;
-}
+};
 
 export interface DisplayPackage {
   id: string;
