@@ -14,7 +14,9 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS suppliers (
   id TEXT PRIMARY KEY,
   code TEXT NOT NULL UNIQUE,
-  name TEXT NOT NULL
+  name TEXT NOT NULL,
+  qrcode_template TEXT,
+  qrcode_qty_encoding TEXT
 );
 
 CREATE TABLE IF NOT EXISTS parts (
