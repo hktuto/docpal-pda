@@ -66,7 +66,7 @@ const { t } = useI18n();
 const getErrorMessage = useErrorMessage();
 const warehouse = useWarehouse();
 
-const countryLabels = computed(() => t('countryLabels') as Record<string, string>);
+const countryLabels = computed(() => t('countryLabels') as unknown as Record<string, string>);
 function countryName(value: string) {
   return countryLabels.value[value] ?? value;
 }

@@ -296,12 +296,12 @@ describe("parseQrCapture", () => {
     const genericTemplate = {
       code: "GENERIC",
       qrcodeTemplate: "^(?<itemId>.+)$",
-      qrcodeQtyEncoding: null as const,
+      qrcodeQtyEncoding: null,
     };
     const specificTemplate = {
       code: "SPECIFIC",
       qrcodeTemplate: "^ID:(?<itemId>[A-Z0-9]+)$",
-      qrcodeQtyEncoding: null as const,
+      qrcodeQtyEncoding: null,
     };
 
     const qrValue = "ID:RK73B1JTTD181G";
@@ -327,7 +327,7 @@ describe("parseQrCapture", () => {
     const invalidTemplate = {
       code: "INVALID",
       qrcodeTemplate: "(?<itemId>[",
-      qrcodeQtyEncoding: null as const,
+      qrcodeQtyEncoding: null,
     };
 
     expect(() =>

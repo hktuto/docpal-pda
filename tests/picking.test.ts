@@ -345,7 +345,7 @@ describe('addPackageToBox', () => {
     await db.insert(schema.pickingOrders).values({
       id: otherOrderId,
       refNo: 'PICK-OTHER',
-      supplierId: (await db.query.suppliers.findFirst())!.id,
+      supplierId: (await db.query.suppliers.findFirst())!.id as string,
       deliveryDate: now,
       poNo: 'PO-OTHER',
       requiredDateCodeNotice: null,

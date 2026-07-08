@@ -36,6 +36,8 @@ export interface MeasuringTaskDetail {
     deliveryDate: Date | null;
     poNo: string | null;
     requiredDateCodeNotice: string | null;
+    shipTo: string | null;
+    destinationCountry: string | null;
     status: (typeof schema.pickingOrderStatus)[number];
     createdAt: Date;
     updatedAt: Date;

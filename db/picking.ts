@@ -1090,5 +1090,5 @@ export async function getPickingOrdersByReceivingOrder(
     ORDER BY c.picking_order_ref, c.part_no;
   `);
 
-  return (result.rows ?? []) as PickingByReceivingRow[];
+  return (result.rows ?? []) as unknown as PickingByReceivingRow[];
 }

@@ -1036,20 +1036,17 @@ export function createPgliteWarehouseService(
       }
 
       const invoices: ReceivingOrderDetail["invoices"] = orderData.invoices.map(
-        (invoice) => {
-          const { receivingOrderId: _ignored, ...invoiceRest } = invoice;
-          return {
-            ...invoiceRest,
-            items: invoice.items.map((item) => {
-              const base = toReceivingItem(item);
-              const mismatch = activeMismatches.get(item.id) ?? null;
-              return {
-                ...base,
-                mismatch: mismatch ? toReceivingItemMismatch(mismatch) : null,
-              };
-            }),
-          };
-        }
+        (invoice) => ({
+          ...invoice,
+          items: invoice.items.map((item) => {
+            const base = toReceivingItem(item);
+            const mismatch = activeMismatches.get(item.id) ?? null;
+            return {
+              ...base,
+              mismatch: mismatch ? toReceivingItemMismatch(mismatch) : null,
+            };
+          }),
+        })
       );
 
       return {
@@ -1317,7 +1314,7 @@ export function createPgliteWarehouseService(
     async getShippingBoxForMeasuring(id: string): Promise<ShippingBoxForMeasuring> {
       const data = await dbGetShippingBoxForMeasuring(db, id);
       if (!data) throw new I18nError("shipping_box_not_found");
-      return toShippingBoxForMeasuring(data);
+      return toShippingBoxForMeasuring(data as unknown as Parameters<typeof toShippingBoxForMeasuring>[0]);
     },
 
     async findMatchingUnverifiedPackage(

@@ -61,7 +61,7 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
     { id: uuid(), code: "YAMAIC", name: "YAMAICHI -MCE" },
     { id: uuid(), code: "YAMA1", name: "YAMAICHI -MCI" },
   ] as const;
-  await db.insert(schema.suppliers).values(supplierRecords);
+  await db.insert(schema.suppliers).values([...supplierRecords]);
   const supplierByCode = Object.fromEntries(supplierRecords.map((s) => [s.code, s])) as Record<
     (typeof supplierRecords)[number]["code"],
     (typeof supplierRecords)[number]
@@ -90,7 +90,7 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
     { id: uuid(), partNo: "D1FL20U", internalCode: "", description: "", defaultCoo: "JP" },
     { id: uuid(), partNo: "04028DA12RBUFB", internalCode: "", description: "", defaultCoo: "CN" },
   ] as const;
-  await db.insert(schema.parts).values(partRecords);
+  await db.insert(schema.parts).values([...partRecords]);
   const partByNo = Object.fromEntries(partRecords.map((p) => [p.partNo, p])) as Record<
     (typeof partRecords)[number]["partNo"],
     (typeof partRecords)[number]
@@ -109,7 +109,7 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
     { code: "B-02-01", zone: "B" },
     { code: "B-02-02", zone: "B" },
   ] as const;
-  await db.insert(schema.shelves).values(shelfRecords);
+  await db.insert(schema.shelves).values([...shelfRecords]);
 
   // Pre-existing shelf inventory from Section 4 of the seed curation.
   const preExistingLots = [
@@ -122,7 +122,7 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
     { id: uuid(), partId: partByNo["D1FL20U"].id, dateCode: "", lotCode: "", coo: "JP", cow: "USA", shelfCode: "A-01-07", boxId: null, totalQty: 5000, allocatedQty: 0 },
     { id: uuid(), partId: partByNo["04028DA12RBUFB"].id, dateCode: "", lotCode: "", coo: "CN", cow: "USA", shelfCode: "A-01-08", boxId: null, totalQty: 10, allocatedQty: 0 },
   ] as const;
-  await db.insert(schema.inventoryLots).values(preExistingLots);
+  await db.insert(schema.inventoryLots).values([...preExistingLots]);
 
   // Pre-existing shelf boxes so the goods-verify flow has boxes to check.
   const preExistingShelfBoxes = [
@@ -130,7 +130,7 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
     { id: "SBOX-SEED-002", receivingOrderId: null as string | null, shelfCode: "A-01-02", status: "closed" as const, createdAt: now },
     { id: "SBOX-SEED-003", receivingOrderId: null as string | null, shelfCode: "B-01-01", status: "open" as const, createdAt: now },
   ] as const;
-  await db.insert(schema.shelfBoxes).values(preExistingShelfBoxes);
+  await db.insert(schema.shelfBoxes).values([...preExistingShelfBoxes]);
 
   await db.insert(schema.putAwayScans).values([
     {
@@ -241,7 +241,7 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
       updatedAt: now,
     },
   ] as const;
-  await db.insert(schema.receivingOrders).values(receivingOrderRecords);
+  await db.insert(schema.receivingOrders).values([...receivingOrderRecords]);
   const receivingOrderByRef = Object.fromEntries(receivingOrderRecords.map((ro) => [ro.refNo, ro])) as Record<
     (typeof receivingOrderRecords)[number]["refNo"],
     (typeof receivingOrderRecords)[number]
@@ -252,7 +252,7 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
     { id: uuid(), receivingOrderId: receivingOrderByRef["1080082369"].id, invoiceNo: "1080082369", supplierId: supplierByCode.ABLIC.id },
     { id: uuid(), receivingOrderId: receivingOrderByRef["52600142"].id, invoiceNo: "52600142", supplierId: supplierByCode.DIOTEC.id },
   ] as const;
-  await db.insert(schema.receivingInvoices).values(invoiceRecords);
+  await db.insert(schema.receivingInvoices).values([...invoiceRecords]);
   const invoiceByNo = Object.fromEntries(invoiceRecords.map((inv) => [inv.invoiceNo, inv])) as Record<
     (typeof invoiceRecords)[number]["invoiceNo"],
     (typeof invoiceRecords)[number]
@@ -521,7 +521,7 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
     { id: uuid(), refNo: "PICK-004", supplierId: supplierByCode.KYOCER.id, deliveryDate: now, poNo: "PO-PICK-004", requiredDateCodeNotice: null, shipTo: "CN", destinationCountry: "China", status: "pending" as const, createdAt: now, updatedAt: now },
     { id: uuid(), refNo: "PICK-005", supplierId: supplierByCode.IK.id, deliveryDate: now, poNo: "PO-PICK-005", requiredDateCodeNotice: null, shipTo: "US", destinationCountry: "USA", status: "pending" as const, createdAt: now, updatedAt: now },
   ] as const;
-  await db.insert(schema.pickingOrders).values(pickingOrderRecords);
+  await db.insert(schema.pickingOrders).values([...pickingOrderRecords]);
   const pickingOrderByRef = Object.fromEntries(pickingOrderRecords.map((po) => [po.refNo, po])) as Record<
     (typeof pickingOrderRecords)[number]["refNo"],
     (typeof pickingOrderRecords)[number]
@@ -684,7 +684,7 @@ export async function seedDb(db: PgliteDatabase<typeof schema>) {
       sourceShelfCode: null,
     },
   ] as const;
-  await db.insert(schema.pickingItems).values(pickingItemRecords);
+  await db.insert(schema.pickingItems).values([...pickingItemRecords]);
 
   // Attempt to allocate all seeded picking orders from shelf stock or in-hand receiving items.
   for (const po of pickingOrderRecords) {
