@@ -18,6 +18,8 @@ export const suppliers = pgTable("suppliers", {
   id: text("id").primaryKey(),
   code: text("code").notNull().unique(),
   name: text("name").notNull(),
+  qrcodeTemplate: text("qrcode_template"),
+  qrcodeQtyEncoding: text("qrcode_qty_encoding"),
 });
 
 export const parts = pgTable("parts", {
