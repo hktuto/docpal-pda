@@ -47,7 +47,7 @@ No ML Kit QR detection is added to the live preview; the hardware scanner is the
 
 ## Database changes
 
-Add two columns to the `suppliers` table:
+Add two columns to the `suppliers` table in both the Drizzle schema and the raw SQL bootstrap in `db/init.ts`:
 
 ```sql
 qrcode_template text,
@@ -64,6 +64,18 @@ export const suppliers = pgTable("suppliers", {
   qrcodeTemplate: text("qrcode_template"),
   qrcodeQtyEncoding: text("qrcode_qty_encoding"),
 });
+```
+
+`db/init.ts` bootstrap SQL:
+
+```sql
+CREATE TABLE IF NOT EXISTS suppliers (
+  id TEXT PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  qrcode_template TEXT,
+  qrcode_qty_encoding TEXT
+);
 ```
 
 Update the shared `Supplier` type in `services/types.ts` to include the new fields, and add a shared `SupplierQrcodeTemplate` DTO used by the parser and DB loader:

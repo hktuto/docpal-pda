@@ -30,6 +30,7 @@
 
 **Files:**
 - Modify: `db/schema.ts`
+- Modify: `db/init.ts`
 - Modify: `services/types.ts`
 - Modify: `db/seed.ts`
 
@@ -47,7 +48,21 @@ export const suppliers = pgTable("suppliers", {
 });
 ```
 
-- [ ] **Step 2: Add fields to shared Supplier type**
+- [ ] **Step 2: Update raw SQL bootstrap in `db/init.ts`**
+
+In `db/init.ts`, update the `suppliers` table DDL to include the new columns:
+
+```sql
+CREATE TABLE IF NOT EXISTS suppliers (
+  id TEXT PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  qrcode_template TEXT,
+  qrcode_qty_encoding TEXT
+);
+```
+
+- [ ] **Step 3: Add fields to shared Supplier type**
 
 In `services/types.ts`, update the `Supplier` interface:
 
@@ -67,7 +82,7 @@ export interface SupplierQrcodeTemplate {
 }
 ```
 
-- [ ] **Step 3: Seed KOA template**
+- [ ] **Step 4: Seed KOA template**
 
 In `db/seed.ts`, change the KOA supplier record from:
 
@@ -87,10 +102,10 @@ to:
 },
 ```
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add db/schema.ts services/types.ts db/seed.ts
+git add db/schema.ts db/init.ts services/types.ts db/seed.ts
 git commit -m "feat(qr): add supplier qrcode_template and qrcode_qty_encoding"
 ```
 
