@@ -659,7 +659,7 @@ export function parseQrCapture(
   }
 
   return parseAndIdentify(
-    { text: qrValue, barcodes: [{ value: qrValue, format: "QR_CODE" }] },
+    { text: qrValue, barcodes: [{ value: qrValue, format: "4" }] },
     targets
   );
 }

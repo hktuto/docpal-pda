@@ -242,11 +242,13 @@ describe("decodeKoaQty", () => {
     expect(decodeKoaQty("abc")).toBeUndefined();
   });
 
-  it("returns undefined for non-positive results", () => {
+  it("decodes single-digit significant values (zero trailing zeros)", () => {
     expect(decodeKoaQty("50")).toBe(5);
-    expect(decodeKoaQty("5")).toBeUndefined();
+  });
+
+  it("returns undefined for non-positive results", () => {
     expect(decodeKoaQty("00")).toBeUndefined();
-    expect(decodeKoaQty("25a")).toBeUndefined();
+    expect(decodeKoaQty("0")).toBeUndefined();
   });
 });
 

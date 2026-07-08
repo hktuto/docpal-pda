@@ -121,13 +121,13 @@
 </template>
 
 <script setup lang="ts">
-import { sql } from "drizzle-orm";
-import { availableReceivingQtySql, allocationsCte } from "~/db/helpers";
 import ReceivingItemsTab from "~/components/receiving/ReceivingItemsTab.vue";
 import ReceivingPickingTab from "~/components/receiving/ReceivingPickingTab.vue";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useLabelScanReview } from "~/composables/useLabelScanReview";
+import { useWarehouse } from "~/composables/useWarehouse";
+import { useToast } from "~/composables/useToast";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import ReportIssueModal from "~/components/ReportIssueModal.vue";
 import {
@@ -139,47 +139,27 @@ import {
   DisplayPackage,
   DisplayBox,
 } from "~/components/receiving/types";
-import {
-  getReceivingOrderDetail,
-  confirmReceivingOrderArrived,
-} from "~/db/receiving";
-import {
-  getActiveMismatchesForItems,
-  reportReceivingItemMismatch,
-  editReceivingItemMismatch,
-  confirmReceivingItemMismatch,
-  cancelReceivingItemMismatch,
-} from "~/db/mismatch";
-import {
-  getPickingOrdersByReceivingOrder,
-  getPickingItemTransitionLogs,
-  createShippingBoxForPickingOrder,
-  addPackageToBox,
-  removePackageFromBox,
-  removeScannedPackage,
-  type PickingByReceivingRow,
-} from "~/db/picking";
-import { I18nError } from "~/composables/i18nError";
-import * as schema from "~/db/schema";
+import type { MismatchReason } from "~/services/types";
 
 definePageMeta({ title: "meta.receivingDetail", props: { noPadding: true } });
 
 const { t } = useI18n();
 const errorMessage = useErrorMessage();
+const warehouse = useWarehouse();
+const { showToast } = useToast();
 
 useHead({ title: t("receiving.detail.title") });
 
 const route = useRoute();
 const orderId = route.params.id as string;
 
-const db = await useDb();
 const { currentUser } = useAuth();
 
 const pending = ref(true);
 const error = ref<string | null>(null);
 
 const order = ref<DisplayReceivingOrder | null>(null);
-const pickingRows = ref<PickingByReceivingRow[]>([]);
+const pickingRows = ref<NonNullable<DisplayReceivingOrder["pickingRows"]>>([]);
 const saving = ref<Record<string, boolean>>({});
 const confirming = ref(false);
 const { scan, scanning, review, reviewOpen, onApplied } = useLabelScanReview({
@@ -281,142 +261,25 @@ const allocatedByItem = ref<Record<string, number>>({});
 
 async function load() {
   try {
-    // Phase 1: independent primary queries can be started together.
-    const [orderData, linkedRows, remainingResult, allocatedResult] = await Promise.all([
-      getReceivingOrderDetail(db, orderId),
-      getPickingOrdersByReceivingOrder(db, orderId),
-      db.execute(
-        sql`SELECT COUNT(DISTINCT CASE
-                  WHEN ro.status = 'in_hand'
-                    AND (${availableReceivingQtySql}) > 0
-                  THEN rii.id
-                END) AS qty
-            FROM receiving_orders ro
-            JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
-            JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
-            LEFT JOIN (${allocationsCte()}) alloc ON alloc.receiving_invoice_item_id = rii.id
-            WHERE ro.id = ${orderId}`
-      ),
-      db.execute(
-        sql`SELECT rii.id AS receiving_invoice_item_id, COALESCE(SUM(a.qty), 0) AS allocated_qty
-            FROM receiving_invoice_items rii
-            JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-            JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
-            LEFT JOIN allocations a ON a.receiving_invoice_item_id = rii.id
-            WHERE ro.id = ${orderId}
-            GROUP BY rii.id`
-      ),
-    ]);
+    const detail = await warehouse.getReceivingOrder(orderId);
 
-    pickingRows.value = linkedRows;
-    remainingItems.value = Number((remainingResult.rows[0] as any)?.qty ?? 0);
+    order.value = detail as DisplayReceivingOrder;
+    pickingRows.value = detail.pickingRows;
+    remainingItems.value = detail.remainingItems;
+    allocatedByItem.value = detail.allocatedByItem;
+    boxesByOrder.value = detail.boxesByOrder;
+    transitionLogs.value = detail.transitionLogs;
 
-    const itemIds = Array.from(new Set(linkedRows.map((r) => r.picking_item_id)));
-    const orderIds = Array.from(new Set(linkedRows.map((r) => r.picking_order_id)));
-
-    // Phase 2: child lookups depend only on the IDs above.
-    const idList = itemIds.map((id) => `'${id}'`).join(", ");
-    const orderIdList = orderIds.map((id) => `'${id}'`).join(", ");
-
-    const [logs, packageResult, boxResult] = await Promise.all([
-      itemIds.length ? getPickingItemTransitionLogs(db, itemIds) : Promise.resolve([]),
-      itemIds.length
-        ? db.execute(sql`
-            SELECT id,
-                   picking_item_id,
-                   picking_order_id,
-                   qty,
-                   shipping_box_id,
-                   date_code,
-                   lot_code,
-                   coo,
-                   cow,
-                   created_at
-            FROM picking_packages
-            WHERE picking_item_id IN (${sql.raw(idList)})
-            ORDER BY created_at
-          `)
-        : Promise.resolve({ rows: [] }),
-      orderIds.length
-        ? db.execute(sql`
-            SELECT id, picking_order_id, status
-            FROM shipping_boxes
-            WHERE picking_order_id IN (${sql.raw(orderIdList)})
-            ORDER BY id
-          `)
-        : Promise.resolve({ rows: [] }),
-    ]);
-
-    const nextLogs: Record<string, TransitionLog[]> = {};
-    for (const log of logs) {
-      const list = nextLogs[log.entityId] ?? [];
-      list.push(log);
-      nextLogs[log.entityId] = list;
-    }
-    transitionLogs.value = nextLogs;
-
-    const nextPackages: Record<string, DisplayPackage[]> = {};
     const nextBoxSelections: Record<string, string> = {};
-    for (const raw of (packageResult.rows ?? []) as any[]) {
-      const pkg: DisplayPackage = {
-        id: raw.id,
-        pickingItemId: raw.picking_item_id,
-        pickingOrderId: raw.picking_order_id,
-        qty: raw.qty,
-        shippingBoxId: raw.shipping_box_id,
-        dateCode: raw.date_code,
-        lotCode: raw.lot_code,
-        coo: raw.coo,
-        cow: raw.cow,
-        createdAt: raw.created_at,
-      };
-      const list = nextPackages[pkg.pickingItemId] ?? [];
-      list.push(pkg);
-      nextPackages[pkg.pickingItemId] = list;
-      if (!pkg.shippingBoxId) {
-        nextBoxSelections[pkg.id] = boxSelections.value[pkg.id] ?? "";
+    for (const [itemId, packages] of Object.entries(detail.packagesByItem)) {
+      for (const pkg of packages) {
+        if (!pkg.shippingBoxId) {
+          nextBoxSelections[pkg.id] = boxSelections.value[pkg.id] ?? "";
+        }
       }
     }
-    packagesByItem.value = nextPackages;
-
-    const nextBoxes: Record<string, DisplayBox[]> = {};
-    for (const box of (boxResult.rows ?? []) as any[]) {
-      const displayBox: DisplayBox = {
-        id: box.id,
-        pickingOrderId: box.picking_order_id,
-        status: box.status,
-      };
-      const list = nextBoxes[displayBox.pickingOrderId] ?? [];
-      list.push(displayBox);
-      nextBoxes[displayBox.pickingOrderId] = list;
-    }
-    boxesByOrder.value = nextBoxes;
+    packagesByItem.value = detail.packagesByItem;
     boxSelections.value = nextBoxSelections;
-
-    const nextAllocated: Record<string, number> = {};
-    for (const row of (allocatedResult.rows ?? []) as any[]) {
-      nextAllocated[row.receiving_invoice_item_id] = Number(row.allocated_qty);
-    }
-    allocatedByItem.value = nextAllocated;
-
-    if (orderData) {
-      const allItemIds = orderData.invoices.flatMap((inv) => inv.items.map((i) => i.id));
-      const activeMismatches = await getActiveMismatchesForItems(db, allItemIds);
-
-      order.value = {
-        ...orderData,
-        invoices: orderData.invoices.map((invoice) => {
-          const { receivingOrderId: _ignored, ...invoiceRest } = invoice;
-          return {
-            ...invoiceRest,
-            items: invoice.items.map((item) => ({
-              ...item,
-              mismatch: activeMismatches.get(item.id) ?? null,
-            })) as DisplayReceivingItem[],
-          };
-        }),
-      };
-    }
   } catch (e: any) {
     error.value = errorMessage(e);
   } finally {
@@ -432,9 +295,10 @@ async function openScan(itemId?: string) {
     pickingItemId: scanPickingItemId.value,
     targets: scanTargets.value,
     confirmSingleMatch: true,
+    supplierCode: order.value?.supplier?.code,
   });
   if (result.status === "error") {
-    error.value = result.message;
+    showToast(result.message);
   }
   // applied/review/manual are handled by useLabelScanReview.
 }
@@ -450,7 +314,7 @@ function onReportModalModelValueUpdate(v: boolean) {
 }
 
 async function onConfirmIssue(payload: {
-  reason: schema.MismatchReason;
+  reason: MismatchReason;
   mismatchQty: number | null;
   wrongPartNo: string | null;
   note: string;
@@ -462,25 +326,19 @@ async function onConfirmIssue(payload: {
   try {
     const item = reportModalItem.value;
     if (payload.isEdit && item.mismatch) {
-      await editReceivingItemMismatch(
-        db,
-        item.mismatch.id,
-        currentUser.value.id,
-        payload.reason,
-        payload.mismatchQty,
-        payload.wrongPartNo,
-        payload.note
-      );
+      await warehouse.editMismatch(item.mismatch.id, {
+        reason: payload.reason,
+        mismatchQty: payload.mismatchQty,
+        wrongPartNo: payload.wrongPartNo,
+        note: payload.note,
+      });
     } else {
-      await reportReceivingItemMismatch(
-        db,
-        item.id,
-        currentUser.value.id,
-        payload.reason,
-        payload.mismatchQty,
-        payload.wrongPartNo,
-        payload.note
-      );
+      await warehouse.reportMismatch(item.id, {
+        reason: payload.reason,
+        mismatchQty: payload.mismatchQty,
+        wrongPartNo: payload.wrongPartNo,
+        note: payload.note,
+      });
     }
     reportModalOpen.value = false;
     await load();
@@ -496,7 +354,7 @@ async function confirmMismatch(mismatchId: string) {
   saving.value[mismatchId] = true;
   error.value = null;
   try {
-    await confirmReceivingItemMismatch(db, mismatchId, currentUser.value.id);
+    await warehouse.confirmMismatch(mismatchId);
     await load();
   } catch (e: any) {
     error.value = errorMessage(e);
@@ -510,7 +368,7 @@ async function cancelMismatch(mismatchId: string) {
   saving.value[mismatchId] = true;
   error.value = null;
   try {
-    await cancelReceivingItemMismatch(db, mismatchId, currentUser.value.id);
+    await warehouse.cancelMismatch(mismatchId);
     await load();
   } catch (e: any) {
     error.value = errorMessage(e);
@@ -522,8 +380,7 @@ async function cancelMismatch(mismatchId: string) {
 async function confirmArrival() {
   confirming.value = true;
   try {
-    if (!currentUser.value) throw new I18nError("no_operator_user_found");
-    await confirmReceivingOrderArrived(db, orderId, currentUser.value.id);
+    await warehouse.confirmReceivingOrderArrived(orderId);
     await load();
   } catch (e: any) {
     error.value = errorMessage(e);
@@ -535,8 +392,7 @@ async function confirmArrival() {
 async function createBox(pickingOrderId: string) {
   creatingBox.value[pickingOrderId] = true;
   try {
-    if (!currentUser.value) throw new I18nError("no_operator_user_found");
-    await createShippingBoxForPickingOrder(db, pickingOrderId, currentUser.value.id);
+    await warehouse.createShippingBoxForPickingOrder(pickingOrderId);
     await load();
   } catch (e: any) {
     error.value = errorMessage(e);
@@ -550,8 +406,7 @@ async function addToBox(packageId: string) {
   if (!boxId) return;
   addingPackage.value[packageId] = true;
   try {
-    if (!currentUser.value) throw new I18nError("no_operator_user_found");
-    await addPackageToBox(db, packageId, boxId, currentUser.value.id);
+    await warehouse.addPackageToBox(packageId, boxId);
     await load();
   } catch (e: any) {
     error.value = errorMessage(e);
@@ -563,8 +418,7 @@ async function addToBox(packageId: string) {
 async function removeFromBox(packageId: string) {
   removingPackage.value[packageId] = true;
   try {
-    if (!currentUser.value) throw new I18nError("no_operator_user_found");
-    await removePackageFromBox(db, packageId, currentUser.value.id);
+    await warehouse.removePackageFromBox(packageId);
     await load();
   } catch (e: any) {
     error.value = errorMessage(e);
@@ -576,8 +430,7 @@ async function removeFromBox(packageId: string) {
 async function removeScannedPackageHandler(packageId: string) {
   removingPackage.value[packageId] = true;
   try {
-    if (!currentUser.value) throw new I18nError("no_operator_user_found");
-    await removeScannedPackage(db, packageId, currentUser.value.id);
+    await warehouse.removeScannedPackage(packageId);
     await load();
   } catch (e: any) {
     error.value = errorMessage(e);

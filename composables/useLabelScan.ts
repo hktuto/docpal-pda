@@ -66,6 +66,7 @@ export function useLabelScan() {
       parsedResult = parseQrCapture(qrValue, {
         supplierTemplates: suppliers,
         targets: context.targets ?? [],
+        contextSupplierCode: context.supplierCode,
       });
     } else {
       parsedResult = parseAndIdentify(

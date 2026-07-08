@@ -10,6 +10,7 @@ import android.util.Log;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.Surface;
+import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.Toast;
 import org.json.JSONArray;
@@ -64,6 +65,7 @@ public class RectangleCameraActivity extends ComponentActivity {
   private ImageButton cancelButton;
   private ImageButton captureButton;
   private ImageButton flashButton;
+  private EditText scannerInput;
   private ExecutorService analysisExecutor;
 
   private static boolean sTorchOn = true;
@@ -97,6 +99,9 @@ public class RectangleCameraActivity extends ComponentActivity {
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     setContentView(R.layout.activity_rectangle_camera);
+
+    scannerInput = findViewById(R.id.scannerInput);
+    scannerInput.requestFocus();
 
     String mode = getIntent().getStringExtra(EXTRA_MODE);
     if (mode == null) mode = MODE_DEFAULT;
