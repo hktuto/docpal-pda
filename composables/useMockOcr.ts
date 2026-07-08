@@ -1,5 +1,5 @@
 import { I18nError } from "~/composables/i18nError";
-import type { OcrParseResult } from "~/services/types";
+import type { OcrParsedFields } from "~/services/types";
 
 export interface OcrInput {
   partNo: string;
@@ -14,7 +14,7 @@ export interface OcrInput {
  * Turn a manual tester input into a parsed OCR result.
  * Empty date/lot/origin are stored as null so they act as wildcards.
  */
-export function parseManual(input: OcrInput): OcrParseResult {
+export function parseManual(input: OcrInput): OcrParsedFields {
   const qty = typeof input.qty === "number" ? input.qty : Number(input.qty);
   if (!Number.isInteger(qty) || qty <= 0) {
     throw new I18nError("qty_must_be_positive_integer");

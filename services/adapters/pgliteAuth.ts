@@ -2,7 +2,8 @@ import { eq } from "drizzle-orm";
 import * as schema from "~/db/schema";
 import { useDb } from "~/composables/useDb";
 import { I18nError } from "~/composables/i18nError";
-import type { AuthService, User } from "../auth";
+import type { AuthService } from "../auth";
+import type { User } from "../types";
 
 const STORAGE_KEY = "warehouse-user-id";
 

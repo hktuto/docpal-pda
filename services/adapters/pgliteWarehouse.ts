@@ -79,6 +79,7 @@ import type {
   ReceivingItem,
   ReceivingItemWithMismatch,
   ReceivingItemMismatch,
+  ReceivingInvoice,
   ReportMismatchInput,
   PickingByReceivingRow,
   TransitionLog,
@@ -102,6 +103,8 @@ import type {
   ShelfBox,
   ShelfBoxItem,
   Shelf,
+  MeasuringTaskStatus,
+  BoxStatus,
   MeasuringTaskSummary,
   MeasuringTaskDetail,
   MeasuringPickingOrder,
@@ -128,6 +131,8 @@ function toSupplier(row: typeof schema.suppliers.$inferSelect): Supplier {
     id: row.id,
     code: row.code,
     name: row.name,
+    qrcodeTemplate: row.qrcodeTemplate ?? null,
+    qrcodeQtyEncoding: row.qrcodeQtyEncoding ?? null,
   };
 }
 

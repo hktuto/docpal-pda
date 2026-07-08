@@ -34,6 +34,7 @@
     "playwright": "^1.61.1",
     "qrcode": "^1.5.4",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.9",
+    "vue-tsc": "^3.3.7"
   }
 }
