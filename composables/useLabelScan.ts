@@ -7,7 +7,9 @@ import {
 import { runScanMatcher, useScanMatchers, type ScanTaskContext, type ScanMatchResult } from './useScanMatchers';
 import { I18nError } from '~/composables/i18nError';
 import { useErrorMessage } from '~/composables/errorMessage';
-import { parseAndIdentify, type CandidateOptions, type RawOcrCapture, type OcrBarcode, type ParsedFields } from '~/utils/parseOcrScan';
+import { useDb } from '~/composables/useDb';
+import { parseAndIdentify, parseQrCapture, type CandidateOptions, type OcrParseResult, type RawOcrCapture, type OcrBarcode, type ParsedFields } from '~/utils/parseOcrScan';
+import { getSuppliersWithQrTemplates } from '~/db/suppliers';
 import type { OcrInput } from './useMockOcr';
 
 function parseBarcodes(barcodesJson: string): RawOcrCapture['barcodes'] {
@@ -26,6 +28,14 @@ function parseBarcodes(barcodesJson: string): RawOcrCapture['barcodes'] {
     // ignore malformed barcode JSON
   }
   return [];
+}
+
+const QR_CODE_FORMAT = '4';
+
+function isQrOnlyCapture(capture: LabelScanCapture): boolean {
+  if (capture.imagePath) return false;
+  const barcodes = parseBarcodes(capture.barcodes);
+  return barcodes.length === 1 && barcodes[0].format === QR_CODE_FORMAT;
 }
 
 export type LabelScanResult =
@@ -49,11 +59,25 @@ export function useLabelScan() {
     capture: LabelScanCapture,
     context: ScanTaskContext
   ): Promise<LabelScanResult> {
-    const barcodes = parseBarcodes(capture.barcodes);
-    const parsedResult = parseAndIdentify(
-      { text: capture.text, barcodes },
-      context.targets ?? []
-    );
+    let parsedResult: OcrParseResult;
+
+    if (isQrOnlyCapture(capture)) {
+      const barcodes = parseBarcodes(capture.barcodes);
+      const qrValue = barcodes[0]?.value ?? capture.text;
+      const db = useDb();
+      const suppliers = await getSuppliersWithQrTemplates(db);
+      parsedResult = parseQrCapture(qrValue, {
+        supplierTemplates: suppliers,
+        targets: context.targets ?? [],
+      });
+    } else {
+      const barcodes = parseBarcodes(capture.barcodes);
+      parsedResult = parseAndIdentify(
+        { text: capture.text, barcodes },
+        context.targets ?? []
+      );
+    }
+
     const parsed = ocrResultToInput(parsedResult.parsed);
 
     const matchResult = await runScanMatcher(context, parsed, matchers);
