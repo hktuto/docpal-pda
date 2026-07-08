@@ -16,13 +16,7 @@ function parseBarcodes(barcodesJson: string): RawOcrCapture['barcodes'] {
   try {
     const parsed = JSON.parse(barcodesJson);
     if (Array.isArray(parsed)) {
-      return parsed.filter(
-        (b): b is { value: string; format: string } =>
-          typeof b === 'object' &&
-          b !== null &&
-          typeof (b as { value?: unknown }).value === 'string' &&
-          typeof (b as { format?: unknown }).format === 'string'
-      );
+      return parsed.filter(isBarcodeItem);
     }
   } catch {
     // ignore malformed barcode JSON
@@ -30,11 +24,14 @@ function parseBarcodes(barcodesJson: string): RawOcrCapture['barcodes'] {
   return [];
 }
 
+// ML Kit Barcode.FORMAT_QR_CODE is serialized as the integer string "4".
 const QR_CODE_FORMAT = '4';
 
-function isQrOnlyCapture(capture: LabelScanCapture): boolean {
+function isQrOnlyCapture(
+  capture: LabelScanCapture,
+  barcodes: ReturnType<typeof parseBarcodes>
+): boolean {
   if (capture.imagePath) return false;
-  const barcodes = parseBarcodes(capture.barcodes);
   return barcodes.length === 1 && barcodes[0].format === QR_CODE_FORMAT;
 }
 
@@ -54,24 +51,23 @@ export function useLabelScan() {
   const scanning = ref(false);
   const errorMessage = useErrorMessage();
   const matchers = useScanMatchers();
+  const db = useDb();
 
   async function processCapture(
     capture: LabelScanCapture,
     context: ScanTaskContext
   ): Promise<LabelScanResult> {
+    const barcodes = parseBarcodes(capture.barcodes);
     let parsedResult: OcrParseResult;
 
-    if (isQrOnlyCapture(capture)) {
-      const barcodes = parseBarcodes(capture.barcodes);
+    if (isQrOnlyCapture(capture, barcodes)) {
       const qrValue = barcodes[0]?.value ?? capture.text;
-      const db = useDb();
       const suppliers = await getSuppliersWithQrTemplates(db);
       parsedResult = parseQrCapture(qrValue, {
         supplierTemplates: suppliers,
         targets: context.targets ?? [],
       });
     } else {
-      const barcodes = parseBarcodes(capture.barcodes);
       parsedResult = parseAndIdentify(
         { text: capture.text, barcodes },
         context.targets ?? []

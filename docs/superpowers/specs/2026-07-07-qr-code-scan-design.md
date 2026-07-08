@@ -37,7 +37,7 @@ Behavior:
   {
     "imagePath": "",
     "text": "<raw qr payload>",
-    "barcodes": "[{\"value\":\"<raw qr payload>\",\"format\":\"QR_CODE\"}]"
+    "barcodes": "[{\"value\":\"<raw qr payload>\",\"format\":\"4\"}]"
   }
   ```
 - If a capture is already in progress (OCR running, picker open), ignore scanner input.
@@ -138,7 +138,7 @@ If the QR value cannot be parsed by any template, fall back to the existing `par
 ### `useLabelScan.ts`
 
 In `processCapture()`:
-- Detect a QR-only capture: `imagePath` is empty and there is exactly one barcode with format `QR_CODE`.
+- Detect a QR-only capture: `imagePath` is empty and there is exactly one barcode with format `"4"` (ML Kit's integer format value for QR codes).
 - If detected, call the new QR parser with the available supplier context.
 - Use the parsed result in the existing matcher flow.
 
