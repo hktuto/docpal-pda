@@ -1,5 +1,8 @@
 import type { SupplierQrcodeTemplate } from "~/services/types";
 
+const QTY_ENCODING_KOA_ZEROS = "koa_zeros";
+const qrTemplateRegexCache = new Map<string, RegExp | null>();
+
 /** A single barcode or QR code returned by the native scanner. */
 export interface OcrBarcode {
   value: string;
@@ -561,7 +564,25 @@ export function decodeKoaQty(encoded: string): number | undefined {
   const zeroCount = Number(encoded.slice(-1));
   const prefix = encoded.slice(0, -1);
   if (!Number.isFinite(zeroCount) || zeroCount < 0) return undefined;
-  return Number(prefix) * Math.pow(10, zeroCount);
+  const result = Number(prefix) * Math.pow(10, zeroCount);
+  if (!Number.isFinite(result) || !Number.isInteger(result) || result <= 0) return undefined;
+  return result;
+}
+
+function getQrTemplateRegex(template: string): RegExp | null {
+  if (qrTemplateRegexCache.has(template)) {
+    return qrTemplateRegexCache.get(template)!;
+  }
+
+  try {
+    const regex = new RegExp(template, "u");
+    qrTemplateRegexCache.set(template, regex);
+    return regex;
+  } catch (error) {
+    console.warn(`Invalid QR code template regex: ${template}`, error);
+    qrTemplateRegexCache.set(template, null);
+    return null;
+  }
 }
 
 function extractNamedGroups(regex: RegExp, value: string): Record<string, string> | null {
@@ -592,51 +613,53 @@ export function parseQrCapture(
     : supplierTemplates;
 
   for (const supplier of orderedTemplates) {
-    try {
-      const regex = new RegExp(supplier.qrcodeTemplate, "u");
-      const groups = extractNamedGroups(regex, normalizedQr);
-      if (!groups || !groups.itemId) continue;
+    const regex = getQrTemplateRegex(supplier.qrcodeTemplate);
+    if (!regex) continue;
 
-      const normalizedItemId = collapseSpaces(groups.itemId.toUpperCase());
-      const itemMatch = targetArray.length === 0 ||
-        targetArray.some((t) => collapseSpaces(t.toUpperCase()) === normalizedItemId);
+    const groups = extractNamedGroups(regex, normalizedQr);
+    if (!groups || !groups.itemId) continue;
 
-      if (!itemMatch) continue;
+    const normalizedItemId = collapseSpaces(groups.itemId.toUpperCase());
+    const itemMatch =
+      targetArray.length === 0 ||
+      targetArray.some((t) => collapseSpaces(t.toUpperCase()) === normalizedItemId);
 
-      let qty: number | undefined;
-      if (groups.qty) {
-        if (supplier.qrcodeQtyEncoding === "koa_zeros") {
-          qty = decodeKoaQty(groups.qty);
-        } else {
-          const n = Number(groups.qty);
-          if (Number.isInteger(n) && n > 0) qty = n;
-        }
+    if (!itemMatch) continue;
+
+    let qty: number | undefined;
+    if (groups.qty) {
+      if (supplier.qrcodeQtyEncoding === QTY_ENCODING_KOA_ZEROS) {
+        qty = decodeKoaQty(groups.qty);
+      } else {
+        const n = Number(groups.qty);
+        if (Number.isInteger(n) && n > 0) qty = n;
       }
-
-      return {
-        matched: true,
-        parsed: {
-          itemId: normalizedItemId,
-          qty,
-          lotCode: groups.lotCode ?? undefined,
-          dateCode: groups.dateCode ?? undefined,
-          coo: groups.coo ?? undefined,
-          cow: groups.cow ?? undefined,
-        },
-        options: {
-          itemIds: [normalizedItemId],
-          qtys: qty !== undefined ? [qty] : [],
-          lotCodes: groups.lotCode ? [groups.lotCode] : [],
-          dateCodes: groups.dateCode ? [groups.dateCode] : [],
-          coos: groups.coo ? [groups.coo] : [],
-          cows: groups.cow ? [groups.cow] : [],
-        },
-        raw: { text: qrValue, barcodes: [] },
-      };
-    } catch {
-      // Ignore invalid regex templates.
     }
+
+    return {
+      matched: true,
+      parsed: {
+        itemId: normalizedItemId,
+        qty,
+        lotCode: groups.lotCode ?? undefined,
+        dateCode: groups.dateCode ?? undefined,
+        coo: groups.coo ?? undefined,
+        cow: groups.cow ?? undefined,
+      },
+      options: {
+        itemIds: [normalizedItemId],
+        qtys: qty !== undefined ? [qty] : [],
+        lotCodes: groups.lotCode ? [groups.lotCode] : [],
+        dateCodes: groups.dateCode ? [groups.dateCode] : [],
+        coos: groups.coo ? [groups.coo] : [],
+        cows: groups.cow ? [groups.cow] : [],
+      },
+      raw: { text: qrValue, barcodes: [] },
+    };
   }
 
-  return parseAndIdentify({ text: qrValue, barcodes: [] }, targets);
+  return parseAndIdentify(
+    { text: qrValue, barcodes: [{ value: qrValue, format: "QR_CODE" }] },
+    targets
+  );
 }

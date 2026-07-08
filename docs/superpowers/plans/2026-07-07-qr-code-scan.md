@@ -188,8 +188,10 @@ describe("parseQrCapture", () => {
   it("parses KOA QR payload and expands qty", () => {
     const result = parseQrCapture(
       ":RK73H2ATTD2403F::253:M:63048349:S613:KOA*RK73H2ATTD 2403F",
-      [koaTemplate],
-      ["RK73H2ATTD2403F"]
+      {
+        supplierTemplates: [koaTemplate],
+        targets: ["RK73H2ATTD2403F"],
+      }
     );
 
     expect(result.matched).toBe(true);
@@ -199,8 +201,21 @@ describe("parseQrCapture", () => {
   });
 
   it("returns no match when QR value does not fit any template", () => {
-    const result = parseQrCapture("SOME-RANDOM-STRING", [koaTemplate], ["RK73H2ATTD2403F"]);
+    const result = parseQrCapture("SOME-RANDOM-STRING", {
+      supplierTemplates: [koaTemplate],
+      targets: ["RK73H2ATTD2403F"],
+    });
     expect(result.matched).toBe(false);
+  });
+
+  it("falls back to generic part-number matching when no template matches", () => {
+    const result = parseQrCapture("PART: RK73B1JTTD181G", {
+      supplierTemplates: [koaTemplate],
+      targets: ["RK73B1JTTD181G"],
+    });
+
+    expect(result.matched).toBe(true);
+    expect(result.parsed.itemId).toBe("RK73B1JTTD181G");
   });
 });
 ```
@@ -239,15 +254,28 @@ function extractNamedGroups(regex: RegExp, value: string): Record<string, string
   return match.groups;
 }
 
+export interface ParseQrCaptureOptions {
+  supplierTemplates: SupplierQrcodeTemplate[];
+  targets?: string | string[];
+  contextSupplierCode?: string;
+}
+
 export function parseQrCapture(
   qrValue: string,
-  supplierTemplates: SupplierQrcodeTemplate[],
-  targets: string | string[] = []
+  options: ParseQrCaptureOptions
 ): OcrParseResult {
+  const { supplierTemplates, targets = [], contextSupplierCode } = options;
   const targetArray = Array.isArray(targets) ? targets : [targets];
   const normalizedQr = qrValue.trim();
 
-  for (const supplier of supplierTemplates) {
+  const orderedTemplates = contextSupplierCode
+    ? [
+        ...supplierTemplates.filter((s) => s.code === contextSupplierCode),
+        ...supplierTemplates.filter((s) => s.code !== contextSupplierCode),
+      ]
+    : supplierTemplates;
+
+  for (const supplier of orderedTemplates) {
     try {
       const regex = new RegExp(supplier.qrcodeTemplate, "u");
       const groups = extractNamedGroups(regex, normalizedQr);
@@ -294,12 +322,7 @@ export function parseQrCapture(
     }
   }
 
-  return {
-    matched: false,
-    parsed: { itemId: null },
-    options: { itemIds: [], qtys: [], lotCodes: [], dateCodes: [], coos: [], cows: [] },
-    raw: { text: qrValue, barcodes: [] },
-  };
+  return parseAndIdentify({ text: qrValue, barcodes: [] }, targets);
 }
 ```
 
@@ -334,6 +357,7 @@ In `composables/useLabelScan.ts`, import the new helpers and supplier loader:
 ```typescript
 import { parseQrCapture } from "~/utils/parseOcrScan";
 import { getSuppliersWithQrTemplates } from "~/db/suppliers";
+import { useDb } from "~/composables/useDb";
 ```
 
 Add a helper to detect QR-only hardware scans. The native layer serializes ML Kit's QR code format as the integer string `"4"`:
@@ -360,15 +384,12 @@ async function processCapture(
   if (isQrOnlyCapture(capture)) {
     const barcodes = parseBarcodes(capture.barcodes);
     const qrValue = barcodes[0]?.value ?? capture.text;
-    const suppliers = await getSuppliersWithQrTemplates();
-    parsedResult = parseQrCapture(qrValue, suppliers, context.targets ?? []);
-
-    if (!parsedResult.matched) {
-      parsedResult = parseAndIdentify(
-        { text: qrValue, barcodes: [] },
-        context.targets ?? []
-      );
-    }
+    const db = useDb();
+    const suppliers = await getSuppliersWithQrTemplates(db);
+    parsedResult = parseQrCapture(qrValue, {
+      supplierTemplates: suppliers,
+      targets: context.targets ?? [],
+    });
   } else {
     const barcodes = parseBarcodes(capture.barcodes);
     parsedResult = parseAndIdentify(

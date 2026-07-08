@@ -119,11 +119,14 @@ Quantity encoding (`koa_zeros`):
 
 ### General parsing algorithm
 
-Add a new function `parseQrCapture(qrValue, options)` where `options` can include a known supplier template.
+Add a new function `parseQrCapture(qrValue, options)` where `options` includes:
+- `supplierTemplates`: all suppliers that have a QR template.
+- `targets`: optional part numbers to match against.
+- `contextSupplierCode`: optional supplier code to try first.
 
 1. Normalize the QR value (trim whitespace).
-2. If a supplier context is known (e.g., the receiving/picking order has a supplier), try that supplier's `qrcodeTemplate` first.
-3. If no match, iterate over every supplier's `qrcodeTemplate` and use the first regex that matches and extracts an `itemId`.
+2. If `contextSupplierCode` is provided, try that supplier's `qrcodeTemplate` first.
+3. Otherwise, iterate over every supplier's `qrcodeTemplate` and use the first regex that matches and extracts an `itemId` that also matches a target.
 4. Extract named groups: `itemId`, `qty`, `lotCode`, `dateCode`, `coo`, `cow`, `fullName`.
 5. If the supplier has `qrcodeQtyEncoding === 'koa_zeros'`, decode the qty field.
 6. Return a `ParsedFields` object compatible with the existing `OcrInput` shape.

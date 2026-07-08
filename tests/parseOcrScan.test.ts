@@ -241,6 +241,13 @@ describe("decodeKoaQty", () => {
     expect(decodeKoaQty("")).toBeUndefined();
     expect(decodeKoaQty("abc")).toBeUndefined();
   });
+
+  it("returns undefined for non-positive results", () => {
+    expect(decodeKoaQty("50")).toBe(5);
+    expect(decodeKoaQty("5")).toBeUndefined();
+    expect(decodeKoaQty("00")).toBeUndefined();
+    expect(decodeKoaQty("25a")).toBeUndefined();
+  });
 });
 
 describe("parseQrCapture", () => {
@@ -276,6 +283,94 @@ describe("parseQrCapture", () => {
   it("falls back to generic part-number matching when no template matches", () => {
     const result = parseQrCapture("PART: RK73B1JTTD181G", {
       supplierTemplates: [koaTemplate],
+      targets: ["RK73B1JTTD181G"],
+    });
+
+    expect(result.matched).toBe(true);
+    expect(result.parsed.itemId).toBe("RK73B1JTTD181G");
+  });
+
+  it("prefers the context supplier's template when templates overlap", () => {
+    const genericTemplate = {
+      code: "GENERIC",
+      qrcodeTemplate: "^(?<itemId>.+)$",
+      qrcodeQtyEncoding: null as const,
+    };
+    const specificTemplate = {
+      code: "SPECIFIC",
+      qrcodeTemplate: "^ID:(?<itemId>[A-Z0-9]+)$",
+      qrcodeQtyEncoding: null as const,
+    };
+
+    const qrValue = "ID:RK73B1JTTD181G";
+    const targets = ["ID:RK73B1JTTD181G", "RK73B1JTTD181G"];
+
+    const withoutContext = parseQrCapture(qrValue, {
+      supplierTemplates: [genericTemplate, specificTemplate],
+      targets,
+    });
+    expect(withoutContext.matched).toBe(true);
+    expect(withoutContext.parsed.itemId).toBe("ID:RK73B1JTTD181G");
+
+    const withContext = parseQrCapture(qrValue, {
+      supplierTemplates: [genericTemplate, specificTemplate],
+      targets,
+      contextSupplierCode: "SPECIFIC",
+    });
+    expect(withContext.matched).toBe(true);
+    expect(withContext.parsed.itemId).toBe("RK73B1JTTD181G");
+  });
+
+  it("does not throw on an invalid regex template and falls back", () => {
+    const invalidTemplate = {
+      code: "INVALID",
+      qrcodeTemplate: "(?<itemId>[",
+      qrcodeQtyEncoding: null as const,
+    };
+
+    expect(() =>
+      parseQrCapture("ID:RK73B1JTTD181G", {
+        supplierTemplates: [invalidTemplate, koaTemplate],
+        targets: ["RK73B1JTTD181G"],
+      })
+    ).not.toThrow();
+
+    const result = parseQrCapture(":RK73B1JTTD181G::253:M:63048349:S613:X", {
+      supplierTemplates: [invalidTemplate, koaTemplate],
+      targets: ["RK73B1JTTD181G"],
+    });
+    expect(result.matched).toBe(true);
+    expect(result.parsed.itemId).toBe("RK73B1JTTD181G");
+  });
+
+  it("returns matched=false when parsed itemId is not in targets", () => {
+    const result = parseQrCapture(
+      ":RK73H2ATTD2403F::253:M:63048349:S613:KOA*RK73H2ATTD 2403F",
+      {
+        supplierTemplates: [koaTemplate],
+        targets: ["OTHER-PART"],
+      }
+    );
+
+    expect(result.matched).toBe(false);
+  });
+
+  it("matches any parsed itemId when no targets are provided", () => {
+    const result = parseQrCapture(
+      ":RK73H2ATTD2403F::253:M:63048349:S613:KOA*RK73H2ATTD 2403F",
+      {
+        supplierTemplates: [koaTemplate],
+      }
+    );
+
+    expect(result.matched).toBe(true);
+    expect(result.parsed.itemId).toBe("RK73H2ATTD2403F");
+    expect(result.parsed.qty).toBe(25000);
+  });
+
+  it("falls back to parseAndIdentify when supplierTemplates is empty", () => {
+    const result = parseQrCapture("RK73B1JTTD181G", {
+      supplierTemplates: [],
       targets: ["RK73B1JTTD181G"],
     });
 
