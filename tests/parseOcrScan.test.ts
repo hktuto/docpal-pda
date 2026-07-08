@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseAndIdentify } from '../utils/parseOcrScan';
+import { decodeKoaQty, parseAndIdentify, parseQrCapture } from '../utils/parseOcrScan';
 
 describe('parseAndIdentify', () => {
   it('matches a part number from a barcode value', () => {
@@ -227,5 +227,59 @@ describe('parseAndIdentify', () => {
     expect(result.options.dateCodes).toContain('2025-10-29');
     expect(result.options.lotCodes).toContain('S12235');
     expect(result.options.coos.map((c) => c.toUpperCase())).toContain('SI');
+  });
+});
+
+describe("decodeKoaQty", () => {
+  it("expands qty using last digit as zero count", () => {
+    expect(decodeKoaQty("53")).toBe(5000);
+    expect(decodeKoaQty("253")).toBe(25000);
+    expect(decodeKoaQty("14")).toBe(10000);
+  });
+
+  it("returns undefined for invalid input", () => {
+    expect(decodeKoaQty("")).toBeUndefined();
+    expect(decodeKoaQty("abc")).toBeUndefined();
+  });
+});
+
+describe("parseQrCapture", () => {
+  const koaTemplate = {
+    code: "KOA",
+    qrcodeTemplate: "^:(?<itemId>[^:]+)::(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<ignore2>[^:]+):(?<fullName>.+)$",
+    qrcodeQtyEncoding: "koa_zeros" as const,
+  };
+
+  it("parses KOA QR payload and expands qty", () => {
+    const result = parseQrCapture(
+      ":RK73H2ATTD2403F::253:M:63048349:S613:KOA*RK73H2ATTD 2403F",
+      {
+        supplierTemplates: [koaTemplate],
+        targets: ["RK73H2ATTD2403F"],
+      }
+    );
+
+    expect(result.matched).toBe(true);
+    expect(result.parsed.itemId).toBe("RK73H2ATTD2403F");
+    expect(result.parsed.qty).toBe(25000);
+    expect(result.parsed.lotCode).toBe("63048349");
+  });
+
+  it("returns no match when QR value does not fit any template", () => {
+    const result = parseQrCapture("SOME-RANDOM-STRING", {
+      supplierTemplates: [koaTemplate],
+      targets: ["RK73H2ATTD2403F"],
+    });
+    expect(result.matched).toBe(false);
+  });
+
+  it("falls back to generic part-number matching when no template matches", () => {
+    const result = parseQrCapture("PART: RK73B1JTTD181G", {
+      supplierTemplates: [koaTemplate],
+      targets: ["RK73B1JTTD181G"],
+    });
+
+    expect(result.matched).toBe(true);
+    expect(result.parsed.itemId).toBe("RK73B1JTTD181G");
   });
 });

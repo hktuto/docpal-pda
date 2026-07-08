@@ -1,3 +1,5 @@
+import type { SupplierQrcodeTemplate } from "~/services/types";
+
 /** A single barcode or QR code returned by the native scanner. */
 export interface OcrBarcode {
   value: string;
@@ -551,4 +553,90 @@ export function parseAndIdentify(
     },
     raw: capture,
   };
+}
+
+export function decodeKoaQty(encoded: string): number | undefined {
+  if (!/^\d+$/.test(encoded)) return undefined;
+  if (encoded.length < 2) return undefined;
+  const zeroCount = Number(encoded.slice(-1));
+  const prefix = encoded.slice(0, -1);
+  if (!Number.isFinite(zeroCount) || zeroCount < 0) return undefined;
+  return Number(prefix) * Math.pow(10, zeroCount);
+}
+
+function extractNamedGroups(regex: RegExp, value: string): Record<string, string> | null {
+  const match = regex.exec(value);
+  if (!match || !match.groups) return null;
+  return match.groups;
+}
+
+export interface ParseQrCaptureOptions {
+  supplierTemplates: SupplierQrcodeTemplate[];
+  targets?: string | string[];
+  contextSupplierCode?: string;
+}
+
+export function parseQrCapture(
+  qrValue: string,
+  options: ParseQrCaptureOptions
+): OcrParseResult {
+  const { supplierTemplates, targets = [], contextSupplierCode } = options;
+  const targetArray = Array.isArray(targets) ? targets : [targets];
+  const normalizedQr = qrValue.trim();
+
+  const orderedTemplates = contextSupplierCode
+    ? [
+        ...supplierTemplates.filter((s) => s.code === contextSupplierCode),
+        ...supplierTemplates.filter((s) => s.code !== contextSupplierCode),
+      ]
+    : supplierTemplates;
+
+  for (const supplier of orderedTemplates) {
+    try {
+      const regex = new RegExp(supplier.qrcodeTemplate, "u");
+      const groups = extractNamedGroups(regex, normalizedQr);
+      if (!groups || !groups.itemId) continue;
+
+      const normalizedItemId = collapseSpaces(groups.itemId.toUpperCase());
+      const itemMatch = targetArray.length === 0 ||
+        targetArray.some((t) => collapseSpaces(t.toUpperCase()) === normalizedItemId);
+
+      if (!itemMatch) continue;
+
+      let qty: number | undefined;
+      if (groups.qty) {
+        if (supplier.qrcodeQtyEncoding === "koa_zeros") {
+          qty = decodeKoaQty(groups.qty);
+        } else {
+          const n = Number(groups.qty);
+          if (Number.isInteger(n) && n > 0) qty = n;
+        }
+      }
+
+      return {
+        matched: true,
+        parsed: {
+          itemId: normalizedItemId,
+          qty,
+          lotCode: groups.lotCode ?? undefined,
+          dateCode: groups.dateCode ?? undefined,
+          coo: groups.coo ?? undefined,
+          cow: groups.cow ?? undefined,
+        },
+        options: {
+          itemIds: [normalizedItemId],
+          qtys: qty !== undefined ? [qty] : [],
+          lotCodes: groups.lotCode ? [groups.lotCode] : [],
+          dateCodes: groups.dateCode ? [groups.dateCode] : [],
+          coos: groups.coo ? [groups.coo] : [],
+          cows: groups.cow ? [groups.cow] : [],
+        },
+        raw: { text: qrValue, barcodes: [] },
+      };
+    } catch {
+      // Ignore invalid regex templates.
+    }
+  }
+
+  return parseAndIdentify({ text: qrValue, barcodes: [] }, targets);
 }
