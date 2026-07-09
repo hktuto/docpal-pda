@@ -5556,37 +5556,6 @@ const wclReceivingInvoiceItemRecords = [
 
   await db.insert(schema.receivingInvoiceItems).values([...wclReceivingInvoiceItemRecords]);
 
-  await db.insert(schema.receivingItemMismatches).values([
-    {
-      id: uuid(),
-      receivingInvoiceItemId: sampleItem.id,
-      reason: "damaged",
-      mismatchQty: 100,
-      wrongPartNo: null,
-      note: "Seeded pending mismatch",
-      status: "pending",
-      effectiveReceivedQty: sampleItem.qty - 100,
-      previousReceivedQty: sampleItem.qty,
-      reportedBy: userOperator.id,
-      reportedAt: now,
-    },
-    {
-      id: uuid(),
-      receivingInvoiceItemId: sampleItem2.id,
-      reason: "qty_mismatch",
-      mismatchQty: 1000,
-      wrongPartNo: null,
-      note: "Seeded confirmed mismatch",
-      status: "confirmed",
-      effectiveReceivedQty: 1000,
-      previousReceivedQty: sampleItem2.qty,
-      reportedBy: userOperator.id,
-      reportedAt: now,
-      confirmedBy: userAdmin.id,
-      confirmedAt: now,
-    },
-  ]);
-
   // Picking orders from TN PDFs
 
 // Picking orders (23)
