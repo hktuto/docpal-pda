@@ -15,6 +15,7 @@
     "generate:ocr-labels-pdf": "node scripts/generate-ocr-labels-pdf.mjs",
     "generate:precalc-seed": "vitest run --config vitest.generator.config.ts scripts/generate-precalc-seed.test.ts",
     "generate:ocr-labels": "vitest run --config vitest.generator.config.ts scripts/generate-ocr-labels.test.ts",
+    "generate:labels-data": "vitest run --config vitest.generator.config.ts scripts/generate-labels-data.test.ts",
     "assets:generate": "npx capacitor-assets generate --android --assetPath resources",
     "assets:android": "pnpm assets:generate"
   },
@@ -25,6 +26,7 @@
     "@capacitor/core": "^8.4.1",
     "@electric-sql/pglite": "^0.3.0",
     "drizzle-orm": "^0.45.0",
+    "jsbarcode": "^3.12.3",
     "nuxt": "^3.12.0",
     "uuid": "^9.0.1"
   },
