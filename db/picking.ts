@@ -35,7 +35,7 @@ export async function getPickingOrderDetail(
           allocations: {
             with: {
               inventoryLot: { with: { part: true } },
-              receivingInvoiceItem: { with: { invoice: { with: { receivingOrder: true } } } },
+              receivingOrder: true,
               pickingItem: { with: { part: true } },
             },
           },
@@ -59,6 +59,7 @@ export async function materializeReceivingAllocation(
   lotCode: string | null,
   coo: string | null,
   cow: string | null,
+  receivingInvoiceItemId: string,
   tx?: PgliteDatabase<typeof schema>
 ): Promise<string> {
   if (tx) return materialize(tx);
@@ -67,14 +68,18 @@ export async function materializeReceivingAllocation(
   async function materialize(tx: PgliteDatabase<typeof schema>): Promise<string> {
     const allocation = await tx.query.allocations.findFirst({
       where: eq(schema.allocations.id, allocationId),
-      with: { pickingItem: true, receivingInvoiceItem: { with: { invoice: true } } },
+      with: { pickingItem: true, receivingOrder: true },
     });
 
     if (!allocation) throw new I18nError("allocation_not_found");
-    if (!allocation.receivingInvoiceItemId) throw new I18nError("allocation_not_against_receiving_item");
+    if (!allocation.receivingOrderId) throw new I18nError("allocation_not_against_receiving_order");
     if (qty <= 0 || qty > allocation.qty) throw new I18nError("invalid_materialize_quantity");
 
-    const invoiceItem = allocation.receivingInvoiceItem!;
+    const [invoiceItem] = await tx
+      .select()
+      .from(schema.receivingInvoiceItems)
+      .where(eq(schema.receivingInvoiceItems.id, receivingInvoiceItemId));
+    if (!invoiceItem) throw new I18nError("receiving_invoice_item_not_found");
 
     // Always create a dedicated receiving-area lot for this allocation so that
     // source accounting in scanAllocationToPackage stays tied to the original invoice item.
@@ -117,7 +122,7 @@ export async function materializeReceivingAllocation(
       // Move the whole allocation to the new lot
       await tx
         .update(schema.allocations)
-        .set({ inventoryLotId: lotId, receivingInvoiceItemId: null })
+        .set({ inventoryLotId: lotId, receivingOrderId: null })
         .where(eq(schema.allocations.id, allocationId));
       return allocationId;
     }
@@ -137,7 +142,7 @@ export async function scanAllocationToPackage(
   async function scan(tx: PgliteDatabase<typeof schema>): Promise<string> {
     const allocation = await tx.query.allocations.findFirst({
       where: eq(schema.allocations.id, allocationId),
-      with: { pickingItem: true, inventoryLot: true, receivingInvoiceItem: true },
+      with: { pickingItem: true, inventoryLot: true },
     });
 
     if (!allocation) throw new I18nError("allocation_not_found");
@@ -239,30 +244,6 @@ export async function scanAllocationToPackage(
       lotCode = lot.lotCode;
       coo = lot.coo;
       cow = lot.cow;
-    } else if (allocation.receivingInvoiceItem) {
-      const invoiceItem = allocation.receivingInvoiceItem;
-      const available = invoiceItem.receivedQty - invoiceItem.pickedQty - invoiceItem.putAwayQty;
-      if (available < qty) throw new I18nError("insufficient_receiving_quantity");
-
-      await tx
-        .update(schema.receivingInvoiceItems)
-        .set({ pickedQty: sql`${schema.receivingInvoiceItems.pickedQty} + ${qty}` })
-        .where(eq(schema.receivingInvoiceItems.id, invoiceItem.id));
-
-      const [invoice] = await tx
-        .select()
-        .from(schema.receivingInvoices)
-        .where(eq(schema.receivingInvoices.id, invoiceItem.receivingInvoiceId));
-      if (invoice?.receivingOrderId) {
-        await tryMarkReceivingOrderClear(tx, invoice.receivingOrderId, actorId);
-      }
-
-      sourceType = "receiving_invoice_item";
-      sourceId = invoiceItem.id;
-      dateCode = invoiceItem.dateCode;
-      lotCode = invoiceItem.lotCode;
-      coo = invoiceItem.coo;
-      cow = invoiceItem.cow;
     } else {
       throw new I18nError("allocation_has_no_source");
     }
@@ -394,15 +375,27 @@ export async function removeScannedPackage(
         .set({ pickedQty: sql`${schema.receivingInvoiceItems.pickedQty} - ${qty}` })
         .where(eq(schema.receivingInvoiceItems.id, pkg.sourceId));
 
-      const [allocation] = await tx
-        .select()
-        .from(schema.allocations)
-        .where(
-          and(
-            eq(schema.allocations.receivingInvoiceItemId, pkg.sourceId),
-            eq(schema.allocations.pickingItemId, item.id)
-          )
-        );
+      const [invoice] = await tx
+        .select({ receivingOrderId: schema.receivingInvoices.receivingOrderId })
+        .from(schema.receivingInvoices)
+        .innerJoin(
+          schema.receivingInvoiceItems,
+          eq(schema.receivingInvoiceItems.receivingInvoiceId, schema.receivingInvoices.id)
+        )
+        .where(eq(schema.receivingInvoiceItems.id, pkg.sourceId));
+
+      const receivingOrderId = invoice?.receivingOrderId ?? null;
+      const [allocation] = receivingOrderId
+        ? await tx
+            .select()
+            .from(schema.allocations)
+            .where(
+              and(
+                eq(schema.allocations.receivingOrderId, receivingOrderId),
+                eq(schema.allocations.pickingItemId, item.id)
+              )
+            )
+        : [undefined];
       if (allocation) {
         await tx
           .update(schema.allocations)
@@ -412,7 +405,7 @@ export async function removeScannedPackage(
         await tx.insert(schema.allocations).values({
           id: uuid(),
           pickingItemId: item.id,
-          receivingInvoiceItemId: pkg.sourceId,
+          receivingOrderId,
           qty,
         });
       }
