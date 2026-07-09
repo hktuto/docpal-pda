@@ -1193,10 +1193,6 @@ const wclPartByNo = Object.fromEntries(wclPartRecords.map((p) => [p.partNo, p]))
     (typeof partRecords)[number]["partNo"],
     (typeof partRecords)[number]
   >;
-  const wclPartByNo = Object.fromEntries(wclPartRecords.map((p) => [p.partNo, p])) as Record<
-    (typeof wclPartRecords)[number]["partNo"],
-    (typeof wclPartRecords)[number]
-  >;
 
   const shelfRecords = [
     { code: "A-01-01", zone: "A" },
@@ -1472,10 +1468,6 @@ const wclInvoiceByNo = Object.fromEntries(wclInvoiceRecords.map((inv) => [inv.in
   const invoiceByNo = Object.fromEntries(invoiceRecords.map((inv) => [inv.invoiceNo, inv])) as Record<
     (typeof invoiceRecords)[number]["invoiceNo"],
     (typeof invoiceRecords)[number]
-  >;
-  const wclInvoiceByNo = Object.fromEntries(wclInvoiceRecords.map((inv) => [inv.invoiceNo, inv])) as Record<
-    (typeof wclInvoiceRecords)[number]["invoiceNo"],
-    (typeof wclInvoiceRecords)[number]
   >;
 
   const receivingInvoiceItemRecords = [
