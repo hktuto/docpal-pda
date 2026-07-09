@@ -2,9 +2,13 @@ package com.docpal.warehouse.data.local.entity
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "users")
+@Entity(
+    tableName = "users",
+    indices = [Index(value = ["username"], unique = true)]
+)
 data class UserEntity(
     @PrimaryKey
     @ColumnInfo(name = "id")
