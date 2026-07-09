@@ -163,13 +163,13 @@ export function useLabelScan() {
           return { status: 'cancelled' };
         }
         if (isBrowserUnavailableError(e)) {
-          const raw = window.prompt('Paste scan JSON (text + barcodes):');
+          const raw = window.prompt('Paste label QR code value:');
           if (raw === null) {
             return { status: 'cancelled' };
           }
-          const simulated = parseBrowserScanPromptJson(raw);
+          const simulated = parseBrowserScanPrompt(raw);
           if (!simulated) {
-            return { status: 'error', message: 'Invalid scan JSON' };
+            return { status: 'cancelled' };
           }
           capture = simulated;
         } else {
@@ -229,6 +229,16 @@ export function parseBrowserScanPromptJson(raw: string): LabelScanCapture | null
     text: obj.text,
     barcodes: JSON.stringify(barcodes),
   };
+}
+
+export function parseBrowserScanPrompt(raw: string): LabelScanCapture | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  const jsonCapture = parseBrowserScanPromptJson(trimmed);
+  if (jsonCapture) return jsonCapture;
+
+  return buildRawCapture(trimmed);
 }
 
 function isCancellationError(err: unknown): boolean {

@@ -27,7 +27,7 @@ vi.mock('../composables/errorMessage', () => ({
   useErrorMessage: vi.fn(() => (e: unknown) => String(e)),
 }));
 
-const { ocrResultToInput, parseBrowserScanPromptJson } = await import('../composables/useLabelScan');
+const { ocrResultToInput, parseBrowserScanPromptJson, buildRawCapture, parseBrowserScanPrompt } = await import('../composables/useLabelScan');
 
 describe('ocrResultToInput', () => {
   it('maps all parsed fields to the matcher input shape', () => {
@@ -164,5 +164,29 @@ describe('parseBrowserScanPromptJson', () => {
       text: 'X',
       barcodes: ['string'],
     }))).toBeNull();
+  });
+});
+
+describe('parseBrowserScanPrompt', () => {
+  it('parses valid JSON input', () => {
+    const raw = JSON.stringify({
+      text: ':RK73H1ETTP1000F::24:X:9827002:602:KOA+RK73H1ETTP1000F::::',
+      barcodes: [{ value: '123', format: '4' }],
+    });
+    const result = parseBrowserScanPrompt(raw);
+    expect(result).not.toBeNull();
+    expect(result!.text).toBe(':RK73H1ETTP1000F::24:X:9827002:602:KOA+RK73H1ETTP1000F::::');
+    expect(result!.barcodes).toBe(JSON.stringify([{ value: '123', format: '4' }]));
+  });
+
+  it('falls back to treating non-JSON input as a QR-code string', () => {
+    const raw = ':RK73H1ETTP1000F::24:X:9827002:602:KOA+RK73H1ETTP1000F::::';
+    const result = parseBrowserScanPrompt(raw);
+    expect(result).toEqual(buildRawCapture(raw));
+  });
+
+  it('returns null for empty or whitespace-only input', () => {
+    expect(parseBrowserScanPrompt('')).toBeNull();
+    expect(parseBrowserScanPrompt('   ')).toBeNull();
   });
 });
