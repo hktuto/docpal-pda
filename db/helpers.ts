@@ -8,6 +8,10 @@ export const availableReceivingQtySql = sql`
  * Returns per-item reservation totals used by `availableReceivingQtySql`.
  * Includes picking allocations plus unboxed put-away scans, both of which
  * reserve quantity from the receiving item.
+ *
+ * Allocations are now at receiving-order + part level, so allocated_qty
+ * for a receiving invoice item is the sum of allocations against the same
+ * receiving order and same part.
  */
 export function allocationsCte() {
   return sql`
@@ -17,12 +21,15 @@ export function allocationsCte() {
       SUM(unboxed_scanned_qty) AS unboxed_scanned_qty
     FROM (
       SELECT
-        receiving_invoice_item_id,
-        SUM(qty) AS allocated_qty,
+        rii.id AS receiving_invoice_item_id,
+        COALESCE(SUM(a.qty), 0) AS allocated_qty,
         0 AS unboxed_scanned_qty
-      FROM allocations
-      WHERE receiving_invoice_item_id IS NOT NULL
-      GROUP BY receiving_invoice_item_id
+      FROM receiving_invoice_items rii
+      JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+      JOIN allocations a ON a.receiving_order_id = ri.receiving_order_id
+      JOIN picking_items pi ON pi.id = a.picking_item_id
+      WHERE pi.part_id = rii.part_id
+      GROUP BY rii.id
       UNION ALL
       SELECT
         receiving_invoice_item_id,
