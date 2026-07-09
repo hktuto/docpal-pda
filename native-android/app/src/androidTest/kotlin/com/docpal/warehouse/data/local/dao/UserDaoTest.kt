@@ -6,7 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.docpal.warehouse.data.local.AppDatabase
 import com.docpal.warehouse.data.local.entity.UserEntity
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -33,7 +33,7 @@ class UserDaoTest {
     }
 
     @Test
-    fun insert_and_retrieve_user() = runBlocking {
+    fun insert_and_retrieve_user() = runTest {
         val user = UserEntity(
             id = "1",
             username = "operator",
@@ -47,11 +47,11 @@ class UserDaoTest {
         val found = dao.getByUsername("operator")
 
         assertNotNull(found)
-        assertEquals("Operator", found?.displayName)
+        assertEquals(user, found)
     }
 
     @Test
-    fun count_returns_zero_when_empty() = runBlocking {
+    fun count_returns_zero_when_empty() = runTest {
         assertEquals(0, dao.count())
     }
 }
