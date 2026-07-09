@@ -22,7 +22,6 @@ import {
   addPackageToBox as dbAddPackageToBox,
   removePackageFromBox as dbRemovePackageFromBox,
   removeScannedPackage as dbRemoveScannedPackage,
-  materializeReceivingAllocation as dbMaterializeReceivingAllocation,
   scanAllocationToPackage as dbScanAllocationToPackage,
   finishPickingOrder as dbFinishPickingOrder,
   reportPickingOrderIssues as dbReportPickingOrderIssues,
@@ -95,7 +94,6 @@ import type {
   ReportPickingIssueEntry,
   ReportPickingIssuesInput,
   ReportPickingIssuesResult,
-  MaterializeAllocationInput,
   ApplyOcrPickInput,
   PutAwayCandidate,
   PutAwayLot,
@@ -1146,50 +1144,6 @@ export function createPgliteWarehouseService(
       input: ReportPickingIssuesInput
     ): Promise<ReportPickingIssuesResult> {
       return dbReportPickingOrderIssues(db, entries, input, assertActorId(getActorId));
-    },
-
-    async materializeAllocation(id: string, input: MaterializeAllocationInput): Promise<string> {
-      const allocation = await db.query.allocations.findFirst({
-        where: eq(schema.allocations.id, id),
-        with: { pickingItem: true, receivingOrder: true },
-      });
-      if (!allocation) throw new I18nError("allocation_not_found");
-      if (!allocation.receivingOrderId) throw new I18nError("allocation_not_against_receiving_order");
-      if (!allocation.pickingItem) throw new I18nError("picking_item_not_found");
-
-      const invoiceItemResult = await db.execute(sql`
-        SELECT
-          rii.id AS receiving_invoice_item_id,
-          rii.received_qty,
-          rii.picked_qty,
-          rii.put_away_qty,
-          COALESCE(alloc.allocated_qty, 0) AS allocated_qty,
-          COALESCE(alloc.unboxed_scanned_qty, 0) AS unboxed_scanned_qty
-        FROM receiving_orders ro
-        JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
-        JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
-        LEFT JOIN (${allocationsCte()}) alloc ON alloc.receiving_invoice_item_id = rii.id
-        WHERE ro.id = ${allocation.receivingOrderId}
-          AND rii.part_id = ${allocation.pickingItem.partId}
-          AND rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(alloc.allocated_qty, 0) - COALESCE(alloc.unboxed_scanned_qty, 0) >= ${input.qty}
-        ORDER BY ro.delivery_date ASC NULLS LAST, ri.invoice_no ASC, rii.date_code ASC NULLS LAST
-        LIMIT 1
-      `);
-
-      const rows = invoiceItemResult.rows ?? [];
-      if (rows.length === 0) throw new I18nError("quantity_not_available_receiving");
-      const receivingInvoiceItemId = String(rows[0].receiving_invoice_item_id);
-
-      return dbMaterializeReceivingAllocation(
-        db,
-        id,
-        input.qty,
-        input.dateCode ?? null,
-        input.lotCode ?? null,
-        input.coo ?? null,
-        input.cow ?? null,
-        receivingInvoiceItemId
-      );
     },
 
     async scanAllocation(id: string, qty: number): Promise<string> {

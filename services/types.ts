@@ -368,14 +368,6 @@ export interface PickingItemTransitionLog {
   actorName: string | null;
 }
 
-export interface MaterializeAllocationInput {
-  qty: number;
-  dateCode?: string | null;
-  lotCode?: string | null;
-  coo?: string | null;
-  cow?: string | null;
-}
-
 export interface ApplyOcrPickInput {
   receivingOrderId: string;
   pickingItemId: string;

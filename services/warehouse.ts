@@ -11,7 +11,6 @@ import type {
   ReportPickingIssueEntry,
   ReportPickingIssuesInput,
   ReportPickingIssuesResult,
-  MaterializeAllocationInput,
   ApplyOcrPickInput,
   PutAwayCandidate,
   PutAwayLot,
@@ -63,7 +62,6 @@ export interface WarehouseService {
     entries: ReportPickingIssueEntry[],
     input: ReportPickingIssuesInput
   ): Promise<ReportPickingIssuesResult>;
-  materializeAllocation(id: string, input: MaterializeAllocationInput): Promise<string>;
   scanAllocation(id: string, qty: number): Promise<string>;
   applyOcrPick(input: ApplyOcrPickInput): Promise<void>;
   addAllUnboxedPackagesToBox(boxId: string): Promise<number>;

@@ -29,7 +29,6 @@ export function createApiWarehouseService(
     getPickingOrder: notImplemented,
     finishPickingOrder: notImplemented,
     reportPickingOrderIssues: notImplemented,
-    materializeAllocation: notImplemented,
     scanAllocation: notImplemented,
     applyOcrPick: notImplemented,
     addAllUnboxedPackagesToBox: notImplemented,
