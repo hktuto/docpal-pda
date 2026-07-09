@@ -7,6 +7,25 @@ import { availableReceivingQtySql, allocationsCte } from "./helpers";
 import { getActiveMismatchesForItems } from "./mismatch";
 import { I18nError } from "~/composables/i18nError";
 
+async function fetchAvailableReceivingQtyByItem(
+  tx: PgliteDatabase<typeof schema>,
+  orderId: string
+): Promise<Map<string, number>> {
+  const result = await tx.execute(sql`
+    WITH allocations_cte AS (${allocationsCte()})
+    SELECT
+      rii.id,
+      (${availableReceivingQtySql}) AS available_qty
+    FROM receiving_invoice_items rii
+    JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+    LEFT JOIN allocations_cte alloc ON alloc.receiving_invoice_item_id = rii.id
+    WHERE ri.receiving_order_id = ${orderId}
+  `);
+  return new Map(
+    (result.rows ?? []).map((r) => [r.id, Number(r.available_qty ?? 0)])
+  );
+}
+
 export async function tryMarkReceivingOrderClear(
   tx: PgliteDatabase<typeof schema>,
   orderId: string,
@@ -18,23 +37,10 @@ export async function tryMarkReceivingOrderClear(
   });
   if (!order || order.status !== "in_hand") return;
 
-  const itemIds = order.invoices.flatMap((inv) => inv.items.map((i) => i.id));
-  if (itemIds.length === 0) return;
+  const hasItems = order.invoices.some((inv) => inv.items.length > 0);
+  if (!hasItems) return;
 
-  const itemRows = await tx.execute(sql`
-    WITH allocations_cte AS (${allocationsCte()})
-    SELECT
-      rii.id,
-      (${availableReceivingQtySql}) AS available_qty
-    FROM receiving_invoice_items rii
-    JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-    LEFT JOIN allocations_cte alloc ON alloc.receiving_invoice_item_id = rii.id
-    WHERE ri.receiving_order_id = ${orderId}
-  `);
-
-  const availableByItem = new Map(
-    (itemRows.rows ?? []).map((r) => [r.id, Number(r.available_qty ?? 0)])
-  );
+  const availableByItem = await fetchAvailableReceivingQtyByItem(tx, orderId);
 
   const allClear = order.invoices.every((inv) =>
     inv.items.every((item) => {
@@ -74,23 +80,10 @@ export async function tryMarkReceivingOrderInHand(
   });
   if (!order || order.status !== "clear") return;
 
-  const itemIds = order.invoices.flatMap((inv) => inv.items.map((i) => i.id));
-  if (itemIds.length === 0) return;
+  const hasItems = order.invoices.some((inv) => inv.items.length > 0);
+  if (!hasItems) return;
 
-  const itemRows = await tx.execute(sql`
-    WITH allocations_cte AS (${allocationsCte()})
-    SELECT
-      rii.id,
-      (${availableReceivingQtySql}) AS available_qty
-    FROM receiving_invoice_items rii
-    JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-    LEFT JOIN allocations_cte alloc ON alloc.receiving_invoice_item_id = rii.id
-    WHERE ri.receiving_order_id = ${orderId}
-  `);
-
-  const availableByItem = new Map(
-    (itemRows.rows ?? []).map((r) => [r.id, Number(r.available_qty ?? 0)])
-  );
+  const availableByItem = await fetchAvailableReceivingQtyByItem(tx, orderId);
 
   const hasAvailable = order.invoices.some((inv) =>
     inv.items.some((item) => {
