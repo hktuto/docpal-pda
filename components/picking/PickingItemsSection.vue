@@ -54,11 +54,11 @@
           </div>
         </template>
 
-        <template v-else-if="allocation.receivingInvoiceItem">
+        <template v-else-if="allocation.receivingOrder">
           <DetailRow :label="$t('picking.itemsSection.source')">
             {{ $t('picking.itemsSection.receivingArea') }}
-            <span v-if="allocation.receivingInvoiceItem.invoice?.receivingOrder?.refNo">
-              ({{ allocation.receivingInvoiceItem.invoice.receivingOrder.refNo }})
+            <span v-if="allocation.receivingOrder.refNo">
+              ({{ allocation.receivingOrder.refNo }})
             </span>
           </DetailRow>
           <DetailRow :label="$t('picking.itemsSection.allocatedQty')" :value="allocation.qty" />

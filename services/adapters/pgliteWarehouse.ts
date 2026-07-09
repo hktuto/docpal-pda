@@ -226,20 +226,10 @@ function toPickingAllocation(
           boxId: allocation.inventoryLot.boxId ?? null,
         }
       : null,
-    receivingInvoiceItem: allocation.receivingInvoiceItem
+    receivingOrder: allocation.receivingOrder
       ? {
-          id: allocation.receivingInvoiceItem.id,
-          receivingInvoiceId: allocation.receivingInvoiceItem.receivingInvoiceId,
-          invoice: allocation.receivingInvoiceItem.invoice
-            ? {
-                receivingOrder: allocation.receivingInvoiceItem.invoice.receivingOrder
-                  ? {
-                      id: allocation.receivingInvoiceItem.invoice.receivingOrder.id,
-                      refNo: allocation.receivingInvoiceItem.invoice.receivingOrder.refNo,
-                    }
-                  : { id: "", refNo: "" },
-              }
-            : null,
+          id: allocation.receivingOrder.id,
+          refNo: allocation.receivingOrder.refNo,
         }
       : null,
     pickingItem: allocation.pickingItem
@@ -875,12 +865,7 @@ export function createPgliteWarehouseService(
             FROM allocations a
             JOIN picking_items pi ON pi.id = a.picking_item_id
             JOIN picking_orders po ON po.id = pi.picking_order_id
-            WHERE a.receiving_invoice_item_id IN (
-              SELECT rii2.id
-              FROM receiving_invoices ri2
-              JOIN receiving_invoice_items rii2 ON rii2.receiving_invoice_id = ri2.id
-              WHERE ri2.receiving_order_id = ro.id
-            )
+            WHERE a.receiving_order_id = ro.id
             AND a.qty > 0
             AND po.status IN ('pending', 'picking')
 
@@ -947,13 +932,12 @@ export function createPgliteWarehouseService(
                 WHERE ro.id = ${id}`
           ),
           db.execute(
-            sql`SELECT rii.id AS receiving_invoice_item_id, COALESCE(SUM(a.qty), 0) AS allocated_qty
+            sql`SELECT rii.id AS receiving_invoice_item_id, COALESCE(alloc.allocated_qty, 0) AS allocated_qty
                 FROM receiving_invoice_items rii
                 JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
                 JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
-                LEFT JOIN allocations a ON a.receiving_invoice_item_id = rii.id
-                WHERE ro.id = ${id}
-                GROUP BY rii.id`
+                LEFT JOIN (${allocationsCte()}) alloc ON alloc.receiving_invoice_item_id = rii.id
+                WHERE ro.id = ${id}`
           ),
           allItemIds.length
             ? getActiveMismatchesForItems(db, allItemIds)
@@ -1186,7 +1170,7 @@ export function createPgliteWarehouseService(
     async applyOcrPick(input: ApplyOcrPickInput): Promise<void> {
       await dbApplyOcrPick(
         db,
-        input.receivingInvoiceItemId,
+        input.receivingOrderId,
         input.pickingItemId,
         input.qty,
         input.dateCode ?? null,

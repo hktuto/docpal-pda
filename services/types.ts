@@ -248,6 +248,7 @@ export interface PickingCandidate {
   pickingOrderId: string;
   pickingOrderRefNo: string;
   pickingItemId: string;
+  partId: string;
   shipTo: string | null;
   requiredQty: number;
   pickedQty: number;
@@ -307,16 +308,7 @@ export interface PickingAllocation {
     shelfCode: string | null;
     boxId: string | null;
   } | null;
-  receivingInvoiceItem: {
-    id: string;
-    receivingInvoiceId: string;
-    invoice: {
-      receivingOrder: {
-        id: string;
-        refNo: string;
-      };
-    } | null;
-  } | null;
+  receivingOrder: { id: string; refNo: string } | null;
   pickingItem: {
     id: string;
     part: Part | null;
@@ -385,7 +377,7 @@ export interface MaterializeAllocationInput {
 }
 
 export interface ApplyOcrPickInput {
-  receivingInvoiceItemId: string;
+  receivingOrderId: string;
   pickingItemId: string;
   qty: number;
   dateCode?: string | null;

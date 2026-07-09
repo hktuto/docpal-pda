@@ -2,7 +2,7 @@ import { parseManual, normalize } from './useMockOcr';
 import { useAuth } from './useAuth';
 import { useWarehouse } from './useWarehouse';
 import { useDb } from './useDb';
-import { findReceivingCandidates, findPickingCandidates } from '~/db/ocrPicking';
+import { findReceivingCandidates, findPickingCandidates, findReceivingCandidatesForOrder, findPickingCandidatesForOrder } from '~/db/ocrPicking';
 import { I18nError } from '~/composables/i18nError';
 import type { OcrInput } from './useMockOcr';
 import type {
@@ -25,7 +25,7 @@ export async function runScanMatcher(
   switch (ctx.task) {
     case 'receiving':
       if (!ctx.receivingOrderId) return m.error('missing_receiving_order_id');
-      return m.matchReceiving(ctx.receivingOrderId, ctx.pickingItemId, parsed);
+      return m.matchReceiving(ctx, parsed);
     case 'picking':
       if (!ctx.allocation) return m.error('missing_allocation');
       return m.matchPicking(ctx.allocation, parsed);
@@ -46,7 +46,7 @@ export async function runScanMatcher(
 interface PickingAllocation {
   id: string;
   qty: number;
-  receivingInvoiceItem?: unknown;
+  receivingOrder?: unknown;
   pickingItem?: { part?: { partNo: string | null } | null } | null;
 }
 
@@ -57,6 +57,8 @@ export interface ScanTaskContext {
   receivingOrderId?: string;
   pickingItemId?: string;
   supplierCode?: string;
+  receivingCandidatesByPartNo?: Map<string, ReceivingCandidate[]>;
+  pickingCandidatesByPartId?: Map<string, PickingCandidate[]>;
   // picking
   allocation?: PickingAllocation;
   // put-away
@@ -82,7 +84,7 @@ export type ScanMatchResult =
   | { type: 'error'; message: string };
 
 export interface ScanMatchers {
-  matchReceiving(receivingOrderId: string, pickingItemId: string | undefined, parsed: OcrInput): Promise<ScanMatchResult>;
+  matchReceiving(ctx: ScanTaskContext, parsed: OcrInput): Promise<ScanMatchResult>;
   matchPicking(allocation: PickingAllocation, parsed: OcrInput): Promise<ScanMatchResult>;
   matchPutAway(receivingItem: PutAwayLot, parsed: OcrInput): Promise<ScanMatchResult>;
   matchMeasuring(boxId: string, targetPackageId: string | undefined, parsed: OcrInput): Promise<ScanMatchResult>;
@@ -114,27 +116,39 @@ export function useScanMatchers(): ScanMatchers {
     return { type: 'error', message: t(`errors.${arg}`, params ?? {}) };
   }
 
-  async function matchReceiving(
-    receivingOrderId: string,
-    pickingItemId: string | undefined,
-    parsed: OcrInput
-  ): Promise<ScanMatchResult> {
+  async function matchReceiving(ctx: ScanTaskContext, parsed: OcrInput): Promise<ScanMatchResult> {
     try {
       const t0 = performance.now();
       const user = currentUser.value;
       if (!user?.id) return error('operator_not_signed_in');
 
+      const receivingOrderId = ctx.receivingOrderId;
+      if (!receivingOrderId) return error('missing_receiving_order_id');
+      const pickingItemId = ctx.pickingItemId;
+
       const p = parseManual(parsed);
       const t1 = performance.now();
-      const receivingCandidates = await findReceivingCandidates(db, receivingOrderId, p);
-      console.log('[SCAN-TIME] findReceivingCandidates', (performance.now() - t1).toFixed(1), 'ms');
+      let receivingCandidates: ReceivingCandidate[];
+      if (ctx.receivingCandidatesByPartNo) {
+        receivingCandidates = ctx.receivingCandidatesByPartNo.get(p.partNo) ?? [];
+        console.log('[SCAN-TIME] receivingCandidates cache lookup', (performance.now() - t1).toFixed(1), 'ms');
+      } else {
+        receivingCandidates = await findReceivingCandidates(db, receivingOrderId, p);
+        console.log('[SCAN-TIME] findReceivingCandidates', (performance.now() - t1).toFixed(1), 'ms');
+      }
       if (receivingCandidates.length === 0) return { type: 'none' };
       const receiving = receivingCandidates[0];
       if (p.qty > receiving.availableQty) return { type: 'none' };
 
       const t2 = performance.now();
-      let pickingCandidates = await findPickingCandidates(db, receivingOrderId, receiving.partId, p.qty);
-      console.log('[SCAN-TIME] findPickingCandidates', (performance.now() - t2).toFixed(1), 'ms');
+      let pickingCandidates: PickingCandidate[];
+      if (ctx.pickingCandidatesByPartId) {
+        pickingCandidates = ctx.pickingCandidatesByPartId.get(receiving.partId)?.filter((c) => c.remainingQty >= p.qty) ?? [];
+        console.log('[SCAN-TIME] pickingCandidates cache lookup', (performance.now() - t2).toFixed(1), 'ms');
+      } else {
+        pickingCandidates = await findPickingCandidates(db, receivingOrderId, receiving.partId, p.qty);
+        console.log('[SCAN-TIME] findPickingCandidates', (performance.now() - t2).toFixed(1), 'ms');
+      }
       if (pickingItemId) {
         pickingCandidates = pickingCandidates.filter((c) => c.pickingItemId === pickingItemId);
       }
@@ -149,7 +163,7 @@ export function useScanMatchers(): ScanMatchers {
         if (qty > receiving.availableQty) throw new I18nError('quantity_not_available_receiving');
         if (qty > picking.remainingQty) throw new I18nError('quantity_exceeds_picking_need');
         await warehouse.applyOcrPick({
-          receivingInvoiceItemId: receiving.receivingInvoiceItemId,
+          receivingOrderId: ctx.receivingOrderId!,
           pickingItemId: picking.pickingItemId,
           qty,
           dateCode: receiving.dateCode,
@@ -193,7 +207,7 @@ export function useScanMatchers(): ScanMatchers {
       const coo = rawCode(parsed.coo);
       const cow = rawCode(parsed.cow);
 
-      const isReceivingAllocation = !!allocation?.receivingInvoiceItem;
+      const isReceivingAllocation = !!allocation?.receivingOrder;
 
       return {
         type: 'single',
