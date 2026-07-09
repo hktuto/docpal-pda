@@ -46,8 +46,8 @@ export async function runScanMatcher(
 interface PickingAllocation {
   id: string;
   qty: number;
-  receivingOrder?: unknown;
-  pickingItem?: { part?: { partNo: string | null } | null } | null;
+  receivingOrder?: { id: string } | null;
+  pickingItem?: { id: string; part?: { partNo: string | null } | null } | null;
 }
 
 export interface ScanTaskContext {
@@ -216,14 +216,15 @@ export function useScanMatchers(): ScanMatchers {
           const actorId = currentUser.value?.id;
           if (!actorId) throw new I18nError('operator_not_signed_in');
           if (isReceivingAllocation) {
-            const materializedId = await warehouse.materializeAllocation(allocation.id, {
+            await warehouse.applyOcrPick({
+              receivingOrderId: allocation.receivingOrder!.id,
+              pickingItemId: allocation.pickingItem!.id,
               qty,
               dateCode,
               lotCode,
               coo,
               cow,
             });
-            await warehouse.scanAllocation(materializedId, qty);
           } else {
             await warehouse.scanAllocation(allocation.id, qty);
           }

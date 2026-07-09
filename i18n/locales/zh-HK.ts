@@ -525,6 +525,7 @@ export default {
     receiving_order_already_status: "收貨單已為 {status} 狀態",
     allocation_not_found: "找不到分配",
     allocation_not_against_receiving_item: "分配未針對收貨項目",
+    allocation_not_against_receiving_order: "分配未針對收貨單",
     invalid_materialize_quantity: "物化數量無效",
     invalid_receiving_item: "無效的收貨項目",
     invalid_scan_quantity: "掃描數量無效",

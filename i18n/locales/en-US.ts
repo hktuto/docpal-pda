@@ -525,6 +525,7 @@ export default {
     receiving_order_already_status: "Receiving order is already {status}",
     allocation_not_found: "Allocation not found",
     allocation_not_against_receiving_item: "Allocation is not against a receiving item",
+    allocation_not_against_receiving_order: "Allocation is not against a receiving order",
     invalid_materialize_quantity: "Invalid materialize quantity",
     invalid_receiving_item: "Invalid receiving item",
     invalid_scan_quantity: "Invalid scan quantity",
