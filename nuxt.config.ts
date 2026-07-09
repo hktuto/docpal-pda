@@ -62,6 +62,7 @@ export default defineNuxtConfig({
     public: {
       warehouseAdapter: "pglite", // "pglite" | "api"
       apiBaseUrl: "",             // e.g. "https://warehouse-api.example.com/api/v1"
+      seedPreset: "default",      // "default" (allocate on reset) | "precalc"
     },
   },
 });

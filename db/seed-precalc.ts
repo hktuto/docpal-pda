@@ -2,7 +2,6 @@ import { eq } from "drizzle-orm";
 import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { v4 as uuid } from "uuid";
 import * as schema from "./schema";
-import { allocatePickingOrder } from "./allocate";
 
 export async function seedDb(db: PgliteDatabase<typeof schema>) {
   const now = new Date();
@@ -5919,7 +5918,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP1000F'].id,
     qty: 760000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 760000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -5929,7 +5928,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP2001F'].id,
     qty: 390000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 390000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -5939,7 +5938,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP4701D'].id,
     qty: 170000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 170000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -5949,7 +5948,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['HV732HTTE1004F'].id,
     qty: 296000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 296000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -5959,7 +5958,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ERTTP3301F'].id,
     qty: 300000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 300000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -5969,7 +5968,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H2ATTD3161D'].id,
     qty: 10000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 10000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -5979,7 +5978,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1JTTD2001F'].id,
     qty: 120000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 120000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -5989,7 +5988,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ERTTP1004F'].id,
     qty: 10000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 10000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -5999,7 +5998,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP1001F'].id,
     qty: 1240000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 1240000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6009,7 +6008,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP1002F'].id,
     qty: 400000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 400000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6019,7 +6018,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP3002F'].id,
     qty: 90000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 90000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6029,7 +6028,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP3003F'].id,
     qty: 290000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 290000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6039,7 +6038,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP33R0F'].id,
     qty: 20000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 20000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6049,7 +6048,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP8061F'].id,
     qty: 20000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 20000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6059,7 +6058,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1JTTD1003F'].id,
     qty: 10000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 10000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6069,7 +6068,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP1000F'].id,
     qty: 880000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 880000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6079,7 +6078,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP1001F'].id,
     qty: 60000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 60000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6089,7 +6088,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP1002F'].id,
     qty: 580000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 580000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6099,7 +6098,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP2401F'].id,
     qty: 10000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 10000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6109,7 +6108,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP5100F'].id,
     qty: 10000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 10000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6119,7 +6118,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP5102F'].id,
     qty: 10000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 10000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6129,7 +6128,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1JTTD1000F'].id,
     qty: 165000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 165000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6139,7 +6138,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1JTTD1001F'].id,
     qty: 15000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 15000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6149,7 +6148,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1JTTD2002F'].id,
     qty: 720000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 720000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6159,7 +6158,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H2ATTD10R0F'].id,
     qty: 300000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 300000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6169,7 +6168,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H2ATTD10R0F'].id,
     qty: 515000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 515000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6179,7 +6178,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H2ATTD20R0F'].id,
     qty: 10000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 10000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6189,7 +6188,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['HV73V2BTTD1004D'].id,
     qty: 1200000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 1200000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6199,7 +6198,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['HV73V2BTTD1004D'].id,
     qty: 300000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 300000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6209,7 +6208,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73B1ETTP102J'].id,
     qty: 50000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 50000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6219,7 +6218,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73B1ETTP105J'].id,
     qty: 10000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 10000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6229,7 +6228,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73B1ETTP330J'].id,
     qty: 10000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 10000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6239,7 +6238,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73B1ETTP512J'].id,
     qty: 10000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 10000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6249,7 +6248,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73B1HTTC103J'].id,
     qty: 170000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 170000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6259,7 +6258,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73B1HTTC151J'].id,
     qty: 10000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 10000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6269,7 +6268,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73B1HTTC180J'].id,
     qty: 30000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 30000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6279,7 +6278,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73B1HTTC330J'].id,
     qty: 40000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 40000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6289,7 +6288,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73B1HTTC510J'].id,
     qty: 170000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 170000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6299,7 +6298,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73B1HTTC510J'].id,
     qty: 130000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 130000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6309,7 +6308,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73B1JTTD472J'].id,
     qty: 5000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 5000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6319,7 +6318,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73B2BTTD103J'].id,
     qty: 125000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 125000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6329,7 +6328,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP1000F'].id,
     qty: 20000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 20000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6339,7 +6338,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP1001F'].id,
     qty: 230000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 230000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6349,7 +6348,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP1003F'].id,
     qty: 90000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 90000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6359,7 +6358,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP2001F'].id,
     qty: 20000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 20000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6369,7 +6368,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP2400F'].id,
     qty: 10000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 10000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6379,7 +6378,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP2702F'].id,
     qty: 50000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 50000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6389,7 +6388,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP3001F'].id,
     qty: 30000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 30000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6399,7 +6398,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP3002F'].id,
     qty: 350000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 350000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6409,7 +6408,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP33R0F'].id,
     qty: 10000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 10000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6419,7 +6418,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP4703F'].id,
     qty: 170000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 170000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6429,7 +6428,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP5101F'].id,
     qty: 170000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 170000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6439,7 +6438,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP6801F'].id,
     qty: 20000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 20000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6449,7 +6448,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1ETTP82R0F'].id,
     qty: 70000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 70000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6459,7 +6458,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1HTTC1431F'].id,
     qty: 70000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 70000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6469,7 +6468,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1HTTC2203F'].id,
     qty: 90000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 90000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6479,7 +6478,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1HTTC2400F'].id,
     qty: 180000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 180000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6489,7 +6488,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1HTTC2400F'].id,
     qty: 440000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 440000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6499,7 +6498,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1HTTC5492F'].id,
     qty: 20000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 20000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6509,7 +6508,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1JTTD1001F'].id,
     qty: 10000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 10000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6519,7 +6518,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1JTTD1542F'].id,
     qty: 5000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 5000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6529,7 +6528,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1JTTD1R00F'].id,
     qty: 5000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 5000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6539,7 +6538,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1JTTD2001F'].id,
     qty: 110000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 110000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6549,7 +6548,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1JTTD2493F'].id,
     qty: 5000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 5000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6559,7 +6558,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1JTTD3001F'].id,
     qty: 65000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 65000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6569,7 +6568,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1JTTD43R0F'].id,
     qty: 10000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 10000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6579,7 +6578,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1JTTD4701F'].id,
     qty: 5000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 5000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6589,7 +6588,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1JTTD4703F'].id,
     qty: 5000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 5000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6599,7 +6598,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1JTTD4990F'].id,
     qty: 45000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 45000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6609,7 +6608,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H1JTTD82R5F'].id,
     qty: 50000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 50000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6619,7 +6618,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H2BTTD2004F'].id,
     qty: 35000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 35000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6629,7 +6628,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['RK73H2BTTD3900F'].id,
     qty: 5000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 5000,
     requiredDateCode: null,
     sourceShelfCode: null
   },
@@ -6639,7 +6638,7 @@ const pickingItemRecords = [
     partId: wclPartByNo['WK73R2BTTD62R0F'].id,
     qty: 790000,
     pickedQty: 0,
-    allocatedQty: 0,
+    allocatedQty: 790000,
     requiredDateCode: null,
     sourceShelfCode: null
   }
@@ -6649,9 +6648,893 @@ const pickingItemRecords = [
   await db.insert(schema.pickingOrders).values([...pickingOrderRecords]);
   await db.insert(schema.pickingItems).values([...pickingItemRecords]);
 
-  for (const po of pickingOrderRecords) {
-    await allocatePickingOrder(db, po.id);
+// Pre-calculated allocations (126)
+const allocationRecords = [
+  {
+    "id": "0218ac25-c96e-4d1a-89e3-54beb64e8cdd",
+    "pickingItemId": "938d3740-bac9-43f7-8a8d-139c37ff4d54",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "5daa17e9-3858-4dde-821a-a1e3e1745865",
+    "qty": 40000
+  },
+  {
+    "id": "03f1aec3-2fb4-4764-9bfe-d6444a55e10f",
+    "pickingItemId": "88eac7b8-2125-478c-b972-075fe8fe1dd4",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "0b2be5b1-dff3-4e7a-bc00-9b717cb8fca4",
+    "qty": 200000
+  },
+  {
+    "id": "070541fc-f1ff-42ed-b0e4-c1d48e033baf",
+    "pickingItemId": "9669148b-1115-413c-a0e0-af23a8513794",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "e9808567-f75b-4d7c-b959-8206059b4c16",
+    "qty": 290000
+  },
+  {
+    "id": "070dbfc4-1343-47da-9a93-e4a7dda6ce50",
+    "pickingItemId": "7de15506-0830-4ecc-9f8a-d71f8c765efb",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "4e6d1378-080e-4098-836e-54a4f3b8bc63",
+    "qty": 20000
+  },
+  {
+    "id": "077f4e13-0727-4db0-86cd-604130d5d2c2",
+    "pickingItemId": "938d3740-bac9-43f7-8a8d-139c37ff4d54",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "0126e777-1288-4295-97cc-15302d5e5d60",
+    "qty": 600000
+  },
+  {
+    "id": "094815f1-0c7d-4a87-9aa2-0f9ea3b14619",
+    "pickingItemId": "65618c3d-8434-4c5f-bd4b-7659bb62e993",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "ddc647b3-9d25-4ac3-be2d-c9ee83ab330b",
+    "qty": 500000
+  },
+  {
+    "id": "0bd81c6f-f13d-4560-b218-bc7a7ece0459",
+    "pickingItemId": "7e04dae3-75e5-4a14-94ba-8a2e41d211f5",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "91efb2e3-6879-4415-ac02-65af35f2f0d0",
+    "qty": 20000
+  },
+  {
+    "id": "11c685cc-de44-49a2-8a54-589a00e5d599",
+    "pickingItemId": "a5dd5259-facf-4807-8861-d07bb58ac204",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "fe07b228-c5b9-4ef9-bac4-ac814b6c7354",
+    "qty": 10000
+  },
+  {
+    "id": "12bca062-170d-4f66-b807-47a9fb175ed3",
+    "pickingItemId": "b8c6ec7b-dfb4-4ea4-b4fa-ca3f5bf3f25d",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "3294432a-f730-402d-a468-3bfbdaf8bd58",
+    "qty": 300000
+  },
+  {
+    "id": "168e6ee4-360b-4368-a4c3-76478dc075c6",
+    "pickingItemId": "7de15506-0830-4ecc-9f8a-d71f8c765efb",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "5ec6a027-4d8a-4fe8-9155-369fa5bfebc5",
+    "qty": 70000
+  },
+  {
+    "id": "18226b8c-d63c-4fcb-aba6-b377215facca",
+    "pickingItemId": "94e3cb44-862d-4892-8b85-76ffec460def",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "1deaaf09-5380-4000-a5f3-3864ed7fcce1",
+    "qty": 20000
+  },
+  {
+    "id": "1d1f8c2f-def5-4471-ae5a-603e4ebbbc1d",
+    "pickingItemId": "fc99ea08-7bc5-49de-97bc-383ab9bd7315",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "d20a40d9-b457-4586-ad92-32ef217ca183",
+    "qty": 10000
+  },
+  {
+    "id": "1dd866f2-d699-48cf-863f-4563a5f6f326",
+    "pickingItemId": "6225128e-9317-455d-8935-ff9366f9dfad",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "36b10a84-6b07-451c-93ea-401593fea033",
+    "qty": 5000
+  },
+  {
+    "id": "1df99faa-e0ed-473d-bd4b-2ebb6bf9dcad",
+    "pickingItemId": "8fc3497f-b337-4b28-97ff-8fcdd4608e81",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "0d50ec4e-d658-4bec-907b-ee3c8d3a02d9",
+    "qty": 10000
+  },
+  {
+    "id": "1f905ad3-2291-4e13-967d-20e91e19b2e8",
+    "pickingItemId": "c8a5ec63-d003-4ead-a0df-a0c97838b630",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "f32b4e75-c1a6-4ff3-af1e-d46d9fee9522",
+    "qty": 5000
+  },
+  {
+    "id": "2140d089-076e-4724-986a-05774f57be4f",
+    "pickingItemId": "51fc4087-b398-420e-af7d-a1d06256b71e",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "e7c8de49-a28a-4a6b-83cd-7df321943379",
+    "qty": 20000
+  },
+  {
+    "id": "25e2e337-e7ac-46d5-81b3-3d4654ab5d41",
+    "pickingItemId": "978422e0-821f-4c2b-9bab-1cd0049e28e3",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "a6c145d6-400e-438d-8629-0a521f664873",
+    "qty": 10000
+  },
+  {
+    "id": "25f07b09-4725-417b-a6c8-58a0ea232afb",
+    "pickingItemId": "2ac437d9-cf7c-4b74-b9ca-03b64c0b2cf8",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "b482f40c-3dca-49dc-83b0-31b783000c4a",
+    "qty": 25000
+  },
+  {
+    "id": "263e8fee-6f2b-4be5-87c3-3043d909abaa",
+    "pickingItemId": "729dbb95-ff0f-4207-b45c-3f07e50e0d7d",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "342d8067-03a0-4b87-9ccd-2222c101d8e2",
+    "qty": 80000
+  },
+  {
+    "id": "26dfeadf-427c-4059-a7b6-deab3f1314ea",
+    "pickingItemId": "96251357-ebec-4151-8a7d-bb23781be27c",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "99b85d3e-ccbb-466d-a151-fb81a739e140",
+    "qty": 20000
+  },
+  {
+    "id": "2b57a38d-725b-4dc3-a905-d6e810f6199c",
+    "pickingItemId": "1bc48297-7e8f-4b03-b2fc-5360cfadb99b",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "69f2f69f-8637-4f59-8a7f-c69e41086948",
+    "qty": 20000
+  },
+  {
+    "id": "2bc10b31-9218-4bc8-b0e9-220e1bdc45ca",
+    "pickingItemId": "845071ca-afeb-4c68-95c3-d45b33b1ee5d",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "1f3ec0ee-2225-4429-9a12-adb461c96310",
+    "qty": 120000
+  },
+  {
+    "id": "2cac6e3c-afdc-4090-9c9a-afd77115cdb4",
+    "pickingItemId": "511ab905-ccd7-4ac7-9556-7bbfddaee8f3",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "32a581b1-e68e-484a-aef3-559b78c8e361",
+    "qty": 400000
+  },
+  {
+    "id": "2f1c8ad8-425f-4f05-8e35-d5577c5baccf",
+    "pickingItemId": "91db2583-e3a7-4c7f-a24f-4a8275f28c87",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "1abebf69-db7b-4e1c-965e-94dc4be9eb22",
+    "qty": 170000
+  },
+  {
+    "id": "30aec91d-c010-42a3-914e-318decc76713",
+    "pickingItemId": "dd4d8b64-d8b8-4163-bcaa-9b639c1a5801",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "5d2668f5-3254-4555-a465-8583b85e6ea3",
+    "qty": 90000
+  },
+  {
+    "id": "31d7de7c-1cc3-4ba8-9273-446f061cbeff",
+    "pickingItemId": "c8a5ec63-d003-4ead-a0df-a0c97838b630",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "ff85ebc3-5579-462b-9cd8-84c915e582b0",
+    "qty": 5000
+  },
+  {
+    "id": "358d8b74-fae4-4742-b325-338f8cbafe70",
+    "pickingItemId": "aff7fc72-a07d-45b9-895e-346277ad5a1b",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "c6357cb2-4864-4683-a3e6-f1eaa804c624",
+    "qty": 5000
+  },
+  {
+    "id": "374f6014-7bec-4f23-8a43-ed981364485e",
+    "pickingItemId": "07c1c762-b044-4420-b4fa-d2300de72897",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "f32b4e75-c1a6-4ff3-af1e-d46d9fee9522",
+    "qty": 10000
+  },
+  {
+    "id": "387d72fc-1eee-40aa-ad24-142a70bddc62",
+    "pickingItemId": "45774eca-7435-4c0a-aaa6-753e69848f91",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "70c718e2-1906-4f4b-b04b-d8f7593dc004",
+    "qty": 10000
+  },
+  {
+    "id": "392aaf54-5dfe-4cb5-8a04-151578bc6b4b",
+    "pickingItemId": "9e2f98c2-2c6f-45bb-9800-a85e668f5a15",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "c9e9a145-13c7-4549-9434-019cbb600681",
+    "qty": 100000
+  },
+  {
+    "id": "3a315caf-fa01-408e-b370-faa2f38cc23a",
+    "pickingItemId": "7b49f885-47da-4190-b1f8-6dbb1db430a7",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "9275fcd0-4621-4897-8a48-51afd43abb48",
+    "qty": 20000
+  },
+  {
+    "id": "3d108a79-f0d9-4645-b2ee-7cce80016875",
+    "pickingItemId": "38706988-4a86-4de8-89ff-26555f3d50a0",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "41461c9d-9f42-496d-8d80-d75b00d59d3f",
+    "qty": 30000
+  },
+  {
+    "id": "3da6c90c-b174-4bc7-a6c3-01024d864602",
+    "pickingItemId": "e642d7ed-158b-401c-8a70-5f75758dfc2d",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "362546b0-8778-4b07-bb84-20871a179550",
+    "qty": 10000
+  },
+  {
+    "id": "3fa41274-694f-4797-8a29-e92ec625a021",
+    "pickingItemId": "599a7241-d98d-4d0f-989e-5091f7b18123",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "09289478-9e18-4d31-84d3-f06950014c69",
+    "qty": 5000
+  },
+  {
+    "id": "411819bd-d09e-45fb-b9e7-a2494e92c552",
+    "pickingItemId": "fb8e4d57-b0ce-4534-8844-7e3c34b3feb7",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "4b045089-944c-45cd-b2f9-eafe8d8eeebe",
+    "qty": 130000
+  },
+  {
+    "id": "4157a0c0-7563-4174-bc66-4fb840eea82e",
+    "pickingItemId": "744ea1e7-cf8a-4ec4-80af-22b88f92e533",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "342d8067-03a0-4b87-9ccd-2222c101d8e2",
+    "qty": 180000
+  },
+  {
+    "id": "4401501c-a9c5-4e88-8838-48cf0478cb79",
+    "pickingItemId": "58aa7122-6233-4339-97d1-f2e598de2c12",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "cd85824f-dce4-47b8-8a0d-74410e263bc8",
+    "qty": 104000
+  },
+  {
+    "id": "450642f7-c496-4cd7-9540-976ee1ffb6ec",
+    "pickingItemId": "f6d5122a-c769-4f99-9cb0-a251cb7bf3a5",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "807f11e7-80d1-406b-b690-00b0112d9dbd",
+    "qty": 20000
+  },
+  {
+    "id": "460a9937-611a-40ea-99cb-16dffe8b0c3b",
+    "pickingItemId": "65618c3d-8434-4c5f-bd4b-7659bb62e993",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "e796c7c5-575a-4074-988a-fff7b4356901",
+    "qty": 100000
+  },
+  {
+    "id": "465d8dc1-4b2f-498a-a793-7a69f77f028a",
+    "pickingItemId": "938d3740-bac9-43f7-8a8d-139c37ff4d54",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "15a84fa0-2142-4ee0-a42c-cd9b7e46de3a",
+    "qty": 160000
+  },
+  {
+    "id": "467297af-c5e0-4abe-afc0-bae7ce83709b",
+    "pickingItemId": "65618c3d-8434-4c5f-bd4b-7659bb62e993",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "de267ff3-b011-41ae-94e3-91a82ce374e4",
+    "qty": 10000
+  },
+  {
+    "id": "4c09beee-9a26-46fe-ad4d-e99aaaa08652",
+    "pickingItemId": "f275b88b-80c0-4742-b254-7de8b3a9774a",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "c45ad9e2-8c1e-4a09-bda3-5acd6fabcc37",
+    "qty": 160000
+  },
+  {
+    "id": "4cb973ea-0a16-45bd-83d4-2e57a31796b5",
+    "pickingItemId": "729dbb95-ff0f-4207-b45c-3f07e50e0d7d",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "fadd8cf9-0a79-4155-a130-bae84ef8a928",
+    "qty": 180000
+  },
+  {
+    "id": "569c5315-02a7-4c29-ab10-c05502a0a9f5",
+    "pickingItemId": "51fc4087-b398-420e-af7d-a1d06256b71e",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "f356187d-3a42-4a2e-9db2-e882682c9823",
+    "qty": 25000
+  },
+  {
+    "id": "5763e413-d9b2-4f81-ac56-b0590b0a0826",
+    "pickingItemId": "b9414f66-9b49-4c36-bdf4-c3b7b4a685e0",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "3bd57a33-3ef9-46ff-9c35-f1f96061b4d7",
+    "qty": 20000
+  },
+  {
+    "id": "5908c4a5-8ee2-4a56-bae8-9aa26c6c36aa",
+    "pickingItemId": "99058306-c1e5-4248-b61e-11261244ec2a",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "1b96c765-f6b5-4099-96cb-8651143f4542",
+    "qty": 10000
+  },
+  {
+    "id": "59170984-4feb-45d7-9b3a-b3ecdb2aa29b",
+    "pickingItemId": "a5dd5259-facf-4807-8861-d07bb58ac204",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "fb183e80-5e9b-412b-80da-2079e010baea",
+    "qty": 20000
+  },
+  {
+    "id": "5acec67a-dd41-4e5b-861d-cb112808b6d1",
+    "pickingItemId": "b76d4e80-94dd-4ee8-acb9-eeb270f83945",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "f2eee9ab-e149-44ec-9b76-3557aaa02165",
+    "qty": 60000
+  },
+  {
+    "id": "60cf2076-9957-448d-ac8f-ea6626d3ae81",
+    "pickingItemId": "07c1c762-b044-4420-b4fa-d2300de72897",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "03054931-af37-4ffb-8e4a-9aa8a0686fa7",
+    "qty": 5000
+  },
+  {
+    "id": "64580b9e-a95b-4a2e-a5e9-b3ca5c726b24",
+    "pickingItemId": "81235f85-ffd8-4d8e-ac61-52492534abc1",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "65ccd5ce-c0c8-4be7-9838-a69d9b890dbc",
+    "qty": 300000
+  },
+  {
+    "id": "66041f4c-0d83-4ed7-93f5-fc852cbbebb5",
+    "pickingItemId": "81235f85-ffd8-4d8e-ac61-52492534abc1",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "f433b561-78d5-47a1-96e1-0889b7d211ba",
+    "qty": 120000
+  },
+  {
+    "id": "6720bd69-28eb-4665-a70a-dec781fc5d54",
+    "pickingItemId": "2f99f283-9df4-49f6-831e-cce833979ec3",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "cb1fdd33-82fd-41a3-a15c-f9b00f47bf2b",
+    "qty": 10000
+  },
+  {
+    "id": "68523043-49ba-4516-9726-c0d848b911f4",
+    "pickingItemId": "f275b88b-80c0-4742-b254-7de8b3a9774a",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "332da311-9013-4fbd-b75a-934e6dd5c585",
+    "qty": 5000
+  },
+  {
+    "id": "68e704cb-8134-493c-b63d-87edf43e1bee",
+    "pickingItemId": "7de15506-0830-4ecc-9f8a-d71f8c765efb",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "99b85d3e-ccbb-466d-a151-fb81a739e140",
+    "qty": 300000
+  },
+  {
+    "id": "69a5b289-65fc-4626-b1e3-87dd71b49429",
+    "pickingItemId": "b8ad16f6-3364-43bd-8cf9-a15e1fe558d6",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "f2eee9ab-e149-44ec-9b76-3557aaa02165",
+    "qty": 230000
+  },
+  {
+    "id": "6adce3f9-2059-40d9-9632-d7d537a21a0c",
+    "pickingItemId": "a461d6b9-d471-4706-86ed-bd28d05e690d",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "8a2aa154-5603-420e-a239-f6f6af1f3811",
+    "qty": 20000
+  },
+  {
+    "id": "6bd88772-a98c-41c8-a788-e469ef31347d",
+    "pickingItemId": "8a489553-ad4a-47ed-8d76-ec08ebcbcddb",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "6fbddc88-47a1-4016-88d2-c1e0f25d742c",
+    "qty": 65000
+  },
+  {
+    "id": "6ce7aa5e-7155-4be4-b454-d78e6d110b42",
+    "pickingItemId": "faf7b0a4-c920-4b57-9cf7-b439e00546b4",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "71e806eb-0e02-498f-8892-e466ac96ba03",
+    "qty": 50000
+  },
+  {
+    "id": "71c29dba-607d-4f27-a73f-b0b76de0e1ba",
+    "pickingItemId": "faf7b0a4-c920-4b57-9cf7-b439e00546b4",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "eda0aae4-c1e2-481a-bd37-7331ff51f0b6",
+    "qty": 40000
+  },
+  {
+    "id": "7234f985-c4ef-4355-8c3e-1523ff19e4ef",
+    "pickingItemId": "53e3ee74-0b5f-4cec-be67-e0a3cff0120a",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "6a6eb1f8-b676-4a5c-a906-4e7ffe779b2f",
+    "qty": 10000
+  },
+  {
+    "id": "73654983-fea2-4b3b-b37c-9ea7c2e73e78",
+    "pickingItemId": "b8c6ec7b-dfb4-4ea4-b4fa-ca3f5bf3f25d",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "4a1694b0-c2ce-483a-a08d-22b1da578d35",
+    "qty": 300000
+  },
+  {
+    "id": "738990f2-2fe8-4c91-93e6-d101f4676e1f",
+    "pickingItemId": "1711584a-e4fc-48f7-b0cc-1bc112c929bf",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "e515ba13-eb49-4846-8820-84125865f5df",
+    "qty": 10000
+  },
+  {
+    "id": "765abbad-7952-4274-a88e-3bc1d26d36bb",
+    "pickingItemId": "2ac437d9-cf7c-4b74-b9ca-03b64c0b2cf8",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "8393fb92-0e39-44f1-a379-e6e076b227f8",
+    "qty": 10000
+  },
+  {
+    "id": "76dd0b16-1a43-43b8-b537-1c5d34b304c6",
+    "pickingItemId": "88eac7b8-2125-478c-b972-075fe8fe1dd4",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "2575717e-eba9-441b-b83a-d6ede91c9384",
+    "qty": 300000
+  },
+  {
+    "id": "7d310224-752b-4878-81de-e2072d08653a",
+    "pickingItemId": "9e2f98c2-2c6f-45bb-9800-a85e668f5a15",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "69872723-b064-4b3b-b839-fc13dde17668",
+    "qty": 100000
+  },
+  {
+    "id": "7da7eb59-a72d-42be-839f-c8ac8170ecc6",
+    "pickingItemId": "e2ebf66b-8a8b-4547-b446-5e475ce03fc2",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "19223255-12ac-4f38-bb24-ee1c0fb7b218",
+    "qty": 600000
+  },
+  {
+    "id": "7e77f36a-073a-4470-9b8b-464e0109d604",
+    "pickingItemId": "88eac7b8-2125-478c-b972-075fe8fe1dd4",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "565ddffa-af33-4cdc-b59a-922720597549",
+    "qty": 200000
+  },
+  {
+    "id": "7e8b258d-a7f4-4873-8a83-cb01bb59c7ca",
+    "pickingItemId": "d7f58d30-0094-43b0-8536-d91d90e1093a",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "b01a1264-92f4-4ce6-b0b5-c4e7190247b6",
+    "qty": 170000
+  },
+  {
+    "id": "817c4b51-3dc7-4660-83c0-d8d9acd33d5d",
+    "pickingItemId": "594d9412-aadd-48ec-92b0-7ed6c59b32ea",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "27fd3132-be92-496d-b8c8-b4ae0c1f729b",
+    "qty": 10000
+  },
+  {
+    "id": "82664a22-18f2-472e-b91e-b9fc833a613f",
+    "pickingItemId": "fab33d2a-8751-4cfd-ba95-f474244a7859",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "564c9487-f93b-47cc-b2e3-b825c3f318c8",
+    "qty": 10000
+  },
+  {
+    "id": "82c38b9a-0059-4d1a-b410-47dbefa303f0",
+    "pickingItemId": "d29c253c-a4fc-4794-b58b-d33270661dc8",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "d7071304-36b4-457a-bece-c9b9cef8ba2a",
+    "qty": 10000
+  },
+  {
+    "id": "868247c8-813e-4c0f-91a4-e6256960a9f3",
+    "pickingItemId": "1bc48297-7e8f-4b03-b2fc-5360cfadb99b",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "1d4e6aa2-89e2-478f-8ae7-221b9fb64642",
+    "qty": 10000
+  },
+  {
+    "id": "88a04e6b-1d72-447e-8c54-4335572e0519",
+    "pickingItemId": "a461d6b9-d471-4706-86ed-bd28d05e690d",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "f2591df9-521d-4887-9d4e-a21bfe40ddbf",
+    "qty": 70000
+  },
+  {
+    "id": "88e6d7fa-3480-4917-8651-c524587536e9",
+    "pickingItemId": "ae7449c1-3676-471b-ad2d-e2aae2897731",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "e64b1f81-e2c0-47b6-9f53-699618603758",
+    "qty": 5000
+  },
+  {
+    "id": "8b6479ea-3d9c-4895-8bbb-7a2d9a701d16",
+    "pickingItemId": "88eac7b8-2125-478c-b972-075fe8fe1dd4",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "5de4a3df-4fc0-4634-9daf-58b4c36b4217",
+    "qty": 200000
+  },
+  {
+    "id": "8c09002a-c1ad-417a-9430-6fc8e1dc8055",
+    "pickingItemId": "d7d33033-2bca-47a6-af8f-12a8b793af60",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "f7577a53-b41c-4842-9813-1238b826ed26",
+    "qty": 280000
+  },
+  {
+    "id": "8ccf87ed-cbfd-49db-af04-8966abb010ed",
+    "pickingItemId": "65618c3d-8434-4c5f-bd4b-7659bb62e993",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "df7f60f3-1e6f-41e2-a88e-721d666f3cfb",
+    "qty": 270000
+  },
+  {
+    "id": "8cf51cb1-a588-43a0-8cf3-663be7bff1b6",
+    "pickingItemId": "7e04dae3-75e5-4a14-94ba-8a2e41d211f5",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "e0546525-d43f-4920-8f0e-f54cd6e7a65e",
+    "qty": 10000
+  },
+  {
+    "id": "930de943-966f-4d1a-bb0d-71a4390b6367",
+    "pickingItemId": "938d3740-bac9-43f7-8a8d-139c37ff4d54",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "f2eee9ab-e149-44ec-9b76-3557aaa02165",
+    "qty": 310000
+  },
+  {
+    "id": "96f3f131-0550-4008-b383-8d977aacbfb2",
+    "pickingItemId": "d7d33033-2bca-47a6-af8f-12a8b793af60",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "d5ea4ed6-ce1d-46c2-a05a-2ddc39ffaaad",
+    "qty": 215000
+  },
+  {
+    "id": "97968973-11a3-439b-8c86-f48c56e963ef",
+    "pickingItemId": "e2ebf66b-8a8b-4547-b446-5e475ce03fc2",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "a6bd3a00-97d4-4c0d-b0db-c789e7d4d010",
+    "qty": 20000
+  },
+  {
+    "id": "985a3e57-494e-4a92-a3d9-5f981916bd2f",
+    "pickingItemId": "ade0779a-1f5c-4471-a670-5458010d5c05",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "8f7e6a00-7473-401b-ab83-8b1c87776444",
+    "qty": 300000
+  },
+  {
+    "id": "98bb8612-3dcc-42d3-be1e-83fd353347fc",
+    "pickingItemId": "a4e61a40-6aad-4007-8374-a224679dceef",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "45c64013-c261-423d-ba50-d56fde390b78",
+    "qty": 5000
+  },
+  {
+    "id": "9a643650-7d71-4a33-8a0f-b9a7c797cf63",
+    "pickingItemId": "e2ebf66b-8a8b-4547-b446-5e475ce03fc2",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "ddc647b3-9d25-4ac3-be2d-c9ee83ab330b",
+    "qty": 100000
+  },
+  {
+    "id": "9acc07ec-fe91-4a1c-9476-1ad7ce8ef751",
+    "pickingItemId": "938d3740-bac9-43f7-8a8d-139c37ff4d54",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "50b509df-faac-40b2-93d1-2d803c777872",
+    "qty": 60000
+  },
+  {
+    "id": "9e8acb8d-12c3-4df2-b3ce-0db562ceca51",
+    "pickingItemId": "94e3cb44-862d-4892-8b85-76ffec460def",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "fe0ad685-c77b-43d8-8238-d44ddb92102c",
+    "qty": 50000
+  },
+  {
+    "id": "a01afc96-aa39-4540-abef-41fad34be21e",
+    "pickingItemId": "45774eca-7435-4c0a-aaa6-753e69848f91",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "c2180391-9777-4e51-a620-ba30b539f132",
+    "qty": 10000
+  },
+  {
+    "id": "a539b0b8-7454-41a7-85e2-29b6ba834be8",
+    "pickingItemId": "c7f8e348-ab42-47a8-9bb6-9d6c3bd0272b",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "1a4bceb0-8b85-402b-8267-f4f338e97c44",
+    "qty": 300000
+  },
+  {
+    "id": "a554bad4-eae2-47b4-a671-abbe820dfb77",
+    "pickingItemId": "d300eb93-309b-414d-a28b-a2d6418f41e6",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "42cc6460-cb5e-41a5-b7ff-7a6a82bdc685",
+    "qty": 400000
+  },
+  {
+    "id": "a73fac57-a4b6-4821-bba9-494cff80cc57",
+    "pickingItemId": "bf4d1a8e-2042-4100-93a2-57cdef6c1420",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "b078d64b-29b5-4fbb-9b89-2546e7f90e04",
+    "qty": 170000
+  },
+  {
+    "id": "aaa68f1f-1e27-448d-979a-61e8ef0a6f92",
+    "pickingItemId": "645b7c9f-d1fa-4f54-ad44-e5c7355791b0",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "76bebe80-3c00-4678-83e1-c5265c8bb9c2",
+    "qty": 50000
+  },
+  {
+    "id": "aee46182-e335-4edc-9313-1bd10edb78c2",
+    "pickingItemId": "9dad1c3b-0aea-4485-a042-7cb0054b19f2",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "43f4e8f0-b083-4f53-b798-6272ffd090d2",
+    "qty": 50000
+  },
+  {
+    "id": "af04c7b4-2aa1-4ae8-a83d-df37dc0754a0",
+    "pickingItemId": "e2ebf66b-8a8b-4547-b446-5e475ce03fc2",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "892b4f8e-95fa-458f-ba85-9740a87b5154",
+    "qty": 10000
+  },
+  {
+    "id": "af3d0661-b7c3-431c-b556-4b458d02f593",
+    "pickingItemId": "a5dd5259-facf-4807-8861-d07bb58ac204",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "311b9362-49c7-470b-bf90-4e32d0774127",
+    "qty": 40000
+  },
+  {
+    "id": "b6a72574-86ec-4330-ab1e-e494216597e0",
+    "pickingItemId": "71fffc6e-ced4-47b2-a7db-ea5d70fe71b9",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "0cda9c50-0569-4fb0-abda-852e8e170064",
+    "qty": 30000
+  },
+  {
+    "id": "ba32e560-0e89-4874-aaa4-d3324785c785",
+    "pickingItemId": "9adabbf4-4eff-415c-80fc-19e996fc0331",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "7b3dc327-0314-4ce0-a552-59a9675b6ab4",
+    "qty": 170000
+  },
+  {
+    "id": "baf3b201-1575-4563-9706-df63307951f2",
+    "pickingItemId": "729dbb95-ff0f-4207-b45c-3f07e50e0d7d",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "85452703-1883-4c6e-97bd-118699ac5876",
+    "qty": 180000
+  },
+  {
+    "id": "bbccb3c1-730a-47f8-9889-aa6610d3f4fa",
+    "pickingItemId": "e4bd06f5-bbd3-4828-8626-f023e6ce03df",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "9a180051-9eec-4135-b26a-456008f3c805",
+    "qty": 110000
+  },
+  {
+    "id": "bfdb1052-3144-4e5d-ab22-a13304852d0c",
+    "pickingItemId": "a5b8dede-5862-4c84-887d-9ec0e3cf5118",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "9a5e9976-eab1-4be8-b9c1-5abbbb785a9e",
+    "qty": 10000
+  },
+  {
+    "id": "c0d702dc-63e8-4f65-8007-fd48f7d79e88",
+    "pickingItemId": "d7d33033-2bca-47a6-af8f-12a8b793af60",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "97aa4739-3d9d-4629-8e18-0929b9ef9983",
+    "qty": 20000
+  },
+  {
+    "id": "c5079ea1-ccd3-459c-8cf9-9226a5fe913a",
+    "pickingItemId": "d722a39b-5eb3-406a-b299-6e1a8da13b9b",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "e1be0510-03ac-4c59-9022-e0296572a587",
+    "qty": 5000
+  },
+  {
+    "id": "c6371b59-ae75-4029-9f76-b8c2ac707aa3",
+    "pickingItemId": "8fc3497f-b337-4b28-97ff-8fcdd4608e81",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "0d11c5ce-63c1-411f-944d-8c7f0a3c48bd",
+    "qty": 10000
+  },
+  {
+    "id": "c6c226b0-3046-49b1-9bc6-adda1781459c",
+    "pickingItemId": "b9414f66-9b49-4c36-bdf4-c3b7b4a685e0",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "b5adbb2e-6695-449e-8020-fcc29631deb5",
+    "qty": 20000
+  },
+  {
+    "id": "c89b56d6-f30a-4c00-8317-aa9b7fc85bc0",
+    "pickingItemId": "e2ebf66b-8a8b-4547-b446-5e475ce03fc2",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "6b7c2e6a-8f65-41ac-9ff5-2456384354f6",
+    "qty": 10000
+  },
+  {
+    "id": "cba2c94d-eee4-4ab0-af5b-b220f4356860",
+    "pickingItemId": "faf7b0a4-c920-4b57-9cf7-b439e00546b4",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "6faa2a5b-60e4-4925-ba24-9911c0895bf9",
+    "qty": 80000
+  },
+  {
+    "id": "cc50e589-7ce3-4d3f-b065-1146f9a17d9f",
+    "pickingItemId": "dd4d8b64-d8b8-4163-bcaa-9b639c1a5801",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "3c887c28-1826-44a3-8983-0876c8f4170d",
+    "qty": 260000
+  },
+  {
+    "id": "d0c49ade-d529-4fd1-b500-370e02553a22",
+    "pickingItemId": "71fffc6e-ced4-47b2-a7db-ea5d70fe71b9",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "69383e6d-6c72-4e2a-a109-948026d7016e",
+    "qty": 30000
+  },
+  {
+    "id": "d20f3836-8353-4cdc-a238-034556216d14",
+    "pickingItemId": "88eac7b8-2125-478c-b972-075fe8fe1dd4",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "2f7466c6-6d0d-4bb8-942e-f44767fad3b4",
+    "qty": 100000
+  },
+  {
+    "id": "d4d6051d-4f9f-49b1-87b3-a3731dd6111e",
+    "pickingItemId": "cd1c5712-e9f2-4be5-8104-b93196913540",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "19285ce7-5b88-4348-99d9-9c76096f0244",
+    "qty": 125000
+  },
+  {
+    "id": "d860966b-b688-4780-8621-d341d05a806e",
+    "pickingItemId": "1bc48297-7e8f-4b03-b2fc-5360cfadb99b",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "ecca315b-042c-438a-b04c-dc425719ebcd",
+    "qty": 20000
+  },
+  {
+    "id": "dbc61158-41ee-4055-995e-82900c575f3a",
+    "pickingItemId": "c5f59ef9-8609-44fc-ae44-3ae08bcb7ac5",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "58b9e010-5bef-48c2-855e-ffce34368985",
+    "qty": 5000
+  },
+  {
+    "id": "de43a2d8-a5dc-4079-9593-18b24500978c",
+    "pickingItemId": "71fffc6e-ced4-47b2-a7db-ea5d70fe71b9",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "da17d34e-1ab3-418e-bf4c-5d2f9528e207",
+    "qty": 30000
+  },
+  {
+    "id": "ded86033-85fa-4c32-8775-f749c1b44870",
+    "pickingItemId": "81235f85-ffd8-4d8e-ac61-52492534abc1",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "040c4a92-0fc2-437f-aa52-ec436d0e6ebe",
+    "qty": 300000
+  },
+  {
+    "id": "e20a579c-7d4c-465c-a192-0323f9b8a7dd",
+    "pickingItemId": "e4f680a0-105f-474e-9b70-bae79b14ef63",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "a7654f03-73b3-41d3-98de-46c56630d568",
+    "qty": 10000
+  },
+  {
+    "id": "e2344b83-d90e-45e9-92be-543f33bf9b26",
+    "pickingItemId": "938d3740-bac9-43f7-8a8d-139c37ff4d54",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "c09790b0-c119-42c7-931d-79d1d9619f0b",
+    "qty": 50000
+  },
+  {
+    "id": "e7392033-2b04-4897-a088-516c7b062b7c",
+    "pickingItemId": "a23ec1c1-5331-401f-845f-0a8c64008b0b",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "46e4d9dd-d199-4f0c-b677-85298c8ceec2",
+    "qty": 10000
+  },
+  {
+    "id": "e9d32803-43f3-4133-be2f-0ede2899accc",
+    "pickingItemId": "b8c6ec7b-dfb4-4ea4-b4fa-ca3f5bf3f25d",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "035f2194-95e1-4d15-948a-96ae44b33a16",
+    "qty": 190000
+  },
+  {
+    "id": "ed29b294-24a3-434c-b9dc-77ffc46f6745",
+    "pickingItemId": "938d3740-bac9-43f7-8a8d-139c37ff4d54",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "0df68e5b-7609-49a4-af81-0b86b3854003",
+    "qty": 20000
+  },
+  {
+    "id": "ee09bb6d-4391-448d-956a-12493b42ccf1",
+    "pickingItemId": "d300eb93-309b-414d-a28b-a2d6418f41e6",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "32a581b1-e68e-484a-aef3-559b78c8e361",
+    "qty": 180000
+  },
+  {
+    "id": "f332e28c-82f0-4c67-b367-cfcd85b31995",
+    "pickingItemId": "e3bb05d9-2273-4704-9c7a-5eb77db0aa5d",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "30932d0b-be5b-45cb-b3b0-781efd066c6e",
+    "qty": 10000
+  },
+  {
+    "id": "f472c345-11e3-47cc-8192-289c53ab7951",
+    "pickingItemId": "7200eda8-cf21-4ed6-b970-70f254ff3506",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "3c887c28-1826-44a3-8983-0876c8f4170d",
+    "qty": 90000
+  },
+  {
+    "id": "f90f431c-27fb-4c77-ac16-c590edd9eaeb",
+    "pickingItemId": "58aa7122-6233-4339-97d1-f2e598de2c12",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "07e3210b-3012-4a71-8937-42bb2427c2b1",
+    "qty": 192000
+  },
+  {
+    "id": "f9cf3b24-2082-46ff-9f27-66152fe159fd",
+    "pickingItemId": "9e2f98c2-2c6f-45bb-9800-a85e668f5a15",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "e89dde6c-6b65-4ebd-838e-b81bc3cd5c4e",
+    "qty": 100000
+  },
+  {
+    "id": "fb354ed1-284e-4733-95b2-b84c050b03ff",
+    "pickingItemId": "88eac7b8-2125-478c-b972-075fe8fe1dd4",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "69872723-b064-4b3b-b839-fc13dde17668",
+    "qty": 200000
+  },
+  {
+    "id": "fb395b21-991d-4107-b085-f6d9e804f367",
+    "pickingItemId": "e2ebf66b-8a8b-4547-b446-5e475ce03fc2",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "976a1b54-e6ca-4b92-9fba-be750fdf4799",
+    "qty": 20000
+  },
+  {
+    "id": "ffe8b95b-1e0d-4c08-a588-959a4096b0f9",
+    "pickingItemId": "28ae7148-70a2-4797-aec5-8672dc78570f",
+    "inventoryLotId": null,
+    "receivingInvoiceItemId": "e796c7c5-575a-4074-988a-fff7b4356901",
+    "qty": 20000
   }
+] as const;
+
+  await db.insert(schema.allocations).values([...allocationRecords]);
 }
 
 // Demo only: passwords are stored as-is so the local demo can compare them directly.
