@@ -37,8 +37,8 @@ fun LoginScreen(
     viewModel: LoginViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsState()
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("operator") }
+    var password by remember { mutableStateOf("DocPal2026!") }
 
     LaunchedEffect(state) {
         if (state is LoginViewModel.LoginUiState.Success) {
