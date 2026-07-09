@@ -2,7 +2,6 @@ package com.docpal.warehouse.data.local.dao
 
 import androidx.room.Dao
 import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import com.docpal.warehouse.data.local.entity.UserEntity
 
@@ -15,7 +14,7 @@ interface UserDao {
     @Query("SELECT COUNT(*) FROM users")
     suspend fun count(): Int
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert
     suspend fun insert(user: UserEntity)
 
     @Query("DELETE FROM users")

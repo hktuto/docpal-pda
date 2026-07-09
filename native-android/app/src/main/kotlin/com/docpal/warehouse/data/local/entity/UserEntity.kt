@@ -23,7 +23,7 @@ data class UserEntity(
     @ColumnInfo(name = "display_name")
     val displayName: String,
 
-    @ColumnInfo(name = "role")
+    @ColumnInfo(name = "role", defaultValue = "operator")
     val role: String,
 
     @ColumnInfo(name = "created_at")
