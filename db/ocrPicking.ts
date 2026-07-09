@@ -23,33 +23,55 @@ export async function findReceivingCandidates(
     throw new I18nError("qty_must_be_positive_integer");
   }
 
-  return db
+  const t0 = performance.now();
+  const result = await db
     .execute(sql`
-      WITH normalized AS (
-        SELECT
-          rii.id AS receiving_invoice_item_id,
-          p.id AS part_id,
-          p.part_no,
-          REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REGEXP_REPLACE(UPPER(TRIM(rii.date_code)), '\s+', ' ', 'g'), 'O', '0'), 'I', '1'), 'L', '1'), 'Z', '2'), 'S', '5') AS date_code,
-          REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REGEXP_REPLACE(UPPER(TRIM(rii.lot_code)), '\s+', ' ', 'g'), 'O', '0'), 'I', '1'), 'L', '1'), 'Z', '2'), 'S', '5') AS lot_code,
-          REGEXP_REPLACE(UPPER(TRIM(rii.coo)), '\s+', ' ', 'g') AS coo,
-          REGEXP_REPLACE(UPPER(TRIM(rii.cow)), '\s+', ' ', 'g') AS cow,
-          (${availableReceivingQtySql}) AS available_qty
+      WITH order_item_ids AS (
+        SELECT rii.id AS receiving_invoice_item_id
         FROM receiving_orders ro
         JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
         JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
         JOIN parts p ON p.id = rii.part_id
-        LEFT JOIN (${allocationsCte()}) alloc ON alloc.receiving_invoice_item_id = rii.id
         WHERE ro.id = ${receivingOrderId}
           AND ro.status = 'in_hand'
-          AND ${availableReceivingQtySql} >= ${qty}
+          AND REGEXP_REPLACE(UPPER(TRIM(p.part_no)), '\s+', ' ', 'g') = ${parsed.partNo}
+      ),
+      order_allocations AS (
+        SELECT
+          a.receiving_invoice_item_id,
+          SUM(a.qty) AS allocated_qty
+        FROM allocations a
+        WHERE a.receiving_invoice_item_id IN (SELECT receiving_invoice_item_id FROM order_item_ids)
+        GROUP BY a.receiving_invoice_item_id
+      ),
+      order_unboxed AS (
+        SELECT
+          pas.receiving_invoice_item_id,
+          SUM(pas.qty) AS unboxed_scanned_qty
+        FROM put_away_scans pas
+        WHERE pas.shelf_box_id IS NULL
+          AND pas.receiving_invoice_item_id IN (SELECT receiving_invoice_item_id FROM order_item_ids)
+        GROUP BY pas.receiving_invoice_item_id
       )
-      SELECT * FROM normalized
-      WHERE REGEXP_REPLACE(UPPER(TRIM(part_no)), '\s+', ' ', 'g') = ${parsed.partNo}
-        AND (date_code IS NULL OR date_code = '' OR date_code IS NOT DISTINCT FROM COALESCE(${parsed.dateCode}, date_code))
-        AND (lot_code IS NULL OR lot_code = '' OR lot_code IS NOT DISTINCT FROM COALESCE(${parsed.lotCode}, lot_code))
-        AND (coo IS NULL OR coo = '' OR coo IS NOT DISTINCT FROM COALESCE(${parsed.coo}, coo))
-        AND (cow IS NULL OR cow = '' OR cow IS NOT DISTINCT FROM COALESCE(${parsed.cow}, cow))
+      SELECT
+        rii.id AS receiving_invoice_item_id,
+        p.id AS part_id,
+        p.part_no,
+        REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REGEXP_REPLACE(UPPER(TRIM(rii.date_code)), '\s+', ' ', 'g'), 'O', '0'), 'I', '1'), 'L', '1'), 'Z', '2'), 'S', '5') AS date_code,
+        REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REGEXP_REPLACE(UPPER(TRIM(rii.lot_code)), '\s+', ' ', 'g'), 'O', '0'), 'I', '1'), 'L', '1'), 'Z', '2'), 'S', '5') AS lot_code,
+        REGEXP_REPLACE(UPPER(TRIM(rii.coo)), '\s+', ' ', 'g') AS coo,
+        REGEXP_REPLACE(UPPER(TRIM(rii.cow)), '\s+', ' ', 'g') AS cow,
+        (rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(alloc.allocated_qty, 0) - COALESCE(unboxed.unboxed_scanned_qty, 0)) AS available_qty
+      FROM receiving_orders ro
+      JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
+      JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
+      JOIN parts p ON p.id = rii.part_id
+      LEFT JOIN order_allocations alloc ON alloc.receiving_invoice_item_id = rii.id
+      LEFT JOIN order_unboxed unboxed ON unboxed.receiving_invoice_item_id = rii.id
+      WHERE ro.id = ${receivingOrderId}
+        AND ro.status = 'in_hand'
+        AND REGEXP_REPLACE(UPPER(TRIM(p.part_no)), '\s+', ' ', 'g') = ${parsed.partNo}
+        AND (rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(alloc.allocated_qty, 0) - COALESCE(unboxed.unboxed_scanned_qty, 0)) >= ${qty}
       ORDER BY date_code, lot_code
     `)
     .then((r) =>
@@ -64,6 +86,8 @@ export async function findReceivingCandidates(
         availableQty: Number(row.available_qty),
       }))
     );
+  console.log('[SCAN-TIME] findReceivingCandidates query', (performance.now() - t0).toFixed(1), 'ms');
+  return result;
 }
 
 export async function findPickingCandidates(
@@ -76,7 +100,8 @@ export async function findPickingCandidates(
     throw new I18nError("qty_must_be_positive_integer");
   }
 
-  return db
+  const t0 = performance.now();
+  const result = await db
     .execute(sql`
       SELECT DISTINCT
         po.id AS picking_order_id,
@@ -86,21 +111,20 @@ export async function findPickingCandidates(
         pi.qty AS required_qty,
         pi.picked_qty,
         (pi.qty - pi.picked_qty) AS remaining_qty
-      FROM picking_orders po
-      JOIN picking_items pi ON pi.picking_order_id = po.id
-      WHERE po.id IN (
-        SELECT DISTINCT po2.id
-        FROM receiving_orders ro
-        JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
-        JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
-        JOIN allocations a ON a.receiving_invoice_item_id = rii.id
-        JOIN picking_items pi2 ON pi2.id = a.picking_item_id
-        JOIN picking_orders po2 ON po2.id = pi2.picking_order_id
-        WHERE ro.id = ${receivingOrderId}
-      )
-        AND pi.part_id = ${partId}
+      FROM picking_items pi
+      JOIN picking_orders po ON po.id = pi.picking_order_id
+      WHERE pi.part_id = ${partId}
         AND po.status != 'finished'
         AND (pi.qty - pi.picked_qty) > 0
+        AND EXISTS (
+          SELECT 1
+          FROM picking_items pi2
+          JOIN allocations a ON a.picking_item_id = pi2.id
+          JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
+          JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+          WHERE pi2.picking_order_id = po.id
+            AND ri.receiving_order_id = ${receivingOrderId}
+        )
       ORDER BY po.ref_no
     `)
     .then((r) =>
@@ -114,6 +138,8 @@ export async function findPickingCandidates(
         remainingQty: Number(row.remaining_qty),
       }))
     );
+  console.log('[SCAN-TIME] findPickingCandidates query', (performance.now() - t0).toFixed(1), 'ms');
+  return result;
 }
 
 export async function applyOcrPick(

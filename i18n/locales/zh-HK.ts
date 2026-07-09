@@ -181,7 +181,8 @@ export default {
       finishPicking: "完成揀貨",
       measuring: "測量",
       measuringTaskCreated: "測量任務已建立",
-      goToMeasuring: "前往測量"
+      goToMeasuring: "前往測量",
+      noMatchingAllocation: "掃描的項目沒有匹配的分配"
     },
     itemsSection: {
       title: "項目",

@@ -1,9 +1,12 @@
 <template>
   <h2 class="section-title">{{ $t('receiving.itemsTab.title') }}</h2>
   <div v-for="invoice in order.invoices" :key="invoice.id" style="margin-bottom: 1.5rem;">
-    <h3 style="margin-bottom: 0.5rem; color: var(--muted);">
-      {{ $t('common.invoiceTitle', { no: invoice.invoiceNo }) }}
-    </h3>
+      <div class="sticky_header">
+
+        <h3 style="margin-bottom: 0.5rem; color: var(--muted);">
+        {{ $t('common.invoiceTitle', { no: invoice.invoiceNo }) }}
+        </h3>
+      </div>
 
     <div
       v-for="item in invoice.items"
@@ -13,20 +16,30 @@
       <DetailRow :label="$t('receiving.itemsTab.part')">
         <span class="card__title">{{ item.part?.partNo }}</span>
       </DetailRow>
-      <DetailRow :label="$t('receiving.itemsTab.poLine')" :value="`${item.poNo} / ${item.poLine}`" />
-      <DetailRow :label="$t('receiving.itemsTab.expected')" :value="item.qty" />
-      <DetailRow :label="$t('receiving.itemsTab.reserved')" :value="allocatedByItem[item.id] || 0" />
-      <DetailRow :label="$t('receiving.itemsTab.picked')" :value="item.pickedQty" />
-      <DetailRow :label="$t('receiving.itemsTab.putAway')" :value="item.putAwayQty" />
-      <DetailRow
-        :label="$t('receiving.itemsTab.available')"
-        :value="item.receivedQty - item.pickedQty - item.putAwayQty - (allocatedByItem[item.id] || 0)"
-      />
-      <DetailRow
-        :label="$t('receiving.itemsTab.dateLotCooCow')"
-        :value="`${item.dateCode} / ${item.lotCode} / ${item.coo} / ${item.cow}`"
-      />
 
+      <DetailRow :label="$t('receiving.itemsTab.expected')" :value="item.qty" />
+      <DetailRow :label="$t('receiving.itemsTab.expected')" :value="item.boxId" />
+      <template v-if="expanded">
+        <DetailRow :label="$t('receiving.itemsTab.poLine')" :value="`${item.poNo} / ${item.poLine}`" />
+        <DetailRow :label="$t('receiving.itemsTab.reserved')" :value="allocatedByItem[item.id] || 0" />
+        <DetailRow :label="$t('receiving.itemsTab.picked')" :value="item.pickedQty" />
+        <DetailRow :label="$t('receiving.itemsTab.putAway')" :value="item.putAwayQty" />
+        <DetailRow
+            :label="$t('receiving.itemsTab.available')"
+            :value="item.receivedQty - item.pickedQty - item.putAwayQty - (allocatedByItem[item.id] || 0)"
+        />
+        <DetailRow
+          :label="$t('receiving.itemsTab.dateLotCooCow')"
+          :value="`${item.dateCode} / ${item.lotCode} / ${item.coo} / ${item.cow}`"
+        />
+      </template>
+
+
+      <div class="toggleContainer">
+        <div  @click="toggle">
+            {{ expanded ? "▲" : "▼" }}
+        </div>
+      </div>
       <div v-if="order.status === 'pending' || order.status === 'in_hand'" style="margin-top: 0.75rem;">
         <template v-if="item.pickedQty > 0 || item.putAwayQty > 0">
           <p class="mismatch-locked">{{ $t('common.locked') }}</p>
@@ -89,6 +102,7 @@
           </button>
         </template>
       </div>
+
     </div>
   </div>
 </template>
@@ -98,6 +112,12 @@ import { DisplayReceivingItem, DisplayReceivingOrder } from "./types";
 
 const { t } = useI18n();
 const { currentUser } = useAuth();
+
+const expanded = ref(false)
+
+function toggle(){
+  expanded.value = !expanded.value
+}
 
 defineProps<{
   order: DisplayReceivingOrder;
@@ -134,6 +154,24 @@ function formatMismatchSummary(item: DisplayReceivingItem): string {
 </script>
 
 <style scoped>
+.sticky_header{
+    position: -webkit-sticky; /* For Safari */
+    position: sticky;
+    top: 61px;
+    z-index: 2;
+    background: var(--bg);
+    margin-inline: calc(1rem * -1);
+    padding-inline: 1rem;
+    padding-block: 0.22rem;
+}
+.card{
+    position: relative;
+}
+.toggleContainer{
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+}
 .mismatch-badge {
   display: inline-block;
   padding: 0.25rem 0.625rem;

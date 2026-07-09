@@ -11,6 +11,23 @@ import { useDb } from '~/composables/useDb';
 import { parseAndIdentify, parseQrCapture, type CandidateOptions, type OcrParseResult, type RawOcrCapture, type OcrBarcode, type ParsedFields } from '~/utils/parseOcrScan';
 import { getSuppliersWithQrTemplates } from '~/db/suppliers';
 import type { OcrInput } from './useMockOcr';
+import type { SupplierQrcodeTemplate } from '~/services/types';
+
+let supplierTemplateCache: SupplierQrcodeTemplate[] | null = null;
+let supplierTemplateCachePromise: Promise<SupplierQrcodeTemplate[]> | null = null;
+
+async function getCachedSuppliersWithQrTemplates(
+  db: ReturnType<typeof useDb>
+): Promise<SupplierQrcodeTemplate[]> {
+  if (supplierTemplateCache) return supplierTemplateCache;
+  if (!supplierTemplateCachePromise) {
+    supplierTemplateCachePromise = getSuppliersWithQrTemplates(db).then((templates) => {
+      supplierTemplateCache = templates;
+      return templates;
+    });
+  }
+  return supplierTemplateCachePromise;
+}
 
 function parseBarcodes(barcodesJson: string): RawOcrCapture['barcodes'] {
   try {
@@ -47,6 +64,14 @@ export type LabelScanResult =
   | { status: 'cancelled' }
   | { status: 'error'; message: string };
 
+export function buildRawCapture(value: string): LabelScanCapture {
+  return {
+    imagePath: '',
+    text: value,
+    barcodes: JSON.stringify([{ value, format: '4' }]),
+  };
+}
+
 export function useLabelScan() {
   const scanning = ref(false);
   const errorMessage = useErrorMessage();
@@ -57,27 +82,37 @@ export function useLabelScan() {
     capture: LabelScanCapture,
     context: ScanTaskContext
   ): Promise<LabelScanResult> {
+    const t0 = performance.now();
     const barcodes = parseBarcodes(capture.barcodes);
     let parsedResult: OcrParseResult;
 
     if (isQrOnlyCapture(capture, barcodes)) {
       const qrValue = barcodes[0]?.value ?? capture.text;
-      const suppliers = await getSuppliersWithQrTemplates(db);
+      console.log('[SCAN-TIME] fetching supplier QR templates...');
+      const t1 = performance.now();
+      const suppliers = await getCachedSuppliersWithQrTemplates(db);
+      console.log('[SCAN-TIME] getSuppliersWithQrTemplates', (performance.now() - t1).toFixed(1), 'ms');
+      const t2 = performance.now();
       parsedResult = parseQrCapture(qrValue, {
         supplierTemplates: suppliers,
         targets: context.targets ?? [],
         contextSupplierCode: context.supplierCode,
       });
+      console.log('[SCAN-TIME] parseQrCapture', (performance.now() - t2).toFixed(1), 'ms');
     } else {
+      const t1 = performance.now();
       parsedResult = parseAndIdentify(
         { text: capture.text, barcodes },
         context.targets ?? []
       );
+      console.log('[SCAN-TIME] parseAndIdentify', (performance.now() - t1).toFixed(1), 'ms');
     }
 
     const parsed = ocrResultToInput(parsedResult.parsed);
 
+    const t3 = performance.now();
     const matchResult = await runScanMatcher(context, parsed, matchers);
+    console.log('[SCAN-TIME] runScanMatcher', (performance.now() - t3).toFixed(1), 'ms');
 
     if (matchResult.type === 'error') {
       return { status: 'error', message: matchResult.message };
@@ -88,6 +123,7 @@ export function useLabelScan() {
       return { status: 'applied' };
     }
 
+    console.log('[SCAN-TIME] processCapture total', (performance.now() - t0).toFixed(1), 'ms');
     return {
       status: 'review',
       capture,
@@ -95,6 +131,25 @@ export function useLabelScan() {
       options: parsedResult.options,
       matchResult,
     };
+  }
+
+  async function parseRawValue(
+    rawValue: string,
+    supplierCode?: string
+  ): Promise<OcrParseResult> {
+    const capture = buildRawCapture(rawValue);
+    const barcodes = parseBarcodes(capture.barcodes);
+
+    if (isQrOnlyCapture(capture, barcodes)) {
+      const suppliers = await getCachedSuppliersWithQrTemplates(db);
+      return parseQrCapture(rawValue, {
+        supplierTemplates: suppliers,
+        targets: [],
+        contextSupplierCode: supplierCode,
+      });
+    }
+
+    return parseAndIdentify({ text: rawValue, barcodes }, []);
   }
 
   async function scan(context: ScanTaskContext): Promise<LabelScanResult> {
@@ -130,7 +185,7 @@ export function useLabelScan() {
     }
   }
 
-  return { scan, scanning };
+  return { scan, scanning, processCapture, parseRawValue };
 }
 
 export function ocrResultToInput(parsed: ParsedFields): OcrInput {

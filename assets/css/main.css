@@ -33,7 +33,9 @@ body {
     "Helvetica Neue", Arial, sans-serif;
   line-height: 1.5;
   -webkit-tap-highlight-color: transparent;
+  font-weight: 500;
 }
+
 
 .container {
   max-width: 960px;
@@ -387,15 +389,20 @@ input:focus {
 
 .detail-row {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
+  flex-flow: column nowrap;
+  justify-content: flex-start;
+  align-items: flex-start;
+  gap: 0.1rem;
   padding: 0.35rem 0;
   border-bottom: 1px solid var(--border);
+}
+.detail-row span:last-child {
+     font-size: 1.2rem;
 }
 
 .detail-row:last-child {
   border-bottom: none;
+
 }
 
 .detail-label {
@@ -403,6 +410,7 @@ input:focus {
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;
+
 }
 
 .lot {

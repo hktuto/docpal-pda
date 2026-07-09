@@ -100,7 +100,7 @@ describe('findReceivingCandidates empty-field wildcard', () => {
     expect(candidates[0].partNo).toBe('RK73B1JTTD181G');
   });
 
-  it('still requires coo/cow to match when the receiving item provides them', async () => {
+  it('ignores coo/cow mismatches when the receiving item provides them', async () => {
     const parsed: OcrParsedFields = {
       partNo: 'RK73B1JTTD181G',
       dateCode: '2544',
@@ -112,7 +112,8 @@ describe('findReceivingCandidates empty-field wildcard', () => {
 
     const candidates = await findReceivingCandidates(db, receivingOrderId, parsed);
 
-    expect(candidates).toHaveLength(0);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].partNo).toBe('RK73B1JTTD181G');
   });
 });
 

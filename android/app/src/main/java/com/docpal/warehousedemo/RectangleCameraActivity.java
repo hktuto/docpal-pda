@@ -7,15 +7,10 @@ import android.content.pm.PackageManager;
 import android.graphics.ImageFormat;
 import android.os.Bundle;
 import android.util.Log;
-import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.Surface;
-import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.Toast;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
 import androidx.activity.ComponentActivity;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -30,7 +25,6 @@ import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
 import androidx.core.content.ContextCompat;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.mlkit.vision.barcode.common.Barcode;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -65,7 +59,6 @@ public class RectangleCameraActivity extends ComponentActivity {
   private ImageButton cancelButton;
   private ImageButton captureButton;
   private ImageButton flashButton;
-  private EditText scannerInput;
   private ExecutorService analysisExecutor;
 
   private static boolean sTorchOn = true;
@@ -88,9 +81,6 @@ public class RectangleCameraActivity extends ComponentActivity {
   private volatile RectangleDetector.RectResult pendingTapRect = null;
   private boolean isLabelScan = false;
 
-  private static final int SCANNER_BUFFER_MAX_SIZE = 2048;
-  private final StringBuilder scannerBuffer = new StringBuilder();
-
   static {
     OpenCVLoader.initDebug();
   }
@@ -99,9 +89,6 @@ public class RectangleCameraActivity extends ComponentActivity {
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     setContentView(R.layout.activity_rectangle_camera);
-
-    scannerInput = findViewById(R.id.scannerInput);
-    scannerInput.requestFocus();
 
     String mode = getIntent().getStringExtra(EXTRA_MODE);
     if (mode == null) mode = MODE_DEFAULT;
@@ -142,7 +129,6 @@ public class RectangleCameraActivity extends ComponentActivity {
     if (captureMode != CaptureMode.NONE || imageCapture == null) {
       return;
     }
-    scannerBuffer.setLength(0);
     captureMode = CaptureMode.SHUTTER;
     captureButton.setEnabled(false);
     Toast.makeText(this, "Capturing…", Toast.LENGTH_SHORT).show();
@@ -196,7 +182,6 @@ public class RectangleCameraActivity extends ComponentActivity {
 
     for (RectangleTracker.TrackedRect tracked : currentTrackedRects) {
       if (RectangleCropper.isPointInPolygon(imagePoint.x, imagePoint.y, tracked.rect.points)) {
-        scannerBuffer.setLength(0);
         captureMode = CaptureMode.TAP_RECT;
         pendingTapRect = tracked.rect;
         takePicture();
@@ -404,72 +389,6 @@ public class RectangleCameraActivity extends ComponentActivity {
     captureMode = CaptureMode.NONE;
     pendingTapRect = null;
     runOnUiThread(() -> captureButton.setEnabled(true));
-  }
-
-  private void finishWithQrResult(String qrValue) {
-    Intent resultIntent = new Intent();
-    resultIntent.putExtra("imagePath", "");
-    resultIntent.putExtra("text", qrValue);
-
-    JSONArray barcodes = new JSONArray();
-    JSONObject barcode = new JSONObject();
-    try {
-      barcode.put("value", qrValue);
-      barcode.put("format", String.valueOf(Barcode.FORMAT_QR_CODE));
-    } catch (JSONException e) {
-      // Ignore serialization errors for individual fields.
-    }
-    barcodes.put(barcode);
-    resultIntent.putExtra("barcodes", barcodes.toString());
-
-    setResult(Activity.RESULT_OK, resultIntent);
-    finish();
-  }
-
-  @Override
-  public boolean dispatchKeyEvent(KeyEvent event) {
-    if (event.getRepeatCount() != 0) {
-      return super.dispatchKeyEvent(event);
-    }
-
-    int keyCode = event.getKeyCode();
-
-    if (keyCode == KeyEvent.KEYCODE_ENTER) {
-      if (event.getAction() != KeyEvent.ACTION_DOWN && event.getAction() != KeyEvent.ACTION_UP) {
-        return super.dispatchKeyEvent(event);
-      }
-      if (captureMode != CaptureMode.NONE || scannerBuffer.length() == 0) {
-        return super.dispatchKeyEvent(event);
-      }
-      if (event.getAction() == KeyEvent.ACTION_UP) {
-        String qrValue = scannerBuffer.toString();
-        scannerBuffer.setLength(0);
-        finishWithQrResult(qrValue);
-        return true;
-      }
-      return true;
-    }
-
-    if (event.getAction() != KeyEvent.ACTION_DOWN) {
-      return super.dispatchKeyEvent(event);
-    }
-
-    if (keyCode == KeyEvent.KEYCODE_DEL || keyCode == KeyEvent.KEYCODE_FORWARD_DEL) {
-      if (!scannerBuffer.isEmpty()) {
-        scannerBuffer.deleteCharAt(scannerBuffer.length() - 1);
-      }
-      return true;
-    }
-
-    int unicode = event.getUnicodeChar();
-    if (unicode >= 32 && unicode < 127) {
-      if (captureMode == CaptureMode.NONE && scannerBuffer.length() < SCANNER_BUFFER_MAX_SIZE) {
-        scannerBuffer.append((char) unicode);
-      }
-      return true;
-    }
-
-    return super.dispatchKeyEvent(event);
   }
 
   private void startCamera() {

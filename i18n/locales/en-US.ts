@@ -181,7 +181,8 @@ export default {
       finishPicking: "Finish picking",
       measuring: "Measuring",
       measuringTaskCreated: "Measuring task created",
-      goToMeasuring: "Go to measuring"
+      goToMeasuring: "Go to measuring",
+      noMatchingAllocation: "No matching allocation for scanned item"
     },
     itemsSection: {
       title: "Items",

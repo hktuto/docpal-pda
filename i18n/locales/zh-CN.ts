@@ -181,7 +181,8 @@ export default {
       finishPicking: "完成拣货",
       measuring: "测量",
       measuringTaskCreated: "测量任务已创建",
-      goToMeasuring: "前往测量"
+      goToMeasuring: "前往测量",
+      noMatchingAllocation: "扫描的物料没有匹配的分配"
     },
     itemsSection: {
       title: "明细",

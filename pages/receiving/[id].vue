@@ -126,6 +126,8 @@ import ReceivingPickingTab from "~/components/receiving/ReceivingPickingTab.vue"
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useLabelScanReview } from "~/composables/useLabelScanReview";
+import { useLabelScan, buildRawCapture } from "~/composables/useLabelScan";
+import { useHardwareScanner } from "~/composables/useHardwareScanner";
 import { useWarehouse } from "~/composables/useWarehouse";
 import { useToast } from "~/composables/useToast";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
@@ -164,6 +166,28 @@ const saving = ref<Record<string, boolean>>({});
 const confirming = ref(false);
 const { scan, scanning, review, reviewOpen, onApplied } = useLabelScanReview({
   onApplied: load,
+});
+const { processCapture } = useLabelScan();
+
+useHardwareScanner({
+  enabled: () => !reviewOpen.value,
+  onScan: async (rawValue: string) => {
+    const result = await processCapture(buildRawCapture(rawValue), {
+      task: "receiving",
+      receivingOrderId: orderId,
+      targets: scanTargets.value,
+      confirmSingleMatch: true,
+      supplierCode: order.value?.supplier?.code,
+    });
+    if (result.status === "error") {
+      showToast(result.message);
+    } else if (result.status === "applied") {
+      await onApplied();
+    } else if (result.status === "review") {
+      review.value = result;
+      reviewOpen.value = true;
+    }
+  },
 });
 
 async function onRetake() {

@@ -94,6 +94,9 @@ import { useToast } from "~/composables/useToast";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useLabelScanReview } from "~/composables/useLabelScanReview";
+import { useLabelScan, buildRawCapture, ocrResultToInput } from "~/composables/useLabelScan";
+import { useHardwareScanner } from "~/composables/useHardwareScanner";
+import { normalize } from "~/composables/useMockOcr";
 import { useErrorMessage } from "~/composables/errorMessage";
 import { useWarehouse } from "~/composables/useWarehouse";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
@@ -138,7 +141,51 @@ const boxSelections = ref<Record<string, string>>({});
 const { scan, scanning, review, reviewOpen, onApplied } = useLabelScanReview({
   onApplied: load,
 });
+const { processCapture, parseRawValue } = useLabelScan();
 const { showToast } = useToast();
+
+function findMatchingAllocation(parsed: { partNo: string | number; qty: string | number }) {
+  if (!order.value) return null;
+  const scannedPartNo = normalize(String(parsed.partNo ?? ""));
+  const scannedQty = typeof parsed.qty === "number" ? parsed.qty : Number(parsed.qty);
+  if (!scannedPartNo || !Number.isInteger(scannedQty) || scannedQty <= 0) return null;
+
+  for (const item of order.value.items) {
+    const itemPartNo = normalize(item.part?.partNo ?? "");
+    if (itemPartNo !== scannedPartNo) continue;
+    for (const allocation of item.allocations ?? []) {
+      if (allocation.qty > 0 && scannedQty <= allocation.qty) {
+        return allocation;
+      }
+    }
+  }
+  return null;
+}
+
+useHardwareScanner({
+  enabled: () => !reviewOpen.value,
+  onScan: async (rawValue: string) => {
+    if (!order.value) return;
+    const parsedResult = await parseRawValue(rawValue, order.value.supplier?.code);
+    const parsed = ocrResultToInput(parsedResult.parsed);
+    const allocation = findMatchingAllocation(parsed);
+    if (!allocation) {
+      showToast(t("picking.detail.noMatchingAllocation"));
+      return;
+    }
+    const result = await processCapture(buildRawCapture(rawValue), {
+      task: "picking",
+      allocation,
+      targets: [allocation.pickingItem?.part?.partNo ?? ""],
+    });
+    if (result.status === "error") {
+      showToast(result.message);
+    } else if (result.status === "applied") {
+      await onApplied();
+    }
+  },
+});
+
 const allItemsFullyBoxed = computed(
   () => order.value?.items?.every((i) => i.pickedQty >= i.qty) ?? false
 );

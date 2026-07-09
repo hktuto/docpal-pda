@@ -120,20 +120,26 @@ export function useScanMatchers(): ScanMatchers {
     parsed: OcrInput
   ): Promise<ScanMatchResult> {
     try {
+      const t0 = performance.now();
       const user = currentUser.value;
       if (!user?.id) return error('operator_not_signed_in');
 
       const p = parseManual(parsed);
+      const t1 = performance.now();
       const receivingCandidates = await findReceivingCandidates(db, receivingOrderId, p);
+      console.log('[SCAN-TIME] findReceivingCandidates', (performance.now() - t1).toFixed(1), 'ms');
       if (receivingCandidates.length === 0) return { type: 'none' };
       const receiving = receivingCandidates[0];
       if (p.qty > receiving.availableQty) return { type: 'none' };
 
+      const t2 = performance.now();
       let pickingCandidates = await findPickingCandidates(db, receivingOrderId, receiving.partId, p.qty);
+      console.log('[SCAN-TIME] findPickingCandidates', (performance.now() - t2).toFixed(1), 'ms');
       if (pickingItemId) {
         pickingCandidates = pickingCandidates.filter((c) => c.pickingItemId === pickingItemId);
       }
       if (pickingCandidates.length === 0) return { type: 'none' };
+      console.log('[SCAN-TIME] matchReceiving total', (performance.now() - t0).toFixed(1), 'ms');
 
       const applyFor = (picking: PickingCandidate) => async () => {
         const actorId = currentUser.value?.id;
