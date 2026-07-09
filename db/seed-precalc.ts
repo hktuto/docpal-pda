@@ -6651,515 +6651,515 @@ const pickingItemRecords = [
 // Pre-calculated allocations (73)
 const allocationRecords = [
   {
-    "id": "0218ac25-c96e-4d1a-89e3-54beb64e8cdd",
-    "pickingItemId": "938d3740-bac9-43f7-8a8d-139c37ff4d54",
-    "inventoryLotId": null,
+    id: "0218ac25-c96e-4d1a-89e3-54beb64e8cdd",
+    pickingItemId: "938d3740-bac9-43f7-8a8d-139c37ff4d54",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 1240000
+    qty: 1240000
   },
   {
-    "id": "03f1aec3-2fb4-4764-9bfe-d6444a55e10f",
-    "pickingItemId": "88eac7b8-2125-478c-b972-075fe8fe1dd4",
-    "inventoryLotId": null,
+    id: "03f1aec3-2fb4-4764-9bfe-d6444a55e10f",
+    pickingItemId: "88eac7b8-2125-478c-b972-075fe8fe1dd4",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 1200000
+    qty: 1200000
   },
   {
-    "id": "070541fc-f1ff-42ed-b0e4-c1d48e033baf",
-    "pickingItemId": "9669148b-1115-413c-a0e0-af23a8513794",
-    "inventoryLotId": null,
+    id: "070541fc-f1ff-42ed-b0e4-c1d48e033baf",
+    pickingItemId: "9669148b-1115-413c-a0e0-af23a8513794",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 290000
+    qty: 290000
   },
   {
-    "id": "070dbfc4-1343-47da-9a93-e4a7dda6ce50",
-    "pickingItemId": "7de15506-0830-4ecc-9f8a-d71f8c765efb",
-    "inventoryLotId": null,
+    id: "070dbfc4-1343-47da-9a93-e4a7dda6ce50",
+    pickingItemId: "7de15506-0830-4ecc-9f8a-d71f8c765efb",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 390000
+    qty: 390000
   },
   {
-    "id": "094815f1-0c7d-4a87-9aa2-0f9ea3b14619",
-    "pickingItemId": "65618c3d-8434-4c5f-bd4b-7659bb62e993",
-    "inventoryLotId": null,
+    id: "094815f1-0c7d-4a87-9aa2-0f9ea3b14619",
+    pickingItemId: "65618c3d-8434-4c5f-bd4b-7659bb62e993",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 880000
+    qty: 880000
   },
   {
-    "id": "0bd81c6f-f13d-4560-b218-bc7a7ece0459",
-    "pickingItemId": "7e04dae3-75e5-4a14-94ba-8a2e41d211f5",
-    "inventoryLotId": null,
+    id: "0bd81c6f-f13d-4560-b218-bc7a7ece0459",
+    pickingItemId: "7e04dae3-75e5-4a14-94ba-8a2e41d211f5",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 30000
+    qty: 30000
   },
   {
-    "id": "11c685cc-de44-49a2-8a54-589a00e5d599",
-    "pickingItemId": "a5dd5259-facf-4807-8861-d07bb58ac204",
-    "inventoryLotId": null,
+    id: "11c685cc-de44-49a2-8a54-589a00e5d599",
+    pickingItemId: "a5dd5259-facf-4807-8861-d07bb58ac204",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 70000
+    qty: 70000
   },
   {
-    "id": "12bca062-170d-4f66-b807-47a9fb175ed3",
-    "pickingItemId": "b8c6ec7b-dfb4-4ea4-b4fa-ca3f5bf3f25d",
-    "inventoryLotId": null,
+    id: "12bca062-170d-4f66-b807-47a9fb175ed3",
+    pickingItemId: "b8c6ec7b-dfb4-4ea4-b4fa-ca3f5bf3f25d",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 790000
+    qty: 790000
   },
   {
-    "id": "18226b8c-d63c-4fcb-aba6-b377215facca",
-    "pickingItemId": "94e3cb44-862d-4892-8b85-76ffec460def",
-    "inventoryLotId": null,
+    id: "18226b8c-d63c-4fcb-aba6-b377215facca",
+    pickingItemId: "94e3cb44-862d-4892-8b85-76ffec460def",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 70000
+    qty: 70000
   },
   {
-    "id": "1d1f8c2f-def5-4471-ae5a-603e4ebbbc1d",
-    "pickingItemId": "fc99ea08-7bc5-49de-97bc-383ab9bd7315",
-    "inventoryLotId": null,
+    id: "1d1f8c2f-def5-4471-ae5a-603e4ebbbc1d",
+    pickingItemId: "fc99ea08-7bc5-49de-97bc-383ab9bd7315",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 10000
+    qty: 10000
   },
   {
-    "id": "1dd866f2-d699-48cf-863f-4563a5f6f326",
-    "pickingItemId": "6225128e-9317-455d-8935-ff9366f9dfad",
-    "inventoryLotId": null,
+    id: "1dd866f2-d699-48cf-863f-4563a5f6f326",
+    pickingItemId: "6225128e-9317-455d-8935-ff9366f9dfad",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 5000
+    qty: 5000
   },
   {
-    "id": "1df99faa-e0ed-473d-bd4b-2ebb6bf9dcad",
-    "pickingItemId": "8fc3497f-b337-4b28-97ff-8fcdd4608e81",
-    "inventoryLotId": null,
+    id: "1df99faa-e0ed-473d-bd4b-2ebb6bf9dcad",
+    pickingItemId: "8fc3497f-b337-4b28-97ff-8fcdd4608e81",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 20000
+    qty: 20000
   },
   {
-    "id": "1f905ad3-2291-4e13-967d-20e91e19b2e8",
-    "pickingItemId": "c8a5ec63-d003-4ead-a0df-a0c97838b630",
-    "inventoryLotId": null,
+    id: "1f905ad3-2291-4e13-967d-20e91e19b2e8",
+    pickingItemId: "c8a5ec63-d003-4ead-a0df-a0c97838b630",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 10000
+    qty: 10000
   },
   {
-    "id": "2140d089-076e-4724-986a-05774f57be4f",
-    "pickingItemId": "51fc4087-b398-420e-af7d-a1d06256b71e",
-    "inventoryLotId": null,
+    id: "2140d089-076e-4724-986a-05774f57be4f",
+    pickingItemId: "51fc4087-b398-420e-af7d-a1d06256b71e",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 45000
+    qty: 45000
   },
   {
-    "id": "25e2e337-e7ac-46d5-81b3-3d4654ab5d41",
-    "pickingItemId": "978422e0-821f-4c2b-9bab-1cd0049e28e3",
-    "inventoryLotId": null,
+    id: "25e2e337-e7ac-46d5-81b3-3d4654ab5d41",
+    pickingItemId: "978422e0-821f-4c2b-9bab-1cd0049e28e3",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 10000
+    qty: 10000
   },
   {
-    "id": "25f07b09-4725-417b-a6c8-58a0ea232afb",
-    "pickingItemId": "2ac437d9-cf7c-4b74-b9ca-03b64c0b2cf8",
-    "inventoryLotId": null,
+    id: "25f07b09-4725-417b-a6c8-58a0ea232afb",
+    pickingItemId: "2ac437d9-cf7c-4b74-b9ca-03b64c0b2cf8",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 35000
+    qty: 35000
   },
   {
-    "id": "263e8fee-6f2b-4be5-87c3-3043d909abaa",
-    "pickingItemId": "729dbb95-ff0f-4207-b45c-3f07e50e0d7d",
-    "inventoryLotId": null,
+    id: "263e8fee-6f2b-4be5-87c3-3043d909abaa",
+    pickingItemId: "729dbb95-ff0f-4207-b45c-3f07e50e0d7d",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 440000
+    qty: 440000
   },
   {
-    "id": "26dfeadf-427c-4059-a7b6-deab3f1314ea",
-    "pickingItemId": "96251357-ebec-4151-8a7d-bb23781be27c",
-    "inventoryLotId": null,
+    id: "26dfeadf-427c-4059-a7b6-deab3f1314ea",
+    pickingItemId: "96251357-ebec-4151-8a7d-bb23781be27c",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 20000
+    qty: 20000
   },
   {
-    "id": "2b57a38d-725b-4dc3-a905-d6e810f6199c",
-    "pickingItemId": "1bc48297-7e8f-4b03-b2fc-5360cfadb99b",
-    "inventoryLotId": null,
+    id: "2b57a38d-725b-4dc3-a905-d6e810f6199c",
+    pickingItemId: "1bc48297-7e8f-4b03-b2fc-5360cfadb99b",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 50000
+    qty: 50000
   },
   {
-    "id": "2bc10b31-9218-4bc8-b0e9-220e1bdc45ca",
-    "pickingItemId": "845071ca-afeb-4c68-95c3-d45b33b1ee5d",
-    "inventoryLotId": null,
+    id: "2bc10b31-9218-4bc8-b0e9-220e1bdc45ca",
+    pickingItemId: "845071ca-afeb-4c68-95c3-d45b33b1ee5d",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 120000
+    qty: 120000
   },
   {
-    "id": "2cac6e3c-afdc-4090-9c9a-afd77115cdb4",
-    "pickingItemId": "511ab905-ccd7-4ac7-9556-7bbfddaee8f3",
-    "inventoryLotId": null,
+    id: "2cac6e3c-afdc-4090-9c9a-afd77115cdb4",
+    pickingItemId: "511ab905-ccd7-4ac7-9556-7bbfddaee8f3",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 400000
+    qty: 400000
   },
   {
-    "id": "2f1c8ad8-425f-4f05-8e35-d5577c5baccf",
-    "pickingItemId": "91db2583-e3a7-4c7f-a24f-4a8275f28c87",
-    "inventoryLotId": null,
+    id: "2f1c8ad8-425f-4f05-8e35-d5577c5baccf",
+    pickingItemId: "91db2583-e3a7-4c7f-a24f-4a8275f28c87",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 170000
+    qty: 170000
   },
   {
-    "id": "30aec91d-c010-42a3-914e-318decc76713",
-    "pickingItemId": "dd4d8b64-d8b8-4163-bcaa-9b639c1a5801",
-    "inventoryLotId": null,
+    id: "30aec91d-c010-42a3-914e-318decc76713",
+    pickingItemId: "dd4d8b64-d8b8-4163-bcaa-9b639c1a5801",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 350000
+    qty: 350000
   },
   {
-    "id": "358d8b74-fae4-4742-b325-338f8cbafe70",
-    "pickingItemId": "aff7fc72-a07d-45b9-895e-346277ad5a1b",
-    "inventoryLotId": null,
+    id: "358d8b74-fae4-4742-b325-338f8cbafe70",
+    pickingItemId: "aff7fc72-a07d-45b9-895e-346277ad5a1b",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 5000
+    qty: 5000
   },
   {
-    "id": "374f6014-7bec-4f23-8a43-ed981364485e",
-    "pickingItemId": "07c1c762-b044-4420-b4fa-d2300de72897",
-    "inventoryLotId": null,
+    id: "374f6014-7bec-4f23-8a43-ed981364485e",
+    pickingItemId: "07c1c762-b044-4420-b4fa-d2300de72897",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 15000
+    qty: 15000
   },
   {
-    "id": "387d72fc-1eee-40aa-ad24-142a70bddc62",
-    "pickingItemId": "45774eca-7435-4c0a-aaa6-753e69848f91",
-    "inventoryLotId": null,
+    id: "387d72fc-1eee-40aa-ad24-142a70bddc62",
+    pickingItemId: "45774eca-7435-4c0a-aaa6-753e69848f91",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 20000
+    qty: 20000
   },
   {
-    "id": "392aaf54-5dfe-4cb5-8a04-151578bc6b4b",
-    "pickingItemId": "9e2f98c2-2c6f-45bb-9800-a85e668f5a15",
-    "inventoryLotId": null,
+    id: "392aaf54-5dfe-4cb5-8a04-151578bc6b4b",
+    pickingItemId: "9e2f98c2-2c6f-45bb-9800-a85e668f5a15",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 300000
+    qty: 300000
   },
   {
-    "id": "3a315caf-fa01-408e-b370-faa2f38cc23a",
-    "pickingItemId": "7b49f885-47da-4190-b1f8-6dbb1db430a7",
-    "inventoryLotId": null,
+    id: "3a315caf-fa01-408e-b370-faa2f38cc23a",
+    pickingItemId: "7b49f885-47da-4190-b1f8-6dbb1db430a7",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 20000
+    qty: 20000
   },
   {
-    "id": "3d108a79-f0d9-4645-b2ee-7cce80016875",
-    "pickingItemId": "38706988-4a86-4de8-89ff-26555f3d50a0",
-    "inventoryLotId": null,
+    id: "3d108a79-f0d9-4645-b2ee-7cce80016875",
+    pickingItemId: "38706988-4a86-4de8-89ff-26555f3d50a0",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 30000
+    qty: 30000
   },
   {
-    "id": "3da6c90c-b174-4bc7-a6c3-01024d864602",
-    "pickingItemId": "e642d7ed-158b-401c-8a70-5f75758dfc2d",
-    "inventoryLotId": null,
+    id: "3da6c90c-b174-4bc7-a6c3-01024d864602",
+    pickingItemId: "e642d7ed-158b-401c-8a70-5f75758dfc2d",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 10000
+    qty: 10000
   },
   {
-    "id": "3fa41274-694f-4797-8a29-e92ec625a021",
-    "pickingItemId": "599a7241-d98d-4d0f-989e-5091f7b18123",
-    "inventoryLotId": null,
+    id: "3fa41274-694f-4797-8a29-e92ec625a021",
+    pickingItemId: "599a7241-d98d-4d0f-989e-5091f7b18123",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 5000
+    qty: 5000
   },
   {
-    "id": "411819bd-d09e-45fb-b9e7-a2494e92c552",
-    "pickingItemId": "fb8e4d57-b0ce-4534-8844-7e3c34b3feb7",
-    "inventoryLotId": null,
+    id: "411819bd-d09e-45fb-b9e7-a2494e92c552",
+    pickingItemId: "fb8e4d57-b0ce-4534-8844-7e3c34b3feb7",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 130000
+    qty: 130000
   },
   {
-    "id": "4157a0c0-7563-4174-bc66-4fb840eea82e",
-    "pickingItemId": "744ea1e7-cf8a-4ec4-80af-22b88f92e533",
-    "inventoryLotId": null,
+    id: "4157a0c0-7563-4174-bc66-4fb840eea82e",
+    pickingItemId: "744ea1e7-cf8a-4ec4-80af-22b88f92e533",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 180000
+    qty: 180000
   },
   {
-    "id": "4401501c-a9c5-4e88-8838-48cf0478cb79",
-    "pickingItemId": "58aa7122-6233-4339-97d1-f2e598de2c12",
-    "inventoryLotId": null,
+    id: "4401501c-a9c5-4e88-8838-48cf0478cb79",
+    pickingItemId: "58aa7122-6233-4339-97d1-f2e598de2c12",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 296000
+    qty: 296000
   },
   {
-    "id": "450642f7-c496-4cd7-9540-976ee1ffb6ec",
-    "pickingItemId": "f6d5122a-c769-4f99-9cb0-a251cb7bf3a5",
-    "inventoryLotId": null,
+    id: "450642f7-c496-4cd7-9540-976ee1ffb6ec",
+    pickingItemId: "f6d5122a-c769-4f99-9cb0-a251cb7bf3a5",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 20000
+    qty: 20000
   },
   {
-    "id": "4c09beee-9a26-46fe-ad4d-e99aaaa08652",
-    "pickingItemId": "f275b88b-80c0-4742-b254-7de8b3a9774a",
-    "inventoryLotId": null,
+    id: "4c09beee-9a26-46fe-ad4d-e99aaaa08652",
+    pickingItemId: "f275b88b-80c0-4742-b254-7de8b3a9774a",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 165000
+    qty: 165000
   },
   {
-    "id": "5763e413-d9b2-4f81-ac56-b0590b0a0826",
-    "pickingItemId": "b9414f66-9b49-4c36-bdf4-c3b7b4a685e0",
-    "inventoryLotId": null,
+    id: "5763e413-d9b2-4f81-ac56-b0590b0a0826",
+    pickingItemId: "b9414f66-9b49-4c36-bdf4-c3b7b4a685e0",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 40000
+    qty: 40000
   },
   {
-    "id": "5908c4a5-8ee2-4a56-bae8-9aa26c6c36aa",
-    "pickingItemId": "99058306-c1e5-4248-b61e-11261244ec2a",
-    "inventoryLotId": null,
+    id: "5908c4a5-8ee2-4a56-bae8-9aa26c6c36aa",
+    pickingItemId: "99058306-c1e5-4248-b61e-11261244ec2a",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 10000
+    qty: 10000
   },
   {
-    "id": "5acec67a-dd41-4e5b-861d-cb112808b6d1",
-    "pickingItemId": "b76d4e80-94dd-4ee8-acb9-eeb270f83945",
-    "inventoryLotId": null,
+    id: "5acec67a-dd41-4e5b-861d-cb112808b6d1",
+    pickingItemId: "b76d4e80-94dd-4ee8-acb9-eeb270f83945",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 60000
+    qty: 60000
   },
   {
-    "id": "64580b9e-a95b-4a2e-a5e9-b3ca5c726b24",
-    "pickingItemId": "81235f85-ffd8-4d8e-ac61-52492534abc1",
-    "inventoryLotId": null,
+    id: "64580b9e-a95b-4a2e-a5e9-b3ca5c726b24",
+    pickingItemId: "81235f85-ffd8-4d8e-ac61-52492534abc1",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 720000
+    qty: 720000
   },
   {
-    "id": "6720bd69-28eb-4665-a70a-dec781fc5d54",
-    "pickingItemId": "2f99f283-9df4-49f6-831e-cce833979ec3",
-    "inventoryLotId": null,
+    id: "6720bd69-28eb-4665-a70a-dec781fc5d54",
+    pickingItemId: "2f99f283-9df4-49f6-831e-cce833979ec3",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 10000
+    qty: 10000
   },
   {
-    "id": "69a5b289-65fc-4626-b1e3-87dd71b49429",
-    "pickingItemId": "b8ad16f6-3364-43bd-8cf9-a15e1fe558d6",
-    "inventoryLotId": null,
+    id: "69a5b289-65fc-4626-b1e3-87dd71b49429",
+    pickingItemId: "b8ad16f6-3364-43bd-8cf9-a15e1fe558d6",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 230000
+    qty: 230000
   },
   {
-    "id": "6adce3f9-2059-40d9-9632-d7d537a21a0c",
-    "pickingItemId": "a461d6b9-d471-4706-86ed-bd28d05e690d",
-    "inventoryLotId": null,
+    id: "6adce3f9-2059-40d9-9632-d7d537a21a0c",
+    pickingItemId: "a461d6b9-d471-4706-86ed-bd28d05e690d",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 90000
+    qty: 90000
   },
   {
-    "id": "6bd88772-a98c-41c8-a788-e469ef31347d",
-    "pickingItemId": "8a489553-ad4a-47ed-8d76-ec08ebcbcddb",
-    "inventoryLotId": null,
+    id: "6bd88772-a98c-41c8-a788-e469ef31347d",
+    pickingItemId: "8a489553-ad4a-47ed-8d76-ec08ebcbcddb",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 65000
+    qty: 65000
   },
   {
-    "id": "6ce7aa5e-7155-4be4-b454-d78e6d110b42",
-    "pickingItemId": "faf7b0a4-c920-4b57-9cf7-b439e00546b4",
-    "inventoryLotId": null,
+    id: "6ce7aa5e-7155-4be4-b454-d78e6d110b42",
+    pickingItemId: "faf7b0a4-c920-4b57-9cf7-b439e00546b4",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 170000
+    qty: 170000
   },
   {
-    "id": "7234f985-c4ef-4355-8c3e-1523ff19e4ef",
-    "pickingItemId": "53e3ee74-0b5f-4cec-be67-e0a3cff0120a",
-    "inventoryLotId": null,
+    id: "7234f985-c4ef-4355-8c3e-1523ff19e4ef",
+    pickingItemId: "53e3ee74-0b5f-4cec-be67-e0a3cff0120a",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 10000
+    qty: 10000
   },
   {
-    "id": "738990f2-2fe8-4c91-93e6-d101f4676e1f",
-    "pickingItemId": "1711584a-e4fc-48f7-b0cc-1bc112c929bf",
-    "inventoryLotId": null,
+    id: "738990f2-2fe8-4c91-93e6-d101f4676e1f",
+    pickingItemId: "1711584a-e4fc-48f7-b0cc-1bc112c929bf",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 10000
+    qty: 10000
   },
   {
-    "id": "7da7eb59-a72d-42be-839f-c8ac8170ecc6",
-    "pickingItemId": "e2ebf66b-8a8b-4547-b446-5e475ce03fc2",
-    "inventoryLotId": null,
+    id: "7da7eb59-a72d-42be-839f-c8ac8170ecc6",
+    pickingItemId: "e2ebf66b-8a8b-4547-b446-5e475ce03fc2",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 760000
+    qty: 760000
   },
   {
-    "id": "7e8b258d-a7f4-4873-8a83-cb01bb59c7ca",
-    "pickingItemId": "d7f58d30-0094-43b0-8536-d91d90e1093a",
-    "inventoryLotId": null,
+    id: "7e8b258d-a7f4-4873-8a83-cb01bb59c7ca",
+    pickingItemId: "d7f58d30-0094-43b0-8536-d91d90e1093a",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 170000
+    qty: 170000
   },
   {
-    "id": "817c4b51-3dc7-4660-83c0-d8d9acd33d5d",
-    "pickingItemId": "594d9412-aadd-48ec-92b0-7ed6c59b32ea",
-    "inventoryLotId": null,
+    id: "817c4b51-3dc7-4660-83c0-d8d9acd33d5d",
+    pickingItemId: "594d9412-aadd-48ec-92b0-7ed6c59b32ea",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 10000
+    qty: 10000
   },
   {
-    "id": "82664a22-18f2-472e-b91e-b9fc833a613f",
-    "pickingItemId": "fab33d2a-8751-4cfd-ba95-f474244a7859",
-    "inventoryLotId": null,
+    id: "82664a22-18f2-472e-b91e-b9fc833a613f",
+    pickingItemId: "fab33d2a-8751-4cfd-ba95-f474244a7859",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 10000
+    qty: 10000
   },
   {
-    "id": "82c38b9a-0059-4d1a-b410-47dbefa303f0",
-    "pickingItemId": "d29c253c-a4fc-4794-b58b-d33270661dc8",
-    "inventoryLotId": null,
+    id: "82c38b9a-0059-4d1a-b410-47dbefa303f0",
+    pickingItemId: "d29c253c-a4fc-4794-b58b-d33270661dc8",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 10000
+    qty: 10000
   },
   {
-    "id": "88e6d7fa-3480-4917-8651-c524587536e9",
-    "pickingItemId": "ae7449c1-3676-471b-ad2d-e2aae2897731",
-    "inventoryLotId": null,
+    id: "88e6d7fa-3480-4917-8651-c524587536e9",
+    pickingItemId: "ae7449c1-3676-471b-ad2d-e2aae2897731",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 5000
+    qty: 5000
   },
   {
-    "id": "8c09002a-c1ad-417a-9430-6fc8e1dc8055",
-    "pickingItemId": "d7d33033-2bca-47a6-af8f-12a8b793af60",
-    "inventoryLotId": null,
+    id: "8c09002a-c1ad-417a-9430-6fc8e1dc8055",
+    pickingItemId: "d7d33033-2bca-47a6-af8f-12a8b793af60",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 515000
+    qty: 515000
   },
   {
-    "id": "985a3e57-494e-4a92-a3d9-5f981916bd2f",
-    "pickingItemId": "ade0779a-1f5c-4471-a670-5458010d5c05",
-    "inventoryLotId": null,
+    id: "985a3e57-494e-4a92-a3d9-5f981916bd2f",
+    pickingItemId: "ade0779a-1f5c-4471-a670-5458010d5c05",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 300000
+    qty: 300000
   },
   {
-    "id": "98bb8612-3dcc-42d3-be1e-83fd353347fc",
-    "pickingItemId": "a4e61a40-6aad-4007-8374-a224679dceef",
-    "inventoryLotId": null,
+    id: "98bb8612-3dcc-42d3-be1e-83fd353347fc",
+    pickingItemId: "a4e61a40-6aad-4007-8374-a224679dceef",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 5000
+    qty: 5000
   },
   {
-    "id": "a539b0b8-7454-41a7-85e2-29b6ba834be8",
-    "pickingItemId": "c7f8e348-ab42-47a8-9bb6-9d6c3bd0272b",
-    "inventoryLotId": null,
+    id: "a539b0b8-7454-41a7-85e2-29b6ba834be8",
+    pickingItemId: "c7f8e348-ab42-47a8-9bb6-9d6c3bd0272b",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 300000
+    qty: 300000
   },
   {
-    "id": "a554bad4-eae2-47b4-a671-abbe820dfb77",
-    "pickingItemId": "d300eb93-309b-414d-a28b-a2d6418f41e6",
-    "inventoryLotId": null,
+    id: "a554bad4-eae2-47b4-a671-abbe820dfb77",
+    pickingItemId: "d300eb93-309b-414d-a28b-a2d6418f41e6",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 580000
+    qty: 580000
   },
   {
-    "id": "a73fac57-a4b6-4821-bba9-494cff80cc57",
-    "pickingItemId": "bf4d1a8e-2042-4100-93a2-57cdef6c1420",
-    "inventoryLotId": null,
+    id: "a73fac57-a4b6-4821-bba9-494cff80cc57",
+    pickingItemId: "bf4d1a8e-2042-4100-93a2-57cdef6c1420",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 170000
+    qty: 170000
   },
   {
-    "id": "aaa68f1f-1e27-448d-979a-61e8ef0a6f92",
-    "pickingItemId": "645b7c9f-d1fa-4f54-ad44-e5c7355791b0",
-    "inventoryLotId": null,
+    id: "aaa68f1f-1e27-448d-979a-61e8ef0a6f92",
+    pickingItemId: "645b7c9f-d1fa-4f54-ad44-e5c7355791b0",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 50000
+    qty: 50000
   },
   {
-    "id": "aee46182-e335-4edc-9313-1bd10edb78c2",
-    "pickingItemId": "9dad1c3b-0aea-4485-a042-7cb0054b19f2",
-    "inventoryLotId": null,
+    id: "aee46182-e335-4edc-9313-1bd10edb78c2",
+    pickingItemId: "9dad1c3b-0aea-4485-a042-7cb0054b19f2",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 50000
+    qty: 50000
   },
   {
-    "id": "b6a72574-86ec-4330-ab1e-e494216597e0",
-    "pickingItemId": "71fffc6e-ced4-47b2-a7db-ea5d70fe71b9",
-    "inventoryLotId": null,
+    id: "b6a72574-86ec-4330-ab1e-e494216597e0",
+    pickingItemId: "71fffc6e-ced4-47b2-a7db-ea5d70fe71b9",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 90000
+    qty: 90000
   },
   {
-    "id": "ba32e560-0e89-4874-aaa4-d3324785c785",
-    "pickingItemId": "9adabbf4-4eff-415c-80fc-19e996fc0331",
-    "inventoryLotId": null,
+    id: "ba32e560-0e89-4874-aaa4-d3324785c785",
+    pickingItemId: "9adabbf4-4eff-415c-80fc-19e996fc0331",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 170000
+    qty: 170000
   },
   {
-    "id": "bbccb3c1-730a-47f8-9889-aa6610d3f4fa",
-    "pickingItemId": "e4bd06f5-bbd3-4828-8626-f023e6ce03df",
-    "inventoryLotId": null,
+    id: "bbccb3c1-730a-47f8-9889-aa6610d3f4fa",
+    pickingItemId: "e4bd06f5-bbd3-4828-8626-f023e6ce03df",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 110000
+    qty: 110000
   },
   {
-    "id": "bfdb1052-3144-4e5d-ab22-a13304852d0c",
-    "pickingItemId": "a5b8dede-5862-4c84-887d-9ec0e3cf5118",
-    "inventoryLotId": null,
+    id: "bfdb1052-3144-4e5d-ab22-a13304852d0c",
+    pickingItemId: "a5b8dede-5862-4c84-887d-9ec0e3cf5118",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 10000
+    qty: 10000
   },
   {
-    "id": "c5079ea1-ccd3-459c-8cf9-9226a5fe913a",
-    "pickingItemId": "d722a39b-5eb3-406a-b299-6e1a8da13b9b",
-    "inventoryLotId": null,
+    id: "c5079ea1-ccd3-459c-8cf9-9226a5fe913a",
+    pickingItemId: "d722a39b-5eb3-406a-b299-6e1a8da13b9b",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 5000
+    qty: 5000
   },
   {
-    "id": "d4d6051d-4f9f-49b1-87b3-a3731dd6111e",
-    "pickingItemId": "cd1c5712-e9f2-4be5-8104-b93196913540",
-    "inventoryLotId": null,
+    id: "d4d6051d-4f9f-49b1-87b3-a3731dd6111e",
+    pickingItemId: "cd1c5712-e9f2-4be5-8104-b93196913540",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 125000
+    qty: 125000
   },
   {
-    "id": "dbc61158-41ee-4055-995e-82900c575f3a",
-    "pickingItemId": "c5f59ef9-8609-44fc-ae44-3ae08bcb7ac5",
-    "inventoryLotId": null,
+    id: "dbc61158-41ee-4055-995e-82900c575f3a",
+    pickingItemId: "c5f59ef9-8609-44fc-ae44-3ae08bcb7ac5",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 5000
+    qty: 5000
   },
   {
-    "id": "e20a579c-7d4c-465c-a192-0323f9b8a7dd",
-    "pickingItemId": "e4f680a0-105f-474e-9b70-bae79b14ef63",
-    "inventoryLotId": null,
+    id: "e20a579c-7d4c-465c-a192-0323f9b8a7dd",
+    pickingItemId: "e4f680a0-105f-474e-9b70-bae79b14ef63",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 10000
+    qty: 10000
   },
   {
-    "id": "e7392033-2b04-4897-a088-516c7b062b7c",
-    "pickingItemId": "a23ec1c1-5331-401f-845f-0a8c64008b0b",
-    "inventoryLotId": null,
+    id: "e7392033-2b04-4897-a088-516c7b062b7c",
+    pickingItemId: "a23ec1c1-5331-401f-845f-0a8c64008b0b",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 10000
+    qty: 10000
   },
   {
-    "id": "f332e28c-82f0-4c67-b367-cfcd85b31995",
-    "pickingItemId": "e3bb05d9-2273-4704-9c7a-5eb77db0aa5d",
-    "inventoryLotId": null,
+    id: "f332e28c-82f0-4c67-b367-cfcd85b31995",
+    pickingItemId: "e3bb05d9-2273-4704-9c7a-5eb77db0aa5d",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 10000
+    qty: 10000
   },
   {
-    "id": "f472c345-11e3-47cc-8192-289c53ab7951",
-    "pickingItemId": "7200eda8-cf21-4ed6-b970-70f254ff3506",
-    "inventoryLotId": null,
+    id: "f472c345-11e3-47cc-8192-289c53ab7951",
+    pickingItemId: "7200eda8-cf21-4ed6-b970-70f254ff3506",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 90000
+    qty: 90000
   },
   {
-    "id": "ffe8b95b-1e0d-4c08-a588-959a4096b0f9",
-    "pickingItemId": "28ae7148-70a2-4797-aec5-8672dc78570f",
-    "inventoryLotId": null,
+    id: "ffe8b95b-1e0d-4c08-a588-959a4096b0f9",
+    pickingItemId: "28ae7148-70a2-4797-aec5-8672dc78570f",
+    inventoryLotId: null,
     receivingOrderId: wclReceivingOrder.id,
-    "qty": 20000
+    qty: 20000
   }
 ] as const;
 
