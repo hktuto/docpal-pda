@@ -1,8 +1,9 @@
-import { eq, sql, inArray } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { v4 as uuid } from "uuid";
 import * as schema from "./schema";
 import { allocatePendingPickingOrders } from "./allocate";
+import { availableReceivingQtySql, allocationsCte } from "./helpers";
 import { getActiveMismatchesForItems } from "./mismatch";
 import { I18nError } from "~/composables/i18nError";
 
@@ -20,23 +21,24 @@ export async function tryMarkReceivingOrderClear(
   const itemIds = order.invoices.flatMap((inv) => inv.items.map((i) => i.id));
   if (itemIds.length === 0) return;
 
-  const allocatedRows = await tx
-    .select({
-      receivingInvoiceItemId: schema.allocations.receivingInvoiceItemId,
-      total: sql<number>`coalesce(sum(${schema.allocations.qty}), 0)`.mapWith(Number),
-    })
-    .from(schema.allocations)
-    .where(inArray(schema.allocations.receivingInvoiceItemId, itemIds))
-    .groupBy(schema.allocations.receivingInvoiceItemId);
+  const itemRows = await tx.execute(sql`
+    WITH allocations_cte AS (${allocationsCte()})
+    SELECT
+      rii.id,
+      (${availableReceivingQtySql}) AS available_qty
+    FROM receiving_invoice_items rii
+    JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+    LEFT JOIN allocations_cte alloc ON alloc.receiving_invoice_item_id = rii.id
+    WHERE ri.receiving_order_id = ${orderId}
+  `);
 
-  const allocatedMap = new Map(
-    allocatedRows.map((r) => [r.receivingInvoiceItemId, r.total])
+  const availableByItem = new Map(
+    (itemRows.rows ?? []).map((r) => [r.id, Number(r.available_qty ?? 0)])
   );
 
   const allClear = order.invoices.every((inv) =>
     inv.items.every((item) => {
-      const allocated = allocatedMap.get(item.id) ?? 0;
-      const available = item.receivedQty - item.pickedQty - item.putAwayQty - allocated;
+      const available = availableByItem.get(item.id) ?? 0;
       return available <= 0;
     })
   );
@@ -75,23 +77,24 @@ export async function tryMarkReceivingOrderInHand(
   const itemIds = order.invoices.flatMap((inv) => inv.items.map((i) => i.id));
   if (itemIds.length === 0) return;
 
-  const allocatedRows = await tx
-    .select({
-      receivingInvoiceItemId: schema.allocations.receivingInvoiceItemId,
-      total: sql<number>`coalesce(sum(${schema.allocations.qty}), 0)`.mapWith(Number),
-    })
-    .from(schema.allocations)
-    .where(inArray(schema.allocations.receivingInvoiceItemId, itemIds))
-    .groupBy(schema.allocations.receivingInvoiceItemId);
+  const itemRows = await tx.execute(sql`
+    WITH allocations_cte AS (${allocationsCte()})
+    SELECT
+      rii.id,
+      (${availableReceivingQtySql}) AS available_qty
+    FROM receiving_invoice_items rii
+    JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+    LEFT JOIN allocations_cte alloc ON alloc.receiving_invoice_item_id = rii.id
+    WHERE ri.receiving_order_id = ${orderId}
+  `);
 
-  const allocatedMap = new Map(
-    allocatedRows.map((r) => [r.receivingInvoiceItemId, r.total])
+  const availableByItem = new Map(
+    (itemRows.rows ?? []).map((r) => [r.id, Number(r.available_qty ?? 0)])
   );
 
   const hasAvailable = order.invoices.some((inv) =>
     inv.items.some((item) => {
-      const allocated = allocatedMap.get(item.id) ?? 0;
-      const available = item.receivedQty - item.pickedQty - item.putAwayQty - allocated;
+      const available = availableByItem.get(item.id) ?? 0;
       return available > 0;
     })
   );
