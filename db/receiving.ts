@@ -22,7 +22,7 @@ async function fetchAvailableReceivingQtyByItem(
     WHERE ri.receiving_order_id = ${orderId}
   `);
   return new Map(
-    (result.rows ?? []).map((r) => [r.id, Number(r.available_qty ?? 0)])
+    (result.rows ?? []).map((r) => [String(r.id), Number(r.available_qty ?? 0)])
   );
 }
 
