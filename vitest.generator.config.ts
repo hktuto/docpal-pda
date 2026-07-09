@@ -13,7 +13,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    include: ["scripts/generate-precalc-seed.test.ts"],
+    include: ["scripts/*.test.ts"],
     exclude: ["**/node_modules/**", "**/.git/**"],
   },
 });
