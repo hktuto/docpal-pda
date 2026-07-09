@@ -39,6 +39,7 @@ interface ReceivingItemRow {
   pickedQty: number;
   putAwayQty: number;
   allocatedQty: number;
+  receivingOrderId: string;
   deliveryDate: string | null;
 }
 
@@ -94,48 +95,69 @@ export async function allocatePickingOrder(
         needed -= take;
       }
 
-      // Phase 2: receiving-area invoice items
+      // Phase 2: receiving-area receiving orders
       if (needed > 0) {
         const result = await tx.execute(sql`
           SELECT
-            rii.id,
-            rii.date_code,
-            rii.received_qty,
-            rii.picked_qty,
-            rii.put_away_qty,
+            ro.id AS receiving_order_id,
+            ro.delivery_date,
+            COALESCE(SUM(rii.received_qty - rii.picked_qty - rii.put_away_qty), 0) AS physical_qty,
             COALESCE(SUM(a.qty), 0) AS allocated_qty,
-            ro.delivery_date
-          FROM receiving_invoice_items rii
-          JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-          JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
-          LEFT JOIN allocations a ON a.receiving_invoice_item_id = rii.id
+            (
+              SELECT COALESCE(SUM(pas.qty), 0)
+              FROM put_away_scans pas
+              JOIN receiving_invoice_items rii2 ON rii2.id = pas.receiving_invoice_item_id
+              JOIN receiving_invoices ri2 ON ri2.id = rii2.receiving_invoice_id
+              WHERE ri2.receiving_order_id = ro.id
+                AND rii2.part_id = ${item.partId}
+                AND pas.shelf_box_id IS NULL
+            ) AS unboxed_qty
+          FROM receiving_orders ro
+          JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
+          JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
+          LEFT JOIN allocations a
+            ON a.receiving_order_id = ro.id
+            AND EXISTS (
+              SELECT 1 FROM picking_items pi
+              WHERE pi.id = a.picking_item_id AND pi.part_id = rii.part_id
+            )
           WHERE rii.part_id = ${item.partId}
             AND ro.status = 'in_hand'
-          GROUP BY rii.id, rii.date_code, rii.received_qty, rii.picked_qty, rii.put_away_qty, ro.delivery_date
-          HAVING rii.received_qty - rii.picked_qty - rii.put_away_qty - COALESCE(SUM(a.qty), 0) > 0
-          ORDER BY ro.delivery_date ASC, rii.date_code ASC NULLS LAST
+          GROUP BY ro.id, ro.delivery_date
+          HAVING COALESCE(SUM(rii.received_qty - rii.picked_qty - rii.put_away_qty), 0)
+            - COALESCE(SUM(a.qty), 0)
+            - (
+              SELECT COALESCE(SUM(pas.qty), 0)
+              FROM put_away_scans pas
+              JOIN receiving_invoice_items rii2 ON rii2.id = pas.receiving_invoice_item_id
+              JOIN receiving_invoices ri2 ON ri2.id = rii2.receiving_invoice_id
+              WHERE ri2.receiving_order_id = ro.id
+                AND rii2.part_id = ${item.partId}
+                AND pas.shelf_box_id IS NULL
+            ) > 0
+          ORDER BY ro.delivery_date ASC NULLS LAST
         `);
 
         const rows: ReceivingItemRow[] = result.rows.map((row) => ({
-          id: row.id as string,
-          dateCode: row.date_code as string | null,
-          receivedQty: Number(row.received_qty),
-          pickedQty: Number(row.picked_qty),
-          putAwayQty: Number(row.put_away_qty),
-          allocatedQty: Number(row.allocated_qty),
+          id: row.receiving_order_id as string,
+          dateCode: null,
+          receivedQty: Number(row.physical_qty),
+          pickedQty: 0,
+          putAwayQty: 0,
+          allocatedQty: Number(row.allocated_qty) + Number(row.unboxed_qty),
+          receivingOrderId: row.receiving_order_id as string,
           deliveryDate: row.delivery_date as string | null,
         }));
 
         for (const row of rows) {
           if (needed <= 0) break;
-          if (!dateCodeMatches(row.dateCode, rule)) continue;
-          const available = row.receivedQty - row.pickedQty - row.putAwayQty - row.allocatedQty;
+          const available = row.receivedQty - row.allocatedQty;
           if (available <= 0) continue;
           const take = Math.min(needed, available);
           await tx.insert(schema.allocations).values({
             id: uuid(),
             pickingItemId: item.id,
-            receivingInvoiceItemId: row.id,
+            receivingOrderId: row.receivingOrderId,
             qty: take,
           });
           await tx.update(schema.pickingItems)
