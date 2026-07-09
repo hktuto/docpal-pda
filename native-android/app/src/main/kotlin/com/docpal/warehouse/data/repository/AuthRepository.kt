@@ -10,21 +10,23 @@ class AuthRepository @Inject constructor(
     private val userDao: UserDao
 ) {
 
-    suspend fun login(username: String, password: String): Result<User> {
-        val entity = userDao.getByUsername(username.trim())
-            ?: return Result.failure(IllegalArgumentException("Invalid credentials"))
+    suspend fun login(username: String, password: String): User {
+        val trimmedUsername = username.trim()
+        require(trimmedUsername.isNotBlank()) { "Username is required" }
+        require(password.isNotEmpty()) { "Password is required" }
+
+        val entity = userDao.getByUsername(trimmedUsername)
+            ?: throw IllegalArgumentException("Invalid credentials")
 
         if (entity.passwordHash != password) {
-            return Result.failure(IllegalArgumentException("Invalid credentials"))
+            throw IllegalArgumentException("Invalid credentials")
         }
 
-        return Result.success(
-            User(
-                id = entity.id,
-                username = entity.username,
-                displayName = entity.displayName,
-                role = entity.role
-            )
+        return User(
+            id = entity.id,
+            username = entity.username,
+            displayName = entity.displayName,
+            role = entity.role
         )
     }
 }
