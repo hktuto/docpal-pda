@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -22,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -74,18 +77,23 @@ fun LoginScreen(
             label = { Text(stringResource(R.string.password)) },
             singleLine = true,
             visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(
+                onDone = { viewModel.login(username, password) }
+            ),
             modifier = Modifier.fillMaxWidth()
         )
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        if (state is LoginViewModel.LoginUiState.Loading) {
-            CircularProgressIndicator()
-        } else {
-            Button(
-                onClick = { viewModel.login(username, password) },
-                modifier = Modifier.fillMaxWidth()
-            ) {
+        Button(
+            onClick = { viewModel.login(username, password) },
+            enabled = state !is LoginViewModel.LoginUiState.Loading,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            if (state is LoginViewModel.LoginUiState.Loading) {
+                CircularProgressIndicator()
+            } else {
                 Text(stringResource(R.string.login))
             }
         }

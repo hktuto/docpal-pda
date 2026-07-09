@@ -45,8 +45,10 @@ fun WarehousePdaTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
-            window.statusBarColor = colorScheme.primary.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = darkTheme
+            val statusBarColor = colorScheme.surface.toArgb()
+            window.statusBarColor = statusBarColor
+            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars =
+                androidx.core.graphics.ColorUtils.calculateLuminance(statusBarColor) > 0.5
         }
     }
 
