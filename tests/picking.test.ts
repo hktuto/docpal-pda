@@ -6,6 +6,7 @@ import { v4 as uuid } from 'uuid';
 import * as schema from '../db/schema';
 import { createTablesSql } from '../db/init';
 import { addAllUnboxedPackagesToBox, addPackageToBox } from '../db/picking';
+import { applyOcrPick } from '../db/ocrPicking';
 import { I18nError } from '../composables/i18nError';
 
 async function createTestDb() {
@@ -406,5 +407,156 @@ describe('addPackageToBox', () => {
       where: eq(schema.measuringTasks.pickingOrderId, pickingOrderId),
     });
     expect(task).toBeTruthy();
+  });
+});
+
+describe('applyOcrPick splits scan across invoice items', () => {
+  let db: Awaited<ReturnType<typeof createTestDb>>;
+  let actorId: string;
+  let receivingOrderId: string;
+  let firstInvoiceItemId: string;
+  let secondInvoiceItemId: string;
+  let pickingItemId: string;
+
+  beforeEach(async () => {
+    db = await createTestDb();
+    const now = new Date();
+
+    actorId = uuid();
+    await db.insert(schema.users).values({
+      id: actorId,
+      username: 'operator',
+      passwordHash: 'pw',
+      displayName: 'Operator',
+      role: 'operator',
+      createdAt: now,
+    });
+
+    const supplierId = uuid();
+    await db.insert(schema.suppliers).values({ id: supplierId, code: 'KOA', name: 'KOA' });
+
+    const partId = uuid();
+    await db.insert(schema.parts).values({
+      id: partId,
+      partNo: 'RK73B1JTTD181G',
+      internalCode: '',
+      description: '',
+      defaultCoo: 'CN',
+    });
+
+    receivingOrderId = uuid();
+    await db.insert(schema.receivingOrders).values({
+      id: receivingOrderId,
+      refNo: 'RO-001',
+      supplierId,
+      deliveryDate: now,
+      status: 'in_hand',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const firstInvoiceId = uuid();
+    await db.insert(schema.receivingInvoices).values({
+      id: firstInvoiceId,
+      receivingOrderId,
+      invoiceNo: 'INV-001',
+      supplierId,
+    });
+
+    firstInvoiceItemId = uuid();
+    await db.insert(schema.receivingInvoiceItems).values({
+      id: firstInvoiceItemId,
+      receivingInvoiceId: firstInvoiceId,
+      partId,
+      qty: 10000,
+      receivedQty: 10000,
+      pickedQty: 0,
+      putAwayQty: 0,
+    });
+
+    const secondInvoiceId = uuid();
+    await db.insert(schema.receivingInvoices).values({
+      id: secondInvoiceId,
+      receivingOrderId,
+      invoiceNo: 'INV-002',
+      supplierId,
+    });
+
+    secondInvoiceItemId = uuid();
+    await db.insert(schema.receivingInvoiceItems).values({
+      id: secondInvoiceItemId,
+      receivingInvoiceId: secondInvoiceId,
+      partId,
+      qty: 190000,
+      receivedQty: 190000,
+      pickedQty: 0,
+      putAwayQty: 0,
+    });
+
+    const pickingOrderId = uuid();
+    await db.insert(schema.pickingOrders).values({
+      id: pickingOrderId,
+      refNo: 'PICK-001',
+      supplierId,
+      deliveryDate: now,
+      poNo: 'PO-PICK',
+      requiredDateCodeNotice: null,
+      shipTo: 'US',
+      destinationCountry: 'USA',
+      status: 'picking',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    pickingItemId = uuid();
+    await db.insert(schema.pickingItems).values({
+      id: pickingItemId,
+      pickingOrderId,
+      partId,
+      qty: 200000,
+      pickedQty: 0,
+      allocatedQty: 0,
+    });
+
+    await db.transaction(async (tx) => {
+      await tx.insert(schema.allocations).values({
+        id: uuid(),
+        pickingItemId,
+        receivingOrderId,
+        qty: 200000,
+      });
+      await tx.update(schema.pickingItems)
+        .set({ allocatedQty: 200000 })
+        .where(eq(schema.pickingItems.id, pickingItemId));
+    });
+  });
+
+  it('distributes a 20,000 piece scan across two invoice items', async () => {
+    await expect(
+      applyOcrPick(db, receivingOrderId, pickingItemId, 20000, null, null, null, null, actorId)
+    ).resolves.toBeUndefined();
+
+    const packages = await db.query.pickingPackages.findMany({
+      where: eq(schema.pickingPackages.pickingItemId, pickingItemId),
+    });
+
+    expect(packages).toHaveLength(2);
+    expect(packages.map((pkg) => pkg.qty).sort((a, b) => a - b)).toEqual([10000, 10000]);
+
+    const firstItem = await db.query.receivingInvoiceItems.findFirst({
+      where: eq(schema.receivingInvoiceItems.id, firstInvoiceItemId),
+    });
+    const secondItem = await db.query.receivingInvoiceItems.findFirst({
+      where: eq(schema.receivingInvoiceItems.id, secondInvoiceItemId),
+    });
+
+    expect(firstItem?.pickedQty).toBe(10000);
+    expect(secondItem?.pickedQty).toBe(10000);
+
+    const allocations = await db.query.allocations.findMany({
+      where: eq(schema.allocations.pickingItemId, pickingItemId),
+    });
+    const remainingAllocationQty = allocations.reduce((sum, allocation) => sum + allocation.qty, 0);
+    expect(remainingAllocationQty).toBe(180000);
   });
 });

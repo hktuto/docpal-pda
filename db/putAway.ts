@@ -63,11 +63,13 @@ export async function recordPutAwayScan(
       .where(eq(schema.receivingInvoiceItems.id, receivingInvoiceItemId));
     if (!item) throw new I18nError("invoice_item_not_found");
 
-    const allocatedResult = await tx
-      .select({ total: sql<number>`coalesce(sum(${schema.allocations.qty}), 0)`.mapWith(Number) })
-      .from(schema.allocations)
-      .where(eq(schema.allocations.receivingInvoiceItemId, receivingInvoiceItemId));
-    const allocated = allocatedResult[0]?.total ?? 0;
+    const allocatedResult = await tx.execute(sql`
+      SELECT COALESCE(alloc.allocated_qty, 0) AS allocated_qty
+      FROM receiving_invoice_items rii
+      LEFT JOIN (${allocationsCte()}) alloc ON alloc.receiving_invoice_item_id = rii.id
+      WHERE rii.id = ${receivingInvoiceItemId}
+    `);
+    const allocated = Number((allocatedResult.rows[0] as any)?.allocated_qty ?? 0);
 
     const unboxedResult = await tx
       .select({ total: sql<number>`coalesce(sum(${schema.putAwayScans.qty}), 0)`.mapWith(Number) })

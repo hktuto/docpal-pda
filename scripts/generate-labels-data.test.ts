@@ -2,7 +2,7 @@ import { describe, it } from "vitest";
 import fs from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { inArray } from "drizzle-orm";
+import { inArray, eq } from "drizzle-orm";
 import * as schema from "~/db/schema";
 import { createTablesSql } from "~/db/init";
 import { seedDb } from "~/db/seed-precalc";
@@ -29,6 +29,7 @@ interface LabelItem {
   unknown: string;
   fullName: string;
   qrValue: string;
+  pickingOrderRefs: string[];
 }
 
 describe("generate-labels-data", () => {
@@ -63,6 +64,27 @@ describe("generate-labels-data", () => {
     });
     const partNoById = new Map(parts.map((p) => [p.id, p.partNo]));
 
+    // Find which picking orders each receiving item is allocated to.
+    // Allocations are now at receiving-order + picking-item level, so match
+    // by receiving order and part.
+    const allocations = await db.query.allocations.findMany({
+      where: eq(schema.allocations.receivingOrderId, receivingOrder.id),
+      with: { pickingItem: { with: { pickingOrder: true } } },
+    });
+    const pickingOrderRefsByReceivingItemId = new Map<string, Set<string>>();
+    for (const allocation of allocations) {
+      const pickingItem = allocation.pickingItem;
+      if (!pickingItem) continue;
+      const refNo = pickingItem.pickingOrder?.refNo;
+      if (!refNo) continue;
+      for (const item of items) {
+        if (item.partId !== pickingItem.partId) continue;
+        const set = pickingOrderRefsByReceivingItemId.get(item.id) ?? new Set<string>();
+        set.add(refNo);
+        pickingOrderRefsByReceivingItemId.set(item.id, set);
+      }
+    }
+
     const labels: LabelItem[] = items.map((item, index) => {
       const partNo = partNoById.get(item.partId) ?? item.partId;
       const invoiceNo = invoiceNoById.get(item.receivingInvoiceId) ?? "";
@@ -72,6 +94,7 @@ describe("generate-labels-data", () => {
       const unknown = "602";
       const fullName = `KOA+${partNo}`;
       const qrValue = `:${partNo}::${qtyEncoding}:X:${traceCode}:${unknown}:${fullName}::::`;
+      const pickingOrderRefs = [...(pickingOrderRefsByReceivingItemId.get(item.id) ?? [])].sort();
 
       return {
         invoiceNo,
@@ -85,6 +108,7 @@ describe("generate-labels-data", () => {
         unknown,
         fullName,
         qrValue,
+        pickingOrderRefs,
       };
     });
 

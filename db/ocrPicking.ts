@@ -39,11 +39,14 @@ export async function findReceivingCandidates(
       ),
       order_allocations AS (
         SELECT
-          a.receiving_invoice_item_id,
-          SUM(a.qty) AS allocated_qty
-        FROM allocations a
-        WHERE a.receiving_invoice_item_id IN (SELECT receiving_invoice_item_id FROM order_item_ids)
-        GROUP BY a.receiving_invoice_item_id
+          rii.id AS receiving_invoice_item_id,
+          COALESCE(SUM(a.qty), 0) AS allocated_qty
+        FROM receiving_invoice_items rii
+        JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+        JOIN allocations a ON a.receiving_order_id = ri.receiving_order_id
+        JOIN picking_items pi ON pi.id = a.picking_item_id
+        WHERE pi.part_id = rii.part_id
+        GROUP BY rii.id
       ),
       order_unboxed AS (
         SELECT
@@ -164,11 +167,14 @@ export async function findReceivingCandidatesForOrder(
       ),
       order_allocations AS (
         SELECT
-          a.receiving_invoice_item_id,
-          SUM(a.qty) AS allocated_qty
-        FROM allocations a
-        WHERE a.receiving_invoice_item_id IN (SELECT receiving_invoice_item_id FROM order_item_ids)
-        GROUP BY a.receiving_invoice_item_id
+          rii.id AS receiving_invoice_item_id,
+          COALESCE(SUM(a.qty), 0) AS allocated_qty
+        FROM receiving_invoice_items rii
+        JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+        JOIN allocations a ON a.receiving_order_id = ri.receiving_order_id
+        JOIN picking_items pi ON pi.id = a.picking_item_id
+        WHERE pi.part_id = rii.part_id
+        GROUP BY rii.id
       ),
       order_unboxed AS (
         SELECT
@@ -356,7 +362,16 @@ export async function applyOcrPick(
           WHERE a.receiving_order_id = ${receivingOrderId}
             AND pi.part_id = ${pickingItem.partId}
             AND a.picking_item_id != ${pickingItemId}
-        ), 0) AS reserved_by_others
+        ), 0) AS reserved_by_others,
+        (
+          SELECT COALESCE(SUM(pas.qty), 0)
+          FROM put_away_scans pas
+          JOIN receiving_invoice_items rii2 ON rii2.id = pas.receiving_invoice_item_id
+          JOIN receiving_invoices ri2 ON ri2.id = rii2.receiving_invoice_id
+          WHERE ri2.receiving_order_id = ${receivingOrderId}
+            AND rii2.part_id = ${pickingItem.partId}
+            AND pas.shelf_box_id IS NULL
+        ) AS unboxed_qty
       FROM receiving_orders ro
       JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
       JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
@@ -366,7 +381,8 @@ export async function applyOcrPick(
     const availabilityRow = availabilityResult.rows[0] as any;
     const physicalQty = Number(availabilityRow.physical_qty ?? 0);
     const reservedByOthers = Number(availabilityRow.reserved_by_others ?? 0);
-    const availableForScan = physicalQty - reservedByOthers;
+    const unboxedQty = Number(availabilityRow.unboxed_qty ?? 0);
+    const availableForScan = physicalQty - reservedByOthers - unboxedQty;
     if (qty > availableForScan) {
       throw new I18nError("quantity_not_available_receiving");
     }
@@ -389,6 +405,17 @@ export async function applyOcrPick(
         .where(eq(schema.pickingItems.id, pickingItemId));
     }
 
+    // Reload allocations after possible insertion.
+    const allocations = await tx
+      .select()
+      .from(schema.allocations)
+      .where(
+        sql`${schema.allocations.receivingOrderId} = ${receivingOrderId}
+          AND ${schema.allocations.pickingItemId} = ${pickingItemId}
+          AND ${schema.allocations.qty} > 0`
+      )
+      .orderBy(schema.allocations.id);
+
     const invoiceItems = await tx.execute(sql`
       SELECT
         rii.id AS receiving_invoice_item_id,
@@ -400,7 +427,7 @@ export async function applyOcrPick(
           SELECT SUM(a.qty)
           FROM allocations a
           JOIN picking_items pi ON pi.id = a.picking_item_id
-          WHERE a.receiving_order_id = ro.id
+          WHERE a.receiving_order_id = ${receivingOrderId}
             AND pi.part_id = rii.part_id
             AND a.picking_item_id != ${pickingItemId}
         ), 0) AS reserved_by_others,
@@ -421,7 +448,7 @@ export async function applyOcrPick(
           SELECT SUM(a.qty)
           FROM allocations a
           JOIN picking_items pi ON pi.id = a.picking_item_id
-          WHERE a.receiving_order_id = ro.id
+          WHERE a.receiving_order_id = ${receivingOrderId}
             AND pi.part_id = rii.part_id
             AND a.picking_item_id != ${pickingItemId}
         ), 0) -
@@ -435,6 +462,7 @@ export async function applyOcrPick(
     `);
 
     let remainingScan = qty;
+    let allocationIndex = 0;
     for (const raw of invoiceItems.rows ?? []) {
       if (remainingScan <= 0) break;
       const available =
@@ -447,30 +475,27 @@ export async function applyOcrPick(
       const use = Math.min(remainingScan, available);
       const receivingInvoiceItemId = String(raw.receiving_invoice_item_id);
 
-      const [allocation] = await tx
-        .select()
-        .from(schema.allocations)
-        .where(
-          sql`${schema.allocations.receivingOrderId} = ${receivingOrderId}
-            AND ${schema.allocations.pickingItemId} = ${pickingItemId}
-            AND ${schema.allocations.qty} > 0`
-        )
-        .orderBy(schema.allocations.id)
-        .limit(1);
-      if (!allocation) throw new I18nError("allocation_not_found");
-
-      const materializedAllocationId = await materializeReceivingAllocation(
-        db,
-        allocation.id,
-        use,
-        dateCode,
-        lotCode,
-        coo,
-        cow,
-        receivingInvoiceItemId,
-        tx
-      );
-      await scanAllocationToPackage(db, materializedAllocationId, use, actorId, tx);
+      let portionLeft = use;
+      while (portionLeft > 0) {
+        const allocation = allocations[allocationIndex];
+        if (!allocation) throw new I18nError("allocation_not_found");
+        const take = Math.min(portionLeft, allocation.qty);
+        const materializedAllocationId = await materializeReceivingAllocation(
+          db,
+          allocation.id,
+          take,
+          dateCode,
+          lotCode,
+          coo,
+          cow,
+          receivingInvoiceItemId,
+          tx
+        );
+        await scanAllocationToPackage(db, materializedAllocationId, take, actorId, tx);
+        allocation.qty -= take;
+        if (allocation.qty <= 0) allocationIndex++;
+        portionLeft -= take;
+      }
       remainingScan -= use;
     }
 
