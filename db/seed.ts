@@ -1209,136 +1209,7 @@ const wclPartByNo = Object.fromEntries(wclPartRecords.map((p) => [p.partNo, p]))
   ] as const;
   await db.insert(schema.shelves).values([...shelfRecords]);
 
-  // Pre-existing shelf inventory from Section 4 of the seed curation.
-  const preExistingLots = [
-    { id: uuid(), partId: partByNo["IL34063ADT"].id, dateCode: "", lotCode: "", coo: "KR", cow: "USA", shelfCode: "A-01-01", boxId: null, totalQty: 5000, allocatedQty: 0 },
-    { id: uuid(), partId: partByNo["CX2016SA20000D0HSSCC"].id, dateCode: "", lotCode: "", coo: "JP", cow: "USA", shelfCode: "A-01-02", boxId: null, totalQty: 5000, allocatedQty: 0 },
-    { id: uuid(), partId: partByNo["NCC-TND14V-471KB00AAA0"].id, dateCode: "", lotCode: "", coo: "ID", cow: "USA", shelfCode: "A-01-03", boxId: null, totalQty: 5000, allocatedQty: 0 },
-    { id: uuid(), partId: partByNo["NX8045GB"].id, dateCode: "", lotCode: "", coo: "CN", cow: "USA", shelfCode: "A-01-04", boxId: null, totalQty: 5000, allocatedQty: 0 },
-    { id: uuid(), partId: partByNo["Q-SPT7P0327620C5GF"].id, dateCode: "", lotCode: "", coo: "MY", cow: "USA", shelfCode: "A-01-05", boxId: null, totalQty: 5000, allocatedQty: 0 },
-    { id: uuid(), partId: partByNo["OKAYA-RE104-L"].id, dateCode: "", lotCode: "", coo: "CN", cow: "USA", shelfCode: "A-01-06", boxId: null, totalQty: 5000, allocatedQty: 0 },
-    { id: uuid(), partId: partByNo["D1FL20U"].id, dateCode: "", lotCode: "", coo: "JP", cow: "USA", shelfCode: "A-01-07", boxId: null, totalQty: 5000, allocatedQty: 0 },
-    { id: uuid(), partId: partByNo["04028DA12RBUFB"].id, dateCode: "", lotCode: "", coo: "CN", cow: "USA", shelfCode: "A-01-08", boxId: null, totalQty: 10, allocatedQty: 0 },
-  ] as const;
-  await db.insert(schema.inventoryLots).values([...preExistingLots]);
-
-  // Pre-existing shelf boxes so the goods-verify flow has boxes to check.
-  const preExistingShelfBoxes = [
-    { id: "SBOX-SEED-001", receivingOrderId: null as string | null, shelfCode: "A-01-01", status: "open" as const, createdAt: now },
-    { id: "SBOX-SEED-002", receivingOrderId: null as string | null, shelfCode: "A-01-02", status: "closed" as const, createdAt: now },
-    { id: "SBOX-SEED-003", receivingOrderId: null as string | null, shelfCode: "B-01-01", status: "open" as const, createdAt: now },
-  ] as const;
-  await db.insert(schema.shelfBoxes).values([...preExistingShelfBoxes]);
-
-  await db.insert(schema.putAwayScans).values([
-    {
-      id: uuid(),
-      shelfBoxId: "SBOX-SEED-001",
-      receivingInvoiceItemId: null,
-      partId: partByNo["RK73B1JTTD181G"].id,
-      qty: 1000,
-      dateCode: "",
-      lotCode: "",
-      coo: "CN",
-      cow: "USA",
-      verified: false,
-      verifiedAt: null,
-      createdAt: now,
-    },
-    {
-      id: uuid(),
-      shelfBoxId: "SBOX-SEED-001",
-      receivingInvoiceItemId: null,
-      partId: partByNo["RK73H2ATTD1372F"].id,
-      qty: 500,
-      dateCode: "",
-      lotCode: "",
-      coo: "CN",
-      cow: "USA",
-      verified: true,
-      verifiedAt: now,
-      createdAt: now,
-    },
-    {
-      id: uuid(),
-      shelfBoxId: "SBOX-SEED-002",
-      receivingInvoiceItemId: null,
-      partId: partByNo["S-1206B18-M3T1U"].id,
-      qty: 500,
-      dateCode: "",
-      lotCode: "",
-      coo: "JP",
-      cow: "USA",
-      verified: true,
-      verifiedAt: now,
-      createdAt: now,
-    },
-    {
-      id: uuid(),
-      shelfBoxId: "SBOX-SEED-003",
-      receivingInvoiceItemId: null,
-      partId: partByNo["S-8240ADJ-I6T1U"].id,
-      qty: 200,
-      dateCode: "",
-      lotCode: "",
-      coo: "JP",
-      cow: "USA",
-      verified: false,
-      verifiedAt: null,
-      createdAt: now,
-    },
-    {
-      id: uuid(),
-      shelfBoxId: "SBOX-SEED-003",
-      receivingInvoiceItemId: null,
-      partId: partByNo["D1FL20U"].id,
-      qty: 100,
-      dateCode: "",
-      lotCode: "",
-      coo: "JP",
-      cow: "USA",
-      verified: false,
-      verifiedAt: null,
-      createdAt: now,
-    },
-  ]);
-
   // Receiving orders
-  const receivingOrderRecords = [
-    {
-      id: uuid(),
-      refNo: "04958058-W-01",
-      supplierId: supplierByCode.KOA.id,
-      deliveryDate: now,
-      status: "in_hand" as const,
-      arrivedAt: now,
-      arrivedBy: userOperator.id,
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: uuid(),
-      refNo: "1080082369",
-      supplierId: supplierByCode.ABLIC.id,
-      deliveryDate: now,
-      status: "in_hand" as const,
-      arrivedAt: now,
-      arrivedBy: userOperator.id,
-      createdAt: now,
-      updatedAt: now,
-    },
-    {
-      id: uuid(),
-      refNo: "52600142",
-      supplierId: supplierByCode.DIOTEC.id,
-      deliveryDate: now,
-      status: "pending" as const,
-      arrivedAt: null as Date | null,
-      arrivedBy: null as string | null,
-      createdAt: now,
-      updatedAt: now,
-    },
-  ] as const;
   const wclReceivingOrder = {
     id: uuid(),
     refNo: "04958166",
@@ -1351,17 +1222,7 @@ const wclPartByNo = Object.fromEntries(wclPartRecords.map((p) => [p.partNo, p]))
     updatedAt: now,
   };
 
-  await db.insert(schema.receivingOrders).values([...receivingOrderRecords, wclReceivingOrder]);
-  const receivingOrderByRef = Object.fromEntries(receivingOrderRecords.map((ro) => [ro.refNo, ro])) as Record<
-    (typeof receivingOrderRecords)[number]["refNo"],
-    (typeof receivingOrderRecords)[number]
-  >;
-
-  const invoiceRecords = [
-    { id: uuid(), receivingOrderId: receivingOrderByRef["04958058-W-01"].id, invoiceNo: "04958058-W-01", supplierId: supplierByCode.KOA.id },
-    { id: uuid(), receivingOrderId: receivingOrderByRef["1080082369"].id, invoiceNo: "1080082369", supplierId: supplierByCode.ABLIC.id },
-    { id: uuid(), receivingOrderId: receivingOrderByRef["52600142"].id, invoiceNo: "52600142", supplierId: supplierByCode.DIOTEC.id },
-  ] as const;
+  await db.insert(schema.receivingOrders).values([wclReceivingOrder]);
 const wclInvoiceRecords = [
   {
     id: '54298b96-454e-48f2-9868-6b8482a37ed9',
@@ -1464,231 +1325,7 @@ const wclInvoiceByNo = Object.fromEntries(wclInvoiceRecords.map((inv) => [inv.in
   (typeof wclInvoiceRecords)[number]["invoiceNo"],
   (typeof wclInvoiceRecords)[number]
 >;
-  await db.insert(schema.receivingInvoices).values([...invoiceRecords, ...wclInvoiceRecords]);
-  const invoiceByNo = Object.fromEntries(invoiceRecords.map((inv) => [inv.invoiceNo, inv])) as Record<
-    (typeof invoiceRecords)[number]["invoiceNo"],
-    (typeof invoiceRecords)[number]
-  >;
-
-  const receivingInvoiceItemRecords = [
-    // KOA 04958058-W-01
-    {
-      id: uuid(),
-      receivingInvoiceId: invoiceByNo["04958058-W-01"].id,
-      partId: partByNo["RK73B1JTTD181G"].id,
-      poNo: "1180200568STD",
-      poLine: "1",
-      qty: 15000,
-      receivedQty: 15000,
-      pickedQty: 0,
-      putAwayQty: 0,
-      boxId: null as string | null,
-      dateCode: "" as string | null,
-      lotCode: "" as string | null,
-      coo: "CN",
-      cow: "USA",
-    },
-    {
-      id: uuid(),
-      receivingInvoiceId: invoiceByNo["04958058-W-01"].id,
-      partId: partByNo["RK73H2ATTD1372F"].id,
-      poNo: "1180200568STD",
-      poLine: "2",
-      qty: 40000,
-      receivedQty: 40000,
-      pickedQty: 0,
-      putAwayQty: 0,
-      boxId: null,
-      dateCode: "",
-      lotCode: "",
-      coo: "CN",
-      cow: "USA",
-    },
-    {
-      id: uuid(),
-      receivingInvoiceId: invoiceByNo["04958058-W-01"].id,
-      partId: partByNo["RK73H1JTTD1501F"].id,
-      poNo: "1180200859STD",
-      poLine: "3",
-      qty: 5000,
-      receivedQty: 5000,
-      pickedQty: 0,
-      putAwayQty: 0,
-      boxId: null,
-      dateCode: "",
-      lotCode: "",
-      coo: "CN",
-      cow: "USA",
-    },
-    {
-      id: uuid(),
-      receivingInvoiceId: invoiceByNo["04958058-W-01"].id,
-      partId: partByNo["RK73H1JTTD2202F"].id,
-      poNo: "1180200859STD",
-      poLine: "4",
-      qty: 5000,
-      receivedQty: 5000,
-      pickedQty: 0,
-      putAwayQty: 0,
-      boxId: null,
-      dateCode: "",
-      lotCode: "",
-      coo: "CN",
-      cow: "USA",
-    },
-    {
-      id: uuid(),
-      receivingInvoiceId: invoiceByNo["04958058-W-01"].id,
-      partId: partByNo["RK73H2ATTD1002F"].id,
-      poNo: "1180201327STD",
-      poLine: "5",
-      qty: 70000,
-      receivedQty: 70000,
-      pickedQty: 0,
-      putAwayQty: 0,
-      boxId: null,
-      dateCode: "",
-      lotCode: "",
-      coo: "CN",
-      cow: "USA",
-    },
-    // ABLIC 1080082369
-    {
-      id: uuid(),
-      receivingInvoiceId: invoiceByNo["1080082369"].id,
-      partId: partByNo["S-1206B18-M3T1U"].id,
-      poNo: "1180200571W",
-      poLine: "1",
-      qty: 3000,
-      receivedQty: 3000,
-      pickedQty: 0,
-      putAwayQty: 0,
-      boxId: null,
-      dateCode: "",
-      lotCode: "",
-      coo: "JP",
-      cow: "USA",
-    },
-    {
-      id: uuid(),
-      receivingInvoiceId: invoiceByNo["1080082369"].id,
-      partId: partByNo["S-80860CNNB-B9LT2U"].id,
-      poNo: "1180200214",
-      poLine: "2",
-      qty: 3000,
-      receivedQty: 3000,
-      pickedQty: 0,
-      putAwayQty: 0,
-      boxId: null,
-      dateCode: "",
-      lotCode: "",
-      coo: "JP",
-      cow: "USA",
-    },
-    {
-      id: uuid(),
-      receivingInvoiceId: invoiceByNo["1080082369"].id,
-      partId: partByNo["S-8240ADJ-I6T1U"].id,
-      poNo: "1180201399",
-      poLine: "3",
-      qty: 15000,
-      receivedQty: 15000,
-      pickedQty: 0,
-      putAwayQty: 0,
-      boxId: null,
-      dateCode: "",
-      lotCode: "",
-      coo: "JP",
-      cow: "USA",
-    },
-    // DIOTEC 52600142 (pending)
-    {
-      id: uuid(),
-      receivingInvoiceId: invoiceByNo["52600142"].id,
-      partId: partByNo["DBI25-16A"].id,
-      poNo: "1180200536",
-      poLine: "1",
-      qty: 900,
-      receivedQty: 0,
-      pickedQty: 0,
-      putAwayQty: 0,
-      boxId: null,
-      dateCode: "",
-      lotCode: "",
-      coo: "IN",
-      cow: "USA",
-    },
-    {
-      id: uuid(),
-      receivingInvoiceId: invoiceByNo["52600142"].id,
-      partId: partByNo["MM1Z4733A"].id,
-      poNo: "1180200595",
-      poLine: "2",
-      qty: 75000,
-      receivedQty: 0,
-      pickedQty: 0,
-      putAwayQty: 0,
-      boxId: null,
-      dateCode: "",
-      lotCode: "",
-      coo: "CN",
-      cow: "USA",
-    },
-    {
-      id: uuid(),
-      receivingInvoiceId: invoiceByNo["52600142"].id,
-      partId: partByNo["SL1M"].id,
-      poNo: "1180200706",
-      poLine: "3",
-      qty: 300000,
-      receivedQty: 0,
-      pickedQty: 0,
-      putAwayQty: 0,
-      boxId: null,
-      dateCode: "",
-      lotCode: "",
-      coo: "CN",
-      cow: "USA",
-    },
-    {
-      id: uuid(),
-      receivingInvoiceId: invoiceByNo["52600142"].id,
-      partId: partByNo["SMF51CA"].id,
-      poNo: "1180201274",
-      poLine: "4",
-      qty: 12000,
-      receivedQty: 0,
-      pickedQty: 0,
-      putAwayQty: 0,
-      boxId: null,
-      dateCode: "",
-      lotCode: "",
-      coo: "CN",
-      cow: "USA",
-    },
-    {
-      id: uuid(),
-      receivingInvoiceId: invoiceByNo["52600142"].id,
-      partId: partByNo["Z1SMA1020"].id,
-      poNo: "1180201290",
-      poLine: "5",
-      qty: 7500,
-      receivedQty: 0,
-      pickedQty: 0,
-      putAwayQty: 0,
-      boxId: null,
-      dateCode: "",
-      lotCode: "",
-      coo: "DE",
-      cow: "USA",
-    },
-  ];
-
-  const [sampleItem] = receivingInvoiceItemRecords;
-  const [sampleItem2] = receivingInvoiceItemRecords.slice(1);
-
-  sampleItem.receivedQty = sampleItem.qty - 100;
-  sampleItem2.receivedQty = 1000;
+  await db.insert(schema.receivingInvoices).values([...wclInvoiceRecords]);
 
 const wclReceivingInvoiceItemRecords = [
   {
@@ -5917,10 +5554,7 @@ const wclReceivingInvoiceItemRecords = [
   }
 ];
 
-  await db.insert(schema.receivingInvoiceItems).values([
-    ...receivingInvoiceItemRecords,
-    ...wclReceivingInvoiceItemRecords,
-  ]);
+  await db.insert(schema.receivingInvoiceItems).values([...wclReceivingInvoiceItemRecords]);
 
   await db.insert(schema.receivingItemMismatches).values([
     {
@@ -5953,186 +5587,1103 @@ const wclReceivingInvoiceItemRecords = [
     },
   ]);
 
-  // Note: in-hand receiving orders intentionally do NOT create inventory_lots here.
-  // Allocations are made against receiving_invoice_items directly.
+  // Picking orders from TN PDFs
 
-  const pickingOrderRecords = [
-    { id: uuid(), refNo: "PICK-001", supplierId: supplierByCode.KOA.id, deliveryDate: now, poNo: "PO-PICK-001", requiredDateCodeNotice: null as string | null, shipTo: "US", destinationCountry: "USA", status: "pending" as const, createdAt: now, updatedAt: now },
-    { id: uuid(), refNo: "PICK-002", supplierId: supplierByCode.ABLIC.id, deliveryDate: now, poNo: "PO-PICK-002", requiredDateCodeNotice: null, shipTo: "CN", destinationCountry: "China", status: "pending" as const, createdAt: now, updatedAt: now },
-    { id: uuid(), refNo: "PICK-003", supplierId: supplierByCode.OKAYA.id, deliveryDate: now, poNo: "PO-PICK-003", requiredDateCodeNotice: null, shipTo: "US", destinationCountry: "USA", status: "pending" as const, createdAt: now, updatedAt: now },
-    { id: uuid(), refNo: "PICK-004", supplierId: supplierByCode.KYOCER.id, deliveryDate: now, poNo: "PO-PICK-004", requiredDateCodeNotice: null, shipTo: "CN", destinationCountry: "China", status: "pending" as const, createdAt: now, updatedAt: now },
-    { id: uuid(), refNo: "PICK-005", supplierId: supplierByCode.IK.id, deliveryDate: now, poNo: "PO-PICK-005", requiredDateCodeNotice: null, shipTo: "US", destinationCountry: "USA", status: "pending" as const, createdAt: now, updatedAt: now },
-  ] as const;
+// Picking orders (23)
+const pickingOrderRecords = [
+  {
+    id: 'eafb5b08-d111-4c71-8c95-3b4bcecdcf0b',
+    refNo: 'GZ-26070045',
+    supplierId: supplierByCode.KOA.id,
+    deliveryDate: new Date('2026-07-13'),
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: 'GZ',
+    destinationCountry: 'China',
+    status: 'pending',
+    arrivedAt: null,
+    arrivedBy: null,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: '87db7fb4-15f8-461a-929b-7b6ae4a73b84',
+    refNo: 'GZ-26070046',
+    supplierId: supplierByCode.KOA.id,
+    deliveryDate: new Date('2026-07-13'),
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: 'GZ',
+    destinationCountry: 'China',
+    status: 'pending',
+    arrivedAt: null,
+    arrivedBy: null,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: '3b80562d-219c-4cae-8b29-4ab9255dcb25',
+    refNo: 'GZ-26070047',
+    supplierId: supplierByCode.KOA.id,
+    deliveryDate: new Date('2026-07-13'),
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: 'GZ',
+    destinationCountry: 'China',
+    status: 'pending',
+    arrivedAt: null,
+    arrivedBy: null,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: 'd91ea1b9-1603-4163-851f-3c3768b6e9e0',
+    refNo: 'GZ-26070048',
+    supplierId: supplierByCode.KOA.id,
+    deliveryDate: new Date('2026-07-13'),
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: 'GZ',
+    destinationCountry: 'China',
+    status: 'pending',
+    arrivedAt: null,
+    arrivedBy: null,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: '4551a00f-6669-431a-89bc-4ce195f3383d',
+    refNo: 'GZ-26070049',
+    supplierId: supplierByCode.KOA.id,
+    deliveryDate: new Date('2026-07-13'),
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: 'GZ',
+    destinationCountry: 'China',
+    status: 'pending',
+    arrivedAt: null,
+    arrivedBy: null,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: '0faae128-a28c-48fe-8c5c-4540c77175db',
+    refNo: 'GZ-26070050',
+    supplierId: supplierByCode.KOA.id,
+    deliveryDate: new Date('2026-07-13'),
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: 'GZ',
+    destinationCountry: 'China',
+    status: 'pending',
+    arrivedAt: null,
+    arrivedBy: null,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: '3f7851b9-d5ba-4710-ab9c-65072f541c31',
+    refNo: 'GZ-26070051',
+    supplierId: supplierByCode.KOA.id,
+    deliveryDate: new Date('2026-07-13'),
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: 'GZ',
+    destinationCountry: 'China',
+    status: 'pending',
+    arrivedAt: null,
+    arrivedBy: null,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: 'f19d85cf-88ab-44c1-91b6-a94ed141c9ef',
+    refNo: 'GZ-26070052',
+    supplierId: supplierByCode.KOA.id,
+    deliveryDate: new Date('2026-07-13'),
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: 'GZ',
+    destinationCountry: 'China',
+    status: 'pending',
+    arrivedAt: null,
+    arrivedBy: null,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: '1f8b40e3-98e1-4402-a9a5-c9cc1f836e22',
+    refNo: 'GZ-26070053',
+    supplierId: supplierByCode.KOA.id,
+    deliveryDate: new Date('2026-07-13'),
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: 'GZ',
+    destinationCountry: 'China',
+    status: 'pending',
+    arrivedAt: null,
+    arrivedBy: null,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: '4c32edc4-cd14-4cbd-a53b-d3df4bae2013',
+    refNo: 'GZ-26070054',
+    supplierId: supplierByCode.KOA.id,
+    deliveryDate: new Date('2026-07-13'),
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: 'GZ',
+    destinationCountry: 'China',
+    status: 'pending',
+    arrivedAt: null,
+    arrivedBy: null,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: 'c95cc3c7-f011-45db-a4e6-8bdd431144fa',
+    refNo: 'SZ-26070040',
+    supplierId: supplierByCode.KOA.id,
+    deliveryDate: new Date('2026-07-13'),
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: 'SZ',
+    destinationCountry: 'China',
+    status: 'pending',
+    arrivedAt: null,
+    arrivedBy: null,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: '50572fe6-a6ae-4b17-a952-d7e5f4b6cffe',
+    refNo: 'SZ-26070041',
+    supplierId: supplierByCode.KOA.id,
+    deliveryDate: new Date('2026-07-13'),
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: 'SZ',
+    destinationCountry: 'China',
+    status: 'pending',
+    arrivedAt: null,
+    arrivedBy: null,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: 'a93f9e3e-09ad-4e4a-ba81-317bf8c628f4',
+    refNo: 'SZ-26070042',
+    supplierId: supplierByCode.KOA.id,
+    deliveryDate: new Date('2026-07-13'),
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: 'SZ',
+    destinationCountry: 'China',
+    status: 'pending',
+    arrivedAt: null,
+    arrivedBy: null,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: '86ecc0ae-a112-4c37-850a-21107b22f210',
+    refNo: 'SZ-26070043',
+    supplierId: supplierByCode.KOA.id,
+    deliveryDate: new Date('2026-07-13'),
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: 'SZ',
+    destinationCountry: 'China',
+    status: 'pending',
+    arrivedAt: null,
+    arrivedBy: null,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: '86e6d1bb-cd56-4ef9-9a27-205864eb9341',
+    refNo: 'SZ-26070044',
+    supplierId: supplierByCode.KOA.id,
+    deliveryDate: new Date('2026-07-13'),
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: 'SZ',
+    destinationCountry: 'China',
+    status: 'pending',
+    arrivedAt: null,
+    arrivedBy: null,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: '7358c4df-ab54-4a88-980c-1cffc2441dac',
+    refNo: 'SZ-26070045',
+    supplierId: supplierByCode.KOA.id,
+    deliveryDate: new Date('2026-07-13'),
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: 'SZ',
+    destinationCountry: 'China',
+    status: 'pending',
+    arrivedAt: null,
+    arrivedBy: null,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: 'c6e19535-6dff-4f2d-9742-6bf50b7ae7d9',
+    refNo: 'SZ-26070046',
+    supplierId: supplierByCode.KOA.id,
+    deliveryDate: new Date('2026-07-13'),
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: 'SZ',
+    destinationCountry: 'China',
+    status: 'pending',
+    arrivedAt: null,
+    arrivedBy: null,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: '3d75e69a-b344-446d-8a28-08ed36009e13',
+    refNo: 'SZ-26070047',
+    supplierId: supplierByCode.KOA.id,
+    deliveryDate: new Date('2026-07-13'),
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: 'SZ',
+    destinationCountry: 'China',
+    status: 'pending',
+    arrivedAt: null,
+    arrivedBy: null,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: '2dda231a-0842-4e19-90d5-516426e80897',
+    refNo: 'SZ-26070048',
+    supplierId: supplierByCode.KOA.id,
+    deliveryDate: new Date('2026-07-13'),
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: 'SZ',
+    destinationCountry: 'China',
+    status: 'pending',
+    arrivedAt: null,
+    arrivedBy: null,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: '7fc8061f-2374-4f91-9e92-b57612a002c4',
+    refNo: 'SZ-26070049',
+    supplierId: supplierByCode.KOA.id,
+    deliveryDate: new Date('2026-07-13'),
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: 'SZ',
+    destinationCountry: 'China',
+    status: 'pending',
+    arrivedAt: null,
+    arrivedBy: null,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: '78dbafdc-d289-4519-b872-ec0b76943993',
+    refNo: 'SZ-26070050',
+    supplierId: supplierByCode.KOA.id,
+    deliveryDate: new Date('2026-07-13'),
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: 'SZ',
+    destinationCountry: 'China',
+    status: 'pending',
+    arrivedAt: null,
+    arrivedBy: null,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: 'c18af4d0-6da6-4ffd-aa4a-465058ae8f89',
+    refNo: 'SZ-26070051',
+    supplierId: supplierByCode.KOA.id,
+    deliveryDate: new Date('2026-07-13'),
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: 'SZ',
+    destinationCountry: 'China',
+    status: 'pending',
+    arrivedAt: null,
+    arrivedBy: null,
+    createdAt: now,
+    updatedAt: now
+  },
+  {
+    id: '04f9f4f9-c370-4a9e-b05f-90e17de22d64',
+    refNo: 'SZ-26070052',
+    supplierId: supplierByCode.KOA.id,
+    deliveryDate: new Date('2026-07-13'),
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: 'SZ',
+    destinationCountry: 'China',
+    status: 'pending',
+    arrivedAt: null,
+    arrivedBy: null,
+    createdAt: now,
+    updatedAt: now
+  }
+] as const;
+const pickingOrderByRef = Object.fromEntries(pickingOrderRecords.map((po) => [po.refNo, po])) as Record<
+  (typeof pickingOrderRecords)[number]["refNo"],
+  (typeof pickingOrderRecords)[number]
+>;
+
+// Picking items (73)
+const pickingItemRecords = [
+  {
+    id: 'e2ebf66b-8a8b-4547-b446-5e475ce03fc2',
+    pickingOrderId: pickingOrderByRef[\GZ-26070045\'].id',
+    partId: wclPartByNo[\RK73H1ETTP1000F\'].id',
+    qty: 760000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '7de15506-0830-4ecc-9f8a-d71f8c765efb',
+    pickingOrderId: pickingOrderByRef[\GZ-26070045\'].id',
+    partId: wclPartByNo[\RK73H1ETTP2001F\'].id',
+    qty: 390000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'd7f58d30-0094-43b0-8536-d91d90e1093a',
+    pickingOrderId: pickingOrderByRef[\GZ-26070045\'].id',
+    partId: wclPartByNo[\RK73H1ETTP4701D\'].id',
+    qty: 170000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '58aa7122-6233-4339-97d1-f2e598de2c12',
+    pickingOrderId: pickingOrderByRef[\GZ-26070046\'].id',
+    partId: wclPartByNo[\HV732HTTE1004F\'].id',
+    qty: 296000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'ade0779a-1f5c-4471-a670-5458010d5c05',
+    pickingOrderId: pickingOrderByRef[\GZ-26070047\'].id',
+    partId: wclPartByNo[\RK73H1ERTTP3301F\'].id',
+    qty: 300000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'e642d7ed-158b-401c-8a70-5f75758dfc2d',
+    pickingOrderId: pickingOrderByRef[\GZ-26070047\'].id',
+    partId: wclPartByNo[\RK73H2ATTD3161D\'].id',
+    qty: 10000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '845071ca-afeb-4c68-95c3-d45b33b1ee5d',
+    pickingOrderId: pickingOrderByRef[\GZ-26070048\'].id',
+    partId: wclPartByNo[\RK73H1JTTD2001F\'].id',
+    qty: 120000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'a5b8dede-5862-4c84-887d-9ec0e3cf5118',
+    pickingOrderId: pickingOrderByRef[\GZ-26070050\'].id',
+    partId: wclPartByNo[\RK73H1ERTTP1004F\'].id',
+    qty: 10000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '938d3740-bac9-43f7-8a8d-139c37ff4d54',
+    pickingOrderId: pickingOrderByRef[\GZ-26070050\'].id',
+    partId: wclPartByNo[\RK73H1ETTP1001F\'].id',
+    qty: 1240000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '511ab905-ccd7-4ac7-9556-7bbfddaee8f3',
+    pickingOrderId: pickingOrderByRef[\GZ-26070050\'].id',
+    partId: wclPartByNo[\RK73H1ETTP1002F\'].id',
+    qty: 400000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '7200eda8-cf21-4ed6-b970-70f254ff3506',
+    pickingOrderId: pickingOrderByRef[\GZ-26070050\'].id',
+    partId: wclPartByNo[\RK73H1ETTP3002F\'].id',
+    qty: 90000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '9669148b-1115-413c-a0e0-af23a8513794',
+    pickingOrderId: pickingOrderByRef[\GZ-26070050\'].id',
+    partId: wclPartByNo[\RK73H1ETTP3003F\'].id',
+    qty: 290000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '7b49f885-47da-4190-b1f8-6dbb1db430a7',
+    pickingOrderId: pickingOrderByRef[\GZ-26070051\'].id',
+    partId: wclPartByNo[\RK73H1ETTP33R0F\'].id',
+    qty: 20000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'f6d5122a-c769-4f99-9cb0-a251cb7bf3a5',
+    pickingOrderId: pickingOrderByRef[\GZ-26070051\'].id',
+    partId: wclPartByNo[\RK73H1ETTP8061F\'].id',
+    qty: 20000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '594d9412-aadd-48ec-92b0-7ed6c59b32ea',
+    pickingOrderId: pickingOrderByRef[\GZ-26070051\'].id',
+    partId: wclPartByNo[\RK73H1JTTD1003F\'].id',
+    qty: 10000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '65618c3d-8434-4c5f-bd4b-7659bb62e993',
+    pickingOrderId: pickingOrderByRef[\GZ-26070052\'].id',
+    partId: wclPartByNo[\RK73H1ETTP1000F\'].id',
+    qty: 880000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'b76d4e80-94dd-4ee8-acb9-eeb270f83945',
+    pickingOrderId: pickingOrderByRef[\GZ-26070052\'].id',
+    partId: wclPartByNo[\RK73H1ETTP1001F\'].id',
+    qty: 60000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'd300eb93-309b-414d-a28b-a2d6418f41e6',
+    pickingOrderId: pickingOrderByRef[\GZ-26070052\'].id',
+    partId: wclPartByNo[\RK73H1ETTP1002F\'].id',
+    qty: 580000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '99058306-c1e5-4248-b61e-11261244ec2a',
+    pickingOrderId: pickingOrderByRef[\GZ-26070052\'].id',
+    partId: wclPartByNo[\RK73H1ETTP2401F\'].id',
+    qty: 10000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'e3bb05d9-2273-4704-9c7a-5eb77db0aa5d',
+    pickingOrderId: pickingOrderByRef[\GZ-26070052\'].id',
+    partId: wclPartByNo[\RK73H1ETTP5100F\'].id',
+    qty: 10000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'a23ec1c1-5331-401f-845f-0a8c64008b0b',
+    pickingOrderId: pickingOrderByRef[\GZ-26070053\'].id',
+    partId: wclPartByNo[\RK73H1ETTP5102F\'].id',
+    qty: 10000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'f275b88b-80c0-4742-b254-7de8b3a9774a',
+    pickingOrderId: pickingOrderByRef[\GZ-26070053\'].id',
+    partId: wclPartByNo[\RK73H1JTTD1000F\'].id',
+    qty: 165000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '07c1c762-b044-4420-b4fa-d2300de72897',
+    pickingOrderId: pickingOrderByRef[\GZ-26070053\'].id',
+    partId: wclPartByNo[\RK73H1JTTD1001F\'].id',
+    qty: 15000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '81235f85-ffd8-4d8e-ac61-52492534abc1',
+    pickingOrderId: pickingOrderByRef[\GZ-26070053\'].id',
+    partId: wclPartByNo[\RK73H1JTTD2002F\'].id',
+    qty: 720000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'c7f8e348-ab42-47a8-9bb6-9d6c3bd0272b',
+    pickingOrderId: pickingOrderByRef[\GZ-26070053\'].id',
+    partId: wclPartByNo[\RK73H2ATTD10R0F\'].id',
+    qty: 300000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'd7d33033-2bca-47a6-af8f-12a8b793af60',
+    pickingOrderId: pickingOrderByRef[\GZ-26070054\'].id',
+    partId: wclPartByNo[\RK73H2ATTD10R0F\'].id',
+    qty: 515000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '2f99f283-9df4-49f6-831e-cce833979ec3',
+    pickingOrderId: pickingOrderByRef[\GZ-26070054\'].id',
+    partId: wclPartByNo[\RK73H2ATTD20R0F\'].id',
+    qty: 10000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '88eac7b8-2125-478c-b972-075fe8fe1dd4',
+    pickingOrderId: pickingOrderByRef[\SZ-26070040\'].id',
+    partId: wclPartByNo[\HV73V2BTTD1004D\'].id',
+    qty: 1200000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '9e2f98c2-2c6f-45bb-9800-a85e668f5a15',
+    pickingOrderId: pickingOrderByRef[\SZ-26070041\'].id',
+    partId: wclPartByNo[\HV73V2BTTD1004D\'].id',
+    qty: 300000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '9dad1c3b-0aea-4485-a042-7cb0054b19f2',
+    pickingOrderId: pickingOrderByRef[\SZ-26070042\'].id',
+    partId: wclPartByNo[\RK73B1ETTP102J\'].id',
+    qty: 50000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'fab33d2a-8751-4cfd-ba95-f474244a7859',
+    pickingOrderId: pickingOrderByRef[\SZ-26070042\'].id',
+    partId: wclPartByNo[\RK73B1ETTP105J\'].id',
+    qty: 10000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '53e3ee74-0b5f-4cec-be67-e0a3cff0120a',
+    pickingOrderId: pickingOrderByRef[\SZ-26070042\'].id',
+    partId: wclPartByNo[\RK73B1ETTP330J\'].id',
+    qty: 10000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'e4f680a0-105f-474e-9b70-bae79b14ef63',
+    pickingOrderId: pickingOrderByRef[\SZ-26070042\'].id',
+    partId: wclPartByNo[\RK73B1ETTP512J\'].id',
+    qty: 10000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'faf7b0a4-c920-4b57-9cf7-b439e00546b4',
+    pickingOrderId: pickingOrderByRef[\SZ-26070042\'].id',
+    partId: wclPartByNo[\RK73B1HTTC103J\'].id',
+    qty: 170000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '978422e0-821f-4c2b-9bab-1cd0049e28e3',
+    pickingOrderId: pickingOrderByRef[\SZ-26070043\'].id',
+    partId: wclPartByNo[\RK73B1HTTC151J\'].id',
+    qty: 10000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '7e04dae3-75e5-4a14-94ba-8a2e41d211f5',
+    pickingOrderId: pickingOrderByRef[\SZ-26070043\'].id',
+    partId: wclPartByNo[\RK73B1HTTC180J\'].id',
+    qty: 30000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'b9414f66-9b49-4c36-bdf4-c3b7b4a685e0',
+    pickingOrderId: pickingOrderByRef[\SZ-26070043\'].id',
+    partId: wclPartByNo[\RK73B1HTTC330J\'].id',
+    qty: 40000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '91db2583-e3a7-4c7f-a24f-4a8275f28c87',
+    pickingOrderId: pickingOrderByRef[\SZ-26070043\'].id',
+    partId: wclPartByNo[\RK73B1HTTC510J\'].id',
+    qty: 170000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'fb8e4d57-b0ce-4534-8844-7e3c34b3feb7',
+    pickingOrderId: pickingOrderByRef[\SZ-26070044\'].id',
+    partId: wclPartByNo[\RK73B1HTTC510J\'].id',
+    qty: 130000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '599a7241-d98d-4d0f-989e-5091f7b18123',
+    pickingOrderId: pickingOrderByRef[\SZ-26070044\'].id',
+    partId: wclPartByNo[\RK73B1JTTD472J\'].id',
+    qty: 5000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'cd1c5712-e9f2-4be5-8104-b93196913540',
+    pickingOrderId: pickingOrderByRef[\SZ-26070044\'].id',
+    partId: wclPartByNo[\RK73B2BTTD103J\'].id',
+    qty: 125000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '28ae7148-70a2-4797-aec5-8672dc78570f',
+    pickingOrderId: pickingOrderByRef[\SZ-26070044\'].id',
+    partId: wclPartByNo[\RK73H1ETTP1000F\'].id',
+    qty: 20000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'b8ad16f6-3364-43bd-8cf9-a15e1fe558d6',
+    pickingOrderId: pickingOrderByRef[\SZ-26070044\'].id',
+    partId: wclPartByNo[\RK73H1ETTP1001F\'].id',
+    qty: 230000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'a461d6b9-d471-4706-86ed-bd28d05e690d',
+    pickingOrderId: pickingOrderByRef[\SZ-26070045\'].id',
+    partId: wclPartByNo[\RK73H1ETTP1003F\'].id',
+    qty: 90000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '96251357-ebec-4151-8a7d-bb23781be27c',
+    pickingOrderId: pickingOrderByRef[\SZ-26070045\'].id',
+    partId: wclPartByNo[\RK73H1ETTP2001F\'].id',
+    qty: 20000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'fc99ea08-7bc5-49de-97bc-383ab9bd7315',
+    pickingOrderId: pickingOrderByRef[\SZ-26070045\'].id',
+    partId: wclPartByNo[\RK73H1ETTP2400F\'].id',
+    qty: 10000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '645b7c9f-d1fa-4f54-ad44-e5c7355791b0',
+    pickingOrderId: pickingOrderByRef[\SZ-26070045\'].id',
+    partId: wclPartByNo[\RK73H1ETTP2702F\'].id',
+    qty: 50000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '38706988-4a86-4de8-89ff-26555f3d50a0',
+    pickingOrderId: pickingOrderByRef[\SZ-26070045\'].id',
+    partId: wclPartByNo[\RK73H1ETTP3001F\'].id',
+    qty: 30000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'dd4d8b64-d8b8-4163-bcaa-9b639c1a5801',
+    pickingOrderId: pickingOrderByRef[\SZ-26070045\'].id',
+    partId: wclPartByNo[\RK73H1ETTP3002F\'].id',
+    qty: 350000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'd29c253c-a4fc-4794-b58b-d33270661dc8',
+    pickingOrderId: pickingOrderByRef[\SZ-26070046\'].id',
+    partId: wclPartByNo[\RK73H1ETTP33R0F\'].id',
+    qty: 10000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '9adabbf4-4eff-415c-80fc-19e996fc0331',
+    pickingOrderId: pickingOrderByRef[\SZ-26070046\'].id',
+    partId: wclPartByNo[\RK73H1ETTP4703F\'].id',
+    qty: 170000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'bf4d1a8e-2042-4100-93a2-57cdef6c1420',
+    pickingOrderId: pickingOrderByRef[\SZ-26070046\'].id',
+    partId: wclPartByNo[\RK73H1ETTP5101F\'].id',
+    qty: 170000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '8fc3497f-b337-4b28-97ff-8fcdd4608e81',
+    pickingOrderId: pickingOrderByRef[\SZ-26070046\'].id',
+    partId: wclPartByNo[\RK73H1ETTP6801F\'].id',
+    qty: 20000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '94e3cb44-862d-4892-8b85-76ffec460def',
+    pickingOrderId: pickingOrderByRef[\SZ-26070046\'].id',
+    partId: wclPartByNo[\RK73H1ETTP82R0F\'].id',
+    qty: 70000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'a5dd5259-facf-4807-8861-d07bb58ac204',
+    pickingOrderId: pickingOrderByRef[\SZ-26070047\'].id',
+    partId: wclPartByNo[\RK73H1HTTC1431F\'].id',
+    qty: 70000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '71fffc6e-ced4-47b2-a7db-ea5d70fe71b9',
+    pickingOrderId: pickingOrderByRef[\SZ-26070047\'].id',
+    partId: wclPartByNo[\RK73H1HTTC2203F\'].id',
+    qty: 90000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '744ea1e7-cf8a-4ec4-80af-22b88f92e533',
+    pickingOrderId: pickingOrderByRef[\SZ-26070047\'].id',
+    partId: wclPartByNo[\RK73H1HTTC2400F\'].id',
+    qty: 180000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '729dbb95-ff0f-4207-b45c-3f07e50e0d7d',
+    pickingOrderId: pickingOrderByRef[\SZ-26070048\'].id',
+    partId: wclPartByNo[\RK73H1HTTC2400F\'].id',
+    qty: 440000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '45774eca-7435-4c0a-aaa6-753e69848f91',
+    pickingOrderId: pickingOrderByRef[\SZ-26070048\'].id',
+    partId: wclPartByNo[\RK73H1HTTC5492F\'].id',
+    qty: 20000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'c8a5ec63-d003-4ead-a0df-a0c97838b630',
+    pickingOrderId: pickingOrderByRef[\SZ-26070048\'].id',
+    partId: wclPartByNo[\RK73H1JTTD1001F\'].id',
+    qty: 10000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'a4e61a40-6aad-4007-8374-a224679dceef',
+    pickingOrderId: pickingOrderByRef[\SZ-26070048\'].id',
+    partId: wclPartByNo[\RK73H1JTTD1542F\'].id',
+    qty: 5000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'd722a39b-5eb3-406a-b299-6e1a8da13b9b',
+    pickingOrderId: pickingOrderByRef[\SZ-26070049\'].id',
+    partId: wclPartByNo[\RK73H1JTTD1R00F\'].id',
+    qty: 5000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'e4bd06f5-bbd3-4828-8626-f023e6ce03df',
+    pickingOrderId: pickingOrderByRef[\SZ-26070049\'].id',
+    partId: wclPartByNo[\RK73H1JTTD2001F\'].id',
+    qty: 110000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'c5f59ef9-8609-44fc-ae44-3ae08bcb7ac5',
+    pickingOrderId: pickingOrderByRef[\SZ-26070049\'].id',
+    partId: wclPartByNo[\RK73H1JTTD2493F\'].id',
+    qty: 5000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '8a489553-ad4a-47ed-8d76-ec08ebcbcddb',
+    pickingOrderId: pickingOrderByRef[\SZ-26070049\'].id',
+    partId: wclPartByNo[\RK73H1JTTD3001F\'].id',
+    qty: 65000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '1711584a-e4fc-48f7-b0cc-1bc112c929bf',
+    pickingOrderId: pickingOrderByRef[\SZ-26070049\'].id',
+    partId: wclPartByNo[\RK73H1JTTD43R0F\'].id',
+    qty: 10000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'aff7fc72-a07d-45b9-895e-346277ad5a1b',
+    pickingOrderId: pickingOrderByRef[\SZ-26070049\'].id',
+    partId: wclPartByNo[\RK73H1JTTD4701F\'].id',
+    qty: 5000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '6225128e-9317-455d-8935-ff9366f9dfad',
+    pickingOrderId: pickingOrderByRef[\SZ-26070049\'].id',
+    partId: wclPartByNo[\RK73H1JTTD4703F\'].id',
+    qty: 5000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '51fc4087-b398-420e-af7d-a1d06256b71e',
+    pickingOrderId: pickingOrderByRef[\SZ-26070050\'].id',
+    partId: wclPartByNo[\RK73H1JTTD4990F\'].id',
+    qty: 45000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '1bc48297-7e8f-4b03-b2fc-5360cfadb99b',
+    pickingOrderId: pickingOrderByRef[\SZ-26070050\'].id',
+    partId: wclPartByNo[\RK73H1JTTD82R5F\'].id',
+    qty: 50000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: '2ac437d9-cf7c-4b74-b9ca-03b64c0b2cf8',
+    pickingOrderId: pickingOrderByRef[\SZ-26070050\'].id',
+    partId: wclPartByNo[\RK73H2BTTD2004F\'].id',
+    qty: 35000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'ae7449c1-3676-471b-ad2d-e2aae2897731',
+    pickingOrderId: pickingOrderByRef[\SZ-26070051\'].id',
+    partId: wclPartByNo[\RK73H2BTTD3900F\'].id',
+    qty: 5000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  },
+  {
+    id: 'b8c6ec7b-dfb4-4ea4-b4fa-ca3f5bf3f25d',
+    pickingOrderId: pickingOrderByRef[\SZ-26070052\'].id',
+    partId: wclPartByNo[\WK73R2BTTD62R0F\'].id',
+    qty: 790000,
+    pickedQty: 0,
+    allocatedQty: 0,
+    requiredDateCode: null,
+    sourceShelfCode: null
+  }
+] as const;
+
+
   await db.insert(schema.pickingOrders).values([...pickingOrderRecords]);
-  const pickingOrderByRef = Object.fromEntries(pickingOrderRecords.map((po) => [po.refNo, po])) as Record<
-    (typeof pickingOrderRecords)[number]["refNo"],
-    (typeof pickingOrderRecords)[number]
-  >;
-
-  const pickingItemRecords = [
-    // PICK-001 (KOA)
-    {
-      id: uuid(),
-      pickingOrderId: pickingOrderByRef["PICK-001"].id,
-      partId: partByNo["RK73H2ATTD1372F"].id,
-      qty: 500,
-      pickedQty: 0,
-      allocatedQty: 0,
-      requiredDateCode: null,
-      sourceShelfCode: null as string | null,
-    },
-    {
-      id: uuid(),
-      pickingOrderId: pickingOrderByRef["PICK-001"].id,
-      partId: partByNo["RK73H1JTTD1501F"].id,
-      qty: 200,
-      pickedQty: 0,
-      allocatedQty: 0,
-      requiredDateCode: null,
-      sourceShelfCode: null,
-    },
-    {
-      id: uuid(),
-      pickingOrderId: pickingOrderByRef["PICK-001"].id,
-      partId: partByNo["RK73H2ATTD1002F"].id,
-      qty: 1000,
-      pickedQty: 0,
-      allocatedQty: 0,
-      requiredDateCode: null,
-      sourceShelfCode: null,
-    },
-    // PICK-002 (ABLIC)
-    {
-      id: uuid(),
-      pickingOrderId: pickingOrderByRef["PICK-002"].id,
-      partId: partByNo["S-1206B18-M3T1U"].id,
-      qty: 100,
-      pickedQty: 0,
-      allocatedQty: 0,
-      requiredDateCode: null,
-      sourceShelfCode: null,
-    },
-    {
-      id: uuid(),
-      pickingOrderId: pickingOrderByRef["PICK-002"].id,
-      partId: partByNo["S-8240ADJ-I6T1U"].id,
-      qty: 500,
-      pickedQty: 0,
-      allocatedQty: 0,
-      requiredDateCode: null,
-      sourceShelfCode: null,
-    },
-    {
-      id: uuid(),
-      pickingOrderId: pickingOrderByRef["PICK-002"].id,
-      partId: partByNo["D1FL20U"].id,
-      qty: 100,
-      pickedQty: 0,
-      allocatedQty: 0,
-      requiredDateCode: null,
-      sourceShelfCode: null,
-    },
-    // PICK-003 (OKAYA)
-    {
-      id: uuid(),
-      pickingOrderId: pickingOrderByRef["PICK-003"].id,
-      partId: partByNo["OKAYA-RE104-L"].id,
-      qty: 500,
-      pickedQty: 0,
-      allocatedQty: 0,
-      requiredDateCode: null,
-      sourceShelfCode: null,
-    },
-    {
-      id: uuid(),
-      pickingOrderId: pickingOrderByRef["PICK-003"].id,
-      partId: partByNo["D1FL20U"].id,
-      qty: 100,
-      pickedQty: 0,
-      allocatedQty: 0,
-      requiredDateCode: null,
-      sourceShelfCode: null,
-    },
-    {
-      id: uuid(),
-      pickingOrderId: pickingOrderByRef["PICK-003"].id,
-      partId: partByNo["IL34063ADT"].id,
-      qty: 200,
-      pickedQty: 0,
-      allocatedQty: 0,
-      requiredDateCode: null,
-      sourceShelfCode: null,
-    },
-    // PICK-004 (KYOCER)
-    {
-      id: uuid(),
-      pickingOrderId: pickingOrderByRef["PICK-004"].id,
-      partId: partByNo["NX8045GB"].id,
-      qty: 50,
-      pickedQty: 0,
-      allocatedQty: 0,
-      requiredDateCode: null,
-      sourceShelfCode: null,
-    },
-    {
-      id: uuid(),
-      pickingOrderId: pickingOrderByRef["PICK-004"].id,
-      partId: partByNo["CX2016SA20000D0HSSCC"].id,
-      qty: 100,
-      pickedQty: 0,
-      allocatedQty: 0,
-      requiredDateCode: null,
-      sourceShelfCode: null,
-    },
-    {
-      id: uuid(),
-      pickingOrderId: pickingOrderByRef["PICK-004"].id,
-      partId: partByNo["Q-SPT7P0327620C5GF"].id,
-      qty: 120,
-      pickedQty: 0,
-      allocatedQty: 0,
-      requiredDateCode: null,
-      sourceShelfCode: null,
-    },
-    // PICK-005 (IK)
-    {
-      id: uuid(),
-      pickingOrderId: pickingOrderByRef["PICK-005"].id,
-      partId: partByNo["IL34063ADT"].id,
-      qty: 200,
-      pickedQty: 0,
-      allocatedQty: 0,
-      requiredDateCode: null,
-      sourceShelfCode: null,
-    },
-    {
-      id: uuid(),
-      pickingOrderId: pickingOrderByRef["PICK-005"].id,
-      partId: partByNo["NCC-TND14V-471KB00AAA0"].id,
-      qty: 250,
-      pickedQty: 0,
-      allocatedQty: 0,
-      requiredDateCode: null,
-      sourceShelfCode: null,
-    },
-    {
-      id: uuid(),
-      pickingOrderId: pickingOrderByRef["PICK-005"].id,
-      partId: partByNo["04028DA12RBUFB"].id,
-      qty: 1,
-      pickedQty: 0,
-      allocatedQty: 0,
-      requiredDateCode: null,
-      sourceShelfCode: null,
-    },
-  ] as const;
   await db.insert(schema.pickingItems).values([...pickingItemRecords]);
 
-  // Attempt to allocate all seeded picking orders from shelf stock or in-hand receiving items.
   for (const po of pickingOrderRecords) {
     await allocatePickingOrder(db, po.id);
   }
-}
+}}
 
 // Demo only: passwords are stored as-is so the local demo can compare them directly.
 export async function ensureDemoPasswords(db: PgliteDatabase<typeof schema>) {
