@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.docpal.warehouse.data.repository.AuthRepository
 import com.docpal.warehouse.domain.model.User
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -23,7 +24,9 @@ class LoginViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = try {
                 LoginUiState.Success(authRepository.login(username, password))
-            } catch (e: IllegalArgumentException) {
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
                 LoginUiState.Error("Invalid username or password")
             }
         }
