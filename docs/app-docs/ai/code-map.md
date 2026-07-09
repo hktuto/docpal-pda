@@ -89,3 +89,20 @@ Page and component locations mapped to source files.
 | Measuring | `db/measuring.ts` |
 | Goods verify | `db/goodsVerify.ts` |
 | Allocation | `db/allocate.ts` |
+
+## Native Android (greenfield rewrite)
+
+| Element | Source file |
+|---------|-------------|
+| MainActivity | `native-android/app/src/main/kotlin/com/docpal/warehouse/MainActivity.kt` |
+| Application | `native-android/app/src/main/kotlin/com/docpal/warehouse/WarehouseApplication.kt` |
+| Hilt module | `native-android/app/src/main/kotlin/com/docpal/warehouse/di/AppModule.kt` |
+| Database | `native-android/app/src/main/kotlin/com/docpal/warehouse/data/local/AppDatabase.kt` |
+| User entity | `native-android/app/src/main/kotlin/com/docpal/warehouse/data/local/entity/UserEntity.kt` |
+| User DAO | `native-android/app/src/main/kotlin/com/docpal/warehouse/data/local/dao/UserDao.kt` |
+| Seed loader | `native-android/app/src/main/kotlin/com/docpal/warehouse/data/local/seed/SeedLoader.kt` |
+| Auth repository | `native-android/app/src/main/kotlin/com/docpal/warehouse/data/repository/AuthRepository.kt` |
+| Login screen | `native-android/app/src/main/kotlin/com/docpal/warehouse/ui/screens/LoginScreen.kt` |
+| Home screen | `native-android/app/src/main/kotlin/com/docpal/warehouse/ui/screens/HomeScreen.kt` |
+| Navigation | `native-android/app/src/main/kotlin/com/docpal/warehouse/ui/navigation/AppNavigation.kt` |
+| Login ViewModel | `native-android/app/src/main/kotlin/com/docpal/warehouse/ui/viewmodel/LoginViewModel.kt` |

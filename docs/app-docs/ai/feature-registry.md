@@ -26,7 +26,17 @@ Machine-readable index of features in the warehouse PDA demo. Use this page to l
 | Language switcher | Shared | Shipped | `components/LanguageSwitcher.vue`, `app.vue`, `i18n/` | [navigation](../concepts/navigation.md) |
 | Toast notifications | Shared | Shipped | `components/ToastHost.vue`, `composables/useToast.ts` | [picking ai-scope](../flows/picking/ai-scope.md) |
 
+## Native Android (greenfield rewrite)
+
+| Feature | Flow | Status | Key Files | Scope Doc |
+|---------|------|--------|-----------|-----------|
+| Native app scaffold | — | In Progress | `native-android/` Gradle project | [full-native spec](../../superpowers/specs/2026-07-09-full-native-android-design.md) |
+| Offline SQLite database | — | In Progress | `native-android/app/.../data/local/AppDatabase.kt`, `UserEntity`, `UserDao` | [full-native spec](../../superpowers/specs/2026-07-09-full-native-android-design.md) |
+| Native login | Auth | In Progress | `native-android/app/.../ui/screens/LoginScreen.kt`, `LoginViewModel`, `AuthRepository` | [full-native spec](../../superpowers/specs/2026-07-09-full-native-android-design.md) |
+| Native home menu | — | In Progress | `native-android/app/.../ui/screens/HomeScreen.kt` | [full-native spec](../../superpowers/specs/2026-07-09-full-native-android-design.md) |
+
 ## Status legend
 
 - **Shipped** — feature exists in the current demo.
 - **Planned** — not part of this documentation system; see `docs/superpowers/plans/`.
+- **In Progress** — being built in the native Android rewrite.
