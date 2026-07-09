@@ -13,11 +13,12 @@ class AuthRepository @Inject constructor(
     suspend fun login(username: String, password: String): User {
         val trimmedUsername = username.trim()
         require(trimmedUsername.isNotBlank()) { "Username is required" }
-        require(password.isNotEmpty()) { "Password is required" }
+        require(password.isNotBlank()) { "Password is required" }
 
         val entity = userDao.getByUsername(trimmedUsername)
             ?: throw IllegalArgumentException("Invalid credentials")
 
+        // Demo-only: the seed stores passwords as plain text, matching the web demo.
         if (entity.passwordHash != password) {
             throw IllegalArgumentException("Invalid credentials")
         }
