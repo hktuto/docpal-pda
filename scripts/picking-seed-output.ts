@@ -1,7 +1,7 @@
 // Picking orders (23)
 const pickingOrderRecords = [
   {
-    id: 'eafb5b08-d111-4c71-8c95-3b4bcecdcf0b',
+    id: 'b57d5071-5857-43eb-8f04-319746d1a855',
     refNo: 'GZ-26070045',
     supplierId: supplierByCode.KOA.id,
     deliveryDate: new Date('2026-07-13'),
@@ -16,7 +16,7 @@ const pickingOrderRecords = [
     updatedAt: now
   },
   {
-    id: '87db7fb4-15f8-461a-929b-7b6ae4a73b84',
+    id: '016b8eea-94f4-4442-a68d-b04c9325b7f6',
     refNo: 'GZ-26070046',
     supplierId: supplierByCode.KOA.id,
     deliveryDate: new Date('2026-07-13'),
@@ -31,7 +31,7 @@ const pickingOrderRecords = [
     updatedAt: now
   },
   {
-    id: '3b80562d-219c-4cae-8b29-4ab9255dcb25',
+    id: 'ca73d4ff-5e52-4f43-90d4-9e29dd9dc923',
     refNo: 'GZ-26070047',
     supplierId: supplierByCode.KOA.id,
     deliveryDate: new Date('2026-07-13'),
@@ -46,7 +46,7 @@ const pickingOrderRecords = [
     updatedAt: now
   },
   {
-    id: 'd91ea1b9-1603-4163-851f-3c3768b6e9e0',
+    id: 'ef6a60ef-1e63-4fe9-b858-781724586e6a',
     refNo: 'GZ-26070048',
     supplierId: supplierByCode.KOA.id,
     deliveryDate: new Date('2026-07-13'),
@@ -61,7 +61,7 @@ const pickingOrderRecords = [
     updatedAt: now
   },
   {
-    id: '4551a00f-6669-431a-89bc-4ce195f3383d',
+    id: '11dc5b37-fe10-426e-b96d-807813ba7e7e',
     refNo: 'GZ-26070049',
     supplierId: supplierByCode.KOA.id,
     deliveryDate: new Date('2026-07-13'),
@@ -76,7 +76,7 @@ const pickingOrderRecords = [
     updatedAt: now
   },
   {
-    id: '0faae128-a28c-48fe-8c5c-4540c77175db',
+    id: '00dc7c28-7397-4229-8596-30ff54c44c5a',
     refNo: 'GZ-26070050',
     supplierId: supplierByCode.KOA.id,
     deliveryDate: new Date('2026-07-13'),
@@ -91,7 +91,7 @@ const pickingOrderRecords = [
     updatedAt: now
   },
   {
-    id: '3f7851b9-d5ba-4710-ab9c-65072f541c31',
+    id: '12e08a0f-3490-4bef-866c-87c7a3b05cc2',
     refNo: 'GZ-26070051',
     supplierId: supplierByCode.KOA.id,
     deliveryDate: new Date('2026-07-13'),
@@ -106,7 +106,7 @@ const pickingOrderRecords = [
     updatedAt: now
   },
   {
-    id: 'f19d85cf-88ab-44c1-91b6-a94ed141c9ef',
+    id: '2179c030-f080-4327-9f1d-59891c50444e',
     refNo: 'GZ-26070052',
     supplierId: supplierByCode.KOA.id,
     deliveryDate: new Date('2026-07-13'),
@@ -121,7 +121,7 @@ const pickingOrderRecords = [
     updatedAt: now
   },
   {
-    id: '1f8b40e3-98e1-4402-a9a5-c9cc1f836e22',
+    id: 'c805b914-0983-4831-b3b9-9fdeba5077c1',
     refNo: 'GZ-26070053',
     supplierId: supplierByCode.KOA.id,
     deliveryDate: new Date('2026-07-13'),
@@ -136,7 +136,7 @@ const pickingOrderRecords = [
     updatedAt: now
   },
   {
-    id: '4c32edc4-cd14-4cbd-a53b-d3df4bae2013',
+    id: '64de9764-5151-45c7-87fa-a35a64d27fac',
     refNo: 'GZ-26070054',
     supplierId: supplierByCode.KOA.id,
     deliveryDate: new Date('2026-07-13'),
@@ -151,7 +151,7 @@ const pickingOrderRecords = [
     updatedAt: now
   },
   {
-    id: 'c95cc3c7-f011-45db-a4e6-8bdd431144fa',
+    id: '861f33a0-f608-4a41-8091-af0c0e9da483',
     refNo: 'SZ-26070040',
     supplierId: supplierByCode.KOA.id,
     deliveryDate: new Date('2026-07-13'),
@@ -166,7 +166,7 @@ const pickingOrderRecords = [
     updatedAt: now
   },
   {
-    id: '50572fe6-a6ae-4b17-a952-d7e5f4b6cffe',
+    id: '56565571-7a14-4775-980c-639a0d63bdec',
     refNo: 'SZ-26070041',
     supplierId: supplierByCode.KOA.id,
     deliveryDate: new Date('2026-07-13'),
@@ -181,7 +181,7 @@ const pickingOrderRecords = [
     updatedAt: now
   },
   {
-    id: 'a93f9e3e-09ad-4e4a-ba81-317bf8c628f4',
+    id: '04d0aee3-7bd1-4f22-ac4b-1cecc5410e32',
     refNo: 'SZ-26070042',
     supplierId: supplierByCode.KOA.id,
     deliveryDate: new Date('2026-07-13'),
@@ -196,7 +196,7 @@ const pickingOrderRecords = [
     updatedAt: now
   },
   {
-    id: '86ecc0ae-a112-4c37-850a-21107b22f210',
+    id: '31d54bb1-b810-4f82-bc45-9d759e4f8d28',
     refNo: 'SZ-26070043',
     supplierId: supplierByCode.KOA.id,
     deliveryDate: new Date('2026-07-13'),
@@ -211,7 +211,7 @@ const pickingOrderRecords = [
     updatedAt: now
   },
   {
-    id: '86e6d1bb-cd56-4ef9-9a27-205864eb9341',
+    id: 'a07d0d6d-6a56-451d-9d4b-ee28bd347808',
     refNo: 'SZ-26070044',
     supplierId: supplierByCode.KOA.id,
     deliveryDate: new Date('2026-07-13'),
@@ -226,7 +226,7 @@ const pickingOrderRecords = [
     updatedAt: now
   },
   {
-    id: '7358c4df-ab54-4a88-980c-1cffc2441dac',
+    id: '2f8d6ccb-b2d3-4680-817c-458c2aa66bed',
     refNo: 'SZ-26070045',
     supplierId: supplierByCode.KOA.id,
     deliveryDate: new Date('2026-07-13'),
@@ -241,7 +241,7 @@ const pickingOrderRecords = [
     updatedAt: now
   },
   {
-    id: 'c6e19535-6dff-4f2d-9742-6bf50b7ae7d9',
+    id: '075dfa6c-ebd6-449c-be44-74e74f9a67b9',
     refNo: 'SZ-26070046',
     supplierId: supplierByCode.KOA.id,
     deliveryDate: new Date('2026-07-13'),
@@ -256,7 +256,7 @@ const pickingOrderRecords = [
     updatedAt: now
   },
   {
-    id: '3d75e69a-b344-446d-8a28-08ed36009e13',
+    id: '022170db-979a-49ec-a758-18c5139a63ac',
     refNo: 'SZ-26070047',
     supplierId: supplierByCode.KOA.id,
     deliveryDate: new Date('2026-07-13'),
@@ -271,7 +271,7 @@ const pickingOrderRecords = [
     updatedAt: now
   },
   {
-    id: '2dda231a-0842-4e19-90d5-516426e80897',
+    id: 'c3a3144e-a12b-47cb-b560-e0c384f28e39',
     refNo: 'SZ-26070048',
     supplierId: supplierByCode.KOA.id,
     deliveryDate: new Date('2026-07-13'),
@@ -286,7 +286,7 @@ const pickingOrderRecords = [
     updatedAt: now
   },
   {
-    id: '7fc8061f-2374-4f91-9e92-b57612a002c4',
+    id: 'c10e80fb-5849-4010-a89e-fd528ade43af',
     refNo: 'SZ-26070049',
     supplierId: supplierByCode.KOA.id,
     deliveryDate: new Date('2026-07-13'),
@@ -301,7 +301,7 @@ const pickingOrderRecords = [
     updatedAt: now
   },
   {
-    id: '78dbafdc-d289-4519-b872-ec0b76943993',
+    id: '060e4c15-a454-4911-9688-fae8f9903c36',
     refNo: 'SZ-26070050',
     supplierId: supplierByCode.KOA.id,
     deliveryDate: new Date('2026-07-13'),
@@ -316,7 +316,7 @@ const pickingOrderRecords = [
     updatedAt: now
   },
   {
-    id: 'c18af4d0-6da6-4ffd-aa4a-465058ae8f89',
+    id: 'e8594c6c-eaee-4dbd-aedd-68ad65cb86d8',
     refNo: 'SZ-26070051',
     supplierId: supplierByCode.KOA.id,
     deliveryDate: new Date('2026-07-13'),
@@ -331,7 +331,7 @@ const pickingOrderRecords = [
     updatedAt: now
   },
   {
-    id: '04f9f4f9-c370-4a9e-b05f-90e17de22d64',
+    id: '3560aaa6-96b8-4988-90d8-cf6f6fba4970',
     refNo: 'SZ-26070052',
     supplierId: supplierByCode.KOA.id,
     deliveryDate: new Date('2026-07-13'),
@@ -354,9 +354,9 @@ const pickingOrderByRef = Object.fromEntries(pickingOrderRecords.map((po) => [po
 // Picking items (73)
 const pickingItemRecords = [
   {
-    id: 'e2ebf66b-8a8b-4547-b446-5e475ce03fc2',
-    pickingOrderId: pickingOrderByRef[\GZ-26070045\'].id',
-    partId: wclPartByNo[\RK73H1ETTP1000F\'].id',
+    id: '08060dcc-44be-4ac7-8d6c-7ce8dd470b73',
+    pickingOrderId: pickingOrderByRef['GZ-26070045'].id,
+    partId: wclPartByNo['RK73H1ETTP1000F'].id,
     qty: 760000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -364,9 +364,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '7de15506-0830-4ecc-9f8a-d71f8c765efb',
-    pickingOrderId: pickingOrderByRef[\GZ-26070045\'].id',
-    partId: wclPartByNo[\RK73H1ETTP2001F\'].id',
+    id: 'd01c45e4-5b61-479f-a50c-11e938e90d2f',
+    pickingOrderId: pickingOrderByRef['GZ-26070045'].id,
+    partId: wclPartByNo['RK73H1ETTP2001F'].id,
     qty: 390000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -374,9 +374,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'd7f58d30-0094-43b0-8536-d91d90e1093a',
-    pickingOrderId: pickingOrderByRef[\GZ-26070045\'].id',
-    partId: wclPartByNo[\RK73H1ETTP4701D\'].id',
+    id: 'de338fe7-4364-49e4-ba08-01ae7be78d1c',
+    pickingOrderId: pickingOrderByRef['GZ-26070045'].id,
+    partId: wclPartByNo['RK73H1ETTP4701D'].id,
     qty: 170000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -384,9 +384,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '58aa7122-6233-4339-97d1-f2e598de2c12',
-    pickingOrderId: pickingOrderByRef[\GZ-26070046\'].id',
-    partId: wclPartByNo[\HV732HTTE1004F\'].id',
+    id: '563a4c2a-bdc1-4929-8d97-d33ec8b516bd',
+    pickingOrderId: pickingOrderByRef['GZ-26070046'].id,
+    partId: wclPartByNo['HV732HTTE1004F'].id,
     qty: 296000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -394,9 +394,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'ade0779a-1f5c-4471-a670-5458010d5c05',
-    pickingOrderId: pickingOrderByRef[\GZ-26070047\'].id',
-    partId: wclPartByNo[\RK73H1ERTTP3301F\'].id',
+    id: 'c23d8014-9e9d-4cae-822d-bad94988510a',
+    pickingOrderId: pickingOrderByRef['GZ-26070047'].id,
+    partId: wclPartByNo['RK73H1ERTTP3301F'].id,
     qty: 300000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -404,9 +404,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'e642d7ed-158b-401c-8a70-5f75758dfc2d',
-    pickingOrderId: pickingOrderByRef[\GZ-26070047\'].id',
-    partId: wclPartByNo[\RK73H2ATTD3161D\'].id',
+    id: '1f3c8ec3-b5e5-4671-b2b9-2186baa6a2f8',
+    pickingOrderId: pickingOrderByRef['GZ-26070047'].id,
+    partId: wclPartByNo['RK73H2ATTD3161D'].id,
     qty: 10000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -414,9 +414,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '845071ca-afeb-4c68-95c3-d45b33b1ee5d',
-    pickingOrderId: pickingOrderByRef[\GZ-26070048\'].id',
-    partId: wclPartByNo[\RK73H1JTTD2001F\'].id',
+    id: '55378ecd-5000-4221-a9cf-86dc4a66abdf',
+    pickingOrderId: pickingOrderByRef['GZ-26070048'].id,
+    partId: wclPartByNo['RK73H1JTTD2001F'].id,
     qty: 120000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -424,9 +424,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'a5b8dede-5862-4c84-887d-9ec0e3cf5118',
-    pickingOrderId: pickingOrderByRef[\GZ-26070050\'].id',
-    partId: wclPartByNo[\RK73H1ERTTP1004F\'].id',
+    id: '15315c63-d11b-4d4b-a73e-04a4d83e7f64',
+    pickingOrderId: pickingOrderByRef['GZ-26070050'].id,
+    partId: wclPartByNo['RK73H1ERTTP1004F'].id,
     qty: 10000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -434,9 +434,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '938d3740-bac9-43f7-8a8d-139c37ff4d54',
-    pickingOrderId: pickingOrderByRef[\GZ-26070050\'].id',
-    partId: wclPartByNo[\RK73H1ETTP1001F\'].id',
+    id: 'c7c27e57-22be-4ffb-8bd5-5e9dbf165768',
+    pickingOrderId: pickingOrderByRef['GZ-26070050'].id,
+    partId: wclPartByNo['RK73H1ETTP1001F'].id,
     qty: 1240000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -444,9 +444,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '511ab905-ccd7-4ac7-9556-7bbfddaee8f3',
-    pickingOrderId: pickingOrderByRef[\GZ-26070050\'].id',
-    partId: wclPartByNo[\RK73H1ETTP1002F\'].id',
+    id: '5d90e7ac-fd4d-45b9-841e-4a7d7737e0f8',
+    pickingOrderId: pickingOrderByRef['GZ-26070050'].id,
+    partId: wclPartByNo['RK73H1ETTP1002F'].id,
     qty: 400000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -454,9 +454,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '7200eda8-cf21-4ed6-b970-70f254ff3506',
-    pickingOrderId: pickingOrderByRef[\GZ-26070050\'].id',
-    partId: wclPartByNo[\RK73H1ETTP3002F\'].id',
+    id: 'b2b71818-cace-4b13-bbee-5181749cf4d2',
+    pickingOrderId: pickingOrderByRef['GZ-26070050'].id,
+    partId: wclPartByNo['RK73H1ETTP3002F'].id,
     qty: 90000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -464,9 +464,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '9669148b-1115-413c-a0e0-af23a8513794',
-    pickingOrderId: pickingOrderByRef[\GZ-26070050\'].id',
-    partId: wclPartByNo[\RK73H1ETTP3003F\'].id',
+    id: '955e5e5f-084a-4188-9138-1c3894de6f9d',
+    pickingOrderId: pickingOrderByRef['GZ-26070050'].id,
+    partId: wclPartByNo['RK73H1ETTP3003F'].id,
     qty: 290000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -474,9 +474,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '7b49f885-47da-4190-b1f8-6dbb1db430a7',
-    pickingOrderId: pickingOrderByRef[\GZ-26070051\'].id',
-    partId: wclPartByNo[\RK73H1ETTP33R0F\'].id',
+    id: '3c8953ec-1f61-4f69-8a48-ec9153556400',
+    pickingOrderId: pickingOrderByRef['GZ-26070051'].id,
+    partId: wclPartByNo['RK73H1ETTP33R0F'].id,
     qty: 20000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -484,9 +484,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'f6d5122a-c769-4f99-9cb0-a251cb7bf3a5',
-    pickingOrderId: pickingOrderByRef[\GZ-26070051\'].id',
-    partId: wclPartByNo[\RK73H1ETTP8061F\'].id',
+    id: '7094d609-ed84-4ba5-82a3-fa03333cc752',
+    pickingOrderId: pickingOrderByRef['GZ-26070051'].id,
+    partId: wclPartByNo['RK73H1ETTP8061F'].id,
     qty: 20000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -494,9 +494,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '594d9412-aadd-48ec-92b0-7ed6c59b32ea',
-    pickingOrderId: pickingOrderByRef[\GZ-26070051\'].id',
-    partId: wclPartByNo[\RK73H1JTTD1003F\'].id',
+    id: 'fc4d2b94-4b1e-4189-ae79-53792f07c936',
+    pickingOrderId: pickingOrderByRef['GZ-26070051'].id,
+    partId: wclPartByNo['RK73H1JTTD1003F'].id,
     qty: 10000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -504,9 +504,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '65618c3d-8434-4c5f-bd4b-7659bb62e993',
-    pickingOrderId: pickingOrderByRef[\GZ-26070052\'].id',
-    partId: wclPartByNo[\RK73H1ETTP1000F\'].id',
+    id: '9b570f81-2fcc-47af-873e-3713d0aff436',
+    pickingOrderId: pickingOrderByRef['GZ-26070052'].id,
+    partId: wclPartByNo['RK73H1ETTP1000F'].id,
     qty: 880000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -514,9 +514,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'b76d4e80-94dd-4ee8-acb9-eeb270f83945',
-    pickingOrderId: pickingOrderByRef[\GZ-26070052\'].id',
-    partId: wclPartByNo[\RK73H1ETTP1001F\'].id',
+    id: '14ca847f-9cac-4014-b372-b7722fa6c553',
+    pickingOrderId: pickingOrderByRef['GZ-26070052'].id,
+    partId: wclPartByNo['RK73H1ETTP1001F'].id,
     qty: 60000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -524,9 +524,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'd300eb93-309b-414d-a28b-a2d6418f41e6',
-    pickingOrderId: pickingOrderByRef[\GZ-26070052\'].id',
-    partId: wclPartByNo[\RK73H1ETTP1002F\'].id',
+    id: '24753a76-4d4f-4a16-91b3-52ddafbf9682',
+    pickingOrderId: pickingOrderByRef['GZ-26070052'].id,
+    partId: wclPartByNo['RK73H1ETTP1002F'].id,
     qty: 580000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -534,9 +534,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '99058306-c1e5-4248-b61e-11261244ec2a',
-    pickingOrderId: pickingOrderByRef[\GZ-26070052\'].id',
-    partId: wclPartByNo[\RK73H1ETTP2401F\'].id',
+    id: 'dd2f5599-5d25-4383-9453-3da1be436c35',
+    pickingOrderId: pickingOrderByRef['GZ-26070052'].id,
+    partId: wclPartByNo['RK73H1ETTP2401F'].id,
     qty: 10000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -544,9 +544,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'e3bb05d9-2273-4704-9c7a-5eb77db0aa5d',
-    pickingOrderId: pickingOrderByRef[\GZ-26070052\'].id',
-    partId: wclPartByNo[\RK73H1ETTP5100F\'].id',
+    id: '266d4fd9-a1b2-4f9b-a65b-3e55db7ac687',
+    pickingOrderId: pickingOrderByRef['GZ-26070052'].id,
+    partId: wclPartByNo['RK73H1ETTP5100F'].id,
     qty: 10000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -554,9 +554,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'a23ec1c1-5331-401f-845f-0a8c64008b0b',
-    pickingOrderId: pickingOrderByRef[\GZ-26070053\'].id',
-    partId: wclPartByNo[\RK73H1ETTP5102F\'].id',
+    id: '4ac17aeb-c343-4702-91c9-eb0f141816a9',
+    pickingOrderId: pickingOrderByRef['GZ-26070053'].id,
+    partId: wclPartByNo['RK73H1ETTP5102F'].id,
     qty: 10000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -564,9 +564,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'f275b88b-80c0-4742-b254-7de8b3a9774a',
-    pickingOrderId: pickingOrderByRef[\GZ-26070053\'].id',
-    partId: wclPartByNo[\RK73H1JTTD1000F\'].id',
+    id: '4fe711cc-2891-4e47-9cb8-eef758a9bd0e',
+    pickingOrderId: pickingOrderByRef['GZ-26070053'].id,
+    partId: wclPartByNo['RK73H1JTTD1000F'].id,
     qty: 165000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -574,9 +574,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '07c1c762-b044-4420-b4fa-d2300de72897',
-    pickingOrderId: pickingOrderByRef[\GZ-26070053\'].id',
-    partId: wclPartByNo[\RK73H1JTTD1001F\'].id',
+    id: '39622287-9806-4f29-b754-75818fbe04ea',
+    pickingOrderId: pickingOrderByRef['GZ-26070053'].id,
+    partId: wclPartByNo['RK73H1JTTD1001F'].id,
     qty: 15000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -584,9 +584,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '81235f85-ffd8-4d8e-ac61-52492534abc1',
-    pickingOrderId: pickingOrderByRef[\GZ-26070053\'].id',
-    partId: wclPartByNo[\RK73H1JTTD2002F\'].id',
+    id: '9383b18b-4583-40e4-9af3-87ccc499c2f5',
+    pickingOrderId: pickingOrderByRef['GZ-26070053'].id,
+    partId: wclPartByNo['RK73H1JTTD2002F'].id,
     qty: 720000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -594,9 +594,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'c7f8e348-ab42-47a8-9bb6-9d6c3bd0272b',
-    pickingOrderId: pickingOrderByRef[\GZ-26070053\'].id',
-    partId: wclPartByNo[\RK73H2ATTD10R0F\'].id',
+    id: 'f76cebe3-5eda-4b83-b79c-875249ad7127',
+    pickingOrderId: pickingOrderByRef['GZ-26070053'].id,
+    partId: wclPartByNo['RK73H2ATTD10R0F'].id,
     qty: 300000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -604,9 +604,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'd7d33033-2bca-47a6-af8f-12a8b793af60',
-    pickingOrderId: pickingOrderByRef[\GZ-26070054\'].id',
-    partId: wclPartByNo[\RK73H2ATTD10R0F\'].id',
+    id: '7e9d03a8-1a7b-4f68-a642-f880ce6c00cb',
+    pickingOrderId: pickingOrderByRef['GZ-26070054'].id,
+    partId: wclPartByNo['RK73H2ATTD10R0F'].id,
     qty: 515000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -614,9 +614,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '2f99f283-9df4-49f6-831e-cce833979ec3',
-    pickingOrderId: pickingOrderByRef[\GZ-26070054\'].id',
-    partId: wclPartByNo[\RK73H2ATTD20R0F\'].id',
+    id: '7bfef009-7a94-47e6-b333-e3594156251c',
+    pickingOrderId: pickingOrderByRef['GZ-26070054'].id,
+    partId: wclPartByNo['RK73H2ATTD20R0F'].id,
     qty: 10000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -624,9 +624,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '88eac7b8-2125-478c-b972-075fe8fe1dd4',
-    pickingOrderId: pickingOrderByRef[\SZ-26070040\'].id',
-    partId: wclPartByNo[\HV73V2BTTD1004D\'].id',
+    id: 'dff48cb6-03ed-4488-9074-af3023616e3b',
+    pickingOrderId: pickingOrderByRef['SZ-26070040'].id,
+    partId: wclPartByNo['HV73V2BTTD1004D'].id,
     qty: 1200000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -634,9 +634,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '9e2f98c2-2c6f-45bb-9800-a85e668f5a15',
-    pickingOrderId: pickingOrderByRef[\SZ-26070041\'].id',
-    partId: wclPartByNo[\HV73V2BTTD1004D\'].id',
+    id: '439cf6e2-33ab-4c05-a5b3-b0dcd8220e3d',
+    pickingOrderId: pickingOrderByRef['SZ-26070041'].id,
+    partId: wclPartByNo['HV73V2BTTD1004D'].id,
     qty: 300000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -644,9 +644,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '9dad1c3b-0aea-4485-a042-7cb0054b19f2',
-    pickingOrderId: pickingOrderByRef[\SZ-26070042\'].id',
-    partId: wclPartByNo[\RK73B1ETTP102J\'].id',
+    id: '27eecda5-da23-4084-8cc3-c582e4e61652',
+    pickingOrderId: pickingOrderByRef['SZ-26070042'].id,
+    partId: wclPartByNo['RK73B1ETTP102J'].id,
     qty: 50000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -654,9 +654,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'fab33d2a-8751-4cfd-ba95-f474244a7859',
-    pickingOrderId: pickingOrderByRef[\SZ-26070042\'].id',
-    partId: wclPartByNo[\RK73B1ETTP105J\'].id',
+    id: 'b4728f15-972b-4503-9d22-41283eb97898',
+    pickingOrderId: pickingOrderByRef['SZ-26070042'].id,
+    partId: wclPartByNo['RK73B1ETTP105J'].id,
     qty: 10000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -664,9 +664,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '53e3ee74-0b5f-4cec-be67-e0a3cff0120a',
-    pickingOrderId: pickingOrderByRef[\SZ-26070042\'].id',
-    partId: wclPartByNo[\RK73B1ETTP330J\'].id',
+    id: '829fe53c-e0cb-4881-b621-eec0fe66f6c5',
+    pickingOrderId: pickingOrderByRef['SZ-26070042'].id,
+    partId: wclPartByNo['RK73B1ETTP330J'].id,
     qty: 10000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -674,9 +674,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'e4f680a0-105f-474e-9b70-bae79b14ef63',
-    pickingOrderId: pickingOrderByRef[\SZ-26070042\'].id',
-    partId: wclPartByNo[\RK73B1ETTP512J\'].id',
+    id: '7acc1f84-1a57-4b45-897a-2e3f17abc762',
+    pickingOrderId: pickingOrderByRef['SZ-26070042'].id,
+    partId: wclPartByNo['RK73B1ETTP512J'].id,
     qty: 10000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -684,9 +684,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'faf7b0a4-c920-4b57-9cf7-b439e00546b4',
-    pickingOrderId: pickingOrderByRef[\SZ-26070042\'].id',
-    partId: wclPartByNo[\RK73B1HTTC103J\'].id',
+    id: '739caaba-f0c3-463c-8c1d-1ee6db94c902',
+    pickingOrderId: pickingOrderByRef['SZ-26070042'].id,
+    partId: wclPartByNo['RK73B1HTTC103J'].id,
     qty: 170000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -694,9 +694,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '978422e0-821f-4c2b-9bab-1cd0049e28e3',
-    pickingOrderId: pickingOrderByRef[\SZ-26070043\'].id',
-    partId: wclPartByNo[\RK73B1HTTC151J\'].id',
+    id: '024617e6-b3f4-4654-873b-d15ecadce515',
+    pickingOrderId: pickingOrderByRef['SZ-26070043'].id,
+    partId: wclPartByNo['RK73B1HTTC151J'].id,
     qty: 10000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -704,9 +704,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '7e04dae3-75e5-4a14-94ba-8a2e41d211f5',
-    pickingOrderId: pickingOrderByRef[\SZ-26070043\'].id',
-    partId: wclPartByNo[\RK73B1HTTC180J\'].id',
+    id: '9d82fb45-3644-49bf-a241-48ef6fd9c007',
+    pickingOrderId: pickingOrderByRef['SZ-26070043'].id,
+    partId: wclPartByNo['RK73B1HTTC180J'].id,
     qty: 30000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -714,9 +714,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'b9414f66-9b49-4c36-bdf4-c3b7b4a685e0',
-    pickingOrderId: pickingOrderByRef[\SZ-26070043\'].id',
-    partId: wclPartByNo[\RK73B1HTTC330J\'].id',
+    id: '90d8d563-bcdc-4162-86e4-cec27b4e92ef',
+    pickingOrderId: pickingOrderByRef['SZ-26070043'].id,
+    partId: wclPartByNo['RK73B1HTTC330J'].id,
     qty: 40000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -724,9 +724,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '91db2583-e3a7-4c7f-a24f-4a8275f28c87',
-    pickingOrderId: pickingOrderByRef[\SZ-26070043\'].id',
-    partId: wclPartByNo[\RK73B1HTTC510J\'].id',
+    id: 'e5571268-af1a-4726-a10f-d2881b62f9fe',
+    pickingOrderId: pickingOrderByRef['SZ-26070043'].id,
+    partId: wclPartByNo['RK73B1HTTC510J'].id,
     qty: 170000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -734,9 +734,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'fb8e4d57-b0ce-4534-8844-7e3c34b3feb7',
-    pickingOrderId: pickingOrderByRef[\SZ-26070044\'].id',
-    partId: wclPartByNo[\RK73B1HTTC510J\'].id',
+    id: 'ce675ed0-e301-4b82-9be3-f972a3e26e07',
+    pickingOrderId: pickingOrderByRef['SZ-26070044'].id,
+    partId: wclPartByNo['RK73B1HTTC510J'].id,
     qty: 130000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -744,9 +744,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '599a7241-d98d-4d0f-989e-5091f7b18123',
-    pickingOrderId: pickingOrderByRef[\SZ-26070044\'].id',
-    partId: wclPartByNo[\RK73B1JTTD472J\'].id',
+    id: '549b91df-6cd6-49d3-9462-746f504ef1f5',
+    pickingOrderId: pickingOrderByRef['SZ-26070044'].id,
+    partId: wclPartByNo['RK73B1JTTD472J'].id,
     qty: 5000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -754,9 +754,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'cd1c5712-e9f2-4be5-8104-b93196913540',
-    pickingOrderId: pickingOrderByRef[\SZ-26070044\'].id',
-    partId: wclPartByNo[\RK73B2BTTD103J\'].id',
+    id: 'd8fd3a81-f82b-44f0-9f85-847d75f4accf',
+    pickingOrderId: pickingOrderByRef['SZ-26070044'].id,
+    partId: wclPartByNo['RK73B2BTTD103J'].id,
     qty: 125000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -764,9 +764,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '28ae7148-70a2-4797-aec5-8672dc78570f',
-    pickingOrderId: pickingOrderByRef[\SZ-26070044\'].id',
-    partId: wclPartByNo[\RK73H1ETTP1000F\'].id',
+    id: '294d9b4e-6fa3-4afe-9392-e61f62506965',
+    pickingOrderId: pickingOrderByRef['SZ-26070044'].id,
+    partId: wclPartByNo['RK73H1ETTP1000F'].id,
     qty: 20000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -774,9 +774,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'b8ad16f6-3364-43bd-8cf9-a15e1fe558d6',
-    pickingOrderId: pickingOrderByRef[\SZ-26070044\'].id',
-    partId: wclPartByNo[\RK73H1ETTP1001F\'].id',
+    id: '476b201d-99d5-4765-886f-5770de275dd6',
+    pickingOrderId: pickingOrderByRef['SZ-26070044'].id,
+    partId: wclPartByNo['RK73H1ETTP1001F'].id,
     qty: 230000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -784,9 +784,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'a461d6b9-d471-4706-86ed-bd28d05e690d',
-    pickingOrderId: pickingOrderByRef[\SZ-26070045\'].id',
-    partId: wclPartByNo[\RK73H1ETTP1003F\'].id',
+    id: 'e2a2fbfe-0930-4edd-a593-b81a22283c1d',
+    pickingOrderId: pickingOrderByRef['SZ-26070045'].id,
+    partId: wclPartByNo['RK73H1ETTP1003F'].id,
     qty: 90000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -794,9 +794,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '96251357-ebec-4151-8a7d-bb23781be27c',
-    pickingOrderId: pickingOrderByRef[\SZ-26070045\'].id',
-    partId: wclPartByNo[\RK73H1ETTP2001F\'].id',
+    id: '7359e59f-7175-46b3-a629-24094b50485d',
+    pickingOrderId: pickingOrderByRef['SZ-26070045'].id,
+    partId: wclPartByNo['RK73H1ETTP2001F'].id,
     qty: 20000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -804,9 +804,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'fc99ea08-7bc5-49de-97bc-383ab9bd7315',
-    pickingOrderId: pickingOrderByRef[\SZ-26070045\'].id',
-    partId: wclPartByNo[\RK73H1ETTP2400F\'].id',
+    id: '6a2314c3-4693-4b9c-b455-84ebd613f21c',
+    pickingOrderId: pickingOrderByRef['SZ-26070045'].id,
+    partId: wclPartByNo['RK73H1ETTP2400F'].id,
     qty: 10000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -814,9 +814,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '645b7c9f-d1fa-4f54-ad44-e5c7355791b0',
-    pickingOrderId: pickingOrderByRef[\SZ-26070045\'].id',
-    partId: wclPartByNo[\RK73H1ETTP2702F\'].id',
+    id: '89abae02-29bc-4bcb-bb56-72e137281558',
+    pickingOrderId: pickingOrderByRef['SZ-26070045'].id,
+    partId: wclPartByNo['RK73H1ETTP2702F'].id,
     qty: 50000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -824,9 +824,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '38706988-4a86-4de8-89ff-26555f3d50a0',
-    pickingOrderId: pickingOrderByRef[\SZ-26070045\'].id',
-    partId: wclPartByNo[\RK73H1ETTP3001F\'].id',
+    id: 'a4c3a77d-c556-4ea9-87c2-6f278100daf7',
+    pickingOrderId: pickingOrderByRef['SZ-26070045'].id,
+    partId: wclPartByNo['RK73H1ETTP3001F'].id,
     qty: 30000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -834,9 +834,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'dd4d8b64-d8b8-4163-bcaa-9b639c1a5801',
-    pickingOrderId: pickingOrderByRef[\SZ-26070045\'].id',
-    partId: wclPartByNo[\RK73H1ETTP3002F\'].id',
+    id: '3f6ab06c-f61d-4398-b8b2-1965a0b353a6',
+    pickingOrderId: pickingOrderByRef['SZ-26070045'].id,
+    partId: wclPartByNo['RK73H1ETTP3002F'].id,
     qty: 350000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -844,9 +844,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'd29c253c-a4fc-4794-b58b-d33270661dc8',
-    pickingOrderId: pickingOrderByRef[\SZ-26070046\'].id',
-    partId: wclPartByNo[\RK73H1ETTP33R0F\'].id',
+    id: 'fa5c26fb-2505-4752-bb5c-ad4bb532a398',
+    pickingOrderId: pickingOrderByRef['SZ-26070046'].id,
+    partId: wclPartByNo['RK73H1ETTP33R0F'].id,
     qty: 10000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -854,9 +854,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '9adabbf4-4eff-415c-80fc-19e996fc0331',
-    pickingOrderId: pickingOrderByRef[\SZ-26070046\'].id',
-    partId: wclPartByNo[\RK73H1ETTP4703F\'].id',
+    id: 'fe20703a-6ae0-4855-9bf6-04791c3c7c3b',
+    pickingOrderId: pickingOrderByRef['SZ-26070046'].id,
+    partId: wclPartByNo['RK73H1ETTP4703F'].id,
     qty: 170000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -864,9 +864,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'bf4d1a8e-2042-4100-93a2-57cdef6c1420',
-    pickingOrderId: pickingOrderByRef[\SZ-26070046\'].id',
-    partId: wclPartByNo[\RK73H1ETTP5101F\'].id',
+    id: 'de42f789-8169-4d04-b0c9-8bb9e6048445',
+    pickingOrderId: pickingOrderByRef['SZ-26070046'].id,
+    partId: wclPartByNo['RK73H1ETTP5101F'].id,
     qty: 170000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -874,9 +874,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '8fc3497f-b337-4b28-97ff-8fcdd4608e81',
-    pickingOrderId: pickingOrderByRef[\SZ-26070046\'].id',
-    partId: wclPartByNo[\RK73H1ETTP6801F\'].id',
+    id: '4770027f-1743-4cf9-9222-5d8b7a686013',
+    pickingOrderId: pickingOrderByRef['SZ-26070046'].id,
+    partId: wclPartByNo['RK73H1ETTP6801F'].id,
     qty: 20000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -884,9 +884,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '94e3cb44-862d-4892-8b85-76ffec460def',
-    pickingOrderId: pickingOrderByRef[\SZ-26070046\'].id',
-    partId: wclPartByNo[\RK73H1ETTP82R0F\'].id',
+    id: 'e4bf1f46-a616-4a74-b4a4-68143413a428',
+    pickingOrderId: pickingOrderByRef['SZ-26070046'].id,
+    partId: wclPartByNo['RK73H1ETTP82R0F'].id,
     qty: 70000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -894,9 +894,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'a5dd5259-facf-4807-8861-d07bb58ac204',
-    pickingOrderId: pickingOrderByRef[\SZ-26070047\'].id',
-    partId: wclPartByNo[\RK73H1HTTC1431F\'].id',
+    id: 'f44c9d55-353f-4755-9bab-7f0cc13dc0f6',
+    pickingOrderId: pickingOrderByRef['SZ-26070047'].id,
+    partId: wclPartByNo['RK73H1HTTC1431F'].id,
     qty: 70000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -904,9 +904,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '71fffc6e-ced4-47b2-a7db-ea5d70fe71b9',
-    pickingOrderId: pickingOrderByRef[\SZ-26070047\'].id',
-    partId: wclPartByNo[\RK73H1HTTC2203F\'].id',
+    id: '8c214a9e-9ef0-45b8-8d56-054908a63815',
+    pickingOrderId: pickingOrderByRef['SZ-26070047'].id,
+    partId: wclPartByNo['RK73H1HTTC2203F'].id,
     qty: 90000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -914,9 +914,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '744ea1e7-cf8a-4ec4-80af-22b88f92e533',
-    pickingOrderId: pickingOrderByRef[\SZ-26070047\'].id',
-    partId: wclPartByNo[\RK73H1HTTC2400F\'].id',
+    id: '773e57fa-2dc8-443b-ac75-a7a9467a9f09',
+    pickingOrderId: pickingOrderByRef['SZ-26070047'].id,
+    partId: wclPartByNo['RK73H1HTTC2400F'].id,
     qty: 180000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -924,9 +924,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '729dbb95-ff0f-4207-b45c-3f07e50e0d7d',
-    pickingOrderId: pickingOrderByRef[\SZ-26070048\'].id',
-    partId: wclPartByNo[\RK73H1HTTC2400F\'].id',
+    id: '6723faf2-f452-405e-b9df-441b4696bea9',
+    pickingOrderId: pickingOrderByRef['SZ-26070048'].id,
+    partId: wclPartByNo['RK73H1HTTC2400F'].id,
     qty: 440000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -934,9 +934,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '45774eca-7435-4c0a-aaa6-753e69848f91',
-    pickingOrderId: pickingOrderByRef[\SZ-26070048\'].id',
-    partId: wclPartByNo[\RK73H1HTTC5492F\'].id',
+    id: 'f156bb9b-38d0-454b-9f57-f5a3c933a8f9',
+    pickingOrderId: pickingOrderByRef['SZ-26070048'].id,
+    partId: wclPartByNo['RK73H1HTTC5492F'].id,
     qty: 20000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -944,9 +944,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'c8a5ec63-d003-4ead-a0df-a0c97838b630',
-    pickingOrderId: pickingOrderByRef[\SZ-26070048\'].id',
-    partId: wclPartByNo[\RK73H1JTTD1001F\'].id',
+    id: '1e5a826c-0820-4f29-898b-e20b7a1ebfec',
+    pickingOrderId: pickingOrderByRef['SZ-26070048'].id,
+    partId: wclPartByNo['RK73H1JTTD1001F'].id,
     qty: 10000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -954,9 +954,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'a4e61a40-6aad-4007-8374-a224679dceef',
-    pickingOrderId: pickingOrderByRef[\SZ-26070048\'].id',
-    partId: wclPartByNo[\RK73H1JTTD1542F\'].id',
+    id: 'dbcd676a-d416-425b-aa72-4577112c02ef',
+    pickingOrderId: pickingOrderByRef['SZ-26070048'].id,
+    partId: wclPartByNo['RK73H1JTTD1542F'].id,
     qty: 5000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -964,9 +964,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'd722a39b-5eb3-406a-b299-6e1a8da13b9b',
-    pickingOrderId: pickingOrderByRef[\SZ-26070049\'].id',
-    partId: wclPartByNo[\RK73H1JTTD1R00F\'].id',
+    id: '24912aad-02b8-4170-94c1-2f6fc3e4df0f',
+    pickingOrderId: pickingOrderByRef['SZ-26070049'].id,
+    partId: wclPartByNo['RK73H1JTTD1R00F'].id,
     qty: 5000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -974,9 +974,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'e4bd06f5-bbd3-4828-8626-f023e6ce03df',
-    pickingOrderId: pickingOrderByRef[\SZ-26070049\'].id',
-    partId: wclPartByNo[\RK73H1JTTD2001F\'].id',
+    id: 'b8824bdd-44f9-48d4-a978-7952d6f32029',
+    pickingOrderId: pickingOrderByRef['SZ-26070049'].id,
+    partId: wclPartByNo['RK73H1JTTD2001F'].id,
     qty: 110000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -984,9 +984,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'c5f59ef9-8609-44fc-ae44-3ae08bcb7ac5',
-    pickingOrderId: pickingOrderByRef[\SZ-26070049\'].id',
-    partId: wclPartByNo[\RK73H1JTTD2493F\'].id',
+    id: '1dbf99c0-30bb-4ea2-aead-9748e1dcdafa',
+    pickingOrderId: pickingOrderByRef['SZ-26070049'].id,
+    partId: wclPartByNo['RK73H1JTTD2493F'].id,
     qty: 5000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -994,9 +994,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '8a489553-ad4a-47ed-8d76-ec08ebcbcddb',
-    pickingOrderId: pickingOrderByRef[\SZ-26070049\'].id',
-    partId: wclPartByNo[\RK73H1JTTD3001F\'].id',
+    id: 'bb55f1f7-14af-4557-bfa1-ab1c03a750b0',
+    pickingOrderId: pickingOrderByRef['SZ-26070049'].id,
+    partId: wclPartByNo['RK73H1JTTD3001F'].id,
     qty: 65000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -1004,9 +1004,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '1711584a-e4fc-48f7-b0cc-1bc112c929bf',
-    pickingOrderId: pickingOrderByRef[\SZ-26070049\'].id',
-    partId: wclPartByNo[\RK73H1JTTD43R0F\'].id',
+    id: '2e4e26d6-b5c0-4983-96f9-49ecce9d9fce',
+    pickingOrderId: pickingOrderByRef['SZ-26070049'].id,
+    partId: wclPartByNo['RK73H1JTTD43R0F'].id,
     qty: 10000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -1014,9 +1014,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'aff7fc72-a07d-45b9-895e-346277ad5a1b',
-    pickingOrderId: pickingOrderByRef[\SZ-26070049\'].id',
-    partId: wclPartByNo[\RK73H1JTTD4701F\'].id',
+    id: '88857538-c025-4ada-b79e-ac70057d3c47',
+    pickingOrderId: pickingOrderByRef['SZ-26070049'].id,
+    partId: wclPartByNo['RK73H1JTTD4701F'].id,
     qty: 5000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -1024,9 +1024,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '6225128e-9317-455d-8935-ff9366f9dfad',
-    pickingOrderId: pickingOrderByRef[\SZ-26070049\'].id',
-    partId: wclPartByNo[\RK73H1JTTD4703F\'].id',
+    id: '4b979315-8296-486b-9122-251bc21b6e47',
+    pickingOrderId: pickingOrderByRef['SZ-26070049'].id,
+    partId: wclPartByNo['RK73H1JTTD4703F'].id,
     qty: 5000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -1034,9 +1034,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '51fc4087-b398-420e-af7d-a1d06256b71e',
-    pickingOrderId: pickingOrderByRef[\SZ-26070050\'].id',
-    partId: wclPartByNo[\RK73H1JTTD4990F\'].id',
+    id: 'f360e7d1-bc20-485f-8c6b-7fdff55a3752',
+    pickingOrderId: pickingOrderByRef['SZ-26070050'].id,
+    partId: wclPartByNo['RK73H1JTTD4990F'].id,
     qty: 45000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -1044,9 +1044,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '1bc48297-7e8f-4b03-b2fc-5360cfadb99b',
-    pickingOrderId: pickingOrderByRef[\SZ-26070050\'].id',
-    partId: wclPartByNo[\RK73H1JTTD82R5F\'].id',
+    id: 'f3d92d78-2d5a-4980-bfa8-82cd9ef0859b',
+    pickingOrderId: pickingOrderByRef['SZ-26070050'].id,
+    partId: wclPartByNo['RK73H1JTTD82R5F'].id,
     qty: 50000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -1054,9 +1054,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: '2ac437d9-cf7c-4b74-b9ca-03b64c0b2cf8',
-    pickingOrderId: pickingOrderByRef[\SZ-26070050\'].id',
-    partId: wclPartByNo[\RK73H2BTTD2004F\'].id',
+    id: 'e57aca55-7909-4801-abf3-9a2fab3c1b1f',
+    pickingOrderId: pickingOrderByRef['SZ-26070050'].id,
+    partId: wclPartByNo['RK73H2BTTD2004F'].id,
     qty: 35000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -1064,9 +1064,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'ae7449c1-3676-471b-ad2d-e2aae2897731',
-    pickingOrderId: pickingOrderByRef[\SZ-26070051\'].id',
-    partId: wclPartByNo[\RK73H2BTTD3900F\'].id',
+    id: '8045663f-b713-4669-ac71-4877c84dffd5',
+    pickingOrderId: pickingOrderByRef['SZ-26070051'].id,
+    partId: wclPartByNo['RK73H2BTTD3900F'].id,
     qty: 5000,
     pickedQty: 0,
     allocatedQty: 0,
@@ -1074,9 +1074,9 @@ const pickingItemRecords = [
     sourceShelfCode: null
   },
   {
-    id: 'b8c6ec7b-dfb4-4ea4-b4fa-ca3f5bf3f25d',
-    pickingOrderId: pickingOrderByRef[\SZ-26070052\'].id',
-    partId: wclPartByNo[\WK73R2BTTD62R0F\'].id',
+    id: '306654c7-ec3a-493f-a559-c8b65e8514b2',
+    pickingOrderId: pickingOrderByRef['SZ-26070052'].id,
+    partId: wclPartByNo['WK73R2BTTD62R0F'].id,
     qty: 790000,
     pickedQty: 0,
     allocatedQty: 0,

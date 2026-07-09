@@ -66,8 +66,8 @@ for (const file of files) {
   for (const [partNo, qty] of byPart) {
     itemRows.push({
       id: uuid(),
-      pickingOrderId: `__CODE__:pickingOrderByRef["${refNo}"].id`,
-      partId: `__CODE__:wclPartByNo["${partNo}"].id`,
+      pickingOrderId: `__CODE__:pickingOrderByRef['${refNo}'].id`,
+      partId: `__CODE__:wclPartByNo['${partNo}'].id`,
       qty,
       pickedQty: 0,
       allocatedQty: 0,
