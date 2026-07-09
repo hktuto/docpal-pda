@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">Warehouse PDA</string>
+    <string name="login_title">Warehouse PDA</string>
+    <string name="username">Username</string>
+    <string name="password">Password</string>
+    <string name="login">Log in</string>
+    <string name="login_error">Invalid username or password</string>
+    <string name="home_title">Warehouse PDA</string>
+    <string name="receiving">Receiving</string>
+    <string name="picking">Picking</string>
+    <string name="put_away">Put-away</string>
+    <string name="measuring">Measuring</string>
+    <string name="goods_verify">Goods verify</string>
+    <string name="stock_search">Stock search</string>
+</resources>
