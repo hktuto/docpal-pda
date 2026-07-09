@@ -234,8 +234,7 @@ export const allocations = pgTable("allocations", {
     .references(() => pickingItems.id, { onDelete: "cascade" }),
   inventoryLotId: text("inventory_lot_id")
     .references(() => inventoryLots.id, { onDelete: "cascade" }),
-  receivingInvoiceItemId: text("receiving_invoice_item_id")
-    .references(() => receivingInvoiceItems.id, { onDelete: "cascade" }),
+  receivingOrderId: text("receiving_order_id").references(() => receivingOrders.id, { onDelete: "cascade" }),
   qty: integer("qty").notNull(),
 });
 
@@ -324,6 +323,7 @@ export const receivingOrdersRelations = relations(receivingOrders, ({ many, one 
   supplier: one(suppliers, { fields: [receivingOrders.supplierId], references: [suppliers.id] }),
   invoices: many(receivingInvoices),
   shelfBoxes: many(shelfBoxes),
+  allocations: many(allocations),
 }));
 
 export const receivingInvoicesRelations = relations(receivingInvoices, ({ one, many }) => ({
@@ -336,7 +336,6 @@ export const receivingInvoiceItemsRelations = relations(receivingInvoiceItems, (
   part: one(parts, { fields: [receivingInvoiceItems.partId], references: [parts.id] }),
   inventoryLotSources: many(inventoryLotSources),
   putAwayScans: many(putAwayScans),
-  allocations: many(allocations),
   mismatches: many(receivingItemMismatches),
 }));
 
@@ -383,7 +382,7 @@ export const inventoryLotSourcesRelations = relations(inventoryLotSources, ({ on
 export const allocationsRelations = relations(allocations, ({ one }) => ({
   pickingItem: one(pickingItems, { fields: [allocations.pickingItemId], references: [pickingItems.id] }),
   inventoryLot: one(inventoryLots, { fields: [allocations.inventoryLotId], references: [inventoryLots.id] }),
-  receivingInvoiceItem: one(receivingInvoiceItems, { fields: [allocations.receivingInvoiceItemId], references: [receivingInvoiceItems.id] }),
+  receivingOrder: one(receivingOrders, { fields: [allocations.receivingOrderId], references: [receivingOrders.id] }),
 }));
 
 export const measuringTasksRelations = relations(measuringTasks, ({ one, many }) => ({

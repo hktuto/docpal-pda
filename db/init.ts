@@ -166,7 +166,7 @@ CREATE TABLE IF NOT EXISTS allocations (
   id TEXT PRIMARY KEY,
   picking_item_id TEXT NOT NULL REFERENCES picking_items(id) ON DELETE CASCADE,
   inventory_lot_id TEXT REFERENCES inventory_lots(id) ON DELETE CASCADE,
-  receiving_invoice_item_id TEXT REFERENCES receiving_invoice_items(id) ON DELETE CASCADE,
+  receiving_order_id TEXT REFERENCES receiving_orders(id) ON DELETE CASCADE,
   qty INTEGER NOT NULL
 );
 
@@ -262,7 +262,7 @@ CREATE INDEX IF NOT EXISTS idx_transition_logs_entity ON transition_logs(entity_
 CREATE INDEX IF NOT EXISTS idx_receiving_invoice_items_invoice ON receiving_invoice_items(receiving_invoice_id);
 CREATE INDEX IF NOT EXISTS idx_receiving_invoice_items_part ON receiving_invoice_items(part_id);
 CREATE INDEX IF NOT EXISTS idx_picking_items_part ON picking_items(part_id);
-CREATE INDEX IF NOT EXISTS idx_allocations_receiving_item ON allocations(receiving_invoice_item_id);
+CREATE INDEX IF NOT EXISTS idx_allocations_receiving_order ON allocations(receiving_order_id);
 CREATE INDEX IF NOT EXISTS idx_shipping_boxes_order ON shipping_boxes(picking_order_id);
 CREATE INDEX IF NOT EXISTS idx_transition_logs_created_at ON transition_logs(created_at);
 `;
