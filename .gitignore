@@ -25,3 +25,8 @@ docs/.obsidian/workspace.json
 
 .worktrees
 .superpowers/
+
+# SQLite (apps/api)
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
