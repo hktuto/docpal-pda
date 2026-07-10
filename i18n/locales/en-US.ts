@@ -220,7 +220,9 @@ export default {
       status: "Status",
       packages: "Packages",
       qty: "Qty",
-      cancelBox: "Cancel box"
+      cancelBox: "Cancel box",
+      addAll: "Add all",
+      addAllConfirm: "Add {count} unboxed package(s) to this box?"
     },
     issueBanner: {
       issueReason: "Issue reason",

@@ -220,7 +220,9 @@ export default {
       status: "狀態",
       packages: "包裹",
       qty: "數量",
-      cancelBox: "取消箱號"
+      cancelBox: "取消箱號",
+      addAll: "全部加入",
+      addAllConfirm: "將 {count} 個未裝箱包裹加入此箱？"
     },
     issueBanner: {
       issueReason: "問題原因",
