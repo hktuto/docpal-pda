@@ -39,7 +39,7 @@
         style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;"
       >
         <span style="font-size: 0.875rem; font-weight: 600;">{{ box.id }}</span>
-        <span class="badge" :class="badgeClass(box.status)">{{ statusLabel.box(box.status) }}</span>
+         <span class="badge" >Print</span>
         <button
           v-if="box.status === 'open'"
           class="btn btn--small"
