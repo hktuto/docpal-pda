@@ -188,6 +188,7 @@ useHardwareScanner({
       showToast(result.message);
     } else if (result.status === "applied") {
       await onApplied();
+      showToast(t("common.scanSuccess"));
     } else if (result.status === "review") {
       review.value = result;
       reviewOpen.value = true;

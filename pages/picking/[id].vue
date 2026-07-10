@@ -199,6 +199,7 @@ useHardwareScanner({
       showToast(result.message);
     } else if (result.status === "applied") {
       await onApplied();
+      showToast(t("common.scanSuccess"));
     }
   },
 });

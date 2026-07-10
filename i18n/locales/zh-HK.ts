@@ -78,7 +78,8 @@ export default {
     shelfFormat: "{code} — {zone}",
     boxFormat: "{box} — {shelf}",
     reportedBy: "由 {name} 匯報",
-    kg: "千克"
+    kg: "千克",
+    scanSuccess: "掃描成功"
   },
   home: {
     greeting: "你好，{name}",

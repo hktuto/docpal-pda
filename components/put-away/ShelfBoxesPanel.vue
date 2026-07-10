@@ -41,6 +41,7 @@
             <span class="card__title">{{ box.id }}</span>
           </DetailRow>
           <DetailRow :label="$t('putAway.shelfBoxesPanel.status')">
+
             <span class="badge" :class="badgeClass(box.status)">{{ statusLabel.box(box.status) }}</span>
           </DetailRow>
           <DetailRow :label="$t('putAway.shelfBoxesPanel.items')">

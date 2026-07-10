@@ -146,8 +146,8 @@ a:hover {
 }
 
 .btn--small {
-  padding: 0.4rem 0.875rem;
-  font-size: 0.8125rem;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.6rem;
   min-height: 34px;
 }
 

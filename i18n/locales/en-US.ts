@@ -78,7 +78,8 @@ export default {
     shelfFormat: "{code} — {zone}",
     boxFormat: "{box} — {shelf}",
     reportedBy: "by {name}",
-    kg: "kg"
+    kg: "kg",
+    scanSuccess: "Scanned successfully"
   },
   home: {
     greeting: "Hello, {name}",
