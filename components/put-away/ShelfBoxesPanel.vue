@@ -71,6 +71,18 @@
 
           <div v-if="box.status === 'open'" class="box-actions">
             <button
+              class="btn btn--small"
+              :disabled="addingAll[box.id] || !(unboxedCountByBoxId[box.id] > 0)"
+              @click="emit('add-all-to-box', box.id)"
+            >
+              <template v-if="addingAll[box.id]">
+                <InlineSpinner /> {{ $t('putAway.shelfBoxesPanel.addAll') }}
+              </template>
+              <template v-else>
+                {{ $t('putAway.shelfBoxesPanel.addAll') }}
+              </template>
+            </button>
+            <button
               v-if="box.items?.length"
               class="btn"
               :disabled="closing"
@@ -96,6 +108,7 @@
 <script setup lang="ts">
 import { badgeClass } from "~/composables/useStatusBadge";
 import { boxTotalQty } from "~/utils/box";
+import InlineSpinner from "~/components/InlineSpinner.vue";
 import type { ShelfBox, Shelf } from "~/services/types";
 
 interface Props {
@@ -107,6 +120,8 @@ interface Props {
   cancellingBox: Record<string, boolean>;
   expandedItemBoxes: Set<string>;
   shelves?: Shelf[];
+  addingAll: Record<string, boolean>;
+  unboxedCountByBoxId: Record<string, number>;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -119,6 +134,7 @@ const emit = defineEmits<{
   "new-box": [];
   "close-box": [boxId: string];
   "cancel-box": [boxId: string];
+  "add-all-to-box": [boxId: string];
 }>();
 
 const { t } = useI18n();

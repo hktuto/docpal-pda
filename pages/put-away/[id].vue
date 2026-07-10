@@ -25,9 +25,12 @@
         :creating="creating"
         :closing="closing"
         :cancelling-box="cancellingBox"
+        :adding-all="addingAll"
+        :unboxed-count-by-box-id="unboxedCountByBoxId"
         @new-box="openNewBoxDialog"
         @close-box="closeBox"
         @cancel-box="cancelBox"
+        @add-all-to-box="addAllToBox"
       />
 
       <SelectShelfDialog
@@ -129,6 +132,18 @@ const addingScan = ref<Record<string, boolean>>({});
 const removingScan = ref<Record<string, boolean>>({});
 const boxSelections = ref<Record<string, string>>({});
 const expandedItems = ref<Set<string>>(new Set());
+const addingAll = ref<Record<string, boolean>>({});
+
+const unboxedCountByBoxId = computed(() => {
+  const counts: Record<string, number> = {};
+  for (const box of boxes.value) {
+    counts[box.id] = scans.value.filter(
+      (s) => !s.shelfBoxId && box.receivingOrderId === orderId
+    ).length;
+  }
+  return counts;
+});
+
 const { scan, scanning, review, reviewOpen, onApplied } = useLabelScanReview({ onApplied: load });
 
 async function addScanToBox(scanId: string) {
@@ -248,6 +263,24 @@ async function cancelBox(boxId: string) {
     error.value = errorMessage(e);
   } finally {
     cancellingBox.value[boxId] = false;
+  }
+}
+
+async function addAllToBox(boxId: string) {
+  const count = unboxedCountByBoxId.value[boxId] ?? 0;
+  if (count === 0) return;
+  const confirmed = window.confirm(t('putAway.shelfBoxesPanel.addAllConfirm', { count }));
+  if (!confirmed) return;
+
+  addingAll.value[boxId] = true;
+  error.value = null;
+  try {
+    await warehouse.addAllUnboxedScansToBox(boxId);
+    await load();
+  } catch (e) {
+    error.value = errorMessage(e);
+  } finally {
+    addingAll.value[boxId] = false;
   }
 }
 
