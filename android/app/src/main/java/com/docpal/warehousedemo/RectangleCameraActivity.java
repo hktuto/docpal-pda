@@ -12,6 +12,8 @@ import android.view.Surface;
 import android.widget.ImageButton;
 import android.widget.Toast;
 import androidx.activity.ComponentActivity;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.camera.core.Camera;
@@ -80,6 +82,7 @@ public class RectangleCameraActivity extends ComponentActivity {
   private volatile CaptureMode captureMode = CaptureMode.NONE;
   private volatile RectangleDetector.RectResult pendingTapRect = null;
   private boolean isLabelScan = false;
+  private ActivityResultLauncher<String> requestPermissionLauncher;
 
   static {
     OpenCVLoader.initDebug();
@@ -111,13 +114,27 @@ public class RectangleCameraActivity extends ComponentActivity {
       return false;
     });
 
+    requestPermissionLauncher = registerForActivityResult(
+      new ActivityResultContracts.RequestPermission(),
+      isGranted -> {
+        if (isGranted) {
+          initializeCamera();
+        } else {
+          Toast.makeText(this, "Camera permission required", Toast.LENGTH_SHORT).show();
+          finish();
+        }
+      }
+    );
+
     if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
         != PackageManager.PERMISSION_GRANTED) {
-      Toast.makeText(this, "Camera permission required", Toast.LENGTH_SHORT).show();
-      finish();
-      return;
+      requestPermissionLauncher.launch(Manifest.permission.CAMERA);
+    } else {
+      initializeCamera();
     }
+  }
 
+  private void initializeCamera() {
     previewView.setScaleType(PreviewView.ScaleType.FIT_CENTER);
     analysisExecutor = Executors.newSingleThreadExecutor();
     ocrHelper = new RectangleOcrHelper();

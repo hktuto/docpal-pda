@@ -54,7 +54,7 @@ The demo models an event-driven warehouse with two overlapping workflows that sh
 - **UI:** Vue 3, plain CSS
 - **Database:** PGlite — WebAssembly build of Postgres running in the browser
 - **ORM:** Drizzle ORM with the `drizzle-orm/pglite` driver
-- **Persistence:** IndexedDB via PGlite (`idb://warehouse-demo-pglite`)
+- **Persistence:** In-memory only. PGlite is initialized without a data directory in `plugins/pglite.client.ts`, so the database lives in the browser tab's memory and is re-seeded on every app launch.
 - **List pages:** Manual `db.execute` queries that reload on mount and when the app regains visibility (Capacitor does not support `useLiveQuery`).
 
 ---
@@ -215,7 +215,7 @@ pnpm run build
 
 ### Reset the demo data
 
-The database lives in the browser's IndexedDB. Use the **⋮ → Reset local DB** menu in the app, or clear site data for the origin. The next load will re-seed with fresh demo data.
+The database is in-memory and is not persisted across app restarts. The app re-seeds fresh demo data on every launch. The **⋮ → Reset local DB** menu still clears the in-memory state and reloads the page.
 
 ---
 
@@ -297,8 +297,8 @@ The database lives in the browser's IndexedDB. Use the **⋮ → Reset local DB*
 ## Notes and limitations
 
 - **Demo only.** Passwords are stored as plain text hashes in the seed file; this is acceptable for a local proof-of-concept only.
-- **Single-browser database.** Because PGlite stores data in IndexedDB, each browser has its own isolated demo database.
-- **No migrations.** The schema is created once from `db/init.ts` when the `users` table does not exist. Schema changes require clearing IndexedDB.
+- **Data is not persisted across sessions.** The in-memory database is re-seeded on every app launch, so each session starts fresh.
+- **No migrations.** The schema is created once from `db/init.ts` when the `users` table does not exist. Because the database is in-memory, schema changes take effect on the next app launch.
 - **Allocation is greedy.** It fills shelved lots first, then receiving-area lots, without partial date-code relaxation or FIFO beyond the required date code filter.
 - **Scanning supports camera input.** Camera/barcode integration is implemented via the native Android `RectangleDetection.scanLabel()` flow. On supported devices the operator can scan a label with the camera; the detected text is parsed and matched to receiving and picking records just like typed input. A typed-input fallback is still available for browsers and testing. The parsing logic normalizes input and applies simple OCR-style substitutions (e.g. `O` → `0`) so the demo can simulate real scan errors.
 - **Limited automated tests.** There is a small Android unit-test suite for the OpenCV crop logic (`./gradlew :app:testDebugUnitTest`). Most verification is still manual browser testing plus `pnpm nuxt prepare` for TypeScript generation.

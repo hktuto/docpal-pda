@@ -9,7 +9,7 @@ This is a client-side Nuxt 3 proof-of-concept for warehouse mobile/Android flows
 - **Mobile shell:** Capacitor (Android platform added)
 - **Database:** PGlite — WebAssembly build of Postgres running in the browser
 - **ORM:** Drizzle ORM with the `drizzle-orm/pglite` driver
-- **Persistence:** IndexedDB via PGlite (`idb://warehouse-demo-pglite`)
+- **Persistence:** In-memory only. PGlite is initialized without a data directory in `plugins/pglite.client.ts`, so the database lives in the browser tab's memory and is re-seeded on every app launch.
 - **List pages:** Manual `db.execute` queries that reload on mount and when the app regains visibility (Capacitor does not support `useLiveQuery`).
 
 ## Common commands
@@ -120,9 +120,9 @@ When you add, remove, or significantly change a feature:
 
 ## Demo limitations to keep in mind
 
-- **No migrations.** The schema is created once from `db/init.ts` when the `users` table does not exist. Schema changes require clearing IndexedDB.
+- **No migrations.** The schema is created once from `db/init.ts` when the `users` table does not exist. Because the database is in-memory, schema changes take effect on the next app launch.
 - **Demo passwords only.** Passwords are stored as plain-text hashes in the seed file.
-- **Per-browser database.** PGlite stores data in IndexedDB, so each browser has its own isolated demo database.
+- **Data is not persisted.** The in-memory database is re-seeded on every app launch, so each session starts fresh.
 - **Native scanning.** The Android native `RectangleDetection.scanLabel()` flow is still used for camera-based label capture where implemented.
 - **Capacitor web assets.** Run `pnpm generate` before `pnpm cap:sync` so the native apps receive the latest static build from `.output/public`. For dev live reload, use `pnpm cap:android:dev` instead.
 - **Android only.** iOS platform is not configured.

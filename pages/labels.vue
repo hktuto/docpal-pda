@@ -15,6 +15,7 @@ interface LabelItem {
   unknown: string;
   fullName: string;
   qrValue: string;
+  pickingOrderRefs: string[];
 }
 
 interface LabelsData {
@@ -31,11 +32,34 @@ const { data } = await useFetch<LabelsData>("/labels-data.json", {
 });
 
 const search = ref("");
+const selectedPickingOrder = ref<string>("picking");
+
+const pickingOrderOptions = computed(() => {
+  if (!data.value) return [];
+  const refs = new Set<string>();
+  for (const label of data.value.labels) {
+    for (const ref of label.pickingOrderRefs) {
+      refs.add(ref);
+    }
+  }
+  return [...refs].sort();
+});
+
 const filteredLabels = computed(() => {
   if (!data.value) return [];
-  if (!search.value.trim()) return data.value.labels;
+  let labels = data.value.labels;
+
+  if (selectedPickingOrder.value === "picking") {
+    labels = labels.filter((l) => l.pickingOrderRefs.length > 0);
+  } else if (selectedPickingOrder.value) {
+    labels = labels.filter((l) =>
+      l.pickingOrderRefs.includes(selectedPickingOrder.value)
+    );
+  }
+
+  if (!search.value.trim()) return labels;
   const term = search.value.trim().toLowerCase();
-  return data.value.labels.filter(
+  return labels.filter(
     (l) =>
       l.partNo.toLowerCase().includes(term) ||
       l.poNo.toLowerCase().includes(term) ||
@@ -112,6 +136,17 @@ watch(
           placeholder="Search part, PO, invoice or box..."
           class="search-input"
         />
+        <select v-model="selectedPickingOrder" class="picking-select">
+          <option value="picking">Picking labels only</option>
+          <option value="">All receiving items</option>
+          <option
+            v-for="refNo of pickingOrderOptions"
+            :key="refNo"
+            :value="refNo"
+          >
+            Picking {{ refNo }}
+          </option>
+        </select>
         <button class="print-btn" @click="() => window.print()">Print labels</button>
       </div>
     </header>
@@ -122,7 +157,9 @@ watch(
         :key="index"
         class="label label--koa"
       >
-        <div class="label__use">{{ label.invoiceNo }}</div>
+        <div class="label__use">
+          {{ label.pickingOrderRefs.length ? label.pickingOrderRefs.join(", ") : "Put-away" }}
+        </div>
         <div class="label__koa-rohs">RoHS</div>
         <div class="label__koa-order">{{ label.invoiceNo }}</div>
         <div class="label__koa-po">PO: {{ label.poNo }} · Line {{ label.poLine }}</div>
@@ -209,6 +246,15 @@ h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
   border: 1px solid #000;
   font-family: inherit;
   font-size: 0.9rem;
+}
+
+.picking-select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #000;
+  font-family: inherit;
+  font-size: 0.9rem;
+  background: #fff;
+  min-width: 180px;
 }
 
 .print-btn {

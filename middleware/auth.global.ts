@@ -1,4 +1,7 @@
 export default defineNuxtRouteMiddleware(async (to) => {
+  if (to.path === '/labels') {
+    return;
+  }
   const { currentUser, restore } = useAuth();
 
   await restore();

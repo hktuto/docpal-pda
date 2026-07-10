@@ -5,15 +5,13 @@ import { createTablesSql } from "~/db/init";
 import { seedDb as seedDbDefault, ensureDemoPasswords as ensureDemoPasswordsDefault } from "~/db/seed";
 import { seedDb as seedDbPrecalc, ensureDemoPasswords as ensureDemoPasswordsPrecalc } from "~/db/seed-precalc";
 
-const DATA_DIR = "idb://warehouse-demo-pglite";
-
 export default defineNuxtPlugin(async () => {
   const config = useRuntimeConfig();
   const usePrecalc = config.public.seedPreset === "precalc";
   const seedDb = usePrecalc ? seedDbPrecalc : seedDbDefault;
   const ensureDemoPasswords = usePrecalc ? ensureDemoPasswordsPrecalc : ensureDemoPasswordsDefault;
 
-  const pg = new PGlite(DATA_DIR);
+  const pg = new PGlite();
 
   await pg.waitReady;
 

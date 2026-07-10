@@ -1,5 +1,6 @@
 package com.docpal.warehouse.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -35,7 +36,10 @@ private val menuItems = listOf(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen() {
+fun HomeScreen(
+    onStockSearch: () -> Unit,
+    onMeasuring: () -> Unit
+) {
     Scaffold(
         topBar = {
             TopAppBar(title = { Text(stringResource(R.string.home_title)) })
@@ -51,9 +55,17 @@ fun HomeScreen() {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(menuItems) { item ->
+                val onClick: () -> Unit = {
+                    when (item.labelRes) {
+                        R.string.stock_search -> onStockSearch()
+                        R.string.measuring -> onMeasuring()
+                        else -> { /* TODO in next phases */ }
+                    }
+                }
                 Card(
-                    onClick = { /* TODO in next phases */ },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onClick)
                 ) {
                     Text(
                         text = stringResource(item.labelRes),

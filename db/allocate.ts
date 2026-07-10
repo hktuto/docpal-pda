@@ -102,7 +102,13 @@ export async function allocatePickingOrder(
             ro.id AS receiving_order_id,
             ro.delivery_date,
             COALESCE(SUM(rii.received_qty - rii.picked_qty - rii.put_away_qty), 0) AS physical_qty,
-            COALESCE(SUM(a.qty), 0) AS allocated_qty,
+            COALESCE((
+              SELECT SUM(a.qty)
+              FROM allocations a
+              JOIN picking_items pi ON pi.id = a.picking_item_id
+              WHERE a.receiving_order_id = ro.id
+                AND pi.part_id = ${item.partId}
+            ), 0) AS allocated_qty,
             (
               SELECT COALESCE(SUM(pas.qty), 0)
               FROM put_away_scans pas
@@ -115,17 +121,17 @@ export async function allocatePickingOrder(
           FROM receiving_orders ro
           JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
           JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
-          LEFT JOIN allocations a
-            ON a.receiving_order_id = ro.id
-            AND EXISTS (
-              SELECT 1 FROM picking_items pi
-              WHERE pi.id = a.picking_item_id AND pi.part_id = rii.part_id
-            )
           WHERE rii.part_id = ${item.partId}
             AND ro.status = 'in_hand'
           GROUP BY ro.id, ro.delivery_date
           HAVING COALESCE(SUM(rii.received_qty - rii.picked_qty - rii.put_away_qty), 0)
-            - COALESCE(SUM(a.qty), 0)
+            - COALESCE((
+              SELECT SUM(a.qty)
+              FROM allocations a
+              JOIN picking_items pi ON pi.id = a.picking_item_id
+              WHERE a.receiving_order_id = ro.id
+                AND pi.part_id = ${item.partId}
+            ), 0)
             - (
               SELECT COALESCE(SUM(pas.qty), 0)
               FROM put_away_scans pas

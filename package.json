@@ -13,9 +13,11 @@
     "cap:android": "nuxt generate && cap sync android && cap open android",
     "cap:android:dev": "node scripts/cap-android-dev.mjs",
     "generate:ocr-labels-pdf": "node scripts/generate-ocr-labels-pdf.mjs",
+    "generate:box-shelf-labels-pdf": "node scripts/generate-box-shelf-labels-pdf.mjs",
     "generate:precalc-seed": "vitest run --config vitest.generator.config.ts scripts/generate-precalc-seed.test.ts",
     "generate:ocr-labels": "vitest run --config vitest.generator.config.ts scripts/generate-ocr-labels.test.ts",
     "generate:labels-data": "vitest run --config vitest.generator.config.ts scripts/generate-labels-data.test.ts",
+    "generate:native-seed": "vitest run --config vitest.generator.config.ts scripts/generate-native-seed.test.ts",
     "assets:generate": "npx capacitor-assets generate --android --assetPath resources",
     "assets:android": "pnpm assets:generate"
   },
@@ -37,6 +39,7 @@
     "@types/uuid": "^9.0.8",
     "playwright": "^1.61.1",
     "qrcode": "^1.5.4",
+    "sql.js": "^1.14.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9",
     "vue-tsc": "^3.3.7"

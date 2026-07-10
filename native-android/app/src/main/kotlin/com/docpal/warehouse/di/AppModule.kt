@@ -2,6 +2,7 @@ package com.docpal.warehouse.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.docpal.warehouse.data.local.AppDatabase
 import com.docpal.warehouse.data.local.seed.SeedLoader
 import dagger.Module
@@ -30,4 +31,9 @@ object AppModule {
 
     @Provides
     fun provideUserDao(database: AppDatabase) = database.userDao()
+
+    @Provides
+    fun provideWritableDatabase(database: AppDatabase): SupportSQLiteDatabase {
+        return database.openHelper.writableDatabase
+    }
 }

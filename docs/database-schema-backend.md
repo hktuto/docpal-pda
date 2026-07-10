@@ -4,7 +4,7 @@
 
 ## Overview
 
-The demo runs PostgreSQL in the browser via PGlite. The schema is bootstrapped once from `db/init.ts` when the `users` table does not exist. There are no migrations; schema changes require clearing IndexedDB.
+The demo runs PostgreSQL in the browser via PGlite. The schema is bootstrapped once from `db/init.ts` when the `users` table does not exist. There are no migrations; because the database is in-memory, schema changes take effect on the next app launch.
 
 ## Full SQL Schema
 
@@ -394,9 +394,9 @@ flowchart LR
 
 ## Important Notes for Backend Developers
 
-- **No migrations.** The schema is created once when the `users` table does not exist. Schema changes require clearing IndexedDB.
+- **No migrations.** The schema is created once when the `users` table does not exist. Because the database is in-memory, schema changes take effect on the next app launch.
 - **Demo passwords only.** Passwords are stored as plain-text hashes in the seed file.
-- **Per-browser database.** PGlite stores data in IndexedDB, so each browser has its own isolated demo database.
+- **Data is not persisted.** The in-memory database is re-seeded on every app launch, so each session starts fresh.
 - **Generated column.** `inventory_lots.available_qty` is generated as `total_qty - allocated_qty`.
 - **Partial unique index.** `inventory_lots` are unique by `part_id + date_code + coo + cow + shelf_code + box_id`, but only when `shelf_code` or `box_id` is set. Receiving-area lots (no location) may be duplicated.
 - **Allocation polymorphism.** An `allocation` points to either an `inventory_lot_id` **or** a `receiving_invoice_item_id`, not necessarily both.
