@@ -85,8 +85,12 @@
         :creating-box="creatingBox"
         :adding-package="addingPackage"
         :removing-package="removingPackage"
+        :adding-all="addingAll"
+        :any-adding-all="anyAddingAll"
+        :unboxed-count-by-order-id="unboxedCountByOrderId"
         :scanning="scanning"
         @create-box="createBox"
+        @add-all-to-box="addAllToBox"
         @add-to-box="addToBox"
         @remove-from-box="removeFromBox"
         @remove-scanned-package="removeScannedPackageHandler"
@@ -206,6 +210,7 @@ const boxesByOrder = ref<Record<string, DisplayBox[]>>({});
 const creatingBox = ref<Record<string, boolean>>({});
 const addingPackage = ref<Record<string, boolean>>({});
 const removingPackage = ref<Record<string, boolean>>({});
+const addingAll = ref<Record<string, boolean>>({});
 const boxSelections = ref<Record<string, string>>({});
 const reportModalOpen = ref(false);
 const reportModalItem = ref<DisplayReceivingItem | null>(null);
@@ -271,6 +276,21 @@ const filteredGroupedPickingOrders = computed<GroupedOrder[]>(() => {
     return orderMatch || itemMatch;
   });
 });
+
+const unboxedCountByOrderId = computed(() => {
+  const counts: Record<string, number> = {};
+  for (const po of filteredGroupedPickingOrders.value) {
+    let count = 0;
+    for (const item of po.items) {
+      const packages = packagesByItem.value[item.id] ?? [];
+      count += packages.filter((p) => !p.shippingBoxId).length;
+    }
+    counts[po.id] = count;
+  }
+  return counts;
+});
+
+const anyAddingAll = computed(() => Object.values(addingAll.value).some(Boolean));
 
 const scanTargets = computed(() => {
   if (!order.value) return [];
@@ -422,6 +442,37 @@ async function createBox(pickingOrderId: string) {
     error.value = errorMessage(e);
   } finally {
     creatingBox.value[pickingOrderId] = false;
+  }
+}
+
+async function addAllToBox(boxId: string) {
+  if (anyAddingAll.value) return;
+
+  let pickingOrderId: string | null = null;
+  for (const po of filteredGroupedPickingOrders.value) {
+    const boxes = boxesByOrder.value[po.id] ?? [];
+    if (boxes.some((b) => b.id === boxId)) {
+      pickingOrderId = po.id;
+      break;
+    }
+  }
+  if (!pickingOrderId) return;
+
+  const count = unboxedCountByOrderId.value[pickingOrderId] ?? 0;
+  if (count === 0) return;
+
+  const confirmed = window.confirm(t("receiving.pickingTab.addAllConfirm", { count }));
+  if (!confirmed) return;
+
+  addingAll.value[boxId] = true;
+  error.value = null;
+  try {
+    await warehouse.addAllUnboxedPackagesToBox(boxId);
+    await load();
+  } catch (e: any) {
+    error.value = errorMessage(e);
+  } finally {
+    addingAll.value[boxId] = false;
   }
 }
 

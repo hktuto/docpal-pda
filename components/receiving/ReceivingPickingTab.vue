@@ -40,6 +40,19 @@
       >
         <span style="font-size: 0.875rem; font-weight: 600;">{{ box.id }}</span>
         <span class="badge" :class="badgeClass(box.status)">{{ statusLabel.box(box.status) }}</span>
+        <button
+          v-if="box.status === 'open'"
+          class="btn btn--small"
+          :disabled="anyAddingAll || addingAll[box.id] || !(unboxedCountByOrderId[po.id] > 0)"
+          @click="emit('add-all-to-box', box.id)"
+        >
+          <template v-if="addingAll[box.id]">
+            <InlineSpinner /> {{ $t('receiving.pickingTab.addAll') }}
+          </template>
+          <template v-else>
+            {{ $t('receiving.pickingTab.addAll') }}
+          </template>
+        </button>
       </div>
     </div>
 
@@ -177,6 +190,9 @@ const props = defineProps<{
   creatingBox: Record<string, boolean>;
   addingPackage: Record<string, boolean>;
   removingPackage: Record<string, boolean>;
+  addingAll: Record<string, boolean>;
+  anyAddingAll: boolean;
+  unboxedCountByOrderId: Record<string, number>;
   scanning: boolean;
   expandedItems: Set<string>;
   searchQuery: string;
@@ -187,6 +203,7 @@ const emit = defineEmits<{
   "update:expandedItems": [value: Set<string>];
   "update:boxSelections": [value: Record<string, string>];
   "create-box": [pickingOrderId: string];
+  "add-all-to-box": [boxId: string];
   "add-to-box": [packageId: string];
   "remove-from-box": [packageId: string];
   "remove-scanned-package": [packageId: string];
