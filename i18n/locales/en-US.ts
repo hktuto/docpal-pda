@@ -161,6 +161,8 @@ export default {
       removeScanned: "Remove scan",
       removingScanned: "Removing…",
       scan: "Scan",
+      addAll: "Add all",
+      addAllConfirm: "Add {count} unboxed package(s) to this box?",
       hideLogs: "Hide picking logs",
       showLogs: "Show picking logs",
       noLogs: "No picking logs."
@@ -277,7 +279,9 @@ export default {
       closeBox: "Close box",
       closing: "Closing…",
       cancelBox: "Cancel box",
-      canceling: "Canceling…"
+      canceling: "Canceling…",
+      addAll: "Add all",
+      addAllConfirm: "Add {count} unboxed scan(s) to this box?"
     },
     lotsPanel: {
       title: "Items to put away",

@@ -161,6 +161,8 @@ export default {
       removeScanned: "移除掃描",
       removingScanned: "移除中…",
       scan: "掃描",
+      addAll: "全部加入",
+      addAllConfirm: "將 {count} 個未裝箱包裹加入此箱？",
       hideLogs: "隱藏揀貨記錄",
       showLogs: "顯示揀貨記錄",
       noLogs: "暫無揀貨記錄。"
@@ -277,7 +279,9 @@ export default {
       closeBox: "關閉箱號",
       closing: "關閉中…",
       cancelBox: "取消箱號",
-      canceling: "取消中…"
+      canceling: "取消中…",
+      addAll: "全部加入",
+      addAllConfirm: "將 {count} 個未裝箱掃描加入此箱？"
     },
     lotsPanel: {
       title: "待上架物品",
