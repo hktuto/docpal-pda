@@ -266,6 +266,7 @@ async function cancelBox(boxId: string) {
 }
 
 async function addAllToBox(boxId: string) {
+  if (anyAddingAll.value) return;
   const count = unboxedCountForOrder.value;
   if (count === 0) return;
   const confirmed = window.confirm(t('putAway.shelfBoxesPanel.addAllConfirm', { count }));
