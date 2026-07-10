@@ -15,9 +15,9 @@
       </div>
 
       <div class="modal__body">
-        <div class="preview">
-          <img v-if="imageSrc" :src="imageSrc" :alt="$t('labelScanReviewModal.capturedLabelAlt')" />
-          <div v-else class="placeholder">{{ $t('labelScanReviewModal.noImage') }}</div>
+        <div v-if="imageSrc" class="preview">
+          <img  :src="imageSrc" :alt="$t('labelScanReviewModal.capturedLabelAlt')" />
+          <!-- <div v-else class="placeholder">{{ $t('labelScanReviewModal.noImage') }}</div> -->
         </div>
 
         <p class="subtitle">{{ $t('labelScanReviewModal.editSubtitle') }}</p>
@@ -88,7 +88,7 @@
               type="button"
               class="btn btn--full"
               :disabled="applying"
-              @click="applyRecord(localMatchResult.apply)"
+              @click="applyRecord(localMatchResult)"
             >
               <template v-if="applying">
                 <InlineSpinner /> {{ $t('labelScanReviewModal.applying') }}
@@ -108,15 +108,15 @@
                 type="button"
                 class="option"
                 :disabled="applying || matching"
-                @click="applyRecord(record.apply)"
+                @click="applyRecord(record)"
               >
                 <div class="letter">
                   <template v-if="applying"><InlineSpinner /></template>
                   <template v-else>📦</template>
                 </div>
                 <div class="content">
-                  <h3>{{ $t('labelScanReviewModal.matchN', { n: index + 1 }) }}</h3>
-                  <p>{{ formatRecord(record.record) }}</p>
+                  <p>{{ $t('labelScanReviewModal.matchN', { n: index + 1 }) }}</p>
+                  <p class="multiple_match_label">{{ formatRecord(record.record) }}</p>
                 </div>
               </button>
             </div>
@@ -238,11 +238,13 @@ async function findMatch() {
   }
 }
 
-async function applyRecord(apply: () => Promise<void>) {
+async function applyRecord(item: { record: unknown; apply: () => Promise<void> }) {
   applying.value = true;
   applyError.value = null;
   try {
-    await apply();
+    await item.apply();
+    // Refresh the match result so remainingQty reflects the just-applied scan.
+    await findMatch();
     emit('applied');
   } catch (e: any) {
     applyError.value = e?.message ? getErrorMessage(e) : t('labelScanReviewModal.applyFailed');
@@ -263,10 +265,11 @@ function selectAll(event: FocusEvent) {
 function formatRecord(record: unknown): string {
   if (record == null) return t('common.noData');
   if (typeof record === 'object') {
+
     const obj = record as Record<string, unknown>;
     if (typeof obj.picking === 'object' && obj.picking !== null) {
       const picking = obj.picking as Record<string, unknown>;
-      if (typeof picking.pickingOrderRefNo === 'string') return picking.pickingOrderRefNo;
+      if (typeof picking.pickingOrderRefNo === 'string') return `${picking.pickingOrderRefNo} (${picking.remainingQty} / ${picking.requiredQty} )`;
       return t('receiving.pickingTab.pickingOrder');
     }
     if (typeof obj.pickingOrderRefNo === 'string') return obj.pickingOrderRefNo;
@@ -278,6 +281,12 @@ function formatRecord(record: unknown): string {
 </script>
 
 <style scoped>
+
+.multiple_match_label{
+    font-size: 1rem;
+    font-weight: 700;
+    color:#000;
+}
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -295,7 +304,7 @@ function formatRecord(record: unknown): string {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   width: 100%;
-  max-width: 420px;
+  max-width: calc(100vw - 2rem);
   max-height: 90vh;
   overflow-y: auto;
 }

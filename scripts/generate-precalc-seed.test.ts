@@ -30,7 +30,7 @@ describe("generate-precalc-seed", () => {
         id: a.id,
         pickingItemId: a.pickingItemId,
         inventoryLotId: a.inventoryLotId,
-        receivingInvoiceItemId: a.receivingInvoiceItemId,
+        receivingOrderId: a.receivingOrderId,
         qty: a.qty,
       }))
       .sort((a, b) => a.id.localeCompare(b.id));
@@ -70,8 +70,8 @@ describe("generate-precalc-seed", () => {
       )
       .replace(pickingItemsArraySource, updatedPickingItemsArraySource)
       .replace(
-        /  for \(const po of pickingOrderRecords\) \{\n    await allocatePickingOrder\(db, po\.id\);\n  \}\n\}/,
-        `  await db.insert(schema.allocations).values([...allocationRecords]);\n}`
+        /  if \(!options\.skipAllocation\) \{\n    for \(const po of pickingOrderRecords\) \{\n      await allocatePickingOrder\(db, po\.id\);\n    \}\n  \}\n/,
+        `  await db.insert(schema.allocations).values([...allocationRecords]);\n`
       )
       .replace(
         "  await db.insert(schema.pickingItems).values([...pickingItemRecords]);\n\n",

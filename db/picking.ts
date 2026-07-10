@@ -1036,15 +1036,11 @@ export async function getPickingOrdersByReceivingOrder(
         NULL AS cow,
         a.qty AS allocated_qty,
         a.id AS allocation_id
-      FROM receiving_orders ro
-      JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
-      JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
-      JOIN allocations a ON a.receiving_order_id = ro.id
+      FROM allocations a
       JOIN picking_items pi ON pi.id = a.picking_item_id
       JOIN picking_orders po ON po.id = pi.picking_order_id
       JOIN parts p ON p.id = pi.part_id
-      WHERE ro.id = ${receivingOrderId}
-        AND pi.part_id = rii.part_id
+      WHERE a.receiving_order_id = ${receivingOrderId}
     ),
     combined AS (
       SELECT * FROM lot_allocations

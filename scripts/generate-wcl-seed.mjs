@@ -30,7 +30,7 @@ const wclPartRecords = partNos.map((partNo) => ({
 }));
 const wclPartByNo = Object.fromEntries(wclPartRecords.map((p) => [p.partNo, p]));
 
-const wclReceivingOrderId = uuid();
+const wclReceivingOrderId = 'b55df3d8-bd2a-43d5-80fa-616a7058439a';
 
 const invoiceNos = [...new Set(all.map((r) => r["INVOICE NO."]))].sort();
 const wclInvoiceRecords = invoiceNos.map((invoiceNo) => ({

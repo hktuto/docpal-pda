@@ -5,8 +5,8 @@ import { drizzle } from 'drizzle-orm/pglite';
 import { v4 as uuid } from 'uuid';
 import * as schema from '../db/schema';
 import { createTablesSql } from '../db/init';
-import { addAllUnboxedPackagesToBox, addPackageToBox } from '../db/picking';
-import { applyOcrPick } from '../db/ocrPicking';
+import { addAllUnboxedPackagesToBox, addPackageToBox, getPickingOrdersByReceivingOrder } from '../db/picking';
+import { applyOcrPick, findReceivingCandidates } from '../db/ocrPicking';
 import { I18nError } from '../composables/i18nError';
 
 async function createTestDb() {
@@ -413,6 +413,8 @@ describe('addPackageToBox', () => {
 describe('applyOcrPick splits scan across invoice items', () => {
   let db: Awaited<ReturnType<typeof createTestDb>>;
   let actorId: string;
+  let supplierId: string;
+  let partId: string;
   let receivingOrderId: string;
   let firstInvoiceItemId: string;
   let secondInvoiceItemId: string;
@@ -432,10 +434,10 @@ describe('applyOcrPick splits scan across invoice items', () => {
       createdAt: now,
     });
 
-    const supplierId = uuid();
+    supplierId = uuid();
     await db.insert(schema.suppliers).values({ id: supplierId, code: 'KOA', name: 'KOA' });
 
-    const partId = uuid();
+    partId = uuid();
     await db.insert(schema.parts).values({
       id: partId,
       partNo: 'RK73B1JTTD181G',
@@ -487,8 +489,8 @@ describe('applyOcrPick splits scan across invoice items', () => {
       id: secondInvoiceItemId,
       receivingInvoiceId: secondInvoiceId,
       partId,
-      qty: 190000,
-      receivedQty: 190000,
+      qty: 200000,
+      receivedQty: 200000,
       pickedQty: 0,
       putAwayQty: 0,
     });
@@ -540,8 +542,8 @@ describe('applyOcrPick splits scan across invoice items', () => {
       where: eq(schema.pickingPackages.pickingItemId, pickingItemId),
     });
 
-    expect(packages).toHaveLength(2);
-    expect(packages.map((pkg) => pkg.qty).sort((a, b) => a - b)).toEqual([10000, 10000]);
+    expect(packages).toHaveLength(1);
+    expect(packages[0]?.qty).toBe(20000);
 
     const firstItem = await db.query.receivingInvoiceItems.findFirst({
       where: eq(schema.receivingInvoiceItems.id, firstInvoiceItemId),
@@ -558,5 +560,71 @@ describe('applyOcrPick splits scan across invoice items', () => {
     });
     const remainingAllocationQty = allocations.reduce((sum, allocation) => sum + allocation.qty, 0);
     expect(remainingAllocationQty).toBe(180000);
+  });
+
+  it('does not duplicate picking rows when a receiving order has multiple invoice items for the same part', async () => {
+    const rows = await getPickingOrdersByReceivingOrder(db, receivingOrderId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.picking_order_ref).toBe('PICK-001');
+    expect(rows[0]?.allocated_qty).toBe(200000);
+  });
+
+  it('finds receiving candidates after a receiving-order allocation spans multiple invoice items', async () => {
+    const candidates = await findReceivingCandidates(db, receivingOrderId, {
+      partNo: 'RK73B1JTTD181G',
+      qty: 24,
+      dateCode: null,
+      lotCode: null,
+      coo: null,
+      cow: null,
+    });
+
+    expect(candidates.length).toBeGreaterThan(0);
+    const totalAvailable = candidates.reduce((sum, c) => sum + c.availableQty, 0);
+    expect(totalAvailable).toBe(10000);
+  });
+
+  it('consumes from an invoice item not fully reserved by another picking order allocation', async () => {
+    const otherPickingOrderId = uuid();
+    await db.insert(schema.pickingOrders).values({
+      id: otherPickingOrderId,
+      refNo: 'PICK-OTHER',
+      supplierId,
+      deliveryDate: new Date(),
+      poNo: 'PO-OTHER',
+      requiredDateCodeNotice: null,
+      shipTo: 'US',
+      destinationCountry: 'USA',
+      status: 'picking',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const otherPickingItemId = uuid();
+    await db.insert(schema.pickingItems).values({
+      id: otherPickingItemId,
+      pickingOrderId: otherPickingOrderId,
+      partId,
+      qty: 200000,
+      pickedQty: 0,
+      allocatedQty: 200000,
+    });
+
+    await db.insert(schema.allocations).values({
+      id: uuid(),
+      pickingItemId: otherPickingItemId,
+      receivingOrderId,
+      qty: 200000,
+    });
+
+    await expect(
+      applyOcrPick(db, receivingOrderId, pickingItemId, 24, null, null, null, null, actorId)
+    ).resolves.toBeUndefined();
+
+    const packages = await db.query.pickingPackages.findMany({
+      where: eq(schema.pickingPackages.pickingItemId, pickingItemId),
+    });
+    expect(packages).toHaveLength(1);
+    expect(packages[0]?.qty).toBe(24);
   });
 });
