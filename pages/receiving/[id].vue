@@ -56,7 +56,7 @@
           :key="opt.value"
           class="filter-chip"
           :class="{ 'filter-chip--active': view === opt.value }"
-          @click="view = opt.value"
+          @click="setView(opt.value)"
         >
           {{ $t(opt.labelKey) }}
           <span v-if="opt.value === 'picking'" class="tab-badge">({{ groupedPickingOrders.length }})</span>
@@ -157,6 +157,7 @@ const { showToast } = useToast();
 useHead({ title: t("receiving.detail.title") });
 
 const route = useRoute();
+const router = useRouter();
 const orderId = route.params.id as string;
 
 const { currentUser } = useAuth();
@@ -200,7 +201,14 @@ async function onRetake() {
 }
 
 const scanPickingItemId = ref<string | undefined>(undefined);
-const view = ref<"receiving" | "picking">("receiving");
+const view = ref<"receiving" | "picking">(
+  route.query.tab === "picking" ? "picking" : "receiving"
+);
+
+function setView(next: "receiving" | "picking") {
+  view.value = next;
+  router.replace({ query: { ...route.query, tab: next } });
+}
 const headerExpanded = ref(false);
 const transitionLogs = ref<Record<string, TransitionLog[]>>({});
 const expandedItems = ref<Set<string>>(new Set());
