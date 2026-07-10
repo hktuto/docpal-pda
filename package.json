@@ -12,5 +12,10 @@
     "cap:sync": "pnpm --filter @warehouse/web cap:sync",
     "cap:android": "pnpm --filter @warehouse/web cap:android",
     "cap:android:dev": "pnpm --filter @warehouse/web cap:android:dev"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3"
+    ]
   }
 }
