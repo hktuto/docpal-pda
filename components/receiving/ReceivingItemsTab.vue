@@ -18,7 +18,7 @@
       </DetailRow>
 
       <DetailRow :label="$t('receiving.itemsTab.expected')" :value="item.qty" />
-      <DetailRow :label="$t('receiving.itemsTab.expected')" :value="item.boxId" />
+      <DetailRow :label="$t('receiving.itemsTab.boxId')" :value="item.boxId" />
       <template v-if="expanded">
         <DetailRow :label="$t('receiving.itemsTab.poLine')" :value="`${item.poNo} / ${item.poLine}`" />
         <DetailRow :label="$t('receiving.itemsTab.reserved')" :value="allocatedByItem[item.id] || 0" />

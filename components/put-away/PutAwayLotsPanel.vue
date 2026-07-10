@@ -6,6 +6,7 @@
     <div
       v-for="lot in lots"
       :key="lot.receivingInvoiceItemId"
+      :data-item-id="lot.receivingInvoiceItemId"
       class="card"
     >
       <DetailRow :label="$t('putAway.lotsPanel.part')">

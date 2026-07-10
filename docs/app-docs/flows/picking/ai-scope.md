@@ -33,9 +33,11 @@
 - Matching depends on normalized text and may require manual review.
 - No backend validation; all logic runs client-side in PGlite.
 - OCR scan candidate search (`findReceivingCandidates` / `findPickingCandidates`) is intentionally local-only in `composables/useScanMatchers.ts`; it is not exposed through `WarehouseService` and has no API equivalent.
+- Receiving-order allocations may display a "Box IDs" remark when the underlying invoice items record `box_id` values. This is informational only and does not restrict scanning.
 
 ## Related specs/plans
 
 - `docs/superpowers/specs/2026-07-01-ocr-assisted-picking-design.md`
 - `docs/superpowers/specs/2026-07-03-picking-issue-reporting-design.md`
 - `docs/superpowers/specs/2026-07-03-package-level-picking-design.md`
+- `docs/superpowers/specs/2026-07-10-allocation-box-remark-design.md`

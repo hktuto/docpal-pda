@@ -103,6 +103,8 @@ import { useHardwareScanner } from "~/composables/useHardwareScanner";
 import { normalize } from "~/composables/useMockOcr";
 import { useErrorMessage } from "~/composables/errorMessage";
 import { useWarehouse } from "~/composables/useWarehouse";
+import { scrollToItem } from "~/utils/scroll";
+import { nextTick } from "vue";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import PickingBoxesSection from "~/components/picking/PickingBoxesSection.vue";
 import PickingItemsSection from "~/components/picking/PickingItemsSection.vue";
@@ -143,8 +145,17 @@ const boxesExpanded = ref(false);
 const scanAllocation = ref<PickingAllocation | null>(null);
 const boxSelections = ref<Record<string, string>>({});
 
+async function onAppliedWithScroll() {
+  const targetItemId = scanAllocation.value?.pickingItem?.id;
+  await load();
+  if (targetItemId) {
+    await nextTick();
+    scrollToItem({ itemId: targetItemId });
+  }
+}
+
 const { scan, scanning, review, reviewOpen, onApplied } = useLabelScanReview({
-  onApplied: load,
+  onApplied: onAppliedWithScroll,
 });
 const { processCapture, parseRawValue } = useLabelScan();
 const { showToast } = useToast();
@@ -178,6 +189,7 @@ useHardwareScanner({
       showToast(t("picking.detail.noMatchingAllocation"));
       return;
     }
+    scanAllocation.value = allocation;
     const result = await processCapture(buildRawCapture(rawValue), {
       task: "picking",
       allocation,

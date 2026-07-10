@@ -125,6 +125,7 @@ export default {
       dateLotCooCow: "Date / Lot / COO / COW",
       confirmMismatch: "Confirm",
       cancelMismatch: "Cancel",
+      boxId:"Box",
       mismatchStatus: {
         pending: "Pending confirmation",
         confirmed: "Confirmed",
@@ -202,6 +203,7 @@ export default {
       allocatedQty: "Allocated qty",
       unboxedPackages: "Unboxed packages",
       boxedPackages: "Boxed packages",
+      boxIds: "Box IDs",
       selectBox: "Select box",
       addToBox: "Add to box",
       adding: "Adding…",

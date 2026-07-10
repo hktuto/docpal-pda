@@ -298,6 +298,7 @@ export interface PickingAllocation {
   id: string;
   pickingItemId: string;
   qty: number;
+  remark: string | null;
   inventoryLot: {
     id: string;
     partId: string;

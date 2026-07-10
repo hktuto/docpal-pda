@@ -167,7 +167,8 @@ CREATE TABLE IF NOT EXISTS allocations (
   picking_item_id TEXT NOT NULL REFERENCES picking_items(id) ON DELETE CASCADE,
   inventory_lot_id TEXT REFERENCES inventory_lots(id) ON DELETE CASCADE,
   receiving_order_id TEXT REFERENCES receiving_orders(id) ON DELETE CASCADE,
-  qty INTEGER NOT NULL
+  qty INTEGER NOT NULL,
+  remark TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_allocations_picking_item ON allocations(picking_item_id);

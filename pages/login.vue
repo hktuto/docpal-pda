@@ -100,7 +100,7 @@ async function onSubmit() {
   border: 1px solid rgba(255, 255, 255, 0.5);
   border-radius: 1.25rem;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
-  padding: 2.25rem 1.75rem;
+  padding: 1.2rem 1rem;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }

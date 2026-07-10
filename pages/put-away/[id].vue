@@ -74,6 +74,7 @@
 </template>
 
 <script setup lang="ts">
+import { nextTick } from "vue";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useStatusLabel } from "~/composables/useStatusLabel";
@@ -82,6 +83,7 @@ import { useErrorMessage } from "~/composables/errorMessage";
 import { I18nError } from "~/composables/i18nError";
 import { useWarehouse } from "~/composables/useWarehouse";
 import { useToast } from "~/composables/useToast";
+import { scrollToItem } from "~/utils/scroll";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import SelectShelfDialog from "~/components/SelectShelfDialog.vue";
 import ShelfBoxesPanel from "~/components/put-away/ShelfBoxesPanel.vue";
@@ -128,6 +130,7 @@ const closing = ref(false);
 const cancellingBox = ref<Record<string, boolean>>({});
 
 const scanLot = ref<PutAwayLot | null>(null);
+const scrollTargetLotId = ref<string | null>(null);
 const scans = ref<PutAwayScan[]>([]);
 const addingScan = ref<Record<string, boolean>>({});
 const removingScan = ref<Record<string, boolean>>({});
@@ -213,8 +216,16 @@ async function load() {
       }
     }
     expandedItemBoxes.value = nextExpanded;
+
+    if (scrollTargetLotId.value) {
+      const targetId = scrollTargetLotId.value;
+      scrollTargetLotId.value = null;
+      await nextTick();
+      scrollToItem({ itemId: targetId });
+    }
   } catch (e) {
     error.value = errorMessage(e);
+    scrollTargetLotId.value = null;
   } finally {
     pending.value = false;
   }
@@ -286,12 +297,16 @@ async function addAllToBox(boxId: string) {
 
 async function openScan(lot: PutAwayLot) {
   error.value = null;
+  scrollTargetLotId.value = lot.receivingInvoiceItemId;
   scanLot.value = lot;
   const result = await scan({
     task: 'put-away',
     receivingItem: lot,
     targets: lot.partNo ? [lot.partNo] : [],
   });
+  if (result.status === 'error' || result.status === 'cancelled') {
+    scrollTargetLotId.value = null;
+  }
   if (result.status === 'error') {
     showToast(result.message);
   }

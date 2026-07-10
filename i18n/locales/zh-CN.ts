@@ -125,6 +125,7 @@ export default {
       dateLotCooCow: "日期 / 批次 / 产地 / 晶圆产地",
       confirmMismatch: "确认",
       cancelMismatch: "取消",
+      boxId:"箱",
       mismatchStatus: {
         pending: "待确认",
         confirmed: "已确认",
@@ -202,6 +203,7 @@ export default {
       allocatedQty: "已分配数量",
       unboxedPackages: "未装箱包裹",
       boxedPackages: "已装箱包裹",
+      boxIds: "箱号",
       selectBox: "选择箱子",
       addToBox: "添加到箱子",
       adding: "添加中…",

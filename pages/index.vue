@@ -112,7 +112,7 @@ const { currentUser } = useAuth();
 .menu-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 1rem;
+  gap: 0.6rem;
 }
 
 @media (max-width: 360px) {
@@ -129,7 +129,7 @@ const { currentUser } = useAuth();
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 1.25rem;
+  padding: 0.7rem;
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
@@ -146,7 +146,7 @@ const { currentUser } = useAuth();
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.75rem;
+  border-radius: 0.6rem;
   margin-bottom: 0.875rem;
   color: white;
 }

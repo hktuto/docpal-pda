@@ -14,7 +14,7 @@ Tap the order you want to work on. The detail page opens.
 
 ## 3. Review allocated lines
 
-The detail page shows each picking item, the required quantity, and where the stock is allocated from (lot or receiving-area item).
+The detail page shows each picking item, the required quantity, and where the stock is allocated from (lot or receiving-area item). For allocations against a receiving order, any recorded box IDs from the receiving invoice items are shown as a "Box IDs" remark so the operator knows which boxes to pick from.
 
 ## 4. Pick each line
 

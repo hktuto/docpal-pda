@@ -236,6 +236,7 @@ export const allocations = pgTable("allocations", {
     .references(() => inventoryLots.id, { onDelete: "cascade" }),
   receivingOrderId: text("receiving_order_id").references(() => receivingOrders.id, { onDelete: "cascade" }),
   qty: integer("qty").notNull(),
+  remark: text("remark"),
 });
 
 // ------------------------------------------------------------------

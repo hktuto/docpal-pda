@@ -160,11 +160,26 @@ export async function allocatePickingOrder(
           const available = row.receivedQty - row.allocatedQty;
           if (available <= 0) continue;
           const take = Math.min(needed, available);
+
+          const boxResult = await tx.execute(sql`
+            SELECT DISTINCT rii.box_id
+            FROM receiving_invoice_items rii
+            JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+            WHERE ri.receiving_order_id = ${row.receivingOrderId}
+              AND rii.part_id = ${item.partId}
+              AND rii.box_id IS NOT NULL
+          `);
+          const boxIds = (boxResult.rows as { box_id: string }[])
+            .map((r) => r.box_id)
+            .filter(Boolean);
+          const remark = boxIds.length > 0 ? JSON.stringify(boxIds) : null;
+
           await tx.insert(schema.allocations).values({
             id: uuid(),
             pickingItemId: item.id,
             receivingOrderId: row.receivingOrderId,
             qty: take,
+            remark,
           });
           await tx.update(schema.pickingItems)
             .set({ allocatedQty: sql`${schema.pickingItems.allocatedQty} + ${take}` })

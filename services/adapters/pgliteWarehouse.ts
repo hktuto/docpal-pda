@@ -213,6 +213,7 @@ function toPickingAllocation(
     id: allocation.id,
     pickingItemId: allocation.pickingItemId,
     qty: allocation.qty,
+    remark: allocation.remark ?? null,
     inventoryLot: allocation.inventoryLot
       ? {
           id: allocation.inventoryLot.id,

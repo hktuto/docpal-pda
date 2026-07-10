@@ -3,6 +3,7 @@
   <div
     v-for="item in items"
     :key="item.id"
+    :data-item-id="item.id"
     class="card item-card"
     :class="{ 'card--done': item.pickedQty >= item.qty }"
   >
@@ -62,6 +63,12 @@
             </span>
           </DetailRow>
           <DetailRow :label="$t('picking.itemsSection.allocatedQty')" :value="allocation.qty" />
+          <DetailRow
+            v-if="boxIdsFromRemark(allocation).length"
+            :label="$t('picking.itemsSection.boxIds')"
+          >
+            {{ boxIdsFromRemark(allocation).join(', ') }}
+          </DetailRow>
           <div class="allocation-actions">
             <button class="btn btn--small" :disabled="scanning" @click="emit('scan', allocation)">
               <template v-if="scanning">
@@ -228,6 +235,19 @@ function updateBoxSelection(packageId: string, value: string) {
 
 function formatLotFields(source: { dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null }): string {
   return `${source.dateCode || t('common.noData')} / ${source.lotCode || t('common.noData')} / ${source.coo || t('common.noData')} / ${source.cow || t('common.noData')}`;
+}
+
+function boxIdsFromRemark(allocation: Allocation): string[] {
+  if (!allocation.remark) return [];
+  try {
+    const parsed = JSON.parse(allocation.remark);
+    if (Array.isArray(parsed) && parsed.every((v) => typeof v === "string")) {
+      return parsed;
+    }
+  } catch {
+    // ignore malformed remark
+  }
+  return [];
 }
 
 </script>
