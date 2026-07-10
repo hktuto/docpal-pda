@@ -40,6 +40,7 @@ export function createApiWarehouseService(
     getShelves: notImplemented,
     recordPutAwayScan: notImplemented,
     assignPutAwayScanToBox: notImplemented,
+    addAllUnboxedScansToBox: notImplemented,
     removePutAwayScanFromBox: notImplemented,
     removePutAwayScannedPiece: notImplemented,
     createShelfBox: notImplemented,

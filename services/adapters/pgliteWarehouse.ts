@@ -38,6 +38,7 @@ import {
   getShelfBoxesForReceivingOrder as dbGetShelfBoxesForReceivingOrder,
   recordPutAwayScan as dbRecordPutAwayScan,
   assignScanToBox as dbAssignScanToBox,
+  addAllUnboxedScansToBox as dbAddAllUnboxedScansToBox,
   removeScanFromBox as dbRemoveScanFromBox,
   removeScannedPiece as dbRemoveScannedPiece,
   createShelfBox as dbCreateShelfBox,
@@ -1219,6 +1220,10 @@ export function createPgliteWarehouseService(
 
     async assignPutAwayScanToBox(scanId: string, boxId: string): Promise<void> {
       await dbAssignScanToBox(db, scanId, boxId, assertActorId(getActorId));
+    },
+
+    async addAllUnboxedScansToBox(boxId: string): Promise<number> {
+      return dbAddAllUnboxedScansToBox(db, boxId, assertActorId(getActorId));
     },
 
     async removePutAwayScanFromBox(scanId: string): Promise<void> {

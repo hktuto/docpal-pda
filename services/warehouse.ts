@@ -82,6 +82,7 @@ export interface WarehouseService {
     cow: string | null
   ): Promise<PutAwayScan>;
   assignPutAwayScanToBox(scanId: string, boxId: string): Promise<void>;
+  addAllUnboxedScansToBox(boxId: string): Promise<number>;
   removePutAwayScanFromBox(scanId: string): Promise<void>;
   removePutAwayScannedPiece(scanId: string): Promise<void>;
   createShelfBox(receivingOrderId: string, shelfCode: string): Promise<ShelfBox>;
