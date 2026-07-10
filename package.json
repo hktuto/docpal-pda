@@ -17,7 +17,6 @@
     "generate:precalc-seed": "vitest run --config vitest.generator.config.ts scripts/generate-precalc-seed.test.ts",
     "generate:ocr-labels": "vitest run --config vitest.generator.config.ts scripts/generate-ocr-labels.test.ts",
     "generate:labels-data": "vitest run --config vitest.generator.config.ts scripts/generate-labels-data.test.ts",
-    "generate:native-seed": "vitest run --config vitest.generator.config.ts scripts/generate-native-seed.test.ts",
     "assets:generate": "npx capacitor-assets generate --android --assetPath resources",
     "assets:android": "pnpm assets:generate"
   },
