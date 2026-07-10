@@ -42,8 +42,21 @@
       </DetailRow>
       <DetailRow :label="$t('picking.boxesSection.packages')" :value="box.packages?.length ?? 0" />
       <DetailRow :label="$t('picking.boxesSection.qty')" :value="boxTotalQty(box.packages ?? [])" />
-      <div v-if="box.status === 'open' && (box.packages?.length ?? 0) === 0" class="box-cancel">
+      <div v-if="box.status === 'open'" class="box-actions">
         <button
+          class="btn btn--small"
+          :disabled="anyAddingAll || addingAll[box.id] || unboxedCount === 0"
+          @click="emit('add-all-to-box', box.id)"
+        >
+          <template v-if="addingAll[box.id]">
+            <InlineSpinner /> {{ $t('picking.boxesSection.addAll') }}
+          </template>
+          <template v-else>
+            {{ $t('picking.boxesSection.addAll') }}
+          </template>
+        </button>
+        <button
+          v-if="(box.packages?.length ?? 0) === 0"
           class="btn btn--small btn--danger"
           :disabled="cancellingBox[box.id]"
           @click="$emit('cancel-box', box.id)"
@@ -67,12 +80,16 @@ const props = defineProps<{
   actionable: boolean;
   creatingBox: boolean;
   cancellingBox: Record<string, boolean>;
+  addingAll: Record<string, boolean>;
+  anyAddingAll: boolean;
+  unboxedCount: number;
   expanded: boolean;
 }>();
 
 const emit = defineEmits<{
   "create-box": [];
   "cancel-box": [boxId: string];
+  "add-all-to-box": [boxId: string];
   "update:expanded": [value: boolean];
 }>();
 
@@ -108,7 +125,10 @@ const expanded = computed({
   margin-bottom: 1rem;
 }
 
-.box-cancel {
+.box-actions {
   margin-top: 1rem;
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 </style>

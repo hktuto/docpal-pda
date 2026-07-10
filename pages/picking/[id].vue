@@ -52,8 +52,12 @@
         :actionable="actionable"
         :creating-box="creatingBox"
         :cancelling-box="cancellingBox"
+        :adding-all="addingAll"
+        :any-adding-all="anyAddingAll"
+        :unboxed-count="unboxedCountForOrder"
         @create-box="createBox"
         @cancel-box="cancelBox"
+        @add-all-to-box="addAllToBox"
       />
 
       <PickingItemsSection
@@ -130,6 +134,7 @@ const adding = ref<Record<string, boolean>>({});
 const removing = ref<Record<string, boolean>>({});
 const creatingBox = ref(false);
 const cancellingBox = ref<Record<string, boolean>>({});
+const addingAll = ref<Record<string, boolean>>({});
 const finishing = ref(false);
 const transitionLogs = ref<Record<string, PickingItemTransitionLog[]>>({});
 const expandedItems = ref<Set<string>>(new Set());
@@ -197,6 +202,13 @@ const openBoxes = computed(() =>
 const actionable = computed(
   () => order.value?.status !== "finished" && order.value?.status !== "issue"
 );
+const unboxedCountForOrder = computed(() => {
+  return (order.value?.items ?? []).reduce((sum, item) => {
+    const unboxed = (item.packages ?? []).filter((p) => !p.shippingBoxId);
+    return sum + unboxed.length;
+  }, 0);
+});
+const anyAddingAll = computed(() => Object.values(addingAll.value).some(Boolean));
 const scanTargets = computed(() => {
   const partNo = scanAllocation.value?.pickingItem?.part?.partNo;
   return partNo ? [partNo] : [];
@@ -272,6 +284,25 @@ async function cancelBox(boxId: string) {
     error.value = errorMessage(e);
   } finally {
     cancellingBox.value[boxId] = false;
+  }
+}
+
+async function addAllToBox(boxId: string) {
+  if (anyAddingAll.value) return;
+  const count = unboxedCountForOrder.value;
+  if (count === 0) return;
+  const confirmed = window.confirm(t("picking.boxesSection.addAllConfirm", { count }));
+  if (!confirmed) return;
+
+  addingAll.value[boxId] = true;
+  error.value = null;
+  try {
+    await warehouse.addAllUnboxedPackagesToBox(boxId);
+    await load();
+  } catch (e) {
+    error.value = errorMessage(e);
+  } finally {
+    addingAll.value[boxId] = false;
   }
 }
 
