@@ -72,7 +72,7 @@
           <div v-if="box.status === 'open'" class="box-actions">
             <button
               class="btn btn--small"
-              :disabled="addingAll[box.id] || !(unboxedCountByBoxId[box.id] > 0)"
+              :disabled="anyAddingAll || addingAll[box.id] || unboxedCount === 0"
               @click="emit('add-all-to-box', box.id)"
             >
               <template v-if="addingAll[box.id]">
@@ -121,7 +121,8 @@ interface Props {
   expandedItemBoxes: Set<string>;
   shelves?: Shelf[];
   addingAll: Record<string, boolean>;
-  unboxedCountByBoxId: Record<string, number>;
+  anyAddingAll: boolean;
+  unboxedCount: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {

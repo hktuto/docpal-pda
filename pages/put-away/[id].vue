@@ -26,7 +26,8 @@
         :closing="closing"
         :cancelling-box="cancellingBox"
         :adding-all="addingAll"
-        :unboxed-count-by-box-id="unboxedCountByBoxId"
+        :any-adding-all="anyAddingAll"
+        :unboxed-count="unboxedCountForOrder"
         @new-box="openNewBoxDialog"
         @close-box="closeBox"
         @cancel-box="cancelBox"
@@ -134,15 +135,13 @@ const boxSelections = ref<Record<string, string>>({});
 const expandedItems = ref<Set<string>>(new Set());
 const addingAll = ref<Record<string, boolean>>({});
 
-const unboxedCountByBoxId = computed(() => {
-  const counts: Record<string, number> = {};
-  for (const box of boxes.value) {
-    counts[box.id] = scans.value.filter(
-      (s) => !s.shelfBoxId && box.receivingOrderId === orderId
-    ).length;
-  }
-  return counts;
-});
+const unboxedCountForOrder = computed(
+  () => scans.value.filter((s) => !s.shelfBoxId).length
+);
+
+const anyAddingAll = computed(() =>
+  Object.values(addingAll.value).some(Boolean)
+);
 
 const { scan, scanning, review, reviewOpen, onApplied } = useLabelScanReview({ onApplied: load });
 
@@ -267,7 +266,7 @@ async function cancelBox(boxId: string) {
 }
 
 async function addAllToBox(boxId: string) {
-  const count = unboxedCountByBoxId.value[boxId] ?? 0;
+  const count = unboxedCountForOrder.value;
   if (count === 0) return;
   const confirmed = window.confirm(t('putAway.shelfBoxesPanel.addAllConfirm', { count }));
   if (!confirmed) return;
