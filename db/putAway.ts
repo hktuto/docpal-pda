@@ -330,6 +330,39 @@ export async function assignScanToBox(
   });
 }
 
+export async function addAllUnboxedScansToBox(
+  db: PgliteDatabase<typeof schema>,
+  shelfBoxId: string,
+  actorId: string
+): Promise<number> {
+  if (!actorId) throw new I18nError("actor_required");
+  return db.transaction(async (tx) => {
+    const [box] = await tx
+      .select()
+      .from(schema.shelfBoxes)
+      .where(eq(schema.shelfBoxes.id, shelfBoxId));
+    if (!box) throw new I18nError("shelf_box_not_found");
+    if (box.status !== "open") throw new I18nError("shelf_box_is_not_open");
+
+    const scansResult = await tx.execute(sql`
+      SELECT pas.id
+      FROM put_away_scans pas
+      JOIN receiving_invoice_items rii ON rii.id = pas.receiving_invoice_item_id
+      JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+      WHERE ri.receiving_order_id = ${box.receivingOrderId}
+        AND pas.shelf_box_id IS NULL
+      ORDER BY pas.created_at ASC
+    `);
+
+    const scanIds = (scansResult.rows ?? []).map((row) => String(row.id));
+    for (const scanId of scanIds) {
+      await assignScanToBox(tx, scanId, shelfBoxId, actorId);
+    }
+
+    return scanIds.length;
+  });
+}
+
 export async function removeScanFromBox(
   db: PgliteDatabase<typeof schema>,
   scanId: string,

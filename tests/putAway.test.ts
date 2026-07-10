@@ -12,6 +12,8 @@ import {
   removeScannedPiece,
   cancelShelfBox,
   getPutAwayCandidates,
+  addAllUnboxedScansToBox,
+  createShelfBox,
 } from '../db/putAway';
 
 async function createTestDb() {
@@ -245,5 +247,123 @@ describe('put-away scan flow', () => {
     expect(candidates).toHaveLength(1);
     expect(candidates[0].id).toBe(receivingOrderId);
     expect(candidates[0].available_qty).toBe(0);
+  });
+});
+
+async function seedMinimalReceivingOrder(db: Awaited<ReturnType<typeof createTestDb>>) {
+  const now = new Date();
+  const actorId = uuid();
+  await db.insert(schema.users).values({
+    id: actorId,
+    username: 'op',
+    passwordHash: 'pw',
+    displayName: 'Op',
+    role: 'operator',
+    createdAt: now,
+  });
+
+  const supplierId = uuid();
+  await db.insert(schema.suppliers).values({ id: supplierId, code: 'KOA', name: 'KOA' });
+
+  await db.insert(schema.shelves).values({ code: 'A-01', zone: 'A' });
+
+  const partId = uuid();
+  await db.insert(schema.parts).values({
+    id: partId,
+    partNo: 'RK73B1JTTD181G',
+    internalCode: '',
+    description: '',
+    defaultCoo: 'CN',
+  });
+
+  const receivingOrderId = uuid();
+  await db.insert(schema.receivingOrders).values({
+    id: receivingOrderId,
+    refNo: 'RO-001',
+    supplierId,
+    deliveryDate: now,
+    status: 'in_hand',
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const receivingInvoiceId = uuid();
+  await db.insert(schema.receivingInvoices).values({
+    id: receivingInvoiceId,
+    receivingOrderId,
+    invoiceNo: 'INV-001',
+    createdAt: now,
+  });
+
+  const receivingInvoiceItemId = uuid();
+  await db.insert(schema.receivingInvoiceItems).values({
+    id: receivingInvoiceItemId,
+    receivingInvoiceId,
+    partId,
+    qty: 100,
+    receivedQty: 100,
+    pickedQty: 0,
+    putAwayQty: 0,
+    dateCode: '2544',
+    lotCode: 'L1',
+    coo: 'CN',
+    cow: 'USA',
+  });
+
+  return { actorId, receivingOrderId, receivingInvoiceItemId, partId };
+}
+
+describe('addAllUnboxedScansToBox', () => {
+  let db: Awaited<ReturnType<typeof createTestDb>>;
+
+  beforeEach(async () => {
+    db = await createTestDb();
+  });
+
+  it('adds all unboxed scans to the box', async () => {
+    const { actorId, receivingOrderId, receivingInvoiceItemId, partId } = await seedMinimalReceivingOrder(db);
+    const box = await createShelfBox(db, receivingOrderId, 'A-01', actorId);
+
+    const scan1 = await recordPutAwayScan(db, receivingInvoiceItemId, 10, '2544', 'L1', 'CN', 'USA');
+    const scan2 = await recordPutAwayScan(db, receivingInvoiceItemId, 20, '2544', 'L1', 'CN', 'USA');
+
+    const count = await addAllUnboxedScansToBox(db, box.id, actorId);
+    expect(count).toBe(2);
+
+    const updated1 = await db.query.putAwayScans.findFirst({ where: (pas, { eq }) => eq(pas.id, scan1.id) });
+    const updated2 = await db.query.putAwayScans.findFirst({ where: (pas, { eq }) => eq(pas.id, scan2.id) });
+    expect(updated1?.shelfBoxId).toBe(box.id);
+    expect(updated2?.shelfBoxId).toBe(box.id);
+
+    const item = await db.query.receivingInvoiceItems.findFirst({
+      where: (rii, { eq }) => eq(rii.id, receivingInvoiceItemId),
+    });
+    expect(item?.putAwayQty).toBe(30);
+
+    const lots = await db.query.inventoryLots.findMany({
+      where: (il, { eq }) => eq(il.boxId, box.id),
+    });
+    expect(lots).toHaveLength(1);
+    expect(lots[0].totalQty).toBe(30);
+  });
+
+  it('returns 0 when no unboxed scans exist', async () => {
+    const { actorId, receivingOrderId, receivingInvoiceItemId } = await seedMinimalReceivingOrder(db);
+    const box = await createShelfBox(db, receivingOrderId, 'A-01', actorId);
+
+    await recordPutAwayScan(db, receivingInvoiceItemId, 10, '2544', 'L1', 'CN', 'USA');
+    await addAllUnboxedScansToBox(db, box.id, actorId);
+
+    const count = await addAllUnboxedScansToBox(db, box.id, actorId);
+    expect(count).toBe(0);
+  });
+
+  it('throws when the box is not open', async () => {
+    const { actorId, receivingOrderId, receivingInvoiceItemId } = await seedMinimalReceivingOrder(db);
+    const box = await createShelfBox(db, receivingOrderId, 'A-01', actorId);
+    await assignScanToBox(db, (await recordPutAwayScan(db, receivingInvoiceItemId, 10, '2544', 'L1', 'CN', 'USA')).id, box.id, actorId);
+    await db.update(schema.shelfBoxes).set({ status: 'closed' }).where(eq(schema.shelfBoxes.id, box.id));
+
+    await expect(addAllUnboxedScansToBox(db, box.id, actorId)).rejects.toThrow('shelf_box_is_not_open');
   });
 });
