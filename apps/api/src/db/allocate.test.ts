@@ -40,3 +40,28 @@ test("Phase 1 consumes on-shelf lots in created_at then date_code_norm order", (
   assertInvariantsHold(db);
   sqlite.close();
 });
+
+test("Phase 2 consumes receiving orders by delivery_date FIFO, invoice_no, date_code", () => {
+  const { sqlite, db } = makeDb();
+  // Two in_hand receiving orders for part 'p', no shelf stock. roLate delivered later, roEarly earlier.
+  sqlite.exec(`
+    INSERT INTO receiving_orders (id, external_id, ref_no, status, delivery_date, created_at, updated_at) VALUES
+      ('roLate','el','RL','in_hand','2024-06-01','0','0'),
+      ('roEarly','ee','RE','in_hand','2024-01-01','0','0');
+    INSERT INTO receiving_invoices (id, receiving_order_id, invoice_no, created_at, updated_at) VALUES
+      ('riLate','roLate','INV-L','0','0'),
+      ('riEarly','roEarly','INV-E','0','0');
+    INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty, available_qty, date_code, created_at, updated_at) VALUES
+      ('riiLate','riLate','p',100,100,100,'202402','0','0'),
+      ('riiEarly','riEarly','p',4,4,4,'202401','0','0');
+  `);
+  db.transaction((tx) => allocatePickingItem(tx, "pi"));
+
+  // need=10; no shelf; Phase2 order: roEarly (delivery 2024-01-01) fills 4 from riiEarly, then roLate fills 6 from riiLate.
+  const a = sqlite.prepare("SELECT receiving_order_id AS ro, qty FROM allocations WHERE picking_item_id='pi' ORDER BY rowid").all() as any[];
+  assert.deepEqual(a, [{ ro: "roEarly", qty: 4 }, { ro: "roLate", qty: 6 }]);
+  const links = sqlite.prepare("SELECT receiving_invoice_item_id AS rii, qty FROM allocation_receiving_items ORDER BY rowid").all() as any[];
+  assert.deepEqual(links, [{ rii: "riiEarly", qty: 4 }, { rii: "riiLate", qty: 6 }]);
+  assertInvariantsHold(db);
+  sqlite.close();
+});
