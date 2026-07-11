@@ -27,6 +27,8 @@
 > - `verification_tasks(shelf_box_id)` → `verification_tasks_shelf_box_idx`
 >
 > Implementers and reviewers for Tasks 6, 8, and 10 must treat these as part of the task. (Task 4 was corrected in-place when this was caught.)
+>
+> **Seed correction (added during execution, Task 14).** The Task 14 property-test seed as literally pasted violates the `receiving_invoice_items` invariant (`available_qty` must equal `received_qty - picked_qty - put_away_qty - allocated_qty` at all times, including the initial seed). `available_qty` is a maintained column (`DEFAULT 0`), not generated, so seeding `received_qty=20` with `available_qty=0` trips the guard at step 0. The committed test sets `available_qty=20` on that seed row (one-line change) so the seed is invariant-consistent; the guard, op logic, `SEED=123456789`, and 300-step count are unchanged. Earlier unit tests avoid this by seeding `received_qty=0` (Task 11) or calling `applyReceipt` before asserting (Task 12).
 - Test runner: `node:test`. Single file: `pnpm --filter @warehouse/api exec tsx --test <path>`. Full suite: `pnpm --filter @warehouse/api test`.
 - **Environment note (Windows + Git Bash):** the `pnpm …` `.cmd` shims cannot find `node` when spawned directly from Git Bash (`'node' is not recognized`). Prefix every verification command with `cmd.exe //c` so it runs in a fresh `cmd` that has `node` on PATH, e.g. `cmd.exe //c "pnpm --filter @warehouse/api build"` and `cmd.exe //c "pnpm --filter @warehouse/api test"`. The `package.json` scripts themselves are correct for normal shells/CI — do not change them for this.
 - Commit after each task with `git add <explicit paths>` (never `git add -A`).
