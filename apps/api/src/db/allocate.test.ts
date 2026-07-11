@@ -94,3 +94,40 @@ test("within one receiving order: boxed items allocate box-by-box, unboxed group
   assertInvariantsHold(db);
   sqlite.close();
 });
+
+
+test("re-running allocatePickingItem releases and re-plans to the same result", () => {
+  const { sqlite, db } = makeDb();
+  sqlite.exec(`
+    INSERT INTO inventory_lots (id, part_id, shelf_code, total_qty, created_at, updated_at) VALUES ('lot','p','S1',6,'2024-01-01T00:00:00Z','0');
+    INSERT INTO receiving_orders (id, external_id, ref_no, status, delivery_date, created_at, updated_at) VALUES ('ro','e','R','in_hand','2024-01-01','0','0');
+    INSERT INTO receiving_invoices (id, receiving_order_id, invoice_no, created_at, updated_at) VALUES ('ri','ro','INV','0','0');
+    INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty, available_qty, created_at, updated_at) VALUES ('rii','ri','p',10,10,10,'0','0');
+  `);
+  db.transaction((tx) => allocatePickingItem(tx, "pi"));
+  const first = sqlite.prepare("SELECT inventory_lot_id AS lot, receiving_order_id AS ro, qty FROM allocations WHERE picking_item_id='pi' ORDER BY rowid").all() as any[];
+  // Run again — must release prior allocations and produce an identical plan (no double-allocate).
+  db.transaction((tx) => allocatePickingItem(tx, "pi"));
+  const second = sqlite.prepare("SELECT inventory_lot_id AS lot, receiving_order_id AS ro, qty FROM allocations WHERE picking_item_id='pi' ORDER BY rowid").all() as any[];
+  assert.deepEqual(second, first);
+  // need=10: shelf lot 6 + receiving 4.
+  assert.deepEqual(second, [{ lot: "lot", ro: null, qty: 6 }, { lot: null, ro: "ro", qty: 4 }]);
+  const pi = sqlite.prepare("SELECT allocated_qty FROM picking_items WHERE id='pi'").get() as any;
+  assert.equal(pi.allocated_qty, 10);
+  assertInvariantsHold(db);
+  sqlite.close();
+});
+
+test("allocatePickingItem with remaining_qty <= 0 releases allocations and plans nothing", () => {
+  const { sqlite, db } = makeDb();
+  // Pre-allocate fully via a first run, then drop the picking qty to 0 by marking fully picked.
+  sqlite.exec(`INSERT INTO inventory_lots (id, part_id, shelf_code, total_qty, created_at, updated_at) VALUES ('lot','p','S1',10,'2024-01-01T00:00:00Z','0');`);
+  db.transaction((tx) => allocatePickingItem(tx, "pi"));
+  assert.equal((sqlite.prepare("SELECT count(*) c FROM allocations WHERE picking_item_id='pi'").get() as any).c, 1);
+  // Simulate fully picked: picked_qty = qty → remaining_qty = 0.
+  sqlite.exec(`UPDATE picking_items SET picked_qty = 10 WHERE id='pi';`);
+  db.transaction((tx) => allocatePickingItem(tx, "pi"));
+  assert.equal((sqlite.prepare("SELECT count(*) c FROM allocations WHERE picking_item_id='pi'").get() as any).c, 0);
+  assertInvariantsHold(db);
+  sqlite.close();
+});
