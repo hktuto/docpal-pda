@@ -119,4 +119,35 @@ test("GET /picking-orders/:id resolves receiving-sourced allocations and exclude
   assert.equal(d.allocations[0].receiving_items[0].date_code_norm, "DC1");
 });
 
+test("box sub-routes enforce order/box ownership: wrong order or box is 404", async () => {
+  sqlite.exec(`
+    INSERT INTO inventory_lots (id, part_id, shelf_code, total_qty, allocated_qty, created_at, updated_at) VALUES ('lot9','p','S1',10,10,'0','0');
+    INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('po9','pe9','R9','picking','0','0');
+    INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('pi9','po9','p',10,'0','0');
+    INSERT INTO allocations (id, picking_item_id, qty, inventory_lot_id, created_at, updated_at) VALUES ('a9','pi9',10,'lot9','0','0');
+  `);
+  const created = await app.request("/picking-orders/po9/boxes", { method: "POST" });
+  assert.equal(created.status, 201);
+  const boxId = ((await created.json()) as { id: string }).id;
+
+  const wrongOrderPack = await app.request(`/picking-orders/WRONG/boxes/${boxId}/packages`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ package_id: "pp9" }),
+  });
+  assert.equal(wrongOrderPack.status, 404);
+
+  const wrongOrderAddAll = await app.request(`/picking-orders/WRONG/boxes/${boxId}/add-all-unboxed`, { method: "POST" });
+  assert.equal(wrongOrderAddAll.status, 404);
+
+  sqlite.prepare(`INSERT INTO picking_packages (id, picking_item_id, source_type, source_id, qty, shipping_box_id, created_at, updated_at)
+                  VALUES ('pp9','pi9','inventory_lot','lot9',4,?,'0','0')`).run(boxId);
+
+  const wrongOrderDel = await app.request(`/picking-orders/WRONG/boxes/${boxId}/packages/pp9`, { method: "DELETE" });
+  assert.equal(wrongOrderDel.status, 404);
+  const wrongBoxDel = await app.request(`/picking-orders/po9/boxes/WRONGBOX/packages/pp9`, { method: "DELETE" });
+  assert.equal(wrongBoxDel.status, 404);
+  const okDel = await app.request(`/picking-orders/po9/boxes/${boxId}/packages/pp9`, { method: "DELETE" });
+  assert.equal(okDel.status, 200);
+});
+
 test("cleanup", () => { sqlite.close(); });

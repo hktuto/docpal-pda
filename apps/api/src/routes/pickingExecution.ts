@@ -82,24 +82,43 @@ pickingExecutionRoute.post("/picking-orders/:id/boxes/:box_id/cancel", (c) => {
 });
 
 pickingExecutionRoute.post("/picking-orders/:id/boxes/:box_id/packages", async (c) => {
+  const orderId = c.req.param("id");
   const boxId = c.req.param("box_id");
   const body = await readJson<{ package_id?: string; actor_id?: string | null }>(c);
   if (!body.package_id) throw new HTTPException(400, { message: "package_id is required" });
-  db.transaction((tx) => addPackageToBox(tx, { packageId: body.package_id!, shippingBoxId: boxId, actorId: body.actor_id ?? null }));
+  db.transaction((tx) => {
+    const box = tx.get<{ pickingOrderId: string }>(sql`SELECT picking_order_id AS pickingOrderId FROM shipping_boxes WHERE id = ${boxId}`);
+    if (!box || box.pickingOrderId !== orderId) throw new HTTPException(404, { message: "box not found in this order" });
+    addPackageToBox(tx, { packageId: body.package_id!, shippingBoxId: boxId, actorId: body.actor_id ?? null });
+  });
   return c.json({ ok: true }, 200);
 });
 
 pickingExecutionRoute.post("/picking-orders/:id/boxes/:box_id/add-all-unboxed", (c) => {
+  const orderId = c.req.param("id");
   const boxId = c.req.param("box_id");
   const actorId = c.req.query("actor_id") ?? null;
-  const n = db.transaction((tx) => addAllUnboxedToBox(tx, { shippingBoxId: boxId, actorId }));
+  const n = db.transaction((tx) => {
+    const box = tx.get<{ pickingOrderId: string }>(sql`SELECT picking_order_id AS pickingOrderId FROM shipping_boxes WHERE id = ${boxId}`);
+    if (!box || box.pickingOrderId !== orderId) throw new HTTPException(404, { message: "box not found in this order" });
+    return addAllUnboxedToBox(tx, { shippingBoxId: boxId, actorId });
+  });
   return c.json({ packed: n }, 200);
 });
 
 pickingExecutionRoute.delete("/picking-orders/:id/boxes/:box_id/packages/:package_id", (c) => {
+  const orderId = c.req.param("id");
+  const boxId = c.req.param("box_id");
   const packageId = c.req.param("package_id");
   const actorId = c.req.query("actor_id") ?? null;
-  db.transaction((tx) => removePackageFromBox(tx, { packageId, actorId }));
+  db.transaction((tx) => {
+    const pkg = tx.get<{ pickingOrderId: string; shippingBoxId: string | null }>(sql`
+      SELECT pi.picking_order_id AS pickingOrderId, pp.shipping_box_id AS shippingBoxId FROM picking_packages pp
+      JOIN picking_items pi ON pi.id = pp.picking_item_id WHERE pp.id = ${packageId}`);
+    if (!pkg || pkg.pickingOrderId !== orderId || pkg.shippingBoxId !== boxId)
+      throw new HTTPException(404, { message: "package not found in this box" });
+    removePackageFromBox(tx, { packageId, actorId });
+  });
   return c.json({ ok: true }, 200);
 });
 
