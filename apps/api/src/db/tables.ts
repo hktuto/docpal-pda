@@ -134,6 +134,7 @@ CREATE INDEX IF NOT EXISTS verification_tasks_kind_status_updated_idx ON verific
 CREATE INDEX IF NOT EXISTS verification_tasks_picking_order_idx ON verification_tasks(picking_order_id);
 CREATE INDEX IF NOT EXISTS verification_tasks_shelf_box_idx ON verification_tasks(shelf_box_id);
 CREATE UNIQUE INDEX IF NOT EXISTS verification_tasks_cycle_coalesce_uq ON verification_tasks(kind, shelf_box_id, date(due_at));
+CREATE UNIQUE INDEX IF NOT EXISTS verification_tasks_preship_pending_uq ON verification_tasks(picking_order_id) WHERE kind='pre_shipment' AND status='pending';
 
 CREATE TABLE IF NOT EXISTS transition_logs (
   id TEXT PRIMARY KEY, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, from_status TEXT, to_status TEXT,

@@ -96,3 +96,38 @@ export function closeShippingBox(tx: DbOrTx, a: { shippingBoxId: string; actorId
   tx.run(sql`UPDATE shipping_boxes SET status = 'closed', destination_country = ${dest}, updated_at = ${now()} WHERE id = ${box.id}`);
   logTransition(tx, { entityType: "shipping_box", entityId: box.id, fromStatus: "open", toStatus: "closed", actorId: a.actorId ?? null });
 }
+
+export function completeMeasuringTask(tx: DbOrTx, a: { measuringTaskId: string; actorId?: string | null }): void {
+  const task = tx.get<{ id: string; pickingOrderId: string; status: string }>(
+    sql`SELECT id, picking_order_id AS pickingOrderId, status FROM measuring_tasks WHERE id = ${a.measuringTaskId}`
+  );
+  if (!task) throw new HTTPException(404, { message: "measuring task not found" });
+  if (task.status !== "pending") throw new HTTPException(409, { message: "measuring task is not pending" });
+
+  const openBox = tx.get<{ id: string }>(
+    sql`SELECT id FROM shipping_boxes WHERE picking_order_id = ${task.pickingOrderId} AND status != 'closed' LIMIT 1`
+  );
+  if (openBox) throw new HTTPException(409, { message: "all shipping boxes must be closed" });
+
+  const perItem = tx.all<{ picked: number; packed: number }>(
+    sql`SELECT pi.picked_qty AS picked,
+               COALESCE((SELECT SUM(pp.qty) FROM picking_packages pp
+                         WHERE pp.picking_item_id = pi.id AND pp.shipping_box_id IS NOT NULL), 0) AS packed
+        FROM picking_items pi WHERE pi.picking_order_id = ${task.pickingOrderId}`
+  );
+  if (perItem.some((r) => r.packed !== r.picked)) throw new HTTPException(409, { message: "picking item not fully packed" });
+
+  tx.run(sql`UPDATE measuring_tasks SET status = 'completed', updated_at = ${now()} WHERE id = ${task.id}`);
+  logTransition(tx, { entityType: "measuring_task", entityId: task.id, fromStatus: "pending", toStatus: "completed", actorId: a.actorId ?? null });
+
+  // spec §10: measuring completed -> pre_shipment verification task (idempotent; unique index in tables.ts is the backstop)
+  const existing = tx.get<{ id: string }>(
+    sql`SELECT id FROM verification_tasks WHERE kind = 'pre_shipment' AND picking_order_id = ${task.pickingOrderId} AND status = 'pending'`
+  );
+  if (!existing) {
+    tx.run(
+      sql`INSERT INTO verification_tasks (id, kind, status, picking_order_id, created_at, updated_at)
+          VALUES (${crypto.randomUUID()}, 'pre_shipment', 'pending', ${task.pickingOrderId}, ${now()}, ${now()})`
+    );
+  }
+}
