@@ -3,6 +3,7 @@ package com.docpal.warehousepda.data.db
 import android.content.Context
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.test.core.app.ApplicationProvider
+import com.docpal.warehousepda.offMainThread
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -30,16 +31,8 @@ class SeedImportTest {
         db.close()
     }
 
-    // AppDatabase.build intentionally disallows main-thread queries (production
-    // behavior), so test queries run on a background thread.
-    private fun <T> offMainThread(block: () -> T): T {
-        var result: Result<T>? = null
-        val t = Thread { result = runCatching(block) }
-        t.start()
-        t.join()
-        return result!!.getOrThrow()
-    }
-
+    // Shared helper from DbTestSupport.kt runs queries on a background thread
+    // (AppDatabase.build intentionally disallows main-thread queries).
     private fun count(table: String): Int = offMainThread {
         db.query(SimpleSQLiteQuery("SELECT COUNT(*) FROM $table")).use { cursor ->
             cursor.moveToFirst()
