@@ -59,4 +59,24 @@ test("POST /shipping-boxes/:id/verify-package verifies; wrong box 404; missing p
   assert.equal(bad.status, 400);
 });
 
+test("POST /shipping-boxes/:id/close closes a ready box; 409 when unverified", async () => {
+  // seed a second self-contained box for this test.
+  sqlite.exec(`
+    INSERT INTO picking_items (id, picking_order_id, part_id, qty, picked_qty, created_at, updated_at) VALUES ('piC','po','p',2,2,'0','0');
+    INSERT INTO shipping_boxes (id, picking_order_id, status, box_size, net_weight_g, gross_weight_g, destination_country, created_at, updated_at)
+      VALUES ('boxC','po','open','M',100,200,'HK','0','0');
+    INSERT INTO picking_packages (id, picking_item_id, source_type, source_id, qty, shipping_box_id, verified, created_at, updated_at)
+      VALUES ('ppC','piC','inventory_lot','lot',2,'boxC',1,'0','0');
+  `);
+  const ok = await app.request("/shipping-boxes/boxC/close", { method: "POST" });
+  assert.equal(ok.status, 200);
+  assert.equal((sqlite.prepare("SELECT status FROM shipping_boxes WHERE id='boxC'").get() as any).status, "closed");
+
+  sqlite.exec(`INSERT INTO shipping_boxes (id, picking_order_id, status, created_at, updated_at) VALUES ('boxU','po','open','0','0');
+               INSERT INTO picking_packages (id, picking_item_id, source_type, source_id, qty, shipping_box_id, verified, created_at, updated_at)
+                 VALUES ('ppU','piC','inventory_lot','lot',1,'boxU',0,'0','0');`);
+  const bad = await app.request("/shipping-boxes/boxU/close", { method: "POST" });
+  assert.equal(bad.status, 409);
+});
+
 test("cleanup", () => { sqlite.close(); });

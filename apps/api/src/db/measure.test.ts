@@ -7,7 +7,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema/index.js";
 import { createDb } from "./client.js";
 import { createTables } from "./tables.js";
-import { updateShippingBoxMeasurements, verifyPackage } from "./measure.js";
+import { updateShippingBoxMeasurements, verifyPackage, closeShippingBox } from "./measure.js";
 import { assertInvariantsHold } from "./invariants.guard.js";
 
 function makeDb() {
@@ -86,5 +86,53 @@ test("verifyPackage guards: 404 missing, 409 not in box, 409 box closed, 409 tas
   sqlite.prepare("UPDATE measuring_tasks SET status='pending'").run();
   sqlite.prepare("UPDATE picking_packages SET verified=1").run();
   assert.throws(() => db.transaction((tx) => verifyPackage(tx, { packageId: "pp" })), (e: any) => e.status === 409);
+  sqlite.close();
+});
+
+function seedClosableBox(sqlite: any) {
+  seedPackableBox(sqlite); // part, item (qty4/picked4), package pp (verified 0) in 'box', measuring task pending
+  sqlite.exec(`UPDATE picking_packages SET verified=1;
+               UPDATE shipping_boxes SET box_size='S', net_weight_g=500, gross_weight_g=800, destination_country=NULL;`);
+}
+
+test("closeShippingBox closes a fully-verified measured box and persists the destination fallback", () => {
+  const { sqlite, db } = makeDb();
+  seedClosableBox(sqlite);
+  db.transaction((tx) => closeShippingBox(tx, { shippingBoxId: "box", actorId: "u1" }));
+  const b = sqlite.prepare("SELECT status, destination_country FROM shipping_boxes WHERE id='box'").get() as any;
+  assert.deepEqual(b, { status: "closed", destination_country: "HK" }); // fell back to picking_orders.destination_country
+  assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM transition_logs WHERE entity_type='shipping_box' AND to_status='closed'").get() as any).c, 1);
+  assertInvariantsHold(db);
+  sqlite.close();
+});
+
+test("close guards: 404 missing, 409 not open, 409 empty, 409 unverified package, 409 missing measurements, 409 bad weights, 409 no destination", () => {
+  const { sqlite, db } = makeDb();
+  assert.throws(() => db.transaction((tx) => closeShippingBox(tx, { shippingBoxId: "nope" })), (e: any) => e.status === 404);
+
+  seedClosableBox(sqlite);
+  sqlite.prepare("UPDATE picking_orders SET destination_country=NULL, ship_to=NULL").run();
+  assert.throws(() => db.transaction((tx) => closeShippingBox(tx, { shippingBoxId: "box" })), (e: any) => e.status === 409); // no destination anywhere
+  sqlite.prepare("UPDATE picking_orders SET destination_country='HK'").run();
+
+  sqlite.prepare("UPDATE shipping_boxes SET net_weight_g=NULL").run();
+  assert.throws(() => db.transaction((tx) => closeShippingBox(tx, { shippingBoxId: "box" })), (e: any) => e.status === 409); // weights required
+  sqlite.prepare("UPDATE shipping_boxes SET net_weight_g=900").run(); // net 900 > gross 800
+  assert.throws(() => db.transaction((tx) => closeShippingBox(tx, { shippingBoxId: "box" })), (e: any) => e.status === 409);
+  sqlite.prepare("UPDATE shipping_boxes SET net_weight_g=0").run();
+  assert.throws(() => db.transaction((tx) => closeShippingBox(tx, { shippingBoxId: "box" })), (e: any) => e.status === 409); // must be > 0
+  sqlite.prepare("UPDATE shipping_boxes SET net_weight_g=500").run();
+
+  sqlite.prepare("UPDATE picking_packages SET verified=0").run();
+  assert.throws(() => db.transaction((tx) => closeShippingBox(tx, { shippingBoxId: "box" })), (e: any) => e.status === 409); // unverified package
+  sqlite.prepare("UPDATE picking_packages SET verified=1").run();
+
+  // empty box
+  sqlite.exec(`INSERT INTO shipping_boxes (id, picking_order_id, status, created_at, updated_at) VALUES ('boxE','po','open','0','0')`);
+  assert.throws(() => db.transaction((tx) => closeShippingBox(tx, { shippingBoxId: "boxE" })), (e: any) => e.status === 409);
+
+  // not open
+  sqlite.prepare("UPDATE shipping_boxes SET status='closed' WHERE id='box'").run();
+  assert.throws(() => db.transaction((tx) => closeShippingBox(tx, { shippingBoxId: "box" })), (e: any) => e.status === 409);
   sqlite.close();
 });

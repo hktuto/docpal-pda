@@ -70,3 +70,29 @@ export function verifyPackage(tx: DbOrTx, a: { packageId: string; actorId?: stri
   logTransition(tx, { entityType: "picking_package", entityId: pkg.id, fromStatus: "unverified", toStatus: "verified",
     actorId: a.actorId ?? null, note: `qty=${pkg.qty} box=${box.id}` });
 }
+
+export function closeShippingBox(tx: DbOrTx, a: { shippingBoxId: string; actorId?: string | null }): void {
+  const box = loadBox(tx, a.shippingBoxId);
+  if (box.status !== "open") throw new HTTPException(409, { message: "box is not open" });
+  const pkgs = tx.all<{ id: string; verified: number }>(
+    sql`SELECT id, verified FROM picking_packages WHERE shipping_box_id = ${box.id}`
+  );
+  if (pkgs.length === 0) throw new HTTPException(409, { message: "cannot close an empty box" });
+  if (pkgs.some((p) => !p.verified)) throw new HTTPException(409, { message: "all packages must be verified" });
+
+  let dest = box.destinationCountry;
+  if (dest === null || dest.trim() === "") {
+    const order = tx.get<{ dc: string | null; st: string | null }>(
+      sql`SELECT destination_country AS dc, ship_to AS st FROM picking_orders WHERE id = ${box.pickingOrderId}`
+    );
+    dest = order?.dc && order.dc.trim() !== "" ? order.dc : order?.st ?? null;
+  }
+  if (dest === null || dest.trim() === "") throw new HTTPException(409, { message: "destination is required" });
+  if (box.boxSize === null || box.boxSize.trim() === "") throw new HTTPException(409, { message: "box_size is required" });
+  if (box.netWeightG === null || box.grossWeightG === null) throw new HTTPException(409, { message: "weights are required" });
+  if (box.netWeightG <= 0 || box.grossWeightG <= 0) throw new HTTPException(409, { message: "weights must be greater than zero" });
+  if (box.grossWeightG < box.netWeightG) throw new HTTPException(409, { message: "gross weight must be >= net weight" });
+
+  tx.run(sql`UPDATE shipping_boxes SET status = 'closed', destination_country = ${dest}, updated_at = ${now()} WHERE id = ${box.id}`);
+  logTransition(tx, { entityType: "shipping_box", entityId: box.id, fromStatus: "open", toStatus: "closed", actorId: a.actorId ?? null });
+}

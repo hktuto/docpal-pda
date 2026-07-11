@@ -3,7 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { sql } from "drizzle-orm";
 import type { UpdateShippingBoxRequest, VerifyPackageRequest } from "@warehouse/shared";
 import { db } from "../db.js";
-import { updateShippingBoxMeasurements, verifyPackage } from "../db/measure.js";
+import { updateShippingBoxMeasurements, verifyPackage, closeShippingBox } from "../db/measure.js";
 
 export const boxesRoute = new Hono();
 
@@ -34,5 +34,11 @@ boxesRoute.post("/shipping-boxes/:id/verify-package", async (c) => {
     if (!pkg || pkg.shippingBoxId !== boxId) throw new HTTPException(404, { message: "package not found in this box" });
     verifyPackage(tx, { packageId: body.package_id!, actorId: body.actor_id ?? null });
   });
+  return c.json({ ok: true }, 200);
+});
+
+boxesRoute.post("/shipping-boxes/:id/close", (c) => {
+  const boxId = c.req.param("id");
+  db.transaction((tx) => closeShippingBox(tx, { shippingBoxId: boxId, actorId: c.req.query("actor_id") ?? null }));
   return c.json({ ok: true }, 200);
 });
