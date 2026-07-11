@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">倉庫 PDA</string>
+
+    <string name="login_brand">DocPal</string>
+    <string name="login_subtitle">倉庫 PDA</string>
+    <string name="login_username">用戶名稱</string>
+    <string name="login_password">密碼</string>
+    <string name="login_username_placeholder">operator</string>
+    <string name="login_password_placeholder">••••••••</string>
+    <string name="login_sign_in">登入</string>
+    <string name="login_signing_in">登入中…</string>
+    <string name="login_toggle_password">切換密碼可見度</string>
+
+    <string name="home_greeting">你好，%1$s</string>
+    <string name="home_operator_fallback">操作員</string>
+    <string name="home_prompt">請選擇要執行的操作？</string>
+
+    <string name="menu_receiving_title">收貨</string>
+    <string name="menu_receiving_desc">確認到貨及庫存</string>
+    <string name="menu_picking_title">揀貨</string>
+    <string name="menu_picking_desc">掃描、裝箱並完成訂單</string>
+    <string name="menu_put_away_title">上架</string>
+    <string name="menu_put_away_desc">將庫存移至貨架</string>
+    <string name="menu_goods_verify_title">查貨</string>
+    <string name="menu_goods_verify_desc">核對貨架箱號內容</string>
+    <string name="menu_measuring_title">測量</string>
+    <string name="menu_measuring_desc">秤重並裝箱</string>
+    <string name="menu_stock_search_title">庫存查詢</string>
+    <string name="menu_stock_search_desc">按供應商或物料查詢庫存</string>
+
+    <string name="action_logout">登出</string>
+    <string name="action_language">語言</string>
+    <string name="lang_en_us">English</string>
+    <string name="lang_zh_cn">简体中文</string>
+    <string name="lang_zh_hk">繁體中文（香港）</string>
+
+    <string name="error_invalid_credentials">用戶名稱或密碼不正確</string>
+    <string name="common_loading">載入中…</string>
+    <string name="common_coming_soon">即將在後續階段推出</string>
+</resources>
