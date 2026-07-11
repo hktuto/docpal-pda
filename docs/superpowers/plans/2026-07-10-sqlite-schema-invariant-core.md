@@ -28,6 +28,7 @@
 >
 > Implementers and reviewers for Tasks 6, 8, and 10 must treat these as part of the task. (Task 4 was corrected in-place when this was caught.)
 - Test runner: `node:test`. Single file: `pnpm --filter @warehouse/api exec tsx --test <path>`. Full suite: `pnpm --filter @warehouse/api test`.
+- **Environment note (Windows + Git Bash):** the `pnpm …` `.cmd` shims cannot find `node` when spawned directly from Git Bash (`'node' is not recognized`). Prefix every verification command with `cmd.exe //c` so it runs in a fresh `cmd` that has `node` on PATH, e.g. `cmd.exe //c "pnpm --filter @warehouse/api build"` and `cmd.exe //c "pnpm --filter @warehouse/api test"`. The `package.json` scripts themselves are correct for normal shells/CI — do not change them for this.
 - Commit after each task with `git add <explicit paths>` (never `git add -A`).
 
 ## File structure (Plan 1)
