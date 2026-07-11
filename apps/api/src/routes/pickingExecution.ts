@@ -11,6 +11,7 @@ import {
   addPackageToBox,
   addAllUnboxedToBox,
   removePackageFromBox,
+  finishPickingOrder,
 } from "../db/pickScan.js";
 
 export const pickingExecutionRoute = new Hono();
@@ -99,5 +100,11 @@ pickingExecutionRoute.delete("/picking-orders/:id/boxes/:box_id/packages/:packag
   const packageId = c.req.param("package_id");
   const actorId = c.req.query("actor_id") ?? null;
   db.transaction((tx) => removePackageFromBox(tx, { packageId, actorId }));
+  return c.json({ ok: true }, 200);
+});
+
+pickingExecutionRoute.post("/picking-orders/:id/finish", (c) => {
+  const orderId = c.req.param("id");
+  db.transaction((tx) => finishPickingOrder(tx, { pickingOrderId: orderId, actorId: c.req.query("actor_id") ?? null }));
   return c.json({ ok: true }, 200);
 });

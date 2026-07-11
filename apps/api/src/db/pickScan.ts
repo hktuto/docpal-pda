@@ -223,6 +223,20 @@ export function maybeAutoFinishPickingOrder(tx: DbOrTx, a: { pickingOrderId: str
   return true;
 }
 
+export function finishPickingOrder(tx: DbOrTx, a: { pickingOrderId: string; actorId?: string | null }): void {
+  const order = tx.get<{ id: string; status: string }>(sql`SELECT id, status FROM picking_orders WHERE id = ${a.pickingOrderId}`);
+  if (!order) throw new HTTPException(404, { message: "picking order not found" });
+  if (order.status === "finished") throw new HTTPException(409, { message: "picking order already finished" });
+  if (order.status === "issue") throw new HTTPException(409, { message: "picking order has an open issue" });
+  const items = tx.all<{ qty: number; pickedQty: number }>(
+    sql`SELECT qty, picked_qty AS pickedQty FROM picking_items WHERE picking_order_id = ${order.id}`
+  );
+  if (items.length === 0) throw new HTTPException(409, { message: "no items to pick" });
+  if (!items.every((i) => i.pickedQty >= i.qty)) throw new HTTPException(409, { message: "not all items fully boxed" });
+  const done = maybeAutoFinishPickingOrder(tx, a);
+  if (!done) throw new HTTPException(409, { message: "picking order could not be finished" });
+}
+
 function loadBoxForPack(tx: DbOrTx, boxId: string): { id: string; status: string; pickingOrderId: string } {
   const box = tx.get<{ id: string; status: string; pickingOrderId: string }>(
     sql`SELECT id, status, picking_order_id AS pickingOrderId FROM shipping_boxes WHERE id = ${boxId}`
