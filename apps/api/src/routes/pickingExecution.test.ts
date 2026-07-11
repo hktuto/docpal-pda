@@ -43,11 +43,17 @@ test("POST /picking-orders/:id/scan picks against the allocation; DELETE package
 });
 
 test("scan of an allocation from another order is 404; bad qty is 400", async () => {
-  const other = await app.request("/picking-orders/other/scan", {
+  sqlite.exec(`
+    INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('po2','pe2','R2','picking','0','0');
+    INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('pi2','po2','p',10,'0','0');
+  `);
+  const cross = await app.request("/picking-orders/po2/scan", {
     method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ allocation_id: "a", qty: 1 }),
+    body: JSON.stringify({ allocation_id: "a", qty: 1 }), // 'a' belongs to 'po'
   });
-  assert.equal(other.status, 404);
+  assert.equal(cross.status, 404);
+  assert.match(await cross.text(), /allocation not found in this order/);
+  assert.equal((sqlite.prepare("SELECT total_qty FROM inventory_lots WHERE id='lot'").get() as any).total_qty, 10);
   const bad = await app.request("/picking-orders/po/scan", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ allocation_id: "a", qty: -1 }),

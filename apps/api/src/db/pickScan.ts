@@ -110,6 +110,7 @@ export function removeScannedPackage(tx: DbOrTx, p: { packageId: string; actorId
   )!;
   const order = tx.get<{ status: string }>(sql`SELECT status FROM picking_orders WHERE id = ${item.pickingOrderId}`)!;
   if (order.status === "issue") throw new HTTPException(409, { message: "picking order has an open issue" });
+  if (order.status === "finished") throw new HTTPException(409, { message: "picking order already finished" });
 
   if (pkg.sourceType === "inventory_lot") {
     const lot = tx.get<{ id: string }>(sql`SELECT id FROM inventory_lots WHERE id = ${pkg.sourceId}`);

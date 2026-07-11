@@ -7,7 +7,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema/index.js";
 import { createDb } from "./client.js";
 import { createTables } from "./tables.js";
-import { scanAllocation } from "./pickScan.js";
+import { scanAllocation, removeScannedPackage } from "./pickScan.js";
 import { assertInvariantsHold } from "./invariants.guard.js";
 
 function makeDb() {
@@ -66,6 +66,52 @@ test("scan against a receiving allocation consumes link portions FIFO (one packa
   assert.equal((sqlite.prepare("SELECT qty FROM allocations WHERE id='a'").get() as any).qty, 10);
   const links = sqlite.prepare("SELECT receiving_invoice_item_id AS r, qty FROM allocation_receiving_items ORDER BY id").all() as any[];
   assert.deepEqual(links, [{ r: "riiA", qty: 0 }, { r: "riiB", qty: 10 }]);
+  assertInvariantsHold(db);
+  sqlite.close();
+});
+
+test("undo of a receiving-source scan restores picked_qty, allocation, links, and logs removal", () => {
+  const { sqlite, db } = makeDb();
+  sqlite.exec(`
+    INSERT INTO receiving_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('ro','e','R','in_hand','0','0');
+    INSERT INTO receiving_invoices (id, receiving_order_id, invoice_no, created_at, updated_at) VALUES ('ri','ro','I','0','0');
+    INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty, allocated_qty, available_qty, date_code, created_at, updated_at) VALUES
+      ('riiA','ri','p',25,25,25,0,'202401','0','0'),
+      ('riiB','ri','p',25,25,15,10,'202402','0','0');
+    INSERT INTO allocations (id, picking_item_id, qty, receiving_order_id, created_at, updated_at) VALUES ('a','pi',40,'ro','0','0');
+    INSERT INTO allocation_receiving_items (id, allocation_id, receiving_invoice_item_id, qty, created_at, updated_at) VALUES
+      ('lA','a','riiA',25,'0','0'), ('lB','a','riiB',15,'1','0');
+  `);
+  sqlite.prepare("UPDATE picking_items SET qty=40").run();
+  const res = db.transaction((tx) => scanAllocation(tx, { allocationId: "a", qty: 30 }));
+  assert.equal(res.packageIds.length, 2); // 25 from riiA + 5 from riiB
+
+  db.transaction((tx) => removeScannedPackage(tx, { packageId: res.packageIds[0], actorId: "u1" }));
+  // undo is blocked on a finished order, mirroring scanAllocation
+  sqlite.prepare("UPDATE picking_orders SET status='finished'").run();
+  assert.throws(
+    () => db.transaction((tx) => removeScannedPackage(tx, { packageId: res.packageIds[1], actorId: "u1" })),
+    (e: any) => e.status === 409
+  );
+  sqlite.prepare("UPDATE picking_orders SET status='picking'").run();
+  db.transaction((tx) => removeScannedPackage(tx, { packageId: res.packageIds[1], actorId: "u1" }));
+
+  const riis = sqlite.prepare("SELECT id, picked_qty, allocated_qty, available_qty FROM receiving_invoice_items ORDER BY id").all() as any[];
+  assert.deepEqual(riis, [
+    { id: "riiA", picked_qty: 0, allocated_qty: 25, available_qty: 0 },
+    { id: "riiB", picked_qty: 0, allocated_qty: 15, available_qty: 10 },
+  ]);
+  assert.equal((sqlite.prepare("SELECT qty FROM allocations WHERE id='a'").get() as any).qty, 40);
+  const links = sqlite.prepare("SELECT receiving_invoice_item_id AS r, qty FROM allocation_receiving_items ORDER BY id").all() as any[];
+  assert.deepEqual(links, [{ r: "riiA", qty: 25 }, { r: "riiB", qty: 15 }]);
+  assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM picking_packages").get() as any).c, 0);
+  const pi = sqlite.prepare("SELECT scanned_not_boxed_qty, picked_qty, remaining_qty FROM picking_items WHERE id='pi'").get() as any;
+  assert.deepEqual(pi, { scanned_not_boxed_qty: 0, picked_qty: 0, remaining_qty: 40 });
+  const removed = sqlite.prepare("SELECT from_status, to_status, actor_id FROM transition_logs WHERE entity_type='picking_item' AND to_status='removed'").all() as any[];
+  assert.deepEqual(removed, [
+    { from_status: "scanned", to_status: "removed", actor_id: "u1" },
+    { from_status: "scanned", to_status: "removed", actor_id: "u1" },
+  ]);
   assertInvariantsHold(db);
   sqlite.close();
 });
