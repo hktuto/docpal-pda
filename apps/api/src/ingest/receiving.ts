@@ -85,9 +85,95 @@ export function upsertReceivingOrder(tx: DbOrTx, externalId: string, body: Recei
   return reconcileReceivingOrder(tx, existing.id, existing.status, body, orderSupplierId);
 }
 
-// placeholder so Task 2 compiles; replaced in Task 3.
+interface ExistingItem {
+  id: string; invoiceId: string; lineNo: number; partId: string; qty: number;
+  boxId: string | null; dateCodeNorm: string | null; lotCodeNorm: string | null;
+  cooNorm: string | null; cowNorm: string | null;
+  receivedQty: number; pickedQty: number; putAwayQty: number; allocLinks: number;
+}
+
+function loadExistingItems(tx: DbOrTx, orderId: string): ExistingItem[] {
+  return tx.all<ExistingItem>(sql`
+    SELECT rii.id, ri.id AS invoiceId, rii.line_no AS lineNo, rii.part_id AS partId, rii.qty,
+           rii.box_id AS boxId, rii.date_code_norm AS dateCodeNorm, rii.lot_code_norm AS lotCodeNorm,
+           rii.coo_norm AS cooNorm, rii.cow_norm AS cowNorm,
+           rii.received_qty AS receivedQty, rii.picked_qty AS pickedQty, rii.put_away_qty AS putAwayQty,
+           (SELECT COUNT(*) FROM allocation_receiving_items ari WHERE ari.receiving_invoice_item_id = rii.id) AS allocLinks
+    FROM receiving_invoice_items rii JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+    WHERE ri.receiving_order_id = ${orderId}`);
+}
+
 function reconcileReceivingOrder(
-  _tx: DbOrTx, _orderId: string, _status: string, _body: ReceivingPutBody, _orderSupplierId: string | null
+  tx: DbOrTx, orderId: string, status: string, body: ReceivingPutBody, orderSupplierId: string | null
 ): ReceivingUpsertResult {
-  throw new Error("reconcileReceivingOrder implemented in Task 3");
+  let changed = false;
+  const ro = tx.get<{ refNo: string; deliveryDate: string | null; supplierId: string | null }>(
+    sql`SELECT ref_no AS refNo, delivery_date AS deliveryDate, supplier_id AS supplierId FROM receiving_orders WHERE id = ${orderId}`
+  )!;
+  const newDelivery = body.order.delivery_date ?? null;
+  if (ro.refNo !== body.order.ref_no || ro.deliveryDate !== newDelivery || ro.supplierId !== orderSupplierId) {
+    tx.run(sql`UPDATE receiving_orders SET ref_no = ${body.order.ref_no}, delivery_date = ${newDelivery},
+               supplier_id = ${orderSupplierId}, updated_at = ${now()} WHERE id = ${orderId}`);
+    changed = true;
+  }
+
+  const locked = status !== "pending";
+  const existingItems = loadExistingItems(tx, orderId);
+  const seenKeys = new Set<string>();
+
+  for (const inv of body.invoices) {
+    const invoiceId = upsertInvoice(tx, orderId, inv, orderSupplierId);
+    for (const it of inv.items) {
+      const key = `${invoiceId}:${it.line_no}`;
+      seenKeys.add(key);
+      const partId = resolveOrCreatePart(tx, it.part_no, it.description);
+      const n = itemNorms(it);
+      const ex = existingItems.find((e) => e.invoiceId === invoiceId && e.lineNo === it.line_no);
+
+      if (!ex) {
+        tx.run(
+          sql`INSERT INTO receiving_invoice_items
+              (id, receiving_invoice_id, part_id, qty, box_id, date_code, lot_code, coo, cow,
+               date_code_norm, lot_code_norm, coo_norm, cow_norm, line_no, created_at, updated_at)
+              VALUES (${crypto.randomUUID()}, ${invoiceId}, ${partId}, ${it.qty}, ${it.box_id ?? null},
+                      ${n.dateCode}, ${n.lotCode}, ${n.coo}, ${n.cow}, ${n.dateCodeNorm}, ${n.lotCodeNorm},
+                      ${n.cooNorm}, ${n.cowNorm}, ${it.line_no}, ${now()}, ${now()})`
+        );
+        changed = true;
+        continue;
+      }
+
+      if (it.qty < ex.qty) {
+        if (locked) throw new HTTPException(409, { message: `invoice ${inv.invoice_no} line ${it.line_no}: qty may only increase once ${status}` });
+        if (ex.allocLinks > 0 || ex.receivedQty > 0 || ex.pickedQty > 0 || ex.putAwayQty > 0)
+          throw new HTTPException(409, { message: `invoice ${inv.invoice_no} line ${it.line_no}: cannot decrease qty after work started` });
+      }
+      const same =
+        ex.partId === partId && ex.qty === it.qty && (ex.boxId ?? null) === (it.box_id ?? null) &&
+        ex.dateCodeNorm === n.dateCodeNorm && ex.lotCodeNorm === n.lotCodeNorm &&
+        ex.cooNorm === n.cooNorm && ex.cowNorm === n.cowNorm;
+      if (!same) {
+        tx.run(
+          sql`UPDATE receiving_invoice_items SET part_id = ${partId}, qty = ${it.qty}, box_id = ${it.box_id ?? null},
+              date_code = ${n.dateCode}, lot_code = ${n.lotCode}, coo = ${n.coo}, cow = ${n.cow},
+              date_code_norm = ${n.dateCodeNorm}, lot_code_norm = ${n.lotCodeNorm}, coo_norm = ${n.cooNorm},
+              cow_norm = ${n.cowNorm}, updated_at = ${now()} WHERE id = ${ex.id}`
+        );
+        changed = true;
+      }
+    }
+  }
+
+  for (const ex of existingItems) {
+    const key = `${ex.invoiceId}:${ex.lineNo}`;
+    if (seenKeys.has(key)) continue;
+    if (locked) throw new HTTPException(409, { message: `cannot remove a line once ${status}` });
+    if (ex.allocLinks > 0 || ex.receivedQty > 0 || ex.pickedQty > 0 || ex.putAwayQty > 0)
+      throw new HTTPException(409, { message: "cannot remove a line after work started" });
+    tx.run(sql`DELETE FROM receiving_invoice_items WHERE id = ${ex.id}`);
+    changed = true;
+  }
+
+  if (changed) tx.run(sql`UPDATE receiving_orders SET updated_at = ${now()} WHERE id = ${orderId}`);
+  return { orderId, created: false, changed };
 }

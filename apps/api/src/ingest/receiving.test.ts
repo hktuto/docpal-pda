@@ -70,3 +70,55 @@ test("upsertReceivingOrder rejects a missing ref_no and a negative qty with 400"
     (e: any) => e.status === 400
   );
 });
+
+test("re-PUT of an identical payload is a no-op (changed=false, updated_at unchanged)", () => {
+  const { sqlite, db } = makeDb();
+  const body: ReceivingPutBody = {
+    order: { ref_no: "RO-1", delivery_date: "2026-07-20" },
+    invoices: [{ invoice_no: "INV-1", items: [{ line_no: 1, part_no: "ABO", qty: 100, date_code: "202401" }] }],
+  };
+  const first = db.transaction((tx) => upsertReceivingOrder(tx, "EXT-1", body));
+  const stamp = (sqlite.prepare("SELECT updated_at FROM receiving_orders WHERE id=?").get(first.orderId) as any).updated_at;
+  const itemStamp = (sqlite.prepare("SELECT updated_at FROM receiving_invoice_items").get() as any).updated_at;
+
+  const second = db.transaction((tx) => upsertReceivingOrder(tx, "EXT-1", body));
+  assert.equal(second.created, false);
+  assert.equal(second.changed, false);
+  assert.equal((sqlite.prepare("SELECT updated_at FROM receiving_orders WHERE id=?").get(first.orderId) as any).updated_at, stamp);
+  assert.equal((sqlite.prepare("SELECT updated_at FROM receiving_invoice_items").get() as any).updated_at, itemStamp);
+  sqlite.close();
+});
+
+test("update adds a line, changes a qty (pending), and removes an untouched line", () => {
+  const { sqlite, db } = makeDb();
+  const v1: ReceivingPutBody = {
+    order: { ref_no: "RO-1" },
+    invoices: [{ invoice_no: "INV-1", items: [
+      { line_no: 1, part_no: "ABO", qty: 100 },
+      { line_no: 2, part_no: "X1", qty: 5 },
+    ] }],
+  };
+  const first = db.transaction((tx) => upsertReceivingOrder(tx, "EXT-1", v1));
+
+  const v2: ReceivingPutBody = {
+    order: { ref_no: "RO-1" },
+    invoices: [{ invoice_no: "INV-1", items: [
+      { line_no: 1, part_no: "ABO", qty: 120 },
+      { line_no: 3, part_no: "Z9", qty: 7 },
+    ] }],
+  };
+  const second = db.transaction((tx) => upsertReceivingOrder(tx, "EXT-1", v2));
+  assert.equal(second.created, false);
+  assert.equal(second.changed, true);
+
+  const rows = sqlite.prepare(`
+    SELECT rii.line_no, rii.qty, p.part_no FROM receiving_invoice_items rii
+    JOIN parts p ON p.id=rii.part_id JOIN receiving_invoices ri ON ri.id=rii.receiving_invoice_id
+    WHERE ri.receiving_order_id=? ORDER BY rii.line_no`).all(first.orderId) as any[];
+  assert.deepEqual(rows, [
+    { line_no: 1, qty: 120, part_no: "ABO" },
+    { line_no: 3, qty: 7, part_no: "Z9" },
+  ]);
+  assertInvariantsHold(db);
+  sqlite.close();
+});
