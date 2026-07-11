@@ -124,3 +124,51 @@ test("update adds a line, changes a qty (pending), and removes an untouched line
   assertInvariantsHold(db);
   sqlite.close();
 });
+
+function seedInHand(sqlite: any, orderId: string) {
+  sqlite.prepare("UPDATE receiving_orders SET status='in_hand' WHERE id=?").run(orderId);
+}
+
+test("in_hand: decreasing a line qty is 409", () => {
+  const { sqlite, db } = makeDb();
+  const v1: ReceivingPutBody = { order: { ref_no: "R" }, invoices: [{ invoice_no: "I", items: [{ line_no: 1, part_no: "P", qty: 100 }] }] };
+  const r = db.transaction((tx) => upsertReceivingOrder(tx, "E", v1));
+  seedInHand(sqlite, r.orderId);
+  const v2: ReceivingPutBody = { order: { ref_no: "R" }, invoices: [{ invoice_no: "I", items: [{ line_no: 1, part_no: "P", qty: 99 }] }] };
+  assert.throws(() => db.transaction((tx) => upsertReceivingOrder(tx, "E", v2)), (e: any) => e.status === 409);
+  sqlite.close();
+});
+
+test("in_hand: increasing a line qty is allowed", () => {
+  const { sqlite, db } = makeDb();
+  const v1: ReceivingPutBody = { order: { ref_no: "R" }, invoices: [{ invoice_no: "I", items: [{ line_no: 1, part_no: "P", qty: 100 }] }] };
+  const r = db.transaction((tx) => upsertReceivingOrder(tx, "E", v1));
+  seedInHand(sqlite, r.orderId);
+  const v2: ReceivingPutBody = { order: { ref_no: "R" }, invoices: [{ invoice_no: "I", items: [{ line_no: 1, part_no: "P", qty: 150 }] }] };
+  const r2 = db.transaction((tx) => upsertReceivingOrder(tx, "E", v2));
+  assert.equal(r2.changed, true);
+  assert.equal((sqlite.prepare("SELECT qty FROM receiving_invoice_items").get() as any).qty, 150);
+  sqlite.close();
+});
+
+test("in_hand: removing a line is 409", () => {
+  const { sqlite, db } = makeDb();
+  const v1: ReceivingPutBody = { order: { ref_no: "R" }, invoices: [{ invoice_no: "I", items: [
+    { line_no: 1, part_no: "P", qty: 100 }, { line_no: 2, part_no: "Q", qty: 5 }] }] };
+  const r = db.transaction((tx) => upsertReceivingOrder(tx, "E", v1));
+  seedInHand(sqlite, r.orderId);
+  const v2: ReceivingPutBody = { order: { ref_no: "R" }, invoices: [{ invoice_no: "I", items: [{ line_no: 1, part_no: "P", qty: 100 }] }] };
+  assert.throws(() => db.transaction((tx) => upsertReceivingOrder(tx, "E", v2)), (e: any) => e.status === 409);
+  sqlite.close();
+});
+
+test("pending: removing a line that already has a receipt is 409", () => {
+  const { sqlite, db } = makeDb();
+  const v1: ReceivingPutBody = { order: { ref_no: "R" }, invoices: [{ invoice_no: "I", items: [
+    { line_no: 1, part_no: "P", qty: 100 }, { line_no: 2, part_no: "Q", qty: 5 }] }] };
+  db.transaction((tx) => upsertReceivingOrder(tx, "E", v1));
+  sqlite.prepare(`UPDATE receiving_invoice_items SET received_qty=1, available_qty=1 WHERE line_no=2`).run();
+  const v2: ReceivingPutBody = { order: { ref_no: "R" }, invoices: [{ invoice_no: "I", items: [{ line_no: 1, part_no: "P", qty: 100 }] }] };
+  assert.throws(() => db.transaction((tx) => upsertReceivingOrder(tx, "E", v2)), (e: any) => e.status === 409);
+  sqlite.close();
+});
