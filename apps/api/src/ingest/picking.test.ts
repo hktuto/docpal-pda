@@ -64,3 +64,30 @@ test("re-PUT identical picking payload is a no-op; update adds/changes/removes u
   assertInvariantsHold(db);
   sqlite.close();
 });
+
+test("picking: decreasing qty below picked+scanned is 409", () => {
+  const { sqlite, db } = makeDb();
+  const v1: PickingPutBody = { order: { ref_no: "PO" }, items: [{ line_id: "L1", part_no: "P", qty: 100 }] };
+  const r = db.transaction((tx) => upsertPickingOrder(tx, "E", v1));
+  sqlite.prepare("UPDATE picking_items SET picked_qty=40, scanned_not_boxed_qty=20 WHERE picking_order_id=?").run(r.orderId);
+  const v2: PickingPutBody = { order: { ref_no: "PO" }, items: [{ line_id: "L1", part_no: "P", qty: 59 }] };
+  assert.throws(() => db.transaction((tx) => upsertPickingOrder(tx, "E", v2)), (e: any) => e.status === 409);
+  sqlite.close();
+});
+
+test("picking: removing a line that has allocations is 409", () => {
+  const { sqlite, db } = makeDb();
+  const v1: PickingPutBody = { order: { ref_no: "PO" }, items: [
+    { line_id: "L1", part_no: "P", qty: 100 }, { line_id: "L2", part_no: "Q", qty: 5 }] };
+  const r = db.transaction((tx) => upsertPickingOrder(tx, "E", v1));
+  const l2 = (sqlite.prepare("SELECT id FROM picking_items WHERE line_id='L2'").get() as any).id;
+  const pP = (sqlite.prepare("SELECT id FROM parts WHERE part_no_norm='P'").get() as any).id;
+  // allocation must satisfy the target-XOR check -> point it at a real on-shelf lot
+  sqlite.prepare(`INSERT INTO inventory_lots (id, part_id, shelf_code, total_qty, created_at, updated_at)
+                  VALUES ('lot', ?, 'S1', 5, '0','0')`).run(pP);
+  sqlite.prepare(`INSERT INTO allocations (id, picking_item_id, qty, inventory_lot_id, created_at, updated_at)
+                  VALUES ('a', ?, 5, 'lot', '0','0')`).run(l2);
+  const v2: PickingPutBody = { order: { ref_no: "PO" }, items: [{ line_id: "L1", part_no: "P", qty: 100 }] };
+  assert.throws(() => db.transaction((tx) => upsertPickingOrder(tx, "E", v2)), (e: any) => e.status === 409);
+  sqlite.close();
+});
