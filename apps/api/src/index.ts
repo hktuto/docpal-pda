@@ -8,6 +8,7 @@ import { measuringRoute } from "./routes/measuring.js";
 import { boxesRoute } from "./routes/boxes.js";
 import { verificationRoute } from "./routes/verification.js";
 import { putAwayRoute } from "./routes/putAway.js";
+import { goodsVerifyRoute } from "./routes/goodsVerify.js";
 
 export const app = new Hono();
 
@@ -25,3 +26,4 @@ app.route("/", measuringRoute);
 app.route("/", boxesRoute);
 app.route("/", verificationRoute);
 app.route("/", putAwayRoute);
+app.route("/", goodsVerifyRoute);

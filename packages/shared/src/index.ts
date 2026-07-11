@@ -32,3 +32,4 @@ export interface VerifyPackageRequest { package_id: string; actor_id?: string | 
 export interface CreateShelfBoxRequest { shelf_code: string; actor_id?: string | null; }
 export interface RecordPutAwayScanRequest { receiving_invoice_item_id: string; qty: number; date_code?: string | null; lot_code?: string | null; coo?: string | null; cow?: string | null; }
 export interface AssignScanToBoxRequest { shelf_box_id: string; actor_id?: string | null; }
+export interface VerifyShelfBoxItemRequest { part_id: string; actor_id?: string | null; }

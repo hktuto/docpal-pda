@@ -235,6 +235,20 @@ export function removeScanFromBox(tx: DbOrTx, a: { scanId: string; actorId?: str
   tryMarkReceivingOrderClear(tx, { receivingOrderId: item.receivingOrderId, actorId: a.actorId ?? null });
 }
 
+/** Cycle-count: mark all of one part's scans in a box as verified (scans have no part_id — join via receiving_invoice_items). */
+export function verifyShelfBoxItem(
+  tx: DbOrTx,
+  a: { shelfBoxId: string; partId: string; actorId?: string | null }
+): { verifiedCount: number } {
+  const result = tx.run(
+    sql`UPDATE put_away_scans SET verified = 1, verified_at = ${now()}, updated_at = ${now()}
+        WHERE shelf_box_id = ${a.shelfBoxId} AND verified = 0
+          AND receiving_invoice_item_id IN (SELECT id FROM receiving_invoice_items WHERE part_id = ${a.partId})`
+  );
+  if (result.changes === 0) throw new HTTPException(404, { message: "no unverified scans for part in box" });
+  return { verifiedCount: Number(result.changes) };
+}
+
 export function closeShelfBox(tx: DbOrTx, a: { shelfBoxId: string; actorId?: string | null }): void {
   const box = loadShelfBox(tx, a.shelfBoxId);
   if (box.status !== "open") throw new HTTPException(409, { message: "shelf box is not open" });

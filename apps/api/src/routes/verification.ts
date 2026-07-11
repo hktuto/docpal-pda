@@ -16,12 +16,14 @@ verificationRoute.get("/verification-tasks", (c) => {
   const kind = c.req.query("kind");
   const status = c.req.query("status");
   const since = c.req.query("since");
+  const dueBefore = c.req.query("due_before");
   const rows = db.all<Record<string, unknown>>(sql`
     SELECT id, kind, status, due_at, picking_order_id, shelf_box_id, created_at, updated_at
     FROM verification_tasks
     WHERE (${kind ?? null} IS NULL OR kind = ${kind ?? null})
       AND (${status ?? null} IS NULL OR status = ${status ?? null})
       AND (${since ?? null} IS NULL OR updated_at > ${since ?? null})
+      AND (${dueBefore ?? null} IS NULL OR due_at <= ${dueBefore ?? null})
     ORDER BY updated_at ASC, id ASC LIMIT 200`);
   return c.json(rows, 200);
 });
