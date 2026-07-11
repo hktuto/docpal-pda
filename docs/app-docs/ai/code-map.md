@@ -90,6 +90,31 @@ Page and component locations mapped to source files.
 | Goods verify | `db/goodsVerify.ts` |
 | Allocation | `db/allocate.ts` |
 
+## Warehouse API (apps/api)
+
+### Endpoints
+
+| Endpoint | Source file |
+|----------|-------------|
+| `GET /health` | `apps/api/src/routes/health.ts` |
+| `PUT /receiving-orders/:external_id` | `apps/api/src/routes/receiving.ts` |
+| `POST /receiving-orders/:external_id/confirm-arrival` | `apps/api/src/routes/receiving.ts` |
+| `PUT /picking-orders/:external_id` | `apps/api/src/routes/picking.ts` |
+
+### Ingest helpers and triggers
+
+| Helper | Source file |
+|--------|-------------|
+| Receiving upsert / confirm arrival | `apps/api/src/ingest/receiving.ts` |
+| Picking upsert | `apps/api/src/ingest/picking.ts` |
+| Part resolve/create | `apps/api/src/ingest/parts.ts` |
+| Supplier resolve | `apps/api/src/ingest/suppliers.ts` |
+| Transition log writer | `apps/api/src/ingest/transition.ts` |
+| Allocation triggers (`allocateAll`, `allocatePickingOrder`) | `apps/api/src/db/allocate.ts` |
+
+- Server entry: `apps/api/src/server.ts`; app wiring: `apps/api/src/index.ts`; DB bootstrap: `apps/api/src/db.ts`.
+- confirm-arrival runs `allocateAll` after the order flips to `in_hand`; a picking upsert runs `allocatePickingOrder` when the upsert changed data. Both are best-effort and never roll back the committed write.
+
 ## Native Android (greenfield rewrite)
 
 | Element | Source file |

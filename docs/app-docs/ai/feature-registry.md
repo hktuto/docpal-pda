@@ -26,6 +26,14 @@ Machine-readable index of features in the warehouse PDA demo. Use this page to l
 | Language switcher | Shared | Shipped | `components/LanguageSwitcher.vue`, `app.vue`, `i18n/` | [navigation](../concepts/navigation.md) |
 | Toast notifications | Shared | Shipped | `components/ToastHost.vue`, `composables/useToast.ts` | [picking ai-scope](../flows/picking/ai-scope.md) |
 
+## Warehouse API (apps/api)
+
+| Feature | Flow | Status | Key Files | Scope Doc |
+|---------|------|--------|-----------|-----------|
+| Receiving order ingestion | Receiving | Shipped | `PUT /receiving-orders/:external_id` in `apps/api/src/routes/receiving.ts`, `apps/api/src/ingest/receiving.ts`, `apps/api/src/ingest/parts.ts`, `apps/api/src/ingest/suppliers.ts` | [ai-scope](../flows/receiving/ai-scope.md) |
+| Confirm arrival + allocation trigger | Receiving | Shipped | `POST /receiving-orders/:external_id/confirm-arrival` in `apps/api/src/routes/receiving.ts`, `apps/api/src/ingest/receiving.ts`, `apps/api/src/ingest/transition.ts`; triggers `allocateAll` in `apps/api/src/db/allocate.ts` | [ai-scope](../flows/receiving/ai-scope.md) |
+| Picking order ingestion + allocation trigger | Picking | Shipped | `PUT /picking-orders/:external_id` in `apps/api/src/routes/picking.ts`, `apps/api/src/ingest/picking.ts`, `apps/api/src/ingest/parts.ts`; triggers `allocatePickingOrder` in `apps/api/src/db/allocate.ts` | [ai-scope](../flows/picking/ai-scope.md) |
+
 ## Native Android (greenfield rewrite)
 
 | Feature | Flow | Status | Key Files | Scope Doc |
