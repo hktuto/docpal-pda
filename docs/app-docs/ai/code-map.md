@@ -100,6 +100,16 @@ Page and component locations mapped to source files.
 | `PUT /receiving-orders/:external_id` | `apps/api/src/routes/receiving.ts` |
 | `POST /receiving-orders/:external_id/confirm-arrival` | `apps/api/src/routes/receiving.ts` |
 | `PUT /picking-orders/:external_id` | `apps/api/src/routes/picking.ts` |
+| `POST /picking-orders/:id/scan` | `apps/api/src/routes/pickingExecution.ts` |
+| `DELETE /picking-orders/:id/packages/:package_id` | `apps/api/src/routes/pickingExecution.ts` |
+| `POST /picking-orders/:id/boxes` | `apps/api/src/routes/pickingExecution.ts` |
+| `POST /picking-orders/:id/boxes/:box_id/cancel` | `apps/api/src/routes/pickingExecution.ts` |
+| `POST /picking-orders/:id/boxes/:box_id/packages` | `apps/api/src/routes/pickingExecution.ts` |
+| `POST /picking-orders/:id/boxes/:box_id/add-all-unboxed` | `apps/api/src/routes/pickingExecution.ts` |
+| `DELETE /picking-orders/:id/boxes/:box_id/packages/:package_id` | `apps/api/src/routes/pickingExecution.ts` |
+| `POST /picking-orders/:id/finish` | `apps/api/src/routes/pickingExecution.ts` |
+| `GET /picking-orders`, `GET /picking-orders/:id` | `apps/api/src/routes/pickingExecution.ts` |
+| `GET /measuring-tasks` | `apps/api/src/routes/measuring.ts` |
 
 ### Ingest helpers and triggers
 
@@ -111,6 +121,7 @@ Page and component locations mapped to source files.
 | Supplier resolve | `apps/api/src/ingest/suppliers.ts` |
 | Transition log writer | `apps/api/src/ingest/transition.ts` |
 | Allocation triggers (`allocateAll`, `allocatePickingOrder`) | `apps/api/src/db/allocate.ts` |
+| Picking execution writes (scan, undo-scan, boxes, pack/unpack, finish, auto-finish → measuring task) | `apps/api/src/db/pickScan.ts` |
 
 - Server entry: `apps/api/src/server.ts`; app wiring: `apps/api/src/index.ts`; DB bootstrap: `apps/api/src/db.ts`.
 - confirm-arrival runs `allocateAll` after the order flips to `in_hand`; a picking upsert runs `allocatePickingOrder` when the upsert changed data. Both are best-effort and never roll back the committed write.
