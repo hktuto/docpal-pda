@@ -118,6 +118,21 @@ Page and component locations mapped to source files.
 | `POST /shipping-boxes/:id/verify` | `apps/api/src/routes/boxes.ts` |
 | `GET /verification-tasks`, `GET /verification-tasks/:id` | `apps/api/src/routes/verification.ts` |
 | `POST /verification-tasks/:id/complete` | `apps/api/src/routes/verification.ts` |
+| `GET /put-away/candidates` | `apps/api/src/routes/putAway.ts` |
+| `GET /receiving-orders/:id/put-away-lots` | `apps/api/src/routes/putAway.ts` |
+| `GET /receiving-orders/:id/put-away-scans` | `apps/api/src/routes/putAway.ts` |
+| `GET /receiving-orders/:id/shelf-boxes` | `apps/api/src/routes/putAway.ts` |
+| `POST /receiving-orders/:id/shelf-boxes` | `apps/api/src/routes/putAway.ts` |
+| `DELETE /shelf-boxes/:id` | `apps/api/src/routes/putAway.ts` |
+| `POST /put-away/scans` | `apps/api/src/routes/putAway.ts` |
+| `POST /put-away/scans/:id/remove-piece` | `apps/api/src/routes/putAway.ts` |
+| `POST /put-away/scans/:id/assign-to-box` | `apps/api/src/routes/putAway.ts` |
+| `POST /shelf-boxes/:id/add-all-unboxed` | `apps/api/src/routes/putAway.ts` |
+| `POST /put-away/scans/:id/remove-from-box` | `apps/api/src/routes/putAway.ts` |
+| `POST /shelf-boxes/:id/close` | `apps/api/src/routes/putAway.ts` |
+| `GET /shelves`, `GET /shelves/with-box-counts`, `GET /shelves/:code/boxes` | `apps/api/src/routes/goodsVerify.ts` |
+| `GET /shelf-boxes/:id` | `apps/api/src/routes/goodsVerify.ts` |
+| `POST /shelf-boxes/:id/verify-item` | `apps/api/src/routes/goodsVerify.ts` |
 
 ### Ingest helpers and triggers
 
@@ -131,9 +146,13 @@ Page and component locations mapped to source files.
 | Allocation triggers (`allocateAll`, `allocatePickingOrder`) | `apps/api/src/db/allocate.ts` |
 | Picking execution writes (scan, undo-scan, boxes, pack/unpack, finish, auto-finish → measuring task) | `apps/api/src/db/pickScan.ts` |
 | Measuring + pre-shipment verification writes (box measurements, package verify, box close/verify, task completion) | `apps/api/src/db/measure.ts` |
+| Put-away writes (scans, shelf-box lifecycle, lot materialization, receiving clear, cycle-count scheduling) | `apps/api/src/db/putAway.ts` |
+| Cycle-count verification writes (`verifyShelfBoxItem`, `cycle_count` branch of `completeVerificationTask`) | `apps/api/src/db/putAway.ts`, `apps/api/src/db/measure.ts` |
+| Pick-scan cycle-count hook (picking from a boxed lot schedules a recount and resets the box) | `apps/api/src/db/pickScan.ts` |
 
 - Server entry: `apps/api/src/server.ts`; app wiring: `apps/api/src/index.ts`; DB bootstrap: `apps/api/src/db.ts`.
 - confirm-arrival runs `allocateAll` after the order flips to `in_hand`; a picking upsert runs `allocatePickingOrder` when the upsert changed data. Both are best-effort and never roll back the committed write.
+- The web pages under `pages/put-away/` and `pages/goods-verify/` still run on PGlite (`db/putAway.ts`, `db/goodsVerify.ts`); the API endpoints above are not wired to the frontend yet — that is a future frontend-migration plan.
 
 ## Native Android (greenfield rewrite)
 
