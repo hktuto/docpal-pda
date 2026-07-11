@@ -7,7 +7,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema/index.js";
 import { createDb } from "./client.js";
 import { createTables } from "./tables.js";
-import { createShelfBox, cancelShelfBox } from "./putAway.js";
+import { createShelfBox, cancelShelfBox, recordPutAwayScan, removeScannedPiece } from "./putAway.js";
 import { assertInvariantsHold } from "./invariants.guard.js";
 
 function makeDb() {
@@ -55,5 +55,44 @@ test("create/cancel guards: 404 order, 404 shelf, 409 cancel non-open", () => {
   const { id } = db.transaction((tx) => createShelfBox(tx, { receivingOrderId: "ro", shelfCode: "A1" }));
   sqlite.prepare("UPDATE shelf_boxes SET status='closed' WHERE id=?").run(id);
   assert.throws(() => db.transaction((tx) => cancelShelfBox(tx, { shelfBoxId: id })), (e: any) => e.status === 409); // not open
+  sqlite.close();
+});
+
+// seed a part + invoice + receivable item (received 10) — call after makeDb
+function seedReceivableItem(sqlite: any) {
+  sqlite.exec(`
+    INSERT INTO parts (id, part_no, part_no_norm, created_at, updated_at) VALUES ('p','X','X','0','0');
+    INSERT INTO receiving_invoices (id, external_id, receiving_order_id, invoice_no, supplier_id, created_at, updated_at)
+      VALUES ('inv','e','ro','INV-1','sup','0','0');
+    INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty, available_qty, created_at, updated_at)
+      VALUES ('rii','inv','p',10,10,10,'0','0');
+  `);
+}
+
+test("recordPutAwayScan drops an unboxed scan; over-scan 409; removeScannedPiece deletes unboxed", () => {
+  const { sqlite, db } = makeDb();
+  seedReceivableItem(sqlite);
+  const { id } = db.transaction((tx) => recordPutAwayScan(tx, { receivingInvoiceItemId: "rii", qty: 4, dateCode: "D1" }));
+  const row = sqlite.prepare("SELECT receiving_invoice_item_id, qty, shelf_box_id, date_code FROM put_away_scans WHERE id=?").get(id) as any;
+  assert.deepEqual(row, { receiving_invoice_item_id: "rii", qty: 4, shelf_box_id: null, date_code: "D1" });
+  // 4 scanned + another 7 would exceed remaining 10
+  assert.throws(() => db.transaction((tx) => recordPutAwayScan(tx, { receivingInvoiceItemId: "rii", qty: 7 })), (e: any) => e.status === 409);
+  db.transaction((tx) => removeScannedPiece(tx, { scanId: id }));
+  assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM put_away_scans WHERE id=?").get(id) as any).c, 0);
+  assertInvariantsHold(db);
+  sqlite.close();
+});
+
+test("record/remove guards: 404 item, 400 bad qty, 404 scan, 409 remove boxed", () => {
+  const { sqlite, db } = makeDb();
+  seedReceivableItem(sqlite);
+  assert.throws(() => db.transaction((tx) => recordPutAwayScan(tx, { receivingInvoiceItemId: "nope", qty: 1 })), (e: any) => e.status === 404);
+  assert.throws(() => db.transaction((tx) => recordPutAwayScan(tx, { receivingInvoiceItemId: "rii", qty: 0 })), (e: any) => e.status === 400);
+  assert.throws(() => db.transaction((tx) => recordPutAwayScan(tx, { receivingInvoiceItemId: "rii", qty: 1.5 })), (e: any) => e.status === 400);
+  assert.throws(() => db.transaction((tx) => removeScannedPiece(tx, { scanId: "nope" })), (e: any) => e.status === 404);
+  const { id } = db.transaction((tx) => recordPutAwayScan(tx, { receivingInvoiceItemId: "rii", qty: 1 }));
+  sqlite.prepare("INSERT INTO shelf_boxes (id, shelf_code, status, created_at, updated_at) VALUES ('somebox','A1','open','0','0')").run();
+  sqlite.prepare("UPDATE put_away_scans SET shelf_box_id='somebox' WHERE id=?").run(id);
+  assert.throws(() => db.transaction((tx) => removeScannedPiece(tx, { scanId: id })), (e: any) => e.status === 409); // boxed
   sqlite.close();
 });

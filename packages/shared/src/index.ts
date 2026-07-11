@@ -30,3 +30,4 @@ export interface ApiErrorBody { error: string; }
 export interface UpdateShippingBoxRequest { box_size?: string | null; net_weight_g?: number | string | null; gross_weight_g?: number | string | null; destination_country?: string | null; }
 export interface VerifyPackageRequest { package_id: string; actor_id?: string | null; }
 export interface CreateShelfBoxRequest { shelf_code: string; actor_id?: string | null; }
+export interface RecordPutAwayScanRequest { receiving_invoice_item_id: string; qty: number; date_code?: string | null; lot_code?: string | null; coo?: string | null; cow?: string | null; }

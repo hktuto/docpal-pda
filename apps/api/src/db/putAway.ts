@@ -49,3 +49,35 @@ export function cancelShelfBox(tx: DbOrTx, a: { shelfBoxId: string; actorId?: st
   logTransition(tx, { entityType: "shelf_box", entityId: box.id, fromStatus: "open", toStatus: "cancelled", actorId: a.actorId ?? null });
   tx.run(sql`DELETE FROM shelf_boxes WHERE id = ${box.id}`);
 }
+
+export function recordPutAwayScan(
+  tx: DbOrTx,
+  a: { receivingInvoiceItemId: string; qty: number; dateCode?: string | null; lotCode?: string | null; coo?: string | null; cow?: string | null }
+): { id: string } {
+  const item = tx.get<{ id: string; received: number; picked: number; putAway: number; allocated: number }>(
+    sql`SELECT id, received_qty AS received, picked_qty AS picked, put_away_qty AS putAway, allocated_qty AS allocated
+        FROM receiving_invoice_items WHERE id = ${a.receivingInvoiceItemId}`
+  );
+  if (!item) throw new HTTPException(404, { message: "receiving invoice item not found" });
+  if (!Number.isInteger(a.qty) || a.qty <= 0) throw new HTTPException(400, { message: "qty must be a positive integer" });
+  const unboxed = tx.get<{ s: number }>(
+    sql`SELECT COALESCE(SUM(qty), 0) AS s FROM put_away_scans WHERE receiving_invoice_item_id = ${item.id} AND shelf_box_id IS NULL`
+  )!.s;
+  const remaining = item.received - item.picked - item.putAway - item.allocated - unboxed;
+  if (a.qty > remaining) throw new HTTPException(409, { message: "scanned qty exceeds remaining" });
+  const id = crypto.randomUUID();
+  tx.run(
+    sql`INSERT INTO put_away_scans (id, receiving_invoice_item_id, qty, shelf_box_id, date_code, lot_code, coo, cow, created_at, updated_at)
+        VALUES (${id}, ${item.id}, ${a.qty}, NULL, ${a.dateCode ?? null}, ${a.lotCode ?? null}, ${a.coo ?? null}, ${a.cow ?? null}, ${now()}, ${now()})`
+  );
+  return { id };
+}
+
+export function removeScannedPiece(tx: DbOrTx, a: { scanId: string }): void {
+  const scan = tx.get<{ id: string; shelfBoxId: string | null }>(
+    sql`SELECT id, shelf_box_id AS shelfBoxId FROM put_away_scans WHERE id = ${a.scanId}`
+  );
+  if (!scan) throw new HTTPException(404, { message: "put-away scan not found" });
+  if (scan.shelfBoxId !== null) throw new HTTPException(409, { message: "scan is already in a box" });
+  tx.run(sql`DELETE FROM put_away_scans WHERE id = ${scan.id}`);
+}

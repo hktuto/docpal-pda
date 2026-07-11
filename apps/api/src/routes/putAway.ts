@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { Context } from "hono";
-import type { CreateShelfBoxRequest } from "@warehouse/shared";
+import type { CreateShelfBoxRequest, RecordPutAwayScanRequest } from "@warehouse/shared";
 import { db } from "../db.js";
-import { createShelfBox, cancelShelfBox } from "../db/putAway.js";
+import { createShelfBox, cancelShelfBox, recordPutAwayScan, removeScannedPiece } from "../db/putAway.js";
 
 export const putAwayRoute = new Hono();
 
@@ -22,5 +22,21 @@ putAwayRoute.post("/receiving-orders/:id/shelf-boxes", async (c) => {
 putAwayRoute.delete("/shelf-boxes/:id", (c) => {
   const shelfBoxId = c.req.param("id");
   db.transaction((tx) => cancelShelfBox(tx, { shelfBoxId, actorId: c.req.query("actor_id") ?? null }));
+  return c.json({ ok: true }, 200);
+});
+
+putAwayRoute.post("/put-away/scans", async (c) => {
+  const body = await readJson<RecordPutAwayScanRequest>(c);
+  if (!body.receiving_invoice_item_id) throw new HTTPException(400, { message: "receiving_invoice_item_id is required" });
+  const result = db.transaction((tx) => recordPutAwayScan(tx, {
+    receivingInvoiceItemId: body.receiving_invoice_item_id, qty: body.qty,
+    dateCode: body.date_code ?? null, lotCode: body.lot_code ?? null, coo: body.coo ?? null, cow: body.cow ?? null,
+  }));
+  return c.json(result, 201);
+});
+
+putAwayRoute.post("/put-away/scans/:id/remove-piece", (c) => {
+  const scanId = c.req.param("id");
+  db.transaction((tx) => removeScannedPiece(tx, { scanId }));
   return c.json({ ok: true }, 200);
 });
