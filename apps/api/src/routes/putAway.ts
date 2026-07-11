@@ -3,7 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import type { Context } from "hono";
 import type { CreateShelfBoxRequest, RecordPutAwayScanRequest, AssignScanToBoxRequest } from "@warehouse/shared";
 import { db } from "../db.js";
-import { createShelfBox, cancelShelfBox, recordPutAwayScan, removeScannedPiece, assignScanToBox, addAllUnboxedToBox } from "../db/putAway.js";
+import { createShelfBox, cancelShelfBox, recordPutAwayScan, removeScannedPiece, assignScanToBox, addAllUnboxedToBox, removeScanFromBox, closeShelfBox } from "../db/putAway.js";
 
 export const putAwayRoute = new Hono();
 
@@ -53,4 +53,16 @@ putAwayRoute.post("/shelf-boxes/:id/add-all-unboxed", (c) => {
   const shelfBoxId = c.req.param("id");
   const result = db.transaction((tx) => addAllUnboxedToBox(tx, { shelfBoxId, actorId: c.req.query("actor_id") ?? null }));
   return c.json(result, 200);
+});
+
+putAwayRoute.post("/put-away/scans/:id/remove-from-box", (c) => {
+  const scanId = c.req.param("id");
+  db.transaction((tx) => removeScanFromBox(tx, { scanId, actorId: c.req.query("actor_id") ?? null }));
+  return c.json({ ok: true }, 200);
+});
+
+putAwayRoute.post("/shelf-boxes/:id/close", (c) => {
+  const shelfBoxId = c.req.param("id");
+  db.transaction((tx) => closeShelfBox(tx, { shelfBoxId, actorId: c.req.query("actor_id") ?? null }));
+  return c.json({ ok: true }, 200);
 });

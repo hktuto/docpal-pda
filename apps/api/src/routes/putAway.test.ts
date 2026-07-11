@@ -75,4 +75,21 @@ test("POST assign-to-box materializes lot; add-all-unboxed boxes the rest", asyn
   assert.equal(addAll.status, 200);
 });
 
+test("POST close closes a non-empty box", async () => {
+  const boxRes = await app.request("/receiving-orders/ro/shelf-boxes", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ shelf_code: "A1" }),
+  });
+  const boxId = ((await boxRes.json()) as any).id;
+  const scanRes = await app.request("/put-away/scans", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ receiving_invoice_item_id: "rii", qty: 2 }),
+  });
+  const scanId = ((await scanRes.json()) as any).id;
+  await app.request(`/put-away/scans/${scanId}/assign-to-box`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ shelf_box_id: boxId }),
+  });
+  const close = await app.request(`/shelf-boxes/${boxId}/close`, { method: "POST" });
+  assert.equal(close.status, 200);
+  assert.equal((sqlite.prepare("SELECT status FROM shelf_boxes WHERE id=?").get(boxId) as any).status, "closed");
+});
+
 test("cleanup", () => { sqlite.close(); });

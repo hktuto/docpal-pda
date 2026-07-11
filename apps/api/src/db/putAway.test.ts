@@ -7,7 +7,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema/index.js";
 import { createDb } from "./client.js";
 import { createTables } from "./tables.js";
-import { createShelfBox, cancelShelfBox, recordPutAwayScan, removeScannedPiece, assignScanToBox, addAllUnboxedToBox } from "./putAway.js";
+import { createShelfBox, cancelShelfBox, recordPutAwayScan, removeScannedPiece, assignScanToBox, addAllUnboxedToBox, removeScanFromBox, closeShelfBox } from "./putAway.js";
 import { assertInvariantsHold } from "./invariants.guard.js";
 
 function makeDb() {
@@ -142,6 +142,54 @@ test("addAllUnboxedToBox boxes every unboxed scan of the box's order", () => {
   assert.equal(count, 2);
   assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM put_away_scans WHERE shelf_box_id IS NULL").get() as any).c, 0);
   assert.equal((sqlite.prepare("SELECT status FROM receiving_orders WHERE id='ro'").get() as any).status, "clear");
+  assertInvariantsHold(db);
+  sqlite.close();
+});
+
+test("removeScanFromBox reverses the assignment (scan unboxed, lot + source removed, availability restored)", () => {
+  const { sqlite, db } = makeDb();
+  seedReceivableItem(sqlite);
+  const { id: scanId } = db.transaction((tx) => recordPutAwayScan(tx, { receivingInvoiceItemId: "rii", qty: 10 }));
+  const { id: boxId } = db.transaction((tx) => createShelfBox(tx, { receivingOrderId: "ro", shelfCode: "A1" }));
+  db.transaction((tx) => assignScanToBox(tx, { scanId, shelfBoxId: boxId }));
+  db.transaction((tx) => removeScanFromBox(tx, { scanId, actorId: "u1" }));
+
+  assert.equal((sqlite.prepare("SELECT shelf_box_id FROM put_away_scans WHERE id=?").get(scanId) as any).shelf_box_id, null);
+  assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM inventory_lots WHERE box_id=?").get(boxId) as any).c, 0);
+  assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM inventory_lot_sources WHERE receiving_invoice_item_id='rii'").get() as any).c, 0);
+  const rii = sqlite.prepare("SELECT put_away_qty, available_qty FROM receiving_invoice_items WHERE id='rii'").get() as any;
+  assert.deepEqual(rii, { put_away_qty: 0, available_qty: 10 });
+  assertInvariantsHold(db);
+  sqlite.close();
+});
+
+test("remove/close guards: 404 scan, 409 not in box, 409 box not open; close 409 empty + not open", () => {
+  const { sqlite, db } = makeDb();
+  seedReceivableItem(sqlite);
+  const { id: scanId } = db.transaction((tx) => recordPutAwayScan(tx, { receivingInvoiceItemId: "rii", qty: 1 }));
+  assert.throws(() => db.transaction((tx) => removeScanFromBox(tx, { scanId: "nope" })), (e: any) => e.status === 404);
+  assert.throws(() => db.transaction((tx) => removeScanFromBox(tx, { scanId })), (e: any) => e.status === 409); // not in a box
+  const { id: boxId } = db.transaction((tx) => createShelfBox(tx, { receivingOrderId: "ro", shelfCode: "A1" }));
+  db.transaction((tx) => assignScanToBox(tx, { scanId, shelfBoxId: boxId }));
+  sqlite.prepare("UPDATE shelf_boxes SET status='closed' WHERE id=?").run(boxId);
+  assert.throws(() => db.transaction((tx) => removeScanFromBox(tx, { scanId })), (e: any) => e.status === 409); // box not open
+  // close: empty box 409
+  const { id: empty } = db.transaction((tx) => createShelfBox(tx, { receivingOrderId: "ro", shelfCode: "A1" }));
+  assert.throws(() => db.transaction((tx) => closeShelfBox(tx, { shelfBoxId: empty })), (e: any) => e.status === 409);
+  // close: not open 409 (boxId already closed)
+  assert.throws(() => db.transaction((tx) => closeShelfBox(tx, { shelfBoxId: boxId })), (e: any) => e.status === 409);
+  sqlite.close();
+});
+
+test("closeShelfBox closes a non-empty open box + logs transition", () => {
+  const { sqlite, db } = makeDb();
+  seedReceivableItem(sqlite);
+  const { id: scanId } = db.transaction((tx) => recordPutAwayScan(tx, { receivingInvoiceItemId: "rii", qty: 2 }));
+  const { id: boxId } = db.transaction((tx) => createShelfBox(tx, { receivingOrderId: "ro", shelfCode: "A1" }));
+  db.transaction((tx) => assignScanToBox(tx, { scanId, shelfBoxId: boxId }));
+  db.transaction((tx) => closeShelfBox(tx, { shelfBoxId: boxId, actorId: "u1" }));
+  assert.equal((sqlite.prepare("SELECT status FROM shelf_boxes WHERE id=?").get(boxId) as any).status, "closed");
+  assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM transition_logs WHERE entity_type='shelf_box' AND to_status='closed'").get() as any).c, 1);
   assertInvariantsHold(db);
   sqlite.close();
 });

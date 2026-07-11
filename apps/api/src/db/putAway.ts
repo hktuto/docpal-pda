@@ -193,3 +193,49 @@ export function addAllUnboxedToBox(tx: DbOrTx, a: { shelfBoxId: string; actorId?
   for (const s of scans) assignScanToBox(tx, { scanId: s.id, shelfBoxId: box.id, actorId: a.actorId ?? null });
   return { count: scans.length };
 }
+
+export function removeScanFromBox(tx: DbOrTx, a: { scanId: string; actorId?: string | null }): void {
+  const scan = tx.get<{ id: string; itemId: string; qty: number; shelfBoxId: string | null }>(
+    sql`SELECT id, receiving_invoice_item_id AS itemId, qty, shelf_box_id AS shelfBoxId FROM put_away_scans WHERE id = ${a.scanId}`
+  );
+  if (!scan) throw new HTTPException(404, { message: "put-away scan not found" });
+  if (scan.shelfBoxId === null) throw new HTTPException(409, { message: "scan is not in a box" });
+  const box = loadShelfBox(tx, scan.shelfBoxId);
+  if (box.status !== "open") throw new HTTPException(409, { message: "shelf box is not open" });
+  const item = tx.get<{ partId: string; receivingOrderId: string }>(
+    sql`SELECT rii.part_id AS partId, ri.receiving_order_id AS receivingOrderId
+        FROM receiving_invoice_items rii JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id WHERE rii.id = ${scan.itemId}`
+  )!;
+
+  tx.run(sql`UPDATE put_away_scans SET shelf_box_id = NULL, verified = 0, verified_at = NULL, updated_at = ${now()} WHERE id = ${scan.id}`);
+
+  // reverse the lot materialization (find the lot via its source row in this box)
+  const src = tx.get<{ id: string; lotId: string; qty: number }>(
+    sql`SELECT ils.id, ils.inventory_lot_id AS lotId, ils.qty FROM inventory_lot_sources ils
+        JOIN inventory_lots il ON il.id = ils.inventory_lot_id
+        WHERE ils.receiving_invoice_item_id = ${scan.itemId} AND il.box_id = ${box.id}`
+  );
+  if (src) {
+    if (src.qty - scan.qty <= 0) tx.run(sql`DELETE FROM inventory_lot_sources WHERE id = ${src.id}`);
+    else tx.run(sql`UPDATE inventory_lot_sources SET qty = qty - ${scan.qty}, updated_at = ${now()} WHERE id = ${src.id}`);
+    const lot = tx.get<{ total: number }>(sql`SELECT total_qty AS total FROM inventory_lots WHERE id = ${src.lotId}`)!;
+    if (lot.total - scan.qty <= 0) tx.run(sql`DELETE FROM inventory_lots WHERE id = ${src.lotId}`);
+    else tx.run(sql`UPDATE inventory_lots SET total_qty = total_qty - ${scan.qty}, updated_at = ${now()} WHERE id = ${src.lotId}`);
+  }
+
+  tx.run(sql`UPDATE receiving_invoice_items SET put_away_qty = put_away_qty - ${scan.qty}, updated_at = ${now()} WHERE id = ${scan.itemId}`);
+  recomputeReceivingItem(tx, scan.itemId);
+
+  scheduleCycleCount(tx, box.id);
+  tryMarkReceivingOrderClear(tx, { receivingOrderId: item.receivingOrderId, actorId: a.actorId ?? null });
+}
+
+export function closeShelfBox(tx: DbOrTx, a: { shelfBoxId: string; actorId?: string | null }): void {
+  const box = loadShelfBox(tx, a.shelfBoxId);
+  if (box.status !== "open") throw new HTTPException(409, { message: "shelf box is not open" });
+  const cnt = tx.get<{ c: number }>(sql`SELECT COUNT(*) AS c FROM put_away_scans WHERE shelf_box_id = ${box.id}`)!.c;
+  if (cnt === 0) throw new HTTPException(409, { message: "cannot close an empty shelf box" });
+  tx.run(sql`UPDATE shelf_boxes SET status = 'closed', updated_at = ${now()} WHERE id = ${box.id}`);
+  logTransition(tx, { entityType: "shelf_box", entityId: box.id, fromStatus: "open", toStatus: "closed", actorId: a.actorId ?? null });
+  if (box.receivingOrderId) tryMarkReceivingOrderClear(tx, { receivingOrderId: box.receivingOrderId, actorId: a.actorId ?? null });
+}
