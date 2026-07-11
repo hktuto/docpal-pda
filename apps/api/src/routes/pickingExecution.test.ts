@@ -61,4 +61,30 @@ test("scan of an allocation from another order is 404; bad qty is 400", async ()
   assert.equal(bad.status, 400);
 });
 
+test("GET /picking-orders/:id returns detail with items, allocations, packages, boxes", async () => {
+  const res = await app.request("/picking-orders/po");
+  assert.equal(res.status, 200);
+  const d = (await res.json()) as any;
+  assert.equal(d.order.ref_no, "R");
+  assert.equal(d.items.length, 1);
+  assert.equal(d.items[0].part_no, "X");
+  assert.equal(d.allocations.length, 1);
+  assert.equal(d.allocations[0].lot.shelf_code, "S1");
+  assert.deepEqual(d.allocations[0].receiving_items, []);
+  assert.deepEqual(d.packages, []);
+  assert.deepEqual(d.boxes, []);
+  const missing = await app.request("/picking-orders/nope");
+  assert.equal(missing.status, 404);
+});
+
+test("GET /picking-orders filters by status and updated_since", async () => {
+  const all = await app.request("/picking-orders");
+  assert.equal(all.status, 200);
+  assert.equal(((await all.json()) as any[]).length >= 1, true);
+  const picking = await app.request("/picking-orders?status=picking");
+  assert.equal(((await picking.json()) as any[]).every((o: any) => o.status === "picking"), true);
+  const future = await app.request("/picking-orders?updated_since=2999-01-01T00:00:00.000Z");
+  assert.deepEqual(await future.json(), []);
+});
+
 test("cleanup", () => { sqlite.close(); });

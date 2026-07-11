@@ -109,3 +109,61 @@ pickingExecutionRoute.post("/picking-orders/:id/finish", (c) => {
   db.transaction((tx) => finishPickingOrder(tx, { pickingOrderId: orderId, actorId }));
   return c.json({ ok: true }, 200);
 });
+
+pickingExecutionRoute.get("/picking-orders", (c) => {
+  const status = c.req.query("status");
+  const updatedSince = c.req.query("updated_since");
+  const rows = db.all<Record<string, unknown>>(sql`
+    SELECT id, external_id, ref_no, status, ship_to, destination_country, created_at, updated_at
+    FROM picking_orders
+    WHERE (${status ?? null} IS NULL OR status = ${status ?? null})
+      AND (${updatedSince ?? null} IS NULL OR updated_at > ${updatedSince ?? null})
+    ORDER BY updated_at ASC, id ASC LIMIT 200`);
+  return c.json(rows, 200);
+});
+
+pickingExecutionRoute.get("/picking-orders/:id", (c) => {
+  const orderId = c.req.param("id");
+  const order = db.get<Record<string, unknown>>(sql`
+    SELECT id, external_id, ref_no, status, ship_to, destination_country, created_at, updated_at
+    FROM picking_orders WHERE id = ${orderId}`);
+  if (!order) throw new HTTPException(404, { message: "picking order not found" });
+
+  const items = db.all<Record<string, unknown>>(sql`
+    SELECT pi.id, pi.part_id, p.part_no, pi.qty, pi.picked_qty, pi.scanned_not_boxed_qty,
+           pi.remaining_qty, pi.allocated_qty, pi.line_id
+    FROM picking_items pi JOIN parts p ON p.id = pi.part_id
+    WHERE pi.picking_order_id = ${orderId} ORDER BY pi.created_at ASC, pi.id ASC`);
+
+  const allocations = db.all<Record<string, unknown>>(sql`
+    SELECT a.id, a.picking_item_id, a.qty, a.inventory_lot_id, a.receiving_order_id
+    FROM allocations a JOIN picking_items pi ON pi.id = a.picking_item_id
+    WHERE pi.picking_order_id = ${orderId} AND a.qty > 0 ORDER BY a.created_at ASC, a.id ASC`);
+  for (const a of allocations) {
+    a.lot = a.inventory_lot_id
+      ? db.get<Record<string, unknown>>(sql`
+          SELECT shelf_code, box_id, date_code, lot_code, coo, cow,
+                 date_code_norm, lot_code_norm, coo_norm, cow_norm
+          FROM inventory_lots WHERE id = ${a.inventory_lot_id}`) ?? null
+      : null;
+    a.receiving_items = db.all<Record<string, unknown>>(sql`
+      SELECT ari.receiving_invoice_item_id, ari.qty, ri.invoice_no, rii.box_id,
+             rii.date_code_norm, rii.lot_code_norm, rii.coo_norm, rii.cow_norm
+      FROM allocation_receiving_items ari
+      JOIN receiving_invoice_items rii ON rii.id = ari.receiving_invoice_item_id
+      JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+      WHERE ari.allocation_id = ${a.id} AND ari.qty > 0 ORDER BY ari.created_at ASC, ari.id ASC`);
+  }
+
+  const packages = db.all<Record<string, unknown>>(sql`
+    SELECT pp.id, pp.picking_item_id, pp.source_type, pp.source_id, pp.qty, pp.shipping_box_id,
+           pp.date_code, pp.lot_code, pp.coo, pp.cow, pp.verified
+    FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id
+    WHERE pi.picking_order_id = ${orderId} ORDER BY pp.created_at ASC, pp.id ASC`);
+
+  const boxes = db.all<Record<string, unknown>>(sql`
+    SELECT id, status, box_size, net_weight_g, gross_weight_g, destination_country, created_at, updated_at
+    FROM shipping_boxes WHERE picking_order_id = ${orderId} ORDER BY created_at ASC, id ASC`);
+
+  return c.json({ order, items, allocations, packages, boxes }, 200);
+});
