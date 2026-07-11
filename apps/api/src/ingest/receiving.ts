@@ -1,10 +1,11 @@
 import { sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
-import type { DbOrTx } from "../db/invariants.js";
+import { type DbOrTx, applyReceipt } from "../db/invariants.js";
 import { now } from "../db/now.js";
 import { normalizeCode, normalizePlain } from "../db/schema/normalize.js";
 import { resolveOrCreatePart } from "./parts.js";
 import { resolveSupplierId } from "./suppliers.js";
+import { logTransition } from "./transition.js";
 import type { ReceivingPutBody, ReceivingPutInvoice, ReceivingPutItem } from "@warehouse/shared";
 
 export interface ReceivingUpsertResult { orderId: string; created: boolean; changed: boolean; }
@@ -183,4 +184,19 @@ function reconcileReceivingOrder(
 
   if (changed) tx.run(sql`UPDATE receiving_orders SET updated_at = ${now()} WHERE id = ${orderId}`);
   return { orderId, created: false, changed };
+}
+
+export function confirmReceivingArrival(tx: DbOrTx, orderId: string, actorId?: string | null): { fromStatus: string } {
+  const ro = tx.get<{ id: string; status: string }>(sql`SELECT id, status FROM receiving_orders WHERE id = ${orderId}`);
+  if (!ro) throw new HTTPException(404, { message: "receiving order not found" });
+  if (ro.status !== "pending") throw new HTTPException(409, { message: `cannot confirm arrival from status ${ro.status}` });
+
+  const items = tx.all<{ id: string; qty: number }>(
+    sql`SELECT rii.id, rii.qty FROM receiving_invoice_items rii
+        JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id WHERE ri.receiving_order_id = ${orderId}`
+  );
+  tx.run(sql`UPDATE receiving_orders SET status = 'in_hand', updated_at = ${now()} WHERE id = ${orderId}`);
+  for (const it of items) applyReceipt(tx, it.id, it.qty);
+  logTransition(tx, { entityType: "receiving_order", entityId: orderId, fromStatus: ro.status, toStatus: "in_hand", actorId: actorId ?? null });
+  return { fromStatus: ro.status };
 }
