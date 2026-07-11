@@ -3,7 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { sql } from "drizzle-orm";
 import type { ScanResponse } from "@warehouse/shared";
 import { db } from "../db.js";
-import { scanAllocation, removeScannedPackage } from "../db/pickScan.js";
+import { scanAllocation, removeScannedPackage, createShippingBox, cancelShippingBox } from "../db/pickScan.js";
 
 export const pickingExecutionRoute = new Hono();
 
@@ -44,5 +44,19 @@ pickingExecutionRoute.delete("/picking-orders/:id/packages/:package_id", async (
     if (!pkg || pkg.pickingOrderId !== orderId) throw new HTTPException(404, { message: "package not found in this order" });
     removeScannedPackage(tx, { packageId, actorId });
   });
+  return c.json({ ok: true }, 200);
+});
+
+pickingExecutionRoute.post("/picking-orders/:id/boxes", async (c) => {
+  const orderId = c.req.param("id");
+  let actorId: string | null = null;
+  try { actorId = (await c.req.json<{ actor_id?: string | null }>()).actor_id ?? null; } catch { /* empty body ok */ }
+  const boxId = db.transaction((tx) => createShippingBox(tx, { pickingOrderId: orderId, actorId }));
+  return c.json({ id: boxId }, 201);
+});
+
+pickingExecutionRoute.post("/picking-orders/:id/boxes/:box_id/cancel", (c) => {
+  const boxId = c.req.param("box_id");
+  db.transaction((tx) => cancelShippingBox(tx, { shippingBoxId: boxId, actorId: null }));
   return c.json({ ok: true }, 200);
 });

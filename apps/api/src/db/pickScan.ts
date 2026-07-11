@@ -163,3 +163,40 @@ export function removeScannedPackage(tx: DbOrTx, p: { packageId: string; actorId
   logTransition(tx, { entityType: "picking_item", entityId: pkg.pickingItemId, fromStatus: "scanned", toStatus: "removed",
     actorId: p.actorId ?? null, note: `qty=${pkg.qty} package=${pkg.id}` });
 }
+
+function loadOrderForWrite(tx: DbOrTx, orderId: string): { id: string; status: string } {
+  const order = tx.get<{ id: string; status: string }>(sql`SELECT id, status FROM picking_orders WHERE id = ${orderId}`);
+  if (!order) throw new HTTPException(404, { message: "picking order not found" });
+  return order;
+}
+
+function assertOrderWritable(order: { status: string }): void {
+  if (order.status === "issue") throw new HTTPException(409, { message: "picking order has an open issue" });
+  if (order.status === "finished") throw new HTTPException(409, { message: "picking order already finished" });
+}
+
+export function createShippingBox(tx: DbOrTx, a: { pickingOrderId: string; actorId?: string | null }): string {
+  const order = loadOrderForWrite(tx, a.pickingOrderId);
+  assertOrderWritable(order);
+  const id = crypto.randomUUID();
+  tx.run(
+    sql`INSERT INTO shipping_boxes (id, picking_order_id, status, created_at, updated_at)
+        VALUES (${id}, ${a.pickingOrderId}, 'open', ${now()}, ${now()})`
+  );
+  logTransition(tx, { entityType: "shipping_box", entityId: id, fromStatus: null, toStatus: "open", actorId: a.actorId ?? null,
+    note: `picking_order=${a.pickingOrderId}` });
+  return id;
+}
+
+export function cancelShippingBox(tx: DbOrTx, a: { shippingBoxId: string; actorId?: string | null }): void {
+  const box = tx.get<{ id: string; status: string; pickingOrderId: string }>(
+    sql`SELECT id, status, picking_order_id AS pickingOrderId FROM shipping_boxes WHERE id = ${a.shippingBoxId}`
+  );
+  if (!box) throw new HTTPException(404, { message: "box not found" });
+  if (box.status !== "open") throw new HTTPException(409, { message: "box is not open" });
+  const used = tx.get<{ c: number }>(sql`SELECT COUNT(*) AS c FROM picking_packages WHERE shipping_box_id = ${box.id}`)!;
+  if (used.c > 0) throw new HTTPException(409, { message: "box is not empty" });
+  tx.run(sql`DELETE FROM shipping_boxes WHERE id = ${box.id}`);
+  logTransition(tx, { entityType: "shipping_box", entityId: box.id, fromStatus: box.status, toStatus: "cancelled",
+    actorId: a.actorId ?? null, note: `picking_order=${box.pickingOrderId}` });
+}
