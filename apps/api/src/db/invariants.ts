@@ -101,11 +101,16 @@ export function deleteAllocation(tx: DbOrTx, allocationId: string): void {
 
 export function scanToPackage(
   tx: DbOrTx,
-  p: { id: string; pickingItemId: string; qty: number; sourceType: "receiving_invoice_item" | "inventory_lot"; sourceId: string }
+  p: {
+    id: string; pickingItemId: string; qty: number;
+    sourceType: "receiving_invoice_item" | "inventory_lot"; sourceId: string;
+    dateCode?: string | null; lotCode?: string | null; coo?: string | null; cow?: string | null;
+  }
 ): void {
   tx.run(
-    sql`INSERT INTO picking_packages (id, picking_item_id, source_type, source_id, qty, shipping_box_id, created_at, updated_at)
-        VALUES (${p.id}, ${p.pickingItemId}, ${p.sourceType}, ${p.sourceId}, ${p.qty}, NULL, ${now()}, ${now()})`
+    sql`INSERT INTO picking_packages (id, picking_item_id, source_type, source_id, qty, shipping_box_id, date_code, lot_code, coo, cow, created_at, updated_at)
+        VALUES (${p.id}, ${p.pickingItemId}, ${p.sourceType}, ${p.sourceId}, ${p.qty}, NULL,
+                ${p.dateCode ?? null}, ${p.lotCode ?? null}, ${p.coo ?? null}, ${p.cow ?? null}, ${now()}, ${now()})`
   );
   recomputePickingItem(tx, p.pickingItemId);
 }
