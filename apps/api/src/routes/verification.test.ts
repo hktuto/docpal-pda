@@ -28,4 +28,23 @@ test("POST /shipping-boxes/:id/verify then POST /verification-tasks/:id/complete
   assert.equal(again.status, 409);
 });
 
+test("GET /verification-tasks filters by kind/status/since; GET /:id returns detail", async () => {
+  const all = await app.request("/verification-tasks");
+  assert.equal(all.status, 200);
+  assert.equal(((await all.json()) as any[]).length >= 1, true);
+  const pre = await app.request("/verification-tasks?kind=pre_shipment");
+  assert.equal(((await pre.json()) as any[]).every((t: any) => t.kind === "pre_shipment"), true);
+  const future = await app.request("/verification-tasks?since=2999-01-01T00:00:00.000Z");
+  assert.deepEqual(await future.json(), []);
+
+  const d = await app.request("/verification-tasks/vt");
+  assert.equal(d.status, 200);
+  const detail = (await d.json()) as any;
+  assert.equal(detail.task.kind, "pre_shipment");
+  assert.equal(detail.order.ref_no, "R");
+  assert.equal(detail.boxes.length, 1);
+  const missing = await app.request("/verification-tasks/nope");
+  assert.equal(missing.status, 404);
+});
+
 test("cleanup", () => { sqlite.close(); });

@@ -42,4 +42,27 @@ test("POST /measuring-tasks/:id/complete completes and creates pre_shipment task
   assert.equal(missing.status, 404);
 });
 
+test("GET /measuring-tasks/:id returns task detail with boxes and packages", async () => {
+  const res = await app.request("/measuring-tasks/mt");
+  assert.equal(res.status, 200);
+  const d = (await res.json()) as any;
+  assert.equal(d.task.picking_order_id, "po");
+  assert.equal(d.order.ref_no, "R");
+  assert.equal(d.items.length, 1);
+  assert.equal(d.boxes.length, 1);
+  assert.equal(d.boxes[0].packages[0].part_no, "X");
+  assert.equal(d.boxes[0].packages[0].verified, 1);
+  const missing = await app.request("/measuring-tasks/nope");
+  assert.equal(missing.status, 404);
+});
+
+test("GET /measuring-tasks includes totals", async () => {
+  const res = await app.request("/measuring-tasks");
+  const rows = (await res.json()) as any[];
+  const mt = rows.find((r: any) => r.id === "mt");
+  assert.equal(mt.ref_no, "R");
+  assert.equal(mt.total_items, 4);
+  assert.equal(mt.packed_items, 4);
+});
+
 test("cleanup", () => { sqlite.close(); });

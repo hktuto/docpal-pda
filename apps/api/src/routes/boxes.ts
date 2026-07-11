@@ -48,3 +48,20 @@ boxesRoute.post("/shipping-boxes/:id/verify", (c) => {
   db.transaction((tx) => verifyShippingBox(tx, { shippingBoxId: boxId, actorId: c.req.query("actor_id") ?? null }));
   return c.json({ ok: true }, 200);
 });
+
+boxesRoute.get("/shipping-boxes/:id/for-measuring", (c) => {
+  const boxId = c.req.param("id");
+  const box = db.get<Record<string, unknown>>(sql`
+    SELECT id, picking_order_id, status, box_size, net_weight_g, gross_weight_g, destination_country, created_at, updated_at
+    FROM shipping_boxes WHERE id = ${boxId}`);
+  if (!box) throw new HTTPException(404, { message: "shipping box not found" });
+  const order = db.get<Record<string, unknown>>(sql`
+    SELECT id, ref_no, ship_to, destination_country, status FROM picking_orders WHERE id = ${box.picking_order_id}`);
+  const task = db.get<Record<string, unknown>>(sql`
+    SELECT id, status FROM measuring_tasks WHERE picking_order_id = ${box.picking_order_id}`) ?? null;
+  const packages = db.all<Record<string, unknown>>(sql`
+    SELECT pp.id, pp.picking_item_id, p.part_no, pp.qty, pp.date_code, pp.lot_code, pp.coo, pp.cow, pp.verified
+    FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id JOIN parts p ON p.id = pi.part_id
+    WHERE pp.shipping_box_id = ${boxId} ORDER BY pp.created_at ASC, pp.id ASC`);
+  return c.json({ box, order, task, packages }, 200);
+});

@@ -79,4 +79,15 @@ test("POST /shipping-boxes/:id/close closes a ready box; 409 when unverified", a
   assert.equal(bad.status, 409);
 });
 
+test("GET /shipping-boxes/:id/for-measuring returns box, order, task, packages", async () => {
+  const res = await app.request("/shipping-boxes/box/for-measuring");
+  assert.equal(res.status, 200);
+  const d = (await res.json()) as any;
+  assert.equal(d.box.picking_order_id, "po");
+  assert.equal(d.order.ref_no, "R");
+  assert.ok(Array.isArray(d.packages));
+  const missing = await app.request("/shipping-boxes/nope/for-measuring");
+  assert.equal(missing.status, 404);
+});
+
 test("cleanup", () => { sqlite.close(); });
