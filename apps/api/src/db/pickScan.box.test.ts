@@ -32,6 +32,7 @@ test("createShippingBox creates an open box + transition log; cancel removes an 
 
   db.transaction((tx) => cancelShippingBox(tx, { shippingBoxId: boxId, actorId: "u1" }));
   assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM shipping_boxes").get() as any).c, 0);
+  assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM transition_logs WHERE entity_type='shipping_box' AND to_status='cancelled'").get() as any).c, 1);
   assertInvariantsHold(db);
   sqlite.close();
 });

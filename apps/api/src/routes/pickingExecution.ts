@@ -49,14 +49,25 @@ pickingExecutionRoute.delete("/picking-orders/:id/packages/:package_id", async (
 
 pickingExecutionRoute.post("/picking-orders/:id/boxes", async (c) => {
   const orderId = c.req.param("id");
+  const raw = await c.req.text();
   let actorId: string | null = null;
-  try { actorId = (await c.req.json<{ actor_id?: string | null }>()).actor_id ?? null; } catch { /* empty body ok */ }
+  if (raw.trim() !== "") {
+    let body: { actor_id?: string | null };
+    try { body = JSON.parse(raw); } catch { throw new HTTPException(400, { message: "invalid JSON body" }); }
+    actorId = body.actor_id ?? null;
+  }
   const boxId = db.transaction((tx) => createShippingBox(tx, { pickingOrderId: orderId, actorId }));
   return c.json({ id: boxId }, 201);
 });
 
 pickingExecutionRoute.post("/picking-orders/:id/boxes/:box_id/cancel", (c) => {
+  const orderId = c.req.param("id");
   const boxId = c.req.param("box_id");
-  db.transaction((tx) => cancelShippingBox(tx, { shippingBoxId: boxId, actorId: null }));
+  const actorId = c.req.query("actor_id") ?? null;
+  db.transaction((tx) => {
+    const box = tx.get<{ pickingOrderId: string }>(sql`SELECT picking_order_id AS pickingOrderId FROM shipping_boxes WHERE id = ${boxId}`);
+    if (!box || box.pickingOrderId !== orderId) throw new HTTPException(404, { message: "box not found in this order" });
+    cancelShippingBox(tx, { shippingBoxId: boxId, actorId });
+  });
   return c.json({ ok: true }, 200);
 });
