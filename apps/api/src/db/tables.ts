@@ -138,7 +138,7 @@ CREATE TABLE IF NOT EXISTS verification_tasks (
 CREATE INDEX IF NOT EXISTS verification_tasks_kind_status_updated_idx ON verification_tasks(kind, status, updated_at);
 CREATE INDEX IF NOT EXISTS verification_tasks_picking_order_idx ON verification_tasks(picking_order_id);
 CREATE INDEX IF NOT EXISTS verification_tasks_shelf_box_idx ON verification_tasks(shelf_box_id);
-CREATE UNIQUE INDEX IF NOT EXISTS verification_tasks_cycle_coalesce_uq ON verification_tasks(kind, shelf_box_id, date(due_at));
+CREATE UNIQUE INDEX IF NOT EXISTS verification_tasks_cycle_coalesce_uq ON verification_tasks(kind, shelf_box_id, date(due_at)) WHERE kind = 'cycle_count' AND status = 'pending';
 CREATE UNIQUE INDEX IF NOT EXISTS verification_tasks_preship_pending_uq ON verification_tasks(picking_order_id) WHERE kind='pre_shipment' AND status='pending';
 
 CREATE TABLE IF NOT EXISTS transition_logs (
@@ -167,5 +167,9 @@ export function createTables(sqlite: DatabaseType): void {
   ensureColumn(sqlite, "picking_items", "line_id", "line_id TEXT");
   ensureColumn(sqlite, "shelf_boxes", "receiving_order_id", "receiving_order_id TEXT REFERENCES receiving_orders(id)");
   ensureColumn(sqlite, "shelf_boxes", "status", "status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','closed','verified'))");
+  // The cycle-coalesce index became partial (pending-only). A stale dev.sqlite still
+  // holds the old non-partial definition, which CREATE ... IF NOT EXISTS would keep,
+  // so drop it first and let the DDL recreate it (cheap at demo scale).
+  sqlite.exec("DROP INDEX IF EXISTS verification_tasks_cycle_coalesce_uq");
   sqlite.exec(createTablesSql);
 }

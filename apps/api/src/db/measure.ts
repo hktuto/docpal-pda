@@ -159,6 +159,7 @@ export function completeVerificationTask(tx: DbOrTx, a: { verificationTaskId: st
     if (!task.shelfBoxId) throw new HTTPException(409, { message: "cycle_count task has no shelf box" });
     const box = tx.get<{ id: string; status: string }>(sql`SELECT id, status FROM shelf_boxes WHERE id = ${task.shelfBoxId}`);
     if (!box) throw new HTTPException(404, { message: "shelf box not found" });
+    if (box.status !== "closed") throw new HTTPException(409, { message: "shelf box is not closed" });
     const unverified = tx.get<{ c: number }>(
       sql`SELECT COUNT(*) AS c FROM put_away_scans WHERE shelf_box_id = ${box.id} AND verified = 0`
     )!;

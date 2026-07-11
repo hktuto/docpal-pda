@@ -94,7 +94,7 @@ function nextMorning(): string {
 export function scheduleCycleCount(tx: DbOrTx, shelfBoxId: string): void {
   const dueAt = nextMorning();
   const existing = tx.get<{ id: string }>(
-    sql`SELECT id FROM verification_tasks WHERE kind = 'cycle_count' AND shelf_box_id = ${shelfBoxId} AND date(due_at) = date(${dueAt})`
+    sql`SELECT id FROM verification_tasks WHERE kind = 'cycle_count' AND shelf_box_id = ${shelfBoxId} AND status = 'pending' AND date(due_at) = date(${dueAt})`
   );
   if (existing) return; // one task per box per day
   tx.run(

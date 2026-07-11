@@ -8,7 +8,7 @@ import { createDb } from "./client.js";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema/index.js";
 import { createTables } from "./tables.js";
-import { verifyShelfBoxItem } from "./putAway.js";
+import { verifyShelfBoxItem, scheduleCycleCount } from "./putAway.js";
 import { completeVerificationTask } from "./measure.js";
 import { assertInvariantsHold } from "./invariants.guard.js";
 
@@ -88,6 +88,48 @@ test("completeVerificationTask(cycle_count) completes task and marks box verifie
   assert.equal((sqlite.prepare("SELECT status FROM verification_tasks WHERE id='vt'").get() as any).status, "completed");
   assert.equal((sqlite.prepare("SELECT status FROM shelf_boxes WHERE id='box'").get() as any).status, "verified");
   assertInvariantsHold(db);
+  sqlite.close();
+});
+
+test("same-day complete + restock creates a new pending task and resets the box", () => {
+  const { sqlite, db } = makeDb();
+  // align the seeded task's due date with scheduleCycleCount's nextMorning() (local tomorrow 09:00)
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(9, 0, 0, 0);
+  sqlite.prepare("UPDATE verification_tasks SET due_at=? WHERE id='vt'").run(d.toISOString());
+  db.transaction((tx) => {
+    verifyShelfBoxItem(tx, { shelfBoxId: "box", partId: "p" });
+    verifyShelfBoxItem(tx, { shelfBoxId: "box", partId: "p2" });
+    completeVerificationTask(tx, { verificationTaskId: "vt", actorId: "u1" });
+  });
+  assert.equal((sqlite.prepare("SELECT status FROM shelf_boxes WHERE id='box'").get() as any).status, "verified");
+  // same-day stock change must schedule a NEW task (completed same-day task must not coalesce)
+  db.transaction((tx) => scheduleCycleCount(tx, "box"));
+  const counts = sqlite.prepare(
+    "SELECT SUM(status='pending') AS pending, SUM(status='completed') AS completed FROM verification_tasks WHERE kind='cycle_count' AND shelf_box_id='box'"
+  ).get() as any;
+  assert.equal(counts.pending, 1);
+  assert.equal(counts.completed, 1);
+  assert.equal((sqlite.prepare("SELECT status FROM shelf_boxes WHERE id='box'").get() as any).status, "closed");
+  assert.equal((sqlite.prepare("SELECT COUNT(*) AS c FROM put_away_scans WHERE shelf_box_id='box' AND verified=1").get() as any).c, 0);
+  assertInvariantsHold(db);
+  sqlite.close();
+});
+
+test("completeVerificationTask(cycle_count) 409s when the box is not closed", () => {
+  const { sqlite, db } = makeDb();
+  db.transaction((tx) => {
+    verifyShelfBoxItem(tx, { shelfBoxId: "box", partId: "p" });
+    verifyShelfBoxItem(tx, { shelfBoxId: "box", partId: "p2" });
+  });
+  for (const status of ["open", "verified"]) {
+    sqlite.exec(`UPDATE shelf_boxes SET status='${status}' WHERE id='box'`);
+    assert.throws(
+      () => db.transaction((tx) => completeVerificationTask(tx, { verificationTaskId: "vt", actorId: "u1" })),
+      (e: any) => e.status === 409,
+    );
+  }
   sqlite.close();
 });
 
