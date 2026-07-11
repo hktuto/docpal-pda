@@ -34,4 +34,29 @@ test("PATCH /shipping-boxes/:id sets measurements; 404 missing; 400 bad json", a
   assert.equal(bad.status, 400);
 });
 
+test("POST /shipping-boxes/:id/verify-package verifies; wrong box 404; missing package_id 400", async () => {
+  sqlite.exec(`
+    INSERT INTO parts (id, part_no, part_no_norm, created_at, updated_at) VALUES ('p','X','X','0','0');
+    INSERT INTO picking_items (id, picking_order_id, part_id, qty, picked_qty, created_at, updated_at) VALUES ('pi','po','p',4,4,'0','0');
+    INSERT INTO picking_packages (id, picking_item_id, source_type, source_id, qty, shipping_box_id, created_at, updated_at)
+      VALUES ('pp','pi','inventory_lot','lot',4,'box','0','0');
+    INSERT INTO measuring_tasks (id, picking_order_id, status, created_at, updated_at) VALUES ('mt','po','pending','0','0');
+    INSERT INTO shipping_boxes (id, picking_order_id, status, created_at, updated_at) VALUES ('box2','po','open','0','0');
+  `);
+  const ok = await app.request("/shipping-boxes/box/verify-package", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ package_id: "pp" }),
+  });
+  assert.equal(ok.status, 200);
+  assert.equal((sqlite.prepare("SELECT verified FROM picking_packages WHERE id='pp'").get() as any).verified, 1);
+
+  const wrong = await app.request("/shipping-boxes/box2/verify-package", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ package_id: "pp" }),
+  });
+  assert.equal(wrong.status, 404);
+  const bad = await app.request("/shipping-boxes/box/verify-package", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}),
+  });
+  assert.equal(bad.status, 400);
+});
+
 test("cleanup", () => { sqlite.close(); });

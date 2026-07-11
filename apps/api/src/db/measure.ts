@@ -52,3 +52,21 @@ export function updateShippingBoxMeasurements(
         WHERE id = ${box.id}`
   );
 }
+
+export function verifyPackage(tx: DbOrTx, a: { packageId: string; actorId?: string | null }): void {
+  const pkg = tx.get<{ id: string; shippingBoxId: string | null; verified: number; qty: number; pickingOrderId: string }>(
+    sql`SELECT pp.id, pp.shipping_box_id AS shippingBoxId, pp.verified, pp.qty, pi.picking_order_id AS pickingOrderId
+        FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id WHERE pp.id = ${a.packageId}`
+  );
+  if (!pkg) throw new HTTPException(404, { message: "package not found" });
+  if (pkg.shippingBoxId === null) throw new HTTPException(409, { message: "package is not in a box" });
+  const box = loadBox(tx, pkg.shippingBoxId);
+  if (box.status !== "open") throw new HTTPException(409, { message: "box is not open" });
+  const task = tx.get<{ status: string }>(sql`SELECT status FROM measuring_tasks WHERE picking_order_id = ${pkg.pickingOrderId}`);
+  if (!task || task.status !== "pending") throw new HTTPException(409, { message: "measuring task is not pending" });
+  if (pkg.verified) throw new HTTPException(409, { message: "package already verified" });
+
+  tx.run(sql`UPDATE picking_packages SET verified = 1, updated_at = ${now()} WHERE id = ${pkg.id}`);
+  logTransition(tx, { entityType: "picking_package", entityId: pkg.id, fromStatus: "unverified", toStatus: "verified",
+    actorId: a.actorId ?? null, note: `qty=${pkg.qty} box=${box.id}` });
+}

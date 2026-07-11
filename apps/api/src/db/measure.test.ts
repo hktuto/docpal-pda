@@ -7,7 +7,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema/index.js";
 import { createDb } from "./client.js";
 import { createTables } from "./tables.js";
-import { updateShippingBoxMeasurements } from "./measure.js";
+import { updateShippingBoxMeasurements, verifyPackage } from "./measure.js";
 import { assertInvariantsHold } from "./invariants.guard.js";
 
 function makeDb() {
@@ -46,5 +46,45 @@ test("measurement guards: 404 missing, 400 bad weight, 409 closed box", () => {
   assert.throws(() => db.transaction((tx) => updateShippingBoxMeasurements(tx, { shippingBoxId: "box", fields: { grossWeightG: -1 } })), (e: any) => e.status === 400);
   sqlite.prepare("UPDATE shipping_boxes SET status='closed'").run();
   assert.throws(() => db.transaction((tx) => updateShippingBoxMeasurements(tx, { shippingBoxId: "box", fields: { boxSize: "x" } })), (e: any) => e.status === 409);
+  sqlite.close();
+});
+
+// extra seed helper for package-verify tests (call inside each test after makeDb)
+function seedPackableBox(sqlite: any) {
+  sqlite.exec(`
+    INSERT INTO parts (id, part_no, part_no_norm, created_at, updated_at) VALUES ('p','X','X','0','0');
+    INSERT INTO picking_items (id, picking_order_id, part_id, qty, picked_qty, created_at, updated_at) VALUES ('pi','po','p',4,4,'0','0');
+    INSERT INTO picking_packages (id, picking_item_id, source_type, source_id, qty, shipping_box_id, created_at, updated_at)
+      VALUES ('pp','pi','inventory_lot','lot',4,'box','0','0');
+    INSERT INTO measuring_tasks (id, picking_order_id, status, created_at, updated_at) VALUES ('mt','po','pending','0','0');
+  `);
+}
+
+test("verifyPackage marks the package verified + logs transition", () => {
+  const { sqlite, db } = makeDb();
+  seedPackableBox(sqlite);
+  db.transaction((tx) => verifyPackage(tx, { packageId: "pp", actorId: "u1" }));
+  assert.equal((sqlite.prepare("SELECT verified FROM picking_packages WHERE id='pp'").get() as any).verified, 1);
+  const logs = sqlite.prepare("SELECT entity_type, from_status, to_status, actor_id FROM transition_logs WHERE entity_type='picking_package'").all() as any[];
+  assert.deepEqual(logs, [{ entity_type: "picking_package", from_status: "unverified", to_status: "verified", actor_id: "u1" }]);
+  assertInvariantsHold(db);
+  sqlite.close();
+});
+
+test("verifyPackage guards: 404 missing, 409 not in box, 409 box closed, 409 task not pending, 409 already verified", () => {
+  const { sqlite, db } = makeDb();
+  seedPackableBox(sqlite);
+  assert.throws(() => db.transaction((tx) => verifyPackage(tx, { packageId: "nope" })), (e: any) => e.status === 404);
+  sqlite.prepare("UPDATE picking_packages SET shipping_box_id=NULL").run();
+  assert.throws(() => db.transaction((tx) => verifyPackage(tx, { packageId: "pp" })), (e: any) => e.status === 409);
+  sqlite.prepare("UPDATE picking_packages SET shipping_box_id='box'").run();
+  sqlite.prepare("UPDATE shipping_boxes SET status='closed'").run();
+  assert.throws(() => db.transaction((tx) => verifyPackage(tx, { packageId: "pp" })), (e: any) => e.status === 409);
+  sqlite.prepare("UPDATE shipping_boxes SET status='open'").run();
+  sqlite.prepare("UPDATE measuring_tasks SET status='completed'").run();
+  assert.throws(() => db.transaction((tx) => verifyPackage(tx, { packageId: "pp" })), (e: any) => e.status === 409);
+  sqlite.prepare("UPDATE measuring_tasks SET status='pending'").run();
+  sqlite.prepare("UPDATE picking_packages SET verified=1").run();
+  assert.throws(() => db.transaction((tx) => verifyPackage(tx, { packageId: "pp" })), (e: any) => e.status === 409);
   sqlite.close();
 });
