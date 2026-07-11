@@ -16,7 +16,14 @@ pickingRoute.put("/picking-orders/:external_id", async (c) => {
     throw new HTTPException(400, { message: "invalid JSON body" });
   }
   const result = db.transaction((tx) => upsertPickingOrder(tx, externalId, body));
-  if (result.changed) allocatePickingOrder(db, result.orderId);
+  // Allocation is best-effort and recomputable; it must never misreport a committed upsert.
+  if (result.changed) {
+    try {
+      allocatePickingOrder(db, result.orderId);
+    } catch (err) {
+      console.error("allocatePickingOrder after picking upsert failed", err);
+    }
+  }
   const res: IngestUpsertResponse = { id: result.orderId, external_id: externalId, created: result.created, changed: result.changed };
   return c.json(res, result.created ? 201 : 200);
 });
