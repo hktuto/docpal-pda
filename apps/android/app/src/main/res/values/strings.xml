@@ -38,4 +38,9 @@
     <string name="error_invalid_credentials">Invalid username or password</string>
     <string name="common_loading">Loading…</string>
     <string name="common_coming_soon">Coming in a later phase</string>
+
+    <string name="camera_cancel">Cancel</string>
+    <string name="camera_capture">Capture</string>
+    <string name="camera_toggle_flash">Toggle flash</string>
+    <string name="camera_use_full_image">Use full image</string>
 </resources>

@@ -38,4 +38,9 @@
     <string name="error_invalid_credentials">用戶名稱或密碼不正確</string>
     <string name="common_loading">載入中…</string>
     <string name="common_coming_soon">即將在後續階段推出</string>
+
+    <string name="camera_cancel">取消</string>
+    <string name="camera_capture">拍照</string>
+    <string name="camera_toggle_flash">切換閃光燈</string>
+    <string name="camera_use_full_image">使用整張圖片</string>
 </resources>
