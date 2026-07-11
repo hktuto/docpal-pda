@@ -220,8 +220,12 @@ export function removeScanFromBox(tx: DbOrTx, a: { scanId: string; actorId?: str
           AND il.coo IS ${scan.coo} AND il.cow IS ${scan.cow}`
   );
   if (src) {
-    const lot = tx.get<{ total: number; allocated: number }>(sql`SELECT total_qty AS total, allocated_qty AS allocated FROM inventory_lots WHERE id = ${src.lotId}`)!;
-    if (lot.allocated > 0) throw new HTTPException(409, { message: "lot has active allocations" });
+    const lot = tx.get<{ total: number }>(sql`SELECT total_qty AS total FROM inventory_lots WHERE id = ${src.lotId}`)!;
+    // any pick-allocation row (even fully picked, qty 0) means the box contents no longer map to this scan — refuse
+    const hasAllocations = tx.get<{ n: number }>(
+      sql`SELECT COUNT(*) AS n FROM allocations WHERE inventory_lot_id = ${src.lotId}`
+    )!.n;
+    if (hasAllocations > 0) throw new HTTPException(409, { message: "lot has pick allocations" });
     if (src.qty - scan.qty <= 0) tx.run(sql`DELETE FROM inventory_lot_sources WHERE id = ${src.id}`);
     else tx.run(sql`UPDATE inventory_lot_sources SET qty = qty - ${scan.qty}, updated_at = ${now()} WHERE id = ${src.id}`);
     if (lot.total - scan.qty <= 0) tx.run(sql`DELETE FROM inventory_lots WHERE id = ${src.lotId}`);

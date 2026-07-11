@@ -214,15 +214,38 @@ test("removeScanFromBox reverses only the matching attribute lot when a box hold
   sqlite.close();
 });
 
-test("removeScanFromBox 409s when the lot has active allocations (lot untouched)", () => {
+test("removeScanFromBox 409s when the lot has pick allocations (lot untouched)", () => {
   const { sqlite, db } = makeDb();
   seedReceivableItem(sqlite);
   const { id: scanId } = db.transaction((tx) => recordPutAwayScan(tx, { receivingInvoiceItemId: "rii", qty: 5 }));
   const { id: boxId } = db.transaction((tx) => createShelfBox(tx, { receivingOrderId: "ro", shelfCode: "A1" }));
   db.transaction((tx) => assignScanToBox(tx, { scanId, shelfBoxId: boxId }));
   sqlite.prepare("UPDATE inventory_lots SET allocated_qty = 2 WHERE box_id=?").run(boxId);
+  sqlite.exec(`
+    INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('po','e','PO-1','picking','0','0');
+    INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('pi','po','p',2,'0','0');
+    INSERT INTO allocations (id, picking_item_id, qty, inventory_lot_id, created_at, updated_at)
+      SELECT 'alloc','pi',2,id,'0','0' FROM inventory_lots WHERE box_id='${boxId}';
+  `);
   assert.throws(() => db.transaction((tx) => removeScanFromBox(tx, { scanId })), (e: any) => e.status === 409);
   const lot = sqlite.prepare("SELECT total_qty, allocated_qty FROM inventory_lots WHERE box_id=?").get(boxId) as any;
   assert.deepEqual(lot, { total_qty: 5, allocated_qty: 2 });
+  sqlite.close();
+});
+
+test("removeScanFromBox 409s on a fully-picked allocation residue (qty 0 row still references the lot)", () => {
+  const { sqlite, db } = makeDb();
+  seedReceivableItem(sqlite);
+  const { id: scanId } = db.transaction((tx) => recordPutAwayScan(tx, { receivingInvoiceItemId: "rii", qty: 5 }));
+  const { id: boxId } = db.transaction((tx) => createShelfBox(tx, { receivingOrderId: "ro", shelfCode: "A1" }));
+  db.transaction((tx) => assignScanToBox(tx, { scanId, shelfBoxId: boxId }));
+  sqlite.exec(`
+    INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('po','e','PO-1','picking','0','0');
+    INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('pi','po','p',5,'0','0');
+    INSERT INTO allocations (id, picking_item_id, qty, inventory_lot_id, created_at, updated_at)
+      SELECT 'alloc','pi',0,id,'0','0' FROM inventory_lots WHERE box_id='${boxId}';
+  `);
+  assert.throws(() => db.transaction((tx) => removeScanFromBox(tx, { scanId })), (e: any) => e.status === 409 && /pick allocations/.test(e.message));
+  assert.equal((sqlite.prepare("SELECT total_qty FROM inventory_lots WHERE box_id=?").get(boxId) as any).total_qty, 5);
   sqlite.close();
 });
