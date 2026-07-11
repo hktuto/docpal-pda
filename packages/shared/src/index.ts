@@ -25,4 +25,5 @@ export interface PickingPutItem {
 export interface PickingPutBody { order: PickingPutOrder; items: PickingPutItem[]; }
 export interface IngestUpsertResponse { id: string; external_id: string; created: boolean; changed: boolean; }
 export interface ConfirmArrivalResponse { id: string; status: "in_hand"; }
+export interface ScanResponse { package_ids: string[]; }
 export interface ApiErrorBody { error: string; }

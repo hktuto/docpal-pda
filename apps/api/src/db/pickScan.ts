@@ -3,8 +3,11 @@ import { HTTPException } from "hono/http-exception";
 import {
   type DbOrTx,
   applyPick,
+  createAllocation,
+  linkAllocation,
   recomputeLot,
   recomputePickingItem,
+  recomputeReceivingItem,
   scanToPackage,
 } from "./invariants.js";
 import { now } from "./now.js";
@@ -92,4 +95,70 @@ export function scanAllocation(
     actorId: a.actorId ?? null, note: `qty=${a.qty} allocation=${alloc.id}` });
 
   return { packageIds };
+}
+
+export function removeScannedPackage(tx: DbOrTx, p: { packageId: string; actorId?: string | null }): void {
+  const pkg = tx.get<{ id: string; pickingItemId: string; sourceType: string; sourceId: string; qty: number; shippingBoxId: string | null }>(
+    sql`SELECT id, picking_item_id AS pickingItemId, source_type AS sourceType, source_id AS sourceId, qty, shipping_box_id AS shippingBoxId
+        FROM picking_packages WHERE id = ${p.packageId}`
+  );
+  if (!pkg) throw new HTTPException(404, { message: "package not found" });
+  if (pkg.shippingBoxId !== null) throw new HTTPException(409, { message: "package already in a box" });
+
+  const item = tx.get<{ id: string; pickingOrderId: string }>(
+    sql`SELECT id, picking_order_id AS pickingOrderId FROM picking_items WHERE id = ${pkg.pickingItemId}`
+  )!;
+  const order = tx.get<{ status: string }>(sql`SELECT status FROM picking_orders WHERE id = ${item.pickingOrderId}`)!;
+  if (order.status === "issue") throw new HTTPException(409, { message: "picking order has an open issue" });
+
+  if (pkg.sourceType === "inventory_lot") {
+    const lot = tx.get<{ id: string }>(sql`SELECT id FROM inventory_lots WHERE id = ${pkg.sourceId}`);
+    if (!lot) throw new HTTPException(404, { message: "inventory lot not found" });
+    tx.run(sql`UPDATE inventory_lots SET total_qty = total_qty + ${pkg.qty}, updated_at = ${now()} WHERE id = ${lot.id}`);
+    const existing = tx.get<{ id: string }>(
+      sql`SELECT id FROM allocations WHERE picking_item_id = ${pkg.pickingItemId} AND inventory_lot_id = ${lot.id}`
+    );
+    if (existing) {
+      tx.run(sql`UPDATE allocations SET qty = qty + ${pkg.qty}, updated_at = ${now()} WHERE id = ${existing.id}`);
+      recomputePickingItem(tx, pkg.pickingItemId);
+      recomputeLot(tx, lot.id);
+    } else {
+      createAllocation(tx, { id: crypto.randomUUID(), pickingItemId: pkg.pickingItemId, qty: pkg.qty, inventoryLotId: lot.id });
+    }
+  } else if (pkg.sourceType === "receiving_invoice_item") {
+    const rii = tx.get<{ pickedQty: number; receivingOrderId: string }>(
+      sql`SELECT rii.picked_qty AS pickedQty, ri.receiving_order_id AS receivingOrderId
+          FROM receiving_invoice_items rii JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+          WHERE rii.id = ${pkg.sourceId}`
+    );
+    if (!rii) throw new HTTPException(404, { message: "receiving invoice item not found" });
+    tx.run(sql`UPDATE receiving_invoice_items SET picked_qty = picked_qty - ${pkg.qty}, updated_at = ${now()} WHERE id = ${pkg.sourceId}`);
+    let allocation = tx.get<{ id: string }>(
+      sql`SELECT id FROM allocations WHERE picking_item_id = ${pkg.pickingItemId} AND receiving_order_id = ${rii.receivingOrderId}`
+    );
+    let allocationId: string;
+    if (allocation) {
+      tx.run(sql`UPDATE allocations SET qty = qty + ${pkg.qty}, updated_at = ${now()} WHERE id = ${allocation.id}`);
+      allocationId = allocation.id;
+    } else {
+      allocationId = crypto.randomUUID();
+      createAllocation(tx, { id: allocationId, pickingItemId: pkg.pickingItemId, qty: pkg.qty, receivingOrderId: rii.receivingOrderId });
+    }
+    const link = tx.get<{ id: string }>(
+      sql`SELECT id FROM allocation_receiving_items WHERE allocation_id = ${allocationId} AND receiving_invoice_item_id = ${pkg.sourceId}`
+    );
+    if (link) {
+      tx.run(sql`UPDATE allocation_receiving_items SET qty = qty + ${pkg.qty}, updated_at = ${now()} WHERE id = ${link.id}`);
+    } else {
+      linkAllocation(tx, { id: crypto.randomUUID(), allocationId, receivingInvoiceItemId: pkg.sourceId, qty: pkg.qty });
+    }
+    recomputeReceivingItem(tx, pkg.sourceId);
+  } else {
+    throw new HTTPException(409, { message: "unknown package source type" });
+  }
+
+  tx.run(sql`DELETE FROM picking_packages WHERE id = ${pkg.id}`);
+  recomputePickingItem(tx, pkg.pickingItemId);
+  logTransition(tx, { entityType: "picking_item", entityId: pkg.pickingItemId, fromStatus: "scanned", toStatus: "removed",
+    actorId: p.actorId ?? null, note: `qty=${pkg.qty} package=${pkg.id}` });
 }
