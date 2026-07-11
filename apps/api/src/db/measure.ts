@@ -131,3 +131,36 @@ export function completeMeasuringTask(tx: DbOrTx, a: { measuringTaskId: string; 
     );
   }
 }
+
+export function verifyShippingBox(tx: DbOrTx, a: { shippingBoxId: string; actorId?: string | null }): void {
+  const box = loadBox(tx, a.shippingBoxId);
+  if (box.status !== "closed") throw new HTTPException(409, { message: "box is not closed" });
+  const task = tx.get<{ id: string }>(
+    sql`SELECT id FROM verification_tasks
+        WHERE kind = 'pre_shipment' AND picking_order_id = ${box.pickingOrderId} AND status = 'pending'`
+  );
+  if (!task) throw new HTTPException(409, { message: "no pending verification task for this order" });
+  const unverified = tx.get<{ c: number }>(
+    sql`SELECT COUNT(*) AS c FROM picking_packages WHERE shipping_box_id = ${box.id} AND verified = 0`
+  )!;
+  if (unverified.c > 0) throw new HTTPException(409, { message: "all packages must be verified" });
+
+  tx.run(sql`UPDATE shipping_boxes SET status = 'verified', updated_at = ${now()} WHERE id = ${box.id}`);
+  logTransition(tx, { entityType: "shipping_box", entityId: box.id, fromStatus: "closed", toStatus: "verified", actorId: a.actorId ?? null });
+}
+
+export function completeVerificationTask(tx: DbOrTx, a: { verificationTaskId: string; actorId?: string | null }): void {
+  const task = tx.get<{ id: string; kind: string; status: string; pickingOrderId: string | null }>(
+    sql`SELECT id, kind, status, picking_order_id AS pickingOrderId FROM verification_tasks WHERE id = ${a.verificationTaskId}`
+  );
+  if (!task) throw new HTTPException(404, { message: "verification task not found" });
+  if (task.kind !== "pre_shipment") throw new HTTPException(409, { message: "only pre_shipment tasks can be completed here" });
+  if (task.status !== "pending") throw new HTTPException(409, { message: "verification task is not pending" });
+  const notVerified = tx.get<{ c: number }>(
+    sql`SELECT COUNT(*) AS c FROM shipping_boxes WHERE picking_order_id = ${task.pickingOrderId} AND status != 'verified'`
+  )!;
+  if (notVerified.c > 0) throw new HTTPException(409, { message: "all shipping boxes must be verified" });
+
+  tx.run(sql`UPDATE verification_tasks SET status = 'completed', updated_at = ${now()} WHERE id = ${task.id}`);
+  logTransition(tx, { entityType: "verification_task", entityId: task.id, fromStatus: "pending", toStatus: "completed", actorId: a.actorId ?? null });
+}

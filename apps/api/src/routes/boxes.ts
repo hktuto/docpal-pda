@@ -3,7 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { sql } from "drizzle-orm";
 import type { UpdateShippingBoxRequest, VerifyPackageRequest } from "@warehouse/shared";
 import { db } from "../db.js";
-import { updateShippingBoxMeasurements, verifyPackage, closeShippingBox } from "../db/measure.js";
+import { updateShippingBoxMeasurements, verifyPackage, closeShippingBox, verifyShippingBox } from "../db/measure.js";
 
 export const boxesRoute = new Hono();
 
@@ -40,5 +40,11 @@ boxesRoute.post("/shipping-boxes/:id/verify-package", async (c) => {
 boxesRoute.post("/shipping-boxes/:id/close", (c) => {
   const boxId = c.req.param("id");
   db.transaction((tx) => closeShippingBox(tx, { shippingBoxId: boxId, actorId: c.req.query("actor_id") ?? null }));
+  return c.json({ ok: true }, 200);
+});
+
+boxesRoute.post("/shipping-boxes/:id/verify", (c) => {
+  const boxId = c.req.param("id");
+  db.transaction((tx) => verifyShippingBox(tx, { shippingBoxId: boxId, actorId: c.req.query("actor_id") ?? null }));
   return c.json({ ok: true }, 200);
 });

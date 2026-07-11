@@ -7,7 +7,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema/index.js";
 import { createDb } from "./client.js";
 import { createTables } from "./tables.js";
-import { completeMeasuringTask } from "./measure.js";
+import { completeMeasuringTask, verifyShippingBox, completeVerificationTask } from "./measure.js";
 import { assertInvariantsHold } from "./invariants.guard.js";
 
 function makeDb() {
@@ -50,5 +50,49 @@ test("completeMeasuringTask guards: 404 missing, 409 open box, 409 under-packed 
   sqlite.prepare("UPDATE shipping_boxes SET status='closed'").run();
   sqlite.prepare("UPDATE picking_packages SET qty=3").run(); // packed 3 != picked 4
   assert.throws(() => db.transaction((tx) => completeMeasuringTask(tx, { measuringTaskId: "mt" })), (e: any) => e.status === 409);
+  sqlite.close();
+});
+
+function seedPreShipment(sqlite: any) {
+  // measuring already completed; one closed box with a verified package; pending pre_shipment task
+  sqlite.exec(`
+    UPDATE measuring_tasks SET status='completed';
+    INSERT INTO verification_tasks (id, kind, status, picking_order_id, created_at, updated_at) VALUES ('vt','pre_shipment','pending','po','0','0');
+  `);
+}
+
+test("verifyShippingBox marks a closed box verified; completeVerificationTask completes when all boxes verified", () => {
+  const { sqlite, db } = makeDb();
+  seedPreShipment(sqlite);
+  db.transaction((tx) => verifyShippingBox(tx, { shippingBoxId: "box", actorId: "u1" }));
+  assert.equal((sqlite.prepare("SELECT status FROM shipping_boxes WHERE id='box'").get() as any).status, "verified");
+  assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM transition_logs WHERE entity_type='shipping_box' AND to_status='verified'").get() as any).c, 1);
+
+  db.transaction((tx) => completeVerificationTask(tx, { verificationTaskId: "vt", actorId: "u1" }));
+  assert.equal((sqlite.prepare("SELECT status FROM verification_tasks WHERE id='vt'").get() as any).status, "completed");
+  assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM transition_logs WHERE entity_type='verification_task' AND to_status='completed'").get() as any).c, 1);
+  assertInvariantsHold(db);
+  sqlite.close();
+});
+
+test("verify/complete guards: box must be closed, task must be pending, all boxes verified before completion", () => {
+  const { sqlite, db } = makeDb();
+  seedPreShipment(sqlite);
+  // box still open -> 409
+  sqlite.prepare("UPDATE shipping_boxes SET status='open'").run();
+  assert.throws(() => db.transaction((tx) => verifyShippingBox(tx, { shippingBoxId: "box" })), (e: any) => e.status === 409);
+  sqlite.prepare("UPDATE shipping_boxes SET status='closed'").run();
+  // unverified package -> 409
+  sqlite.prepare("UPDATE picking_packages SET verified=0").run();
+  assert.throws(() => db.transaction((tx) => verifyShippingBox(tx, { shippingBoxId: "box" })), (e: any) => e.status === 409);
+  sqlite.prepare("UPDATE picking_packages SET verified=1").run();
+  // complete before box verified -> 409
+  assert.throws(() => db.transaction((tx) => completeVerificationTask(tx, { verificationTaskId: "vt" })), (e: any) => e.status === 409);
+  // missing task -> 404; missing box -> 404
+  assert.throws(() => db.transaction((tx) => completeVerificationTask(tx, { verificationTaskId: "nope" })), (e: any) => e.status === 404);
+  assert.throws(() => db.transaction((tx) => verifyShippingBox(tx, { shippingBoxId: "nope" })), (e: any) => e.status === 404);
+  // no pending pre_shipment task for the order -> 409
+  sqlite.prepare("UPDATE verification_tasks SET status='completed'").run();
+  assert.throws(() => db.transaction((tx) => verifyShippingBox(tx, { shippingBoxId: "box" })), (e: any) => e.status === 409);
   sqlite.close();
 });
