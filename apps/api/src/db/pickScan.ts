@@ -12,6 +12,7 @@ import {
   scanToPackage,
 } from "./invariants.js";
 import { now } from "./now.js";
+import { scheduleCycleCount } from "./putAway.js";
 import { logTransition } from "../ingest/transition.js";
 
 function reduceAllocation(tx: DbOrTx, allocationId: string, qty: number): void {
@@ -52,11 +53,12 @@ export function scanAllocation(
   const packageIds: string[] = [];
 
   if (alloc.lotId) {
-    const lot = tx.get<{ id: string; totalQty: number; dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null }>(
-      sql`SELECT id, total_qty AS totalQty, date_code AS dateCode, lot_code AS lotCode, coo, cow FROM inventory_lots WHERE id = ${alloc.lotId}`
+    const lot = tx.get<{ id: string; totalQty: number; dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null; boxId: string | null }>(
+      sql`SELECT id, total_qty AS totalQty, date_code AS dateCode, lot_code AS lotCode, coo, cow, box_id AS boxId FROM inventory_lots WHERE id = ${alloc.lotId}`
     )!;
     if (lot.totalQty < a.qty) throw new HTTPException(409, { message: "insufficient lot quantity" });
     tx.run(sql`UPDATE inventory_lots SET total_qty = total_qty - ${a.qty}, updated_at = ${now()} WHERE id = ${lot.id}`);
+    if (lot.boxId) scheduleCycleCount(tx, lot.boxId);
     reduceAllocation(tx, alloc.id, a.qty); // allocations.qty -= qty; recomputeLot -> allocated = Σ allocations
     const pid = crypto.randomUUID();
     scanToPackage(tx, { id: pid, pickingItemId: item.id, qty: a.qty, sourceType: "inventory_lot", sourceId: lot.id,
@@ -114,9 +116,10 @@ export function removeScannedPackage(tx: DbOrTx, p: { packageId: string; actorId
   if (order.status === "finished") throw new HTTPException(409, { message: "picking order already finished" });
 
   if (pkg.sourceType === "inventory_lot") {
-    const lot = tx.get<{ id: string }>(sql`SELECT id FROM inventory_lots WHERE id = ${pkg.sourceId}`);
+    const lot = tx.get<{ id: string; boxId: string | null }>(sql`SELECT id, box_id AS boxId FROM inventory_lots WHERE id = ${pkg.sourceId}`);
     if (!lot) throw new HTTPException(404, { message: "inventory lot not found" });
     tx.run(sql`UPDATE inventory_lots SET total_qty = total_qty + ${pkg.qty}, updated_at = ${now()} WHERE id = ${lot.id}`);
+    if (lot.boxId) scheduleCycleCount(tx, lot.boxId);
     const existing = tx.get<{ id: string }>(
       sql`SELECT id FROM allocations WHERE picking_item_id = ${pkg.pickingItemId} AND inventory_lot_id = ${lot.id}`
     );
