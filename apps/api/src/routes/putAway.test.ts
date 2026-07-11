@@ -92,4 +92,72 @@ test("POST close closes a non-empty box", async () => {
   assert.equal((sqlite.prepare("SELECT status FROM shelf_boxes WHERE id=?").get(boxId) as any).status, "closed");
 });
 
+test("GET put-away read endpoints for a fresh order ro8", async () => {
+  sqlite.exec(`
+    INSERT INTO receiving_orders (id, external_id, ref_no, status, supplier_id, created_at, updated_at)
+      VALUES ('ro8','e8','RO-8','in_hand','sup','0','0'), ('ro8b','e8b','RO-8B','in_hand','sup','0','0');
+    INSERT INTO receiving_invoices (id, external_id, receiving_order_id, invoice_no, supplier_id, created_at, updated_at)
+      VALUES ('inv8','e8','ro8','INV-8','sup','0','0'), ('inv8b','e8b','ro8b','INV-8B','sup','0','0');
+    INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty, available_qty, created_at, updated_at)
+      VALUES ('rii8','inv8','p',10,10,10,'0','0'), ('rii8b','inv8b','p',4,4,0,'0','0');
+    INSERT INTO shelf_boxes (id, receiving_order_id, shelf_code, status, created_at, updated_at)
+      VALUES ('box8c','ro8','A1','closed','2026-01-01T00:00:00.000Z','0'),
+             ('box8o','ro8','A1','open','2026-01-02T00:00:00.000Z','0');
+    INSERT INTO put_away_scans (id, receiving_invoice_item_id, qty, shelf_box_id, verified, created_at, updated_at)
+      VALUES ('pas8u','rii8',3,NULL,0,'2026-01-02T00:00:00.000Z','0'),
+             ('pas8b','rii8',4,'box8o',1,'2026-01-03T00:00:00.000Z','0');
+  `);
+
+  // candidates: ro8 appears (available 10 + 3 unboxed), ro8b (available 0, no scans) excluded
+  const candRes = await app.request("/put-away/candidates");
+  assert.equal(candRes.status, 200);
+  const candidates = (await candRes.json()) as any[];
+  const ro8 = candidates.find((r) => r.id === "ro8");
+  assert.ok(ro8, "ro8 should be a candidate");
+  assert.equal(ro8.available_qty, 10);
+  assert.equal(ro8.unboxed_qty, 3);
+  assert.ok(!candidates.some((r) => r.id === "ro8b"), "ro8b must be excluded");
+
+  // put-away-lots: one lot row with scanned/boxed sums
+  const lotsRes = await app.request("/receiving-orders/ro8/put-away-lots");
+  assert.equal(lotsRes.status, 200);
+  const lots = (await lotsRes.json()) as any[];
+  assert.equal(lots.length, 1);
+  assert.equal(lots[0].receiving_invoice_item_id, "rii8");
+  assert.equal(lots[0].part_no, "X");
+  assert.equal(lots[0].total_qty, 10);
+  assert.equal(lots[0].available_qty, 10);
+  assert.equal(lots[0].scanned_qty, 7);
+  assert.equal(lots[0].boxed_qty, 4);
+
+  // put-away-scans: both scans, newest first
+  const scansRes = await app.request("/receiving-orders/ro8/put-away-scans");
+  assert.equal(scansRes.status, 200);
+  const scans = (await scansRes.json()) as any[];
+  assert.equal(scans.length, 2);
+  assert.equal(scans[0].id, "pas8b");
+  assert.equal(scans[0].part_id, "p");
+  assert.equal(scans[0].shelf_box_id, "box8o");
+  assert.equal(scans[0].verified, 1);
+  assert.equal(scans[1].id, "pas8u");
+  assert.equal(scans[1].shelf_box_id, null);
+
+  // shelf-boxes: open box first (even though created later), items grouped per box
+  const boxesRes = await app.request("/receiving-orders/ro8/shelf-boxes");
+  assert.equal(boxesRes.status, 200);
+  const boxes = (await boxesRes.json()) as any[];
+  assert.equal(boxes.length, 2);
+  assert.equal(boxes[0].id, "box8o");
+  assert.equal(boxes[0].items.length, 1);
+  assert.equal(boxes[0].items[0].part_no, "X");
+  assert.equal(boxes[0].items[0].qty, 4);
+  assert.equal(boxes[0].items[0].verified, 1);
+  assert.equal(boxes[1].id, "box8c");
+  assert.equal(boxes[1].items.length, 0);
+
+  const emptyRes = await app.request("/receiving-orders/ro8b/shelf-boxes");
+  assert.equal(emptyRes.status, 200);
+  assert.deepEqual(await emptyRes.json(), []);
+});
+
 test("cleanup", () => { sqlite.close(); });

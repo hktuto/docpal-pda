@@ -153,4 +153,53 @@ test("GET /verification-tasks?due_before=... filters by due_at", async () => {
   assert.equal(((await res2.json()) as any[]).length, 0);
 });
 
+test("GET shelf browse endpoints (shelves, with-box-counts, shelf boxes, box detail)", async () => {
+  routeSqlite.exec(`
+    INSERT INTO shelves (id, code, created_at, updated_at) VALUES ('shb','B1','0','0');
+    INSERT INTO shelf_boxes (id, receiving_order_id, shelf_code, status, created_at, updated_at)
+      VALUES ('gvbox','ro','B1','closed','0','0');
+    INSERT INTO put_away_scans (id, receiving_invoice_item_id, qty, shelf_box_id, verified, created_at, updated_at)
+      VALUES ('gvpas','rii',2,'gvbox',1,'0','0');
+  `);
+
+  // /shelves lists all shelf codes
+  const shelvesRes = await app.request("/shelves");
+  assert.equal(shelvesRes.status, 200);
+  const shelves = (await shelvesRes.json()) as any[];
+  const codes = shelves.map((s) => s.code);
+  assert.ok(codes.includes("A1") && codes.includes("B1"));
+
+  // /shelves/with-box-counts: B1 has its one box, A1 has the seeded box
+  const countsRes = await app.request("/shelves/with-box-counts");
+  assert.equal(countsRes.status, 200);
+  const counts = (await countsRes.json()) as any[];
+  assert.equal(counts.find((r) => r.code === "B1").box_count, 1);
+  assert.ok(counts.find((r) => r.code === "A1").box_count >= 1);
+
+  // /shelves/B1/boxes: item/verified counts per box
+  const boxesRes = await app.request("/shelves/B1/boxes");
+  assert.equal(boxesRes.status, 200);
+  const boxes = (await boxesRes.json()) as any[];
+  assert.equal(boxes.length, 1);
+  assert.equal(boxes[0].id, "gvbox");
+  assert.equal(boxes[0].item_count, 1);
+  assert.equal(boxes[0].verified_count, 1);
+  assert.equal(boxes[0].checked_today, false);
+
+  // /shelf-boxes/:id: nested shelf + receiving_order + items
+  const detailRes = await app.request("/shelf-boxes/gvbox");
+  assert.equal(detailRes.status, 200);
+  const detail = (await detailRes.json()) as any;
+  assert.equal(detail.id, "gvbox");
+  assert.deepEqual(detail.shelf, { code: "B1", zone: null });
+  assert.deepEqual(detail.receiving_order, { id: "ro", ref_no: "RO-1" });
+  assert.equal(detail.items.length, 1);
+  assert.equal(detail.items[0].part_no, "X");
+  assert.equal(detail.items[0].qty, 2);
+  assert.equal(detail.items[0].verified, 1);
+
+  const missingRes = await app.request("/shelf-boxes/nope");
+  assert.equal(missingRes.status, 404);
+});
+
 test("cleanup", () => { routeSqlite.close(); });
