@@ -18,6 +18,15 @@
 - Relative imports **must** use the `.js` extension (NodeNext): `import { x } from "./normalize.js"`.
 - All timestamps are ISO-8601 UTC text via `now()` (Task 1b). `updated_at` is set on every write.
 - Every FK is indexed. Every business key used for upsert is `UNIQUE`.
+
+> **Convention correction (added during execution, Task 4 review).** The "every FK is indexed" rule was under-applied in the schema code blocks below. The following FK indexes ARE required and must be present in the implemented files and in the Task 10 DDL, in addition to what the literal code blocks show:
+> - `receiving_orders(supplier_id)` → `receiving_orders_supplier_idx`
+> - `receiving_invoices(supplier_id)` → `receiving_invoices_supplier_idx`
+> - `shelf_box_items(part_id)` → `shelf_box_items_part_idx`
+> - `verification_tasks(picking_order_id)` → `verification_tasks_picking_order_idx`
+> - `verification_tasks(shelf_box_id)` → `verification_tasks_shelf_box_idx`
+>
+> Implementers and reviewers for Tasks 6, 8, and 10 must treat these as part of the task. (Task 4 was corrected in-place when this was caught.)
 - Test runner: `node:test`. Single file: `pnpm --filter @warehouse/api exec tsx --test <path>`. Full suite: `pnpm --filter @warehouse/api test`.
 - Commit after each task with `git add <explicit paths>` (never `git add -A`).
 
