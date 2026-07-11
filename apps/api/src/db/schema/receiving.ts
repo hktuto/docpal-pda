@@ -14,7 +14,10 @@ export const receivingOrders = sqliteTable(
     createdAt: text("created_at").notNull().$defaultFn(now),
     updatedAt: text("updated_at").notNull().$defaultFn(now),
   },
-  (t) => ({ statusUpdatedIdx: index("receiving_orders_status_updated_idx").on(t.status, t.updatedAt) })
+  (t) => ({
+    statusUpdatedIdx: index("receiving_orders_status_updated_idx").on(t.status, t.updatedAt),
+    supplierIdx: index("receiving_orders_supplier_idx").on(t.supplierId),
+  })
 );
 
 export const receivingInvoices = sqliteTable(
@@ -31,6 +34,7 @@ export const receivingInvoices = sqliteTable(
   (t) => ({
     orderIdx: index("receiving_invoices_order_idx").on(t.receivingOrderId),
     orderInvoiceUq: unique("receiving_invoices_order_invoice_uq").on(t.receivingOrderId, t.invoiceNo),
+    supplierIdx: index("receiving_invoices_supplier_idx").on(t.supplierId),
   })
 );
 
