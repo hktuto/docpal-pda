@@ -58,6 +58,27 @@ To clear old debug/output images from the app cache:
   "run-as com.docpal.warehousedemo sh -c 'rm -f cache/debug_* cache/rectangle_*'"
 ```
 
+## Native Android app (apps/android)
+
+The native rewrite (Kotlin + Compose + Room) lives in `apps/android` as an
+independent Gradle project — do not confuse it with the Capacitor project at
+`apps/web/android`. Spec: `docs/superpowers/specs/2026-07-12-native-android-design.md`;
+plans: `docs/superpowers/plans/2026-07-12-native-android-phase-*.md`.
+
+```bash
+cd apps/android
+export JAVA_HOME='/c/Program Files/Android/Android Studio/jbr'
+export PATH="$JAVA_HOME/bin:$PATH"
+./gradlew :app:installDebug        # build + install on connected device
+./gradlew :app:testDebugUnitTest   # JVM tests (Robolectric Room tests + OpenCV crop test)
+```
+
+Seed data: `apps/android/app/src/main/assets/seed.sql` is generated from the
+web PGlite seed (precalc preset) and imported in Room's `onCreate`. Regenerate
+after seed changes with `cd apps/web && pnpm export:android-seed`.
+The app id `com.docpal.warehousepda` installs side by side with the Capacitor
+`com.docpal.warehousedemo`.
+
 ## Code conventions
 
 - Follow existing patterns. Make minimal, focused changes.
