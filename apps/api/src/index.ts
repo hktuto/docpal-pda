@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { healthRoute } from "./routes/health.js";
 import { receivingRoute } from "./routes/receiving.js";
+import { pickingRoute } from "./routes/picking.js";
 
 export const app = new Hono();
 
@@ -13,3 +14,4 @@ const origins = (
 app.use("*", cors({ origin: origins }));
 app.route("/", healthRoute);
 app.route("/", receivingRoute);
+app.route("/", pickingRoute);
