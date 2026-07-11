@@ -4,7 +4,6 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
-import { createTables } from "../db/tables.js";
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wh-api-"));
 const dbPath = path.join(dir, "t.sqlite");

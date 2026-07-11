@@ -29,7 +29,12 @@ receivingRoute.post("/receiving-orders/:external_id/confirm-arrival", (c) => {
     confirmReceivingArrival(tx, found.id);
     return found;
   });
-  allocateAll(db);
+  // Allocation is best-effort and recomputable; it must never roll back a confirmed arrival.
+  try {
+    allocateAll(db);
+  } catch (err) {
+    console.error("allocateAll after confirm-arrival failed", err);
+  }
   const res: ConfirmArrivalResponse = { id: order.id, status: "in_hand" };
   return c.json(res, 200);
 });
