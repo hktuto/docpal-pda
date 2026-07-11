@@ -7,7 +7,7 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema/index.js";
 import { createDb } from "./client.js";
 import { createTables } from "./tables.js";
-import { allocatePickingItem } from "./allocate.js";
+import { allocatePickingItem, allocatePickingOrder, allocateAll } from "./allocate.js";
 import { assertInvariantsHold } from "./invariants.guard.js";
 
 function makeDb() {
@@ -129,5 +129,35 @@ test("allocatePickingItem with remaining_qty <= 0 releases allocations and plans
   db.transaction((tx) => allocatePickingItem(tx, "pi"));
   assert.equal((sqlite.prepare("SELECT count(*) c FROM allocations WHERE picking_item_id='pi'").get() as any).c, 0);
   assertInvariantsHold(db);
+  sqlite.close();
+});
+
+test("allocatePickingOrder plans every item of the order; allocateAll plans all remaining demand oldest-first", () => {
+  const { sqlite, db } = makeDb();
+  sqlite.exec(`
+    INSERT INTO parts (id, part_no, part_no_norm, created_at, updated_at) VALUES ('p2','Y','Y','0','0');
+    INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('po2','e2','R2','picking','0','0');
+    INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES
+      ('piOld','po','p',5,'2024-01-01T00:00:00Z','0'),
+      ('piNew','po2','p2',4,'2024-02-01T00:00:00Z','0');
+    INSERT INTO inventory_lots (id, part_id, shelf_code, total_qty, created_at, updated_at) VALUES
+      ('lotP','p','S1',3,'2024-01-01T00:00:00Z','0'),
+      ('lotP2','p2','S1',10,'2024-01-01T00:00:00Z','0');
+  `);
+  // po has two items now: 'pi' (qty10 from makeDb, part p, created '0') and 'piOld' (qty5, part p, created 2024-01-01). allocatePickingOrder plans both of po's items only.
+  allocatePickingOrder(db, "po");
+  // Order is by picking_items.created_at: 'pi' (created '0') < 'piOld' (2024-01-01), so 'pi' consumes lotP(3) first.
+  const piAlloc = sqlite.prepare("SELECT allocated_qty FROM picking_items WHERE id='pi'").get() as any;
+  assert.equal(piAlloc.allocated_qty, 3);
+  const piOldAlloc = sqlite.prepare("SELECT allocated_qty FROM picking_items WHERE id='piOld'").get() as any;
+  assert.equal(piOldAlloc.allocated_qty, 0);
+  // po2 / piNew untouched by allocatePickingOrder('po'):
+  assert.equal((sqlite.prepare("SELECT count(*) c FROM allocations WHERE picking_item_id='piNew'").get() as any).c, 0);
+
+  // Now global replan across all remaining demand.
+  allocateAll(db);
+  assertInvariantsHold(db);
+  // piNew (part p2) now allocated from lotP2.
+  assert.equal((sqlite.prepare("SELECT allocated_qty FROM picking_items WHERE id='piNew'").get() as any).allocated_qty, 4);
   sqlite.close();
 });

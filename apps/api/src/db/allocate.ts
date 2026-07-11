@@ -108,3 +108,21 @@ export function allocatePickingItem(tx: DbOrTx, pickingItemId: string): void {
     }
   }
 }
+
+export function allocatePickingOrder(db: AppDb, pickingOrderId: string): void {
+  db.transaction((tx) => {
+    const items = tx.all<{ id: string }>(
+      sql`SELECT id FROM picking_items WHERE picking_order_id = ${pickingOrderId} ORDER BY created_at ASC, id ASC`
+    );
+    for (const it of items) allocatePickingItem(tx, it.id);
+  });
+}
+
+export function allocateAll(db: AppDb): void {
+  db.transaction((tx) => {
+    const items = tx.all<{ id: string }>(
+      sql`SELECT id FROM picking_items WHERE remaining_qty > 0 ORDER BY created_at ASC, id ASC`
+    );
+    for (const it of items) allocatePickingItem(tx, it.id);
+  });
+}
