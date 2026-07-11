@@ -85,8 +85,13 @@ CREATE TABLE IF NOT EXISTS inventory_lot_sources (
 CREATE INDEX IF NOT EXISTS ils_lot_idx ON inventory_lot_sources(inventory_lot_id);
 CREATE INDEX IF NOT EXISTS ils_item_idx ON inventory_lot_sources(receiving_invoice_item_id);
 CREATE TABLE IF NOT EXISTS shelf_boxes (
-  id TEXT PRIMARY KEY, shelf_code TEXT NOT NULL, box_id TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+  id TEXT PRIMARY KEY, shelf_code TEXT NOT NULL, box_id TEXT,
+  receiving_order_id TEXT REFERENCES receiving_orders(id),
+  status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','closed','verified')),
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS shelf_boxes_shelf_idx ON shelf_boxes(shelf_code);
+CREATE INDEX IF NOT EXISTS shelf_boxes_status_idx ON shelf_boxes(status);
+CREATE INDEX IF NOT EXISTS shelf_boxes_receiving_order_idx ON shelf_boxes(receiving_order_id);
 CREATE TABLE IF NOT EXISTS shelf_box_items (
   id TEXT PRIMARY KEY, shelf_box_id TEXT NOT NULL REFERENCES shelf_boxes(id) ON DELETE CASCADE,
   part_id TEXT NOT NULL REFERENCES parts(id), qty INTEGER NOT NULL DEFAULT 0, verified INTEGER NOT NULL DEFAULT 0,
@@ -160,5 +165,7 @@ function ensureColumn(sqlite: DatabaseType, table: string, column: string, decl:
 export function createTables(sqlite: DatabaseType): void {
   ensureColumn(sqlite, "receiving_invoice_items", "line_no", "line_no INTEGER");
   ensureColumn(sqlite, "picking_items", "line_id", "line_id TEXT");
+  ensureColumn(sqlite, "shelf_boxes", "receiving_order_id", "receiving_order_id TEXT REFERENCES receiving_orders(id)");
+  ensureColumn(sqlite, "shelf_boxes", "status", "status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','closed','verified'))");
   sqlite.exec(createTablesSql);
 }

@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 import { now } from "../now.js";
 import { parts } from "./master.js";
-import { receivingInvoiceItems } from "./receiving.js";
+import { receivingInvoiceItems, receivingOrders } from "./receiving.js";
 
 export const inventoryLots = sqliteTable(
   "inventory_lots",
@@ -52,10 +52,16 @@ export const shelfBoxes = sqliteTable(
     id: text("id").primaryKey(),
     shelfCode: text("shelf_code").notNull(),
     boxId: text("box_id"),
+    receivingOrderId: text("receiving_order_id").references(() => receivingOrders.id),
+    status: text("status", { enum: ["open", "closed", "verified"] }).notNull().default("open"),
     createdAt: text("created_at").notNull().$defaultFn(now),
     updatedAt: text("updated_at").notNull().$defaultFn(now),
   },
-  (t) => ({ shelfIdx: index("shelf_boxes_shelf_idx").on(t.shelfCode) })
+  (t) => ({
+    shelfIdx: index("shelf_boxes_shelf_idx").on(t.shelfCode),
+    statusIdx: index("shelf_boxes_status_idx").on(t.status),
+    receivingOrderIdx: index("shelf_boxes_receiving_order_idx").on(t.receivingOrderId),
+  })
 );
 
 export const shelfBoxItems = sqliteTable(
