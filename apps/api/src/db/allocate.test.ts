@@ -65,3 +65,32 @@ test("Phase 2 consumes receiving orders by delivery_date FIFO, invoice_no, date_
   assertInvariantsHold(db);
   sqlite.close();
 });
+
+test("within one receiving order: boxed items allocate box-by-box, unboxed group into one pool", () => {
+  const { sqlite, db } = makeDb();
+  // One in_hand order with part 'p' spread across two invoices: one boxed item (box 'B1' qty 3) and two unboxed items (qty 2 + 2).
+  sqlite.exec(`
+    INSERT INTO receiving_orders (id, external_id, ref_no, status, delivery_date, created_at, updated_at) VALUES ('ro','e','R','in_hand','2024-01-01','0','0');
+    INSERT INTO receiving_invoices (id, receiving_order_id, invoice_no, created_at, updated_at) VALUES
+      ('riA','ro','A','0','0'),('riB','ro','B','0','0');
+    INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty, available_qty, box_id, date_code, created_at, updated_at) VALUES
+      ('riiBox','riA','p',3,3,3,'B1','202401','0','0'),
+      ('riiU1','riA','p',2,2,2,NULL,'202401','0','0'),
+      ('riiU2','riB','p',2,2,2,NULL,'202401','0','0');
+  `);
+  db.transaction((tx) => allocatePickingItem(tx, "pi"));
+
+  // need=10. Boxed riiBox (invoice A, date 202401) → its own allocation qty3. Unboxed riiU1+riiU2 (A then B) grouped → one allocation qty4 with two link rows.
+  const allocs = sqlite.prepare("SELECT id, receiving_order_id AS ro, qty FROM allocations WHERE picking_item_id='pi' ORDER BY rowid").all() as any[];
+  assert.equal(allocs.length, 2);
+  assert.deepEqual(allocs.map((x) => x.qty).sort(), [3, 4]);
+
+  const boxAlloc = allocs.find((x) => x.qty === 3)!;
+  const poolAlloc = allocs.find((x) => x.qty === 4)!;
+  const boxLinks = sqlite.prepare("SELECT receiving_invoice_item_id AS rii, qty FROM allocation_receiving_items WHERE allocation_id=?").all(boxAlloc.id) as any[];
+  assert.deepEqual(boxLinks, [{ rii: "riiBox", qty: 3 }]);
+  const poolLinks = sqlite.prepare("SELECT receiving_invoice_item_id AS rii, qty FROM allocation_receiving_items WHERE allocation_id=? ORDER BY rowid").all(poolAlloc.id) as any[];
+  assert.deepEqual(poolLinks, [{ rii: "riiU1", qty: 2 }, { rii: "riiU2", qty: 2 }]);
+  assertInvariantsHold(db);
+  sqlite.close();
+});
