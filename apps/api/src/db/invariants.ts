@@ -95,3 +95,21 @@ export function deleteAllocation(tx: DbOrTx, allocationId: string): void {
   if (a.inventoryLotId) recomputeLot(tx, a.inventoryLotId);
   for (const { itemId } of linked) recomputeReceivingItem(tx, itemId);
 }
+
+export function scanToPackage(
+  tx: DbOrTx,
+  p: { id: string; pickingItemId: string; qty: number; sourceType: "receiving_invoice_item" | "inventory_lot"; sourceId: string }
+): void {
+  tx.run(
+    sql`INSERT INTO picking_packages (id, picking_item_id, source_type, source_id, qty, shipping_box_id, created_at, updated_at)
+        VALUES (${p.id}, ${p.pickingItemId}, ${p.sourceType}, ${p.sourceId}, ${p.qty}, NULL, ${now()}, ${now()})`
+  );
+  recomputePickingItem(tx, p.pickingItemId);
+}
+
+export function assignPackageToBox(tx: DbOrTx, a: { packageId: string; shippingBoxId: string }): void {
+  const pkg = tx.get<{ pickingItemId: string }>(sql`SELECT picking_item_id AS pickingItemId FROM picking_packages WHERE id = ${a.packageId}`);
+  if (!pkg) return;
+  tx.run(sql`UPDATE picking_packages SET shipping_box_id = ${a.shippingBoxId}, updated_at = ${now()} WHERE id = ${a.packageId}`);
+  recomputePickingItem(tx, pkg.pickingItemId);
+}
