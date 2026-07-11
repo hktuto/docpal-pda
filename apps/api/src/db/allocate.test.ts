@@ -124,8 +124,11 @@ test("allocatePickingItem with remaining_qty <= 0 releases allocations and plans
   sqlite.exec(`INSERT INTO inventory_lots (id, part_id, shelf_code, total_qty, created_at, updated_at) VALUES ('lot','p','S1',10,'2024-01-01T00:00:00Z','0');`);
   db.transaction((tx) => allocatePickingItem(tx, "pi"));
   assert.equal((sqlite.prepare("SELECT count(*) c FROM allocations WHERE picking_item_id='pi'").get() as any).c, 1);
-  // Simulate fully picked: picked_qty = qty → remaining_qty = 0.
-  sqlite.exec(`UPDATE picking_items SET picked_qty = 10 WHERE id='pi';`);
+  // Simulate fully picked via a boxed package: picked_qty is maintained (boxed sum = 10) → remaining_qty = 0.
+  sqlite.exec(`
+    INSERT INTO shipping_boxes (id, picking_order_id, status, created_at, updated_at) VALUES ('box','po','open','0','0');
+    INSERT INTO picking_packages (id, picking_item_id, source_type, source_id, qty, shipping_box_id, created_at, updated_at) VALUES ('pkg','pi','inventory_lot','lot',10,'box','0','0');
+  `);
   db.transaction((tx) => allocatePickingItem(tx, "pi"));
   assert.equal((sqlite.prepare("SELECT count(*) c FROM allocations WHERE picking_item_id='pi'").get() as any).c, 0);
   assertInvariantsHold(db);

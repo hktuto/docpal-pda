@@ -42,14 +42,17 @@ export function applyPutAway(tx: DbOrTx, itemId: string, qty: number, shelfBoxId
   recomputeReceivingItem(tx, itemId);
 }
 
-/** Recompute picking_items.allocated_qty and scanned_not_boxed_qty (remaining_qty is generated). */
+/** Recompute picking_items.allocated_qty, scanned_not_boxed_qty and picked_qty (remaining_qty is generated). */
 export function recomputePickingItem(tx: DbOrTx, pickingItemId: string): void {
   const alloc = tx.get<{ s: number }>(sql`SELECT COALESCE(SUM(qty), 0) AS s FROM allocations WHERE picking_item_id = ${pickingItemId}`);
   const scanned = tx.get<{ s: number }>(
     sql`SELECT COALESCE(SUM(qty), 0) AS s FROM picking_packages WHERE picking_item_id = ${pickingItemId} AND shipping_box_id IS NULL`
   );
+  const boxed = tx.get<{ s: number }>(
+    sql`SELECT COALESCE(SUM(qty), 0) AS s FROM picking_packages WHERE picking_item_id = ${pickingItemId} AND shipping_box_id IS NOT NULL`
+  );
   tx.run(
-    sql`UPDATE picking_items SET allocated_qty = ${alloc?.s ?? 0}, scanned_not_boxed_qty = ${scanned?.s ?? 0}, updated_at = ${now()} WHERE id = ${pickingItemId}`
+    sql`UPDATE picking_items SET allocated_qty = ${alloc?.s ?? 0}, scanned_not_boxed_qty = ${scanned?.s ?? 0}, picked_qty = ${boxed?.s ?? 0}, updated_at = ${now()} WHERE id = ${pickingItemId}`
   );
 }
 

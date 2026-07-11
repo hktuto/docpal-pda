@@ -33,6 +33,6 @@ test("scan unboxed then assign to box keeps scanned_not_boxed and remaining corr
 
   assignPackageToBox(db, { packageId: "pp1", shippingBoxId: "box" });
   pi = sqlite.prepare("SELECT scanned_not_boxed_qty s, remaining_qty r FROM picking_items WHERE id='pi'").get() as any;
-  assert.deepEqual(pi, { s: 2, r: 8 }); // 10 - 0 - 2
+  assert.deepEqual(pi, { s: 2, r: 5 }); // 10 - 3 (boxed → picked) - 2
   sqlite.close();
 });

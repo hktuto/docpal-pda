@@ -18,17 +18,19 @@ export function assertInvariantsHold(tx: DbOrTx): void {
   }
 
   const pi = tx.all<{
-    id: string; sAlloc: number; sScanned: number; sRemaining: number; eAlloc: number; eScanned: number; eRemaining: number;
+    id: string; sAlloc: number; sScanned: number; sPicked: number; sRemaining: number; eAlloc: number; eScanned: number; ePicked: number; eRemaining: number;
   }>(sql`
     SELECT pi.id,
-      pi.allocated_qty AS sAlloc, pi.scanned_not_boxed_qty AS sScanned, pi.remaining_qty AS sRemaining,
+      pi.allocated_qty AS sAlloc, pi.scanned_not_boxed_qty AS sScanned, pi.picked_qty AS sPicked, pi.remaining_qty AS sRemaining,
       COALESCE((SELECT SUM(qty) FROM allocations WHERE picking_item_id = pi.id), 0) AS eAlloc,
       COALESCE((SELECT SUM(qty) FROM picking_packages WHERE picking_item_id = pi.id AND shipping_box_id IS NULL), 0) AS eScanned,
+      COALESCE((SELECT SUM(qty) FROM picking_packages WHERE picking_item_id = pi.id AND shipping_box_id IS NOT NULL), 0) AS ePicked,
       pi.qty - pi.picked_qty - pi.scanned_not_boxed_qty AS eRemaining
     FROM picking_items pi`);
   for (const r of pi) {
     if (r.sAlloc !== r.eAlloc) throw new Error(`picking ${r.id}: allocated stored ${r.sAlloc} expected ${r.eAlloc}`);
     if (r.sScanned !== r.eScanned) throw new Error(`picking ${r.id}: scanned stored ${r.sScanned} expected ${r.eScanned}`);
+    if (r.sPicked !== r.ePicked) throw new Error(`picking ${r.id}: picked stored ${r.sPicked} expected ${r.ePicked}`);
     if (r.sRemaining !== r.eRemaining) throw new Error(`picking ${r.id}: remaining stored ${r.sRemaining} expected ${r.eRemaining}`);
   }
 
