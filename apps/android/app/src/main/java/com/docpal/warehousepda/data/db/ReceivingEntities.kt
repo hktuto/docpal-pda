@@ -2,9 +2,13 @@ package com.docpal.warehousepda.data.db
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "receiving_orders")
+@Entity(
+    tableName = "receiving_orders",
+    indices = [Index(name = "idx_receiving_orders_status", value = ["status"])]
+)
 data class ReceivingOrderEntity(
     @PrimaryKey val id: String,
     @ColumnInfo(name = "ref_no") val refNo: String,
@@ -25,7 +29,13 @@ data class ReceivingInvoiceEntity(
     @ColumnInfo(name = "supplier_id") val supplierId: String?,
 )
 
-@Entity(tableName = "receiving_invoice_items")
+@Entity(
+    tableName = "receiving_invoice_items",
+    indices = [
+        Index(name = "idx_receiving_invoice_items_invoice", value = ["receiving_invoice_id"]),
+        Index(name = "idx_receiving_invoice_items_part", value = ["part_id"]),
+    ]
+)
 data class ReceivingInvoiceItemEntity(
     @PrimaryKey val id: String,
     @ColumnInfo(name = "receiving_invoice_id") val receivingInvoiceId: String,
@@ -43,7 +53,13 @@ data class ReceivingInvoiceItemEntity(
     val cow: String?,
 )
 
-@Entity(tableName = "receiving_item_mismatches")
+@Entity(
+    tableName = "receiving_item_mismatches",
+    indices = [
+        Index(name = "idx_receiving_item_mismatches_item", value = ["receiving_invoice_item_id"]),
+        Index(name = "idx_receiving_item_mismatches_status", value = ["status"]),
+    ]
+)
 data class ReceivingItemMismatchEntity(
     @PrimaryKey val id: String,
     @ColumnInfo(name = "receiving_invoice_item_id") val receivingInvoiceItemId: String,

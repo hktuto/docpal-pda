@@ -16,7 +16,13 @@ data class MeasuringTaskEntity(
     @ColumnInfo(name = "created_at") val createdAt: Long,
 )
 
-@Entity(tableName = "shipping_boxes")
+@Entity(
+    tableName = "shipping_boxes",
+    indices = [
+        Index(name = "idx_shipping_boxes_task", value = ["measuring_task_id"]),
+        Index(name = "idx_shipping_boxes_order", value = ["picking_order_id"]),
+    ]
+)
 data class ShippingBoxEntity(
     @PrimaryKey val id: String,
     @ColumnInfo(name = "picking_order_id") val pickingOrderId: String?,
@@ -29,7 +35,13 @@ data class ShippingBoxEntity(
     @ColumnInfo(name = "created_at") val createdAt: Long,
 )
 
-@Entity(tableName = "shelf_boxes")
+@Entity(
+    tableName = "shelf_boxes",
+    indices = [
+        Index(name = "idx_shelf_boxes_order", value = ["receiving_order_id"]),
+        Index(name = "idx_shelf_boxes_shelf", value = ["shelf_code"]),
+    ]
+)
 data class ShelfBoxEntity(
     @PrimaryKey val id: String,
     @ColumnInfo(name = "receiving_order_id") val receivingOrderId: String?,
@@ -38,7 +50,13 @@ data class ShelfBoxEntity(
     @ColumnInfo(name = "created_at") val createdAt: Long,
 )
 
-@Entity(tableName = "put_away_scans")
+@Entity(
+    tableName = "put_away_scans",
+    indices = [
+        Index(name = "idx_put_away_scans_item", value = ["receiving_invoice_item_id"]),
+        Index(name = "idx_put_away_scans_box", value = ["shelf_box_id"]),
+    ]
+)
 data class PutAwayScanEntity(
     @PrimaryKey val id: String,
     @ColumnInfo(name = "receiving_invoice_item_id") val receivingInvoiceItemId: String?,

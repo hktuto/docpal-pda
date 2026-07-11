@@ -2,9 +2,13 @@ package com.docpal.warehousepda.data.db
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "picking_orders")
+@Entity(
+    tableName = "picking_orders",
+    indices = [Index(name = "idx_picking_orders_status", value = ["status"])]
+)
 data class PickingOrderEntity(
     @PrimaryKey val id: String,
     @ColumnInfo(name = "ref_no") val refNo: String,
@@ -26,7 +30,13 @@ data class PickingOrderEntity(
     @ColumnInfo(name = "updated_at") val updatedAt: Long,
 )
 
-@Entity(tableName = "picking_items")
+@Entity(
+    tableName = "picking_items",
+    indices = [
+        Index(name = "idx_picking_items_order", value = ["picking_order_id"]),
+        Index(name = "idx_picking_items_part", value = ["part_id"]),
+    ]
+)
 data class PickingItemEntity(
     @PrimaryKey val id: String,
     @ColumnInfo(name = "picking_order_id") val pickingOrderId: String,
@@ -38,7 +48,14 @@ data class PickingItemEntity(
     @ColumnInfo(name = "source_shelf_code") val sourceShelfCode: String?,
 )
 
-@Entity(tableName = "picking_packages")
+@Entity(
+    tableName = "picking_packages",
+    indices = [
+        Index(name = "idx_picking_packages_item", value = ["picking_item_id"]),
+        Index(name = "idx_picking_packages_order", value = ["picking_order_id"]),
+        Index(name = "idx_picking_packages_box", value = ["shipping_box_id"]),
+    ]
+)
 data class PickingPackageEntity(
     @PrimaryKey val id: String,
     @ColumnInfo(name = "picking_item_id") val pickingItemId: String,

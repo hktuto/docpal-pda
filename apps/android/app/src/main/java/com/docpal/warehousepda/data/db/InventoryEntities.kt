@@ -10,10 +10,13 @@ import androidx.room.PrimaryKey
     // SQLite treats NULLs as distinct in unique indexes, so this plain unique
     // index is equivalent to the web's partial index on located lots (design
     // decision 2 in the Phase 0 plan).
-    indices = [Index(
-        value = ["part_id", "date_code", "coo", "cow", "shelf_code", "box_id"],
-        unique = true
-    )]
+    indices = [
+        Index(
+            value = ["part_id", "date_code", "coo", "cow", "shelf_code", "box_id"],
+            unique = true
+        ),
+        Index(name = "idx_inventory_lots_location", value = ["shelf_code", "box_id"]),
+    ]
 )
 data class InventoryLotEntity(
     @PrimaryKey val id: String,
@@ -33,7 +36,10 @@ data class InventoryLotEntity(
 
 @Entity(
     tableName = "inventory_lot_sources",
-    indices = [Index(value = ["inventory_lot_id", "receiving_invoice_item_id"], unique = true)]
+    indices = [
+        Index(value = ["inventory_lot_id", "receiving_invoice_item_id"], unique = true),
+        Index(name = "idx_inventory_lot_sources_receiving_item", value = ["receiving_invoice_item_id"]),
+    ]
 )
 data class InventoryLotSourceEntity(
     @PrimaryKey val id: String,
@@ -42,7 +48,14 @@ data class InventoryLotSourceEntity(
     val qty: Int,
 )
 
-@Entity(tableName = "allocations")
+@Entity(
+    tableName = "allocations",
+    indices = [
+        Index(name = "idx_allocations_picking_item", value = ["picking_item_id"]),
+        Index(name = "idx_allocations_lot", value = ["inventory_lot_id"]),
+        Index(name = "idx_allocations_receiving_order", value = ["receiving_order_id"]),
+    ]
+)
 data class AllocationEntity(
     @PrimaryKey val id: String,
     @ColumnInfo(name = "picking_item_id") val pickingItemId: String,
