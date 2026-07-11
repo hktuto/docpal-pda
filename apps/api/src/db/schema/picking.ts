@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, index, unique } from "drizzle-orm/sqlite-core";
 import { now } from "../now.js";
 import { parts } from "./master.js";
 
@@ -33,12 +33,14 @@ export const pickingItems = sqliteTable(
     sourceShelfCode: text("source_shelf_code"),
     scannedNotBoxedQty: integer("scanned_not_boxed_qty").notNull().default(0), // MAINTAINED
     remainingQty: integer("remaining_qty").generatedAlwaysAs(sql`qty - picked_qty - scanned_not_boxed_qty`, { mode: "stored" }),
+    lineId: text("line_id"),
     createdAt: text("created_at").notNull().$defaultFn(now),
     updatedAt: text("updated_at").notNull().$defaultFn(now),
   },
   (t) => ({
     partIdx: index("picking_items_part_idx").on(t.partId),
     orderIdx: index("picking_items_order_idx").on(t.pickingOrderId),
+    orderLineUq: unique("picking_items_order_line_uq").on(t.pickingOrderId, t.lineId),
   })
 );
 

@@ -59,12 +59,14 @@ export const receivingInvoiceItems = sqliteTable(
     lotCodeNorm: text("lot_code_norm"),
     cooNorm: text("coo_norm"),
     cowNorm: text("cow_norm"),
+    lineNo: integer("line_no"),
     createdAt: text("created_at").notNull().$defaultFn(now),
     updatedAt: text("updated_at").notNull().$defaultFn(now),
   },
   (t) => ({
     partAvailIdx: index("rii_part_available_idx").on(t.partId, t.availableQty),
     invoiceIdx: index("rii_invoice_idx").on(t.receivingInvoiceId),
+    invoiceLineUq: unique("rii_invoice_line_uq").on(t.receivingInvoiceId, t.lineNo),
   })
 );
 

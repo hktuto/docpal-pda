@@ -29,10 +29,11 @@ CREATE TABLE IF NOT EXISTS receiving_invoice_items (
   part_id TEXT NOT NULL REFERENCES parts(id), qty INTEGER NOT NULL DEFAULT 0, received_qty INTEGER NOT NULL DEFAULT 0,
   picked_qty INTEGER NOT NULL DEFAULT 0, put_away_qty INTEGER NOT NULL DEFAULT 0,
   allocated_qty INTEGER NOT NULL DEFAULT 0, available_qty INTEGER NOT NULL DEFAULT 0, box_id TEXT,
-  date_code TEXT, lot_code TEXT, coo TEXT, cow TEXT, date_code_norm TEXT, lot_code_norm TEXT, coo_norm TEXT, cow_norm TEXT,
+  date_code TEXT, lot_code TEXT, coo TEXT, cow TEXT, date_code_norm TEXT, lot_code_norm TEXT, coo_norm TEXT, cow_norm TEXT, line_no INTEGER,
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS rii_part_available_idx ON receiving_invoice_items(part_id, available_qty);
 CREATE INDEX IF NOT EXISTS rii_invoice_idx ON receiving_invoice_items(receiving_invoice_id);
+CREATE UNIQUE INDEX IF NOT EXISTS rii_invoice_line_uq ON receiving_invoice_items(receiving_invoice_id, line_no) WHERE line_no IS NOT NULL;
 CREATE TABLE IF NOT EXISTS receiving_item_mismatches (
   id TEXT PRIMARY KEY, receiving_invoice_item_id TEXT NOT NULL REFERENCES receiving_invoice_items(id) ON DELETE CASCADE,
   kind TEXT NOT NULL, note TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
@@ -49,9 +50,11 @@ CREATE TABLE IF NOT EXISTS picking_items (
   allocated_qty INTEGER NOT NULL DEFAULT 0, required_date_code TEXT, source_shelf_code TEXT,
   scanned_not_boxed_qty INTEGER NOT NULL DEFAULT 0,
   remaining_qty INTEGER GENERATED ALWAYS AS (qty - picked_qty - scanned_not_boxed_qty) STORED,
+  line_id TEXT,
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS picking_items_part_idx ON picking_items(part_id);
 CREATE INDEX IF NOT EXISTS picking_items_order_idx ON picking_items(picking_order_id);
+CREATE UNIQUE INDEX IF NOT EXISTS picking_items_order_line_uq ON picking_items(picking_order_id, line_id) WHERE line_id IS NOT NULL;
 CREATE TABLE IF NOT EXISTS shipping_boxes (
   id TEXT PRIMARY KEY, picking_order_id TEXT NOT NULL REFERENCES picking_orders(id) ON DELETE CASCADE,
   status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','closed','verified')), box_size TEXT,
@@ -140,6 +143,21 @@ CREATE INDEX IF NOT EXISTS transition_logs_entity_idx ON transition_logs(entity_
 
 import type { Database as DatabaseType } from "better-sqlite3";
 
+// The API keeps a persistent dev.sqlite across launches (no migrations).
+// createTables runs on every boot and must be idempotent for BOTH a fresh DB
+// and a pre-existing DB that predates newly added columns. The partial unique
+// indexes below reference line_no / line_id, so a stale DB must gain those
+// columns before the DDL script executes (else "no such column").
+function ensureColumn(sqlite: DatabaseType, table: string, column: string, decl: string): void {
+  const exists = sqlite.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`).get(table);
+  if (!exists) return; // fresh DB: CREATE TABLE below already declares the column
+  const cols = sqlite.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (cols.some((c) => c.name === column)) return;
+  sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${decl}`);
+}
+
 export function createTables(sqlite: DatabaseType): void {
+  ensureColumn(sqlite, "receiving_invoice_items", "line_no", "line_no INTEGER");
+  ensureColumn(sqlite, "picking_items", "line_id", "line_id TEXT");
   sqlite.exec(createTablesSql);
 }
