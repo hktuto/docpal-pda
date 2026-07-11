@@ -1,15 +1,12 @@
 import "dotenv/config";
-import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import path from "node:path";
-import fs from "node:fs";
+import * as schema from "./db/schema/index.js";
+import { createDb } from "./db/client.js";
 
-const dbPath = path.resolve(process.env.DATABASE_URL ?? "./dev.sqlite");
-fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+const resolved = path.resolve(process.env.DATABASE_URL ?? "./dev.sqlite");
+const { sqlite } = createDb(resolved);
 
-export const sqlite = new Database(dbPath);
-sqlite.pragma("journal_mode = WAL");
-sqlite.pragma("foreign_keys = ON");
-
-// Schema is intentionally empty — the database structure will be rethought later.
-export const db = drizzle(sqlite, { schema: {} });
+export { sqlite };
+export const db = drizzle(sqlite, { schema });
+export type AppDb = typeof db;
