@@ -5,6 +5,7 @@ import { receivingRoute } from "./routes/receiving.js";
 import { pickingRoute } from "./routes/picking.js";
 import { pickingExecutionRoute } from "./routes/pickingExecution.js";
 import { measuringRoute } from "./routes/measuring.js";
+import { boxesRoute } from "./routes/boxes.js";
 
 export const app = new Hono();
 
@@ -19,3 +20,4 @@ app.route("/", receivingRoute);
 app.route("/", pickingRoute);
 app.route("/", pickingExecutionRoute);
 app.route("/", measuringRoute);
+app.route("/", boxesRoute);

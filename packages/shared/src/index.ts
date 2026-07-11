@@ -27,3 +27,4 @@ export interface IngestUpsertResponse { id: string; external_id: string; created
 export interface ConfirmArrivalResponse { id: string; status: "in_hand"; }
 export interface ScanResponse { package_ids: string[]; }
 export interface ApiErrorBody { error: string; }
+export interface UpdateShippingBoxRequest { box_size?: string | null; net_weight_g?: number | string | null; gross_weight_g?: number | string | null; destination_country?: string | null; }
