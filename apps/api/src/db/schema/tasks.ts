@@ -35,5 +35,6 @@ export const verificationTasks = sqliteTable(
     pickingOrderIdx: index("verification_tasks_picking_order_idx").on(t.pickingOrderId),
     shelfBoxIdx: index("verification_tasks_shelf_box_idx").on(t.shelfBoxId),
     cycleCoalesceUq: uniqueIndex("verification_tasks_cycle_coalesce_uq").on(t.kind, t.shelfBoxId, sql`date(${t.dueAt})`),
+    preshipPendingUq: uniqueIndex("verification_tasks_preship_pending_uq").on(t.pickingOrderId).where(sql`kind='pre_shipment' AND status='pending'`),
   })
 );
