@@ -52,4 +52,27 @@ test("POST /put-away/scans records; remove-piece deletes; over-scan 409", async 
   assert.equal(del.status, 200);
 });
 
+test("POST assign-to-box materializes lot; add-all-unboxed boxes the rest", async () => {
+  sqlite.exec(`
+    INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty, created_at, updated_at)
+      VALUES ('rii2','inv','p',5,5,'0','0');
+  `);
+  const boxRes = await app.request("/receiving-orders/ro/shelf-boxes", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ shelf_code: "A1" }),
+  });
+  const boxId = ((await boxRes.json()) as any).id;
+  const scanRes = await app.request("/put-away/scans", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ receiving_invoice_item_id: "rii2", qty: 5 }),
+  });
+  const scanId = ((await scanRes.json()) as any).id;
+  const assign = await app.request(`/put-away/scans/${scanId}/assign-to-box`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ shelf_box_id: boxId }),
+  });
+  assert.equal(assign.status, 200);
+  assert.equal((sqlite.prepare("SELECT total_qty FROM inventory_lots WHERE box_id=?").get(boxId) as any).total_qty, 5);
+
+  const addAll = await app.request(`/shelf-boxes/${boxId}/add-all-unboxed`, { method: "POST" });
+  assert.equal(addAll.status, 200);
+});
+
 test("cleanup", () => { sqlite.close(); });

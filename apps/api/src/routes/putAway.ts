@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { Context } from "hono";
-import type { CreateShelfBoxRequest, RecordPutAwayScanRequest } from "@warehouse/shared";
+import type { CreateShelfBoxRequest, RecordPutAwayScanRequest, AssignScanToBoxRequest } from "@warehouse/shared";
 import { db } from "../db.js";
-import { createShelfBox, cancelShelfBox, recordPutAwayScan, removeScannedPiece } from "../db/putAway.js";
+import { createShelfBox, cancelShelfBox, recordPutAwayScan, removeScannedPiece, assignScanToBox, addAllUnboxedToBox } from "../db/putAway.js";
 
 export const putAwayRoute = new Hono();
 
@@ -39,4 +39,18 @@ putAwayRoute.post("/put-away/scans/:id/remove-piece", (c) => {
   const scanId = c.req.param("id");
   db.transaction((tx) => removeScannedPiece(tx, { scanId }));
   return c.json({ ok: true }, 200);
+});
+
+putAwayRoute.post("/put-away/scans/:id/assign-to-box", async (c) => {
+  const scanId = c.req.param("id");
+  const body = await readJson<AssignScanToBoxRequest>(c);
+  if (!body.shelf_box_id) throw new HTTPException(400, { message: "shelf_box_id is required" });
+  db.transaction((tx) => assignScanToBox(tx, { scanId, shelfBoxId: body.shelf_box_id, actorId: body.actor_id ?? null }));
+  return c.json({ ok: true }, 200);
+});
+
+putAwayRoute.post("/shelf-boxes/:id/add-all-unboxed", (c) => {
+  const shelfBoxId = c.req.param("id");
+  const result = db.transaction((tx) => addAllUnboxedToBox(tx, { shelfBoxId, actorId: c.req.query("actor_id") ?? null }));
+  return c.json(result, 200);
 });
