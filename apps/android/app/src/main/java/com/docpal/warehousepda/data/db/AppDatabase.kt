@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [
@@ -50,8 +51,27 @@ abstract class AppDatabase : RoomDatabase() {
                 Room.databaseBuilder(context.applicationContext, AppDatabase::class.java, "warehouse.db")
             }
             return builder
+                .addCallback(SeedCallback(context.applicationContext))
                 .fallbackToDestructiveMigration() // POC: no shipped data to migrate
                 .build()
+        }
+    }
+
+    private class SeedCallback(private val context: Context) : Callback() {
+        override fun onCreate(db: SupportSQLiteDatabase) {
+            // seed.sql has exactly one INSERT per line, no embedded newlines
+            // (the export script flattens them).
+            db.beginTransaction()
+            try {
+                context.assets.open("seed.sql").bufferedReader().useLines { lines ->
+                    lines.map { it.trim() }
+                        .filter { it.isNotEmpty() }
+                        .forEach { db.execSQL(it.removeSuffix(";")) }
+                }
+                db.setTransactionSuccessful()
+            } finally {
+                db.endTransaction()
+            }
         }
     }
 }
