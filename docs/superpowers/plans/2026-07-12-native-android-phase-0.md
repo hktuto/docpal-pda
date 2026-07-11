@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Create the `apps/android` native Android app skeleton — Gradle project, Compose theme, navigation, Room database with all 20 tables, seed-data export/import, login, home screen, and i18n plumbing — so the app installs, seeds itself on first launch, and a user can log in and see the 6-card home screen.
+**Goal:** Create the `apps/android` native Android app skeleton — Gradle project, Compose theme, navigation, Room database with all 19 tables, seed-data export/import, login, home screen, and i18n plumbing — so the app installs, seeds itself on first launch, and a user can log in and see the 6-card home screen.
 
 **Architecture:** New independent Gradle project at `apps/android` (sibling of `apps/web`, `apps/api`), Kotlin + Jetpack Compose + Navigation-Compose + Room (SQLite) + DataStore, MVVM with StateFlow. Seed data is produced by a Node script in `apps/web/scripts/` that boots the existing seeded PGlite database and dumps all tables to `apps/android/app/src/main/assets/seed.sql`, imported in Room's `onCreate` callback. The Java scanner pipeline (OpenCV + ML Kit + CameraX) is copied unchanged from `apps/web/android` so Phase 1 can use it.
 
@@ -422,7 +422,7 @@ git commit -m "feat(android): manifest, theme, placeholder MainActivity"
 
 ---
 
-## Task 3: Room entities for all 20 tables + AppDatabase + smoke test
+## Task 3: Room entities for all 19 tables + AppDatabase + smoke test
 
 All column names/types mirror `apps/web/db/init.ts` exactly (verified against the web schema). Timestamps are epoch-ms `Long`; defaults mirror the web schema. No FK annotations (decision 4).
 
@@ -467,7 +467,7 @@ class DatabaseSchemaTest {
     }
 
     @Test
-    fun `creates exactly the 20 app tables`() {
+    fun `creates exactly the 19 app tables`() {
         db.query(
             SimpleSQLiteQuery(
                 "SELECT name FROM sqlite_master WHERE type='table' " +
@@ -482,8 +482,8 @@ class DatabaseSchemaTest {
                 listOf(
                     "allocations", "inventory_lot_sources", "inventory_lots",
                     "measuring_tasks", "parts", "picking_items", "picking_orders",
-                    "picking_packages", "put_away_scans", "receiving_invoices",
-                    "receiving_invoice_items", "receiving_item_mismatches",
+                    "picking_packages", "put_away_scans", "receiving_invoice_items",
+                    "receiving_invoices", "receiving_item_mismatches",
                     "receiving_orders", "shelf_boxes", "shelves", "shipping_boxes",
                     "suppliers", "transition_logs", "users"
                 ),
@@ -911,7 +911,7 @@ abstract class AppDatabase : RoomDatabase() {
 ./gradlew :app:testDebugUnitTest --tests "com.docpal.warehousepda.data.db.DatabaseSchemaTest"
 ```
 
-Expected: PASS — all 20 tables created. (First Robolectric run downloads android-all jars; requires network.)
+Expected: PASS — all 19 tables created. (First Robolectric run downloads android-all jars; requires network.)
 
 - [ ] **Step 12: Commit**
 
