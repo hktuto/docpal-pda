@@ -37,7 +37,11 @@ Machine-readable index of features in the warehouse PDA demo. Use this page to l
 | Picking execution — box & pack ops | Picking | Shipped | `POST /picking-orders/:id/boxes`, `POST /picking-orders/:id/boxes/:box_id/cancel`, `POST /picking-orders/:id/boxes/:box_id/packages`, `POST /picking-orders/:id/boxes/:box_id/add-all-unboxed`, `DELETE /picking-orders/:id/boxes/:box_id/packages/:package_id` in `apps/api/src/routes/pickingExecution.ts`, `apps/api/src/db/pickScan.ts`; packing the last package auto-finishes the order and creates a measuring task | [ai-scope](../flows/picking/ai-scope.md) |
 | Picking order finish | Picking | Shipped | `POST /picking-orders/:id/finish` in `apps/api/src/routes/pickingExecution.ts`, `apps/api/src/db/pickScan.ts` | [ai-scope](../flows/picking/ai-scope.md) |
 | Picking order list/detail API | Picking | Shipped | `GET /picking-orders`, `GET /picking-orders/:id` in `apps/api/src/routes/pickingExecution.ts` | [ai-scope](../flows/picking/ai-scope.md) |
-| Measuring task list API | Measuring | Shipped | `GET /measuring-tasks` in `apps/api/src/routes/measuring.ts` | [ai-scope](../flows/measuring/ai-scope.md) |
+| Measuring task list/detail API | Measuring | Shipped | `GET /measuring-tasks` (with `total_items`/`packed_items` totals), `GET /measuring-tasks/:id` in `apps/api/src/routes/measuring.ts` | [ai-scope](../flows/measuring/ai-scope.md) |
+| Measuring task completion | Measuring | Shipped | `POST /measuring-tasks/:id/complete` in `apps/api/src/routes/measuring.ts`, `apps/api/src/db/measure.ts`; auto-creates a `pre_shipment` verification task | [ai-scope](../flows/measuring/ai-scope.md) |
+| Shipping box measuring execution | Measuring | Shipped | `PATCH /shipping-boxes/:id`, `GET /shipping-boxes/:id/for-measuring`, `POST /shipping-boxes/:id/verify-package`, `POST /shipping-boxes/:id/close` in `apps/api/src/routes/boxes.ts`, `apps/api/src/db/measure.ts` | [ai-scope](../flows/measuring/ai-scope.md) |
+| Pre-shipment box verification | Goods Verify | Shipped | `POST /shipping-boxes/:id/verify` in `apps/api/src/routes/boxes.ts`, `apps/api/src/db/measure.ts`; box `closed → verified` | [ai-scope](../flows/goods-verify/ai-scope.md) |
+| Verification task API | Goods Verify | Shipped | `GET /verification-tasks`, `GET /verification-tasks/:id`, `POST /verification-tasks/:id/complete` in `apps/api/src/routes/verification.ts`, `apps/api/src/db/measure.ts` | [ai-scope](../flows/goods-verify/ai-scope.md) |
 
 ## Native Android (greenfield rewrite)
 

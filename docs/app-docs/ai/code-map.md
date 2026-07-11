@@ -109,7 +109,15 @@ Page and component locations mapped to source files.
 | `DELETE /picking-orders/:id/boxes/:box_id/packages/:package_id` | `apps/api/src/routes/pickingExecution.ts` |
 | `POST /picking-orders/:id/finish` | `apps/api/src/routes/pickingExecution.ts` |
 | `GET /picking-orders`, `GET /picking-orders/:id` | `apps/api/src/routes/pickingExecution.ts` |
-| `GET /measuring-tasks` | `apps/api/src/routes/measuring.ts` |
+| `GET /measuring-tasks` (with `total_items`/`packed_items` totals), `GET /measuring-tasks/:id` | `apps/api/src/routes/measuring.ts` |
+| `POST /measuring-tasks/:id/complete` | `apps/api/src/routes/measuring.ts` |
+| `PATCH /shipping-boxes/:id` | `apps/api/src/routes/boxes.ts` |
+| `GET /shipping-boxes/:id/for-measuring` | `apps/api/src/routes/boxes.ts` |
+| `POST /shipping-boxes/:id/verify-package` | `apps/api/src/routes/boxes.ts` |
+| `POST /shipping-boxes/:id/close` | `apps/api/src/routes/boxes.ts` |
+| `POST /shipping-boxes/:id/verify` | `apps/api/src/routes/boxes.ts` |
+| `GET /verification-tasks`, `GET /verification-tasks/:id` | `apps/api/src/routes/verification.ts` |
+| `POST /verification-tasks/:id/complete` | `apps/api/src/routes/verification.ts` |
 
 ### Ingest helpers and triggers
 
@@ -122,6 +130,7 @@ Page and component locations mapped to source files.
 | Transition log writer | `apps/api/src/ingest/transition.ts` |
 | Allocation triggers (`allocateAll`, `allocatePickingOrder`) | `apps/api/src/db/allocate.ts` |
 | Picking execution writes (scan, undo-scan, boxes, pack/unpack, finish, auto-finish → measuring task) | `apps/api/src/db/pickScan.ts` |
+| Measuring + pre-shipment verification writes (box measurements, package verify, box close/verify, task completion) | `apps/api/src/db/measure.ts` |
 
 - Server entry: `apps/api/src/server.ts`; app wiring: `apps/api/src/index.ts`; DB bootstrap: `apps/api/src/db.ts`.
 - confirm-arrival runs `allocateAll` after the order flips to `in_hand`; a picking upsert runs `allocatePickingOrder` when the upsert changed data. Both are best-effort and never roll back the committed write.
