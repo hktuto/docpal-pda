@@ -193,3 +193,36 @@ test("closeShelfBox closes a non-empty open box + logs transition", () => {
   assertInvariantsHold(db);
   sqlite.close();
 });
+
+test("removeScanFromBox reverses only the matching attribute lot when a box holds lots of the same item", () => {
+  const { sqlite, db } = makeDb();
+  seedReceivableItem(sqlite);
+  const { id: scan1 } = db.transaction((tx) => recordPutAwayScan(tx, { receivingInvoiceItemId: "rii", qty: 3, dateCode: "D1" }));
+  const { id: scan2 } = db.transaction((tx) => recordPutAwayScan(tx, { receivingInvoiceItemId: "rii", qty: 4, dateCode: "D2" }));
+  const { id: boxId } = db.transaction((tx) => createShelfBox(tx, { receivingOrderId: "ro", shelfCode: "A1" }));
+  db.transaction((tx) => assignScanToBox(tx, { scanId: scan1, shelfBoxId: boxId }));
+  db.transaction((tx) => assignScanToBox(tx, { scanId: scan2, shelfBoxId: boxId }));
+  db.transaction((tx) => removeScanFromBox(tx, { scanId: scan2, actorId: "u1" }));
+
+  const d1 = sqlite.prepare("SELECT total_qty FROM inventory_lots WHERE box_id=? AND date_code='D1'").get(boxId) as any;
+  assert.equal(d1.total_qty, 3);
+  assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM inventory_lots WHERE box_id=? AND date_code='D2'").get(boxId) as any).c, 0);
+  assert.equal((sqlite.prepare("SELECT qty FROM inventory_lot_sources WHERE receiving_invoice_item_id='rii'").get() as any).qty, 3);
+  const rii = sqlite.prepare("SELECT put_away_qty, available_qty FROM receiving_invoice_items WHERE id='rii'").get() as any;
+  assert.deepEqual(rii, { put_away_qty: 3, available_qty: 7 });
+  assertInvariantsHold(db);
+  sqlite.close();
+});
+
+test("removeScanFromBox 409s when the lot has active allocations (lot untouched)", () => {
+  const { sqlite, db } = makeDb();
+  seedReceivableItem(sqlite);
+  const { id: scanId } = db.transaction((tx) => recordPutAwayScan(tx, { receivingInvoiceItemId: "rii", qty: 5 }));
+  const { id: boxId } = db.transaction((tx) => createShelfBox(tx, { receivingOrderId: "ro", shelfCode: "A1" }));
+  db.transaction((tx) => assignScanToBox(tx, { scanId, shelfBoxId: boxId }));
+  sqlite.prepare("UPDATE inventory_lots SET allocated_qty = 2 WHERE box_id=?").run(boxId);
+  assert.throws(() => db.transaction((tx) => removeScanFromBox(tx, { scanId })), (e: any) => e.status === 409);
+  const lot = sqlite.prepare("SELECT total_qty, allocated_qty FROM inventory_lots WHERE box_id=?").get(boxId) as any;
+  assert.deepEqual(lot, { total_qty: 5, allocated_qty: 2 });
+  sqlite.close();
+});

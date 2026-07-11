@@ -195,8 +195,10 @@ export function addAllUnboxedToBox(tx: DbOrTx, a: { shelfBoxId: string; actorId?
 }
 
 export function removeScanFromBox(tx: DbOrTx, a: { scanId: string; actorId?: string | null }): void {
-  const scan = tx.get<{ id: string; itemId: string; qty: number; shelfBoxId: string | null }>(
-    sql`SELECT id, receiving_invoice_item_id AS itemId, qty, shelf_box_id AS shelfBoxId FROM put_away_scans WHERE id = ${a.scanId}`
+  const scan = tx.get<{ id: string; itemId: string; qty: number; shelfBoxId: string | null; dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null }>(
+    sql`SELECT id, receiving_invoice_item_id AS itemId, qty, shelf_box_id AS shelfBoxId,
+               date_code AS dateCode, lot_code AS lotCode, coo AS coo, cow AS cow
+        FROM put_away_scans WHERE id = ${a.scanId}`
   );
   if (!scan) throw new HTTPException(404, { message: "put-away scan not found" });
   if (scan.shelfBoxId === null) throw new HTTPException(409, { message: "scan is not in a box" });
@@ -209,16 +211,19 @@ export function removeScanFromBox(tx: DbOrTx, a: { scanId: string; actorId?: str
 
   tx.run(sql`UPDATE put_away_scans SET shelf_box_id = NULL, verified = 0, verified_at = NULL, updated_at = ${now()} WHERE id = ${scan.id}`);
 
-  // reverse the lot materialization (find the lot via its source row in this box)
+  // reverse the lot materialization (find the lot via its source row in this box, matched on the scan's attributes)
   const src = tx.get<{ id: string; lotId: string; qty: number }>(
     sql`SELECT ils.id, ils.inventory_lot_id AS lotId, ils.qty FROM inventory_lot_sources ils
         JOIN inventory_lots il ON il.id = ils.inventory_lot_id
-        WHERE ils.receiving_invoice_item_id = ${scan.itemId} AND il.box_id = ${box.id}`
+        WHERE ils.receiving_invoice_item_id = ${scan.itemId} AND il.box_id = ${box.id}
+          AND il.date_code IS ${scan.dateCode} AND il.lot_code IS ${scan.lotCode}
+          AND il.coo IS ${scan.coo} AND il.cow IS ${scan.cow}`
   );
   if (src) {
+    const lot = tx.get<{ total: number; allocated: number }>(sql`SELECT total_qty AS total, allocated_qty AS allocated FROM inventory_lots WHERE id = ${src.lotId}`)!;
+    if (lot.allocated > 0) throw new HTTPException(409, { message: "lot has active allocations" });
     if (src.qty - scan.qty <= 0) tx.run(sql`DELETE FROM inventory_lot_sources WHERE id = ${src.id}`);
     else tx.run(sql`UPDATE inventory_lot_sources SET qty = qty - ${scan.qty}, updated_at = ${now()} WHERE id = ${src.id}`);
-    const lot = tx.get<{ total: number }>(sql`SELECT total_qty AS total FROM inventory_lots WHERE id = ${src.lotId}`)!;
     if (lot.total - scan.qty <= 0) tx.run(sql`DELETE FROM inventory_lots WHERE id = ${src.lotId}`);
     else tx.run(sql`UPDATE inventory_lots SET total_qty = total_qty - ${scan.qty}, updated_at = ${now()} WHERE id = ${src.lotId}`);
   }
