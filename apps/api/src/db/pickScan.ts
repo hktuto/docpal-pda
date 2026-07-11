@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import {
   type DbOrTx,
   applyPick,
+  assignPackageToBox,
   createAllocation,
   linkAllocation,
   recomputeLot,
@@ -199,4 +200,82 @@ export function cancelShippingBox(tx: DbOrTx, a: { shippingBoxId: string; actorI
   tx.run(sql`DELETE FROM shipping_boxes WHERE id = ${box.id}`);
   logTransition(tx, { entityType: "shipping_box", entityId: box.id, fromStatus: box.status, toStatus: "cancelled",
     actorId: a.actorId ?? null, note: `picking_order=${box.pickingOrderId}` });
+}
+
+export function maybeAutoFinishPickingOrder(tx: DbOrTx, a: { pickingOrderId: string; actorId?: string | null }): boolean {
+  const order = tx.get<{ id: string; status: string }>(sql`SELECT id, status FROM picking_orders WHERE id = ${a.pickingOrderId}`);
+  if (!order) return false;
+  if (order.status !== "pending" && order.status !== "picking") return false;
+  const items = tx.all<{ qty: number; pickedQty: number }>(
+    sql`SELECT qty, picked_qty AS pickedQty FROM picking_items WHERE picking_order_id = ${order.id}`
+  );
+  if (items.length === 0) return false;
+  if (!items.every((i) => i.pickedQty >= i.qty)) return false;
+
+  tx.run(sql`UPDATE picking_orders SET status = 'finished', updated_at = ${now()} WHERE id = ${order.id}`);
+  tx.run(
+    sql`INSERT INTO measuring_tasks (id, picking_order_id, status, created_at, updated_at)
+        VALUES (${crypto.randomUUID()}, ${order.id}, 'pending', ${now()}, ${now()})
+        ON CONFLICT (picking_order_id) DO NOTHING`
+  );
+  logTransition(tx, { entityType: "picking_order", entityId: order.id, fromStatus: order.status, toStatus: "finished", actorId: a.actorId ?? null });
+  return true;
+}
+
+function loadBoxForPack(tx: DbOrTx, boxId: string): { id: string; status: string; pickingOrderId: string } {
+  const box = tx.get<{ id: string; status: string; pickingOrderId: string }>(
+    sql`SELECT id, status, picking_order_id AS pickingOrderId FROM shipping_boxes WHERE id = ${boxId}`
+  );
+  if (!box) throw new HTTPException(404, { message: "box not found" });
+  if (box.status !== "open") throw new HTTPException(409, { message: "box is not open" });
+  return box;
+}
+
+export function addPackageToBox(tx: DbOrTx, a: { packageId: string; shippingBoxId: string; actorId?: string | null }): void {
+  const pkg = tx.get<{ id: string; pickingItemId: string; pickingOrderId: string; shippingBoxId: string | null; qty: number }>(
+    sql`SELECT pp.id, pp.picking_item_id AS pickingItemId, pi.picking_order_id AS pickingOrderId, pp.shipping_box_id AS shippingBoxId, pp.qty
+        FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id WHERE pp.id = ${a.packageId}`
+  );
+  if (!pkg) throw new HTTPException(404, { message: "package not found" });
+  if (pkg.shippingBoxId !== null) throw new HTTPException(409, { message: "package already in a box" });
+  const box = loadBoxForPack(tx, a.shippingBoxId);
+  if (box.pickingOrderId !== pkg.pickingOrderId) throw new HTTPException(409, { message: "package does not belong to this picking order" });
+  const order = loadOrderForWrite(tx, box.pickingOrderId);
+  assertOrderWritable(order);
+
+  assignPackageToBox(tx, { packageId: pkg.id, shippingBoxId: box.id }); // sets box + recomputePickingItem (picked up, scanned down)
+  logTransition(tx, { entityType: "picking_item", entityId: pkg.pickingItemId, fromStatus: "scanned", toStatus: "boxed",
+    actorId: a.actorId ?? null, note: `qty=${pkg.qty} box=${box.id}` });
+  maybeAutoFinishPickingOrder(tx, { pickingOrderId: pkg.pickingOrderId, actorId: a.actorId ?? null });
+}
+
+export function addAllUnboxedToBox(tx: DbOrTx, a: { shippingBoxId: string; actorId?: string | null }): number {
+  const box = loadBoxForPack(tx, a.shippingBoxId);
+  const order = loadOrderForWrite(tx, box.pickingOrderId);
+  assertOrderWritable(order);
+  const packages = tx.all<{ id: string }>(
+    sql`SELECT pp.id FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id
+        WHERE pi.picking_order_id = ${box.pickingOrderId} AND pp.shipping_box_id IS NULL ORDER BY pp.created_at ASC, pp.id ASC`
+  );
+  for (const pkg of packages) {
+    assignPackageToBox(tx, { packageId: pkg.id, shippingBoxId: box.id });
+  }
+  maybeAutoFinishPickingOrder(tx, { pickingOrderId: box.pickingOrderId, actorId: a.actorId ?? null });
+  return packages.length;
+}
+
+export function removePackageFromBox(tx: DbOrTx, a: { packageId: string; actorId?: string | null }): void {
+  const pkg = tx.get<{ id: string; pickingItemId: string; shippingBoxId: string | null; qty: number }>(
+    sql`SELECT id, picking_item_id AS pickingItemId, shipping_box_id AS shippingBoxId, qty FROM picking_packages WHERE id = ${a.packageId}`
+  );
+  if (!pkg) throw new HTTPException(404, { message: "package not found" });
+  if (pkg.shippingBoxId === null) throw new HTTPException(409, { message: "package is not in a box" });
+  const box = loadBoxForPack(tx, pkg.shippingBoxId);
+  const order = loadOrderForWrite(tx, box.pickingOrderId);
+  if (order.status === "issue") throw new HTTPException(409, { message: "picking order has an open issue" });
+
+  tx.run(sql`UPDATE picking_packages SET shipping_box_id = NULL, verified = 0, updated_at = ${now()} WHERE id = ${pkg.id}`);
+  recomputePickingItem(tx, pkg.pickingItemId);
+  logTransition(tx, { entityType: "picking_item", entityId: pkg.pickingItemId, fromStatus: "boxed", toStatus: "scanned",
+    actorId: a.actorId ?? null, note: `qty=${pkg.qty} box=${box.id}` });
 }

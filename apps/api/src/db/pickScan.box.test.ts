@@ -7,7 +7,14 @@ import { drizzle } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema/index.js";
 import { createDb } from "./client.js";
 import { createTables } from "./tables.js";
-import { createShippingBox, cancelShippingBox } from "./pickScan.js";
+import {
+  createShippingBox,
+  cancelShippingBox,
+  addPackageToBox,
+  addAllUnboxedToBox,
+  removePackageFromBox,
+  maybeAutoFinishPickingOrder,
+} from "./pickScan.js";
 import { assertInvariantsHold } from "./invariants.guard.js";
 
 function makeDb() {
@@ -56,5 +63,73 @@ test("box guards: create on finished/issue order is 409; cancel non-empty or non
   sqlite.prepare("UPDATE shipping_boxes SET status='closed' WHERE id=?").run(boxId);
   assert.throws(() => db.transaction((tx) => cancelShippingBox(tx, { shippingBoxId: boxId })), (e: any) => e.status === 409);
   assert.throws(() => db.transaction((tx) => cancelShippingBox(tx, { shippingBoxId: "nope" })), (e: any) => e.status === 404);
+  sqlite.close();
+});
+
+function seedScanned(sqlite: any, qty = 10) {
+  // one unboxed scanned package of qty on item 'pi'
+  sqlite.exec(`
+    INSERT INTO picking_packages (id, picking_item_id, source_type, source_id, qty, shipping_box_id, created_at, updated_at)
+    VALUES ('pp','pi','inventory_lot','lot',${qty},NULL,'0','0');
+    UPDATE picking_items SET scanned_not_boxed_qty=${qty};
+  `);
+}
+
+test("addPackageToBox moves package into the box: scanned drops, picked rises; auto-finish creates measuring task", () => {
+  const { sqlite, db } = makeDb();
+  seedScanned(sqlite, 10); // item qty is 10 -> fully boxed after this
+  const boxId = db.transaction((tx) => createShippingBox(tx, { pickingOrderId: "po" }));
+  db.transaction((tx) => addPackageToBox(tx, { packageId: "pp", shippingBoxId: boxId, actorId: "u1" }));
+
+  const pi = sqlite.prepare("SELECT picked_qty, scanned_not_boxed_qty, remaining_qty FROM picking_items WHERE id='pi'").get() as any;
+  assert.deepEqual(pi, { picked_qty: 10, scanned_not_boxed_qty: 0, remaining_qty: 0 });
+  const po = sqlite.prepare("SELECT status FROM picking_orders WHERE id='po'").get() as any;
+  assert.equal(po.status, "finished");
+  const tasks = sqlite.prepare("SELECT picking_order_id, status FROM measuring_tasks").all() as any[];
+  assert.deepEqual(tasks, [{ picking_order_id: "po", status: "pending" }]);
+  assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM transition_logs WHERE entity_type='picking_order' AND to_status='finished'").get() as any).c, 1);
+  assertInvariantsHold(db);
+
+  // idempotent: a second maybeAutoFinish does not duplicate the task or the transition
+  db.transaction((tx) => { const done = maybeAutoFinishPickingOrder(tx, { pickingOrderId: "po" }); assert.equal(done, false); });
+  assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM measuring_tasks").get() as any).c, 1);
+  sqlite.close();
+});
+
+test("addPackageToBox guards: cross-order package 409, box not open 409, already-boxed 409", () => {
+  const { sqlite, db } = makeDb();
+  seedScanned(sqlite, 4);
+  sqlite.exec(`INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('po2','e2','R2','picking','0','0')`);
+  const otherBox = db.transaction((tx) => createShippingBox(tx, { pickingOrderId: "po2" }));
+  assert.throws(() => db.transaction((tx) => addPackageToBox(tx, { packageId: "pp", shippingBoxId: otherBox })), (e: any) => e.status === 409);
+
+  const box = db.transaction((tx) => createShippingBox(tx, { pickingOrderId: "po" }));
+  sqlite.prepare("UPDATE shipping_boxes SET status='closed' WHERE id=?").run(box);
+  assert.throws(() => db.transaction((tx) => addPackageToBox(tx, { packageId: "pp", shippingBoxId: box })), (e: any) => e.status === 409);
+
+  sqlite.prepare("UPDATE shipping_boxes SET status='open' WHERE id=?").run(box);
+  db.transaction((tx) => addPackageToBox(tx, { packageId: "pp", shippingBoxId: box }));
+  assert.throws(() => db.transaction((tx) => addPackageToBox(tx, { packageId: "pp", shippingBoxId: box })), (e: any) => e.status === 409);
+  sqlite.close();
+});
+
+test("addAllUnboxedToBox packs every unboxed package of the order; removePackageFromBox reverts picked/scanned", () => {
+  const { sqlite, db } = makeDb();
+  seedScanned(sqlite, 4);
+  sqlite.exec(`INSERT INTO picking_packages (id, picking_item_id, source_type, source_id, qty, shipping_box_id, created_at, updated_at)
+               VALUES ('pp2','pi','inventory_lot','lot',2,NULL,'0','0');
+               UPDATE picking_items SET scanned_not_boxed_qty=6;`);
+  const box = db.transaction((tx) => createShippingBox(tx, { pickingOrderId: "po" }));
+  const n = db.transaction((tx) => addAllUnboxedToBox(tx, { shippingBoxId: box, actorId: "u1" }));
+  assert.equal(n, 2);
+  let pi = sqlite.prepare("SELECT picked_qty, scanned_not_boxed_qty FROM picking_items WHERE id='pi'").get() as any;
+  assert.deepEqual(pi, { picked_qty: 6, scanned_not_boxed_qty: 0 });
+
+  db.transaction((tx) => removePackageFromBox(tx, { packageId: "pp2", actorId: "u1" }));
+  pi = sqlite.prepare("SELECT picked_qty, scanned_not_boxed_qty FROM picking_items WHERE id='pi'").get() as any;
+  assert.deepEqual(pi, { picked_qty: 4, scanned_not_boxed_qty: 2 });
+  const pkg = sqlite.prepare("SELECT shipping_box_id, verified FROM picking_packages WHERE id='pp2'").get() as any;
+  assert.deepEqual(pkg, { shipping_box_id: null, verified: 0 });
+  assertInvariantsHold(db);
   sqlite.close();
 });
