@@ -2520,3 +2520,15 @@ git commit -m "docs: document apps/android native project in AGENTS.md"
 ## Phase 0 done — what comes next
 
 Phase 1 (Receiving) gets its own plan once Phase 0 is verified: receiving order list/detail, scan-to-receive using the scanner pipeline copied in Task 10 (via an `ActivityResultLauncher` wrapper), mismatch reporting, allocation, and the transition_logs writes — ported from `apps/web/db/receiving.ts`, `db/mismatch.ts`, and `db/allocate.ts` with JVM repository tests written from web behavior first.
+
+## Phase 1 handoff notes (from final review, 2026-07-12)
+
+- **ViewModel testability seam first.** Login/Home ViewModels call `AppDatabase.getInstance(application)` and `SessionStore(application)` directly, making them expensive to unit-test. Introduce a minimal provider/DI seam (constructor injection with defaults or a small ServiceLocator) before writing receiving ViewModels, and write the first ViewModel tests to set the pattern.
+- **Indexes consciously deferred:** `idx_inventory_lots_part`, `idx_inventory_lots_available`, `idx_inventory_lot_sources_lot` are not ported — the first and third are covered by leftmost-prefix of the unique composites; `idx_inventory_lots_available` gets prefix + row filter. Acceptable at POC scale (empty lot tables until Phase 3); reconsider when stock-search/put-away queries land (Phases 3/6) and update `DatabaseSchemaTest`'s expected index set if added.
+- **Receiving repositories:** use `db.withTransaction { ... }` (room-ktx present); add `ReceivingOrderDao` / `ReceivingInvoiceItemDao` / `TransitionLogDao` (entity exists, no DAO yet). `transition_logs` writes go in the same transaction as state changes, mirroring the web.
+- **`available_qty` is app-maintained** (design decision 1): every receiving/allocation write must recompute `available_qty = total_qty - allocated_qty`; encode in repository tests written from web behavior.
+- **Scanner integration:** activities compile but nothing launches them — Phase 1 needs the `ActivityResultLauncher` contract wrapper, result parsing via `RectangleResultJson`, and a runtime CAMERA permission request (manifest declares it; nothing requests yet).
+- **Centralize session access** — the stored-id → userById → clear-on-stale logic is duplicated in Login/Home ViewModels; receiving flows need the actor id for `arrived_by` / `reported_by` / transition logs. Extract a `SessionRepository` (or current-user accessor) — third copy is the trigger.
+- **Locale switch helper:** extract `LocaleManager.applyAndRecreate(context, tag)` (currently duplicated 4×). Also note the recreate-based switch loses `remember`-scoped UI state — revisit if language change mid-flow becomes a real concern.
+- **On-device verification still owed** (no device during Phase 0): install side by side with the Capacitor app, cold-launch → login → 6 cards, locale switch + persistence across relaunch, session persistence.
+- Minor: `login_username_placeholder` / `login_password_placeholder` strings exist but login fields use labels only (web shows placeholders); unused `action_language` / `common_loading` strings; `MenuCard` should gain a `route` field when cards start navigating.
