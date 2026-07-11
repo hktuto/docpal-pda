@@ -105,6 +105,7 @@ pickingExecutionRoute.delete("/picking-orders/:id/boxes/:box_id/packages/:packag
 
 pickingExecutionRoute.post("/picking-orders/:id/finish", (c) => {
   const orderId = c.req.param("id");
-  db.transaction((tx) => finishPickingOrder(tx, { pickingOrderId: orderId, actorId: c.req.query("actor_id") ?? null }));
+  const actorId = c.req.query("actor_id") ?? null;
+  db.transaction((tx) => finishPickingOrder(tx, { pickingOrderId: orderId, actorId }));
   return c.json({ ok: true }, 200);
 });

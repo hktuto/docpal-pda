@@ -224,10 +224,8 @@ export function maybeAutoFinishPickingOrder(tx: DbOrTx, a: { pickingOrderId: str
 }
 
 export function finishPickingOrder(tx: DbOrTx, a: { pickingOrderId: string; actorId?: string | null }): void {
-  const order = tx.get<{ id: string; status: string }>(sql`SELECT id, status FROM picking_orders WHERE id = ${a.pickingOrderId}`);
-  if (!order) throw new HTTPException(404, { message: "picking order not found" });
-  if (order.status === "finished") throw new HTTPException(409, { message: "picking order already finished" });
-  if (order.status === "issue") throw new HTTPException(409, { message: "picking order has an open issue" });
+  const order = loadOrderForWrite(tx, a.pickingOrderId);
+  assertOrderWritable(order);
   const items = tx.all<{ qty: number; pickedQty: number }>(
     sql`SELECT qty, picked_qty AS pickedQty FROM picking_items WHERE picking_order_id = ${order.id}`
   );

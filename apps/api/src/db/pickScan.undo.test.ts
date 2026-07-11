@@ -70,13 +70,25 @@ test("undo guards: 404 missing package, 409 boxed package", () => {
   sqlite.close();
 });
 
-test("finishPickingOrder: finishes a fully-picked order; 409 when not fully picked; 404 missing", () => {
+test("finishPickingOrder: finishes a fully-picked order; 409 when not fully picked, finished or in issue; 404 missing", () => {
   const { sqlite, db } = makeDb();
   assert.throws(() => db.transaction((tx) => finishPickingOrder(tx, { pickingOrderId: "nope" })), (e: any) => e.status === 404);
   assert.throws(() => db.transaction((tx) => finishPickingOrder(tx, { pickingOrderId: "po" })), (e: any) => e.status === 409);
-  sqlite.prepare("UPDATE picking_items SET picked_qty=10").run();
+  sqlite.prepare("UPDATE picking_orders SET status='finished'").run();
+  assert.throws(() => db.transaction((tx) => finishPickingOrder(tx, { pickingOrderId: "po" })), (e: any) => e.status === 409);
+  sqlite.prepare("UPDATE picking_orders SET status='issue'").run();
+  assert.throws(() => db.transaction((tx) => finishPickingOrder(tx, { pickingOrderId: "po" })), (e: any) => e.status === 409);
+  sqlite.prepare("UPDATE picking_orders SET status='picking'").run();
+  sqlite.exec(`
+    INSERT INTO shipping_boxes (id, picking_order_id, status, created_at, updated_at) VALUES ('box','po','open','0','0');
+    INSERT INTO picking_packages (id, picking_item_id, source_type, source_id, qty, shipping_box_id, created_at, updated_at)
+      VALUES ('pp','pi','inventory_lot','lot',10,'box','0','0');
+    UPDATE picking_items SET picked_qty=10;
+  `);
   db.transaction((tx) => finishPickingOrder(tx, { pickingOrderId: "po" }));
   assert.equal((sqlite.prepare("SELECT status FROM picking_orders").get() as any).status, "finished");
   assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM measuring_tasks WHERE picking_order_id='po'").get() as any).c, 1);
+  assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM transition_logs WHERE entity_type='picking_order' AND to_status='finished'").get() as any).c, 1);
+  assertInvariantsHold(db);
   sqlite.close();
 });
