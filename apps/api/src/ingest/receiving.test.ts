@@ -80,12 +80,14 @@ test("re-PUT of an identical payload is a no-op (changed=false, updated_at uncha
   const first = db.transaction((tx) => upsertReceivingOrder(tx, "EXT-1", body));
   const stamp = (sqlite.prepare("SELECT updated_at FROM receiving_orders WHERE id=?").get(first.orderId) as any).updated_at;
   const itemStamp = (sqlite.prepare("SELECT updated_at FROM receiving_invoice_items").get() as any).updated_at;
+  const invoiceStamp = (sqlite.prepare("SELECT updated_at FROM receiving_invoices").get() as any).updated_at;
 
   const second = db.transaction((tx) => upsertReceivingOrder(tx, "EXT-1", body));
   assert.equal(second.created, false);
   assert.equal(second.changed, false);
   assert.equal((sqlite.prepare("SELECT updated_at FROM receiving_orders WHERE id=?").get(first.orderId) as any).updated_at, stamp);
   assert.equal((sqlite.prepare("SELECT updated_at FROM receiving_invoice_items").get() as any).updated_at, itemStamp);
+  assert.equal((sqlite.prepare("SELECT updated_at FROM receiving_invoices").get() as any).updated_at, invoiceStamp);
   sqlite.close();
 });
 

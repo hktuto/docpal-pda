@@ -33,21 +33,26 @@ function itemNorms(it: ReceivingPutItem) {
   };
 }
 
-function upsertInvoice(tx: DbOrTx, orderId: string, inv: ReceivingPutInvoice, fallbackSupplierId: string | null): string {
+function upsertInvoice(
+  tx: DbOrTx, orderId: string, inv: ReceivingPutInvoice, fallbackSupplierId: string | null
+): { id: string; changed: boolean } {
   const supplierId = inv.supplier_code !== undefined ? resolveSupplierId(tx, inv.supplier_code) : fallbackSupplierId;
-  const existing = tx.get<{ id: string }>(
-    sql`SELECT id FROM receiving_invoices WHERE receiving_order_id = ${orderId} AND invoice_no = ${inv.invoice_no}`
+  const existing = tx.get<{ id: string; supplierId: string | null }>(
+    sql`SELECT id, supplier_id AS supplierId FROM receiving_invoices WHERE receiving_order_id = ${orderId} AND invoice_no = ${inv.invoice_no}`
   );
   if (existing) {
-    tx.run(sql`UPDATE receiving_invoices SET supplier_id = ${supplierId}, updated_at = ${now()} WHERE id = ${existing.id}`);
-    return existing.id;
+    if (existing.supplierId !== supplierId) {
+      tx.run(sql`UPDATE receiving_invoices SET supplier_id = ${supplierId}, updated_at = ${now()} WHERE id = ${existing.id}`);
+      return { id: existing.id, changed: true };
+    }
+    return { id: existing.id, changed: false };
   }
   const id = crypto.randomUUID();
   tx.run(
     sql`INSERT INTO receiving_invoices (id, receiving_order_id, invoice_no, supplier_id, created_at, updated_at)
         VALUES (${id}, ${orderId}, ${inv.invoice_no}, ${supplierId}, ${now()}, ${now()})`
   );
-  return id;
+  return { id, changed: true };
 }
 
 export function upsertReceivingOrder(tx: DbOrTx, externalId: string, body: ReceivingPutBody): ReceivingUpsertResult {
@@ -65,7 +70,7 @@ export function upsertReceivingOrder(tx: DbOrTx, externalId: string, body: Recei
                   ${orderSupplierId}, ${now()}, ${now()})`
     );
     for (const inv of body.invoices) {
-      const invoiceId = upsertInvoice(tx, orderId, inv, orderSupplierId);
+      const { id: invoiceId } = upsertInvoice(tx, orderId, inv, orderSupplierId);
       for (const it of inv.items) {
         const partId = resolveOrCreatePart(tx, it.part_no, it.description);
         const n = itemNorms(it);
@@ -122,7 +127,9 @@ function reconcileReceivingOrder(
   const seenKeys = new Set<string>();
 
   for (const inv of body.invoices) {
-    const invoiceId = upsertInvoice(tx, orderId, inv, orderSupplierId);
+    const invRes = upsertInvoice(tx, orderId, inv, orderSupplierId);
+    const invoiceId = invRes.id;
+    if (invRes.changed) changed = true;
     for (const it of inv.items) {
       const key = `${invoiceId}:${it.line_no}`;
       seenKeys.add(key);
