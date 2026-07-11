@@ -15,7 +15,13 @@ function loadShelfBox(tx: DbOrTx, boxId: string): ShelfBoxRow {
 }
 
 function nextShelfBoxId(tx: DbOrTx): string {
-  const rows = tx.all<{ id: string }>(sql`SELECT id FROM shelf_boxes WHERE id LIKE 'SBOX-%'`);
+  // Cancelled boxes are hard-deleted, so also scan transition_logs (no FK, kept
+  // forever) to never reissue an id whose audit history still references it.
+  const rows = tx.all<{ id: string }>(sql`
+    SELECT id FROM shelf_boxes WHERE id LIKE 'SBOX-%'
+    UNION ALL
+    SELECT entity_id AS id FROM transition_logs WHERE entity_type = 'shelf_box' AND entity_id LIKE 'SBOX-%'
+  `);
   let max = 0;
   for (const r of rows) { const n = Number(r.id.slice(5)); if (Number.isInteger(n) && n > max) max = n; }
   return `SBOX-${String(max + 1).padStart(4, "0")}`;

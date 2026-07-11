@@ -37,6 +37,17 @@ test("createShelfBox creates an open box scoped to the order + shelf; cancelShel
   sqlite.close();
 });
 
+test("cancelled shelf-box ids are never reissued", () => {
+  const { sqlite, db } = makeDb();
+  const first = db.transaction((tx) => createShelfBox(tx, { receivingOrderId: "ro", shelfCode: "A1" }));
+  assert.equal(first.id, "SBOX-0001");
+  db.transaction((tx) => cancelShelfBox(tx, { shelfBoxId: first.id }));
+  const second = db.transaction((tx) => createShelfBox(tx, { receivingOrderId: "ro", shelfCode: "A1" }));
+  assert.equal(second.id, "SBOX-0002");
+  assertInvariantsHold(db);
+  sqlite.close();
+});
+
 test("create/cancel guards: 404 order, 404 shelf, 409 cancel non-open", () => {
   const { sqlite, db } = makeDb();
   assert.throws(() => db.transaction((tx) => createShelfBox(tx, { receivingOrderId: "nope", shelfCode: "A1" })), (e: any) => e.status === 404);
