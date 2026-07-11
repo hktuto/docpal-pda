@@ -202,6 +202,7 @@ export function cancelShippingBox(tx: DbOrTx, a: { shippingBoxId: string; actorI
     actorId: a.actorId ?? null, note: `picking_order=${box.pickingOrderId}` });
 }
 
+/** Finish order + create measuring task when fully boxed. Call only after picked_qty is fresh (i.e., after a recomputePickingItem-emitting mutation in this tx). */
 export function maybeAutoFinishPickingOrder(tx: DbOrTx, a: { pickingOrderId: string; actorId?: string | null }): boolean {
   const order = tx.get<{ id: string; status: string }>(sql`SELECT id, status FROM picking_orders WHERE id = ${a.pickingOrderId}`);
   if (!order) return false;
@@ -253,12 +254,14 @@ export function addAllUnboxedToBox(tx: DbOrTx, a: { shippingBoxId: string; actor
   const box = loadBoxForPack(tx, a.shippingBoxId);
   const order = loadOrderForWrite(tx, box.pickingOrderId);
   assertOrderWritable(order);
-  const packages = tx.all<{ id: string }>(
-    sql`SELECT pp.id FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id
+  const packages = tx.all<{ id: string; pickingItemId: string; qty: number }>(
+    sql`SELECT pp.id, pp.picking_item_id AS pickingItemId, pp.qty FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id
         WHERE pi.picking_order_id = ${box.pickingOrderId} AND pp.shipping_box_id IS NULL ORDER BY pp.created_at ASC, pp.id ASC`
   );
   for (const pkg of packages) {
     assignPackageToBox(tx, { packageId: pkg.id, shippingBoxId: box.id });
+    logTransition(tx, { entityType: "picking_item", entityId: pkg.pickingItemId, fromStatus: "scanned", toStatus: "boxed",
+      actorId: a.actorId ?? null, note: `qty=${pkg.qty} box=${box.id}` });
   }
   maybeAutoFinishPickingOrder(tx, { pickingOrderId: box.pickingOrderId, actorId: a.actorId ?? null });
   return packages.length;
@@ -272,6 +275,7 @@ export function removePackageFromBox(tx: DbOrTx, a: { packageId: string; actorId
   if (pkg.shippingBoxId === null) throw new HTTPException(409, { message: "package is not in a box" });
   const box = loadBoxForPack(tx, pkg.shippingBoxId);
   const order = loadOrderForWrite(tx, box.pickingOrderId);
+  // only 'issue' is blocked: unpacking a finished order is allowed (measuring-time correction); re-packing is blocked by assertOrderWritable in the add paths.
   if (order.status === "issue") throw new HTTPException(409, { message: "picking order has an open issue" });
 
   tx.run(sql`UPDATE picking_packages SET shipping_box_id = NULL, verified = 0, updated_at = ${now()} WHERE id = ${pkg.id}`);

@@ -90,12 +90,14 @@ pickingExecutionRoute.post("/picking-orders/:id/boxes/:box_id/packages", async (
 
 pickingExecutionRoute.post("/picking-orders/:id/boxes/:box_id/add-all-unboxed", (c) => {
   const boxId = c.req.param("box_id");
-  const n = db.transaction((tx) => addAllUnboxedToBox(tx, { shippingBoxId: boxId, actorId: null }));
+  const actorId = c.req.query("actor_id") ?? null;
+  const n = db.transaction((tx) => addAllUnboxedToBox(tx, { shippingBoxId: boxId, actorId }));
   return c.json({ packed: n }, 200);
 });
 
 pickingExecutionRoute.delete("/picking-orders/:id/boxes/:box_id/packages/:package_id", (c) => {
   const packageId = c.req.param("package_id");
-  db.transaction((tx) => removePackageFromBox(tx, { packageId, actorId: null }));
+  const actorId = c.req.query("actor_id") ?? null;
+  db.transaction((tx) => removePackageFromBox(tx, { packageId, actorId }));
   return c.json({ ok: true }, 200);
 });

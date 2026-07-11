@@ -124,6 +124,8 @@ test("addAllUnboxedToBox packs every unboxed package of the order; removePackage
   assert.equal(n, 2);
   let pi = sqlite.prepare("SELECT picked_qty, scanned_not_boxed_qty FROM picking_items WHERE id='pi'").get() as any;
   assert.deepEqual(pi, { picked_qty: 6, scanned_not_boxed_qty: 0 });
+  assert.equal((sqlite.prepare("SELECT status FROM picking_orders WHERE id='po'").get() as any).status, "picking");
+  assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM transition_logs WHERE entity_type='picking_item' AND to_status='boxed'").get() as any).c, 2);
 
   db.transaction((tx) => removePackageFromBox(tx, { packageId: "pp2", actorId: "u1" }));
   pi = sqlite.prepare("SELECT picked_qty, scanned_not_boxed_qty FROM picking_items WHERE id='pi'").get() as any;
