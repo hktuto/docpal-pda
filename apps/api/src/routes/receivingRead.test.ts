@@ -248,6 +248,64 @@ test("GET /receiving-orders/:id/picking returns 404 for unknown order", async ()
   assert.equal(res.status, 404);
 });
 
+// Regression: the bundle's IN-clause queries (packages_by_item, boxes_by_order,
+// transition_logs) use sql.join and previously concatenated placeholders when
+// multiple ids were involved — invisible with single-id fixtures (a lone
+// placeholder needs no separator). ro7 has two items across two orders.
+sqlite.exec(`
+  INSERT INTO parts (id, part_no, part_no_norm, description, created_at, updated_at)
+    VALUES ('p7','P7','P7','Part seven','0','0');
+  INSERT INTO receiving_orders (id, external_id, ref_no, delivery_date, status, supplier_id, created_at, updated_at)
+    VALUES ('ro7','e7','RO-7',NULL,'in_hand',NULL,'0','0');
+  INSERT INTO receiving_invoices (id, external_id, receiving_order_id, invoice_no, supplier_id, created_at, updated_at)
+    VALUES ('inv7','e7','ro7','INV-7',NULL,'0','0');
+  INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty, available_qty, created_at, updated_at)
+    VALUES ('rii7a','inv7','p7',5,5,5,'0','0'),
+           ('rii7b','inv7','p7',3,3,3,'0','0');
+  INSERT INTO picking_orders (id, external_id, ref_no, status, ship_to, created_at, updated_at)
+    VALUES ('po7a','e7a','PO-7A','picking','Ship A','0','0'),
+           ('po7b','e7b','PO-7B','picking','Ship B','0','0');
+  INSERT INTO picking_items (id, picking_order_id, part_id, qty, picked_qty, created_at, updated_at)
+    VALUES ('pi7a','po7a','p7',5,0,'0','0'),
+           ('pi7b','po7b','p7',3,0,'0','0');
+  INSERT INTO allocations (id, picking_item_id, qty, receiving_order_id, created_at, updated_at)
+    VALUES ('al7a','pi7a',5,'ro7','0','0'),
+           ('al7b','pi7b',3,'ro7','0','0');
+  INSERT INTO shipping_boxes (id, picking_order_id, status, created_at, updated_at)
+    VALUES ('box7a','po7a','open','0','0'),
+           ('box7b','po7b','open','0','0');
+  INSERT INTO picking_packages (id, picking_item_id, source_type, source_id, qty, shipping_box_id, created_at, updated_at)
+    VALUES ('pkg7a','pi7a','receiving_invoice_item','rii7a',2,NULL,'0','0'),
+           ('pkg7b','pi7b','receiving_invoice_item','rii7b',1,'box7b','0','0');
+`);
+
+test("GET /receiving-orders/:id/picking handles multiple items and orders (sql.join regression)", async () => {
+  const res = await app.request("/receiving-orders/ro7/picking");
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as any;
+
+  assert.equal(body.rows.length, 2);
+  assert.equal(body.packages_by_item.pi7a.length, 1);
+  assert.equal(body.packages_by_item.pi7a[0].id, "pkg7a");
+  assert.equal(body.packages_by_item.pi7b.length, 1);
+  assert.equal(body.packages_by_item.pi7b[0].id, "pkg7b");
+  assert.equal(body.boxes_by_order.po7a.length, 1);
+  assert.equal(body.boxes_by_order.po7b.length, 1);
+  assert.deepEqual(body.transition_logs, {});
+});
+
+test("POST /picking-items/transition-logs accepts multiple ids (sql.join regression)", async () => {
+  const res = await app.request("/picking-items/transition-logs", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ids: ["pi6", "pi7a", "pi7b"] }),
+  });
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as any;
+  assert.equal(body.logs.length, 1);
+  assert.equal(body.logs[0].entity_id, "pi6");
+});
+
 test("POST /picking-items/transition-logs returns logs with actor_name for known ids", async () => {
   const res = await app.request("/picking-items/transition-logs", {
     method: "POST",

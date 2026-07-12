@@ -264,7 +264,7 @@ receivingRoute.get("/receiving-orders/:id/picking", (c) => {
       SELECT id, picking_item_id, source_type, source_id, qty, shipping_box_id,
              date_code, lot_code, coo, cow, verified, created_at, updated_at
       FROM picking_packages
-      WHERE picking_item_id IN (${sql.join(itemIds.map((i) => sql`${i}`))})
+      WHERE picking_item_id IN (${sql.join(itemIds.map((i) => sql`${i}`), sql`, `)})
       ORDER BY created_at`);
     for (const pkg of pkgs) {
       const key = String(pkg.picking_item_id);
@@ -277,7 +277,7 @@ receivingRoute.get("/receiving-orders/:id/picking", (c) => {
     const boxes = db.all<Record<string, unknown>>(sql`
       SELECT id, picking_order_id, status
       FROM shipping_boxes
-      WHERE picking_order_id IN (${sql.join(orderIds.map((i) => sql`${i}`))})
+      WHERE picking_order_id IN (${sql.join(orderIds.map((i) => sql`${i}`), sql`, `)})
       ORDER BY id`);
     for (const box of boxes) {
       const key = String(box.picking_order_id);
@@ -293,7 +293,7 @@ receivingRoute.get("/receiving-orders/:id/picking", (c) => {
       FROM transition_logs tl
       LEFT JOIN users u ON u.id = tl.actor_id
       WHERE tl.entity_type = 'picking_order'
-        AND tl.entity_id IN (${sql.join(orderIds.map((i) => sql`${i}`))})
+        AND tl.entity_id IN (${sql.join(orderIds.map((i) => sql`${i}`), sql`, `)})
       ORDER BY tl.created_at DESC`);
     for (const log of logs) {
       const key = String(log.entity_id);
@@ -326,7 +326,7 @@ receivingRoute.post("/picking-items/transition-logs", async (c) => {
     FROM transition_logs tl
     LEFT JOIN users u ON u.id = tl.actor_id
     WHERE tl.entity_type = 'picking_item'
-      AND tl.entity_id IN (${sql.join(ids.map((i) => sql`${i}`))})
+      AND tl.entity_id IN (${sql.join(ids.map((i) => sql`${i}`), sql`, `)})
     ORDER BY tl.created_at DESC`);
   return c.json({ logs }, 200);
 });
