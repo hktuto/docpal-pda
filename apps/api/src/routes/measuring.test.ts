@@ -13,12 +13,15 @@ const { app } = await import("../index.js");
 const sqlite = new Database(dbPath);
 
 test("GET /measuring-tasks filters by status and since", async () => {
-  sqlite.exec(`INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('po','pe','R','finished','0','0')`);
+  sqlite.exec(`INSERT INTO suppliers (id, code, name, created_at, updated_at) VALUES ('sup-l','SUP-L','List Sup','0','0')`);
+  sqlite.exec(`INSERT INTO picking_orders (id, external_id, ref_no, status, supplier_id, created_at, updated_at) VALUES ('po','pe','R','finished','sup-l','0','0')`);
   sqlite.exec(`INSERT INTO measuring_tasks (id, picking_order_id, status, created_at, updated_at) VALUES
     ('mt','po','pending','2026-07-10T00:00:00.000Z','2026-07-10T00:00:00.000Z')`);
   const all = await app.request("/measuring-tasks");
   assert.equal(all.status, 200);
-  assert.equal(((await all.json()) as any[]).length, 1);
+  const allRows = (await all.json()) as any[];
+  assert.equal(allRows.length, 1);
+  assert.equal(allRows[0].supplier_name, "List Sup");
   const pending = await app.request("/measuring-tasks?status=pending");
   assert.equal(((await pending.json()) as any[])[0].id, "mt");
   const since = await app.request("/measuring-tasks?since=2026-07-11T00:00:00.000Z");
@@ -55,6 +58,25 @@ test("GET /measuring-tasks/:id returns task detail with boxes and packages", asy
   assert.equal(d.boxes[0].packages[0].verified, 1);
   const missing = await app.request("/measuring-tasks/nope");
   assert.equal(missing.status, 404);
+});
+
+test("GET /measuring-tasks/:id order carries po_no/required_date_code_notice/delivery_date + supplier (pglite parity)", async () => {
+  sqlite.exec(`
+    INSERT INTO suppliers (id, code, name, qr_template, qrcode_qty_encoding, created_at, updated_at)
+      VALUES ('sup-m','SUP-M','Measure Supplier','^:(?<itemId>.+)$','koa_zeros','0','0');
+    INSERT INTO picking_orders (id, external_id, ref_no, status, delivery_date, supplier_id, po_no, required_date_code_notice, created_at, updated_at)
+      VALUES ('pom','pem','RM','finished','2026-04-05','sup-m','1180200993STD','notice-1','0','0');
+    INSERT INTO measuring_tasks (id, picking_order_id, status, created_at, updated_at) VALUES ('mtm','pom','pending','0','0');
+  `);
+  const res = await app.request("/measuring-tasks/mtm");
+  assert.equal(res.status, 200);
+  const d = (await res.json()) as any;
+  assert.equal(d.order.po_no, "1180200993STD");
+  assert.equal(d.order.required_date_code_notice, "notice-1");
+  assert.equal(d.order.delivery_date, "2026-04-05");
+  assert.equal(d.order.supplier_id, "sup-m");
+  assert.equal(d.order.supplier_name, "Measure Supplier");
+  assert.equal(d.order.supplier_qrcode_qty_encoding, "koa_zeros");
 });
 
 test("GET /measuring-tasks includes totals", async () => {

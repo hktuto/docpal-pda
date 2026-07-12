@@ -121,6 +121,29 @@ test("createTables gives fresh + stale DBs the picking_orders issue columns", ()
   b.close();
 });
 
+test("createTables gives fresh + stale DBs the picking_orders po_no + required_date_code_notice columns", () => {
+  const expected = ["po_no", "required_date_code_notice"];
+  const a = freshDb();
+  createTables(a);
+  const colsA = pickingOrderCols(a);
+  for (const c of expected) assert.ok(colsA.includes(c), `fresh DB missing ${c}`);
+  a.close();
+
+  const b = freshDb();
+  b.exec(`CREATE TABLE picking_orders (
+            id TEXT PRIMARY KEY, external_id TEXT NOT NULL UNIQUE, ref_no TEXT NOT NULL,
+            status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+          INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at)
+            VALUES ('po1','e1','PO-1','pending','0','0');`);
+  createTables(b);
+  const colsB = pickingOrderCols(b);
+  for (const c of expected) assert.ok(colsB.includes(c), `stale DB missing ${c}`);
+  const row = b.prepare("SELECT po_no, required_date_code_notice FROM picking_orders WHERE id='po1'").get() as any;
+  assert.equal(row.po_no, null);
+  assert.equal(row.required_date_code_notice, null);
+  b.close();
+});
+
 test("createTables upgrades the cycle-coalesce index to its partial form", () => {
   const sqlite = freshDb();
   createTables(sqlite);

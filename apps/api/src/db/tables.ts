@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS picking_orders (
   id TEXT PRIMARY KEY, external_id TEXT NOT NULL UNIQUE, ref_no TEXT NOT NULL,
   status TEXT NOT NULL CHECK(status IN ('pending','picking','finished','issue')), ship_to TEXT, destination_country TEXT,
   delivery_date TEXT, supplier_id TEXT REFERENCES suppliers(id),
+  po_no TEXT, required_date_code_notice TEXT,
   issue_reason TEXT, issue_note TEXT, issue_qty INTEGER, issue_pack_size INTEGER, issue_remark TEXT,
   issue_reported_at TEXT, issue_reported_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS picking_orders_status_updated_idx ON picking_orders(status, updated_at);
@@ -173,6 +174,8 @@ export function createTables(sqlite: DatabaseType): void {
   ensureColumn(sqlite, "receiving_invoice_items", "line_no", "line_no INTEGER");
   ensureColumn(sqlite, "picking_items", "line_id", "line_id TEXT");
   ensureColumn(sqlite, "suppliers", "qrcode_qty_encoding", "qrcode_qty_encoding TEXT");
+  ensureColumn(sqlite, "picking_orders", "po_no", "po_no TEXT");
+  ensureColumn(sqlite, "picking_orders", "required_date_code_notice", "required_date_code_notice TEXT");
   ensureColumn(sqlite, "shelf_boxes", "receiving_order_id", "receiving_order_id TEXT REFERENCES receiving_orders(id)");
   ensureColumn(sqlite, "shelf_boxes", "status", "status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','closed','verified'))");
   // receiving_item_mismatches gained the web mismatch-workflow columns (Plan 7 task 5).

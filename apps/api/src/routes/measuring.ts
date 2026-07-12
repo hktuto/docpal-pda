@@ -11,11 +11,13 @@ measuringRoute.get("/measuring-tasks", (c) => {
   const since = c.req.query("since");
   const rows = db.all<Record<string, unknown>>(sql`
     SELECT mt.id, mt.picking_order_id, mt.status, mt.created_at, mt.updated_at, po.ref_no,
+      s.name AS supplier_name,
       (SELECT COALESCE(SUM(qty), 0) FROM picking_items WHERE picking_order_id = mt.picking_order_id) AS total_items,
       (SELECT COALESCE(SUM(pp.qty), 0) FROM picking_packages pp
         WHERE pp.shipping_box_id IS NOT NULL
           AND pp.picking_item_id IN (SELECT id FROM picking_items WHERE picking_order_id = mt.picking_order_id)) AS packed_items
     FROM measuring_tasks mt JOIN picking_orders po ON po.id = mt.picking_order_id
+    LEFT JOIN suppliers s ON s.id = po.supplier_id
     WHERE (${status ?? null} IS NULL OR mt.status = ${status ?? null})
       AND (${since ?? null} IS NULL OR mt.updated_at > ${since ?? null})
     ORDER BY mt.updated_at ASC, mt.id ASC LIMIT 200`);
@@ -29,8 +31,12 @@ measuringRoute.get("/measuring-tasks/:id", (c) => {
   if (!task) throw new HTTPException(404, { message: "measuring task not found" });
   const orderId = task.picking_order_id as string;
   const order = db.get<Record<string, unknown>>(sql`
-    SELECT id, external_id, ref_no, status, ship_to, destination_country, created_at, updated_at
-    FROM picking_orders WHERE id = ${orderId}`);
+    SELECT po.id, po.external_id, po.ref_no, po.status, po.ship_to, po.destination_country,
+           po.delivery_date, po.po_no, po.required_date_code_notice, po.created_at, po.updated_at,
+           s.id AS supplier_id, s.code AS supplier_code, s.name AS supplier_name,
+           s.qr_template AS supplier_qr_template, s.qrcode_qty_encoding AS supplier_qrcode_qty_encoding
+    FROM picking_orders po LEFT JOIN suppliers s ON s.id = po.supplier_id
+    WHERE po.id = ${orderId}`);
   const items = db.all<Record<string, unknown>>(sql`
     SELECT pi.id, pi.part_id, p.part_no, pi.qty, pi.picked_qty, pi.scanned_not_boxed_qty,
            pi.remaining_qty, pi.allocated_qty, pi.line_id

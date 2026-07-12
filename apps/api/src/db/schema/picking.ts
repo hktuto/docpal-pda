@@ -14,6 +14,8 @@ export const pickingOrders = sqliteTable(
     destinationCountry: text("destination_country"),
     deliveryDate: text("delivery_date"),
     supplierId: text("supplier_id"),
+    poNo: text("po_no"),
+    requiredDateCodeNotice: text("required_date_code_notice"),
     issueReason: text("issue_reason"),
     issueNote: text("issue_note"),
     issueQty: integer("issue_qty"),

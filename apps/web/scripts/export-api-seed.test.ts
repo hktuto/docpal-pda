@@ -182,8 +182,8 @@ describe("export-api-seed", () => {
         lines.push(
           insert(
             "picking_orders",
-            ["id", "external_id", "ref_no", "status", "ship_to", "destination_country", "delivery_date", "supplier_id", "issue_reason", "issue_note", "created_at", "updated_at"],
-            [r.id, r.ref_no, r.ref_no, r.status, r.ship_to, r.destination_country, r.delivery_date == null ? null : iso(r.delivery_date), r.supplier_id, r.issue_reason, r.issue_note, iso(r.created_at), iso(r.updated_at)]
+            ["id", "external_id", "ref_no", "status", "ship_to", "destination_country", "delivery_date", "supplier_id", "po_no", "required_date_code_notice", "issue_reason", "issue_note", "created_at", "updated_at"],
+            [r.id, r.ref_no, r.ref_no, r.status, r.ship_to, r.destination_country, r.delivery_date == null ? null : iso(r.delivery_date), r.supplier_id, r.po_no, r.required_date_code_notice, r.issue_reason, r.issue_note, iso(r.created_at), iso(r.updated_at)]
           )
         );
       }

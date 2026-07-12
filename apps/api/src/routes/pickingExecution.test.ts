@@ -383,6 +383,8 @@ test("GET /picking-orders/:id returns null issue fields and null measuring_task 
   assert.equal(d.order.issue_reported_by, null);
   assert.equal(d.order.issue_reported_by_name, null);
   assert.equal(d.measuring_task, null);
+  assert.equal(d.order.po_no, null);
+  assert.equal(d.order.required_date_code_notice, null);
   assert.equal(d.items[0].required_date_code, null);
   assert.equal(d.items[0].source_shelf_code, null);
 });
@@ -390,12 +392,14 @@ test("GET /picking-orders/:id returns null issue fields and null measuring_task 
 test("GET /picking-orders/:id returns supplier and delivery_date via the suppliers join", async () => {
   sqlite.exec(`
     INSERT INTO suppliers (id, code, name, qr_template, qrcode_qty_encoding, created_at, updated_at) VALUES ('supx','SUPX','Sup X','tpl-x','plain','0','0');
-    INSERT INTO picking_orders (id, external_id, ref_no, status, delivery_date, supplier_id, created_at, updated_at) VALUES ('pox','poxe','POX','picking','2026-07-13T00:00:00.000Z','supx','0','0');
+    INSERT INTO picking_orders (id, external_id, ref_no, status, delivery_date, supplier_id, po_no, required_date_code_notice, created_at, updated_at) VALUES ('pox','poxe','POX','picking','2026-07-13T00:00:00.000Z','supx','1180200993STD','notice-x','0','0');
   `);
   const res = await app.request("/picking-orders/pox");
   assert.equal(res.status, 200);
   const d = (await res.json()) as any;
   assert.equal(d.order.delivery_date, "2026-07-13T00:00:00.000Z");
+  assert.equal(d.order.po_no, "1180200993STD");
+  assert.equal(d.order.required_date_code_notice, "notice-x");
   assert.equal(d.order.supplier_id, "supx");
   assert.equal(d.order.supplier_code, "SUPX");
   assert.equal(d.order.supplier_name, "Sup X");

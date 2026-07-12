@@ -446,8 +446,6 @@ function toApiMeasuringPackage(
   };
 }
 
-// The measuring detail query selects no supplier/delivery/po columns on the
-// order and no allocations at all; those stay null/empty (API gaps).
 function toApiMeasuringPickingOrder(
   order: RawRow,
   items: RawRow[]
@@ -456,10 +454,12 @@ function toApiMeasuringPickingOrder(
   return {
     id: orderId,
     refNo: order.ref_no ? String(order.ref_no) : null,
-    supplierId: null,
-    deliveryDate: null,
-    poNo: null,
-    requiredDateCodeNotice: null,
+    supplierId: order.supplier_id ? String(order.supplier_id) : null,
+    deliveryDate: order.delivery_date ? new Date(order.delivery_date) : null,
+    poNo: order.po_no ? String(order.po_no) : null,
+    requiredDateCodeNotice: order.required_date_code_notice
+      ? String(order.required_date_code_notice)
+      : null,
     shipTo: order.ship_to ? String(order.ship_to) : null,
     destinationCountry: order.destination_country
       ? String(order.destination_country)
@@ -467,7 +467,15 @@ function toApiMeasuringPickingOrder(
     status: order.status as PickingOrderStatus,
     createdAt: new Date(order.created_at),
     updatedAt: new Date(order.updated_at),
-    supplier: null,
+    supplier: order.supplier_id
+      ? {
+          id: String(order.supplier_id),
+          code: String(order.supplier_code),
+          name: String(order.supplier_name),
+          qrcodeTemplate: order.supplier_qr_template ?? null,
+          qrcodeQtyEncoding: order.supplier_qrcode_qty_encoding ?? null,
+        }
+      : null,
     items: items.map((it) => ({
       id: String(it.id),
       pickingOrderId: orderId,
@@ -614,8 +622,6 @@ function toPickingOrderDetailBundle(bundle: RawRow): PickingOrderDetail {
     id: orderId,
     refNo: String(order.ref_no),
     status: order.status as PickingOrderStatus,
-    // The bundle's order select has no po_no/required_date_code_notice
-    // columns (API gaps); they default to null.
     deliveryDate: order.delivery_date ? new Date(order.delivery_date) : null,
     supplier: order.supplier_id
       ? {
@@ -1038,7 +1044,6 @@ export function createApiWarehouseService(
         status: row.status as MeasuringTaskStatus,
         pickingOrderId: String(row.picking_order_id),
         pickingOrderRef: row.ref_no ? String(row.ref_no) : null,
-        // The list query has no supplier join (API gap).
         supplierName: row.supplier_name ? String(row.supplier_name) : null,
         totalItems: Number(row.total_items ?? 0),
         packedItems: Number(row.packed_items ?? 0),
