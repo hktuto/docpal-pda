@@ -146,7 +146,7 @@ private fun ReceivingOrderCard(order: ReceivingOrderSummary, onClick: () -> Unit
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    order.deliveryDate?.let { formatIsoDate(it) } ?: "",
+                    order.deliveryDate?.let { formatIsoDate(it) } ?: stringResource(R.string.common_no_date),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
