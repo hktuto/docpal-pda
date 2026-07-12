@@ -153,8 +153,8 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     public: {
-      warehouseAdapter: "pglite", // "pglite" | "api"
-      apiBaseUrl: "",             // e.g. "https://warehouse-api.example.com/api/v1"
+      warehouseAdapter: "api",    // "pglite" | "api"
+      apiBaseUrl: "http://localhost:3001", // override with NUXT_PUBLIC_API_BASE_URL (device builds need a LAN-reachable host)
       seedPreset: "precalc",      // "default" (allocate on reset) | "precalc"
     },
   },

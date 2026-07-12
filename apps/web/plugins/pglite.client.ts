@@ -7,6 +7,13 @@ import { seedDb as seedDbPrecalc, ensureDemoPasswords as ensureDemoPasswordsPrec
 
 export default defineNuxtPlugin(async () => {
   const config = useRuntimeConfig();
+
+  // When the app talks to the real API, PGlite must not boot at all.
+  // (The static imports above stay — the WASM chunk is accepted dead weight.)
+  if (config.public.warehouseAdapter !== "pglite") {
+    return;
+  }
+
   const usePrecalc = config.public.seedPreset === "precalc";
   const seedDb = usePrecalc ? seedDbPrecalc : seedDbDefault;
   const ensureDemoPasswords = usePrecalc ? ensureDemoPasswordsPrecalc : ensureDemoPasswordsDefault;
