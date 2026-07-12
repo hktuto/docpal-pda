@@ -51,7 +51,7 @@ fun AppNav() {
             Routes.RECEIVING_DETAIL,
             arguments = listOf(navArgument("orderId") { type = NavType.StringType }),
         ) { entry ->
-            val orderId = entry.arguments!!.getString("orderId")!!
+            val orderId = requireNotNull(entry.arguments?.getString("orderId")) { "orderId argument is required" }
             ReceivingDetailScreen(orderId = orderId, onBack = { navController.popBackStack() })
         }
     }

@@ -80,6 +80,9 @@ class ReceivingDetailViewModel(
 
     fun setTab(tab: Int) = _uiState.update { it.copy(tab = tab) }
 
+    /** Clears a surfaced error — called when the error's UI surface is dismissed/replaced. */
+    fun clearError() = _uiState.update { it.copy(errorKey = null) }
+
     fun reload() {
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
@@ -131,6 +134,8 @@ class ReceivingDetailViewModel(
     }
 
     private fun runAction(block: suspend (actorId: String) -> Unit) {
+        // Serialize actions so overlapping taps can't clobber each other's state.
+        if (_uiState.value.actionInProgress) return
         viewModelScope.launch {
             _uiState.update { it.copy(actionInProgress = true, errorKey = null) }
             try {

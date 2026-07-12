@@ -45,9 +45,15 @@ class ReceivingDetailViewModelTest {
         val itemId: String, val reason: String, val qty: Int?, val wrongPart: String?, val note: String,
     )
 
+    private data class EditCall(
+        val mismatchId: String, val actorId: String, val reason: String,
+        val qty: Int?, val wrongPart: String?, val note: String,
+    )
+
     private class FakeMismatchSource : MismatchSource {
         var throwOnReport: LocalizedException? = null
         val reportCalls = ArrayList<ReportCall>()
+        val editCalls = ArrayList<EditCall>()
         val confirmCalls = ArrayList<Pair<String, String>>()
         val cancelCalls = ArrayList<Pair<String, String>>()
 
@@ -63,6 +69,7 @@ class ReceivingDetailViewModelTest {
             mismatchId: String, actorId: String, reason: String,
             mismatchQty: Int?, wrongPartNo: String?, note: String,
         ) {
+            editCalls += EditCall(mismatchId, actorId, reason, mismatchQty, wrongPartNo, note)
         }
 
         override suspend fun confirmMismatch(mismatchId: String, actorId: String) {
@@ -141,6 +148,51 @@ class ReceivingDetailViewModelTest {
         val otherMismatch = otherVm.uiState.value.detail!!.invoices[0].items[0].mismatch!!
         assertFalse(otherVm.canEditMismatch(otherMismatch))
         assertTrue(otherVm.canReviewMismatch(otherMismatch))
+    }
+
+    @Test fun `reportMismatch success records call, reloads, no error`() = runTest {
+        val receiving = FakeReceivingSource()
+        val mismatch = FakeMismatchSource()
+        val vm = vm(receiving, mismatch)
+        advanceUntilIdle()
+        vm.reportMismatch("item-1", "damaged", 2, null, "note")
+        advanceUntilIdle()
+        assertEquals(listOf(ReportCall("item-1", "damaged", 2, null, "note")), mismatch.reportCalls)
+        // Once on init, once after the mutation.
+        assertEquals(listOf("order-1", "order-1"), receiving.getOrderDetailCalls)
+        assertNull(vm.uiState.value.errorKey)
+        assertFalse(vm.uiState.value.actionInProgress)
+    }
+
+    @Test fun `errorKey is cleared by the next successful action`() = runTest {
+        val receiving = FakeReceivingSource()
+        val mismatch = FakeMismatchSource().apply {
+            throwOnReport = LocalizedException("pending_mismatch_already_exists")
+        }
+        val vm = vm(receiving, mismatch)
+        advanceUntilIdle()
+        vm.reportMismatch("item-1", "damaged", 2, null, "note")
+        advanceUntilIdle()
+        assertEquals("pending_mismatch_already_exists", vm.uiState.value.errorKey)
+
+        mismatch.throwOnReport = null
+        vm.reportMismatch("item-1", "damaged", 2, null, "note")
+        advanceUntilIdle()
+        assertNull(vm.uiState.value.errorKey)
+        assertEquals(1, mismatch.reportCalls.size)
+    }
+
+    @Test fun `editMismatch passes mismatch id and actor`() = runTest {
+        val receiving = FakeReceivingSource()
+        val mismatch = FakeMismatchSource()
+        val vm = vm(receiving, mismatch)
+        advanceUntilIdle()
+        vm.editMismatch("m-9", "wrong_part", 3, "PART-X", "note")
+        advanceUntilIdle()
+        assertEquals(
+            listOf(EditCall("m-9", "user-1", "wrong_part", 3, "PART-X", "note")),
+            mismatch.editCalls,
+        )
     }
 
     @Test fun `confirm and cancel mismatch pass mismatch id and actor`() = runTest {

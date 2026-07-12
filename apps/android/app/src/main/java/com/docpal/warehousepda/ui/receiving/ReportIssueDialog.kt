@@ -81,6 +81,9 @@ fun ReportIssueDialog(
                                 text = { Text(reasonLabel(r)) },
                                 onClick = {
                                     reason = r
+                                    // Fields from a previous reason don't carry over.
+                                    qtyText = ""
+                                    wrongPartNo = ""
                                     validationError = null
                                     reasonExpanded = false
                                 },
@@ -89,18 +92,20 @@ fun ReportIssueDialog(
                     }
                 }
 
-                if (reason != null && reason != MismatchRules.NOT_FOUND) {
-                    Spacer(Modifier.height(8.dp))
-                    OutlinedTextField(
-                        value = qtyText,
-                        onValueChange = { qtyText = it.filter { c -> c.isDigit() }; validationError = null },
-                        label = { Text(stringResource(qtyLabelRes(reason!!))) },
-                        placeholder = { Text(stringResource(qtyPlaceholderRes(reason!!))) },
-                        singleLine = true,
-                        enabled = !submitting,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                reason?.let { selected ->
+                    if (selected != MismatchRules.NOT_FOUND) {
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedTextField(
+                            value = qtyText,
+                            onValueChange = { qtyText = it.filter { c -> c.isDigit() }; validationError = null },
+                            label = { Text(stringResource(qtyLabelRes(selected))) },
+                            placeholder = { Text(stringResource(qtyPlaceholderRes(selected))) },
+                            singleLine = true,
+                            enabled = !submitting,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
                 }
 
                 if (reason == MismatchRules.WRONG_PART) {
