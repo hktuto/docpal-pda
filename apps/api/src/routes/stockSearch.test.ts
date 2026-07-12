@@ -23,17 +23,20 @@ sqlite.exec(`
     VALUES ('sup10','SUP10','Supplier Ten','0','0');
   INSERT INTO parts (id, part_no, part_no_norm, description, created_at, updated_at) VALUES
     ('p10a','P10A','P10A','Part ten A','0','0'),
-    ('p10b','P10B','P10B','Part ten B','0','0');
+    ('p10b','P10B','P10B','Part ten B','0','0'),
+    ('p10c','P10C','P10C','Part ten C','0','0');
   INSERT INTO receiving_orders (id, external_id, ref_no, status, supplier_id, created_at, updated_at)
     VALUES ('ro10','e10','RO-10','in_hand','sup10','0','0');
   INSERT INTO receiving_invoices (id, receiving_order_id, invoice_no, supplier_id, created_at, updated_at)
     VALUES ('inv10','ro10','INV-10','sup10','0','0');
   INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty, available_qty, created_at, updated_at)
     VALUES ('rii10','inv10','p10a',4,4,4,'0','0'),
-           ('rii10b','inv10','p10b',10,10,0,'0','0');
+           ('rii10b','inv10','p10b',10,10,0,'0','0'),
+           ('rii10c','inv10','p10c',2,2,0,'0','0');
   INSERT INTO inventory_lots (id, part_id, shelf_code, box_id, total_qty, allocated_qty, created_at, updated_at)
     VALUES ('lot10a','p10a',NULL,NULL,4,0,'0','0'),
-           ('lot10','p10b','S1','B1',10,3,'0','0');
+           ('lot10','p10b','S1','B1',10,3,'0','0'),
+           ('lot10c','p10c','S2',NULL,0,0,'0','0');
   INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at)
     VALUES ('po10','e10p','PO-10','picking','0','0');
   INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at)
@@ -50,7 +53,9 @@ test("GET /stock-search/suppliers returns per-supplier part stats", async () => 
   assert.ok(sup, "sup10 row present");
   assert.equal(sup.code, "SUP10");
   assert.equal(sup.name, "Supplier Ten");
-  assert.equal(sup.total_parts, 2);
+  // p10c is linked to sup10 but its only lot has total_qty = 0, so it counts
+  // toward total_parts but NOT parts_with_inventory (web uses total_qty > 0).
+  assert.equal(sup.total_parts, 3);
   assert.equal(sup.parts_with_inventory, 2);
 });
 
@@ -60,7 +65,7 @@ test("GET /stock-search/suppliers/:id/parts returns parts ordered by part_no; 40
   const rows = (await res.json()) as any[];
   assert.deepEqual(
     rows.map((r) => r.id),
-    ["p10a", "p10b"],
+    ["p10a", "p10b", "p10c"],
   );
   assert.equal(rows[0].part_no, "P10A");
   assert.equal(rows[0].description, "Part ten A");
@@ -71,10 +76,10 @@ test("GET /stock-search/suppliers/:id/parts returns parts ordered by part_no; 40
 });
 
 test("GET /stock-search/parts/lots returns per-lot quantities and location labels", async () => {
-  const res = await app.request("/stock-search/parts/lots?part_ids=p10a,p10b");
+  const res = await app.request("/stock-search/parts/lots?part_ids=p10a,p10b,p10c");
   assert.equal(res.status, 200);
   const rows = (await res.json()) as any[];
-  assert.equal(rows.length, 2);
+  assert.equal(rows.length, 3);
   const byPart = Object.fromEntries(rows.map((r) => [r.part_id, r]));
 
   const recv = byPart["p10a"];
@@ -92,6 +97,14 @@ test("GET /stock-search/parts/lots returns per-lot quantities and location label
   assert.equal(shelf.total_qty, 10);
   assert.equal(shelf.allocated_qty, 3);
   assert.equal(shelf.available_qty, 7);
+
+  // shelf-only branch of location_label (box_id NULL)
+  const shelfOnly = byPart["p10c"];
+  assert.equal(shelfOnly.location_label, "S2");
+  assert.equal(shelfOnly.shelf_code, "S2");
+  assert.equal(shelfOnly.box_id, null);
+  assert.equal(shelfOnly.total_qty, 0);
+  assert.equal(shelfOnly.available_qty, 0);
 });
 
 test("GET /stock-search/parts/lots without part_ids is 400", async () => {
