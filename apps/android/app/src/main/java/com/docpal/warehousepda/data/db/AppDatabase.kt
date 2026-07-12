@@ -39,6 +39,8 @@ abstract class AppDatabase : RoomDatabase() {
 
     abstract fun pickingDao(): PickingDao
 
+    abstract fun scanDao(): ScanDao
+
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
