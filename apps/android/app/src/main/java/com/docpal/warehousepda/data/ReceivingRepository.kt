@@ -1,7 +1,6 @@
 package com.docpal.warehousepda.data
 
 import com.docpal.warehousepda.data.db.AppDatabase
-import com.docpal.warehousepda.data.db.DetailItemFlatRow
 import com.docpal.warehousepda.data.db.ReceivingItemMismatchEntity
 import com.docpal.warehousepda.data.db.TransitionLogEntity
 import com.docpal.warehousepda.domain.AllocationDistributor
@@ -75,7 +74,7 @@ class ReceivingRepository(private val db: AppDatabase, private val allocator: Al
         val itemIds = rows.map { it.itemId }
 
         // Availability per item (allocated share) via the distributor.
-        val availability = availabilityByItem(orderId, rows, order.deliveryDate)
+        val availability = ReceivingAvailability.byItem(dao, orderId, rows, order.deliveryDate)
 
         val mismatches = if (itemIds.isEmpty()) emptyList() else dao.activeMismatches(itemIds)
         val mismatchByItem = HashMap<String, ReceivingItemMismatchEntity>()
@@ -152,27 +151,8 @@ class ReceivingRepository(private val db: AppDatabase, private val allocator: Al
     internal fun availableQtyByItem(orderId: String): Map<String, Int> {
         val order = dao.orderById(orderId) ?: return emptyMap()
         val rows = dao.detailItemRows(orderId)
-        return availabilityByItem(orderId, rows, order.deliveryDate)
+        return ReceivingAvailability.byItem(dao, orderId, rows, order.deliveryDate)
             .mapValues { it.value.availableQty }
-    }
-
-    private fun availabilityByItem(
-        orderId: String,
-        rows: List<DetailItemFlatRow>,
-        deliveryDate: Long?,
-    ): Map<String, AllocationDistributor.ItemAvailability> {
-        val totals = dao.orderAllocationTotals().associate { (it.receivingOrderId to it.partId) to it.totalQty }
-        val unboxed = dao.unboxedPutAwayScanTotals().associate { it.itemId to it.qty }
-        val items = rows.map {
-            AllocationDistributor.InvoiceItemRow(
-                id = it.itemId, partId = it.partId, receivingOrderId = orderId,
-                grossQty = it.receivedQty - it.pickedQty - it.putAwayQty,
-                deliveryDate = deliveryDate,
-                invoiceNo = it.invoiceNo,
-                dateCode = it.dateCode,
-            )
-        }
-        return AllocationDistributor.distribute(items, totals, unboxed)
     }
 
     /** Port of db/receiving.ts confirmReceivingOrderArrived. Allocation runs AFTER the transaction, best-effort. */
