@@ -89,6 +89,38 @@ test("createTables gives fresh + stale DBs the receiving_item_mismatches workflo
   b.close();
 });
 
+function pickingOrderCols(sqlite: any): string[] {
+  return (sqlite.prepare("PRAGMA table_info(picking_orders)").all() as any[]).map((c) => c.name);
+}
+
+test("createTables gives fresh + stale DBs the picking_orders issue columns", () => {
+  const expected = ["issue_qty", "issue_pack_size", "issue_remark", "issue_reported_at", "issue_reported_by"];
+  // fresh DB: columns come straight from the DDL
+  const a = freshDb();
+  createTables(a);
+  const colsA = pickingOrderCols(a);
+  for (const c of expected) assert.ok(colsA.includes(c), `fresh DB missing ${c}`);
+  a.close();
+
+  // stale DB: pre-create the OLD shape (issue_reason/issue_note only) + a row, then createTables must upgrade it
+  const b = freshDb();
+  b.exec(`CREATE TABLE picking_orders (
+            id TEXT PRIMARY KEY, external_id TEXT NOT NULL UNIQUE, ref_no TEXT NOT NULL,
+            status TEXT NOT NULL, issue_reason TEXT, issue_note TEXT,
+            created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+          INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at)
+            VALUES ('po1','e1','PO-1','pending','0','0');`);
+  createTables(b);
+  const colsB = pickingOrderCols(b);
+  for (const c of expected) assert.ok(colsB.includes(c), `stale DB missing ${c}`);
+  // pre-existing rows backfill NULL
+  const row = b.prepare("SELECT issue_qty, issue_remark, issue_reported_at FROM picking_orders WHERE id='po1'").get() as any;
+  assert.equal(row.issue_qty, null);
+  assert.equal(row.issue_remark, null);
+  assert.equal(row.issue_reported_at, null);
+  b.close();
+});
+
 test("createTables upgrades the cycle-coalesce index to its partial form", () => {
   const sqlite = freshDb();
   createTables(sqlite);

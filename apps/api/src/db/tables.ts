@@ -47,7 +47,8 @@ CREATE INDEX IF NOT EXISTS rim_item_idx ON receiving_item_mismatches(receiving_i
 CREATE TABLE IF NOT EXISTS picking_orders (
   id TEXT PRIMARY KEY, external_id TEXT NOT NULL UNIQUE, ref_no TEXT NOT NULL,
   status TEXT NOT NULL CHECK(status IN ('pending','picking','finished','issue')), ship_to TEXT, destination_country TEXT,
-  issue_reason TEXT, issue_note TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+  issue_reason TEXT, issue_note TEXT, issue_qty INTEGER, issue_pack_size INTEGER, issue_remark TEXT,
+  issue_reported_at TEXT, issue_reported_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS picking_orders_status_updated_idx ON picking_orders(status, updated_at);
 CREATE TABLE IF NOT EXISTS picking_items (
   id TEXT PRIMARY KEY, picking_order_id TEXT NOT NULL REFERENCES picking_orders(id) ON DELETE CASCADE,
@@ -185,6 +186,13 @@ export function createTables(sqlite: DatabaseType): void {
   ensureColumn(sqlite, "receiving_item_mismatches", "confirmed_at", "confirmed_at TEXT");
   ensureColumn(sqlite, "receiving_item_mismatches", "cancelled_by", "cancelled_by TEXT");
   ensureColumn(sqlite, "receiving_item_mismatches", "cancelled_at", "cancelled_at TEXT");
+  // picking_orders gained the web issue-reporting columns (Plan 7 task 7).
+  // issue_reason / issue_note were already present from the original DDL.
+  ensureColumn(sqlite, "picking_orders", "issue_qty", "issue_qty INTEGER");
+  ensureColumn(sqlite, "picking_orders", "issue_pack_size", "issue_pack_size INTEGER");
+  ensureColumn(sqlite, "picking_orders", "issue_remark", "issue_remark TEXT");
+  ensureColumn(sqlite, "picking_orders", "issue_reported_at", "issue_reported_at TEXT");
+  ensureColumn(sqlite, "picking_orders", "issue_reported_by", "issue_reported_by TEXT");
   // The cycle-coalesce index became partial (pending-only). A stale dev.sqlite still
   // holds the old non-partial definition, which CREATE ... IF NOT EXISTS would keep,
   // so drop it first and let the DDL recreate it (cheap at demo scale).
