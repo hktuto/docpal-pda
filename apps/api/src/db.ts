@@ -4,6 +4,7 @@ import path from "node:path";
 import * as schema from "./db/schema/index.js";
 import { createDb } from "./db/client.js";
 import { createTables } from "./db/tables.js";
+import { seedIfEmpty } from "./db/seed.js";
 
 const resolved = path.resolve(process.env.DATABASE_URL ?? "./dev.sqlite");
 const { sqlite } = createDb(resolved);
@@ -12,3 +13,8 @@ createTables(sqlite);
 export { sqlite };
 export const db = drizzle(sqlite, { schema });
 export type AppDb = typeof db;
+
+// Auto-seed demo data on an empty database. Disabled under the test runner
+// (NODE_ENV is not set by `tsx --test`) via WAREHOUSE_SEED=off so route tests
+// keep their own fixtures on fresh temp databases.
+if (process.env.WAREHOUSE_SEED !== "off") seedIfEmpty(sqlite, db);

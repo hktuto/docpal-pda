@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { app } from "./index.js";
+
+process.env.WAREHOUSE_SEED = "off";
+const { app } = await import("./index.js");
 
 test("GET /health returns ok with the database reachable", async () => {
   const res = await app.request("/health");
