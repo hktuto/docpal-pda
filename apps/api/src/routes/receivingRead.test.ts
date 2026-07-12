@@ -275,4 +275,94 @@ test("POST /picking-items/transition-logs returns 400 for missing or empty ids",
   assert.equal(missing.status, 400);
 });
 
+// Task 9 fixtures: scan-candidates for ro9c (in_hand).
+// p9c part_no 'ABC123' normalizes to 'ABC123' under the API's normalizePartNo
+// (whitespace is collapsed but kept, no confusable chars present).
+// rii9ca has one unboxed put-away scan (qty 2) -> available 5-2=3; rii9cb is
+// fully consumed (available 0) and must be excluded. ro9cb is pending, so its
+// item must never surface and its own scan-candidates return empty maps.
+// po9c (picking) has pi9c (qty 5, picked 1, one unboxed package qty 1 ->
+// remaining 3) with an order-level allocation on ro9c; po9cx is finished and
+// must be excluded despite its allocation on ro9c.
+// Inserted inside the first test (not at module top) because the pending ro9cb
+// would otherwise break the earlier ?status=pending filter test, which expects
+// an empty list.
+function seedScanCandidatesFixtures(): void {
+  sqlite.exec(`
+  INSERT INTO parts (id, part_no, part_no_norm, description, created_at, updated_at)
+    VALUES ('p9c','ABC123','ABC123','Part nine C','0','0');
+  INSERT INTO receiving_orders (id, external_id, ref_no, delivery_date, status, supplier_id, created_at, updated_at)
+    VALUES ('ro9c','e9c','RO-9C',NULL,'in_hand',NULL,'0','0'),
+           ('ro9cb','e9cb','RO-9CB',NULL,'pending',NULL,'0','0');
+  INSERT INTO receiving_invoices (id, external_id, receiving_order_id, invoice_no, supplier_id, created_at, updated_at)
+    VALUES ('inv9c','e9c','ro9c','INV-9C',NULL,'0','0'),
+           ('inv9cb','e9cb','ro9cb','INV-9CB',NULL,'0','0');
+  INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty, available_qty,
+                                       date_code, lot_code, coo, cow,
+                                       date_code_norm, lot_code_norm, coo_norm, cow_norm,
+                                       created_at, updated_at)
+    VALUES ('rii9ca','inv9c','p9c',5,5,5,'dc9c','lot9c','cn','2026 w01','DC9C','LOT9C','CN','2026 W01','0','0'),
+           ('rii9cb','inv9c','p9c',5,5,0,NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL,'0','0'),
+           ('rii9cc','inv9cb','p9c',3,3,3,'dc9c','lot9c','cn','2026 w01','DC9C','LOT9C','CN','2026 W01','0','0');
+  INSERT INTO put_away_scans (id, receiving_invoice_item_id, qty, shelf_box_id, verified, created_at, updated_at)
+    VALUES ('pas9c','rii9ca',2,NULL,0,'0','0');
+  INSERT INTO picking_orders (id, external_id, ref_no, status, ship_to, created_at, updated_at)
+    VALUES ('po9c','e9c','PO-9C','picking','Ship Nine','0','0'),
+           ('po9cx','e9cx','PO-9CX','finished','Ship Nine X','0','0');
+  INSERT INTO picking_items (id, picking_order_id, part_id, qty, picked_qty, created_at, updated_at)
+    VALUES ('pi9c','po9c','p9c',5,1,'0','0'),
+           ('pi9cx','po9cx','p9c',5,0,'0','0');
+  INSERT INTO allocations (id, picking_item_id, qty, receiving_order_id, created_at, updated_at)
+    VALUES ('al9c','pi9c',3,'ro9c','0','0'),
+           ('al9cx','pi9cx',2,'ro9c','0','0');
+  INSERT INTO picking_packages (id, picking_item_id, source_type, source_id, qty, shipping_box_id, created_at, updated_at)
+    VALUES ('pkg9c','pi9c','receiving_invoice_item','rii9ca',1,NULL,'0','0');
+`);
+}
+
+test("GET /receiving-orders/:id/scan-candidates returns receiving and picking candidates", async () => {
+  seedScanCandidatesFixtures();
+  const res = await app.request("/receiving-orders/ro9c/scan-candidates");
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as any;
+
+  const recv = body.receiving_by_part_no;
+  assert.deepEqual(Object.keys(recv), ["ABC123"]);
+  assert.equal(recv.ABC123.length, 1); // rii9cb (available 0) and ro9cb's rii9cc excluded
+  const cand = recv.ABC123[0];
+  assert.equal(cand.receiving_invoice_item_id, "rii9ca");
+  assert.equal(cand.part_id, "p9c");
+  assert.equal(cand.part_no, "ABC123");
+  assert.equal(cand.available_qty, 3); // 5 - 2 unboxed put-away scan
+  assert.equal(cand.date_code, "DC9C"); // normalized values
+  assert.equal(cand.lot_code, "LOT9C");
+  assert.equal(cand.coo, "CN");
+  assert.equal(cand.cow, "2026 W01");
+
+  const pick = body.picking_by_part_id;
+  assert.deepEqual(Object.keys(pick), ["p9c"]);
+  assert.equal(pick.p9c.length, 1); // finished po9cx excluded
+  const pc = pick.p9c[0];
+  assert.equal(pc.picking_order_id, "po9c");
+  assert.equal(pc.picking_order_ref_no, "PO-9C");
+  assert.equal(pc.picking_item_id, "pi9c");
+  assert.equal(pc.part_id, "p9c");
+  assert.equal(pc.ship_to, "Ship Nine");
+  assert.equal(pc.required_qty, 5);
+  assert.equal(pc.picked_qty, 1);
+  assert.equal(pc.remaining_qty, 3); // 5 - 1 picked - 1 unboxed package
+});
+
+test("GET /receiving-orders/:id/scan-candidates returns empty maps for non-in_hand order", async () => {
+  const res = await app.request("/receiving-orders/ro9cb/scan-candidates");
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as any;
+  assert.deepEqual(body, { receiving_by_part_no: {}, picking_by_part_id: {} });
+});
+
+test("GET /receiving-orders/:id/scan-candidates returns 404 for unknown order", async () => {
+  const res = await app.request("/receiving-orders/nope/scan-candidates");
+  assert.equal(res.status, 404);
+});
+
 test("cleanup", () => { sqlite.close(); });

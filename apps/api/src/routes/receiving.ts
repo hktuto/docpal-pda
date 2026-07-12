@@ -129,6 +129,78 @@ receivingRoute.get("/receiving-orders/:id", (c) => {
   }, 200);
 });
 
+// Scan-candidates snapshot powering the web's useScanMatchers without direct
+// DB access. Mirrors findReceivingCandidatesForOrder / findPickingCandidatesForOrder
+// in apps/web/db/ocrPicking.ts: the web groups Maps keyed by part_no_norm /
+// part_id; here they are plain objects. date_code/lot_code/coo/cow carry the
+// stored *_norm columns (the web normalizes in SQL to the same values).
+// available_qty is the API's stored column minus unboxed put-away scans (same
+// subquery shape as the list endpoint above); the web computes the same value
+// from received - picked - put_away - allocated - unboxed.
+receivingRoute.get("/receiving-orders/:id/scan-candidates", (c) => {
+  const orderId = c.req.param("id");
+  const order = db.get<{ id: string; status: string }>(sql`
+    SELECT id, status FROM receiving_orders WHERE id = ${orderId}`);
+  if (!order) throw new HTTPException(404, { message: "receiving order not found" });
+  if (order.status !== "in_hand") {
+    return c.json({ receiving_by_part_no: {}, picking_by_part_id: {} }, 200);
+  }
+
+  const receivingRows = db.all<Record<string, unknown>>(sql`
+    SELECT rii.id AS receiving_invoice_item_id, p.id AS part_id, p.part_no, p.part_no_norm,
+           rii.date_code_norm AS date_code, rii.lot_code_norm AS lot_code,
+           rii.coo_norm AS coo, rii.cow_norm AS cow,
+           rii.available_qty - COALESCE(u.uq, 0) AS available_qty
+    FROM receiving_invoices ri
+    JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
+    JOIN parts p ON p.id = rii.part_id
+    LEFT JOIN (SELECT receiving_invoice_item_id, SUM(qty) AS uq FROM put_away_scans
+               WHERE shelf_box_id IS NULL GROUP BY receiving_invoice_item_id) u
+      ON u.receiving_invoice_item_id = rii.id
+    WHERE ri.receiving_order_id = ${orderId}
+      AND rii.available_qty - COALESCE(u.uq, 0) > 0
+    ORDER BY p.part_no_norm, rii.date_code_norm, rii.lot_code_norm`);
+  const receivingByPartNo: Record<string, Record<string, unknown>[]> = {};
+  for (const row of receivingRows) {
+    const { part_no_norm, ...candidate } = row;
+    (receivingByPartNo[String(part_no_norm)] ??= []).push(candidate);
+  }
+
+  // remaining_qty mirrors the web: qty - picked_qty - SUM(unboxed packages).
+  // The EXISTS is order-level (any item of the picking order allocated to this
+  // receiving order), exactly as in findPickingCandidatesForOrder.
+  const pickingRows = db.all<Record<string, unknown>>(sql`
+    SELECT DISTINCT po.id AS picking_order_id, po.ref_no AS picking_order_ref_no,
+           pi.id AS picking_item_id, pi.part_id, po.ship_to,
+           pi.qty AS required_qty, pi.picked_qty,
+           (pi.qty - pi.picked_qty - COALESCE((
+             SELECT SUM(pp.qty) FROM picking_packages pp
+             WHERE pp.picking_item_id = pi.id AND pp.shipping_box_id IS NULL
+           ), 0)) AS remaining_qty
+    FROM picking_items pi
+    JOIN picking_orders po ON po.id = pi.picking_order_id
+    WHERE po.status != 'finished'
+      AND (pi.qty - pi.picked_qty - COALESCE((
+        SELECT SUM(pp.qty) FROM picking_packages pp
+        WHERE pp.picking_item_id = pi.id AND pp.shipping_box_id IS NULL
+      ), 0)) > 0
+      AND EXISTS (
+        SELECT 1 FROM picking_items pi2
+        JOIN allocations a ON a.picking_item_id = pi2.id
+        WHERE pi2.picking_order_id = po.id AND a.receiving_order_id = ${orderId}
+      )
+    ORDER BY po.ref_no`);
+  const pickingByPartId: Record<string, Record<string, unknown>[]> = {};
+  for (const row of pickingRows) {
+    (pickingByPartId[String(row.part_id)] ??= []).push(row);
+  }
+
+  return c.json({
+    receiving_by_part_no: receivingByPartNo,
+    picking_by_part_id: pickingByPartId,
+  }, 200);
+});
+
 receivingRoute.get("/receiving-orders/:id/picking", (c) => {
   const orderId = c.req.param("id");
   const order = db.get<{ id: string }>(sql`SELECT id FROM receiving_orders WHERE id = ${orderId}`);
