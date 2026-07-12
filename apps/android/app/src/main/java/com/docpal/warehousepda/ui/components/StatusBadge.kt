@@ -20,15 +20,16 @@ import com.docpal.warehousepda.R
  */
 @Composable
 fun StatusBadge(status: String, family: String = "receiving", modifier: Modifier = Modifier) {
-    val s = status.lowercase().replace('_', '-')
+    // Normalize once ("IN_HAND"/"in-hand" → "in_hand") and use it for both color and label.
+    val s = status.lowercase().replace('-', '_')
     val color = when (s) {
         "pending", "open" -> Color(0xFFF59E0B)
-        "in-hand", "picking" -> Color(0xFF3B82F6)
+        "in_hand", "picking" -> Color(0xFF3B82F6)
         "finished", "completed", "verified", "closed", "clear", "done" -> Color(0xFF10B981)
         "issue", "danger" -> Color(0xFFEF4444)
         else -> MaterialTheme.colorScheme.onSurfaceVariant
     }
-    val labelRes = statusLabelRes(family, status)
+    val labelRes = statusLabelRes(family, s)
     Text(
         text = labelRes?.let { stringResource(it) } ?: status,
         style = MaterialTheme.typography.labelSmall,

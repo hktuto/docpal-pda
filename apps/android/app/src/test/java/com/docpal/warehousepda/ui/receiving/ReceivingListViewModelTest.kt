@@ -32,7 +32,9 @@ class ReceivingListViewModelTest {
 
     @Test fun `loads in_hand by default`() = runTest {
         val source = FakeSource()
-        ReceivingListViewModel(source, dispatcher)
+        val vm = ReceivingListViewModel(source, dispatcher)
+        // The screen triggers the first load via OnResumeEffect (initial ON_RESUME).
+        vm.reload()
         advanceUntilIdle()
         assertEquals(listOf("in_hand"), source.requestedFilters)
     }
@@ -40,6 +42,7 @@ class ReceivingListViewModelTest {
     @Test fun `filter change reloads`() = runTest {
         val source = FakeSource()
         val vm = ReceivingListViewModel(source, dispatcher)
+        vm.reload()
         advanceUntilIdle()
         vm.setFilter("pending")
         advanceUntilIdle()
@@ -52,6 +55,7 @@ class ReceivingListViewModelTest {
             orders += ReceivingOrderSummary("2", "RO-002", "in_hand", null, "Diotec", 1, 0)
         }
         val vm = ReceivingListViewModel(source, dispatcher)
+        vm.reload()
         advanceUntilIdle()
         vm.setSearch("koa")
         assertEquals(listOf("RO-001"), vm.uiState.value.visibleOrders.map { it.refNo })
@@ -62,9 +66,22 @@ class ReceivingListViewModelTest {
     @Test fun `reload re-queries with current filter`() = runTest {
         val source = FakeSource()
         val vm = ReceivingListViewModel(source, dispatcher)
+        vm.reload()
         advanceUntilIdle()
         vm.setFilter("all"); advanceUntilIdle()
         vm.reload(); advanceUntilIdle()
         assertEquals(listOf("in_hand", "all", "all"), source.requestedFilters)
+    }
+
+    @Test fun `load exposes orders in ui state`() = runTest {
+        val source = FakeSource().apply {
+            orders += ReceivingOrderSummary("1", "RO-001", "in_hand", null, "KOA", 2, 0)
+            orders += ReceivingOrderSummary("2", "RO-002", "in_hand", null, "Diotec", 1, 0)
+        }
+        val vm = ReceivingListViewModel(source, dispatcher)
+        vm.reload()
+        advanceUntilIdle()
+        assertEquals(listOf("RO-001", "RO-002"), vm.uiState.value.orders.map { it.refNo })
+        assertEquals(false, vm.uiState.value.loading)
     }
 }

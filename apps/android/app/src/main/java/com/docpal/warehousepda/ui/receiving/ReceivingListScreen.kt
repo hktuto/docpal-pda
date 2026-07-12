@@ -25,22 +25,19 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.docpal.warehousepda.App
 import com.docpal.warehousepda.R
 import com.docpal.warehousepda.domain.model.ReceivingOrderSummary
 import com.docpal.warehousepda.ui.components.EmptyState
+import com.docpal.warehousepda.ui.components.OnResumeEffect
 import com.docpal.warehousepda.ui.components.StatusBadge
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -55,14 +52,8 @@ fun ReceivingListScreen(onOrderClick: (String) -> Unit) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     // Reload whenever the screen regains focus, matching the web's visibilitychange reload.
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) viewModel.reload()
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
+    // The initial ON_RESUME also covers the first load.
+    OnResumeEffect { viewModel.reload() }
 
     val filters = listOf(
         R.string.common_all to "all",

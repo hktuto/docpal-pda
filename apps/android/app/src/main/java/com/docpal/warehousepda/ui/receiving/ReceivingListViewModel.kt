@@ -3,8 +3,10 @@ package com.docpal.warehousepda.ui.receiving
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.docpal.warehousepda.domain.model.ReceivingOrderSummary
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,7 +44,8 @@ class ReceivingListViewModel(
     private val _uiState = MutableStateFlow(ReceivingListUiState())
     val uiState: StateFlow<ReceivingListUiState> = _uiState.asStateFlow()
 
-    init { reload() }
+    // First load is triggered by the screen's ON_RESUME observer (OnResumeEffect).
+    private var loadJob: Job? = null
 
     fun setFilter(filter: String) {
         _uiState.update { it.copy(filter = filter) }
@@ -52,11 +55,18 @@ class ReceivingListViewModel(
     fun setSearch(value: String) = _uiState.update { it.copy(search = value) }
 
     fun reload() {
-        viewModelScope.launch {
-            val filter = _uiState.value.filter
+        val filter = _uiState.value.filter
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             _uiState.update { it.copy(loading = true) }
-            val orders = withContext(io) { source.listOrders(filter) }
-            _uiState.update { it.copy(loading = false, orders = orders) }
+            try {
+                val orders = withContext(io) { source.listOrders(filter) }
+                _uiState.update { it.copy(loading = false, orders = orders) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.update { it.copy(loading = false) }
+            }
         }
     }
 }
