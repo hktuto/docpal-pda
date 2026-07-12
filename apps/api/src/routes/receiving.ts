@@ -143,10 +143,8 @@ receivingRoute.get("/receiving-orders/:id/picking", (c) => {
            po.ship_to AS picking_order_ship_to, pi.id AS picking_item_id, pi.qty AS required_qty, pi.picked_qty,
            a.id AS allocation_id, a.qty AS allocated_qty, pi.part_id, p.part_no,
            il.shelf_code, il.box_id, il.date_code, il.lot_code, il.coo, il.cow,
-           (SELECT COALESCE(SUM(pk.qty), 0) FROM picking_packages pk
-             WHERE pk.picking_item_id = pi.id AND pk.shipping_box_id IS NULL) AS scanned_qty,
-           (SELECT COALESCE(SUM(pk.qty), 0) FROM picking_packages pk
-             WHERE pk.picking_item_id = pi.id AND pk.shipping_box_id IS NOT NULL) AS boxed_qty
+           COALESCE(pt.scanned_qty, 0) AS scanned_qty,
+           COALESCE(pt.boxed_qty, 0) AS boxed_qty
     FROM allocations a
     JOIN picking_items pi ON pi.id = a.picking_item_id
     JOIN picking_orders po ON po.id = pi.picking_order_id
@@ -155,20 +153,26 @@ receivingRoute.get("/receiving-orders/:id/picking", (c) => {
     JOIN inventory_lot_sources ils ON ils.inventory_lot_id = a.inventory_lot_id
     JOIN receiving_invoice_items rii ON rii.id = ils.receiving_invoice_item_id
     JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+    LEFT JOIN (SELECT picking_item_id,
+                      SUM(CASE WHEN shipping_box_id IS NULL THEN qty ELSE 0 END) AS scanned_qty,
+                      SUM(CASE WHEN shipping_box_id IS NOT NULL THEN qty ELSE 0 END) AS boxed_qty
+               FROM picking_packages GROUP BY picking_item_id) pt ON pt.picking_item_id = pi.id
     WHERE ri.receiving_order_id = ${orderId} AND a.qty > 0
     GROUP BY a.id
     UNION ALL
     SELECT po.id, po.ref_no, po.status, po.ship_to, pi.id, pi.qty, pi.picked_qty,
            a.id, a.qty, pi.part_id, p.part_no,
            NULL, NULL, NULL, NULL, NULL, NULL,
-           (SELECT COALESCE(SUM(pk.qty), 0) FROM picking_packages pk
-             WHERE pk.picking_item_id = pi.id AND pk.shipping_box_id IS NULL),
-           (SELECT COALESCE(SUM(pk.qty), 0) FROM picking_packages pk
-             WHERE pk.picking_item_id = pi.id AND pk.shipping_box_id IS NOT NULL)
+           COALESCE(pt.scanned_qty, 0),
+           COALESCE(pt.boxed_qty, 0)
     FROM allocations a
     JOIN picking_items pi ON pi.id = a.picking_item_id
     JOIN picking_orders po ON po.id = pi.picking_order_id
     JOIN parts p ON p.id = pi.part_id
+    LEFT JOIN (SELECT picking_item_id,
+                      SUM(CASE WHEN shipping_box_id IS NULL THEN qty ELSE 0 END) AS scanned_qty,
+                      SUM(CASE WHEN shipping_box_id IS NOT NULL THEN qty ELSE 0 END) AS boxed_qty
+               FROM picking_packages GROUP BY picking_item_id) pt ON pt.picking_item_id = pi.id
     WHERE a.receiving_order_id = ${orderId} AND a.qty > 0
     ORDER BY picking_order_ref, picking_item_id`);
 

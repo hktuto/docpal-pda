@@ -121,6 +121,8 @@ test("GET /receiving-orders/:id returns 404 for unknown order", async () => {
 // Task 6 fixtures: ro6 with both allocation shapes (lot-sourced al6 and
 // order-level al6b), one unboxed + one boxed package on pi6, a shipping box,
 // and transition logs for both the picking order and the picking item.
+// lot6 is sourced from TWO invoice items (rii6 + rii6b) of ro6, so the bundle
+// query's GROUP BY a.id dedup is exercised: without it the lot row doubles.
 // Note: API inventory_lots carries shelf_code/box_id directly (no shelf_box_id
 // FK), so the lot row's location fields come from the lot itself.
 sqlite.exec(`
@@ -133,7 +135,8 @@ sqlite.exec(`
   INSERT INTO receiving_invoices (id, external_id, receiving_order_id, invoice_no, supplier_id, created_at, updated_at)
     VALUES ('inv6','e6','ro6','INV-6',NULL,'0','0');
   INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty, available_qty, created_at, updated_at)
-    VALUES ('rii6','inv6','p6',10,10,10,'0','0');
+    VALUES ('rii6','inv6','p6',10,10,10,'0','0'),
+           ('rii6b','inv6','p6',4,4,4,'0','0');
   INSERT INTO picking_orders (id, external_id, ref_no, status, ship_to, created_at, updated_at)
     VALUES ('po6','e6','PO-6','picking','Ship To Six','0','0');
   INSERT INTO picking_items (id, picking_order_id, part_id, qty, picked_qty, created_at, updated_at)
@@ -141,7 +144,8 @@ sqlite.exec(`
   INSERT INTO inventory_lots (id, part_id, date_code, lot_code, coo, cow, shelf_code, box_id, total_qty, allocated_qty, created_at, updated_at)
     VALUES ('lot6','p6','DC6','LOT6','CN','2026-W01','SH-6','BX-6',10,4,'0','0');
   INSERT INTO inventory_lot_sources (id, inventory_lot_id, receiving_invoice_item_id, qty, created_at, updated_at)
-    VALUES ('ils6','lot6','rii6',10,'0','0');
+    VALUES ('ils6','lot6','rii6',10,'0','0'),
+           ('ils6b','lot6','rii6b',4,'0','0');
   INSERT INTO allocations (id, picking_item_id, qty, inventory_lot_id, created_at, updated_at)
     VALUES ('al6','pi6',4,'lot6','0','0');
   INSERT INTO allocations (id, picking_item_id, qty, receiving_order_id, created_at, updated_at)
