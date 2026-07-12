@@ -259,6 +259,16 @@ interface PickingDao {
     @Query("SELECT * FROM shipping_boxes WHERE id = :id")
     fun boxById(id: String): ShippingBoxEntity?
 
+    @Query("SELECT COUNT(*) FROM picking_packages WHERE shipping_box_id = :boxId")
+    fun packageCountInBox(boxId: String): Int
+
+    /** Hard-delete (web cancelShippingBox: cancelled boxes are not persisted). */
+    @Query("DELETE FROM shipping_boxes WHERE id = :boxId")
+    fun deleteBox(boxId: String)
+
+    @Query("SELECT * FROM measuring_tasks WHERE picking_order_id = :orderId")
+    fun measuringTaskOfOrder(orderId: String): MeasuringTaskEntity?
+
     @Query("SELECT id FROM shipping_boxes WHERE id LIKE :prefix || '%'")
     fun boxIdsWithPrefix(prefix: String): List<String>
 

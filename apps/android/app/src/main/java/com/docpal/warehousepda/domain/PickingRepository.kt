@@ -22,8 +22,8 @@ import java.util.UUID
  * Scan-to-pick and shipping-box operations. Function-by-function port of
  * apps/web/db/ocrPicking.ts (applyOcrPick) and apps/web/db/picking.ts
  * (reportPickingOrderIssues, scanAllocationToPackage, removeScannedPackage, materializeReceivingAllocation,
- * createShippingBoxForPickingOrder, addPackageToBox, addAllUnboxedPackagesToBox,
- * removePackageFromBox, maybeAutoFinishPickingOrder, refreshPickingItemPickedQty),
+ * createShippingBoxForPickingOrder, cancelShippingBox, addPackageToBox, addAllUnboxedPackagesToBox,
+ * removePackageFromBox, maybeAutoFinishPickingOrder, finishPickingOrder, refreshPickingItemPickedQty),
  * keeping the web's error keys and write order.
  */
 class PickingRepository(
@@ -492,6 +492,29 @@ class PickingRepository(
             boxId!!
         }
 
+    /** Port of web cancelShippingBox: only an open, empty box can be cancelled; the row is hard-deleted. */
+    suspend fun cancelShippingBox(boxId: String, actorId: String) = withContext(Dispatchers.IO) {
+        db.runInTransaction { cancelShippingBoxInternal(boxId, actorId) }
+        Unit
+    }
+
+    private fun cancelShippingBoxInternal(boxId: String, actorId: String) {
+        val box = pickingDao.boxById(boxId) ?: throw LocalizedException("box_not_found")
+        if (box.status != "open") throw LocalizedException("box_is_not_open")
+        if (pickingDao.packageCountInBox(boxId) > 0) throw LocalizedException("box_is_not_empty")
+
+        pickingDao.insertLog(
+            TransitionLogEntity(
+                id = UUID.randomUUID().toString(),
+                entityType = "shipping_box", entityId = boxId,
+                fromState = box.status, toState = "cancelled", actorId = actorId,
+                metadata = JSONObject().apply { put("pickingOrderId", box.pickingOrderId) }.toString(),
+                createdAt = System.currentTimeMillis(),
+            )
+        )
+        pickingDao.deleteBox(boxId)
+    }
+
     /** Port of web addPackageToBox. */
     suspend fun addPackageToBox(
         packageId: String,
@@ -599,6 +622,25 @@ class PickingRepository(
             Unit
         }
 
+    /**
+     * Port of web finishPickingOrder: manual finish. Same guard order as the web —
+     * not found, already finished, no items, open issue, not fully boxed — then the
+     * shared finish work with NULL log metadata (auto-finish logs {"auto": true}).
+     */
+    suspend fun finishPickingOrder(orderId: String, actorId: String) = withContext(Dispatchers.IO) {
+        db.runInTransaction {
+            val order = pickingDao.pickingOrderById(orderId)
+                ?: throw LocalizedException("picking_order_not_found")
+            if (order.status == "finished") throw LocalizedException("order_already_finished")
+            val items = pickingDao.itemsOfPickingOrder(orderId)
+            if (items.isEmpty()) throw LocalizedException("no_items_to_pick")
+            if (order.status == "issue") throw LocalizedException("picking_order_has_open_issue")
+            if (items.any { it.pickedQty < it.qty }) throw LocalizedException("not_all_items_fully_boxed")
+            finishOrderInternal(orderId, actorId, System.currentTimeMillis(), auto = false)
+        }
+        Unit
+    }
+
     private fun maybeAutoFinishPickingOrderInternal(pickingOrderId: String, actorId: String) {
         val order = pickingDao.pickingOrderById(pickingOrderId) ?: return
         if (order.status == "finished") return
@@ -606,23 +648,27 @@ class PickingRepository(
         if (items.isEmpty()) return
         if (!items.all { it.pickedQty >= it.qty }) return
 
-        val now = System.currentTimeMillis()
-        pickingDao.updatePickingOrderStatus(pickingOrderId, "finished", now)
+        finishOrderInternal(pickingOrderId, actorId, System.currentTimeMillis(), auto = true)
+    }
+
+    /** Shared finish work of web maybeAutoFinishPickingOrder / finishPickingOrder. */
+    private fun finishOrderInternal(orderId: String, actorId: String, now: Long, auto: Boolean) {
+        pickingDao.updatePickingOrderStatus(orderId, "finished", now)
 
         val taskId = UUID.randomUUID().toString()
         pickingDao.insertMeasuringTask(
             MeasuringTaskEntity(
-                id = taskId, pickingOrderId = pickingOrderId, status = "pending", createdAt = now,
+                id = taskId, pickingOrderId = orderId, status = "pending", createdAt = now,
             )
         )
-        pickingDao.assignBoxesToMeasuringTask(pickingOrderId, taskId)
+        pickingDao.assignBoxesToMeasuringTask(orderId, taskId)
 
         pickingDao.insertLog(
             TransitionLogEntity(
                 id = UUID.randomUUID().toString(),
-                entityType = "picking_order", entityId = pickingOrderId,
+                entityType = "picking_order", entityId = orderId,
                 fromState = "picking", toState = "finished", actorId = actorId,
-                metadata = JSONObject().apply { put("auto", true) }.toString(),
+                metadata = if (auto) JSONObject().apply { put("auto", true) }.toString() else null,
                 createdAt = now,
             )
         )
