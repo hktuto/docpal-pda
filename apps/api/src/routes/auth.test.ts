@@ -22,7 +22,7 @@ test("POST /auth/login returns the user on correct password; 401 on wrong; 401 u
     body: JSON.stringify({ username: "operator", password: "DocPal2026!" }),
   });
   assert.equal(ok.status, 200);
-  assert.deepEqual(await ok.json(), { id: "u1", username: "operator", name: "Operator" });
+  assert.deepEqual(await ok.json(), { id: "u1", username: "operator", name: "Operator", role: "operator" });
 
   const bad = await app.request("/auth/login", {
     method: "POST", headers: { "content-type": "application/json" },
@@ -45,7 +45,7 @@ test("POST /auth/login returns the user on correct password; 401 on wrong; 401 u
 test("GET /auth/users/:id returns the user; 404 unknown", async () => {
   const res = await app.request("/auth/users/u1");
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), { id: "u1", username: "operator", name: "Operator" });
+  assert.deepEqual(await res.json(), { id: "u1", username: "operator", name: "Operator", role: "operator" });
   assert.equal((await app.request("/auth/users/nope")).status, 404);
 });
 

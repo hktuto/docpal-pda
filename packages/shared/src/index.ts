@@ -6,6 +6,8 @@
 // and requires no build step for consumers in this iteration.
 
 export interface LoginRequest { username: string; password: string; }
+// Role union mirrors apps/web UserRole ("operator" | "admin"); copied locally, not imported.
+export interface AuthUser { id: string; username: string; name: string; role: "operator" | "admin"; }
 
 export interface HealthResponse {
   ok: boolean;
