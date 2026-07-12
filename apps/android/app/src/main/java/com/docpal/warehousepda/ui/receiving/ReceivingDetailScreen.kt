@@ -69,7 +69,11 @@ import java.util.TimeZone
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReceivingDetailScreen(orderId: String, onBack: () -> Unit) {
+fun ReceivingDetailScreen(
+    orderId: String,
+    onBack: () -> Unit,
+    onPickingOrderClick: (pickingOrderId: String) -> Unit = {},
+) {
     val context = LocalContext.current
     val app = context.applicationContext as App
     val viewModel: ReceivingDetailViewModel = viewModel(
@@ -229,6 +233,7 @@ fun ReceivingDetailScreen(orderId: String, onBack: () -> Unit) {
                         actionInProgress = state.actionInProgress,
                         boxSelections = boxSelections,
                         expandedLogs = expandedLogs,
+                        onPickingOrderClick = onPickingOrderClick,
                         onSelectBox = { pkgId, boxId ->
                             boxSelections = boxSelections + (pkgId to boxId)
                         },

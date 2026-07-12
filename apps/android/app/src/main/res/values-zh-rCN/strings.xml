@@ -131,6 +131,7 @@
     <string name="picking_items_unboxed_packages">未装箱包裹</string>
     <string name="picking_items_boxed_packages">已装箱包裹</string>
     <string name="picking_items_box_ids">箱号</string>
+    <string name="picking_items_date_lot_coo_cow">日期 / 批次 / 产地 / 晶圆产地</string>
     <string name="picking_items_select_box">选择箱子</string>
     <string name="picking_items_add_to_box">添加到箱子</string>
     <string name="picking_items_adding">添加中…</string>
@@ -150,6 +151,8 @@
     <string name="picking_boxes_canceling">取消中…</string>
     <string name="picking_boxes_add_all">全部加入</string>
     <string name="picking_boxes_add_all_confirm">将 %1$d 个未装箱包裹加入此箱？</string>
+    <string name="picking_boxes_show">显示</string>
+    <string name="picking_boxes_hide">隐藏</string>
     <string name="picking_issue_banner_issue_reason">问题原因</string>
     <string name="picking_issue_banner_actual_qty_available">实际可用数量</string>
     <string name="picking_issue_banner_pack_size">包装规格</string>

@@ -131,6 +131,7 @@
     <string name="picking_items_unboxed_packages">Unboxed packages</string>
     <string name="picking_items_boxed_packages">Boxed packages</string>
     <string name="picking_items_box_ids">Box IDs</string>
+    <string name="picking_items_date_lot_coo_cow">Date / Lot / COO / COW</string>
     <string name="picking_items_select_box">Select box</string>
     <string name="picking_items_add_to_box">Add to box</string>
     <string name="picking_items_adding">Adding…</string>
@@ -150,6 +151,8 @@
     <string name="picking_boxes_canceling">Canceling…</string>
     <string name="picking_boxes_add_all">Add all</string>
     <string name="picking_boxes_add_all_confirm">Add %1$d unboxed package(s) to this box?</string>
+    <string name="picking_boxes_show">Show</string>
+    <string name="picking_boxes_hide">Hide</string>
     <string name="picking_issue_banner_issue_reason">Issue reason</string>
     <string name="picking_issue_banner_actual_qty_available">Actual qty available</string>
     <string name="picking_issue_banner_pack_size">Pack size</string>

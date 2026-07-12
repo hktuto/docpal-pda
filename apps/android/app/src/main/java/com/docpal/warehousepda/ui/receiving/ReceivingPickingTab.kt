@@ -21,6 +21,7 @@ import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,14 +47,15 @@ import java.util.TimeZone
 
 /**
  * Picking tab content — port of the web ReceivingPickingTab.vue.
- * Rows grouped by picking order; "View picking order" is Phase 2, so the ref
- * renders as plain text. Rendered inside the detail screen's LazyColumn.
+ * Rows grouped by picking order; the order ref links to the picking detail screen.
+ * Rendered inside the detail screen's LazyColumn.
  */
 internal fun LazyListScope.receivingPickingTabContent(
     detail: ReceivingOrderDetail,
     actionInProgress: Boolean,
     boxSelections: Map<String, String>,
     expandedLogs: Set<String>,
+    onPickingOrderClick: (pickingOrderId: String) -> Unit,
     onSelectBox: (packageId: String, boxId: String) -> Unit,
     onToggleLogs: (pickingItemId: String) -> Unit,
     onCreateBox: (pickingOrderId: String) -> Unit,
@@ -77,6 +79,7 @@ internal fun LazyListScope.receivingPickingTabContent(
                 actionInProgress = actionInProgress,
                 boxSelections = boxSelections,
                 expandedLogs = expandedLogs,
+                onPickingOrderClick = onPickingOrderClick,
                 onSelectBox = onSelectBox,
                 onToggleLogs = onToggleLogs,
                 onCreateBox = onCreateBox,
@@ -98,6 +101,7 @@ private fun PickingOrderSection(
     actionInProgress: Boolean,
     boxSelections: Map<String, String>,
     expandedLogs: Set<String>,
+    onPickingOrderClick: (pickingOrderId: String) -> Unit,
     onSelectBox: (packageId: String, boxId: String) -> Unit,
     onToggleLogs: (pickingItemId: String) -> Unit,
     onCreateBox: (pickingOrderId: String) -> Unit,
@@ -124,8 +128,10 @@ private fun PickingOrderSection(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Phase 2: web links to the picking order; here the ref is plain text.
-                Text(first.pickingOrderRef, style = MaterialTheme.typography.titleMedium)
+                // Web links to the picking order.
+                TextButton(onClick = { onPickingOrderClick(orderId) }) {
+                    Text(first.pickingOrderRef, style = MaterialTheme.typography.titleMedium)
+                }
                 StatusBadge(first.pickingOrderStatus, family = "picking")
             }
             if (first.pickingOrderStatus != "finished") {

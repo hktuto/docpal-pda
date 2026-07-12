@@ -17,6 +17,7 @@ import com.docpal.warehousepda.domain.model.PickingItemLogEntry
 import com.docpal.warehousepda.domain.model.PickingOrderDetail
 import com.docpal.warehousepda.domain.model.PickingOrderSummary
 import com.docpal.warehousepda.domain.model.PickingPackageDetail
+import com.docpal.warehousepda.ui.picking.PickingDetailSource
 import com.docpal.warehousepda.ui.picking.PickingListSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -38,7 +39,7 @@ import java.util.UUID
 class PickingRepository(
     private val db: AppDatabase,
     private val receivingRepository: ReceivingRepository,
-) : PickingListSource {
+) : PickingListSource, PickingDetailSource {
 
     private val pickingDao get() = db.pickingDao()
     private val receivingDao get() = db.receivingDao()
@@ -64,7 +65,7 @@ class PickingRepository(
      * order's shipping boxes with package aggregates. scannedQty mirrors the web's
      * scannedQty(item): sum of ALL of the item's packages.
      */
-    suspend fun getPickingOrderDetail(orderId: String): PickingOrderDetail? = withContext(Dispatchers.IO) {
+    override suspend fun getPickingOrderDetail(orderId: String): PickingOrderDetail? = withContext(Dispatchers.IO) {
         val row = pickingDao.pickingOrderDetailRow(orderId) ?: return@withContext null
         val itemRows = pickingDao.pickingItemDetailRows(orderId)
         val itemIds = itemRows.map { it.id }
@@ -127,7 +128,7 @@ class PickingRepository(
     }
 
     /** Picking-item transition logs grouped by item id, newest first (web getPickingItemTransitionLogs). */
-    suspend fun pickingItemLogs(itemIds: List<String>): Map<String, List<PickingItemLogEntry>> =
+    override suspend fun pickingItemLogs(itemIds: List<String>): Map<String, List<PickingItemLogEntry>> =
         withContext(Dispatchers.IO) {
             if (itemIds.isEmpty()) return@withContext emptyMap()
             pickingDao.pickingItemLogRows(itemIds).groupBy(
@@ -573,6 +574,11 @@ class PickingRepository(
         Unit
     }
 
+    /** PickingDetailSource entry point — delegates to [createShippingBoxForPickingOrder]. */
+    override suspend fun createBox(pickingOrderId: String, actorId: String) {
+        createShippingBoxForPickingOrder(pickingOrderId, actorId)
+    }
+
     /** Port of web createShippingBoxForPickingOrder. Returns the generated box id. */
     suspend fun createShippingBoxForPickingOrder(pickingOrderId: String, actorId: String): String =
         withContext(Dispatchers.IO) {
@@ -608,6 +614,9 @@ class PickingRepository(
             boxId!!
         }
 
+    /** PickingDetailSource entry point — delegates to [cancelShippingBox]. */
+    override suspend fun cancelBox(boxId: String, actorId: String) = cancelShippingBox(boxId, actorId)
+
     /** Port of web cancelShippingBox: only an open, empty box can be cancelled; the row is hard-deleted. */
     suspend fun cancelShippingBox(boxId: String, actorId: String) = withContext(Dispatchers.IO) {
         db.runInTransaction { cancelShippingBoxInternal(boxId, actorId) }
@@ -633,14 +642,13 @@ class PickingRepository(
     }
 
     /** Port of web addPackageToBox. */
-    suspend fun addPackageToBox(
+    override suspend fun addPackageToBox(
         packageId: String,
         shippingBoxId: String,
         actorId: String,
-        skipAutoFinish: Boolean = false,
     ) = withContext(Dispatchers.IO) {
         if (actorId.isEmpty()) throw LocalizedException("actor_required")
-        db.runInTransaction { addPackageToBoxInternal(packageId, shippingBoxId, actorId, skipAutoFinish) }
+        db.runInTransaction { addPackageToBoxInternal(packageId, shippingBoxId, actorId, skipAutoFinish = false) }
         Unit
     }
 
@@ -681,6 +689,11 @@ class PickingRepository(
         if (!skipAutoFinish) maybeAutoFinishPickingOrderInternal(pkg.pickingOrderId, actorId)
     }
 
+    /** PickingDetailSource entry point — delegates to [addAllUnboxedPackagesToBox]. */
+    override suspend fun addAllToBox(boxId: String, actorId: String) {
+        addAllUnboxedPackagesToBox(boxId, actorId)
+    }
+
     /** Port of web addAllUnboxedPackagesToBox. Returns the number of packages boxed. */
     suspend fun addAllUnboxedPackagesToBox(shippingBoxId: String, actorId: String): Int =
         withContext(Dispatchers.IO) {
@@ -702,7 +715,7 @@ class PickingRepository(
         }
 
     /** Port of web removePackageFromBox. */
-    suspend fun removePackageFromBox(packageId: String, actorId: String) = withContext(Dispatchers.IO) {
+    override suspend fun removePackageFromBox(packageId: String, actorId: String) = withContext(Dispatchers.IO) {
         db.runInTransaction {
             val pkg = pickingDao.packageById(packageId) ?: throw LocalizedException("package_not_found")
             val shippingBoxId = pkg.shippingBoxId ?: throw LocalizedException("package_not_in_box")
@@ -738,6 +751,9 @@ class PickingRepository(
             db.runInTransaction { maybeAutoFinishPickingOrderInternal(pickingOrderId, actorId) }
             Unit
         }
+
+    /** PickingDetailSource entry point — delegates to [finishPickingOrder]. */
+    override suspend fun finishPicking(orderId: String, actorId: String) = finishPickingOrder(orderId, actorId)
 
     /**
      * Port of web finishPickingOrder: manual finish. Same guard order as the web —
