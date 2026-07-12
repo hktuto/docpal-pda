@@ -52,6 +52,18 @@ class ScanMatcher(
         data class Error(val key: String) : PickingMatchResult()
     }
 
+    /** A pinned put-away target: one receiving invoice item (lot card). */
+    data class PinnedPutAwayItem(
+        val receivingInvoiceItemId: String,
+        val partNo: String,               // normalized (ScanPrimitives.normalize)
+        val availableQty: Int,            // live-computed remaining for this item
+    )
+
+    sealed class PutAwayMatchResult {
+        data class Single(val item: PinnedPutAwayItem, val qty: Int) : PutAwayMatchResult()
+        data class Error(val key: String) : PutAwayMatchResult()
+    }
+
     data class MatchedRecord(val receiving: ReceivingCandidate, val picking: PickingCandidate)
 
     sealed class MatchResult {
@@ -114,6 +126,28 @@ class ScanMatcher(
         if (allocation.allocationQty <= 0) return PickingMatchResult.Error("invalid_allocation")
         if (p.qty > allocation.allocationQty) return PickingMatchResult.Error("qty_exceeds_allocated")
         return PickingMatchResult.Single(allocation, p.qty)
+    }
+
+    /**
+     * Port of useScanMatchers.matchPutAway: validates parsed fields against the pinned lot.
+     * On success, Single carries the validated scan quantity (qty) alongside the pinned item.
+     * Date/lot/coo/cow are not validated (web parity — taken from the label as-is at apply time).
+     */
+    fun matchPutAway(
+        item: PinnedPutAwayItem?,
+        parsed: ScanPrimitives.OcrInput,
+        actorId: String?,
+    ): PutAwayMatchResult {
+        if (actorId == null) return PutAwayMatchResult.Error("operator_not_signed_in")
+        if (item == null) return PutAwayMatchResult.Error("invalid_receiving_item")
+        val p = try {
+            ScanPrimitives.parseManual(parsed)      // throws qty_must_be_positive_integer
+        } catch (e: LocalizedException) {
+            return PutAwayMatchResult.Error(e.code)
+        }
+        if (p.partNo != item.partNo) return PutAwayMatchResult.Error("scanned_part_does_not_match_item")
+        if (p.qty > item.availableQty) return PutAwayMatchResult.Error("quantity_exceeds_available")
+        return PutAwayMatchResult.Single(item, p.qty)
     }
 
     /**
