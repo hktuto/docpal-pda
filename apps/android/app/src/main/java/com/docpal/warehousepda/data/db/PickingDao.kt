@@ -14,7 +14,7 @@ interface PickingDao {
     @Query("SELECT * FROM picking_orders WHERE id = :id")
     fun pickingOrderById(id: String): PickingOrderEntity?
 
-    @Query("SELECT * FROM picking_orders WHERE id IN (:ids)")
+    @Query("SELECT * FROM picking_orders WHERE id IN (:ids) ORDER BY id")
     fun pickingOrdersByIds(ids: List<String>): List<PickingOrderEntity>
 
     /** Marks an order as issue with the report fields (web reportPickingOrderIssues UPDATE). */

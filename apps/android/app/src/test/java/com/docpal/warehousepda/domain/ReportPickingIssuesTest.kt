@@ -14,7 +14,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -127,6 +126,8 @@ class ReportPickingIssuesTest {
                 "user-1",
             )
         }
+        // Nothing written.
+        assertEquals("pending", stringQuery("SELECT status FROM picking_orders WHERE id = '$PO1'"))
     }
 
     @Test
@@ -161,13 +162,15 @@ class ReportPickingIssuesTest {
     @Test
     fun `insufficient stock qty must be below order total`() = runBlocking {
         insertPickingOrder(PO1, "TEST-PO-01", "pending", totalQty = 10)
-        expectCode("actual_qty_must_be_less_than_requested") {
+        val e = expectCode("actual_qty_must_be_less_than_requested") {
             repo.reportPickingOrderIssues(
                 listOf(PO1 to null),
                 PickingIssueInput(reason = "insufficient_stock", qty = 10, packSize = null, note = null),
                 "user-1",
             )
         }
+        // ref_no param is what ErrorText renders as %1$s.
+        assertEquals(mapOf("ref_no" to "TEST-PO-01"), e.params)
         // Nothing written.
         assertEquals("pending", stringQuery("SELECT status FROM picking_orders WHERE id = '$PO1'"))
     }
@@ -207,6 +210,9 @@ class ReportPickingIssuesTest {
                 "user-1",
             )
         }
+        // Nothing written.
+        assertEquals("finished", stringQuery("SELECT status FROM picking_orders WHERE id = '$PO1'"))
+        assertNull(stringQuery("SELECT issue_reason FROM picking_orders WHERE id = '$PO2'"))
     }
 
     @Test
@@ -262,12 +268,13 @@ class ReportPickingIssuesTest {
         }
     }
 
-    private fun expectCode(code: String, block: suspend () -> Unit) = runBlocking {
+    private fun expectCode(code: String, block: suspend () -> Unit): LocalizedException = runBlocking {
         try {
             block()
-            fail("expected LocalizedException '$code'")
+            throw AssertionError("expected LocalizedException '$code'")
         } catch (e: LocalizedException) {
             assertEquals(code, e.code)
+            e
         }
     }
 
