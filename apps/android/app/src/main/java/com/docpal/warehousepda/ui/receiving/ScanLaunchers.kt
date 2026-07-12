@@ -2,6 +2,7 @@ package com.docpal.warehousepda.ui.receiving
 
 import android.Manifest
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -34,7 +35,7 @@ internal fun parseScanResult(data: Intent?): CameraScanResult? {
             val obj = array.getJSONObject(i)
             barcodes.add(OcrBarcodeValue(obj.optString("value"), obj.optString("format")))
         }
-    } catch (e: org.json.JSONException) {
+    } catch (_: org.json.JSONException) {
         // Scanner always writes valid JSON; keep text/imagePath if it ever doesn't.
     }
     return CameraScanResult(rawText = text, barcodes = barcodes, imagePath = imagePath)
@@ -61,25 +62,23 @@ fun rememberCameraScanLauncher(onResult: (CameraScanResult) -> Unit): () -> Unit
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            scanLauncher.launch(
-                Intent(context, RectangleCameraActivity::class.java)
-                    .putExtra(RectangleCameraActivity.EXTRA_MODE, RectangleCameraActivity.MODE_LABEL_SCAN)
-            )
+            scanLauncher.launch(labelScanIntent(context))
         }
     }
 
-    return remember {
+    return remember(context) {
         {
             if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
                 == PackageManager.PERMISSION_GRANTED
             ) {
-                scanLauncher.launch(
-                    Intent(context, RectangleCameraActivity::class.java)
-                        .putExtra(RectangleCameraActivity.EXTRA_MODE, RectangleCameraActivity.MODE_LABEL_SCAN)
-                )
+                scanLauncher.launch(labelScanIntent(context))
             } else {
                 permissionLauncher.launch(Manifest.permission.CAMERA)
             }
         }
     }
 }
+
+private fun labelScanIntent(context: Context): Intent =
+    Intent(context, RectangleCameraActivity::class.java)
+        .putExtra(RectangleCameraActivity.EXTRA_MODE, RectangleCameraActivity.MODE_LABEL_SCAN)

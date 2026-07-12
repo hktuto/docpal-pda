@@ -23,6 +23,8 @@ class HardwareKeyBuffer(
 
     fun onKey(key: String): Consume {
         if (!enabled) return Consume.IGNORED
+        val now = clock.nowMillis()
+        if (pending.isNotEmpty() && now - lastKeyAt > idleTimeoutMs) pending = ""
         if (key == "Enter") {
             if (pending.isEmpty()) return Consume.IGNORED
             val value = pending
@@ -31,8 +33,6 @@ class HardwareKeyBuffer(
             return Consume.CONSUMED
         }
         if (key.length != 1) return Consume.IGNORED   // printable single chars only
-        val now = clock.nowMillis()
-        if (pending.isNotEmpty() && now - lastKeyAt > idleTimeoutMs) pending = ""
         lastKeyAt = now
         pending += key
         return Consume.CONSUMED

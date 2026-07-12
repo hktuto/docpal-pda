@@ -46,6 +46,17 @@ class HardwareKeyBufferTest {
         assertEquals("C", buffer.pending)
     }
 
+    @Test fun `Enter after idle timeout is ignored (buffer expired)`() {
+        val clock = FakeClock()
+        val flushed = ArrayList<String>()
+        val buffer = HardwareKeyBuffer(clock, 300, onFlush = flushed::add)
+        buffer.onKey("A")
+        clock.now += 301
+        assertEquals(HardwareKeyBuffer.Consume.IGNORED, buffer.onKey("Enter"))
+        assertEquals(emptyList<String>(), flushed)
+        assertEquals("", buffer.pending)
+    }
+
     @Test fun `disabled buffer ignores everything`() {
         val buffer = HardwareKeyBuffer(FakeClock(), 300) {}
         buffer.enabled = false
