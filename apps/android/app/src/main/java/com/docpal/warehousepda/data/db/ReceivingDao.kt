@@ -200,6 +200,61 @@ interface ReceivingDao {
 
     @Insert
     fun insertTransitionLog(log: TransitionLogEntity)
+
+    @Query("SELECT * FROM receiving_invoice_items WHERE id = :id")
+    fun itemById(id: String): ReceivingInvoiceItemEntity?
+
+    @Query(
+        """
+        SELECT * FROM receiving_item_mismatches
+        WHERE receiving_invoice_item_id = :itemId AND status != 'cancelled'
+        ORDER BY reported_at DESC LIMIT 1
+        """
+    )
+    fun activeMismatchForItem(itemId: String): ReceivingItemMismatchEntity?
+
+    @Query("SELECT * FROM receiving_item_mismatches WHERE id = :id")
+    fun mismatchById(id: String): ReceivingItemMismatchEntity?
+
+    @Query("SELECT receiving_order_id FROM receiving_invoices WHERE id = :invoiceId")
+    fun orderIdOfInvoice(invoiceId: String): String?
+
+    @Query("UPDATE receiving_invoice_items SET received_qty = :qty WHERE id = :itemId")
+    fun updateItemReceivedQty(itemId: String, qty: Int)
+
+    @Query(
+        """
+        UPDATE receiving_item_mismatches
+        SET reason = :reason, mismatch_qty = :mismatchQty, wrong_part_no = :wrongPartNo,
+            note = :note, effective_received_qty = :effectiveReceivedQty
+        WHERE id = :id
+        """
+    )
+    fun updateMismatchFields(
+        id: String, reason: String, mismatchQty: Int?, wrongPartNo: String?,
+        note: String?, effectiveReceivedQty: Int,
+    )
+
+    @Query(
+        """
+        UPDATE receiving_item_mismatches
+        SET status = :status, confirmed_by = :confirmedBy, confirmed_at = :confirmedAt
+        WHERE id = :id
+        """
+    )
+    fun markMismatchConfirmed(id: String, status: String, confirmedBy: String, confirmedAt: Long)
+
+    @Query(
+        """
+        UPDATE receiving_item_mismatches
+        SET status = :status, cancelled_by = :cancelledBy, cancelled_at = :cancelledAt
+        WHERE id = :id
+        """
+    )
+    fun markMismatchCancelled(id: String, status: String, cancelledBy: String, cancelledAt: Long)
+
+    @Insert
+    fun insertMismatch(mismatch: ReceivingItemMismatchEntity)
 }
 
 data class OrderItemFlatRow(

@@ -9,6 +9,7 @@ import com.docpal.warehousepda.data.SessionStore
 import com.docpal.warehousepda.data.db.AppDatabase
 import com.docpal.warehousepda.domain.AuthRepository
 import com.docpal.warehousepda.domain.DefaultAuthRepository
+import com.docpal.warehousepda.domain.MismatchRepository
 import com.docpal.warehousepda.ui.home.HomeViewModel
 import com.docpal.warehousepda.ui.login.LoginViewModel
 
@@ -26,6 +27,8 @@ class AppContainer(context: Context) {
     }
 
     val receivingRepository: ReceivingRepository by lazy { ReceivingRepository(db) }
+
+    val mismatchRepository: MismatchRepository by lazy { MismatchRepository(db, receivingRepository) }
 
     @Suppress("UNCHECKED_CAST")
     val viewModelFactory: ViewModelProvider.Factory = object : ViewModelProvider.Factory {
