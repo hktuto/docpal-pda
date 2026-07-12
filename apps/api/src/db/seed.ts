@@ -38,13 +38,17 @@ export function seedIfEmpty(sqlite: DatabaseType, db: AppDb): boolean {
   return true;
 }
 
-/** Dev-only: wipe everything and re-seed. */
+/** Dev-only: wipe everything and re-seed. Atomic: a failure rolls back to the pre-reset state. */
 export function resetAndReseed(sqlite: DatabaseType, db: AppDb): void {
+  const run = sqlite.transaction(() => {
+    for (const t of ALL_TABLES) sqlite.exec(`DELETE FROM ${t}`);
+    seedAll(sqlite, db);
+  });
+  // PRAGMA foreign_keys is a no-op inside a transaction, so toggle it outside.
   sqlite.exec("PRAGMA foreign_keys = OFF");
   try {
-    for (const t of ALL_TABLES) sqlite.exec(`DELETE FROM ${t}`);
+    run();
   } finally {
     sqlite.exec("PRAGMA foreign_keys = ON");
   }
-  seedAll(sqlite, db);
 }
