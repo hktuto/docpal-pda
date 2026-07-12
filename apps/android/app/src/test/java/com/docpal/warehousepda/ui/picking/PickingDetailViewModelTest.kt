@@ -60,6 +60,13 @@ class PickingDetailViewModelTest {
         override suspend fun finishPicking(orderId: String, actorId: String) {
             finishCalls += orderId to actorId
         }
+
+        override suspend fun scanAllocation(allocationId: String, qty: Int, actorId: String) = "pkg-1"
+
+        override suspend fun applyOcrPick(
+            receivingOrderId: String, pickingItemId: String, qty: Int,
+            dateCode: String?, lotCode: String?, coo: String?, cow: String?, actorId: String,
+        ) {}
     }
 
     private class FakeSessionSource(var userId: String?) : SessionSource {

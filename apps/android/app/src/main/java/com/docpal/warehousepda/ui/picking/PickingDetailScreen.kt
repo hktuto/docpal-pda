@@ -30,6 +30,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -38,6 +39,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.key.utf16CodePoint
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -46,10 +53,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.docpal.warehousepda.App
 import com.docpal.warehousepda.R
 import com.docpal.warehousepda.domain.model.PickingOrderDetail
+import com.docpal.warehousepda.domain.scan.HardwareKeyBuffer
 import com.docpal.warehousepda.ui.components.DetailRow
 import com.docpal.warehousepda.ui.components.ErrorText
 import com.docpal.warehousepda.ui.components.OnResumeEffect
 import com.docpal.warehousepda.ui.components.StatusBadge
+import com.docpal.warehousepda.ui.components.errorMessage
+import com.docpal.warehousepda.ui.receiving.rememberCameraScanLauncher
+import com.docpal.warehousepda.ui.scan.LabelScanReviewDialog
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -70,11 +81,40 @@ fun PickingDetailScreen(orderId: String, onBack: () -> Unit) {
     // The VM also loads in init; the first ON_RESUME simply re-queries once.
     OnResumeEffect { viewModel.reload() }
 
-    // Success toast after finishing creates the measuring task (web finish()).
-    val measuringToast = stringResource(R.string.picking_detail_measuring_task_created)
-    LaunchedEffect(state.toastKey) {
-        if (state.toastKey != null) {
-            Toast.makeText(context, measuringToast, Toast.LENGTH_SHORT).show()
+    // Camera scan → same handling pipeline as a hardware wedge flush.
+    val launchCameraScan = rememberCameraScanLauncher { result ->
+        viewModel.onCameraScan(result)
+    }
+
+    // Hardware scanner wedge: scanners type the code as keystrokes + Enter;
+    // buffer with a 300 ms idle gap (web useHardwareScanner parity).
+    val keyBuffer = remember {
+        HardwareKeyBuffer(
+            clock = object : HardwareKeyBuffer.Clock {
+                override fun nowMillis() = System.currentTimeMillis()
+            },
+            onFlush = { viewModel.onHardwareScan(it) },
+        )
+    }
+    // Dialogs live in their own windows, but also disable the buffer explicitly
+    // (scan review raises dialogOpen; add-all confirm uses pendingAddAllBoxId).
+    val wedgeDisabled = state.dialogOpen || state.pendingAddAllBoxId != null
+    SideEffect { keyBuffer.enabled = !wedgeDisabled }
+
+    // Toasts: scan success / no-matching-allocation / measuring-task created are
+    // fixed strings; any other toastKey is a LocalizedException code from the
+    // auto-apply error path (web showToast) rendered via errorMessage.
+    val toastText = when (state.toastKey) {
+        null -> null
+        "common_scan_success" -> stringResource(R.string.common_scan_success)
+        "picking_detail_no_matching_allocation" ->
+            stringResource(R.string.picking_detail_no_matching_allocation)
+        "measuring_task_created" -> stringResource(R.string.picking_detail_measuring_task_created)
+        else -> errorMessage(state.toastKey!!, state.toastArgs)
+    }
+    LaunchedEffect(toastText) {
+        if (toastText != null) {
+            Toast.makeText(context, toastText, Toast.LENGTH_SHORT).show()
             viewModel.clearToast()
         }
     }
@@ -99,6 +139,20 @@ fun PickingDetailScreen(orderId: String, onBack: () -> Unit) {
     }
 
     Scaffold(
+        modifier = Modifier.onPreviewKeyEvent { event ->
+            when {
+                wedgeDisabled || event.type != KeyEventType.KeyDown -> false
+                event.key == Key.Enter ->
+                    keyBuffer.onKey("Enter") == HardwareKeyBuffer.Consume.CONSUMED
+                else -> {
+                    val codePoint = event.utf16CodePoint
+                    if (codePoint != 0 && !codePoint.toChar().isISOControl()) {
+                        keyBuffer.onKey(codePoint.toChar().toString()) ==
+                            HardwareKeyBuffer.Consume.CONSUMED
+                    } else false
+                }
+            }
+        },
         topBar = {
             TopAppBar(
                 title = { Text(state.detail?.refNo ?: stringResource(R.string.picking_detail_title)) },
@@ -160,6 +214,7 @@ fun PickingDetailScreen(orderId: String, onBack: () -> Unit) {
                     boxSelections = boxSelections,
                     expandedLogs = expandedLogs,
                     actionInProgress = state.actionInProgress,
+                    scanEnabled = true,
                     onSelectBox = { pkgId, boxId ->
                         boxSelections = boxSelections + (pkgId to boxId)
                     },
@@ -172,6 +227,10 @@ fun PickingDetailScreen(orderId: String, onBack: () -> Unit) {
                         boxSelections[pkgId]?.let { viewModel.addPackageToBox(pkgId, it) }
                     },
                     onRemoveFromBox = viewModel::removePackageFromBox,
+                    onScanAllocation = { allocation, item ->
+                        viewModel.pinAllocation(allocation, item)
+                        launchCameraScan()
+                    },
                 )
                 item { Spacer(Modifier.height(8.dp)) }
             }
@@ -194,6 +253,21 @@ fun PickingDetailScreen(orderId: String, onBack: () -> Unit) {
                     Text(stringResource(R.string.action_cancel))
                 }
             },
+        )
+    }
+
+    state.scanReview?.let { review ->
+        LabelScanReviewDialog(
+            review = review,
+            onFieldsChange = viewModel::updateScanFields,
+            onFindMatch = { viewModel.findMatch() },
+            onApply = { viewModel.applyScan(it) },
+            onRetake = {
+                // Retake keeps the pin — the re-scan matches the same allocation.
+                viewModel.retakeScan()
+                launchCameraScan()
+            },
+            onDismiss = viewModel::closeScanReview,
         )
     }
 }

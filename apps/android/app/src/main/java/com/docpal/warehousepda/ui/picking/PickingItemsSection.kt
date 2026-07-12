@@ -52,8 +52,8 @@ internal val CardDoneColor = Color(0xFF10B981)
 
 /**
  * Items section — port of the web PickingItemsSection.vue.
- * Rendered inside the detail screen's LazyColumn. [scanEnabled] stays false until
- * Task 10 wires the scan buttons.
+ * Rendered inside the detail screen's LazyColumn. Scan buttons pin the
+ * allocation and launch the camera (Task 10).
  */
 internal fun LazyListScope.pickingItemsSection(
     detail: PickingOrderDetail,
@@ -66,7 +66,7 @@ internal fun LazyListScope.pickingItemsSection(
     onToggleLogs: (itemId: String) -> Unit,
     onAddToBox: (packageId: String) -> Unit,
     onRemoveFromBox: (packageId: String) -> Unit,
-    onScanAllocation: (allocationId: String) -> Unit = {},
+    onScanAllocation: (allocation: PickingAllocationDetail, item: PickingItemDetail) -> Unit = { _, _ -> },
 ) {
     item(key = "items-title") {
         Text(
@@ -91,7 +91,7 @@ internal fun LazyListScope.pickingItemsSection(
                 onToggleLogs = { onToggleLogs(item.id) },
                 onAddToBox = onAddToBox,
                 onRemoveFromBox = onRemoveFromBox,
-                onScanAllocation = onScanAllocation,
+                onScanAllocation = { allocation -> onScanAllocation(allocation, item) },
             )
         }
     }
@@ -112,7 +112,7 @@ private fun PickingItemCard(
     onToggleLogs: () -> Unit,
     onAddToBox: (packageId: String) -> Unit,
     onRemoveFromBox: (packageId: String) -> Unit,
-    onScanAllocation: (allocationId: String) -> Unit,
+    onScanAllocation: (allocation: PickingAllocationDetail) -> Unit,
 ) {
     val done = item.pickedQty >= item.qty
     val actionable = orderStatus != "finished" && orderStatus != "issue"
@@ -210,7 +210,7 @@ private fun AllocationBlock(
     allocation: PickingAllocationDetail,
     actionInProgress: Boolean,
     scanEnabled: Boolean,
-    onScanAllocation: (allocationId: String) -> Unit,
+    onScanAllocation: (allocation: PickingAllocationDetail) -> Unit,
 ) {
     Column(Modifier.padding(start = 12.dp, top = 4.dp)) {
         if (allocation.lotId != null) {
@@ -239,10 +239,10 @@ private fun AllocationBlock(
                 )
             }
         }
-        // Task 10 wires scanning; the button stays disabled until then.
+        // Scan pins this allocation and launches the camera (Task 10).
         Spacer(Modifier.height(4.dp))
         OutlinedButton(
-            onClick = { onScanAllocation(allocation.id) },
+            onClick = { onScanAllocation(allocation) },
             enabled = scanEnabled && !actionInProgress,
         ) {
             Text(stringResource(R.string.picking_items_scan))

@@ -243,7 +243,7 @@ class PickingRepository(
     }
 
     /** Port of web applyOcrPick (ocrPicking.ts): top up + consume coarse allocation, build lot, scan into one package. */
-    suspend fun applyOcrPick(
+    override suspend fun applyOcrPick(
         receivingOrderId: String,
         pickingItemId: String,
         qty: Int,
@@ -426,6 +426,10 @@ class PickingRepository(
         }
         resultId!!
     }
+
+    /** PickingDetailSource entry point — delegates to [scanAllocationToPackage]. */
+    override suspend fun scanAllocation(allocationId: String, qty: Int, actorId: String): String =
+        scanAllocationToPackage(allocationId, qty, actorId)
 
     /** Port of web scanAllocationToPackage (standalone transaction). Returns the new package id. */
     suspend fun scanAllocationToPackage(allocationId: String, qty: Int, actorId: String): String =
