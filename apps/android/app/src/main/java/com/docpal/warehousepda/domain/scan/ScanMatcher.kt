@@ -1,11 +1,12 @@
 package com.docpal.warehousepda.domain.scan
 
 import com.docpal.warehousepda.domain.LocalizedException
+import kotlinx.coroutines.CancellationException
 
 /** Port of useScanMatchers.matchReceiving (receiving task only; other tasks arrive in later phases). */
 class ScanMatcher(
     private val receivingCandidates: suspend (receivingOrderId: String, partNo: String, qty: Int) -> List<ReceivingCandidate>,
-    private val pickingCandidates: suspend (receivingOrderId: String, partId: String, qty: Int) -> List<PickingCandidate>,
+    private val pickingCandidates: suspend (receivingOrderId: String, partId: String) -> List<PickingCandidate>,
 ) {
 
     data class ReceivingCandidate(
@@ -40,7 +41,7 @@ class ScanMatcher(
     sealed class MatchResult {
         data class Single(val record: MatchedRecord) : MatchResult()
         data class Multiple(val records: List<MatchedRecord>) : MatchResult()
-        object None : MatchResult()
+        data object None : MatchResult()
         data class Error(val key: String) : MatchResult()
     }
 
@@ -59,7 +60,7 @@ class ScanMatcher(
             val receiving = receivingList.first()
             if (p.qty > receiving.availableQty) return MatchResult.None
 
-            var pickingList = pickingCandidates(receivingOrderId, receiving.partId, p.qty)
+            var pickingList = pickingCandidates(receivingOrderId, receiving.partId)
                 .filter { it.remainingQty >= p.qty }
             ctx.pickingItemId?.let { pinned ->
                 pickingList = pickingList.filter { it.pickingItemId == pinned }
@@ -70,6 +71,8 @@ class ScanMatcher(
             return if (records.size == 1) MatchResult.Single(records.first()) else MatchResult.Multiple(records)
         } catch (e: LocalizedException) {
             return MatchResult.Error(e.code)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             return MatchResult.Error("unknown_match_failed")
         }

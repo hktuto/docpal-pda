@@ -48,7 +48,7 @@ class ScanRepository(private val db: AppDatabase) {
     }
 
     suspend fun findPickingCandidates(
-        receivingOrderId: String, partId: String, qty: Int,
+        receivingOrderId: String, partId: String,
     ): List<ScanMatcher.PickingCandidate> = withContext(Dispatchers.IO) {
         scanDao.pickingCandidateRows(receivingOrderId, partId).mapNotNull { row ->
             val remaining = row.requiredQty - row.pickedQty - row.scannedNotBoxedQty

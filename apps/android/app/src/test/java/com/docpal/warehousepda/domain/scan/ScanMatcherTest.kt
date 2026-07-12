@@ -5,9 +5,11 @@ import androidx.test.core.app.ApplicationProvider
 import com.docpal.warehousepda.data.ScanRepository
 import com.docpal.warehousepda.data.db.AppDatabase
 import com.docpal.warehousepda.offMainThread
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -66,7 +68,7 @@ class ScanMatcherTest {
                     ScanPrimitives.normalize(it.partNo) == partNo && it.availableQty >= qty
                 }
             },
-            pickingCandidates = { _, partId, _ -> pickingRows.filter { it.partId == partId } },
+            pickingCandidates = { _, partId -> pickingRows.filter { it.partId == partId } },
         )
     }
 
@@ -150,6 +152,17 @@ class ScanMatcherTest {
     }
 
     @Test
+    fun `under-available first candidate returns none even without provider pre-filtering`() = runBlocking {
+        // Exercises the matcher's own defensive qty > availableQty check:
+        // the stub returns the candidate regardless of qty.
+        val m = ScanMatcher(
+            receivingCandidates = { _, _, _ -> listOf(receiving(available = 50)) },
+            pickingCandidates = { _, _ -> listOf(picking()) },
+        )
+        assertEquals(ScanMatcher.MatchResult.None, m.matchReceiving(ctx, input(qty = "100"), actorId = ACTOR))
+    }
+
+    @Test
     fun `no picking candidates returns none`() = runBlocking {
         val result = matcher(pickingRows = emptyList()).matchReceiving(ctx, input(), actorId = ACTOR)
         assertEquals(ScanMatcher.MatchResult.None, result)
@@ -196,9 +209,20 @@ class ScanMatcherTest {
     fun `unexpected provider failure returns unknown_match_failed`() = runBlocking {
         val m = ScanMatcher(
             receivingCandidates = { _, _, _ -> throw IllegalStateException("boom") },
-            pickingCandidates = { _, _, _ -> emptyList() },
+            pickingCandidates = { _, _ -> emptyList() },
         )
         assertEquals(ScanMatcher.MatchResult.Error("unknown_match_failed"), m.matchReceiving(ctx, input(), actorId = ACTOR))
+    }
+
+    @Test
+    fun `cancellation from provider propagates instead of unknown_match_failed`() {
+        val m = ScanMatcher(
+            receivingCandidates = { _, _, _ -> throw CancellationException("cancelled") },
+            pickingCandidates = { _, _ -> emptyList() },
+        )
+        assertThrows(CancellationException::class.java) {
+            runBlocking { m.matchReceiving(ctx, input(), actorId = ACTOR) }
+        }
     }
 
     companion object {
@@ -312,7 +336,7 @@ class ScanRepositorySeededTest {
                     "VALUES ('f1f1f1f1-f1f1-f1f1-f1f1-f1f1f1f1f1f2', 'f1f1f1f1-f1f1-f1f1-f1f1-f1f1f1f1f1f1', '$PART_1000F', 1000, 0, 0, NULL, NULL)"
             )
         }
-        val candidates = repo.findPickingCandidates(ORDER_ID, PART_1000F, qty = 10)
+        val candidates = repo.findPickingCandidates(ORDER_ID, PART_1000F)
         // Only the three seeded linked pending orders survive, ORDER BY po.ref_no.
         assertEquals(
             listOf("GZ-26070045", "GZ-26070052", "SZ-26070044"),
