@@ -128,8 +128,8 @@ export function useScanMatchers(): ScanMatchers {
       const receivingCandidates: ReceivingCandidate[] =
         scanCandidates.receivingCandidatesByPartNo[p.partNo] ?? [];
       if (receivingCandidates.length === 0) return { type: 'none' };
-      const receiving = receivingCandidates[0];
-      if (p.qty > receiving.availableQty) return { type: 'none' };
+      const receiving = receivingCandidates.find((c) => c.availableQty >= p.qty);
+      if (!receiving) return { type: 'none' };
 
       const t2 = performance.now();
       let pickingCandidates: PickingCandidate[] =
