@@ -371,6 +371,26 @@ test("GET /picking-orders/:id returns null issue fields and null measuring_task 
   assert.equal(d.items[0].source_shelf_code, null);
 });
 
+test("GET /picking-orders/:id returns supplier and delivery_date via the suppliers join", async () => {
+  sqlite.exec(`
+    INSERT INTO suppliers (id, code, name, qr_template, qrcode_qty_encoding, created_at, updated_at) VALUES ('supx','SUPX','Sup X','tpl-x','plain','0','0');
+    INSERT INTO picking_orders (id, external_id, ref_no, status, delivery_date, supplier_id, created_at, updated_at) VALUES ('pox','poxe','POX','picking','2026-07-13T00:00:00.000Z','supx','0','0');
+  `);
+  const res = await app.request("/picking-orders/pox");
+  assert.equal(res.status, 200);
+  const d = (await res.json()) as any;
+  assert.equal(d.order.delivery_date, "2026-07-13T00:00:00.000Z");
+  assert.equal(d.order.supplier_id, "supx");
+  assert.equal(d.order.supplier_code, "SUPX");
+  assert.equal(d.order.supplier_name, "Sup X");
+  assert.equal(d.order.supplier_qr_template, "tpl-x");
+  assert.equal(d.order.supplier_qrcode_qty_encoding, "plain");
+  // an order without a supplier gets nulls, not a 500
+  const plain = (await (await app.request("/picking-orders/rxpo2")).json()) as any;
+  assert.equal(plain.order.supplier_id, null);
+  assert.equal(plain.order.supplier_name, null);
+});
+
 test("GET /picking-orders includes total_qty summed over each order's items", async () => {
   const res = await app.request("/picking-orders?status=issue");
   assert.equal(res.status, 200);

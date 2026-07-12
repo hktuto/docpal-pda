@@ -587,6 +587,12 @@ const PICKING_ORDER_BUNDLE = {
     status: 'picking',
     ship_to: 'Berlin',
     destination_country: 'DE',
+    delivery_date: '2026-07-13T00:00:00.000Z',
+    supplier_id: 's1',
+    supplier_code: 'SUP1',
+    supplier_name: 'Supplier One',
+    supplier_qr_template: 'tpl-{qty}',
+    supplier_qrcode_qty_encoding: 'plain',
     created_at: '2026-07-01T00:00:00.000Z',
     updated_at: '2026-07-06T00:00:00.000Z',
     issue_reason: 'insufficient_stock',
@@ -789,9 +795,15 @@ describe('createApiWarehouseService (picking)', () => {
       expect(detail.status).toBe('picking');
       expect(detail.shipTo).toBe('Berlin');
       expect(detail.destinationCountry).toBe('DE');
-      // API bundle gaps: no delivery_date/supplier/po_no/date-code notice.
-      expect(detail.deliveryDate).toBeNull();
-      expect(detail.supplier).toBeNull();
+      // API bundle gaps: no po_no/date-code notice columns.
+      expect(detail.deliveryDate).toEqual(new Date('2026-07-13T00:00:00.000Z'));
+      expect(detail.supplier).toEqual({
+        id: 's1',
+        code: 'SUP1',
+        name: 'Supplier One',
+        qrcodeTemplate: 'tpl-{qty}',
+        qrcodeQtyEncoding: 'plain',
+      });
       expect(detail.poNo).toBeNull();
       expect(detail.requiredDateCodeNotice).toBeNull();
 
@@ -885,6 +897,8 @@ describe('createApiWarehouseService (picking)', () => {
       const detail = await createService().getPickingOrder('po2');
 
       expect(detail.measuringTask).toBeNull();
+      expect(detail.deliveryDate).toBeNull();
+      expect(detail.supplier).toBeNull();
       expect(detail.issueReason).toBeNull();
       expect(detail.issueReportedAt).toBeNull();
       expect(detail.issueReportedBy).toBeNull();

@@ -198,10 +198,13 @@ pickingExecutionRoute.get("/picking-orders", (c) => {
 pickingExecutionRoute.get("/picking-orders/:id", (c) => {
   const orderId = c.req.param("id");
   const order = db.get<Record<string, unknown>>(sql`
-    SELECT po.id, po.external_id, po.ref_no, po.status, po.ship_to, po.destination_country, po.created_at, po.updated_at,
+    SELECT po.id, po.external_id, po.ref_no, po.status, po.ship_to, po.destination_country, po.delivery_date, po.created_at, po.updated_at,
            po.issue_reason, po.issue_note, po.issue_qty, po.issue_pack_size, po.issue_remark,
-           po.issue_reported_at, po.issue_reported_by, u.name AS issue_reported_by_name
+           po.issue_reported_at, po.issue_reported_by, u.name AS issue_reported_by_name,
+           s.id AS supplier_id, s.code AS supplier_code, s.name AS supplier_name,
+           s.qr_template AS supplier_qr_template, s.qrcode_qty_encoding AS supplier_qrcode_qty_encoding
     FROM picking_orders po LEFT JOIN users u ON u.id = po.issue_reported_by
+    LEFT JOIN suppliers s ON s.id = po.supplier_id
     WHERE po.id = ${orderId}`);
   if (!order) throw new HTTPException(404, { message: "picking order not found" });
 

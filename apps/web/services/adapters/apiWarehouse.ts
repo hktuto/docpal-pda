@@ -615,10 +615,18 @@ function toPickingOrderDetailBundle(bundle: RawRow): PickingOrderDetail {
     id: orderId,
     refNo: String(order.ref_no),
     status: order.status as PickingOrderStatus,
-    // The bundle's order select has no delivery_date/supplier/po_no/
-    // required_date_code_notice columns (API gaps); they default to null.
+    // The bundle's order select has no po_no/required_date_code_notice
+    // columns (API gaps); they default to null.
     deliveryDate: order.delivery_date ? new Date(order.delivery_date) : null,
-    supplier: null,
+    supplier: order.supplier_id
+      ? {
+          id: String(order.supplier_id),
+          code: String(order.supplier_code),
+          name: String(order.supplier_name),
+          qrcodeTemplate: order.supplier_qr_template ?? null,
+          qrcodeQtyEncoding: order.supplier_qrcode_qty_encoding ?? null,
+        }
+      : null,
     poNo: order.po_no ?? null,
     shipTo: order.ship_to ?? null,
     destinationCountry: order.destination_country ?? null,
