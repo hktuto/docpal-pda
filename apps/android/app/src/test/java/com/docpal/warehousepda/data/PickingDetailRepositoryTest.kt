@@ -180,6 +180,61 @@ class PickingDetailRepositoryTest {
         assertTrue(byId["alloc-bad-3"]!!.boxIds.isEmpty())
     }
 
+    @Test
+    fun `item without allocations or packages is returned with empty lists`() = runBlocking {
+        insertPickingItem(db, "pi-empty", PO, PART, 5)
+
+        val detail = repo.getPickingOrderDetail(PO)!!
+        assertEquals(2, detail.items.size)
+        val empty = detail.items.first { it.id == "pi-empty" }
+        assertEquals(5, empty.qty)
+        assertEquals(0, empty.scannedQty)
+        assertTrue(empty.allocations.isEmpty())
+        assertTrue(empty.packages.isEmpty())
+    }
+
+    @Test
+    fun `order without boxes and with empty box`() = runBlocking {
+        insertPickingOrder(db, "po-nobox", "TEST-PO-NB", "picking")
+        insertPickingItem(db, "pi-nobox", "po-nobox", PART, 5)
+
+        val noBoxes = repo.getPickingOrderDetail("po-nobox")!!
+        assertTrue(noBoxes.boxes.isEmpty())
+
+        insertBox(db, "box-empty", "po-nobox", "open")
+        val withEmpty = repo.getPickingOrderDetail("po-nobox")!!
+        val box = withEmpty.boxes.single()
+        assertEquals("box-empty", box.id)
+        assertEquals("open", box.status)
+        assertEquals(0, box.packageCount)
+        assertEquals(0, box.totalQty)
+    }
+
+    @Test
+    fun `issue order populates issue header fields`() = runBlocking {
+        exec(
+            db,
+            "INSERT INTO users (id, username, password_hash, display_name, role, created_at) " +
+                "VALUES ('user-9', 'issue-op', 'x', 'Issue Reporter', 'operator', 1783779245783)"
+        )
+        insertPickingOrder(db, "po-issue", "TEST-PO-IS", "issue")
+        exec(
+            db,
+            "UPDATE picking_orders SET issue_reason = 'insufficient_stock', issue_qty = 7, " +
+                "issue_pack_size = 3, issue_note = 'only 13 on hand', issue_remark = 'line 2', " +
+                "issue_reported_by = 'user-9', issue_reported_at = 1783779245783 WHERE id = 'po-issue'"
+        )
+
+        val detail = repo.getPickingOrderDetail("po-issue")!!
+        assertEquals("issue", detail.status)
+        assertEquals("insufficient_stock", detail.issueReason)
+        assertEquals(7, detail.issueQty)
+        assertEquals(3, detail.issuePackSize)
+        assertEquals("only 13 on hand", detail.issueNote)
+        assertEquals("line 2", detail.issueRemark)
+        assertEquals("Issue Reporter", detail.issueReportedByName)
+    }
+
     private fun insertLog(
         id: String,
         entityType: String,

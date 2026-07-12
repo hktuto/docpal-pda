@@ -104,7 +104,7 @@ interface PickingDao {
         SELECT id, picking_item_id, qty, shipping_box_id, date_code, lot_code, coo, cow
         FROM picking_packages
         WHERE picking_item_id IN (:itemIds)
-        ORDER BY created_at
+        ORDER BY created_at, id
         """
     )
     fun packageDetailRows(itemIds: List<String>): List<PackageDetailRow>
@@ -118,7 +118,7 @@ interface PickingDao {
         LEFT JOIN picking_packages pp ON pp.shipping_box_id = sb.id
         WHERE sb.picking_order_id = :orderId
         GROUP BY sb.id, sb.status
-        ORDER BY sb.id
+        ORDER BY sb.created_at, sb.id
         """
     )
     fun boxDetailRows(orderId: String): List<BoxDetailRow>

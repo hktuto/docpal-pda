@@ -102,7 +102,7 @@ internal fun insertInventoryLot(
     )
 }
 
-private fun sqlQuote(value: String?): String = value?.let { "'$it'" } ?: "NULL"
+private fun sqlQuote(value: String?): String = value?.let { "'${it.replace("'", "''")}'" } ?: "NULL"
 
 internal fun insertPickingItem(
     db: AppDatabase,
