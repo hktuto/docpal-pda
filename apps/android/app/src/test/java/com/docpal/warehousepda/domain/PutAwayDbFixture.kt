@@ -8,7 +8,8 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  * [SupportSQLiteDatabase] so a test can batch inserts inside one offMainThread
  * block; the AppDatabase-based helpers in PickingDbFixture.kt (insertReceivingOrder,
  * insertPart, insertPickingOrder, insertPickingItem, insertAllocation) are reused
- * as-is. Column sets verified against ReceivingEntities.kt / MeasuringEntities.kt.
+ * as-is. Column sets verified against ReceivingEntities.kt / MeasuringEntities.kt /
+ * ReferenceEntities.kt.
  */
 internal fun insertReceivingInvoice(
     db: SupportSQLiteDatabase,
@@ -67,9 +68,23 @@ internal fun insertShelfBox(
     orderId: String,
     shelfCode: String?,
     status: String = "open",
+    createdAt: Long = 1783779245783,
 ) {
     db.execSQL(
         "INSERT INTO shelf_boxes (id, receiving_order_id, shelf_code, status, created_at) " +
-            "VALUES (${sqlQuote(id)}, ${sqlQuote(orderId)}, ${sqlQuote(shelfCode)}, ${sqlQuote(status)}, 1783779245783)"
+            "VALUES (${sqlQuote(id)}, ${sqlQuote(orderId)}, ${sqlQuote(shelfCode)}, ${sqlQuote(status)}, $createdAt)"
+    )
+}
+
+internal fun insertSupplier(db: SupportSQLiteDatabase, id: String, code: String, name: String) {
+    db.execSQL(
+        "INSERT INTO suppliers (id, code, name) " +
+            "VALUES (${sqlQuote(id)}, ${sqlQuote(code)}, ${sqlQuote(name)})"
+    )
+}
+
+internal fun insertShelf(db: SupportSQLiteDatabase, code: String, zone: String?) {
+    db.execSQL(
+        "INSERT INTO shelves (code, zone) VALUES (${sqlQuote(code)}, ${sqlQuote(zone)})"
     )
 }
