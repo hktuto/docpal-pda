@@ -592,6 +592,8 @@ export default {
     weights_must_be_greater_than_zero: "Weights must be greater than zero",
     gross_weight_must_be_greater_than_or_equal_to_net_weight: "Gross weight must be greater than or equal to net weight",
     measuring_task_not_found: "Measuring task not found",
+    verification_task_not_found: "Verification task not found",
+    verification_task_is_not_pending: "Verification task is not pending",
     all_shipping_boxes_must_be_closed: "All shipping boxes must be closed before completing",
     picking_item_not_fully_packed: "Picking item {item_id} is not fully packed",
     shelf_box_item_not_found: "Shelf box item not found",

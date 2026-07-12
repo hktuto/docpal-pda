@@ -592,6 +592,8 @@ export default {
     weights_must_be_greater_than_zero: "重量必須大於零",
     gross_weight_must_be_greater_than_or_equal_to_net_weight: "毛重必須大於或等於淨重",
     measuring_task_not_found: "找不到測量任務",
+    verification_task_not_found: "找不到查貨任務",
+    verification_task_is_not_pending: "查貨任務不是待處理狀態",
     all_shipping_boxes_must_be_closed: "完成前所有出貨箱必須已關閉",
     picking_item_not_fully_packed: "揀貨項目 {item_id} 未完全打包",
     shelf_box_item_not_found: "找不到貨架箱號物品",

@@ -91,6 +91,49 @@ describe('createApiClient', () => {
     await expect(promise).rejects.toMatchObject({ code: 'shelf_box_is_not_closed' });
   });
 
+  // API error sentences (verbatim from apps/api/src) that must map to an
+  // errors.* i18n key instead of surfacing as raw "409: <english>".
+  const ENGLISH_ERROR_CASES: [string, string][] = [
+    ['picking order has an open issue', 'picking_order_has_open_issue'],
+    ['picking order already finished', 'picking_order_already_finished'],
+    ['scan quantity exceeds required', 'scan_quantity_exceeds_required'],
+    ['insufficient lot quantity', 'insufficient_lot_quantity'],
+    ['package already in a box', 'package_already_in_box'],
+    ['box is not empty', 'box_is_not_empty'],
+    ['no items to pick', 'no_items_to_pick'],
+    ['not all items fully boxed', 'not_all_items_fully_boxed'],
+    ['allocation not found', 'allocation_not_found'],
+    ['allocation not found in this order', 'allocation_not_found'],
+    ['qty exceeds the remaining picking need', 'quantity_exceeds_picking_need'],
+    ['qty not available on this receiving order', 'quantity_not_available_receiving'],
+    ['picking item part is not on this receiving order', 'receiving_picking_part_mismatch'],
+    ['all packages must be verified', 'all_packages_must_be_verified'],
+    ['weights must be greater than zero', 'weights_must_be_greater_than_zero'],
+    ['gross weight must be >= net weight', 'gross_weight_must_be_greater_than_or_equal_to_net_weight'],
+    ['cannot close an empty box', 'cannot_close_empty_shipping_box'],
+    ['all shipping boxes must be closed', 'all_shipping_boxes_must_be_closed'],
+    ['picking item not fully packed', 'picking_item_not_fully_packed'],
+    ['scan is already in a box', 'put_away_scan_already_boxed'],
+    ['scan is not in a box', 'put_away_scan_not_boxed'],
+    ['put-away scan not found', 'put_away_scan_not_found'],
+    ['cannot close an empty shelf box', 'cannot_close_empty_shelf_box'],
+    ['shelf box is not empty', 'shelf_box_is_not_empty'],
+    ['verification task not found', 'verification_task_not_found'],
+    ['verification task is not pending', 'verification_task_is_not_pending'],
+  ];
+
+  it.each(ENGLISH_ERROR_CASES)(
+    'maps English API error "%s" to i18n key "%s"',
+    async (text, key) => {
+      fetchMock.mockResolvedValue(errorResponse(text, 409));
+      const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+
+      const promise = client.get('/anything');
+      await expect(promise).rejects.toThrow(I18nError);
+      await expect(promise).rejects.toMatchObject({ code: key });
+    }
+  );
+
   it('throws a plain Error containing the status for unmapped error text', async () => {
     fetchMock.mockResolvedValue(errorResponse('something exploded', 500));
     const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
