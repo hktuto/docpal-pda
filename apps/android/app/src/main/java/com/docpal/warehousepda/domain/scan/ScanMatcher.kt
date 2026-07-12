@@ -3,7 +3,7 @@ package com.docpal.warehousepda.domain.scan
 import com.docpal.warehousepda.domain.LocalizedException
 import kotlinx.coroutines.CancellationException
 
-/** Port of useScanMatchers.matchReceiving (receiving task only; other tasks arrive in later phases). */
+/** Ports of useScanMatchers: matchReceiving, matchPicking, matchPutAway. */
 class ScanMatcher(
     private val receivingCandidates: suspend (receivingOrderId: String, partNo: String, qty: Int) -> List<ReceivingCandidate>,
     private val pickingCandidates: suspend (receivingOrderId: String, partId: String) -> List<PickingCandidate>,
@@ -60,6 +60,7 @@ class ScanMatcher(
     )
 
     sealed class PutAwayMatchResult {
+        /** qty is the validated scan quantity from parseManual. */
         data class Single(val item: PinnedPutAwayItem, val qty: Int) : PutAwayMatchResult()
         data class Error(val key: String) : PutAwayMatchResult()
     }
