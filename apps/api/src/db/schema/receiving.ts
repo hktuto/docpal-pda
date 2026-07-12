@@ -75,9 +75,19 @@ export const receivingItemMismatches = sqliteTable(
   {
     id: text("id").primaryKey(),
     receivingInvoiceItemId: text("receiving_invoice_item_id").notNull().references(() => receivingInvoiceItems.id, { onDelete: "cascade" }),
-    kind: text("kind").notNull(),
+    kind: text("kind").notNull(), // mirrors the web's `reason` (mismatchReasons enum)
+    mismatchQty: integer("mismatch_qty"),
+    wrongPartNo: text("wrong_part_no"),
     note: text("note"),
-    createdAt: text("created_at").notNull().$defaultFn(now),
+    status: text("status", { enum: ["pending", "confirmed", "cancelled"] }).notNull().default("pending"),
+    effectiveReceivedQty: integer("effective_received_qty"),
+    previousReceivedQty: integer("previous_received_qty"),
+    reportedBy: text("reported_by"),
+    confirmedBy: text("confirmed_by"),
+    confirmedAt: text("confirmed_at"),
+    cancelledBy: text("cancelled_by"),
+    cancelledAt: text("cancelled_at"),
+    createdAt: text("created_at").notNull().$defaultFn(now), // plays the role of the web's reported_at
     updatedAt: text("updated_at").notNull().$defaultFn(now),
   },
   (t) => ({ itemIdx: index("rim_item_idx").on(t.receivingInvoiceItemId) })

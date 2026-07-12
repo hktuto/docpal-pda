@@ -54,6 +54,41 @@ test("createTables gives fresh + stale DBs the suppliers.qrcode_qty_encoding col
   b.close();
 });
 
+function mismatchCols(sqlite: any): string[] {
+  return (sqlite.prepare("PRAGMA table_info(receiving_item_mismatches)").all() as any[]).map((c) => c.name);
+}
+
+test("createTables gives fresh + stale DBs the receiving_item_mismatches workflow columns", () => {
+  const expected = [
+    "mismatch_qty", "wrong_part_no", "status", "effective_received_qty", "previous_received_qty",
+    "reported_by", "confirmed_by", "confirmed_at", "cancelled_by", "cancelled_at",
+  ];
+  // fresh DB: columns come straight from the DDL
+  const a = freshDb();
+  createTables(a);
+  const colsA = mismatchCols(a);
+  for (const c of expected) assert.ok(colsA.includes(c), `fresh DB missing ${c}`);
+  a.close();
+
+  // stale DB: pre-create the OLD minimal shape + a pre-existing row, then createTables must upgrade it
+  const b = freshDb();
+  b.exec(`CREATE TABLE receiving_item_mismatches (
+            id TEXT PRIMARY KEY, receiving_invoice_item_id TEXT NOT NULL,
+            kind TEXT NOT NULL, note TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+          INSERT INTO receiving_item_mismatches (id, receiving_invoice_item_id, kind, note, created_at, updated_at)
+            VALUES ('rim1','rii1','qty','old','0','0');`);
+  createTables(b);
+  const colsB = mismatchCols(b);
+  for (const c of expected) assert.ok(colsB.includes(c), `stale DB missing ${c}`);
+  // pre-existing rows backfill status='pending', audit/qty columns stay NULL
+  const row = b.prepare("SELECT status, mismatch_qty, reported_by, confirmed_at FROM receiving_item_mismatches WHERE id='rim1'").get() as any;
+  assert.equal(row.status, "pending");
+  assert.equal(row.mismatch_qty, null);
+  assert.equal(row.reported_by, null);
+  assert.equal(row.confirmed_at, null);
+  b.close();
+});
+
 test("createTables upgrades the cycle-coalesce index to its partial form", () => {
   const sqlite = freshDb();
   createTables(sqlite);

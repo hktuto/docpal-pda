@@ -43,9 +43,10 @@ sqlite.exec(`
     VALUES ('al4b','pi4b',3,'lot4','0','0');
   INSERT INTO inventory_lot_sources (id, inventory_lot_id, receiving_invoice_item_id, qty, created_at, updated_at)
     VALUES ('ils4a','lot4','rii4a',3,'0','0'), ('ils4b','lot4','rii4a',2,'0','0');
-  INSERT INTO receiving_item_mismatches (id, receiving_invoice_item_id, kind, note, created_at, updated_at)
-    VALUES ('rim4old','rii4b','qty','old note','2026-01-01T00:00:00.000Z','0'),
-           ('rim4new','rii4b','qty','new note','2026-01-02T00:00:00.000Z','0');
+  INSERT INTO receiving_item_mismatches (id, receiving_invoice_item_id, kind, note, status, created_at, updated_at)
+    VALUES ('rim4old','rii4b','qty','old note','pending','2026-01-01T00:00:00.000Z','0'),
+           ('rim4new','rii4b','qty','new note','pending','2026-01-02T00:00:00.000Z','0'),
+           ('rim4cancelled','rii4b','qty','cancelled note','cancelled','2026-01-03T00:00:00.000Z','0');
 `);
 
 test("GET /receiving-orders lists orders with remaining items and pending picking counts", async () => {
@@ -106,7 +107,7 @@ test("GET /receiving-orders/:id returns detail with supplier, items, allocations
 
   assert.deepEqual(itemB.part, { id: "p4b", part_no: "P4B", description: "Part four B" });
   assert.ok(itemB.mismatch, "rii4b has a mismatch");
-  assert.equal(itemB.mismatch.id, "rim4new"); // latest by created_at wins
+  assert.equal(itemB.mismatch.id, "rim4new"); // latest non-cancelled by created_at wins (rim4cancelled is newer but cancelled)
   assert.equal(itemB.mismatch.receiving_invoice_item_id, "rii4b");
   assert.equal(itemB.mismatch.kind, "qty");
   assert.equal(itemB.mismatch.note, "new note");

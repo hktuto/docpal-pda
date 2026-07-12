@@ -37,7 +37,11 @@ CREATE INDEX IF NOT EXISTS rii_invoice_idx ON receiving_invoice_items(receiving_
 CREATE UNIQUE INDEX IF NOT EXISTS rii_invoice_line_uq ON receiving_invoice_items(receiving_invoice_id, line_no) WHERE line_no IS NOT NULL;
 CREATE TABLE IF NOT EXISTS receiving_item_mismatches (
   id TEXT PRIMARY KEY, receiving_invoice_item_id TEXT NOT NULL REFERENCES receiving_invoice_items(id) ON DELETE CASCADE,
-  kind TEXT NOT NULL, note TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+  kind TEXT NOT NULL, mismatch_qty INTEGER, wrong_part_no TEXT, note TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','confirmed','cancelled')),
+  effective_received_qty INTEGER, previous_received_qty INTEGER,
+  reported_by TEXT, confirmed_by TEXT, confirmed_at TEXT, cancelled_by TEXT, cancelled_at TEXT,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS rim_item_idx ON receiving_item_mismatches(receiving_invoice_item_id);
 
 CREATE TABLE IF NOT EXISTS picking_orders (
@@ -169,6 +173,18 @@ export function createTables(sqlite: DatabaseType): void {
   ensureColumn(sqlite, "suppliers", "qrcode_qty_encoding", "qrcode_qty_encoding TEXT");
   ensureColumn(sqlite, "shelf_boxes", "receiving_order_id", "receiving_order_id TEXT REFERENCES receiving_orders(id)");
   ensureColumn(sqlite, "shelf_boxes", "status", "status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','closed','verified'))");
+  // receiving_item_mismatches gained the web mismatch-workflow columns (Plan 7 task 5).
+  // created_at plays the role of the web's reported_at, so no separate column is added.
+  ensureColumn(sqlite, "receiving_item_mismatches", "mismatch_qty", "mismatch_qty INTEGER");
+  ensureColumn(sqlite, "receiving_item_mismatches", "wrong_part_no", "wrong_part_no TEXT");
+  ensureColumn(sqlite, "receiving_item_mismatches", "status", "status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','confirmed','cancelled'))");
+  ensureColumn(sqlite, "receiving_item_mismatches", "effective_received_qty", "effective_received_qty INTEGER");
+  ensureColumn(sqlite, "receiving_item_mismatches", "previous_received_qty", "previous_received_qty INTEGER");
+  ensureColumn(sqlite, "receiving_item_mismatches", "reported_by", "reported_by TEXT");
+  ensureColumn(sqlite, "receiving_item_mismatches", "confirmed_by", "confirmed_by TEXT");
+  ensureColumn(sqlite, "receiving_item_mismatches", "confirmed_at", "confirmed_at TEXT");
+  ensureColumn(sqlite, "receiving_item_mismatches", "cancelled_by", "cancelled_by TEXT");
+  ensureColumn(sqlite, "receiving_item_mismatches", "cancelled_at", "cancelled_at TEXT");
   // The cycle-coalesce index became partial (pending-only). A stale dev.sqlite still
   // holds the old non-partial definition, which CREATE ... IF NOT EXISTS would keep,
   // so drop it first and let the DDL recreate it (cheap at demo scale).

@@ -83,14 +83,16 @@ receivingRoute.get("/receiving-orders/:id", (c) => {
     WHERE ri.receiving_order_id = ${orderId}
     ORDER BY ri.invoice_no, rii.id`);
 
-  // Latest mismatch per item (receiving_item_mismatches has no status/reported_at
-  // columns; created_at DESC picks the most recent report).
+  // Latest non-cancelled mismatch per item (created_at DESC picks the most recent report).
   const mismatchRows = db.all<Record<string, unknown>>(sql`
-    SELECT rim.id, rim.receiving_invoice_item_id, rim.kind, rim.note, rim.created_at, rim.updated_at
+    SELECT rim.id, rim.receiving_invoice_item_id, rim.kind, rim.mismatch_qty, rim.wrong_part_no, rim.note,
+           rim.status, rim.effective_received_qty, rim.previous_received_qty,
+           rim.reported_by, rim.confirmed_by, rim.confirmed_at, rim.cancelled_by, rim.cancelled_at,
+           rim.created_at, rim.updated_at
     FROM receiving_item_mismatches rim
     JOIN receiving_invoice_items rii ON rii.id = rim.receiving_invoice_item_id
     JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-    WHERE ri.receiving_order_id = ${orderId}
+    WHERE ri.receiving_order_id = ${orderId} AND rim.status != 'cancelled'
     ORDER BY rim.created_at DESC, rim.id DESC`);
   const mismatchByItem = new Map<string, Record<string, unknown>>();
   for (const m of mismatchRows) {
