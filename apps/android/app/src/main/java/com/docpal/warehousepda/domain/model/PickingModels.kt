@@ -9,3 +9,11 @@ data class PickingOrderSummary(
     val shipTo: String?,
     val totalQty: Int,
 )
+
+/** Input for PickingRepository.reportPickingOrderIssues (web PickingOrderIssueInput). */
+data class PickingIssueInput(
+    val reason: String,     // insufficient_stock | cannot_divide | merge | other
+    val qty: Int?,          // required for insufficient_stock
+    val packSize: Int?,     // required for cannot_divide
+    val note: String?,
+)

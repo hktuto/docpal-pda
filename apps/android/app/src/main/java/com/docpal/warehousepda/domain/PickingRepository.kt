@@ -9,6 +9,7 @@ import com.docpal.warehousepda.data.db.MeasuringTaskEntity
 import com.docpal.warehousepda.data.db.PickingPackageEntity
 import com.docpal.warehousepda.data.db.ShippingBoxEntity
 import com.docpal.warehousepda.data.db.TransitionLogEntity
+import com.docpal.warehousepda.domain.model.PickingIssueInput
 import com.docpal.warehousepda.domain.model.PickingOrderSummary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -20,7 +21,7 @@ import java.util.UUID
 /**
  * Scan-to-pick and shipping-box operations. Function-by-function port of
  * apps/web/db/ocrPicking.ts (applyOcrPick) and apps/web/db/picking.ts
- * (scanAllocationToPackage, removeScannedPackage, materializeReceivingAllocation,
+ * (reportPickingOrderIssues, scanAllocationToPackage, removeScannedPackage, materializeReceivingAllocation,
  * createShippingBoxForPickingOrder, addPackageToBox, addAllUnboxedPackagesToBox,
  * removePackageFromBox, maybeAutoFinishPickingOrder, refreshPickingItemPickedQty),
  * keeping the web's error keys and write order.
@@ -46,6 +47,82 @@ class PickingRepository(
                 totalQty = it.totalQty,
             )
         }
+    }
+
+    /**
+     * Port of web reportPickingOrderIssues (picking.ts): batch-mark pending/picking orders as
+     * issue with a transition log each. Finished/issue orders are silently skipped.
+     * Returns (reported, skipped).
+     */
+    suspend fun reportPickingOrderIssues(
+        entries: List<Pair<String, String?>>,
+        input: PickingIssueInput,
+        actorId: String,
+    ): Pair<Int, Int> = withContext(Dispatchers.IO) {
+        if (entries.isEmpty()) throw LocalizedException("no_orders_selected")
+        if (input.reason == "merge" && entries.size < 2) {
+            throw LocalizedException("select_at_least_two_orders_to_merge")
+        }
+        if (input.reason == "insufficient_stock" && (input.qty == null || input.qty < 0)) {
+            throw LocalizedException("actual_quantity_required")
+        }
+        if (input.reason == "cannot_divide" && (input.packSize == null || input.packSize <= 0)) {
+            throw LocalizedException("pack_size_required")
+        }
+
+        val orderIds = entries.map { it.first }
+        var result = 0 to 0
+        db.runInTransaction {
+            val orders = pickingDao.pickingOrdersByIds(orderIds)
+            val reportable = orders.filter { it.status == "pending" || it.status == "picking" }
+            if (reportable.isEmpty()) throw LocalizedException("no_reportable_orders_selected")
+
+            val remarkByOrderId = entries.associate { (id, remark) ->
+                id to remark?.trim()?.takeIf { it.isNotEmpty() }
+            }
+            val note = input.note?.trim()?.takeIf { it.isNotEmpty() }
+            val now = System.currentTimeMillis()
+
+            for (order in reportable) {
+                val totalQty = pickingDao.totalQtyOfOrder(order.id)
+                if (input.reason == "insufficient_stock" && input.qty!! >= totalQty) {
+                    throw LocalizedException(
+                        "actual_qty_must_be_less_than_requested",
+                        mapOf("ref_no" to order.refNo),
+                    )
+                }
+                val remark = remarkByOrderId[order.id]
+                pickingDao.markPickingOrderIssue(
+                    id = order.id,
+                    reason = input.reason,
+                    qty = if (input.reason == "insufficient_stock") input.qty else null,
+                    packSize = if (input.reason == "cannot_divide") input.packSize else null,
+                    note = note,
+                    remark = remark,
+                    now = now,
+                    actorId = actorId,
+                )
+                pickingDao.insertLog(
+                    TransitionLogEntity(
+                        id = UUID.randomUUID().toString(),
+                        entityType = "picking_order", entityId = order.id,
+                        fromState = order.status, toState = "issue", actorId = actorId,
+                        // Web JSON.stringify drops undefined; mirror by only putting non-null
+                        // values. Like the web, metadata keeps the raw note (column is trimmed).
+                        metadata = JSONObject().apply {
+                            put("reason", input.reason)
+                            input.qty?.let { put("qty", it) }
+                            input.packSize?.let { put("packSize", it) }
+                            input.note?.let { put("note", it) }
+                            remark?.let { put("remark", it) }
+                        }.toString(),
+                        createdAt = now,
+                    )
+                )
+            }
+            result = reportable.size to (orderIds.size - reportable.size)
+        }
+        result
     }
 
     /** Port of web applyOcrPick (ocrPicking.ts): top up + consume coarse allocation, build lot, scan into one package. */

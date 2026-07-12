@@ -14,6 +14,32 @@ interface PickingDao {
     @Query("SELECT * FROM picking_orders WHERE id = :id")
     fun pickingOrderById(id: String): PickingOrderEntity?
 
+    @Query("SELECT * FROM picking_orders WHERE id IN (:ids)")
+    fun pickingOrdersByIds(ids: List<String>): List<PickingOrderEntity>
+
+    /** Marks an order as issue with the report fields (web reportPickingOrderIssues UPDATE). */
+    @Query(
+        """
+        UPDATE picking_orders SET status = 'issue', issue_reason = :reason, issue_qty = :qty,
+          issue_pack_size = :packSize, issue_note = :note, issue_remark = :remark,
+          issue_reported_at = :now, issue_reported_by = :actorId, updated_at = :now
+        WHERE id = :id
+        """
+    )
+    fun markPickingOrderIssue(
+        id: String,
+        reason: String,
+        qty: Int?,
+        packSize: Int?,
+        note: String?,
+        remark: String?,
+        now: Long,
+        actorId: String,
+    )
+
+    @Query("SELECT COALESCE(SUM(qty), 0) FROM picking_items WHERE picking_order_id = :orderId")
+    fun totalQtyOfOrder(orderId: String): Int
+
     /** Picking list: all orders, finished sink last, then delivery_date (nulls last); web pgliteWarehouse listOrders query. */
     @Query(
         """
