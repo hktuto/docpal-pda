@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.docpal.warehousepda.data.ReceivingRepository
+import com.docpal.warehousepda.data.ScanRepository
 import com.docpal.warehousepda.data.SessionRepository
 import com.docpal.warehousepda.data.SessionStore
 import com.docpal.warehousepda.data.db.AppDatabase
@@ -11,6 +12,7 @@ import com.docpal.warehousepda.domain.Allocator
 import com.docpal.warehousepda.domain.AuthRepository
 import com.docpal.warehousepda.domain.DefaultAuthRepository
 import com.docpal.warehousepda.domain.MismatchRepository
+import com.docpal.warehousepda.domain.scan.ScanMatcher
 import com.docpal.warehousepda.ui.home.HomeViewModel
 import com.docpal.warehousepda.ui.login.LoginViewModel
 
@@ -32,6 +34,15 @@ class AppContainer(context: Context) {
     val receivingRepository: ReceivingRepository by lazy { ReceivingRepository(db, allocator) }
 
     val mismatchRepository: MismatchRepository by lazy { MismatchRepository(db, receivingRepository) }
+
+    val scanRepository: ScanRepository by lazy { ScanRepository(db) }
+
+    val scanMatcher: ScanMatcher by lazy {
+        ScanMatcher(
+            receivingCandidates = scanRepository::findReceivingCandidates,
+            pickingCandidates = scanRepository::findPickingCandidates,
+        )
+    }
 
     @Suppress("UNCHECKED_CAST")
     val viewModelFactory: ViewModelProvider.Factory = object : ViewModelProvider.Factory {
