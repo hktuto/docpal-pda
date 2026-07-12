@@ -139,8 +139,8 @@ receivingRoute.get("/receiving-orders/:id/picking", (c) => {
   // allocations have none. scanned/boxed mirror the web adapter: unboxed vs
   // boxed package qty per picking item.
   const rows = db.all<Record<string, unknown>>(sql`
-    SELECT po.id AS picking_order_id, po.ref_no AS picking_order_ref_no, po.status AS picking_order_status,
-           po.ship_to, pi.id AS picking_item_id, pi.qty AS required_qty, pi.picked_qty,
+    SELECT po.id AS picking_order_id, po.ref_no AS picking_order_ref, po.status AS picking_order_status,
+           po.ship_to AS picking_order_ship_to, pi.id AS picking_item_id, pi.qty AS required_qty, pi.picked_qty,
            a.id AS allocation_id, a.qty AS allocated_qty, pi.part_id, p.part_no,
            il.shelf_code, il.box_id, il.date_code, il.lot_code, il.coo, il.cow,
            (SELECT COALESCE(SUM(pk.qty), 0) FROM picking_packages pk
@@ -170,7 +170,7 @@ receivingRoute.get("/receiving-orders/:id/picking", (c) => {
     JOIN picking_orders po ON po.id = pi.picking_order_id
     JOIN parts p ON p.id = pi.part_id
     WHERE a.receiving_order_id = ${orderId} AND a.qty > 0
-    ORDER BY picking_order_ref_no, picking_item_id`);
+    ORDER BY picking_order_ref, picking_item_id`);
 
   const itemIds = [...new Set(rows.map((r) => String(r.picking_item_id)))];
   const orderIds = [...new Set(rows.map((r) => String(r.picking_order_id)))];

@@ -171,9 +171,9 @@ test("GET /receiving-orders/:id/picking returns bundle rows for both allocation 
 
   for (const row of [lotRow, orderRow]) {
     assert.equal(row.picking_order_id, "po6");
-    assert.equal(row.picking_order_ref_no, "PO-6");
+    assert.equal(row.picking_order_ref, "PO-6");
     assert.equal(row.picking_order_status, "picking");
-    assert.equal(row.ship_to, "Ship To Six");
+    assert.equal(row.picking_order_ship_to, "Ship To Six");
     assert.equal(row.picking_item_id, "pi6");
     assert.equal(row.required_qty, 6);
     assert.equal(row.picked_qty, 2);
