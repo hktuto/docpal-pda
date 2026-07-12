@@ -2,6 +2,7 @@ package com.docpal.warehousepda.data.db
 
 import androidx.room.ColumnInfo
 import androidx.room.Dao
+import androidx.room.Insert
 import androidx.room.Query
 
 @Dao
@@ -110,6 +111,47 @@ interface PutAwayDao {
     /** All shelves for the box shelf-selection dialog. */
     @Query("SELECT code, zone FROM shelves ORDER BY code")
     fun shelfOptionRows(): List<ShelfOptionRow>
+
+    /**
+     * Item lookup for recordPutAwayScan: the item's part_id plus its receiving order
+     * (the shared availability math needs the order's items and delivery date).
+     */
+    @Query(
+        """
+        SELECT rii.part_id AS part_id, ri.receiving_order_id AS order_id
+        FROM receiving_invoice_items rii
+        JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+        WHERE rii.id = :itemId
+        """
+    )
+    fun scanItemRow(itemId: String): PutAwayScanItemRow?
+
+    /** Shelf existence check for createShelfBox (web createShelfBox: shelf_not_found). */
+    @Query("SELECT code FROM shelves WHERE code = :code")
+    fun shelfCodeOf(code: String): String?
+
+    /** API nextShelfBoxId parity: max numeric suffix over live boxes … */
+    @Query("SELECT MAX(CAST(SUBSTR(id, 6) AS INTEGER)) FROM shelf_boxes WHERE id LIKE 'SBOX-%'")
+    fun maxShelfBoxIdSuffix(): Int?
+
+    /** … and over transition logs (cancelled boxes are hard-deleted; ids are never reissued). */
+    @Query("SELECT MAX(CAST(SUBSTR(entity_id, 6) AS INTEGER)) FROM transition_logs WHERE entity_id LIKE 'SBOX-%'")
+    fun maxShelfBoxLogIdSuffix(): Int?
+
+    @Query("SELECT * FROM put_away_scans WHERE id = :scanId")
+    fun scanById(scanId: String): PutAwayScanEntity?
+
+    @Insert
+    fun insertScan(scan: PutAwayScanEntity)
+
+    @Insert
+    fun insertBox(box: ShelfBoxEntity)
+
+    @Insert
+    fun insertLog(log: TransitionLogEntity)
+
+    @Query("DELETE FROM put_away_scans WHERE id = :scanId")
+    fun deleteScan(scanId: String)
 }
 
 data class InHandOrderRow(
@@ -167,6 +209,11 @@ data class PutAwayBoxContentRow(
     @ColumnInfo(name = "box_id") val boxId: String,
     @ColumnInfo(name = "part_no") val partNo: String?,
     val qty: Int,
+)
+
+data class PutAwayScanItemRow(
+    @ColumnInfo(name = "part_id") val partId: String,
+    @ColumnInfo(name = "order_id") val orderId: String,
 )
 
 data class ShelfOptionRow(

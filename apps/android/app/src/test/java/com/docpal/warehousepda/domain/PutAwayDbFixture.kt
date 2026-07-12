@@ -89,3 +89,20 @@ internal fun insertShelf(db: SupportSQLiteDatabase, code: String, zone: String?)
         "INSERT INTO shelves (code, zone) VALUES (${sqlQuote(code)}, ${sqlQuote(zone)})"
     )
 }
+
+/** Audit row; used for the cancelled-SBOX-id fixture (ids kept forever in transition_logs). Column set verified against AuditEntities.kt. */
+internal fun insertTransitionLog(
+    db: SupportSQLiteDatabase,
+    entityType: String,
+    entityId: String,
+    fromStatus: String?,
+    toStatus: String,
+    actorId: String?,
+    id: String = "log-$entityType-$entityId-$toStatus",
+    createdAt: Long = 1783779245783,
+) {
+    db.execSQL(
+        "INSERT INTO transition_logs (id, entity_type, entity_id, from_state, to_state, actor_id, metadata, created_at) " +
+            "VALUES (${sqlQuote(id)}, ${sqlQuote(entityType)}, ${sqlQuote(entityId)}, ${sqlQuote(fromStatus)}, ${sqlQuote(toStatus)}, ${sqlQuote(actorId)}, NULL, $createdAt)"
+    )
+}
