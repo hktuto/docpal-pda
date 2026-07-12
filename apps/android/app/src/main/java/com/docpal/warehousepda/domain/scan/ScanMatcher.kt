@@ -36,6 +36,21 @@ class ScanMatcher(
         val pickingItemId: String?,   // pinned item filter
     )
 
+    /** A pinned (or wedge-matched) allocation target on a picking order. */
+    data class PinnedAllocation(
+        val allocationId: String?,        // null when the item has only a coarse receiving-order allocation target
+        val pickingItemId: String,
+        val partNo: String,               // normalized (ScanPrimitives.normalize)
+        val allocationQty: Int,
+        val scannedQty: Int,              // qty already scanned against this allocation
+        val receivingOrderId: String?,    // non-null => receiving-order-backed: apply via applyOcrPick
+    )
+
+    sealed class PickingMatchResult {
+        data class Single(val allocation: PinnedAllocation) : PickingMatchResult()
+        data class Error(val key: String) : PickingMatchResult()
+    }
+
     data class MatchedRecord(val receiving: ReceivingCandidate, val picking: PickingCandidate)
 
     sealed class MatchResult {
@@ -75,6 +90,43 @@ class ScanMatcher(
             throw e
         } catch (e: Exception) {
             return MatchResult.Error("unknown_match_failed")
+        }
+    }
+
+    /** Port of useScanMatchers.matchPicking: validates parsed fields against a pinned allocation. */
+    fun matchPicking(
+        allocation: PinnedAllocation?,
+        parsed: ScanPrimitives.OcrInput,
+        actorId: String?,
+    ): PickingMatchResult {
+        if (actorId == null) return PickingMatchResult.Error("operator_not_signed_in")
+        if (allocation == null) return PickingMatchResult.Error("missing_allocation")
+        val p = try {
+            ScanPrimitives.parseManual(parsed)      // throws qty_must_be_positive_integer
+        } catch (e: LocalizedException) {
+            return PickingMatchResult.Error(e.code)
+        }
+        if (p.partNo != allocation.partNo) return PickingMatchResult.Error("scanned_part_does_not_match_allocation")
+        if (allocation.allocationQty <= 0) return PickingMatchResult.Error("invalid_allocation")
+        if (p.qty > allocation.allocationQty) return PickingMatchResult.Error("qty_exceeds_allocated")
+        return PickingMatchResult.Single(allocation)
+    }
+
+    /**
+     * Wedge path: first item whose normalized partNo matches and whose allocation still has room.
+     *
+     * The web original (picking/[id].vue findMatchingAllocation) checks the *new* scan qty
+     * against allocation.qty; here PinnedAllocation.scannedQty is the *cumulative* qty already
+     * scanned against the allocation, so "still has room" is scannedQty < allocationQty (a full
+     * allocation, scannedQty == allocationQty, is skipped).
+     */
+    fun findMatchingAllocation(
+        parsed: ScanPrimitives.OcrInput,
+        allocations: List<PinnedAllocation>,
+    ): PinnedAllocation? {
+        val p = try { ScanPrimitives.parseManual(parsed) } catch (e: LocalizedException) { return null }
+        return allocations.firstOrNull {
+            it.partNo == p.partNo && it.allocationQty > 0 && it.scannedQty < it.allocationQty
         }
     }
 }
