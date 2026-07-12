@@ -5,6 +5,8 @@
 // "@warehouse/shared"`), so this package ships its TypeScript source directly
 // and requires no build step for consumers in this iteration.
 
+export interface LoginRequest { username: string; password: string; }
+
 export interface HealthResponse {
   ok: boolean;
   db: "ok" | "error";

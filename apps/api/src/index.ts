@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { healthRoute } from "./routes/health.js";
+import { authRoute } from "./routes/auth.js";
 import { receivingRoute } from "./routes/receiving.js";
 import { pickingRoute } from "./routes/picking.js";
 import { pickingExecutionRoute } from "./routes/pickingExecution.js";
@@ -19,6 +20,7 @@ const origins = (
 
 app.use("*", cors({ origin: origins }));
 app.route("/", healthRoute);
+app.route("/", authRoute);
 app.route("/", receivingRoute);
 app.route("/", pickingRoute);
 app.route("/", pickingExecutionRoute);
