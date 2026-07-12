@@ -91,7 +91,7 @@ receivingRoute.get("/receiving-orders/:id", (c) => {
     JOIN receiving_invoice_items rii ON rii.id = rim.receiving_invoice_item_id
     JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
     WHERE ri.receiving_order_id = ${orderId}
-    ORDER BY rim.created_at DESC`);
+    ORDER BY rim.created_at DESC, rim.id DESC`);
   const mismatchByItem = new Map<string, Record<string, unknown>>();
   for (const m of mismatchRows) {
     const key = String(m.receiving_invoice_item_id);

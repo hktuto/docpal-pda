@@ -33,6 +33,16 @@ sqlite.exec(`
     VALUES ('al4','pi4',2,'ro4','0','0');
   INSERT INTO allocation_receiving_items (id, allocation_id, receiving_invoice_item_id, qty, created_at, updated_at)
     VALUES ('ari4','al4','rii4a',2,'0','0');
+  INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at)
+    VALUES ('po4b','e4b','PO-4B','pending','0','0');
+  INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at)
+    VALUES ('pi4b','po4b','p4',3,'0','0');
+  INSERT INTO inventory_lots (id, part_id, total_qty, allocated_qty, created_at, updated_at)
+    VALUES ('lot4','p4',5,3,'0','0');
+  INSERT INTO allocations (id, picking_item_id, qty, inventory_lot_id, created_at, updated_at)
+    VALUES ('al4b','pi4b',3,'lot4','0','0');
+  INSERT INTO inventory_lot_sources (id, inventory_lot_id, receiving_invoice_item_id, qty, created_at, updated_at)
+    VALUES ('ils4a','lot4','rii4a',3,'0','0'), ('ils4b','lot4','rii4a',2,'0','0');
   INSERT INTO receiving_item_mismatches (id, receiving_invoice_item_id, kind, note, created_at, updated_at)
     VALUES ('rim4old','rii4b','qty','old note','2026-01-01T00:00:00.000Z','0'),
            ('rim4new','rii4b','qty','new note','2026-01-02T00:00:00.000Z','0');
@@ -49,7 +59,8 @@ test("GET /receiving-orders lists orders with remaining items and pending pickin
   assert.equal(ro4.delivery_date, "2026-01-15");
   assert.equal(ro4.supplier_name, "Sup Four");
   assert.equal(ro4.remaining_items, 1); // rii4a: 10-3 > 0; rii4b: available 0
-  assert.equal(ro4.pending_picking_orders, 1);
+  // po4 via direct ro allocation + ari link; po4b via lot sources (two rows -> COUNT DISTINCT dedups)
+  assert.equal(ro4.pending_picking_orders, 2);
 });
 
 test("GET /receiving-orders?status=pending filters out in_hand orders", async () => {
