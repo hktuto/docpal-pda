@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.docpal.warehousepda.AppContainer
+import com.docpal.warehousepda.R
 import com.docpal.warehousepda.domain.LocalizedException
 import com.docpal.warehousepda.domain.model.MismatchInfo
 import com.docpal.warehousepda.domain.model.ReceivingOrderDetail
@@ -12,6 +13,10 @@ import com.docpal.warehousepda.domain.scan.OcrLabelParser
 import com.docpal.warehousepda.domain.scan.QrParser
 import com.docpal.warehousepda.domain.scan.ScanMatcher
 import com.docpal.warehousepda.domain.scan.ScanPrimitives
+import com.docpal.warehousepda.ui.scan.LabelScanParser
+import com.docpal.warehousepda.ui.scan.ScanMatchOption
+import com.docpal.warehousepda.ui.scan.ScanMatchSource
+import com.docpal.warehousepda.ui.scan.ScanReviewUiState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -63,34 +68,9 @@ interface PickingSource {
     )
 }
 
-/** Matcher seam — lets VM tests substitute a fake for the lambda-built `ScanMatcher`. */
-fun interface ScanMatchSource {
-    suspend fun matchReceiving(
-        ctx: ScanMatcher.ReceivingContext,
-        parsed: ScanPrimitives.OcrInput,
-        actorId: String?,
-    ): ScanMatcher.MatchResult
-}
-
-/** Parse seam — QR template first, OCR fallback (real wiring lives in the factory). */
-fun interface LabelScanParser {
-    suspend fun parse(
-        capture: OcrLabelParser.RawOcrCapture,
-        targets: List<String>,
-    ): OcrLabelParser.OcrParseResult
-}
-
-/** State of the label scan review dialog (port of LabelScanReviewModal.vue props). */
-data class ScanReviewUiState(
-    val manual: Boolean,              // manual entry vs camera review (web mode)
-    val imagePath: String?,
-    val fields: ScanPrimitives.OcrInput,
-    val options: OcrLabelParser.CandidateOptions,
-    val matchResult: ScanMatcher.MatchResult? = null,
-    val matching: Boolean = false,
-    val applying: Boolean = false,
-    val applyErrorKey: String? = null,
-)
+// ScanMatchSource / LabelScanParser / ScanReviewUiState moved to ui/scan/ (shared
+// with the picking flow); ReceivingDetailSource/MismatchSource/SessionSource/
+// PickingSource stay here until the Phase 3 cleanup.
 
 data class ReceivingDetailUiState(
     val loading: Boolean = true,
@@ -144,6 +124,9 @@ class ReceivingDetailViewModel(
     val uiState: StateFlow<ReceivingDetailUiState> = _uiState.asStateFlow()
 
     private var loadJob: Job? = null
+
+    /** Last matcher result — `applyScan` resolves dialog option ids against it. */
+    private var lastMatchResult: ScanMatcher.MatchResult? = null
 
     init {
         reload()
@@ -304,8 +287,11 @@ class ReceivingDetailViewModel(
         }
     }
 
-    fun closeScanReview() = _uiState.update {
-        it.copy(scanReview = null, dialogOpen = false, scanPin = null)
+    fun closeScanReview() {
+        lastMatchResult = null
+        _uiState.update {
+            it.copy(scanReview = null, dialogOpen = false, scanPin = null)
+        }
     }
 
     fun updateScanFields(fields: ScanPrimitives.OcrInput) = _uiState.update {
@@ -326,30 +312,81 @@ class ReceivingDetailViewModel(
                         sessionSource.currentUser()?.id,
                     )
                 }
-                _uiState.update {
-                    it.copy(scanReview = it.scanReview?.copy(matching = false, matchResult = result))
-                }
+                applyMatchResult(result)
             } catch (e: CancellationException) {
                 _uiState.update { it.copy(scanReview = it.scanReview?.copy(matching = false)) }
                 throw e
             } catch (e: Exception) {
                 // Don't strand the dialog with matching=true if the seam throws.
-                _uiState.update {
-                    it.copy(
-                        scanReview = it.scanReview?.copy(
-                            matching = false,
-                            matchResult = ScanMatcher.MatchResult.Error("unknown_match_failed"),
-                        )
-                    )
-                }
+                applyMatchResult(ScanMatcher.MatchResult.Error("unknown_match_failed"))
             }
         }
     }
 
+    /** Maps a matcher result onto the generalized review-dialog options/message state. */
+    private fun applyMatchResult(result: ScanMatcher.MatchResult) {
+        lastMatchResult = result
+        val options: List<ScanMatchOption>
+        val messageRes: Int
+        val errorKey: String?
+        when (result) {
+            is ScanMatcher.MatchResult.Single -> {
+                options = listOf(scanMatchOption(result.record))
+                messageRes = R.string.scan_review_match_single
+                errorKey = null
+            }
+            is ScanMatcher.MatchResult.Multiple -> {
+                options = result.records.map(::scanMatchOption)
+                messageRes = R.string.scan_review_match_multiple
+                errorKey = null
+            }
+            ScanMatcher.MatchResult.None -> {
+                options = emptyList()
+                messageRes = R.string.scan_review_match_none
+                errorKey = null
+            }
+            is ScanMatcher.MatchResult.Error -> {
+                options = emptyList()
+                messageRes = R.string.scan_review_error
+                errorKey = result.key
+            }
+        }
+        _uiState.update {
+            it.copy(
+                scanReview = it.scanReview?.copy(
+                    matching = false,
+                    matchOptions = options,
+                    matchMessageRes = messageRes,
+                    matchErrorKey = errorKey,
+                ),
+            )
+        }
+    }
+
+    /** Dialog option for a matched record; label is the web formatRecord string. */
+    private fun scanMatchOption(record: ScanMatcher.MatchedRecord): ScanMatchOption {
+        val p = record.picking
+        return ScanMatchOption(
+            id = "${p.pickingItemId}|${record.receiving.receivingInvoiceItemId}",
+            label = "${p.pickingOrderRefNo} (${p.remainingQty} / ${p.requiredQty})",
+        )
+    }
+
+    /** Resolves a dialog option id back to the matcher's record (id round-trips). */
+    private fun matchedRecordFor(optionId: String): ScanMatcher.MatchedRecord? {
+        val records = when (val result = lastMatchResult) {
+            is ScanMatcher.MatchResult.Single -> listOf(result.record)
+            is ScanMatcher.MatchResult.Multiple -> result.records
+            else -> emptyList()
+        }
+        return records.firstOrNull { scanMatchOption(it).id == optionId }
+    }
+
     /** Applies a chosen match via applyOcrPick; success closes the dialog + toasts + reloads. */
-    fun applyScan(match: ScanMatcher.MatchedRecord, fields: ScanPrimitives.OcrInput? = null) {
+    fun applyScan(optionId: String, fields: ScanPrimitives.OcrInput? = null) {
         val review = _uiState.value.scanReview ?: return
         if (review.applying) return
+        val match = matchedRecordFor(optionId) ?: return
         val f = fields ?: review.fields
         viewModelScope.launch {
             _uiState.update { it.copy(scanReview = review.copy(applying = true, applyErrorKey = null)) }
@@ -363,6 +400,7 @@ class ReceivingDetailViewModel(
                         p.dateCode, p.lotCode, p.coo, p.cow, actorId,
                     )
                 }
+                lastMatchResult = null
                 _uiState.update {
                     it.copy(
                         scanReview = null, dialogOpen = false, scanPin = null,

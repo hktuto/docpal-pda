@@ -1,4 +1,4 @@
-package com.docpal.warehousepda.ui.receiving
+package com.docpal.warehousepda.ui.scan
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -9,9 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -39,7 +37,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.docpal.warehousepda.R
-import com.docpal.warehousepda.domain.scan.ScanMatcher
 import com.docpal.warehousepda.domain.scan.ScanPrimitives
 import com.docpal.warehousepda.ui.components.ErrorText
 import kotlinx.coroutines.Dispatchers
@@ -50,21 +47,23 @@ import kotlinx.coroutines.withContext
  * Review mode (camera) shows the captured image; manual mode does not.
  * Fields are owned by the VM ([ScanReviewUiState.fields]) so edits survive
  * match/apply state updates; multiple matches require an explicit selection
- * before Apply is enabled.
+ * before Apply is enabled (a single match option is pre-selected).
+ * Match payload is flow-agnostic: options carry precomputed id + label and
+ * [onApply] hands back the selected [ScanMatchOption.id].
  */
 @Composable
 fun LabelScanReviewDialog(
     review: ScanReviewUiState,
     onFieldsChange: (ScanPrimitives.OcrInput) -> Unit,
     onFindMatch: () -> Unit,
-    onApply: (ScanMatcher.MatchedRecord) -> Unit,
+    onApply: (String) -> Unit,
     onRetake: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val busy = review.matching || review.applying
-    var selectedMatch by remember { mutableStateOf<ScanMatcher.MatchedRecord?>(null) }
-    LaunchedEffect(review.matchResult) {
-        selectedMatch = (review.matchResult as? ScanMatcher.MatchResult.Single)?.record
+    var selectedOptionId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(review.matchOptions) {
+        selectedOptionId = review.matchOptions.singleOrNull()?.id
     }
 
     Dialog(onDismissRequest = { if (!busy) onDismiss() }) {
@@ -165,7 +164,7 @@ fun LabelScanReviewDialog(
                     onValueChange = { onFieldsChange(fields.copy(qty = it)) },
                 )
 
-                MatchSection(review.matchResult, selectedMatch, busy) { selectedMatch = it }
+                MatchSection(review, selectedOptionId, busy) { selectedOptionId = it }
 
                 if (review.applyErrorKey != null) {
                     Text(
@@ -195,13 +194,13 @@ fun LabelScanReviewDialog(
                     }
                 }
 
-                val applyTarget = when (val result = review.matchResult) {
-                    is ScanMatcher.MatchResult.Single -> result.record
-                    is ScanMatcher.MatchResult.Multiple -> selectedMatch
+                val applyTarget = when (review.matchMessageRes) {
+                    R.string.scan_review_match_single -> review.matchOptions.singleOrNull()?.id
+                    R.string.scan_review_match_multiple -> selectedOptionId
                     else -> null
                 }
-                if (review.matchResult is ScanMatcher.MatchResult.Single ||
-                    review.matchResult is ScanMatcher.MatchResult.Multiple
+                if (review.matchMessageRes == R.string.scan_review_match_single ||
+                    review.matchMessageRes == R.string.scan_review_match_multiple
                 ) {
                     Button(
                         onClick = { applyTarget?.let(onApply) },
@@ -223,30 +222,32 @@ fun LabelScanReviewDialog(
 
 @Composable
 private fun MatchSection(
-    result: ScanMatcher.MatchResult?,
-    selectedMatch: ScanMatcher.MatchedRecord?,
+    review: ScanReviewUiState,
+    selectedOptionId: String?,
     busy: Boolean,
-    onSelect: (ScanMatcher.MatchedRecord) -> Unit,
+    onSelect: (String) -> Unit,
 ) {
-    when (result) {
-        is ScanMatcher.MatchResult.Single -> {
+    when (review.matchMessageRes) {
+        R.string.scan_review_match_single -> {
             Text(
                 stringResource(R.string.scan_review_match_single),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.primary,
             )
-            Text(matchLabel(result.record), style = MaterialTheme.typography.bodySmall)
+            review.matchOptions.singleOrNull()?.let { option ->
+                Text(option.label, style = MaterialTheme.typography.bodySmall)
+            }
         }
-        is ScanMatcher.MatchResult.Multiple -> {
+        R.string.scan_review_match_multiple -> {
             Text(
                 stringResource(R.string.scan_review_match_multiple),
                 style = MaterialTheme.typography.bodyMedium,
             )
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                for (record in result.records) {
-                    val selected = record == selectedMatch
+                for (option in review.matchOptions) {
+                    val selected = option.id == selectedOptionId
                     OutlinedCard(
-                        onClick = { if (!busy) onSelect(record) },
+                        onClick = { if (!busy) onSelect(option.id) },
                         enabled = !busy,
                         border = BorderStroke(
                             if (selected) 2.dp else 1.dp,
@@ -256,7 +257,7 @@ private fun MatchSection(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text(
-                            matchLabel(record),
+                            option.label,
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(12.dp),
                         )
@@ -264,27 +265,20 @@ private fun MatchSection(
                 }
             }
         }
-        ScanMatcher.MatchResult.None -> Text(
+        R.string.scan_review_match_none -> Text(
             stringResource(R.string.scan_review_match_none),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.error,
         )
-        is ScanMatcher.MatchResult.Error -> {
+        R.string.scan_review_error -> {
             Text(
                 stringResource(R.string.scan_review_error),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.error,
             )
-            ErrorText(result.key)
+            review.matchErrorKey?.let { ErrorText(it) }
         }
-        null -> {}
     }
-}
-
-/** Web formatRecord: "{pickingOrderRefNo} ({remainingQty} / {requiredQty})". */
-private fun matchLabel(record: ScanMatcher.MatchedRecord): String {
-    val p = record.picking
-    return "${p.pickingOrderRefNo} (${p.remainingQty} / ${p.requiredQty})"
 }
 
 private const val DISPLAY_MAX_DIMENSION = 2048

@@ -1,5 +1,6 @@
 package com.docpal.warehousepda.ui.receiving
 
+import com.docpal.warehousepda.R
 import com.docpal.warehousepda.domain.LocalizedException
 import com.docpal.warehousepda.domain.model.ReceivingInvoiceDetail
 import com.docpal.warehousepda.domain.model.ReceivingItemDetail
@@ -8,6 +9,9 @@ import com.docpal.warehousepda.domain.model.User
 import com.docpal.warehousepda.domain.scan.OcrLabelParser
 import com.docpal.warehousepda.domain.scan.ScanMatcher
 import com.docpal.warehousepda.domain.scan.ScanPrimitives
+import com.docpal.warehousepda.ui.scan.LabelScanParser
+import com.docpal.warehousepda.ui.scan.ScanMatchOption
+import com.docpal.warehousepda.ui.scan.ScanMatchSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -185,12 +189,26 @@ class ReceivingDetailPickingTest {
     @Test fun `applyScan calls applyOcrPick with match fields and reloads`() = runTest {
         val receiving = FakeReceivingSource()
         val picking = FakePickingSource()
-        val vm = vm(receiving, picking)
+        val matcher = FakeScanMatchSource().apply {
+            result = ScanMatcher.MatchResult.Single(matchedRecord())
+        }
+        val vm = vm(receiving, picking, matcher)
         advanceUntilIdle()
         vm.openManualEntry()
 
-        val match = matchedRecord()
-        vm.applyScan(match, ScanPrimitives.OcrInput("IC-1", "2406", "AB12", "CN", "US", "5"))
+        val fields = ScanPrimitives.OcrInput("IC-1", "2406", "AB12", "CN", "US", "5")
+        vm.findMatch(fields)
+        advanceUntilIdle()
+
+        val review = vm.uiState.value.scanReview
+        assertNotNull(review)
+        assertEquals(R.string.scan_review_match_single, review!!.matchMessageRes)
+        assertEquals(
+            listOf(ScanMatchOption("pi-1|rii-1", "PICK-001 (10 / 10)")),
+            review.matchOptions,
+        )
+
+        vm.applyScan("pi-1|rii-1", fields)
         advanceUntilIdle()
 
         assertEquals(
@@ -246,11 +264,17 @@ class ReceivingDetailPickingTest {
         val picking = FakePickingSource().apply {
             throwOnApply = LocalizedException("quantity_exceeds_picking_need")
         }
-        val vm = vm(picking = picking)
+        val matcher = FakeScanMatchSource().apply {
+            result = ScanMatcher.MatchResult.Single(matchedRecord())
+        }
+        val vm = vm(picking = picking, matcher = matcher)
         advanceUntilIdle()
         vm.openManualEntry()
 
-        vm.applyScan(matchedRecord(), ScanPrimitives.OcrInput("IC-1", "", "", "", "", "5"))
+        val fields = ScanPrimitives.OcrInput("IC-1", "", "", "", "", "5")
+        vm.findMatch(fields)
+        advanceUntilIdle()
+        vm.applyScan("pi-1|rii-1", fields)
         advanceUntilIdle()
 
         val review = vm.uiState.value.scanReview
