@@ -70,7 +70,8 @@ interface PickingSource {
 
 // ScanMatchSource / LabelScanParser / ScanReviewUiState moved to ui/scan/ (shared
 // with the picking flow); ReceivingDetailSource/MismatchSource/SessionSource/
-// PickingSource stay here until the Phase 3 cleanup.
+// PickingSource still live here — moving them is a deferred cleanup
+// (see the phase-3 plan's handoff notes).
 
 data class ReceivingDetailUiState(
     val loading: Boolean = true,

@@ -150,10 +150,12 @@ notes"):
 
 ## Testing
 
-There is a small Android unit-test suite for the OpenCV crop logic. Run it with:
+The native Android app (`apps/android`) has a JVM unit-test suite (Robolectric
+Room/repository tests, ViewModel tests, OpenCV crop test — see the Android
+section above for the current count). Run it with:
 
 ```bash
-cd android
+cd apps/android
 export JAVA_HOME='/c/Program Files/Android/Android Studio/jbr'
 export PATH="$JAVA_HOME/bin:$PATH"
 ./gradlew :app:testDebugUnitTest
