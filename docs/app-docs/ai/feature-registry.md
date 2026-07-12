@@ -70,7 +70,8 @@ older revisions of this page was superseded.
 | Feature | Flow | Status | Key Files | Scope Doc |
 |---------|------|--------|-----------|-----------|
 | Native Phase 1: login, home, receiving list/detail (items + picking tabs) | Receiving | Shipped (native) | `apps/android/app/src/main/java/com/docpal/warehousepda/` (`ui/login/`, `ui/home/`, `ui/receiving/`, `data/`, `domain/`) | [phase-1 plan](../../superpowers/plans/2026-07-12-native-android-phase-1.md) (see "Phase 2 handoff notes") |
-| Native scan pipeline (camera + hardware wedge, QR templates → OCR fallback → match → review dialog) | Picking / Receiving | Shipped (native) | `apps/android/.../scanner/`, `domain/scan/`, `ui/receiving/ScanLaunchers.kt`, `ui/receiving/LabelScanReviewDialog.kt` | [phase-1 plan](../../superpowers/plans/2026-07-12-native-android-phase-1.md) |
+| Native scan pipeline (camera + hardware wedge, QR templates → OCR fallback → match → review dialog) | Picking / Receiving | Shipped (native) | `apps/android/.../scanner/`, `domain/scan/`, `ui/receiving/ScanLaunchers.kt`, `ui/scan/LabelScanReviewDialog.kt` | [phase-1 plan](../../superpowers/plans/2026-07-12-native-android-phase-1.md) |
+| Native Phase 2: picking list (search, batch issue report), picking detail (items/allocations/packages/boxes/logs), scan-to-pick (`matchPicking`), finish → measuring task | Picking | Shipped (native) | `apps/android/.../ui/picking/`, `domain/PickingRepository.kt`, `domain/scan/ScanMatcher.kt` | [phase-2 plan](../../superpowers/plans/2026-07-12-native-android-phase-2.md) (see "Phase 3 handoff notes") |
 
 Conventions (repository layer, ViewModel patterns, test setup): root `AGENTS.md`,
 "Native Android app (apps/android)" section.

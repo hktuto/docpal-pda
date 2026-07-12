@@ -1227,3 +1227,117 @@ git commit -m "android phase2: docs + handoff notes"
 - [x] Deliberate web-parity deviations documented: no ScanFab/manual button on picking detail; single-match auto-apply (no confirmSingleMatch); wedge `scannedQty = 0` simplification; measuring link rendered as plain text until Phase 5.
 - [x] Type consistency: `PickingOrderSummary`, `PickingOrderDetail`/`PickingItemDetail`/`PickingAllocationDetail`/`PickingPackageDetail`/`PickingBoxDetail`, `PickingIssueInput`, `PinnedAllocation`, `PickingMatchResult`, `ScanMatchOption`/`ScanReviewUiState` defined once and used consistently across tasks; `PickingDetailSource` introduced in Task 9 and extended in Task 10 with exact signatures.
 - [x] Every task has failing-test-first steps, exact commands, and a commit step.
+
+---
+
+## Phase 3 handoff notes
+
+Phase 2 verification (Task 11, 2026-07-12): 199 JVM tests green
+(`./gradlew :app:testDebugUnitTest`, 0 failures/errors/skips), `assembleDebug`
+and `installDebug` clean on device `MFM5PRE526010002`. All six device
+walkthrough items verified — see "Deferred verifications" below for the three
+that could not be exercised through adb.
+
+### What Phase 3 (put-away) reuses
+
+- **Scan pipeline end to end.** Camera (`scanner/RectangleCameraActivity` via
+  `ui/receiving/ScanLaunchers.kt`'s `rememberCameraScanLauncher`), hardware
+  wedge (`domain/scan/HardwareKeyBuffer`, 300 ms idle gap, Enter flush),
+  QR-template-first parsing (`QrParser` → `OcrLabelParser` fallback), then
+  `ScanMatcher`. The picking detail shows the full wiring: Scaffold-level
+  `onPreviewKeyEvent` feeding the buffer, `scanInFlight` transient gate
+  handing off to `dialogOpen`, per-orderId `provideFactory` building the
+  supplier-template-aware `LabelScanParser`
+  (`ui/picking/PickingDetailViewModel.kt`).
+- **`ui/scan/LabelScanReviewDialog` + `ScanReviewUiState`.** Generalized in
+  Task 7 (moved out of `ui/receiving/`); consumed by both receiving and
+  picking. Reuse as-is for put-away scan review.
+- **ScanMatchers pattern.** `ScanMatcher.matchReceiving` (receiving) and
+  `ScanMatcher.matchPicking` (scan-to-pick: pinned allocation, part/qty
+  validation, `Single` auto-applies, `Error` opens the review dialog). A
+  put-away matcher context is the next sibling in
+  `domain/scan/ScanMatcher.kt` — same `OcrInput` in, sealed result out.
+- **Box/lot DAO queries.** `data/db/PickingDao.kt` (shipping boxes, packages,
+  unboxed-package queries, `insertMeasuringTask`) and the lot reads in
+  `data/db/ReceivingDao.kt` are the query style to follow. Note
+  `put_away_scans` already has an entity (`PutAwayScanEntity`, oddly placed in
+  `data/db/MeasuringEntities.kt`) with indexes, and read-side quantity math
+  already subtracts put-away quantities (`PickingDao`/`ReceivingDao`
+  `physical_qty` queries) — but nothing writes the table yet.
+- **Measuring task row.** `PickingRepository.finishOrderInternal` inserts a
+  `measuring_tasks` row on every finish (manual or auto); the unique
+  `picking_order_id` index rejects a second finish. Phase 5 reads this table.
+
+### Known gaps / corrections
+
+- **`materializeReceivingAllocation` has no production caller** (corrects the
+  plan's Step 4 outline, which assumed Task 10's `applyOcrPick` used it).
+  It is ported at `PickingRepository.kt:371` and unit-tested
+  (`PickingRepositoryTest`), but Task 10's `applyOcrPick`
+  (`PickingRepository.kt:246`) does its own inline top-up + coarse-allocation
+  consume + lot build instead. A put-away lot-materialization path can adopt
+  it or follow `applyOcrPick`'s inline approach; if it stays unused, delete it.
+- **Put-away scans table untouched** (see above): entity + read-side math
+  exist, no write path.
+- **Wedge `scannedQty = 0` simplification** (Task 10,
+  `PickingDetailViewModel.toPin`): `PinnedAllocation.scannedQty` is hardcoded
+  0, so `findMatchingAllocation`'s room check never skips a full allocation;
+  the apply side (`scanAllocationToPackageInternal`) only validates the new
+  scan qty against the allocation, not the cumulative total. POC-acceptable;
+  revisit if double-scan overshoot matters.
+- **`removeScannedPackage` first-source-restore bug** — inherited from the
+  web, still open on both sides. First Phase 2 defect ticket.
+- **Seam interfaces still in `ui/receiving/ReceivingDetailViewModel.kt:32-59`**
+  (`ReceivingDetailSource`/`MismatchSource`/`SessionSource`/`PickingSource`).
+  `PickingDetailSource` already lives with its own ViewModel; Phase 3 cleanup
+  should move the four receiving seams to a neutral package.
+- **`removeScannedPackage` action exists on the receiving picking tab but not
+  on the picking detail** — web parity, not an omission.
+- **Measuring link on finished picking orders is plain text** until Phase 5
+  (`PickingDetailScreen.kt:341-344`).
+- **`issueReportedAt` is shown on the web issue banner but deliberately
+  omitted on Android** (spec simplification); the banner shows reason, reason
+  fields, and reporter only.
+- **`matchMessageRes` doubles as the state-kind discriminator** in
+  `LabelScanReviewDialog.kt:197-230` (Task 7 review note): the Apply button's
+  visibility is keyed on the message string resource, so a new consumer can't
+  vary the wording without losing the Apply button. A new consumer should add
+  an explicit state-kind field to `ScanReviewUiState` first.
+- **Wedge Enter KeyUp propagates after flush** (observed during the Task 11
+  walkthrough): the Scaffold `onPreviewKeyEvent` consumes the Enter KeyDown
+  for the buffer flush but KeyUp falls through and, outside touch mode,
+  activates the app-bar back button — with `adb shell input keyevent 66` this
+  pops the picking detail right after a scan. Verify with a real scanner;
+  likely fix is consuming the Enter KeyUp as well.
+
+### Deferred verifications (from Task 11 Step 2)
+
+Verified on device (screencap-confirmed): picking list search filtering,
+checkboxes on pending/picking only (issue and finished rows have none),
+finished order sunk to the bottom of the list; batch issue report (reason
+dropdown switches fields — 庫存不足→實際可用數量, 不可拆分數量→包裝規格 +
+per-order demand — save toasts `已上報 1 個問題` and the order shows the 異常
+badge); picking detail header/items/allocations/packages/logs toggle; create
+box → appears, cancel empty box → empty state, Add-all confirm dialog
+(`將 1 個未裝箱包裹加入此箱？`) → boxed; receiving detail picking tab → tap
+picking order ref → picking detail; issue banner on the detail (reason, pack
+size, reporter).
+
+Not fully exercised:
+
+- **Camera label scan** (`RectangleCameraActivity`) — needs a physical label;
+  deferred.
+- **Real hardware wedge scanner** — no scanner available. Instead the wedge
+  code path was verified by injecting a KOA QR payload via adb key events
+  (`:HV73V2BTTD1004D::35:X:LOT001:Y:...` + Enter): single match auto-applied,
+  已掃描數量 300000, unboxed package with lot, log entry written. Same buffer/
+  parse/match/apply code, synthetic input.
+- **Scan review dialog error path on device** — attempted twice with a
+  `qty_exceeds_allocated` wedge payload; the dialog opens on flush but the
+  adb-injected Enter KeyUp pops the detail before a screencap (see Known
+  gaps). JVM tests (Tasks 7/10) cover the dialog states.
+- **Manual Finish button** — not exercised: boxing the last package triggered
+  `maybeAutoFinishPickingOrder` first, which finished the order and created
+  the measuring task (the 測量 task-id row rendered on the detail, order shows
+  已完成 and sinks to the bottom of the list). The manual finish path is
+  covered by `CancelBoxAndFinishTest` in JVM.
