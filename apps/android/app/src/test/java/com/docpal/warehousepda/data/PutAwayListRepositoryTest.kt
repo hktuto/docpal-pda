@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
 import com.docpal.warehousepda.data.db.AppDatabase
+import com.docpal.warehousepda.domain.Allocator
 import com.docpal.warehousepda.domain.PutAwayRepository
 import com.docpal.warehousepda.domain.insertAllocation
 import com.docpal.warehousepda.domain.insertPart
@@ -38,7 +39,7 @@ class PutAwayListRepositoryTest {
         // Seed-agnostic: wipe the imported seed.sql rows so every test assembles
         // its own synthetic fixture with deterministic ids.
         offMainThread { db.clearAllTables() }
-        repo = PutAwayRepository(db)
+        repo = PutAwayRepository(db, ReceivingRepository(db, Allocator(db)))
     }
 
     @After

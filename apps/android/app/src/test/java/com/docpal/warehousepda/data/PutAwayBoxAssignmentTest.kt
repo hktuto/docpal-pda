@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
 import com.docpal.warehousepda.data.db.AppDatabase
+import com.docpal.warehousepda.domain.Allocator
 import com.docpal.warehousepda.domain.LocalizedException
 import com.docpal.warehousepda.domain.PutAwayRepository
 import com.docpal.warehousepda.domain.expectCode
@@ -31,10 +32,10 @@ import org.robolectric.annotation.Config
 
 /**
  * Put-away box assignment mutations (web apps/api/src/db/putAway.ts assignScanToBox /
- * addAllUnboxedToBox / removeScanFromBox / closeShelfBox / cancelShelfBox /
- * tryMarkReceivingOrderClear): lot materialization on the inventory_lots unique-index
- * columns, removal reversal, close/cancel, and receiving-order auto-clear. Synthetic
- * fixtures only — setUp wipes the seed import.
+ * addAllUnboxedToBox / removeScanFromBox / closeShelfBox / cancelShelfBox; auto-clear via
+ * the shared ReceivingRepository.tryMarkClear): lot materialization on the inventory_lots
+ * unique-index columns, removal reversal, close/cancel, and receiving-order auto-clear.
+ * Synthetic fixtures only — setUp wipes the seed import.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -48,7 +49,7 @@ class PutAwayBoxAssignmentTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         db = AppDatabase.build(context, inMemory = true)
         offMainThread { db.clearAllTables() }
-        repo = PutAwayRepository(db)
+        repo = PutAwayRepository(db, ReceivingRepository(db, Allocator(db)))
     }
 
     @After
@@ -252,6 +253,68 @@ class PutAwayBoxAssignmentTest {
             4,
             intQuery(db, "SELECT put_away_qty FROM receiving_invoice_items WHERE id = 'pa-item-1'"),
         )
+    }
+
+    @Test
+    fun `remove from box decrements lot and source when remainder stays`() = runBlocking {
+        insertReceivingOrder(db, "pa-order-1", "PA-001", "in_hand")
+        insertPart(db, "pa-part-1", "PA-PART-1")
+        fixture { wdb ->
+            insertShelf(wdb, "A-01-01", "A")
+            insertReceivingInvoice(wdb, "pa-inv-1", "pa-order-1")
+            insertReceivingInvoiceItem(wdb, "pa-item-1", "pa-inv-1", "pa-part-1", qty = 10)
+            insertShelfBox(wdb, "pa-box-1", "pa-order-1", "A-01-01")
+            // Same item + attributes: both scans merge into one lot and one source row.
+            insertPutAwayScan(
+                wdb, "pa-scan-1", itemId = "pa-item-1", partId = "pa-part-1", qty = 2,
+                dateCode = "DC1", lotCode = "LOT1", coo = "CN", cow = "TW", createdAt = 100,
+            )
+            insertPutAwayScan(
+                wdb, "pa-scan-2", itemId = "pa-item-1", partId = "pa-part-1", qty = 3,
+                dateCode = "DC1", lotCode = "LOT1", coo = "CN", cow = "TW", createdAt = 200,
+            )
+        }
+        repo.assignScanToBox("pa-scan-1", "pa-box-1", "actor-1")
+        repo.assignScanToBox("pa-scan-2", "pa-box-1", "actor-1")
+        assertEquals(5, intQuery(db, "SELECT total_qty FROM inventory_lots"))
+        assertEquals(5, intQuery(db, "SELECT qty FROM inventory_lot_sources"))
+
+        repo.removeScanFromBox("pa-scan-1", "actor-1")
+
+        // Decrease branches (not delete-at-0): lot 5-2, source 5-2, put_away_qty 5-2; rows kept.
+        assertEquals(1, intQuery(db, "SELECT COUNT(*) FROM inventory_lots"))
+        assertEquals(3, intQuery(db, "SELECT total_qty FROM inventory_lots"))
+        assertEquals(3, intQuery(db, "SELECT available_qty FROM inventory_lots"))
+        assertEquals(1, intQuery(db, "SELECT COUNT(*) FROM inventory_lot_sources"))
+        assertEquals(3, intQuery(db, "SELECT qty FROM inventory_lot_sources"))
+        assertEquals(
+            3,
+            intQuery(db, "SELECT put_away_qty FROM receiving_invoice_items WHERE id = 'pa-item-1'"),
+        )
+        assertNull(scanColumn("shelf_box_id", "pa-scan-1"))
+        assertEquals("pa-box-1", scanColumn("shelf_box_id", "pa-scan-2"))
+    }
+
+    @Test
+    fun `remove from box rejects closed box`() = runBlocking {
+        insertReceivingOrder(db, "pa-order-1", "PA-001", "in_hand")
+        insertPart(db, "pa-part-1", "PA-PART-1")
+        fixture { wdb ->
+            insertShelf(wdb, "A-01-01", "A")
+            insertReceivingInvoice(wdb, "pa-inv-1", "pa-order-1")
+            insertReceivingInvoiceItem(wdb, "pa-item-1", "pa-inv-1", "pa-part-1", qty = 10)
+            insertShelfBox(wdb, "pa-box-1", "pa-order-1", "A-01-01")
+            insertPutAwayScan(wdb, "pa-scan-1", itemId = "pa-item-1", partId = "pa-part-1", qty = 4)
+        }
+        repo.assignScanToBox("pa-scan-1", "pa-box-1", "actor-1")
+        repo.closeShelfBox("pa-box-1", "actor-1")
+
+        expectCode("shelf_box_is_not_open") {
+            repo.removeScanFromBox("pa-scan-1", "actor-1")
+        }
+
+        assertEquals("pa-box-1", scanColumn("shelf_box_id", "pa-scan-1"))
+        assertEquals(1, intQuery(db, "SELECT COUNT(*) FROM inventory_lots"))
     }
 
     @Test

@@ -1,6 +1,7 @@
 package com.docpal.warehousepda.domain
 
 import com.docpal.warehousepda.data.ReceivingAvailability
+import com.docpal.warehousepda.data.ReceivingRepository
 import com.docpal.warehousepda.data.db.AppDatabase
 import com.docpal.warehousepda.data.db.InventoryLotEntity
 import com.docpal.warehousepda.data.db.InventoryLotSourceEntity
@@ -29,12 +30,16 @@ import java.util.UUID
  * screens; do not duplicate it. The mutations port web recordPutAwayScan / createShelfBox /
  * removeScannedPiece / assignScanToBox / addAllUnboxedToBox / removeScanFromBox /
  * closeShelfBox / cancelShelfBox keeping the web's error codes (nextShelfBoxId follows the
- * API variant, apps/api/src/db/putAway.ts); assign/remove/close end with
- * [tryMarkReceivingOrderClear], the API auto-clear check on the shared availability math.
+ * API variant, apps/api/src/db/putAway.ts); assign/remove/close end with the shared
+ * [ReceivingRepository.tryMarkClear] auto-clear check (Room runInTransaction passes through
+ * when already in a transaction, same as PickingRepository's usage).
  * Threading matches the other repositories: suspend entry points wrap plain blocking Room
  * calls in withContext(Dispatchers.IO).
  */
-class PutAwayRepository(private val db: AppDatabase) {
+class PutAwayRepository(
+    private val db: AppDatabase,
+    private val receivingRepository: ReceivingRepository,
+) {
 
     private val putAwayDao get() = db.putAwayDao()
     private val receivingDao get() = db.receivingDao()
@@ -267,7 +272,7 @@ class PutAwayRepository(private val db: AppDatabase) {
         val lotId = upsertMaterializedLot(scan, item.partId, box)
         upsertLotSource(lotId, itemId, scan.qty)
         putAwayDao.increaseItemPutAwayQty(itemId, scan.qty)
-        tryMarkReceivingOrderClear(item.orderId, actorId)
+        receivingRepository.tryMarkClear(item.orderId, actorId)
     }
 
     /**
@@ -363,7 +368,7 @@ class PutAwayRepository(private val db: AppDatabase) {
             else putAwayDao.decreaseLotAvailableQtys(lot.id, scan.qty)
 
             putAwayDao.decreaseItemPutAwayQty(itemId, scan.qty)
-            tryMarkReceivingOrderClear(item.orderId, actorId)
+            receivingRepository.tryMarkClear(item.orderId, actorId)
         }
         Unit
     }
@@ -376,7 +381,7 @@ class PutAwayRepository(private val db: AppDatabase) {
             if (putAwayDao.scanCountInBox(boxId) == 0) throw LocalizedException("cannot_close_empty_shelf_box")
             putAwayDao.updateBoxStatus(boxId, "closed")
             insertBoxTransitionLog(boxId, from = "open", to = "closed", actorId = actorId)
-            box.receivingOrderId?.let { tryMarkReceivingOrderClear(it, actorId) }
+            box.receivingOrderId?.let { receivingRepository.tryMarkClear(it, actorId) }
         }
         Unit
     }
@@ -404,35 +409,6 @@ class PutAwayRepository(private val db: AppDatabase) {
                 entityType = "shelf_box", entityId = boxId,
                 fromState = from, toState = to, actorId = actorId,
                 metadata = null, createdAt = System.currentTimeMillis(),
-            )
-        )
-    }
-
-    /**
-     * Port of API tryMarkReceivingOrderClear (apps/api/src/db/putAway.ts:110-127): in_hand → clear
-     * when every invoice item's available <= 0. Uses the shared [ReceivingAvailability] math, in
-     * which unboxed scans are already subtracted (web parity: unboxed scans count as consumed).
-     * Called inside the box mutations' transactions; log shape mirrors
-     * ReceivingRepository.tryMarkClear (entity_type receiving_order, no metadata).
-     */
-    internal fun tryMarkReceivingOrderClear(orderId: String, actorId: String) {
-        val order = receivingDao.orderById(orderId) ?: return
-        if (order.status != "in_hand") return
-        val invoices = receivingDao.invoicesOfOrder(orderId)
-        val items = if (invoices.isEmpty()) emptyList() else receivingDao.itemsOfInvoices(invoices.map { it.id })
-        if (items.isEmpty()) return
-        val available = ReceivingAvailability.byItem(
-            receivingDao, orderId, receivingDao.detailItemRows(orderId), order.deliveryDate,
-        ).mapValues { it.value.availableQty }
-        if (items.any { (available[it.id] ?: 0) > 0 }) return
-        val now = System.currentTimeMillis()
-        receivingDao.updateOrderStatus(orderId, "clear", now)
-        receivingDao.insertTransitionLog(
-            TransitionLogEntity(
-                id = UUID.randomUUID().toString(),
-                entityType = "receiving_order", entityId = orderId,
-                fromState = order.status, toState = "clear",
-                actorId = actorId, metadata = null, createdAt = now,
             )
         )
     }

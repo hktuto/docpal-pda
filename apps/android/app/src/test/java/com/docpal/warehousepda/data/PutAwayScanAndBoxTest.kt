@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
 import com.docpal.warehousepda.data.db.AppDatabase
+import com.docpal.warehousepda.domain.Allocator
 import com.docpal.warehousepda.domain.PutAwayRepository
 import com.docpal.warehousepda.domain.expectCode
 import com.docpal.warehousepda.domain.insertPart
@@ -45,7 +46,7 @@ class PutAwayScanAndBoxTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         db = AppDatabase.build(context, inMemory = true)
         offMainThread { db.clearAllTables() }
-        repo = PutAwayRepository(db)
+        repo = PutAwayRepository(db, ReceivingRepository(db, Allocator(db)))
     }
 
     @After

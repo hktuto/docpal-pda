@@ -41,7 +41,7 @@ class AppContainer(context: Context) {
 
     val pickingRepository: PickingRepository by lazy { PickingRepository(db, receivingRepository) }
 
-    val putAwayRepository: PutAwayRepository by lazy { PutAwayRepository(db) }
+    val putAwayRepository: PutAwayRepository by lazy { PutAwayRepository(db, receivingRepository) }
 
     val scanRepository: ScanRepository by lazy { ScanRepository(db) }
 
