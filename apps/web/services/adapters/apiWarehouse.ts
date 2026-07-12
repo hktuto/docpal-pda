@@ -194,7 +194,6 @@ function toPickingOrderSummary(row: RawRow): PickingOrderSummary {
     id: String(row.id),
     refNo: String(row.ref_no),
     status: row.status as PickingOrderStatus,
-    // API list rows carry neither delivery_date nor supplier_name (API gaps).
     deliveryDate: row.delivery_date ? String(row.delivery_date) : null,
     supplierName: row.supplier_name ? String(row.supplier_name) : null,
     shipTo: row.ship_to ? String(row.ship_to) : null,

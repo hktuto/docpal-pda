@@ -107,6 +107,22 @@ test("GET /picking-orders orders finished-last, then delivery_date ASC (pglite p
   assert.ok(idx("ordb") < idx("orda"), "finished sorts last regardless of delivery_date");
 });
 
+test("GET /picking-orders rows carry delivery_date + supplier_name (pglite parity)", async () => {
+  sqlite.exec(`
+    INSERT INTO suppliers (id, code, name, created_at, updated_at) VALUES ('sup-l','SUP-L','List Supplier','0','0');
+    INSERT INTO picking_orders (id, external_id, ref_no, status, delivery_date, supplier_id, created_at, updated_at) VALUES
+      ('ords','ords-e','ORD-S','picking','2026-03-04','sup-l','0','0');
+  `);
+  const rows = (await (await app.request("/picking-orders?status=picking")).json()) as any[];
+  const row = rows.find((r) => r.id === "ords");
+  assert.ok(row, "seeded order present in list");
+  assert.equal(row.delivery_date, "2026-03-04");
+  assert.equal(row.supplier_name, "List Supplier");
+  const plain = rows.find((r) => r.id === "ordb"); // no supplier_id
+  assert.equal(plain.delivery_date, "2026-06-01");
+  assert.equal(plain.supplier_name, null);
+});
+
 test("GET /picking-orders/:id resolves receiving-sourced allocations and excludes zero-qty residue", async () => {
   sqlite.exec(`
     INSERT INTO receiving_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('ro2','roe2','RO2','in_hand','0','0');

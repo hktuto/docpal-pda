@@ -186,12 +186,15 @@ pickingExecutionRoute.get("/picking-orders", (c) => {
   const status = c.req.query("status");
   const updatedSince = c.req.query("updated_since");
   const rows = db.all<Record<string, unknown>>(sql`
-    SELECT id, external_id, ref_no, status, ship_to, destination_country, created_at, updated_at,
-           (SELECT COALESCE(SUM(pi.qty), 0) FROM picking_items pi WHERE pi.picking_order_id = picking_orders.id) AS total_qty
-    FROM picking_orders
-    WHERE (${status ?? null} IS NULL OR status = ${status ?? null})
-      AND (${updatedSince ?? null} IS NULL OR updated_at > ${updatedSince ?? null})
-    ORDER BY CASE WHEN status = 'finished' THEN 1 ELSE 0 END, delivery_date ASC, id ASC`);
+    SELECT po.id, po.external_id, po.ref_no, po.status, po.ship_to, po.destination_country,
+           po.delivery_date, po.created_at, po.updated_at,
+           s.name AS supplier_name,
+           (SELECT COALESCE(SUM(pi.qty), 0) FROM picking_items pi WHERE pi.picking_order_id = po.id) AS total_qty
+    FROM picking_orders po
+    LEFT JOIN suppliers s ON s.id = po.supplier_id
+    WHERE (${status ?? null} IS NULL OR po.status = ${status ?? null})
+      AND (${updatedSince ?? null} IS NULL OR po.updated_at > ${updatedSince ?? null})
+    ORDER BY CASE WHEN po.status = 'finished' THEN 1 ELSE 0 END, po.delivery_date ASC, po.id ASC`);
   return c.json(rows, 200);
 });
 
