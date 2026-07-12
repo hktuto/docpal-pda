@@ -9,6 +9,7 @@ import com.docpal.warehousepda.data.db.MeasuringTaskEntity
 import com.docpal.warehousepda.data.db.PickingPackageEntity
 import com.docpal.warehousepda.data.db.ShippingBoxEntity
 import com.docpal.warehousepda.data.db.TransitionLogEntity
+import com.docpal.warehousepda.domain.model.PickingOrderSummary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -31,6 +32,21 @@ class PickingRepository(
 
     private val pickingDao get() = db.pickingDao()
     private val receivingDao get() = db.receivingDao()
+
+    /** Picking list (web pgliteWarehouse listOrders): all orders, finished last, with item qty totals. */
+    suspend fun listOrders(): List<PickingOrderSummary> = withContext(Dispatchers.IO) {
+        pickingDao.pickingOrderSummaryRows().map {
+            PickingOrderSummary(
+                id = it.id,
+                refNo = it.refNo,
+                status = it.status,
+                deliveryDate = it.deliveryDate,
+                supplierName = it.supplierName,
+                shipTo = it.shipTo,
+                totalQty = it.totalQty,
+            )
+        }
+    }
 
     /** Port of web applyOcrPick (ocrPicking.ts): top up + consume coarse allocation, build lot, scan into one package. */
     suspend fun applyOcrPick(
