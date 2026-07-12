@@ -16,16 +16,17 @@ import com.docpal.warehousepda.domain.model.ReceivingInvoiceDetail
 import com.docpal.warehousepda.domain.model.ReceivingItemDetail
 import com.docpal.warehousepda.domain.model.ReceivingOrderDetail
 import com.docpal.warehousepda.domain.model.ReceivingOrderSummary
+import com.docpal.warehousepda.ui.receiving.ReceivingListSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.UUID
 
 /** Read model + clear/in-hand transitions for receiving orders. Mirrors the web adapter + db/receiving.ts. */
-class ReceivingRepository(private val db: AppDatabase, private val allocator: Allocator) {
+class ReceivingRepository(private val db: AppDatabase, private val allocator: Allocator) : ReceivingListSource {
 
     private val dao get() = db.receivingDao()
 
-    suspend fun listOrders(filter: String): List<ReceivingOrderSummary> = withContext(Dispatchers.IO) {
+    override suspend fun listOrders(filter: String): List<ReceivingOrderSummary> = withContext(Dispatchers.IO) {
         val rows = dao.listOrderRows(filter)
         val totals = dao.orderAllocationTotals().associate { (it.receivingOrderId to it.partId) to it.totalQty }
         val unboxed = dao.unboxedPutAwayScanTotals().associate { it.itemId to it.qty }

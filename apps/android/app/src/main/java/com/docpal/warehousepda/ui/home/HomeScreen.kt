@@ -50,17 +50,20 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.docpal.warehousepda.App
 import com.docpal.warehousepda.R
 import com.docpal.warehousepda.ui.LocaleManager
+import com.docpal.warehousepda.ui.navigation.Routes
 
 private data class MenuCard(
     val titleRes: Int,
     val descRes: Int,
     val color: Color,
+    val route: String? = null,
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onLoggedOut: () -> Unit,
+    onNavigate: (String) -> Unit = {},
 ) {
     val app = LocalContext.current.applicationContext as App
     val viewModel: HomeViewModel = viewModel(factory = app.container.viewModelFactory)
@@ -79,7 +82,7 @@ fun HomeScreen(
     }
 
     val cards = listOf(
-        MenuCard(R.string.menu_receiving_title, R.string.menu_receiving_desc, Color(0xFF00BFA5)),
+        MenuCard(R.string.menu_receiving_title, R.string.menu_receiving_desc, Color(0xFF00BFA5), Routes.RECEIVING_LIST),
         MenuCard(R.string.menu_picking_title, R.string.menu_picking_desc, Color(0xFF3B82F6)),
         MenuCard(R.string.menu_put_away_title, R.string.menu_put_away_desc, Color(0xFFF59E0B)),
         MenuCard(R.string.menu_goods_verify_title, R.string.menu_goods_verify_desc, Color(0xFF10B981)),
@@ -163,7 +166,12 @@ fun HomeScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                Toast.makeText(context, comingSoon, Toast.LENGTH_SHORT).show()
+                                val route = card.route
+                                if (route != null) {
+                                    onNavigate(route)
+                                } else {
+                                    Toast.makeText(context, comingSoon, Toast.LENGTH_SHORT).show()
+                                }
                             },
                         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
                     ) {
