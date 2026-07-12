@@ -1471,3 +1471,934 @@ describe('createApiWarehouseService (put-away + shelves)', () => {
     });
   });
 });
+
+// ------------------------------------------------------------------
+// Measuring, goods verify, stock search
+// ------------------------------------------------------------------
+
+const MEASURING_TASK_LIST_ROWS = [
+  {
+    id: 'mt1',
+    picking_order_id: 'po1',
+    status: 'pending',
+    created_at: '2026-07-05T00:00:00.000Z',
+    updated_at: '2026-07-05T00:00:00.000Z',
+    ref_no: 'PO-001',
+    total_items: 10,
+    packed_items: 4,
+  },
+];
+
+const MEASURING_TASK_DETAIL = {
+  task: {
+    id: 'mt1',
+    picking_order_id: 'po1',
+    status: 'pending',
+    created_at: '2026-07-05T00:00:00.000Z',
+    updated_at: '2026-07-05T00:00:00.000Z',
+  },
+  order: {
+    id: 'po1',
+    external_id: 'EXT-1',
+    ref_no: 'PO-001',
+    status: 'picking',
+    ship_to: 'Berlin',
+    destination_country: 'DE',
+    created_at: '2026-07-04T00:00:00.000Z',
+    updated_at: '2026-07-05T00:00:00.000Z',
+  },
+  items: [
+    {
+      id: 'pi1',
+      part_id: 'p1',
+      part_no: 'PN-1',
+      qty: 10,
+      picked_qty: 10,
+      scanned_not_boxed_qty: 0,
+      remaining_qty: 0,
+      allocated_qty: 10,
+      line_id: 'L1',
+    },
+  ],
+  boxes: [
+    {
+      id: 'box1',
+      status: 'open',
+      box_size: 'M',
+      net_weight_g: 1250,
+      gross_weight_g: 1500,
+      destination_country: 'DE',
+      created_at: '2026-07-05T00:00:00.000Z',
+      updated_at: '2026-07-05T00:00:00.000Z',
+      packages: [
+        {
+          id: 'pkg1',
+          picking_item_id: 'pi1',
+          part_no: 'PN-1',
+          source_type: 'scan',
+          source_id: null,
+          qty: 4,
+          date_code: 'D1',
+          lot_code: 'L1',
+          coo: 'CN',
+          cow: null,
+          verified: 1,
+        },
+      ],
+    },
+  ],
+};
+
+const FOR_MEASURING = {
+  box: {
+    id: 'box1',
+    picking_order_id: 'po1',
+    status: 'open',
+    box_size: 'M',
+    net_weight_g: 1250,
+    gross_weight_g: 1500,
+    destination_country: 'DE',
+    created_at: '2026-07-05T00:00:00.000Z',
+    updated_at: '2026-07-05T00:00:00.000Z',
+  },
+  order: {
+    id: 'po1',
+    ref_no: 'PO-001',
+    ship_to: 'Berlin',
+    destination_country: 'DE',
+    status: 'picking',
+  },
+  task: { id: 'mt1', status: 'pending' },
+  packages: [
+    {
+      id: 'pkg1',
+      picking_item_id: 'pi1',
+      part_no: 'PN-1',
+      qty: 4,
+      date_code: 'D1',
+      lot_code: 'L1',
+      coo: 'CN',
+      cow: null,
+      verified: 1,
+    },
+    {
+      id: 'pkg2',
+      picking_item_id: 'pi1',
+      part_no: 'PN-1',
+      qty: 6,
+      date_code: 'D2',
+      lot_code: 'L0T',
+      coo: null,
+      cow: null,
+      verified: 0,
+    },
+    {
+      id: 'pkg3',
+      picking_item_id: 'pi2',
+      part_no: 'PN-2',
+      qty: 6,
+      date_code: 'D2',
+      lot_code: null,
+      coo: null,
+      cow: null,
+      verified: 0,
+    },
+  ],
+};
+
+const EXPECTED_MEASURING_PICKING_ORDER = {
+  id: 'po1',
+  refNo: 'PO-001',
+  // API measuring order rows have no supplier/delivery/po columns (API gaps).
+  supplierId: null,
+  deliveryDate: null,
+  poNo: null,
+  requiredDateCodeNotice: null,
+  shipTo: 'Berlin',
+  destinationCountry: 'DE',
+  status: 'picking',
+  createdAt: new Date('2026-07-04T00:00:00.000Z'),
+  updatedAt: new Date('2026-07-05T00:00:00.000Z'),
+  supplier: null,
+  items: [
+    {
+      id: 'pi1',
+      pickingOrderId: 'po1',
+      partId: 'p1',
+      qty: 10,
+      pickedQty: 10,
+      requiredDateCode: null,
+      sourceShelfCode: null,
+      part: {
+        id: 'p1',
+        partNo: 'PN-1',
+        internalCode: null,
+        description: null,
+        defaultCoo: null,
+      },
+      // The API measuring detail serves no allocations (API gap).
+      allocations: [],
+    },
+  ],
+};
+
+describe('createApiWarehouseService (measuring)', () => {
+  const fetchMock = vi.fn();
+
+  function createService(): WarehouseService {
+    return createApiWarehouseService({
+      adapter: 'api',
+      apiBaseUrl: 'http://api.test',
+      getActorId: () => ACTOR_ID,
+    });
+  }
+
+  function routeFetch(routes: Record<string, unknown>): void {
+    fetchMock.mockImplementation((url: string) => {
+      for (const [path, data] of Object.entries(routes)) {
+        if (url === `http://api.test${path}`) {
+          return Promise.resolve(jsonResponse(data));
+        }
+      }
+      return Promise.resolve(jsonResponse({}, 404));
+    });
+  }
+
+  function lastBody(): unknown {
+    const [, init] = fetchMock.mock.calls[fetchMock.mock.calls.length - 1] ?? [];
+    return init?.body ? JSON.parse(String(init.body)) : undefined;
+  }
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  describe('getMeasuringTasks', () => {
+    it('requests pending tasks and maps rows (supplierName gap)', async () => {
+      fetchMock.mockResolvedValue(jsonResponse(MEASURING_TASK_LIST_ROWS));
+
+      const rows = await createService().getMeasuringTasks();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://api.test/measuring-tasks?status=pending',
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(rows).toEqual([
+        {
+          id: 'mt1',
+          status: 'pending',
+          pickingOrderId: 'po1',
+          pickingOrderRef: 'PO-001',
+          // The API list query has no supplier join (API gap).
+          supplierName: null,
+          totalItems: 10,
+          packedItems: 4,
+        },
+      ]);
+    });
+  });
+
+  describe('getMeasuringTask', () => {
+    it('maps the detail bundle with gram weights converted to kg', async () => {
+      fetchMock.mockResolvedValue(jsonResponse(MEASURING_TASK_DETAIL));
+
+      const detail = await createService().getMeasuringTask('mt1');
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://api.test/measuring-tasks/mt1',
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(detail).toEqual({
+        id: 'mt1',
+        status: 'pending',
+        pickingOrderId: 'po1',
+        createdAt: new Date('2026-07-05T00:00:00.000Z'),
+        pickingOrder: EXPECTED_MEASURING_PICKING_ORDER,
+        shippingBoxes: [
+          {
+            id: 'box1',
+            pickingOrderId: 'po1',
+            measuringTaskId: 'mt1',
+            status: 'open',
+            grossWeight: 1.5,
+            netWeight: 1.25,
+            destinationCountry: 'DE',
+            boxSize: 'M',
+            createdAt: new Date('2026-07-05T00:00:00.000Z'),
+            packages: [
+              {
+                id: 'pkg1',
+                pickingItemId: 'pi1',
+                qty: 4,
+                dateCode: 'D1',
+                lotCode: 'L1',
+                coo: 'CN',
+                cow: null,
+                verified: true,
+                pickingItem: {
+                  id: 'pi1',
+                  partId: 'p1',
+                  part: {
+                    id: 'p1',
+                    partNo: 'PN-1',
+                    internalCode: null,
+                    description: null,
+                    defaultCoo: null,
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      });
+    });
+  });
+
+  describe('getShippingBoxForMeasuring', () => {
+    it('fetches the box then its measuring task to resolve part ids', async () => {
+      routeFetch({
+        '/shipping-boxes/box1/for-measuring': FOR_MEASURING,
+        '/measuring-tasks/mt1': MEASURING_TASK_DETAIL,
+      });
+
+      const box = await createService().getShippingBoxForMeasuring('box1');
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        1,
+        'http://api.test/shipping-boxes/box1/for-measuring',
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        2,
+        'http://api.test/measuring-tasks/mt1',
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(box).toEqual({
+        id: 'box1',
+        pickingOrderId: 'po1',
+        measuringTaskId: 'mt1',
+        status: 'open',
+        grossWeight: 1.5,
+        netWeight: 1.25,
+        destinationCountry: 'DE',
+        boxSize: 'M',
+        createdAt: new Date('2026-07-05T00:00:00.000Z'),
+        measuringTask: {
+          id: 'mt1',
+          status: 'pending',
+          pickingOrder: EXPECTED_MEASURING_PICKING_ORDER,
+        },
+        packages: [
+          {
+            id: 'pkg1',
+            pickingItemId: 'pi1',
+            qty: 4,
+            dateCode: 'D1',
+            lotCode: 'L1',
+            coo: 'CN',
+            cow: null,
+            verified: true,
+            pickingItem: {
+              id: 'pi1',
+              partId: 'p1',
+              part: {
+                id: 'p1',
+                partNo: 'PN-1',
+                internalCode: null,
+                description: null,
+                defaultCoo: null,
+              },
+            },
+          },
+          {
+            id: 'pkg2',
+            pickingItemId: 'pi1',
+            qty: 6,
+            dateCode: 'D2',
+            lotCode: 'L0T',
+            coo: null,
+            cow: null,
+            verified: false,
+            pickingItem: {
+              id: 'pi1',
+              partId: 'p1',
+              part: {
+                id: 'p1',
+                partNo: 'PN-1',
+                internalCode: null,
+                description: null,
+                defaultCoo: null,
+              },
+            },
+          },
+          {
+            id: 'pkg3',
+            pickingItemId: 'pi2',
+            qty: 6,
+            dateCode: 'D2',
+            lotCode: null,
+            coo: null,
+            cow: null,
+            verified: false,
+            // pi2 is not in the task's item list, so partId cannot be
+            // resolved (API gap) but part_no is still carried.
+            pickingItem: {
+              id: 'pi2',
+              partId: '',
+              part: {
+                id: '',
+                partNo: 'PN-2',
+                internalCode: null,
+                description: null,
+                defaultCoo: null,
+              },
+            },
+          },
+        ],
+      });
+    });
+  });
+
+  describe('findMatchingUnverifiedPackage', () => {
+    const SCAN = {
+      partNo: 'pn-1 ',
+      dateCode: 'd2',
+      lotCode: 'LOT',
+      coo: '',
+      cow: '',
+      qty: 6,
+    };
+
+    it('ports the pglite match loop over the for-measuring packages', async () => {
+      fetchMock.mockResolvedValue(jsonResponse(FOR_MEASURING));
+
+      const matched = await createService().findMatchingUnverifiedPackage(
+        'box1',
+        SCAN
+      );
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://api.test/shipping-boxes/box1/for-measuring',
+        expect.objectContaining({ method: 'GET' })
+      );
+      // pkg1 is verified (skipped), pkg3 has a different part; pkg2 matches
+      // with normalized part no / date code and O->0 lot code folding.
+      expect(matched).toEqual({
+        id: 'pkg2',
+        pickingItemId: 'pi1',
+        qty: 6,
+        dateCode: 'D2',
+        lotCode: 'L0T',
+        coo: null,
+        cow: null,
+        verified: false,
+        // No second call here, so partId is unresolved (API gap).
+        pickingItem: {
+          id: 'pi1',
+          partId: '',
+          part: {
+            id: '',
+            partNo: 'PN-1',
+            internalCode: null,
+            description: null,
+            defaultCoo: null,
+          },
+        },
+      });
+    });
+
+    it('returns null when no unverified package matches', async () => {
+      fetchMock.mockResolvedValue(jsonResponse(FOR_MEASURING));
+
+      const matched = await createService().findMatchingUnverifiedPackage(
+        'box1',
+        { ...SCAN, qty: 5 }
+      );
+
+      expect(matched).toBeNull();
+    });
+
+    it('honours targetPackageId', async () => {
+      fetchMock.mockResolvedValue(jsonResponse(FOR_MEASURING));
+
+      const matched = await createService().findMatchingUnverifiedPackage(
+        'box1',
+        SCAN,
+        'pkg3'
+      );
+
+      expect(matched).toBeNull();
+    });
+  });
+
+  describe('verifyPickingPackage', () => {
+    it('posts to the flat package verify route with actor_id body', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+
+      await expect(
+        createService().verifyPickingPackage('pkg1')
+      ).resolves.toBeUndefined();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://api.test/packages/pkg1/verify',
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(lastBody()).toEqual({ actor_id: ACTOR_ID });
+    });
+  });
+
+  describe('updateShippingBox', () => {
+    it('patches measurements converting kg to rounded grams', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+
+      await expect(
+        createService().updateShippingBox('box1', {
+          grossWeight: 1.5,
+          netWeight: '1.25',
+          destinationCountry: ' DE ',
+          boxSize: 'M',
+        })
+      ).resolves.toBeUndefined();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://api.test/shipping-boxes/box1',
+        expect.objectContaining({ method: 'PATCH' })
+      );
+      expect(lastBody()).toEqual({
+        gross_weight_g: 1500,
+        net_weight_g: 1250,
+        destination_country: 'DE',
+        box_size: 'M',
+      });
+    });
+
+    it('only sends provided fields; null clears a weight', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+
+      await createService().updateShippingBox('box1', { grossWeight: null });
+
+      expect(lastBody()).toEqual({ gross_weight_g: null });
+    });
+
+    it('throws weight_must_be_number on non-numeric strings', async () => {
+      await expect(
+        createService().updateShippingBox('box1', { netWeight: 'abc' })
+      ).rejects.toThrow('weight_must_be_number');
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('throws weight_must_be_number on non-finite numbers', async () => {
+      await expect(
+        createService().updateShippingBox('box1', { grossWeight: Infinity })
+      ).rejects.toThrow('weight_must_be_number');
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('closeShippingBox / completeMeasuringTask', () => {
+    it('closeShippingBox posts with actor_id query', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+
+      await expect(
+        createService().closeShippingBox('box1')
+      ).resolves.toBeUndefined();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        `http://api.test/shipping-boxes/box1/close?actor_id=${ACTOR_ID}`,
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(lastBody()).toBeUndefined();
+    });
+
+    it('completeMeasuringTask posts with actor_id query', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+
+      await expect(
+        createService().completeMeasuringTask('mt1')
+      ).resolves.toBeUndefined();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        `http://api.test/measuring-tasks/mt1/complete?actor_id=${ACTOR_ID}`,
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(lastBody()).toBeUndefined();
+    });
+  });
+});
+
+describe('createApiWarehouseService (goods verify)', () => {
+  const fetchMock = vi.fn();
+
+  function createService(): WarehouseService {
+    return createApiWarehouseService({
+      adapter: 'api',
+      apiBaseUrl: 'http://api.test',
+      getActorId: () => ACTOR_ID,
+    });
+  }
+
+  function routeFetch(routes: Record<string, unknown>): void {
+    fetchMock.mockImplementation((url: string) => {
+      for (const [path, data] of Object.entries(routes)) {
+        if (url === `http://api.test${path}`) {
+          return Promise.resolve(jsonResponse(data));
+        }
+      }
+      return Promise.resolve(jsonResponse({}, 404));
+    });
+  }
+
+  function lastBody(): unknown {
+    const [, init] = fetchMock.mock.calls[fetchMock.mock.calls.length - 1] ?? [];
+    return init?.body ? JSON.parse(String(init.body)) : undefined;
+  }
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('getShelvesWithBoxes maps box counts (zone gap)', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse([
+        { code: 'A1', box_count: 2 },
+        { code: 'B1', box_count: 0 },
+      ])
+    );
+
+    const rows = await createService().getShelvesWithBoxes();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://api.test/shelves/with-box-counts',
+      expect.objectContaining({ method: 'GET' })
+    );
+    expect(rows).toEqual([
+      { code: 'A1', zone: null, boxCount: 2 },
+      { code: 'B1', zone: null, boxCount: 0 },
+    ]);
+  });
+
+  it('getShelfBoxes maps summaries with Date coercion', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse([
+        {
+          id: 'sbox1',
+          shelf_code: 'A1',
+          status: 'open',
+          created_at: '2026-07-02T00:00:00.000Z',
+          item_count: 3,
+          verified_count: 1,
+          last_check_at: '2026-07-06T10:00:00.000Z',
+          checked_today: 1,
+        },
+      ])
+    );
+
+    const rows = await createService().getShelfBoxes('A1');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://api.test/shelves/A1/boxes',
+      expect.objectContaining({ method: 'GET' })
+    );
+    expect(rows).toEqual([
+      {
+        id: 'sbox1',
+        shelfCode: 'A1',
+        status: 'open',
+        itemCount: 3,
+        verifiedCount: 1,
+        lastCheckAt: new Date('2026-07-06T10:00:00.000Z'),
+        checkedToday: true,
+      },
+    ]);
+  });
+
+  it('getShelfBox synthesizes item ids as `${boxId}-${part_id}`', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        id: 'sbox1',
+        receiving_order_id: 'ro1',
+        shelf_code: 'A1',
+        status: 'open',
+        created_at: '2026-07-02T00:00:00.000Z',
+        shelf: { code: 'A1', zone: null },
+        receiving_order: { id: 'ro1', ref_no: 'RO-001' },
+        items: [
+          {
+            part_id: 'p1',
+            part_no: 'PN-1',
+            description: 'Part one',
+            qty: 5,
+            verified: 0,
+            verified_at: null,
+          },
+          {
+            part_id: 'p2',
+            part_no: 'PN-2',
+            description: null,
+            qty: 2,
+            verified: 1,
+            verified_at: '2026-07-06T10:00:00.000Z',
+          },
+        ],
+      })
+    );
+
+    const box = await createService().getShelfBox('sbox1');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://api.test/shelf-boxes/sbox1',
+      expect.objectContaining({ method: 'GET' })
+    );
+    expect(box).toEqual({
+      id: 'sbox1',
+      receivingOrderId: 'ro1',
+      shelfCode: 'A1',
+      status: 'open',
+      createdAt: new Date('2026-07-02T00:00:00.000Z'),
+      shelf: { code: 'A1', zone: null },
+      receivingOrder: { id: 'ro1', refNo: 'RO-001' },
+      items: [
+        {
+          id: 'sbox1-p1',
+          shelfBoxId: 'sbox1',
+          partId: 'p1',
+          qty: 5,
+          verified: false,
+          verifiedAt: null,
+          part: { partNo: 'PN-1', description: 'Part one' },
+        },
+        {
+          id: 'sbox1-p2',
+          shelfBoxId: 'sbox1',
+          partId: 'p2',
+          qty: 2,
+          verified: true,
+          verifiedAt: new Date('2026-07-06T10:00:00.000Z'),
+          part: { partNo: 'PN-2', description: null },
+        },
+      ],
+    });
+  });
+
+  it('verifyShelfBoxItem posts {part_id, actor_id}', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true, verified_count: 2 }));
+
+    await expect(
+      createService().verifyShelfBoxItem('sbox1', 'p1')
+    ).resolves.toBeUndefined();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://api.test/shelf-boxes/sbox1/verify-item',
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(lastBody()).toEqual({ part_id: 'p1', actor_id: ACTOR_ID });
+  });
+
+  describe('markShelfBoxVerified', () => {
+    it('finds the pending cycle_count task and completes it', async () => {
+      routeFetch({
+        '/verification-tasks?kind=cycle_count&status=pending': [
+          {
+            id: 'vt-other',
+            kind: 'cycle_count',
+            status: 'pending',
+            shelf_box_id: 'sbox9',
+            due_at: null,
+            picking_order_id: null,
+            created_at: '2026-07-01T00:00:00.000Z',
+            updated_at: '2026-07-01T00:00:00.000Z',
+          },
+          {
+            id: 'vt1',
+            kind: 'cycle_count',
+            status: 'pending',
+            shelf_box_id: 'sbox1',
+            due_at: null,
+            picking_order_id: null,
+            created_at: '2026-07-01T00:00:00.000Z',
+            updated_at: '2026-07-01T00:00:00.000Z',
+          },
+        ],
+        [`/verification-tasks/vt1/complete?actor_id=${ACTOR_ID}`]: { ok: true },
+      });
+
+      await expect(
+        createService().markShelfBoxVerified('sbox1')
+      ).resolves.toBeUndefined();
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        1,
+        'http://api.test/verification-tasks?kind=cycle_count&status=pending',
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        2,
+        `http://api.test/verification-tasks/vt1/complete?actor_id=${ACTOR_ID}`,
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+
+    it('throws shelf_box_not_found when no pending task matches', async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse([
+          {
+            id: 'vt-other',
+            kind: 'cycle_count',
+            status: 'pending',
+            shelf_box_id: 'sbox9',
+          },
+        ])
+      );
+
+      await expect(
+        createService().markShelfBoxVerified('sbox1')
+      ).rejects.toThrow('shelf_box_not_found');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
+});
+
+describe('createApiWarehouseService (stock search)', () => {
+  const fetchMock = vi.fn();
+
+  function createService(): WarehouseService {
+    return createApiWarehouseService({
+      adapter: 'api',
+      apiBaseUrl: 'http://api.test',
+      getActorId: () => ACTOR_ID,
+    });
+  }
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('getSuppliersWithInventoryStats maps snake_case stats', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse([
+        {
+          id: 's1',
+          code: 'SUP',
+          name: 'Supplier One',
+          total_parts: 4,
+          parts_with_inventory: 2,
+        },
+      ])
+    );
+
+    const rows = await createService().getSuppliersWithInventoryStats();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://api.test/stock-search/suppliers',
+      expect.objectContaining({ method: 'GET' })
+    );
+    expect(rows).toEqual([
+      {
+        id: 's1',
+        code: 'SUP',
+        name: 'Supplier One',
+        totalParts: 4,
+        partsWithInventory: 2,
+      },
+    ]);
+  });
+
+  it('getPartsBySupplier maps parts with internalCode/defaultCoo gaps', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse([
+        { id: 'p1', part_no: 'PN-1', description: 'Part one' },
+        { id: 'p2', part_no: 'PN-2', description: null },
+      ])
+    );
+
+    const rows = await createService().getPartsBySupplier('s1');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://api.test/stock-search/suppliers/s1/parts',
+      expect.objectContaining({ method: 'GET' })
+    );
+    expect(rows).toEqual([
+      {
+        id: 'p1',
+        partNo: 'PN-1',
+        // The API parts table lacks internal_code/default_coo (API gap).
+        internalCode: null,
+        description: 'Part one',
+        defaultCoo: null,
+      },
+      {
+        id: 'p2',
+        partNo: 'PN-2',
+        internalCode: null,
+        description: null,
+        defaultCoo: null,
+      },
+    ]);
+  });
+
+  it('getInventoryLotsForParts passes part_ids and maps location labels', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse([
+        {
+          part_id: 'p1',
+          date_code: 'D1',
+          lot_code: null,
+          coo: 'CN',
+          cow: null,
+          shelf_code: 'A1',
+          box_id: 'BOX-9',
+          total_qty: 10,
+          allocated_qty: 3,
+          available_qty: 7,
+          location_label: 'A1 / BOX-9',
+        },
+      ])
+    );
+
+    const rows = await createService().getInventoryLotsForParts(['p1', 'p2']);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://api.test/stock-search/parts/lots?part_ids=p1%2Cp2',
+      expect.objectContaining({ method: 'GET' })
+    );
+    expect(rows).toEqual([
+      {
+        partId: 'p1',
+        dateCode: 'D1',
+        lotCode: null,
+        coo: 'CN',
+        cow: null,
+        shelfCode: 'A1',
+        boxId: 'BOX-9',
+        totalQty: 10,
+        allocatedQty: 3,
+        availableQty: 7,
+        locationLabel: 'A1 / BOX-9',
+      },
+    ]);
+  });
+
+  it('getInventoryLotsForParts returns [] without a request for empty input', async () => {
+    const rows = await createService().getInventoryLotsForParts([]);
+
+    expect(rows).toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

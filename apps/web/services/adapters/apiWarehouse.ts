@@ -1,4 +1,6 @@
 import { createApiClient } from "../apiClient";
+import { I18nError } from "~/composables/i18nError";
+import { normalizeString } from "~/utils/text";
 import type {
   WarehouseService,
   CreateWarehouseServiceOptions,
@@ -30,6 +32,17 @@ import type {
   PutAwayScan,
   ShelfBox,
   Shelf,
+  MeasuringTaskStatus,
+  MeasuringPickingOrder,
+  MeasuringShippingBox,
+  MeasuringPackage,
+  BoxStatus,
+  ShelfWithBoxCount,
+  GoodsVerifyShelfBoxSummary,
+  GoodsVerifyShelfBoxDetail,
+  StockSearchSupplierWithStats,
+  StockSearchPart,
+  StockSearchInventoryLot,
 } from "../types";
 
 type RawRow = Record<string, any>;
@@ -355,6 +368,223 @@ function toShelf(row: RawRow): Shelf {
   };
 }
 
+// ------------------------------------------------------------------
+// Measuring
+// ------------------------------------------------------------------
+
+/** The API stores box weights as integer grams; web DTOs use kg. */
+function gramsToKg(value: unknown): number | null {
+  return value === null || value === undefined ? null : Number(value) / 1000;
+}
+
+// Ported from db/measuring.ts normalizeWeight: undefined leaves the column
+// untouched, null/"" clears it, non-finite input is rejected.
+function normalizeWeightKg(
+  value: number | string | null | undefined
+): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const num = typeof value === "string" ? Number(value) : value;
+  if (!Number.isFinite(num)) throw new I18nError("weight_must_be_number");
+  return num;
+}
+
+function kgToGrams(
+  value: number | string | null | undefined
+): number | null | undefined {
+  const kg = normalizeWeightKg(value);
+  return kg === undefined || kg === null ? kg : Math.round(kg * 1000);
+}
+
+type MeasuringPartInfo = { partId: string; partNo: string | null };
+
+function measuringPartByItem(items: RawRow[]): Map<string, MeasuringPartInfo> {
+  return new Map(
+    items.map((it) => [
+      String(it.id),
+      {
+        partId: String(it.part_id),
+        partNo: it.part_no ? String(it.part_no) : null,
+      },
+    ])
+  );
+}
+
+// API package rows join part_no but not part_id; partId is resolved through
+// the task's item rows when available, otherwise left empty (API gap).
+function toApiMeasuringPackage(
+  row: RawRow,
+  partByItem: Map<string, MeasuringPartInfo>
+): MeasuringPackage {
+  const pickingItemId = String(row.picking_item_id);
+  const info = partByItem.get(pickingItemId);
+  return {
+    id: String(row.id),
+    pickingItemId,
+    qty: Number(row.qty),
+    dateCode: row.date_code ?? null,
+    lotCode: row.lot_code ?? null,
+    coo: row.coo ?? null,
+    cow: row.cow ?? null,
+    verified: Boolean(row.verified),
+    pickingItem: {
+      id: pickingItemId,
+      partId: info?.partId ?? "",
+      part: {
+        id: info?.partId ?? "",
+        partNo: row.part_no
+          ? String(row.part_no)
+          : info?.partNo ?? "",
+        internalCode: null,
+        description: null,
+        defaultCoo: null,
+      },
+    },
+  };
+}
+
+// The measuring detail query selects no supplier/delivery/po columns on the
+// order and no allocations at all; those stay null/empty (API gaps).
+function toApiMeasuringPickingOrder(
+  order: RawRow,
+  items: RawRow[]
+): MeasuringPickingOrder {
+  const orderId = String(order.id);
+  return {
+    id: orderId,
+    refNo: order.ref_no ? String(order.ref_no) : null,
+    supplierId: null,
+    deliveryDate: null,
+    poNo: null,
+    requiredDateCodeNotice: null,
+    shipTo: order.ship_to ? String(order.ship_to) : null,
+    destinationCountry: order.destination_country
+      ? String(order.destination_country)
+      : null,
+    status: order.status as PickingOrderStatus,
+    createdAt: new Date(order.created_at),
+    updatedAt: new Date(order.updated_at),
+    supplier: null,
+    items: items.map((it) => ({
+      id: String(it.id),
+      pickingOrderId: orderId,
+      partId: String(it.part_id),
+      qty: Number(it.qty),
+      pickedQty: Number(it.picked_qty ?? 0),
+      requiredDateCode: null,
+      sourceShelfCode: null,
+      part: {
+        id: String(it.part_id),
+        partNo: String(it.part_no),
+        internalCode: null,
+        description: null,
+        defaultCoo: null,
+      },
+      allocations: [],
+    })),
+  };
+}
+
+// The API box row carries no picking_order_id/measuring_task_id; both are
+// derived from the owning task.
+function toApiMeasuringShippingBox(
+  row: RawRow,
+  orderId: string,
+  taskId: string,
+  partByItem: Map<string, MeasuringPartInfo>
+): MeasuringShippingBox {
+  return {
+    id: String(row.id),
+    pickingOrderId: orderId,
+    measuringTaskId: taskId,
+    status: row.status as BoxStatus,
+    grossWeight: gramsToKg(row.gross_weight_g),
+    netWeight: gramsToKg(row.net_weight_g),
+    destinationCountry: row.destination_country ?? null,
+    boxSize: row.box_size ?? null,
+    createdAt: new Date(row.created_at),
+    packages: ((row.packages ?? []) as RawRow[]).map((p) =>
+      toApiMeasuringPackage(p, partByItem)
+    ),
+  };
+}
+
+// Scan matching semantics ported from db/measuring.ts: empty values on either
+// side act as wildcards; codes fold common OCR confusables.
+const normalizeScanValue = (value: string | null | undefined) =>
+  (value ?? "").toString().trim().toUpperCase().replace(/\s+/g, " ");
+
+const normalizeScanCode = (value: string | null | undefined) =>
+  normalizeScanValue(value)
+    .replace(/O/g, "0")
+    .replace(/I/g, "1")
+    .replace(/L/g, "1")
+    .replace(/Z/g, "2")
+    .replace(/S/g, "5");
+
+// ------------------------------------------------------------------
+// Goods verify + stock search
+// ------------------------------------------------------------------
+
+// The API shelves table has no zone column (same gap as toShelf).
+function toShelfWithBoxCount(row: RawRow): ShelfWithBoxCount {
+  return {
+    code: String(row.code),
+    zone: row.zone ?? null,
+    boxCount: Number(row.box_count ?? 0),
+  };
+}
+
+function toGoodsVerifySummary(row: RawRow): GoodsVerifyShelfBoxSummary {
+  return {
+    id: String(row.id),
+    shelfCode: row.shelf_code ?? null,
+    status: row.status as BoxStatus,
+    itemCount: Number(row.item_count ?? 0),
+    verifiedCount: Number(row.verified_count ?? 0),
+    lastCheckAt: row.last_check_at ? new Date(row.last_check_at) : null,
+    checkedToday: Boolean(row.checked_today),
+  };
+}
+
+function toStockSupplierStats(row: RawRow): StockSearchSupplierWithStats {
+  return {
+    id: String(row.id),
+    code: String(row.code),
+    name: String(row.name),
+    totalParts: Number(row.total_parts ?? 0),
+    partsWithInventory: Number(row.parts_with_inventory ?? 0),
+  };
+}
+
+// The API parts table lacks internal_code/default_coo (API gap), so they
+// default to null unless a row happens to carry them.
+function toStockPart(row: RawRow): StockSearchPart {
+  return {
+    id: String(row.id),
+    partNo: String(row.part_no),
+    internalCode: row.internal_code ?? null,
+    description: row.description ?? null,
+    defaultCoo: row.default_coo ?? null,
+  };
+}
+
+function toStockLot(row: RawRow): StockSearchInventoryLot {
+  return {
+    partId: String(row.part_id),
+    dateCode: row.date_code ?? null,
+    lotCode: row.lot_code ?? null,
+    coo: row.coo ?? null,
+    cow: row.cow ?? null,
+    shelfCode: row.shelf_code ?? null,
+    boxId: row.box_id ?? null,
+    totalQty: Number(row.total_qty ?? 0),
+    allocatedQty: Number(row.allocated_qty ?? 0),
+    availableQty: Number(row.available_qty ?? 0),
+    locationLabel: String(row.location_label),
+  };
+}
+
 function toPickingOrderDetailBundle(bundle: RawRow): PickingOrderDetail {
   const order = (bundle.order ?? {}) as RawRow;
   const orderId = String(order.id);
@@ -418,10 +648,6 @@ export function createApiWarehouseService(
     baseUrl: options.apiBaseUrl ?? "",
     getActorId: options.getActorId,
   });
-
-  const notImplemented = async (): Promise<never> => {
-    throw new Error("not implemented");
-  };
 
   return {
     async getReceivingOrders(filter) {
@@ -791,21 +1017,247 @@ export function createApiWarehouseService(
     async cancelShelfBox(id) {
       await client.del(`/shelf-boxes/${id}`, { actor_id: client.actorId() });
     },
-    getMeasuringTasks: notImplemented,
-    getMeasuringTask: notImplemented,
-    getShippingBoxForMeasuring: notImplemented,
-    findMatchingUnverifiedPackage: notImplemented,
-    verifyPickingPackage: notImplemented,
-    updateShippingBox: notImplemented,
-    closeShippingBox: notImplemented,
-    completeMeasuringTask: notImplemented,
-    getShelvesWithBoxes: notImplemented,
-    getShelfBoxes: notImplemented,
-    getShelfBox: notImplemented,
-    verifyShelfBoxItem: notImplemented,
-    markShelfBoxVerified: notImplemented,
-    getSuppliersWithInventoryStats: notImplemented,
-    getPartsBySupplier: notImplemented,
-    getInventoryLotsForParts: notImplemented,
+    async getMeasuringTasks() {
+      // Mirrors pglite, which only lists pending tasks.
+      const rows = await client.get<RawRow[]>("/measuring-tasks", {
+        status: "pending",
+      });
+      return rows.map((row) => ({
+        id: String(row.id),
+        status: row.status as MeasuringTaskStatus,
+        pickingOrderId: String(row.picking_order_id),
+        pickingOrderRef: row.ref_no ? String(row.ref_no) : null,
+        // The list query has no supplier join (API gap).
+        supplierName: row.supplier_name ? String(row.supplier_name) : null,
+        totalItems: Number(row.total_items ?? 0),
+        packedItems: Number(row.packed_items ?? 0),
+      }));
+    },
+
+    async getMeasuringTask(id) {
+      const res = await client.get<RawRow>(`/measuring-tasks/${id}`);
+      const task = (res.task ?? {}) as RawRow;
+      const items = (res.items ?? []) as RawRow[];
+      const partByItem = measuringPartByItem(items);
+      const orderId = String(task.picking_order_id);
+      return {
+        id: String(task.id),
+        status: task.status as MeasuringTaskStatus,
+        pickingOrderId: orderId,
+        createdAt: new Date(task.created_at),
+        pickingOrder: res.order
+          ? toApiMeasuringPickingOrder(res.order as RawRow, items)
+          : null,
+        shippingBoxes: ((res.boxes ?? []) as RawRow[]).map((b) =>
+          toApiMeasuringShippingBox(b, orderId, String(task.id), partByItem)
+        ),
+      };
+    },
+
+    async getShippingBoxForMeasuring(id) {
+      const res = await client.get<RawRow>(
+        `/shipping-boxes/${id}/for-measuring`
+      );
+      const box = res.box as RawRow;
+      const task = res.task as RawRow | null;
+      // The for-measuring payload carries no part_id on packages; the
+      // measuring task detail's item rows do, so fetch it when a task exists.
+      const detail = task?.id
+        ? await client.get<RawRow>(`/measuring-tasks/${task.id}`)
+        : null;
+      const items = (detail?.items ?? []) as RawRow[];
+      const partByItem = measuringPartByItem(items);
+      return {
+        id: String(box.id),
+        pickingOrderId: box.picking_order_id
+          ? String(box.picking_order_id)
+          : null,
+        measuringTaskId: task ? String(task.id) : null,
+        status: box.status as BoxStatus,
+        grossWeight: gramsToKg(box.gross_weight_g),
+        netWeight: gramsToKg(box.net_weight_g),
+        destinationCountry: box.destination_country ?? null,
+        boxSize: box.box_size ?? null,
+        createdAt: new Date(box.created_at),
+        measuringTask:
+          task && detail
+            ? {
+                id: String(task.id),
+                status: task.status as MeasuringTaskStatus,
+                pickingOrder: detail.order
+                  ? toApiMeasuringPickingOrder(detail.order as RawRow, items)
+                  : null,
+              }
+            : null,
+        packages: ((res.packages ?? []) as RawRow[]).map((p) =>
+          toApiMeasuringPackage(p, partByItem)
+        ),
+      };
+    },
+
+    async findMatchingUnverifiedPackage(boxId, input, targetPackageId) {
+      // No dedicated endpoint: reuse the for-measuring payload and run the
+      // pglite match loop client-side (partId stays unresolved — API gap).
+      const res = await client.get<RawRow>(
+        `/shipping-boxes/${boxId}/for-measuring`
+      );
+      const rows = ((res.packages ?? []) as RawRow[]).filter(
+        (p) => !p.verified
+      );
+
+      const partNo = normalizeScanValue(input.partNo);
+      const dateCode = normalizeScanCode(input.dateCode);
+      const lotCode = normalizeScanCode(input.lotCode);
+      const coo = normalizeScanValue(input.coo);
+      const cow = normalizeScanValue(input.cow);
+
+      const matched =
+        rows.find((pkg) => {
+          if (targetPackageId && String(pkg.id) !== targetPackageId)
+            return false;
+          if (!pkg.part_no) return false;
+          if (normalizeScanValue(String(pkg.part_no)) !== partNo) return false;
+          const pkgDateCode = normalizeScanCode(pkg.date_code);
+          if (dateCode && pkgDateCode && dateCode !== pkgDateCode) return false;
+          const pkgLotCode = normalizeScanCode(pkg.lot_code);
+          if (lotCode && pkgLotCode && lotCode !== pkgLotCode) return false;
+          const pkgCoo = normalizeScanValue(pkg.coo);
+          if (coo && pkgCoo && coo !== pkgCoo) return false;
+          const pkgCow = normalizeScanValue(pkg.cow);
+          if (cow && pkgCow && cow !== pkgCow) return false;
+          return Number(pkg.qty) === input.qty;
+        }) ?? null;
+
+      return matched ? toApiMeasuringPackage(matched, new Map()) : null;
+    },
+
+    async verifyPickingPackage(packageId) {
+      await client.post(`/packages/${packageId}/verify`, {
+        actor_id: client.actorId(),
+      });
+    },
+
+    async updateShippingBox(id, fields) {
+      const body: Record<string, unknown> = {};
+      if ("grossWeight" in fields)
+        body.gross_weight_g = kgToGrams(fields.grossWeight);
+      if ("netWeight" in fields)
+        body.net_weight_g = kgToGrams(fields.netWeight);
+      if ("destinationCountry" in fields)
+        body.destination_country = normalizeString(fields.destinationCountry);
+      if ("boxSize" in fields) body.box_size = normalizeString(fields.boxSize);
+      // The route (PATCH /shipping-boxes/:id) takes no actor_id.
+      await client.patch(`/shipping-boxes/${id}`, body);
+    },
+
+    async closeShippingBox(id) {
+      await client.post(
+        withActorQuery(`/shipping-boxes/${id}/close`, client.actorId())
+      );
+    },
+
+    async completeMeasuringTask(id) {
+      await client.post(
+        withActorQuery(`/measuring-tasks/${id}/complete`, client.actorId())
+      );
+    },
+
+    async getShelvesWithBoxes() {
+      const rows = await client.get<RawRow[]>("/shelves/with-box-counts");
+      return rows.map(toShelfWithBoxCount);
+    },
+
+    async getShelfBoxes(shelfCode) {
+      const rows = await client.get<RawRow[]>(`/shelves/${shelfCode}/boxes`);
+      return rows.map(toGoodsVerifySummary);
+    },
+
+    async getShelfBox(id) {
+      const row = await client.get<RawRow>(`/shelf-boxes/${id}`);
+      const boxId = String(row.id);
+      const shelf = row.shelf as RawRow | null;
+      const receivingOrder = row.receiving_order as RawRow | null;
+      const detail: GoodsVerifyShelfBoxDetail = {
+        id: boxId,
+        receivingOrderId: row.receiving_order_id
+          ? String(row.receiving_order_id)
+          : null,
+        shelfCode: row.shelf_code ?? null,
+        status: row.status as BoxStatus,
+        createdAt: new Date(row.created_at),
+        shelf: shelf
+          ? { code: String(shelf.code), zone: shelf.zone ?? null }
+          : null,
+        receivingOrder: receivingOrder
+          ? {
+              id: String(receivingOrder.id),
+              refNo: String(receivingOrder.ref_no),
+            }
+          : null,
+        // Item rows are grouped per (box, part) with no id column; the id is
+        // synthesized exactly like db/goodsVerify.ts does.
+        items: ((row.items ?? []) as RawRow[]).map((it) => {
+          const partId = String(it.part_id);
+          return {
+            id: `${boxId}-${partId}`,
+            shelfBoxId: boxId,
+            partId,
+            qty: Number(it.qty ?? 0),
+            verified: Boolean(it.verified),
+            verifiedAt: it.verified_at ? new Date(it.verified_at) : null,
+            part: {
+              partNo: it.part_no ? String(it.part_no) : null,
+              description: it.description ? String(it.description) : null,
+            },
+          };
+        }),
+      };
+      return detail;
+    },
+
+    async verifyShelfBoxItem(shelfBoxId, partId) {
+      await client.post(`/shelf-boxes/${shelfBoxId}/verify-item`, {
+        part_id: partId,
+        actor_id: client.actorId(),
+      });
+    },
+
+    async markShelfBoxVerified(id) {
+      // The API has no direct box-verify route for shelf boxes; completing
+      // the box's pending cycle_count verification task marks it verified.
+      const tasks = await client.get<RawRow[]>("/verification-tasks", {
+        kind: "cycle_count",
+        status: "pending",
+      });
+      const task = tasks.find((t) => t.shelf_box_id === id);
+      if (!task) throw new I18nError("shelf_box_not_found");
+      await client.post(
+        withActorQuery(
+          `/verification-tasks/${task.id}/complete`,
+          client.actorId()
+        )
+      );
+    },
+
+    async getSuppliersWithInventoryStats() {
+      const rows = await client.get<RawRow[]>("/stock-search/suppliers");
+      return rows.map(toStockSupplierStats);
+    },
+
+    async getPartsBySupplier(supplierId) {
+      const rows = await client.get<RawRow[]>(
+        `/stock-search/suppliers/${supplierId}/parts`
+      );
+      return rows.map(toStockPart);
+    },
+
+    async getInventoryLotsForParts(partIds) {
+      // The route 400s on an empty part_ids param; pglite returns [].
+      if (partIds.length === 0) return [];
+      const rows = await client.get<RawRow[]>("/stock-search/parts/lots", {
+        part_ids: partIds.join(","),
+      });
+      return rows.map(toStockLot);
+    },
   };
 }
