@@ -595,7 +595,8 @@ export default {
     shelf_box_item_not_found: "找不到貨架箱號物品",
     shelf_box_already_verified: "貨架箱號已查貨",
     shelf_box_has_no_items: "貨架箱號沒有可查貨的物品",
-    not_all_shelf_box_items_verified: "並非所有貨架箱號物品都已查貨"
+    not_all_shelf_box_items_verified: "並非所有貨架箱號物品都已查貨",
+    network_error: "網絡錯誤，請檢查連接後重試。"
   },
   status: {
     receiving: {

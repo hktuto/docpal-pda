@@ -595,7 +595,8 @@ export default {
     shelf_box_item_not_found: "Shelf box item not found",
     shelf_box_already_verified: "Shelf box is already verified",
     shelf_box_has_no_items: "Shelf box has no items to verify",
-    not_all_shelf_box_items_verified: "Not all shelf box items are verified"
+    not_all_shelf_box_items_verified: "Not all shelf box items are verified",
+    network_error: "Network error. Please check your connection and try again."
   },
   status: {
     receiving: {

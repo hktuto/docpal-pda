@@ -595,7 +595,8 @@ export default {
     shelf_box_item_not_found: "未找到货架箱子物品",
     shelf_box_already_verified: "货架箱子已盘点",
     shelf_box_has_no_items: "货架箱子没有可盘点的物品",
-    not_all_shelf_box_items_verified: "并非所有货架箱子物品都已盘点"
+    not_all_shelf_box_items_verified: "并非所有货架箱子物品都已盘点",
+    network_error: "网络错误，请检查连接后重试。"
   },
   status: {
     receiving: {
