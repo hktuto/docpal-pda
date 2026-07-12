@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS users (
   role TEXT NOT NULL, name TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS suppliers (
   id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, qr_template TEXT,
+  qrcode_qty_encoding TEXT,
   created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS parts (
   id TEXT PRIMARY KEY, part_no TEXT NOT NULL, part_no_norm TEXT NOT NULL, description TEXT,
@@ -165,6 +166,7 @@ function ensureColumn(sqlite: DatabaseType, table: string, column: string, decl:
 export function createTables(sqlite: DatabaseType): void {
   ensureColumn(sqlite, "receiving_invoice_items", "line_no", "line_no INTEGER");
   ensureColumn(sqlite, "picking_items", "line_id", "line_id TEXT");
+  ensureColumn(sqlite, "suppliers", "qrcode_qty_encoding", "qrcode_qty_encoding TEXT");
   ensureColumn(sqlite, "shelf_boxes", "receiving_order_id", "receiving_order_id TEXT REFERENCES receiving_orders(id)");
   ensureColumn(sqlite, "shelf_boxes", "status", "status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','closed','verified'))");
   // The cycle-coalesce index became partial (pending-only). A stale dev.sqlite still

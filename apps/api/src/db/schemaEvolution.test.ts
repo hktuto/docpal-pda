@@ -34,6 +34,26 @@ test("createTables gives fresh + stale DBs the new shelf_boxes columns", () => {
   b.close();
 });
 
+test("createTables gives fresh + stale DBs the suppliers.qrcode_qty_encoding column", () => {
+  // fresh DB: column comes straight from the DDL
+  const a = freshDb();
+  createTables(a);
+  const colsA = (a.prepare("PRAGMA table_info(suppliers)").all() as any[]).map((c) => c.name);
+  assert.ok(colsA.includes("qrcode_qty_encoding"));
+  a.close();
+
+  // stale DB: pre-create the OLD suppliers shape + a row, then createTables must upgrade it
+  const b = freshDb();
+  b.exec(`CREATE TABLE suppliers (id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, qr_template TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+          INSERT INTO suppliers (id, code, name, created_at, updated_at) VALUES ('s1','S','Sup','0','0');`);
+  createTables(b);
+  const colsB = (b.prepare("PRAGMA table_info(suppliers)").all() as any[]).map((c) => c.name);
+  assert.ok(colsB.includes("qrcode_qty_encoding"));
+  // existing rows backfill NULL
+  assert.equal((b.prepare("SELECT qrcode_qty_encoding FROM suppliers WHERE id='s1'").get() as any).qrcode_qty_encoding, null);
+  b.close();
+});
+
 test("createTables upgrades the cycle-coalesce index to its partial form", () => {
   const sqlite = freshDb();
   createTables(sqlite);

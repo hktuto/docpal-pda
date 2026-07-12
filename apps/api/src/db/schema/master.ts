@@ -16,6 +16,7 @@ export const suppliers = sqliteTable("suppliers", {
   code: text("code").notNull().unique(),
   name: text("name").notNull(),
   qrTemplate: text("qr_template"),
+  qrcodeQtyEncoding: text("qrcode_qty_encoding"),
   createdAt: text("created_at").notNull().$defaultFn(now),
   updatedAt: text("updated_at").notNull().$defaultFn(now),
 });
