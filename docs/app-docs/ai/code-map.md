@@ -171,19 +171,23 @@ Page and component locations mapped to source files.
 - confirm-arrival runs `allocateAll` after the order flips to `in_hand`; a picking upsert runs `allocatePickingOrder` when the upsert changed data. Both are best-effort and never roll back the committed write.
 - The web pages under `pages/put-away/` and `pages/goods-verify/` still run on PGlite (`db/putAway.ts`, `db/goodsVerify.ts`); the API endpoints above are not wired to the frontend yet — that is a future frontend-migration plan.
 
-## Native Android (greenfield rewrite)
+## Native Android app (apps/android)
+
+The native rewrite lives in `apps/android` (package `com.docpal.warehousepda`);
+an earlier `native-android/` scaffold listed in older revisions of this page
+was superseded. Entry points:
 
 | Element | Source file |
 |---------|-------------|
-| MainActivity | `native-android/app/src/main/kotlin/com/docpal/warehouse/MainActivity.kt` |
-| Application | `native-android/app/src/main/kotlin/com/docpal/warehouse/WarehouseApplication.kt` |
-| Hilt module | `native-android/app/src/main/kotlin/com/docpal/warehouse/di/AppModule.kt` |
-| Database | `native-android/app/src/main/kotlin/com/docpal/warehouse/data/local/AppDatabase.kt` |
-| User entity | `native-android/app/src/main/kotlin/com/docpal/warehouse/data/local/entity/UserEntity.kt` |
-| User DAO | `native-android/app/src/main/kotlin/com/docpal/warehouse/data/local/dao/UserDao.kt` |
-| Seed loader | `native-android/app/src/main/kotlin/com/docpal/warehouse/data/local/seed/SeedLoader.kt` |
-| Auth repository | `native-android/app/src/main/kotlin/com/docpal/warehouse/data/repository/AuthRepository.kt` |
-| Login screen | `native-android/app/src/main/kotlin/com/docpal/warehouse/ui/screens/LoginScreen.kt` |
-| Home screen | `native-android/app/src/main/kotlin/com/docpal/warehouse/ui/screens/HomeScreen.kt` |
-| Navigation | `native-android/app/src/main/kotlin/com/docpal/warehouse/ui/navigation/AppNavigation.kt` |
-| Login ViewModel | `native-android/app/src/main/kotlin/com/docpal/warehouse/ui/viewmodel/LoginViewModel.kt` |
+| App entry / DI | `apps/android/app/src/main/java/com/docpal/warehousepda/App.kt`, `AppContainer.kt`, `MainActivity.kt` |
+| Navigation | `apps/android/.../ui/navigation/` |
+| Login / Home | `apps/android/.../ui/login/`, `apps/android/.../ui/home/` |
+| Receiving list + detail (items & picking tabs, dialogs, scan launchers) | `apps/android/.../ui/receiving/` |
+| Shared UI primitives | `apps/android/.../ui/components/` (`StatusBadge`, `EmptyState`, `DetailRow`, `ErrorText`, `OnResumeEffect`) |
+| Room DB, entities, DAOs | `apps/android/.../data/db/`; repositories in `apps/android/.../data/` + `apps/android/.../domain/` |
+| Scan pipeline | `apps/android/.../scanner/` (camera/OCR), `apps/android/.../domain/scan/` (parsers, matcher, wedge buffer), `ui/receiving/ScanLaunchers.kt` |
+| JVM tests | `apps/android/app/src/test/...` (Robolectric; fixtures in `DbTestSupport.kt`) |
+
+Full structure and conventions: root `AGENTS.md`, "Native Android app
+(apps/android)", and the "Phase 2 handoff notes" in
+`docs/superpowers/plans/2026-07-12-native-android-phase-1.md`.

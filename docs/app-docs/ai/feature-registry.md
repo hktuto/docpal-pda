@@ -57,14 +57,19 @@ Machine-readable index of features in the warehouse PDA demo. Use this page to l
 | Stock search API | — | Shipped | `GET /stock-search/suppliers`, `GET /stock-search/suppliers/:id/parts`, `GET /stock-search/parts/lots` in `apps/api/src/routes/stockSearch.ts` | [ai-scope](../flows/stock-search/ai-scope.md) |
 | Supplier QR templates API | Shared | Shipped | `GET /suppliers/qr-templates` in `apps/api/src/routes/suppliers.ts` | — |
 
-## Native Android (greenfield rewrite)
+## Native Android app (apps/android)
+
+The native rewrite lives in `apps/android` (Kotlin + Compose + Room, app id
+`com.docpal.warehousepda`) — an earlier `native-android/` scaffold listed in
+older revisions of this page was superseded.
 
 | Feature | Flow | Status | Key Files | Scope Doc |
 |---------|------|--------|-----------|-----------|
-| Native app scaffold | — | In Progress | `native-android/` Gradle project | [full-native spec](../../superpowers/specs/2026-07-09-full-native-android-design.md) |
-| Offline SQLite database | — | In Progress | `native-android/app/.../data/local/AppDatabase.kt`, `UserEntity`, `UserDao` | [full-native spec](../../superpowers/specs/2026-07-09-full-native-android-design.md) |
-| Native login | Auth | In Progress | `native-android/app/.../ui/screens/LoginScreen.kt`, `LoginViewModel`, `AuthRepository` | [full-native spec](../../superpowers/specs/2026-07-09-full-native-android-design.md) |
-| Native home menu | — | In Progress | `native-android/app/.../ui/screens/HomeScreen.kt` | [full-native spec](../../superpowers/specs/2026-07-09-full-native-android-design.md) |
+| Native Phase 1: login, home, receiving list/detail (items + picking tabs) | Receiving | Shipped (native) | `apps/android/app/src/main/java/com/docpal/warehousepda/` (`ui/login/`, `ui/home/`, `ui/receiving/`, `data/`, `domain/`) | [phase-1 plan](../../superpowers/plans/2026-07-12-native-android-phase-1.md) (see "Phase 2 handoff notes") |
+| Native scan pipeline (camera + hardware wedge, QR templates → OCR fallback → match → review dialog) | Picking / Receiving | Shipped (native) | `apps/android/.../scanner/`, `domain/scan/`, `ui/receiving/ScanLaunchers.kt`, `ui/receiving/LabelScanReviewDialog.kt` | [phase-1 plan](../../superpowers/plans/2026-07-12-native-android-phase-1.md) |
+
+Conventions (repository layer, ViewModel patterns, test setup): root `AGENTS.md`,
+"Native Android app (apps/android)" section.
 
 ## Status legend
 

@@ -4293,3 +4293,78 @@ git add -A && git commit -m "android phase1: docs + handoff notes"
 - [x] Error keys traced from web domain code to Task 12 string list.
 - [x] Every task has failing-test-first steps, exact commands, and a commit step.
 - [x] Type consistency: `AllocationDistributor.InvoiceItemRow` nullable sort fields used identically in Tasks 2, 3, 9, 10; entity class names verified against Phase 0 files; `LocalizedException(code, params)` extension scheduled in Task 1 and used consistently (`.code` accessor).
+
+---
+
+## Phase 2 handoff notes
+
+Phase 1 verification (2026-07-12): `./gradlew :app:testDebugUnitTest` — 138 tests,
+0 failures; `./gradlew :app:assembleDebug` and `:app:installDebug` — both
+BUILD SUCCESSFUL on device `MFM5PRE526010002`. Device smoke walk recorded below.
+
+### What Phase 2 reuses as-is
+
+- `PickingRepository` (`domain/PickingRepository.kt`) already ports
+  `scanAllocationToPackage`, `removeScannedPackage`, box ops
+  (create/cancel box, pack/unpack package, add-all-unboxed) and
+  `maybeAutoFinishPickingOrder` (auto-finish → measuring task). Phase 2 picking
+  detail screens call these directly.
+- `PickingDao` / `ScanDao` (`data/db/`) already carry the picking-tab and
+  scan-candidate queries.
+- UI primitives in `ui/components/`: `StatusBadge`, `DetailRow`, `ErrorText`
+  (including the `errorMessage(key)` string table), `EmptyState`,
+  `OnResumeEffect`.
+- The end-to-end scan pipeline: `ScanLaunchers` (camera / manual / wedge) →
+  `QrParser` (supplier QR templates) with `OcrLabelParser` fallback →
+  `ScanMatcher` → `applyOcrPick` → `LabelScanReviewDialog`.
+- Trilingual strings infrastructure (`res/values`, `values-zh-rHK`,
+  `values-zh-rCN` + `LocaleManager`) guarded by `StringsParityTest` — add new
+  user-facing strings to all three or the parity test fails.
+- ViewModel patterns: injected `io` dispatcher, race-safe `loadJob` reload,
+  `runAction` mutation serialization, `OnResumeEffect` refresh.
+
+### Known gaps / landmines
+
+- `removeScannedPackage` deliberately omits the `receiving_invoice_item` branch
+  (unreachable in current flows — re-evaluate when put-away/returns arrive).
+- `materializeReceivingAllocation` is ported but its usage points are Phase 2.
+- The put-away scans table is untouched until Phase 3.
+- Every `inventory_lot` write must keep `available_qty = total_qty - allocated_qty`.
+- Follow the factory-per-orderId pattern (`ReceivingDetailViewModel.provideFactory`)
+  for picking detail screens — do not introduce a shared singleton detail VM.
+- Hardware wedge: disabled while dialogs are open; TextFields live in dialog
+  windows so wedge keys never reach them; `BoxSelector` is `readOnly`.
+- `seed.sql` is regenerated non-deterministically by the export script (new
+  UUIDs every run) — tests must look ids up by business key, never hardcode
+  UUIDs (`ReceivingRepositoryTest.partIdOf` is the pattern).
+- `ScanFab` shows whenever the picking tab is loaded (the web additionally gates
+  on `in_hand && remaining > 0`).
+- Camera captures with an image try QR templates first before the OCR fallback
+  (the web goes straight to OCR when an image is present) — deliberate per the
+  Task 15 spec.
+- Minor deferred review nits: `ErrorText` uses `getIdentifier` (not shrink-safe
+  for release builds); duplicate `formatIsoDate` in `ReceivingListScreen` and
+  `ReceivingDetailScreen`; redundant dispatcher hops in the label-scan parser
+  factory; no double-tap guard on camera launch; `Calendar.getInstance()`
+  default-locale in the ISO-week code (`PickingRepository`) — consider
+  `Locale.US`.
+
+### Step 2 device walkthrough — verified vs deferred
+
+Device: `MFM5PRE526010002`, app installed via `:app:installDebug`, seeded DB.
+
+| Walkthrough step | Result |
+|------------------|--------|
+| Login ×3 locales | Verified. Logged in as `operator` / `DocPal2026!` in zh-HK; home overflow menu switches locale live — English and zh-CN confirmed on the home screen, then restored to zh-HK. (Login itself performed once, in zh-HK; the locale switcher is the same component on the login screen.) |
+| Receiving list: default in_hand filter, chips, search | Verified. Default `已收貨` (in_hand) chip selected, all four chips render and filter (pending chip shows EmptyState), order card with status badge + remaining/picking counts. Search field renders; text search itself not exercised (device IME duplicates `input text`, making scripted typing unreliable). |
+| Pending order → confirm arrived | Deferred — seed data has no pending receiving order (only one in_hand order), so confirm-arrived could not be exercised on device. Covered by unit tests (`ReceivingRepositoryTest` / allocation tests). |
+| Mismatch report + four-eyes confirm/cancel | Partially verified. `匯報問題` dialog opens from an item card (reason dropdown, remark field, cancel/confirm) and cancel dismisses it. Submit + four-eyes confirm/cancel deferred — four-eyes needs a second distinct user; covered by `MismatchRepository` unit tests. |
+| Clear transition via scans | Deferred — needs a full scan-consume cycle (see camera/hardware rows below); covered by unit tests. |
+| Camera scan → review dialog → find match → apply → box ops → auto-finish | Deferred — no printed supplier labels available and OCR/camera automation via adb is not practical. Picking tab itself verified (packages, line items with需求/已掃描/已裝箱, status badges, 掃描/顯示揀貨記錄 buttons, `ScanFab`, 手動輸入 entry point visible). |
+| Hardware wedge | Deferred — no paired HID scanner on the device. |
+
+Note: the web side-by-side comparison (`pnpm dev`) was not run — device-only
+smoke, per task scope. One device quirk worth knowing for future adb walks: the
+installed IME (Simeji) commits `adb shell input text` twice, so scripted text
+entry needs a select-all/delete retry loop or typed-value verification via
+screenshots.

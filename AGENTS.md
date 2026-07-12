@@ -79,6 +79,32 @@ after seed changes with `cd apps/web && pnpm export:android-seed`.
 The app id `com.docpal.warehousepda` installs side by side with the Capacitor
 `com.docpal.warehousedemo`.
 
+Phase 1 (login, home, receiving list/detail with items + picking tabs, end-to-end
+scan pipeline) is complete: 138 JVM tests green, debug APK builds and installs.
+Conventions inside `apps/android` (details in the Phase 1 plan's
+"Phase 2 handoff notes"):
+
+- **Layers:** `data/` holds Room (`data/db/`) plus suspend repositories that wrap
+  DAO calls in `withContext(Dispatchers.IO)`; `domain/` holds the pure/sync
+  business logic (`PickingRepository`, `MismatchRepository`, `AuthRepository`,
+  `AllocationDistributor` for allocation math) whose transition functions
+  self-wrap `db.runInTransaction`. Scan parsing/matching lives in `domain/scan/`.
+- **Screens:** `ui/login`, `ui/home`, `ui/receiving` (list + detail with items
+  and picking tabs, `LabelScanReviewDialog`, `ReportIssueDialog`).
+- **Scan entry points:** `ui/receiving/ScanLaunchers.kt` (camera / manual /
+  wedge), `HardwareKeyBuffer` (wedge key capture), `QrParser` with
+  `OcrLabelParser` fallback, then `ScanMatcher`.
+- **UI conventions:** reusables in `ui/components/` (`StatusBadge`, `EmptyState`,
+  `DetailRow`, `ErrorText`, `OnResumeEffect`). ViewModels take an injected `io`
+  dispatcher, reload through a race-safe `loadJob`, serialize mutations via
+  `runAction`, and detail screens use a per-orderId `provideFactory`
+  (`ReceivingDetailViewModel.provideFactory`).
+- **Tests:** Robolectric with `@Config(sdk=[34])` + `StandardTestDispatcher`;
+  Room fixtures use an in-memory DB seeded by `offMainThread` execSQL
+  (`app/src/test/.../DbTestSupport.kt`); repositories are faked via their source
+  interfaces. Never hardcode seed UUIDs — look ids up by business key
+  (`ReceivingRepositoryTest.partIdOf` is the pattern).
+
 ## Code conventions
 
 - Follow existing patterns. Make minimal, focused changes.
