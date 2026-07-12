@@ -41,6 +41,8 @@ abstract class AppDatabase : RoomDatabase() {
 
     abstract fun putAwayDao(): PutAwayDao
 
+    abstract fun goodsVerifyDao(): GoodsVerifyDao
+
     abstract fun scanDao(): ScanDao
 
     companion object {

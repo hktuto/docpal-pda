@@ -56,10 +56,12 @@ internal fun insertPutAwayScan(
     coo: String? = null,
     cow: String? = null,
     createdAt: Long = 1783779245783,
+    verified: Int = 0,
+    verifiedAt: Long? = null,
 ) {
     db.execSQL(
         "INSERT INTO put_away_scans (id, receiving_invoice_item_id, part_id, qty, date_code, lot_code, coo, cow, shelf_box_id, verified, verified_at, created_at) " +
-            "VALUES (${sqlQuote(id)}, ${sqlQuote(itemId)}, ${sqlQuote(partId)}, $qty, ${sqlQuote(dateCode)}, ${sqlQuote(lotCode)}, ${sqlQuote(coo)}, ${sqlQuote(cow)}, ${sqlQuote(shelfBoxId)}, 0, NULL, $createdAt)"
+            "VALUES (${sqlQuote(id)}, ${sqlQuote(itemId)}, ${sqlQuote(partId)}, $qty, ${sqlQuote(dateCode)}, ${sqlQuote(lotCode)}, ${sqlQuote(coo)}, ${sqlQuote(cow)}, ${sqlQuote(shelfBoxId)}, $verified, ${verifiedAt ?: "NULL"}, $createdAt)"
     )
 }
 
