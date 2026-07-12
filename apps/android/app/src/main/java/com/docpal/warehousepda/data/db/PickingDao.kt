@@ -14,14 +14,14 @@ interface PickingDao {
     @Query("SELECT * FROM picking_orders WHERE id = :id")
     fun pickingOrderById(id: String): PickingOrderEntity?
 
-    /** Picking list: all orders, finished sink last, then delivery_date; web pgliteWarehouse listOrders query. */
+    /** Picking list: all orders, finished sink last, then delivery_date (nulls last); web pgliteWarehouse listOrders query. */
     @Query(
         """
         SELECT po.id, po.ref_no, po.status, po.delivery_date, po.ship_to, s.name AS supplier_name,
           (SELECT COALESCE(SUM(pi.qty), 0) FROM picking_items pi WHERE pi.picking_order_id = po.id) AS total_qty
         FROM picking_orders po
         LEFT JOIN suppliers s ON po.supplier_id = s.id
-        ORDER BY CASE WHEN po.status = 'finished' THEN 1 ELSE 0 END, po.delivery_date
+        ORDER BY CASE WHEN po.status = 'finished' THEN 1 ELSE 0 END, (po.delivery_date IS NULL), po.delivery_date
         """
     )
     fun pickingOrderSummaryRows(): List<PickingOrderSummaryRow>
