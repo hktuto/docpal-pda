@@ -1,31 +1,43 @@
 # Agent Instructions
 
-This is a client-side Nuxt 3 proof-of-concept for warehouse mobile/Android flows. It runs a full Postgres database in the browser using PGlite, so the demo works without a backend.
+This is a pnpm monorepo proof-of-concept for warehouse mobile/Android flows: `apps/web` (Nuxt 3 client), `apps/api` (Hono API backed by better-sqlite3), and `packages/shared` (API request/response types used by both sides). The web app talks to the HTTP API by default through an adapter layer; the original in-browser PGlite database remains available behind a config flag for offline/demo use.
 
 ## Tech stack
 
-- **Framework:** Nuxt 3 (`ssr: false`)
+- **Workspace:** pnpm monorepo — `apps/web`, `apps/api`, `packages/shared`
+- **Web framework:** Nuxt 3 (`ssr: false`)
 - **UI:** Vue 3, plain CSS
 - **Mobile shell:** Capacitor (Android platform added)
-- **Database:** PGlite — WebAssembly build of Postgres running in the browser
-- **ORM:** Drizzle ORM with the `drizzle-orm/pglite` driver
-- **Persistence:** In-memory only. PGlite is initialized without a data directory in `plugins/pglite.client.ts`, so the database lives in the browser tab's memory and is re-seeded on every app launch.
-- **List pages:** Manual `db.execute` queries that reload on mount and when the app regains visibility (Capacitor does not support `useLiveQuery`).
+- **API:** Hono on Node, better-sqlite3 (file-backed `./dev.sqlite`, `DATABASE_URL` overridable), Drizzle ORM
+- **Data access (web):** Pages call `WarehouseService` / `AuthService` (`apps/web/services/warehouse.ts`, `services/auth.ts`) via `useWarehouse()` / `useAuth()`. The default adapter (`services/adapters/apiWarehouse.ts`, `apiAuth.ts`) speaks HTTP through `services/apiClient.ts`. The PGlite adapter (`services/adapters/pgliteWarehouse.ts`, `pgliteAuth.ts`) keeps the old in-browser Postgres path (Drizzle `drizzle-orm/pglite`, in-memory, re-seeded per launch); `plugins/pglite.client.ts` only starts PGlite when `warehouseAdapter === "pglite"`.
+- **Adapter switch:** `apps/web/nuxt.config.ts` — `warehouseAdapter: "api"` (default) or `"pglite"`, and `apiBaseUrl` (env-overridable via `NUXT_PUBLIC_API_BASE_URL`; Capacitor device builds need a LAN-reachable host — the API's CORS allows `http://localhost:3000` and `capacitor://localhost`).
+- **List pages:** Reload on mount and when the app regains visibility (Capacitor does not support `useLiveQuery`). In pglite mode these use manual `db.execute` queries; in api mode they go through `WarehouseService` → HTTP.
 
 ## Common commands
 
 ```bash
 pnpm install        # install dependencies
-pnpm dev            # start dev server
-pnpm nuxt prepare   # generate Nuxt types; run after schema/template changes
-pnpm build          # production build
-pnpm generate          # static export for Capacitor
-pnpm cap:sync          # copy web assets into native platforms
-pnpm cap:android       # generate, sync, and open Android project
-pnpm cap:android:dev   # sync Android to the running `pnpm dev` server for live reload
+pnpm --filter @warehouse/api dev     # start API dev server on :3001
+pnpm --filter @warehouse/api test    # API test suite (node:test)
+pnpm --filter @warehouse/api build   # API typecheck (tsc)
+pnpm --filter @warehouse/web dev     # start web dev server on :3000
+pnpm --filter @warehouse/web test    # web test suite (vitest)
+pnpm --filter @warehouse/web nuxt prepare   # generate Nuxt types; run after schema/template changes
+pnpm --filter @warehouse/web build   # production build
+pnpm --filter @warehouse/web generate     # static export for Capacitor
+pnpm --filter @warehouse/web cap:sync     # copy web assets into native platforms
+pnpm --filter @warehouse/web cap:android  # generate, sync, and open Android project
+pnpm --filter @warehouse/web cap:android:dev  # sync Android to the running web dev server for live reload
 ```
 
-For Android live reload, run `pnpm dev` in one terminal, then run `pnpm cap:android:dev` in another. The helper script finds your machine's LAN IP and points the Android WebView at `http://<ip>:3000`. Make sure the Android device and dev machine are on the same network.
+The web dev workflow needs TWO servers: `pnpm --filter @warehouse/api dev` (:3001) and `pnpm --filter @warehouse/web dev` (:3000). The web app talks to the API by default; with `warehouseAdapter: "pglite"` the API is not needed.
+
+For Android live reload, run the web dev server in one terminal, then run `pnpm --filter @warehouse/web cap:android:dev` in another. The helper script finds your machine's LAN IP and points the Android WebView at `http://<ip>:3000`. In api mode the device also needs to reach the API, so set `NUXT_PUBLIC_API_BASE_URL=http://<ip>:3001` when starting the web dev server. Make sure the Android device and dev machine are on the same network.
+
+### Demo reset
+
+- **API:** `POST /dev/reset` wipes the sqlite database and re-seeds it.
+- **Web:** the reset control in `components/AppHeader.vue` calls `warehouse.resetDemoData()`, which hits `POST /dev/reset` in api mode and re-seeds PGlite in pglite mode.
 
 ### Native Android build / install on a connected device
 
@@ -110,7 +122,7 @@ Conventions inside `apps/android` (details in the Phase 1 plan's
 - Follow existing patterns. Make minimal, focused changes.
 - Keep files small and single-responsibility.
 - Put database helpers in `db/` and Vue composables in `composables/`.
-- Use manual `db.execute` queries for list pages and reload on `onMounted` plus `visibilitychange`/`focus` events so Capacitor behaves correctly. Prefer the shared `useVisibleReload(load)` composable for this lifecycle wiring.
+- New data access goes through `WarehouseService` (`useWarehouse()`), which routes to the HTTP API or the PGlite adapter depending on `warehouseAdapter`. In pglite mode, use manual `db.execute` queries for list pages and reload on `onMounted` plus `visibilitychange`/`focus` events so Capacitor behaves correctly. Prefer the shared `useVisibleReload(load)` composable for this lifecycle wiring (both modes).
 - Use shared presentation primitives on detail pages: `DetailRow`, `ScanFab`, `EmptyState`, and composables `useStatusBadge`, `useLabelScanReview`. Status badges are rendered inline with `badgeClass` and `useStatusBadge` / `statusLabel` helpers. Keep page-specific sub-views in `components/<page>/`.
 - Inline raw SQL is acceptable for list queries when Drizzle relations are cumbersome.
 - Prefer explicit, readable names over clever abstractions.
@@ -167,9 +179,9 @@ When you add, remove, or significantly change a feature:
 
 ## Demo limitations to keep in mind
 
-- **No migrations.** The schema is created once from `db/init.ts` when the `users` table does not exist. Because the database is in-memory, schema changes take effect on the next app launch.
+- **PGlite adapter mode only — no migrations.** With `warehouseAdapter: "pglite"` the schema is created once from `db/init.ts` when the `users` table does not exist. Because that database is in-memory, schema changes take effect on the next app launch.
+- **PGlite adapter mode only — data is not persisted.** The in-memory database is re-seeded on every app launch, so each session starts fresh. In api mode data lives in the API's sqlite file and survives reloads; use `POST /dev/reset` to re-seed.
 - **Demo passwords only.** Passwords are stored as plain-text hashes in the seed file.
-- **Data is not persisted.** The in-memory database is re-seeded on every app launch, so each session starts fresh.
 - **Native scanning.** The Android native `RectangleDetection.scanLabel()` flow is still used for camera-based label capture where implemented.
 - **Capacitor web assets.** Run `pnpm generate` before `pnpm cap:sync` so the native apps receive the latest static build from `.output/public`. For dev live reload, use `pnpm cap:android:dev` instead.
 - **Android only.** iOS platform is not configured.

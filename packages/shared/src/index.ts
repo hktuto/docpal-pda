@@ -1,5 +1,7 @@
-// Shared cross-package types. DTOs from apps/web/services/types.ts will migrate
-// here in a later spec when the frontend `api` adapter is implemented.
+// Shared cross-package types: only the API request/response types actually used
+// by both apps/api and apps/web live here. The web app's DTOs stay in
+// apps/web/services/types.ts (relocation here was considered and rejected —
+// 34 importers would have to change for no functional gain).
 //
 // Consumed via type-only imports (e.g. `import type { HealthResponse } from
 // "@warehouse/shared"`), so this package ships its TypeScript source directly

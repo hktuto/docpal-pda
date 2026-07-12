@@ -6,8 +6,8 @@ Machine-readable index of features in the warehouse PDA demo. Use this page to l
 |---------|------|--------|-----------|-----------|
 | Picking list | Picking | Shipped | `pages/picking/index.vue` | [ai-scope](../flows/picking/ai-scope.md) |
 | Picking detail | Picking | Shipped | `pages/picking/[id].vue` or equivalent | [ai-scope](../flows/picking/ai-scope.md) |
-| OCR-assisted picking | Picking / Receiving | Shipped | `composables/useLabelScan.ts`, `composables/useScanMatchers.ts`, `db/ocrPicking.ts`, `components/LabelScanReviewModal.vue`, `utils/parseOcrScan.ts`, `components/CandidateChips.vue` | [ai-scope](../flows/picking/ai-scope.md) |
-| OCR scan candidate search | Picking / Receiving | Local-only | `composables/useScanMatchers.ts`, `db/ocrPicking.ts`, `composables/useDb.ts` | [useScanMatchers](../composables/useScanMatchers.md) |
+| OCR-assisted picking | Picking / Receiving | Shipped | `composables/useLabelScan.ts`, `composables/useScanMatchers.ts`, `services/warehouse.ts`, `components/LabelScanReviewModal.vue`, `utils/parseOcrScan.ts`, `components/CandidateChips.vue`; apply logic: `db/ocrPicking.ts` (pglite adapter) / `apps/api/src/db/ocrPick.ts` (api) | [ai-scope](../flows/picking/ai-scope.md) |
+| OCR scan candidate search | Picking / Receiving | Shipped | `composables/useScanMatchers.ts` → `WarehouseService.getScanCandidates` → `GET /receiving-orders/:id/scan-candidates` in `apps/api/src/routes/receiving.ts` (pglite adapter: `db/ocrPicking.ts`) | [useScanMatchers](../composables/useScanMatchers.md) |
 | Picking issue reporting | Picking | Shipped | `components/PickingIssueReportModal.vue`, `components/ReportIssueModal.vue` | [ai-scope](../flows/picking/ai-scope.md) |
 | Receiving list | Receiving | Shipped | `pages/receiving/index.vue` | [ai-scope](../flows/receiving/ai-scope.md) |
 | Receiving detail | Receiving | Shipped | `pages/receiving/[id].vue` or equivalent | [ai-scope](../flows/receiving/ai-scope.md) |
@@ -16,15 +16,18 @@ Machine-readable index of features in the warehouse PDA demo. Use this page to l
 | Put-away list | Put-away | Shipped | `pages/put-away/index.vue` | [ai-scope](../flows/put-away/ai-scope.md) |
 | Put-away detail | Put-away | Shipped | `pages/put-away/[id].vue`, `components/put-away/PutAwayLotsPanel.vue`, `components/put-away/ShelfBoxesPanel.vue` | [ai-scope](../flows/put-away/ai-scope.md) |
 | Shelf selection | Put-away | Shipped | `components/SelectShelfDialog.vue` | [ai-scope](../flows/put-away/ai-scope.md) |
-| Measuring list | Measuring | Shipped | `pages/measuring/index.vue`, `services/warehouse.ts`, `services/adapters/pgliteWarehouse.ts` | [ai-scope](../flows/measuring/ai-scope.md) |
-| Measuring detail | Measuring | Shipped | `pages/measuring/[id].vue`, `services/warehouse.ts`, `services/adapters/pgliteWarehouse.ts` | [ai-scope](../flows/measuring/ai-scope.md) |
-| Box measurements | Measuring | Shipped | `components/BoxMeasurementsModal.vue`, `services/warehouse.ts`, `services/adapters/pgliteWarehouse.ts`, `db/measuring.ts` | [ai-scope](../flows/measuring/ai-scope.md) |
+| Measuring list | Measuring | Shipped | `pages/measuring/index.vue`, `services/warehouse.ts`, `services/adapters/apiWarehouse.ts` / `pgliteWarehouse.ts` | [ai-scope](../flows/measuring/ai-scope.md) |
+| Measuring detail | Measuring | Shipped | `pages/measuring/[id].vue`, `services/warehouse.ts`, `services/adapters/apiWarehouse.ts` / `pgliteWarehouse.ts` | [ai-scope](../flows/measuring/ai-scope.md) |
+| Box measurements | Measuring | Shipped | `components/BoxMeasurementsModal.vue`, `services/warehouse.ts`, `services/adapters/apiWarehouse.ts` / `pgliteWarehouse.ts`, `db/measuring.ts` (pglite only) | [ai-scope](../flows/measuring/ai-scope.md) |
 | Goods verify list | Goods Verify | Shipped | `pages/goods-verify/index.vue` | [ai-scope](../flows/goods-verify/ai-scope.md) |
 | Goods verify detail | Goods Verify | Shipped | `pages/goods-verify/[id].vue` or equivalent | [ai-scope](../flows/goods-verify/ai-scope.md) |
 | Stock Search | — | Shipped | `pages/stock-search/index.vue`, `db/stockSearch.ts` | [ai-scope](../flows/stock-search/ai-scope.md) |
 | Login | Auth | Shipped | `pages/login.vue`, `composables/useAuth.ts` | [roles](../concepts/roles.md) |
 | Language switcher | Shared | Shipped | `components/LanguageSwitcher.vue`, `app.vue`, `i18n/` | [navigation](../concepts/navigation.md) |
 | Toast notifications | Shared | Shipped | `components/ToastHost.vue`, `composables/useToast.ts` | [picking ai-scope](../flows/picking/ai-scope.md) |
+| Service adapter layer | Shared | Shipped | `services/warehouse.ts` (`WarehouseService` interface), `services/auth.ts` (`AuthService`), `services/adapters/apiWarehouse.ts` + `apiAuth.ts` (HTTP impl, default), `services/adapters/pgliteWarehouse.ts` + `pgliteAuth.ts` (in-browser fallback), `services/apiClient.ts` (fetch wrapper), `services/types.ts` (web DTOs), `composables/useWarehouse.ts` (adapter switch via `warehouseAdapter` runtime config) | root `AGENTS.md` |
+
+Pages and components never query the database directly (except the pure `validateMismatchInputs` helper in `components/ReportIssueModal.vue`): they call `WarehouseService` / `AuthService`, which route to the HTTP API by default (`warehouseAdapter: "api"`) or to in-browser PGlite (`warehouseAdapter: "pglite"`). The `db/*.ts` helpers below are now exercised only by the PGlite adapter.
 
 ## Warehouse API (apps/api)
 
@@ -36,6 +39,7 @@ Machine-readable index of features in the warehouse PDA demo. Use this page to l
 | Picking execution — scan & undo-scan | Picking | Shipped | `POST /picking-orders/:id/scan`, `DELETE /picking-orders/:id/packages/:package_id` in `apps/api/src/routes/pickingExecution.ts`, `apps/api/src/db/pickScan.ts` | [ai-scope](../flows/picking/ai-scope.md) |
 | Picking execution — box & pack ops | Picking | Shipped | `POST /picking-orders/:id/boxes`, `POST /picking-orders/:id/boxes/:box_id/cancel`, `POST /picking-orders/:id/boxes/:box_id/packages`, `POST /picking-orders/:id/boxes/:box_id/add-all-unboxed`, `DELETE /picking-orders/:id/boxes/:box_id/packages/:package_id` in `apps/api/src/routes/pickingExecution.ts`, `apps/api/src/db/pickScan.ts`; packing the last package auto-finishes the order and creates a measuring task | [ai-scope](../flows/picking/ai-scope.md) |
 | Picking order finish | Picking | Shipped | `POST /picking-orders/:id/finish` in `apps/api/src/routes/pickingExecution.ts`, `apps/api/src/db/pickScan.ts` | [ai-scope](../flows/picking/ai-scope.md) |
+| Flat mutation routes (web adapter) | Picking / Measuring | Shipped | `POST /allocations/:id/scan`, `POST /packages/:id/add-to-box`, `DELETE /packages/:id`, `POST /packages/:id/verify`, `POST /shipping-boxes/:id/cancel?actor_id=` in `apps/api/src/routes/pickingExecution.ts` — used by `apps/web/services/adapters/apiWarehouse.ts` | [ai-scope](../flows/picking/ai-scope.md) |
 | Picking order list/detail API | Picking | Shipped | `GET /picking-orders`, `GET /picking-orders/:id` in `apps/api/src/routes/pickingExecution.ts` | [ai-scope](../flows/picking/ai-scope.md) |
 | Measuring task list/detail API | Measuring | Shipped | `GET /measuring-tasks` (with `total_items`/`packed_items` totals), `GET /measuring-tasks/:id` in `apps/api/src/routes/measuring.ts` | [ai-scope](../flows/measuring/ai-scope.md) |
 | Measuring task completion | Measuring | Shipped | `POST /measuring-tasks/:id/complete` in `apps/api/src/routes/measuring.ts`, `apps/api/src/db/measure.ts`; auto-creates a `pre_shipment` verification task | [ai-scope](../flows/measuring/ai-scope.md) |

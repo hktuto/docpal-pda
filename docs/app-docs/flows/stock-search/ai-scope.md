@@ -18,7 +18,7 @@
 ## Key files
 
 - `pages/stock-search/index.vue` — search page.
-- `db/stockSearch.ts` — query helpers.
+- `db/stockSearch.ts` — query helpers (pglite adapter only; api mode: `services/adapters/apiWarehouse.ts` → `GET /stock-search/*` in `apps/api/src/routes/stockSearch.ts`).
 - `pages/index.vue` — home menu card.
 
 ## Known limitations

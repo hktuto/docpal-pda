@@ -18,7 +18,7 @@
 ## Key files
 
 - `pages/goods-verify/` — list and detail pages.
-- `db/goodsVerify.ts` — goods verify DB helpers.
+- `db/goodsVerify.ts` — goods verify DB helpers (pglite adapter only; api mode: `apps/api/src/db/measure.ts` / `putAway.ts` behind the routes below).
 - `apps/api/src/routes/verification.ts` — `GET /verification-tasks` (filter by `kind`, `status`, `since`), `GET /verification-tasks/:id`, `POST /verification-tasks/:id/complete`.
 - `apps/api/src/routes/boxes.ts` — `POST /shipping-boxes/:id/verify`.
 - `apps/api/src/db/measure.ts` — `verifyShippingBox`, `completeVerificationTask` (both `pre_shipment` and `cycle_count` branches).
@@ -43,7 +43,6 @@
 
 - Verification is a simplified demo flow.
 - No image or signature capture.
-- No UI pages are wired to the API verification endpoints yet; they are exercised via HTTP only.
 - API: the `shelves` table has no `zone` column (unlike the web app), so shelf responses expose `code` only.
 - API: cycle-count box contents aggregate live from `put_away_scans`; the `shelf_box_items` table is intentionally unused (see [put-away ai-scope](../put-away/ai-scope.md)).
 

@@ -21,8 +21,9 @@
 - `pages/measuring/` — list and detail pages.
 - `components/BoxMeasurementsModal.vue` — measurement entry.
 - `services/warehouse.ts` — service interface.
-- `services/adapters/pgliteWarehouse.ts` — PGlite service implementation.
-- `db/measuring.ts` — measuring DB helpers (called only by the adapter).
+- `services/adapters/apiWarehouse.ts` — HTTP service implementation (default; calls `routes/measuring.ts` + `routes/boxes.ts` below).
+- `services/adapters/pgliteWarehouse.ts` — PGlite service implementation (fallback).
+- `db/measuring.ts` — measuring DB helpers (called only by the PGlite adapter).
 - `apps/api/src/db/pickScan.ts` — `maybeAutoFinishPickingOrder` creates the measuring task: when a pack/bulk-pack/finish leaves every picking item fully boxed, the order flips to `finished` and a `measuring_tasks` row is inserted with `ON CONFLICT (picking_order_id) DO NOTHING` (at most one task per picking order).
 - `apps/api/src/routes/measuring.ts` — `GET /measuring-tasks` list/polling endpoint (filter by `status`, `since`; includes `total_items`/`packed_items` totals), `GET /measuring-tasks/:id` detail, and `POST /measuring-tasks/:id/complete`.
 - `apps/api/src/routes/boxes.ts`, `apps/api/src/db/measure.ts` — measuring execution now lives in the API: `GET /shipping-boxes/:id/for-measuring`, `POST /shipping-boxes/:id/verify-package`, `PATCH /shipping-boxes/:id` (measurements), `POST /shipping-boxes/:id/close`.

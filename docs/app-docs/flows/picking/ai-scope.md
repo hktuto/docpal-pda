@@ -23,9 +23,9 @@
 - `composables/useLabelScan.ts` — label parsing.
 - `composables/useScanMatchers.ts` — matching logic.
 - `composables/useMockOcr.ts` — OCR normalization demo.
-- `db/picking.ts` — picking DB helpers.
-- `db/ocrPicking.ts` — OCR-assisted picking apply logic.
-- `db/allocate.ts` — allocation creation.
+- `db/picking.ts` — picking DB helpers (pglite adapter only; in api mode the equivalent logic is `apps/api/src/db/pickScan.ts` behind `routes/pickingExecution.ts`).
+- `db/ocrPicking.ts` — OCR-assisted picking apply logic (pglite adapter only; api mode: `apps/api/src/db/ocrPick.ts`).
+- `db/allocate.ts` — allocation creation (pglite adapter only; api mode: `apps/api/src/db/allocate.ts`).
 - `apps/api/src/routes/picking.ts` — admin ingestion endpoint `PUT /picking-orders/:external_id`.
 - `apps/api/src/ingest/picking.ts` (with `ingest/parts.ts`) — idempotent order upsert; a changed upsert triggers `allocatePickingOrder` in `apps/api/src/db/allocate.ts` to allocate available received stock.
 - `apps/api/src/routes/pickingExecution.ts` — operator picking-execution API: `POST /picking-orders/:id/scan`, `DELETE /picking-orders/:id/packages/:package_id` (undo-scan), `POST /picking-orders/:id/boxes` (+ `:box_id/cancel`, `:box_id/packages`, `:box_id/add-all-unboxed`, `DELETE :box_id/packages/:package_id`), `POST /picking-orders/:id/finish`, and the `GET /picking-orders` / `GET /picking-orders/:id` list/detail reads.
@@ -37,9 +37,9 @@
 
 - Typed input simulates scanning; the Android native `RectangleDetection.scanLabel()` path is used in some camera flows but not all.
 - Matching depends on normalized text and may require manual review.
-- No backend validation; all logic runs client-side in PGlite.
+- In the default api mode all mutations run in the Hono API (validated server-side); only the `warehouseAdapter: "pglite"` fallback runs everything client-side in PGlite with no backend validation.
 - The admin payload field names for the ingestion endpoints are currently PROPOSED (`external_id` on the order, receiving lines keyed by `invoice_no` + `line_no`, picking lines keyed by `line_id`) — to be reconciled with the real admin app.
-- OCR scan candidate search (`findReceivingCandidates` / `findPickingCandidates`) is intentionally local-only in `composables/useScanMatchers.ts`; it is not exposed through `WarehouseService` and has no API equivalent.
+- OCR scan candidate search (`findReceivingCandidates` / `findPickingCandidates` in `composables/useScanMatchers.ts`) goes through `WarehouseService.getScanCandidates` → `GET /receiving-orders/:id/scan-candidates` in api mode; the pglite adapter serves the same data locally.
 - Receiving-order allocations may display a "Box IDs" remark when the underlying invoice items record `box_id` values. This is informational only and does not restrict scanning.
 
 ## Related specs/plans

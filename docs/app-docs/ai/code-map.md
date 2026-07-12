@@ -57,6 +57,23 @@ Page and component locations mapped to source files.
 | Put-away lots panel | `components/put-away/PutAwayLotsPanel.vue` |
 | Shelf boxes panel | `components/put-away/ShelfBoxesPanel.vue` |
 
+## Service layer (web data access)
+
+Pages go through `WarehouseService` / `AuthService`, never the database directly.
+The adapter is selected by `warehouseAdapter` in `nuxt.config.ts` (`"api"` default,
+`"pglite"` for offline/demo); `apiBaseUrl` is env-overridable via
+`NUXT_PUBLIC_API_BASE_URL`.
+
+| Element | Source file |
+|---------|-------------|
+| `WarehouseService` interface + `createWarehouseService` | `services/warehouse.ts` |
+| `AuthService` interface | `services/auth.ts` |
+| Web DTOs | `services/types.ts` |
+| HTTP adapter (default) | `services/adapters/apiWarehouse.ts`, `services/adapters/apiAuth.ts` |
+| PGlite adapter (in-browser fallback) | `services/adapters/pgliteWarehouse.ts`, `services/adapters/pgliteAuth.ts` |
+| HTTP fetch wrapper (error mapping to `I18nError`/`ApiError`) | `services/apiClient.ts` |
+| Composable entry point | `composables/useWarehouse.ts` |
+
 ## Scan / OCR flow
 
 | Component / helper | Source file |
@@ -72,9 +89,13 @@ Page and component locations mapped to source files.
 
 - `composables/useLabelScan.ts` — orchestrates native scan; in browsers falls back to `window.prompt()` + JSON.
 - `composables/useLabelScan.ts` — validates prompt JSON and converts it to `LabelScanCapture` in browser fallback mode.
-- `composables/useScanMatchers.ts` — candidate search reads (`findReceivingCandidates`, `findPickingCandidates`) use `useDb()` and `db/ocrPicking.ts` directly; only the matched write actions go through `WarehouseService`.
+- `composables/useScanMatchers.ts` — candidate search (`findReceivingCandidates`, `findPickingCandidates`) goes through `WarehouseService.getScanCandidates` → `GET /receiving-orders/:id/scan-candidates` in api mode (pglite adapter: `db/ocrPicking.ts`); the matched write actions also go through `WarehouseService`.
 
 ## Database helpers
+
+These `db/*.ts` helpers are called only by the PGlite adapter
+(`services/adapters/pgliteWarehouse.ts`); in the default api mode the equivalent
+logic lives in `apps/api/src/db/*.ts` behind the routes below.
 
 | Helper | Source file |
 |--------|-------------|
@@ -108,6 +129,11 @@ Page and component locations mapped to source files.
 | `POST /picking-orders/:id/boxes/:box_id/add-all-unboxed` | `apps/api/src/routes/pickingExecution.ts` |
 | `DELETE /picking-orders/:id/boxes/:box_id/packages/:package_id` | `apps/api/src/routes/pickingExecution.ts` |
 | `POST /picking-orders/:id/finish` | `apps/api/src/routes/pickingExecution.ts` |
+| `POST /allocations/:id/scan` | `apps/api/src/routes/pickingExecution.ts` |
+| `POST /packages/:id/add-to-box` | `apps/api/src/routes/pickingExecution.ts` |
+| `DELETE /packages/:id` | `apps/api/src/routes/pickingExecution.ts` |
+| `POST /packages/:id/verify` | `apps/api/src/routes/pickingExecution.ts` |
+| `POST /shipping-boxes/:id/cancel?actor_id=` | `apps/api/src/routes/pickingExecution.ts` |
 | `GET /picking-orders`, `GET /picking-orders/:id` | `apps/api/src/routes/pickingExecution.ts` |
 | `GET /measuring-tasks` (with `total_items`/`packed_items` totals), `GET /measuring-tasks/:id` | `apps/api/src/routes/measuring.ts` |
 | `POST /measuring-tasks/:id/complete` | `apps/api/src/routes/measuring.ts` |
@@ -169,7 +195,7 @@ Page and component locations mapped to source files.
 
 - Server entry: `apps/api/src/server.ts`; app wiring: `apps/api/src/index.ts`; DB bootstrap: `apps/api/src/db.ts`.
 - confirm-arrival runs `allocateAll` after the order flips to `in_hand`; a picking upsert runs `allocatePickingOrder` when the upsert changed data. Both are best-effort and never roll back the committed write.
-- The web pages under `pages/put-away/` and `pages/goods-verify/` still run on PGlite (`db/putAway.ts`, `db/goodsVerify.ts`); the API endpoints above are not wired to the frontend yet — that is a future frontend-migration plan.
+- All web pages (including `pages/put-away/` and `pages/goods-verify/`) go through `WarehouseService` → these HTTP endpoints by default (`warehouseAdapter: "api"`); the PGlite adapter path (`db/*.ts`) remains behind `warehouseAdapter: "pglite"`.
 
 ## Native Android app (apps/android)
 
