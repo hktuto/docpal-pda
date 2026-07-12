@@ -196,7 +196,7 @@ export function cancelShippingBox(tx: DbOrTx, a: { shippingBoxId: string; actorI
   const box = tx.get<{ id: string; status: string; pickingOrderId: string }>(
     sql`SELECT id, status, picking_order_id AS pickingOrderId FROM shipping_boxes WHERE id = ${a.shippingBoxId}`
   );
-  if (!box) throw new HTTPException(404, { message: "box not found" });
+  if (!box) throw new HTTPException(404, { message: "shipping box not found" });
   if (box.status !== "open") throw new HTTPException(409, { message: "box is not open" });
   const used = tx.get<{ c: number }>(sql`SELECT COUNT(*) AS c FROM picking_packages WHERE shipping_box_id = ${box.id}`)!;
   if (used.c > 0) throw new HTTPException(409, { message: "box is not empty" });
@@ -242,7 +242,7 @@ function loadBoxForPack(tx: DbOrTx, boxId: string): { id: string; status: string
   const box = tx.get<{ id: string; status: string; pickingOrderId: string }>(
     sql`SELECT id, status, picking_order_id AS pickingOrderId FROM shipping_boxes WHERE id = ${boxId}`
   );
-  if (!box) throw new HTTPException(404, { message: "box not found" });
+  if (!box) throw new HTTPException(404, { message: "shipping box not found" });
   if (box.status !== "open") throw new HTTPException(409, { message: "box is not open" });
   return box;
 }

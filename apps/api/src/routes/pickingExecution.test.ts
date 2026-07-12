@@ -281,6 +281,7 @@ test("POST /shipping-boxes/:id/cancel deletes an empty open box; 404 unknown", a
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}),
   });
   assert.equal(miss.status, 404);
+  assert.match(await miss.text(), /shipping box not found/);
 });
 
 test("cleanup", () => { sqlite.close(); });
