@@ -12,6 +12,7 @@ import com.docpal.warehousepda.domain.Allocator
 import com.docpal.warehousepda.domain.AuthRepository
 import com.docpal.warehousepda.domain.DefaultAuthRepository
 import com.docpal.warehousepda.domain.MismatchRepository
+import com.docpal.warehousepda.domain.PickingRepository
 import com.docpal.warehousepda.domain.scan.ScanMatcher
 import com.docpal.warehousepda.ui.home.HomeViewModel
 import com.docpal.warehousepda.ui.login.LoginViewModel
@@ -34,6 +35,8 @@ class AppContainer(context: Context) {
     val receivingRepository: ReceivingRepository by lazy { ReceivingRepository(db, allocator) }
 
     val mismatchRepository: MismatchRepository by lazy { MismatchRepository(db, receivingRepository) }
+
+    val pickingRepository: PickingRepository by lazy { PickingRepository(db, receivingRepository) }
 
     val scanRepository: ScanRepository by lazy { ScanRepository(db) }
 
