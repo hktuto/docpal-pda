@@ -47,7 +47,8 @@ class ScanMatcher(
     )
 
     sealed class PickingMatchResult {
-        data class Single(val allocation: PinnedAllocation) : PickingMatchResult()
+        /** qty is the validated scan quantity from parseManual. */
+        data class Single(val allocation: PinnedAllocation, val qty: Int) : PickingMatchResult()
         data class Error(val key: String) : PickingMatchResult()
     }
 
@@ -93,7 +94,10 @@ class ScanMatcher(
         }
     }
 
-    /** Port of useScanMatchers.matchPicking: validates parsed fields against a pinned allocation. */
+    /**
+     * Port of useScanMatchers.matchPicking: validates parsed fields against a pinned allocation.
+     * On success, Single carries the validated scan quantity (qty) alongside the allocation.
+     */
     fun matchPicking(
         allocation: PinnedAllocation?,
         parsed: ScanPrimitives.OcrInput,
@@ -109,7 +113,7 @@ class ScanMatcher(
         if (p.partNo != allocation.partNo) return PickingMatchResult.Error("scanned_part_does_not_match_allocation")
         if (allocation.allocationQty <= 0) return PickingMatchResult.Error("invalid_allocation")
         if (p.qty > allocation.allocationQty) return PickingMatchResult.Error("qty_exceeds_allocated")
-        return PickingMatchResult.Single(allocation)
+        return PickingMatchResult.Single(allocation, p.qty)
     }
 
     /**

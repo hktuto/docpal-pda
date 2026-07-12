@@ -25,7 +25,14 @@ class MatchPickingTest {
     @Test
     fun `single when fields match pin`() {
         val result = matcher().matchPicking(pin, input(), "user-1")
-        assertEquals(ScanMatcher.PickingMatchResult.Single(pin), result)
+        assertEquals(ScanMatcher.PickingMatchResult.Single(pin, 4), result)
+    }
+
+    @Test
+    fun `invalid allocation when allocation qty is zero`() {
+        val zeroPin = ScanMatcher.PinnedAllocation("alloc-1", "pi-1", "IC-LM358DR", 0, 0, null)
+        val result = matcher().matchPicking(zeroPin, input(), "user-1")
+        assertEquals(ScanMatcher.PickingMatchResult.Error("invalid_allocation"), result)
     }
 
     @Test
@@ -63,6 +70,14 @@ class MatchPickingTest {
         val full = ScanMatcher.PinnedAllocation("alloc-1", "pi-1", "IC-LM358DR", 10, 10, null)
         val room = ScanMatcher.PinnedAllocation("alloc-2", "pi-2", "IC-LM358DR", 10, 0, null)
         val result = matcher().findMatchingAllocation(input(), listOf(full, room))
+        assertEquals(room, result)
+    }
+
+    @Test
+    fun `findMatchingAllocation skips zero-qty allocations`() {
+        val zero = ScanMatcher.PinnedAllocation("alloc-1", "pi-1", "IC-LM358DR", 0, 0, null)
+        val room = ScanMatcher.PinnedAllocation("alloc-2", "pi-2", "IC-LM358DR", 10, 0, null)
+        val result = matcher().findMatchingAllocation(input(), listOf(zero, room))
         assertEquals(room, result)
     }
 
