@@ -11,7 +11,7 @@ import org.junit.Test
 /**
  * Case-by-case port of the `parseAndIdentify` describe block in
  * apps/web/tests/parseOcrScan.test.ts (17 cases). The `decodeKoaQty` (4) and
- * `parseQrCapture` (7) cases are not ported here — they live in QrParserTest
+ * `parseQrCapture` (8) cases are not ported here — they live in QrParserTest
  * (QrParser.parseQrCapture returns null on no template match instead of
  * falling back internally, so the fallback cases don't apply to this parser).
  */

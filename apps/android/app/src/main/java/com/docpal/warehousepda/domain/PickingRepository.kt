@@ -13,6 +13,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.util.Calendar
+import java.util.Locale
 import java.util.UUID
 
 /**
@@ -543,11 +544,11 @@ class PickingRepository(
      * Port of web getLocationBoxIdPrefix: "{prefix}-{locationCode}-{isoWeek:02}{year%100:02}".
      * java.time IsoFields needs API 26 and this app has no coreLibraryDesugaring (minSdk 24),
      * so the ISO week comes from java.util.Calendar configured for ISO-8601 (Monday first,
-     * minimal 4 days in first week). Like the web, the year is the calendar year, not the
-     * week-based year.
+     * minimal 4 days in first week). Locale.US is pinned so week fields don't depend on the
+     * device locale. Like the web, the year is the calendar year, not the week-based year.
      */
     private fun locationBoxIdPrefix(prefix: String, locationCode: String): String {
-        val cal = Calendar.getInstance().apply {
+        val cal = Calendar.getInstance(Locale.US).apply {
             firstDayOfWeek = Calendar.MONDAY
             minimalDaysInFirstWeek = 4
         }

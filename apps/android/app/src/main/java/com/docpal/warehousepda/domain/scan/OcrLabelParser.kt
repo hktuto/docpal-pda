@@ -185,7 +185,7 @@ object OcrLabelParser {
         }
 
         // Fallback: any token that looks like a part number
-        val tokens = normalizedText.split(Regex("[^A-Z0-9\\-]+"))
+        val tokens = normalizedText.split(NON_PART_TOKEN_SPLIT)
         for (token in tokens) {
             if (looksLikePartNumber(token)) {
                 candidates.add(stripSupplierPrefixes(token))
@@ -193,7 +193,7 @@ object OcrLabelParser {
         }
 
         // Also try joining adjacent short tokens that may have been split (e.g. 'RK73H1ETTP 1001F')
-        val words = normalizedText.split(Regex("\\s+"))
+        val words = normalizedText.split(WHITESPACE_SPLIT)
         for (i in 0 until words.size - 1) {
             val joined = words[i] + words[i + 1]
             if (looksLikePartNumber(joined)) {
@@ -346,7 +346,7 @@ object OcrLabelParser {
         }
 
         // Fallback: alphanumeric tokens that are not substrings of the matched part number
-        val tokens = normalizedText.split(Regex("[^A-Z0-9\\-]+"))
+        val tokens = normalizedText.split(NON_PART_TOKEN_SPLIT)
         for (token in tokens) {
             val cleaned = collapseSpaces(token)
             if (cleaned.length in 4..30 &&
@@ -518,4 +518,7 @@ object OcrLabelParser {
             raw = raw,
         )
     }
+
+    private val NON_PART_TOKEN_SPLIT = Regex("[^A-Z0-9\\-]+")
+    private val WHITESPACE_SPLIT = Regex("\\s+")
 }

@@ -181,6 +181,37 @@ class AllocatorDbTest {
     }
 
     @Test
+    fun `allocation after confirm arrival splits across receiving orders in FIFO delivery-date order`() = runBlocking {
+        insertPendingReceivingOrder(RECV_ORDER, RECV_INVOICE, refNo = "TEST-FIFO-01", deliveryDate = 1783612800000)
+        insertReceivingItem(RECV_ITEM_1, RECV_INVOICE, PART_1, qty = 100)
+        insertPendingReceivingOrder(RECV_ORDER_2, RECV_INVOICE_2, refNo = "TEST-FIFO-02", deliveryDate = 1783699200000)
+        insertReceivingItem(RECV_ITEM_3, RECV_INVOICE_2, PART_1, qty = 100)
+        repo.confirmArrived(RECV_ORDER, ACTOR)
+        repo.confirmArrived(RECV_ORDER_2, ACTOR)
+        insertPendingPickingOrder(PICK_ORDER)
+        insertPickingItem(PICK_ITEM_1, PICK_ORDER, PART_1, qty = 150)
+
+        allocator.allocatePickingOrder(PICK_ORDER)
+
+        // Need 150: earlier delivery date fills first (100), remainder (50) spills to the later order.
+        assertEquals(
+            1,
+            intQuery(
+                "SELECT COUNT(*) FROM allocations WHERE picking_item_id = '$PICK_ITEM_1' " +
+                    "AND receiving_order_id = '$RECV_ORDER' AND qty = 100"
+            ),
+        )
+        assertEquals(
+            1,
+            intQuery(
+                "SELECT COUNT(*) FROM allocations WHERE picking_item_id = '$PICK_ITEM_1' " +
+                    "AND receiving_order_id = '$RECV_ORDER_2' AND qty = 50"
+            ),
+        )
+        assertEquals(150, intQuery("SELECT allocated_qty FROM picking_items WHERE id = '$PICK_ITEM_1'"))
+    }
+
+    @Test
     fun `allocation is silent-partial and idempotent`() = runBlocking {
         insertPendingPickingOrder(PICK_ORDER)
         insertPickingItem(PICK_ITEM_1, PICK_ORDER, PART_1, qty = 50)
@@ -213,10 +244,13 @@ class AllocatorDbTest {
         }
     }
 
-    private fun insertPendingReceivingOrder(orderId: String, invoiceId: String) {
+    private fun insertPendingReceivingOrder(
+        orderId: String, invoiceId: String,
+        refNo: String = "TEST-ARRIVE-01", deliveryDate: Long = 1783612800000,
+    ) {
         exec(
             "INSERT INTO receiving_orders (id, ref_no, supplier_id, delivery_date, status, arrived_at, arrived_by, created_at, updated_at) " +
-                "VALUES ('$orderId', 'TEST-ARRIVE-01', NULL, 1783612800000, 'pending', NULL, NULL, 1783779245783, 1783779245783)"
+                "VALUES ('$orderId', '$refNo', NULL, $deliveryDate, 'pending', NULL, NULL, 1783779245783, 1783779245783)"
         )
         exec(
             "INSERT INTO receiving_invoices (id, receiving_order_id, invoice_no, supplier_id) " +
@@ -268,6 +302,9 @@ class AllocatorDbTest {
         private const val RECV_INVOICE = "aaaaaaaa-0000-0000-0000-000000000002"
         private const val RECV_ITEM_1 = "aaaaaaaa-0000-0000-0000-000000000003"
         private const val RECV_ITEM_2 = "aaaaaaaa-0000-0000-0000-000000000004"
+        private const val RECV_ORDER_2 = "aaaaaaaa-0000-0000-0000-000000000005"
+        private const val RECV_INVOICE_2 = "aaaaaaaa-0000-0000-0000-000000000006"
+        private const val RECV_ITEM_3 = "aaaaaaaa-0000-0000-0000-000000000007"
 
         private const val PICK_ORDER = "bbbbbbbb-0000-0000-0000-000000000010"
         private const val PICK_ITEM_1 = "bbbbbbbb-0000-0000-0000-000000000011"

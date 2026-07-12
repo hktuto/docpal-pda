@@ -29,6 +29,8 @@ interface PickingDao {
     )
     fun locatedLotsForPart(partId: String): List<InventoryLotEntity>
 
+    // SQLite evaluates all SET expressions against the pre-update row, so the RHS
+    // allocated_qty is the old value: available_qty is recomputed as total minus the NEW allocated total.
     @Query("UPDATE inventory_lots SET allocated_qty = allocated_qty + :qty, available_qty = total_qty - (allocated_qty + :qty) WHERE id = :lotId")
     fun increaseLotAllocated(lotId: String, qty: Int)
 

@@ -96,7 +96,11 @@ class NamedGroupRegex private constructor(
         if (!matcher.find()) return null
         val result = HashMap<String, String>()
         names.forEachIndexed { index, name ->
-            if (name != null) result[name] = matcher.group(index + 1)
+            if (name == null) return@forEachIndexed
+            // An optional group that didn't participate returns null; store it as
+            // absent (callers treat missing keys as "not captured"), never as null.
+            val value = matcher.group(index + 1) ?: return@forEachIndexed
+            result[name] = value
         }
         return result
     }

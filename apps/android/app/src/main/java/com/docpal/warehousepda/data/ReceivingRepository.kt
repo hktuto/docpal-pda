@@ -22,7 +22,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.UUID
 
-/** Read model + clear/in-hand transitions for receiving orders. Mirrors the web adapter + db/receiving.ts. */
+/**
+ * Read model + clear/in-hand transitions for receiving orders. Mirrors the web adapter + db/receiving.ts.
+ * Threading: every suspend entry point wraps its DAO work in `withContext(Dispatchers.IO)`;
+ * the DAOs themselves are plain blocking Room calls.
+ */
 class ReceivingRepository(private val db: AppDatabase, private val allocator: Allocator) : ReceivingListSource, ReceivingDetailSource {
 
     private val dao get() = db.receivingDao()
