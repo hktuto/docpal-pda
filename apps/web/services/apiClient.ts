@@ -20,7 +20,9 @@ export class ApiError extends Error {
 const ERROR_KEY_MAP: Record<string, string> = {
   "shipping box not found": "shipping_box_not_found",
   "shelf box not found": "shelf_box_not_found",
+  "shelf not found": "shelf_not_found",
   "receiving order not found": "receiving_order_not_found",
+  "receiving order is not in_hand": "receiving_order_not_in_hand",
   "picking order not found": "picking_order_not_found",
   "measuring task not found": "measuring_task_not_found",
   "box is not open": "box_is_not_open",
