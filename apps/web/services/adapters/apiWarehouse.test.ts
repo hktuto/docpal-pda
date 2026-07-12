@@ -561,3 +561,537 @@ describe('createApiWarehouseService (receiving)', () => {
     });
   });
 });
+
+const PICKING_LIST_ROWS = [
+  {
+    id: 'po1',
+    ref_no: 'PO-001',
+    status: 'picking',
+    ship_to: 'Berlin',
+    total_qty: 9,
+  },
+  {
+    id: 'po2',
+    ref_no: 'PO-002',
+    status: 'finished',
+    ship_to: null,
+    total_qty: 0,
+  },
+];
+
+const PICKING_ORDER_BUNDLE = {
+  order: {
+    id: 'po1',
+    external_id: 'ext-1',
+    ref_no: 'PO-001',
+    status: 'picking',
+    ship_to: 'Berlin',
+    destination_country: 'DE',
+    created_at: '2026-07-01T00:00:00.000Z',
+    updated_at: '2026-07-06T00:00:00.000Z',
+    issue_reason: 'insufficient_stock',
+    issue_note: 'short on shelf',
+    issue_qty: 3,
+    issue_pack_size: null,
+    issue_remark: 'check A1',
+    issue_reported_at: '2026-07-06T08:00:00.000Z',
+    issue_reported_by: 'u9',
+    issue_reported_by_name: 'Operator Nine',
+  },
+  measuring_task: { id: 'mt1', status: 'pending' },
+  items: [
+    {
+      id: 'pi1',
+      part_id: 'p1',
+      part_no: 'PN-1',
+      qty: 5,
+      picked_qty: 1,
+      scanned_not_boxed_qty: 0,
+      remaining_qty: 4,
+      allocated_qty: 4,
+      line_id: 'L1',
+      required_date_code: 'D-req',
+      source_shelf_code: 'A1',
+    },
+  ],
+  allocations: [
+    {
+      id: 'al1',
+      picking_item_id: 'pi1',
+      qty: 4,
+      remark: 'alloc note',
+      inventory_lot_id: 'lot1',
+      receiving_order_id: 'ro1',
+      receiving_order_ref_no: 'RO-001',
+      lot: {
+        id: 'lot1',
+        part_id: 'p1',
+        shelf_code: 'A1',
+        box_id: null,
+        date_code: 'D1',
+        lot_code: 'LOT1',
+        coo: 'CN',
+        cow: null,
+        date_code_norm: 'd1',
+        lot_code_norm: 'lot1',
+        coo_norm: 'cn',
+        cow_norm: null,
+      },
+      receiving_items: [
+        {
+          receiving_invoice_item_id: 'rii1',
+          qty: 4,
+          invoice_no: 'INV-1',
+          box_id: null,
+          date_code_norm: 'd1',
+          lot_code_norm: 'lot1',
+          coo_norm: 'cn',
+          cow_norm: null,
+        },
+      ],
+    },
+  ],
+  packages: [
+    {
+      id: 'pkg1',
+      picking_item_id: 'pi1',
+      source_type: 'scan',
+      source_id: null,
+      qty: 1,
+      shipping_box_id: 'box1',
+      date_code: 'D1',
+      lot_code: 'LOT1',
+      coo: 'CN',
+      cow: null,
+      verified: 0,
+      created_at: '2026-07-03T00:00:00.000Z',
+    },
+  ],
+  boxes: [
+    {
+      id: 'box1',
+      status: 'open',
+      box_size: null,
+      net_weight_g: null,
+      gross_weight_g: null,
+      destination_country: null,
+      created_at: '2026-07-02T00:00:00.000Z',
+      updated_at: '2026-07-02T00:00:00.000Z',
+    },
+  ],
+};
+
+const PLAIN_ORDER_BUNDLE = {
+  order: {
+    id: 'po2',
+    ref_no: 'PO-002',
+    status: 'pending',
+    ship_to: null,
+    destination_country: null,
+    issue_reason: null,
+    issue_note: null,
+    issue_qty: null,
+    issue_pack_size: null,
+    issue_remark: null,
+    issue_reported_at: null,
+    issue_reported_by: null,
+    issue_reported_by_name: null,
+  },
+  measuring_task: null,
+  items: [],
+  allocations: [],
+  packages: [],
+  boxes: [],
+};
+
+describe('createApiWarehouseService (picking)', () => {
+  const fetchMock = vi.fn();
+
+  function createService(): WarehouseService {
+    return createApiWarehouseService({
+      adapter: 'api',
+      apiBaseUrl: 'http://api.test',
+      getActorId: () => ACTOR_ID,
+    });
+  }
+
+  function routeFetch(routes: Record<string, unknown>): void {
+    fetchMock.mockImplementation((url: string) => {
+      for (const [path, data] of Object.entries(routes)) {
+        if (url === `http://api.test${path}`) {
+          return Promise.resolve(jsonResponse(data));
+        }
+      }
+      return Promise.resolve(jsonResponse({}, 404));
+    });
+  }
+
+  function lastBody(): unknown {
+    const [, init] = fetchMock.mock.calls[fetchMock.mock.calls.length - 1] ?? [];
+    return init?.body ? JSON.parse(String(init.body)) : undefined;
+  }
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  describe('getPickingOrders', () => {
+    it('gets the list and maps rows (supplierName/deliveryDate are API gaps)', async () => {
+      fetchMock.mockResolvedValue(jsonResponse(PICKING_LIST_ROWS));
+
+      const rows = await createService().getPickingOrders();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://api.test/picking-orders',
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(rows).toEqual([
+        {
+          id: 'po1',
+          refNo: 'PO-001',
+          status: 'picking',
+          deliveryDate: null,
+          supplierName: null,
+          shipTo: 'Berlin',
+          totalQty: 9,
+        },
+        {
+          id: 'po2',
+          refNo: 'PO-002',
+          status: 'finished',
+          deliveryDate: null,
+          supplierName: null,
+          shipTo: null,
+          totalQty: 0,
+        },
+      ]);
+    });
+  });
+
+  describe('getPickingOrder', () => {
+    it('maps the composed bundle into the detail shape', async () => {
+      fetchMock.mockResolvedValue(jsonResponse(PICKING_ORDER_BUNDLE));
+
+      const detail = await createService().getPickingOrder('po1');
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://api.test/picking-orders/po1',
+        expect.objectContaining({ method: 'GET' })
+      );
+
+      expect(detail.id).toBe('po1');
+      expect(detail.refNo).toBe('PO-001');
+      expect(detail.status).toBe('picking');
+      expect(detail.shipTo).toBe('Berlin');
+      expect(detail.destinationCountry).toBe('DE');
+      // API bundle gaps: no delivery_date/supplier/po_no/date-code notice.
+      expect(detail.deliveryDate).toBeNull();
+      expect(detail.supplier).toBeNull();
+      expect(detail.poNo).toBeNull();
+      expect(detail.requiredDateCodeNotice).toBeNull();
+
+      expect(detail.issueReason).toBe('insufficient_stock');
+      expect(detail.issueQty).toBe(3);
+      expect(detail.issuePackSize).toBeNull();
+      expect(detail.issueNote).toBe('short on shelf');
+      expect(detail.issueRemark).toBe('check A1');
+      expect(detail.issueReportedAt).toEqual(new Date('2026-07-06T08:00:00.000Z'));
+      expect(detail.issueReportedBy).toBe('u9');
+      expect(detail.issueReportedByUser).toEqual({ displayName: 'Operator Nine' });
+
+      expect(detail.measuringTask).toEqual({ id: 'mt1', status: 'pending' });
+
+      expect(detail.items).toHaveLength(1);
+      const item = detail.items[0];
+      expect(item).toMatchObject({
+        id: 'pi1',
+        pickingOrderId: 'po1',
+        partId: 'p1',
+        qty: 5,
+        pickedQty: 1,
+        allocatedQty: 4,
+        requiredDateCode: 'D-req',
+        sourceShelfCode: 'A1',
+      });
+      expect(item.part).toEqual({
+        id: 'p1',
+        partNo: 'PN-1',
+        internalCode: null,
+        description: null,
+        defaultCoo: null,
+      });
+
+      expect(item.allocations).toHaveLength(1);
+      expect(item.allocations[0]).toEqual({
+        id: 'al1',
+        pickingItemId: 'pi1',
+        qty: 4,
+        remark: 'alloc note',
+        inventoryLot: {
+          id: 'lot1',
+          partId: 'p1',
+          dateCode: 'D1',
+          lotCode: 'LOT1',
+          coo: 'CN',
+          cow: null,
+          shelfCode: 'A1',
+          boxId: null,
+        },
+        receivingOrder: { id: 'ro1', refNo: 'RO-001' },
+        pickingItem: {
+          id: 'pi1',
+          part: {
+            id: 'p1',
+            partNo: 'PN-1',
+            internalCode: null,
+            description: null,
+            defaultCoo: null,
+          },
+        },
+      });
+
+      const expectedPackage = {
+        id: 'pkg1',
+        pickingItemId: 'pi1',
+        pickingOrderId: 'po1',
+        qty: 1,
+        shippingBoxId: 'box1',
+        dateCode: 'D1',
+        lotCode: 'LOT1',
+        coo: 'CN',
+        cow: null,
+        createdAt: new Date('2026-07-03T00:00:00.000Z'),
+      };
+      expect(item.packages).toEqual([expectedPackage]);
+
+      expect(detail.shippingBoxes).toEqual([
+        {
+          id: 'box1',
+          pickingOrderId: 'po1',
+          status: 'open',
+          packages: [expectedPackage],
+        },
+      ]);
+    });
+
+    it('maps the null cases on a plain order', async () => {
+      fetchMock.mockResolvedValue(jsonResponse(PLAIN_ORDER_BUNDLE));
+
+      const detail = await createService().getPickingOrder('po2');
+
+      expect(detail.measuringTask).toBeNull();
+      expect(detail.issueReason).toBeNull();
+      expect(detail.issueReportedAt).toBeNull();
+      expect(detail.issueReportedBy).toBeNull();
+      expect(detail.issueReportedByUser).toBeNull();
+      expect(detail.items).toEqual([]);
+      expect(detail.shippingBoxes).toEqual([]);
+    });
+  });
+
+  describe('scanAllocation', () => {
+    it('posts qty + actor_id and returns the first package id', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ package_ids: ['pkg9', 'pkg10'] }));
+
+      const packageId = await createService().scanAllocation('al1', 2);
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://api.test/allocations/al1/scan',
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(lastBody()).toEqual({ qty: 2, actor_id: ACTOR_ID });
+      expect(packageId).toBe('pkg9');
+    });
+
+    it('returns an empty string when no package ids come back', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ package_ids: [] }));
+
+      await expect(createService().scanAllocation('al1', 1)).resolves.toBe('');
+    });
+  });
+
+  describe('applyOcrPick', () => {
+    it('posts to the picking-orders ocr-pick route with the receiving order id', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ package_ids: ['pkg1'] }));
+
+      await expect(
+        createService().applyOcrPick({
+          receivingOrderId: 'ro1',
+          pickingItemId: 'pi1',
+          qty: 5,
+          dateCode: 'D1',
+          lotCode: 'L1',
+          coo: 'CN',
+          cow: null,
+        })
+      ).resolves.toBeUndefined();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://api.test/picking-orders/ro1/ocr-pick',
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(lastBody()).toEqual({
+        picking_item_id: 'pi1',
+        qty: 5,
+        date_code: 'D1',
+        lot_code: 'L1',
+        coo: 'CN',
+        cow: null,
+        actor_id: ACTOR_ID,
+      });
+    });
+  });
+
+  describe('box/package mutations', () => {
+    it('addPackageToBox posts {box_id, actor_id}', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+
+      await expect(
+        createService().addPackageToBox('pkg1', 'box1')
+      ).resolves.toBeUndefined();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://api.test/packages/pkg1/add-to-box',
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(lastBody()).toEqual({ box_id: 'box1', actor_id: ACTOR_ID });
+    });
+
+    it('removePackageFromBox and removeScannedPackage both DELETE with actor_id query', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+      const service = createService();
+
+      await expect(service.removePackageFromBox('pkg1')).resolves.toBeUndefined();
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        `http://api.test/packages/pkg1?actor_id=${ACTOR_ID}`,
+        expect.objectContaining({ method: 'DELETE' })
+      );
+
+      await expect(service.removeScannedPackage('pkg2')).resolves.toBeUndefined();
+      expect(fetchMock).toHaveBeenLastCalledWith(
+        `http://api.test/packages/pkg2?actor_id=${ACTOR_ID}`,
+        expect.objectContaining({ method: 'DELETE' })
+      );
+    });
+
+    it('createShippingBoxForPickingOrder posts actor_id to the boxes route', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ id: 'box2' }, 201));
+
+      await expect(
+        createService().createShippingBoxForPickingOrder('po1')
+      ).resolves.toBeUndefined();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://api.test/picking-orders/po1/boxes',
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(lastBody()).toEqual({ actor_id: ACTOR_ID });
+    });
+
+    it('addAllUnboxedPackagesToBox resolves the order via the box then posts', async () => {
+      routeFetch({
+        '/shipping-boxes/box1/for-measuring': {
+          box: { id: 'box1', picking_order_id: 'po1', status: 'open' },
+          order: { id: 'po1' },
+          task: null,
+          packages: [],
+        },
+        [`/picking-orders/po1/boxes/box1/add-all-unboxed?actor_id=${ACTOR_ID}`]: {
+          packed: 3,
+        },
+      });
+
+      const packed = await createService().addAllUnboxedPackagesToBox('box1');
+
+      expect(packed).toBe(3);
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        1,
+        'http://api.test/shipping-boxes/box1/for-measuring',
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        2,
+        `http://api.test/picking-orders/po1/boxes/box1/add-all-unboxed?actor_id=${ACTOR_ID}`,
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(lastBody()).toBeUndefined();
+    });
+
+    it('cancelShippingBox posts with actor_id in the query and no body', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+
+      await expect(createService().cancelShippingBox('box1')).resolves.toBeUndefined();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        `http://api.test/shipping-boxes/box1/cancel?actor_id=${ACTOR_ID}`,
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(lastBody()).toBeUndefined();
+    });
+
+    it('finishPickingOrder posts with actor_id in the query and no body', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+
+      await expect(createService().finishPickingOrder('po1')).resolves.toBeUndefined();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        `http://api.test/picking-orders/po1/finish?actor_id=${ACTOR_ID}`,
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(lastBody()).toBeUndefined();
+    });
+  });
+
+  describe('reportPickingOrderIssues', () => {
+    it('posts picking_order_ids with a collapsed remark and maps id arrays to counts', async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse({ reported: ['po1'], skipped: ['po2'] })
+      );
+
+      const result = await createService().reportPickingOrderIssues(
+        [
+          { orderId: 'po1', remark: 'short stock' },
+          { orderId: 'po2', remark: null },
+        ],
+        { reason: 'insufficient_stock', qty: 3, packSize: null, note: 'ignored' }
+      );
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://api.test/picking-orders/report-issues',
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(lastBody()).toEqual({
+        picking_order_ids: ['po1', 'po2'],
+        reason: 'insufficient_stock',
+        qty: 3,
+        pack_size: null,
+        remark: 'short stock',
+        actor_id: ACTOR_ID,
+      });
+      expect(result).toEqual({ reported: 1, skipped: 1 });
+    });
+
+    it('sends a null remark when no entry has one', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ reported: [], skipped: [] }));
+
+      await createService().reportPickingOrderIssues(
+        [{ orderId: 'po1' }],
+        { reason: 'other' }
+      );
+
+      expect(lastBody()).toEqual({
+        picking_order_ids: ['po1'],
+        reason: 'other',
+        qty: null,
+        pack_size: null,
+        remark: null,
+        actor_id: ACTOR_ID,
+      });
+    });
+  });
+});
