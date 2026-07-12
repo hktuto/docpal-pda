@@ -30,6 +30,13 @@ export interface PickingPutBody { order: PickingPutOrder; items: PickingPutItem[
 export interface IngestUpsertResponse { id: string; external_id: string; created: boolean; changed: boolean; }
 export interface ConfirmArrivalResponse { id: string; status: "in_hand"; }
 export interface ScanResponse { package_ids: string[]; }
+// date_code/lot_code/coo/cow come from the client's OCR parse but are informational
+// only — allocation is FIFO and never filtered by them (matches the web behavior).
+export interface ApplyOcrPickRequest {
+  picking_item_id: string; qty: number;
+  date_code?: string | null; lot_code?: string | null; coo?: string | null; cow?: string | null;
+  actor_id?: string | null;
+}
 export interface ApiErrorBody { error: string; }
 
 // --- Receiving-item mismatch rules -------------------------------------------------

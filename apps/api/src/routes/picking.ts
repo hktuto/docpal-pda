@@ -1,10 +1,11 @@
 import { Hono, type Context } from "hono";
 import { HTTPException } from "hono/http-exception";
-import type { IngestUpsertResponse, PickingPutBody } from "@warehouse/shared";
+import type { ApplyOcrPickRequest, IngestUpsertResponse, PickingPutBody, ScanResponse } from "@warehouse/shared";
 import { db } from "../db.js";
 import { upsertPickingOrder } from "../ingest/picking.js";
 import { allocatePickingOrder } from "../db/allocate.js";
 import { reportPickingOrderIssues, type PickingIssueReason } from "../db/pickingIssues.js";
+import { applyOcrPick } from "../db/ocrPick.js";
 
 export const pickingRoute = new Hono();
 
@@ -70,4 +71,23 @@ pickingRoute.post("/picking-orders/report-issues", async (c) => {
     })
   );
   return c.json(result, 200);
+});
+
+// NOTE: :id is the RECEIVING order id here (the scan targets a picking item but
+// sources from this receiving order), matching the web's applyOcrPick signature.
+pickingRoute.post("/picking-orders/:id/ocr-pick", async (c) => {
+  const receivingOrderId = c.req.param("id");
+  const body = await readJson<ApplyOcrPickRequest>(c);
+  if (typeof body.picking_item_id !== "string" || body.picking_item_id.trim() === "") {
+    throw new HTTPException(400, { message: "picking_item_id is required" });
+  }
+  const result = db.transaction((tx) =>
+    applyOcrPick(tx, receivingOrderId, {
+      pickingItemId: body.picking_item_id,
+      qty: body.qty,
+      actorId: body.actor_id ?? null,
+    })
+  );
+  const res: ScanResponse = { package_ids: result.packageIds };
+  return c.json(res, 200);
 });
