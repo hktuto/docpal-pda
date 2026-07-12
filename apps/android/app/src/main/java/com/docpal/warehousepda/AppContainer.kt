@@ -16,6 +16,7 @@ import com.docpal.warehousepda.domain.PickingRepository
 import com.docpal.warehousepda.domain.scan.ScanMatcher
 import com.docpal.warehousepda.ui.home.HomeViewModel
 import com.docpal.warehousepda.ui.login.LoginViewModel
+import com.docpal.warehousepda.ui.picking.PickingListViewModel
 import com.docpal.warehousepda.ui.receiving.ReceivingListViewModel
 
 /** Manual DI container. Created once in [App]; Compose screens obtain ViewModels via [viewModelFactory]. */
@@ -57,6 +58,8 @@ class AppContainer(context: Context) {
                 HomeViewModel(sessionRepository) as T
             modelClass.isAssignableFrom(ReceivingListViewModel::class.java) ->
                 ReceivingListViewModel(receivingRepository) as T
+            modelClass.isAssignableFrom(PickingListViewModel::class.java) ->
+                PickingListViewModel(pickingRepository, sessionRepository) as T
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }
     }

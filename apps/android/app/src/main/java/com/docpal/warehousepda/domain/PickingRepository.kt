@@ -17,6 +17,7 @@ import com.docpal.warehousepda.domain.model.PickingItemLogEntry
 import com.docpal.warehousepda.domain.model.PickingOrderDetail
 import com.docpal.warehousepda.domain.model.PickingOrderSummary
 import com.docpal.warehousepda.domain.model.PickingPackageDetail
+import com.docpal.warehousepda.ui.picking.PickingListSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -37,13 +38,13 @@ import java.util.UUID
 class PickingRepository(
     private val db: AppDatabase,
     private val receivingRepository: ReceivingRepository,
-) {
+) : PickingListSource {
 
     private val pickingDao get() = db.pickingDao()
     private val receivingDao get() = db.receivingDao()
 
     /** Picking list (web pgliteWarehouse listOrders): all orders, finished last, with item qty totals. */
-    suspend fun listOrders(): List<PickingOrderSummary> = withContext(Dispatchers.IO) {
+    override suspend fun listOrders(): List<PickingOrderSummary> = withContext(Dispatchers.IO) {
         pickingDao.pickingOrderSummaryRows().map {
             PickingOrderSummary(
                 id = it.id,
@@ -156,6 +157,13 @@ class PickingRepository(
             emptyList()
         }
     }
+
+    /** PickingListSource entry point — delegates to [reportPickingOrderIssues]. */
+    override suspend fun reportIssues(
+        entries: List<Pair<String, String?>>,
+        input: PickingIssueInput,
+        actorId: String,
+    ): Pair<Int, Int> = reportPickingOrderIssues(entries, input, actorId)
 
     /**
      * Port of web reportPickingOrderIssues (picking.ts): batch-mark pending/picking orders as

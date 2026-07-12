@@ -83,7 +83,7 @@ fun HomeScreen(
 
     val cards = listOf(
         MenuCard(R.string.menu_receiving_title, R.string.menu_receiving_desc, Color(0xFF00BFA5), Routes.RECEIVING_LIST),
-        MenuCard(R.string.menu_picking_title, R.string.menu_picking_desc, Color(0xFF3B82F6)),
+        MenuCard(R.string.menu_picking_title, R.string.menu_picking_desc, Color(0xFF3B82F6), Routes.PICKING_LIST),
         MenuCard(R.string.menu_put_away_title, R.string.menu_put_away_desc, Color(0xFFF59E0B)),
         MenuCard(R.string.menu_goods_verify_title, R.string.menu_goods_verify_desc, Color(0xFF10B981)),
         MenuCard(R.string.menu_measuring_title, R.string.menu_measuring_desc, Color(0xFF8B5CF6)),
