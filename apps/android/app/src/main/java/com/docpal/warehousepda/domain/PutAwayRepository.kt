@@ -16,6 +16,7 @@ import com.docpal.warehousepda.domain.model.PutAwayLotDetail
 import com.docpal.warehousepda.domain.model.PutAwayOrderHeader
 import com.docpal.warehousepda.domain.model.PutAwayScanDetail
 import com.docpal.warehousepda.domain.model.ShelfOption
+import com.docpal.warehousepda.ui.putaway.PutAwayListSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -39,12 +40,12 @@ import java.util.UUID
 class PutAwayRepository(
     private val db: AppDatabase,
     private val receivingRepository: ReceivingRepository,
-) {
+) : PutAwayListSource {
 
     private val putAwayDao get() = db.putAwayDao()
     private val receivingDao get() = db.receivingDao()
 
-    suspend fun listCandidates(): List<PutAwayCandidate> = withContext(Dispatchers.IO) {
+    override suspend fun listCandidates(): List<PutAwayCandidate> = withContext(Dispatchers.IO) {
         putAwayDao.inHandOrderRows().mapNotNull { row ->
             val itemRows = receivingDao.detailItemRows(row.id)
             val availability = ReceivingAvailability.byItem(receivingDao, row.id, itemRows, row.deliveryDate)

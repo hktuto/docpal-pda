@@ -1,5 +1,6 @@
 package com.docpal.warehousepda.ui.navigation
 
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -10,6 +11,7 @@ import com.docpal.warehousepda.ui.home.HomeScreen
 import com.docpal.warehousepda.ui.login.LoginScreen
 import com.docpal.warehousepda.ui.picking.PickingDetailScreen
 import com.docpal.warehousepda.ui.picking.PickingListScreen
+import com.docpal.warehousepda.ui.putaway.PutAwayListScreen
 import com.docpal.warehousepda.ui.receiving.ReceivingDetailScreen
 import com.docpal.warehousepda.ui.receiving.ReceivingListScreen
 
@@ -22,6 +24,9 @@ object Routes {
     const val PICKING_LIST = "picking"
     const val PICKING_DETAIL = "picking/{orderId}"
     fun pickingDetail(orderId: String) = "picking/$orderId"
+    const val PUT_AWAY_LIST = "put-away"
+    const val PUT_AWAY_DETAIL = "put-away/{orderId}"
+    fun putAwayDetail(orderId: String) = "put-away/$orderId"
 }
 
 @Composable
@@ -74,6 +79,19 @@ fun AppNav() {
         ) { entry ->
             val orderId = requireNotNull(entry.arguments?.getString("orderId")) { "orderId argument is required" }
             PickingDetailScreen(orderId = orderId, onBack = { navController.popBackStack() })
+        }
+        composable(Routes.PUT_AWAY_LIST) {
+            PutAwayListScreen(
+                onOrderClick = { navController.navigate(Routes.putAwayDetail(it)) },
+            )
+        }
+        composable(
+            Routes.PUT_AWAY_DETAIL,
+            arguments = listOf(navArgument("orderId") { type = NavType.StringType }),
+        ) { entry ->
+            val orderId = requireNotNull(entry.arguments?.getString("orderId")) { "orderId argument is required" }
+            // Placeholder — the real detail screen lands in Task 9.
+            Text("put-away/$orderId")
         }
     }
 }
