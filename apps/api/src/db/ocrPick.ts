@@ -53,21 +53,34 @@ export function applyOcrPick(
   if (req.qty > item.remainingQty)
     throw new HTTPException(409, { message: "qty exceeds the remaining picking need" });
 
-  // Part-level availability: Σ maintained rii.available_qty in the RO minus unboxed
-  // put-away scans (same subquery shape as the web's ocrPicking availability check).
-  const available = tx.get<{ v: number }>(sql`
-    SELECT COALESCE(SUM(rii.available_qty), 0) AS v
+  // Part-level availability, mirroring the web's applyOcrPick formula exactly:
+  // physical − reserved-by-others − unboxed. The item's OWN allocation is not
+  // subtracted (ingested picking orders are auto-allocated by the PUT route, so
+  // counting it would false-reject the primary scan path).
+  const availability = tx.get<{ physical: number; reservedByOthers: number; unboxed: number }>(sql`
+    SELECT
+      COALESCE(SUM(rii.received_qty - rii.picked_qty - rii.put_away_qty), 0) AS physical,
+      COALESCE((
+        SELECT SUM(a.qty)
+        FROM allocations a
+        JOIN picking_items pi ON pi.id = a.picking_item_id
+        WHERE a.receiving_order_id = ${receivingOrderId}
+          AND pi.part_id = ${item.partId}
+          AND a.picking_item_id != ${req.pickingItemId}
+      ), 0) AS reservedByOthers,
+      (
+        SELECT COALESCE(SUM(pas.qty), 0)
+        FROM put_away_scans pas
+        JOIN receiving_invoice_items rii2 ON rii2.id = pas.receiving_invoice_item_id
+        JOIN receiving_invoices ri2 ON ri2.id = rii2.receiving_invoice_id
+        WHERE ri2.receiving_order_id = ${receivingOrderId}
+          AND rii2.part_id = ${item.partId}
+          AND pas.shelf_box_id IS NULL
+      ) AS unboxed
     FROM receiving_invoices ri
     JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
-    WHERE ri.receiving_order_id = ${receivingOrderId} AND rii.part_id = ${item.partId}`)!.v;
-  const unboxed = tx.get<{ v: number }>(sql`
-    SELECT COALESCE(SUM(pas.qty), 0) AS v
-    FROM put_away_scans pas
-    JOIN receiving_invoice_items rii ON rii.id = pas.receiving_invoice_item_id
-    JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-    WHERE ri.receiving_order_id = ${receivingOrderId} AND rii.part_id = ${item.partId}
-      AND pas.shelf_box_id IS NULL`)!.v;
-  if (req.qty > available - unboxed)
+    WHERE ri.receiving_order_id = ${receivingOrderId} AND rii.part_id = ${item.partId}`)!;
+  if (req.qty > availability.physical - availability.reservedByOthers - availability.unboxed)
     throw new HTTPException(409, { message: "qty not available on this receiving order" });
 
   // Find-or-create the order-level allocation (XOR CHECK: receiving_order_id set, inventory_lot_id NULL).

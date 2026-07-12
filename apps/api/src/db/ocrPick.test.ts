@@ -8,6 +8,7 @@ import * as schema from "./schema/index.js";
 import { createDb } from "./client.js";
 import { createTables } from "./tables.js";
 import { applyOcrPick } from "./ocrPick.js";
+import { allocatePickingItem } from "./allocate.js";
 import { assertInvariantsHold } from "./invariants.guard.js";
 
 function makeDb() {
@@ -109,7 +110,7 @@ test("second ocr pick tops up the existing allocation row instead of creating a 
   const after = (sqlite.prepare("SELECT COUNT(*) c FROM allocations").get() as any).c;
   assert.equal(after, before);
 
-  const pkg = sqlite.prepare("SELECT source_id, qty FROM picking_packages ORDER BY created_at DESC, id DESC LIMIT 1").get() as any;
+  const pkg = sqlite.prepare("SELECT source_id, qty FROM picking_packages WHERE id = ?").get(res.packageIds[0]) as any;
   assert.deepEqual(pkg, { source_id: "rii8b", qty: 2 });
   const pi = sqlite
     .prepare("SELECT scanned_not_boxed_qty, picked_qty, remaining_qty FROM picking_items WHERE id='pi8'")
@@ -169,6 +170,43 @@ test("ocr pick rejects qty beyond the RO's part-level availability with 409", ()
   );
   assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM picking_packages").get() as any).c, 0);
   assert.equal((sqlite.prepare("SELECT status FROM picking_orders WHERE id='po8c'").get() as any).status, "pending");
+  assertInvariantsHold(db);
+  sqlite.close();
+});
+
+test("ocr pick succeeds when the item's own auto-allocation already drained rii.available_qty", () => {
+  const { sqlite, db } = makeDb();
+  sqlite.exec(`
+    INSERT INTO parts (id, part_no, part_no_norm, created_at, updated_at) VALUES ('p9','P9','P9','0','0');
+    INSERT INTO receiving_orders (id, external_id, ref_no, delivery_date, status, supplier_id, created_at, updated_at)
+      VALUES ('ro9','e9','R9','2026-07-04','in_hand','sup8','0','0');
+    INSERT INTO receiving_invoices (id, receiving_order_id, invoice_no, created_at, updated_at) VALUES ('inv9','ro9','INV9','0','0');
+    INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty, available_qty, date_code, created_at, updated_at)
+      VALUES ('rii9','inv9','p9',12,12,12,'D9','0','0');
+    INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('po9','pe9','PR9','pending','0','0');
+    INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('pi9','po9','p9',10,'0','0');
+  `);
+  // The PUT route auto-allocates ingested orders; replicate that with the real allocator.
+  db.transaction((tx) => allocatePickingItem(tx, "pi9"));
+  const drained = sqlite.prepare("SELECT allocated_qty, available_qty FROM receiving_invoice_items WHERE id='rii9'").get() as any;
+  assert.deepEqual(drained, { allocated_qty: 10, available_qty: 2 });
+
+  // Old formula (Σ available_qty − unboxed = 2) would 409 here; the web formula
+  // (physical 12 − reserved-by-others 0 − unboxed 0) must let it through.
+  const res = db.transaction((tx) => applyOcrPick(tx, "ro9", { pickingItemId: "pi9", qty: 10, actorId: "op8" }));
+  assert.equal(res.packageIds.length, 1);
+  const pkg = sqlite.prepare("SELECT source_type, source_id, qty, date_code FROM picking_packages WHERE id = ?").get(res.packageIds[0]) as any;
+  assert.deepEqual(pkg, { source_type: "receiving_invoice_item", source_id: "rii9", qty: 10, date_code: "D9" });
+
+  const alloc = sqlite.prepare("SELECT qty FROM allocations WHERE picking_item_id='pi9'").get() as any;
+  assert.equal(alloc.qty, 0); // pre-existing allocation fully consumed, no top-up row
+  assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM allocations").get() as any).c, 1);
+  const link = sqlite.prepare("SELECT qty FROM allocation_receiving_items WHERE receiving_invoice_item_id='rii9'").get() as any;
+  assert.equal(link.qty, 0);
+  const rii = sqlite.prepare("SELECT picked_qty, allocated_qty, available_qty FROM receiving_invoice_items WHERE id='rii9'").get() as any;
+  assert.deepEqual(rii, { picked_qty: 10, allocated_qty: 0, available_qty: 2 });
+  const pi = sqlite.prepare("SELECT scanned_not_boxed_qty, remaining_qty FROM picking_items WHERE id='pi9'").get() as any;
+  assert.deepEqual(pi, { scanned_not_boxed_qty: 10, remaining_qty: 0 });
   assertInvariantsHold(db);
   sqlite.close();
 });

@@ -80,4 +80,32 @@ test("POST /picking-orders/report-issues validation: malformed JSON / actor_id /
   assert.equal(unknownReason.status, 400);
 });
 
+sqlite.exec(`
+  INSERT INTO parts (id, part_no, part_no_norm, created_at, updated_at) VALUES ('p8r','P8R','P8R','0','0');
+  INSERT INTO receiving_orders (id, external_id, ref_no, delivery_date, status, created_at, updated_at)
+    VALUES ('ro8r','e8r','R8R','2026-07-01','in_hand','0','0');
+  INSERT INTO receiving_invoices (id, receiving_order_id, invoice_no, created_at, updated_at) VALUES ('inv8r','ro8r','INV8R','0','0');
+  INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty, available_qty, date_code, created_at, updated_at)
+    VALUES ('rii8r','inv8r','p8r',8,8,8,'D8R','0','0');
+  INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('po8r','e8rp','PO-8R','pending','0','0');
+  INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('pi8r','po8r','p8r',5,'0','0');
+`);
+
+test("POST /picking-orders/:id/ocr-pick scans from the receiving order and returns package_ids", async () => {
+  const res = await post("/picking-orders/ro8r/ocr-pick", { picking_item_id: "pi8r", qty: 5, actor_id: "op7r" });
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { package_ids: string[] };
+  assert.equal(body.package_ids.length, 1);
+  const pkg = sqlite.prepare("SELECT source_type, source_id, qty, date_code FROM picking_packages WHERE id = ?").get(body.package_ids[0]) as any;
+  assert.deepEqual(pkg, { source_type: "receiving_invoice_item", source_id: "rii8r", qty: 5, date_code: "D8R" });
+  const pi = sqlite.prepare("SELECT scanned_not_boxed_qty, remaining_qty FROM picking_items WHERE id='pi8r'").get() as any;
+  assert.deepEqual(pi, { scanned_not_boxed_qty: 5, remaining_qty: 0 });
+  assert.equal((sqlite.prepare("SELECT status FROM picking_orders WHERE id='po8r'").get() as any).status, "picking");
+});
+
+test("POST /picking-orders/:id/ocr-pick requires picking_item_id -> 400", async () => {
+  const res = await post("/picking-orders/ro8r/ocr-pick", { qty: 5, actor_id: "op7r" });
+  assert.equal(res.status, 400);
+});
+
 test("cleanup", () => { sqlite.close(); });
