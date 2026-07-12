@@ -27,7 +27,7 @@ interface GoodsVerifyDao {
             (SELECT COUNT(*) FROM (SELECT 1 FROM put_away_scans WHERE shelf_box_id = sb.id GROUP BY part_id)) AS itemCount,
             (SELECT COUNT(*) FROM (SELECT 1 FROM put_away_scans WHERE shelf_box_id = sb.id GROUP BY part_id HAVING MIN(verified) = 1)) AS verifiedCount,
             (SELECT MAX(verified_at) FROM put_away_scans WHERE shelf_box_id = sb.id) AS lastCheckAt
-        FROM shelf_boxes sb WHERE sb.shelf_code = :shelfCode ORDER BY sb.created_at DESC
+        FROM shelf_boxes sb WHERE sb.shelf_code = :shelfCode ORDER BY sb.created_at DESC, sb.id
         """
     )
     fun boxSummaries(shelfCode: String): List<VerifyBoxSummaryRow>
