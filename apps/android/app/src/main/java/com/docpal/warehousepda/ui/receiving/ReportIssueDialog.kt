@@ -32,7 +32,8 @@ import com.docpal.warehousepda.ui.components.ErrorText
 /**
  * Report/edit mismatch dialog — port of the web ReportIssueModal.
  * Validates client-side with [MismatchRules] (same rules as the web modal) and
- * surfaces repository errors via [errorKey] while open. [submitting] disables inputs.
+ * surfaces repository errors via [errorKey] while open ([errorArgs] are its
+ * `%1$s` format args). [submitting] disables inputs.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,6 +41,7 @@ fun ReportIssueDialog(
     item: ReceivingItemDetail,
     submitting: Boolean,
     errorKey: String?,
+    errorArgs: List<String> = emptyList(),
     onDismiss: () -> Unit,
     onConfirm: (reason: String, qty: Int?, wrongPartNo: String?, note: String) -> Unit,
 ) {
@@ -137,7 +139,7 @@ fun ReportIssueDialog(
                 val shownError = validationError ?: errorKey
                 if (shownError != null) {
                     Spacer(Modifier.height(8.dp))
-                    ErrorText(shownError)
+                    ErrorText(shownError, args = if (validationError == null) errorArgs else emptyList())
                 }
             }
         },

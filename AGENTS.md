@@ -80,7 +80,7 @@ The app id `com.docpal.warehousepda` installs side by side with the Capacitor
 `com.docpal.warehousedemo`.
 
 Phase 1 (login, home, receiving list/detail with items + picking tabs, end-to-end
-scan pipeline) is complete: 138 JVM tests green, debug APK builds and installs.
+scan pipeline) is complete: 143 JVM tests green, debug APK builds and installs.
 Conventions inside `apps/android` (details in the Phase 1 plan's
 "Phase 2 handoff notes"):
 

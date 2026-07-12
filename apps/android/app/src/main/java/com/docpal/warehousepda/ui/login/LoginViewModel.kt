@@ -6,6 +6,7 @@ import com.docpal.warehousepda.data.SessionRepository
 import com.docpal.warehousepda.domain.AuthRepository
 import com.docpal.warehousepda.domain.LocalizedException
 import com.docpal.warehousepda.domain.model.User
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,8 +39,15 @@ class LoginViewModel(
         // Mirrors the web middleware: an existing session skips the login screen.
         // SessionRepository clears a stale stored id as part of the read.
         viewModelScope.launch {
-            val user = withContext(io) { sessionRepository.currentUser() }
-            _uiState.update { it.copy(loggedInUser = user, checkingSession = false) }
+            try {
+                val user = withContext(io) { sessionRepository.currentUser() }
+                _uiState.update { it.copy(loggedInUser = user, checkingSession = false) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // A DataStore/Room failure must not crash or strand checkingSession.
+                _uiState.update { it.copy(checkingSession = false) }
+            }
         }
     }
 
@@ -65,8 +73,15 @@ class LoginViewModel(
                 // A successful login persists the session inside AuthRepository.
                 val user = withContext(io) { authRepository.login(username, password) }
                 _uiState.update { it.copy(submitting = false, loggedInUser = user) }
+            } catch (e: CancellationException) {
+                _uiState.update { it.copy(submitting = false) }
+                throw e
             } catch (e: LocalizedException) {
                 _uiState.update { it.copy(submitting = false, errorCode = e.code) }
+            } catch (e: Exception) {
+                // DataStore/Room failures would otherwise escape viewModelScope
+                // (crash, submitting stuck true).
+                _uiState.update { it.copy(submitting = false, errorCode = "unknown") }
             }
         }
     }

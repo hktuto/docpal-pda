@@ -188,7 +188,7 @@ fun ReceivingDetailScreen(orderId: String, onBack: () -> Unit) {
                 ) { CircularProgressIndicator() }
             detail == null ->
                 Box(Modifier.fillMaxSize().padding(padding)) {
-                    ErrorText(state.errorKey, Modifier.align(Alignment.Center))
+                    ErrorText(state.errorKey, Modifier.align(Alignment.Center), state.errorArgs)
                 }
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
@@ -262,6 +262,7 @@ fun ReceivingDetailScreen(orderId: String, onBack: () -> Unit) {
             item = item,
             submitting = state.actionInProgress,
             errorKey = state.errorKey,
+            errorArgs = state.errorArgs,
             onDismiss = {
                 viewModel.clearError()
                 dialogItem = null
@@ -353,7 +354,7 @@ private fun HeaderCard(
             }
             if (state.errorKey != null) {
                 Spacer(Modifier.height(4.dp))
-                ErrorText(state.errorKey)
+                ErrorText(state.errorKey, args = state.errorArgs)
             }
             if (detail.status == "pending") {
                 Spacer(Modifier.height(8.dp))

@@ -231,6 +231,7 @@
     <string name="error_operator_not_signed_in">Operator not signed in</string>
     <string name="error_missing_receiving_order_id">Missing receiving order ID</string>
     <string name="error_unknown_match_failed">Match failed</string>
+    <string name="error_unknown">Unknown error</string>
     <string name="error_apply_failed">Apply failed</string>
     <string name="error_scan_parse_failed">Scan parse failed</string>
     <string name="error_invalid_quantity_to_apply">Invalid quantity to apply</string>

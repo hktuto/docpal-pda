@@ -38,12 +38,14 @@ class LoginViewModelTest {
     private class FakeAuthRepository : AuthRepository {
         var nextUser: User? = User("u1", "operator", "Operator", "operator", createdAt = 0L)
         var nextError: LocalizedException? = null
+        var nextFailure: Exception? = null
         var lastUsername: String? = null
         var lastPassword: String? = null
 
         override suspend fun login(username: String, password: String): User {
             lastUsername = username
             lastPassword = password
+            nextFailure?.let { throw it }
             nextError?.let { throw it }
             return nextUser ?: throw LocalizedException("invalid_username_or_password")
         }
@@ -92,5 +94,19 @@ class LoginViewModelTest {
         val state = vm.uiState.value
         assertNull(state.loggedInUser)
         assertEquals("invalid_username_or_password", state.errorCode)
+    }
+
+    @Test
+    fun `login unexpected failure resets submitting and shows generic error`() = runTest(dispatcher) {
+        val auth = FakeAuthRepository().apply {
+            nextFailure = RuntimeException("datastore boom")
+        }
+        val vm = LoginViewModel(auth, sessionRepository, dispatcher)
+        vm.submit()
+        advanceUntilIdle()
+        val state = vm.uiState.value
+        assertNull(state.loggedInUser)
+        assertFalse(state.submitting)
+        assertEquals("unknown", state.errorCode)
     }
 }

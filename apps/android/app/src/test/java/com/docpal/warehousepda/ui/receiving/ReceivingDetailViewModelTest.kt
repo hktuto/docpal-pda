@@ -28,6 +28,7 @@ class ReceivingDetailViewModelTest {
 
     private class FakeReceivingSource : ReceivingDetailSource {
         var detail: ReceivingOrderDetail = detailWith("order-1")
+        var throwOnConfirm: LocalizedException? = null
         val getOrderDetailCalls = ArrayList<String>()
         val confirmArrivedCalls = ArrayList<Pair<String, String>>()
 
@@ -37,6 +38,7 @@ class ReceivingDetailViewModelTest {
         }
 
         override suspend fun confirmArrived(orderId: String, actorId: String) {
+            throwOnConfirm?.let { throw it }
             confirmArrivedCalls += orderId to actorId
         }
     }
@@ -129,6 +131,53 @@ class ReceivingDetailViewModelTest {
         advanceUntilIdle()
         assertEquals("pending_mismatch_already_exists", vm.uiState.value.errorKey)
         assertFalse(vm.uiState.value.actionInProgress)
+    }
+
+    @Test fun `confirmArrived error params surface as errorArgs`() = runTest {
+        val receiving = FakeReceivingSource().apply {
+            throwOnConfirm =
+                LocalizedException("receiving_order_already_status", mapOf("status" to "in_hand"))
+        }
+        val vm = vm(receiving)
+        advanceUntilIdle()
+        vm.confirmArrived()
+        advanceUntilIdle()
+        val state = vm.uiState.value
+        assertEquals("receiving_order_already_status", state.errorKey)
+        assertEquals(listOf("in_hand"), state.errorArgs)
+        assertFalse(state.actionInProgress)
+    }
+
+    @Test fun `mismatch error params surface as errorArgs`() = runTest {
+        val receiving = FakeReceivingSource()
+        val mismatch = FakeMismatchSource().apply {
+            throwOnReport =
+                LocalizedException("unhandled_mismatch_reason", mapOf("reason" to "bogus"))
+        }
+        val vm = vm(receiving, mismatch)
+        advanceUntilIdle()
+        vm.reportMismatch("item-1", "bogus", null, null, "note")
+        advanceUntilIdle()
+        val state = vm.uiState.value
+        assertEquals("unhandled_mismatch_reason", state.errorKey)
+        assertEquals(listOf("bogus"), state.errorArgs)
+    }
+
+    @Test fun `errorArgs are cleared with the error`() = runTest {
+        val receiving = FakeReceivingSource()
+        val mismatch = FakeMismatchSource().apply {
+            throwOnReport =
+                LocalizedException("unhandled_mismatch_reason", mapOf("reason" to "bogus"))
+        }
+        val vm = vm(receiving, mismatch)
+        advanceUntilIdle()
+        vm.reportMismatch("item-1", "bogus", null, null, "note")
+        advanceUntilIdle()
+        assertEquals(listOf("bogus"), vm.uiState.value.errorArgs)
+
+        vm.clearError()
+        assertNull(vm.uiState.value.errorKey)
+        assertEquals(emptyList<String>(), vm.uiState.value.errorArgs)
     }
 
     @Test fun `four eyes - reporter sees edit, others see confirm-cancel`() = runTest {

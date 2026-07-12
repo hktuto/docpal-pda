@@ -96,6 +96,8 @@ data class ReceivingDetailUiState(
     val loading: Boolean = true,
     val detail: ReceivingOrderDetail? = null,
     val errorKey: String? = null,
+    // LocalizedException.params, passed as %1$s format args when errorKey renders.
+    val errorArgs: List<String> = emptyList(),
     val tab: Int = 0,
     val currentUserId: String? = null,
     val actionInProgress: Boolean = false,
@@ -150,7 +152,7 @@ class ReceivingDetailViewModel(
     fun setTab(tab: Int) = _uiState.update { it.copy(tab = tab) }
 
     /** Clears a surfaced error — called when the error's UI surface is dismissed/replaced. */
-    fun clearError() = _uiState.update { it.copy(errorKey = null) }
+    fun clearError() = _uiState.update { it.copy(errorKey = null, errorArgs = emptyList()) }
 
     fun reload() {
         loadJob?.cancel()
@@ -160,12 +162,17 @@ class ReceivingDetailViewModel(
                 val detail = withContext(io) { receivingSource.getOrderDetail(orderId) }
                 val userId = withContext(io) { sessionSource.currentUser()?.id }
                 _uiState.update {
-                    it.copy(loading = false, detail = detail, currentUserId = userId, errorKey = null)
+                    it.copy(
+                        loading = false, detail = detail, currentUserId = userId,
+                        errorKey = null, errorArgs = emptyList(),
+                    )
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: LocalizedException) {
-                _uiState.update { it.copy(loading = false, errorKey = e.code) }
+                _uiState.update {
+                    it.copy(loading = false, errorKey = e.code, errorArgs = e.params.values.toList())
+                }
             } catch (e: Exception) {
                 _uiState.update { it.copy(loading = false) }
             }
@@ -266,7 +273,9 @@ class ReceivingDetailViewModel(
                 _uiState.update { it.copy(dialogOpen = false) }
                 throw e
             } catch (e: LocalizedException) {
-                _uiState.update { it.copy(dialogOpen = false, errorKey = e.code) }
+                _uiState.update {
+                    it.copy(dialogOpen = false, errorKey = e.code, errorArgs = e.params.values.toList())
+                }
             } catch (e: Exception) {
                 // Parsing does Room I/O (templates/supplier) — surface failures.
                 _uiState.update { it.copy(dialogOpen = false, errorKey = "scan_parse_failed") }
@@ -380,7 +389,7 @@ class ReceivingDetailViewModel(
         // Serialize actions so overlapping taps can't clobber each other's state.
         if (_uiState.value.actionInProgress) return
         viewModelScope.launch {
-            _uiState.update { it.copy(actionInProgress = true, errorKey = null) }
+            _uiState.update { it.copy(actionInProgress = true, errorKey = null, errorArgs = emptyList()) }
             try {
                 withContext(io) {
                     val actorId = sessionSource.currentUser()?.id
@@ -393,7 +402,13 @@ class ReceivingDetailViewModel(
                 _uiState.update { it.copy(actionInProgress = false) }
                 throw e
             } catch (e: LocalizedException) {
-                _uiState.update { it.copy(actionInProgress = false, errorKey = e.code) }
+                _uiState.update {
+                    it.copy(
+                        actionInProgress = false,
+                        errorKey = e.code,
+                        errorArgs = e.params.values.toList(),
+                    )
+                }
             } catch (e: Exception) {
                 _uiState.update { it.copy(actionInProgress = false) }
             }

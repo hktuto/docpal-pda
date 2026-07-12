@@ -231,6 +231,7 @@
     <string name="error_operator_not_signed_in">操作員未登入</string>
     <string name="error_missing_receiving_order_id">缺少收貨單 ID</string>
     <string name="error_unknown_match_failed">配對失敗</string>
+    <string name="error_unknown">未知錯誤</string>
     <string name="error_apply_failed">套用失敗</string>
     <string name="error_scan_parse_failed">掃描解析失敗</string>
     <string name="error_invalid_quantity_to_apply">套用數量無效</string>

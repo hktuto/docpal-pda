@@ -4298,21 +4298,63 @@ git add -A && git commit -m "android phase1: docs + handoff notes"
 
 ## Phase 2 handoff notes
 
-Phase 1 verification (2026-07-12): `./gradlew :app:testDebugUnitTest` — 138 tests,
+Phase 1 verification (2026-07-12): `./gradlew :app:testDebugUnitTest` — 139 tests,
 0 failures; `./gradlew :app:assembleDebug` and `:app:installDebug` — both
 BUILD SUCCESSFUL on device `MFM5PRE526010002`. Device smoke walk recorded below.
+
+Final review wrap-up (2026-07-12): fixed error-param rendering
+(`ErrorText`/`errorMessage` now take format args, `ReceivingDetailUiState`
+carries `errorArgs` from `LocalizedException.params`) and the
+`LoginViewModel.submit()` generic-failure hole (generic catch → `error_unknown`
+string, added in all 3 locales; init session check guarded too). Suite: 143
+tests, 0 failures; `assembleDebug` BUILD SUCCESSFUL.
+
+### Final review findings
+
+Recorded by the final holistic review; fix during Phase 2, not here.
+
+1. **MAJOR — inherited web bug in `removeScannedPackage`** (first Phase 2
+   defect ticket): when a scan spanned multiple invoice items (FIFO portions
+   loop in `applyOcrPick`), removal restores the full qty into the FIRST lot
+   source row and decrements only that row's `picked_qty` — the first item can
+   go negative, availability inflates, overscan becomes possible. The web has
+   the identical bug (`apps/web/db/picking.ts:334-348`). Fix requires recording
+   per-source portions at scan time (package metadata) and restoring exactly,
+   in BOTH codebases.
+2. **Seam interfaces in the wrong package**: `MismatchSource`, `SessionSource`,
+   `PickingSource`, `ScanMatchSource`, `LabelScanParser` live inside
+   `ui/receiving/ReceivingDetailViewModel.kt`, causing a `domain → ui` import
+   (`domain/MismatchRepository.kt` implements `MismatchSource`). Move them to a
+   neutral package before Phase 2 multiplies the pattern.
+3. **Session access fragmented**: Login/Home VMs use concrete
+   `SessionRepository`; the detail VM uses `SessionSource`. Unify when touching
+   them next.
+4. **~27 dead string keys ×3 locales** (speculative web-parity keys never
+   referenced, e.g. `login_username_placeholder`, `common_loading`,
+   `scan_review_close`, `receiving_picking_tab_title`,
+   `error_invalid_quantity_to_apply`) — consciously accepted; delete in a
+   future cleanup if they stay unused.
+5. **Missing high-value tests for Phase 2**: (a) `confirmArrived` against a
+   real DB (status guard, effective-mismatch-qty, transition log, allocator
+   side effects); (b) `applyOcrPick` FIFO split across ≥2 invoice items +
+   `removeScannedPackage` round-trip asserting per-item `picked_qty` (exposes
+   finding 1); (c) error-code ↔ resources contract test (every thrown
+   `LocalizedException.code` has `error_<code>` in all 3 locales, `%1$s` codes
+   receive params).
 
 ### What Phase 2 reuses as-is
 
 - `PickingRepository` (`domain/PickingRepository.kt`) already ports
   `scanAllocationToPackage`, `removeScannedPackage`, box ops
-  (create/cancel box, pack/unpack package, add-all-unboxed) and
+  (create box, pack/unpack package, add-all-unboxed) and
   `maybeAutoFinishPickingOrder` (auto-finish → measuring task). Phase 2 picking
-  detail screens call these directly.
+  detail screens call these directly. NOTE: "cancel box" is NOT ported — no
+  `cancelShippingBox` / `box_is_not_empty` equivalent exists; Phase 2 picking
+  detail needs it plus the error string (see Final review findings).
 - `PickingDao` / `ScanDao` (`data/db/`) already carry the picking-tab and
   scan-candidate queries.
 - UI primitives in `ui/components/`: `StatusBadge`, `DetailRow`, `ErrorText`
-  (including the `errorMessage(key)` string table), `EmptyState`,
+  (including the `errorMessage(key, args)` string table), `EmptyState`,
   `OnResumeEffect`.
 - The end-to-end scan pipeline: `ScanLaunchers` (camera / manual / wedge) →
   `QrParser` (supplier QR templates) with `OcrLabelParser` fallback →
@@ -4345,9 +4387,7 @@ BUILD SUCCESSFUL on device `MFM5PRE526010002`. Device smoke walk recorded below.
 - Minor deferred review nits: `ErrorText` uses `getIdentifier` (not shrink-safe
   for release builds); duplicate `formatIsoDate` in `ReceivingListScreen` and
   `ReceivingDetailScreen`; redundant dispatcher hops in the label-scan parser
-  factory; no double-tap guard on camera launch; `Calendar.getInstance()`
-  default-locale in the ISO-week code (`PickingRepository`) — consider
-  `Locale.US`.
+  factory; no double-tap guard on camera launch.
 
 ### Step 2 device walkthrough — verified vs deferred
 

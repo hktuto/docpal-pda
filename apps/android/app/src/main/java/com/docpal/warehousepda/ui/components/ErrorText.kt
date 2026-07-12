@@ -11,11 +11,12 @@ import com.docpal.warehousepda.R
 
 /**
  * Resolves a `LocalizedException.code` to a display string: the `error_<code>` string
- * resource when it exists, falling back to the raw code. Shared by all screens so
- * error localization lives in one place.
+ * resource when it exists, falling back to the raw code. [args] are the exception's
+ * interpolation params (`%1$s` placeholders, e.g. receiving_order_already_status).
+ * Shared by all screens so error localization lives in one place.
  */
 @Composable
-fun errorMessage(key: String): String {
+fun errorMessage(key: String, args: List<String> = emptyList()): String {
     val context = LocalContext.current
     val resId = remember(key) {
         when (key) {
@@ -26,15 +27,17 @@ fun errorMessage(key: String): String {
                 .takeIf { it != 0 }
         }
     }
-    return resId?.let { stringResource(it) } ?: key
+    return resId?.let {
+        if (args.isEmpty()) stringResource(it) else stringResource(it, *args.toTypedArray())
+    } ?: key
 }
 
 /** Red error text for a `LocalizedException.code`; renders nothing when [key] is null. */
 @Composable
-fun ErrorText(key: String?, modifier: Modifier = Modifier) {
+fun ErrorText(key: String?, modifier: Modifier = Modifier, args: List<String> = emptyList()) {
     if (key == null) return
     Text(
-        text = errorMessage(key),
+        text = errorMessage(key, args),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.error,
         modifier = modifier,
