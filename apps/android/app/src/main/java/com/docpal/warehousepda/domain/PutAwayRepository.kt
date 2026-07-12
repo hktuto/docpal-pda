@@ -16,6 +16,7 @@ import com.docpal.warehousepda.domain.model.PutAwayLotDetail
 import com.docpal.warehousepda.domain.model.PutAwayOrderHeader
 import com.docpal.warehousepda.domain.model.PutAwayScanDetail
 import com.docpal.warehousepda.domain.model.ShelfOption
+import com.docpal.warehousepda.ui.putaway.PutAwayDetailSource
 import com.docpal.warehousepda.ui.putaway.PutAwayListSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -40,7 +41,7 @@ import java.util.UUID
 class PutAwayRepository(
     private val db: AppDatabase,
     private val receivingRepository: ReceivingRepository,
-) : PutAwayListSource {
+) : PutAwayListSource, PutAwayDetailSource {
 
     private val putAwayDao get() = db.putAwayDao()
     private val receivingDao get() = db.receivingDao()
@@ -72,7 +73,7 @@ class PutAwayRepository(
      * web getPutAwayLots HAVING (available > 0 OR unboxed scans > 0); like the web, the
      * lots panel is empty unless the order is in_hand (shows common_no_lots).
      */
-    suspend fun getPutAwayDetail(orderId: String): PutAwayDetail? = withContext(Dispatchers.IO) {
+    override suspend fun getPutAwayDetail(orderId: String): PutAwayDetail? = withContext(Dispatchers.IO) {
         val headerRow = putAwayDao.orderHeaderRow(orderId) ?: return@withContext null
         val header = PutAwayOrderHeader(
             id = headerRow.id,
@@ -187,6 +188,11 @@ class PutAwayRepository(
         scanId!!
     }
 
+    /** PutAwayDetailSource entry point — delegates to [createShelfBox]. */
+    override suspend fun createBox(orderId: String, shelfCode: String, actorId: String) {
+        createShelfBox(orderId, shelfCode, actorId)
+    }
+
     /**
      * Port of web createShelfBox: validates order + shelf, assigns the next SBOX id, inserts
      * the open box and its transition log (web pglite metadata {receivingOrderId, shelfCode}).
@@ -235,7 +241,7 @@ class PutAwayRepository(
     }
 
     /** Port of web removeScannedPiece: hard delete, unboxed scans only. */
-    suspend fun removeScannedPiece(scanId: String) = withContext(Dispatchers.IO) {
+    override suspend fun removeScannedPiece(scanId: String) = withContext(Dispatchers.IO) {
         db.runInTransaction {
             val scan = putAwayDao.scanById(scanId) ?: throw LocalizedException("put_away_scan_not_found")
             if (scan.shelfBoxId != null) throw LocalizedException("put_away_scan_already_boxed")
@@ -251,7 +257,7 @@ class PutAwayRepository(
      * verification_tasks don't exist on Android (Phase 4 lists boxes directly), so the scan's
      * verified flag stays 0 until goods-verify.
      */
-    suspend fun assignScanToBox(scanId: String, boxId: String, actorId: String) =
+    override suspend fun assignScanToBox(scanId: String, boxId: String, actorId: String) =
         withContext(Dispatchers.IO) {
             db.runInTransaction { assignScanToBoxInternal(scanId, boxId, actorId) }
             Unit
@@ -317,6 +323,11 @@ class PutAwayRepository(
         }
     }
 
+    /** PutAwayDetailSource entry point — delegates to [addAllUnboxedToBox]. */
+    override suspend fun addAllToBox(boxId: String, actorId: String) {
+        addAllUnboxedToBox(boxId, actorId)
+    }
+
     /**
      * Port of web addAllUnboxedToBox (apps/api/src/db/putAway.ts:183-195): assigns every unboxed
      * scan of the box's receiving order, oldest first, in one transaction — if any assign throws,
@@ -342,7 +353,7 @@ class PutAwayRepository(
      * clear check is web parity; practically a no-op since removal only restores availability
      * (web never flips clear → in_hand, and neither do we).
      */
-    suspend fun removeScanFromBox(scanId: String, actorId: String) = withContext(Dispatchers.IO) {
+    override suspend fun removeScanFromBox(scanId: String, actorId: String) = withContext(Dispatchers.IO) {
         db.runInTransaction {
             val scan = putAwayDao.scanById(scanId) ?: throw LocalizedException("put_away_scan_not_found")
             val boxId = scan.shelfBoxId ?: throw LocalizedException("put_away_scan_not_boxed")
@@ -374,6 +385,9 @@ class PutAwayRepository(
         Unit
     }
 
+    /** PutAwayDetailSource entry point — delegates to [closeShelfBox]. */
+    override suspend fun closeBox(boxId: String, actorId: String) = closeShelfBox(boxId, actorId)
+
     /** Port of web closeShelfBox (:256-263): open box with at least one scan → closed + log + clear check. */
     suspend fun closeShelfBox(boxId: String, actorId: String) = withContext(Dispatchers.IO) {
         db.runInTransaction {
@@ -386,6 +400,9 @@ class PutAwayRepository(
         }
         Unit
     }
+
+    /** PutAwayDetailSource entry point — delegates to [cancelShelfBox]. */
+    override suspend fun cancelBox(boxId: String, actorId: String) = cancelShelfBox(boxId, actorId)
 
     /**
      * Port of web cancelShelfBox (:44-51): open + empty → cancelled transition log, then hard

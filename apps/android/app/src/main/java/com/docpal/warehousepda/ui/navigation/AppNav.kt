@@ -1,6 +1,5 @@
 package com.docpal.warehousepda.ui.navigation
 
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -11,6 +10,7 @@ import com.docpal.warehousepda.ui.home.HomeScreen
 import com.docpal.warehousepda.ui.login.LoginScreen
 import com.docpal.warehousepda.ui.picking.PickingDetailScreen
 import com.docpal.warehousepda.ui.picking.PickingListScreen
+import com.docpal.warehousepda.ui.putaway.PutAwayDetailScreen
 import com.docpal.warehousepda.ui.putaway.PutAwayListScreen
 import com.docpal.warehousepda.ui.receiving.ReceivingDetailScreen
 import com.docpal.warehousepda.ui.receiving.ReceivingListScreen
@@ -90,8 +90,7 @@ fun AppNav() {
             arguments = listOf(navArgument("orderId") { type = NavType.StringType }),
         ) { entry ->
             val orderId = requireNotNull(entry.arguments?.getString("orderId")) { "orderId argument is required" }
-            // Placeholder — the real detail screen lands in Task 9.
-            Text("put-away/$orderId")
+            PutAwayDetailScreen(orderId = orderId, onBack = { navController.popBackStack() })
         }
     }
 }
