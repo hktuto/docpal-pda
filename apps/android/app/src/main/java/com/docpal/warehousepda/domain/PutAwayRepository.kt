@@ -7,7 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Put-away candidate list. Port of web listPutAwayCandidates (apps/web/db/putAway.ts):
+ * Put-away candidate list. Port of web getPutAwayCandidates (apps/web/db/putAway.ts):
  * in-hand receiving orders kept when SUM(available_qty) > 0 OR any unboxed put-away
  * scan exists (the web HAVING clause). Per-item availability reuses
  * [ReceivingAvailability] — the same AllocationDistributor math as the receiving

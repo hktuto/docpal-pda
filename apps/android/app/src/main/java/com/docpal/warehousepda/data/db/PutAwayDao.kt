@@ -8,7 +8,7 @@ import androidx.room.Query
 interface PutAwayDao {
 
     /**
-     * Put-away list base rows (web listPutAwayCandidates, putAway.ts): in-hand receiving
+     * Put-away list base rows (web getPutAwayCandidates, putAway.ts): in-hand receiving
      * orders with supplier name, ref_no order. delivery_date rides along because the
      * shared availability math (ReceivingAvailability) sorts items with it; the web's
      * HAVING availability/unboxed filter is applied in PutAwayRepository (SQLite on
