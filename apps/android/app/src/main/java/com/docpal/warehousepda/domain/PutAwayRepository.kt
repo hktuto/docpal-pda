@@ -188,6 +188,12 @@ class PutAwayRepository(
         scanId!!
     }
 
+    /** PutAwayDetailSource entry point — delegates to [recordPutAwayScan]. */
+    override suspend fun recordScan(
+        receivingInvoiceItemId: String, qty: Int,
+        dateCode: String?, lotCode: String?, coo: String?, cow: String?,
+    ): String = recordPutAwayScan(receivingInvoiceItemId, qty, dateCode, lotCode, coo, cow)
+
     /** PutAwayDetailSource entry point — delegates to [createShelfBox]. */
     override suspend fun createBox(orderId: String, shelfCode: String, actorId: String) {
         createShelfBox(orderId, shelfCode, actorId)

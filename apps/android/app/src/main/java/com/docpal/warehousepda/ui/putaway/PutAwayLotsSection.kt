@@ -42,8 +42,8 @@ private val UnboxedWarningColor = Color(0xFFF59E0B)
 
 /**
  * Lots section — port of the web PutAwayLotsPanel.vue.
- * Rendered inside the detail screen's LazyColumn. The Scan buttons are wired in
- * Task 10 — they render behind [scanEnabled] (Task 9 screens pass false).
+ * Rendered inside the detail screen's LazyColumn. The Scan buttons pin the lot
+ * and launch the camera scan flow (Task 10) when [scanEnabled].
  */
 internal fun LazyListScope.putAwayLotsSection(
     detail: PutAwayDetail,
@@ -132,7 +132,7 @@ private fun PutAwayLotCard(
 
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Scan-to-put-away is Task 10 — the button renders disabled until then.
+                // Scan-to-put-away (Task 10): pins this lot and launches the camera.
                 OutlinedButton(onClick = onScan, enabled = scanEnabled && !actionInProgress) {
                     Text(stringResource(R.string.put_away_scan_piece))
                 }

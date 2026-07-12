@@ -1,5 +1,6 @@
 package com.docpal.warehousepda.ui.putaway
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,6 +49,9 @@ import com.docpal.warehousepda.ui.components.DetailRow
 import com.docpal.warehousepda.ui.components.ErrorText
 import com.docpal.warehousepda.ui.components.OnResumeEffect
 import com.docpal.warehousepda.ui.components.StatusBadge
+import com.docpal.warehousepda.ui.components.errorMessage
+import com.docpal.warehousepda.ui.receiving.rememberCameraScanLauncher
+import com.docpal.warehousepda.ui.scan.LabelScanReviewDialog
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -67,6 +71,25 @@ fun PutAwayDetailScreen(orderId: String, onBack: () -> Unit) {
     // Reload whenever the screen regains focus (web visibilitychange parity).
     // The VM also loads in init; the first ON_RESUME simply re-queries once.
     OnResumeEffect { viewModel.reload() }
+
+    // Camera scan → the pinned-lot scan pipeline (web openScan parity).
+    val launchCameraScan = rememberCameraScanLauncher { result ->
+        viewModel.onCameraScan(result)
+    }
+
+    // Toasts: scan success is a fixed string; any other toastKey is a
+    // LocalizedException code from the auto-apply error path (web showToast).
+    val toastText = when (state.toastKey) {
+        null -> null
+        "common_scan_success" -> stringResource(R.string.common_scan_success)
+        else -> errorMessage(state.toastKey!!, state.toastArgs)
+    }
+    LaunchedEffect(toastText) {
+        if (toastText != null) {
+            Toast.makeText(context, toastText, Toast.LENGTH_SHORT).show()
+            viewModel.clearToast()
+        }
+    }
 
     // View-only UI state (web page-level refs; screen-held like the picking detail).
     var headerExpanded by rememberSaveable { mutableStateOf(false) }
@@ -152,8 +175,7 @@ fun PutAwayDetailScreen(orderId: String, onBack: () -> Unit) {
                     boxSelections = boxSelections,
                     expandedLots = expandedLots,
                     actionInProgress = state.actionInProgress,
-                    // Scan wiring is Task 10 — the buttons render disabled for now.
-                    scanEnabled = false,
+                    scanEnabled = true,
                     onSelectBox = { scanId, boxId ->
                         boxSelections = boxSelections + (scanId to boxId)
                     },
@@ -167,6 +189,11 @@ fun PutAwayDetailScreen(orderId: String, onBack: () -> Unit) {
                     },
                     onRemoveFromBox = viewModel::removeScanFromBox,
                     onRemoveScan = viewModel::removeScan,
+                    onScanLot = { lot ->
+                        // Web openScan: pin the lot, then launch the camera.
+                        viewModel.pinLot(lot)
+                        launchCameraScan()
+                    },
                 )
                 item { Spacer(Modifier.height(8.dp)) }
             }
@@ -197,6 +224,21 @@ fun PutAwayDetailScreen(orderId: String, onBack: () -> Unit) {
             shelves = state.detail?.shelves.orEmpty(),
             onConfirm = viewModel::createBox,
             onDismiss = viewModel::dismissShelfDialog,
+        )
+    }
+
+    state.scanReview?.let { review ->
+        LabelScanReviewDialog(
+            review = review,
+            onFieldsChange = viewModel::updateScanFields,
+            onFindMatch = { viewModel.findMatch() },
+            onApply = { viewModel.applyScan(it) },
+            onRetake = {
+                // Retake keeps the pin — the re-scan matches the same lot.
+                viewModel.retakeScan()
+                launchCameraScan()
+            },
+            onDismiss = viewModel::closeScanReview,
         )
     }
 }

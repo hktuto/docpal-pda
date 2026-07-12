@@ -57,6 +57,11 @@ class PutAwayDetailViewModelTest {
 
         override suspend fun removeScannedPiece(scanId: String) = Unit
 
+        override suspend fun recordScan(
+            receivingInvoiceItemId: String, qty: Int,
+            dateCode: String?, lotCode: String?, coo: String?, cow: String?,
+        ): String = "scan-new"
+
         override suspend fun closeBox(boxId: String, actorId: String) {
             throwOnCloseBox?.let { throw it }
             closeBoxCalls += boxId to actorId
