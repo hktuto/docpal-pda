@@ -237,6 +237,8 @@
     <string name="error_quantity_not_available_receiving">收货区数量不再可用</string>
     <string name="error_quantity_exceeds_unallocated_picking_need">数量超出未分配拣货单需求</string>
     <string name="error_allocation_not_found">未找到分配</string>
+    <string name="error_allocation_not_against_receiving_order">分配未针对收货单</string>
+    <string name="error_invalid_materialize_quantity">物化数量无效</string>
     <string name="error_invalid_scan_quantity">扫描数量无效</string>
     <string name="error_picking_order_has_open_issue">拣货单存在未解决问题</string>
     <string name="error_scan_quantity_exceeds_required">扫描数量超过需求数量</string>
@@ -252,6 +254,7 @@
     <string name="error_box_is_not_open">箱子未打开</string>
     <string name="error_shipping_box_not_associated">出货箱未关联拣货单</string>
     <string name="error_package_does_not_belong_to_picking_order">包裹不属于此拣货单</string>
+    <string name="error_picking_order_not_found">未找到拣货单</string>
     <string name="error_picking_order_already_finished">拣货单已完成</string>
     <string name="error_package_not_in_box">包裹不在箱子中</string>
     <string name="error_actor_required">操作员为必填项</string>

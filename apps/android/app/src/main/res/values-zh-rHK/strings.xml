@@ -237,6 +237,8 @@
     <string name="error_quantity_not_available_receiving">收貨區數量不再可用</string>
     <string name="error_quantity_exceeds_unallocated_picking_need">數量超出未分配揀貨單需求</string>
     <string name="error_allocation_not_found">找不到分配</string>
+    <string name="error_allocation_not_against_receiving_order">分配未針對收貨單</string>
+    <string name="error_invalid_materialize_quantity">物化數量無效</string>
     <string name="error_invalid_scan_quantity">掃描數量無效</string>
     <string name="error_picking_order_has_open_issue">揀貨單存在未解決問題</string>
     <string name="error_scan_quantity_exceeds_required">掃描數量超過需求數量</string>
@@ -252,6 +254,7 @@
     <string name="error_box_is_not_open">箱號未開啟</string>
     <string name="error_shipping_box_not_associated">出貨箱未關聯揀貨單</string>
     <string name="error_package_does_not_belong_to_picking_order">包裹不屬於此揀貨單</string>
+    <string name="error_picking_order_not_found">找不到揀貨單</string>
     <string name="error_picking_order_already_finished">揀貨單已完成</string>
     <string name="error_package_not_in_box">包裹不在箱號中</string>
     <string name="error_actor_required">操作員為必填項</string>

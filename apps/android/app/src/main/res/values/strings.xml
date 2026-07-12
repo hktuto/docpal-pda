@@ -237,6 +237,8 @@
     <string name="error_quantity_not_available_receiving">Quantity no longer available in receiving</string>
     <string name="error_quantity_exceeds_unallocated_picking_need">Quantity exceeds unallocated picking order need</string>
     <string name="error_allocation_not_found">Allocation not found</string>
+    <string name="error_allocation_not_against_receiving_order">Allocation is not against a receiving order</string>
+    <string name="error_invalid_materialize_quantity">Invalid materialize quantity</string>
     <string name="error_invalid_scan_quantity">Invalid scan quantity</string>
     <string name="error_picking_order_has_open_issue">Picking order has an open issue</string>
     <string name="error_scan_quantity_exceeds_required">Scan quantity exceeds required quantity</string>
@@ -252,6 +254,7 @@
     <string name="error_box_is_not_open">Box is not open</string>
     <string name="error_shipping_box_not_associated">Shipping box is not associated with a picking order</string>
     <string name="error_package_does_not_belong_to_picking_order">Package does not belong to this picking order</string>
+    <string name="error_picking_order_not_found">Picking order not found</string>
     <string name="error_picking_order_already_finished">Picking order is already finished</string>
     <string name="error_package_not_in_box">Package is not in a box</string>
     <string name="error_actor_required">Actor is required</string>
