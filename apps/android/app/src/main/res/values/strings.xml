@@ -186,6 +186,7 @@
     <string name="log_state_unverified">Unverified</string>
     <string name="log_state_scanned">Scanned</string>
     <string name="log_state_boxed">Boxed</string>
+    <string name="log_state_removed">Removed</string>
     <string name="log_state_mismatch_reported">Mismatch reported</string>
     <string name="log_state_cancelled">Cancelled</string>
     <string name="log_state_completed">Completed</string>
@@ -199,6 +200,9 @@
 
     <string name="common_error_prefix">Error: %1$s</string>
     <string name="common_no_data">—</string>
+    <string name="common_state_none">—</string>
+    <string name="common_pcs">pcs</string>
+    <string name="common_in_box">In box %1$s</string>
     <string name="common_search_by_ref_or_supplier">Search by ref or supplier…</string>
     <string name="common_all">All</string>
     <string name="common_pending">Pending</string>

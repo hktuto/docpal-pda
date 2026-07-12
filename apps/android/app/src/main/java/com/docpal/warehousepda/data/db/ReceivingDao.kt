@@ -76,6 +76,10 @@ interface ReceivingDao {
     @Query("SELECT name FROM suppliers WHERE id = :id")
     fun supplierName(id: String): String?
 
+    /** Supplier code of a receiving order — context for QR template matching. */
+    @Query("SELECT s.code FROM receiving_orders ro JOIN suppliers s ON s.id = ro.supplier_id WHERE ro.id = :orderId")
+    fun supplierCodeOfOrder(orderId: String): String?
+
     @Query(
         """
         SELECT ri.id AS invoice_id, ri.invoice_no,

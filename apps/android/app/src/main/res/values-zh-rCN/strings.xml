@@ -186,6 +186,7 @@
     <string name="log_state_unverified">未盘点</string>
     <string name="log_state_scanned">已扫描</string>
     <string name="log_state_boxed">已装箱</string>
+    <string name="log_state_removed">已移除</string>
     <string name="log_state_mismatch_reported">已上报异常</string>
     <string name="log_state_cancelled">已取消</string>
     <string name="log_state_completed">已完成</string>
@@ -199,6 +200,9 @@
 
     <string name="common_error_prefix">错误：%1$s</string>
     <string name="common_no_data">—</string>
+    <string name="common_state_none">—</string>
+    <string name="common_pcs">件</string>
+    <string name="common_in_box">在箱 %1$s 中</string>
     <string name="common_search_by_ref_or_supplier">按单号或供应商搜索…</string>
     <string name="common_all">全部</string>
     <string name="common_pending">待处理</string>

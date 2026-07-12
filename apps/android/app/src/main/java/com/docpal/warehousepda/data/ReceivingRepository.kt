@@ -139,6 +139,11 @@ class ReceivingRepository(private val db: AppDatabase, private val allocator: Al
         )
     }
 
+    /** Supplier code of an order — context supplier for QR template matching. */
+    suspend fun supplierCodeOfOrder(orderId: String): String? = withContext(Dispatchers.IO) {
+        dao.supplierCodeOfOrder(orderId)
+    }
+
     /** available = received - picked - put_away - allocated - unboxed scans, per item. Used by clear/in-hand. */
     internal fun availableQtyByItem(orderId: String): Map<String, Int> {
         val order = dao.orderById(orderId) ?: return emptyMap()

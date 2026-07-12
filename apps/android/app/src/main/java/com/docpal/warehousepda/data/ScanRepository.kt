@@ -2,6 +2,7 @@ package com.docpal.warehousepda.data
 
 import com.docpal.warehousepda.data.db.AppDatabase
 import com.docpal.warehousepda.domain.AllocationDistributor
+import com.docpal.warehousepda.domain.scan.QrParser
 import com.docpal.warehousepda.domain.scan.ScanMatcher
 import com.docpal.warehousepda.domain.scan.ScanPrimitives
 import kotlinx.coroutines.Dispatchers
@@ -12,6 +13,13 @@ class ScanRepository(private val db: AppDatabase) {
 
     private val scanDao get() = db.scanDao()
     private val receivingDao get() = db.receivingDao()
+
+    /** Supplier QR templates (web getSuppliersWithQrTemplates). */
+    suspend fun supplierQrTemplates(): List<QrParser.SupplierQrcodeTemplate> = withContext(Dispatchers.IO) {
+        scanDao.supplierQrTemplates().map {
+            QrParser.SupplierQrcodeTemplate(it.code, it.qrcodeTemplate, it.qrcodeQtyEncoding)
+        }
+    }
 
     suspend fun findReceivingCandidates(
         receivingOrderId: String, normalizedPartNo: String, qty: Int,

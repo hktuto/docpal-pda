@@ -8,6 +8,10 @@ import com.docpal.warehousepda.domain.LocalizedException
 import com.docpal.warehousepda.domain.model.MismatchInfo
 import com.docpal.warehousepda.domain.model.ReceivingOrderDetail
 import com.docpal.warehousepda.domain.model.User
+import com.docpal.warehousepda.domain.scan.OcrLabelParser
+import com.docpal.warehousepda.domain.scan.QrParser
+import com.docpal.warehousepda.domain.scan.ScanMatcher
+import com.docpal.warehousepda.domain.scan.ScanPrimitives
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +50,48 @@ interface SessionSource {
     fun currentUser(): User?
 }
 
+/** Picking mutation slice of `PickingRepository` (web picking.ts / ocrPicking.ts). */
+interface PickingSource {
+    suspend fun createBox(pickingOrderId: String, actorId: String)
+    suspend fun addAllToBox(boxId: String, actorId: String)
+    suspend fun addPackageToBox(packageId: String, boxId: String, actorId: String)
+    suspend fun removePackageFromBox(packageId: String, actorId: String)
+    suspend fun removeScannedPackage(packageId: String, actorId: String)
+    suspend fun applyOcrPick(
+        receivingOrderId: String, pickingItemId: String, qty: Int,
+        dateCode: String?, lotCode: String?, coo: String?, cow: String?, actorId: String,
+    )
+}
+
+/** Matcher seam — lets VM tests substitute a fake for the lambda-built `ScanMatcher`. */
+fun interface ScanMatchSource {
+    suspend fun matchReceiving(
+        ctx: ScanMatcher.ReceivingContext,
+        parsed: ScanPrimitives.OcrInput,
+        actorId: String?,
+    ): ScanMatcher.MatchResult
+}
+
+/** Parse seam — QR template first, OCR fallback (real wiring lives in the factory). */
+fun interface LabelScanParser {
+    suspend fun parse(
+        capture: OcrLabelParser.RawOcrCapture,
+        targets: List<String>,
+    ): OcrLabelParser.OcrParseResult
+}
+
+/** State of the label scan review dialog (port of LabelScanReviewModal.vue props). */
+data class ScanReviewUiState(
+    val manual: Boolean,              // manual entry vs camera review (web mode)
+    val imagePath: String?,
+    val fields: ScanPrimitives.OcrInput,
+    val options: OcrLabelParser.CandidateOptions,
+    val matchResult: ScanMatcher.MatchResult? = null,
+    val matching: Boolean = false,
+    val applying: Boolean = false,
+    val applyErrorKey: String? = null,
+)
+
 data class ReceivingDetailUiState(
     val loading: Boolean = true,
     val detail: ReceivingOrderDetail? = null,
@@ -53,6 +99,11 @@ data class ReceivingDetailUiState(
     val tab: Int = 0,
     val currentUserId: String? = null,
     val actionInProgress: Boolean = false,
+    val scanPin: String? = null,
+    val dialogOpen: Boolean = false,
+    val scanReview: ScanReviewUiState? = null,
+    val pendingAddAllBoxId: String? = null,
+    val toastKey: String? = null,
 )
 
 /**
@@ -67,7 +118,25 @@ class ReceivingDetailViewModel(
     private val mismatchSource: MismatchSource,
     private val sessionSource: SessionSource,
     private val io: CoroutineDispatcher = Dispatchers.IO,
+    private val pickingSource: PickingSource = NoopPickingSource,
+    private val scanMatchSource: ScanMatchSource = ScanMatchSource { _, _, _ -> ScanMatcher.MatchResult.None },
+    private val labelScanParser: LabelScanParser = LabelScanParser { capture, _ ->
+        OcrLabelParser.parseAndIdentify(capture)
+    },
 ) : ViewModel() {
+
+    /** No-op defaults keep the pre-picking constructor call sites/tests valid. */
+    private object NoopPickingSource : PickingSource {
+        override suspend fun createBox(pickingOrderId: String, actorId: String) {}
+        override suspend fun addAllToBox(boxId: String, actorId: String) {}
+        override suspend fun addPackageToBox(packageId: String, boxId: String, actorId: String) {}
+        override suspend fun removePackageFromBox(packageId: String, actorId: String) {}
+        override suspend fun removeScannedPackage(packageId: String, actorId: String) {}
+        override suspend fun applyOcrPick(
+            receivingOrderId: String, pickingItemId: String, qty: Int,
+            dateCode: String?, lotCode: String?, coo: String?, cow: String?, actorId: String,
+        ) {}
+    }
 
     private val _uiState = MutableStateFlow(ReceivingDetailUiState())
     val uiState: StateFlow<ReceivingDetailUiState> = _uiState.asStateFlow()
@@ -133,6 +202,166 @@ class ReceivingDetailViewModel(
         mismatchSource.cancelMismatch(mismatchId, actorId)
     }
 
+    // --- Picking tab actions -------------------------------------------------
+
+    /** Pins a picking item so the next scan only matches that item (web scan(pickingItemId)). */
+    fun pinScan(pickingItemId: String?) = _uiState.update { it.copy(scanPin = pickingItemId) }
+
+    /** The screen raises this while any dialog is open — it gates the hardware wedge. */
+    fun setDialogOpen(open: Boolean) = _uiState.update { it.copy(dialogOpen = open) }
+
+    fun clearToast() = _uiState.update { it.copy(toastKey = null) }
+
+    fun createBox(pickingOrderId: String) = runAction { actorId ->
+        pickingSource.createBox(pickingOrderId, actorId)
+    }
+
+    /** "Add all" is the only confirm-guarded picking action (web parity). */
+    fun requestAddAll(boxId: String) = _uiState.update { it.copy(pendingAddAllBoxId = boxId) }
+
+    fun dismissAddAll() = _uiState.update { it.copy(pendingAddAllBoxId = null) }
+
+    fun confirmAddAll() {
+        val boxId = _uiState.value.pendingAddAllBoxId ?: return
+        _uiState.update { it.copy(pendingAddAllBoxId = null) }
+        runAction { actorId -> pickingSource.addAllToBox(boxId, actorId) }
+    }
+
+    fun addPackageToBox(packageId: String, boxId: String) = runAction { actorId ->
+        pickingSource.addPackageToBox(packageId, boxId, actorId)
+    }
+
+    fun removePackageFromBox(packageId: String) = runAction { actorId ->
+        pickingSource.removePackageFromBox(packageId, actorId)
+    }
+
+    fun removeScannedPackage(packageId: String) = runAction { actorId ->
+        pickingSource.removeScannedPackage(packageId, actorId)
+    }
+
+    // --- Scan review ----------------------------------------------------------
+
+    /** Camera scan result: parse (QR template → OCR fallback) and open the review dialog. */
+    fun openScanReview(text: String, barcodes: List<OcrLabelParser.OcrBarcode>, imagePath: String?) {
+        if (_uiState.value.dialogOpen) return
+        viewModelScope.launch {
+            try {
+                val targets = _uiState.value.detail?.let { partTargets(it) } ?: emptyList()
+                val capture = OcrLabelParser.RawOcrCapture(text, barcodes)
+                val result = withContext(io) { labelScanParser.parse(capture, targets) }
+                _uiState.update {
+                    it.copy(
+                        dialogOpen = true,
+                        scanReview = ScanReviewUiState(
+                            manual = imagePath == null,
+                            imagePath = imagePath,
+                            fields = result.parsed.toOcrInput(),
+                            options = result.options,
+                        ),
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: LocalizedException) {
+                _uiState.update { it.copy(errorKey = e.code) }
+            } catch (e: Exception) {
+                // Parsing never throws in practice; ignore a failed capture like a cancel.
+            }
+        }
+    }
+
+    /** Hardware wedge flush — same handling as a camera scan without an image. */
+    fun onHardwareScan(text: String) {
+        if (_uiState.value.dialogOpen) return
+        openScanReview(text, listOf(OcrLabelParser.OcrBarcode(text, "4")), null)
+    }
+
+    fun openManualEntry() {
+        if (_uiState.value.dialogOpen) return
+        _uiState.update {
+            it.copy(
+                dialogOpen = true,
+                scanReview = ScanReviewUiState(
+                    manual = true,
+                    imagePath = null,
+                    fields = ScanPrimitives.OcrInput("", "", "", "", "", ""),
+                    options = EMPTY_CANDIDATES,
+                ),
+            )
+        }
+    }
+
+    fun closeScanReview() = _uiState.update {
+        it.copy(scanReview = null, dialogOpen = false, scanPin = null)
+    }
+
+    fun updateScanFields(fields: ScanPrimitives.OcrInput) = _uiState.update {
+        it.copy(scanReview = it.scanReview?.copy(fields = fields))
+    }
+
+    fun findMatch(fields: ScanPrimitives.OcrInput? = null) {
+        val review = _uiState.value.scanReview ?: return
+        if (review.matching) return
+        val f = fields ?: review.fields
+        viewModelScope.launch {
+            _uiState.update { it.copy(scanReview = review.copy(matching = true, applyErrorKey = null)) }
+            try {
+                val result = withContext(io) {
+                    scanMatchSource.matchReceiving(
+                        ScanMatcher.ReceivingContext(orderId, _uiState.value.scanPin),
+                        f,
+                        sessionSource.currentUser()?.id,
+                    )
+                }
+                _uiState.update {
+                    it.copy(scanReview = it.scanReview?.copy(matching = false, matchResult = result))
+                }
+            } catch (e: CancellationException) {
+                _uiState.update { it.copy(scanReview = it.scanReview?.copy(matching = false)) }
+                throw e
+            }
+        }
+    }
+
+    /** Applies a chosen match via applyOcrPick; success closes the dialog + toasts + reloads. */
+    fun applyScan(match: ScanMatcher.MatchedRecord, fields: ScanPrimitives.OcrInput? = null) {
+        val review = _uiState.value.scanReview ?: return
+        if (review.applying) return
+        val f = fields ?: review.fields
+        viewModelScope.launch {
+            _uiState.update { it.copy(scanReview = review.copy(applying = true, applyErrorKey = null)) }
+            try {
+                withContext(io) {
+                    val actorId = sessionSource.currentUser()?.id
+                        ?: throw LocalizedException("operator_not_signed_in")
+                    val p = ScanPrimitives.parseManual(f)
+                    pickingSource.applyOcrPick(
+                        orderId, match.picking.pickingItemId, p.qty,
+                        p.dateCode, p.lotCode, p.coo, p.cow, actorId,
+                    )
+                }
+                _uiState.update {
+                    it.copy(
+                        scanReview = null, dialogOpen = false, scanPin = null,
+                        toastKey = "common_scan_success",
+                    )
+                }
+                reload()
+            } catch (e: CancellationException) {
+                _uiState.update { it.copy(scanReview = it.scanReview?.copy(applying = false)) }
+                throw e
+            } catch (e: LocalizedException) {
+                _uiState.update {
+                    it.copy(scanReview = it.scanReview?.copy(applying = false, applyErrorKey = e.code))
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(scanReview = it.scanReview?.copy(applying = false, applyErrorKey = "apply_failed"))
+                }
+            }
+        }
+    }
+
     private fun runAction(block: suspend (actorId: String) -> Unit) {
         // Serialize actions so overlapping taps can't clobber each other's state.
         if (_uiState.value.actionInProgress) return
@@ -158,9 +387,69 @@ class ReceivingDetailViewModel(
     }
 
     companion object {
+        private val EMPTY_CANDIDATES = OcrLabelParser.CandidateOptions(
+            emptyList(), emptyList(), emptyList(), emptyList(), emptyList(), emptyList(),
+        )
+
+        /** Part numbers of the receiving order — the parse/match gate (web context.targets). */
+        private fun partTargets(detail: ReceivingOrderDetail): List<String> =
+            detail.invoices.flatMap { invoice -> invoice.items.map { it.partNo } }.distinct()
+
+        private fun OcrLabelParser.ParsedFields.toOcrInput() = ScanPrimitives.OcrInput(
+            partNo = itemId ?: "",
+            dateCode = dateCode ?: "",
+            lotCode = lotCode ?: "",
+            coo = coo ?: "",
+            cow = cow ?: "",
+            qty = qty?.toString() ?: "",
+        )
+
         /** Per-orderId factory; screens build it from the app container. */
-        fun provideFactory(container: AppContainer, orderId: String): ViewModelProvider.Factory =
-            object : ViewModelProvider.Factory {
+        fun provideFactory(container: AppContainer, orderId: String): ViewModelProvider.Factory {
+            val repo = container.pickingRepository
+            val pickingSource = object : PickingSource {
+                override suspend fun createBox(pickingOrderId: String, actorId: String) {
+                    repo.createShippingBoxForPickingOrder(pickingOrderId, actorId)
+                }
+
+                override suspend fun addAllToBox(boxId: String, actorId: String) {
+                    repo.addAllUnboxedPackagesToBox(boxId, actorId)
+                }
+
+                override suspend fun addPackageToBox(packageId: String, boxId: String, actorId: String) {
+                    repo.addPackageToBox(packageId, boxId, actorId)
+                }
+
+                override suspend fun removePackageFromBox(packageId: String, actorId: String) =
+                    repo.removePackageFromBox(packageId, actorId)
+
+                override suspend fun removeScannedPackage(packageId: String, actorId: String) =
+                    repo.removeScannedPackage(packageId, actorId)
+
+                override suspend fun applyOcrPick(
+                    receivingOrderId: String, pickingItemId: String, qty: Int,
+                    dateCode: String?, lotCode: String?, coo: String?, cow: String?, actorId: String,
+                ) = repo.applyOcrPick(
+                    receivingOrderId, pickingItemId, qty, dateCode, lotCode, coo, cow, actorId,
+                )
+            }
+            val scanMatchSource = ScanMatchSource { ctx, parsed, actorId ->
+                container.scanMatcher.matchReceiving(ctx, parsed, actorId)
+            }
+            // Web useLabelScan.processCapture: QR/barcode values go through the supplier
+            // QR templates first; when no template matches, fall back to OCR parsing.
+            val labelScanParser = LabelScanParser { capture, targets ->
+                val templates = withContext(Dispatchers.IO) {
+                    container.scanRepository.supplierQrTemplates()
+                }
+                val supplierCode = withContext(Dispatchers.IO) {
+                    container.receivingRepository.supplierCodeOfOrder(orderId)
+                }
+                capture.barcodes.firstNotNullOfOrNull { barcode ->
+                    QrParser.parseQrCapture(barcode.value, templates, targets, supplierCode)
+                } ?: OcrLabelParser.parseAndIdentify(capture, targets)
+            }
+            return object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")
                 override fun <T : ViewModel> create(modelClass: Class<T>): T {
                     if (modelClass.isAssignableFrom(ReceivingDetailViewModel::class.java)) {
@@ -169,10 +458,14 @@ class ReceivingDetailViewModel(
                             container.receivingRepository,
                             container.mismatchRepository,
                             container.sessionRepository,
+                            pickingSource = pickingSource,
+                            scanMatchSource = scanMatchSource,
+                            labelScanParser = labelScanParser,
                         ) as T
                     }
                     throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
                 }
             }
+        }
     }
 }
