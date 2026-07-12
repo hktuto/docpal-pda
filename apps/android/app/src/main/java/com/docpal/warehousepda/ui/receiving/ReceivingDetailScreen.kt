@@ -139,6 +139,10 @@ fun ReceivingDetailScreen(
     Scaffold(
         modifier = Modifier.onPreviewKeyEvent { event ->
             when {
+                // Phase 2 walkthrough: wedge Enter KeyUp fell through and activated
+                // the app-bar back button, popping this screen after a hardware scan.
+                event.type == KeyEventType.KeyUp && event.key == Key.Enter ->
+                    keyBuffer.enabled
                 wedgeDisabled || event.type != KeyEventType.KeyDown -> false
                 event.key == Key.Enter ->
                     keyBuffer.onKey("Enter") == HardwareKeyBuffer.Consume.CONSUMED
