@@ -141,6 +141,90 @@ interface PutAwayDao {
     @Query("SELECT * FROM put_away_scans WHERE id = :scanId")
     fun scanById(scanId: String): PutAwayScanEntity?
 
+    @Query("SELECT * FROM shelf_boxes WHERE id = :boxId")
+    fun boxById(boxId: String): ShelfBoxEntity?
+
+    /** Unboxed scans of one receiving order, oldest first with id tiebreak (API addAllUnboxedToBox: created_at ASC). */
+    @Query(
+        """
+        SELECT pas.id FROM put_away_scans pas
+        JOIN receiving_invoice_items rii ON rii.id = pas.receiving_invoice_item_id
+        JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+        WHERE pas.shelf_box_id IS NULL AND ri.receiving_order_id = :orderId
+        ORDER BY pas.created_at ASC, pas.id
+        """
+    )
+    fun unboxedScanIdsOfOrder(orderId: String): List<String>
+
+    @Query("UPDATE put_away_scans SET shelf_box_id = :boxId WHERE id = :scanId")
+    fun assignScanToBox(scanId: String, boxId: String)
+
+    @Query("UPDATE put_away_scans SET shelf_box_id = NULL, verified = 0, verified_at = NULL WHERE id = :scanId")
+    fun unassignScanFromBox(scanId: String)
+
+    /**
+     * Lot lookup on the merge key — exactly the inventory_lots unique-index columns
+     * (part_id, date_code, coo, cow, shelf_code, box_id); lot_code is deliberately NOT
+     * part of the key, so scans with differing lot codes merge into the one physical lot
+     * per box slot. Null-safe attribute match via IS, like the web's IS comparisons.
+     */
+    @Query(
+        """
+        SELECT * FROM inventory_lots
+        WHERE part_id = :partId AND date_code IS :dateCode AND coo IS :coo AND cow IS :cow
+              AND shelf_code IS :shelfCode AND box_id IS :boxId
+        """
+    )
+    fun lotByMergeKey(
+        partId: String,
+        dateCode: String?,
+        coo: String?,
+        cow: String?,
+        shelfCode: String?,
+        boxId: String?,
+    ): InventoryLotEntity?
+
+    @Query("UPDATE inventory_lots SET total_qty = total_qty + :qty, available_qty = available_qty + :qty WHERE id = :id")
+    fun increaseLotAvailableQtys(id: String, qty: Int)
+
+    @Query("UPDATE inventory_lots SET total_qty = total_qty - :qty, available_qty = available_qty - :qty WHERE id = :id")
+    fun decreaseLotAvailableQtys(id: String, qty: Int)
+
+    @Query("DELETE FROM inventory_lots WHERE id = :id")
+    fun deleteLot(id: String)
+
+    @Query("SELECT * FROM inventory_lot_sources WHERE inventory_lot_id = :lotId AND receiving_invoice_item_id = :itemId")
+    fun lotSourceByLotAndItem(lotId: String, itemId: String): InventoryLotSourceEntity?
+
+    @Query("UPDATE inventory_lot_sources SET qty = qty + :qty WHERE id = :id")
+    fun increaseLotSourceQty(id: String, qty: Int)
+
+    @Query("UPDATE inventory_lot_sources SET qty = qty - :qty WHERE id = :id")
+    fun decreaseLotSourceQty(id: String, qty: Int)
+
+    @Query("DELETE FROM inventory_lot_sources WHERE id = :id")
+    fun deleteLotSource(id: String)
+
+    /** API removeScanFromBox allocation guard: any allocation row (even fully picked) pins the lot. */
+    @Query("SELECT COUNT(*) FROM allocations WHERE inventory_lot_id = :lotId")
+    fun allocationCountForLot(lotId: String): Int
+
+    @Query("UPDATE receiving_invoice_items SET put_away_qty = put_away_qty + :qty WHERE id = :id")
+    fun increaseItemPutAwayQty(id: String, qty: Int)
+
+    @Query("UPDATE receiving_invoice_items SET put_away_qty = put_away_qty - :qty WHERE id = :id")
+    fun decreaseItemPutAwayQty(id: String, qty: Int)
+
+    @Query("SELECT COUNT(*) FROM put_away_scans WHERE shelf_box_id = :boxId")
+    fun scanCountInBox(boxId: String): Int
+
+    @Query("UPDATE shelf_boxes SET status = :status WHERE id = :boxId")
+    fun updateBoxStatus(boxId: String, status: String)
+
+    /** Hard delete (web cancelShelfBox: cancelled boxes are not persisted; the id survives in transition_logs). */
+    @Query("DELETE FROM shelf_boxes WHERE id = :boxId")
+    fun deleteBox(boxId: String)
+
     @Insert
     fun insertScan(scan: PutAwayScanEntity)
 
@@ -149,6 +233,12 @@ interface PutAwayDao {
 
     @Insert
     fun insertLog(log: TransitionLogEntity)
+
+    @Insert
+    fun insertLot(lot: InventoryLotEntity)
+
+    @Insert
+    fun insertLotSource(source: InventoryLotSourceEntity)
 
     @Query("DELETE FROM put_away_scans WHERE id = :scanId")
     fun deleteScan(scanId: String)

@@ -2,6 +2,8 @@ package com.docpal.warehousepda.domain
 
 import com.docpal.warehousepda.data.ReceivingAvailability
 import com.docpal.warehousepda.data.db.AppDatabase
+import com.docpal.warehousepda.data.db.InventoryLotEntity
+import com.docpal.warehousepda.data.db.InventoryLotSourceEntity
 import com.docpal.warehousepda.data.db.PutAwayScanEntity
 import com.docpal.warehousepda.data.db.ShelfBoxEntity
 import com.docpal.warehousepda.data.db.TransitionLogEntity
@@ -25,9 +27,12 @@ import java.util.UUID
  * page (header, lots, scans, boxes, shelves) from the flat DAO rows. Per-item availability
  * reuses [ReceivingAvailability] — the same AllocationDistributor math as the receiving
  * screens; do not duplicate it. The mutations port web recordPutAwayScan / createShelfBox /
- * removeScannedPiece keeping the web's error codes (nextShelfBoxId follows the API variant,
- * apps/api/src/db/putAway.ts). Threading matches the other repositories: suspend entry points
- * wrap plain blocking Room calls in withContext(Dispatchers.IO).
+ * removeScannedPiece / assignScanToBox / addAllUnboxedToBox / removeScanFromBox /
+ * closeShelfBox / cancelShelfBox keeping the web's error codes (nextShelfBoxId follows the
+ * API variant, apps/api/src/db/putAway.ts); assign/remove/close end with
+ * [tryMarkReceivingOrderClear], the API auto-clear check on the shared availability math.
+ * Threading matches the other repositories: suspend entry points wrap plain blocking Room
+ * calls in withContext(Dispatchers.IO).
  */
 class PutAwayRepository(private val db: AppDatabase) {
 
@@ -231,5 +236,204 @@ class PutAwayRepository(private val db: AppDatabase) {
             putAwayDao.deleteScan(scanId)
         }
         Unit
+    }
+
+    /**
+     * Port of web assignScanToBox (apps/api/src/db/putAway.ts:129-181): validates scan/box/item,
+     * boxes the scan, materializes the inventory lot + lot source, bumps put_away_qty, then runs
+     * the receiving-order clear check. Not ported (deliberate): scheduleCycleCount —
+     * verification_tasks don't exist on Android (Phase 4 lists boxes directly), so the scan's
+     * verified flag stays 0 until goods-verify.
+     */
+    suspend fun assignScanToBox(scanId: String, boxId: String, actorId: String) =
+        withContext(Dispatchers.IO) {
+            db.runInTransaction { assignScanToBoxInternal(scanId, boxId, actorId) }
+            Unit
+        }
+
+    /** Tx-internal assign — also driven by [addAllUnboxedToBox] inside its single transaction. */
+    internal fun assignScanToBoxInternal(scanId: String, boxId: String, actorId: String) {
+        val scan = putAwayDao.scanById(scanId) ?: throw LocalizedException("put_away_scan_not_found")
+        if (scan.shelfBoxId != null) throw LocalizedException("put_away_scan_already_boxed")
+        val box = putAwayDao.boxById(boxId) ?: throw LocalizedException("shelf_box_not_found")
+        if (box.status != "open") throw LocalizedException("shelf_box_is_not_open")
+        val itemId = scan.receivingInvoiceItemId ?: throw LocalizedException("invoice_item_not_found")
+        val item = putAwayDao.scanItemRow(itemId) ?: throw LocalizedException("invoice_item_not_found")
+        if (box.receivingOrderId != item.orderId) {
+            throw LocalizedException("item_does_not_belong_to_receiving_order")
+        }
+
+        putAwayDao.assignScanToBox(scanId, boxId)
+        val lotId = upsertMaterializedLot(scan, item.partId, box)
+        upsertLotSource(lotId, itemId, scan.qty)
+        putAwayDao.increaseItemPutAwayQty(itemId, scan.qty)
+        tryMarkReceivingOrderClear(item.orderId, actorId)
+    }
+
+    /**
+     * Lot materialization upsert (web assignScanToBox): the merge key is exactly the
+     * inventory_lots unique-index columns (part_id, date_code, coo, cow, shelf_code, box_id) —
+     * lot_code is NOT part of the key, so scans with differing lot codes merge into the one
+     * physical lot per box slot. Match → total_qty/available_qty += scan qty; else insert
+     * (allocated_qty = 0, lot_code from the scan).
+     */
+    private fun upsertMaterializedLot(scan: PutAwayScanEntity, partId: String, box: ShelfBoxEntity): String {
+        val existing =
+            putAwayDao.lotByMergeKey(partId, scan.dateCode, scan.coo, scan.cow, box.shelfCode, box.id)
+        if (existing != null) {
+            putAwayDao.increaseLotAvailableQtys(existing.id, scan.qty)
+            return existing.id
+        }
+        val lotId = UUID.randomUUID().toString()
+        putAwayDao.insertLot(
+            InventoryLotEntity(
+                id = lotId, partId = partId,
+                dateCode = scan.dateCode, lotCode = scan.lotCode, coo = scan.coo, cow = scan.cow,
+                shelfCode = box.shelfCode, boxId = box.id,
+                totalQty = scan.qty, allocatedQty = 0, availableQty = scan.qty,
+            )
+        )
+        return lotId
+    }
+
+    /** Lot source upsert on (inventory_lot_id, receiving_invoice_item_id): qty += or insert. */
+    private fun upsertLotSource(lotId: String, itemId: String, qty: Int) {
+        val existing = putAwayDao.lotSourceByLotAndItem(lotId, itemId)
+        if (existing != null) {
+            putAwayDao.increaseLotSourceQty(existing.id, qty)
+        } else {
+            putAwayDao.insertLotSource(
+                InventoryLotSourceEntity(
+                    id = UUID.randomUUID().toString(),
+                    inventoryLotId = lotId, receivingInvoiceItemId = itemId, qty = qty,
+                )
+            )
+        }
+    }
+
+    /**
+     * Port of web addAllUnboxedToBox (apps/api/src/db/putAway.ts:183-195): assigns every unboxed
+     * scan of the box's receiving order, oldest first, in one transaction — if any assign throws,
+     * everything rolls back. Returns the assigned count.
+     */
+    suspend fun addAllUnboxedToBox(boxId: String, actorId: String): Int = withContext(Dispatchers.IO) {
+        var count = 0
+        db.runInTransaction {
+            val box = putAwayDao.boxById(boxId) ?: throw LocalizedException("shelf_box_not_found")
+            if (box.status != "open") throw LocalizedException("shelf_box_is_not_open")
+            val scanIds = box.receivingOrderId?.let { putAwayDao.unboxedScanIdsOfOrder(it) } ?: emptyList()
+            for (scanId in scanIds) assignScanToBoxInternal(scanId, boxId, actorId)
+            count = scanIds.size
+        }
+        count
+    }
+
+    /**
+     * Port of web removeScanFromBox (apps/api/src/db/putAway.ts:197-240): unboxes the scan and
+     * reverses the lot materialization + put_away_qty. API allocation guard: a materialized lot
+     * with any allocation rows (even fully picked) no longer maps to this scan —
+     * lot_has_pick_allocations (the web API's unmapped 409, mapped properly here). The trailing
+     * clear check is web parity; practically a no-op since removal only restores availability
+     * (web never flips clear → in_hand, and neither do we).
+     */
+    suspend fun removeScanFromBox(scanId: String, actorId: String) = withContext(Dispatchers.IO) {
+        db.runInTransaction {
+            val scan = putAwayDao.scanById(scanId) ?: throw LocalizedException("put_away_scan_not_found")
+            val boxId = scan.shelfBoxId ?: throw LocalizedException("put_away_scan_not_boxed")
+            val box = putAwayDao.boxById(boxId) ?: throw LocalizedException("shelf_box_not_found")
+            if (box.status != "open") throw LocalizedException("shelf_box_is_not_open")
+            val itemId = scan.receivingInvoiceItemId ?: throw LocalizedException("invoice_item_not_found")
+            val item = putAwayDao.scanItemRow(itemId) ?: throw LocalizedException("invoice_item_not_found")
+
+            putAwayDao.unassignScanFromBox(scanId)
+
+            // Reverse the lot materialization: the lot via the same six-column merge key
+            // (lot_code excluded), the source via (inventory_lot_id, receiving_invoice_item_id).
+            // Missing rows mean data inconsistency — web pglite throws inventory_lot_not_found.
+            val lot = putAwayDao.lotByMergeKey(item.partId, scan.dateCode, scan.coo, scan.cow, box.shelfCode, boxId)
+                ?: throw LocalizedException("inventory_lot_not_found")
+            val source = putAwayDao.lotSourceByLotAndItem(lot.id, itemId)
+                ?: throw LocalizedException("inventory_lot_not_found")
+            if (putAwayDao.allocationCountForLot(lot.id) > 0) {
+                throw LocalizedException("lot_has_pick_allocations")
+            }
+            if (source.qty - scan.qty <= 0) putAwayDao.deleteLotSource(source.id)
+            else putAwayDao.decreaseLotSourceQty(source.id, scan.qty)
+            if (lot.totalQty - scan.qty <= 0) putAwayDao.deleteLot(lot.id)
+            else putAwayDao.decreaseLotAvailableQtys(lot.id, scan.qty)
+
+            putAwayDao.decreaseItemPutAwayQty(itemId, scan.qty)
+            tryMarkReceivingOrderClear(item.orderId, actorId)
+        }
+        Unit
+    }
+
+    /** Port of web closeShelfBox (:256-263): open box with at least one scan → closed + log + clear check. */
+    suspend fun closeShelfBox(boxId: String, actorId: String) = withContext(Dispatchers.IO) {
+        db.runInTransaction {
+            val box = putAwayDao.boxById(boxId) ?: throw LocalizedException("shelf_box_not_found")
+            if (box.status != "open") throw LocalizedException("shelf_box_is_not_open")
+            if (putAwayDao.scanCountInBox(boxId) == 0) throw LocalizedException("cannot_close_empty_shelf_box")
+            putAwayDao.updateBoxStatus(boxId, "closed")
+            insertBoxTransitionLog(boxId, from = "open", to = "closed", actorId = actorId)
+            box.receivingOrderId?.let { tryMarkReceivingOrderClear(it, actorId) }
+        }
+        Unit
+    }
+
+    /**
+     * Port of web cancelShelfBox (:44-51): open + empty → cancelled transition log, then hard
+     * delete the box row. The id survives in transition_logs, so nextShelfBoxId never reissues it.
+     */
+    suspend fun cancelShelfBox(boxId: String, actorId: String) = withContext(Dispatchers.IO) {
+        db.runInTransaction {
+            val box = putAwayDao.boxById(boxId) ?: throw LocalizedException("shelf_box_not_found")
+            if (box.status != "open") throw LocalizedException("shelf_box_is_not_open")
+            if (putAwayDao.scanCountInBox(boxId) > 0) throw LocalizedException("shelf_box_is_not_empty")
+            insertBoxTransitionLog(boxId, from = "open", to = "cancelled", actorId = actorId)
+            putAwayDao.deleteBox(boxId)
+        }
+        Unit
+    }
+
+    /** Shelf-box transition log row (web logTransition; no metadata for close/cancel). */
+    private fun insertBoxTransitionLog(boxId: String, from: String?, to: String, actorId: String) {
+        putAwayDao.insertLog(
+            TransitionLogEntity(
+                id = UUID.randomUUID().toString(),
+                entityType = "shelf_box", entityId = boxId,
+                fromState = from, toState = to, actorId = actorId,
+                metadata = null, createdAt = System.currentTimeMillis(),
+            )
+        )
+    }
+
+    /**
+     * Port of API tryMarkReceivingOrderClear (apps/api/src/db/putAway.ts:110-127): in_hand → clear
+     * when every invoice item's available <= 0. Uses the shared [ReceivingAvailability] math, in
+     * which unboxed scans are already subtracted (web parity: unboxed scans count as consumed).
+     * Called inside the box mutations' transactions; log shape mirrors
+     * ReceivingRepository.tryMarkClear (entity_type receiving_order, no metadata).
+     */
+    internal fun tryMarkReceivingOrderClear(orderId: String, actorId: String) {
+        val order = receivingDao.orderById(orderId) ?: return
+        if (order.status != "in_hand") return
+        val invoices = receivingDao.invoicesOfOrder(orderId)
+        val items = if (invoices.isEmpty()) emptyList() else receivingDao.itemsOfInvoices(invoices.map { it.id })
+        if (items.isEmpty()) return
+        val available = ReceivingAvailability.byItem(
+            receivingDao, orderId, receivingDao.detailItemRows(orderId), order.deliveryDate,
+        ).mapValues { it.value.availableQty }
+        if (items.any { (available[it.id] ?: 0) > 0 }) return
+        val now = System.currentTimeMillis()
+        receivingDao.updateOrderStatus(orderId, "clear", now)
+        receivingDao.insertTransitionLog(
+            TransitionLogEntity(
+                id = UUID.randomUUID().toString(),
+                entityType = "receiving_order", entityId = orderId,
+                fromState = order.status, toState = "clear",
+                actorId = actorId, metadata = null, createdAt = now,
+            )
+        )
     }
 }
