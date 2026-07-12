@@ -43,6 +43,10 @@ import type {
   StockSearchSupplierWithStats,
   StockSearchPart,
   StockSearchInventoryLot,
+  ScanCandidates,
+  ReceivingCandidate,
+  PickingCandidate,
+  SupplierQrcodeTemplate,
 } from "../types";
 
 type RawRow = Record<string, any>;
@@ -1258,6 +1262,61 @@ export function createApiWarehouseService(
         part_ids: partIds.join(","),
       });
       return rows.map(toStockLot);
+    },
+
+    async getScanCandidates(receivingOrderId): Promise<ScanCandidates> {
+      // The API returns the same grouped maps the web builds from
+      // findReceivingCandidatesForOrder / findPickingCandidatesForOrder:
+      // receiving keyed by normalize()d part_no, picking keyed by part_id.
+      // The keys pass through; only the row fields are camelCased.
+      const res = await client.get<{
+        receiving_by_part_no: Record<string, RawRow[]>;
+        picking_by_part_id: Record<string, RawRow[]>;
+      }>(`/receiving-orders/${receivingOrderId}/scan-candidates`);
+
+      const receivingCandidatesByPartNo: Record<string, ReceivingCandidate[]> = {};
+      for (const [key, rows] of Object.entries(res.receiving_by_part_no ?? {})) {
+        receivingCandidatesByPartNo[key] = rows.map((row) => ({
+          receivingInvoiceItemId: String(row.receiving_invoice_item_id),
+          partId: String(row.part_id),
+          partNo: String(row.part_no),
+          dateCode: row.date_code != null ? String(row.date_code) : null,
+          lotCode: row.lot_code != null ? String(row.lot_code) : null,
+          coo: row.coo != null ? String(row.coo) : null,
+          cow: row.cow != null ? String(row.cow) : null,
+          availableQty: Number(row.available_qty),
+        }));
+      }
+
+      const pickingCandidatesByPartId: Record<string, PickingCandidate[]> = {};
+      for (const [key, rows] of Object.entries(res.picking_by_part_id ?? {})) {
+        pickingCandidatesByPartId[key] = rows.map((row) => ({
+          pickingOrderId: String(row.picking_order_id),
+          pickingOrderRefNo: String(row.picking_order_ref_no),
+          pickingItemId: String(row.picking_item_id),
+          partId: String(row.part_id),
+          shipTo: row.ship_to != null ? String(row.ship_to) : null,
+          requiredQty: Number(row.required_qty),
+          pickedQty: Number(row.picked_qty),
+          remainingQty: Number(row.remaining_qty),
+        }));
+      }
+
+      return { receivingCandidatesByPartNo, pickingCandidatesByPartId };
+    },
+
+    async getSupplierQrTemplates(): Promise<SupplierQrcodeTemplate[]> {
+      const rows = await client.get<RawRow[]>("/suppliers/qr-templates");
+      return rows.map((row) => ({
+        code: String(row.code),
+        qrcodeTemplate: String(row.qr_template),
+        qrcodeQtyEncoding:
+          row.qrcode_qty_encoding == null ? null : String(row.qrcode_qty_encoding),
+      }));
+    },
+
+    async resetDemoData(): Promise<void> {
+      await client.post("/dev/reset");
     },
   };
 }

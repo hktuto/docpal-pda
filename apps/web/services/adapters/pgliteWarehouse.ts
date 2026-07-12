@@ -30,7 +30,10 @@ import {
 } from "~/db/picking";
 import {
   applyOcrPick as dbApplyOcrPick,
+  findReceivingCandidatesForOrder,
+  findPickingCandidatesForOrder,
 } from "~/db/ocrPicking";
+import { getSuppliersWithQrTemplates } from "~/db/suppliers";
 import {
   getPutAwayCandidates as dbGetPutAwayCandidates,
   getPutAwayLots as dbGetPutAwayLots,
@@ -121,6 +124,8 @@ import type {
   StockSearchSupplierWithStats,
   StockSearchPart,
   StockSearchInventoryLot,
+  ScanCandidates,
+  SupplierQrcodeTemplate,
 } from "../types";
 
 type DbPickingOrderDetail = NonNullable<Awaited<ReturnType<typeof getPickingOrderDetail>>>;
@@ -1347,6 +1352,37 @@ export function createPgliteWarehouseService(
 
     async getInventoryLotsForParts(partIds: string[]): Promise<StockSearchInventoryLot[]> {
       return dbGetInventoryLotsForParts(db, partIds);
+    },
+
+    async getScanCandidates(receivingOrderId: string): Promise<ScanCandidates> {
+      const [receivingMap, pickingMap] = await Promise.all([
+        findReceivingCandidatesForOrder(db, receivingOrderId),
+        findPickingCandidatesForOrder(db, receivingOrderId),
+      ]);
+      return {
+        receivingCandidatesByPartNo: Object.fromEntries(receivingMap),
+        pickingCandidatesByPartId: Object.fromEntries(pickingMap),
+      };
+    },
+
+    async getSupplierQrTemplates(): Promise<SupplierQrcodeTemplate[]> {
+      return getSuppliersWithQrTemplates(db);
+    },
+
+    async resetDemoData(): Promise<void> {
+      // Parity with AppHeader's previous direct reset: close PGlite and drop
+      // its IndexedDB database. Callers keep localStorage.clear() + reload.
+      const pg = useNuxtApp().$pglite;
+      if (pg) {
+        await pg.close();
+      }
+      if (typeof indexedDB === "undefined") return;
+      await new Promise<void>((resolve, reject) => {
+        const req = indexedDB.deleteDatabase("/pglite/warehouse-demo-pglite");
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+        req.onblocked = () => resolve();
+      });
     },
   };
 }

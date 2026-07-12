@@ -256,6 +256,18 @@ export interface PickingCandidate {
   remainingQty: number;
 }
 
+/**
+ * Pre-computed scan candidates for a receiving order, grouped for instant
+ * lookup: receiving candidates keyed by normalize()d part_no (trim/uppercase/
+ * collapse whitespace — see composables/useMockOcr.ts), picking candidates
+ * keyed by part_id. Plain records so both adapters (and the API transport)
+ * share the same shape.
+ */
+export interface ScanCandidates {
+  receivingCandidatesByPartNo: Record<string, ReceivingCandidate[]>;
+  pickingCandidatesByPartId: Record<string, PickingCandidate[]>;
+}
+
 // ------------------------------------------------------------------
 // Picking
 // ------------------------------------------------------------------

@@ -29,6 +29,8 @@ import type {
   StockSearchSupplierWithStats,
   StockSearchPart,
   StockSearchInventoryLot,
+  ScanCandidates,
+  SupplierQrcodeTemplate,
 } from "./types";
 import { createPgliteWarehouseService } from "./adapters/pgliteWarehouse";
 import { createApiWarehouseService } from "./adapters/apiWarehouse";
@@ -109,6 +111,13 @@ export interface WarehouseService {
   getShelfBox(id: string): Promise<GoodsVerifyShelfBoxDetail>;
   verifyShelfBoxItem(shelfBoxId: string, partId: string): Promise<void>;
   markShelfBoxVerified(id: string): Promise<void>;
+
+  // Scan candidates & supplier QR templates (OCR label scanning)
+  getScanCandidates(receivingOrderId: string): Promise<ScanCandidates>;
+  getSupplierQrTemplates(): Promise<SupplierQrcodeTemplate[]>;
+
+  // Demo reset (dev only)
+  resetDemoData(): Promise<void>;
 
   // Stock search
   getSuppliersWithInventoryStats(): Promise<StockSearchSupplierWithStats[]>;

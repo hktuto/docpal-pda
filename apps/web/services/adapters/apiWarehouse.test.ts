@@ -2402,3 +2402,138 @@ describe('createApiWarehouseService (stock search)', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe('createApiWarehouseService (scan candidates, qr templates, reset)', () => {
+  const fetchMock = vi.fn();
+
+  function createService(): WarehouseService {
+    return createApiWarehouseService({
+      adapter: 'api',
+      apiBaseUrl: 'http://api.test',
+      getActorId: () => ACTOR_ID,
+    });
+  }
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('getScanCandidates maps the grouped snake_case maps to camelCase candidates', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        receiving_by_part_no: {
+          'ABC 123': [
+            {
+              receiving_invoice_item_id: 'rii1',
+              part_id: 'p1',
+              part_no: 'abc  123',
+              date_code: 'D1',
+              lot_code: null,
+              coo: 'CN',
+              cow: null,
+              available_qty: 7,
+            },
+          ],
+        },
+        picking_by_part_id: {
+          p1: [
+            {
+              picking_order_id: 'po1',
+              picking_order_ref_no: 'PO-1',
+              picking_item_id: 'pi1',
+              part_id: 'p1',
+              ship_to: 'Berlin',
+              required_qty: 10,
+              picked_qty: 2,
+              remaining_qty: 8,
+            },
+          ],
+        },
+      })
+    );
+
+    const result = await createService().getScanCandidates('ro1');
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://api.test/receiving-orders/ro1/scan-candidates',
+      expect.objectContaining({ method: 'GET' })
+    );
+    // The API keys the maps exactly like the web's normalize() grouping; the
+    // keys pass through unchanged.
+    expect(Object.keys(result.receivingCandidatesByPartNo)).toEqual(['ABC 123']);
+    expect(result.receivingCandidatesByPartNo['ABC 123']).toEqual([
+      {
+        receivingInvoiceItemId: 'rii1',
+        partId: 'p1',
+        partNo: 'abc  123',
+        dateCode: 'D1',
+        lotCode: null,
+        coo: 'CN',
+        cow: null,
+        availableQty: 7,
+      },
+    ]);
+    expect(Object.keys(result.pickingCandidatesByPartId)).toEqual(['p1']);
+    expect(result.pickingCandidatesByPartId.p1).toEqual([
+      {
+        pickingOrderId: 'po1',
+        pickingOrderRefNo: 'PO-1',
+        pickingItemId: 'pi1',
+        partId: 'p1',
+        shipTo: 'Berlin',
+        requiredQty: 10,
+        pickedQty: 2,
+        remainingQty: 8,
+      },
+    ]);
+  });
+
+  it('getScanCandidates passes through empty maps', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({ receiving_by_part_no: {}, picking_by_part_id: {} })
+    );
+
+    const result = await createService().getScanCandidates('ro1');
+
+    expect(result).toEqual({
+      receivingCandidatesByPartNo: {},
+      pickingCandidatesByPartId: {},
+    });
+  });
+
+  it('getSupplierQrTemplates maps snake_case rows to SupplierQrcodeTemplate', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse([
+        { code: 'KOA', qr_template: '^:(?<itemId>.+)$', qrcode_qty_encoding: 'koa_zeros' },
+        { code: 'MMC', qr_template: '^MMC', qrcode_qty_encoding: null },
+      ])
+    );
+
+    const rows = await createService().getSupplierQrTemplates();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://api.test/suppliers/qr-templates',
+      expect.objectContaining({ method: 'GET' })
+    );
+    expect(rows).toEqual([
+      { code: 'KOA', qrcodeTemplate: '^:(?<itemId>.+)$', qrcodeQtyEncoding: 'koa_zeros' },
+      { code: 'MMC', qrcodeTemplate: '^MMC', qrcodeQtyEncoding: null },
+    ]);
+  });
+
+  it('resetDemoData posts to /dev/reset', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+
+    await createService().resetDemoData();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://api.test/dev/reset',
+      expect.objectContaining({ method: 'POST' })
+    );
+  });
+});
