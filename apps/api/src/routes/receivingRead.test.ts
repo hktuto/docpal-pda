@@ -118,4 +118,157 @@ test("GET /receiving-orders/:id returns 404 for unknown order", async () => {
   assert.equal(res.status, 404);
 });
 
+// Task 6 fixtures: ro6 with both allocation shapes (lot-sourced al6 and
+// order-level al6b), one unboxed + one boxed package on pi6, a shipping box,
+// and transition logs for both the picking order and the picking item.
+// Note: API inventory_lots carries shelf_code/box_id directly (no shelf_box_id
+// FK), so the lot row's location fields come from the lot itself.
+sqlite.exec(`
+  INSERT INTO parts (id, part_no, part_no_norm, description, created_at, updated_at)
+    VALUES ('p6','P6','P6','Part six','0','0');
+  INSERT INTO users (id, username, password_hash, role, name, created_at, updated_at)
+    VALUES ('u6','user6','hash6','operator','User Six','0','0');
+  INSERT INTO receiving_orders (id, external_id, ref_no, delivery_date, status, supplier_id, created_at, updated_at)
+    VALUES ('ro6','e6','RO-6',NULL,'in_hand',NULL,'0','0');
+  INSERT INTO receiving_invoices (id, external_id, receiving_order_id, invoice_no, supplier_id, created_at, updated_at)
+    VALUES ('inv6','e6','ro6','INV-6',NULL,'0','0');
+  INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty, available_qty, created_at, updated_at)
+    VALUES ('rii6','inv6','p6',10,10,10,'0','0');
+  INSERT INTO picking_orders (id, external_id, ref_no, status, ship_to, created_at, updated_at)
+    VALUES ('po6','e6','PO-6','picking','Ship To Six','0','0');
+  INSERT INTO picking_items (id, picking_order_id, part_id, qty, picked_qty, created_at, updated_at)
+    VALUES ('pi6','po6','p6',6,2,'0','0');
+  INSERT INTO inventory_lots (id, part_id, date_code, lot_code, coo, cow, shelf_code, box_id, total_qty, allocated_qty, created_at, updated_at)
+    VALUES ('lot6','p6','DC6','LOT6','CN','2026-W01','SH-6','BX-6',10,4,'0','0');
+  INSERT INTO inventory_lot_sources (id, inventory_lot_id, receiving_invoice_item_id, qty, created_at, updated_at)
+    VALUES ('ils6','lot6','rii6',10,'0','0');
+  INSERT INTO allocations (id, picking_item_id, qty, inventory_lot_id, created_at, updated_at)
+    VALUES ('al6','pi6',4,'lot6','0','0');
+  INSERT INTO allocations (id, picking_item_id, qty, receiving_order_id, created_at, updated_at)
+    VALUES ('al6b','pi6',2,'ro6','0','0');
+  INSERT INTO allocation_receiving_items (id, allocation_id, receiving_invoice_item_id, qty, created_at, updated_at)
+    VALUES ('ari6','al6b','rii6',2,'0','0');
+  INSERT INTO picking_packages (id, picking_item_id, source_type, source_id, qty, shipping_box_id, created_at, updated_at)
+    VALUES ('pkg6a','pi6','inventory_lot','lot6',2,NULL,'0','0');
+  INSERT INTO shipping_boxes (id, picking_order_id, status, created_at, updated_at)
+    VALUES ('box6','po6','open','0','0');
+  INSERT INTO picking_packages (id, picking_item_id, source_type, source_id, qty, shipping_box_id, created_at, updated_at)
+    VALUES ('pkg6b','pi6','inventory_lot','lot6',2,'box6','0','0');
+  INSERT INTO transition_logs (id, entity_type, entity_id, from_status, to_status, actor_id, note, created_at, updated_at)
+    VALUES ('tl6po','picking_order','po6','pending','picking','u6','po note','2026-01-05T00:00:00.000Z','0'),
+           ('tl6pi','picking_item','pi6','pending','picking','u6','pi note','2026-01-06T00:00:00.000Z','0');
+`);
+
+test("GET /receiving-orders/:id/picking returns bundle rows for both allocation shapes", async () => {
+  const res = await app.request("/receiving-orders/ro6/picking");
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as any;
+
+  assert.equal(body.rows.length, 2);
+  const lotRow = body.rows.find((r: any) => r.allocation_id === "al6");
+  const orderRow = body.rows.find((r: any) => r.allocation_id === "al6b");
+  assert.ok(lotRow && orderRow, "both allocation rows present");
+
+  for (const row of [lotRow, orderRow]) {
+    assert.equal(row.picking_order_id, "po6");
+    assert.equal(row.picking_order_ref_no, "PO-6");
+    assert.equal(row.picking_order_status, "picking");
+    assert.equal(row.ship_to, "Ship To Six");
+    assert.equal(row.picking_item_id, "pi6");
+    assert.equal(row.required_qty, 6);
+    assert.equal(row.picked_qty, 2);
+    assert.equal(row.part_id, "p6");
+    assert.equal(row.part_no, "P6");
+    assert.equal(row.scanned_qty, 2); // pkg6a (unboxed)
+    assert.equal(row.boxed_qty, 2); // pkg6b (in box6)
+  }
+
+  assert.equal(lotRow.allocated_qty, 4);
+  assert.equal(lotRow.shelf_code, "SH-6");
+  assert.equal(lotRow.box_id, "BX-6");
+  assert.equal(lotRow.date_code, "DC6");
+  assert.equal(lotRow.lot_code, "LOT6");
+  assert.equal(lotRow.coo, "CN");
+  assert.equal(lotRow.cow, "2026-W01");
+
+  assert.equal(orderRow.allocated_qty, 2);
+  for (const field of ["shelf_code", "box_id", "date_code", "lot_code", "coo", "cow"]) {
+    assert.equal(orderRow[field], null, `order-level row ${field} should be null`);
+  }
+});
+
+test("GET /receiving-orders/:id/picking returns packages, boxes and order logs keyed by id", async () => {
+  const res = await app.request("/receiving-orders/ro6/picking");
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as any;
+
+  // The web adapter includes ALL packages for the item (boxed and unboxed).
+  const pkgs = body.packages_by_item.pi6;
+  assert.equal(pkgs.length, 2);
+  const unboxed = pkgs.find((p: any) => p.id === "pkg6a");
+  const boxed = pkgs.find((p: any) => p.id === "pkg6b");
+  assert.ok(unboxed && boxed, "both packages present");
+  assert.equal(unboxed.shipping_box_id, null);
+  assert.equal(unboxed.qty, 2);
+  assert.equal(boxed.shipping_box_id, "box6");
+
+  assert.equal(body.boxes_by_order.po6.length, 1);
+  assert.equal(body.boxes_by_order.po6[0].id, "box6");
+  assert.equal(body.boxes_by_order.po6[0].status, "open");
+
+  assert.equal(body.transition_logs.po6.length, 1);
+  assert.equal(body.transition_logs.po6[0].id, "tl6po");
+  assert.equal(body.transition_logs.po6[0].actor_name, "User Six");
+  assert.equal(body.transition_logs.po6[0].from_status, "pending");
+  assert.equal(body.transition_logs.po6[0].to_status, "picking");
+});
+
+test("GET /receiving-orders/:id/picking returns 404 for unknown order", async () => {
+  const res = await app.request("/receiving-orders/nope/picking");
+  assert.equal(res.status, 404);
+});
+
+test("POST /picking-items/transition-logs returns logs with actor_name for known ids", async () => {
+  const res = await app.request("/picking-items/transition-logs", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ids: ["pi6"] }),
+  });
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as any;
+  assert.equal(body.logs.length, 1);
+  assert.equal(body.logs[0].id, "tl6pi");
+  assert.equal(body.logs[0].entity_id, "pi6");
+  assert.equal(body.logs[0].from_status, "pending");
+  assert.equal(body.logs[0].to_status, "picking");
+  assert.equal(body.logs[0].actor_name, "User Six");
+});
+
+test("POST /picking-items/transition-logs returns empty logs for unknown ids", async () => {
+  const res = await app.request("/picking-items/transition-logs", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ids: ["nope"] }),
+  });
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as any;
+  assert.deepEqual(body, { logs: [] });
+});
+
+test("POST /picking-items/transition-logs returns 400 for missing or empty ids", async () => {
+  const empty = await app.request("/picking-items/transition-logs", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ids: [] }),
+  });
+  assert.equal(empty.status, 400);
+
+  const missing = await app.request("/picking-items/transition-logs", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  assert.equal(missing.status, 400);
+});
+
 test("cleanup", () => { sqlite.close(); });
