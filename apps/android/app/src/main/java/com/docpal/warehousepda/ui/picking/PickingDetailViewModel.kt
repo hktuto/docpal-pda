@@ -64,12 +64,10 @@ data class PickingDetailUiState(
     val toastKey: String? = null,
     // LocalizedException.params when toastKey is an error code (auto-apply error toast).
     val toastArgs: List<String> = emptyList(),
-    // Scan-to-pick (Task 10): pinned allocation, review dialog, wedge gate, pending parse.
+    // Scan-to-pick (Task 10): pinned allocation, review dialog, wedge gate.
     val scanPin: ScanMatcher.PinnedAllocation? = null,
     val scanReview: ScanReviewUiState? = null,
     val dialogOpen: Boolean = false,
-    val pendingParse: ScanPrimitives.OcrInput? = null,
-    val pendingImagePath: String? = null,
 ) {
     /**
      * Web allItemsFullyBoxed + the actionable gate: finish is offered while the order is
@@ -107,6 +105,14 @@ class PickingDetailViewModel(
 
     /** Last matchPicking result — `applyScan` resolves dialog option ids against it. */
     private var lastMatch: ScanMatcher.PickingMatchResult? = null
+
+    /**
+     * Transient guard (NOT UiState): rejects a second scan while a parse/auto-apply is
+     * in flight, so two scans can't interleave (a scan B success wiping scan A's error
+     * dialog). Held through parse + auto-apply; released the moment dialogOpen takes
+     * over as the gate. Cleared on every terminal path by construction.
+     */
+    private var scanInFlight = false
 
     init {
         reload()
@@ -187,7 +193,7 @@ class PickingDetailViewModel(
 
     /** Camera scan result: parse (QR template → OCR fallback), then run the pinned flow. */
     fun onCameraScan(result: CameraScanResult) {
-        if (_uiState.value.dialogOpen) return
+        if (_uiState.value.dialogOpen || scanInFlight) return
         handleScan(
             result.rawText,
             result.barcodes.map { OcrLabelParser.OcrBarcode(it.value, it.format) },
@@ -197,11 +203,12 @@ class PickingDetailViewModel(
 
     /** Hardware wedge flush — same handling as a camera scan without an image. */
     fun onHardwareScan(text: String) {
-        if (_uiState.value.dialogOpen) return
+        if (_uiState.value.dialogOpen || scanInFlight) return
         handleScan(text, listOf(OcrLabelParser.OcrBarcode(text, "4")), null)
     }
 
     private fun handleScan(text: String, barcodes: List<OcrLabelParser.OcrBarcode>, imagePath: String?) {
+        scanInFlight = true
         viewModelScope.launch {
             try {
                 val detail = _uiState.value.detail
@@ -209,7 +216,6 @@ class PickingDetailViewModel(
                 val capture = OcrLabelParser.RawOcrCapture(text, barcodes)
                 val result = withContext(io) { labelScanParser.parse(capture, targets) }
                 val fields = result.parsed.toOcrInput()
-                _uiState.update { it.copy(pendingParse = fields, pendingImagePath = imagePath) }
 
                 // Wedge without a pin: locate the allocation by part number
                 // (web findMatchingAllocation).
@@ -223,18 +229,25 @@ class PickingDetailViewModel(
                                 toastArgs = emptyList(),
                             )
                         }
+                        scanInFlight = false
                         return@launch
                     }
                     _uiState.update { it.copy(scanPin = pin) }
                 }
+                // dispatchMatch either opens the review dialog (openScanReviewOnError
+                // releases the gate — dialogOpen takes over) or starts applyPicked
+                // (runAction's scanApply finally releases it when the apply finishes).
                 dispatchMatch(pin, fields, imagePath)
             } catch (e: CancellationException) {
+                scanInFlight = false
                 throw e
             } catch (e: LocalizedException) {
+                scanInFlight = false
                 _uiState.update {
                     it.copy(errorKey = e.code, errorArgs = e.params.values.toList())
                 }
             } catch (e: Exception) {
+                scanInFlight = false
                 // Parsing does Room I/O (templates/supplier) — surface failures.
                 _uiState.update { it.copy(errorKey = "scan_parse_failed") }
             }
@@ -263,7 +276,8 @@ class PickingDetailViewModel(
     ) {
         lastMatch = null
         // Raise dialogOpen at entry (Phase 1 race fix: no second parse can start
-        // while the dialog is being built).
+        // while the dialog is being built), then release the in-flight gate —
+        // dialogOpen is the gate from here on.
         _uiState.update {
             it.copy(
                 dialogOpen = true,
@@ -277,6 +291,7 @@ class PickingDetailViewModel(
                 ),
             )
         }
+        scanInFlight = false
     }
 
     fun updateScanFields(fields: ScanPrimitives.OcrInput) = _uiState.update {
@@ -358,10 +373,7 @@ class PickingDetailViewModel(
     fun closeScanReview() {
         lastMatch = null
         _uiState.update {
-            it.copy(
-                scanReview = null, dialogOpen = false, scanPin = null,
-                pendingParse = null, pendingImagePath = null,
-            )
+            it.copy(scanReview = null, dialogOpen = false, scanPin = null)
         }
     }
 
@@ -370,7 +382,14 @@ class PickingDetailViewModel(
      * action runner. [qty] is the matchPicking-validated scan quantity — do not
      * re-run parseManual for it.
      */
-    private fun applyPicked(pin: ScanMatcher.PinnedAllocation, fields: ScanPrimitives.OcrInput, qty: Int) =
+    private fun applyPicked(pin: ScanMatcher.PinnedAllocation, fields: ScanPrimitives.OcrInput, qty: Int) {
+        // Mirror runAction's serialization guard: when another action holds it,
+        // runAction would no-op without a coroutine — release the scan gate here
+        // so it can't strand.
+        if (_uiState.value.actionInProgress) {
+            scanInFlight = false
+            return
+        }
         runAction(toastKeyAfterReload = "common_scan_success", scanApply = true) { actorId ->
             if (pin.receivingOrderId != null) {
                 val f = ancillaryFields(fields)
@@ -383,6 +402,7 @@ class PickingDetailViewModel(
                 pickingSource.scanAllocation(allocationId, qty, actorId)
             }
         }
+    }
 
     private fun runAction(
         toastKeyAfterReload: String? = null,
@@ -406,8 +426,6 @@ class PickingDetailViewModel(
                         scanPin = if (scanApply) null else it.scanPin,
                         scanReview = if (scanApply) null else it.scanReview,
                         dialogOpen = if (scanApply) false else it.dialogOpen,
-                        pendingParse = if (scanApply) null else it.pendingParse,
-                        pendingImagePath = if (scanApply) null else it.pendingImagePath,
                     )
                 }
                 reload().join()
@@ -459,6 +477,10 @@ class PickingDetailViewModel(
                         toastKey = if (scanApply && it.scanReview == null) "apply_failed" else it.toastKey,
                     )
                 }
+            } finally {
+                // The scan gate is held through the auto-apply; release it on every
+                // terminal path (success, failure, cancellation).
+                if (scanApply) scanInFlight = false
             }
         }
     }

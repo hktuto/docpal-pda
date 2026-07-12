@@ -1,6 +1,7 @@
 package com.docpal.warehousepda.ui.picking
 
 import com.docpal.warehousepda.R
+import com.docpal.warehousepda.domain.LocalizedException
 import com.docpal.warehousepda.domain.model.PickingAllocationDetail
 import com.docpal.warehousepda.domain.model.PickingItemDetail
 import com.docpal.warehousepda.domain.model.PickingItemLogEntry
@@ -43,6 +44,7 @@ class PickingDetailScanTest {
 
     private class FakePickingDetailSource : PickingDetailSource {
         var detail: PickingOrderDetail = detailWith()
+        var throwOnScan: LocalizedException? = null
         val getDetailCalls = ArrayList<String>()
         val scanCalls = ArrayList<ScanCall>()
         val ocrPickCalls = ArrayList<OcrPickCall>()
@@ -64,6 +66,7 @@ class PickingDetailScanTest {
 
         override suspend fun scanAllocation(allocationId: String, qty: Int, actorId: String): String {
             scanCalls += ScanCall(allocationId, qty, actorId)
+            throwOnScan?.let { throw it }
             return "pkg-1"
         }
 
@@ -262,6 +265,83 @@ class PickingDetailScanTest {
 
         assertEquals(callsBefore, parser.parseCalls)
         assertEquals(emptyList<ScanCall>(), source.scanCalls)
+    }
+
+    @Test fun `auto apply error toasts without dialog`() = runTest {
+        val source = FakePickingDetailSource().apply {
+            throwOnScan = LocalizedException("allocation_not_found", mapOf("detail" to "alloc-1"))
+        }
+        val vm = vm(source)
+        advanceUntilIdle()
+        val item = source.detail.items[0]
+        vm.pinAllocation(item.allocations[0], item)
+
+        vm.onCameraScan(CameraScanResult("label text", emptyList(), "/tmp/label.jpg"))
+        advanceUntilIdle()
+
+        assertEquals(listOf(ScanCall("alloc-1", 4, "user-1")), source.scanCalls)
+        // No dialog surface in the auto-apply path — the error is toasted instead.
+        assertNull(vm.uiState.value.scanReview)
+        assertFalse(vm.uiState.value.dialogOpen)
+        assertEquals("allocation_not_found", vm.uiState.value.toastKey)
+        assertEquals(listOf("alloc-1"), vm.uiState.value.toastArgs)
+        // The pin survives so the operator can retry the scan.
+        assertEquals("alloc-1", vm.uiState.value.scanPin?.allocationId)
+    }
+
+    @Test fun `dialog apply failure shows inline error and stays open`() = runTest {
+        val source = FakePickingDetailSource().apply {
+            throwOnScan = LocalizedException("allocation_not_found")
+        }
+        val parser = FakeLabelScanParser().apply {
+            parsed = OcrLabelParser.ParsedFields("OTHER", 4, null, null, null, null)
+        }
+        val vm = vm(source, parser)
+        advanceUntilIdle()
+        val item = source.detail.items[0]
+        vm.pinAllocation(item.allocations[0], item)
+        vm.onCameraScan(CameraScanResult("ocr noise", emptyList(), "/tmp/label.jpg"))
+        advanceUntilIdle()
+        assertNotNull(vm.uiState.value.scanReview)
+
+        vm.updateScanFields(ScanPrimitives.OcrInput("IC-1", "", "", "", "", "4"))
+        vm.findMatch()
+        advanceUntilIdle()
+        val option = vm.uiState.value.scanReview!!.matchOptions.single()
+
+        vm.applyScan(option.id)
+        advanceUntilIdle()
+
+        // The fake was called once, the dialog stays open with the inline error.
+        assertEquals(listOf(ScanCall("alloc-1", 4, "user-1")), source.scanCalls)
+        val review = vm.uiState.value.scanReview
+        assertNotNull(review)
+        assertEquals("allocation_not_found", review!!.applyErrorKey)
+        assertFalse(review.applying)
+        assertTrue(vm.uiState.value.dialogOpen)
+        assertNull(vm.uiState.value.toastKey)
+    }
+
+    @Test fun `retake keeps pin and clears dialog`() = runTest {
+        val source = FakePickingDetailSource()
+        val parser = FakeLabelScanParser().apply {
+            parsed = OcrLabelParser.ParsedFields("OTHER", 4, null, null, null, null)
+        }
+        val vm = vm(source, parser)
+        advanceUntilIdle()
+        val item = source.detail.items[0]
+        vm.pinAllocation(item.allocations[0], item)
+        vm.onCameraScan(CameraScanResult("ocr noise", emptyList(), "/tmp/label.jpg"))
+        advanceUntilIdle()
+        // Camera review mode (imagePath != null) — retake is offered.
+        assertFalse(vm.uiState.value.scanReview!!.manual)
+
+        vm.retakeScan()
+
+        assertNull(vm.uiState.value.scanReview)
+        assertFalse(vm.uiState.value.dialogOpen)
+        // The pin survives: the re-scan matches the same allocation.
+        assertEquals("alloc-1", vm.uiState.value.scanPin?.allocationId)
     }
 
     private companion object {
