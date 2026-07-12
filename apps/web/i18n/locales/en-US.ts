@@ -512,6 +512,7 @@ export default {
     missing_box_items: "Missing box items",
     scanned_part_does_not_match_item: "Scanned part does not match item",
     unhandled_mismatch_reason: "Unhandled mismatch reason: {reason}",
+    unhandled_issue_reason: "Unhandled issue reason.",
     not_found_mismatch_cannot_include_qty: "not_found mismatch cannot include a quantity",
     quantity_must_be_non_negative_integer: "Quantity must be a non-negative integer",
     damaged_rejected_quantity_exceeds_expected: "Damaged/rejected quantity cannot exceed expected quantity",

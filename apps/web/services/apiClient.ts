@@ -1,9 +1,21 @@
 import { I18nError } from "~/composables/i18nError";
 
+/** Plain Error with the HTTP status attached, for errors without an i18n key. */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number
+  ) {
+    super(message);
+  }
+}
+
 /**
  * English error sentences returned by the API mapped to i18n keys under
  * `errors.*`. Only keys that exist in the web locale files are mapped;
- * anything else falls through to a plain Error with the status code.
+ * anything else falls through to an ApiError with the status code.
+ * Note: key-shaped API error text (I18N_KEY_PATTERN) passes through as an
+ * I18nError verbatim, whether or not the key exists in the locale files.
  */
 const ERROR_KEY_MAP: Record<string, string> = {
   "shipping box not found": "shipping_box_not_found",
@@ -86,13 +98,17 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       if (key) {
         throw new I18nError(key);
       }
-      throw new Error(`${res.status}: ${text}`);
+      throw new ApiError(`${res.status}: ${text}`, res.status);
     }
 
     if (res.status === 204) {
       return undefined as T;
     }
-    return (await res.json()) as T;
+    try {
+      return (await res.json()) as T;
+    } catch {
+      throw new ApiError(`${res.status}: invalid JSON response`, res.status);
+    }
   }
 
   return {

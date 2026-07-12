@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { createApiClient } from './apiClient';
+import { createApiClient, ApiError } from './apiClient';
 import { I18nError } from '~/composables/i18nError';
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -90,6 +90,24 @@ describe('createApiClient', () => {
     await expect(promise).rejects.toThrow(Error);
     await expect(promise).rejects.not.toThrow(I18nError);
     await expect(promise).rejects.toThrow(/500/);
+    await expect(promise).rejects.toMatchObject({ status: 500 });
+  });
+
+  it('throws an Error with the status when a 2xx body is not valid JSON', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => '',
+      json: async () => {
+        throw new SyntaxError('Unexpected end of JSON input');
+      },
+    } as unknown as Response);
+    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+
+    const promise = client.get('/orders');
+    await expect(promise).rejects.toThrow(ApiError);
+    await expect(promise).rejects.not.toThrow(SyntaxError);
+    await expect(promise).rejects.toMatchObject({ status: 200 });
   });
 
   it('throws I18nError("network_error") when fetch rejects', async () => {
@@ -127,5 +145,34 @@ describe('createApiClient', () => {
     const result = await client.del('/orders/1');
 
     expect(result).toBeUndefined();
+  });
+
+  it('GET sends no body and no content-type header', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: '1' }));
+    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+
+    await client.get('/orders');
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(init.body).toBeUndefined();
+    expect(init.headers).toBeUndefined();
+  });
+
+  it('actorId() passes through getActorId', () => {
+    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+
+    expect(client.actorId()).toBe('u1');
+  });
+
+  it('URL-encodes query param values', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: '1' }));
+    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+
+    await client.get('/orders', { q: 'a b&c' });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://api.test/orders?q=a+b%26c',
+      expect.objectContaining({ method: 'GET' })
+    );
   });
 });

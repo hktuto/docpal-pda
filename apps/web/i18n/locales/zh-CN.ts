@@ -512,6 +512,7 @@ export default {
     missing_box_items: "缺少箱子物品",
     scanned_part_does_not_match_item: "扫描料号与物品不匹配",
     unhandled_mismatch_reason: "未处理的异常原因：{reason}",
+    unhandled_issue_reason: "未处理的问题原因",
     not_found_mismatch_cannot_include_qty: "not_found 异常不能包含数量",
     quantity_must_be_non_negative_integer: "数量必须为非负整数",
     damaged_rejected_quantity_exceeds_expected: "损坏/拒收数量不能超过预期数量",
