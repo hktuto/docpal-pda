@@ -1,6 +1,5 @@
 package com.docpal.warehousepda.ui.navigation
 
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -9,6 +8,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.docpal.warehousepda.ui.home.HomeScreen
 import com.docpal.warehousepda.ui.login.LoginScreen
+import com.docpal.warehousepda.ui.receiving.ReceivingDetailScreen
 import com.docpal.warehousepda.ui.receiving.ReceivingListScreen
 
 object Routes {
@@ -51,8 +51,8 @@ fun AppNav() {
             Routes.RECEIVING_DETAIL,
             arguments = listOf(navArgument("orderId") { type = NavType.StringType }),
         ) { entry ->
-            // Placeholder until the detail screen lands (Task 14).
-            Text("Receiving order: ${entry.arguments?.getString("orderId")}")
+            val orderId = entry.arguments!!.getString("orderId")!!
+            ReceivingDetailScreen(orderId = orderId, onBack = { navController.popBackStack() })
         }
     }
 }

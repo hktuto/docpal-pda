@@ -4,6 +4,7 @@ import com.docpal.warehousepda.data.ReceivingRepository
 import com.docpal.warehousepda.data.db.AppDatabase
 import com.docpal.warehousepda.data.db.ReceivingItemMismatchEntity
 import com.docpal.warehousepda.data.db.TransitionLogEntity
+import com.docpal.warehousepda.ui.receiving.MismatchSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -13,11 +14,11 @@ import java.util.UUID
 class MismatchRepository(
     private val db: AppDatabase,
     private val receivingRepository: ReceivingRepository,
-) {
+) : MismatchSource {
 
     private val dao get() = db.receivingDao()
 
-    suspend fun reportMismatch(
+    override suspend fun reportMismatch(
         itemId: String, actorId: String, reason: String,
         mismatchQty: Int?, wrongPartNo: String?, note: String,
     ) = withContext(Dispatchers.IO) {
@@ -61,7 +62,7 @@ class MismatchRepository(
         }
     }
 
-    suspend fun editMismatch(
+    override suspend fun editMismatch(
         mismatchId: String, actorId: String, reason: String,
         mismatchQty: Int?, wrongPartNo: String?, note: String,
     ) = withContext(Dispatchers.IO) {
@@ -96,7 +97,7 @@ class MismatchRepository(
         }
     }
 
-    suspend fun confirmMismatch(mismatchId: String, actorId: String) = withContext(Dispatchers.IO) {
+    override suspend fun confirmMismatch(mismatchId: String, actorId: String) = withContext(Dispatchers.IO) {
         db.runInTransaction {
             val mismatch = dao.mismatchById(mismatchId)
                 ?: throw LocalizedException("receiving_item_mismatch_not_found")
@@ -111,7 +112,7 @@ class MismatchRepository(
         }
     }
 
-    suspend fun cancelMismatch(mismatchId: String, actorId: String) = withContext(Dispatchers.IO) {
+    override suspend fun cancelMismatch(mismatchId: String, actorId: String) = withContext(Dispatchers.IO) {
         db.runInTransaction {
             val mismatch = dao.mismatchById(mismatchId)
                 ?: throw LocalizedException("receiving_item_mismatch_not_found")

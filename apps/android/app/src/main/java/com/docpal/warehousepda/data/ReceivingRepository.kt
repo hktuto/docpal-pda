@@ -16,13 +16,14 @@ import com.docpal.warehousepda.domain.model.ReceivingInvoiceDetail
 import com.docpal.warehousepda.domain.model.ReceivingItemDetail
 import com.docpal.warehousepda.domain.model.ReceivingOrderDetail
 import com.docpal.warehousepda.domain.model.ReceivingOrderSummary
+import com.docpal.warehousepda.ui.receiving.ReceivingDetailSource
 import com.docpal.warehousepda.ui.receiving.ReceivingListSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.UUID
 
 /** Read model + clear/in-hand transitions for receiving orders. Mirrors the web adapter + db/receiving.ts. */
-class ReceivingRepository(private val db: AppDatabase, private val allocator: Allocator) : ReceivingListSource {
+class ReceivingRepository(private val db: AppDatabase, private val allocator: Allocator) : ReceivingListSource, ReceivingDetailSource {
 
     private val dao get() = db.receivingDao()
 
@@ -62,7 +63,7 @@ class ReceivingRepository(private val db: AppDatabase, private val allocator: Al
         }
     }
 
-    suspend fun getOrderDetail(orderId: String): ReceivingOrderDetail = withContext(Dispatchers.IO) {
+    override suspend fun getOrderDetail(orderId: String): ReceivingOrderDetail = withContext(Dispatchers.IO) {
         val order = dao.orderById(orderId)
             ?: throw LocalizedException("receiving_order_not_found")
         val supplierName = order.supplierId?.let { dao.supplierName(it) }
@@ -166,7 +167,7 @@ class ReceivingRepository(private val db: AppDatabase, private val allocator: Al
     }
 
     /** Port of db/receiving.ts confirmReceivingOrderArrived. Allocation runs AFTER the transaction, best-effort. */
-    suspend fun confirmArrived(orderId: String, actorId: String) = withContext(Dispatchers.IO) {
+    override suspend fun confirmArrived(orderId: String, actorId: String) = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         db.runInTransaction {
             val order = dao.orderById(orderId) ?: throw LocalizedException("receiving_order_not_found")

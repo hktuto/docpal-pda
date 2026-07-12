@@ -41,6 +41,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.docpal.warehousepda.App
 import com.docpal.warehousepda.R
 import com.docpal.warehousepda.ui.LocaleManager
+import com.docpal.warehousepda.ui.components.ErrorText
 
 @Composable
 fun LoginScreen(
@@ -112,13 +113,7 @@ fun LoginScreen(
 
         if (state.errorCode != null) {
             Spacer(Modifier.height(8.dp))
-            Text(
-                text = when (state.errorCode) {
-                    "invalid_username_or_password" -> stringResource(R.string.error_invalid_credentials)
-                    else -> state.errorCode ?: ""
-                },
-                color = MaterialTheme.colorScheme.error,
-            )
+            ErrorText(state.errorCode)
         }
 
         Spacer(Modifier.height(24.dp))

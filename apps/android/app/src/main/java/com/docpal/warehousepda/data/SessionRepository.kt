@@ -2,6 +2,7 @@ package com.docpal.warehousepda.data
 
 import com.docpal.warehousepda.data.db.UserDao
 import com.docpal.warehousepda.domain.model.User
+import com.docpal.warehousepda.ui.receiving.SessionSource
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -14,10 +15,10 @@ import kotlinx.coroutines.runBlocking
 class SessionRepository(
     private val sessionStore: SessionStore,
     private val userDao: UserDao,
-) {
+) : SessionSource {
 
     /** Blocking read — call from a background thread (repositories do this inside Dispatchers.IO). */
-    fun currentUser(): User? {
+    override fun currentUser(): User? {
         val id = sessionStore.userIdBlocking() ?: return null
         val entity = runBlocking { userDao.findById(id) }
         if (entity == null) {
