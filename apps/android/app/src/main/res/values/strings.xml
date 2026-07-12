@@ -230,7 +230,9 @@
     <string name="error_qty_must_be_positive_integer">Qty must be a positive integer</string>
     <string name="error_operator_not_signed_in">Operator not signed in</string>
     <string name="error_missing_receiving_order_id">Missing receiving order ID</string>
-    <string name="error_unknown_match_failed">%1$s match failed</string>
+    <string name="error_unknown_match_failed">Match failed</string>
+    <string name="error_apply_failed">Apply failed</string>
+    <string name="error_scan_parse_failed">Scan parse failed</string>
     <string name="error_invalid_quantity_to_apply">Invalid quantity to apply</string>
     <string name="error_receiving_order_not_found">Receiving order not found</string>
     <string name="error_receiving_order_not_in_hand">Receiving order is not in hand</string>

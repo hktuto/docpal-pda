@@ -230,7 +230,9 @@
     <string name="error_qty_must_be_positive_integer">数量必须为正整数</string>
     <string name="error_operator_not_signed_in">操作员未登录</string>
     <string name="error_missing_receiving_order_id">缺少收货单 ID</string>
-    <string name="error_unknown_match_failed">%1$s 匹配失败</string>
+    <string name="error_unknown_match_failed">匹配失败</string>
+    <string name="error_apply_failed">应用失败</string>
+    <string name="error_scan_parse_failed">扫描解析失败</string>
     <string name="error_invalid_quantity_to_apply">应用数量无效</string>
     <string name="error_receiving_order_not_found">未找到收货单</string>
     <string name="error_receiving_order_not_in_hand">Receiving order is not in hand</string>

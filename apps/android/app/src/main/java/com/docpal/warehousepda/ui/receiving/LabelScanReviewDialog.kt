@@ -1,5 +1,6 @@
 package com.docpal.warehousepda.ui.receiving
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -28,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -40,6 +42,8 @@ import com.docpal.warehousepda.R
 import com.docpal.warehousepda.domain.scan.ScanMatcher
 import com.docpal.warehousepda.domain.scan.ScanPrimitives
 import com.docpal.warehousepda.ui.components.ErrorText
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Label scan review dialog — port of the web LabelScanReviewModal.vue.
@@ -81,12 +85,17 @@ fun LabelScanReviewDialog(
                 )
 
                 if (!review.manual) {
-                    val bitmap = remember(review.imagePath) {
-                        review.imagePath?.let { BitmapFactory.decodeFile(it) }
+                    // Decode off the UI thread with downsampling — captures can be
+                    // full-frame multi-megapixel JPEGs (RectanglePickerActivity logic).
+                    val bitmap by produceState<Bitmap?>(null, review.imagePath) {
+                        val path = review.imagePath
+                        value = if (path == null) null else withContext(Dispatchers.IO) {
+                            decodeSampledBitmap(path, DISPLAY_MAX_DIMENSION)
+                        }
                     }
                     if (bitmap != null) {
                         Image(
-                            bitmap = bitmap.asImageBitmap(),
+                            bitmap = bitmap!!.asImageBitmap(),
                             contentDescription = stringResource(R.string.scan_review_captured_label_alt),
                             modifier = Modifier.fillMaxWidth(),
                         )
@@ -276,6 +285,23 @@ private fun MatchSection(
 private fun matchLabel(record: ScanMatcher.MatchedRecord): String {
     val p = record.picking
     return "${p.pickingOrderRefNo} (${p.remainingQty} / ${p.requiredQty})"
+}
+
+private const val DISPLAY_MAX_DIMENSION = 2048
+
+/** Port of RectanglePickerActivity.loadSampledBitmap: bounds pass + power-of-two downsample. */
+private fun decodeSampledBitmap(path: String, maxDimension: Int): Bitmap? = try {
+    val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(path, options)
+    var sampleSize = 1
+    while (maxOf(options.outWidth, options.outHeight) / (sampleSize * 2) > maxDimension) {
+        sampleSize *= 2
+    }
+    options.inSampleSize = sampleSize
+    options.inJustDecodeBounds = false
+    BitmapFactory.decodeFile(path, options)
+} catch (e: Exception) {
+    null
 }
 
 @OptIn(ExperimentalLayoutApi::class)

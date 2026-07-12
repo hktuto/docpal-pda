@@ -112,8 +112,10 @@ fun ReceivingDetailScreen(orderId: String, onBack: () -> Unit) {
             onFlush = { viewModel.onHardwareScan(it) },
         )
     }
-    // Dialogs live in their own windows, but also disable the buffer explicitly.
-    SideEffect { keyBuffer.enabled = !state.dialogOpen }
+    // Dialogs live in their own windows, but also disable the buffer explicitly
+    // (scan review + issue dialog raise dialogOpen; add-all confirm uses pendingAddAllBoxId).
+    val wedgeDisabled = state.dialogOpen || state.pendingAddAllBoxId != null
+    SideEffect { keyBuffer.enabled = !wedgeDisabled }
 
     // Success toast after a scan is applied.
     val scanSuccessText = stringResource(R.string.common_scan_success)
@@ -132,7 +134,7 @@ fun ReceivingDetailScreen(orderId: String, onBack: () -> Unit) {
     Scaffold(
         modifier = Modifier.onPreviewKeyEvent { event ->
             when {
-                state.dialogOpen || event.type != KeyEventType.KeyDown -> false
+                wedgeDisabled || event.type != KeyEventType.KeyDown -> false
                 event.key == Key.Enter ->
                     keyBuffer.onKey("Enter") == HardwareKeyBuffer.Consume.CONSUMED
                 else -> {

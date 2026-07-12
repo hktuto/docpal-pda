@@ -1,5 +1,6 @@
 package com.docpal.warehousepda.ui.receiving
 
+import com.docpal.warehousepda.domain.LocalizedException
 import com.docpal.warehousepda.domain.model.ReceivingInvoiceDetail
 import com.docpal.warehousepda.domain.model.ReceivingItemDetail
 import com.docpal.warehousepda.domain.model.ReceivingOrderDetail
@@ -67,6 +68,7 @@ class ReceivingDetailPickingTest {
     )
 
     private class FakePickingSource : PickingSource {
+        var throwOnApply: LocalizedException? = null
         val createBoxCalls = ArrayList<Pair<String, String>>()
         val addAllCalls = ArrayList<Pair<String, String>>()
         val applyCalls = ArrayList<ApplyCall>()
@@ -87,6 +89,7 @@ class ReceivingDetailPickingTest {
             receivingOrderId: String, pickingItemId: String, qty: Int,
             dateCode: String?, lotCode: String?, coo: String?, cow: String?, actorId: String,
         ) {
+            throwOnApply?.let { throw it }
             applyCalls += ApplyCall(receivingOrderId, pickingItemId, qty, dateCode, lotCode, coo, cow, actorId)
         }
     }
@@ -236,6 +239,39 @@ class ReceivingDetailPickingTest {
         // No image from a hardware wedge scan -> manual mode (web parity).
         assertTrue(review!!.manual)
         assertEquals("IC-1", review.fields.partNo)
+        assertTrue(vm.uiState.value.dialogOpen)
+    }
+
+    @Test fun `applyScan failure keeps dialog open with inline error`() = runTest {
+        val picking = FakePickingSource().apply {
+            throwOnApply = LocalizedException("quantity_exceeds_picking_need")
+        }
+        val vm = vm(picking = picking)
+        advanceUntilIdle()
+        vm.openManualEntry()
+
+        vm.applyScan(matchedRecord(), ScanPrimitives.OcrInput("IC-1", "", "", "", "", "5"))
+        advanceUntilIdle()
+
+        val review = vm.uiState.value.scanReview
+        assertNotNull(review)
+        assertFalse(review!!.applying)
+        assertEquals("quantity_exceeds_picking_need", review.applyErrorKey)
+        assertNull(vm.uiState.value.toastKey)
+        assertTrue(picking.applyCalls.isEmpty())
+    }
+
+    @Test fun `camera scan opens review mode with image`() = runTest {
+        val vm = vm()
+        advanceUntilIdle()
+
+        vm.openScanReview("raw text", listOf(OcrLabelParser.OcrBarcode("X", "4")), "/tmp/x.jpg")
+        advanceUntilIdle()
+
+        val review = vm.uiState.value.scanReview
+        assertNotNull(review)
+        assertFalse(review!!.manual)
+        assertEquals("/tmp/x.jpg", review.imagePath)
         assertTrue(vm.uiState.value.dialogOpen)
     }
 

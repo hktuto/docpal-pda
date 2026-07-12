@@ -244,6 +244,9 @@ class ReceivingDetailViewModel(
     /** Camera scan result: parse (QR template → OCR fallback) and open the review dialog. */
     fun openScanReview(text: String, barcodes: List<OcrLabelParser.OcrBarcode>, imagePath: String?) {
         if (_uiState.value.dialogOpen) return
+        // Raise dialogOpen before parsing so a second wedge flush during the
+        // parse window can't start a clobbering second parse.
+        _uiState.update { it.copy(dialogOpen = true) }
         viewModelScope.launch {
             try {
                 val targets = _uiState.value.detail?.let { partTargets(it) } ?: emptyList()
@@ -251,7 +254,6 @@ class ReceivingDetailViewModel(
                 val result = withContext(io) { labelScanParser.parse(capture, targets) }
                 _uiState.update {
                     it.copy(
-                        dialogOpen = true,
                         scanReview = ScanReviewUiState(
                             manual = imagePath == null,
                             imagePath = imagePath,
@@ -261,11 +263,13 @@ class ReceivingDetailViewModel(
                     )
                 }
             } catch (e: CancellationException) {
+                _uiState.update { it.copy(dialogOpen = false) }
                 throw e
             } catch (e: LocalizedException) {
-                _uiState.update { it.copy(errorKey = e.code) }
+                _uiState.update { it.copy(dialogOpen = false, errorKey = e.code) }
             } catch (e: Exception) {
-                // Parsing never throws in practice; ignore a failed capture like a cancel.
+                // Parsing does Room I/O (templates/supplier) — surface failures.
+                _uiState.update { it.copy(dialogOpen = false, errorKey = "scan_parse_failed") }
             }
         }
     }
@@ -319,6 +323,16 @@ class ReceivingDetailViewModel(
             } catch (e: CancellationException) {
                 _uiState.update { it.copy(scanReview = it.scanReview?.copy(matching = false)) }
                 throw e
+            } catch (e: Exception) {
+                // Don't strand the dialog with matching=true if the seam throws.
+                _uiState.update {
+                    it.copy(
+                        scanReview = it.scanReview?.copy(
+                            matching = false,
+                            matchResult = ScanMatcher.MatchResult.Error("unknown_match_failed"),
+                        )
+                    )
+                }
             }
         }
     }

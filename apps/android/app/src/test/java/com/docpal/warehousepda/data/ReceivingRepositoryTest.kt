@@ -110,6 +110,8 @@ class ReceivingRepositoryTest {
     @Test
     fun `tryMarkClear flips in_hand order to clear when fully consumed, and back`() {
         // Seed has no fully-consumed order; insert one (received 10, picked 10 -> available 0).
+        // Part id is looked up by part_no: the seed export assigns fresh UUIDs on regeneration.
+        val partId = partIdOf("RK73B1JTTD181G")
         offMainThread {
             db.openHelper.writableDatabase.execSQL(
                 "INSERT INTO receiving_orders (id, ref_no, supplier_id, delivery_date, status, arrived_at, arrived_by, created_at, updated_at) " +
@@ -121,7 +123,7 @@ class ReceivingRepositoryTest {
             )
             db.openHelper.writableDatabase.execSQL(
                 "INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, po_no, po_line, qty, received_qty, picked_qty, put_away_qty, box_id, date_code, lot_code, coo, cow) " +
-                    "VALUES ('33333333-3333-3333-3333-333333333333', '22222222-2222-2222-2222-222222222222', 'cd426b37-aac4-4e4d-a979-c20738741e65', NULL, NULL, 10, 10, 10, 0, NULL, NULL, NULL, NULL, NULL)"
+                    "VALUES ('33333333-3333-3333-3333-333333333333', '22222222-2222-2222-2222-222222222222', '$partId', NULL, NULL, 10, 10, 10, 0, NULL, NULL, NULL, NULL, NULL)"
             )
         }
 
@@ -143,6 +145,13 @@ class ReceivingRepositoryTest {
     private fun statusOf(orderId: String): String? = offMainThread {
         db.query(SimpleSQLiteQuery("SELECT status FROM receiving_orders WHERE id = '$orderId'")).use { c ->
             if (c.moveToFirst()) c.getString(0) else null
+        }
+    }
+
+    private fun partIdOf(partNo: String): String = offMainThread {
+        db.query(SimpleSQLiteQuery("SELECT id FROM parts WHERE part_no = '$partNo'")).use { c ->
+            check(c.moveToFirst()) { "seed has no part $partNo" }
+            c.getString(0)
         }
     }
 
