@@ -7,21 +7,21 @@ import {
 import { runScanMatcher, useScanMatchers, type ScanTaskContext, type ScanMatchResult } from './useScanMatchers';
 import { I18nError } from '~/composables/i18nError';
 import { useErrorMessage } from '~/composables/errorMessage';
-import { useDb } from '~/composables/useDb';
+import { useWarehouse } from '~/composables/useWarehouse';
 import { parseAndIdentify, parseQrCapture, type CandidateOptions, type OcrParseResult, type RawOcrCapture, type OcrBarcode, type ParsedFields } from '~/utils/parseOcrScan';
-import { getSuppliersWithQrTemplates } from '~/db/suppliers';
 import type { OcrInput } from './useMockOcr';
 import type { SupplierQrcodeTemplate } from '~/services/types';
+import type { WarehouseService } from '~/services/warehouse';
 
 let supplierTemplateCache: SupplierQrcodeTemplate[] | null = null;
 let supplierTemplateCachePromise: Promise<SupplierQrcodeTemplate[]> | null = null;
 
-async function getCachedSuppliersWithQrTemplates(
-  db: ReturnType<typeof useDb>
+async function getCachedSupplierQrTemplates(
+  warehouse: WarehouseService
 ): Promise<SupplierQrcodeTemplate[]> {
   if (supplierTemplateCache) return supplierTemplateCache;
   if (!supplierTemplateCachePromise) {
-    supplierTemplateCachePromise = getSuppliersWithQrTemplates(db).then((templates) => {
+    supplierTemplateCachePromise = warehouse.getSupplierQrTemplates().then((templates) => {
       supplierTemplateCache = templates;
       return templates;
     });
@@ -76,7 +76,7 @@ export function useLabelScan() {
   const scanning = ref(false);
   const errorMessage = useErrorMessage();
   const matchers = useScanMatchers();
-  const db = useDb();
+  const warehouse = useWarehouse();
 
   async function processCapture(
     capture: LabelScanCapture,
@@ -90,8 +90,8 @@ export function useLabelScan() {
       const qrValue = barcodes[0]?.value ?? capture.text;
       console.log('[SCAN-TIME] fetching supplier QR templates...');
       const t1 = performance.now();
-      const suppliers = await getCachedSuppliersWithQrTemplates(db);
-      console.log('[SCAN-TIME] getSuppliersWithQrTemplates', (performance.now() - t1).toFixed(1), 'ms');
+      const suppliers = await getCachedSupplierQrTemplates(warehouse);
+      console.log('[SCAN-TIME] getSupplierQrTemplates', (performance.now() - t1).toFixed(1), 'ms');
       const t2 = performance.now();
       parsedResult = parseQrCapture(qrValue, {
         supplierTemplates: suppliers,
@@ -141,7 +141,7 @@ export function useLabelScan() {
     const barcodes = parseBarcodes(capture.barcodes);
 
     if (isQrOnlyCapture(capture, barcodes)) {
-      const suppliers = await getCachedSuppliersWithQrTemplates(db);
+      const suppliers = await getCachedSupplierQrTemplates(warehouse);
       return parseQrCapture(rawValue, {
         supplierTemplates: suppliers,
         targets: [],

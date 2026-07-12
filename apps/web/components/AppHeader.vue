@@ -75,7 +75,7 @@ const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 const { logout: authLogout } = useAuth();
-const pg = useNuxtApp().$pglite;
+const warehouse = useWarehouse();
 
 const menuOpen = ref(false);
 const menuRef = ref<HTMLElement | null>(null);
@@ -117,17 +117,7 @@ function logout() {
 async function resetDb() {
   if (!confirm(t("appHeader.resetConfirm"))) return;
 
-  if (pg) {
-    await pg.close();
-  }
-
-  const dbName = "/pglite/warehouse-demo-pglite";
-  await new Promise<void>((resolve, reject) => {
-    const req = indexedDB.deleteDatabase(dbName);
-    req.onsuccess = () => resolve();
-    req.onerror = () => reject(req.error);
-    req.onblocked = () => resolve();
-  });
+  await warehouse.resetDemoData();
 
   localStorage.clear();
   window.location.reload();

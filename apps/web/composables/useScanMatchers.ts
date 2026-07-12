@@ -1,8 +1,6 @@
 import { parseManual, normalize } from './useMockOcr';
 import { useAuth } from './useAuth';
 import { useWarehouse } from './useWarehouse';
-import { useDb } from './useDb';
-import { findReceivingCandidates, findPickingCandidates, findReceivingCandidatesForOrder, findPickingCandidatesForOrder } from '~/db/ocrPicking';
 import { I18nError } from '~/composables/i18nError';
 import type { OcrInput } from './useMockOcr';
 import type {
@@ -57,8 +55,6 @@ export interface ScanTaskContext {
   receivingOrderId?: string;
   pickingItemId?: string;
   supplierCode?: string;
-  receivingCandidatesByPartNo?: Map<string, ReceivingCandidate[]>;
-  pickingCandidatesByPartId?: Map<string, PickingCandidate[]>;
   // picking
   allocation?: PickingAllocation;
   // put-away
@@ -105,7 +101,6 @@ export function findUnverifiedBoxItemByPartNo(
 
 export function useScanMatchers(): ScanMatchers {
   const warehouse = useWarehouse();
-  const db = useDb();
   const { currentUser } = useAuth();
   const { t } = useI18n();
 
@@ -128,27 +123,19 @@ export function useScanMatchers(): ScanMatchers {
 
       const p = parseManual(parsed);
       const t1 = performance.now();
-      let receivingCandidates: ReceivingCandidate[];
-      if (ctx.receivingCandidatesByPartNo) {
-        receivingCandidates = ctx.receivingCandidatesByPartNo.get(p.partNo) ?? [];
-        console.log('[SCAN-TIME] receivingCandidates cache lookup', (performance.now() - t1).toFixed(1), 'ms');
-      } else {
-        receivingCandidates = await findReceivingCandidates(db, receivingOrderId, p);
-        console.log('[SCAN-TIME] findReceivingCandidates', (performance.now() - t1).toFixed(1), 'ms');
-      }
+      const scanCandidates = await warehouse.getScanCandidates(receivingOrderId);
+      console.log('[SCAN-TIME] getScanCandidates', (performance.now() - t1).toFixed(1), 'ms');
+      const receivingCandidates: ReceivingCandidate[] =
+        scanCandidates.receivingCandidatesByPartNo[p.partNo] ?? [];
       if (receivingCandidates.length === 0) return { type: 'none' };
       const receiving = receivingCandidates[0];
       if (p.qty > receiving.availableQty) return { type: 'none' };
 
       const t2 = performance.now();
-      let pickingCandidates: PickingCandidate[];
-      if (ctx.pickingCandidatesByPartId) {
-        pickingCandidates = ctx.pickingCandidatesByPartId.get(receiving.partId)?.filter((c) => c.remainingQty >= p.qty) ?? [];
-        console.log('[SCAN-TIME] pickingCandidates cache lookup', (performance.now() - t2).toFixed(1), 'ms');
-      } else {
-        pickingCandidates = await findPickingCandidates(db, receivingOrderId, receiving.partId, p.qty);
-        console.log('[SCAN-TIME] findPickingCandidates', (performance.now() - t2).toFixed(1), 'ms');
-      }
+      let pickingCandidates: PickingCandidate[] =
+        (scanCandidates.pickingCandidatesByPartId[receiving.partId] ?? [])
+          .filter((c) => c.remainingQty >= p.qty);
+      console.log('[SCAN-TIME] pickingCandidates lookup', (performance.now() - t2).toFixed(1), 'ms');
       if (pickingItemId) {
         pickingCandidates = pickingCandidates.filter((c) => c.pickingItemId === pickingItemId);
       }
