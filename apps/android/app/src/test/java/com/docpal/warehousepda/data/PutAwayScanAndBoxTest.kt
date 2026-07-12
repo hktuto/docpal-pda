@@ -113,6 +113,31 @@ class PutAwayScanAndBoxTest {
     }
 
     @Test
+    fun `record scan remaining shrinks with existing scans`() = runBlocking {
+        insertReceivingOrder(db, "pa-order-1", "PA-001", "in_hand")
+        insertPart(db, "pa-part-1", "PA-PART-1")
+        fixture { wdb ->
+            insertReceivingInvoice(wdb, "pa-inv-1", "pa-order-1")
+            insertReceivingInvoiceItem(wdb, "pa-item-1", "pa-inv-1", "pa-part-1", qty = 5)
+        }
+
+        repo.recordPutAwayScan("pa-item-1", 3, null, null, null, null)
+        // The remaining-check integration path: the first unboxed scan must be subtracted
+        // via ReceivingAvailability.byItem (ReceivingDao.unboxedPutAwayScanTotals).
+        expectCode("scanned_qty_exceeds_total") {
+            repo.recordPutAwayScan("pa-item-1", 3, null, null, null, null)
+        }
+        assertEquals(1, intQuery(db, "SELECT COUNT(*) FROM put_away_scans"))
+
+        repo.recordPutAwayScan("pa-item-1", 2, null, null, null, null)
+        assertEquals(2, intQuery(db, "SELECT COUNT(*) FROM put_away_scans WHERE shelf_box_id IS NULL"))
+        assertEquals(
+            5,
+            intQuery(db, "SELECT COALESCE(SUM(qty), 0) FROM put_away_scans WHERE shelf_box_id IS NULL"),
+        )
+    }
+
+    @Test
     fun `record scan unknown item throws`() = runBlocking {
         expectCode("invoice_item_not_found") {
             repo.recordPutAwayScan("no-such-item", 1, null, null, null, null)
