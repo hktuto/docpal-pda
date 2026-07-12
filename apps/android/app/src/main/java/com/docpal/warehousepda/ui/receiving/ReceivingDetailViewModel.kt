@@ -234,6 +234,8 @@ class ReceivingDetailViewModel(
     /** Camera scan result: parse (QR template → OCR fallback) and open the review dialog. */
     fun openScanReview(text: String, barcodes: List<OcrLabelParser.OcrBarcode>, imagePath: String?) {
         if (_uiState.value.dialogOpen) return
+        // A fresh dialog starts with no match state (defense in depth).
+        lastMatchResult = null
         // Raise dialogOpen before parsing so a second wedge flush during the
         // parse window can't start a clobbering second parse.
         _uiState.update { it.copy(dialogOpen = true) }
@@ -274,6 +276,8 @@ class ReceivingDetailViewModel(
 
     fun openManualEntry() {
         if (_uiState.value.dialogOpen) return
+        // A fresh dialog starts with no match state (defense in depth).
+        lastMatchResult = null
         _uiState.update {
             it.copy(
                 dialogOpen = true,
@@ -325,6 +329,9 @@ class ReceivingDetailViewModel(
 
     /** Maps a matcher result onto the generalized review-dialog options/message state. */
     private fun applyMatchResult(result: ScanMatcher.MatchResult) {
+        // A closeScanReview() racing an in-flight findMatch leaves scanReview null;
+        // don't let lastMatchResult outlive its dialog.
+        if (_uiState.value.scanReview == null) return
         lastMatchResult = result
         val options: List<ScanMatchOption>
         val messageRes: Int
