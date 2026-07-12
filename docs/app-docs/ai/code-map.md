@@ -133,6 +133,18 @@ Page and component locations mapped to source files.
 | `GET /shelves`, `GET /shelves/with-box-counts`, `GET /shelves/:code/boxes` | `apps/api/src/routes/goodsVerify.ts` |
 | `GET /shelf-boxes/:id` | `apps/api/src/routes/goodsVerify.ts` |
 | `POST /shelf-boxes/:id/verify-item` | `apps/api/src/routes/goodsVerify.ts` |
+| `POST /auth/login`, `GET /auth/users/:id` | `apps/api/src/routes/auth.ts` |
+| `POST /dev/reset` | `apps/api/src/routes/dev.ts` |
+| `GET /receiving-orders`, `GET /receiving-orders/:id` | `apps/api/src/routes/receiving.ts` |
+| `GET /receiving-orders/:id/picking` | `apps/api/src/routes/receiving.ts` |
+| `POST /picking-items/transition-logs` | `apps/api/src/routes/receiving.ts` |
+| `GET /receiving-orders/:id/scan-candidates` | `apps/api/src/routes/receiving.ts` |
+| `GET /receiving-invoice-items/:id/mismatch`, `POST /receiving-invoice-items/:id/mismatches` | `apps/api/src/routes/mismatch.ts` |
+| `PATCH /mismatches/:id`, `POST /mismatches/:id/confirm`, `POST /mismatches/:id/cancel` | `apps/api/src/routes/mismatch.ts` |
+| `POST /picking-orders/report-issues` | `apps/api/src/routes/picking.ts` |
+| `POST /picking-orders/:id/ocr-pick` | `apps/api/src/routes/picking.ts` |
+| `GET /stock-search/suppliers`, `GET /stock-search/suppliers/:id/parts`, `GET /stock-search/parts/lots` | `apps/api/src/routes/stockSearch.ts` |
+| `GET /suppliers/qr-templates` | `apps/api/src/routes/suppliers.ts` |
 
 ### Ingest helpers and triggers
 
@@ -149,6 +161,11 @@ Page and component locations mapped to source files.
 | Put-away writes (scans, shelf-box lifecycle, lot materialization, receiving clear, cycle-count scheduling) | `apps/api/src/db/putAway.ts` |
 | Cycle-count verification writes (`verifyShelfBoxItem`, `cycle_count` branch of `completeVerificationTask`) | `apps/api/src/db/putAway.ts`, `apps/api/src/db/measure.ts` |
 | Pick-scan cycle-count hook (picking from a boxed lot schedules a recount and resets the box) | `apps/api/src/db/pickScan.ts` |
+| Seed on empty + reset (`seedIfEmpty`, `resetAndReseed`; frozen `seedSql` + recompute + `allocateAll`) | `apps/api/src/db/seed.ts`, `apps/api/src/db/seedSql.ts` |
+| Seed generator (replays web seed in PGlite, projects onto API schema) | `apps/web/scripts/export-api-seed.test.ts` |
+| Receiving mismatch workflow (report/edit/confirm/cancel) | `apps/api/src/db/mismatch.ts` |
+| Picking issue reporting | `apps/api/src/db/pickingIssues.ts` |
+| OCR pick (FIFO link + `scanAllocation` from an in-hand receiving order) | `apps/api/src/db/ocrPick.ts` |
 
 - Server entry: `apps/api/src/server.ts`; app wiring: `apps/api/src/index.ts`; DB bootstrap: `apps/api/src/db.ts`.
 - confirm-arrival runs `allocateAll` after the order flips to `in_hand`; a picking upsert runs `allocatePickingOrder` when the upsert changed data. Both are best-effort and never roll back the committed write.
