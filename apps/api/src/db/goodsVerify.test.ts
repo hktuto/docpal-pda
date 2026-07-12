@@ -16,6 +16,7 @@ import { assertInvariantsHold } from "./invariants.guard.js";
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wh-api-"));
 const dbPath = path.join(dir, "t.sqlite");
 process.env.DATABASE_URL = dbPath;
+process.env.WAREHOUSE_SEED = "off";
 const { app } = await import("../index.js");
 const routeSqlite = new Database(dbPath);
 
