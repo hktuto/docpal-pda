@@ -5,6 +5,7 @@ import type { ConfirmArrivalResponse, IngestUpsertResponse, ReceivingPutBody } f
 import { db } from "../db.js";
 import { allocateAll } from "../db/allocate.js";
 import { confirmReceivingArrival, upsertReceivingOrder } from "../ingest/receiving.js";
+import { collapseUpper } from "../db/schema/normalize.js";
 
 export const receivingRoute = new Hono();
 
@@ -133,9 +134,7 @@ receivingRoute.get("/receiving-orders/:id", (c) => {
 // apps/web/composables/useMockOcr.ts — trim/uppercase/collapse-whitespace,
 // WITHOUT the confusable mapping the stored part_no_norm applies. The client
 // looks up by that same key, so the map key must match it exactly.
-function normalizeScanKey(partNo: string): string {
-  return partNo.trim().toUpperCase().replace(/\s+/g, " ");
-}
+// collapseUpper (db/schema/normalize.ts) is the same transform.
 
 // Scan-candidates snapshot powering the web's useScanMatchers without direct
 // DB access. Mirrors findReceivingCandidatesForOrder / findPickingCandidatesForOrder
@@ -170,7 +169,7 @@ receivingRoute.get("/receiving-orders/:id/scan-candidates", (c) => {
     ORDER BY p.part_no_norm, rii.date_code_norm, rii.lot_code_norm`);
   const receivingByPartNo: Record<string, Record<string, unknown>[]> = {};
   for (const row of receivingRows) {
-    (receivingByPartNo[normalizeScanKey(String(row.part_no))] ??= []).push(row);
+    (receivingByPartNo[collapseUpper(String(row.part_no))] ??= []).push(row);
   }
 
   // remaining_qty mirrors the web: qty - picked_qty - SUM(unboxed packages).

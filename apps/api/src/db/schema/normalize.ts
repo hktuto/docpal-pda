@@ -1,6 +1,6 @@
 const CONFUSABLES: Record<string, string> = { O: "0", I: "1", L: "1", Z: "2", S: "5" };
 
-function collapseUpper(s: string): string {
+export function collapseUpper(s: string): string {
   return s.trim().replace(/\s+/g, " ").toUpperCase();
 }
 
