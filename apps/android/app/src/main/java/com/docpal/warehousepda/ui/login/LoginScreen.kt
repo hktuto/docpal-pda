@@ -38,14 +38,16 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.docpal.warehousepda.App
 import com.docpal.warehousepda.R
 import com.docpal.warehousepda.ui.LocaleManager
 
 @Composable
 fun LoginScreen(
     onLoggedIn: () -> Unit,
-    viewModel: LoginViewModel = viewModel(),
 ) {
+    val app = LocalContext.current.applicationContext as App
+    val viewModel: LoginViewModel = viewModel(factory = app.container.viewModelFactory)
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     LaunchedEffect(state.loggedInUser) {

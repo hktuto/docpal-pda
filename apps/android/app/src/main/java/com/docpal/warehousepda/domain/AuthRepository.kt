@@ -1,17 +1,26 @@
 package com.docpal.warehousepda.domain
 
-import com.docpal.warehousepda.data.db.AppDatabase
+import com.docpal.warehousepda.data.SessionRepository
+import com.docpal.warehousepda.data.db.UserDao
 import com.docpal.warehousepda.domain.model.User
 
-class AuthRepository(private val db: AppDatabase) {
+interface AuthRepository {
+    suspend fun login(username: String, password: String): User
+}
 
-    suspend fun login(username: String, password: String): User {
-        val row = db.userDao().findByUsername(username)
+class DefaultAuthRepository(
+    private val userDao: UserDao,
+    private val sessionRepository: SessionRepository,
+) : AuthRepository {
+
+    override suspend fun login(username: String, password: String): User {
+        val row = userDao.findByUsername(username)
             ?: throw LocalizedException("invalid_username_or_password")
         // Plain-text compare — demo-only, mirrors the web adapter.
         if (row.passwordHash != password) {
             throw LocalizedException("invalid_username_or_password")
         }
+        sessionRepository.setLoggedInUserId(row.id)
         return User(
             id = row.id,
             username = row.username,
@@ -22,7 +31,7 @@ class AuthRepository(private val db: AppDatabase) {
     }
 
     suspend fun userById(id: String): User? {
-        val row = db.userDao().findById(id) ?: return null
+        val row = userDao.findById(id) ?: return null
         return User(
             id = row.id,
             username = row.username,

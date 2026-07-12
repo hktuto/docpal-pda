@@ -47,6 +47,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.docpal.warehousepda.App
 import com.docpal.warehousepda.R
 import com.docpal.warehousepda.ui.LocaleManager
 
@@ -60,8 +61,9 @@ private data class MenuCard(
 @Composable
 fun HomeScreen(
     onLoggedOut: () -> Unit,
-    viewModel: HomeViewModel = viewModel(),
 ) {
+    val app = LocalContext.current.applicationContext as App
+    val viewModel: HomeViewModel = viewModel(factory = app.container.viewModelFactory)
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 

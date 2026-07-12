@@ -2,6 +2,8 @@ package com.docpal.warehousepda.domain
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.docpal.warehousepda.data.SessionRepository
+import com.docpal.warehousepda.data.SessionStore
 import com.docpal.warehousepda.data.db.AppDatabase
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -21,13 +23,16 @@ import org.robolectric.annotation.Config
 class AuthRepositoryTest {
 
     private lateinit var db: AppDatabase
-    private lateinit var repo: AuthRepository
+    private lateinit var repo: DefaultAuthRepository
 
     @Before
     fun setUp() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         db = AppDatabase.build(context, inMemory = true)
-        repo = AuthRepository(db)
+        repo = DefaultAuthRepository(
+            db.userDao(),
+            SessionRepository(SessionStore(context), db.userDao()),
+        )
     }
 
     @After
