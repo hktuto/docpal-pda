@@ -128,6 +128,7 @@ fun PutAwayDetailScreen(orderId: String, onBack: () -> Unit) {
                     expanded = boxesExpanded,
                     expandedContents = expandedContents,
                     actionInProgress = state.actionInProgress,
+                    unboxedCount = state.unboxedScanCount,
                     onToggleExpanded = { boxesExpanded = !boxesExpanded },
                     onToggleContents = { boxId ->
                         expandedContents =

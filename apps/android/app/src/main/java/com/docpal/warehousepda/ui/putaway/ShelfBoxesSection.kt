@@ -44,6 +44,8 @@ internal fun LazyListScope.shelfBoxesSection(
     expanded: Boolean,
     expandedContents: Set<String>,
     actionInProgress: Boolean,
+    // PutAwayDetailUiState.unboxedScanCount — the business rule lives in the VM state.
+    unboxedCount: Int,
     onToggleExpanded: () -> Unit,
     onToggleContents: (boxId: String) -> Unit,
     onNewBox: () -> Unit,
@@ -53,7 +55,6 @@ internal fun LazyListScope.shelfBoxesSection(
 ) {
     // Web actionable: the order can still take stock (clear is terminal).
     val actionable = detail.header.status != "clear"
-    val unboxedCount = detail.scans.count { it.shelfBoxId == null }
     item(key = "boxes-header") {
         Row(
             Modifier.fillMaxWidth(),
