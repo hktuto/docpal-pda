@@ -191,7 +191,7 @@ pickingExecutionRoute.get("/picking-orders", (c) => {
     FROM picking_orders
     WHERE (${status ?? null} IS NULL OR status = ${status ?? null})
       AND (${updatedSince ?? null} IS NULL OR updated_at > ${updatedSince ?? null})
-    ORDER BY updated_at ASC, id ASC LIMIT 200`);
+    ORDER BY CASE WHEN status = 'finished' THEN 1 ELSE 0 END, delivery_date ASC, id ASC`);
   return c.json(rows, 200);
 });
 

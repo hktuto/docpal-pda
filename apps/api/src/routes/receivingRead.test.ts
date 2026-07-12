@@ -71,6 +71,22 @@ test("GET /receiving-orders?status=pending filters out in_hand orders", async ()
   assert.deepEqual(rows, []);
 });
 
+test("GET /receiving-orders orders by delivery_date, not ref_no (pglite parity)", async () => {
+  sqlite.exec(`
+    INSERT INTO receiving_orders (id, external_id, ref_no, delivery_date, status, created_at, updated_at) VALUES
+      ('ordx1','ordxe1','RO-AAA','2026-06-01','pending','0','0'),
+      ('ordx2','ordxe2','RO-ZZZ','2025-01-01','pending','0','0'),
+      ('ordx3','ordxe3','RO-MMM',NULL,'pending','0','0');
+  `);
+  const res = await app.request("/receiving-orders");
+  assert.equal(res.status, 200);
+  const rows = (await res.json()) as any[];
+  const idx = (id: string) => rows.findIndex((r) => r.id === id);
+  // delivery_date ASC (NULLs first, as in SQLite/PGlite); ref_no order would be AAA < MMM < ZZZ
+  assert.ok(idx("ordx3") < idx("ordx2"), "NULL delivery_date sorts first");
+  assert.ok(idx("ordx2") < idx("ordx1"), "earlier delivery_date sorts before later");
+});
+
 test("GET /receiving-orders/:id returns detail with supplier, items, allocations, mismatches", async () => {
   const res = await app.request("/receiving-orders/ro4");
   assert.equal(res.status, 200);

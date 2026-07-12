@@ -47,6 +47,7 @@ CREATE INDEX IF NOT EXISTS rim_item_idx ON receiving_item_mismatches(receiving_i
 CREATE TABLE IF NOT EXISTS picking_orders (
   id TEXT PRIMARY KEY, external_id TEXT NOT NULL UNIQUE, ref_no TEXT NOT NULL,
   status TEXT NOT NULL CHECK(status IN ('pending','picking','finished','issue')), ship_to TEXT, destination_country TEXT,
+  delivery_date TEXT, supplier_id TEXT REFERENCES suppliers(id),
   issue_reason TEXT, issue_note TEXT, issue_qty INTEGER, issue_pack_size INTEGER, issue_remark TEXT,
   issue_reported_at TEXT, issue_reported_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS picking_orders_status_updated_idx ON picking_orders(status, updated_at);
@@ -193,6 +194,9 @@ export function createTables(sqlite: DatabaseType): void {
   ensureColumn(sqlite, "picking_orders", "issue_remark", "issue_remark TEXT");
   ensureColumn(sqlite, "picking_orders", "issue_reported_at", "issue_reported_at TEXT");
   ensureColumn(sqlite, "picking_orders", "issue_reported_by", "issue_reported_by TEXT");
+  // picking_orders gained the web delivery/supplier columns (Plan 8 follow-up).
+  ensureColumn(sqlite, "picking_orders", "delivery_date", "delivery_date TEXT");
+  ensureColumn(sqlite, "picking_orders", "supplier_id", "supplier_id TEXT REFERENCES suppliers(id)");
   // The cycle-coalesce index became partial (pending-only). A stale dev.sqlite still
   // holds the old non-partial definition, which CREATE ... IF NOT EXISTS would keep,
   // so drop it first and let the DDL recreate it (cheap at demo scale).

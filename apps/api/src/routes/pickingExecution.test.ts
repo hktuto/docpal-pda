@@ -94,6 +94,19 @@ test("GET /picking-orders filters by status and updated_since", async () => {
   assert.deepEqual(await future.json(), []);
 });
 
+test("GET /picking-orders orders finished-last, then delivery_date ASC (pglite parity)", async () => {
+  sqlite.exec(`
+    INSERT INTO picking_orders (id, external_id, ref_no, status, delivery_date, created_at, updated_at) VALUES
+      ('orda','orda-e','ORD-A','finished','2025-01-01','0','0'),
+      ('ordb','ordb-e','ORD-B','picking','2026-06-01','0','0'),
+      ('ordc','ordc-e','ORD-C','picking','2025-06-01','0','0');
+  `);
+  const rows = (await (await app.request("/picking-orders")).json()) as any[];
+  const idx = (id: string) => rows.findIndex((r) => r.id === id);
+  assert.ok(idx("ordc") < idx("ordb"), "earlier delivery_date first among non-finished");
+  assert.ok(idx("ordb") < idx("orda"), "finished sorts last regardless of delivery_date");
+});
+
 test("GET /picking-orders/:id resolves receiving-sourced allocations and excludes zero-qty residue", async () => {
   sqlite.exec(`
     INSERT INTO receiving_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('ro2','roe2','RO2','in_hand','0','0');

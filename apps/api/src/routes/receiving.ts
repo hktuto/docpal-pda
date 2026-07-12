@@ -35,7 +35,7 @@ receivingRoute.get("/receiving-orders", (c) => {
     FROM receiving_orders ro
     LEFT JOIN suppliers s ON s.id = ro.supplier_id
     WHERE (${status} IS NULL OR ro.status = ${status})
-    ORDER BY ro.ref_no`);
+    ORDER BY ro.delivery_date`);
   return c.json(rows, 200);
 });
 

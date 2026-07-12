@@ -12,6 +12,8 @@ export const pickingOrders = sqliteTable(
     status: text("status", { enum: ["pending", "picking", "finished", "issue"] }).notNull(),
     shipTo: text("ship_to"),
     destinationCountry: text("destination_country"),
+    deliveryDate: text("delivery_date"),
+    supplierId: text("supplier_id"),
     issueReason: text("issue_reason"),
     issueNote: text("issue_note"),
     issueQty: integer("issue_qty"),
