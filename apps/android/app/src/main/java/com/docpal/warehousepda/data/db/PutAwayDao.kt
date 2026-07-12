@@ -63,7 +63,7 @@ interface PutAwayDao {
     )
     fun lotRows(orderId: String): List<PutAwayLotRow>
 
-    /** All put-away scans of the order, oldest first with id tiebreak (created_at, id). */
+    /** All put-away scans of the order, newest first with id tiebreak (web getPutAwayScansForReceivingOrder: created_at DESC). */
     @Query(
         """
         SELECT pas.id, pas.receiving_invoice_item_id, pas.qty,
@@ -72,7 +72,7 @@ interface PutAwayDao {
         JOIN receiving_invoice_items rii ON rii.id = pas.receiving_invoice_item_id
         JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
         WHERE ri.receiving_order_id = :orderId
-        ORDER BY pas.created_at, pas.id
+        ORDER BY pas.created_at DESC, pas.id
         """
     )
     fun scanRows(orderId: String): List<PutAwayScanRow>

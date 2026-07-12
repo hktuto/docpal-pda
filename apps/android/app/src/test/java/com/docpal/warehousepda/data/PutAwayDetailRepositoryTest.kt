@@ -103,7 +103,7 @@ class PutAwayDetailRepositoryTest {
         assertEquals(7, lot.scannedQty)     // 4 unboxed + 3 boxed
         assertEquals(3, lot.boxedQty)
 
-        // Scans ordered by created_at, id (fixture shares one timestamp -> id tiebreak).
+        // Scans ordered by created_at DESC, id (fixture shares one timestamp -> id tiebreak).
         assertEquals(listOf("pa-scan-1", "pa-scan-2"), detail.scans.map { it.id })
         val unboxedScan = detail.scans[0]
         assertEquals("pa-item-1", unboxedScan.receivingInvoiceItemId)
@@ -194,6 +194,29 @@ class PutAwayDetailRepositoryTest {
             listOf("pa-box-open", "pa-box-closed-new", "pa-box-closed-old"),
             detail.boxes.map { it.id },
         )
+    }
+
+    @Test
+    fun `scans are ordered newest first`() = runBlocking {
+        insertReceivingOrder(db, "pa-order-1", "PA-001", "in_hand")
+        insertPart(db, "pa-part-1", "PA-PART-1")
+        fixture { wdb ->
+            insertReceivingInvoice(wdb, "pa-inv-1", "pa-order-1")
+            insertReceivingInvoiceItem(wdb, "pa-item-1", "pa-inv-1", "pa-part-1", qty = 10)
+            // Insertion order is the opposite of chronological order: only the
+            // created_at DESC primary sort key puts the newer scan first.
+            insertPutAwayScan(wdb, "pa-scan-new", itemId = "pa-item-1", partId = "pa-part-1", qty = 1, createdAt = 2000)
+            insertPutAwayScan(wdb, "pa-scan-old", itemId = "pa-item-1", partId = "pa-part-1", qty = 1, createdAt = 1000)
+        }
+
+        val detail = repo.getPutAwayDetail("pa-order-1") ?: error("expected detail")
+
+        assertEquals(listOf("pa-scan-new", "pa-scan-old"), detail.scans.map { it.id })
+    }
+
+    @Test
+    fun `unknown order returns null`() = runBlocking {
+        assertNull(repo.getPutAwayDetail("no-such-order"))
     }
 
     /** Batches raw fixture inserts in one off-main-thread block (Room forbids main-thread writes). */
