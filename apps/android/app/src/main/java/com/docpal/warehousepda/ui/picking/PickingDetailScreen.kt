@@ -249,9 +249,7 @@ private fun HeaderCard(
                 Spacer(Modifier.height(4.dp))
                 ErrorText(state.errorKey, args = state.errorArgs)
             }
-            val actionable = detail.status != "finished" && detail.status != "issue"
-            // Web allItemsFullyBoxed: items.every(pickedQty >= qty) — true also for no items.
-            if (actionable && detail.items.all { it.pickedQty >= it.qty }) {
+            if (state.canFinish) {
                 Spacer(Modifier.height(8.dp))
                 Button(
                     onClick = onFinish,

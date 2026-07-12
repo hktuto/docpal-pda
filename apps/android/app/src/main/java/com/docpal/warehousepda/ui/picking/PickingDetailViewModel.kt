@@ -42,7 +42,19 @@ data class PickingDetailUiState(
     val actionInProgress: Boolean = false,
     val pendingAddAllBoxId: String? = null,
     val toastKey: String? = null,
-)
+) {
+    /**
+     * Web allItemsFullyBoxed + the actionable gate: finish is offered while the order is
+     * not finished/issue and every item is fully boxed. Like the web (Array.every on an
+     * empty list is true), an order with zero items qualifies — finishPickingOrder then
+     * rejects it with no_items_to_pick.
+     */
+    val canFinish: Boolean
+        get() = detail?.let {
+            it.status != "finished" && it.status != "issue" &&
+                it.items.all { item -> item.pickedQty >= item.qty }
+        } ?: false
+}
 
 /**
  * Loads the picking order detail + per-item logs in `init` (the first query must be

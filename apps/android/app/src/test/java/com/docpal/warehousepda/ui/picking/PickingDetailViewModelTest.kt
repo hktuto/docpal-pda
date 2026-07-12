@@ -17,6 +17,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -146,6 +147,39 @@ class PickingDetailViewModelTest {
         advanceUntilIdle()
         assertEquals("box_is_not_empty", vm.uiState.value.errorKey)
         assertFalse(vm.uiState.value.actionInProgress)
+    }
+
+    @Test fun `canFinish requires all items boxed and actionable status`() = runTest {
+        val source = FakePickingDetailSource()
+        val vm = vm(source)
+        advanceUntilIdle()
+        // Fixture item: pickedQty 0 of 10 required.
+        assertFalse(vm.uiState.value.canFinish)
+
+        source.detail = source.detail.copy(
+            items = source.detail.items.map { it.copy(pickedQty = it.qty) },
+        )
+        vm.reload()
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value.canFinish)
+
+        source.detail = source.detail.copy(status = "finished")
+        vm.reload()
+        advanceUntilIdle()
+        assertFalse(vm.uiState.value.canFinish)
+    }
+
+    @Test fun `dismissAddAll clears pending without delegating`() = runTest {
+        val source = FakePickingDetailSource()
+        val vm = vm(source)
+        advanceUntilIdle()
+        vm.requestAddAll("box-1")
+        assertEquals("box-1", vm.uiState.value.pendingAddAllBoxId)
+
+        vm.dismissAddAll()
+        advanceUntilIdle()
+        assertNull(vm.uiState.value.pendingAddAllBoxId)
+        assertEquals(emptyList<Pair<String, String>>(), source.addAllCalls)
     }
 
     private companion object {
