@@ -37,4 +37,47 @@ test("PUT picking order runs allocation against existing in_hand receiving stock
   assert.equal(rii.available_qty, 70);
 });
 
+const post = (url: string, body: unknown) =>
+  app.request(url, { method: "POST", headers: { "content-type": "application/json" }, body: typeof body === "string" ? body : JSON.stringify(body) });
+
+sqlite.exec(`
+  INSERT INTO users (id, username, password_hash, role, name, created_at, updated_at)
+    VALUES ('op7r','op7r','h','operator','Op7r','0','0');
+  INSERT INTO parts (id, part_no, part_no_norm, created_at, updated_at) VALUES ('p7r','P7R','P7R','0','0');
+  INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES
+    ('po7r1','e7r1','PO-7R1','pending','0','0'),
+    ('po7r2','e7r2','PO-7R2','picking','0','0'),
+    ('po7r3','e7r3','PO-7R3','finished','0','0');
+  INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES
+    ('pi7r1','po7r1','p7r',10,'0','0'),
+    ('pi7r2','po7r2','p7r',10,'0','0');
+`);
+
+test("POST /picking-orders/report-issues reports pending/picking orders and skips finished ones", async () => {
+  const res = await post("/picking-orders/report-issues", {
+    picking_order_ids: ["po7r1", "po7r2", "po7r3"], reason: "insufficient_stock", qty: 5, remark: "short", actor_id: "op7r",
+  });
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { reported: string[]; skipped: string[] };
+  assert.deepEqual(body.reported, ["po7r1", "po7r2"]);
+  assert.deepEqual(body.skipped, ["po7r3"]);
+  const row = sqlite
+    .prepare("SELECT status, issue_reason, issue_qty, issue_remark, issue_reported_by FROM picking_orders WHERE id='po7r1'")
+    .get() as any;
+  assert.deepEqual(row, { status: "issue", issue_reason: "insufficient_stock", issue_qty: 5, issue_remark: "short", issue_reported_by: "op7r" });
+});
+
+test("POST /picking-orders/report-issues validation: malformed JSON / actor_id / ids / reason -> 400", async () => {
+  const badJson = await post("/picking-orders/report-issues", "{nope");
+  assert.equal(badJson.status, 400);
+  const noActor = await post("/picking-orders/report-issues", { picking_order_ids: ["po7r1"], reason: "merge" });
+  assert.equal(noActor.status, 400);
+  const emptyIds = await post("/picking-orders/report-issues", { picking_order_ids: [], reason: "merge", actor_id: "op7r" });
+  assert.equal(emptyIds.status, 400);
+  const nonArrayIds = await post("/picking-orders/report-issues", { picking_order_ids: "po7r1", reason: "merge", actor_id: "op7r" });
+  assert.equal(nonArrayIds.status, 400);
+  const unknownReason = await post("/picking-orders/report-issues", { picking_order_ids: ["po7r1"], reason: "bogus", actor_id: "op7r" });
+  assert.equal(unknownReason.status, 400);
+});
+
 test("cleanup", () => { sqlite.close(); });

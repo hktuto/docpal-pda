@@ -22,10 +22,12 @@ function makeDb() {
     INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES
       ('po7a','e7a','PO-7A','pending','0','0'),
       ('po7b','e7b','PO-7B','picking','0','0'),
-      ('po7c','e7c','PO-7C','finished','0','0');
+      ('po7c','e7c','PO-7C','finished','0','0'),
+      ('po7d','e7d','PO-7D','pending','0','0');
     INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES
       ('pi7a','po7a','p7',10,'0','0'),
-      ('pi7b','po7b','p7',10,'0','0');
+      ('pi7b','po7b','p7',10,'0','0'),
+      ('pi7d','po7d','p7',3,'0','0');
   `);
   return { sqlite, db };
 }
@@ -102,8 +104,32 @@ test("insufficient_stock qty must be >= 0 and below the order's total required q
       ),
     (e: any) => e.status === 400
   );
-  // rejected reports changed nothing
+  // rejected reports changed nothing: no status change, no transition logs
   assert.equal(order(sqlite, "po7a").status, "pending");
+  assert.deepEqual(logs(sqlite, "po7a"), []);
+  assertInvariantsHold(db);
+  sqlite.close();
+});
+
+test("a mid-loop validation failure rolls back earlier updates and logs", () => {
+  const { sqlite, db } = makeDb();
+  // po7a (total 10) passes the qty check, po7d (total 3) fails it second
+  assert.throws(
+    () =>
+      db.transaction((tx) =>
+        reportPickingOrderIssues(tx, {
+          pickingOrderIds: ["po7a", "po7d"],
+          reason: "insufficient_stock",
+          qty: 5,
+          actorId: "op7",
+        })
+      ),
+    (e: any) => e.status === 400
+  );
+  // po7a's update + transition log were rolled back with the transaction
+  assert.equal(order(sqlite, "po7a").status, "pending");
+  assert.deepEqual(logs(sqlite, "po7a"), []);
+  assert.equal(order(sqlite, "po7d").status, "pending");
   assertInvariantsHold(db);
   sqlite.close();
 });
@@ -117,6 +143,7 @@ test("cannot_divide requires a positive pack_size and stores it", () => {
       ),
     (e: any) => e.status === 400
   );
+  assert.deepEqual(logs(sqlite, "po7a"), []);
   const result = db.transaction((tx) =>
     reportPickingOrderIssues(tx, { pickingOrderIds: ["po7a"], reason: "cannot_divide", packSize: 6, actorId: "op7" })
   );
@@ -139,6 +166,7 @@ test("merge requires at least two orders", () => {
       ),
     (e: any) => e.status === 400
   );
+  assert.deepEqual(logs(sqlite, "po7a"), []);
   const result = db.transaction((tx) =>
     reportPickingOrderIssues(tx, { pickingOrderIds: ["po7a", "po7b"], reason: "merge", actorId: "op7" })
   );

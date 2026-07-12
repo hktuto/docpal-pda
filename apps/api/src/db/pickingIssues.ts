@@ -32,7 +32,7 @@ export function reportPickingOrderIssues(
   tx: DbOrTx,
   input: ReportPickingOrderIssuesInput
 ): { reported: string[]; skipped: string[] } {
-  const ids = input.pickingOrderIds;
+  const ids = [...new Set(input.pickingOrderIds)];
   if (ids.length === 0) throw new HTTPException(400, { message: "no_orders_selected" });
   if (input.reason === "merge" && ids.length < 2) {
     throw new HTTPException(400, { message: "select_at_least_two_orders_to_merge" });
