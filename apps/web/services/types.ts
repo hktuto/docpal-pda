@@ -9,7 +9,8 @@ export interface User {
   username: string;
   displayName: string;
   role: UserRole;
-  createdAt: Date;
+  // Nullable: the HTTP API auth payload has no created_at column.
+  createdAt: Date | null;
 }
 
 export interface Supplier {
