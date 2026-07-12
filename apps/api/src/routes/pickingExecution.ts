@@ -175,10 +175,10 @@ pickingExecutionRoute.post("/packages/:id/verify", async (c) => {
   return c.json({ ok: true }, 200);
 });
 
-pickingExecutionRoute.post("/shipping-boxes/:id/cancel", async (c) => {
+pickingExecutionRoute.post("/shipping-boxes/:id/cancel", (c) => {
   const boxId = c.req.param("id");
-  const body = await readJson<{ actor_id?: string | null }>(c);
-  db.transaction((tx) => cancelShippingBox(tx, { shippingBoxId: boxId, actorId: body.actor_id ?? null }));
+  const actorId = c.req.query("actor_id") ?? null;
+  db.transaction((tx) => cancelShippingBox(tx, { shippingBoxId: boxId, actorId }));
   return c.json({ ok: true }, 200);
 });
 

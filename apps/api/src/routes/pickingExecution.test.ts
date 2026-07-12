@@ -268,18 +268,16 @@ test("POST /packages/:id/verify marks a boxed package verified; 409 when not in 
   assert.equal(miss.status, 404);
 });
 
-test("POST /shipping-boxes/:id/cancel deletes an empty open box; 404 unknown", async () => {
+test("POST /shipping-boxes/:id/cancel deletes an empty open box (actor_id via query); 404 unknown", async () => {
   sqlite.exec(`INSERT INTO shipping_boxes (id, picking_order_id, status, created_at, updated_at) VALUES ('fcbox','fpo','open','0','0')`);
-  const cancel = await app.request("/shipping-boxes/fcbox/cancel", {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}),
-  });
+  const cancel = await app.request("/shipping-boxes/fcbox/cancel?actor_id=op1", { method: "POST" });
   assert.equal(cancel.status, 200);
   assert.deepEqual(await cancel.json(), { ok: true });
   assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM shipping_boxes WHERE id='fcbox'").get() as any).c, 0);
+  const log = sqlite.prepare("SELECT actor_id FROM transition_logs WHERE entity_type='shipping_box' AND entity_id='fcbox'").get() as any;
+  assert.equal(log.actor_id, "op1");
 
-  const miss = await app.request("/shipping-boxes/nope/cancel", {
-    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}),
-  });
+  const miss = await app.request("/shipping-boxes/nope/cancel", { method: "POST" });
   assert.equal(miss.status, 404);
   assert.match(await miss.text(), /shipping box not found/);
 });
