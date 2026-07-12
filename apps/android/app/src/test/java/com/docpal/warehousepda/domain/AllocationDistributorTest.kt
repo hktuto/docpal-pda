@@ -5,10 +5,19 @@ import org.junit.Test
 
 class AllocationDistributorTest {
 
-    private fun item(id: String, partId: String, orderId: String, gross: Int, sortKey: Int) =
+    private fun item(
+        id: String,
+        partId: String,
+        orderId: String,
+        gross: Int,
+        sortKey: Int,
+        deliveryDate: Long? = sortKey.toLong(),
+        invoiceNo: String = "INV",
+        dateCode: String? = sortKey.toString(),
+    ) =
         AllocationDistributor.InvoiceItemRow(
             id = id, partId = partId, receivingOrderId = orderId, grossQty = gross,
-            deliveryDate = sortKey.toLong(), invoiceNo = "INV", dateCode = sortKey.toString(),
+            deliveryDate = deliveryDate, invoiceNo = invoiceNo, dateCode = dateCode,
         )
 
     @Test
@@ -82,5 +91,54 @@ class AllocationDistributorTest {
         )
         assertEquals(10, result["e"]!!.allocatedQty)
         assertEquals(0, result["n"]!!.allocatedQty)
+    }
+
+    @Test
+    fun `lower invoice number fills first under equal delivery dates`() {
+        val items = listOf(
+            item("b", "p1", "o1", gross = 100, sortKey = 1, invoiceNo = "INV-2"),
+            item("a", "p1", "o1", gross = 100, sortKey = 1, invoiceNo = "INV-1"),
+        )
+        val result = AllocationDistributor.distribute(items, mapOf(("o1" to "p1") to 50), emptyMap())
+        assertEquals(50, result["a"]!!.allocatedQty)
+        assertEquals(0, result["b"]!!.allocatedQty)
+    }
+
+    @Test
+    fun `lower date code fills first under equal delivery date and invoice number`() {
+        val items = listOf(
+            item("b", "p1", "o1", gross = 100, sortKey = 1, dateCode = "2024-02"),
+            item("a", "p1", "o1", gross = 100, sortKey = 1, dateCode = "2024-01"),
+        )
+        val result = AllocationDistributor.distribute(items, mapOf(("o1" to "p1") to 50), emptyMap())
+        assertEquals(50, result["a"]!!.allocatedQty)
+        assertEquals(0, result["b"]!!.allocatedQty)
+    }
+
+    @Test
+    fun `null date code sorts last under equal delivery date and invoice number`() {
+        val items = listOf(
+            item("n", "p1", "o1", gross = 100, sortKey = 1, dateCode = null),
+            item("a", "p1", "o1", gross = 100, sortKey = 1, dateCode = "2024-01"),
+        )
+        val result = AllocationDistributor.distribute(items, mapOf(("o1" to "p1") to 50), emptyMap())
+        assertEquals(50, result["a"]!!.allocatedQty)
+        assertEquals(0, result["n"]!!.allocatedQty)
+    }
+
+    @Test
+    fun `empty items list returns empty result`() {
+        val result = AllocationDistributor.distribute(emptyList(), mapOf(("o1" to "p1") to 50), emptyMap())
+        assertEquals(0, result.size)
+    }
+
+    @Test
+    fun `available qty is not clamped when unboxed exceeds gross minus allocated`() {
+        val items = listOf(item("a", "p1", "o1", gross = 30, sortKey = 1))
+        val result = AllocationDistributor.distribute(
+            items, mapOf(("o1" to "p1") to 10), mapOf("a" to 25)
+        )
+        // matches the web formula, which also does not clamp: 30 - 10 - 25
+        assertEquals(-5, result["a"]!!.availableQty)
     }
 }

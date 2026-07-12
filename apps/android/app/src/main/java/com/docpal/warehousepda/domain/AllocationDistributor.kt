@@ -38,6 +38,8 @@ object AllocationDistributor {
      * @param allocationTotals  (receivingOrderId, partId) -> total allocated qty (pre-filtered for exclusions)
      * @param unboxedByItem     receiving_invoice_item_id -> unboxed put-away scan qty
      * @return receiving_invoice_item_id -> availability breakdown
+     *
+     * Ties on all sort keys resolve by caller input order (stable sort).
      */
     fun distribute(
         items: List<InvoiceItemRow>,
