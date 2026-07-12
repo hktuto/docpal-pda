@@ -82,6 +82,15 @@ describe('createApiClient', () => {
     await expect(promise).rejects.toMatchObject({ code: 'package_not_in_shipping_box' });
   });
 
+  it('maps "shelf box is not closed" 409 text to shelf_box_is_not_closed', async () => {
+    fetchMock.mockResolvedValue(errorResponse('shelf box is not closed', 409));
+    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+
+    const promise = client.post('/verification-tasks/vt1/complete');
+    await expect(promise).rejects.toThrow(I18nError);
+    await expect(promise).rejects.toMatchObject({ code: 'shelf_box_is_not_closed' });
+  });
+
   it('throws a plain Error containing the status for unmapped error text', async () => {
     fetchMock.mockResolvedValue(errorResponse('something exploded', 500));
     const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });

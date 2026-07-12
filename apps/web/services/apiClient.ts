@@ -30,6 +30,7 @@ const ERROR_KEY_MAP: Record<string, string> = {
   "measuring task is not pending": "measuring_task_is_not_pending",
   "no unverified scans for part in box": "shelf_box_item_not_found",
   "shelf box is not open": "shelf_box_is_not_open",
+  "shelf box is not closed": "shelf_box_is_not_closed",
   "box has unverified items": "not_all_shelf_box_items_verified",
 };
 

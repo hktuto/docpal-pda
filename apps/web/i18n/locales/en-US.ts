@@ -568,6 +568,7 @@ export default {
     invalid_picking_item_id: "Invalid picking item id: {id}",
     shelf_box_not_found: "Shelf box not found",
     shelf_box_is_not_open: "Shelf box is not open",
+    shelf_box_is_not_closed: "Shelf box is not closed",
     shelf_box_is_not_empty: "Shelf box is not empty",
     cannot_close_empty_shelf_box: "Cannot close an empty shelf box",
     scanned_qty_exceeds_total: "Scanned quantity exceeds remaining quantity for this item",

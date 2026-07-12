@@ -568,6 +568,7 @@ export default {
     invalid_picking_item_id: "拣货项 ID 无效：{id}",
     shelf_box_not_found: "未找到货架箱子",
     shelf_box_is_not_open: "货架箱子未打开",
+    shelf_box_is_not_closed: "货架箱子未关闭",
     shelf_box_is_not_empty: "货架箱子不是空的",
     cannot_close_empty_shelf_box: "无法关闭空货架箱子",
     scanned_qty_exceeds_total: "扫描数量超过该物品的剩余数量",

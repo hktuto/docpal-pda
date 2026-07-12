@@ -568,6 +568,7 @@ export default {
     invalid_picking_item_id: "揀貨項目 ID 無效：{id}",
     shelf_box_not_found: "找不到貨架箱號",
     shelf_box_is_not_open: "貨架箱號未開啟",
+    shelf_box_is_not_closed: "貨架箱號未關閉",
     shelf_box_is_not_empty: "貨架箱號不是空的",
     cannot_close_empty_shelf_box: "無法關閉空貨架箱號",
     scanned_qty_exceeds_total: "掃描數量超過該物品的剩餘數量",
