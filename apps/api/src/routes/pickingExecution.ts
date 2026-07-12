@@ -186,7 +186,8 @@ pickingExecutionRoute.get("/picking-orders", (c) => {
   const status = c.req.query("status");
   const updatedSince = c.req.query("updated_since");
   const rows = db.all<Record<string, unknown>>(sql`
-    SELECT id, external_id, ref_no, status, ship_to, destination_country, created_at, updated_at
+    SELECT id, external_id, ref_no, status, ship_to, destination_country, created_at, updated_at,
+           (SELECT COALESCE(SUM(pi.qty), 0) FROM picking_items pi WHERE pi.picking_order_id = picking_orders.id) AS total_qty
     FROM picking_orders
     WHERE (${status ?? null} IS NULL OR status = ${status ?? null})
       AND (${updatedSince ?? null} IS NULL OR updated_at > ${updatedSince ?? null})
@@ -197,24 +198,33 @@ pickingExecutionRoute.get("/picking-orders", (c) => {
 pickingExecutionRoute.get("/picking-orders/:id", (c) => {
   const orderId = c.req.param("id");
   const order = db.get<Record<string, unknown>>(sql`
-    SELECT id, external_id, ref_no, status, ship_to, destination_country, created_at, updated_at
-    FROM picking_orders WHERE id = ${orderId}`);
+    SELECT po.id, po.external_id, po.ref_no, po.status, po.ship_to, po.destination_country, po.created_at, po.updated_at,
+           po.issue_reason, po.issue_note, po.issue_qty, po.issue_pack_size, po.issue_remark,
+           po.issue_reported_at, po.issue_reported_by, u.name AS issue_reported_by_name
+    FROM picking_orders po LEFT JOIN users u ON u.id = po.issue_reported_by
+    WHERE po.id = ${orderId}`);
   if (!order) throw new HTTPException(404, { message: "picking order not found" });
+
+  const measuringTask = db.get<Record<string, unknown>>(sql`
+    SELECT id, status FROM measuring_tasks
+    WHERE picking_order_id = ${orderId} ORDER BY created_at DESC LIMIT 1`) ?? null;
 
   const items = db.all<Record<string, unknown>>(sql`
     SELECT pi.id, pi.part_id, p.part_no, pi.qty, pi.picked_qty, pi.scanned_not_boxed_qty,
-           pi.remaining_qty, pi.allocated_qty, pi.line_id
+           pi.remaining_qty, pi.allocated_qty, pi.line_id, pi.required_date_code, pi.source_shelf_code
     FROM picking_items pi JOIN parts p ON p.id = pi.part_id
     WHERE pi.picking_order_id = ${orderId} ORDER BY pi.created_at ASC, pi.id ASC`);
 
   const allocations = db.all<Record<string, unknown>>(sql`
-    SELECT a.id, a.picking_item_id, a.qty, a.inventory_lot_id, a.receiving_order_id
+    SELECT a.id, a.picking_item_id, a.qty, a.remark, a.inventory_lot_id, a.receiving_order_id,
+           ro.ref_no AS receiving_order_ref_no
     FROM allocations a JOIN picking_items pi ON pi.id = a.picking_item_id
+    LEFT JOIN receiving_orders ro ON ro.id = a.receiving_order_id
     WHERE pi.picking_order_id = ${orderId} AND a.qty > 0 ORDER BY a.created_at ASC, a.id ASC`);
   for (const a of allocations) {
     a.lot = a.inventory_lot_id
       ? db.get<Record<string, unknown>>(sql`
-          SELECT shelf_code, box_id, date_code, lot_code, coo, cow,
+          SELECT id, part_id, shelf_code, box_id, date_code, lot_code, coo, cow,
                  date_code_norm, lot_code_norm, coo_norm, cow_norm
           FROM inventory_lots WHERE id = ${a.inventory_lot_id}`) ?? null
       : null;
@@ -229,7 +239,7 @@ pickingExecutionRoute.get("/picking-orders/:id", (c) => {
 
   const packages = db.all<Record<string, unknown>>(sql`
     SELECT pp.id, pp.picking_item_id, pp.source_type, pp.source_id, pp.qty, pp.shipping_box_id,
-           pp.date_code, pp.lot_code, pp.coo, pp.cow, pp.verified
+           pp.date_code, pp.lot_code, pp.coo, pp.cow, pp.verified, pp.created_at
     FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id
     WHERE pi.picking_order_id = ${orderId} ORDER BY pp.created_at ASC, pp.id ASC`);
 
@@ -237,5 +247,5 @@ pickingExecutionRoute.get("/picking-orders/:id", (c) => {
     SELECT id, status, box_size, net_weight_g, gross_weight_g, destination_country, created_at, updated_at
     FROM shipping_boxes WHERE picking_order_id = ${orderId} ORDER BY created_at ASC, id ASC`);
 
-  return c.json({ order, items, allocations, packages, boxes }, 200);
+  return c.json({ order, measuring_task: measuringTask, items, allocations, packages, boxes }, 200);
 });

@@ -282,4 +282,91 @@ test("POST /shipping-boxes/:id/cancel deletes an empty open box (actor_id via qu
   assert.match(await miss.text(), /shipping box not found/);
 });
 
+// --- read extensions (adapter needs these fields) ---
+
+sqlite.exec(`
+  INSERT INTO users (id, username, password_hash, role, name, created_at, updated_at) VALUES ('rxu1','rxreporter','h','operator','Reporter One','0','0');
+  INSERT INTO parts (id, part_no, part_no_norm, created_at, updated_at) VALUES ('rxp1','RX-P1','RX-P1','0','0');
+  INSERT INTO receiving_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('rxro1','rxroe1','RX-RO-1','in_hand','0','0');
+  INSERT INTO inventory_lots (id, part_id, shelf_code, total_qty, allocated_qty, created_at, updated_at) VALUES ('rxlot1','rxp1','RXS1',10,2,'0','0');
+  INSERT INTO picking_orders (id, external_id, ref_no, status, issue_reason, issue_note, issue_qty, issue_pack_size, issue_remark, issue_reported_at, issue_reported_by, created_at, updated_at)
+    VALUES ('rxpo1','rxpe1','RX-R1','issue','shortage','missing parts',3,10,'recount shelf','2026-01-01T00:00:00Z','rxu1','0','0');
+  INSERT INTO picking_items (id, picking_order_id, part_id, qty, required_date_code, source_shelf_code, created_at, updated_at)
+    VALUES ('rxpi1','rxpo1','rxp1',4,'DC-REQ','S-REQ','0','0'),
+           ('rxpi2','rxpo1','rxp1',6,NULL,NULL,'0','0');
+  INSERT INTO allocations (id, picking_item_id, qty, remark, inventory_lot_id, created_at, updated_at) VALUES ('rxa1','rxpi1',2,'alloc remark','rxlot1','0','0');
+  INSERT INTO allocations (id, picking_item_id, qty, receiving_order_id, created_at, updated_at) VALUES ('rxa2','rxpi2',3,'rxro1','0','0');
+  INSERT INTO measuring_tasks (id, picking_order_id, status, created_at, updated_at) VALUES ('rxmt1','rxpo1','pending','0','0');
+  INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('rxpo2','rxpe2','RX-R2','picking','0','0');
+  INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('rxpi3','rxpo2','rxp1',7,'0','0');
+`);
+
+test("GET /picking-orders/:id returns issue fields, measuring task, and extended item/package/allocation keys", async () => {
+  sqlite.exec(`
+    INSERT INTO picking_packages (id, picking_item_id, source_type, source_id, qty, created_at, updated_at)
+      VALUES ('rxpp1','rxpi1','inventory_lot','rxlot1',1,'2026-02-01T00:00:00Z','0');
+  `);
+  const res = await app.request("/picking-orders/rxpo1");
+  assert.equal(res.status, 200);
+  const d = (await res.json()) as any;
+
+  assert.equal(d.order.issue_reason, "shortage");
+  assert.equal(d.order.issue_note, "missing parts");
+  assert.equal(d.order.issue_qty, 3);
+  assert.equal(d.order.issue_pack_size, 10);
+  assert.equal(d.order.issue_remark, "recount shelf");
+  assert.equal(d.order.issue_reported_at, "2026-01-01T00:00:00Z");
+  assert.equal(d.order.issue_reported_by, "rxu1");
+  assert.equal(d.order.issue_reported_by_name, "Reporter One");
+
+  assert.deepEqual(d.measuring_task, { id: "rxmt1", status: "pending" });
+
+  assert.equal(d.items.length, 2);
+  const item1 = d.items.find((i: any) => i.id === "rxpi1");
+  assert.equal(item1.required_date_code, "DC-REQ");
+  assert.equal(item1.source_shelf_code, "S-REQ");
+
+  assert.equal(d.packages.length, 1);
+  assert.equal(d.packages[0].created_at, "2026-02-01T00:00:00Z");
+
+  const a1 = d.allocations.find((a: any) => a.id === "rxa1");
+  assert.equal(a1.remark, "alloc remark");
+  assert.equal(a1.lot.id, "rxlot1");
+  assert.equal(a1.lot.part_id, "rxp1");
+  assert.equal(a1.lot.shelf_code, "RXS1");
+
+  const a2 = d.allocations.find((a: any) => a.id === "rxa2");
+  assert.equal(a2.remark, null);
+  assert.equal(a2.lot, null);
+  assert.equal(a2.receiving_order_ref_no, "RX-RO-1");
+});
+
+test("GET /picking-orders/:id returns null issue fields and null measuring_task for a plain order", async () => {
+  const res = await app.request("/picking-orders/rxpo2");
+  assert.equal(res.status, 200);
+  const d = (await res.json()) as any;
+  assert.equal(d.order.issue_reason, null);
+  assert.equal(d.order.issue_note, null);
+  assert.equal(d.order.issue_qty, null);
+  assert.equal(d.order.issue_pack_size, null);
+  assert.equal(d.order.issue_remark, null);
+  assert.equal(d.order.issue_reported_at, null);
+  assert.equal(d.order.issue_reported_by, null);
+  assert.equal(d.order.issue_reported_by_name, null);
+  assert.equal(d.measuring_task, null);
+  assert.equal(d.items[0].required_date_code, null);
+  assert.equal(d.items[0].source_shelf_code, null);
+});
+
+test("GET /picking-orders includes total_qty summed over each order's items", async () => {
+  const res = await app.request("/picking-orders?status=issue");
+  assert.equal(res.status, 200);
+  const rows = (await res.json()) as any[];
+  const o1 = rows.find((o: any) => o.id === "rxpo1");
+  assert.equal(o1.total_qty, 10); // 4 + 6 across two items
+  const all = (await (await app.request("/picking-orders?status=picking")).json()) as any[];
+  const o2 = all.find((o: any) => o.id === "rxpo2");
+  assert.equal(o2.total_qty, 7);
+});
+
 test("cleanup", () => { sqlite.close(); });
