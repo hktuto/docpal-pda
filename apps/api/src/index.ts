@@ -12,6 +12,7 @@ import { putAwayRoute } from "./routes/putAway.js";
 import { goodsVerifyRoute } from "./routes/goodsVerify.js";
 import { mismatchRoute } from "./routes/mismatch.js";
 import { stockSearchRoute } from "./routes/stockSearch.js";
+import { suppliersRoute } from "./routes/suppliers.js";
 import { devRoute } from "./routes/dev.js";
 
 export const app = new Hono();
@@ -34,4 +35,5 @@ app.route("/", putAwayRoute);
 app.route("/", goodsVerifyRoute);
 app.route("/", mismatchRoute);
 app.route("/", stockSearchRoute);
+app.route("/", suppliersRoute);
 app.route("/", devRoute);
