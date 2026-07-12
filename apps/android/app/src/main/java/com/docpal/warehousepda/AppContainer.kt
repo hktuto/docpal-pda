@@ -3,6 +3,7 @@ package com.docpal.warehousepda
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.docpal.warehousepda.data.ReceivingRepository
 import com.docpal.warehousepda.data.SessionRepository
 import com.docpal.warehousepda.data.SessionStore
 import com.docpal.warehousepda.data.db.AppDatabase
@@ -23,6 +24,8 @@ class AppContainer(context: Context) {
     val authRepository: AuthRepository by lazy {
         DefaultAuthRepository(db.userDao(), sessionRepository)
     }
+
+    val receivingRepository: ReceivingRepository by lazy { ReceivingRepository(db) }
 
     @Suppress("UNCHECKED_CAST")
     val viewModelFactory: ViewModelProvider.Factory = object : ViewModelProvider.Factory {
