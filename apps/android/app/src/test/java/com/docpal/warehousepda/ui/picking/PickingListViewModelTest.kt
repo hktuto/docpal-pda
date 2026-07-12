@@ -82,6 +82,23 @@ class PickingListViewModelTest {
         assertEquals(setOf("1", "2"), vm.uiState.value.selectedIds)
     }
 
+    @Test fun `selection survives reload`() = runTest {
+        val source = FakeSource().apply {
+            orders += PickingOrderSummary("1", "RO-1", "pending", null, "KOA", null, 10)
+            orders += PickingOrderSummary("2", "RO-2", "picking", null, "Diotec", null, 5)
+        }
+        val vm = PickingListViewModel(source, session, dispatcher)
+        vm.reload()
+        advanceUntilIdle()
+        vm.toggleSelection("1")
+        vm.reload()
+        advanceUntilIdle()
+        assertEquals(setOf("1"), vm.uiState.value.selectedIds)
+        // The reload actually re-queried the source.
+        assertEquals(2, source.listCalls)
+        assertEquals(listOf("RO-1", "RO-2"), vm.uiState.value.orders.map { it.refNo })
+    }
+
     @Test fun `report success clears selection reloads and toasts`() = runTest {
         val source = FakeSource().apply {
             orders += PickingOrderSummary("1", "RO-1", "pending", null, "KOA", null, 10)
@@ -98,6 +115,28 @@ class PickingListViewModelTest {
         assertEquals("issue_reported", vm.uiState.value.toastKey)
         assertEquals(listOf(1, 0), vm.uiState.value.toastArgs)
         assertFalse(vm.uiState.value.reporting)
+    }
+
+    @Test fun `report maps remarks to entries`() = runTest {
+        val source = FakeSource().apply {
+            orders += PickingOrderSummary("1", "RO-1", "pending", null, "KOA", null, 10)
+            orders += PickingOrderSummary("2", "RO-2", "picking", null, "Diotec", null, 5)
+        }
+        val vm = PickingListViewModel(source, session, dispatcher)
+        vm.reload()
+        advanceUntilIdle()
+        vm.toggleSelection("1")
+        vm.toggleSelection("2")
+        vm.reportIssues(
+            "other", null, null, "note",
+            remarks = mapOf("1" to "  keep this  ", "2" to "   "),
+        )
+        advanceUntilIdle()
+        // One entry per selected order (in list order): remark trimmed, blank -> null.
+        assertEquals(
+            listOf(listOf("1" to "keep this", "2" to null)),
+            source.reportedEntries,
+        )
     }
 
     @Test fun `report validation error surfaces as errorKey`() = runTest {
