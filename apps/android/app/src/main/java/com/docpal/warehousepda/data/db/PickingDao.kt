@@ -52,6 +52,90 @@ interface PickingDao {
     )
     fun pickingOrderSummaryRows(): List<PickingOrderSummaryRow>
 
+    /** Picking detail header: order + supplier + measuring task + issue reported-by user (web getPickingOrderDetail). */
+    @Query(
+        """
+        SELECT po.id, po.ref_no, po.status, po.delivery_date, po.po_no, po.ship_to,
+               po.required_date_code_notice,
+               po.issue_reason, po.issue_qty, po.issue_pack_size, po.issue_note, po.issue_remark,
+               s.name AS supplier_name, s.code AS supplier_code,
+               u.display_name AS issue_reported_by_name,
+               mt.id AS measuring_task_id
+        FROM picking_orders po
+        LEFT JOIN suppliers s ON s.id = po.supplier_id
+        LEFT JOIN users u ON u.id = po.issue_reported_by
+        LEFT JOIN measuring_tasks mt ON mt.picking_order_id = po.id
+        WHERE po.id = :orderId
+        """
+    )
+    fun pickingOrderDetailRow(orderId: String): PickingOrderDetailRow?
+
+    @Query(
+        """
+        SELECT pi.id, pi.qty, pi.picked_qty, pi.required_date_code, p.part_no
+        FROM picking_items pi
+        LEFT JOIN parts p ON p.id = pi.part_id
+        WHERE pi.picking_order_id = :orderId
+        ORDER BY pi.id
+        """
+    )
+    fun pickingItemDetailRows(orderId: String): List<PickingItemDetailRow>
+
+    /** Active allocations (web itemsSection activeAllocations) with lot / receiving-order columns left-joined. */
+    @Query(
+        """
+        SELECT a.id, a.picking_item_id, a.qty, a.remark,
+               a.inventory_lot_id AS lot_id,
+               il.shelf_code, il.box_id, il.date_code, il.lot_code, il.coo, il.cow,
+               a.receiving_order_id, ro.ref_no AS receiving_order_ref_no
+        FROM allocations a
+        LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
+        LEFT JOIN receiving_orders ro ON ro.id = a.receiving_order_id
+        WHERE a.picking_item_id IN (:itemIds)
+          AND (a.inventory_lot_id IS NOT NULL OR a.receiving_order_id IS NOT NULL)
+          AND a.qty > 0
+        ORDER BY a.id
+        """
+    )
+    fun allocationDetailRows(itemIds: List<String>): List<AllocationDetailRow>
+
+    @Query(
+        """
+        SELECT id, picking_item_id, qty, shipping_box_id, date_code, lot_code, coo, cow
+        FROM picking_packages
+        WHERE picking_item_id IN (:itemIds)
+        ORDER BY created_at
+        """
+    )
+    fun packageDetailRows(itemIds: List<String>): List<PackageDetailRow>
+
+    @Query(
+        """
+        SELECT sb.id, sb.status,
+               COUNT(pp.id) AS package_count,
+               COALESCE(SUM(pp.qty), 0) AS total_qty
+        FROM shipping_boxes sb
+        LEFT JOIN picking_packages pp ON pp.shipping_box_id = sb.id
+        WHERE sb.picking_order_id = :orderId
+        GROUP BY sb.id, sb.status
+        ORDER BY sb.id
+        """
+    )
+    fun boxDetailRows(orderId: String): List<BoxDetailRow>
+
+    /** Picking-item transition logs, newest first (web getPickingItemTransitionLogs). */
+    @Query(
+        """
+        SELECT tl.id, tl.entity_id, tl.from_state, tl.to_state, tl.metadata,
+               tl.created_at, u.display_name AS actor_name
+        FROM transition_logs tl
+        LEFT JOIN users u ON u.id = tl.actor_id
+        WHERE tl.entity_type = 'picking_item' AND tl.entity_id IN (:itemIds)
+        ORDER BY tl.created_at DESC
+        """
+    )
+    fun pickingItemLogRows(itemIds: List<String>): List<LogFlatRow>
+
     @Query("SELECT * FROM picking_items WHERE picking_order_id = :orderId")
     fun itemsOfPickingOrder(orderId: String): List<PickingItemEntity>
 
@@ -327,5 +411,66 @@ data class PickingOrderSummaryRow(
     @ColumnInfo(name = "delivery_date") val deliveryDate: Long?,
     @ColumnInfo(name = "ship_to") val shipTo: String?,
     @ColumnInfo(name = "supplier_name") val supplierName: String?,
+    @ColumnInfo(name = "total_qty") val totalQty: Int,
+)
+
+data class PickingOrderDetailRow(
+    val id: String,
+    @ColumnInfo(name = "ref_no") val refNo: String,
+    val status: String,
+    @ColumnInfo(name = "delivery_date") val deliveryDate: Long?,
+    @ColumnInfo(name = "po_no") val poNo: String?,
+    @ColumnInfo(name = "ship_to") val shipTo: String?,
+    @ColumnInfo(name = "required_date_code_notice") val requiredDateCodeNotice: String?,
+    @ColumnInfo(name = "issue_reason") val issueReason: String?,
+    @ColumnInfo(name = "issue_qty") val issueQty: Int?,
+    @ColumnInfo(name = "issue_pack_size") val issuePackSize: Int?,
+    @ColumnInfo(name = "issue_note") val issueNote: String?,
+    @ColumnInfo(name = "issue_remark") val issueRemark: String?,
+    @ColumnInfo(name = "supplier_name") val supplierName: String?,
+    @ColumnInfo(name = "supplier_code") val supplierCode: String?,
+    @ColumnInfo(name = "issue_reported_by_name") val issueReportedByName: String?,
+    @ColumnInfo(name = "measuring_task_id") val measuringTaskId: String?,
+)
+
+data class PickingItemDetailRow(
+    val id: String,
+    val qty: Int,
+    @ColumnInfo(name = "picked_qty") val pickedQty: Int,
+    @ColumnInfo(name = "required_date_code") val requiredDateCode: String?,
+    @ColumnInfo(name = "part_no") val partNo: String?,
+)
+
+data class AllocationDetailRow(
+    val id: String,
+    @ColumnInfo(name = "picking_item_id") val pickingItemId: String,
+    val qty: Int,
+    val remark: String?,
+    @ColumnInfo(name = "lot_id") val lotId: String?,
+    @ColumnInfo(name = "shelf_code") val shelfCode: String?,
+    @ColumnInfo(name = "box_id") val boxId: String?,
+    @ColumnInfo(name = "date_code") val dateCode: String?,
+    @ColumnInfo(name = "lot_code") val lotCode: String?,
+    val coo: String?,
+    val cow: String?,
+    @ColumnInfo(name = "receiving_order_id") val receivingOrderId: String?,
+    @ColumnInfo(name = "receiving_order_ref_no") val receivingOrderRefNo: String?,
+)
+
+data class PackageDetailRow(
+    val id: String,
+    @ColumnInfo(name = "picking_item_id") val pickingItemId: String,
+    val qty: Int,
+    @ColumnInfo(name = "shipping_box_id") val shippingBoxId: String?,
+    @ColumnInfo(name = "date_code") val dateCode: String?,
+    @ColumnInfo(name = "lot_code") val lotCode: String?,
+    val coo: String?,
+    val cow: String?,
+)
+
+data class BoxDetailRow(
+    val id: String,
+    val status: String,
+    @ColumnInfo(name = "package_count") val packageCount: Int,
     @ColumnInfo(name = "total_qty") val totalQty: Int,
 )

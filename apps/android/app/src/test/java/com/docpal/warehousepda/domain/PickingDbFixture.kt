@@ -41,13 +41,68 @@ internal fun expectCode(code: String, block: suspend () -> Unit): LocalizedExcep
     }
 }
 
-internal fun insertPickingOrder(db: AppDatabase, id: String, refNo: String, status: String) {
+internal fun insertPickingOrder(db: AppDatabase, id: String, refNo: String, status: String, supplierId: String? = null) {
     exec(
         db,
         "INSERT INTO picking_orders (id, ref_no, supplier_id, delivery_date, po_no, required_date_code_notice, ship_to, destination_country, issue_reason, issue_qty, issue_pack_size, issue_note, issue_remark, issue_reported_at, issue_reported_by, status, created_at, updated_at) " +
-            "VALUES ('$id', '$refNo', NULL, 1783872000000, NULL, NULL, 'GZ', 'China', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '$status', 1783779245783, 1783779245783)"
+            "VALUES ('$id', '$refNo', ${sqlQuote(supplierId)}, 1783872000000, NULL, NULL, 'GZ', 'China', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '$status', 1783779245783, 1783779245783)"
     )
 }
+
+internal fun insertReceivingOrder(db: AppDatabase, id: String, refNo: String, status: String) {
+    exec(
+        db,
+        "INSERT INTO receiving_orders (id, ref_no, supplier_id, delivery_date, status, arrived_at, arrived_by, created_at, updated_at) " +
+            "VALUES ('$id', '$refNo', NULL, 1783612800000, '$status', 1783779245783, NULL, 1783779245783, 1783779245783)"
+    )
+}
+
+internal fun insertPart(db: AppDatabase, id: String, partNo: String) {
+    exec(
+        db,
+        "INSERT INTO parts (id, part_no, internal_code, description, default_coo) " +
+            "VALUES ('$id', '$partNo', '', '', 'CN')"
+    )
+}
+
+/** Allocation against a lot ([lotId]) or a receiving order ([receivingOrderId]); [remark] is inlined raw (JSON box ids for RO allocations). */
+internal fun insertAllocation(
+    db: AppDatabase,
+    id: String,
+    itemId: String,
+    lotId: String? = null,
+    receivingOrderId: String? = null,
+    qty: Int,
+    remark: String? = null,
+) {
+    exec(
+        db,
+        "INSERT INTO allocations (id, picking_item_id, inventory_lot_id, receiving_order_id, qty, remark) " +
+            "VALUES ('$id', '$itemId', ${sqlQuote(lotId)}, ${sqlQuote(receivingOrderId)}, $qty, ${sqlQuote(remark)})"
+    )
+}
+
+internal fun insertInventoryLot(
+    db: AppDatabase,
+    id: String,
+    partId: String,
+    total: Int,
+    allocated: Int,
+    shelfCode: String? = null,
+    boxId: String? = null,
+    dateCode: String? = null,
+    lotCode: String? = null,
+    coo: String? = null,
+    cow: String? = null,
+) {
+    exec(
+        db,
+        "INSERT INTO inventory_lots (id, part_id, date_code, lot_code, coo, cow, shelf_code, box_id, total_qty, allocated_qty, available_qty) " +
+            "VALUES ('$id', '$partId', ${sqlQuote(dateCode)}, ${sqlQuote(lotCode)}, ${sqlQuote(coo)}, ${sqlQuote(cow)}, ${sqlQuote(shelfCode)}, ${sqlQuote(boxId)}, $total, $allocated, ${total - allocated})"
+    )
+}
+
+private fun sqlQuote(value: String?): String = value?.let { "'$it'" } ?: "NULL"
 
 internal fun insertPickingItem(
     db: AppDatabase,

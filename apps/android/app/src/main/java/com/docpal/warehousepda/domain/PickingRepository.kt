@@ -9,10 +9,18 @@ import com.docpal.warehousepda.data.db.MeasuringTaskEntity
 import com.docpal.warehousepda.data.db.PickingPackageEntity
 import com.docpal.warehousepda.data.db.ShippingBoxEntity
 import com.docpal.warehousepda.data.db.TransitionLogEntity
+import com.docpal.warehousepda.domain.model.PickingAllocationDetail
+import com.docpal.warehousepda.domain.model.PickingBoxDetail
 import com.docpal.warehousepda.domain.model.PickingIssueInput
+import com.docpal.warehousepda.domain.model.PickingItemDetail
+import com.docpal.warehousepda.domain.model.PickingItemLogEntry
+import com.docpal.warehousepda.domain.model.PickingOrderDetail
 import com.docpal.warehousepda.domain.model.PickingOrderSummary
+import com.docpal.warehousepda.domain.model.PickingPackageDetail
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 import java.util.Calendar
 import java.util.Locale
@@ -46,6 +54,106 @@ class PickingRepository(
                 shipTo = it.shipTo,
                 totalQty = it.totalQty,
             )
+        }
+    }
+
+    /**
+     * Picking detail read model (web getPickingOrderDetail + the page's package/log
+     * assembly): order header, items with active allocations and packages, and the
+     * order's shipping boxes with package aggregates. scannedQty mirrors the web's
+     * scannedQty(item): sum of ALL of the item's packages.
+     */
+    suspend fun getPickingOrderDetail(orderId: String): PickingOrderDetail? = withContext(Dispatchers.IO) {
+        val row = pickingDao.pickingOrderDetailRow(orderId) ?: return@withContext null
+        val itemRows = pickingDao.pickingItemDetailRows(orderId)
+        val itemIds = itemRows.map { it.id }
+        val allocationsByItem = if (itemIds.isEmpty()) emptyMap() else
+            pickingDao.allocationDetailRows(itemIds).groupBy { it.pickingItemId }
+        val packagesByItem = if (itemIds.isEmpty()) emptyMap() else
+            pickingDao.packageDetailRows(itemIds).groupBy { it.pickingItemId }
+
+        PickingOrderDetail(
+            id = row.id,
+            refNo = row.refNo,
+            status = row.status,
+            supplierName = row.supplierName,
+            supplierCode = row.supplierCode,
+            deliveryDate = row.deliveryDate,
+            poNo = row.poNo,
+            shipTo = row.shipTo,
+            requiredDateCodeNotice = row.requiredDateCodeNotice,
+            measuringTaskId = row.measuringTaskId,
+            issueReason = row.issueReason,
+            issueQty = row.issueQty,
+            issuePackSize = row.issuePackSize,
+            issueNote = row.issueNote,
+            issueRemark = row.issueRemark,
+            issueReportedByName = row.issueReportedByName,
+            items = itemRows.map { itemRow ->
+                val packages = (packagesByItem[itemRow.id] ?: emptyList()).map {
+                    PickingPackageDetail(
+                        id = it.id, qty = it.qty, shippingBoxId = it.shippingBoxId,
+                        dateCode = it.dateCode, lotCode = it.lotCode, coo = it.coo, cow = it.cow,
+                    )
+                }
+                PickingItemDetail(
+                    id = itemRow.id,
+                    partNo = itemRow.partNo,
+                    qty = itemRow.qty,
+                    pickedQty = itemRow.pickedQty,
+                    scannedQty = packages.sumOf { it.qty },
+                    requiredDateCode = itemRow.requiredDateCode,
+                    allocations = (allocationsByItem[itemRow.id] ?: emptyList()).map {
+                        PickingAllocationDetail(
+                            id = it.id, qty = it.qty,
+                            lotId = it.lotId, shelfCode = it.shelfCode, boxId = it.boxId,
+                            dateCode = it.dateCode, lotCode = it.lotCode, coo = it.coo, cow = it.cow,
+                            receivingOrderId = it.receivingOrderId,
+                            receivingOrderRefNo = it.receivingOrderRefNo,
+                            boxIds = boxIdsFromRemark(it.remark),
+                        )
+                    },
+                    packages = packages,
+                )
+            },
+            boxes = pickingDao.boxDetailRows(orderId).map {
+                PickingBoxDetail(
+                    id = it.id, status = it.status,
+                    packageCount = it.packageCount, totalQty = it.totalQty,
+                )
+            },
+        )
+    }
+
+    /** Picking-item transition logs grouped by item id, newest first (web getPickingItemTransitionLogs). */
+    suspend fun pickingItemLogs(itemIds: List<String>): Map<String, List<PickingItemLogEntry>> =
+        withContext(Dispatchers.IO) {
+            if (itemIds.isEmpty()) return@withContext emptyMap()
+            pickingDao.pickingItemLogRows(itemIds).groupBy(
+                { it.entityId },
+                {
+                    PickingItemLogEntry(
+                        id = it.id, fromState = it.fromState, toState = it.toState,
+                        actorName = it.actorName, metadata = it.metadata, createdAt = it.createdAt,
+                    )
+                },
+            )
+        }
+
+    /** Web boxIdsFromRemark (PickingItemsSection.vue): JSON array of strings only; anything else -> empty. */
+    private fun boxIdsFromRemark(remark: String?): List<String> {
+        if (remark.isNullOrEmpty()) return emptyList()
+        return try {
+            val array = JSONArray(remark)
+            val ids = ArrayList<String>(array.length())
+            for (i in 0 until array.length()) {
+                val value = array.get(i)
+                if (value !is String) return emptyList()
+                ids.add(value)
+            }
+            ids
+        } catch (e: JSONException) {
+            emptyList()
         }
     }
 
