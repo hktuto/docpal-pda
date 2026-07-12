@@ -498,6 +498,7 @@ class PickingRepository(
         Unit
     }
 
+    /** Web cancelShippingBox; tx-internal (also called standalone via public wrapper). */
     private fun cancelShippingBoxInternal(boxId: String, actorId: String) {
         val box = pickingDao.boxById(boxId) ?: throw LocalizedException("box_not_found")
         if (box.status != "open") throw LocalizedException("box_is_not_open")
@@ -651,7 +652,11 @@ class PickingRepository(
         finishOrderInternal(pickingOrderId, actorId, System.currentTimeMillis(), auto = true)
     }
 
-    /** Shared finish work of web maybeAutoFinishPickingOrder / finishPickingOrder. */
+    /**
+     * Shared finish work of web maybeAutoFinishPickingOrder / finishPickingOrder.
+     * The callers' status guards are load-bearing: this inserts a measuring_tasks row
+     * unconditionally, and the unique picking_order_id index rejects a second finish.
+     */
     private fun finishOrderInternal(orderId: String, actorId: String, now: Long, auto: Boolean) {
         pickingDao.updatePickingOrderStatus(orderId, "finished", now)
 
