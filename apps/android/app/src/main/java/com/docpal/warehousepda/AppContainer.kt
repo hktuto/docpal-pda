@@ -7,6 +7,7 @@ import com.docpal.warehousepda.data.ReceivingRepository
 import com.docpal.warehousepda.data.SessionRepository
 import com.docpal.warehousepda.data.SessionStore
 import com.docpal.warehousepda.data.db.AppDatabase
+import com.docpal.warehousepda.domain.Allocator
 import com.docpal.warehousepda.domain.AuthRepository
 import com.docpal.warehousepda.domain.DefaultAuthRepository
 import com.docpal.warehousepda.domain.MismatchRepository
@@ -26,7 +27,9 @@ class AppContainer(context: Context) {
         DefaultAuthRepository(db.userDao(), sessionRepository)
     }
 
-    val receivingRepository: ReceivingRepository by lazy { ReceivingRepository(db) }
+    val allocator: Allocator by lazy { Allocator(db) }
+
+    val receivingRepository: ReceivingRepository by lazy { ReceivingRepository(db, allocator) }
 
     val mismatchRepository: MismatchRepository by lazy { MismatchRepository(db, receivingRepository) }
 

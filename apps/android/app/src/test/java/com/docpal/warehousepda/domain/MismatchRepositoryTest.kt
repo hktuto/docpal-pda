@@ -31,7 +31,7 @@ class MismatchRepositoryTest {
     fun setUp() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         db = AppDatabase.build(context, inMemory = true)
-        receivingRepo = ReceivingRepository(db)
+        receivingRepo = ReceivingRepository(db, Allocator(db))
         repo = MismatchRepository(db, receivingRepo)
     }
 

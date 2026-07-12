@@ -37,6 +37,8 @@ abstract class AppDatabase : RoomDatabase() {
 
     abstract fun receivingDao(): ReceivingDao
 
+    abstract fun pickingDao(): PickingDao
+
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null

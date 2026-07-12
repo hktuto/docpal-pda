@@ -5,6 +5,7 @@ import com.docpal.warehousepda.data.db.DetailItemFlatRow
 import com.docpal.warehousepda.data.db.ReceivingItemMismatchEntity
 import com.docpal.warehousepda.data.db.TransitionLogEntity
 import com.docpal.warehousepda.domain.AllocationDistributor
+import com.docpal.warehousepda.domain.Allocator
 import com.docpal.warehousepda.domain.LocalizedException
 import com.docpal.warehousepda.domain.model.DisplayBox
 import com.docpal.warehousepda.domain.model.DisplayPackage
@@ -20,7 +21,7 @@ import kotlinx.coroutines.withContext
 import java.util.UUID
 
 /** Read model + clear/in-hand transitions for receiving orders. Mirrors the web adapter + db/receiving.ts. */
-class ReceivingRepository(private val db: AppDatabase) {
+class ReceivingRepository(private val db: AppDatabase, private val allocator: Allocator) {
 
     private val dao get() = db.receivingDao()
 
@@ -161,6 +162,37 @@ class ReceivingRepository(private val db: AppDatabase) {
             )
         }
         return AllocationDistributor.distribute(items, totals, unboxed)
+    }
+
+    /** Port of db/receiving.ts confirmReceivingOrderArrived. Allocation runs AFTER the transaction, best-effort. */
+    suspend fun confirmArrived(orderId: String, actorId: String) = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        db.runInTransaction {
+            val order = dao.orderById(orderId) ?: throw LocalizedException("receiving_order_not_found")
+            if (order.status != "pending") {
+                throw LocalizedException("receiving_order_already_status", mapOf("status" to order.status))
+            }
+            dao.markOrderArrived(orderId, actorId, now)
+            val invoices = dao.invoicesOfOrder(orderId)
+            val items = if (invoices.isEmpty()) emptyList() else dao.itemsOfInvoices(invoices.map { it.id })
+            val mismatches = if (items.isEmpty()) emptyList() else dao.activeMismatches(items.map { it.id })
+            val mismatchByItem = HashMap<String, ReceivingItemMismatchEntity>()
+            for (m in mismatches) mismatchByItem.putIfAbsent(m.receivingInvoiceItemId, m)
+            for (item in items) {
+                val qtyToReceive = mismatchByItem[item.id]?.effectiveReceivedQty ?: item.qty
+                if (qtyToReceive <= 0) continue // web skips writes when <= 0
+                dao.updateItemReceivedQty(item.id, qtyToReceive)
+            }
+            dao.insertTransitionLog(
+                TransitionLogEntity(
+                    id = UUID.randomUUID().toString(),
+                    entityType = "receiving_order", entityId = orderId,
+                    fromState = order.status, toState = "in_hand",
+                    actorId = actorId, metadata = null, createdAt = now,
+                )
+            )
+        }
+        allocator.allocatePendingPickingOrders()
     }
 
     /** Mirrors web tryMarkReceivingOrderClear: in_hand → clear when every item's available <= 0. */

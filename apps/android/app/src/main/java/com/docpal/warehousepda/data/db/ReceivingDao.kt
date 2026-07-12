@@ -198,6 +198,15 @@ interface ReceivingDao {
     @Query("UPDATE receiving_orders SET status = :status, updated_at = :now WHERE id = :orderId")
     fun updateOrderStatus(orderId: String, status: String, now: Long)
 
+    @Query(
+        """
+        UPDATE receiving_orders
+        SET status = 'in_hand', arrived_at = :now, arrived_by = :actorId, updated_at = :now
+        WHERE id = :orderId
+        """
+    )
+    fun markOrderArrived(orderId: String, actorId: String, now: Long)
+
     @Insert
     fun insertTransitionLog(log: TransitionLogEntity)
 

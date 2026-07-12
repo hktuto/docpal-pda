@@ -5,6 +5,7 @@ import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.test.core.app.ApplicationProvider
 import com.docpal.warehousepda.data.db.AppDatabase
 import com.docpal.warehousepda.domain.AllocationDistributor
+import com.docpal.warehousepda.domain.Allocator
 import com.docpal.warehousepda.offMainThread
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -28,7 +29,7 @@ class ReceivingRepositoryTest {
     fun setUp() {
         val context = ApplicationProvider.getApplicationContext<Context>()
         db = AppDatabase.build(context, inMemory = true)
-        repo = ReceivingRepository(db)
+        repo = ReceivingRepository(db, Allocator(db))
     }
 
     @After
