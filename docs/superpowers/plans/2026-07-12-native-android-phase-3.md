@@ -774,7 +774,7 @@ cd apps/android && export JAVA_HOME='/c/Program Files/Android/Android Studio/jbr
 ./gradlew :app:assembleDebug
 ```
 
-Expected: full suite PASS (244), APK builds.
+Expected: full suite PASS (249 — the Task 10 trajectory predicted 244; the actual final count is 249), APK builds.
 
 - [ ] **Step 2: On-device walkthrough (if a device is connected)**
 
@@ -820,3 +820,115 @@ git commit -m "android phase3: docs + handoff notes"
 - [x] Type consistency: `PutAwayCandidate`, `PutAwayOrderHeader`/`PutAwayLotDetail`/`PutAwayScanDetail`/`PutAwayBoxDetail`/`PutAwayBoxContent`/`ShelfOption`/`PutAwayDetail`, `PinnedPutAwayItem`, `PutAwayMatchResult`, `PutAwayListSource`/`PutAwayDetailSource` defined once and used consistently; `PutAwayDetailSource` introduced in Task 9 and extended in Task 10 with exact signatures.
 - [x] Every task has failing-test-first steps (except the two non-logic tasks: strings, wedge fix — both have explicit verification), exact commands, and a commit step.
 - [x] Test-count trajectory: 199 → 199 (T1) → 199 (T2) → 203 (T3) → 207 (T4) → 214 (T5) → 224 (T6) → 230 (T7) → 233 (T8) → 238 (T9) → 244 (T10) → verified at T11.
+
+---
+
+## Phase 4 handoff notes
+
+Phase 3 verification (Task 11, 2026-07-12): 249 JVM tests green
+(`./gradlew :app:testDebugUnitTest`, 0 failures/errors/skips across 39 test
+classes), `assembleDebug` and `installDebug` clean on device
+`MFM5PRE526010002`. All six device walkthrough items were exercised — see
+"Deferred verifications" below for what could not be done through adb.
+
+### What Phase 4 (goods verify) reuses
+
+- **Shelf boxes + put-away scans.** `PutAwayRepository` writes `shelf_boxes`
+  (`SBOX-%04d` global numbering, API-style) and `put_away_scans` rows. Scans
+  carry `verified` / `verified_at` flags that Phase 3 never sets — goods
+  verify is the consumer that flips them.
+- **Boxes-by-shelf grouping UI.** The put-away detail's boxes section
+  (`ui/putaway/PutAwayDetailScreen.kt`) groups boxes by shelf with per-box
+  contents and a Close action — the natural starting point for a
+  shelf→box→scan verify list.
+- **Scan pipeline end to end** — camera (`scanner/RectangleCameraActivity`
+  via `ui/receiving/ScanLaunchers.kt`), QR-template-first parsing
+  (`QrParser` → `OcrLabelParser` fallback), `ScanMatcher`. Note: put-away
+  has no wedge/manual scan entry (web parity), so the camera launcher +
+  review dialog is the only scan entry on that screen.
+- **`ui/scan/LabelScanReviewDialog` + `ScanReviewUiState`** — now consumed
+  by receiving, picking, and put-away. See the known gap about
+  `matchMessageRes` below before adding a fourth consumer.
+- **ScanMatcher sibling pattern** — `ScanMatcher.matchPutAway`
+  (`domain/scan/ScanMatcher.kt`) is the third sibling after
+  `matchReceiving`/`matchPicking`; a goods-verify matcher context follows
+  the same shape (`OcrInput` in, sealed result out, single match
+  auto-applies, match error opens the review dialog).
+- **CRITICAL: no `verification_tasks` table.** The API's
+  `scheduleCycleCount` was deliberately not ported — Android has no
+  verification-task entity and no scheduling path. Phase 4 must list
+  shelves/boxes directly (e.g. from `shelf_boxes` + `put_away_scans` where
+  `verified = 0`) instead of reading verification tasks. Verify against the
+  web goods-verify flow (`apps/web/pages/goods-verify/`, the API's
+  goods-verify/verification-task queries) when planning.
+
+### Known gaps / corrections
+
+- **`materializeReceivingAllocation` still has no production caller**
+  (carried over from the Phase 2 handoff). Put-away does its own lot upsert
+  keyed on the `inventory_lots` unique index — `lot_code` is NOT in the
+  merge key, a deliberate divergence from the web (which merges on lot_code).
+  If Phase 4 doesn't adopt the function either, delete it.
+- **`removeScannedPackage` first-source-restore bug** — inherited from the
+  web, still open on both sides (first flagged in the Phase 2 handoff).
+- **Seam interfaces still in `ui/receiving/ReceivingDetailViewModel.kt`**
+  (`ReceivingDetailSource`/`MismatchSource`/`SessionSource`/`PickingSource`)
+  — the Phase 3 cleanup suggested in the Phase 2 handoff did not happen.
+  Phase 3 instead followed the newer pattern: `PutAwayListSource` /
+  `PutAwayDetailSource` live next to their own ViewModel in `ui/putaway/`.
+- **`matchMessageRes` doubles as the state-kind discriminator** in
+  `LabelScanReviewDialog.kt` (Apply-button visibility is keyed on the
+  message string resource). Put-away reused the existing message kinds; a
+  goods-verify consumer that needs new wording must add an explicit
+  state-kind field to `ScanReviewUiState` first.
+- **Wedge `scannedQty = 0` simplification** on picking (inherited,
+  POC-acceptable).
+- **Remove-from-box does not flip `clear` back to `in_hand`** (web parity).
+- **Once an order is `clear`, its unboxed scans are unreachable in the
+  put-away UI** (web parity — goods-verify/stock-search phases read them
+  from other angles).
+- **`PutAwayRepository.listCandidates` runs N+1 totals queries** (one per
+  candidate order; Phase 3 review note). Defensible at POC scale — the seed
+  has a single candidate; revisit with one grouped query if the list grows.
+- **Task 2's wedge KeyUp fix blanket-consumes Enter KeyUp on detail
+  screens** (intentional): keypad-Enter button activation is disabled while
+  the hardware-key buffer is enabled. Touch is unaffected (verified on
+  device — the picking-detail log toggle still expands via tap).
+
+### Deferred verifications (from Task 11 Step 2)
+
+Verified on device (screencap-confirmed; shots in
+`apps/android/build/walkthrough/`):
+
+- Login (operator / DocPal2026!), put-away candidate list (seed order
+  `04958166`, KOA, 可用 8914000, 已收貨 badge, hint text).
+- Put-away detail: header, lots panel, New box → shelf dialog → `SBOX-0001`
+  created on shelf `A-01-01`.
+- Scan button launches `RectangleCameraActivity` (camera permission grant
+  flow exercised).
+- Assign flow: unboxed scan row → select `SBOX-0001` → assign → boxed
+  (在箱 SBOX-0001 內).
+- Add-all confirm dialog (將 264 個未裝箱掃描加入此箱？) → 265 lines boxed →
+  **order auto-cleared on the last assign** (header badge 已完成, lots panel
+  沒有可上架的批次, New-box action gone).
+- Close box (已關閉); back → list empty state 沒有需要上架的收貨單.
+- Wedge KeyUp regression check (Task 2 fix): on the picking detail, an
+  adb-keyevent wedge payload ending in Enter flushed without popping the
+  screen back to the list; the toast "Receiving order is not in hand" proved
+  the flush was processed end to end (rejected because the put-away
+  walkthrough had already cleared allocation source `04958166` — expected
+  cross-flow consistency, not a bug).
+
+Not fully exercised:
+
+- **Camera label scan** — needs a physical label; deferred (as in Phases
+  1–2). The camera activity launch itself was verified.
+- **Put-away scan rows were DB-injected** rather than camera-created (no
+  label available, and put-away has no wedge/manual entry). The
+  assign / add-all / close / auto-clear UI paths themselves were genuinely
+  exercised on device against real Room state.
+
+Device state note: the walkthrough left the device DB with `04958166`
+cleared and `SBOX-0001` closed on `A-01-01` holding 265 put-away lines
+(~21.76M qty), all unverified — a useful starting state for the Phase 4
+goods-verify walkthrough.

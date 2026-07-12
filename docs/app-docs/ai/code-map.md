@@ -210,13 +210,16 @@ was superseded. Entry points:
 | Login / Home | `apps/android/.../ui/login/`, `apps/android/.../ui/home/` |
 | Receiving list + detail (items & picking tabs, dialogs, scan launchers) | `apps/android/.../ui/receiving/` |
 | Picking list + detail (search, batch issue report, boxes, logs, scan-to-pick) | `apps/android/.../ui/picking/`, `domain/PickingRepository.kt` |
+| Put-away candidate list + detail (lots, shelf boxes, scan-to-put-away, auto-clear) | `apps/android/.../ui/putaway/`, `domain/PutAwayRepository.kt` |
 | Shared UI primitives | `apps/android/.../ui/components/` (`StatusBadge`, `EmptyState`, `DetailRow`, `ErrorText`, `OnResumeEffect`) |
 | Room DB, entities, DAOs | `apps/android/.../data/db/`; repositories in `apps/android/.../data/` + `apps/android/.../domain/` |
-| Scan pipeline | `apps/android/.../scanner/` (camera/OCR), `apps/android/.../domain/scan/` (parsers, `ScanMatcher.matchReceiving`/`matchPicking`, wedge buffer), `ui/receiving/ScanLaunchers.kt`, `ui/scan/LabelScanReviewDialog.kt` |
+| Scan pipeline | `apps/android/.../scanner/` (camera/OCR), `apps/android/.../domain/scan/` (parsers, `ScanMatcher.matchReceiving`/`matchPicking`/`matchPutAway`, wedge buffer), `ui/receiving/ScanLaunchers.kt`, `ui/scan/LabelScanReviewDialog.kt` |
 | JVM tests | `apps/android/app/src/test/...` (Robolectric; fixtures in `DbTestSupport.kt`) |
 
 Full structure and conventions: root `AGENTS.md`, "Native Android app
 (apps/android)", and the handoff notes in
 `docs/superpowers/plans/2026-07-12-native-android-phase-1.md` ("Phase 2
-handoff notes") and `docs/superpowers/plans/2026-07-12-native-android-phase-2.md`
-("Phase 3 handoff notes").
+handoff notes"), `docs/superpowers/plans/2026-07-12-native-android-phase-2.md`
+("Phase 3 handoff notes"), and
+`docs/superpowers/plans/2026-07-12-native-android-phase-3.md` ("Phase 4
+handoff notes").

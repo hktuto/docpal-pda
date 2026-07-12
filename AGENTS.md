@@ -97,30 +97,36 @@ The app id `com.docpal.warehousepda` installs side by side with the Capacitor
 `com.docpal.warehousedemo`.
 
 Phase 1 (login, home, receiving list/detail with items + picking tabs, end-to-end
-scan pipeline) and Phase 2 (picking list with search + batch issue report, picking
-detail with boxes/logs, scan-to-pick, finish → measuring task) are complete:
-199 JVM tests green, debug APK builds and installs. Conventions inside
-`apps/android` (details in the Phase 1 plan's "Phase 2 handoff notes" and the
-Phase 2 plan's "Phase 3 handoff notes"):
+scan pipeline), Phase 2 (picking list with search + batch issue report, picking
+detail with boxes/logs, scan-to-pick, finish → measuring task), and Phase 3
+(put-away candidate list, put-away detail with lots + shelf boxes, scan-to-put-away,
+inventory-lot materialization, receiving-order auto-clear) are complete:
+249 JVM tests green, debug APK builds and installs. Conventions inside
+`apps/android` (details in the Phase 1 plan's "Phase 2 handoff notes", the
+Phase 2 plan's "Phase 3 handoff notes", and the Phase 3 plan's "Phase 4 handoff
+notes"):
 
 - **Layers:** `data/` holds Room (`data/db/`) plus suspend repositories that wrap
   DAO calls in `withContext(Dispatchers.IO)`; `domain/` holds the pure/sync
   business logic (`PickingRepository` — scan-to-pick, shipping-box ops, batch
   issue reports, finish (manual or auto when the last package is boxed) which
-  inserts the `measuring_tasks` row Phase 5 will read; `MismatchRepository`,
-  `AuthRepository`, `AllocationDistributor` for allocation math) whose
-  transition functions self-wrap `db.runInTransaction`. Scan parsing/matching
-  lives in `domain/scan/`.
+  inserts the `measuring_tasks` row Phase 5 will read; `PutAwayRepository` —
+  put-away read model, shelf-box lifecycle, scan-to-box assignment with
+  inventory-lot materialization, auto-clear via `ReceivingRepository.tryMarkClear`;
+  `MismatchRepository`, `AuthRepository`, `AllocationDistributor` for allocation
+  math) whose transition functions self-wrap `db.runInTransaction`. Scan
+  parsing/matching lives in `domain/scan/`.
 - **Screens:** `ui/login`, `ui/home`, `ui/receiving` (list + detail with items
   and picking tabs, `ReportIssueDialog`), `ui/picking` (list with search +
   multi-select batch issue report, detail with items/allocations/packages/boxes/
-  logs, `PickingIssueReportDialog`). The shared scan review dialog lives in
-  `ui/scan/` (`LabelScanReviewDialog`, `ScanReviewUiState`).
+  logs, `PickingIssueReportDialog`), `ui/putaway` (candidate list, detail with
+  lots + shelf-boxes sections, `SelectShelfDialog`). The shared scan review
+  dialog lives in `ui/scan/` (`LabelScanReviewDialog`, `ScanReviewUiState`).
 - **Scan entry points:** `ui/receiving/ScanLaunchers.kt` (camera / manual /
   wedge), `HardwareKeyBuffer` (wedge key capture), `QrParser` with
   `OcrLabelParser` fallback, then `ScanMatcher` (`matchReceiving` for receiving,
-  `matchPicking` for scan-to-pick — single match auto-applies, a match error
-  opens the review dialog).
+  `matchPicking` for scan-to-pick, `matchPutAway` for pinned-lot put-away —
+  single match auto-applies, a match error opens the review dialog).
 - **UI conventions:** reusables in `ui/components/` (`StatusBadge`, `EmptyState`,
   `DetailRow`, `ErrorText`, `OnResumeEffect`). ViewModels take an injected `io`
   dispatcher, reload through a race-safe `loadJob`, serialize mutations via
