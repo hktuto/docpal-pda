@@ -207,6 +207,27 @@
     <string name="put_away_show_scans">Show scans (%1$d)</string>
     <string name="put_away_hide_scans">Hide scans</string>
 
+    <string name="goods_verify_title">Goods Verify</string>
+    <string name="goods_verify_search_shelves">Search shelf code or zone…</string>
+    <string name="goods_verify_no_shelves">No shelves found.</string>
+    <string name="goods_verify_boxes_count">%1$d boxes</string>
+    <string name="goods_verify_boxes_title">Shelf Boxes</string>
+    <string name="goods_verify_boxes_intro">Boxes on shelf %1$s.</string>
+    <string name="goods_verify_search_boxes">Search box ID or status…</string>
+    <string name="goods_verify_no_boxes">No boxes on this shelf.</string>
+    <string name="goods_verify_verified_fraction">%1$d / %2$d verified</string>
+    <string name="goods_verify_last_check">Last check: %1$s</string>
+    <string name="goods_verify_box_title">Box %1$s</string>
+    <string name="goods_verify_box_not_found">Box not found.</string>
+    <string name="goods_verify_mark_verified">Mark box verified</string>
+    <string name="goods_verify_shelf_label">Shelf</string>
+    <string name="goods_verify_expected_items">Expected items</string>
+    <string name="goods_verify_no_items">No items in this box.</string>
+    <string name="goods_verify_part">Part</string>
+    <string name="goods_verify_qty">Qty</string>
+    <string name="goods_verify_verified_label">Verified</string>
+    <string name="goods_verify_scan">Scan</string>
+
     <string name="select_shelf_title">Select shelf</string>
     <string name="select_shelf_label">Shelf</string>
     <string name="select_shelf_default">Choose a shelf…</string>
@@ -312,12 +333,15 @@
     <string name="common_no_data">—</string>
     <string name="common_state_none">—</string>
     <string name="common_pcs">pcs</string>
+    <string name="common_yes">Yes</string>
+    <string name="common_no">No</string>
     <string name="common_in_box">In box %1$s</string>
     <string name="common_search_by_ref_or_supplier">Search by ref or supplier…</string>
     <string name="common_all">All</string>
     <string name="common_pending">Pending</string>
     <string name="common_no_supplier">No supplier</string>
     <string name="common_no_date">No date</string>
+    <string name="common_today">Today</string>
     <string name="common_item">item</string>
     <string name="common_items">items</string>
     <string name="common_invoice_title">Invoice %1$s</string>
@@ -425,6 +449,10 @@
     <string name="error_shelf_box_not_found">Shelf box not found.</string>
     <string name="error_shelf_box_is_not_open">Shelf box is not open.</string>
     <string name="error_shelf_box_is_not_empty">Shelf box is not empty.</string>
+    <string name="error_shelf_box_item_not_found">Shelf box item not found</string>
+    <string name="error_shelf_box_already_verified">Shelf box is already verified</string>
+    <string name="error_shelf_box_has_no_items">Shelf box has no items to verify</string>
+    <string name="error_not_all_shelf_box_items_verified">Not all shelf box items are verified</string>
     <string name="error_cannot_close_empty_shelf_box">Cannot close an empty shelf box.</string>
     <string name="error_shelf_not_found">Shelf not found.</string>
     <string name="error_item_does_not_belong_to_receiving_order">Scan and box belong to different receiving orders.</string>
@@ -432,4 +460,6 @@
     <string name="error_quantity_exceeds_available">Quantity exceeds available.</string>
     <string name="error_scanned_part_does_not_match_item">Scanned part does not match the item.</string>
     <string name="error_invalid_receiving_item">Invalid receiving item.</string>
+    <string name="error_part_no_required">Part No. is required</string>
+    <string name="error_part_not_found_in_box">Part not found in box</string>
 </resources>

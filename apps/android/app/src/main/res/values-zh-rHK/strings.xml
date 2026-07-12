@@ -207,6 +207,27 @@
     <string name="put_away_show_scans">顯示掃描 (%1$d)</string>
     <string name="put_away_hide_scans">隱藏掃描</string>
 
+    <string name="goods_verify_title">查貨</string>
+    <string name="goods_verify_search_shelves">按貨架編號或區域搜尋…</string>
+    <string name="goods_verify_no_shelves">找不到貨架。</string>
+    <string name="goods_verify_boxes_count">%1$d 個箱號</string>
+    <string name="goods_verify_boxes_title">貨架箱號</string>
+    <string name="goods_verify_boxes_intro">貨架 %1$s 上的箱號。</string>
+    <string name="goods_verify_search_boxes">按箱號或狀態搜尋…</string>
+    <string name="goods_verify_no_boxes">此貨架上沒有箱號。</string>
+    <string name="goods_verify_verified_fraction">%1$d / %2$d 已查貨</string>
+    <string name="goods_verify_last_check">上次查貨：%1$s</string>
+    <string name="goods_verify_box_title">箱號 %1$s</string>
+    <string name="goods_verify_box_not_found">找不到該箱號。</string>
+    <string name="goods_verify_mark_verified">標記箱號已查貨</string>
+    <string name="goods_verify_shelf_label">貨架</string>
+    <string name="goods_verify_expected_items">預期項目</string>
+    <string name="goods_verify_no_items">此箱號內沒有物品。</string>
+    <string name="goods_verify_part">料號</string>
+    <string name="goods_verify_qty">數量</string>
+    <string name="goods_verify_verified_label">已查貨</string>
+    <string name="goods_verify_scan">掃描</string>
+
     <string name="select_shelf_title">選擇貨架</string>
     <string name="select_shelf_label">貨架</string>
     <string name="select_shelf_default">請選擇貨架…</string>
@@ -312,12 +333,15 @@
     <string name="common_no_data">—</string>
     <string name="common_state_none">—</string>
     <string name="common_pcs">件</string>
+    <string name="common_yes">是</string>
+    <string name="common_no">否</string>
     <string name="common_in_box">在箱 %1$s 內</string>
     <string name="common_search_by_ref_or_supplier">按參考編號或供應商搜尋…</string>
     <string name="common_all">全部</string>
     <string name="common_pending">待處理</string>
     <string name="common_no_supplier">無供應商</string>
     <string name="common_no_date">無日期</string>
+    <string name="common_today">今日</string>
     <string name="common_item">項</string>
     <string name="common_items">項</string>
     <string name="common_invoice_title">發票 %1$s</string>
@@ -425,6 +449,10 @@
     <string name="error_shelf_box_not_found">找不到貨架箱號</string>
     <string name="error_shelf_box_is_not_open">貨架箱號未開啟</string>
     <string name="error_shelf_box_is_not_empty">貨架箱號不是空的</string>
+    <string name="error_shelf_box_item_not_found">找不到貨架箱號物品</string>
+    <string name="error_shelf_box_already_verified">貨架箱號已查貨</string>
+    <string name="error_shelf_box_has_no_items">貨架箱號沒有可查貨的物品</string>
+    <string name="error_not_all_shelf_box_items_verified">並非所有貨架箱號物品都已查貨</string>
     <string name="error_cannot_close_empty_shelf_box">無法關閉空的貨架箱號</string>
     <string name="error_shelf_not_found">找不到貨架</string>
     <string name="error_item_does_not_belong_to_receiving_order">掃描與箱號屬於不同的收貨單</string>
@@ -432,4 +460,6 @@
     <string name="error_quantity_exceeds_available">數量超出可用數量</string>
     <string name="error_scanned_part_does_not_match_item">掃描料號與項目不匹配</string>
     <string name="error_invalid_receiving_item">收貨項目無效</string>
+    <string name="error_part_no_required">料號為必填項</string>
+    <string name="error_part_not_found_in_box">箱號中找不到該料號</string>
 </resources>
