@@ -25,7 +25,7 @@ function requireActorId(body: { actor_id?: unknown }): string {
   return actorId;
 }
 
-const pickingIssueReasons: readonly string[] = ["insufficient_stock", "cannot_divide", "merge"];
+const pickingIssueReasons: readonly string[] = ["insufficient_stock", "cannot_divide", "merge", "other"];
 
 pickingRoute.put("/picking-orders/:external_id", async (c) => {
   const externalId = c.req.param("external_id");

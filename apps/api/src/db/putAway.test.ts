@@ -25,8 +25,12 @@ function makeDb() {
 
 test("createShelfBox creates an open box scoped to the order + shelf; cancelShelfBox deletes an empty open box", () => {
   const { sqlite, db } = makeDb();
-  const { id } = db.transaction((tx) => createShelfBox(tx, { receivingOrderId: "ro", shelfCode: "A1", actorId: "u1" }));
+  const created = db.transaction((tx) => createShelfBox(tx, { receivingOrderId: "ro", shelfCode: "A1", actorId: "u1" }));
+  const { id } = created;
   assert.match(id, /^SBOX-\d{4}$/);
+  assert.equal(created.shelf_code, "A1");
+  assert.equal(created.receiving_order_id, "ro");
+  assert.equal(created.status, "open");
   const box = sqlite.prepare("SELECT receiving_order_id, shelf_code, status FROM shelf_boxes WHERE id=?").get(id) as any;
   assert.deepEqual(box, { receiving_order_id: "ro", shelf_code: "A1", status: "open" });
   assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM transition_logs WHERE entity_type='shelf_box' AND to_status='open'").get() as any).c, 1);
@@ -72,7 +76,13 @@ function seedReceivableItem(sqlite: any) {
 test("recordPutAwayScan drops an unboxed scan; over-scan 409; removeScannedPiece deletes unboxed", () => {
   const { sqlite, db } = makeDb();
   seedReceivableItem(sqlite);
-  const { id } = db.transaction((tx) => recordPutAwayScan(tx, { receivingInvoiceItemId: "rii", qty: 4, dateCode: "D1" }));
+  const scan = db.transaction((tx) => recordPutAwayScan(tx, { receivingInvoiceItemId: "rii", qty: 4, dateCode: "D1" }));
+  const { id } = scan;
+  assert.equal(scan.receiving_invoice_item_id, "rii");
+  assert.equal(scan.qty, 4);
+  assert.equal(scan.shelf_box_id, null);
+  assert.equal(scan.date_code, "D1");
+  assert.equal(scan.verified, 0);
   const row = sqlite.prepare("SELECT receiving_invoice_item_id, qty, shelf_box_id, date_code FROM put_away_scans WHERE id=?").get(id) as any;
   assert.deepEqual(row, { receiving_invoice_item_id: "rii", qty: 4, shelf_box_id: null, date_code: "D1" });
   // 4 scanned + another 7 would exceed remaining 10

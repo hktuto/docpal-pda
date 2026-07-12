@@ -23,7 +23,13 @@ test("POST /receiving-orders/:id/shelf-boxes creates; DELETE /shelf-boxes/:id ca
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ shelf_code: "A1" }),
   });
   assert.equal(created.status, 201);
-  const { id } = (await created.json()) as any;
+  const box = (await created.json()) as any;
+  assert.match(box.id, /^SBOX-\d{4}$/);
+  assert.equal(box.receiving_order_id, "ro");
+  assert.equal(box.shelf_code, "A1");
+  assert.equal(box.status, "open");
+  assert.ok(box.created_at);
+  const { id } = box;
   const del = await app.request(`/shelf-boxes/${id}`, { method: "DELETE" });
   assert.equal(del.status, 200);
   const bad = await app.request("/receiving-orders/ro/shelf-boxes", {
@@ -44,7 +50,14 @@ test("POST /put-away/scans records; remove-piece deletes; over-scan 409", async 
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ receiving_invoice_item_id: "rii", qty: 4 }),
   });
   assert.equal(created.status, 201);
-  const { id } = (await created.json()) as any;
+  const scan = (await created.json()) as any;
+  assert.ok(scan.id);
+  assert.equal(scan.receiving_invoice_item_id, "rii");
+  assert.equal(scan.qty, 4);
+  assert.equal(scan.shelf_box_id, null);
+  assert.equal(scan.verified, 0);
+  assert.ok(scan.created_at);
+  const { id } = scan;
   const over = await app.request("/put-away/scans", {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ receiving_invoice_item_id: "rii", qty: 7 }),
   });

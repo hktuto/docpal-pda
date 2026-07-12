@@ -151,4 +151,136 @@ test("box sub-routes enforce order/box ownership: wrong order or box is 404", as
   assert.equal(okDel.status, 200);
 });
 
+// --- flat mutation routes (adapter doesn't know parent ids) ---
+
+sqlite.exec(`
+  INSERT INTO parts (id, part_no, part_no_norm, created_at, updated_at) VALUES ('fp','FX','FX','0','0');
+  INSERT INTO inventory_lots (id, part_id, shelf_code, total_qty, allocated_qty, created_at, updated_at) VALUES ('flot','fp','S1',10,10,'0','0');
+  INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('fpo','fpe','FR','picking','0','0');
+  INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('fpi','fpo','fp',10,'0','0');
+  INSERT INTO allocations (id, picking_item_id, qty, inventory_lot_id, created_at, updated_at) VALUES ('fa','fpi',10,'flot','0','0');
+  INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('fpoF','fpeF','FRF','finished','0','0');
+  INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('fpiF','fpoF','fp',5,'0','0');
+  INSERT INTO allocations (id, picking_item_id, qty, inventory_lot_id, created_at, updated_at) VALUES ('faF','fpiF',5,'flot','0','0');
+`);
+
+test("POST /allocations/:id/scan picks without an order id; 404 unknown; 409 finished order", async () => {
+  const scan = await app.request("/allocations/fa/scan", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ qty: 3 }),
+  });
+  assert.equal(scan.status, 201);
+  const body = (await scan.json()) as { package_ids: string[] };
+  assert.equal(body.package_ids.length, 1);
+  assert.equal((sqlite.prepare("SELECT total_qty FROM inventory_lots WHERE id='flot'").get() as any).total_qty, 7);
+
+  const miss = await app.request("/allocations/nope/scan", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ qty: 1 }),
+  });
+  assert.equal(miss.status, 404);
+
+  const finished = await app.request("/allocations/faF/scan", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ qty: 1 }),
+  });
+  assert.equal(finished.status, 409);
+});
+
+test("POST /packages/:id/add-to-box boxes a scanned package; 404 unknown package; 400 missing box_id", async () => {
+  const scan = await app.request("/allocations/fa/scan", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ qty: 2 }),
+  });
+  const packageId = ((await scan.json()) as { package_ids: string[] }).package_ids[0];
+  const created = await app.request("/picking-orders/fpo/boxes", { method: "POST" });
+  const boxId = ((await created.json()) as { id: string }).id;
+
+  const noBox = await app.request(`/packages/${packageId}/add-to-box`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}),
+  });
+  assert.equal(noBox.status, 400);
+
+  const add = await app.request(`/packages/${packageId}/add-to-box`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ box_id: boxId }),
+  });
+  assert.equal(add.status, 200);
+  assert.equal((sqlite.prepare("SELECT shipping_box_id FROM picking_packages WHERE id=?").get(packageId) as any).shipping_box_id, boxId);
+
+  const miss = await app.request("/packages/nope/add-to-box", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ box_id: boxId }),
+  });
+  assert.equal(miss.status, 404);
+});
+
+test("DELETE /packages/:id removes a boxed package from its box or deletes an unboxed one", async () => {
+  // boxed package -> removed from box (package survives, shipping_box_id NULL)
+  const scan = await app.request("/allocations/fa/scan", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ qty: 2 }),
+  });
+  const boxedId = ((await scan.json()) as { package_ids: string[] }).package_ids[0];
+  const created = await app.request("/picking-orders/fpo/boxes", { method: "POST" });
+  const boxId = ((await created.json()) as { id: string }).id;
+  await app.request(`/packages/${boxedId}/add-to-box`, {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ box_id: boxId }),
+  });
+  const unbox = await app.request(`/packages/${boxedId}`, { method: "DELETE" });
+  assert.equal(unbox.status, 200);
+  assert.deepEqual(await unbox.json(), { ok: true });
+  assert.equal((sqlite.prepare("SELECT shipping_box_id FROM picking_packages WHERE id=?").get(boxedId) as any).shipping_box_id, null);
+
+  // unboxed package -> deleted, lot restored
+  const scan2 = await app.request("/allocations/fa/scan", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ qty: 2 }),
+  });
+  const unboxedId = ((await scan2.json()) as { package_ids: string[] }).package_ids[0];
+  const lotBefore = (sqlite.prepare("SELECT total_qty FROM inventory_lots WHERE id='flot'").get() as any).total_qty;
+  const del = await app.request(`/packages/${unboxedId}`, { method: "DELETE" });
+  assert.equal(del.status, 200);
+  assert.deepEqual(await del.json(), { ok: true });
+  assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM picking_packages WHERE id=?").get(unboxedId) as any).c, 0);
+  assert.equal((sqlite.prepare("SELECT total_qty FROM inventory_lots WHERE id='flot'").get() as any).total_qty, lotBefore + 2);
+
+  const miss = await app.request("/packages/nope", { method: "DELETE" });
+  assert.equal(miss.status, 404);
+});
+
+test("POST /packages/:id/verify marks a boxed package verified; 409 when not in a box", async () => {
+  sqlite.exec(`
+    INSERT INTO shipping_boxes (id, picking_order_id, status, created_at, updated_at) VALUES ('fvbox','fpo','open','0','0');
+    INSERT INTO measuring_tasks (id, picking_order_id, status, created_at, updated_at) VALUES ('fvmt','fpo','pending','0','0');
+    INSERT INTO picking_packages (id, picking_item_id, source_type, source_id, qty, shipping_box_id, created_at, updated_at)
+      VALUES ('fvpp','fpi','inventory_lot','flot',1,'fvbox','0','0'),
+             ('fvpp2','fpi','inventory_lot','flot',1,NULL,'0','0');
+  `);
+  const notInBox = await app.request("/packages/fvpp2/verify", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}),
+  });
+  assert.equal(notInBox.status, 409);
+  assert.match(await notInBox.text(), /package is not in a box/);
+
+  const ok = await app.request("/packages/fvpp/verify", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}),
+  });
+  assert.equal(ok.status, 200);
+  assert.deepEqual(await ok.json(), { ok: true });
+  assert.equal((sqlite.prepare("SELECT verified FROM picking_packages WHERE id='fvpp'").get() as any).verified, 1);
+
+  const miss = await app.request("/packages/nope/verify", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}),
+  });
+  assert.equal(miss.status, 404);
+});
+
+test("POST /shipping-boxes/:id/cancel deletes an empty open box; 404 unknown", async () => {
+  sqlite.exec(`INSERT INTO shipping_boxes (id, picking_order_id, status, created_at, updated_at) VALUES ('fcbox','fpo','open','0','0')`);
+  const cancel = await app.request("/shipping-boxes/fcbox/cancel", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}),
+  });
+  assert.equal(cancel.status, 200);
+  assert.deepEqual(await cancel.json(), { ok: true });
+  assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM shipping_boxes WHERE id='fcbox'").get() as any).c, 0);
+
+  const miss = await app.request("/shipping-boxes/nope/cancel", {
+    method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}),
+  });
+  assert.equal(miss.status, 404);
+});
+
 test("cleanup", () => { sqlite.close(); });

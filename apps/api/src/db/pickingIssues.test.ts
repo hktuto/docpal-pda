@@ -177,6 +177,23 @@ test("merge requires at least two orders", () => {
   sqlite.close();
 });
 
+test("'other' reports with remark only (no qty/pack_size), mirroring the web", () => {
+  const { sqlite, db } = makeDb();
+  const result = db.transaction((tx) =>
+    reportPickingOrderIssues(tx, { pickingOrderIds: ["po7a"], reason: "other", remark: "damaged label", actorId: "op7" })
+  );
+  assert.deepEqual(result.reported, ["po7a"]);
+  const a = order(sqlite, "po7a");
+  assert.equal(a.status, "issue");
+  assert.equal(a.issue_reason, "other");
+  assert.equal(a.issue_qty, null);
+  assert.equal(a.issue_pack_size, null);
+  assert.equal(a.issue_note, null);
+  assert.equal(a.issue_remark, "damaged label");
+  assertInvariantsHold(db);
+  sqlite.close();
+});
+
 test("unknown order ids are skipped, not an error", () => {
   const { sqlite, db } = makeDb();
   const result = db.transaction((tx) =>

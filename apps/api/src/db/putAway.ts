@@ -27,7 +27,7 @@ function nextShelfBoxId(tx: DbOrTx): string {
   return `SBOX-${String(max + 1).padStart(4, "0")}`;
 }
 
-export function createShelfBox(tx: DbOrTx, a: { receivingOrderId: string; shelfCode: string; actorId?: string | null }): { id: string } {
+export function createShelfBox(tx: DbOrTx, a: { receivingOrderId: string; shelfCode: string; actorId?: string | null }): Record<string, unknown> {
   const order = tx.get<{ id: string }>(sql`SELECT id FROM receiving_orders WHERE id = ${a.receivingOrderId}`);
   if (!order) throw new HTTPException(404, { message: "receiving order not found" });
   const shelf = tx.get<{ code: string }>(sql`SELECT code FROM shelves WHERE code = ${a.shelfCode}`);
@@ -38,7 +38,7 @@ export function createShelfBox(tx: DbOrTx, a: { receivingOrderId: string; shelfC
         VALUES (${id}, ${a.receivingOrderId}, ${a.shelfCode}, 'open', ${now()}, ${now()})`
   );
   logTransition(tx, { entityType: "shelf_box", entityId: id, toStatus: "open", actorId: a.actorId ?? null, note: `order=${a.receivingOrderId} shelf=${a.shelfCode}` });
-  return { id };
+  return tx.get<Record<string, unknown>>(sql`SELECT * FROM shelf_boxes WHERE id = ${id}`)!;
 }
 
 export function cancelShelfBox(tx: DbOrTx, a: { shelfBoxId: string; actorId?: string | null }): void {
@@ -53,7 +53,7 @@ export function cancelShelfBox(tx: DbOrTx, a: { shelfBoxId: string; actorId?: st
 export function recordPutAwayScan(
   tx: DbOrTx,
   a: { receivingInvoiceItemId: string; qty: number; dateCode?: string | null; lotCode?: string | null; coo?: string | null; cow?: string | null }
-): { id: string } {
+): Record<string, unknown> {
   const item = tx.get<{ id: string; received: number; picked: number; putAway: number; allocated: number }>(
     sql`SELECT id, received_qty AS received, picked_qty AS picked, put_away_qty AS putAway, allocated_qty AS allocated
         FROM receiving_invoice_items WHERE id = ${a.receivingInvoiceItemId}`
@@ -70,7 +70,7 @@ export function recordPutAwayScan(
     sql`INSERT INTO put_away_scans (id, receiving_invoice_item_id, qty, shelf_box_id, date_code, lot_code, coo, cow, created_at, updated_at)
         VALUES (${id}, ${item.id}, ${a.qty}, NULL, ${a.dateCode ?? null}, ${a.lotCode ?? null}, ${a.coo ?? null}, ${a.cow ?? null}, ${now()}, ${now()})`
   );
-  return { id };
+  return tx.get<Record<string, unknown>>(sql`SELECT * FROM put_away_scans WHERE id = ${id}`)!;
 }
 
 export function removeScannedPiece(tx: DbOrTx, a: { scanId: string }): void {

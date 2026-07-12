@@ -49,4 +49,13 @@ test("confirm-arrival is 409 when not pending and 404 when unknown", async () =>
   assert.equal(again.status, 409);
 });
 
+test("confirm-arrival also matches the internal order id (web passes internal ids)", async () => {
+  sqlite.exec(`INSERT INTO receiving_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('roint','EINT','R-INT','pending','0','0')`);
+  const res = await app.request("/receiving-orders/roint/confirm-arrival", { method: "POST" });
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { id: string; status: string };
+  assert.deepEqual(body, { id: "roint", status: "in_hand" });
+  assert.equal((sqlite.prepare("SELECT status FROM receiving_orders WHERE id='roint'").get() as any).status, "in_hand");
+});
+
 test("cleanup", () => { sqlite.close(); });

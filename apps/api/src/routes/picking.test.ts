@@ -67,6 +67,20 @@ test("POST /picking-orders/report-issues reports pending/picking orders and skip
   assert.deepEqual(row, { status: "issue", issue_reason: "insufficient_stock", issue_qty: 5, issue_remark: "short", issue_reported_by: "op7r" });
 });
 
+test("POST /picking-orders/report-issues accepts reason 'other' (remark only, no qty/pack_size)", async () => {
+  sqlite.exec(`INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('po9o','e9o','PO-9O','pending','0','0')`);
+  const res = await post("/picking-orders/report-issues", {
+    picking_order_ids: ["po9o"], reason: "other", remark: "damaged label", actor_id: "op7r",
+  });
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { reported: string[]; skipped: string[] };
+  assert.deepEqual(body.reported, ["po9o"]);
+  const row = sqlite
+    .prepare("SELECT status, issue_reason, issue_qty, issue_pack_size, issue_remark FROM picking_orders WHERE id='po9o'")
+    .get() as any;
+  assert.deepEqual(row, { status: "issue", issue_reason: "other", issue_qty: null, issue_pack_size: null, issue_remark: "damaged label" });
+});
+
 test("POST /picking-orders/report-issues validation: malformed JSON / actor_id / ids / reason -> 400", async () => {
   const badJson = await post("/picking-orders/report-issues", "{nope");
   assert.equal(badJson.status, 400);

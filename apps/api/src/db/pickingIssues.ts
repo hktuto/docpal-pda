@@ -10,7 +10,7 @@ import { logTransition } from "../ingest/transition.js";
 // - returns the reported/skipped order ids instead of counts.
 // The web's I18nError keys become HTTPException 400 messages.
 
-export type PickingIssueReason = "insufficient_stock" | "cannot_divide" | "merge";
+export type PickingIssueReason = "insufficient_stock" | "cannot_divide" | "merge" | "other";
 
 export interface ReportPickingOrderIssuesInput {
   pickingOrderIds: string[];

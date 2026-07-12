@@ -13,6 +13,7 @@ import {
   removePackageFromBox,
   finishPickingOrder,
 } from "../db/pickScan.js";
+import { verifyPackage } from "../db/measure.js";
 
 export const pickingExecutionRoute = new Hono();
 
@@ -126,6 +127,58 @@ pickingExecutionRoute.post("/picking-orders/:id/finish", (c) => {
   const orderId = c.req.param("id");
   const actorId = c.req.query("actor_id") ?? null;
   db.transaction((tx) => finishPickingOrder(tx, { pickingOrderId: orderId, actorId }));
+  return c.json({ ok: true }, 200);
+});
+
+// --- flat mutation routes: same db functions as the nested routes above, but
+// the adapter doesn't know parent ids, so parents are resolved inside the db
+// functions (scanAllocation loads allocation -> item -> order and validates
+// order status itself; verifyPackage derives the box from the package). ---
+
+pickingExecutionRoute.post("/allocations/:id/scan", async (c) => {
+  const allocationId = c.req.param("id");
+  const body = await readJson<{ qty?: number; actor_id?: string | null }>(c);
+  const result = db.transaction((tx) =>
+    scanAllocation(tx, { allocationId, qty: body.qty as number, actorId: body.actor_id ?? null })
+  );
+  const res: ScanResponse = { package_ids: result.packageIds };
+  return c.json(res, 201);
+});
+
+pickingExecutionRoute.post("/packages/:id/add-to-box", async (c) => {
+  const packageId = c.req.param("id");
+  const body = await readJson<{ box_id?: string; actor_id?: string | null }>(c);
+  if (!body.box_id) throw new HTTPException(400, { message: "box_id is required" });
+  db.transaction((tx) => addPackageToBox(tx, { packageId, shippingBoxId: body.box_id!, actorId: body.actor_id ?? null }));
+  return c.json({ ok: true }, 200);
+});
+
+// Both nested delete shapes are { ok: true }, so the flat route is too.
+pickingExecutionRoute.delete("/packages/:id", (c) => {
+  const packageId = c.req.param("id");
+  const actorId = c.req.query("actor_id") ?? null;
+  db.transaction((tx) => {
+    const pkg = tx.get<{ shippingBoxId: string | null }>(
+      sql`SELECT shipping_box_id AS shippingBoxId FROM picking_packages WHERE id = ${packageId}`
+    );
+    if (!pkg) throw new HTTPException(404, { message: "package not found" });
+    if (pkg.shippingBoxId !== null) removePackageFromBox(tx, { packageId, actorId });
+    else removeScannedPackage(tx, { packageId, actorId });
+  });
+  return c.json({ ok: true }, 200);
+});
+
+pickingExecutionRoute.post("/packages/:id/verify", async (c) => {
+  const packageId = c.req.param("id");
+  const body = await readJson<{ actor_id?: string | null }>(c);
+  db.transaction((tx) => verifyPackage(tx, { packageId, actorId: body.actor_id ?? null }));
+  return c.json({ ok: true }, 200);
+});
+
+pickingExecutionRoute.post("/shipping-boxes/:id/cancel", async (c) => {
+  const boxId = c.req.param("id");
+  const body = await readJson<{ actor_id?: string | null }>(c);
+  db.transaction((tx) => cancelShippingBox(tx, { shippingBoxId: boxId, actorId: body.actor_id ?? null }));
   return c.json({ ok: true }, 200);
 });
 

@@ -344,10 +344,12 @@ receivingRoute.put("/receiving-orders/:external_id", async (c) => {
   return c.json(res, result.created ? 201 : 200);
 });
 
+// :external_id accepts either the internal order id or the ingest external_id
+// (the web adapter passes internal ids).
 receivingRoute.post("/receiving-orders/:external_id/confirm-arrival", (c) => {
   const externalId = c.req.param("external_id");
   const order = db.transaction((tx) => {
-    const found = tx.get<{ id: string }>(sql`SELECT id FROM receiving_orders WHERE external_id = ${externalId}`);
+    const found = tx.get<{ id: string }>(sql`SELECT id FROM receiving_orders WHERE id = ${externalId} OR external_id = ${externalId}`);
     if (!found) throw new HTTPException(404, { message: "receiving order not found" });
     confirmReceivingArrival(tx, found.id);
     return found;
