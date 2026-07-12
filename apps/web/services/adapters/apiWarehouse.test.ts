@@ -1095,3 +1095,379 @@ describe('createApiWarehouseService (picking)', () => {
     });
   });
 });
+
+const CANDIDATE_ROW = {
+  id: 'ro1',
+  ref_no: 'RO-001',
+  status: 'in_hand',
+  supplier_name: 'Supplier One',
+  available_qty: 10,
+  unboxed_qty: 3,
+};
+
+const LOT_ROW = {
+  receiving_invoice_item_id: 'rii1',
+  part_id: 'p1',
+  part_no: 'PN-1',
+  date_code: 'D1',
+  lot_code: 'L1',
+  coo: 'CN',
+  cow: null,
+  total_qty: 10,
+  available_qty: 6,
+  scanned_qty: 7,
+  boxed_qty: 4,
+};
+
+const SCAN_ROW = {
+  id: 'pas1',
+  receiving_invoice_item_id: 'rii1',
+  part_id: 'p1',
+  qty: 4,
+  date_code: 'D1',
+  lot_code: 'L1',
+  coo: 'CN',
+  cow: null,
+  shelf_box_id: 'sbox1',
+  verified: 1,
+  verified_at: '2026-07-03T00:00:00.000Z',
+  created_at: '2026-07-02T00:00:00.000Z',
+  updated_at: '2026-07-03T00:00:00.000Z',
+};
+
+// Full row shape returned by POST /put-away/scans (post-3a): the table has no
+// part_id column, and a fresh scan is unboxed/unverified.
+const CREATED_SCAN_ROW = {
+  id: 'pas9',
+  receiving_invoice_item_id: 'rii1',
+  qty: 2,
+  shelf_box_id: null,
+  date_code: null,
+  lot_code: null,
+  coo: null,
+  cow: null,
+  verified: 0,
+  verified_at: null,
+  created_at: '2026-07-06T00:00:00.000Z',
+  updated_at: '2026-07-06T00:00:00.000Z',
+};
+
+const SHELF_BOX_ROW = {
+  id: 'sbox1',
+  receiving_order_id: 'ro1',
+  shelf_code: 'A1',
+  status: 'open',
+  created_at: '2026-07-02T00:00:00.000Z',
+  updated_at: '2026-07-02T00:00:00.000Z',
+  items: [
+    { part_id: 'p1', part_no: 'PN-1', qty: 4, verified: 1 },
+    { part_id: 'p2', part_no: 'PN-2', qty: 6, verified: 0 },
+  ],
+};
+
+describe('createApiWarehouseService (put-away + shelves)', () => {
+  const fetchMock = vi.fn();
+
+  function createService(): WarehouseService {
+    return createApiWarehouseService({
+      adapter: 'api',
+      apiBaseUrl: 'http://api.test',
+      getActorId: () => ACTOR_ID,
+    });
+  }
+
+  function lastBody(): unknown {
+    const [, init] = fetchMock.mock.calls[fetchMock.mock.calls.length - 1] ?? [];
+    return init?.body ? JSON.parse(String(init.body)) : undefined;
+  }
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  describe('getPutAwayCandidates', () => {
+    it('gets the candidates and maps rows (unboxed_qty is dropped)', async () => {
+      fetchMock.mockResolvedValue(jsonResponse([CANDIDATE_ROW]));
+
+      const rows = await createService().getPutAwayCandidates();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://api.test/put-away/candidates',
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(rows).toEqual([
+        {
+          id: 'ro1',
+          refNo: 'RO-001',
+          status: 'in_hand',
+          supplierName: 'Supplier One',
+          availableQty: 10,
+        },
+      ]);
+    });
+  });
+
+  describe('getPutAwayLots', () => {
+    it('gets the lots for a receiving order and maps rows', async () => {
+      fetchMock.mockResolvedValue(jsonResponse([LOT_ROW]));
+
+      const rows = await createService().getPutAwayLots('ro1');
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://api.test/receiving-orders/ro1/put-away-lots',
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(rows).toEqual([
+        {
+          receivingInvoiceItemId: 'rii1',
+          partId: 'p1',
+          partNo: 'PN-1',
+          dateCode: 'D1',
+          lotCode: 'L1',
+          coo: 'CN',
+          cow: null,
+          totalQty: 10,
+          availableQty: 6,
+          scannedQty: 7,
+          boxedQty: 4,
+        },
+      ]);
+    });
+  });
+
+  describe('getPutAwayScans', () => {
+    it('maps scans with integer verified flags and date columns', async () => {
+      fetchMock.mockResolvedValue(
+        jsonResponse([SCAN_ROW, { ...SCAN_ROW, id: 'pas2', shelf_box_id: null, verified: 0, verified_at: null }])
+      );
+
+      const rows = await createService().getPutAwayScans('ro1');
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://api.test/receiving-orders/ro1/put-away-scans',
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(rows).toEqual([
+        {
+          id: 'pas1',
+          receivingInvoiceItemId: 'rii1',
+          partId: 'p1',
+          qty: 4,
+          dateCode: 'D1',
+          lotCode: 'L1',
+          coo: 'CN',
+          cow: null,
+          shelfBoxId: 'sbox1',
+          verified: true,
+          verifiedAt: new Date('2026-07-03T00:00:00.000Z'),
+          createdAt: new Date('2026-07-02T00:00:00.000Z'),
+        },
+        {
+          id: 'pas2',
+          receivingInvoiceItemId: 'rii1',
+          partId: 'p1',
+          qty: 4,
+          dateCode: 'D1',
+          lotCode: 'L1',
+          coo: 'CN',
+          cow: null,
+          shelfBoxId: null,
+          verified: false,
+          verifiedAt: null,
+          createdAt: new Date('2026-07-02T00:00:00.000Z'),
+        },
+      ]);
+    });
+  });
+
+  describe('getShelfBoxesForReceivingOrder', () => {
+    it('maps boxes with their grouped items (part_id doubles as item id)', async () => {
+      fetchMock.mockResolvedValue(jsonResponse([SHELF_BOX_ROW]));
+
+      const boxes = await createService().getShelfBoxesForReceivingOrder('ro1');
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://api.test/receiving-orders/ro1/shelf-boxes',
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(boxes).toEqual([
+        {
+          id: 'sbox1',
+          receivingOrderId: 'ro1',
+          shelfCode: 'A1',
+          status: 'open',
+          createdAt: new Date('2026-07-02T00:00:00.000Z'),
+          items: [
+            { id: 'p1', partId: 'p1', part: { partNo: 'PN-1' }, qty: 4, verified: true },
+            { id: 'p2', partId: 'p2', part: { partNo: 'PN-2' }, qty: 6, verified: false },
+          ],
+        },
+      ]);
+    });
+  });
+
+  describe('getShelves', () => {
+    it('gets shelves; zone is null (API shelves table has no zone column)', async () => {
+      fetchMock.mockResolvedValue(jsonResponse([{ code: 'A1' }, { code: 'B2' }]));
+
+      const shelves = await createService().getShelves();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://api.test/shelves',
+        expect.objectContaining({ method: 'GET' })
+      );
+      expect(shelves).toEqual([
+        { code: 'A1', zone: null },
+        { code: 'B2', zone: null },
+      ]);
+    });
+  });
+
+  describe('recordPutAwayScan', () => {
+    it('posts the snake_case body (no actor_id) and maps the full scan row', async () => {
+      fetchMock.mockResolvedValue(jsonResponse(CREATED_SCAN_ROW, 201));
+
+      const scan = await createService().recordPutAwayScan(
+        'rii1', 2, null, null, null, null
+      );
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://api.test/put-away/scans',
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(lastBody()).toEqual({
+        receiving_invoice_item_id: 'rii1',
+        qty: 2,
+        date_code: null,
+        lot_code: null,
+        coo: null,
+        cow: null,
+      });
+      expect(scan).toEqual({
+        id: 'pas9',
+        receivingInvoiceItemId: 'rii1',
+        // API full-row gap: put_away_scans has no part_id column.
+        partId: '',
+        qty: 2,
+        dateCode: null,
+        lotCode: null,
+        coo: null,
+        cow: null,
+        shelfBoxId: null,
+        verified: false,
+        verifiedAt: null,
+        createdAt: new Date('2026-07-06T00:00:00.000Z'),
+      });
+    });
+  });
+
+  describe('createShelfBox', () => {
+    it('posts {shelf_code, actor_id} and maps the full box row', async () => {
+      const created = { ...SHELF_BOX_ROW, id: 'SBOX-0001' };
+      delete (created as Record<string, unknown>).items;
+      fetchMock.mockResolvedValue(jsonResponse(created, 201));
+
+      const box = await createService().createShelfBox('ro1', 'A1');
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://api.test/receiving-orders/ro1/shelf-boxes',
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(lastBody()).toEqual({ shelf_code: 'A1', actor_id: ACTOR_ID });
+      expect(box).toEqual({
+        id: 'SBOX-0001',
+        receivingOrderId: 'ro1',
+        shelfCode: 'A1',
+        status: 'open',
+        createdAt: new Date('2026-07-02T00:00:00.000Z'),
+        items: [],
+      });
+    });
+  });
+
+  describe('scan/box mutations', () => {
+    it('assignPutAwayScanToBox posts {shelf_box_id, actor_id}', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+
+      await expect(
+        createService().assignPutAwayScanToBox('pas1', 'sbox1')
+      ).resolves.toBeUndefined();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://api.test/put-away/scans/pas1/assign-to-box',
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(lastBody()).toEqual({ shelf_box_id: 'sbox1', actor_id: ACTOR_ID });
+    });
+
+    it('addAllUnboxedScansToBox posts with actor_id query and returns the count', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ count: 3 }));
+
+      const count = await createService().addAllUnboxedScansToBox('sbox1');
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        `http://api.test/shelf-boxes/sbox1/add-all-unboxed?actor_id=${ACTOR_ID}`,
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(lastBody()).toBeUndefined();
+      expect(count).toBe(3);
+    });
+
+    it('removePutAwayScanFromBox posts with actor_id query and no body', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+
+      await expect(
+        createService().removePutAwayScanFromBox('pas1')
+      ).resolves.toBeUndefined();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        `http://api.test/put-away/scans/pas1/remove-from-box?actor_id=${ACTOR_ID}`,
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(lastBody()).toBeUndefined();
+    });
+
+    it('removePutAwayScannedPiece posts with no actor and no body', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+
+      await expect(
+        createService().removePutAwayScannedPiece('pas1')
+      ).resolves.toBeUndefined();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://api.test/put-away/scans/pas1/remove-piece',
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(lastBody()).toBeUndefined();
+    });
+
+    it('closeShelfBox posts with actor_id query and no body', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+
+      await expect(createService().closeShelfBox('sbox1')).resolves.toBeUndefined();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        `http://api.test/shelf-boxes/sbox1/close?actor_id=${ACTOR_ID}`,
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(lastBody()).toBeUndefined();
+    });
+
+    it('cancelShelfBox DELETEs with actor_id query', async () => {
+      fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+
+      await expect(createService().cancelShelfBox('sbox1')).resolves.toBeUndefined();
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        `http://api.test/shelf-boxes/sbox1?actor_id=${ACTOR_ID}`,
+        expect.objectContaining({ method: 'DELETE' })
+      );
+      expect(lastBody()).toBeUndefined();
+    });
+  });
+});

@@ -25,6 +25,11 @@ import type {
   PickingPackage,
   ShippingBox,
   Part,
+  PutAwayCandidate,
+  PutAwayLot,
+  PutAwayScan,
+  ShelfBox,
+  Shelf,
 } from "../types";
 
 type RawRow = Record<string, any>;
@@ -265,6 +270,88 @@ function toBundleItem(
     part: toBundlePart(row),
     allocations: allocations.filter((a) => a.pickingItemId === itemId),
     packages: packages.filter((p) => p.pickingItemId === itemId),
+  };
+}
+
+// ------------------------------------------------------------------
+// Put-away + shelves
+// ------------------------------------------------------------------
+
+// The candidates route also returns unboxed_qty, which the summary type has
+// no field for; it is intentionally dropped.
+function toPutAwayCandidate(row: RawRow): PutAwayCandidate {
+  return {
+    id: String(row.id),
+    refNo: String(row.ref_no),
+    status: String(row.status),
+    supplierName: row.supplier_name ? String(row.supplier_name) : null,
+    availableQty: Number(row.available_qty ?? 0),
+  };
+}
+
+function toPutAwayLot(row: RawRow): PutAwayLot {
+  return {
+    receivingInvoiceItemId: String(row.receiving_invoice_item_id),
+    partId: String(row.part_id),
+    partNo: row.part_no ? String(row.part_no) : null,
+    dateCode: row.date_code ? String(row.date_code) : null,
+    lotCode: row.lot_code ? String(row.lot_code) : null,
+    coo: row.coo ? String(row.coo) : null,
+    cow: row.cow ? String(row.cow) : null,
+    totalQty: Number(row.total_qty ?? 0),
+    availableQty: Number(row.available_qty ?? 0),
+    scannedQty: Number(row.scanned_qty ?? 0),
+    boxedQty: Number(row.boxed_qty ?? 0),
+  };
+}
+
+// API scan rows carry SQLite 0/1 verified flags and ISO date strings. The
+// put_away_scans table has no part_id column; only the list route joins it
+// in, so the full row from POST /put-away/scans maps partId to "" (API gap).
+function toPutAwayScan(row: RawRow): PutAwayScan {
+  return {
+    id: String(row.id),
+    receivingInvoiceItemId: String(row.receiving_invoice_item_id),
+    partId: row.part_id ? String(row.part_id) : "",
+    qty: Number(row.qty ?? 0),
+    dateCode: row.date_code ?? null,
+    lotCode: row.lot_code ?? null,
+    coo: row.coo ?? null,
+    cow: row.cow ?? null,
+    shelfBoxId: row.shelf_box_id ?? null,
+    verified: Boolean(row.verified),
+    verifiedAt: row.verified_at ? new Date(row.verified_at) : null,
+    createdAt: new Date(row.created_at),
+  };
+}
+
+// API box items are grouped per (box, part) and carry no id column; part_id
+// is unique within a box, so it doubles as the item id (used as a list key).
+function toShelfBox(row: RawRow): ShelfBox {
+  return {
+    id: String(row.id),
+    receivingOrderId: row.receiving_order_id
+      ? String(row.receiving_order_id)
+      : "",
+    shelfCode: row.shelf_code ?? null,
+    status: String(row.status),
+    createdAt: new Date(row.created_at),
+    items: ((row.items ?? []) as RawRow[]).map((it) => ({
+      id: String(it.part_id),
+      partId: String(it.part_id),
+      part: { partNo: it.part_no ? String(it.part_no) : null },
+      qty: Number(it.qty ?? 0),
+      verified: Boolean(it.verified),
+    })),
+  };
+}
+
+// The API shelves table has no zone column (unlike the web schema), so shelf
+// responses expose code only and zone stays null (documented API gap).
+function toShelf(row: RawRow): Shelf {
+  return {
+    code: String(row.code),
+    zone: row.zone ?? null,
   };
 }
 
@@ -604,19 +691,106 @@ export function createApiWarehouseService(
         withActorQuery(`/shipping-boxes/${id}/cancel`, client.actorId())
       );
     },
-    getPutAwayCandidates: notImplemented,
-    getPutAwayLots: notImplemented,
-    getPutAwayScans: notImplemented,
-    getShelfBoxesForReceivingOrder: notImplemented,
-    getShelves: notImplemented,
-    recordPutAwayScan: notImplemented,
-    assignPutAwayScanToBox: notImplemented,
-    addAllUnboxedScansToBox: notImplemented,
-    removePutAwayScanFromBox: notImplemented,
-    removePutAwayScannedPiece: notImplemented,
-    createShelfBox: notImplemented,
-    closeShelfBox: notImplemented,
-    cancelShelfBox: notImplemented,
+    async getPutAwayCandidates() {
+      const rows = await client.get<RawRow[]>("/put-away/candidates");
+      return rows.map(toPutAwayCandidate);
+    },
+
+    async getPutAwayLots(receivingOrderId) {
+      const rows = await client.get<RawRow[]>(
+        `/receiving-orders/${receivingOrderId}/put-away-lots`
+      );
+      return rows.map(toPutAwayLot);
+    },
+
+    async getPutAwayScans(receivingOrderId) {
+      const rows = await client.get<RawRow[]>(
+        `/receiving-orders/${receivingOrderId}/put-away-scans`
+      );
+      return rows.map(toPutAwayScan);
+    },
+
+    async getShelfBoxesForReceivingOrder(receivingOrderId) {
+      const rows = await client.get<RawRow[]>(
+        `/receiving-orders/${receivingOrderId}/shelf-boxes`
+      );
+      return rows.map(toShelfBox);
+    },
+
+    async getShelves() {
+      const rows = await client.get<RawRow[]>("/shelves");
+      return rows.map(toShelf);
+    },
+
+    async recordPutAwayScan(
+      receivingInvoiceItemId,
+      qty,
+      dateCode,
+      lotCode,
+      coo,
+      cow
+    ) {
+      // The route takes no actor_id (see RecordPutAwayScanRequest) and
+      // returns the full created scan row.
+      const row = await client.post<RawRow>("/put-away/scans", {
+        receiving_invoice_item_id: receivingInvoiceItemId,
+        qty,
+        date_code: dateCode,
+        lot_code: lotCode,
+        coo,
+        cow,
+      });
+      return toPutAwayScan(row);
+    },
+
+    async assignPutAwayScanToBox(scanId, boxId) {
+      await client.post(`/put-away/scans/${scanId}/assign-to-box`, {
+        shelf_box_id: boxId,
+        actor_id: client.actorId(),
+      });
+    },
+
+    async addAllUnboxedScansToBox(boxId) {
+      const res = await client.post<{ count: number }>(
+        withActorQuery(
+          `/shelf-boxes/${boxId}/add-all-unboxed`,
+          client.actorId()
+        )
+      );
+      return Number(res.count ?? 0);
+    },
+
+    async removePutAwayScanFromBox(scanId) {
+      await client.post(
+        withActorQuery(
+          `/put-away/scans/${scanId}/remove-from-box`,
+          client.actorId()
+        )
+      );
+    },
+
+    async removePutAwayScannedPiece(scanId) {
+      await client.post(`/put-away/scans/${scanId}/remove-piece`);
+    },
+
+    async createShelfBox(receivingOrderId, shelfCode) {
+      // Returns the full created box row (no items on a fresh box).
+      const row = await client.post<RawRow>(
+        `/receiving-orders/${receivingOrderId}/shelf-boxes`,
+        { shelf_code: shelfCode, actor_id: client.actorId() }
+      );
+      return toShelfBox(row);
+    },
+
+    async closeShelfBox(id) {
+      await client.post(
+        withActorQuery(`/shelf-boxes/${id}/close`, client.actorId())
+      );
+    },
+
+    async cancelShelfBox(id) {
+      await client.del(`/shelf-boxes/${id}`, { actor_id: client.actorId() });
+    },
     getMeasuringTasks: notImplemented,
     getMeasuringTask: notImplemented,
     getShippingBoxForMeasuring: notImplemented,
