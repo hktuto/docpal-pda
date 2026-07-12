@@ -1,4 +1,5 @@
 import { sqliteTable, text, integer, index, unique } from "drizzle-orm/sqlite-core";
+import { mismatchStatuses } from "@warehouse/shared";
 import { now } from "../now.js";
 import { suppliers, parts } from "./master.js";
 
@@ -79,7 +80,7 @@ export const receivingItemMismatches = sqliteTable(
     mismatchQty: integer("mismatch_qty"),
     wrongPartNo: text("wrong_part_no"),
     note: text("note"),
-    status: text("status", { enum: ["pending", "confirmed", "cancelled"] }).notNull().default("pending"),
+    status: text("status", { enum: mismatchStatuses }).notNull().default("pending"),
     effectiveReceivedQty: integer("effective_received_qty"),
     previousReceivedQty: integer("previous_received_qty"),
     reportedBy: text("reported_by"),

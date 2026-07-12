@@ -73,6 +73,13 @@ test("a second report on the same item is rejected (409)", () => {
     () => db.transaction((tx) => reportMismatch(tx, { receivingInvoiceItemId: "rii", reason: "damaged", mismatchQty: 1, actorId: "reporter" })),
     (e: any) => e.status === 409
   );
+  // rejected report changed nothing: still exactly one active row with its original values
+  const active = sqlite.prepare("SELECT * FROM receiving_item_mismatches WHERE status != 'cancelled'").all() as any[];
+  assert.equal(active.length, 1);
+  assert.equal(active[0].kind, "qty_mismatch");
+  assert.equal(active[0].mismatch_qty, 8);
+  assert.equal(active[0].status, "pending");
+  assert.deepEqual(item(sqlite, "rii"), { received_qty: 8, available_qty: 8, picked_qty: 0 });
   assertInvariantsHold(db);
   sqlite.close();
 });
@@ -95,6 +102,10 @@ test("editMismatch: non-reporter is rejected; the reporter's edit re-applies the
     () => db.transaction((tx) => editMismatch(tx, { mismatchId: reported.id, actorId: "confirmer", reason: "damaged", mismatchQty: 3 })),
     (e: any) => e.status === 409
   );
+  // rejected edit changed nothing: the row keeps its reported values
+  const unchanged = sqlite.prepare("SELECT kind, mismatch_qty, effective_received_qty, status FROM receiving_item_mismatches WHERE id = ?").get(reported.id) as any;
+  assert.deepEqual(unchanged, { kind: "qty_mismatch", mismatch_qty: 8, effective_received_qty: 8, status: "pending" });
+  assert.deepEqual(item(sqlite, "rii"), { received_qty: 8, available_qty: 8, picked_qty: 0 });
   const edited = db.transaction((tx) =>
     editMismatch(tx, { mismatchId: reported.id, actorId: "reporter", reason: "damaged", mismatchQty: 3 })
   );
