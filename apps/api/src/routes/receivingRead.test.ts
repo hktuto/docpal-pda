@@ -365,4 +365,26 @@ test("GET /receiving-orders/:id/scan-candidates returns 404 for unknown order", 
   assert.equal(res.status, 404);
 });
 
+test("GET /receiving-orders/:id/scan-candidates keys receiving map by web normalize, not part_no_norm", async () => {
+  // The web keys its candidate map with normalize() (no confusable mapping),
+  // while the stored part_no_norm maps O->0. p9d's stored norm is 'K0A-103';
+  // the map key must be 'KOA-103' so the client's lookups hit.
+  sqlite.exec(`
+    INSERT INTO parts (id, part_no, part_no_norm, description, created_at, updated_at)
+      VALUES ('p9d','KOA-103','K0A-103','Part nine D','0','0');
+    INSERT INTO receiving_orders (id, external_id, ref_no, delivery_date, status, supplier_id, created_at, updated_at)
+      VALUES ('ro9d','e9d','RO-9D',NULL,'in_hand',NULL,'0','0');
+    INSERT INTO receiving_invoices (id, external_id, receiving_order_id, invoice_no, supplier_id, created_at, updated_at)
+      VALUES ('inv9d','e9d','ro9d','INV-9D',NULL,'0','0');
+    INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty, available_qty, created_at, updated_at)
+      VALUES ('rii9d','inv9d','p9d',4,4,4,'0','0');
+  `);
+  const res = await app.request("/receiving-orders/ro9d/scan-candidates");
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as any;
+  assert.deepEqual(Object.keys(body.receiving_by_part_no), ["KOA-103"]);
+  assert.equal(body.receiving_by_part_no["KOA-103"][0].receiving_invoice_item_id, "rii9d");
+  assert.equal(body.receiving_by_part_no["KOA-103"][0].part_no, "KOA-103");
+});
+
 test("cleanup", () => { sqlite.close(); });

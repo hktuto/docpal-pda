@@ -129,11 +129,19 @@ receivingRoute.get("/receiving-orders/:id", (c) => {
   }, 200);
 });
 
+// The web keys its candidate map with normalize() from
+// apps/web/composables/useMockOcr.ts — trim/uppercase/collapse-whitespace,
+// WITHOUT the confusable mapping the stored part_no_norm applies. The client
+// looks up by that same key, so the map key must match it exactly.
+function normalizeScanKey(partNo: string): string {
+  return partNo.trim().toUpperCase().replace(/\s+/g, " ");
+}
+
 // Scan-candidates snapshot powering the web's useScanMatchers without direct
 // DB access. Mirrors findReceivingCandidatesForOrder / findPickingCandidatesForOrder
-// in apps/web/db/ocrPicking.ts: the web groups Maps keyed by part_no_norm /
-// part_id; here they are plain objects. date_code/lot_code/coo/cow carry the
-// stored *_norm columns (the web normalizes in SQL to the same values).
+// in apps/web/db/ocrPicking.ts: the web groups Maps keyed by normalized part
+// no / part_id; here they are plain objects. date_code/lot_code/coo/cow carry
+// the stored *_norm columns (the web normalizes in SQL to the same values).
 // available_qty is the API's stored column minus unboxed put-away scans (same
 // subquery shape as the list endpoint above); the web computes the same value
 // from received - picked - put_away - allocated - unboxed.
@@ -147,7 +155,7 @@ receivingRoute.get("/receiving-orders/:id/scan-candidates", (c) => {
   }
 
   const receivingRows = db.all<Record<string, unknown>>(sql`
-    SELECT rii.id AS receiving_invoice_item_id, p.id AS part_id, p.part_no, p.part_no_norm,
+    SELECT rii.id AS receiving_invoice_item_id, p.id AS part_id, p.part_no,
            rii.date_code_norm AS date_code, rii.lot_code_norm AS lot_code,
            rii.coo_norm AS coo, rii.cow_norm AS cow,
            rii.available_qty - COALESCE(u.uq, 0) AS available_qty
@@ -162,8 +170,7 @@ receivingRoute.get("/receiving-orders/:id/scan-candidates", (c) => {
     ORDER BY p.part_no_norm, rii.date_code_norm, rii.lot_code_norm`);
   const receivingByPartNo: Record<string, Record<string, unknown>[]> = {};
   for (const row of receivingRows) {
-    const { part_no_norm, ...candidate } = row;
-    (receivingByPartNo[String(part_no_norm)] ??= []).push(candidate);
+    (receivingByPartNo[normalizeScanKey(String(row.part_no))] ??= []).push(row);
   }
 
   // remaining_qty mirrors the web: qty - picked_qty - SUM(unboxed packages).
