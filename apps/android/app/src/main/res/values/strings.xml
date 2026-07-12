@@ -179,6 +179,38 @@
     <string name="picking_issue_validation_valid_pack_size">Enter a valid pack size</string>
     <string name="picking_issue_validation_note_or_remark">Enter a note or at least one remark</string>
 
+    <string name="put_away_title">Put-away</string>
+    <string name="put_away_hint">Receiving orders with stock still in the receiving area.</string>
+    <string name="put_away_available">%1$d available</string>
+    <string name="put_away_detail_supplier">Supplier</string>
+    <string name="put_away_detail_delivery_date">Delivery date</string>
+    <string name="put_away_boxes_title">Shelf boxes</string>
+    <string name="put_away_new_box">New box</string>
+    <string name="put_away_box_lines_qty">%1$d lines · %2$d pcs</string>
+    <string name="put_away_add_all">Add all</string>
+    <string name="put_away_add_all_confirm">Add %1$d unboxed scan(s) to this box?</string>
+    <string name="put_away_close_box">Close box</string>
+    <string name="put_away_cancel_box">Cancel box</string>
+    <string name="put_away_lots_title">Lots</string>
+    <string name="put_away_part">Part</string>
+    <string name="put_away_total_qty">Total</string>
+    <string name="put_away_scanned_qty">Scanned</string>
+    <string name="put_away_boxed_qty">Boxed</string>
+    <string name="put_away_date_lot">Date / Lot</string>
+    <string name="put_away_coo_cow">COO / COW</string>
+    <string name="put_away_no_scans">No scans yet</string>
+    <string name="put_away_select_box">Select box</string>
+    <string name="put_away_add_to_box">Add to box</string>
+    <string name="put_away_remove_from_box">Remove from box</string>
+    <string name="put_away_remove_scan">Remove scan</string>
+    <string name="put_away_scan_piece">Scan piece</string>
+    <string name="put_away_show_scans">Show scans (%1$d)</string>
+    <string name="put_away_hide_scans">Hide scans</string>
+
+    <string name="select_shelf_title">Select shelf</string>
+    <string name="select_shelf_label">Shelf</string>
+    <string name="select_shelf_default">Choose a shelf…</string>
+
     <string name="scan_review_title_manual">Manual entry</string>
     <string name="scan_review_title_review">Review scan</string>
     <string name="scan_review_close">Close</string>
@@ -300,6 +332,10 @@
     <string name="common_no_boxes">No boxes yet.</string>
     <string name="common_scan_success">Scanned successfully</string>
     <string name="common_actor_system">System</string>
+    <string name="common_no_receiving_orders_need_put_away">No receiving orders need put-away.</string>
+    <string name="common_no_lots">No lots available for put-away.</string>
+    <string name="common_unassigned">Unassigned</string>
+    <string name="common_shelf_format">%1$s — %2$s</string>
 
     <string name="action_scan">Scan</string>
     <string name="action_cancel">Cancel</string>
@@ -381,4 +417,19 @@
     <string name="error_scanned_part_does_not_match_allocation">Scanned part does not match allocation</string>
     <string name="error_invalid_allocation">Invalid allocation</string>
     <string name="error_qty_exceeds_allocated">Qty exceeds allocated quantity</string>
+    <string name="error_invoice_item_not_found">Invoice item not found.</string>
+    <string name="error_scanned_qty_exceeds_total">Scanned qty exceeds the remaining qty.</string>
+    <string name="error_put_away_scan_not_found">Put-away scan not found.</string>
+    <string name="error_put_away_scan_already_boxed">Scan is already in a box.</string>
+    <string name="error_put_away_scan_not_boxed">Scan is not in a box.</string>
+    <string name="error_shelf_box_not_found">Shelf box not found.</string>
+    <string name="error_shelf_box_is_not_open">Shelf box is not open.</string>
+    <string name="error_shelf_box_is_not_empty">Shelf box is not empty.</string>
+    <string name="error_cannot_close_empty_shelf_box">Cannot close an empty shelf box.</string>
+    <string name="error_shelf_not_found">Shelf not found.</string>
+    <string name="error_item_does_not_belong_to_receiving_order">Scan and box belong to different receiving orders.</string>
+    <string name="error_lot_has_pick_allocations">Lot has pick allocations.</string>
+    <string name="error_quantity_exceeds_available">Quantity exceeds available.</string>
+    <string name="error_scanned_part_does_not_match_item">Scanned part does not match the item.</string>
+    <string name="error_invalid_receiving_item">Invalid receiving item.</string>
 </resources>

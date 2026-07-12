@@ -179,6 +179,38 @@
     <string name="picking_issue_validation_valid_pack_size">请输入有效的包装规格</string>
     <string name="picking_issue_validation_note_or_remark">请输入备注或至少一条订单备注</string>
 
+    <string name="put_away_title">上架</string>
+    <string name="put_away_hint">收货区仍有库存的收货单。</string>
+    <string name="put_away_available">可用 %1$d</string>
+    <string name="put_away_detail_supplier">供应商</string>
+    <string name="put_away_detail_delivery_date">交货日期</string>
+    <string name="put_away_boxes_title">货架箱子</string>
+    <string name="put_away_new_box">新建箱子</string>
+    <string name="put_away_box_lines_qty">%1$d 行 · %2$d 件</string>
+    <string name="put_away_add_all">全部加入</string>
+    <string name="put_away_add_all_confirm">将 %1$d 个未装箱扫描加入此箱？</string>
+    <string name="put_away_close_box">关闭箱子</string>
+    <string name="put_away_cancel_box">取消箱子</string>
+    <string name="put_away_lots_title">批次</string>
+    <string name="put_away_part">料号</string>
+    <string name="put_away_total_qty">总数</string>
+    <string name="put_away_scanned_qty">已扫描</string>
+    <string name="put_away_boxed_qty">已装箱</string>
+    <string name="put_away_date_lot">日期 / 批次</string>
+    <string name="put_away_coo_cow">产地 / 晶圆产地</string>
+    <string name="put_away_no_scans">暂无扫描</string>
+    <string name="put_away_select_box">选择箱子</string>
+    <string name="put_away_add_to_box">添加到箱子</string>
+    <string name="put_away_remove_from_box">从箱子移除</string>
+    <string name="put_away_remove_scan">移除扫描</string>
+    <string name="put_away_scan_piece">扫描单件</string>
+    <string name="put_away_show_scans">显示扫描 (%1$d)</string>
+    <string name="put_away_hide_scans">隐藏扫描</string>
+
+    <string name="select_shelf_title">选择货架</string>
+    <string name="select_shelf_label">货架</string>
+    <string name="select_shelf_default">请选择货架…</string>
+
     <string name="scan_review_title_manual">手动录入</string>
     <string name="scan_review_title_review">复核扫描</string>
     <string name="scan_review_close">关闭</string>
@@ -300,6 +332,10 @@
     <string name="common_no_boxes">暂无箱子。</string>
     <string name="common_scan_success">扫描成功</string>
     <string name="common_actor_system">系统</string>
+    <string name="common_no_receiving_orders_need_put_away">没有需要上架的收货单。</string>
+    <string name="common_no_lots">没有可上架的批次。</string>
+    <string name="common_unassigned">未分配</string>
+    <string name="common_shelf_format">%1$s — %2$s</string>
 
     <string name="action_scan">扫描</string>
     <string name="action_cancel">取消</string>
@@ -381,4 +417,19 @@
     <string name="error_scanned_part_does_not_match_allocation">扫描料号与分配不匹配</string>
     <string name="error_invalid_allocation">分配无效</string>
     <string name="error_qty_exceeds_allocated">数量超出已分配数量</string>
+    <string name="error_invoice_item_not_found">未找到发票项</string>
+    <string name="error_scanned_qty_exceeds_total">扫描数量超过剩余数量</string>
+    <string name="error_put_away_scan_not_found">未找到上架扫描</string>
+    <string name="error_put_away_scan_already_boxed">扫描已在箱子中</string>
+    <string name="error_put_away_scan_not_boxed">扫描不在箱子中</string>
+    <string name="error_shelf_box_not_found">未找到货架箱子</string>
+    <string name="error_shelf_box_is_not_open">货架箱子未打开</string>
+    <string name="error_shelf_box_is_not_empty">货架箱子不是空的</string>
+    <string name="error_cannot_close_empty_shelf_box">无法关闭空的货架箱子</string>
+    <string name="error_shelf_not_found">未找到货架</string>
+    <string name="error_item_does_not_belong_to_receiving_order">扫描与箱子属于不同的收货单</string>
+    <string name="error_lot_has_pick_allocations">批次存在拣货分配</string>
+    <string name="error_quantity_exceeds_available">数量超出可用数量</string>
+    <string name="error_scanned_part_does_not_match_item">扫描料号与项目不匹配</string>
+    <string name="error_invalid_receiving_item">收货项无效</string>
 </resources>
