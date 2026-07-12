@@ -173,6 +173,30 @@ class ReportPickingIssuesTest {
     }
 
     @Test
+    fun `throw on second order rolls back first order writes`() = runBlocking {
+        // PO1 (total 20) passes the 10 < 20 check and is updated + logged first; PO2 (total 10)
+        // then throws -> the whole transaction must roll back.
+        insertPickingOrder(PO1, "TEST-PO-01", "pending", totalQty = 20)
+        insertPickingOrder(PO2, "TEST-PO-02", "pending", totalQty = 10)
+        expectCode("actual_qty_must_be_less_than_requested") {
+            repo.reportPickingOrderIssues(
+                listOf(PO1 to "short", PO2 to null),
+                PickingIssueInput(reason = "insufficient_stock", qty = 10, packSize = null, note = null),
+                "user-1",
+            )
+        }
+        // PO1's UPDATE rolled back.
+        assertEquals("pending", stringQuery("SELECT status FROM picking_orders WHERE id = '$PO1'"))
+        assertNull(stringQuery("SELECT issue_reason FROM picking_orders WHERE id = '$PO1'"))
+        assertEquals("pending", stringQuery("SELECT status FROM picking_orders WHERE id = '$PO2'"))
+        // No transition logs written for either order.
+        assertEquals(
+            0,
+            intQuery("SELECT COUNT(*) FROM transition_logs WHERE entity_id IN ('$PO1', '$PO2')"),
+        )
+    }
+
+    @Test
     fun `no reportable orders throws`() = runBlocking {
         insertPickingOrder(PO1, "TEST-PO-01", "finished", totalQty = 10)
         insertPickingOrder(PO2, "TEST-PO-02", "finished", totalQty = 8)
