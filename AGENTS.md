@@ -10,7 +10,7 @@ This is a pnpm monorepo proof-of-concept for warehouse mobile/Android flows: `ap
 - **Mobile shell:** Capacitor (Android platform added)
 - **API:** Hono on Node, better-sqlite3 (file-backed `./dev.sqlite`, `DATABASE_URL` overridable), Drizzle ORM
 - **Data access (web):** Pages call `WarehouseService` / `AuthService` (`apps/web/services/warehouse.ts`, `services/auth.ts`) via `useWarehouse()` / `useAuth()`. The default adapter (`services/adapters/apiWarehouse.ts`, `apiAuth.ts`) speaks HTTP through `services/apiClient.ts`. The PGlite adapter (`services/adapters/pgliteWarehouse.ts`, `pgliteAuth.ts`) keeps the old in-browser Postgres path (Drizzle `drizzle-orm/pglite`, in-memory, re-seeded per launch); `plugins/pglite.client.ts` only starts PGlite when `warehouseAdapter === "pglite"`.
-- **Adapter switch:** `apps/web/nuxt.config.ts` — `warehouseAdapter: "api"` (default) or `"pglite"`, and `apiBaseUrl` (env-overridable via `NUXT_PUBLIC_API_BASE_URL`; Capacitor device builds need a LAN-reachable host — the API's CORS allows `http://localhost:3000` and `capacitor://localhost`).
+- **Adapter switch:** `apps/web/nuxt.config.ts` — `warehouseAdapter: "api"` (default) or `"pglite"`, and `apiBaseUrl` (env-overridable via `NUXT_PUBLIC_API_BASE_URL`; Capacitor device builds need a LAN-reachable host — the API's CORS allows `http://localhost:3000` and `capacitor://localhost`, and the device WebView origin is `http://localhost` because `capacitor.config.ts` sets `server.androidScheme: "http"`).
 - **List pages:** Reload on mount and when the app regains visibility (Capacitor does not support `useLiveQuery`). In pglite mode these use manual `db.execute` queries; in api mode they go through `WarehouseService` → HTTP.
 
 ## Common commands
@@ -32,7 +32,12 @@ pnpm --filter @warehouse/web cap:android:dev  # sync Android to the running web 
 
 The web dev workflow needs TWO servers: `pnpm --filter @warehouse/api dev` (:3001) and `pnpm --filter @warehouse/web dev` (:3000). The web app talks to the API by default; with `warehouseAdapter: "pglite"` the API is not needed.
 
-For Android live reload, run the web dev server in one terminal, then run `pnpm --filter @warehouse/web cap:android:dev` in another. The helper script finds your machine's LAN IP and points the Android WebView at `http://<ip>:3000`. In api mode the device also needs to reach the API, so set `NUXT_PUBLIC_API_BASE_URL=http://<ip>:3001` when starting the web dev server. Make sure the Android device and dev machine are on the same network.
+For Android live reload, run the web dev server in one terminal, then run `pnpm --filter @warehouse/web cap:android:dev` in another. The helper script (`scripts/cap-android-dev.mjs`) finds your machine's LAN IP, sets `CAPACITOR_SERVER_URL` (consumed by `capacitor.config.ts`), and points the Android WebView at `http://<ip>:3000`. In api mode the device also needs to reach the API, so set `NUXT_PUBLIC_API_BASE_URL=http://<ip>:3001` when starting the web dev server. Make sure the Android device and dev machine are on the same network. Known issue: on the current Capacitor version live reload fails with a native bridge `Cannot read properties of undefined (reading 'triggerEvent')` error; use the bundled build below until that is resolved.
+
+Device networking notes (bundled builds verified on a real device):
+
+- `capacitor.config.ts` sets `server.androidScheme: "http"` — required so LAN `http://` API calls are not blocked as mixed content (the default `https://localhost` origin would also miss the API CORS allowlist). `AndroidManifest.xml` carries `android:usesCleartextTraffic="true"` for the same reason.
+- Never run `pnpm generate` while the web dev server is running: both share `.nuxt/dist/client`, and the dev server pollutes the static export with dev URLs (`@vite/client`, absolute-path entries). Stop the dev server first, then generate.
 
 ### Demo reset
 
