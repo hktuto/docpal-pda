@@ -211,9 +211,10 @@ was superseded. Entry points:
 | Receiving list + detail (items & picking tabs, dialogs, scan launchers) | `apps/android/.../ui/receiving/` |
 | Picking list + detail (search, batch issue report, boxes, logs, scan-to-pick) | `apps/android/.../ui/picking/`, `domain/PickingRepository.kt` |
 | Put-away candidate list + detail (lots, shelf boxes, scan-to-put-away, auto-clear) | `apps/android/.../ui/putaway/`, `domain/PutAwayRepository.kt` |
+| Goods verify shelf list + box list + box detail (scan-to-verify, mark verified) | `apps/android/.../ui/goodsverify/`, `domain/GoodsVerifyRepository.kt`, `data/db/GoodsVerifyDao.kt`, `domain/model/GoodsVerifyModels.kt` |
 | Shared UI primitives | `apps/android/.../ui/components/` (`StatusBadge`, `EmptyState`, `DetailRow`, `ErrorText`, `OnResumeEffect`) |
 | Room DB, entities, DAOs | `apps/android/.../data/db/`; repositories in `apps/android/.../data/` + `apps/android/.../domain/` |
-| Scan pipeline | `apps/android/.../scanner/` (camera/OCR), `apps/android/.../domain/scan/` (parsers, `ScanMatcher.matchReceiving`/`matchPicking`/`matchPutAway`, wedge buffer), `ui/receiving/ScanLaunchers.kt`, `ui/scan/LabelScanReviewDialog.kt` |
+| Scan pipeline | `apps/android/.../scanner/` (camera/OCR), `apps/android/.../domain/scan/` (parsers, `ScanMatcher.matchReceiving`/`matchPicking`/`matchPutAway`/`matchGoodsVerify`, wedge buffer), `ui/receiving/ScanLaunchers.kt`, `ui/scan/LabelScanReviewDialog.kt` |
 | JVM tests | `apps/android/app/src/test/...` (Robolectric; fixtures in `DbTestSupport.kt`) |
 
 Full structure and conventions: root `AGENTS.md`, "Native Android app

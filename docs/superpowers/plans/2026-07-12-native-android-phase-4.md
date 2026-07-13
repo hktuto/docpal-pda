@@ -672,3 +672,170 @@ git commit -m "android phase4: docs + handoff notes"
 - [x] Type consistency: `ShelfSummary`/`VerifyBoxSummary`/`VerifyBoxItem`/`VerifyBoxDetail`, `GoodsVerifyTarget`/`GoodsVerifyMatchResult`, `GoodsVerifyShelfListSource`/`GoodsVerifyBoxListSource`/`GoodsVerifyBoxDetailSource` defined once and used consistently; route constants `GOODS_VERIFY_SHELVES`/`GOODS_VERIFY_SHELF_BOXES`/`GOODS_VERIFY_BOX` + helpers `goodsVerifyShelfBoxes`/`goodsVerifyBox` consistent across Tasks 5–7.
 - [x] Every task has failing-test-first steps (except Task 1 strings — explicit parity verification), exact commands, and a commit step.
 - [x] Test-count trajectory: 249 → 249 (T1) → 254 (T2) → 260 (T3) → 266 (T4) → 269 (T5) → 272 (T6) → 276 (T7) → 282 (T8) → verified at T9.
+
+---
+
+## Phase 5 handoff notes
+
+Phase 4 verification (Task 9, 2026-07-13): 282 JVM tests green
+(`./gradlew :app:testDebugUnitTest`, 0 failures/errors/skips across 46 test
+classes), `assembleDebug` and `installDebug` clean on device
+`MFM5PRE526010002`. All seven device walkthrough items were exercised — see
+"Deferred verifications" below for what could not be done through adb.
+
+### What Phase 5 (measuring) reuses
+
+- **`measuring_tasks` rows inserted by picking finish** (Phase 2
+  `PickingRepository.finish` — manual or auto when the last package is boxed).
+  `MeasuringTaskEntity` (`data/db/MeasuringEntities.kt:12`): `id`,
+  `pickingOrderId` (unique index), `status` default `"pending"`, `createdAt`.
+  Phase 5's task list reads these directly.
+- **Per-box measurement columns already in the schema** — `ShippingBoxEntity`
+  (`MeasuringEntities.kt:26`): `pickingOrderId`, `measuringTaskId`, `status`
+  default `"open"`, `grossWeight`, `netWeight`, `destinationCountry`,
+  `boxSize`, `createdAt`. No schema change needed for the measuring flow.
+- **The box drill-down UI pattern from this phase** — three-level
+  list → list → detail (`ui/goodsverify/`) with per-key `provideFactory`
+  (`GoodsVerifyBoxDetailViewModel.provideFactory`), `OnResumeEffect` reload,
+  expandable header card with an actions slot, LazyListScope item sections
+  (`GoodsVerifyItemsSection.kt`), and done-card styling (green `CardDoneColor`
+  border, reused from `ui.picking`).
+- **Scan-to-verify packages — the `matchGoodsVerify` sibling pattern**
+  (`domain/scan/ScanMatcher.kt:167`): targets in, sealed result out
+  (`Single` → review dialog, `Error` → review dialog in error state),
+  `verifyItem`-style apply with inline `applyErrorKey`. Goods verify is the
+  fourth `LabelScanReviewDialog` consumer; see the `matchMessageRes` gap below
+  before adding a fifth.
+- **`LabelScanReviewDialog` + camera launcher** —
+  `rememberCameraScanLauncher` (`ui/receiving/ScanLaunchers.kt`) with the
+  `LabelScanParser` seam and `provideFactory` wiring, reused unchanged.
+- **Transition logs for box status transitions** — `GoodsVerifyDao.insertTransitionLog`
+  shares the `@Insert` shape with `PutAwayDao.insertLog`; measuring box
+  transitions (open → closed → verified) should log the same way.
+
+### Known gaps inherited (re-verified against current code 2026-07-13)
+
+- **`materializeReceivingAllocation` still has no production caller**
+  (`domain/PickingRepository.kt:371` — definition + KDoc + DAO helper only;
+  carried from Phases 2–3). If Phase 5 doesn't adopt it, delete it.
+- **`removeScannedPackage` first-source-restore bug** — still present,
+  still "Ported as written from the web" (`PickingRepository.kt:526-533`);
+  open on both web and Android.
+- **Seam interfaces still in `ui/receiving/ReceivingDetailViewModel.kt`**
+  (`ReceivingDetailSource`/`MismatchSource`/`SessionSource`/`PickingSource`,
+  lines 32–59). Newer phases put source interfaces next to their own ViewModel;
+  goods verify followed that (`ui/goodsverify/`).
+- **`matchMessageRes` doubles as the dialog kind discriminator** in
+  `LabelScanReviewDialog.kt` (Apply-button visibility keyed on the message
+  string resource, lines 197/202–203/230). Goods verify reused the existing
+  message kinds; a measuring consumer needing new wording must add an explicit
+  state-kind field to `ScanReviewUiState` first.
+- **Wedge `scannedQty = 0` simplification** on picking
+  (`PickingDetailViewModel.kt:505`; inherited, POC-acceptable).
+- **Remove-from-box does not flip `clear` back to `in_hand`** (web parity;
+  `PutAwayRepository.kt:360` comment).
+- **Once an order is `clear`, its unboxed scans are unreachable in the
+  put-away UI** (web parity; `PutAwayDao.inHandOrderRows` filters
+  `WHERE ro.status = 'in_hand'`).
+- **`ScanMatcherTest.kt:376` hardcoded seed UUID** (`ORDER_ID` companion
+  constant for seeded order 04958166) — violates the "look ids up by business
+  key" test convention; cosmetic.
+- **`ShelfBoxEntity` / `PutAwayScanEntity` live in `MeasuringEntities.kt`**
+  (`data/db/MeasuringEntities.kt:45,60`) — file-name mismatch, rename
+  candidate (e.g. `BoxEntities.kt`); do it when Phase 5 next touches the file.
+- **`PutAwayRepository.listCandidates` runs N+1 totals queries**
+  (`PutAwayRepository.kt:50-51`; defensible at POC scale).
+- **Phase 2's Enter-KeyUp blanket-consume applies to any future wedge
+  screen** — keypad-Enter button activation is disabled while the hardware-key
+  buffer is enabled (`ReceivingDetailScreen.kt:144`,
+  `PickingDetailScreen.kt:146`); touch unaffected. If measuring adds a wedge
+  entry, copy the same `onKeyEvent` guard.
+
+### Phase 4 decisions to record
+
+- **pglite mark-verified parity — open boxes allowed.** `markBoxVerified`
+  has no closed-status check (`GoodsVerifyRepository.kt:91`); the API would
+  409 (`apps/api/src/db/measure.ts:162`). Deliberate pglite-over-API choice,
+  same as Phase 3.
+- **verify-item updates ALL scans of the part in the box**
+  (`GoodsVerifyDao.verifyScansInBoxForPart`, no `verified = 0` filter); the
+  API updates only unverified rows and 404s otherwise. pglite parity.
+- **No per-scan transition logs** — only the mark-verified
+  `closed|open → verified` log row. Verify-item is a flag flip, not a
+  transition (web pglite parity).
+- **`part_not_found_in_box` coined on Android** (3 Android locales,
+  `res/values*/strings.xml:464`); missing from the web locales — the web
+  goods-verify matcher can't reach this state (targets are computed the same
+  way), Android's box-scoped matcher can.
+- **Auto-mark after the last verify** (web `onScanApplied` parity) —
+  `GoodsVerifyBoxDetailViewModel.autoMarkIfReady` (`:301`) runs after a
+  successful scan apply + reload; the manual header button is the other path.
+- **`checkedToday` uses UTC dates** (`GoodsVerifyRepository.kt:54`,
+  `LocalDate.now(ZoneOffset.UTC)`), not device-local.
+- **Supplier context absent from QR parsing on this flow** — the box
+  aggregates parts across receiving orders, so `parseQrCapture` gets
+  `contextSupplier = null` (`GoodsVerifyBoxDetailViewModel.kt:402`).
+- **No ScanFab, no wedge, no manual entry** on goods verify — scan entry is
+  the per-item Scan buttons only (every button triggers the same box-level
+  scan; web also has a ScanFab, noted deviation with no UX loss).
+- **Always-confirm review dialog** (web `confirmSingleMatch: true`) — a
+  single match does NOT auto-apply on goods verify, unlike the other three
+  matchers. Match errors route to the dialog (Android precedent), not a toast.
+
+### Phase 4 review items (recorded, no code change)
+
+- **`GoodsVerifyDao` uses camelCase SQL column aliases** (`AS boxCount`,
+  `AS shelfCode`, `AS partNo`, …) bound straight to row data classes, while
+  the codebase convention elsewhere is snake_case columns + `@ColumnInfo`
+  mapping on entities. Deliberate T2 choice (query row classes, not entities);
+  flagged MINOR consistency inconsistency, deferred.
+- **`GoodsVerifyItemsSection.kt` keeps vestigial `scanEnabled: Boolean = false`
+  / `onScan: () -> Unit = {}` default parameters** deliberately, to mirror the
+  sibling `PutAwayLotsSection` shape — adjudicated KEEP in the T8 review.
+
+### Deferred verifications (from Task 9 Step 2)
+
+Verified on device (screencap-confirmed; shots `gv1`–`gv19` in
+`apps/android/build/walkthrough/`):
+
+- Home → Goods Verify card (session persisted from Phase 3 — login as
+  operator already active; greeting "Demo Operator").
+- Shelf list: 11 seed shelves with box counts (`A-01-01` = 1 box, others 0),
+  zone shown; search filters by code (`01-02` → only `A-01-02`).
+- `A-01-01` box list: `SBOX-0001`, `0 / 156 已查貨`, closed badge, no
+  last-check line. Empty box-list state on `A-01-02` (`此貨架上沒有箱號`).
+- Box detail: header (box id, closed badge, expandable shelf row `A-01-01`),
+  expected items with partNo/qty/`否`, Scan button per unverified item;
+  Mark-verified button absent until all verified.
+- Scan button launches `RectangleCameraActivity` with live preview.
+- DB-injected `verified=1` for all but one part (helper
+  `build/walkthrough/injectVerified.cjs`): fraction advanced to `155 / 156`,
+  per-item timestamps (`2026-07-13 11:02`), `上次查貨` last-check line +
+  `今日` badge on the box-list card.
+- After the last-part injection: Mark box verified button appeared → tap →
+  status `verified` (`已查貨`), done styling, box-list card done
+  (`156 / 156`); `closed → verified` transition-log row confirmed in the
+  device DB (actor = seeded operator).
+- Reopened the verified box: no Scan buttons, no Mark-verified button.
+
+Not fully exercised:
+
+- **Physical-label camera scan** — needs a printed label; deferred (same as
+  Phases 1–3). The camera activity launch itself was verified, and the
+  parse → match → review-dialog → apply pipeline is covered by JVM tests
+  (`GoodsVerifyBoxScanTest`). Verified flags were DB-injected rather than
+  scan-applied; the mark-verified UI path itself was genuinely exercised
+  against real Room state.
+
+Device walkthrough gotcha for Phase 5: `adb push <file> /data/local/tmp/...`
+from Git Bash silently mis-routes (MSYS path conversion turns the remote path
+into `C:/Program Files/Git/...`; adb prints `secure_mkdirs failed` but a
+misleading "1 file pushed"). Prefix the command with `MSYS_NO_PATHCONV=1`. A
+`cat` from the stale temp file truncated the app DB mid-walkthrough and
+triggered a Room re-seed; recovered by re-pushing the checkpointed copy.
+
+Device state note: the walkthrough left the device DB with `SBOX-0001`
+**verified** on `A-01-01` (all 265 lines verified, order `04958166` clear).
+`measuring_tasks` and `shipping_boxes` are empty; all picking orders are
+`pending` — Phase 5's walkthrough must first finish a picking order (or
+DB-inject a `measuring_tasks` row) to get a starting state.
