@@ -1,6 +1,7 @@
 package com.docpal.warehousepda.data.db
 
 import androidx.room.Dao
+import androidx.room.Insert
 import androidx.room.Query
 
 @Dao
@@ -55,6 +56,23 @@ interface GoodsVerifyDao {
         """
     )
     fun boxItems(boxId: String): List<VerifyBoxItemRow>
+
+    /** Web pglite verifyShelfBoxScans: verifies every scan of the part in the box; returns rows changed. */
+    @Query("UPDATE put_away_scans SET verified = 1, verified_at = :now WHERE shelf_box_id = :boxId AND part_id = :partId")
+    fun verifyScansInBoxForPart(boxId: String, partId: String, now: Long): Int
+
+    @Query("SELECT COUNT(*) FROM put_away_scans WHERE shelf_box_id = :boxId")
+    fun scanCount(boxId: String): Int
+
+    @Query("SELECT COUNT(*) FROM put_away_scans WHERE shelf_box_id = :boxId AND verified = 0")
+    fun unverifiedScanCount(boxId: String): Int
+
+    @Query("UPDATE shelf_boxes SET status = :status WHERE id = :boxId")
+    fun updateBoxStatus(boxId: String, status: String)
+
+    /** Same TransitionLogEntity @Insert shape as PutAwayDao.insertLog. */
+    @Insert
+    fun insertTransitionLog(row: TransitionLogEntity)
 }
 
 data class ShelfSummaryRow(
