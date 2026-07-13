@@ -6,6 +6,7 @@ import com.docpal.warehousepda.domain.model.ShelfSummary
 import com.docpal.warehousepda.domain.model.VerifyBoxDetail
 import com.docpal.warehousepda.domain.model.VerifyBoxItem
 import com.docpal.warehousepda.domain.model.VerifyBoxSummary
+import com.docpal.warehousepda.ui.goodsverify.GoodsVerifyBoxDetailSource
 import com.docpal.warehousepda.ui.goodsverify.GoodsVerifyBoxListSource
 import com.docpal.warehousepda.ui.goodsverify.GoodsVerifyShelfListSource
 import kotlinx.coroutines.Dispatchers
@@ -35,7 +36,8 @@ import java.util.UUID
  * blocking Room calls in withContext(Dispatchers.IO); mutations self-wrap
  * db.runInTransaction.
  */
-class GoodsVerifyRepository(private val db: AppDatabase) : GoodsVerifyShelfListSource, GoodsVerifyBoxListSource {
+class GoodsVerifyRepository(private val db: AppDatabase) :
+    GoodsVerifyShelfListSource, GoodsVerifyBoxListSource, GoodsVerifyBoxDetailSource {
 
     private val dao get() = db.goodsVerifyDao()
 
@@ -63,7 +65,7 @@ class GoodsVerifyRepository(private val db: AppDatabase) : GoodsVerifyShelfListS
     }
 
     /** Box detail: header (null → box not found) + per-part items ordered by part_no. */
-    suspend fun getBoxDetail(boxId: String): VerifyBoxDetail? = withContext(Dispatchers.IO) {
+    override suspend fun getBoxDetail(boxId: String): VerifyBoxDetail? = withContext(Dispatchers.IO) {
         val header = dao.boxHeader(boxId) ?: return@withContext null
         VerifyBoxDetail(
             id = header.id, status = header.status,
@@ -82,8 +84,11 @@ class GoodsVerifyRepository(private val db: AppDatabase) : GoodsVerifyShelfListS
         }
     }
 
+    /** GoodsVerifyBoxDetailSource entry point — delegates to [verifyBoxItem]. */
+    override suspend fun verifyItem(boxId: String, partId: String) = verifyBoxItem(boxId, partId)
+
     /** pglite markShelfBoxVerified: not-found → already-verified → no-items → not-all-verified; logs closed|open → verified. */
-    suspend fun markBoxVerified(boxId: String, actorId: String) = withContext(Dispatchers.IO) {
+    override suspend fun markBoxVerified(boxId: String, actorId: String) = withContext(Dispatchers.IO) {
         db.runInTransaction {
             val header = dao.boxHeader(boxId) ?: throw LocalizedException("shelf_box_not_found")
             if (header.status == "verified") throw LocalizedException("shelf_box_already_verified")

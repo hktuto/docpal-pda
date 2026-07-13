@@ -1,12 +1,12 @@
 package com.docpal.warehousepda.ui.navigation
 
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.docpal.warehousepda.ui.goodsverify.GoodsVerifyBoxDetailScreen
 import com.docpal.warehousepda.ui.goodsverify.GoodsVerifyBoxListScreen
 import com.docpal.warehousepda.ui.goodsverify.GoodsVerifyShelfListScreen
 import com.docpal.warehousepda.ui.home.HomeScreen
@@ -121,8 +121,7 @@ fun AppNav() {
             arguments = listOf(navArgument("boxId") { type = NavType.StringType }),
         ) { entry ->
             val boxId = requireNotNull(entry.arguments?.getString("boxId")) { "boxId argument is required" }
-            // Placeholder — the real box detail lands in Task 7.
-            Text("goods-verify/box/$boxId")
+            GoodsVerifyBoxDetailScreen(boxId = boxId, onBack = { navController.popBackStack() })
         }
     }
 }
