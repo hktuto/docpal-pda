@@ -65,6 +65,18 @@ class ScanMatcher(
         data class Error(val key: String) : PutAwayMatchResult()
     }
 
+    /** An unverified item in the box being verified (aggregation key is part). */
+    data class GoodsVerifyTarget(
+        val partId: String,
+        val partNo: String,               // normalized (ScanPrimitives.normalize)
+        val qty: Int,                     // aggregated box qty for display
+    )
+
+    sealed class GoodsVerifyMatchResult {
+        data class Single(val item: GoodsVerifyTarget) : GoodsVerifyMatchResult()
+        data class Error(val key: String) : GoodsVerifyMatchResult()
+    }
+
     data class MatchedRecord(val receiving: ReceivingCandidate, val picking: PickingCandidate)
 
     sealed class MatchResult {
@@ -149,6 +161,20 @@ class ScanMatcher(
         if (p.partNo != item.partNo) return PutAwayMatchResult.Error("scanned_part_does_not_match_item")
         if (p.qty > item.availableQty) return PutAwayMatchResult.Error("quantity_exceeds_available")
         return PutAwayMatchResult.Single(item, p.qty)
+    }
+
+    /** Port of useScanMatchers.matchGoodsVerify: matches the scanned part against the box's unverified items. */
+    fun matchGoodsVerify(
+        targets: List<GoodsVerifyTarget>,       // unverified items only
+        parsed: ScanPrimitives.OcrInput,
+        actorId: String?,
+    ): GoodsVerifyMatchResult {
+        if (actorId == null) return GoodsVerifyMatchResult.Error("operator_not_signed_in")
+        val partNo = ScanPrimitives.normalize(parsed.partNo)
+        if (partNo.isEmpty()) return GoodsVerifyMatchResult.Error("part_no_required")
+        val item = targets.firstOrNull { it.partNo == partNo }
+            ?: return GoodsVerifyMatchResult.Error("part_not_found_in_box")
+        return GoodsVerifyMatchResult.Single(item)
     }
 
     /**
