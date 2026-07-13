@@ -1,11 +1,13 @@
 package com.docpal.warehousepda.ui.navigation
 
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.docpal.warehousepda.ui.goodsverify.GoodsVerifyShelfListScreen
 import com.docpal.warehousepda.ui.home.HomeScreen
 import com.docpal.warehousepda.ui.login.LoginScreen
 import com.docpal.warehousepda.ui.picking.PickingDetailScreen
@@ -27,6 +29,11 @@ object Routes {
     const val PUT_AWAY_LIST = "put-away"
     const val PUT_AWAY_DETAIL = "put-away/{orderId}"
     fun putAwayDetail(orderId: String) = "put-away/$orderId"
+    const val GOODS_VERIFY_SHELVES = "goods-verify"
+    const val GOODS_VERIFY_SHELF_BOXES = "goods-verify/shelf/{shelfCode}"
+    const val GOODS_VERIFY_BOX = "goods-verify/box/{boxId}"
+    fun goodsVerifyShelfBoxes(shelfCode: String) = "goods-verify/shelf/$shelfCode"
+    fun goodsVerifyBox(boxId: String) = "goods-verify/box/$boxId"
 }
 
 @Composable
@@ -91,6 +98,27 @@ fun AppNav() {
         ) { entry ->
             val orderId = requireNotNull(entry.arguments?.getString("orderId")) { "orderId argument is required" }
             PutAwayDetailScreen(orderId = orderId, onBack = { navController.popBackStack() })
+        }
+        composable(Routes.GOODS_VERIFY_SHELVES) {
+            GoodsVerifyShelfListScreen(
+                onShelfClick = { navController.navigate(Routes.goodsVerifyShelfBoxes(it)) },
+            )
+        }
+        composable(
+            Routes.GOODS_VERIFY_SHELF_BOXES,
+            arguments = listOf(navArgument("shelfCode") { type = NavType.StringType }),
+        ) { entry ->
+            val shelfCode = requireNotNull(entry.arguments?.getString("shelfCode")) { "shelfCode argument is required" }
+            // Placeholder — the real shelf box list lands in Task 6.
+            Text("goods-verify/shelf/$shelfCode")
+        }
+        composable(
+            Routes.GOODS_VERIFY_BOX,
+            arguments = listOf(navArgument("boxId") { type = NavType.StringType }),
+        ) { entry ->
+            val boxId = requireNotNull(entry.arguments?.getString("boxId")) { "boxId argument is required" }
+            // Placeholder — the real box detail lands in Task 7.
+            Text("goods-verify/box/$boxId")
         }
     }
 }

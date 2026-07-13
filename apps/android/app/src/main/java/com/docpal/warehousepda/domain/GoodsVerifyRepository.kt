@@ -6,6 +6,7 @@ import com.docpal.warehousepda.domain.model.ShelfSummary
 import com.docpal.warehousepda.domain.model.VerifyBoxDetail
 import com.docpal.warehousepda.domain.model.VerifyBoxItem
 import com.docpal.warehousepda.domain.model.VerifyBoxSummary
+import com.docpal.warehousepda.ui.goodsverify.GoodsVerifyShelfListSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.time.Instant
@@ -33,12 +34,12 @@ import java.util.UUID
  * blocking Room calls in withContext(Dispatchers.IO); mutations self-wrap
  * db.runInTransaction.
  */
-class GoodsVerifyRepository(private val db: AppDatabase) {
+class GoodsVerifyRepository(private val db: AppDatabase) : GoodsVerifyShelfListSource {
 
     private val dao get() = db.goodsVerifyDao()
 
     /** All shelves with box counts, ordered by code (web goods-verify index page). */
-    suspend fun listShelves(): List<ShelfSummary> = withContext(Dispatchers.IO) {
+    override suspend fun listShelves(): List<ShelfSummary> = withContext(Dispatchers.IO) {
         dao.shelfSummaries().map { ShelfSummary(it.code, it.zone, it.boxCount) }
     }
 

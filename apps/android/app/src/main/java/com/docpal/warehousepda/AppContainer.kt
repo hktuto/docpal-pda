@@ -16,6 +16,7 @@ import com.docpal.warehousepda.domain.MismatchRepository
 import com.docpal.warehousepda.domain.PickingRepository
 import com.docpal.warehousepda.domain.PutAwayRepository
 import com.docpal.warehousepda.domain.scan.ScanMatcher
+import com.docpal.warehousepda.ui.goodsverify.GoodsVerifyShelfListViewModel
 import com.docpal.warehousepda.ui.home.HomeViewModel
 import com.docpal.warehousepda.ui.login.LoginViewModel
 import com.docpal.warehousepda.ui.picking.PickingListViewModel
@@ -69,6 +70,8 @@ class AppContainer(context: Context) {
                 PickingListViewModel(pickingRepository, sessionRepository) as T
             modelClass.isAssignableFrom(PutAwayListViewModel::class.java) ->
                 PutAwayListViewModel(putAwayRepository) as T
+            modelClass.isAssignableFrom(GoodsVerifyShelfListViewModel::class.java) ->
+                GoodsVerifyShelfListViewModel(goodsVerifyRepository) as T
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }
     }
