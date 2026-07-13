@@ -45,8 +45,10 @@ import com.docpal.warehousepda.ui.components.EmptyState
 import com.docpal.warehousepda.ui.components.ErrorText
 import com.docpal.warehousepda.ui.components.OnResumeEffect
 import com.docpal.warehousepda.ui.components.StatusBadge
+import com.docpal.warehousepda.ui.receiving.rememberCameraScanLauncher
+import com.docpal.warehousepda.ui.scan.LabelScanReviewDialog
 
-/** Goods-verify box detail — port of apps/web/pages/goods-verify/box/[id].vue (scan wiring is Task 8). */
+/** Goods-verify box detail — port of apps/web/pages/goods-verify/box/[id].vue. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GoodsVerifyBoxDetailScreen(boxId: String, onBack: () -> Unit) {
@@ -60,6 +62,12 @@ fun GoodsVerifyBoxDetailScreen(boxId: String, onBack: () -> Unit) {
     // Reload whenever the screen regains focus (web useVisibleReload parity).
     // The VM also loads in init; the first ON_RESUME simply re-queries once.
     OnResumeEffect { viewModel.reload() }
+
+    // Camera scan → the box-level scan-to-verify pipeline (web openScan parity).
+    // Every per-item Scan button triggers the same launch (no per-item pin).
+    val launchCameraScan = rememberCameraScanLauncher { result ->
+        viewModel.onCameraScan(result)
+    }
 
     // View-only UI state (web headerExpanded ref).
     var headerExpanded by rememberSaveable { mutableStateOf(false) }
@@ -104,11 +112,26 @@ fun GoodsVerifyBoxDetailScreen(boxId: String, onBack: () -> Unit) {
                 goodsVerifyItemsSection(
                     detail = detail,
                     actionInProgress = state.actionInProgress,
-                    // Scan buttons render disabled in Task 7; Task 8 wires the camera flow.
+                    scanEnabled = true,
+                    onScan = launchCameraScan,
                 )
                 item { Spacer(Modifier.height(8.dp)) }
             }
         }
+    }
+
+    state.scanReview?.let { review ->
+        LabelScanReviewDialog(
+            review = review,
+            onFieldsChange = viewModel::updateScanFields,
+            onFindMatch = { viewModel.findMatch() },
+            onApply = { viewModel.applyScan(it) },
+            onRetake = {
+                viewModel.retakeScan()
+                launchCameraScan()
+            },
+            onDismiss = viewModel::closeScanReview,
+        )
     }
 }
 

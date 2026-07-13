@@ -38,8 +38,8 @@ private val VerifiedGreen = Color(0xFF166534)
 /**
  * Expected-items section — port of the web box page's item cards, rendered inside
  * the detail screen's LazyColumn. Every Scan button triggers the SAME box-level
- * scan (web parity — there is no per-item pin); the buttons render disabled until
- * Task 8 wires the camera flow ([scanEnabled]).
+ * scan (web parity — there is no per-item pin); [scanEnabled] gates the buttons
+ * (the screen enables them once the camera flow is wired).
  */
 internal fun LazyListScope.goodsVerifyItemsSection(
     detail: VerifyBoxDetail,
@@ -88,7 +88,7 @@ private fun VerifyItemCard(
             VerifiedRow(item)
             if (!item.verified) {
                 Spacer(Modifier.height(8.dp))
-                // Box-level scan (no per-item pin) — Task 8 enables these buttons.
+                // Box-level scan (no per-item pin) — launches the camera flow.
                 OutlinedButton(onClick = onScan, enabled = scanEnabled && !actionInProgress) {
                     Text(stringResource(R.string.goods_verify_scan))
                 }
