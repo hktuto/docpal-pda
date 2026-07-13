@@ -7,6 +7,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.docpal.warehousepda.ui.goodsverify.GoodsVerifyBoxListScreen
 import com.docpal.warehousepda.ui.goodsverify.GoodsVerifyShelfListScreen
 import com.docpal.warehousepda.ui.home.HomeScreen
 import com.docpal.warehousepda.ui.login.LoginScreen
@@ -109,8 +110,11 @@ fun AppNav() {
             arguments = listOf(navArgument("shelfCode") { type = NavType.StringType }),
         ) { entry ->
             val shelfCode = requireNotNull(entry.arguments?.getString("shelfCode")) { "shelfCode argument is required" }
-            // Placeholder — the real shelf box list lands in Task 6.
-            Text("goods-verify/shelf/$shelfCode")
+            GoodsVerifyBoxListScreen(
+                shelfCode = shelfCode,
+                onBack = { navController.popBackStack() },
+                onBoxClick = { navController.navigate(Routes.goodsVerifyBox(it)) },
+            )
         }
         composable(
             Routes.GOODS_VERIFY_BOX,

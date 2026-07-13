@@ -6,6 +6,7 @@ import com.docpal.warehousepda.domain.model.ShelfSummary
 import com.docpal.warehousepda.domain.model.VerifyBoxDetail
 import com.docpal.warehousepda.domain.model.VerifyBoxItem
 import com.docpal.warehousepda.domain.model.VerifyBoxSummary
+import com.docpal.warehousepda.ui.goodsverify.GoodsVerifyBoxListSource
 import com.docpal.warehousepda.ui.goodsverify.GoodsVerifyShelfListSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -34,7 +35,7 @@ import java.util.UUID
  * blocking Room calls in withContext(Dispatchers.IO); mutations self-wrap
  * db.runInTransaction.
  */
-class GoodsVerifyRepository(private val db: AppDatabase) : GoodsVerifyShelfListSource {
+class GoodsVerifyRepository(private val db: AppDatabase) : GoodsVerifyShelfListSource, GoodsVerifyBoxListSource {
 
     private val dao get() = db.goodsVerifyDao()
 
@@ -47,7 +48,7 @@ class GoodsVerifyRepository(private val db: AppDatabase) : GoodsVerifyShelfListS
      * Boxes on one shelf, newest first (web goods-verify shelf page). checkedToday is
      * web parity (lastCheckAt on the current date), computed on the UTC date.
      */
-    suspend fun listBoxes(shelfCode: String): List<VerifyBoxSummary> = withContext(Dispatchers.IO) {
+    override suspend fun listBoxes(shelfCode: String): List<VerifyBoxSummary> = withContext(Dispatchers.IO) {
         val today = LocalDate.now(ZoneOffset.UTC)
         dao.boxSummaries(shelfCode).map { row ->
             VerifyBoxSummary(
