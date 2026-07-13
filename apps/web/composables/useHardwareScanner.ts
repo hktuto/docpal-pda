@@ -1,4 +1,9 @@
 import { onMounted, onUnmounted, ref } from 'vue';
+import type { PluginListenerHandle } from '@capacitor/core';
+import { ScannerBroadcast } from './useScannerBroadcast';
+
+/** After a broadcast scan, consume wedge key echo for this long (ms). */
+const WEDGE_SUPPRESS_MS = 1500;
 
 export interface UseHardwareScannerOptions {
   /** Called with the full scanned string when Enter is pressed. */
@@ -30,6 +35,9 @@ function isInputElement(target: EventTarget | null): boolean {
 export function useHardwareScanner(options: UseHardwareScannerOptions) {
   const buffer = ref('');
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
+  let suppressWedgeUntil = 0;
+  let broadcastHandle: PluginListenerHandle | null = null;
+  let unmounted = false;
 
   function resetIdleTimer() {
     if (timeoutId) clearTimeout(timeoutId);
@@ -38,18 +46,36 @@ export function useHardwareScanner(options: UseHardwareScannerOptions) {
     }, options.idleTimeoutMs ?? 300);
   }
 
-  async function flush() {
+  function clearIdleTimer() {
     if (timeoutId) {
       clearTimeout(timeoutId);
       timeoutId = null;
     }
-    const value = buffer.value;
-    buffer.value = '';
-    if (!value) return;
-    console.log('[SCAN-TIME] hardware flush:', value);
+  }
+
+  async function deliver(source: string, value: string) {
+    console.log(`[SCAN-TIME] ${source}:`, value);
     const start = performance.now();
     await options.onScan(value);
     console.log('[SCAN-TIME] onScan done in', (performance.now() - start).toFixed(1), 'ms');
+  }
+
+  async function flush() {
+    clearIdleTimer();
+    const value = buffer.value;
+    buffer.value = '';
+    if (!value) return;
+    await deliver('hardware flush', value);
+  }
+
+  // Broadcast scan: the whole barcode arrives in one event — no key buffering.
+  async function onBroadcastScan(value: string) {
+    if (options.enabled && !options.enabled()) return;
+    clearIdleTimer();
+    buffer.value = '';
+    // Eat the wedge echo if the device outputs broadcast + keyboard combined.
+    suppressWedgeUntil = Date.now() + WEDGE_SUPPRESS_MS;
+    await deliver('broadcast scan', value);
   }
 
   function onKeydown(event: KeyboardEvent) {
@@ -57,6 +83,13 @@ export function useHardwareScanner(options: UseHardwareScannerOptions) {
     if (event.repeat) return;
     if (event.isComposing) return;
     if (isInputElement(event.target)) return;
+
+    // Wedge echo suppression window after a broadcast scan (see onBroadcastScan).
+    if (Date.now() < suppressWedgeUntil) {
+      if (event.key === 'Enter' || event.key.length === 1) event.preventDefault();
+      return;
+    }
+
     if (options.ignoreKey && options.ignoreKey(event)) return;
 
     if (event.key === 'Enter') {
@@ -77,11 +110,22 @@ export function useHardwareScanner(options: UseHardwareScannerOptions) {
 
   onMounted(() => {
     window.addEventListener('keydown', onKeydown, { capture: true });
+    void ScannerBroadcast.addListener('scan', (data) => {
+      void onBroadcastScan(data.value);
+    }).then((handle) => {
+      if (unmounted) void handle.remove();
+      else broadcastHandle = handle;
+    });
   });
 
   onUnmounted(() => {
+    unmounted = true;
     window.removeEventListener('keydown', onKeydown, { capture: true });
-    if (timeoutId) clearTimeout(timeoutId);
+    clearIdleTimer();
+    if (broadcastHandle) {
+      void broadcastHandle.remove();
+      broadcastHandle = null;
+    }
   });
 
   return { buffer };

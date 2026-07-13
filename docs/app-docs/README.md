@@ -9,6 +9,7 @@ This manual explains the warehouse PDA demo app for **operators and trainers**, 
 - [Flows](./flows/index.md) — step-by-step guides for each warehouse operation.
 - [Components](./components/shared-components.md) — shared UI building blocks.
 - [Composables](./composables/index.md) — reusable Vue logic.
+- [Device Setup](./setup/android-pda-scanner.md) — Android PDA scanner configuration.
 - [AI Feature Registry](./ai/feature-registry.md) — machine-readable feature index for agents.
 
 ## For operators and trainers

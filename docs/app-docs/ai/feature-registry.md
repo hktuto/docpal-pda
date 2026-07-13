@@ -26,6 +26,7 @@ Machine-readable index of features in the warehouse PDA demo. Use this page to l
 | Language switcher | Shared | Shipped | `components/LanguageSwitcher.vue`, `app.vue`, `i18n/` | [navigation](../concepts/navigation.md) |
 | Toast notifications | Shared | Shipped | `components/ToastHost.vue`, `composables/useToast.ts` | [picking ai-scope](../flows/picking/ai-scope.md) |
 | Service adapter layer | Shared | Shipped | `services/warehouse.ts` (`WarehouseService` interface), `services/auth.ts` (`AuthService`), `services/adapters/apiWarehouse.ts` + `apiAuth.ts` (HTTP impl, default), `services/adapters/pgliteWarehouse.ts` + `pgliteAuth.ts` (in-browser fallback), `services/apiClient.ts` (fetch wrapper), `services/types.ts` (web DTOs), `composables/useWarehouse.ts` (adapter switch via `warehouseAdapter` runtime config) | root `AGENTS.md` |
+| Hardware scanner delivery | Shared | Shipped | `composables/useHardwareScanner.ts` (wedge fallback + broadcast subscription), `composables/useScannerBroadcast.ts`, native `apps/web/android/.../ScannerBroadcastPlugin.java` + `ScannerBroadcastReceiver.java` (manifest component) | [scanner setup](../setup/android-pda-scanner.md) |
 
 Pages and components never query the database directly (except the pure `validateMismatchInputs` helper in `components/ReportIssueModal.vue`): they call `WarehouseService` / `AuthService`, which route to the HTTP API by default (`warehouseAdapter: "api"`) or to in-browser PGlite (`warehouseAdapter: "pglite"`). The `db/*.ts` helpers below are now exercised only by the PGlite adapter.
 

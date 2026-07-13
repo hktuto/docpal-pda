@@ -47,6 +47,16 @@
             android:screenOrientation="portrait"
             android:exported="false" />
 
+        <!-- Explicit target for the scanner service's directional output
+             (PackageName + ClassName). Exported: the sender is another app. -->
+        <receiver
+            android:name=".ScannerBroadcastReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.wclsolution.docpal.action.BARCODE_SCANNED" />
+            </intent-filter>
+        </receiver>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
