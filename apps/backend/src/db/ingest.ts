@@ -10,6 +10,7 @@ import {
   pickingOrders,
   pickingItems,
 } from "./schema/index.js";
+import { emitEvent } from "./events.js";
 import { now } from "./now.js";
 
 // ---------------------------------------------------------------------------
@@ -340,6 +341,11 @@ export async function upsertReceivingOrder(
       for (const inv of body.invoices) {
         await insertInvoiceWithItems(tx, orderId, inv, orderSupplierId);
       }
+      await emitEvent(tx, {
+        type: "receiving_order.upserted",
+        topics: ["/receiving-orders"],
+        data: { id: orderId, refNo: body.order.refNo, externalId },
+      });
       return { id: orderId, externalId, created: true, changed: true, orderStatus: "pending" };
     }
 
@@ -522,7 +528,14 @@ export async function upsertReceivingOrder(
       changed = true;
     }
 
-    if (changed) await queryRun(tx, sql`UPDATE receiving_orders SET updated_at = ${now()} WHERE id = ${orderId}`);
+    if (changed) {
+      await queryRun(tx, sql`UPDATE receiving_orders SET updated_at = ${now()} WHERE id = ${orderId}`);
+      await emitEvent(tx, {
+        type: "receiving_order.upserted",
+        topics: ["/receiving-orders"],
+        data: { id: orderId, refNo: body.order.refNo, externalId },
+      });
+    }
     return { id: orderId, externalId, created: false, changed, orderStatus: status };
   });
 }
@@ -608,6 +621,11 @@ export async function upsertPickingOrder(
       for (const it of body.items) {
         await insertPickingItem(tx, orderId, it);
       }
+      await emitEvent(tx, {
+        type: "picking_order.created",
+        topics: ["/picking-orders"],
+        data: { id: orderId, refNo: body.order.refNo, externalId },
+      });
       return { id: orderId, externalId, created: true, changed: true, orderStatus: "pending" };
     }
 
@@ -713,7 +731,14 @@ export async function upsertPickingOrder(
       changed = true;
     }
 
-    if (changed) await queryRun(tx, sql`UPDATE picking_orders SET updated_at = ${now()} WHERE id = ${orderId}`);
+    if (changed) {
+      await queryRun(tx, sql`UPDATE picking_orders SET updated_at = ${now()} WHERE id = ${orderId}`);
+      await emitEvent(tx, {
+        type: "picking_order.updated",
+        topics: ["/picking-orders"],
+        data: { id: orderId, refNo: body.order.refNo, externalId },
+      });
+    }
     return { id: orderId, externalId, created: false, changed, orderStatus: existing.status };
   });
 }

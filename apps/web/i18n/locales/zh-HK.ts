@@ -700,4 +700,8 @@ export default {
     over_shipment: "超發",
     quality_rejection: "質量拒收"
   },
+  event_allocation_computed: "揀貨分配已更新",
+  event_picking_order_created: "新揀貨單 {refNo}",
+  event_goods_verify_tasks_created: "新增 {count} 個查貨任務",
+  view: "查看"
 } as const;

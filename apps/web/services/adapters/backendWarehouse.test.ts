@@ -2,8 +2,14 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createBackendWarehouseService } from './backendWarehouse';
 import { createWarehouseService } from '../warehouse';
 import { ApiError } from '../apiClient';
+import { clearApiCache } from '../apiCache';
 
 const BASE_URL = 'http://backend.test';
+
+// The apiClient GET cache is module-level; keep tests isolated from it.
+beforeEach(() => {
+  clearApiCache();
+});
 
 function jsonResponse(data: unknown, status = 200): Response {
   return {

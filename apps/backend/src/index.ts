@@ -11,6 +11,7 @@ import { goodsVerifyRoute } from "./routes/goodsverify.js";
 import { stockSearchRoute } from "./routes/stocksearch.js";
 import { scanTemplatesRoute } from "./routes/scantemplates.js";
 import { ingestRoute } from "./routes/ingest.js";
+import { eventsRoute } from "./routes/events.js";
 import { devRoute } from "./routes/dev.js";
 
 export const app = new Hono();
@@ -20,7 +21,7 @@ const origins = (
   "http://localhost:3000,http://localhost:3100,http://localhost,capacitor://localhost"
 ).split(",");
 
-app.use("*", cors({ origin: origins }));
+app.use("*", cors({ origin: origins, allowHeaders: ["Content-Type", "Last-Event-ID"] }));
 app.route("/", healthRoute);
 app.route("/", authRoute);
 app.route("/admin", adminRoute);
@@ -32,6 +33,7 @@ app.route("/", goodsVerifyRoute);
 app.route("/", stockSearchRoute);
 app.route("/", scanTemplatesRoute);
 app.route("/", ingestRoute);
+app.route("/", eventsRoute);
 // Demo-only routes (/dev/reset, /dev/allocate); disable with DEV_ROUTES=off.
 if (process.env.DEV_ROUTES !== "off") {
   app.route("/", devRoute);

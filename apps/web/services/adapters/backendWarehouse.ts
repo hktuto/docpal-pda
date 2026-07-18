@@ -87,7 +87,9 @@ export function createBackendWarehouseService(
       });
     },
     async getReceivingOrder(id: string): Promise<ReceivingOrderDetail> {
-      return client.get(`/receiving-orders/${id}`);
+      // cache: false — the detail reloads after mismatch verbs, which live
+      // under /receiving-invoice-items (a different first path segment).
+      return client.get(`/receiving-orders/${id}`, undefined, { cache: false });
     },
     async confirmReceivingOrderArrived(id: string): Promise<void> {
       await client.post(`/receiving-orders/${id}/confirm-arrival`, {
@@ -146,7 +148,10 @@ export function createBackendWarehouseService(
     async getPickingOrdersByReceivingOrder(
       id: string
     ): Promise<ReceivingPickingSection> {
-      return client.get(`/receiving-orders/${id}/picking`);
+      // cache: false — part of the receiving detail page (see above).
+      return client.get(`/receiving-orders/${id}/picking`, undefined, {
+        cache: false,
+      });
     },
 
     // Picking — list + nested detail, then the mutation verbs in design-doc
@@ -156,7 +161,9 @@ export function createBackendWarehouseService(
       return client.get("/picking-orders", { status });
     },
     async getPickingOrder(id: string): Promise<PickingOrderDetail> {
-      return client.get(`/picking-orders/${id}`);
+      // cache: false — the detail reloads after scan/box verbs, which live
+      // under /picking-items, /packages and /shipping-boxes.
+      return client.get(`/picking-orders/${id}`, undefined, { cache: false });
     },
     // The one canonical scan-to-pick (covers lot and receiving-area sources;
     // the old applyOcrPick path is gone). Null batch fields are omitted so the
@@ -256,10 +263,17 @@ export function createBackendWarehouseService(
     // lots + staging scans + boxes), per-verb mutations. Scan label matching
     // stays client-side (see useScanMatchers.matchPutAway).
     async getPutAwayCandidates(): Promise<PutAwayCandidate[]> {
-      return client.get("/put-away/candidates");
+      // cache: false — candidates change after put-away scans and shelf-box
+      // verbs, which live under /receiving-orders, /shelf-boxes and
+      // /put-away-scans.
+      return client.get("/put-away/candidates", undefined, { cache: false });
     },
     async getPutAwayDetail(receivingOrderId: string): Promise<PutAwayDetail> {
-      return client.get(`/receiving-orders/${receivingOrderId}/put-away`);
+      // cache: false — the detail reloads after /shelf-boxes and
+      // /put-away-scans verbs.
+      return client.get(`/receiving-orders/${receivingOrderId}/put-away`, undefined, {
+        cache: false,
+      });
     },
     // The admin CRUD read doubles as the PDA shelf list (unauthenticated POC);
     // it returns every field the page needs (code/zone/warehouse/section/
@@ -346,7 +360,9 @@ export function createBackendWarehouseService(
       return client.get("/measuring-tasks", { status });
     },
     async getMeasuringTask(id: string): Promise<MeasuringTaskDetail> {
-      return client.get(`/measuring-tasks/${id}`);
+      // cache: false — the detail reloads after /packages and /shipping-boxes
+      // verbs (verifyPackage / box measurement).
+      return client.get(`/measuring-tasks/${id}`, undefined, { cache: false });
     },
     async completeMeasuringTask(id: string): Promise<void> {
       await client.post(`/measuring-tasks/${id}/complete`, {

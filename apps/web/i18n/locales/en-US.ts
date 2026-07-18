@@ -700,4 +700,8 @@ export default {
     over_shipment: "Over shipment",
     quality_rejection: "Quality rejection"
   },
+  event_allocation_computed: "Picking allocations updated",
+  event_picking_order_created: "New picking order {refNo}",
+  event_goods_verify_tasks_created: "{count} new goods-verify tasks",
+  view: "View"
 } as const;

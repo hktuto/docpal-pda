@@ -3,6 +3,7 @@ import { inArray, sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { queryAll, type DbOrTx } from "./query.js";
 import { allocations, inventoryTransactions } from "./schema/index.js";
+import { emitEvent } from "./events.js";
 import { now } from "./now.js";
 
 // ---------------------------------------------------------------------------
@@ -215,6 +216,20 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
           LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
           WHERE ${inArray(sql`a.picking_item_id`, itemIds)}`
     );
+    // Net-change detection for the SSE event: the wipe-and-rebuild counters
+    // are non-zero on every run with open demand, so emit only when the
+    // allocation set actually changed (multiset compare of canonical keys).
+    const allocationKey = (
+      pickingItemId: string,
+      inventoryLotId: string | null,
+      receivingInvoiceItemId: string | null,
+      receivingOrderId: string | null,
+      qty: number
+    ) => `${pickingItemId}|${inventoryLotId ?? ""}|${receivingInvoiceItemId ?? ""}|${receivingOrderId ?? ""}|${qty}`;
+    const beforeKeys = existing.map((a) =>
+      allocationKey(a.pickingItemId, a.inventoryLotId, a.receivingInvoiceItemId, a.receivingOrderId, a.qty)
+    );
+    const afterKeys: string[] = [];
     const txnRows: (typeof inventoryTransactions.$inferInsert)[] = [];
     const lotDelta = new Map<string, number>(); // lotId → allocated_qty delta
 
@@ -304,6 +319,15 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
           qty: alloc.qty,
         });
         summary.allocationsCreated += 1;
+        afterKeys.push(
+          allocationKey(
+            d.pickingItemId,
+            alloc.lotId ?? null,
+            alloc.recv?.boxId ? alloc.recv.receivingInvoiceItemId : null,
+            alloc.recv && !alloc.recv.boxId ? alloc.recv.receivingOrderId : null,
+            alloc.qty
+          )
+        );
         if (alloc.lotId) {
           lotDelta.set(alloc.lotId, (lotDelta.get(alloc.lotId) ?? 0) + alloc.qty);
         }
@@ -346,6 +370,13 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
             SELECT DISTINCT picking_item_id FROM allocations WHERE ${inArray(sql`picking_item_id`, itemIds)}
           )`
     );
+    if (beforeKeys.slice().sort().join("\n") !== afterKeys.slice().sort().join("\n")) {
+      await emitEvent(tx, {
+        type: "allocation.computed",
+        topics: ["/picking-orders"],
+        data: { ...summary },
+      });
+    }
     return summary;
   });
 }

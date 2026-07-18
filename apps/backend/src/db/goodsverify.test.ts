@@ -200,7 +200,7 @@ test("detail: task + lot + box items; legacy box id → box null; 404", async ()
     allocatedQty: 0,
     availableQty: 5000,
     warehouseCode: "HK1",
-    warehouseSectionCode: "MAIN",
+    warehouseSectionCode: "HK",
     subInventoryCode: "STORE1",
   });
 

@@ -36,6 +36,9 @@ test("parseDateCodeRule: exact / + / - / year-relative", () => {
 
 test("allocateAll: FIFO from shelf lots, updates lots + picking items", async () => {
   await reseed(client);
+  // keep the demo world hermetic: drop the new_seed real-data picking orders
+  // so allocateAll only sees the two seeded demo demands
+  await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${PO_22}`);
   const s = await allocateAll(client.db);
   assert.equal(s.demands, 2);
   assert.equal(s.fullyAllocated, 2);

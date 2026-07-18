@@ -21,9 +21,18 @@ import {
   pickingOrders,
   pickingItems,
 } from "./schema/index.js";
+import {
+  realParts,
+  realReceivingOrders,
+  realReceivingInvoices,
+  realReceivingInvoiceItems,
+  realPickingOrders,
+  realPickingItems,
+} from "./seed-real-data.js";
 
 // every table created by Drizzle migrations
 export const ALL_TABLES = [
+  "app_events",
   "inventory_transactions",
   "transaction_logs",
   "goods_verify_tasks",
@@ -73,12 +82,21 @@ async function seedAll(db: AppDb): Promise<void> {
   await db.insert(suppliers).values([
     { id: uid(3), code: "KOA", name: "KOA", shortName: "KOA" },
     { id: uid(4), code: "DAITO", name: "DAITO", shortName: "DAITO" },
+    // real-data supplier (new_seed/): KOA items shipped by TCG
+    { id: uid(28), code: "KOA+TCG", name: "KOA+TCG", shortName: "KOA+TCG" },
   ]);
 
   await db.insert(supplierProfiles).values([
     {
       id: uid(25),
       supplierCode: "KOA",
+      qrTemplate: "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<fullName>.+)$",
+      qtyEncoding: "koa_zeros",
+    },
+    // same KOA label format for the real-data supplier
+    {
+      id: uid(29),
+      supplierCode: "KOA+TCG",
       qrTemplate: "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<fullName>.+)$",
       qtyEncoding: "koa_zeros",
     },
@@ -179,26 +197,60 @@ async function seedAll(db: AppDb): Promise<void> {
 
   await db.insert(customerProfiles).values([
     { code: "ACME", label: "ACME Electronics (HK)", remark: "requires segregated storage" },
+    // real-data customers (new_seed/65878/picking.xlsx)
+    { code: "HK-SUN64", label: "HK-SUN64" },
+    { code: "HK-WIN84", label: "HK-WIN84" },
   ]);
 
+  // Real sub-inventory codes (new_seed/subInventories.xlsx), grouped by
+  // warehouse section: HK → STORE1/WSTORE1/OSWF (HK); TH → THHK2/OSWF (TH);
+  // MCE → BJHK1…HWOS (HUAWEI); MCI → BJHK2…OSWF (MCI). The section link is
+  // per-row on shelves/orders (sub_inventories itself has no section column).
   await db.insert(subInventories).values([
     { code: "STORE1", name: "Main store" },
+    { code: "WSTORE1", name: "WSTORE1" },
+    { code: "OSWF (HK)", name: "OSWF (HK)" },
+    { code: "THHK2", name: "THHK2" },
+    { code: "OSWF (TH)", name: "OSWF (TH)" },
+    { code: "BJHK1", name: "BJHK1" },
+    { code: "GZHK1", name: "GZHK1" },
+    { code: "SHHK1", name: "SHHK1" },
+    { code: "SZHK1", name: "SZHK1" },
+    { code: "ZTE", name: "ZTE" },
+    { code: "OSWF (MCE)", name: "OSWF (MCE)" },
+    { code: "HUAWEI", name: "HUAWEI" },
+    { code: "HUAWEI-CAR", name: "HUAWEI-CAR" },
+    { code: "HWOS (HUAWEI)", name: "HWOS (HUAWEI)" },
+    { code: "BJHK2", name: "BJHK2" },
+    { code: "GZHK2", name: "GZHK2" },
+    { code: "SHHK2", name: "SHHK2" },
+    { code: "SZHK2", name: "SZHK2" },
+    { code: "OSWF (MCI)", name: "OSWF (MCI)" },
     { code: "ACME-S1", name: "ACME segregated store", customerCode: "ACME" },
   ]);
 
-  // warehouse → warehouse_section → sub_inventory (3 stock levels)
+  // warehouse → warehouse_section → sub_inventory (3 stock levels).
+  // Real sections of warehouse HK1 (new_seed/subInventories.xlsx).
   await db.insert(warehouseSections).values([
-    { code: "MAIN", name: "Main section", warehouseCode: "HK1" },
-    { code: "SEC-B", name: "Section B", warehouseCode: "HK1" },
+    { code: "HK", name: "HK", warehouseCode: "HK1" },
+    { code: "TH", name: "TH", warehouseCode: "HK1" },
+    { code: "MCE", name: "MCE", warehouseCode: "HK1" },
+    { code: "MCI", name: "MCI", warehouseCode: "HK1" },
   ]);
 
   await db.insert(shelves).values([
-    { code: "A-01-01", zone: "A", orgId: 2, warehouseSectionCode: "MAIN", subInventoryCode: "STORE1", locationType: "shelf" },
-    { code: "A-01-02", zone: "A", orgId: 2, warehouseSectionCode: "MAIN", subInventoryCode: "STORE1", locationType: "shelf" },
-    { code: "A-01-03", zone: "A", orgId: 2, warehouseSectionCode: "MAIN", subInventoryCode: "STORE1", locationType: "shelf" },
-    { code: "A-01-04", zone: "A", orgId: 2, warehouseSectionCode: "MAIN", subInventoryCode: "STORE1", locationType: "shelf" },
+    { code: "A-01-01", zone: "A", orgId: 2, warehouseSectionCode: "HK", subInventoryCode: "STORE1", locationType: "shelf" },
+    { code: "A-01-02", zone: "A", orgId: 2, warehouseSectionCode: "HK", subInventoryCode: "STORE1", locationType: "shelf" },
+    { code: "A-01-03", zone: "A", orgId: 2, warehouseSectionCode: "HK", subInventoryCode: "STORE1", locationType: "shelf" },
+    { code: "A-01-04", zone: "A", orgId: 2, warehouseSectionCode: "HK", subInventoryCode: "STORE1", locationType: "shelf" },
     // virtual dock shelf — dock/GIT lots hang off this code (never NULL)
-    { code: "DOCK", zone: "DOCK", orgId: 2, warehouseSectionCode: "MAIN", subInventoryCode: "STORE1", locationType: "dock" },
+    { code: "DOCK", zone: "DOCK", orgId: 2, warehouseSectionCode: "HK", subInventoryCode: "STORE1", locationType: "dock" },
+    // shelves for the real-data sub-inventories (new_seed/ orders)
+    { code: "GZ-01-01", zone: "GZ", orgId: 2, warehouseSectionCode: "MCE", subInventoryCode: "GZHK1", locationType: "shelf" },
+    { code: "GZ-01-02", zone: "GZ", orgId: 2, warehouseSectionCode: "MCE", subInventoryCode: "GZHK1", locationType: "shelf" },
+    { code: "SZ-01-01", zone: "SZ", orgId: 2, warehouseSectionCode: "MCE", subInventoryCode: "SZHK1", locationType: "shelf" },
+    { code: "SZ-01-02", zone: "SZ", orgId: 2, warehouseSectionCode: "MCE", subInventoryCode: "SZHK1", locationType: "shelf" },
+    { code: "W-01-01", zone: "W", orgId: 2, warehouseSectionCode: "HK", subInventoryCode: "WSTORE1", locationType: "shelf" },
   ]);
 
   // Net-weight reference: 1000 pcs of each 0603 resistor ≈ 6.3 g.
@@ -214,7 +266,7 @@ async function seedAll(db: AppDb): Promise<void> {
       refNo: "04958166",
       supplierId: uid(3),
       deliveryDate: new Date("2026-07-10"),
-      warehouseSectionCode: "MAIN",
+      warehouseSectionCode: "HK",
       subInventoryCode: "STORE1",
       status: "clear",
       arrivedAt: new Date("2026-07-10T09:30:00Z"),
@@ -226,7 +278,7 @@ async function seedAll(db: AppDb): Promise<void> {
       refNo: "04958210",
       supplierId: uid(4),
       deliveryDate: new Date("2026-07-20"),
-      warehouseSectionCode: "MAIN",
+      warehouseSectionCode: "HK",
       subInventoryCode: "STORE1",
       status: "pending",
     },
@@ -243,7 +295,7 @@ async function seedAll(db: AppDb): Promise<void> {
       totalCtn: 2,
       deliveryDate: new Date("2026-07-08"),
       orgId: 2,
-      warehouseSectionCode: "MAIN",
+      warehouseSectionCode: "HK",
       subInventoryCode: "STORE1",
     },
     {
@@ -256,7 +308,7 @@ async function seedAll(db: AppDb): Promise<void> {
       totalCtn: 1,
       deliveryDate: new Date("2026-07-18"),
       orgId: 2,
-      warehouseSectionCode: "MAIN",
+      warehouseSectionCode: "HK",
       subInventoryCode: "STORE1",
     },
   ]);
@@ -331,7 +383,7 @@ async function seedAll(db: AppDb): Promise<void> {
       cow: "JP",
       shelfCode: "A-01-01",
       boxId: "BOX-0001",
-      warehouseSectionCode: "MAIN",
+      warehouseSectionCode: "HK",
       subInventoryCode: "STORE1",
       supplierInvoiceNo: "04958166-W-01",
       expectedQty: 0,
@@ -347,7 +399,7 @@ async function seedAll(db: AppDb): Promise<void> {
       cow: "JP",
       shelfCode: "A-01-02",
       boxId: "BOX-0002",
-      warehouseSectionCode: "MAIN",
+      warehouseSectionCode: "HK",
       subInventoryCode: "STORE1",
       supplierInvoiceNo: "04958166-W-01",
       expectedQty: 0,
@@ -372,7 +424,7 @@ async function seedAll(db: AppDb): Promise<void> {
       shipTo: "ACME Electronics (HK)",
       destinationCountry: "HK",
       customerCode: "ACME",
-      warehouseSectionCode: "MAIN",
+      warehouseSectionCode: "HK",
       subInventoryCode: "STORE1",
       status: "pending",
     },
@@ -396,6 +448,17 @@ async function seedAll(db: AppDb): Promise<void> {
       sourceShelfCode: "A-01-02",
     },
   ]);
+
+  // --- real data from new_seed/ (see seed-real-data.ts header) ----------------
+  // Two pending receiving orders (refNo = folder name: 04958184, 65878) with
+  // their real invoices/items, plus the related picking lists: picking.xlsx
+  // invoices for 65878 and the TN (transfer note) PDFs for 04958184.
+  await db.insert(parts).values([...realParts]);
+  await db.insert(receivingOrders).values([...realReceivingOrders]);
+  await db.insert(receivingInvoices).values([...realReceivingInvoices]);
+  await db.insert(receivingInvoiceItems).values([...realReceivingInvoiceItems]);
+  await db.insert(pickingOrders).values([...realPickingOrders]);
+  await db.insert(pickingItems).values([...realPickingItems]);
 }
 
 /** Seed demo data when the users table is empty. Returns true when it seeded. */

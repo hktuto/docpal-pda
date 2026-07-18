@@ -121,7 +121,7 @@ async function insertPickingOrder(refNo: string, status: string): Promise<string
   const id = randomUUID();
   await client.db.execute(
     sql`INSERT INTO picking_orders (id, ref_no, status, warehouse_code, warehouse_section_code, sub_inventory_code, created_at, updated_at)
-        VALUES (${id}, ${refNo}, ${status}, 'HK1', 'MAIN', 'STORE1', now(), now())`
+        VALUES (${id}, ${refNo}, ${status}, 'HK1', 'HK', 'STORE1', now(), now())`
   );
   return id;
 }
@@ -140,6 +140,8 @@ async function insertPickingItem(orderId: string, partNo: string, qty: number): 
 test("list: seeded order with item/qty counts; status filter", async () => {
   await reseed(client);
   const { orderId } = await seededOrderAllocated();
+  // keep the demo world hermetic: drop the new_seed real-data picking orders
+  await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${orderId}`);
 
   const rows = await listPickingOrders(client.db);
   assert.equal(rows.length, 1);
@@ -152,7 +154,7 @@ test("list: seeded order with item/qty counts; status filter", async () => {
   assert.equal(row.customerCode, "ACME");
   assert.equal(row.destinationCountry, "HK");
   assert.equal(row.warehouseCode, "HK1");
-  assert.equal(row.warehouseSectionCode, "MAIN");
+  assert.equal(row.warehouseSectionCode, "HK");
   assert.equal(row.subInventoryCode, "STORE1");
   assert.ok(row.deliveryDate);
   assert.equal(row.itemCount, 2);

@@ -71,6 +71,8 @@
 </template>
 
 <script setup lang="ts">
+import { clearApiCache } from "~/services/apiCache";
+
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
@@ -110,6 +112,8 @@ function goBack() {
 }
 
 function logout() {
+  useWarehouseEvents().disconnect();
+  clearApiCache();
   authLogout();
   navigateTo("/login");
 }

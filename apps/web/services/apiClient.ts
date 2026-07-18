@@ -1,4 +1,5 @@
 import { I18nError } from "~/composables/i18nError";
+import { getCached, setCached, invalidatePrefix } from "./apiCache";
 
 /** Plain Error with the HTTP status attached, for errors without an i18n key. */
 export class ApiError extends Error {
@@ -46,7 +47,7 @@ export interface ApiClientOptions {
 }
 
 export interface ApiClient {
-  get<T>(path: string, params?: QueryParams): Promise<T>;
+  get<T>(path: string, params?: QueryParams, opts?: { cache?: boolean }): Promise<T>;
   post<T>(path: string, body?: unknown): Promise<T>;
   patch<T>(path: string, body?: unknown): Promise<T>;
   del<T>(path: string, body?: unknown): Promise<T>;
@@ -69,6 +70,14 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       if (qs) url += `?${qs}`;
     }
     return url;
+  }
+
+  // Local mutations invalidate their own first-path-segment prefix
+  // ("/picking-items/123/scan" → "/picking-items") so later reads refetch.
+  function invalidateForMutation(method: string, path: string): void {
+    if (method === "GET") return;
+    const segment = path.split("/")[1];
+    if (segment) invalidatePrefix(`/${segment}`);
   }
 
   async function request<T>(
@@ -109,18 +118,36 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     }
 
     if (res.status === 204) {
+      invalidateForMutation(method, path);
       return undefined as T;
     }
     try {
-      return (await res.json()) as T;
+      const data = (await res.json()) as T;
+      invalidateForMutation(method, path);
+      return data;
     } catch {
       throw new ApiError(`${res.status}: invalid JSON response`, res.status);
     }
   }
 
+  async function get<T>(
+    path: string,
+    params?: QueryParams,
+    opts?: { cache?: boolean }
+  ): Promise<T> {
+    if (opts?.cache === false) {
+      return request<T>("GET", path, { params });
+    }
+    const url = buildUrl(path, params);
+    const hit = getCached<T>(url);
+    if (hit !== null) return hit;
+    const data = await request<T>("GET", path, { params });
+    setCached(url, data);
+    return data;
+  }
+
   return {
-    get: <T>(path: string, params?: QueryParams) =>
-      request<T>("GET", path, { params }),
+    get,
     post: <T>(path: string, body?: unknown) =>
       request<T>("POST", path, { body }),
     patch: <T>(path: string, body?: unknown) =>

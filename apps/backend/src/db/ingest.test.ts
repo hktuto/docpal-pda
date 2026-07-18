@@ -46,7 +46,7 @@ function receivingBody(qty2 = 50): IngestReceivingBody {
       supplierCode: "KOA",
       deliveryDate: "2026-07-20",
       dateCode: "2610",
-      warehouseSectionCode: "MAIN",
+      warehouseSectionCode: "HK",
       subInventoryCode: "STORE1",
     },
     invoices: [
@@ -106,7 +106,7 @@ test("receiving: create → created/changed, order + invoices + items written wi
   assert.equal(order.supplierId, koaId);
   assert.equal(order.dateCode, "2610");
   assert.equal(order.warehouseCode, "HK1"); // schema $defaultFn
-  assert.equal(order.warehouseSectionCode, "MAIN");
+  assert.equal(order.warehouseSectionCode, "HK");
   assert.equal(order.subInventoryCode, "STORE1");
 
   const invoices = await queryAll<{ id: string; invoiceNo: string; supplierId: string; totalQty: number; orgId: number }>(
@@ -286,7 +286,7 @@ function pickingBody(qty1 = 500): IngestPickingBody {
       destinationCountry: "HK",
       customerCode: "ACME",
       deliveryDate: "2026-07-25",
-      warehouseSectionCode: "MAIN",
+      warehouseSectionCode: "HK",
       subInventoryCode: "STORE1",
     },
     items: [
@@ -359,7 +359,7 @@ test("picking: upserted pending order allocates from seeded lots via allocateAll
     order: {
       refNo: "PO-INGEST-ALLOC",
       customerCode: "ACME",
-      warehouseSectionCode: "MAIN",
+      warehouseSectionCode: "HK",
       subInventoryCode: "STORE1",
     },
     items: [{ partNo: "RK73H1JTTD2202F", qty: 500 }],

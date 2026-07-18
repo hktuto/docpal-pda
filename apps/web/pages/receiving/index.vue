@@ -108,7 +108,7 @@ const rows = computed(() => {
 });
 
 watch(filter, load);
-useVisibleReload(load);
+useVisibleReload(load, ["/receiving-orders"]);
 </script>
 
 <style scoped>

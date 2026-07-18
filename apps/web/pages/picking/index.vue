@@ -175,7 +175,7 @@ async function onReportSaved(payload: {
   }
 }
 
-useVisibleReload(load);
+useVisibleReload(load, ["/picking-orders"]);
 </script>
 
 <style scoped>

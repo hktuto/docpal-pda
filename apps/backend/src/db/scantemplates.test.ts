@@ -14,11 +14,17 @@ before(async () => {
 test("scan-templates: every supplier profile, ordered by supplier_code (null templates included)", async () => {
   await reseed(client);
 
-  // seed: only the KOA profile (serialNo group in the template)
+  // seed: the KOA and KOA+TCG profiles (serialNo group in the template)
   let rows = await listScanTemplates(client.db);
   assert.deepEqual(rows, [
     {
       supplierCode: "KOA",
+      qrTemplate:
+        "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<fullName>.+)$",
+      qtyEncoding: "koa_zeros",
+    },
+    {
+      supplierCode: "KOA+TCG",
       qrTemplate:
         "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<fullName>.+)$",
       qtyEncoding: "koa_zeros",
@@ -34,7 +40,8 @@ test("scan-templates: every supplier profile, ordered by supplier_code (null tem
         VALUES (${randomUUID()}, 'ACME', now(), now())`
   );
   rows = await listScanTemplates(client.db);
-  assert.equal(rows.length, 2);
+  assert.equal(rows.length, 3);
   assert.deepEqual(rows[0], { supplierCode: "ACME", qrTemplate: null, qtyEncoding: null });
   assert.equal(rows[1].supplierCode, "KOA");
+  assert.equal(rows[2].supplierCode, "KOA+TCG");
 });

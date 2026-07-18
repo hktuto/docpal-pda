@@ -20,6 +20,12 @@ Differences from the original target DDL are deliberate and listed at the end.
 - **parts** — `id` PK, `part_no` UQ, `wcl_item_no` (WCL Part No, same meaning
   as `receiving_invoice_items.wcl_item_no`), `internal_code`, `description`,
   `default_coo`.
+
+  > **TODO (later):** real data shows suppliers are not directly related to
+  > parts — one supplier has multiple **brands**, and brands own the parts
+  > (e.g. supplier `KOA+TCG` ships `KOA/...` items). The demo ignores this and
+  > treats parts as supplier-agnostic; a future `brands` table
+  > (`supplier_code` FK, parts keyed by brand) is needed before production.
 - **shelves** — `code` PK, `zone`, `org_id`, `warehouse_code` (NOT NULL,
   default from instance), `warehouse_section_code` FK→`warehouse_sections`,
   `sub_inventory_code` FK→`sub_inventories`,

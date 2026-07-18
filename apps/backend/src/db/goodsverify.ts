@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { queryAll, queryGet, queryRun, type DbOrTx } from "./query.js";
 import { transactionLogs, inventoryTransactions } from "./schema/index.js";
+import { emitEvent } from "./events.js";
 import { now } from "./now.js";
 
 // ---------------------------------------------------------------------------
@@ -100,6 +101,15 @@ export async function generateGoodsVerifyTasks(
       ON CONFLICT (task_date, inventory_lot_id) DO NOTHING
     `
   );
+  // Single statement (no tx) — emit right after the insert; re-runs absorbed
+  // by the unique index create nothing and stay silent.
+  if (res.changes > 0) {
+    await emitEvent(db, {
+      type: "goods_verify.tasks_created",
+      topics: ["/goods-verify-tasks"],
+      data: { date, count: res.changes },
+    });
+  }
   return { created: res.changes, date };
 }
 

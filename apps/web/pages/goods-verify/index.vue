@@ -135,7 +135,7 @@ async function generate() {
 }
 
 watch(status, load);
-useVisibleReload(load);
+useVisibleReload(load, ["/goods-verify-tasks"]);
 </script>
 
 <style scoped>

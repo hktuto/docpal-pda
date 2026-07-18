@@ -92,7 +92,7 @@ test("candidates: receivable orders with received/unboxed item counts", async ()
   assert.equal(row.supplierCode, "DAITO");
   assert.equal(row.supplierName, "DAITO");
   assert.equal(row.warehouseCode, "HK1");
-  assert.equal(row.warehouseSectionCode, "MAIN");
+  assert.equal(row.warehouseSectionCode, "HK");
   assert.equal(row.subInventoryCode, "STORE1");
   assert.equal(row.receivedItems, 2);
   assert.equal(row.unboxedItems, 2);
@@ -278,7 +278,7 @@ test("assign: materializes lot with shelf location, sources, put_away_qty, ledge
   assert.equal(lot.shelfCode, "A-01-03");
   assert.equal(lot.boxId, box.id);
   assert.equal(lot.warehouseCode, "HK1");
-  assert.equal(lot.warehouseSectionCode, "MAIN");
+  assert.equal(lot.warehouseSectionCode, "HK");
   assert.equal(lot.subInventoryCode, "STORE1");
   assert.equal(lot.dateCode, "2610");
   assert.equal(lot.coo, "JP");

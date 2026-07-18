@@ -182,6 +182,18 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   text.
 - `POST /dev/reset`, `POST /dev/allocate` — demo reset / manual allocation
   recompute.
+- `GET /events?since=<id>` — SSE stream (`src/routes/events.ts`) over the
+  `app_events` transactional-outbox table (`src/db/schema/events.ts`).
+  Mutations insert event rows inside their own transaction via
+  `emitEvent` (`src/db/events.ts`); each open stream polls
+  `WHERE id > since` every ~1.5 s (heartbeat comment every 25 s) and rows are
+  pruned after 3 days. Catalog: `allocation.computed` (from `allocateAll`,
+  only on net allocation change), `picking_order.created` /
+  `picking_order.updated`, `receiving_order.upserted` (ingest upserts),
+  `goods_verify.tasks_created` (day-end generate). Frames carry
+  `topics` (URL path prefixes like `/picking-orders`) that web clients use to
+  invalidate their local API cache. On Vercel the stream self-closes at ~55 s
+  (`maxDuration`); clients reconnect with their last id as `?since=`.
 
 ## Run it
 
