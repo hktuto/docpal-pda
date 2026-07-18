@@ -197,8 +197,31 @@ shared local Postgres), `PORT`, `WAREHOUSE_CODE` (instance warehouse default,
 `pnpm --filter @warehouse/backend db:seed` wipes and re-seeds the demo dataset;
 `db:generate` / `db:migrate` manage migrations.
 
-`pnpm --filter @warehouse/backend db:seed` wipes and re-seeds the demo dataset;
-`db:generate` / `db:migrate` manage migrations.
+## Hosted dev (Vercel + Neon)
+
+The backend and admin console also run hosted for demos:
+
+- **Backend:** `https://docpal-pda-backend.vercel.app` — Vercel project
+  `docpal-pda-backend` (root `apps/backend`, Hono preset serving
+  `src/index.ts` as the function via its `export default app`; `maxDuration`
+  60 in `vercel.json`). Boot-time migrate/seed are **skipped on Vercel**
+  (`process.env.VERCEL` gate in `src/db.ts`) — migrations run explicitly:
+  `DATABASE_URL=<unpooled> pnpm --filter @warehouse/backend db:migrate`, then
+  `db:seed` once.
+- **Database:** Neon `warehouse_backend` (Vercel Marketplace integration,
+  injects `DATABASE_URL`/`DATABASE_URL_UNPOOLED`). Runtime uses the **pooled**
+  URL with `PG_MAX=1` + `PG_PREPARE=false` (PgBouncer transaction mode);
+  migrations/seed use the unpooled URL.
+- **Admin:** Vercel project `docpal-pda-admin` (root `apps/admin`) with
+  `NUXT_PUBLIC_API_BASE_URL` pointing at the backend URL; the backend's
+  `CORS_ORIGINS` includes the admin origin.
+- Env vars live on the Vercel projects (Production scope): backend
+  `WAREHOUSE_SEED=off`, `WAREHOUSE_CODE=HK1`, `PG_MAX`, `PG_PREPARE`,
+  `CORS_ORIGINS` (optionally `DEV_ROUTES=off` to hide the demo routes);
+  admin `NUXT_PUBLIC_API_BASE_URL`.
+- Deploys are git-triggered: push to `master` on GitHub redeploys both
+  projects. SSO deployment protection is disabled on both (public POC).
+  A PM2 alternative for a VM lives in `ecosystem.config.cjs`.
 
 ## Known follow-ups (web-client migration)
 
