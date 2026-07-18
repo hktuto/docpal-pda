@@ -4,7 +4,7 @@
       v-model="search"
       class="search"
       type="text"
-      :placeholder="$t('common.searchByRefOrSupplier')"
+      :placeholder="$t('common.searchByRefPoOrCustomer')"
     />
 
     <p v-if="loading" class="empty">{{ $t('common.loading') }}</p>
@@ -33,7 +33,7 @@
         <span class="badge" :class="badgeClass(po.status)">{{ statusLabel.picking(po.status) }}</span>
       </div>
       <p class="list-card__meta">
-        {{ po.supplierName || $t('common.noSupplier') }}
+        {{ [po.customerCode, po.poNo].filter(Boolean).join(' · ') || $t('common.noData') }}
       </p>
       <div class="list-card__footer">
         <span class="list-card__date">
@@ -63,7 +63,11 @@
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useWarehouse } from "~/composables/useWarehouse";
-import type { PickingOrderSummary, PickingIssueReason } from "~/services/types";
+import type {
+  PickingOrderListRow,
+  PickingIssueReason,
+  ReportPickingIssueEntry,
+} from "~/services/types";
 
 definePageMeta({ title: "meta.picking" });
 
@@ -75,7 +79,7 @@ const warehouse = useWarehouse();
 useHead({ title: t("picking.title") });
 
 const search = ref("");
-const rawRows = ref<PickingOrderSummary[]>([]);
+const rawRows = ref<PickingOrderListRow[]>([]);
 const loading = ref(true);
 const loadError = ref<string | null>(null);
 const reportMessage = ref<string | null>(null);
@@ -103,7 +107,8 @@ const rows = computed(() => {
   return rawRows.value.filter(
     (r) =>
       r.refNo.toLowerCase().includes(term) ||
-      (r.supplierName?.toLowerCase().includes(term) ?? false)
+      (r.poNo?.toLowerCase().includes(term) ?? false) ||
+      (r.customerCode?.toLowerCase().includes(term) ?? false)
   );
 });
 
@@ -143,23 +148,24 @@ async function onReportSaved(payload: {
 }) {
   reporting.value = true;
   try {
-    const entries = selectedOrders.value.map((o) => ({
-      orderId: o.id,
-      remark: payload.remarks[o.id]?.trim() || null,
-    }));
-    const result = await warehouse.reportPickingOrderIssues(entries, {
+    // The dialog's shared fields apply to every selected order; only the
+    // remark is per-order.
+    const entries: ReportPickingIssueEntry[] = selectedOrders.value.map((o) => ({
+      pickingOrderId: o.id,
       reason: payload.reason,
       qty: payload.qty,
       packSize: payload.packSize,
       note: payload.note,
-    });
+      remark: payload.remarks[o.id]?.trim() || null,
+    }));
+    const result = await warehouse.reportPickingOrderIssues(entries);
     selectedIds.value = new Set();
     modalOpen.value = false;
     await load();
-    if (result.reported > 0) {
+    if (result.reported.length > 0) {
       reportMessage.value = t('picking.issueReportSummary', {
-        reported: result.reported,
-        skipped: result.skipped,
+        reported: result.reported.length,
+        skipped: result.skipped.length,
       });
     }
   } catch (e) {

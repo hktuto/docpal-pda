@@ -58,7 +58,7 @@
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { useWarehouse } from "~/composables/useWarehouse";
-import type { ReceivingFilter, ReceivingOrderSummary } from "~/services/types";
+import type { ReceivingFilter, ReceivingOrderListRow } from "~/services/types";
 
 definePageMeta({ title: "meta.receiving" });
 
@@ -72,6 +72,7 @@ useHead({ title: t("receiving.title") });
 const filters: { labelKey: string; value: ReceivingFilter }[] = [
   { labelKey: "common.all", value: "all" },
   { labelKey: "status.receiving.pending", value: "pending" },
+  { labelKey: "status.receiving.provisional_received", value: "provisional_received" },
   { labelKey: "status.receiving.in_hand", value: "in_hand" },
   { labelKey: "status.receiving.clear", value: "clear" },
 ];
@@ -79,7 +80,7 @@ const filters: { labelKey: string; value: ReceivingFilter }[] = [
 const filter = ref<ReceivingFilter>("in_hand");
 const search = ref("");
 
-const rawRows = ref<ReceivingOrderSummary[]>([]);
+const rawRows = ref<ReceivingOrderListRow[]>([]);
 const loading = ref(true);
 const loadError = ref<string | null>(null);
 

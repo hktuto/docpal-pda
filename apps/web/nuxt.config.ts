@@ -52,17 +52,9 @@ export default defineNuxtConfig({
       },
     },
   },
-  vite: {
-    optimizeDeps: {
-      // Exclude PGlite packages from optimization (they contain WASM files)
-      exclude: ["@electric-sql/pglite"],
-    },
-  },
   runtimeConfig: {
     public: {
-      warehouseAdapter: "api",    // "pglite" | "api"
-      apiBaseUrl: "http://localhost:3001", // override with NUXT_PUBLIC_API_BASE_URL (device builds need a LAN-reachable host)
-      seedPreset: "precalc",      // "default" (allocate on reset) | "precalc"
+      apiBaseUrl: "http://localhost:3002", // override with NUXT_PUBLIC_API_BASE_URL (device builds need a LAN-reachable host)
     },
   },
 });

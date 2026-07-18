@@ -6,16 +6,16 @@
     <template v-else-if="task">
       <DetailHeader
         v-model="headerExpanded"
-        :title="task.pickingOrder?.refNo || $t('common.noData')"
-        :status="task.status"
-        :label="statusLabel.measuring(task.status)"
+        :title="task.order.refNo || $t('common.noData')"
+        :status="task.task.status"
+        :label="statusLabel.measuring(task.task.status)"
         :flush-top="route.meta.props?.noPadding"
         style="margin-bottom: 1.5rem;"
       >
         <template #actions>
           <NuxtLink
-            v-if="task.pickingOrder?.status === 'finished'"
-            :to="`/picking/${task.pickingOrderId}`"
+            v-if="task.order.status === 'finished'"
+            :to="`/picking/${task.task.pickingOrderId}`"
             class="btn btn--small"
           >
             {{ $t('actions.viewPickingOrder') }}
@@ -23,16 +23,16 @@
         </template>
 
         <div class="detail-row">
-          <span class="detail-label">{{ $t('measuring.detail.supplier') }}</span>
-          <span>{{ task.pickingOrder?.supplier?.name || $t('common.noData') }}</span>
+          <span class="detail-label">{{ $t('measuring.detail.shipTo') }}</span>
+          <span>{{ task.order.shipTo || $t('common.noData') }}</span>
         </div>
       </DetailHeader>
 
       <h2 class="section-title">{{ $t('measuring.detail.boxes') }}</h2>
-      <p v-if="!task.shippingBoxes.length" class="empty">{{ $t('measuring.detail.noBoxes') }}</p>
+      <p v-if="!task.boxes.length" class="empty">{{ $t('measuring.detail.noBoxes') }}</p>
 
       <div
-        v-for="box in task.shippingBoxes"
+        v-for="box in task.boxes"
         :key="box.id"
         class="card"
         style="margin-bottom: 1.5rem;"
@@ -53,14 +53,14 @@
           <span class="detail-label">{{ $t('measuring.detail.measurements') }}</span>
           <span style="text-align: right; font-size: 0.8125rem;">
             {{ box.boxSize || $t('common.noData') }}
-            · {{ box.grossWeight ?? $t('common.noData') }} / {{ box.netWeight ?? $t('common.noData') }} {{ $t('common.kg') }}
+            · {{ box.grossWeight ?? $t('common.noData') }} / {{ box.netWeight ?? $t('common.noData') }} {{ $t('common.grams') }}
             · {{ box.destinationCountry || $t('common.noData') }}
           </span>
         </div>
 
         <div style="margin-top: 0.75rem;">
           <NuxtLink
-            :to="`/measuring/${task.id}/box/${box.id}`"
+            :to="`/measuring/${task.task.id}/box/${box.id}`"
             class="btn"
             :class="{ 'btn--small': box.status === 'closed' }"
           >
@@ -83,7 +83,7 @@ import { useErrorMessage } from "~/composables/errorMessage";
 import { useWarehouse } from "~/composables/useWarehouse";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useVisibleReload } from "~/composables/useVisibleReload";
-import type { MeasuringTaskDetail } from "~/services/types";
+import type { MeasuringTaskDetail, MeasuringBox } from "~/services/types";
 
 definePageMeta({ title: "meta.measuringDetail", props: { noPadding: true } });
 
@@ -114,13 +114,13 @@ async function load() {
   }
 }
 
-function verifiedCount(box: MeasuringTaskDetail["shippingBoxes"][number]) {
+function verifiedCount(box: MeasuringBox) {
   return box.packages.filter((p) => p.verified).length;
 }
 
 const canComplete = computed(() => {
-  if (!task.value || task.value.status !== "pending") return false;
-  return task.value.shippingBoxes.length > 0 && task.value.shippingBoxes.every((box) => box.status === "closed");
+  if (!task.value || task.value.task.status !== "pending") return false;
+  return task.value.boxes.length > 0 && task.value.boxes.every((box) => box.status === "closed");
 });
 
 async function complete() {

@@ -15,15 +15,15 @@
       class="card list-card"
     >
       <div class="list-card__header">
-        <span class="list-card__title">{{ task.pickingOrderRef }}</span>
+        <span class="list-card__title">{{ task.refNo }}</span>
         <span class="badge" :class="badgeClass(task.status)">{{ statusLabel.measuring(task.status) }}</span>
       </div>
       <p class="list-card__meta">
-        {{ task.supplierName || $t('common.noSupplier') }}
+        {{ task.shipTo || $t('common.noData') }}
       </p>
       <div class="list-card__footer">
         <span class="list-card__date">
-          {{ $t('measuring.packed', { count: task.packedItems, total: task.totalItems }) }}
+          {{ $t('measuring.boxesClosed', { count: task.closedBoxCount, total: task.boxCount }) }}
         </span>
       </div>
     </NuxtLink>
@@ -35,7 +35,7 @@ import { useVisibleReload } from "~/composables/useVisibleReload";
 import { useErrorMessage } from "~/composables/errorMessage";
 import { useWarehouse } from "~/composables/useWarehouse";
 import { badgeClass } from "~/composables/useStatusBadge";
-import type { MeasuringTaskSummary } from "~/services/types";
+import type { MeasuringTaskListRow } from "~/services/types";
 
 definePageMeta({ title: "meta.measuring" });
 
@@ -46,7 +46,7 @@ const warehouse = useWarehouse();
 
 useHead({ title: t('measuring.title') });
 
-const rawRows = ref<MeasuringTaskSummary[]>([]);
+const rawRows = ref<MeasuringTaskListRow[]>([]);
 const loading = ref(true);
 const loadError = ref<string | null>(null);
 
@@ -54,7 +54,8 @@ async function load() {
   loading.value = true;
   loadError.value = null;
   try {
-    rawRows.value = await warehouse.getMeasuringTasks();
+    // Pending only — the old client behavior (completed tasks are history).
+    rawRows.value = await warehouse.getMeasuringTasks("pending");
   } catch (e: unknown) {
     loadError.value = errorMessage(e);
     rawRows.value = [];

@@ -1,55 +1,55 @@
 <template>
   <div class="lots-panel">
     <h2 class="section-title">{{ $t('putAway.lotsPanel.title') }}</h2>
-    <p v-if="lots.length === 0" class="empty">{{ $t('common.noLots') }}</p>
+    <p v-if="items.length === 0" class="empty">{{ $t('common.noLots') }}</p>
 
     <div
-      v-for="lot in lots"
-      :key="lot.receivingInvoiceItemId"
-      :data-item-id="lot.receivingInvoiceItemId"
+      v-for="item in items"
+      :key="item.id"
+      :data-item-id="item.id"
       class="card"
     >
       <DetailRow :label="$t('putAway.lotsPanel.part')">
-        <span class="card__title">{{ lot.partNo || $t('common.noData') }}</span>
+        <span class="card__title">{{ item.partNo || $t('common.noData') }}</span>
       </DetailRow>
       <DetailRow :label="$t('putAway.lotsPanel.dateLot')">
-        <span>{{ lot.dateCode || $t('common.noData') }} / {{ lot.lotCode || $t('common.noData') }}</span>
+        <span>{{ item.dateCode || $t('common.noData') }} / {{ item.lotCode || $t('common.noData') }}</span>
       </DetailRow>
       <DetailRow :label="$t('putAway.lotsPanel.cooCow')">
-        <span>{{ lot.coo || $t('common.noData') }} / {{ lot.cow || $t('common.noData') }}</span>
+        <span>{{ item.coo || $t('common.noData') }} / {{ item.cow || $t('common.noData') }}</span>
       </DetailRow>
       <DetailRow :label="$t('putAway.lotsPanel.totalQty')">
-        <span>{{ lot.totalQty }}</span>
+        <span>{{ item.qty }}</span>
       </DetailRow>
       <DetailRow :label="$t('putAway.lotsPanel.scannedQty')">
-        <span>{{ lot.scannedQty }}</span>
+        <span>{{ scannedQty(item) }}</span>
       </DetailRow>
       <DetailRow :label="$t('putAway.lotsPanel.boxedQty')">
-        <span>{{ lot.boxedQty }}</span>
+        <span>{{ item.putAwayQty }}</span>
       </DetailRow>
 
       <div class="lot-actions">
         <button
           class="btn btn--small"
           :disabled="scanning"
-          @click="emit('scan', lot)"
+          @click="emit('scan', item)"
         >
           {{ $t('putAway.lotsPanel.scan') }}
         </button>
         <button
           class="btn btn--small btn--ghost"
-          @click="toggleExpand(lot.receivingInvoiceItemId)"
+          @click="toggleExpand(item.id)"
         >
-          {{ expandedItems.has(lot.receivingInvoiceItemId) ? $t('putAway.lotsPanel.collapseScans') : $t('putAway.lotsPanel.expandScans') }}
+          {{ expandedItems.has(item.id) ? $t('putAway.lotsPanel.collapseScans') : $t('putAway.lotsPanel.expandScans') }}
         </button>
       </div>
 
-      <div v-if="expandedItems.has(lot.receivingInvoiceItemId)" class="scans-list">
-        <p v-if="!scansByItem[lot.receivingInvoiceItemId]?.length" class="empty">
+      <div v-if="expandedItems.has(item.id)" class="scans-list">
+        <p v-if="!scansByItem[item.id]?.length" class="empty">
           {{ $t('putAway.lotsPanel.noScans') }}
         </p>
         <div
-          v-for="scan in scansByItem[lot.receivingInvoiceItemId]"
+          v-for="scan in scansByItem[item.id]"
           :key="scan.id"
           class="scan-row"
         >
@@ -58,59 +58,41 @@
             <span class="scan-meta">
               {{ scan.dateCode || $t('common.stateNone') }} / {{ scan.lotCode || $t('common.stateNone') }} / {{ scan.coo || $t('common.stateNone') }} / {{ scan.cow || $t('common.stateNone') }}
             </span>
-            <span v-if="scan.shelfBoxId" class="scan-box">
-              {{ $t('common.inBox', { id: scan.shelfBoxId }) }}
-            </span>
-            <span v-else class="scan-box scan-box--unboxed">{{ $t('common.unboxed') }}</span>
+            <span class="scan-box scan-box--unboxed">{{ $t('common.unboxed') }}</span>
           </div>
           <div class="scan-actions">
-            <template v-if="!scan.shelfBoxId">
-              <select
-                :value="boxSelections[scan.id]"
-                :disabled="addingScan[scan.id] || removingScan[scan.id]"
-                @change="updateBoxSelection(scan.id, ($event.target as HTMLSelectElement).value)"
-              >
-                <option value="">{{ $t('putAway.lotsPanel.selectBox') }}</option>
-                <option v-for="box in openBoxes" :key="box.id" :value="box.id">
-                  {{ box.id }} · {{ box.shelfCode || $t('common.noData') }}
-                </option>
-              </select>
-              <button
-                class="btn btn--small"
-                :disabled="addingScan[scan.id] || removingScan[scan.id] || !boxSelections[scan.id]"
-                @click="emit('add-to-box', scan.id)"
-              >
-                <template v-if="addingScan[scan.id]">
-                  <InlineSpinner /> {{ $t('putAway.lotsPanel.addingToBox') }}
-                </template>
-                <template v-else>
-                  {{ $t('putAway.lotsPanel.addToBox') }}
-                </template>
-              </button>
-              <button
-                class="btn btn--small btn--secondary"
-                :disabled="addingScan[scan.id] || removingScan[scan.id]"
-                @click="emit('remove-scan', scan.id)"
-              >
-                <template v-if="removingScan[scan.id]">
-                  <InlineSpinner /> {{ $t('putAway.lotsPanel.removingScan') }}
-                </template>
-                <template v-else>
-                  {{ $t('putAway.lotsPanel.removeScan') }}
-                </template>
-              </button>
-            </template>
-            <button
-              v-else-if="boxById(scan.shelfBoxId)?.status === 'open'"
-              class="btn btn--small"
-              :disabled="removingScan[scan.id]"
-              @click="emit('remove-from-box', scan.id)"
+            <select
+              :value="boxSelections[scan.id]"
+              :disabled="addingScan[scan.id] || removingScan[scan.id]"
+              @change="updateBoxSelection(scan.id, ($event.target as HTMLSelectElement).value)"
             >
-              <template v-if="removingScan[scan.id]">
-                <InlineSpinner /> {{ $t('putAway.lotsPanel.removingFromBox') }}
+              <option value="">{{ $t('putAway.lotsPanel.selectBox') }}</option>
+              <option v-for="box in openBoxes" :key="box.id" :value="box.id">
+                {{ box.id }} · {{ box.shelfCode || $t('common.noData') }}
+              </option>
+            </select>
+            <button
+              class="btn btn--small"
+              :disabled="addingScan[scan.id] || removingScan[scan.id] || !boxSelections[scan.id]"
+              @click="emit('add-to-box', scan.id)"
+            >
+              <template v-if="addingScan[scan.id]">
+                <InlineSpinner /> {{ $t('putAway.lotsPanel.addingToBox') }}
               </template>
               <template v-else>
-                {{ $t('putAway.lotsPanel.removeFromBox') }}
+                {{ $t('putAway.lotsPanel.addToBox') }}
+              </template>
+            </button>
+            <button
+              class="btn btn--small btn--secondary"
+              :disabled="addingScan[scan.id] || removingScan[scan.id]"
+              @click="emit('remove-scan', scan.id)"
+            >
+              <template v-if="removingScan[scan.id]">
+                <InlineSpinner /> {{ $t('putAway.lotsPanel.removingScan') }}
+              </template>
+              <template v-else>
+                {{ $t('putAway.lotsPanel.removeScan') }}
               </template>
             </button>
           </div>
@@ -122,12 +104,13 @@
 
 <script setup lang="ts">
 import InlineSpinner from "~/components/InlineSpinner.vue";
-import type { PutAwayLot, PutAwayScan, ShelfBox } from "~/services/types";
+import type { PutAwayExpectedItem, PutAwayScan, PutAwayBox } from "~/services/types";
 
 interface Props {
-  lots: PutAwayLot[];
+  items: PutAwayExpectedItem[];
+  stagedQtyByItem: Record<string, number>;
   scans: PutAwayScan[];
-  boxes: ShelfBox[];
+  boxes: PutAwayBox[];
   scanning: boolean;
   addingScan: Record<string, boolean>;
   removingScan: Record<string, boolean>;
@@ -138,9 +121,8 @@ interface Props {
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
-  scan: [lot: PutAwayLot];
+  scan: [item: PutAwayExpectedItem];
   "add-to-box": [scanId: string];
-  "remove-from-box": [scanId: string];
   "remove-scan": [scanId: string];
   "update:boxSelections": [value: Record<string, string>];
   "update:expandedItems": [value: Set<string>];
@@ -151,14 +133,16 @@ const openBoxes = computed(() => props.boxes.filter((b) => b.status === "open"))
 const scansByItem = computed(() => {
   const map: Record<string, PutAwayScan[]> = {};
   for (const scan of props.scans) {
+    if (!scan.receivingInvoiceItemId) continue;
     if (!map[scan.receivingInvoiceItemId]) map[scan.receivingInvoiceItemId] = [];
     map[scan.receivingInvoiceItemId].push(scan);
   }
   return map;
 });
 
-function boxById(boxId: string | null) {
-  return props.boxes.find((b) => b.id === boxId);
+// Total scanned for the item = already boxed (putAwayQty) + still staged.
+function scannedQty(item: PutAwayExpectedItem): number {
+  return item.putAwayQty + (props.stagedQtyByItem[item.id] ?? 0);
 }
 
 function updateBoxSelection(scanId: string, value: string) {

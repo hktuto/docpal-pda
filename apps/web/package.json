@@ -14,10 +14,6 @@
     "cap:android:dev": "node scripts/cap-android-dev.mjs",
     "generate:ocr-labels-pdf": "node scripts/generate-ocr-labels-pdf.mjs",
     "generate:box-shelf-labels-pdf": "node scripts/generate-box-shelf-labels-pdf.mjs",
-    "generate:precalc-seed": "vitest run --config vitest.generator.config.ts scripts/generate-precalc-seed.test.ts",
-    "export:android-seed": "vitest run --config vitest.generator.config.ts scripts/export-android-seed.test.ts",
-    "generate:ocr-labels": "vitest run --config vitest.generator.config.ts scripts/generate-ocr-labels.test.ts",
-    "generate:labels-data": "vitest run --config vitest.generator.config.ts scripts/generate-labels-data.test.ts",
     "assets:generate": "npx capacitor-assets generate --android --assetPath resources",
     "assets:android": "pnpm assets:generate"
   },
@@ -27,8 +23,6 @@
     "@capacitor/app": "^8.1.0",
     "@capacitor/cli": "^8.4.1",
     "@capacitor/core": "^8.4.1",
-    "@electric-sql/pglite": "^0.3.0",
-    "drizzle-orm": "^0.45.0",
     "jsbarcode": "^3.12.3",
     "nuxt": "^3.12.0",
     "uuid": "^9.0.1"
@@ -40,7 +34,6 @@
     "@types/uuid": "^9.0.8",
     "playwright": "^1.61.1",
     "qrcode": "^1.5.4",
-    "sql.js": "^1.14.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9",
     "vue-tsc": "^3.3.7"

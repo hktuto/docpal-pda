@@ -7,13 +7,13 @@
     style="width: 100%; margin-bottom: 1rem;"
     @input="emit('update:searchQuery', ($event.target as HTMLInputElement).value)"
   />
-  <p v-if="filteredGroupedPickingOrders.length === 0" class="empty">
+  <p v-if="pickingOrders.length === 0" class="empty">
     {{ $t('common.noPickingOrdersLinked') }}
   </p>
 
-  <div v-for="po in filteredGroupedPickingOrders" :key="po.id" class="card" style="margin-bottom: 1.5rem;">
+  <div v-for="po in pickingOrders" :key="po.id" class="card" style="margin-bottom: 1.5rem;">
     <DetailRow :label="$t('receiving.pickingTab.pickingOrder')">
-      <NuxtLink :to="`/picking/${po.id}`" class="card__title">{{ po.ref_no }}</NuxtLink>
+      <NuxtLink :to="`/picking/${po.id}`" class="card__title">{{ po.refNo }}</NuxtLink>
     </DetailRow>
     <DetailRow :label="$t('receiving.pickingTab.status')">
       <span class="badge" :class="badgeClass(po.status)">{{ statusLabel.picking(po.status) }}</span>
@@ -30,10 +30,10 @@
       </button>
     </div>
 
-    <div v-if="(boxesByOrder[po.id] || []).length" style="margin-top: 0.75rem;">
+    <div v-if="po.boxes.length" style="margin-top: 0.75rem;">
       <h3 style="margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--muted);">{{ $t('receiving.pickingTab.boxes') }}</h3>
       <div
-        v-for="box in boxesByOrder[po.id]"
+        v-for="box in po.boxes"
         :key="box.id"
         class="lot"
         style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;"
@@ -57,38 +57,38 @@
     </div>
 
     <div v-for="pi in po.items" :key="pi.id" class="lot" style="margin-top: 0.75rem;">
-      <DetailRow :label="$t('receiving.itemsTab.part')" :value="pi.part_no" />
-      <DetailRow :label="$t('receiving.pickingTab.requiredScannedBoxed')" :value="`${pi.required_qty} / ${pi.scanned_qty} / ${pi.boxed_qty}`" />
+      <DetailRow :label="$t('receiving.itemsTab.part')" :value="pi.partNo" />
+      <DetailRow :label="$t('receiving.pickingTab.requiredScannedBoxed')" :value="`${pi.qty} / ${scannedQty(pi)} / ${boxedQty(pi)}`" />
       <DetailRow :label="$t('receiving.pickingTab.status')">
         <span
           class="badge"
-          :class="badgeClass(pi.boxed_qty >= pi.required_qty ? 'finished' : 'picking')"
+          :class="badgeClass(boxedQty(pi) >= pi.qty ? 'finished' : 'picking')"
         >
-          {{ pi.boxed_qty >= pi.required_qty ? statusLabel.picking('finished') : statusLabel.picking('picking') }}
+          {{ boxedQty(pi) >= pi.qty ? statusLabel.picking('finished') : statusLabel.picking('picking') }}
         </span>
       </DetailRow>
       <div v-if="allocatedLocations(pi).length" class="detail-row">
         <span class="detail-label">{{ $t('receiving.pickingTab.allocatedLots') }}</span>
       </div>
       <ul v-if="allocatedLocations(pi).length" style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--muted);">
-        <li v-for="(loc, idx) in allocatedLocations(pi)" :key="idx">
-          {{ loc.shelf_code || (loc.box_id ? $t('common.inBox', { id: loc.box_id }) : $t('receiving.pickingTab.receivingArea')) }}
-          · {{ loc.date_code || $t('common.stateNone') }} / {{ loc.lot_code || $t('common.stateNone') }} / {{ loc.coo || $t('common.stateNone') }} / {{ loc.cow || $t('common.stateNone') }}
-          · {{ loc.allocated_qty }} {{ $t('common.pcs') }}
+        <li v-for="loc in allocatedLocations(pi)" :key="loc.id">
+          {{ loc.lot?.shelfCode || (loc.lot?.boxId ? $t('common.inBox', { id: loc.lot.boxId }) : $t('receiving.pickingTab.receivingArea')) }}
+          · {{ loc.lot?.dateCode || $t('common.stateNone') }} / {{ loc.lot?.lotCode || $t('common.stateNone') }} / {{ loc.lot?.coo || $t('common.stateNone') }} / {{ loc.lot?.cow || $t('common.stateNone') }}
+          · {{ loc.qty }} {{ $t('common.pcs') }}
         </li>
       </ul>
 
-      <div v-if="packagesByItem[pi.id]?.length" style="margin-top: 0.75rem;">
+      <div v-if="pi.packages.length" style="margin-top: 0.75rem;">
         <h3 style="margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--muted);">{{ $t('receiving.pickingTab.packages') }}</h3>
         <div
-          v-for="pkg in packagesByItem[pi.id]"
+          v-for="pkg in pi.packages"
           :key="pkg.id"
           class="lot"
           style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; justify-content: space-between;"
         >
           <div style="display: flex; flex-direction: column; gap: 0.25rem;">
             <span style="font-size: 0.875rem;">
-              {{ pkg.qty }} {{ $t('common.pcs') }} · {{ pkg.dateCode || $t('common.stateNone') }} / {{ pkg.lotCode || $t('common.stateNone') }} / {{ pkg.coo || $t('common.stateNone') }} / {{ pkg.cow || $t('common.stateNone') }}
+              {{ pkg.qty }} {{ $t('common.pcs') }} · {{ pkg.dateCode || $t('common.stateNone') }} / {{ pkg.lotCode || $t('common.stateNone') }}
             </span>
             <span style="font-size: 0.75rem; color: var(--muted);">
               <template v-if="pkg.shippingBoxId">{{ $t('common.inBox', { id: pkg.shippingBoxId }) }}</template>
@@ -147,22 +147,18 @@
       </div>
 
       <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-        <button class="btn btn--small" :disabled="scanning" @click="emit('scan', pi.id)">{{ $t('receiving.pickingTab.scan') }}</button>
         <button class="btn btn--small" @click="toggleExpand(pi.id)">
           {{ expandedItems.has(pi.id) ? $t('receiving.pickingTab.hideLogs') : $t('receiving.pickingTab.showLogs') }}
-          ({{ (transitionLogs[pi.id] || []).length }})
+          ({{ pi.transitionLogs.length }})
         </button>
 
         <div v-if="expandedItems.has(pi.id)" style="width: 100%; margin-top: 0.5rem;">
-          <p v-if="!(transitionLogs[pi.id] || []).length" class="card__meta">{{ $t('receiving.pickingTab.noLogs') }}</p>
+          <p v-if="!pi.transitionLogs.length" class="card__meta">{{ $t('receiving.pickingTab.noLogs') }}</p>
           <ul v-else style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--muted);">
-            <li v-for="log in transitionLogs[pi.id]" :key="log.id" style="margin-bottom: 0.35rem;">
+            <li v-for="(log, idx) in pi.transitionLogs" :key="idx" style="margin-bottom: 0.35rem;">
               {{ new Date(log.createdAt).toLocaleString() }}
-              · {{ log.actorName || $t('common.actorSystem') }}
+              · {{ log.actorId || $t('common.actorSystem') }}
               · {{ logStateLabel(log.fromState) }} → {{ logStateLabel(log.toState) }}
-              <span v-if="log.metadata">
-                · {{ logMetadataText(log.metadata) }}
-              </span>
             </li>
           </ul>
         </div>
@@ -172,9 +168,12 @@
 </template>
 
 <script setup lang="ts">
-import { GroupedItem, GroupedOrder, TransitionLog, DisplayBox, DisplayPackage } from "./types";
+import type {
+  ReceivingPickingAllocation,
+  ReceivingPickingItem,
+  ReceivingPickingOrder,
+} from "~/services/types";
 import { badgeClass } from "~/composables/useStatusBadge";
-import { logMetadataText } from "~/utils/log";
 
 const { t } = useI18n();
 const statusLabel = useStatusLabel();
@@ -182,18 +181,13 @@ const logStateLabel = (code: string | null | undefined) =>
   code ? t(`logStates.${code}`) : t("common.stateNone");
 
 const props = defineProps<{
-  filteredGroupedPickingOrders: GroupedOrder[];
-  boxesByOrder: Record<string, DisplayBox[]>;
-  packagesByItem: Record<string, DisplayPackage[]>;
-  transitionLogs: Record<string, TransitionLog[]>;
+  pickingOrders: ReceivingPickingOrder[];
   boxSelections: Record<string, string>;
   creatingBox: Record<string, boolean>;
   addingPackage: Record<string, boolean>;
   removingPackage: Record<string, boolean>;
   addingAll: Record<string, boolean>;
   anyAddingAll: boolean;
-  unboxedCountByOrderId: Record<string, number>;
-  scanning: boolean;
   expandedItems: Set<string>;
   searchQuery: string;
 }>();
@@ -207,17 +201,41 @@ const emit = defineEmits<{
   "add-to-box": [packageId: string];
   "remove-from-box": [packageId: string];
   "remove-scanned-package": [packageId: string];
-  scan: [pickingItemId?: string];
 }>();
 
+const unboxedCountByOrderId = computed(() => {
+  const counts: Record<string, number> = {};
+  for (const po of props.pickingOrders) {
+    let count = 0;
+    for (const item of po.items) {
+      count += item.packages.filter((p) => !p.shippingBoxId).length;
+    }
+    counts[po.id] = count;
+  }
+  return counts;
+});
+
+function scannedQty(item: ReceivingPickingItem): number {
+  return item.packages.reduce((sum, p) => sum + p.qty, 0);
+}
+
+function boxedQty(item: ReceivingPickingItem): number {
+  return item.packages.filter((p) => p.shippingBoxId).reduce((sum, p) => sum + p.qty, 0);
+}
+
+function allocatedLocations(item: ReceivingPickingItem): ReceivingPickingAllocation[] {
+  return item.allocations.filter((a) => a.qty > 0);
+}
+
 function openBoxesForOrder(pickingOrderId: string) {
-  return (props.boxesByOrder[pickingOrderId] ?? []).filter((b) => b.status === "open");
+  const po = props.pickingOrders.find((o) => o.id === pickingOrderId);
+  return (po?.boxes ?? []).filter((b) => b.status === "open");
 }
 
 function boxById(boxId: string | null | undefined) {
   if (!boxId) return undefined;
-  for (const boxes of Object.values(props.boxesByOrder)) {
-    const box = boxes.find((b) => b.id === boxId);
+  for (const po of props.pickingOrders) {
+    const box = po.boxes.find((b) => b.id === boxId);
     if (box) return box;
   }
   return undefined;
@@ -233,9 +251,4 @@ function toggleExpand(itemId: string) {
   else next.add(itemId);
   emit("update:expandedItems", next);
 }
-
-function allocatedLocations(item: GroupedItem) {
-  return item.locations.filter((l) => l.allocated_qty > 0);
-}
-
 </script>

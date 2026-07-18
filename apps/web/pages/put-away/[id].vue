@@ -28,10 +28,12 @@
         :adding-all="addingAll"
         :any-adding-all="anyAddingAll"
         :unboxed-count="unboxedCountForOrder"
+        :removing-item="removingScan"
         @new-box="openNewBoxDialog"
         @close-box="closeBox"
         @cancel-box="cancelBox"
         @add-all-to-box="addAllToBox"
+        @remove-from-box="removeScanFromBoxHandler"
       />
 
       <SelectShelfDialog
@@ -43,7 +45,8 @@
       <PutAwayLotsPanel
         v-model:box-selections="boxSelections"
         v-model:expanded-items="expandedItems"
-        :lots="lots"
+        :items="visibleItems"
+        :staged-qty-by-item="stagedQtyByItem"
         :scans="scans"
         :boxes="boxes"
         :scanning="scanning"
@@ -51,7 +54,6 @@
         :removing-scan="removingScan"
         @scan="openScan"
         @add-to-box="addScanToBox"
-        @remove-from-box="removeScanFromBoxHandler"
         @remove-scan="removeScanHandler"
       />
     </template>
@@ -66,7 +68,7 @@
       :options="review.options"
       :match-result="review.matchResult"
       :mode="review.capture.imagePath ? 'review' : 'manual'"
-      :context="{ task: 'put-away', receivingItem: scanLot ?? undefined }"
+      :context="{ task: 'put-away', receivingOrderId: orderId, receivingItem: scanItem ?? undefined }"
       @applied="onApplied"
       @retake="onRetake"
     />
@@ -89,9 +91,9 @@ import SelectShelfDialog from "~/components/SelectShelfDialog.vue";
 import ShelfBoxesPanel from "~/components/put-away/ShelfBoxesPanel.vue";
 import PutAwayLotsPanel from "~/components/put-away/PutAwayLotsPanel.vue";
 import type {
-  PutAwayLot,
+  PutAwayExpectedItem,
   PutAwayScan,
-  ShelfBox,
+  PutAwayBox,
   Shelf,
   ReceivingOrderDetail,
 } from "~/services/types";
@@ -122,15 +124,15 @@ const warehouse = useWarehouse();
 const pending = ref(true);
 const error = ref<string | null>(null);
 const order = ref<ReceivingOrderDetail | null>(null);
-const lots = ref<PutAwayLot[]>([]);
+const items = ref<PutAwayExpectedItem[]>([]);
 const shelves = ref<Shelf[]>([]);
-const boxes = ref<ShelfBox[]>([]);
+const boxes = ref<PutAwayBox[]>([]);
 const creating = ref(false);
 const closing = ref(false);
 const cancellingBox = ref<Record<string, boolean>>({});
 
-const scanLot = ref<PutAwayLot | null>(null);
-const scrollTargetLotId = ref<string | null>(null);
+const scanItem = ref<PutAwayExpectedItem | null>(null);
+const scrollTargetItemId = ref<string | null>(null);
 const scans = ref<PutAwayScan[]>([]);
 const addingScan = ref<Record<string, boolean>>({});
 const removingScan = ref<Record<string, boolean>>({});
@@ -138,8 +140,26 @@ const boxSelections = ref<Record<string, string>>({});
 const expandedItems = ref<Set<string>>(new Set());
 const addingAll = ref<Record<string, boolean>>({});
 
-const unboxedCountForOrder = computed(
-  () => scans.value.filter((s) => !s.shelfBoxId).length
+// scans[] are the staging rows (never boxed), so they are all unboxed.
+const unboxedCountForOrder = computed(() => scans.value.length);
+
+const stagedQtyByItem = computed(() => {
+  const map: Record<string, number> = {};
+  for (const scan of scans.value) {
+    if (!scan.receivingInvoiceItemId) continue;
+    map[scan.receivingInvoiceItemId] =
+      (map[scan.receivingInvoiceItemId] ?? 0) + scan.qty;
+  }
+  return map;
+});
+
+// Same visibility rule as the old lots list: items with anything left to put
+// away, or with scans still sitting in the staging box.
+const visibleItems = computed(() =>
+  items.value.filter(
+    (item) =>
+      item.remainingQty > 0 || (stagedQtyByItem.value[item.id] ?? 0) > 0
+  )
 );
 
 const anyAddingAll = computed(() =>
@@ -163,11 +183,11 @@ async function addScanToBox(scanId: string) {
   }
 }
 
-async function removeScanFromBoxHandler(scanId: string) {
+async function removeScanFromBoxHandler(boxId: string, scanId: string) {
   removingScan.value[scanId] = true;
   error.value = null;
   try {
-    await warehouse.removePutAwayScanFromBox(scanId);
+    await warehouse.removePutAwayScanFromBox(scanId, boxId);
     await load();
   } catch (e) {
     error.value = errorMessage(e);
@@ -176,6 +196,7 @@ async function removeScanFromBoxHandler(scanId: string) {
   }
 }
 
+// Hard-delete a staged scan (mis-scan correction).
 async function removeScanHandler(scanId: string) {
   removingScan.value[scanId] = true;
   error.value = null;
@@ -195,37 +216,35 @@ async function load() {
   pending.value = true;
   error.value = null;
   try {
-    const [orderData, lotsData, shelvesData, boxesData, scansData] = await Promise.all([
+    const [orderData, detail, shelvesData] = await Promise.all([
       warehouse.getReceivingOrder(orderId),
-      warehouse.getPutAwayLots(orderId),
+      warehouse.getPutAwayDetail(orderId),
       warehouse.getShelves(),
-      warehouse.getShelfBoxesForReceivingOrder(orderId),
-      warehouse.getPutAwayScans(orderId),
     ]);
     order.value = orderData;
-    lots.value = lotsData;
+    items.value = detail.items;
     shelves.value = shelvesData;
 
     const previousBoxIds = new Set(boxes.value.map((b) => b.id));
-    boxes.value = boxesData;
-    scans.value = scansData;
+    boxes.value = detail.boxes;
+    scans.value = detail.scans;
     const nextExpanded = new Set(expandedItemBoxes.value);
-    for (const b of boxesData) {
+    for (const b of detail.boxes) {
       if (b.status === "open" && !previousBoxIds.has(b.id)) {
         nextExpanded.add(b.id);
       }
     }
     expandedItemBoxes.value = nextExpanded;
 
-    if (scrollTargetLotId.value) {
-      const targetId = scrollTargetLotId.value;
-      scrollTargetLotId.value = null;
+    if (scrollTargetItemId.value) {
+      const targetId = scrollTargetItemId.value;
+      scrollTargetItemId.value = null;
       await nextTick();
       scrollToItem({ itemId: targetId });
     }
   } catch (e) {
     error.value = errorMessage(e);
-    scrollTargetLotId.value = null;
+    scrollTargetItemId.value = null;
   } finally {
     pending.value = false;
   }
@@ -295,17 +314,18 @@ async function addAllToBox(boxId: string) {
   }
 }
 
-async function openScan(lot: PutAwayLot) {
+async function openScan(item: PutAwayExpectedItem) {
   error.value = null;
-  scrollTargetLotId.value = lot.receivingInvoiceItemId;
-  scanLot.value = lot;
+  scrollTargetItemId.value = item.id;
+  scanItem.value = item;
   const result = await scan({
     task: 'put-away',
-    receivingItem: lot,
-    targets: lot.partNo ? [lot.partNo] : [],
+    receivingOrderId: orderId,
+    receivingItem: item,
+    targets: item.partNo ? [item.partNo] : [],
   });
   if (result.status === 'error' || result.status === 'cancelled') {
-    scrollTargetLotId.value = null;
+    scrollTargetItemId.value = null;
   }
   if (result.status === 'error') {
     showToast(result.message);
@@ -314,12 +334,12 @@ async function openScan(lot: PutAwayLot) {
 
 async function onRetake() {
   reviewOpen.value = false;
-  const lot = scanLot.value;
-  if (!lot) {
+  const item = scanItem.value;
+  if (!item) {
     error.value = errorMessage(new I18nError("no_scan_item_to_retake"));
     return;
   }
-  await openScan(lot);
+  await openScan(item);
 }
 </script>
 

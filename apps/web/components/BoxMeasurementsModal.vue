@@ -26,12 +26,12 @@
 
           <label class="field">
             <span>{{ $t('boxMeasurementsModal.netWeight') }} <span class="required">{{ $t('boxMeasurementsModal.required') }}</span></span>
-            <input v-model="form.netWeight" type="number" step="0.01" :placeholder="$t('boxMeasurementsModal.placeholderNetWeight')" :disabled="isBusy" />
+            <input v-model="form.netWeight" type="number" step="1" min="0" inputmode="numeric" :placeholder="$t('boxMeasurementsModal.placeholderNetWeight')" :disabled="isBusy" />
           </label>
 
           <label class="field">
             <span>{{ $t('boxMeasurementsModal.grossWeight') }} <span class="required">{{ $t('boxMeasurementsModal.required') }}</span></span>
-            <input v-model="form.grossWeight" type="number" step="0.01" :placeholder="$t('boxMeasurementsModal.placeholderGrossWeight')" :disabled="isBusy" />
+            <input v-model="form.grossWeight" type="number" step="1" min="0" inputmode="numeric" :placeholder="$t('boxMeasurementsModal.placeholderGrossWeight')" :disabled="isBusy" />
           </label>
 
           <label class="field">
@@ -108,10 +108,11 @@ const isBusy = computed(() => saving.value || finishing.value);
 const isValid = computed(() => {
   if (!form.value.boxSize) return false;
   if (!form.value.destinationCountry) return false;
+  // Backend weights are non-negative integer grams; closing requires > 0.
   const net = Number(form.value.netWeight);
   const gross = Number(form.value.grossWeight);
-  if (Number.isNaN(net) || net <= 0) return false;
-  if (Number.isNaN(gross) || gross <= 0) return false;
+  if (!Number.isInteger(net) || net <= 0) return false;
+  if (!Number.isInteger(gross) || gross <= 0) return false;
   if (gross < net) return false;
   return true;
 });
@@ -140,10 +141,11 @@ function close() {
 }
 
 async function persist() {
+  // Backend weights are integer grams under the *G field names.
   await warehouse.updateShippingBox(props.boxId, {
     boxSize: form.value.boxSize,
-    netWeight: form.value.netWeight,
-    grossWeight: form.value.grossWeight,
+    netWeightG: Number(form.value.netWeight),
+    grossWeightG: Number(form.value.grossWeight),
     destinationCountry: form.value.destinationCountry,
   });
 }

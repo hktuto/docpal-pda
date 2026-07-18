@@ -37,7 +37,7 @@
           </NuxtLink>
         </template>
 
-        <DetailRow :label="$t('picking.detail.supplier')" :value="order.supplier?.name" />
+        <DetailRow :label="$t('picking.detail.customer')" :value="order.customerCode" />
         <DetailRow :label="$t('picking.detail.deliveryDate')" :value="order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : null" />
         <DetailRow :label="$t('picking.detail.poNo')" :value="order.poNo" />
         <DetailRow :label="$t('picking.detail.shipTo')" :value="order.shipTo" />
@@ -48,7 +48,7 @@
 
       <PickingBoxesSection
         v-model:expanded="boxesExpanded"
-        :boxes="order.shippingBoxes"
+        :boxes="order.boxes"
         :actionable="actionable"
         :creating-box="creatingBox"
         :cancelling-box="cancellingBox"
@@ -61,11 +61,9 @@
       />
 
       <PickingItemsSection
-        v-model:expanded-items="expandedItems"
         v-model:box-selections="boxSelections"
         :items="order.items ?? []"
         :actionable="actionable"
-        :transition-logs="transitionLogs"
         :adding="adding"
         :removing="removing"
         :scanning="scanning"
@@ -86,7 +84,7 @@
       :options="review.options"
       :match-result="review.matchResult"
       :mode="review.capture.imagePath ? 'review' : 'manual'"
-      :context="{ task: 'picking', allocation: scanAllocation }"
+      :context="scanContext"
       @applied="onApplied"
       @retake="onRetake"
     />
@@ -109,14 +107,20 @@ import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import PickingBoxesSection from "~/components/picking/PickingBoxesSection.vue";
 import PickingItemsSection from "~/components/picking/PickingItemsSection.vue";
 import PickingIssueBanner from "~/components/picking/PickingIssueBanner.vue";
+import type { ScanTaskContext } from "~/composables/useScanMatchers";
 import type {
   PickingOrderDetail,
   PickingAllocation,
-  PickingItemTransitionLog,
 } from "~/services/types";
 
 type PickingItem = PickingOrderDetail["items"][number];
-type ShippingBox = PickingOrderDetail["shippingBoxes"][number];
+
+/** The pre-selected scan target: an allocation row plus its parent item (the
+ *  nested DTO does not back-reference allocations to items). */
+interface ScanTarget {
+  item: PickingItem;
+  allocation: PickingAllocation;
+}
 
 definePageMeta({ title: "meta.pickingDetail", props: { noPadding: true } });
 
@@ -138,15 +142,15 @@ const creatingBox = ref(false);
 const cancellingBox = ref<Record<string, boolean>>({});
 const addingAll = ref<Record<string, boolean>>({});
 const finishing = ref(false);
-const transitionLogs = ref<Record<string, PickingItemTransitionLog[]>>({});
-const expandedItems = ref<Set<string>>(new Set());
 const headerExpanded = ref(false);
 const boxesExpanded = ref(false);
-const scanAllocation = ref<PickingAllocation | null>(null);
+const scanTarget = ref<ScanTarget | null>(null);
 const boxSelections = ref<Record<string, string>>({});
 
 async function onAppliedWithScroll() {
-  const targetItemId = scanAllocation.value?.pickingItem?.id;
+  const targetItemId = scanTarget.value?.item.id;
+  // Re-fetch: the backend rebuilds the item's allocation rows (new ids)
+  // after every scan until its packages are boxed.
   await load();
   if (targetItemId) {
     await nextTick();
@@ -160,18 +164,17 @@ const { scan, scanning, review, reviewOpen, onApplied } = useLabelScanReview({
 const { processCapture, parseRawValue } = useLabelScan();
 const { showToast } = useToast();
 
-function findMatchingAllocation(parsed: { partNo: string | number; qty: string | number }) {
+function findMatchingAllocation(parsed: { partNo: string | number; qty: string | number }): ScanTarget | null {
   if (!order.value) return null;
   const scannedPartNo = normalize(String(parsed.partNo ?? ""));
   const scannedQty = typeof parsed.qty === "number" ? parsed.qty : Number(parsed.qty);
   if (!scannedPartNo || !Number.isInteger(scannedQty) || scannedQty <= 0) return null;
 
   for (const item of order.value.items) {
-    const itemPartNo = normalize(item.part?.partNo ?? "");
-    if (itemPartNo !== scannedPartNo) continue;
+    if (normalize(item.partNo) !== scannedPartNo) continue;
     for (const allocation of item.allocations ?? []) {
       if (allocation.qty > 0 && scannedQty <= allocation.qty) {
-        return allocation;
+        return { item, allocation };
       }
     }
   }
@@ -182,18 +185,19 @@ useHardwareScanner({
   enabled: () => !reviewOpen.value,
   onScan: async (rawValue: string) => {
     if (!order.value) return;
-    const parsedResult = await parseRawValue(rawValue, order.value.supplier?.code);
+    const parsedResult = await parseRawValue(rawValue);
     const parsed = ocrResultToInput(parsedResult.parsed);
-    const allocation = findMatchingAllocation(parsed);
-    if (!allocation) {
+    const target = findMatchingAllocation(parsed);
+    if (!target) {
       showToast(t("picking.detail.noMatchingAllocation"));
       return;
     }
-    scanAllocation.value = allocation;
+    scanTarget.value = target;
     const result = await processCapture(buildRawCapture(rawValue), {
       task: "picking",
-      allocation,
-      targets: [allocation.pickingItem?.part?.partNo ?? ""],
+      allocation: target.allocation,
+      pickingItem: { id: target.item.id, partNo: target.item.partNo },
+      targets: [target.item.partNo],
     });
     if (result.status === "error") {
       showToast(result.message);
@@ -210,7 +214,7 @@ const allItemsFullyBoxed = computed(
 const headerBadgeClass = computed(() => badgeClass(order.value?.status));
 const headerStatus = computed(() => statusLabel.picking(order.value?.status ?? ""));
 const openBoxes = computed(() =>
-  (order.value?.shippingBoxes ?? []).filter((b) => b.status === "open")
+  (order.value?.boxes ?? []).filter((b) => b.status === "open")
 );
 const actionable = computed(
   () => order.value?.status !== "finished" && order.value?.status !== "issue"
@@ -222,10 +226,13 @@ const unboxedCountForOrder = computed(() => {
   }, 0);
 });
 const anyAddingAll = computed(() => Object.values(addingAll.value).some(Boolean));
-const scanTargets = computed(() => {
-  const partNo = scanAllocation.value?.pickingItem?.part?.partNo;
-  return partNo ? [partNo] : [];
-});
+const scanContext = computed<ScanTaskContext>(() => ({
+  task: "picking",
+  allocation: scanTarget.value?.allocation,
+  pickingItem: scanTarget.value
+    ? { id: scanTarget.value.item.id, partNo: scanTarget.value.item.partNo }
+    : undefined,
+}));
 
 async function load() {
   try {
@@ -240,16 +247,6 @@ async function load() {
       }
     }
     boxSelections.value = nextBoxSelections;
-
-    const itemIds = data.items.map((i) => i.id);
-    const logs = await warehouse.getPickingItemTransitionLogs(itemIds);
-    const nextLogs: Record<string, PickingItemTransitionLog[]> = {};
-    for (const log of logs) {
-      const list = nextLogs[log.entityId] ?? [];
-      list.push(log);
-      nextLogs[log.entityId] = list;
-    }
-    transitionLogs.value = nextLogs;
   } catch (e) {
     error.value = errorMessage(e);
   } finally {
@@ -257,12 +254,13 @@ async function load() {
   }
 }
 
-async function openScan(allocation: PickingAllocation) {
-  scanAllocation.value = allocation;
+async function openScan(item: PickingItem, allocation: PickingAllocation) {
+  scanTarget.value = { item, allocation };
   const result = await scan({
     task: "picking",
-    allocation: scanAllocation.value,
-    targets: scanTargets.value,
+    allocation,
+    pickingItem: { id: item.id, partNo: item.partNo },
+    targets: [item.partNo],
   });
   if (result.status === "error") {
     showToast(result.message);
@@ -271,8 +269,8 @@ async function openScan(allocation: PickingAllocation) {
 
 async function onRetake() {
   reviewOpen.value = false;
-  if (!scanAllocation.value) return;
-  await openScan(scanAllocation.value);
+  if (!scanTarget.value) return;
+  await openScan(scanTarget.value.item, scanTarget.value.allocation);
 }
 
 async function createBox() {
@@ -334,9 +332,13 @@ async function addToBox(packageId: string) {
 }
 
 async function removeFromBox(packageId: string) {
+  const pkg = order.value?.items
+    .flatMap((i) => i.packages ?? [])
+    .find((p) => p.id === packageId);
+  if (!pkg?.shippingBoxId) return;
   removing.value[packageId] = true;
   try {
-    await warehouse.removePackageFromBox(packageId);
+    await warehouse.removePackageFromBox(pkg.shippingBoxId, packageId);
     await load();
   } catch (e) {
     error.value = errorMessage(e);

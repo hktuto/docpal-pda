@@ -21,12 +21,12 @@
       <DetailRow :label="$t('receiving.itemsTab.boxId')" :value="item.boxId" />
       <template v-if="expanded">
         <DetailRow :label="$t('receiving.itemsTab.poLine')" :value="`${item.poNo} / ${item.poLine}`" />
-        <DetailRow :label="$t('receiving.itemsTab.reserved')" :value="allocatedByItem[item.id] || 0" />
+        <DetailRow :label="$t('receiving.itemsTab.reserved')" :value="item.allocatedQty" />
         <DetailRow :label="$t('receiving.itemsTab.picked')" :value="item.pickedQty" />
         <DetailRow :label="$t('receiving.itemsTab.putAway')" :value="item.putAwayQty" />
         <DetailRow
             :label="$t('receiving.itemsTab.available')"
-            :value="item.receivedQty - item.pickedQty - item.putAwayQty - (allocatedByItem[item.id] || 0)"
+            :value="item.receivedQty - item.pickedQty - item.putAwayQty - item.allocatedQty"
         />
         <DetailRow
           :label="$t('receiving.itemsTab.dateLotCooCow')"
@@ -40,7 +40,7 @@
             {{ expanded ? "▲" : "▼" }}
         </div>
       </div>
-      <div v-if="order.status === 'pending' || order.status === 'in_hand'" style="margin-top: 0.75rem;">
+      <div v-if="order.status !== 'clear'" style="margin-top: 0.75rem;">
         <template v-if="item.pickedQty > 0 || item.putAwayQty > 0">
           <p class="mismatch-locked">{{ $t('common.locked') }}</p>
         </template>
@@ -48,46 +48,40 @@
         <template v-else-if="item.mismatch">
           <div class="mismatch-summary">
             <span class="mismatch-badge">{{ formatMismatchSummary(item) }}</span>
-            <span class="mismatch-badge mismatch-badge--status">{{ $t(`receiving.itemsTab.mismatchStatus.${item.mismatch.status}`) }}</span>
             <span v-if="item.mismatch.note" class="mismatch-note">{{ item.mismatch.note }}</span>
 
-            <template v-if="item.mismatch.status === 'pending' && currentUser?.id !== item.mismatch.reportedBy">
-              <button
-                class="btn btn--small"
-                :disabled="saving[item.mismatch.id]"
-                @click="emit('confirm-mismatch', item.mismatch.id)"
-              >
-                <template v-if="saving[item.mismatch.id]">
-                  <InlineSpinner /> {{ $t('actions.saving') }}
-                </template>
-                <template v-else>
-                  {{ $t('receiving.itemsTab.confirmMismatch') }}
-                </template>
-              </button>
-              <button
-                class="btn btn--small btn--danger"
-                :disabled="saving[item.mismatch.id]"
-                @click="emit('cancel-mismatch', item.mismatch.id)"
-              >
-                <template v-if="saving[item.mismatch.id]">
-                  <InlineSpinner /> {{ $t('actions.saving') }}
-                </template>
-                <template v-else>
-                  {{ $t('receiving.itemsTab.cancelMismatch') }}
-                </template>
-              </button>
-            </template>
-
-            <template v-else-if="item.mismatch.status === 'pending' && currentUser?.id === item.mismatch.reportedBy">
-              <button class="btn btn--small btn--danger" :disabled="saving[item.id]" @click="emit('report-issue', item)">
-                <template v-if="saving[item.id]">
-                  <InlineSpinner /> {{ $t('actions.saving') }}
-                </template>
-                <template v-else>
-                  {{ $t('receiving.itemsTab.editIssue') }}
-                </template>
-              </button>
-            </template>
+            <button class="btn btn--small" :disabled="saving[item.id]" @click="emit('report-issue', item)">
+              <template v-if="saving[item.id]">
+                <InlineSpinner /> {{ $t('actions.saving') }}
+              </template>
+              <template v-else>
+                {{ $t('receiving.itemsTab.editIssue') }}
+              </template>
+            </button>
+            <button
+              class="btn btn--small"
+              :disabled="saving[item.id]"
+              @click="emit('confirm-mismatch', item.id)"
+            >
+              <template v-if="saving[item.id]">
+                <InlineSpinner /> {{ $t('actions.saving') }}
+              </template>
+              <template v-else>
+                {{ $t('receiving.itemsTab.confirmMismatch') }}
+              </template>
+            </button>
+            <button
+              class="btn btn--small btn--danger"
+              :disabled="saving[item.id]"
+              @click="emit('cancel-mismatch', item.id)"
+            >
+              <template v-if="saving[item.id]">
+                <InlineSpinner /> {{ $t('actions.saving') }}
+              </template>
+              <template v-else>
+                {{ $t('receiving.itemsTab.cancelMismatch') }}
+              </template>
+            </button>
           </div>
         </template>
 
@@ -111,7 +105,6 @@
 import { DisplayReceivingItem, DisplayReceivingOrder } from "./types";
 
 const { t } = useI18n();
-const { currentUser } = useAuth();
 
 const expanded = ref(false)
 
@@ -121,19 +114,18 @@ function toggle(){
 
 defineProps<{
   order: DisplayReceivingOrder;
-  allocatedByItem: Record<string, number>;
   saving: Record<string, boolean>;
 }>();
 
 const emit = defineEmits<{
   "report-issue": [item: DisplayReceivingItem];
-  "confirm-mismatch": [mismatchId: string];
-  "cancel-mismatch": [mismatchId: string];
+  "confirm-mismatch": [itemId: string];
+  "cancel-mismatch": [itemId: string];
 }>();
 
 function formatMismatchSummary(item: DisplayReceivingItem): string {
   const mismatch = item.mismatch;
-  if (!mismatch) return "";
+  if (!mismatch?.reason) return "";
   switch (mismatch.reason) {
     case "not_found":
       return t("receiving.itemsTab.mismatch.not_found");

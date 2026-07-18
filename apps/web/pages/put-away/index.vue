@@ -22,7 +22,7 @@
         {{ ro.supplierName || $t('common.noSupplier') }}
       </p>
       <div class="list-card__footer">
-        <span class="list-card__date">{{ $t('putAway.available', { count: ro.availableQty }) }}</span>
+        <span class="list-card__date">{{ $t('putAway.unboxedItems', { count: ro.unboxedItems }) }}</span>
       </div>
     </NuxtLink>
   </div>

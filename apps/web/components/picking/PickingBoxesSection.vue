@@ -40,8 +40,7 @@
       <DetailRow :label="$t('picking.boxesSection.status')">
         <span class="badge" :class="badgeClass(box.status)">{{ statusLabel.box(box.status) }}</span>
       </DetailRow>
-      <DetailRow :label="$t('picking.boxesSection.packages')" :value="box.packages?.length ?? 0" />
-      <DetailRow :label="$t('picking.boxesSection.qty')" :value="boxTotalQty(box.packages ?? [])" />
+      <DetailRow :label="$t('picking.boxesSection.packages')" :value="box.packageCount" />
       <div v-if="box.status === 'open'" class="box-actions">
         <button
           class="btn btn--small"
@@ -56,7 +55,7 @@
           </template>
         </button>
         <button
-          v-if="(box.packages?.length ?? 0) === 0"
+          v-if="box.packageCount === 0"
           class="btn btn--small btn--danger"
           :disabled="cancellingBox[box.id]"
           @click="$emit('cancel-box', box.id)"
@@ -71,12 +70,11 @@
 <script setup lang="ts">
 import type { PickingOrderDetail } from "~/services/types";
 import { badgeClass } from "~/composables/useStatusBadge";
-import { boxTotalQty } from "~/utils/box";
 
 const statusLabel = useStatusLabel();
 
 const props = defineProps<{
-  boxes: PickingOrderDetail["shippingBoxes"];
+  boxes: PickingOrderDetail["boxes"];
   actionable: boolean;
   creatingBox: boolean;
   cancellingBox: Record<string, boolean>;

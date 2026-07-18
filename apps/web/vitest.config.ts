@@ -16,7 +16,6 @@ export default defineConfig({
     exclude: [
       '**/node_modules/**',
       '**/.git/**',
-      '**/scripts/generate-precalc-seed.test.ts',
     ],
   },
 });

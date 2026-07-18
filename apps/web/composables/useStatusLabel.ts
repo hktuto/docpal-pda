@@ -6,5 +6,6 @@ export function useStatusLabel() {
     picking: (code: string) => t(`status.picking.${code}`),
     box: (code: string) => t(`status.box.${code}`),
     measuring: (code: string) => t(`status.measuring.${code}`),
+    goodsVerify: (code: string) => t(`status.goodsVerify.${code}`),
   };
 }

@@ -30,8 +30,8 @@
           </button>
         </template>
 
-        <DetailRow :label="$t('measuring.measureBox.pickingOrder')" :value="box.measuringTask?.pickingOrder?.refNo" />
-        <DetailRow :label="$t('measuring.measureBox.destination')" :value="box.measuringTask?.pickingOrder?.destinationCountry" />
+        <DetailRow :label="$t('measuring.measureBox.pickingOrder')" :value="detail?.order.refNo" />
+        <DetailRow :label="$t('measuring.measureBox.destination')" :value="detail?.order.destinationCountry" />
       </DetailHeader>
 
       <div class="card" style="margin-bottom: 1.5rem;">
@@ -44,7 +44,7 @@
           :key="pkg.id"
           class="packed-item"
         >
-          <DetailRow :label="$t('measuring.measureBox.part')" :value="pkg.pickingItem?.part?.partNo" />
+          <DetailRow :label="$t('measuring.measureBox.part')" :value="pkg.partNo" />
           <DetailRow :label="$t('measuring.measureBox.qty')" :value="pkg.qty" />
           <DetailRow :label="$t('measuring.measureBox.dateLotOrigin')">
             {{ pkg.dateCode || $t('common.noData') }} / {{ pkg.lotCode || $t('common.noData') }} / {{ pkg.coo || $t('common.noData') }} / {{ pkg.cow || $t('common.noData') }}
@@ -63,8 +63,8 @@
       <div v-if="box.status === 'closed'" class="card" style="margin-bottom: 1.5rem;">
         <h3 style="margin: 0 0 0.75rem; font-size: 0.875rem; color: var(--muted);">{{ $t('measuring.measureBox.measurements') }}</h3>
         <DetailRow :label="$t('measuring.measureBox.boxSize')" :value="box.boxSize" />
-        <DetailRow :label="$t('measuring.measureBox.netWeight')" :value="box.netWeight != null ? `${box.netWeight} ${$t('common.kg')}` : `${$t('common.noData')} ${$t('common.kg')}`" />
-        <DetailRow :label="$t('measuring.measureBox.grossWeight')" :value="box.grossWeight != null ? `${box.grossWeight} ${$t('common.kg')}` : `${$t('common.noData')} ${$t('common.kg')}`" />
+        <DetailRow :label="$t('measuring.measureBox.netWeight')" :value="box.netWeight != null ? `${box.netWeight} ${$t('common.grams')}` : `${$t('common.noData')} ${$t('common.grams')}`" />
+        <DetailRow :label="$t('measuring.measureBox.grossWeight')" :value="box.grossWeight != null ? `${box.grossWeight} ${$t('common.grams')}` : `${$t('common.noData')} ${$t('common.grams')}`" />
         <DetailRow :label="$t('measuring.measureBox.destinationCountry')" :value="box.destinationCountry" />
       </div>
 
@@ -78,7 +78,7 @@
         :options="review.options"
         :match-result="review.matchResult"
         :mode="review.capture.imagePath ? 'review' : 'manual'"
-        :context="{ task: 'measuring', boxId, targetPackageId: scanTargetPackageId }"
+        :context="scanContext"
         @applied="onApplied"
         @retake="onRetake"
       />
@@ -87,7 +87,7 @@
         v-model="measureOpen"
         :box-id="boxId"
         :initial-values="measurementInitialValues"
-        :default-destination-country="box.measuringTask?.pickingOrder?.destinationCountry"
+        :default-destination-country="detail?.order.destinationCountry"
         @saved="load"
         @finished="load"
       />
@@ -103,7 +103,8 @@ import { useToast } from "~/composables/useToast";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import BoxMeasurementsModal from "~/components/BoxMeasurementsModal.vue";
 import { badgeClass } from "~/composables/useStatusBadge";
-import type { ShippingBoxForMeasuring } from "~/services/types";
+import type { ScanTaskContext } from "~/composables/useScanMatchers";
+import type { MeasuringTaskDetail } from "~/services/types";
 
 async function onScanApplied() {
   await load();
@@ -133,7 +134,9 @@ useHead({ title: t('measuring.measureBox.title') });
 
 const pending = ref(true);
 const error = ref<string | null>(null);
-const box = ref<ShippingBoxForMeasuring | null>(null);
+// The consolidated task detail is the one read; the box is a view onto it
+// (no per-box fetch, no server-side package search).
+const detail = ref<MeasuringTaskDetail | null>(null);
 const scanTargetPackageId = ref<string | undefined>(undefined);
 const measureOpen = ref(false);
 const headerExpanded = ref(false);
@@ -150,8 +153,12 @@ useVisibleReload(load);
 
 async function load() {
   try {
-    const data = await warehouse.getShippingBoxForMeasuring(boxId);
-    box.value = data;
+    const data = await warehouse.getMeasuringTask(taskId);
+    detail.value = data;
+    if (!data.boxes.some((b) => b.id === boxId)) {
+      error.value = t("measuring.measureBox.boxNotFound");
+      return;
+    }
     error.value = null;
   } catch (e: unknown) {
     error.value = errorMessage(e);
@@ -159,6 +166,8 @@ async function load() {
     pending.value = false;
   }
 }
+
+const box = computed(() => detail.value?.boxes.find((b) => b.id === boxId) ?? null);
 
 const verifiedCount = computed(() => box.value?.packages.filter((p) => p.verified).length ?? 0);
 const allVerified = computed(
@@ -183,17 +192,21 @@ const scanTargets = computed(() => {
   if (!box.value) return [];
   return box.value.packages
     .filter((pkg) => !pkg.verified)
-    .map((pkg) => pkg.pickingItem?.part?.partNo)
+    .map((pkg) => pkg.partNo)
     .filter((partNo): partNo is string => !!partNo);
 });
+
+const scanContext = computed<ScanTaskContext>(() => ({
+  task: "measuring",
+  packages: box.value?.packages ?? [],
+  targetPackageId: scanTargetPackageId.value,
+}));
 
 async function openScan(packageId?: string) {
   if (!box.value) return;
   scanTargetPackageId.value = packageId;
   const result = await scan({
-    task: "measuring",
-    boxId,
-    targetPackageId: packageId,
+    ...scanContext.value,
     targets: scanTargets.value,
     confirmSingleMatch: true,
   });

@@ -72,6 +72,34 @@ export function buildRawCapture(value: string): LabelScanCapture {
   };
 }
 
+/**
+ * Camera label capture with the browser fallback (prompt for a raw value).
+ * Returns null when the operator cancels.
+ */
+export async function captureLabel(): Promise<LabelScanCapture | null> {
+  try {
+    return await RectangleDetection.scanLabel();
+  } catch (e: unknown) {
+    if (isCancellationError(e)) {
+      return null;
+    }
+    if (isBrowserUnavailableError(e)) {
+      const raw = window.prompt('Paste label QR code value:');
+      if (raw === null) {
+        return null;
+      }
+      return parseBrowserScanPrompt(raw);
+    }
+    throw e;
+  }
+}
+
+/** The raw value to send to the server: the barcode value when present, else the OCR text. */
+export function captureRawLabelValue(capture: LabelScanCapture): string {
+  const barcodes = parseBarcodes(capture.barcodes);
+  return barcodes[0]?.value ?? capture.text;
+}
+
 export function useLabelScan() {
   const scanning = ref(false);
   const errorMessage = useErrorMessage();
@@ -155,26 +183,9 @@ export function useLabelScan() {
   async function scan(context: ScanTaskContext): Promise<LabelScanResult> {
     scanning.value = true;
     try {
-      let capture: LabelScanCapture;
-      try {
-        capture = await RectangleDetection.scanLabel();
-      } catch (e: unknown) {
-        if (isCancellationError(e)) {
-          return { status: 'cancelled' };
-        }
-        if (isBrowserUnavailableError(e)) {
-          const raw = window.prompt('Paste label QR code value:');
-          if (raw === null) {
-            return { status: 'cancelled' };
-          }
-          const simulated = parseBrowserScanPrompt(raw);
-          if (!simulated) {
-            return { status: 'cancelled' };
-          }
-          capture = simulated;
-        } else {
-          throw e;
-        }
+      const capture = await captureLabel();
+      if (!capture) {
+        return { status: 'cancelled' };
       }
       return await processCapture(capture, context);
     } catch (e: unknown) {

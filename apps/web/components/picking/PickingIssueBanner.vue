@@ -7,13 +7,13 @@
     <DetailRow v-if="order.issueNote" :label="$t('picking.issueBanner.note')" :value="order.issueNote" />
     <DetailRow :label="$t('picking.issueBanner.reported')">
       {{ order.issueReportedAt ? new Date(order.issueReportedAt).toLocaleString() : $t('common.noData') }}
-      {{ $t('common.reportedBy', { name: order.issueReportedByUser?.displayName || order.issueReportedBy || $t('common.noData') }) }}
+      {{ $t('common.reportedBy', { name: order.issueReportedBy || $t('common.noData') }) }}
     </DetailRow>
   </div>
 </template>
 
 <script setup lang="ts">
-import type { PickingIssueReason, PickingOrderDetail } from "~/services/types";
+import type { PickingOrderDetail } from "~/services/types";
 
 defineProps<{
   order: PickingOrderDetail;
@@ -21,7 +21,7 @@ defineProps<{
 
 const { t } = useI18n();
 
-function issueReasonLabel(reason: PickingIssueReason | null) {
+function issueReasonLabel(reason: string | null) {
   if (reason === "insufficient_stock") return t('picking.issueReasons.insufficient_stock');
   if (reason === "cannot_divide") return t('picking.issueReasons.cannot_divide');
   if (reason === "merge") return t('picking.issueReasons.merge');

@@ -7,7 +7,6 @@ export function useAuth() {
   const currentUser = useState<User | null>("auth-user", () => null);
 
   const authService = createAuthService({
-    adapter: useRuntimeConfig().public.warehouseAdapter as "pglite" | "api",
     apiBaseUrl: useRuntimeConfig().public.apiBaseUrl as string | undefined,
   });
 

@@ -61,7 +61,7 @@
 </template>
 
 <script setup lang="ts">
-import { validateMismatchInputs } from "~/db/mismatch";
+import { validateMismatchInputs } from "~/utils/mismatch";
 import { mismatchReasons, type MismatchReason } from "~/services/types";
 import { I18nError } from "~/composables/i18nError";
 import type { DisplayReceivingItem } from "~/components/receiving/types";
@@ -100,7 +100,7 @@ function resetForm() {
   openedForEdit.value = !!props.item?.mismatch;
   validationError.value = null;
   if (props.item?.mismatch) {
-    reason.value = props.item.mismatch.reason;
+    reason.value = props.item.mismatch.reason ?? "";
     mismatchQty.value = props.item.mismatch.mismatchQty ?? null;
     wrongPartNo.value = props.item.mismatch.wrongPartNo || "";
     note.value = props.item.mismatch.note || "";

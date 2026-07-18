@@ -1,81 +1,84 @@
 import type {
   ReceivingFilter,
-  ReceivingOrderSummary,
+  ReceivingOrderListRow,
   ReceivingOrderDetail,
+  ReceivingPickingSection,
+  ReceivingScanInput,
+  ReceivingScanResult,
   ReceivingItemMismatch,
   ReportMismatchInput,
-  PickingByReceivingRow,
-  TransitionLog,
-  PickingOrderSummary,
+  PickingOrderListRow,
   PickingOrderDetail,
+  ScanPickingItemInput,
+  ShippingBoxUpdateInput,
   ReportPickingIssueEntry,
-  ReportPickingIssuesInput,
   ReportPickingIssuesResult,
-  ApplyOcrPickInput,
   PutAwayCandidate,
-  PutAwayLot,
+  PutAwayDetail,
   PutAwayScan,
   ShelfBox,
   Shelf,
-  MeasuringTaskSummary,
+  MeasuringTaskListRow,
   MeasuringTaskDetail,
-  ShippingBoxForMeasuring,
-  BoxMeasurementsInput,
-  PackageVerificationInput,
-  MeasuringPackage,
-  ShelfWithBoxCount,
-  GoodsVerifyShelfBoxSummary,
-  GoodsVerifyShelfBoxDetail,
-  StockSearchSupplierWithStats,
-  StockSearchPart,
-  StockSearchInventoryLot,
-  ScanCandidates,
+  GoodsVerifyTaskListRow,
+  GoodsVerifyTaskDetail,
+  GoodsVerifyTaskFilters,
+  StockSearchFilters,
+  StockSearchResult,
+  SupplierListRow,
   SupplierQrcodeTemplate,
 } from "./types";
-import { createPgliteWarehouseService } from "./adapters/pgliteWarehouse";
-import { createApiWarehouseService } from "./adapters/apiWarehouse";
+import { createBackendWarehouseService } from "./adapters/backendWarehouse";
 
 export interface WarehouseService {
   // Receiving
-  getReceivingOrders(filter: ReceivingFilter): Promise<ReceivingOrderSummary[]>;
+  getReceivingOrders(filter: ReceivingFilter): Promise<ReceivingOrderListRow[]>;
   getReceivingOrder(id: string): Promise<ReceivingOrderDetail>;
   confirmReceivingOrderArrived(id: string): Promise<void>;
+  scanReceiving(orderId: string, input: ReceivingScanInput): Promise<ReceivingScanResult>;
 
-  // Mismatches
+  // Mismatches (item-keyed: every call addresses the receiving invoice ITEM id)
   getActiveMismatch(itemId: string): Promise<ReceivingItemMismatch | null>;
   reportMismatch(itemId: string, input: ReportMismatchInput): Promise<void>;
-  editMismatch(mismatchId: string, input: ReportMismatchInput): Promise<void>;
-  confirmMismatch(mismatchId: string): Promise<void>;
-  cancelMismatch(mismatchId: string): Promise<void>;
+  editMismatch(itemId: string, input: ReportMismatchInput): Promise<void>;
+  confirmMismatch(itemId: string): Promise<void>;
+  cancelMismatch(itemId: string): Promise<void>;
 
-  // Picking (receiving detail view)
-  getPickingOrdersByReceivingOrder(id: string): Promise<PickingByReceivingRow[]>;
-  getPickingItemTransitionLogs(ids: string[]): Promise<TransitionLog[]>;
-  createShippingBoxForPickingOrder(pickingOrderId: string): Promise<void>;
-  addPackageToBox(packageId: string, boxId: string): Promise<void>;
-  removePackageFromBox(packageId: string): Promise<void>;
-  removeScannedPackage(packageId: string): Promise<void>;
+  // Picking (receiving detail view — nested orders with items/boxes/logs embedded)
+  getPickingOrdersByReceivingOrder(id: string): Promise<ReceivingPickingSection>;
 
-  // Picking
-  getPickingOrders(): Promise<PickingOrderSummary[]>;
+  // Picking — nested detail read; mutations mirror the backend verbs
+  // one-to-one (docs/backend/api-design.md §Picking). The shipping-box
+  // verbs are shared with the receiving picking tab and the measuring flow.
+  getPickingOrders(status?: string): Promise<PickingOrderListRow[]>;
   getPickingOrder(id: string): Promise<PickingOrderDetail>;
-  finishPickingOrder(id: string): Promise<void>;
-  reportPickingOrderIssues(
-    entries: ReportPickingIssueEntry[],
-    input: ReportPickingIssuesInput
-  ): Promise<ReportPickingIssuesResult>;
-  scanAllocation(id: string, qty: number): Promise<string>;
-  applyOcrPick(input: ApplyOcrPickInput): Promise<void>;
+  scanPickingItem(
+    itemId: string,
+    input: ScanPickingItemInput
+  ): Promise<{ packageIds: string[] }>;
+  removeScannedPackage(packageId: string): Promise<void>;
+  verifyPackage(packageId: string): Promise<void>;
+  createShippingBoxForPickingOrder(pickingOrderId: string): Promise<void>;
+  updateShippingBox(id: string, fields: ShippingBoxUpdateInput): Promise<void>;
+  addPackageToBox(packageId: string, boxId: string): Promise<void>;
+  removePackageFromBox(boxId: string, packageId: string): Promise<void>;
   addAllUnboxedPackagesToBox(boxId: string): Promise<number>;
   cancelShippingBox(id: string): Promise<void>;
+  closeShippingBox(id: string): Promise<void>;
+  finishPickingOrder(
+    id: string
+  ): Promise<{ id: string; pickingOrderId: string; status: string }>;
+  reportPickingOrderIssues(
+    entries: ReportPickingIssueEntry[]
+  ): Promise<ReportPickingIssuesResult>;
 
-  // Put-away
+  // Put-away — one aggregate read replaces the old lots/scans/boxes stitch;
+  // scan matching stays client-side (QR templates), mutations are per-verb.
   getPutAwayCandidates(): Promise<PutAwayCandidate[]>;
-  getPutAwayLots(receivingOrderId: string): Promise<PutAwayLot[]>;
-  getPutAwayScans(receivingOrderId: string): Promise<PutAwayScan[]>;
-  getShelfBoxesForReceivingOrder(receivingOrderId: string): Promise<ShelfBox[]>;
+  getPutAwayDetail(receivingOrderId: string): Promise<PutAwayDetail>;
   getShelves(): Promise<Shelf[]>;
   recordPutAwayScan(
+    receivingOrderId: string,
     receivingInvoiceItemId: string,
     qty: number,
     dateCode: string | null,
@@ -85,48 +88,45 @@ export interface WarehouseService {
   ): Promise<PutAwayScan>;
   assignPutAwayScanToBox(scanId: string, boxId: string): Promise<void>;
   addAllUnboxedScansToBox(boxId: string): Promise<number>;
-  removePutAwayScanFromBox(scanId: string): Promise<void>;
+  removePutAwayScanFromBox(scanId: string, boxId: string): Promise<void>;
   removePutAwayScannedPiece(scanId: string): Promise<void>;
   createShelfBox(receivingOrderId: string, shelfCode: string): Promise<ShelfBox>;
   closeShelfBox(id: string): Promise<void>;
   cancelShelfBox(id: string): Promise<void>;
 
-  // Measuring
-  getMeasuringTasks(): Promise<MeasuringTaskSummary[]>;
+  // Measuring — the consolidated detail (task + order + boxes with
+  // packages) feeds both the task page and the box page; box measurement
+  // reuses the picking verbs above (verifyPackage / updateShippingBox /
+  // closeShippingBox). Scanned labels are matched to packages client-side.
+  getMeasuringTasks(status?: string): Promise<MeasuringTaskListRow[]>;
   getMeasuringTask(id: string): Promise<MeasuringTaskDetail>;
-  getShippingBoxForMeasuring(id: string): Promise<ShippingBoxForMeasuring>;
-  findMatchingUnverifiedPackage(
-    boxId: string,
-    input: PackageVerificationInput,
-    targetPackageId?: string
-  ): Promise<MeasuringPackage | null>;
-  verifyPickingPackage(packageId: string): Promise<void>;
-  updateShippingBox(id: string, fields: BoxMeasurementsInput): Promise<void>;
-  closeShippingBox(id: string): Promise<void>;
   completeMeasuringTask(id: string): Promise<void>;
 
-  // Goods verify
-  getShelvesWithBoxes(): Promise<ShelfWithBoxCount[]>;
-  getShelfBoxes(shelfCode: string): Promise<GoodsVerifyShelfBoxSummary[]>;
-  getShelfBox(id: string): Promise<GoodsVerifyShelfBoxDetail>;
-  verifyShelfBoxItem(shelfBoxId: string, partId: string): Promise<void>;
-  markShelfBoxVerified(id: string): Promise<void>;
+  // Goods verify — task-based (docs/backend/api-design.md §Goods verify).
+  // Day-end generation is explicit + idempotent (no actorId — the backend
+  // treats it as a system job and tolerates an empty body); verify is one
+  // call per task (countedQty optional; a mismatch corrects the lot and
+  // writes an ADJUST ledger row server-side).
+  generateGoodsVerifyTasks(date?: string): Promise<{ created: number; date: string }>;
+  getGoodsVerifyTasks(filters?: GoodsVerifyTaskFilters): Promise<GoodsVerifyTaskListRow[]>;
+  getGoodsVerifyTask(id: string): Promise<GoodsVerifyTaskDetail>;
+  verifyGoodsVerifyTask(id: string, countedQty?: number): Promise<GoodsVerifyTaskListRow>;
 
-  // Scan candidates & supplier QR templates (OCR label scanning)
-  getScanCandidates(receivingOrderId: string): Promise<ScanCandidates>;
+  // Supplier QR templates for client-side label parsing (GET /scan-templates)
   getSupplierQrTemplates(): Promise<SupplierQrcodeTemplate[]>;
 
   // Demo reset (dev only)
   resetDemoData(): Promise<void>;
 
-  // Stock search
-  getSuppliersWithInventoryStats(): Promise<StockSearchSupplierWithStats[]>;
-  getPartsBySupplier(supplierId: string): Promise<StockSearchPart[]>;
-  getInventoryLotsForParts(partIds: string[]): Promise<StockSearchInventoryLot[]>;
+  // Stock search — one aggregate read (GET /stock-search) replaces the old
+  // suppliers → parts → lots cascade; zero-qty lots come back by design.
+  // The admin suppliers CRUD read doubles as the filter dropdown list
+  // (same trick as getShelves).
+  searchStock(filters?: StockSearchFilters): Promise<StockSearchResult>;
+  getSuppliers(): Promise<SupplierListRow[]>;
 }
 
 export interface CreateWarehouseServiceOptions {
-  adapter: "pglite" | "api";
   getActorId: () => string | undefined;
   apiBaseUrl?: string;
 }
@@ -134,8 +134,5 @@ export interface CreateWarehouseServiceOptions {
 export function createWarehouseService(
   options: CreateWarehouseServiceOptions
 ): WarehouseService {
-  if (options.adapter === "pglite") {
-    return createPgliteWarehouseService(options);
-  }
-  return createApiWarehouseService(options);
+  return createBackendWarehouseService(options);
 }

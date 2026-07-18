@@ -64,8 +64,21 @@
                 :key="item.id"
                 class="lot"
               >
-                <span>{{ item.part?.partNo || $t('common.noData') }}</span>
+                <span>{{ item.partNo || $t('common.noData') }}</span>
                 <span class="lot-qty">× {{ item.qty }}</span>
+                <button
+                  v-if="box.status === 'open'"
+                  class="btn btn--small btn--secondary lot-remove"
+                  :disabled="removingItem[item.id]"
+                  @click="emit('remove-from-box', box.id, item.id)"
+                >
+                  <template v-if="removingItem[item.id]">
+                    <InlineSpinner /> {{ $t('putAway.shelfBoxesPanel.removingFromBox') }}
+                  </template>
+                  <template v-else>
+                    {{ $t('putAway.shelfBoxesPanel.removeFromBox') }}
+                  </template>
+                </button>
               </div>
             </div>
           </div>
@@ -110,10 +123,10 @@
 import { badgeClass } from "~/composables/useStatusBadge";
 import { boxTotalQty } from "~/utils/box";
 import InlineSpinner from "~/components/InlineSpinner.vue";
-import type { ShelfBox, Shelf } from "~/services/types";
+import type { PutAwayBox, Shelf } from "~/services/types";
 
 interface Props {
-  boxes: ShelfBox[];
+  boxes: PutAwayBox[];
   boxesExpanded: boolean;
   actionable: boolean;
   creating: boolean;
@@ -124,6 +137,7 @@ interface Props {
   addingAll: Record<string, boolean>;
   anyAddingAll: boolean;
   unboxedCount: number;
+  removingItem: Record<string, boolean>;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -137,6 +151,7 @@ const emit = defineEmits<{
   "close-box": [boxId: string];
   "cancel-box": [boxId: string];
   "add-all-to-box": [boxId: string];
+  "remove-from-box": [boxId: string, scanId: string];
 }>();
 
 const { t } = useI18n();
@@ -153,7 +168,7 @@ const isExpandedItemBoxes = computed({
 });
 
 const boxesByShelf = computed(() => {
-  const map: Record<string, ShelfBox[]> = {};
+  const map: Record<string, PutAwayBox[]> = {};
   for (const box of props.boxes) {
     const code = box.shelfCode ?? t('common.unassigned');
     if (!map[code]) map[code] = [];
@@ -232,8 +247,18 @@ function toggleItemVisibility(boxId: string) {
   color: var(--muted);
 }
 
+.lot {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .lot-qty {
   color: var(--muted);
+}
+
+.lot-remove {
+  margin-left: auto;
 }
 
 .box-actions {
