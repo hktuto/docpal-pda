@@ -32,4 +32,7 @@ app.route("/", goodsVerifyRoute);
 app.route("/", stockSearchRoute);
 app.route("/", scanTemplatesRoute);
 app.route("/", ingestRoute);
-app.route("/", devRoute);
+// Demo-only routes (/dev/reset, /dev/allocate); disable with DEV_ROUTES=off.
+if (process.env.DEV_ROUTES !== "off") {
+  app.route("/", devRoute);
+}
