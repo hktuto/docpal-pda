@@ -1,140 +1,60 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import Database from "better-sqlite3";
-import { createDb } from "./client.js";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import * as schema from "./schema/index.js";
-import { createTables } from "./tables.js";
-import { verifyShelfBoxItem, scheduleCycleCount } from "./putAway.js";
-import { completeVerificationTask } from "./measure.js";
+import { sql } from "drizzle-orm";
+import { createTestDb, TEST_DATABASE_URL } from "./test-helper.js";
+import { resetTables } from "./tables.js";
+import { verifyShelfBoxItem } from "./putAway.js";
 import { assertInvariantsHold } from "./invariants.guard.js";
 
-// route-test bootstrap: temp DATABASE_URL must be set before importing the app
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wh-api-"));
-const dbPath = path.join(dir, "t.sqlite");
-process.env.DATABASE_URL = dbPath;
+process.env.DATABASE_URL = TEST_DATABASE_URL;
 process.env.WAREHOUSE_SEED = "off";
 const { app } = await import("../index.js");
-const routeSqlite = new Database(dbPath);
 
-routeSqlite.exec(`
-  INSERT INTO suppliers (id, code, name, created_at, updated_at) VALUES ('sup','S','Sup','0','0');
-  INSERT INTO parts (id, part_no, part_no_norm, created_at, updated_at) VALUES ('p','X','X','0','0'), ('p2','Y','Y','0','0');
-  INSERT INTO shelves (id, code, created_at, updated_at) VALUES ('sh','A1','0','0');
-  INSERT INTO receiving_orders (id, external_id, ref_no, status, supplier_id, created_at, updated_at) VALUES ('ro','e','RO-1','in_hand','sup','0','0');
-  INSERT INTO receiving_invoices (id, external_id, receiving_order_id, invoice_no, supplier_id, created_at, updated_at) VALUES ('inv','e','ro','INV-1','sup','0','0');
-  INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty, put_away_qty, created_at, updated_at) VALUES ('rii','inv','p',5,5,5,'0','0'), ('rii2','inv','p2',3,3,3,'0','0');
-  INSERT INTO shelf_boxes (id, receiving_order_id, shelf_code, status, created_at, updated_at) VALUES ('box','ro','A1','closed','0','0');
-  INSERT INTO put_away_scans (id, receiving_invoice_item_id, qty, shelf_box_id, verified, created_at, updated_at) VALUES ('pas','rii',5,'box',0,'0','0'), ('pas2','rii2',3,'box',0,'0','0');
-  INSERT INTO verification_tasks (id, kind, status, shelf_box_id, due_at, created_at, updated_at) VALUES ('vt','cycle_count','pending','box','2099-01-01T09:00:00.000Z','0','0');
-`);
+const { sql: testSql, db } = await createTestDb();
 
-function makeDb() {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), "wh-api-"));
-  const { sqlite } = createDb(path.join(d, "t.sqlite"));
-  createTables(sqlite);
-  const db = drizzle(sqlite, { schema });
-  sqlite.exec(`
-    INSERT INTO suppliers (id, code, name, created_at, updated_at) VALUES ('sup','S','Sup','0','0');
-    INSERT INTO parts (id, part_no, part_no_norm, created_at, updated_at) VALUES ('p','X','X','0','0'), ('p2','Y','Y','0','0');
-    INSERT INTO shelves (id, code, created_at, updated_at) VALUES ('sh','A1','0','0');
-    INSERT INTO receiving_orders (id, external_id, ref_no, status, supplier_id, created_at, updated_at) VALUES ('ro','e','RO-1','in_hand','sup','0','0');
-    INSERT INTO receiving_invoices (id, external_id, receiving_order_id, invoice_no, supplier_id, created_at, updated_at) VALUES ('inv','e','ro','INV-1','sup','0','0');
-    INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty, put_away_qty, created_at, updated_at) VALUES ('rii','inv','p',5,5,5,'0','0'), ('rii2','inv','p2',3,3,3,'0','0');
-    INSERT INTO shelf_boxes (id, receiving_order_id, shelf_code, status, created_at, updated_at) VALUES ('box','ro','A1','closed','0','0');
-    INSERT INTO put_away_scans (id, receiving_invoice_item_id, qty, shelf_box_id, verified, created_at, updated_at) VALUES ('pas','rii',5,'box',0,'0','0'), ('pas2','rii2',3,'box',0,'0','0');
-    INSERT INTO verification_tasks (id, kind, status, shelf_box_id, due_at, created_at, updated_at) VALUES ('vt','cycle_count','pending','box','2099-01-01T09:00:00.000Z','0','0');
-  `);
-  return { sqlite, db };
+const TS = "2026-01-01T00:00:00.000Z";
+
+test.beforeEach(async () => {
+  await resetTables(db);
+});
+
+async function seedBase() {
+  await db.execute(sql`INSERT INTO users (id, username, password_hash, display_name, role, created_at)
+    VALUES ('u1','op','pw','Op','operator',${TS})`);
+  await db.execute(sql`INSERT INTO suppliers (id, code, name) VALUES ('sup','S','Sup')`);
+  await db.execute(sql`INSERT INTO parts (id, part_no) VALUES ('p','X'), ('p2','Y')`);
+  await db.execute(sql`INSERT INTO shelves (code, location_type, created_at, updated_at)
+    VALUES ('A1','shelf',${TS},${TS}), ('B1','shelf',${TS},${TS})`);
+  await db.execute(sql`INSERT INTO receiving_orders (id, ref_no, status, supplier_id, created_at, updated_at)
+    VALUES ('ro','RO-1','in_hand','sup',${TS},${TS})`);
+  await db.execute(sql`INSERT INTO receiving_invoices (id, receiving_order_id, invoice_no, supplier_id, created_at, updated_at)
+    VALUES ('inv','ro','INV-1','sup',${TS},${TS})`);
+  await db.execute(sql`INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty)
+    VALUES ('rii','inv','p',5,5), ('rii2','inv','p2',3,3)`);
+  await db.execute(sql`INSERT INTO shelf_boxes (id, receiving_order_id, shelf_code, status, created_at)
+    VALUES ('box','ro','A1','closed',${TS})`);
+  await db.execute(sql`INSERT INTO shelf_box_items (id, shelf_box_id, receiving_invoice_item_id, part_id, qty, verified)
+    VALUES ('sbi1','box','rii','p',5,false), ('sbi2','box','rii2','p2',3,false)`);
 }
 
-test("verifyShelfBoxItem verifies only the given part's scans in the box", () => {
-  const { sqlite, db } = makeDb();
-  db.transaction((tx) => verifyShelfBoxItem(tx, { shelfBoxId: "box", partId: "p", actorId: "u1" }));
-  assert.equal((sqlite.prepare("SELECT verified FROM put_away_scans WHERE id='pas'").get() as any).verified, 1);
-  assert.equal((sqlite.prepare("SELECT verified FROM put_away_scans WHERE id='pas2'").get() as any).verified, 0);
-  assertInvariantsHold(db);
-  sqlite.close();
+test("verifyShelfBoxItem verifies only the given part's scans in the box", async () => {
+  await seedBase();
+  await db.transaction(async (tx) => verifyShelfBoxItem(tx, { shelfBoxId: "box", partId: "p", actorId: "u1" }));
+  assert.equal((await db.execute<{ verified: boolean }>(sql`SELECT verified FROM shelf_box_items WHERE id='sbi1'`))[0].verified, true);
+  assert.equal((await db.execute<{ verified: boolean }>(sql`SELECT verified FROM shelf_box_items WHERE id='sbi2'`))[0].verified, false);
+  await assertInvariantsHold(db);
 });
 
-test("verifyShelfBoxItem 404s when the part has no unverified scans in the box", () => {
-  const { sqlite, db } = makeDb();
-  assert.throws(
-    () => db.transaction((tx) => verifyShelfBoxItem(tx, { shelfBoxId: "box", partId: "nope" })),
-    (e: any) => e.status === 404,
+test("verifyShelfBoxItem 404s when the part has no unverified scans in the box", async () => {
+  await seedBase();
+  await assert.rejects(
+    () => db.transaction(async (tx) => verifyShelfBoxItem(tx, { shelfBoxId: "box", partId: "nope" })),
+    (e: any) => e.status === 404
   );
-  sqlite.close();
-});
-
-test("completeVerificationTask(cycle_count) 409s while scans remain unverified", () => {
-  const { sqlite, db } = makeDb();
-  db.transaction((tx) => verifyShelfBoxItem(tx, { shelfBoxId: "box", partId: "p" }));
-  assert.throws(
-    () => db.transaction((tx) => completeVerificationTask(tx, { verificationTaskId: "vt", actorId: "u1" })),
-    (e: any) => e.status === 409,
-  );
-  sqlite.close();
-});
-
-test("completeVerificationTask(cycle_count) completes task and marks box verified", () => {
-  const { sqlite, db } = makeDb();
-  db.transaction((tx) => {
-    verifyShelfBoxItem(tx, { shelfBoxId: "box", partId: "p" });
-    verifyShelfBoxItem(tx, { shelfBoxId: "box", partId: "p2" });
-    completeVerificationTask(tx, { verificationTaskId: "vt", actorId: "u1" });
-  });
-  assert.equal((sqlite.prepare("SELECT status FROM verification_tasks WHERE id='vt'").get() as any).status, "completed");
-  assert.equal((sqlite.prepare("SELECT status FROM shelf_boxes WHERE id='box'").get() as any).status, "verified");
-  assertInvariantsHold(db);
-  sqlite.close();
-});
-
-test("same-day complete + restock creates a new pending task and resets the box", () => {
-  const { sqlite, db } = makeDb();
-  // align the seeded task's due date with scheduleCycleCount's nextMorning() (local tomorrow 09:00)
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  d.setHours(9, 0, 0, 0);
-  sqlite.prepare("UPDATE verification_tasks SET due_at=? WHERE id='vt'").run(d.toISOString());
-  db.transaction((tx) => {
-    verifyShelfBoxItem(tx, { shelfBoxId: "box", partId: "p" });
-    verifyShelfBoxItem(tx, { shelfBoxId: "box", partId: "p2" });
-    completeVerificationTask(tx, { verificationTaskId: "vt", actorId: "u1" });
-  });
-  assert.equal((sqlite.prepare("SELECT status FROM shelf_boxes WHERE id='box'").get() as any).status, "verified");
-  // same-day stock change must schedule a NEW task (completed same-day task must not coalesce)
-  db.transaction((tx) => scheduleCycleCount(tx, "box"));
-  const counts = sqlite.prepare(
-    "SELECT SUM(status='pending') AS pending, SUM(status='completed') AS completed FROM verification_tasks WHERE kind='cycle_count' AND shelf_box_id='box'"
-  ).get() as any;
-  assert.equal(counts.pending, 1);
-  assert.equal(counts.completed, 1);
-  assert.equal((sqlite.prepare("SELECT status FROM shelf_boxes WHERE id='box'").get() as any).status, "closed");
-  assert.equal((sqlite.prepare("SELECT COUNT(*) AS c FROM put_away_scans WHERE shelf_box_id='box' AND verified=1").get() as any).c, 0);
-  assertInvariantsHold(db);
-  sqlite.close();
-});
-
-test("completeVerificationTask(cycle_count) 409s when the box is not closed", () => {
-  const { sqlite, db } = makeDb();
-  db.transaction((tx) => {
-    verifyShelfBoxItem(tx, { shelfBoxId: "box", partId: "p" });
-    verifyShelfBoxItem(tx, { shelfBoxId: "box", partId: "p2" });
-  });
-  for (const status of ["open", "verified"]) {
-    sqlite.exec(`UPDATE shelf_boxes SET status='${status}' WHERE id='box'`);
-    assert.throws(
-      () => db.transaction((tx) => completeVerificationTask(tx, { verificationTaskId: "vt", actorId: "u1" })),
-      (e: any) => e.status === 409,
-    );
-  }
-  sqlite.close();
 });
 
 test("POST /shelf-boxes/:id/verify-item marks scans verified", async () => {
+  await seedBase();
   const res = await app.request("/shelf-boxes/box/verify-item", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -145,39 +65,25 @@ test("POST /shelf-boxes/:id/verify-item marks scans verified", async () => {
   assert.equal(body.verified_count, 1);
 });
 
-test("GET /verification-tasks?due_before=... filters by due_at", async () => {
-  const res = await app.request("/verification-tasks?due_before=2099-01-02T00:00:00.000Z");
-  assert.equal(res.status, 200);
-  const tasks = (await res.json()) as any[];
-  assert.ok(tasks.some((t) => t.id === "vt"));
-  const res2 = await app.request("/verification-tasks?due_before=2020-01-01T00:00:00.000Z");
-  assert.equal(((await res2.json()) as any[]).length, 0);
-});
-
 test("GET shelf browse endpoints (shelves, with-box-counts, shelf boxes, box detail)", async () => {
-  routeSqlite.exec(`
-    INSERT INTO shelves (id, code, created_at, updated_at) VALUES ('shb','B1','0','0');
-    INSERT INTO shelf_boxes (id, receiving_order_id, shelf_code, status, created_at, updated_at)
-      VALUES ('gvbox','ro','B1','closed','0','0');
-    INSERT INTO put_away_scans (id, receiving_invoice_item_id, qty, shelf_box_id, verified, created_at, updated_at)
-      VALUES ('gvpas','rii',2,'gvbox',1,'0','0');
-  `);
+  await seedBase();
+  await db.execute(sql`INSERT INTO shelf_boxes (id, receiving_order_id, shelf_code, status, created_at)
+    VALUES ('gvbox','ro','B1','closed',${TS})`);
+  await db.execute(sql`INSERT INTO shelf_box_items (id, shelf_box_id, receiving_invoice_item_id, part_id, qty, verified, verified_at)
+    VALUES ('gvpas','gvbox','rii', 'p',2,true,${TS})`);
 
-  // /shelves lists all shelf codes
   const shelvesRes = await app.request("/shelves");
   assert.equal(shelvesRes.status, 200);
   const shelves = (await shelvesRes.json()) as any[];
   const codes = shelves.map((s) => s.code);
   assert.ok(codes.includes("A1") && codes.includes("B1"));
 
-  // /shelves/with-box-counts: B1 has its one box, A1 has the seeded box
   const countsRes = await app.request("/shelves/with-box-counts");
   assert.equal(countsRes.status, 200);
   const counts = (await countsRes.json()) as any[];
   assert.equal(counts.find((r) => r.code === "B1").box_count, 1);
   assert.ok(counts.find((r) => r.code === "A1").box_count >= 1);
 
-  // /shelves/B1/boxes: item/verified counts per box
   const boxesRes = await app.request("/shelves/B1/boxes");
   assert.equal(boxesRes.status, 200);
   const boxes = (await boxesRes.json()) as any[];
@@ -187,7 +93,6 @@ test("GET shelf browse endpoints (shelves, with-box-counts, shelf boxes, box det
   assert.equal(boxes[0].verified_count, 1);
   assert.equal(boxes[0].checked_today, false);
 
-  // /shelf-boxes/:id: nested shelf + receiving_order + items
   const detailRes = await app.request("/shelf-boxes/gvbox");
   assert.equal(detailRes.status, 200);
   const detail = (await detailRes.json()) as any;
@@ -197,10 +102,14 @@ test("GET shelf browse endpoints (shelves, with-box-counts, shelf boxes, box det
   assert.equal(detail.items.length, 1);
   assert.equal(detail.items[0].part_no, "X");
   assert.equal(detail.items[0].qty, 2);
-  assert.equal(detail.items[0].verified, 1);
+  assert.equal(detail.items[0].verified, true);
 
   const missingRes = await app.request("/shelf-boxes/nope");
   assert.equal(missingRes.status, 404);
 });
 
-test("cleanup", () => { routeSqlite.close(); });
+test.after(async () => {
+  await testSql.end();
+  const { sql: appSql } = await import("../db.js");
+  await appSql.end();
+});

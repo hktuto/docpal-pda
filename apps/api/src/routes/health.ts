@@ -1,15 +1,16 @@
 import { Hono } from "hono";
 import type { HealthResponse } from "@warehouse/shared";
-import { sqlite } from "../db.js";
+import { sql } from "drizzle-orm";
+import { db } from "../db.js";
 
-export const healthRoute = new Hono().get("/health", (c) => {
-  let db: HealthResponse["db"] = "ok";
+export const healthRoute = new Hono().get("/health", async (c) => {
+  let dbStatus: HealthResponse["db"] = "ok";
   try {
-    sqlite.prepare("SELECT 1").get();
+    await db.execute(sql`SELECT 1`);
   } catch {
-    db = "error";
+    dbStatus = "error";
   }
 
-  const body: HealthResponse = { ok: db === "ok", db };
-  return c.json(body, db === "ok" ? 200 : 500);
+  const body: HealthResponse = { ok: dbStatus === "ok", db: dbStatus };
+  return c.json(body, dbStatus === "ok" ? 200 : 500);
 });

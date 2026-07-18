@@ -26,7 +26,14 @@ docs/.obsidian/workspace.json
 .worktrees
 .superpowers/
 
-# SQLite (apps/api)
+# SQLite (legacy)
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
+
+# Drizzle (apps/api)
+apps/api/drizzle/
+
+# Local env files (root .env is tracked intentionally)
+apps/*/.env
+

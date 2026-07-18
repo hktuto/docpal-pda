@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { type DbOrTx } from "./invariants.js";
-import { now } from "./now.js";
+import { queryAll, queryRun } from "./query.js";
 import { logTransition } from "../ingest/transition.js";
 
 // Port of apps/web/db/picking.ts reportPickingOrderIssues. Differences from the web:
@@ -28,10 +28,10 @@ interface OrderRow {
   totalQty: number;
 }
 
-export function reportPickingOrderIssues(
+export async function reportPickingOrderIssues(
   tx: DbOrTx,
   input: ReportPickingOrderIssuesInput
-): { reported: string[]; skipped: string[] } {
+): Promise<{ reported: string[]; skipped: string[] }> {
   const ids = [...new Set(input.pickingOrderIds)];
   if (ids.length === 0) throw new HTTPException(400, { message: "no_orders_selected" });
   if (input.reason === "merge" && ids.length < 2) {
@@ -44,9 +44,9 @@ export function reportPickingOrderIssues(
     throw new HTTPException(400, { message: "pack_size_required" });
   }
 
-  const rows = tx.all<OrderRow>(sql`
-    SELECT po.id, po.ref_no AS refNo, po.status,
-      (SELECT COALESCE(SUM(pi.qty), 0) FROM picking_items pi WHERE pi.picking_order_id = po.id) AS totalQty
+  const rows = await queryAll<OrderRow>(tx, sql`
+    SELECT po.id, po.ref_no AS "refNo", po.status,
+      (SELECT COALESCE(SUM(pi.qty)::int, 0) FROM picking_items pi WHERE pi.picking_order_id = po.id) AS "totalQty"
     FROM picking_orders po
     WHERE po.id IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})
   `);
@@ -56,7 +56,6 @@ export function reportPickingOrderIssues(
   if (reportable.length === 0) throw new HTTPException(400, { message: "no_reportable_orders_selected" });
 
   const remark = input.remark?.trim() || null;
-  const t = now();
   const reported: string[] = [];
 
   for (const row of reportable) {
@@ -64,7 +63,9 @@ export function reportPickingOrderIssues(
       throw new HTTPException(400, { message: `actual_qty_must_be_less_than_requested: ${row.refNo}` });
     }
 
-    tx.run(sql`
+    await queryRun(
+      tx,
+      sql`
       UPDATE picking_orders
       SET status = 'issue',
           issue_reason = ${input.reason},
@@ -72,19 +73,24 @@ export function reportPickingOrderIssues(
           issue_pack_size = ${input.reason === "cannot_divide" ? input.packSize : null},
           issue_note = NULL,
           issue_remark = ${remark},
-          issue_reported_at = ${t},
+          issue_reported_at = now(),
           issue_reported_by = ${input.actorId},
-          updated_at = ${t}
+          updated_at = now()
       WHERE id = ${row.id}
-    `);
+    `
+    );
 
-    logTransition(tx, {
+    await logTransition(tx, {
       entityType: "picking_order",
       entityId: row.id,
-      fromStatus: row.status,
-      toStatus: "issue",
+      fromState: row.status,
+      toState: "issue",
       actorId: input.actorId,
-      note: `reason=${input.reason}` + (input.qty != null ? ` qty=${input.qty}` : "") + (input.packSize != null ? ` packSize=${input.packSize}` : ""),
+      metadata: {
+        reason: input.reason,
+        ...(input.qty != null ? { qty: input.qty } : {}),
+        ...(input.packSize != null ? { packSize: input.packSize } : {}),
+      },
     });
 
     reported.push(row.id);

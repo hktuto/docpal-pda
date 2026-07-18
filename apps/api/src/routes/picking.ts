@@ -2,6 +2,7 @@ import { Hono, type Context } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { ApplyOcrPickRequest, IngestUpsertResponse, PickingPutBody, ScanResponse } from "@warehouse/shared";
 import { db } from "../db.js";
+import { type DbOrTx } from "../db/query.js";
 import { upsertPickingOrder } from "../ingest/picking.js";
 import { allocatePickingOrder } from "../db/allocate.js";
 import { reportPickingOrderIssues, type PickingIssueReason } from "../db/pickingIssues.js";
@@ -35,11 +36,11 @@ pickingRoute.put("/picking-orders/:external_id", async (c) => {
   } catch {
     throw new HTTPException(400, { message: "invalid JSON body" });
   }
-  const result = db.transaction((tx) => upsertPickingOrder(tx, externalId, body));
+  const result = await db.transaction(async (tx: DbOrTx) => upsertPickingOrder(tx, externalId, body));
   // Allocation is best-effort and recomputable; it must never misreport a committed upsert.
   if (result.changed) {
     try {
-      allocatePickingOrder(db, result.orderId);
+      await allocatePickingOrder(db, result.orderId);
     } catch (err) {
       console.error("allocatePickingOrder after picking upsert failed", err);
     }
@@ -60,7 +61,7 @@ pickingRoute.post("/picking-orders/report-issues", async (c) => {
   if (typeof body.reason !== "string" || !pickingIssueReasons.includes(body.reason)) {
     throw new HTTPException(400, { message: "unhandled_issue_reason" });
   }
-  const result = db.transaction((tx) =>
+  const result = await db.transaction(async (tx: DbOrTx) =>
     reportPickingOrderIssues(tx, {
       pickingOrderIds: body.picking_order_ids as string[],
       reason: body.reason as PickingIssueReason,
@@ -81,7 +82,7 @@ pickingRoute.post("/picking-orders/:id/ocr-pick", async (c) => {
   if (typeof body.picking_item_id !== "string" || body.picking_item_id.trim() === "") {
     throw new HTTPException(400, { message: "picking_item_id is required" });
   }
-  const result = db.transaction((tx) =>
+  const result = await db.transaction(async (tx: DbOrTx) =>
     applyOcrPick(tx, receivingOrderId, {
       pickingItemId: body.picking_item_id,
       qty: body.qty,

@@ -16,7 +16,7 @@ Composables live in `composables/` and contain reusable Vue logic.
 | `useStatusLabel.ts` | Status label helper. |
 | `useVisibleReload.ts` | Reload data on mount and visibility/focus events for Capacitor. |
 | `useLabelScanReview.ts` | Review-modal state for label scans. |
-| `useHardwareScanner.ts` | Hardware scan input: fast intent-broadcast path (via `useScannerBroadcast`) plus keyboard-wedge fallback; used by receiving/picking detail pages. |
+| `useHardwareScanner.ts` | Hardware scan input: fast intent-broadcast path (via `useScannerBroadcast`) plus keyboard-wedge fallback; broadcast scans replace the value of a focused `data-scan-fill` input instead of running the match pipeline; used by receiving/picking detail pages. |
 | `useScannerBroadcast.ts` | Capacitor wrapper for the native `ScannerBroadcast` plugin (no-op in browser). |
 
 ## Agent note

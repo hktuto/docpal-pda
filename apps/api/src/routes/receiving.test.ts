@@ -1,22 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import Database from "better-sqlite3";
+import { createTestDb } from "../db/test-helper.js";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wh-api-"));
-const dbPath = path.join(dir, "t.sqlite");
-process.env.DATABASE_URL = dbPath;
+process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? "postgresql://warehouse:warehouse@localhost:5432/warehouse_test";
 process.env.WAREHOUSE_SEED = "off";
 const { app } = await import("../index.js");
 
-const sqlite = new Database(dbPath);
+const { sql, db } = await createTestDb();
 
 test("PUT receiving -> confirm-arrival flips to in_hand, sets received_qty=qty, logs transition, allocates", async () => {
-  sqlite.exec(`INSERT INTO parts (id, part_no, part_no_norm, created_at, updated_at) VALUES ('pABO','ABO','AB0','0','0')`);
-  sqlite.exec(`INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('po','pe','PO','picking','0','0')`);
-  sqlite.exec(`INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('pi','po','pABO',60,'0','0')`);
+  await db.execute(`INSERT INTO parts (id, part_no, part_no_norm, created_at, updated_at) VALUES ('pABO','ABO','AB0','0','0')`);
+  await db.execute(`INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('po','pe','PO','picking','0','0')`);
+  await db.execute(`INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('pi','po','pABO',60,'0','0')`);
 
   const put = await app.request("/receiving-orders/EXT-1", {
     method: "PUT",
@@ -30,13 +25,13 @@ test("PUT receiving -> confirm-arrival flips to in_hand, sets received_qty=qty, 
   const body = (await confirm.json()) as { id: string; status: string };
   assert.equal(body.status, "in_hand");
 
-  const ro = sqlite.prepare("SELECT status FROM receiving_orders WHERE external_id='EXT-1'").get() as any;
+  const ro = (await db.execute<{ status: string }>(`SELECT status FROM receiving_orders WHERE external_id='EXT-1'`))[0];
   assert.equal(ro.status, "in_hand");
-  const rii = sqlite.prepare("SELECT received_qty, available_qty, allocated_qty FROM receiving_invoice_items").get() as any;
+  const rii = (await db.execute<{ received_qty: number; available_qty: number; allocated_qty: number }>(`SELECT received_qty, available_qty, allocated_qty FROM receiving_invoice_items`))[0];
   assert.equal(rii.received_qty, 100);
   assert.equal(rii.allocated_qty, 60);
   assert.equal(rii.available_qty, 40);
-  const logs = sqlite.prepare("SELECT COUNT(*) c FROM transition_logs WHERE entity_type='receiving_order' AND to_status='in_hand'").get() as any;
+  const logs = (await db.execute<{ c: number }>(`SELECT COUNT(*)::int AS c FROM transition_logs WHERE entity_type='receiving_order' AND to_status='in_hand'`))[0];
   assert.equal(logs.c, 1);
 });
 
@@ -44,18 +39,18 @@ test("confirm-arrival is 409 when not pending and 404 when unknown", async () =>
   const miss = await app.request("/receiving-orders/NOPE/confirm-arrival", { method: "POST" });
   assert.equal(miss.status, 404);
 
-  sqlite.exec(`INSERT INTO receiving_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('ro2','E2','R','in_hand','0','0')`);
+  await db.execute(`INSERT INTO receiving_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('ro2','E2','R','in_hand','0','0')`);
   const again = await app.request("/receiving-orders/E2/confirm-arrival", { method: "POST" });
   assert.equal(again.status, 409);
 });
 
 test("confirm-arrival also matches the internal order id (web passes internal ids)", async () => {
-  sqlite.exec(`INSERT INTO receiving_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('roint','EINT','R-INT','pending','0','0')`);
+  await db.execute(`INSERT INTO receiving_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('roint','EINT','R-INT','pending','0','0')`);
   const res = await app.request("/receiving-orders/roint/confirm-arrival", { method: "POST" });
   assert.equal(res.status, 200);
   const body = (await res.json()) as { id: string; status: string };
   assert.deepEqual(body, { id: "roint", status: "in_hand" });
-  assert.equal((sqlite.prepare("SELECT status FROM receiving_orders WHERE id='roint'").get() as any).status, "in_hand");
+  assert.equal((await db.execute<{ status: string }>(`SELECT status FROM receiving_orders WHERE id='roint'`))[0].status, "in_hand");
 });
 
-test("cleanup", () => { sqlite.close(); });
+test.after(async () => { await sql.end(); });

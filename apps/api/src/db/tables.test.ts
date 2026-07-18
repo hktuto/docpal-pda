@@ -1,84 +1,66 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { createDb } from "./client.js";
-import { createTables } from "./tables.js";
-
-function tmp() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wh-api-"));
-  return path.join(dir, "t.sqlite");
-}
+import { sql, db, setupTestDb } from "./test-helper.js";
 
 const EXPECTED_TABLES = [
   "users","suppliers","parts","shelves",
-  "receiving_orders","receiving_invoices","receiving_invoice_items","receiving_item_mismatches",
-  "picking_orders","picking_items","shipping_boxes","picking_packages",
-  "inventory_lots","inventory_lot_sources","shelf_boxes","shelf_box_items","put_away_scans",
-  "allocations","allocation_receiving_items","measuring_tasks","verification_tasks","transition_logs",
+  "receiving_orders","receiving_invoices","receiving_invoice_items",
+  "picking_orders","picking_items","shipping_boxes","picking_packages","shipping_box_items",
+  "inventory_lots","inventory_lot_sources","shelf_boxes","shelf_box_items",
+  "allocations","measuring_tasks","transaction_logs","inventory_transactions",
 ];
 
-function tableNames(sqlite: ReturnType<typeof createDb>["sqlite"]): Set<string> {
-  const rows = sqlite.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[];
-  return new Set(rows.map((r) => r.name));
+async function tableNames(): Promise<Set<string>> {
+  const rows = await db.execute<{ tablename: string }>(`
+    SELECT tablename FROM pg_tables WHERE schemaname = 'public'
+  `);
+  return new Set(rows.map((r) => r.tablename));
 }
 
-test("createTables creates every table", () => {
-  const { sqlite } = createDb(tmp());
-  createTables(sqlite);
-  const names = tableNames(sqlite);
+test("migrations create every expected table", async () => {
+  await setupTestDb();
+  const names = await tableNames();
   for (const t of EXPECTED_TABLES) assert.ok(names.has(t), `missing table ${t}`);
-  sqlite.close();
 });
 
-test("createTables is idempotent", () => {
-  const { sqlite } = createDb(tmp());
-  createTables(sqlite);
-  assert.doesNotThrow(() => createTables(sqlite));
-  sqlite.close();
+test("inventory_lots.available_qty is generated (stored)", async () => {
+  await setupTestDb();
+  await db.execute(`
+    INSERT INTO parts (id, part_no) VALUES ('p','X');
+    INSERT INTO inventory_lots (id, part_id, total_qty, allocated_qty) VALUES ('l','p',10,4);
+  `);
+  const rows = await db.execute<{ available_qty: number }>(`SELECT available_qty FROM inventory_lots WHERE id='l'`);
+  assert.equal(rows[0].available_qty, 6);
 });
 
-test("picking_items.remaining_qty is generated (stored)", () => {
-  const { sqlite } = createDb(tmp());
-  createTables(sqlite);
-  sqlite.prepare("INSERT INTO parts (id, part_no, part_no_norm, created_at, updated_at) VALUES ('p','X','X',0,0)").run();
-  sqlite.prepare("INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('po','e1','R1','pending',0,0)").run();
-  sqlite.prepare("INSERT INTO picking_items (id, picking_order_id, part_id, qty, picked_qty, scanned_not_boxed_qty, created_at, updated_at) VALUES ('pi','po','p',10,3,2,0,0)").run();
-  const row = sqlite.prepare("SELECT remaining_qty FROM picking_items WHERE id='pi'").get() as { remaining_qty: number };
-  assert.equal(row.remaining_qty, 5); // 10 - 3 - 2
-  sqlite.close();
-});
-
-test("inventory_lots.available_qty is generated (stored)", () => {
-  const { sqlite } = createDb(tmp());
-  createTables(sqlite);
-  sqlite.prepare("INSERT INTO parts (id, part_no, part_no_norm, created_at, updated_at) VALUES ('p','X','X',0,0)").run();
-  sqlite.prepare("INSERT INTO inventory_lots (id, part_id, total_qty, allocated_qty, created_at, updated_at) VALUES ('l','p',10,4,0,0)").run();
-  const row = sqlite.prepare("SELECT available_qty FROM inventory_lots WHERE id='l'").get() as { available_qty: number };
-  assert.equal(row.available_qty, 6);
-  sqlite.close();
-});
-
-test("allocations XOR check rejects both targets set", () => {
-  const { sqlite } = createDb(tmp());
-  createTables(sqlite);
-  sqlite.prepare("INSERT INTO parts (id, part_no, part_no_norm, created_at, updated_at) VALUES ('p','X','X',0,0)").run();
-  sqlite.prepare("INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('po','e1','R1','pending',0,0)").run();
-  sqlite.prepare("INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('pi','po','p',1,0,0)").run();
-  sqlite.prepare("INSERT INTO inventory_lots (id, part_id, total_qty, created_at, updated_at) VALUES ('l','p',1,0,0)").run();
-  sqlite.prepare("INSERT INTO receiving_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('ro','e2','R2','pending',0,0)").run();
-  assert.throws(() =>
-    sqlite.prepare("INSERT INTO allocations (id, picking_item_id, qty, inventory_lot_id, receiving_order_id, created_at, updated_at) VALUES ('a','pi',1,'l','ro',0,0)").run()
+test("allocations source check rejects no target set, allows both (OR check)", async () => {
+  await setupTestDb();
+  await db.execute(`
+    INSERT INTO parts (id, part_no) VALUES ('p','X');
+    INSERT INTO picking_orders (id, ref_no, status, created_at, updated_at) VALUES ('po','R1','pending','2024-01-01T00:00:00Z','2024-01-01T00:00:00Z');
+    INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('pi','po','p',1,'2024-01-01T00:00:00Z','2024-01-01T00:00:00Z');
+    INSERT INTO inventory_lots (id, part_id, total_qty) VALUES ('l','p',1);
+    INSERT INTO receiving_orders (id, ref_no, status, created_at, updated_at) VALUES ('ro','R2','pending','2024-01-01T00:00:00Z','2024-01-01T00:00:00Z');
+    INSERT INTO receiving_invoices (id, receiving_order_id, invoice_no, created_at, updated_at) VALUES ('ri','ro','INV','2024-01-01T00:00:00Z','2024-01-01T00:00:00Z');
+    INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty) VALUES ('rii','ri','p',1);
+  `);
+  // CHECK is inventory_lot_id IS NOT NULL OR receiving_invoice_item_id IS NOT NULL → neither set violates it.
+  await assert.rejects(
+    () => sql.unsafe(`
+      INSERT INTO allocations (id, picking_item_id, qty, created_at, updated_at)
+      VALUES ('a0','pi',1,'2024-01-01T00:00:00Z','2024-01-01T00:00:00Z')
+    `),
+    /check constraint/
   );
-  sqlite.close();
+  // Both set is accepted by the DB check; the single-source rule is enforced by the invariant guard.
+  await sql.unsafe(`
+    INSERT INTO allocations (id, picking_item_id, qty, inventory_lot_id, receiving_invoice_item_id, created_at, updated_at)
+    VALUES ('a1','pi',1,'l','rii','2024-01-01T00:00:00Z','2024-01-01T00:00:00Z')
+  `);
+  const rows = await db.execute<{ c: number }>(`SELECT count(*)::int c FROM allocations WHERE id='a1'`);
+  assert.equal(rows[0].c, 1);
 });
 
-test("verification_tasks kind check rejects pre_shipment without picking_order_id", () => {
-  const { sqlite } = createDb(tmp());
-  createTables(sqlite);
-  assert.throws(() =>
-    sqlite.prepare("INSERT INTO verification_tasks (id, kind, status, created_at, updated_at) VALUES ('v','pre_shipment','pending',0,0)").run()
-  );
-  sqlite.close();
+test.after(async () => {
+  await sql.end();
 });

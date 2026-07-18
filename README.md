@@ -1,13 +1,14 @@
 # Warehouse Web Demo
 
-A client-side Nuxt 3 proof-of-concept for the DocPal warehouse mobile/Android flows. It runs a full Postgres database in the browser using PGlite, so the demo works without a backend.
+A client-side Nuxt 3 proof-of-concept for the DocPal warehouse mobile/Android flows. The web app talks to the Hono API (`apps/api`, SQLite) by default; the original in-browser PGlite database remains available behind a config flag for offline/demo use.
 
 ---
 
 ## Documentation
 
 - [App documentation (manual + AI lookup)](./docs/app-docs/README.md) — training guides for operators and a feature registry for coding agents.
-- [Database relations](./docs/database-relations.md) — ER diagram and table reference.
+- [API database schema](./docs/database-schema-api.md) — SQLite schema and ER diagram for `apps/api`.
+- [API reference](./docs/api-reference-backend.md) — HTTP endpoints served by `apps/api`.
 - [Agent instructions](./AGENTS.md) — conventions and commands for coding agents.
 
 ---

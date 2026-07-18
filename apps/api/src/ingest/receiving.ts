@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { type DbOrTx, applyReceipt } from "../db/invariants.js";
 import { now } from "../db/now.js";
 import { normalizeCode, normalizePlain } from "../db/schema/normalize.js";
+import { queryAll, queryGet, queryRun } from "../db/query.js";
 import { resolveOrCreatePart } from "./parts.js";
 import { resolveSupplierId } from "./suppliers.js";
 import { logTransition } from "./transition.js";
@@ -34,48 +35,53 @@ function itemNorms(it: ReceivingPutItem) {
   };
 }
 
-function upsertInvoice(
+async function upsertInvoice(
   tx: DbOrTx, orderId: string, inv: ReceivingPutInvoice, fallbackSupplierId: string | null
-): { id: string; changed: boolean } {
-  const supplierId = inv.supplier_code !== undefined ? resolveSupplierId(tx, inv.supplier_code) : fallbackSupplierId;
-  const existing = tx.get<{ id: string; supplierId: string | null }>(
-    sql`SELECT id, supplier_id AS supplierId FROM receiving_invoices WHERE receiving_order_id = ${orderId} AND invoice_no = ${inv.invoice_no}`
+): Promise<{ id: string; changed: boolean; supplierId: string | null }> {
+  const supplierId = inv.supplier_code !== undefined ? await resolveSupplierId(tx, inv.supplier_code) : fallbackSupplierId;
+  const existing = await queryGet<{ id: string; supplierId: string | null }>(
+    tx,
+    sql`SELECT id, supplier_id AS "supplierId" FROM receiving_invoices WHERE receiving_order_id = ${orderId} AND invoice_no = ${inv.invoice_no}`
   );
   if (existing) {
     if (existing.supplierId !== supplierId) {
-      tx.run(sql`UPDATE receiving_invoices SET supplier_id = ${supplierId}, updated_at = ${now()} WHERE id = ${existing.id}`);
-      return { id: existing.id, changed: true };
+      await queryRun(tx, sql`UPDATE receiving_invoices SET supplier_id = ${supplierId}, updated_at = ${now()} WHERE id = ${existing.id}`);
+      return { id: existing.id, changed: true, supplierId };
     }
-    return { id: existing.id, changed: false };
+    return { id: existing.id, changed: false, supplierId };
   }
   const id = crypto.randomUUID();
-  tx.run(
+  await queryRun(
+    tx,
     sql`INSERT INTO receiving_invoices (id, receiving_order_id, invoice_no, supplier_id, created_at, updated_at)
         VALUES (${id}, ${orderId}, ${inv.invoice_no}, ${supplierId}, ${now()}, ${now()})`
   );
-  return { id, changed: true };
+  return { id, changed: true, supplierId };
 }
 
-export function upsertReceivingOrder(tx: DbOrTx, externalId: string, body: ReceivingPutBody): ReceivingUpsertResult {
+export async function upsertReceivingOrder(tx: DbOrTx, externalId: string, body: ReceivingPutBody): Promise<ReceivingUpsertResult> {
   validate(body);
-  const orderSupplierId = resolveSupplierId(tx, body.order.supplier_code);
-  const existing = tx.get<{ id: string; status: string }>(
+  const orderSupplierId = await resolveSupplierId(tx, body.order.supplier_code);
+  const existing = await queryGet<{ id: string; status: string }>(
+    tx,
     sql`SELECT id, status FROM receiving_orders WHERE external_id = ${externalId}`
   );
 
   if (!existing) {
     const orderId = crypto.randomUUID();
-    tx.run(
+    await queryRun(
+      tx,
       sql`INSERT INTO receiving_orders (id, external_id, ref_no, delivery_date, status, supplier_id, created_at, updated_at)
           VALUES (${orderId}, ${externalId}, ${body.order.ref_no}, ${body.order.delivery_date ?? null}, 'pending',
                   ${orderSupplierId}, ${now()}, ${now()})`
     );
     for (const inv of body.invoices) {
-      const { id: invoiceId } = upsertInvoice(tx, orderId, inv, orderSupplierId);
+      const { id: invoiceId, supplierId } = await upsertInvoice(tx, orderId, inv, orderSupplierId);
       for (const it of inv.items) {
-        const partId = resolveOrCreatePart(tx, it.part_no, it.description);
+        const partId = await resolveOrCreatePart(tx, it.part_no, it.description, supplierId);
         const n = itemNorms(it);
-        tx.run(
+        await queryRun(
+          tx,
           sql`INSERT INTO receiving_invoice_items
               (id, receiving_invoice_id, part_id, qty, box_id, date_code, lot_code, coo, cow,
                date_code_norm, lot_code_norm, coo_norm, cow_norm, line_no, created_at, updated_at)
@@ -98,48 +104,50 @@ interface ExistingItem {
   receivedQty: number; pickedQty: number; putAwayQty: number; allocLinks: number;
 }
 
-function loadExistingItems(tx: DbOrTx, orderId: string): ExistingItem[] {
-  return tx.all<ExistingItem>(sql`
-    SELECT rii.id, ri.id AS invoiceId, rii.line_no AS lineNo, rii.part_id AS partId, rii.qty,
-           rii.box_id AS boxId, rii.date_code_norm AS dateCodeNorm, rii.lot_code_norm AS lotCodeNorm,
-           rii.coo_norm AS cooNorm, rii.cow_norm AS cowNorm,
-           rii.received_qty AS receivedQty, rii.picked_qty AS pickedQty, rii.put_away_qty AS putAwayQty,
-           (SELECT COUNT(*) FROM allocation_receiving_items ari WHERE ari.receiving_invoice_item_id = rii.id) AS allocLinks
+async function loadExistingItems(tx: DbOrTx, orderId: string): Promise<ExistingItem[]> {
+  return queryAll<ExistingItem>(tx, sql`
+    SELECT rii.id, ri.id AS "invoiceId", rii.line_no AS "lineNo", rii.part_id AS "partId", rii.qty,
+           rii.box_id AS "boxId", rii.date_code_norm AS "dateCodeNorm", rii.lot_code_norm AS "lotCodeNorm",
+           rii.coo_norm AS "cooNorm", rii.cow_norm AS "cowNorm",
+           rii.received_qty AS "receivedQty", rii.picked_qty AS "pickedQty", rii.put_away_qty AS "putAwayQty",
+           (SELECT COUNT(*)::int FROM allocation_receiving_items ari WHERE ari.receiving_invoice_item_id = rii.id) AS "allocLinks"
     FROM receiving_invoice_items rii JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
     WHERE ri.receiving_order_id = ${orderId}`);
 }
 
-function reconcileReceivingOrder(
+async function reconcileReceivingOrder(
   tx: DbOrTx, orderId: string, status: string, body: ReceivingPutBody, orderSupplierId: string | null
-): ReceivingUpsertResult {
+): Promise<ReceivingUpsertResult> {
   let changed = false;
-  const ro = tx.get<{ refNo: string; deliveryDate: string | null; supplierId: string | null }>(
-    sql`SELECT ref_no AS refNo, delivery_date AS deliveryDate, supplier_id AS supplierId FROM receiving_orders WHERE id = ${orderId}`
-  )!;
+  const ro = (await queryGet<{ refNo: string; deliveryDate: string | null; supplierId: string | null }>(
+    tx,
+    sql`SELECT ref_no AS "refNo", delivery_date AS "deliveryDate", supplier_id AS "supplierId" FROM receiving_orders WHERE id = ${orderId}`
+  ))!;
   const newDelivery = body.order.delivery_date ?? null;
   if (ro.refNo !== body.order.ref_no || ro.deliveryDate !== newDelivery || ro.supplierId !== orderSupplierId) {
-    tx.run(sql`UPDATE receiving_orders SET ref_no = ${body.order.ref_no}, delivery_date = ${newDelivery},
-               supplier_id = ${orderSupplierId}, updated_at = ${now()} WHERE id = ${orderId}`);
+    await queryRun(tx, sql`UPDATE receiving_orders SET ref_no = ${body.order.ref_no}, delivery_date = ${newDelivery},
+                   supplier_id = ${orderSupplierId}, updated_at = ${now()} WHERE id = ${orderId}`);
     changed = true;
   }
 
   const locked = status !== "pending";
-  const existingItems = loadExistingItems(tx, orderId);
+  const existingItems = await loadExistingItems(tx, orderId);
   const seenKeys = new Set<string>();
 
   for (const inv of body.invoices) {
-    const invRes = upsertInvoice(tx, orderId, inv, orderSupplierId);
+    const invRes = await upsertInvoice(tx, orderId, inv, orderSupplierId);
     const invoiceId = invRes.id;
     if (invRes.changed) changed = true;
     for (const it of inv.items) {
       const key = `${invoiceId}:${it.line_no}`;
       seenKeys.add(key);
-      const partId = resolveOrCreatePart(tx, it.part_no, it.description);
+      const partId = await resolveOrCreatePart(tx, it.part_no, it.description, invRes.supplierId);
       const n = itemNorms(it);
       const ex = existingItems.find((e) => e.invoiceId === invoiceId && e.lineNo === it.line_no);
 
       if (!ex) {
-        tx.run(
+        await queryRun(
+          tx,
           sql`INSERT INTO receiving_invoice_items
               (id, receiving_invoice_id, part_id, qty, box_id, date_code, lot_code, coo, cow,
                date_code_norm, lot_code_norm, coo_norm, cow_norm, line_no, created_at, updated_at)
@@ -161,7 +169,8 @@ function reconcileReceivingOrder(
         ex.dateCodeNorm === n.dateCodeNorm && ex.lotCodeNorm === n.lotCodeNorm &&
         ex.cooNorm === n.cooNorm && ex.cowNorm === n.cowNorm;
       if (!same) {
-        tx.run(
+        await queryRun(
+          tx,
           sql`UPDATE receiving_invoice_items SET part_id = ${partId}, qty = ${it.qty}, box_id = ${it.box_id ?? null},
               date_code = ${n.dateCode}, lot_code = ${n.lotCode}, coo = ${n.coo}, cow = ${n.cow},
               date_code_norm = ${n.dateCodeNorm}, lot_code_norm = ${n.lotCodeNorm}, coo_norm = ${n.cooNorm},
@@ -178,25 +187,26 @@ function reconcileReceivingOrder(
     if (locked) throw new HTTPException(409, { message: `cannot remove a line once ${status}` });
     if (ex.allocLinks > 0 || ex.receivedQty > 0 || ex.pickedQty > 0 || ex.putAwayQty > 0)
       throw new HTTPException(409, { message: "cannot remove a line after work started" });
-    tx.run(sql`DELETE FROM receiving_invoice_items WHERE id = ${ex.id}`);
+    await queryRun(tx, sql`DELETE FROM receiving_invoice_items WHERE id = ${ex.id}`);
     changed = true;
   }
 
-  if (changed) tx.run(sql`UPDATE receiving_orders SET updated_at = ${now()} WHERE id = ${orderId}`);
+  if (changed) await queryRun(tx, sql`UPDATE receiving_orders SET updated_at = ${now()} WHERE id = ${orderId}`);
   return { orderId, created: false, changed };
 }
 
-export function confirmReceivingArrival(tx: DbOrTx, orderId: string, actorId?: string | null): { fromStatus: string } {
-  const ro = tx.get<{ id: string; status: string }>(sql`SELECT id, status FROM receiving_orders WHERE id = ${orderId}`);
+export async function confirmReceivingArrival(tx: DbOrTx, orderId: string, actorId?: string | null): Promise<{ fromStatus: string }> {
+  const ro = await queryGet<{ id: string; status: string }>(tx, sql`SELECT id, status FROM receiving_orders WHERE id = ${orderId}`);
   if (!ro) throw new HTTPException(404, { message: "receiving order not found" });
   if (ro.status !== "pending") throw new HTTPException(409, { message: `cannot confirm arrival from status ${ro.status}` });
 
-  const items = tx.all<{ id: string; qty: number }>(
+  const items = await queryAll<{ id: string; qty: number }>(
+    tx,
     sql`SELECT rii.id, rii.qty FROM receiving_invoice_items rii
         JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id WHERE ri.receiving_order_id = ${orderId}`
   );
-  tx.run(sql`UPDATE receiving_orders SET status = 'in_hand', updated_at = ${now()} WHERE id = ${orderId}`);
-  for (const it of items) applyReceipt(tx, it.id, it.qty);
-  logTransition(tx, { entityType: "receiving_order", entityId: orderId, fromStatus: ro.status, toStatus: "in_hand", actorId: actorId ?? null });
+  await queryRun(tx, sql`UPDATE receiving_orders SET status = 'in_hand', updated_at = ${now()} WHERE id = ${orderId}`);
+  for (const it of items) await applyReceipt(tx, it.id, it.qty);
+  await logTransition(tx, { entityType: "receiving_order", entityId: orderId, fromState: ro.status, toState: "in_hand", actorId: actorId ?? null });
   return { fromStatus: ro.status };
 }

@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import type { DbOrTx } from "../db/invariants.js";
 import { now } from "../db/now.js";
+import { queryAll, queryGet, queryRun } from "../db/query.js";
 import { resolveOrCreatePart } from "./parts.js";
 import type { PickingPutBody } from "@warehouse/shared";
 
@@ -23,31 +24,34 @@ interface ExistingPickingItem {
   scannedNotBoxedQty: number; requiredDateCode: string | null; sourceShelfCode: string | null; allocCount: number;
 }
 
-function loadExisting(tx: DbOrTx, orderId: string): ExistingPickingItem[] {
-  return tx.all<ExistingPickingItem>(sql`
-    SELECT pi.id, pi.line_id AS lineId, pi.part_id AS partId, pi.qty, pi.picked_qty AS pickedQty,
-           pi.scanned_not_boxed_qty AS scannedNotBoxedQty, pi.required_date_code AS requiredDateCode,
-           pi.source_shelf_code AS sourceShelfCode,
-           (SELECT COUNT(*) FROM allocations a WHERE a.picking_item_id = pi.id) AS allocCount
+async function loadExisting(tx: DbOrTx, orderId: string): Promise<ExistingPickingItem[]> {
+  return queryAll<ExistingPickingItem>(tx, sql`
+    SELECT pi.id, pi.line_id AS "lineId", pi.part_id AS "partId", pi.qty, pi.picked_qty AS "pickedQty",
+           pi.scanned_not_boxed_qty AS "scannedNotBoxedQty", pi.required_date_code AS "requiredDateCode",
+           pi.source_shelf_code AS "sourceShelfCode",
+           (SELECT COUNT(*)::int FROM allocations a WHERE a.picking_item_id = pi.id) AS "allocCount"
     FROM picking_items pi WHERE pi.picking_order_id = ${orderId}`);
 }
 
-export function upsertPickingOrder(tx: DbOrTx, externalId: string, body: PickingPutBody): PickingUpsertResult {
+export async function upsertPickingOrder(tx: DbOrTx, externalId: string, body: PickingPutBody): Promise<PickingUpsertResult> {
   validate(body);
-  const existing = tx.get<{ id: string; status: string }>(
+  const existing = await queryGet<{ id: string; status: string }>(
+    tx,
     sql`SELECT id, status FROM picking_orders WHERE external_id = ${externalId}`
   );
 
   if (!existing) {
     const orderId = crypto.randomUUID();
-    tx.run(
+    await queryRun(
+      tx,
       sql`INSERT INTO picking_orders (id, external_id, ref_no, status, ship_to, destination_country, created_at, updated_at)
           VALUES (${orderId}, ${externalId}, ${body.order.ref_no}, 'pending', ${body.order.ship_to ?? null},
                   ${body.order.destination_country ?? null}, ${now()}, ${now()})`
     );
     for (const it of body.items) {
-      const partId = resolveOrCreatePart(tx, it.part_no);
-      tx.run(
+      const partId = await resolveOrCreatePart(tx, it.part_no);
+      await queryRun(
+        tx,
         sql`INSERT INTO picking_items (id, picking_order_id, part_id, qty, required_date_code, source_shelf_code, line_id, created_at, updated_at)
             VALUES (${crypto.randomUUID()}, ${orderId}, ${partId}, ${it.qty}, ${it.required_date_code ?? null},
                     ${it.source_shelf_code ?? null}, ${it.line_id}, ${now()}, ${now()})`
@@ -57,27 +61,29 @@ export function upsertPickingOrder(tx: DbOrTx, externalId: string, body: Picking
   }
 
   let changed = false;
-  const po = tx.get<{ refNo: string; shipTo: string | null; dest: string | null }>(
-    sql`SELECT ref_no AS refNo, ship_to AS shipTo, destination_country AS dest FROM picking_orders WHERE id = ${existing.id}`
-  )!;
+  const po = (await queryGet<{ refNo: string; shipTo: string | null; dest: string | null }>(
+    tx,
+    sql`SELECT ref_no AS "refNo", ship_to AS "shipTo", destination_country AS dest FROM picking_orders WHERE id = ${existing.id}`
+  ))!;
   const shipTo = body.order.ship_to ?? null;
   const dest = body.order.destination_country ?? null;
   if (po.refNo !== body.order.ref_no || po.shipTo !== shipTo || po.dest !== dest) {
-    tx.run(sql`UPDATE picking_orders SET ref_no = ${body.order.ref_no}, ship_to = ${shipTo},
-               destination_country = ${dest}, updated_at = ${now()} WHERE id = ${existing.id}`);
+    await queryRun(tx, sql`UPDATE picking_orders SET ref_no = ${body.order.ref_no}, ship_to = ${shipTo},
+                   destination_country = ${dest}, updated_at = ${now()} WHERE id = ${existing.id}`);
     changed = true;
   }
 
-  const existingItems = loadExisting(tx, existing.id);
+  const existingItems = await loadExisting(tx, existing.id);
   const seen = new Set<string>();
 
   for (const it of body.items) {
     seen.add(it.line_id);
-    const partId = resolveOrCreatePart(tx, it.part_no);
+    const partId = await resolveOrCreatePart(tx, it.part_no);
     const ex = existingItems.find((e) => e.lineId === it.line_id);
 
     if (!ex) {
-      tx.run(
+      await queryRun(
+        tx,
         sql`INSERT INTO picking_items (id, picking_order_id, part_id, qty, required_date_code, source_shelf_code, line_id, created_at, updated_at)
             VALUES (${crypto.randomUUID()}, ${existing.id}, ${partId}, ${it.qty}, ${it.required_date_code ?? null},
                     ${it.source_shelf_code ?? null}, ${it.line_id}, ${now()}, ${now()})`
@@ -95,7 +101,8 @@ export function upsertPickingOrder(tx: DbOrTx, externalId: string, body: Picking
     const srcShelf = it.source_shelf_code ?? null;
     const same = ex.partId === partId && ex.qty === it.qty && ex.requiredDateCode === reqDc && ex.sourceShelfCode === srcShelf;
     if (!same) {
-      tx.run(
+      await queryRun(
+        tx,
         sql`UPDATE picking_items SET part_id = ${partId}, qty = ${it.qty}, required_date_code = ${reqDc},
             source_shelf_code = ${srcShelf}, updated_at = ${now()} WHERE id = ${ex.id}`
       );
@@ -107,10 +114,10 @@ export function upsertPickingOrder(tx: DbOrTx, externalId: string, body: Picking
     if (seen.has(ex.lineId)) continue;
     if (ex.allocCount > 0 || ex.scannedNotBoxedQty > 0 || ex.pickedQty > 0)
       throw new HTTPException(409, { message: `line ${ex.lineId}: cannot remove after work started` });
-    tx.run(sql`DELETE FROM picking_items WHERE id = ${ex.id}`);
+    await queryRun(tx, sql`DELETE FROM picking_items WHERE id = ${ex.id}`);
     changed = true;
   }
 
-  if (changed) tx.run(sql`UPDATE picking_orders SET updated_at = ${now()} WHERE id = ${existing.id}`);
+  if (changed) await queryRun(tx, sql`UPDATE picking_orders SET updated_at = ${now()} WHERE id = ${existing.id}`);
   return { orderId: existing.id, created: false, changed };
 }

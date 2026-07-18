@@ -6,6 +6,8 @@
     "dev": "pnpm -r --parallel dev",
     "dev:web": "pnpm --filter @warehouse/web dev",
     "dev:api": "pnpm --filter @warehouse/api dev",
+    "dev:backend": "pnpm --filter @warehouse/backend dev",
+    "dev:admin": "pnpm --filter @warehouse/admin dev",
     "build": "pnpm -r build",
     "generate": "pnpm --filter @warehouse/web generate",
     "test": "pnpm -r test",
@@ -14,8 +16,6 @@
     "cap:android:dev": "pnpm --filter @warehouse/web cap:android:dev"
   },
   "pnpm": {
-    "onlyBuiltDependencies": [
-      "better-sqlite3"
-    ]
+    "onlyBuiltDependencies": []
   }
 }

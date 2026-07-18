@@ -1,42 +1,36 @@
-import { sqliteTable, text, index } from "drizzle-orm/sqlite-core";
+import { pgTable, text, integer, timestamp } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
 
-export const users = sqliteTable("users", {
+export const users = pgTable("users", {
   id: text("id").primaryKey(),
   username: text("username").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
-  role: text("role").notNull(),
-  name: text("name").notNull(),
-  createdAt: text("created_at").notNull().$defaultFn(now),
-  updatedAt: text("updated_at").notNull().$defaultFn(now),
+  displayName: text("display_name").notNull(),
+  role: text("role").notNull().default("operator"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
 });
 
-export const suppliers = sqliteTable("suppliers", {
+export const suppliers = pgTable("suppliers", {
   id: text("id").primaryKey(),
   code: text("code").notNull().unique(),
   name: text("name").notNull(),
-  qrTemplate: text("qr_template"),
-  qrcodeQtyEncoding: text("qrcode_qty_encoding"),
-  createdAt: text("created_at").notNull().$defaultFn(now),
-  updatedAt: text("updated_at").notNull().$defaultFn(now),
+  shortName: text("short_name"),
 });
 
-export const parts = sqliteTable(
-  "parts",
-  {
-    id: text("id").primaryKey(),
-    partNo: text("part_no").notNull(),
-    partNoNorm: text("part_no_norm").notNull(),
-    description: text("description"),
-    createdAt: text("created_at").notNull().$defaultFn(now),
-    updatedAt: text("updated_at").notNull().$defaultFn(now),
-  },
-  (t) => ({ partNoNormIdx: index("parts_part_no_norm_idx").on(t.partNoNorm) })
-);
-
-export const shelves = sqliteTable("shelves", {
+export const parts = pgTable("parts", {
   id: text("id").primaryKey(),
-  code: text("code").notNull().unique(),
-  createdAt: text("created_at").notNull().$defaultFn(now),
-  updatedAt: text("updated_at").notNull().$defaultFn(now),
+  partNo: text("part_no").notNull().unique(),
+  internalCode: text("internal_code"),
+  description: text("description"),
+  defaultCoo: text("default_coo"),
+});
+
+export const shelves = pgTable("shelves", {
+  code: text("code").primaryKey(),
+  zone: text("zone"),
+  orgId: integer("org_id"),
+  subInventoryCode: text("sub_inventory_code"),
+  locationType: text("location_type", { enum: ["shelf", "dock"] }).notNull().default("shelf"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
 });

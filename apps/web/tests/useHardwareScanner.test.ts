@@ -149,6 +149,57 @@ describe('useHardwareScanner', () => {
     }
   });
 
+  function fakeInput(marked: boolean) {
+    return {
+      tagName: 'INPUT',
+      value: '',
+      isContentEditable: false,
+      hasAttribute: (name: string) => marked && name === 'data-scan-fill',
+      dispatchEvent: vi.fn(),
+    };
+  }
+
+  function withFocusedElement(el: unknown, fn: () => Promise<void>) {
+    const original = (globalThis as Record<string, unknown>).document;
+    (globalThis as Record<string, unknown>).document = { activeElement: el };
+    return fn().finally(() => {
+      if (original === undefined) delete (globalThis as Record<string, unknown>).document;
+      else (globalThis as Record<string, unknown>).document = original;
+    });
+  }
+
+  it('fills a focused data-scan-fill input instead of running onScan', async () => {
+    const input = fakeInput(true);
+    await withFocusedElement(input, async () => {
+      useHardwareScanner({ onScan: handler });
+      broadcast('BC123');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(input.value).toBe('BC123');
+    expect(input.dispatchEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'input' }));
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('runs onScan when the focused input is not marked data-scan-fill', async () => {
+    const input = fakeInput(false);
+    await withFocusedElement(input, async () => {
+      useHardwareScanner({ onScan: handler });
+      broadcast('BC123');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(input.value).toBe('');
+    expect(handler).toHaveBeenCalledWith('BC123');
+  });
+
+  it('runs onScan when nothing is focused', async () => {
+    await withFocusedElement(null, async () => {
+      useHardwareScanner({ onScan: handler });
+      broadcast('BC123');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(handler).toHaveBeenCalledWith('BC123');
+  });
+
   it('ignores keys matched by ignoreKey predicate', async () => {
     useHardwareScanner({ onScan: handler, ignoreKey: (event) => event.key === '!' });
     keydown('A');

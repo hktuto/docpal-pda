@@ -1,18 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import Database from "better-sqlite3";
+import { createTestDb } from "../db/test-helper.js";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wh-api-"));
-const dbPath = path.join(dir, "t.sqlite");
-process.env.DATABASE_URL = dbPath;
+process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? "postgresql://warehouse:warehouse@localhost:5432/warehouse_test";
 process.env.WAREHOUSE_SEED = "off";
 const { app } = await import("../index.js");
-const sqlite = new Database(dbPath);
+const { sql, db } = await createTestDb();
 
-sqlite.exec(`
+await db.execute(`
   INSERT INTO suppliers (id, code, name, qr_template, qrcode_qty_encoding, created_at, updated_at)
     VALUES ('sup4','S4','Sup Four','tpl-{qty}','plain','0','0');
   INSERT INTO parts (id, part_no, part_no_norm, description, created_at, updated_at)
@@ -24,7 +19,7 @@ sqlite.exec(`
   INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty, available_qty, created_at, updated_at)
     VALUES ('rii4a','inv4','p4',10,10,10,'0','0'), ('rii4b','inv4','p4b',5,5,0,'0','0');
   INSERT INTO put_away_scans (id, receiving_invoice_item_id, qty, shelf_box_id, verified, created_at, updated_at)
-    VALUES ('pas4','rii4a',3,NULL,0,'0','0');
+    VALUES ('pas4','rii4a',3,NULL,false,'0','0');
   INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at)
     VALUES ('po4','e4','PO-4','pending','0','0');
   INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at)
@@ -68,11 +63,11 @@ test("GET /receiving-orders?status=pending filters out in_hand orders", async ()
   const res = await app.request("/receiving-orders?status=pending");
   assert.equal(res.status, 200);
   const rows = (await res.json()) as any[];
-  assert.deepEqual(rows, []);
+  assert.deepEqual(Array.from(rows), []);
 });
 
 test("GET /receiving-orders orders by delivery_date, not ref_no (pglite parity)", async () => {
-  sqlite.exec(`
+  await db.execute(`
     INSERT INTO receiving_orders (id, external_id, ref_no, delivery_date, status, created_at, updated_at) VALUES
       ('ordx1','ordxe1','RO-AAA','2026-06-01','pending','0','0'),
       ('ordx2','ordxe2','RO-ZZZ','2025-01-01','pending','0','0'),
@@ -141,7 +136,7 @@ test("GET /receiving-orders/:id returns 404 for unknown order", async () => {
 // query's GROUP BY a.id dedup is exercised: without it the lot row doubles.
 // Note: API inventory_lots carries shelf_code/box_id directly (no shelf_box_id
 // FK), so the lot row's location fields come from the lot itself.
-sqlite.exec(`
+await db.execute(`
   INSERT INTO parts (id, part_no, part_no_norm, description, created_at, updated_at)
     VALUES ('p6','P6','P6','Part six','0','0');
   INSERT INTO users (id, username, password_hash, role, name, created_at, updated_at)
@@ -252,7 +247,7 @@ test("GET /receiving-orders/:id/picking returns 404 for unknown order", async ()
 // transition_logs) use sql.join and previously concatenated placeholders when
 // multiple ids were involved — invisible with single-id fixtures (a lone
 // placeholder needs no separator). ro7 has two items across two orders.
-sqlite.exec(`
+await db.execute(`
   INSERT INTO parts (id, part_no, part_no_norm, description, created_at, updated_at)
     VALUES ('p7','P7','P7','Part seven','0','0');
   INSERT INTO receiving_orders (id, external_id, ref_no, delivery_date, status, supplier_id, created_at, updated_at)
@@ -364,8 +359,8 @@ test("POST /picking-items/transition-logs returns 400 for missing or empty ids",
 // Inserted inside the first test (not at module top) because the pending ro9cb
 // would otherwise break the earlier ?status=pending filter test, which expects
 // an empty list.
-function seedScanCandidatesFixtures(): void {
-  sqlite.exec(`
+async function seedScanCandidatesFixtures(): Promise<void> {
+  await db.execute(`
   INSERT INTO parts (id, part_no, part_no_norm, description, created_at, updated_at)
     VALUES ('p9c','ABC123','ABC123','Part nine C','0','0');
   INSERT INTO receiving_orders (id, external_id, ref_no, delivery_date, status, supplier_id, created_at, updated_at)
@@ -383,7 +378,7 @@ function seedScanCandidatesFixtures(): void {
            ('rii9cc','inv9cb','p9c',3,3,3,'dc9c','lot9c','cn','2026 w01','DC9C','LOT9C','CN','2026 W01','0','0'),
            ('rii9cd','inv9c','p9c',2,2,2,'dc9a','lot9a','cn','2026 w01','DC9A','LOT9A','CN','2026 W01','0','0');
   INSERT INTO put_away_scans (id, receiving_invoice_item_id, qty, shelf_box_id, verified, created_at, updated_at)
-    VALUES ('pas9c','rii9ca',2,NULL,0,'0','0');
+    VALUES ('pas9c','rii9ca',2,NULL,false,'0','0');
   INSERT INTO picking_orders (id, external_id, ref_no, status, ship_to, created_at, updated_at)
     VALUES ('po9c','e9c','PO-9C','picking','Ship Nine','0','0'),
            ('po9cx','e9cx','PO-9CX','finished','Ship Nine X','0','0'),
@@ -402,7 +397,7 @@ function seedScanCandidatesFixtures(): void {
 }
 
 test("GET /receiving-orders/:id/scan-candidates returns receiving and picking candidates", async () => {
-  seedScanCandidatesFixtures();
+  await seedScanCandidatesFixtures();
   const res = await app.request("/receiving-orders/ro9c/scan-candidates");
   assert.equal(res.status, 200);
   const body = (await res.json()) as any;
@@ -459,7 +454,7 @@ test("GET /receiving-orders/:id/scan-candidates keys receiving map by web normal
   // The web keys its candidate map with normalize() (no confusable mapping),
   // while the stored part_no_norm maps O->0. p9d's stored norm is 'K0A-103';
   // the map key must be 'KOA-103' so the client's lookups hit.
-  sqlite.exec(`
+  await db.execute(`
     INSERT INTO parts (id, part_no, part_no_norm, description, created_at, updated_at)
       VALUES ('p9d','KOA-103','K0A-103','Part nine D','0','0');
     INSERT INTO receiving_orders (id, external_id, ref_no, delivery_date, status, supplier_id, created_at, updated_at)
@@ -477,4 +472,4 @@ test("GET /receiving-orders/:id/scan-candidates keys receiving map by web normal
   assert.equal(body.receiving_by_part_no["KOA-103"][0].part_no, "KOA-103");
 });
 
-test("cleanup", () => { sqlite.close(); });
+test.after(async () => { await sql.end(); });

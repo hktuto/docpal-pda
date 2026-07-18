@@ -32,6 +32,48 @@ function isInputElement(target: EventTarget | null): boolean {
   return Boolean(el.isContentEditable);
 }
 
+/**
+ * Fill the focused element with a scanned value. Only elements marked with
+ * the `data-scan-fill` attribute opt in — without that guard a trigger pull
+ * while typing in a dialog field (issue report, scan review) would wipe the
+ * half-written text. Returns true when a marked element was filled.
+ *
+ * In wedge mode this is unnecessary: the scanner types into the focused
+ * field by itself. It matters for broadcast mode, where no key events exist.
+ */
+function fillFocusedInput(value: string): boolean {
+  if (typeof document === 'undefined') return false;
+  const el = document.activeElement as HTMLElement | null;
+  if (!isInputElement(el)) return false;
+  if (!(el as Element).hasAttribute?.('data-scan-fill')) return false;
+
+  const dispatch = (type: string) => el!.dispatchEvent(new Event(type, { bubbles: true }));
+  const tagName = String(el!.tagName ?? '').toLowerCase();
+
+  if (tagName === 'select') {
+    (el as HTMLSelectElement).value = value;
+    dispatch('change');
+    return true;
+  }
+  if (el!.isContentEditable) {
+    el!.textContent = value;
+    dispatch('input');
+    return true;
+  }
+  // Use the native value setter so Vue's v-model doesn't snap the value back.
+  const proto =
+    typeof HTMLInputElement !== 'undefined' && typeof HTMLTextAreaElement !== 'undefined'
+      ? tagName === 'textarea'
+        ? HTMLTextAreaElement.prototype
+        : HTMLInputElement.prototype
+      : null;
+  const setter = proto ? Object.getOwnPropertyDescriptor(proto, 'value')?.set : undefined;
+  if (setter) setter.call(el, value);
+  else (el as HTMLInputElement).value = value;
+  dispatch('input');
+  return true;
+}
+
 export function useHardwareScanner(options: UseHardwareScannerOptions) {
   const buffer = ref('');
   let timeoutId: ReturnType<typeof setTimeout> | null = null;
@@ -75,6 +117,10 @@ export function useHardwareScanner(options: UseHardwareScannerOptions) {
     buffer.value = '';
     // Eat the wedge echo if the device outputs broadcast + keyboard combined.
     suppressWedgeUntil = Date.now() + WEDGE_SUPPRESS_MS;
+    if (fillFocusedInput(value)) {
+      console.log('[SCAN-TIME] broadcast scan → focused input:', value);
+      return;
+    }
     await deliver('broadcast scan', value);
   }
 

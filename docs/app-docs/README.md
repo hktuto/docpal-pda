@@ -33,5 +33,6 @@ Start with [Concepts → Overview](./concepts/overview.md) and the [User Menu](.
 
 - [Root README](../../README.md) — setup and quick-start.
 - [AGENTS.md](../../AGENTS.md) — coding conventions and commands.
-- [Database relations](../database-relations.md) — ER diagram and table summary.
+- [API database schema](../database-schema-api.md) — Hono API SQLite schema (`apps/api`).
+- [API reference](../api-reference-backend.md) — HTTP endpoints served by `apps/api`.
 - [Design specs](../superpowers/specs/) — per-feature design documents.

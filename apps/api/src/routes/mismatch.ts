@@ -1,9 +1,10 @@
 import { Hono, type Context } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { sql } from "drizzle-orm";
 import { mismatchReasons, type MismatchReason } from "@warehouse/shared";
+import { sql } from "drizzle-orm";
 import { db } from "../db.js";
-import { cancelMismatch, confirmMismatch, editMismatch, getLatestMismatch, reportMismatch } from "../db/mismatch.js";
+import { queryGet } from "../db/query.js";
+import { cancelMismatch, editMismatch, getMismatch, reportMismatch } from "../db/mismatch.js";
 
 export const mismatchRoute = new Hono();
 
@@ -33,14 +34,17 @@ function parseReason(reason: unknown): MismatchReason | undefined {
   return reason as MismatchReason;
 }
 
-mismatchRoute.get("/receiving-invoice-items/:id/mismatch", (c) => {
+// Mismatches are inline on the item (one active mismatch per item), so every operation is
+// keyed by the receiving invoice item id — there are no mismatch ids anymore.
+
+mismatchRoute.get("/receiving-invoice-items/:id/mismatch", async (c) => {
   const itemId = c.req.param("id");
-  const item = db.get<{ id: string }>(sql`SELECT id FROM receiving_invoice_items WHERE id = ${itemId}`);
+  const item = await queryGet<{ id: string }>(db, sql`SELECT id FROM receiving_invoice_items WHERE id = ${itemId}`);
   if (!item) throw new HTTPException(404, { message: "receiving_invoice_item_not_found" });
-  return c.json(getLatestMismatch(db, itemId), 200);
+  return c.json(await getMismatch(db, itemId), 200);
 });
 
-mismatchRoute.post("/receiving-invoice-items/:id/mismatches", async (c) => {
+mismatchRoute.post("/receiving-invoice-items/:id/mismatch", async (c) => {
   const itemId = c.req.param("id");
   const body = await readJson<{
     reason?: string; mismatch_qty?: number | null; wrong_part_no?: string | null; note?: string | null; actor_id?: string;
@@ -48,7 +52,7 @@ mismatchRoute.post("/receiving-invoice-items/:id/mismatches", async (c) => {
   const actorId = requireActorId(body);
   const reason = parseReason(body.reason);
   if (reason === undefined) throw new HTTPException(400, { message: "mismatch_reason_required" });
-  const row = db.transaction((tx) =>
+  const row = await db.transaction(async (tx) =>
     reportMismatch(tx, {
       receivingInvoiceItemId: itemId,
       reason,
@@ -61,15 +65,15 @@ mismatchRoute.post("/receiving-invoice-items/:id/mismatches", async (c) => {
   return c.json(row, 201);
 });
 
-mismatchRoute.patch("/mismatches/:id", async (c) => {
-  const mismatchId = c.req.param("id");
+mismatchRoute.patch("/receiving-invoice-items/:id/mismatch", async (c) => {
+  const itemId = c.req.param("id");
   const body = await readJson<{
     reason?: string; mismatch_qty?: number | null; wrong_part_no?: string | null; note?: string | null; actor_id?: string;
   }>(c);
   const actorId = requireActorId(body);
-  const row = db.transaction((tx) =>
+  const row = await db.transaction(async (tx) =>
     editMismatch(tx, {
-      mismatchId,
+      receivingInvoiceItemId: itemId,
       actorId,
       reason: parseReason(body.reason),
       mismatchQty: body.mismatch_qty,
@@ -80,16 +84,11 @@ mismatchRoute.patch("/mismatches/:id", async (c) => {
   return c.json(row, 200);
 });
 
-mismatchRoute.post("/mismatches/:id/confirm", async (c) => {
-  const mismatchId = c.req.param("id");
+mismatchRoute.post("/receiving-invoice-items/:id/mismatch/cancel", async (c) => {
+  const itemId = c.req.param("id");
   const body = await readJson<{ actor_id?: string }>(c);
-  const row = db.transaction((tx) => confirmMismatch(tx, { mismatchId, actorId: requireActorId(body) }));
-  return c.json(row, 200);
-});
-
-mismatchRoute.post("/mismatches/:id/cancel", async (c) => {
-  const mismatchId = c.req.param("id");
-  const body = await readJson<{ actor_id?: string }>(c);
-  const row = db.transaction((tx) => cancelMismatch(tx, { mismatchId, actorId: requireActorId(body) }));
+  const row = await db.transaction(async (tx) =>
+    cancelMismatch(tx, { receivingInvoiceItemId: itemId, actorId: requireActorId(body) })
+  );
   return c.json(row, 200);
 });

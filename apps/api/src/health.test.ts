@@ -11,3 +11,8 @@ test("GET /health returns ok with the database reachable", async () => {
   assert.equal(body.ok, true);
   assert.equal(body.db, "ok");
 });
+
+test.after(async () => {
+  const { sql: appSql } = await import("./db.js");
+  await appSql.end();
+});

@@ -1,95 +1,66 @@
-import { sqliteTable, text, integer, index, unique } from "drizzle-orm/sqlite-core";
-import { mismatchStatuses } from "@warehouse/shared";
+import { pgTable, text, integer, boolean, timestamp, index } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
-import { suppliers, parts } from "./master.js";
+import { users, suppliers, parts } from "./master.js";
 
-export const receivingOrders = sqliteTable(
+export const receivingOrders = pgTable(
   "receiving_orders",
   {
     id: text("id").primaryKey(),
-    externalId: text("external_id").notNull().unique(),
     refNo: text("ref_no").notNull(),
-    deliveryDate: text("delivery_date"),
-    status: text("status", { enum: ["pending", "in_hand", "clear"] }).notNull(),
     supplierId: text("supplier_id").references(() => suppliers.id),
-    createdAt: text("created_at").notNull().$defaultFn(now),
-    updatedAt: text("updated_at").notNull().$defaultFn(now),
+    deliveryDate: timestamp("delivery_date", { mode: "date" }),
+    status: text("status", { enum: ["pending", "in_hand", "provisional_received", "clear"] }).notNull().default("pending"),
+    arrivedAt: timestamp("arrived_at", { mode: "date" }),
+    arrivedBy: text("arrived_by").references(() => users.id),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
   },
   (t) => ({
-    statusUpdatedIdx: index("receiving_orders_status_updated_idx").on(t.status, t.updatedAt),
-    supplierIdx: index("receiving_orders_supplier_idx").on(t.supplierId),
+    statusIdx: index("idx_receiving_orders_status").on(t.status),
   })
 );
 
-export const receivingInvoices = sqliteTable(
-  "receiving_invoices",
-  {
-    id: text("id").primaryKey(),
-    externalId: text("external_id"),
-    receivingOrderId: text("receiving_order_id").notNull().references(() => receivingOrders.id, { onDelete: "cascade" }),
-    invoiceNo: text("invoice_no").notNull(),
-    supplierId: text("supplier_id").references(() => suppliers.id),
-    createdAt: text("created_at").notNull().$defaultFn(now),
-    updatedAt: text("updated_at").notNull().$defaultFn(now),
-  },
-  (t) => ({
-    orderIdx: index("receiving_invoices_order_idx").on(t.receivingOrderId),
-    orderInvoiceUq: unique("receiving_invoices_order_invoice_uq").on(t.receivingOrderId, t.invoiceNo),
-    supplierIdx: index("receiving_invoices_supplier_idx").on(t.supplierId),
-  })
-);
+export const receivingInvoices = pgTable("receiving_invoices", {
+  id: text("id").primaryKey(),
+  receivingOrderId: text("receiving_order_id").notNull().references(() => receivingOrders.id, { onDelete: "cascade" }),
+  invoiceNo: text("invoice_no").notNull(),
+  supplierId: text("supplier_id").references(() => suppliers.id),
+  wclCompanyName: text("wcl_company_name"),
+  totalQty: integer("total_qty"),
+  totalCtn: integer("total_ctn"),
+  deliveryDate: timestamp("delivery_date", { mode: "date" }),
+  orgId: integer("org_id").notNull().default(2),
+  subInventoryCode: text("sub_inventory_code"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
+});
 
-export const receivingInvoiceItems = sqliteTable(
+export const receivingInvoiceItems = pgTable(
   "receiving_invoice_items",
   {
     id: text("id").primaryKey(),
     receivingInvoiceId: text("receiving_invoice_id").notNull().references(() => receivingInvoices.id, { onDelete: "cascade" }),
     partId: text("part_id").notNull().references(() => parts.id),
-    qty: integer("qty").notNull().default(0),
+    wclItemNo: text("wcl_item_no"),
+    poNo: text("po_no"),
+    poLine: text("po_line"),
+    qty: integer("qty").notNull(),
     receivedQty: integer("received_qty").notNull().default(0),
     pickedQty: integer("picked_qty").notNull().default(0),
     putAwayQty: integer("put_away_qty").notNull().default(0),
-    allocatedQty: integer("allocated_qty").notNull().default(0), // MAINTAINED = Σ allocation_receiving_items.qty
-    availableQty: integer("available_qty").notNull().default(0), // MAINTAINED = received - picked - put_away - allocated
     boxId: text("box_id"),
     dateCode: text("date_code"),
     lotCode: text("lot_code"),
     coo: text("coo"),
     cow: text("cow"),
-    dateCodeNorm: text("date_code_norm"),
-    lotCodeNorm: text("lot_code_norm"),
-    cooNorm: text("coo_norm"),
-    cowNorm: text("cow_norm"),
-    lineNo: integer("line_no"),
-    createdAt: text("created_at").notNull().$defaultFn(now),
-    updatedAt: text("updated_at").notNull().$defaultFn(now),
-  },
-  (t) => ({
-    partAvailIdx: index("rii_part_available_idx").on(t.partId, t.availableQty),
-    invoiceIdx: index("rii_invoice_idx").on(t.receivingInvoiceId),
-    invoiceLineUq: unique("rii_invoice_line_uq").on(t.receivingInvoiceId, t.lineNo),
-  })
-);
-
-export const receivingItemMismatches = sqliteTable(
-  "receiving_item_mismatches",
-  {
-    id: text("id").primaryKey(),
-    receivingInvoiceItemId: text("receiving_invoice_item_id").notNull().references(() => receivingInvoiceItems.id, { onDelete: "cascade" }),
-    kind: text("kind").notNull(), // mirrors the web's `reason` (mismatchReasons enum)
+    reportedMismatch: boolean("reported_mismatch").notNull().default(false),
+    mismatchReason: text("mismatch_reason"),
     mismatchQty: integer("mismatch_qty"),
     wrongPartNo: text("wrong_part_no"),
-    note: text("note"),
-    status: text("status", { enum: mismatchStatuses }).notNull().default("pending"),
-    effectiveReceivedQty: integer("effective_received_qty"),
-    previousReceivedQty: integer("previous_received_qty"),
-    reportedBy: text("reported_by"),
-    confirmedBy: text("confirmed_by"),
-    confirmedAt: text("confirmed_at"),
-    cancelledBy: text("cancelled_by"),
-    cancelledAt: text("cancelled_at"),
-    createdAt: text("created_at").notNull().$defaultFn(now), // plays the role of the web's reported_at
-    updatedAt: text("updated_at").notNull().$defaultFn(now),
+    mismatchNote: text("mismatch_note"),
   },
-  (t) => ({ itemIdx: index("rim_item_idx").on(t.receivingInvoiceItemId) })
+  (t) => ({
+    invoiceIdx: index("idx_receiving_invoice_items_invoice").on(t.receivingInvoiceId),
+    partIdx: index("idx_receiving_invoice_items_part").on(t.partId),
+  })
 );

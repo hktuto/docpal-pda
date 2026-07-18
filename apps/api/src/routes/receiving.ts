@@ -1,25 +1,26 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { sql } from "drizzle-orm";
 import type { ConfirmArrivalResponse, IngestUpsertResponse, ReceivingPutBody } from "@warehouse/shared";
+import { sql } from "drizzle-orm";
 import { db } from "../db.js";
+import { queryAll, queryGet } from "../db/query.js";
 import { allocateAll } from "../db/allocate.js";
 import { confirmReceivingArrival, upsertReceivingOrder } from "../ingest/receiving.js";
 import { collapseUpper } from "../db/schema/normalize.js";
 
 export const receivingRoute = new Hono();
 
-receivingRoute.get("/receiving-orders", (c) => {
+receivingRoute.get("/receiving-orders", async (c) => {
   const status = c.req.query("status") ?? null;
-  const rows = db.all<Record<string, unknown>>(sql`
+  const rows = await queryAll<Record<string, unknown>>(db, sql`
     SELECT ro.id, ro.ref_no, ro.status, ro.delivery_date, s.name AS supplier_name,
-      (SELECT COUNT(*) FROM receiving_invoice_items rii
+      (SELECT COUNT(*)::int FROM receiving_invoice_items rii
          JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-         LEFT JOIN (SELECT receiving_invoice_item_id, SUM(qty) AS uq FROM put_away_scans
+         LEFT JOIN (SELECT receiving_invoice_item_id, SUM(qty)::int AS uq FROM put_away_scans
                     WHERE shelf_box_id IS NULL GROUP BY receiving_invoice_item_id) u
            ON u.receiving_invoice_item_id = rii.id
          WHERE ri.receiving_order_id = ro.id AND rii.available_qty - COALESCE(u.uq, 0) > 0) AS remaining_items,
-      (SELECT COUNT(DISTINCT po.id) FROM picking_orders po
+      (SELECT COUNT(DISTINCT po.id)::int FROM picking_orders po
          JOIN picking_items pi ON pi.picking_order_id = po.id
          JOIN allocations a ON a.picking_item_id = pi.id AND a.qty > 0
          LEFT JOIN allocation_receiving_items ari ON ari.allocation_id = a.id
@@ -34,14 +35,14 @@ receivingRoute.get("/receiving-orders", (c) => {
                 OR src_ri.receiving_order_id = ro.id)) AS pending_picking_orders
     FROM receiving_orders ro
     LEFT JOIN suppliers s ON s.id = ro.supplier_id
-    WHERE (${status} IS NULL OR ro.status = ${status})
-    ORDER BY ro.delivery_date`);
+    WHERE (${status}::text IS NULL OR ro.status = ${status}::text)
+    ORDER BY ro.delivery_date NULLS FIRST`);
   return c.json(rows, 200);
 });
 
-receivingRoute.get("/receiving-orders/:id", (c) => {
+receivingRoute.get("/receiving-orders/:id", async (c) => {
   const orderId = c.req.param("id");
-  const order = db.get<Record<string, unknown>>(sql`
+  const order = await queryGet<Record<string, unknown>>(db, sql`
     SELECT ro.id, ro.ref_no, ro.status, ro.delivery_date,
            s.id AS supplier_id, s.code AS supplier_code, s.name AS supplier_name,
            s.qr_template AS supplier_qr_template, s.qrcode_qty_encoding AS supplier_qrcode_qty_encoding
@@ -50,17 +51,17 @@ receivingRoute.get("/receiving-orders/:id", (c) => {
     WHERE ro.id = ${orderId}`);
   if (!order) throw new HTTPException(404, { message: "receiving order not found" });
 
-  const remaining = db.get<{ remaining_items: number }>(sql`
-    SELECT COUNT(*) AS remaining_items
+  const remaining = await queryGet<{ remaining_items: number }>(db, sql`
+    SELECT COUNT(*)::int AS remaining_items
     FROM receiving_invoice_items rii
     JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-    LEFT JOIN (SELECT receiving_invoice_item_id, SUM(qty) AS uq FROM put_away_scans
+    LEFT JOIN (SELECT receiving_invoice_item_id, SUM(qty)::int AS uq FROM put_away_scans
                WHERE shelf_box_id IS NULL GROUP BY receiving_invoice_item_id) u
       ON u.receiving_invoice_item_id = rii.id
     WHERE ri.receiving_order_id = ${orderId} AND rii.available_qty - COALESCE(u.uq, 0) > 0`);
 
-  const allocRows = db.all<{ item_id: string; qty: number }>(sql`
-    SELECT ari.receiving_invoice_item_id AS item_id, SUM(ari.qty) AS qty
+  const allocRows = await queryAll<{ item_id: string; qty: number }>(db, sql`
+    SELECT ari.receiving_invoice_item_id AS item_id, SUM(ari.qty)::int AS qty
     FROM allocation_receiving_items ari
     JOIN receiving_invoice_items rii ON rii.id = ari.receiving_invoice_item_id
     JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
@@ -69,12 +70,12 @@ receivingRoute.get("/receiving-orders/:id", (c) => {
   const allocatedByItem: Record<string, number> = {};
   for (const r of allocRows) allocatedByItem[r.item_id] = r.qty;
 
-  const invoices = db.all<Record<string, unknown>>(sql`
+  const invoices = await queryAll<Record<string, unknown>>(db, sql`
     SELECT id, receiving_order_id, invoice_no, supplier_id
     FROM receiving_invoices WHERE receiving_order_id = ${orderId}
     ORDER BY invoice_no`);
 
-  const itemRows = db.all<Record<string, unknown>>(sql`
+  const itemRows = await queryAll<Record<string, unknown>>(db, sql`
     SELECT rii.id, rii.receiving_invoice_id, rii.part_id, rii.qty, rii.received_qty,
            rii.picked_qty, rii.put_away_qty, rii.box_id, rii.date_code, rii.lot_code, rii.coo, rii.cow,
            p.id AS part_ref_id, p.part_no, p.description AS part_description
@@ -85,7 +86,7 @@ receivingRoute.get("/receiving-orders/:id", (c) => {
     ORDER BY ri.invoice_no, rii.id`);
 
   // Latest non-cancelled mismatch per item (created_at DESC picks the most recent report).
-  const mismatchRows = db.all<Record<string, unknown>>(sql`
+  const mismatchRows = await queryAll<Record<string, unknown>>(db, sql`
     SELECT rim.id, rim.receiving_invoice_item_id, rim.kind, rim.mismatch_qty, rim.wrong_part_no, rim.note,
            rim.status, rim.effective_received_qty, rim.previous_received_qty,
            rim.reported_by, rim.confirmed_by, rim.confirmed_at, rim.cancelled_by, rim.cancelled_at,
@@ -144,16 +145,16 @@ receivingRoute.get("/receiving-orders/:id", (c) => {
 // available_qty is the API's stored column minus unboxed put-away scans (same
 // subquery shape as the list endpoint above); the web computes the same value
 // from received - picked - put_away - allocated - unboxed.
-receivingRoute.get("/receiving-orders/:id/scan-candidates", (c) => {
+receivingRoute.get("/receiving-orders/:id/scan-candidates", async (c) => {
   const orderId = c.req.param("id");
-  const order = db.get<{ id: string; status: string }>(sql`
+  const order = await queryGet<{ id: string; status: string }>(db, sql`
     SELECT id, status FROM receiving_orders WHERE id = ${orderId}`);
   if (!order) throw new HTTPException(404, { message: "receiving order not found" });
   if (order.status !== "in_hand") {
     return c.json({ receiving_by_part_no: {}, picking_by_part_id: {} }, 200);
   }
 
-  const receivingRows = db.all<Record<string, unknown>>(sql`
+  const receivingRows = await queryAll<Record<string, unknown>>(db, sql`
     SELECT rii.id AS receiving_invoice_item_id, p.id AS part_id, p.part_no,
            rii.date_code_norm AS date_code, rii.lot_code_norm AS lot_code,
            rii.coo_norm AS coo, rii.cow_norm AS cow,
@@ -161,7 +162,7 @@ receivingRoute.get("/receiving-orders/:id/scan-candidates", (c) => {
     FROM receiving_invoices ri
     JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
     JOIN parts p ON p.id = rii.part_id
-    LEFT JOIN (SELECT receiving_invoice_item_id, SUM(qty) AS uq FROM put_away_scans
+    LEFT JOIN (SELECT receiving_invoice_item_id, SUM(qty)::int AS uq FROM put_away_scans
                WHERE shelf_box_id IS NULL GROUP BY receiving_invoice_item_id) u
       ON u.receiving_invoice_item_id = rii.id
     WHERE ri.receiving_order_id = ${orderId}
@@ -172,23 +173,23 @@ receivingRoute.get("/receiving-orders/:id/scan-candidates", (c) => {
     (receivingByPartNo[collapseUpper(String(row.part_no))] ??= []).push(row);
   }
 
-  // remaining_qty mirrors the web: qty - picked_qty - SUM(unboxed packages).
+  // remaining_qty mirrors the web: qty - picked_qty - SUM(unboxed packages)::int.
   // The EXISTS is order-level (any item of the picking order allocated to this
   // receiving order), exactly as in findPickingCandidatesForOrder.
-  const pickingRows = db.all<Record<string, unknown>>(sql`
+  const pickingRows = await queryAll<Record<string, unknown>>(db, sql`
     SELECT DISTINCT po.id AS picking_order_id, po.ref_no AS picking_order_ref_no,
            pi.id AS picking_item_id, pi.part_id, po.ship_to,
            pi.qty AS required_qty, pi.picked_qty,
            (pi.qty - pi.picked_qty - COALESCE((
-             SELECT SUM(pp.qty) FROM picking_packages pp
+             SELECT SUM(pp.qty)::int FROM picking_packages pp
              WHERE pp.picking_item_id = pi.id AND pp.shipping_box_id IS NULL
            ), 0)) AS remaining_qty
     FROM picking_items pi
     JOIN picking_orders po ON po.id = pi.picking_order_id
     WHERE po.status != 'finished'
       AND (pi.qty - pi.picked_qty - COALESCE((
-        SELECT SUM(pp.qty) FROM picking_packages pp
-        WHERE pp.picking_item_id = pi.id AND pp.shipping_box_id IS NULL
+        SELECT SUM(pp.qty)::int FROM picking_packages pp
+        WHERE pp.picking_item_id = pi.id AND shipping_box_id IS NULL
       ), 0)) > 0
       AND EXISTS (
         SELECT 1 FROM picking_items pi2
@@ -207,17 +208,17 @@ receivingRoute.get("/receiving-orders/:id/scan-candidates", (c) => {
   }, 200);
 });
 
-receivingRoute.get("/receiving-orders/:id/picking", (c) => {
+receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
   const orderId = c.req.param("id");
-  const order = db.get<{ id: string }>(sql`SELECT id FROM receiving_orders WHERE id = ${orderId}`);
+  const order = await queryGet<{ id: string }>(db, sql`SELECT id FROM receiving_orders WHERE id = ${orderId}`);
   if (!order) throw new HTTPException(404, { message: "receiving order not found" });
 
   // One row per allocation: lot allocations traceable to this order through
   // inventory_lot_sources carry the lot's location/date fields; order-level
   // allocations have none. scanned/boxed mirror the web adapter: unboxed vs
   // boxed package qty per picking item.
-  const rows = db.all<Record<string, unknown>>(sql`
-    SELECT po.id AS picking_order_id, po.ref_no AS picking_order_ref, po.status AS picking_order_status,
+  const rows = await queryAll<Record<string, unknown>>(db, sql`
+    SELECT DISTINCT po.id AS picking_order_id, po.ref_no AS picking_order_ref, po.status AS picking_order_status,
            po.ship_to AS picking_order_ship_to, pi.id AS picking_item_id, pi.qty AS required_qty, pi.picked_qty,
            a.id AS allocation_id, a.qty AS allocated_qty, pi.part_id, p.part_no,
            il.shelf_code, il.box_id, il.date_code, il.lot_code, il.coo, il.cow,
@@ -232,11 +233,10 @@ receivingRoute.get("/receiving-orders/:id/picking", (c) => {
     JOIN receiving_invoice_items rii ON rii.id = ils.receiving_invoice_item_id
     JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
     LEFT JOIN (SELECT picking_item_id,
-                      SUM(CASE WHEN shipping_box_id IS NULL THEN qty ELSE 0 END) AS scanned_qty,
-                      SUM(CASE WHEN shipping_box_id IS NOT NULL THEN qty ELSE 0 END) AS boxed_qty
+                      SUM(CASE WHEN shipping_box_id IS NULL THEN qty ELSE 0 END)::int AS scanned_qty,
+                      SUM(CASE WHEN shipping_box_id IS NOT NULL THEN qty ELSE 0 END)::int AS boxed_qty
                FROM picking_packages GROUP BY picking_item_id) pt ON pt.picking_item_id = pi.id
     WHERE ri.receiving_order_id = ${orderId} AND a.qty > 0
-    GROUP BY a.id
     UNION ALL
     SELECT po.id, po.ref_no, po.status, po.ship_to, pi.id, pi.qty, pi.picked_qty,
            a.id, a.qty, pi.part_id, p.part_no,
@@ -248,8 +248,8 @@ receivingRoute.get("/receiving-orders/:id/picking", (c) => {
     JOIN picking_orders po ON po.id = pi.picking_order_id
     JOIN parts p ON p.id = pi.part_id
     LEFT JOIN (SELECT picking_item_id,
-                      SUM(CASE WHEN shipping_box_id IS NULL THEN qty ELSE 0 END) AS scanned_qty,
-                      SUM(CASE WHEN shipping_box_id IS NOT NULL THEN qty ELSE 0 END) AS boxed_qty
+                      SUM(CASE WHEN shipping_box_id IS NULL THEN qty ELSE 0 END)::int AS scanned_qty,
+                      SUM(CASE WHEN shipping_box_id IS NOT NULL THEN qty ELSE 0 END)::int AS boxed_qty
                FROM picking_packages GROUP BY picking_item_id) pt ON pt.picking_item_id = pi.id
     WHERE a.receiving_order_id = ${orderId} AND a.qty > 0
     ORDER BY picking_order_ref, picking_item_id`);
@@ -260,7 +260,7 @@ receivingRoute.get("/receiving-orders/:id/picking", (c) => {
   // The web adapter returns ALL packages for the involved items (boxed + unboxed).
   const packagesByItem: Record<string, Record<string, unknown>[]> = {};
   if (itemIds.length) {
-    const pkgs = db.all<Record<string, unknown>>(sql`
+    const pkgs = await queryAll<Record<string, unknown>>(db, sql`
       SELECT id, picking_item_id, source_type, source_id, qty, shipping_box_id,
              date_code, lot_code, coo, cow, verified, created_at, updated_at
       FROM picking_packages
@@ -274,7 +274,7 @@ receivingRoute.get("/receiving-orders/:id/picking", (c) => {
 
   const boxesByOrder: Record<string, Record<string, unknown>[]> = {};
   if (orderIds.length) {
-    const boxes = db.all<Record<string, unknown>>(sql`
+    const boxes = await queryAll<Record<string, unknown>>(db, sql`
       SELECT id, picking_order_id, status
       FROM shipping_boxes
       WHERE picking_order_id IN (${sql.join(orderIds.map((i) => sql`${i}`), sql`, `)})
@@ -287,7 +287,7 @@ receivingRoute.get("/receiving-orders/:id/picking", (c) => {
 
   const transitionLogs: Record<string, Record<string, unknown>[]> = {};
   if (orderIds.length) {
-    const logs = db.all<Record<string, unknown>>(sql`
+    const logs = await queryAll<Record<string, unknown>>(db, sql`
       SELECT tl.id, tl.entity_type, tl.entity_id, tl.from_status, tl.to_status,
              tl.actor_id, tl.note, tl.created_at, tl.updated_at, u.name AS actor_name
       FROM transition_logs tl
@@ -320,7 +320,7 @@ receivingRoute.post("/picking-items/transition-logs", async (c) => {
   if (!Array.isArray(ids) || ids.length === 0 || !ids.every((i) => typeof i === "string")) {
     throw new HTTPException(400, { message: "ids must be a non-empty string array" });
   }
-  const logs = db.all<Record<string, unknown>>(sql`
+  const logs = await queryAll<Record<string, unknown>>(db, sql`
     SELECT tl.id, tl.entity_type, tl.entity_id, tl.from_status, tl.to_status,
            tl.actor_id, tl.note, tl.created_at, tl.updated_at, u.name AS actor_name
     FROM transition_logs tl
@@ -339,24 +339,26 @@ receivingRoute.put("/receiving-orders/:external_id", async (c) => {
   } catch {
     throw new HTTPException(400, { message: "invalid JSON body" });
   }
-  const result = db.transaction((tx) => upsertReceivingOrder(tx, externalId, body));
+  const result = await db.transaction(async (tx) => {
+    return await upsertReceivingOrder(tx, externalId, body);
+  });
   const res: IngestUpsertResponse = { id: result.orderId, external_id: externalId, created: result.created, changed: result.changed };
   return c.json(res, result.created ? 201 : 200);
 });
 
 // :external_id accepts either the internal order id or the ingest external_id
 // (the web adapter passes internal ids).
-receivingRoute.post("/receiving-orders/:external_id/confirm-arrival", (c) => {
+receivingRoute.post("/receiving-orders/:external_id/confirm-arrival", async (c) => {
   const externalId = c.req.param("external_id");
-  const order = db.transaction((tx) => {
-    const found = tx.get<{ id: string }>(sql`SELECT id FROM receiving_orders WHERE id = ${externalId} OR external_id = ${externalId}`);
+  const order = await db.transaction(async (tx) => {
+    const found = await queryGet<{ id: string }>(tx, sql`SELECT id FROM receiving_orders WHERE id = ${externalId} OR external_id = ${externalId}`);
     if (!found) throw new HTTPException(404, { message: "receiving order not found" });
-    confirmReceivingArrival(tx, found.id);
+    await confirmReceivingArrival(tx, found.id);
     return found;
   });
   // Allocation is best-effort and recomputable; it must never roll back a confirmed arrival.
   try {
-    allocateAll(db);
+    await allocateAll(db);
   } catch (err) {
     console.error("allocateAll after confirm-arrival failed", err);
   }

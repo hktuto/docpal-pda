@@ -1,16 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import Database from "better-sqlite3";
+import { createTestDb } from "../db/test-helper.js";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wh-api-"));
-const dbPath = path.join(dir, "t.sqlite");
-process.env.DATABASE_URL = dbPath;
+process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? "postgresql://warehouse:warehouse@localhost:5432/warehouse_test";
 process.env.WAREHOUSE_SEED = "off";
 const { app } = await import("../index.js");
-const sqlite = new Database(dbPath);
+const { sql, db } = await createTestDb();
 
 // Fixture mirrors the web stockSearch.ts linkage:
 // - supplier ↔ part via receiving_invoice_items → receiving_invoices → receiving_orders.supplier_id
@@ -18,7 +13,7 @@ const sqlite = new Database(dbPath);
 //   UNION leg cannot exist here; p10b is linked through receiving instead).
 // - parts_with_inventory counts distinct parts with an inventory_lots row total_qty > 0.
 // - a "receiving-area" lot is just an inventory_lots row with NULL shelf_code/box_id.
-sqlite.exec(`
+await db.execute(`
   INSERT INTO suppliers (id, code, name, created_at, updated_at)
     VALUES ('sup10','SUP10','Supplier Ten','0','0');
   INSERT INTO parts (id, part_no, part_no_norm, description, created_at, updated_at) VALUES
@@ -114,6 +109,8 @@ test("GET /stock-search/parts/lots without part_ids is 400", async () => {
   assert.equal(empty.status, 400);
 });
 
-test("cleanup", () => {
-  sqlite.close();
+test.after(async () => {
+  await sql.end();
+  const { sql: appSql } = await import("../db.js");
+  await appSql.end();
 });

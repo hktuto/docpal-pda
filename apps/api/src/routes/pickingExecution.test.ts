@@ -1,30 +1,26 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import Database from "better-sqlite3";
+import { createTestDb } from "../db/test-helper.js";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wh-api-"));
-const dbPath = path.join(dir, "t.sqlite");
-process.env.DATABASE_URL = dbPath;
+process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? "postgresql://warehouse:warehouse@localhost:5432/warehouse_test";
 process.env.WAREHOUSE_SEED = "off";
 const { app } = await import("../index.js");
 
-const sqlite = new Database(dbPath);
+const { sql, db } = await createTestDb();
 
-function seedPickable() {
-  sqlite.exec(`
-    INSERT INTO parts (id, part_no, part_no_norm, created_at, updated_at) VALUES ('p','X','X','0','0');
-    INSERT INTO inventory_lots (id, part_id, shelf_code, total_qty, allocated_qty, created_at, updated_at) VALUES ('lot','p','S1',10,10,'0','0');
-    INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('po','pe','R','picking','0','0');
-    INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('pi','po','p',10,'0','0');
-    INSERT INTO allocations (id, picking_item_id, qty, inventory_lot_id, created_at, updated_at) VALUES ('a','pi',10,'lot','0','0');
+async function seedPickable() {
+  await db.execute(`
+    INSERT INTO parts (id, part_no) VALUES ('p','X');
+    INSERT INTO shelves (code, created_at, updated_at) VALUES ('S1', now(), now()) ON CONFLICT (code) DO NOTHING;
+    INSERT INTO inventory_lots (id, part_id, shelf_code, total_qty, allocated_qty) VALUES ('lot','p','S1',10,10);
+    INSERT INTO picking_orders (id, ref_no, status, created_at, updated_at) VALUES ('po','R','picking',now(),now());
+    INSERT INTO picking_items (id, picking_order_id, part_id, qty, allocated_qty, created_at, updated_at) VALUES ('pi','po','p',10,10,now(),now());
+    INSERT INTO allocations (id, picking_item_id, qty, inventory_lot_id, created_at, updated_at) VALUES ('a','pi',10,'lot',now(),now());
   `);
 }
 
 test("POST /picking-orders/:id/scan picks against the allocation; DELETE package undoes it", async () => {
-  seedPickable();
+  await seedPickable();
   const scan = await app.request("/picking-orders/po/scan", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -33,20 +29,20 @@ test("POST /picking-orders/:id/scan picks against the allocation; DELETE package
   assert.equal(scan.status, 201);
   const body = (await scan.json()) as { package_ids: string[] };
   assert.equal(body.package_ids.length, 1);
-  assert.equal((sqlite.prepare("SELECT total_qty FROM inventory_lots WHERE id='lot'").get() as any).total_qty, 6);
+  assert.equal((await db.execute<{ total_qty: number }>("SELECT total_qty FROM inventory_lots WHERE id='lot'"))[0].total_qty, 6);
 
   const del = await app.request(`/picking-orders/po/packages/${body.package_ids[0]}`, { method: "DELETE" });
   assert.equal(del.status, 200);
   // lot restored, allocation restored, package gone
-  assert.equal((sqlite.prepare("SELECT total_qty FROM inventory_lots WHERE id='lot'").get() as any).total_qty, 10);
-  assert.equal((sqlite.prepare("SELECT qty FROM allocations WHERE id='a'").get() as any).qty, 10);
-  assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM picking_packages").get() as any).c, 0);
+  assert.equal((await db.execute<{ total_qty: number }>("SELECT total_qty FROM inventory_lots WHERE id='lot'"))[0].total_qty, 10);
+  assert.equal((await db.execute<{ qty: number }>("SELECT qty FROM allocations WHERE id='a'"))[0].qty, 10);
+  assert.equal((await db.execute<{ c: number }>("SELECT COUNT(*)::int c FROM picking_packages"))[0].c, 0);
 });
 
 test("scan of an allocation from another order is 404; bad qty is 400", async () => {
-  sqlite.exec(`
-    INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('po2','pe2','R2','picking','0','0');
-    INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('pi2','po2','p',10,'0','0');
+  await db.execute(`
+    INSERT INTO picking_orders (id, ref_no, status, created_at, updated_at) VALUES ('po2','R2','picking',now(),now());
+    INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('pi2','po2','p',10,now(),now());
   `);
   const cross = await app.request("/picking-orders/po2/scan", {
     method: "POST", headers: { "content-type": "application/json" },
@@ -54,7 +50,7 @@ test("scan of an allocation from another order is 404; bad qty is 400", async ()
   });
   assert.equal(cross.status, 404);
   assert.match(await cross.text(), /allocation not found in this order/);
-  assert.equal((sqlite.prepare("SELECT total_qty FROM inventory_lots WHERE id='lot'").get() as any).total_qty, 10);
+  assert.equal((await db.execute<{ total_qty: number }>("SELECT total_qty FROM inventory_lots WHERE id='lot'"))[0].total_qty, 10);
   const bad = await app.request("/picking-orders/po/scan", {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ allocation_id: "a", qty: -1 }),
@@ -95,11 +91,11 @@ test("GET /picking-orders filters by status and updated_since", async () => {
 });
 
 test("GET /picking-orders orders finished-last, then delivery_date ASC (pglite parity)", async () => {
-  sqlite.exec(`
-    INSERT INTO picking_orders (id, external_id, ref_no, status, delivery_date, created_at, updated_at) VALUES
-      ('orda','orda-e','ORD-A','finished','2025-01-01','0','0'),
-      ('ordb','ordb-e','ORD-B','picking','2026-06-01','0','0'),
-      ('ordc','ordc-e','ORD-C','picking','2025-06-01','0','0');
+  await db.execute(`
+    INSERT INTO picking_orders (id, ref_no, status, delivery_date, created_at, updated_at) VALUES
+      ('orda','ORD-A','finished','2025-01-01',now(),now()),
+      ('ordb','ORD-B','picking','2026-06-01',now(),now()),
+      ('ordc','ORD-C','picking','2025-06-01',now(),now());
   `);
   const rows = (await (await app.request("/picking-orders")).json()) as any[];
   const idx = (id: string) => rows.findIndex((r) => r.id === id);
@@ -108,33 +104,31 @@ test("GET /picking-orders orders finished-last, then delivery_date ASC (pglite p
 });
 
 test("GET /picking-orders rows carry delivery_date + supplier_name (pglite parity)", async () => {
-  sqlite.exec(`
-    INSERT INTO suppliers (id, code, name, created_at, updated_at) VALUES ('sup-l','SUP-L','List Supplier','0','0');
-    INSERT INTO picking_orders (id, external_id, ref_no, status, delivery_date, supplier_id, created_at, updated_at) VALUES
-      ('ords','ords-e','ORD-S','picking','2026-03-04','sup-l','0','0');
+  await db.execute(`
+    INSERT INTO suppliers (id, code, name) VALUES ('sup-l','SUP-L','List Supplier');
+    INSERT INTO picking_orders (id, ref_no, status, delivery_date, supplier_id, created_at, updated_at) VALUES
+      ('ords','ORD-S','picking','2026-03-04','sup-l',now(),now());
   `);
   const rows = (await (await app.request("/picking-orders?status=picking")).json()) as any[];
   const row = rows.find((r) => r.id === "ords");
   assert.ok(row, "seeded order present in list");
-  assert.equal(row.delivery_date, "2026-03-04");
+  assert.equal(row.delivery_date, "2026-03-04T00:00:00.000Z");
   assert.equal(row.supplier_name, "List Supplier");
   const plain = rows.find((r) => r.id === "ordb"); // no supplier_id
-  assert.equal(plain.delivery_date, "2026-06-01");
+  assert.equal(plain.delivery_date, "2026-06-01T00:00:00.000Z");
   assert.equal(plain.supplier_name, null);
 });
 
 test("GET /picking-orders/:id resolves receiving-sourced allocations and excludes zero-qty residue", async () => {
-  sqlite.exec(`
-    INSERT INTO receiving_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('ro2','roe2','RO2','in_hand','0','0');
-    INSERT INTO receiving_invoices (id, external_id, receiving_order_id, invoice_no, created_at, updated_at) VALUES ('ri2','rie2','ro2','INV-2','0','0');
-    INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty, allocated_qty, available_qty, date_code_norm, created_at, updated_at) VALUES ('rii2','ri2','p',5,5,5,0,'DC1','0','0');
-    INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('po3','pe3','R3','picking','0','0');
-    INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('pi3','po3','p',5,'0','0');
-    INSERT INTO allocations (id, picking_item_id, qty, receiving_order_id, created_at, updated_at) VALUES ('a3','pi3',5,'ro2','0','0');
-    INSERT INTO allocation_receiving_items (id, allocation_id, receiving_invoice_item_id, qty, created_at, updated_at) VALUES ('ari3','a3','rii2',5,'0','0');
-    -- audit residue: zero-qty allocation and link must be excluded from the detail response
-    INSERT INTO allocations (id, picking_item_id, qty, receiving_order_id, created_at, updated_at) VALUES ('a4','pi3',0,'ro2','0','0');
-    INSERT INTO allocation_receiving_items (id, allocation_id, receiving_invoice_item_id, qty, created_at, updated_at) VALUES ('ari4','a4','rii2',0,'0','0');
+  await db.execute(`
+    INSERT INTO receiving_orders (id, ref_no, status, created_at, updated_at) VALUES ('ro2','RO2','in_hand',now(),now());
+    INSERT INTO receiving_invoices (id, receiving_order_id, invoice_no, created_at, updated_at) VALUES ('ri2','ro2','INV-2',now(),now());
+    INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty, date_code) VALUES ('rii2','ri2','p',5,5,'DC1');
+    INSERT INTO picking_orders (id, ref_no, status, created_at, updated_at) VALUES ('po3','R3','picking',now(),now());
+    INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('pi3','po3','p',5,now(),now());
+    INSERT INTO allocations (id, picking_item_id, qty, receiving_invoice_item_id, created_at, updated_at) VALUES ('a3','pi3',5,'rii2',now(),now());
+    -- audit residue: zero-qty allocation must be excluded from the detail response
+    INSERT INTO allocations (id, picking_item_id, qty, receiving_invoice_item_id, created_at, updated_at) VALUES ('a4','pi3',0,'rii2',now(),now());
   `);
   const res = await app.request("/picking-orders/po3");
   assert.equal(res.status, 200);
@@ -142,19 +136,21 @@ test("GET /picking-orders/:id resolves receiving-sourced allocations and exclude
   assert.equal(d.allocations.length, 1);
   assert.equal(d.allocations[0].id, "a3");
   assert.equal(d.allocations[0].lot, null);
+  assert.equal(d.allocations[0].receiving_invoice_item_id, "rii2");
   assert.equal(d.allocations[0].receiving_order_id, "ro2");
   assert.equal(d.allocations[0].receiving_items.length, 1);
+  assert.equal(d.allocations[0].receiving_items[0].receiving_invoice_item_id, "rii2");
   assert.equal(d.allocations[0].receiving_items[0].invoice_no, "INV-2");
   assert.equal(d.allocations[0].receiving_items[0].qty, 5);
-  assert.equal(d.allocations[0].receiving_items[0].date_code_norm, "DC1");
+  assert.equal(d.allocations[0].receiving_items[0].date_code, "DC1");
 });
 
 test("box sub-routes enforce order/box ownership: wrong order or box is 404", async () => {
-  sqlite.exec(`
-    INSERT INTO inventory_lots (id, part_id, shelf_code, total_qty, allocated_qty, created_at, updated_at) VALUES ('lot9','p','S1',10,10,'0','0');
-    INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('po9','pe9','R9','picking','0','0');
-    INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('pi9','po9','p',10,'0','0');
-    INSERT INTO allocations (id, picking_item_id, qty, inventory_lot_id, created_at, updated_at) VALUES ('a9','pi9',10,'lot9','0','0');
+  await db.execute(`
+    INSERT INTO inventory_lots (id, part_id, shelf_code, total_qty, allocated_qty) VALUES ('lot9','p','S1',10,10);
+    INSERT INTO picking_orders (id, ref_no, status, created_at, updated_at) VALUES ('po9','R9','picking',now(),now());
+    INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('pi9','po9','p',10,now(),now());
+    INSERT INTO allocations (id, picking_item_id, qty, inventory_lot_id, created_at, updated_at) VALUES ('a9','pi9',10,'lot9',now(),now());
   `);
   const created = await app.request("/picking-orders/po9/boxes", { method: "POST" });
   assert.equal(created.status, 201);
@@ -169,8 +165,8 @@ test("box sub-routes enforce order/box ownership: wrong order or box is 404", as
   const wrongOrderAddAll = await app.request(`/picking-orders/WRONG/boxes/${boxId}/add-all-unboxed`, { method: "POST" });
   assert.equal(wrongOrderAddAll.status, 404);
 
-  sqlite.prepare(`INSERT INTO picking_packages (id, picking_item_id, source_type, source_id, qty, shipping_box_id, created_at, updated_at)
-                  VALUES ('pp9','pi9','inventory_lot','lot9',4,?,'0','0')`).run(boxId);
+  await db.execute(`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, shipping_box_id, created_at, updated_at)
+                  VALUES ('pp9','pi9','po9','inventory_lot','lot9',4,'${boxId}',now(),now())`);
 
   const wrongOrderDel = await app.request(`/picking-orders/WRONG/boxes/${boxId}/packages/pp9`, { method: "DELETE" });
   assert.equal(wrongOrderDel.status, 404);
@@ -182,15 +178,17 @@ test("box sub-routes enforce order/box ownership: wrong order or box is 404", as
 
 // --- flat mutation routes (adapter doesn't know parent ids) ---
 
-sqlite.exec(`
-  INSERT INTO parts (id, part_no, part_no_norm, created_at, updated_at) VALUES ('fp','FX','FX','0','0');
-  INSERT INTO inventory_lots (id, part_id, shelf_code, total_qty, allocated_qty, created_at, updated_at) VALUES ('flot','fp','S1',10,10,'0','0');
-  INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('fpo','fpe','FR','picking','0','0');
-  INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('fpi','fpo','fp',10,'0','0');
-  INSERT INTO allocations (id, picking_item_id, qty, inventory_lot_id, created_at, updated_at) VALUES ('fa','fpi',10,'flot','0','0');
-  INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('fpoF','fpeF','FRF','finished','0','0');
-  INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('fpiF','fpoF','fp',5,'0','0');
-  INSERT INTO allocations (id, picking_item_id, qty, inventory_lot_id, created_at, updated_at) VALUES ('faF','fpiF',5,'flot','0','0');
+await db.execute(`
+  INSERT INTO shelves (code, created_at, updated_at) VALUES ('S1', now(), now()) ON CONFLICT (code) DO NOTHING;
+  INSERT INTO users (id, username, password_hash, display_name, created_at) VALUES ('op1','op1','h','Op1',now());
+  INSERT INTO parts (id, part_no) VALUES ('fp','FX');
+  INSERT INTO inventory_lots (id, part_id, shelf_code, total_qty, allocated_qty) VALUES ('flot','fp','S1',10,10);
+  INSERT INTO picking_orders (id, ref_no, status, created_at, updated_at) VALUES ('fpo','FR','picking',now(),now());
+  INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('fpi','fpo','fp',10,now(),now());
+  INSERT INTO allocations (id, picking_item_id, qty, inventory_lot_id, created_at, updated_at) VALUES ('fa','fpi',10,'flot',now(),now());
+  INSERT INTO picking_orders (id, ref_no, status, created_at, updated_at) VALUES ('fpoF','FRF','finished',now(),now());
+  INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('fpiF','fpoF','fp',5,now(),now());
+  INSERT INTO allocations (id, picking_item_id, qty, inventory_lot_id, created_at, updated_at) VALUES ('faF','fpiF',5,'flot',now(),now());
 `);
 
 test("POST /allocations/:id/scan picks without an order id; 404 unknown; 409 finished order", async () => {
@@ -200,7 +198,7 @@ test("POST /allocations/:id/scan picks without an order id; 404 unknown; 409 fin
   assert.equal(scan.status, 201);
   const body = (await scan.json()) as { package_ids: string[] };
   assert.equal(body.package_ids.length, 1);
-  assert.equal((sqlite.prepare("SELECT total_qty FROM inventory_lots WHERE id='flot'").get() as any).total_qty, 7);
+  assert.equal((await db.execute<{ total_qty: number }>("SELECT total_qty FROM inventory_lots WHERE id='flot'"))[0].total_qty, 7);
 
   const miss = await app.request("/allocations/nope/scan", {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ qty: 1 }),
@@ -230,7 +228,7 @@ test("POST /packages/:id/add-to-box boxes a scanned package; 404 unknown package
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ box_id: boxId }),
   });
   assert.equal(add.status, 200);
-  assert.equal((sqlite.prepare("SELECT shipping_box_id FROM picking_packages WHERE id=?").get(packageId) as any).shipping_box_id, boxId);
+  assert.equal((await db.execute<{ shipping_box_id: string }>(`SELECT shipping_box_id FROM picking_packages WHERE id='${packageId}'`))[0].shipping_box_id, boxId);
 
   const miss = await app.request("/packages/nope/add-to-box", {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ box_id: boxId }),
@@ -252,31 +250,31 @@ test("DELETE /packages/:id removes a boxed package from its box or deletes an un
   const unbox = await app.request(`/packages/${boxedId}`, { method: "DELETE" });
   assert.equal(unbox.status, 200);
   assert.deepEqual(await unbox.json(), { ok: true });
-  assert.equal((sqlite.prepare("SELECT shipping_box_id FROM picking_packages WHERE id=?").get(boxedId) as any).shipping_box_id, null);
+  assert.equal((await db.execute<{ shipping_box_id: string | null }>(`SELECT shipping_box_id FROM picking_packages WHERE id='${boxedId}'`))[0].shipping_box_id, null);
 
   // unboxed package -> deleted, lot restored
   const scan2 = await app.request("/allocations/fa/scan", {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ qty: 2 }),
   });
   const unboxedId = ((await scan2.json()) as { package_ids: string[] }).package_ids[0];
-  const lotBefore = (sqlite.prepare("SELECT total_qty FROM inventory_lots WHERE id='flot'").get() as any).total_qty;
+  const lotBefore = (await db.execute<{ total_qty: number }>("SELECT total_qty FROM inventory_lots WHERE id='flot'"))[0].total_qty;
   const del = await app.request(`/packages/${unboxedId}`, { method: "DELETE" });
   assert.equal(del.status, 200);
   assert.deepEqual(await del.json(), { ok: true });
-  assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM picking_packages WHERE id=?").get(unboxedId) as any).c, 0);
-  assert.equal((sqlite.prepare("SELECT total_qty FROM inventory_lots WHERE id='flot'").get() as any).total_qty, lotBefore + 2);
+  assert.equal((await db.execute<{ c: number }>(`SELECT COUNT(*)::int c FROM picking_packages WHERE id='${unboxedId}'`))[0].c, 0);
+  assert.equal((await db.execute<{ total_qty: number }>(`SELECT total_qty FROM inventory_lots WHERE id='flot'`))[0].total_qty, lotBefore + 2);
 
   const miss = await app.request("/packages/nope", { method: "DELETE" });
   assert.equal(miss.status, 404);
 });
 
 test("POST /packages/:id/verify marks a boxed package verified; 409 when not in a box", async () => {
-  sqlite.exec(`
-    INSERT INTO shipping_boxes (id, picking_order_id, status, created_at, updated_at) VALUES ('fvbox','fpo','open','0','0');
-    INSERT INTO measuring_tasks (id, picking_order_id, status, created_at, updated_at) VALUES ('fvmt','fpo','pending','0','0');
-    INSERT INTO picking_packages (id, picking_item_id, source_type, source_id, qty, shipping_box_id, created_at, updated_at)
-      VALUES ('fvpp','fpi','inventory_lot','flot',1,'fvbox','0','0'),
-             ('fvpp2','fpi','inventory_lot','flot',1,NULL,'0','0');
+  await db.execute(`
+    INSERT INTO shipping_boxes (id, picking_order_id, status, created_at, updated_at) VALUES ('fvbox','fpo','open',now(),now());
+    INSERT INTO measuring_tasks (id, picking_order_id, status, created_at) VALUES ('fvmt','fpo','pending',now());
+    INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, shipping_box_id, created_at, updated_at)
+      VALUES ('fvpp','fpi','fpo','inventory_lot','flot',1,'fvbox',now(),now()),
+             ('fvpp2','fpi','fpo','inventory_lot','flot',1,NULL,now(),now());
   `);
   const notInBox = await app.request("/packages/fvpp2/verify", {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}),
@@ -289,7 +287,7 @@ test("POST /packages/:id/verify marks a boxed package verified; 409 when not in 
   });
   assert.equal(ok.status, 200);
   assert.deepEqual(await ok.json(), { ok: true });
-  assert.equal((sqlite.prepare("SELECT verified FROM picking_packages WHERE id='fvpp'").get() as any).verified, 1);
+  assert.equal((await db.execute<{ verified: boolean }>("SELECT verified FROM picking_packages WHERE id='fvpp'"))[0].verified, true);
 
   const miss = await app.request("/packages/nope/verify", {
     method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}),
@@ -298,12 +296,12 @@ test("POST /packages/:id/verify marks a boxed package verified; 409 when not in 
 });
 
 test("POST /shipping-boxes/:id/cancel deletes an empty open box (actor_id via query); 404 unknown", async () => {
-  sqlite.exec(`INSERT INTO shipping_boxes (id, picking_order_id, status, created_at, updated_at) VALUES ('fcbox','fpo','open','0','0')`);
+  await db.execute(`INSERT INTO shipping_boxes (id, picking_order_id, status, created_at, updated_at) VALUES ('fcbox','fpo','open',now(),now())`);
   const cancel = await app.request("/shipping-boxes/fcbox/cancel?actor_id=op1", { method: "POST" });
   assert.equal(cancel.status, 200);
   assert.deepEqual(await cancel.json(), { ok: true });
-  assert.equal((sqlite.prepare("SELECT COUNT(*) c FROM shipping_boxes WHERE id='fcbox'").get() as any).c, 0);
-  const log = sqlite.prepare("SELECT actor_id FROM transition_logs WHERE entity_type='shipping_box' AND entity_id='fcbox'").get() as any;
+  assert.equal((await db.execute<{ c: number }>("SELECT COUNT(*)::int c FROM shipping_boxes WHERE id='fcbox'"))[0].c, 0);
+  const log = (await db.execute<{ actor_id: string }>("SELECT actor_id FROM transaction_logs WHERE entity_type='shipping_box' AND entity_id='fcbox'"))[0];
   assert.equal(log.actor_id, "op1");
 
   const miss = await app.request("/shipping-boxes/nope/cancel", { method: "POST" });
@@ -313,27 +311,30 @@ test("POST /shipping-boxes/:id/cancel deletes an empty open box (actor_id via qu
 
 // --- read extensions (adapter needs these fields) ---
 
-sqlite.exec(`
-  INSERT INTO users (id, username, password_hash, role, name, created_at, updated_at) VALUES ('rxu1','rxreporter','h','operator','Reporter One','0','0');
-  INSERT INTO parts (id, part_no, part_no_norm, created_at, updated_at) VALUES ('rxp1','RX-P1','RX-P1','0','0');
-  INSERT INTO receiving_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('rxro1','rxroe1','RX-RO-1','in_hand','0','0');
-  INSERT INTO inventory_lots (id, part_id, shelf_code, total_qty, allocated_qty, created_at, updated_at) VALUES ('rxlot1','rxp1','RXS1',10,2,'0','0');
-  INSERT INTO picking_orders (id, external_id, ref_no, status, issue_reason, issue_note, issue_qty, issue_pack_size, issue_remark, issue_reported_at, issue_reported_by, created_at, updated_at)
-    VALUES ('rxpo1','rxpe1','RX-R1','issue','shortage','missing parts',3,10,'recount shelf','2026-01-01T00:00:00Z','rxu1','0','0');
+await db.execute(`
+  INSERT INTO users (id, username, password_hash, role, display_name, created_at) VALUES ('rxu1','rxreporter','h','operator','Reporter One',now());
+  INSERT INTO parts (id, part_no) VALUES ('rxp1','RX-P1');
+  INSERT INTO shelves (code, created_at, updated_at) VALUES ('RXS1', now(), now()) ON CONFLICT (code) DO NOTHING;
+  INSERT INTO receiving_orders (id, ref_no, status, created_at, updated_at) VALUES ('rxro1','RX-RO-1','in_hand',now(),now());
+  INSERT INTO receiving_invoices (id, receiving_order_id, invoice_no, created_at, updated_at) VALUES ('rxri1','rxro1','RX-INV-1',now(),now());
+  INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty) VALUES ('rxrii1','rxri1','rxp1',3,3);
+  INSERT INTO inventory_lots (id, part_id, shelf_code, total_qty, allocated_qty) VALUES ('rxlot1','rxp1','RXS1',10,2);
+  INSERT INTO picking_orders (id, ref_no, status, issue_reason, issue_note, issue_qty, issue_pack_size, issue_remark, issue_reported_at, issue_reported_by, created_at, updated_at)
+    VALUES ('rxpo1','RX-R1','issue','shortage','missing parts',3,10,'recount shelf','2026-01-01T00:00:00Z','rxu1',now(),now());
   INSERT INTO picking_items (id, picking_order_id, part_id, qty, required_date_code, source_shelf_code, created_at, updated_at)
-    VALUES ('rxpi1','rxpo1','rxp1',4,'DC-REQ','S-REQ','0','0'),
-           ('rxpi2','rxpo1','rxp1',6,NULL,NULL,'0','0');
-  INSERT INTO allocations (id, picking_item_id, qty, remark, inventory_lot_id, created_at, updated_at) VALUES ('rxa1','rxpi1',2,'alloc remark','rxlot1','0','0');
-  INSERT INTO allocations (id, picking_item_id, qty, receiving_order_id, created_at, updated_at) VALUES ('rxa2','rxpi2',3,'rxro1','0','0');
-  INSERT INTO measuring_tasks (id, picking_order_id, status, created_at, updated_at) VALUES ('rxmt1','rxpo1','pending','0','0');
-  INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('rxpo2','rxpe2','RX-R2','picking','0','0');
-  INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('rxpi3','rxpo2','rxp1',7,'0','0');
+    VALUES ('rxpi1','rxpo1','rxp1',4,'DC-REQ','S-REQ',now(),now()),
+           ('rxpi2','rxpo1','rxp1',6,NULL,NULL,now(),now());
+  INSERT INTO allocations (id, picking_item_id, qty, inventory_lot_id, created_at, updated_at) VALUES ('rxa1','rxpi1',2,'rxlot1',now(),now());
+  INSERT INTO allocations (id, picking_item_id, qty, receiving_invoice_item_id, created_at, updated_at) VALUES ('rxa2','rxpi2',3,'rxrii1',now(),now());
+  INSERT INTO measuring_tasks (id, picking_order_id, status, created_at) VALUES ('rxmt1','rxpo1','pending',now());
+  INSERT INTO picking_orders (id, ref_no, status, created_at, updated_at) VALUES ('rxpo2','RX-R2','picking',now(),now());
+  INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at) VALUES ('rxpi3','rxpo2','rxp1',7,now(),now());
 `);
 
 test("GET /picking-orders/:id returns issue fields, measuring task, and extended item/package/allocation keys", async () => {
-  sqlite.exec(`
-    INSERT INTO picking_packages (id, picking_item_id, source_type, source_id, qty, created_at, updated_at)
-      VALUES ('rxpp1','rxpi1','inventory_lot','rxlot1',1,'2026-02-01T00:00:00Z','0');
+  await db.execute(`
+    INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, created_at, updated_at)
+      VALUES ('rxpp1','rxpi1','rxpo1','inventory_lot','rxlot1',1,'2026-02-01T00:00:00Z',now());
   `);
   const res = await app.request("/picking-orders/rxpo1");
   assert.equal(res.status, 200);
@@ -344,7 +345,7 @@ test("GET /picking-orders/:id returns issue fields, measuring task, and extended
   assert.equal(d.order.issue_qty, 3);
   assert.equal(d.order.issue_pack_size, 10);
   assert.equal(d.order.issue_remark, "recount shelf");
-  assert.equal(d.order.issue_reported_at, "2026-01-01T00:00:00Z");
+  assert.equal(d.order.issue_reported_at, "2026-01-01T00:00:00.000Z");
   assert.equal(d.order.issue_reported_by, "rxu1");
   assert.equal(d.order.issue_reported_by_name, "Reporter One");
 
@@ -356,16 +357,16 @@ test("GET /picking-orders/:id returns issue fields, measuring task, and extended
   assert.equal(item1.source_shelf_code, "S-REQ");
 
   assert.equal(d.packages.length, 1);
-  assert.equal(d.packages[0].created_at, "2026-02-01T00:00:00Z");
+  assert.equal(d.packages[0].created_at, "2026-02-01T00:00:00.000Z");
 
   const a1 = d.allocations.find((a: any) => a.id === "rxa1");
-  assert.equal(a1.remark, "alloc remark");
+  assert.equal(a1.inventory_lot_id, "rxlot1");
   assert.equal(a1.lot.id, "rxlot1");
   assert.equal(a1.lot.part_id, "rxp1");
   assert.equal(a1.lot.shelf_code, "RXS1");
 
   const a2 = d.allocations.find((a: any) => a.id === "rxa2");
-  assert.equal(a2.remark, null);
+  assert.equal(a2.receiving_invoice_item_id, "rxrii1");
   assert.equal(a2.lot, null);
   assert.equal(a2.receiving_order_ref_no, "RX-RO-1");
 });
@@ -390,9 +391,10 @@ test("GET /picking-orders/:id returns null issue fields and null measuring_task 
 });
 
 test("GET /picking-orders/:id returns supplier and delivery_date via the suppliers join", async () => {
-  sqlite.exec(`
-    INSERT INTO suppliers (id, code, name, qr_template, qrcode_qty_encoding, created_at, updated_at) VALUES ('supx','SUPX','Sup X','tpl-x','plain','0','0');
-    INSERT INTO picking_orders (id, external_id, ref_no, status, delivery_date, supplier_id, po_no, required_date_code_notice, created_at, updated_at) VALUES ('pox','poxe','POX','picking','2026-07-13T00:00:00.000Z','supx','1180200993STD','notice-x','0','0');
+  await db.execute(`
+    INSERT INTO suppliers (id, code, name) VALUES ('supx','SUPX','Sup X');
+    INSERT INTO picking_orders (id, ref_no, status, delivery_date, supplier_id, po_no, required_date_code_notice, created_at, updated_at)
+      VALUES ('pox','POX','picking','2026-07-13T00:00:00.000Z','supx','1180200993STD','notice-x',now(),now());
   `);
   const res = await app.request("/picking-orders/pox");
   assert.equal(res.status, 200);
@@ -403,8 +405,6 @@ test("GET /picking-orders/:id returns supplier and delivery_date via the supplie
   assert.equal(d.order.supplier_id, "supx");
   assert.equal(d.order.supplier_code, "SUPX");
   assert.equal(d.order.supplier_name, "Sup X");
-  assert.equal(d.order.supplier_qr_template, "tpl-x");
-  assert.equal(d.order.supplier_qrcode_qty_encoding, "plain");
   // an order without a supplier gets nulls, not a 500
   const plain = (await (await app.request("/picking-orders/rxpo2")).json()) as any;
   assert.equal(plain.order.supplier_id, null);
@@ -422,4 +422,4 @@ test("GET /picking-orders includes total_qty summed over each order's items", as
   assert.equal(o2.total_qty, 7);
 });
 
-test("cleanup", () => { sqlite.close(); });
+test.after(async () => { await sql.end(); });

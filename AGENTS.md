@@ -1,14 +1,16 @@
 # Agent Instructions
 
-This is a pnpm monorepo proof-of-concept for warehouse mobile/Android flows: `apps/web` (Nuxt 3 client), `apps/api` (Hono API backed by better-sqlite3), and `packages/shared` (API request/response types used by both sides). The web app talks to the HTTP API by default through an adapter layer; the original in-browser PGlite database remains available behind a config flag for offline/demo use.
+This is a pnpm monorepo proof-of-concept for warehouse mobile/Android flows: `apps/web` (Nuxt 3 client), `apps/api` (Hono API backed by PostgreSQL), and `packages/shared` (API request/response types used by both sides). The web app talks to the HTTP API by default through an adapter layer; the original in-browser PGlite database remains available behind a config flag for offline/demo use.
 
 ## Tech stack
 
-- **Workspace:** pnpm monorepo — `apps/web`, `apps/api`, `packages/shared`
+- **Workspace:** pnpm monorepo — `apps/web`, `apps/api`, `apps/backend`, `apps/android`, `packages/shared`
+- **Backend (placeholder):** `apps/backend` (`@warehouse/backend`) is a fresh Hono + Drizzle + PostgreSQL package holding the revised target WMS schema (20 tables under `src/db/schema/`, plus `supplier_profiles` for PDA-local supplier fields such as `qr_template`/`qty_encoding` and lookup tables `country_list`, `box_size_list`, `net_weight_formula`, `customer_profiles`, `sub_inventories`; `suppliers` stays a pure AP_SUPPLIERS sync mirror). `sub_inventory_code` (FK → `sub_inventories`) partitions stock across `shelves`, `receiving_orders`, `receiving_invoices`, `picking_orders`, and `inventory_lots`; the same five tables also carry `warehouse_code` (plain text, no lookup table — instance default from env `WAREHOUSE_CODE`, default `HK1`, see `src/config.ts`). Routes so far: `/health`, auth (`POST /auth/login`, `POST /auth/logout`, `GET /auth/users/:id` — stateless demo parity with apps/api: plain-text password compare, no tokens, logout is a server no-op), and `/admin/*` master-data CRUD (`src/routes/admin/` — generic `createCrudRouter` for shelves/suppliers/supplier-profiles/parts/countries/box-sizes/sub-inventories/customer-profiles/net-weight-formulas/users, plus a custom `/admin/shelf-boxes` router; unauthenticated POC, errors are plain text). Same conventions as `apps/api`: migrations auto-apply on startup, and `src/db/seed.ts` auto-seeds a small demo dataset when the `users` table is empty (disable with `WAREHOUSE_SEED=off`); `pnpm --filter @warehouse/backend db:seed` wipes and re-seeds. Commands: `pnpm --filter @warehouse/backend dev|build|db:generate|db:migrate|db:seed`. Defaults: port `3002`, database `warehouse_backend` on the shared local Postgres (`DATABASE_URL` overrides). Backend docs (key concepts + schema reference): `docs/backend/`.
+- **Admin UI:** `apps/admin` (`@warehouse/admin`) is a Nuxt 3 (`ssr: false`) desktop admin console for the backend's `/admin/*` CRUD API. Plain CSS, English-only, port `3100`, `apiBaseUrl` env-overridable via `NUXT_PUBLIC_API_BASE_URL` (default `http://localhost:3002`). Client-side login gate only (stores `admin_user` in localStorage); generic `CrudTable`/`CrudForm` driven by `utils/entities.ts` configs, suppliers page edits the supplier profile (upsert), `shelf-boxes` pages manage shelf boxes (items read-only). Run with `pnpm dev:backend` + `pnpm dev:admin`.
 - **Web framework:** Nuxt 3 (`ssr: false`)
 - **UI:** Vue 3, plain CSS
 - **Mobile shell:** Capacitor (Android platform added)
-- **API:** Hono on Node, better-sqlite3 (file-backed `./dev.sqlite`, `DATABASE_URL` overridable), Drizzle ORM
+- **API:** Hono on Node, PostgreSQL via the `postgres` driver (`DATABASE_URL` connection string), Drizzle ORM
 - **Data access (web):** Pages call `WarehouseService` / `AuthService` (`apps/web/services/warehouse.ts`, `services/auth.ts`) via `useWarehouse()` / `useAuth()`. The default adapter (`services/adapters/apiWarehouse.ts`, `apiAuth.ts`) speaks HTTP through `services/apiClient.ts`. The PGlite adapter (`services/adapters/pgliteWarehouse.ts`, `pgliteAuth.ts`) keeps the old in-browser Postgres path (Drizzle `drizzle-orm/pglite`, in-memory, re-seeded per launch); `plugins/pglite.client.ts` only starts PGlite when `warehouseAdapter === "pglite"`.
 - **Adapter switch:** `apps/web/nuxt.config.ts` — `warehouseAdapter: "api"` (default) or `"pglite"`, and `apiBaseUrl` (env-overridable via `NUXT_PUBLIC_API_BASE_URL`; Capacitor device builds need a LAN-reachable host — the API's CORS allows `http://localhost:3000` and `capacitor://localhost`, and the device WebView origin is `http://localhost` because `capacitor.config.ts` sets `server.androidScheme: "http"`).
 - **List pages:** Reload on mount and when the app regains visibility (Capacitor does not support `useLiveQuery`). In pglite mode these use manual `db.execute` queries; in api mode they go through `WarehouseService` → HTTP.
@@ -17,8 +19,10 @@ This is a pnpm monorepo proof-of-concept for warehouse mobile/Android flows: `ap
 
 ```bash
 pnpm install        # install dependencies
+cd apps/api && docker compose up -d  # start the local Postgres service (required for dev/tests)
+pnpm --filter @warehouse/api db:migrate  # run Drizzle migrations against DATABASE_URL
 pnpm --filter @warehouse/api dev     # start API dev server on :3001
-pnpm --filter @warehouse/api test    # API test suite (node:test)
+pnpm --filter @warehouse/api test    # API test suite (node:test; needs Postgres + TEST_DATABASE_URL)
 pnpm --filter @warehouse/api build   # API typecheck (tsc)
 pnpm --filter @warehouse/web dev     # start web dev server on :3000
 pnpm --filter @warehouse/web test    # web test suite (vitest)
@@ -32,6 +36,24 @@ pnpm --filter @warehouse/web cap:android:dev  # sync Android to the running web 
 
 The web dev workflow needs TWO servers: `pnpm --filter @warehouse/api dev` (:3001) and `pnpm --filter @warehouse/web dev` (:3000). The web app talks to the API by default; with `warehouseAdapter: "pglite"` the API is not needed.
 
+### Postgres setup (apps/api)
+
+The API expects a running PostgreSQL server. A Docker Compose service is provided:
+
+```bash
+cd apps/api
+cp .env.example .env   # edit DATABASE_URL / TEST_DATABASE_URL if needed
+docker compose up -d
+```
+
+Migrations are applied automatically on API startup. To generate migrations after schema changes:
+
+```bash
+pnpm --filter @warehouse/api db:generate
+```
+
+Tests use the `TEST_DATABASE_URL` database (default `warehouse_test`) and run serially (`--test-concurrency=1`) because they share one test database.
+
 For Android live reload, run the web dev server in one terminal, then run `pnpm --filter @warehouse/web cap:android:dev` in another. The helper script (`scripts/cap-android-dev.mjs`) finds your machine's LAN IP, sets `CAPACITOR_SERVER_URL` (consumed by `capacitor.config.ts`), and points the Android WebView at `http://<ip>:3000`. In api mode the device also needs to reach the API, so set `NUXT_PUBLIC_API_BASE_URL=http://<ip>:3001` when starting the web dev server. Make sure the Android device and dev machine are on the same network. Known issue: on the current Capacitor version live reload fails with a native bridge `Cannot read properties of undefined (reading 'triggerEvent')` error; use the bundled build below until that is resolved.
 
 Device networking notes (bundled builds verified on a real device):
@@ -41,7 +63,7 @@ Device networking notes (bundled builds verified on a real device):
 
 ### Demo reset
 
-- **API:** `POST /dev/reset` wipes the sqlite database and re-seeds it.
+- **API:** `POST /dev/reset` truncates the Postgres database and re-seeds it.
 - **Web:** the reset control in `components/AppHeader.vue` calls `warehouse.resetDemoData()`, which hits `POST /dev/reset` in api mode and re-seeds PGlite in pglite mode.
 
 ### Native Android build / install on a connected device
@@ -211,7 +233,7 @@ When you add, remove, or significantly change a feature:
 ## Demo limitations to keep in mind
 
 - **PGlite adapter mode only — no migrations.** With `warehouseAdapter: "pglite"` the schema is created once from `db/init.ts` when the `users` table does not exist. Because that database is in-memory, schema changes take effect on the next app launch.
-- **PGlite adapter mode only — data is not persisted.** The in-memory database is re-seeded on every app launch, so each session starts fresh. In api mode data lives in the API's sqlite file and survives reloads; use `POST /dev/reset` to re-seed.
+- **PGlite adapter mode only — data is not persisted.** The in-memory database is re-seeded on every app launch, so each session starts fresh. In api mode data lives in the API's PostgreSQL database and survives reloads; use `POST /dev/reset` to re-seed.
 - **Demo passwords only.** Passwords are stored as plain-text hashes in the seed file.
 - **Native scanning.** The Android native `RectangleDetection.scanLabel()` flow is still used for camera-based label capture where implemented.
 - **Hardware scanner delivery.** The Capacitor app receives hardware scans two ways: the `ScannerBroadcast` plugin (`apps/web/android/.../ScannerBroadcastPlugin.java`, wrapped by `composables/useScannerBroadcast.ts`) listens for the scanner service's intent broadcast `com.wclsolution.docpal.action.BARCODE_SCANNED` (extra `barcode`) and is the fast path; `useHardwareScanner` also keeps the keyboard-wedge fallback (key events buffered until Enter) for browser dev and unconfigured devices. The plugin receives via a context-registered receiver (implicit broadcasts) plus the manifest component `ScannerBroadcastReceiver` (explicit package/class-targeted broadcasts); both share one dispatch path that suppresses duplicate deliveries of the same value within 400 ms. After a broadcast scan the composable eats wedge key echo for 1.5 s so the "Output to broadcast/keyboard" device mode does not double-scan. Device setup (one-time, scanner Function settings / directional output): Barcode data output mode = "Output to broadcast", PackageName = `com.docpal.warehousedemo`, ClassName = `com.docpal.warehousedemo.ScannerBroadcastReceiver`, Scan Result Action = the action above (Enable Intent ON), Scan Result Data Key = `barcode` (the firmware's misspelled default `bacode` is also accepted); verify with `adb logcat -s ScannerBroadcast` (this ROM suppresses DEBUG log lines — the plugin logs at INFO).

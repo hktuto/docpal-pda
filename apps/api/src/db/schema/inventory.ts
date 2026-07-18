@@ -1,10 +1,10 @@
 import { sql } from "drizzle-orm";
-import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
+import { pgTable, text, integer, boolean, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
-import { parts } from "./master.js";
+import { parts, shelves } from "./master.js";
 import { receivingInvoiceItems, receivingOrders } from "./receiving.js";
 
-export const inventoryLots = sqliteTable(
+export const inventoryLots = pgTable(
   "inventory_lots",
   {
     id: text("id").primaryKey(),
@@ -13,93 +13,66 @@ export const inventoryLots = sqliteTable(
     lotCode: text("lot_code"),
     coo: text("coo"),
     cow: text("cow"),
-    dateCodeNorm: text("date_code_norm"),
-    lotCodeNorm: text("lot_code_norm"),
-    cooNorm: text("coo_norm"),
-    cowNorm: text("cow_norm"),
-    shelfCode: text("shelf_code"), // null = receiving-area lot
+    shelfCode: text("shelf_code").references(() => shelves.code), // dock lots use a virtual dock shelf_code (shelves.location_type)
     boxId: text("box_id"),
+    supplierInvoiceNo: text("supplier_invoice_no"),
+    expectedQty: integer("expected_qty").notNull().default(0),
     totalQty: integer("total_qty").notNull().default(0),
     allocatedQty: integer("allocated_qty").notNull().default(0), // MAINTAINED = Σ allocations.qty
-    availableQty: integer("available_qty").generatedAlwaysAs(sql`total_qty - allocated_qty`, { mode: "stored" }),
-    createdAt: text("created_at").notNull().$defaultFn(now),
-    updatedAt: text("updated_at").notNull().$defaultFn(now),
+    availableQty: integer("available_qty").generatedAlwaysAs(sql`total_qty - allocated_qty`),
   },
   (t) => ({
-    partShelfAvailIdx: index("inventory_lots_part_shelf_avail_idx").on(t.partId, t.shelfCode, t.availableQty),
+    uniqueLot: uniqueIndex("inventory_lots_unique_lot")
+      .on(t.partId, t.dateCode, t.coo, t.cow, t.shelfCode, t.boxId)
+      .where(sql`shelf_code IS NOT NULL OR box_id IS NOT NULL`),
+    partIdx: index("idx_inventory_lots_part").on(t.partId),
+    availIdx: index("idx_inventory_lots_available").on(t.partId, t.availableQty),
+    locationIdx: index("idx_inventory_lots_location").on(t.shelfCode, t.boxId),
   })
 );
 
-export const inventoryLotSources = sqliteTable(
+export const inventoryLotSources = pgTable(
   "inventory_lot_sources",
   {
     id: text("id").primaryKey(),
     inventoryLotId: text("inventory_lot_id").notNull().references(() => inventoryLots.id, { onDelete: "cascade" }),
-    receivingInvoiceItemId: text("receiving_invoice_item_id").notNull().references(() => receivingInvoiceItems.id),
-    qty: integer("qty").notNull().default(0),
-    createdAt: text("created_at").notNull().$defaultFn(now),
-    updatedAt: text("updated_at").notNull().$defaultFn(now),
+    receivingInvoiceItemId: text("receiving_invoice_item_id").notNull().references(() => receivingInvoiceItems.id, { onDelete: "cascade" }),
+    qty: integer("qty").notNull(),
   },
   (t) => ({
-    lotIdx: index("ils_lot_idx").on(t.inventoryLotId),
-    itemIdx: index("ils_item_idx").on(t.receivingInvoiceItemId),
+    lotItemUq: uniqueIndex("inventory_lot_sources_unique").on(t.inventoryLotId, t.receivingInvoiceItemId),
+    itemIdx: index("idx_inventory_lot_sources_receiving_item").on(t.receivingInvoiceItemId),
+    lotIdx: index("idx_inventory_lot_sources_lot").on(t.inventoryLotId),
   })
 );
 
-export const shelfBoxes = sqliteTable(
+export const shelfBoxes = pgTable(
   "shelf_boxes",
   {
     id: text("id").primaryKey(),
-    shelfCode: text("shelf_code").notNull(),
-    boxId: text("box_id"),
     receivingOrderId: text("receiving_order_id").references(() => receivingOrders.id),
+    shelfCode: text("shelf_code").references(() => shelves.code), // null = staged (scanned, not yet shelved)
     status: text("status", { enum: ["open", "closed", "verified"] }).notNull().default("open"),
-    createdAt: text("created_at").notNull().$defaultFn(now),
-    updatedAt: text("updated_at").notNull().$defaultFn(now),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
   },
   (t) => ({
-    shelfIdx: index("shelf_boxes_shelf_idx").on(t.shelfCode),
-    statusIdx: index("shelf_boxes_status_idx").on(t.status),
-    receivingOrderIdx: index("shelf_boxes_receiving_order_idx").on(t.receivingOrderId),
+    orderIdx: index("idx_shelf_boxes_order").on(t.receivingOrderId),
+    shelfIdx: index("idx_shelf_boxes_shelf").on(t.shelfCode),
   })
 );
 
-export const shelfBoxItems = sqliteTable(
+export const shelfBoxItems = pgTable(
   "shelf_box_items",
   {
     id: text("id").primaryKey(),
     shelfBoxId: text("shelf_box_id").notNull().references(() => shelfBoxes.id, { onDelete: "cascade" }),
+    receivingInvoiceItemId: text("receiving_invoice_item_id").references(() => receivingInvoiceItems.id),
     partId: text("part_id").notNull().references(() => parts.id),
-    qty: integer("qty").notNull().default(0),
-    verified: integer("verified").notNull().default(0),
-    verifiedAt: text("verified_at"),
-    createdAt: text("created_at").notNull().$defaultFn(now),
-    updatedAt: text("updated_at").notNull().$defaultFn(now),
+    qty: integer("qty").notNull(),
+    verified: boolean("verified").default(false),
+    verifiedAt: timestamp("verified_at", { mode: "date" }),
   },
   (t) => ({
-    boxIdx: index("shelf_box_items_box_idx").on(t.shelfBoxId),
-    partIdx: index("shelf_box_items_part_idx").on(t.partId),
-  })
-);
-
-export const putAwayScans = sqliteTable(
-  "put_away_scans",
-  {
-    id: text("id").primaryKey(),
-    receivingInvoiceItemId: text("receiving_invoice_item_id").notNull().references(() => receivingInvoiceItems.id),
-    qty: integer("qty").notNull().default(0),
-    shelfBoxId: text("shelf_box_id").references(() => shelfBoxes.id), // null = scanned, not yet shelved
-    verified: integer("verified").notNull().default(0),
-    verifiedAt: text("verified_at"),
-    dateCode: text("date_code"),
-    lotCode: text("lot_code"),
-    coo: text("coo"),
-    cow: text("cow"),
-    createdAt: text("created_at").notNull().$defaultFn(now),
-    updatedAt: text("updated_at").notNull().$defaultFn(now),
-  },
-  (t) => ({
-    itemIdx: index("put_away_scans_item_idx").on(t.receivingInvoiceItemId),
-    boxIdx: index("put_away_scans_box_idx").on(t.shelfBoxId),
+    boxIdx: index("idx_shelf_box_items_box").on(t.shelfBoxId),
   })
 );

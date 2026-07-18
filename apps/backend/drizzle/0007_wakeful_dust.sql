@@ -1,0 +1,1 @@
+ALTER TABLE "parts" ADD COLUMN "wcl_item_no" text;

@@ -1,208 +1,30 @@
-export const createTablesSql = `
-CREATE TABLE IF NOT EXISTS users (
-  id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL,
-  role TEXT NOT NULL, name TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS suppliers (
-  id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, name TEXT NOT NULL, qr_template TEXT,
-  qrcode_qty_encoding TEXT,
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS parts (
-  id TEXT PRIMARY KEY, part_no TEXT NOT NULL, part_no_norm TEXT NOT NULL, description TEXT,
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS parts_part_no_norm_idx ON parts(part_no_norm);
-CREATE TABLE IF NOT EXISTS shelves (
-  id TEXT PRIMARY KEY, code TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+import type { AppDb } from "../db.js";
 
-CREATE TABLE IF NOT EXISTS receiving_orders (
-  id TEXT PRIMARY KEY, external_id TEXT NOT NULL UNIQUE, ref_no TEXT NOT NULL, delivery_date TEXT,
-  status TEXT NOT NULL CHECK(status IN ('pending','in_hand','clear')), supplier_id TEXT REFERENCES suppliers(id),
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS receiving_orders_status_updated_idx ON receiving_orders(status, updated_at);
-CREATE INDEX IF NOT EXISTS receiving_orders_supplier_idx ON receiving_orders(supplier_id);
-CREATE TABLE IF NOT EXISTS receiving_invoices (
-  id TEXT PRIMARY KEY, external_id TEXT, receiving_order_id TEXT NOT NULL REFERENCES receiving_orders(id) ON DELETE CASCADE,
-  invoice_no TEXT NOT NULL, supplier_id TEXT REFERENCES suppliers(id),
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(receiving_order_id, invoice_no));
-CREATE INDEX IF NOT EXISTS receiving_invoices_order_idx ON receiving_invoices(receiving_order_id);
-CREATE INDEX IF NOT EXISTS receiving_invoices_supplier_idx ON receiving_invoices(supplier_id);
-CREATE TABLE IF NOT EXISTS receiving_invoice_items (
-  id TEXT PRIMARY KEY, receiving_invoice_id TEXT NOT NULL REFERENCES receiving_invoices(id) ON DELETE CASCADE,
-  part_id TEXT NOT NULL REFERENCES parts(id), qty INTEGER NOT NULL DEFAULT 0, received_qty INTEGER NOT NULL DEFAULT 0,
-  picked_qty INTEGER NOT NULL DEFAULT 0, put_away_qty INTEGER NOT NULL DEFAULT 0,
-  allocated_qty INTEGER NOT NULL DEFAULT 0, available_qty INTEGER NOT NULL DEFAULT 0, box_id TEXT,
-  date_code TEXT, lot_code TEXT, coo TEXT, cow TEXT, date_code_norm TEXT, lot_code_norm TEXT, coo_norm TEXT, cow_norm TEXT, line_no INTEGER,
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS rii_part_available_idx ON receiving_invoice_items(part_id, available_qty);
-CREATE INDEX IF NOT EXISTS rii_invoice_idx ON receiving_invoice_items(receiving_invoice_id);
-CREATE UNIQUE INDEX IF NOT EXISTS rii_invoice_line_uq ON receiving_invoice_items(receiving_invoice_id, line_no) WHERE line_no IS NOT NULL;
-CREATE TABLE IF NOT EXISTS receiving_item_mismatches (
-  id TEXT PRIMARY KEY, receiving_invoice_item_id TEXT NOT NULL REFERENCES receiving_invoice_items(id) ON DELETE CASCADE,
-  kind TEXT NOT NULL, mismatch_qty INTEGER, wrong_part_no TEXT, note TEXT,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','confirmed','cancelled')),
-  effective_received_qty INTEGER, previous_received_qty INTEGER,
-  reported_by TEXT, confirmed_by TEXT, confirmed_at TEXT, cancelled_by TEXT, cancelled_at TEXT,
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS rim_item_idx ON receiving_item_mismatches(receiving_invoice_item_id);
+// every table created by Drizzle migrations; order matters for TRUNCATE without CASCADE
+const ALL_TABLES = [
+  "inventory_transactions",
+  "transaction_logs",
+  "measuring_tasks",
+  "picking_packages",
+  "shipping_box_items",
+  "shipping_boxes",
+  "picking_items",
+  "picking_orders",
+  "allocations",
+  "inventory_lot_sources",
+  "inventory_lots",
+  "shelf_box_items",
+  "shelf_boxes",
+  "receiving_invoice_items",
+  "receiving_invoices",
+  "receiving_orders",
+  "shelves",
+  "parts",
+  "suppliers",
+  "users",
+];
 
-CREATE TABLE IF NOT EXISTS picking_orders (
-  id TEXT PRIMARY KEY, external_id TEXT NOT NULL UNIQUE, ref_no TEXT NOT NULL,
-  status TEXT NOT NULL CHECK(status IN ('pending','picking','finished','issue')), ship_to TEXT, destination_country TEXT,
-  delivery_date TEXT, supplier_id TEXT REFERENCES suppliers(id),
-  po_no TEXT, required_date_code_notice TEXT,
-  issue_reason TEXT, issue_note TEXT, issue_qty INTEGER, issue_pack_size INTEGER, issue_remark TEXT,
-  issue_reported_at TEXT, issue_reported_by TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS picking_orders_status_updated_idx ON picking_orders(status, updated_at);
-CREATE TABLE IF NOT EXISTS picking_items (
-  id TEXT PRIMARY KEY, picking_order_id TEXT NOT NULL REFERENCES picking_orders(id) ON DELETE CASCADE,
-  part_id TEXT NOT NULL REFERENCES parts(id), qty INTEGER NOT NULL DEFAULT 0, picked_qty INTEGER NOT NULL DEFAULT 0,
-  allocated_qty INTEGER NOT NULL DEFAULT 0, required_date_code TEXT, source_shelf_code TEXT,
-  scanned_not_boxed_qty INTEGER NOT NULL DEFAULT 0,
-  remaining_qty INTEGER GENERATED ALWAYS AS (qty - picked_qty - scanned_not_boxed_qty) STORED,
-  line_id TEXT,
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS picking_items_part_idx ON picking_items(part_id);
-CREATE INDEX IF NOT EXISTS picking_items_order_idx ON picking_items(picking_order_id);
-CREATE UNIQUE INDEX IF NOT EXISTS picking_items_order_line_uq ON picking_items(picking_order_id, line_id) WHERE line_id IS NOT NULL;
-CREATE TABLE IF NOT EXISTS shipping_boxes (
-  id TEXT PRIMARY KEY, picking_order_id TEXT NOT NULL REFERENCES picking_orders(id) ON DELETE CASCADE,
-  status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','closed','verified')), box_size TEXT,
-  net_weight_g INTEGER, gross_weight_g INTEGER, destination_country TEXT,
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS shipping_boxes_order_idx ON shipping_boxes(picking_order_id);
-CREATE INDEX IF NOT EXISTS shipping_boxes_status_idx ON shipping_boxes(status);
-CREATE TABLE IF NOT EXISTS picking_packages (
-  id TEXT PRIMARY KEY, picking_item_id TEXT NOT NULL REFERENCES picking_items(id) ON DELETE CASCADE,
-  source_type TEXT NOT NULL CHECK(source_type IN ('receiving_invoice_item','inventory_lot')), source_id TEXT NOT NULL,
-  qty INTEGER NOT NULL DEFAULT 0, shipping_box_id TEXT REFERENCES shipping_boxes(id),
-  date_code TEXT, lot_code TEXT, coo TEXT, cow TEXT, verified INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS picking_packages_box_idx ON picking_packages(shipping_box_id);
-CREATE INDEX IF NOT EXISTS picking_packages_item_idx ON picking_packages(picking_item_id);
-
-CREATE TABLE IF NOT EXISTS inventory_lots (
-  id TEXT PRIMARY KEY, part_id TEXT NOT NULL REFERENCES parts(id),
-  date_code TEXT, lot_code TEXT, coo TEXT, cow TEXT, date_code_norm TEXT, lot_code_norm TEXT, coo_norm TEXT, cow_norm TEXT,
-  shelf_code TEXT, box_id TEXT, total_qty INTEGER NOT NULL DEFAULT 0, allocated_qty INTEGER NOT NULL DEFAULT 0,
-  available_qty INTEGER GENERATED ALWAYS AS (total_qty - allocated_qty) STORED,
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS inventory_lots_part_shelf_avail_idx ON inventory_lots(part_id, shelf_code, available_qty);
-CREATE TABLE IF NOT EXISTS inventory_lot_sources (
-  id TEXT PRIMARY KEY, inventory_lot_id TEXT NOT NULL REFERENCES inventory_lots(id) ON DELETE CASCADE,
-  receiving_invoice_item_id TEXT NOT NULL REFERENCES receiving_invoice_items(id), qty INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS ils_lot_idx ON inventory_lot_sources(inventory_lot_id);
-CREATE INDEX IF NOT EXISTS ils_item_idx ON inventory_lot_sources(receiving_invoice_item_id);
-CREATE TABLE IF NOT EXISTS shelf_boxes (
-  id TEXT PRIMARY KEY, shelf_code TEXT NOT NULL, box_id TEXT,
-  receiving_order_id TEXT REFERENCES receiving_orders(id),
-  status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','closed','verified')),
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS shelf_boxes_shelf_idx ON shelf_boxes(shelf_code);
-CREATE INDEX IF NOT EXISTS shelf_boxes_status_idx ON shelf_boxes(status);
-CREATE INDEX IF NOT EXISTS shelf_boxes_receiving_order_idx ON shelf_boxes(receiving_order_id);
-CREATE TABLE IF NOT EXISTS shelf_box_items (
-  id TEXT PRIMARY KEY, shelf_box_id TEXT NOT NULL REFERENCES shelf_boxes(id) ON DELETE CASCADE,
-  part_id TEXT NOT NULL REFERENCES parts(id), qty INTEGER NOT NULL DEFAULT 0, verified INTEGER NOT NULL DEFAULT 0,
-  verified_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS shelf_box_items_box_idx ON shelf_box_items(shelf_box_id);
-CREATE INDEX IF NOT EXISTS shelf_box_items_part_idx ON shelf_box_items(part_id);
-CREATE TABLE IF NOT EXISTS put_away_scans (
-  id TEXT PRIMARY KEY, receiving_invoice_item_id TEXT NOT NULL REFERENCES receiving_invoice_items(id),
-  qty INTEGER NOT NULL DEFAULT 0, shelf_box_id TEXT REFERENCES shelf_boxes(id), verified INTEGER NOT NULL DEFAULT 0,
-  verified_at TEXT, date_code TEXT, lot_code TEXT, coo TEXT, cow TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS put_away_scans_item_idx ON put_away_scans(receiving_invoice_item_id);
-CREATE INDEX IF NOT EXISTS put_away_scans_box_idx ON put_away_scans(shelf_box_id);
-
-CREATE TABLE IF NOT EXISTS allocations (
-  id TEXT PRIMARY KEY, picking_item_id TEXT NOT NULL REFERENCES picking_items(id) ON DELETE CASCADE,
-  qty INTEGER NOT NULL DEFAULT 0, remark TEXT, inventory_lot_id TEXT REFERENCES inventory_lots(id),
-  receiving_order_id TEXT REFERENCES receiving_orders(id),
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
-  CHECK ((inventory_lot_id IS NOT NULL) != (receiving_order_id IS NOT NULL)));
-CREATE INDEX IF NOT EXISTS allocations_item_idx ON allocations(picking_item_id);
-CREATE INDEX IF NOT EXISTS allocations_lot_idx ON allocations(inventory_lot_id);
-CREATE INDEX IF NOT EXISTS allocations_receiving_order_idx ON allocations(receiving_order_id);
-CREATE TABLE IF NOT EXISTS allocation_receiving_items (
-  id TEXT PRIMARY KEY, allocation_id TEXT NOT NULL REFERENCES allocations(id) ON DELETE CASCADE,
-  receiving_invoice_item_id TEXT NOT NULL REFERENCES receiving_invoice_items(id), qty INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
-  UNIQUE(allocation_id, receiving_invoice_item_id));
-CREATE INDEX IF NOT EXISTS ari_item_idx ON allocation_receiving_items(receiving_invoice_item_id);
-CREATE INDEX IF NOT EXISTS ari_allocation_idx ON allocation_receiving_items(allocation_id);
-
-CREATE TABLE IF NOT EXISTS measuring_tasks (
-  id TEXT PRIMARY KEY, picking_order_id TEXT NOT NULL UNIQUE REFERENCES picking_orders(id) ON DELETE CASCADE,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','completed')),
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS measuring_tasks_status_updated_idx ON measuring_tasks(status, updated_at);
-CREATE TABLE IF NOT EXISTS verification_tasks (
-  id TEXT PRIMARY KEY, kind TEXT NOT NULL CHECK(kind IN ('pre_shipment','cycle_count')),
-  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','completed')), due_at TEXT,
-  picking_order_id TEXT REFERENCES picking_orders(id) ON DELETE CASCADE,
-  shelf_box_id TEXT REFERENCES shelf_boxes(id) ON DELETE CASCADE,
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
-  CHECK ((kind = 'pre_shipment') = (picking_order_id IS NOT NULL)),
-  CHECK ((kind = 'cycle_count') = (shelf_box_id IS NOT NULL)));
-CREATE INDEX IF NOT EXISTS verification_tasks_kind_status_updated_idx ON verification_tasks(kind, status, updated_at);
-CREATE INDEX IF NOT EXISTS verification_tasks_picking_order_idx ON verification_tasks(picking_order_id);
-CREATE INDEX IF NOT EXISTS verification_tasks_shelf_box_idx ON verification_tasks(shelf_box_id);
-CREATE UNIQUE INDEX IF NOT EXISTS verification_tasks_cycle_coalesce_uq ON verification_tasks(kind, shelf_box_id, date(due_at)) WHERE kind = 'cycle_count' AND status = 'pending';
-CREATE UNIQUE INDEX IF NOT EXISTS verification_tasks_preship_pending_uq ON verification_tasks(picking_order_id) WHERE kind='pre_shipment' AND status='pending';
-
-CREATE TABLE IF NOT EXISTS transition_logs (
-  id TEXT PRIMARY KEY, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, from_status TEXT, to_status TEXT,
-  actor_id TEXT, note TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE INDEX IF NOT EXISTS transition_logs_entity_idx ON transition_logs(entity_type, entity_id);
-`;
-
-import type { Database as DatabaseType } from "better-sqlite3";
-
-// The API keeps a persistent dev.sqlite across launches (no migrations).
-// createTables runs on every boot and must be idempotent for BOTH a fresh DB
-// and a pre-existing DB that predates newly added columns. The partial unique
-// indexes below reference line_no / line_id, so a stale DB must gain those
-// columns before the DDL script executes (else "no such column").
-function ensureColumn(sqlite: DatabaseType, table: string, column: string, decl: string): void {
-  const exists = sqlite.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name=?`).get(table);
-  if (!exists) return; // fresh DB: CREATE TABLE below already declares the column
-  const cols = sqlite.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
-  if (cols.some((c) => c.name === column)) return;
-  sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${decl}`);
-}
-
-export function createTables(sqlite: DatabaseType): void {
-  ensureColumn(sqlite, "receiving_invoice_items", "line_no", "line_no INTEGER");
-  ensureColumn(sqlite, "picking_items", "line_id", "line_id TEXT");
-  ensureColumn(sqlite, "suppliers", "qrcode_qty_encoding", "qrcode_qty_encoding TEXT");
-  ensureColumn(sqlite, "picking_orders", "po_no", "po_no TEXT");
-  ensureColumn(sqlite, "picking_orders", "required_date_code_notice", "required_date_code_notice TEXT");
-  ensureColumn(sqlite, "shelf_boxes", "receiving_order_id", "receiving_order_id TEXT REFERENCES receiving_orders(id)");
-  ensureColumn(sqlite, "shelf_boxes", "status", "status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open','closed','verified'))");
-  // receiving_item_mismatches gained the web mismatch-workflow columns (Plan 7 task 5).
-  // created_at plays the role of the web's reported_at, so no separate column is added.
-  ensureColumn(sqlite, "receiving_item_mismatches", "mismatch_qty", "mismatch_qty INTEGER");
-  ensureColumn(sqlite, "receiving_item_mismatches", "wrong_part_no", "wrong_part_no TEXT");
-  ensureColumn(sqlite, "receiving_item_mismatches", "status", "status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','confirmed','cancelled'))");
-  ensureColumn(sqlite, "receiving_item_mismatches", "effective_received_qty", "effective_received_qty INTEGER");
-  ensureColumn(sqlite, "receiving_item_mismatches", "previous_received_qty", "previous_received_qty INTEGER");
-  ensureColumn(sqlite, "receiving_item_mismatches", "reported_by", "reported_by TEXT");
-  ensureColumn(sqlite, "receiving_item_mismatches", "confirmed_by", "confirmed_by TEXT");
-  ensureColumn(sqlite, "receiving_item_mismatches", "confirmed_at", "confirmed_at TEXT");
-  ensureColumn(sqlite, "receiving_item_mismatches", "cancelled_by", "cancelled_by TEXT");
-  ensureColumn(sqlite, "receiving_item_mismatches", "cancelled_at", "cancelled_at TEXT");
-  // picking_orders gained the web issue-reporting columns (Plan 7 task 7).
-  // issue_reason / issue_note were already present from the original DDL.
-  ensureColumn(sqlite, "picking_orders", "issue_qty", "issue_qty INTEGER");
-  ensureColumn(sqlite, "picking_orders", "issue_pack_size", "issue_pack_size INTEGER");
-  ensureColumn(sqlite, "picking_orders", "issue_remark", "issue_remark TEXT");
-  ensureColumn(sqlite, "picking_orders", "issue_reported_at", "issue_reported_at TEXT");
-  ensureColumn(sqlite, "picking_orders", "issue_reported_by", "issue_reported_by TEXT");
-  // picking_orders gained the web delivery/supplier columns (Plan 8 follow-up).
-  ensureColumn(sqlite, "picking_orders", "delivery_date", "delivery_date TEXT");
-  ensureColumn(sqlite, "picking_orders", "supplier_id", "supplier_id TEXT REFERENCES suppliers(id)");
-  // The cycle-coalesce index became partial (pending-only). A stale dev.sqlite still
-  // holds the old non-partial definition, which CREATE ... IF NOT EXISTS would keep,
-  // so drop it first and let the DDL recreate it (cheap at demo scale).
-  sqlite.exec("DROP INDEX IF EXISTS verification_tasks_cycle_coalesce_uq");
-  sqlite.exec(createTablesSql);
+/** Wipe all data. Used by tests and the dev reset endpoint. */
+export async function resetTables(db: AppDb): Promise<void> {
+  await db.execute(`TRUNCATE TABLE ${ALL_TABLES.join(", ")} CASCADE`);
 }

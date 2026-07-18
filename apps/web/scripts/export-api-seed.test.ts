@@ -114,13 +114,33 @@ describe("export-api-seed", () => {
         );
       }
 
+      const receivingOrders = await select("receiving_orders");
+      const receivingInvoices = await select("receiving_invoices");
+      const receivingItems = await select("receiving_invoice_items");
+
+      // The web schema has no part↔supplier link; derive each part's supplier
+      // from the receiving invoice that introduced it (invoice supplier,
+      // falling back to the order supplier). First non-null wins.
+      const orderSupplier = new Map(receivingOrders.map((r) => [r.id as string, r.supplier_id as string | null]));
+      const invoiceSupplier = new Map(
+        receivingInvoices.map((r) => [
+          r.id as string,
+          (r.supplier_id as string | null) ?? orderSupplier.get(r.receiving_order_id as string) ?? null,
+        ])
+      );
+      const partSupplier = new Map<string, string>();
+      for (const it of receivingItems) {
+        const sup = invoiceSupplier.get(it.receiving_invoice_id as string);
+        if (sup && !partSupplier.has(it.part_id as string)) partSupplier.set(it.part_id as string, sup);
+      }
+
       const parts = await select("parts");
       for (const r of parts) {
         lines.push(
           insert(
             "parts",
-            ["id", "part_no", "part_no_norm", "description", "created_at", "updated_at"],
-            [r.id, r.part_no, normalizeCode(r.part_no as string), r.description, seedTs, seedTs]
+            ["id", "part_no", "part_no_norm", "description", "supplier_id", "created_at", "updated_at"],
+            [r.id, r.part_no, normalizeCode(r.part_no as string), r.description, partSupplier.get(r.id as string) ?? null, seedTs, seedTs]
           )
         );
       }
@@ -132,7 +152,6 @@ describe("export-api-seed", () => {
         );
       }
 
-      const receivingOrders = await select("receiving_orders");
       for (const r of receivingOrders) {
         lines.push(
           insert(
@@ -143,7 +162,6 @@ describe("export-api-seed", () => {
         );
       }
 
-      const receivingInvoices = await select("receiving_invoices");
       for (const r of receivingInvoices) {
         lines.push(
           insert(
@@ -154,7 +172,6 @@ describe("export-api-seed", () => {
         );
       }
 
-      const receivingItems = await select("receiving_invoice_items");
       for (const r of receivingItems) {
         // allocated_qty / available_qty start at 0 — re-derived by the API
         // allocation engine at seed time (later task).

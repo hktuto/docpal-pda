@@ -193,7 +193,7 @@ logic lives in `apps/api/src/db/*.ts` behind the routes below.
 | Picking issue reporting | `apps/api/src/db/pickingIssues.ts` |
 | OCR pick (FIFO link + `scanAllocation` from an in-hand receiving order) | `apps/api/src/db/ocrPick.ts` |
 
-- Server entry: `apps/api/src/server.ts`; app wiring: `apps/api/src/index.ts`; DB bootstrap: `apps/api/src/db.ts`.
+- Server entry: `apps/api/src/server.ts`; app wiring: `apps/api/src/index.ts`; DB bootstrap: `apps/api/src/db.ts` (connects via `DATABASE_URL`, runs Drizzle migrations from `apps/api/drizzle`, then seeds if empty).
 - confirm-arrival runs `allocateAll` after the order flips to `in_hand`; a picking upsert runs `allocatePickingOrder` when the upsert changed data. Both are best-effort and never roll back the committed write.
 - All web pages (including `pages/put-away/` and `pages/goods-verify/`) go through `WarehouseService` → these HTTP endpoints by default (`warehouseAdapter: "api"`); the PGlite adapter path (`db/*.ts`) remains behind `warehouseAdapter: "pglite"`.
 

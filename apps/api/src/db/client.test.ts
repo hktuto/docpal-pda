@@ -1,27 +1,21 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { createDb } from "./client.js";
 
-function tmpPath(): string {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wh-api-"));
-  return path.join(dir, "t.sqlite");
-}
-
-test("createDb enables foreign keys, WAL, NORMAL sync, busy_timeout", () => {
-  const { sqlite } = createDb(tmpPath());
-  assert.equal(sqlite.pragma("foreign_keys", { simple: true }), 1);
-  assert.equal(sqlite.pragma("journal_mode", { simple: true }), "wal");
-  assert.equal(sqlite.pragma("synchronous", { simple: true }), 1); // 1 = NORMAL
-  assert.equal(sqlite.pragma("busy_timeout", { simple: true }), 5000);
-  sqlite.close();
+test("createDb connects to Postgres and can run a query", async () => {
+  const { sql, db } = createDb(process.env.TEST_DATABASE_URL ?? "postgresql://warehouse:warehouse@localhost:5432/warehouse_test");
+  const rows = await db.execute(`SELECT 1 AS one`);
+  assert.deepEqual(rows[0], { one: 1 });
+  await sql.end();
 });
 
-test("createDb creates missing parent directories", () => {
-  const p = path.join(os.tmpdir(), "wh-api-" + Date.now(), "nested", "t.sqlite");
-  const { sqlite } = createDb(p);
-  assert.ok(fs.existsSync(p));
-  sqlite.close();
+test("createDb uses DATABASE_URL when no connection string is provided", async () => {
+  const original = process.env.DATABASE_URL;
+  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? "postgresql://warehouse:warehouse@localhost:5432/warehouse_test";
+  const { sql, db } = createDb();
+  const rows = await db.execute(`SELECT 1 AS one`);
+  assert.deepEqual(rows[0], { one: 1 });
+  await sql.end();
+  if (original === undefined) delete process.env.DATABASE_URL;
+  else process.env.DATABASE_URL = original;
 });

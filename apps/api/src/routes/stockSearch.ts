@@ -2,16 +2,18 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { sql } from "drizzle-orm";
 import { db } from "../db.js";
+import { queryAll, queryGet } from "../db/query.js";
 
 export const stockSearchRoute = new Hono();
 
 // Ported from apps/web/db/stockSearch.ts. Deviation: the web also links
-// supplier ↔ part through picking_items → picking_orders.supplier_id, but the
-// API picking_orders table has no supplier_id column, so only the receiving
-// linkage (receiving_invoice_items → receiving_invoices → receiving_orders)
-// exists here. The API parts table also lacks internal_code / default_coo.
-stockSearchRoute.get("/stock-search/suppliers", (c) => {
-  const rows = db.all<Record<string, unknown>>(sql`
+// supplier ↔ part through picking_items → picking_orders.supplier_id; the API
+// only uses the receiving linkage (receiving_invoice_items →
+// receiving_invoices → receiving_orders) even though both picking_orders and
+// parts now carry supplier_id. The API parts table also lacks internal_code /
+// default_coo.
+stockSearchRoute.get("/stock-search/suppliers", async (c) => {
+  const rows = await queryAll<Record<string, unknown>>(db, sql`
     WITH supplier_parts AS (
       SELECT DISTINCT rii.part_id AS part_id, ro.supplier_id AS supplier_id
       FROM receiving_invoice_items rii
@@ -30,12 +32,12 @@ stockSearchRoute.get("/stock-search/suppliers", (c) => {
       s.code,
       s.name,
       COALESCE((
-        SELECT COUNT(DISTINCT part_id)
+        SELECT COUNT(DISTINCT part_id)::int
         FROM supplier_parts sp
         WHERE sp.supplier_id = s.id
       ), 0) AS total_parts,
       COALESCE((
-        SELECT COUNT(DISTINCT part_id)
+        SELECT COUNT(DISTINCT part_id)::int
         FROM inventory_parts ip
         WHERE ip.supplier_id = s.id
       ), 0) AS parts_with_inventory
@@ -54,11 +56,11 @@ stockSearchRoute.get("/stock-search/suppliers", (c) => {
   );
 });
 
-stockSearchRoute.get("/stock-search/suppliers/:id/parts", (c) => {
+stockSearchRoute.get("/stock-search/suppliers/:id/parts", async (c) => {
   const supplierId = c.req.param("id");
-  const supplier = db.get<{ id: string }>(sql`SELECT id FROM suppliers WHERE id = ${supplierId}`);
+  const supplier = await queryGet<{ id: string }>(db, sql`SELECT id FROM suppliers WHERE id = ${supplierId}`);
   if (!supplier) throw new HTTPException(404, { message: "supplier not found" });
-  const rows = db.all<Record<string, unknown>>(sql`
+  const rows = await queryAll<Record<string, unknown>>(db, sql`
     SELECT DISTINCT p.id, p.part_no, p.description
     FROM parts p
     WHERE p.id IN (
@@ -80,13 +82,13 @@ stockSearchRoute.get("/stock-search/suppliers/:id/parts", (c) => {
   );
 });
 
-stockSearchRoute.get("/stock-search/parts/lots", (c) => {
+stockSearchRoute.get("/stock-search/parts/lots", async (c) => {
   const partIds = (c.req.query("part_ids") ?? "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
   if (partIds.length === 0) throw new HTTPException(400, { message: "part_ids query param is required" });
-  const rows = db.all<Record<string, unknown>>(sql`
+  const rows = await queryAll<Record<string, unknown>>(db, sql`
     SELECT part_id, date_code, lot_code, coo, cow, shelf_code, box_id, total_qty, allocated_qty, available_qty
     FROM inventory_lots
     WHERE part_id IN (${sql.join(

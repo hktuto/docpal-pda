@@ -1,19 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import Database from "better-sqlite3";
+import { createTestDb } from "../db/test-helper.js";
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wh-api-"));
-const dbPath = path.join(dir, "t.sqlite");
-process.env.DATABASE_URL = dbPath;
+process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? "postgresql://warehouse:warehouse@localhost:5432/warehouse_test";
 process.env.WAREHOUSE_SEED = "off";
 const { app } = await import("../index.js");
-const sqlite = new Database(dbPath);
+const { sql, db } = await createTestDb();
 
 test("PUT picking order runs allocation against existing in_hand receiving stock", async () => {
-  sqlite.exec(`
+  await db.execute(`
     INSERT INTO parts (id, part_no, part_no_norm, created_at, updated_at) VALUES ('pP','P','P','0','0');
     INSERT INTO receiving_orders (id, external_id, ref_no, status, delivery_date, created_at, updated_at) VALUES ('ro','re','R','in_hand','2026-01-01','0','0');
     INSERT INTO receiving_invoices (id, receiving_order_id, invoice_no, created_at, updated_at) VALUES ('ri','ro','I','0','0');
@@ -29,10 +24,10 @@ test("PUT picking order runs allocation against existing in_hand receiving stock
   const body = (await res.json()) as { created: boolean; changed: boolean };
   assert.equal(body.created, true);
 
-  const alloc = sqlite.prepare("SELECT qty, receiving_order_id AS ro FROM allocations").get() as any;
+  const alloc = (await db.execute<{ qty: number; ro: string }>("SELECT qty, receiving_order_id AS ro FROM allocations"))[0];
   assert.equal(alloc.qty, 30);
   assert.equal(alloc.ro, "ro");
-  const rii = sqlite.prepare("SELECT allocated_qty, available_qty FROM receiving_invoice_items WHERE id='rii'").get() as any;
+  const rii = (await db.execute<{ allocated_qty: number; available_qty: number }>("SELECT allocated_qty, available_qty FROM receiving_invoice_items WHERE id='rii'"))[0];
   assert.equal(rii.allocated_qty, 30);
   assert.equal(rii.available_qty, 70);
 });
@@ -40,7 +35,7 @@ test("PUT picking order runs allocation against existing in_hand receiving stock
 const post = (url: string, body: unknown) =>
   app.request(url, { method: "POST", headers: { "content-type": "application/json" }, body: typeof body === "string" ? body : JSON.stringify(body) });
 
-sqlite.exec(`
+await db.execute(`
   INSERT INTO users (id, username, password_hash, role, name, created_at, updated_at)
     VALUES ('op7r','op7r','h','operator','Op7r','0','0');
   INSERT INTO parts (id, part_no, part_no_norm, created_at, updated_at) VALUES ('p7r','P7R','P7R','0','0');
@@ -61,23 +56,23 @@ test("POST /picking-orders/report-issues reports pending/picking orders and skip
   const body = (await res.json()) as { reported: string[]; skipped: string[] };
   assert.deepEqual(body.reported, ["po7r1", "po7r2"]);
   assert.deepEqual(body.skipped, ["po7r3"]);
-  const row = sqlite
-    .prepare("SELECT status, issue_reason, issue_qty, issue_remark, issue_reported_by FROM picking_orders WHERE id='po7r1'")
-    .get() as any;
+  const row = (await db.execute<{
+    status: string; issue_reason: string; issue_qty: number; issue_remark: string; issue_reported_by: string;
+  }>("SELECT status, issue_reason, issue_qty, issue_remark, issue_reported_by FROM picking_orders WHERE id='po7r1'"))[0];
   assert.deepEqual(row, { status: "issue", issue_reason: "insufficient_stock", issue_qty: 5, issue_remark: "short", issue_reported_by: "op7r" });
 });
 
 test("POST /picking-orders/report-issues accepts reason 'other' (remark only, no qty/pack_size)", async () => {
-  sqlite.exec(`INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('po9o','e9o','PO-9O','pending','0','0')`);
+  await db.execute(`INSERT INTO picking_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('po9o','e9o','PO-9O','pending','0','0')`);
   const res = await post("/picking-orders/report-issues", {
     picking_order_ids: ["po9o"], reason: "other", remark: "damaged label", actor_id: "op7r",
   });
   assert.equal(res.status, 200);
   const body = (await res.json()) as { reported: string[]; skipped: string[] };
   assert.deepEqual(body.reported, ["po9o"]);
-  const row = sqlite
-    .prepare("SELECT status, issue_reason, issue_qty, issue_pack_size, issue_remark FROM picking_orders WHERE id='po9o'")
-    .get() as any;
+  const row = (await db.execute<{
+    status: string; issue_reason: string; issue_qty: number | null; issue_pack_size: number | null; issue_remark: string;
+  }>("SELECT status, issue_reason, issue_qty, issue_pack_size, issue_remark FROM picking_orders WHERE id='po9o'"))[0];
   assert.deepEqual(row, { status: "issue", issue_reason: "other", issue_qty: null, issue_pack_size: null, issue_remark: "damaged label" });
 });
 
@@ -94,7 +89,7 @@ test("POST /picking-orders/report-issues validation: malformed JSON / actor_id /
   assert.equal(unknownReason.status, 400);
 });
 
-sqlite.exec(`
+await db.execute(`
   INSERT INTO parts (id, part_no, part_no_norm, created_at, updated_at) VALUES ('p8r','P8R','P8R','0','0');
   INSERT INTO receiving_orders (id, external_id, ref_no, delivery_date, status, created_at, updated_at)
     VALUES ('ro8r','e8r','R8R','2026-07-01','in_hand','0','0');
@@ -110,11 +105,13 @@ test("POST /picking-orders/:id/ocr-pick scans from the receiving order and retur
   assert.equal(res.status, 200);
   const body = (await res.json()) as { package_ids: string[] };
   assert.equal(body.package_ids.length, 1);
-  const pkg = sqlite.prepare("SELECT source_type, source_id, qty, date_code FROM picking_packages WHERE id = ?").get(body.package_ids[0]) as any;
+  const pkg = (await db.execute<{
+    source_type: string; source_id: string; qty: number; date_code: string;
+  }>("SELECT source_type, source_id, qty, date_code FROM picking_packages WHERE id = '" + body.package_ids[0] + "'"))[0];
   assert.deepEqual(pkg, { source_type: "receiving_invoice_item", source_id: "rii8r", qty: 5, date_code: "D8R" });
-  const pi = sqlite.prepare("SELECT scanned_not_boxed_qty, remaining_qty FROM picking_items WHERE id='pi8r'").get() as any;
+  const pi = (await db.execute<{ scanned_not_boxed_qty: number; remaining_qty: number }>("SELECT scanned_not_boxed_qty, remaining_qty FROM picking_items WHERE id='pi8r'"))[0];
   assert.deepEqual(pi, { scanned_not_boxed_qty: 5, remaining_qty: 0 });
-  assert.equal((sqlite.prepare("SELECT status FROM picking_orders WHERE id='po8r'").get() as any).status, "picking");
+  assert.equal((await db.execute<{ status: string }>("SELECT status FROM picking_orders WHERE id='po8r'"))[0].status, "picking");
 });
 
 test("POST /picking-orders/:id/ocr-pick requires picking_item_id -> 400", async () => {
@@ -122,4 +119,4 @@ test("POST /picking-orders/:id/ocr-pick requires picking_item_id -> 400", async 
   assert.equal(res.status, 400);
 });
 
-test("cleanup", () => { sqlite.close(); });
+test.after(async () => { await sql.end(); });

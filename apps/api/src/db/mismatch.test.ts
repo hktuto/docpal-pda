@@ -1,208 +1,290 @@
-import { test } from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import * as schema from "./schema/index.js";
-import { createDb } from "./client.js";
-import { createTables } from "./tables.js";
-import { cancelMismatch, confirmMismatch, editMismatch, getLatestMismatch, reportMismatch } from "./mismatch.js";
+import { sql } from "drizzle-orm";
+import { createTestDb } from "./test-helper.js";
+import { resetTables } from "./tables.js";
+import { cancelMismatch, editMismatch, getMismatch, reportMismatch } from "./mismatch.js";
 import { assertInvariantsHold } from "./invariants.guard.js";
 
-function makeDb() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wh-api-"));
-  const { sqlite } = createDb(path.join(dir, "t.sqlite"));
-  createTables(sqlite);
-  const db = drizzle(sqlite, { schema });
-  sqlite.exec(`
-    INSERT INTO users (id, username, password_hash, role, name, created_at, updated_at)
-      VALUES ('reporter','reporter','h','operator','Reporter','0','0'),
-             ('confirmer','confirmer','h','operator','Confirmer','0','0');
-    INSERT INTO parts (id, part_no, part_no_norm, created_at, updated_at) VALUES ('p','P','P','0','0');
-    INSERT INTO receiving_orders (id, external_id, ref_no, status, created_at, updated_at) VALUES ('ro','e','R','in_hand','0','0');
-    INSERT INTO receiving_invoices (id, receiving_order_id, invoice_no, created_at, updated_at) VALUES ('inv','ro','INV','0','0');
-    INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty, available_qty, created_at, updated_at)
-      VALUES ('rii','inv','p',10,10,10,'0','0');
+const { sql: testSql, db } = await createTestDb();
+
+test.beforeEach(async () => {
+  await resetTables(db);
+});
+
+const T0 = "2024-01-01T00:00:00Z";
+
+async function seedBase() {
+  await db.execute(`
+    INSERT INTO users (id, username, password_hash, display_name, created_at)
+      VALUES ('reporter','reporter','h','Reporter','${T0}'),
+             ('other','other','h','Other','${T0}');
+    INSERT INTO parts (id, part_no) VALUES ('p','P');
+    INSERT INTO receiving_orders (id, ref_no, status, created_at, updated_at) VALUES ('ro','R','in_hand','${T0}','${T0}');
+    INSERT INTO receiving_invoices (id, receiving_order_id, invoice_no, created_at, updated_at) VALUES ('inv','ro','INV','${T0}','${T0}');
+    INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty)
+      VALUES ('rii','inv','p',10,10);
   `);
-  return { sqlite, db };
 }
 
-function seedItem(sqlite: any, id: string, opts: { qty?: number; received?: number; picked?: number; available?: number } = {}) {
-  const { qty = 10, received = 10, picked = 0, available = received - picked } = opts;
-  sqlite
-    .prepare(
-      `INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty, picked_qty, available_qty, created_at, updated_at)
-       VALUES (?, 'inv', 'p', ?, ?, ?, ?, '0', '0')`
+async function seedItem(id: string, opts: { qty?: number; received?: number; picked?: number } = {}) {
+  const { qty = 10, received = 10, picked = 0 } = opts;
+  await db.execute(sql`
+    INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_id, qty, received_qty, picked_qty)
+    VALUES (${id}, 'inv', 'p', ${qty}, ${received}, ${picked})
+  `);
+}
+
+/** Single-level allocation consuming `qty` of the item (picking_items.allocated_qty kept in sync). */
+async function seedAllocation(itemId: string, qty: number) {
+  await db.execute(`
+    INSERT INTO picking_orders (id, ref_no, status, created_at, updated_at) VALUES ('po-${itemId}','PO-${itemId}','picking','${T0}','${T0}');
+    INSERT INTO picking_items (id, picking_order_id, part_id, qty, allocated_qty, created_at, updated_at)
+      VALUES ('pi-${itemId}','po-${itemId}','p',${qty},${qty},'${T0}','${T0}');
+    INSERT INTO allocations (id, picking_item_id, receiving_invoice_item_id, qty, created_at, updated_at)
+      VALUES ('al-${itemId}','pi-${itemId}','${itemId}',${qty},'${T0}','${T0}');
+  `);
+}
+
+async function item(id: string) {
+  return (await db.execute<{
+    received_qty: number; picked_qty: number; reported_mismatch: boolean;
+    mismatch_reason: string | null; mismatch_qty: number | null;
+    wrong_part_no: string | null; mismatch_note: string | null;
+  }>(
+    sql`SELECT received_qty, picked_qty, reported_mismatch, mismatch_reason, mismatch_qty, wrong_part_no, mismatch_note
+        FROM receiving_invoice_items WHERE id = ${id}`
+  ))[0];
+}
+
+interface LogRow {
+  from_state: string | null;
+  to_state: string;
+  actor_id: string;
+  metadata: Record<string, unknown>;
+}
+
+async function transitionLogs(): Promise<LogRow[]> {
+  return Array.from(
+    await db.execute<LogRow>(
+      `SELECT from_state, to_state, actor_id, metadata FROM transaction_logs
+       WHERE entity_type = 'receiving_invoice_item' ORDER BY created_at, id`
     )
-    .run(id, qty, received, picked, available);
+  );
 }
 
-function item(sqlite: any, id: string) {
-  return sqlite.prepare(`SELECT received_qty, available_qty, picked_qty FROM receiving_invoice_items WHERE id = ?`).get(id) as any;
-}
-
-function transitionLogs(sqlite: any) {
-  return sqlite
-    .prepare("SELECT from_status, to_status, actor_id FROM transition_logs WHERE entity_type='receiving_item_mismatch' ORDER BY created_at, id")
-    .all() as any[];
-}
-
-test("reportMismatch creates a pending row and applies the effective received qty", () => {
-  const { sqlite, db } = makeDb();
-  const row = db.transaction((tx) =>
+test("reportMismatch flags the item inline and applies the effective received qty", async () => {
+  await seedBase();
+  assert.equal(await getMismatch(db, "rii"), null);
+  const row = await db.transaction(async (tx) =>
     reportMismatch(tx, { receivingInvoiceItemId: "rii", reason: "qty_mismatch", mismatchQty: 8, actorId: "reporter" })
   );
-  assert.equal(row.kind, "qty_mismatch");
-  assert.equal(row.mismatch_qty, 8);
-  assert.equal(row.status, "pending");
-  assert.equal(row.reported_by, "reporter");
-  assert.equal(row.effective_received_qty, 8);
-  assert.equal(row.previous_received_qty, 10);
-  // web semantics: the effective qty is applied to the item already at report time
-  assert.deepEqual(item(sqlite, "rii"), { received_qty: 8, available_qty: 8, picked_qty: 0 });
-  assert.deepEqual(transitionLogs(sqlite), [{ from_status: null, to_status: "pending", actor_id: "reporter" }]);
-  assertInvariantsHold(db);
-  sqlite.close();
-});
-
-test("a second report on the same item is rejected (409)", () => {
-  const { sqlite, db } = makeDb();
-  db.transaction((tx) => reportMismatch(tx, { receivingInvoiceItemId: "rii", reason: "qty_mismatch", mismatchQty: 8, actorId: "reporter" }));
-  assert.throws(
-    () => db.transaction((tx) => reportMismatch(tx, { receivingInvoiceItemId: "rii", reason: "damaged", mismatchQty: 1, actorId: "reporter" })),
-    (e: any) => e.status === 409
+  assert.deepEqual(row, {
+    receiving_invoice_item_id: "rii",
+    reason: "qty_mismatch",
+    mismatch_qty: 8,
+    wrong_part_no: null,
+    note: null,
+    effective_received_qty: 8,
+    reported: true,
+  });
+  // the effective qty is applied to the item already at report time
+  assert.deepEqual(await item("rii"), {
+    received_qty: 8,
+    picked_qty: 0,
+    reported_mismatch: true,
+    mismatch_reason: "qty_mismatch",
+    mismatch_qty: 8,
+    wrong_part_no: null,
+    mismatch_note: null,
+  });
+  const logs = await transitionLogs();
+  assert.deepEqual(
+    logs.map(({ from_state, to_state, actor_id }) => ({ from_state, to_state, actor_id })),
+    [{ from_state: null, to_state: "mismatch_reported", actor_id: "reporter" }]
   );
-  // rejected report changed nothing: still exactly one active row with its original values
-  const active = sqlite.prepare("SELECT * FROM receiving_item_mismatches WHERE status != 'cancelled'").all() as any[];
-  assert.equal(active.length, 1);
-  assert.equal(active[0].kind, "qty_mismatch");
-  assert.equal(active[0].mismatch_qty, 8);
-  assert.equal(active[0].status, "pending");
-  assert.deepEqual(item(sqlite, "rii"), { received_qty: 8, available_qty: 8, picked_qty: 0 });
-  assertInvariantsHold(db);
-  sqlite.close();
+  assert.deepEqual(logs[0].metadata, {
+    reason: "qty_mismatch",
+    mismatchQty: 8,
+    wrongPartNo: null,
+    note: null,
+    previousReceivedQty: 10,
+    effectiveReceivedQty: 8,
+  });
+  await assertInvariantsHold(db);
 });
 
-test("reportMismatch returns 404 for an unknown item", () => {
-  const { sqlite, db } = makeDb();
-  assert.throws(
-    () => db.transaction((tx) => reportMismatch(tx, { receivingInvoiceItemId: "nope", reason: "not_found", mismatchQty: null, actorId: "reporter" })),
-    (e: any) => e.status === 404
+test("reportMismatch wrong_part stores wrong_part_no, zeroes the receipt, and trims note/part no", async () => {
+  await seedBase();
+  const row = await db.transaction(async (tx) =>
+    reportMismatch(tx, {
+      receivingInvoiceItemId: "rii",
+      reason: "wrong_part",
+      mismatchQty: 4,
+      wrongPartNo: " X-9 ",
+      note: " swapped ",
+      actorId: "reporter",
+    })
   );
-  sqlite.close();
+  assert.deepEqual(row, {
+    receiving_invoice_item_id: "rii",
+    reason: "wrong_part",
+    mismatch_qty: 4,
+    wrong_part_no: "X-9",
+    note: "swapped",
+    effective_received_qty: 0,
+    reported: true,
+  });
+  assert.equal((await item("rii")).received_qty, 0);
+  await assertInvariantsHold(db);
 });
 
-test("editMismatch: non-reporter is rejected; the reporter's edit re-applies the qty", () => {
-  const { sqlite, db } = makeDb();
-  const reported = db.transaction((tx) =>
+test("a second report on the same item is rejected (409 mismatch_already_reported)", async () => {
+  await seedBase();
+  await db.transaction(async (tx) =>
     reportMismatch(tx, { receivingInvoiceItemId: "rii", reason: "qty_mismatch", mismatchQty: 8, actorId: "reporter" })
   );
-  assert.throws(
-    () => db.transaction((tx) => editMismatch(tx, { mismatchId: reported.id, actorId: "confirmer", reason: "damaged", mismatchQty: 3 })),
-    (e: any) => e.status === 409
+  await assert.rejects(
+    () => db.transaction(async (tx) => reportMismatch(tx, { receivingInvoiceItemId: "rii", reason: "damaged", mismatchQty: 1, actorId: "reporter" })),
+    (e: any) => e.status === 409 && e.message === "mismatch_already_reported"
   );
-  // rejected edit changed nothing: the row keeps its reported values
-  const unchanged = sqlite.prepare("SELECT kind, mismatch_qty, effective_received_qty, status FROM receiving_item_mismatches WHERE id = ?").get(reported.id) as any;
-  assert.deepEqual(unchanged, { kind: "qty_mismatch", mismatch_qty: 8, effective_received_qty: 8, status: "pending" });
-  assert.deepEqual(item(sqlite, "rii"), { received_qty: 8, available_qty: 8, picked_qty: 0 });
-  const edited = db.transaction((tx) =>
-    editMismatch(tx, { mismatchId: reported.id, actorId: "reporter", reason: "damaged", mismatchQty: 3 })
+  // the rejected report changed nothing
+  assert.deepEqual(await item("rii"), {
+    received_qty: 8,
+    picked_qty: 0,
+    reported_mismatch: true,
+    mismatch_reason: "qty_mismatch",
+    mismatch_qty: 8,
+    wrong_part_no: null,
+    mismatch_note: null,
+  });
+  await assertInvariantsHold(db);
+});
+
+test("reportMismatch returns 404 for an unknown item", async () => {
+  await seedBase();
+  await assert.rejects(
+    () => db.transaction(async (tx) => reportMismatch(tx, { receivingInvoiceItemId: "nope", reason: "not_found", mismatchQty: null, actorId: "reporter" })),
+    (e: any) => e.status === 404 && e.message === "receiving_invoice_item_not_found"
   );
-  assert.equal(edited.kind, "damaged");
+});
+
+test("editMismatch: 409 when nothing is reported; any actor may edit and re-apply the qty", async () => {
+  await seedBase();
+  await assert.rejects(
+    () => db.transaction(async (tx) => editMismatch(tx, { receivingInvoiceItemId: "rii", actorId: "reporter", mismatchQty: 5 })),
+    (e: any) => e.status === 409 && e.message === "no_mismatch_reported"
+  );
+  await db.transaction(async (tx) =>
+    reportMismatch(tx, { receivingInvoiceItemId: "rii", reason: "qty_mismatch", mismatchQty: 8, actorId: "reporter" })
+  );
+  // the inline model stores no reporter, so the old reporter-only rule is gone
+  const edited = await db.transaction(async (tx) =>
+    editMismatch(tx, { receivingInvoiceItemId: "rii", actorId: "other", reason: "damaged", mismatchQty: 3 })
+  );
+  assert.equal(edited.reason, "damaged");
   assert.equal(edited.mismatch_qty, 3);
   assert.equal(edited.effective_received_qty, 7);
-  assert.equal(edited.status, "pending");
-  assert.deepEqual(item(sqlite, "rii"), { received_qty: 7, available_qty: 7, picked_qty: 0 });
-  assertInvariantsHold(db);
-  sqlite.close();
+  assert.equal(edited.reported, true);
+  assert.equal((await item("rii")).received_qty, 7);
+  assert.deepEqual((await transitionLogs()).map((l) => l.to_state), ["mismatch_reported", "mismatch_updated"]);
+  await assertInvariantsHold(db);
 });
 
-test("confirmMismatch: the reporter cannot confirm; another user confirms", () => {
-  const { sqlite, db } = makeDb();
-  const reported = db.transaction((tx) =>
+test("cancelMismatch clears the inline fields, restores received_qty, and allows a fresh report", async () => {
+  await seedBase();
+  await assert.rejects(
+    () => db.transaction(async (tx) => cancelMismatch(tx, { receivingInvoiceItemId: "rii", actorId: "other" })),
+    (e: any) => e.status === 409 && e.message === "no_mismatch_reported"
+  );
+  await db.transaction(async (tx) =>
     reportMismatch(tx, { receivingInvoiceItemId: "rii", reason: "qty_mismatch", mismatchQty: 8, actorId: "reporter" })
   );
-  db.transaction((tx) => editMismatch(tx, { mismatchId: reported.id, actorId: "reporter", reason: "damaged", mismatchQty: 3 }));
-  assert.throws(
-    () => db.transaction((tx) => confirmMismatch(tx, { mismatchId: reported.id, actorId: "reporter" })),
-    (e: any) => e.status === 409
+  const cancelled = await db.transaction(async (tx) => cancelMismatch(tx, { receivingInvoiceItemId: "rii", actorId: "other" }));
+  assert.deepEqual(cancelled, {
+    receiving_invoice_item_id: "rii",
+    reason: null,
+    mismatch_qty: null,
+    wrong_part_no: null,
+    note: null,
+    effective_received_qty: 10,
+    reported: false,
+  });
+  assert.deepEqual(await item("rii"), {
+    received_qty: 10,
+    picked_qty: 0,
+    reported_mismatch: false,
+    mismatch_reason: null,
+    mismatch_qty: null,
+    wrong_part_no: null,
+    mismatch_note: null,
+  });
+  assert.equal(await getMismatch(db, "rii"), null);
+  const logs = await transitionLogs();
+  assert.deepEqual(logs.map((l) => l.to_state), ["mismatch_reported", "mismatch_cancelled"]);
+  assert.deepEqual(logs.at(-1)!.metadata, { restoredReceivedQty: 10 });
+  // a fresh report succeeds after a cancel
+  const fresh = await db.transaction(async (tx) =>
+    reportMismatch(tx, { receivingInvoiceItemId: "rii", reason: "qty_mismatch", mismatchQty: 5, actorId: "reporter" })
   );
-  const confirmed = db.transaction((tx) => confirmMismatch(tx, { mismatchId: reported.id, actorId: "confirmer" }));
-  assert.equal(confirmed.status, "confirmed");
-  assert.equal(confirmed.confirmed_by, "confirmer");
-  assert.ok(confirmed.confirmed_at);
-  // damaged 3 of 10 -> effective 7 was applied at edit time; confirm keeps it
-  assert.deepEqual(item(sqlite, "rii"), { received_qty: 7, available_qty: 7, picked_qty: 0 });
-  assert.deepEqual(transitionLogs(sqlite).at(-1), { from_status: "pending", to_status: "confirmed", actor_id: "confirmer" });
-  // a confirmed mismatch still blocks a new report
-  assert.throws(
-    () => db.transaction((tx) => reportMismatch(tx, { receivingInvoiceItemId: "rii", reason: "damaged", mismatchQty: 1, actorId: "reporter" })),
-    (e: any) => e.status === 409
-  );
-  assertInvariantsHold(db);
-  sqlite.close();
+  assert.equal(fresh.effective_received_qty, 5);
+  assert.equal((await getMismatch(db, "rii"))?.mismatch_qty, 5);
+  await assertInvariantsHold(db);
 });
 
-test("cancelMismatch: the reporter cannot cancel; another user cancels, reverts the qty, and a new report succeeds", () => {
-  const { sqlite, db } = makeDb();
-  seedItem(sqlite, "rii2");
-  const reported = db.transaction((tx) =>
-    reportMismatch(tx, { receivingInvoiceItemId: "rii2", reason: "qty_mismatch", mismatchQty: 8, actorId: "reporter" })
-  );
-  assert.throws(
-    () => db.transaction((tx) => cancelMismatch(tx, { mismatchId: reported.id, actorId: "reporter" })),
-    (e: any) => e.status === 409
-  );
-  const cancelled = db.transaction((tx) => cancelMismatch(tx, { mismatchId: reported.id, actorId: "confirmer" }));
-  assert.equal(cancelled.status, "cancelled");
-  assert.equal(cancelled.cancelled_by, "confirmer");
-  assert.ok(cancelled.cancelled_at);
-  // cancel reverts received_qty to previous_received_qty
-  assert.deepEqual(item(sqlite, "rii2"), { received_qty: 10, available_qty: 10, picked_qty: 0 });
-  assert.equal(getLatestMismatch(db, "rii2"), null);
-  const fresh = db.transaction((tx) =>
+test("cancel restores the document qty (documented approximation for partial receipts)", async () => {
+  await seedBase();
+  await seedItem("rii2", { qty: 10, received: 6 });
+  await db.transaction(async (tx) =>
     reportMismatch(tx, { receivingInvoiceItemId: "rii2", reason: "qty_mismatch", mismatchQty: 5, actorId: "reporter" })
   );
-  assert.equal(fresh.status, "pending");
-  assert.equal(getLatestMismatch(db, "rii2")?.id, fresh.id);
-  assertInvariantsHold(db);
-  sqlite.close();
+  assert.equal((await item("rii2")).received_qty, 5);
+  await db.transaction(async (tx) => cancelMismatch(tx, { receivingInvoiceItemId: "rii2", actorId: "reporter" }));
+  // previous_received_qty no longer exists anywhere: cancel restores qty (10), not the pre-report 6
+  assert.equal((await item("rii2")).received_qty, 10);
+  await assertInvariantsHold(db);
 });
 
-test("validation errors map to 400", () => {
-  const { sqlite, db } = makeDb();
-  seedItem(sqlite, "rii3");
+test("validation errors map to 400", async () => {
+  await seedBase();
   // over_shipment requires qty > 0
-  assert.throws(
-    () => db.transaction((tx) => reportMismatch(tx, { receivingInvoiceItemId: "rii3", reason: "over_shipment", mismatchQty: 0, actorId: "reporter" })),
+  await assert.rejects(
+    () => db.transaction(async (tx) => reportMismatch(tx, { receivingInvoiceItemId: "rii", reason: "over_shipment", mismatchQty: 0, actorId: "reporter" })),
     (e: any) => e.status === 400 && e.message === "quantity_must_be_greater_than_zero"
   );
   // wrong_part requires wrong_part_no
-  assert.throws(
-    () => db.transaction((tx) => reportMismatch(tx, { receivingInvoiceItemId: "rii3", reason: "wrong_part", mismatchQty: 2, actorId: "reporter" })),
+  await assert.rejects(
+    () => db.transaction(async (tx) => reportMismatch(tx, { receivingInvoiceItemId: "rii", reason: "wrong_part", mismatchQty: 2, actorId: "reporter" })),
     (e: any) => e.status === 400 && e.message === "wrong_part_number_required"
   );
   // not_found cannot carry a qty
-  assert.throws(
-    () => db.transaction((tx) => reportMismatch(tx, { receivingInvoiceItemId: "rii3", reason: "not_found", mismatchQty: 2, actorId: "reporter" })),
+  await assert.rejects(
+    () => db.transaction(async (tx) => reportMismatch(tx, { receivingInvoiceItemId: "rii", reason: "not_found", mismatchQty: 2, actorId: "reporter" })),
     (e: any) => e.status === 400 && e.message === "not_found_mismatch_cannot_include_qty"
   );
-  assert.equal(getLatestMismatch(db, "rii3"), null);
-  assertInvariantsHold(db);
-  sqlite.close();
+  // the rejected reports left the item untouched
+  assert.equal(await getMismatch(db, "rii"), null);
+  assert.equal((await item("rii")).received_qty, 10);
+  await assertInvariantsHold(db);
 });
 
-test("report is rejected (409) when the effective qty falls below picked + put-away + allocated", () => {
-  const { sqlite, db } = makeDb();
-  seedItem(sqlite, "rii4", { picked: 4 }); // received 10, picked 4, available 6
-  // web semantics: assertCanApplyMismatchQty runs at report time, so the report itself
-  // is rejected — there is no pending row left to confirm.
-  assert.throws(
-    () => db.transaction((tx) => reportMismatch(tx, { receivingInvoiceItemId: "rii4", reason: "not_found", mismatchQty: null, actorId: "reporter" })),
+test("report is rejected (409) when the effective qty falls below picked + put-away + allocated", async () => {
+  await seedBase();
+  await seedItem("rii3", { picked: 4 }); // received 10, picked 4
+  await seedAllocation("rii3", 2); // allocated 2 -> consumed 6
+  await assert.rejects(
+    () => db.transaction(async (tx) => reportMismatch(tx, { receivingInvoiceItemId: "rii3", reason: "not_found", mismatchQty: null, actorId: "reporter" })),
     (e: any) => e.status === 409 && e.message === "mismatch_qty_below_consumed_stock"
   );
-  assert.equal(getLatestMismatch(db, "rii4"), null);
-  assertInvariantsHold(db);
-  sqlite.close();
+  assert.equal(await getMismatch(db, "rii3"), null);
+  // an effective qty that still covers consumption is accepted
+  const row = await db.transaction(async (tx) =>
+    reportMismatch(tx, { receivingInvoiceItemId: "rii3", reason: "damaged", mismatchQty: 2, actorId: "reporter" })
+  );
+  assert.equal(row.effective_received_qty, 8);
+  await assertInvariantsHold(db);
+});
+
+test.after(async () => {
+  await testSql.end();
 });

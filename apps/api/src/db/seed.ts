@@ -1,54 +1,65 @@
-import type { Database as DatabaseType } from "better-sqlite3";
+import postgres from "postgres";
 import { sql } from "drizzle-orm";
-import { seedSql } from "./seedSql.js";
 import { allocateAll } from "./allocate.js";
 import { assertInvariantsHold } from "./invariants.guard.js";
-import { recomputeReceivingItem } from "./invariants.js";
+import { seedSql } from "./seedSql.js";
 import type { AppDb } from "../db.js";
 
-// every table createTables makes; FK is disabled during the wipe so order doesn't matter
+// every table created by Drizzle migrations
 const ALL_TABLES = [
-  "users", "suppliers", "parts", "shelves",
-  "receiving_orders", "receiving_invoices", "receiving_invoice_items", "receiving_item_mismatches",
-  "picking_orders", "picking_items", "picking_packages", "shipping_boxes",
-  "inventory_lots", "inventory_lot_sources", "allocations", "allocation_receiving_items",
-  "measuring_tasks", "verification_tasks",
-  "shelf_boxes", "shelf_box_items", "put_away_scans", "transition_logs",
+  "inventory_transactions",
+  "transaction_logs",
+  "measuring_tasks",
+  "picking_packages",
+  "shipping_box_items",
+  "shipping_boxes",
+  "picking_items",
+  "picking_orders",
+  "allocations",
+  "inventory_lot_sources",
+  "inventory_lots",
+  "shelf_box_items",
+  "shelf_boxes",
+  "receiving_invoice_items",
+  "receiving_invoices",
+  "receiving_orders",
+  "shelves",
+  "parts",
+  "suppliers",
+  "users",
 ];
 
-// The frozen seedSql leaves derived receiving columns (allocated_qty / available_qty)
-// at 0; recompute them from received/picked/put_away before allocating.
-function recomputeAllReceivingItems(db: AppDb): void {
-  const ids = db.all<{ id: string }>(sql`SELECT id FROM receiving_invoice_items`);
-  for (const r of ids) recomputeReceivingItem(db, r.id);
+function splitStatements(sql: string): string[] {
+  return sql
+    .split(/;\s*$/gm)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 }
 
-function seedAll(sqlite: DatabaseType, db: AppDb): void {
-  sqlite.exec(seedSql);
-  recomputeAllReceivingItems(db);
-  allocateAll(db);
-  assertInvariantsHold(db);
+async function seedAll(execRaw: (statement: string) => Promise<unknown>, db: AppDb): Promise<void> {
+  for (const statement of splitStatements(seedSql)) {
+    await execRaw(statement);
+  }
+  await allocateAll(db);
+  await assertInvariantsHold(db);
 }
 
 /** Seed demo data when the users table is empty. Returns true when it seeded. */
-export function seedIfEmpty(sqlite: DatabaseType, db: AppDb): boolean {
-  const c = (sqlite.prepare("SELECT COUNT(*) AS c FROM users").get() as { c: number }).c;
+export async function seedIfEmpty(sql: postgres.Sql, db: AppDb): Promise<boolean> {
+  const rows = await sql`SELECT COUNT(*)::int AS c FROM users`;
+  const c = Number((rows[0] as { c: string | number }).c);
   if (c > 0) return false;
-  seedAll(sqlite, db);
+  await seedAll((stmt) => sql.unsafe(stmt), db);
   return true;
 }
 
-/** Dev-only: wipe everything and re-seed. Atomic: a failure rolls back to the pre-reset state. */
-export function resetAndReseed(sqlite: DatabaseType, db: AppDb): void {
-  const run = sqlite.transaction(() => {
-    for (const t of ALL_TABLES) sqlite.exec(`DELETE FROM ${t}`);
-    seedAll(sqlite, db);
+/** Dev-only: wipe everything and re-seed inside a transaction. */
+export async function resetAndReseed(_sql: postgres.Sql, db: AppDb): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`TRUNCATE TABLE ${sql.raw(ALL_TABLES.join(", "))} CASCADE`);
+    await seedAll(
+      (stmt) => tx.execute(sql`${sql.raw(stmt)}`),
+      tx as unknown as AppDb
+    );
   });
-  // PRAGMA foreign_keys is a no-op inside a transaction, so toggle it outside.
-  sqlite.exec("PRAGMA foreign_keys = OFF");
-  try {
-    run();
-  } finally {
-    sqlite.exec("PRAGMA foreign_keys = ON");
-  }
 }
