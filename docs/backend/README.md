@@ -215,6 +215,13 @@ The backend and admin console also run hosted for demos:
 - **Admin:** Vercel project `docpal-pda-admin` (root `apps/admin`) with
   `NUXT_PUBLIC_API_BASE_URL` pointing at the backend URL; the backend's
   `CORS_ORIGINS` includes the admin origin.
+- **CORS_ORIGINS must keep every client origin** — it replaces the default
+  list wholesale. The hosted value needs: `http://localhost:3000`,
+  `http://localhost:3100`, `http://localhost` (**the Android WebView origin —
+  dropping it breaks the Capacitor app's login with a network error**),
+  `capacitor://localhost`, and both admin URLs
+  (`https://docpal-pda-admin.vercel.app` + the `-sean-tsnags-projects`
+  alias).
 - Env vars live on the Vercel projects (Production scope): backend
   `WAREHOUSE_SEED=off`, `WAREHOUSE_CODE=HK1`, `PG_MAX`, `PG_PREPARE`,
   `CORS_ORIGINS` (optionally `DEV_ROUTES=off` to hide the demo routes);
