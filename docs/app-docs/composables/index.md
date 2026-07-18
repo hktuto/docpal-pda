@@ -7,9 +7,9 @@ Composables live in `composables/` and contain reusable Vue logic.
 | Composable | Purpose |
 |------------|---------|
 | `useAuth.ts` | Login/logout/restore. |
-| `useDb.ts` | Drizzle client from the provided PGlite instance. |
 | `useLabelScan.ts` | Parse and manage scanned label input. |
-| `useScanMatchers.ts` | Match parsed label data to receiving/picking records. |
+| `useReceivingScan.ts` | Receiving scan submission: server-side match, 409 → candidate review flow. |
+| `useScanMatchers.ts` | Client-side label validation for picking/put-away/measuring scans. |
 | `useMockOcr.ts` | Simulate OCR normalization and errors. |
 | `useRectangleDetection.ts` | Android native rectangle detection wrapper. |
 | `useStatusBadge.ts` | Status badge styling/state helper. |

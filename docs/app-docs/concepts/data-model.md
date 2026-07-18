@@ -1,6 +1,6 @@
 # Data Model (Business View)
 
-These are the core entities an operator works with. For the full database schema, see the [API database schema](../../database-schema-api.md).
+These are the core entities an operator works with. For the full database schema, see the [backend schema reference](../../backend/schema.md).
 
 ## Receiving order
 

@@ -15,9 +15,10 @@ Page and component locations mapped to source files.
 | Put-away list | `/put-away` | `pages/put-away/index.vue` |
 | Put-away detail | `/put-away/:id` | `pages/put-away/[id].vue` or equivalent |
 | Measuring list | `/measuring` | `pages/measuring/index.vue` |
-| Measuring detail | `/measuring/:id` | `pages/measuring/[id].vue` or equivalent |
-| Goods verify list | `/goods-verify` | `pages/goods-verify/index.vue` |
-| Goods verify detail | `/goods-verify/:id` | `pages/goods-verify/[id].vue` or equivalent |
+| Measuring task detail | `/measuring/:id` | `pages/measuring/[id].vue` |
+| Measuring box | `/measuring/:taskId/box/:boxId` | `pages/measuring/[taskId]/box/[boxId].vue` |
+| Goods verify queue | `/goods-verify` | `pages/goods-verify/index.vue` |
+| Goods verify detail | `/goods-verify/:id` | `pages/goods-verify/[id].vue` |
 | Stock Search | `/stock-search` | `pages/stock-search/index.vue` |
 
 ## Layouts and global UI
@@ -45,6 +46,7 @@ Page and component locations mapped to source files.
 | Modal | Source file |
 |-------|-------------|
 | LabelScanReviewModal | `components/LabelScanReviewModal.vue` |
+| ReceivingScanReviewModal | `components/receiving/ReceivingScanReviewModal.vue` |
 | BoxMeasurementsModal | `components/BoxMeasurementsModal.vue` |
 | ReportIssueModal | `components/ReportIssueModal.vue` |
 | PickingIssueReportModal | `components/PickingIssueReportModal.vue` |
@@ -57,20 +59,37 @@ Page and component locations mapped to source files.
 | Put-away lots panel | `components/put-away/PutAwayLotsPanel.vue` |
 | Shelf boxes panel | `components/put-away/ShelfBoxesPanel.vue` |
 
+## Picking
+
+| Component | Source file |
+|-----------|-------------|
+| Items section | `components/picking/PickingItemsSection.vue` |
+| Boxes section | `components/picking/PickingBoxesSection.vue` |
+| Issue banner | `components/picking/PickingIssueBanner.vue` |
+
+## Receiving
+
+| Component | Source file |
+|-----------|-------------|
+| Items tab | `components/receiving/ReceivingItemsTab.vue` |
+| Picking tab | `components/receiving/ReceivingPickingTab.vue` |
+| Scan review modal | `components/receiving/ReceivingScanReviewModal.vue` |
+
 ## Service layer (web data access)
 
-Pages go through `WarehouseService` / `AuthService`, never the database directly.
-The adapter is selected by `warehouseAdapter` in `nuxt.config.ts` (`"api"` default,
-`"pglite"` for offline/demo); `apiBaseUrl` is env-overridable via
-`NUXT_PUBLIC_API_BASE_URL`.
+Pages go through `WarehouseService` / `AuthService`, never the network
+directly. There is exactly one adapter: HTTP to `apps/backend` (default
+`http://localhost:3002`), env-overridable via `NUXT_PUBLIC_API_BASE_URL`.
+The old `warehouseAdapter` config switch, the PGlite adapter, the `apps/api`
+adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 
 | Element | Source file |
 |---------|-------------|
 | `WarehouseService` interface + `createWarehouseService` | `services/warehouse.ts` |
 | `AuthService` interface | `services/auth.ts` |
-| Web DTOs | `services/types.ts` |
-| HTTP adapter (default) | `services/adapters/apiWarehouse.ts`, `services/adapters/apiAuth.ts` |
-| PGlite adapter (in-browser fallback) | `services/adapters/pgliteWarehouse.ts`, `services/adapters/pgliteAuth.ts` |
+| Web DTOs (mirror backend responses) | `services/types.ts` |
+| HTTP adapter (warehouse) | `services/adapters/backendWarehouse.ts` |
+| HTTP adapter (auth) | `services/adapters/apiAuth.ts` |
 | HTTP fetch wrapper (error mapping to `I18nError`/`ApiError`) | `services/apiClient.ts` |
 | Composable entry point | `composables/useWarehouse.ts` |
 
@@ -78,124 +97,63 @@ The adapter is selected by `warehouseAdapter` in `nuxt.config.ts` (`"api"` defau
 
 | Component / helper | Source file |
 |--------------------|-------------|
-| Review modal | `components/LabelScanReviewModal.vue` |
+| Review modal (picking / put-away / measuring) | `components/LabelScanReviewModal.vue` |
+| Review modal (receiving candidates) | `components/receiving/ReceivingScanReviewModal.vue` |
 | Candidate chips UI | `components/CandidateChips.vue` |
 | Scan orchestration | `composables/useLabelScan.ts` |
+| Receiving scan submission (server-side match, 409 → review) | `composables/useReceivingScan.ts` |
 | Review state wrapper | `composables/useLabelScanReview.ts` |
-| Matchers | `composables/useScanMatchers.ts` |
-| OCR parser and candidate extraction | `utils/parseOcrScan.ts` |
-| OCR result → `OcrInput` mapper | `composables/useLabelScan.ts` |
-| OCR-assisted picking DB helpers | `db/ocrPicking.ts` |
+| Client-side matchers (picking / put-away / measuring) | `composables/useScanMatchers.ts` |
+| OCR/QR parser and candidate extraction | `utils/parseOcrScan.ts` |
+| Mismatch form validation (pure) | `utils/mismatch.ts` |
 
 - `composables/useLabelScan.ts` — orchestrates native scan; in browsers falls back to `window.prompt()` + JSON.
-- `composables/useLabelScan.ts` — validates prompt JSON and converts it to `LabelScanCapture` in browser fallback mode.
-- `composables/useScanMatchers.ts` — candidate search (`findReceivingCandidates`, `findPickingCandidates`) goes through `WarehouseService.getScanCandidates` → `GET /receiving-orders/:id/scan-candidates` in api mode (pglite adapter: `db/ocrPicking.ts`); the matched write actions also go through `WarehouseService`.
+- `composables/useLabelScan.ts` — validates prompt JSON and converts it to a capture in browser fallback mode; supplier QR templates come from `GET /scan-templates` via `WarehouseService.getSupplierQrTemplates`.
+- `composables/useReceivingScan.ts` — sends the raw label to `POST /receiving-orders/:id/scan`; on 409 `{message, candidates}` it opens the review modal, and picking a candidate resends with explicit `{partNo, qty}`.
+- `composables/useScanMatchers.ts` — client-side validation for picking (`matchPicking`), put-away (`matchPutAway`), and measuring (`matchMeasuring`); the apply actions go through `WarehouseService`.
 
-## Database helpers
+## Warehouse backend (apps/backend)
 
-These `db/*.ts` helpers are called only by the PGlite adapter
-(`services/adapters/pgliteWarehouse.ts`); in the default api mode the equivalent
-logic lives in `apps/api/src/db/*.ts` behind the routes below.
+Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
+`apps/backend/src/db/`. Authoritative endpoint reference:
+`docs/backend/api-design.md`.
 
-| Helper | Source file |
-|--------|-------------|
-| Schema definitions | `db/schema.ts` |
-| Bootstrap / init | `db/init.ts` |
-| Seed data | `db/seed.ts` |
-| Picking | `db/picking.ts` |
-| OCR-assisted picking | `db/ocrPicking.ts` |
-| Receiving | `db/receiving.ts` |
-| Receiving mismatch | `db/mismatch.ts` |
-| Put-away | `db/putAway.ts` |
-| Measuring | `db/measuring.ts` |
-| Goods verify | `db/goodsVerify.ts` |
-| Allocation | `db/allocate.ts` |
+| Endpoint group | Source file |
+|----------------|-------------|
+| `GET /health` | `apps/backend/src/routes/health.ts` |
+| `POST /auth/login`, `POST /auth/logout`, `GET /auth/users/:id` | `apps/backend/src/routes/auth.ts` |
+| `GET /receiving-orders`, `GET /receiving-orders/:id` (+`/picking`, +`/put-away`) | `apps/backend/src/routes/receiving.ts` |
+| `POST /receiving-orders/:id/confirm-arrival`, `POST /receiving-orders/:id/scan` | `apps/backend/src/routes/receiving.ts` |
+| `GET|POST|PATCH /receiving-invoice-items/:id/mismatch`, `POST .../mismatch/confirm|cancel` | `apps/backend/src/routes/receiving.ts` |
+| `GET /picking-orders`, `GET /picking-orders/:id`, `POST /picking-orders/:id/finish`, `POST /picking-orders/report-issues` | `apps/backend/src/routes/picking.ts` |
+| `POST /picking-items/:id/scan`, `/packages/:id*` verbs, `/shipping-boxes/:id*` lifecycle | `apps/backend/src/routes/picking.ts` |
+| `GET /put-away/candidates`, `POST /receiving-orders/:id/put-away-scans`, `DELETE /put-away-scans/:scanId`, `/shelf-boxes*` lifecycle (create / cancel / assign-scan / remove-scan / add-all-unboxed / close) | `apps/backend/src/routes/putaway.ts` |
+| `GET /measuring-tasks`, `GET /measuring-tasks/:id`, `POST /measuring-tasks/:id/complete` | `apps/backend/src/routes/measuring.ts` |
+| `POST /goods-verify-tasks/generate`, `GET /goods-verify-tasks`, `GET /goods-verify-tasks/:id`, `POST /goods-verify-tasks/:id/verify` | `apps/backend/src/routes/goodsverify.ts` |
+| `GET /stock-search` | `apps/backend/src/routes/stocksearch.ts` |
+| `GET /scan-templates` | `apps/backend/src/routes/scantemplates.ts` |
+| `PUT /receiving-orders/:externalId`, `PUT /picking-orders/:externalId` | `apps/backend/src/routes/ingest.ts` |
+| `POST /dev/reset`, `POST /dev/allocate` | `apps/backend/src/routes/dev.ts` |
+| `/admin/*` master-data CRUD | `apps/backend/src/routes/admin/` |
 
-## Warehouse API (apps/api)
-
-### Endpoints
-
-| Endpoint | Source file |
-|----------|-------------|
-| `GET /health` | `apps/api/src/routes/health.ts` |
-| `PUT /receiving-orders/:external_id` | `apps/api/src/routes/receiving.ts` |
-| `POST /receiving-orders/:external_id/confirm-arrival` | `apps/api/src/routes/receiving.ts` |
-| `PUT /picking-orders/:external_id` | `apps/api/src/routes/picking.ts` |
-| `POST /picking-orders/:id/scan` | `apps/api/src/routes/pickingExecution.ts` |
-| `DELETE /picking-orders/:id/packages/:package_id` | `apps/api/src/routes/pickingExecution.ts` |
-| `POST /picking-orders/:id/boxes` | `apps/api/src/routes/pickingExecution.ts` |
-| `POST /picking-orders/:id/boxes/:box_id/cancel` | `apps/api/src/routes/pickingExecution.ts` |
-| `POST /picking-orders/:id/boxes/:box_id/packages` | `apps/api/src/routes/pickingExecution.ts` |
-| `POST /picking-orders/:id/boxes/:box_id/add-all-unboxed` | `apps/api/src/routes/pickingExecution.ts` |
-| `DELETE /picking-orders/:id/boxes/:box_id/packages/:package_id` | `apps/api/src/routes/pickingExecution.ts` |
-| `POST /picking-orders/:id/finish` | `apps/api/src/routes/pickingExecution.ts` |
-| `POST /allocations/:id/scan` | `apps/api/src/routes/pickingExecution.ts` |
-| `POST /packages/:id/add-to-box` | `apps/api/src/routes/pickingExecution.ts` |
-| `DELETE /packages/:id` | `apps/api/src/routes/pickingExecution.ts` |
-| `POST /packages/:id/verify` | `apps/api/src/routes/pickingExecution.ts` |
-| `POST /shipping-boxes/:id/cancel?actor_id=` | `apps/api/src/routes/pickingExecution.ts` |
-| `GET /picking-orders`, `GET /picking-orders/:id` | `apps/api/src/routes/pickingExecution.ts` |
-| `GET /measuring-tasks` (with `total_items`/`packed_items` totals), `GET /measuring-tasks/:id` | `apps/api/src/routes/measuring.ts` |
-| `POST /measuring-tasks/:id/complete` | `apps/api/src/routes/measuring.ts` |
-| `PATCH /shipping-boxes/:id` | `apps/api/src/routes/boxes.ts` |
-| `GET /shipping-boxes/:id/for-measuring` | `apps/api/src/routes/boxes.ts` |
-| `POST /shipping-boxes/:id/verify-package` | `apps/api/src/routes/boxes.ts` |
-| `POST /shipping-boxes/:id/close` | `apps/api/src/routes/boxes.ts` |
-| `POST /shipping-boxes/:id/verify` | `apps/api/src/routes/boxes.ts` |
-| `GET /verification-tasks`, `GET /verification-tasks/:id` | `apps/api/src/routes/verification.ts` |
-| `POST /verification-tasks/:id/complete` | `apps/api/src/routes/verification.ts` |
-| `GET /put-away/candidates` | `apps/api/src/routes/putAway.ts` |
-| `GET /receiving-orders/:id/put-away-lots` | `apps/api/src/routes/putAway.ts` |
-| `GET /receiving-orders/:id/put-away-scans` | `apps/api/src/routes/putAway.ts` |
-| `GET /receiving-orders/:id/shelf-boxes` | `apps/api/src/routes/putAway.ts` |
-| `POST /receiving-orders/:id/shelf-boxes` | `apps/api/src/routes/putAway.ts` |
-| `DELETE /shelf-boxes/:id` | `apps/api/src/routes/putAway.ts` |
-| `POST /put-away/scans` | `apps/api/src/routes/putAway.ts` |
-| `POST /put-away/scans/:id/remove-piece` | `apps/api/src/routes/putAway.ts` |
-| `POST /put-away/scans/:id/assign-to-box` | `apps/api/src/routes/putAway.ts` |
-| `POST /shelf-boxes/:id/add-all-unboxed` | `apps/api/src/routes/putAway.ts` |
-| `POST /put-away/scans/:id/remove-from-box` | `apps/api/src/routes/putAway.ts` |
-| `POST /shelf-boxes/:id/close` | `apps/api/src/routes/putAway.ts` |
-| `GET /shelves`, `GET /shelves/with-box-counts`, `GET /shelves/:code/boxes` | `apps/api/src/routes/goodsVerify.ts` |
-| `GET /shelf-boxes/:id` | `apps/api/src/routes/goodsVerify.ts` |
-| `POST /shelf-boxes/:id/verify-item` | `apps/api/src/routes/goodsVerify.ts` |
-| `POST /auth/login`, `GET /auth/users/:id` | `apps/api/src/routes/auth.ts` |
-| `POST /dev/reset` | `apps/api/src/routes/dev.ts` |
-| `GET /receiving-orders`, `GET /receiving-orders/:id` | `apps/api/src/routes/receiving.ts` |
-| `GET /receiving-orders/:id/picking` | `apps/api/src/routes/receiving.ts` |
-| `POST /picking-items/transition-logs` | `apps/api/src/routes/receiving.ts` |
-| `GET /receiving-orders/:id/scan-candidates` | `apps/api/src/routes/receiving.ts` |
-| `GET /receiving-invoice-items/:id/mismatch`, `POST /receiving-invoice-items/:id/mismatches` | `apps/api/src/routes/mismatch.ts` |
-| `PATCH /mismatches/:id`, `POST /mismatches/:id/confirm`, `POST /mismatches/:id/cancel` | `apps/api/src/routes/mismatch.ts` |
-| `POST /picking-orders/report-issues` | `apps/api/src/routes/picking.ts` |
-| `POST /picking-orders/:id/ocr-pick` | `apps/api/src/routes/picking.ts` |
-| `GET /stock-search/suppliers`, `GET /stock-search/suppliers/:id/parts`, `GET /stock-search/parts/lots` | `apps/api/src/routes/stockSearch.ts` |
-| `GET /suppliers/qr-templates` | `apps/api/src/routes/suppliers.ts` |
-
-### Ingest helpers and triggers
+### Domain modules
 
 | Helper | Source file |
 |--------|-------------|
-| Receiving upsert / confirm arrival | `apps/api/src/ingest/receiving.ts` |
-| Picking upsert | `apps/api/src/ingest/picking.ts` |
-| Part resolve/create | `apps/api/src/ingest/parts.ts` |
-| Supplier resolve | `apps/api/src/ingest/suppliers.ts` |
-| Transition log writer | `apps/api/src/ingest/transition.ts` |
-| Allocation triggers (`allocateAll`, `allocatePickingOrder`) | `apps/api/src/db/allocate.ts` |
-| Picking execution writes (scan, undo-scan, boxes, pack/unpack, finish, auto-finish → measuring task) | `apps/api/src/db/pickScan.ts` |
-| Measuring + pre-shipment verification writes (box measurements, package verify, box close/verify, task completion) | `apps/api/src/db/measure.ts` |
-| Put-away writes (scans, shelf-box lifecycle, lot materialization, receiving clear, cycle-count scheduling) | `apps/api/src/db/putAway.ts` |
-| Cycle-count verification writes (`verifyShelfBoxItem`, `cycle_count` branch of `completeVerificationTask`) | `apps/api/src/db/putAway.ts`, `apps/api/src/db/measure.ts` |
-| Pick-scan cycle-count hook (picking from a boxed lot schedules a recount and resets the box) | `apps/api/src/db/pickScan.ts` |
-| Seed on empty + reset (`seedIfEmpty`, `resetAndReseed`; frozen `seedSql` + recompute + `allocateAll`) | `apps/api/src/db/seed.ts`, `apps/api/src/db/seedSql.ts` |
-| Seed generator (replays web seed in PGlite, projects onto API schema) | `apps/web/scripts/export-api-seed.test.ts` |
-| Receiving mismatch workflow (report/edit/confirm/cancel) | `apps/api/src/db/mismatch.ts` |
-| Picking issue reporting | `apps/api/src/db/pickingIssues.ts` |
-| OCR pick (FIFO link + `scanAllocation` from an in-hand receiving order) | `apps/api/src/db/ocrPick.ts` |
+| Receiving reads/writes, scan matching, mismatch lifecycle | `apps/backend/src/db/receiving.ts` |
+| Label parsing for receiving scans (QR templates, serial extraction) | `apps/backend/src/db/scanParse.ts` |
+| Picking execution (scan, packages, boxes, finish, issues) | `apps/backend/src/db/picking.ts` |
+| Put-away (scans, shelf boxes, lot materialization, auto-clear) | `apps/backend/src/db/putaway.ts` |
+| Measuring (task reads, completion) | `apps/backend/src/db/measuring.ts` |
+| Goods verify (generation, queue, verify with ADJUST) | `apps/backend/src/db/goodsverify.ts` |
+| Stock search | `apps/backend/src/db/stocksearch.ts` |
+| Ingest upserts | `apps/backend/src/db/ingest.ts` |
+| Allocation engine (`allocateAll`) | `apps/backend/src/db/allocate.ts` |
+| Demo seed | `apps/backend/src/db/seed.ts` |
 
-- Server entry: `apps/api/src/server.ts`; app wiring: `apps/api/src/index.ts`; DB bootstrap: `apps/api/src/db.ts` (connects via `DATABASE_URL`, runs Drizzle migrations from `apps/api/drizzle`, then seeds if empty).
-- confirm-arrival runs `allocateAll` after the order flips to `in_hand`; a picking upsert runs `allocatePickingOrder` when the upsert changed data. Both are best-effort and never roll back the committed write.
-- All web pages (including `pages/put-away/` and `pages/goods-verify/`) go through `WarehouseService` → these HTTP endpoints by default (`warehouseAdapter: "api"`); the PGlite adapter path (`db/*.ts`) remains behind `warehouseAdapter: "pglite"`.
+- Server entry / app wiring: `apps/backend/src/index.ts` (migrations auto-apply on startup; seed runs when `users` is empty unless `WAREHOUSE_SEED=off`).
+- All web pages go through `WarehouseService` → these HTTP endpoints.
+- The retired `apps/api` (:3001) routes are gone from the web app's runtime path; the package remains in the repo for history (see `apps/api/README.md`).
 
 ## Native Android app (apps/android)
 

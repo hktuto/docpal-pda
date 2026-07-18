@@ -1,0 +1,26 @@
+<template>
+  <NuxtLayout>
+    <NuxtPage />
+  </NuxtLayout>
+</template>
+
+<script setup lang="ts">
+const SUPPORTED_LOCALES = ["en-US", "zh-CN", "zh-HK"] as const;
+type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
+const STORAGE_KEY = "warehouse-locale";
+
+const { locale, setLocale } = useI18n();
+
+onMounted(() => {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved && SUPPORTED_LOCALES.includes(saved as SupportedLocale)) {
+    setLocale(saved as SupportedLocale);
+  }
+});
+
+watch(locale, (code) => {
+  if (SUPPORTED_LOCALES.includes(code as SupportedLocale)) {
+    localStorage.setItem(STORAGE_KEY, code);
+  }
+});
+</script>

@@ -20,16 +20,19 @@ A mismatch occurs when the physical shipment does not match the expected invoice
 
 ## Storage and lifecycle
 
-Mismatches are stored in the `receiving_item_mismatches` table.
+A mismatch is a set of flat columns on the receiving invoice item itself
+(`reported_mismatch`, `mismatch_reason`, `mismatch_qty`, `wrong_part_no`,
+`mismatch_note`) — there is no separate mismatch table and no status or
+reporter tracking.
 
-| Status | Meaning |
-|--------|---------|
-| `pending` | Reported and awaiting a second user's approval. |
-| `confirmed` | Approved by another user; the effective received quantity is final. |
-| `cancelled` | Rejected by another user; the line reverts to its previous received quantity. |
-
-Only the reporter can edit a pending mismatch. A different user must confirm or cancel it.
+| Action | Effect |
+|--------|--------|
+| Report | Sets the mismatch columns on the item (one active mismatch per item). |
+| Edit | Overwrites the mismatch columns. |
+| Confirm | Keeps the values and writes a transition log entry. |
+| Cancel | Clears the mismatch columns. |
 
 ## Result
 
-The mismatch updates `receiving_invoice_items.received_qty` to the effective quantity and re-evaluates the parent receiving order's `clear`/`in_hand` status. Confirmed and cancelled mismatches are recorded in the transition log.
+The reported mismatch is visible on the receiving detail's item row. All
+four lifecycle actions are recorded in the transition log.

@@ -2,12 +2,19 @@
 
 ## In scope
 
-- List measuring tasks for finished picking orders.
-- Show task detail with items to pack.
-- Create shipping boxes.
-- Record box measurements (length, width, height, weight).
-- Pack picking items into shipping boxes.
-- Finish the measuring task.
+- List measuring tasks for finished picking orders (server-computed box
+  counts: `boxCount` / `closedBoxCount`).
+- Task detail as **one consolidated read** (`GET /measuring-tasks/:id`):
+  the task, its picking order, and all shipping boxes with their packages
+  (part identity embedded on each package).
+- Per-box page (`/measuring/:taskId/box/:boxId`): verify packages by
+  scanning labels — matching runs client-side against the box's packages,
+  then `verifyPackage` by id.
+- Record box measurements (box size, net/gross weights in integer grams,
+  destination country) via the shared picking verbs
+  (`updateShippingBox`), then close the box.
+- Complete the measuring task once every box is closed and all items are
+  fully packed.
 
 ## Out of scope
 
@@ -18,30 +25,35 @@
 
 ## Key files
 
-- `pages/measuring/` — list and detail pages.
+- `pages/measuring/index.vue` — task list.
+- `pages/measuring/[id].vue` — task detail (boxes overview, complete
+  action).
+- `pages/measuring/[taskId]/box/[boxId].vue` — box page (package verify by
+  scan, measurements, close).
 - `components/BoxMeasurementsModal.vue` — measurement entry.
-- `services/warehouse.ts` — service interface.
-- `services/adapters/apiWarehouse.ts` — HTTP service implementation (default; calls `routes/measuring.ts` + `routes/boxes.ts` below).
-- `services/adapters/pgliteWarehouse.ts` — PGlite service implementation (fallback).
-- `db/measuring.ts` — measuring DB helpers (called only by the PGlite adapter).
-- `apps/api/src/db/pickScan.ts` — `maybeAutoFinishPickingOrder` creates the measuring task: when a pack/bulk-pack/finish leaves every picking item fully boxed, the order flips to `finished` and a `measuring_tasks` row is inserted with `ON CONFLICT (picking_order_id) DO NOTHING` (at most one task per picking order).
-- `apps/api/src/routes/measuring.ts` — `GET /measuring-tasks` list/polling endpoint (filter by `status`, `since`; includes `total_items`/`packed_items` totals), `GET /measuring-tasks/:id` detail, and `POST /measuring-tasks/:id/complete`.
-- `apps/api/src/routes/boxes.ts`, `apps/api/src/db/measure.ts` — measuring execution now lives in the API: `GET /shipping-boxes/:id/for-measuring`, `POST /shipping-boxes/:id/verify-package`, `PATCH /shipping-boxes/:id` (measurements), `POST /shipping-boxes/:id/close`.
-
-## API semantics (Plan 5)
-
-- A box can be `closed` only when it is non-empty, every package is verified, and `box_size`, weights, and a destination are set; `destination_country` falls back to the picking order's `destination_country`, then `ship_to`, at close time.
-- `POST /measuring-tasks/:id/complete` requires all boxes closed and all items fully packed; on completion it auto-creates a `pre_shipment` verification task for the order (see [goods-verify ai-scope](../goods-verify/ai-scope.md)).
-- Pre-shipment verification is box-level (`closed → verified`); cycle-count verification is still pending (Plan 6).
+- `composables/useScanMatchers.ts` — client-side `matchMeasuring`
+  (read-only match against the box's packages; apply calls
+  `WarehouseService.verifyPackage`).
+- `services/adapters/backendWarehouse.ts` — measuring reads reuse the
+  picking verbs for box mutations.
+- `apps/backend/src/routes/measuring.ts` + `apps/backend/src/db/measuring.ts` —
+  `GET /measuring-tasks?status=`, `GET /measuring-tasks/:id`,
+  `POST /measuring-tasks/:id/complete`. Box mutations live with picking
+  (`/packages/:id/verify`, `PATCH /shipping-boxes/:id`,
+  `/shipping-boxes/:id/close`).
+- `apps/backend/src/db/picking.ts` — finishing a picking order (manual or
+  auto when the last package is boxed) inserts the `measuring_tasks` row.
 
 ## Known limitations
 
-- Measurements are typed manually.
-- No real weight or dimension capture.
+- Measurements are typed manually; no real weight or dimension capture.
+- Completing a task no longer spawns a separate pre-shipment verification
+  task (the new backend has no `verification_tasks` table — goods verify is
+  the daily lot-count queue instead).
 
 ## Related specs/plans
 
+- `docs/backend/api-design.md` §Measuring
 - `docs/superpowers/specs/2026-07-02-measuring-flow-design.md`
 - `docs/superpowers/specs/2026-07-03-boxes-section-redesign-design.md`
 - `docs/superpowers/plans/2026-07-12-picking-execution.md`
-- `docs/superpowers/plans/2026-07-12-measuring-verification.md`

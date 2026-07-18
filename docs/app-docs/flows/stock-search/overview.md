@@ -8,41 +8,40 @@ Use Stock Search when you need to know:
 
 - Whether a part is in stock.
 - How much of a part is available.
-- Where a part is located (shelf, box, or receiving area).
+- Where a part is located (warehouse, section, sub-inventory, shelf, box).
 
 ## Concept
 
 1. Open Stock Search from the home screen.
-2. Use the search bar or filters to narrow suppliers and items.
-3. Tap a supplier card to expand it and see its items.
-4. Each item shows total quantity and a list of inventory locations.
+2. Type a part number (or expand the filters to pick a supplier or enter a
+   shelf code) — results reload as you type.
+3. Each matching part shows its total on-hand quantity and the list of
+   inventory lots behind it (location, available vs. total, batch details).
 
 ## Screenshots
 
 ### Default view
 
-The Stock Search page lists all suppliers. Tap a supplier to expand its items.
+The Stock Search page lists parts with their on-hand quantity and lot
+breakdown.
 
 ![Stock search default view](./assets/stock-search-default.png)
 
-### Expanded supplier
-
-Expanded supplier cards show every associated item and its inventory breakdown. Items with no stock display "No inventory".
-
-![Stock search expanded supplier](./assets/stock-search-expanded.png)
-
 ### Filtered view
 
-Select a supplier from the filter to narrow the list and enable the item filter. Items with zero inventory are hidden when the toggle is on.
+The filters panel narrows results by supplier and shelf code.
 
 ![Stock search filtered view](./assets/stock-search-filtered.png)
 
 ## Filters
 
-- **Keyword search** — search by supplier name/code, part number, internal code, or description.
-- **Supplier filter** — show only one supplier.
-- **Item filter** — show only one item (available after selecting a supplier).
-- **Only items with inventory** — hide items that currently have no stock.
+- **Part number search** — normalized substring match on the part number.
+- **Supplier filter** — show only lots traceable to one supplier's
+  receiving orders.
+- **Shelf filter** — show only lots on an exact shelf code.
+
+All three filters combine (AND) in a single backend query
+(`GET /stock-search`); lots with zero quantity are included by design.
 
 ## Related guides
 

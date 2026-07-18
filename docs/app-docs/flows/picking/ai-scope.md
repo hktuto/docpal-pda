@@ -2,12 +2,20 @@
 
 ## In scope
 
-- List open picking orders.
-- Show picking order detail with allocated lines.
-- Confirm picks by quantity and source location.
-- OCR-assisted picking via typed label input on the receiving detail Picking tab.
-- Issue reporting for shortages/damages.
-- Finish a picking order and create a measuring task.
+- List picking orders with a status filter and text search; multi-select
+  batch issue reporting.
+- Show picking order detail as one nested read: order (incl. issue fields
+  and its measuring task), items → allocations (with lot or receiving-area
+  source) and packages, plus the shipping boxes.
+- Scan-to-pick: the operator pre-selects an allocation row, scans a label
+  (validated client-side against supplier QR templates), and the app calls
+  `POST /picking-items/:id/scan {allocationId, qty, ...batch overrides}`.
+- Package and shipping-box operations: remove (undo-scan) / verify packages,
+  create / cancel / close boxes, add/remove packages, add-all-unboxed;
+  box sizes and weights in integer grams.
+- Finish a picking order manually, or automatically when the last package
+  is boxed — finishing creates a measuring task.
+- Per-order issue reporting (`POST /picking-orders/report-issues`).
 
 ## Out of scope
 
@@ -15,35 +23,48 @@
 - Wave picking or batch picking across multiple orders.
 - Pick-to-light or voice picking.
 - Integration with external WMS/ERP.
+- Server-side picking-scan matching — the current UX pre-selects the
+  allocation, so client-side template validation is sufficient.
 
 ## Key files
 
-- `pages/picking/` — list and detail pages.
-- `components/picking/` — picking-specific components.
-- `composables/useLabelScan.ts` — label parsing.
-- `composables/useScanMatchers.ts` — matching logic.
-- `composables/useMockOcr.ts` — OCR normalization demo.
-- `db/picking.ts` — picking DB helpers (pglite adapter only; in api mode the equivalent logic is `apps/api/src/db/pickScan.ts` behind `routes/pickingExecution.ts`).
-- `db/ocrPicking.ts` — OCR-assisted picking apply logic (pglite adapter only; api mode: `apps/api/src/db/ocrPick.ts`).
-- `db/allocate.ts` — allocation creation (pglite adapter only; api mode: `apps/api/src/db/allocate.ts`).
-- `apps/api/src/routes/picking.ts` — admin ingestion endpoint `PUT /picking-orders/:external_id`.
-- `apps/api/src/ingest/picking.ts` (with `ingest/parts.ts`) — idempotent order upsert; a changed upsert triggers `allocatePickingOrder` in `apps/api/src/db/allocate.ts` to allocate available received stock.
-- `apps/api/src/routes/pickingExecution.ts` — operator picking-execution API: `POST /picking-orders/:id/scan`, `DELETE /picking-orders/:id/packages/:package_id` (undo-scan), `POST /picking-orders/:id/boxes` (+ `:box_id/cancel`, `:box_id/packages`, `:box_id/add-all-unboxed`, `DELETE :box_id/packages/:package_id`), `POST /picking-orders/:id/finish`, and the `GET /picking-orders` / `GET /picking-orders/:id` list/detail reads.
-- `apps/api/src/db/pickScan.ts` — transaction logic behind the execution endpoints; `maybeAutoFinishPickingOrder` flips the order to `finished` and inserts a `measuring_tasks` row (`ON CONFLICT (picking_order_id) DO NOTHING`) once every item is fully boxed.
-- `apps/api/src/routes/measuring.ts` — `GET /measuring-tasks` polling endpoint for the tasks created at auto-finish.
-- `picking_items` quantities are API-maintained columns, not inputs: `picked_qty` is the boxed sum (packages with a `shipping_box_id`), `scanned_not_boxed_qty` is the scanned-but-unboxed sum, `allocated_qty` is the live allocation sum (all recomputed by `recomputePickingItem` in `apps/api/src/db/invariants.ts`), and `remaining_qty` is a generated column (`qty - picked_qty - scanned_not_boxed_qty`).
+- `pages/picking/index.vue` — list page (search, status filter, batch issue
+  report dialog).
+- `pages/picking/[id].vue` — detail page (items/allocations/packages,
+  boxes, logs, scan-to-pick, finish).
+- `components/picking/PickingItemsSection.vue`,
+  `components/picking/PickingBoxesSection.vue`,
+  `components/picking/PickingIssueBanner.vue` — detail sub-views.
+- `components/PickingIssueReportModal.vue` — batch issue report dialog.
+- `composables/useLabelScan.ts` + `utils/parseOcrScan.ts` — label parsing
+  (QR templates from `GET /scan-templates`, OCR fallback).
+- `composables/useScanMatchers.ts` — client-side `matchPicking` validation;
+  apply calls `WarehouseService.scanPickingItem`.
+- `services/adapters/backendWarehouse.ts` — picking + shipping-box methods.
+- `apps/backend/src/routes/picking.ts` + `apps/backend/src/db/picking.ts` —
+  `GET /picking-orders`, `GET /picking-orders/:id`,
+  `POST /picking-items/:id/scan`, `/packages/:id` verbs,
+  `/shipping-boxes/:id*` lifecycle, `POST /picking-orders/:id/finish`
+  (→ measuring task), `POST /picking-orders/report-issues`.
+- `apps/backend/src/routes/ingest.ts` + `apps/backend/src/db/ingest.ts` —
+  `PUT /picking-orders/:externalId` upsert; a changed upsert triggers
+  allocation.
 
 ## Known limitations
 
-- Typed input simulates scanning; the Android native `RectangleDetection.scanLabel()` path is used in some camera flows but not all.
+- **Allocation ids are unstable between scan and boxing:** post-scan
+  `allocateAll` rebuilds an item's allocation rows with new ids until its
+  packages are boxed, so the detail page re-fetches after every scan/box
+  mutation instead of caching allocation ids (documented in
+  `docs/backend/README.md`).
+- Typed input simulates scanning; the Android native
+  `RectangleDetection.scanLabel()` path is used in some camera flows but
+  not all.
 - Matching depends on normalized text and may require manual review.
-- In the default api mode all mutations run in the Hono API (validated server-side); only the `warehouseAdapter: "pglite"` fallback runs everything client-side in PGlite with no backend validation.
-- The admin payload field names for the ingestion endpoints are currently PROPOSED (`external_id` on the order, receiving lines keyed by `invoice_no` + `line_no`, picking lines keyed by `line_id`) — to be reconciled with the real admin app.
-- OCR scan candidate search (`findReceivingCandidates` / `findPickingCandidates` in `composables/useScanMatchers.ts`) goes through `WarehouseService.getScanCandidates` → `GET /receiving-orders/:id/scan-candidates` in api mode; the pglite adapter serves the same data locally.
-- Receiving-order allocations may display a "Box IDs" remark when the underlying invoice items record `box_id` values. This is informational only and does not restrict scanning.
 
 ## Related specs/plans
 
+- `docs/backend/api-design.md` §Picking
 - `docs/superpowers/specs/2026-07-01-ocr-assisted-picking-design.md`
 - `docs/superpowers/specs/2026-07-03-picking-issue-reporting-design.md`
 - `docs/superpowers/specs/2026-07-03-package-level-picking-design.md`

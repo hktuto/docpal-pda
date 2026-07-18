@@ -13,12 +13,21 @@ Typical label fields:
 
 ## How it works
 
-1. The operator taps the scan button on the Picking tab of a receiving detail.
-2. The `LabelScanReviewModal` opens.
-3. The operator enters or confirms label data.
-4. `useLabelScan` and `useScanMatchers` parse and normalize the input.
-5. `db/ocrPicking.ts` matches the parsed data to receiving invoice items and picking items.
-6. If a unique match is found, the pick is applied automatically.
+1. The operator taps the scan button (receiving detail, picking detail,
+   put-away detail, or measuring box page).
+2. The label is captured (camera on Android, or a typed/pasted value).
+3. `useLabelScan` + `utils/parseOcrScan.ts` parse and normalize the input
+   against the supplier's QR template (fetched from `GET /scan-templates`).
+4. What happens next depends on the flow:
+   - **Receiving** — the raw label is sent to
+     `POST /receiving-orders/:id/scan`; the server parses and matches it.
+     On a 409 (`no_match` / `multiple_matches`) the
+     `ReceivingScanReviewModal` shows the candidates and the operator picks
+     one.
+   - **Picking / put-away / measuring** — `useScanMatchers` validates the
+     parsed label client-side against the pre-selected allocation, the
+     pinned receiving item, or the box's packages; a single match applies
+     the action (pick / stage / verify) through `WarehouseService`.
 
 ## Known behavior
 

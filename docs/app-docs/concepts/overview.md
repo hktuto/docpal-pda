@@ -1,6 +1,6 @@
 # Overview
 
-The Warehouse PDA app is a client-side Nuxt 3 proof-of-concept for warehouse mobile/Android flows. It runs a full Postgres database in the browser using PGlite, so the demo works without a backend.
+The Warehouse PDA app is a Nuxt 3 proof-of-concept for warehouse mobile/Android flows. It is a thin client: all data lives in the `apps/backend` PostgreSQL backend, which the app talks to over HTTP.
 
 ## What it demonstrates
 
@@ -13,16 +13,14 @@ The Warehouse PDA app is a client-side Nuxt 3 proof-of-concept for warehouse mob
 ## Key design ideas
 
 - **Mobile-first.** The UI is built for a handheld Android device.
-- **Offline-capable demo.** PGlite runs a full Postgres database in the browser, but data is kept in memory only and is re-seeded on each launch.
-- **No backend.** All data lives in the browser; this is for demonstration and training only.
+- **Thin client over HTTP.** Pages call `WarehouseService`, which talks to the `apps/backend` Hono API (default `http://localhost:3002`). All business rules and data live server-side.
+- **Persistent demo dataset.** Data is stored in PostgreSQL and survives reloads; a demo reset (`POST /dev/reset`) re-seeds it.
 
 ## Demo limitations
 
-- **No migrations.** The schema is created once from `db/init.ts`. Because the database is in-memory, schema changes take effect on the next app launch.
-- **Demo passwords only.** Passwords are stored as plain-text hashes in the seed file.
-- **Data is not persisted.** The in-memory database is re-seeded on every app launch, so each session starts fresh.
+- **Demo passwords only.** Passwords are stored as plain-text hashes in the seed file; there are no tokens or sessions.
 - **Typed scanning.** Camera OCR exists on Android for label capture in some flows, but much scanning is simulated by typed input.
-- **No automated test suite.** Verification is manual browser testing plus `pnpm nuxt prepare`.
+- **Single shared dataset.** Everyone using the demo works on the same backend database; use the reset control to start fresh.
 
 ## Who should read this
 
