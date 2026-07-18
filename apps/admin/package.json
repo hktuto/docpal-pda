@@ -1,0 +1,17 @@
+{
+  "name": "@warehouse/admin",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev --port 3100",
+    "build": "nuxt build",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "nuxt": "^3.21.8"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vue-tsc": "^3.3.7"
+  }
+}
