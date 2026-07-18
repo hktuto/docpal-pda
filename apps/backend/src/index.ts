@@ -36,3 +36,8 @@ app.route("/", ingestRoute);
 if (process.env.DEV_ROUTES !== "off") {
   app.route("/", devRoute);
 }
+
+// Vercel's Hono preset serves this file as the function entry and expects
+// the app as the default export. The long-running node server
+// (src/server.ts) imports the named `app` — both stay valid.
+export default app;
