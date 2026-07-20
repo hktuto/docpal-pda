@@ -28,3 +28,19 @@ Confirmed items become receiving-area inventory lots that can be picked or put a
 ## 6. Switch to Picking view (optional)
 
 Tap **Picking** to see linked picking orders and use OCR-assisted picking to consume receiving-area stock directly.
+
+## Scanning labels (optional)
+
+Tap the floating camera button to scan a supplier label instead of confirming lines manually:
+
+- A label that matches exactly one item applies immediately.
+- An ambiguous or unknown label opens the candidate review dialog — pick the
+  invoice line and quantity to receive.
+
+  ![Scan review](./assets/receiving-scan-review.png)
+
+- A **carton label listing several items** opens the multi-item table: one
+  editable row per item (part + quantity). Apply receives every row; failed
+  rows stay editable for a retry.
+
+  ![Multi-item scan review](./assets/receiving-scan-multi-item.png)

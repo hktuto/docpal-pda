@@ -10,6 +10,7 @@ Page and component locations mapped to source files.
 | Home / Menu | `/` | `pages/index.vue` |
 | Picking list | `/picking` | `pages/picking/index.vue` |
 | Picking detail | `/picking/:id` | `pages/picking/[id].vue` or equivalent |
+| Picking scan session ("checkout") | `/picking/scan/:id` | `pages/picking/scan/[id].vue` |
 | Receiving list | `/receiving` | `pages/receiving/index.vue` |
 | Receiving detail | `/receiving/:id` | `pages/receiving/[id].vue` or equivalent |
 | Put-away list | `/put-away` | `pages/put-away/index.vue` |
@@ -47,6 +48,9 @@ Page and component locations mapped to source files.
 |-------|-------------|
 | LabelScanReviewModal | `components/LabelScanReviewModal.vue` |
 | ReceivingScanReviewModal | `components/receiving/ReceivingScanReviewModal.vue` |
+| ReceivingScanMultiItemModal | `components/receiving/ReceivingScanMultiItemModal.vue` |
+| PickingScanReviewModal | `components/picking/PickingScanReviewModal.vue` |
+| ScanMultiItemModal | `components/ScanMultiItemModal.vue` |
 | BoxMeasurementsModal | `components/BoxMeasurementsModal.vue` |
 | ReportIssueModal | `components/ReportIssueModal.vue` |
 | PickingIssueReportModal | `components/PickingIssueReportModal.vue` |
@@ -74,6 +78,7 @@ Page and component locations mapped to source files.
 | Items tab | `components/receiving/ReceivingItemsTab.vue` |
 | Picking tab | `components/receiving/ReceivingPickingTab.vue` |
 | Scan review modal | `components/receiving/ReceivingScanReviewModal.vue` |
+| Multi-item scan review modal | `components/receiving/ReceivingScanMultiItemModal.vue` |
 
 ## Service layer (web data access)
 
@@ -109,7 +114,7 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 
 - `composables/useLabelScan.ts` — orchestrates native scan; in browsers falls back to `window.prompt()` + JSON.
 - `composables/useLabelScan.ts` — validates prompt JSON and converts it to a capture in browser fallback mode; supplier QR templates come from `GET /scan-templates` via `WarehouseService.getSupplierQrTemplates`.
-- `composables/useReceivingScan.ts` — sends the raw label to `POST /receiving-orders/:id/scan`; on 409 `{message, candidates}` it opens the review modal, and picking a candidate resends with explicit `{partNo, qty}`.
+- `composables/useReceivingScan.ts` — sends the raw label to `POST /receiving-orders/:id/scan`; on 409 `{message, candidates}` it opens the review modal, and picking a candidate resends with explicit `{partNo, qty}`. A raw label that parses into 2+ item rows (`extractMultiItemRows`) opens the multi-item table modal instead, and `applyRows` applies one explicit `{partNo, qty}` scan per row.
 - `composables/useScanMatchers.ts` — client-side validation for picking (`matchPicking`), put-away (`matchPutAway`), and measuring (`matchMeasuring`); the apply actions go through `WarehouseService`.
 
 ## Warehouse backend (apps/backend)

@@ -27,6 +27,7 @@ import type {
   StockSearchResult,
   SupplierListRow,
   SupplierQrcodeTemplate,
+  BoxSearchResult,
 } from "./types";
 import { createBackendWarehouseService } from "./adapters/backendWarehouse";
 
@@ -58,7 +59,7 @@ export interface WarehouseService {
   ): Promise<{ packageIds: string[] }>;
   removeScannedPackage(packageId: string): Promise<void>;
   verifyPackage(packageId: string): Promise<void>;
-  createShippingBoxForPickingOrder(pickingOrderId: string): Promise<void>;
+  createShippingBoxForPickingOrder(pickingOrderId: string, boxId?: string): Promise<void>;
   updateShippingBox(id: string, fields: ShippingBoxUpdateInput): Promise<void>;
   addPackageToBox(packageId: string, boxId: string): Promise<void>;
   removePackageFromBox(boxId: string, packageId: string): Promise<void>;
@@ -124,6 +125,10 @@ export interface WarehouseService {
   // (same trick as getShelves).
   searchStock(filters?: StockSearchFilters): Promise<StockSearchResult>;
   getSuppliers(): Promise<SupplierListRow[]>;
+
+  // Box lookup for the /box QR page — searches both box tables by id
+  // substring (a bare daily seq like "0007" matches).
+  searchBoxes(q: string): Promise<BoxSearchResult[]>;
 }
 
 export interface CreateWarehouseServiceOptions {

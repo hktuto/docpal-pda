@@ -72,7 +72,7 @@ useHead({ title: t("receiving.title") });
 const filters: { labelKey: string; value: ReceivingFilter }[] = [
   { labelKey: "common.all", value: "all" },
   { labelKey: "status.receiving.pending", value: "pending" },
-  { labelKey: "status.receiving.provisional_received", value: "provisional_received" },
+  // { labelKey: "status.receiving.provisional_received", value: "provisional_received" },
   { labelKey: "status.receiving.in_hand", value: "in_hand" },
   { labelKey: "status.receiving.clear", value: "clear" },
 ];

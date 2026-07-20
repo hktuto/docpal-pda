@@ -1,0 +1,82 @@
+import { sql } from "drizzle-orm";
+import { defaultWarehouse } from "../config.js";
+import { queryAll, type DbOrTx } from "./query.js";
+
+// ---------------------------------------------------------------------------
+// Shared box identity + search.
+//
+// Box ids are `BOX-<kind>-<warehouse>-<YYYYMMDD>-<seq>`: kind S = shipping
+// box / H = shelf box, warehouse from `WAREHOUSE_CODE` (default HK1), seq a
+// per-day counter per kind (zero-padded to 4). Ids survive hard deletes
+// (cancel) via their transaction_logs rows — scan both tables so a cancelled
+// seq is never reused.
+// ---------------------------------------------------------------------------
+
+export type BoxKind = "S" | "H";
+
+const KIND_TABLE: Record<BoxKind, { table: string; entityType: string }> = {
+  S: { table: "shipping_boxes", entityType: "shipping_box" },
+  H: { table: "shelf_boxes", entityType: "shelf_box" },
+};
+
+function localYyyymmdd(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}${m}${day}`;
+}
+
+export function boxIdPrefix(kind: BoxKind, at: Date = new Date()): string {
+  return `BOX-${kind}-${defaultWarehouse()}-${localYyyymmdd(at)}-`;
+}
+
+export async function nextBoxId(tx: DbOrTx, kind: BoxKind): Promise<string> {
+  const prefix = boxIdPrefix(kind);
+  const { table, entityType } = KIND_TABLE[kind];
+  const rows = await queryAll<{ id: string }>(
+    tx,
+    sql`SELECT id FROM ${sql.raw(table)} WHERE id LIKE ${prefix + "%"}
+        UNION ALL
+        SELECT entity_id AS id FROM transaction_logs
+        WHERE entity_type = ${entityType} AND entity_id LIKE ${prefix + "%"}`
+  );
+  let max = 0;
+  for (const r of rows) {
+    const n = Number(r.id.slice(prefix.length));
+    if (Number.isInteger(n) && n > max) max = n;
+  }
+  return `${prefix}${String(max + 1).padStart(4, "0")}`;
+}
+
+export interface BoxSearchRow {
+  kind: "shipping" | "shelf";
+  id: string;
+  status: string;
+  createdAt: Date;
+  refNo: string | null;
+}
+
+/** Search both box tables by id substring (a bare seq like `7` or `0007`
+ *  matches). Blank q returns the latest 50 boxes across both kinds. */
+export async function searchBoxes(db: DbOrTx, q: string): Promise<BoxSearchRow[]> {
+  const term = `%${q.trim()}%`;
+  const rows = await queryAll<BoxSearchRow>(
+    db,
+    sql`SELECT * FROM (
+          SELECT 'shipping' AS kind, sb.id, sb.status, sb.created_at AS "createdAt",
+                 po.ref_no AS "refNo"
+          FROM shipping_boxes sb
+          LEFT JOIN picking_orders po ON po.id = sb.picking_order_id
+          WHERE sb.id ILIKE ${term}
+          UNION ALL
+          SELECT 'shelf' AS kind, hb.id, hb.status, hb.created_at AS "createdAt",
+                 ro.ref_no AS "refNo"
+          FROM shelf_boxes hb
+          LEFT JOIN receiving_orders ro ON ro.id = hb.receiving_order_id
+          WHERE hb.id ILIKE ${term}
+        ) boxes
+        ORDER BY boxes."createdAt" DESC
+        LIMIT 50`
+  );
+  return rows;
+}

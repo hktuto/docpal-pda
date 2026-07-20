@@ -459,6 +459,29 @@ test("remove package: reverses lot/allocation/ledger; guards", async () => {
   assert.equal(boxed.message, "package_already_in_box");
 });
 
+// --- create box with pre-printed id --------------------------------------------------
+
+test("boxes: create with pre-printed boxId; duplicate and empty guards", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await seededOrderAllocated();
+
+  const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId, boxId: "BOX-HK1-2826-000001" });
+  assert.equal(box.id, "BOX-HK1-2826-000001");
+  assert.equal(box.status, "open");
+
+  const dup = await catchHttp(createShippingBox(client.db, { pickingOrderId: orderId, actorId, boxId: "BOX-HK1-2826-000001" }));
+  assert.equal(dup.status, 409);
+  assert.equal(dup.message, "box_id_exists");
+
+  const empty = await catchHttp(createShippingBox(client.db, { pickingOrderId: orderId, actorId, boxId: "   " }));
+  assert.equal(empty.status, 400);
+  assert.equal(empty.message, "box_id_empty");
+
+  // id is trimmed before use
+  const padded = await createShippingBox(client.db, { pickingOrderId: orderId, actorId, boxId: "  BOX-HK1-2826-000002  " });
+  assert.equal(padded.id, "BOX-HK1-2826-000002");
+});
+
 // --- box membership + cancel --------------------------------------------------------
 
 test("boxes: membership add/remove, cancel; guards incl. different orders", async () => {

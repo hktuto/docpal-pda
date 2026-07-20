@@ -45,7 +45,7 @@
       </DetailHeader>
 
       <ScanFab
-        v-if="order.status === 'pending' || order.status === 'provisional_received'"
+        v-if="order.status === 'provisional_received'"
         :loading="scanning"
         @click="openScan()"
       />
@@ -84,6 +84,8 @@
         :adding-all="addingAll"
         :any-adding-all="anyAddingAll"
         @create-box="createBox"
+        @scan="openPickingScan"
+        @print-box="printBox"
         @add-all-to-box="addAllToBox"
         @add-to-box="addToBox"
         @remove-from-box="removeFromBox"
@@ -98,6 +100,17 @@
         :initial-qty="review.initialQty"
         :applying="applying"
         @pick="onPickCandidate"
+      />
+
+      <ReceivingScanMultiItemModal
+        v-if="multiReview"
+        :model-value="multiOpen"
+        :rows="multiReview.rows"
+        :candidates="multiReview.candidates"
+        :applying="applying"
+        :results="multiResults"
+        @update:model-value="onMultiModalModelValueUpdate"
+        @apply="onApplyMulti"
       />
 
       <ReportIssueModal
@@ -116,9 +129,14 @@
 import ReceivingItemsTab from "~/components/receiving/ReceivingItemsTab.vue";
 import ReceivingPickingTab from "~/components/receiving/ReceivingPickingTab.vue";
 import ReceivingScanReviewModal from "~/components/receiving/ReceivingScanReviewModal.vue";
+import ReceivingScanMultiItemModal from "~/components/receiving/ReceivingScanMultiItemModal.vue";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useReceivingScan } from "~/composables/useReceivingScan";
+import type {
+  MultiApplyResult,
+  MultiScanRow,
+} from "~/composables/useReceivingScan";
 import { useHardwareScanner } from "~/composables/useHardwareScanner";
 import { useWarehouse } from "~/composables/useWarehouse";
 import { useToast } from "~/composables/useToast";
@@ -154,19 +172,36 @@ const {
   scan,
   submitRaw,
   pickCandidate,
+  applyRows,
+  closeMulti,
   scanning,
   applying,
   review,
   reviewOpen,
+  multiReview,
+  multiOpen,
 } = useReceivingScan({
   onApplied: async () => {
     await load();
     showToast(t("common.scanSuccess"));
   },
+  scanItems: () =>
+    (order.value?.invoices ?? []).flatMap((invoice) =>
+      invoice.items.map((item) => ({
+        id: item.id,
+        partId: item.partId,
+        partNo: item.part.partNo,
+        wclItemNo: item.wclItemNo,
+        qty: item.qty,
+        receivedQty: item.receivedQty,
+      }))
+    ),
 });
 
+const multiResults = ref<MultiApplyResult[] | null>(null);
+
 useHardwareScanner({
-  enabled: () => !reviewOpen.value,
+  enabled: () => !reviewOpen.value && !multiOpen.value,
   onScan: async (rawValue: string) => {
     const result = await submitRaw(orderId, rawValue, order.value?.supplier?.code ?? undefined);
     if (result.status === "error") {
@@ -180,6 +215,26 @@ async function onPickCandidate(payload: { candidate: ReceivingScanCandidate; qty
   const result = await pickCandidate(payload.candidate, payload.qty);
   if (result.status === "error") {
     showToast(result.message);
+  }
+}
+
+async function onApplyMulti(rows: MultiScanRow[]) {
+  const results = await applyRows(rows);
+  // Merge with earlier results (replacing by partNo) so locked rows stay marked.
+  const merged = new Map<string, MultiApplyResult>();
+  for (const r of multiResults.value ?? []) merged.set(r.partNo, r);
+  for (const r of results) merged.set(r.partNo, r);
+  multiResults.value = [...merged.values()];
+  if (multiResults.value.every((r) => r.ok)) {
+    closeMulti();
+    multiResults.value = null;
+  }
+}
+
+function onMultiModalModelValueUpdate(v: boolean) {
+  if (!v) {
+    closeMulti();
+    multiResults.value = null;
   }
 }
 
@@ -355,10 +410,20 @@ async function confirmArrival() {
   }
 }
 
+function openPickingScan(pickingOrderId: string) {
+  router.push(`/picking/scan/${pickingOrderId}?from=receiving&ro=${orderId}`);
+}
+
+// Placeholder until backend-side printing lands.
+function printBox(_boxId: string) {
+  showToast(t("picking.detail.printComingSoon"));
+}
+
 async function createBox(pickingOrderId: string) {
   creatingBox.value[pickingOrderId] = true;
   try {
     await warehouse.createShippingBoxForPickingOrder(pickingOrderId);
+
     await load();
   } catch (e: any) {
     error.value = errorMessage(e);

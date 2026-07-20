@@ -15,6 +15,13 @@
   (`no_match` / `multiple_matches`) the review modal lets the operator pick
   a candidate and resend with an explicit `{partNo, qty}` (the raw rides
   along so serial dedup still applies).
+- Multi-item labels (e.g. a carton label whose items table lists several
+  parts): the client parses the raw capture into one row per item
+  (`extractMultiItemRows` in `utils/parseOcrScan.ts`) before posting; 2+
+  rows opens the multi-item table modal (per-row part dropdown + qty, row
+  remove, per-row ✓/✗ status) and applying loops one explicit
+  `{partNo, qty}` scan per row (raw is not resent, so serial dedup never
+  trips on the second row; succeeded rows are locked out of retries).
 - S-key serial dedup: a parsed `serialNo` (KOA S-key) is recorded per order
   in `receiving_scan_labels`; a repeat serial is rejected with
   `409 label_already_scanned`. Scans without a serial skip dedup.
@@ -43,7 +50,11 @@
   `components/receiving/ReceivingPickingTab.vue` — detail sub-views.
 - `components/receiving/ReceivingScanReviewModal.vue` — candidate review
   dialog for scan 409s.
-- `composables/useReceivingScan.ts` — scan submission + 409 → review flow.
+- `components/receiving/ReceivingScanMultiItemModal.vue` — multi-item label
+  review table (row per parsed item, editable part/qty, per-row apply
+  status).
+- `composables/useReceivingScan.ts` — scan submission, multi-item pre-check,
+  409 → review flow, and the per-row `applyRows` loop.
 - `components/ReportIssueModal.vue` + `utils/mismatch.ts`
   (`validateMismatchInputs`) — mismatch dialog and its pure validation.
 - `services/adapters/backendWarehouse.ts` — receiving + mismatch methods.

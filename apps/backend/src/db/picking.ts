@@ -4,6 +4,7 @@ import { inArray, sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { queryAll, queryGet, queryRun, type DbOrTx } from "./query.js";
 import { transactionLogs, inventoryTransactions } from "./schema/index.js";
+import { nextBoxId } from "./boxes.js";
 import { now } from "./now.js";
 
 // ---------------------------------------------------------------------------
@@ -945,16 +946,30 @@ function toBoxDto(box: ShippingBoxRow): ShippingBoxDto {
   };
 }
 
-/** Create an open shipping box for the order (+ transition log). */
+/** Create an open shipping box for the order (+ transition log). A pre-printed
+ *  `boxId` may be supplied (scanned box label); it is the global PK, so a
+ *  duplicate is rejected with 409 box_id_exists. Server-generated ids follow
+ *  nextBoxId: BOX-S-<warehouse>-<YYYYMMDD>-<seq> (per-day seq). */
 export async function createShippingBox(
   db: AppDb,
-  input: { pickingOrderId: string; actorId: string }
+  input: { pickingOrderId: string; actorId: string; boxId?: string }
 ): Promise<ShippingBoxDto> {
   return db.transaction(async (tx) => {
     const order = await loadOrderForWrite(tx, input.pickingOrderId);
     assertOrderWritable(order);
     await assertActor(tx, input.actorId);
-    const id = randomUUID();
+    const requested = input.boxId?.trim();
+    if (requested !== undefined && requested === "") {
+      throw new HTTPException(400, { message: "box_id_empty" });
+    }
+    const id = requested || (await nextBoxId(tx, "S"));
+    if (requested) {
+      const dup = await queryGet<{ id: string }>(
+        tx,
+        sql`SELECT id FROM shipping_boxes WHERE id = ${id}`
+      );
+      if (dup) throw new HTTPException(409, { message: "box_id_exists" });
+    }
     const at = now();
     await queryRun(
       tx,

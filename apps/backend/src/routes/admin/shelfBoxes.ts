@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { Context } from "hono";
-import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { db } from "../../db.js";
+import { nextBoxId } from "../../db/boxes.js";
 import { queryAll, queryGet } from "../../db/query.js";
 
 export const shelfBoxesRoute = new Hono();
@@ -56,7 +56,7 @@ shelfBoxesRoute.get("/", async (c) => {
 
 shelfBoxesRoute.post("/", async (c) => {
   const b = await readJson(c);
-  const id = randomUUID();
+  const id = await nextBoxId(db, "H");
   try {
     const row = await queryGet(
       db,

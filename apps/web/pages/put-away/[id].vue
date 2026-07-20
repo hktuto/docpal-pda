@@ -58,7 +58,18 @@
       />
     </template>
 
-    <LabelScanReviewModal
+      <ScanMultiItemModal
+        v-if="multiReview"
+        :model-value="multiOpen"
+        :rows="multiReview.rows"
+        :part-nos="visiblePartNos"
+        :results="multiResults"
+        @update:model-value="onMultiClosed"
+        @apply="onApplyMulti"
+        @remove="onMultiRowRemoved"
+      />
+
+      <LabelScanReviewModal
       v-if="review?.status === 'review'"
       v-model="reviewOpen"
       :image-path="review.capture.imagePath"
@@ -80,13 +91,27 @@ import { nextTick } from "vue";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useStatusLabel } from "~/composables/useStatusLabel";
-import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import { useErrorMessage } from "~/composables/errorMessage";
 import { I18nError } from "~/composables/i18nError";
+import { useHardwareScanner } from "~/composables/useHardwareScanner";
+import {
+  captureLabel,
+  ocrResultToInput,
+  useLabelScan,
+  type LabelScanResult,
+} from "~/composables/useLabelScan";
 import { useWarehouse } from "~/composables/useWarehouse";
 import { useToast } from "~/composables/useToast";
 import { scrollToItem } from "~/utils/scroll";
+import { rawCode } from "~/utils/text";
+import { findPutAwayTarget } from "~/utils/putAwayScan";
+import {
+  extractMultiItemRows,
+  type ScanMultiRow,
+  type ScanMultiRowResult,
+} from "~/utils/parseOcrScan";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
+import ScanMultiItemModal from "~/components/ScanMultiItemModal.vue";
 import SelectShelfDialog from "~/components/SelectShelfDialog.vue";
 import ShelfBoxesPanel from "~/components/put-away/ShelfBoxesPanel.vue";
 import PutAwayLotsPanel from "~/components/put-away/PutAwayLotsPanel.vue";
@@ -166,7 +191,69 @@ const anyAddingAll = computed(() =>
   Object.values(addingAll.value).some(Boolean)
 );
 
-const { scan, scanning, review, reviewOpen, onApplied } = useLabelScanReview({ onApplied: load });
+const { processCapture, parseRawValue } = useLabelScan();
+const scanning = ref(false);
+const review = ref<LabelScanResult | null>(null);
+const reviewOpen = ref(false);
+
+// Multi-item label review (table UI): rows parsed from one OCR capture.
+const multiReview = ref<{ rows: ScanMultiRow[] } | null>(null);
+const multiOpen = ref(false);
+const multiResults = ref<ScanMultiRowResult[] | null>(null);
+const multiApplying = ref(false);
+
+const visiblePartNos = computed(() => visibleItems.value.map((i) => i.partNo));
+
+async function onApplied() {
+  reviewOpen.value = false;
+  review.value = null;
+  await load();
+}
+
+// Hardware / wedge QR scans: parse via the supplier QR templates, match the
+// part against the order's visible items, and apply immediately (no review).
+useHardwareScanner({
+  enabled: () =>
+    !!order.value &&
+    order.value.status !== "clear" &&
+    !scanning.value &&
+    !reviewOpen.value &&
+    !multiOpen.value &&
+    !newBoxDialogOpen.value,
+  onScan: async (rawValue: string) => {
+    if (!order.value) return;
+    scanning.value = true;
+    try {
+      const parsedResult = await parseRawValue(
+        rawValue,
+        order.value.supplier?.code ?? undefined
+      );
+      const parsed = ocrResultToInput(parsedResult.parsed);
+      const qty = typeof parsed.qty === "number" ? parsed.qty : Number(parsed.qty);
+      const target = findPutAwayTarget(visibleItems.value, parsed.partNo, qty);
+      if (!target) {
+        showToast(t("errors.scanned_part_does_not_match_item"));
+        return;
+      }
+      await warehouse.recordPutAwayScan(
+        orderId,
+        target.id,
+        qty,
+        rawCode(parsed.dateCode),
+        rawCode(parsed.lotCode),
+        rawCode(parsed.coo),
+        rawCode(parsed.cow)
+      );
+      showToast(t("common.scanSuccess"));
+      scrollTargetItemId.value = target.id;
+      await load();
+    } catch (e) {
+      showToast(errorMessage(e));
+    } finally {
+      scanning.value = false;
+    }
+  },
+});
 
 async function addScanToBox(scanId: string) {
   const boxId = boxSelections.value[scanId];
@@ -318,18 +405,110 @@ async function openScan(item: PutAwayExpectedItem) {
   error.value = null;
   scrollTargetItemId.value = item.id;
   scanItem.value = item;
-  const result = await scan({
-    task: 'put-away',
-    receivingOrderId: orderId,
-    receivingItem: item,
-    targets: item.partNo ? [item.partNo] : [],
-  });
-  if (result.status === 'error' || result.status === 'cancelled') {
+  scanning.value = true;
+  try {
+    const capture = await captureLabel();
+    if (!capture) {
+      scrollTargetItemId.value = null;
+      return;
+    }
+    // A label whose items table lists several parts parses into 2+ rows
+    // (matched against all visible items — carton labels mix parts): open the
+    // multi-item table so the operator can edit every row.
+    const multiRows = extractMultiItemRows(capture.text, visiblePartNos.value);
+    if (multiRows.length >= 2) {
+      multiReview.value = {
+        rows: multiRows.map((r) => ({ partNo: r.partNo, qty: r.qty ?? null })),
+      };
+      multiResults.value = null;
+      multiOpen.value = true;
+      return;
+    }
+    // Single record: always pop the confirm form (confirmSingleMatch).
+    const result = await processCapture(capture, {
+      task: "put-away",
+      receivingOrderId: orderId,
+      receivingItem: item,
+      targets: item.partNo ? [item.partNo] : [],
+      confirmSingleMatch: true,
+    });
+    if (result.status === "review") {
+      review.value = result;
+      reviewOpen.value = true;
+    } else {
+      scrollTargetItemId.value = null;
+      if (result.status === "error") {
+        showToast(result.message);
+      }
+    }
+  } catch (e) {
     scrollTargetItemId.value = null;
+    showToast(errorMessage(e));
+  } finally {
+    scanning.value = false;
   }
-  if (result.status === 'error') {
-    showToast(result.message);
+}
+
+/**
+ * Multi-item apply: record one put-away scan per row, sequentially so the
+ * per-row guards report cleanly. Rows that already succeeded stay locked;
+ * the modal closes when every row is applied.
+ */
+async function onApplyMulti(entries: { row: ScanMultiRow; index: number }[]) {
+  if (multiApplying.value) return;
+  multiApplying.value = true;
+  try {
+    const results: ScanMultiRowResult[] = [];
+    let anyOk = false;
+    for (const { row, index } of entries) {
+      const qty = row.qty ?? 0;
+      const target = findPutAwayTarget(visibleItems.value, row.partNo, qty);
+      if (!target) {
+        results.push({
+          index,
+          ok: false,
+          message: t("errors.scanned_part_does_not_match_item"),
+        });
+        continue;
+      }
+      try {
+        await warehouse.recordPutAwayScan(orderId, target.id, qty, null, null, null, null);
+        results.push({ index, ok: true });
+        anyOk = true;
+      } catch (e) {
+        results.push({ index, ok: false, message: errorMessage(e) });
+      }
+    }
+    // Merge with earlier results (replacing by index) so locked rows stay marked.
+    const merged = new Map<number, ScanMultiRowResult>();
+    for (const r of multiResults.value ?? []) merged.set(r.index, r);
+    for (const r of results) merged.set(r.index, r);
+    multiResults.value = [...merged.values()];
+    if (anyOk) await load();
+    if (multiResults.value.every((r) => r.ok)) {
+      multiOpen.value = false;
+      multiReview.value = null;
+      multiResults.value = null;
+      showToast(t("common.scanSuccess"));
+    }
+  } finally {
+    multiApplying.value = false;
   }
+}
+
+function onMultiClosed(v: boolean) {
+  multiOpen.value = v;
+  if (!v) {
+    multiReview.value = null;
+    multiResults.value = null;
+  }
+}
+
+/** A removed row shifts later row indices — keep stored results aligned. */
+function onMultiRowRemoved(index: number) {
+  multiResults.value = (multiResults.value ?? [])
+    .filter((r) => r.index !== index)
+    .map((r) => (r.index > index ? { ...r, index: r.index - 1 } : r));
 }
 
 async function onRetake() {

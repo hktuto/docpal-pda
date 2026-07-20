@@ -4,14 +4,15 @@ import { inArray, sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { queryAll, queryGet, queryRun, type DbOrTx } from "./query.js";
 import { transactionLogs, inventoryTransactions } from "./schema/index.js";
+import { nextBoxId } from "./boxes.js";
 import { now } from "./now.js";
 
 // ---------------------------------------------------------------------------
 // Put-away flow — staging-box model (ported from apps/api putAway.ts).
 //
 // A put-away "scan" is a shelf_box_items row in the per-order staging box (a
-// shelf_boxes row with shelf_code IS NULL, auto-created on first scan, ids
-// SBOX-%04d). Assigning a scan into a real box moves the row and MATERIALIZES
+// shelf_boxes row with shelf_code IS NULL, auto-created on first scan; ids
+// from nextBoxId — BOX-H-<warehouse>-<YYYYMMDD>-<seq>). Assigning a scan into a real box moves the row and MATERIALIZES
 // the inventory lot (keyed part + shelf + box_id + batch attrs, box_id = the
 // shelf box's id) with inventory_lot_sources + put_away_qty and two ledger
 // rows (PUT_AWAY dock −qty / on_hand +qty); removing a scan reverses all of
@@ -39,24 +40,6 @@ async function loadShelfBox(tx: DbOrTx, boxId: string): Promise<ShelfBoxRow> {
 async function assertActor(tx: DbOrTx, actorId: string): Promise<void> {
   const actor = await queryGet<{ id: string }>(tx, sql`SELECT id FROM users WHERE id = ${actorId}`);
   if (!actor) throw new HTTPException(400, { message: "actor_not_found" });
-}
-
-// Box ids survive hard deletes (cancel) via their transaction_logs rows —
-// scan both tables so a cancelled id is never reused.
-async function nextShelfBoxId(tx: DbOrTx): Promise<string> {
-  const rows = await queryAll<{ id: string }>(
-    tx,
-    sql`SELECT id FROM shelf_boxes WHERE id LIKE 'SBOX-%'
-        UNION ALL
-        SELECT entity_id AS id FROM transaction_logs
-        WHERE entity_type = 'shelf_box' AND entity_id LIKE 'SBOX-%'`
-  );
-  let max = 0;
-  for (const r of rows) {
-    const n = Number(r.id.slice(5));
-    if (Number.isInteger(n) && n > max) max = n;
-  }
-  return `SBOX-${String(max + 1).padStart(4, "0")}`;
 }
 
 async function logShelfBox(
@@ -87,7 +70,7 @@ async function ensureStagingBox(tx: DbOrTx, receivingOrderId: string): Promise<s
         WHERE receiving_order_id = ${receivingOrderId} AND shelf_code IS NULL AND status = 'open'`
   );
   if (existing) return existing.id;
-  const id = await nextShelfBoxId(tx);
+  const id = await nextBoxId(tx, "H");
   await queryRun(
     tx,
     sql`INSERT INTO shelf_boxes (id, receiving_order_id, shelf_code, status, created_at)
@@ -538,7 +521,7 @@ export async function createShelfBox(
     if (!shelf) throw new HTTPException(404, { message: "shelf_not_found" });
     await assertActor(tx, input.actorId);
 
-    const id = await nextShelfBoxId(tx);
+    const id = await nextBoxId(tx, "H");
     const at = now();
     await queryRun(
       tx,

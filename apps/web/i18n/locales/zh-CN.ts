@@ -5,6 +5,7 @@ export default {
     receivingDetail: "收货详情",
     picking: "拣货",
     pickingDetail: "拣货详情",
+    pickingScan: "拣货扫码",
     putAway: "上架",
     putAwayDetail: "上架详情",
     goodsVerify: "盘点",
@@ -156,6 +157,7 @@ export default {
       removeFromBox: "从箱子移除",
       removing: "移除中…",
       removeScanned: "移除扫描",
+      print: "打印",
       removingScanned: "移除中…",
       scan: "扫描",
       addAll: "全部加入",
@@ -173,6 +175,14 @@ export default {
       progress: "已收 {received} / {expected}",
       cancel: "取消",
       close: "关闭"
+    },
+    multiScan: {
+      title: "标签上有多个项目",
+      subtitle: "扫描的标签列出多个项目，请核对及编辑每一行，然后应用。",
+      partNo: "料号",
+      apply: "应用 {count} 个项目",
+      applying: "应用中...",
+      remove: "移除此行"
     }
   },
   picking: {
@@ -191,8 +201,39 @@ export default {
       measuring: "测量",
       measuringTaskCreated: "测量任务已创建",
       goToMeasuring: "前往测量",
-      noMatchingAllocation: "扫描的物料没有匹配的分配"
+      scan: "扫码",
+      noMatchingAllocation: "扫描的物料没有匹配的分配",
+      boxCreated: "箱号 {id} 已创建",
+      printComingSoon: "打印功能将在后续版本提供",
+      itemQrUseScanMode: "这是物料标签——请使用扫码按钮拣货"
     },
+    scanSession: {
+          title: "扫码 — {refNo}",
+          back: "返回",
+          progress: "需求 {required} · 已扫 {scanned} · 待确认 {queued}",
+          emptyQueue: "还没有扫描记录——请扫描二维码或用 OCR 拍照。",
+          colPart: "料号",
+          colQty: "数量",
+          colLot: "批次/日期",
+          colSource: "来源",
+          removeRow: "移除",
+          ocrCapture: "OCR 拍照",
+          confirm: "确认 ({count})",
+          confirming: "提交中…",
+          allApplied: "全部扫描已生效",
+          goBoxing: "去装箱",
+                    continueScan: "继续扫码",
+                    boxingHint: "下一步：创建箱子并把已扫描的包裹装箱。",
+          partialFail: "{count} 条扫描失败——请检查后移除或重试",
+          leaveWarning: "未确认的扫描将会丢失，确定离开吗？",
+          duplicate: "该标签已在列表中",
+          no_match: "该标签没有匹配的项目/分配",
+          allocationChanged: "上一笔扫描后分配已变化——请移除后重扫",
+          invalid: "无法识别有效的料号和数量",
+          reviewTitle: "确认扫描项目",
+          reviewSubtitle: "请核对 OCR 识别结果，加入列表前可修改任何字段。",
+          addToQueue: "加入列表"
+        },
     itemsSection: {
       title: "明细",
       part: "料号",
@@ -219,6 +260,8 @@ export default {
     boxesSection: {
       title: "箱子 ({count})",
       newBox: "新建箱子",
+      scanBox: "扫描箱号",
+      print: "打印",
       boxId: "箱号",
       status: "状态",
       packages: "包裹",
@@ -407,6 +450,12 @@ export default {
     finishBox: "完成箱子",
     finishing: "完成中…"
   },
+  scanReview: {
+    multiTitle: "标签上有多个项目",
+    multiSubtitle: "扫描的标签列出多个项目。请检查并编辑每一行，然后加入。",
+    multiAdd: "加入 {count} 个项目",
+    multiRemove: "移除该行"
+  },
   labelScanReviewModal: {
     titleManual: "手动录入",
     titleReview: "复核扫描",
@@ -532,6 +581,10 @@ export default {
     mismatch_not_found: "此项没有已上报的差异",
     actor_not_found: "找不到操作员",
     label_already_scanned: "此标签已扫描过",
+    multiple_matches: "料号匹配到订单上多个项目",
+    no_match: "订单上没有匹配的项目",
+    box_id_exists: "此箱号已存在",
+    box_id_empty: "箱号为空",
     scanned_qty_exceeds_remaining: "扫描数量超过此项的剩余数量",
     allocation_not_found: "未找到分配",
     invalid_receiving_item: "无效的收货项",

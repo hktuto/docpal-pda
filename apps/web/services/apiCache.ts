@@ -19,6 +19,19 @@ interface CacheEntry {
 
 const memory = new Map<string, CacheEntry>();
 
+// Global kill switch (NUXT_PUBLIC_API_CACHE=off, wired in plugins/apiCache.ts):
+// when disabled, reads always miss and writes are dropped.
+let enabled = true;
+
+export function setApiCacheEnabled(value: boolean): void {
+  enabled = value;
+  if (!value) clearApiCache();
+}
+
+export function isApiCacheEnabled(): boolean {
+  return enabled;
+}
+
 function storage(): Storage | null {
   try {
     return typeof localStorage === "undefined" ? null : localStorage;
@@ -53,13 +66,15 @@ function readEntry(url: string): CacheEntry | null {
   return entry;
 }
 
-/** Cached payload for `url`, or null when missing/expired. */
+/** Cached payload for `url`, or null when missing/expired/disabled. */
 export function getCached<T = unknown>(url: string): T | null {
+  if (!enabled) return null;
   const entry = readEntry(url);
   return entry === null || entry.data === undefined ? null : (entry.data as T);
 }
 
 export function setCached(url: string, data: unknown): void {
+  if (!enabled) return;
   const entry: CacheEntry = { ts: Date.now(), data };
   // Re-insert so recency is reflected in insertion order for eviction.
   memory.delete(url);

@@ -9,11 +9,20 @@
   remaining qty), materialized inventory lots, staging scans, and the
   non-staging shelf boxes with their item rows.
 - Scan physical pieces into the order's staging box (client-side label
-  validation against supplier QR templates).
+  validation against supplier QR templates). The hardware scanner is armed on
+  the detail page: a QR/wedge scan parses via the supplier templates and
+  applies immediately to the first visible item whose part matches and whose
+  `remainingQty` fits (`utils/putAwayScan.ts` `findPutAwayTarget`). The
+  per-item camera OCR button opens a review step first: a single parsed
+  record pops the `LabelScanReviewModal` confirm form
+  (`confirmSingleMatch: true`); a multi-item (carton) label pops the shared
+  `ScanMultiItemModal` table and rows are applied one by one.
 - Assign staging scans into shelf boxes (one box per shelf), add-all-unboxed,
   remove-from-box, and remove scanned pieces.
 - Create / close / cancel shelf boxes; closing materializes inventory lots
-  and auto-clears the receiving order when its last piece is boxed.
+  and auto-clears the receiving order when its last piece is boxed. Shelf box
+  ids are server-generated as `BOX-H-<warehouse>-<YYYYMMDD>-<seq>` (per-day
+  seq, `nextBoxId` in `apps/backend/src/db/boxes.ts`).
 - Select a destination shelf (the `/admin/shelves` CRUD read doubles as the
   shelf list).
 
@@ -27,7 +36,12 @@
 
 - `pages/put-away/index.vue` — candidate list.
 - `pages/put-away/[id].vue` — detail page (expected items, lots, scans,
-  boxes; scan entry).
+  boxes; armed hardware scanner + camera OCR scan entry with
+  single-record form / multi-item table review).
+- `utils/putAwayScan.ts` — `findPutAwayTarget` first-fit item matching for
+  hardware QR scans (tests in `tests/putAwayScan.test.ts`).
+- `components/ScanMultiItemModal.vue` — shared multi-item label table (also
+  used by the picking scan session).
 - `components/put-away/PutAwayLotsPanel.vue` — expected items and scan
   staging.
 - `components/put-away/ShelfBoxesPanel.vue` — shelf boxes and scan

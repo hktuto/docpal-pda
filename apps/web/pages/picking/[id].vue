@@ -14,6 +14,9 @@
       >
         <template #actions>
           <template v-if="order.status !== 'finished' && order.status !== 'issue'">
+            <NuxtLink :to="`/picking/scan/${orderId}`" class="btn btn--small">
+              {{ $t('picking.detail.scan') }}
+            </NuxtLink>
             <button
               v-if="allItemsFullyBoxed"
               class="btn btn--small"
@@ -51,11 +54,14 @@
         :boxes="order.boxes"
         :actionable="actionable"
         :creating-box="creatingBox"
+        :scanning-box="scanningBox"
         :cancelling-box="cancellingBox"
         :adding-all="addingAll"
         :any-adding-all="anyAddingAll"
         :unboxed-count="unboxedCountForOrder"
         @create-box="createBox"
+        @scan-box="scanBoxId"
+        @print-box="printBox"
         @cancel-box="cancelBox"
         @add-all-to-box="addAllToBox"
       />
@@ -66,28 +72,11 @@
         :actionable="actionable"
         :adding="adding"
         :removing="removing"
-        :scanning="scanning"
         :open-boxes="openBoxes"
-        @scan="openScan"
         @add-to-box="addToBox"
         @remove-from-box="removeFromBox"
       />
     </template>
-
-    <LabelScanReviewModal
-      v-if="review?.status === 'review'"
-      v-model="reviewOpen"
-      :image-path="review.capture.imagePath"
-      :text="review.capture.text"
-      :barcodes="review.capture.barcodes"
-      :parsed="review.parsed"
-      :options="review.options"
-      :match-result="review.matchResult"
-      :mode="review.capture.imagePath ? 'review' : 'manual'"
-      :context="scanContext"
-      @applied="onApplied"
-      @retake="onRetake"
-    />
   </div>
 </template>
 
@@ -95,32 +84,16 @@
 import { useToast } from "~/composables/useToast";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { badgeClass } from "~/composables/useStatusBadge";
-import { useLabelScanReview } from "~/composables/useLabelScanReview";
-import { useLabelScan, buildRawCapture, ocrResultToInput } from "~/composables/useLabelScan";
-import { useHardwareScanner } from "~/composables/useHardwareScanner";
-import { normalize } from "~/composables/useMockOcr";
 import { useErrorMessage } from "~/composables/errorMessage";
 import { useWarehouse } from "~/composables/useWarehouse";
-import { scrollToItem } from "~/utils/scroll";
-import { nextTick } from "vue";
-import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
+import { useHardwareScanner } from "~/composables/useHardwareScanner";
+import { useLabelScan, captureLabel, captureRawLabelValue } from "~/composables/useLabelScan";
 import PickingBoxesSection from "~/components/picking/PickingBoxesSection.vue";
 import PickingItemsSection from "~/components/picking/PickingItemsSection.vue";
 import PickingIssueBanner from "~/components/picking/PickingIssueBanner.vue";
-import type { ScanTaskContext } from "~/composables/useScanMatchers";
 import type {
   PickingOrderDetail,
-  PickingAllocation,
 } from "~/services/types";
-
-type PickingItem = PickingOrderDetail["items"][number];
-
-/** The pre-selected scan target: an allocation row plus its parent item (the
- *  nested DTO does not back-reference allocations to items). */
-interface ScanTarget {
-  item: PickingItem;
-  allocation: PickingAllocation;
-}
 
 definePageMeta({ title: "meta.pickingDetail", props: { noPadding: true } });
 
@@ -144,69 +117,59 @@ const addingAll = ref<Record<string, boolean>>({});
 const finishing = ref(false);
 const headerExpanded = ref(false);
 const boxesExpanded = ref(false);
-const scanTarget = ref<ScanTarget | null>(null);
 const boxSelections = ref<Record<string, string>>({});
 
-async function onAppliedWithScroll() {
-  const targetItemId = scanTarget.value?.item.id;
-  // Re-fetch: the backend rebuilds the item's allocation rows (new ids)
-  // after every scan until its packages are boxed.
-  await load();
-  if (targetItemId) {
-    await nextTick();
-    scrollToItem({ itemId: targetItemId });
-  }
-}
-
-const { scan, scanning, review, reviewOpen, onApplied } = useLabelScanReview({
-  onApplied: onAppliedWithScroll,
-});
-const { processCapture, parseRawValue } = useLabelScan();
 const { showToast } = useToast();
+const { parseRawValue } = useLabelScan();
+const scanningBox = ref(false);
 
-function findMatchingAllocation(parsed: { partNo: string | number; qty: string | number }): ScanTarget | null {
-  if (!order.value) return null;
-  const scannedPartNo = normalize(String(parsed.partNo ?? ""));
-  const scannedQty = typeof parsed.qty === "number" ? parsed.qty : Number(parsed.qty);
-  if (!scannedPartNo || !Number.isInteger(scannedQty) || scannedQty <= 0) return null;
-
-  for (const item of order.value.items) {
-    if (normalize(item.partNo) !== scannedPartNo) continue;
-    for (const allocation of item.allocations ?? []) {
-      if (allocation.qty > 0 && scannedQty <= allocation.qty) {
-        return { item, allocation };
-      }
-    }
+// Scan-to-create-box: on this page a scan that matches a supplier QR template
+// is an item label (point the operator at scan mode); anything else is treated
+// as a pre-printed box id and creates an open box with that id.
+async function createBoxWithId(boxId: string) {
+  const trimmed = boxId.trim();
+  if (!trimmed || scanningBox.value) return;
+  scanningBox.value = true;
+  try {
+    await warehouse.createShippingBoxForPickingOrder(orderId, trimmed);
+    boxesExpanded.value = true;
+    await load();
+    showToast(t("picking.detail.boxCreated", { id: trimmed }));
+  } catch (e) {
+    showToast(errorMessage(e));
+  } finally {
+    scanningBox.value = false;
   }
-  return null;
 }
 
 useHardwareScanner({
-  enabled: () => !reviewOpen.value,
+  enabled: () => actionable.value && !scanningBox.value,
   onScan: async (rawValue: string) => {
-    if (!order.value) return;
     const parsedResult = await parseRawValue(rawValue);
-    const parsed = ocrResultToInput(parsedResult.parsed);
-    const target = findMatchingAllocation(parsed);
-    if (!target) {
-      showToast(t("picking.detail.noMatchingAllocation"));
+    if (parsedResult.matched) {
+      showToast(t("picking.detail.itemQrUseScanMode"));
       return;
     }
-    scanTarget.value = target;
-    const result = await processCapture(buildRawCapture(rawValue), {
-      task: "picking",
-      allocation: target.allocation,
-      pickingItem: { id: target.item.id, partNo: target.item.partNo },
-      targets: [target.item.partNo],
-    });
-    if (result.status === "error") {
-      showToast(result.message);
-    } else if (result.status === "applied") {
-      await onApplied();
-      showToast(t("common.scanSuccess"));
-    }
+    await createBoxWithId(rawValue);
   },
 });
+
+// Placeholder until backend-side printing lands.
+function printBox(_boxId: string) {
+  showToast(t("picking.detail.printComingSoon"));
+}
+
+async function scanBoxId() {
+  if (scanningBox.value) return;
+  try {
+    const capture = await captureLabel();
+    if (!capture) return;
+    const value = captureRawLabelValue(capture).trim();
+    if (value) await createBoxWithId(value);
+  } catch (e) {
+    showToast(errorMessage(e));
+  }
+}
 
 const allItemsFullyBoxed = computed(
   () => order.value?.items?.every((i) => i.pickedQty >= i.qty) ?? false
@@ -226,13 +189,6 @@ const unboxedCountForOrder = computed(() => {
   }, 0);
 });
 const anyAddingAll = computed(() => Object.values(addingAll.value).some(Boolean));
-const scanContext = computed<ScanTaskContext>(() => ({
-  task: "picking",
-  allocation: scanTarget.value?.allocation,
-  pickingItem: scanTarget.value
-    ? { id: scanTarget.value.item.id, partNo: scanTarget.value.item.partNo }
-    : undefined,
-}));
 
 async function load() {
   try {
@@ -252,25 +208,6 @@ async function load() {
   } finally {
     pending.value = false;
   }
-}
-
-async function openScan(item: PickingItem, allocation: PickingAllocation) {
-  scanTarget.value = { item, allocation };
-  const result = await scan({
-    task: "picking",
-    allocation,
-    pickingItem: { id: item.id, partNo: item.partNo },
-    targets: [item.partNo],
-  });
-  if (result.status === "error") {
-    showToast(result.message);
-  }
-}
-
-async function onRetake() {
-  reviewOpen.value = false;
-  if (!scanTarget.value) return;
-  await openScan(scanTarget.value.item, scanTarget.value.allocation);
 }
 
 async function createBox() {

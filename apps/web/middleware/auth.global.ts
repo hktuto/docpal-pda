@@ -1,5 +1,5 @@
 export default defineNuxtRouteMiddleware(async (to) => {
-  if (to.path === '/labels') {
+  if (to.path === '/labels' || to.path === '/carton' || to.path === '/box') {
     return;
   }
   const { currentUser, restore } = useAuth();

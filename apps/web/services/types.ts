@@ -745,3 +745,13 @@ export interface SupplierListRow {
   name: string;
   shortName: string | null;
 }
+
+/** GET /boxes?q= row — one box from either box table (shipping or shelf),
+ *  matched by id substring; refNo is the owning order's ref no when set. */
+export interface BoxSearchResult {
+  kind: "shipping" | "shelf";
+  id: string;
+  status: string;
+  createdAt: string;
+  refNo: string | null;
+}

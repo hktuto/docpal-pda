@@ -7,12 +7,34 @@
 - Show picking order detail as one nested read: order (incl. issue fields
   and its measuring task), items → allocations (with lot or receiving-area
   source) and packages, plus the shipping boxes.
-- Scan-to-pick: the operator pre-selects an allocation row, scans a label
-  (validated client-side against supplier QR templates), and the app calls
-  `POST /picking-items/:id/scan {allocationId, qty, ...batch overrides}`.
+- Scan-to-pick ("checkout" scan session): one Scan button per picking order
+  opens `/picking/scan/:id`. The hardware scanner is armed only on that page;
+  each QR scan is validated client-side (part matches an order item, qty fits
+  the first allocation with enough remaining minus already-queued qty,
+  duplicate raw QR rejected) and appended to a local queue table — no per-scan
+  confirm/review. An OCR button captures a label with the camera: a capture
+  that parses into a single record opens a confirm form
+  (`PickingScanReviewModal` — editable fields with OCR candidate chips),
+  while a multi-item label (2+ rows via `extractMultiItemRows`) opens an
+  editable table (`PickingScanMultiItemModal`) whose rows are added to the
+  queue row-by-row. Confirm
+  batch-applies the queue sequentially via
+  `POST /picking-items/:id/scan {allocationId, qty, ...batch overrides}`;
+  failed rows stay in the list with their error. Launched from the picking
+  detail page or the receiving order's picking tab (`?from=receiving&ro=`).
 - Package and shipping-box operations: remove (undo-scan) / verify packages,
   create / cancel / close boxes, add/remove packages, add-all-unboxed;
   box sizes and weights in integer grams.
+- Box labels + pre-printed box ids: on the picking detail page the
+  hardware scanner is armed for box ids — a scan that does not match a
+  supplier QR template creates an open box with that scanned (pre-printed)
+  id; item QRs get a "use scan mode" toast. A "Scan box id" button covers
+  camera/manual entry. Server side, `createShippingBox` accepts an optional
+  `boxId` (409 `box_id_exists` on duplicates — the id is the global PK);
+  server-generated ids follow `BOX-S-<warehouse>-<YYYYMMDD>-<seq>` (per-day
+  seq, `nextBoxId` in `apps/backend/src/db/boxes.ts`).
+  The per-box Print buttons (picking detail + receiving picking tab) are
+  placeholders — real printing will be added backend-side later.
 - Finish a picking order manually, or automatically when the last package
   is boxed — finishing creates a measuring task.
 - Per-order issue reporting (`POST /picking-orders/report-issues`).
@@ -23,23 +45,38 @@
 - Wave picking or batch picking across multiple orders.
 - Pick-to-light or voice picking.
 - Integration with external WMS/ERP.
-- Server-side picking-scan matching — the current UX pre-selects the
-  allocation, so client-side template validation is sufficient.
+- Server-side picking-scan matching — the scan session matches client-side
+  (part + allocation fit), so client-side template validation is sufficient.
+- Server-side picking serial dedup — the scan queue dedups by raw QR value
+  within the session only; the same label scanned in two sessions can still
+  double-pick (the server qty guard is the backstop).
 
 ## Key files
 
 - `pages/picking/index.vue` — list page (search, status filter, batch issue
   report dialog).
 - `pages/picking/[id].vue` — detail page (items/allocations/packages,
-  boxes, logs, scan-to-pick, finish).
+  boxes, logs, finish; single Scan action → scan session).
+- `pages/picking/scan/[id].vue` — scan-session ("checkout") page: armed
+  hardware scanner, OCR capture button (single-record confirm form /
+  multi-item table review before queueing), local queue table, Confirm
+  batch-apply, leave guard.
+- `components/picking/PickingScanReviewModal.vue` — single-record OCR
+  confirm form (editable fields + candidate chips, retake).
+- `components/ScanMultiItemModal.vue` — shared multi-item OCR label
+  table (part select + qty per row, per-row add results; also used by the
+  put-away detail page).
+- `composables/usePickingScanQueue.ts` — the session queue + client-side
+  validation (tests in `tests/usePickingScanQueue.test.ts`).
 - `components/picking/PickingItemsSection.vue`,
   `components/picking/PickingBoxesSection.vue`,
   `components/picking/PickingIssueBanner.vue` — detail sub-views.
 - `components/PickingIssueReportModal.vue` — batch issue report dialog.
 - `composables/useLabelScan.ts` + `utils/parseOcrScan.ts` — label parsing
   (QR templates from `GET /scan-templates`, OCR fallback).
-- `composables/useScanMatchers.ts` — client-side `matchPicking` validation;
-  apply calls `WarehouseService.scanPickingItem`.
+- `composables/useScanMatchers.ts` — client-side matchers for put-away and
+  measuring (`matchPicking` remains but picking no longer routes through it —
+  the scan session validates in `usePickingScanQueue` instead).
 - `services/adapters/backendWarehouse.ts` — picking + shipping-box methods.
 - `apps/backend/src/routes/picking.ts` + `apps/backend/src/db/picking.ts` —
   `GET /picking-orders`, `GET /picking-orders/:id`,
@@ -69,4 +106,8 @@
 - `docs/superpowers/specs/2026-07-03-picking-issue-reporting-design.md`
 - `docs/superpowers/specs/2026-07-03-package-level-picking-design.md`
 - `docs/superpowers/specs/2026-07-10-allocation-box-remark-design.md`
+- `docs/superpowers/specs/2026-07-18-picking-scan-session-design.md`
+- `docs/superpowers/specs/2026-07-19-box-label-print-preprinted-id-design.md`
 - `docs/superpowers/plans/2026-07-12-picking-execution.md`
+- `docs/superpowers/plans/2026-07-18-picking-scan-session.md`
+- `docs/superpowers/plans/2026-07-19-box-label-print-preprinted-id.md`

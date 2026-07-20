@@ -4,6 +4,7 @@ import {
   setCached,
   invalidatePrefix,
   clearApiCache,
+  setApiCacheEnabled,
 } from '~/services/apiCache';
 
 // Same node-env localStorage fake as services/adapters/apiAuth.test.ts.
@@ -27,6 +28,7 @@ describe('apiCache', () => {
   beforeEach(() => {
     storage = createLocalStorageFake();
     vi.stubGlobal('localStorage', storage);
+    setApiCacheEnabled(true);
     clearApiCache();
   });
 
@@ -109,5 +111,19 @@ describe('apiCache', () => {
     expect(getCached('http://api.test/orders')).toBeNull();
     expect(storage.getItem('wms-cache:http://api.test/orders')).toBeNull();
     expect(storage.getItem('other-key')).toBe('keep');
+  });
+
+  it('kill switch: disabled cache always misses and drops writes', () => {
+    setCached('http://api.test/orders', [{ id: '1' }]);
+    setApiCacheEnabled(false);
+
+    expect(getCached('http://api.test/orders')).toBeNull(); // wiped on disable
+    setCached('http://api.test/orders', [{ id: '2' }]); // write dropped
+    expect(getCached('http://api.test/orders')).toBeNull();
+    expect(storage.getItem('wms-cache:http://api.test/orders')).toBeNull();
+
+    setApiCacheEnabled(true);
+    setCached('http://api.test/orders', [{ id: '3' }]);
+    expect(getCached('http://api.test/orders')).toEqual([{ id: '3' }]);
   });
 });

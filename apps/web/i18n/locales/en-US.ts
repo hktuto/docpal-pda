@@ -5,6 +5,7 @@ export default {
     receivingDetail: "Receiving Detail",
     picking: "Picking",
     pickingDetail: "Picking Detail",
+    pickingScan: "Picking Scan",
     putAway: "Put-away",
     putAwayDetail: "Put-away Detail",
     goodsVerify: "Goods Verify",
@@ -156,6 +157,7 @@ export default {
       removeFromBox: "Remove from box",
       removing: "Removing…",
       removeScanned: "Remove scan",
+      print: "Print",
       removingScanned: "Removing…",
       scan: "Scan",
       addAll: "Add all",
@@ -173,6 +175,14 @@ export default {
       progress: "Received {received} / {expected}",
       cancel: "Cancel",
       close: "Close"
+    },
+    multiScan: {
+      title: "Multiple items on label",
+      subtitle: "The scanned label lists several items. Review and edit each row, then apply.",
+      partNo: "Part No.",
+      apply: "Apply {count} items",
+      applying: "Applying...",
+      remove: "Remove row"
     }
   },
   picking: {
@@ -191,8 +201,39 @@ export default {
       measuring: "Measuring",
       measuringTaskCreated: "Measuring task created",
       goToMeasuring: "Go to measuring",
-      noMatchingAllocation: "No matching allocation for scanned item"
+      scan: "Scan",
+      noMatchingAllocation: "No matching allocation for scanned item",
+      boxCreated: "Box {id} created",
+      printComingSoon: "Printing will be available in a later update",
+      itemQrUseScanMode: "Item label — use the Scan button to pick items"
     },
+    scanSession: {
+          title: "Scan — {refNo}",
+          back: "Back",
+          progress: "Required {required} · Scanned {scanned} · Queued {queued}",
+          emptyQueue: "No scans yet — scan a QR code or capture a label with OCR.",
+          colPart: "Part",
+          colQty: "Qty",
+          colLot: "Lot / Date",
+          colSource: "Source",
+          removeRow: "Remove",
+          ocrCapture: "OCR capture",
+          confirm: "Confirm ({count})",
+          confirming: "Applying…",
+          allApplied: "All scans applied",
+          goBoxing: "Go to boxing",
+                    continueScan: "Continue scanning",
+                    boxingHint: "Next step: create a box and add the scanned packages to it.",
+          partialFail: "{count} scan(s) failed — review and remove or retry",
+          leaveWarning: "Unconfirmed scans will be lost. Leave anyway?",
+          duplicate: "This label is already in the list",
+          no_match: "No matching item/allocation for this label",
+          allocationChanged: "Allocation changed after a previous scan — remove and rescan",
+          invalid: "Could not read a valid part and quantity",
+          reviewTitle: "Confirm scanned item",
+          reviewSubtitle: "Check the OCR result and edit any field before adding it to the list.",
+          addToQueue: "Add to list"
+        },
     itemsSection: {
       title: "Items",
       part: "Part",
@@ -219,6 +260,8 @@ export default {
     boxesSection: {
       title: "Boxes ({count})",
       newBox: "New box",
+      scanBox: "Scan box id",
+      print: "Print",
       boxId: "Box ID",
       status: "Status",
       packages: "Packages",
@@ -407,6 +450,12 @@ export default {
     finishBox: "Finish box",
     finishing: "Finishing…"
   },
+  scanReview: {
+    multiTitle: "Multiple items on label",
+    multiSubtitle: "The scanned label lists several items. Review and edit each row, then add them.",
+    multiAdd: "Add {count} items",
+    multiRemove: "Remove row"
+  },
   labelScanReviewModal: {
     titleManual: "Manual entry",
     titleReview: "Review scan",
@@ -532,6 +581,10 @@ export default {
     mismatch_not_found: "No mismatch is reported for this item",
     actor_not_found: "Operator not found",
     label_already_scanned: "This label was already scanned",
+    multiple_matches: "The part number matches several items on this order",
+    no_match: "No matching item on this order",
+    box_id_exists: "This box id already exists",
+    box_id_empty: "Box id is empty",
     scanned_qty_exceeds_remaining: "Scanned quantity exceeds the remaining quantity for this item",
     allocation_not_found: "Allocation not found",
     invalid_receiving_item: "Invalid receiving item",

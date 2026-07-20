@@ -1141,3 +1141,38 @@ describe('createWarehouseService', () => {
     );
   });
 });
+
+describe('backendWarehouse box search', () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  function service(actorId: string | undefined = 'u-actor') {
+    return createBackendWarehouseService({
+      apiBaseUrl: BASE_URL,
+      getActorId: () => actorId,
+    });
+  }
+
+  function lastCall() {
+    const [url, init] = fetchMock.mock.calls[fetchMock.mock.calls.length - 1];
+    return { url: url as string, init: init as RequestInit };
+  }
+
+  it('searchBoxes GETs /boxes with the q param and returns rows verbatim', async () => {
+    const rows = [
+      { kind: 'shipping', id: 'BOX-S-HK1-20260720-0001', status: 'open', createdAt: '2026-07-20T01:00:00.000Z', refNo: 'SO-2026-0001' },
+      { kind: 'shelf', id: 'BOX-H-HK1-20260720-0001', status: 'open', createdAt: '2026-07-20T01:01:00.000Z', refNo: '04958210' },
+    ];
+    fetchMock.mockResolvedValue(jsonResponse(rows));
+
+    const result = await service().searchBoxes('0001');
+
+    expect(lastCall().url).toBe(`${BASE_URL}/boxes?q=0001`);
+    expect(lastCall().init.method).toBe('GET');
+    expect(result).toEqual(rows);
+  });
+});

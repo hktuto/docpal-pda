@@ -27,7 +27,7 @@ The demo models an event-driven warehouse with two overlapping workflows that sh
    - The worker can also use the global **scan button** on the Picking tab to type label data (part number, quantity, date/lot code, and origin country). The system matches the input to linked receiving and picking records and creates a scanned package.
    - A **search box** filters the linked picking orders by order number, part number, date code, or lot code.
    - Each picking order number is a link to the full picking order detail page.
-5. On the picking order detail page the worker creates shipping boxes. The system auto-generates box IDs such as `BOX-HK1-WWYY000001`.
+5. On the picking order detail page the worker creates shipping boxes. The system auto-generates box IDs such as `BOX-S-HK1-20260720-0001`.
 6. The worker adds scanned packages into boxes. Once every package for a picking item is in a box, the item is finished.
 7. If any stock is left over, the worker can **Shelve (put away)** the remainder into a shelf box. The system logs where every item went.
 8. When a picking order is fully boxed, a measuring task is created so the boxes can be weighed and closed.
@@ -93,7 +93,7 @@ transition_logs                   (all status changes)
 - **Inventory is location-aware.** A located lot is unique by `(part_id, date_code, lot_code, origin_country, shelf_code, box_id)`. Receiving-area lots (`shelf_code = NULL, box_id = NULL`) are created per materialized allocation so each one has a single `inventory_lot_sources` link; once put away they become located lots and merge by the unique key.
 - **Traceability.** `inventory_lot_sources` links every lot back to the originating `receiving_invoice_item`.
 - **Allocations reserve stock; packages track physical units.** When a receiving order becomes `in_hand`, pending picking orders are allocated against matching lots. Scanning an allocation creates a `picking_packages` row and consumes source stock. Boxing a package assigns it to a `shipping_box` and marks quantity as picked.
-- **Shipping boxes are created during picking.** Box IDs are auto-generated as `BOX-HK1-WWYY######` (warehouse `HK1`, ISO week, two-digit year, per-week sequence).
+- **Shipping boxes are created during picking.** Box IDs are auto-generated as `BOX-S-<warehouse>-<YYYYMMDD>-<seq>` (warehouse from `WAREHOUSE_CODE`, default `HK1`; per-day sequence). Shelf boxes use the same scheme with the `BOX-H-` prefix.
 - **State transitions are logged.** Every status change for receiving orders, picking orders, shelf boxes, shipping boxes, picking items, and measuring tasks writes a row to `transition_logs`.
 
 ---
@@ -121,7 +121,7 @@ transition_logs                   (all status changes)
 
 - The operator opens a picking order and sees its allocated lots.
 - **Scan package** consumes the allocation and source stock, then creates a `picking_packages` row with `shipping_box_id = NULL`. The package is now "scanned".
-- The operator creates one or more `shipping_boxes`. The system auto-generates the box ID as `BOX-HK1-WWYY######`.
+- The operator creates one or more `shipping_boxes`. The system auto-generates the box ID as `BOX-S-<warehouse>-<YYYYMMDD>-<seq>`.
 - **Add to box** sets `picking_packages.shipping_box_id` and recalculates `picking_items.picked_qty` as the sum of boxed package quantities.
 - Once `picking_items.picked_qty` reaches the required quantity, the item is finished.
 - When every item is fully boxed, the operator finishes the order. The system creates a `measuring_tasks` row with status `pending`.

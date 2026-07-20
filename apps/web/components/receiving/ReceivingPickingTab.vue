@@ -19,7 +19,10 @@
       <span class="badge" :class="badgeClass(po.status)">{{ statusLabel.picking(po.status) }}</span>
     </DetailRow>
 
-    <div v-if="po.status !== 'finished'" style="margin-top: 0.75rem;">
+    <div v-if="po.status !== 'finished'" style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
+      <button class="btn btn--small" @click="emit('scan', po.id)">
+        {{ $t('receiving.pickingTab.scan') }}
+      </button>
       <button class="btn btn--small" :disabled="creatingBox[po.id]" @click="emit('create-box', po.id)">
         <template v-if="creatingBox[po.id]">
           <InlineSpinner /> {{ $t('receiving.pickingTab.creating') }}
@@ -39,7 +42,9 @@
         style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;"
       >
         <span style="font-size: 0.875rem; font-weight: 600;">{{ box.id }}</span>
-         <span class="badge" >Print</span>
+        <button class="btn btn--small" @click="emit('print-box', box.id)">
+          {{ $t('receiving.pickingTab.print') }}
+        </button>
         <button
           v-if="box.status === 'open'"
           class="btn btn--small"
@@ -197,6 +202,8 @@ const emit = defineEmits<{
   "update:expandedItems": [value: Set<string>];
   "update:boxSelections": [value: Record<string, string>];
   "create-box": [pickingOrderId: string];
+  scan: [pickingOrderId: string];
+  "print-box": [boxId: string];
   "add-all-to-box": [boxId: string];
   "add-to-box": [packageId: string];
   "remove-from-box": [packageId: string];

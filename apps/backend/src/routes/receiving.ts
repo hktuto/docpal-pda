@@ -391,9 +391,12 @@ interface PickingLogRow {
 
 // Picking orders with allocations tracing to this receiving order
 // (allocations.receiving_order_id, or allocations.receiving_invoice_item_id →
-// receiving_invoices → this order). Items embed ALL their allocations (full
-// sourcing picture), their packages, and their picking_item transition logs;
-// orders embed their shipping boxes.
+// receiving_invoices → this order) — plus orders that no longer have such
+// allocations but already have scanned PACKAGES tracing back here (a fully
+// picked item loses its allocation rows when allocateAll recomputes, and the
+// order must stay visible until boxing is done). Items embed ALL their
+// allocations (full sourcing picture), their packages, and their
+// picking_item transition logs; orders embed their shipping boxes.
 receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
   const id = c.req.param("id");
   const order = await queryGet<{ id: string }>(db, sql`SELECT id FROM receiving_orders WHERE id = ${id}`);
@@ -417,6 +420,19 @@ receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
         LEFT JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
         WHERE a.picking_item_id = pi.id
           AND (a.receiving_order_id = ${id} OR ri.receiving_order_id = ${id})
+      ) OR EXISTS (
+        SELECT 1 FROM picking_packages pp
+        LEFT JOIN receiving_invoice_items prii
+          ON pp.source_type = 'receiving_invoice_item' AND prii.id = pp.source_id
+        LEFT JOIN receiving_invoices pri ON pri.id = prii.receiving_invoice_id
+        LEFT JOIN inventory_lot_sources ils
+          ON pp.source_type = 'inventory_lot' AND ils.inventory_lot_id = pp.source_id
+        LEFT JOIN receiving_invoice_items lrii ON lrii.id = ils.receiving_invoice_item_id
+        LEFT JOIN receiving_invoices lri ON lri.id = lrii.receiving_invoice_id
+        WHERE pp.picking_item_id = pi.id
+          AND ((pp.source_type = 'receiving_order' AND pp.source_id = ${id})
+            OR pri.receiving_order_id = ${id}
+            OR lri.receiving_order_id = ${id})
       )
       ORDER BY po.ref_no, pi.id
     `

@@ -90,8 +90,13 @@ function collapseSpaces(value: string): string {
 function generateVariants(value: string): string[] {
   const base = collapseSpaces(value.toUpperCase());
   const results = new Set<string>();
+  // Substitution branching is exponential in the number of replaceable chars;
+  // cap it so long tokens (e.g. OCR lines joining two part numbers) cannot
+  // blow up. Realistic part numbers stay far below this bound.
+  const MAX_VARIANTS = 4096;
 
   function generate(index: number, current: string) {
+    if (results.size >= MAX_VARIANTS) return;
     if (index >= base.length) {
       results.add(current);
       return;
@@ -556,6 +561,56 @@ export function parseAndIdentify(
     },
     raw: capture,
   };
+}
+
+export interface MultiItemRow {
+  partNo: string;
+  qty?: number;
+}
+
+/** One editable item row in the shared multi-item scan review table. */
+export interface ScanMultiRow {
+  partNo: string;
+  qty: number | null;
+}
+
+/** Per-row result of a multi-row apply attempt, keyed by row index. */
+export interface ScanMultiRowResult {
+  index: number;
+  ok: boolean;
+  message?: string;
+}
+
+/**
+ * Extract one row per item from a multi-item label (e.g. a carton label whose
+ * items table lists several parts). Line-based: each OCR line containing a
+ * candidate that matches one of `targets` contributes a row; the row's qty is
+ * the first plausible quantity on the same line. Rows are merged by part
+ * number, so a part repeated on a second line (e.g. "KOA/<partNo>") yields a
+ * single row. The result is a best-effort starting point — the operator can
+ * edit every row before applying.
+ */
+export function extractMultiItemRows(
+  text: string,
+  targets: string[]
+): MultiItemRow[] {
+  // Thousands separators would split "36,000" into useless tokens.
+  const cleaned = text.replace(/(\d),(\d{3})\b/g, "$1$2");
+  const normalizedTargets = targets.map(normalizeText);
+  const rows = new Map<string, MultiItemRow>();
+
+  for (const line of cleaned.split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    const partNoCandidates = extractPartNoCandidates(line, []);
+    const matches = findBestItemMatches(normalizedTargets, partNoCandidates);
+    const partNo = matches[0];
+    if (!partNo || rows.has(partNo)) continue;
+
+    const qtys = extractQtyCandidates(line, []);
+    rows.set(partNo, { partNo, qty: qtys[0] });
+  }
+
+  return [...rows.values()];
 }
 
 export function decodeKoaQty(encoded: string): number | undefined {

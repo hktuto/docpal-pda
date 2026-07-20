@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Warehouse PDA — 用戶指南</title>
+<style>
+@page { size: A4; margin: 16mm 14mm; }
+body {
+  font-family: "Segoe UI", "Microsoft JhengHei", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 10.5pt; line-height: 1.55; color: #1a1a1a; max-width: 180mm; margin: 0 auto;
+}
+h1 { font-size: 20pt; border-bottom: 2px solid #0d9488; padding-bottom: 6px; }
+h2 { font-size: 15pt; color: #0d9488; margin-top: 1.4em; page-break-after: avoid; }
+h3 { font-size: 12pt; margin-top: 1.2em; page-break-after: avoid; }
+figure { margin: 0.8em 0 1.2em; text-align: center; page-break-inside: avoid; }
+figure img { max-width: 88mm; max-height: 120mm; border: 1px solid #ccc; border-radius: 4px; }
+figcaption { font-size: 9pt; color: #666; margin-top: 4px; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; }
+th, td { border: 1px solid #ccc; padding: 5px 8px; text-align: left; font-size: 10pt; }
+th { background: #f0fdfa; }
+code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 9.5pt; }
+a { color: #0d9488; text-decoration: none; }
+hr { border: none; border-top: 1px solid #ddd; margin: 1.6em 0; }
+ul, ol { padding-left: 1.4em; }
+li { margin: 0.3em 0; }
+</style></head><body>
+<h1>用戶指南</h1>
+<p>本指南是 Warehouse PDA 應用程式所有畫面的完整視覺參考：每個畫面顯示甚麼、每個功能做甚麼。所有截圖均以手機（PDA）尺寸拍攝，並使用示範種子資料。</p>
+<p>每項操作的詳細步驟請參閱 Flows 章節；本頁是整個應用程式的地圖。</p>
+<h2>登入畫面</h2>
+<p>啟動應用程式時，操作員會看到 DocPal 登入畫面。</p>
+<figure><img alt="登入畫面" src="./assets/login-page.png"><figcaption>登入畫面</figcaption></figure>
+<ol><li>輸入<strong>用戶名稱</strong>。</li><li>輸入<strong>密碼</strong>（眼睛圖示可切換顯示密碼）。</li><li>點按<strong>登入</strong>。</li></ol>
+<p>示範種子用戶為 <code>operator</code> / <code>DocPal2026!</code>。</p>
+<h2>主頁畫面</h2>
+<p>登入後，主頁會顯示主要操作選單。</p>
+<figure><img alt="主頁畫面" src="./assets/home-page.png"><figcaption>主頁畫面</figcaption></figure>
+<table><thead><tr><th>卡片</th><th>流程</th><th>用途</th></tr></thead><tbody><tr><td>收貨</td><td>收貨</td><td>確認到貨及庫存。</td></tr><tr><td>揀貨</td><td>揀貨</td><td>掃描、裝箱並完成訂單。</td></tr><tr><td>上架</td><td>上架</td><td>將庫存移至貨架。</td></tr><tr><td>查貨</td><td>查貨</td><td>盤點當日異動批次。</td></tr><tr><td>測量</td><td>測量</td><td>秤重並量度箱件。</td></tr><tr><td>庫存查詢</td><td>庫存查詢</td><td>按供應商、物料或貨架查詢庫存。</td></tr></tbody></table>
+<p>點按任何卡片即可進入該流程。</p>
+<h2>頁首操作</h2>
+<p>應用程式頁首（大部分畫面可見）提供：</p>
+<ul><li><strong>返回 / 主頁</strong> — 返回上一頁或回到主頁選單。</li><li><strong>⋮ 選單</strong> — 語言切換、<strong>重設資料庫</strong>（清除並重新載入示範資料）及<strong>登出</strong>。</li></ul>
+<p>列表會在應用程式重新聚焦時自動重新載入，當其他操作員更改相同資料時亦會即時更新。</p>
+<hr>
+<h2>收貨</h2>
+<h3>收貨列表</h3>
+<figure><img alt="收貨列表" src="./assets/receiving-list.png"><figcaption>收貨列表</figcaption></figure>
+<ul><li><strong>狀態篩選</strong> — 全部、待處理、已收貨、已完成。</li><li><strong>搜尋</strong> — 按參考編號或供應商篩選。</li><li>每張卡片顯示訂單參考編號、供應商、交貨日期、狀態徽章及尚餘項目數量。</li><li>點按卡片開啟收貨詳情。</li></ul>
+<h3>收貨詳情 — 收貨分頁</h3>
+<figure><img alt="收貨詳情" src="./assets/receiving-detail.png"><figcaption>收貨詳情</figcaption></figure>
+<ul><li>訂單標題連狀態徽章；點按 ▼ 展開供應商及交貨詳情。</li><li><strong>確認到貨</strong> — 一步將整張訂單標記為已到貨。</li><li><strong>上架剩餘庫存</strong> — 貨物在手後前往上架的捷徑（此圖未顯示）。</li><li>發票區段列出每個項目：料號、預期數量、箱號，展開後顯示每項進度。</li><li><strong>匯報問題</strong> — 標記項目的異常（見下文）。</li><li>浮動<strong>相機按鈕</strong>掃描標籤（見下文）— 只在收貨進行中（provisional_received）顯示；訂單仍為待處理（pending）時不會出現。</li></ul>
+<h3>匯報問題</h3>
+<figure><img alt="匯報問題" src="./assets/receiving-report-issue.png"><figcaption>匯報問題</figcaption></figure>
+<ul><li>項目上的<strong>匯報問題</strong>會開啟此對話框：選擇<strong>原因</strong>（找不到、損壞、品質拒收、數量不符、超量出貨、錯誤物料）並加上<strong>備註</strong>。</li><li>已匯報的項目會在詳情畫面上標記，直至異常被確認或取消。</li></ul>
+<h3>收貨詳情 — 揀貨分頁</h3>
+<figure><img alt="收貨詳情揀貨分頁" src="./assets/receiving-detail-picking.png"><figcaption>收貨詳情揀貨分頁</figcaption></figure>
+<ul><li>顯示連結到此收貨單的揀貨單，包括每張單的狀態及項目。</li><li><strong>掃描</strong>進入該揀貨單的掃描頁（見下文）；<strong>建立箱號</strong>建立運輸箱。</li><li>可用於核對入庫貨品與已分配給出庫訂單的數量。</li></ul>
+<h3>揀貨掃描頁</h3>
+<figure><img alt="揀貨掃描頁" src="./assets/picking-scan.png"><figcaption>揀貨掃描頁</figcaption></figure>
+<ul><li>從揀貨分頁按<strong>掃描</strong>進入。頂部列出此單每個項目的需求 / 已掃 / 待確認數量。</li><li>用硬件掃描器掃二維碼會直接加入待確認列表；按 <strong>OCR 拍攝</strong>用相機拍攝標籤則會先覆核：<ul><li>識別到<strong>單一項目</strong>時，彈出確認表單 — 可修改料號、數量、日期碼、批次等欄位（含候選值），確認後才加入列表；亦可按<strong>重拍</strong>重新拍攝。</li><li>識別到<strong>多個項目</strong>（如箱標）時，彈出可編輯表格 — 每行可改料號（下拉選單）及數量、可刪除行，然後一次過加入列表。</li></ul></li><li>每次掃描先加入待確認列表，核對無誤後按<strong>確認</strong>一次過提交。</li><li>掃完所有項目並裝箱後，系統會自動建立測量任務。</li></ul>
+<h3>掃描標籤 — 單一項目</h3>
+<figure><img alt="掃描覆核 — 多個匹配" src="./assets/receiving-scan-review.png"><figcaption>掃描覆核 — 多個匹配</figcaption></figure>
+<p>在收貨詳情掃描供應商標籤（QR/條碼或相機 OCR）會自動套用到匹配的發票項目。當匹配不明確時，會開啟覆核對話框：</p>
+<ul><li><strong>有多個匹配的項目</strong> — 料號出現在多個發票行。如有需要可調整數量，然後點按正確的行收貨。</li><li><strong>沒有匹配的項目</strong> — 標籤與訂單上任何項目都不匹配；從完整列表中手動選擇項目。</li><li>重複掃描同一標籤會被拒絕，並顯示「此標籤已掃描過」。</li></ul>
+<h3>掃描標籤 — 一張標籤上有多個項目（箱標）</h3>
+<figure><img alt="多項目掃描覆核" src="./assets/receiving-scan-multi-item.png"><figcaption>多項目掃描覆核</figcaption></figure>
+<p>如果箱標的項目表列出<strong>多個物料</strong>，會改為開啟多項目表格 — 標籤上每個項目佔一個可編輯行：</p>
+<ul><li>每行有<strong>料號下拉選單</strong>（顯示已收 / 預期進度）及可編輯的<strong>數量</strong>。</li><li><strong>×</strong> 移除該行（例如暫時不收的箱）。</li><li><strong>套用 N 個項目</strong>逐行收貨。</li><li>成功的行會變綠色 ✓ 並鎖定；失敗的行會變紅色 ✗，並在表格下方顯示原因（例如數量超過尚餘數量，或料號匹配多個發票行）。修正失敗的行後可再次套用 — 成功的行不會重複提交。</li></ul>
+<hr>
+<h2>上架</h2>
+<h3>上架列表</h3>
+<figure><img alt="上架列表" src="./assets/put-away-list.png"><figcaption>上架列表</figcaption></figure>
+<ul><li>列出仍有庫存留在收貨區的收貨單（已收貨），並顯示待上架項目數量。</li><li>點按卡片開啟上架詳情。</li></ul>
+<h3>上架詳情</h3>
+<figure><img alt="上架詳情" src="./assets/put-away-detail.png"><figcaption>上架詳情</figcaption></figure>
+<ul><li><strong>貨架箱號</strong> — 目的貨架上的箱；<strong>新增箱號</strong>建立新箱號。</li><li><strong>待上架物品</strong> — 每張卡片顯示料號、日期/批次、產地、總數、已掃描數量及已裝箱數量。</li><li>掃描方式：<ul><li><strong>硬件掃描器</strong>掃供應商二維碼 — 系統自動匹配料號及數量到對應項目並立即記錄，無需先點選項目。</li><li>按項目上的<strong>掃描</strong>用相機 OCR 拍攝標籤 — 識別到<strong>單一項目</strong>時彈出確認表單（可修改欄位）；識別到<strong>多個項目</strong>（如箱標）時彈出可編輯表格，逐行加入。</li></ul></li><li>掃描後的件數先進入暫存區，再分配到貨架箱；全部上架後收貨單會自動完成。</li></ul>
+<hr>
+<h2>揀貨</h2>
+<h3>揀貨列表</h3>
+<figure><img alt="揀貨列表" src="./assets/picking-list.png"><figcaption>揀貨列表</figcaption></figure>
+<ul><li><strong>搜尋</strong> — 按單號、PO 或客戶篩選。</li><li>每張卡片顯示揀貨單參考編號、日期、狀態及收貨方。</li><li><strong>核取方塊</strong>可選擇多張訂單作批量問題匯報。</li><li>點按卡片開啟揀貨詳情。</li></ul>
+<h3>揀貨詳情</h3>
+<figure><img alt="揀貨詳情" src="./assets/picking-detail.png"><figcaption>揀貨詳情</figcaption></figure>
+<ul><li><strong>箱號</strong> — 此訂單的運輸箱；<strong>新增箱號</strong>建立箱號，<strong>掃描箱號</strong>以掃描方式分配。每個箱號可以列印箱標（打印功能將於稍後版本提供）。</li><li><strong>項目</strong> — 每張卡片顯示料號、需求數量、已掃描數量、已裝箱數量、需求日期代碼及狀態。</li><li><strong>掃碼</strong>進入掃描頁（見上文「揀貨掃描頁」），根據分配掃描標籤；完成最後一件包裝後會自動建立測量任務。</li></ul>
+<hr>
+<h2>測量</h2>
+<figure><img alt="測量列表" src="./assets/measuring-list.png"><figcaption>測量列表</figcaption></figure>
+<ul><li>列出已包裝、等待秤重及量度的揀貨單。</li><li>示範種子資料暫時沒有待處理任務 — 揀貨單完成後任務會自動在此出現。</li></ul>
+<hr>
+<h2>查貨</h2>
+<h3>查貨列表</h3>
+<figure><img alt="查貨列表" src="./assets/goods-verify-list.png"><figcaption>查貨列表</figcaption></figure>
+<ul><li>針對當日有庫存異動批次的每日盤點任務。</li><li>選擇<strong>日期</strong>，然後按<strong>產生今日任務</strong>，系統會根據當日交易建立任務列表。</li><li><strong>狀態篩選</strong> — 全部、待處理、已查貨、已略過。</li><li><strong>搜尋</strong> — 按貨架、箱號或料號篩選。</li><li>每張任務卡片顯示料號、貨架 · 箱號及預期數量；點按卡片開啟任務詳情。</li></ul>
+<h3>查貨任務詳情</h3>
+<figure><img alt="查貨任務詳情" src="./assets/goods-verify-detail.png"><figcaption>查貨任務詳情</figcaption></figure>
+<ul><li>顯示該箱的批次資料：料號、描述、日期碼、批號、產地 / 組裝地、倉庫及區域。</li><li>掃描箱內每件貨品的標籤逐項核對；數量不符時系統會記錄差異調整。</li><li>全部核對完成後任務標記為已查貨。</li></ul>
+<hr>
+<h2>庫存查詢</h2>
+<figure><img alt="庫存查詢" src="./assets/stock-search.png"><figcaption>庫存查詢</figcaption></figure>
+<ul><li>按物料編號搜尋，查看物料存放的所有位置。</li><li>每張結果卡片顯示物料、描述、產地，以及每個批次：倉庫 · 區域 · 子庫 · 貨架 · 箱，連可用 / 總數量及批次欄位（日期代碼 / 批次 / COO / COW）。</li></ul>
+</body></html>

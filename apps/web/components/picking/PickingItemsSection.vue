@@ -43,16 +43,6 @@
             {{ formatLotFields(allocation.lot) }}
           </DetailRow>
           <DetailRow :label="$t('picking.itemsSection.allocatedQty')" :value="allocation.qty" />
-          <div class="allocation-actions">
-            <button class="btn btn--small" :disabled="scanning" @click="emit('scan', item, allocation)">
-              <template v-if="scanning">
-                <InlineSpinner /> {{ $t('picking.itemsSection.scan') }}
-              </template>
-              <template v-else>
-                {{ $t('picking.itemsSection.scan') }}
-              </template>
-            </button>
-          </div>
         </template>
 
         <template v-else>
@@ -63,16 +53,6 @@
             </span>
           </DetailRow>
           <DetailRow :label="$t('picking.itemsSection.allocatedQty')" :value="allocation.qty" />
-          <div class="allocation-actions">
-            <button class="btn btn--small" :disabled="scanning" @click="emit('scan', item, allocation)">
-              <template v-if="scanning">
-                <InlineSpinner /> {{ $t('picking.itemsSection.scan') }}
-              </template>
-              <template v-else>
-                {{ $t('picking.itemsSection.scan') }}
-              </template>
-            </button>
-          </div>
         </template>
       </div>
     </div>
@@ -141,7 +121,7 @@ import type { PickingOrderDetail } from "~/services/types";
 import { badgeClass } from "~/composables/useStatusBadge";
 
 type PickingItem = PickingOrderDetail["items"][number];
-type Allocation = PickingItem["allocations"][number];
+
 type ShippingBox = PickingOrderDetail["boxes"][number];
 
 const props = defineProps<{
@@ -150,13 +130,11 @@ const props = defineProps<{
   boxSelections: Record<string, string>;
   adding: Record<string, boolean>;
   removing: Record<string, boolean>;
-  scanning: boolean;
   openBoxes: PickingOrderDetail["boxes"];
 }>();
 
 const emit = defineEmits<{
   "update:boxSelections": [value: Record<string, string>];
-  scan: [item: PickingItem, allocation: Allocation];
   "add-to-box": [packageId: string];
   "remove-from-box": [packageId: string];
 }>();
@@ -224,9 +202,6 @@ function formatLotFields(source: { dateCode: string | null; lotCode: string | nu
   flex-wrap: wrap;
 }
 
-.allocation-actions {
-  margin-top: 0.5rem;
-}
 
 .boxed-title {
   margin: 0 0 0.5rem;

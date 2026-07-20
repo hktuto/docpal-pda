@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { decodeKoaQty, parseAndIdentify, parseQrCapture } from '../utils/parseOcrScan';
+import { decodeKoaQty, extractMultiItemRows, parseAndIdentify, parseQrCapture } from '../utils/parseOcrScan';
 
 describe('parseAndIdentify', () => {
   it('matches a part number from a barcode value', () => {
@@ -378,5 +378,58 @@ describe("parseQrCapture", () => {
 
     expect(result.matched).toBe(true);
     expect(result.parsed.itemId).toBe("RK73B1JTTD181G");
+  });
+});
+
+describe("extractMultiItemRows", () => {
+  const cartonText = [
+    "WEL-D06",
+    "WELTRONICS",
+    "MCE",
+    "C/NO.00003",
+    "MADE IN JAPAN",
+    "Invoice No 65878-01",
+    "Carton No 00003",
+    "Customer Name WEL MCE",
+    "Total Q'ty 36,000",
+    "Customer PO MFG Item Customer Item Quantity",
+    "1180201015STD RN412ESTTE2703F50 3,000",
+    "21 KOA/RN412ESTTE 2703F50 K0A/RN412ESTTE2703F50",
+    "1180201509STD RN412ESTTE1R50F50 3,000",
+    "11 KOA/RN412ESTTE 1R50F50 K0A/RN412ESTTE1R50F50",
+    "1180201654STD SR732BTTDR365F 20,000",
+    "21 KOA/SR732BTTD R365F K0A/SR732BTTDR365F",
+  ].join("\n");
+
+  const targets = [
+    "RN412ESTTE2703F50",
+    "RN412ESTTE1R50F50",
+    "SR732BTTDR365F",
+  ];
+
+  it("extracts one row per item with the same-line quantity", () => {
+    const rows = extractMultiItemRows(cartonText, targets);
+
+    expect(rows).toHaveLength(3);
+    expect(rows).toEqual([
+      { partNo: "RN412ESTTE2703F50", qty: 3000 },
+      { partNo: "RN412ESTTE1R50F50", qty: 3000 },
+      { partNo: "SR732BTTDR365F", qty: 20000 },
+    ]);
+  });
+
+  it("ignores lines without a matching target (total qty, header)", () => {
+    const rows = extractMultiItemRows(
+      "Total Q'ty 36,000\nCustomer Name WEL MCE",
+      targets
+    );
+
+    expect(rows).toHaveLength(0);
+  });
+
+  it("leaves qty undefined when the line has no plausible quantity", () => {
+    const rows = extractMultiItemRows("RN412ESTTE2703F50", targets);
+
+    expect(rows).toEqual([{ partNo: "RN412ESTTE2703F50", qty: undefined }]);
   });
 });

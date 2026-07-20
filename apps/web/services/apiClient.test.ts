@@ -255,4 +255,30 @@ describe('createApiClient', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it('POST invalidates mapped cross-prefix reads (scan → picking detail)', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+
+    await client.get('/picking-orders/po1'); // cached
+    await client.get('/measuring-tasks/mt1'); // cached
+    await client.post('/picking-items/pi1/scan', {});
+    await client.get('/picking-orders/po1'); // invalidated via map → refetch
+    await client.get('/measuring-tasks/mt1'); // not mapped from picking-items → cached
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it('POST /shipping-boxes invalidates picking + measuring reads', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+
+    await client.get('/picking-orders/po1'); // cached
+    await client.get('/measuring-tasks/mt1'); // cached
+    await client.post('/shipping-boxes/sb1/close', {});
+    await client.get('/picking-orders/po1'); // refetch
+    await client.get('/measuring-tasks/mt1'); // refetch
+
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+  });
 });

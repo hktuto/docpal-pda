@@ -5,6 +5,7 @@ export default {
     receivingDetail: "收貨詳情",
     picking: "揀貨",
     pickingDetail: "揀貨詳情",
+    pickingScan: "揀貨掃碼",
     putAway: "上架",
     putAwayDetail: "上架詳情",
     goodsVerify: "查貨",
@@ -156,6 +157,7 @@ export default {
       removeFromBox: "從箱號移除",
       removing: "移除中…",
       removeScanned: "移除掃描",
+      print: "打印",
       removingScanned: "移除中…",
       scan: "掃描",
       addAll: "全部加入",
@@ -173,6 +175,14 @@ export default {
       progress: "已收 {received} / {expected}",
       cancel: "取消",
       close: "關閉"
+    },
+    multiScan: {
+      title: "標籤上有多個項目",
+      subtitle: "掃描的標籤列出多個項目，請核對及編輯每一行，然後套用。",
+      partNo: "料號",
+      apply: "套用 {count} 個項目",
+      applying: "套用中...",
+      remove: "移除此行"
     }
   },
   picking: {
@@ -191,8 +201,39 @@ export default {
       measuring: "測量",
       measuringTaskCreated: "測量任務已建立",
       goToMeasuring: "前往測量",
-      noMatchingAllocation: "掃描的項目沒有匹配的分配"
+      scan: "掃碼",
+      noMatchingAllocation: "掃描的項目沒有匹配的分配",
+      boxCreated: "箱號 {id} 已建立",
+      printComingSoon: "打印功能將於稍後版本提供",
+      itemQrUseScanMode: "這是物料標籤——請使用掃碼按鈕揀貨"
     },
+    scanSession: {
+          title: "掃碼 — {refNo}",
+          back: "返回",
+          progress: "需求 {required} · 已掃 {scanned} · 待確認 {queued}",
+          emptyQueue: "尚未有掃描記錄——請掃描二維碼或用 OCR 拍攝標籤。",
+          colPart: "料號",
+          colQty: "數量",
+          colLot: "批次/日期",
+          colSource: "來源",
+          removeRow: "移除",
+          ocrCapture: "OCR 拍攝",
+          confirm: "確認 ({count})",
+          confirming: "提交中…",
+          allApplied: "全部掃描已生效",
+          goBoxing: "去裝箱",
+                    continueScan: "繼續掃碼",
+                    boxingHint: "下一步：建立箱號並把已掃描的包裹裝箱。",
+          partialFail: "{count} 條掃描失敗——請檢查後移除或重試",
+          leaveWarning: "未確認的掃描將會遺失，確定離開嗎？",
+          duplicate: "該標籤已在清單中",
+          no_match: "該標籤沒有匹配的項目/分配",
+          allocationChanged: "上一筆掃描後分配已變更——請移除後重掃",
+          invalid: "無法識別有效的料號和數量",
+          reviewTitle: "確認掃描項目",
+          reviewSubtitle: "請核對 OCR 識別結果，加入清單前可修改任何欄位。",
+          addToQueue: "加入清單"
+        },
     itemsSection: {
       title: "項目",
       part: "料號",
@@ -219,6 +260,8 @@ export default {
     boxesSection: {
       title: "箱號 ({count})",
       newBox: "新增箱號",
+      scanBox: "掃描箱號",
+      print: "打印",
       boxId: "箱號",
       status: "狀態",
       packages: "包裹",
@@ -407,6 +450,12 @@ export default {
     finishBox: "完成箱號",
     finishing: "完成中…"
   },
+  scanReview: {
+    multiTitle: "標籤上有多個項目",
+    multiSubtitle: "掃描的標籤列出多個項目。請檢查並編輯每一行，然後加入。",
+    multiAdd: "加入 {count} 個項目",
+    multiRemove: "移除該行"
+  },
   labelScanReviewModal: {
     titleManual: "手動輸入",
     titleReview: "複核掃描",
@@ -532,6 +581,10 @@ export default {
     mismatch_not_found: "此項目沒有已匯報的差異",
     actor_not_found: "找不到操作員",
     label_already_scanned: "此標籤已掃描過",
+    multiple_matches: "料號匹配到訂單上多個項目",
+    no_match: "訂單上沒有匹配的項目",
+    box_id_exists: "此箱號已存在",
+    box_id_empty: "箱號為空",
     scanned_qty_exceeds_remaining: "掃描數量超過此項目的剩餘數量",
     allocation_not_found: "找不到分配",
     invalid_receiving_item: "無效的收貨項目",

@@ -72,12 +72,31 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     return url;
   }
 
-  // Local mutations invalidate their own first-path-segment prefix
-  // ("/picking-items/123/scan" → "/picking-items") so later reads refetch.
+  // Local mutations invalidate cached GETs. The own first-path-segment prefix
+  // is always invalidated; MUTATION_INVALIDATIONS adds the related read models
+  // whose URLs live under a different segment (e.g. scan-to-pick POSTs under
+  // /picking-items but the picking detail reads /picking-orders/:id).
+  const MUTATION_INVALIDATIONS: Record<string, string[]> = {
+    "receiving-orders": ["/put-away", "/stock-search"],
+    "receiving-invoice-items": ["/receiving-orders"],
+    "picking-orders": ["/measuring-tasks", "/receiving-orders", "/put-away", "/stock-search"],
+    "picking-items": ["/picking-orders", "/receiving-orders", "/stock-search"],
+    packages: ["/picking-orders", "/measuring-tasks", "/receiving-orders"],
+    "shipping-boxes": ["/picking-orders", "/measuring-tasks", "/receiving-orders"],
+    "shelf-boxes": ["/put-away", "/receiving-orders", "/stock-search"],
+    "put-away-scans": ["/put-away", "/receiving-orders"],
+    "measuring-tasks": ["/picking-orders"],
+    "goods-verify-tasks": ["/stock-search"],
+  };
+
   function invalidateForMutation(method: string, path: string): void {
     if (method === "GET") return;
     const segment = path.split("/")[1];
-    if (segment) invalidatePrefix(`/${segment}`);
+    if (!segment) return;
+    invalidatePrefix(`/${segment}`);
+    for (const extra of MUTATION_INVALIDATIONS[segment] ?? []) {
+      invalidatePrefix(extra);
+    }
   }
 
   async function request<T>(

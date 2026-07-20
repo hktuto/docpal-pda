@@ -49,8 +49,10 @@ Status: agreed (user approved SSE + localStorage cache invalidated by SSE)
   A matching event deletes matching cache entries immediately and tells
   mounted pages to reload — so with the stream connected, data is at worst
   ~2 s stale; disconnected, at worst 60 s.
-- Local mutations (POST/PATCH/DELETE through `apiClient`) invalidate their
-  own first-path-segment prefix on success.
+- Local mutations (POST/PATCH/DELETE through `apiClient`) invalidate their own
+  first-path-segment prefix plus related read models from a small
+  `MUTATION_INVALIDATIONS` map (e.g. `/picking-items` scans also invalidate
+  `/picking-orders`), so detail pages stay cached safely.
 - No backend response cache: on serverless it is per-instance, saves a DB
   query but not the roundtrip, and adds invalidation complexity. Revisit
   only if profiling says otherwise (the outbox would make ETags cheap).

@@ -110,11 +110,16 @@ pickingRoute.post("/packages/:id/verify", async (c) => {
   return c.json({ ok: true }, 200);
 });
 
-// Create an open shipping box for the order.
+// Create an open shipping box for the order. Optional `boxId` adopts a
+// pre-printed label id (409 box_id_exists when taken).
 pickingRoute.post("/picking-orders/:id/boxes", async (c) => {
-  const body = await readJson<{ actorId?: string }>(c);
+  const body = await readJson<{ actorId?: string; boxId?: string }>(c);
   const actorId = requireActor(body);
-  const box = await createShippingBox(db, { pickingOrderId: c.req.param("id"), actorId });
+  const box = await createShippingBox(db, {
+    pickingOrderId: c.req.param("id"),
+    actorId,
+    boxId: body.boxId,
+  });
   return c.json(box, 201);
 });
 
