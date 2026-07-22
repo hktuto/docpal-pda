@@ -1,14 +1,14 @@
 # Warehouse Web Demo
 
-A client-side Nuxt 3 proof-of-concept for the DocPal warehouse mobile/Android flows. The web app talks to the Hono API (`apps/api`, SQLite) by default; the original in-browser PGlite database remains available behind a config flag for offline/demo use.
+A client-side Nuxt 3 proof-of-concept for the DocPal warehouse mobile/Android flows. The web app talks to the `apps/backend` Hono + PostgreSQL API over HTTP (JWT-auth); it also ships as an Android app via Capacitor (`apps/web/android`).
 
 ---
 
 ## Documentation
 
 - [App documentation (manual + AI lookup)](./docs/app-docs/README.md) — training guides for operators and a feature registry for coding agents.
-- [API database schema](./docs/database-schema-api.md) — SQLite schema and ER diagram for `apps/api`.
-- [API reference](./docs/api-reference-backend.md) — HTTP endpoints served by `apps/api`.
+- [Backend database schema](./docs/backend/schema-tables.md) — table-by-table PostgreSQL schema of `apps/backend`.
+- [Backend docs](./docs/backend/README.md) — API overview, event catalog, deployment.
 - [Agent instructions](./AGENTS.md) — conventions and commands for coding agents.
 
 ---

@@ -1,11 +1,11 @@
 # Agent Instructions
 
-This is a pnpm monorepo proof-of-concept for warehouse mobile/Android flows: `apps/web` (Nuxt 3 client), `apps/backend` (`@warehouse/backend` — Hono + Drizzle + PostgreSQL backend holding the revised target WMS schema, :3002), `apps/api` (**RETIRED** — the old Hono API the web client used until 2026-07; kept for history, see its README), and `packages/shared` (API request/response types used by both sides). The web app always talks to `apps/backend` over HTTP through a single adapter layer; the old PGlite offline mode and the `apps/api` adapter are gone.
+This is a pnpm monorepo proof-of-concept for warehouse mobile/Android flows: `apps/web` (Nuxt 3 client, shipped to Android via Capacitor), `apps/backend` (`@warehouse/backend` — Hono + Drizzle + PostgreSQL backend holding the revised target WMS schema, :3002), `apps/admin` (desktop admin console), and `packages/shared` (legacy API types — no current consumer since the retired `apps/api` was removed 2026-07). The web app always talks to `apps/backend` over HTTP through a single adapter layer. The retired `apps/api` (old Hono/SQLite API) and the deprecated native `apps/android` (Kotlin POC) were deleted 2026-07; their history lives in git and the `docs/superpowers/` specs.
 
 ## Tech stack
 
-- **Workspace:** pnpm monorepo — `apps/web`, `apps/api`, `apps/backend`, `apps/android`, `packages/shared`
-- **Backend:** `apps/backend` (`@warehouse/backend`) is the next-gen Hono + Drizzle + PostgreSQL backend holding the revised target WMS schema (full flow API implemented per `docs/backend/api-design.md`; the web client runs against it). Table-by-table schema contract: `docs/backend/schema-tables.md` (Drizzle source of truth: `src/db/schema/*.ts`; design decisions: `docs/superpowers/specs/2026-07-21-schema-redesign-org-id-design.md`). Master data includes `supplier_profiles` for PDA-local supplier fields (`qr_template`/`qr_type`/`qty_encoding`) and lookups `country_list`, `box_size_list`, `net_weight_formula`, `customer_profiles` (+`rule` for customer custom requirements); `suppliers` stays a pure AP_SUPPLIERS sync mirror; `parts` is referenced by all other tables via `part_no` (UNIQUE) — its UUID `id` is internal-only. The app runs one standalone instance per warehouse, so there is no `warehouse_code`; stock is partitioned by `org_id` (integer office id, 2 = HK) carried by `shelves` (nullable) and the receiving tables (`receiving_orders` / `receiving_invoices` / `receiving_invoice_items`, NOT NULL DEFAULT 2 — each invoice inside an order can belong to a different org). `picking_orders` deliberately has no `org_id`; allocation is org-agnostic. Natural keys: `receiving_orders.batch_no`, `picking_orders.order_no` (UNIQUE — sync/dedup key for the upstream-DB replica; there is no `external_id`), `receiving_invoice_items.line_qty`/`ctn_no` (Oracle parity). Routes: `/health`; auth (JWT bearer, HS256 via `hono/jwt`, secret from env `AUTH_SECRET`, 12 h TTL — `POST /auth/login` → `{user, token}`, `GET /auth/me`, `POST /auth/change-password`; global middleware enforces the token on all routes except `/health`, `/auth/login`, `/dev/*`, with `?token=` accepted only for `GET /events`; passwords are scrypt-hashed (`src/auth/password.ts`, lazy upgrade of legacy plain-text rows); users belong to groups via `user_groups` + `user_group_members` (many-to-many, `users.role` is gone); mutation actor is taken from the token, never the body — see `docs/superpowers/specs/2026-07-21-real-login-design.md`); the full WMS flow API — receiving (`GET /receiving-orders?status=`, `GET /receiving-orders/:id` (+`/picking`, +`/put-away`), `POST .../confirm-arrival`/`/scan`, mismatch CRUD under `/receiving-invoice-items/:id/mismatch*`), put-away (`GET /put-away/candidates`, `POST /receiving-orders/:id/put-away-scans`, `/shelf-boxes*` lifecycle with lot materialization + receiving-order auto-clear), picking (`GET /picking-orders`, `POST /picking-items/:id/scan`, `/packages/:id`, `/shipping-boxes/:id*`, `POST /picking-orders/:id/finish` → measuring task, `POST /picking-orders/report-issues`), measuring (`GET /measuring-tasks`, `POST /measuring-tasks/:id/complete`), goods verify (`POST /goods-verify-tasks/generate` day-end from `inventory_transactions`, task queue, `POST /goods-verify-tasks/:id/verify` with ADJUST), stock search (`GET /stock-search`), box lookup (`GET /boxes?q=` — cross-flow shipping + shelf box search for the web `/box` QR page; server-generated box ids are `BOX-<kind>-<YYYYMMDD>-<seq>` with kind `S`=shipping / `H`=shelf and a per-day seq, `nextBoxId` in `src/db/boxes.ts`), scan support (`GET /scan-templates` — supplier QR templates for client-side label parsing; receiving scans also dedup by S-key serial via `receiving_scan_labels`, 409 `label_already_scanned`, migration 0012), ingest upserts (`PUT /receiving-orders/:batchNo`, `PUT /picking-orders/:orderNo` — idempotent upsert keyed by the natural business keys), server events (`GET /events?since=` — SSE over the `app_events` transactional outbox; `emitEvent` (`src/db/events.ts`) writes rows inside the allocate/ingest/goods-verify txs, each stream polls every ~1.5 s and self-closes at ~55 s on Vercel; catalog in `docs/backend/README.md`), and `/admin/*` master-data CRUD (`src/routes/admin/` — generic `createCrudRouter` for shelves/suppliers/supplier-profiles/parts/countries/box-sizes/customer-profiles/net-weight-formulas/users, plus a custom `/admin/shelf-boxes` router; unauthenticated POC, errors are plain text). Layering: thin routes in `src/routes/<flow>.ts` over tx-wrapped domain modules in `src/db/<flow>.ts` (snake_code `HTTPException` errors, `actorId` in every mutation body, `transaction_logs` + `inventory_transactions` ledger rows inside the tx, best-effort `allocateAll` after stock-changing commits). Same conventions as `apps/api`: migrations auto-apply on startup, and `src/db/seed.ts` auto-seeds the demo dataset when the `users` table is empty (a small hand-written demo world — cleared KOA order with on-shelf lots, pending DAITO order, pending SO, 10 stocked shelf boxes (`BOX-H-20260701-0001..0010`; skipped in tests via `resetAndReseed(..., { stockBoxes: false })`) — plus the `new_seed/` real dataset generated into `src/db/seed-real-data.ts`: pending receiving orders `04958184`/`65878` with real invoices/items, and their picking lists — the `65878` picking.xlsx invoices and the `04958184` TN transfer-note PDFs as picking orders) (disable with `WAREHOUSE_SEED=off`); `pnpm --filter @warehouse/backend db:seed` wipes and re-seeds. Commands: `pnpm --filter @warehouse/backend dev|build|test|db:generate|db:migrate|db:seed` (`test` runs the node:test suite across `src/db/*.test.ts` against `TEST_DATABASE_URL`, default database `warehouse_backend_test`). The allocation engine lives in `src/db/allocate.ts` (`allocateAll` — idempotent recompute per `docs/backend/concepts.md` §6; `POST /dev/allocate` triggers it, `POST /dev/reset` re-seeds). Defaults: port `3002`, database `warehouse_backend` on the shared local Postgres (`DATABASE_URL` overrides). Backend docs (key concepts + schema reference): `docs/backend/`. Hosted dev deployment (Vercel + Neon, see `docs/backend/README.md` "Hosted dev"): Vercel projects `docpal-pda-backend` (`https://docpal-pda-backend.vercel.app`, Hono preset serving `src/index.ts` via its `export default app`; boot migrate/seed skipped under `VERCEL`, use `db:migrate` + `db:seed` against the unpooled Neon URL) and `docpal-pda-admin`; Neon DB `warehouse_backend` (Marketplace integration injects `DATABASE_URL`; runtime uses the pooled URL with `PG_MAX=1` + `PG_PREPARE=false`); deploys are git-triggered on push to `master`.
+- **Workspace:** pnpm monorepo — `apps/web`, `apps/backend`, `apps/admin`, `packages/shared`
+- **Backend:** `apps/backend` (`@warehouse/backend`) is the next-gen Hono + Drizzle + PostgreSQL backend holding the revised target WMS schema (full flow API implemented per `docs/backend/api-design.md`; the web client runs against it). Table-by-table schema contract: `docs/backend/schema-tables.md` (Drizzle source of truth: `src/db/schema/*.ts`; design decisions: `docs/superpowers/specs/2026-07-21-schema-redesign-org-id-design.md`). Master data includes `supplier_profiles` for PDA-local supplier fields (`qr_template`/`qr_type`/`qty_encoding`) and lookups `country_list`, `box_size_list`, `net_weight_formula`, `customer_profiles` (+`rule` for customer custom requirements); `suppliers` stays a pure AP_SUPPLIERS sync mirror; `parts` is referenced by all other tables via `part_no` (UNIQUE) — its UUID `id` is internal-only. The app runs one standalone instance per warehouse, so there is no `warehouse_code`; stock is partitioned by `org_id` (integer office id, 2 = HK) carried by `shelves` (nullable) and the receiving tables (`receiving_orders` / `receiving_invoices` / `receiving_invoice_items`, NOT NULL DEFAULT 2 — each invoice inside an order can belong to a different org). `picking_orders` deliberately has no `org_id`; allocation is org-agnostic. Natural keys: `receiving_orders.batch_no`, `picking_orders.order_no` (UNIQUE — sync/dedup key for the upstream-DB replica; there is no `external_id`), `receiving_invoice_items.line_qty`/`ctn_no` (Oracle parity). Routes: `/health`; auth (JWT bearer, HS256 via `hono/jwt`, secret from env `AUTH_SECRET`, 12 h TTL — `POST /auth/login` → `{user, token}`, `GET /auth/me`, `POST /auth/change-password`; global middleware enforces the token on all routes except `/health`, `/auth/login`, `/dev/*`, with `?token=` accepted only for `GET /events`; passwords are scrypt-hashed (`src/auth/password.ts`, lazy upgrade of legacy plain-text rows); users belong to groups via `user_groups` + `user_group_members` (many-to-many, `users.role` is gone); mutation actor is taken from the token, never the body — see `docs/superpowers/specs/2026-07-21-real-login-design.md`); the full WMS flow API — receiving (`GET /receiving-orders?status=`, `GET /receiving-orders/:id` (+`/picking`, +`/put-away`), `POST .../confirm-arrival`/`/scan`, mismatch CRUD under `/receiving-invoice-items/:id/mismatch*`), put-away (`GET /put-away/candidates`, `POST /receiving-orders/:id/put-away-scans`, `/shelf-boxes*` lifecycle with lot materialization + receiving-order auto-clear), picking (`GET /picking-orders`, `POST /picking-items/:id/scan`, `/packages/:id`, `/shipping-boxes/:id*`, `POST /picking-orders/:id/finish` → measuring task, `POST /picking-orders/report-issues`), measuring (`GET /measuring-tasks`, `POST /measuring-tasks/:id/complete`), goods verify (`POST /goods-verify-tasks/generate` day-end from `inventory_transactions`, task queue, `POST /goods-verify-tasks/:id/verify` with ADJUST), stock search (`GET /stock-search`), box lookup (`GET /boxes?q=` — cross-flow shipping + shelf box search for the web `/box` QR page; server-generated box ids are `BOX-<kind>-<YYYYMMDD>-<seq>` with kind `S`=shipping / `H`=shelf and a per-day seq, `nextBoxId` in `src/db/boxes.ts`), scan support (`GET /scan-templates` — supplier QR templates for client-side label parsing; receiving scans also dedup by S-key serial via `receiving_scan_labels`, 409 `label_already_scanned`, migration 0012), ingest upserts (`PUT /receiving-orders/:batchNo`, `PUT /picking-orders/:orderNo` — idempotent upsert keyed by the natural business keys), server events (`GET /events?since=` — SSE over the `app_events` transactional outbox; `emitEvent` (`src/db/events.ts`) writes rows inside the allocate/ingest/goods-verify txs, each stream polls every ~1.5 s and self-closes at ~55 s on Vercel; catalog in `docs/backend/README.md`), and `/admin/*` master-data CRUD (`src/routes/admin/` — generic `createCrudRouter` for shelves/suppliers/supplier-profiles/parts/countries/box-sizes/customer-profiles/net-weight-formulas/users, plus a custom `/admin/shelf-boxes` router; unauthenticated POC, errors are plain text). Layering: thin routes in `src/routes/<flow>.ts` over tx-wrapped domain modules in `src/db/<flow>.ts` (snake_code `HTTPException` errors, `actorId` in every mutation body, `transaction_logs` + `inventory_transactions` ledger rows inside the tx, best-effort `allocateAll` after stock-changing commits). Migrations auto-apply on startup, and `src/db/seed.ts` auto-seeds the demo dataset when the `users` table is empty (a small hand-written demo world — cleared KOA order with on-shelf lots, pending DAITO order, pending SO, 10 stocked shelf boxes (`BOX-H-20260701-0001..0010`; skipped in tests via `resetAndReseed(..., { stockBoxes: false })`) — plus the `new_seed/` real dataset generated into `src/db/seed-real-data.ts`: pending receiving orders `04958184`/`65878` with real invoices/items, and their picking lists — the `65878` picking.xlsx invoices and the `04958184` TN transfer-note PDFs as picking orders) (disable with `WAREHOUSE_SEED=off`); `pnpm --filter @warehouse/backend db:seed` wipes and re-seeds. Commands: `pnpm --filter @warehouse/backend dev|build|test|db:generate|db:migrate|db:seed` (`test` runs the node:test suite across `src/db/*.test.ts` against `TEST_DATABASE_URL`, default database `warehouse_backend_test`). The allocation engine lives in `src/db/allocate.ts` (`allocateAll` — idempotent recompute per `docs/backend/concepts.md` §6; `POST /dev/allocate` triggers it, `POST /dev/reset` re-seeds). Defaults: port `3002`, database `warehouse_backend` on the shared local Postgres (`DATABASE_URL` overrides). Backend docs (key concepts + schema reference): `docs/backend/`. Hosted dev deployment (Vercel + Neon, see `docs/backend/README.md` "Hosted dev"): Vercel projects `docpal-pda-backend` (`https://docpal-pda-backend.vercel.app`, Hono preset serving `src/index.ts` via its `export default app`; boot migrate/seed skipped under `VERCEL`, use `db:migrate` + `db:seed` against the unpooled Neon URL) and `docpal-pda-admin`; Neon DB `warehouse_backend` (Marketplace integration injects `DATABASE_URL`; runtime uses the pooled URL with `PG_MAX=1` + `PG_PREPARE=false`); deploys are git-triggered on push to `master`.
 - **Admin UI:** `apps/admin` (`@warehouse/admin`) is a Nuxt 3 (`ssr: false`) desktop admin console for the backend's `/admin/*` CRUD API. Plain CSS, English-only, port `3100`, `apiBaseUrl` env-overridable via `NUXT_PUBLIC_API_BASE_URL` (default `http://localhost:3002`). Real login against the backend's `POST /auth/login` (JWT bearer stored as `admin_token` in localStorage, admin-group membership required); generic `CrudTable`/`CrudForm` driven by `utils/entities.ts` configs, suppliers page edits the supplier profile (upsert), `shelf-boxes` pages manage shelf boxes (items read-only). Run with `pnpm dev:backend` + `pnpm dev:admin`.
 - **Web framework:** Nuxt 3 (`ssr: false`)
 - **UI:** Vue 3, plain CSS
@@ -18,7 +18,7 @@ This is a pnpm monorepo proof-of-concept for warehouse mobile/Android flows: `ap
 
 ```bash
 pnpm install        # install dependencies
-cd apps/api && docker compose up -d  # start the shared local Postgres service (required for dev/tests)
+docker compose up -d  # start the shared local Postgres service (required for dev/tests)
 pnpm dev:backend                     # start the backend dev server on :3002 (@warehouse/backend)
 pnpm --filter @warehouse/backend test    # backend test suite (node:test; needs Postgres + TEST_DATABASE_URL)
 pnpm --filter @warehouse/backend build   # backend typecheck (tsc)
@@ -34,17 +34,13 @@ pnpm --filter @warehouse/web cap:android  # generate, sync, and open Android pro
 pnpm --filter @warehouse/web cap:android:dev  # sync Android to the running web dev server for live reload
 ```
 
-The retired `apps/api` package keeps its own commands (`pnpm --filter @warehouse/api dev|test|build|db:migrate`) for historical reference only — the web client no longer talks to it.
-
 The web dev workflow needs TWO servers: `pnpm dev:backend` (:3002) and `pnpm --filter @warehouse/web dev` (:3000). The web app always talks to the backend.
 
 ### Postgres setup (shared)
 
-The backend expects a running PostgreSQL server. A Docker Compose service is provided (it lives in `apps/api` for historical reasons but serves the whole repo):
+The backend expects a running PostgreSQL server. A Docker Compose service is provided at the repo root:
 
 ```bash
-cd apps/api
-cp .env.example .env   # edit DATABASE_URL / TEST_DATABASE_URL if needed
 docker compose up -d
 ```
 
@@ -99,81 +95,6 @@ To clear old debug/output images from the app cache:
   "run-as com.docpal.warehousedemo sh -c 'rm -f cache/debug_* cache/rectangle_*'"
 ```
 
-## Native Android app (apps/android) — DEPRECATED
-
-**Deprecated (2026-07).** The native rewrite (Kotlin + Compose + Room) was a
-proof-of-concept and is no longer the product direction — the Capacitor web
-client (`apps/web`) + `apps/backend` is. The code stays as reference only
-(scan parsing, flow logic); do not add features. It lives in `apps/android` as an
-independent Gradle project — do not confuse it with the Capacitor project at
-`apps/web/android`. Spec: `docs/superpowers/specs/2026-07-12-native-android-design.md`;
-plans: `docs/superpowers/plans/2026-07-12-native-android-phase-*.md`.
-
-```bash
-cd apps/android
-export JAVA_HOME='/c/Program Files/Android/Android Studio/jbr'
-export PATH="$JAVA_HOME/bin:$PATH"
-./gradlew :app:installDebug        # build + install on connected device
-./gradlew :app:testDebugUnitTest   # JVM tests (Robolectric Room tests + OpenCV crop test)
-```
-
-Seed data: `apps/android/app/src/main/assets/seed.sql` was generated from the
-old web PGlite seed (precalc preset) and imported in Room's `onCreate`. It is
-frozen — the PGlite seed and the `export:android-seed` script were removed with
-the backend migration, so the file can no longer be regenerated.
-The app id `com.docpal.warehousepda` installs side by side with the Capacitor
-`com.docpal.warehousedemo`.
-
-Phase 1 (login, home, receiving list/detail with items + picking tabs, end-to-end
-scan pipeline), Phase 2 (picking list with search + batch issue report, picking
-detail with boxes/logs, scan-to-pick, finish → measuring task), Phase 3
-(put-away candidate list, put-away detail with lots + shelf boxes, scan-to-put-away,
-inventory-lot materialization, receiving-order auto-clear), and Phase 4
-(goods-verify shelf list → shelf box list → box detail, scan-to-verify per part,
-mark box verified) are complete: 282 JVM tests green, debug APK builds and installs.
-Conventions inside `apps/android` (details in the Phase 1 plan's "Phase 2 handoff
-notes", the Phase 2 plan's "Phase 3 handoff notes", the Phase 3 plan's "Phase 4
-handoff notes", and the Phase 4 plan's "Phase 5 handoff notes"):
-
-- **Layers:** `data/` holds Room (`data/db/`) plus suspend repositories that wrap
-  DAO calls in `withContext(Dispatchers.IO)`; `domain/` holds the pure/sync
-  business logic (`PickingRepository` — scan-to-pick, shipping-box ops, batch
-  issue reports, finish (manual or auto when the last package is boxed) which
-  inserts the `measuring_tasks` row Phase 5 will read; `PutAwayRepository` —
-  put-away read model, shelf-box lifecycle, scan-to-box assignment with
-  inventory-lot materialization, auto-clear via `ReceivingRepository.tryMarkClear`;
-  `GoodsVerifyRepository` — goods-verify read model (shelves → boxes → box items),
-  verify-item (all scans of a part in a box), mark-box-verified with a
-  `closed → verified` transition log; `MismatchRepository`, `AuthRepository`,
-  `AllocationDistributor` for allocation
-  math) whose transition functions self-wrap `db.runInTransaction`. Scan
-  parsing/matching lives in `domain/scan/`.
-- **Screens:** `ui/login`, `ui/home`, `ui/receiving` (list + detail with items
-  and picking tabs, `ReportIssueDialog`), `ui/picking` (list with search +
-  multi-select batch issue report, detail with items/allocations/packages/boxes/
-  logs, `PickingIssueReportDialog`), `ui/putaway` (candidate list, detail with
-  lots + shelf-boxes sections, `SelectShelfDialog`), `ui/goodsverify` (shelf
-  list, shelf box list, box detail with expected-items + mark-verified). The
-  shared scan review
-  dialog lives in `ui/scan/` (`LabelScanReviewDialog`, `ScanReviewUiState`).
-- **Scan entry points:** `ui/receiving/ScanLaunchers.kt` (camera / manual /
-  wedge), `HardwareKeyBuffer` (wedge key capture), `QrParser` with
-  `OcrLabelParser` fallback, then `ScanMatcher` (`matchReceiving` for receiving,
-  `matchPicking` for scan-to-pick, `matchPutAway` for pinned-lot put-away,
-  `matchGoodsVerify` for box-scoped scan-to-verify — single match auto-applies
-  (goods verify always opens the review dialog, web `confirmSingleMatch` parity),
-  a match error opens the review dialog).
-- **UI conventions:** reusables in `ui/components/` (`StatusBadge`, `EmptyState`,
-  `DetailRow`, `ErrorText`, `OnResumeEffect`). ViewModels take an injected `io`
-  dispatcher, reload through a race-safe `loadJob`, serialize mutations via
-  `runAction`, and detail screens use a per-orderId `provideFactory`
-  (`ReceivingDetailViewModel.provideFactory`).
-- **Tests:** Robolectric with `@Config(sdk=[34])` + `StandardTestDispatcher`;
-  Room fixtures use an in-memory DB seeded by `offMainThread` execSQL
-  (`app/src/test/.../DbTestSupport.kt`); repositories are faked via their source
-  interfaces. Never hardcode seed UUIDs — look ids up by business key
-  (`ReceivingRepositoryTest.partIdOf` is the pattern).
-
 ## Code conventions
 
 - Follow existing patterns. Make minimal, focused changes.
@@ -185,16 +106,8 @@ handoff notes", and the Phase 4 plan's "Phase 5 handoff notes"):
 
 ## Testing
 
-The native Android app (`apps/android`, **deprecated**) has a JVM unit-test suite (Robolectric
-Room/repository tests, ViewModel tests, OpenCV crop test — see the Android
-section above for the current count). Run it with:
-
-```bash
-cd apps/android
-export JAVA_HOME='/c/Program Files/Android/Android Studio/jbr'
-export PATH="$JAVA_HOME/bin:$PATH"
-./gradlew :app:testDebugUnitTest
-```
+- Backend: `pnpm --filter @warehouse/backend test` (node:test, needs Postgres).
+- Web: `pnpm --filter @warehouse/web test` (vitest).
 
 Also verify work with:
 

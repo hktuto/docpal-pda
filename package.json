@@ -5,7 +5,6 @@
   "scripts": {
     "dev": "pnpm -r --parallel dev",
     "dev:web": "pnpm --filter @warehouse/web dev",
-    "dev:api": "pnpm --filter @warehouse/api dev",
     "dev:backend": "pnpm --filter @warehouse/backend dev",
     "dev:admin": "pnpm --filter @warehouse/admin dev",
     "build": "pnpm -r build",
