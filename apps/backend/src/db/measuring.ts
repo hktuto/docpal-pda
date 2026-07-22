@@ -59,7 +59,7 @@ export interface MeasuringTaskListRow {
   id: string;
   status: string;
   pickingOrderId: string;
-  refNo: string;
+  orderNo: string;
   shipTo: string | null;
   boxCount: number;
   closedBoxCount: number;
@@ -73,7 +73,7 @@ export async function listMeasuringTasks(db: AppDb, status?: string): Promise<Me
     sql`
       SELECT
         mt.id, mt.status, mt.picking_order_id AS "pickingOrderId",
-        po.ref_no AS "refNo", po.ship_to AS "shipTo",
+        po.order_no AS "orderNo", po.ship_to AS "shipTo",
         COUNT(sb.id)::int AS "boxCount",
         COUNT(sb.id) FILTER (WHERE sb.status <> 'open')::int AS "closedBoxCount",
         mt.created_at AS "createdAt"
@@ -81,7 +81,7 @@ export async function listMeasuringTasks(db: AppDb, status?: string): Promise<Me
       JOIN picking_orders po ON po.id = mt.picking_order_id
       LEFT JOIN shipping_boxes sb ON sb.picking_order_id = mt.picking_order_id
       ${status ? sql`WHERE mt.status = ${status}` : sql``}
-      GROUP BY mt.id, po.ref_no, po.ship_to
+      GROUP BY mt.id, po.order_no, po.ship_to
       ORDER BY mt.created_at DESC, mt.id DESC
     `
   );
@@ -96,11 +96,10 @@ export interface MeasuringTaskRow {
 
 export interface MeasuringOrderRow {
   id: string;
-  refNo: string;
+  orderNo: string;
   status: string;
   shipTo: string | null;
   customerCode: string | null;
-  destinationCountry: string | null;
   poNo: string | null;
 }
 
@@ -112,7 +111,6 @@ export interface MeasuringPackageRow {
   coo: string | null;
   cow: string | null;
   verified: boolean;
-  partId: string;
   partNo: string;
   wclItemNo: string | null;
 }
@@ -144,8 +142,8 @@ export async function getMeasuringTaskDetail(db: AppDb, taskId: string): Promise
 
   const order = (await queryGet<MeasuringOrderRow>(
     db,
-    sql`SELECT id, ref_no AS "refNo", status, ship_to AS "shipTo",
-               customer_code AS "customerCode", destination_country AS "destinationCountry",
+    sql`SELECT id, order_no AS "orderNo", status, ship_to AS "shipTo",
+               customer_code AS "customerCode",
                po_no AS "poNo"
         FROM picking_orders WHERE id = ${task.pickingOrderId}`
   ))!;
@@ -167,10 +165,10 @@ export async function getMeasuringTaskDetail(db: AppDb, taskId: string): Promise
           SELECT
             pp.id, pp.shipping_box_id AS "shippingBoxId", pp.qty,
             pp.date_code AS "dateCode", pp.lot_code AS "lotCode", pp.coo, pp.cow, pp.verified,
-            pi.part_id AS "partId", p.part_no AS "partNo", p.wcl_item_no AS "wclItemNo"
+            pi.part_no AS "partNo", p.wcl_item_no AS "wclItemNo"
           FROM picking_packages pp
           JOIN picking_items pi ON pi.id = pp.picking_item_id
-          JOIN parts p ON p.id = pi.part_id
+          JOIN parts p ON p.part_no = pi.part_no
           WHERE ${inArray(sql`pp.shipping_box_id`, boxIds)}
           ORDER BY pp.created_at, pp.id
         `

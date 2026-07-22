@@ -54,7 +54,7 @@ li { margin: 0.3em 0; }
 <ul><li>顯示連結到此收貨單的揀貨單，包括每張單的狀態及項目。</li><li><strong>掃描</strong>進入該揀貨單的掃描頁（見下文）；<strong>建立箱號</strong>建立運輸箱。</li><li>可用於核對入庫貨品與已分配給出庫訂單的數量。</li></ul>
 <h3>揀貨掃描頁</h3>
 <figure><img alt="揀貨掃描頁" src="./assets/picking-scan.png"><figcaption>揀貨掃描頁</figcaption></figure>
-<ul><li>從揀貨分頁按<strong>掃描</strong>進入。頂部列出此單每個項目的需求 / 已掃 / 待確認數量。</li><li>用硬件掃描器掃二維碼會直接加入待確認列表；按 <strong>OCR 拍攝</strong>用相機拍攝標籤則會先覆核：<ul><li>識別到<strong>單一項目</strong>時，彈出確認表單 — 可修改料號、數量、日期碼、批次等欄位（含候選值），確認後才加入列表；亦可按<strong>重拍</strong>重新拍攝。</li><li>識別到<strong>多個項目</strong>（如箱標）時，彈出可編輯表格 — 每行可改料號（下拉選單）及數量、可刪除行，然後一次過加入列表。</li></ul></li><li>每次掃描先加入待確認列表，核對無誤後按<strong>確認</strong>一次過提交。</li><li>掃完所有項目並裝箱後，系統會自動建立測量任務。</li></ul>
+<ul><li>從揀貨分頁按<strong>掃描</strong>進入。頂部列出此單每個項目的需求 / 已掃 / 待確認數量。</li><li>用硬件掃描器掃二維碼會直接加入待確認列表；按 <strong>OCR 拍攝</strong>用相機拍攝標籤則會先覆核：<ul><li>識別到<strong>單一項目</strong>時，彈出確認表單 — 可修改料號、數量、日期碼、批次等欄位（含候選值），確認後才加入列表；亦可按<strong>重拍</strong>重新拍攝。</li><li>識別到<strong>多個項目</strong>（如箱標）時，彈出可編輯表格 — 每行可改料號（下拉選單）及數量、可刪除行，然後一次過加入列表。</li></ul></li><li>每次掃描先加入待確認列表；相同項目（料號 + 日期/批次/產地）的多次掃描會合併成一行顯示總數，核對無誤後按<strong>確認</strong>一次過提交（提交時仍按每次掃描逐筆套用）。</li><li>掃完所有項目並裝箱後，系統會自動建立測量任務。</li></ul>
 <h3>掃描標籤 — 單一項目</h3>
 <figure><img alt="掃描覆核 — 多個匹配" src="./assets/receiving-scan-review.png"><figcaption>掃描覆核 — 多個匹配</figcaption></figure>
 <p>在收貨詳情掃描供應商標籤（QR/條碼或相機 OCR）會自動套用到匹配的發票項目。當匹配不明確時，會開啟覆核對話框：</p>
@@ -78,11 +78,15 @@ li { margin: 0.3em 0; }
 <ul><li><strong>搜尋</strong> — 按單號、PO 或客戶篩選。</li><li>每張卡片顯示揀貨單參考編號、日期、狀態及收貨方。</li><li><strong>核取方塊</strong>可選擇多張訂單作批量問題匯報。</li><li>點按卡片開啟揀貨詳情。</li></ul>
 <h3>揀貨詳情</h3>
 <figure><img alt="揀貨詳情" src="./assets/picking-detail.png"><figcaption>揀貨詳情</figcaption></figure>
-<ul><li><strong>箱號</strong> — 此訂單的運輸箱；<strong>新增箱號</strong>建立箱號，<strong>掃描箱號</strong>以掃描方式分配。每個箱號可以列印箱標（打印功能將於稍後版本提供）。</li><li><strong>項目</strong> — 每張卡片顯示料號、需求數量、已掃描數量、已裝箱數量、需求日期代碼及狀態。</li><li><strong>掃碼</strong>進入掃描頁（見上文「揀貨掃描頁」），根據分配掃描標籤；完成最後一件包裝後會自動建立測量任務。</li></ul>
+<ul><li><strong>箱號</strong> — 此訂單的運輸箱；<strong>新增箱號</strong>建立箱號，<strong>掃描箱號</strong>以掃描方式分配。</li><li><strong>項目</strong> — 每張卡片顯示料號、需求數量、已掃描數量、已裝箱數量、需求日期代碼及狀態。</li><li><strong>掃碼</strong>進入掃描頁（見上文「揀貨掃描頁」），根據分配掃描標籤；完成最後一件包裝後會自動建立測量任務。</li></ul>
 <hr>
 <h2>測量</h2>
 <figure><img alt="測量列表" src="./assets/measuring-list.png"><figcaption>測量列表</figcaption></figure>
 <ul><li>列出已包裝、等待秤重及量度的揀貨單。</li><li>示範種子資料暫時沒有待處理任務 — 揀貨單完成後任務會自動在此出現。</li></ul>
+<h3>測量詳情</h3>
+<ul><li>顯示揀貨單的每個運輸箱：狀態、包裹核對進度及已記錄的測量資料。</li><li><strong>掃描箱號二維碼</strong>（或輸入箱號）可直接打開該箱，無需在列表中尋找；亦可點按箱卡上的<strong>打開箱號</strong>。</li><li>全部箱號關閉後，按<strong>完成測量</strong>完成整個任務。</li></ul>
+<h3>測量箱號頁</h3>
+<ul><li>表格列出箱內每個包裹：料號、數量、日期/批次/產地及核對狀態。</li><li>用硬件掃描器掃包裹二維碼會即時核對匹配的包裹，該行變為<strong>已核對</strong>；每行的<strong>掃描</strong>按鈕是相機 OCR 覆核的後備方式。</li><li>全部包裹核對後會自動彈出測量表單（箱型、淨重 / 毛重、目的地國家）；填妥後按<strong>完成箱號</strong>關閉箱號。</li></ul>
 <hr>
 <h2>查貨</h2>
 <h3>查貨列表</h3>

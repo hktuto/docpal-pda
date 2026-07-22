@@ -1,5 +1,5 @@
 import { I18nError } from "~/composables/i18nError";
-import { getCached, setCached, invalidatePrefix } from "./apiCache";
+import { getCached, setCached, invalidatePrefix, clearApiCache } from "./apiCache";
 
 /** Plain Error with the HTTP status attached, for errors without an i18n key. */
 export class ApiError extends Error {
@@ -43,7 +43,6 @@ export type QueryParams = Record<
 
 export interface ApiClientOptions {
   baseUrl: string;
-  getActorId?: () => string | undefined;
 }
 
 export interface ApiClient {
@@ -51,7 +50,49 @@ export interface ApiClient {
   post<T>(path: string, body?: unknown): Promise<T>;
   patch<T>(path: string, body?: unknown): Promise<T>;
   del<T>(path: string, body?: unknown): Promise<T>;
-  actorId(): string | undefined;
+}
+
+// Session token wiring: the auth adapter (services/adapters/apiAuth.ts)
+// registers a getter once at module load; every apiClient request then sends
+// `Authorization: Bearer <token>` when a session exists. Module-level so the
+// auth client and the warehouse client share the same token source.
+let tokenGetter: (() => string | null) | null = null;
+
+export function setTokenGetter(fn: () => string | null): void {
+  tokenGetter = fn;
+}
+
+/** localStorage keys holding the session (written by the auth adapter). */
+const TOKEN_STORAGE_KEY = "warehouse-token";
+const USER_ID_STORAGE_KEY = "warehouse-user-id";
+const USER_STORAGE_KEY = "warehouse-user";
+
+/**
+ * A 401 means the session is gone/invalid: clear the stored session and send
+ * the user back to /login. Skipped for the login call itself (a 401 there is
+ * just "invalid credentials" and must surface to the caller) and guarded
+ * against redirect loops when already on the login page.
+ */
+function handleUnauthorized(path: string): void {
+  if (path === "/auth/login") return;
+  try {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    localStorage.removeItem(USER_ID_STORAGE_KEY);
+    localStorage.removeItem(USER_STORAGE_KEY);
+  } catch {
+    // Storage unavailable (tests/SSR) — nothing to clear.
+  }
+  // Drop every cached GET: responses were fetched under the dead session.
+  clearApiCache();
+  if (typeof window === "undefined") return;
+  if (window.location.pathname === "/login") return;
+  // navigateTo is a Nuxt auto-import; fall back to a hard navigation where it
+  // is not available (plain vitest runtime).
+  if (typeof navigateTo === "function") {
+    void navigateTo("/login");
+  } else {
+    window.location.assign("/login");
+  }
 }
 
 export function createApiClient(options: ApiClientOptions): ApiClient {
@@ -105,9 +146,17 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     opts: { params?: QueryParams; body?: unknown } = {}
   ): Promise<T> {
     const init: RequestInit = { method };
+    const headers: Record<string, string> = {};
+    const token = tokenGetter?.();
+    if (token) {
+      headers.authorization = `Bearer ${token}`;
+    }
     if (opts.body !== undefined) {
-      init.headers = { "content-type": "application/json" };
+      headers["content-type"] = "application/json";
       init.body = JSON.stringify(opts.body);
+    }
+    if (Object.keys(headers).length > 0) {
+      init.headers = headers;
     }
 
     let res: Response;
@@ -115,6 +164,15 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       res = await fetch(buildUrl(path, opts.params), init);
     } catch {
       throw new I18nError("network_error");
+    }
+
+    if (res.status === 401) {
+      handleUnauthorized(path);
+      // Always an ApiError (never an I18nError, even when the body is a
+      // snake_case word like "unauthorized") so callers can reliably detect
+      // an invalid session by status.
+      const text = (await res.text()).trim();
+      throw new ApiError(text || "unauthorized", res.status);
     }
 
     if (!res.ok) {
@@ -173,6 +231,5 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       request<T>("PATCH", path, { body }),
     del: <T>(path: string, body?: unknown) =>
       request<T>("DELETE", path, { body }),
-    actorId: () => options.getActorId?.(),
   };
 }

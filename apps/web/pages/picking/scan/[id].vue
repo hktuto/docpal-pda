@@ -5,7 +5,7 @@
 
     <template v-else-if="order">
       <header class="scan-session__header">
-        <h1 class="scan-session__title">{{ $t('picking.scanSession.title', { refNo: order.refNo }) }}</h1>
+        <h1 class="scan-session__title">{{ $t('picking.scanSession.title', { orderNo: order.orderNo }) }}</h1>
         <button class="btn btn--small btn--secondary" :disabled="applying" @click="goBack">
           {{ $t('picking.scanSession.back') }}
         </button>
@@ -53,18 +53,18 @@
           </thead>
           <tbody>
             <tr
-              v-for="(row, index) in rows"
+              v-for="(row, index) in displayRows"
               :key="row.key"
               :class="{ 'scan-session__row--failed': row.status === 'failed' }"
             >
-              <td>{{ rows.length - index }}</td>
+              <td>{{ displayRows.length - index }}</td>
               <td>{{ row.partNo }}</td>
               <td>{{ row.qty }}</td>
               <td>{{ row.lotCode || $t('common.stateNone') }} / {{ row.dateCode || $t('common.stateNone') }}</td>
-              <td>{{ row.source === 'ocr' ? 'OCR' : 'QR' }}</td>
+              <td>{{ row.source === 'mixed' ? 'QR/OCR' : row.source === 'ocr' ? 'OCR' : 'QR' }}</td>
               <td>
                 <span v-if="row.status === 'failed'" class="scan-session__error">{{ row.error }}</span>
-                <button class="btn btn--small btn--secondary" :disabled="applying" @click="removeRow(row.key)">
+                <button class="btn btn--small btn--secondary" :disabled="applying" @click="removeGroup(row.keys)">
                   {{ $t('picking.scanSession.removeRow') }}
                 </button>
               </td>
@@ -153,6 +153,55 @@ const completed = ref(false);
 const orderItems = computed(() => order.value?.items ?? []);
 const { rows, queuedQtyByItem, addScan, removeRow, reresolveQueued, applyAll } = usePickingScanQueue(orderItems);
 const queuedCount = computed(() => rows.value.filter((r) => r.status === "queued").length);
+
+// The table aggregates scans of the same item + batch fields into one row
+// with the total qty — the queue itself stays one row per scan so Confirm
+// applies each label exactly as scanned.
+interface DisplayRow {
+  key: string;
+  keys: string[];
+  partNo: string;
+  qty: number;
+  lotCode: string | null;
+  dateCode: string | null;
+  source: "qr" | "ocr" | "mixed";
+  status: "queued" | "failed";
+  error: string | null;
+}
+
+const displayRows = computed<DisplayRow[]>(() => {
+  const groups = new Map<string, DisplayRow>();
+  for (const row of rows.value) {
+    const gk = [row.itemId, row.lotCode ?? "", row.dateCode ?? "", row.coo ?? "", row.cow ?? ""].join("|");
+    const g = groups.get(gk);
+    if (g) {
+      g.keys.push(row.key);
+      g.qty += row.qty;
+      if (g.source !== row.source) g.source = "mixed";
+      if (row.status === "failed") {
+        g.status = "failed";
+        g.error = row.error;
+      }
+    } else {
+      groups.set(gk, {
+        key: row.key,
+        keys: [row.key],
+        partNo: row.partNo,
+        qty: row.qty,
+        lotCode: row.lotCode,
+        dateCode: row.dateCode,
+        source: row.source,
+        status: row.status === "failed" ? "failed" : "queued",
+        error: row.error,
+      });
+    }
+  }
+  return [...groups.values()];
+});
+
+function removeGroup(keys: string[]) {
+  for (const key of keys) removeRow(key);
+}
 const orderPartNos = computed(() => orderItems.value.map((i) => i.partNo));
 
 // OCR review state: a single parsed record opens the confirm form; a label

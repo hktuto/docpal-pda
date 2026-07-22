@@ -20,14 +20,14 @@ async function readJson<T>(c: Context): Promise<T> {
 
 export const ingestRoute = new Hono();
 
-// PUT /receiving-orders/:externalId — idempotent ingest upsert keyed by
-// external_id. 201 on create, 200 on reconcile (`changed` reports whether
+// PUT /receiving-orders/:batchNo — idempotent ingest upsert keyed by the
+// natural batch_no. 201 on create, 200 on reconcile (`changed` reports whether
 // anything differed). Changed expected qtys on an order past pending move
 // allocation demand → best-effort allocateAll after commit (a new pending
 // order needs no trigger, plan phase 7).
-ingestRoute.put("/receiving-orders/:externalId", async (c) => {
+ingestRoute.put("/receiving-orders/:batchNo", async (c) => {
   const body = await readJson<IngestReceivingBody>(c);
-  const result = await upsertReceivingOrder(db, c.req.param("externalId"), body);
+  const result = await upsertReceivingOrder(db, c.req.param("batchNo"), body);
   if (result.changed && result.orderStatus !== "pending") {
     try {
       await allocateAll(db);
@@ -36,17 +36,17 @@ ingestRoute.put("/receiving-orders/:externalId", async (c) => {
     }
   }
   return c.json(
-    { id: result.id, externalId: result.externalId, created: result.created, changed: result.changed },
+    { id: result.id, created: result.created, changed: result.changed },
     result.created ? 201 : 200
   );
 });
 
-// PUT /picking-orders/:externalId — same upsert pattern for picking orders.
-// Any change to an open (pending/picking) order → best-effort allocateAll
-// after commit.
-ingestRoute.put("/picking-orders/:externalId", async (c) => {
+// PUT /picking-orders/:orderNo — same upsert pattern for picking orders
+// (order_no is the upstream sync/dedup key). Any change to an open
+// (pending/picking) order → best-effort allocateAll after commit.
+ingestRoute.put("/picking-orders/:orderNo", async (c) => {
   const body = await readJson<IngestPickingBody>(c);
-  const result = await upsertPickingOrder(db, c.req.param("externalId"), body);
+  const result = await upsertPickingOrder(db, c.req.param("orderNo"), body);
   if (result.changed && (result.orderStatus === "pending" || result.orderStatus === "picking")) {
     try {
       await allocateAll(db);
@@ -55,7 +55,7 @@ ingestRoute.put("/picking-orders/:externalId", async (c) => {
     }
   }
   return c.json(
-    { id: result.id, externalId: result.externalId, created: result.created, changed: result.changed },
+    { id: result.id, created: result.created, changed: result.changed },
     result.created ? 201 : 200
   );
 });

@@ -30,8 +30,8 @@ async function actorIdOf(username = "operator"): Promise<string> {
   return row!.id;
 }
 
-async function pickingOrderIdOf(refNo: string): Promise<string> {
-  const row = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM picking_orders WHERE ref_no = ${refNo}`);
+async function pickingOrderIdOf(orderNo: string): Promise<string> {
+  const row = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM picking_orders WHERE order_no = ${orderNo}`);
   return row!.id;
 }
 
@@ -39,8 +39,7 @@ async function pickingItemIdOf(orderId: string, partNo: string): Promise<string>
   const row = await queryGet<{ id: string }>(
     client.db,
     sql`SELECT pi.id FROM picking_items pi
-        JOIN parts p ON p.id = pi.part_id
-        WHERE pi.picking_order_id = ${orderId} AND p.part_no = ${partNo}`
+        WHERE pi.picking_order_id = ${orderId} AND pi.part_no = ${partNo}`
   );
   return row!.id;
 }
@@ -98,7 +97,7 @@ async function closeTheBox(boxId: string, actorId: string, packageIds: string[])
 
 // --- list ----------------------------------------------------------------------
 
-test("list: box counts, refNo/shipTo join, status filter", async () => {
+test("list: box counts, orderNo/shipTo join, status filter", async () => {
   await reseed(client);
   const { taskId, actorId, boxId, packageIds } = await finishedOrder();
 
@@ -107,7 +106,7 @@ test("list: box counts, refNo/shipTo join, status filter", async () => {
   const row = rows[0];
   assert.equal(row.id, taskId);
   assert.equal(row.status, "pending");
-  assert.equal(row.refNo, "SO-2026-0001");
+  assert.equal(row.orderNo, "SO-2026-0001");
   assert.equal(row.shipTo, "ACME Electronics (HK)");
   assert.equal(row.boxCount, 1);
   assert.equal(row.closedBoxCount, 0); // box still open
@@ -136,11 +135,10 @@ test("detail: consolidated task/order/boxes, packages carry part identity; 404",
 
   assert.deepEqual(detail.order, {
     id: orderId,
-    refNo: "SO-2026-0001",
+    orderNo: "SO-2026-0001",
     status: "finished",
     shipTo: "ACME Electronics (HK)",
     customerCode: "ACME",
-    destinationCountry: "HK",
     poNo: "CUST-PO-8899",
   });
 
@@ -163,7 +161,6 @@ test("detail: consolidated task/order/boxes, packages carry part identity; 404",
   assert.equal(pkg1.coo, "JP");
   assert.equal(pkg1.cow, "JP");
   assert.equal(pkg1.verified, false);
-  assert.ok(pkg1.partId);
   assert.equal(pkg1.wclItemNo, "RK73H1JTTD1002F");
   const pkg2 = byPartNo.get("RK73H1JTTD2202F")!;
   assert.equal(pkg2.id, packageIds[1]);

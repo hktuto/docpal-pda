@@ -30,11 +30,9 @@ import type {
   BoxSearchResult,
 } from "../types";
 import type { WarehouseService } from "../warehouse";
-import { createApiClient, type ApiClient } from "../apiClient";
-import { I18nError } from "~/composables/i18nError";
+import { createApiClient } from "../apiClient";
 
 export interface CreateBackendWarehouseServiceOptions {
-  getActorId: () => string | undefined;
   apiBaseUrl?: string;
 }
 
@@ -43,12 +41,6 @@ interface ScanTemplateRow {
   supplierCode: string;
   qrTemplate: string | null;
   qtyEncoding: string | null;
-}
-
-function requireActorId(client: ApiClient): string {
-  const actorId = client.actorId();
-  if (!actorId) throw new I18nError("operator_not_signed_in");
-  return actorId;
 }
 
 /**
@@ -69,14 +61,15 @@ function requireActorId(client: ApiClient): string {
  * real HTTP calls. Step 7 (stock search): the one aggregate
  * `/stock-search` read plus the admin suppliers dropdown list are real
  * HTTP calls — every flow is now migrated (see docs/backend/api-design.md).
+ *
+ * Auth: every request carries `Authorization: Bearer <token>` (wired in
+ * apiClient via the shared token getter); the server derives the actor from
+ * the JWT, so mutation bodies no longer send actorId.
  */
 export function createBackendWarehouseService(
   options: CreateBackendWarehouseServiceOptions
 ): WarehouseService {
-  const client = createApiClient({
-    baseUrl: options.apiBaseUrl ?? "",
-    getActorId: options.getActorId,
-  });
+  const client = createApiClient({ baseUrl: options.apiBaseUrl ?? "" });
 
   return {
     // Receiving
@@ -91,9 +84,7 @@ export function createBackendWarehouseService(
       return client.get(`/receiving-orders/${id}`);
     },
     async confirmReceivingOrderArrived(id: string): Promise<void> {
-      await client.post(`/receiving-orders/${id}/confirm-arrival`, {
-        actorId: requireActorId(client),
-      });
+      await client.post(`/receiving-orders/${id}/confirm-arrival`, {});
     },
     // Server-side parse/match. A 409 {message: no_match|multiple_matches,
     // candidates} propagates as an ApiError with the parsed body — the caller
@@ -102,10 +93,7 @@ export function createBackendWarehouseService(
       orderId: string,
       input: ReceivingScanInput
     ): Promise<ReceivingScanResult> {
-      return client.post(`/receiving-orders/${orderId}/scan`, {
-        actorId: requireActorId(client),
-        ...input,
-      });
+      return client.post(`/receiving-orders/${orderId}/scan`, { ...input });
     },
 
     // Mismatches (item-keyed)
@@ -119,7 +107,6 @@ export function createBackendWarehouseService(
       input: ReportMismatchInput
     ): Promise<void> {
       await client.post(`/receiving-invoice-items/${itemId}/mismatch`, {
-        actorId: requireActorId(client),
         ...input,
       });
     },
@@ -128,19 +115,14 @@ export function createBackendWarehouseService(
       input: ReportMismatchInput
     ): Promise<void> {
       await client.patch(`/receiving-invoice-items/${itemId}/mismatch`, {
-        actorId: requireActorId(client),
         ...input,
       });
     },
     async confirmMismatch(itemId: string): Promise<void> {
-      await client.post(`/receiving-invoice-items/${itemId}/mismatch/confirm`, {
-        actorId: requireActorId(client),
-      });
+      await client.post(`/receiving-invoice-items/${itemId}/mismatch/confirm`, {});
     },
     async cancelMismatch(itemId: string): Promise<void> {
-      await client.post(`/receiving-invoice-items/${itemId}/mismatch/cancel`, {
-        actorId: requireActorId(client),
-      });
+      await client.post(`/receiving-invoice-items/${itemId}/mismatch/cancel`, {});
     },
 
     // Picking (receiving detail view)
@@ -167,7 +149,6 @@ export function createBackendWarehouseService(
       input: ScanPickingItemInput
     ): Promise<{ packageIds: string[] }> {
       return client.post(`/picking-items/${itemId}/scan`, {
-        actorId: requireActorId(client),
         allocationId: input.allocationId,
         qty: input.qty,
         dateCode: input.dateCode ?? undefined,
@@ -178,22 +159,17 @@ export function createBackendWarehouseService(
     },
     // Remove an unboxed, unverified package (reverses source + allocation).
     async removeScannedPackage(packageId: string): Promise<void> {
-      await client.del(`/packages/${packageId}`, {
-        actorId: requireActorId(client),
-      });
+      await client.del(`/packages/${packageId}`);
     },
     // Measuring-time package verification (boxed, open box, pending task).
     async verifyPackage(packageId: string): Promise<void> {
-      await client.post(`/packages/${packageId}/verify`, {
-        actorId: requireActorId(client),
-      });
+      await client.post(`/packages/${packageId}/verify`, {});
     },
     async createShippingBoxForPickingOrder(
       pickingOrderId: string,
       boxId?: string
     ): Promise<void> {
       await client.post(`/picking-orders/${pickingOrderId}/boxes`, {
-        actorId: requireActorId(client),
         boxId: boxId?.trim() || undefined,
       });
     },
@@ -202,57 +178,40 @@ export function createBackendWarehouseService(
       id: string,
       fields: ShippingBoxUpdateInput
     ): Promise<void> {
-      await client.patch(`/shipping-boxes/${id}`, {
-        actorId: requireActorId(client),
-        ...fields,
-      });
+      await client.patch(`/shipping-boxes/${id}`, { ...fields });
     },
     async addPackageToBox(packageId: string, boxId: string): Promise<void> {
-      await client.post(`/shipping-boxes/${boxId}/packages`, {
-        packageId,
-        actorId: requireActorId(client),
-      });
+      await client.post(`/shipping-boxes/${boxId}/packages`, { packageId });
     },
     async removePackageFromBox(boxId: string, packageId: string): Promise<void> {
-      await client.del(`/shipping-boxes/${boxId}/packages/${packageId}`, {
-        actorId: requireActorId(client),
-      });
+      await client.del(`/shipping-boxes/${boxId}/packages/${packageId}`);
     },
     async addAllUnboxedPackagesToBox(boxId: string): Promise<number> {
       const result = await client.post<{ packed: number }>(
         `/shipping-boxes/${boxId}/add-all-unboxed`,
-        { actorId: requireActorId(client) }
+        {}
       );
       return result.packed;
     },
     async cancelShippingBox(id: string): Promise<void> {
-      await client.post(`/shipping-boxes/${id}/cancel`, {
-        actorId: requireActorId(client),
-      });
+      await client.post(`/shipping-boxes/${id}/cancel`, {});
     },
     async closeShippingBox(id: string): Promise<void> {
-      await client.post(`/shipping-boxes/${id}/close`, {
-        actorId: requireActorId(client),
-      });
+      await client.post(`/shipping-boxes/${id}/close`, {});
     },
     // Explicit finish: all items fully boxed → order finished + the measuring
     // task (returned). Boxing the last package also auto-finishes.
     async finishPickingOrder(
       id: string
     ): Promise<{ id: string; pickingOrderId: string; status: string }> {
-      return client.post(`/picking-orders/${id}/finish`, {
-        actorId: requireActorId(client),
-      });
+      return client.post(`/picking-orders/${id}/finish`, {});
     },
     // Batch issue report: per-order entries (the dialog's shared fields are
     // already folded into each entry by the caller).
     async reportPickingOrderIssues(
       entries: ReportPickingIssueEntry[]
     ): Promise<ReportPickingIssuesResult> {
-      return client.post(`/picking-orders/report-issues`, {
-        actorId: requireActorId(client),
-        entries,
-      });
+      return client.post(`/picking-orders/report-issues`, { entries });
     },
 
     // Put-away — one aggregate read (order + expected items + materialized
@@ -264,9 +223,8 @@ export function createBackendWarehouseService(
     async getPutAwayDetail(receivingOrderId: string): Promise<PutAwayDetail> {
       return client.get(`/receiving-orders/${receivingOrderId}/put-away`);
     },
-    // The admin CRUD read doubles as the PDA shelf list (unauthenticated POC);
-    // it returns every field the page needs (code/zone/warehouse/section/
-    // sub-inventory/locationType).
+    // The admin CRUD read doubles as the PDA shelf list; it returns every
+    // field the page needs (code/zone/orgId).
     async getShelves(): Promise<Shelf[]> {
       return client.get("/admin/shelves");
     },
@@ -277,31 +235,29 @@ export function createBackendWarehouseService(
       dateCode: string | null,
       lotCode: string | null,
       coo: string | null,
-      cow: string | null
+      cow: string | null,
+      shelfBoxId?: string | null
     ): Promise<PutAwayScan> {
       return client.post(`/receiving-orders/${receivingOrderId}/put-away-scans`, {
-        actorId: requireActorId(client),
         receivingInvoiceItemId,
         qty,
         dateCode: dateCode ?? undefined,
         lotCode: lotCode ?? undefined,
         coo: coo ?? undefined,
         cow: cow ?? undefined,
+        shelfBoxId: shelfBoxId ?? undefined,
       });
     },
     async assignPutAwayScanToBox(
       scanId: string,
       boxId: string
     ): Promise<void> {
-      await client.post(`/shelf-boxes/${boxId}/scans`, {
-        scanId,
-        actorId: requireActorId(client),
-      });
+      await client.post(`/shelf-boxes/${boxId}/scans`, { scanId });
     },
     async addAllUnboxedScansToBox(boxId: string): Promise<number> {
       const result = await client.post<{ count: number }>(
         `/shelf-boxes/${boxId}/add-all-unboxed`,
-        { actorId: requireActorId(client) }
+        {}
       );
       return result.count;
     },
@@ -309,36 +265,29 @@ export function createBackendWarehouseService(
       scanId: string,
       boxId: string
     ): Promise<void> {
-      await client.del(`/shelf-boxes/${boxId}/scans/${scanId}`, {
-        actorId: requireActorId(client),
-      });
+      await client.del(`/shelf-boxes/${boxId}/scans/${scanId}`);
     },
     // Hard-delete a staged scan (mis-scan correction); boxed scans go through
     // removePutAwayScanFromBox instead (backend: 409 scan_not_in_staging_box).
     async removePutAwayScannedPiece(scanId: string): Promise<void> {
-      await client.del(`/put-away-scans/${scanId}`, {
-        actorId: requireActorId(client),
-      });
+      await client.del(`/put-away-scans/${scanId}`);
     },
     async createShelfBox(
       receivingOrderId: string,
-      shelfCode: string
+      shelfCode: string,
+      boxId?: string
     ): Promise<ShelfBox> {
       return client.post("/shelf-boxes", {
         receivingOrderId,
         shelfCode,
-        actorId: requireActorId(client),
+        boxId: boxId ?? undefined,
       });
     },
     async closeShelfBox(id: string): Promise<void> {
-      await client.post(`/shelf-boxes/${id}/close`, {
-        actorId: requireActorId(client),
-      });
+      await client.post(`/shelf-boxes/${id}/close`, {});
     },
     async cancelShelfBox(id: string): Promise<void> {
-      await client.del(`/shelf-boxes/${id}`, {
-        actorId: requireActorId(client),
-      });
+      await client.del(`/shelf-boxes/${id}`);
     },
 
     // Measuring — list/detail reads plus completion. Box measurement
@@ -352,16 +301,14 @@ export function createBackendWarehouseService(
       return client.get(`/measuring-tasks/${id}`);
     },
     async completeMeasuringTask(id: string): Promise<void> {
-      await client.post(`/measuring-tasks/${id}/complete`, {
-        actorId: requireActorId(client),
-      });
+      await client.post(`/measuring-tasks/${id}/complete`, {});
     },
 
-    // Goods verify — day-end generation (a system job: no actorId, empty
-    // body tolerated; date defaults to the DB server's CURRENT_DATE), the
-    // task queue reads, and the one-call per-task verify. A countedQty
-    // that differs from expectedQty corrects the lot and writes an ADJUST
-    // ledger row server-side (409 counted_qty_below_allocated /
+    // Goods verify — day-end generation (a system job: empty body tolerated;
+    // date defaults to the DB server's CURRENT_DATE), the task queue reads,
+    // and the one-call per-task verify. A countedQty that differs from
+    // expectedQty corrects the lot and writes an ADJUST ledger row
+    // server-side (409 counted_qty_below_allocated /
     // goods_verify_task_not_pending / shelf_box_not_closed).
     async generateGoodsVerifyTasks(
       date?: string
@@ -384,10 +331,7 @@ export function createBackendWarehouseService(
       id: string,
       countedQty?: number
     ): Promise<GoodsVerifyTaskListRow> {
-      return client.post(`/goods-verify-tasks/${id}/verify`, {
-        actorId: requireActorId(client),
-        countedQty,
-      });
+      return client.post(`/goods-verify-tasks/${id}/verify`, { countedQty });
     },
 
     // Supplier QR templates for client-side label parsing
@@ -406,7 +350,7 @@ export function createBackendWarehouseService(
     },
 
     // Stock search — one aggregate read; filters are optional ANDed query
-    // params (read-only: no actorId). Zero-qty lots come back by design.
+    // params. Zero-qty lots come back by design.
     async searchStock(
       filters: StockSearchFilters = {}
     ): Promise<StockSearchResult> {

@@ -89,7 +89,7 @@ onUnmounted(() => {
         <div class="box-card__id">{{ box.id }}</div>
         <div class="box-card__meta">
           <span>{{ box.status }}</span>
-          <span v-if="box.refNo">{{ box.refNo }}</span>
+          <span v-if="box.orderNo">{{ box.orderNo }}</span>
         </div>
       </div>
     </main>

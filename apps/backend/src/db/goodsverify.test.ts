@@ -28,8 +28,8 @@ async function actorIdOf(username = "operator"): Promise<string> {
   return row!.id;
 }
 
-async function receivingOrderIdOf(refNo: string): Promise<string> {
-  const row = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM receiving_orders WHERE ref_no = ${refNo}`);
+async function receivingOrderIdOf(batchNo: string): Promise<string> {
+  const row = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM receiving_orders WHERE batch_no = ${batchNo}`);
   return row!.id;
 }
 
@@ -38,8 +38,7 @@ async function invoiceItemIdOf(orderId: string, partNo: string): Promise<string>
     client.db,
     sql`SELECT rii.id FROM receiving_invoice_items rii
         JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-        JOIN parts p ON p.id = rii.part_id
-        WHERE ri.receiving_order_id = ${orderId} AND p.part_no = ${partNo}`
+        WHERE ri.receiving_order_id = ${orderId} AND rii.part_no = ${partNo}`
   );
   return row!.id;
 }
@@ -47,8 +46,8 @@ async function invoiceItemIdOf(orderId: string, partNo: string): Promise<string>
 async function seedLotIdOf(partNo: string, shelfCode: string): Promise<string> {
   const row = await queryGet<{ id: string }>(
     client.db,
-    sql`SELECT il.id FROM inventory_lots il JOIN parts p ON p.id = il.part_id
-        WHERE p.part_no = ${partNo} AND il.shelf_code = ${shelfCode}`
+    sql`SELECT il.id FROM inventory_lots il
+        WHERE il.part_no = ${partNo} AND il.shelf_code = ${shelfCode}`
   );
   return row!.id;
 }
@@ -199,9 +198,7 @@ test("detail: task + lot + box items; legacy box id → box null; 404", async ()
     totalQty: 5000,
     allocatedQty: 0,
     availableQty: 5000,
-    warehouseCode: "HK1",
-    warehouseSectionCode: "HK",
-    subInventoryCode: "STORE1",
+    orgId: 2,
   });
 
   assert.ok(detail.box);
@@ -225,8 +222,8 @@ test("detail: task + lot + box items; legacy box id → box null; 404", async ()
   const lotId = await seedLotIdOf("RK73H1JTTD1002F", "A-01-01");
   await queryRun(
     client.db,
-    sql`INSERT INTO inventory_transactions (id, inventory_lot_id, part_id, shelf_code, box_id, txn_type, qty_type, qty_delta, txn_at, created_at)
-        SELECT gen_random_uuid()::text, id, part_id, shelf_code, box_id, 'RESERVE', 'reserved', -100, now(), now()
+    sql`INSERT INTO inventory_transactions (id, inventory_lot_id, part_no, shelf_code, box_id, txn_type, qty_type, qty_delta, txn_at, created_at)
+        SELECT gen_random_uuid()::text, id, part_no, shelf_code, box_id, 'RESERVE', 'reserved', -100, now(), now()
         FROM inventory_lots WHERE id = ${lotId}`
   );
   const r = await generateGoodsVerifyTasks(client.db, {});
@@ -345,7 +342,7 @@ test("verify: no countedQty → no ADJUST; mismatch → ADJUST row + lot total_q
     qtyType: string;
     qtyDelta: number;
     inventoryLotId: string;
-    partId: string;
+    partNo: string;
     shelfCode: string;
     boxId: string;
     dateCode: string;
@@ -359,7 +356,7 @@ test("verify: no countedQty → no ADJUST; mismatch → ADJUST row + lot total_q
   }>(
     client.db,
     sql`SELECT qty_type AS "qtyType", qty_delta AS "qtyDelta",
-               inventory_lot_id AS "inventoryLotId", part_id AS "partId",
+               inventory_lot_id AS "inventoryLotId", part_no AS "partNo",
                shelf_code AS "shelfCode", box_id AS "boxId",
                date_code AS "dateCode", lot_code AS "lotCode", coo, cow,
                reference_type AS "referenceType", reference_id AS "referenceId",

@@ -13,7 +13,7 @@ import { normalizePartNo, parseQrRaw } from "./scanParse.js";
 
 export interface ConfirmArrivalResult {
   id: string;
-  refNo: string;
+  batchNo: string;
   status: string;
   arrivedAt: Date | null;
   arrivedBy: string | null;
@@ -22,9 +22,9 @@ export interface ConfirmArrivalResult {
 /**
  * Confirm a pending or provisionally-received receiving order as in-hand:
  *   - order: status → in_hand, arrived_at / arrived_by stamped
- *   - items: full receipt (received_qty = qty) + date-code fallback from the
- *     order (concept 4); for provisional orders this completes the remaining
- *     receipt on top of any scanned partials
+ *   - items: full receipt (received_qty = line_qty) + date-code fallback from
+ *     the order (concept 4); for provisional orders this completes the
+ *     remaining receipt on top of any scanned partials
  *   - ledger: RECEIVE_TO_DOCK (qty_type 'dock') row per item for the applied
  *     delta, plus a transaction_logs state transition
  * The caller runs `allocateAll` after commit (concept 5) — allocation is
@@ -36,9 +36,9 @@ export async function confirmReceivingArrival(
   actorId: string
 ): Promise<ConfirmArrivalResult> {
   return db.transaction(async (tx) => {
-    const ro = await queryGet<{ id: string; refNo: string; status: string; dateCode: string | null }>(
+    const ro = await queryGet<{ id: string; batchNo: string; status: string; dateCode: string | null }>(
       tx,
-      sql`SELECT id, ref_no AS "refNo", status, date_code AS "dateCode" FROM receiving_orders WHERE id = ${orderId}`
+      sql`SELECT id, batch_no AS "batchNo", status, date_code AS "dateCode" FROM receiving_orders WHERE id = ${orderId}`
     );
     if (!ro) throw new HTTPException(404, { message: "receiving_order_not_found" });
     if (ro.status !== "pending" && ro.status !== "provisional_received") {
@@ -49,18 +49,18 @@ export async function confirmReceivingArrival(
 
     const items = await queryAll<{
       id: string;
-      qty: number;
+      lineQty: number;
       receivedQty: number;
-      partId: string;
-      boxId: string | null;
+      partNo: string;
+      ctnNo: string | null;
       dateCode: string | null;
       lotCode: string | null;
       coo: string | null;
       cow: string | null;
     }>(
       tx,
-      sql`SELECT rii.id, rii.qty, rii.received_qty AS "receivedQty",
-                 rii.part_id AS "partId", rii.box_id AS "boxId",
+      sql`SELECT rii.id, rii.line_qty AS "lineQty", rii.received_qty AS "receivedQty",
+                 rii.part_no AS "partNo", rii.ctn_no AS "ctnNo",
                  rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
                  rii.coo, rii.cow
           FROM receiving_invoice_items rii
@@ -79,21 +79,21 @@ export async function confirmReceivingArrival(
     await queryRun(
       tx,
       sql`UPDATE receiving_invoice_items rii
-          SET received_qty = rii.qty,
+          SET received_qty = rii.line_qty,
               date_code = COALESCE(rii.date_code, ${ro.dateCode})
           FROM receiving_invoices ri
           WHERE rii.receiving_invoice_id = ri.id AND ri.receiving_order_id = ${orderId}`
     );
 
     const txnRows = items
-      .map((it) => ({ it, delta: it.qty - it.receivedQty }))
+      .map((it) => ({ it, delta: it.lineQty - it.receivedQty }))
       .filter(({ delta }) => delta !== 0)
       .map(({ it, delta }) => ({
         id: randomUUID(),
         inventoryLotId: null,
-        partId: it.partId,
+        partNo: it.partNo,
         shelfCode: null,
-        boxId: it.boxId,
+        boxId: it.ctnNo,
         txnType: "RECEIVE_TO_DOCK",
         qtyType: "dock",
         qtyDelta: delta,
@@ -121,7 +121,7 @@ export async function confirmReceivingArrival(
       createdAt: at,
     });
 
-    return { id: ro.id, refNo: ro.refNo, status: "in_hand", arrivedAt: at, arrivedBy: actorId };
+    return { id: ro.id, batchNo: ro.batchNo, status: "in_hand", arrivedAt: at, arrivedBy: actorId };
   });
 }
 
@@ -138,21 +138,20 @@ export interface ScanReceivingOrderInput {
   lotCode?: string | null;
   coo?: string | null;
   cow?: string | null;
-  boxId?: string | null;
+  ctnNo?: string | null;
   serialNo?: string | null;
 }
 
 export interface ScanMatchCandidate {
   id: string;
-  partId: string;
   partNo: string;
   wclItemNo: string | null;
-  qty: number;
+  lineQty: number;
   receivedQty: number;
 }
 
 export interface ScanReceivingResult extends ScanMatchCandidate {
-  boxId: string | null;
+  ctnNo: string | null;
   dateCode: string | null;
   lotCode: string | null;
   coo: string | null;
@@ -175,7 +174,7 @@ function matchConflict(body: { message: "no_match" | "multiple_matches"; candida
 }
 
 function toCandidate(it: ScanItemRow): ScanMatchCandidate {
-  return { id: it.id, partId: it.partId, partNo: it.partNo, wclItemNo: it.wclItemNo, qty: it.qty, receivedQty: it.receivedQty };
+  return { id: it.id, partNo: it.partNo, wclItemNo: it.wclItemNo, lineQty: it.lineQty, receivedQty: it.receivedQty };
 }
 
 /**
@@ -235,14 +234,14 @@ export async function scanReceivingOrder(
 
     const items = await queryAll<ScanItemRow>(
       tx,
-      sql`SELECT rii.id, rii.part_id AS "partId", p.part_no AS "partNo",
+      sql`SELECT rii.id, rii.part_no AS "partNo",
                  rii.wcl_item_no AS "wclItemNo", p.wcl_item_no AS "partWclItemNo",
-                 rii.qty, rii.received_qty AS "receivedQty",
-                 rii.box_id AS "boxId", rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
+                 rii.line_qty AS "lineQty", rii.received_qty AS "receivedQty",
+                 rii.ctn_no AS "ctnNo", rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
                  rii.coo, rii.cow
           FROM receiving_invoice_items rii
           JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-          JOIN parts p ON p.id = rii.part_id
+          JOIN parts p ON p.part_no = rii.part_no
           WHERE ri.receiving_order_id = ${orderId}
           ORDER BY rii.po_no, rii.po_line, rii.id`
     );
@@ -275,7 +274,7 @@ export async function scanReceivingOrder(
       if (dup) throw new HTTPException(409, { message: "label_already_scanned" });
     }
 
-    if (qty > item.qty - item.receivedQty) {
+    if (qty > item.lineQty - item.receivedQty) {
       throw new HTTPException(409, { message: "scanned_qty_exceeds_remaining" });
     }
 
@@ -302,9 +301,9 @@ export async function scanReceivingOrder(
     await tx.insert(inventoryTransactions).values({
       id: randomUUID(),
       inventoryLotId: null,
-      partId: item.partId,
+      partNo: item.partNo,
       shelfCode: null,
-      boxId: input.boxId ?? item.boxId,
+      boxId: input.ctnNo ?? item.ctnNo,
       txnType: "RECEIVE_TO_DOCK",
       qtyType: "dock",
       qtyDelta: qty,
@@ -334,12 +333,11 @@ export async function scanReceivingOrder(
 
     const updated = await queryGet<Omit<ScanReceivingResult, "serialNo">>(
       tx,
-      sql`SELECT rii.id, rii.part_id AS "partId", p.part_no AS "partNo",
-                 rii.wcl_item_no AS "wclItemNo", rii.qty, rii.received_qty AS "receivedQty",
-                 rii.box_id AS "boxId", rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
+      sql`SELECT rii.id, rii.part_no AS "partNo",
+                 rii.wcl_item_no AS "wclItemNo", rii.line_qty AS "lineQty", rii.received_qty AS "receivedQty",
+                 rii.ctn_no AS "ctnNo", rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
                  rii.coo, rii.cow
           FROM receiving_invoice_items rii
-          JOIN parts p ON p.id = rii.part_id
           WHERE rii.id = ${item.id}`
     );
     return { ...updated!, serialNo };

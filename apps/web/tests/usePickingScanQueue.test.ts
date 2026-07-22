@@ -21,8 +21,6 @@ function makeItems(): Items {
       qty: 3000,
       pickedQty: 0,
       allocatedQty: 3000,
-      requiredDateCode: null,
-      sourceShelfCode: null,
       allocations: [
         { id: 'alloc-1', qty: 2000, lot: null, receivingInvoiceItemId: 'ri-1', receivingOrderId: 'ro-1', boxId: null },
         { id: 'alloc-2', qty: 1000, lot: null, receivingInvoiceItemId: 'ri-2', receivingOrderId: 'ro-1', boxId: null },
@@ -36,8 +34,6 @@ function makeItems(): Items {
       qty: 1000,
       pickedQty: 0,
       allocatedQty: 1000,
-      requiredDateCode: null,
-      sourceShelfCode: null,
       allocations: [
         { id: 'alloc-3', qty: 1000, lot: null, receivingInvoiceItemId: 'ri-3', receivingOrderId: 'ro-1', boxId: null },
       ],

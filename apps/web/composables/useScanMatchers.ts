@@ -23,7 +23,7 @@ export async function runScanMatcher(
       return m.matchPicking(ctx.allocation, ctx.pickingItem, parsed);
     case 'put-away':
       if (!ctx.receivingItem) return m.error('missing_receiving_item');
-      return m.matchPutAway(ctx.receivingOrderId, ctx.receivingItem, parsed);
+      return m.matchPutAway(ctx.receivingOrderId, ctx.receivingItem, parsed, ctx.shelfBoxId);
     case 'measuring':
       if (!ctx.packages) return m.error('missing_box_packages');
       return m.matchMeasuring(ctx.packages, ctx.targetPackageId, parsed);
@@ -53,6 +53,8 @@ export interface ScanTaskContext {
   // put-away
   receivingOrderId?: string;
   receivingItem?: PutAwayExpectedItem;
+  // put-away active box: scans are assigned straight into this open shelf box
+  shelfBoxId?: string | null;
   // measuring (the box's packages from the consolidated task detail —
   // matching runs client-side, then verifyPackage by id)
   packages?: MeasuringPackage[];
@@ -74,7 +76,7 @@ export type ScanMatchResult =
 
 export interface ScanMatchers {
   matchPicking(allocation: PickingAllocationRef, pickingItem: PickingItemRef, parsed: OcrInput): Promise<ScanMatchResult>;
-  matchPutAway(receivingOrderId: string | undefined, receivingItem: PutAwayExpectedItem, parsed: OcrInput): Promise<ScanMatchResult>;
+  matchPutAway(receivingOrderId: string | undefined, receivingItem: PutAwayExpectedItem, parsed: OcrInput, shelfBoxId?: string | null): Promise<ScanMatchResult>;
   matchMeasuring(packages: MeasuringPackage[], targetPackageId: string | undefined, parsed: OcrInput): Promise<ScanMatchResult>;
   error(err: I18nError): ScanMatchResult;
   error(code: string, params?: Record<string, unknown>): ScanMatchResult;
@@ -128,7 +130,7 @@ export function useScanMatchers(): ScanMatchers {
     }
   }
 
-  async function matchPutAway(receivingOrderId: string | undefined, receivingItem: PutAwayExpectedItem, parsed: OcrInput): Promise<ScanMatchResult> {
+  async function matchPutAway(receivingOrderId: string | undefined, receivingItem: PutAwayExpectedItem, parsed: OcrInput, shelfBoxId?: string | null): Promise<ScanMatchResult> {
     try {
       const user = currentUser.value;
       if (!user?.id) return error('operator_not_signed_in');
@@ -153,8 +155,6 @@ export function useScanMatchers(): ScanMatchers {
         type: 'single',
         record: receivingItem,
         apply: async () => {
-          const actorId = currentUser.value?.id;
-          if (!actorId) throw new I18nError('operator_not_signed_in');
           await warehouse.recordPutAwayScan(
             receivingOrderId,
             receivingItem.id,
@@ -162,7 +162,8 @@ export function useScanMatchers(): ScanMatchers {
             dateCode,
             lotCode,
             coo,
-            cow
+            cow,
+            shelfBoxId ?? null
           );
         },
       };

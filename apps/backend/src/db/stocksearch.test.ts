@@ -35,31 +35,27 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
   const id2202 = await partIdOf("RK73H1JTTD2202F");
 
   assert.deepEqual(lots[0], {
-    partId: id1002,
+    partNo: "RK73H1JTTD1002F",
     dateCode: "2601",
     lotCode: "L2601A",
     coo: "JP",
     cow: "JP",
     shelfCode: "A-01-01",
     boxId: "BOX-0001",
-    warehouseCode: "HK1",
-    warehouseSectionCode: "HK",
-    subInventoryCode: "STORE1",
+    orgId: 2,
     totalQty: 10000,
     allocatedQty: 0,
     availableQty: 10000,
   });
   assert.deepEqual(lots[1], {
-    partId: id2202,
+    partNo: "RK73H1JTTD2202F",
     dateCode: "2602",
     lotCode: "L2602B",
     coo: "JP",
     cow: "JP",
     shelfCode: "A-01-02",
     boxId: "BOX-0002",
-    warehouseCode: "HK1",
-    warehouseSectionCode: "HK",
-    subInventoryCode: "STORE1",
+    orgId: 2,
     totalQty: 5000,
     allocatedQty: 0,
     availableQty: 5000,
@@ -174,7 +170,7 @@ test("zero-qty lots are returned (old /stock-search/parts/lots had no qty filter
   await queryRun(
     client.db,
     sql`UPDATE inventory_lots SET total_qty = 0
-        WHERE part_id = (SELECT id FROM parts WHERE part_no = 'RK73H1JTTD2202F')`
+        WHERE part_no = 'RK73H1JTTD2202F'`
   );
 
   const { parts, lots } = await searchStock(client.db, {});

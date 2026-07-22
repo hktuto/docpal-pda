@@ -16,20 +16,19 @@ export interface HealthResponse {
   db: "ok" | "error";
 }
 
-export interface ReceivingPutOrder { ref_no: string; delivery_date?: string | null; supplier_code?: string | null; }
+export interface ReceivingPutOrder { batch_no: string; delivery_date?: string | null; supplier_code?: string | null; org_id?: number | null; }
 export interface ReceivingPutItem {
-  line_no: number; part_no: string; description?: string | null; qty: number;
-  box_id?: string | null; date_code?: string | null; lot_code?: string | null; coo?: string | null; cow?: string | null;
+  line_no: number; part_no: string; description?: string | null; line_qty: number;
+  ctn_no?: string | null; date_code?: string | null; lot_code?: string | null; coo?: string | null; cow?: string | null;
 }
 export interface ReceivingPutInvoice { invoice_no: string; supplier_code?: string | null; items: ReceivingPutItem[]; }
 export interface ReceivingPutBody { order: ReceivingPutOrder; invoices: ReceivingPutInvoice[]; }
-export interface PickingPutOrder { ref_no: string; ship_to?: string | null; destination_country?: string | null; }
+export interface PickingPutOrder { order_no: string; ship_to?: string | null; }
 export interface PickingPutItem {
   line_id: string; part_no: string; qty: number;
-  required_date_code?: string | null; source_shelf_code?: string | null;
 }
 export interface PickingPutBody { order: PickingPutOrder; items: PickingPutItem[]; }
-export interface IngestUpsertResponse { id: string; external_id: string; created: boolean; changed: boolean; }
+export interface IngestUpsertResponse { id: string; created: boolean; changed: boolean; }
 export interface ConfirmArrivalResponse { id: string; status: "in_hand"; }
 export interface ScanResponse { package_ids: string[]; }
 // date_code/lot_code/coo/cow come from the client's OCR parse but are informational

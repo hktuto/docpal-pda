@@ -6,7 +6,7 @@
     <template v-else-if="task">
       <DetailHeader
         v-model="headerExpanded"
-        :title="task.order.refNo || $t('common.noData')"
+        :title="task.order.orderNo || $t('common.noData')"
         :status="task.task.status"
         :label="statusLabel.measuring(task.task.status)"
         :flush-top="route.meta.props?.noPadding"
@@ -29,6 +29,7 @@
       </DetailHeader>
 
       <h2 class="section-title">{{ $t('measuring.detail.boxes') }}</h2>
+      <p class="scan-hint">{{ $t('measuring.detail.scanHint') }}</p>
       <p v-if="!task.boxes.length" class="empty">{{ $t('measuring.detail.noBoxes') }}</p>
 
       <div
@@ -81,6 +82,8 @@
 <script setup lang="ts">
 import { useErrorMessage } from "~/composables/errorMessage";
 import { useWarehouse } from "~/composables/useWarehouse";
+import { useHardwareScanner } from "~/composables/useHardwareScanner";
+import { useToast } from "~/composables/useToast";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import type { MeasuringTaskDetail, MeasuringBox } from "~/services/types";
@@ -91,6 +94,8 @@ const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const warehouse = useWarehouse();
+const router = useRouter();
+const { showToast } = useToast();
 
 useHead({ title: t('measuring.detail.title') });
 
@@ -136,6 +141,24 @@ async function complete() {
 }
 
 useVisibleReload(load);
+
+// Scanning a box QR (or typing its id on the wedge) opens that box directly.
+// Exact id wins; otherwise a unique substring match (e.g. the daily seq).
+useHardwareScanner({
+  enabled: () => !!task.value,
+  onScan: (rawValue) => {
+    const boxes = task.value?.boxes ?? [];
+    const q = rawValue.trim().toLowerCase();
+    if (!q) return;
+    const exact = boxes.find((b) => b.id.toLowerCase() === q);
+    const matches = exact ? [exact] : boxes.filter((b) => b.id.toLowerCase().includes(q));
+    if (matches.length === 1) {
+      router.push(`/measuring/${taskId}/box/${matches[0].id}`);
+    } else {
+      showToast(t("measuring.detail.boxNotFound", { id: rawValue.trim() }));
+    }
+  },
+});
 </script>
 
 <style scoped>
@@ -157,6 +180,12 @@ useVisibleReload(load);
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.03em;
+}
+
+.scan-hint {
+  margin: -0.5rem 0 1rem;
+  color: var(--muted);
+  font-size: 0.8125rem;
 }
 
 </style>

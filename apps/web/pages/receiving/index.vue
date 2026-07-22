@@ -30,7 +30,7 @@
       class="card list-card"
     >
       <div class="list-card__header">
-        <span class="list-card__title">{{ ro.refNo }}</span>
+        <span class="list-card__title">{{ ro.batchNo }}</span>
         <span class="badge" :class="badgeClass(ro.status)">{{ statusLabel.receiving(ro.status) }}</span>
       </div>
       <p class="list-card__meta">
@@ -102,7 +102,7 @@ const rows = computed(() => {
   if (!term) return rawRows.value;
   return rawRows.value.filter(
     (r) =>
-      r.refNo.toLowerCase().includes(term) ||
+      r.batchNo.toLowerCase().includes(term) ||
       (r.supplierName?.toLowerCase().includes(term) ?? false)
   );
 });

@@ -8,31 +8,20 @@ From the home screen, tap **Measuring**. The list shows measuring tasks for fini
 
 ## 2. Select a measuring task
 
-Tap the task to open the detail page.
+Tap the task to open the detail page. The detail shows the picking order and every shipping box with its package-verification progress and any recorded measurements.
 
-## 3. Review items to pack
+## 3. Open a box
 
-The detail shows the picking order lines and quantities that need to be packed.
+Either tap **Open box** on the box card, or scan the box's QR code (or type its box id on the wedge) — scanning opens the box page directly.
 
-## 4. Create shipping boxes
+## 4. Verify the packages
 
-Tap the action to add a new shipping box. Each box gets a unique identifier.
+The box page lists the box's packages in a table. Scan each package's QR label with the hardware scanner — a matching package is verified immediately and its row flips to **Verified**. The per-row **Scan** button (camera OCR with review) is the fallback for labels the QR parser cannot handle.
 
 ## 5. Record measurements
 
-For each box, enter:
+When every package is verified, the measurements form opens automatically (or tap **Enter measurements**). Enter box size, net/gross weight, and destination country, then **Finish box** to close the box. See [Box measurements](./box-measurements.md).
 
-- Length
-- Width
-- Height
-- Weight
+## 6. Complete the task
 
-See [Box measurements](./box-measurements.md) for details.
-
-## 6. Pack items
-
-Assign picking items to boxes. The packed quantity is recorded per box.
-
-## 7. Finish the task
-
-When all items are packed and measurements are recorded, finish the measuring task.
+When every box is closed, tap **Complete measuring** on the task detail.

@@ -58,7 +58,7 @@
         <div v-if="partMeta(part)" class="part-item__meta">{{ partMeta(part) }}</div>
 
         <ul class="part-item__lots">
-          <li v-for="(lot, index) in lotsByPart[part.id] ?? []" :key="index" class="lot-row">
+          <li v-for="(lot, index) in lotsByPart[part.partNo] ?? []" :key="index" class="lot-row">
             <span class="lot-row__location">{{ locationLabel(lot) }}</span>
             <span class="lot-row__qty">{{ $t('stockSearch.lotQty', { available: lot.availableQty, total: lot.totalQty }) }}</span>
             <span v-if="batchLabel(lot)" class="lot-row__meta">{{ batchLabel(lot) }}</span>
@@ -103,9 +103,9 @@ const filtersExpanded = ref(false);
 const lotsByPart = computed(() => {
   const map: Record<string, StockSearchLot[]> = {};
   for (const lot of lots.value) {
-    const list = map[lot.partId] ?? [];
+    const list = map[lot.partNo] ?? [];
     list.push(lot);
-    map[lot.partId] = list;
+    map[lot.partNo] = list;
   }
   return map;
 });
@@ -152,13 +152,11 @@ function partMeta(part: StockSearchPart): string {
     .join(" · ");
 }
 
-// Three-level location (warehouse → section → sub-inventory) + shelf + box;
-// the API returns fields, the client formats the label.
+// Org (office) + shelf + box; the API returns fields, the client formats
+// the label.
 function locationLabel(lot: StockSearchLot): string {
   return [
-    lot.warehouseCode,
-    lot.warehouseSectionCode,
-    lot.subInventoryCode,
+    lot.orgId != null ? `Org ${lot.orgId}` : null,
     lot.shelfCode,
     lot.boxId,
   ]

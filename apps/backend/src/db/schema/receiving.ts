@@ -1,22 +1,18 @@
 import { pgTable, text, integer, boolean, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
-import { defaultWarehouse } from "../../config.js";
-import { users, suppliers, parts, subInventories, warehouseSections } from "./master.js";
+import { users, suppliers, parts } from "./master.js";
 
 // = Packing List Batch
 export const receivingOrders = pgTable(
   "receiving_orders",
   {
     id: text("id").primaryKey(),
-    refNo: text("ref_no").notNull(),
-    externalId: text("external_id"), // ingest sync key (PUT /receiving-orders/:externalId); null = created locally
+    batchNo: text("batch_no").notNull(), // 批次参考号（原 ref_no）
     supplierId: text("supplier_id").references(() => suppliers.id),
     deliveryDate: timestamp("delivery_date", { mode: "date" }),
-    warehouseCode: text("warehouse_code").notNull().default("HK1").$defaultFn(defaultWarehouse), // 收货仓库（实例默认 WAREHOUSE_CODE）
-    warehouseSectionCode: text("warehouse_section_code").references(() => warehouseSections.code), // 收货仓库分区
-    subInventoryCode: text("sub_inventory_code").notNull().references(() => subInventories.code), // 收货入哪一个子库存（每单必有）
+    orgId: integer("org_id").notNull().default(2), // 收货办公室, 2: HK
     dateCode: text("date_code"), // 整单 date code；行无 date_code 时继承此值
-    status: text("status").notNull().default("pending"), // pending | provisional_received(暫收貨) | clear
+    status: text("status").notNull().default("pending"), // pending | in_hand | provisional_received | clear
     arrivedAt: timestamp("arrived_at", { mode: "date" }),
     arrivedBy: text("arrived_by").references(() => users.id),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
@@ -24,7 +20,6 @@ export const receivingOrders = pgTable(
   },
   (t) => ({
     statusIdx: index("idx_receiving_orders_status").on(t.status),
-    externalIdUq: uniqueIndex("idx_receiving_orders_external_id").on(t.externalId),
   })
 );
 
@@ -39,9 +34,6 @@ export const receivingInvoices = pgTable("receiving_invoices", {
   totalCtn: integer("total_ctn"), // 总箱数
   deliveryDate: timestamp("delivery_date", { mode: "date" }), // 出货日期，非入库时间
   orgId: integer("org_id").notNull().default(2), // 出货方办公室, 2: HK
-  warehouseCode: text("warehouse_code").notNull().default("HK1").$defaultFn(defaultWarehouse), // 收货仓库（实例默认 WAREHOUSE_CODE）
-  warehouseSectionCode: text("warehouse_section_code").references(() => warehouseSections.code), // 收货仓库分区
-  subInventoryCode: text("sub_inventory_code").references(() => subInventories.code), // 放到哪一个子库仓库中，如 STORE1，允许为空
   createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
 });
@@ -52,19 +44,20 @@ export const receivingInvoiceItems = pgTable(
   {
     id: text("id").primaryKey(),
     receivingInvoiceId: text("receiving_invoice_id").notNull().references(() => receivingInvoices.id, { onDelete: "cascade" }),
-    partId: text("part_id").notNull().references(() => parts.id),
+    partNo: text("part_no").notNull().references(() => parts.partNo),
     wclItemNo: text("wcl_item_no"), // WCL Part No（行级冗余，便于 OCR 对账）
     poNo: text("po_no"),
     poLine: text("po_line"),
-    qty: integer("qty").notNull(), // 应收 / Expected 单据量
+    lineQty: integer("line_qty").notNull(), // 应收 / Expected 单据量（与 Oracle DB line qty 一致）
     receivedQty: integer("received_qty").notNull().default(0),
     pickedQty: integer("picked_qty").notNull().default(0),
     putAwayQty: integer("put_away_qty").notNull().default(0),
-    boxId: text("box_id"),
+    ctnNo: text("ctn_no"), // 箱号（原 box_id）
     dateCode: text("date_code"),
-    lotCode: text("lot_code"),
+    lotCode: text("lot_code"), // lot_no
     coo: text("coo"), // country_of_origin
     cow: text("cow"), // country_of_wafer
+    orgId: integer("org_id").notNull().default(2), // 收货办公室, 2: HK
     reportedMismatch: boolean("reported_mismatch").notNull().default(false),
     mismatchReason: text("mismatch_reason"),
     mismatchQty: integer("mismatch_qty"),
@@ -73,7 +66,7 @@ export const receivingInvoiceItems = pgTable(
   },
   (t) => ({
     invoiceIdx: index("idx_receiving_invoice_items_invoice").on(t.receivingInvoiceId),
-    partIdx: index("idx_receiving_invoice_items_part").on(t.partId),
+    partIdx: index("idx_receiving_invoice_items_part").on(t.partNo),
   })
 );
 

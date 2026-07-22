@@ -90,6 +90,8 @@ describe('useWarehouseEvents', () => {
     }));
     // The i18n stub returns the key, so toast assertions read as keys.
     vi.stubGlobal('useNuxtApp', () => ({ $i18n: { t: (key: string) => key } }));
+    // The stream carries the JWT as a query param — sign in by default.
+    storage.setItem('warehouse-token', 'jwt-1');
     MockEventSource.instances = [];
     showToastMock.mockReset();
     clearApiCache();
@@ -101,13 +103,21 @@ describe('useWarehouseEvents', () => {
     vi.unstubAllGlobals();
   });
 
-  it('connects to /events with the ?since= cursor from storage', () => {
+  it('connects to /events with the ?since= cursor from storage and the session token', () => {
     storage.setItem('wms-events-last-id', '41');
 
     useWarehouseEvents().connect();
 
     expect(MockEventSource.instances).toHaveLength(1);
-    expect(MockEventSource.instances[0].url).toBe('http://api.test/events?since=41');
+    expect(MockEventSource.instances[0].url).toBe('http://api.test/events?since=41&token=jwt-1');
+  });
+
+  it('does not connect without a session token', () => {
+    storage.removeItem('warehouse-token');
+
+    useWarehouseEvents().connect();
+
+    expect(MockEventSource.instances).toHaveLength(0);
   });
 
   it('connect() is a no-op while already connected', () => {
@@ -175,7 +185,7 @@ describe('useWarehouseEvents', () => {
     vi.advanceTimersByTime(2000);
     expect(MockEventSource.instances).toHaveLength(2);
     const second = MockEventSource.instances[1];
-    expect(second.url).toBe('http://api.test/events?since=7');
+    expect(second.url).toBe('http://api.test/events?since=7&token=jwt-1');
 
     // Backoff grows ×1.5: next retry after 3 s.
     second.error();

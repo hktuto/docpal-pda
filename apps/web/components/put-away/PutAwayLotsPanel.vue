@@ -18,14 +18,8 @@
       <DetailRow :label="$t('putAway.lotsPanel.cooCow')">
         <span>{{ item.coo || $t('common.noData') }} / {{ item.cow || $t('common.noData') }}</span>
       </DetailRow>
-      <DetailRow :label="$t('putAway.lotsPanel.totalQty')">
-        <span>{{ item.qty }}</span>
-      </DetailRow>
-      <DetailRow :label="$t('putAway.lotsPanel.scannedQty')">
-        <span>{{ scannedQty(item) }}</span>
-      </DetailRow>
-      <DetailRow :label="$t('putAway.lotsPanel.boxedQty')">
-        <span>{{ item.putAwayQty }}</span>
+      <DetailRow :label="$t('putAway.lotsPanel.totalQty') +' / '+ $t('putAway.lotsPanel.scannedQty')  +' / '+ $t('putAway.lotsPanel.boxedQty')">
+        <span>{{ item.lineQty }}</span> / <span>{{ scannedQty(item) || 0 }}</span> / <span>{{ item.putAwayQty }}</span>
       </DetailRow>
 
       <div class="lot-actions">

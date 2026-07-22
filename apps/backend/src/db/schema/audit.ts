@@ -31,7 +31,7 @@ export const inventoryTransactions = pgTable(
   {
     id: text("id").primaryKey(),
     inventoryLotId: text("inventory_lot_id").references(() => inventoryLots.id), // 关联库存批次（可空）
-    partId: text("part_id").notNull().references(() => parts.id),
+    partNo: text("part_no").notNull().references(() => parts.partNo),
     shelfCode: text("shelf_code").references(() => shelves.code), // 发生出入的仓位（盘点筛选用）
     boxId: text("box_id"), // 箱号（可空）
     txnType: text("txn_type").notNull(), // 业务动作：EXPECTED_CREATE / RECEIVE_TO_DOCK / PUT_AWAY / RESERVE / PICK / SHIP_CONFIRM / ADJUST
@@ -54,7 +54,7 @@ export const inventoryTransactions = pgTable(
     qtyTypeCheck: check("chk_inventory_transactions_qty_type", sql`qty_type IN ('expected', 'dock', 'on_hand', 'reserved')`),
     shelfTimeIdx: index("idx_inventory_transactions_shelf_time").on(t.shelfCode, t.txnAt),
     lotTimeIdx: index("idx_inventory_transactions_lot_time").on(t.inventoryLotId, t.txnAt),
-    partTimeIdx: index("idx_inventory_transactions_part_time").on(t.partId, t.txnAt),
+    partTimeIdx: index("idx_inventory_transactions_part_time").on(t.partNo, t.txnAt),
     txnTypeIdx: index("idx_inventory_transactions_txn_type").on(t.txnType),
     referenceIdx: index("idx_inventory_transactions_reference").on(t.referenceType, t.referenceId),
     receivingItemIdx: index("idx_inventory_transactions_receiving_item").on(t.receivingInvoiceItemId),

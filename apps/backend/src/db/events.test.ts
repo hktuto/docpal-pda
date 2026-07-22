@@ -75,58 +75,57 @@ test("allocateAll: emits one allocation.computed on change, none on an idempoten
 });
 
 const pickingBody: IngestPickingBody = {
-  order: { refNo: "PO-EVT-1" },
+  order: {},
   items: [{ partNo: "RK73H1JTTD2202F", qty: 5 }],
 };
 
 test("ingest picking: emits created on insert, nothing on no-change, updated on change", async () => {
   await reseed(client);
-  const r1 = await upsertPickingOrder(client.db, "EXT-EVT-PO-1", pickingBody);
+  const r1 = await upsertPickingOrder(client.db, "PO-EVT-1", pickingBody);
   assert.equal(r1.created, true);
   let created = await eventsOfType("picking_order.created");
   assert.equal(created.length, 1);
   assert.deepEqual(created[0]!.topics, ["/picking-orders"]);
-  assert.equal(created[0]!.data.externalId, "EXT-EVT-PO-1");
-  assert.equal(created[0]!.data.refNo, "PO-EVT-1");
+  assert.equal(created[0]!.data.orderNo, "PO-EVT-1");
 
-  const r2 = await upsertPickingOrder(client.db, "EXT-EVT-PO-1", pickingBody);
+  const r2 = await upsertPickingOrder(client.db, "PO-EVT-1", pickingBody);
   assert.equal(r2.changed, false);
   assert.equal((await eventsOfType("picking_order.created")).length, 1);
   assert.equal((await eventsOfType("picking_order.updated")).length, 0);
 
-  const r3 = await upsertPickingOrder(client.db, "EXT-EVT-PO-1", {
-    order: { refNo: "PO-EVT-1" },
+  const r3 = await upsertPickingOrder(client.db, "PO-EVT-1", {
+    order: {},
     items: [{ partNo: "RK73H1JTTD2202F", qty: 7 }],
   });
   assert.equal(r3.changed, true);
   const updated = await eventsOfType("picking_order.updated");
   assert.equal(updated.length, 1);
-  assert.equal(updated[0]!.data.externalId, "EXT-EVT-PO-1");
+  assert.equal(updated[0]!.data.orderNo, "PO-EVT-1");
 });
 
 function receivingBody(): IngestReceivingBody {
   return {
-    order: { refNo: "RO-EVT-1", subInventoryCode: "STORE1" },
-    invoices: [{ invoiceNo: "INV-EVT-1", items: [{ partNo: "RK73H1JTTD2202F", qty: 10 }] }],
+    order: {},
+    invoices: [{ invoiceNo: "INV-EVT-1", items: [{ partNo: "RK73H1JTTD2202F", lineQty: 10 }] }],
   };
 }
 
 test("ingest receiving: emits receiving_order.upserted on create and on change only", async () => {
   await reseed(client);
-  const r1 = await upsertReceivingOrder(client.db, "EXT-EVT-RO-1", receivingBody());
+  const r1 = await upsertReceivingOrder(client.db, "RO-EVT-1", receivingBody());
   assert.equal(r1.created, true);
   const afterCreate = await eventsOfType("receiving_order.upserted");
   assert.equal(afterCreate.length, 1);
   assert.deepEqual(afterCreate[0]!.topics, ["/receiving-orders"]);
-  assert.equal(afterCreate[0]!.data.refNo, "RO-EVT-1");
+  assert.equal(afterCreate[0]!.data.batchNo, "RO-EVT-1");
 
-  const r2 = await upsertReceivingOrder(client.db, "EXT-EVT-RO-1", receivingBody());
+  const r2 = await upsertReceivingOrder(client.db, "RO-EVT-1", receivingBody());
   assert.equal(r2.changed, false);
   assert.equal((await eventsOfType("receiving_order.upserted")).length, 1);
 
   const changedBody = receivingBody();
-  changedBody.invoices[0]!.items[0]!.qty = 12;
-  const r3 = await upsertReceivingOrder(client.db, "EXT-EVT-RO-1", changedBody);
+  changedBody.invoices[0]!.items[0]!.lineQty = 12;
+  const r3 = await upsertReceivingOrder(client.db, "RO-EVT-1", changedBody);
   assert.equal(r3.changed, true);
   assert.equal((await eventsOfType("receiving_order.upserted")).length, 2);
 });

@@ -85,13 +85,14 @@ export interface WarehouseService {
     dateCode: string | null,
     lotCode: string | null,
     coo: string | null,
-    cow: string | null
+    cow: string | null,
+    shelfBoxId?: string | null
   ): Promise<PutAwayScan>;
   assignPutAwayScanToBox(scanId: string, boxId: string): Promise<void>;
   addAllUnboxedScansToBox(boxId: string): Promise<number>;
   removePutAwayScanFromBox(scanId: string, boxId: string): Promise<void>;
   removePutAwayScannedPiece(scanId: string): Promise<void>;
-  createShelfBox(receivingOrderId: string, shelfCode: string): Promise<ShelfBox>;
+  createShelfBox(receivingOrderId: string, shelfCode: string, boxId?: string): Promise<ShelfBox>;
   closeShelfBox(id: string): Promise<void>;
   cancelShelfBox(id: string): Promise<void>;
 
@@ -104,10 +105,10 @@ export interface WarehouseService {
   completeMeasuringTask(id: string): Promise<void>;
 
   // Goods verify — task-based (docs/backend/api-design.md §Goods verify).
-  // Day-end generation is explicit + idempotent (no actorId — the backend
-  // treats it as a system job and tolerates an empty body); verify is one
-  // call per task (countedQty optional; a mismatch corrects the lot and
-  // writes an ADJUST ledger row server-side).
+  // Day-end generation is explicit + idempotent (the backend treats it as a
+  // system job and tolerates an empty body); verify is one call per task
+  // (countedQty optional; a mismatch corrects the lot and writes an ADJUST
+  // ledger row server-side).
   generateGoodsVerifyTasks(date?: string): Promise<{ created: number; date: string }>;
   getGoodsVerifyTasks(filters?: GoodsVerifyTaskFilters): Promise<GoodsVerifyTaskListRow[]>;
   getGoodsVerifyTask(id: string): Promise<GoodsVerifyTaskDetail>;
@@ -132,7 +133,6 @@ export interface WarehouseService {
 }
 
 export interface CreateWarehouseServiceOptions {
-  getActorId: () => string | undefined;
   apiBaseUrl?: string;
 }
 

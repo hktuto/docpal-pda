@@ -27,7 +27,7 @@
             @change="toggleSelection(po.id)"
           />
           <NuxtLink :to="`/picking/${po.id}`" class="list-card__title">
-            {{ po.refNo }}
+            {{ po.orderNo }}
           </NuxtLink>
         </div>
         <span class="badge" :class="badgeClass(po.status)">{{ statusLabel.picking(po.status) }}</span>
@@ -106,7 +106,7 @@ const rows = computed(() => {
   if (!term) return rawRows.value;
   return rawRows.value.filter(
     (r) =>
-      r.refNo.toLowerCase().includes(term) ||
+      r.orderNo.toLowerCase().includes(term) ||
       (r.poNo?.toLowerCase().includes(term) ?? false) ||
       (r.customerCode?.toLowerCase().includes(term) ?? false)
   );
@@ -115,7 +115,7 @@ const rows = computed(() => {
 const selectedOrders = computed(() =>
   rawRows.value
     .filter((r) => selectedIds.value.has(r.id))
-    .map((r) => ({ id: r.id, refNo: r.refNo, totalQty: r.totalQty }))
+    .map((r) => ({ id: r.id, orderNo: r.orderNo, totalQty: r.totalQty }))
 );
 
 const hasSelection = computed(() => selectedOrders.value.length > 0);

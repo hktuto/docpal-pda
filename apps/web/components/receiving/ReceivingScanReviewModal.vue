@@ -39,7 +39,7 @@
               <p class="option__title">{{ candidate.partNo }}</p>
               <p v-if="candidate.wclItemNo" class="option__meta">{{ candidate.wclItemNo }}</p>
               <p class="option__meta">
-                {{ $t('receiving.scanReview.progress', { received: candidate.receivedQty, expected: candidate.qty }) }}
+                {{ $t('receiving.scanReview.progress', { received: candidate.receivedQty, expected: candidate.lineQty }) }}
               </p>
             </div>
           </button>

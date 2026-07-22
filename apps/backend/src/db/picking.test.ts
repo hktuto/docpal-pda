@@ -37,13 +37,13 @@ async function actorIdOf(username = "operator"): Promise<string> {
   return row!.id;
 }
 
-async function pickingOrderIdOf(refNo: string): Promise<string> {
-  const row = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM picking_orders WHERE ref_no = ${refNo}`);
+async function pickingOrderIdOf(orderNo: string): Promise<string> {
+  const row = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM picking_orders WHERE order_no = ${orderNo}`);
   return row!.id;
 }
 
-async function receivingOrderIdOf(refNo: string): Promise<string> {
-  const row = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM receiving_orders WHERE ref_no = ${refNo}`);
+async function receivingOrderIdOf(batchNo: string): Promise<string> {
+  const row = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM receiving_orders WHERE batch_no = ${batchNo}`);
   return row!.id;
 }
 
@@ -51,8 +51,7 @@ async function pickingItemIdOf(orderId: string, partNo: string): Promise<string>
   const row = await queryGet<{ id: string }>(
     client.db,
     sql`SELECT pi.id FROM picking_items pi
-        JOIN parts p ON p.id = pi.part_id
-        WHERE pi.picking_order_id = ${orderId} AND p.part_no = ${partNo}`
+        WHERE pi.picking_order_id = ${orderId} AND pi.part_no = ${partNo}`
   );
   return row!.id;
 }
@@ -62,14 +61,8 @@ async function receivingItemIdOf(receivingOrderId: string, partNo: string): Prom
     client.db,
     sql`SELECT rii.id FROM receiving_invoice_items rii
         JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-        JOIN parts p ON p.id = rii.part_id
-        WHERE ri.receiving_order_id = ${receivingOrderId} AND p.part_no = ${partNo}`
+        WHERE ri.receiving_order_id = ${receivingOrderId} AND rii.part_no = ${partNo}`
   );
-  return row!.id;
-}
-
-async function partIdOf(partNo: string): Promise<string> {
-  const row = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM parts WHERE part_no = ${partNo}`);
   return row!.id;
 }
 
@@ -117,11 +110,11 @@ async function seededOrderAllocated(): Promise<{ orderId: string; actorId: strin
 }
 
 /** Insert a bare picking order via SQL (business-key parts). */
-async function insertPickingOrder(refNo: string, status: string): Promise<string> {
+async function insertPickingOrder(orderNo: string, status: string): Promise<string> {
   const id = randomUUID();
   await client.db.execute(
-    sql`INSERT INTO picking_orders (id, ref_no, status, warehouse_code, warehouse_section_code, sub_inventory_code, created_at, updated_at)
-        VALUES (${id}, ${refNo}, ${status}, 'HK1', 'HK', 'STORE1', now(), now())`
+    sql`INSERT INTO picking_orders (id, order_no, status, created_at, updated_at)
+        VALUES (${id}, ${orderNo}, ${status}, now(), now())`
   );
   return id;
 }
@@ -129,8 +122,8 @@ async function insertPickingOrder(refNo: string, status: string): Promise<string
 async function insertPickingItem(orderId: string, partNo: string, qty: number): Promise<string> {
   const id = randomUUID();
   await client.db.execute(
-    sql`INSERT INTO picking_items (id, picking_order_id, part_id, qty, created_at, updated_at)
-        VALUES (${id}, ${orderId}, ${await partIdOf(partNo)}, ${qty}, now(), now())`
+    sql`INSERT INTO picking_items (id, picking_order_id, part_no, qty, created_at, updated_at)
+        VALUES (${id}, ${orderId}, ${partNo}, ${qty}, now(), now())`
   );
   return id;
 }
@@ -147,15 +140,11 @@ test("list: seeded order with item/qty counts; status filter", async () => {
   assert.equal(rows.length, 1);
   const row = rows[0];
   assert.equal(row.id, orderId);
-  assert.equal(row.refNo, "SO-2026-0001");
+  assert.equal(row.orderNo, "SO-2026-0001");
   assert.equal(row.status, "pending");
   assert.equal(row.poNo, "CUST-PO-8899");
   assert.equal(row.shipTo, "ACME Electronics (HK)");
   assert.equal(row.customerCode, "ACME");
-  assert.equal(row.destinationCountry, "HK");
-  assert.equal(row.warehouseCode, "HK1");
-  assert.equal(row.warehouseSectionCode, "HK");
-  assert.equal(row.subInventoryCode, "STORE1");
   assert.ok(row.deliveryDate);
   assert.equal(row.itemCount, 2);
   assert.equal(row.totalQty, 3000);
@@ -172,9 +161,8 @@ test("detail: nested shape — order, measuringTask, items with allocations/pack
   const { orderId } = await seededOrderAllocated();
 
   const detail = await getPickingOrderDetail(client.db, orderId);
-  assert.equal(detail.refNo, "SO-2026-0001");
+  assert.equal(detail.orderNo, "SO-2026-0001");
   assert.equal(detail.status, "pending");
-  assert.equal(detail.requiredDateCodeNotice, "DC 2601+");
   assert.equal(detail.customerCode, "ACME");
   assert.equal(detail.issueReason, null);
   assert.equal(detail.issueReportedBy, null);
@@ -188,8 +176,6 @@ test("detail: nested shape — order, measuringTask, items with allocations/pack
   assert.equal(item1.qty, 2000);
   assert.equal(item1.pickedQty, 0);
   assert.equal(item1.allocatedQty, 2000);
-  assert.equal(item1.requiredDateCode, "2601+");
-  assert.equal(item1.sourceShelfCode, "A-01-01");
   assert.equal(item2.partNo, "RK73H1JTTD2202F");
   assert.equal(item2.qty, 1000);
   assert.equal(item2.allocatedQty, 1000);
@@ -606,7 +592,7 @@ test("close flow: add-all-unboxed auto-finishes; verify → measure → close ca
   await verifyPackage(client.db, { packageId: p1, actorId });
   await verifyPackage(client.db, { packageId: p2, actorId });
 
-  // destination falls back to the order's destination_country ("HK"), so the
+  // destination falls back to the order's ship_to, so the
   // first failing requirement is the missing box size
   const noSize = await catchHttp(closeShippingBox(client.db, { shippingBoxId: box.id, actorId }));
   assert.equal(noSize.status, 409);
@@ -636,7 +622,7 @@ test("close flow: add-all-unboxed auto-finishes; verify → measure → close ca
     client.db,
     sql`SELECT status, destination_country AS "destinationCountry" FROM shipping_boxes WHERE id = ${box.id}`
   );
-  assert.deepEqual(closed, { status: "closed", destinationCountry: "HK" });
+  assert.deepEqual(closed, { status: "closed", destinationCountry: "ACME Electronics (HK)" });
 
   const detail = await getPickingOrderDetail(client.db, orderId);
   assert.equal(detail.measuringTask?.status, "pending");
@@ -756,7 +742,7 @@ test("scan from receiving sources: order-level (no box) and box-level allocation
   // give the P413 line a box → its allocation becomes box-level; the other
   // line (no box) pools into an order-level allocation
   const p413ItemId = await receivingItemIdOf(roId, "P413");
-  await client.db.execute(sql`UPDATE receiving_invoice_items SET box_id = 'BOX-DAI-1' WHERE id = ${p413ItemId}`);
+  await client.db.execute(sql`UPDATE receiving_invoice_items SET ctn_no = 'BOX-DAI-1' WHERE id = ${p413ItemId}`);
 
   const orderId = await insertPickingOrder("SO-2026-0002", "pending");
   const itemA = await insertPickingItem(orderId, "RK73B1JTTD181G", 1000); // order-level source

@@ -14,10 +14,15 @@ import {
   scanReceivingOrder,
 } from "../db/receiving.js";
 import { allocateAll } from "../db/allocate.js";
+import { actorFrom } from "../auth/middleware.js";
 
+// Empty bodies parse as {} — after the auth migration several mutations no
+// longer carry any body fields (the actor comes from the token).
 async function readJson<T>(c: Context): Promise<T> {
+  const text = await c.req.text();
+  if (!text) return {} as T;
   try {
-    return await c.req.json<T>();
+    return JSON.parse(text) as T;
   } catch {
     throw new HTTPException(400, { message: "invalid JSON body" });
   }
@@ -25,15 +30,13 @@ async function readJson<T>(c: Context): Promise<T> {
 
 export interface ReceivingOrderListRow {
   id: string;
-  refNo: string;
+  batchNo: string;
   status: string;
   deliveryDate: string | null;
   dateCode: string | null;
   supplierCode: string | null;
   supplierName: string | null;
-  warehouseCode: string;
-  warehouseSectionCode: string | null;
-  subInventoryCode: string;
+  orgId: number;
   invoiceCount: number;
   itemCount: number;
   remainingItems: number;
@@ -53,18 +56,16 @@ receivingRoute.get("/receiving-orders", async (c) => {
     sql`
       SELECT
         ro.id,
-        ro.ref_no AS "refNo",
+        ro.batch_no AS "batchNo",
         ro.status,
         ro.delivery_date AS "deliveryDate",
         ro.date_code AS "dateCode",
         s.code AS "supplierCode",
         s.name AS "supplierName",
-        ro.warehouse_code AS "warehouseCode",
-        ro.warehouse_section_code AS "warehouseSectionCode",
-        ro.sub_inventory_code AS "subInventoryCode",
+        ro.org_id AS "orgId",
         COUNT(DISTINCT inv.id)::int AS "invoiceCount",
         COUNT(rii.id)::int AS "itemCount",
-        COUNT(rii.id) FILTER (WHERE rii.put_away_qty < rii.qty)::int AS "remainingItems",
+        COUNT(rii.id) FILTER (WHERE rii.put_away_qty < rii.line_qty)::int AS "remainingItems",
         (
           SELECT COUNT(DISTINCT po.id)::int
           FROM picking_orders po
@@ -93,13 +94,11 @@ receivingRoute.get("/receiving-orders", async (c) => {
 
 interface OrderDetailRow {
   id: string;
-  refNo: string;
+  batchNo: string;
   status: string;
   deliveryDate: string | null;
   dateCode: string | null;
-  warehouseCode: string;
-  warehouseSectionCode: string | null;
-  subInventoryCode: string;
+  orgId: number;
   arrivedAt: string | null;
   arrivedBy: string | null;
   createdAt: string;
@@ -124,9 +123,6 @@ interface InvoiceRow {
   totalCtn: number | null;
   deliveryDate: string | null;
   orgId: number;
-  warehouseCode: string;
-  warehouseSectionCode: string | null;
-  subInventoryCode: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -134,15 +130,15 @@ interface InvoiceRow {
 interface ItemRow {
   id: string;
   receivingInvoiceId: string;
-  partId: string;
+  partNo: string;
   wclItemNo: string | null;
   poNo: string | null;
   poLine: string | null;
-  qty: number;
+  lineQty: number;
   receivedQty: number;
   pickedQty: number;
   putAwayQty: number;
-  boxId: string | null;
+  ctnNo: string | null;
   dateCode: string | null;
   lotCode: string | null;
   coo: string | null;
@@ -153,9 +149,8 @@ interface ItemRow {
   wrongPartNo: string | null;
   mismatchNote: string | null;
   allocatedQty: number;
-  partNo: string;
+  partPk: string;
   partWclItemNo: string | null;
-  partInternalCode: string | null;
   partDescription: string | null;
   partDefaultCoo: string | null;
 }
@@ -169,10 +164,9 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
     db,
     sql`
       SELECT
-        ro.id, ro.ref_no AS "refNo", ro.status,
+        ro.id, ro.batch_no AS "batchNo", ro.status,
         ro.delivery_date AS "deliveryDate", ro.date_code AS "dateCode",
-        ro.warehouse_code AS "warehouseCode", ro.warehouse_section_code AS "warehouseSectionCode",
-        ro.sub_inventory_code AS "subInventoryCode",
+        ro.org_id AS "orgId",
         ro.arrived_at AS "arrivedAt", ro.arrived_by AS "arrivedBy",
         ro.created_at AS "createdAt", ro.updated_at AS "updatedAt",
         s.id AS "supplierId", s.code AS "supplierCode", s.name AS "supplierName",
@@ -195,8 +189,6 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
         id, invoice_no AS "invoiceNo", supplier_id AS "supplierId",
         wcl_company_name AS "wclCompanyName", total_qty AS "totalQty", total_ctn AS "totalCtn",
         delivery_date AS "deliveryDate", org_id AS "orgId",
-        warehouse_code AS "warehouseCode", warehouse_section_code AS "warehouseSectionCode",
-        sub_inventory_code AS "subInventoryCode",
         created_at AS "createdAt", updated_at AS "updatedAt"
       FROM receiving_invoices
       WHERE receiving_order_id = ${id}
@@ -209,11 +201,11 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
     sql`
       SELECT
         rii.id, rii.receiving_invoice_id AS "receivingInvoiceId",
-        rii.part_id AS "partId", rii.wcl_item_no AS "wclItemNo",
+        rii.part_no AS "partNo", rii.wcl_item_no AS "wclItemNo",
         rii.po_no AS "poNo", rii.po_line AS "poLine",
-        rii.qty, rii.received_qty AS "receivedQty", rii.picked_qty AS "pickedQty",
+        rii.line_qty AS "lineQty", rii.received_qty AS "receivedQty", rii.picked_qty AS "pickedQty",
         rii.put_away_qty AS "putAwayQty",
-        rii.box_id AS "boxId", rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
+        rii.ctn_no AS "ctnNo", rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
         rii.coo, rii.cow,
         rii.reported_mismatch AS "reportedMismatch", rii.mismatch_reason AS "mismatchReason",
         rii.mismatch_qty AS "mismatchQty", rii.wrong_part_no AS "wrongPartNo",
@@ -222,12 +214,12 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
           SELECT SUM(a.qty) FROM allocations a
           WHERE a.receiving_invoice_item_id = rii.id
         ), 0)::int AS "allocatedQty",
-        p.part_no AS "partNo", p.wcl_item_no AS "partWclItemNo",
-        p.internal_code AS "partInternalCode", p.description AS "partDescription",
+        p.id AS "partPk", p.wcl_item_no AS "partWclItemNo",
+        p.description AS "partDescription",
         p.default_coo AS "partDefaultCoo"
       FROM receiving_invoice_items rii
       JOIN receiving_invoices inv ON inv.id = rii.receiving_invoice_id
-      JOIN parts p ON p.id = rii.part_id
+      JOIN parts p ON p.part_no = rii.part_no
       WHERE inv.receiving_order_id = ${id}
       ORDER BY rii.po_no, rii.po_line, rii.id
     `
@@ -236,13 +228,11 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
   return c.json(
     {
       id: order.id,
-      refNo: order.refNo,
+      batchNo: order.batchNo,
       status: order.status,
       deliveryDate: order.deliveryDate,
       dateCode: order.dateCode,
-      warehouseCode: order.warehouseCode,
-      warehouseSectionCode: order.warehouseSectionCode,
-      subInventoryCode: order.subInventoryCode,
+      orgId: order.orgId,
       arrivedAt: order.arrivedAt,
       arrivedBy: order.arrivedBy,
       createdAt: order.createdAt,
@@ -269,25 +259,24 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
           .filter((i) => i.receivingInvoiceId === inv.id)
           .map((i) => ({
             id: i.id,
-            partId: i.partId,
+            partNo: i.partNo,
             wclItemNo: i.wclItemNo,
             poNo: i.poNo,
             poLine: i.poLine,
-            qty: i.qty,
+            lineQty: i.lineQty,
             receivedQty: i.receivedQty,
             pickedQty: i.pickedQty,
             putAwayQty: i.putAwayQty,
-            boxId: i.boxId,
+            ctnNo: i.ctnNo,
             dateCode: i.dateCode,
             lotCode: i.lotCode,
             coo: i.coo,
             cow: i.cow,
             allocatedQty: i.allocatedQty,
             part: {
-              id: i.partId,
+              id: i.partPk,
               partNo: i.partNo,
               wclItemNo: i.partWclItemNo,
-              internalCode: i.partInternalCode,
               description: i.partDescription,
               defaultCoo: i.partDefaultCoo,
             },
@@ -316,9 +305,7 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
 // Accepts pending and provisional_received orders (a provisional order is
 // completed to full receipt).
 receivingRoute.post("/receiving-orders/:id/confirm-arrival", async (c) => {
-  const body = await readJson<{ actorId?: string }>(c);
-  if (!body.actorId) throw new HTTPException(400, { message: "actorId is required" });
-  const result = await confirmReceivingArrival(db, c.req.param("id"), body.actorId);
+  const result = await confirmReceivingArrival(db, c.req.param("id"), actorFrom(c).id);
   try {
     await allocateAll(db);
   } catch (err) {
@@ -333,17 +320,15 @@ receivingRoute.post("/receiving-orders/:id/confirm-arrival", async (c) => {
 
 interface PickingDemandRow {
   orderId: string;
-  refNo: string;
+  orderNo: string;
   status: string;
   shipTo: string | null;
   customerCode: string | null;
   itemId: string;
-  partId: string;
   partNo: string;
   itemQty: number;
   pickedQty: number;
   allocatedQty: number;
-  requiredDateCode: string | null;
 }
 
 interface PickingAllocationRow {
@@ -406,14 +391,12 @@ receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
     db,
     sql`
       SELECT
-        po.id AS "orderId", po.ref_no AS "refNo", po.status,
+        po.id AS "orderId", po.order_no AS "orderNo", po.status,
         po.ship_to AS "shipTo", po.customer_code AS "customerCode",
-        pi.id AS "itemId", pi.part_id AS "partId", p.part_no AS "partNo",
-        pi.qty AS "itemQty", pi.picked_qty AS "pickedQty", pi.allocated_qty AS "allocatedQty",
-        pi.required_date_code AS "requiredDateCode"
+        pi.id AS "itemId", pi.part_no AS "partNo",
+        pi.qty AS "itemQty", pi.picked_qty AS "pickedQty", pi.allocated_qty AS "allocatedQty"
       FROM picking_items pi
       JOIN picking_orders po ON po.id = pi.picking_order_id
-      JOIN parts p ON p.id = pi.part_id
       WHERE EXISTS (
         SELECT 1 FROM allocations a
         LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
@@ -434,7 +417,7 @@ receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
             OR pri.receiving_order_id = ${id}
             OR lri.receiving_order_id = ${id})
       )
-      ORDER BY po.ref_no, pi.id
+      ORDER BY po.order_no, pi.id
     `
   );
 
@@ -450,7 +433,7 @@ receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
             a.inventory_lot_id AS "inventoryLotId",
             a.receiving_invoice_item_id AS "receivingInvoiceItemId",
             a.receiving_order_id AS "receivingOrderId",
-            rii.box_id AS "boxId",
+            rii.ctn_no AS "boxId",
             il.shelf_code AS "shelfCode", il.box_id AS "lotBoxId",
             il.date_code AS "dateCode", il.lot_code AS "lotCode", il.coo, il.cow
           FROM allocations a
@@ -509,7 +492,7 @@ receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
     string,
     {
       id: string;
-      refNo: string;
+      orderNo: string;
       status: string;
       shipTo: string | null;
       customerCode: string | null;
@@ -522,7 +505,7 @@ receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
     if (!o) {
       o = {
         id: r.orderId,
-        refNo: r.refNo,
+        orderNo: r.orderNo,
         status: r.status,
         shipTo: r.shipTo,
         customerCode: r.customerCode,
@@ -541,12 +524,10 @@ receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
     }
     o.items.push({
       id: r.itemId,
-      partId: r.partId,
       partNo: r.partNo,
       qty: r.itemQty,
       pickedQty: r.pickedQty,
       allocatedQty: r.allocatedQty,
-      requiredDateCode: r.requiredDateCode,
       allocations: allocations
         .filter((a) => a.pickingItemId === r.itemId)
         .map((a) => ({
@@ -603,7 +584,6 @@ receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
 // Then recalculates allocations — best-effort, after commit.
 receivingRoute.post("/receiving-orders/:id/scan", async (c) => {
   const body = await readJson<{
-    actorId?: string;
     raw?: string;
     partNo?: string;
     qty?: number;
@@ -611,12 +591,11 @@ receivingRoute.post("/receiving-orders/:id/scan", async (c) => {
     lotCode?: string;
     coo?: string;
     cow?: string;
-    boxId?: string;
+    ctnNo?: string;
     serialNo?: string;
   }>(c);
-  if (!body.actorId) throw new HTTPException(400, { message: "actorId is required" });
   const result = await scanReceivingOrder(db, c.req.param("id"), {
-    actorId: body.actorId,
+    actorId: actorFrom(c).id,
     raw: body.raw ?? null,
     partNo: body.partNo ?? null,
     qty: body.qty ?? null,
@@ -624,7 +603,7 @@ receivingRoute.post("/receiving-orders/:id/scan", async (c) => {
     lotCode: body.lotCode ?? null,
     coo: body.coo ?? null,
     cow: body.cow ?? null,
-    boxId: body.boxId ?? null,
+    ctnNo: body.ctnNo ?? null,
     serialNo: body.serialNo ?? null,
   });
   try {
@@ -643,14 +622,14 @@ receivingRoute.get("/receiving-invoice-items/:id/mismatch", async (c) => {
   return c.json(await getReceivingItemMismatch(db, c.req.param("id")), 200);
 });
 
-function parseMismatchBody(body: {
-  actorId?: string;
+interface MismatchBody {
   reason?: string;
   mismatchQty?: number | null;
   wrongPartNo?: string | null;
   note?: string | null;
-}): { actorId: string; reason?: string; mismatchQty?: number | null; wrongPartNo?: string | null; note?: string | null } {
-  if (!body.actorId) throw new HTTPException(400, { message: "actorId is required" });
+}
+
+function parseMismatchBody(body: MismatchBody): MismatchBody {
   if (body.reason !== undefined && (typeof body.reason !== "string" || body.reason.trim() === "")) {
     throw new HTTPException(400, { message: "mismatch_reason_required" });
   }
@@ -661,48 +640,32 @@ function parseMismatchBody(body: {
   ) {
     throw new HTTPException(400, { message: "invalid_mismatch_qty" });
   }
-  return { ...body, actorId: body.actorId };
+  return body;
 }
 
 receivingRoute.post("/receiving-invoice-items/:id/mismatch", async (c) => {
-  const body = parseMismatchBody(
-    await readJson<{
-      actorId?: string;
-      reason?: string;
-      mismatchQty?: number | null;
-      wrongPartNo?: string | null;
-      note?: string | null;
-    }>(c)
-  );
+  const body = parseMismatchBody(await readJson<MismatchBody>(c));
   if (body.reason === undefined) throw new HTTPException(400, { message: "mismatch_reason_required" });
-  const row = await reportReceivingItemMismatch(db, c.req.param("id"), { ...body, reason: body.reason });
+  const row = await reportReceivingItemMismatch(db, c.req.param("id"), {
+    ...body,
+    actorId: actorFrom(c).id,
+    reason: body.reason,
+  });
   return c.json(row, 200);
 });
 
 receivingRoute.patch("/receiving-invoice-items/:id/mismatch", async (c) => {
-  const body = parseMismatchBody(
-    await readJson<{
-      actorId?: string;
-      reason?: string;
-      mismatchQty?: number | null;
-      wrongPartNo?: string | null;
-      note?: string | null;
-    }>(c)
-  );
-  const row = await editReceivingItemMismatch(db, c.req.param("id"), body);
+  const body = parseMismatchBody(await readJson<MismatchBody>(c));
+  const row = await editReceivingItemMismatch(db, c.req.param("id"), { ...body, actorId: actorFrom(c).id });
   return c.json(row, 200);
 });
 
 receivingRoute.post("/receiving-invoice-items/:id/mismatch/confirm", async (c) => {
-  const body = await readJson<{ actorId?: string }>(c);
-  if (!body.actorId) throw new HTTPException(400, { message: "actorId is required" });
-  const row = await confirmReceivingItemMismatch(db, c.req.param("id"), body.actorId);
+  const row = await confirmReceivingItemMismatch(db, c.req.param("id"), actorFrom(c).id);
   return c.json(row, 200);
 });
 
 receivingRoute.post("/receiving-invoice-items/:id/mismatch/cancel", async (c) => {
-  const body = await readJson<{ actorId?: string }>(c);
-  if (!body.actorId) throw new HTTPException(400, { message: "actorId is required" });
-  const row = await cancelReceivingItemMismatch(db, c.req.param("id"), body.actorId);
+  const row = await cancelReceivingItemMismatch(db, c.req.param("id"), actorFrom(c).id);
   return c.json(row, 200);
 });

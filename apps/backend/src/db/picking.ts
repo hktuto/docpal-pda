@@ -9,7 +9,7 @@ import { now } from "./now.js";
 
 // ---------------------------------------------------------------------------
 // Picking flow (ported from apps/api pickScan.ts + measure.ts + pickingIssues.ts,
-// adapted to the new schema: three-level locations, order-level receiving
+// adapted to the new schema: org_id locations, order-level receiving
 // allocations, inventory_transactions ledger, transaction_logs).
 //
 // Scan-to-pick consumes an allocation into picking_packages rows (the boxing
@@ -241,16 +241,12 @@ async function maybeAutoFinishPickingOrder(
 
 export interface PickingOrderListRow {
   id: string;
-  refNo: string;
+  orderNo: string;
   status: string;
   poNo: string | null;
   shipTo: string | null;
   customerCode: string | null;
-  destinationCountry: string | null;
   deliveryDate: Date | null;
-  warehouseCode: string;
-  warehouseSectionCode: string | null;
-  subInventoryCode: string | null;
   itemCount: number;
   totalQty: number;
   pickedQty: number;
@@ -262,11 +258,9 @@ export async function listPickingOrders(db: AppDb, status?: string): Promise<Pic
     db,
     sql`
       SELECT
-        po.id, po.ref_no AS "refNo", po.status, po.po_no AS "poNo", po.ship_to AS "shipTo",
-        po.customer_code AS "customerCode", po.destination_country AS "destinationCountry",
+        po.id, po.order_no AS "orderNo", po.status, po.po_no AS "poNo", po.ship_to AS "shipTo",
+        po.customer_code AS "customerCode",
         po.delivery_date AS "deliveryDate",
-        po.warehouse_code AS "warehouseCode", po.warehouse_section_code AS "warehouseSectionCode",
-        po.sub_inventory_code AS "subInventoryCode",
         COUNT(pi.id)::int AS "itemCount",
         COALESCE(SUM(pi.qty), 0)::int AS "totalQty",
         COALESCE(SUM(pi.picked_qty), 0)::int AS "pickedQty"
@@ -281,18 +275,12 @@ export async function listPickingOrders(db: AppDb, status?: string): Promise<Pic
 
 export interface PickingOrderRow {
   id: string;
-  refNo: string;
+  orderNo: string;
   status: string;
-  supplierId: string | null;
   deliveryDate: Date | null;
   poNo: string | null;
-  requiredDateCodeNotice: string | null;
   shipTo: string | null;
-  destinationCountry: string | null;
   customerCode: string | null;
-  warehouseCode: string;
-  warehouseSectionCode: string | null;
-  subInventoryCode: string | null;
   issueReason: string | null;
   issueQty: number | null;
   issuePackSize: number | null;
@@ -341,14 +329,11 @@ export interface PickingPackageDetail {
 
 export interface PickingItemDetail {
   id: string;
-  partId: string;
   partNo: string;
   wclItemNo: string | null;
   qty: number;
   pickedQty: number;
   allocatedQty: number;
-  requiredDateCode: string | null;
-  sourceShelfCode: string | null;
   allocations: PickingAllocationDetail[];
   packages: PickingPackageDetail[];
 }
@@ -394,13 +379,10 @@ export async function getPickingOrderDetail(db: AppDb, orderId: string): Promise
     db,
     sql`
       SELECT
-        id, ref_no AS "refNo", status, supplier_id AS "supplierId",
+        id, order_no AS "orderNo", status,
         delivery_date AS "deliveryDate", po_no AS "poNo",
-        required_date_code_notice AS "requiredDateCodeNotice",
-        ship_to AS "shipTo", destination_country AS "destinationCountry",
+        ship_to AS "shipTo",
         customer_code AS "customerCode",
-        warehouse_code AS "warehouseCode", warehouse_section_code AS "warehouseSectionCode",
-        sub_inventory_code AS "subInventoryCode",
         issue_reason AS "issueReason", issue_qty AS "issueQty", issue_pack_size AS "issuePackSize",
         issue_note AS "issueNote", issue_remark AS "issueRemark",
         issue_reported_at AS "issueReportedAt", issue_reported_by AS "issueReportedBy",
@@ -420,11 +402,10 @@ export async function getPickingOrderDetail(db: AppDb, orderId: string): Promise
     db,
     sql`
       SELECT
-        pi.id, pi.part_id AS "partId", p.part_no AS "partNo", p.wcl_item_no AS "wclItemNo",
-        pi.qty, pi.picked_qty AS "pickedQty", pi.allocated_qty AS "allocatedQty",
-        pi.required_date_code AS "requiredDateCode", pi.source_shelf_code AS "sourceShelfCode"
+        pi.id, pi.part_no AS "partNo", p.wcl_item_no AS "wclItemNo",
+        pi.qty, pi.picked_qty AS "pickedQty", pi.allocated_qty AS "allocatedQty"
       FROM picking_items pi
-      JOIN parts p ON p.id = pi.part_id
+      JOIN parts p ON p.part_no = pi.part_no
       WHERE pi.picking_order_id = ${orderId}
       ORDER BY pi.created_at, pi.id
     `
@@ -439,7 +420,7 @@ export async function getPickingOrderDetail(db: AppDb, orderId: string): Promise
             a.id, a.picking_item_id AS "pickingItemId", a.qty,
             a.receiving_invoice_item_id AS "receivingInvoiceItemId",
             a.receiving_order_id AS "receivingOrderId",
-            rii.box_id AS "boxId",
+            rii.ctn_no AS "boxId",
             il.id AS "lotId", il.shelf_code AS "lotShelfCode", il.box_id AS "lotBoxId",
             il.date_code AS "lotDateCode", il.lot_code AS "lotLotCode",
             il.coo AS "lotCoo", il.cow AS "lotCow",
@@ -577,9 +558,9 @@ export async function scanPickingItem(
   input: ScanPickingItemInput
 ): Promise<{ packageIds: string[] }> {
   return db.transaction(async (tx) => {
-    const item = await queryGet<{ id: string; pickingOrderId: string; partId: string; qty: number; packagedQty: number }>(
+    const item = await queryGet<{ id: string; pickingOrderId: string; partNo: string; qty: number; packagedQty: number }>(
       tx,
-      sql`SELECT pi.id, pi.picking_order_id AS "pickingOrderId", pi.part_id AS "partId", pi.qty,
+      sql`SELECT pi.id, pi.picking_order_id AS "pickingOrderId", pi.part_no AS "partNo", pi.qty,
             COALESCE((SELECT SUM(pp.qty)::int FROM picking_packages pp WHERE pp.picking_item_id = pi.id), 0) AS "packagedQty"
           FROM picking_items pi WHERE pi.id = ${pickingItemId}`
     );
@@ -636,7 +617,7 @@ export async function scanPickingItem(
     } else if (alloc.receivingInvoiceItemId) {
       const rii = await queryGet<SourceLine>(
         tx,
-        sql`SELECT id, box_id AS "boxId", date_code AS "dateCode", lot_code AS "lotCode", coo, cow
+        sql`SELECT id, ctn_no AS "boxId", date_code AS "dateCode", lot_code AS "lotCode", coo, cow
             FROM receiving_invoice_items WHERE id = ${alloc.receivingInvoiceItemId}`
       );
       if (!rii) throw new HTTPException(404, { message: "receiving_invoice_item_not_found" });
@@ -655,17 +636,17 @@ export async function scanPickingItem(
         receivingInvoiceItemId: rii.id,
       });
     } else if (alloc.receivingOrderId) {
-      // Order-level source (line without box_id): distribute FIFO across the
+      // Order-level source (line without ctn_no): distribute FIFO across the
       // receiving order's lines for the part — the allocation row does not
       // record which line the engine pooled it from.
       const lines = await queryAll<SourceLine & { remaining: number }>(
         tx,
-        sql`SELECT rii.id, rii.box_id AS "boxId", rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
+        sql`SELECT rii.id, rii.ctn_no AS "boxId", rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
                    rii.coo, rii.cow,
                    (rii.received_qty - rii.picked_qty - rii.put_away_qty)::int AS "remaining"
             FROM receiving_invoice_items rii
             JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-            WHERE ri.receiving_order_id = ${alloc.receivingOrderId} AND rii.part_id = ${item.partId}
+            WHERE ri.receiving_order_id = ${alloc.receivingOrderId} AND rii.part_no = ${item.partNo}
               AND (rii.received_qty - rii.picked_qty - rii.put_away_qty) > 0
             ORDER BY rii.date_code ASC NULLS LAST, rii.id`
       );
@@ -717,7 +698,7 @@ export async function scanPickingItem(
       packageIds.push(pid);
       const base = {
         inventoryLotId: p.inventoryLotId,
-        partId: item.partId,
+        partNo: item.partNo,
         shelfCode: p.shelfCode,
         boxId: p.boxId,
         txnType: "PICK",
@@ -777,7 +758,7 @@ export async function removeScannedPackage(db: AppDb, input: { packageId: string
       id: string;
       pickingItemId: string;
       pickingOrderId: string;
-      partId: string;
+      partNo: string;
       sourceType: string;
       sourceId: string;
       qty: number;
@@ -790,7 +771,7 @@ export async function removeScannedPackage(db: AppDb, input: { packageId: string
     }>(
       tx,
       sql`SELECT pp.id, pp.picking_item_id AS "pickingItemId", pi.picking_order_id AS "pickingOrderId",
-                 pi.part_id AS "partId",
+                 pi.part_no AS "partNo",
                  pp.source_type AS "sourceType", pp.source_id AS "sourceId", pp.qty,
                  pp.shipping_box_id AS "shippingBoxId", pp.verified,
                  pp.date_code AS "dateCode", pp.lot_code AS "lotCode", pp.coo, pp.cow
@@ -807,7 +788,7 @@ export async function removeScannedPackage(db: AppDb, input: { packageId: string
     const at = now();
     const txnRows: (typeof inventoryTransactions.$inferInsert)[] = [];
     const base = {
-      partId: pkg.partId,
+      partNo: pkg.partNo,
       txnType: "PICK",
       dateCode: pkg.dateCode,
       lotCode: pkg.lotCode,
@@ -836,7 +817,7 @@ export async function removeScannedPackage(db: AppDb, input: { packageId: string
     } else if (pkg.sourceType === "receiving_invoice_item") {
       const rii = await queryGet<{ id: string; boxId: string | null }>(
         tx,
-        sql`SELECT id, box_id AS "boxId" FROM receiving_invoice_items WHERE id = ${pkg.sourceId}`
+        sql`SELECT id, ctn_no AS "boxId" FROM receiving_invoice_items WHERE id = ${pkg.sourceId}`
       );
       if (!rii) throw new HTTPException(404, { message: "receiving_invoice_item_not_found" });
       await queryRun(tx, sql`UPDATE receiving_invoice_items SET picked_qty = picked_qty - ${pkg.qty} WHERE id = ${rii.id}`);
@@ -848,10 +829,10 @@ export async function removeScannedPackage(db: AppDb, input: { packageId: string
     } else if (pkg.sourceType === "receiving_order") {
       const lines = await queryAll<{ id: string; pickedQty: number; boxId: string | null }>(
         tx,
-        sql`SELECT rii.id, rii.picked_qty AS "pickedQty", rii.box_id AS "boxId"
+        sql`SELECT rii.id, rii.picked_qty AS "pickedQty", rii.ctn_no AS "boxId"
             FROM receiving_invoice_items rii
             JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-            WHERE ri.receiving_order_id = ${pkg.sourceId} AND rii.part_id = ${pkg.partId} AND rii.picked_qty > 0
+            WHERE ri.receiving_order_id = ${pkg.sourceId} AND rii.part_no = ${pkg.partNo} AND rii.picked_qty > 0
             ORDER BY rii.date_code DESC NULLS FIRST, rii.id DESC`
       );
       let left = pkg.qty;
@@ -949,7 +930,7 @@ function toBoxDto(box: ShippingBoxRow): ShippingBoxDto {
 /** Create an open shipping box for the order (+ transition log). A pre-printed
  *  `boxId` may be supplied (scanned box label); it is the global PK, so a
  *  duplicate is rejected with 409 box_id_exists. Server-generated ids follow
- *  nextBoxId: BOX-S-<warehouse>-<YYYYMMDD>-<seq> (per-day seq). */
+ *  nextBoxId: BOX-S-<YYYYMMDD>-<seq> (per-day seq). */
 export async function createShippingBox(
   db: AppDb,
   input: { pickingOrderId: string; actorId: string; boxId?: string }
@@ -1179,7 +1160,7 @@ export async function cancelShippingBox(db: AppDb, input: { shippingBoxId: strin
 
 /**
  * Close a shipping box (ported from measure.ts): non-empty, all packages
- * verified, destination (box → order destination_country → ship_to), box
+ * verified, destination (box → order ship_to), box
  * size, and positive weights with gross ≥ net are required. Stamps the
  * resolved destination, logs the transition, and runs the auto-finish check.
  */
@@ -1197,11 +1178,11 @@ export async function closeShippingBox(db: AppDb, input: { shippingBoxId: string
 
     let dest = box.destinationCountry;
     if (dest === null || dest.trim() === "") {
-      const order = await queryGet<{ dc: string | null; st: string | null }>(
+      const order = await queryGet<{ st: string | null }>(
         tx,
-        sql`SELECT destination_country AS dc, ship_to AS st FROM picking_orders WHERE id = ${box.pickingOrderId}`
+        sql`SELECT ship_to AS st FROM picking_orders WHERE id = ${box.pickingOrderId}`
       );
-      dest = order?.dc && order.dc.trim() !== "" ? order.dc : order?.st ?? null;
+      dest = order?.st ?? null;
     }
     if (dest === null || dest.trim() === "") throw new HTTPException(409, { message: "destination_required" });
     if (box.boxSize === null || box.boxSize.trim() === "") throw new HTTPException(409, { message: "box_size_required" });
@@ -1280,7 +1261,7 @@ export interface PickingIssueEntry {
 
 interface IssueOrderRow {
   id: string;
-  refNo: string;
+  orderNo: string;
   status: string;
   totalQty: number;
 }
@@ -1317,7 +1298,7 @@ export async function reportPickingOrderIssues(
     const ids = [...byOrder.keys()];
     const rows = await queryAll<IssueOrderRow>(
       tx,
-      sql`SELECT po.id, po.ref_no AS "refNo", po.status,
+      sql`SELECT po.id, po.order_no AS "orderNo", po.status,
             (SELECT COALESCE(SUM(pi.qty)::int, 0) FROM picking_items pi WHERE pi.picking_order_id = po.id) AS "totalQty"
           FROM picking_orders po WHERE ${inArray(sql`po.id`, ids)}`
     );

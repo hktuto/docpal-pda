@@ -1,24 +1,16 @@
 import { pgTable, text, integer, boolean, real, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
-import { defaultWarehouse } from "../../config.js";
-import { users, suppliers, parts, subInventories, customerProfiles, warehouseSections } from "./master.js";
+import { users, parts, customerProfiles } from "./master.js";
 
 export const pickingOrders = pgTable(
   "picking_orders",
   {
     id: text("id").primaryKey(),
-    refNo: text("ref_no").notNull(),
-    externalId: text("external_id"), // ingest sync key (PUT /picking-orders/:externalId); null = created locally
-    supplierId: text("supplier_id").references(() => suppliers.id),
+    orderNo: text("order_no").notNull().unique(), // 订单/发票/TN 号 — 上游 DB 复制同步/dedup key
     deliveryDate: timestamp("delivery_date", { mode: "date" }),
     poNo: text("po_no"),
-    requiredDateCodeNotice: text("required_date_code_notice"), // Oracle 无此字段
-    shipTo: text("ship_to"), // 收货方 / 出货目的描述（非结构化地址全文）
-    destinationCountry: text("destination_country"), // 目的国家
+    shipTo: text("ship_to"), // 收货方 / 出货目的描述（含目的国家，非结构化地址全文）
     customerCode: text("customer_code").references(() => customerProfiles.code), // 出货客户
-    warehouseCode: text("warehouse_code").notNull().default("HK1").$defaultFn(defaultWarehouse), // 出货仓库（实例默认 WAREHOUSE_CODE）
-    warehouseSectionCode: text("warehouse_section_code").references(() => warehouseSections.code), // 出货仓库分区
-    subInventoryCode: text("sub_inventory_code").references(() => subInventories.code), // 从哪一个子库存出货
     issueReason: text("issue_reason"),
     issueQty: integer("issue_qty"),
     issuePackSize: integer("issue_pack_size"),
@@ -26,13 +18,12 @@ export const pickingOrders = pgTable(
     issueRemark: text("issue_remark"),
     issueReportedAt: timestamp("issue_reported_at", { mode: "date" }),
     issueReportedBy: text("issue_reported_by").references(() => users.id),
-    status: text("status").notNull().default("pending"),
+    status: text("status").notNull().default("pending"), // pending | picking | finished
     createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
   },
   (t) => ({
     statusIdx: index("idx_picking_orders_status").on(t.status),
-    externalIdUq: uniqueIndex("idx_picking_orders_external_id").on(t.externalId),
   })
 );
 
@@ -41,18 +32,16 @@ export const pickingItems = pgTable(
   {
     id: text("id").primaryKey(),
     pickingOrderId: text("picking_order_id").notNull().references(() => pickingOrders.id, { onDelete: "cascade" }),
-    partId: text("part_id").notNull().references(() => parts.id),
+    partNo: text("part_no").notNull().references(() => parts.partNo),
     qty: integer("qty").notNull(), // 需求数量（要出货）
     pickedQty: integer("picked_qty").notNull().default(0), // 已扫描装数量
     allocatedQty: integer("allocated_qty").notNull().default(0), // 已预留 Reserved
-    requiredDateCode: text("required_date_code"),
-    sourceShelfCode: text("source_shelf_code"),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
   },
   (t) => ({
     orderIdx: index("idx_picking_items_order").on(t.pickingOrderId),
-    partIdx: index("idx_picking_items_part").on(t.partId),
+    partIdx: index("idx_picking_items_part").on(t.partNo),
   })
 );
 
@@ -61,7 +50,7 @@ export const measuringTasks = pgTable(
   {
     id: text("id").primaryKey(),
     pickingOrderId: text("picking_order_id").notNull().references(() => pickingOrders.id, { onDelete: "cascade" }),
-    status: text("status").notNull().default("pending"),
+    status: text("status").notNull().default("pending"), // pending | completed
     createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
   },
   (t) => ({
@@ -72,10 +61,10 @@ export const measuringTasks = pgTable(
 export const shippingBoxes = pgTable(
   "shipping_boxes",
   {
-    id: text("id").primaryKey(),
+    id: text("id").primaryKey(), // server-generated BOX-S-<YYYYMMDD>-<seq>
     pickingOrderId: text("picking_order_id").references(() => pickingOrders.id),
     measuringTaskId: text("measuring_task_id").references(() => measuringTasks.id),
-    status: text("status").notNull().default("open"),
+    status: text("status").notNull().default("open"), // open | closed
     grossWeight: real("gross_weight"),
     netWeight: real("net_weight"),
     destinationCountry: text("destination_country"),
@@ -121,7 +110,7 @@ export const shippingBoxItems = pgTable(
     id: text("id").primaryKey(),
     shippingBoxId: text("shipping_box_id").notNull().references(() => shippingBoxes.id, { onDelete: "cascade" }),
     pickingItemId: text("picking_item_id").references(() => pickingItems.id),
-    partId: text("part_id").notNull().references(() => parts.id),
+    partNo: text("part_no").notNull().references(() => parts.partNo),
     qty: integer("qty").notNull(),
     createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),

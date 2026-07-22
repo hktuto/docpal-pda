@@ -49,11 +49,6 @@
         <span class="badge" :class="badgeClass(box.status)">{{ statusLabel.box(box.status) }}</span>
       </DetailRow>
       <DetailRow :label="$t('picking.boxesSection.packages')" :value="box.packageCount" />
-      <div class="box-actions">
-        <button class="btn btn--small" @click="emit('print-box', box.id)">
-          {{ $t('picking.boxesSection.print') }}
-        </button>
-      </div>
       <div v-if="box.status === 'open'" class="box-actions">
         <button
           class="btn btn--small"
@@ -101,7 +96,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   "create-box": [];
   "scan-box": [];
-  "print-box": [boxId: string];
   "cancel-box": [boxId: string];
   "add-all-to-box": [boxId: string];
   "update:expanded": [value: boolean];

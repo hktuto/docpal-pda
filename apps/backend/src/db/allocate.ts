@@ -14,15 +14,13 @@ import { now } from "./now.js";
 //   1. shelf stock (inventory_lots with available_qty > 0)
 //   2. in-hand / provisional receiving stock (received, not yet picked)
 // Rules (confirmed with the business):
-//   - Date-code rule: if the demand carries one (picking item's
-//     required_date_code → picking order's required_date_code_notice →
-//     customer profile remark, first match wins), sources must satisfy it;
-//     otherwise plain FIFO.
-//   - Location: sources must match the picking order's warehouse_code,
-//     warehouse_section_code (when set) and sub_inventory_code (when set).
+//   - Allocation is org-agnostic: sources match by part_no only (no
+//     warehouse/section/sub-inventory location matching; the old
+//     sub-inventory customer segregation is removed — customer_profiles.rule
+//     is stored but not yet interpreted here).
 //   - FIFO: oldest date_code first (NULLS LAST).
-//   - Box granularity: a receiving line WITH box_id allocates down to that box
-//     (receiving_invoice_item_id); a line WITHOUT box_id allocates to the
+//   - Box granularity: a receiving line WITH ctn_no allocates down to that box
+//     (receiving_invoice_item_id); a line WITHOUT ctn_no allocates to the
 //     whole receiving order (receiving_order_id).
 // The engine is a full idempotent recompute: existing allocations of an
 // open item are wiped (RESERVE reversal txns) and rebuilt.
@@ -45,6 +43,10 @@ function yymm(d: Date): string {
  *   "within/last/less than N year(s)"  → date_code >= YYMM(N years ago)
  *   "more than N year(s)"              → date_code <  YYMM(N years ago)
  * Returns null when the text carries no recognizable rule (→ plain FIFO).
+ *
+ * Note: not currently wired into allocateAll — no demand-side date-code rule
+ * column remains in the schema (customer_profiles.rule is stored but not yet
+ * interpreted). Kept for the future rule interpretation.
  */
 export function parseDateCodeRule(text: string | null | undefined, ref: Date = new Date()): DateCodeRule | null {
   if (!text) return null;
@@ -77,14 +79,8 @@ export function parseDateCodeRule(text: string | null | undefined, ref: Date = n
 
 interface DemandRow {
   pickingItemId: string;
-  partId: string;
+  partNo: string;
   openQty: number;
-  requiredDateCode: string | null;
-  orderNotice: string | null;
-  customerRemark: string | null;
-  warehouseCode: string;
-  warehouseSectionCode: string | null;
-  subInventoryCode: string | null;
 }
 
 interface LotRow {
@@ -96,7 +92,7 @@ interface LotRow {
 interface ReceivingRow {
   receivingInvoiceItemId: string;
   receivingOrderId: string;
-  boxId: string | null;
+  ctnNo: string | null;
   dateCode: string | null;
   available: number;
 }
@@ -113,17 +109,10 @@ async function loadDemands(dbOrTx: DbOrTx): Promise<DemandRow[]> {
   return queryAll<DemandRow>(
     dbOrTx,
     sql`SELECT pi.id AS "pickingItemId",
-               pi.part_id AS "partId",
-               (pi.qty - pi.picked_qty) AS "openQty",
-               pi.required_date_code AS "requiredDateCode",
-               po.required_date_code_notice AS "orderNotice",
-               cp.remark AS "customerRemark",
-               po.warehouse_code AS "warehouseCode",
-               po.warehouse_section_code AS "warehouseSectionCode",
-               po.sub_inventory_code AS "subInventoryCode"
+               pi.part_no AS "partNo",
+               (pi.qty - pi.picked_qty) AS "openQty"
         FROM picking_items pi
         JOIN picking_orders po ON po.id = pi.picking_order_id
-        LEFT JOIN customer_profiles cp ON cp.code = po.customer_code
         WHERE po.status IN ('pending', 'picking')
           AND pi.qty > pi.picked_qty
           AND pi.picked_qty = 0  -- v1: never re-allocate partially picked items
@@ -138,10 +127,7 @@ async function loadLotSources(dbOrTx: DbOrTx, d: DemandRow): Promise<LotRow[]> {
                il.date_code AS "dateCode",
                (il.total_qty - il.allocated_qty) AS "available"
         FROM inventory_lots il
-        WHERE il.part_id = ${d.partId}
-          AND il.warehouse_code = ${d.warehouseCode}
-          AND (${d.warehouseSectionCode}::text IS NULL OR il.warehouse_section_code = ${d.warehouseSectionCode})
-          AND (${d.subInventoryCode}::text IS NULL OR il.sub_inventory_code = ${d.subInventoryCode})
+        WHERE il.part_no = ${d.partNo}
           AND il.total_qty - il.allocated_qty > 0
         ORDER BY il.date_code ASC NULLS LAST, il.id`
   );
@@ -152,17 +138,14 @@ async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow): Promise<Recei
     dbOrTx,
     sql`SELECT rii.id AS "receivingInvoiceItemId",
                ro.id AS "receivingOrderId",
-               rii.box_id AS "boxId",
+               rii.ctn_no AS "ctnNo",
                rii.date_code AS "dateCode",
                (rii.received_qty - rii.picked_qty) AS "available"
         FROM receiving_invoice_items rii
         JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
         JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
-        WHERE rii.part_id = ${d.partId}
+        WHERE rii.part_no = ${d.partNo}
           AND ro.status IN ('in_hand', 'provisional_received')
-          AND ro.warehouse_code = ${d.warehouseCode}
-          AND (${d.warehouseSectionCode}::text IS NULL OR ro.warehouse_section_code = ${d.warehouseSectionCode})
-          AND (${d.subInventoryCode}::text IS NULL OR ro.sub_inventory_code = ${d.subInventoryCode})
           AND (rii.received_qty - rii.picked_qty) > 0
         ORDER BY rii.date_code ASC NULLS LAST, rii.id`
   );
@@ -191,7 +174,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
       receivingInvoiceItemId: string | null;
       receivingOrderId: string | null;
       qty: number;
-      partId: string;
+      partNo: string;
       dateCode: string | null;
       lotCode: string | null;
       coo: string | null;
@@ -203,13 +186,13 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
       sql`SELECT a.id, a.picking_item_id AS "pickingItemId", a.inventory_lot_id AS "inventoryLotId",
                  a.receiving_invoice_item_id AS "receivingInvoiceItemId",
                  a.receiving_order_id AS "receivingOrderId", a.qty,
-                 COALESCE(il.part_id, rii.part_id, pi.part_id) AS "partId",
+                 COALESCE(il.part_no, rii.part_no, pi.part_no) AS "partNo",
                  COALESCE(il.date_code, rii.date_code) AS "dateCode",
                  COALESCE(il.lot_code, rii.lot_code) AS "lotCode",
                  COALESCE(il.coo, rii.coo) AS "coo",
                  COALESCE(il.cow, rii.cow) AS "cow",
                  il.shelf_code AS "shelfCode",
-                 COALESCE(il.box_id, rii.box_id) AS "boxId"
+                 COALESCE(il.box_id, rii.ctn_no) AS "boxId"
           FROM allocations a
           JOIN picking_items pi ON pi.id = a.picking_item_id
           LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
@@ -241,7 +224,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
       txnRows.push({
         id: randomUUID(),
         inventoryLotId: a.inventoryLotId,
-        partId: a.partId,
+        partNo: a.partNo,
         shelfCode: a.shelfCode,
         boxId: a.boxId,
         txnType: "RESERVE",
@@ -268,16 +251,11 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
     const recvUsed = new Map<string, number>(); // receiving source key → qty allocated this run
 
     for (const d of demands) {
-      const rule =
-        parseDateCodeRule(d.requiredDateCode) ??
-        parseDateCodeRule(d.orderNotice) ??
-        parseDateCodeRule(d.customerRemark);
-
       let remaining = d.openQty;
       const allocatedForItem: { qty: number; lotId?: string; recv?: ReceivingRow }[] = [];
 
       // 1. shelf stock, FIFO by date_code
-      const lots = (await loadLotSources(tx, d)).filter((l) => !rule || rule(l.dateCode));
+      const lots = await loadLotSources(tx, d);
       for (const lot of lots) {
         if (remaining <= 0) break;
         const usable = lot.available - (lotUsed.get(lot.lotId) ?? 0);
@@ -290,11 +268,11 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
 
       // 2. in-hand / provisional receiving stock, FIFO by date_code
       if (remaining > 0) {
-        const rows = (await loadReceivingSources(tx, d)).filter((r) => !rule || rule(r.dateCode));
+        const rows = await loadReceivingSources(tx, d);
         for (const r of rows) {
           if (remaining <= 0) break;
           // box-level sources track per item; order-level sources pool per order+part
-          const key = r.boxId ? `item:${r.receivingInvoiceItemId}` : `order:${r.receivingOrderId}:${d.partId}`;
+          const key = r.ctnNo ? `item:${r.receivingInvoiceItemId}` : `order:${r.receivingOrderId}:${d.partNo}`;
           const usable = r.available - (recvUsed.get(key) ?? 0);
           if (usable <= 0) continue;
           const take = Math.min(usable, remaining);
@@ -314,8 +292,8 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
           id,
           pickingItemId: d.pickingItemId,
           inventoryLotId: alloc.lotId ?? null,
-          receivingInvoiceItemId: alloc.recv?.boxId ? alloc.recv.receivingInvoiceItemId : null,
-          receivingOrderId: alloc.recv && !alloc.recv.boxId ? alloc.recv.receivingOrderId : null,
+          receivingInvoiceItemId: alloc.recv?.ctnNo ? alloc.recv.receivingInvoiceItemId : null,
+          receivingOrderId: alloc.recv && !alloc.recv.ctnNo ? alloc.recv.receivingOrderId : null,
           qty: alloc.qty,
         });
         summary.allocationsCreated += 1;
@@ -323,8 +301,8 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
           allocationKey(
             d.pickingItemId,
             alloc.lotId ?? null,
-            alloc.recv?.boxId ? alloc.recv.receivingInvoiceItemId : null,
-            alloc.recv && !alloc.recv.boxId ? alloc.recv.receivingOrderId : null,
+            alloc.recv?.ctnNo ? alloc.recv.receivingInvoiceItemId : null,
+            alloc.recv && !alloc.recv.ctnNo ? alloc.recv.receivingOrderId : null,
             alloc.qty
           )
         );
@@ -334,16 +312,16 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
         txnRows.push({
           id: randomUUID(),
           inventoryLotId: alloc.lotId ?? null,
-          partId: d.partId,
+          partNo: d.partNo,
           shelfCode: null,
-          boxId: alloc.recv?.boxId ?? null,
+          boxId: alloc.recv?.ctnNo ?? null,
           txnType: "RESERVE",
           qtyType: "reserved",
           qtyDelta: alloc.qty,
           dateCode: alloc.recv?.dateCode ?? null,
           referenceType: "allocation",
           referenceId: id,
-          receivingInvoiceItemId: alloc.recv?.boxId ? alloc.recv.receivingInvoiceItemId : null,
+          receivingInvoiceItemId: alloc.recv?.ctnNo ? alloc.recv.receivingInvoiceItemId : null,
           txnReason: "recompute: reserve",
           txnAt: now(),
         });

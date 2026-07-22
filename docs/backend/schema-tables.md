@@ -1,0 +1,521 @@
+# Backend — Schema Tables
+
+This document lists every PostgreSQL table in the `apps/backend` database, one
+section per table, grouped by Drizzle schema domain file. The typed source of
+truth is `apps/backend/src/db/schema/*.ts`; migrations live in
+`apps/backend/drizzle/` and auto-apply on server start. All ids are `text`
+UUID strings and all timestamps are UTC wall-clock (`created_at`/`updated_at`
+are set by the app). This document mirrors the TS definitions exactly — fields
+commented out in the schema files are omitted even though older migrated
+databases may still carry those legacy columns (e.g. `warehouse_code` on
+`receiving_orders`).
+
+Internal/demo tables are intentionally omitted from this document but remain in
+the database: `app_events` (internal SSE outbox) and `receiving_scan_labels`
+(internal scan-label dedup).
+
+# Master data (`schema/master.ts`)
+
+## suppliers
+
+Pure AP_SUPPLIERS sync mirror; PDA-local fields live in `supplier_profiles`.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Supplier id (UUID) |
+| code | text NOT NULL UNIQUE | Supplier business code |
+| name | text NOT NULL | Supplier name |
+| short_name | text | Supplier short name (from AP_SUPPLIERS sync) |
+
+## supplier_profiles
+
+PDA-local supplier profile — extra fields that do not come from the sync;
+keyed by business code so it survives id churn if the sync re-creates
+supplier rows.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Profile id (UUID) |
+| supplier_code | text NOT NULL UNIQUE FK → suppliers(code) | Business key of the supplier |
+| name | text | Local display-name override; null = use suppliers.name |
+| qr_template | text | QR-code template (regex with named groups) |
+| qr_type | text | QR-code type (eg: isbn, ban 14, ban 16) |
+| qty_encoding | text | Qty decoding rule, e.g. 'koa_zeros' |
+| remark | text | Free-form remark for extension |
+| created_at | timestamp NOT NULL | Creation time (UTC) |
+| updated_at | timestamp NOT NULL | Last update time (UTC) |
+
+## parts
+
+Part master. Kept in this database (the upstream system may or may not
+provide one); other tables reference parts by `part_no`, not by UUID.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Part id (UUID, internal use only) |
+| supplier_code | text NOT NULL UNIQUE FK → suppliers(code) | Business key of the supplier |
+| part_no | text UNIQUE | Part number — the reference key used by all other tables |
+| wcl_item_no | text | WCL Part No (same meaning as receiving_invoice_items.wcl_item_no) |
+| description | text | Part description |
+| default_coo | text | Default country of origin |
+
+## shelves
+
+Storage locations (shelves and docks).
+
+| Field | Type | Description |
+| --- | --- | --- |
+| code | text PK | Shelf/location code |
+| zone | text | Zone within the warehouse |
+| org_id | integer | Office (HK, SZ, CME, ...) distinguishing per-office shelf locations, for extend if need to seperate org from shelf |
+| created_at | timestamp NOT NULL | Creation time (UTC) |
+| updated_at | timestamp NOT NULL | Last update time (UTC) |
+
+## country_list
+
+Country lookup: short code → display name (destination country, COO, etc.).
+
+| Field | Type | Description |
+| --- | --- | --- |
+| code | text PK | ISO 3166-1 alpha-2 code, e.g. HK, CN, JP |
+| name | text NOT NULL | Country display name |
+
+## box_size_list
+
+Default box sizes offered at measuring/packing.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| code | text PK | Size code, "L X W X H" in cm, e.g. "26 X 20 X 20" |
+| description | text | Optional description |
+
+## net_weight_formula
+
+Net-weight reference per item: `qty` units weigh `weight` grams → unit net =
+weight / qty.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Row id (UUID) |
+| part_no | text NOT NULL UNIQUE FK → parts(part_no) | Part the formula applies to |
+| qty | integer NOT NULL | Reference quantity |
+| weight | real NOT NULL | Grams per `qty` units |
+
+## customer_profiles
+
+Customer master used by picking orders and customer-segregated stores.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| code | text PK | Customer code |
+| label | text NOT NULL | Display label |
+| rule | text | formual for a customer |
+| remark | text | Free-form remark |
+| created_at | timestamp NOT NULL | Creation time (UTC) |
+| updated_at | timestamp NOT NULL | Last update time (UTC) |
+
+## users
+
+Local users for login (a ucenter/external user-system sync may replace this
+later; syncable by `username`). `password_hash` holds
+`scrypt:N:r:p:<salt>:<hash>` (see `src/auth/password.ts`); legacy plain-text
+rows are lazily upgraded on login. Roles were replaced by group membership
+(`user_groups` / `user_group_members`) — a user's groups ride in the JWT as
+`groupCodes`.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | User id (UUID) |
+| username | text NOT NULL UNIQUE | Login name |
+| password_hash | text NOT NULL | scrypt hash (`scrypt:N:r:p:salt:hash`) |
+| display_name | text NOT NULL | Display name |
+| created_at | timestamp NOT NULL | Creation time (UTC) |
+
+## user_groups
+
+User groups (replaces the dropped `users.role` column). Membership is
+many-to-many via `user_group_members`.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| code | text PK | Group code (e.g. operator, admin) |
+| label | text NOT NULL | Display label |
+| remark | text | Free-form remark |
+| created_at | timestamp NOT NULL | Creation time (UTC) |
+| updated_at | timestamp NOT NULL | Last update time (UTC) |
+
+## user_group_members
+
+Group membership junction; a user can belong to any number of groups.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| user_id | text PK (composite) FK → users(id) ON DELETE CASCADE | Member user |
+| group_code | text PK (composite) FK → user_groups(code) ON DELETE CASCADE | Group |
+| created_at | timestamp NOT NULL | Creation time (UTC) |
+
+# Receiving (`schema/receiving.ts`)
+
+## receiving_orders
+
+Packing-list batch — one inbound delivery from a supplier. Created locally in
+this app by the user (no upstream sync key).
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Order id (UUID) |
+| batch_no | text NOT NULL | Batch reference number |
+| supplier_id | text FK → suppliers(id) | Supplier |
+| delivery_date | timestamp | Expected delivery date |
+| org_id | integer NOT NULL DEFAULT 2 | Receiving office |
+| date_code | text | Batch-level date code; items without one inherit it |
+| status | text NOT NULL DEFAULT 'pending' | Order status |
+| arrived_at | timestamp | Arrival confirmation time |
+| arrived_by | text FK → users(id) | User who confirmed arrival |
+| created_at | timestamp NOT NULL | Creation time (UTC) |
+| updated_at | timestamp NOT NULL | Last update time (UTC) |
+
+Note: status values `pending` | `in_hand` | `provisional_received` | `clear`;
+index on `status`.
+
+## receiving_invoices
+
+Packing-list header — one supplier invoice inside a receiving order.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Invoice id (UUID) |
+| receiving_order_id | text NOT NULL FK → receiving_orders(id) ON DELETE CASCADE | Parent receiving order |
+| invoice_no | text NOT NULL | Supplier invoice number |
+| supplier_id | text FK → suppliers(id) | Supplier |
+| wcl_company_name | text | Shipper company name (not the supplier name) |
+| total_qty | integer | Total component quantity |
+| total_ctn | integer | Total carton count |
+| delivery_date | timestamp | Ship-out date (not the inbound time) |
+| org_id | integer NOT NULL DEFAULT 2 | Shipper office, 2 = HK |
+| created_at | timestamp NOT NULL | Creation time (UTC) |
+| updated_at | timestamp NOT NULL | Last update time (UTC) |
+
+## receiving_invoice_items
+
+Packing-list line items.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Line id (UUID) |
+| receiving_invoice_id | text NOT NULL FK → receiving_invoices(id) ON DELETE CASCADE | Parent invoice |
+| part_no | text NOT NULL FK → parts(part_no) | Part |
+| wcl_item_no | text | WCL Part No (line-level copy, eases OCR reconciliation) |
+| po_no | text | Purchase order number |
+| po_line | text | Purchase order line |
+| line_qty | integer NOT NULL | Expected quantity per the document (matches Oracle DB line qty) |
+| received_qty | integer NOT NULL DEFAULT 0 | Quantity scanned/received |
+| picked_qty | integer NOT NULL DEFAULT 0 | Quantity picked from this line |
+| put_away_qty | integer NOT NULL DEFAULT 0 | Quantity put away |
+| ctn_no | text | Carton number (replaces the old box_id) |
+| date_code | text | Line date code |
+| lot_code | text | Lot number |
+| coo | text | Country of origin |
+| cow | text | Country of wafer |
+| org_id | integer NOT NULL DEFAULT 2 | Receiving office |
+| reported_mismatch | boolean NOT NULL DEFAULT false | A mismatch was reported on this line |
+| mismatch_reason | text | Mismatch reason |
+| mismatch_qty | integer | Mismatched quantity |
+| wrong_part_no | text | Wrong part number actually received |
+| mismatch_note | text | Free-form mismatch note |
+
+Note: indexes on `receiving_invoice_id` and `part_no`.
+
+
+# Picking (`schema/picking.ts`)
+
+## picking_orders
+
+Outbound order (invoice / transfer note) to pick and ship. Replicated from an
+upstream database — `order_no` is the sync/dedup key (no separate
+external_id).
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Order id (UUID) |
+| order_no | text NOT NULL UNIQUE | Order / invoice / TN number — replication sync key from the upstream DB |
+| delivery_date | timestamp | Requested delivery date |
+| po_no | text | Customer PO number |
+| ship_to | text | Ship-to description (merged with destination country; unstructured, not a full address) |
+| customer_code | text FK → customer_profiles(code) | Customer |
+| issue_reason | text | Issue-report reason |
+| issue_qty | integer | Issue-report quantity |
+| issue_pack_size | integer | Issue-report pack size |
+| issue_note | text | Issue-report note |
+| issue_remark | text | Issue-report remark |
+| issue_reported_at | timestamp | When the issue was reported |
+| issue_reported_by | text FK → users(id) | User who reported the issue |
+| status | text NOT NULL DEFAULT 'pending' | Order status |
+| created_at | timestamp NOT NULL | Creation time (UTC) |
+| updated_at | timestamp NOT NULL | Last update time (UTC) |
+
+Note: status values `pending` | `picking` | `finished`; unique index on
+`order_no`; index on `status`.
+
+## picking_items
+
+Picking order lines.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Line id (UUID) |
+| picking_order_id | text NOT NULL FK → picking_orders(id) ON DELETE CASCADE | Parent picking order |
+| part_no | text NOT NULL FK → parts(part_no) | Part |
+| qty | integer NOT NULL | Demand quantity to ship |
+| picked_qty | integer NOT NULL DEFAULT 0 | Quantity scanned/picked |
+| allocated_qty | integer NOT NULL DEFAULT 0 | Quantity reserved (allocated) |
+| created_at | timestamp NOT NULL | Creation time (UTC) |
+| updated_at | timestamp NOT NULL | Last update time (UTC) |
+
+Note: indexes on `picking_order_id` and `part_no`.
+
+## measuring_tasks
+
+Measuring/weighing task created when a picking order is finished.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Task id (UUID) |
+| picking_order_id | text NOT NULL FK → picking_orders(id) ON DELETE CASCADE | Order being measured |
+| status | text NOT NULL DEFAULT 'pending' | Task status |
+| created_at | timestamp NOT NULL | Creation time (UTC) |
+
+Note: status values `pending` | `completed`; unique index on
+`picking_order_id` (one measuring task per order).
+
+## shipping_boxes
+
+Shipping cartons used at picking and measuring.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Box id (server-generated `BOX-S-<date>-<seq>`; format to be finalized now that warehouse_code is removed) |
+| picking_order_id | text FK → picking_orders(id) | Order the box belongs to |
+| measuring_task_id | text FK → measuring_tasks(id) | Measuring task the box is attached to |
+| status | text NOT NULL DEFAULT 'open' | Box status |
+| gross_weight | real | Gross weight |
+| net_weight | real | Net weight |
+| destination_country | text | Destination country code |
+| box_size | text | Box size code (see box_size_list) |
+| created_at | timestamp NOT NULL | Creation time (UTC) |
+| updated_at | timestamp NOT NULL | Last update time (UTC) |
+
+Note: status values `open` | `closed`; indexes on `measuring_task_id` and
+`picking_order_id`.
+
+## picking_packages
+
+Picked units per source — the packing truth for what went into which box.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Package id (UUID) |
+| picking_item_id | text NOT NULL FK → picking_items(id) ON DELETE CASCADE | Picking line fulfilled |
+| picking_order_id | text NOT NULL FK → picking_orders(id) ON DELETE CASCADE | Parent picking order |
+| source_type | text NOT NULL | 'receiving_invoice_item' \| 'inventory_lot' |
+| source_id | text NOT NULL | Id of the source row (per source_type) |
+| qty | integer NOT NULL | Quantity picked from this source |
+| shipping_box_id | text FK → shipping_boxes(id) | Box the units were packed into |
+| date_code | text | Date code of the picked stock |
+| lot_code | text | Lot number of the picked stock |
+| coo | text | Country of origin |
+| cow | text | Country of wafer |
+| verified | boolean NOT NULL DEFAULT false | Package verified |
+| created_at | timestamp NOT NULL | Creation time (UTC) |
+| updated_at | timestamp NOT NULL | Last update time (UTC) |
+
+Note: indexes on `picking_item_id`, `picking_order_id`, and `shipping_box_id`.
+
+## shipping_box_items
+
+Compat table kept for legacy reads; the packing truth is `picking_packages`.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Row id (UUID) |
+| shipping_box_id | text NOT NULL FK → shipping_boxes(id) ON DELETE CASCADE | Box |
+| picking_item_id | text FK → picking_items(id) | Picking line |
+| part_no | text NOT NULL FK → parts(part_no) | Part |
+| qty | integer NOT NULL | Quantity in the box |
+| created_at | timestamp NOT NULL | Creation time (UTC) |
+| updated_at | timestamp NOT NULL | Last update time (UTC) |
+
+Note: index on `shipping_box_id`.
+
+# Inventory (`schema/inventory.ts`)
+
+## inventory_lots
+
+On-hand stock lots — one row per unique
+part/date-code/COO/COW/location combination. Dock lots use a
+virtual shelf code so the lot key never goes NULL. The lot's org derives from
+its shelf (`shelf_code → shelves.org_id`).
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Lot id (UUID) |
+| part_no | text NOT NULL FK → parts(part_no) | Part |
+| wcl_item_no | text | WCL Part No |
+| date_code | text | Date code |
+| lot_code | text | Lot number |
+| coo | text | Country of origin |
+| cow | text | Country of wafer |
+| shelf_code | text FK → shelves(code) | Location (virtual shelf for dock/GIT lots) |
+| box_id | text | Shelf box holding the stock |
+| total_qty | integer NOT NULL DEFAULT 0 | Total quantity (dock lots: expected qty; shelf lots: on-hand stock) |
+| allocated_qty | integer NOT NULL DEFAULT 0 | Reserved quantity |
+| available_qty | integer GENERATED ALWAYS AS (total_qty - allocated_qty) | Available (unreserved) quantity |
+
+Note: partial unique index `inventory_lots_unique_lot` on `(part_no,
+date_code, coo, cow, shelf_code, box_id)` WHERE `shelf_code IS NOT NULL OR
+box_id IS NOT NULL`; indexes on `part_no`, `(part_no, available_qty)`, and
+`(shelf_code, box_id)`.
+
+## inventory_lot_sources
+
+Provenance of a lot — which receiving invoice items fed it and how much.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Row id (UUID) |
+| inventory_lot_id | text NOT NULL FK → inventory_lots(id) ON DELETE CASCADE | Lot |
+| receiving_invoice_item_id | text NOT NULL FK → receiving_invoice_items(id) ON DELETE CASCADE | Contributing receiving line |
+| qty | integer NOT NULL | Quantity contributed |
+
+Note: unique index on `(inventory_lot_id, receiving_invoice_item_id)`;
+indexes on `receiving_invoice_item_id` and `inventory_lot_id`.
+
+## shelf_boxes
+
+Physical boxes on shelves used by put-away (printed box label).
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Box id (server-generated `BOX-H-<date>-<seq>`; format to be finalized now that warehouse_code is removed) |
+| shelf_code | text FK → shelves(code) | Shelf the box sits on |
+| status | text NOT NULL DEFAULT 'open' | Box status |
+| created_at | timestamp NOT NULL | Creation time (UTC) |
+
+Note: status values `open` | `closed` | `verified`; index on `shelf_code`.
+
+## shelf_box_items
+
+Contents of a shelf box.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Row id (UUID) |
+| shelf_box_id | text NOT NULL FK → shelf_boxes(id) ON DELETE CASCADE | Box |
+| receiving_invoice_item_id | text FK → receiving_invoice_items(id) | Source receiving line |
+| part_no | text NOT NULL FK → parts(part_no) | Part |
+| wcl_item_no | text | WCL Part No |
+| qty | integer NOT NULL | Quantity in the box |
+| verified | boolean DEFAULT false | Item verified (goods verify) |
+| verified_at | timestamp | Verification time |
+
+Note: index on `shelf_box_id`.
+
+## goods_verify_tasks
+
+Daily goods-verify tasks (concept 7): generated at day end from
+`inventory_transactions` — one task per inventory lot with movement that day.
+Put-away/verify is box-based (printed box label), so the task carries box_id.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Task id (UUID) |
+| task_date | date NOT NULL | The day being counted |
+| inventory_lot_id | text NOT NULL FK → inventory_lots(id) | Lot to verify |
+| shelf_code | text FK → shelves(code) | Shelf (task queue grouping) |
+| box_id | text | Box to verify (box-based verify) |
+| part_no | text NOT NULL FK → parts(part_no) | Part |
+| expected_qty | integer NOT NULL | Stock snapshot at generation time |
+| status | text NOT NULL DEFAULT 'pending' | Task status |
+| verified_by | text FK → users(id) | Verifying user |
+| verified_at | timestamp | Verification time |
+| created_at | timestamp NOT NULL | Creation time (UTC) |
+
+Note: status values `pending` | `verified` | `skipped`; unique index on
+`(task_date, inventory_lot_id)` (one task per lot per day); indexes on
+`(shelf_code, task_date)` and `status`.
+
+# Allocation (`schema/allocation.ts`)
+
+## allocations
+
+Reservation of stock for a picking item — from an on-hand lot, a receiving
+invoice item, or a whole receiving order (when the line has no box).
+Recomputed idempotently by the allocation engine (`allocateAll`).
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Allocation id (UUID) |
+| picking_item_id | text NOT NULL FK → picking_items(id) ON DELETE CASCADE | Picking line being reserved for |
+| inventory_lot_id | text FK → inventory_lots(id) ON DELETE CASCADE | Source lot (on-hand stock) |
+| receiving_invoice_item_id | text FK → receiving_invoice_items(id) ON DELETE CASCADE | Source receiving line (not yet put away) |
+| receiving_order_id | text FK → receiving_orders(id) ON DELETE CASCADE | Whole-order allocation (line has no box) |
+| qty | integer NOT NULL | Reserved quantity |
+| created_at | timestamp NOT NULL | Creation time (UTC) |
+| updated_at | timestamp NOT NULL | Last update time (UTC) |
+
+Note: CHECK `chk_allocations_source` requires at least one of
+`inventory_lot_id` / `receiving_invoice_item_id` / `receiving_order_id`;
+indexes on all four FK columns.
+
+# Audit (`schema/audit.ts`)
+
+## transaction_logs
+
+Status-transition audit for documents/tasks (uniform name transaction_logs).
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Log id (UUID) |
+| entity_type | text NOT NULL | Entity type: receiving_order / picking_order / shelf_box / ... |
+| entity_id | text NOT NULL | Entity primary key |
+| from_state | text | Previous status (null = newly created) |
+| to_state | text NOT NULL | New status |
+| actor_id | text FK → users(id) | Acting user |
+| metadata | jsonb NOT NULL DEFAULT '{}' | Extra audit info (JSON) |
+| created_at | timestamp NOT NULL | Transition time (UTC) |
+
+Note: indexes on `(entity_type, entity_id)` and `created_at`.
+
+## inventory_transactions
+
+Stock movement ledger — feeds "locations with movement yesterday" / daily
+goods-verify. Simplified rule: one row records one quantity change of one
+stock class; multiple classes changing at once write multiple rows.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Row id (UUID) |
+| inventory_lot_id | text FK → inventory_lots(id) | Related lot (nullable) |
+| part_no | text NOT NULL FK → parts(part_no) | Part |
+| shelf_code | text FK → shelves(code) | Location of the movement (used by cycle-count filtering) |
+| box_id | text | Box number (nullable) |
+| txn_type | text NOT NULL | Business action: EXPECTED_CREATE / RECEIVE_TO_DOCK / PUT_AWAY / RESERVE / PICK / SHIP_CONFIRM / ADJUST |
+| qty_type | text NOT NULL | Stock class affected: expected \| dock \| on_hand \| reserved |
+| qty_delta | integer NOT NULL | Quantity change (positive = increase, negative = decrease) |
+| date_code | text | Lot snapshot: date code (nullable) |
+| lot_code | text | Lot snapshot: lot number |
+| coo | text | Lot snapshot: country of origin |
+| cow | text | Lot snapshot: country of wafer |
+| reference_type | text | Source document type |
+| reference_id | text | Source document id |
+| receiving_invoice_item_id | text FK → receiving_invoice_items(id) | Related receiving line |
+| actor_id | text FK → users(id) | Acting user |
+| txn_reason | text | Reason for the movement |
+| metadata | jsonb NOT NULL DEFAULT '{}' | Optional extras (before/after quantities, ...) |
+| txn_at | timestamp NOT NULL | Business occurrence time |
+| created_at | timestamp NOT NULL | Row creation time (UTC) |
+
+Note: CHECK `chk_inventory_transactions_qty_type` constrains `qty_type` to
+`expected` | `dock` | `on_hand` | `reserved`; indexes on `(shelf_code,
+txn_at)`, `(inventory_lot_id, txn_at)`, `(part_no, txn_at)`, `txn_type`,
+`(reference_type, reference_id)`, and `receiving_invoice_item_id`.

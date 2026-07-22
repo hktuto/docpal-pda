@@ -15,7 +15,7 @@
       class="card list-card"
     >
       <div class="list-card__header">
-        <span class="list-card__title">{{ task.refNo }}</span>
+        <span class="list-card__title">{{ task.orderNo }}</span>
         <span class="badge" :class="badgeClass(task.status)">{{ statusLabel.measuring(task.status) }}</span>
       </div>
       <p class="list-card__meta">

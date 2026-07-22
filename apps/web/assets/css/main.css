@@ -147,8 +147,8 @@ a:hover {
 
 .btn--small {
   padding: 0.2rem 0.4rem;
-  font-size: 0.6rem;
-  min-height: 34px;
+  font-size: 0.8rem;
+  /*min-height: 1rem;*/
 }
 
 .btn--ghost {

@@ -12,6 +12,14 @@
           {{ creating ? $t('putAway.shelfBoxesPanel.creating') : $t('putAway.shelfBoxesPanel.newBox') }}
         </button>
         <button
+          v-if="actionable"
+          class="btn btn--small"
+          :disabled="creating"
+          @click="emit('scan-box')"
+        >
+          {{ $t('putAway.shelfBoxesPanel.scanBox') }}
+        </button>
+        <button
           class="btn btn--small btn--ghost"
           :aria-expanded="isBoxesExpanded"
           @click="isBoxesExpanded = !isBoxesExpanded"
@@ -35,7 +43,7 @@
           v-for="box in group"
           :key="box.id"
           class="card box-card"
-          :class="{ 'card--done': box.status !== 'open' }"
+          :class="{ 'card--done': box.status !== 'open', 'box-card--active': box.id === activeBoxId }"
         >
           <DetailRow :label="$t('putAway.shelfBoxesPanel.box')">
             <span class="card__title">{{ box.id }}</span>
@@ -43,6 +51,7 @@
           <DetailRow :label="$t('putAway.shelfBoxesPanel.status')">
 
             <span class="badge" :class="badgeClass(box.status)">{{ statusLabel.box(box.status) }}</span>
+            <span v-if="box.id === activeBoxId" class="badge badge--active">{{ $t('putAway.shelfBoxesPanel.active') }}</span>
           </DetailRow>
           <DetailRow :label="$t('putAway.shelfBoxesPanel.items')">
             <span>{{ box.items?.length || 0 }} {{ box.items?.length === 1 ? $t('common.line') : $t('common.lines') }} · {{ boxTotalQty(box.items ?? []) }} {{ $t('common.pcs') }}</span>
@@ -84,6 +93,13 @@
           </div>
 
           <div v-if="box.status === 'open'" class="box-actions">
+            <button
+              v-if="box.id !== activeBoxId"
+              class="btn btn--small btn--secondary"
+              @click="emit('set-active', box.id)"
+            >
+              {{ $t('putAway.shelfBoxesPanel.setActive') }}
+            </button>
             <button
               class="btn btn--small"
               :disabled="anyAddingAll || addingAll[box.id] || unboxedCount === 0"
@@ -138,16 +154,21 @@ interface Props {
   anyAddingAll: boolean;
   unboxedCount: number;
   removingItem: Record<string, boolean>;
+  /** The box that currently receives auto-put scans (highlighted). */
+  activeBoxId?: string | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   shelves: () => [],
+  activeBoxId: null,
 });
 
 const emit = defineEmits<{
   "update:boxesExpanded": [value: boolean];
   "update:expandedItemBoxes": [value: Set<string>];
   "new-box": [];
+  "scan-box": [];
+  "set-active": [boxId: string];
   "close-box": [boxId: string];
   "cancel-box": [boxId: string];
   "add-all-to-box": [boxId: string];
@@ -228,6 +249,17 @@ function toggleItemVisibility(boxId: string) {
 
 .box-card {
   margin-bottom: 0.75rem;
+}
+
+.box-card--active {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.badge--active {
+  margin-left: 0.5rem;
+  background: var(--primary);
+  color: #fff;
 }
 
 .box-contents {

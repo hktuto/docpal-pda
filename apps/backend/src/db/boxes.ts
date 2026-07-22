@@ -1,15 +1,13 @@
 import { sql } from "drizzle-orm";
-import { defaultWarehouse } from "../config.js";
 import { queryAll, type DbOrTx } from "./query.js";
 
 // ---------------------------------------------------------------------------
 // Shared box identity + search.
 //
-// Box ids are `BOX-<kind>-<warehouse>-<YYYYMMDD>-<seq>`: kind S = shipping
-// box / H = shelf box, warehouse from `WAREHOUSE_CODE` (default HK1), seq a
-// per-day counter per kind (zero-padded to 4). Ids survive hard deletes
-// (cancel) via their transaction_logs rows — scan both tables so a cancelled
-// seq is never reused.
+// Box ids are `BOX-<kind>-<YYYYMMDD>-<seq>`: kind S = shipping box / H =
+// shelf box, seq a per-day counter per kind (zero-padded to 4). Ids survive
+// hard deletes (cancel) via their transaction_logs rows — scan both tables so
+// a cancelled seq is never reused.
 // ---------------------------------------------------------------------------
 
 export type BoxKind = "S" | "H";
@@ -27,7 +25,7 @@ function localYyyymmdd(d: Date): string {
 }
 
 export function boxIdPrefix(kind: BoxKind, at: Date = new Date()): string {
-  return `BOX-${kind}-${defaultWarehouse()}-${localYyyymmdd(at)}-`;
+  return `BOX-${kind}-${localYyyymmdd(at)}-`;
 }
 
 export async function nextBoxId(tx: DbOrTx, kind: BoxKind): Promise<string> {
@@ -53,7 +51,8 @@ export interface BoxSearchRow {
   id: string;
   status: string;
   createdAt: Date;
-  refNo: string | null;
+  /** Owning order's number (shipping boxes only; shelf boxes have no order). */
+  orderNo: string | null;
 }
 
 /** Search both box tables by id substring (a bare seq like `7` or `0007`
@@ -64,15 +63,14 @@ export async function searchBoxes(db: DbOrTx, q: string): Promise<BoxSearchRow[]
     db,
     sql`SELECT * FROM (
           SELECT 'shipping' AS kind, sb.id, sb.status, sb.created_at AS "createdAt",
-                 po.ref_no AS "refNo"
+                 po.order_no AS "orderNo"
           FROM shipping_boxes sb
           LEFT JOIN picking_orders po ON po.id = sb.picking_order_id
           WHERE sb.id ILIKE ${term}
           UNION ALL
           SELECT 'shelf' AS kind, hb.id, hb.status, hb.created_at AS "createdAt",
-                 ro.ref_no AS "refNo"
+                 NULL AS "orderNo"
           FROM shelf_boxes hb
-          LEFT JOIN receiving_orders ro ON ro.id = hb.receiving_order_id
           WHERE hb.id ILIKE ${term}
         ) boxes
         ORDER BY boxes."createdAt" DESC

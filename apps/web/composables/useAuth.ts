@@ -1,8 +1,9 @@
 import { createAuthService } from "~/services/auth";
+import { getStoredUser } from "~/services/adapters/apiAuth";
 import type { User } from "~/services/types";
 
-const STORAGE_KEY = "warehouse-user-id";
-
+// The session (warehouse-token + warehouse-user-id + warehouse-user) lives in
+// localStorage, owned by the auth adapter (services/adapters/apiAuth.ts).
 export function useAuth() {
   const currentUser = useState<User | null>("auth-user", () => null);
 
@@ -13,23 +14,29 @@ export function useAuth() {
   async function login(username: string, password: string) {
     const user = await authService.login(username, password);
     currentUser.value = user;
-    localStorage.setItem(STORAGE_KEY, user.id);
     return user;
   }
 
   async function logout() {
     await authService.logout();
     currentUser.value = null;
-    localStorage.removeItem(STORAGE_KEY);
   }
 
   async function restore() {
-    const user = await authService.getCurrentUser();
-    if (user) {
-      currentUser.value = user;
-    } else {
-      localStorage.removeItem(STORAGE_KEY);
+    // Seed synchronously from the persisted session user so group membership
+    // (groupCodes) is available before the /auth/me round-trip resolves…
+    const stored = getStoredUser();
+    if (stored) {
+      currentUser.value = { ...stored, createdAt: null };
     }
+    // …then validate against the server; refreshes groups and clears the
+    // session on 401.
+    currentUser.value = await authService.getCurrentUser();
+  }
+
+  /** True when the current user belongs to the given group. */
+  function hasGroup(code: string): boolean {
+    return currentUser.value?.groupCodes.includes(code) ?? false;
   }
 
   return {
@@ -37,5 +44,6 @@ export function useAuth() {
     login,
     logout,
     restore,
+    hasGroup,
   };
 }

@@ -13,7 +13,6 @@
     <DetailRow :label="$t('picking.itemsSection.requiredQty')" :value="item.qty" />
     <DetailRow :label="$t('picking.itemsSection.scannedQty')" :value="scannedQty(item)" />
     <DetailRow :label="$t('picking.itemsSection.boxedQty')" :value="item.pickedQty" />
-    <DetailRow :label="$t('picking.itemsSection.requiredDateCode')" :value="item.requiredDateCode || $t('common.noData')" />
     <DetailRow :label="$t('picking.itemsSection.status')">
       <span
         class="badge"

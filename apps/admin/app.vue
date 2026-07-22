@@ -16,6 +16,7 @@ onMounted(refreshUser);
 const isLogin = computed(() => route.path === "/login");
 
 function logout() {
+  localStorage.removeItem("admin_token");
   localStorage.removeItem("admin_user");
   user.value = null;
   navigateTo("/login");

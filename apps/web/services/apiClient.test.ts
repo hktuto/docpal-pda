@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { createApiClient, ApiError } from './apiClient';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { createApiClient, ApiError, setTokenGetter } from './apiClient';
 import { clearApiCache } from './apiCache';
 import { I18nError } from '~/composables/i18nError';
 
@@ -23,18 +23,38 @@ function errorResponse(text: string, status: number): Response {
   } as unknown as Response;
 }
 
+function createLocalStorageFake(): Storage {
+  const map = new Map<string, string>();
+  return {
+    get length() {
+      return map.size;
+    },
+    clear: () => map.clear(),
+    getItem: (key: string) => map.get(key) ?? null,
+    key: (index: number) => [...map.keys()][index] ?? null,
+    removeItem: (key: string) => map.delete(key),
+    setItem: (key: string, value: string) => map.set(key, value),
+  };
+}
+
 describe('createApiClient', () => {
   const fetchMock = vi.fn();
 
   beforeEach(() => {
     fetchMock.mockReset();
     vi.stubGlobal('fetch', fetchMock);
+    // The token getter is module-level (shared with apiAuth) — reset it.
+    setTokenGetter(() => null);
     clearApiCache();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('GET builds URL from baseUrl + path + query and returns parsed JSON', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ id: '1' }));
-    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+    const client = createApiClient({ baseUrl: 'http://api.test' });
 
     const result = await client.get('/orders', {
       status: 'open',
@@ -52,7 +72,7 @@ describe('createApiClient', () => {
 
   it('POST sends JSON body with content-type header', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
-    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+    const client = createApiClient({ baseUrl: 'http://api.test' });
 
     await client.post('/orders', { foo_bar: 1 });
 
@@ -68,7 +88,7 @@ describe('createApiClient', () => {
 
   it('maps i18n-key-shaped error text to I18nError with that key', async () => {
     fetchMock.mockResolvedValue(errorResponse('box_is_not_open', 400));
-    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+    const client = createApiClient({ baseUrl: 'http://api.test' });
 
     const promise = client.get('/boxes/1');
     await expect(promise).rejects.toThrow(I18nError);
@@ -81,7 +101,7 @@ describe('createApiClient', () => {
       candidates: [{ id: 'a1' }, { id: 'a2' }],
     };
     fetchMock.mockResolvedValue(errorResponse(JSON.stringify(body), 409));
-    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+    const client = createApiClient({ baseUrl: 'http://api.test' });
 
     const promise = client.post('/picking-items/pi1/scan', { allocationId: 'x', qty: 1 });
     await expect(promise).rejects.toThrow(ApiError);
@@ -95,7 +115,7 @@ describe('createApiClient', () => {
 
   it('falls back to "<status>: <text>" message when the JSON error body has no message', async () => {
     fetchMock.mockResolvedValue(errorResponse(JSON.stringify({ code: 1 }), 400));
-    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+    const client = createApiClient({ baseUrl: 'http://api.test' });
 
     const promise = client.get('/orders');
     await expect(promise).rejects.toThrow(ApiError);
@@ -108,7 +128,7 @@ describe('createApiClient', () => {
 
   it('treats a JSON array error body as plain text (no ApiError body)', async () => {
     fetchMock.mockResolvedValue(errorResponse(JSON.stringify([1, 2]), 500));
-    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+    const client = createApiClient({ baseUrl: 'http://api.test' });
 
     const promise = client.get('/orders');
     await expect(promise).rejects.toThrow(ApiError);
@@ -117,7 +137,7 @@ describe('createApiClient', () => {
 
   it('throws a plain Error containing the status for unmapped error text', async () => {
     fetchMock.mockResolvedValue(errorResponse('something exploded', 500));
-    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+    const client = createApiClient({ baseUrl: 'http://api.test' });
 
     const promise = client.get('/orders');
     await expect(promise).rejects.toThrow(Error);
@@ -135,7 +155,7 @@ describe('createApiClient', () => {
         throw new SyntaxError('Unexpected end of JSON input');
       },
     } as unknown as Response);
-    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+    const client = createApiClient({ baseUrl: 'http://api.test' });
 
     const promise = client.get('/orders');
     await expect(promise).rejects.toThrow(ApiError);
@@ -145,7 +165,7 @@ describe('createApiClient', () => {
 
   it('throws I18nError("network_error") when fetch rejects', async () => {
     fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
-    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+    const client = createApiClient({ baseUrl: 'http://api.test' });
 
     const promise = client.get('/orders');
     await expect(promise).rejects.toThrow(I18nError);
@@ -154,7 +174,7 @@ describe('createApiClient', () => {
 
   it('normalizes a trailing slash in baseUrl', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ id: '1' }));
-    const client = createApiClient({ baseUrl: 'http://api.test/', getActorId: () => 'u1' });
+    const client = createApiClient({ baseUrl: 'http://api.test/' });
 
     await client.get('/orders');
 
@@ -173,7 +193,7 @@ describe('createApiClient', () => {
         throw new Error('no body');
       },
     } as unknown as Response);
-    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+    const client = createApiClient({ baseUrl: 'http://api.test' });
 
     const result = await client.del('/orders/1');
 
@@ -182,7 +202,7 @@ describe('createApiClient', () => {
 
   it('GET sends no body and no content-type header', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ id: '1' }));
-    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+    const client = createApiClient({ baseUrl: 'http://api.test' });
 
     await client.get('/orders');
 
@@ -191,15 +211,64 @@ describe('createApiClient', () => {
     expect(init.headers).toBeUndefined();
   });
 
-  it('actorId() passes through getActorId', () => {
-    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+  it('sends Authorization: Bearer when the shared token getter returns a token', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: '1' }));
+    setTokenGetter(() => 'jwt-token');
+    const client = createApiClient({ baseUrl: 'http://api.test' });
 
-    expect(client.actorId()).toBe('u1');
+    await client.get('/orders');
+    expect((fetchMock.mock.calls[0][1] as RequestInit).headers).toEqual({
+      authorization: 'Bearer jwt-token',
+    });
+
+    await client.post('/orders', { foo: 1 });
+    expect((fetchMock.mock.calls[1][1] as RequestInit).headers).toEqual({
+      authorization: 'Bearer jwt-token',
+      'content-type': 'application/json',
+    });
+  });
+
+  it('sends no Authorization header without a token', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: '1' }));
+    const client = createApiClient({ baseUrl: 'http://api.test' });
+
+    await client.get('/orders');
+
+    expect((fetchMock.mock.calls[0][1] as RequestInit).headers).toBeUndefined();
+  });
+
+  it('a 401 clears the stored session and throws an ApiError with the status', async () => {
+    const storage = createLocalStorageFake();
+    storage.setItem('warehouse-token', 'stale');
+    storage.setItem('warehouse-user-id', 'u1');
+    vi.stubGlobal('localStorage', storage);
+    fetchMock.mockResolvedValue(errorResponse('unauthorized', 401));
+    setTokenGetter(() => 'stale');
+    const client = createApiClient({ baseUrl: 'http://api.test' });
+
+    const promise = client.get('/orders');
+    await expect(promise).rejects.toThrow(ApiError);
+    await expect(promise).rejects.not.toThrow(I18nError);
+    await expect(promise).rejects.toMatchObject({ status: 401 });
+    expect(storage.getItem('warehouse-token')).toBeNull();
+    expect(storage.getItem('warehouse-user-id')).toBeNull();
+  });
+
+  it('a 401 from /auth/login does not clear the stored session', async () => {
+    const storage = createLocalStorageFake();
+    storage.setItem('warehouse-token', 'keep');
+    vi.stubGlobal('localStorage', storage);
+    fetchMock.mockResolvedValue(errorResponse('invalid credentials', 401));
+    const client = createApiClient({ baseUrl: 'http://api.test' });
+
+    const promise = client.post('/auth/login', { username: 'x', password: 'y' });
+    await expect(promise).rejects.toMatchObject({ status: 401 });
+    expect(storage.getItem('warehouse-token')).toBe('keep');
   });
 
   it('URL-encodes query param values', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ id: '1' }));
-    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+    const client = createApiClient({ baseUrl: 'http://api.test' });
 
     await client.get('/orders', { q: 'a b&c' });
 
@@ -211,7 +280,7 @@ describe('createApiClient', () => {
 
   it('serves a repeated GET from the cache (fetch called once)', async () => {
     fetchMock.mockResolvedValue(jsonResponse([{ id: '1' }]));
-    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+    const client = createApiClient({ baseUrl: 'http://api.test' });
 
     const first = await client.get('/orders', { status: 'open' });
     const second = await client.get('/orders', { status: 'open' });
@@ -222,7 +291,7 @@ describe('createApiClient', () => {
 
   it('GET with { cache: false } always fetches', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ id: '1' }));
-    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+    const client = createApiClient({ baseUrl: 'http://api.test' });
 
     await client.get('/orders');
     await client.get('/orders', undefined, { cache: false });
@@ -232,7 +301,7 @@ describe('createApiClient', () => {
 
   it('POST invalidates the cached first-path-segment prefix', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
-    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+    const client = createApiClient({ baseUrl: 'http://api.test' });
 
     await client.get('/orders'); // cached
     await client.get('/orders/1'); // different URL: separate fetch + cache entry
@@ -247,7 +316,7 @@ describe('createApiClient', () => {
 
   it('POST does not invalidate other prefixes', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
-    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+    const client = createApiClient({ baseUrl: 'http://api.test' });
 
     await client.get('/orders'); // cached
     await client.post('/picking-items/pi1/scan', {});
@@ -258,7 +327,7 @@ describe('createApiClient', () => {
 
   it('POST invalidates mapped cross-prefix reads (scan → picking detail)', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
-    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+    const client = createApiClient({ baseUrl: 'http://api.test' });
 
     await client.get('/picking-orders/po1'); // cached
     await client.get('/measuring-tasks/mt1'); // cached
@@ -271,7 +340,7 @@ describe('createApiClient', () => {
 
   it('POST /shipping-boxes invalidates picking + measuring reads', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
-    const client = createApiClient({ baseUrl: 'http://api.test', getActorId: () => 'u1' });
+    const client = createApiClient({ baseUrl: 'http://api.test' });
 
     await client.get('/picking-orders/po1'); // cached
     await client.get('/measuring-tasks/mt1'); // cached

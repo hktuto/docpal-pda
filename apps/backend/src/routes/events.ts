@@ -12,8 +12,9 @@ import { fetchEventsSince, pruneEvents } from "../db/events.js";
 // idling the connection out. Each frame carries `event: <type>`,
 // `id: <row id>`, and `data: <JSON of {id,type,topics,data,createdAt}>`.
 // On Vercel the stream closes itself before maxDuration so the client
-// reconnects cleanly with its last-seen id. Unauthenticated, like the rest
-// of the POC API.
+// reconnects cleanly with its last-seen id. Authenticated via the global
+// middleware — the only route where `?token=` is accepted (EventSource
+// cannot set an Authorization header).
 // ---------------------------------------------------------------------------
 
 const POLL_MS = 1500;

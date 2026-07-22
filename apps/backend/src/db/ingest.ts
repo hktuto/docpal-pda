@@ -16,16 +16,16 @@ import { now } from "./now.js";
 // ---------------------------------------------------------------------------
 // Ingest upserts (server-to-server sync; plan decision 6 — no ledger rows).
 // Ported from apps/api/src/ingest/{receiving,picking}.ts: idempotent upserts
-// keyed by external_id, with the old O(n²) line scan replaced by business-key
-// map reconciles (invoices by invoice_no, receiving items by
-// part+po_no+po_line, picking items by part+required_date_code).
+// keyed by the natural keys (receiving batch_no / picking order_no — no
+// external_id), with the old O(n²) line scan replaced by business-key map
+// reconciles (invoices by invoice_no, receiving items by part_no+po_no+po_line,
+// picking items by part_no).
 // Derived state (received_qty / picked_qty / put_away_qty / allocated_qty /
 // mismatch flags) is never written here.
 // ---------------------------------------------------------------------------
 
 export interface IngestUpsertResult {
   id: string;
-  externalId: string;
   created: boolean;
   changed: boolean;
   /** Order status after the upsert — the route uses it to decide on allocateAll. */
@@ -35,27 +35,25 @@ export interface IngestUpsertResult {
 // --- payload types (camelCase, per the API conventions) ----------------------
 
 export interface IngestReceivingOrder {
-  refNo: string;
   supplierCode?: string | null;
   supplierId?: string | null;
   deliveryDate?: string | null;
   dateCode?: string | null;
-  warehouseSectionCode?: string | null;
-  subInventoryCode: string;
+  orgId?: number | null;
 }
 
 export interface IngestReceivingItem {
-  partNo?: string | null;
-  partId?: string | null;
+  partNo: string;
   wclItemNo?: string | null;
   poNo?: string | null;
   poLine?: string | null;
-  qty: number;
-  boxId?: string | null;
+  lineQty: number;
+  ctnNo?: string | null;
   dateCode?: string | null;
   lotCode?: string | null;
   coo?: string | null;
   cow?: string | null;
+  orgId?: number | null;
 }
 
 export interface IngestReceivingInvoice {
@@ -67,8 +65,6 @@ export interface IngestReceivingInvoice {
   totalCtn?: number | null;
   deliveryDate?: string | null;
   orgId?: number | null;
-  warehouseSectionCode?: string | null;
-  subInventoryCode?: string | null;
   items: IngestReceivingItem[];
 }
 
@@ -78,25 +74,15 @@ export interface IngestReceivingBody {
 }
 
 export interface IngestPickingOrder {
-  refNo: string;
   poNo?: string | null;
   shipTo?: string | null;
-  destinationCountry?: string | null;
   customerCode?: string | null;
-  requiredDateCodeNotice?: string | null;
   deliveryDate?: string | null;
-  warehouseSectionCode?: string | null;
-  subInventoryCode?: string | null;
-  supplierCode?: string | null;
-  supplierId?: string | null;
 }
 
 export interface IngestPickingItem {
-  partNo?: string | null;
-  partId?: string | null;
+  partNo: string;
   qty: number;
-  requiredDateCode?: string | null;
-  sourceShelfCode?: string | null;
 }
 
 export interface IngestPickingBody {
@@ -151,23 +137,12 @@ async function resolveSupplierId(
   return null;
 }
 
-/** partId given directly wins; otherwise resolve partNo → parts.id. */
-async function resolvePartId(
-  tx: DbOrTx,
-  partId: string | null | undefined,
-  partNo: string | null | undefined
-): Promise<string> {
-  if (partId) {
-    const row = await queryGet<{ id: string }>(tx, sql`SELECT id FROM parts WHERE id = ${partId}`);
-    if (!row) throw new HTTPException(400, { message: `unknown_part: ${partId}` });
-    return row.id;
-  }
-  if (partNo) {
-    const row = await queryGet<{ id: string }>(tx, sql`SELECT id FROM parts WHERE part_no = ${partNo}`);
-    if (!row) throw new HTTPException(400, { message: `unknown_part: ${partNo}` });
-    return row.id;
-  }
-  throw new HTTPException(400, { message: "partNo or partId is required" });
+/** Parts are referenced by part_no; 400 unknown_part when it does not exist. */
+async function assertPartNo(tx: DbOrTx, partNo: string | null | undefined): Promise<string> {
+  if (!partNo) throw new HTTPException(400, { message: "partNo is required" });
+  const row = await queryGet<{ partNo: string }>(tx, sql`SELECT part_no AS "partNo" FROM parts WHERE part_no = ${partNo}`);
+  if (!row) throw new HTTPException(400, { message: `unknown_part: ${partNo}` });
+  return row.partNo;
 }
 
 /** customerCode → customer_profiles.code (400 unknown_customer). */
@@ -182,18 +157,15 @@ async function resolveCustomerCode(tx: DbOrTx, customerCode: string | null | und
 }
 
 // Business keys (null-safe).
-const receivingItemKey = (partId: string, poNo: string | null, poLine: string | null) =>
-  `${partId}|${poNo ?? ""}|${poLine ?? ""}`;
-const pickingItemKey = (partId: string, requiredDateCode: string | null) =>
-  `${partId}|${requiredDateCode ?? ""}`;
+const receivingItemKey = (partNo: string, poNo: string | null, poLine: string | null) =>
+  `${partNo}|${poNo ?? ""}|${poLine ?? ""}`;
 
 // ---------------------------------------------------------------------------
 // Receiving
 // ---------------------------------------------------------------------------
 
 function validateReceivingBody(body: IngestReceivingBody): void {
-  if (!body?.order?.refNo) throw new HTTPException(400, { message: "order.refNo is required" });
-  if (!body.order.subInventoryCode) throw new HTTPException(400, { message: "order.subInventoryCode is required" });
+  if (!body?.order) throw new HTTPException(400, { message: "order is required" });
   if (!Array.isArray(body.invoices) || body.invoices.length === 0) {
     throw new HTTPException(400, { message: "invoices[] is required" });
   }
@@ -203,29 +175,30 @@ function validateReceivingBody(body: IngestReceivingBody): void {
       throw new HTTPException(400, { message: `invoice ${inv.invoiceNo}: items[] required` });
     }
     for (const it of inv.items) {
-      if (!it.partNo && !it.partId) throw new HTTPException(400, { message: "partNo or partId is required" });
-      if (!Number.isInteger(it.qty) || it.qty < 0) {
-        throw new HTTPException(400, { message: "qty must be a non-negative integer" });
+      if (!it.partNo) throw new HTTPException(400, { message: "partNo is required" });
+      if (!Number.isInteger(it.lineQty) || it.lineQty < 0) {
+        throw new HTTPException(400, { message: "lineQty must be a non-negative integer" });
       }
     }
   }
 }
 
 async function insertReceivingItem(tx: DbOrTx, invoiceId: string, it: IngestReceivingItem): Promise<void> {
-  const partId = await resolvePartId(tx, it.partId, it.partNo);
+  const partNo = await assertPartNo(tx, it.partNo);
   await tx.insert(receivingInvoiceItems).values({
     id: randomUUID(),
     receivingInvoiceId: invoiceId,
-    partId,
+    partNo,
     wclItemNo: it.wclItemNo ?? null,
     poNo: it.poNo ?? null,
     poLine: it.poLine ?? null,
-    qty: it.qty,
-    boxId: it.boxId ?? null,
+    lineQty: it.lineQty,
+    ctnNo: it.ctnNo ?? null,
     dateCode: it.dateCode ?? null,
     lotCode: it.lotCode ?? null,
     coo: it.coo ?? null,
     cow: it.cow ?? null,
+    orgId: it.orgId ?? 2,
   });
 }
 
@@ -258,8 +231,6 @@ async function insertInvoiceWithItems(
     totalCtn: inv.totalCtn ?? null,
     deliveryDate: toDate(inv.deliveryDate),
     orgId: inv.orgId ?? 2,
-    warehouseSectionCode: inv.warehouseSectionCode ?? null,
-    subInventoryCode: inv.subInventoryCode ?? null,
   });
   for (const it of inv.items) {
     await insertReceivingItem(tx, invoiceId, it);
@@ -275,19 +246,17 @@ interface ExistingInvoiceRow {
   totalQty: number | null;
   totalCtn: number | null;
   orgId: number;
-  warehouseSectionCode: string | null;
-  subInventoryCode: string | null;
 }
 
 interface ExistingReceivingItemRow {
   id: string;
   receivingInvoiceId: string;
-  partId: string;
+  partNo: string;
   wclItemNo: string | null;
   poNo: string | null;
   poLine: string | null;
-  qty: number;
-  boxId: string | null;
+  lineQty: number;
+  ctnNo: string | null;
   dateCode: string | null;
   lotCode: string | null;
   coo: string | null;
@@ -303,17 +272,17 @@ function itemWorkStarted(it: Pick<ExistingReceivingItemRow, "allocLinks" | "rece
 }
 
 /**
- * Idempotent upsert keyed by external_id. No existing row → INSERT order +
- * invoices + items (status pending, warehouse_code from the schema default).
- * Existing row → reconcile: order fields when different; invoices by
- * invoice_no (add / update / delete — delete cascades the items); items by
- * business key (part_id + po_no + po_line). Derived state is never touched;
- * qty decreases and line/invoice removals are guarded like the old ingest
- * (blocked once the order is past pending or work has started on the line).
+ * Idempotent upsert keyed by batch_no. No existing row → INSERT order +
+ * invoices + items (status pending, org_id default 2). Existing row →
+ * reconcile: order fields when different; invoices by invoice_no (add /
+ * update / delete — delete cascades the items); items by business key
+ * (part_no + po_no + po_line). Derived state is never touched; qty decreases
+ * and line/invoice removals are guarded like the old ingest (blocked once the
+ * order is past pending or work has started on the line).
  */
 export async function upsertReceivingOrder(
   db: AppDb,
-  externalId: string,
+  batchNo: string,
   body: IngestReceivingBody
 ): Promise<IngestUpsertResult> {
   validateReceivingBody(body);
@@ -322,20 +291,18 @@ export async function upsertReceivingOrder(
     const orderDeliveryDate = toDate(body.order.deliveryDate);
     const existing = await queryGet<{ id: string; status: string }>(
       tx,
-      sql`SELECT id, status FROM receiving_orders WHERE external_id = ${externalId}`
+      sql`SELECT id, status FROM receiving_orders WHERE batch_no = ${batchNo} LIMIT 1`
     );
 
     if (!existing) {
       const orderId = randomUUID();
       await tx.insert(receivingOrders).values({
         id: orderId,
-        externalId,
-        refNo: body.order.refNo,
+        batchNo,
         supplierId: orderSupplierId,
         deliveryDate: orderDeliveryDate,
         dateCode: body.order.dateCode ?? null,
-        warehouseSectionCode: body.order.warehouseSectionCode ?? null,
-        subInventoryCode: body.order.subInventoryCode,
+        orgId: body.order.orgId ?? 2,
         status: "pending",
       });
       for (const inv of body.invoices) {
@@ -344,9 +311,9 @@ export async function upsertReceivingOrder(
       await emitEvent(tx, {
         type: "receiving_order.upserted",
         topics: ["/receiving-orders"],
-        data: { id: orderId, refNo: body.order.refNo, externalId },
+        data: { id: orderId, batchNo },
       });
-      return { id: orderId, externalId, created: true, changed: true, orderStatus: "pending" };
+      return { id: orderId, created: true, changed: true, orderStatus: "pending" };
     }
 
     const orderId = existing.id;
@@ -354,40 +321,31 @@ export async function upsertReceivingOrder(
     let changed = false;
 
     const ro = (await queryGet<{
-      refNo: string;
       supplierId: string | null;
       dateCode: string | null;
-      warehouseSectionCode: string | null;
-      subInventoryCode: string;
+      orgId: number;
     }>(
       tx,
-      sql`SELECT ref_no AS "refNo", supplier_id AS "supplierId",
-                 date_code AS "dateCode", warehouse_section_code AS "warehouseSectionCode",
-                 sub_inventory_code AS "subInventoryCode"
+      sql`SELECT supplier_id AS "supplierId", date_code AS "dateCode", org_id AS "orgId"
           FROM receiving_orders WHERE id = ${orderId}`
     ))!;
     const orderFields = {
-      refNo: body.order.refNo,
       supplierId: orderSupplierId,
       deliveryDate: orderDeliveryDate,
       dateCode: body.order.dateCode ?? null,
-      warehouseSectionCode: body.order.warehouseSectionCode ?? null,
-      subInventoryCode: body.order.subInventoryCode,
+      orgId: body.order.orgId ?? 2,
     };
     if (
-      ro.refNo !== orderFields.refNo ||
       ro.supplierId !== orderFields.supplierId ||
       (await deliveryDateDiffers(tx, "receiving_orders", orderId, orderFields.deliveryDate)) ||
       ro.dateCode !== orderFields.dateCode ||
-      ro.warehouseSectionCode !== orderFields.warehouseSectionCode ||
-      ro.subInventoryCode !== orderFields.subInventoryCode
+      ro.orgId !== orderFields.orgId
     ) {
       await queryRun(
         tx,
-        sql`UPDATE receiving_orders SET ref_no = ${orderFields.refNo}, supplier_id = ${orderFields.supplierId},
+        sql`UPDATE receiving_orders SET supplier_id = ${orderFields.supplierId},
               delivery_date = ${orderFields.deliveryDate}, date_code = ${orderFields.dateCode},
-              warehouse_section_code = ${orderFields.warehouseSectionCode},
-              sub_inventory_code = ${orderFields.subInventoryCode}, updated_at = ${now()}
+              org_id = ${orderFields.orgId}, updated_at = ${now()}
             WHERE id = ${orderId}`
       );
       changed = true;
@@ -398,15 +356,14 @@ export async function upsertReceivingOrder(
       tx,
       sql`SELECT id, invoice_no AS "invoiceNo", supplier_id AS "supplierId",
                  wcl_company_name AS "wclCompanyName", total_qty AS "totalQty", total_ctn AS "totalCtn",
-                 org_id AS "orgId",
-                 warehouse_section_code AS "warehouseSectionCode", sub_inventory_code AS "subInventoryCode"
+                 org_id AS "orgId"
           FROM receiving_invoices WHERE receiving_order_id = ${orderId}`
     );
     const existingItems = await queryAll<ExistingReceivingItemRow>(
       tx,
-      sql`SELECT rii.id, rii.receiving_invoice_id AS "receivingInvoiceId", rii.part_id AS "partId",
+      sql`SELECT rii.id, rii.receiving_invoice_id AS "receivingInvoiceId", rii.part_no AS "partNo",
                  rii.wcl_item_no AS "wclItemNo", rii.po_no AS "poNo", rii.po_line AS "poLine",
-                 rii.qty, rii.box_id AS "boxId", rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
+                 rii.line_qty AS "lineQty", rii.ctn_no AS "ctnNo", rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
                  rii.coo, rii.cow,
                  rii.received_qty AS "receivedQty", rii.picked_qty AS "pickedQty", rii.put_away_qty AS "putAwayQty",
                  (SELECT COUNT(*)::int FROM allocations a WHERE a.receiving_invoice_item_id = rii.id) AS "allocLinks"
@@ -422,7 +379,7 @@ export async function upsertReceivingOrder(
         m = new Map();
         itemsByInvoice.set(it.receivingInvoiceId, m);
       }
-      m.set(receivingItemKey(it.partId, it.poNo, it.poLine), it);
+      m.set(receivingItemKey(it.partNo, it.poNo, it.poLine), it);
     }
 
     const seenInvoiceIds = new Set<string>();
@@ -443,8 +400,6 @@ export async function upsertReceivingOrder(
         totalCtn: inv.totalCtn ?? null,
         deliveryDate: toDate(inv.deliveryDate),
         orgId: inv.orgId ?? 2,
-        warehouseSectionCode: inv.warehouseSectionCode ?? null,
-        subInventoryCode: inv.subInventoryCode ?? null,
       };
       if (
         ex.supplierId !== invFields.supplierId ||
@@ -452,17 +407,14 @@ export async function upsertReceivingOrder(
         ex.totalQty !== invFields.totalQty ||
         ex.totalCtn !== invFields.totalCtn ||
         (await deliveryDateDiffers(tx, "receiving_invoices", ex.id, invFields.deliveryDate)) ||
-        ex.orgId !== invFields.orgId ||
-        ex.warehouseSectionCode !== invFields.warehouseSectionCode ||
-        ex.subInventoryCode !== invFields.subInventoryCode
+        ex.orgId !== invFields.orgId
       ) {
         await queryRun(
           tx,
           sql`UPDATE receiving_invoices SET supplier_id = ${invFields.supplierId},
                 wcl_company_name = ${invFields.wclCompanyName}, total_qty = ${invFields.totalQty},
                 total_ctn = ${invFields.totalCtn}, delivery_date = ${invFields.deliveryDate},
-                org_id = ${invFields.orgId}, warehouse_section_code = ${invFields.warehouseSectionCode},
-                sub_inventory_code = ${invFields.subInventoryCode}, updated_at = ${now()}
+                org_id = ${invFields.orgId}, updated_at = ${now()}
               WHERE id = ${ex.id}`
         );
         changed = true;
@@ -470,8 +422,8 @@ export async function upsertReceivingOrder(
 
       const byKey = itemsByInvoice.get(ex.id) ?? new Map<string, ExistingReceivingItemRow>();
       for (const it of inv.items) {
-        const partId = await resolvePartId(tx, it.partId, it.partNo);
-        const key = receivingItemKey(partId, it.poNo ?? null, it.poLine ?? null);
+        const partNo = await assertPartNo(tx, it.partNo);
+        const key = receivingItemKey(partNo, it.poNo ?? null, it.poLine ?? null);
         const exItem = byKey.get(key);
         if (!exItem) {
           await insertReceivingItem(tx, ex.id, it);
@@ -479,16 +431,16 @@ export async function upsertReceivingOrder(
           continue;
         }
         byKey.delete(key);
-        if (it.qty < exItem.qty) {
+        if (it.lineQty < exItem.lineQty) {
           if (locked) throw new HTTPException(409, { message: `qty_may_only_increase_once_${status}` });
           if (itemWorkStarted(exItem)) {
             throw new HTTPException(409, { message: "cannot_decrease_qty_after_work_started" });
           }
         }
         const same =
-          exItem.qty === it.qty &&
+          exItem.lineQty === it.lineQty &&
           (exItem.wclItemNo ?? null) === (it.wclItemNo ?? null) &&
-          (exItem.boxId ?? null) === (it.boxId ?? null) &&
+          (exItem.ctnNo ?? null) === (it.ctnNo ?? null) &&
           (exItem.dateCode ?? null) === (it.dateCode ?? null) &&
           (exItem.lotCode ?? null) === (it.lotCode ?? null) &&
           (exItem.coo ?? null) === (it.coo ?? null) &&
@@ -497,8 +449,8 @@ export async function upsertReceivingOrder(
           // Expected-side fields only — derived state stays untouched.
           await queryRun(
             tx,
-            sql`UPDATE receiving_invoice_items SET qty = ${it.qty}, wcl_item_no = ${it.wclItemNo ?? null},
-                  box_id = ${it.boxId ?? null}, date_code = ${it.dateCode ?? null}, lot_code = ${it.lotCode ?? null},
+            sql`UPDATE receiving_invoice_items SET line_qty = ${it.lineQty}, wcl_item_no = ${it.wclItemNo ?? null},
+                  ctn_no = ${it.ctnNo ?? null}, date_code = ${it.dateCode ?? null}, lot_code = ${it.lotCode ?? null},
                   coo = ${it.coo ?? null}, cow = ${it.cow ?? null}
                 WHERE id = ${exItem.id}`
           );
@@ -533,10 +485,10 @@ export async function upsertReceivingOrder(
       await emitEvent(tx, {
         type: "receiving_order.upserted",
         topics: ["/receiving-orders"],
-        data: { id: orderId, refNo: body.order.refNo, externalId },
+        data: { id: orderId, batchNo },
       });
     }
-    return { id: orderId, externalId, created: false, changed, orderStatus: status };
+    return { id: orderId, created: false, changed, orderStatus: status };
   });
 }
 
@@ -545,12 +497,12 @@ export async function upsertReceivingOrder(
 // ---------------------------------------------------------------------------
 
 function validatePickingBody(body: IngestPickingBody): void {
-  if (!body?.order?.refNo) throw new HTTPException(400, { message: "order.refNo is required" });
+  if (!body?.order) throw new HTTPException(400, { message: "order is required" });
   if (!Array.isArray(body.items) || body.items.length === 0) {
     throw new HTTPException(400, { message: "items[] is required" });
   }
   for (const it of body.items) {
-    if (!it.partNo && !it.partId) throw new HTTPException(400, { message: "partNo or partId is required" });
+    if (!it.partNo) throw new HTTPException(400, { message: "partNo is required" });
     if (!Number.isInteger(it.qty) || it.qty < 0) {
       throw new HTTPException(400, { message: "qty must be a non-negative integer" });
     }
@@ -558,64 +510,53 @@ function validatePickingBody(body: IngestPickingBody): void {
 }
 
 async function insertPickingItem(tx: DbOrTx, orderId: string, it: IngestPickingItem): Promise<void> {
-  const partId = await resolvePartId(tx, it.partId, it.partNo);
+  const partNo = await assertPartNo(tx, it.partNo);
   await tx.insert(pickingItems).values({
     id: randomUUID(),
     pickingOrderId: orderId,
-    partId,
+    partNo,
     qty: it.qty,
-    requiredDateCode: it.requiredDateCode ?? null,
-    sourceShelfCode: it.sourceShelfCode ?? null,
   });
 }
 
 interface ExistingPickingItemRow {
   id: string;
-  partId: string;
+  partNo: string;
   qty: number;
   pickedQty: number;
-  requiredDateCode: string | null;
-  sourceShelfCode: string | null;
   allocCount: number;
 }
 
 /**
- * Idempotent upsert keyed by external_id, same pattern as receiving: INSERT
- * order + items when new, otherwise reconcile order fields and items by
- * business key (part_id + required_date_code). picked_qty / allocated_qty on
- * existing lines are never written; removals and below-picked qty decreases
- * are guarded like the old ingest.
+ * Idempotent upsert keyed by order_no (the upstream sync/dedup key), same
+ * pattern as receiving: INSERT order + items when new, otherwise reconcile
+ * order fields and items by business key (part_no). picked_qty /
+ * allocated_qty on existing lines are never written; removals and
+ * below-picked qty decreases are guarded like the old ingest.
  */
 export async function upsertPickingOrder(
   db: AppDb,
-  externalId: string,
+  orderNo: string,
   body: IngestPickingBody
 ): Promise<IngestUpsertResult> {
   validatePickingBody(body);
   return db.transaction(async (tx) => {
-    const supplierId = await resolveSupplierId(tx, body.order.supplierId, body.order.supplierCode);
     const customerCode = await resolveCustomerCode(tx, body.order.customerCode);
     const deliveryDate = toDate(body.order.deliveryDate);
     const existing = await queryGet<{ id: string; status: string }>(
       tx,
-      sql`SELECT id, status FROM picking_orders WHERE external_id = ${externalId}`
+      sql`SELECT id, status FROM picking_orders WHERE order_no = ${orderNo}`
     );
 
     if (!existing) {
       const orderId = randomUUID();
       await tx.insert(pickingOrders).values({
         id: orderId,
-        externalId,
-        refNo: body.order.refNo,
-        supplierId,
+        orderNo,
         customerCode,
         poNo: body.order.poNo ?? null,
         shipTo: body.order.shipTo ?? null,
-        destinationCountry: body.order.destinationCountry ?? null,
-        requiredDateCodeNotice: body.order.requiredDateCodeNotice ?? null,
         deliveryDate,
-        warehouseSectionCode: body.order.warehouseSectionCode ?? null,
-        subInventoryCode: body.order.subInventoryCode ?? null,
         status: "pending",
       });
       for (const it of body.items) {
@@ -624,65 +565,39 @@ export async function upsertPickingOrder(
       await emitEvent(tx, {
         type: "picking_order.created",
         topics: ["/picking-orders"],
-        data: { id: orderId, refNo: body.order.refNo, externalId },
+        data: { id: orderId, orderNo },
       });
-      return { id: orderId, externalId, created: true, changed: true, orderStatus: "pending" };
+      return { id: orderId, created: true, changed: true, orderStatus: "pending" };
     }
 
     const orderId = existing.id;
     let changed = false;
 
     const po = (await queryGet<{
-      refNo: string;
-      supplierId: string | null;
       customerCode: string | null;
       poNo: string | null;
       shipTo: string | null;
-      destinationCountry: string | null;
-      requiredDateCodeNotice: string | null;
-      warehouseSectionCode: string | null;
-      subInventoryCode: string | null;
     }>(
       tx,
-      sql`SELECT ref_no AS "refNo", supplier_id AS "supplierId", customer_code AS "customerCode",
-                 po_no AS "poNo", ship_to AS "shipTo", destination_country AS "destinationCountry",
-                 required_date_code_notice AS "requiredDateCodeNotice",
-                 warehouse_section_code AS "warehouseSectionCode", sub_inventory_code AS "subInventoryCode"
+      sql`SELECT customer_code AS "customerCode", po_no AS "poNo", ship_to AS "shipTo"
           FROM picking_orders WHERE id = ${orderId}`
     ))!;
     const orderFields = {
-      refNo: body.order.refNo,
-      supplierId,
       customerCode,
       poNo: body.order.poNo ?? null,
       shipTo: body.order.shipTo ?? null,
-      destinationCountry: body.order.destinationCountry ?? null,
-      requiredDateCodeNotice: body.order.requiredDateCodeNotice ?? null,
       deliveryDate,
-      warehouseSectionCode: body.order.warehouseSectionCode ?? null,
-      subInventoryCode: body.order.subInventoryCode ?? null,
     };
     if (
-      po.refNo !== orderFields.refNo ||
-      po.supplierId !== orderFields.supplierId ||
       po.customerCode !== orderFields.customerCode ||
       po.poNo !== orderFields.poNo ||
       po.shipTo !== orderFields.shipTo ||
-      po.destinationCountry !== orderFields.destinationCountry ||
-      po.requiredDateCodeNotice !== orderFields.requiredDateCodeNotice ||
-      (await deliveryDateDiffers(tx, "picking_orders", orderId, orderFields.deliveryDate)) ||
-      po.warehouseSectionCode !== orderFields.warehouseSectionCode ||
-      po.subInventoryCode !== orderFields.subInventoryCode
+      (await deliveryDateDiffers(tx, "picking_orders", orderId, orderFields.deliveryDate))
     ) {
       await queryRun(
         tx,
-        sql`UPDATE picking_orders SET ref_no = ${orderFields.refNo}, supplier_id = ${orderFields.supplierId},
-              customer_code = ${orderFields.customerCode}, po_no = ${orderFields.poNo},
-              ship_to = ${orderFields.shipTo}, destination_country = ${orderFields.destinationCountry},
-              required_date_code_notice = ${orderFields.requiredDateCodeNotice},
-              delivery_date = ${orderFields.deliveryDate},
-              warehouse_section_code = ${orderFields.warehouseSectionCode},
-              sub_inventory_code = ${orderFields.subInventoryCode}, updated_at = ${now()}
+        sql`UPDATE picking_orders SET customer_code = ${orderFields.customerCode}, po_no = ${orderFields.poNo},
+              ship_to = ${orderFields.shipTo}, delivery_date = ${orderFields.deliveryDate}, updated_at = ${now()}
             WHERE id = ${orderId}`
       );
       changed = true;
@@ -690,33 +605,29 @@ export async function upsertPickingOrder(
 
     const existingItems = await queryAll<ExistingPickingItemRow>(
       tx,
-      sql`SELECT pi.id, pi.part_id AS "partId", pi.qty, pi.picked_qty AS "pickedQty",
-                 pi.required_date_code AS "requiredDateCode", pi.source_shelf_code AS "sourceShelfCode",
+      sql`SELECT pi.id, pi.part_no AS "partNo", pi.qty, pi.picked_qty AS "pickedQty",
                  (SELECT COUNT(*)::int FROM allocations a WHERE a.picking_item_id = pi.id) AS "allocCount"
           FROM picking_items pi WHERE pi.picking_order_id = ${orderId}`
     );
-    const byKey = new Map(existingItems.map((e) => [pickingItemKey(e.partId, e.requiredDateCode), e]));
+    const byKey = new Map(existingItems.map((e) => [e.partNo, e]));
 
     for (const it of body.items) {
-      const partId = await resolvePartId(tx, it.partId, it.partNo);
-      const key = pickingItemKey(partId, it.requiredDateCode ?? null);
-      const ex = byKey.get(key);
+      const partNo = await assertPartNo(tx, it.partNo);
+      const ex = byKey.get(partNo);
       if (!ex) {
         await insertPickingItem(tx, orderId, it);
         changed = true;
         continue;
       }
-      byKey.delete(key);
+      byKey.delete(partNo);
       if (it.qty < ex.pickedQty) {
         throw new HTTPException(409, { message: `qty_below_picked: ${it.qty} < ${ex.pickedQty}` });
       }
-      const same = ex.qty === it.qty && (ex.sourceShelfCode ?? null) === (it.sourceShelfCode ?? null);
-      if (!same) {
+      if (ex.qty !== it.qty) {
         // Expected-side fields only — picked_qty / allocated_qty stay untouched.
         await queryRun(
           tx,
-          sql`UPDATE picking_items SET qty = ${it.qty}, source_shelf_code = ${it.sourceShelfCode ?? null},
-                updated_at = ${now()}
+          sql`UPDATE picking_items SET qty = ${it.qty}, updated_at = ${now()}
               WHERE id = ${ex.id}`
         );
         changed = true;
@@ -736,9 +647,9 @@ export async function upsertPickingOrder(
       await emitEvent(tx, {
         type: "picking_order.updated",
         topics: ["/picking-orders"],
-        data: { id: orderId, refNo: body.order.refNo, externalId },
+        data: { id: orderId, orderNo },
       });
     }
-    return { id: orderId, externalId, created: false, changed, orderStatus: existing.status };
+    return { id: orderId, created: false, changed, orderStatus: existing.status };
   });
 }

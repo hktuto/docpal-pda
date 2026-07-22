@@ -9,11 +9,17 @@ async function submit() {
   error.value = "";
   busy.value = true;
   try {
-    const user = await api.post("/auth/login", {
+    const res = await api.post<{ user: any; token: string }>("/auth/login", {
       username: username.value.trim(),
       password: password.value,
     });
-    localStorage.setItem("admin_user", JSON.stringify(user));
+    const groupCodes: string[] = res.user?.groupCodes ?? [];
+    if (!groupCodes.includes("admin")) {
+      error.value = "This account does not have admin access.";
+      return;
+    }
+    localStorage.setItem("admin_token", res.token);
+    localStorage.setItem("admin_user", JSON.stringify(res.user));
     await navigateTo("/");
   } catch (e: any) {
     error.value = e.message;

@@ -2,13 +2,12 @@
 // Shared service-layer DTOs. No Drizzle imports here.
 // ------------------------------------------------------------------
 
-export type UserRole = "operator" | "admin";
-
 export interface User {
   id: string;
   username: string;
   displayName: string;
-  role: UserRole;
+  /** Permission group codes from the JWT session (GET /auth/me). */
+  groupCodes: string[];
   // Nullable: the HTTP API auth payload has no created_at column.
   createdAt: Date | null;
 }
@@ -30,15 +29,13 @@ export type ReceivingFilter = "all" | "pending" | "provisional_received" | "in_h
 
 export interface ReceivingOrderListRow {
   id: string;
-  refNo: string;
+  batchNo: string;
   status: string;
   deliveryDate: string | null;
   dateCode: string | null;
   supplierCode: string | null;
   supplierName: string | null;
-  warehouseCode: string;
-  warehouseSectionCode: string | null;
-  subInventoryCode: string;
+  orgId: number;
   invoiceCount: number;
   itemCount: number;
   remainingItems: number;
@@ -60,13 +57,11 @@ export interface ReceivingOrderSupplier {
 
 export interface ReceivingOrderDetail {
   id: string;
-  refNo: string;
+  batchNo: string;
   status: string;
   deliveryDate: string | null;
   dateCode: string | null;
-  warehouseCode: string;
-  warehouseSectionCode: string | null;
-  subInventoryCode: string;
+  orgId: number;
   arrivedAt: string | null;
   arrivedBy: string | null;
   createdAt: string;
@@ -84,9 +79,6 @@ export interface ReceivingInvoice {
   totalCtn: number | null;
   deliveryDate: string | null;
   orgId: number;
-  warehouseCode: string;
-  warehouseSectionCode: string | null;
-  subInventoryCode: string | null;
   createdAt: string;
   updatedAt: string;
   items: ReceivingItem[];
@@ -94,15 +86,15 @@ export interface ReceivingInvoice {
 
 export interface ReceivingItem {
   id: string;
-  partId: string;
+  partNo: string;
   wclItemNo: string | null;
   poNo: string | null;
   poLine: string | null;
-  qty: number;
+  lineQty: number;
   receivedQty: number;
   pickedQty: number;
   putAwayQty: number;
-  boxId: string | null;
+  ctnNo: string | null;
   dateCode: string | null;
   lotCode: string | null;
   coo: string | null;
@@ -112,7 +104,6 @@ export interface ReceivingItem {
     id: string;
     partNo: string;
     wclItemNo: string | null;
-    internalCode: string | null;
     description: string | null;
     defaultCoo: string | null;
   };
@@ -162,7 +153,7 @@ export interface ReceivingPickingSection {
 
 export interface ReceivingPickingOrder {
   id: string;
-  refNo: string;
+  orderNo: string;
   status: string;
   shipTo: string | null;
   customerCode: string | null;
@@ -172,12 +163,10 @@ export interface ReceivingPickingOrder {
 
 export interface ReceivingPickingItem {
   id: string;
-  partId: string;
   partNo: string;
   qty: number;
   pickedQty: number;
   allocatedQty: number;
-  requiredDateCode: string | null;
   allocations: ReceivingPickingAllocation[];
   packages: ReceivingPickingPackage[];
   transitionLogs: ReceivingPickingLog[];
@@ -237,22 +226,21 @@ export interface ReceivingScanInput {
   lotCode?: string;
   coo?: string;
   cow?: string;
-  boxId?: string;
+  ctnNo?: string;
   serialNo?: string;
 }
 
 export interface ReceivingScanCandidate {
   /** Receiving invoice item id. */
   id: string;
-  partId: string;
   partNo: string;
   wclItemNo: string | null;
-  qty: number;
+  lineQty: number;
   receivedQty: number;
 }
 
 export interface ReceivingScanResult extends ReceivingScanCandidate {
-  boxId: string | null;
+  ctnNo: string | null;
   dateCode: string | null;
   lotCode: string | null;
   coo: string | null;
@@ -295,16 +283,12 @@ export type PickingIssueReason = (typeof pickingIssueReasons)[number];
 /** GET /picking-orders?status= row. */
 export interface PickingOrderListRow {
   id: string;
-  refNo: string;
+  orderNo: string;
   status: string;
   poNo: string | null;
   shipTo: string | null;
   customerCode: string | null;
-  destinationCountry: string | null;
   deliveryDate: string | null;
-  warehouseCode: string;
-  warehouseSectionCode: string | null;
-  subInventoryCode: string | null;
   itemCount: number;
   totalQty: number;
   pickedQty: number;
@@ -349,14 +333,11 @@ export interface PickingPackage {
 
 export interface PickingItem {
   id: string;
-  partId: string;
   partNo: string;
   wclItemNo: string | null;
   qty: number;
   pickedQty: number;
   allocatedQty: number;
-  requiredDateCode: string | null;
-  sourceShelfCode: string | null;
   allocations: PickingAllocation[];
   packages: PickingPackage[];
 }
@@ -375,18 +356,12 @@ export interface PickingBox {
  *  measuringTask + items(allocations, packages) + boxes. */
 export interface PickingOrderDetail {
   id: string;
-  refNo: string;
+  orderNo: string;
   status: string;
-  supplierId: string | null;
   deliveryDate: string | null;
   poNo: string | null;
-  requiredDateCodeNotice: string | null;
   shipTo: string | null;
-  destinationCountry: string | null;
   customerCode: string | null;
-  warehouseCode: string;
-  warehouseSectionCode: string | null;
-  subInventoryCode: string | null;
   issueReason: string | null;
   issueQty: number | null;
   issuePackSize: number | null;
@@ -401,7 +376,7 @@ export interface PickingOrderDetail {
   boxes: PickingBox[];
 }
 
-/** POST /picking-items/:id/scan body (actorId injected by the adapter). */
+/** POST /picking-items/:id/scan body (the actor comes from the JWT). */
 export interface ScanPickingItemInput {
   allocationId: string;
   qty: number;
@@ -445,13 +420,11 @@ export interface ReportPickingIssuesResult {
 
 export interface PutAwayCandidate {
   id: string;
-  refNo: string;
+  batchNo: string;
   status: string;
   supplierCode: string | null;
   supplierName: string | null;
-  warehouseCode: string;
-  warehouseSectionCode: string | null;
-  subInventoryCode: string;
+  orgId: number;
   receivedItems: number;
   unboxedItems: number;
 }
@@ -461,9 +434,8 @@ export interface PutAwayCandidate {
 export interface PutAwayExpectedItem {
   /** Receiving invoice item id. */
   id: string;
-  partId: string;
   partNo: string;
-  qty: number;
+  lineQty: number;
   receivedQty: number;
   pickedQty: number;
   putAwayQty: number;
@@ -478,7 +450,6 @@ export interface PutAwayExpectedItem {
 /** Inventory lot materialized from this order (via inventory_lot_sources). */
 export interface PutAwayLot {
   id: string;
-  partId: string;
   partNo: string;
   dateCode: string | null;
   lotCode: string | null;
@@ -495,7 +466,6 @@ export interface PutAwayLot {
 export interface PutAwayScan {
   id: string;
   receivingInvoiceItemId: string | null;
-  partId: string;
   partNo: string;
   qty: number;
   dateCode: string | null;
@@ -507,7 +477,6 @@ export interface PutAwayScan {
 export interface PutAwayBoxItem {
   id: string;
   receivingInvoiceItemId: string | null;
-  partId: string;
   partNo: string;
   qty: number;
   verified: boolean | null;
@@ -523,7 +492,7 @@ export interface PutAwayBox {
 }
 
 export interface PutAwayDetail {
-  order: { id: string; refNo: string; status: string };
+  order: { id: string; batchNo: string; status: string };
   items: PutAwayExpectedItem[];
   lots: PutAwayLot[];
   scans: PutAwayScan[];
@@ -544,10 +513,6 @@ export interface Shelf {
   code: string;
   zone: string | null;
   orgId: number | null;
-  warehouseCode: string;
-  warehouseSectionCode: string | null;
-  subInventoryCode: string | null;
-  locationType: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -566,7 +531,7 @@ export interface MeasuringTaskListRow {
   id: string;
   status: string;
   pickingOrderId: string;
-  refNo: string;
+  orderNo: string;
   shipTo: string | null;
   boxCount: number;
   closedBoxCount: number;
@@ -582,7 +547,6 @@ export interface MeasuringPackage {
   coo: string | null;
   cow: string | null;
   verified: boolean;
-  partId: string;
   partNo: string;
   wclItemNo: string | null;
 }
@@ -609,11 +573,10 @@ export interface MeasuringTaskDetail {
   };
   order: {
     id: string;
-    refNo: string;
+    orderNo: string;
     status: string;
     shipTo: string | null;
     customerCode: string | null;
-    destinationCountry: string | null;
     poNo: string | null;
   };
   boxes: MeasuringBox[];
@@ -636,7 +599,6 @@ export interface GoodsVerifyTaskListRow {
   taskDate: string;
   shelfCode: string | null;
   boxId: string | null;
-  partId: string;
   partNo: string;
   wclItemNo: string | null;
   expectedQty: number;
@@ -655,16 +617,15 @@ export interface GoodsVerifyTaskFilters {
 
 export interface GoodsVerifyBoxItem {
   id: string;
-  partId: string;
   partNo: string;
   qty: number;
   verified: boolean | null;
   verifiedAt: string | null;
 }
 
-/** GET /goods-verify-tasks/:id — task + lot (batch + three-level
- *  location + qtys) + the shelf box with its items (null when the task
- *  has no box or the id is a legacy non-shelf-box id). */
+/** GET /goods-verify-tasks/:id — task + lot (batch + location + qtys;
+ *  the lot's org derives from its shelf) + the shelf box with its items
+ *  (null when the task has no box or the id is a legacy non-shelf-box id). */
 export interface GoodsVerifyTaskDetail {
   task: GoodsVerifyTaskListRow & {
     inventoryLotId: string;
@@ -682,9 +643,7 @@ export interface GoodsVerifyTaskDetail {
     totalQty: number;
     allocatedQty: number;
     availableQty: number;
-    warehouseCode: string;
-    warehouseSectionCode: string | null;
-    subInventoryCode: string | null;
+    orgId: number | null;
   };
   box: { id: string; status: string; items: GoodsVerifyBoxItem[] } | null;
 }
@@ -717,16 +676,14 @@ export interface StockSearchPart {
 }
 
 export interface StockSearchLot {
-  partId: string;
+  partNo: string;
   dateCode: string | null;
   lotCode: string | null;
   coo: string | null;
   cow: string | null;
   shelfCode: string | null;
   boxId: string | null;
-  warehouseCode: string;
-  warehouseSectionCode: string | null;
-  subInventoryCode: string | null;
+  orgId: number | null;
   totalQty: number;
   allocatedQty: number;
   availableQty: number;
@@ -747,11 +704,11 @@ export interface SupplierListRow {
 }
 
 /** GET /boxes?q= row — one box from either box table (shipping or shelf),
- *  matched by id substring; refNo is the owning order's ref no when set. */
+ *  matched by id substring; orderNo is the owning order's number when set. */
 export interface BoxSearchResult {
   kind: "shipping" | "shelf";
   id: string;
   status: string;
   createdAt: string;
-  refNo: string | null;
+  orderNo: string | null;
 }

@@ -10,19 +10,21 @@ import { now } from "./now.js";
 // ---------------------------------------------------------------------------
 // Put-away flow — staging-box model (ported from apps/api putAway.ts).
 //
-// A put-away "scan" is a shelf_box_items row in the per-order staging box (a
-// shelf_boxes row with shelf_code IS NULL, auto-created on first scan; ids
-// from nextBoxId — BOX-H-<warehouse>-<YYYYMMDD>-<seq>). Assigning a scan into a real box moves the row and MATERIALIZES
-// the inventory lot (keyed part + shelf + box_id + batch attrs, box_id = the
-// shelf box's id) with inventory_lot_sources + put_away_qty and two ledger
-// rows (PUT_AWAY dock −qty / on_hand +qty); removing a scan reverses all of
-// it. New lots stamp warehouse/section/sub-inventory from the shelf the box
-// sits on (three-level location, mirrored in the lot lookup).
+// A put-away "scan" is a shelf_box_items row in a staging box (a shelf_boxes
+// row with shelf_code IS NULL, auto-created on first scan; ids from nextBoxId
+// — BOX-H-<YYYYMMDD>-<seq>). Assigning a scan into a real box moves the row
+// and MATERIALIZES the inventory lot (keyed part_no + shelf + box_id + batch
+// attrs, box_id = the shelf box's id) with inventory_lot_sources +
+// put_away_qty and two ledger rows (PUT_AWAY dock −qty / on_hand +qty);
+// removing a scan reverses all of it.
+//
+// shelf_boxes has no receiving_order_id: a box's order derives from its items
+// (shelf_box_items → receiving_invoice_items → receiving_invoices), falling
+// back to the creation transition-log metadata for empty boxes (boxOrderId).
 // ---------------------------------------------------------------------------
 
 interface ShelfBoxRow {
   id: string;
-  receivingOrderId: string | null;
   shelfCode: string | null;
   status: string;
 }
@@ -30,11 +32,34 @@ interface ShelfBoxRow {
 async function loadShelfBox(tx: DbOrTx, boxId: string): Promise<ShelfBoxRow> {
   const box = await queryGet<ShelfBoxRow>(
     tx,
-    sql`SELECT id, receiving_order_id AS "receivingOrderId", shelf_code AS "shelfCode", status
+    sql`SELECT id, shelf_code AS "shelfCode", status
         FROM shelf_boxes WHERE id = ${boxId}`
   );
   if (!box) throw new HTTPException(404, { message: "shelf_box_not_found" });
   return box;
+}
+
+/**
+ * A box's receiving order, derived from its items (boxes are single-order —
+ * assignScanToBoxTx guards mixing); for empty boxes falls back to the
+ * creation transition-log metadata (createShelfBox logs {order}).
+ */
+async function boxOrderId(tx: DbOrTx, boxId: string): Promise<string | null> {
+  const row = await queryGet<{ orderId: string | null }>(
+    tx,
+    sql`SELECT COALESCE(
+          (SELECT ri.receiving_order_id
+           FROM shelf_box_items sbi
+           JOIN receiving_invoice_items rii ON rii.id = sbi.receiving_invoice_item_id
+           JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+           WHERE sbi.shelf_box_id = ${boxId} LIMIT 1),
+          (SELECT tl.metadata->>'order'
+           FROM transaction_logs tl
+           WHERE tl.entity_type = 'shelf_box' AND tl.entity_id = ${boxId} AND tl.to_state = 'open'
+           ORDER BY tl.created_at DESC LIMIT 1)
+        ) AS "orderId"`
+  );
+  return row?.orderId ?? null;
 }
 
 async function assertActor(tx: DbOrTx, actorId: string): Promise<void> {
@@ -62,27 +87,40 @@ async function logShelfBox(
   });
 }
 
-/** Find-or-create the per-order staging box (shelf_code IS NULL). */
+/** Find-or-create the order's staging box (shelf_code IS NULL): the staging
+ *  box holding this order's scans, else any empty open staging box, else a
+ *  new one. */
 async function ensureStagingBox(tx: DbOrTx, receivingOrderId: string): Promise<string> {
   const existing = await queryGet<{ id: string }>(
     tx,
-    sql`SELECT id FROM shelf_boxes
-        WHERE receiving_order_id = ${receivingOrderId} AND shelf_code IS NULL AND status = 'open'`
+    sql`SELECT sb.id FROM shelf_boxes sb
+        WHERE sb.shelf_code IS NULL AND sb.status = 'open'
+          AND (
+            EXISTS (
+              SELECT 1 FROM shelf_box_items sbi
+              JOIN receiving_invoice_items rii ON rii.id = sbi.receiving_invoice_item_id
+              JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+              WHERE sbi.shelf_box_id = sb.id AND ri.receiving_order_id = ${receivingOrderId}
+            )
+            OR NOT EXISTS (SELECT 1 FROM shelf_box_items sbi WHERE sbi.shelf_box_id = sb.id)
+          )
+        ORDER BY sb.created_at
+        LIMIT 1`
   );
   if (existing) return existing.id;
   const id = await nextBoxId(tx, "H");
   await queryRun(
     tx,
-    sql`INSERT INTO shelf_boxes (id, receiving_order_id, shelf_code, status, created_at)
-        VALUES (${id}, ${receivingOrderId}, NULL, 'open', ${now()})`
+    sql`INSERT INTO shelf_boxes (id, shelf_code, status, created_at)
+        VALUES (${id}, NULL, 'open', ${now()})`
   );
-  await logShelfBox(tx, id, null, "open", null, { kind: "staging", receivingOrderId });
+  await logShelfBox(tx, id, null, "open", null, { kind: "staging", order: receivingOrderId });
   return id;
 }
 
 interface PutAwayItemRow {
   id: string;
-  partId: string;
+  partNo: string;
   receivingOrderId: string;
   received: number;
   picked: number;
@@ -96,7 +134,7 @@ interface PutAwayItemRow {
 async function loadItemForPutAway(tx: DbOrTx, itemId: string): Promise<PutAwayItemRow> {
   const item = await queryGet<PutAwayItemRow>(
     tx,
-    sql`SELECT rii.id, rii.part_id AS "partId", ri.receiving_order_id AS "receivingOrderId",
+    sql`SELECT rii.id, rii.part_no AS "partNo", ri.receiving_order_id AS "receivingOrderId",
                rii.received_qty AS "received", rii.picked_qty AS "picked", rii.put_away_qty AS "putAway",
                rii.date_code AS "dateCode", rii.lot_code AS "lotCode", rii.coo, rii.cow
         FROM receiving_invoice_items rii
@@ -147,7 +185,7 @@ export async function tryMarkReceivingOrderClear(
   if (!order || order.status !== "in_hand") return;
   const items = await queryAll<PutAwayItemRow>(
     tx,
-    sql`SELECT rii.id, rii.part_id AS "partId", ri.receiving_order_id AS "receivingOrderId",
+    sql`SELECT rii.id, rii.part_no AS "partNo", ri.receiving_order_id AS "receivingOrderId",
                rii.received_qty AS "received", rii.picked_qty AS "picked", rii.put_away_qty AS "putAway",
                rii.date_code AS "dateCode", rii.lot_code AS "lotCode", rii.coo, rii.cow
         FROM receiving_invoice_items rii
@@ -177,13 +215,11 @@ export async function tryMarkReceivingOrderClear(
 
 export interface PutAwayCandidateRow {
   id: string;
-  refNo: string;
+  batchNo: string;
   status: string;
   supplierCode: string | null;
   supplierName: string | null;
-  warehouseCode: string;
-  warehouseSectionCode: string | null;
-  subInventoryCode: string;
+  orgId: number;
   receivedItems: number;
   unboxedItems: number;
 }
@@ -195,13 +231,11 @@ export async function listPutAwayCandidates(db: AppDb): Promise<PutAwayCandidate
     sql`
       SELECT
         ro.id,
-        ro.ref_no AS "refNo",
+        ro.batch_no AS "batchNo",
         ro.status,
         s.code AS "supplierCode",
         s.name AS "supplierName",
-        ro.warehouse_code AS "warehouseCode",
-        ro.warehouse_section_code AS "warehouseSectionCode",
-        ro.sub_inventory_code AS "subInventoryCode",
+        ro.org_id AS "orgId",
         COUNT(rii.id) FILTER (WHERE rii.received_qty > 0)::int AS "receivedItems",
         COUNT(rii.id) FILTER (WHERE
           rii.received_qty - rii.picked_qty - rii.put_away_qty
@@ -232,7 +266,6 @@ export async function listPutAwayCandidates(db: AppDb): Promise<PutAwayCandidate
 
 export interface PutAwayLotRow {
   id: string;
-  partId: string;
   partNo: string;
   dateCode: string | null;
   lotCode: string | null;
@@ -248,7 +281,6 @@ export interface PutAwayLotRow {
 export interface PutAwayScanRow {
   id: string;
   receivingInvoiceItemId: string | null;
-  partId: string;
   partNo: string;
   qty: number;
   dateCode: string | null;
@@ -260,7 +292,6 @@ export interface PutAwayScanRow {
 export interface PutAwayBoxItemRow {
   id: string;
   receivingInvoiceItemId: string | null;
-  partId: string;
   partNo: string;
   qty: number;
   verified: boolean | null;
@@ -269,9 +300,8 @@ export interface PutAwayBoxItemRow {
 
 export interface PutAwayExpectedItemRow {
   id: string;
-  partId: string;
   partNo: string;
-  qty: number;
+  lineQty: number;
   receivedQty: number;
   pickedQty: number;
   putAwayQty: number;
@@ -284,7 +314,7 @@ export interface PutAwayExpectedItemRow {
 }
 
 export interface PutAwayAggregate {
-  order: { id: string; refNo: string; status: string };
+  order: { id: string; batchNo: string; status: string };
   items: PutAwayExpectedItemRow[];
   lots: PutAwayLotRow[];
   scans: PutAwayScanRow[];
@@ -305,9 +335,9 @@ export interface PutAwayAggregate {
  * the non-staging boxes with their item rows.
  */
 export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<PutAwayAggregate> {
-  const order = await queryGet<{ id: string; refNo: string; status: string }>(
+  const order = await queryGet<{ id: string; batchNo: string; status: string }>(
     db,
-    sql`SELECT id, ref_no AS "refNo", status FROM receiving_orders WHERE id = ${orderId}`
+    sql`SELECT id, batch_no AS "batchNo", status FROM receiving_orders WHERE id = ${orderId}`
   );
   if (!order) throw new HTTPException(404, { message: "receiving_order_not_found" });
 
@@ -315,13 +345,12 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
     db,
     sql`
       SELECT DISTINCT
-        il.id, il.part_id AS "partId", p.part_no AS "partNo",
+        il.id, il.part_no AS "partNo",
         il.date_code AS "dateCode", il.lot_code AS "lotCode", il.coo, il.cow,
         il.shelf_code AS "shelfCode", il.box_id AS "boxId",
         il.total_qty AS "totalQty", il.allocated_qty AS "allocatedQty",
         il.available_qty AS "availableQty"
       FROM inventory_lots il
-      JOIN parts p ON p.id = il.part_id
       JOIN inventory_lot_sources ils ON ils.inventory_lot_id = il.id
       JOIN receiving_invoice_items rii ON rii.id = ils.receiving_invoice_item_id
       JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
@@ -337,8 +366,8 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
     db,
     sql`
       SELECT
-        rii.id, rii.part_id AS "partId", p.part_no AS "partNo",
-        rii.qty, rii.received_qty AS "receivedQty", rii.picked_qty AS "pickedQty",
+        rii.id, rii.part_no AS "partNo",
+        rii.line_qty AS "lineQty", rii.received_qty AS "receivedQty", rii.picked_qty AS "pickedQty",
         rii.put_away_qty AS "putAwayQty",
         COALESCE(alloc.qty, 0)::int AS "allocatedQty",
         (rii.received_qty - rii.picked_qty - rii.put_away_qty
@@ -346,7 +375,6 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
         rii.date_code AS "dateCode", rii.lot_code AS "lotCode", rii.coo, rii.cow
       FROM receiving_invoice_items rii
       JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-      JOIN parts p ON p.id = rii.part_id
       LEFT JOIN (
         SELECT receiving_invoice_item_id, SUM(qty)::int AS qty
         FROM allocations
@@ -370,13 +398,12 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
     sql`
       SELECT
         sbi.id, sbi.receiving_invoice_item_id AS "receivingInvoiceItemId",
-        sbi.part_id AS "partId", p.part_no AS "partNo", sbi.qty,
+        sbi.part_no AS "partNo", sbi.qty,
         rii.date_code AS "dateCode", rii.lot_code AS "lotCode", rii.coo, rii.cow
       FROM shelf_box_items sbi
       JOIN shelf_boxes sb ON sb.id = sbi.shelf_box_id
       JOIN receiving_invoice_items rii ON rii.id = sbi.receiving_invoice_item_id
       JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-      JOIN parts p ON p.id = sbi.part_id
       WHERE ri.receiving_order_id = ${orderId} AND sb.shelf_code IS NULL
       ORDER BY sbi.id
     `
@@ -385,10 +412,25 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
   const boxes = await queryAll<{ id: string; shelfCode: string | null; status: string; createdAt: Date }>(
     db,
     sql`
-      SELECT id, shelf_code AS "shelfCode", status, created_at AS "createdAt"
-      FROM shelf_boxes
-      WHERE receiving_order_id = ${orderId} AND shelf_code IS NOT NULL
-      ORDER BY CASE WHEN status = 'open' THEN 0 ELSE 1 END, created_at DESC
+      SELECT sb.id, sb.shelf_code AS "shelfCode", sb.status, sb.created_at AS "createdAt"
+      FROM shelf_boxes sb
+      WHERE sb.shelf_code IS NOT NULL AND (
+        EXISTS (
+          SELECT 1 FROM shelf_box_items sbi
+          JOIN receiving_invoice_items rii ON rii.id = sbi.receiving_invoice_item_id
+          JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+          WHERE sbi.shelf_box_id = sb.id AND ri.receiving_order_id = ${orderId}
+        )
+        OR (
+          NOT EXISTS (SELECT 1 FROM shelf_box_items sbi WHERE sbi.shelf_box_id = sb.id)
+          AND EXISTS (
+            SELECT 1 FROM transaction_logs tl
+            WHERE tl.entity_type = 'shelf_box' AND tl.entity_id = sb.id AND tl.to_state = 'open'
+              AND tl.metadata->>'order' = ${orderId}
+          )
+        )
+      )
+      ORDER BY CASE WHEN sb.status = 'open' THEN 0 ELSE 1 END, sb.created_at DESC
     `
   );
 
@@ -400,10 +442,9 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
           SELECT
             sbi.id, sbi.shelf_box_id AS "shelfBoxId",
             sbi.receiving_invoice_item_id AS "receivingInvoiceItemId",
-            sbi.part_id AS "partId", p.part_no AS "partNo", sbi.qty,
+            sbi.part_no AS "partNo", sbi.qty,
             sbi.verified, sbi.verified_at AS "verifiedAt"
           FROM shelf_box_items sbi
-          JOIN parts p ON p.id = sbi.part_id
           WHERE ${inArray(sql`sbi.shelf_box_id`, boxIds)}
           ORDER BY sbi.id
         `
@@ -436,17 +477,18 @@ export interface RecordPutAwayScanInput {
   lotCode?: string | null;
   coo?: string | null;
   cow?: string | null;
-  /** Accepted for client parity; not stored — shelf_box_items has no box_id
-   *  for the scanned supplier box (the old API ignored it too). */
-  boxId?: string | null;
+  /** When set, the scan is assigned straight into this open shelf box in the
+   *  same tx (active-box auto-put) instead of staying in staging. */
+  shelfBoxId?: string | null;
 }
 
 /**
  * Record one staging scan: backfills NULL batch attributes on the invoice
  * item (the RII row is the batch source of truth) and inserts a
  * shelf_box_items row into the order's staging box. Guarded by the remaining
- * qty (received − picked − put away − allocated − staged). No ledger rows —
- * nothing moved physically.
+ * qty (received − picked − put away − allocated − staged). With `shelfBoxId`
+ * the scan is immediately assigned into that open box in the same tx
+ * (lot + ledger included); otherwise no ledger rows — nothing moved physically.
  */
 export async function recordPutAwayScan(
   db: AppDb,
@@ -481,16 +523,21 @@ export async function recordPutAwayScan(
     const id = randomUUID();
     await queryRun(
       tx,
-      sql`INSERT INTO shelf_box_items (id, shelf_box_id, receiving_invoice_item_id, part_id, qty, verified)
-          VALUES (${id}, ${stagingBoxId}, ${item.id}, ${item.partId}, ${input.qty}, false)`
+      sql`INSERT INTO shelf_box_items (id, shelf_box_id, receiving_invoice_item_id, part_no, qty, verified)
+          VALUES (${id}, ${stagingBoxId}, ${item.id}, ${item.partNo}, ${input.qty}, false)`
     );
+    // Active-box auto-put: assign the just-staged scan into the target box in
+    // the same tx (guards/materialization/ledger/auto-clear reused; a guard
+    // failure rolls back the staging insert too).
+    if (input.shelfBoxId) {
+      await assignScanToBoxTx(tx, { scanId: id, shelfBoxId: input.shelfBoxId, actorId: input.actorId });
+    }
     const row = await queryGet<PutAwayScanRow>(
       tx,
       sql`SELECT sbi.id, sbi.receiving_invoice_item_id AS "receivingInvoiceItemId",
-                 sbi.part_id AS "partId", p.part_no AS "partNo", sbi.qty,
+                 sbi.part_no AS "partNo", sbi.qty,
                  rii.date_code AS "dateCode", rii.lot_code AS "lotCode", rii.coo, rii.cow
           FROM shelf_box_items sbi
-          JOIN parts p ON p.id = sbi.part_id
           JOIN receiving_invoice_items rii ON rii.id = sbi.receiving_invoice_item_id
           WHERE sbi.id = ${id}`
     );
@@ -506,10 +553,16 @@ export interface ShelfBoxDto {
   createdAt: Date;
 }
 
-/** Create a real (non-staging) shelf box for an order; logs the open transition. */
+/**
+ * Create a real (non-staging) shelf box for an order; logs the open transition.
+ * With `boxId` (a scanned physical box QR) the box uses that id instead of a
+ * server-generated one: an existing open box of the same order is returned
+ * unchanged (idempotent re-scan — the client just makes it active), any other
+ * existing id is a 409 conflict.
+ */
 export async function createShelfBox(
   db: AppDb,
-  input: { receivingOrderId: string; shelfCode: string; actorId: string }
+  input: { receivingOrderId: string; shelfCode: string; actorId: string; boxId?: string | null }
 ): Promise<ShelfBoxDto> {
   return db.transaction(async (tx) => {
     const order = await queryGet<{ id: string }>(
@@ -521,12 +574,32 @@ export async function createShelfBox(
     if (!shelf) throw new HTTPException(404, { message: "shelf_not_found" });
     await assertActor(tx, input.actorId);
 
-    const id = await nextBoxId(tx, "H");
+    const requestedId = input.boxId?.trim() || null;
+    if (input.boxId != null && !requestedId) {
+      throw new HTTPException(400, { message: "box_id_required" });
+    }
+    if (requestedId) {
+      const existing = await queryGet<ShelfBoxRow & { createdAt: Date; receivingOrderId: string | null }>(
+        tx,
+        sql`SELECT id, shelf_code AS "shelfCode", status, created_at AS "createdAt"
+            FROM shelf_boxes WHERE id = ${requestedId}`
+      );
+      if (existing) {
+        const existingOrder = await boxOrderId(tx, existing.id);
+        if (existing.status === "open" && existing.shelfCode !== null
+            && (existingOrder === null || existingOrder === input.receivingOrderId)) {
+          return { ...existing, receivingOrderId: existingOrder ?? input.receivingOrderId };
+        }
+        throw new HTTPException(409, { message: "box_id_already_exists" });
+      }
+    }
+
+    const id = requestedId ?? (await nextBoxId(tx, "H"));
     const at = now();
     await queryRun(
       tx,
-      sql`INSERT INTO shelf_boxes (id, receiving_order_id, shelf_code, status, created_at)
-          VALUES (${id}, ${input.receivingOrderId}, ${input.shelfCode}, 'open', ${at})`
+      sql`INSERT INTO shelf_boxes (id, shelf_code, status, created_at)
+          VALUES (${id}, ${input.shelfCode}, 'open', ${at})`
     );
     await logShelfBox(tx, id, null, "open", input.actorId, {
       order: input.receivingOrderId,
@@ -552,19 +625,13 @@ export async function cancelShelfBox(db: AppDb, input: { shelfBoxId: string; act
   });
 }
 
-interface ShelfLocation {
-  warehouseCode: string;
-  warehouseSectionCode: string | null;
-  subInventoryCode: string | null;
-}
-
 async function assignScanToBoxTx(
   tx: DbOrTx,
   input: { scanId: string; shelfBoxId: string; actorId: string }
 ): Promise<void> {
-  const scan = await queryGet<{ id: string; itemId: string; qty: number; shelfBoxId: string | null; partId: string }>(
+  const scan = await queryGet<{ id: string; itemId: string; qty: number; shelfBoxId: string | null; partNo: string }>(
     tx,
-    sql`SELECT id, receiving_invoice_item_id AS "itemId", qty, shelf_box_id AS "shelfBoxId", part_id AS "partId"
+    sql`SELECT id, receiving_invoice_item_id AS "itemId", qty, shelf_box_id AS "shelfBoxId", part_no AS "partNo"
         FROM shelf_box_items WHERE id = ${input.scanId}`
   );
   if (!scan) throw new HTTPException(404, { message: "scan_not_found" });
@@ -581,35 +648,23 @@ async function assignScanToBoxTx(
   if (box.status !== "open") throw new HTTPException(409, { message: "shelf_box_not_open" });
   if (box.shelfCode === null) throw new HTTPException(409, { message: "cannot_assign_into_staging_box" });
   const item = await loadItemForPutAway(tx, scan.itemId);
-  if (box.receivingOrderId !== item.receivingOrderId) {
+  const boxOrder = await boxOrderId(tx, box.id);
+  if (boxOrder !== null && boxOrder !== item.receivingOrderId) {
     throw new HTTPException(409, { message: "different_receiving_orders" });
   }
 
-  // The box's shelf carries the three-level location stamped onto the lot.
-  const shelf = (
-    await queryGet<ShelfLocation>(
-      tx,
-      sql`SELECT warehouse_code AS "warehouseCode", warehouse_section_code AS "warehouseSectionCode",
-                 sub_inventory_code AS "subInventoryCode"
-          FROM shelves WHERE code = ${box.shelfCode}`
-    )
-  )!;
-
   await queryRun(tx, sql`UPDATE shelf_box_items SET shelf_box_id = ${box.id}, verified = false WHERE id = ${scan.id}`);
 
-  // Lot lookup mirrors the unique index (part + batch attrs + shelf + box +
-  // three-level location); a match merges into the existing lot.
+  // Lot lookup mirrors the unique index (part_no + batch attrs + shelf +
+  // box); a match merges into the existing lot.
   const lot = await queryGet<{ id: string }>(
     tx,
     sql`SELECT id FROM inventory_lots
-        WHERE part_id = ${item.partId} AND shelf_code = ${box.shelfCode} AND box_id = ${box.id}
+        WHERE part_no = ${item.partNo} AND shelf_code = ${box.shelfCode} AND box_id = ${box.id}
           AND date_code IS NOT DISTINCT FROM ${item.dateCode}
           AND lot_code IS NOT DISTINCT FROM ${item.lotCode}
           AND coo IS NOT DISTINCT FROM ${item.coo}
-          AND cow IS NOT DISTINCT FROM ${item.cow}
-          AND warehouse_section_code IS NOT DISTINCT FROM ${shelf.warehouseSectionCode}
-          AND sub_inventory_code IS NOT DISTINCT FROM ${shelf.subInventoryCode}
-          AND warehouse_code = ${shelf.warehouseCode}`
+          AND cow IS NOT DISTINCT FROM ${item.cow}`
   );
   let lotId: string;
   if (lot) {
@@ -619,13 +674,11 @@ async function assignScanToBoxTx(
     lotId = randomUUID();
     await queryRun(
       tx,
-      sql`INSERT INTO inventory_lots (id, part_id, date_code, lot_code, coo, cow, shelf_code, box_id,
-                                     warehouse_code, warehouse_section_code, sub_inventory_code,
-                                     expected_qty, total_qty, allocated_qty)
-          VALUES (${lotId}, ${item.partId}, ${item.dateCode}, ${item.lotCode}, ${item.coo}, ${item.cow},
+      sql`INSERT INTO inventory_lots (id, part_no, date_code, lot_code, coo, cow, shelf_code, box_id,
+                                     total_qty, allocated_qty)
+          VALUES (${lotId}, ${item.partNo}, ${item.dateCode}, ${item.lotCode}, ${item.coo}, ${item.cow},
                   ${box.shelfCode}, ${box.id},
-                  ${shelf.warehouseCode}, ${shelf.warehouseSectionCode}, ${shelf.subInventoryCode},
-                  0, ${scan.qty}, 0)`
+                  ${scan.qty}, 0)`
     );
   }
 
@@ -653,7 +706,7 @@ async function assignScanToBoxTx(
   const at = now();
   const base = {
     inventoryLotId: lotId,
-    partId: item.partId,
+    partNo: item.partNo,
     shelfCode: box.shelfCode,
     boxId: box.id,
     txnType: "PUT_AWAY",
@@ -703,13 +756,15 @@ export async function addAllUnboxedToBox(
     await assertActor(tx, input.actorId);
     if (box.status !== "open") throw new HTTPException(409, { message: "shelf_box_not_open" });
     if (box.shelfCode === null) throw new HTTPException(409, { message: "cannot_add_to_staging_box" });
+    const boxOrder = await boxOrderId(tx, box.id);
+    if (boxOrder === null) return { count: 0 };
     const scans = await queryAll<{ id: string }>(
       tx,
       sql`SELECT sbi.id FROM shelf_box_items sbi
           JOIN shelf_boxes sb ON sb.id = sbi.shelf_box_id
           JOIN receiving_invoice_items rii ON rii.id = sbi.receiving_invoice_item_id
           JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-          WHERE sb.shelf_code IS NULL AND ri.receiving_order_id = ${box.receivingOrderId}
+          WHERE sb.shelf_code IS NULL AND ri.receiving_order_id = ${boxOrder}
           ORDER BY sbi.id`
     );
     for (const s of scans) {
@@ -802,7 +857,7 @@ export async function removeScanFromBox(
     const at = now();
     const base = {
       inventoryLotId: ledgerLotId,
-      partId: item.partId,
+      partNo: item.partNo,
       shelfCode: box.shelfCode,
       boxId: box.id,
       txnType: "PUT_AWAY",
@@ -864,8 +919,9 @@ export async function closeShelfBox(db: AppDb, input: { shelfBoxId: string; acto
     if (cnt === 0) throw new HTTPException(409, { message: "cannot_close_empty_shelf_box" });
     await queryRun(tx, sql`UPDATE shelf_boxes SET status = 'closed' WHERE id = ${box.id}`);
     await logShelfBox(tx, box.id, "open", "closed", input.actorId);
-    if (box.receivingOrderId) {
-      await tryMarkReceivingOrderClear(tx, { receivingOrderId: box.receivingOrderId, actorId: input.actorId });
+    const orderId = await boxOrderId(tx, box.id);
+    if (orderId) {
+      await tryMarkReceivingOrderClear(tx, { receivingOrderId: orderId, actorId: input.actorId });
     }
   });
 }

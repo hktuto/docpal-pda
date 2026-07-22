@@ -1,21 +1,7 @@
 import { Hono } from "hono";
-import { HTTPException } from "hono/http-exception";
-import type { Context } from "hono";
 import { db } from "../db.js";
 import { completeMeasuringTask, getMeasuringTaskDetail, listMeasuringTasks } from "../db/measuring.js";
-
-async function readJson<T>(c: Context): Promise<T> {
-  try {
-    return await c.req.json<T>();
-  } catch {
-    throw new HTTPException(400, { message: "invalid JSON body" });
-  }
-}
-
-function requireActor(body: { actorId?: string }): string {
-  if (!body.actorId) throw new HTTPException(400, { message: "actorId is required" });
-  return body.actorId;
-}
+import { actorFrom } from "../auth/middleware.js";
 
 export const measuringRoute = new Hono();
 
@@ -34,8 +20,6 @@ measuringRoute.get("/measuring-tasks/:id", async (c) => {
 // Complete: pending task + all boxes closed + nothing unboxed → 'completed'
 // (+ transition log; no stock movement, picking order status untouched).
 measuringRoute.post("/measuring-tasks/:id/complete", async (c) => {
-  const body = await readJson<{ actorId?: string }>(c);
-  const actorId = requireActor(body);
-  await completeMeasuringTask(db, { taskId: c.req.param("id"), actorId });
+  await completeMeasuringTask(db, { taskId: c.req.param("id"), actorId: actorFrom(c).id });
   return c.json({ ok: true }, 200);
 });

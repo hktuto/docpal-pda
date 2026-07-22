@@ -11,10 +11,10 @@ before(async () => {
 });
 
 // Seed ids (see seed.ts)
-const ITEM_23 = "00000000-0000-4000-8000-000000000023"; // part 5, qty 2000, dc "2601+"
-const ITEM_24 = "00000000-0000-4000-8000-000000000024"; // part 6, qty 1000, dc "2601+"
-const LOT_18 = "00000000-0000-4000-8000-000000000018"; // part 5, dc 2601, 10000
-const LOT_19 = "00000000-0000-4000-8000-000000000019"; // part 6, dc 2602, 5000
+const ITEM_23 = "00000000-0000-4000-8000-000000000023"; // part RK73H1JTTD1002F, qty 2000
+const ITEM_24 = "00000000-0000-4000-8000-000000000024"; // part RK73H1JTTD2202F, qty 1000
+const LOT_18 = "00000000-0000-4000-8000-000000000018"; // part RK73H1JTTD1002F, dc 2601, 10000
+const LOT_19 = "00000000-0000-4000-8000-000000000019"; // part RK73H1JTTD2202F, dc 2602, 5000
 const PO_22 = "00000000-0000-4000-8000-000000000022";
 
 test("parseDateCodeRule: exact / + / - / year-relative", () => {
@@ -76,28 +76,18 @@ test("allocateAll: FIFO from shelf lots, updates lots + picking items", async ()
   );
 });
 
-test("allocateAll: date-code rule excludes older lots", async () => {
+test("allocateAll: org-agnostic — lots on any shelf match by part_no", async () => {
   await reseed(client);
-  await client.db.execute(sql`UPDATE picking_items SET required_date_code = '2602+' WHERE id = ${ITEM_23}`);
+  await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${PO_22}`);
+  // move lot 18 onto a shelf with a different (null) org — allocation must
+  // still find it (no location matching remains)
+  await client.db.execute(sql`INSERT INTO shelves (code, zone, org_id, created_at, updated_at)
+    VALUES ('X-99-01', 'X', NULL, now(), now()) ON CONFLICT (code) DO NOTHING`);
+  await client.db.execute(sql`UPDATE inventory_lots SET shelf_code = 'X-99-01' WHERE id = ${LOT_18}`);
   const s = await allocateAll(client.db);
-  // item 23's only lot is dc 2601 → excluded; no receiving source → unallocated
-  const a23 = await client.db.execute(sql`SELECT count(*)::int AS c FROM allocations WHERE picking_item_id = ${ITEM_23}`);
-  assert.equal(Number((a23[0] as any).c), 0);
-  const i23 = await client.db.execute(sql`SELECT allocated_qty FROM picking_items WHERE id = ${ITEM_23}`);
-  assert.equal(Number((i23[0] as any).allocated_qty), 0);
-  // item 24 (rule "2601+") still allocates from its dc 2602 lot
-  const a24 = await client.db.execute(sql`SELECT qty FROM allocations WHERE picking_item_id = ${ITEM_24}`);
-  assert.equal(Number((a24[0] as any).qty), 1000);
-  assert.equal(s.fullyAllocated, 1);
-});
-
-test("allocateAll: sources must match the picking order's location", async () => {
-  await reseed(client);
-  await client.db.execute(sql`UPDATE picking_orders SET sub_inventory_code = 'ACME-S1' WHERE id = ${PO_22}`);
-  const s = await allocateAll(client.db);
-  assert.equal(s.allocationsCreated, 0);
-  const c = await client.db.execute(sql`SELECT count(*)::int AS c FROM allocations`);
-  assert.equal(Number((c[0] as any).c), 0);
+  assert.equal(s.fullyAllocated, 2);
+  const a23 = await client.db.execute(sql`SELECT qty FROM allocations WHERE picking_item_id = ${ITEM_23}`);
+  assert.equal(Number((a23[0] as any).qty), 2000);
 });
 
 test("allocateAll: idempotent recompute, ledger stays consistent", async () => {

@@ -17,7 +17,9 @@
   (`PickingScanReviewModal` — editable fields with OCR candidate chips),
   while a multi-item label (2+ rows via `extractMultiItemRows`) opens an
   editable table (`PickingScanMultiItemModal`) whose rows are added to the
-  queue row-by-row. Confirm
+  queue row-by-row. The queue table aggregates scans of the same item +
+  batch fields (lot/date/coo/cow) into one row with the total qty — display
+  only; Confirm still applies each scan individually. Confirm
   batch-applies the queue sequentially via
   `POST /picking-items/:id/scan {allocationId, qty, ...batch overrides}`;
   failed rows stay in the list with their error. Launched from the picking
@@ -33,8 +35,9 @@
   `boxId` (409 `box_id_exists` on duplicates — the id is the global PK);
   server-generated ids follow `BOX-S-<warehouse>-<YYYYMMDD>-<seq>` (per-day
   seq, `nextBoxId` in `apps/backend/src/db/boxes.ts`).
-  The per-box Print buttons (picking detail + receiving picking tab) are
-  placeholders — real printing will be added backend-side later.
+  The per-box Print button on the picking detail was removed (2026-07);
+  the receiving picking tab's Print button remains a placeholder — real
+  printing will be added backend-side later.
 - Finish a picking order manually, or automatically when the last package
   is boxed — finishing creates a measuring task.
 - Per-order issue reporting (`POST /picking-orders/report-issues`).

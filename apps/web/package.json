@@ -18,11 +18,12 @@
     "assets:android": "pnpm assets:generate"
   },
   "dependencies": {
-    "@warehouse/shared": "workspace:*",
     "@capacitor/android": "^8.4.1",
     "@capacitor/app": "^8.1.0",
     "@capacitor/cli": "^8.4.1",
     "@capacitor/core": "^8.4.1",
+    "@warehouse/shared": "workspace:*",
+    "bwip-js": "^4.11.2",
     "jsbarcode": "^3.12.3",
     "nuxt": "^3.12.0",
     "uuid": "^9.0.1"

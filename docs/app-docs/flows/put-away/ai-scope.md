@@ -19,10 +19,21 @@
   `ScanMultiItemModal` table and rows are applied one by one.
 - Assign staging scans into shelf boxes (one box per shelf), add-all-unboxed,
   remove-from-box, and remove scanned pieces.
+- Scan a physical box QR to create a box: the "Scan box" button opens a
+  dialog with the scanned (or manually typed) box id + a shelf dropdown; the
+  backend uses that id for the box (an existing open box of the same order is
+  reused, any other duplicate is a 409 `box_id_already_exists`). The
+  created/scanned box becomes the **active box** (highlighted, switchable via
+  a "Set active" button per open box); while an active box is set, every part
+  scan — hardware scan, OCR review apply, multi-item apply — is assigned
+  straight into it (`POST /receiving-orders/:id/put-away-scans` with
+  `shelfBoxId`, one tx: staging insert + assign + lot materialization)
+  instead of going to staging.
 - Create / close / cancel shelf boxes; closing materializes inventory lots
   and auto-clears the receiving order when its last piece is boxed. Shelf box
   ids are server-generated as `BOX-H-<warehouse>-<YYYYMMDD>-<seq>` (per-day
-  seq, `nextBoxId` in `apps/backend/src/db/boxes.ts`).
+  seq, `nextBoxId` in `apps/backend/src/db/boxes.ts`) unless a physical box id
+  was scanned.
 - Select a destination shelf (the `/admin/shelves` CRUD read doubles as the
   shelf list).
 
@@ -45,16 +56,21 @@
 - `components/put-away/PutAwayLotsPanel.vue` — expected items and scan
   staging.
 - `components/put-away/ShelfBoxesPanel.vue` — shelf boxes and scan
-  assignment.
+  assignment; "Scan box" button, active-box highlight + "Set active" switch.
+- `components/put-away/ScanBoxDialog.vue` — scanned/typed box id + shelf
+  selection for scan-to-create-box.
 - `components/SelectShelfDialog.vue` — shelf selection UI.
 - `composables/useScanMatchers.ts` — client-side `matchPutAway` validation;
-  apply calls `WarehouseService.recordPutAwayScan`.
+  apply calls `WarehouseService.recordPutAwayScan` (with `shelfBoxId` when an
+  active box is set).
 - `services/adapters/backendWarehouse.ts` — put-away + shelf-box methods.
 - `apps/backend/src/routes/putaway.ts` + `apps/backend/src/db/putaway.ts` —
   `GET /put-away/candidates`, `GET /receiving-orders/:id/put-away`,
-  `POST /receiving-orders/:id/put-away-scans`, `DELETE
+  `POST /receiving-orders/:id/put-away-scans` (optional `shelfBoxId` =
+  scan straight into a box), `DELETE
   /put-away-scans/:scanId`, `/shelf-boxes*` lifecycle (lot materialization
-  + receiving-order auto-clear).
+  + receiving-order auto-clear; `POST /shelf-boxes` takes an optional `boxId`
+  for scanned physical boxes).
 
 ## Known limitations
 
@@ -70,3 +86,4 @@
 - `docs/superpowers/specs/2026-07-03-cancel-empty-box-design.md`
 - `docs/superpowers/specs/2026-07-06-put-away-scan-first-design.md`
 - `docs/superpowers/plans/2026-07-06-put-away-scan-first.md`
+- `docs/superpowers/specs/2026-07-20-put-away-scan-box-design.md`

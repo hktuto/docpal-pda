@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, watch } from "vue";
-import QRCode from "qrcode";
+import { ref, computed, nextTick, watch, onMounted } from "vue";
+import bwipjs from "bwip-js";
 import JsBarcode from "jsbarcode";
 
 interface LabelItem {
@@ -32,7 +32,7 @@ const { data } = await useFetch<LabelsData>("/labels-data.json", {
 });
 
 const search = ref("");
-const selectedPickingOrder = ref<string>("picking");
+const selectedPickingOrder = ref<string>("");
 
 const pickingOrderOptions = computed(() => {
   if (!data.value) return [];
@@ -68,26 +68,26 @@ const filteredLabels = computed(() => {
   );
 });
 
-const qrSvgs = ref<Record<number, string>>({});
-
-async function generateQrSvgs(labels: LabelItem[]) {
-  const result: Record<number, string> = {};
-  await Promise.all(
-    labels.map(async (label, index) => {
+// 2D code: PDF417 (the stacked 2D symbology on real KOA reel labels),
+// rendered with bwip-js onto the per-label canvas.
+function renderPdf417() {
+  nextTick(() => {
+    document.querySelectorAll<HTMLCanvasElement>("canvas[data-pdf417]").forEach((el) => {
+      const value = el.getAttribute("data-pdf417") ?? "";
+      if (!value) return;
       try {
-        const svg = await QRCode.toString(label.qrValue, {
-          type: "svg",
-          width: 200,
-          margin: 1,
-          errorCorrectionLevel: "M",
+        bwipjs.toCanvas(el, {
+          bcid: "pdf417",
+          text: value,
+          scale: 2,
+          height: 12,
+          includetext: false,
         });
-        result[index] = svg;
       } catch {
-        result[index] = "";
+        el.textContent = "";
       }
-    })
-  );
-  qrSvgs.value = result;
+    });
+  });
 }
 
 function renderBarcodes() {
@@ -111,13 +111,21 @@ function renderBarcodes() {
   });
 }
 
+// Draw the barcodes once the v-for DOM actually exists (the component is
+// suspended on the useFetch await, so a watcher — even post-flush — fires
+// before the initial render commits), and again on every filter change.
+onMounted(() => {
+  renderPdf417();
+  renderBarcodes();
+});
+
 watch(
   filteredLabels,
-  async (labels) => {
-    await generateQrSvgs(labels);
+  async () => {
+    renderPdf417();
     renderBarcodes();
   },
-  { immediate: true }
+  { flush: "post" }
 );
 </script>
 
@@ -201,7 +209,7 @@ watch(
         </div>
 
         <div class="label__koa-bottom">
-          <div v-if="qrSvgs[index]" class="qr-code" v-html="qrSvgs[index]"></div>
+          <canvas class="pdf417" :data-pdf417="label.qrValue"></canvas>
           <div class="label__koa-enc">{{ label.qrValue }}</div>
         </div>
 
@@ -313,15 +321,10 @@ h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
   display: block;
 }
 
-.qr-code {
-  width: 80px;
-  height: 80px;
+.pdf417 {
+  height: 64px;
+  max-width: 240px;
   flex-shrink: 0;
-}
-
-.qr-code :deep(svg) {
-  width: 100%;
-  height: 100%;
   display: block;
 }
 

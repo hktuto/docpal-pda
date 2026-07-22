@@ -53,14 +53,14 @@
             <span>{{ $t('picking.issueModal.perOrderRemarks') }}</span>
             <div v-for="o in orders" :key="o.id" class="remark-row">
               <div class="remark-header">
-                <strong>{{ o.refNo }}</strong>
+                <strong>{{ o.orderNo }}</strong>
                 <span v-if="reason === 'cannot_divide'" class="muted">{{ $t('picking.issueModal.requested', { qty: o.totalQty }) }}</span>
               </div>
               <input
                 v-model="remarks[o.id]"
                 type="text"
                 :placeholder="$t('picking.issueModal.remarkPlaceholder')"
-                :aria-label="$t('picking.issueModal.remarkAriaLabel', { ref: o.refNo })"
+                :aria-label="$t('picking.issueModal.remarkAriaLabel', { ref: o.orderNo })"
                 :disabled="saving"
               />
             </div>
@@ -95,7 +95,7 @@ import { pickingIssueReasons, type PickingIssueReason } from "~/services/types";
 
 interface OrderOption {
   id: string;
-  refNo: string;
+  orderNo: string;
   totalQty: number;
 }
 

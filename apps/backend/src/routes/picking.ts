@@ -20,18 +20,18 @@ import {
   type PickingIssueEntry,
 } from "../db/picking.js";
 import { allocateAll } from "../db/allocate.js";
+import { actorFrom } from "../auth/middleware.js";
 
+// Empty bodies parse as {} — after the auth migration several mutations no
+// longer carry any body fields (the actor comes from the token).
 async function readJson<T>(c: Context): Promise<T> {
+  const text = await c.req.text();
+  if (!text) return {} as T;
   try {
-    return await c.req.json<T>();
+    return JSON.parse(text) as T;
   } catch {
     throw new HTTPException(400, { message: "invalid JSON body" });
   }
-}
-
-function requireActor(body: { actorId?: string }): string {
-  if (!body.actorId) throw new HTTPException(400, { message: "actorId is required" });
-  return body.actorId;
 }
 
 // Source-availability-changing mutations (scan / package removal) recalculate
@@ -54,10 +54,9 @@ pickingRoute.get("/picking-orders", async (c) => {
 // Batch issue report (registered before /picking-orders/:id verbs — no path
 // conflict, but kept first for clarity). Per-order entries.
 pickingRoute.post("/picking-orders/report-issues", async (c) => {
-  const body = await readJson<{ actorId?: string; entries?: PickingIssueEntry[] }>(c);
-  const actorId = requireActor(body);
+  const body = await readJson<{ entries?: PickingIssueEntry[] }>(c);
   if (!Array.isArray(body.entries)) throw new HTTPException(400, { message: "entries is required" });
-  const result = await reportPickingOrderIssues(db, { actorId, entries: body.entries });
+  const result = await reportPickingOrderIssues(db, { actorId: actorFrom(c).id, entries: body.entries });
   return c.json(result, 200);
 });
 
@@ -70,7 +69,6 @@ pickingRoute.get("/picking-orders/:id", async (c) => {
 // picking package(s) + PICK ledger rows, then recalculates allocations.
 pickingRoute.post("/picking-items/:id/scan", async (c) => {
   const body = await readJson<{
-    actorId?: string;
     allocationId?: string;
     qty?: number;
     dateCode?: string;
@@ -78,10 +76,9 @@ pickingRoute.post("/picking-items/:id/scan", async (c) => {
     coo?: string;
     cow?: string;
   }>(c);
-  const actorId = requireActor(body);
   if (!body.allocationId) throw new HTTPException(400, { message: "allocationId is required" });
   const result = await scanPickingItem(db, c.req.param("id"), {
-    actorId,
+    actorId: actorFrom(c).id,
     allocationId: body.allocationId,
     qty: body.qty as number,
     dateCode: body.dateCode ?? null,
@@ -95,29 +92,24 @@ pickingRoute.post("/picking-items/:id/scan", async (c) => {
 
 // Remove an unboxed, unverified package (reverses source + allocation + ledger).
 pickingRoute.delete("/packages/:id", async (c) => {
-  const body = await readJson<{ actorId?: string }>(c);
-  const actorId = requireActor(body);
-  await removeScannedPackage(db, { packageId: c.req.param("id"), actorId });
+  await removeScannedPackage(db, { packageId: c.req.param("id"), actorId: actorFrom(c).id });
   await reallocateBestEffort("package removal");
   return c.json({ ok: true }, 200);
 });
 
 // Measuring-time package verification (boxed, open box, pending task).
 pickingRoute.post("/packages/:id/verify", async (c) => {
-  const body = await readJson<{ actorId?: string }>(c);
-  const actorId = requireActor(body);
-  await verifyPackage(db, { packageId: c.req.param("id"), actorId });
+  await verifyPackage(db, { packageId: c.req.param("id"), actorId: actorFrom(c).id });
   return c.json({ ok: true }, 200);
 });
 
 // Create an open shipping box for the order. Optional `boxId` adopts a
 // pre-printed label id (409 box_id_exists when taken).
 pickingRoute.post("/picking-orders/:id/boxes", async (c) => {
-  const body = await readJson<{ actorId?: string; boxId?: string }>(c);
-  const actorId = requireActor(body);
+  const body = await readJson<{ boxId?: string }>(c);
   const box = await createShippingBox(db, {
     pickingOrderId: c.req.param("id"),
-    actorId,
+    actorId: actorFrom(c).id,
     boxId: body.boxId,
   });
   return c.json(box, 201);
@@ -126,15 +118,13 @@ pickingRoute.post("/picking-orders/:id/boxes", async (c) => {
 // Edit box size / weights (grams) / destination country; open boxes only.
 pickingRoute.patch("/shipping-boxes/:id", async (c) => {
   const body = await readJson<{
-    actorId?: string;
     boxSize?: string | null;
     netWeightG?: number | string | null;
     grossWeightG?: number | string | null;
     destinationCountry?: string | null;
   }>(c);
-  const actorId = requireActor(body);
   const box = await updateShippingBox(db, c.req.param("id"), {
-    actorId,
+    actorId: actorFrom(c).id,
     boxSize: body.boxSize,
     netWeightG: body.netWeightG,
     grossWeightG: body.grossWeightG,
@@ -145,50 +135,46 @@ pickingRoute.patch("/shipping-boxes/:id", async (c) => {
 
 // Box membership: add one package / remove one package / add all unboxed.
 pickingRoute.post("/shipping-boxes/:id/packages", async (c) => {
-  const body = await readJson<{ packageId?: string; actorId?: string }>(c);
-  const actorId = requireActor(body);
+  const body = await readJson<{ packageId?: string }>(c);
   if (!body.packageId) throw new HTTPException(400, { message: "packageId is required" });
-  await addPackageToBox(db, { shippingBoxId: c.req.param("id"), packageId: body.packageId, actorId });
+  await addPackageToBox(db, {
+    shippingBoxId: c.req.param("id"),
+    packageId: body.packageId,
+    actorId: actorFrom(c).id,
+  });
   return c.json({ ok: true }, 200);
 });
 
 pickingRoute.delete("/shipping-boxes/:id/packages/:packageId", async (c) => {
-  const body = await readJson<{ actorId?: string }>(c);
-  const actorId = requireActor(body);
   await removePackageFromBox(db, {
     shippingBoxId: c.req.param("id"),
     packageId: c.req.param("packageId"),
-    actorId,
+    actorId: actorFrom(c).id,
   });
   return c.json({ ok: true }, 200);
 });
 
 pickingRoute.post("/shipping-boxes/:id/add-all-unboxed", async (c) => {
-  const body = await readJson<{ actorId?: string }>(c);
-  const actorId = requireActor(body);
-  const result = await addAllUnboxedToShippingBox(db, { shippingBoxId: c.req.param("id"), actorId });
+  const result = await addAllUnboxedToShippingBox(db, {
+    shippingBoxId: c.req.param("id"),
+    actorId: actorFrom(c).id,
+  });
   return c.json(result, 200);
 });
 
 // Cancel (empty + open, hard delete) / close (verified + measured) a box.
 pickingRoute.post("/shipping-boxes/:id/cancel", async (c) => {
-  const body = await readJson<{ actorId?: string }>(c);
-  const actorId = requireActor(body);
-  await cancelShippingBox(db, { shippingBoxId: c.req.param("id"), actorId });
+  await cancelShippingBox(db, { shippingBoxId: c.req.param("id"), actorId: actorFrom(c).id });
   return c.json({ ok: true }, 200);
 });
 
 pickingRoute.post("/shipping-boxes/:id/close", async (c) => {
-  const body = await readJson<{ actorId?: string }>(c);
-  const actorId = requireActor(body);
-  await closeShippingBox(db, { shippingBoxId: c.req.param("id"), actorId });
+  await closeShippingBox(db, { shippingBoxId: c.req.param("id"), actorId: actorFrom(c).id });
   return c.json({ ok: true }, 200);
 });
 
 // Explicit finish: all items fully boxed → order finished + measuring task.
 pickingRoute.post("/picking-orders/:id/finish", async (c) => {
-  const body = await readJson<{ actorId?: string }>(c);
-  const actorId = requireActor(body);
-  const task = await finishPickingOrder(db, { pickingOrderId: c.req.param("id"), actorId });
+  const task = await finishPickingOrder(db, { pickingOrderId: c.req.param("id"), actorId: actorFrom(c).id });
   return c.json(task, 200);
 });

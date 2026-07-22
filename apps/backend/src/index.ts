@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { authMiddleware, type AuthVariables } from "./auth/middleware.js";
 import { healthRoute } from "./routes/health.js";
 import { authRoute } from "./routes/auth.js";
 import { adminRoute } from "./routes/admin/index.js";
@@ -15,14 +16,18 @@ import { ingestRoute } from "./routes/ingest.js";
 import { eventsRoute } from "./routes/events.js";
 import { devRoute } from "./routes/dev.js";
 
-export const app = new Hono();
+export const app = new Hono<{ Variables: AuthVariables }>();
 
 const origins = (
   process.env.CORS_ORIGINS ??
   "http://localhost:3000,http://localhost:3100,http://localhost,capacitor://localhost"
 ).split(",");
 
-app.use("*", cors({ origin: origins, allowHeaders: ["Content-Type", "Last-Event-ID"] }));
+app.use("*", cors({ origin: origins, allowHeaders: ["Content-Type", "Last-Event-ID", "Authorization"] }));
+// Everything below requires a bearer token except /health, POST /auth/login
+// and /dev/* (allowlist inside the middleware; GET /events also accepts
+// ?token= for EventSource clients).
+app.use("*", authMiddleware);
 app.route("/", healthRoute);
 app.route("/", authRoute);
 app.route("/admin", adminRoute);

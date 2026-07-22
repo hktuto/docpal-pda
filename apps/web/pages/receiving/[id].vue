@@ -6,7 +6,7 @@
     <template v-else-if="order">
       <DetailHeader
         v-model="headerExpanded"
-        :title="order.refNo"
+        :title="order.batchNo"
         :status="order.status"
         :badge-class="badgeClass(order.status)"
         :flush-top="route.meta.props?.noPadding"
@@ -189,10 +189,9 @@ const {
     (order.value?.invoices ?? []).flatMap((invoice) =>
       invoice.items.map((item) => ({
         id: item.id,
-        partId: item.partId,
-        partNo: item.part.partNo,
+        partNo: item.partNo,
         wclItemNo: item.wclItemNo,
-        qty: item.qty,
+        lineQty: item.lineQty,
         receivedQty: item.receivedQty,
       }))
     ),
@@ -266,7 +265,7 @@ const filteredPickingOrders = computed<ReceivingPickingOrder[]>(() => {
   const query = searchQuery.value.trim().toLowerCase();
   if (!query) return pickingOrders.value;
   return pickingOrders.value.filter((po) => {
-    const orderMatch = po.refNo.toLowerCase().includes(query);
+    const orderMatch = po.orderNo.toLowerCase().includes(query);
     const itemMatch = po.items.some(
       (pi) =>
         pi.partNo.toLowerCase().includes(query) ||
@@ -287,7 +286,7 @@ const remainingItems = computed(() => {
   if (!order.value) return 0;
   return order.value.invoices
     .flatMap((invoice) => invoice.items)
-    .filter((item) => item.putAwayQty < item.qty).length;
+    .filter((item) => item.putAwayQty < item.lineQty).length;
 });
 
 async function load() {

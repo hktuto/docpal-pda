@@ -12,15 +12,34 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   deliberate deltas from the original target DDL.
 - [API Design](./api-design.md) — the endorsed API for this backend:
   conventions (camelCase DTOs, complete reads, one canonical route per
-  operation, `actorId` in mutation bodies) and the route map per flow,
-  including the task-based goods-verify API.
+  operation) and the route map per flow, including the task-based
+  goods-verify API. (Its "`actorId` in mutation bodies" convention is
+  superseded by bearer-token auth — see the auth bullet below.)
 - [Old API Review](./api-review-old-api.md) — design review of the deprecated
   `apps/api` this replaces (what carried over, what got redesigned and why).
 
 ## API surface (current)
 
-- `POST /auth/login`, `POST /auth/logout`, `GET /auth/users/:id` — stateless
-  demo auth (plain-text compare, no tokens).
+- Auth (spec: `docs/superpowers/specs/2026-07-21-real-login-design.md`) —
+  JWT bearer auth enforced by global middleware (`src/auth/middleware.ts`) on
+  every route except `GET /health`, `POST /auth/login`, and `/dev/*`. Send
+  `Authorization: Bearer <token>` on all other calls; `GET /events`
+  additionally accepts `?token=` because EventSource cannot set headers.
+  Failures are 401 `unauthorized`. The actor for every mutation comes from
+  the token (`c.get("user")`) — request bodies no longer carry `actorId`.
+  - `POST /auth/login` `{username, password}` →
+    `{user: {id, username, displayName, groupCodes}, token}` — scrypt verify
+    (`src/auth/password.ts`, `scrypt:N:r:p:salt:hash`); legacy plain-text rows
+    are lazily re-hashed on success. 401 `invalid credentials`.
+  - `GET /auth/me` → the same `user` object, resolved fresh from the DB by
+    token `sub` (client session restore).
+  - `GET /auth/users/:id` → the same `user` object for any user.
+  - `POST /auth/change-password` `{oldPassword, newPassword}` → `{ok}`.
+  - `POST /auth/logout` → `{ok}` no-op (client discards the token; no
+    server-side revocation).
+  - Tokens are HS256 JWTs (`src/auth/jwt.ts`), payload
+    `{sub, username, groupCodes, exp}`, signed with `AUTH_SECRET` (dev default
+    + startup warning), TTL `AUTH_TOKEN_TTL_SECONDS` (default 43200 = 12 h).
 - `GET /health` — liveness + DB check.
 - Receiving flow (`apps/backend/src/routes/receiving.ts`):
   - `GET /receiving-orders?status=` — list with per-order invoice/item counts,
@@ -32,11 +51,11 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     allocations tracing to this order, items embedding their allocations
     (lot or receiving source), packages, and transition logs, plus shipping
     boxes.
-  - `POST /receiving-orders/:id/confirm-arrival` `{actorId}` — pending or
+  - `POST /receiving-orders/:id/confirm-arrival` (no body) — pending or
     provisional_received → `in_hand` with full receipt, date-code fallback,
     RECEIVE_TO_DOCK ledger rows, a transition log, then a best-effort
     `allocateAll` (concepts 4-5).
-  - `POST /receiving-orders/:id/scan` `{actorId, raw?, partNo?, qty, ...}` —
+  - `POST /receiving-orders/:id/scan` `{raw?, partNo?, qty, ...}` —
     QR-template parse (supplier profile, `koa_zeros` qty decoding) → match
     against the order's items; single match auto-applies a partial receipt
     (`received_qty += qty`, order → `provisional_received`, ledger row);
@@ -61,22 +80,24 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     screen: order + expected items (per invoice item: qty counters,
     `allocatedQty`, `remainingQty` = the candidates formula, batch fields) +
     materialized lots + staging scans + non-staging boxes with their items.
-  - `POST /receiving-orders/:id/put-away-scans` `{actorId,
-    receivingInvoiceItemId, qty, dateCode?, lotCode?, coo?, cow?}` — staging
-    scan insert (auto-creates the per-order staging box), batch-attr backfill
-    on the item, 409 `scanned_qty_exceeds_remaining`.
-  - `POST /shelf-boxes` `{receivingOrderId, shelfCode, actorId}` /
-    `DELETE /shelf-boxes/:id` `{actorId}` — create / cancel (empty, open,
-    non-staging only; hard delete + transition log).
-  - `POST /shelf-boxes/:id/scans` `{scanId, actorId}` /
-    `DELETE /shelf-boxes/:id/scans/:scanId` `{actorId}` — assign / remove one
-    staging scan; assign materializes the lot (stamped with the shelf's
-    warehouse/section/sub-inventory) + `inventory_lot_sources` +
+  - `POST /receiving-orders/:id/put-away-scans` `{receivingInvoiceItemId, qty, dateCode?, lotCode?, coo?, cow?, shelfBoxId?}`
+    — staging scan insert (auto-creates the staging box), batch-attr backfill
+    on the item, 409 `scanned_qty_exceeds_remaining`; with `shelfBoxId` the
+    scan is assigned straight into that open box in the same tx (active-box
+    auto-put, lot + ledger included).
+  - `POST /shelf-boxes` `{receivingOrderId, shelfCode, boxId?}` /
+    `DELETE /shelf-boxes/:id` (no body) — create / cancel (empty, open,
+    non-staging only; hard delete + transition log). `boxId` = scanned
+    physical box QR (an existing open box of the same order is reused, any
+    other duplicate → 409 `box_id_already_exists`).
+  - `POST /shelf-boxes/:id/scans` `{scanId}` /
+    `DELETE /shelf-boxes/:id/scans/:scanId` (no body) — assign / remove one
+    staging scan; assign materializes the lot + `inventory_lot_sources` +
     `put_away_qty` + two PUT_AWAY ledger rows (dock −qty / on_hand +qty),
     remove reverses (409 `lot_has_pick_allocations` when allocated, emptied
     lots are deleted with their ledger rows detached).
-  - `POST /shelf-boxes/:id/add-all-unboxed` `{actorId}` → `{count}` /
-    `POST /shelf-boxes/:id/close` `{actorId}` — bulk assign / close box;
+  - `POST /shelf-boxes/:id/add-all-unboxed` (no body) → `{count}` /
+    `POST /shelf-boxes/:id/close` (no body) — bulk assign / close box;
     lot-changing mutations run `allocateAll` best-effort after commit, and
     fully put-away `in_hand` orders auto-flip to `clear` (+ transition log).
 - Picking flow (`apps/backend/src/routes/picking.ts`):
@@ -85,7 +106,7 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   - `GET /picking-orders/:id` — nested detail: order (incl. issue fields +
     three-level location) + `measuringTask` + items with `allocations` (lot or
     receiving source) and `packages`, plus shipping boxes with `packageCount`.
-  - `POST /picking-items/:id/scan` `{actorId, allocationId, qty, dateCode?,
+  - `POST /picking-items/:id/scan` `{allocationId, qty, dateCode?,
     lotCode?, coo?, cow?}` → `{packageIds}` — the one canonical scan-to-pick:
     consumes the allocation's source (lot `total_qty`/`allocated_qty` −qty,
     receiving `picked_qty` +qty, or FIFO across the lines of an order-level
@@ -93,35 +114,35 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     (explicit fields override), shrinks the allocation, writes two PICK ledger
     rows per portion (reserved −qty / on_hand −qty), order `pending →
     picking`; 409 `scanned_qty_exceeds_allocation` / `scan_qty_exceeds_required`.
-  - `DELETE /packages/:id` `{actorId}` — remove an unboxed, unverified
+  - `DELETE /packages/:id` (no body) — remove an unboxed, unverified
     package, reversing source + allocation + ledger. Scan and removal run
     `allocateAll` best-effort after commit.
-  - `POST /packages/:id/verify` `{actorId}` — measuring-time verification
+  - `POST /packages/:id/verify` (no body) — measuring-time verification
     (package boxed, box open, measuring task pending).
-  - `POST /picking-orders/:id/boxes` `{actorId}` /
-    `PATCH /shipping-boxes/:id` `{actorId, boxSize?, netWeightG?,
+  - `POST /picking-orders/:id/boxes` (no body) /
+    `PATCH /shipping-boxes/:id` `{boxSize?, netWeightG?,
     grossWeightG?, destinationCountry?}` (grams) — create / measure boxes.
-  - `POST /shipping-boxes/:id/packages` `{packageId, actorId}` /
-    `DELETE /shipping-boxes/:id/packages/:packageId` `{actorId}` /
-    `POST /shipping-boxes/:id/add-all-unboxed` `{actorId}` → `{packed}` —
+  - `POST /shipping-boxes/:id/packages` `{packageId}` /
+    `DELETE /shipping-boxes/:id/packages/:packageId` (no body) /
+    `POST /shipping-boxes/:id/add-all-unboxed` (no body) → `{packed}` —
     box membership; `picked_qty` tracks boxed packages, so boxing the last
     package auto-finishes the order (+ `measuring_tasks` row).
-  - `POST /shipping-boxes/:id/cancel` `{actorId}` (empty + open) /
-    `POST /shipping-boxes/:id/close` `{actorId}` (all packages verified +
+  - `POST /shipping-boxes/:id/cancel` (no body) (empty + open) /
+    `POST /shipping-boxes/:id/close` (no body) (all packages verified +
     destination/box-size/weights guards, transition log).
-  - `POST /picking-orders/:id/finish` `{actorId}` → the `measuring_tasks`
+  - `POST /picking-orders/:id/finish` (no body) → the `measuring_tasks`
     row (409 `measuring_task_exists` when present).
-  - `POST /picking-orders/report-issues` `{actorId, entries:[{pickingOrderId,
+  - `POST /picking-orders/report-issues` `{entries:[{pickingOrderId,
     reason, qty?, packSize?, note?, remark?}]}` → `{reported[], skipped[]}` —
     per-order issue fields + `issue` status + transition log; unknown ids and
     non-pending/picking orders are skipped.
 - Measuring flow (`apps/backend/src/routes/measuring.ts`):
-  - `GET /measuring-tasks?status=` — list with `refNo`/`shipTo` and
+  - `GET /measuring-tasks?status=` — list with `orderNo`/`shipTo` and
     server-side `boxCount`/`closedBoxCount` (closed = any status but `open`).
   - `GET /measuring-tasks/:id` — consolidated `{task, order, boxes[{...,
-    packages[]}]}`; packages carry `partId`/`partNo`/`wclItemNo` — no second
+    packages[]}]`; packages carry `partNo`/`wclItemNo` — no second
     request. 404 `measuring_task_not_found`.
-  - `POST /measuring-tasks/:id/complete` `{actorId}` — guards: 404
+  - `POST /measuring-tasks/:id/complete` (no body) — guards: 404
     `measuring_task_not_found`, 409 `measuring_task_not_pending`, 409
     `shipping_boxes_not_all_closed`, 409 `picking_items_not_fully_packed`
     (unboxed packages left); then `completed` + transition log. No stock
@@ -130,7 +151,7 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     picking routes (`PATCH /shipping-boxes/:id`, `/packages/:id/verify`,
     `/close`).
 - Goods verify flow (`apps/backend/src/routes/goodsverify.ts`, concept 7):
-  - `POST /goods-verify-tasks/generate` `{date?, actorId?}` → `{created,
+  - `POST /goods-verify-tasks/generate` `{date?}` → `{created,
     date}` — day-end generation: one pending task per lot moved in
     `inventory_transactions` that day (`date` defaults to the DB server's
     `CURRENT_DATE`); the `(task_date, inventory_lot_id)` unique index makes
@@ -138,9 +159,10 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   - `GET /goods-verify-tasks?date=&status=&shelfCode=` — the work queue with
     `partNo`/`wclItemNo` joined, ordered by shelf/box/part.
   - `GET /goods-verify-tasks/:id` — task (all fields + part identity) + lot
-    (batch, three-level location, qtys) + the shelf box with its items
+    (batch, location, qtys, `orgId` derived via the shelf) + the shelf box
+    with its items
     (`box` null when the task's `box_id` is unset or not a `shelf_boxes` row).
-  - `POST /goods-verify-tasks/:id/verify` `{actorId, countedQty?}` → the
+  - `POST /goods-verify-tasks/:id/verify` `{countedQty?}` → the
     updated task — pending → `verified` (+ transition log); a `countedQty`
     mismatch corrects lot `total_qty` (409 `counted_qty_below_allocated` so
     `available_qty` never goes negative) and writes an ADJUST `on_hand`
@@ -158,28 +180,32 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     supplier; zero-qty lots included (old `/stock-search/parts/lots`
     semantics).
 - Ingest (`apps/backend/src/routes/ingest.ts`, server-to-server):
-  - `PUT /receiving-orders/:externalId` `{order, invoices[{..., items[]}]}`
-    (camelCase) → 201/200 `{id, externalId, created, changed}` — idempotent
-    upsert keyed by `receiving_orders.external_id`; invoices reconcile by
+  - `PUT /receiving-orders/:batchNo` `{order, invoices[{..., items[]}]}`
+    (camelCase) → 201/200 `{id, created, changed}` — idempotent upsert keyed
+    by the natural `batch_no` (no `external_id`); invoices reconcile by
     `invoiceNo` (add/update/delete — delete cascades items), items by business
-    key (`partId + poNo + poLine`). Derived state (`received_qty`,
-    `picked_qty`, `put_away_qty`, mismatch flags) is never written; qty
-    decreases / removals are 409-guarded once the order is past pending or
-    work has started. A changed upsert on an order past `pending` runs
-    `allocateAll` best-effort after commit; no ledger rows on ingest.
-  - `PUT /picking-orders/:externalId` `{order, items[]}` → same shape —
-    items reconcile by business key (`partId + requiredDateCode`),
-    `picked_qty`/`allocated_qty` never written, `customerCode` resolves to
-    `customer_profiles.code`; a changed upsert on a `pending`/`picking` order
-    runs `allocateAll` best-effort after commit.
-  - Both resolve `supplierCode`/`partNo` (400 `unknown_supplier` /
-    `unknown_part` / `unknown_customer` with the code in the message);
-    `supplierId`/`partId` given directly are also accepted.
+    key (`partNo + poNo + poLine`, `lineQty`/`ctnNo` fields). Derived state
+    (`received_qty`, `picked_qty`, `put_away_qty`, mismatch flags) is never
+    written; qty decreases / removals are 409-guarded once the order is past
+    pending or work has started. A changed upsert on an order past `pending`
+    runs `allocateAll` best-effort after commit; no ledger rows on ingest.
+  - `PUT /picking-orders/:orderNo` `{order, items[]}` → same shape — items
+    reconcile by business key (`partNo`), `picked_qty`/`allocated_qty` never
+    written, `customerCode` resolves to `customer_profiles.code`; a changed
+    upsert on a `pending`/`picking` order runs `allocateAll` best-effort
+    after commit.
+  - Both reference parts by `partNo` and resolve `supplierCode` /
+    `customerCode` (400 `unknown_part` / `unknown_supplier` /
+    `unknown_customer` with the code in the message); `org_id` is accepted
+    with a `2` default.
 - `/admin/*` — master-data CRUD (see `apps/backend/src/routes/admin/`):
-  generic CRUD for shelves, suppliers, supplier-profiles, parts, countries,
-  box-sizes, sub-inventories, customer-profiles, net-weight-formulas, users,
-  plus the custom `shelf-boxes` router. Unauthenticated POC — errors are plain
-  text.
+  generic CRUD for shelves (code/zone/orgId), suppliers, supplier-profiles
+  (incl. `qrType`), parts (referenced by `partNo`, `supplierCode` required),
+  countries, box-sizes, customer-profiles (incl. `rule`), net-weight-formulas
+  (`partNo`), user-groups, and user-group-members (composite key addressed as
+  `:userId::groupCode`), plus custom routers for users (write-only `password`
+  hashed server-side, `password_hash` never returned) and `shelf-boxes`.
+  Requires the bearer token like everything else; errors are plain text.
 - `POST /dev/reset`, `POST /dev/allocate` — demo reset / manual allocation
   recompute.
 - `GET /events?since=<id>` — SSE stream (`src/routes/events.ts`) over the
@@ -194,6 +220,8 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   `topics` (URL path prefixes like `/picking-orders`) that web clients use to
   invalidate their local API cache. On Vercel the stream self-closes at ~55 s
   (`maxDuration`); clients reconnect with their last id as `?since=`.
+  Authenticated like every other route, with one exception: as the only
+  route where `?token=` is accepted (EventSource cannot set headers).
 
 ## Run it
 

@@ -6,7 +6,7 @@
     <template v-else-if="order">
       <DetailHeader
         v-model="headerExpanded"
-        :title="order.refNo"
+        :title="order.batchNo"
         :status="headerStatus"
         :badge-class="badgeClass(order.status)"
         :flush-top="route.meta.props?.noPadding"
@@ -29,7 +29,10 @@
         :any-adding-all="anyAddingAll"
         :unboxed-count="unboxedCountForOrder"
         :removing-item="removingScan"
+        :active-box-id="activeBoxId"
         @new-box="openNewBoxDialog"
+        @scan-box="openScanBoxDialog"
+        @set-active="setActiveBox"
         @close-box="closeBox"
         @cancel-box="cancelBox"
         @add-all-to-box="addAllToBox"
@@ -40,6 +43,14 @@
         v-model="newBoxDialogOpen"
         :shelves="shelves"
         @selected="createBoxFromDialog"
+      />
+
+      <ScanBoxDialog
+        v-model="scanBoxDialogOpen"
+        v-model:box-id="scannedBoxId"
+        :shelves="shelves"
+        :creating="creating"
+        @confirm="confirmScanBox"
       />
 
       <PutAwayLotsPanel
@@ -79,7 +90,7 @@
       :options="review.options"
       :match-result="review.matchResult"
       :mode="review.capture.imagePath ? 'review' : 'manual'"
-      :context="{ task: 'put-away', receivingOrderId: orderId, receivingItem: scanItem ?? undefined }"
+      :context="{ task: 'put-away', receivingOrderId: orderId, receivingItem: scanItem ?? undefined, shelfBoxId: activeBoxId }"
       @applied="onApplied"
       @retake="onRetake"
     />
@@ -113,6 +124,7 @@ import {
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import ScanMultiItemModal from "~/components/ScanMultiItemModal.vue";
 import SelectShelfDialog from "~/components/SelectShelfDialog.vue";
+import ScanBoxDialog from "~/components/put-away/ScanBoxDialog.vue";
 import ShelfBoxesPanel from "~/components/put-away/ShelfBoxesPanel.vue";
 import PutAwayLotsPanel from "~/components/put-away/PutAwayLotsPanel.vue";
 import type {
@@ -137,7 +149,11 @@ const orderId = route.params.id as string;
 const headerExpanded = ref(false);
 const boxesExpanded = ref(false);
 const newBoxDialogOpen = ref(false);
+const scanBoxDialogOpen = ref(false);
+const scannedBoxId = ref("");
 const expandedItemBoxes = ref<Set<string>>(new Set());
+// The box that currently receives auto-put scans (null = scans go to staging).
+const activeBoxId = ref<string | null>(null);
 
 const statusLabel = useStatusLabel();
 const headerStatus = computed(() =>
@@ -212,6 +228,8 @@ async function onApplied() {
 
 // Hardware / wedge QR scans: parse via the supplier QR templates, match the
 // part against the order's visible items, and apply immediately (no review).
+// While the scan-box dialog is open the scan is the box id instead; with an
+// active box set the scan is assigned straight into it.
 useHardwareScanner({
   enabled: () =>
     !!order.value &&
@@ -219,8 +237,12 @@ useHardwareScanner({
     !scanning.value &&
     !reviewOpen.value &&
     !multiOpen.value &&
-    !newBoxDialogOpen.value,
+    (scanBoxDialogOpen.value || !newBoxDialogOpen.value),
   onScan: async (rawValue: string) => {
+    if (scanBoxDialogOpen.value) {
+      scannedBoxId.value = rawValue.trim();
+      return;
+    }
     if (!order.value) return;
     scanning.value = true;
     try {
@@ -242,7 +264,8 @@ useHardwareScanner({
         rawCode(parsed.dateCode),
         rawCode(parsed.lotCode),
         rawCode(parsed.coo),
-        rawCode(parsed.cow)
+        rawCode(parsed.cow),
+        activeBoxId.value
       );
       showToast(t("common.scanSuccess"));
       scrollTargetItemId.value = target.id;
@@ -315,6 +338,13 @@ async function load() {
     const previousBoxIds = new Set(boxes.value.map((b) => b.id));
     boxes.value = detail.boxes;
     scans.value = detail.scans;
+    // The active box is only valid while it is still open on this order.
+    if (
+      activeBoxId.value &&
+      !detail.boxes.some((b) => b.id === activeBoxId.value && b.status === "open")
+    ) {
+      activeBoxId.value = null;
+    }
     const nextExpanded = new Set(expandedItemBoxes.value);
     for (const b of detail.boxes) {
       if (b.status === "open" && !previousBoxIds.has(b.id)) {
@@ -342,11 +372,37 @@ function openNewBoxDialog() {
   boxesExpanded.value = true;
 }
 
+function openScanBoxDialog() {
+  scannedBoxId.value = "";
+  scanBoxDialogOpen.value = true;
+  boxesExpanded.value = true;
+}
+
+async function confirmScanBox(boxId: string, shelfCode: string) {
+  error.value = null;
+  creating.value = true;
+  try {
+    const box = await warehouse.createShelfBox(orderId, shelfCode, boxId);
+    activeBoxId.value = box.id;
+    await load();
+    boxesExpanded.value = true;
+  } catch (e) {
+    error.value = errorMessage(e);
+  } finally {
+    creating.value = false;
+  }
+}
+
+function setActiveBox(boxId: string) {
+  activeBoxId.value = boxId;
+}
+
 async function createBoxFromDialog(shelfCode: string) {
   error.value = null;
   creating.value = true;
   try {
-    await warehouse.createShelfBox(orderId, shelfCode);
+    const box = await warehouse.createShelfBox(orderId, shelfCode);
+    activeBoxId.value = box.id;
     await load();
     boxesExpanded.value = true;
   } catch (e) {
@@ -431,6 +487,7 @@ async function openScan(item: PutAwayExpectedItem) {
       receivingItem: item,
       targets: item.partNo ? [item.partNo] : [],
       confirmSingleMatch: true,
+      shelfBoxId: activeBoxId.value,
     });
     if (result.status === "review") {
       review.value = result;
@@ -472,7 +529,7 @@ async function onApplyMulti(entries: { row: ScanMultiRow; index: number }[]) {
         continue;
       }
       try {
-        await warehouse.recordPutAwayScan(orderId, target.id, qty, null, null, null, null);
+        await warehouse.recordPutAwayScan(orderId, target.id, qty, null, null, null, null, activeBoxId.value);
         results.push({ index, ok: true });
         anyOk = true;
       } catch (e) {

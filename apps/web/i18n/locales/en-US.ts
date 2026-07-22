@@ -196,7 +196,6 @@ export default {
       deliveryDate: "Delivery date",
       poNo: "PO No.",
       shipTo: "Ship to",
-      dateCodeNotice: "Date-code notice",
       finishPicking: "Finish picking",
       measuring: "Measuring",
       measuringTaskCreated: "Measuring task created",
@@ -208,7 +207,7 @@ export default {
       itemQrUseScanMode: "Item label — use the Scan button to pick items"
     },
     scanSession: {
-          title: "Scan — {refNo}",
+          title: "Scan — {orderNo}",
           back: "Back",
           progress: "Required {required} · Scanned {scanned} · Queued {queued}",
           emptyQueue: "No scans yet — scan a QR code or capture a label with OCR.",
@@ -240,7 +239,6 @@ export default {
       requiredQty: "Required qty",
       scannedQty: "Scanned qty",
       boxedQty: "Boxed qty",
-      requiredDateCode: "Required date code",
       dateLotCooCow: "Date / Lot / COO / COW",
       status: "Status",
       allocations: "Allocations",
@@ -261,7 +259,6 @@ export default {
       title: "Boxes ({count})",
       newBox: "New box",
       scanBox: "Scan box id",
-      print: "Print",
       boxId: "Box ID",
       status: "Status",
       packages: "Packages",
@@ -317,9 +314,12 @@ export default {
     shelfBoxesPanel: {
       title: "Shelf boxes ({count})",
       newBox: "New box",
+      scanBox: "Scan box",
       creating: "Creating…",
       box: "Box",
       status: "Status",
+      active: "Active",
+      setActive: "Set active",
       items: "Items",
       contents: "Contents",
       hideItems: "Hide items",
@@ -371,9 +371,7 @@ export default {
       dateCode: "Date code",
       lotCode: "Lot code",
       cooCow: "COO / COW",
-      warehouse: "Warehouse",
-      section: "Section",
-      subInventory: "Sub-inventory",
+      org: "Office",
       shelf: "Shelf",
       box: "Box",
       expectedQty: "Expected qty",
@@ -413,13 +411,14 @@ export default {
       viewBox: "View box",
       openBox: "Open box",
       completeMeasuring: "Complete measuring",
-      completing: "Completing…"
+      completing: "Completing…",
+      scanHint: "Scan a box QR code to open it.",
+      boxNotFound: "No box in this task matches \"{id}\"."
     },
     measureBox: {
       title: "Measure Box",
       boxTitle: "Box {id}",
       pickingOrder: "Picking order",
-      destination: "Destination",
       packagesVerified: "Packages — {verified} / {total} verified",
       part: "Part",
       qty: "Qty",
@@ -430,7 +429,9 @@ export default {
       netWeight: "Net weight",
       grossWeight: "Gross weight",
       destinationCountry: "Destination country",
-      boxNotFound: "Box not found"
+      boxNotFound: "Box not found",
+      scanHint: "Scan a package QR code to verify it.",
+      noMatch: "No unverified package matches this label."
     }
   },
   boxMeasurementsModal: {
@@ -532,6 +533,17 @@ export default {
     cancel: "Cancel",
     confirm: "Confirm"
   },
+  scanBoxDialog: {
+    title: "Scan box",
+    close: "Close",
+    boxId: "Box id",
+    boxIdPlaceholder: "Scan or enter the box id",
+    shelf: "Shelf",
+    defaultOption: "Select a shelf",
+    cancel: "Cancel",
+    confirm: "Confirm",
+    creating: "Creating…"
+  },
   appHeader: {
     goBack: "Go back",
     home: "Home",
@@ -622,6 +634,8 @@ export default {
     cannot_cancel_staging_box: "Cannot cancel the staging box",
     cannot_assign_into_staging_box: "Cannot assign scans into the staging box",
     cannot_add_to_staging_box: "Cannot add scans to the staging box",
+    box_id_already_exists: "A box with this id already exists",
+    box_id_required: "Box id is required",
     cannot_close_staging_box: "Cannot close the staging box",
     cannot_close_empty_shelf_box: "Cannot close an empty shelf box",
     measuring_task_not_pending: "Measuring task is not pending",
@@ -754,7 +768,7 @@ export default {
     quality_rejection: "Quality rejection"
   },
   event_allocation_computed: "Picking allocations updated",
-  event_picking_order_created: "New picking order {refNo}",
+  event_picking_order_created: "New picking order {orderNo}",
   event_goods_verify_tasks_created: "{count} new goods-verify tasks",
   view: "View"
 } as const;

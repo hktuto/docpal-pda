@@ -28,8 +28,8 @@ async function actorIdOf(username: string): Promise<string> {
   return row!.id;
 }
 
-async function orderIdOf(refNo: string): Promise<string> {
-  const row = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM receiving_orders WHERE ref_no = ${refNo}`);
+async function orderIdOf(batchNo: string): Promise<string> {
+  const row = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM receiving_orders WHERE batch_no = ${batchNo}`);
   return row!.id;
 }
 
@@ -38,8 +38,7 @@ async function itemIdOf(orderId: string, partNo: string): Promise<string> {
     client.db,
     sql`SELECT rii.id FROM receiving_invoice_items rii
         JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-        JOIN parts p ON p.id = rii.part_id
-        WHERE ri.receiving_order_id = ${orderId} AND p.part_no = ${partNo}`
+        WHERE ri.receiving_order_id = ${orderId} AND rii.part_no = ${partNo}`
   );
   return row!.id;
 }
@@ -262,7 +261,7 @@ test("scan: no match → 409 JSON with all order items as candidates", async () 
     body.candidates.map((c: { partNo: string }) => c.partNo).sort(),
     ["P413", "RK73B1JTTD181G"]
   );
-  assert.deepEqual(Object.keys(body.candidates[0]).sort(), ["id", "partId", "partNo", "qty", "receivedQty", "wclItemNo"].sort());
+  assert.deepEqual(Object.keys(body.candidates[0]).sort(), ["id", "lineQty", "partNo", "receivedQty", "wclItemNo"].sort());
 });
 
 test("scan: multiple matches → 409 JSON with the matching candidates", async () => {
@@ -519,15 +518,15 @@ test("confirm-arrival: provisional_received completes the remaining receipt", as
   const result = await confirmReceivingArrival(client.db, orderId, actorId);
   assert.equal(result.status, "in_hand");
 
-  const items = await queryAll<{ id: string; receivedQty: number; qty: number }>(
+  const items = await queryAll<{ id: string; receivedQty: number; lineQty: number }>(
     client.db,
-    sql`SELECT rii.id, rii.received_qty AS "receivedQty", rii.qty
+    sql`SELECT rii.id, rii.received_qty AS "receivedQty", rii.line_qty AS "lineQty"
         FROM receiving_invoice_items rii
         JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
         WHERE ri.receiving_order_id = ${orderId} ORDER BY rii.id`
   );
   assert.deepEqual(
-    items.map((i) => [i.id, i.receivedQty, i.qty]),
+    items.map((i) => [i.id, i.receivedQty, i.lineQty]),
     [
       [scannedItemId, 5000, 5000],
       [otherItemId, 3000, 3000],

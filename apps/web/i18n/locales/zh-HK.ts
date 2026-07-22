@@ -196,7 +196,6 @@ export default {
       deliveryDate: "送貨日期",
       poNo: "採購單號",
       shipTo: "收貨方",
-      dateCodeNotice: "日期代碼提示",
       finishPicking: "完成揀貨",
       measuring: "測量",
       measuringTaskCreated: "測量任務已建立",
@@ -208,7 +207,7 @@ export default {
       itemQrUseScanMode: "這是物料標籤——請使用掃碼按鈕揀貨"
     },
     scanSession: {
-          title: "掃碼 — {refNo}",
+          title: "掃碼 — {orderNo}",
           back: "返回",
           progress: "需求 {required} · 已掃 {scanned} · 待確認 {queued}",
           emptyQueue: "尚未有掃描記錄——請掃描二維碼或用 OCR 拍攝標籤。",
@@ -240,7 +239,6 @@ export default {
       requiredQty: "需求數量",
       scannedQty: "已掃描數量",
       boxedQty: "已裝箱數量",
-      requiredDateCode: "需求日期代碼",
       dateLotCooCow: "日期 / 批次 / 產地 / 晶圓產地",
       status: "狀態",
       allocations: "分配",
@@ -261,7 +259,6 @@ export default {
       title: "箱號 ({count})",
       newBox: "新增箱號",
       scanBox: "掃描箱號",
-      print: "打印",
       boxId: "箱號",
       status: "狀態",
       packages: "包裹",
@@ -317,9 +314,12 @@ export default {
     shelfBoxesPanel: {
       title: "貨架箱號({count})",
       newBox: "新增箱號",
+      scanBox: "掃描箱號",
       creating: "建立中…",
       box: "箱",
       status: "狀態",
+      active: "使用中",
+      setActive: "設為使用中",
       items: "項目",
       contents: "內容",
       hideItems: "隱藏項目",
@@ -371,9 +371,7 @@ export default {
       dateCode: "日期碼",
       lotCode: "批號",
       cooCow: "產地 / 組裝地",
-      warehouse: "倉庫",
-      section: "區域",
-      subInventory: "子庫存",
+      org: "辦事處",
       shelf: "貨架",
       box: "箱號",
       expectedQty: "預期數量",
@@ -413,13 +411,14 @@ export default {
       viewBox: "檢視箱號",
       openBox: "開啟箱號",
       completeMeasuring: "完成測量",
-      completing: "完成中…"
+      completing: "完成中…",
+      scanHint: "掃描箱號 QR code 以開啟。",
+      boxNotFound: "此任務中找不到與「{id}」相符的箱號。"
     },
     measureBox: {
       title: "測量箱號",
       boxTitle: "箱號 {id}",
       pickingOrder: "揀貨單",
-      destination: "收貨方",
       packagesVerified: "包裹 — 已查貨 {verified} / {total}",
       part: "料號",
       qty: "數量",
@@ -430,7 +429,9 @@ export default {
       netWeight: "淨重",
       grossWeight: "毛重",
       destinationCountry: "目的地國家/地區",
-      boxNotFound: "找不到箱號"
+      boxNotFound: "找不到箱號",
+      scanHint: "掃描包裹 QR code 以核實。",
+      noMatch: "沒有與此標籤相符的未核實包裹。"
     }
   },
   boxMeasurementsModal: {
@@ -532,6 +533,17 @@ export default {
     cancel: "取消",
     confirm: "確認"
   },
+  scanBoxDialog: {
+    title: "掃描箱號",
+    close: "關閉",
+    boxId: "箱號",
+    boxIdPlaceholder: "掃描或輸入箱號",
+    shelf: "貨架",
+    defaultOption: "選擇貨架",
+    cancel: "取消",
+    confirm: "確認",
+    creating: "建立中…"
+  },
   appHeader: {
     goBack: "返回",
     home: "主頁",
@@ -622,6 +634,8 @@ export default {
     cannot_cancel_staging_box: "無法取消暫存箱",
     cannot_assign_into_staging_box: "無法將掃描件分配到暫存箱",
     cannot_add_to_staging_box: "無法將掃描件加入暫存箱",
+    box_id_already_exists: "該箱號已存在",
+    box_id_required: "箱號不能為空",
     cannot_close_staging_box: "無法關閉暫存箱",
     cannot_close_empty_shelf_box: "無法關閉空貨架箱號",
     measuring_task_not_pending: "測量任務不是待處理狀態",
@@ -754,7 +768,7 @@ export default {
     quality_rejection: "質量拒收"
   },
   event_allocation_computed: "揀貨分配已更新",
-  event_picking_order_created: "新揀貨單 {refNo}",
+  event_picking_order_created: "新揀貨單 {orderNo}",
   event_goods_verify_tasks_created: "新增 {count} 個查貨任務",
   view: "查看"
 } as const;

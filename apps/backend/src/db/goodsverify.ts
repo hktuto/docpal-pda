@@ -89,8 +89,8 @@ export async function generateGoodsVerifyTasks(
     db,
     sql`
       INSERT INTO goods_verify_tasks
-        (id, task_date, inventory_lot_id, shelf_code, box_id, part_id, expected_qty, status, created_at)
-      SELECT gen_random_uuid()::text, ${date}::date, il.id, il.shelf_code, il.box_id, il.part_id,
+        (id, task_date, inventory_lot_id, shelf_code, box_id, part_no, expected_qty, status, created_at)
+      SELECT gen_random_uuid()::text, ${date}::date, il.id, il.shelf_code, il.box_id, il.part_no,
              il.total_qty, 'pending', ${at}
       FROM (
         SELECT DISTINCT inventory_lot_id
@@ -122,7 +122,6 @@ export interface GoodsVerifyTaskQueueRow {
   taskDate: string; // task_date cast to text (YYYY-MM-DD)
   shelfCode: string | null;
   boxId: string | null;
-  partId: string;
   partNo: string;
   wclItemNo: string | null;
   expectedQty: number;
@@ -158,11 +157,11 @@ export async function listGoodsVerifyTasks(
       SELECT
         gvt.id, gvt.task_date::text AS "taskDate",
         gvt.shelf_code AS "shelfCode", gvt.box_id AS "boxId",
-        gvt.part_id AS "partId", p.part_no AS "partNo", p.wcl_item_no AS "wclItemNo",
+        gvt.part_no AS "partNo", p.wcl_item_no AS "wclItemNo",
         gvt.expected_qty AS "expectedQty", gvt.status,
         gvt.verified_by AS "verifiedBy", gvt.verified_at AS "verifiedAt"
       FROM goods_verify_tasks gvt
-      JOIN parts p ON p.id = gvt.part_id
+      JOIN parts p ON p.part_no = gvt.part_no
       ${where}
       ORDER BY gvt.shelf_code, gvt.box_id, p.part_no
     `
@@ -193,14 +192,12 @@ export interface GoodsVerifyLotRow {
   totalQty: number;
   allocatedQty: number;
   availableQty: number;
-  warehouseCode: string;
-  warehouseSectionCode: string | null;
-  subInventoryCode: string | null;
+  /** Derived via shelf_code → shelves.org_id. */
+  orgId: number | null;
 }
 
 export interface GoodsVerifyBoxItemRow {
   id: string;
-  partId: string;
   partNo: string;
   qty: number;
   verified: boolean | null;
@@ -225,13 +222,13 @@ export async function getGoodsVerifyTaskDetail(db: AppDb, taskId: string): Promi
       SELECT
         gvt.id, gvt.task_date::text AS "taskDate", gvt.inventory_lot_id AS "inventoryLotId",
         gvt.shelf_code AS "shelfCode", gvt.box_id AS "boxId",
-        gvt.part_id AS "partId", p.part_no AS "partNo", p.wcl_item_no AS "wclItemNo",
+        gvt.part_no AS "partNo", p.wcl_item_no AS "wclItemNo",
         p.description,
         gvt.expected_qty AS "expectedQty", gvt.status,
         gvt.verified_by AS "verifiedBy", gvt.verified_at AS "verifiedAt",
         gvt.created_at AS "createdAt"
       FROM goods_verify_tasks gvt
-      JOIN parts p ON p.id = gvt.part_id
+      JOIN parts p ON p.part_no = gvt.part_no
       WHERE gvt.id = ${taskId}
     `
   );
@@ -241,12 +238,13 @@ export async function getGoodsVerifyTaskDetail(db: AppDb, taskId: string): Promi
     db,
     sql`
       SELECT
-        id, date_code AS "dateCode", lot_code AS "lotCode", coo, cow,
-        shelf_code AS "shelfCode", box_id AS "boxId",
-        total_qty AS "totalQty", allocated_qty AS "allocatedQty", available_qty AS "availableQty",
-        warehouse_code AS "warehouseCode", warehouse_section_code AS "warehouseSectionCode",
-        sub_inventory_code AS "subInventoryCode"
-      FROM inventory_lots WHERE id = ${task.inventoryLotId}
+        il.id, il.date_code AS "dateCode", il.lot_code AS "lotCode", il.coo, il.cow,
+        il.shelf_code AS "shelfCode", il.box_id AS "boxId",
+        il.total_qty AS "totalQty", il.allocated_qty AS "allocatedQty", il.available_qty AS "availableQty",
+        s.org_id AS "orgId"
+      FROM inventory_lots il
+      LEFT JOIN shelves s ON s.code = il.shelf_code
+      WHERE il.id = ${task.inventoryLotId}
     `
   ))!; // FK guarantees the lot exists
 
@@ -261,12 +259,11 @@ export async function getGoodsVerifyTaskDetail(db: AppDb, taskId: string): Promi
         db,
         sql`
           SELECT
-            sbi.id, sbi.part_id AS "partId", p.part_no AS "partNo", sbi.qty,
+            sbi.id, sbi.part_no AS "partNo", sbi.qty,
             sbi.verified, sbi.verified_at AS "verifiedAt"
           FROM shelf_box_items sbi
-          JOIN parts p ON p.id = sbi.part_id
           WHERE sbi.shelf_box_id = ${boxRow.id}
-          ORDER BY p.part_no, sbi.id
+          ORDER BY sbi.part_no, sbi.id
         `
       );
       box = { id: boxRow.id, status: boxRow.status, items };
@@ -320,7 +317,7 @@ export async function verifyGoodsVerifyTask(
     if (input.countedQty !== undefined && input.countedQty !== task.expectedQty) {
       const lot = await queryGet<{
         id: string;
-        partId: string;
+        partNo: string;
         shelfCode: string | null;
         boxId: string | null;
         dateCode: string | null;
@@ -330,7 +327,7 @@ export async function verifyGoodsVerifyTask(
         allocatedQty: number;
       }>(
         tx,
-        sql`SELECT id, part_id AS "partId", shelf_code AS "shelfCode", box_id AS "boxId",
+        sql`SELECT id, part_no AS "partNo", shelf_code AS "shelfCode", box_id AS "boxId",
                    date_code AS "dateCode", lot_code AS "lotCode", coo, cow,
                    allocated_qty AS "allocatedQty"
             FROM inventory_lots WHERE id = ${task.inventoryLotId}`
@@ -343,7 +340,7 @@ export async function verifyGoodsVerifyTask(
       await tx.insert(inventoryTransactions).values({
         id: randomUUID(),
         inventoryLotId: lot.id,
-        partId: lot.partId,
+        partNo: lot.partNo,
         shelfCode: lot.shelfCode,
         boxId: lot.boxId,
         txnType: "ADJUST",

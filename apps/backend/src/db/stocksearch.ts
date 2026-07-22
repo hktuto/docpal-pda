@@ -40,16 +40,15 @@ export interface StockSearchPartRow {
 }
 
 export interface StockSearchLotRow {
-  partId: string;
+  partNo: string;
   dateCode: string | null;
   lotCode: string | null;
   coo: string | null;
   cow: string | null;
   shelfCode: string | null;
   boxId: string | null;
-  warehouseCode: string;
-  warehouseSectionCode: string | null;
-  subInventoryCode: string | null;
+  /** Derived via shelf_code → shelves.org_id. */
+  orgId: number | null;
   totalQty: number;
   allocatedQty: number;
   availableQty: number;
@@ -62,7 +61,7 @@ export interface StockSearchResult {
 
 /** Lot row joined with its part's identity fields (part fields stitched away in TS). */
 interface LotJoinRow extends StockSearchLotRow {
-  partNo: string;
+  partPk: string;
   wclItemNo: string | null;
   description: string | null;
   defaultCoo: string | null;
@@ -80,24 +79,23 @@ export async function searchStock(db: AppDb, filters: StockSearchFilters): Promi
     db,
     sql`
       SELECT
-        il.part_id AS "partId",
+        il.part_no AS "partNo",
         il.date_code AS "dateCode",
         il.lot_code AS "lotCode",
         il.coo, il.cow,
         il.shelf_code AS "shelfCode",
         il.box_id AS "boxId",
-        il.warehouse_code AS "warehouseCode",
-        il.warehouse_section_code AS "warehouseSectionCode",
-        il.sub_inventory_code AS "subInventoryCode",
+        s.org_id AS "orgId",
         il.total_qty AS "totalQty",
         il.allocated_qty AS "allocatedQty",
         il.available_qty AS "availableQty",
-        p.part_no AS "partNo",
+        p.id AS "partPk",
         p.wcl_item_no AS "wclItemNo",
         p.description,
         p.default_coo AS "defaultCoo"
       FROM inventory_lots il
-      JOIN parts p ON p.id = il.part_id
+      JOIN parts p ON p.part_no = il.part_no
+      LEFT JOIN shelves s ON s.code = il.shelf_code
       WHERE TRUE
       ${partNoNorm ? sql`AND strpos(regexp_replace(upper(p.part_no), '\\s', '', 'g'), ${partNoNorm}) > 0` : sql``}
       ${filters.shelfCode ? sql`AND il.shelf_code = ${filters.shelfCode}` : sql``}
@@ -113,7 +111,7 @@ export async function searchStock(db: AppDb, filters: StockSearchFilters): Promi
             )`
           : sql``
       }
-      ORDER BY p.part_no, il.date_code NULLS LAST, il.shelf_code, il.box_id
+      ORDER BY il.part_no, il.date_code NULLS LAST, il.shelf_code, il.box_id
     `
   );
 
@@ -121,12 +119,12 @@ export async function searchStock(db: AppDb, filters: StockSearchFilters): Promi
   const partIndexById = new Map<string, number>();
   const lots: StockSearchLotRow[] = [];
   for (const row of rows) {
-    const { partNo, wclItemNo, description, defaultCoo, ...lot } = row;
+    const { partPk, wclItemNo, description, defaultCoo, ...lot } = row;
     lots.push(lot);
-    const idx = partIndexById.get(row.partId);
+    const idx = partIndexById.get(partPk);
     if (idx === undefined) {
-      partIndexById.set(row.partId, parts.length);
-      parts.push({ id: row.partId, partNo, wclItemNo, description, defaultCoo, onHandQty: row.totalQty });
+      partIndexById.set(partPk, parts.length);
+      parts.push({ id: partPk, partNo: row.partNo, wclItemNo, description, defaultCoo, onHandQty: row.totalQty });
     } else {
       parts[idx].onHandQty += row.totalQty;
     }

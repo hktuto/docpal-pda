@@ -8,7 +8,7 @@ const error = ref("");
 const statuses = ["open", "closed", "verified"];
 
 const showNew = ref(false);
-const newForm = reactive({ receivingOrderId: "", shelfCode: "", status: "open" });
+const newForm = reactive({ shelfCode: "", status: "open" });
 const newError = ref("");
 
 const editing = ref<any | null>(null);
@@ -33,7 +33,6 @@ async function load() {
 }
 
 function openNew() {
-  newForm.receivingOrderId = "";
   newForm.shelfCode = "";
   newForm.status = "open";
   newError.value = "";
@@ -44,7 +43,6 @@ async function createBox() {
   newError.value = "";
   try {
     const body: Record<string, unknown> = { status: newForm.status };
-    if (newForm.receivingOrderId.trim()) body.receivingOrderId = newForm.receivingOrderId.trim();
     if (newForm.shelfCode.trim()) body.shelfCode = newForm.shelfCode.trim();
     await api.post("/admin/shelf-boxes", body);
     showNew.value = false;
@@ -102,7 +100,6 @@ onMounted(load);
         <thead>
           <tr>
             <th>ID</th>
-            <th>Receiving order</th>
             <th>Shelf</th>
             <th>Status</th>
             <th>Items</th>
@@ -116,7 +113,6 @@ onMounted(load);
             <td>
               <NuxtLink :to="`/shelf-boxes/${b.id}`" :title="b.id">{{ b.id.slice(0, 8) }}</NuxtLink>
             </td>
-            <td>{{ formatCell(b.receivingOrderRefNo) }}</td>
             <td>{{ formatCell(b.shelfCode) }}</td>
             <td>{{ b.status }}</td>
             <td>{{ b.itemCount }}</td>
@@ -128,7 +124,7 @@ onMounted(load);
             </td>
           </tr>
           <tr v-if="boxes.length === 0">
-            <td colspan="8" class="muted">No shelf boxes.</td>
+            <td colspan="7" class="muted">No shelf boxes.</td>
           </tr>
         </tbody>
       </table>
@@ -139,10 +135,6 @@ onMounted(load);
         <h2>New shelf box</h2>
         <div v-if="newError" class="error-banner">{{ newError }}</div>
         <form @submit.prevent="createBox">
-          <div class="form-row">
-            <label for="nb-ro">Receiving order ID</label>
-            <input id="nb-ro" v-model="newForm.receivingOrderId" type="text" />
-          </div>
           <div class="form-row">
             <label for="nb-shelf">Shelf code</label>
             <input id="nb-shelf" v-model="newForm.shelfCode" type="text" />

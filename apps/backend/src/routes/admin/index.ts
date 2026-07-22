@@ -1,5 +1,7 @@
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { randomUUID } from "node:crypto";
+import { and, eq } from "drizzle-orm";
 import {
   shelves,
   suppliers,
@@ -7,14 +9,14 @@ import {
   parts,
   countryList,
   boxSizeList,
-  subInventories,
   customerProfiles,
   netWeightFormula,
-  users,
-  warehouseSections,
+  userGroups,
+  userGroupMembers,
 } from "../../db/schema/index.js";
 import { createCrudRouter, reqStr, optStr, reqInt, optInt, reqNum } from "./crud.js";
 import { shelfBoxesRoute } from "./shelfBoxes.js";
+import { adminUsersRoute } from "./users.js";
 
 // Optional id on create: use the client's when given, else generate one.
 function optId(body: Record<string, unknown>): string {
@@ -33,16 +35,10 @@ adminRoute.route(
       code: reqStr(b, "code"),
       zone: optStr(b, "zone"),
       orgId: optInt(b, "orgId"),
-      warehouseSectionCode: optStr(b, "warehouseSectionCode"),
-      subInventoryCode: optStr(b, "subInventoryCode"),
-      locationType: optStr(b, "locationType") ?? "shelf",
     }),
     update: (b) => ({
       ...(b.zone !== undefined && { zone: optStr(b, "zone") }),
       ...(b.orgId !== undefined && { orgId: optInt(b, "orgId") }),
-      ...(b.warehouseSectionCode !== undefined && { warehouseSectionCode: optStr(b, "warehouseSectionCode") }),
-      ...(b.subInventoryCode !== undefined && { subInventoryCode: optStr(b, "subInventoryCode") }),
-      ...(b.locationType !== undefined && { locationType: optStr(b, "locationType") ?? "shelf" }),
       updatedAt: new Date(),
     }),
   })
@@ -77,6 +73,7 @@ adminRoute.route(
       supplierCode: reqStr(b, "supplierCode"),
       name: optStr(b, "name"),
       qrTemplate: optStr(b, "qrTemplate"),
+      qrType: optStr(b, "qrType"),
       qtyEncoding: optStr(b, "qtyEncoding"),
       remark: optStr(b, "remark"),
     }),
@@ -84,6 +81,7 @@ adminRoute.route(
       ...(b.supplierCode !== undefined && { supplierCode: reqStr(b, "supplierCode") }),
       ...(b.name !== undefined && { name: optStr(b, "name") }),
       ...(b.qrTemplate !== undefined && { qrTemplate: optStr(b, "qrTemplate") }),
+      ...(b.qrType !== undefined && { qrType: optStr(b, "qrType") }),
       ...(b.qtyEncoding !== undefined && { qtyEncoding: optStr(b, "qtyEncoding") }),
       ...(b.remark !== undefined && { remark: optStr(b, "remark") }),
       updatedAt: new Date(),
@@ -98,16 +96,16 @@ adminRoute.route(
     pk: parts.id,
     create: (b) => ({
       id: optId(b),
+      supplierCode: reqStr(b, "supplierCode"),
       partNo: reqStr(b, "partNo"),
       wclItemNo: optStr(b, "wclItemNo"),
-      internalCode: optStr(b, "internalCode"),
       description: optStr(b, "description"),
       defaultCoo: optStr(b, "defaultCoo"),
     }),
     update: (b) => ({
+      ...(b.supplierCode !== undefined && { supplierCode: reqStr(b, "supplierCode") }),
       ...(b.partNo !== undefined && { partNo: reqStr(b, "partNo") }),
       ...(b.wclItemNo !== undefined && { wclItemNo: optStr(b, "wclItemNo") }),
-      ...(b.internalCode !== undefined && { internalCode: optStr(b, "internalCode") }),
       ...(b.description !== undefined && { description: optStr(b, "description") }),
       ...(b.defaultCoo !== undefined && { defaultCoo: optStr(b, "defaultCoo") }),
     }),
@@ -139,38 +137,6 @@ adminRoute.route(
 );
 
 adminRoute.route(
-  "/sub-inventories",
-  createCrudRouter({
-    table: subInventories,
-    pk: subInventories.code,
-    create: (b) => ({
-      code: reqStr(b, "code"),
-      name: reqStr(b, "name"),
-      customerCode: optStr(b, "customerCode"),
-    }),
-    update: (b) => ({
-      ...(b.name !== undefined && { name: reqStr(b, "name") }),
-      ...(b.customerCode !== undefined && { customerCode: optStr(b, "customerCode") }),
-    }),
-  })
-);
-
-adminRoute.route(
-  "/warehouse-sections",
-  createCrudRouter({
-    table: warehouseSections,
-    pk: warehouseSections.code,
-    create: (b) => ({
-      code: reqStr(b, "code"),
-      name: reqStr(b, "name"),
-    }),
-    update: (b) => ({
-      ...(b.name !== undefined && { name: reqStr(b, "name") }),
-    }),
-  })
-);
-
-adminRoute.route(
   "/customer-profiles",
   createCrudRouter({
     table: customerProfiles,
@@ -178,10 +144,12 @@ adminRoute.route(
     create: (b) => ({
       code: reqStr(b, "code"),
       label: reqStr(b, "label"),
+      rule: optStr(b, "rule"),
       remark: optStr(b, "remark"),
     }),
     update: (b) => ({
       ...(b.label !== undefined && { label: reqStr(b, "label") }),
+      ...(b.rule !== undefined && { rule: optStr(b, "rule") }),
       ...(b.remark !== undefined && { remark: optStr(b, "remark") }),
       updatedAt: new Date(),
     }),
@@ -195,36 +163,55 @@ adminRoute.route(
     pk: netWeightFormula.id,
     create: (b) => ({
       id: optId(b),
-      partId: reqStr(b, "partId"),
+      partNo: reqStr(b, "partNo"),
       qty: reqInt(b, "qty"),
       weight: reqNum(b, "weight"),
     }),
     update: (b) => ({
-      ...(b.partId !== undefined && { partId: reqStr(b, "partId") }),
+      ...(b.partNo !== undefined && { partNo: reqStr(b, "partNo") }),
       ...(b.qty !== undefined && { qty: reqInt(b, "qty") }),
       ...(b.weight !== undefined && { weight: reqNum(b, "weight") }),
     }),
   })
 );
 
+// Users: custom router (write-only `password`, never returns password_hash).
+adminRoute.route("/users", adminUsersRoute);
+
 adminRoute.route(
-  "/users",
+  "/user-groups",
   createCrudRouter({
-    table: users,
-    pk: users.id,
+    table: userGroups,
+    pk: userGroups.code,
     create: (b) => ({
-      id: optId(b),
-      username: reqStr(b, "username"),
-      passwordHash: reqStr(b, "passwordHash"),
-      displayName: reqStr(b, "displayName"),
-      role: optStr(b, "role") ?? "operator",
+      code: reqStr(b, "code"),
+      label: reqStr(b, "label"),
+      remark: optStr(b, "remark"),
     }),
     update: (b) => ({
-      ...(b.username !== undefined && { username: reqStr(b, "username") }),
-      ...(b.passwordHash !== undefined && { passwordHash: reqStr(b, "passwordHash") }),
-      ...(b.displayName !== undefined && { displayName: reqStr(b, "displayName") }),
-      ...(b.role !== undefined && { role: reqStr(b, "role") }),
+      ...(b.label !== undefined && { label: reqStr(b, "label") }),
+      ...(b.remark !== undefined && { remark: optStr(b, "remark") }),
+      updatedAt: new Date(),
     }),
+  })
+);
+
+// Composite PK — rows are addressed as `:userId::groupCode` in the URL.
+adminRoute.route(
+  "/user-group-members",
+  createCrudRouter({
+    table: userGroupMembers,
+    pk: userGroupMembers.userId,
+    match: (id) => {
+      const sep = id.indexOf(":");
+      if (sep <= 0) throw new HTTPException(400, { message: "id must be userId:groupCode" });
+      return and(eq(userGroupMembers.userId, id.slice(0, sep)), eq(userGroupMembers.groupCode, id.slice(sep + 1)))!;
+    },
+    create: (b) => ({
+      userId: reqStr(b, "userId"),
+      groupCode: reqStr(b, "groupCode"),
+    }),
+    update: () => ({}),
   })
 );
 

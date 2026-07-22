@@ -196,7 +196,6 @@ export default {
       deliveryDate: "交货日期",
       poNo: "采购单号",
       shipTo: "收货方",
-      dateCodeNotice: "日期代码提示",
       finishPicking: "完成拣货",
       measuring: "测量",
       measuringTaskCreated: "测量任务已创建",
@@ -208,7 +207,7 @@ export default {
       itemQrUseScanMode: "这是物料标签——请使用扫码按钮拣货"
     },
     scanSession: {
-          title: "扫码 — {refNo}",
+          title: "扫码 — {orderNo}",
           back: "返回",
           progress: "需求 {required} · 已扫 {scanned} · 待确认 {queued}",
           emptyQueue: "还没有扫描记录——请扫描二维码或用 OCR 拍照。",
@@ -240,7 +239,6 @@ export default {
       requiredQty: "需求数量",
       scannedQty: "已扫描数量",
       boxedQty: "已装箱数量",
-      requiredDateCode: "需求日期代码",
       dateLotCooCow: "日期 / 批次 / 产地 / 晶圆产地",
       status: "状态",
       allocations: "分配",
@@ -261,7 +259,6 @@ export default {
       title: "箱子 ({count})",
       newBox: "新建箱子",
       scanBox: "扫描箱号",
-      print: "打印",
       boxId: "箱号",
       status: "状态",
       packages: "包裹",
@@ -317,9 +314,12 @@ export default {
     shelfBoxesPanel: {
       title: "货架箱子({count})",
       newBox: "新建箱子",
+      scanBox: "扫描箱子",
       creating: "创建中…",
       box: "箱",
       status: "状态",
+      active: "使用中",
+      setActive: "设为使用中",
       items: "明细",
       contents: "内容",
       hideItems: "隐藏明细",
@@ -371,9 +371,7 @@ export default {
       dateCode: "日期码",
       lotCode: "批号",
       cooCow: "产地 / 组装地",
-      warehouse: "仓库",
-      section: "区域",
-      subInventory: "子库存",
+      org: "办事处",
       shelf: "货架",
       box: "箱子",
       expectedQty: "预期数量",
@@ -413,13 +411,14 @@ export default {
       viewBox: "查看箱子",
       openBox: "打开箱子",
       completeMeasuring: "完成测量",
-      completing: "完成中…"
+      completing: "完成中…",
+      scanHint: "扫描箱子二维码以打开。",
+      boxNotFound: "此任务中没有匹配“{id}”的箱子。"
     },
     measureBox: {
       title: "测量箱子",
       boxTitle: "箱子 {id}",
       pickingOrder: "拣货单",
-      destination: "收货方",
       packagesVerified: "包裹 — 已盘点 {verified} / {total}",
       part: "料号",
       qty: "数量",
@@ -430,7 +429,9 @@ export default {
       netWeight: "净重",
       grossWeight: "毛重",
       destinationCountry: "目的国家/地区",
-      boxNotFound: "未找到箱子"
+      boxNotFound: "未找到箱子",
+      scanHint: "扫描包裹二维码以核验。",
+      noMatch: "没有匹配该标签的未核验包裹。"
     }
   },
   boxMeasurementsModal: {
@@ -532,6 +533,17 @@ export default {
     cancel: "取消",
     confirm: "确认"
   },
+  scanBoxDialog: {
+    title: "扫描箱子",
+    close: "关闭",
+    boxId: "箱号",
+    boxIdPlaceholder: "扫描或输入箱号",
+    shelf: "货架",
+    defaultOption: "选择货架",
+    cancel: "取消",
+    confirm: "确认",
+    creating: "创建中…"
+  },
   appHeader: {
     goBack: "返回",
     home: "首页",
@@ -622,6 +634,8 @@ export default {
     cannot_cancel_staging_box: "无法取消暂存箱",
     cannot_assign_into_staging_box: "无法将扫描件分配到暂存箱",
     cannot_add_to_staging_box: "无法将扫描件加入暂存箱",
+    box_id_already_exists: "该箱号已存在",
+    box_id_required: "箱号不能为空",
     cannot_close_staging_box: "无法关闭暂存箱",
     cannot_close_empty_shelf_box: "无法关闭空货架箱子",
     measuring_task_not_pending: "测量任务不是待处理状态",
@@ -754,7 +768,7 @@ export default {
     quality_rejection: "质量拒收"
   },
   event_allocation_computed: "拣货分配已更新",
-  event_picking_order_created: "新拣货单 {refNo}",
+  event_picking_order_created: "新拣货单 {orderNo}",
   event_goods_verify_tasks_created: "新增 {count} 个盘点任务",
   view: "查看"
 } as const;

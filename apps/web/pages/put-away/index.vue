@@ -15,7 +15,7 @@
       class="card list-card"
     >
       <div class="list-card__header">
-        <span class="list-card__title">{{ ro.refNo }}</span>
+        <span class="list-card__title">{{ ro.batchNo }}</span>
         <span class="badge" :class="badgeClass(ro.status)">{{ statusLabel.receiving(ro.status) }}</span>
       </div>
       <p class="list-card__meta">

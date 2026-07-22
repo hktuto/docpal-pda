@@ -22,9 +22,13 @@ For each item, tap **Scan piece** and scan a physical label. Each scan records o
 
 Tap **New box**, select a shelf, and confirm. The box appears in the shelf boxes panel.
 
+Alternatively, tap **Scan box** and scan the QR code on a physical box (or type the box id), select a shelf, and confirm. The box is created with that physical box id.
+
+The created box becomes the **active box** (highlighted, with an "Active" badge). While an active box is set, every piece you scan — hardware scan, camera OCR, or multi-item label — goes straight into that box, skipping the staging list. Tap **Set active** on another open box to switch the target. Closing or cancelling the active box clears the active state and scans go back to the staging list.
+
 ## 6. Assign pieces to boxes
 
-Under each item, select an open box from the dropdown next to an unboxed scan and tap **Add to box**. You can also remove a scan or remove a piece from a box while the box is still open.
+Under each item, select an open box from the dropdown next to an unboxed scan and tap **Add to box**. You can also remove a scan or remove a piece from a box while the box is still open. (Scans made while an active box is set land in that box directly and skip this step.)
 
 ## 7. Close the box
 

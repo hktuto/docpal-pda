@@ -16,11 +16,20 @@ const columns = computed(() => {
   const labels: Record<string, string> = {};
   labels[props.config.pk] = props.config.pk === "id" ? "ID" : "Code";
   for (const f of props.config.fields) labels[f.key] = f.label;
-  const keys = [props.config.pk, ...props.config.fields.map((f) => f.key)];
+  const fieldKeys = props.config.fields.map((f) => f.key);
+  // A synthetic pk (deriveId) is not a real column — don't render it.
+  const keys = props.config.deriveId && !fieldKeys.includes(props.config.pk)
+    ? fieldKeys
+    : [props.config.pk, ...fieldKeys];
   const cols = [...new Set(keys)].map((key) => ({ key, label: labels[key] ?? key }));
   for (const extra of props.config.extraColumns ?? []) cols.push(extra);
   return cols;
 });
+
+/** Row identity for keys and /:id URLs; falls back to deriveId for composite-key rows. */
+function rowId(row: any): string {
+  return row[props.config.pk] ?? props.config.deriveId?.(row);
+}
 
 async function load() {
   loading.value = true;
@@ -50,7 +59,7 @@ async function onSave(payload: Record<string, unknown>) {
   saveError.value = "";
   try {
     if (editing.value) {
-      await api.patch(`/admin/${props.config.path}/${editing.value[props.config.pk]}`, payload);
+      await api.patch(`/admin/${props.config.path}/${rowId(editing.value)}`, payload);
     } else {
       await api.post(`/admin/${props.config.path}`, payload);
     }
@@ -62,7 +71,7 @@ async function onSave(payload: Record<string, unknown>) {
 }
 
 async function onDelete(row: any) {
-  const pkVal = row[props.config.pk];
+  const pkVal = rowId(row);
   if (!confirm(`Delete ${pkVal}?`)) return;
   error.value = "";
   try {
@@ -93,11 +102,11 @@ onMounted(load);
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in rows" :key="row[config.pk]">
+          <tr v-for="row in rows" :key="rowId(row)">
             <td v-for="c in columns" :key="c.key">{{ formatCell(row[c.key]) }}</td>
             <td class="actions">
               <slot name="row-actions" :row="row" />
-              <button class="btn-link" @click="startEdit(row)">Edit</button>
+              <button v-if="!config.noEdit" class="btn-link" @click="startEdit(row)">Edit</button>
               <button class="btn-link" @click="onDelete(row)">Delete</button>
             </td>
           </tr>

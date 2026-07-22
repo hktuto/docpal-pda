@@ -40,6 +40,11 @@ function disabled(f: EntityField): boolean {
   return editing.value && !!f.readonlyOnEdit;
 }
 
+/** Show the required marker; write-only fields are only required on create. */
+function showRequired(f: EntityField): boolean {
+  return !!f.required && !(editing.value && f.omitWhenEmpty);
+}
+
 function submit() {
   localError.value = "";
   const payload: Record<string, unknown> = {};
@@ -47,6 +52,15 @@ function submit() {
     if (disabled(f)) continue;
     const raw = String(form[f.key] ?? "").trim();
     if (raw === "") {
+      // Write-only fields (e.g. password): blank means "don't send" — on edit
+      // this keeps the current server-side value.
+      if (f.omitWhenEmpty) {
+        if (f.required && !editing.value) {
+          localError.value = `${f.label} is required`;
+          return;
+        }
+        continue;
+      }
       if (f.required) {
         localError.value = `${f.label} is required`;
         return;
@@ -77,12 +91,12 @@ function submit() {
       <form @submit.prevent="submit">
         <div v-for="f in fields" :key="f.key" class="form-row">
           <label :for="`ff-${f.key}`">
-            {{ f.label }}<span v-if="f.required" class="req"> *</span>
+            {{ f.label }}<span v-if="showRequired(f)" class="req"> *</span>
           </label>
           <input
             :id="`ff-${f.key}`"
             v-model="form[f.key]"
-            :type="f.type === 'number' ? 'number' : 'text'"
+            :type="f.type === 'number' ? 'number' : f.type === 'password' ? 'password' : 'text'"
             :step="f.type === 'number' ? 'any' : undefined"
             :disabled="disabled(f)"
           />

@@ -69,7 +69,7 @@ public class ScannerBroadcastPlugin extends Plugin {
         }
         lastValue = value;
         lastAt = now;
-        Log.i(TAG, "scan broadcast received: " + value);
+        Log.i(TAG, "scan broadcast received: " + value + ", extras: " + dumpExtras(intent));
         ScannerBroadcastPlugin instance = activeInstance;
         if (instance == null) {
             Log.i(TAG, "app not ready, scan dropped: " + value);

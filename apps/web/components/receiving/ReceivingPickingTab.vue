@@ -13,7 +13,7 @@
 
   <div v-for="po in pickingOrders" :key="po.id" class="card" style="margin-bottom: 1.5rem;">
     <DetailRow :label="$t('receiving.pickingTab.pickingOrder')">
-      <NuxtLink :to="`/picking/${po.id}`" class="card__title">{{ po.refNo }}</NuxtLink>
+      <NuxtLink :to="`/picking/${po.id}`" class="card__title">{{ po.orderNo }}</NuxtLink>
     </DetailRow>
     <DetailRow :label="$t('receiving.pickingTab.status')">
       <span class="badge" :class="badgeClass(po.status)">{{ statusLabel.picking(po.status) }}</span>

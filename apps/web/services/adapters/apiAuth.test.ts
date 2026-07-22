@@ -1,8 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createApiAuthService } from './apiAuth';
+import { createApiAuthService, getToken, getStoredUser } from './apiAuth';
+import { setTokenGetter } from '../apiClient';
 import { I18nError } from '~/composables/i18nError';
 
-const STORAGE_KEY = 'warehouse-user-id';
+const TOKEN_KEY = 'warehouse-token';
+const USER_ID_KEY = 'warehouse-user-id';
+const USER_KEY = 'warehouse-user';
 
 function jsonResponse(data: unknown, status = 200): Response {
   return {
@@ -38,11 +41,19 @@ function createLocalStorageFake(): Storage {
   };
 }
 
-const AUTH_USER = {
+const SESSION_USER = {
   id: 'u1',
   username: 'operator',
-  name: 'Operator One',
-  role: 'operator',
+  displayName: 'Operator One',
+  groupCodes: ['operator'],
+};
+
+const EXPECTED_USER = {
+  id: 'u1',
+  username: 'operator',
+  displayName: 'Operator One',
+  groupCodes: ['operator'],
+  createdAt: null,
 };
 
 describe('createApiAuthService', () => {
@@ -54,15 +65,17 @@ describe('createApiAuthService', () => {
     vi.stubGlobal('fetch', fetchMock);
     storage = createLocalStorageFake();
     vi.stubGlobal('localStorage', storage);
+    // apiAuth registers getToken at module load; make sure nothing leaked.
+    setTokenGetter(getToken);
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it('login posts credentials and maps AuthUser to User', async () => {
-    fetchMock.mockResolvedValue(jsonResponse(AUTH_USER));
-    const auth = createApiAuthService({ adapter: 'api', apiBaseUrl: 'http://api.test' });
+  it('login posts credentials, stores the session and maps the user', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ user: SESSION_USER, token: 'jwt-1' }));
+    const auth = createApiAuthService({ apiBaseUrl: 'http://api.test' });
 
     const user = await auth.login('operator', 'DocPal2026!');
 
@@ -73,26 +86,36 @@ describe('createApiAuthService', () => {
         body: JSON.stringify({ username: 'operator', password: 'DocPal2026!' }),
       })
     );
-    expect(user).toEqual({
-      id: 'u1',
-      username: 'operator',
-      displayName: 'Operator One',
-      role: 'operator',
-      createdAt: null,
-    });
+    expect(storage.getItem(TOKEN_KEY)).toBe('jwt-1');
+    expect(storage.getItem(USER_ID_KEY)).toBe('u1');
+    expect(storage.getItem(USER_KEY)).toBe(JSON.stringify(SESSION_USER));
+    expect(user).toEqual(EXPECTED_USER);
+  });
+
+  it('getStoredUser reads the persisted session user (with groupCodes)', () => {
+    expect(getStoredUser()).toBeNull();
+    storage.setItem(USER_KEY, JSON.stringify(SESSION_USER));
+    expect(getStoredUser()).toEqual(SESSION_USER);
   });
 
   it('login maps a 401 to I18nError("invalid_username_or_password")', async () => {
     fetchMock.mockResolvedValue(errorResponse('invalid credentials', 401));
-    const auth = createApiAuthService({ adapter: 'api', apiBaseUrl: 'http://api.test' });
+    const auth = createApiAuthService({ apiBaseUrl: 'http://api.test' });
 
     const promise = auth.login('operator', 'wrong');
     await expect(promise).rejects.toThrow(I18nError);
     await expect(promise).rejects.toMatchObject({ code: 'invalid_username_or_password' });
+    expect(storage.getItem(TOKEN_KEY)).toBeNull();
   });
 
-  it('getCurrentUser returns null without fetching when no stored id', async () => {
-    const auth = createApiAuthService({ adapter: 'api', apiBaseUrl: 'http://api.test' });
+  it('getToken reads the stored token', async () => {
+    expect(getToken()).toBeNull();
+    storage.setItem(TOKEN_KEY, 'jwt-1');
+    expect(getToken()).toBe('jwt-1');
+  });
+
+  it('getCurrentUser returns null without fetching when there is no token', async () => {
+    const auth = createApiAuthService({ apiBaseUrl: 'http://api.test' });
 
     const user = await auth.getCurrentUser();
 
@@ -100,41 +123,51 @@ describe('createApiAuthService', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('getCurrentUser fetches and maps the stored user', async () => {
-    storage.setItem(STORAGE_KEY, 'u1');
-    fetchMock.mockResolvedValue(jsonResponse(AUTH_USER));
-    const auth = createApiAuthService({ adapter: 'api', apiBaseUrl: 'http://api.test' });
+  it('getCurrentUser calls GET /auth/me with the bearer token and maps the user', async () => {
+    storage.setItem(TOKEN_KEY, 'jwt-1');
+    storage.setItem(USER_ID_KEY, 'u1');
+    fetchMock.mockResolvedValue(jsonResponse(SESSION_USER));
+    const auth = createApiAuthService({ apiBaseUrl: 'http://api.test' });
 
     const user = await auth.getCurrentUser();
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'http://api.test/auth/users/u1',
-      expect.objectContaining({ method: 'GET' })
+      'http://api.test/auth/me',
+      expect.objectContaining({
+        method: 'GET',
+        headers: { authorization: 'Bearer jwt-1' },
+      })
     );
-    expect(user).toEqual({
-      id: 'u1',
-      username: 'operator',
-      displayName: 'Operator One',
-      role: 'operator',
-      createdAt: null,
-    });
+    expect(user).toEqual(EXPECTED_USER);
+    // The fresh user refreshes the persisted copy (groups can change).
+    expect(storage.getItem(USER_KEY)).toBe(JSON.stringify(SESSION_USER));
   });
 
-  it('getCurrentUser clears the stored id and returns null on 404', async () => {
-    storage.setItem(STORAGE_KEY, 'gone');
-    fetchMock.mockResolvedValue(errorResponse('user not found', 404));
-    const auth = createApiAuthService({ adapter: 'api', apiBaseUrl: 'http://api.test' });
+  it('getCurrentUser clears the session and returns null on 401', async () => {
+    storage.setItem(TOKEN_KEY, 'stale');
+    storage.setItem(USER_ID_KEY, 'u1');
+    storage.setItem(USER_KEY, JSON.stringify(SESSION_USER));
+    fetchMock.mockResolvedValue(errorResponse('unauthorized', 401));
+    const auth = createApiAuthService({ apiBaseUrl: 'http://api.test' });
 
     const user = await auth.getCurrentUser();
 
     expect(user).toBeNull();
-    expect(storage.getItem(STORAGE_KEY)).toBeNull();
+    expect(storage.getItem(TOKEN_KEY)).toBeNull();
+    expect(storage.getItem(USER_ID_KEY)).toBeNull();
+    expect(storage.getItem(USER_KEY)).toBeNull();
   });
 
-  it('logout resolves without fetching', async () => {
-    const auth = createApiAuthService({ adapter: 'api', apiBaseUrl: 'http://api.test' });
+  it('logout clears the stored session without fetching', async () => {
+    storage.setItem(TOKEN_KEY, 'jwt-1');
+    storage.setItem(USER_ID_KEY, 'u1');
+    storage.setItem(USER_KEY, JSON.stringify(SESSION_USER));
+    const auth = createApiAuthService({ apiBaseUrl: 'http://api.test' });
 
     await expect(auth.logout()).resolves.toBeUndefined();
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(storage.getItem(TOKEN_KEY)).toBeNull();
+    expect(storage.getItem(USER_ID_KEY)).toBeNull();
+    expect(storage.getItem(USER_KEY)).toBeNull();
   });
 });

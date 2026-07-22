@@ -1,16 +1,40 @@
-import { pgTable, text, integer, real, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, primaryKey, text, integer, real, timestamp } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
-import { defaultWarehouse } from "../../config.js";
 
-// Demo users table; a ucenter_user integration may replace this later.
+// Local users table; a ucenter_user integration may replace this later
+// (syncable by username). password_hash holds scrypt:N:r:p:salt:hash (see
+// src/auth/password.ts); legacy plain-text rows are upgraded on login.
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
   username: text("username").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   displayName: text("display_name").notNull(),
-  role: text("role").notNull().default("operator"),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
 });
+
+// User groups (replaces the old users.role text column). Membership is
+// many-to-many via user_group_members; tokens carry the full group-code list.
+export const userGroups = pgTable("user_groups", {
+  code: text("code").primaryKey(),
+  label: text("label").notNull(),
+  remark: text("remark"),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
+});
+
+export const userGroupMembers = pgTable(
+  "user_group_members",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    groupCode: text("group_code")
+      .notNull()
+      .references(() => userGroups.code, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.groupCode] })]
+);
 
 // Synced from AP_SUPPLIERS — keep this a pure sync mirror; PDA-local fields
 // live in supplier_profiles.
@@ -28,17 +52,20 @@ export const supplierProfiles = pgTable("supplier_profiles", {
   supplierCode: text("supplier_code").notNull().unique().references(() => suppliers.code),
   name: text("name"), // local display-name override; null = use suppliers.name
   qrTemplate: text("qr_template"), // qrcode template (regex with named groups)
+  qrType: text("qr_type"), // qrcode type, e.g. isbn, ban 14, ban 16
   qtyEncoding: text("qty_encoding"), // qty decoding rule, e.g. 'koa_zeros'
   remark: text("remark"), // other remark for extension
   createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
 });
 
+// Part master. Kept in this database (the upstream system may or may not
+// provide one); other tables reference parts by part_no, not by UUID.
 export const parts = pgTable("parts", {
   id: text("id").primaryKey(),
-  partNo: text("part_no").notNull().unique(),
+  supplierCode: text("supplier_code").notNull().references(() => suppliers.code), // 供应商业务代码（一个供应商有多个 part，不唯一）
+  partNo: text("part_no").notNull().unique(), // 所有其他表通过 part_no 引用
   wclItemNo: text("wcl_item_no"), // WCL Part No（同 receiving_invoice_items.wcl_item_no）
-  internalCode: text("internal_code"),
   description: text("description"),
   defaultCoo: text("default_coo"),
 });
@@ -47,10 +74,6 @@ export const shelves = pgTable("shelves", {
   code: text("code").primaryKey(),
   zone: text("zone"),
   orgId: integer("org_id"), // 办公室: HK, SZ, CME 等，用于区分不同办公室的货架位置
-  warehouseCode: text("warehouse_code").notNull().default("HK1").$defaultFn(defaultWarehouse), // 所属仓库（实例默认 WAREHOUSE_CODE）
-  warehouseSectionCode: text("warehouse_section_code").references(() => warehouseSections.code), // 所属仓库分区
-  subInventoryCode: text("sub_inventory_code").references(() => subInventories.code), // 子库存代码: STORE1
-  locationType: text("location_type").notNull().default("shelf"), // 'shelf' | 'dock'
   createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
 });
@@ -74,7 +97,7 @@ export const boxSizeList = pgTable("box_size_list", {
 // Net-weight reference per item: `qty` units weigh `weight` grams → unit net = weight / qty
 export const netWeightFormula = pgTable("net_weight_formula", {
   id: text("id").primaryKey(),
-  partId: text("part_id").notNull().unique().references(() => parts.id),
+  partNo: text("part_no").notNull().unique().references(() => parts.partNo),
   qty: integer("qty").notNull(),
   weight: real("weight").notNull(), // grams per `qty` units
 });
@@ -82,24 +105,8 @@ export const netWeightFormula = pgTable("net_weight_formula", {
 export const customerProfiles = pgTable("customer_profiles", {
   code: text("code").primaryKey(),
   label: text("label").notNull(),
+  rule: text("rule"), // customer custom requirement/formula (stored, not yet interpreted)
   remark: text("remark"),
   createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
-});
-
-// Warehouse sections: the middle stock level — warehouse → warehouse_section →
-// sub_inventory. Sections belong to a warehouse instance (plain text, no
-// warehouse table).
-export const warehouseSections = pgTable("warehouse_sections", {
-  code: text("code").primaryKey(),
-  name: text("name").notNull(),
-  warehouseCode: text("warehouse_code").notNull().default("HK1").$defaultFn(defaultWarehouse), // 所属仓库（实例默认 WAREHOUSE_CODE）
-});
-
-// Warehouse sub-inventories: logical partitions of stock (e.g. STORE1, or a
-// customer-segregated store when a customer requests separation).
-export const subInventories = pgTable("sub_inventories", {
-  code: text("code").primaryKey(), // e.g. STORE1
-  name: text("name").notNull(),
-  customerCode: text("customer_code").references(() => customerProfiles.code), // set for customer-segregated stores
 });

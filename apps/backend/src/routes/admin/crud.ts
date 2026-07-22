@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { Context } from "hono";
-import { eq } from "drizzle-orm";
+import { eq, type SQL } from "drizzle-orm";
 import type { AnyPgColumn, PgTableWithColumns } from "drizzle-orm/pg-core";
 import { db } from "../../db.js";
 
@@ -19,7 +19,7 @@ function pgCode(e: unknown): string | undefined {
 }
 
 /** Map Postgres driver errors to HTTP responses. */
-function mapDbError(e: unknown): never {
+export function mapDbError(e: unknown): never {
   const code = pgCode(e);
   if (code === "23503") throw new HTTPException(409, { message: "in use or invalid reference" });
   if (code === "23505") throw new HTTPException(409, { message: "duplicate" });
@@ -71,8 +71,11 @@ export function reqNum(body: Record<string, unknown>, field: string): number {
 
 export interface CrudConfig<T extends PgTableWithColumns<any>> {
   table: T;
-  /** Text primary-key column used in /:id lookups. */
+  /** Text primary-key column used in /:id lookups and list ordering. */
   pk: AnyPgColumn;
+  /** WHERE clause for /:id lookups; defaults to eq(pk, id). Needed for
+   *  composite-PK tables (e.g. user_group_members addressed as userId:groupCode). */
+  match?: (id: string) => SQL;
   /** Build the insert row from a validated body (throw HTTPException(400) on bad input). */
   create: (body: Record<string, unknown>) => T["$inferInsert"];
   /** Build the update set from a validated body; only provided fields are updated. */
@@ -85,6 +88,7 @@ export function createCrudRouter<T extends PgTableWithColumns<any>>(cfg: CrudCon
   // generics don't resolve across a generic boundary. The public config above
   // keeps create/update fully type-checked at each call site.
   const table = cfg.table as PgTableWithColumns<any>;
+  const match = cfg.match ?? ((id: string) => eq(cfg.pk, id));
   const r = new Hono();
 
   r.get("/", async (c) => {
@@ -93,7 +97,7 @@ export function createCrudRouter<T extends PgTableWithColumns<any>>(cfg: CrudCon
   });
 
   r.get("/:id", async (c) => {
-    const rows = await db.select().from(table).where(eq(cfg.pk, c.req.param("id")));
+    const rows = await db.select().from(table).where(match(c.req.param("id")));
     if (rows.length === 0) throw new HTTPException(404, { message: "not found" });
     return c.json(rows[0]);
   });
@@ -119,7 +123,7 @@ export function createCrudRouter<T extends PgTableWithColumns<any>>(cfg: CrudCon
       const updated = await db
         .update(table)
         .set(set as never)
-        .where(eq(cfg.pk, c.req.param("id")))
+        .where(match(c.req.param("id")))
         .returning();
       if (updated.length === 0) throw new HTTPException(404, { message: "not found" });
       return c.json(updated[0]);
@@ -132,7 +136,7 @@ export function createCrudRouter<T extends PgTableWithColumns<any>>(cfg: CrudCon
     try {
       const deleted = await db
         .delete(table)
-        .where(eq(cfg.pk, c.req.param("id")))
+        .where(match(c.req.param("id")))
         .returning({ id: cfg.pk });
       if (deleted.length === 0) throw new HTTPException(404, { message: "not found" });
       return c.json({ ok: true });

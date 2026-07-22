@@ -165,7 +165,7 @@ function onConfirm() {
       : null;
     const partNo = selectedReason === "wrong_part" ? wrongPartNo.value.trim() || null : null;
 
-    validateMismatchInputs(props.item.qty, selectedReason, qty, partNo);
+    validateMismatchInputs(props.item.lineQty, selectedReason, qty, partNo);
 
     emit("confirm", {
       reason: selectedReason,

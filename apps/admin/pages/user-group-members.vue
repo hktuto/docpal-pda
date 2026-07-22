@@ -3,5 +3,5 @@ import { entities } from "~/utils/entities";
 </script>
 
 <template>
-  <CrudTable :config="entities['warehouse-sections']" />
+  <CrudTable :config="entities['user-group-members']" />
 </template>

@@ -6,7 +6,7 @@
     <template v-else-if="order">
       <DetailHeader
         v-model="headerExpanded"
-        :title="order.refNo"
+        :title="order.orderNo"
         :status="headerStatus"
         :badge-class="headerBadgeClass"
         :flush-top="route.meta.props?.noPadding"
@@ -44,7 +44,6 @@
         <DetailRow :label="$t('picking.detail.deliveryDate')" :value="order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : null" />
         <DetailRow :label="$t('picking.detail.poNo')" :value="order.poNo" />
         <DetailRow :label="$t('picking.detail.shipTo')" :value="order.shipTo" />
-        <DetailRow :label="$t('picking.detail.dateCodeNotice')" :value="order.requiredDateCodeNotice" />
       </DetailHeader>
 
       <PickingIssueBanner v-if="order.status === 'issue'" :order="order" />
@@ -61,7 +60,6 @@
         :unboxed-count="unboxedCountForOrder"
         @create-box="createBox"
         @scan-box="scanBoxId"
-        @print-box="printBox"
         @cancel-box="cancelBox"
         @add-all-to-box="addAllToBox"
       />
@@ -153,11 +151,6 @@ useHardwareScanner({
     await createBoxWithId(rawValue);
   },
 });
-
-// Placeholder until backend-side printing lands.
-function printBox(_boxId: string) {
-  showToast(t("picking.detail.printComingSoon"));
-}
 
 async function scanBoxId() {
   if (scanningBox.value) return;

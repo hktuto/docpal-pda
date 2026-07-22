@@ -1,5 +1,6 @@
 import { ref, readonly } from "vue";
 import { invalidatePrefix } from "~/services/apiCache";
+import { getToken } from "~/services/adapters/apiAuth";
 import { useToast } from "~/composables/useToast";
 
 /**
@@ -104,9 +105,15 @@ function handleEvent(type: string, raw: MessageEvent): void {
 
 function connect(): void {
   if (es) return; // already connected/connecting
+  // EventSource can't set headers — the JWT rides as a query param. No
+  // token, no stream (signed out).
+  const token = getToken();
+  if (!token) return;
   if (lastEventId === null) lastEventId = readCursor();
   const base = (useRuntimeConfig().public.apiBaseUrl as string).replace(/\/+$/, "");
-  const source = new EventSource(`${base}/events?since=${lastEventId}`);
+  const source = new EventSource(
+    `${base}/events?since=${lastEventId}&token=${encodeURIComponent(token)}`
+  );
   es = source;
   for (const type of KNOWN_EVENT_TYPES) {
     source.addEventListener(type, (ev) => handleEvent(type, ev as MessageEvent));

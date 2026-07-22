@@ -1,5 +1,11 @@
 # Backend API Design
 
+> **Note (2026-07-21):** this is the original design doc. Field names shown
+> below predate the org_id redesign (`ref_no`→`batch_no`/`order_no`,
+> `part_id`→`part_no`, no `warehouse_code`/section/sub-inventory) — the
+> current schema contract is `schema-tables.md`, and auth is now JWT (see the
+> Auth section below and `README.md`).
+
 The endorsed HTTP API for `apps/backend` (the `apps/api` replacement). Derived
 from the old-API review (`api-review-old-api.md`): keep what worked (list +
 status filter, detail / detail-picking split, ingest upserts), fix what didn't
@@ -25,7 +31,8 @@ live in `concepts.md`; tables in `schema.md`.
    - `POST /resource/:id/<action>` — state transitions with side effects
      (`confirm-arrival`, `finish`, `close`, `verify`, `cancel`).
    - `DELETE /resource/:id` — removal.
-   - **`actorId` in the body of every mutation** (never a query param).
+   - **`actorId` is taken from the JWT** (auth middleware) — mutation bodies
+     no longer carry it.
 6. **Errors:** proper HTTP status (400 invalid, 404 missing, 409 conflict) +
    plain-text snake_code message body (e.g. `receiving_order_not_found`).
 
@@ -33,11 +40,17 @@ live in `concepts.md`; tables in `schema.md`.
 
 | Endpoint | Body → Response | Note |
 |---|---|---|
-| `POST /auth/login` | `{username, password}` → 200 `{id, username, displayName, role}` / 401 | plain-text compare, demo |
-| `POST /auth/logout` | — → `{ok: true}` | no-op (stateless) |
+| `POST /auth/login` | `{username, password}` → 200 `{user{id, username, displayName, groupCodes}, token}` / 401 | scrypt verify (+ lazy upgrade of legacy plain-text rows) |
+| `POST /auth/logout` | — → `{ok: true}` | no-op (client discards the token) |
+| `GET /auth/me` | — → AuthUser / 401 | session restore from the bearer token |
 | `GET /auth/users/:id` | — → AuthUser / 404 | |
+| `POST /auth/change-password` | `{oldPassword, newPassword}` → `{ok: true}` | self-service |
 
-No tokens/sessions yet; `actorId` travels in mutation bodies (demo trust model).
+JWT bearer (HS256, `hono/jwt`, secret from `AUTH_SECRET`, 12 h TTL) required on
+all routes except `/health`, `POST /auth/login`, and `/dev/*`; `GET /events`
+also accepts `?token=` (EventSource can't set headers). Users belong to groups
+via `user_group_members` (many-to-many); `users.role` is gone. Design:
+`docs/superpowers/specs/2026-07-21-real-login-design.md`.
 
 ## Receiving
 

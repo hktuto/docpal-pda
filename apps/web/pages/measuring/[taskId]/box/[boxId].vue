@@ -4,14 +4,6 @@
     <EmptyState v-else-if="error" error>{{ $t('common.errorPrefix', { message: error }) }}</EmptyState>
 
     <template v-else-if="box">
-      <ScanFab
-        v-if="box.status === 'open'"
-        :loading="scanning"
-        :aria-label="$t('actions.scan')"
-        @click="openScan()"
-      />
-
-
       <DetailHeader
         v-model="headerExpanded"
         :title="t('measuring.measureBox.boxTitle', { id: box.id })"
@@ -30,8 +22,7 @@
           </button>
         </template>
 
-        <DetailRow :label="$t('measuring.measureBox.pickingOrder')" :value="detail?.order.refNo" />
-        <DetailRow :label="$t('measuring.measureBox.destination')" :value="detail?.order.destinationCountry" />
+        <DetailRow :label="$t('measuring.measureBox.pickingOrder')" :value="detail?.order.orderNo" />
       </DetailHeader>
 
       <div class="card" style="margin-bottom: 1.5rem;">
@@ -39,26 +30,42 @@
           {{ $t('measuring.measureBox.packagesVerified', { verified: verifiedCount, total: box.packages.length }) }}
         </h3>
         <p v-if="!box.packages.length" class="empty" style="padding: 0;">{{ $t('common.noPackages') }}</p>
-        <div
-          v-for="pkg in box.packages"
-          :key="pkg.id"
-          class="packed-item"
-        >
-          <DetailRow :label="$t('measuring.measureBox.part')" :value="pkg.partNo" />
-          <DetailRow :label="$t('measuring.measureBox.qty')" :value="pkg.qty" />
-          <DetailRow :label="$t('measuring.measureBox.dateLotOrigin')">
-            {{ pkg.dateCode || $t('common.noData') }} / {{ pkg.lotCode || $t('common.noData') }} / {{ pkg.coo || $t('common.noData') }} / {{ pkg.cow || $t('common.noData') }}
-          </DetailRow>
-          <DetailRow :label="$t('measuring.measureBox.status')">
-            <span class="badge" :class="badgeClass(pkg.verified ? 'verified' : 'pending')">
-              {{ pkg.verified ? $t('common.verified') : $t('common.pending') }}
-            </span>
-          </DetailRow>
-          <div v-if="box.status === 'open' && !pkg.verified" style="margin-top: 0.5rem;">
-            <button class="btn btn--small" :disabled="scanning" @click="openScan(pkg.id)">{{ $t('actions.scan') }}</button>
-          </div>
-        </div>
+        <table v-else class="pkg-table">
+          <thead>
+            <tr>
+              <th>{{ $t('measuring.measureBox.part') }}</th>
+              <th>{{ $t('measuring.measureBox.qty') }}</th>
+              <th>{{ $t('measuring.measureBox.dateLotOrigin') }}</th>
+              <th>{{ $t('measuring.measureBox.status') }}</th>
+              <th v-if="box.status === 'open'"></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="pkg in box.packages" :key="pkg.id">
+              <td>{{ pkg.partNo }}</td>
+              <td>{{ pkg.qty }}</td>
+              <td>{{ pkg.dateCode || $t('common.noData') }} / {{ pkg.lotCode || $t('common.noData') }} / {{ pkg.coo || $t('common.noData') }} / {{ pkg.cow || $t('common.noData') }}</td>
+              <td>
+                <span class="badge" :class="badgeClass(pkg.verified ? 'verified' : 'pending')">
+                  {{ pkg.verified ? $t('common.verified') : $t('common.pending') }}
+                </span>
+              </td>
+              <td v-if="box.status === 'open'">
+                <button
+                  v-if="!pkg.verified"
+                  class="btn btn--small"
+                  :disabled="scanning"
+                  @click="openScan(pkg.id)"
+                >{{ $t('actions.scan') }}</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
+
+      <p v-if="box.status === 'open' && !allVerified" class="scan-hint">
+        {{ $t('measuring.measureBox.scanHint') }}
+      </p>
 
       <div v-if="box.status === 'closed'" class="card" style="margin-bottom: 1.5rem;">
         <h3 style="margin: 0 0 0.75rem; font-size: 0.875rem; color: var(--muted);">{{ $t('measuring.measureBox.measurements') }}</h3>
@@ -87,7 +94,6 @@
         v-model="measureOpen"
         :box-id="boxId"
         :initial-values="measurementInitialValues"
-        :default-destination-country="detail?.order.destinationCountry"
         @saved="load"
         @finished="load"
       />
@@ -100,10 +106,12 @@ import { useLabelScanReview } from "~/composables/useLabelScanReview";
 import { useErrorMessage } from "~/composables/errorMessage";
 import { useWarehouse } from "~/composables/useWarehouse";
 import { useToast } from "~/composables/useToast";
+import { useHardwareScanner } from "~/composables/useHardwareScanner";
+import { ocrResultToInput, useLabelScan } from "~/composables/useLabelScan";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import BoxMeasurementsModal from "~/components/BoxMeasurementsModal.vue";
 import { badgeClass } from "~/composables/useStatusBadge";
-import type { ScanTaskContext } from "~/composables/useScanMatchers";
+import { runScanMatcher, useScanMatchers, type ScanTaskContext } from "~/composables/useScanMatchers";
 import type { MeasuringTaskDetail } from "~/services/types";
 
 async function onScanApplied() {
@@ -148,6 +156,10 @@ const {
   reviewOpen,
   onApplied,
 } = useLabelScanReview({ onApplied: onScanApplied });
+
+const matchers = useScanMatchers();
+const { parseRawValue } = useLabelScan();
+const verifying = ref(false);
 
 useVisibleReload(load);
 
@@ -199,7 +211,6 @@ const scanTargets = computed(() => {
 const scanContext = computed<ScanTaskContext>(() => ({
   task: "measuring",
   packages: box.value?.packages ?? [],
-  targetPackageId: scanTargetPackageId.value,
 }));
 
 async function openScan(packageId?: string) {
@@ -207,6 +218,7 @@ async function openScan(packageId?: string) {
   scanTargetPackageId.value = packageId;
   const result = await scan({
     ...scanContext.value,
+    targetPackageId: packageId,
     targets: scanTargets.value,
     confirmSingleMatch: true,
   });
@@ -215,13 +227,61 @@ async function openScan(packageId?: string) {
   }
   // applied/review/manual are handled by useLabelScanReview.
 }
+
+// Hardware/wedge QR scans verify packages straight from the table — the camera
+// flow (per-row Scan buttons) stays as the fallback for OCR-only labels.
+useHardwareScanner({
+  enabled: () =>
+    !!box.value &&
+    box.value.status === "open" &&
+    !allVerified.value &&
+    !scanning.value &&
+    !verifying.value &&
+    !reviewOpen.value &&
+    !measureOpen.value,
+  onScan: async (rawValue: string) => {
+    if (!box.value) return;
+    verifying.value = true;
+    try {
+      const parsedResult = await parseRawValue(rawValue);
+      const result = await runScanMatcher(scanContext.value, ocrResultToInput(parsedResult.parsed), matchers);
+      if (result.type === "single") {
+        await result.apply();
+        showToast(t("common.scanSuccess"));
+        await onScanApplied();
+      } else if (result.type === "none") {
+        showToast(t("measuring.measureBox.noMatch"));
+      } else if (result.type === "error") {
+        showToast(result.message);
+      }
+    } finally {
+      verifying.value = false;
+    }
+  },
+});
 </script>
 
 <style scoped>
-.packed-item {
-  background: var(--bg);
-  border-radius: var(--radius);
-  padding: 0.75rem;
-  margin-bottom: 0.5rem;
+.pkg-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.pkg-table th,
+.pkg-table td {
+  text-align: left;
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.pkg-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.scan-hint {
+  margin: 0 0 1.5rem;
+  color: var(--muted);
+  font-size: 0.8125rem;
 }
 </style>

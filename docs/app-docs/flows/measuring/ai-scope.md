@@ -6,10 +6,15 @@
   counts: `boxCount` / `closedBoxCount`).
 - Task detail as **one consolidated read** (`GET /measuring-tasks/:id`):
   the task, its picking order, and all shipping boxes with their packages
-  (part identity embedded on each package).
-- Per-box page (`/measuring/:taskId/box/:boxId`): verify packages by
-  scanning labels — matching runs client-side against the box's packages,
-  then `verifyPackage` by id.
+  (part identity embedded on each package). Scanning a box QR/id on this
+  page (`useHardwareScanner`) opens that box directly — exact id match,
+  else a unique substring match.
+- Per-box page (`/measuring/:taskId/box/:boxId`): packages shown as a table
+  that listens to hardware/wedge QR scans — each scan is parsed with the
+  supplier templates (`parseRawValue`), matched client-side against the
+  box's unverified packages (`matchMeasuring` via `runScanMatcher`), and
+  applied immediately with `verifyPackage` by id. The camera/OCR flow
+  (`useLabelScanReview` + per-row Scan buttons) remains as fallback.
 - Record box measurements (box size, net/gross weights in integer grams,
   destination country) via the shared picking verbs
   (`updateShippingBox`), then close the box.

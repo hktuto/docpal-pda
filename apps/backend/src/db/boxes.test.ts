@@ -22,13 +22,13 @@ async function actorIdOf(username = "operator"): Promise<string> {
   return row!.id;
 }
 
-async function pickingOrderIdOf(refNo: string): Promise<string> {
-  const row = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM picking_orders WHERE ref_no = ${refNo}`);
+async function pickingOrderIdOf(orderNo: string): Promise<string> {
+  const row = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM picking_orders WHERE order_no = ${orderNo}`);
   return row!.id;
 }
 
-async function receivingOrderIdOf(refNo: string): Promise<string> {
-  const row = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM receiving_orders WHERE ref_no = ${refNo}`);
+async function receivingOrderIdOf(batchNo: string): Promise<string> {
+  const row = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM receiving_orders WHERE batch_no = ${batchNo}`);
   return row!.id;
 }
 
@@ -37,36 +37,35 @@ async function receivingItemIdOf(receivingOrderId: string, partNo: string): Prom
     client.db,
     sql`SELECT rii.id FROM receiving_invoice_items rii
         JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-        JOIN parts p ON p.id = rii.part_id
-        WHERE ri.receiving_order_id = ${receivingOrderId} AND p.part_no = ${partNo}`
+        WHERE ri.receiving_order_id = ${receivingOrderId} AND rii.part_no = ${partNo}`
   );
   return row!.id;
 }
 
 // --- shipping box ids ---------------------------------------------------------
 
-test("shipping box ids: BOX-S-<warehouse>-<date>-<seq>, per-day seq, cancelled seq not reused", async () => {
+test("shipping box ids: BOX-S-<date>-<seq>, per-day seq, cancelled seq not reused", async () => {
   await reseed(client);
   const actorId = await actorIdOf();
   await allocateAll(client.db);
   const orderId = await pickingOrderIdOf("SO-2026-0001");
 
   const box1 = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
-  assert.match(box1.id, /^BOX-S-HK1-\d{8}-0001$/);
+  assert.match(box1.id, /^BOX-S-\d{8}-0001$/);
   assert.ok(box1.id.startsWith(boxIdPrefix("S")));
 
   const box2 = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
-  assert.match(box2.id, /^BOX-S-HK1-\d{8}-0002$/);
+  assert.match(box2.id, /^BOX-S-\d{8}-0002$/);
 
   // cancel (hard delete) must not free the seq — transaction_logs remembers it
   await cancelShippingBox(client.db, { shippingBoxId: box2.id, actorId });
   const box3 = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
-  assert.match(box3.id, /^BOX-S-HK1-\d{8}-0003$/);
+  assert.match(box3.id, /^BOX-S-\d{8}-0003$/);
 });
 
 // --- shelf box ids ------------------------------------------------------------
 
-test("shelf box ids: BOX-H-<warehouse>-<date>-<seq>; staging and manual boxes share the daily seq", async () => {
+test("shelf box ids: BOX-H-<date>-<seq>; staging and manual boxes share the daily seq", async () => {
   await reseed(client);
   const actorId = await actorIdOf();
   const orderId = await receivingOrderIdOf("04958210");
@@ -77,21 +76,23 @@ test("shelf box ids: BOX-H-<warehouse>-<date>-<seq>; staging and manual boxes sh
   await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 100 });
   const staging = await queryGet<{ id: string }>(
     client.db,
-    sql`SELECT id FROM shelf_boxes WHERE receiving_order_id = ${orderId} AND shelf_code IS NULL`
+    sql`SELECT sbi.shelf_box_id AS id FROM shelf_box_items sbi
+        JOIN shelf_boxes sb ON sb.id = sbi.shelf_box_id
+        WHERE sb.shelf_code IS NULL AND sbi.receiving_invoice_item_id = ${itemId}`
   );
-  assert.match(staging!.id, /^BOX-H-HK1-\d{8}-0001$/);
+  assert.match(staging!.id, /^BOX-H-\d{8}-0001$/);
 
   const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
-  assert.match(box.id, /^BOX-H-HK1-\d{8}-0002$/);
+  assert.match(box.id, /^BOX-H-\d{8}-0002$/);
 
   await cancelShelfBox(client.db, { shelfBoxId: box.id, actorId });
   const box2 = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
-  assert.match(box2.id, /^BOX-H-HK1-\d{8}-0003$/);
+  assert.match(box2.id, /^BOX-H-\d{8}-0003$/);
 });
 
 // --- search -------------------------------------------------------------------
 
-test("searchBoxes: finds both kinds by full id and seq substring, with kind + refNo", async () => {
+test("searchBoxes: finds both kinds by full id and seq substring, with kind + orderNo", async () => {
   await reseed(client);
   const actorId = await actorIdOf();
   await allocateAll(client.db);
@@ -107,14 +108,14 @@ test("searchBoxes: finds both kinds by full id and seq substring, with kind + re
 
   const byFullId = await searchBoxes(client.db, shipping.id);
   assert.deepEqual(
-    byFullId.map((r) => ({ kind: r.kind, id: r.id, refNo: r.refNo })),
-    [{ kind: "shipping", id: shipping.id, refNo: "SO-2026-0001" }]
+    byFullId.map((r) => ({ kind: r.kind, id: r.id, orderNo: r.orderNo })),
+    [{ kind: "shipping", id: shipping.id, orderNo: "SO-2026-0001" }]
   );
 
-  // bare seq substring matches either kind's daily seq
+  // bare seq substring matches either kind's daily seq; shelf boxes have no order
   const bySeq = await searchBoxes(client.db, "0001");
   const byId = new Map(bySeq.map((r) => [r.id, r]));
   assert.equal(byId.get(shipping.id)?.kind, "shipping");
   assert.equal(byId.get(shelf.id)?.kind, "shelf");
-  assert.equal(byId.get(shelf.id)?.refNo, "04958210");
+  assert.equal(byId.get(shelf.id)?.orderNo, null);
 });

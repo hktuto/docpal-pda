@@ -32,14 +32,6 @@ onMounted(async () => {
           <div class="dd">{{ box.id }}</div>
         </div>
         <div>
-          <div class="dt">Receiving order</div>
-          <div class="dd">{{ formatCell(box.receivingOrderRefNo) }}</div>
-        </div>
-        <div>
-          <div class="dt">Receiving order ID</div>
-          <div class="dd">{{ formatCell(box.receivingOrderId) }}</div>
-        </div>
-        <div>
           <div class="dt">Shelf</div>
           <div class="dd">{{ formatCell(box.shelfCode) }}</div>
         </div>
