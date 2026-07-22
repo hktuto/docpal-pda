@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { pgTable, text, integer, boolean, timestamp, date, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
-import { parts, shelves, users } from "./master.js";
+import { parts, shelves, subInventories, users } from "./master.js";
 import { receivingInvoiceItems } from "./receiving.js";
 
 export const inventoryLots = pgTable(
@@ -16,6 +16,9 @@ export const inventoryLots = pgTable(
     cow: text("cow"),
     shelfCode: text("shelf_code").references(() => shelves.code),
     boxId: text("box_id"),
+    // 库存位置配对（put-away 时从 shelf 盖章）— 与 org_id 一起识别库存分区
+    orgId: integer("org_id"), // 批次所属办公室, 2: HK
+    subInventoryCode: text("sub_inventory_code").references(() => subInventories.code), // 批次所属子库存
     // 如果 location 是 DOCK（虚拟 shelf_code），totalQty 值为 expected_qty；SHELF 则为货架存量
     totalQty: integer("total_qty").notNull().default(0),
     allocatedQty: integer("allocated_qty").notNull().default(0), // 已预留数量
@@ -24,7 +27,7 @@ export const inventoryLots = pgTable(
   (t) => ({
     // GIT/DOCK 也使用虚拟 shelf_code，避免 NULL 导致重复 lot
     uniqueLot: uniqueIndex("inventory_lots_unique_lot")
-      .on(t.partNo, t.dateCode, t.coo, t.cow, t.shelfCode, t.boxId)
+      .on(t.partNo, t.dateCode, t.coo, t.cow, t.shelfCode, t.boxId, t.orgId, t.subInventoryCode)
       .where(sql`shelf_code IS NOT NULL OR box_id IS NOT NULL`),
     partIdx: index("idx_inventory_lots_part").on(t.partNo),
     availIdx: index("idx_inventory_lots_available").on(t.partNo, t.availableQty),

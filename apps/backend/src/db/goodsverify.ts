@@ -192,8 +192,9 @@ export interface GoodsVerifyLotRow {
   totalQty: number;
   allocatedQty: number;
   availableQty: number;
-  /** Derived via shelf_code → shelves.org_id. */
+  /** Stamped from the shelf at put-away (the lot's location pair). */
   orgId: number | null;
+  subInventoryCode: string | null;
 }
 
 export interface GoodsVerifyBoxItemRow {
@@ -241,9 +242,8 @@ export async function getGoodsVerifyTaskDetail(db: AppDb, taskId: string): Promi
         il.id, il.date_code AS "dateCode", il.lot_code AS "lotCode", il.coo, il.cow,
         il.shelf_code AS "shelfCode", il.box_id AS "boxId",
         il.total_qty AS "totalQty", il.allocated_qty AS "allocatedQty", il.available_qty AS "availableQty",
-        s.org_id AS "orgId"
+        il.org_id AS "orgId", il.sub_inventory_code AS "subInventoryCode"
       FROM inventory_lots il
-      LEFT JOIN shelves s ON s.code = il.shelf_code
       WHERE il.id = ${task.inventoryLotId}
     `
   ))!; // FK guarantees the lot exists

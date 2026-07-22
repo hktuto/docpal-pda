@@ -49,6 +49,7 @@
           :value="`${detail.lot.coo || $t('common.noData')} / ${detail.lot.cow || $t('common.noData')}`"
         />
         <DetailRow :label="$t('goodsVerify.detail.org')" :value="detail.lot.orgId ?? $t('common.noData')" />
+        <DetailRow :label="$t('goodsVerify.detail.subInventory')" :value="detail.lot.subInventoryCode || $t('common.noData')" />
         <DetailRow :label="$t('goodsVerify.detail.shelf')" :value="detail.lot.shelfCode || $t('common.noData')" />
         <DetailRow :label="$t('goodsVerify.detail.box')" :value="detail.lot.boxId || $t('common.noData')" />
         <DetailRow :label="$t('goodsVerify.detail.expectedQty')" :value="detail.task.expectedQty" />

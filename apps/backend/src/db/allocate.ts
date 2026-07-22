@@ -14,10 +14,13 @@ import { now } from "./now.js";
 //   1. shelf stock (inventory_lots with available_qty > 0)
 //   2. in-hand / provisional receiving stock (received, not yet picked)
 // Rules (confirmed with the business):
-//   - Allocation is org-agnostic: sources match by part_no only (no
-//     warehouse/section/sub-inventory location matching; the old
-//     sub-inventory customer segregation is removed — customer_profiles.rule
-//     is stored but not yet interpreted here).
+//   - Location: the picking order's (org_id, sub_inventory_code) pair must
+//     match the source's pair — lots match on their own pair, receiving
+//     sources on the receiving order's pair. A demand without the pair
+//     (both columns NULL) is org-agnostic and matches any source.
+//   - Customer segregation: a source in a sub-inventory with
+//     sub_inventories.customer_code only allocates to picking orders of that
+//     customer (customer_profiles.rule stays stored-not-interpreted).
 //   - FIFO: oldest date_code first (NULLS LAST).
 //   - Box granularity: a receiving line WITH ctn_no allocates down to that box
 //     (receiving_invoice_item_id); a line WITHOUT ctn_no allocates to the
@@ -81,6 +84,9 @@ interface DemandRow {
   pickingItemId: string;
   partNo: string;
   openQty: number;
+  customerCode: string | null;
+  orgId: number | null;
+  subInventoryCode: string | null;
 }
 
 interface LotRow {
@@ -110,7 +116,10 @@ async function loadDemands(dbOrTx: DbOrTx): Promise<DemandRow[]> {
     dbOrTx,
     sql`SELECT pi.id AS "pickingItemId",
                pi.part_no AS "partNo",
-               (pi.qty - pi.picked_qty) AS "openQty"
+               (pi.qty - pi.picked_qty) AS "openQty",
+               po.customer_code AS "customerCode",
+               po.org_id AS "orgId",
+               po.sub_inventory_code AS "subInventoryCode"
         FROM picking_items pi
         JOIN picking_orders po ON po.id = pi.picking_order_id
         WHERE po.status IN ('pending', 'picking')
@@ -127,7 +136,11 @@ async function loadLotSources(dbOrTx: DbOrTx, d: DemandRow): Promise<LotRow[]> {
                il.date_code AS "dateCode",
                (il.total_qty - il.allocated_qty) AS "available"
         FROM inventory_lots il
+        LEFT JOIN sub_inventories si ON si.code = il.sub_inventory_code
         WHERE il.part_no = ${d.partNo}
+          AND (${d.orgId}::int IS NULL OR il.org_id = ${d.orgId})
+          AND (${d.subInventoryCode}::text IS NULL OR il.sub_inventory_code = ${d.subInventoryCode})
+          AND (si.customer_code IS NULL OR si.customer_code = ${d.customerCode})
           AND il.total_qty - il.allocated_qty > 0
         ORDER BY il.date_code ASC NULLS LAST, il.id`
   );
@@ -144,8 +157,12 @@ async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow): Promise<Recei
         FROM receiving_invoice_items rii
         JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
         JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
+        LEFT JOIN sub_inventories si ON si.code = ro.sub_inventory_code
         WHERE rii.part_no = ${d.partNo}
           AND ro.status IN ('in_hand', 'provisional_received')
+          AND (${d.orgId}::int IS NULL OR ro.org_id = ${d.orgId})
+          AND (${d.subInventoryCode}::text IS NULL OR ro.sub_inventory_code = ${d.subInventoryCode})
+          AND (si.customer_code IS NULL OR si.customer_code = ${d.customerCode})
           AND (rii.received_qty - rii.picked_qty) > 0
         ORDER BY rii.date_code ASC NULLS LAST, rii.id`
   );

@@ -103,6 +103,7 @@ test("candidates: receivable orders with received/unboxed item counts", async ()
   assert.equal(row.supplierCode, "DAITO");
   assert.equal(row.supplierName, "DAITO");
   assert.equal(row.orgId, 2);
+  assert.equal(row.subInventoryCode, "STORE1");
   assert.equal(row.receivedItems, 2);
   assert.equal(row.unboxedItems, 2);
 
@@ -258,7 +259,7 @@ test("assign: materializes lot with shelf location, sources, put_away_qty, ledge
   );
   assert.equal(moved!.boxId, box.id);
 
-  // lot stamped with the item's batch attrs
+  // lot stamped with the item's batch attrs + the shelf's location pair
   const lot = await queryGet<{
     id: string;
     partNo: string;
@@ -268,12 +269,15 @@ test("assign: materializes lot with shelf location, sources, put_away_qty, ledge
     cow: string | null;
     shelfCode: string;
     boxId: string;
+    orgId: number | null;
+    subInventoryCode: string | null;
     totalQty: number;
     allocatedQty: number;
   }>(
     client.db,
     sql`SELECT id, part_no AS "partNo", date_code AS "dateCode", lot_code AS "lotCode", coo, cow,
                shelf_code AS "shelfCode", box_id AS "boxId",
+               org_id AS "orgId", sub_inventory_code AS "subInventoryCode",
                total_qty AS "totalQty", allocated_qty AS "allocatedQty"
         FROM inventory_lots WHERE box_id = ${box.id}`
   );
@@ -283,6 +287,8 @@ test("assign: materializes lot with shelf location, sources, put_away_qty, ledge
   assert.equal(lot.boxId, box.id);
   assert.equal(lot.dateCode, "2610");
   assert.equal(lot.coo, "JP");
+  assert.equal(lot.orgId, 2);
+  assert.equal(lot.subInventoryCode, "STORE1");
   assert.equal(lot.totalQty, 2000);
   assert.equal(lot.allocatedQty, 0);
 
@@ -755,6 +761,8 @@ test("aggregate: order + lots + staging scans + boxes with items; 404", async ()
   assert.equal(lot.shelfCode, "A-01-03");
   assert.equal(lot.boxId, box.id);
   assert.equal(lot.dateCode, "2610");
+  assert.equal(lot.orgId, 2);
+  assert.equal(lot.subInventoryCode, "STORE1");
   assert.equal(lot.totalQty, 2000);
   assert.equal(lot.allocatedQty, 0);
   assert.equal(lot.availableQty, 2000);

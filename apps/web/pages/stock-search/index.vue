@@ -152,11 +152,12 @@ function partMeta(part: StockSearchPart): string {
     .join(" · ");
 }
 
-// Org (office) + shelf + box; the API returns fields, the client formats
-// the label.
+// Org (office) + sub-inventory + shelf + box; the API returns fields, the
+// client formats the label.
 function locationLabel(lot: StockSearchLot): string {
   return [
     lot.orgId != null ? `Org ${lot.orgId}` : null,
+    lot.subInventoryCode,
     lot.shelfCode,
     lot.boxId,
   ]

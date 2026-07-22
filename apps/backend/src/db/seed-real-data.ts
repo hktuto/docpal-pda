@@ -908,8 +908,8 @@ export const realParts = [
 ] as const;
 
 export const realReceivingOrders = [
-  { id: "00000000-0000-4000-8000-000000002000", batchNo: "04958184", supplierId: "00000000-0000-4000-8000-000000000028", deliveryDate: new Date("2026-07-17"), status: "pending" },
-  { id: "00000000-0000-4000-8000-000000002001", batchNo: "65878", supplierId: "00000000-0000-4000-8000-000000000028", deliveryDate: new Date("2026-07-15"), status: "pending" },
+  { id: "00000000-0000-4000-8000-000000002000", batchNo: "04958184", supplierId: "00000000-0000-4000-8000-000000000028", deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "SZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000002001", batchNo: "65878", supplierId: "00000000-0000-4000-8000-000000000028", deliveryDate: new Date("2026-07-15"), orgId: 2, subInventoryCode: "STORE1", status: "pending" },
 ];
 
 export const realReceivingInvoices = [
@@ -1196,32 +1196,32 @@ export const realReceivingInvoiceItems = [
 ];
 
 export const realPickingOrders = [
-  { id: "00000000-0000-4000-8000-000000006000", orderNo: "HK2607-0462", poNo: "POP-260522055", deliveryDate: new Date("2026-07-24"), customerCode: "HK-SUN64", status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006001", orderNo: "HK2607-0463", poNo: "WJE-26040107094", deliveryDate: new Date("2026-07-24"), customerCode: "HK-WIN84", status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006002", orderNo: "GZ-26070110", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006003", orderNo: "GZ-26070111", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006004", orderNo: "GZ-26070112", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006005", orderNo: "GZ-26070114", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006006", orderNo: "GZ-26070115", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006007", orderNo: "GZ-26070116", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006008", orderNo: "GZ-26070117", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006009", orderNo: "GZ-26070118", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006010", orderNo: "GZ-26070119", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006011", orderNo: "GZ-26070120", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006012", orderNo: "GZ-26070121", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006013", orderNo: "GZ-26070122", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006014", orderNo: "SZ-26070123", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006015", orderNo: "SZ-26070124", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006016", orderNo: "SZ-26070125", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006017", orderNo: "SZ-26070126", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006018", orderNo: "SZ-26070127", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006019", orderNo: "SZ-26070128", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006020", orderNo: "SZ-26070129", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006021", orderNo: "SZ-26070130", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006022", orderNo: "SZ-26070131", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006023", orderNo: "SZ-26070132", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006024", orderNo: "SZ-26070133", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
-  { id: "00000000-0000-4000-8000-000000006025", orderNo: "SZ-26070138", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006000", orderNo: "HK2607-0462", poNo: "POP-260522055", deliveryDate: new Date("2026-07-24"), customerCode: "HK-SUN64", orgId: 2, subInventoryCode: "STORE1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006001", orderNo: "HK2607-0463", poNo: "WJE-26040107094", deliveryDate: new Date("2026-07-24"), customerCode: "HK-WIN84", orgId: 2, subInventoryCode: "STORE1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006002", orderNo: "GZ-26070110", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "GZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006003", orderNo: "GZ-26070111", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "GZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006004", orderNo: "GZ-26070112", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "GZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006005", orderNo: "GZ-26070114", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "GZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006006", orderNo: "GZ-26070115", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "GZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006007", orderNo: "GZ-26070116", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "GZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006008", orderNo: "GZ-26070117", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "GZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006009", orderNo: "GZ-26070118", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "GZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006010", orderNo: "GZ-26070119", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "GZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006011", orderNo: "GZ-26070120", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "GZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006012", orderNo: "GZ-26070121", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "GZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006013", orderNo: "GZ-26070122", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "GZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006014", orderNo: "SZ-26070123", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "SZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006015", orderNo: "SZ-26070124", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "SZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006016", orderNo: "SZ-26070125", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "SZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006017", orderNo: "SZ-26070126", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "SZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006018", orderNo: "SZ-26070127", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "SZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006019", orderNo: "SZ-26070128", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "SZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006020", orderNo: "SZ-26070129", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "SZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006021", orderNo: "SZ-26070130", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "SZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006022", orderNo: "SZ-26070131", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "SZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006023", orderNo: "SZ-26070132", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "SZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006024", orderNo: "SZ-26070133", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "SZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000006025", orderNo: "SZ-26070138", poNo: undefined, deliveryDate: new Date("2026-07-20"), customerCode: undefined, orgId: 2, subInventoryCode: "SZHK1", status: "pending" },
 ];
 
 export const realPickingItems = [

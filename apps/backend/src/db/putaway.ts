@@ -14,7 +14,8 @@ import { now } from "./now.js";
 // row with shelf_code IS NULL, auto-created on first scan; ids from nextBoxId
 // — BOX-H-<YYYYMMDD>-<seq>). Assigning a scan into a real box moves the row
 // and MATERIALIZES the inventory lot (keyed part_no + shelf + box_id + batch
-// attrs, box_id = the shelf box's id) with inventory_lot_sources +
+// attrs + the shelf's org_id/sub_inventory_code pair, box_id = the shelf
+// box's id) with inventory_lot_sources +
 // put_away_qty and two ledger rows (PUT_AWAY dock −qty / on_hand +qty);
 // removing a scan reverses all of it.
 //
@@ -220,6 +221,7 @@ export interface PutAwayCandidateRow {
   supplierCode: string | null;
   supplierName: string | null;
   orgId: number;
+  subInventoryCode: string;
   receivedItems: number;
   unboxedItems: number;
 }
@@ -236,6 +238,7 @@ export async function listPutAwayCandidates(db: AppDb): Promise<PutAwayCandidate
         s.code AS "supplierCode",
         s.name AS "supplierName",
         ro.org_id AS "orgId",
+        ro.sub_inventory_code AS "subInventoryCode",
         COUNT(rii.id) FILTER (WHERE rii.received_qty > 0)::int AS "receivedItems",
         COUNT(rii.id) FILTER (WHERE
           rii.received_qty - rii.picked_qty - rii.put_away_qty
@@ -273,6 +276,8 @@ export interface PutAwayLotRow {
   cow: string | null;
   shelfCode: string | null;
   boxId: string | null;
+  orgId: number | null;
+  subInventoryCode: string | null;
   totalQty: number;
   allocatedQty: number;
   availableQty: number;
@@ -348,6 +353,7 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
         il.id, il.part_no AS "partNo",
         il.date_code AS "dateCode", il.lot_code AS "lotCode", il.coo, il.cow,
         il.shelf_code AS "shelfCode", il.box_id AS "boxId",
+        il.org_id AS "orgId", il.sub_inventory_code AS "subInventoryCode",
         il.total_qty AS "totalQty", il.allocated_qty AS "allocatedQty",
         il.available_qty AS "availableQty"
       FROM inventory_lots il
@@ -655,8 +661,18 @@ async function assignScanToBoxTx(
 
   await queryRun(tx, sql`UPDATE shelf_box_items SET shelf_box_id = ${box.id}, verified = false WHERE id = ${scan.id}`);
 
-  // Lot lookup mirrors the unique index (part_no + batch attrs + shelf +
-  // box); a match merges into the existing lot.
+  // The box's shelf carries the location pair (org_id + sub_inventory_code)
+  // stamped onto the lot (pre-redesign: warehouse/section/sub-inventory).
+  const shelf = (
+    await queryGet<{ orgId: number | null; subInventoryCode: string | null }>(
+      tx,
+      sql`SELECT org_id AS "orgId", sub_inventory_code AS "subInventoryCode"
+          FROM shelves WHERE code = ${box.shelfCode}`
+    )
+  )!;
+
+  // Lot lookup mirrors the unique index (part_no + batch attrs + shelf + box
+  // + location pair); a match merges into the existing lot.
   const lot = await queryGet<{ id: string }>(
     tx,
     sql`SELECT id FROM inventory_lots
@@ -664,7 +680,9 @@ async function assignScanToBoxTx(
           AND date_code IS NOT DISTINCT FROM ${item.dateCode}
           AND lot_code IS NOT DISTINCT FROM ${item.lotCode}
           AND coo IS NOT DISTINCT FROM ${item.coo}
-          AND cow IS NOT DISTINCT FROM ${item.cow}`
+          AND cow IS NOT DISTINCT FROM ${item.cow}
+          AND org_id IS NOT DISTINCT FROM ${shelf.orgId}
+          AND sub_inventory_code IS NOT DISTINCT FROM ${shelf.subInventoryCode}`
   );
   let lotId: string;
   if (lot) {
@@ -675,9 +693,10 @@ async function assignScanToBoxTx(
     await queryRun(
       tx,
       sql`INSERT INTO inventory_lots (id, part_no, date_code, lot_code, coo, cow, shelf_code, box_id,
-                                     total_qty, allocated_qty)
+                                     org_id, sub_inventory_code, total_qty, allocated_qty)
           VALUES (${lotId}, ${item.partNo}, ${item.dateCode}, ${item.lotCode}, ${item.coo}, ${item.cow},
                   ${box.shelfCode}, ${box.id},
+                  ${shelf.orgId}, ${shelf.subInventoryCode},
                   ${scan.qty}, 0)`
     );
   }

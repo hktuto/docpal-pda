@@ -247,6 +247,8 @@ export interface PickingOrderListRow {
   shipTo: string | null;
   customerCode: string | null;
   deliveryDate: Date | null;
+  orgId: number | null;
+  subInventoryCode: string | null;
   itemCount: number;
   totalQty: number;
   pickedQty: number;
@@ -261,6 +263,7 @@ export async function listPickingOrders(db: AppDb, status?: string): Promise<Pic
         po.id, po.order_no AS "orderNo", po.status, po.po_no AS "poNo", po.ship_to AS "shipTo",
         po.customer_code AS "customerCode",
         po.delivery_date AS "deliveryDate",
+        po.org_id AS "orgId", po.sub_inventory_code AS "subInventoryCode",
         COUNT(pi.id)::int AS "itemCount",
         COALESCE(SUM(pi.qty), 0)::int AS "totalQty",
         COALESCE(SUM(pi.picked_qty), 0)::int AS "pickedQty"
@@ -281,6 +284,8 @@ export interface PickingOrderRow {
   poNo: string | null;
   shipTo: string | null;
   customerCode: string | null;
+  orgId: number | null;
+  subInventoryCode: string | null;
   issueReason: string | null;
   issueQty: number | null;
   issuePackSize: number | null;
@@ -383,6 +388,7 @@ export async function getPickingOrderDetail(db: AppDb, orderId: string): Promise
         delivery_date AS "deliveryDate", po_no AS "poNo",
         ship_to AS "shipTo",
         customer_code AS "customerCode",
+        org_id AS "orgId", sub_inventory_code AS "subInventoryCode",
         issue_reason AS "issueReason", issue_qty AS "issueQty", issue_pack_size AS "issuePackSize",
         issue_note AS "issueNote", issue_remark AS "issueRemark",
         issue_reported_at AS "issueReportedAt", issue_reported_by AS "issueReportedBy",

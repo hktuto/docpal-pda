@@ -76,18 +76,59 @@ test("allocateAll: FIFO from shelf lots, updates lots + picking items", async ()
   );
 });
 
-test("allocateAll: org-agnostic — lots on any shelf match by part_no", async () => {
+test("allocateAll: pair-less demand is org-agnostic — lots in any org match by part_no", async () => {
   await reseed(client);
   await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${PO_22}`);
-  // move lot 18 onto a shelf with a different (null) org — allocation must
-  // still find it (no location matching remains)
-  await client.db.execute(sql`INSERT INTO shelves (code, zone, org_id, created_at, updated_at)
-    VALUES ('X-99-01', 'X', NULL, now(), now()) ON CONFLICT (code) DO NOTHING`);
-  await client.db.execute(sql`UPDATE inventory_lots SET shelf_code = 'X-99-01' WHERE id = ${LOT_18}`);
+  // strip the demand's location pair and move lot 18 into a different org —
+  // allocation must still find it (a demand without the pair matches anything)
+  await client.db.execute(sql`UPDATE picking_orders SET org_id = NULL, sub_inventory_code = NULL WHERE id = ${PO_22}`);
+  await client.db.execute(sql`UPDATE inventory_lots SET org_id = 3, sub_inventory_code = NULL WHERE id = ${LOT_18}`);
   const s = await allocateAll(client.db);
   assert.equal(s.fullyAllocated, 2);
   const a23 = await client.db.execute(sql`SELECT qty FROM allocations WHERE picking_item_id = ${ITEM_23}`);
   assert.equal(Number((a23[0] as any).qty), 2000);
+});
+
+test("allocateAll: sources must match the picking order's location pair", async () => {
+  await reseed(client);
+  // seeded demand is (org 2, STORE1); a different sub-inventory finds nothing
+  await client.db.execute(sql`UPDATE picking_orders SET sub_inventory_code = 'WSTORE1' WHERE id = ${PO_22}`);
+  let s = await allocateAll(client.db);
+  assert.equal(s.allocationsCreated, 0);
+  let c = await client.db.execute(sql`SELECT count(*)::int AS c FROM allocations`);
+  assert.equal(Number((c[0] as any).c), 0);
+
+  // a different org finds nothing either
+  await client.db.execute(sql`UPDATE picking_orders SET sub_inventory_code = 'STORE1', org_id = 3 WHERE id = ${PO_22}`);
+  s = await allocateAll(client.db);
+  assert.equal(s.allocationsCreated, 0);
+  c = await client.db.execute(sql`SELECT count(*)::int AS c FROM allocations`);
+  assert.equal(Number((c[0] as any).c), 0);
+});
+
+test("allocateAll: customer-segregated sub-inventory only serves its customer", async () => {
+  await reseed(client);
+  // move lot 18 into the ACME-segregated store; keep the demand pair-less so
+  // the pair match cannot mask the segregation rule
+  await client.db.execute(sql`UPDATE inventory_lots SET sub_inventory_code = 'ACME-S1' WHERE id = ${LOT_18}`);
+  await client.db.execute(sql`UPDATE picking_orders SET org_id = NULL, sub_inventory_code = NULL WHERE id = ${PO_22}`);
+
+  // seeded demand is customer ACME → the segregated lot serves it
+  let s = await allocateAll(client.db);
+  assert.equal(s.fullyAllocated, 2);
+  const a23 = await client.db.execute(sql`SELECT qty, inventory_lot_id AS lot FROM allocations WHERE picking_item_id = ${ITEM_23}`);
+  assert.equal(a23.length, 1);
+  assert.equal(Number((a23[0] as any).qty), 2000);
+  assert.equal((a23[0] as any).lot, LOT_18);
+
+  // the same demand without a customer cannot touch the segregated lot, but
+  // item 24's STORE1 lot (not segregated) still allocates
+  await client.db.execute(sql`UPDATE picking_orders SET customer_code = NULL WHERE id = ${PO_22}`);
+  await allocateAll(client.db);
+  const c = await client.db.execute(sql`SELECT count(*)::int AS c FROM allocations WHERE picking_item_id = ${ITEM_23}`);
+  assert.equal(Number((c[0] as any).c), 0);
+  const a24 = await client.db.execute(sql`SELECT qty FROM allocations WHERE picking_item_id = ${ITEM_24}`);
+  assert.equal(Number((a24[0] as any).qty), 1000);
 });
 
 test("allocateAll: idempotent recompute, ledger stays consistent", async () => {

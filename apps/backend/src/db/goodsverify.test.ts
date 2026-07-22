@@ -199,6 +199,7 @@ test("detail: task + lot + box items; legacy box id → box null; 404", async ()
     allocatedQty: 0,
     availableQty: 5000,
     orgId: 2,
+    subInventoryCode: "STORE1",
   });
 
   assert.ok(detail.box);

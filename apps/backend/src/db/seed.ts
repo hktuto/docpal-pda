@@ -14,6 +14,7 @@ import {
   boxSizeList,
   netWeightFormula,
   customerProfiles,
+  subInventories,
   receivingOrders,
   receivingInvoices,
   receivingInvoiceItems,
@@ -56,6 +57,7 @@ export const ALL_TABLES = [
   "receiving_orders",
   "net_weight_formula",
   "shelves",
+  "sub_inventories",
   "customer_profiles",
   "box_size_list",
   "country_list",
@@ -220,19 +222,47 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
     { code: "HK-WIN84", label: "HK-WIN84" },
   ]);
 
+  // Real sub-inventory codes (new_seed/subInventories.xlsx), all belonging to
+  // org 2 (HK office): STORE1/WSTORE1/OSWF (HK); THHK2/OSWF (TH);
+  // BJHK1…HWOS (MCE/HUAWEI); BJHK2…OSWF (MCI). ACME-S1 is the demo
+  // customer-segregated store (customer_code → only ACME picking orders can
+  // allocate from it).
+  await db.insert(subInventories).values([
+    { code: "STORE1", name: "Main store", orgId: 2 },
+    { code: "WSTORE1", name: "WSTORE1", orgId: 2 },
+    { code: "OSWF (HK)", name: "OSWF (HK)", orgId: 2 },
+    { code: "THHK2", name: "THHK2", orgId: 2 },
+    { code: "OSWF (TH)", name: "OSWF (TH)", orgId: 2 },
+    { code: "BJHK1", name: "BJHK1", orgId: 2 },
+    { code: "GZHK1", name: "GZHK1", orgId: 2 },
+    { code: "SHHK1", name: "SHHK1", orgId: 2 },
+    { code: "SZHK1", name: "SZHK1", orgId: 2 },
+    { code: "ZTE", name: "ZTE", orgId: 2 },
+    { code: "OSWF (MCE)", name: "OSWF (MCE)", orgId: 2 },
+    { code: "HUAWEI", name: "HUAWEI", orgId: 2 },
+    { code: "HUAWEI-CAR", name: "HUAWEI-CAR", orgId: 2 },
+    { code: "HWOS (HUAWEI)", name: "HWOS (HUAWEI)", orgId: 2 },
+    { code: "BJHK2", name: "BJHK2", orgId: 2 },
+    { code: "GZHK2", name: "GZHK2", orgId: 2 },
+    { code: "SHHK2", name: "SHHK2", orgId: 2 },
+    { code: "SZHK2", name: "SZHK2", orgId: 2 },
+    { code: "OSWF (MCI)", name: "OSWF (MCI)", orgId: 2 },
+    { code: "ACME-S1", name: "ACME segregated store", orgId: 2, customerCode: "ACME" },
+  ]);
+
   await db.insert(shelves).values([
-    { code: "A-01-01", zone: "A", orgId: 2 },
-    { code: "A-01-02", zone: "A", orgId: 2 },
-    { code: "A-01-03", zone: "A", orgId: 2 },
-    { code: "A-01-04", zone: "A", orgId: 2 },
+    { code: "A-01-01", zone: "A", orgId: 2, subInventoryCode: "STORE1" },
+    { code: "A-01-02", zone: "A", orgId: 2, subInventoryCode: "STORE1" },
+    { code: "A-01-03", zone: "A", orgId: 2, subInventoryCode: "STORE1" },
+    { code: "A-01-04", zone: "A", orgId: 2, subInventoryCode: "STORE1" },
     // virtual dock shelf — dock/GIT lots hang off this code (never NULL)
-    { code: "DOCK", zone: "DOCK", orgId: 2 },
+    { code: "DOCK", zone: "DOCK", orgId: 2, subInventoryCode: "STORE1" },
     // shelves for the real-data orders (new_seed/)
-    { code: "GZ-01-01", zone: "GZ", orgId: 2 },
-    { code: "GZ-01-02", zone: "GZ", orgId: 2 },
-    { code: "SZ-01-01", zone: "SZ", orgId: 2 },
-    { code: "SZ-01-02", zone: "SZ", orgId: 2 },
-    { code: "W-01-01", zone: "W", orgId: 2 },
+    { code: "GZ-01-01", zone: "GZ", orgId: 2, subInventoryCode: "GZHK1" },
+    { code: "GZ-01-02", zone: "GZ", orgId: 2, subInventoryCode: "GZHK1" },
+    { code: "SZ-01-01", zone: "SZ", orgId: 2, subInventoryCode: "SZHK1" },
+    { code: "SZ-01-02", zone: "SZ", orgId: 2, subInventoryCode: "SZHK1" },
+    { code: "W-01-01", zone: "W", orgId: 2, subInventoryCode: "WSTORE1" },
   ]);
 
   // Net-weight reference: 1000 pcs of each 0603 resistor ≈ 6.3 g.
@@ -249,6 +279,7 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
       supplierId: uid(3),
       deliveryDate: new Date("2026-07-10"),
       orgId: 2,
+      subInventoryCode: "STORE1",
       status: "clear",
       arrivedAt: new Date("2026-07-10T09:30:00Z"),
       arrivedBy: uid(1),
@@ -260,6 +291,7 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
       supplierId: uid(4),
       deliveryDate: new Date("2026-07-20"),
       orgId: 2,
+      subInventoryCode: "STORE1",
       status: "pending",
     },
   ]);
@@ -275,6 +307,7 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
       totalCtn: 2,
       deliveryDate: new Date("2026-07-08"),
       orgId: 2,
+      subInventoryCode: "STORE1",
     },
     {
       id: uid(13),
@@ -286,6 +319,7 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
       totalCtn: 1,
       deliveryDate: new Date("2026-07-18"),
       orgId: 2,
+      subInventoryCode: "STORE1",
     },
   ]);
 
@@ -359,6 +393,8 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
       cow: "JP",
       shelfCode: "A-01-01",
       boxId: "BOX-0001",
+      orgId: 2,
+      subInventoryCode: "STORE1",
       totalQty: 10000,
       allocatedQty: 0,
     },
@@ -371,6 +407,8 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
       cow: "JP",
       shelfCode: "A-01-02",
       boxId: "BOX-0002",
+      orgId: 2,
+      subInventoryCode: "STORE1",
       totalQty: 5000,
       allocatedQty: 0,
     },
@@ -416,33 +454,43 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
   await db.insert(inventoryLots).values([
     { id: uid(40), partNo: "RK73H1JTTD1002F", dateCode: "2603", lotCode: "L2603A", coo: "JP", cow: "JP",
       shelfCode: "A-01-01", boxId: "BOX-H-20260701-0001",
+      orgId: 2, subInventoryCode: "STORE1",
       totalQty: 10000, allocatedQty: 0 },
     { id: uid(41), partNo: "RK73H1JTTD2202F", dateCode: "2603", lotCode: "L2603B", coo: "JP", cow: "JP",
       shelfCode: "A-01-01", boxId: "BOX-H-20260701-0002",
+      orgId: 2, subInventoryCode: "STORE1",
       totalQty: 5000, allocatedQty: 0 },
     { id: uid(42), partNo: "RK73B1JTTD181G", dateCode: "2604", lotCode: "L2604A", coo: "JP", cow: "JP",
       shelfCode: "A-01-02", boxId: "BOX-H-20260701-0003",
+      orgId: 2, subInventoryCode: "STORE1",
       totalQty: 8000, allocatedQty: 0 },
     { id: uid(43), partNo: "RK73H2ATTD1372F", dateCode: "2604", lotCode: "L2604B", coo: "JP", cow: "JP",
       shelfCode: "A-01-02", boxId: "BOX-H-20260701-0004",
+      orgId: 2, subInventoryCode: "STORE1",
       totalQty: 4000, allocatedQty: 0 },
     { id: uid(44), partNo: "P413", dateCode: "2605", lotCode: "L2605A", coo: "JP", cow: "JP",
       shelfCode: "A-01-03", boxId: "BOX-H-20260701-0005",
+      orgId: 2, subInventoryCode: "STORE1",
       totalQty: 2000, allocatedQty: 0 },
     { id: uid(45), partNo: "RK73H1JTTD1002F", dateCode: "2605", lotCode: "L2605B", coo: "JP", cow: "JP",
       shelfCode: "A-01-03", boxId: "BOX-H-20260701-0006",
+      orgId: 2, subInventoryCode: "STORE1",
       totalQty: 10000, allocatedQty: 0 },
     { id: uid(46), partNo: "RK73H1JTTD2202F", dateCode: "2606", lotCode: "L2606A", coo: "JP", cow: "JP",
       shelfCode: "A-01-04", boxId: "BOX-H-20260701-0007",
+      orgId: 2, subInventoryCode: "STORE1",
       totalQty: 5000, allocatedQty: 0 },
     { id: uid(47), partNo: "RK73B1JTTD181G", dateCode: "2606", lotCode: "L2606B", coo: "JP", cow: "JP",
       shelfCode: "A-01-04", boxId: "BOX-H-20260701-0008",
+      orgId: 2, subInventoryCode: "STORE1",
       totalQty: 6000, allocatedQty: 0 },
     { id: uid(48), partNo: "RK73H2ATTD1372F", dateCode: "2607", lotCode: "L2607A", coo: "JP", cow: "JP",
       shelfCode: "W-01-01", boxId: "BOX-H-20260701-0009",
+      orgId: 2, subInventoryCode: "WSTORE1",
       totalQty: 3000, allocatedQty: 0 },
     { id: uid(49), partNo: "P413", dateCode: "2607", lotCode: "L2607B", coo: "JP", cow: "JP",
       shelfCode: "W-01-01", boxId: "BOX-H-20260701-0010",
+      orgId: 2, subInventoryCode: "WSTORE1",
       totalQty: 1500, allocatedQty: 0 },
   ]);
   }
@@ -456,6 +504,8 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
       deliveryDate: new Date("2026-07-25"),
       shipTo: "ACME Electronics (HK)",
       customerCode: "ACME",
+      orgId: 2,
+      subInventoryCode: "STORE1",
       status: "pending",
     },
   ]);

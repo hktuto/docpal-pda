@@ -37,6 +37,7 @@ export interface ReceivingOrderListRow {
   supplierCode: string | null;
   supplierName: string | null;
   orgId: number;
+  subInventoryCode: string;
   invoiceCount: number;
   itemCount: number;
   remainingItems: number;
@@ -63,6 +64,7 @@ receivingRoute.get("/receiving-orders", async (c) => {
         s.code AS "supplierCode",
         s.name AS "supplierName",
         ro.org_id AS "orgId",
+        ro.sub_inventory_code AS "subInventoryCode",
         COUNT(DISTINCT inv.id)::int AS "invoiceCount",
         COUNT(rii.id)::int AS "itemCount",
         COUNT(rii.id) FILTER (WHERE rii.put_away_qty < rii.line_qty)::int AS "remainingItems",
@@ -99,6 +101,7 @@ interface OrderDetailRow {
   deliveryDate: string | null;
   dateCode: string | null;
   orgId: number;
+  subInventoryCode: string;
   arrivedAt: string | null;
   arrivedBy: string | null;
   createdAt: string;
@@ -123,6 +126,7 @@ interface InvoiceRow {
   totalCtn: number | null;
   deliveryDate: string | null;
   orgId: number;
+  subInventoryCode: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -167,6 +171,7 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
         ro.id, ro.batch_no AS "batchNo", ro.status,
         ro.delivery_date AS "deliveryDate", ro.date_code AS "dateCode",
         ro.org_id AS "orgId",
+        ro.sub_inventory_code AS "subInventoryCode",
         ro.arrived_at AS "arrivedAt", ro.arrived_by AS "arrivedBy",
         ro.created_at AS "createdAt", ro.updated_at AS "updatedAt",
         s.id AS "supplierId", s.code AS "supplierCode", s.name AS "supplierName",
@@ -189,6 +194,7 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
         id, invoice_no AS "invoiceNo", supplier_id AS "supplierId",
         wcl_company_name AS "wclCompanyName", total_qty AS "totalQty", total_ctn AS "totalCtn",
         delivery_date AS "deliveryDate", org_id AS "orgId",
+        sub_inventory_code AS "subInventoryCode",
         created_at AS "createdAt", updated_at AS "updatedAt"
       FROM receiving_invoices
       WHERE receiving_order_id = ${id}
@@ -233,6 +239,7 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
       deliveryDate: order.deliveryDate,
       dateCode: order.dateCode,
       orgId: order.orgId,
+      subInventoryCode: order.subInventoryCode,
       arrivedAt: order.arrivedAt,
       arrivedBy: order.arrivedBy,
       createdAt: order.createdAt,

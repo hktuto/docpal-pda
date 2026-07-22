@@ -21,9 +21,9 @@ export interface TestDb {
 
 /**
  * Wipe + re-seed the demo dataset, minus the new_seed real-data picking
- * orders: allocation is org-agnostic now, and two of their items reference a
- * demo part_no, so they would compete with the seeded demo demands for the
- * demo lots (previously excluded by location matching).
+ * orders: two of their items reference a demo part_no and (via the SZHK1 /
+ * STORE1 pairs) could compete with the seeded demo demands for demo stock,
+ * so the tests stay hermetic against the minimal demo world.
  */
 async function reseedTestWorld(client: TestDb): Promise<void> {
   await resetAndReseed(client.sql, client.db, { stockBoxes: false });

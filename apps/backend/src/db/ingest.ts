@@ -40,6 +40,8 @@ export interface IngestReceivingOrder {
   deliveryDate?: string | null;
   dateCode?: string | null;
   orgId?: number | null;
+  /** Required — every receiving order goes into exactly one sub-inventory. */
+  subInventoryCode: string;
 }
 
 export interface IngestReceivingItem {
@@ -54,6 +56,7 @@ export interface IngestReceivingItem {
   coo?: string | null;
   cow?: string | null;
   orgId?: number | null;
+  subInventoryCode?: string | null;
 }
 
 export interface IngestReceivingInvoice {
@@ -65,6 +68,7 @@ export interface IngestReceivingInvoice {
   totalCtn?: number | null;
   deliveryDate?: string | null;
   orgId?: number | null;
+  subInventoryCode?: string | null;
   items: IngestReceivingItem[];
 }
 
@@ -78,6 +82,8 @@ export interface IngestPickingOrder {
   shipTo?: string | null;
   customerCode?: string | null;
   deliveryDate?: string | null;
+  orgId?: number | null;
+  subInventoryCode?: string | null;
 }
 
 export interface IngestPickingItem {
@@ -166,6 +172,7 @@ const receivingItemKey = (partNo: string, poNo: string | null, poLine: string | 
 
 function validateReceivingBody(body: IngestReceivingBody): void {
   if (!body?.order) throw new HTTPException(400, { message: "order is required" });
+  if (!body.order.subInventoryCode) throw new HTTPException(400, { message: "order.subInventoryCode is required" });
   if (!Array.isArray(body.invoices) || body.invoices.length === 0) {
     throw new HTTPException(400, { message: "invoices[] is required" });
   }
@@ -199,6 +206,7 @@ async function insertReceivingItem(tx: DbOrTx, invoiceId: string, it: IngestRece
     coo: it.coo ?? null,
     cow: it.cow ?? null,
     orgId: it.orgId ?? 2,
+    subInventoryCode: it.subInventoryCode ?? null,
   });
 }
 
@@ -231,6 +239,7 @@ async function insertInvoiceWithItems(
     totalCtn: inv.totalCtn ?? null,
     deliveryDate: toDate(inv.deliveryDate),
     orgId: inv.orgId ?? 2,
+    subInventoryCode: inv.subInventoryCode ?? null,
   });
   for (const it of inv.items) {
     await insertReceivingItem(tx, invoiceId, it);
@@ -246,6 +255,7 @@ interface ExistingInvoiceRow {
   totalQty: number | null;
   totalCtn: number | null;
   orgId: number;
+  subInventoryCode: string | null;
 }
 
 interface ExistingReceivingItemRow {
@@ -261,6 +271,7 @@ interface ExistingReceivingItemRow {
   lotCode: string | null;
   coo: string | null;
   cow: string | null;
+  subInventoryCode: string | null;
   receivedQty: number;
   pickedQty: number;
   putAwayQty: number;
@@ -273,7 +284,9 @@ function itemWorkStarted(it: Pick<ExistingReceivingItemRow, "allocLinks" | "rece
 
 /**
  * Idempotent upsert keyed by batch_no. No existing row → INSERT order +
- * invoices + items (status pending, org_id default 2). Existing row →
+ * invoices + items (status pending, org_id default 2; order.subInventoryCode
+ * is required — every receiving order lands in exactly one sub-inventory).
+ * Existing row →
  * reconcile: order fields when different; invoices by invoice_no (add /
  * update / delete — delete cascades the items); items by business key
  * (part_no + po_no + po_line). Derived state is never touched; qty decreases
@@ -303,6 +316,7 @@ export async function upsertReceivingOrder(
         deliveryDate: orderDeliveryDate,
         dateCode: body.order.dateCode ?? null,
         orgId: body.order.orgId ?? 2,
+        subInventoryCode: body.order.subInventoryCode,
         status: "pending",
       });
       for (const inv of body.invoices) {
@@ -324,9 +338,11 @@ export async function upsertReceivingOrder(
       supplierId: string | null;
       dateCode: string | null;
       orgId: number;
+      subInventoryCode: string;
     }>(
       tx,
-      sql`SELECT supplier_id AS "supplierId", date_code AS "dateCode", org_id AS "orgId"
+      sql`SELECT supplier_id AS "supplierId", date_code AS "dateCode", org_id AS "orgId",
+                 sub_inventory_code AS "subInventoryCode"
           FROM receiving_orders WHERE id = ${orderId}`
     ))!;
     const orderFields = {
@@ -334,18 +350,21 @@ export async function upsertReceivingOrder(
       deliveryDate: orderDeliveryDate,
       dateCode: body.order.dateCode ?? null,
       orgId: body.order.orgId ?? 2,
+      subInventoryCode: body.order.subInventoryCode,
     };
     if (
       ro.supplierId !== orderFields.supplierId ||
       (await deliveryDateDiffers(tx, "receiving_orders", orderId, orderFields.deliveryDate)) ||
       ro.dateCode !== orderFields.dateCode ||
-      ro.orgId !== orderFields.orgId
+      ro.orgId !== orderFields.orgId ||
+      ro.subInventoryCode !== orderFields.subInventoryCode
     ) {
       await queryRun(
         tx,
         sql`UPDATE receiving_orders SET supplier_id = ${orderFields.supplierId},
               delivery_date = ${orderFields.deliveryDate}, date_code = ${orderFields.dateCode},
-              org_id = ${orderFields.orgId}, updated_at = ${now()}
+              org_id = ${orderFields.orgId}, sub_inventory_code = ${orderFields.subInventoryCode},
+              updated_at = ${now()}
             WHERE id = ${orderId}`
       );
       changed = true;
@@ -356,7 +375,7 @@ export async function upsertReceivingOrder(
       tx,
       sql`SELECT id, invoice_no AS "invoiceNo", supplier_id AS "supplierId",
                  wcl_company_name AS "wclCompanyName", total_qty AS "totalQty", total_ctn AS "totalCtn",
-                 org_id AS "orgId"
+                 org_id AS "orgId", sub_inventory_code AS "subInventoryCode"
           FROM receiving_invoices WHERE receiving_order_id = ${orderId}`
     );
     const existingItems = await queryAll<ExistingReceivingItemRow>(
@@ -364,7 +383,7 @@ export async function upsertReceivingOrder(
       sql`SELECT rii.id, rii.receiving_invoice_id AS "receivingInvoiceId", rii.part_no AS "partNo",
                  rii.wcl_item_no AS "wclItemNo", rii.po_no AS "poNo", rii.po_line AS "poLine",
                  rii.line_qty AS "lineQty", rii.ctn_no AS "ctnNo", rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
-                 rii.coo, rii.cow,
+                 rii.coo, rii.cow, rii.sub_inventory_code AS "subInventoryCode",
                  rii.received_qty AS "receivedQty", rii.picked_qty AS "pickedQty", rii.put_away_qty AS "putAwayQty",
                  (SELECT COUNT(*)::int FROM allocations a WHERE a.receiving_invoice_item_id = rii.id) AS "allocLinks"
           FROM receiving_invoice_items rii
@@ -400,6 +419,7 @@ export async function upsertReceivingOrder(
         totalCtn: inv.totalCtn ?? null,
         deliveryDate: toDate(inv.deliveryDate),
         orgId: inv.orgId ?? 2,
+        subInventoryCode: inv.subInventoryCode ?? null,
       };
       if (
         ex.supplierId !== invFields.supplierId ||
@@ -407,14 +427,16 @@ export async function upsertReceivingOrder(
         ex.totalQty !== invFields.totalQty ||
         ex.totalCtn !== invFields.totalCtn ||
         (await deliveryDateDiffers(tx, "receiving_invoices", ex.id, invFields.deliveryDate)) ||
-        ex.orgId !== invFields.orgId
+        ex.orgId !== invFields.orgId ||
+        ex.subInventoryCode !== invFields.subInventoryCode
       ) {
         await queryRun(
           tx,
           sql`UPDATE receiving_invoices SET supplier_id = ${invFields.supplierId},
                 wcl_company_name = ${invFields.wclCompanyName}, total_qty = ${invFields.totalQty},
                 total_ctn = ${invFields.totalCtn}, delivery_date = ${invFields.deliveryDate},
-                org_id = ${invFields.orgId}, updated_at = ${now()}
+                org_id = ${invFields.orgId}, sub_inventory_code = ${invFields.subInventoryCode},
+                updated_at = ${now()}
               WHERE id = ${ex.id}`
         );
         changed = true;
@@ -444,14 +466,16 @@ export async function upsertReceivingOrder(
           (exItem.dateCode ?? null) === (it.dateCode ?? null) &&
           (exItem.lotCode ?? null) === (it.lotCode ?? null) &&
           (exItem.coo ?? null) === (it.coo ?? null) &&
-          (exItem.cow ?? null) === (it.cow ?? null);
+          (exItem.cow ?? null) === (it.cow ?? null) &&
+          (exItem.subInventoryCode ?? null) === (it.subInventoryCode ?? null);
         if (!same) {
           // Expected-side fields only — derived state stays untouched.
           await queryRun(
             tx,
             sql`UPDATE receiving_invoice_items SET line_qty = ${it.lineQty}, wcl_item_no = ${it.wclItemNo ?? null},
                   ctn_no = ${it.ctnNo ?? null}, date_code = ${it.dateCode ?? null}, lot_code = ${it.lotCode ?? null},
-                  coo = ${it.coo ?? null}, cow = ${it.cow ?? null}
+                  coo = ${it.coo ?? null}, cow = ${it.cow ?? null},
+                  sub_inventory_code = ${it.subInventoryCode ?? null}
                 WHERE id = ${exItem.id}`
           );
           changed = true;
@@ -557,6 +581,8 @@ export async function upsertPickingOrder(
         poNo: body.order.poNo ?? null,
         shipTo: body.order.shipTo ?? null,
         deliveryDate,
+        orgId: body.order.orgId ?? null,
+        subInventoryCode: body.order.subInventoryCode ?? null,
         status: "pending",
       });
       for (const it of body.items) {
@@ -577,9 +603,12 @@ export async function upsertPickingOrder(
       customerCode: string | null;
       poNo: string | null;
       shipTo: string | null;
+      orgId: number | null;
+      subInventoryCode: string | null;
     }>(
       tx,
-      sql`SELECT customer_code AS "customerCode", po_no AS "poNo", ship_to AS "shipTo"
+      sql`SELECT customer_code AS "customerCode", po_no AS "poNo", ship_to AS "shipTo",
+                 org_id AS "orgId", sub_inventory_code AS "subInventoryCode"
           FROM picking_orders WHERE id = ${orderId}`
     ))!;
     const orderFields = {
@@ -587,17 +616,23 @@ export async function upsertPickingOrder(
       poNo: body.order.poNo ?? null,
       shipTo: body.order.shipTo ?? null,
       deliveryDate,
+      orgId: body.order.orgId ?? null,
+      subInventoryCode: body.order.subInventoryCode ?? null,
     };
     if (
       po.customerCode !== orderFields.customerCode ||
       po.poNo !== orderFields.poNo ||
       po.shipTo !== orderFields.shipTo ||
-      (await deliveryDateDiffers(tx, "picking_orders", orderId, orderFields.deliveryDate))
+      (await deliveryDateDiffers(tx, "picking_orders", orderId, orderFields.deliveryDate)) ||
+      po.orgId !== orderFields.orgId ||
+      po.subInventoryCode !== orderFields.subInventoryCode
     ) {
       await queryRun(
         tx,
         sql`UPDATE picking_orders SET customer_code = ${orderFields.customerCode}, po_no = ${orderFields.poNo},
-              ship_to = ${orderFields.shipTo}, delivery_date = ${orderFields.deliveryDate}, updated_at = ${now()}
+              ship_to = ${orderFields.shipTo}, delivery_date = ${orderFields.deliveryDate},
+              org_id = ${orderFields.orgId}, sub_inventory_code = ${orderFields.subInventoryCode},
+              updated_at = ${now()}
             WHERE id = ${orderId}`
       );
       changed = true;

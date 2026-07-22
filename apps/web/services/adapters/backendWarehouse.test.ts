@@ -266,6 +266,7 @@ describe('backendWarehouse put-away flow', () => {
           supplierCode: 'DAITO',
           supplierName: 'DAITO',
           orgId: 2,
+          subInventoryCode: 'ACME-S1',
           receivedItems: 2,
           unboxedItems: 2,
         },
@@ -282,7 +283,7 @@ describe('backendWarehouse put-away flow', () => {
   it('getPutAwayDetail GETs the one aggregate', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse({
-        order: { id: 'ro1', batchNo: '04958210', status: 'in_hand' },
+        order: { id: 'ro1', batchNo: '04958210', status: 'in_hand', subInventoryCode: 'ACME-S1' },
         items: [{ id: 'rii1', remainingQty: 100 }],
         lots: [],
         scans: [{ id: 'scan1', receivingInvoiceItemId: 'rii1', qty: 5 }],
@@ -301,7 +302,7 @@ describe('backendWarehouse put-away flow', () => {
 
   it('getShelves reads the admin shelves list', async () => {
     fetchMock.mockResolvedValue(
-      jsonResponse([{ code: 'A-01-01', zone: 'A', orgId: 2 }])
+      jsonResponse([{ code: 'A-01-01', zone: 'A', orgId: 2, subInventoryCode: 'ACME-S1' }])
     );
 
     const shelves = await service().getShelves();
@@ -478,6 +479,8 @@ describe('backendWarehouse picking flow', () => {
         id: 'po1',
         orderNo: 'SO-2026-0001',
         status: 'picking',
+        orgId: 2,
+        subInventoryCode: 'ACME-S1',
         measuringTask: null,
         items: [
           {
@@ -849,6 +852,7 @@ describe('backendWarehouse goods verify flow', () => {
         allocatedQty: 0,
         availableQty: 500,
         orgId: 2,
+        subInventoryCode: 'ACME-S1',
       },
       box: {
         id: 'SBOX-0001',
@@ -949,6 +953,7 @@ describe('backendWarehouse stock search flow', () => {
           shelfCode: 'A-01-01',
           boxId: 'SBOX-0001',
           orgId: 2,
+          subInventoryCode: 'ACME-S1',
           totalQty: 500,
           allocatedQty: 0,
           availableQty: 500,
@@ -962,6 +967,7 @@ describe('backendWarehouse stock search flow', () => {
           shelfCode: null,
           boxId: null,
           orgId: null,
+          subInventoryCode: null,
           totalQty: 0,
           allocatedQty: 0,
           availableQty: 0,

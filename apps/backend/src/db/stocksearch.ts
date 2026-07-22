@@ -47,8 +47,9 @@ export interface StockSearchLotRow {
   cow: string | null;
   shelfCode: string | null;
   boxId: string | null;
-  /** Derived via shelf_code → shelves.org_id. */
+  /** Stamped from the shelf at put-away (the lot's location pair). */
   orgId: number | null;
+  subInventoryCode: string | null;
   totalQty: number;
   allocatedQty: number;
   availableQty: number;
@@ -85,7 +86,8 @@ export async function searchStock(db: AppDb, filters: StockSearchFilters): Promi
         il.coo, il.cow,
         il.shelf_code AS "shelfCode",
         il.box_id AS "boxId",
-        s.org_id AS "orgId",
+        il.org_id AS "orgId",
+        il.sub_inventory_code AS "subInventoryCode",
         il.total_qty AS "totalQty",
         il.allocated_qty AS "allocatedQty",
         il.available_qty AS "availableQty",
@@ -95,7 +97,6 @@ export async function searchStock(db: AppDb, filters: StockSearchFilters): Promi
         p.default_coo AS "defaultCoo"
       FROM inventory_lots il
       JOIN parts p ON p.part_no = il.part_no
-      LEFT JOIN shelves s ON s.code = il.shelf_code
       WHERE TRUE
       ${partNoNorm ? sql`AND strpos(regexp_replace(upper(p.part_no), '\\s', '', 'g'), ${partNoNorm}) > 0` : sql``}
       ${filters.shelfCode ? sql`AND il.shelf_code = ${filters.shelfCode}` : sql``}

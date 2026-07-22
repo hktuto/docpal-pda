@@ -10,6 +10,7 @@ import {
   countryList,
   boxSizeList,
   customerProfiles,
+  subInventories,
   netWeightFormula,
   userGroups,
   userGroupMembers,
@@ -35,10 +36,12 @@ adminRoute.route(
       code: reqStr(b, "code"),
       zone: optStr(b, "zone"),
       orgId: optInt(b, "orgId"),
+      subInventoryCode: optStr(b, "subInventoryCode"),
     }),
     update: (b) => ({
       ...(b.zone !== undefined && { zone: optStr(b, "zone") }),
       ...(b.orgId !== undefined && { orgId: optInt(b, "orgId") }),
+      ...(b.subInventoryCode !== undefined && { subInventoryCode: optStr(b, "subInventoryCode") }),
       updatedAt: new Date(),
     }),
   })
@@ -151,6 +154,26 @@ adminRoute.route(
       ...(b.label !== undefined && { label: reqStr(b, "label") }),
       ...(b.rule !== undefined && { rule: optStr(b, "rule") }),
       ...(b.remark !== undefined && { remark: optStr(b, "remark") }),
+      updatedAt: new Date(),
+    }),
+  })
+);
+
+adminRoute.route(
+  "/sub-inventories",
+  createCrudRouter({
+    table: subInventories,
+    pk: subInventories.code,
+    create: (b) => ({
+      code: reqStr(b, "code"),
+      name: reqStr(b, "name"),
+      orgId: reqInt(b, "orgId"),
+      customerCode: optStr(b, "customerCode"),
+    }),
+    update: (b) => ({
+      ...(b.name !== undefined && { name: reqStr(b, "name") }),
+      ...(b.orgId !== undefined && { orgId: reqInt(b, "orgId") }),
+      ...(b.customerCode !== undefined && { customerCode: optStr(b, "customerCode") }),
       updatedAt: new Date(),
     }),
   })

@@ -57,3 +57,33 @@ decisions behind it).
 - Client impact inventory: `apps/web/services/types.ts` is the DTO contract
   (no `packages/shared` usage in web); admin drops the sub-inventories and
   warehouse-sections CRUD pages.
+
+## Amendment 2026-07-22 — sub-inventory restored next to org_id
+
+The 2026-07-21 redesign collapsed warehouse_code / warehouse_section_code /
+sub_inventory_code down to org_id. This amendment restores
+`sub_inventory_code` (only — warehouse_code and warehouse_sections stay gone):
+the pair **`org_id` + `sub_inventory_code`** now identifies stock partitioning
+(Oracle EBS organization + subinventory style).
+
+- **`sub_inventories` is back** (`code` PK, `name`, `org_id` integer NOT NULL,
+  `customer_code` nullable FK → customer_profiles, timestamps).
+  `sub_inventories.org_id` anchors which org the sub-inventory belongs to —
+  the pair is enforced here (plain integer office id, no FK to a lookup).
+- **`sub_inventory_code`** (FK → sub_inventories(code)) sits next to the
+  existing `org_id` on `shelves` (nullable), `receiving_orders` (NOT NULL —
+  mandatory like the pre-redesign design), `receiving_invoices` (nullable),
+  `receiving_invoice_items` (nullable). `picking_orders` gains both `org_id`
+  and `sub_inventory_code` **nullable**; `inventory_lots` gains both
+  **nullable**, and the `inventory_lots_unique_lot` partial unique index is
+  extended with the pair.
+- **Allocation matches on the pair again** (adapted from the pre-redesign
+  engine): demands carry the pair from picking_orders; lots match on their own
+  pair, receiving sources on the receiving order's pair; a demand without the
+  pair is org-agnostic and matches anything. Customer segregation returns via
+  `sub_inventories.customer_code` — sources in a customer-segregated
+  sub-inventory only allocate to picking orders of that customer
+  (`customer_profiles.rule` remains stored-not-interpreted).
+- Put-away lot materialization stamps the lot's pair from the shelf; the
+  receiving ingest upsert requires `order.subInventoryCode` again (400 when
+  missing) and the picking upsert accepts the pair optionally.

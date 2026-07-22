@@ -1,6 +1,6 @@
 import { pgTable, text, integer, boolean, real, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
-import { users, parts, customerProfiles } from "./master.js";
+import { users, parts, customerProfiles, subInventories } from "./master.js";
 
 export const pickingOrders = pgTable(
   "picking_orders",
@@ -11,6 +11,9 @@ export const pickingOrders = pgTable(
     poNo: text("po_no"),
     shipTo: text("ship_to"), // 收货方 / 出货目的描述（含目的国家，非结构化地址全文）
     customerCode: text("customer_code").references(() => customerProfiles.code), // 出货客户
+    // 出货位置配对（nullable — allocation 只在订单带配对时按位置匹配）
+    orgId: integer("org_id"), // 出货办公室, 2: HK
+    subInventoryCode: text("sub_inventory_code").references(() => subInventories.code), // 从哪一个子库存出货
     issueReason: text("issue_reason"),
     issueQty: integer("issue_qty"),
     issuePackSize: integer("issue_pack_size"),

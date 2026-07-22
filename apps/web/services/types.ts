@@ -36,6 +36,7 @@ export interface ReceivingOrderListRow {
   supplierCode: string | null;
   supplierName: string | null;
   orgId: number;
+  subInventoryCode: string | null;
   invoiceCount: number;
   itemCount: number;
   remainingItems: number;
@@ -62,6 +63,7 @@ export interface ReceivingOrderDetail {
   deliveryDate: string | null;
   dateCode: string | null;
   orgId: number;
+  subInventoryCode: string | null;
   arrivedAt: string | null;
   arrivedBy: string | null;
   createdAt: string;
@@ -79,6 +81,7 @@ export interface ReceivingInvoice {
   totalCtn: number | null;
   deliveryDate: string | null;
   orgId: number;
+  subInventoryCode: string | null;
   createdAt: string;
   updatedAt: string;
   items: ReceivingItem[];
@@ -99,6 +102,7 @@ export interface ReceivingItem {
   lotCode: string | null;
   coo: string | null;
   cow: string | null;
+  subInventoryCode: string | null;
   allocatedQty: number;
   part: {
     id: string;
@@ -288,6 +292,8 @@ export interface PickingOrderListRow {
   poNo: string | null;
   shipTo: string | null;
   customerCode: string | null;
+  orgId: number | null;
+  subInventoryCode: string | null;
   deliveryDate: string | null;
   itemCount: number;
   totalQty: number;
@@ -362,6 +368,8 @@ export interface PickingOrderDetail {
   poNo: string | null;
   shipTo: string | null;
   customerCode: string | null;
+  orgId: number | null;
+  subInventoryCode: string | null;
   issueReason: string | null;
   issueQty: number | null;
   issuePackSize: number | null;
@@ -425,6 +433,7 @@ export interface PutAwayCandidate {
   supplierCode: string | null;
   supplierName: string | null;
   orgId: number;
+  subInventoryCode: string | null;
   receivedItems: number;
   unboxedItems: number;
 }
@@ -492,7 +501,7 @@ export interface PutAwayBox {
 }
 
 export interface PutAwayDetail {
-  order: { id: string; batchNo: string; status: string };
+  order: { id: string; batchNo: string; status: string; subInventoryCode: string | null };
   items: PutAwayExpectedItem[];
   lots: PutAwayLot[];
   scans: PutAwayScan[];
@@ -513,6 +522,7 @@ export interface Shelf {
   code: string;
   zone: string | null;
   orgId: number | null;
+  subInventoryCode: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -644,6 +654,7 @@ export interface GoodsVerifyTaskDetail {
     allocatedQty: number;
     availableQty: number;
     orgId: number | null;
+    subInventoryCode: string | null;
   };
   box: { id: string; status: string; items: GoodsVerifyBoxItem[] } | null;
 }
@@ -684,6 +695,7 @@ export interface StockSearchLot {
   shelfCode: string | null;
   boxId: string | null;
   orgId: number | null;
+  subInventoryCode: string | null;
   totalQty: number;
   allocatedQty: number;
   availableQty: number;

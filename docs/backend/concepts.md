@@ -23,28 +23,31 @@ lines, one per part/PO line).
 receiving_orders 1──N receiving_invoices 1──N receiving_invoice_items
 ```
 
-## 3. Stock is partitioned in three levels: warehouse → section → sub-inventory
+## 3. Stock is partitioned by the pair org_id + sub_inventory_code
 
-Stock and stock-affecting documents are stamped with three location levels:
+The app runs one standalone instance per warehouse (no `warehouse_code`).
+Stock and stock-affecting documents are stamped with a location pair:
 
 ```
-warehouse (e.g. HK1) → warehouse_section (e.g. MAIN) → sub_inventory (e.g. STORE1)
+org_id (integer office, e.g. 2 = HK) + sub_inventory_code (e.g. STORE1)
 ```
 
-- `warehouse_code` — the warehouse instance (env `WAREHOUSE_CODE`, default
-  `HK1`; plain text, no lookup table — each deployed instance serves one
-  warehouse). `NOT NULL`.
-- `warehouse_section_code` — a zone-sized partition inside the warehouse
-  (`warehouse_sections` lookup table). Nullable for now.
+- `org_id` — the office/organization the stock belongs to (plain integer, no
+  lookup table). `NOT NULL DEFAULT 2` on the receiving tables; nullable
+  elsewhere.
 - `sub_inventory_code` — the store the goods go into (`sub_inventories`
-  lookup). A customer may request their goods be stored separately
+  lookup; its own `org_id` anchors which org the sub-inventory belongs to). A
+  customer may request their goods be stored separately
   (`sub_inventories.customer_code`). On receiving orders it is mandatory
-  (`NOT NULL`).
+  (`NOT NULL`); on `picking_orders` and `inventory_lots` it is nullable.
 
-The three columns ride together on `shelves`, `receiving_orders`,
-`receiving_invoices`, `picking_orders`, and `inventory_lots`, and all three
-are part of the `inventory_lots_unique_lot` identity — the same lot tuple can
-exist independently per warehouse / section / sub-inventory.
+The pair rides together on `shelves`, `receiving_orders`,
+`receiving_invoices`, `receiving_invoice_items`, `picking_orders`, and
+`inventory_lots`, and both columns are part of the
+`inventory_lots_unique_lot` identity — the same lot tuple can exist
+independently per org / sub-inventory. Allocation matches demand to sources
+on the pair (a NULL on the picking order side matches anything); sources in a
+customer-segregated sub-inventory only serve that customer's orders.
 
 ## 4. Date-code fallback from order to items
 

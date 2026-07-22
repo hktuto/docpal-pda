@@ -1,6 +1,6 @@
 import { pgTable, text, integer, boolean, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
-import { users, suppliers, parts } from "./master.js";
+import { users, suppliers, parts, subInventories } from "./master.js";
 
 // = Packing List Batch
 export const receivingOrders = pgTable(
@@ -11,6 +11,7 @@ export const receivingOrders = pgTable(
     supplierId: text("supplier_id").references(() => suppliers.id),
     deliveryDate: timestamp("delivery_date", { mode: "date" }),
     orgId: integer("org_id").notNull().default(2), // 收货办公室, 2: HK
+    subInventoryCode: text("sub_inventory_code").notNull().references(() => subInventories.code), // 收货入哪一个子库存（每单必有）
     dateCode: text("date_code"), // 整单 date code；行无 date_code 时继承此值
     status: text("status").notNull().default("pending"), // pending | in_hand | provisional_received | clear
     arrivedAt: timestamp("arrived_at", { mode: "date" }),
@@ -34,6 +35,7 @@ export const receivingInvoices = pgTable("receiving_invoices", {
   totalCtn: integer("total_ctn"), // 总箱数
   deliveryDate: timestamp("delivery_date", { mode: "date" }), // 出货日期，非入库时间
   orgId: integer("org_id").notNull().default(2), // 出货方办公室, 2: HK
+  subInventoryCode: text("sub_inventory_code").references(() => subInventories.code), // 放到哪一个子库存中，如 STORE1，允许为空
   createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
 });
@@ -58,6 +60,7 @@ export const receivingInvoiceItems = pgTable(
     coo: text("coo"), // country_of_origin
     cow: text("cow"), // country_of_wafer
     orgId: integer("org_id").notNull().default(2), // 收货办公室, 2: HK
+    subInventoryCode: text("sub_inventory_code").references(() => subInventories.code), // 子库存，允许为空
     reportedMismatch: boolean("reported_mismatch").notNull().default(false),
     mismatchReason: text("mismatch_reason"),
     mismatchQty: integer("mismatch_qty"),

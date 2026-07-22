@@ -40,10 +40,22 @@ export const entities: Record<string, EntityConfig> = {
       { key: "code", label: "Code", type: "text", required: true, readonlyOnEdit: true },
       { key: "zone", label: "Zone", type: "text" },
       { key: "orgId", label: "Org ID", type: "number" },
+      { key: "subInventoryCode", label: "Sub-inventory", type: "text" },
     ],
     extraColumns: [
       { key: "createdAt", label: "Created" },
       { key: "updatedAt", label: "Updated" },
+    ],
+  },
+  "sub-inventories": {
+    path: "sub-inventories",
+    title: "Sub-inventories",
+    pk: "code",
+    fields: [
+      { key: "code", label: "Code", type: "text", required: true, readonlyOnEdit: true },
+      { key: "name", label: "Name", type: "text", required: true },
+      { key: "orgId", label: "Org ID", type: "number", required: true },
+      { key: "customerCode", label: "Customer code", type: "text" },
     ],
   },
   suppliers: {
@@ -158,6 +170,7 @@ export const entities: Record<string, EntityConfig> = {
 /** Pages rendered as a generic CrudTable, in nav order. */
 export const entityPages: { key: string; route: string; title: string }[] = [
   { key: "shelves", route: "/shelves", title: entities.shelves.title },
+  { key: "sub-inventories", route: "/sub-inventories", title: entities["sub-inventories"].title },
   { key: "suppliers", route: "/suppliers", title: entities.suppliers.title },
   { key: "parts", route: "/parts", title: entities.parts.title },
   { key: "countries", route: "/countries", title: entities.countries.title },

@@ -68,6 +68,7 @@ Storage locations (shelves and docks).
 | code | text PK | Shelf/location code |
 | zone | text | Zone within the warehouse |
 | org_id | integer | Office (HK, SZ, CME, ...) distinguishing per-office shelf locations, for extend if need to seperate org from shelf |
+| sub_inventory_code | text FK → sub_inventories(code) | Sub-inventory the shelf belongs to (with org_id, the shelf's location pair) |
 | created_at | timestamp NOT NULL | Creation time (UTC) |
 | updated_at | timestamp NOT NULL | Last update time (UTC) |
 
@@ -111,6 +112,23 @@ Customer master used by picking orders and customer-segregated stores.
 | label | text NOT NULL | Display label |
 | rule | text | formual for a customer |
 | remark | text | Free-form remark |
+| created_at | timestamp NOT NULL | Creation time (UTC) |
+| updated_at | timestamp NOT NULL | Last update time (UTC) |
+
+## sub_inventories
+
+Warehouse sub-inventories: logical partitions of stock inside one org (Oracle
+EBS organization + subinventory). The pair `org_id` + `sub_inventory_code`
+identifies stock partitioning; `sub_inventories.org_id` anchors which org the
+sub-inventory belongs to. `customer_code` marks a customer-segregated store —
+allocation only serves picking orders of that customer from it.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| code | text PK | Sub-inventory code, e.g. STORE1 |
+| name | text NOT NULL | Sub-inventory name |
+| org_id | integer NOT NULL | Owning office (2 = HK; plain integer, no FK to a lookup) |
+| customer_code | text FK → customer_profiles(code) | Set for customer-segregated stores |
 | created_at | timestamp NOT NULL | Creation time (UTC) |
 | updated_at | timestamp NOT NULL | Last update time (UTC) |
 
@@ -168,6 +186,7 @@ this app by the user (no upstream sync key).
 | supplier_id | text FK → suppliers(id) | Supplier |
 | delivery_date | timestamp | Expected delivery date |
 | org_id | integer NOT NULL DEFAULT 2 | Receiving office |
+| sub_inventory_code | text NOT NULL FK → sub_inventories(code) | Sub-inventory the order receives into (mandatory per order; with org_id, the receiving location pair) |
 | date_code | text | Batch-level date code; items without one inherit it |
 | status | text NOT NULL DEFAULT 'pending' | Order status |
 | arrived_at | timestamp | Arrival confirmation time |
@@ -193,6 +212,7 @@ Packing-list header — one supplier invoice inside a receiving order.
 | total_ctn | integer | Total carton count |
 | delivery_date | timestamp | Ship-out date (not the inbound time) |
 | org_id | integer NOT NULL DEFAULT 2 | Shipper office, 2 = HK |
+| sub_inventory_code | text FK → sub_inventories(code) | Sub-inventory override for this invoice (nullable) |
 | created_at | timestamp NOT NULL | Creation time (UTC) |
 | updated_at | timestamp NOT NULL | Last update time (UTC) |
 
@@ -218,6 +238,7 @@ Packing-list line items.
 | coo | text | Country of origin |
 | cow | text | Country of wafer |
 | org_id | integer NOT NULL DEFAULT 2 | Receiving office |
+| sub_inventory_code | text FK → sub_inventories(code) | Sub-inventory override for this line (nullable) |
 | reported_mismatch | boolean NOT NULL DEFAULT false | A mismatch was reported on this line |
 | mismatch_reason | text | Mismatch reason |
 | mismatch_qty | integer | Mismatched quantity |
@@ -243,6 +264,8 @@ external_id).
 | po_no | text | Customer PO number |
 | ship_to | text | Ship-to description (merged with destination country; unstructured, not a full address) |
 | customer_code | text FK → customer_profiles(code) | Customer |
+| org_id | integer | Shipping office (nullable — allocation matches on the pair only when set) |
+| sub_inventory_code | text FK → sub_inventories(code) | Sub-inventory to ship from (nullable — with org_id, the shipping location pair) |
 | issue_reason | text | Issue-report reason |
 | issue_qty | integer | Issue-report quantity |
 | issue_pack_size | integer | Issue-report pack size |
@@ -353,8 +376,8 @@ Note: index on `shipping_box_id`.
 
 On-hand stock lots — one row per unique
 part/date-code/COO/COW/location combination. Dock lots use a
-virtual shelf code so the lot key never goes NULL. The lot's org derives from
-its shelf (`shelf_code → shelves.org_id`).
+virtual shelf code so the lot key never goes NULL. The lot's location pair
+(`org_id` + `sub_inventory_code`) is stamped from the shelf at put-away.
 
 | Field | Type | Description |
 | --- | --- | --- |
@@ -367,14 +390,16 @@ its shelf (`shelf_code → shelves.org_id`).
 | cow | text | Country of wafer |
 | shelf_code | text FK → shelves(code) | Location (virtual shelf for dock/GIT lots) |
 | box_id | text | Shelf box holding the stock |
+| org_id | integer | Lot's office (stamped from the shelf at put-away) |
+| sub_inventory_code | text FK → sub_inventories(code) | Lot's sub-inventory (stamped from the shelf at put-away) |
 | total_qty | integer NOT NULL DEFAULT 0 | Total quantity (dock lots: expected qty; shelf lots: on-hand stock) |
 | allocated_qty | integer NOT NULL DEFAULT 0 | Reserved quantity |
 | available_qty | integer GENERATED ALWAYS AS (total_qty - allocated_qty) | Available (unreserved) quantity |
 
 Note: partial unique index `inventory_lots_unique_lot` on `(part_no,
-date_code, coo, cow, shelf_code, box_id)` WHERE `shelf_code IS NOT NULL OR
-box_id IS NOT NULL`; indexes on `part_no`, `(part_no, available_qty)`, and
-`(shelf_code, box_id)`.
+date_code, coo, cow, shelf_code, box_id, org_id, sub_inventory_code)` WHERE
+`shelf_code IS NOT NULL OR box_id IS NOT NULL`; indexes on `part_no`,
+`(part_no, available_qty)`, and `(shelf_code, box_id)`.
 
 ## inventory_lot_sources
 
