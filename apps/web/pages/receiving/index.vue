@@ -77,7 +77,7 @@ const filters: { labelKey: string; value: ReceivingFilter }[] = [
   { labelKey: "status.receiving.clear", value: "clear" },
 ];
 
-const filter = ref<ReceivingFilter>("in_hand");
+const filter = ref<ReceivingFilter>("pending");
 const search = ref("");
 
 const rawRows = ref<ReceivingOrderListRow[]>([]);

@@ -36,7 +36,9 @@
         </template>
 
         <DetailRow :label="$t('receiving.detail.supplier')" :value="order.supplier?.name" />
+        <DetailRow :label="$t('goodsVerify.detail.dateCode')" :value="order.dateCode" />
         <DetailRow :label="$t('receiving.detail.deliveryDate')" :value="order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : null" />
+
         <DetailRow
           v-if="order.status !== 'clear' && remainingItems > 0"
           :label="$t('receiving.detail.remainingItems')"
@@ -295,7 +297,6 @@ async function load() {
       warehouse.getReceivingOrder(orderId),
       warehouse.getPickingOrdersByReceivingOrder(orderId),
     ]);
-
     order.value = detail;
     pickingOrders.value = picking.pickingOrders;
 
