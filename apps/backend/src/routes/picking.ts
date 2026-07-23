@@ -3,6 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import type { Context } from "hono";
 import { db } from "../db.js";
 import {
+  acquireWorkLock,
   addAllUnboxedToShippingBox,
   addPackageToBox,
   cancelShippingBox,
@@ -11,8 +12,10 @@ import {
   finishPickingOrder,
   getPickingOrderDetail,
   listPickingOrders,
+  releaseWorkLock,
   removePackageFromBox,
   removeScannedPackage,
+  reorderPickingOrders,
   reportPickingOrderIssues,
   scanPickingItem,
   updateShippingBox,
@@ -57,6 +60,16 @@ pickingRoute.post("/picking-orders/report-issues", async (c) => {
   const body = await readJson<{ entries?: PickingIssueEntry[] }>(c);
   if (!Array.isArray(body.entries)) throw new HTTPException(400, { message: "entries is required" });
   const result = await reportPickingOrderIssues(db, { actorId: actorFrom(c).id, entries: body.entries });
+  return c.json(result, 200);
+});
+
+// Admin reorder: { orderIds } in priority order → priority_seq 1..n, then
+// re-allocate. Registered before /picking-orders/:id like report-issues.
+pickingRoute.post("/picking-orders/reorder", async (c) => {
+  const body = await readJson<{ orderIds?: string[] }>(c);
+  if (!Array.isArray(body.orderIds)) throw new HTTPException(400, { message: "orderIds is required" });
+  const result = await reorderPickingOrders(db, { actorId: actorFrom(c).id, orderIds: body.orderIds });
+  await reallocateBestEffort("reorder");
   return c.json(result, 200);
 });
 
@@ -177,4 +190,17 @@ pickingRoute.post("/shipping-boxes/:id/close", async (c) => {
 pickingRoute.post("/picking-orders/:id/finish", async (c) => {
   const task = await finishPickingOrder(db, { pickingOrderId: c.req.param("id"), actorId: actorFrom(c).id });
   return c.json(task, 200);
+});
+
+// Page-driven work lock: acquire/refresh while the order page is open
+// (409 lock_held with holder info when another user holds a fresh lock).
+pickingRoute.post("/picking-orders/:id/work-lock", async (c) => {
+  const lock = await acquireWorkLock(db, { orderId: c.req.param("id"), actorId: actorFrom(c).id });
+  return c.json(lock, 200);
+});
+
+// Best-effort release on page leave (sendBeacon — no body parsing needed).
+pickingRoute.delete("/picking-orders/:id/work-lock", async (c) => {
+  await releaseWorkLock(db, { orderId: c.req.param("id"), actorId: actorFrom(c).id });
+  return c.json({ ok: true }, 200);
 });

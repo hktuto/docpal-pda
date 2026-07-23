@@ -136,6 +136,17 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     reason, qty?, packSize?, note?, remark?}]}` → `{reported[], skipped[]}` —
     per-order issue fields + `issue` status + transition log; unknown ids and
     non-pending/picking orders are skipped.
+  - `POST /picking-orders/:id/work-lock` (no body) → `{orderId, workingBy}` —
+    acquire/refresh the page work lock (idempotent per user; 409 `lock_held`
+    with `{holderId, holderName}` when another user holds a fresh lock; the
+    lock expires 10 min after `working_at`) /
+    `DELETE /picking-orders/:id/work-lock` (no body) — best-effort release on
+    page leave (holder only). Locked orders are skipped by `allocateAll`;
+    finishing an order clears its lock.
+  - `POST /picking-orders/reorder` `{orderIds[]}` → `{reordered}` — rewrites
+    `priority_seq` 1..n in the given order (400 `invalid_order_ids` for
+    unknown/finished ids), emits `picking.reordered`, then runs `allocateAll`.
+    The list endpoint sorts by `priority_seq` (allocation order).
 - Measuring flow (`apps/backend/src/routes/measuring.ts`):
   - `GET /measuring-tasks?status=` — list with `orderNo`/`shipTo` and
     server-side `boxCount`/`closedBoxCount` (closed = any status but `open`).
@@ -215,7 +226,8 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   `WHERE id > since` every ~1.5 s (heartbeat comment every 25 s) and rows are
   pruned after 3 days. Catalog: `allocation.computed` (from `allocateAll`,
   only on net allocation change), `picking_order.created` /
-  `picking_order.updated`, `receiving_order.upserted` (ingest upserts),
+  `picking_order.updated`, `picking.reordered` (priority reorder, emitted even
+  when allocations did not change), `receiving_order.upserted` (ingest upserts),
   `goods_verify.tasks_created` (day-end generate). Frames carry
   `topics` (URL path prefixes like `/picking-orders`) that web clients use to
   invalidate their local API cache. On Vercel the stream self-closes at ~55 s

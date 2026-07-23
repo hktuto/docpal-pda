@@ -41,6 +41,16 @@
 - Finish a picking order manually, or automatically when the last package
   is boxed — finishing creates a measuring task.
 - Per-order issue reporting (`POST /picking-orders/report-issues`).
+- Page work lock: opening the picking detail or scan-session page acquires
+  the server-side work lock on the order (`POST /picking-orders/:id/work-lock`,
+  refreshed every 3 min while open, keepalive release on leave, expires 10 min
+  after `working_at`). A locked order's allocations are never wiped by
+  `allocateAll`. A second user opening the same order gets 409 `lock_held` and
+  a read-only page with a "held by <name>" banner.
+- Allocation priority: `picking_orders.priority_seq` (lower = allocated
+  first) drives both `allocateAll` demand order and the picking list order;
+  `POST /picking-orders/reorder` rewrites it and re-allocates (admin UI
+  comes with the console revamp).
 
 ## Out of scope
 
@@ -71,6 +81,9 @@
   put-away detail page).
 - `composables/usePickingScanQueue.ts` — the session queue + client-side
   validation (tests in `tests/usePickingScanQueue.test.ts`).
+- `composables/usePickingWorkLock.ts` — page work lock acquire/3-min
+  refresh/keepalive release + `heldByOther` state (tests in
+  `tests/usePickingWorkLock.test.ts`).
 - `components/picking/PickingItemsSection.vue`,
   `components/picking/PickingBoxesSection.vue`,
   `components/picking/PickingIssueBanner.vue` — detail sub-views.
@@ -85,13 +98,21 @@
   `GET /picking-orders`, `GET /picking-orders/:id`,
   `POST /picking-items/:id/scan`, `/packages/:id` verbs,
   `/shipping-boxes/:id*` lifecycle, `POST /picking-orders/:id/finish`
-  (→ measuring task), `POST /picking-orders/report-issues`.
+  (→ measuring task), `POST /picking-orders/report-issues`,
+  `POST`/`DELETE /picking-orders/:id/work-lock`, `POST /picking-orders/reorder`.
+- `apps/backend/src/db/allocate.ts` — allocation engine: demands in
+  `priority_seq` order, skips work-locked orders, open qty = `qty − Σ
+  picking_packages`.
 - `apps/backend/src/routes/ingest.ts` + `apps/backend/src/db/ingest.ts` —
   `PUT /picking-orders/:externalId` upsert; a changed upsert triggers
   allocation.
 
 ## Known limitations
 
+- **Work lock is best-effort:** page leave releases via keepalive fetch, but
+  an app kill/crash relies on the 10-min expiry — an abandoned order can hold
+  its allocations for up to 10 minutes. No force-release yet (admin console
+  revamp); no lock stealing.
 - **Allocation ids are unstable between scan and boxing:** post-scan
   `allocateAll` rebuilds an item's allocation rows with new ids until its
   packages are boxed, so the detail page re-fetches after every scan/box
@@ -111,6 +132,8 @@
 - `docs/superpowers/specs/2026-07-10-allocation-box-remark-design.md`
 - `docs/superpowers/specs/2026-07-18-picking-scan-session-design.md`
 - `docs/superpowers/specs/2026-07-19-box-label-print-preprinted-id-design.md`
+- `docs/superpowers/specs/2026-07-23-picking-priority-allocation-design.md`
+- `docs/superpowers/plans/2026-07-23-picking-priority-allocation.md`
 - `docs/superpowers/plans/2026-07-12-picking-execution.md`
 - `docs/superpowers/plans/2026-07-18-picking-scan-session.md`
 - `docs/superpowers/plans/2026-07-19-box-label-print-preprinted-id.md`

@@ -535,6 +535,13 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
   await db.insert(receivingInvoiceItems).values([...realReceivingInvoiceItems]);
   await db.insert(pickingOrders).values([...realPickingOrders]);
   await db.insert(pickingItems).values([...realPickingItems]);
+
+  // Allocation priority: creation order is the initial queue order (admin
+  // reorders afterwards via POST /picking-orders/reorder).
+  await db.execute(sql`
+    UPDATE picking_orders SET priority_seq = r.seq
+    FROM (SELECT id, row_number() OVER (ORDER BY created_at) AS seq FROM picking_orders) r
+    WHERE picking_orders.id = r.id`);
 }
 
 /** Seed demo data when the users table is empty. Returns true when it seeded. */

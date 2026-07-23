@@ -11,6 +11,10 @@
         </button>
       </header>
 
+      <div v-if="heldByOther" class="scan-session__lock-banner">
+        {{ $t('picking.scanSession.heldBy', { name: heldByOther }) }}
+      </div>
+
       <div v-if="completed" class="card scan-session__done">
         <p class="scan-session__done-text">{{ $t('picking.scanSession.allApplied') }}</p>
         <p class="scan-session__done-hint">{{ $t('picking.scanSession.boxingHint') }}</p>
@@ -73,11 +77,11 @@
         </table>
 
         <footer class="scan-session__footer">
-          <button class="btn btn--small" :disabled="applying || ocrCapturing" @click="captureOcr">
+          <button class="btn btn--small" :disabled="applying || ocrCapturing || !!heldByOther" @click="captureOcr">
             <template v-if="ocrCapturing"><InlineSpinner /> {{ $t('picking.scanSession.ocrCapture') }}</template>
             <template v-else>{{ $t('picking.scanSession.ocrCapture') }}</template>
           </button>
-          <button class="btn" :disabled="applying || queuedCount === 0" @click="confirm">
+          <button class="btn" :disabled="applying || queuedCount === 0 || !!heldByOther" @click="confirm">
             <template v-if="applying"><InlineSpinner /> {{ $t('picking.scanSession.confirming') }}</template>
             <template v-else>{{ $t('picking.scanSession.confirm', { count: queuedCount }) }}</template>
           </button>
@@ -112,6 +116,7 @@
 import { useToast } from "~/composables/useToast";
 import { useErrorMessage } from "~/composables/errorMessage";
 import { useWarehouse } from "~/composables/useWarehouse";
+import { usePickingWorkLock } from "~/composables/usePickingWorkLock";
 import { useHardwareScanner } from "~/composables/useHardwareScanner";
 import { usePickingScanQueue } from "~/composables/usePickingScanQueue";
 import { captureLabel, ocrResultToInput, useLabelScan } from "~/composables/useLabelScan";
@@ -136,6 +141,7 @@ const route = useRoute();
 const router = useRouter();
 const orderId = route.params.id as string;
 const warehouse = useWarehouse();
+const { heldByOther } = usePickingWorkLock(orderId);
 const { t } = useI18n();
 const errorMessage = useErrorMessage();
 const { showToast } = useToast();
@@ -248,6 +254,7 @@ useHardwareScanner({
     !completed.value &&
     !reviewOpen.value &&
     !multiOpen.value &&
+    !heldByOther.value &&
     !!order.value,
   onScan: async (rawValue: string) => {
     if (!order.value) return;
@@ -375,7 +382,7 @@ function onMultiRowRemoved(index: number) {
 }
 
 async function confirm() {
-  if (applying.value || queuedCount.value === 0) return;
+  if (applying.value || queuedCount.value === 0 || heldByOther.value) return;
   applying.value = true;
   try {
     const failed = await applyAll(
@@ -463,6 +470,16 @@ onUnmounted(() => window.removeEventListener("beforeunload", beforeUnload));
 .scan-session__progress {
   margin-bottom: 1rem;
   padding: 0.75rem 1rem;
+}
+
+.scan-session__lock-banner {
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  color: #92400e;
+  font-size: 0.875rem;
+  padding: 0.6rem 1rem;
+  margin-bottom: 1rem;
 }
 
 .scan-session__progress-row {

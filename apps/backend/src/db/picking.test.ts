@@ -8,6 +8,7 @@ import { queryAll, queryGet } from "./query.js";
 import { allocateAll } from "./allocate.js";
 import { confirmReceivingArrival } from "./receiving.js";
 import {
+  acquireWorkLock,
   addAllUnboxedToShippingBox,
   addPackageToBox,
   cancelShippingBox,
@@ -16,8 +17,10 @@ import {
   finishPickingOrder,
   getPickingOrderDetail,
   listPickingOrders,
+  releaseWorkLock,
   removePackageFromBox,
   removeScannedPackage,
+  reorderPickingOrders,
   reportPickingOrderIssues,
   scanPickingItem,
   updateShippingBox,
@@ -941,4 +944,108 @@ test("report-issues: reported/skipped, issue fields + log; validations", async (
   assert.equal(log!.fromState, "pending");
   assert.equal(log!.metadata.reason, "insufficient_stock");
   assert.equal(log!.metadata.qty, 500);
+});
+
+// --- page work lock + priority reorder (2026-07-23 design) -------------------
+
+test("work lock: acquire, same-user refresh, 409 other user, release, expired re-acquire", async () => {
+  await reseed(client);
+  const orderId = await pickingOrderIdOf("SO-2026-0001");
+  const operator = await actorIdOf("operator");
+  const admin = await actorIdOf("admin");
+
+  const lock = await acquireWorkLock(client.db, { orderId, actorId: operator });
+  assert.equal(lock.workingBy, operator);
+
+  // same-user refresh is idempotent
+  const again = await acquireWorkLock(client.db, { orderId, actorId: operator });
+  assert.equal(again.workingBy, operator);
+
+  // another user → 409 lock_held with holder info in the JSON body
+  const err = await catchHttp(acquireWorkLock(client.db, { orderId, actorId: admin }));
+  assert.equal(err.status, 409);
+  const body = (await err.res!.json()) as { error: string; holderId: string };
+  assert.equal(body.error, "lock_held");
+  assert.equal(body.holderId, operator);
+
+  // non-holder release is a silent no-op
+  await releaseWorkLock(client.db, { orderId, actorId: admin });
+  const stillHeld = await catchHttp(acquireWorkLock(client.db, { orderId, actorId: admin }));
+  assert.equal(stillHeld.status, 409);
+
+  // holder release clears the lock
+  await releaseWorkLock(client.db, { orderId, actorId: operator });
+  const reacquired = await acquireWorkLock(client.db, { orderId, actorId: admin });
+  assert.equal(reacquired.workingBy, admin);
+
+  // an expired lock (> 10 min) can be taken by anyone
+  await client.db.execute(
+    sql`UPDATE picking_orders SET working_at = now() - interval '20 minutes' WHERE id = ${orderId}`
+  );
+  const taken = await acquireWorkLock(client.db, { orderId, actorId: operator });
+  assert.equal(taken.workingBy, operator);
+});
+
+test("work lock: finished order cannot be locked", async () => {
+  await reseed(client);
+  const orderId = await insertPickingOrder("SO-LOCK-FIN", "finished");
+  const err = await catchHttp(acquireWorkLock(client.db, { orderId, actorId: await actorIdOf() }));
+  assert.equal(err.status, 409);
+});
+
+test("work lock: finishing the order clears the lock", async () => {
+  await reseed(client);
+  const actorId = await actorIdOf();
+  const orderId = await insertPickingOrder("SO-LOCK-FINISH", "picking");
+  const itemId = await insertPickingItem(orderId, "RK73H1JTTD1002F", 5);
+  await acquireWorkLock(client.db, { orderId, actorId });
+  const boxId = randomUUID();
+  await client.db.execute(
+    sql`INSERT INTO shipping_boxes (id, picking_order_id, status, created_at, updated_at)
+        VALUES (${boxId}, ${orderId}, 'open', now(), now())`
+  );
+  await client.db.execute(
+    sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, shipping_box_id, created_at, updated_at)
+        VALUES (${randomUUID()}, ${itemId}, ${orderId}, 'inventory_lot', 'test-lot', 5, ${boxId}, now(), now())`
+  );
+  await client.db.execute(sql`UPDATE picking_items SET picked_qty = 5 WHERE id = ${itemId}`);
+
+  const task = await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
+  assert.equal(task.status, "pending");
+  const row = await queryGet<{ w: string | null }>(
+    client.db,
+    sql`SELECT working_by AS w FROM picking_orders WHERE id = ${orderId}`
+  );
+  assert.equal(row!.w, null);
+});
+
+test("reorder: rewrites priority_seq, emits event, list follows, rejects bad ids", async () => {
+  await reseed(client);
+  const actorId = await actorIdOf();
+  const a = await pickingOrderIdOf("SO-2026-0001");
+  const b = await insertPickingOrder("SO-REORDER-B", "pending");
+  const cOrder = await insertPickingOrder("SO-REORDER-C", "pending");
+
+  const res = await reorderPickingOrders(client.db, { actorId, orderIds: [cOrder, a, b] });
+  assert.equal(res.reordered, 3);
+  const seqOf = async (id: string) =>
+    Number((await queryGet<{ seq: number }>(client.db, sql`SELECT priority_seq AS seq FROM picking_orders WHERE id = ${id}`))!.seq);
+  assert.equal(await seqOf(cOrder), 1);
+  assert.equal(await seqOf(a), 2);
+  assert.equal(await seqOf(b), 3);
+
+  const ev = await queryGet<{ type: string }>(
+    client.db,
+    sql`SELECT type FROM app_events WHERE type = 'picking.reordered' ORDER BY id DESC LIMIT 1`
+  );
+  assert.ok(ev);
+
+  const list = await listPickingOrders(client.db);
+  const wanted = list.map((o) => o.id).filter((id) => [cOrder, a, b].includes(id));
+  assert.deepEqual(wanted, [cOrder, a, b]);
+
+  const fin = await insertPickingOrder("SO-REORDER-FIN", "finished");
+  const err = await catchHttp(reorderPickingOrders(client.db, { actorId, orderIds: [a, fin] }));
+  assert.equal(err.status, 400);
+  assert.match(err.message, /invalid_order_ids/);
 });

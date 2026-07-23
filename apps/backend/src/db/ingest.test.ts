@@ -433,3 +433,27 @@ test("picking: upserted pending order allocates from seeded lots via allocateAll
   assert.equal(allocs[0].qty, 500);
   assert.equal(allocs[0].inventoryLotId, lotId);
 });
+
+test("picking: new order appends to the priority queue; re-upsert keeps its seq", async () => {
+  await reseed(client);
+  const first = await upsertPickingOrder(client.db, "PO-SEQ-1", {
+    order: { customerCode: "ACME" },
+    items: [{ partNo: "RK73H1JTTD2202F", qty: 10 }],
+  });
+  const second = await upsertPickingOrder(client.db, "PO-SEQ-2", {
+    order: { customerCode: "ACME" },
+    items: [{ partNo: "RK73H1JTTD2202F", qty: 10 }],
+  });
+  const seqOf = async (id: string) =>
+    Number((await queryGet<{ seq: number }>(client.db, sql`SELECT priority_seq AS seq FROM picking_orders WHERE id = ${id}`))!.seq);
+
+  const s1 = await seqOf(first.id);
+  const s2 = await seqOf(second.id);
+  assert.ok(s2 > s1, `expected second order seq ${s2} > first ${s1}`);
+
+  await upsertPickingOrder(client.db, "PO-SEQ-1", {
+    order: { customerCode: "ACME" },
+    items: [{ partNo: "RK73H1JTTD2202F", qty: 20 }],
+  });
+  assert.equal(await seqOf(first.id), s1);
+});

@@ -109,6 +109,7 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Receiving scan submission (server-side match, 409 → review) | `composables/useReceivingScan.ts` |
 | Review state wrapper | `composables/useLabelScanReview.ts` |
 | Client-side matchers (picking / put-away / measuring) | `composables/useScanMatchers.ts` |
+| Picking page work lock (acquire/refresh/release + held-by state) | `composables/usePickingWorkLock.ts` |
 | OCR/QR parser and candidate extraction | `utils/parseOcrScan.ts` |
 | Mismatch form validation (pure) | `utils/mismatch.ts` |
 

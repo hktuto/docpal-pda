@@ -9,11 +9,16 @@ import { now } from "./now.js";
 // ---------------------------------------------------------------------------
 // Allocation engine (concepts 5-6 in docs/backend/concepts.md).
 //
-// Demand: open picking items (order status pending/picking, not yet picked).
+// Demand: open picking items (order status pending/picking) whose order is NOT
+// protected by a live work lock (a PDA has the order open — see
+// WORK_LOCK_TTL_MINUTES). Open qty = qty − Σ picking_packages (boxed or not —
+// scanned-but-unboxed packages must not be re-reserved).
 // Sources, in priority order:
 //   1. shelf stock (inventory_lots with available_qty > 0)
 //   2. in-hand / provisional receiving stock (received, not yet picked)
 // Rules (confirmed with the business):
+//   - Order: demands are allocated in picking_orders.priority_seq order
+//     (admin-reorderable via POST /picking-orders/reorder).
 //   - Location: the picking order's (org_id, sub_inventory_code) pair must
 //     match the source's pair — lots match on their own pair, receiving
 //     sources on the receiving order's pair. A demand without the pair
@@ -26,8 +31,15 @@ import { now } from "./now.js";
 //     (receiving_invoice_item_id); a line WITHOUT ctn_no allocates to the
 //     whole receiving order (receiving_order_id).
 // The engine is a full idempotent recompute: existing allocations of an
-// open item are wiped (RESERVE reversal txns) and rebuilt.
+// unlocked open item are wiped (RESERVE reversal txns) and rebuilt.
 // ---------------------------------------------------------------------------
+
+/** A work lock older than this is treated as expired (no cron — compared at recompute/acquire time). */
+export const WORK_LOCK_TTL_MINUTES = 10;
+
+export function workLockExpiry(ref: Date = new Date()): Date {
+  return new Date(ref.getTime() - WORK_LOCK_TTL_MINUTES * 60_000);
+}
 
 export type DateCodeRule = (dateCode: string | null) => boolean;
 
@@ -116,16 +128,20 @@ async function loadDemands(dbOrTx: DbOrTx): Promise<DemandRow[]> {
     dbOrTx,
     sql`SELECT pi.id AS "pickingItemId",
                pi.part_no AS "partNo",
-               (pi.qty - pi.picked_qty) AS "openQty",
+               (pi.qty - COALESCE(pkg.qty, 0)) AS "openQty",
                po.customer_code AS "customerCode",
                po.org_id AS "orgId",
                po.sub_inventory_code AS "subInventoryCode"
         FROM picking_items pi
         JOIN picking_orders po ON po.id = pi.picking_order_id
+        LEFT JOIN (
+          SELECT picking_item_id, SUM(qty)::int AS qty
+          FROM picking_packages GROUP BY picking_item_id
+        ) pkg ON pkg.picking_item_id = pi.id
         WHERE po.status IN ('pending', 'picking')
-          AND pi.qty > pi.picked_qty
-          AND pi.picked_qty = 0  -- v1: never re-allocate partially picked items
-        ORDER BY po.delivery_date NULLS LAST, po.created_at, pi.id`
+          AND (po.working_by IS NULL OR po.working_at IS NULL OR po.working_at < ${workLockExpiry()})
+          AND pi.qty > COALESCE(pkg.qty, 0)
+        ORDER BY po.priority_seq, po.delivery_date NULLS LAST, po.created_at, pi.id`
   );
 }
 
@@ -147,23 +163,47 @@ async function loadLotSources(dbOrTx: DbOrTx, d: DemandRow): Promise<LotRow[]> {
 }
 
 async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow): Promise<ReceivingRow[]> {
+  // Availability must net out allocations held by work-locked orders (their
+  // rows survive the wipe). Lot sources get this for free via
+  // inventory_lots.allocated_qty; receiving sources have no such counter.
+  const expiry = workLockExpiry();
   return queryAll<ReceivingRow>(
     dbOrTx,
     sql`SELECT rii.id AS "receivingInvoiceItemId",
                ro.id AS "receivingOrderId",
                rii.ctn_no AS "ctnNo",
                rii.date_code AS "dateCode",
-               (rii.received_qty - rii.picked_qty) AS "available"
+               (rii.received_qty - rii.picked_qty
+                 - COALESCE(locked_ii.qty, 0) - COALESCE(locked_ro.qty, 0)) AS "available"
         FROM receiving_invoice_items rii
         JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
         JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
         LEFT JOIN sub_inventories si ON si.code = ro.sub_inventory_code
+        LEFT JOIN (
+          SELECT a.receiving_invoice_item_id AS rii_id, SUM(a.qty)::int AS qty
+          FROM allocations a
+          JOIN picking_items pi ON pi.id = a.picking_item_id
+          JOIN picking_orders po ON po.id = pi.picking_order_id
+          WHERE a.receiving_invoice_item_id IS NOT NULL
+            AND po.working_by IS NOT NULL AND po.working_at >= ${expiry}
+          GROUP BY a.receiving_invoice_item_id
+        ) locked_ii ON locked_ii.rii_id = rii.id
+        LEFT JOIN (
+          SELECT a.receiving_order_id AS ro_id, SUM(a.qty)::int AS qty
+          FROM allocations a
+          JOIN picking_items pi ON pi.id = a.picking_item_id
+          JOIN picking_orders po ON po.id = pi.picking_order_id
+          WHERE a.receiving_order_id IS NOT NULL AND pi.part_no = ${d.partNo}
+            AND po.working_by IS NOT NULL AND po.working_at >= ${expiry}
+          GROUP BY a.receiving_order_id
+        ) locked_ro ON locked_ro.ro_id = ro.id
         WHERE rii.part_no = ${d.partNo}
           AND ro.status IN ('in_hand', 'provisional_received')
           AND (${d.orgId}::int IS NULL OR ro.org_id = ${d.orgId})
           AND (${d.subInventoryCode}::text IS NULL OR ro.sub_inventory_code = ${d.subInventoryCode})
           AND (si.customer_code IS NULL OR si.customer_code = ${d.customerCode})
-          AND (rii.received_qty - rii.picked_qty) > 0
+          AND (rii.received_qty - rii.picked_qty
+                - COALESCE(locked_ii.qty, 0) - COALESCE(locked_ro.qty, 0)) > 0
         ORDER BY rii.date_code ASC NULLS LAST, rii.id`
   );
 }
@@ -261,6 +301,18 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
     await tx.execute(
       sql`DELETE FROM allocations WHERE ${inArray(sql`picking_item_id`, itemIds)}`
     );
+    // Apply the wipe to lot allocated_qty up front (negative deltas only):
+    // the per-demand source queries below must see availability net of the
+    // removed reservations — otherwise a priority change makes wiped stock
+    // look still-reserved. New allocations accumulate in lotDelta as usual
+    // and are applied at the end.
+    for (const [lotId, delta] of lotDelta) {
+      if (delta === 0) continue;
+      await tx.execute(
+        sql`UPDATE inventory_lots SET allocated_qty = allocated_qty + ${delta} WHERE id = ${lotId}`
+      );
+    }
+    lotDelta.clear();
 
     // Rebuild per demand.
     // In-run availability trackers (sources are shared across demands).

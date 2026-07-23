@@ -295,9 +295,17 @@ export interface PickingOrderListRow {
   orgId: number | null;
   subInventoryCode: string | null;
   deliveryDate: string | null;
+  prioritySeq: number;
+  workingBy: string | null;
+  workingByName: string | null;
   itemCount: number;
   totalQty: number;
   pickedQty: number;
+}
+
+export interface PickingWorkLock {
+  orderId: string;
+  workingBy: string;
 }
 
 export interface PickingAllocationLot {

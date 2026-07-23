@@ -206,7 +206,8 @@ export default {
       noMatchingAllocation: "掃描的項目沒有匹配的分配",
       boxCreated: "箱號 {id} 已建立",
       printComingSoon: "打印功能將於稍後版本提供",
-      itemQrUseScanMode: "這是物料標籤——請使用掃碼按鈕揀貨"
+      itemQrUseScanMode: "這是物料標籤——請使用掃碼按鈕揀貨",
+      heldBy: "此訂單正由 {name} 揀貨——唯讀"
     },
     scanSession: {
           title: "掃碼 — {orderNo}",
@@ -233,7 +234,8 @@ export default {
           invalid: "無法識別有效的料號和數量",
           reviewTitle: "確認掃描項目",
           reviewSubtitle: "請核對 OCR 識別結果，加入清單前可修改任何欄位。",
-          addToQueue: "加入清單"
+          addToQueue: "加入清單",
+          heldBy: "此訂單正由 {name} 揀貨——無法掃描"
         },
     itemsSection: {
       title: "項目",

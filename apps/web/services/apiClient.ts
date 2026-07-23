@@ -50,6 +50,9 @@ export interface ApiClient {
   post<T>(path: string, body?: unknown): Promise<T>;
   patch<T>(path: string, body?: unknown): Promise<T>;
   del<T>(path: string, body?: unknown): Promise<T>;
+  /** Fire-and-forget DELETE that survives page unload (fetch keepalive).
+   *  Used for best-effort releases on page leave; errors are swallowed. */
+  keepaliveDel(path: string): void;
 }
 
 // Session token wiring: the auth adapter (services/adapters/apiAuth.ts)
@@ -231,5 +234,13 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       request<T>("PATCH", path, { body }),
     del: <T>(path: string, body?: unknown) =>
       request<T>("DELETE", path, { body }),
+    keepaliveDel(path: string): void {
+      const headers: Record<string, string> = {};
+      const token = tokenGetter?.();
+      if (token) headers.authorization = `Bearer ${token}`;
+      // keepalive lets the request outlive the page (unload/navigation);
+      // the response is intentionally not awaited.
+      void fetch(buildUrl(path), { method: "DELETE", headers, keepalive: true }).catch(() => {});
+    },
   };
 }

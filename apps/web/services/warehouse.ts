@@ -9,6 +9,7 @@ import type {
   ReportMismatchInput,
   PickingOrderListRow,
   PickingOrderDetail,
+  PickingWorkLock,
   ScanPickingItemInput,
   ShippingBoxUpdateInput,
   ReportPickingIssueEntry,
@@ -72,6 +73,12 @@ export interface WarehouseService {
   reportPickingOrderIssues(
     entries: ReportPickingIssueEntry[]
   ): Promise<ReportPickingIssuesResult>;
+
+  // Page-driven work lock: acquire/refresh while the order page is open
+  // (throws ApiError 409 with body {error: "lock_held", holderName} when held
+  // by another user); release is fire-and-forget on page leave.
+  acquirePickingWorkLock(id: string): Promise<PickingWorkLock>;
+  releasePickingWorkLock(id: string): void;
 
   // Put-away — one aggregate read replaces the old lots/scans/boxes stitch;
   // scan matching stays client-side (QR templates), mutations are per-verb.

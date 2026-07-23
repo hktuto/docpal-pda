@@ -94,9 +94,24 @@ Selection rules (confirmed with the business):
 > idempotent recompute (wipes and rebuilds open items' allocations with
 > RESERVE ledger rows); `POST /dev/allocate` triggers it manually and
 > confirm-arrival calls it automatically. Receiving
-> sources are `in_hand` / `provisional_received` orders only. The engine and
-> the confirm-arrival trigger exist; the remaining picking/receiving flows
-> that call it are planned.
+> sources are `in_hand` / `provisional_received` orders only.
+>
+> Demand scope and order (2026-07-23 design,
+> `docs/superpowers/specs/2026-07-23-picking-priority-allocation-design.md`):
+>
+> - Demands are allocated in **`picking_orders.priority_seq`** order (lower
+>   first; `POST /picking-orders/reorder` rewrites the seq and re-allocates,
+>   emitting `picking.reordered`). New ingest orders append at the end.
+> - An order protected by a **live page work lock** (`working_by`/`working_at`
+>   — a PDA has the order open; `POST/DELETE /picking-orders/:id/work-lock`,
+>   3-min keep-alive, expires 10 min after `working_at`) is skipped entirely:
+>   its allocations are never wiped by a recompute.
+> - Open qty is `qty − Σ picking_packages` (boxed or not), so
+>   scanned-but-unboxed packages are never double-reserved and partially
+>   picked orders get their remainder re-allocated.
+> - Availability nets out locked orders' reservations: lot sources via
+>   `inventory_lots.allocated_qty`, receiving sources by subtracting the
+>   locked orders' allocation rows in the source query.
 
 ## 7. Goods-verify tasks are generated at day end
 

@@ -574,6 +574,11 @@ export async function upsertPickingOrder(
 
     if (!existing) {
       const orderId = randomUUID();
+      // Append at the end of the priority queue (admin reorders afterwards).
+      const nextSeq = await queryGet<{ seq: number }>(
+        tx,
+        sql`SELECT COALESCE(MAX(priority_seq), 0) + 1 AS seq FROM picking_orders`
+      );
       await tx.insert(pickingOrders).values({
         id: orderId,
         orderNo,
@@ -584,6 +589,7 @@ export async function upsertPickingOrder(
         orgId: body.order.orgId ?? null,
         subInventoryCode: body.order.subInventoryCode ?? null,
         status: "pending",
+        prioritySeq: nextSeq?.seq ?? 1,
       });
       for (const it of body.items) {
         await insertPickingItem(tx, orderId, it);

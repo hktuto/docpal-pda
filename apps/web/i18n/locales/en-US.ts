@@ -206,7 +206,8 @@ export default {
       noMatchingAllocation: "No matching allocation for scanned item",
       boxCreated: "Box {id} created",
       printComingSoon: "Printing will be available in a later update",
-      itemQrUseScanMode: "Item label — use the Scan button to pick items"
+      itemQrUseScanMode: "Item label — use the Scan button to pick items",
+      heldBy: "This order is being picked by {name} — read-only"
     },
     scanSession: {
           title: "Scan — {orderNo}",
@@ -233,7 +234,8 @@ export default {
           invalid: "Could not read a valid part and quantity",
           reviewTitle: "Confirm scanned item",
           reviewSubtitle: "Check the OCR result and edit any field before adding it to the list.",
-          addToQueue: "Add to list"
+          addToQueue: "Add to list",
+          heldBy: "This order is being picked by {name} — scanning disabled"
         },
     itemsSection: {
       title: "Items",

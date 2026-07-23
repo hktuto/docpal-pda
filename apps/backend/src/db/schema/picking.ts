@@ -14,6 +14,11 @@ export const pickingOrders = pgTable(
     // 出货位置配对（nullable — allocation 只在订单带配对时按位置匹配）
     orgId: integer("org_id"), // 出货办公室, 2: HK
     subInventoryCode: text("sub_inventory_code").references(() => subInventories.code), // 从哪一个子库存出货
+    prioritySeq: integer("priority_seq").notNull().default(0), // allocation/list order — lower first, admin-reorderable
+    // Page-driven work lock: a PDA with this order open keeps its allocations
+    // from being wiped by allocateAll. Expires 10 min after working_at.
+    workingBy: text("working_by").references(() => users.id),
+    workingAt: timestamp("working_at", { mode: "date" }),
     issueReason: text("issue_reason"),
     issueQty: integer("issue_qty"),
     issuePackSize: integer("issue_pack_size"),

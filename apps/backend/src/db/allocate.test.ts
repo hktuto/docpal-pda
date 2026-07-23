@@ -162,3 +162,79 @@ test("allocateAll: idempotent recompute, ledger stays consistent", async () => {
     ]
   );
 });
+
+test("allocateAll: priority_seq decides who wins scarce stock", async () => {
+  await reseed(client);
+  // order B wants 9000 of the same part as ITEM_23; lot 18 holds 10000.
+  const ORDER_B = "00000000-0000-4000-8000-0000000000b1";
+  const ITEM_B = "00000000-0000-4000-8000-0000000000b2";
+  await client.db.execute(sql`
+    INSERT INTO picking_orders (id, order_no, customer_code, org_id, sub_inventory_code, status, priority_seq, created_at, updated_at)
+    VALUES (${ORDER_B}, 'TEST-PRIO', 'ACME', 2, 'STORE1', 'pending', 1, now(), now())`);
+  await client.db.execute(sql`
+    INSERT INTO picking_items (id, picking_order_id, part_no, qty, created_at, updated_at)
+    VALUES (${ITEM_B}, ${ORDER_B}, 'RK73H1JTTD1002F', 9000, now(), now())`);
+  await client.db.execute(sql`UPDATE picking_orders SET priority_seq = 2 WHERE id = ${PO_22}`);
+
+  // B (seq 1) takes 9000 first; ITEM_23 gets only the remaining 1000.
+  await allocateAll(client.db);
+  let rows = await client.db.execute(sql`
+    SELECT picking_item_id AS item, qty FROM allocations WHERE inventory_lot_id = ${LOT_18}`);
+  const byItem = new Map(rows.map((r: any) => [r.item, Number(r.qty)]));
+  assert.equal(byItem.get(ITEM_B), 9000);
+  assert.equal(byItem.get(ITEM_23), 1000);
+
+  // swap priorities → the recompute flips the split
+  await client.db.execute(sql`UPDATE picking_orders SET priority_seq = 1 WHERE id = ${PO_22}`);
+  await client.db.execute(sql`UPDATE picking_orders SET priority_seq = 2 WHERE id = ${ORDER_B}`);
+  await allocateAll(client.db);
+  rows = await client.db.execute(sql`
+    SELECT picking_item_id AS item, qty FROM allocations WHERE inventory_lot_id = ${LOT_18}`);
+  const flipped = new Map(rows.map((r: any) => [r.item, Number(r.qty)]));
+  assert.equal(flipped.get(ITEM_23), 2000);
+  assert.equal(flipped.get(ITEM_B), 8000);
+});
+
+test("allocateAll: live work lock protects the order; expired lock is rebuilt", async () => {
+  await reseed(client);
+  const first = await allocateAll(client.db);
+  assert.equal(first.allocationsCreated, 2);
+
+  const operator = await client.db.execute(sql`SELECT id FROM users WHERE username = 'operator'`);
+  const operatorId = (operator[0] as any).id as string;
+  await client.db.execute(
+    sql`UPDATE picking_orders SET working_by = ${operatorId}, working_at = now() WHERE id = ${PO_22}`
+  );
+
+  // live lock → the order is not a demand and its allocations stay
+  const locked = await allocateAll(client.db);
+  assert.equal(locked.demands, 0);
+  assert.equal(locked.allocationsRemoved, 0);
+  const kept = await client.db.execute(sql`SELECT count(*)::int AS c FROM allocations`);
+  assert.equal(Number((kept[0] as any).c), 2);
+
+  // expired lock (> 10 min) → wiped and rebuilt like any other order
+  await client.db.execute(
+    sql`UPDATE picking_orders SET working_at = now() - interval '20 minutes' WHERE id = ${PO_22}`
+  );
+  const expired = await allocateAll(client.db);
+  assert.equal(expired.demands, 2);
+  assert.equal(expired.allocationsRemoved, 2);
+  assert.equal(expired.allocationsCreated, 2);
+});
+
+test("allocateAll: open qty subtracts unboxed packages (no double reserve)", async () => {
+  await reseed(client);
+  await allocateAll(client.db);
+  // simulate a scan: 500 of ITEM_23 consumed into an UNBOXED package
+  // (picked_qty stays 0 — the old picked_qty-based guard would re-reserve it)
+  await client.db.execute(sql`
+    INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, created_at, updated_at)
+    VALUES ('00000000-0000-4000-8000-0000000000c1', ${ITEM_23}, ${PO_22}, 'inventory_lot', ${LOT_18}, 500, now(), now())`);
+  await client.db.execute(sql`UPDATE allocations SET qty = 1500 WHERE picking_item_id = ${ITEM_23}`);
+
+  await allocateAll(client.db);
+  const a = await client.db.execute(sql`SELECT qty FROM allocations WHERE picking_item_id = ${ITEM_23}`);
+  assert.equal(a.length, 1);
+  assert.equal(Number((a[0] as any).qty), 1500);
+});

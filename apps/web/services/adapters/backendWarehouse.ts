@@ -9,6 +9,7 @@ import type {
   ReportMismatchInput,
   PickingOrderListRow,
   PickingOrderDetail,
+  PickingWorkLock,
   ScanPickingItemInput,
   ShippingBoxUpdateInput,
   ReportPickingIssueEntry,
@@ -212,6 +213,13 @@ export function createBackendWarehouseService(
       entries: ReportPickingIssueEntry[]
     ): Promise<ReportPickingIssuesResult> {
       return client.post(`/picking-orders/report-issues`, { entries });
+    },
+
+    async acquirePickingWorkLock(id: string): Promise<PickingWorkLock> {
+      return client.post(`/picking-orders/${id}/work-lock`);
+    },
+    releasePickingWorkLock(id: string): void {
+      client.keepaliveDel(`/picking-orders/${id}/work-lock`);
     },
 
     // Put-away — one aggregate read (order + expected items + materialized

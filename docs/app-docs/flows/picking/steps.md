@@ -10,6 +10,10 @@ From the home screen, tap **Picking**. The list shows open picking orders with s
 
 Tap the order you want to work on. The detail page opens.
 
+Opening an order locks it to you: while your page is open, the system will not re-shuffle that order's allocations. The lock releases when you leave the page (or expires after 10 minutes if the app is closed). If a banner says the order is "being picked by" a coworker, the page is read-only — pick a different order or ask them to leave it.
+
+The list order is the priority order set by the office — work from the top.
+
 ![Picking detail](./assets/picking-detail.png)
 
 ## 3. Review allocated lines

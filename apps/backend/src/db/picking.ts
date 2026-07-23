@@ -6,6 +6,8 @@ import { queryAll, queryGet, queryRun, type DbOrTx } from "./query.js";
 import { transactionLogs, inventoryTransactions } from "./schema/index.js";
 import { nextBoxId } from "./boxes.js";
 import { now } from "./now.js";
+import { emitEvent } from "./events.js";
+import { workLockExpiry } from "./allocate.js";
 
 // ---------------------------------------------------------------------------
 // Picking flow (ported from apps/api pickScan.ts + measure.ts + pickingIssues.ts,
@@ -218,7 +220,7 @@ async function maybeAutoFinishPickingOrder(
   if (items.length === 0) return false;
   if (!items.every((i) => i.pickedQty >= i.qty)) return false;
 
-  await queryRun(tx, sql`UPDATE picking_orders SET status = 'finished', updated_at = ${now()} WHERE id = ${order.id}`);
+  await queryRun(tx, sql`UPDATE picking_orders SET status = 'finished', working_by = NULL, working_at = NULL, updated_at = ${now()} WHERE id = ${order.id}`);
   await queryRun(
     tx,
     sql`INSERT INTO measuring_tasks (id, picking_order_id, status, created_at)
@@ -249,12 +251,16 @@ export interface PickingOrderListRow {
   deliveryDate: Date | null;
   orgId: number | null;
   subInventoryCode: string | null;
+  prioritySeq: number;
+  workingBy: string | null;
+  workingByName: string | null;
   itemCount: number;
   totalQty: number;
   pickedQty: number;
 }
 
-/** List rows with per-order item/qty counts; `status` is a pass-through filter. */
+/** List rows with per-order item/qty counts; `status` is a pass-through filter.
+ *  Ordered by priority_seq (allocation order, admin-reorderable). */
 export async function listPickingOrders(db: AppDb, status?: string): Promise<PickingOrderListRow[]> {
   return queryAll<PickingOrderListRow>(
     db,
@@ -264,16 +270,106 @@ export async function listPickingOrders(db: AppDb, status?: string): Promise<Pic
         po.customer_code AS "customerCode",
         po.delivery_date AS "deliveryDate",
         po.org_id AS "orgId", po.sub_inventory_code AS "subInventoryCode",
+        po.priority_seq AS "prioritySeq",
+        po.working_by AS "workingBy", w.display_name AS "workingByName",
         COUNT(pi.id)::int AS "itemCount",
         COALESCE(SUM(pi.qty), 0)::int AS "totalQty",
         COALESCE(SUM(pi.picked_qty), 0)::int AS "pickedQty"
       FROM picking_orders po
       LEFT JOIN picking_items pi ON pi.picking_order_id = po.id
+      LEFT JOIN users w ON w.id = po.working_by
       ${status ? sql`WHERE po.status = ${status}` : sql``}
-      GROUP BY po.id
-      ORDER BY po.created_at DESC
+      GROUP BY po.id, w.display_name
+      ORDER BY po.priority_seq ASC, po.created_at
     `
   );
+}
+
+// ---------------------------------------------------------------------------
+// Page-driven work lock (design: docs/superpowers/specs/2026-07-23-picking-
+// priority-allocation-design.md). A PDA holding the picking order open keeps
+// its allocations from being wiped by allocateAll; the lock expires
+// WORK_LOCK_TTL_MINUTES after working_at (no cron — compared on acquire and
+// at recompute time).
+// ---------------------------------------------------------------------------
+
+export interface WorkLockState {
+  orderId: string;
+  workingBy: string;
+}
+
+function lockHeldResponse(holderId: string, holderName: string | null): HTTPException {
+  return new HTTPException(409, {
+    res: new Response(JSON.stringify({ error: "lock_held", holderId, holderName }), {
+      status: 409,
+      headers: { "content-type": "application/json" },
+    }),
+  });
+}
+
+/** Acquire or refresh the caller's work lock on an open picking order. */
+export async function acquireWorkLock(db: AppDb, input: { orderId: string; actorId: string }): Promise<WorkLockState> {
+  return db.transaction(async (tx) => {
+    const order = await queryGet<{ id: string; status: string; workingBy: string | null; workingAt: Date | null }>(
+      tx,
+      sql`SELECT id, status, working_by AS "workingBy", working_at AS "workingAt"
+          FROM picking_orders WHERE id = ${input.orderId}`
+    );
+    if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
+    if (order.status !== "pending" && order.status !== "picking") {
+      throw new HTTPException(409, { message: "picking_order_not_open" });
+    }
+    const expired = !order.workingBy || !order.workingAt || order.workingAt < workLockExpiry();
+    if (order.workingBy && order.workingBy !== input.actorId && !expired) {
+      const holder = await queryGet<{ name: string }>(
+        tx,
+        sql`SELECT display_name AS name FROM users WHERE id = ${order.workingBy}`
+      );
+      throw lockHeldResponse(order.workingBy, holder?.name ?? null);
+    }
+    await queryRun(
+      tx,
+      sql`UPDATE picking_orders SET working_by = ${input.actorId}, working_at = ${now()}, updated_at = ${now()} WHERE id = ${order.id}`
+    );
+    return { orderId: order.id, workingBy: input.actorId };
+  });
+}
+
+/** Best-effort release on page leave; only the holder can release (silent no-op otherwise). */
+export async function releaseWorkLock(db: AppDb, input: { orderId: string; actorId: string }): Promise<void> {
+  await queryRun(
+    db,
+    sql`UPDATE picking_orders SET working_by = NULL, working_at = NULL, updated_at = ${now()}
+        WHERE id = ${input.orderId} AND working_by = ${input.actorId}`
+  );
+}
+
+/** Admin reorder: rewrite priority_seq 1..n for the given open orders, emit the SSE event.
+ *  The caller runs allocateAll after commit. */
+export async function reorderPickingOrders(
+  db: AppDb,
+  input: { actorId: string; orderIds: string[] }
+): Promise<{ reordered: number }> {
+  const ids = [...new Set(input.orderIds)];
+  if (ids.length === 0) throw new HTTPException(400, { message: "no_orders" });
+  return db.transaction(async (tx) => {
+    const rows = await queryAll<{ id: string }>(
+      tx,
+      sql`SELECT id FROM picking_orders WHERE ${inArray(sql`id`, ids)} AND status IN ('pending', 'picking')`
+    );
+    if (rows.length !== ids.length) throw new HTTPException(400, { message: "invalid_order_ids" });
+    let seq = 1;
+    for (const id of ids) {
+      await queryRun(tx, sql`UPDATE picking_orders SET priority_seq = ${seq}, updated_at = ${now()} WHERE id = ${id}`);
+      seq += 1;
+    }
+    await emitEvent(tx, {
+      type: "picking.reordered",
+      topics: ["/picking-orders"],
+      data: { orderIds: ids, actorId: input.actorId },
+    });
+    return { reordered: ids.length };
+  });
 }
 
 export interface PickingOrderRow {

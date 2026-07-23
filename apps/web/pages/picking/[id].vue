@@ -13,7 +13,7 @@
         style="margin-bottom: 1.5rem;"
       >
         <template #actions>
-          <template v-if="order.status !== 'finished' && order.status !== 'issue'">
+          <template v-if="order.status !== 'finished' && order.status !== 'issue' && !heldByOther">
             <NuxtLink :to="`/picking/scan/${orderId}`" class="btn btn--small">
               {{ $t('picking.detail.scan') }}
             </NuxtLink>
@@ -49,6 +49,10 @@
       </DetailHeader>
 
       <PickingIssueBanner v-if="order.status === 'issue'" :order="order" />
+
+      <div v-if="heldByOther" class="work-lock-banner">
+        {{ $t('picking.detail.heldBy', { name: heldByOther }) }}
+      </div>
 
       <PickingBoxesSection
         v-model:expanded="boxesExpanded"
@@ -86,6 +90,7 @@ import { useVisibleReload } from "~/composables/useVisibleReload";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useErrorMessage } from "~/composables/errorMessage";
 import { useWarehouse } from "~/composables/useWarehouse";
+import { usePickingWorkLock } from "~/composables/usePickingWorkLock";
 import { useHardwareScanner } from "~/composables/useHardwareScanner";
 import { useLabelScan, captureLabel, captureRawLabelValue } from "~/composables/useLabelScan";
 import PickingBoxesSection from "~/components/picking/PickingBoxesSection.vue";
@@ -100,6 +105,7 @@ definePageMeta({ title: "meta.pickingDetail", props: { noPadding: true } });
 const route = useRoute();
 const orderId = route.params.id as string;
 const warehouse = useWarehouse();
+const { heldByOther } = usePickingWorkLock(orderId);
 const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
@@ -175,7 +181,10 @@ const openBoxes = computed(() =>
   (order.value?.boxes ?? []).filter((b) => b.status === "open")
 );
 const actionable = computed(
-  () => order.value?.status !== "finished" && order.value?.status !== "issue"
+  () =>
+    order.value?.status !== "finished" &&
+    order.value?.status !== "issue" &&
+    !heldByOther.value
 );
 const unboxedCountForOrder = computed(() => {
   return (order.value?.items ?? []).reduce((sum, item) => {
@@ -303,4 +312,13 @@ useVisibleReload(load);
 </script>
 
 <style scoped>
+.work-lock-banner {
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  color: #92400e;
+  font-size: 0.875rem;
+  padding: 0.6rem 1rem;
+  margin-bottom: 1rem;
+}
 </style>
