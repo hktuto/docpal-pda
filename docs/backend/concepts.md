@@ -36,12 +36,18 @@ org_id (integer office, e.g. 2 = HK) + sub_inventory_code (e.g. STORE1)
   lookup table). `NOT NULL DEFAULT 2` on the receiving tables; nullable
   elsewhere.
 - `sub_inventory_code` — the store the goods go into (`sub_inventories`
-  lookup; its own `org_id` anchors which org the sub-inventory belongs to). A
-  customer may request their goods be stored separately
+  lookup; its own `org_id` anchors which org the sub-inventory belongs to).
+  Sub-inventories are a 3-level model (org_id → code → tag): stock/docs
+  reference the `(org_id, code)` group via composite FK; tags
+  (`sub_inventory_tags`) are lookup-only, so the same group shares stock
+  across its tags. A customer may request their goods be stored separately
   (`sub_inventories.customer_code`). On receiving orders it is mandatory
   (`NOT NULL`); on `picking_orders` and `inventory_lots` it is nullable.
 
-The pair rides together on `shelves`, `receiving_orders`,
+The pair rides together on `shelf_boxes` (moved from `shelves` 2026-07-23 —
+the box decides the stock partition of its contents; it defaults to the
+receiving order's pair at creation and put-away stamps lots with the box's
+pair), `receiving_orders`,
 `receiving_invoices`, `receiving_invoice_items`, `picking_orders`, and
 `inventory_lots`, and both columns are part of the
 `inventory_lots_unique_lot` identity — the same lot tuple can exist
@@ -142,3 +148,10 @@ time.
 > recompute, and a task with a box marks the box's items verified and
 > transitions the box `closed → verified` (an open box is rejected — put-away
 > may still be in progress).
+>
+> Generation runs automatically every night at local 00:00 from
+> `src/jobs/goodsVerifyDayEnd.ts` (started by `src/server.ts`, so local/pm2
+> only — Vercel stays manual; disable with `GOODS_VERIFY_CRON=off`). Each run
+> generates for DB `CURRENT_DATE - 1` and `CURRENT_DATE` (local midnight can
+> straddle two DB dates), plus an idempotent catch-up run at boot. The manual
+> `POST /goods-verify-tasks/generate` endpoint and web button remain.

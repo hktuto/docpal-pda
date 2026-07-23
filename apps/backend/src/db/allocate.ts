@@ -152,7 +152,7 @@ async function loadLotSources(dbOrTx: DbOrTx, d: DemandRow): Promise<LotRow[]> {
                il.date_code AS "dateCode",
                (il.total_qty - il.allocated_qty) AS "available"
         FROM inventory_lots il
-        LEFT JOIN sub_inventories si ON si.code = il.sub_inventory_code
+        LEFT JOIN sub_inventories si ON si.org_id = il.org_id AND si.code = il.sub_inventory_code
         WHERE il.part_no = ${d.partNo}
           AND (${d.orgId}::int IS NULL OR il.org_id = ${d.orgId})
           AND (${d.subInventoryCode}::text IS NULL OR il.sub_inventory_code = ${d.subInventoryCode})
@@ -178,7 +178,7 @@ async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow): Promise<Recei
         FROM receiving_invoice_items rii
         JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
         JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
-        LEFT JOIN sub_inventories si ON si.code = ro.sub_inventory_code
+        LEFT JOIN sub_inventories si ON si.org_id = ro.org_id AND si.code = ro.sub_inventory_code
         LEFT JOIN (
           SELECT a.receiving_invoice_item_id AS rii_id, SUM(a.qty)::int AS qty
           FROM allocations a

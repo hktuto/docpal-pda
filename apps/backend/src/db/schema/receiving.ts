@@ -1,4 +1,4 @@
-import { pgTable, text, integer, boolean, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, timestamp, index, uniqueIndex, foreignKey } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
 import { users, suppliers, parts, subInventories } from "./master.js";
 
@@ -11,7 +11,7 @@ export const receivingOrders = pgTable(
     supplierId: text("supplier_id").references(() => suppliers.id),
     deliveryDate: timestamp("delivery_date", { mode: "date" }),
     orgId: integer("org_id").notNull().default(2), // 收货办公室, 2: HK
-    subInventoryCode: text("sub_inventory_code").notNull().references(() => subInventories.code), // 收货入哪一个子库存（每单必有）
+    subInventoryCode: text("sub_inventory_code").notNull(), // 收货入哪一个子库存（每单必有）
     dateCode: text("date_code"), // 整单 date code；行无 date_code 时继承此值
     status: text("status").notNull().default("pending"), // pending | in_hand | provisional_received | clear
     arrivedAt: timestamp("arrived_at", { mode: "date" }),
@@ -21,24 +21,32 @@ export const receivingOrders = pgTable(
   },
   (t) => ({
     statusIdx: index("idx_receiving_orders_status").on(t.status),
+    // Composite FK → sub_inventories (org_id, code) group (3-level model).
+    subInvFk: foreignKey({ name: "receiving_orders_sub_inv_fk", columns: [t.orgId, t.subInventoryCode], foreignColumns: [subInventories.orgId, subInventories.code] }),
   })
 );
 
 // = Packing List Header
-export const receivingInvoices = pgTable("receiving_invoices", {
-  id: text("id").primaryKey(),
-  receivingOrderId: text("receiving_order_id").notNull().references(() => receivingOrders.id, { onDelete: "cascade" }),
-  invoiceNo: text("invoice_no").notNull(),
-  supplierId: text("supplier_id").references(() => suppliers.id),
-  wclCompanyName: text("wcl_company_name"), // 出货方公司名，非供应商名
-  totalQty: integer("total_qty"), // 总组件数量
-  totalCtn: integer("total_ctn"), // 总箱数
-  deliveryDate: timestamp("delivery_date", { mode: "date" }), // 出货日期，非入库时间
-  orgId: integer("org_id").notNull().default(2), // 出货方办公室, 2: HK
-  subInventoryCode: text("sub_inventory_code").references(() => subInventories.code), // 放到哪一个子库存中，如 STORE1，允许为空
-  createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
-  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
-});
+export const receivingInvoices = pgTable(
+  "receiving_invoices",
+  {
+    id: text("id").primaryKey(),
+    receivingOrderId: text("receiving_order_id").notNull().references(() => receivingOrders.id, { onDelete: "cascade" }),
+    invoiceNo: text("invoice_no").notNull(),
+    supplierId: text("supplier_id").references(() => suppliers.id),
+    wclCompanyName: text("wcl_company_name"), // 出货方公司名，非供应商名
+    totalQty: integer("total_qty"), // 总组件数量
+    totalCtn: integer("total_ctn"), // 总箱数
+    deliveryDate: timestamp("delivery_date", { mode: "date" }), // 出货日期，非入库时间
+    orgId: integer("org_id").notNull().default(2), // 出货方办公室, 2: HK
+    subInventoryCode: text("sub_inventory_code"), // 放到哪一个子库存中，如 STORE1，允许为空
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
+  },
+  (t) => ({
+    subInvFk: foreignKey({ name: "receiving_invoices_sub_inv_fk", columns: [t.orgId, t.subInventoryCode], foreignColumns: [subInventories.orgId, subInventories.code] }),
+  })
+);
 
 // = Packing List Line Items
 export const receivingInvoiceItems = pgTable(
@@ -60,7 +68,7 @@ export const receivingInvoiceItems = pgTable(
     coo: text("coo"), // country_of_origin
     cow: text("cow"), // country_of_wafer
     orgId: integer("org_id").notNull().default(2), // 收货办公室, 2: HK
-    subInventoryCode: text("sub_inventory_code").references(() => subInventories.code), // 子库存，允许为空
+    subInventoryCode: text("sub_inventory_code"), // 子库存，允许为空
     reportedMismatch: boolean("reported_mismatch").notNull().default(false),
     mismatchReason: text("mismatch_reason"),
     mismatchQty: integer("mismatch_qty"),
@@ -70,6 +78,7 @@ export const receivingInvoiceItems = pgTable(
   (t) => ({
     invoiceIdx: index("idx_receiving_invoice_items_invoice").on(t.receivingInvoiceId),
     partIdx: index("idx_receiving_invoice_items_part").on(t.partNo),
+    subInvFk: foreignKey({ name: "receiving_invoice_items_sub_inv_fk", columns: [t.orgId, t.subInventoryCode], foreignColumns: [subInventories.orgId, subInventories.code] }),
   })
 );
 

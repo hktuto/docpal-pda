@@ -36,6 +36,14 @@ onMounted(async () => {
           <div class="dd">{{ formatCell(box.shelfCode) }}</div>
         </div>
         <div>
+          <div class="dt">Org ID</div>
+          <div class="dd">{{ formatCell(box.orgId) }}</div>
+        </div>
+        <div>
+          <div class="dt">Sub-inventory</div>
+          <div class="dd">{{ formatCell(box.subInventoryCode) }}</div>
+        </div>
+        <div>
           <div class="dt">Status</div>
           <div class="dd">{{ box.status }}</div>
         </div>

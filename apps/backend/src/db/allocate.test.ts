@@ -99,7 +99,7 @@ test("allocateAll: sources must match the picking order's location pair", async 
   assert.equal(Number((c[0] as any).c), 0);
 
   // a different org finds nothing either
-  await client.db.execute(sql`UPDATE picking_orders SET sub_inventory_code = 'STORE1', org_id = 3 WHERE id = ${PO_22}`);
+  await client.db.execute(sql`UPDATE picking_orders SET sub_inventory_code = 'store1', org_id = 143 WHERE id = ${PO_22}`);
   s = await allocateAll(client.db);
   assert.equal(s.allocationsCreated, 0);
   c = await client.db.execute(sql`SELECT count(*)::int AS c FROM allocations`);

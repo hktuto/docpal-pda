@@ -1,4 +1,4 @@
-import { pgTable, text, integer, boolean, real, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, real, timestamp, index, uniqueIndex, foreignKey } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
 import { users, parts, customerProfiles, subInventories } from "./master.js";
 
@@ -13,7 +13,7 @@ export const pickingOrders = pgTable(
     customerCode: text("customer_code").references(() => customerProfiles.code), // 出货客户
     // 出货位置配对（nullable — allocation 只在订单带配对时按位置匹配）
     orgId: integer("org_id"), // 出货办公室, 2: HK
-    subInventoryCode: text("sub_inventory_code").references(() => subInventories.code), // 从哪一个子库存出货
+    subInventoryCode: text("sub_inventory_code"), // 从哪一个子库存出货
     prioritySeq: integer("priority_seq").notNull().default(0), // allocation/list order — lower first, admin-reorderable
     // Page-driven work lock: a PDA with this order open keeps its allocations
     // from being wiped by allocateAll. Expires 10 min after working_at.
@@ -32,6 +32,7 @@ export const pickingOrders = pgTable(
   },
   (t) => ({
     statusIdx: index("idx_picking_orders_status").on(t.status),
+    subInvFk: foreignKey({ name: "picking_orders_sub_inv_fk", columns: [t.orgId, t.subInventoryCode], foreignColumns: [subInventories.orgId, subInventories.code] }),
   })
 );
 

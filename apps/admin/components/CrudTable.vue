@@ -8,6 +8,8 @@ const rows = ref<any[]>([]);
 const loading = ref(false);
 const error = ref("");
 
+const { page, pageSize, total, paged } = usePaging(rows);
+
 const showForm = ref(false);
 const editing = ref<any | null>(null);
 const saveError = ref("");
@@ -17,10 +19,12 @@ const columns = computed(() => {
   labels[props.config.pk] = props.config.pk === "id" ? "ID" : "Code";
   for (const f of props.config.fields) labels[f.key] = f.label;
   const fieldKeys = props.config.fields.map((f) => f.key);
-  // A synthetic pk (deriveId) is not a real column — don't render it.
-  const keys = props.config.deriveId && !fieldKeys.includes(props.config.pk)
-    ? fieldKeys
-    : [props.config.pk, ...fieldKeys];
+  // A synthetic pk (deriveId) is not a real column — don't render it. Internal
+  // UUID pks ("id") are hidden too: they carry no business meaning.
+  const keys =
+    props.config.pk === "id" || (props.config.deriveId && !fieldKeys.includes(props.config.pk))
+      ? fieldKeys
+      : [props.config.pk, ...fieldKeys];
   const cols = [...new Set(keys)].map((key) => ({ key, label: labels[key] ?? key }));
   for (const extra of props.config.extraColumns ?? []) cols.push(extra);
   return cols;
@@ -102,7 +106,7 @@ onMounted(load);
           </tr>
         </thead>
         <tbody>
-          <tr v-for="row in rows" :key="rowId(row)">
+          <tr v-for="row in paged" :key="rowId(row)">
             <td v-for="c in columns" :key="c.key">{{ formatCell(row[c.key]) }}</td>
             <td class="actions">
               <slot name="row-actions" :row="row" />
@@ -116,6 +120,7 @@ onMounted(load);
         </tbody>
       </table>
     </div>
+    <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
     <CrudForm
       v-if="showForm"
       :title="editing ? `Edit ${config.title}` : `New ${config.title}`"

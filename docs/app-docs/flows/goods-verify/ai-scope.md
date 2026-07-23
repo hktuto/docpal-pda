@@ -4,8 +4,12 @@
 
 - Daily goods-verify **task queue**: one pending task per inventory lot that
   moved (received, put away, picked, adjusted) on a given date.
-- Generate the day's tasks on demand from the queue page (idempotent per
-  task date + lot — re-generating creates no duplicates).
+- Generate the day's tasks automatically: the backend runs day-end
+  generation every night at local 00:00 (`src/jobs/goodsVerifyDayEnd.ts`,
+  generating DB `CURRENT_DATE-1` + `CURRENT_DATE` with a boot catch-up;
+  `GOODS_VERIFY_CRON=off` disables; Vercel stays manual). The queue page's
+  generate button remains for manual runs (idempotent per task date + lot —
+  re-generating creates no duplicates).
 - Filter the queue by date (defaults to today, UTC) and status
   (`pending` / `verified` / `skipped`), plus a client-side text search over
   shelf / box / part number.
@@ -43,6 +47,8 @@
   `status`, `shelfCode`), `GET /goods-verify-tasks/:id`,
   `POST /goods-verify-tasks/:id/verify` (optional `countedQty`; writes the
   ADJUST ledger row and corrects the lot when the count differs).
+- `apps/backend/src/jobs/goodsVerifyDayEnd.ts` — nightly 00:00 scheduler
+  (started by `src/server.ts`).
 
 ## Known limitations
 
@@ -57,3 +63,4 @@
 
 - `docs/backend/api-design.md` §Goods verify (task-based, concept 7)
 - `docs/backend/concepts.md` — goods-verify task concept
+- `docs/superpowers/specs/2026-07-23-goods-verify-nightly-cron-design.md`

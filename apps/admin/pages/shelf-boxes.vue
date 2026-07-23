@@ -5,14 +5,16 @@ const boxes = ref<any[]>([]);
 const loading = ref(false);
 const error = ref("");
 
+const { page, pageSize, total, paged } = usePaging(boxes);
+
 const statuses = ["open", "closed", "verified"];
 
 const showNew = ref(false);
-const newForm = reactive({ shelfCode: "", status: "open" });
+const newForm = reactive({ shelfCode: "", orgId: "", subInventoryCode: "", status: "open" });
 const newError = ref("");
 
 const editing = ref<any | null>(null);
-const editForm = reactive({ shelfCode: "", status: "open" });
+const editForm = reactive({ shelfCode: "", orgId: "", subInventoryCode: "", status: "open" });
 const editError = ref("");
 
 // Dismiss overlays only on a genuine overlay click (press starts and ends on
@@ -34,9 +36,21 @@ async function load() {
 
 function openNew() {
   newForm.shelfCode = "";
+  newForm.orgId = "";
+  newForm.subInventoryCode = "";
   newForm.status = "open";
   newError.value = "";
   showNew.value = true;
+}
+
+function pairBody(form: { orgId: string; subInventoryCode: string }, body: Record<string, unknown>) {
+  // Empty string clears / omits the pair member; org id must be an integer.
+  if (form.orgId.trim() !== "") {
+    const n = Number(form.orgId.trim());
+    if (!Number.isInteger(n)) throw new Error("Org ID must be an integer");
+    body.orgId = n;
+  }
+  if (form.subInventoryCode.trim() !== "") body.subInventoryCode = form.subInventoryCode.trim();
 }
 
 async function createBox() {
@@ -44,6 +58,7 @@ async function createBox() {
   try {
     const body: Record<string, unknown> = { status: newForm.status };
     if (newForm.shelfCode.trim()) body.shelfCode = newForm.shelfCode.trim();
+    pairBody(newForm, body);
     await api.post("/admin/shelf-boxes", body);
     showNew.value = false;
     await load();
@@ -55,6 +70,8 @@ async function createBox() {
 function openEdit(row: any) {
   editing.value = row;
   editForm.shelfCode = row.shelfCode ?? "";
+  editForm.orgId = row.orgId != null ? String(row.orgId) : "";
+  editForm.subInventoryCode = row.subInventoryCode ?? "";
   editForm.status = row.status;
   editError.value = "";
 }
@@ -62,10 +79,15 @@ function openEdit(row: any) {
 async function saveEdit() {
   editError.value = "";
   try {
-    await api.patch(`/admin/shelf-boxes/${editing.value.id}`, {
+    const body: Record<string, unknown> = {
       shelfCode: editForm.shelfCode.trim() || null, // null clears the shelf assignment
       status: editForm.status,
-    });
+      // null clears the pair member (server treats present-null as clear)
+      orgId: editForm.orgId.trim() === "" ? null : undefined,
+      subInventoryCode: editForm.subInventoryCode.trim() === "" ? null : undefined,
+    };
+    pairBody(editForm, body);
+    await api.patch(`/admin/shelf-boxes/${editing.value.id}`, body);
     editing.value = null;
     await load();
   } catch (e: any) {
@@ -101,6 +123,8 @@ onMounted(load);
           <tr>
             <th>ID</th>
             <th>Shelf</th>
+            <th>Org ID</th>
+            <th>Sub-inventory</th>
             <th>Status</th>
             <th>Items</th>
             <th>Total qty</th>
@@ -109,11 +133,13 @@ onMounted(load);
           </tr>
         </thead>
         <tbody>
-          <tr v-for="b in boxes" :key="b.id">
+          <tr v-for="b in paged" :key="b.id">
             <td>
               <NuxtLink :to="`/shelf-boxes/${b.id}`" :title="b.id">{{ b.id.slice(0, 8) }}</NuxtLink>
             </td>
             <td>{{ formatCell(b.shelfCode) }}</td>
+            <td>{{ formatCell(b.orgId) }}</td>
+            <td>{{ formatCell(b.subInventoryCode) }}</td>
             <td>{{ b.status }}</td>
             <td>{{ b.itemCount }}</td>
             <td>{{ b.totalQty }}</td>
@@ -123,12 +149,13 @@ onMounted(load);
               <button class="btn-link" @click="remove(b)">Delete</button>
             </td>
           </tr>
-          <tr v-if="boxes.length === 0">
-            <td colspan="7" class="muted">No shelf boxes.</td>
+          <tr v-if="total === 0">
+            <td colspan="9" class="muted">No shelf boxes.</td>
           </tr>
         </tbody>
       </table>
     </div>
+    <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
 
     <div v-if="showNew" class="overlay" @mousedown="newDlg.onMousedown" @click="newDlg.onClick">
       <div class="dialog">
@@ -138,6 +165,14 @@ onMounted(load);
           <div class="form-row">
             <label for="nb-shelf">Shelf code</label>
             <input id="nb-shelf" v-model="newForm.shelfCode" type="text" />
+          </div>
+          <div class="form-row">
+            <label for="nb-org">Org ID</label>
+            <input id="nb-org" v-model="newForm.orgId" type="text" placeholder="e.g. 2" />
+          </div>
+          <div class="form-row">
+            <label for="nb-sub">Sub-inventory</label>
+            <input id="nb-sub" v-model="newForm.subInventoryCode" type="text" placeholder="e.g. STORE1" />
           </div>
           <div class="form-row">
             <label for="nb-status">Status</label>
@@ -162,6 +197,16 @@ onMounted(load);
             <label for="eb-shelf">Shelf code</label>
             <input id="eb-shelf" v-model="editForm.shelfCode" type="text" />
             <div class="hint">Leave empty to clear the shelf assignment.</div>
+          </div>
+          <div class="form-row">
+            <label for="eb-org">Org ID</label>
+            <input id="eb-org" v-model="editForm.orgId" type="text" />
+            <div class="hint">Leave empty to clear.</div>
+          </div>
+          <div class="form-row">
+            <label for="eb-sub">Sub-inventory</label>
+            <input id="eb-sub" v-model="editForm.subInventoryCode" type="text" />
+            <div class="hint">Leave empty to clear.</div>
           </div>
           <div class="form-row">
             <label for="eb-status">Status</label>

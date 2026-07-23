@@ -231,8 +231,7 @@ export function createBackendWarehouseService(
     async getPutAwayDetail(receivingOrderId: string): Promise<PutAwayDetail> {
       return client.get(`/receiving-orders/${receivingOrderId}/put-away`);
     },
-    // The admin CRUD read doubles as the PDA shelf list; it returns every
-    // field the page needs (code/zone/orgId/subInventoryCode).
+    // The admin CRUD read doubles as the PDA shelf list.
     async getShelves(): Promise<Shelf[]> {
       return client.get("/admin/shelves");
     },

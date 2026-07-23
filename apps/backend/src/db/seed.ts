@@ -15,6 +15,7 @@ import {
   netWeightFormula,
   customerProfiles,
   subInventories,
+  subInventoryTags,
   receivingOrders,
   receivingInvoices,
   receivingInvoiceItems,
@@ -222,47 +223,65 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
     { code: "HK-WIN84", label: "HK-WIN84" },
   ]);
 
-  // Real sub-inventory codes (new_seed/subInventories.xlsx), all belonging to
-  // org 2 (HK office): STORE1/WSTORE1/OSWF (HK); THHK2/OSWF (TH);
-  // BJHK1…HWOS (MCE/HUAWEI); BJHK2…OSWF (MCI). ACME-S1 is the demo
-  // customer-segregated store (customer_code → only ACME picking orders can
-  // allocate from it).
+  // Sub-inventories (new_seed/subInventories.xlsx): THREE levels — org_id →
+  // code (sub-inventory group) → tag. Stock/docs reference the (org_id, code)
+  // group via composite FK; tags are lookup-only (sub_inventory_tags).
+  // ACME-S1 is the demo customer-segregated store.
   await db.insert(subInventories).values([
-    { code: "STORE1", name: "Main store", orgId: 2 },
-    { code: "WSTORE1", name: "WSTORE1", orgId: 2 },
-    { code: "OSWF (HK)", name: "OSWF (HK)", orgId: 2 },
-    { code: "THHK2", name: "THHK2", orgId: 2 },
-    { code: "OSWF (TH)", name: "OSWF (TH)", orgId: 2 },
-    { code: "BJHK1", name: "BJHK1", orgId: 2 },
-    { code: "GZHK1", name: "GZHK1", orgId: 2 },
-    { code: "SHHK1", name: "SHHK1", orgId: 2 },
-    { code: "SZHK1", name: "SZHK1", orgId: 2 },
-    { code: "ZTE", name: "ZTE", orgId: 2 },
-    { code: "OSWF (MCE)", name: "OSWF (MCE)", orgId: 2 },
-    { code: "HUAWEI", name: "HUAWEI", orgId: 2 },
-    { code: "HUAWEI-CAR", name: "HUAWEI-CAR", orgId: 2 },
-    { code: "HWOS (HUAWEI)", name: "HWOS (HUAWEI)", orgId: 2 },
-    { code: "BJHK2", name: "BJHK2", orgId: 2 },
-    { code: "GZHK2", name: "GZHK2", orgId: 2 },
-    { code: "SHHK2", name: "SHHK2", orgId: 2 },
-    { code: "SZHK2", name: "SZHK2", orgId: 2 },
-    { code: "OSWF (MCI)", name: "OSWF (MCI)", orgId: 2 },
-    { code: "ACME-S1", name: "ACME segregated store", orgId: 2, customerCode: "ACME" },
+    { orgId: 2, code: "STORE1", name: "Store 1" },
+    { orgId: 2, code: "WSTORE1" },
+    { orgId: 2, code: "OSWF (HK)" },
+    { orgId: 220, code: "THHK2" },
+    { orgId: 220, code: "OSWF (TH)" },
+    { orgId: 140, code: "STORE1" },
+    { orgId: 140, code: "ZTE" },
+    { orgId: 140, code: "OSWF (MCE)" },
+    { orgId: 140, code: "HUAWEI" },
+    { orgId: 140, code: "HWOS (HUAWEI)" },
+    { orgId: 140, code: "DEFAULT" },
+    { orgId: 143, code: "store1" },
+    { orgId: 143, code: "OSWF (MCI)" },
+    { orgId: 143, code: "DEFAULT" },
+    { orgId: 2, code: "ACME-S1", name: "ACME segregated store", customerCode: "ACME" },
+  ]);
+  await db.insert(subInventoryTags).values([
+    { orgId: 2, code: "STORE1", tag: "STORE1", name: "Store 1" },
+    { orgId: 2, code: "WSTORE1", tag: "WSTORE1" },
+    { orgId: 2, code: "OSWF (HK)", tag: "OSWF (HK)" },
+    { orgId: 220, code: "THHK2", tag: "THHK2" },
+    { orgId: 220, code: "OSWF (TH)", tag: "OSWF (TH)" },
+    { orgId: 140, code: "STORE1", tag: "BJHK1" },
+    { orgId: 140, code: "STORE1", tag: "GZHK1" },
+    { orgId: 140, code: "STORE1", tag: "SHHK1" },
+    { orgId: 140, code: "STORE1", tag: "SZHK1" },
+    { orgId: 140, code: "ZTE", tag: "ZTE" },
+    { orgId: 140, code: "OSWF (MCE)", tag: "OSWF (MCE)" },
+    { orgId: 140, code: "HUAWEI", tag: "HUAWEI" },
+    { orgId: 140, code: "HUAWEI", tag: "HUAWEI-CAR" },
+    { orgId: 140, code: "HWOS (HUAWEI)", tag: "HWOS (HUAWEI)" },
+    { orgId: 140, code: "DEFAULT", tag: "DEFAULT" },
+    { orgId: 143, code: "store1", tag: "BJHK2" },
+    { orgId: 143, code: "store1", tag: "GZHK2" },
+    { orgId: 143, code: "store1", tag: "SHHK2" },
+    { orgId: 143, code: "store1", tag: "SZHK2" },
+    { orgId: 143, code: "OSWF (MCI)", tag: "OSWF (MCI)" },
+    { orgId: 143, code: "DEFAULT", tag: "DEFAULT" },
+    { orgId: 2, code: "ACME-S1", tag: "ACME-S1", name: "ACME segregated store" },
   ]);
 
   await db.insert(shelves).values([
-    { code: "A-01-01", zone: "A", orgId: 2, subInventoryCode: "STORE1" },
-    { code: "A-01-02", zone: "A", orgId: 2, subInventoryCode: "STORE1" },
-    { code: "A-01-03", zone: "A", orgId: 2, subInventoryCode: "STORE1" },
-    { code: "A-01-04", zone: "A", orgId: 2, subInventoryCode: "STORE1" },
+    { code: "A-01-01", zone: "A" },
+    { code: "A-01-02", zone: "A" },
+    { code: "A-01-03", zone: "A" },
+    { code: "A-01-04", zone: "A" },
     // virtual dock shelf — dock/GIT lots hang off this code (never NULL)
-    { code: "DOCK", zone: "DOCK", orgId: 2, subInventoryCode: "STORE1" },
+    { code: "DOCK", zone: "DOCK" },
     // shelves for the real-data orders (new_seed/)
-    { code: "GZ-01-01", zone: "GZ", orgId: 2, subInventoryCode: "GZHK1" },
-    { code: "GZ-01-02", zone: "GZ", orgId: 2, subInventoryCode: "GZHK1" },
-    { code: "SZ-01-01", zone: "SZ", orgId: 2, subInventoryCode: "SZHK1" },
-    { code: "SZ-01-02", zone: "SZ", orgId: 2, subInventoryCode: "SZHK1" },
-    { code: "W-01-01", zone: "W", orgId: 2, subInventoryCode: "WSTORE1" },
+    { code: "GZ-01-01", zone: "GZ" },
+    { code: "GZ-01-02", zone: "GZ" },
+    { code: "SZ-01-01", zone: "SZ" },
+    { code: "SZ-01-02", zone: "SZ" },
+    { code: "W-01-01", zone: "W" },
   ]);
 
   // Net-weight reference: 1000 pcs of each 0603 resistor ≈ 6.3 g.
@@ -426,16 +445,16 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
   // per-day seq never collides with them.
   if (opts?.stockBoxes !== false) {
     await db.insert(shelfBoxes).values([
-    { id: "BOX-H-20260701-0001", shelfCode: "A-01-01", status: "closed" },
-    { id: "BOX-H-20260701-0002", shelfCode: "A-01-01", status: "closed" },
-    { id: "BOX-H-20260701-0003", shelfCode: "A-01-02", status: "closed" },
-    { id: "BOX-H-20260701-0004", shelfCode: "A-01-02", status: "closed" },
-    { id: "BOX-H-20260701-0005", shelfCode: "A-01-03", status: "closed" },
-    { id: "BOX-H-20260701-0006", shelfCode: "A-01-03", status: "closed" },
-    { id: "BOX-H-20260701-0007", shelfCode: "A-01-04", status: "closed" },
-    { id: "BOX-H-20260701-0008", shelfCode: "A-01-04", status: "closed" },
-    { id: "BOX-H-20260701-0009", shelfCode: "W-01-01", status: "closed" },
-    { id: "BOX-H-20260701-0010", shelfCode: "W-01-01", status: "closed" },
+    { id: "BOX-H-20260701-0001", shelfCode: "A-01-01", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
+    { id: "BOX-H-20260701-0002", shelfCode: "A-01-01", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
+    { id: "BOX-H-20260701-0003", shelfCode: "A-01-02", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
+    { id: "BOX-H-20260701-0004", shelfCode: "A-01-02", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
+    { id: "BOX-H-20260701-0005", shelfCode: "A-01-03", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
+    { id: "BOX-H-20260701-0006", shelfCode: "A-01-03", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
+    { id: "BOX-H-20260701-0007", shelfCode: "A-01-04", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
+    { id: "BOX-H-20260701-0008", shelfCode: "A-01-04", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
+    { id: "BOX-H-20260701-0009", shelfCode: "W-01-01", orgId: 2, subInventoryCode: "WSTORE1", status: "closed" },
+    { id: "BOX-H-20260701-0010", shelfCode: "W-01-01", orgId: 2, subInventoryCode: "WSTORE1", status: "closed" },
   ]);
 
   await db.insert(shelfBoxItems).values([
@@ -529,11 +548,15 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
   // Two pending receiving orders (batchNo = folder name: 04958184, 65878) with
   // their real invoices/items, plus the related picking lists: picking.xlsx
   // invoices for 65878 and the TN (transfer note) PDFs for 04958184.
+  // Map legacy tag-level sub-inventory values (SZHK1, GZHK2, …) in the
+  // real-data seed rows to their (org_id, code) group per the xlsx structure
+  // (the composite FK rejects tag values at insert time).
+  const mapPair = remapLegacyPair;
   await db.insert(parts).values([...realParts]);
-  await db.insert(receivingOrders).values([...realReceivingOrders]);
-  await db.insert(receivingInvoices).values([...realReceivingInvoices]);
-  await db.insert(receivingInvoiceItems).values([...realReceivingInvoiceItems]);
-  await db.insert(pickingOrders).values([...realPickingOrders]);
+  await db.insert(receivingOrders).values(realReceivingOrders.map(mapPair));
+  await db.insert(receivingInvoices).values(realReceivingInvoices.map(mapPair));
+  await db.insert(receivingInvoiceItems).values(realReceivingInvoiceItems.map(mapPair));
+  await db.insert(pickingOrders).values(realPickingOrders.map(mapPair));
   await db.insert(pickingItems).values([...realPickingItems]);
 
   // Allocation priority: creation order is the initial queue order (admin
@@ -542,6 +565,25 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
     UPDATE picking_orders SET priority_seq = r.seq
     FROM (SELECT id, row_number() OVER (ORDER BY created_at) AS seq FROM picking_orders) r
     WHERE picking_orders.id = r.id`);
+}
+
+/** Legacy tag → (orgId, subInventoryCode) group (per new_seed/subInventories.xlsx). */
+const LEGACY_TAG_GROUPS: Record<string, { orgId: number; subInventoryCode: string }> = {
+  BJHK1: { orgId: 140, subInventoryCode: "STORE1" },
+  GZHK1: { orgId: 140, subInventoryCode: "STORE1" },
+  SHHK1: { orgId: 140, subInventoryCode: "STORE1" },
+  SZHK1: { orgId: 140, subInventoryCode: "STORE1" },
+  BJHK2: { orgId: 143, subInventoryCode: "store1" },
+  GZHK2: { orgId: 143, subInventoryCode: "store1" },
+  SHHK2: { orgId: 143, subInventoryCode: "store1" },
+  SZHK2: { orgId: 143, subInventoryCode: "store1" },
+  "HUAWEI-CAR": { orgId: 140, subInventoryCode: "HUAWEI" },
+};
+
+function remapLegacyPair<T extends object>(row: T): T {
+  const r = row as { orgId?: number | null; subInventoryCode?: string | null };
+  const g = r.subInventoryCode ? LEGACY_TAG_GROUPS[r.subInventoryCode] : undefined;
+  return g ? { ...row, orgId: g.orgId, subInventoryCode: g.subInventoryCode } : row;
 }
 
 /** Seed demo data when the users table is empty. Returns true when it seeded. */

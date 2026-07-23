@@ -14,8 +14,9 @@ import { now } from "./now.js";
 // row with shelf_code IS NULL, auto-created on first scan; ids from nextBoxId
 // — BOX-H-<YYYYMMDD>-<seq>). Assigning a scan into a real box moves the row
 // and MATERIALIZES the inventory lot (keyed part_no + shelf + box_id + batch
-// attrs + the shelf's org_id/sub_inventory_code pair, box_id = the shelf
-// box's id) with inventory_lot_sources +
+// attrs + the BOX's org_id/sub_inventory_code pair — the pair lives on
+// shelf_boxes since 2026-07-23, box_id = the shelf box's id) with
+// inventory_lot_sources +
 // put_away_qty and two ledger rows (PUT_AWAY dock −qty / on_hand +qty);
 // removing a scan reverses all of it.
 //
@@ -108,15 +109,37 @@ async function ensureStagingBox(tx: DbOrTx, receivingOrderId: string): Promise<s
         ORDER BY sb.created_at
         LIMIT 1`
   );
-  if (existing) return existing.id;
+  if (existing) {
+    // An empty staging box may be reused across orders — refresh its pair
+    // (informational only; lots are stamped from the real box).
+    const reusePair = await orderPair(tx, receivingOrderId);
+    await queryRun(
+      tx,
+      sql`UPDATE shelf_boxes SET org_id = ${reusePair.orgId}, sub_inventory_code = ${reusePair.subInventoryCode} WHERE id = ${existing.id}`
+    );
+    return existing.id;
+  }
   const id = await nextBoxId(tx, "H");
+  // Staging boxes carry the order's pair for consistency (a box's pair is the
+  // stock location pair for its contents since 2026-07-23).
+  const pair = await orderPair(tx, receivingOrderId);
   await queryRun(
     tx,
-    sql`INSERT INTO shelf_boxes (id, shelf_code, status, created_at)
-        VALUES (${id}, NULL, 'open', ${now()})`
+    sql`INSERT INTO shelf_boxes (id, shelf_code, org_id, sub_inventory_code, status, created_at)
+        VALUES (${id}, NULL, ${pair.orgId}, ${pair.subInventoryCode}, 'open', ${now()})`
   );
   await logShelfBox(tx, id, null, "open", null, { kind: "staging", order: receivingOrderId });
   return id;
+}
+
+/** The receiving order's stock location pair (mandatory on the order). */
+async function orderPair(tx: DbOrTx, receivingOrderId: string): Promise<{ orgId: number; subInventoryCode: string }> {
+  const row = await queryGet<{ orgId: number; subInventoryCode: string }>(
+    tx,
+    sql`SELECT org_id AS "orgId", sub_inventory_code AS "subInventoryCode" FROM receiving_orders WHERE id = ${receivingOrderId}`
+  );
+  if (!row) throw new HTTPException(404, { message: "receiving_order_not_found" });
+  return row;
 }
 
 interface PutAwayItemRow {
@@ -579,6 +602,9 @@ export async function createShelfBox(
     const shelf = await queryGet<{ code: string }>(tx, sql`SELECT code FROM shelves WHERE code = ${input.shelfCode}`);
     if (!shelf) throw new HTTPException(404, { message: "shelf_not_found" });
     await assertActor(tx, input.actorId);
+    // The box's stock location pair defaults to the receiving order's pair
+    // (admin can override later); put-away stamps lots with the box's pair.
+    const pair = await orderPair(tx, input.receivingOrderId);
 
     const requestedId = input.boxId?.trim() || null;
     if (input.boxId != null && !requestedId) {
@@ -604,8 +630,8 @@ export async function createShelfBox(
     const at = now();
     await queryRun(
       tx,
-      sql`INSERT INTO shelf_boxes (id, shelf_code, status, created_at)
-          VALUES (${id}, ${input.shelfCode}, 'open', ${at})`
+      sql`INSERT INTO shelf_boxes (id, shelf_code, org_id, sub_inventory_code, status, created_at)
+          VALUES (${id}, ${input.shelfCode}, ${pair.orgId}, ${pair.subInventoryCode}, 'open', ${at})`
     );
     await logShelfBox(tx, id, null, "open", input.actorId, {
       order: input.receivingOrderId,
@@ -661,13 +687,13 @@ async function assignScanToBoxTx(
 
   await queryRun(tx, sql`UPDATE shelf_box_items SET shelf_box_id = ${box.id}, verified = false WHERE id = ${scan.id}`);
 
-  // The box's shelf carries the location pair (org_id + sub_inventory_code)
-  // stamped onto the lot (pre-redesign: warehouse/section/sub-inventory).
-  const shelf = (
+  // The box carries the location pair (org_id + sub_inventory_code) stamped
+  // onto the lot (pre-2026-07-23: taken from the shelf).
+  const boxPair = (
     await queryGet<{ orgId: number | null; subInventoryCode: string | null }>(
       tx,
       sql`SELECT org_id AS "orgId", sub_inventory_code AS "subInventoryCode"
-          FROM shelves WHERE code = ${box.shelfCode}`
+          FROM shelf_boxes WHERE id = ${box.id}`
     )
   )!;
 
@@ -681,8 +707,8 @@ async function assignScanToBoxTx(
           AND lot_code IS NOT DISTINCT FROM ${item.lotCode}
           AND coo IS NOT DISTINCT FROM ${item.coo}
           AND cow IS NOT DISTINCT FROM ${item.cow}
-          AND org_id IS NOT DISTINCT FROM ${shelf.orgId}
-          AND sub_inventory_code IS NOT DISTINCT FROM ${shelf.subInventoryCode}`
+          AND org_id IS NOT DISTINCT FROM ${boxPair.orgId}
+          AND sub_inventory_code IS NOT DISTINCT FROM ${boxPair.subInventoryCode}`
   );
   let lotId: string;
   if (lot) {
@@ -696,7 +722,7 @@ async function assignScanToBoxTx(
                                      org_id, sub_inventory_code, total_qty, allocated_qty)
           VALUES (${lotId}, ${item.partNo}, ${item.dateCode}, ${item.lotCode}, ${item.coo}, ${item.cow},
                   ${box.shelfCode}, ${box.id},
-                  ${shelf.orgId}, ${shelf.subInventoryCode},
+                  ${boxPair.orgId}, ${boxPair.subInventoryCode},
                   ${scan.qty}, 0)`
     );
   }

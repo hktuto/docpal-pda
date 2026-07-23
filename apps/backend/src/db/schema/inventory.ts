@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, integer, boolean, timestamp, date, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, timestamp, date, index, uniqueIndex, foreignKey } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
 import { parts, shelves, subInventories, users } from "./master.js";
 import { receivingInvoiceItems } from "./receiving.js";
@@ -16,9 +16,9 @@ export const inventoryLots = pgTable(
     cow: text("cow"),
     shelfCode: text("shelf_code").references(() => shelves.code),
     boxId: text("box_id"),
-    // 库存位置配对（put-away 时从 shelf 盖章）— 与 org_id 一起识别库存分区
+    // 库存位置配对（put-away 时从 shelf box 盖章）— 与 org_id 一起识别库存分区
     orgId: integer("org_id"), // 批次所属办公室, 2: HK
-    subInventoryCode: text("sub_inventory_code").references(() => subInventories.code), // 批次所属子库存
+    subInventoryCode: text("sub_inventory_code"), // 批次所属子库存
     // 如果 location 是 DOCK（虚拟 shelf_code），totalQty 值为 expected_qty；SHELF 则为货架存量
     totalQty: integer("total_qty").notNull().default(0),
     allocatedQty: integer("allocated_qty").notNull().default(0), // 已预留数量
@@ -32,6 +32,7 @@ export const inventoryLots = pgTable(
     partIdx: index("idx_inventory_lots_part").on(t.partNo),
     availIdx: index("idx_inventory_lots_available").on(t.partNo, t.availableQty),
     locationIdx: index("idx_inventory_lots_location").on(t.shelfCode, t.boxId),
+    subInvFk: foreignKey({ name: "inventory_lots_sub_inv_fk", columns: [t.orgId, t.subInventoryCode], foreignColumns: [subInventories.orgId, subInventories.code] }),
   })
 );
 
@@ -55,11 +56,17 @@ export const shelfBoxes = pgTable(
   {
     id: text("id").primaryKey(), // server-generated BOX-H-<YYYYMMDD>-<seq>
     shelfCode: text("shelf_code").references(() => shelves.code),
+    // Stock location pair for the box's contents — put-away stamps lots with
+    // the BOX's pair (moved from shelves 2026-07-23); defaults to the
+    // receiving order's pair at creation.
+    orgId: integer("org_id"), // 库存所属办公室, 2: HK
+    subInventoryCode: text("sub_inventory_code"), // 库存所属子库存
     status: text("status").notNull().default("open"), // open | closed | verified
     createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
   },
   (t) => ({
     shelfIdx: index("idx_shelf_boxes_shelf").on(t.shelfCode),
+    subInvFk: foreignKey({ name: "shelf_boxes_sub_inv_fk", columns: [t.orgId, t.subInventoryCode], foreignColumns: [subInventories.orgId, subInventories.code] }),
   })
 );
 

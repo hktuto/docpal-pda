@@ -529,8 +529,6 @@ export interface ShelfBox {
 export interface Shelf {
   code: string;
   zone: string | null;
-  orgId: number | null;
-  subInventoryCode: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -61,14 +61,14 @@ provide one); other tables reference parts by `part_no`, not by UUID.
 
 ## shelves
 
-Storage locations (shelves and docks).
+Storage locations (shelves and docks). Pure location codes — the stock
+location pair (org_id + sub_inventory_code) lives on `shelf_boxes` and
+`inventory_lots`, not here (moved 2026-07-23).
 
 | Field | Type | Description |
 | --- | --- | --- |
 | code | text PK | Shelf/location code |
 | zone | text | Zone within the warehouse |
-| org_id | integer | Office (HK, SZ, CME, ...) distinguishing per-office shelf locations, for extend if need to seperate org from shelf |
-| sub_inventory_code | text FK → sub_inventories(code) | Sub-inventory the shelf belongs to (with org_id, the shelf's location pair) |
 | created_at | timestamp NOT NULL | Creation time (UTC) |
 | updated_at | timestamp NOT NULL | Last update time (UTC) |
 
@@ -118,17 +118,37 @@ Customer master used by picking orders and customer-segregated stores.
 ## sub_inventories
 
 Warehouse sub-inventories: logical partitions of stock inside one org (Oracle
-EBS organization + subinventory). The pair `org_id` + `sub_inventory_code`
-identifies stock partitioning; `sub_inventories.org_id` anchors which org the
-sub-inventory belongs to. `customer_code` marks a customer-segregated store —
-allocation only serves picking orders of that customer from it.
+EBS organization + subinventory). 3-level model (2026-07-23,
+`new_seed/subInventories.xlsx`): **org_id → code (group) → tag**. This table
+is the **(org_id, code) group level** — the composite-FK target of all
+stock/doc tables (`receiving_orders`, `receiving_invoices`,
+`receiving_invoice_items`, `inventory_lots`, `picking_orders`, `shelf_boxes`).
+`customer_code` marks a customer-segregated store — allocation only serves
+picking orders of that customer from it.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| code | text PK | Sub-inventory code, e.g. STORE1 |
-| name | text NOT NULL | Sub-inventory name |
-| org_id | integer NOT NULL | Owning office (2 = HK; plain integer, no FK to a lookup) |
+| org_id | integer NOT NULL, PK part | Owning office (2 / 140 / 143 / 220; plain integer, no FK to a lookup) |
+| code | text NOT NULL, PK part | Sub-inventory code, e.g. STORE1 |
+| name | text | Sub-inventory name |
 | customer_code | text FK → customer_profiles(code) | Set for customer-segregated stores |
+| created_at | timestamp NOT NULL | Creation time (UTC) |
+| updated_at | timestamp NOT NULL | Last update time (UTC) |
+
+## sub_inventory_tags
+
+Third level of the sub-inventory model: tags within an (org_id, code) group
+(e.g. 140/STORE1 → BJHK1, GZHK1, SHHK1, SZHK1). Lookup/reporting only — no
+stock or document column references it; items in the same org +
+sub-inventory share across tags for allocation.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| org_id | integer NOT NULL, PK part, FK → sub_inventories | Owning office |
+| code | text NOT NULL, PK part, FK → sub_inventories | Parent group |
+| tag | text NOT NULL, PK part | Tag code, e.g. BJHK1 (equals code when untagged) |
+| name | text | Tag name |
+| description | text | Description |
 | created_at | timestamp NOT NULL | Creation time (UTC) |
 | updated_at | timestamp NOT NULL | Last update time (UTC) |
 
@@ -423,6 +443,8 @@ Physical boxes on shelves used by put-away (printed box label).
 | --- | --- | --- |
 | id | text PK | Box id (server-generated `BOX-H-<date>-<seq>`; format to be finalized now that warehouse_code is removed) |
 | shelf_code | text FK → shelves(code) | Shelf the box sits on |
+| org_id | integer | Stock location pair member — the box decides the stock partition of its contents (defaults to the receiving order's pair at creation; put-away stamps lots with the box's pair) |
+| sub_inventory_code | text FK → sub_inventories(code) | Stock location pair member (with org_id) |
 | status | text NOT NULL DEFAULT 'open' | Box status |
 | created_at | timestamp NOT NULL | Creation time (UTC) |
 

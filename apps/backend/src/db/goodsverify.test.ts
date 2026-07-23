@@ -8,6 +8,7 @@ import { queryAll, queryGet, queryRun } from "./query.js";
 import { allocateAll } from "./allocate.js";
 import { confirmReceivingArrival } from "./receiving.js";
 import { assignScanToBox, closeShelfBox, createShelfBox, recordPutAwayScan } from "./putaway.js";
+import { runGoodsVerifyDayEnd } from "../jobs/goodsVerifyDayEnd.js";
 import {
   generateGoodsVerifyTasks,
   getGoodsVerifyTaskDetail,
@@ -458,4 +459,32 @@ test("verify: counted below allocated → 409 counted_qty_below_allocated; equal
     sql`SELECT qty_delta AS "qtyDelta" FROM inventory_transactions WHERE txn_type = 'ADJUST' AND reference_id = ${row.id}`
   );
   assert.equal(adjust!.qtyDelta, -8000);
+});
+
+// --- nightly cron runner (jobs/goodsVerifyDayEnd.ts) -------------------------
+
+test("runGoodsVerifyDayEnd: covers yesterday's movements, idempotent re-run", async () => {
+  await reseed(client);
+  const lotId = await seedLotIdOf("RK73H1JTTD1002F", "A-01-01");
+  // a movement stamped yesterday (the business day that just ended at 00:00)
+  await queryRun(
+    client.db,
+    sql`INSERT INTO inventory_transactions (id, inventory_lot_id, part_no, shelf_code, box_id, txn_type, qty_type, qty_delta, txn_at, created_at)
+        SELECT gen_random_uuid()::text, id, part_no, shelf_code, box_id, 'RESERVE', 'reserved', -100,
+               now() - interval '1 day', now() - interval '1 day'
+        FROM inventory_lots WHERE id = ${lotId}`
+  );
+
+  const yesterday = (await queryGet<{ d: string }>(client.db, sql`SELECT (CURRENT_DATE - 1)::text AS d`))!.d;
+  const r1 = await runGoodsVerifyDayEnd(client.db);
+  assert.equal(r1.created, 1);
+  assert.deepEqual(r1.dates, [yesterday, (await queryGet<{ d: string }>(client.db, sql`SELECT CURRENT_DATE::text AS d`))!.d]);
+
+  const tasks = await listGoodsVerifyTasks(client.db, {});
+  assert.equal(tasks.length, 1);
+  assert.equal(tasks[0].taskDate, yesterday);
+  assert.equal(tasks[0].partNo, "RK73H1JTTD1002F");
+
+  const r2 = await runGoodsVerifyDayEnd(client.db);
+  assert.equal(r2.created, 0);
 });

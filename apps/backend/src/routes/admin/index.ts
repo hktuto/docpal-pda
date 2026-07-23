@@ -10,14 +10,15 @@ import {
   countryList,
   boxSizeList,
   customerProfiles,
-  subInventories,
   netWeightFormula,
   userGroups,
   userGroupMembers,
 } from "../../db/schema/index.js";
-import { createCrudRouter, reqStr, optStr, reqInt, optInt, reqNum } from "./crud.js";
+import { createCrudRouter, reqStr, optStr, reqInt, reqNum } from "./crud.js";
 import { shelfBoxesRoute } from "./shelfBoxes.js";
 import { adminUsersRoute } from "./users.js";
+import { adminFlowEditsRoute } from "./flowEdits.js";
+import { adminSubInventoriesRoute } from "./subInventories.js";
 
 // Optional id on create: use the client's when given, else generate one.
 function optId(body: Record<string, unknown>): string {
@@ -35,13 +36,9 @@ adminRoute.route(
     create: (b) => ({
       code: reqStr(b, "code"),
       zone: optStr(b, "zone"),
-      orgId: optInt(b, "orgId"),
-      subInventoryCode: optStr(b, "subInventoryCode"),
     }),
     update: (b) => ({
       ...(b.zone !== undefined && { zone: optStr(b, "zone") }),
-      ...(b.orgId !== undefined && { orgId: optInt(b, "orgId") }),
-      ...(b.subInventoryCode !== undefined && { subInventoryCode: optStr(b, "subInventoryCode") }),
       updatedAt: new Date(),
     }),
   })
@@ -159,25 +156,9 @@ adminRoute.route(
   })
 );
 
-adminRoute.route(
-  "/sub-inventories",
-  createCrudRouter({
-    table: subInventories,
-    pk: subInventories.code,
-    create: (b) => ({
-      code: reqStr(b, "code"),
-      name: reqStr(b, "name"),
-      orgId: reqInt(b, "orgId"),
-      customerCode: optStr(b, "customerCode"),
-    }),
-    update: (b) => ({
-      ...(b.name !== undefined && { name: reqStr(b, "name") }),
-      ...(b.orgId !== undefined && { orgId: reqInt(b, "orgId") }),
-      ...(b.customerCode !== undefined && { customerCode: optStr(b, "customerCode") }),
-      updatedAt: new Date(),
-    }),
-  })
-);
+// Sub-inventories: custom router (3-level model — list aggregates tags,
+// group create makes its default tag).
+adminRoute.route("/sub-inventories", adminSubInventoriesRoute);
 
 adminRoute.route(
   "/net-weight-formulas",
@@ -239,3 +220,6 @@ adminRoute.route(
 );
 
 adminRoute.route("/shelf-boxes", shelfBoxesRoute);
+
+// Flow-data edits for the admin console (delivery date / item date code).
+adminRoute.route("/", adminFlowEditsRoute);

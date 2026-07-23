@@ -1,4 +1,4 @@
-import { pgTable, primaryKey, text, integer, real, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, primaryKey, foreignKey, text, integer, real, timestamp } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
 
 // Local users table; a ucenter_user integration may replace this later
@@ -73,8 +73,6 @@ export const parts = pgTable("parts", {
 export const shelves = pgTable("shelves", {
   code: text("code").primaryKey(),
   zone: text("zone"),
-  orgId: integer("org_id"), // 办公室: HK, SZ, CME 等，用于区分不同办公室的货架位置
-  subInventoryCode: text("sub_inventory_code").references(() => subInventories.code), // 子库存代码: STORE1
   createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
 });
@@ -114,14 +112,48 @@ export const customerProfiles = pgTable("customer_profiles", {
 
 // Warehouse sub-inventories: logical partitions of stock inside one org
 // (Oracle EBS organization + subinventory — the pair org_id +
-// sub_inventory_code identifies stock partitioning). org_id is the office the
-// sub-inventory belongs to (plain integer office id, no FK to a lookup);
-// customer_code is set for customer-segregated stores.
-export const subInventories = pgTable("sub_inventories", {
-  code: text("code").primaryKey(), // e.g. STORE1
-  name: text("name").notNull(),
-  orgId: integer("org_id").notNull(), // 所属办公室, 2: HK — 与 sub_inventory_code 配对识别库存分区
-  customerCode: text("customer_code").references(() => customerProfiles.code), // set for customer-segregated stores
-  createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
-  updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
-});
+// sub_inventory_code identifies stock partitioning). 2026-07-23 redesign
+// (new_seed/subInventories.xlsx): THREE levels — org_id → sub_inventory
+// (code) → tag. This table is the (org_id, code) GROUP level that all
+// stock/doc tables reference (composite FK); the third level lives in
+// sub_inventory_tags (lookup-only), so items in the same org + sub-inventory
+// share across tags for allocation. customer_code is set for
+// customer-segregated stores.
+export const subInventories = pgTable(
+  "sub_inventories",
+  {
+    orgId: integer("org_id").notNull(), // 所属办公室 — 与 code 配对识别库存分区
+    code: text("code").notNull(), // 子库存 (group level), e.g. STORE1
+    name: text("name"),
+    customerCode: text("customer_code").references(() => customerProfiles.code), // set for customer-segregated stores
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.orgId, t.code] }),
+  })
+);
+
+// Third level of the sub-inventory model: tags within an (org_id, code)
+// group (e.g. STORE1/140 → BJHK1, GZHK1, SHHK1, SZHK1). Lookup/reporting
+// only — no stock or document columns reference it.
+export const subInventoryTags = pgTable(
+  "sub_inventory_tags",
+  {
+    orgId: integer("org_id").notNull(),
+    code: text("code").notNull(),
+    tag: text("tag").notNull(), // e.g. BJHK1; equals code when untagged
+    name: text("name"),
+    description: text("description"),
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
+    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.orgId, t.code, t.tag] }),
+    groupFk: foreignKey({
+      name: "sub_inventory_tags_group_fk",
+      columns: [t.orgId, t.code],
+      foreignColumns: [subInventories.orgId, subInventories.code],
+    }),
+  })
+);

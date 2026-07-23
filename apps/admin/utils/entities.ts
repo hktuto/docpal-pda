@@ -39,23 +39,10 @@ export const entities: Record<string, EntityConfig> = {
     fields: [
       { key: "code", label: "Code", type: "text", required: true, readonlyOnEdit: true },
       { key: "zone", label: "Zone", type: "text" },
-      { key: "orgId", label: "Org ID", type: "number" },
-      { key: "subInventoryCode", label: "Sub-inventory", type: "text" },
     ],
     extraColumns: [
       { key: "createdAt", label: "Created" },
       { key: "updatedAt", label: "Updated" },
-    ],
-  },
-  "sub-inventories": {
-    path: "sub-inventories",
-    title: "Sub-inventories",
-    pk: "code",
-    fields: [
-      { key: "code", label: "Code", type: "text", required: true, readonlyOnEdit: true },
-      { key: "name", label: "Name", type: "text", required: true },
-      { key: "orgId", label: "Org ID", type: "number", required: true },
-      { key: "customerCode", label: "Customer code", type: "text" },
     ],
   },
   suppliers: {
@@ -167,17 +154,49 @@ export const entities: Record<string, EntityConfig> = {
   },
 };
 
-/** Pages rendered as a generic CrudTable, in nav order. */
-export const entityPages: { key: string; route: string; title: string }[] = [
-  { key: "shelves", route: "/shelves", title: entities.shelves.title },
-  { key: "sub-inventories", route: "/sub-inventories", title: entities["sub-inventories"].title },
-  { key: "suppliers", route: "/suppliers", title: entities.suppliers.title },
-  { key: "parts", route: "/parts", title: entities.parts.title },
-  { key: "countries", route: "/countries", title: entities.countries.title },
-  { key: "box-sizes", route: "/box-sizes", title: entities["box-sizes"].title },
-  { key: "customer-profiles", route: "/customer-profiles", title: entities["customer-profiles"].title },
-  { key: "net-weight-formulas", route: "/net-weight-formulas", title: entities["net-weight-formulas"].title },
-  { key: "users", route: "/users", title: entities.users.title },
-  { key: "user-groups", route: "/user-groups", title: entities["user-groups"].title },
-  { key: "user-group-members", route: "/user-group-members", title: entities["user-group-members"].title },
+/** Top-nav grouping per the admin TOC (apps/admin/TOC.md). */
+export const navSections: { title: string; links: { route: string; title: string }[] }[] = [
+  {
+    title: "Customer",
+    links: [{ route: "/customer-profiles", title: "Customer Profiles" }],
+  },
+  {
+    title: "Supplier",
+    links: [{ route: "/suppliers", title: "Suppliers" }],
+  },
+  {
+    title: "Warehouse",
+    links: [
+      { route: "/shelves", title: "Shelves" },
+      { route: "/shelf-boxes", title: "Shelf Boxes" },
+      { route: "/sub-inventories", title: "Sub-inventories" },
+      { route: "/parts", title: "Parts" },
+      { route: "/net-weight-formulas", title: "Net Weight" },
+      { route: "/box-sizes", title: "Box Sizes" },
+      { route: "/countries", title: "Countries" },
+    ],
+  },
+  {
+    title: "Picking",
+    links: [
+      { route: "/picking", title: "Picking Orders" },
+      { route: "/picking/reorder", title: "Reorder" },
+    ],
+  },
+  {
+    title: "Receiving",
+    links: [{ route: "/receiving", title: "Receiving Orders" }],
+  },
+  {
+    title: "Shipping",
+    links: [{ route: "/shipping", title: "Shipping Orders" }],
+  },
+  {
+    title: "Settings",
+    links: [
+      { route: "/users", title: "Users" },
+      { route: "/user-groups", title: "User Groups" },
+      { route: "/user-group-members", title: "Group Members" },
+    ],
+  },
 ];

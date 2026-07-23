@@ -358,8 +358,8 @@ test("picking: create → re-PUT unchanged → reconcile (qty change, add, remov
 
   // reconcile: change the location pair → changed, pair updated
   const pairChanged = pickingBody();
-  pairChanged.order.orgId = 3;
-  pairChanged.order.subInventoryCode = "WSTORE1";
+  pairChanged.order.orgId = 143;
+  pairChanged.order.subInventoryCode = "store1";
   const resPair = await upsertPickingOrder(client.db, "PO-INGEST-1", pairChanged);
   assert.equal(resPair.changed, true);
   const order2 = (await queryGet<{ orgId: number; subInventoryCode: string }>(
@@ -367,8 +367,8 @@ test("picking: create → re-PUT unchanged → reconcile (qty change, add, remov
     sql`SELECT org_id AS "orgId", sub_inventory_code AS "subInventoryCode"
         FROM picking_orders WHERE order_no = 'PO-INGEST-1'`
   ))!;
-  assert.equal(order2.orgId, 3);
-  assert.equal(order2.subInventoryCode, "WSTORE1");
+  assert.equal(order2.orgId, 143);
+  assert.equal(order2.subInventoryCode, "store1");
   await upsertPickingOrder(client.db, "PO-INGEST-1", pickingBody()); // restore
 
   // reconcile: change qty of the P413 line, drop nothing yet → changed

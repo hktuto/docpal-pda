@@ -259,7 +259,7 @@ test("assign: materializes lot with shelf location, sources, put_away_qty, ledge
   );
   assert.equal(moved!.boxId, box.id);
 
-  // lot stamped with the item's batch attrs + the shelf's location pair
+  // lot stamped with the item's batch attrs + the box's location pair
   const lot = await queryGet<{
     id: string;
     partNo: string;
@@ -932,4 +932,27 @@ test("scan with shelfBoxId: lands directly in the box (lot + ledger); guards rol
   );
   assert.equal(wrongOrder.status, 409);
   assert.equal(wrongOrder.message, "different_receiving_orders");
+});
+
+test("assign: lot takes the BOX's location pair, not the receiving order's", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await daitoInHand();
+  const itemId = await itemIdOf(orderId, "RK73B1JTTD181G");
+  const scan = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 500 });
+
+  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
+  // admin overrides the box's pair after creation (the box decides the stock
+  // partition since 2026-07-23 — not the receiving order)
+  await client.db.execute(
+    sql`UPDATE shelf_boxes SET org_id = 220, sub_inventory_code = 'THHK2' WHERE id = ${box.id}`
+  );
+
+  await assignScanToBox(client.db, { scanId: scan.id, shelfBoxId: box.id, actorId });
+
+  const lot = await queryGet<{ orgId: number | null; subInventoryCode: string | null }>(
+    client.db,
+    sql`SELECT org_id AS "orgId", sub_inventory_code AS "subInventoryCode" FROM inventory_lots WHERE box_id = ${box.id}`
+  );
+  assert.equal(lot!.orgId, 220);
+  assert.equal(lot!.subInventoryCode, "THHK2");
 });

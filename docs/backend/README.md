@@ -166,7 +166,10 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     date}` — day-end generation: one pending task per lot moved in
     `inventory_transactions` that day (`date` defaults to the DB server's
     `CURRENT_DATE`); the `(task_date, inventory_lot_id)` unique index makes
-    re-runs idempotent (`created` counts only new rows).
+    re-runs idempotent (`created` counts only new rows). Also runs
+    automatically every night at local 00:00 (`src/jobs/goodsVerifyDayEnd.ts`
+    from `src/server.ts`, generating `CURRENT_DATE-1` + `CURRENT_DATE` with a
+    boot catch-up; `GOODS_VERIFY_CRON=off` disables; Vercel stays manual).
   - `GET /goods-verify-tasks?date=&status=&shelfCode=` — the work queue with
     `partNo`/`wclItemNo` joined, ordered by shelf/box/part.
   - `GET /goods-verify-tasks/:id` — task (all fields + part identity) + lot
@@ -210,12 +213,20 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     `unknown_customer` with the code in the message); `org_id` is accepted
     with a `2` default.
 - `/admin/*` — master-data CRUD (see `apps/backend/src/routes/admin/`):
-  generic CRUD for shelves (code/zone/orgId), suppliers, supplier-profiles
+  generic CRUD for shelves (code/zone), suppliers, supplier-profiles
   (incl. `qrType`), parts (referenced by `partNo`, `supplierCode` required),
   countries, box-sizes, customer-profiles (incl. `rule`), net-weight-formulas
   (`partNo`), user-groups, and user-group-members (composite key addressed as
   `:userId::groupCode`), plus custom routers for users (write-only `password`
-  hashed server-side, `password_hash` never returned) and `shelf-boxes`.
+  hashed server-side, `password_hash` never returned), `shelf-boxes`, and
+  `sub-inventories` (3-level model: the list aggregates `sub_inventory_tags`,
+  group create makes its default tag, tags managed via
+  `POST/DELETE /admin/sub-inventories/:orgId::code/tags(/:tag)`, groups
+  addressed as `:orgId::code`).
+  Flow-data edits for the admin console: `PATCH /admin/picking-orders/:id`
+  `{deliveryDate}` (`YYYY-MM-DD` or null) and
+  `PATCH /admin/receiving-invoice-items/:id` `{dateCode}` (or null) — both in
+  `src/db/adminedits.ts`, each leaving a `transaction_logs` audit row.
   Requires the bearer token like everything else; errors are plain text.
 - `POST /dev/reset`, `POST /dev/allocate` — demo reset / manual allocation
   recompute.

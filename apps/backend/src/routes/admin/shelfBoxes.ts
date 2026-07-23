@@ -34,11 +34,20 @@ function optStatus(b: Record<string, unknown>): string | undefined {
   return v;
 }
 
+function optInt(b: Record<string, unknown>, field: string): number | null {
+  const v = b[field];
+  if (v === undefined || v === null) return null;
+  if (typeof v !== "number" || !Number.isInteger(v)) throw new HTTPException(400, { message: `${field} must be an integer` });
+  return v;
+}
+
 shelfBoxesRoute.get("/", async (c) => {
   const rows = await queryAll(
     db,
     sql`SELECT sb.id,
                sb.shelf_code          AS "shelfCode",
+               sb.org_id              AS "orgId",
+               sb.sub_inventory_code  AS "subInventoryCode",
                sb.status,
                sb.created_at          AS "createdAt",
                COUNT(sbi.id)::int          AS "itemCount",
@@ -57,15 +66,15 @@ shelfBoxesRoute.post("/", async (c) => {
   try {
     const row = await queryGet(
       db,
-      sql`INSERT INTO shelf_boxes (id, shelf_code, status, created_at)
-          VALUES (${id}, ${optStr(b, "shelfCode")}, ${optStatus(b) ?? "open"}, ${new Date()})
-          RETURNING id, shelf_code AS "shelfCode", status, created_at AS "createdAt"`
+      sql`INSERT INTO shelf_boxes (id, shelf_code, org_id, sub_inventory_code, status, created_at)
+          VALUES (${id}, ${optStr(b, "shelfCode")}, ${optInt(b, "orgId")}, ${optStr(b, "subInventoryCode")}, ${optStatus(b) ?? "open"}, ${new Date()})
+          RETURNING id, shelf_code AS "shelfCode", org_id AS "orgId", sub_inventory_code AS "subInventoryCode", status, created_at AS "createdAt"`
     );
     return c.json(row, 201);
   } catch (e) {
     const err = e as { code?: string; cause?: { code?: string } };
     if ((err?.code ?? err?.cause?.code) === "23503") {
-      throw new HTTPException(409, { message: "invalid shelf_code" });
+      throw new HTTPException(409, { message: "invalid shelf_code or sub_inventory_code" });
     }
     throw e;
   }
@@ -77,6 +86,8 @@ shelfBoxesRoute.get("/:id", async (c) => {
     db,
     sql`SELECT sb.id,
                sb.shelf_code          AS "shelfCode",
+               sb.org_id              AS "orgId",
+               sb.sub_inventory_code  AS "subInventoryCode",
                sb.status,
                sb.created_at          AS "createdAt"
         FROM shelf_boxes sb
@@ -103,25 +114,31 @@ shelfBoxesRoute.patch("/:id", async (c) => {
   const b = await readJson(c);
   const status = optStatus(b);
   const hasShelf = b.shelfCode !== undefined;
-  if (status === undefined && !hasShelf) {
+  const hasOrg = b.orgId !== undefined;
+  const hasSub = b.subInventoryCode !== undefined;
+  if (status === undefined && !hasShelf && !hasOrg && !hasSub) {
     throw new HTTPException(400, { message: "no fields to update" });
   }
   const shelfCode = optStr(b, "shelfCode"); // null clears the assignment
+  const orgId = optInt(b, "orgId"); // null clears the pair member
+  const subInventoryCode = optStr(b, "subInventoryCode");
   try {
     const row = await queryGet(
       db,
       sql`UPDATE shelf_boxes
           SET shelf_code = CASE WHEN ${hasShelf} THEN ${shelfCode} ELSE shelf_code END,
-              status     = COALESCE(${status ?? null}, status)
+              status     = COALESCE(${status ?? null}, status),
+              org_id     = CASE WHEN ${hasOrg} THEN ${orgId} ELSE org_id END,
+              sub_inventory_code = CASE WHEN ${hasSub} THEN ${subInventoryCode} ELSE sub_inventory_code END
           WHERE id = ${id}
-          RETURNING id, shelf_code AS "shelfCode", status, created_at AS "createdAt"`
+          RETURNING id, shelf_code AS "shelfCode", org_id AS "orgId", sub_inventory_code AS "subInventoryCode", status, created_at AS "createdAt"`
     );
     if (!row) throw new HTTPException(404, { message: "not found" });
     return c.json(row);
   } catch (e) {
     const err = e as { code?: string; cause?: { code?: string } };
     if ((err?.code ?? err?.cause?.code) === "23503") {
-      throw new HTTPException(409, { message: "invalid shelf_code" });
+      throw new HTTPException(409, { message: "invalid shelf_code or sub_inventory_code" });
     }
     throw e;
   }
