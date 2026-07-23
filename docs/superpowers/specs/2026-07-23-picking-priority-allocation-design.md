@@ -68,9 +68,13 @@ On every `allocateAll` run:
 ### 3. Explicit priority on `picking_orders`
 
 - New column `priority_seq integer` NOT NULL (lower = allocated first).
-- Backfill: `row_number() OVER (ORDER BY created_at)`.
-- Ingest upsert assigns `COALESCE(MAX(priority_seq), 0) + 1` on insert;
-  updates keep the seq.
+- Backfill: `row_number() OVER (ORDER BY delivery_date ASC NULLS LAST,
+  order_no)` (decision 2026-07-23, revised from created_at; migration 0020
+  re-sequenced existing rows).
+- Ingest upsert **slots a new order into its delivery-date position**:
+  position = count of open orders sorting before its `(delivery_date,
+  order_no)` + 1; open orders at-or-after shift down one seq (relative order
+  preserved, incl. manual reorders). Updates keep the seq.
 - Demand order: `po.priority_seq, pi.id`.
 
 ### 4. Reorder endpoint triggers re-allocation

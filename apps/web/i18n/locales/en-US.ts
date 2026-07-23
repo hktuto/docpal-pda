@@ -188,6 +188,7 @@ export default {
   picking: {
     title: "Picking",
     shipTo: "Ship to: {destination}",
+    lockedBy: "Picking: {name}",
     reportIssue: "Report issue",
     issueReportSummary: "{reported} issue(s) reported, {skipped} order(s) skipped.",
     detail: {
@@ -198,6 +199,7 @@ export default {
       shipTo: "Ship to",
       org: "Office",
       subInventory: "Sub-inventory",
+      lockedBy: "Picking by",
       finishPicking: "Finish picking",
       measuring: "Measuring",
       measuringTaskCreated: "Measuring task created",

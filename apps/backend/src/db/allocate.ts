@@ -141,7 +141,7 @@ async function loadDemands(dbOrTx: DbOrTx): Promise<DemandRow[]> {
         WHERE po.status IN ('pending', 'picking')
           AND (po.working_by IS NULL OR po.working_at IS NULL OR po.working_at < ${workLockExpiry()})
           AND pi.qty > COALESCE(pkg.qty, 0)
-        ORDER BY po.priority_seq, po.delivery_date NULLS LAST, po.created_at, pi.id`
+        ORDER BY po.priority_seq, po.delivery_date NULLS LAST, po.order_no, pi.id`
   );
 }
 

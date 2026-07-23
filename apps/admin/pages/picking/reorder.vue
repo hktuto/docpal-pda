@@ -34,6 +34,16 @@ function move(index: number, delta: -1 | 1) {
   saved.value = "";
 }
 
+function moveToTop(index: number) {
+  if (index <= 0) return;
+  const copy = [...rows.value];
+  const [row] = copy.splice(index, 1);
+  copy.unshift(row);
+  rows.value = copy;
+  dirty.value = true;
+  saved.value = "";
+}
+
 async function save() {
   saving.value = true;
   error.value = "";
@@ -90,6 +100,7 @@ onMounted(load);
         <tbody>
           <tr v-for="(r, i) in rows" :key="r.id">
             <td class="actions">
+              <button class="btn btn-small" :disabled="i === 0" title="Move to top" @click="moveToTop(i)">⇤</button>
               <button class="btn btn-small" :disabled="i === 0" @click="move(i, -1)">↑</button>
               <button class="btn btn-small" :disabled="i === rows.length - 1" @click="move(i, 1)">↓</button>
             </td>

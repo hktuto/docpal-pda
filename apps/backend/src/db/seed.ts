@@ -559,11 +559,12 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
   await db.insert(pickingOrders).values(realPickingOrders.map(mapPair));
   await db.insert(pickingItems).values([...realPickingItems]);
 
-  // Allocation priority: creation order is the initial queue order (admin
-  // reorders afterwards via POST /picking-orders/reorder).
+  // Allocation priority default: delivery date (sooner first, NULLS LAST),
+  // then order no. Admin reorders afterwards via POST /picking-orders/reorder;
+  // new ingest orders slot into their delivery-date position.
   await db.execute(sql`
     UPDATE picking_orders SET priority_seq = r.seq
-    FROM (SELECT id, row_number() OVER (ORDER BY created_at) AS seq FROM picking_orders) r
+    FROM (SELECT id, row_number() OVER (ORDER BY delivery_date ASC NULLS LAST, order_no) AS seq FROM picking_orders) r
     WHERE picking_orders.id = r.id`);
 }
 

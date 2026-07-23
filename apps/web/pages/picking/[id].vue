@@ -46,6 +46,7 @@
         <DetailRow :label="$t('picking.detail.shipTo')" :value="order.shipTo" />
         <DetailRow v-if="order.orgId != null" :label="$t('picking.detail.org')" :value="`Org ${order.orgId}`" />
         <DetailRow v-if="order.subInventoryCode" :label="$t('picking.detail.subInventory')" :value="order.subInventoryCode" />
+        <DetailRow v-if="order.workingByName" :label="$t('picking.detail.lockedBy')" :value="order.workingByName" />
       </DetailHeader>
 
       <PickingIssueBanner v-if="order.status === 'issue'" :order="order" />

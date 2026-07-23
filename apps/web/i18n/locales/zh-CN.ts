@@ -188,6 +188,7 @@ export default {
   picking: {
     title: "拣货",
     shipTo: "收货方：{destination}",
+    lockedBy: "拣货中：{name}",
     reportIssue: "上报问题",
     issueReportSummary: "已上报 {reported} 个问题，跳过 {skipped} 个订单。",
     detail: {
@@ -198,6 +199,7 @@ export default {
       shipTo: "收货方",
       org: "办事处",
       subInventory: "子库存",
+      lockedBy: "拣货人",
       finishPicking: "完成拣货",
       measuring: "测量",
       measuringTaskCreated: "测量任务已创建",

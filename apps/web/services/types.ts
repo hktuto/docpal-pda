@@ -378,6 +378,8 @@ export interface PickingOrderDetail {
   customerCode: string | null;
   orgId: number | null;
   subInventoryCode: string | null;
+  workingBy: string | null;
+  workingByName: string | null;
   issueReason: string | null;
   issueQty: number | null;
   issuePackSize: number | null;

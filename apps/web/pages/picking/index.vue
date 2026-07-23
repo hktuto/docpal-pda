@@ -39,6 +39,7 @@
         <span class="list-card__date">
           {{ po.deliveryDate ? new Date(po.deliveryDate).toLocaleDateString() : $t('common.noDate') }}
         </span>
+        <span v-if="po.workingByName" class="list-card__lock">{{ $t('picking.lockedBy', { name: po.workingByName }) }}</span>
         <span class="list-card__ship">{{ $t('picking.shipTo', { destination: po.shipTo || $t('common.noData') }) }}</span>
       </div>
     </div>
@@ -187,6 +188,14 @@ useVisibleReload(load, ["/picking-orders"]);
   margin-left: auto;
   font-size: 0.8125rem;
   color: var(--muted);
+}
+
+.list-card__lock {
+  font-size: 0.8125rem;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
 }
 
 .bulk-actions {

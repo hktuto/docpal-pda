@@ -574,10 +574,27 @@ export async function upsertPickingOrder(
 
     if (!existing) {
       const orderId = randomUUID();
-      // Append at the end of the priority queue (admin reorders afterwards).
-      const nextSeq = await queryGet<{ seq: number }>(
-        tx,
-        sql`SELECT COALESCE(MAX(priority_seq), 0) + 1 AS seq FROM picking_orders`
+      // Slot the new order into the priority queue by (delivery_date ASC
+      // NULLS LAST, order_no): bump open orders that sort at-or-after it and
+      // take the freed position. Existing (incl. manually reordered) relative
+      // order is preserved — everyone just shifts down.
+      const pos = (
+        await queryGet<{ p: number }>(
+          tx,
+          sql`SELECT COUNT(*)::int + 1 AS p
+              FROM picking_orders
+              WHERE status IN ('pending', 'picking')
+                AND (
+                  (${deliveryDate}::date IS NOT NULL AND delivery_date IS NOT NULL
+                    AND (delivery_date, order_no) < (${deliveryDate}, ${orderNo}))
+                  OR (${deliveryDate}::date IS NULL AND delivery_date IS NOT NULL)
+                  OR (${deliveryDate}::date IS NULL AND delivery_date IS NULL AND order_no < ${orderNo})
+                )`
+        )
+      )!.p;
+      await tx.execute(
+        sql`UPDATE picking_orders SET priority_seq = priority_seq + 1, updated_at = ${now()}
+            WHERE status IN ('pending', 'picking') AND priority_seq >= ${pos}`
       );
       await tx.insert(pickingOrders).values({
         id: orderId,
@@ -589,7 +606,7 @@ export async function upsertPickingOrder(
         orgId: body.order.orgId ?? null,
         subInventoryCode: body.order.subInventoryCode ?? null,
         status: "pending",
-        prioritySeq: nextSeq?.seq ?? 1,
+        prioritySeq: pos,
       });
       for (const it of body.items) {
         await insertPickingItem(tx, orderId, it);

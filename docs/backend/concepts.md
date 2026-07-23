@@ -107,7 +107,10 @@ Selection rules (confirmed with the business):
 >
 > - Demands are allocated in **`picking_orders.priority_seq`** order (lower
 >   first; `POST /picking-orders/reorder` rewrites the seq and re-allocates,
->   emitting `picking.reordered`). New ingest orders append at the end.
+>   emitting `picking.reordered`). The default seq is **delivery date ASC
+>   NULLS LAST, then order_no** (migration 0020 re-sequenced existing rows);
+>   new ingest orders **slot into their delivery-date position** (existing
+>   orders shift down, relative order preserved).
 > - An order protected by a **live page work lock** (`working_by`/`working_at`
 >   — a PDA has the order open; `POST/DELETE /picking-orders/:id/work-lock`,
 >   3-min keep-alive, expires 10 min after `working_at`) is skipped entirely:

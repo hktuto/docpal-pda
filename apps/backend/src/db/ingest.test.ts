@@ -434,26 +434,37 @@ test("picking: upserted pending order allocates from seeded lots via allocateAll
   assert.equal(allocs[0].inventoryLotId, lotId);
 });
 
-test("picking: new order appends to the priority queue; re-upsert keeps its seq", async () => {
+test("picking: new order slots into the queue by delivery date; re-upsert keeps its seq", async () => {
   await reseed(client);
-  const first = await upsertPickingOrder(client.db, "PO-SEQ-1", {
-    order: { customerCode: "ACME" },
+  const seqOf = async (orderNo: string) =>
+    Number((await queryGet<{ seq: number }>(client.db, sql`SELECT priority_seq AS seq FROM picking_orders WHERE order_no = ${orderNo}`))!.seq);
+  const mk = (deliveryDate?: string) => ({
+    order: { customerCode: "ACME", ...(deliveryDate ? { deliveryDate } : {}) },
     items: [{ partNo: "RK73H1JTTD2202F", qty: 10 }],
   });
-  const second = await upsertPickingOrder(client.db, "PO-SEQ-2", {
-    order: { customerCode: "ACME" },
-    items: [{ partNo: "RK73H1JTTD2202F", qty: 10 }],
-  });
-  const seqOf = async (id: string) =>
-    Number((await queryGet<{ seq: number }>(client.db, sql`SELECT priority_seq AS seq FROM picking_orders WHERE id = ${id}`))!.seq);
 
-  const s1 = await seqOf(first.id);
-  const s2 = await seqOf(second.id);
-  assert.ok(s2 > s1, `expected second order seq ${s2} > first ${s1}`);
+  // two undated orders: NULLS LAST, ordered by order_no between themselves
+  await upsertPickingOrder(client.db, "PO-SEQ-B", mk());
+  await upsertPickingOrder(client.db, "PO-SEQ-D", mk());
+  const b1 = await seqOf("PO-SEQ-B");
+  const d1 = await seqOf("PO-SEQ-D");
+  assert.ok(d1 > b1, `undated orders order by order_no: B(${b1}) before D(${d1})`);
 
-  await upsertPickingOrder(client.db, "PO-SEQ-1", {
-    order: { customerCode: "ACME" },
-    items: [{ partNo: "RK73H1JTTD2202F", qty: 20 }],
-  });
-  assert.equal(await seqOf(first.id), s1);
+  // a dated order slots ahead of ALL undated ones (NULLS LAST) — and ahead of
+  // the seeded order when its date is earlier (seed SO-2026-0001 is 2026-07-25)
+  await upsertPickingOrder(client.db, "PO-SEQ-A", mk("2026-07-20"));
+  const a1 = await seqOf("PO-SEQ-A");
+  assert.equal(a1, 1, "earliest delivery date takes position 1");
+  assert.ok(a1 < b1, `dated order A(${a1}) slots ahead of undated B(${b1})`);
+  assert.equal(await seqOf("PO-SEQ-B"), b1 + 1, "existing orders shift down by one");
+  assert.equal(await seqOf("PO-SEQ-D"), d1 + 1);
+
+  // a date between the seeded order (07-25) and the undated ones slots between them
+  await upsertPickingOrder(client.db, "PO-SEQ-Z", mk("2026-07-30"));
+  const zSeq = await seqOf("PO-SEQ-Z");
+  assert.ok(zSeq > a1 && zSeq < (await seqOf("PO-SEQ-B")), "Z slots after the dated orders, before undated");
+
+  // re-upsert does not move the order
+  await upsertPickingOrder(client.db, "PO-SEQ-Z", { order: { customerCode: "ACME" }, items: [{ partNo: "RK73H1JTTD2202F", qty: 20 }] });
+  assert.equal(await seqOf("PO-SEQ-Z"), zSeq);
 });

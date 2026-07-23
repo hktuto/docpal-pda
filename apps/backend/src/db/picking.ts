@@ -280,7 +280,7 @@ export async function listPickingOrders(db: AppDb, status?: string): Promise<Pic
       LEFT JOIN users w ON w.id = po.working_by
       ${status ? sql`WHERE po.status = ${status}` : sql``}
       GROUP BY po.id, w.display_name
-      ORDER BY po.priority_seq ASC, po.created_at
+      ORDER BY po.priority_seq ASC, po.delivery_date ASC NULLS LAST, po.order_no
     `
   );
 }
@@ -382,6 +382,8 @@ export interface PickingOrderRow {
   customerCode: string | null;
   orgId: number | null;
   subInventoryCode: string | null;
+  workingBy: string | null;
+  workingByName: string | null;
   issueReason: string | null;
   issueQty: number | null;
   issuePackSize: number | null;
@@ -480,16 +482,19 @@ export async function getPickingOrderDetail(db: AppDb, orderId: string): Promise
     db,
     sql`
       SELECT
-        id, order_no AS "orderNo", status,
-        delivery_date AS "deliveryDate", po_no AS "poNo",
-        ship_to AS "shipTo",
-        customer_code AS "customerCode",
-        org_id AS "orgId", sub_inventory_code AS "subInventoryCode",
-        issue_reason AS "issueReason", issue_qty AS "issueQty", issue_pack_size AS "issuePackSize",
-        issue_note AS "issueNote", issue_remark AS "issueRemark",
-        issue_reported_at AS "issueReportedAt", issue_reported_by AS "issueReportedBy",
-        created_at AS "createdAt", updated_at AS "updatedAt"
-      FROM picking_orders WHERE id = ${orderId}
+        po.id, po.order_no AS "orderNo", po.status,
+        po.delivery_date AS "deliveryDate", po.po_no AS "poNo",
+        po.ship_to AS "shipTo",
+        po.customer_code AS "customerCode",
+        po.org_id AS "orgId", po.sub_inventory_code AS "subInventoryCode",
+        po.working_by AS "workingBy", w.display_name AS "workingByName",
+        po.issue_reason AS "issueReason", po.issue_qty AS "issueQty", po.issue_pack_size AS "issuePackSize",
+        po.issue_note AS "issueNote", po.issue_remark AS "issueRemark",
+        po.issue_reported_at AS "issueReportedAt", po.issue_reported_by AS "issueReportedBy",
+        po.created_at AS "createdAt", po.updated_at AS "updatedAt"
+      FROM picking_orders po
+      LEFT JOIN users w ON w.id = po.working_by
+      WHERE po.id = ${orderId}
     `
   );
   if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
