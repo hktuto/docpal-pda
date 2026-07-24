@@ -2,11 +2,17 @@
   <NuxtLayout>
     <NuxtPage />
   </NuxtLayout>
+  <ServerDownOverlay />
 </template>
 
 <script setup lang="ts">
 import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
+
+const { start: startServerHealth } = useServerHealth();
+
+// Backend reachability watchdog: drives the global maintenance overlay.
+onMounted(startServerHealth);
 
 const SUPPORTED_LOCALES = ["en-US", "zh-CN", "zh-HK"] as const;
 type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];

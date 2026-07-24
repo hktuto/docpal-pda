@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Warehouse PDA — 維護中</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    font-family: -apple-system, "Segoe UI", Roboto, "Noto Sans TC", sans-serif;
+    background: linear-gradient(160deg, #0d9488, #1d4ed8); padding: 1.5rem;
+  }
+  .card {
+    background: #fff; border-radius: 16px; padding: 2rem 1.5rem; width: 100%; max-width: 420px;
+    box-shadow: 0 12px 32px rgba(0,0,0,.25); text-align: center;
+  }
+  h1 { font-size: 1.25rem; margin: 0 0 .5rem; color: #111827; }
+  p { color: #4b5563; font-size: .95rem; line-height: 1.5; margin: .25rem 0 1rem; }
+  .url { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .8rem; color: #6b7280; word-break: break-all; }
+  button {
+    width: 100%; padding: .8rem; border: none; border-radius: 999px; font-size: 1rem; cursor: pointer;
+    background: #0d9488; color: #fff; font-weight: 600;
+  }
+  button.secondary { background: #e5e7eb; color: #111827; margin-top: .5rem; font-weight: 500; }
+  details { margin-top: 1.25rem; text-align: left; }
+  summary { cursor: pointer; color: #6b7280; font-size: .85rem; }
+  label { display: block; font-size: .8rem; color: #4b5563; margin: .75rem 0 .25rem; }
+  input {
+    width: 100%; padding: .6rem .75rem; border: 1px solid #d1d5db; border-radius: 8px; font-size: .95rem;
+  }
+  .status { margin-top: .75rem; font-size: .8rem; color: #9ca3af; min-height: 1em; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>系統暫時無法連線</h1>
+    <p>無法連到 Warehouse PDA 伺服器，可能正在維護或尚未啟動。系統會自動重試。</p>
+    <p class="url" id="target"></p>
+    <button id="retry">立即重試</button>
+    <div class="status" id="status"></div>
+
+    <details>
+      <summary>進階：變更伺服器位址</summary>
+      <label for="serverUrl">伺服器 URL（例如 http://192.168.1.10:3000）</label>
+      <input id="serverUrl" type="url" placeholder="http://localhost:3000" />
+      <button class="secondary" id="save">儲存並連線</button>
+      <button class="secondary" id="reset">回復預設</button>
+    </details>
+  </div>
+
+<script>
+(function () {
+  var DEFAULT_URL = 'http://localhost:3000';
+  var STORAGE_KEY = 'pda-server-url-override';
+  var RETRY_MS = 10000;
+  var timer = null;
+
+  function override() {
+    try { return localStorage.getItem(STORAGE_KEY) || ''; } catch (e) { return ''; }
+  }
+  function targetUrl() { return override() || DEFAULT_URL; }
+
+  var targetEl = document.getElementById('target');
+  var statusEl = document.getElementById('status');
+  var inputEl = document.getElementById('serverUrl');
+
+  function render() {
+    targetEl.textContent = targetUrl();
+    inputEl.value = override();
+  }
+
+  function go() {
+    statusEl.textContent = '連線中…';
+    window.location.href = targetUrl();
+  }
+
+  function schedule() {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(go, RETRY_MS);
+  }
+
+  document.getElementById('retry').addEventListener('click', go);
+  document.getElementById('save').addEventListener('click', function () {
+    var v = inputEl.value.trim().replace(/\/+$/, '');
+    if (v && !/^https?:\/\//i.test(v)) v = 'http://' + v;
+    try {
+      if (v) localStorage.setItem(STORAGE_KEY, v);
+      else localStorage.removeItem(STORAGE_KEY);
+    } catch (e) { /* ignore */ }
+    render();
+    go();
+  });
+  document.getElementById('reset').addEventListener('click', function () {
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
+    render();
+    statusEl.textContent = '已回復預設';
+  });
+
+  render();
+  schedule();
+})();
+</script>
+</body>
+</html>

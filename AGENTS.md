@@ -30,8 +30,9 @@ pnpm --filter @warehouse/web nuxt prepare   # generate Nuxt types; run after sch
 pnpm --filter @warehouse/web build   # production build
 pnpm --filter @warehouse/web generate     # static export for Capacitor
 pnpm --filter @warehouse/web cap:sync     # copy web assets into native platforms
-pnpm --filter @warehouse/web cap:android  # generate, sync, and open Android project
-pnpm --filter @warehouse/web cap:android:dev  # sync Android to the running web dev server for live reload
+pnpm --filter @warehouse/web cap:android  # bundled build: generate, sync (server URL off), and open Android project
+pnpm --filter @warehouse/web cap:android:proxy  # adb reverse tcp:3000+3002 (re-run after device reconnect)
+pnpm --filter @warehouse/web cap:android:dev  # proxy + sync Android pointed at the running web dev server (live reload)
 ```
 
 The web dev workflow needs TWO servers: `pnpm dev:backend` (:3002) and `pnpm --filter @warehouse/web dev` (:3000). The web app always talks to the backend.
@@ -52,7 +53,7 @@ pnpm --filter @warehouse/backend db:generate
 
 Backend tests use the `TEST_DATABASE_URL` database (default `warehouse_backend_test`) and run serially because they share one test database.
 
-For Android live reload, run the web dev server in one terminal, then run `pnpm --filter @warehouse/web cap:android:dev` in another. The helper script (`scripts/cap-android-dev.mjs`) finds your machine's LAN IP, sets `CAPACITOR_SERVER_URL` (consumed by `capacitor.config.ts`), and points the Android WebView at `http://<ip>:3000`. The device also needs to reach the backend, so set `NUXT_PUBLIC_API_BASE_URL=http://<ip>:3002` when starting the web dev server. Make sure the Android device and dev machine are on the same network. Known issue: on the current Capacitor version live reload fails with a native bridge `Cannot read properties of undefined (reading 'triggerEvent')` error; use the bundled build below until that is resolved.
+For Android live reload, `capacitor.config.ts` defaults `server.url` to `http://localhost:3000`, and `adb reverse` tunnels the device's localhost ports back to the dev machine: run the web dev server (`pnpm --filter @warehouse/web dev`) and backend (`pnpm dev:backend`), then `pnpm --filter @warehouse/web cap:android:dev` — it runs `scripts/cap-android-proxy.mjs` (`adb reverse tcp:3000` + `tcp:3002`, so the default `apiBaseUrl` `http://localhost:3002` works on-device too), syncs, and opens Android Studio. Re-run `cap:android:proxy` after every device reconnect/reboot (`adb reverse` does not persist). Reinstall the APK after changing `capacitor.config.ts` — the config is packaged into the APK assets. Known issue: on the current Capacitor version live reload may fail with a native bridge `Cannot read properties of undefined (reading 'triggerEvent')` error; use the bundled build below in that case.
 
 Device networking notes (bundled builds verified on a real device):
 
@@ -66,11 +67,11 @@ Device networking notes (bundled builds verified on a real device):
 
 ### Native Android build / install on a connected device
 
-When the web assets have changed, regenerate and sync first:
+When the web assets have changed, regenerate and sync first. `capacitor.config.ts` defaults `server.url` to the dev server, so bundled syncs must go through the helper script (it sets `CAPACITOR_SERVER_URL=off`; set `NUXT_PUBLIC_API_BASE_URL` to the hosted backend first for production builds):
 
 ```bash
-pnpm generate
-npx cap sync android
+NUXT_PUBLIC_API_BASE_URL=http://<backend-host>:3002 pnpm generate
+node scripts/cap-android-bundled.mjs
 ```
 
 Then build and install the debug APK (from the `android` directory):
@@ -153,5 +154,6 @@ When you add, remove, or significantly change a feature:
 - **Demo passwords only.** The seed uses well-known demo passwords (`operator` / `DocPal2026!`, `admin` / `DocPalAdmin2026!`) — they are scrypt-hashed at seed time, but change them before any real deployment.
 - **Native scanning.** The Android native `RectangleDetection.scanLabel()` flow is still used for camera-based label capture where implemented.
 - **Hardware scanner delivery.** The Capacitor app receives hardware scans two ways: the `ScannerBroadcast` plugin (`apps/web/android/.../ScannerBroadcastPlugin.java`, wrapped by `composables/useScannerBroadcast.ts`) listens for the scanner service's intent broadcast `com.wclsolution.docpal.action.BARCODE_SCANNED` (extra `barcode`) and is the fast path; `useHardwareScanner` also keeps the keyboard-wedge fallback (key events buffered until Enter) for browser dev and unconfigured devices. The plugin receives via a context-registered receiver (implicit broadcasts) plus the manifest component `ScannerBroadcastReceiver` (explicit package/class-targeted broadcasts); both share one dispatch path that suppresses duplicate deliveries of the same value within 400 ms. After a broadcast scan the composable eats wedge key echo for 1.5 s so the "Output to broadcast/keyboard" device mode does not double-scan. Device setup (one-time, scanner Function settings / directional output): Barcode data output mode = "Output to broadcast", PackageName = `com.docpal.warehousedemo`, ClassName = `com.docpal.warehousedemo.ScannerBroadcastReceiver`, Scan Result Action = the action above (Enable Intent ON), Scan Result Data Key = `barcode` (the firmware's misspelled default `bacode` is also accepted); verify with `adb logcat -s ScannerBroadcast` (this ROM suppresses DEBUG log lines — the plugin logs at INFO).
-- **Capacitor web assets.** Run `pnpm generate` before `pnpm cap:sync` so the native apps receive the latest static build from `.output/public`. For dev live reload, use `pnpm cap:android:dev` instead.
+- **Capacitor web assets.** Bundled builds: `pnpm generate` then `node scripts/cap-android-bundled.mjs` (sets `CAPACITOR_SERVER_URL=off`) so the native app receives the static build from `.output/public`. For dev live reload, use `pnpm cap:android:dev` instead (dev-server URL + `adb reverse`).
 - **Android only.** iOS platform is not configured.
+- **Server-down handling.** Two layers: (1) WebView can't load the app at all (dev server down) — `server.errorPath: 'maintenance.html'` in `capacitor.config.ts` shows the bundled `public/maintenance.html`, which auto-retries every 10 s and has an advanced "change server URL" override (persisted in the WebView's localStorage; `allowNavigation: ['*']` keeps the override inside the app); (2) app loads but the backend API is down — `composables/useServerHealth.ts` (started in `app.vue`) polls `GET /health` every 20 s + on resume, `apiClient` reports fetch-level failures to it, and `components/ServerDownOverlay.vue` covers the screen until the backend recovers.

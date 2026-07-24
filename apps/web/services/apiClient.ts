@@ -65,6 +65,15 @@ export function setTokenGetter(fn: () => string | null): void {
   tokenGetter = fn;
 }
 
+// Server-health wiring: useServerHealth registers a handler once; every
+// fetch-level failure (server unreachable, as opposed to an HTTP error)
+// then flips the global maintenance overlay immediately.
+let networkErrorHandler: (() => void) | null = null;
+
+export function setNetworkErrorHandler(fn: () => void): void {
+  networkErrorHandler = fn;
+}
+
 /** localStorage keys holding the session (written by the auth adapter). */
 const TOKEN_STORAGE_KEY = "warehouse-token";
 const USER_ID_STORAGE_KEY = "warehouse-user-id";
@@ -166,6 +175,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     try {
       res = await fetch(buildUrl(path, opts.params), init);
     } catch {
+      networkErrorHandler?.();
       throw new I18nError("network_error");
     }
 

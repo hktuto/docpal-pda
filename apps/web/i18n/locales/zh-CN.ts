@@ -38,6 +38,10 @@ export default {
   common: {
     loading: "加载中…",
     errorPrefix: "错误：{message}",
+    serverDownTitle: "服务器暂时无法连接",
+    serverDownMessage: "无法连接到 Warehouse 服务器，可能正在维护。系统会自动重试。",
+    serverDownRetry: "立即重试",
+    serverDownChecking: "检查中…",
     noData: "—",
     stateNone: "—",
     searchByRefOrSupplier: "按单号或供应商搜索…",

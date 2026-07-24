@@ -34,23 +34,55 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
 
   const queuedRows = computed(() => rows.value.filter((r) => r.status !== "applied"));
 
-  function queuedQtyForAllocation(allocationId: string): number {
+  function queuedQtyForAllocation(allocationId: string, excludeKey?: string): number {
     return rows.value
-      .filter((r) => r.status === "queued" && r.allocationId === allocationId)
+      .filter(
+        (r) => r.status === "queued" && r.allocationId === allocationId && r.key !== excludeKey
+      )
       .reduce((sum, r) => sum + r.qty, 0);
   }
 
   function findTarget(
     partNo: string,
-    qty: number
+    qty: number,
+    excludeKey?: string
   ): { item: OrderItems[number]; allocation: PickingAllocation } | null {
     const wanted = normalize(partNo);
     for (const item of items.value) {
       if (normalize(item.partNo) !== wanted) continue;
       for (const allocation of item.allocations ?? []) {
         if (allocation.qty <= 0) continue;
-        const remaining = allocation.qty - queuedQtyForAllocation(allocation.id);
+        const remaining = allocation.qty - queuedQtyForAllocation(allocation.id, excludeKey);
         if (qty <= remaining) return { item, allocation };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Like findTarget, but allows one label's qty to span several allocations
+   * of the same item (an order line is often allocated from more than one
+   * source, e.g. 50000 = 10000 + 40000). Consumes allocations FIFO and
+   * returns one portion per allocation touched, or null when the item's
+   * total remaining (minus queued) cannot cover the qty.
+   */
+  function findTargets(
+    partNo: string,
+    qty: number
+  ): { item: OrderItems[number]; portions: { allocation: PickingAllocation; qty: number }[] } | null {
+    const wanted = normalize(partNo);
+    for (const item of items.value) {
+      if (normalize(item.partNo) !== wanted) continue;
+      const portions: { allocation: PickingAllocation; qty: number }[] = [];
+      let remaining = qty;
+      for (const allocation of item.allocations ?? []) {
+        if (allocation.qty <= 0) continue;
+        const available = allocation.qty - queuedQtyForAllocation(allocation.id);
+        if (available <= 0) continue;
+        const take = Math.min(available, remaining);
+        portions.push({ allocation, qty: take });
+        remaining -= take;
+        if (remaining === 0) return { item, portions };
       }
     }
     return null;
@@ -68,24 +100,29 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
     if (!normalize(String(parsed.partNo ?? "")) || !Number.isInteger(qty) || qty <= 0) {
       return { ok: false, message: "invalid" };
     }
-    const target = findTarget(String(parsed.partNo), qty);
+    const target = findTargets(String(parsed.partNo), qty);
     if (!target) return { ok: false, message: "no_match" };
 
-    rows.value.unshift({
-      key: `row-${nextKey++}`,
-      itemId: target.item.id,
-      allocationId: target.allocation.id,
-      partNo: target.item.partNo,
-      qty,
-      dateCode: parsed.dateCode || null,
-      lotCode: parsed.lotCode || null,
-      coo: parsed.coo || null,
-      cow: parsed.cow || null,
-      raw,
-      source,
-      status: "queued",
-      error: null,
-    });
+    // One row per allocation portion; unshift in reverse so the first
+    // portion ends up on top. Portions of one label share the raw value —
+    // the page's display table re-aggregates them into a single line.
+    for (const portion of [...target.portions].reverse()) {
+      rows.value.unshift({
+        key: `row-${nextKey++}`,
+        itemId: target.item.id,
+        allocationId: portion.allocation.id,
+        partNo: target.item.partNo,
+        qty: portion.qty,
+        dateCode: parsed.dateCode || null,
+        lotCode: parsed.lotCode || null,
+        coo: parsed.coo || null,
+        cow: parsed.cow || null,
+        raw,
+        source,
+        status: "queued",
+        error: null,
+      });
+    }
     return { ok: true };
   }
 
@@ -113,7 +150,7 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
   function reresolveQueued() {
     for (const row of rows.value) {
       if (row.status !== "queued") continue;
-      const target = findTarget(row.partNo, row.qty);
+      const target = findTarget(row.partNo, row.qty, row.key);
       if (target) {
         row.itemId = target.item.id;
         row.allocationId = target.allocation.id;

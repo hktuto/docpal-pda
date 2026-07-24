@@ -83,6 +83,29 @@ describe('usePickingScanQueue', () => {
     expect(q.addScan(qr('RK73H1JTTD1002F', 0), ':Y::0:X:L:S:F', 'qr')).toEqual({ ok: false, message: 'invalid' });
   });
 
+  it('splits one label across multiple allocations of the same item', () => {
+    const q = usePickingScanQueue(ref(makeItems()));
+    // item-1 holds 3000 = 2000 (alloc-1) + 1000 (alloc-2); a 3000 label spans both
+    const res = q.addScan(qr('RK73H1JTTD1002F', 3000), ':A::302:X:L:S:F', 'qr');
+    expect(res).toEqual({ ok: true });
+    expect(q.rows.value).toHaveLength(2);
+    expect(q.rows.value[0]).toMatchObject({ itemId: 'item-1', allocationId: 'alloc-1', qty: 2000 });
+    expect(q.rows.value[1]).toMatchObject({ itemId: 'item-1', allocationId: 'alloc-2', qty: 1000 });
+    expect(q.queuedQtyByItem.value).toEqual({ 'item-1': 3000 });
+    // both portions share the raw value → rescanning the same label is a duplicate
+    expect(q.addScan(qr('RK73H1JTTD1002F', 3000), ':A::302:X:L:S:F', 'qr')).toEqual({ ok: false, message: 'duplicate' });
+  });
+
+  it('falls through to the next same-part item when the first cannot cover the qty', () => {
+    const items = ref(makeItems());
+    (items.value as any)[1].partNo = 'RK73H1JTTD1002F'; // two lines with the same part
+    const q = usePickingScanQueue(items);
+    q.addScan(qr('RK73H1JTTD1002F', 3000), ':A::302:X:L:S1:F', 'qr'); // fills item-1
+    const res = q.addScan(qr('RK73H1JTTD1002F', 1000), ':A::102:X:L:S2:F', 'qr');
+    expect(res).toEqual({ ok: true });
+    expect(q.rows.value[0]).toMatchObject({ itemId: 'item-2', allocationId: 'alloc-3', qty: 1000 });
+  });
+
   it('removeRow drops queued rows', () => {
     const q = usePickingScanQueue(ref(makeItems()));
     q.addScan(qr('RK73H1JTTD1002F', 1000), ':A::101:X:L:S:F', 'qr');
@@ -141,6 +164,17 @@ describe('usePickingScanQueue', () => {
     // the second row applied with the refreshed allocation id
     expect(applied[1]).toBe('alloc-1b');
     expect(q.rows.value).toHaveLength(0);
+  });
+
+  it('reresolveQueued does not count the row against itself when ids are unchanged', () => {
+    const items = ref(makeItems());
+    const q = usePickingScanQueue(items);
+    // item-2 has a single allocation of exactly 1000
+    q.addScan(qr('RK73H1JTTD2202F', 1000), ':B::101:X:L:S2:F', 'qr');
+    // refetch returns the same allocation ids (e.g. recompute skipped by the
+    // page work lock) — the row must still fit its own allocation
+    q.reresolveQueued();
+    expect(q.rows.value[0]).toMatchObject({ status: 'queued', allocationId: 'alloc-3' });
   });
 
   it('reresolveQueued marks rows that no longer fit as failed', () => {
