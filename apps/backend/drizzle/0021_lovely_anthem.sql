@@ -1,1 +1,0 @@
-ALTER TABLE "supplier_profiles" ADD COLUMN "qr_template_config" jsonb;

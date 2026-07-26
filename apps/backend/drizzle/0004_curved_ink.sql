@@ -1,2 +1,0 @@
-ALTER TABLE "picking_orders" ADD COLUMN "customer_code" text;--> statement-breakpoint
-ALTER TABLE "picking_orders" ADD CONSTRAINT "picking_orders_customer_code_customer_profiles_code_fk" FOREIGN KEY ("customer_code") REFERENCES "public"."customer_profiles"("code") ON DELETE no action ON UPDATE no action;

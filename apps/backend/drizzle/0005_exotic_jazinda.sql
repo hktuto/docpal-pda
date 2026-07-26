@@ -1,2 +1,0 @@
-DROP INDEX "inventory_lots_unique_lot";--> statement-breakpoint
-CREATE UNIQUE INDEX "inventory_lots_unique_lot" ON "inventory_lots" USING btree ("part_id","date_code","coo","cow","shelf_code","box_id","sub_inventory_code") WHERE shelf_code IS NOT NULL OR box_id IS NOT NULL;
