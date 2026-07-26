@@ -9,9 +9,17 @@ export default defineNuxtConfig({
   app: {
     head: {
       title: "Warehouse Admin",
+      link: [
+        { rel: "icon", type: "image/x-icon", href: "/favicon.ico" },
+        { rel: "icon", type: "image/png", sizes: "32x32", href: "/favicon-32x32.png" },
+        { rel: "icon", type: "image/png", sizes: "16x16", href: "/favicon-16x16.png" },
+        { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
+      ],
     },
   },
   css: ["~/assets/main.css"],
+  // i18n comes from the shared layer (locales + LanguageSwitcher + persistence).
+  extends: ["../../layers/i18n"],
   $development: {
     hooks: {
       // Same Nuxt 3.21 + Vite 7 ssr:false dev-server workaround as apps/web:

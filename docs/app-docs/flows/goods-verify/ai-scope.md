@@ -7,9 +7,9 @@
 - Generate the day's tasks automatically: the backend runs day-end
   generation every night at local 00:00 (`src/jobs/goodsVerifyDayEnd.ts`,
   generating DB `CURRENT_DATE-1` + `CURRENT_DATE` with a boot catch-up;
-  `GOODS_VERIFY_CRON=off` disables; Vercel stays manual). The queue page's
-  generate button remains for manual runs (idempotent per task date + lot —
-  re-generating creates no duplicates).
+  `GOODS_VERIFY_CRON=off` disables; Vercel stays manual). There is no
+  generate button in the app — `POST /goods-verify-tasks/generate` remains
+  for manual/server-side runs (idempotent per task date + lot).
 - Filter the queue by date (defaults to today, UTC) and status
   (`pending` / `verified` / `skipped`), plus a client-side text search over
   shelf / box / part number.
@@ -34,11 +34,11 @@
 ## Key files
 
 - `pages/goods-verify/index.vue` — task queue: date picker, status filter
-  chips, search, "Generate today's tasks" button.
+  chips, search.
 - `pages/goods-verify/[id].vue` — task detail: lot batch/location/qty rows,
   box contents, verify form with countedQty + ADJUST consequence hint.
-- `services/adapters/backendWarehouse.ts` — `generateGoodsVerifyTasks`,
-  `getGoodsVerifyTasks`, `getGoodsVerifyTask`, `verifyGoodsVerifyTask`.
+- `services/adapters/backendWarehouse.ts` — `getGoodsVerifyTasks`,
+  `getGoodsVerifyTask`, `verifyGoodsVerifyTask`.
 - `services/types.ts` — `GoodsVerifyTaskListRow`, `GoodsVerifyTaskFilters`,
   `GoodsVerifyTaskDetail` DTOs.
 - `apps/backend/src/routes/goodsverify.ts` + `apps/backend/src/db/goodsverify.ts` —

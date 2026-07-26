@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const api = useApi();
+const { t } = useI18n();
 // Demo convenience: prefill the seeded admin credentials.
 const username = ref("admin");
 const password = ref("DocPalAdmin2026!");
@@ -16,7 +17,7 @@ async function submit() {
     });
     const groupCodes: string[] = res.user?.groupCodes ?? [];
     if (!groupCodes.includes("admin")) {
-      error.value = "This account does not have admin access.";
+      error.value = t("admin.auth.noAdminAccess");
       return;
     }
     localStorage.setItem("admin_token", res.token);
@@ -33,21 +34,31 @@ async function submit() {
 <template>
   <div class="login-wrap">
     <div class="login-box">
+      <img src="/logoWithName.png" alt="DocPal" class="login-logo" />
       <h1>Warehouse Admin</h1>
       <div v-if="error" class="error-banner">{{ error }}</div>
       <form @submit.prevent="submit">
         <div class="form-row">
-          <label for="username">Username</label>
+          <label for="username">{{ $t("admin.auth.username") }}</label>
           <input id="username" v-model="username" type="text" autocomplete="username" />
         </div>
         <div class="form-row">
-          <label for="password">Password</label>
+          <label for="password">{{ $t("admin.auth.password") }}</label>
           <input id="password" v-model="password" type="password" autocomplete="current-password" />
         </div>
         <button type="submit" class="btn btn-primary" style="width: 100%" :disabled="busy">
-          {{ busy ? "Signing in…" : "Sign in" }}
+          {{ busy ? $t("admin.auth.signingIn") : $t("admin.auth.signIn") }}
         </button>
       </form>
+      <div class="login-lang">
+        <LanguageSwitcher />
+      </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.login-lang {
+  margin-top: 14px;
+}
+</style>

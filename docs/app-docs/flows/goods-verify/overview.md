@@ -12,9 +12,9 @@ expects.
 
 ## Concept
 
-1. The operator opens the Goods Verify queue and taps **Generate today's
-   tasks**. The backend creates one pending task per lot that moved today
-   (running it again creates no duplicates).
+1. The backend generates the tasks automatically — a nightly day-end job
+   (local 00:00, with a catch-up at server start) creates one pending task
+   per lot that moved that day, idempotently.
    ![Goods verify list](./assets/goods-verify-list.png)
 2. The queue lists the tasks — part number, shelf/box, and expected
    quantity — filterable by date and status.

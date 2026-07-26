@@ -1,4 +1,4 @@
-import { pgTable, primaryKey, foreignKey, text, integer, real, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, primaryKey, foreignKey, text, integer, real, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
 
 // Local users table; a ucenter_user integration may replace this later
@@ -52,6 +52,10 @@ export const supplierProfiles = pgTable("supplier_profiles", {
   supplierCode: text("supplier_code").notNull().unique().references(() => suppliers.code),
   name: text("name"), // local display-name override; null = use suppliers.name
   qrTemplate: text("qr_template"), // qrcode template (regex with named groups)
+  // structured definition the admin QR-template editor generates qr_template
+  // from ({version, mode: delimited|fixed|advanced, delimiter, fields}) —
+  // null for hand-written legacy templates (editor opens in advanced mode)
+  qrTemplateConfig: jsonb("qr_template_config"),
   qrType: text("qr_type"), // qrcode type, e.g. isbn, ban 14, ban 16
   qtyEncoding: text("qty_encoding"), // qty decoding rule, e.g. 'koa_zeros'
   remark: text("remark"), // other remark for extension

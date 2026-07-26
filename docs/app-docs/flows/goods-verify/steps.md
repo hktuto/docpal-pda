@@ -6,19 +6,17 @@ From the home screen, tap **Goods Verify**. The queue shows verify tasks for
 the selected date (today by default), filterable by status
 (pending / verified / skipped) and searchable by shelf, box, or part number.
 
+Tasks are created automatically by the backend: a nightly day-end job (local
+00:00, with a catch-up at server start) generates one pending task for every
+inventory lot that moved that day — there is nothing to tap to generate them.
+
 ![Goods verify list](./assets/goods-verify-list.png)
 
-## 2. Generate today's tasks
-
-Tap **Generate today's tasks**. The backend creates one pending task for
-every inventory lot that moved today. A toast reports how many tasks were
-created; generating again the same day creates no duplicates.
-
-## 3. Select a task
+## 2. Select a task
 
 Tap a task card to open its detail page.
 
-## 4. Review the lot
+## 3. Review the lot
 
 The detail shows the task's expected quantity plus the lot's full context:
 part, description, date/lot codes, COO/COW, warehouse → section →
@@ -27,7 +25,7 @@ quantities, and — when the lot is boxed — the box's contents.
 
 ![Goods verify shelf detail](./assets/goods-verify-shelf.png)
 
-## 5. Verify the task
+## 4. Verify the task
 
 Physically count the stock, then:
 

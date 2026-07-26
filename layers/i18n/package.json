@@ -1,0 +1,8 @@
+{
+  "name": "@warehouse/i18n-layer",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@nuxtjs/i18n": "^10.4.0"
+  }
+}

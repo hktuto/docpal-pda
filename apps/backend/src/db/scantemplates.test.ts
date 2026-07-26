@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { listScanTemplates } from "./scantemplates.js";
+import { optJson } from "../routes/admin/crud.js";
 
 let client: TestDb;
 
@@ -44,4 +45,46 @@ test("scan-templates: every supplier profile, ordered by supplier_code (null tem
   assert.deepEqual(rows[0], { supplierCode: "ACME", qrTemplate: null, qtyEncoding: null });
   assert.equal(rows[1].supplierCode, "KOA");
   assert.equal(rows[2].supplierCode, "KOA+TCG");
+});
+
+test("supplier_profiles: qr_template_config jsonb round-trips (seed + update)", async () => {
+  await reseed(client);
+
+  // seed: both KOA profiles carry the editor config
+  const seeded = await client.db.execute(
+    sql`SELECT qr_template_config AS config FROM supplier_profiles WHERE supplier_code = 'KOA'`
+  );
+  assert.deepEqual(seeded[0]!.config, {
+    version: 1,
+    mode: "delimited",
+    delimiter: ":",
+    fields: [
+      { role: "ignore" },
+      { role: "itemId" },
+      { role: "ignore" },
+      { role: "qty" },
+      { role: "ignore" },
+      { role: "lotCode" },
+      { role: "serialNo" },
+      { role: "ignore" },
+    ],
+  });
+
+  // update round-trips a fixed-mode config verbatim
+  const fixed = { version: 1, mode: "fixed", fields: [{ role: "itemId", start: 0, length: 14 }] };
+  await client.db.execute(
+    sql`UPDATE supplier_profiles SET qr_template_config = ${JSON.stringify(fixed)}::jsonb
+        WHERE supplier_code = 'KOA+TCG'`
+  );
+  const updated = await client.db.execute(
+    sql`SELECT qr_template_config AS config FROM supplier_profiles WHERE supplier_code = 'KOA+TCG'`
+  );
+  assert.deepEqual(updated[0]!.config, fixed);
+});
+
+test("optJson: object passes, null clears, non-object rejected", () => {
+  assert.deepEqual(optJson({ qrTemplateConfig: { a: 1 } }, "qrTemplateConfig"), { a: 1 });
+  assert.equal(optJson({ qrTemplateConfig: null }, "qrTemplateConfig"), null);
+  assert.equal(optJson({}, "qrTemplateConfig"), null);
+  assert.throws(() => optJson({ qrTemplateConfig: "nope" }, "qrTemplateConfig"), /must be an object/);
 });

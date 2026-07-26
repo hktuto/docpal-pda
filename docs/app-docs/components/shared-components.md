@@ -36,7 +36,7 @@ Circular floating action button that triggers a scan or primary action.
 
 ## LanguageSwitcher
 
-`components/LanguageSwitcher.vue`
+`layers/i18n/components/LanguageSwitcher.vue` (shared Nuxt layer, also used by the admin app)
 
 Inline buttons to switch the app language.
 

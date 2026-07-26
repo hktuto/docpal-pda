@@ -107,11 +107,30 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
     { id: uid(28), code: "KOA+TCG", name: "KOA+TCG", shortName: "KOA+TCG" },
   ]);
 
+  // structured config for the admin QR-template editor (delimited ":" —
+  // leading empty piece is an Ignore; generates a matching-equivalent regex)
+  const koaQrTemplateConfig = {
+    version: 1,
+    mode: "delimited",
+    delimiter: ":",
+    fields: [
+      { role: "ignore" },
+      { role: "itemId" },
+      { role: "ignore" },
+      { role: "qty" },
+      { role: "ignore" },
+      { role: "lotCode" },
+      { role: "serialNo" },
+      { role: "ignore" },
+    ],
+  };
+
   await db.insert(supplierProfiles).values([
     {
       id: uid(25),
       supplierCode: "KOA",
       qrTemplate: "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<fullName>.+)$",
+      qrTemplateConfig: koaQrTemplateConfig,
       qtyEncoding: "koa_zeros",
     },
     // same KOA label format for the real-data supplier
@@ -119,6 +138,7 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
       id: uid(29),
       supplierCode: "KOA+TCG",
       qrTemplate: "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<fullName>.+)$",
+      qrTemplateConfig: koaQrTemplateConfig,
       qtyEncoding: "koa_zeros",
     },
   ]);

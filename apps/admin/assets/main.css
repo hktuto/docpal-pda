@@ -2,16 +2,33 @@
   box-sizing: border-box;
 }
 
+:root {
+  /* DocPal brand palette (see public/logoWithName.png): teal → blue. */
+  --brand-teal: #0fb5a3;
+  --brand-teal-dark: #0b968f;
+  --brand-blue: #1b8fd4;
+  --brand-sidebar-bg: #e9eff6;
+  --brand-sidebar-text: #3e4c5e;
+  /* Tokens consumed by the shared i18n layer's LanguageSwitcher. */
+  --primary: var(--brand-teal);
+  --surface: #fff;
+  --text: #1f2933;
+  --bg: #eef3f8;
+  --border: #d3dce5;
+  --muted: #7b8794;
+  --radius: 6px;
+}
+
 body {
   margin: 0;
   font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
   font-size: 14px;
   color: #1f2933;
-  background: #f4f6f8;
+  background: #f7f9fc;
 }
 
 a {
-  color: #0b5cab;
+  color: var(--brand-blue);
   text-decoration: none;
 }
 a:hover {
@@ -95,12 +112,13 @@ a:hover {
   cursor: default;
 }
 .btn-primary {
-  background: #0b5cab;
-  border-color: #0b5cab;
+  background: var(--brand-teal);
+  border-color: var(--brand-teal);
   color: #fff;
 }
 .btn-primary:hover {
-  background: #094a8a;
+  background: var(--brand-teal-dark);
+  border-color: var(--brand-teal-dark);
 }
 .btn-danger {
   background: #c0392b;
@@ -117,7 +135,7 @@ a:hover {
 .btn-link {
   border: none;
   background: none;
-  color: #0b5cab;
+  color: var(--brand-blue);
   padding: 3px 6px;
 }
 .btn-link:hover {
@@ -268,10 +286,16 @@ td.actions {
   padding: 28px 30px;
   width: 340px;
 }
+.login-box .login-logo {
+  display: block;
+  width: 180px;
+  margin: 0 auto 6px;
+}
 .login-box h1 {
   font-size: 20px;
   margin: 0 0 18px;
   text-align: center;
+  color: var(--brand-sidebar-text);
 }
 
 /* ---- menu cards ---- */
@@ -290,9 +314,9 @@ td.actions {
   color: #1f2933;
 }
 .card:hover {
-  border-color: #0b5cab;
+  border-color: var(--brand-teal);
   text-decoration: none;
-  box-shadow: 0 2px 8px rgba(11, 92, 171, 0.12);
+  box-shadow: 0 2px 8px rgba(15, 181, 163, 0.15);
 }
 .card .card-title {
   font-weight: 700;

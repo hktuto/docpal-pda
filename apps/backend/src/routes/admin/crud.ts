@@ -69,6 +69,13 @@ export function reqNum(body: Record<string, unknown>, field: string): number {
   return v;
 }
 
+export function optJson(body: Record<string, unknown>, field: string): unknown | null {
+  const v = body[field];
+  if (v === undefined || v === null) return null;
+  if (typeof v !== "object") throw new HTTPException(400, { message: `${field} must be an object` });
+  return v;
+}
+
 export interface CrudConfig<T extends PgTableWithColumns<any>> {
   table: T;
   /** Text primary-key column used in /:id lookups and list ordering. */

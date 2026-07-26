@@ -4,9 +4,6 @@
 
     <div class="toolbar">
       <input v-model="date" class="date-input" type="date" @change="load" />
-      <button class="btn btn--small" :disabled="generating" @click="generate">
-        {{ generating ? $t('goodsVerify.generating') : $t('goodsVerify.generate') }}
-      </button>
     </div>
 
     <div class="filters">
@@ -62,7 +59,6 @@
 import { useWarehouse } from "~/composables/useWarehouse";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { useErrorMessage } from "~/composables/errorMessage";
-import { useToast } from "~/composables/useToast";
 import { badgeClass } from "~/composables/useStatusBadge";
 import type { GoodsVerifyTaskListRow } from "~/services/types";
 
@@ -74,7 +70,6 @@ useHead({ title: t('goodsVerify.title') });
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const warehouse = useWarehouse();
-const { showToast } = useToast();
 
 // UTC date — matches the backend's "today" (the DB session runs in UTC).
 const date = ref(new Date().toISOString().slice(0, 10));
@@ -91,7 +86,6 @@ const statusFilters: { labelKey: string; value: string }[] = [
 const rawRows = ref<GoodsVerifyTaskListRow[]>([]);
 const loading = ref(true);
 const loadError = ref<string | null>(null);
-const generating = ref(false);
 
 async function load() {
   loading.value = true;
@@ -119,20 +113,6 @@ const rows = computed(() => {
       r.partNo.toLowerCase().includes(term)
   );
 });
-
-async function generate() {
-  generating.value = true;
-  try {
-    // No date — the backend defaults to its CURRENT_DATE ("today").
-    const result = await warehouse.generateGoodsVerifyTasks();
-    showToast(t('goodsVerify.generated', { count: result.created, date: result.date }));
-    await load();
-  } catch (e: unknown) {
-    loadError.value = errorMessage(e);
-  } finally {
-    generating.value = false;
-  }
-}
 
 watch(status, load);
 useVisibleReload(load, ["/goods-verify-tasks"]);

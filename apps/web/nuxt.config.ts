@@ -13,20 +13,9 @@ export default defineNuxtConfig({
     },
   },
   css: ["~/assets/css/main.css"],
-  modules: ["@nuxtjs/i18n"],
-  i18n: {
-    restructureDir: "",
-    strategy: "no_prefix",
-    defaultLocale: "zh-HK",
-    locales: [
-      { code: "en-US", name: "English", file: "en-US.ts" },
-      { code: "zh-CN", name: "简体中文", file: "zh-CN.ts" },
-      { code: "zh-HK", name: "繁體中文（香港）", file: "zh-HK.ts" },
-    ],
-    langDir: "i18n/locales/",
-    detectBrowserLanguage: false,
-    vueI18n: "./i18n/config.ts",
-  },
+  // i18n config, locales, LanguageSwitcher, and locale persistence come from
+  // the shared layer (also used by apps/admin).
+  extends: ["../../layers/i18n"],
   $development: {
     hooks: {
       // Workaround for Nuxt 3.21 + Vite 7 bug where `ssr: false` dev server

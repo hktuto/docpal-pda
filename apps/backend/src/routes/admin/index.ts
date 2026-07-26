@@ -14,7 +14,7 @@ import {
   userGroups,
   userGroupMembers,
 } from "../../db/schema/index.js";
-import { createCrudRouter, reqStr, optStr, reqInt, reqNum } from "./crud.js";
+import { createCrudRouter, reqStr, optStr, reqInt, reqNum, optJson } from "./crud.js";
 import { shelfBoxesRoute } from "./shelfBoxes.js";
 import { adminUsersRoute } from "./users.js";
 import { adminFlowEditsRoute } from "./flowEdits.js";
@@ -73,6 +73,7 @@ adminRoute.route(
       supplierCode: reqStr(b, "supplierCode"),
       name: optStr(b, "name"),
       qrTemplate: optStr(b, "qrTemplate"),
+      qrTemplateConfig: optJson(b, "qrTemplateConfig"),
       qrType: optStr(b, "qrType"),
       qtyEncoding: optStr(b, "qtyEncoding"),
       remark: optStr(b, "remark"),
@@ -81,6 +82,7 @@ adminRoute.route(
       ...(b.supplierCode !== undefined && { supplierCode: reqStr(b, "supplierCode") }),
       ...(b.name !== undefined && { name: optStr(b, "name") }),
       ...(b.qrTemplate !== undefined && { qrTemplate: optStr(b, "qrTemplate") }),
+      ...(b.qrTemplateConfig !== undefined && { qrTemplateConfig: optJson(b, "qrTemplateConfig") }),
       ...(b.qrType !== undefined && { qrType: optStr(b, "qrType") }),
       ...(b.qtyEncoding !== undefined && { qtyEncoding: optStr(b, "qtyEncoding") }),
       ...(b.remark !== undefined && { remark: optStr(b, "remark") }),

@@ -8,10 +8,10 @@ import { navSections } from "~/utils/entities";
       <h1>Warehouse Admin</h1>
     </div>
     <template v-for="s in navSections" :key="s.title">
-      <h2 class="section-title">{{ s.title }}</h2>
+      <h2 class="section-title">{{ $t(s.title) }}</h2>
       <div class="cards">
         <NuxtLink v-for="l in s.links" :key="l.route" :to="l.route" class="card">
-          <div class="card-title">{{ l.title }}</div>
+          <div class="card-title">{{ $t(l.title) }}</div>
         </NuxtLink>
       </div>
     </template>

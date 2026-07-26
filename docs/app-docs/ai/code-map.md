@@ -28,7 +28,7 @@ Page and component locations mapped to source files.
 |------------|-------------|
 | Default layout | `layouts/default.vue` |
 | App header | `components/AppHeader.vue` |
-| Language switcher | `components/LanguageSwitcher.vue` |
+| Language switcher | `layers/i18n/components/LanguageSwitcher.vue` |
 | Toast notifications | `components/ToastHost.vue`, `composables/useToast.ts` |
 | Inline spinner | `components/InlineSpinner.vue` |
 

@@ -46,12 +46,15 @@ function logout() {
   </div>
   <div v-else class="layout">
     <aside class="sidebar">
-      <NuxtLink to="/" class="brand">Warehouse Admin</NuxtLink>
+      <NuxtLink to="/" class="brand">
+        <img src="/logoWithName.png" alt="DocPal" class="brand-logo" />
+        <span class="brand-sub">Warehouse Admin</span>
+      </NuxtLink>
       <nav>
         <div v-for="s in navSections" :key="s.title" class="nav-section">
           <button class="nav-section-head" @click="toggle(s.title, s.links)">
             <span class="caret" :class="{ open: !isCollapsed(s.title, s.links) }">▸</span>
-            {{ s.title }}
+            {{ $t(s.title) }}
           </button>
           <div v-show="!isCollapsed(s.title, s.links)" class="nav-links">
             <NuxtLink
@@ -60,14 +63,17 @@ function logout() {
               :to="l.route"
               :class="{ 'router-link-active': isActive(l.route) }"
             >
-              {{ l.title }}
+              {{ $t(l.title) }}
             </NuxtLink>
           </div>
         </div>
       </nav>
       <div class="userbox">
         <span class="username">{{ user?.displayName }}</span>
-        <button class="btn btn-small" @click="logout">Logout</button>
+        <button class="btn btn-small" @click="logout">{{ $t("admin.auth.logout") }}</button>
+      </div>
+      <div class="langbox">
+        <LanguageSwitcher />
       </div>
     </aside>
     <main class="content">
@@ -85,8 +91,8 @@ function logout() {
 .sidebar {
   width: 230px;
   flex-shrink: 0;
-  background: #123a5c;
-  color: #fff;
+  background: var(--brand-sidebar-bg);
+  color: var(--brand-sidebar-text);
   display: flex;
   flex-direction: column;
   padding: 14px 0;
@@ -94,18 +100,30 @@ function logout() {
   top: 0;
   height: 100vh;
   overflow-y: auto;
+  border-right: 1px solid #d8e1ea;
 }
 
 .brand {
-  font-weight: 700;
-  font-size: 16px;
-  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   padding: 0 18px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  border-bottom: 1px solid #d8e1ea;
   margin-bottom: 8px;
 }
 .brand:hover {
   text-decoration: none;
+}
+.brand-logo {
+  width: 132px;
+  display: block;
+}
+.brand-sub {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #7b8794;
 }
 
 .sidebar nav {
@@ -119,7 +137,7 @@ function logout() {
   width: 100%;
   border: none;
   background: none;
-  color: #cfdcee;
+  color: #64748b;
   font-size: 13px;
   font-weight: 700;
   text-transform: uppercase;
@@ -128,7 +146,7 @@ function logout() {
   cursor: pointer;
 }
 .nav-section-head:hover {
-  color: #fff;
+  color: var(--brand-sidebar-text);
 }
 
 .caret {
@@ -146,20 +164,21 @@ function logout() {
   padding-bottom: 4px;
 }
 .nav-links a {
-  color: #cfdcee;
-  padding: 6px 18px 6px 32px;
+  color: var(--brand-sidebar-text);
+  padding: 6px 18px;
+  margin: 1px 10px;
+  border-radius: 8px;
   font-size: 14px;
 }
 .nav-links a:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.12);
+  color: var(--brand-teal-dark);
+  background: rgba(15, 181, 163, 0.1);
   text-decoration: none;
 }
 .nav-links a.router-link-active {
   color: #fff;
-  background: rgba(255, 255, 255, 0.2);
-  border-left: 3px solid #7db4e0;
-  padding-left: 29px;
+  background: linear-gradient(135deg, #23c3c9, var(--brand-blue));
+  box-shadow: 0 2px 6px rgba(27, 143, 212, 0.3);
 }
 
 .userbox {
@@ -168,13 +187,17 @@ function logout() {
   justify-content: space-between;
   gap: 10px;
   padding: 12px 18px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  border-top: 1px solid #d8e1ea;
   font-size: 13px;
 }
 .username {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.langbox {
+  padding: 10px 18px 0;
 }
 
 .content {

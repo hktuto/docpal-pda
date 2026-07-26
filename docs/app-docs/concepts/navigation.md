@@ -21,7 +21,7 @@ Tap a card to enter that flow.
 - A back button to return to the previous screen.
 - A reset-database button (demo only).
 - A logout button.
-- A language switcher (`components/LanguageSwitcher.vue`).
+- A language switcher (`layers/i18n/components/LanguageSwitcher.vue`).
 
 ## Detail pages
 

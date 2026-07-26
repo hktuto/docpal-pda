@@ -17,4 +17,4 @@ The app shows the home screen with the main menu. Use the menu to choose a wareh
 
 ## Language
 
-Operators can switch language using the language switcher in the app header. Supported languages are configured in `i18n/config.ts` and live under `i18n/locales/`.
+Operators can switch language using the language switcher in the app header. Supported languages are configured in `layers/i18n/i18n/config.ts` and live under `layers/i18n/i18n/locales/` (shared Nuxt layer).

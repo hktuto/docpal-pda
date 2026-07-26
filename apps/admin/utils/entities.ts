@@ -55,19 +55,6 @@ export const entities: Record<string, EntityConfig> = {
       { key: "shortName", label: "Short name", type: "text" },
     ],
   },
-  "supplier-profiles": {
-    path: "supplier-profiles",
-    title: "Supplier profiles",
-    pk: "id",
-    fields: [
-      { key: "supplierCode", label: "Supplier code", type: "text", required: true },
-      { key: "name", label: "Name", type: "text" },
-      { key: "qrTemplate", label: "QR template", type: "text" },
-      { key: "qrType", label: "QR type", type: "text" },
-      { key: "qtyEncoding", label: "Qty encoding", type: "text" },
-      { key: "remark", label: "Remark", type: "text" },
-    ],
-  },
   parts: {
     path: "parts",
     title: "Parts",
@@ -154,49 +141,50 @@ export const entities: Record<string, EntityConfig> = {
   },
 };
 
-/** Top-nav grouping per the admin TOC (apps/admin/TOC.md). */
+/** Top-nav grouping per the admin TOC (apps/admin/TOC.md).
+ *  `title` values are i18n keys resolved by app.vue via `$t`. */
 export const navSections: { title: string; links: { route: string; title: string }[] }[] = [
   {
-    title: "Customer",
-    links: [{ route: "/customer-profiles", title: "Customer Profiles" }],
+    title: "admin.nav.customer",
+    links: [{ route: "/customer-profiles", title: "admin.navLinks.customerProfiles" }],
   },
   {
-    title: "Supplier",
-    links: [{ route: "/suppliers", title: "Suppliers" }],
+    title: "admin.nav.supplier",
+    links: [{ route: "/suppliers", title: "admin.navLinks.suppliers" }],
   },
   {
-    title: "Warehouse",
+    title: "admin.nav.warehouse",
     links: [
-      { route: "/shelves", title: "Shelves" },
-      { route: "/shelf-boxes", title: "Shelf Boxes" },
-      { route: "/sub-inventories", title: "Sub-inventories" },
-      { route: "/parts", title: "Parts" },
-      { route: "/net-weight-formulas", title: "Net Weight" },
-      { route: "/box-sizes", title: "Box Sizes" },
-      { route: "/countries", title: "Countries" },
+      { route: "/shelves", title: "admin.navLinks.shelves" },
+      { route: "/shelf-boxes", title: "admin.navLinks.shelfBoxes" },
+      { route: "/sub-inventories", title: "admin.navLinks.subInventories" },
+      { route: "/parts", title: "admin.navLinks.parts" },
+      { route: "/net-weight-formulas", title: "admin.navLinks.netWeight" },
+      { route: "/box-sizes", title: "admin.navLinks.boxSizes" },
+      { route: "/countries", title: "admin.navLinks.countries" },
     ],
   },
   {
-    title: "Picking",
+    title: "admin.nav.picking",
     links: [
-      { route: "/picking", title: "Picking Orders" },
-      { route: "/picking/reorder", title: "Reorder" },
+      { route: "/picking", title: "admin.navLinks.pickingOrders" },
+      { route: "/picking/reorder", title: "admin.navLinks.reorder" },
     ],
   },
   {
-    title: "Receiving",
-    links: [{ route: "/receiving", title: "Receiving Orders" }],
+    title: "admin.nav.receiving",
+    links: [{ route: "/receiving", title: "admin.navLinks.receivingOrders" }],
   },
   {
-    title: "Shipping",
-    links: [{ route: "/shipping", title: "Shipping Orders" }],
+    title: "admin.nav.shipping",
+    links: [{ route: "/shipping", title: "admin.navLinks.shippingOrders" }],
   },
   {
-    title: "Settings",
+    title: "admin.nav.settings",
     links: [
-      { route: "/users", title: "Users" },
-      { route: "/user-groups", title: "User Groups" },
-      { route: "/user-group-members", title: "Group Members" },
+      { route: "/users", title: "admin.navLinks.users" },
+      { route: "/user-groups", title: "admin.navLinks.userGroups" },
+      { route: "/user-group-members", title: "admin.navLinks.groupMembers" },
     ],
   },
 ];

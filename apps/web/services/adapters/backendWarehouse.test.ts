@@ -768,26 +768,6 @@ describe('backendWarehouse goods verify flow', () => {
     return { url: url as string, init: init as RequestInit };
   }
 
-  it('generateGoodsVerifyTasks POSTs an empty body without a date', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ created: 3, date: '2026-07-17' }));
-
-    const result = await service().generateGoodsVerifyTasks();
-
-    expect(lastCall().url).toBe(`${BASE_URL}/goods-verify-tasks/generate`);
-    expect(lastCall().init.method).toBe('POST');
-    expect(JSON.parse(lastCall().init.body as string)).toEqual({});
-    expect(result).toEqual({ created: 3, date: '2026-07-17' });
-  });
-
-  it('generateGoodsVerifyTasks POSTs the date when given (a system job)', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ created: 0, date: '2026-07-16' }));
-
-    const result = await service().generateGoodsVerifyTasks('2026-07-16');
-
-    expect(JSON.parse(lastCall().init.body as string)).toEqual({ date: '2026-07-16' });
-    expect(result.created).toBe(0);
-  });
-
   it('getGoodsVerifyTasks passes the filters through and skips absent ones', async () => {
     fetchMock.mockResolvedValue(jsonResponse([]));
 

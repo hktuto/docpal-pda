@@ -102,6 +102,36 @@ test("parseQrRaw: apps-web KOA template variant (empty subId segment)", () => {
   assert.equal(parsed.serialNo, undefined);
 });
 
+test("parseQrRaw: admin editor config builds a matching-equivalent KOA regex", async () => {
+  // Mirror of buildRegex (delimited mode) in apps/admin/utils/qrTemplate.ts —
+  // guards generator/parser drift: editor-generated regexes must parse here.
+  function buildDelimited(delimiter: string, roles: string[]): string {
+    const d = delimiter.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return "^" + roles.map((r) => (r === "ignore" ? `[^${d}]*` : `(?<${r}>[^${d}]*)`)).join(d) + "$";
+  }
+  const profile = await queryGet<{
+    qrTemplateConfig: { delimiter: string; fields: { role: string }[] };
+  }>(
+    client.db,
+    sql`SELECT qr_template_config AS "qrTemplateConfig" FROM supplier_profiles WHERE supplier_code = 'KOA'`
+  );
+  assert.ok(profile?.qrTemplateConfig, "seeded KOA profile carries a qr_template_config");
+  const regex = buildDelimited(
+    profile.qrTemplateConfig.delimiter,
+    profile.qrTemplateConfig.fields.map((f) => f.role)
+  );
+  const inner = parseQrRaw(":RK73H1JTTD1002F:S1:14:X:L2601A:602:KOA+RK73H1JTTD1002F", regex, "koa_zeros");
+  assert.equal(inner.partNo, "RK73H1JTTD1002F");
+  assert.equal(inner.qty, 10000);
+  assert.equal(inner.lotCode, "L2601A");
+  assert.equal(inner.serialNo, "602");
+  // outer label with an empty subId piece must match too
+  const outer = parseQrRaw(":RK73H2ATTD2403F::253:M:63048349:S613:KOA*RK73H2ATTD 2403F", regex, "koa_zeros");
+  assert.equal(outer.partNo, "RK73H2ATTD2403F");
+  assert.equal(outer.qty, 25000);
+  assert.equal(outer.lotCode, "63048349");
+});
+
 test("parseQrRaw: no template / no match / invalid regex → {}", () => {
   assert.deepEqual(parseQrRaw("whatever", null, null), {});
   assert.deepEqual(

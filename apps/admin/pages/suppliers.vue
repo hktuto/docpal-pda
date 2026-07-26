@@ -3,16 +3,12 @@ import { entities } from "~/utils/entities";
 
 const api = useApi();
 
-// Supplier profiles (one per supplierCode), edited inline from the suppliers table.
+// Supplier profiles (one per supplierCode), edited via the QR-template editor dialog.
 const profiles = ref<any[]>([]);
 const showProfileForm = ref(false);
-const profileInitial = ref<Record<string, any> | null>(null);
 const profileError = ref("");
 const currentSupplier = ref<any | null>(null);
-
-const profileFields = entities["supplier-profiles"].fields.map((f) =>
-  f.key === "supplierCode" ? { ...f, readonlyOnEdit: true } : f
-);
+const currentProfile = ref<any | null>(null);
 
 async function loadProfiles() {
   try {
@@ -28,10 +24,7 @@ function profileFor(supplierCode: string) {
 
 function editProfile(row: any) {
   currentSupplier.value = row;
-  const existing = profileFor(row.code);
-  profileInitial.value = existing
-    ? { ...existing }
-    : { supplierCode: row.code, name: "", qrTemplate: "", qtyEncoding: "", remark: "" };
+  currentProfile.value = profileFor(row.code) ?? null;
   profileError.value = "";
   showProfileForm.value = true;
 }
@@ -68,11 +61,10 @@ onMounted(loadProfiles);
         </button>
       </template>
     </CrudTable>
-    <CrudForm
+    <QrTemplateEditorDialog
       v-if="showProfileForm"
-      :title="`Supplier profile — ${currentSupplier?.code ?? ''}`"
-      :fields="profileFields"
-      :initial="profileInitial"
+      :supplier-code="currentSupplier?.code ?? ''"
+      :profile="currentProfile"
       :server-error="profileError"
       @save="saveProfile"
       @cancel="showProfileForm = false"
