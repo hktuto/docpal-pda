@@ -127,7 +127,7 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Master-data CRUD lists | `/<entity>` | `apps/admin/pages/<entity>.vue` (thin wrappers over `components/CrudTable.vue` + `utils/entities.ts` configs) |
 | Stock search (read-only; supplier + part-no filter) | `/stock-search` | `apps/admin/pages/stock-search.vue` |
 | Sub-inventories (+ share-group editor, filter/sort) | `/sub-inventories` | `apps/admin/pages/sub-inventories.vue` |
-| Shelf boxes list / detail | `/shelf-boxes`, `/shelf-boxes/:id` | `apps/admin/pages/shelf-boxes.vue`, `apps/admin/pages/shelf-boxes/[id].vue` |
+| Shelf boxes list / detail | `/shelf-boxes`, `/shelf-boxes/:id` | `apps/admin/pages/shelf-boxes/index.vue`, `apps/admin/pages/shelf-boxes/[id].vue` |
 | Picking orders list / detail (delivery-date edit) | `/picking-orders`, `/picking-orders/:id` | `apps/admin/pages/picking-orders/index.vue`, `apps/admin/pages/picking-orders/[id].vue` |
 | Picking priority reorder | `/picking/reorder` | `apps/admin/pages/picking/reorder.vue` |
 | Receiving orders list / detail (delivery-date + item date-code edit, invoice filter) | `/receiving`, `/receiving/:id` | `apps/admin/pages/receiving/index.vue`, `apps/admin/pages/receiving/[id].vue` |
