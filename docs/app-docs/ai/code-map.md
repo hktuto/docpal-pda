@@ -118,6 +118,24 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 - `composables/useReceivingScan.ts` — sends the raw label to `POST /receiving-orders/:id/scan`; on 409 `{message, candidates}` it opens the review modal, and picking a candidate resends with explicit `{partNo, qty}`. A raw label that parses into 2+ item rows (`extractMultiItemRows`) opens the multi-item table modal instead, and `applyRows` applies one explicit `{partNo, qty}` scan per row.
 - `composables/useScanMatchers.ts` — client-side validation for picking (`matchPicking`), put-away (`matchPutAway`), and measuring (`matchMeasuring`); the apply actions go through `WarehouseService`.
 
+## Admin console (apps/admin)
+
+| Page / component | Route | Source file |
+|------------------|-------|-------------|
+| Login | `/login` | `apps/admin/pages/login.vue` |
+| Home / section cards | `/` | `apps/admin/pages/index.vue` |
+| Master-data CRUD lists | `/<entity>` | `apps/admin/pages/<entity>.vue` (thin wrappers over `components/CrudTable.vue` + `utils/entities.ts` configs) |
+| Stock search (read-only; supplier + part-no filter) | `/stock-search` | `apps/admin/pages/stock-search.vue` |
+| Sub-inventories (+ share-group editor, filter/sort) | `/sub-inventories` | `apps/admin/pages/sub-inventories.vue` |
+| Shelf boxes list / detail | `/shelf-boxes`, `/shelf-boxes/:id` | `apps/admin/pages/shelf-boxes.vue`, `apps/admin/pages/shelf-boxes/[id].vue` |
+| Picking orders list / detail (delivery-date edit) | `/picking-orders`, `/picking-orders/:id` | `apps/admin/pages/picking-orders/index.vue`, `apps/admin/pages/picking-orders/[id].vue` |
+| Picking priority reorder | `/picking/reorder` | `apps/admin/pages/picking/reorder.vue` |
+| Receiving orders list / detail (delivery-date + item date-code edit, invoice filter) | `/receiving`, `/receiving/:id` | `apps/admin/pages/receiving/index.vue`, `apps/admin/pages/receiving/[id].vue` |
+| Shipping orders list / detail | `/shipping`, `/shipping/:id` | `apps/admin/pages/shipping/index.vue`, `apps/admin/pages/shipping/[id].vue` |
+| Generic CRUD table (search / column sorting / server paging) | — | `apps/admin/components/CrudTable.vue` (+ `components/CrudForm.vue`, `components/Pager.vue`, `composables/useColumnSort.ts`) |
+| Sidebar layout + userbox popover | — | `apps/admin/app.vue` |
+| Flow API typed wrappers | — | `apps/admin/utils/flowApi.ts` |
+
 ## Warehouse backend (apps/backend)
 
 Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in

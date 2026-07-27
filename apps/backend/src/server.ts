@@ -11,10 +11,10 @@ serve({ fetch: app.fetch, port }, (info) => {
   console.log(`backend listening on http://localhost:${info.port}`);
 });
 
-// Housekeeping at boot (local/pm2 only — this file never runs on Vercel, where
-// pruneEvents runs fire-and-forget on each new SSE connection instead).
+// Housekeeping at boot (pruneEvents also runs fire-and-forget on each new
+// SSE connection).
 void pruneEvents(db).catch((err) => console.error("pruneEvents at boot failed", err));
 
 // Nightly goods-verify day-end generation at local 00:00 (GOODS_VERIFY_CRON=off
-// to disable; on Vercel generation stays manual via the generate endpoint).
+// to disable).
 startGoodsVerifyDayEndCron(db);

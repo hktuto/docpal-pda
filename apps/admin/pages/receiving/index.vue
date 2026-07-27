@@ -42,31 +42,32 @@ onMounted(load);
 <template>
   <div>
     <div class="page-head">
-      <h1>Receiving Orders</h1>
+      <h1>{{ $t("admin.pages.receiving.title") }}</h1>
+      <button class="btn" :disabled="loading" @click="load">{{ $t("admin.common.refresh") }}</button>
     </div>
 
     <div class="filters">
       <select v-model="status">
-        <option v-for="s in STATUSES" :key="s" :value="s">{{ s || "All statuses" }}</option>
+        <option v-for="s in STATUSES" :key="s" :value="s">{{ s || $t("admin.common.allStatuses") }}</option>
       </select>
-      <input v-model="search" placeholder="Search batch no / supplier" />
+      <input v-model="search" :placeholder="$t('admin.pages.receiving.searchPlaceholder')" />
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
-    <div v-if="loading" class="loading">Loading…</div>
+    <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
     <div v-else class="table-wrap">
       <table class="data">
         <thead>
           <tr>
-            <th>Batch No</th>
-            <th>Status</th>
-            <th>Supplier</th>
-            <th>Delivery Date</th>
-            <th>Invoices</th>
-            <th>Items</th>
-            <th>Remaining</th>
-            <th>Pending Picking</th>
+            <th>{{ $t("admin.pages.receiving.batchNo") }}</th>
+            <th>{{ $t("admin.pages.receiving.status") }}</th>
+            <th>{{ $t("admin.pages.receiving.supplier") }}</th>
+            <th>{{ $t("admin.pages.receiving.deliveryDate") }}</th>
+            <th>{{ $t("admin.pages.receiving.invoices") }}</th>
+            <th>{{ $t("admin.pages.receiving.items") }}</th>
+            <th>{{ $t("admin.pages.receiving.remaining") }}</th>
+            <th>{{ $t("admin.pages.receiving.pendingPicking") }}</th>
           </tr>
         </thead>
         <tbody>
@@ -81,7 +82,7 @@ onMounted(load);
             <td>{{ r.pendingPickingOrders }}</td>
           </tr>
           <tr v-if="total === 0">
-            <td colspan="8" class="muted">No receiving orders.</td>
+            <td colspan="8" class="muted">{{ $t("admin.pages.receiving.none") }}</td>
           </tr>
         </tbody>
       </table>

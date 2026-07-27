@@ -43,34 +43,37 @@ onMounted(load);
 <template>
   <div>
     <div class="page-head">
-      <h1>Picking Orders</h1>
-      <NuxtLink to="/picking/reorder" class="btn">Reorder priority</NuxtLink>
+      <h1>{{ $t("admin.pages.pickingOrders.title") }}</h1>
+      <div class="head-actions">
+        <button class="btn" :disabled="loading" @click="load">{{ $t("admin.common.refresh") }}</button>
+        <NuxtLink to="/picking/reorder" class="btn">{{ $t("admin.pages.pickingOrders.reorderPriority") }}</NuxtLink>
+      </div>
     </div>
 
     <div class="filters">
       <select v-model="status">
-        <option v-for="s in STATUSES" :key="s" :value="s">{{ s || "All statuses" }}</option>
+        <option v-for="s in STATUSES" :key="s" :value="s">{{ s || $t("admin.common.allStatuses") }}</option>
       </select>
-      <input v-model="search" placeholder="Search order no / customer / PO / ship-to" />
+      <input v-model="search" :placeholder="$t('admin.pages.pickingOrders.searchPlaceholder')" />
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
-    <div v-if="loading" class="loading">Loading…</div>
+    <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
     <div v-else class="table-wrap">
       <table class="data">
         <thead>
           <tr>
             <th>#</th>
-            <th>Order No</th>
-            <th>Status</th>
-            <th>Customer</th>
-            <th>PO No</th>
-            <th>Ship To</th>
-            <th>Delivery Date</th>
-            <th>Items</th>
-            <th>Picked / Total</th>
-            <th>Locked By</th>
+            <th>{{ $t("admin.pages.pickingOrders.orderNo") }}</th>
+            <th>{{ $t("admin.pages.pickingOrders.status") }}</th>
+            <th>{{ $t("admin.pages.pickingOrders.customer") }}</th>
+            <th>{{ $t("admin.pages.pickingOrders.poNo") }}</th>
+            <th>{{ $t("admin.pages.pickingOrders.shipTo") }}</th>
+            <th>{{ $t("admin.pages.pickingOrders.deliveryDate") }}</th>
+            <th>{{ $t("admin.pages.pickingOrders.items") }}</th>
+            <th>{{ $t("admin.pages.pickingOrders.pickedTotal") }}</th>
+            <th>{{ $t("admin.pages.pickingOrders.lockedBy") }}</th>
           </tr>
         </thead>
         <tbody>
@@ -87,7 +90,7 @@ onMounted(load);
             <td>{{ r.workingByName ?? "" }}</td>
           </tr>
           <tr v-if="total === 0">
-            <td colspan="10" class="muted">No picking orders.</td>
+            <td colspan="10" class="muted">{{ $t("admin.pages.pickingOrders.none") }}</td>
           </tr>
         </tbody>
       </table>

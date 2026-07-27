@@ -213,6 +213,18 @@ td.actions {
   padding: 12px 0;
 }
 
+/* ---- search bars (CrudTable + filterable list pages) ---- */
+.search-bar {
+  margin: 0 0 12px;
+}
+.search-input {
+  width: 320px;
+  max-width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #b6c2cd;
+  border-radius: 4px;
+}
+
 /* ---- modal-ish dialog ---- */
 .overlay {
   position: fixed;

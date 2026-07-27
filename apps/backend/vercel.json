@@ -1,5 +1,0 @@
-{
-  "functions": {
-    "src/index.ts": { "maxDuration": 60 }
-  }
-}

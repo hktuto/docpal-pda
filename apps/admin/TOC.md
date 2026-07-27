@@ -57,6 +57,8 @@
   - Country List 3.6
     - list country 
       - detail ( update label )
+  - Stock Search
+    - search stock by supplier and/or part no ( parts summary + lot list )
 - Invoice/Picking Management
   - list picking order with filter and sort , reorder picking order 4.3
     - detail picking order ( change item datacode, delevery date, download packing list and TN  ) 4.1, 4.2, 7.2, 7.4

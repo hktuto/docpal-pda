@@ -5,7 +5,7 @@ import { navSections } from "~/utils/entities";
 <template>
   <div>
     <div class="page-head">
-      <h1>Warehouse Admin</h1>
+      <h1>{{ $t("admin.home.title") }}</h1>
     </div>
     <template v-for="s in navSections" :key="s.title">
       <h2 class="section-title">{{ $t(s.title) }}</h2>

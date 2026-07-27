@@ -21,9 +21,9 @@ function patchTimestampHandling(sql: ReturnType<typeof postgres>): void {
 
 export function createSql(connectionString?: string): ReturnType<typeof postgres> {
   const url = connectionString ?? process.env.DATABASE_URL ?? "postgresql://warehouse:warehouse@localhost:5432/warehouse_backend";
-  // PG_MAX / PG_PREPARE tune the pool for serverless: a Vercel function holds
-  // one connection (PG_MAX=1) and the Neon pooler (PgBouncer transaction
-  // mode) rejects prepared statements (PG_PREPARE=false).
+  // PG_MAX caps the pool size; PG_PREPARE=false disables prepared statements
+  // (needed when the database sits behind a PgBouncer-style transaction
+  // pooler).
   return postgres(url, {
     max: Number(process.env.PG_MAX ?? 10),
     prepare: process.env.PG_PREPARE !== "false",

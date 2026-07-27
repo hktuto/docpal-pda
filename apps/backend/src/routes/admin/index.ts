@@ -109,6 +109,14 @@ adminRoute.route(
         ilike(parts.supplierCode, like)
       )!;
     },
+    filters: { supplierCode: (v) => ilike(parts.supplierCode, `%${v}%`) },
+    sorts: {
+      partNo: parts.partNo,
+      supplierCode: parts.supplierCode,
+      wclItemNo: parts.wclItemNo,
+      description: parts.description,
+      defaultCoo: parts.defaultCoo,
+    },
     create: (b) => ({
       id: optId(b),
       supplierCode: reqStr(b, "supplierCode"),
@@ -183,6 +191,14 @@ adminRoute.route(
   createCrudRouter({
     table: netWeightFormula,
     pk: netWeightFormula.id,
+    orderBy: netWeightFormula.partNo,
+    // Large master table — server-side paging/search/sort (?page=&q=&sort=&dir=).
+    search: (q) => ilike(netWeightFormula.partNo, `%${q}%`),
+    sorts: {
+      partNo: netWeightFormula.partNo,
+      qty: netWeightFormula.qty,
+      weight: netWeightFormula.weight,
+    },
     create: (b) => ({
       id: optId(b),
       partNo: reqStr(b, "partNo"),

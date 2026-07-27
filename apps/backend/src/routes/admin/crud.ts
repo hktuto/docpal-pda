@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { Context } from "hono";
-import { eq, count as countFn, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, count as countFn, type SQL } from "drizzle-orm";
 import type { AnyPgColumn, PgTableWithColumns } from "drizzle-orm/pg-core";
 import { db } from "../../db.js";
 
@@ -87,6 +87,12 @@ export interface CrudConfig<T extends PgTableWithColumns<any>> {
    *  list request carries ?page=/?pageSize=/?q=, GET / returns
    *  { rows, total } (LIMIT/OFFSET + COUNT) instead of the full array. */
   search?: (q: string) => SQL;
+  /** Extra AND predicates keyed by query-param name (server-paging branch only).
+   *  Each non-empty ?<name>= value applies filters[name](value). */
+  filters?: Record<string, (value: string) => SQL>;
+  /** Whitelisted sortable columns keyed by sort name (server-paging branch only).
+   *  ?sort=<name>&dir=asc|desc (default dir asc; unknown name falls back to orderBy). */
+  sorts?: Record<string, AnyPgColumn>;
   /** List ordering column; defaults to pk. */
   orderBy?: AnyPgColumn;
   /** Build the insert row from a validated body (throw HTTPException(400) on bad input). */
@@ -112,13 +118,26 @@ export function createCrudRouter<T extends PgTableWithColumns<any>>(cfg: CrudCon
       const page = Math.max(1, Number(c.req.query("page")) || 1);
       const pageSize = Math.min(200, Math.max(1, Number(c.req.query("pageSize")) || 50));
       const q = (c.req.query("q") ?? "").trim();
-      const where = q ? cfg.search(q) : undefined;
+      const predicates: SQL[] = [];
+      if (q) predicates.push(cfg.search(q));
+      for (const [name, build] of Object.entries(cfg.filters ?? {})) {
+        const v = (c.req.query(name) ?? "").trim();
+        if (v) predicates.push(build(v));
+      }
+      const where = predicates.length === 0 ? undefined : and(...predicates);
+      const sortName = c.req.query("sort");
+      const sortCol = sortName ? cfg.sorts?.[sortName] : undefined;
+      const sortExpr = sortCol
+        ? c.req.query("dir") === "desc"
+          ? desc(sortCol)
+          : asc(sortCol)
+        : orderBy;
       const [rows, count] = await Promise.all([
         db
           .select()
           .from(table)
           .where(where)
-          .orderBy(orderBy)
+          .orderBy(sortExpr)
           .limit(pageSize)
           .offset((page - 1) * pageSize),
         db.select({ total: countFn() }).from(table).where(where),

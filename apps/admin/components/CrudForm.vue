@@ -15,6 +15,7 @@ const emit = defineEmits<{
   cancel: [];
 }>();
 
+const { t } = useI18n();
 const form = reactive<Record<string, string>>({});
 const localError = ref("");
 
@@ -56,13 +57,13 @@ function submit() {
       // this keeps the current server-side value.
       if (f.omitWhenEmpty) {
         if (f.required && !editing.value) {
-          localError.value = `${f.label} is required`;
+          localError.value = t("admin.common.required", { label: t(f.label) });
           return;
         }
         continue;
       }
       if (f.required) {
-        localError.value = `${f.label} is required`;
+        localError.value = t("admin.common.required", { label: t(f.label) });
         return;
       }
       payload[f.key] = null; // server treats null as "clear this optional field"
@@ -71,7 +72,7 @@ function submit() {
     if (f.type === "number") {
       const n = Number(raw);
       if (!Number.isFinite(n)) {
-        localError.value = `${f.label} must be a number`;
+        localError.value = t("admin.common.mustBeNumber", { label: t(f.label) });
         return;
       }
       payload[f.key] = n;
@@ -91,7 +92,7 @@ function submit() {
       <form @submit.prevent="submit">
         <div v-for="f in fields" :key="f.key" class="form-row">
           <label :for="`ff-${f.key}`">
-            {{ f.label }}<span v-if="showRequired(f)" class="req"> *</span>
+            {{ $t(f.label) }}<span v-if="showRequired(f)" class="req"> *</span>
           </label>
           <input
             :id="`ff-${f.key}`"
@@ -102,8 +103,8 @@ function submit() {
           />
         </div>
         <div class="dialog-actions">
-          <button type="button" class="btn" @click="emit('cancel')">Cancel</button>
-          <button type="submit" class="btn btn-primary">Save</button>
+          <button type="button" class="btn" @click="emit('cancel')">{{ $t("admin.common.cancel") }}</button>
+          <button type="submit" class="btn btn-primary">{{ $t("admin.common.save") }}</button>
         </div>
       </form>
     </div>

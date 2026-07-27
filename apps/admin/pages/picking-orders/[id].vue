@@ -4,6 +4,7 @@ import type { PickingOrderDetail } from "~/utils/flowApi";
 const route = useRoute();
 const orderId = route.params.id as string;
 const flow = useFlowApi();
+const { t } = useI18n();
 
 const order = ref<PickingOrderDetail | null>(null);
 const loading = ref(true);
@@ -32,9 +33,8 @@ async function saveDeliveryDate() {
   error.value = "";
   try {
     await flow.updatePickingDeliveryDate(orderId, deliveryDate.value || null);
-    dateMsg.value = "Saved.";
     await load();
-    dateMsg.value = "Saved.";
+    dateMsg.value = "saved";
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -43,9 +43,14 @@ async function saveDeliveryDate() {
 }
 
 function allocationSource(a: PickingOrderDetail["items"][number]["allocations"][number]): string {
-  if (a.lot) return `Lot ${a.lot.shelfCode ?? ""}${a.lot.boxId ? ` / ${a.lot.boxId}` : ""} (dc ${a.lot.dateCode ?? "—"})`;
-  if (a.receivingInvoiceItemId) return `Receiving box ${a.boxId ?? ""}`;
-  if (a.receivingOrderId) return "Receiving order";
+  if (a.lot)
+    return t("admin.pages.pickingOrders.allocLot", {
+      shelf: a.lot.shelfCode ?? "",
+      box: a.lot.boxId ? ` / ${a.lot.boxId}` : "",
+      dc: a.lot.dateCode ?? "—",
+    });
+  if (a.receivingInvoiceItemId) return t("admin.pages.pickingOrders.allocReceivingBox", { box: a.boxId ?? "" });
+  if (a.receivingOrderId) return t("admin.pages.pickingOrders.allocReceivingOrder");
   return "—";
 }
 
@@ -55,51 +60,55 @@ onMounted(load);
 <template>
   <div>
     <div class="page-head">
-      <h1>Picking Order {{ order?.orderNo ?? "" }}</h1>
+      <h1>{{ $t("admin.pages.pickingOrders.detailTitle", { orderNo: order?.orderNo ?? "" }) }}</h1>
       <div class="head-actions">
-        <button class="btn" disabled title="Format pending — available in a later update">Download packing list</button>
-        <button class="btn" disabled title="Format pending — available in a later update">Download TN</button>
-        <NuxtLink to="/picking-orders" class="btn">Back</NuxtLink>
+        <button class="btn" disabled :title="$t('admin.common.downloadPendingTitle')">
+          {{ $t("admin.pages.pickingOrders.downloadPackingList") }}
+        </button>
+        <button class="btn" disabled :title="$t('admin.common.downloadPendingTitle')">
+          {{ $t("admin.pages.pickingOrders.downloadTN") }}
+        </button>
+        <NuxtLink to="/picking-orders" class="btn">{{ $t("admin.common.back") }}</NuxtLink>
       </div>
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
-    <div v-if="loading" class="loading">Loading…</div>
+    <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
     <template v-else-if="order">
       <div class="detail-grid">
-        <div><div class="dt">Status</div><div class="dd">{{ order.status }}</div></div>
-        <div><div class="dt">Customer</div><div class="dd">{{ order.customerCode ?? "—" }}</div></div>
-        <div><div class="dt">PO No</div><div class="dd">{{ order.poNo ?? "—" }}</div></div>
-        <div><div class="dt">Ship To</div><div class="dd">{{ order.shipTo ?? "—" }}</div></div>
-        <div><div class="dt">Org / Sub-inventory</div><div class="dd">{{ order.orgId ?? "—" }} / {{ order.subInventoryCode ?? "—" }}</div></div>
+        <div><div class="dt">{{ $t("admin.pages.pickingOrders.status") }}</div><div class="dd">{{ order.status }}</div></div>
+        <div><div class="dt">{{ $t("admin.pages.pickingOrders.customer") }}</div><div class="dd">{{ order.customerCode ?? "—" }}</div></div>
+        <div><div class="dt">{{ $t("admin.pages.pickingOrders.poNo") }}</div><div class="dd">{{ order.poNo ?? "—" }}</div></div>
+        <div><div class="dt">{{ $t("admin.pages.pickingOrders.shipTo") }}</div><div class="dd">{{ order.shipTo ?? "—" }}</div></div>
+        <div><div class="dt">{{ $t("admin.pages.pickingOrders.orgSubInventory") }}</div><div class="dd">{{ order.orgId ?? "—" }} / {{ order.subInventoryCode ?? "—" }}</div></div>
         <div>
-          <div class="dt">Delivery Date</div>
+          <div class="dt">{{ $t("admin.pages.pickingOrders.deliveryDate") }}</div>
           <div class="dd date-edit">
             <input v-model="deliveryDate" type="date" />
             <button class="btn btn-small btn-primary" :disabled="savingDate" @click="saveDeliveryDate">
-              {{ savingDate ? "Saving…" : "Save" }}
+              {{ savingDate ? $t("admin.common.saving") : $t("admin.common.save") }}
             </button>
-            <span v-if="dateMsg" class="muted">{{ dateMsg }}</span>
+            <span v-if="dateMsg" class="muted">{{ $t("admin.pages.pickingOrders.saved") }}</span>
           </div>
         </div>
         <div v-if="order.measuringTask">
-          <div class="dt">Measuring task</div>
+          <div class="dt">{{ $t("admin.pages.pickingOrders.measuringTask") }}</div>
           <div class="dd">{{ order.measuringTask.status }}</div>
         </div>
       </div>
 
-      <h2 class="section-title">Items</h2>
+      <h2 class="section-title">{{ $t("admin.pages.pickingOrders.items") }}</h2>
       <div class="table-wrap">
         <table class="data">
           <thead>
             <tr>
-              <th>Part No</th>
-              <th>Required</th>
-              <th>Allocated</th>
-              <th>Picked</th>
-              <th>Allocations</th>
-              <th>Packages</th>
+              <th>{{ $t("admin.fields.partNo") }}</th>
+              <th>{{ $t("admin.pages.pickingOrders.required") }}</th>
+              <th>{{ $t("admin.pages.pickingOrders.allocated") }}</th>
+              <th>{{ $t("admin.pages.pickingOrders.picked") }}</th>
+              <th>{{ $t("admin.pages.pickingOrders.allocations") }}</th>
+              <th>{{ $t("admin.pages.pickingOrders.packages") }}</th>
             </tr>
           </thead>
           <tbody>
@@ -114,7 +123,9 @@ onMounted(load);
               </td>
               <td>
                 <div v-for="p in item.packages" :key="p.id">
-                  {{ p.qty }} (dc {{ p.dateCode ?? "—" }}{{ p.shippingBoxId ? ", boxed" : ", unboxed" }}{{ p.verified ? ", verified" : "" }})
+                  {{ p.qty }} (dc {{ p.dateCode ?? "—"
+                  }}{{ p.shippingBoxId ? `, ${$t("admin.pages.pickingOrders.boxed")}` : `, ${$t("admin.pages.pickingOrders.unboxed")}`
+                  }}{{ p.verified ? `, ${$t("admin.pages.pickingOrders.verified")}` : "" }})
                 </div>
                 <span v-if="item.packages.length === 0" class="muted">—</span>
               </td>
@@ -123,17 +134,17 @@ onMounted(load);
         </table>
       </div>
 
-      <h2 class="section-title">Shipping boxes</h2>
+      <h2 class="section-title">{{ $t("admin.pages.pickingOrders.shippingBoxes") }}</h2>
       <div class="table-wrap">
         <table class="data">
           <thead>
             <tr>
-              <th>Box ID</th>
-              <th>Status</th>
-              <th>Size</th>
-              <th>Net / Gross (g)</th>
-              <th>Destination</th>
-              <th>Packages</th>
+              <th>{{ $t("admin.pages.pickingOrders.boxId") }}</th>
+              <th>{{ $t("admin.pages.pickingOrders.status") }}</th>
+              <th>{{ $t("admin.pages.pickingOrders.size") }}</th>
+              <th>{{ $t("admin.pages.pickingOrders.netGross") }}</th>
+              <th>{{ $t("admin.pages.pickingOrders.destination") }}</th>
+              <th>{{ $t("admin.pages.pickingOrders.packages") }}</th>
             </tr>
           </thead>
           <tbody>
@@ -146,7 +157,7 @@ onMounted(load);
               <td>{{ b.packageCount }}</td>
             </tr>
             <tr v-if="order.boxes.length === 0">
-              <td colspan="6" class="muted">No boxes yet.</td>
+              <td colspan="6" class="muted">{{ $t("admin.pages.pickingOrders.noBoxes") }}</td>
             </tr>
           </tbody>
         </table>

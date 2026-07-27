@@ -11,17 +11,14 @@ import { fetchEventsSince, pruneEvents } from "../db/events.js";
 // polled every 1.5 s; an SSE comment heartbeat every 25 s keeps proxies from
 // idling the connection out. Each frame carries `event: <type>`,
 // `id: <row id>`, and `data: <JSON of {id,type,topics,data,createdAt}>`.
-// On Vercel the stream closes itself before maxDuration so the client
-// reconnects cleanly with its last-seen id. Authenticated via the global
-// middleware — the only route where `?token=` is accepted (EventSource
-// cannot set an Authorization header).
+// Authenticated via the global middleware — the only route where `?token=`
+// is accepted (EventSource cannot set an Authorization header).
 // ---------------------------------------------------------------------------
 
 const POLL_MS = 1500;
 const HEARTBEAT_MS = 25_000;
 const BACKLOG_LIMIT = 500;
 const POLL_LIMIT = 200;
-const VERCEL_CLOSE_MS = 55_000;
 
 export const eventsRoute = new Hono();
 
@@ -34,12 +31,6 @@ eventsRoute.get("/events", (c) => {
   void pruneEvents(db).catch((err) => console.error("pruneEvents failed", err));
 
   return streamSSE(c, async (stream) => {
-    // Vercel caps function duration (maxDuration 60 s): close first so the
-    // client reconnects with its last-seen id instead of being cut off.
-    if (process.env.VERCEL) {
-      setTimeout(() => void stream.close(), VERCEL_CLOSE_MS);
-    }
-
     let lastHeartbeat = Date.now();
     let limit = BACKLOG_LIMIT; // first pass replays the backlog, then poll in pages
     while (!stream.aborted && !stream.closed) {

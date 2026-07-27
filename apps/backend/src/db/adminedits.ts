@@ -58,6 +58,31 @@ export async function updatePickingDeliveryDate(
   return { id: input.orderId, deliveryDate: input.deliveryDate };
 }
 
+/** Set (or clear with null) the receiving order's delivery date. */
+export async function updateReceivingDeliveryDate(
+  db: AppDb,
+  input: { orderId: string; deliveryDate: string | null; actorId: string | null }
+): Promise<{ id: string; deliveryDate: string | null }> {
+  if (input.deliveryDate !== null && !ADMIN_EDIT_DATE_RE.test(input.deliveryDate)) {
+    throw new HTTPException(400, { message: "deliveryDate must be YYYY-MM-DD" });
+  }
+  const existing = await queryGet<{ deliveryDate: string | null }>(
+    db,
+    sql`SELECT delivery_date::date::text AS "deliveryDate" FROM receiving_orders WHERE id = ${input.orderId}`
+  );
+  if (!existing) throw new HTTPException(404, { message: "receiving_order_not_found" });
+  await queryRun(
+    db,
+    sql`UPDATE receiving_orders SET delivery_date = ${input.deliveryDate}, updated_at = ${now()} WHERE id = ${input.orderId}`
+  );
+  await audit(db, "receiving_order", input.orderId, input.actorId, {
+    field: "delivery_date",
+    from: existing.deliveryDate,
+    to: input.deliveryDate,
+  });
+  return { id: input.orderId, deliveryDate: input.deliveryDate };
+}
+
 /** Set (or clear with null) one receiving invoice item's date code. */
 export async function updateReceivingItemDateCode(
   db: AppDb,

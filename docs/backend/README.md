@@ -169,7 +169,7 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     re-runs idempotent (`created` counts only new rows). Also runs
     automatically every night at local 00:00 (`src/jobs/goodsVerifyDayEnd.ts`
     from `src/server.ts`, generating `CURRENT_DATE-1` + `CURRENT_DATE` with a
-    boot catch-up; `GOODS_VERIFY_CRON=off` disables; Vercel stays manual).
+    boot catch-up; `GOODS_VERIFY_CRON=off` disables).
   - `GET /goods-verify-tasks?date=&status=&shelfCode=` — the work queue with
     `partNo`/`wclItemNo` joined, ordered by shelf/box/part.
   - `GET /goods-verify-tasks/:id` — task (all fields + part identity) + lot
@@ -244,8 +244,7 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   when allocations did not change), `receiving_order.upserted` (ingest upserts),
   `goods_verify.tasks_created` (day-end generate). Frames carry
   `topics` (URL path prefixes like `/picking-orders`) that web clients use to
-  invalidate their local API cache. On Vercel the stream self-closes at ~55 s
-  (`maxDuration`); clients reconnect with their last id as `?since=`.
+  invalidate their local API cache.
   Authenticated like every other route, with one exception: as the only
   route where `?token=` is accepted (EventSource cannot set headers).
 
@@ -261,40 +260,8 @@ shared local Postgres), `PORT`, `WAREHOUSE_CODE` (instance warehouse default,
 `HK1`), `CORS_ORIGINS`, `WAREHOUSE_SEED=off` to disable auto-seed.
 
 `pnpm --filter @warehouse/backend db:seed` wipes and re-seeds the demo dataset;
-`db:generate` / `db:migrate` manage migrations.
-
-## Hosted dev (Vercel + Neon)
-
-The backend and admin console also run hosted for demos:
-
-- **Backend:** `https://docpal-pda-backend.vercel.app` — Vercel project
-  `docpal-pda-backend` (root `apps/backend`, Hono preset serving
-  `src/index.ts` as the function via its `export default app`; `maxDuration`
-  60 in `vercel.json`). Boot-time migrate/seed are **skipped on Vercel**
-  (`process.env.VERCEL` gate in `src/db.ts`) — migrations run explicitly:
-  `DATABASE_URL=<unpooled> pnpm --filter @warehouse/backend db:migrate`, then
-  `db:seed` once.
-- **Database:** Neon `warehouse_backend` (Vercel Marketplace integration,
-  injects `DATABASE_URL`/`DATABASE_URL_UNPOOLED`). Runtime uses the **pooled**
-  URL with `PG_MAX=1` + `PG_PREPARE=false` (PgBouncer transaction mode);
-  migrations/seed use the unpooled URL.
-- **Admin:** Vercel project `docpal-pda-admin` (root `apps/admin`) with
-  `NUXT_PUBLIC_API_BASE_URL` pointing at the backend URL; the backend's
-  `CORS_ORIGINS` includes the admin origin.
-- **CORS_ORIGINS must keep every client origin** — it replaces the default
-  list wholesale. The hosted value needs: `http://localhost:3000`,
-  `http://localhost:3100`, `http://localhost` (**the Android WebView origin —
-  dropping it breaks the Capacitor app's login with a network error**),
-  `capacitor://localhost`, and both admin URLs
-  (`https://docpal-pda-admin.vercel.app` + the `-sean-tsnags-projects`
-  alias).
-- Env vars live on the Vercel projects (Production scope): backend
-  `WAREHOUSE_SEED=off`, `WAREHOUSE_CODE=HK1`, `PG_MAX`, `PG_PREPARE`,
-  `CORS_ORIGINS` (optionally `DEV_ROUTES=off` to hide the demo routes);
-  admin `NUXT_PUBLIC_API_BASE_URL`.
-- Deploys are git-triggered: push to `master` on GitHub redeploys both
-  projects. SSO deployment protection is disabled on both (public POC).
-  A PM2 alternative for a VM lives in `ecosystem.config.cjs`.
+`db:generate` / `db:migrate` manage migrations. A PM2 setup for a VM lives in
+`ecosystem.config.cjs`.
 
 ## Known follow-ups (web-client migration)
 

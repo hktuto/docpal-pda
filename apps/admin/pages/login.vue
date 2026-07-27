@@ -35,7 +35,7 @@ async function submit() {
   <div class="login-wrap">
     <div class="login-box">
       <img src="/logoWithName.png" alt="DocPal" class="login-logo" />
-      <h1>Warehouse Admin</h1>
+      <h1>{{ $t("admin.home.title") }}</h1>
       <div v-if="error" class="error-banner">{{ error }}</div>
       <form @submit.prevent="submit">
         <div class="form-row">

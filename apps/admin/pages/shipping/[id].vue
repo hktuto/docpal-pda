@@ -23,41 +23,41 @@ onMounted(async () => {
 <template>
   <div>
     <div class="page-head">
-      <h1>Shipping Order {{ detail?.order.orderNo ?? "" }}</h1>
-      <NuxtLink to="/shipping" class="btn">Back</NuxtLink>
+      <h1>{{ $t("admin.pages.shipping.detailTitle", { orderNo: detail?.order.orderNo ?? "" }) }}</h1>
+      <NuxtLink to="/shipping" class="btn">{{ $t("admin.common.back") }}</NuxtLink>
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
-    <div v-if="loading" class="loading">Loading…</div>
+    <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
     <template v-else-if="detail">
       <div class="detail-grid">
-        <div><div class="dt">Order status</div><div class="dd">{{ detail.order.status }}</div></div>
-        <div><div class="dt">Customer</div><div class="dd">{{ detail.order.customerCode ?? "—" }}</div></div>
-        <div><div class="dt">PO No</div><div class="dd">{{ detail.order.poNo ?? "—" }}</div></div>
-        <div><div class="dt">Ship To</div><div class="dd">{{ detail.order.shipTo ?? "—" }}</div></div>
-        <div><div class="dt">Measuring task</div><div class="dd">{{ detail.task.status }}</div></div>
+        <div><div class="dt">{{ $t("admin.pages.shipping.orderStatus") }}</div><div class="dd">{{ detail.order.status }}</div></div>
+        <div><div class="dt">{{ $t("admin.pages.shipping.customer") }}</div><div class="dd">{{ detail.order.customerCode ?? "—" }}</div></div>
+        <div><div class="dt">{{ $t("admin.pages.shipping.poNo") }}</div><div class="dd">{{ detail.order.poNo ?? "—" }}</div></div>
+        <div><div class="dt">{{ $t("admin.pages.shipping.shipTo") }}</div><div class="dd">{{ detail.order.shipTo ?? "—" }}</div></div>
+        <div><div class="dt">{{ $t("admin.pages.shipping.measuringTask") }}</div><div class="dd">{{ detail.task.status }}</div></div>
       </div>
 
       <template v-for="b in detail.boxes" :key="b.id">
         <h2 class="section-title">
-          Box {{ b.id }}
+          {{ $t("admin.pages.shipping.boxTitle", { id: b.id }) }}
           <span class="muted">
             — {{ b.status }}{{ b.boxSize ? `, ${b.boxSize}` : ""
             }}{{ b.destinationCountry ? `, ${b.destinationCountry}` : ""
-            }}{{ b.grossWeight != null ? `, gross ${b.grossWeight} g` : "" }}
+            }}{{ b.grossWeight != null ? `, ${$t("admin.pages.shipping.gross", { n: b.grossWeight })}` : "" }}
           </span>
         </h2>
         <div class="table-wrap">
           <table class="data">
             <thead>
               <tr>
-                <th>Part No</th>
-                <th>Qty</th>
-                <th>Date Code</th>
-                <th>Lot</th>
-                <th>COO / COW</th>
-                <th>Verified</th>
+                <th>{{ $t("admin.pages.shipping.partNo") }}</th>
+                <th>{{ $t("admin.pages.shipping.qty") }}</th>
+                <th>{{ $t("admin.pages.shipping.dateCode") }}</th>
+                <th>{{ $t("admin.pages.shipping.lot") }}</th>
+                <th>{{ $t("admin.pages.shipping.cooCow") }}</th>
+                <th>{{ $t("admin.pages.shipping.verified") }}</th>
               </tr>
             </thead>
             <tbody>
@@ -70,13 +70,13 @@ onMounted(async () => {
                 <td>{{ p.verified ? "✓" : "" }}</td>
               </tr>
               <tr v-if="b.packages.length === 0">
-                <td colspan="6" class="muted">Empty box.</td>
+                <td colspan="6" class="muted">{{ $t("admin.pages.shipping.emptyBox") }}</td>
               </tr>
             </tbody>
           </table>
         </div>
       </template>
-      <p v-if="detail.boxes.length === 0" class="muted">No boxes on this order.</p>
+      <p v-if="detail.boxes.length === 0" class="muted">{{ $t("admin.pages.shipping.noBoxes") }}</p>
     </template>
   </div>
 </template>

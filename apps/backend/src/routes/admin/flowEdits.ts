@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { Context } from "hono";
 import { db } from "../../db.js";
-import { updatePickingDeliveryDate, updateReceivingItemDateCode } from "../../db/adminedits.js";
+import { updatePickingDeliveryDate, updateReceivingDeliveryDate, updateReceivingItemDateCode } from "../../db/adminedits.js";
 import { actorFrom } from "../../auth/middleware.js";
 
 // Thin routes over db/adminedits.ts — admin console edits to flow data.
@@ -25,6 +25,22 @@ adminFlowEditsRoute.patch("/picking-orders/:id", async (c) => {
   if (v !== null && typeof v !== "string") throw new HTTPException(400, { message: "deliveryDate must be YYYY-MM-DD" });
   return c.json(
     await updatePickingDeliveryDate(db, {
+      orderId: c.req.param("id"),
+      deliveryDate: v === null || (v as string).trim() === "" ? null : (v as string).trim(),
+      actorId: actorFrom(c).id,
+    }),
+    200
+  );
+});
+
+// Change the receiving order's delivery date. `null` clears it.
+adminFlowEditsRoute.patch("/receiving-orders/:id", async (c) => {
+  const body = await readJson(c);
+  if (!("deliveryDate" in body)) throw new HTTPException(400, { message: "deliveryDate is required" });
+  const v = body.deliveryDate;
+  if (v !== null && typeof v !== "string") throw new HTTPException(400, { message: "deliveryDate must be YYYY-MM-DD" });
+  return c.json(
+    await updateReceivingDeliveryDate(db, {
       orderId: c.req.param("id"),
       deliveryDate: v === null || (v as string).trim() === "" ? null : (v as string).trim(),
       actorId: actorFrom(c).id,

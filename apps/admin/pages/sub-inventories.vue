@@ -12,6 +12,7 @@ interface ShareMemberRow {
   code: string;
 }
 
+const { t } = useI18n();
 const api = useApi();
 const rows = ref<SubInventoryRow[]>([]);
 const loading = ref(false);
@@ -23,7 +24,26 @@ const shareGroups = ref<Record<string, string>>({});
 const shareDrafts = ref<Record<string, string>>({});
 const shareError = ref("");
 
-const { page, pageSize, total, paged } = usePaging(rows);
+// Client-side keyword filter + clickable sort headers, applied before paging.
+const search = ref("");
+const { sortKey, sortDir, toggleSort, sortRows } = useColumnSort();
+
+const displayed = computed(() => {
+  const needle = search.value.trim().toLowerCase();
+  let list = rows.value;
+  if (needle) {
+    list = list.filter((r) =>
+      [String(r.orgId), r.code, r.name, r.customerCode, shareGroups.value[rowId(r)]].some((v) =>
+        String(v ?? "")
+          .toLowerCase()
+          .includes(needle)
+      )
+    );
+  }
+  return sortRows(list);
+});
+
+const { page, pageSize, total, paged } = usePaging(displayed);
 
 const showNew = ref(false);
 const newForm = reactive({ orgId: "", code: "", name: "", customerCode: "" });
@@ -87,7 +107,7 @@ async function createGroup() {
   newError.value = "";
   const orgId = Number(newForm.orgId.trim());
   if (!Number.isInteger(orgId)) {
-    newError.value = "Org ID must be an integer";
+    newError.value = t("admin.common.orgIdInteger");
     return;
   }
   try {
@@ -125,7 +145,7 @@ async function saveEdit() {
 }
 
 async function remove(row: SubInventoryRow) {
-  if (!confirm(`Delete sub-inventory ${row.orgId} / ${row.code}?`)) return;
+  if (!confirm(t("admin.pages.subInventories.deleteConfirm", { id: `${row.orgId} / ${row.code}` }))) return;
   error.value = "";
   try {
     await api.del(`/admin/sub-inventories/${rowId(row)}`);
@@ -141,32 +161,50 @@ onMounted(load);
 <template>
   <div>
     <div class="page-head">
-      <h1>Sub-inventories</h1>
+      <h1>{{ $t("admin.pages.subInventories.title") }}</h1>
       <div class="head-actions">
-        <button class="btn" :disabled="loading" @click="load">Refresh</button>
-        <button class="btn btn-primary" @click="openNew">New</button>
+        <button class="btn" :disabled="loading" @click="load">{{ $t("admin.common.refresh") }}</button>
+        <button class="btn btn-primary" @click="openNew">{{ $t("admin.common.new") }}</button>
       </div>
     </div>
 
-    <p class="muted">
-      Stock is partitioned by Org ID + Sub-inventory. Sub-inventories in the
-      same <strong>share group</strong> may serve each other's picking demands.
-    </p>
+    <p class="muted">{{ $t("admin.pages.subInventories.explainer") }}</p>
+
+    <div class="search-bar">
+      <input
+        v-model="search"
+        type="search"
+        class="search-input"
+        :placeholder="$t('admin.pages.subInventories.filterPlaceholder')"
+      />
+    </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
     <div v-if="shareError" class="error-banner">{{ shareError }}</div>
-    <div v-if="loading" class="loading">Loading…</div>
+    <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
     <div v-else class="table-wrap">
       <table class="data">
         <thead>
           <tr>
-            <th>Org ID</th>
-            <th>Sub-inventory</th>
-            <th>Name</th>
-            <th>Customer</th>
-            <th>Share group</th>
-            <th>Actions</th>
+            <th class="sortable" @click="toggleSort('orgId')">
+              {{ $t("admin.pages.subInventories.orgId") }}
+              <span v-if="sortKey === 'orgId'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('code')">
+              {{ $t("admin.pages.subInventories.code") }}
+              <span v-if="sortKey === 'code'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('name')">
+              {{ $t("admin.pages.subInventories.name") }}
+              <span v-if="sortKey === 'name'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('customerCode')">
+              {{ $t("admin.pages.subInventories.customer") }}
+              <span v-if="sortKey === 'customerCode'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th>{{ $t("admin.pages.subInventories.shareGroup") }}</th>
+            <th>{{ $t("admin.common.actions") }}</th>
           </tr>
         </thead>
         <tbody>
@@ -183,15 +221,17 @@ onMounted(load);
                 placeholder="—"
                 @keyup.enter="saveShare(r)"
               />
-              <button v-if="shareDirty(r)" class="btn btn-small" @click="saveShare(r)">Save</button>
+              <button v-if="shareDirty(r)" class="btn btn-small" @click="saveShare(r)">
+                {{ $t("admin.common.save") }}
+              </button>
             </td>
             <td class="actions">
-              <button class="btn-link" @click="openEdit(r)">Edit</button>
-              <button class="btn-link" @click="remove(r)">Delete</button>
+              <button class="btn-link" @click="openEdit(r)">{{ $t("admin.common.edit") }}</button>
+              <button class="btn-link" @click="remove(r)">{{ $t("admin.common.delete") }}</button>
             </td>
           </tr>
           <tr v-if="total === 0">
-            <td colspan="6" class="muted">No sub-inventories.</td>
+            <td colspan="6" class="muted">{{ $t("admin.pages.subInventories.none") }}</td>
           </tr>
         </tbody>
       </table>
@@ -200,29 +240,29 @@ onMounted(load);
 
     <div v-if="showNew" class="overlay" @mousedown="newDlg.onMousedown" @click="newDlg.onClick">
       <div class="dialog">
-        <h2>New sub-inventory</h2>
+        <h2>{{ $t("admin.pages.subInventories.newTitle") }}</h2>
         <div v-if="newError" class="error-banner">{{ newError }}</div>
         <form @submit.prevent="createGroup">
           <div class="form-row">
-            <label for="ns-org">Org ID <span class="req">*</span></label>
+            <label for="ns-org">{{ $t("admin.pages.subInventories.orgId") }} <span class="req">*</span></label>
             <input id="ns-org" v-model="newForm.orgId" type="text" required placeholder="e.g. 2" />
           </div>
           <div class="form-row">
-            <label for="ns-code">Sub-inventory <span class="req">*</span></label>
+            <label for="ns-code">{{ $t("admin.pages.subInventories.code") }} <span class="req">*</span></label>
             <input id="ns-code" v-model="newForm.code" type="text" required placeholder="e.g. STORE1" />
           </div>
           <div class="form-row">
-            <label for="ns-name">Name</label>
+            <label for="ns-name">{{ $t("admin.pages.subInventories.name") }}</label>
             <input id="ns-name" v-model="newForm.name" type="text" />
           </div>
           <div class="form-row">
-            <label for="ns-cust">Customer code</label>
+            <label for="ns-cust">{{ $t("admin.pages.subInventories.customerCode") }}</label>
             <input id="ns-cust" v-model="newForm.customerCode" type="text" />
-            <div class="hint">Set only for customer-segregated stores.</div>
+            <div class="hint">{{ $t("admin.pages.subInventories.customerCodeHint") }}</div>
           </div>
           <div class="dialog-actions">
-            <button type="button" class="btn" @click="showNew = false">Cancel</button>
-            <button type="submit" class="btn btn-primary">Create</button>
+            <button type="button" class="btn" @click="showNew = false">{{ $t("admin.common.cancel") }}</button>
+            <button type="submit" class="btn btn-primary">{{ $t("admin.common.create") }}</button>
           </div>
         </form>
       </div>
@@ -230,20 +270,20 @@ onMounted(load);
 
     <div v-if="editing" class="overlay" @mousedown="editDlg.onMousedown" @click="editDlg.onClick">
       <div class="dialog">
-        <h2>Edit {{ editing.orgId }} / {{ editing.code }}</h2>
+        <h2>{{ $t("admin.pages.subInventories.editTitle", { id: `${editing.orgId} / ${editing.code}` }) }}</h2>
         <div v-if="editError" class="error-banner">{{ editError }}</div>
         <form @submit.prevent="saveEdit">
           <div class="form-row">
-            <label for="es-name">Name</label>
+            <label for="es-name">{{ $t("admin.pages.subInventories.name") }}</label>
             <input id="es-name" v-model="editForm.name" type="text" />
           </div>
           <div class="form-row">
-            <label for="es-cust">Customer code</label>
+            <label for="es-cust">{{ $t("admin.pages.subInventories.customerCode") }}</label>
             <input id="es-cust" v-model="editForm.customerCode" type="text" />
           </div>
           <div class="dialog-actions">
-            <button type="button" class="btn" @click="editing = null">Close</button>
-            <button type="submit" class="btn btn-primary">Save</button>
+            <button type="button" class="btn" @click="editing = null">{{ $t("admin.common.close") }}</button>
+            <button type="submit" class="btn btn-primary">{{ $t("admin.common.save") }}</button>
           </div>
         </form>
       </div>
@@ -252,6 +292,17 @@ onMounted(load);
 </template>
 
 <style scoped>
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+th.sortable:hover {
+  color: var(--brand-teal-dark);
+}
+.sort-arrow {
+  font-size: 9px;
+  margin-left: 3px;
+}
 .share-cell {
   display: flex;
   gap: 6px;

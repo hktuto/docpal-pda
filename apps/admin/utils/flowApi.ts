@@ -131,6 +131,37 @@ export interface MeasuringTaskDetail {
   }[];
 }
 
+// ---- stock search ----
+
+export interface StockSearchPart {
+  id: string;
+  partNo: string;
+  wclItemNo: string | null;
+  description: string | null;
+  defaultCoo: string | null;
+  onHandQty: number;
+}
+
+export interface StockSearchLot {
+  partNo: string;
+  dateCode: string | null;
+  lotCode: string | null;
+  coo: string | null;
+  cow: string | null;
+  shelfCode: string | null;
+  boxId: string | null;
+  orgId: number | null;
+  subInventoryCode: string | null;
+  totalQty: number;
+  allocatedQty: number;
+  availableQty: number;
+}
+
+export interface StockSearchResult {
+  parts: StockSearchPart[];
+  lots: StockSearchLot[];
+}
+
 export function useFlowApi() {
   const api = useApi();
   return {
@@ -147,8 +178,18 @@ export function useFlowApi() {
     listReceivingOrders: (status?: string) =>
       api.get<ReceivingOrderRow[]>(`/receiving-orders${status ? `?status=${status}` : ""}`),
     getReceivingOrder: (id: string) => api.get<ReceivingOrderDetail>(`/receiving-orders/${id}`),
+    updateReceivingDeliveryDate: (id: string, deliveryDate: string | null) =>
+      api.patch(`/admin/receiving-orders/${id}`, { deliveryDate }),
     updateReceivingItemDateCode: (id: string, dateCode: string | null) =>
       api.patch(`/admin/receiving-invoice-items/${id}`, { dateCode }),
+
+    // Stock search
+    stockSearch: (params: { supplierId?: string; partNo?: string }) => {
+      const qs = new URLSearchParams();
+      if (params.supplierId) qs.set("supplierId", params.supplierId);
+      if (params.partNo) qs.set("partNo", params.partNo);
+      return api.get<StockSearchResult>(`/stock-search?${qs}`);
+    },
 
     // Measuring (shipping)
     listMeasuringTasks: (status?: string) =>

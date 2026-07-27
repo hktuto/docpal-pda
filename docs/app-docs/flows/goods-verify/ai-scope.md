@@ -7,7 +7,7 @@
 - Generate the day's tasks automatically: the backend runs day-end
   generation every night at local 00:00 (`src/jobs/goodsVerifyDayEnd.ts`,
   generating DB `CURRENT_DATE-1` + `CURRENT_DATE` with a boot catch-up;
-  `GOODS_VERIFY_CRON=off` disables; Vercel stays manual). There is no
+  `GOODS_VERIFY_CRON=off` disables). There is no
   generate button in the app — `POST /goods-verify-tasks/generate` remains
   for manual/server-side runs (idempotent per task date + lot).
 - Filter the queue by date (defaults to today, UTC) and status

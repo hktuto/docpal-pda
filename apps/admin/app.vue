@@ -38,6 +38,30 @@ function logout() {
   user.value = null;
   navigateTo("/login");
 }
+
+// Userbox popover: clicking the username toggles a small menu (language
+// switcher + logout) anchored above it; closes on outside click / route change.
+const showUserMenu = ref(false);
+const userboxEl = ref<HTMLElement | null>(null);
+
+function onDocClick(e: MouseEvent) {
+  if (userboxEl.value && !userboxEl.value.contains(e.target as Node)) showUserMenu.value = false;
+}
+
+watch(showUserMenu, (open) => {
+  if (!import.meta.client) return;
+  if (open) document.addEventListener("click", onDocClick, true);
+  else document.removeEventListener("click", onDocClick, true);
+});
+watch(
+  () => route.path,
+  () => {
+    showUserMenu.value = false;
+  }
+);
+onBeforeUnmount(() => {
+  if (import.meta.client) document.removeEventListener("click", onDocClick, true);
+});
 </script>
 
 <template>
@@ -68,12 +92,16 @@ function logout() {
           </div>
         </div>
       </nav>
-      <div class="userbox">
-        <span class="username">{{ user?.displayName }}</span>
-        <button class="btn btn-small" @click="logout">{{ $t("admin.auth.logout") }}</button>
-      </div>
-      <div class="langbox">
-        <LanguageSwitcher />
+      <div ref="userboxEl" class="userbox">
+        <button class="username" @click="showUserMenu = !showUserMenu">
+          {{ user?.displayName }}
+        </button>
+        <div v-if="showUserMenu" class="user-popover">
+          <LanguageSwitcher />
+          <button class="btn btn-small logout-btn" @click="logout">
+            {{ $t("admin.auth.logout") }}
+          </button>
+        </div>
       </div>
     </aside>
     <main class="content">
@@ -182,22 +210,44 @@ function logout() {
 }
 
 .userbox {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  position: relative;
   padding: 12px 18px 0;
   border-top: 1px solid #d8e1ea;
   font-size: 13px;
 }
 .username {
+  display: block;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: 13px;
+  color: var(--brand-sidebar-text);
+  text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
 }
-
-.langbox {
-  padding: 10px 18px 0;
+.username:hover {
+  color: var(--brand-teal-dark);
+}
+.user-popover {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 10px;
+  width: 180px;
+  background: #fff;
+  border: 1px solid #d8e1ea;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(15, 23, 32, 0.18);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.logout-btn {
+  align-self: flex-start;
 }
 
 .content {

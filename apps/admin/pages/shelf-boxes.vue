@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const { t } = useI18n();
 const api = useApi();
 
 const boxes = ref<any[]>([]);
@@ -47,7 +48,7 @@ function pairBody(form: { orgId: string; subInventoryCode: string }, body: Recor
   // Empty string clears / omits the pair member; org id must be an integer.
   if (form.orgId.trim() !== "") {
     const n = Number(form.orgId.trim());
-    if (!Number.isInteger(n)) throw new Error("Org ID must be an integer");
+    if (!Number.isInteger(n)) throw new Error(t("admin.common.orgIdInteger"));
     body.orgId = n;
   }
   if (form.subInventoryCode.trim() !== "") body.subInventoryCode = form.subInventoryCode.trim();
@@ -96,7 +97,7 @@ async function saveEdit() {
 }
 
 async function remove(row: any) {
-  if (!confirm(`Delete box ${row.id.slice(0, 8)}?`)) return;
+  if (!confirm(t("admin.pages.shelfBoxes.deleteConfirm", { id: row.id.slice(0, 8) }))) return;
   error.value = "";
   try {
     await api.del(`/admin/shelf-boxes/${row.id}`);
@@ -112,27 +113,27 @@ onMounted(load);
 <template>
   <div>
     <div class="page-head">
-      <h1>Shelf Boxes</h1>
+      <h1>{{ $t("admin.pages.shelfBoxes.title") }}</h1>
       <div class="head-actions">
-        <button class="btn" :disabled="loading" @click="load">Refresh</button>
-        <button class="btn btn-primary" @click="openNew">New</button>
+        <button class="btn" :disabled="loading" @click="load">{{ $t("admin.common.refresh") }}</button>
+        <button class="btn btn-primary" @click="openNew">{{ $t("admin.common.new") }}</button>
       </div>
     </div>
     <div v-if="error" class="error-banner">{{ error }}</div>
-    <div v-if="loading" class="loading">Loading…</div>
+    <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
     <div v-else class="table-wrap">
       <table class="data">
         <thead>
           <tr>
-            <th>ID</th>
-            <th>Shelf</th>
-            <th>Org ID</th>
-            <th>Sub-inventory</th>
-            <th>Status</th>
-            <th>Items</th>
-            <th>Total qty</th>
-            <th>Created</th>
-            <th>Actions</th>
+            <th>{{ $t("admin.pages.shelfBoxes.id") }}</th>
+            <th>{{ $t("admin.pages.shelfBoxes.shelf") }}</th>
+            <th>{{ $t("admin.pages.shelfBoxes.orgId") }}</th>
+            <th>{{ $t("admin.pages.shelfBoxes.subInventory") }}</th>
+            <th>{{ $t("admin.pages.shelfBoxes.status") }}</th>
+            <th>{{ $t("admin.pages.shelfBoxes.items") }}</th>
+            <th>{{ $t("admin.pages.shelfBoxes.totalQty") }}</th>
+            <th>{{ $t("admin.pages.shelfBoxes.created") }}</th>
+            <th>{{ $t("admin.common.actions") }}</th>
           </tr>
         </thead>
         <tbody>
@@ -148,12 +149,12 @@ onMounted(load);
             <td>{{ b.totalQty }}</td>
             <td>{{ formatCell(b.createdAt) }}</td>
             <td class="actions">
-              <button class="btn-link" @click="openEdit(b)">Edit</button>
-              <button class="btn-link" @click="remove(b)">Delete</button>
+              <button class="btn-link" @click="openEdit(b)">{{ $t("admin.common.edit") }}</button>
+              <button class="btn-link" @click="remove(b)">{{ $t("admin.common.delete") }}</button>
             </td>
           </tr>
           <tr v-if="total === 0">
-            <td colspan="9" class="muted">No shelf boxes.</td>
+            <td colspan="9" class="muted">{{ $t("admin.pages.shelfBoxes.none") }}</td>
           </tr>
         </tbody>
       </table>
@@ -162,30 +163,30 @@ onMounted(load);
 
     <div v-if="showNew" class="overlay" @mousedown="newDlg.onMousedown" @click="newDlg.onClick">
       <div class="dialog">
-        <h2>New shelf box</h2>
+        <h2>{{ $t("admin.pages.shelfBoxes.newTitle") }}</h2>
         <div v-if="newError" class="error-banner">{{ newError }}</div>
         <form @submit.prevent="createBox">
           <div class="form-row">
-            <label for="nb-shelf">Shelf code</label>
+            <label for="nb-shelf">{{ $t("admin.pages.shelfBoxes.shelfCode") }}</label>
             <input id="nb-shelf" v-model="newForm.shelfCode" type="text" />
           </div>
           <div class="form-row">
-            <label for="nb-org">Org ID</label>
+            <label for="nb-org">{{ $t("admin.pages.shelfBoxes.orgId") }}</label>
             <input id="nb-org" v-model="newForm.orgId" type="text" placeholder="e.g. 2" />
           </div>
           <div class="form-row">
-            <label for="nb-sub">Sub-inventory</label>
+            <label for="nb-sub">{{ $t("admin.pages.shelfBoxes.subInventory") }}</label>
             <input id="nb-sub" v-model="newForm.subInventoryCode" type="text" placeholder="e.g. STORE1" />
           </div>
           <div class="form-row">
-            <label for="nb-status">Status</label>
+            <label for="nb-status">{{ $t("admin.pages.shelfBoxes.status") }}</label>
             <select id="nb-status" v-model="newForm.status">
               <option v-for="s in statuses" :key="s" :value="s">{{ s }}</option>
             </select>
           </div>
           <div class="dialog-actions">
-            <button type="button" class="btn" @click="showNew = false">Cancel</button>
-            <button type="submit" class="btn btn-primary">Create</button>
+            <button type="button" class="btn" @click="showNew = false">{{ $t("admin.common.cancel") }}</button>
+            <button type="submit" class="btn btn-primary">{{ $t("admin.common.create") }}</button>
           </div>
         </form>
       </div>
@@ -193,33 +194,33 @@ onMounted(load);
 
     <div v-if="editing" class="overlay" @mousedown="editDlg.onMousedown" @click="editDlg.onClick">
       <div class="dialog">
-        <h2>Edit shelf box {{ editing.id.slice(0, 8) }}</h2>
+        <h2>{{ $t("admin.pages.shelfBoxes.editTitle", { id: editing.id.slice(0, 8) }) }}</h2>
         <div v-if="editError" class="error-banner">{{ editError }}</div>
         <form @submit.prevent="saveEdit">
           <div class="form-row">
-            <label for="eb-shelf">Shelf code</label>
+            <label for="eb-shelf">{{ $t("admin.pages.shelfBoxes.shelfCode") }}</label>
             <input id="eb-shelf" v-model="editForm.shelfCode" type="text" />
-            <div class="hint">Leave empty to clear the shelf assignment.</div>
+            <div class="hint">{{ $t("admin.pages.shelfBoxes.clearShelfHint") }}</div>
           </div>
           <div class="form-row">
-            <label for="eb-org">Org ID</label>
+            <label for="eb-org">{{ $t("admin.pages.shelfBoxes.orgId") }}</label>
             <input id="eb-org" v-model="editForm.orgId" type="text" />
-            <div class="hint">Leave empty to clear.</div>
+            <div class="hint">{{ $t("admin.pages.shelfBoxes.clearHint") }}</div>
           </div>
           <div class="form-row">
-            <label for="eb-sub">Sub-inventory</label>
+            <label for="eb-sub">{{ $t("admin.pages.shelfBoxes.subInventory") }}</label>
             <input id="eb-sub" v-model="editForm.subInventoryCode" type="text" />
-            <div class="hint">Leave empty to clear.</div>
+            <div class="hint">{{ $t("admin.pages.shelfBoxes.clearHint") }}</div>
           </div>
           <div class="form-row">
-            <label for="eb-status">Status</label>
+            <label for="eb-status">{{ $t("admin.pages.shelfBoxes.status") }}</label>
             <select id="eb-status" v-model="editForm.status">
               <option v-for="s in statuses" :key="s" :value="s">{{ s }}</option>
             </select>
           </div>
           <div class="dialog-actions">
-            <button type="button" class="btn" @click="editing = null">Cancel</button>
-            <button type="submit" class="btn btn-primary">Save</button>
+            <button type="button" class="btn" @click="editing = null">{{ $t("admin.common.cancel") }}</button>
+            <button type="submit" class="btn btn-primary">{{ $t("admin.common.save") }}</button>
           </div>
         </form>
       </div>

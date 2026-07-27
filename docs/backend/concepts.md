@@ -153,8 +153,8 @@ time.
 > may still be in progress).
 >
 > Generation runs automatically every night at local 00:00 from
-> `src/jobs/goodsVerifyDayEnd.ts` (started by `src/server.ts`, so local/pm2
-> only — Vercel stays manual; disable with `GOODS_VERIFY_CRON=off`). Each run
+> `src/jobs/goodsVerifyDayEnd.ts` (started by `src/server.ts`; disable with
+> `GOODS_VERIFY_CRON=off`). Each run
 > generates for DB `CURRENT_DATE - 1` and `CURRENT_DATE` (local midnight can
 > straddle two DB dates), plus an idempotent catch-up run at boot. The manual
 > `POST /goods-verify-tasks/generate` endpoint and web button remain.

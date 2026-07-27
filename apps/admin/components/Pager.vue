@@ -9,14 +9,18 @@ const pageCount = computed(() => Math.max(1, Math.ceil(props.total / pageSize.va
 
 <template>
   <div class="pager">
-    <span class="muted">{{ total }} row{{ total === 1 ? "" : "s" }}</span>
+    <span class="muted">{{ $t("admin.pager.rows", { n: total }) }}</span>
     <span class="pager-controls">
-      <button class="btn btn-small" :disabled="page <= 1" @click="page--">‹ Prev</button>
-      <span class="muted">Page {{ page }} / {{ pageCount }}</span>
-      <button class="btn btn-small" :disabled="page >= pageCount" @click="page++">Next ›</button>
+      <button class="btn btn-small" :disabled="page <= 1" @click="page--">
+        ‹ {{ $t("admin.pager.prev") }}
+      </button>
+      <span class="muted">{{ $t("admin.pager.pageOf", { page, count: pageCount }) }}</span>
+      <button class="btn btn-small" :disabled="page >= pageCount" @click="page++">
+        {{ $t("admin.pager.next") }} ›
+      </button>
     </span>
     <select v-model.number="pageSize" class="pager-size">
-      <option v-for="s in SIZES" :key="s" :value="s">{{ s }} / page</option>
+      <option v-for="s in SIZES" :key="s" :value="s">{{ $t("admin.pager.perPage", { n: s }) }}</option>
     </select>
   </div>
 </template>

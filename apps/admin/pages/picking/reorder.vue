@@ -2,6 +2,7 @@
 import type { PickingOrderRow } from "~/utils/flowApi";
 
 const flow = useFlowApi();
+const { t } = useI18n();
 const rows = ref<PickingOrderRow[]>([]);
 const loading = ref(false);
 const saving = ref(false);
@@ -50,9 +51,9 @@ async function save() {
   saved.value = "";
   try {
     const res = await flow.reorderPickingOrders(rows.value.map((r) => r.id));
-    saved.value = `Saved — ${res.reordered} orders re-prioritized; allocations recomputed.`;
+    saved.value = t("admin.pages.reorder.savedMessage", { n: res.reordered });
     await load();
-    saved.value = `Saved — ${res.reordered} orders re-prioritized; allocations recomputed.`;
+    saved.value = t("admin.pages.reorder.savedMessage", { n: res.reordered });
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -66,41 +67,39 @@ onMounted(load);
 <template>
   <div>
     <div class="page-head">
-      <h1>Reorder Picking Priority</h1>
+      <h1>{{ $t("admin.pages.reorder.title") }}</h1>
       <div>
-        <NuxtLink to="/picking-orders" class="btn">Back to list</NuxtLink>
+        <NuxtLink to="/picking-orders" class="btn">{{ $t("admin.pages.reorder.backToList") }}</NuxtLink>
+        <button class="btn" :disabled="loading" @click="load">{{ $t("admin.common.refresh") }}</button>
         <button class="btn btn-primary" :disabled="!dirty || saving" @click="save">
-          {{ saving ? "Saving…" : "Save order" }}
+          {{ saving ? $t("admin.common.saving") : $t("admin.pages.reorder.saveOrder") }}
         </button>
       </div>
     </div>
 
-    <p class="muted">
-      Top of the list is allocated stock first. Saving re-prioritizes all open orders and
-      immediately re-runs allocation (orders being worked on a PDA keep their allocations).
-    </p>
+    <p class="muted">{{ $t("admin.pages.reorder.explainer") }}</p>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
     <div v-if="saved" class="ok-banner">{{ saved }}</div>
-    <div v-if="loading" class="loading">Loading…</div>
+    <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
     <div v-else class="table-wrap">
       <table class="data">
         <thead>
           <tr>
-            <th style="width: 90px">Move</th>
-            <th>Order No</th>
-            <th>Status</th>
-            <th>Customer</th>
-            <th>Delivery Date</th>
-            <th>Picked / Total</th>
-            <th>Locked By</th>
+            <th style="width: 90px">{{ $t("admin.pages.reorder.move") }}</th>
+            <th>{{ $t("admin.pages.pickingOrders.orderNo") }}</th>
+            <th>{{ $t("admin.pages.pickingOrders.status") }}</th>
+            <th>{{ $t("admin.pages.pickingOrders.customer") }}</th>
+            <th>{{ $t("admin.pages.pickingOrders.deliveryDate") }}</th>
+            <th>{{ $t("admin.pages.pickingOrders.pickedTotal") }}</th>
+            <th>{{ $t("admin.pages.pickingOrders.lockedBy") }}</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="(r, i) in rows" :key="r.id">
             <td class="actions">
-              <button class="btn btn-small" :disabled="i === 0" title="Move to top" @click="moveToTop(i)">⇤</button>
+              <button class="btn btn-small" :disabled="i === 0" :title="$t('admin.pages.reorder.moveToTop')" @click="moveToTop(i)">⇤</button>
               <button class="btn btn-small" :disabled="i === 0" @click="move(i, -1)">↑</button>
               <button class="btn btn-small" :disabled="i === rows.length - 1" @click="move(i, 1)">↓</button>
             </td>
@@ -112,7 +111,7 @@ onMounted(load);
             <td>{{ r.workingByName ?? "" }}</td>
           </tr>
           <tr v-if="rows.length === 0">
-            <td colspan="7" class="muted">No open picking orders.</td>
+            <td colspan="7" class="muted">{{ $t("admin.pages.reorder.none") }}</td>
           </tr>
         </tbody>
       </table>

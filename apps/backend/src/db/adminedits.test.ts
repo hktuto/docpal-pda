@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { queryGet } from "./query.js";
-import { updatePickingDeliveryDate, updateReceivingItemDateCode } from "./adminedits.js";
+import { updatePickingDeliveryDate, updateReceivingDeliveryDate, updateReceivingItemDateCode } from "./adminedits.js";
 
 let client: TestDb;
 
@@ -55,6 +55,42 @@ test("admin edits: set and clear picking order delivery date + audit row", async
   const bad = await catchHttp(updatePickingDeliveryDate(client.db, { orderId, deliveryDate: "01/08/2026", actorId }));
   assert.equal(bad.status, 400);
   const missing = await catchHttp(updatePickingDeliveryDate(client.db, { orderId: "nope", deliveryDate: null, actorId }));
+  assert.equal(missing.status, 404);
+});
+
+test("admin edits: set and clear receiving order delivery date + audit row", async () => {
+  await reseed(client);
+  const orderId = (await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT id FROM receiving_orders WHERE batch_no = '65878'`
+  ))!.id;
+  const actorId = (await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'admin'`))!.id;
+
+  const set = await updateReceivingDeliveryDate(client.db, { orderId, deliveryDate: "2026-08-01", actorId });
+  assert.equal(set.deliveryDate, "2026-08-01");
+  const row = await queryGet<{ d: string }>(
+    client.db,
+    sql`SELECT delivery_date::date::text AS d FROM receiving_orders WHERE id = ${orderId}`
+  );
+  assert.equal(row!.d, "2026-08-01");
+
+  const log = await queryGet<{ toState: string; metadata: { field: string; to: string }; actorId: string }>(
+    client.db,
+    sql`SELECT to_state AS "toState", metadata, actor_id AS "actorId"
+        FROM transaction_logs WHERE entity_type = 'receiving_order' AND entity_id = ${orderId}
+        ORDER BY created_at DESC LIMIT 1`
+  );
+  assert.equal(log!.toState, "admin_edit");
+  assert.equal(log!.metadata.field, "delivery_date");
+  assert.equal(log!.metadata.to, "2026-08-01");
+  assert.equal(log!.actorId, actorId);
+
+  const cleared = await updateReceivingDeliveryDate(client.db, { orderId, deliveryDate: null, actorId });
+  assert.equal(cleared.deliveryDate, null);
+
+  const bad = await catchHttp(updateReceivingDeliveryDate(client.db, { orderId, deliveryDate: "01/08/2026", actorId }));
+  assert.equal(bad.status, 400);
+  const missing = await catchHttp(updateReceivingDeliveryDate(client.db, { orderId: "nope", deliveryDate: null, actorId }));
   assert.equal(missing.status, 404);
 });
 

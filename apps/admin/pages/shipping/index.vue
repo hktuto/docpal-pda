@@ -40,32 +40,39 @@ onMounted(load);
 <template>
   <div>
     <div class="page-head">
-      <h1>Shipping Orders</h1>
-      <button
-        class="btn"
-        :disabled="selectedIds.length === 0"
-        :title="`Format pending — available in a later update (${selectedIds.length} selected)`"
-      >
-        Download shipper{{ selectedIds.length ? ` (${selectedIds.length})` : "" }}
-      </button>
+      <h1>{{ $t("admin.pages.shipping.title") }}</h1>
+      <div class="head-actions">
+        <button class="btn" :disabled="loading" @click="load">{{ $t("admin.common.refresh") }}</button>
+        <button
+          class="btn"
+          :disabled="selectedIds.length === 0"
+          :title="$t('admin.pages.shipping.downloadPendingSelected', { n: selectedIds.length })"
+        >
+          {{
+            selectedIds.length
+              ? $t("admin.pages.shipping.downloadShipperSelected", { n: selectedIds.length })
+              : $t("admin.pages.shipping.downloadShipper")
+          }}
+        </button>
+      </div>
     </div>
 
     <div class="filters">
-      <input v-model="search" placeholder="Search order no / ship-to" />
+      <input v-model="search" :placeholder="$t('admin.pages.shipping.searchPlaceholder')" />
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
-    <div v-if="loading" class="loading">Loading…</div>
+    <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
     <div v-else class="table-wrap">
       <table class="data">
         <thead>
           <tr>
             <th></th>
-            <th>Order No</th>
-            <th>Ship To</th>
-            <th>Boxes</th>
-            <th>Completed</th>
+            <th>{{ $t("admin.pages.shipping.orderNo") }}</th>
+            <th>{{ $t("admin.pages.shipping.shipTo") }}</th>
+            <th>{{ $t("admin.pages.shipping.boxes") }}</th>
+            <th>{{ $t("admin.pages.shipping.completed") }}</th>
           </tr>
         </thead>
         <tbody>
@@ -75,11 +82,11 @@ onMounted(load);
             </td>
             <td class="clickable" @click="navigateTo(`/shipping/${r.id}`)">{{ r.orderNo }}</td>
             <td>{{ r.shipTo ?? "—" }}</td>
-            <td>{{ r.closedBoxCount }} / {{ r.boxCount }} closed</td>
+            <td>{{ $t("admin.pages.shipping.boxesClosed", { closed: r.closedBoxCount, total: r.boxCount }) }}</td>
             <td>{{ new Date(r.createdAt).toLocaleDateString() }}</td>
           </tr>
           <tr v-if="total === 0">
-            <td colspan="5" class="muted">No completed shipping orders.</td>
+            <td colspan="5" class="muted">{{ $t("admin.pages.shipping.none") }}</td>
           </tr>
         </tbody>
       </table>

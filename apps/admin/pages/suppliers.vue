@@ -54,10 +54,10 @@ onMounted(loadProfiles);
       <template #row-actions="{ row }">
         <button
           class="btn-link"
-          :title="profileFor(row.code)?.qrTemplate || 'No profile yet'"
+          :title="profileFor(row.code)?.qrTemplate || $t('admin.pages.suppliers.noProfileYet')"
           @click="editProfile(row)"
         >
-          Edit profile
+          {{ $t("admin.pages.suppliers.editProfile") }}
         </button>
       </template>
     </CrudTable>

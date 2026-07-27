@@ -123,7 +123,7 @@ function connect(): void {
     backoffMs = INITIAL_BACKOFF_MS;
   };
   // Manual reconnect: close, wait with backoff, and reconnect with the
-  // persisted ?since= cursor (the server closes streams ~55 s on Vercel).
+  // persisted ?since= cursor.
   source.onerror = () => {
     source.close();
     if (es === source) es = null;
