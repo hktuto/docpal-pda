@@ -28,7 +28,15 @@
 - Report, edit, confirm, and cancel receiving item mismatches — **item-keyed**
   (every call addresses the receiving invoice item id; the mismatch is a set
   of flat columns on the item, no separate table, no status/reporter).
-  Confirm writes a transition log; cancel clears the flag.
+  Confirm writes a transition log; cancel clears the flag. The admin console
+  lists open mismatches across orders (`GET /admin/receiving-mismatches`,
+  `apps/admin/pages/issues/receiving.vue`) and confirms/cancels from there;
+  admins can also report a mismatch themselves (Mark issue on the admin
+  receiving detail) and remove a not-yet-worked issue item
+  (`DELETE /admin/receiving-invoice-items/:id`, 409 `item_work_started`,
+  `item_removed` log row against the order). Both admin detail pages render
+  the order's `transaction_logs` audit trail
+  (`GET /admin/receiving-orders/:id/logs`).
 - Show the order's picking section (nested orders with items, allocations,
   packages, transition logs, and shipping boxes) on the detail's Picking tab.
 
@@ -81,3 +89,5 @@
 - `docs/backend/api-design.md` §Receiving
 - `docs/superpowers/specs/2026-07-01-receiving-list-picking-order-count-design.md`
 - `docs/superpowers/specs/2026-07-03-receiving-mismatch-design.md`
+- `docs/superpowers/specs/2026-07-27-admin-issue-handling-design.md`
+- `docs/superpowers/specs/2026-07-27-admin-item-removal-and-audit-logs-design.md`

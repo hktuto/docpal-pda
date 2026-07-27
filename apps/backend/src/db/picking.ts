@@ -391,6 +391,7 @@ export interface PickingOrderRow {
   issueRemark: string | null;
   issueReportedAt: Date | null;
   issueReportedBy: string | null;
+  issueReportedByName: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -491,9 +492,11 @@ export async function getPickingOrderDetail(db: AppDb, orderId: string): Promise
         po.issue_reason AS "issueReason", po.issue_qty AS "issueQty", po.issue_pack_size AS "issuePackSize",
         po.issue_note AS "issueNote", po.issue_remark AS "issueRemark",
         po.issue_reported_at AS "issueReportedAt", po.issue_reported_by AS "issueReportedBy",
+        ru.display_name AS "issueReportedByName",
         po.created_at AS "createdAt", po.updated_at AS "updatedAt"
       FROM picking_orders po
       LEFT JOIN users w ON w.id = po.working_by
+      LEFT JOIN users ru ON ru.id = po.issue_reported_by
       WHERE po.id = ${orderId}
     `
   );
@@ -1453,9 +1456,102 @@ export async function reportPickingOrderIssues(
           ...(entry.packSize != null ? { packSize: entry.packSize } : {}),
         },
       });
+      await emitEvent(tx, {
+        type: "picking_order.issue_reported",
+        topics: ["/picking-orders"],
+        data: { id: row.id, orderNo: row.orderNo, reason: entry.reason, actorId: input.actorId },
+      });
       reported.push(row.id);
     }
     const reportedSet = new Set(reported);
     return { reported, skipped: ids.filter((id) => !reportedSet.has(id)) };
   });
+}
+
+/** Resolve an open picking issue (admin): back to 'pending' with the issue
+ *  fields cleared, transition log + SSE event. The caller runs allocateAll
+ *  after commit so the order takes part in allocation again. */
+export async function resolvePickingOrderIssue(
+  db: AppDb,
+  input: { orderId: string; actorId: string; resolutionNote?: string | null }
+): Promise<{ id: string; orderNo: string; status: string }> {
+  return db.transaction(async (tx) => {
+    const order = await queryGet<{ id: string; orderNo: string; status: string; issueReason: string | null }>(
+      tx,
+      sql`SELECT id, order_no AS "orderNo", status, issue_reason AS "issueReason"
+          FROM picking_orders WHERE id = ${input.orderId}`
+    );
+    if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
+    if (order.status !== "issue") throw new HTTPException(409, { message: "picking_order_no_open_issue" });
+    await assertActor(tx, input.actorId);
+
+    const resolutionNote = input.resolutionNote?.trim() || null;
+    await queryRun(
+      tx,
+      sql`UPDATE picking_orders
+          SET status = 'pending',
+              issue_reason = NULL,
+              issue_qty = NULL,
+              issue_pack_size = NULL,
+              issue_note = NULL,
+              issue_remark = NULL,
+              issue_reported_at = NULL,
+              issue_reported_by = NULL,
+              updated_at = ${now()}
+          WHERE id = ${order.id}`
+    );
+    await logTransition(tx, {
+      entityType: "picking_order",
+      entityId: order.id,
+      fromState: "issue",
+      toState: "pending",
+      actorId: input.actorId,
+      metadata: { reason: order.issueReason, resolutionNote },
+    });
+    await emitEvent(tx, {
+      type: "picking_order.updated",
+      topics: ["/picking-orders"],
+      data: { id: order.id, orderNo: order.orderNo, actorId: input.actorId },
+    });
+    return { id: order.id, orderNo: order.orderNo, status: "pending" };
+  });
+}
+
+// --- admin audit logs (2026-07-27 design) --------------------------------------
+
+export interface TransactionLogRow {
+  id: string;
+  entityType: string;
+  entityId: string;
+  fromState: string | null;
+  toState: string;
+  actorId: string | null;
+  actorName: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: Date;
+}
+
+/** Audit trail for one picking order: order-level rows plus the rows logged
+ *  against its items, packages, and shipping boxes, newest first. 404 when
+ *  the order does not exist. */
+export async function listPickingOrderLogs(db: AppDb, orderId: string): Promise<TransactionLogRow[]> {
+  const order = await queryGet<{ id: string }>(db, sql`SELECT id FROM picking_orders WHERE id = ${orderId}`);
+  if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
+  return queryAll<TransactionLogRow>(
+    db,
+    sql`SELECT tl.id, tl.entity_type AS "entityType", tl.entity_id AS "entityId",
+               tl.from_state AS "fromState", tl.to_state AS "toState",
+               tl.actor_id AS "actorId", u.display_name AS "actorName",
+               tl.metadata, tl.created_at AS "createdAt"
+        FROM transaction_logs tl
+        LEFT JOIN users u ON u.id = tl.actor_id
+        WHERE (tl.entity_type = 'picking_order' AND tl.entity_id = ${orderId})
+           OR (tl.entity_type = 'picking_item' AND tl.entity_id IN (
+                 SELECT id FROM picking_items WHERE picking_order_id = ${orderId}))
+           OR (tl.entity_type = 'picking_package' AND tl.entity_id IN (
+                 SELECT id FROM picking_packages WHERE picking_order_id = ${orderId}))
+           OR (tl.entity_type = 'shipping_box' AND tl.entity_id IN (
+                 SELECT id FROM shipping_boxes WHERE picking_order_id = ${orderId}))
+        ORDER BY tl.created_at DESC, tl.id DESC`
+  );
 }

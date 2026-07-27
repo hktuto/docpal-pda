@@ -44,6 +44,14 @@ export interface PickingItemRow {
 
 export interface PickingOrderDetail extends Omit<PickingOrderRow, "itemCount" | "totalQty" | "pickedQty" | "prioritySeq" | "workingBy" | "workingByName"> {
   measuringTask: { id: string; status: string } | null;
+  issueReason: string | null;
+  issueQty: number | null;
+  issuePackSize: number | null;
+  issueNote: string | null;
+  issueRemark: string | null;
+  issueReportedAt: string | null;
+  issueReportedBy: string | null;
+  issueReportedByName: string | null;
   items: PickingItemRow[];
   boxes: { id: string; status: string; boxSize: string | null; grossWeight: number | null; netWeight: number | null; destinationCountry: string | null; packageCount: number }[];
 }
@@ -83,6 +91,7 @@ export interface ReceivingItemRow {
   coo: string | null;
   cow: string | null;
   allocatedQty: number;
+  mismatch: { reason: string | null; mismatchQty: number | null; wrongPartNo: string | null; note: string | null } | null;
 }
 
 export interface ReceivingOrderDetail {
@@ -100,6 +109,8 @@ export interface ReceivingOrderDetail {
     totalQty: number | null;
     totalCtn: number | null;
     deliveryDate: string | null;
+    orgId: number;
+    subInventoryCode: string | null;
     items: ReceivingItemRow[];
   }[];
 }
@@ -162,6 +173,36 @@ export interface StockSearchResult {
   lots: StockSearchLot[];
 }
 
+// ---- issues ----
+
+export interface MismatchListRow {
+  itemId: string;
+  receivingOrderId: string;
+  batchNo: string;
+  invoiceId: string;
+  invoiceNo: string;
+  partNo: string;
+  supplierCode: string | null;
+  reason: string | null;
+  mismatchQty: number | null;
+  wrongPartNo: string | null;
+  note: string | null;
+}
+
+// ---- audit logs (transaction_logs rows for an order + its child entities) ----
+
+export interface TransactionLogRow {
+  id: string;
+  entityType: string;
+  entityId: string;
+  fromState: string | null;
+  toState: string;
+  actorId: string | null;
+  actorName: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
 export function useFlowApi() {
   const api = useApi();
   return {
@@ -182,6 +223,32 @@ export function useFlowApi() {
       api.patch(`/admin/receiving-orders/${id}`, { deliveryDate }),
     updateReceivingItemDateCode: (id: string, dateCode: string | null) =>
       api.patch(`/admin/receiving-invoice-items/${id}`, { dateCode }),
+
+    // Issues (actor comes from the JWT — the backend ignores any body actorId)
+    listReceivingMismatches: () => api.get<MismatchListRow[]>("/admin/receiving-mismatches"),
+    confirmReceivingMismatch: (itemId: string) =>
+      api.post(`/receiving-invoice-items/${itemId}/mismatch/confirm`, {}),
+    cancelReceivingMismatch: (itemId: string) =>
+      api.post(`/receiving-invoice-items/${itemId}/mismatch/cancel`, {}),
+    resolvePickingIssue: (orderId: string, resolutionNote?: string) => {
+      const note = (resolutionNote ?? "").trim();
+      return api.post(`/picking-orders/${orderId}/resolve-issue`, note ? { resolutionNote: note } : {});
+    },
+    reportPickingIssue: (
+      orderId: string,
+      entry: { reason: string; qty?: number; packSize?: number; note?: string; remark?: string }
+    ) => api.post(`/picking-orders/report-issues`, { entries: [{ pickingOrderId: orderId, ...entry }] }),
+    reportReceivingMismatch: (
+      itemId: string,
+      body: { reason: string; mismatchQty?: number; wrongPartNo?: string; note?: string }
+    ) => api.post(`/receiving-invoice-items/${itemId}/mismatch`, body),
+    removeReceivingItem: (itemId: string) => api.del(`/admin/receiving-invoice-items/${itemId}`),
+
+    // Audit logs
+    listReceivingOrderLogs: (orderId: string) =>
+      api.get<TransactionLogRow[]>(`/admin/receiving-orders/${orderId}/logs`),
+    listPickingOrderLogs: (orderId: string) =>
+      api.get<TransactionLogRow[]>(`/admin/picking-orders/${orderId}/logs`),
 
     // Stock search
     stockSearch: (params: { supplierId?: string; partNo?: string }) => {

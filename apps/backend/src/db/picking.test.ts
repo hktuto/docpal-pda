@@ -16,12 +16,14 @@ import {
   createShippingBox,
   finishPickingOrder,
   getPickingOrderDetail,
+  listPickingOrderLogs,
   listPickingOrders,
   releaseWorkLock,
   removePackageFromBox,
   removeScannedPackage,
   reorderPickingOrders,
   reportPickingOrderIssues,
+  resolvePickingOrderIssue,
   scanPickingItem,
   updateShippingBox,
   verifyPackage,
@@ -946,6 +948,92 @@ test("report-issues: reported/skipped, issue fields + log; validations", async (
   assert.equal(log!.metadata.qty, 500);
 });
 
+test("resolve-issue: report → resolve → pending, issue fields cleared, log; allocation restored", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await seededOrderAllocated();
+  const itemId = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
+  assert.ok((await itemStateOf(itemId)).allocatedQty > 0);
+
+  // report → the order is no longer an allocation demand
+  await reportPickingOrderIssues(client.db, {
+    actorId,
+    entries: [{ pickingOrderId: orderId, reason: "other", note: "label unreadable" }],
+  });
+  const whileIssue = await allocateAll(client.db);
+  assert.equal(whileIssue.demands, 0);
+
+  // resolve → back to pending with every issue field cleared
+  const resolved = await resolvePickingOrderIssue(client.db, {
+    orderId,
+    actorId,
+    resolutionNote: " label re-printed ",
+  });
+  assert.deepEqual(resolved, { id: orderId, orderNo: "SO-2026-0001", status: "pending" });
+
+  const order = await queryGet<{
+    status: string;
+    issueReason: string | null;
+    issueQty: number | null;
+    issuePackSize: number | null;
+    issueNote: string | null;
+    issueRemark: string | null;
+    issueReportedBy: string | null;
+    issueReportedAt: Date | null;
+  }>(
+    client.db,
+    sql`SELECT status, issue_reason AS "issueReason", issue_qty AS "issueQty",
+               issue_pack_size AS "issuePackSize", issue_note AS "issueNote", issue_remark AS "issueRemark",
+               issue_reported_by AS "issueReportedBy", issue_reported_at AS "issueReportedAt"
+        FROM picking_orders WHERE id = ${orderId}`
+  );
+  assert.deepEqual(order, {
+    status: "pending",
+    issueReason: null,
+    issueQty: null,
+    issuePackSize: null,
+    issueNote: null,
+    issueRemark: null,
+    issueReportedBy: null,
+    issueReportedAt: null,
+  });
+
+  // transition log: issue → pending with the old reason + resolution note
+  const log = await queryGet<{
+    fromState: string;
+    toState: string;
+    actorId: string;
+    metadata: { reason: string; resolutionNote: string };
+  }>(
+    client.db,
+    sql`SELECT from_state AS "fromState", to_state AS "toState", actor_id AS "actorId", metadata
+        FROM transaction_logs WHERE entity_type = 'picking_order' AND entity_id = ${orderId} AND to_state = 'pending'`
+  );
+  assert.equal(log!.fromState, "issue");
+  assert.equal(log!.actorId, actorId);
+  assert.deepEqual(log!.metadata, { reason: "other", resolutionNote: "label re-printed" });
+
+  // SSE event for open pages
+  const evt = await queryGet<{ type: string; topics: string[] }>(
+    client.db,
+    sql`SELECT type, topics FROM app_events WHERE type = 'picking_order.updated' AND data->>'id' = ${orderId}`
+  );
+  assert.deepEqual(evt!.topics, ["/picking-orders"]);
+
+  // participates in allocation again (the route runs allocateAll post-commit)
+  const afterResolve = await allocateAll(client.db);
+  assert.equal(afterResolve.demands, 2);
+  assert.ok((await itemStateOf(itemId)).allocatedQty > 0);
+
+  // error paths
+  const noIssue = await catchHttp(resolvePickingOrderIssue(client.db, { orderId, actorId }));
+  assert.equal(noIssue.status, 409);
+  assert.equal(noIssue.message, "picking_order_no_open_issue");
+
+  const missing = await catchHttp(resolvePickingOrderIssue(client.db, { orderId: randomUUID(), actorId }));
+  assert.equal(missing.status, 404);
+  assert.equal(missing.message, "picking_order_not_found");
+});
+
 // --- page work lock + priority reorder (2026-07-23 design) -------------------
 
 test("work lock: acquire, same-user refresh, 409 other user, release, expired re-acquire", async () => {
@@ -1048,4 +1136,54 @@ test("reorder: rewrites priority_seq, emits event, list follows, rejects bad ids
   const err = await catchHttp(reorderPickingOrders(client.db, { actorId, orderIds: [a, fin] }));
   assert.equal(err.status, 400);
   assert.match(err.message, /invalid_order_ids/);
+});
+
+// --- admin audit logs (2026-07-27 design) --------------------------------------
+
+test("picking order logs: order + item/package/box rows with actor name, newest first; 404 unknown order", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await seededOrderAllocated();
+  const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F"); // qty 2000
+  const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F"); // qty 1000
+
+  assert.deepEqual(await listPickingOrderLogs(client.db, orderId), []);
+
+  // full flow: box → scan both items in full → box everything (auto-finish
+  // creates the measuring task) → verify one package
+  const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
+  const p1 = (
+    await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 2000 })
+  ).packageIds[0]!;
+  await scanPickingItem(client.db, item2, { actorId, allocationId: (await allocationOf(item2)).id, qty: 1000 });
+  await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
+  await verifyPackage(client.db, { packageId: p1, actorId });
+
+  // logs can share a millisecond — make the order deterministic
+  await client.db.execute(
+    sql`UPDATE transaction_logs SET created_at = created_at - interval '1 minute' WHERE to_state <> 'verified'`
+  );
+
+  const logs = await listPickingOrderLogs(client.db, orderId);
+  assert.ok(logs.length >= 5);
+  for (const l of logs) {
+    assert.equal(l.actorId, actorId);
+    assert.equal(l.actorName, "Demo Operator");
+  }
+
+  // newest first: the package verification is the latest entry
+  assert.equal(logs[0]!.entityType, "picking_package");
+  assert.equal(logs[0]!.entityId, p1);
+  assert.equal(logs[0]!.fromState, "unverified");
+  assert.equal(logs[0]!.toState, "verified");
+
+  const byType = new Map<string, string[]>();
+  for (const l of logs) byType.set(l.entityType, [...(byType.get(l.entityType) ?? []), l.entityId]);
+  assert.ok(byType.get("picking_order")!.includes(orderId));
+  assert.deepEqual(new Set(byType.get("picking_item")), new Set([item1, item2]));
+  assert.deepEqual(byType.get("picking_package"), [p1]);
+  assert.deepEqual(byType.get("shipping_box"), [box.id]);
+
+  const missing = await catchHttp(listPickingOrderLogs(client.db, randomUUID()));
+  assert.equal(missing.status, 404);
+  assert.equal(missing.message, "picking_order_not_found");
 });

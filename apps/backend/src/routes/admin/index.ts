@@ -20,6 +20,7 @@ import { adminUsersRoute } from "./users.js";
 import { adminFlowEditsRoute } from "./flowEdits.js";
 import { adminSubInventoriesRoute } from "./subInventories.js";
 import { adminSubInventoryShareGroupsRoute } from "./subInventoryShareGroups.js";
+import { adminIssuesRoute } from "./issues.js";
 
 // Optional id on create: use the client's when given, else generate one.
 function optId(body: Record<string, unknown>): string {
@@ -257,3 +258,6 @@ adminRoute.route("/shelf-boxes", shelfBoxesRoute);
 
 // Flow-data edits for the admin console (delivery date / item date code).
 adminRoute.route("/", adminFlowEditsRoute);
+
+// Issues console (cross-order receiving mismatch list).
+adminRoute.route("/", adminIssuesRoute);

@@ -135,7 +135,13 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   - `POST /picking-orders/report-issues` `{entries:[{pickingOrderId,
     reason, qty?, packSize?, note?, remark?}]}` → `{reported[], skipped[]}` —
     per-order issue fields + `issue` status + transition log; unknown ids and
-    non-pending/picking orders are skipped.
+    non-pending/picking orders are skipped. Emits `picking_order.issue_reported`.
+  - `POST /picking-orders/:id/resolve-issue` `{resolutionNote?}` →
+    `{id, orderNo, status}` — 409 `picking_order_no_open_issue` unless the order
+    is in `issue`; returns it to `pending`, clears the `issue_*` columns,
+    writes the `issue`→`pending` transition log (metadata
+    `{reason, resolutionNote}`), emits `picking_order.updated`, then best-effort
+    `allocateAll`.
   - `POST /picking-orders/:id/work-lock` (no body) → `{orderId, workingBy}` —
     acquire/refresh the page work lock (idempotent per user; 409 `lock_held`
     with `{holderId, holderName}` when another user holds a fresh lock; the
@@ -230,6 +236,16 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   `{deliveryDate}` (`YYYY-MM-DD` or null) and
   `PATCH /admin/receiving-invoice-items/:id` `{dateCode}` (or null) — both in
   `src/db/adminedits.ts`, each leaving a `transaction_logs` audit row.
+  `GET /admin/receiving-mismatches` (`src/routes/admin/issues.ts`) lists open
+  receiving-item mismatches across orders (order/invoice/part/supplier joins,
+  newest first) for the admin Issues page. The same router serves the admin
+  audit-log reads `GET /admin/receiving-orders/:id/logs` /
+  `GET /admin/picking-orders/:id/logs` (`transaction_logs` rows for the order
+  and its child entities, actor display name joined, newest first) and
+  `DELETE /admin/receiving-invoice-items/:id` — removes a not-yet-worked item
+  (409 `item_work_started` when received/picked/put-away qty > 0 or
+  allocations/shelf-box items reference it), logging `item_removed` against
+  the order.
   Requires the bearer token like everything else; errors are plain text.
 - `POST /dev/reset`, `POST /dev/allocate` — demo reset / manual allocation
   recompute.
@@ -240,8 +256,12 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   `WHERE id > since` every ~1.5 s (heartbeat comment every 25 s) and rows are
   pruned after 3 days. Catalog: `allocation.computed` (from `allocateAll`,
   only on net allocation change), `picking_order.created` /
-  `picking_order.updated`, `picking.reordered` (priority reorder, emitted even
+  `picking_order.updated` (also on issue resolve), `picking_order.issue_reported`,
+  `picking.reordered` (priority reorder, emitted even
   when allocations did not change), `receiving_order.upserted` (ingest upserts),
+  `receiving.mismatch_reported` / `receiving.mismatch_updated` /
+  `receiving.mismatch_confirmed` / `receiving.mismatch_cancelled`,
+  `receiving_order.item_removed` (admin issue-item delete),
   `goods_verify.tasks_created` (day-end generate). Frames carry
   `topics` (URL path prefixes like `/picking-orders`) that web clients use to
   invalidate their local API cache.

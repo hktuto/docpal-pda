@@ -1,5 +1,6 @@
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
@@ -9,8 +10,11 @@ import {
   cancelReceivingItemMismatch,
   confirmReceivingArrival,
   confirmReceivingItemMismatch,
+  deleteReceivingInvoiceItem,
   editReceivingItemMismatch,
   getReceivingItemMismatch,
+  listReceivingMismatches,
+  listReceivingOrderLogs,
   reportReceivingItemMismatch,
   scanReceivingOrder,
 } from "./receiving.js";
@@ -534,6 +538,66 @@ test("mismatch: report → edit → confirm → cancel (+ logs, no qty effect)",
   assert.equal(qtyRow!.receivedQty, 0);
 });
 
+test("mismatch list: items across two orders returned with order/invoice joins", async () => {
+  await reseed(client);
+  const actorId = await actorIdOf("operator");
+  const daitoOrderId = await orderIdOf("04958210");
+  const koaOrderId = await orderIdOf("04958166");
+  const daitoItemId = await itemIdOf(daitoOrderId, "RK73B1JTTD181G");
+  const koaItemId = await itemIdOf(koaOrderId, "RK73H1JTTD1002F");
+  const invoiceIdOf = async (invoiceNo: string) =>
+    (await queryGet<{ id: string }>(client.db, sql`SELECT id FROM receiving_invoices WHERE invoice_no = ${invoiceNo}`))!.id;
+
+  assert.deepEqual(await listReceivingMismatches(client.db), []);
+
+  await reportReceivingItemMismatch(client.db, daitoItemId, {
+    actorId,
+    reason: "qty_mismatch",
+    mismatchQty: 100,
+    note: "short",
+  });
+  await reportReceivingItemMismatch(client.db, koaItemId, {
+    actorId,
+    reason: "wrong_part",
+    wrongPartNo: "RK73H1JTTD9999F",
+  });
+
+  const rows = await listReceivingMismatches(client.db);
+  assert.equal(rows.length, 2);
+  const byItem = new Map(rows.map((r) => [r.itemId, r]));
+  assert.deepEqual(byItem.get(daitoItemId), {
+    itemId: daitoItemId,
+    receivingOrderId: daitoOrderId,
+    batchNo: "04958210",
+    invoiceId: await invoiceIdOf("04958210-W-01"),
+    invoiceNo: "04958210-W-01",
+    partNo: "RK73B1JTTD181G",
+    supplierCode: "DAITO",
+    reason: "qty_mismatch",
+    mismatchQty: 100,
+    wrongPartNo: null,
+    note: "short",
+  });
+  assert.deepEqual(byItem.get(koaItemId), {
+    itemId: koaItemId,
+    receivingOrderId: koaOrderId,
+    batchNo: "04958166",
+    invoiceId: await invoiceIdOf("04958166-W-01"),
+    invoiceNo: "04958166-W-01",
+    partNo: "RK73H1JTTD1002F",
+    supplierCode: "KOA",
+    reason: "wrong_part",
+    mismatchQty: null,
+    wrongPartNo: "RK73H1JTTD9999F",
+    note: null,
+  });
+
+  // cancelling drops the item from the open list
+  await cancelReceivingItemMismatch(client.db, daitoItemId, actorId);
+  const after = await listReceivingMismatches(client.db);
+  assert.deepEqual(after.map((r) => r.itemId), [koaItemId]);
+});
+
 // --- confirm-arrival from provisional_received ---------------------------------
 
 test("confirm-arrival: provisional_received completes the remaining receipt", async () => {
@@ -595,4 +659,173 @@ test("confirm-arrival: provisional_received completes the remaining receipt", as
   const again = await catchHttp(confirmReceivingArrival(client.db, orderId, actorId));
   assert.equal(again.status, 409);
   assert.equal(again.message, "cannot_confirm_arrival_from_in_hand");
+});
+
+// --- admin audit logs + item removal (2026-07-27 design) ---------------------
+
+test("receiving order logs: order + item rows with actor name, newest first; 404 unknown order", async () => {
+  await reseed(client);
+  const actorId = await actorIdOf("operator");
+  const orderId = await orderIdOf("04958210");
+  const itemId = await itemIdOf(orderId, "RK73B1JTTD181G");
+
+  assert.deepEqual(await listReceivingOrderLogs(client.db, orderId), []);
+
+  await reportReceivingItemMismatch(client.db, itemId, { actorId, reason: "damaged", note: "wet carton" });
+  await confirmReceivingArrival(client.db, orderId, actorId);
+  // rows logged against another order must not leak in
+  const otherItemId = await itemIdOf(await orderIdOf("04958166"), "RK73H1JTTD1002F");
+  await reportReceivingItemMismatch(client.db, otherItemId, { actorId, reason: "not_found" });
+
+  // both logs can share a millisecond — make the order deterministic
+  await client.db.execute(
+    sql`UPDATE transaction_logs SET created_at = created_at - interval '1 minute' WHERE to_state = 'mismatch_reported'`
+  );
+
+  const logs = await listReceivingOrderLogs(client.db, orderId);
+  assert.equal(logs.length, 2);
+
+  const [orderLog, itemLog] = logs;
+  assert.equal(orderLog!.entityType, "receiving_order");
+  assert.equal(orderLog!.entityId, orderId);
+  assert.equal(orderLog!.fromState, "pending");
+  assert.equal(orderLog!.toState, "in_hand");
+  assert.equal(orderLog!.actorId, actorId);
+  assert.equal(orderLog!.actorName, "Demo Operator");
+  assert.ok(orderLog!.createdAt > itemLog!.createdAt);
+
+  assert.equal(itemLog!.entityType, "receiving_invoice_item");
+  assert.equal(itemLog!.entityId, itemId);
+  assert.equal(itemLog!.fromState, null);
+  assert.equal(itemLog!.toState, "mismatch_reported");
+  assert.equal(itemLog!.actorId, actorId);
+  assert.equal(itemLog!.actorName, "Demo Operator");
+  assert.equal(itemLog!.metadata.reason, "damaged");
+  assert.equal(itemLog!.metadata.note, "wet carton");
+
+  const missing = await catchHttp(listReceivingOrderLogs(client.db, randomUUID()));
+  assert.equal(missing.status, 404);
+  assert.equal(missing.message, "receiving_order_not_found");
+});
+
+test("delete receiving item: row gone, order log row + event written", async () => {
+  await reseed(client);
+  const actorId = await actorIdOf("admin");
+  const orderId = await orderIdOf("04958210");
+  const itemId = await itemIdOf(orderId, "P413");
+
+  await reportReceivingItemMismatch(client.db, itemId, { actorId, reason: "over_shipment" });
+  const before = await queryGet<{ invoiceId: string }>(
+    client.db,
+    sql`SELECT receiving_invoice_id AS "invoiceId" FROM receiving_invoice_items WHERE id = ${itemId}`
+  );
+
+  const result = await deleteReceivingInvoiceItem(client.db, { itemId, actorId });
+  assert.deepEqual(result, { id: itemId, receivingOrderId: orderId });
+
+  // row gone
+  assert.equal(
+    await queryGet(client.db, sql`SELECT id FROM receiving_invoice_items WHERE id = ${itemId}`),
+    undefined
+  );
+
+  // audit trail survives on the order
+  const log = await queryGet<{
+    fromState: string | null;
+    toState: string;
+    actorId: string;
+    metadata: Record<string, unknown>;
+  }>(
+    client.db,
+    sql`SELECT from_state AS "fromState", to_state AS "toState", actor_id AS "actorId", metadata
+        FROM transaction_logs
+        WHERE entity_type = 'receiving_order' AND entity_id = ${orderId} AND to_state = 'item_removed'`
+  );
+  assert.equal(log!.fromState, null);
+  assert.equal(log!.actorId, actorId);
+  assert.deepEqual(log!.metadata, {
+    itemId,
+    invoiceId: before!.invoiceId,
+    partNo: "P413",
+    poNo: "PO-DAI-001",
+    poLine: "2",
+    hadMismatch: true,
+  });
+
+  // SSE event for open pages
+  const evt = await queryGet<{ topics: string[]; data: Record<string, unknown> }>(
+    client.db,
+    sql`SELECT topics, data FROM app_events WHERE type = 'receiving_order.item_removed'`
+  );
+  assert.deepEqual(evt!.topics, ["/receiving-orders"]);
+  assert.equal(evt!.data.orderId, orderId);
+  assert.equal(evt!.data.itemId, itemId);
+
+  // the removed item no longer appears in the order's audit-log item ids
+  const logs = await listReceivingOrderLogs(client.db, orderId);
+  assert.deepEqual(logs.map((l) => l.toState), ["item_removed"]);
+});
+
+test("delete receiving item: 409 item_work_started for each guard; 404 unknown", async () => {
+  await reseed(client);
+  const actorId = await actorIdOf("admin");
+  const orderId = await orderIdOf("04958210");
+  const scannedItemId = await itemIdOf(orderId, "RK73B1JTTD181G");
+  const itemId = await itemIdOf(orderId, "P413");
+
+  const missing = await catchHttp(deleteReceivingInvoiceItem(client.db, { itemId: randomUUID(), actorId }));
+  assert.equal(missing.status, 404);
+  assert.equal(missing.message, "receiving_invoice_item_not_found");
+
+  const expectBlocked = async () => {
+    const err = await catchHttp(deleteReceivingInvoiceItem(client.db, { itemId, actorId }));
+    assert.equal(err.status, 409);
+    assert.equal(err.message, "item_work_started");
+  };
+
+  // received_qty > 0 (a real scan on the other line)
+  await scanReceivingOrder(client.db, orderId, { actorId, partNo: "RK73B1JTTD181G", qty: 10 });
+  const scanBlocked = await catchHttp(deleteReceivingInvoiceItem(client.db, { itemId: scannedItemId, actorId }));
+  assert.equal(scanBlocked.status, 409);
+  assert.equal(scanBlocked.message, "item_work_started");
+
+  // picked_qty > 0
+  await client.db.execute(sql`UPDATE receiving_invoice_items SET picked_qty = 1 WHERE id = ${itemId}`);
+  await expectBlocked();
+  await client.db.execute(sql`UPDATE receiving_invoice_items SET picked_qty = 0 WHERE id = ${itemId}`);
+
+  // put_away_qty > 0
+  await client.db.execute(sql`UPDATE receiving_invoice_items SET put_away_qty = 1 WHERE id = ${itemId}`);
+  await expectBlocked();
+  await client.db.execute(sql`UPDATE receiving_invoice_items SET put_away_qty = 0 WHERE id = ${itemId}`);
+
+  // allocations reference the item
+  const pickingItem = await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT pi.id FROM picking_items pi JOIN picking_orders po ON po.id = pi.picking_order_id
+        WHERE po.order_no = 'SO-2026-0001' LIMIT 1`
+  );
+  const allocId = randomUUID();
+  await client.db.execute(
+    sql`INSERT INTO allocations (id, picking_item_id, receiving_invoice_item_id, qty, created_at, updated_at)
+        VALUES (${allocId}, ${pickingItem!.id}, ${itemId}, 1, now(), now())`
+  );
+  await expectBlocked();
+  await client.db.execute(sql`DELETE FROM allocations WHERE id = ${allocId}`);
+
+  // shelf_box_items reference the item (test world has no seeded boxes — make one)
+  await client.db.execute(
+    sql`INSERT INTO shelf_boxes (id, status, created_at) VALUES ('BOX-H-TEST-0001', 'open', now())`
+  );
+  const sbiId = randomUUID();
+  await client.db.execute(
+    sql`INSERT INTO shelf_box_items (id, shelf_box_id, receiving_invoice_item_id, part_no, qty)
+        VALUES (${sbiId}, 'BOX-H-TEST-0001', ${itemId}, 'P413', 1)`
+  );
+  await expectBlocked();
+  await client.db.execute(sql`DELETE FROM shelf_box_items WHERE id = ${sbiId}`);
+
+  // all guards clear → delete succeeds
+  const result = await deleteReceivingInvoiceItem(client.db, { itemId, actorId });
+  assert.deepEqual(result, { id: itemId, receivingOrderId: orderId });
 });

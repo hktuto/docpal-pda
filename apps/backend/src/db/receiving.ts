@@ -5,6 +5,7 @@ import type { AppDb } from "../db.js";
 import { queryAll, queryGet, queryRun, type DbOrTx } from "./query.js";
 import { transactionLogs, inventoryTransactions, receivingScanLabels } from "./schema/index.js";
 import { now } from "./now.js";
+import { emitEvent } from "./events.js";
 import { normalizePartNo, parseQrRaw } from "./scanParse.js";
 
 // ---------------------------------------------------------------------------
@@ -452,6 +453,11 @@ export async function reportReceivingItemMismatch(
       wrongPartNo,
       note,
     });
+    await emitEvent(tx, {
+      type: "receiving.mismatch_reported",
+      topics: ["/receiving-orders"],
+      data: { itemId: item.id, reason: input.reason, actorId: input.actorId },
+    });
     return toMismatchInfo(await loadMismatchItem(tx, item.id));
   });
 }
@@ -481,6 +487,11 @@ export async function editReceivingItemMismatch(
           WHERE id = ${item.id}`
     );
     await logMismatch(tx, item.id, "mismatch_updated", input.actorId, { reason, mismatchQty, wrongPartNo, note });
+    await emitEvent(tx, {
+      type: "receiving.mismatch_updated",
+      topics: ["/receiving-orders"],
+      data: { itemId: item.id, actorId: input.actorId },
+    });
     return toMismatchInfo(await loadMismatchItem(tx, item.id));
   });
 }
@@ -505,6 +516,11 @@ export async function confirmReceivingItemMismatch(
       mismatchQty: item.mismatchQty,
       wrongPartNo: item.wrongPartNo,
       note: item.mismatchNote,
+    });
+    await emitEvent(tx, {
+      type: "receiving.mismatch_confirmed",
+      topics: ["/receiving-orders"],
+      data: { itemId: item.id, actorId },
     });
     return toMismatchInfo(item);
   });
@@ -532,6 +548,166 @@ export async function cancelReceivingItemMismatch(
           WHERE id = ${item.id}`
     );
     await logMismatch(tx, item.id, "mismatch_cancelled", actorId, {});
+    await emitEvent(tx, {
+      type: "receiving.mismatch_cancelled",
+      topics: ["/receiving-orders"],
+      data: { itemId: item.id, actorId },
+    });
     return null;
+  });
+}
+
+export interface ReceivingMismatchRow {
+  itemId: string;
+  receivingOrderId: string;
+  batchNo: string;
+  invoiceId: string;
+  invoiceNo: string;
+  partNo: string;
+  supplierCode: string | null;
+  reason: string | null;
+  mismatchQty: number | null;
+  wrongPartNo: string | null;
+  note: string | null;
+}
+
+/** Cross-order list of open mismatches (admin issues page): items with
+ *  reported_mismatch = true joined to their order + invoice, newest first
+ *  (items carry no timestamp, so order by the order/invoice creation). */
+export async function listReceivingMismatches(db: AppDb): Promise<ReceivingMismatchRow[]> {
+  return queryAll<ReceivingMismatchRow>(
+    db,
+    sql`SELECT rii.id AS "itemId",
+               ro.id AS "receivingOrderId",
+               ro.batch_no AS "batchNo",
+               ri.id AS "invoiceId",
+               ri.invoice_no AS "invoiceNo",
+               rii.part_no AS "partNo",
+               COALESCE(inv_sup.code, ord_sup.code) AS "supplierCode",
+               rii.mismatch_reason AS "reason",
+               rii.mismatch_qty AS "mismatchQty",
+               rii.wrong_part_no AS "wrongPartNo",
+               rii.mismatch_note AS "note"
+        FROM receiving_invoice_items rii
+        JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+        JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
+        LEFT JOIN suppliers inv_sup ON inv_sup.id = ri.supplier_id
+        LEFT JOIN suppliers ord_sup ON ord_sup.id = ro.supplier_id
+        WHERE rii.reported_mismatch = true
+        ORDER BY ro.created_at DESC, ri.created_at DESC, rii.id DESC`
+  );
+}
+
+// --- admin audit logs + item removal (2026-07-27 design) ---------------------
+
+export interface TransactionLogRow {
+  id: string;
+  entityType: string;
+  entityId: string;
+  fromState: string | null;
+  toState: string;
+  actorId: string | null;
+  actorName: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: Date;
+}
+
+/** Audit trail for one receiving order: order-level rows plus the rows logged
+ *  against its invoice items (mismatch report/edit/confirm/cancel), newest
+ *  first. 404 when the order does not exist. */
+export async function listReceivingOrderLogs(db: AppDb, orderId: string): Promise<TransactionLogRow[]> {
+  const order = await queryGet<{ id: string }>(db, sql`SELECT id FROM receiving_orders WHERE id = ${orderId}`);
+  if (!order) throw new HTTPException(404, { message: "receiving_order_not_found" });
+  return queryAll<TransactionLogRow>(
+    db,
+    sql`SELECT tl.id, tl.entity_type AS "entityType", tl.entity_id AS "entityId",
+               tl.from_state AS "fromState", tl.to_state AS "toState",
+               tl.actor_id AS "actorId", u.display_name AS "actorName",
+               tl.metadata, tl.created_at AS "createdAt"
+        FROM transaction_logs tl
+        LEFT JOIN users u ON u.id = tl.actor_id
+        WHERE (tl.entity_type = 'receiving_order' AND tl.entity_id = ${orderId})
+           OR (tl.entity_type = 'receiving_invoice_item' AND tl.entity_id IN (
+                 SELECT rii.id FROM receiving_invoice_items rii
+                 JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+                 WHERE ri.receiving_order_id = ${orderId}))
+        ORDER BY tl.created_at DESC, tl.id DESC`
+  );
+}
+
+/**
+ * Admin removal of a wrong/unwanted receiving invoice item (e.g. not_found /
+ * over_shipment). Blocked with 409 item_work_started once work has started on
+ * the line (qty counters, allocations, shelf-box links — same guard set as the
+ * ingest line removal). The item row is deleted and the audit trail survives
+ * on the ORDER as an 'item_removed' transaction_logs row. If upstream re-sends
+ * the order the item is re-created (same as ingest line removal).
+ */
+export async function deleteReceivingInvoiceItem(
+  db: AppDb,
+  input: { itemId: string; actorId: string }
+): Promise<{ id: string; receivingOrderId: string }> {
+  return db.transaction(async (tx) => {
+    const item = await queryGet<{
+      id: string;
+      receivingOrderId: string;
+      invoiceId: string;
+      partNo: string;
+      poNo: string | null;
+      poLine: string | null;
+      receivedQty: number;
+      pickedQty: number;
+      putAwayQty: number;
+      reportedMismatch: boolean;
+      allocLinks: number;
+      shelfBoxLinks: number;
+    }>(
+      tx,
+      sql`SELECT rii.id, ri.receiving_order_id AS "receivingOrderId",
+                 rii.receiving_invoice_id AS "invoiceId", rii.part_no AS "partNo",
+                 rii.po_no AS "poNo", rii.po_line AS "poLine",
+                 rii.received_qty AS "receivedQty", rii.picked_qty AS "pickedQty",
+                 rii.put_away_qty AS "putAwayQty", rii.reported_mismatch AS "reportedMismatch",
+                 (SELECT COUNT(*)::int FROM allocations a WHERE a.receiving_invoice_item_id = rii.id) AS "allocLinks",
+                 (SELECT COUNT(*)::int FROM shelf_box_items sbi WHERE sbi.receiving_invoice_item_id = rii.id) AS "shelfBoxLinks"
+          FROM receiving_invoice_items rii
+          JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+          WHERE rii.id = ${input.itemId}`
+    );
+    if (!item) throw new HTTPException(404, { message: "receiving_invoice_item_not_found" });
+    if (
+      item.receivedQty > 0 ||
+      item.pickedQty > 0 ||
+      item.putAwayQty > 0 ||
+      item.allocLinks > 0 ||
+      item.shelfBoxLinks > 0
+    ) {
+      throw new HTTPException(409, { message: "item_work_started" });
+    }
+
+    await queryRun(tx, sql`DELETE FROM receiving_invoice_items WHERE id = ${item.id}`);
+    await tx.insert(transactionLogs).values({
+      id: randomUUID(),
+      entityType: "receiving_order",
+      entityId: item.receivingOrderId,
+      fromState: null,
+      toState: "item_removed",
+      actorId: input.actorId,
+      metadata: {
+        itemId: item.id,
+        invoiceId: item.invoiceId,
+        partNo: item.partNo,
+        poNo: item.poNo,
+        poLine: item.poLine,
+        hadMismatch: item.reportedMismatch,
+      },
+      createdAt: now(),
+    });
+    await emitEvent(tx, {
+      type: "receiving_order.item_removed",
+      topics: ["/receiving-orders"],
+      data: { orderId: item.receivingOrderId, itemId: item.id, actorId: input.actorId },
+    });
+    return { id: item.id, receivingOrderId: item.receivingOrderId };
   });
 }

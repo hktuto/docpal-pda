@@ -17,6 +17,7 @@ import {
   removeScannedPackage,
   reorderPickingOrders,
   reportPickingOrderIssues,
+  resolvePickingOrderIssue,
   scanPickingItem,
   updateShippingBox,
   verifyPackage,
@@ -184,6 +185,19 @@ pickingRoute.post("/shipping-boxes/:id/cancel", async (c) => {
 pickingRoute.post("/shipping-boxes/:id/close", async (c) => {
   await closeShippingBox(db, { shippingBoxId: c.req.param("id"), actorId: actorFrom(c).id });
   return c.json({ ok: true }, 200);
+});
+
+// Admin resolve of an open issue: back to pending (issue fields cleared),
+// then re-allocate so the order takes part in allocation again.
+pickingRoute.post("/picking-orders/:id/resolve-issue", async (c) => {
+  const body = await readJson<{ resolutionNote?: string }>(c);
+  const result = await resolvePickingOrderIssue(db, {
+    orderId: c.req.param("id"),
+    actorId: actorFrom(c).id,
+    resolutionNote: body.resolutionNote ?? null,
+  });
+  await reallocateBestEffort("issue resolve");
+  return c.json(result, 200);
 });
 
 // Explicit finish: all items fully boxed → order finished + measuring task.

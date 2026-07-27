@@ -8,6 +8,7 @@
   --brand-teal-dark: #0b968f;
   --brand-blue: #1b8fd4;
   --brand-sidebar-bg: #e9eff6;
+  --brand-hightlight-bg: #d7e1ec;
   --brand-sidebar-text: #3e4c5e;
   /* Tokens consumed by the shared i18n layer's LanguageSwitcher. */
   --primary: var(--brand-teal);

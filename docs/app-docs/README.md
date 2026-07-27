@@ -6,6 +6,7 @@ This manual explains the warehouse PDA demo app for **operators and trainers**, 
 
 - [Concepts](./concepts/overview.md) — what the app is, who uses it, and how it is organized.
 - [User Menu](./user-menu/index.md) — full operator screen reference (中文). Printable version: [中文 PDF](./user-menu/user-menu-zh-HK.pdf).
+- [Admin User Guide](./admin-user-menu/index.md) — full admin console screen reference (中文).
 - [Flows](./flows/index.md) — step-by-step guides for each warehouse operation.
 - [Components](./components/shared-components.md) — shared UI building blocks.
 - [Composables](./composables/index.md) — reusable Vue logic.

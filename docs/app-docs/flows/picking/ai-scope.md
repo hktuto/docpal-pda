@@ -40,7 +40,13 @@
   printing will be added backend-side later.
 - Finish a picking order manually, or automatically when the last package
   is boxed — finishing creates a measuring task.
-- Per-order issue reporting (`POST /picking-orders/report-issues`).
+- Per-order issue reporting (`POST /picking-orders/report-issues`). An issued
+  order is frozen (scan/unpack 409, excluded from `allocateAll`) until an
+  admin resolves it — `POST /picking-orders/:id/resolve-issue` returns it to
+  `pending`, clears the `issue_*` columns and re-allocates (admin Issues page
+  `apps/admin/pages/issues/picking.vue` + picking order detail). The full
+  history (report, resolve, and all other transitions) is visible on the
+  admin detail's audit-log table (`GET /admin/picking-orders/:id/logs`).
 - Page work lock: opening the picking detail or scan-session page acquires
   the server-side work lock on the order (`POST /picking-orders/:id/work-lock`,
   refreshed every 3 min while open, keepalive release on leave, expires 10 min
@@ -107,6 +113,7 @@
   `POST /picking-items/:id/scan`, `/packages/:id` verbs,
   `/shipping-boxes/:id*` lifecycle, `POST /picking-orders/:id/finish`
   (→ measuring task), `POST /picking-orders/report-issues`,
+  `POST /picking-orders/:id/resolve-issue`,
   `POST`/`DELETE /picking-orders/:id/work-lock`, `POST /picking-orders/reorder`.
 - `apps/backend/src/db/allocate.ts` — allocation engine: demands in
   `priority_seq` order, skips work-locked orders, open qty = `qty − Σ
@@ -136,6 +143,8 @@
 - `docs/backend/api-design.md` §Picking
 - `docs/superpowers/specs/2026-07-01-ocr-assisted-picking-design.md`
 - `docs/superpowers/specs/2026-07-03-picking-issue-reporting-design.md`
+- `docs/superpowers/specs/2026-07-27-admin-issue-handling-design.md`
+- `docs/superpowers/specs/2026-07-27-admin-item-removal-and-audit-logs-design.md`
 - `docs/superpowers/specs/2026-07-03-package-level-picking-design.md`
 - `docs/superpowers/specs/2026-07-10-allocation-box-remark-design.md`
 - `docs/superpowers/specs/2026-07-18-picking-scan-session-design.md`

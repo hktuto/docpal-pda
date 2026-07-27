@@ -202,6 +202,13 @@ export const navSections: { title: string; links: { route: string; title: string
     links: [{ route: "/receiving", title: "admin.navLinks.receivingOrders" }],
   },
   {
+    title: "admin.nav.issues",
+    links: [
+      { route: "/issues/receiving", title: "admin.navLinks.receivingIssues" },
+      { route: "/issues/picking", title: "admin.navLinks.pickingIssues" },
+    ],
+  },
+  {
     title: "admin.nav.shipping",
     links: [{ route: "/shipping", title: "admin.navLinks.shippingOrders" }],
   },

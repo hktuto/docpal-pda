@@ -77,8 +77,8 @@ onBeforeUnmount(() => {
       <nav>
         <div v-for="s in navSections" :key="s.title" class="nav-section">
           <button class="nav-section-head" @click="toggle(s.title, s.links)">
-            <span class="caret" :class="{ open: !isCollapsed(s.title, s.links) }">▸</span>
             {{ $t(s.title) }}
+            <span class="caret" :class="{ open: !isCollapsed(s.title, s.links) }">▸</span>
           </button>
           <div v-show="!isCollapsed(s.title, s.links)" class="nav-links">
             <NuxtLink
@@ -160,6 +160,7 @@ onBeforeUnmount(() => {
 
 .nav-section-head {
   display: flex;
+  justify-content: space-between;
   align-items: center;
   gap: 6px;
   width: 100%;
@@ -172,6 +173,7 @@ onBeforeUnmount(() => {
   letter-spacing: 0.04em;
   padding: 8px 18px 4px;
   cursor: pointer;
+  background: var(--brand-hightlight-bg);
 }
 .nav-section-head:hover {
   color: var(--brand-sidebar-text);
@@ -189,11 +191,11 @@ onBeforeUnmount(() => {
 .nav-links {
   display: flex;
   flex-direction: column;
-  padding-bottom: 4px;
+  padding-block: 4px;
 }
 .nav-links a {
   color: var(--brand-sidebar-text);
-  padding: 6px 18px;
+  padding: 6px 6px;
   margin: 1px 10px;
   border-radius: 8px;
   font-size: 14px;
