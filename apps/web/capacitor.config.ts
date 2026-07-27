@@ -1,13 +1,15 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
-// Dev default: the WebView loads http://localhost:3000, which `adb reverse`
+// Dev default: the WebView loads http://127.0.0.1:3000, which `adb reverse`
 // tunnels to the dev machine's web dev server (see package.json
 // "cap:android:proxy" — also tunnels :3002 for the backend API, so the
-// default apiBaseUrl http://localhost:3002 works on-device too).
+// default apiBaseUrl http://127.0.0.1:3002 works on-device too).
+// 127.0.0.1, not localhost: some Android ROMs (NLS-MT95) fail to resolve
+// "localhost" inside the WebView at all.
 // Override with CAPACITOR_SERVER_URL; set CAPACITOR_SERVER_URL=off for
 // production bundled builds (WebView loads the assets in webDir instead).
 const envUrl = process.env.CAPACITOR_SERVER_URL;
-const serverUrl = envUrl === 'off' ? undefined : (envUrl ?? 'http://localhost:3000');
+const serverUrl = envUrl === 'off' ? undefined : (envUrl ?? 'http://127.0.0.1:3000');
 
 const config: CapacitorConfig = {
   appId: 'com.docpal.warehousedemo',

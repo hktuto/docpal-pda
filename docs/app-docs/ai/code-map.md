@@ -141,6 +141,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | `PUT /receiving-orders/:externalId`, `PUT /picking-orders/:externalId` | `apps/backend/src/routes/ingest.ts` |
 | `POST /dev/reset`, `POST /dev/allocate` | `apps/backend/src/routes/dev.ts` |
 | `/admin/*` master-data CRUD | `apps/backend/src/routes/admin/` |
+| `/admin/sub-inventory-share-groups` (share-group membership upsert/remove) | `apps/backend/src/routes/admin/subInventoryShareGroups.ts` |
 
 ### Domain modules
 
@@ -155,7 +156,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | Stock search | `apps/backend/src/db/stocksearch.ts` |
 | Ingest upserts | `apps/backend/src/db/ingest.ts` |
 | Allocation engine (`allocateAll`) | `apps/backend/src/db/allocate.ts` |
-| Demo seed | `apps/backend/src/db/seed.ts` |
+| Demo seed (+ generated real-data artifacts) | `apps/backend/src/db/seed.ts` (+ `seed-parts-data.json`, `seed-subinventories-data.ts`, `seed-net-weight-data.ts`, `seed-order-210726.ts`; generator `scripts/gen-seed-real-data.mjs`) |
 
 - Server entry / app wiring: `apps/backend/src/index.ts` (migrations auto-apply on startup; seed runs when `users` is empty unless `WAREHOUSE_SEED=off`).
 - All web pages go through `WarehouseService` → these HTTP endpoints.

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { Context } from "hono";
-import { eq, type SQL } from "drizzle-orm";
+import { eq, count as countFn, type SQL } from "drizzle-orm";
 import type { AnyPgColumn, PgTableWithColumns } from "drizzle-orm/pg-core";
 import { db } from "../../db.js";
 
@@ -83,6 +83,12 @@ export interface CrudConfig<T extends PgTableWithColumns<any>> {
   /** WHERE clause for /:id lookups; defaults to eq(pk, id). Needed for
    *  composite-PK tables (e.g. user_group_members addressed as userId:groupCode). */
   match?: (id: string) => SQL;
+  /** Optional search predicate for server-side list paging. When set and the
+   *  list request carries ?page=/?pageSize=/?q=, GET / returns
+   *  { rows, total } (LIMIT/OFFSET + COUNT) instead of the full array. */
+  search?: (q: string) => SQL;
+  /** List ordering column; defaults to pk. */
+  orderBy?: AnyPgColumn;
   /** Build the insert row from a validated body (throw HTTPException(400) on bad input). */
   create: (body: Record<string, unknown>) => T["$inferInsert"];
   /** Build the update set from a validated body; only provided fields are updated. */
@@ -96,10 +102,30 @@ export function createCrudRouter<T extends PgTableWithColumns<any>>(cfg: CrudCon
   // keeps create/update fully type-checked at each call site.
   const table = cfg.table as PgTableWithColumns<any>;
   const match = cfg.match ?? ((id: string) => eq(cfg.pk, id));
+  const orderBy = cfg.orderBy ?? cfg.pk;
   const r = new Hono();
 
   r.get("/", async (c) => {
-    const rows = await db.select().from(table).orderBy(cfg.pk);
+    // Server-side paging/search (opt-in per entity via cfg.search) for large
+    // tables like the ~100k-row parts master.
+    if (cfg.search && (c.req.query("page") !== undefined || c.req.query("q") !== undefined)) {
+      const page = Math.max(1, Number(c.req.query("page")) || 1);
+      const pageSize = Math.min(200, Math.max(1, Number(c.req.query("pageSize")) || 50));
+      const q = (c.req.query("q") ?? "").trim();
+      const where = q ? cfg.search(q) : undefined;
+      const [rows, count] = await Promise.all([
+        db
+          .select()
+          .from(table)
+          .where(where)
+          .orderBy(orderBy)
+          .limit(pageSize)
+          .offset((page - 1) * pageSize),
+        db.select({ total: countFn() }).from(table).where(where),
+      ]);
+      return c.json({ rows, total: Number(count[0]?.total ?? 0) });
+    }
+    const rows = await db.select().from(table).orderBy(orderBy);
     return c.json(rows);
   });
 

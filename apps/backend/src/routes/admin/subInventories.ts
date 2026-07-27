@@ -3,14 +3,13 @@ import { HTTPException } from "hono/http-exception";
 import type { Context } from "hono";
 import { sql } from "drizzle-orm";
 import { db } from "../../db.js";
-import { queryAll, queryGet, queryRun } from "../../db/query.js";
+import { queryAll, queryGet } from "../../db/query.js";
 import { mapDbError, optStr, reqInt, reqStr } from "./crud.js";
 
 // ---------------------------------------------------------------------------
-// Sub-inventories (3-level model: org_id → code group → tag). Custom router
-// (not createCrudRouter): the list aggregates the group's tags, group create
-// makes its default tag, and tags are managed per group. Rows are addressed
-// as `:orgId::code`; tags as `:orgId::code::tag`.
+// Sub-inventories: the (org_id, code) group level all stock/doc tables
+// reference. Custom router (not createCrudRouter): rows are addressed as
+// `:orgId::code` (composite PK).
 // ---------------------------------------------------------------------------
 
 export const adminSubInventoriesRoute = new Hono();
@@ -32,16 +31,13 @@ function parseGroupId(id: string): { orgId: number; code: string } {
 }
 
 const GROUP_COLS = sql`si.org_id AS "orgId", si.code, si.name, si.customer_code AS "customerCode",
-       si.created_at AS "createdAt", si.updated_at AS "updatedAt",
-       COALESCE(array_agg(t.tag ORDER BY t.tag) FILTER (WHERE t.tag IS NOT NULL), '{}') AS "tags"`;
+       si.created_at AS "createdAt", si.updated_at AS "updatedAt"`;
 
 adminSubInventoriesRoute.get("/", async (c) => {
   const rows = await queryAll(
     db,
     sql`SELECT ${GROUP_COLS}
         FROM sub_inventories si
-        LEFT JOIN sub_inventory_tags t ON t.org_id = si.org_id AND t.code = si.code
-        GROUP BY si.org_id, si.code, si.name, si.customer_code, si.created_at, si.updated_at
         ORDER BY si.org_id, si.code`
   );
   return c.json(rows);
@@ -53,38 +49,24 @@ adminSubInventoriesRoute.get("/:id", async (c) => {
     db,
     sql`SELECT ${GROUP_COLS}
         FROM sub_inventories si
-        LEFT JOIN sub_inventory_tags t ON t.org_id = si.org_id AND t.code = si.code
-        WHERE si.org_id = ${g.orgId} AND si.code = ${g.code}
-        GROUP BY si.org_id, si.code, si.name, si.customer_code, si.created_at, si.updated_at`
+        WHERE si.org_id = ${g.orgId} AND si.code = ${g.code}`
   );
   if (!row) throw new HTTPException(404, { message: "not found" });
   return c.json(row);
 });
 
-// Create a group; its default tag (body.tag, default = code) is created with it.
 adminSubInventoriesRoute.post("/", async (c) => {
   const b = await readJson(c);
   const orgId = reqInt(b, "orgId");
   const code = reqStr(b, "code");
-  const tag = optStr(b, "tag") ?? code;
   try {
-    const row = await db.transaction(async (tx) => {
-      await queryRun(
-        tx,
-        sql`INSERT INTO sub_inventories (org_id, code, name, customer_code, created_at, updated_at)
-            VALUES (${orgId}, ${code}, ${optStr(b, "name")}, ${optStr(b, "customerCode")}, now(), now())`
-      );
-      await queryRun(
-        tx,
-        sql`INSERT INTO sub_inventory_tags (org_id, code, tag, created_at, updated_at)
-            VALUES (${orgId}, ${code}, ${tag}, now(), now())`
-      );
-      return queryGet<{ orgId: number; code: string }>(
-        tx,
-        sql`SELECT org_id AS "orgId", code FROM sub_inventories WHERE org_id = ${orgId} AND code = ${code}`
-      );
-    });
-    return c.json({ ...row, tag }, 201);
+    const row = await queryGet(
+      db,
+      sql`INSERT INTO sub_inventories (org_id, code, name, customer_code, created_at, updated_at)
+          VALUES (${orgId}, ${code}, ${optStr(b, "name")}, ${optStr(b, "customerCode")}, now(), now())
+          RETURNING org_id AS "orgId", code`
+    );
+    return c.json(row, 201);
   } catch (e) {
     mapDbError(e);
   }
@@ -114,44 +96,13 @@ adminSubInventoriesRoute.patch("/:id", async (c) => {
   }
 });
 
-// Tags of a group.
-adminSubInventoriesRoute.post("/:id/tags", async (c) => {
-  const g = parseGroupId(c.req.param("id"));
-  const b = await readJson(c);
-  const tag = reqStr(b, "tag");
-  try {
-    await queryRun(
-      db,
-      sql`INSERT INTO sub_inventory_tags (org_id, code, tag, name, description, created_at, updated_at)
-          VALUES (${g.orgId}, ${g.code}, ${tag}, ${optStr(b, "name")}, ${optStr(b, "description")}, now(), now())`
-    );
-    return c.json({ orgId: g.orgId, code: g.code, tag }, 201);
-  } catch (e) {
-    mapDbError(e);
-  }
-});
-
-adminSubInventoriesRoute.delete("/:id/tags/:tag", async (c) => {
-  const g = parseGroupId(c.req.param("id"));
-  const row = await queryGet(
-    db,
-    sql`DELETE FROM sub_inventory_tags WHERE org_id = ${g.orgId} AND code = ${g.code} AND tag = ${c.req.param("tag")}
-        RETURNING tag`
-  );
-  if (!row) throw new HTTPException(404, { message: "not found" });
-  return c.json({ ok: true });
-});
-
 adminSubInventoriesRoute.delete("/:id", async (c) => {
   const g = parseGroupId(c.req.param("id"));
   try {
-    const row = await db.transaction(async (tx) => {
-      await queryRun(
-        tx,
-        sql`DELETE FROM sub_inventory_tags WHERE org_id = ${g.orgId} AND code = ${g.code}`
-      );
-      return queryGet(tx, sql`DELETE FROM sub_inventories WHERE org_id = ${g.orgId} AND code = ${g.code} RETURNING code`);
-    });
+    const row = await queryGet(
+      db,
+      sql`DELETE FROM sub_inventories WHERE org_id = ${g.orgId} AND code = ${g.code} RETURNING code`
+    );
     if (!row) throw new HTTPException(404, { message: "not found" });
     return c.json({ ok: true });
   } catch (e) {

@@ -8,6 +8,20 @@
       "when": 1785043622037,
       "tag": "0000_milky_ted_forrester",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785117173124,
+      "tag": "0001_talented_star_brand",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1785122511830,
+      "tag": "0002_famous_sunspot",
+      "breakpoints": true
     }
   ]
 }

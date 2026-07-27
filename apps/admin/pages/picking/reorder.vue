@@ -68,7 +68,7 @@ onMounted(load);
     <div class="page-head">
       <h1>Reorder Picking Priority</h1>
       <div>
-        <NuxtLink to="/picking" class="btn">Back to list</NuxtLink>
+        <NuxtLink to="/picking-orders" class="btn">Back to list</NuxtLink>
         <button class="btn btn-primary" :disabled="!dirty || saving" @click="save">
           {{ saving ? "Saving…" : "Save order" }}
         </button>

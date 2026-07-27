@@ -43,7 +43,9 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     public: {
-      apiBaseUrl: "http://localhost:3002", // override with NUXT_PUBLIC_API_BASE_URL (device builds need a LAN-reachable host)
+      // 127.0.0.1, not localhost: some Android ROMs (NLS-MT95) fail to resolve
+      // "localhost" inside the WebView, breaking adb-reverse API access.
+      apiBaseUrl: "http://127.0.0.1:3002", // override with NUXT_PUBLIC_API_BASE_URL (device builds need a LAN-reachable host)
       apiCache: "on", // set NUXT_PUBLIC_API_CACHE=off to disable the client-side GET cache entirely
     },
   },

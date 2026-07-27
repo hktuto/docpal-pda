@@ -219,10 +219,13 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   (`partNo`), user-groups, and user-group-members (composite key addressed as
   `:userId::groupCode`), plus custom routers for users (write-only `password`
   hashed server-side, `password_hash` never returned), `shelf-boxes`, and
-  `sub-inventories` (3-level model: the list aggregates `sub_inventory_tags`,
-  group create makes its default tag, tags managed via
-  `POST/DELETE /admin/sub-inventories/:orgId::code/tags(/:tag)`, groups
-  addressed as `:orgId::code`).
+  `sub-inventories` (groups addressed as `:orgId::code`), and
+  `sub-inventory-share-groups`
+  (`GET` all memberships, `PUT /admin/sub-inventory-share-groups/:orgId::code`
+  `{shareGroup}` upserts — empty/null removes — `DELETE` removes). Parts is
+  server-side paged: `GET /admin/parts?page=&pageSize=&q=` returns
+  `{rows, total}` (`q` ILIKEs part_no / wcl_item_no / description /
+  supplier_code).
   Flow-data edits for the admin console: `PATCH /admin/picking-orders/:id`
   `{deliveryDate}` (`YYYY-MM-DD` or null) and
   `PATCH /admin/receiving-invoice-items/:id` `{dateCode}` (or null) — both in

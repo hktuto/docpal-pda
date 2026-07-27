@@ -51,6 +51,14 @@
   first) drives both `allocateAll` demand order and the picking list order;
   `POST /picking-orders/reorder` rewrites it and re-allocates (admin UI
   comes with the console revamp).
+- Allocation location matching: a picking order's `(org_id,
+  sub_inventory_code)` pair must match the stock source's pair (pair-less
+  orders are org-agnostic), widened by `sub_inventory_share_members` —
+  sources whose sub-inventory shares the demand order's `share_group` (same
+  org) also match. Groups are configured per warehouse on the admin
+  sub-inventories page (`/admin/sub-inventory-share-groups`); the seed ships
+  a demo group (org 2 STORE1 + WSTORE1 in `HK`). Customer-segregated stores
+  keep their customer restriction even inside a share group.
 
 ## Out of scope
 

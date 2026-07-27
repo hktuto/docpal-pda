@@ -154,6 +154,11 @@ a:hover {
   font-size: 20px;
   margin: 0;
 }
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
 /* ---- tables ---- */
 .table-wrap {

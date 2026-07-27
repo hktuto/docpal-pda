@@ -4,7 +4,12 @@ interface SubInventoryRow {
   code: string;
   name: string | null;
   customerCode: string | null;
-  tags: string[];
+}
+
+interface ShareMemberRow {
+  shareGroup: string;
+  orgId: number;
+  code: string;
 }
 
 const api = useApi();
@@ -12,16 +17,21 @@ const rows = ref<SubInventoryRow[]>([]);
 const loading = ref(false);
 const error = ref("");
 
+// Share-group membership per "orgId:code" + the editable drafts beside it.
+// Members of the same group may serve each other's picking demands.
+const shareGroups = ref<Record<string, string>>({});
+const shareDrafts = ref<Record<string, string>>({});
+const shareError = ref("");
+
 const { page, pageSize, total, paged } = usePaging(rows);
 
 const showNew = ref(false);
-const newForm = reactive({ orgId: "", code: "", name: "", customerCode: "", tag: "" });
+const newForm = reactive({ orgId: "", code: "", name: "", customerCode: "" });
 const newError = ref("");
 
 const editing = ref<SubInventoryRow | null>(null);
 const editForm = reactive({ name: "", customerCode: "" });
 const editError = ref("");
-const newTag = ref("");
 
 const newDlg = useOverlayDismiss(() => { showNew.value = false; });
 const editDlg = useOverlayDismiss(() => { editing.value = null; });
@@ -34,7 +44,15 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    rows.value = await api.get("/admin/sub-inventories");
+    const [groups, members] = await Promise.all([
+      api.get("/admin/sub-inventories"),
+      api.get("/admin/sub-inventory-share-groups"),
+    ]);
+    rows.value = groups;
+    const map: Record<string, string> = {};
+    for (const m of members as ShareMemberRow[]) map[`${m.orgId}:${m.code}`] = m.shareGroup;
+    shareGroups.value = map;
+    shareDrafts.value = { ...map };
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -42,8 +60,25 @@ async function load() {
   }
 }
 
+function shareDirty(r: SubInventoryRow): boolean {
+  const id = rowId(r);
+  return (shareDrafts.value[id] ?? "").trim() !== (shareGroups.value[id] ?? "");
+}
+
+async function saveShare(r: SubInventoryRow) {
+  shareError.value = "";
+  try {
+    await api.put(`/admin/sub-inventory-share-groups/${rowId(r)}`, {
+      shareGroup: (shareDrafts.value[rowId(r)] ?? "").trim() || null,
+    });
+    await load();
+  } catch (e: any) {
+    shareError.value = e.message;
+  }
+}
+
 function openNew() {
-  Object.assign(newForm, { orgId: "", code: "", name: "", customerCode: "", tag: "" });
+  Object.assign(newForm, { orgId: "", code: "", name: "", customerCode: "" });
   newError.value = "";
   showNew.value = true;
 }
@@ -59,7 +94,6 @@ async function createGroup() {
     const body: Record<string, unknown> = { orgId, code: newForm.code.trim() };
     if (newForm.name.trim()) body.name = newForm.name.trim();
     if (newForm.customerCode.trim()) body.customerCode = newForm.customerCode.trim();
-    if (newForm.tag.trim()) body.tag = newForm.tag.trim();
     await api.post("/admin/sub-inventories", body);
     showNew.value = false;
     await load();
@@ -72,7 +106,6 @@ function openEdit(row: SubInventoryRow) {
   editing.value = row;
   editForm.name = row.name ?? "";
   editForm.customerCode = row.customerCode ?? "";
-  newTag.value = "";
   editError.value = "";
 }
 
@@ -91,33 +124,8 @@ async function saveEdit() {
   }
 }
 
-async function addTag() {
-  if (!editing.value || !newTag.value.trim()) return;
-  editError.value = "";
-  try {
-    await api.post(`/admin/sub-inventories/${rowId(editing.value)}/tags`, { tag: newTag.value.trim() });
-    newTag.value = "";
-    await load();
-    editing.value = rows.value.find((r) => r.orgId === editing.value!.orgId && r.code === editing.value!.code) ?? null;
-  } catch (e: any) {
-    editError.value = e.message;
-  }
-}
-
-async function removeTag(tag: string) {
-  if (!editing.value || !confirm(`Remove tag ${tag}?`)) return;
-  editError.value = "";
-  try {
-    await api.del(`/admin/sub-inventories/${rowId(editing.value)}/tags/${encodeURIComponent(tag)}`);
-    await load();
-    editing.value = rows.value.find((r) => r.orgId === editing.value!.orgId && r.code === editing.value!.code) ?? null;
-  } catch (e: any) {
-    editError.value = e.message;
-  }
-}
-
 async function remove(row: SubInventoryRow) {
-  if (!confirm(`Delete sub-inventory ${row.orgId} / ${row.code} (and its tags)?`)) return;
+  if (!confirm(`Delete sub-inventory ${row.orgId} / ${row.code}?`)) return;
   error.value = "";
   try {
     await api.del(`/admin/sub-inventories/${rowId(row)}`);
@@ -134,15 +142,19 @@ onMounted(load);
   <div>
     <div class="page-head">
       <h1>Sub-inventories</h1>
-      <button class="btn btn-primary" @click="openNew">New</button>
+      <div class="head-actions">
+        <button class="btn" :disabled="loading" @click="load">Refresh</button>
+        <button class="btn btn-primary" @click="openNew">New</button>
+      </div>
     </div>
 
     <p class="muted">
-      Three levels: Org ID → Sub-inventory (group) → Tag. Stock references the
-      group; items in the same org + sub-inventory share across tags.
+      Stock is partitioned by Org ID + Sub-inventory. Sub-inventories in the
+      same <strong>share group</strong> may serve each other's picking demands.
     </p>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
+    <div v-if="shareError" class="error-banner">{{ shareError }}</div>
     <div v-if="loading" class="loading">Loading…</div>
 
     <div v-else class="table-wrap">
@@ -153,7 +165,7 @@ onMounted(load);
             <th>Sub-inventory</th>
             <th>Name</th>
             <th>Customer</th>
-            <th>Tags</th>
+            <th>Share group</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -163,9 +175,15 @@ onMounted(load);
             <td>{{ r.code }}</td>
             <td>{{ r.name ?? "—" }}</td>
             <td>{{ r.customerCode ?? "—" }}</td>
-            <td>
-              <span v-for="t in r.tags" :key="t" class="tag-chip">{{ t }}</span>
-              <span v-if="!r.tags?.length" class="muted">—</span>
+            <td class="share-cell">
+              <input
+                v-model="shareDrafts[rowId(r)]"
+                type="text"
+                class="share-input"
+                placeholder="—"
+                @keyup.enter="saveShare(r)"
+              />
+              <button v-if="shareDirty(r)" class="btn btn-small" @click="saveShare(r)">Save</button>
             </td>
             <td class="actions">
               <button class="btn-link" @click="openEdit(r)">Edit</button>
@@ -192,10 +210,6 @@ onMounted(load);
           <div class="form-row">
             <label for="ns-code">Sub-inventory <span class="req">*</span></label>
             <input id="ns-code" v-model="newForm.code" type="text" required placeholder="e.g. STORE1" />
-          </div>
-          <div class="form-row">
-            <label for="ns-tag">First tag</label>
-            <input id="ns-tag" v-model="newForm.tag" type="text" placeholder="defaults to the sub-inventory code" />
           </div>
           <div class="form-row">
             <label for="ns-name">Name</label>
@@ -232,62 +246,26 @@ onMounted(load);
             <button type="submit" class="btn btn-primary">Save</button>
           </div>
         </form>
-        <hr class="dlg-sep" />
-        <div class="form-row">
-          <label>Tags</label>
-          <div class="tag-list">
-            <span v-for="t in editing.tags" :key="t" class="tag-chip">
-              {{ t }}
-              <button class="tag-x" title="Remove tag" @click="removeTag(t)">×</button>
-            </span>
-            <span v-if="!editing.tags?.length" class="muted">No tags.</span>
-          </div>
-        </div>
-        <div class="form-row tag-add">
-          <input v-model="newTag" type="text" placeholder="New tag" @keyup.enter="addTag" />
-          <button class="btn btn-small" :disabled="!newTag.trim()" @click="addTag">Add</button>
-        </div>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.tag-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: #eef2f5;
-  border: 1px solid #dde3e9;
-  border-radius: 10px;
-  padding: 1px 8px;
-  font-size: 12px;
-  margin: 1px 3px 1px 0;
-}
-.tag-x {
-  border: none;
-  background: none;
-  color: #922b21;
-  cursor: pointer;
-  font-size: 12px;
-  padding: 0 0 0 2px;
-}
-.tag-list {
-  padding-top: 4px;
-}
-.tag-add {
+.share-cell {
   display: flex;
-  gap: 8px;
+  gap: 6px;
+  align-items: center;
 }
-.tag-add input {
-  flex: 1;
-  padding: 7px 9px;
-  border: 1px solid #b6c2cd;
+.share-input {
+  width: 110px;
+  padding: 5px 7px;
+  border: 1px solid #dde3e9;
   border-radius: 4px;
+  font-size: 12px;
 }
-.dlg-sep {
-  border: none;
-  border-top: 1px solid #e6ebf0;
-  margin: 14px 0;
+.share-input:focus {
+  border-color: var(--brand-teal, #0e9594);
+  outline: none;
 }
 </style>

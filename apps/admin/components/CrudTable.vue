@@ -8,7 +8,35 @@ const rows = ref<any[]>([]);
 const loading = ref(false);
 const error = ref("");
 
-const { page, pageSize, total, paged } = usePaging(rows);
+// Client-side paging (default) vs server-side paging (config.serverPaging —
+// large tables fetch { rows, total } page by page).
+const serverMode = computed(() => !!props.config.serverPaging);
+const { page: cPage, pageSize: cPageSize, total: cTotal, paged: cPaged } = usePaging(rows);
+const sPage = ref(1);
+const sPageSize = ref(50);
+const sTotal = ref(0);
+const q = ref("");
+
+const page = computed({
+  get: () => (serverMode.value ? sPage.value : cPage.value),
+  set: (v: number) => {
+    if (serverMode.value) sPage.value = v;
+    else cPage.value = v;
+  },
+});
+const pageSize = computed({
+  get: () => (serverMode.value ? sPageSize.value : cPageSize.value),
+  set: (v: number) => {
+    if (serverMode.value) {
+      sPageSize.value = v;
+      sPage.value = 1;
+    } else {
+      cPageSize.value = v;
+    }
+  },
+});
+const total = computed(() => (serverMode.value ? sTotal.value : cTotal.value));
+const paged = computed(() => (serverMode.value ? rows.value : cPaged.value));
 
 const showForm = ref(false);
 const editing = ref<any | null>(null);
@@ -39,13 +67,38 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    rows.value = await api.get(`/admin/${props.config.path}`);
+    if (serverMode.value) {
+      const params = new URLSearchParams({
+        page: String(sPage.value),
+        pageSize: String(sPageSize.value),
+      });
+      if (q.value.trim()) params.set("q", q.value.trim());
+      const res = await api.get(`/admin/${props.config.path}?${params}`);
+      rows.value = res.rows;
+      sTotal.value = res.total;
+    } else {
+      rows.value = await api.get(`/admin/${props.config.path}`);
+    }
   } catch (e: any) {
     error.value = e.message;
   } finally {
     loading.value = false;
   }
 }
+
+// Server mode: reload on page/page-size change, debounced reload on search.
+watch([sPage, sPageSize], () => {
+  if (serverMode.value) load();
+});
+let qTimer: ReturnType<typeof setTimeout> | undefined;
+watch(q, () => {
+  if (!serverMode.value) return;
+  clearTimeout(qTimer);
+  qTimer = setTimeout(() => {
+    sPage.value = 1;
+    load();
+  }, 300);
+});
 
 function startNew() {
   editing.value = null;
@@ -93,11 +146,22 @@ onMounted(load);
   <div>
     <div class="page-head">
       <h1>{{ config.title }}</h1>
-      <button class="btn btn-primary" @click="startNew">New</button>
+      <div class="head-actions">
+        <button class="btn" :disabled="loading" @click="load">Refresh</button>
+        <button class="btn btn-primary" @click="startNew">New</button>
+      </div>
+    </div>
+    <div v-if="serverMode" class="search-bar">
+      <input
+        v-model="q"
+        type="search"
+        class="search-input"
+        :placeholder="`Search ${config.title.toLowerCase()}…`"
+      />
     </div>
     <div v-if="error" class="error-banner">{{ error }}</div>
-    <div v-if="loading" class="loading">Loading…</div>
-    <div v-else class="table-wrap">
+    <div v-if="loading && rows.length === 0" class="loading">Loading…</div>
+    <div v-else class="table-wrap" :class="{ 'is-loading': loading }">
       <table class="data">
         <thead>
           <tr>
@@ -132,3 +196,20 @@ onMounted(load);
     />
   </div>
 </template>
+
+<style scoped>
+.search-bar {
+  margin: 0 0 12px;
+}
+.search-input {
+  width: 320px;
+  max-width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #b6c2cd;
+  border-radius: 4px;
+}
+.table-wrap.is-loading {
+  opacity: 0.5;
+  pointer-events: none;
+}
+</style>

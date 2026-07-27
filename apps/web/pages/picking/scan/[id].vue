@@ -449,7 +449,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", beforeUnload));
 
 <style scoped>
 .scan-session {
-  padding: 1rem;
+  padding: 0;
   max-width: 960px;
   margin: 0 auto;
 }

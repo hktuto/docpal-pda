@@ -37,10 +37,8 @@ org_id (integer office, e.g. 2 = HK) + sub_inventory_code (e.g. STORE1)
   elsewhere.
 - `sub_inventory_code` — the store the goods go into (`sub_inventories`
   lookup; its own `org_id` anchors which org the sub-inventory belongs to).
-  Sub-inventories are a 3-level model (org_id → code → tag): stock/docs
-  reference the `(org_id, code)` group via composite FK; tags
-  (`sub_inventory_tags`) are lookup-only, so the same group shares stock
-  across its tags. A customer may request their goods be stored separately
+  Stock/docs reference the `(org_id, code)` group via composite FK. A
+  customer may request their goods be stored separately
   (`sub_inventories.customer_code`). On receiving orders it is mandatory
   (`NOT NULL`); on `picking_orders` and `inventory_lots` it is nullable.
 
@@ -91,9 +89,11 @@ Selection rules (confirmed with the business):
   `required_date_code` → picking order's `required_date_code_notice` →
   customer profile remark (e.g. "less than 2 years" / "more than 2 years"
   relative to today). Forms: `2601` exact, `2601+`, `2601-`, year-relative.
-- **Location match** — sources must match the picking order's
-  `warehouse_code`, `warehouse_section_code` (when set) and
-  `sub_inventory_code` (when set).
+- **Location match** — sources must match the picking order's `(org_id,
+  sub_inventory_code)` pair (a pair-less order is org-agnostic). The code
+  match is widened by `sub_inventory_share_members` (2026-07-27): sources
+  whose sub-inventory shares the order's `share_group` also match.
+  Customer-segregated sub-inventories only serve their customer's orders.
 - **FIFO** — oldest `date_code` first (NULLS LAST).
 
 > Implementation: `apps/backend/src/db/allocate.ts` (`allocateAll`) — full

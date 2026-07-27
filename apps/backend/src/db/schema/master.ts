@@ -1,4 +1,4 @@
-import { pgTable, primaryKey, foreignKey, text, integer, real, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, primaryKey, foreignKey, index, text, integer, real, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
 
 // Local users table; a ucenter_user integration may replace this later
@@ -116,12 +116,10 @@ export const customerProfiles = pgTable("customer_profiles", {
 
 // Warehouse sub-inventories: logical partitions of stock inside one org
 // (Oracle EBS organization + subinventory — the pair org_id +
-// sub_inventory_code identifies stock partitioning). 2026-07-23 redesign
-// (new_seed/subInventories.xlsx): THREE levels — org_id → sub_inventory
-// (code) → tag. This table is the (org_id, code) GROUP level that all
-// stock/doc tables reference (composite FK); the third level lives in
-// sub_inventory_tags (lookup-only), so items in the same org + sub-inventory
-// share across tags for allocation. customer_code is set for
+// sub_inventory_code identifies stock partitioning). This table is the
+// (org_id, code) GROUP level that all stock/doc tables reference (composite
+// FK). Cross-store sharing for allocation is declared per warehouse in
+// sub_inventory_share_members below. customer_code is set for
 // customer-segregated stores.
 export const subInventories = pgTable(
   "sub_inventories",
@@ -138,26 +136,31 @@ export const subInventories = pgTable(
   })
 );
 
-// Third level of the sub-inventory model: tags within an (org_id, code)
-// group (e.g. STORE1/140 → BJHK1, GZHK1, SHHK1, SZHK1). Lookup/reporting
-// only — no stock or document columns reference it.
-export const subInventoryTags = pgTable(
-  "sub_inventory_tags",
+// Warehouse-declared stock sharing between sub-inventories: members of the
+// same share_group may serve each other's picking demands (allocation still
+// matches org_id + sub_inventory_code — the group widens the code match to
+// sibling members). PK (org_id, code): a sub-inventory joins at most one
+// group. Customer-segregated stores keep their customer_code restriction, so
+// grouping one does not leak its stock to other customers. Configured per
+// warehouse via /admin/sub-inventory-share-groups; lookup-only for everything
+// except the allocation engine.
+export const subInventoryShareMembers = pgTable(
+  "sub_inventory_share_members",
   {
     orgId: integer("org_id").notNull(),
     code: text("code").notNull(),
-    tag: text("tag").notNull(), // e.g. BJHK1; equals code when untagged
-    name: text("name"),
-    description: text("description"),
+    shareGroup: text("share_group").notNull(), // free-text group code, e.g. HK
     createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
   },
   (t) => ({
-    pk: primaryKey({ columns: [t.orgId, t.code, t.tag] }),
+    pk: primaryKey({ columns: [t.orgId, t.code] }),
+    groupIdx: index("idx_sub_inv_share_members_group").on(t.shareGroup),
     groupFk: foreignKey({
-      name: "sub_inventory_tags_group_fk",
+      name: "sub_inventory_share_members_group_fk",
       columns: [t.orgId, t.code],
       foreignColumns: [subInventories.orgId, subInventories.code],
     }),
   })
 );
+

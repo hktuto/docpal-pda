@@ -20,7 +20,7 @@ export const app = new Hono<{ Variables: AuthVariables }>();
 
 const origins = (
   process.env.CORS_ORIGINS ??
-  "http://localhost:3000,http://localhost:3100,http://localhost,capacitor://localhost"
+  "http://localhost:3000,http://localhost:3100,http://localhost,http://127.0.0.1:3000,http://127.0.0.1,capacitor://localhost"
 ).split(",");
 
 app.use("*", cors({ origin: origins, allowHeaders: ["Content-Type", "Last-Event-ID", "Authorization"] }));

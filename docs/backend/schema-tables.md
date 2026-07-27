@@ -119,13 +119,12 @@ Customer master used by picking orders and customer-segregated stores.
 ## sub_inventories
 
 Warehouse sub-inventories: logical partitions of stock inside one org (Oracle
-EBS organization + subinventory). 3-level model (2026-07-23,
-`new_seed/subInventories.xlsx`): **org_id → code (group) → tag**. This table
-is the **(org_id, code) group level** — the composite-FK target of all
-stock/doc tables (`receiving_orders`, `receiving_invoices`,
-`receiving_invoice_items`, `inventory_lots`, `picking_orders`, `shelf_boxes`).
-`customer_code` marks a customer-segregated store — allocation only serves
-picking orders of that customer from it.
+EBS organization + subinventory). This table is the **(org_id, code) group
+level** — the composite-FK target of all stock/doc tables
+(`receiving_orders`, `receiving_invoices`, `receiving_invoice_items`,
+`inventory_lots`, `picking_orders`, `shelf_boxes`). `customer_code` marks a
+customer-segregated store — allocation only serves picking orders of that
+customer from it.
 
 | Field | Type | Description |
 | --- | --- | --- |
@@ -136,20 +135,25 @@ picking orders of that customer from it.
 | created_at | timestamp NOT NULL | Creation time (UTC) |
 | updated_at | timestamp NOT NULL | Last update time (UTC) |
 
-## sub_inventory_tags
+## sub_inventory_share_members
 
-Third level of the sub-inventory model: tags within an (org_id, code) group
-(e.g. 140/STORE1 → BJHK1, GZHK1, SHHK1, SZHK1). Lookup/reporting only — no
-stock or document column references it; items in the same org +
-sub-inventory share across tags for allocation.
+Warehouse-declared stock sharing between sub-inventories (2026-07-27,
+`docs/superpowers/specs/2026-07-27-real-master-data-and-share-groups-design.md`).
+Allocation still matches a picking order's `(org_id, sub_inventory_code)`
+pair against the source's pair — membership in the same `share_group` widens
+the code match to sibling members (symmetric; org rule unchanged). A
+sub-inventory belongs to at most one group (PK). Customer-segregated stores
+keep their `customer_code` restriction, so grouping one does not leak its
+stock to other customers. Configured per warehouse via
+`/admin/sub-inventory-share-groups`; the real Oracle sub-inventory mapping has
+no tag column, so this table is how the picking logic learns which stores are
+sharable.
 
 | Field | Type | Description |
 | --- | --- | --- |
 | org_id | integer NOT NULL, PK part, FK → sub_inventories | Owning office |
-| code | text NOT NULL, PK part, FK → sub_inventories | Parent group |
-| tag | text NOT NULL, PK part | Tag code, e.g. BJHK1 (equals code when untagged) |
-| name | text | Tag name |
-| description | text | Description |
+| code | text NOT NULL, PK part, FK → sub_inventories | Sub-inventory (group level) |
+| share_group | text NOT NULL, indexed | Free-text group code, e.g. HK — members of the same group share |
 | created_at | timestamp NOT NULL | Creation time (UTC) |
 | updated_at | timestamp NOT NULL | Last update time (UTC) |
 

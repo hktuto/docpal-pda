@@ -1,6 +1,7 @@
 export interface ApiClient {
   get: <T = any>(path: string) => Promise<T>;
   post: <T = any>(path: string, body?: unknown) => Promise<T>;
+  put: <T = any>(path: string, body?: unknown) => Promise<T>;
   patch: <T = any>(path: string, body?: unknown) => Promise<T>;
   del: <T = any>(path: string) => Promise<T>;
 }
@@ -40,6 +41,7 @@ export function createApiClient(baseUrl: string, opts: ApiClientOptions = {}): A
   return {
     get: (path) => request("GET", path),
     post: (path, body) => request("POST", path, body),
+    put: (path, body) => request("PUT", path, body),
     patch: (path, body) => request("PATCH", path, body),
     del: (path) => request("DELETE", path),
   };

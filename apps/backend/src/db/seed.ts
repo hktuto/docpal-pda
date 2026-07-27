@@ -1,5 +1,8 @@
 import postgres from "postgres";
 import { sql } from "drizzle-orm";
+import type { PgTableWithColumns } from "drizzle-orm/pg-core";
+import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import type { AppDb } from "../db.js";
 import { hashPassword } from "../auth/password.js";
 import {
@@ -15,7 +18,7 @@ import {
   netWeightFormula,
   customerProfiles,
   subInventories,
-  subInventoryTags,
+  subInventoryShareMembers,
   receivingOrders,
   receivingInvoices,
   receivingInvoiceItems,
@@ -34,6 +37,41 @@ import {
   realPickingOrders,
   realPickingItems,
 } from "./seed-real-data.js";
+import { realSubInventories } from "./seed-subinventories-data.js";
+import { realNetWeights } from "./seed-net-weight-data.js";
+import { order210726, order210726Invoices, order210726Items } from "./seed-order-210726.js";
+
+interface BulkPartsData {
+  suppliers: string[];
+  parts: {
+    supplierCode: string;
+    partNo: string;
+    wclItemNo: string | null;
+    description: string | null;
+    defaultCoo: string | null;
+  }[];
+}
+
+/** Lazy-loaded bulk parts master (~100k rows, generated — see
+ *  scripts/gen-seed-real-data.mjs). Only read when seeding with bulkParts. */
+function loadBulkParts(): BulkPartsData {
+  return JSON.parse(
+    readFileSync(new URL("./seed-parts-data.json", import.meta.url), "utf8")
+  ) as BulkPartsData;
+}
+
+/** Insert rows in chunks, ignoring unique conflicts (parts/net-weights merge
+ *  with the hand-written demo rows on part_no). */
+async function insertChunked<T extends PgTableWithColumns<any>>(
+  db: AppDb,
+  table: T,
+  rows: T["$inferInsert"][],
+  size = 2000
+): Promise<void> {
+  for (let i = 0; i < rows.length; i += size) {
+    await db.insert(table).values(rows.slice(i, i + size) as never[]).onConflictDoNothing();
+  }
+}
 
 // every table created by Drizzle migrations
 export const ALL_TABLES = [
@@ -58,6 +96,7 @@ export const ALL_TABLES = [
   "receiving_orders",
   "net_weight_formula",
   "shelves",
+  "sub_inventory_share_members",
   "sub_inventories",
   "customer_profiles",
   "box_size_list",
@@ -81,7 +120,12 @@ const uid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0"
 // logic, not by the seed.
 // opts.stockBoxes: seed the 10 demo stock shelf boxes (default on; tests turn
 // it off so their exact-count assertions keep the minimal demo world).
-async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void> {
+async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boolean }): Promise<void> {
+  // bulkParts (default on) seeds the full Oracle parts master (~100k rows),
+  // its 162 auto-created suppliers, the real net-weight table, and the 210726
+  // receiving order (its items FK into the bulk parts). Tests pass
+  // bulkParts: false to keep the small, fast demo world.
+  const bulk = opts?.bulkParts !== false ? loadBulkParts() : null;
   // Demo passwords stay DocPal2026! / DocPalAdmin2026!, stored scrypt-hashed.
   await db.insert(users).values([
     { id: uid(1), username: "operator", passwordHash: await hashPassword("DocPal2026!"), displayName: "Demo Operator" },
@@ -106,6 +150,19 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
     // real-data supplier (new_seed/): KOA items shipped by TCG
     { id: uid(28), code: "KOA+TCG", name: "KOA+TCG", shortName: "KOA+TCG" },
   ]);
+
+  // Auto-created suppliers for every prefix in the Oracle parts master
+  // (parts.supplier_code FK; KOA/DAITO/KOA+TCG already exist above).
+  if (bulk) {
+    const demoCodes = new Set(["KOA", "DAITO", "KOA+TCG"]);
+    await insertChunked(
+      db,
+      suppliers,
+      bulk.suppliers
+        .filter((code) => !demoCodes.has(code))
+        .map((code) => ({ id: randomUUID(), code, name: code, shortName: code }))
+    );
+  }
 
   // structured config for the admin QR-template editor (delimited ":" —
   // leading empty piece is an Ignore; generates a matching-equivalent regex)
@@ -150,6 +207,16 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
     { id: uid(8), supplierCode: "KOA", partNo: "RK73H2ATTD1372F", wclItemNo: "RK73H2ATTD1372F", description: "RES 13.7K OHM 1% 1/8W 0805", defaultCoo: "JP" },
     { id: uid(9), supplierCode: "DAITO", partNo: "P413", wclItemNo: "P413", description: "DAITO FUSE 1A", defaultCoo: "JP" },
   ]);
+
+  // Full Oracle parts master (generated; merges with the demo rows on
+  // part_no — the demo rows above win via keep-first conflict skip).
+  if (bulk) {
+    await insertChunked(
+      db,
+      parts,
+      bulk.parts.map((p) => ({ id: randomUUID(), ...p }))
+    );
+  }
 
   // Country lookup — codes are ISO 3166-1 alpha-2; names kept verbatim from
   // the POC sheet ("Taiwan,China", "USA", "Korea" as given there).
@@ -243,10 +310,9 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
     { code: "HK-WIN84", label: "HK-WIN84" },
   ]);
 
-  // Sub-inventories (new_seed/subInventories.xlsx): THREE levels — org_id →
-  // code (sub-inventory group) → tag. Stock/docs reference the (org_id, code)
-  // group via composite FK; tags are lookup-only (sub_inventory_tags).
-  // ACME-S1 is the demo customer-segregated store.
+  // Sub-inventories: the (org_id, code) group level that all stock/doc
+  // tables reference via composite FK. ACME-S1 is the demo
+  // customer-segregated store.
   await db.insert(subInventories).values([
     { orgId: 2, code: "STORE1", name: "Store 1" },
     { orgId: 2, code: "WSTORE1" },
@@ -264,29 +330,18 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
     { orgId: 143, code: "DEFAULT" },
     { orgId: 2, code: "ACME-S1", name: "ACME segregated store", customerCode: "ACME" },
   ]);
-  await db.insert(subInventoryTags).values([
-    { orgId: 2, code: "STORE1", tag: "STORE1", name: "Store 1" },
-    { orgId: 2, code: "WSTORE1", tag: "WSTORE1" },
-    { orgId: 2, code: "OSWF (HK)", tag: "OSWF (HK)" },
-    { orgId: 220, code: "THHK2", tag: "THHK2" },
-    { orgId: 220, code: "OSWF (TH)", tag: "OSWF (TH)" },
-    { orgId: 140, code: "STORE1", tag: "BJHK1" },
-    { orgId: 140, code: "STORE1", tag: "GZHK1" },
-    { orgId: 140, code: "STORE1", tag: "SHHK1" },
-    { orgId: 140, code: "STORE1", tag: "SZHK1" },
-    { orgId: 140, code: "ZTE", tag: "ZTE" },
-    { orgId: 140, code: "OSWF (MCE)", tag: "OSWF (MCE)" },
-    { orgId: 140, code: "HUAWEI", tag: "HUAWEI" },
-    { orgId: 140, code: "HUAWEI", tag: "HUAWEI-CAR" },
-    { orgId: 140, code: "HWOS (HUAWEI)", tag: "HWOS (HUAWEI)" },
-    { orgId: 140, code: "DEFAULT", tag: "DEFAULT" },
-    { orgId: 143, code: "store1", tag: "BJHK2" },
-    { orgId: 143, code: "store1", tag: "GZHK2" },
-    { orgId: 143, code: "store1", tag: "SHHK2" },
-    { orgId: 143, code: "store1", tag: "SZHK2" },
-    { orgId: 143, code: "OSWF (MCI)", tag: "OSWF (MCI)" },
-    { orgId: 143, code: "DEFAULT", tag: "DEFAULT" },
-    { orgId: 2, code: "ACME-S1", tag: "ACME-S1", name: "ACME segregated store" },
+
+  // Real Oracle org → sub-inventory master (generated from the mapping xlsx —
+  // 151 groups across 13 orgs). Rows colliding with the demo groups above
+  // (e.g. org-2 STORE1/WSTORE1) are skipped keep-first.
+  await db.insert(subInventories).values([...realSubInventories]).onConflictDoNothing();
+
+  // Demo share group: org-2 STORE1 + WSTORE1 serve each other's picking
+  // demands. Real warehouses configure their own groups via the admin console
+  // (/admin/sub-inventory-share-groups).
+  await db.insert(subInventoryShareMembers).values([
+    { orgId: 2, code: "STORE1", shareGroup: "HK" },
+    { orgId: 2, code: "WSTORE1", shareGroup: "HK" },
   ]);
 
   await db.insert(shelves).values([
@@ -309,6 +364,15 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
     { id: uid(26), partNo: "RK73H1JTTD1002F", qty: 1000, weight: 6.3 },
     { id: uid(27), partNo: "RK73H1JTTD2202F", qty: 1000, weight: 6.3 },
   ]);
+  // Real net-weight master (generated from new_seed/weight/*.xls — unit
+  // weight per 1 pc in grams; FK into the bulk parts master).
+  if (bulk) {
+    await insertChunked(
+      db,
+      netWeightFormula,
+      realNetWeights.map((w) => ({ id: randomUUID(), partNo: w.partNo, qty: 1, weight: w.weight }))
+    );
+  }
 
   // --- cleared receiving order (fully received + put away) -------------------
   await db.insert(receivingOrders).values([
@@ -568,16 +632,33 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
   // Two pending receiving orders (batchNo = folder name: 04958184, 65878) with
   // their real invoices/items, plus the related picking lists: picking.xlsx
   // invoices for 65878 and the TN (transfer note) PDFs for 04958184.
-  // Map legacy tag-level sub-inventory values (SZHK1, GZHK2, …) in the
-  // real-data seed rows to their (org_id, code) group per the xlsx structure
-  // (the composite FK rejects tag values at insert time).
+  // Map legacy sub-inventory aliases (SZHK1, GZHK2, …) in the real-data seed
+  // rows to their (org_id, code) group per the xlsx structure (the composite
+  // FK rejects alias values at insert time).
   const mapPair = remapLegacyPair;
-  await db.insert(parts).values([...realParts]);
+  await db.insert(parts).values([...realParts]).onConflictDoNothing();
   await db.insert(receivingOrders).values(realReceivingOrders.map(mapPair));
   await db.insert(receivingInvoices).values(realReceivingInvoices.map(mapPair));
   await db.insert(receivingInvoiceItems).values(realReceivingInvoiceItems.map(mapPair));
   await db.insert(pickingOrders).values(realPickingOrders.map(mapPair));
   await db.insert(pickingItems).values([...realPickingItems]);
+
+  // --- receiving order 210726 (generated from new_seed/210726.xls) -----------
+  // Multi-supplier: the order's supplier_id is NULL and each invoice carries
+  // its own supplier (single-brand invoices), resolved here from the seeded
+  // supplier codes. Its items FK into the bulk parts master → bulk-only.
+  if (bulk) {
+    const supRows = await db.select({ id: suppliers.id, code: suppliers.code }).from(suppliers);
+    const supId = new Map(supRows.map((s) => [s.code, s.id]));
+    await db.insert(receivingOrders).values([...order210726]);
+    await db.insert(receivingInvoices).values(
+      order210726Invoices.map(({ supplierCode, ...inv }) => ({
+        ...inv,
+        supplierId: supId.get(supplierCode) ?? null,
+      }))
+    );
+    await insertChunked(db, receivingInvoiceItems, [...order210726Items]);
+  }
 
   // Allocation priority default: delivery date (sooner first, NULLS LAST),
   // then order no. Admin reorders afterwards via POST /picking-orders/reorder;
@@ -588,7 +669,7 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void
     WHERE picking_orders.id = r.id`);
 }
 
-/** Legacy tag → (orgId, subInventoryCode) group (per new_seed/subInventories.xlsx). */
+/** Legacy sub-inventory alias → (orgId, subInventoryCode) group (per new_seed/subInventories.xlsx). */
 const LEGACY_TAG_GROUPS: Record<string, { orgId: number; subInventoryCode: string }> = {
   BJHK1: { orgId: 140, subInventoryCode: "STORE1" },
   GZHK1: { orgId: 140, subInventoryCode: "STORE1" },
@@ -617,7 +698,11 @@ export async function seedIfEmpty(sql: postgres.Sql, db: AppDb): Promise<boolean
 }
 
 /** Dev-only: wipe everything and re-seed inside a transaction. */
-export async function resetAndReseed(_sql: postgres.Sql, db: AppDb, opts?: { stockBoxes?: boolean }): Promise<void> {
+export async function resetAndReseed(
+  _sql: postgres.Sql,
+  db: AppDb,
+  opts?: { stockBoxes?: boolean; bulkParts?: boolean }
+): Promise<void> {
   await db.transaction(async (tx) => {
     await tx.execute(sql`TRUNCATE TABLE ${sql.raw(ALL_TABLES.join(", "))} CASCADE`);
     await seedAll(tx as unknown as AppDb, opts);

@@ -26,7 +26,7 @@ export interface TestDb {
  * so the tests stay hermetic against the minimal demo world.
  */
 async function reseedTestWorld(client: TestDb): Promise<void> {
-  await resetAndReseed(client.sql, client.db, { stockBoxes: false });
+  await resetAndReseed(client.sql, client.db, { stockBoxes: false, bulkParts: false });
   await client.db.execute(sql`DELETE FROM picking_orders WHERE order_no <> 'SO-2026-0001'`);
 }
 

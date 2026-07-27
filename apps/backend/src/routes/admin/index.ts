@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, or, ilike } from "drizzle-orm";
 import {
   shelves,
   suppliers,
@@ -19,6 +19,7 @@ import { shelfBoxesRoute } from "./shelfBoxes.js";
 import { adminUsersRoute } from "./users.js";
 import { adminFlowEditsRoute } from "./flowEdits.js";
 import { adminSubInventoriesRoute } from "./subInventories.js";
+import { adminSubInventoryShareGroupsRoute } from "./subInventoryShareGroups.js";
 
 // Optional id on create: use the client's when given, else generate one.
 function optId(body: Record<string, unknown>): string {
@@ -96,6 +97,18 @@ adminRoute.route(
   createCrudRouter({
     table: parts,
     pk: parts.id,
+    orderBy: parts.partNo,
+    // ~100k rows from the Oracle parts master — the admin list uses
+    // server-side paging/search (?page=&pageSize=&q=).
+    search: (q) => {
+      const like = `%${q}%`;
+      return or(
+        ilike(parts.partNo, like),
+        ilike(parts.wclItemNo, like),
+        ilike(parts.description, like),
+        ilike(parts.supplierCode, like)
+      )!;
+    },
     create: (b) => ({
       id: optId(b),
       supplierCode: reqStr(b, "supplierCode"),
@@ -161,6 +174,9 @@ adminRoute.route(
 // Sub-inventories: custom router (3-level model — list aggregates tags,
 // group create makes its default tag).
 adminRoute.route("/sub-inventories", adminSubInventoriesRoute);
+
+// Sub-inventory share groups (which stores may serve each other's demands).
+adminRoute.route("/sub-inventory-share-groups", adminSubInventoryShareGroupsRoute);
 
 adminRoute.route(
   "/net-weight-formulas",

@@ -29,6 +29,12 @@ export interface EntityConfig {
   deriveId?: (row: any) => string;
   /** Hide the Edit action (create/delete-only resources). */
   noEdit?: boolean;
+  /**
+   * Large tables (e.g. the ~100k-row parts master): fetch pages from the
+   * server (?page=&pageSize=&q= → { rows, total }) instead of paging the
+   * full list client-side. Shows a search box.
+   */
+  serverPaging?: boolean;
 }
 
 export const entities: Record<string, EntityConfig> = {
@@ -59,6 +65,7 @@ export const entities: Record<string, EntityConfig> = {
     path: "parts",
     title: "Parts",
     pk: "id",
+    serverPaging: true,
     fields: [
       { key: "supplierCode", label: "Supplier code", type: "text", required: true },
       { key: "partNo", label: "Part no", type: "text", required: true },
@@ -167,7 +174,7 @@ export const navSections: { title: string; links: { route: string; title: string
   {
     title: "admin.nav.picking",
     links: [
-      { route: "/picking", title: "admin.navLinks.pickingOrders" },
+      { route: "/picking-orders", title: "admin.navLinks.pickingOrders" },
       { route: "/picking/reorder", title: "admin.navLinks.reorder" },
     ],
   },

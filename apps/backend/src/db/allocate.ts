@@ -22,7 +22,10 @@ import { now } from "./now.js";
 //   - Location: the picking order's (org_id, sub_inventory_code) pair must
 //     match the source's pair — lots match on their own pair, receiving
 //     sources on the receiving order's pair. A demand without the pair
-//     (both columns NULL) is org-agnostic and matches any source.
+//     (both columns NULL) is org-agnostic and matches any source. The code
+//     match is widened by sub_inventory_share_members: a source whose
+//     sub-inventory shares a share_group with the demand's sub-inventory
+//     (same org) also matches.
 //   - Customer segregation: a source in a sub-inventory with
 //     sub_inventories.customer_code only allocates to picking orders of that
 //     customer (customer_profiles.rule stays stored-not-interpreted).
@@ -155,7 +158,12 @@ async function loadLotSources(dbOrTx: DbOrTx, d: DemandRow): Promise<LotRow[]> {
         LEFT JOIN sub_inventories si ON si.org_id = il.org_id AND si.code = il.sub_inventory_code
         WHERE il.part_no = ${d.partNo}
           AND (${d.orgId}::int IS NULL OR il.org_id = ${d.orgId})
-          AND (${d.subInventoryCode}::text IS NULL OR il.sub_inventory_code = ${d.subInventoryCode})
+          AND (${d.subInventoryCode}::text IS NULL
+               OR il.sub_inventory_code = ${d.subInventoryCode}
+               OR EXISTS (SELECT 1 FROM sub_inventory_share_members sm_d
+                          JOIN sub_inventory_share_members sm_s ON sm_s.share_group = sm_d.share_group
+                          WHERE sm_d.org_id = ${d.orgId} AND sm_d.code = ${d.subInventoryCode}
+                            AND sm_s.org_id = il.org_id AND sm_s.code = il.sub_inventory_code))
           AND (si.customer_code IS NULL OR si.customer_code = ${d.customerCode})
           AND il.total_qty - il.allocated_qty > 0
         ORDER BY il.date_code ASC NULLS LAST, il.id`
@@ -200,7 +208,12 @@ async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow): Promise<Recei
         WHERE rii.part_no = ${d.partNo}
           AND ro.status IN ('in_hand', 'provisional_received')
           AND (${d.orgId}::int IS NULL OR ro.org_id = ${d.orgId})
-          AND (${d.subInventoryCode}::text IS NULL OR ro.sub_inventory_code = ${d.subInventoryCode})
+          AND (${d.subInventoryCode}::text IS NULL
+               OR ro.sub_inventory_code = ${d.subInventoryCode}
+               OR EXISTS (SELECT 1 FROM sub_inventory_share_members sm_d
+                          JOIN sub_inventory_share_members sm_s ON sm_s.share_group = sm_d.share_group
+                          WHERE sm_d.org_id = ${d.orgId} AND sm_d.code = ${d.subInventoryCode}
+                            AND sm_s.org_id = ro.org_id AND sm_s.code = ro.sub_inventory_code))
           AND (si.customer_code IS NULL OR si.customer_code = ${d.customerCode})
           AND (rii.received_qty - rii.picked_qty
                 - COALESCE(locked_ii.qty, 0) - COALESCE(locked_ro.qty, 0)) > 0

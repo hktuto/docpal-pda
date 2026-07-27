@@ -113,7 +113,10 @@ onMounted(load);
   <div>
     <div class="page-head">
       <h1>Shelf Boxes</h1>
-      <button class="btn btn-primary" @click="openNew">New</button>
+      <div class="head-actions">
+        <button class="btn" :disabled="loading" @click="load">Refresh</button>
+        <button class="btn btn-primary" @click="openNew">New</button>
+      </div>
     </div>
     <div v-if="error" class="error-banner">{{ error }}</div>
     <div v-if="loading" class="loading">Loading…</div>
