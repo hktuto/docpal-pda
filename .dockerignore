@@ -1,0 +1,16 @@
+.git
+**/node_modules
+**/.nuxt
+**/.output
+**/dist
+.output
+dist
+.worktrees
+.kimi-code
+.superpowers
+docs
+new_seed
+*.log
+apps/web/android
+apps/web/resources
+docker-compose*.yml
