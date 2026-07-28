@@ -15,7 +15,7 @@
       </div>
 
       <div class="modal__body">
-        <form class="form" @submit.prevent="onSave">
+        <form class="form" @submit.prevent="onConfirm">
           <label class="field">
             <span>{{ $t('boxMeasurementsModal.boxSize') }} <span class="required">{{ $t('boxMeasurementsModal.required') }}</span></span>
             <select v-model="form.boxSize" :disabled="isBusy">
@@ -26,12 +26,13 @@
 
           <label class="field">
             <span>{{ $t('boxMeasurementsModal.netWeight') }} <span class="required">{{ $t('boxMeasurementsModal.required') }}</span></span>
-            <input v-model="form.netWeight" type="number" step="1" min="0" inputmode="numeric" :placeholder="$t('boxMeasurementsModal.placeholderNetWeight')" :disabled="isBusy" />
+            <input v-model="form.netWeight" type="number" step="0.001" min="0" inputmode="decimal" :placeholder="$t('boxMeasurementsModal.placeholderNetWeight')" :disabled="isBusy" />
+            <span v-if="netWeightAutoFilled" class="auto-hint">{{ $t('boxMeasurementsModal.netWeightAutoHint') }}</span>
           </label>
 
           <label class="field">
             <span>{{ $t('boxMeasurementsModal.grossWeight') }} <span class="required">{{ $t('boxMeasurementsModal.required') }}</span></span>
-            <input v-model="form.grossWeight" type="number" step="1" min="0" inputmode="numeric" :placeholder="$t('boxMeasurementsModal.placeholderGrossWeight')" :disabled="isBusy" />
+            <input v-model="form.grossWeight" type="number" step="0.001" min="0" inputmode="decimal" :placeholder="$t('boxMeasurementsModal.placeholderGrossWeight')" :disabled="isBusy" />
           </label>
 
           <label class="field">
@@ -45,11 +46,8 @@
           <p v-if="errorText" class="error">{{ errorText }}</p>
 
           <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem;">
-            <button type="submit" class="btn btn--small" :disabled="isBusy || !isValid">
-              {{ saving ? $t('boxMeasurementsModal.saving') : $t('boxMeasurementsModal.saveBoxDetails') }}
-            </button>
-            <button type="button" class="btn" :disabled="isBusy || !isValid" @click="onFinish">
-              {{ finishing ? $t('boxMeasurementsModal.finishing') : $t('boxMeasurementsModal.finishBox') }}
+            <button type="submit" class="btn" :disabled="isBusy || !isValid">
+              {{ confirming ? $t('boxMeasurementsModal.confirming') : $t('boxMeasurementsModal.confirmBox') }}
             </button>
           </div>
         </form>
@@ -83,11 +81,12 @@ const props = defineProps<{
   boxId: string;
   initialValues?: Partial<MeasurementForm>;
   defaultDestinationCountry?: string | null;
+  /** Auto-calculated net weight (kg) from the net-weight formula master — pre-fills the net field when empty. */
+  suggestedNetWeightKg?: number | null;
 }>();
 
 const emit = defineEmits<{
   (e: "update:modelValue", value: boolean): void;
-  (e: "saved"): void;
   (e: "finished"): void;
 }>();
 
@@ -99,20 +98,21 @@ const defaultForm: MeasurementForm = {
 };
 
 const form = ref<MeasurementForm>({ ...defaultForm });
-const saving = ref(false);
-const finishing = ref(false);
+const confirming = ref(false);
 const errorText = ref<string | null>(null);
+// True while the net value shown is the untouched auto-calc pre-fill.
+const netWeightAutoFilled = ref(false);
 
-const isBusy = computed(() => saving.value || finishing.value);
+const isBusy = computed(() => confirming.value);
 
 const isValid = computed(() => {
   if (!form.value.boxSize) return false;
   if (!form.value.destinationCountry) return false;
-  // Backend weights are non-negative integer grams; closing requires > 0.
+  // Backend weights are kilograms; decimals allowed, closing requires > 0.
   const net = Number(form.value.netWeight);
   const gross = Number(form.value.grossWeight);
-  if (!Number.isInteger(net) || net <= 0) return false;
-  if (!Number.isInteger(gross) || gross <= 0) return false;
+  if (!Number.isFinite(net) || net <= 0) return false;
+  if (!Number.isFinite(gross) || gross <= 0) return false;
   if (gross < net) return false;
   return true;
 });
@@ -122,9 +122,13 @@ watch(
   (open) => {
     if (open) {
       errorText.value = null;
+      const initialNet = props.initialValues?.netWeight ?? "";
+      netWeightAutoFilled.value = !initialNet && props.suggestedNetWeightKg != null;
       form.value = {
         boxSize: props.initialValues?.boxSize ?? "",
-        netWeight: props.initialValues?.netWeight ?? "",
+        netWeight:
+          initialNet ||
+          (props.suggestedNetWeightKg != null ? props.suggestedNetWeightKg.toString() : ""),
         grossWeight: props.initialValues?.grossWeight ?? "",
         destinationCountry:
           props.initialValues?.destinationCountry ??
@@ -136,47 +140,39 @@ watch(
   { immediate: true }
 );
 
+watch(
+  () => form.value.netWeight,
+  (value) => {
+    if (netWeightAutoFilled.value && value !== props.suggestedNetWeightKg?.toString()) {
+      netWeightAutoFilled.value = false;
+    }
+  }
+);
+
 function close() {
   emit("update:modelValue", false);
 }
 
-async function persist() {
-  // Backend weights are integer grams under the *G field names.
-  await warehouse.updateShippingBox(props.boxId, {
-    boxSize: form.value.boxSize,
-    netWeightG: Number(form.value.netWeight),
-    grossWeightG: Number(form.value.grossWeight),
-    destinationCountry: form.value.destinationCountry,
-  });
-}
-
-async function onSave() {
+// One action: persist the kg measurements, then confirm (close) the box.
+// Closing the last open box auto-completes the measuring task server-side.
+async function onConfirm() {
   if (!isValid.value) return;
-  saving.value = true;
+  confirming.value = true;
   errorText.value = null;
   try {
-    await persist();
-    emit("saved");
-  } catch (e: any) {
-    errorText.value = getErrorMessage(e);
-  } finally {
-    saving.value = false;
-  }
-}
-
-async function onFinish() {
-  if (!isValid.value) return;
-  finishing.value = true;
-  errorText.value = null;
-  try {
-    await persist();
+    await warehouse.updateShippingBox(props.boxId, {
+      boxSize: form.value.boxSize,
+      netWeightKg: Number(form.value.netWeight),
+      grossWeightKg: Number(form.value.grossWeight),
+      destinationCountry: form.value.destinationCountry,
+    });
     await warehouse.closeShippingBox(props.boxId);
     emit("finished");
     close();
   } catch (e: any) {
     errorText.value = getErrorMessage(e);
   } finally {
-    finishing.value = false;
+    confirming.value = false;
   }
 }
 </script>
@@ -260,6 +256,11 @@ async function onFinish() {
   color: var(--danger);
   font-size: 0.875rem;
   margin: 0.75rem 0 0;
+}
+
+.auto-hint {
+  color: var(--muted);
+  font-size: 0.75rem;
 }
 
 .required {

@@ -404,11 +404,11 @@ export interface ScanPickingItemInput {
   cow?: string | null;
 }
 
-/** PATCH /shipping-boxes/:id fields (grams, one unit everywhere). */
+/** PATCH /shipping-boxes/:id fields (weights in kg, decimals allowed). */
 export interface ShippingBoxUpdateInput {
   boxSize?: string | null;
-  netWeightG?: number | string | null;
-  grossWeightG?: number | string | null;
+  netWeightKg?: number | string | null;
+  grossWeightKg?: number | string | null;
   destinationCountry?: string | null;
 }
 
@@ -541,7 +541,7 @@ export interface Shelf {
 // one task/order/boxes read (packages carry part identity, so the box
 // page matches scanned labels client-side); box measurement reuses the
 // shared picking verbs (verifyPackage / updateShippingBox /
-// closeShippingBox). Weights are integer grams.
+// closeShippingBox). Weights are kilograms (decimals).
 // ------------------------------------------------------------------
 
 /** GET /measuring-tasks?status= row (box counts computed server-side). */
@@ -565,6 +565,8 @@ export interface MeasuringPackage {
   coo: string | null;
   cow: string | null;
   verified: boolean;
+  /** Verify-step re-scan flag (set by verifyPackage during a pending verify task). */
+  verifyVerified: boolean;
   partNo: string;
   wclItemNo: string | null;
 }
@@ -573,10 +575,12 @@ export interface MeasuringBox {
   id: string;
   status: string;
   boxSize: string | null;
-  /** Integer grams. */
+  /** Kilograms (decimals). */
   grossWeight: number | null;
-  /** Integer grams. */
+  /** Kilograms (decimals). */
   netWeight: number | null;
+  /** Auto-calculated net weight suggestion from the net-weight formula master (kg), null when no part has a formula. */
+  suggestedNetWeightKg?: number | null;
   destinationCountry: string | null;
   packages: MeasuringPackage[];
 }
@@ -598,6 +602,36 @@ export interface MeasuringTaskDetail {
     poNo: string | null;
   };
   boxes: MeasuringBox[];
+}
+
+// ------------------------------------------------------------------
+// Verify — the second measuring pass (picking → measuring → verify →
+// shipping). DTOs are the same {task, order, boxes[packages]} shape as
+// measuring (GET /verify-tasks* mirrors /measuring-tasks*).
+// ------------------------------------------------------------------
+
+/** GET /verify-tasks?status= row (same shape as the measuring list). */
+export type VerifyTaskListRow = MeasuringTaskListRow;
+
+/** GET /verify-tasks/:id — consolidated {task, order, boxes}. */
+export type VerifyTaskDetail = MeasuringTaskDetail;
+
+// ------------------------------------------------------------------
+// Flow-step config — GET /config, driven by the backend's
+// FLOW_STEPS_DISABLED env var. Disabled steps hide their home tile.
+// ------------------------------------------------------------------
+
+export type FlowStep =
+  | "receiving"
+  | "put-away"
+  | "picking"
+  | "goods-verify"
+  | "measuring"
+  | "verify"
+  | "stock-search";
+
+export interface FlowConfig {
+  flowSteps: Record<FlowStep, boolean>;
 }
 
 // ------------------------------------------------------------------

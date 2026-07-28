@@ -6,7 +6,7 @@ This manual explains the warehouse PDA demo app for **operators and trainers**, 
 
 - [Concepts](./concepts/overview.md) — what the app is, who uses it, and how it is organized.
 - [User Menu](./user-menu/index.md) — full operator screen reference (中文). Printable version: [中文 PDF](./user-menu/user-menu-zh-HK.pdf).
-- [Admin User Guide](./admin-user-menu/index.md) — full admin console screen reference (中文).
+- [Admin User Guide](./admin-user-menu/index.md) — full admin console screen reference (中文). Printable version: [中文 PDF](./admin-user-menu/admin-user-menu-zh-HK.pdf).
 - [Flows](./flows/index.md) — step-by-step guides for each warehouse operation.
 - [Components](./components/shared-components.md) — shared UI building blocks.
 - [Composables](./composables/index.md) — reusable Vue logic.
@@ -21,8 +21,9 @@ Start with [Concepts → Overview](./concepts/overview.md) and the [User Menu](.
 2. [Receiving](./flows/receiving/overview.md)
 3. [Put-away](./flows/put-away/overview.md)
 4. [Measuring](./flows/measuring/overview.md)
-5. [Goods verify](./flows/goods-verify/overview.md)
-6. [Stock Search](./flows/stock-search/overview.md)
+5. [Verify](./flows/verify/overview.md)
+6. [Goods verify](./flows/goods-verify/overview.md)
+7. [Stock Search](./flows/stock-search/overview.md)
 
 ## For AI agents
 

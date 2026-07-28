@@ -127,8 +127,8 @@ export const entities: Record<string, EntityConfig> = {
     serverPaging: true,
     fields: [
       { key: "partNo", label: "admin.fields.partNo", type: "text", required: true },
-      { key: "qty", label: "admin.fields.qty", type: "number", required: true },
-      { key: "weight", label: "admin.fields.weight", type: "number", required: true },
+      { key: "qty", label: "admin.fields.qtyPcs", type: "number", required: true },
+      { key: "weight", label: "admin.fields.weightGrams", type: "number", required: true },
     ],
   },
   users: {

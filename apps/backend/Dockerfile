@@ -1,6 +1,6 @@
 # Backend production image. Build context: repo root
 #   docker build -f apps/backend/Dockerfile .
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
 WORKDIR /repo
 

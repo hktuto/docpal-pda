@@ -26,7 +26,8 @@
   detail page or the receiving order's picking tab (`?from=receiving&ro=`).
 - Package and shipping-box operations: remove (undo-scan) / verify packages,
   create / cancel / close boxes, add/remove packages, add-all-unboxed;
-  box sizes and weights in integer grams.
+  box sizes and weights in kilograms (decimals, 3 dp — see the measuring
+  flow for the kg convention and the formula-based net-weight pre-fill).
 - Box labels + pre-printed box ids: on the picking detail page the
   hardware scanner is armed for box ids — a scan that does not match a
   supplier QR template creates an open box with that scanned (pre-printed)

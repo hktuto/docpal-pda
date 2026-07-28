@@ -608,19 +608,19 @@ test("close flow: add-all-unboxed auto-finishes; verify → measure → close ca
   assert.equal(noWeights.status, 409);
   assert.equal(noWeights.message, "weights_required");
 
-  await updateShippingBox(client.db, box.id, { actorId, netWeightG: 500 });
+  await updateShippingBox(client.db, box.id, { actorId, netWeightKg: 0.5 });
   const halfWeights = await catchHttp(closeShippingBox(client.db, { shippingBoxId: box.id, actorId }));
   assert.equal(halfWeights.status, 409);
   assert.equal(halfWeights.message, "weights_required");
 
-  await updateShippingBox(client.db, box.id, { actorId, grossWeightG: 300 });
+  await updateShippingBox(client.db, box.id, { actorId, grossWeightKg: 0.3 });
   const grossLtNet = await catchHttp(closeShippingBox(client.db, { shippingBoxId: box.id, actorId }));
   assert.equal(grossLtNet.status, 409);
   assert.equal(grossLtNet.message, "gross_weight_must_be_gte_net_weight");
 
-  const updated = await updateShippingBox(client.db, box.id, { actorId, grossWeightG: 800 });
-  assert.equal(updated.grossWeight, 800);
-  assert.equal(updated.netWeight, 500);
+  const updated = await updateShippingBox(client.db, box.id, { actorId, grossWeightKg: 0.8 });
+  assert.equal(updated.grossWeight, 0.8);
+  assert.equal(updated.netWeight, 0.5);
 
   await closeShippingBox(client.db, { shippingBoxId: box.id, actorId });
   const closed = await queryGet<{ status: string; destinationCountry: string | null }>(
@@ -630,7 +630,13 @@ test("close flow: add-all-unboxed auto-finishes; verify → measure → close ca
   assert.deepEqual(closed, { status: "closed", destinationCountry: "ACME Electronics (HK)" });
 
   const detail = await getPickingOrderDetail(client.db, orderId);
-  assert.equal(detail.measuringTask?.status, "pending");
+  // last-box close auto-completed the measuring task (and spawned the verify task)
+  assert.equal(detail.measuringTask?.status, "completed");
+  const verifyTask = await queryGet<{ status: string }>(
+    client.db,
+    sql`SELECT status FROM verify_tasks WHERE picking_order_id = ${orderId}`
+  );
+  assert.equal(verifyTask!.status, "pending");
   assert.equal(detail.boxes.length, 1);
   assert.equal(detail.boxes[0].status, "closed");
   assert.equal(detail.boxes[0].boxSize, "26 X 20 X 20");
@@ -703,7 +709,7 @@ test("verify: guard cascade — unboxed, no task, ok, duplicate, closed box", as
   await addPackageToBox(client.db, { shippingBoxId: box.id, packageId: p1, actorId });
   const noTask = await catchHttp(verifyPackage(client.db, { packageId: p1, actorId }));
   assert.equal(noTask.status, 409);
-  assert.equal(noTask.message, "measuring_task_not_pending");
+  assert.equal(noTask.message, "no_pending_measure_or_verify_task");
 
   // finish the order (auto) so the measuring task exists
   const p2 = (await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 1500 })).packageIds[0];
@@ -729,12 +735,22 @@ test("verify: guard cascade — unboxed, no task, ok, duplicate, closed box", as
 
   await verifyPackage(client.db, { packageId: p2, actorId });
   await verifyPackage(client.db, { packageId: p3, actorId });
-  await updateShippingBox(client.db, box.id, { actorId, boxSize: "26 X 20 X 20", netWeightG: 500, grossWeightG: 800 });
+  await updateShippingBox(client.db, box.id, { actorId, boxSize: "26 X 20 X 20", netWeightKg: 0.5, grossWeightKg: 0.8 });
   await closeShippingBox(client.db, { shippingBoxId: box.id, actorId });
 
-  const closedBox = await catchHttp(verifyPackage(client.db, { packageId: p1, actorId }));
-  assert.equal(closedBox.status, 409);
-  assert.equal(closedBox.message, "shipping_box_not_open");
+  // closing the last box auto-completed the measuring task and spawned the
+  // verify task — scanning now runs in verify mode: closed box allowed, both
+  // flags set
+  await verifyPackage(client.db, { packageId: p1, actorId });
+  const rescanned = await queryGet<{ verified: boolean; verifyVerified: boolean }>(
+    client.db,
+    sql`SELECT verified, verify_verified AS "verifyVerified" FROM picking_packages WHERE id = ${p1}`
+  );
+  assert.deepEqual(rescanned, { verified: true, verifyVerified: true });
+
+  const dupRescan = await catchHttp(verifyPackage(client.db, { packageId: p1, actorId }));
+  assert.equal(dupRescan.status, 409);
+  assert.equal(dupRescan.message, "package_already_verified");
 });
 
 // --- receiving-source picking ------------------------------------------------------------

@@ -11,14 +11,20 @@
 <script setup lang="ts">
 const { currentUser } = useAuth();
 const events = useWarehouseEvents();
+const { loadFlowSteps } = useFlowSteps();
 
 // The event stream follows the session: connect when logged in (including
-// after restore()), disconnect on logout.
+// after restore()), disconnect on logout. The flow-step config is also
+// (re)fetched on login so env-disabled steps hide their home tiles.
 watch(
   currentUser,
   (user) => {
-    if (user) events.connect();
-    else events.disconnect();
+    if (user) {
+      events.connect();
+      void loadFlowSteps();
+    } else {
+      events.disconnect();
+    }
   },
   { immediate: true }
 );

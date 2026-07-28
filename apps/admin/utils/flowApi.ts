@@ -1,6 +1,6 @@
 /**
  * Typed wrappers over useApi for the backend's flow endpoints (non-`/admin`
- * reads the console needs: picking / receiving / measuring) plus the admin
+ * reads the console needs: picking / receiving / shipping) plus the admin
  * flow-edit PATCHes. DTOs mirror the backend rows (camelCase JSON).
  */
 
@@ -39,7 +39,7 @@ export interface PickingItemRow {
     receivingOrderId: string | null;
     lot: { id: string; shelfCode: string | null; boxId: string | null; dateCode: string | null; lotCode: string | null } | null;
   }[];
-  packages: { id: string; qty: number; dateCode: string | null; lotCode: string | null; verified: boolean; shippingBoxId: string | null }[];
+  packages: { id: string; qty: number; dateCode: string | null; lotCode: string | null; verified: boolean; verifyVerified: boolean; shippingBoxId: string | null }[];
 }
 
 export interface PickingOrderDetail extends Omit<PickingOrderRow, "itemCount" | "totalQty" | "pickedQty" | "prioritySeq" | "workingBy" | "workingByName"> {
@@ -115,21 +115,20 @@ export interface ReceivingOrderDetail {
   }[];
 }
 
-// ---- measuring (shipping) ----
+// ---- shipping (config-aware feed: verify / measuring / picking source) ----
 
-export interface MeasuringTaskRow {
-  id: string;
-  status: string;
+export interface ShippingOrderRow {
+  source: "verify" | "measuring" | "picking";
+  taskId: string | null;
   pickingOrderId: string;
   orderNo: string;
   shipTo: string | null;
   boxCount: number;
   closedBoxCount: number;
-  createdAt: string;
+  completedAt: string;
 }
 
-export interface MeasuringTaskDetail {
-  task: { id: string; status: string; pickingOrderId: string; createdAt: string };
+export interface ShippingOrderDetail {
   order: { id: string; orderNo: string; status: string; shipTo: string | null; customerCode: string | null; poNo: string | null };
   boxes: {
     id: string;
@@ -138,7 +137,7 @@ export interface MeasuringTaskDetail {
     grossWeight: number | null;
     netWeight: number | null;
     destinationCountry: string | null;
-    packages: { id: string; qty: number; dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null; verified: boolean; partNo: string; wclItemNo: string | null }[];
+    packages: { id: string; qty: number; dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null; verified: boolean; verifyVerified: boolean; partNo: string; wclItemNo: string | null }[];
   }[];
 }
 
@@ -258,9 +257,9 @@ export function useFlowApi() {
       return api.get<StockSearchResult>(`/stock-search?${qs}`);
     },
 
-    // Measuring (shipping)
-    listMeasuringTasks: (status?: string) =>
-      api.get<MeasuringTaskRow[]>(`/measuring-tasks${status ? `?status=${status}` : ""}`),
-    getMeasuringTask: (id: string) => api.get<MeasuringTaskDetail>(`/measuring-tasks/${id}`),
+    // Shipping (config-aware feed — the backend picks the source step)
+    listShippingOrders: () => api.get<ShippingOrderRow[]>("/shipping-orders"),
+    getShippingOrder: (pickingOrderId: string) =>
+      api.get<ShippingOrderDetail>(`/shipping-orders/${pickingOrderId}`),
   };
 }

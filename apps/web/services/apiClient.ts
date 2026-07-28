@@ -134,11 +134,12 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     "receiving-invoice-items": ["/receiving-orders"],
     "picking-orders": ["/measuring-tasks", "/receiving-orders", "/put-away", "/stock-search"],
     "picking-items": ["/picking-orders", "/receiving-orders", "/stock-search"],
-    packages: ["/picking-orders", "/measuring-tasks", "/receiving-orders"],
-    "shipping-boxes": ["/picking-orders", "/measuring-tasks", "/receiving-orders"],
+    packages: ["/picking-orders", "/measuring-tasks", "/verify-tasks", "/receiving-orders"],
+    "shipping-boxes": ["/picking-orders", "/measuring-tasks", "/verify-tasks", "/receiving-orders"],
     "shelf-boxes": ["/put-away", "/receiving-orders", "/stock-search"],
     "put-away-scans": ["/put-away", "/receiving-orders"],
-    "measuring-tasks": ["/picking-orders"],
+    "measuring-tasks": ["/picking-orders", "/verify-tasks"],
+    "verify-tasks": ["/picking-orders", "/measuring-tasks"],
     "goods-verify-tasks": ["/stock-search"],
   };
 

@@ -1,6 +1,6 @@
 # Flows
 
-The app supports five warehouse flows. Each flow has an overview, a step-by-step operator guide, and an AI scope document.
+The app supports these warehouse flows. Each flow has an overview, a step-by-step operator guide, and an AI scope document.
 
 | Flow | Purpose | Entry page | Operator guide | AI scope |
 |------|---------|------------|----------------|----------|
@@ -8,6 +8,7 @@ The app supports five warehouse flows. Each flow has an overview, a step-by-step
 | [Receiving](./receiving/overview.md) | Confirm incoming shipments and create receiving-area stock. | `/receiving` | [Steps](./receiving/steps.md) | [Scope](./receiving/ai-scope.md) |
 | [Put-away](./put-away/overview.md) | Move received goods from receiving area onto shelves. | `/put-away` | [Steps](./put-away/steps.md) | [Scope](./put-away/ai-scope.md) |
 | [Measuring](./measuring/overview.md) | Measure and pack shipping boxes for finished picking orders. | `/measuring` | [Steps](./measuring/steps.md) | [Scope](./measuring/ai-scope.md) |
+| [Verify](./verify/overview.md) | Second re-measure check of shipping boxes before shipping. | `/verify` | [Steps](./verify/steps.md) | [Scope](./verify/ai-scope.md) |
 | [Goods Verify](./goods-verify/overview.md) | Verify goods at appropriate process points. | `/goods-verify` | [Steps](./goods-verify/steps.md) | [Scope](./goods-verify/ai-scope.md) |
 | [Stock Search](./stock-search/overview.md) | Search inventory by supplier or item and see locations. | `/stock-search` | [Overview](./stock-search/overview.md) | [Scope](./stock-search/ai-scope.md) |
 

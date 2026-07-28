@@ -20,8 +20,8 @@ The box page lists the box's packages in a table. Scan each package's QR label w
 
 ## 5. Record measurements
 
-When every package is verified, the measurements form opens automatically (or tap **Enter measurements**). Enter box size, net/gross weight, and destination country, then **Finish box** to close the box. See [Box measurements](./box-measurements.md).
+When every package is verified, the measurements form opens automatically (or tap **Enter measurements**). Enter box size, net/gross weight in **kg** (decimals allowed — the net weight is pre-filled with the auto-calculated value from the part net-weight master; adjust it if needed), and destination country, then **Confirm box** to save and close the box in one action. See [Box measurements](./box-measurements.md).
 
-## 6. Complete the task
+## 6. Task completes automatically
 
-When every box is closed, tap **Complete measuring** on the task detail.
+There is no manual complete step: when the last box of the order is confirmed, the measuring task completes automatically and — when the verify step is enabled — a verify task is created for the order. The task detail shows the completed status on reload.

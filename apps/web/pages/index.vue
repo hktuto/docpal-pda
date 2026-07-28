@@ -6,7 +6,7 @@
     </div>
 
     <div class="menu-grid">
-      <NuxtLink to="/receiving" class="menu-card">
+      <NuxtLink v-if="flowSteps.receiving" to="/receiving" class="menu-card">
         <div class="menu-card__icon menu-card__icon--receiving">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
@@ -18,7 +18,7 @@
         <p class="menu-card__meta">{{ $t('home.menu.receiving.desc') }}</p>
       </NuxtLink>
 
-      <NuxtLink to="/picking" class="menu-card">
+      <NuxtLink v-if="flowSteps.picking" to="/picking" class="menu-card">
         <div class="menu-card__icon menu-card__icon--picking">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M5 21v-6"/>
@@ -30,7 +30,7 @@
         <p class="menu-card__meta">{{ $t('home.menu.picking.desc') }}</p>
       </NuxtLink>
 
-      <NuxtLink to="/put-away" class="menu-card">
+      <NuxtLink v-if="flowSteps['put-away']" to="/put-away" class="menu-card">
         <div class="menu-card__icon menu-card__icon--putaway">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 9h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z"/>
@@ -42,7 +42,7 @@
         <p class="menu-card__meta">{{ $t('home.menu.putAway.desc') }}</p>
       </NuxtLink>
 
-      <NuxtLink to="/goods-verify" class="menu-card">
+      <NuxtLink v-if="flowSteps['goods-verify']" to="/goods-verify" class="menu-card">
         <div class="menu-card__icon menu-card__icon--verify">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>
@@ -53,7 +53,7 @@
         <p class="menu-card__meta">{{ $t('home.menu.goodsVerify.desc') }}</p>
       </NuxtLink>
 
-      <NuxtLink to="/measuring" class="menu-card">
+      <NuxtLink v-if="flowSteps.measuring" to="/measuring" class="menu-card">
         <div class="menu-card__icon menu-card__icon--measuring">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16Z"/>
@@ -65,7 +65,19 @@
         <p class="menu-card__meta">{{ $t('home.menu.measuring.desc') }}</p>
       </NuxtLink>
 
-      <NuxtLink to="/stock-search" class="menu-card">
+      <NuxtLink v-if="flowSteps.verify" to="/verify" class="menu-card">
+        <div class="menu-card__icon menu-card__icon--verify2">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="8" y="2" width="8" height="4" rx="1"/>
+            <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+            <path d="m9 14 2 2 4-4"/>
+          </svg>
+        </div>
+        <p class="menu-card__title">{{ $t('home.menu.verify.title') }}</p>
+        <p class="menu-card__meta">{{ $t('home.menu.verify.desc') }}</p>
+      </NuxtLink>
+
+      <NuxtLink v-if="flowSteps['stock-search']" to="/stock-search" class="menu-card">
         <div class="menu-card__icon menu-card__icon--stock-search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="11" cy="11" r="8"/>
@@ -89,6 +101,7 @@ const { t } = useI18n();
 useHead({ title: t("meta.warehouse") });
 
 const { currentUser } = useAuth();
+const { flowSteps } = useFlowSteps();
 </script>
 
 <style scoped>
@@ -161,6 +174,7 @@ const { currentUser } = useAuth();
 .menu-card__icon--putaway { background: linear-gradient(135deg, #f59e0b, #d97706); }
 .menu-card__icon--verify { background: linear-gradient(135deg, #10b981, #059669); }
 .menu-card__icon--measuring { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+.menu-card__icon--verify2 { background: linear-gradient(135deg, #06b6d4, #0891b2); }
 .menu-card__icon--stock-search { background: linear-gradient(135deg, #ec4899, #db2777); }
 
 .menu-card__title {

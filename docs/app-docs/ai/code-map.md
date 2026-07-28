@@ -17,7 +17,10 @@ Page and component locations mapped to source files.
 | Put-away detail | `/put-away/:id` | `pages/put-away/[id].vue` or equivalent |
 | Measuring list | `/measuring` | `pages/measuring/index.vue` |
 | Measuring task detail | `/measuring/:id` | `pages/measuring/[id].vue` |
-| Measuring box | `/measuring/:taskId/box/:boxId` | `pages/measuring/[taskId]/box/[boxId].vue` |
+| Measuring box | `/measuring/:taskId/box/:boxId` | `pages/measuring/[taskId]/box/[boxId].vue` (wrapper over `components/MeasureBox.vue`) |
+| Verify list | `/verify` | `pages/verify/index.vue` |
+| Verify task detail | `/verify/:id` | `pages/verify/[id].vue` |
+| Verify box | `/verify/:taskId/box/:boxId` | `pages/verify/[taskId]/box/[boxId].vue` (wrapper over `components/MeasureBox.vue`) |
 | Goods verify queue | `/goods-verify` | `pages/goods-verify/index.vue` |
 | Goods verify detail | `/goods-verify/:id` | `pages/goods-verify/[id].vue` |
 | Stock Search | `/stock-search` | `pages/stock-search/index.vue` |
@@ -70,6 +73,13 @@ Page and component locations mapped to source files.
 | Items section | `components/picking/PickingItemsSection.vue` |
 | Boxes section | `components/picking/PickingBoxesSection.vue` |
 | Issue banner | `components/picking/PickingIssueBanner.vue` |
+
+## Measuring / Verify
+
+| Component | Source file |
+|-----------|-------------|
+| Shared box page (package verify by scan, measurements, close; `mode` prop = measuring/verify) | `components/MeasureBox.vue` |
+| Flow-step config (disabled-step home tiles) | `composables/useFlowSteps.ts` |
 
 ## Receiving
 
@@ -153,6 +163,9 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | `POST /picking-items/:id/scan`, `/packages/:id*` verbs, `/shipping-boxes/:id*` lifecycle | `apps/backend/src/routes/picking.ts` |
 | `GET /put-away/candidates`, `POST /receiving-orders/:id/put-away-scans`, `DELETE /put-away-scans/:scanId`, `/shelf-boxes*` lifecycle (create / cancel / assign-scan / remove-scan / add-all-unboxed / close) | `apps/backend/src/routes/putaway.ts` |
 | `GET /measuring-tasks`, `GET /measuring-tasks/:id`, `POST /measuring-tasks/:id/complete` | `apps/backend/src/routes/measuring.ts` |
+| `GET /verify-tasks`, `GET /verify-tasks/:id`, `POST /verify-tasks/:id/complete` | `apps/backend/src/routes/verify.ts` |
+| `GET /shipping-orders`, `GET /shipping-orders/:pickingOrderId` | `apps/backend/src/routes/shipping.ts` |
+| `GET /config` (flow-step config from `FLOW_STEPS_DISABLED`) | `apps/backend/src/routes/config.ts` |
 | `POST /goods-verify-tasks/generate`, `GET /goods-verify-tasks`, `GET /goods-verify-tasks/:id`, `POST /goods-verify-tasks/:id/verify` | `apps/backend/src/routes/goodsverify.ts` |
 | `GET /stock-search` | `apps/backend/src/routes/stocksearch.ts` |
 | `GET /scan-templates` | `apps/backend/src/routes/scantemplates.ts` |
@@ -169,7 +182,10 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | Label parsing for receiving scans (QR templates, serial extraction) | `apps/backend/src/db/scanParse.ts` |
 | Picking execution (scan, packages, boxes, finish, issues) | `apps/backend/src/db/picking.ts` |
 | Put-away (scans, shelf boxes, lot materialization, auto-clear) | `apps/backend/src/db/putaway.ts` |
-| Measuring (task reads, completion) | `apps/backend/src/db/measuring.ts` |
+| Measuring (task reads, completion + `completeMeasuringTaskTx` auto-complete on last box close; spawns the verify task) | `apps/backend/src/db/measuring.ts` |
+| Verify (task reads, completion with the `packages_not_all_rescanned` re-scan guard) | `apps/backend/src/db/verify.ts` |
+| Shipping feed (config-aware list/detail) | `apps/backend/src/db/shipping.ts` |
+| Flow-step config (`FLOW_STEPS_DISABLED`, `isStepEnabled`) | `apps/backend/src/config.ts` |
 | Goods verify (generation, queue, verify with ADJUST) | `apps/backend/src/db/goodsverify.ts` |
 | Stock search | `apps/backend/src/db/stocksearch.ts` |
 | Ingest upserts | `apps/backend/src/db/ingest.ts` |

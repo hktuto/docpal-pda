@@ -54,7 +54,7 @@
           <span class="detail-label">{{ $t('measuring.detail.measurements') }}</span>
           <span style="text-align: right; font-size: 0.8125rem;">
             {{ box.boxSize || $t('common.noData') }}
-            · {{ box.grossWeight ?? $t('common.noData') }} / {{ box.netWeight ?? $t('common.noData') }} {{ $t('common.grams') }}
+            · {{ box.grossWeight ?? $t('common.noData') }} / {{ box.netWeight ?? $t('common.noData') }} {{ $t('common.kg') }}
             · {{ box.destinationCountry || $t('common.noData') }}
           </span>
         </div>
@@ -68,12 +68,6 @@
             {{ box.status === 'closed' ? $t('measuring.detail.viewBox') : $t('measuring.detail.openBox') }}
           </NuxtLink>
         </div>
-      </div>
-
-      <div v-if="canComplete" style="margin-top: 1.5rem;">
-        <button class="btn" @click="complete" :disabled="completing">
-          {{ completing ? $t('measuring.detail.completing') : $t('measuring.detail.completeMeasuring') }}
-        </button>
       </div>
     </template>
   </div>
@@ -106,7 +100,6 @@ const pending = ref(true);
 const error = ref<string | null>(null);
 const task = ref<MeasuringTaskDetail | null>(null);
 const headerExpanded = ref(false);
-const completing = ref(false);
 
 async function load() {
   try {
@@ -123,23 +116,8 @@ function verifiedCount(box: MeasuringBox) {
   return box.packages.filter((p) => p.verified).length;
 }
 
-const canComplete = computed(() => {
-  if (!task.value || task.value.task.status !== "pending") return false;
-  return task.value.boxes.length > 0 && task.value.boxes.every((box) => box.status === "closed");
-});
-
-async function complete() {
-  completing.value = true;
-  try {
-    await warehouse.completeMeasuringTask(taskId);
-    await load();
-  } catch (e: unknown) {
-    error.value = errorMessage(e);
-  } finally {
-    completing.value = false;
-  }
-}
-
+// No manual complete: confirming the last open box auto-completes the task
+// server-side (and spawns the verify task); reload shows the status flip.
 useVisibleReload(load);
 
 // Scanning a box QR (or typing its id on the wedge) opens that box directly.

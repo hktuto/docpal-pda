@@ -8,6 +8,7 @@ import { queryAll, queryGet } from "./query.js";
 import { allocateAll } from "./allocate.js";
 import {
   addAllUnboxedToShippingBox,
+  addPackageToBox,
   closeShippingBox,
   createShippingBox,
   removePackageFromBox,
@@ -86,12 +87,12 @@ async function finishedOrder(): Promise<FinishedFixture> {
   return { orderId, actorId, boxId: box.id, taskId: task!.id, packageIds: [p1, p2] };
 }
 
-/** Verify the given packages, stamp measurements, close the box. */
+/** Verify the given packages, stamp measurements (kg), close the box. */
 async function closeTheBox(boxId: string, actorId: string, packageIds: string[]): Promise<void> {
   for (const packageId of packageIds) {
     await verifyPackage(client.db, { packageId, actorId });
   }
-  await updateShippingBox(client.db, boxId, { actorId, boxSize: "26 X 20 X 20", netWeightG: 500, grossWeightG: 800 });
+  await updateShippingBox(client.db, boxId, { actorId, boxSize: "26 X 20 X 20", netWeightKg: 0.5, grossWeightKg: 0.8 });
   await closeShippingBox(client.db, { shippingBoxId: boxId, actorId });
 }
 
@@ -112,13 +113,14 @@ test("list: box counts, orderNo/shipTo join, status filter", async () => {
   assert.equal(row.closedBoxCount, 0); // box still open
   assert.ok(row.createdAt);
 
-  await closeTheBox(boxId, actorId, packageIds);
+  await closeTheBox(boxId, actorId, packageIds); // last-box close auto-completes the task
   rows = await listMeasuringTasks(client.db);
   assert.equal(rows[0].boxCount, 1);
   assert.equal(rows[0].closedBoxCount, 1); // closed counts as closed-or-beyond
+  assert.equal(rows[0].status, "completed");
 
-  assert.equal((await listMeasuringTasks(client.db, "pending")).length, 1);
-  assert.equal((await listMeasuringTasks(client.db, "completed")).length, 0);
+  assert.equal((await listMeasuringTasks(client.db, "pending")).length, 0);
+  assert.equal((await listMeasuringTasks(client.db, "completed")).length, 1);
 });
 
 // --- detail --------------------------------------------------------------------
@@ -150,6 +152,8 @@ test("detail: consolidated task/order/boxes, packages carry part identity; 404",
   assert.equal(box.grossWeight, null);
   assert.equal(box.netWeight, null);
   assert.equal(box.destinationCountry, null);
+  // 2000 pcs + 1000 pcs at 6.3 g per 1000 pcs = 18.9 g → 0.019 kg
+  assert.equal(box.suggestedNetWeightKg, 0.019);
 
   assert.equal(box.packages.length, 2);
   const byPartNo = new Map(box.packages.map((p) => [p.partNo, p]));
@@ -161,6 +165,7 @@ test("detail: consolidated task/order/boxes, packages carry part identity; 404",
   assert.equal(pkg1.coo, "JP");
   assert.equal(pkg1.cow, "JP");
   assert.equal(pkg1.verified, false);
+  assert.equal(pkg1.verifyVerified, false);
   assert.equal(pkg1.wclItemNo, "RK73H1JTTD1002F");
   const pkg2 = byPartNo.get("RK73H1JTTD2202F")!;
   assert.equal(pkg2.id, packageIds[1]);
@@ -202,15 +207,14 @@ test("complete guards: 404, actor_not_found, boxes open, unboxed packages", asyn
   assert.equal(unboxed.message, "picking_items_not_fully_packed");
 });
 
-// --- complete happy path ----------------------------------------------------------
+// --- auto-complete chain ----------------------------------------------------------
 
-test("complete: happy path — completed + transition log, picking order stays finished", async () => {
+test("auto-complete: last box close completes measuring + spawns verify; manual complete then 409s", async () => {
   await reseed(client);
   const { orderId, actorId, boxId, taskId, packageIds } = await finishedOrder();
   await closeTheBox(boxId, actorId, packageIds);
 
-  await completeMeasuringTask(client.db, { taskId, actorId });
-
+  // the close auto-completed the measuring task (no manual complete needed)
   const task = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM measuring_tasks WHERE id = ${taskId}`);
   assert.equal(task!.status, "completed");
   const log = await queryGet<{ fromState: string; toState: string; actorId: string | null }>(
@@ -220,7 +224,14 @@ test("complete: happy path — completed + transition log, picking order stays f
   );
   assert.deepEqual(log, { fromState: "pending", toState: "completed", actorId });
 
-  // old completeMeasuringTask does NOT flip the picking order status
+  // verify task spawned (verify step enabled by default)
+  const verifyTask = await queryGet<{ status: string }>(
+    client.db,
+    sql`SELECT status FROM verify_tasks WHERE picking_order_id = ${orderId}`
+  );
+  assert.equal(verifyTask!.status, "pending");
+
+  // completing measuring does NOT flip the picking order status
   const order = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM picking_orders WHERE id = ${orderId}`);
   assert.equal(order!.status, "finished");
 
@@ -228,6 +239,7 @@ test("complete: happy path — completed + transition log, picking order stays f
   assert.equal((await listMeasuringTasks(client.db, "pending")).length, 0);
   assert.equal((await listMeasuringTasks(client.db, "completed")).length, 1);
 
+  // a later manual complete is a stale-action 409
   const again = await catchHttp(completeMeasuringTask(client.db, { taskId, actorId }));
   assert.equal(again.status, 409);
   assert.equal(again.message, "measuring_task_not_pending");
@@ -238,4 +250,73 @@ test("complete: happy path — completed + transition log, picking order stays f
     sql`SELECT id FROM inventory_transactions WHERE reference_type = 'measuring_task'`
   );
   assert.equal(txns.length, 0);
+});
+
+test("auto-complete: not the last box / unboxed package → task stays pending", async () => {
+  await reseed(client);
+  const actorId = await actorIdOf();
+  await allocateAll(client.db);
+  const orderId = await pickingOrderIdOf("SO-2026-0001");
+  const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F"); // qty 2000
+  const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F"); // qty 1000
+  const p1 = (await scanPickingItem(client.db, item1, { actorId, allocationId: await allocationIdOf(item1), qty: 2000 })).packageIds[0];
+  const p2 = (await scanPickingItem(client.db, item2, { actorId, allocationId: await allocationIdOf(item2), qty: 1000 })).packageIds[0];
+  const box1 = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
+  await createShippingBox(client.db, { pickingOrderId: orderId, actorId }); // second (empty) box, left open
+  await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box1.id, actorId }); // auto-finishes
+  const taskId = (await queryGet<{ id: string }>(client.db, sql`SELECT id FROM measuring_tasks WHERE picking_order_id = ${orderId}`))!.id;
+
+  // another box is still open → closing box1 does not auto-complete
+  await closeTheBox(box1.id, actorId, [p1, p2]);
+  const task = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM measuring_tasks WHERE id = ${taskId}`);
+  assert.equal(task!.status, "pending");
+});
+
+// --- suggested net weight -----------------------------------------------------------
+
+test("suggested net weight: formula-driven per box; null without any formula", async () => {
+  await reseed(client);
+  const actorId = await actorIdOf();
+  await allocateAll(client.db);
+  const orderId = await pickingOrderIdOf("SO-2026-0001");
+  const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F"); // qty 2000
+  const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F"); // qty 1000
+  const p1 = (await scanPickingItem(client.db, item1, { actorId, allocationId: await allocationIdOf(item1), qty: 2000 })).packageIds[0];
+  const p2 = (await scanPickingItem(client.db, item2, { actorId, allocationId: await allocationIdOf(item2), qty: 1000 })).packageIds[0];
+
+  // one package per box (box2 finishes the order): 2000 pcs of RK73H1JTTD1002F
+  // at 6.3 g per 1000 pcs → 12.6 g → 0.013 kg; 1000 pcs → 6.3 g → 0.006 kg
+  const box1 = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
+  await addPackageToBox(client.db, { shippingBoxId: box1.id, packageId: p1, actorId });
+  const box2 = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
+  await addPackageToBox(client.db, { shippingBoxId: box2.id, packageId: p2, actorId }); // auto-finishes here
+
+  const taskId = (await queryGet<{ id: string }>(client.db, sql`SELECT id FROM measuring_tasks WHERE picking_order_id = ${orderId}`))!.id;
+  const detail = await getMeasuringTaskDetail(client.db, taskId);
+  const byBoxId = new Map(detail.boxes.map((b) => [b.id, b]));
+  assert.equal(byBoxId.get(box1.id)!.suggestedNetWeightKg, 0.013);
+  assert.equal(byBoxId.get(box2.id)!.suggestedNetWeightKg, 0.006);
+
+  // a box whose package has no formula row → null (RK73B1JTTD181G is seeded
+  // without a net_weight_formula row)
+  const bareOrderId = randomUUID();
+  const bareItemId = randomUUID();
+  const barePkgId = randomUUID();
+  const bareBoxId = "BOX-S-BARE-1";
+  await client.db.execute(sql`INSERT INTO picking_orders (id, order_no, status, created_at, updated_at)
+      VALUES (${bareOrderId}, 'SO-BARE', 'finished', now(), now())`);
+  await client.db.execute(sql`INSERT INTO measuring_tasks (id, picking_order_id, status, created_at)
+      VALUES (${randomUUID()}, ${bareOrderId}, 'pending', now())`);
+  await client.db.execute(sql`INSERT INTO picking_items (id, picking_order_id, part_no, qty, created_at, updated_at)
+      VALUES (${bareItemId}, ${bareOrderId}, 'RK73B1JTTD181G', 100, now(), now())`);
+  await client.db.execute(sql`INSERT INTO shipping_boxes (id, picking_order_id, status, created_at, updated_at)
+      VALUES (${bareBoxId}, ${bareOrderId}, 'open', now(), now())`);
+  await client.db.execute(sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, shipping_box_id, created_at, updated_at)
+      VALUES (${barePkgId}, ${bareItemId}, ${bareOrderId}, 'inventory_lot', 'bare-src', 100, ${bareBoxId}, now(), now())`);
+  const bareTask = await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT id FROM measuring_tasks WHERE picking_order_id = ${bareOrderId}`
+  );
+  const bareDetail = await getMeasuringTaskDetail(client.db, bareTask!.id);
+  assert.equal(bareDetail.boxes[0].suggestedNetWeightKg, null);
 });

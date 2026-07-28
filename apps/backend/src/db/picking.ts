@@ -8,6 +8,8 @@ import { nextBoxId } from "./boxes.js";
 import { now } from "./now.js";
 import { emitEvent } from "./events.js";
 import { workLockExpiry } from "./allocate.js";
+import { isStepEnabled } from "../config.js";
+import { completeMeasuringTaskTx } from "./measuring.js";
 
 // ---------------------------------------------------------------------------
 // Picking flow (ported from apps/api pickScan.ts + measure.ts + pickingIssues.ts,
@@ -203,8 +205,12 @@ async function unassignPackageFromBoxTx(tx: DbOrTx, packageId: string): Promise<
 }
 
 /**
- * Finish the order + create the measuring task when every item is fully
+ * Finish the order + create the next-step task when every item is fully
  * picked (boxed). Call only after picked_qty is fresh in this tx.
+ * The chain is config-aware (FLOW_STEPS_DISABLED): measuring enabled →
+ * measuring task; else verify enabled → verify task; else nothing (order
+ * finished = ready to ship). The status guard above already keeps a re-close
+ * after a verify-time reopen from re-running this for a finished order.
  */
 async function maybeAutoFinishPickingOrder(
   tx: DbOrTx,
@@ -221,12 +227,21 @@ async function maybeAutoFinishPickingOrder(
   if (!items.every((i) => i.pickedQty >= i.qty)) return false;
 
   await queryRun(tx, sql`UPDATE picking_orders SET status = 'finished', working_by = NULL, working_at = NULL, updated_at = ${now()} WHERE id = ${order.id}`);
-  await queryRun(
-    tx,
-    sql`INSERT INTO measuring_tasks (id, picking_order_id, status, created_at)
-        VALUES (${randomUUID()}, ${order.id}, 'pending', ${now()})
-        ON CONFLICT (picking_order_id) DO NOTHING`
-  );
+  if (isStepEnabled("measuring")) {
+    await queryRun(
+      tx,
+      sql`INSERT INTO measuring_tasks (id, picking_order_id, status, created_at)
+          VALUES (${randomUUID()}, ${order.id}, 'pending', ${now()})
+          ON CONFLICT (picking_order_id) DO NOTHING`
+    );
+  } else if (isStepEnabled("verify")) {
+    await queryRun(
+      tx,
+      sql`INSERT INTO verify_tasks (id, picking_order_id, status, created_at)
+          VALUES (${randomUUID()}, ${order.id}, 'pending', ${now()})
+          ON CONFLICT (picking_order_id) DO NOTHING`
+    );
+  }
   await logTransition(tx, {
     entityType: "picking_order",
     entityId: order.id,
@@ -426,6 +441,7 @@ export interface PickingPackageDetail {
   coo: string | null;
   cow: string | null;
   verified: boolean;
+  verifyVerified: boolean;
   shippingBoxId: string | null;
   sourceType: string;
   sourceId: string;
@@ -552,7 +568,7 @@ export async function getPickingOrderDetail(db: AppDb, orderId: string): Promise
           SELECT
             id, picking_item_id AS "pickingItemId", qty,
             date_code AS "dateCode", lot_code AS "lotCode", coo, cow,
-            verified, shipping_box_id AS "shippingBoxId",
+            verified, verify_verified AS "verifyVerified", shipping_box_id AS "shippingBoxId",
             source_type AS "sourceType", source_id AS "sourceId"
           FROM picking_packages
           WHERE ${inArray(sql`picking_item_id`, itemIds)}
@@ -977,15 +993,26 @@ export async function removeScannedPackage(db: AppDb, input: { packageId: string
 }
 
 /**
- * Mark a package verified (measuring-time weight/count check, ported from
- * measure.ts): the package must be in an open box, the order's measuring task
- * must still be pending, and the package must not be verified already.
+ * Verify-scan a package. Branching on the order's pending task:
+ *  - pending measuring task → the box must be open; sets `verified`.
+ *  - else pending verify task → the box may be open OR closed (verifying
+ *    parts against a sealed box is the normal verify pass); sets
+ *    `verify_verified` AND `verified` (so a reopened box can re-close).
+ * 409 `package_already_verified` only when the applicable flag is already set.
  */
 export async function verifyPackage(db: AppDb, input: { packageId: string; actorId: string }): Promise<void> {
   return db.transaction(async (tx) => {
-    const pkg = await queryGet<{ id: string; shippingBoxId: string | null; verified: boolean; qty: number; pickingOrderId: string }>(
+    const pkg = await queryGet<{
+      id: string;
+      shippingBoxId: string | null;
+      verified: boolean;
+      verifyVerified: boolean;
+      qty: number;
+      pickingOrderId: string;
+    }>(
       tx,
-      sql`SELECT pp.id, pp.shipping_box_id AS "shippingBoxId", pp.verified, pp.qty,
+      sql`SELECT pp.id, pp.shipping_box_id AS "shippingBoxId", pp.verified,
+                 pp.verify_verified AS "verifyVerified", pp.qty,
                  pi.picking_order_id AS "pickingOrderId"
           FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id WHERE pp.id = ${input.packageId}`
     );
@@ -993,20 +1020,39 @@ export async function verifyPackage(db: AppDb, input: { packageId: string; actor
     if (pkg.shippingBoxId === null) throw new HTTPException(409, { message: "package_not_in_box" });
     await assertActor(tx, input.actorId);
     const box = await loadShippingBox(tx, pkg.shippingBoxId);
-    if (box.status !== "open") throw new HTTPException(409, { message: "shipping_box_not_open" });
-    const task = await queryGet<{ status: string }>(
+    const measuringTask = await queryGet<{ id: string }>(
       tx,
-      sql`SELECT status FROM measuring_tasks WHERE picking_order_id = ${pkg.pickingOrderId}`
+      sql`SELECT id FROM measuring_tasks WHERE picking_order_id = ${pkg.pickingOrderId} AND status = 'pending'`
     );
-    if (!task || task.status !== "pending") throw new HTTPException(409, { message: "measuring_task_not_pending" });
-    if (pkg.verified) throw new HTTPException(409, { message: "package_already_verified" });
-
-    await queryRun(tx, sql`UPDATE picking_packages SET verified = true, updated_at = ${now()} WHERE id = ${pkg.id}`);
+    if (measuringTask) {
+      if (box.status !== "open") throw new HTTPException(409, { message: "shipping_box_not_open" });
+      if (pkg.verified) throw new HTTPException(409, { message: "package_already_verified" });
+      await queryRun(tx, sql`UPDATE picking_packages SET verified = true, updated_at = ${now()} WHERE id = ${pkg.id}`);
+      await logTransition(tx, {
+        entityType: "picking_package",
+        entityId: pkg.id,
+        fromState: "unverified",
+        toState: "verified",
+        actorId: input.actorId,
+        metadata: { qty: pkg.qty, box: box.id },
+      });
+      return;
+    }
+    const verifyTask = await queryGet<{ id: string }>(
+      tx,
+      sql`SELECT id FROM verify_tasks WHERE picking_order_id = ${pkg.pickingOrderId} AND status = 'pending'`
+    );
+    if (!verifyTask) throw new HTTPException(409, { message: "no_pending_measure_or_verify_task" });
+    if (pkg.verifyVerified) throw new HTTPException(409, { message: "package_already_verified" });
+    await queryRun(
+      tx,
+      sql`UPDATE picking_packages SET verified = true, verify_verified = true, updated_at = ${now()} WHERE id = ${pkg.id}`
+    );
     await logTransition(tx, {
       entityType: "picking_package",
       entityId: pkg.id,
-      fromState: "unverified",
-      toState: "verified",
+      fromState: "verified",
+      toState: "verify_verified",
       actorId: input.actorId,
       metadata: { qty: pkg.qty, box: box.id },
     });
@@ -1096,24 +1142,24 @@ function cleanText(v: string | null | undefined): string | null | undefined {
   return t === "" ? null : t;
 }
 
-/** Grams, one unit everywhere; stored as-is into the REAL weight columns. */
-function parseGrams(v: number | string | null | undefined, message: string): number | null | undefined {
+/** Kilograms, one unit everywhere; decimals allowed, rounded to 3 dp, stored into the REAL weight columns. */
+function parseKg(v: number | string | null | undefined, message: string): number | null | undefined {
   if (v === undefined) return undefined;
   if (v === null || v === "") return null;
   const n = typeof v === "number" ? v : Number(v);
-  if (!Number.isInteger(n) || n < 0) throw new HTTPException(400, { message });
-  return n;
+  if (!Number.isFinite(n) || n < 0) throw new HTTPException(400, { message });
+  return Math.round(n * 1000) / 1000;
 }
 
-/** Edit box size / weights (grams) / destination country; open boxes only. */
+/** Edit box size / weights (kg) / destination country; open boxes only. */
 export async function updateShippingBox(
   db: AppDb,
   boxId: string,
   input: {
     actorId: string;
     boxSize?: string | null;
-    netWeightG?: number | string | null;
-    grossWeightG?: number | string | null;
+    netWeightKg?: number | string | null;
+    grossWeightKg?: number | string | null;
     destinationCountry?: string | null;
   }
 ): Promise<ShippingBoxDto> {
@@ -1122,8 +1168,8 @@ export async function updateShippingBox(
     await assertActor(tx, input.actorId);
     if (box.status !== "open") throw new HTTPException(409, { message: "shipping_box_not_open" });
     const size = cleanText(input.boxSize);
-    const net = parseGrams(input.netWeightG, "invalid_net_weight_g");
-    const gross = parseGrams(input.grossWeightG, "invalid_gross_weight_g");
+    const net = parseKg(input.netWeightKg, "invalid_net_weight_kg");
+    const gross = parseKg(input.grossWeightKg, "invalid_gross_weight_kg");
     const dest = cleanText(input.destinationCountry);
     await queryRun(
       tx,
@@ -1273,6 +1319,9 @@ export async function cancelShippingBox(db: AppDb, input: { shippingBoxId: strin
  * verified, destination (box → order ship_to), box
  * size, and positive weights with gross ≥ net are required. Stamps the
  * resolved destination, logs the transition, and runs the auto-finish check.
+ * Auto-complete chain: when this was the order's last open box and nothing is
+ * left unboxed, a pending measuring task completes itself (which spawns the
+ * verify task when the verify step is enabled).
  */
 export async function closeShippingBox(db: AppDb, input: { shippingBoxId: string; actorId: string }): Promise<void> {
   return db.transaction(async (tx) => {
@@ -1313,25 +1362,46 @@ export async function closeShippingBox(db: AppDb, input: { shippingBoxId: string
     });
     if (box.pickingOrderId) {
       await maybeAutoFinishPickingOrder(tx, { pickingOrderId: box.pickingOrderId, actorId: input.actorId });
+      // Auto-complete chain: a pending measuring task completes once every
+      // box of the order is closed and no package is left unboxed.
+      const pendingMeasuring = await queryGet<{ id: string }>(
+        tx,
+        sql`SELECT id FROM measuring_tasks WHERE picking_order_id = ${box.pickingOrderId} AND status = 'pending'`
+      );
+      if (pendingMeasuring) {
+        const openBox = await queryGet<{ id: string }>(
+          tx,
+          sql`SELECT id FROM shipping_boxes WHERE picking_order_id = ${box.pickingOrderId} AND status <> 'closed' LIMIT 1`
+        );
+        const unboxed = await queryGet<{ id: string }>(
+          tx,
+          sql`SELECT id FROM picking_packages WHERE picking_order_id = ${box.pickingOrderId} AND shipping_box_id IS NULL LIMIT 1`
+        );
+        if (!openBox && !unboxed) {
+          await completeMeasuringTaskTx(tx, { taskId: pendingMeasuring.id, actorId: input.actorId });
+        }
+      }
     }
   });
 }
 
 /**
  * Explicit finish: all items fully picked (boxed) → order 'finished' + the
- * measuring task (unique per order). Returns the task.
+ * next-step task (measuring, or verify when measuring is disabled — unique
+ * per order). Returns the created task, or null when both steps are off.
  */
 export async function finishPickingOrder(
   db: AppDb,
   input: { pickingOrderId: string; actorId: string }
-): Promise<{ id: string; pickingOrderId: string; status: string }> {
+): Promise<{ id: string; pickingOrderId: string; status: string } | null> {
   return db.transaction(async (tx) => {
     const order = await loadOrderForWrite(tx, input.pickingOrderId);
     assertOrderWritable(order);
     await assertActor(tx, input.actorId);
     const existingTask = await queryGet<{ id: string }>(
       tx,
-      sql`SELECT id FROM measuring_tasks WHERE picking_order_id = ${order.id}`
+      sql`SELECT id FROM measuring_tasks WHERE picking_order_id = ${order.id}
+          UNION ALL SELECT id FROM verify_tasks WHERE picking_order_id = ${order.id} LIMIT 1`
     );
     if (existingTask) throw new HTTPException(409, { message: "measuring_task_exists" });
     const items = await queryAll<{ qty: number; pickedQty: number }>(
@@ -1346,9 +1416,46 @@ export async function finishPickingOrder(
     if (!done) throw new HTTPException(409, { message: "picking_order_could_not_be_finished" });
     const task = await queryGet<{ id: string; pickingOrderId: string; status: string }>(
       tx,
-      sql`SELECT id, picking_order_id AS "pickingOrderId", status FROM measuring_tasks WHERE picking_order_id = ${order.id}`
+      sql`SELECT id, picking_order_id AS "pickingOrderId", status FROM measuring_tasks WHERE picking_order_id = ${order.id}
+          UNION ALL
+          SELECT id, picking_order_id AS "pickingOrderId", status FROM verify_tasks WHERE picking_order_id = ${order.id}
+          LIMIT 1`
     );
-    return task!;
+    return task ?? null;
+  });
+}
+
+/**
+ * Reopen a closed shipping box during the verify step: the order must have a
+ * pending verify task (reopen is a verify-step action only). The box goes
+ * back to 'open' and its packages lose both verified flags so the worker
+ * re-scans them before re-closing (closeShippingBox re-checks auto-finish,
+ * which is a no-op for the already-finished order).
+ */
+export async function reopenShippingBox(db: AppDb, input: { shippingBoxId: string; actorId: string }): Promise<void> {
+  return db.transaction(async (tx) => {
+    const box = await loadShippingBox(tx, input.shippingBoxId);
+    await assertActor(tx, input.actorId);
+    if (box.status !== "closed") throw new HTTPException(409, { message: "shipping_box_not_closed" });
+    const task = await queryGet<{ status: string }>(
+      tx,
+      sql`SELECT status FROM verify_tasks WHERE picking_order_id = ${box.pickingOrderId}`
+    );
+    if (!task || task.status !== "pending") throw new HTTPException(409, { message: "verify_task_not_pending" });
+
+    await queryRun(tx, sql`UPDATE shipping_boxes SET status = 'open', updated_at = ${now()} WHERE id = ${box.id}`);
+    await queryRun(
+      tx,
+      sql`UPDATE picking_packages SET verified = false, verify_verified = false, updated_at = ${now()} WHERE shipping_box_id = ${box.id}`
+    );
+    await logTransition(tx, {
+      entityType: "shipping_box",
+      entityId: box.id,
+      fromState: "closed",
+      toState: "open",
+      actorId: input.actorId,
+      metadata: { reopen: true },
+    });
   });
 }
 

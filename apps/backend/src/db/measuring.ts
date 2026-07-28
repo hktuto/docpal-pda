@@ -5,6 +5,7 @@ import type { AppDb } from "../db.js";
 import { queryAll, queryGet, queryRun, type DbOrTx } from "./query.js";
 import { transactionLogs } from "./schema/index.js";
 import { now } from "./now.js";
+import { isStepEnabled } from "../config.js";
 
 // ---------------------------------------------------------------------------
 // Measuring flow (ported from apps/api measure.ts, adapted to the new schema).
@@ -111,6 +112,7 @@ export interface MeasuringPackageRow {
   coo: string | null;
   cow: string | null;
   verified: boolean;
+  verifyVerified: boolean;
   partNo: string;
   wclItemNo: string | null;
 }
@@ -122,6 +124,7 @@ export interface MeasuringBoxRow {
   grossWeight: number | null;
   netWeight: number | null;
   destinationCountry: string | null;
+  suggestedNetWeightKg: number | null;
   packages: MeasuringPackageRow[];
 }
 
@@ -159,16 +162,19 @@ export async function getMeasuringTaskDetail(db: AppDb, taskId: string): Promise
   const boxIds = boxes.map((b) => b.id);
 
   const packages = boxIds.length
-    ? await queryAll<MeasuringPackageRow & { shippingBoxId: string }>(
+    ? await queryAll<MeasuringPackageRow & { shippingBoxId: string; formulaWeight: number | null; formulaQty: number | null }>(
         db,
         sql`
           SELECT
             pp.id, pp.shipping_box_id AS "shippingBoxId", pp.qty,
             pp.date_code AS "dateCode", pp.lot_code AS "lotCode", pp.coo, pp.cow, pp.verified,
-            pi.part_no AS "partNo", p.wcl_item_no AS "wclItemNo"
+            pp.verify_verified AS "verifyVerified",
+            pi.part_no AS "partNo", p.wcl_item_no AS "wclItemNo",
+            nwf.weight AS "formulaWeight", nwf.qty AS "formulaQty"
           FROM picking_packages pp
           JOIN picking_items pi ON pi.id = pp.picking_item_id
           JOIN parts p ON p.part_no = pi.part_no
+          LEFT JOIN net_weight_formula nwf ON nwf.part_no = pi.part_no
           WHERE ${inArray(sql`pp.shipping_box_id`, boxIds)}
           ORDER BY pp.created_at, pp.id
         `
@@ -178,11 +184,35 @@ export async function getMeasuringTaskDetail(db: AppDb, taskId: string): Promise
   return {
     task,
     order,
-    boxes: boxes.map((b) => ({
-      ...b,
-      packages: packages.filter((p) => p.shippingBoxId === b.id).map(({ shippingBoxId: _shippingBoxId, ...rest }) => rest),
-    })),
+    boxes: boxes.map((b) => {
+      const boxPackages = packages.filter((p) => p.shippingBoxId === b.id);
+      return {
+        ...b,
+        suggestedNetWeightKg: suggestedNetWeightKg(boxPackages),
+        packages: boxPackages.map(({ shippingBoxId: _shippingBoxId, formulaWeight: _fw, formulaQty: _fq, ...rest }) => rest),
+      };
+    }),
   };
+}
+
+/**
+ * Suggested net weight from the net_weight_formula master: Σ over the box's
+ * packages of (formula.weight / formula.qty) × pkg.qty grams, converted to kg
+ * and rounded to 3 dp. Parts without a formula row contribute 0; null when no
+ * package has a formula at all.
+ */
+function suggestedNetWeightKg(
+  packages: { qty: number; formulaWeight: number | null; formulaQty: number | null }[]
+): number | null {
+  let grams = 0;
+  let any = false;
+  for (const p of packages) {
+    if (p.formulaWeight === null || p.formulaQty === null) continue;
+    any = true;
+    grams += (p.formulaWeight / p.formulaQty) * p.qty;
+  }
+  if (!any) return null;
+  return Math.round((grams / 1000) * 1000) / 1000;
 }
 
 // ---------------------------------------------------------------------------
@@ -190,41 +220,56 @@ export async function getMeasuringTaskDetail(db: AppDb, taskId: string): Promise
 // ---------------------------------------------------------------------------
 
 /**
- * Complete a measuring task (ported from old completeMeasuringTask): the task
- * must be pending, every shipping box of the order must be closed, and no
- * package may be left unboxed (the old "picking item not fully packed" guard).
- * Sets status 'completed' + transition log. No stock movement; the picking
- * order status is left untouched (stays 'finished'), mirroring the old code.
+ * Tx-level core of completeMeasuringTask (ported from old
+ * completeMeasuringTask): the task must be pending, every shipping box of the
+ * order must be closed, and no package may be left unboxed (the old "picking
+ * item not fully packed" guard). Sets status 'completed' + transition log and
+ * spawns the verify task when the verify step is enabled. No stock movement;
+ * the picking order status is left untouched (stays 'finished'). Shared by
+ * the endpoint wrapper and closeShippingBox's auto-complete hook.
  */
-export async function completeMeasuringTask(db: AppDb, input: { taskId: string; actorId: string }): Promise<void> {
-  return db.transaction(async (tx) => {
-    const task = await queryGet<{ id: string; pickingOrderId: string; status: string }>(
-      tx,
-      sql`SELECT id, picking_order_id AS "pickingOrderId", status FROM measuring_tasks WHERE id = ${input.taskId}`
-    );
-    if (!task) throw new HTTPException(404, { message: "measuring_task_not_found" });
-    await assertActor(tx, input.actorId);
-    if (task.status !== "pending") throw new HTTPException(409, { message: "measuring_task_not_pending" });
+export async function completeMeasuringTaskTx(tx: DbOrTx, input: { taskId: string; actorId: string }): Promise<void> {
+  const task = await queryGet<{ id: string; pickingOrderId: string; status: string }>(
+    tx,
+    sql`SELECT id, picking_order_id AS "pickingOrderId", status FROM measuring_tasks WHERE id = ${input.taskId}`
+  );
+  if (!task) throw new HTTPException(404, { message: "measuring_task_not_found" });
+  await assertActor(tx, input.actorId);
+  if (task.status !== "pending") throw new HTTPException(409, { message: "measuring_task_not_pending" });
 
-    const openBox = await queryGet<{ id: string }>(
-      tx,
-      sql`SELECT id FROM shipping_boxes WHERE picking_order_id = ${task.pickingOrderId} AND status <> 'closed' LIMIT 1`
-    );
-    if (openBox) throw new HTTPException(409, { message: "shipping_boxes_not_all_closed" });
+  const openBox = await queryGet<{ id: string }>(
+    tx,
+    sql`SELECT id FROM shipping_boxes WHERE picking_order_id = ${task.pickingOrderId} AND status <> 'closed' LIMIT 1`
+  );
+  if (openBox) throw new HTTPException(409, { message: "shipping_boxes_not_all_closed" });
 
-    const unboxed = await queryGet<{ id: string }>(
-      tx,
-      sql`SELECT id FROM picking_packages WHERE picking_order_id = ${task.pickingOrderId} AND shipping_box_id IS NULL LIMIT 1`
-    );
-    if (unboxed) throw new HTTPException(409, { message: "picking_items_not_fully_packed" });
+  const unboxed = await queryGet<{ id: string }>(
+    tx,
+    sql`SELECT id FROM picking_packages WHERE picking_order_id = ${task.pickingOrderId} AND shipping_box_id IS NULL LIMIT 1`
+  );
+  if (unboxed) throw new HTTPException(409, { message: "picking_items_not_fully_packed" });
 
-    await queryRun(tx, sql`UPDATE measuring_tasks SET status = 'completed' WHERE id = ${task.id}`);
-    await logTransition(tx, {
-      entityType: "measuring_task",
-      entityId: task.id,
-      fromState: "pending",
-      toState: "completed",
-      actorId: input.actorId,
-    });
+  await queryRun(tx, sql`UPDATE measuring_tasks SET status = 'completed' WHERE id = ${task.id}`);
+  // Chain: measuring done → verify task (unless the verify step is off).
+  // The unique index keeps a re-complete/re-run idempotent.
+  if (isStepEnabled("verify")) {
+    await queryRun(
+      tx,
+      sql`INSERT INTO verify_tasks (id, picking_order_id, status, created_at)
+          VALUES (${randomUUID()}, ${task.pickingOrderId}, 'pending', ${now()})
+          ON CONFLICT (picking_order_id) DO NOTHING`
+    );
+  }
+  await logTransition(tx, {
+    entityType: "measuring_task",
+    entityId: task.id,
+    fromState: "pending",
+    toState: "completed",
+    actorId: input.actorId,
   });
+}
+
+/** Endpoint wrapper: runs the tx-level core in its own transaction. */
+export async function completeMeasuringTask(db: AppDb, input: { taskId: string; actorId: string }): Promise<void> {
+  return db.transaction((tx) => completeMeasuringTaskTx(tx, input));
 }

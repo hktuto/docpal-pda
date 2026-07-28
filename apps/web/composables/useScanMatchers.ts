@@ -26,7 +26,7 @@ export async function runScanMatcher(
       return m.matchPutAway(ctx.receivingOrderId, ctx.receivingItem, parsed, ctx.shelfBoxId);
     case 'measuring':
       if (!ctx.packages) return m.error('missing_box_packages');
-      return m.matchMeasuring(ctx.packages, ctx.targetPackageId, parsed);
+      return m.matchMeasuring(ctx.packages, ctx.targetPackageId, parsed, ctx.flow);
     default:
       return m.error('unknown_scan_task');
   }
@@ -59,6 +59,9 @@ export interface ScanTaskContext {
   // matching runs client-side, then verifyPackage by id)
   packages?: MeasuringPackage[];
   targetPackageId?: string;
+  // measuring vs verify pass — decides which per-package flag skips a row
+  // (`verified` in measuring, `verifyVerified` in verify); default 'measuring'
+  flow?: 'measuring' | 'verify';
   // when true, even a single match opens the review dialog instead of auto-applying
   confirmSingleMatch?: boolean;
 }
@@ -77,7 +80,7 @@ export type ScanMatchResult =
 export interface ScanMatchers {
   matchPicking(allocation: PickingAllocationRef, pickingItem: PickingItemRef, parsed: OcrInput): Promise<ScanMatchResult>;
   matchPutAway(receivingOrderId: string | undefined, receivingItem: PutAwayExpectedItem, parsed: OcrInput, shelfBoxId?: string | null): Promise<ScanMatchResult>;
-  matchMeasuring(packages: MeasuringPackage[], targetPackageId: string | undefined, parsed: OcrInput): Promise<ScanMatchResult>;
+  matchMeasuring(packages: MeasuringPackage[], targetPackageId: string | undefined, parsed: OcrInput, flow?: 'measuring' | 'verify'): Promise<ScanMatchResult>;
   error(err: I18nError): ScanMatchResult;
   error(code: string, params?: Record<string, unknown>): ScanMatchResult;
 }
@@ -175,7 +178,7 @@ export function useScanMatchers(): ScanMatchers {
   // Client-side match against the box's packages (consolidated measuring
   // detail): part must agree, the label's batch fields constrain only when
   // both sides carry a value, and qty must be exact. Apply = verifyPackage.
-  async function matchMeasuring(packages: MeasuringPackage[], targetPackageId: string | undefined, parsed: OcrInput): Promise<ScanMatchResult> {
+  async function matchMeasuring(packages: MeasuringPackage[], targetPackageId: string | undefined, parsed: OcrInput, flow: 'measuring' | 'verify' = 'measuring'): Promise<ScanMatchResult> {
     const user = currentUser.value;
     if (!user?.id) return error('operator_not_signed_in');
 
@@ -190,8 +193,13 @@ export function useScanMatchers(): ScanMatchers {
       const coo = parsed.coo ? normalize(parsed.coo) : '';
       const cow = parsed.cow ? normalize(parsed.cow) : '';
 
+      // The verify pass re-scans against the verify-specific flag; the
+      // measuring pass uses the shared `verified` flag.
+      const alreadyDone = (pkg: MeasuringPackage) =>
+        flow === 'verify' ? pkg.verifyVerified : pkg.verified;
+
       const matched = packages.find((pkg) => {
-        if (pkg.verified) return false;
+        if (alreadyDone(pkg)) return false;
         if (targetPackageId && pkg.id !== targetPackageId) return false;
         if (normalize(pkg.partNo) !== partNo) return false;
         const pkgDateCode = pkg.dateCode ? normalizeCode(pkg.dateCode) : '';

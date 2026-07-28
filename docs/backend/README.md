@@ -117,21 +117,37 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   - `DELETE /packages/:id` (no body) — remove an unboxed, unverified
     package, reversing source + allocation + ledger. Scan and removal run
     `allocateAll` best-effort after commit.
-  - `POST /packages/:id/verify` (no body) — measuring-time verification
-    (package boxed, box open, measuring task pending).
+  - `POST /packages/:id/verify` (no body) — measuring/verify-time verification
+    (package boxed, pending measuring OR verify task — 409
+    `no_pending_measure_or_verify_task`). With a pending measuring task the
+    box must be open and `verified` is set; with a pending verify task the
+    box may be open OR closed (re-scan against the sealed box) and both
+    `verified` and the `verify_verified` re-scan flag are set (409
+    `package_already_verified` per the applicable flag).
   - `POST /picking-orders/:id/boxes` (no body) /
-    `PATCH /shipping-boxes/:id` `{boxSize?, netWeightG?,
-    grossWeightG?, destinationCountry?}` (grams) — create / measure boxes.
+    `PATCH /shipping-boxes/:id` `{boxSize?, netWeightKg?,
+    grossWeightKg?, destinationCountry?}` (kilograms — decimals allowed,
+    rounded to 3 dp; 400 `invalid_net_weight_kg` /
+    `invalid_gross_weight_kg`) — create / measure boxes.
   - `POST /shipping-boxes/:id/packages` `{packageId}` /
     `DELETE /shipping-boxes/:id/packages/:packageId` (no body) /
     `POST /shipping-boxes/:id/add-all-unboxed` (no body) → `{packed}` —
     box membership; `picked_qty` tracks boxed packages, so boxing the last
-    package auto-finishes the order (+ `measuring_tasks` row).
+    package auto-finishes the order (+ the next-step task row per the
+    flow-step config — see `GET /config` below).
   - `POST /shipping-boxes/:id/cancel` (no body) (empty + open) /
     `POST /shipping-boxes/:id/close` (no body) (all packages verified +
-    destination/box-size/weights guards, transition log).
-  - `POST /picking-orders/:id/finish` (no body) → the `measuring_tasks`
-    row (409 `measuring_task_exists` when present).
+    destination/box-size/weights guards, transition log; closing the order's
+    last open box with nothing left unboxed also auto-completes a pending
+    measuring task in the same tx — see the measuring flow below) /
+    `POST /shipping-boxes/:id/reopen` (no body) — verify-step re-measure:
+    closed box → `open` + its packages un-verified (both `verified` and
+    `verify_verified` reset; 409
+    `shipping_box_not_closed`; 409 `verify_task_not_pending` — reopen requires
+    a pending verify task on the order).
+  - `POST /picking-orders/:id/finish` (no body) → the next-step task row —
+    measuring, or verify when the measuring step is disabled, null when both
+    are off (409 `measuring_task_exists` when either task row exists).
   - `POST /picking-orders/report-issues` `{entries:[{pickingOrderId,
     reason, qty?, packSize?, note?, remark?}]}` → `{reported[], skipped[]}` —
     per-order issue fields + `issue` status + transition log; unknown ids and
@@ -157,16 +173,70 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   - `GET /measuring-tasks?status=` — list with `orderNo`/`shipTo` and
     server-side `boxCount`/`closedBoxCount` (closed = any status but `open`).
   - `GET /measuring-tasks/:id` — consolidated `{task, order, boxes[{...,
-    packages[]}]`; packages carry `partNo`/`wclItemNo` — no second
+    packages[]}]`; packages carry `partNo`/`wclItemNo` plus the
+    `verified`/`verifyVerified` flags, and each box carries
+    `suggestedNetWeightKg` — Σ over its packages of
+    `(formula.weight / formula.qty) × pkg.qty` grams from
+    `net_weight_formula`, converted to kg (3 dp; parts without a formula
+    contribute 0, `null` when none have one) — no second
     request. 404 `measuring_task_not_found`.
   - `POST /measuring-tasks/:id/complete` (no body) — guards: 404
     `measuring_task_not_found`, 409 `measuring_task_not_pending`, 409
     `shipping_boxes_not_all_closed`, 409 `picking_items_not_fully_packed`
-    (unboxed packages left); then `completed` + transition log. No stock
+    (unboxed packages left); then `completed` + transition log — and, when
+    the verify step is enabled, the order's `verify_tasks` row (`ON CONFLICT
+    DO NOTHING`). No stock
     movement; the picking order status stays `finished` (old
-    `completeMeasuringTask` semantics). Box measurement itself reuses the
+    `completeMeasuringTask` semantics). The same core (`completeMeasuringTaskTx`)
+    also runs automatically inside `POST /shipping-boxes/:id/close` when the
+    closed box was the order's last open box, so the PDA flow completes the
+    task without calling this endpoint. Box measurement itself reuses the
     picking routes (`PATCH /shipping-boxes/:id`, `/packages/:id/verify`,
     `/close`).
+- Verify flow (`apps/backend/src/routes/verify.ts`, specs
+  `docs/superpowers/specs/2026-07-28-verify-step-and-flow-step-config-design.md`
+  + `docs/superpowers/specs/2026-07-28-measuring-verify-refinements-design.md`)
+  — a second full re-measure pass over the same boxes after measuring:
+  - `GET /verify-tasks?status=` — list with `orderNo`/`shipTo` and
+    server-side `boxCount`/`closedBoxCount` (same shape as measuring).
+  - `GET /verify-tasks/:id` — consolidated `{task, order, boxes[{...,
+    packages[]}]`; packages carry `partNo`/`wclItemNo` plus the
+    `verified`/`verifyVerified` flags, and each box carries
+    `suggestedNetWeightKg` (same formula-derived auto-calc as measuring).
+    404 `verify_task_not_found`.
+  - `POST /verify-tasks/:id/complete` (no body) — same guards as measuring
+    completion (404 `verify_task_not_found`, 409 `verify_task_not_pending`,
+    409 `shipping_boxes_not_all_closed`, 409
+    `picking_items_not_fully_packed`) plus 409 `packages_not_all_rescanned`
+    until every package carries the `verify_verified` re-scan flag; then
+    `completed` + transition log. No
+    stock movement; the picking order status stays `finished`. Box re-work
+    reuses the picking routes, including the verify-only
+    `POST /shipping-boxes/:id/reopen` (see the picking flow above). A
+    `verify_tasks` row is created when a measuring task completes — or
+    directly at picking finish when the measuring step is disabled.
+- Shipping feed (`apps/backend/src/routes/shipping.ts`) — config-aware read
+  for the admin console: completed verify tasks when the verify step is on,
+  else completed measuring tasks, else finished picking orders with no task
+  rows.
+  - `GET /shipping-orders` — rows `{source ('verify'|'measuring'|'picking'),
+    taskId, pickingOrderId, orderNo, shipTo, boxCount, closedBoxCount,
+    completedAt}`.
+  - `GET /shipping-orders/:pickingOrderId` — task-agnostic `{order,
+    boxes[{..., packages[]}]` detail (same shape as the measuring/verify
+    detail). 404 `picking_order_not_found`.
+- Flow-step config (`apps/backend/src/routes/config.ts`):
+  - `GET /config` → `{flowSteps}` — one boolean per step (`receiving`,
+    `put-away`, `picking`, `goods-verify`, `measuring`, `verify`,
+    `stock-search`) reflecting the `FLOW_STEPS_DISABLED` env var
+    (comma-separated step keys to turn off; unset/empty = all enabled,
+    unknown keys ignored; changes need a backend restart — the PDA fetches
+    this once after login to hide disabled home tiles). Only three toggles
+    change backend behavior: `measuring`/`verify` rewire the picking-finish
+    chain (finish creates a measuring task, or a verify task when measuring
+    is off, or nothing; completing measuring spawns the verify task when
+    verify is on) and `goods-verify` makes task generation (manual + nightly
+    job) a no-op; the other steps' endpoints stay functional.
 - Goods verify flow (`apps/backend/src/routes/goodsverify.ts`, concept 7):
   - `POST /goods-verify-tasks/generate` `{date?}` → `{created,
     date}` — day-end generation: one pending task per lot moved in
@@ -277,7 +347,8 @@ pnpm dev:admin     # admin console on :3100 (login: admin / DocPalAdmin2026!)
 
 Config (`.env`): `DATABASE_URL` (default database `warehouse_backend` on the
 shared local Postgres), `PORT`, `WAREHOUSE_CODE` (instance warehouse default,
-`HK1`), `CORS_ORIGINS`, `WAREHOUSE_SEED=off` to disable auto-seed.
+`HK1`), `CORS_ORIGINS`, `FLOW_STEPS_DISABLED` (comma-separated flow steps to
+disable, served as `GET /config`), `WAREHOUSE_SEED=off` to disable auto-seed.
 
 `pnpm --filter @warehouse/backend db:seed` wipes and re-seeds the demo dataset;
 `db:generate` / `db:migrate` manage migrations. A PM2 setup for a VM lives in

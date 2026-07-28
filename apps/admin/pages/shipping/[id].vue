@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import type { MeasuringTaskDetail } from "~/utils/flowApi";
+import type { ShippingOrderDetail } from "~/utils/flowApi";
 
 const route = useRoute();
-const taskId = route.params.id as string;
+const pickingOrderId = route.params.id as string;
 const flow = useFlowApi();
 
-const detail = ref<MeasuringTaskDetail | null>(null);
+const detail = ref<ShippingOrderDetail | null>(null);
 const loading = ref(true);
 const error = ref("");
 
 onMounted(async () => {
   try {
-    detail.value = await flow.getMeasuringTask(taskId);
+    detail.value = await flow.getShippingOrder(pickingOrderId);
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -36,7 +36,6 @@ onMounted(async () => {
         <div><div class="dt">{{ $t("admin.pages.shipping.customer") }}</div><div class="dd">{{ detail.order.customerCode ?? "—" }}</div></div>
         <div><div class="dt">{{ $t("admin.pages.shipping.poNo") }}</div><div class="dd">{{ detail.order.poNo ?? "—" }}</div></div>
         <div><div class="dt">{{ $t("admin.pages.shipping.shipTo") }}</div><div class="dd">{{ detail.order.shipTo ?? "—" }}</div></div>
-        <div><div class="dt">{{ $t("admin.pages.shipping.measuringTask") }}</div><div class="dd">{{ detail.task.status }}</div></div>
       </div>
 
       <template v-for="b in detail.boxes" :key="b.id">
@@ -45,6 +44,7 @@ onMounted(async () => {
           <span class="muted">
             — {{ b.status }}{{ b.boxSize ? `, ${b.boxSize}` : ""
             }}{{ b.destinationCountry ? `, ${b.destinationCountry}` : ""
+            }}{{ b.netWeight != null ? `, ${$t("admin.pages.shipping.net", { n: b.netWeight })}` : ""
             }}{{ b.grossWeight != null ? `, ${$t("admin.pages.shipping.gross", { n: b.grossWeight })}` : "" }}
           </span>
         </h2>

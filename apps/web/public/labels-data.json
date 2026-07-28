@@ -461,13 +461,13 @@
       "poNo": "317A52599AHWA",
       "poLine": "271",
       "partNo": "RK73H1JRTTD1002F",
-      "qty": 155000,
+      "qty": 2000,
       "boxId": "X7263",
-      "dateCode": "2607",
-      "traceCode": "L2607",
+      "dateCode": "2601",
+      "traceCode": "L2607A",
       "unknown": "700033",
       "fullName": "KOA+RK73H1JRTTD 1002F",
-      "qrValue": ":RK73H1JRTTD1002F::1553:X:L2607:700033:KOA+RK73H1JRTTD 1002F::::",
+      "qrValue": ":RK73H1JTTD1002F::23:X:L2607A:700033:KOA+RK73H1JTTD 1002F::::",
       "pickingOrderRefs": []
     },
     {

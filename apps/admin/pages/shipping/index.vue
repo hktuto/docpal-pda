@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { MeasuringTaskRow } from "~/utils/flowApi";
+import type { ShippingOrderRow } from "~/utils/flowApi";
 
 const flow = useFlowApi();
-const rows = ref<MeasuringTaskRow[]>([]);
+const rows = ref<ShippingOrderRow[]>([]);
 const loading = ref(false);
 const error = ref("");
 const search = ref("");
@@ -24,8 +24,8 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    // A shipping order = a completed measuring task (per the admin TOC review).
-    rows.value = await flow.listMeasuringTasks("completed");
+    // The backend's config-aware feed: whatever step ends the enabled chain.
+    rows.value = await flow.listShippingOrders();
     selected.value = {};
   } catch (e: any) {
     error.value = e.message;
@@ -76,14 +76,14 @@ onMounted(load);
           </tr>
         </thead>
         <tbody>
-          <tr v-for="r in paged" :key="r.id">
+          <tr v-for="r in paged" :key="r.pickingOrderId">
             <td @click.stop>
-              <input v-model="selected[r.id]" type="checkbox" />
+              <input v-model="selected[r.pickingOrderId]" type="checkbox" />
             </td>
-            <td class="clickable" @click="navigateTo(`/shipping/${r.id}`)">{{ r.orderNo }}</td>
+            <td class="clickable" @click="navigateTo(`/shipping/${r.pickingOrderId}`)">{{ r.orderNo }}</td>
             <td>{{ r.shipTo ?? "—" }}</td>
             <td>{{ $t("admin.pages.shipping.boxesClosed", { closed: r.closedBoxCount, total: r.boxCount }) }}</td>
-            <td>{{ new Date(r.createdAt).toLocaleDateString() }}</td>
+            <td>{{ new Date(r.completedAt).toLocaleDateString() }}</td>
           </tr>
           <tr v-if="total === 0">
             <td colspan="5" class="muted">{{ $t("admin.pages.shipping.none") }}</td>

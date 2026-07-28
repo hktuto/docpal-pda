@@ -13,6 +13,8 @@ export default {
     measuring: "测量",
     measuringDetail: "测量详情",
     measureBox: "测量箱子",
+    verify: "复核",
+    verifyDetail: "复核详情",
     stockSearch: "库存查询"
   },
   actions: {
@@ -32,6 +34,7 @@ export default {
     canceling: "取消中…",
     saveIssue: "保存问题",
     enterMeasurements: "输入测量数据",
+    reopenBox: "重新打开箱子",
     viewPickingOrder: "查看拣货单",
     putAwayRemaining: "上架剩余库存"
   },
@@ -72,6 +75,7 @@ export default {
     noReceivingOrders: "未找到收货单。",
     noPickingOrders: "未找到拣货单。",
     noPendingMeasuringTasks: "暂无待处理的测量任务。",
+    noPendingVerifyTasks: "暂无待处理的复核任务。",
     noReceivingOrdersNeedPutAway: "没有需要上架的收货单。",
     invoiceTitle: "发票 {no}",
     inBox: "在箱 {id} 中",
@@ -84,6 +88,7 @@ export default {
     boxFormat: "{box} — {shelf}",
     reportedBy: "由 {name} 上报",
     grams: "克",
+    kg: "公斤",
     scanSuccess: "扫描成功"
   },
   home: {
@@ -96,6 +101,7 @@ export default {
       putAway: { title: "上架", desc: "将库存移至货架" },
       goodsVerify: { title: "盘点", desc: "盘点当日异动批次" },
       measuring: { title: "测量", desc: "称重并打包箱子" },
+      verify: { title: "复核", desc: "复查已打包的箱子" },
       stockSearch: { title: "库存查询", desc: "按供应商、物料或货架查询库存" }
     }
   },
@@ -418,8 +424,6 @@ export default {
       measurements: "测量数据",
       viewBox: "查看箱子",
       openBox: "打开箱子",
-      completeMeasuring: "完成测量",
-      completing: "完成中…",
       scanHint: "扫描箱子二维码以打开。",
       boxNotFound: "此任务中没有匹配“{id}”的箱子。"
     },
@@ -442,22 +446,43 @@ export default {
       noMatch: "没有匹配该标签的未核验包裹。"
     }
   },
+  verify: {
+    title: "复核",
+    hint: "已完成测量、待复核的拣货单。",
+    boxesClosed: "已关闭箱子 {count} / {total}",
+    detail: {
+      title: "复核详情",
+      shipTo: "收货方",
+      boxes: "箱子",
+      noBoxes: "暂无发货箱。",
+      box: "箱子",
+      status: "状态",
+      packages: "包裹",
+      measurements: "测量数据",
+      viewBox: "查看箱子",
+      openBox: "打开箱子",
+      completeVerify: "完成复核",
+      completing: "完成中…",
+      reopening: "重新打开中…",
+      scanHint: "扫描箱子二维码以打开，然后扫描箱内每个项目以核验料件。",
+      boxNotFound: "此任务中没有匹配“{id}”的箱子。"
+    }
+  },
   boxMeasurementsModal: {
     title: "箱子测量",
     close: "关闭",
     boxSize: "箱子尺寸",
-    netWeight: "净重（克）",
-    grossWeight: "毛重（克）",
+    netWeight: "净重（公斤）",
+    grossWeight: "毛重（公斤）",
     destinationCountry: "目的国家/地区",
     required: "*",
     placeholderBoxSize: "选择箱子尺寸",
     placeholderCountry: "选择国家/地区",
-    placeholderNetWeight: "例如 1200",
-    placeholderGrossWeight: "例如 1450",
-    saveBoxDetails: "保存箱子详情",
-    saving: "保存中…",
-    finishBox: "完成箱子",
-    finishing: "完成中…"
+    placeholderNetWeight: "例如 1.200",
+    placeholderGrossWeight: "例如 1.450",
+    confirmBox: "确认箱子",
+    confirming: "确认中…",
+    netWeightAutoHint: "已根据料件重量自动计算 — 可按需修改。"
   },
   scanReview: {
     multiTitle: "标签上有多个项目",
@@ -659,9 +684,16 @@ export default {
     weights_required: "重量为必填项",
     weights_must_be_positive: "重量必须大于零",
     gross_weight_must_be_gte_net_weight: "毛重必须大于或等于净重",
+    invalid_net_weight_kg: "无效的净重（公斤）",
+    invalid_gross_weight_kg: "无效的毛重（公斤）",
+    packages_not_all_rescanned: "所有包裹都必须重新扫描后才能完成复核",
     cannot_close_empty_shipping_box: "无法关闭空发货箱",
     all_packages_must_be_verified: "关闭箱子前所有包裹必须已盘点",
     measuring_task_not_found: "未找到测量任务",
+    verify_task_not_found: "未找到复核任务",
+    verify_task_not_pending: "复核任务不是待处理状态",
+    shipping_box_not_closed: "发货箱尚未关闭",
+    no_pending_measure_or_verify_task: "此拣货单没有待处理的测量或复核任务",
     shipping_boxes_not_all_closed: "完成前所有发货箱必须已关闭",
     picking_items_not_fully_packed: "尚有已拣包裹未装入发货箱",
     goods_verify_task_not_found: "未找到盘点任务",
@@ -691,6 +723,10 @@ export default {
       verified: "已盘点"
     },
     measuring: {
+      pending: "待处理",
+      completed: "已完成"
+    },
+    verify: {
       pending: "待处理",
       completed: "已完成"
     },
@@ -878,6 +914,8 @@ export default {
       remark: "备注",
       qty: "数量",
       weight: "重量",
+      qtyPcs: "数量（件）",
+      weightGrams: "重量（克）",
       username: "用户名",
       password: "密码",
       displayName: "显示名称",
@@ -971,7 +1009,7 @@ export default {
         shippingBoxes: "出货箱",
         boxId: "箱 ID",
         size: "箱型",
-        netGross: "净重 / 毛重 (g)",
+        netGross: "净重 / 毛重 (kg)",
         destination: "目的地",
         noBoxes: "暂无箱。",
         allocLot: "批次 {shelf}{box}（dc {dc}）",
@@ -1117,9 +1155,9 @@ export default {
         orderStatus: "单据状态",
         customer: "客户",
         poNo: "PO 号",
-        measuringTask: "测量任务",
         boxTitle: "箱 {id}",
-        gross: "毛重 {n} g",
+        net: "净重 {n} kg",
+        gross: "毛重 {n} kg",
         partNo: "零件编号",
         qty: "数量",
         dateCode: "Date Code",

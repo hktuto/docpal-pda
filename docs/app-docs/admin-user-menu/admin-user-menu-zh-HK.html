@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Warehouse Admin 後台 — 用戶指南</title>
+<style>
+@page { size: A4; margin: 16mm 14mm; }
+body {
+  font-family: "Segoe UI", "Microsoft JhengHei", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 10.5pt; line-height: 1.55; color: #1a1a1a; max-width: 180mm; margin: 0 auto;
+}
+h1 { font-size: 20pt; border-bottom: 2px solid #0d9488; padding-bottom: 6px; }
+h2 { font-size: 15pt; color: #0d9488; margin-top: 1.4em; page-break-after: avoid; }
+h3 { font-size: 12pt; margin-top: 1.2em; page-break-after: avoid; }
+figure { margin: 0.8em 0 1.2em; text-align: center; page-break-inside: avoid; }
+figure img { max-width: 170mm; max-height: 105mm; border: 1px solid #ccc; border-radius: 4px; }
+figcaption { font-size: 9pt; color: #666; margin-top: 4px; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; }
+th, td { border: 1px solid #ccc; padding: 5px 8px; text-align: left; font-size: 10pt; }
+th { background: #f0fdfa; }
+code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 9.5pt; }
+a { color: #0d9488; text-decoration: none; }
+hr { border: none; border-top: 1px solid #ddd; margin: 1.6em 0; }
+ul, ol { padding-left: 1.4em; }
+li { margin: 0.3em 0; }
+</style></head><body>
+<h1>Admin 後台用戶指南</h1>
+<p>本指南是 Warehouse Admin 後台（桌面版管理主控台）所有頁面的完整視覺參考：每個頁面顯示甚麼、每個功能做甚麼。所有截圖均以桌面瀏覽器拍攝，並使用示範種子資料（預設語言為繁體中文（香港））。</p>
+<p>PDA 操作員畫面請參閱 <a href="../user-menu/index.md">PDA 用戶指南</a>；本頁是整個後台的地圖。</p>
+<h2>登入畫面</h2>
+<p>開啟後台網址時，管理員會看到 DocPal 登入畫面。</p>
+<figure><img alt="登入畫面" src="./assets/login.png"><figcaption>登入畫面</figcaption></figure>
+<ol>
+<li>輸入<strong>用戶名</strong>。</li>
+<li>輸入<strong>密碼</strong>。</li>
+<li>點按<strong>登入</strong>。</li>
+<li>登入前可在下方切換<strong>語言</strong>（English／简体中文／繁體中文（香港））。</li>
+</ol>
+<p>只有屬於 admin 群組的用戶才能登入後台。示範種子用戶為 <code>admin</code> / <code>DocPalAdmin2026!</code>（正式部署前必須更改）。</p>
+<h2>主頁與版面導覽</h2>
+<p>登入後，主頁以卡片列出所有功能入口，與左邊側欄的分組相同。</p>
+<figure><img alt="主頁" src="./assets/home.png"><figcaption>主頁</figcaption></figure>
+<ul>
+<li><strong>側欄</strong> — 功能分為：客戶、供應商、倉庫、揀貨、收貨、問題、出貨、設定；點按分組可展開／收起。</li>
+<li><strong>主頁卡片</strong> — 與側欄項目一一對應，點按直接進入該頁。</li>
+<li><strong>左下角用戶名</strong>（圖中「Demo Admin」）— 點按開啟彈出選單：切換語言及<strong>登出</strong>。</li>
+</ul>
+<hr>
+<h2>客戶</h2>
+<h3>客戶資料</h3>
+<figure><img alt="客戶資料" src="./assets/customer-profiles.png"><figcaption>客戶資料</figcaption></figure>
+<ul>
+<li>客戶主檔：新增、編輯、刪除客戶資料。</li>
+<li><strong>rule</strong> 欄位記錄客戶的自訂要求（例如標籤或文件的特殊規定）。</li>
+</ul>
+<h2>供應商</h2>
+<h3>供應商</h3>
+<figure><img alt="供應商" src="./assets/suppliers.png"><figcaption>供應商</figcaption></figure>
+<ul>
+<li>供應商主檔（與 Oracle AP_SUPPLIERS 同步的鏡像）：<strong>新增</strong>、<strong>編輯</strong>、<strong>刪除</strong>。</li>
+<li>頂部<strong>搜尋欄</strong>可按關鍵字即時篩選列表。</li>
+<li>每行的<strong>編輯資料</strong>開啟供應商資料（Supplier profile）對話框 — 編輯 PDA 本地的供應商設定，包括 QR 掃描模板（見下文）。</li>
+</ul>
+<h3>QR 掃描模板編輯器</h3>
+<figure><img alt="QR 掃描模板編輯器" src="./assets/supplier-qr-template.png"><figcaption>QR 掃描模板編輯器</figcaption></figure>
+<ul>
+<li>供應商資料對話框內的 <strong>Scan template</strong> 區段，用於教 PDA 解析該供應商標籤的 QR／條碼內容（此對話框內部維持英文介面）。</li>
+<li><strong>Sample scan</strong> — 貼上或掃描一個真實標籤內容作為範例。</li>
+<li><strong>Format</strong> — 選擇解析方式：以分隔字元拆分（Separated by a character）、固定位置（Fixed positions）或進階（直接編輯規則）。</li>
+<li>為每段內容標記欄位（料號、數量、日期碼等）後，下方會即時顯示解析預覽，並可用測試台驗證其他標籤。</li>
+<li><strong>Quantity format</strong> — 該供應商標籤的數量編碼方式（例如 KOA 格式：最後一位代表零的個數）。</li>
+</ul>
+<h2>倉庫</h2>
+<h3>貨架</h3>
+<figure><img alt="貨架" src="./assets/shelves.png"><figcaption>貨架</figcaption></figure>
+<ul>
+<li>貨架主檔：新增、編輯、刪除貨架（區域、代碼等）。</li>
+</ul>
+<h3>貨架箱</h3>
+<figure><img alt="貨架箱" src="./assets/shelf-boxes.png"><figcaption>貨架箱</figcaption></figure>
+<ul>
+<li>列出所有貨架箱：箱號、所屬貨架、ORG／子庫及狀態。</li>
+<li>點按箱號開啟箱詳情。</li>
+</ul>
+<h3>貨架箱詳情</h3>
+<figure><img alt="貨架箱詳情" src="./assets/shelf-box-detail.png"><figcaption>貨架箱詳情</figcaption></figure>
+<ul>
+<li>顯示箱的基本資料及箱內批次（料號、數量、日期碼等）。</li>
+<li>箱內項目為<strong>唯讀</strong> — 庫存異動只能透過 PDA 流程（上架、揀貨、查貨）進行。</li>
+</ul>
+<h3>子庫</h3>
+<figure><img alt="子庫" src="./assets/sub-inventories.png"><figcaption>子庫</figcaption></figure>
+<ul>
+<li>子庫（Sub-inventory）主檔：以 ORG + 代碼為群組，客戶專屬倉會標示客戶代碼。</li>
+<li>每行可直接編輯<strong>共享群組</strong>（share group）— 同一共享群組的子庫可互相供貨給對方的揀貨需求；留空表示只供自己使用。</li>
+<li>頂部可按關鍵字篩選及排序。</li>
+</ul>
+<h3>零件</h3>
+<figure><img alt="零件" src="./assets/parts.png"><figcaption>零件</figcaption></figure>
+<ul>
+<li>零件主檔（約十萬筆 Oracle 料號）：<strong>伺服器端分頁</strong>，頂部可按料號關鍵字搜尋、按供應商篩選，欄位標題可點按排序。</li>
+<li>新增、編輯、刪除零件（料號為唯一鍵，其他表以此引用）。</li>
+</ul>
+<h3>淨重</h3>
+<figure><img alt="淨重" src="./assets/net-weight-formulas.png"><figcaption>淨重</figcaption></figure>
+<ul>
+<li>淨重公式表：按料號設定單件淨重，供測量流程計算箱件淨重。</li>
+</ul>
+<h3>箱型</h3>
+<figure><img alt="箱型" src="./assets/box-sizes.png"><figcaption>箱型</figcaption></figure>
+<ul>
+<li>箱型主檔：箱子的尺寸資料，供測量流程選用。</li>
+</ul>
+<h3>國家</h3>
+<figure><img alt="國家" src="./assets/countries.png"><figcaption>國家</figcaption></figure>
+<ul>
+<li>國家主檔：目的地國家清單，供測量流程選用。</li>
+</ul>
+<h3>庫存查詢</h3>
+<figure><img alt="庫存查詢" src="./assets/stock-search.png"><figcaption>庫存查詢</figcaption></figure>
+<ul>
+<li>唯讀查詢：選擇<strong>供應商</strong>（或全部）及輸入<strong>料號關鍵字</strong>，按<strong>搜尋</strong>。</li>
+<li><strong>零件</strong>表顯示匹配料號的概要（料號、WCL 貨號、描述、現有數量）。</li>
+<li><strong>批次</strong>表顯示每個庫存批次：DATE CODE、批次號、貨架、箱、ORG／子庫、總數、已分配及可用數量。</li>
+</ul>
+<hr>
+<h2>揀貨</h2>
+<h3>揀貨單</h3>
+<figure><img alt="揀貨單" src="./assets/picking-orders.png"><figcaption>揀貨單</figcaption></figure>
+<ul>
+<li>以<strong>優先順序</strong>（priority_seq）列出揀貨單：單號、客戶、交貨日期、狀態等。</li>
+<li><strong>狀態篩選</strong> — 全部、pending、issue 等；揀貨員在 PDA 上報問題的單會以 issue 狀態顯示。</li>
+<li>點按單號開啟揀貨單詳情。</li>
+</ul>
+<h3>排序</h3>
+<figure><img alt="排序" src="./assets/picking-reorder.png"><figcaption>排序</figcaption></figure>
+<ul>
+<li>拖拉調整揀貨單的優先順序，儲存後系統會按新順序<strong>重新分配庫存</strong>（排前的單先取貨）。</li>
+<li>正被揀貨員操作的單（工作鎖定中）不會被重新分配影響。</li>
+</ul>
+<h3>揀貨單詳情</h3>
+<figure><img alt="揀貨單詳情" src="./assets/picking-order-detail.png"><figcaption>揀貨單詳情</figcaption></figure>
+<ul>
+<li>頂部顯示狀態、客戶、PO 號、收貨地、ORG／子庫。</li>
+<li><strong>交貨日期</strong> — 可直接修改後按<strong>儲存</strong>（會寫入操作記錄）。</li>
+<li><strong>明細數</strong> — 每個項目的零件編號、需求、已分配、已揀數量，以及分配來源（哪個收貨箱）及包裝進度。</li>
+<li><strong>出貨箱</strong> — 此單的運輸箱：箱 ID、狀態、箱型、淨重／毛重、目的地及包裝進度。</li>
+<li><strong>操作記錄</strong> — 頁底的審計日誌（見下文「通用操作說明」）。</li>
+<li>右上角：<strong>報告問題</strong>（見下文）；<strong>下載裝箱單</strong>／<strong>下載 TN</strong> 為佔位按鈕（文件格式待定，暫未開通）。</li>
+</ul>
+<h3>報告揀貨問題</h3>
+<figure><img alt="報告揀貨問題" src="./assets/picking-report-issue.png"><figcaption>報告揀貨問題</figcaption></figure>
+<ul>
+<li>揀貨單詳情的<strong>報告問題</strong>開啟此對話框（與 PDA 揀貨員上報問題相同效果）：</li>
+<ul>
+<li><strong>問題原因</strong> — 例如「庫存不足」。</li>
+<li><strong>實際可用數量</strong> — 必須少於需求數量（對話框會顯示需求數量作提示）。</li>
+<li><strong>備註</strong>及<strong>附註</strong> — 補充說明。</li>
+</ul>
+<li>提交後揀貨單轉為 <strong>issue</strong> 狀態，並從揀貨員的待辦中暫停，直至問題解決。</li>
+</ul>
+<h3>問題單詳情與解決</h3>
+<figure><img alt="問題單詳情" src="./assets/picking-order-issue.png"><figcaption>問題單詳情</figcaption></figure>
+<ul>
+<li>狀態為 issue 的揀貨單會在詳情頂部顯示<strong>問題</strong>區塊：問題原因、問題數量、問題包裝規格、問題備註、問題說明、<strong>上報時間</strong>及<strong>上報人</strong>（顯示用戶姓名）。</li>
+<li>按<strong>解決問題</strong>（可附解決備註）— 揀貨單回到 <strong>pending</strong> 狀態，系統隨即<strong>重新分配庫存</strong>，揀貨員可繼續作業。</li>
+<li>上報及解決都會記入頁底的<strong>操作記錄</strong>。</li>
+</ul>
+<h2>收貨</h2>
+<h3>收貨單</h3>
+<figure><img alt="收貨單" src="./assets/receiving.png"><figcaption>收貨單</figcaption></figure>
+<ul>
+<li>列出收貨單：批次號、供應商、交貨日期、狀態等。</li>
+<li><strong>狀態篩選</strong> — 全部、pending、provisional_received、received 等；有待揀貨需求的單會顯示待揀貨標記。</li>
+<li>點按批次號開啟收貨單詳情。</li>
+</ul>
+<h3>收貨單詳情</h3>
+<figure><img alt="收貨單詳情" src="./assets/receiving-detail.png"><figcaption>收貨單詳情</figcaption></figure>
+<ul>
+<li>頂部顯示狀態及<strong>單據 DATE CODE</strong>（可修改後按<strong>儲存</strong>）。</li>
+<li><strong>篩選欄</strong> — 按發票號／零件編號／PO 即時篩選下方項目。</li>
+<li>每張發票列出其項目：零件編號、數量、箱號、DATE CODE（可逐項修改後按<strong>儲存</strong>）及每項進度。</li>
+<li>每個項目的操作：</li>
+<ul>
+<li><strong>標記異常</strong> — 開啟異常對話框（見下文）。</li>
+<li>已標記異常的項目會顯示紅色「<strong>差異：</strong>」註記及原因，並提供：<strong>確認</strong>（已知悉，標記保留作審計記錄）、<strong>取消</strong>（清除該差異）、<strong>移除</strong>（從訂單刪除該項目；若該項目已開始收貨作業會被拒絕）。</li>
+</ul>
+<li><strong>操作記錄</strong> — 頁底的審計日誌（見下文「通用操作說明」）。</li>
+<li>右上角：<strong>下載送貨單列表</strong>／<strong>下載揀貨清單</strong> 為佔位按鈕（文件格式待定，暫未開通）。</li>
+</ul>
+<h3>標記異常</h3>
+<figure><img alt="標記異常" src="./assets/receiving-mark-issue.png"><figcaption>標記異常</figcaption></figure>
+<ul>
+<li>項目上的<strong>標記異常</strong>開啟此對話框（與 PDA 收貨員匯報問題相同效果）：</li>
+<ul>
+<li><strong>原因</strong> — 找不到（not_found）、損壞（damaged）、數量不符（qty_mismatch）、錯誤物料（wrong_part）、超量出貨（over_shipment）、品質拒收（quality_rejection）。</li>
+<li><strong>數量</strong> — 數量不符／超發／錯料時必填；找不到時必須留空（對話框會顯示預期數量作提示）。</li>
+<li><strong>錯誤料號</strong> — 原因為錯誤物料時填寫實際收到的料號。</li>
+<li><strong>備註</strong> — 補充說明。</li>
+</ul>
+<li>按<strong>上報異常</strong>提交後，項目會加上差異註記，並出現在「問題 → 收貨問題」頁。</li>
+</ul>
+<hr>
+<h2>問題</h2>
+<h3>收貨問題（收貨差異）</h3>
+<figure><img alt="收貨問題" src="./assets/issues-receiving.png"><figcaption>收貨問題</figcaption></figure>
+<ul>
+<li>跨訂單列出所有<strong>未處理</strong>的收貨差異：批次號、發票號、零件編號、供應商、原因、數量、錯誤零件編號及備註。</li>
+<li>每行操作：<strong>確認</strong>（已知悉 — 差異標記會保留作審計記錄）；<strong>取消</strong>（清除該差異）。</li>
+<li>差異的完整歷史（包括已處理的）可在該收貨單詳情頁底的<strong>操作記錄</strong>查看。</li>
+</ul>
+<h3>揀貨問題</h3>
+<figure><img alt="揀貨問題" src="./assets/issues-picking.png"><figcaption>揀貨問題</figcaption></figure>
+<ul>
+<li>列出所有狀態為 <strong>issue</strong> 的揀貨單及上報的問題資料（原因、數量、上報人、上報時間）。</li>
+<li>點按單號進入詳情，按<strong>解決問題</strong> — 訂單回到 pending 並重新分配庫存。</li>
+</ul>
+<h2>出貨</h2>
+<h3>出貨單</h3>
+<figure><img alt="出貨單" src="./assets/shipping.png"><figcaption>出貨單</figcaption></figure>
+<ul>
+<li>列出<strong>已完成測量</strong>的出貨任務：單號、箱號、箱型、重量、目的地等。</li>
+<li><strong>核取方塊</strong>可多選多張出貨單，供日後下載承運商（shipper）文件之用。</li>
+<li>示範種子資料沒有已完成的測量任務，所以列表為空 — 需先在 PDA 完成揀貨及測量流程才會出現資料。</li>
+<li>下載按鈕為佔位功能（承運商文件格式待定，暫未開通）。</li>
+</ul>
+<h2>設定</h2>
+<h3>用戶</h3>
+<figure><img alt="用戶" src="./assets/users.png"><figcaption>用戶</figcaption></figure>
+<ul>
+<li>用戶主檔：新增、編輯、刪除用戶（登入名稱、顯示姓名、密碼）。</li>
+<li>用戶本身沒有角色欄位 — 權限由所屬群組決定。</li>
+</ul>
+<h3>用戶群組</h3>
+<figure><img alt="用戶群組" src="./assets/user-groups.png"><figcaption>用戶群組</figcaption></figure>
+<ul>
+<li>群組主檔：新增、編輯、刪除群組（例如 admin、operator）。</li>
+<li>只有 <strong>admin</strong> 群組的成員可以登入此後台。</li>
+</ul>
+<h3>群組成員</h3>
+<figure><img alt="群組成員" src="./assets/user-group-members.png"><figcaption>群組成員</figcaption></figure>
+<ul>
+<li>群組與用戶的多對多關係：把用戶加入或移出群組。</li>
+<li>一個用戶可屬於多個群組。</li>
+</ul>
+<hr>
+<h2>通用操作說明</h2>
+<ul>
+<li><strong>分頁</strong> — 列表頁底部可切換每頁 20／50／100 條及上一頁／下一頁；零件及淨重頁為伺服器端分頁。</li>
+<li><strong>排序</strong> — 點按欄位標題可切換升序／降序。</li>
+<li><strong>搜尋／篩選</strong> — 列表頂部的搜尋欄即時篩選（供應商、子庫等），或送往伺服器查詢（零件、庫存查詢）。</li>
+<li><strong>重新整理</strong> — 大部分列表頁右上角有<strong>重新整理</strong>按鈕。</li>
+<li><strong>錯誤提示</strong> — 操作失敗時頁面會顯示錯誤橫額及原因（例如移除已開始作業的項目會被拒絕）。</li>
+<li><strong>操作記錄</strong> — 收貨單及揀貨單詳情頁底的審計日誌表：記錄每項改動的時間、操作人（顯示用戶姓名）、動作及內容 — 包括上報問題、解決問題、修改交貨日期、修改 DATE CODE、移除項目等，可用於追查訂單過往是否曾出現問題及如何處理。</li>
+<li><strong>下載按鈕</strong> — 裝箱單、TN、送貨單列表、揀貨清單及承運商文件均為佔位功能，待文件 Excel 格式確定後才開通。</li>
+</ul>
+<h2>注意事項</h2>
+<ul>
+<li>後台直接修改主檔及訂單資料，<strong>沒有二次確認以外的安全網</strong> — 刪除及移除操作請謹慎。</li>
+<li>示範種子密碼（<code>admin</code> / <code>DocPalAdmin2026!</code>）只供演示，正式部署前必須更改。</li>
+<li>後台的資料改動（例如解決問題、調整優先順序）會即時反映到 PDA — PDA 列表會在重新聚焦或收到伺服器事件時自動更新。</li>
+</ul>
+</body></html>

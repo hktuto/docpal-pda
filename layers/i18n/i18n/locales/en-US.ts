@@ -13,6 +13,8 @@ export default {
     measuring: "Measuring",
     measuringDetail: "Measuring Detail",
     measureBox: "Measure Box",
+    verify: "Verify",
+    verifyDetail: "Verify Detail",
     stockSearch: "Stock Search"
   },
   actions: {
@@ -32,6 +34,7 @@ export default {
     canceling: "Canceling…",
     saveIssue: "Save issue",
     enterMeasurements: "Enter measurements",
+    reopenBox: "Reopen box",
     viewPickingOrder: "View picking order",
     putAwayRemaining: "Put away remaining stock"
   },
@@ -72,6 +75,7 @@ export default {
     noReceivingOrders: "No receiving orders found.",
     noPickingOrders: "No picking orders found.",
     noPendingMeasuringTasks: "No pending measuring tasks.",
+    noPendingVerifyTasks: "No pending verify tasks.",
     noReceivingOrdersNeedPutAway: "No receiving orders need put-away.",
     invoiceTitle: "Invoice {no}",
     inBox: "In box {id}",
@@ -84,6 +88,7 @@ export default {
     boxFormat: "{box} — {shelf}",
     reportedBy: "by {name}",
     grams: "g",
+    kg: "kg",
     scanSuccess: "Scanned successfully"
   },
   home: {
@@ -96,6 +101,7 @@ export default {
       putAway: { title: "Put-away", desc: "Move stock to shelves" },
       goodsVerify: { title: "Goods Verify", desc: "Count today's moved lots" },
       measuring: { title: "Measuring", desc: "Weigh and pack boxes" },
+      verify: { title: "Verify", desc: "Re-check packed boxes" },
       stockSearch: { title: "Stock Search", desc: "Search inventory by supplier, item or shelf" }
     }
   },
@@ -418,8 +424,6 @@ export default {
       measurements: "Measurements",
       viewBox: "View box",
       openBox: "Open box",
-      completeMeasuring: "Complete measuring",
-      completing: "Completing…",
       scanHint: "Scan a box QR code to open it.",
       boxNotFound: "No box in this task matches \"{id}\"."
     },
@@ -442,22 +446,43 @@ export default {
       noMatch: "No unverified package matches this label."
     }
   },
+  verify: {
+    title: "Verify",
+    hint: "Measured orders ready for the verify pass.",
+    boxesClosed: "{count} / {total} boxes closed",
+    detail: {
+      title: "Verify Detail",
+      shipTo: "Ship to",
+      boxes: "Boxes",
+      noBoxes: "No shipping boxes yet.",
+      box: "Box",
+      status: "Status",
+      packages: "Packages",
+      measurements: "Measurements",
+      viewBox: "View box",
+      openBox: "Open box",
+      completeVerify: "Complete verify",
+      completing: "Completing…",
+      reopening: "Reopening…",
+      scanHint: "Scan a box QR code to open it, then scan every item inside to verify the parts.",
+      boxNotFound: "No box in this task matches \"{id}\"."
+    }
+  },
   boxMeasurementsModal: {
     title: "Box measurements",
     close: "Close",
     boxSize: "Box size",
-    netWeight: "Net weight (g)",
-    grossWeight: "Gross weight (g)",
+    netWeight: "Net weight (kg)",
+    grossWeight: "Gross weight (kg)",
     destinationCountry: "Destination country",
     required: "*",
     placeholderBoxSize: "Select box size",
     placeholderCountry: "Select country",
-    placeholderNetWeight: "e.g. 1200",
-    placeholderGrossWeight: "e.g. 1450",
-    saveBoxDetails: "Save box details",
-    saving: "Saving…",
-    finishBox: "Finish box",
-    finishing: "Finishing…"
+    placeholderNetWeight: "e.g. 1.200",
+    placeholderGrossWeight: "e.g. 1.450",
+    confirmBox: "Confirm box",
+    confirming: "Confirming…",
+    netWeightAutoHint: "Auto-calculated from part weights — adjust if needed."
   },
   scanReview: {
     multiTitle: "Multiple items on label",
@@ -659,9 +684,16 @@ export default {
     weights_required: "Weights are required",
     weights_must_be_positive: "Weights must be greater than zero",
     gross_weight_must_be_gte_net_weight: "Gross weight must be greater than or equal to net weight",
+    invalid_net_weight_kg: "Invalid net weight (kg)",
+    invalid_gross_weight_kg: "Invalid gross weight (kg)",
+    packages_not_all_rescanned: "Every package must be re-scanned before completing the verify task",
     cannot_close_empty_shipping_box: "Cannot close an empty shipping box",
     all_packages_must_be_verified: "All packages must be verified before closing the box",
     measuring_task_not_found: "Measuring task not found",
+    verify_task_not_found: "Verify task not found",
+    verify_task_not_pending: "Verify task is not pending",
+    shipping_box_not_closed: "Shipping box is not closed",
+    no_pending_measure_or_verify_task: "No pending measuring or verify task for this order",
     shipping_boxes_not_all_closed: "All shipping boxes must be closed before completing",
     picking_items_not_fully_packed: "Some picked packages are not in a shipping box yet",
     goods_verify_task_not_found: "Goods verify task not found",
@@ -691,6 +723,10 @@ export default {
       verified: "Verified"
     },
     measuring: {
+      pending: "Pending",
+      completed: "Completed"
+    },
+    verify: {
       pending: "Pending",
       completed: "Completed"
     },
@@ -878,6 +914,8 @@ export default {
       remark: "Remark",
       qty: "Qty",
       weight: "Weight",
+      qtyPcs: "Qty (pcs)",
+      weightGrams: "Weight (g)",
       username: "Username",
       password: "Password",
       displayName: "Display name",
@@ -972,7 +1010,7 @@ export default {
         shippingBoxes: "Shipping boxes",
         boxId: "Box ID",
         size: "Size",
-        netGross: "Net / Gross (g)",
+        netGross: "Net / Gross (kg)",
         destination: "Destination",
         noBoxes: "No boxes yet.",
         allocLot: "Lot {shelf}{box} (dc {dc})",
@@ -1120,9 +1158,9 @@ export default {
         orderStatus: "Order status",
         customer: "Customer",
         poNo: "PO No",
-        measuringTask: "Measuring task",
         boxTitle: "Box {id}",
-        gross: "gross {n} g",
+        net: "net {n} kg",
+        gross: "gross {n} kg",
         partNo: "Part No",
         qty: "Qty",
         dateCode: "Date Code",

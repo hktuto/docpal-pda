@@ -94,7 +94,9 @@ Default box sizes offered at measuring/packing.
 ## net_weight_formula
 
 Net-weight reference per item: `qty` units weigh `weight` grams → unit net =
-weight / qty.
+weight / qty. Stays in grams; the measuring/verify task details convert it to
+kg for the per-box `suggestedNetWeightKg` auto-calc (shipping-box weights are
+kg — see `shipping_boxes`).
 
 | Field | Type | Description |
 | --- | --- | --- |
@@ -336,6 +338,23 @@ Measuring/weighing task created when a picking order is finished.
 Note: status values `pending` | `completed`; unique index on
 `picking_order_id` (one measuring task per order).
 
+## verify_tasks
+
+Verify (second-pass re-measure) task created when a measuring task completes
+— or directly at picking finish when the measuring step is disabled
+(`FLOW_STEPS_DISABLED`; spec
+`docs/superpowers/specs/2026-07-28-verify-step-and-flow-step-config-design.md`).
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Task id (UUID) |
+| picking_order_id | text NOT NULL FK → picking_orders(id) ON DELETE CASCADE | Order being verified |
+| status | text NOT NULL DEFAULT 'pending' | Task status |
+| created_at | timestamp NOT NULL | Creation time (UTC) |
+
+Note: status values `pending` | `completed`; unique index on
+`picking_order_id` (one verify task per order). Mirrors `measuring_tasks`.
+
 ## shipping_boxes
 
 Shipping cartons used at picking and measuring.
@@ -346,15 +365,16 @@ Shipping cartons used at picking and measuring.
 | picking_order_id | text FK → picking_orders(id) | Order the box belongs to |
 | measuring_task_id | text FK → measuring_tasks(id) | Measuring task the box is attached to |
 | status | text NOT NULL DEFAULT 'open' | Box status |
-| gross_weight | real | Gross weight |
-| net_weight | real | Net weight |
+| gross_weight | real | Gross weight (kilograms, decimals ≤ 3 dp) |
+| net_weight | real | Net weight (kilograms, decimals ≤ 3 dp) |
 | destination_country | text | Destination country code |
 | box_size | text | Box size code (see box_size_list) |
 | created_at | timestamp NOT NULL | Creation time (UTC) |
 | updated_at | timestamp NOT NULL | Last update time (UTC) |
 
 Note: status values `open` | `closed`; indexes on `measuring_task_id` and
-`picking_order_id`.
+`picking_order_id`. Weights are kilograms end-to-end (API, PDA, admin) — the
+`real` columns are unchanged; only the unit semantics moved from grams to kg.
 
 ## picking_packages
 
@@ -373,7 +393,8 @@ Picked units per source — the packing truth for what went into which box.
 | lot_code | text | Lot number of the picked stock |
 | coo | text | Country of origin |
 | cow | text | Country of wafer |
-| verified | boolean NOT NULL DEFAULT false | Package verified |
+| verified | boolean NOT NULL DEFAULT false | Package verified (measuring pass) |
+| verify_verified | boolean NOT NULL DEFAULT false | Package re-scanned during the verify pass (migration 0004; set with `verified` by `POST /packages/:id/verify` under a pending verify task, reset by box reopen; gates verify-task completion) |
 | created_at | timestamp NOT NULL | Creation time (UTC) |
 | updated_at | timestamp NOT NULL | Last update time (UTC) |
 

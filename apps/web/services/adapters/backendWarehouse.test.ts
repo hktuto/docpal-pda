@@ -567,13 +567,13 @@ describe('backendWarehouse picking flow', () => {
     expect(JSON.parse(lastCall().init.body as string)).toEqual({});
   });
 
-  it('updateShippingBox PATCHes gram weights and box fields', async () => {
+  it('updateShippingBox PATCHes kg weights and box fields', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ id: 'box1' }));
 
     await service().updateShippingBox('box1', {
       boxSize: '20 X 16 X 20',
-      netWeightG: 500,
-      grossWeightG: '650',
+      netWeightKg: 0.5,
+      grossWeightKg: '0.65',
       destinationCountry: 'HK',
     });
 
@@ -581,8 +581,8 @@ describe('backendWarehouse picking flow', () => {
     expect(lastCall().init.method).toBe('PATCH');
     expect(JSON.parse(lastCall().init.body as string)).toEqual({
       boxSize: '20 X 16 X 20',
-      netWeightG: 500,
-      grossWeightG: '650',
+      netWeightKg: 0.5,
+      grossWeightKg: '0.65',
       destinationCountry: 'HK',
     });
   });
@@ -748,6 +748,120 @@ describe('backendWarehouse measuring flow', () => {
     expect(lastCall().url).toBe(`${BASE_URL}/measuring-tasks/mt1/complete`);
     expect(lastCall().init.method).toBe('POST');
     expect(JSON.parse(lastCall().init.body as string)).toEqual({});
+  });
+});
+
+describe('backendWarehouse verify flow', () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  function service() {
+    return createBackendWarehouseService({ apiBaseUrl: BASE_URL });
+  }
+
+  function lastCall() {
+    const [url, init] = fetchMock.mock.calls[fetchMock.mock.calls.length - 1];
+    return { url: url as string, init: init as RequestInit };
+  }
+
+  it('getVerifyTasks passes the status filter through and skips it when absent', async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
+
+    await service().getVerifyTasks();
+    expect(lastCall().url).toBe(`${BASE_URL}/verify-tasks`);
+    expect(lastCall().init.method).toBe('GET');
+
+    await service().getVerifyTasks('pending');
+    expect(lastCall().url).toBe(`${BASE_URL}/verify-tasks?status=pending`);
+  });
+
+  it('getVerifyTask GETs the consolidated detail', async () => {
+    const detail = {
+      task: { id: 'vt1', status: 'pending', pickingOrderId: 'po1', createdAt: '2026-07-28T10:00:00.000Z' },
+      order: {
+        id: 'po1',
+        orderNo: 'SO-2026-0001',
+        status: 'finished',
+        shipTo: 'ACME HK',
+        customerCode: 'ACME',
+        poNo: 'PO-1',
+      },
+      boxes: [
+        {
+          id: 'box1',
+          status: 'closed',
+          boxSize: 'M',
+          grossWeight: 1450,
+          netWeight: 1200,
+          destinationCountry: 'Japan',
+          packages: [
+            {
+              id: 'pkg1',
+              qty: 500,
+              dateCode: '2601',
+              lotCode: 'L1',
+              coo: 'JP',
+              cow: 'TW',
+              verified: true,
+              partNo: 'RK73H1JTTD1002F',
+              wclItemNo: 'WCL-1',
+            },
+          ],
+        },
+      ],
+    };
+    fetchMock.mockResolvedValue(jsonResponse(detail));
+
+    const result = await service().getVerifyTask('vt1');
+
+    expect(lastCall().url).toBe(`${BASE_URL}/verify-tasks/vt1`);
+    expect(lastCall().init.method).toBe('GET');
+    expect(result).toEqual(detail);
+  });
+
+  it('completeVerifyTask POSTs the complete verb', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+
+    await service().completeVerifyTask('vt1');
+
+    expect(lastCall().url).toBe(`${BASE_URL}/verify-tasks/vt1/complete`);
+    expect(lastCall().init.method).toBe('POST');
+    expect(JSON.parse(lastCall().init.body as string)).toEqual({});
+  });
+
+  it('reopenShippingBox POSTs the reopen verb', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+
+    await service().reopenShippingBox('box1');
+
+    expect(lastCall().url).toBe(`${BASE_URL}/shipping-boxes/box1/reopen`);
+    expect(lastCall().init.method).toBe('POST');
+    expect(JSON.parse(lastCall().init.body as string)).toEqual({});
+  });
+
+  it('getFlowConfig GETs /config', async () => {
+    const config = {
+      flowSteps: {
+        receiving: true,
+        'put-away': true,
+        picking: true,
+        'goods-verify': true,
+        measuring: true,
+        verify: false,
+        'stock-search': true,
+      },
+    };
+    fetchMock.mockResolvedValue(jsonResponse(config));
+
+    const result = await service().getFlowConfig();
+
+    expect(lastCall().url).toBe(`${BASE_URL}/config`);
+    expect(lastCall().init.method).toBe('GET');
+    expect(result).toEqual(config);
   });
 });
 

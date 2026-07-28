@@ -67,6 +67,19 @@ export const measuringTasks = pgTable(
   })
 );
 
+export const verifyTasks = pgTable(
+  "verify_tasks",
+  {
+    id: text("id").primaryKey(),
+    pickingOrderId: text("picking_order_id").notNull().references(() => pickingOrders.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("pending"), // pending | completed
+    createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
+  },
+  (t) => ({
+    pickingOrderUq: uniqueIndex("idx_verify_tasks_picking_order").on(t.pickingOrderId),
+  })
+);
+
 export const shippingBoxes = pgTable(
   "shipping_boxes",
   {
@@ -102,6 +115,7 @@ export const pickingPackages = pgTable(
     coo: text("coo"),
     cow: text("cow"),
     verified: boolean("verified").notNull().default(false),
+    verifyVerified: boolean("verify_verified").notNull().default(false), // verify-step re-scan flag
     createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
     updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
   },

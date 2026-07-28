@@ -6,6 +6,7 @@ import { queryAll, queryGet, queryRun, type DbOrTx } from "./query.js";
 import { transactionLogs, inventoryTransactions } from "./schema/index.js";
 import { emitEvent } from "./events.js";
 import { now } from "./now.js";
+import { isStepEnabled } from "../config.js";
 
 // ---------------------------------------------------------------------------
 // Goods verify flow (concept 7 — daily cycle count).
@@ -74,6 +75,8 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
  * unique index, so `created` counts only newly inserted rows; the INNER JOIN
  * skips ledger rows whose lot no longer exists. `actorId` is accepted for the
  * system-job caller but not required (nothing actor-stamped is written).
+ * When the goods-verify flow step is disabled (FLOW_STEPS_DISABLED) this is a
+ * no-op — it gates both POST /goods-verify-tasks/generate and the nightly job.
  */
 export async function generateGoodsVerifyTasks(
   db: AppDb,
@@ -84,6 +87,7 @@ export async function generateGoodsVerifyTasks(
   }
   const date =
     input.date ?? (await queryGet<{ d: string }>(db, sql`SELECT CURRENT_DATE::text AS d`))!.d;
+  if (!isStepEnabled("goods-verify")) return { created: 0, date };
   const at = now();
   const res = await queryRun(
     db,

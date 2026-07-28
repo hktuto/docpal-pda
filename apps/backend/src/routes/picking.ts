@@ -15,6 +15,7 @@ import {
   releaseWorkLock,
   removePackageFromBox,
   removeScannedPackage,
+  reopenShippingBox,
   reorderPickingOrders,
   reportPickingOrderIssues,
   resolvePickingOrderIssue,
@@ -129,19 +130,19 @@ pickingRoute.post("/picking-orders/:id/boxes", async (c) => {
   return c.json(box, 201);
 });
 
-// Edit box size / weights (grams) / destination country; open boxes only.
+// Edit box size / weights (kg) / destination country; open boxes only.
 pickingRoute.patch("/shipping-boxes/:id", async (c) => {
   const body = await readJson<{
     boxSize?: string | null;
-    netWeightG?: number | string | null;
-    grossWeightG?: number | string | null;
+    netWeightKg?: number | string | null;
+    grossWeightKg?: number | string | null;
     destinationCountry?: string | null;
   }>(c);
   const box = await updateShippingBox(db, c.req.param("id"), {
     actorId: actorFrom(c).id,
     boxSize: body.boxSize,
-    netWeightG: body.netWeightG,
-    grossWeightG: body.grossWeightG,
+    netWeightKg: body.netWeightKg,
+    grossWeightKg: body.grossWeightKg,
     destinationCountry: body.destinationCountry,
   });
   return c.json(box, 200);
@@ -184,6 +185,13 @@ pickingRoute.post("/shipping-boxes/:id/cancel", async (c) => {
 
 pickingRoute.post("/shipping-boxes/:id/close", async (c) => {
   await closeShippingBox(db, { shippingBoxId: c.req.param("id"), actorId: actorFrom(c).id });
+  return c.json({ ok: true }, 200);
+});
+
+// Verify-step reopen: closed box → open + packages un-verified, so the worker
+// can re-measure (409 unless the order has a pending verify task).
+pickingRoute.post("/shipping-boxes/:id/reopen", async (c) => {
+  await reopenShippingBox(db, { shippingBoxId: c.req.param("id"), actorId: actorFrom(c).id });
   return c.json({ ok: true }, 200);
 });
 

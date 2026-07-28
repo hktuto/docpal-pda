@@ -22,6 +22,20 @@
       "when": 1785122511830,
       "tag": "0002_famous_sunspot",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1785206065295,
+      "tag": "0003_tidy_red_skull",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785219641131,
+      "tag": "0004_misty_triton",
+      "breakpoints": true
     }
   ]
 }
