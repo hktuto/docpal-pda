@@ -2,7 +2,7 @@
 
 ## User role
 
-The demo has a single operator role. There is no admin/operator split in the UI today.
+PDA operators share a single operator login; there is no per-role UI split in the PDA app. Access is group-based (`user_groups`): only members of the **admin** group can log into the desktop admin console (`apps/admin`).
 
 ## Login
 

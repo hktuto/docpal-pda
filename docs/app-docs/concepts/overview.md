@@ -8,7 +8,10 @@ The Warehouse PDA app is a Nuxt 3 proof-of-concept for warehouse mobile/Android 
 - Putting received goods away onto shelves.
 - Picking items for outgoing orders.
 - Measuring and packing shipping boxes.
-- Verifying goods during the process.
+- Verifying packed boxes a second time before shipping.
+- Verifying goods during the process (goods verify).
+
+Individual flow steps (e.g. measuring, verify) can be turned on/off per warehouse via the backend `FLOW_STEPS_DISABLED` config — hidden steps are skipped in the flow chain and their home tiles disappear.
 
 ## Key design ideas
 
@@ -18,7 +21,7 @@ The Warehouse PDA app is a Nuxt 3 proof-of-concept for warehouse mobile/Android 
 
 ## Demo limitations
 
-- **Demo passwords only.** Passwords are stored as plain-text hashes in the seed file; there are no tokens or sessions.
+- **Demo passwords only.** The seed uses well-known demo passwords (scrypt-hashed); change them before any real deployment. Login is JWT-based against the backend.
 - **Typed scanning.** Camera OCR exists on Android for label capture in some flows, but much scanning is simulated by typed input.
 - **Single shared dataset.** Everyone using the demo works on the same backend database; use the reset control to start fresh.
 

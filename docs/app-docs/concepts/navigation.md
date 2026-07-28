@@ -5,12 +5,14 @@
 The home screen (`pages/index.vue`) shows the main menu cards:
 
 - Receiving
-- Put-away
 - Picking
-- Measuring
+- Put-away
 - Goods Verify
+- Measuring
+- Verify
+- Stock Search
 
-Tap a card to enter that flow.
+Tap a card to enter that flow. Steps disabled in the backend flow-step config do not show a card.
 
 ![Home screen](../user-menu/assets/home-page.png)
 

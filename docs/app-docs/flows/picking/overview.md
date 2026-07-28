@@ -18,7 +18,7 @@ Use the Picking flow when a picking order is ready and stock has been allocated.
 3. The app shows allocated lines and suggested lots/boxes.
 4. The operator picks each line, confirming quantity and location.
 5. Optional: the operator can scan a supplier label to auto-match and apply a pick (OCR-assisted picking).
-6. When all lines are picked, the picking order is finished.
+6. When all lines are picked, the picking order is finished and the next enabled step begins (measuring, or verify when measuring is disabled).
 
 ## Related guides
 

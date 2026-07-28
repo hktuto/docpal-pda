@@ -101,7 +101,7 @@ li { margin: 0.3em 0; }
 <h3>淨重</h3>
 <figure><img alt="淨重" src="./assets/net-weight-formulas.png"><figcaption>淨重</figcaption></figure>
 <ul>
-<li>淨重公式表：按料號設定單件淨重，供測量流程計算箱件淨重。</li>
+<li>淨重公式表：按料號設定單件淨重，供測量／覆核流程自動計算並預填箱件淨重（公斤）。</li>
 </ul>
 <h3>箱型</h3>
 <figure><img alt="箱型" src="./assets/box-sizes.png"><figcaption>箱型</figcaption></figure>
@@ -141,7 +141,7 @@ li { margin: 0.3em 0; }
 <li>頂部顯示狀態、客戶、PO 號、收貨地、ORG／子庫。</li>
 <li><strong>交貨日期</strong> — 可直接修改後按<strong>儲存</strong>（會寫入操作記錄）。</li>
 <li><strong>明細數</strong> — 每個項目的零件編號、需求、已分配、已揀數量，以及分配來源（哪個收貨箱）及包裝進度。</li>
-<li><strong>出貨箱</strong> — 此單的運輸箱：箱 ID、狀態、箱型、淨重／毛重、目的地及包裝進度。</li>
+<li><strong>出貨箱</strong> — 此單的運輸箱：箱 ID、狀態、箱型、淨重／毛重（公斤）、目的地及包裝進度。</li>
 <li><strong>操作記錄</strong> — 頁底的審計日誌（見下文「通用操作說明」）。</li>
 <li>右上角：<strong>報告問題</strong>（見下文）；<strong>下載裝箱單</strong>／<strong>下載 TN</strong> 為佔位按鈕（文件格式待定，暫未開通）。</li>
 </ul>
@@ -216,9 +216,16 @@ li { margin: 0.3em 0; }
 <h3>出貨單</h3>
 <figure><img alt="出貨單" src="./assets/shipping.png"><figcaption>出貨單</figcaption></figure>
 <ul>
-<li>列出<strong>已完成測量</strong>的出貨任務：單號、箱號、箱型、重量、目的地等。</li>
-<li><strong>核取方塊</strong>可多選多張出貨單，供日後下載承運商（shipper）文件之用。</li>
-<li>示範種子資料沒有已完成的測量任務，所以列表為空 — 需先在 PDA 完成揀貨及測量流程才會出現資料。</li>
+<li>列出<strong>可以出貨</strong>的訂單：單號、收貨地、箱數（已封箱進度）及完成時間；頂部搜尋欄可按單號／收貨地即時篩選。</li>
+<li>列表來源會按流程設定（哪些步驟已啟用）自動調整：</li>
+<ul>
+<li><strong>覆核步驟啟用</strong> — 已完成覆核的任務；</li>
+<li><strong>覆核關閉、測量啟用</strong> — 已完成測量的任務；</li>
+<li><strong>兩者都關閉</strong> — 已完成揀貨的訂單。</li>
+</ul>
+<li>點按單號開啟出貨單詳情：顯示單據狀態、客戶、PO 號，以及每個箱的箱型、<strong>淨重／毛重（公斤）</strong>、目的地及箱內包裹清單（含核對狀態）。</li>
+<li><strong>核取方塊</strong>可多選多張出貨單，供日後下載承運商（Shipper）文件之用。</li>
+<li>示範種子資料沒有走完流程的訂單，所以列表為空 — 需先在 PDA 完成揀貨、測量（及覆核）流程才會出現資料。</li>
 <li>下載按鈕為佔位功能（承運商文件格式待定，暫未開通）。</li>
 </ul>
 <h2>設定</h2>

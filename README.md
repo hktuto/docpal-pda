@@ -1,6 +1,6 @@
 # Warehouse Web Demo
 
-A client-side Nuxt 3 proof-of-concept for the DocPal warehouse mobile/Android flows. The web app talks to the `apps/backend` Hono + PostgreSQL API over HTTP (JWT-auth); it also ships as an Android app via Capacitor (`apps/web/android`).
+A Nuxt 3 proof-of-concept for the DocPal warehouse mobile/Android flows. The web (PDA) app is a thin client that talks to the `apps/backend` Hono + PostgreSQL API over HTTP (JWT-auth); it also ships as an Android app via Capacitor (`apps/web/android`). A desktop admin console (`apps/admin`) manages master data and orders through the same backend.
 
 ---
 
@@ -15,7 +15,7 @@ A client-side Nuxt 3 proof-of-concept for the DocPal warehouse mobile/Android fl
 
 ## What it demonstrates
 
-The demo models an event-driven warehouse with two overlapping workflows that share the same inventory.
+The demo models an event-driven warehouse with two overlapping workflows that share the same inventory. The full outbound chain is **picking → measuring → verify → shipping**, where measuring and verify are optional steps the warehouse can turn on/off (see *Flow-step config* below).
 
 ### Workflow A: a receiving order arrives first
 
@@ -27,10 +27,10 @@ The demo models an event-driven warehouse with two overlapping workflows that sh
    - The worker can also use the global **scan button** on the Picking tab to type label data (part number, quantity, date/lot code, and origin country). The system matches the input to linked receiving and picking records and creates a scanned package.
    - A **search box** filters the linked picking orders by order number, part number, date code, or lot code.
    - Each picking order number is a link to the full picking order detail page.
-5. On the picking order detail page the worker creates shipping boxes. The system auto-generates box IDs such as `BOX-S-HK1-20260720-0001`.
+5. On the picking order detail page the worker creates shipping boxes. The system auto-generates box IDs such as `BOX-S-20260720-0001`.
 6. The worker adds scanned packages into boxes. Once every package for a picking item is in a box, the item is finished.
 7. If any stock is left over, the worker can **Shelve (put away)** the remainder into a shelf box. The system logs where every item went.
-8. When a picking order is fully boxed, a measuring task is created so the boxes can be weighed and closed.
+8. When a picking order is fully boxed, the next enabled step's task is created — measuring, or verify when measuring is off.
 
 ### Workflow B: a picking order arrives first
 
@@ -44,57 +44,65 @@ The demo models an event-driven warehouse with two overlapping workflows that sh
 - **Picking** — collect allocated items from shelves or directly from receiving-area lots.
 - **Picking by receiving** — look at one receiving order and see every picking order consuming its stock.
 - **Shelve / Put-away** — move unallocated receiving-area stock into a shelf box; this creates new shelved inventory for future picking.
-- **Goods Verify** — verify the contents of a closed shelf box.
-- **Measuring** — pack picked items into shipping boxes and record weights/size/destination.
+- **Goods Verify** — day-end count of the lots that had stock movements.
+- **Measuring** — weigh and close the shipping boxes of finished picking orders. Weights are in **kg** (decimals); the net weight is auto-calculated from the part net-weight master and pre-filled. A single **Confirm box** action saves and closes a box, and confirming the last box completes the task automatically — there is no manual complete step.
+- **Verify** — a second worker scans each box and re-scans every package (works on sealed boxes) before the order can ship; the task can only complete when everything has been re-scanned.
+- **Stock Search** — look up where a part is stored (shelf, box, quantities).
+- **Flow-step config** — the backend `FLOW_STEPS_DISABLED` env turns individual steps (`receiving`/`put-away`/`picking`/`goods-verify`/`measuring`/`verify`/`stock-search`) on or off: hidden steps disappear from the PDA home menu, and disabling measuring/verify rewires the picking → shipping chain.
+- **Admin console** (`apps/admin`) — desktop UI for master data (suppliers, parts, shelves, sub-inventories, net-weight formulas, …), picking-order priority, issue handling, audit logs, and a config-aware shipping feed (`GET /shipping-orders`: completed verify tasks, completed measuring tasks, or finished picking orders, depending on which steps are enabled).
 
 ---
 
 ## Tech stack
 
-- **Framework:** Nuxt 3 (`ssr: false`)
-- **UI:** Vue 3, plain CSS
-- **Database:** PGlite — WebAssembly build of Postgres running in the browser
-- **ORM:** Drizzle ORM with the `drizzle-orm/pglite` driver
-- **Persistence:** In-memory only. PGlite is initialized without a data directory in `plugins/pglite.client.ts`, so the database lives in the browser tab's memory and is re-seeded on every app launch.
-- **List pages:** Manual `db.execute` queries that reload on mount and when the app regains visibility (Capacitor does not support `useLiveQuery`).
+- **Web (PDA) app:** Nuxt 3 SPA (`ssr: false`), Vue 3, plain CSS — `apps/web`
+- **Mobile shell:** Capacitor (Android platform in `apps/web/android`)
+- **Backend:** Hono + Drizzle ORM + PostgreSQL (JWT auth, SSE event stream) — `apps/backend`, port `3002`
+- **Admin console:** Nuxt 3 SPA — `apps/admin`, port `3100`
+- **Data access:** the PDA app calls `WarehouseService`/`AuthService`, which speak HTTP to the backend through a single adapter layer (`apps/web/services/adapters/`); all business rules and data live server-side
+- **i18n:** shared Nuxt layer `layers/i18n` (en-US / zh-CN / zh-HK) extended by both apps
 
 ---
 
 ## Entity overview
 
+The full table-by-table schema lives in [docs/backend/schema-tables.md](./docs/backend/schema-tables.md). In outline:
+
 ```
-users
-suppliers
-parts
+users / user_groups / user_group_members
+suppliers / supplier_profiles / parts
 shelves
+sub_inventories                    (org_id + code stock partition groups)
 
 receiving_orders
 └── receiving_invoices
-    └── receiving_invoice_items   (lot-level detail)
+    └── receiving_invoice_items    (lot-level detail)
         └── inventory_lot_sources  (traceability link)
-            └── inventory_lots     (stock view, unique by part/date/lot/origin/location when located)
+            └── inventory_lots     (stock view, partitioned by org_id + sub_inventory_code)
 
 picking_orders
 └── picking_items
     ├── allocations                (picking_item → inventory_lot, reserved not yet scanned)
     └── picking_packages           (physical packages scanned then boxed)
 
-measuring_tasks
+measuring_tasks / verify_tasks
 └── shipping_boxes                 (created in picking, packed with picking_packages)
 
-shelf_boxes                       (created during put-away)
-└── shelf_box_items               (verified during goods verify)
+shelf_boxes                        (created during put-away)
+└── shelf_box_items                (verified during goods verify)
 
-transition_logs                   (all status changes)
+goods_verify_tasks                 (day-end counts from inventory_transactions)
+transaction_logs                   (audit trail)
+inventory_transactions             (stock ledger)
 ```
 
 ### Key design points
 
-- **Inventory is location-aware.** A located lot is unique by `(part_id, date_code, lot_code, origin_country, shelf_code, box_id)`. Receiving-area lots (`shelf_code = NULL, box_id = NULL`) are created per materialized allocation so each one has a single `inventory_lot_sources` link; once put away they become located lots and merge by the unique key.
+- **Inventory is location-aware and partitioned by org + sub-inventory.** A located lot is unique by part/date/lot/origin/location; stock is partitioned by the pair `org_id` + `sub_inventory_code`, with cross-store sharing declared via `sub_inventory_share_members`.
 - **Traceability.** `inventory_lot_sources` links every lot back to the originating `receiving_invoice_item`.
-- **Allocations reserve stock; packages track physical units.** When a receiving order becomes `in_hand`, pending picking orders are allocated against matching lots. Scanning an allocation creates a `picking_packages` row and consumes source stock. Boxing a package assigns it to a `shipping_box` and marks quantity as picked.
-- **Shipping boxes are created during picking.** Box IDs are auto-generated as `BOX-S-<warehouse>-<YYYYMMDD>-<seq>` (warehouse from `WAREHOUSE_CODE`, default `HK1`; per-day sequence). Shelf boxes use the same scheme with the `BOX-H-` prefix.
-- **State transitions are logged.** Every status change for receiving orders, picking orders, shelf boxes, shipping boxes, picking items, and measuring tasks writes a row to `transition_logs`.
+- **Allocations reserve stock; packages track physical units.** When a receiving order becomes `in_hand`, pending picking orders are allocated against matching lots (in `picking_orders.priority_seq` order). Scanning an allocation creates a `picking_packages` row and consumes source stock. Boxing a package assigns it to a `shipping_box` and marks quantity as picked.
+- **Shipping boxes are created during picking.** Box IDs are auto-generated as `BOX-<kind>-<YYYYMMDD>-<seq>` (kind `S` = shipping, `H` = shelf; per-day sequence).
+- **Everything is audited.** Mutations write `transaction_logs` rows and stock movements write `inventory_transactions` ledger rows, all inside the same transaction.
 
 ---
 
@@ -104,8 +112,8 @@ transition_logs                   (all status changes)
 
 - A `receiving_order` arrives with one or more `receiving_invoices`.
 - Each invoice has `receiving_invoice_items` describing expected part, quantity, date code, lot code, and origin country.
-- The operator confirms arrival. For each item the system creates an `inventory_lots` row in the **receiving area** (`shelf_code = NULL, box_id = NULL`) with `total_qty = received_qty`.
-- If the operator reports a mismatch, `received_qty` is the actual quantity and `reported_mismatch` is set.
+- The operator confirms arrival. For each item the system creates an `inventory_lots` row in the **receiving area** with `total_qty = received_qty`.
+- If the operator reports a mismatch, `received_qty` is the actual quantity and the mismatch is recorded for admin follow-up.
 - After confirmation, the system automatically tries to allocate the new stock to pending picking orders.
 
 ### Allocation
@@ -115,16 +123,15 @@ transition_logs                   (all status changes)
   1. Lots already on a shelf or in a shelf box (in-stock).
   2. Lots in the receiving area (just arrived, not yet put away).
 - An `allocations` row records how much of each lot is reserved. The reserved quantity reduces the lot's `available_qty`.
-- Shelved stock is consumed first because it is already organized; receiving-area stock is used only when shelved stock is insufficient.
+- Demands are allocated in `picking_orders.priority_seq` order; an order being actively worked on (live work lock) is skipped by the recompute.
 
 ### Picking
 
 - The operator opens a picking order and sees its allocated lots.
 - **Scan package** consumes the allocation and source stock, then creates a `picking_packages` row with `shipping_box_id = NULL`. The package is now "scanned".
-- The operator creates one or more `shipping_boxes`. The system auto-generates the box ID as `BOX-S-<warehouse>-<YYYYMMDD>-<seq>`.
-- **Add to box** sets `picking_packages.shipping_box_id` and recalculates `picking_items.picked_qty` as the sum of boxed package quantities.
-- Once `picking_items.picked_qty` reaches the required quantity, the item is finished.
-- When every item is fully boxed, the operator finishes the order. The system creates a `measuring_tasks` row with status `pending`.
+- The operator creates one or more `shipping_boxes`. The system auto-generates the box ID as `BOX-S-<YYYYMMDD>-<seq>`.
+- **Add to box** sets `picking_packages.shipping_box_id` and recalculates the item's picked quantity as the sum of boxed package quantities.
+- When every item is fully boxed, the operator finishes the order. The system creates the next enabled step's task — a `measuring_tasks` row, or a `verify_tasks` row when measuring is disabled.
 
 ### Picking directly from a receiving order
 
@@ -142,25 +149,27 @@ transition_logs                   (all status changes)
 - The operator moves quantity from receiving-area lots into the shelf box.
 - The system:
   - Decreases the receiving-area lot `total_qty`.
-  - Creates or updates a shelf lot (`shelf_code = box.shelfCode, box_id = box.id`).
+  - Creates or updates a shelf lot for the shelf box.
   - Updates `inventory_lot_sources` on both sides to preserve traceability.
   - Inserts a `shelf_box_items` row.
 - Once shelved, that stock becomes available for future picking orders exactly like any other shelved lot.
 
 ### Goods Verify
 
-- After a shelf box is closed, the operator can verify it.
-- The box shows the expected items and quantities.
-- The operator scans/enters a part number. The system marks the first matching unverified `shelf_box_items` row as verified.
-- When all items are verified, the operator marks the box verified. The system sets `shelf_boxes.status = 'verified'` and logs the transition.
+- Day-end count tasks are generated automatically (nightly job) from the lots that had `inventory_transactions` movements.
+- The operator counts the lot and confirms with the actual quantity; a mismatch writes an ADJUST ledger row.
 
 ### Measuring
 
 - When a picking order is finished, a pending `measuring_tasks` row exists and the shipping boxes were already created and packed during picking.
-- For each open box the operator can set gross/net weight, destination country, and box size.
-- The operator reviews the packages already inside each box.
-- When a box is ready, the operator closes it. The system logs `shipping_box:{id} open → closed`.
-- When all shipping boxes are closed and every picking item is fully packed, the operator can complete the measuring task. The system sets `measuring_tasks.status = 'completed'` and logs the transition.
+- The operator scans each package in a box to verify it, then records box size, destination country, and net/gross weight in **kg** (decimals; the net weight is pre-filled with the auto-calculated value from the part net-weight master and can be adjusted).
+- A single **Confirm box** action saves the measurements and closes the box.
+- When the order's last open box is confirmed, the measuring task completes automatically (no manual complete step) and — when the verify step is enabled — a `verify_tasks` row is created.
+
+### Verify
+
+- A second full check of the same boxes: the operator scans each box and re-scans every package (scanning works on sealed boxes), and can reopen a box to correct measurements.
+- The task can only complete when every package has been re-scanned; after that the order is ready to ship and appears in the admin shipping feed.
 
 ---
 
@@ -168,7 +177,7 @@ transition_logs                   (all status changes)
 
 | Path | Purpose |
 |------|---------|
-| `/` | Main menu |
+| `/` | Main menu (tiles for enabled flow steps only) |
 | `/login` | Login |
 | `/receiving` | List receiving orders (filter: All / Pending / In hand) |
 | `/receiving/:id` | Receiving order detail; **Receiving** view shows invoices/items, **Picking** view shows linked picking orders, per-item scan, search, and order links |
@@ -176,31 +185,38 @@ transition_logs                   (all status changes)
 | `/picking/:id` | Picking order detail: scan packages, create boxes, add packages to boxes |
 | `/put-away` | List receiving orders ready for put-away |
 | `/put-away/:id` | Create shelf box and move receiving-area stock |
-| `/goods-verify` | List shelves with shelf boxes |
-| `/goods-verify/shelf/:code` | List shelf boxes on a shelf |
-| `/goods-verify/box/:id` | Verify items in a shelf box |
+| `/goods-verify` | List day-end goods-verify tasks |
 | `/measuring` | List pending measuring tasks |
-| `/measuring/:id` | Review, weigh, and close shipping boxes |
+| `/measuring/:id` | Verify packages, weigh (kg), and confirm/close shipping boxes |
+| `/verify` | List pending verify tasks |
+| `/verify/:id` | Re-scan boxes and packages, then complete the verify task |
+| `/stock-search` | Search stock by part / supplier |
+| `/box` | Cross-flow box lookup (shipping + shelf boxes) |
 
 ---
 
 ## Running the demo
 
+The demo needs **two servers** (plus PostgreSQL):
+
 ```bash
+docker compose up -d            # shared local PostgreSQL
 pnpm install
-pnpm run dev
+pnpm dev:backend                # backend API on :3002 (migrations + demo seed run automatically)
+pnpm --filter @warehouse/web dev   # PDA web app on :3000
+pnpm dev:admin                  # optional: admin console on :3100
 ```
 
-Then open the local URL and log in with one of the demo accounts:
+Then open the web URL and log in with one of the demo accounts:
 
 | Username | Password |
 |----------|----------|
 | `operator` | `DocPal2026!` |
-| `admin` | `DocPalAdmin2026!` |
+| `admin` | `DocPalAdmin2026!` (admin console) |
 
 ### Scanning demo labels
 
-The Camera OCR demo needs `public/ocr-labels.html` to be present in the build. It is now a 7-step demo flow helper that guides you through receiving → picking → measuring → put-away → goods verify; scan labels only on the steps marked "Scan step". The old flat label catalog is preserved at `public/ocr-labels-backup.html`. Display the page on a monitor or another device and point the Android camera at each label instead of printing physical labels. Open it at:
+The Camera OCR demo needs `apps/web/public/ocr-labels.html` to be present in the build. It is a 7-step demo flow helper that guides you through receiving → picking → measuring → put-away → goods verify; scan labels only on the steps marked "Scan step". The old flat label catalog is preserved at `apps/web/public/ocr-labels-backup.html`. Display the page on a monitor or another device and point the Android camera at each label instead of printing physical labels. Open it at:
 
 ```text
 http://<dev-server-ip>:3000/ocr-labels.html
@@ -210,96 +226,32 @@ The page loads [JsBarcode](https://github.com/lindell/JsBarcode) and [node-qrcod
 
 ### Production build
 
-```bash
-pnpm run build
-```
+`docker-compose.prod.yml` runs the full stack (db + backend + web + admin) as containers; see [AGENTS.md](./AGENTS.md) for the commands and required env.
 
 ### Reset the demo data
 
-The database is in-memory and is not persisted across app restarts. The app re-seeds fresh demo data on every launch. The **⋮ → Reset local DB** menu still clears the in-memory state and reloads the page.
+`POST :3002/dev/reset` truncates the database and re-seeds it. The **⋮ → Reset database** control in the PDA app header calls the same endpoint.
 
 ---
 
 ## Project structure
 
-```
-├── app.vue                  # PGlite bootstrap, schema init, seed, auth restore
-├── assets/                  # Global styles and static assets
-│   └── css/main.css         # Global styles
-├── capacitor.config.ts      # Capacitor native shell configuration
-├── components/
-│   ├── AppHeader.vue             # Header with back button, reset DB, logout
-│   ├── BoxMeasurementsModal.vue  # Edit shipping box weight/size/destination
-│   ├── DetailHeader.vue          # Reusable detail page header and status chip
-│   ├── DetailRow.vue             # Label/value row used across detail pages
-│   ├── EmptyState.vue            # Loading/error/empty message
-│   ├── LabelScanReviewModal.vue  # Review camera-scanned label matches
-│   ├── ScanFab.vue               # Floating circular scan button
-│   ├── picking/                  # Picking detail sub-views
-│   │   ├── PickingBoxesSection.vue
-│   │   ├── PickingIssueBanner.vue
-│   │   └── PickingItemsSection.vue
-│   ├── put-away/                 # Put-away detail sub-views
-│   │   ├── PutAwayLotsPanel.vue
-│   │   └── ShelfBoxesPanel.vue
-│   └── receiving/                # Receiving detail sub-views
-│       ├── ReceivingItemsTab.vue
-│       └── ReceivingPickingTab.vue
-├── composables/
-│   ├── useAuth.ts                # Login/logout/restore
-│   ├── useDb.ts                  # Drizzle client from provided PGlite
-│   ├── useLabelScan.ts           # Scan label parsing and matching state
-│   ├── useLabelScanReview.ts     # Shared scan-review modal state machine
-│   ├── useMockOcr.ts             # Parses typed label input for the scan modal
-│   ├── useRectangleDetection.ts   # Native Android rectangle/label detection
-│   ├── useScanMatchers.ts        # Matching utilities for scan results
-│   ├── useStatusBadge.ts         # Centralized badge class helper
-│   └── useVisibleReload.ts       # Capacitor-friendly reload-on-foreground lifecycle
-├── constants/               # App constants
-│   └── pocOptions.ts
-├── db/
-│   ├── allocate.ts          # Allocation logic (shelved first, then arrivals)
-│   ├── goodsVerify.ts       # Goods verify DB helpers
-│   ├── init.ts              # Raw Postgres DDL for first-time bootstrap
-│   ├── measuring.ts         # Measuring / shipping box helpers
-│   ├── ocrPicking.ts        # OCR-assisted picking matching and apply logic
-│   ├── picking.ts           # Picking DB helpers
-│   ├── putAway.ts           # Put-away DB helpers
-│   ├── receiving.ts         # Receiving DB helpers
-│   ├── schema.ts            # Drizzle pg-core table definitions (includes picking_packages)
-│   └── seed.ts              # Demo users, suppliers, parts, orders, inventory
-├── docs/
-│   └── superpowers/         # Design specs and implementation plans
-│       ├── specs/
-│       └── plans/
-├── layouts/                 # Nuxt layouts
-│   └── default.vue
-├── middleware/              # Nuxt route middleware
-│   └── auth.global.ts       # Global auth guard
-├── nuxt.config.ts           # Nuxt configuration
-├── pages/
-│   ├── login.vue            # Login page
-│   ├── index.vue            # Menu / home page
-│   ├── receiving/
-│   ├── picking/
-│   ├── put-away/
-│   ├── goods-verify/
-│   └── measuring/
-├── patches/                 # pnpm package patches
-├── plugins/                 # Nuxt client plugins
-│   └── pglite.client.ts     # PGlite client plugin
-├── public/                  # Static public assets
-├── scripts/                 # Build/dev helper scripts
-└── package.json
-```
+This is a pnpm monorepo:
+
+- `apps/web` — Nuxt 3 PDA client (+ Capacitor Android shell)
+- `apps/backend` — Hono + Drizzle + PostgreSQL API (schema in `src/db/schema/`)
+- `apps/admin` — Nuxt 3 desktop admin console
+- `layers/i18n` — shared i18n layer
+- `docs/` — app documentation, backend docs, design specs
+
+See [AGENTS.md](./AGENTS.md) for the detailed layout, commands, and conventions, and [docs/app-docs/ai/code-map.md](./docs/app-docs/ai/code-map.md) for a page/component ↔ source-file map.
 
 ---
 
 ## Notes and limitations
 
-- **Demo only.** Passwords are stored as plain text hashes in the seed file; this is acceptable for a local proof-of-concept only.
-- **Data is not persisted across sessions.** The in-memory database is re-seeded on every app launch, so each session starts fresh.
-- **No migrations.** The schema is created once from `db/init.ts` when the `users` table does not exist. Because the database is in-memory, schema changes take effect on the next app launch.
-- **Allocation is greedy.** It fills shelved lots first, then receiving-area lots, without partial date-code relaxation or FIFO beyond the required date code filter.
-- **Scanning supports camera input.** Camera/barcode integration is implemented via the native Android `RectangleDetection.scanLabel()` flow. On supported devices the operator can scan a label with the camera; the detected text is parsed and matched to receiving and picking records just like typed input. A typed-input fallback is still available for browsers and testing. The parsing logic normalizes input and applies simple OCR-style substitutions (e.g. `O` → `0`) so the demo can simulate real scan errors.
-- **Limited automated tests.** There is a small Android unit-test suite for the OpenCV crop logic (`./gradlew :app:testDebugUnitTest`). Most verification is still manual browser testing plus `pnpm nuxt prepare` for TypeScript generation.
+- **Demo passwords only.** The seed uses well-known demo passwords (`operator` / `DocPal2026!`, `admin` / `DocPalAdmin2026!`); they are scrypt-hashed, but change them before any real deployment.
+- **Shared PostgreSQL dataset.** Data persists across restarts and is shared by everyone on the same backend; use the reset control to start fresh. Migrations auto-apply on backend startup, and the demo dataset is seeded when the `users` table is empty.
+- **Allocation is greedy.** It fills shelved lots first, then receiving-area lots, in priority-seq order, without partial date-code relaxation or FIFO beyond the required date code filter.
+- **Scanning.** Camera/barcode capture is implemented via the native Android `RectangleDetection.scanLabel()` flow; on PDA hardware the scanner service's intent broadcast is received through the `ScannerBroadcast` Capacitor plugin, with a keyboard-wedge fallback for browsers and unconfigured devices. The parsing logic normalizes input and applies simple OCR-style substitutions (e.g. `O` → `0`) so the demo can simulate real scan errors.
+- **Tests.** Backend: `pnpm --filter @warehouse/backend test` (node:test, needs PostgreSQL). Web: `pnpm --filter @warehouse/web test` (vitest).

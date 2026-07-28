@@ -16,4 +16,4 @@ The app supports these warehouse flows. Each flow has an overview, a step-by-ste
 
 - **Scanning / label entry** — many flows use `useLabelScan` and `LabelScanReviewModal` to capture part numbers, quantities, dates, lot codes, and origins.
 - **Issue reporting** — operators can report shortages, damages, or mismatches through `ReportIssueModal` / `PickingIssueReportModal`.
-- **Status tracking** — each order/box/task has a status shown inline using `composables/useStatusBadge.ts` and recorded in `transition_logs`.
+- **Status tracking** — each order/box/task has a status shown inline using `composables/useStatusBadge.ts` and recorded in `transaction_logs`.

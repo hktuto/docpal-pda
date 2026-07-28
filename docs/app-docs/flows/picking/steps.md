@@ -33,4 +33,4 @@ If the quantity is wrong, the item is damaged, or stock cannot be found, use the
 
 ## 6. Finish the order
 
-When all lines are fully picked, the order status changes to finished and a measuring task may be created.
+When all lines are fully picked, the order status changes to finished and the next enabled step's task is created — a measuring task, or a verify task when measuring is disabled (nothing when both are off, in which case the order goes straight to shipping).
