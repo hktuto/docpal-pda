@@ -48,7 +48,7 @@ test("shipping box ids: BOX-S-<date>-<seq>, per-day seq, cancelled seq not reuse
   await reseed(client);
   const actorId = await actorIdOf();
   await allocateAll(client.db);
-  const orderId = await pickingOrderIdOf("SO-2026-0001");
+  const orderId = await pickingOrderIdOf("SO-DEMO-0001");
 
   const box1 = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
   assert.match(box1.id, /^BOX-S-\d{8}-0001$/);
@@ -68,7 +68,7 @@ test("shipping box ids: BOX-S-<date>-<seq>, per-day seq, cancelled seq not reuse
 test("shelf box ids: BOX-H-<date>-<seq>; staging and manual boxes share the daily seq", async () => {
   await reseed(client);
   const actorId = await actorIdOf();
-  const orderId = await receivingOrderIdOf("04958210");
+  const orderId = await receivingOrderIdOf("100001");
   await confirmReceivingArrival(client.db, orderId, actorId);
 
   // first put-away scan auto-creates the staging box → daily seq 0001
@@ -96,20 +96,25 @@ test("searchBoxes: finds both kinds by full id and seq substring, with kind + or
   await reseed(client);
   const actorId = await actorIdOf();
   await allocateAll(client.db);
-  const pickingOrderId = await pickingOrderIdOf("SO-2026-0001");
-  const receivingOrderId = await receivingOrderIdOf("04958210");
+  const pickingOrderId = await pickingOrderIdOf("SO-DEMO-0001");
+  const receivingOrderId = await receivingOrderIdOf("100001");
 
   const shipping = await createShippingBox(client.db, { pickingOrderId, actorId });
   const shelf = await createShelfBox(client.db, { receivingOrderId, shelfCode: "A-01-03", actorId });
 
-  // blank query → the latest boxes across both tables
+  // blank query → the latest boxes across both tables (the 2 seeded shelf
+  // boxes plus the 2 just created, newest first)
   const all = await searchBoxes(client.db, "");
-  assert.equal(all.length, 2);
+  assert.equal(all.length, 4);
+  assert.deepEqual(
+    new Set(all.slice(0, 2).map((r) => r.id)),
+    new Set([shipping.id, shelf.id])
+  );
 
   const byFullId = await searchBoxes(client.db, shipping.id);
   assert.deepEqual(
     byFullId.map((r) => ({ kind: r.kind, id: r.id, orderNo: r.orderNo })),
-    [{ kind: "shipping", id: shipping.id, orderNo: "SO-2026-0001" }]
+    [{ kind: "shipping", id: shipping.id, orderNo: "SO-DEMO-0001" }]
   );
 
   // bare seq substring matches either kind's daily seq; shelf boxes have no order

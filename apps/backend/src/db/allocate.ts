@@ -221,6 +221,40 @@ async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow): Promise<Recei
   );
 }
 
+/**
+ * Recompute picking_orders.allocation_status for all open (pending/picking)
+ * orders: Σ allocated_qty vs Σ open qty (qty − Σ packages), 'allocated' when
+ * equal (incl. the Σ open = 0 fully-picked edge), 'partial' in between. A
+ * work-locked order keeps its allocation rows during the recompute, so the
+ * aggregate is correct for it too. Runs even when there are no demands (a
+ * fully-scanned order has no demand rows but must read 'allocated').
+ * last_update_date only bumps where the value actually changes.
+ */
+async function refreshAllocationStatus(dbOrTx: DbOrTx): Promise<void> {
+  await dbOrTx.execute(sql`
+    UPDATE picking_orders po
+    SET allocation_status = agg.new_status, last_update_date = now()
+    FROM (
+      SELECT po2.id,
+             CASE
+               WHEN COALESCE(SUM(pi.allocated_qty), 0) = COALESCE(SUM(pi.qty), 0) - COALESCE(SUM(pkg.qty), 0) THEN 'allocated'
+               WHEN COALESCE(SUM(pi.allocated_qty), 0) > 0 THEN 'partial'
+               ELSE 'unallocated'
+             END AS new_status
+      FROM picking_orders po2
+      LEFT JOIN picking_items pi ON pi.picking_order_id = po2.id
+      LEFT JOIN (
+        SELECT picking_item_id, SUM(qty)::int AS qty
+        FROM picking_packages GROUP BY picking_item_id
+      ) pkg ON pkg.picking_item_id = pi.id
+      WHERE po2.status IN ('pending', 'picking')
+      GROUP BY po2.id
+    ) agg
+    WHERE po.id = agg.id
+      AND po.allocation_status IS DISTINCT FROM agg.new_status
+  `);
+}
+
 /** Full idempotent recompute of allocations for all open picking items. */
 export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
   return db.transaction(async (tx) => {
@@ -233,7 +267,10 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
     };
     const demands = await loadDemands(tx);
     summary.demands = demands.length;
-    if (demands.length === 0) return summary;
+    if (demands.length === 0) {
+      await refreshAllocationStatus(tx);
+      return summary;
+    }
 
     // Wipe existing allocations of the participating items (+ RESERVE reversals).
     const itemIds = demands.map((d) => d.pickingItemId);
@@ -409,7 +446,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
         });
       }
       await tx.execute(
-        sql`UPDATE picking_items SET allocated_qty = ${d.openQty - remaining}, updated_at = ${now()} WHERE id = ${d.pickingItemId}`
+        sql`UPDATE picking_items SET allocated_qty = ${d.openQty - remaining}, last_update_date = ${now()} WHERE id = ${d.pickingItemId}`
       );
     }
 
@@ -425,7 +462,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
     }
     // Demands with no source leave allocated_qty at 0.
     await tx.execute(
-      sql`UPDATE picking_items SET allocated_qty = 0, updated_at = ${now()}
+      sql`UPDATE picking_items SET allocated_qty = 0, last_update_date = ${now()}
           WHERE ${inArray(sql`id`, itemIds)} AND id NOT IN (
             SELECT DISTINCT picking_item_id FROM allocations WHERE ${inArray(sql`picking_item_id`, itemIds)}
           )`
@@ -437,6 +474,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
         data: { ...summary },
       });
     }
+    await refreshAllocationStatus(tx);
     return summary;
   });
 }

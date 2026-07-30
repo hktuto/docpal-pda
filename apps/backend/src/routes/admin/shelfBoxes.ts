@@ -49,13 +49,13 @@ shelfBoxesRoute.get("/", async (c) => {
                sb.org_id              AS "orgId",
                sb.sub_inventory_code  AS "subInventoryCode",
                sb.status,
-               sb.created_at          AS "createdAt",
+               sb.created_date          AS "createdDate",
                COUNT(sbi.id)::int          AS "itemCount",
                COALESCE(SUM(sbi.qty), 0)::int AS "totalQty"
         FROM shelf_boxes sb
         LEFT JOIN shelf_box_items sbi ON sbi.shelf_box_id = sb.id
         GROUP BY sb.id
-        ORDER BY sb.created_at DESC`
+        ORDER BY sb.created_date DESC`
   );
   return c.json(rows);
 });
@@ -66,9 +66,9 @@ shelfBoxesRoute.post("/", async (c) => {
   try {
     const row = await queryGet(
       db,
-      sql`INSERT INTO shelf_boxes (id, shelf_code, org_id, sub_inventory_code, status, created_at)
+      sql`INSERT INTO shelf_boxes (id, shelf_code, org_id, sub_inventory_code, status, created_date)
           VALUES (${id}, ${optStr(b, "shelfCode")}, ${optInt(b, "orgId")}, ${optStr(b, "subInventoryCode")}, ${optStatus(b) ?? "open"}, ${new Date()})
-          RETURNING id, shelf_code AS "shelfCode", org_id AS "orgId", sub_inventory_code AS "subInventoryCode", status, created_at AS "createdAt"`
+          RETURNING id, shelf_code AS "shelfCode", org_id AS "orgId", sub_inventory_code AS "subInventoryCode", status, created_date AS "createdDate"`
     );
     return c.json(row, 201);
   } catch (e) {
@@ -89,7 +89,7 @@ shelfBoxesRoute.get("/:id", async (c) => {
                sb.org_id              AS "orgId",
                sb.sub_inventory_code  AS "subInventoryCode",
                sb.status,
-               sb.created_at          AS "createdAt"
+               sb.created_date          AS "createdDate"
         FROM shelf_boxes sb
         WHERE sb.id = ${id}`
   );
@@ -131,7 +131,7 @@ shelfBoxesRoute.patch("/:id", async (c) => {
               org_id     = CASE WHEN ${hasOrg} THEN ${orgId} ELSE org_id END,
               sub_inventory_code = CASE WHEN ${hasSub} THEN ${subInventoryCode} ELSE sub_inventory_code END
           WHERE id = ${id}
-          RETURNING id, shelf_code AS "shelfCode", org_id AS "orgId", sub_inventory_code AS "subInventoryCode", status, created_at AS "createdAt"`
+          RETURNING id, shelf_code AS "shelfCode", org_id AS "orgId", sub_inventory_code AS "subInventoryCode", status, created_date AS "createdDate"`
     );
     if (!row) throw new HTTPException(404, { message: "not found" });
     return c.json(row);

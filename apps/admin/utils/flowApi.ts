@@ -22,6 +22,8 @@ export interface PickingOrderRow {
   itemCount: number;
   totalQty: number;
   pickedQty: number;
+  allocationStatus: string;
+  allocatedQty: number;
 }
 
 export interface PickingItemRow {
@@ -199,7 +201,7 @@ export interface TransactionLogRow {
   actorId: string | null;
   actorName: string | null;
   metadata: Record<string, unknown>;
-  createdAt: string;
+  createdDate: string;
 }
 
 export function useFlowApi() {
@@ -250,9 +252,9 @@ export function useFlowApi() {
       api.get<TransactionLogRow[]>(`/admin/picking-orders/${orderId}/logs`),
 
     // Stock search
-    stockSearch: (params: { supplierId?: string; partNo?: string }) => {
+    stockSearch: (params: { supplierCode?: string; partNo?: string }) => {
       const qs = new URLSearchParams();
-      if (params.supplierId) qs.set("supplierId", params.supplierId);
+      if (params.supplierCode) qs.set("supplierCode", params.supplierCode);
       if (params.partNo) qs.set("partNo", params.partNo);
       return api.get<StockSearchResult>(`/stock-search?${qs}`);
     },
@@ -261,5 +263,23 @@ export function useFlowApi() {
     listShippingOrders: () => api.get<ShippingOrderRow[]>("/shipping-orders"),
     getShippingOrder: (pickingOrderId: string) =>
       api.get<ShippingOrderDetail>(`/shipping-orders/${pickingOrderId}`),
+    // Marks each order shipped (POST /shipping-orders/:id/ship). Attempts all
+    // ids; on any failure throws an Error whose `failed` property lists the
+    // per-order failures ({ id, message }) so callers can surface them.
+    shipShippingOrders: async (pickingOrderIds: string[]): Promise<void> => {
+      const failed: { id: string; message: string }[] = [];
+      for (const id of pickingOrderIds) {
+        try {
+          await api.post(`/shipping-orders/${id}/ship`);
+        } catch (e: any) {
+          failed.push({ id, message: e?.message ?? String(e) });
+        }
+      }
+      if (failed.length > 0) {
+        const err = new Error(failed.map((f) => `${f.id}: ${f.message}`).join("; "));
+        (err as any).failed = failed;
+        throw err;
+      }
+    },
   };
 }

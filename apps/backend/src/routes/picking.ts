@@ -7,6 +7,7 @@ import {
   addAllUnboxedToShippingBox,
   addPackageToBox,
   cancelShippingBox,
+  claimShelfBox,
   closeShippingBox,
   createShippingBox,
   finishPickingOrder,
@@ -110,6 +111,20 @@ pickingRoute.delete("/packages/:id", async (c) => {
   await removeScannedPackage(db, { packageId: c.req.param("id"), actorId: actorFrom(c).id });
   await reallocateBestEffort("package removal");
   return c.json({ ok: true }, 200);
+});
+
+// Whole-box exact-match claim: reuse a shelf carton whose contents exactly
+// equal the order's remaining demand as the (prefilled) shipping box.
+pickingRoute.post("/picking-orders/:id/claim-shelf-box", async (c) => {
+  const body = await readJson<{ shelfBoxId?: string }>(c);
+  if (!body.shelfBoxId) throw new HTTPException(400, { message: "shelfBoxId is required" });
+  const result = await claimShelfBox(db, {
+    orderId: c.req.param("id"),
+    shelfBoxId: body.shelfBoxId,
+    actorId: actorFrom(c).id,
+  });
+  await reallocateBestEffort("whole-box claim");
+  return c.json(result, 201);
 });
 
 // Measuring-time package verification (boxed, open box, pending task).

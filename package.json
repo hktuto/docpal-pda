@@ -13,7 +13,8 @@
     "test": "pnpm -r test",
     "cap:sync": "pnpm --filter @warehouse/web cap:sync",
     "cap:android": "pnpm --filter @warehouse/web cap:android",
-    "cap:android:dev": "pnpm --filter @warehouse/web cap:android:dev"
+    "cap:android:dev": "pnpm --filter @warehouse/web cap:android:dev",
+    "build:apk": "node apps/web/scripts/build-android-apk.mjs"
   },
   "pnpm": {
     "onlyBuiltDependencies": []

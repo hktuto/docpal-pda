@@ -31,7 +31,7 @@ function parseGroupId(id: string): { orgId: number; code: string } {
 }
 
 const GROUP_COLS = sql`si.org_id AS "orgId", si.code, si.name, si.customer_code AS "customerCode",
-       si.created_at AS "createdAt", si.updated_at AS "updatedAt"`;
+       si.created_date AS "createdDate", si.last_update_date AS "lastUpdateDate"`;
 
 adminSubInventoriesRoute.get("/", async (c) => {
   const rows = await queryAll(
@@ -62,7 +62,7 @@ adminSubInventoriesRoute.post("/", async (c) => {
   try {
     const row = await queryGet(
       db,
-      sql`INSERT INTO sub_inventories (org_id, code, name, customer_code, created_at, updated_at)
+      sql`INSERT INTO sub_inventories (org_id, code, name, customer_code, created_date, last_update_date)
           VALUES (${orgId}, ${code}, ${optStr(b, "name")}, ${optStr(b, "customerCode")}, now(), now())
           RETURNING org_id AS "orgId", code`
     );
@@ -84,7 +84,7 @@ adminSubInventoriesRoute.patch("/:id", async (c) => {
       sql`UPDATE sub_inventories
           SET name = CASE WHEN ${hasName} THEN ${optStr(b, "name")} ELSE name END,
               customer_code = CASE WHEN ${hasCustomer} THEN ${optStr(b, "customerCode")} ELSE customer_code END,
-              updated_at = now()
+              last_update_date = now()
           WHERE org_id = ${g.orgId} AND code = ${g.code}
           RETURNING org_id AS "orgId", code, name, customer_code AS "customerCode"`
     );

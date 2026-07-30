@@ -10,5 +10,6 @@ export const appEvents = pgTable("app_events", {
   type: text("type").notNull(), // e.g. allocation.computed / picking_order.created
   topics: text("topics").array().notNull(), // URL path prefixes for client cache invalidation
   data: jsonb("data").notNull().default(sql`'{}'::jsonb`), // free-form payload (order id, counts, ...)
-  createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
+  createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
+  lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
 });

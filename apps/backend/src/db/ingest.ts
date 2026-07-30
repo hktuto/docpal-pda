@@ -36,7 +36,6 @@ export interface IngestUpsertResult {
 
 export interface IngestReceivingOrder {
   supplierCode?: string | null;
-  supplierId?: string | null;
   deliveryDate?: string | null;
   dateCode?: string | null;
   orgId?: number | null;
@@ -57,12 +56,12 @@ export interface IngestReceivingItem {
   cow?: string | null;
   orgId?: number | null;
   subInventoryCode?: string | null;
+  additionalData?: unknown;
 }
 
 export interface IngestReceivingInvoice {
   invoiceNo: string;
   supplierCode?: string | null;
-  supplierId?: string | null;
   wclCompanyName?: string | null;
   totalQty?: number | null;
   totalCtn?: number | null;
@@ -89,6 +88,7 @@ export interface IngestPickingOrder {
 export interface IngestPickingItem {
   partNo: string;
   qty: number;
+  additionalData?: unknown;
 }
 
 export interface IngestPickingBody {
@@ -124,23 +124,12 @@ async function deliveryDateDiffers(
   return row?.differs ?? false;
 }
 
-/** supplierId given directly wins; otherwise resolve supplierCode → suppliers.id. */
-async function resolveSupplierId(
-  tx: DbOrTx,
-  supplierId: string | null | undefined,
-  supplierCode: string | null | undefined
-): Promise<string | null> {
-  if (supplierId) {
-    const row = await queryGet<{ id: string }>(tx, sql`SELECT id FROM suppliers WHERE id = ${supplierId}`);
-    if (!row) throw new HTTPException(400, { message: `unknown_supplier: ${supplierId}` });
-    return row.id;
-  }
-  if (supplierCode) {
-    const row = await queryGet<{ id: string }>(tx, sql`SELECT id FROM suppliers WHERE code = ${supplierCode}`);
-    if (!row) throw new HTTPException(400, { message: `unknown_supplier: ${supplierCode}` });
-    return row.id;
-  }
-  return null;
+/** supplierCode → suppliers.code (400 unknown_supplier when it does not exist). */
+async function assertSupplierCode(tx: DbOrTx, supplierCode: string | null | undefined): Promise<string | null> {
+  if (!supplierCode) return null;
+  const row = await queryGet<{ code: string }>(tx, sql`SELECT code FROM suppliers WHERE code = ${supplierCode}`);
+  if (!row) throw new HTTPException(400, { message: `unknown_supplier: ${supplierCode}` });
+  return row.code;
 }
 
 /** Parts are referenced by part_no; 400 unknown_part when it does not exist. */
@@ -207,33 +196,32 @@ async function insertReceivingItem(tx: DbOrTx, invoiceId: string, it: IngestRece
     cow: it.cow ?? null,
     orgId: it.orgId ?? 2,
     subInventoryCode: it.subInventoryCode ?? null,
+    additionalData: it.additionalData ?? null,
   });
 }
 
 /** Invoice-level supplier wins over the order-level one (old upsertInvoice semantics). */
-async function resolveInvoiceSupplierId(
+async function resolveInvoiceSupplierCode(
   tx: DbOrTx,
   inv: IngestReceivingInvoice,
-  fallbackSupplierId: string | null
+  fallbackSupplierCode: string | null
 ): Promise<string | null> {
-  return inv.supplierId || inv.supplierCode
-    ? resolveSupplierId(tx, inv.supplierId, inv.supplierCode)
-    : fallbackSupplierId;
+  return inv.supplierCode ? assertSupplierCode(tx, inv.supplierCode) : fallbackSupplierCode;
 }
 
 async function insertInvoiceWithItems(
   tx: DbOrTx,
   orderId: string,
   inv: IngestReceivingInvoice,
-  fallbackSupplierId: string | null
+  fallbackSupplierCode: string | null
 ): Promise<string> {
-  const supplierId = await resolveInvoiceSupplierId(tx, inv, fallbackSupplierId);
+  const supplierCode = await resolveInvoiceSupplierCode(tx, inv, fallbackSupplierCode);
   const invoiceId = randomUUID();
   await tx.insert(receivingInvoices).values({
     id: invoiceId,
     receivingOrderId: orderId,
     invoiceNo: inv.invoiceNo,
-    supplierId,
+    supplierCode,
     wclCompanyName: inv.wclCompanyName ?? null,
     totalQty: inv.totalQty ?? null,
     totalCtn: inv.totalCtn ?? null,
@@ -250,7 +238,7 @@ async function insertInvoiceWithItems(
 interface ExistingInvoiceRow {
   id: string;
   invoiceNo: string;
-  supplierId: string | null;
+  supplierCode: string | null;
   wclCompanyName: string | null;
   totalQty: number | null;
   totalCtn: number | null;
@@ -300,7 +288,7 @@ export async function upsertReceivingOrder(
 ): Promise<IngestUpsertResult> {
   validateReceivingBody(body);
   return db.transaction(async (tx) => {
-    const orderSupplierId = await resolveSupplierId(tx, body.order.supplierId, body.order.supplierCode);
+    const orderSupplierCode = await assertSupplierCode(tx, body.order.supplierCode);
     const orderDeliveryDate = toDate(body.order.deliveryDate);
     const existing = await queryGet<{ id: string; status: string }>(
       tx,
@@ -312,7 +300,7 @@ export async function upsertReceivingOrder(
       await tx.insert(receivingOrders).values({
         id: orderId,
         batchNo,
-        supplierId: orderSupplierId,
+        supplierCode: orderSupplierCode,
         deliveryDate: orderDeliveryDate,
         dateCode: body.order.dateCode ?? null,
         orgId: body.order.orgId ?? 2,
@@ -320,7 +308,7 @@ export async function upsertReceivingOrder(
         status: "pending",
       });
       for (const inv of body.invoices) {
-        await insertInvoiceWithItems(tx, orderId, inv, orderSupplierId);
+        await insertInvoiceWithItems(tx, orderId, inv, orderSupplierCode);
       }
       await emitEvent(tx, {
         type: "receiving_order.upserted",
@@ -335,25 +323,25 @@ export async function upsertReceivingOrder(
     let changed = false;
 
     const ro = (await queryGet<{
-      supplierId: string | null;
+      supplierCode: string | null;
       dateCode: string | null;
       orgId: number;
       subInventoryCode: string;
     }>(
       tx,
-      sql`SELECT supplier_id AS "supplierId", date_code AS "dateCode", org_id AS "orgId",
+      sql`SELECT supplier_code AS "supplierCode", date_code AS "dateCode", org_id AS "orgId",
                  sub_inventory_code AS "subInventoryCode"
           FROM receiving_orders WHERE id = ${orderId}`
     ))!;
     const orderFields = {
-      supplierId: orderSupplierId,
+      supplierCode: orderSupplierCode,
       deliveryDate: orderDeliveryDate,
       dateCode: body.order.dateCode ?? null,
       orgId: body.order.orgId ?? 2,
       subInventoryCode: body.order.subInventoryCode,
     };
     if (
-      ro.supplierId !== orderFields.supplierId ||
+      ro.supplierCode !== orderFields.supplierCode ||
       (await deliveryDateDiffers(tx, "receiving_orders", orderId, orderFields.deliveryDate)) ||
       ro.dateCode !== orderFields.dateCode ||
       ro.orgId !== orderFields.orgId ||
@@ -361,10 +349,10 @@ export async function upsertReceivingOrder(
     ) {
       await queryRun(
         tx,
-        sql`UPDATE receiving_orders SET supplier_id = ${orderFields.supplierId},
+        sql`UPDATE receiving_orders SET supplier_code = ${orderFields.supplierCode},
               delivery_date = ${orderFields.deliveryDate}, date_code = ${orderFields.dateCode},
               org_id = ${orderFields.orgId}, sub_inventory_code = ${orderFields.subInventoryCode},
-              updated_at = ${now()}
+              last_update_date = ${now()}
             WHERE id = ${orderId}`
       );
       changed = true;
@@ -373,7 +361,7 @@ export async function upsertReceivingOrder(
     const locked = status !== "pending";
     const existingInvoices = await queryAll<ExistingInvoiceRow>(
       tx,
-      sql`SELECT id, invoice_no AS "invoiceNo", supplier_id AS "supplierId",
+      sql`SELECT id, invoice_no AS "invoiceNo", supplier_code AS "supplierCode",
                  wcl_company_name AS "wclCompanyName", total_qty AS "totalQty", total_ctn AS "totalCtn",
                  org_id AS "orgId", sub_inventory_code AS "subInventoryCode"
           FROM receiving_invoices WHERE receiving_order_id = ${orderId}`
@@ -405,15 +393,15 @@ export async function upsertReceivingOrder(
     for (const inv of body.invoices) {
       const ex = invoicesByNo.get(inv.invoiceNo);
       if (!ex) {
-        await insertInvoiceWithItems(tx, orderId, inv, orderSupplierId);
+        await insertInvoiceWithItems(tx, orderId, inv, orderSupplierCode);
         changed = true;
         continue;
       }
       seenInvoiceIds.add(ex.id);
 
-      const invoiceSupplierId = await resolveInvoiceSupplierId(tx, inv, orderSupplierId);
+      const invoiceSupplierCode = await resolveInvoiceSupplierCode(tx, inv, orderSupplierCode);
       const invFields = {
-        supplierId: invoiceSupplierId,
+        supplierCode: invoiceSupplierCode,
         wclCompanyName: inv.wclCompanyName ?? null,
         totalQty: inv.totalQty ?? null,
         totalCtn: inv.totalCtn ?? null,
@@ -422,7 +410,7 @@ export async function upsertReceivingOrder(
         subInventoryCode: inv.subInventoryCode ?? null,
       };
       if (
-        ex.supplierId !== invFields.supplierId ||
+        ex.supplierCode !== invFields.supplierCode ||
         ex.wclCompanyName !== invFields.wclCompanyName ||
         ex.totalQty !== invFields.totalQty ||
         ex.totalCtn !== invFields.totalCtn ||
@@ -432,11 +420,11 @@ export async function upsertReceivingOrder(
       ) {
         await queryRun(
           tx,
-          sql`UPDATE receiving_invoices SET supplier_id = ${invFields.supplierId},
+          sql`UPDATE receiving_invoices SET supplier_code = ${invFields.supplierCode},
                 wcl_company_name = ${invFields.wclCompanyName}, total_qty = ${invFields.totalQty},
                 total_ctn = ${invFields.totalCtn}, delivery_date = ${invFields.deliveryDate},
                 org_id = ${invFields.orgId}, sub_inventory_code = ${invFields.subInventoryCode},
-                updated_at = ${now()}
+                last_update_date = ${now()}
               WHERE id = ${ex.id}`
         );
         changed = true;
@@ -505,7 +493,7 @@ export async function upsertReceivingOrder(
     }
 
     if (changed) {
-      await queryRun(tx, sql`UPDATE receiving_orders SET updated_at = ${now()} WHERE id = ${orderId}`);
+      await queryRun(tx, sql`UPDATE receiving_orders SET last_update_date = ${now()} WHERE id = ${orderId}`);
       await emitEvent(tx, {
         type: "receiving_order.upserted",
         topics: ["/receiving-orders"],
@@ -540,6 +528,7 @@ async function insertPickingItem(tx: DbOrTx, orderId: string, it: IngestPickingI
     pickingOrderId: orderId,
     partNo,
     qty: it.qty,
+    additionalData: it.additionalData ?? null,
   });
 }
 
@@ -593,7 +582,7 @@ export async function upsertPickingOrder(
         )
       )!.p;
       await tx.execute(
-        sql`UPDATE picking_orders SET priority_seq = priority_seq + 1, updated_at = ${now()}
+        sql`UPDATE picking_orders SET priority_seq = priority_seq + 1, last_update_date = ${now()}
             WHERE status IN ('pending', 'picking') AND priority_seq >= ${pos}`
       );
       await tx.insert(pickingOrders).values({
@@ -655,7 +644,7 @@ export async function upsertPickingOrder(
         sql`UPDATE picking_orders SET customer_code = ${orderFields.customerCode}, po_no = ${orderFields.poNo},
               ship_to = ${orderFields.shipTo}, delivery_date = ${orderFields.deliveryDate},
               org_id = ${orderFields.orgId}, sub_inventory_code = ${orderFields.subInventoryCode},
-              updated_at = ${now()}
+              last_update_date = ${now()}
             WHERE id = ${orderId}`
       );
       changed = true;
@@ -685,7 +674,7 @@ export async function upsertPickingOrder(
         // Expected-side fields only — picked_qty / allocated_qty stay untouched.
         await queryRun(
           tx,
-          sql`UPDATE picking_items SET qty = ${it.qty}, updated_at = ${now()}
+          sql`UPDATE picking_items SET qty = ${it.qty}, last_update_date = ${now()}
               WHERE id = ${ex.id}`
         );
         changed = true;
@@ -701,7 +690,7 @@ export async function upsertPickingOrder(
     }
 
     if (changed) {
-      await queryRun(tx, sql`UPDATE picking_orders SET updated_at = ${now()} WHERE id = ${orderId}`);
+      await queryRun(tx, sql`UPDATE picking_orders SET last_update_date = ${now()} WHERE id = ${orderId}`);
       await emitEvent(tx, {
         type: "picking_order.updated",
         topics: ["/picking-orders"],

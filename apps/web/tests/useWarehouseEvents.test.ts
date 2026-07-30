@@ -75,7 +75,7 @@ function makeEvent(
   topics: string[],
   data: Record<string, unknown> = {}
 ) {
-  return { id, type, topics, data, createdAt: new Date(0).toISOString() };
+  return { id, type, topics, data, createdDate: new Date(0).toISOString() };
 }
 
 describe('useWarehouseEvents', () => {

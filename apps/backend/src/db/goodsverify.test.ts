@@ -70,25 +70,25 @@ interface PutAwayFixture {
 }
 
 /**
- * Drive the seeded pending DAITO order (04958210) through the real flows:
+ * Drive the seeded pending KOA order (100002) through the real flows:
  * confirm arrival (RECEIVE_TO_DOCK rows with NULL lot — never task-eligible),
- * then put away both items in full into one box on A-01-03 (PUT_AWAY rows
- * materialize the two lots that generation should pick up).
+ * then put away the two C2001 items in full into one box on A-01-03 (PUT_AWAY
+ * rows materialize the two lots that generation should pick up).
  */
 async function putAwayFixture(opts: { close: boolean }): Promise<PutAwayFixture> {
   const actorId = await actorIdOf();
-  const orderId = await receivingOrderIdOf("04958210");
+  const orderId = await receivingOrderIdOf("100002");
   await confirmReceivingArrival(client.db, orderId, actorId);
   const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
   const s1 = await recordPutAwayScan(client.db, orderId, {
     actorId,
     receivingInvoiceItemId: await invoiceItemIdOf(orderId, "RK73B1JTTD181G"),
-    qty: 5000,
+    qty: 600,
   });
   const s2 = await recordPutAwayScan(client.db, orderId, {
     actorId,
-    receivingInvoiceItemId: await invoiceItemIdOf(orderId, "P413"),
-    qty: 3000,
+    receivingInvoiceItemId: await invoiceItemIdOf(orderId, "RK73H1JTTD4702F"),
+    qty: 1200,
   });
   await assignScanToBox(client.db, { scanId: s1.id, shelfBoxId: box.id, actorId });
   await assignScanToBox(client.db, { scanId: s2.id, shelfBoxId: box.id, actorId });
@@ -122,12 +122,12 @@ test("generate: one task per lot moved that day, idempotent re-run, date validat
   assert.equal(t1.taskDate, today);
   assert.equal(t1.shelfCode, "A-01-03");
   assert.ok(t1.boxId);
-  assert.equal(t1.expectedQty, 5000); // lot total_qty snapshot
+  assert.equal(t1.expectedQty, 600); // lot total_qty snapshot
   assert.equal(t1.status, "pending");
   assert.equal(t1.verifiedBy, null);
   assert.equal(t1.verifiedAt, null);
-  assert.equal(byPartNo.get("P413")!.expectedQty, 3000);
-  assert.equal(byPartNo.get("P413")!.wclItemNo, "P413");
+  assert.equal(byPartNo.get("RK73H1JTTD4702F")!.expectedQty, 1200);
+  assert.equal(byPartNo.get("RK73H1JTTD4702F")!.wclItemNo, "RK73H1JTTD4702F");
 
   // idempotent: the (task_date, inventory_lot_id) unique index absorbs the re-run
   const r2 = await generateGoodsVerifyTasks(client.db, {});
@@ -153,8 +153,8 @@ test("queue: filters pass through, part join, shelf/box/part ordering", async ()
   const all = await listGoodsVerifyTasks(client.db, {});
   assert.equal(all.length, 2);
   // same shelf + box → ordered by part_no
-  assert.equal(all[0].partNo, "P413");
-  assert.equal(all[1].partNo, "RK73B1JTTD181G");
+  assert.equal(all[0].partNo, "RK73B1JTTD181G");
+  assert.equal(all[1].partNo, "RK73H1JTTD4702F");
 
   assert.equal((await listGoodsVerifyTasks(client.db, { date })).length, 2);
   assert.equal((await listGoodsVerifyTasks(client.db, { date: "2020-01-01" })).length, 0);
@@ -183,22 +183,22 @@ test("detail: task + lot + box items; legacy box id → box null; 404", async ()
   assert.equal(detail.task.boxId, boxId);
   assert.equal(detail.task.partNo, "RK73B1JTTD181G");
   assert.equal(detail.task.wclItemNo, "RK73B1JTTD181G");
-  assert.equal(detail.task.description, "RES 180 OHM 5% 1/10W 0603");
-  assert.equal(detail.task.expectedQty, 5000);
+  assert.equal(detail.task.description, "RES 180 OHM 5% 1/10W 0603"); // from the seeded demo part
+  assert.equal(detail.task.expectedQty, 600);
   assert.equal(detail.task.status, "pending");
-  assert.ok(detail.task.createdAt);
+  assert.ok(detail.task.createdDate);
 
   assert.deepEqual(detail.lot, {
     id: detail.task.inventoryLotId,
-    dateCode: "2610",
-    lotCode: null,
+    dateCode: "2607",
+    lotCode: "L2607B",
     coo: "JP",
-    cow: null,
+    cow: "JP",
     shelfCode: "A-01-03",
     boxId,
-    totalQty: 5000,
+    totalQty: 600,
     allocatedQty: 0,
-    availableQty: 5000,
+    availableQty: 600,
     orgId: 2,
     subInventoryCode: "STORE1",
   });
@@ -210,8 +210,8 @@ test("detail: task + lot + box items; legacy box id → box null; 404", async ()
   assert.deepEqual(
     detail.box!.items.map((i) => ({ partNo: i.partNo, qty: i.qty, verified: i.verified, verifiedAt: i.verifiedAt })),
     [
-      { partNo: "P413", qty: 3000, verified: false, verifiedAt: null },
-      { partNo: "RK73B1JTTD181G", qty: 5000, verified: false, verifiedAt: null },
+      { partNo: "RK73B1JTTD181G", qty: 600, verified: false, verifiedAt: null },
+      { partNo: "RK73H1JTTD4702F", qty: 1200, verified: false, verifiedAt: null },
     ]
   );
 
@@ -219,12 +219,13 @@ test("detail: task + lot + box items; legacy box id → box null; 404", async ()
   assert.equal(notFound.status, 404);
   assert.equal(notFound.message, "goods_verify_task_not_found");
 
-  // A seed lot moved (direct ledger row, e.g. a RESERVE): its legacy box id is
-  // not a shelf_boxes row → detail.box null, verify skips box handling.
+  // A seed lot moved (direct ledger row, e.g. a RESERVE) with a legacy box id
+  // that is not a shelf_boxes row → detail.box null, verify skips box handling.
   const lotId = await seedLotIdOf("RK73H1JTTD1002F", "A-01-01");
+  await queryRun(client.db, sql`UPDATE inventory_lots SET box_id = 'BOX-0001' WHERE id = ${lotId}`);
   await queryRun(
     client.db,
-    sql`INSERT INTO inventory_transactions (id, inventory_lot_id, part_no, shelf_code, box_id, txn_type, qty_type, qty_delta, txn_at, created_at)
+    sql`INSERT INTO inventory_transactions (id, inventory_lot_id, part_no, shelf_code, box_id, txn_type, qty_type, qty_delta, txn_at, created_date)
         SELECT gen_random_uuid()::text, id, part_no, shelf_code, box_id, 'RESERVE', 'reserved', -100, now(), now()
         FROM inventory_lots WHERE id = ${lotId}`
   );
@@ -234,7 +235,7 @@ test("detail: task + lot + box items; legacy box id → box null; 404", async ()
   assert.equal(seedTask.boxId, "BOX-0001"); // legacy box id copied from the lot
   const seedDetail = await getGoodsVerifyTaskDetail(client.db, seedTask.id);
   assert.equal(seedDetail.box, null);
-  assert.equal(seedDetail.lot.totalQty, 10000);
+  assert.equal(seedDetail.lot.totalQty, 1000);
 
   const res = await verifyGoodsVerifyTask(client.db, { taskId: seedTask.id, actorId });
   assert.equal(res.adjusted, false);
@@ -251,9 +252,9 @@ test("verify: matching count — task/box/items verified, transition logs, no AD
   await reseed(client);
   const { actorId, boxId } = await putAwayFixture({ close: true });
   await generateGoodsVerifyTasks(client.db, {});
-  const row = (await listGoodsVerifyTasks(client.db, {})).find((r) => r.partNo === "P413")!;
+  const row = (await listGoodsVerifyTasks(client.db, {})).find((r) => r.partNo === "RK73H1JTTD4702F")!;
 
-  const res = await verifyGoodsVerifyTask(client.db, { taskId: row.id, actorId, countedQty: 3000 });
+  const res = await verifyGoodsVerifyTask(client.db, { taskId: row.id, actorId, countedQty: 1200 });
   assert.equal(res.adjusted, false); // countedQty == expectedQty → no correction
 
   const task = await queryGet<{ status: string; verifiedBy: string; verifiedAt: Date }>(
@@ -299,7 +300,7 @@ test("verify: matching count — task/box/items verified, transition logs, no AD
     sql`SELECT il.total_qty AS "totalQty" FROM inventory_lots il
         JOIN goods_verify_tasks gvt ON gvt.inventory_lot_id = il.id WHERE gvt.id = ${row.id}`
   );
-  assert.equal(lot!.totalQty, 3000);
+  assert.equal(lot!.totalQty, 1200);
 });
 
 // --- verify with count mismatch --------------------------------------------------
@@ -309,11 +310,11 @@ test("verify: no countedQty → no ADJUST; mismatch → ADJUST row + lot total_q
   const { actorId, boxId } = await putAwayFixture({ close: true });
   await generateGoodsVerifyTasks(client.db, {});
   const rows = await listGoodsVerifyTasks(client.db, {});
-  const tP413 = rows.find((r) => r.partNo === "P413")!;
+  const tR47K = rows.find((r) => r.partNo === "RK73H1JTTD4702F")!;
   const tR180 = rows.find((r) => r.partNo === "RK73B1JTTD181G")!;
 
   // no countedQty: pure confirmation, box closes out on this first task
-  const r1 = await verifyGoodsVerifyTask(client.db, { taskId: tP413.id, actorId });
+  const r1 = await verifyGoodsVerifyTask(client.db, { taskId: tR47K.id, actorId });
   assert.equal(r1.adjusted, false);
   assert.equal(
     (await queryAll(client.db, sql`SELECT id FROM inventory_transactions WHERE txn_type = 'ADJUST'`)).length,
@@ -326,7 +327,7 @@ test("verify: no countedQty → no ADJUST; mismatch → ADJUST row + lot total_q
 
   // mismatch on the second task of the same (already verified) box: corrects
   // the lot + ADJUST, no second box transition
-  const r2 = await verifyGoodsVerifyTask(client.db, { taskId: tR180.id, actorId, countedQty: 4800 });
+  const r2 = await verifyGoodsVerifyTask(client.db, { taskId: tR180.id, actorId, countedQty: 400 });
   assert.equal(r2.adjusted, true);
 
   const lot = await queryGet<{ id: string; totalQty: number; allocatedQty: number; availableQty: number }>(
@@ -337,7 +338,7 @@ test("verify: no countedQty → no ADJUST; mismatch → ADJUST row + lot total_q
   );
   assert.deepEqual(
     { totalQty: lot!.totalQty, allocatedQty: lot!.allocatedQty, availableQty: lot!.availableQty },
-    { totalQty: 4800, allocatedQty: 0, availableQty: 4800 }
+    { totalQty: 400, allocatedQty: 0, availableQty: 400 }
   );
 
   const adjust = await queryGet<{
@@ -367,11 +368,11 @@ test("verify: no countedQty → no ADJUST; mismatch → ADJUST row + lot total_q
   );
   assert.ok(adjust);
   assert.equal(adjust!.qtyType, "on_hand");
-  assert.equal(adjust!.qtyDelta, -200); // 4800 counted − 5000 expected
+  assert.equal(adjust!.qtyDelta, -200); // 400 counted − 600 expected
   assert.equal(adjust!.inventoryLotId, lot!.id);
   assert.equal(adjust!.shelfCode, "A-01-03");
   assert.equal(adjust!.boxId, boxId);
-  assert.equal(adjust!.dateCode, "2610");
+  assert.equal(adjust!.dateCode, "2607");
   assert.equal(adjust!.referenceType, "goods_verify_task");
   assert.equal(adjust!.referenceId, tR180.id);
   assert.equal(adjust!.actorId, actorId);
@@ -424,19 +425,25 @@ test("verify: counted below allocated → 409 counted_qty_below_allocated; equal
   await reseed(client);
   const actorId = await actorIdOf();
   await allocateAll(client.db); // RESERVE rows on the seed lots = today's movement
+  // SO-DEMO-0001 reserves the whole 1000-pc lot; give it on-hand headroom so
+  // counted == allocated still leaves an adjustment (expectedQty snapshots below)
+  await queryRun(
+    client.db,
+    sql`UPDATE inventory_lots SET total_qty = 5000 WHERE part_no = 'RK73H1JTTD1002F' AND shelf_code = 'A-01-01'`
+  );
   await generateGoodsVerifyTasks(client.db, {});
 
   const row = (await listGoodsVerifyTasks(client.db, {})).find((r) => r.partNo === "RK73H1JTTD1002F")!;
-  assert.equal(row.expectedQty, 10000); // seed lot total
+  assert.equal(row.expectedQty, 5000); // seed lot total (with the headroom above)
   const allocated = (
     await queryGet<{ n: number }>(
       client.db,
       sql`SELECT allocated_qty AS n FROM inventory_lots WHERE id = (SELECT inventory_lot_id FROM goods_verify_tasks WHERE id = ${row.id})`
     )
   )!.n;
-  assert.equal(allocated, 2000); // SO-2026-0001 allocation
+  assert.equal(allocated, 1000); // SO-DEMO-0001 allocation
 
-  const below = await catchHttp(verifyGoodsVerifyTask(client.db, { taskId: row.id, actorId, countedQty: 1500 }));
+  const below = await catchHttp(verifyGoodsVerifyTask(client.db, { taskId: row.id, actorId, countedQty: 900 }));
   assert.equal(below.status, 409);
   assert.equal(below.message, "counted_qty_below_allocated");
   // task untouched
@@ -446,19 +453,19 @@ test("verify: counted below allocated → 409 counted_qty_below_allocated; equal
   );
 
   // counted == allocated is the boundary: available_qty bottoms out at 0
-  const res = await verifyGoodsVerifyTask(client.db, { taskId: row.id, actorId, countedQty: 2000 });
+  const res = await verifyGoodsVerifyTask(client.db, { taskId: row.id, actorId, countedQty: 1000 });
   assert.equal(res.adjusted, true);
   const lot = await queryGet<{ totalQty: number; allocatedQty: number; availableQty: number }>(
     client.db,
     sql`SELECT il.total_qty AS "totalQty", il.allocated_qty AS "allocatedQty", il.available_qty AS "availableQty"
         FROM inventory_lots il JOIN goods_verify_tasks gvt ON gvt.inventory_lot_id = il.id WHERE gvt.id = ${row.id}`
   );
-  assert.deepEqual(lot, { totalQty: 2000, allocatedQty: 2000, availableQty: 0 });
+  assert.deepEqual(lot, { totalQty: 1000, allocatedQty: 1000, availableQty: 0 });
   const adjust = await queryGet<{ qtyDelta: number }>(
     client.db,
     sql`SELECT qty_delta AS "qtyDelta" FROM inventory_transactions WHERE txn_type = 'ADJUST' AND reference_id = ${row.id}`
   );
-  assert.equal(adjust!.qtyDelta, -8000);
+  assert.equal(adjust!.qtyDelta, -4000);
 });
 
 // --- nightly cron runner (jobs/goodsVerifyDayEnd.ts) -------------------------
@@ -469,7 +476,7 @@ test("runGoodsVerifyDayEnd: covers yesterday's movements, idempotent re-run", as
   // a movement stamped yesterday (the business day that just ended at 00:00)
   await queryRun(
     client.db,
-    sql`INSERT INTO inventory_transactions (id, inventory_lot_id, part_no, shelf_code, box_id, txn_type, qty_type, qty_delta, txn_at, created_at)
+    sql`INSERT INTO inventory_transactions (id, inventory_lot_id, part_no, shelf_code, box_id, txn_type, qty_type, qty_delta, txn_at, created_date)
         SELECT gen_random_uuid()::text, id, part_no, shelf_code, box_id, 'RESERVE', 'reserved', -100,
                now() - interval '1 day', now() - interval '1 day'
         FROM inventory_lots WHERE id = ${lotId}`

@@ -1,0 +1,2 @@
+ALTER TABLE "shipping_boxes" ADD COLUMN "source_shelf_box_id" text;--> statement-breakpoint
+ALTER TABLE "shipping_boxes" ADD CONSTRAINT "shipping_boxes_source_shelf_box_id_shelf_boxes_id_fk" FOREIGN KEY ("source_shelf_box_id") REFERENCES "public"."shelf_boxes"("id") ON DELETE no action ON UPDATE no action;

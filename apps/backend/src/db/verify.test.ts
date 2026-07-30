@@ -77,18 +77,18 @@ interface FinishedFixture {
 }
 
 /**
- * The seeded pending order (SO-2026-0001) driven to auto-finish through the
+ * The seeded pending order (SO-DEMO-0001) driven to auto-finish through the
  * domain functions: allocate → scan both items in full → box all. The box is
  * left OPEN. Which task the finish creates depends on the flow-step config.
  */
 async function finishedOrder(): Promise<FinishedFixture> {
   const actorId = await actorIdOf();
   await allocateAll(client.db);
-  const orderId = await pickingOrderIdOf("SO-2026-0001");
-  const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F"); // qty 2000
-  const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F"); // qty 1000
-  const p1 = (await scanPickingItem(client.db, item1, { actorId, allocationId: await allocationIdOf(item1), qty: 2000 })).packageIds[0];
-  const p2 = (await scanPickingItem(client.db, item2, { actorId, allocationId: await allocationIdOf(item2), qty: 1000 })).packageIds[0];
+  const orderId = await pickingOrderIdOf("SO-DEMO-0001");
+  const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F"); // qty 1000
+  const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F"); // qty 500
+  const p1 = (await scanPickingItem(client.db, item1, { actorId, allocationId: await allocationIdOf(item1), qty: 1000 })).packageIds[0];
+  const p2 = (await scanPickingItem(client.db, item2, { actorId, allocationId: await allocationIdOf(item2), qty: 500 })).packageIds[0];
   const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
   await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId }); // auto-finishes
   return { orderId, actorId, boxId: box.id, packageIds: [p1, p2] };
@@ -147,11 +147,11 @@ test("list: box counts, orderNo/shipTo join, status filter", async () => {
   const row = rows[0];
   assert.equal(row.id, verifyTaskId);
   assert.equal(row.status, "pending");
-  assert.equal(row.orderNo, "SO-2026-0001");
+  assert.equal(row.orderNo, "SO-DEMO-0001");
   assert.equal(row.shipTo, "ACME Electronics (HK)");
   assert.equal(row.boxCount, 1);
   assert.equal(row.closedBoxCount, 1);
-  assert.ok(row.createdAt);
+  assert.ok(row.createdDate);
 
   assert.equal((await listVerifyTasks(client.db, "pending")).length, 1);
   assert.equal((await listVerifyTasks(client.db, "completed")).length, 0);
@@ -168,11 +168,11 @@ test("detail: consolidated task/order/boxes; 404", async () => {
 
   assert.deepEqual(detail.order, {
     id: orderId,
-    orderNo: "SO-2026-0001",
+    orderNo: "SO-DEMO-0001",
     status: "finished",
     shipTo: "ACME Electronics (HK)",
     customerCode: "ACME",
-    poNo: "CUST-PO-8899",
+    poNo: "CUST-PO-9001",
   });
 
   assert.equal(detail.boxes.length, 1);
@@ -180,7 +180,7 @@ test("detail: consolidated task/order/boxes; 404", async () => {
   assert.equal(box.id, boxId);
   assert.equal(box.status, "closed");
   assert.equal(box.boxSize, "26 X 20 X 20");
-  assert.equal(box.suggestedNetWeightKg, 0.019); // 2000+1000 pcs at 6.3 g per 1000 pcs
+  assert.equal(box.suggestedNetWeightKg, 0.009); // 1000+500 pcs at 6.3 g per 1000 pcs
   assert.equal(box.packages.length, 2);
   const byPartNo = new Map(box.packages.map((p) => [p.partNo, p]));
   assert.equal(byPartNo.get("RK73H1JTTD1002F")!.id, packageIds[0]);
@@ -293,7 +293,7 @@ test("chain: both disabled → finish creates no tasks; shipping feed source='pi
   assert.equal(feed[0].source, "picking");
   assert.equal(feed[0].taskId, null);
   assert.equal(feed[0].pickingOrderId, orderId);
-  assert.equal(feed[0].orderNo, "SO-2026-0001");
+  assert.equal(feed[0].orderNo, "SO-DEMO-0001");
   assert.equal(feed[0].boxCount, 1);
   assert.equal(feed[0].closedBoxCount, 1);
   assert.ok(feed[0].completedAt);
@@ -361,7 +361,7 @@ test("reopen: closed box → open + both package flags reset; re-verify + re-clo
     client.db,
     sql`SELECT from_state AS "fromState", to_state AS "toState", actor_id AS "actorId"
         FROM transaction_logs WHERE entity_type = 'shipping_box' AND entity_id = ${boxId}
-        ORDER BY created_at DESC, id DESC LIMIT 1`
+        ORDER BY created_date DESC, id DESC LIMIT 1`
   );
   assert.deepEqual(log, { fromState: "closed", toState: "open", actorId });
 
@@ -424,7 +424,7 @@ test("shipping detail: task-agnostic order + boxes[packages]; 404", async () => 
 
   const detail = await getShippingOrderDetail(client.db, orderId);
   assert.equal(detail.order.id, orderId);
-  assert.equal(detail.order.orderNo, "SO-2026-0001");
+  assert.equal(detail.order.orderNo, "SO-DEMO-0001");
   assert.equal(detail.boxes.length, 1);
   assert.equal(detail.boxes[0].id, boxId);
   assert.deepEqual(

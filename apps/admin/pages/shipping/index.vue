@@ -2,6 +2,7 @@
 import type { ShippingOrderRow } from "~/utils/flowApi";
 
 const flow = useFlowApi();
+const { t } = useI18n();
 const rows = ref<ShippingOrderRow[]>([]);
 const loading = ref(false);
 const error = ref("");
@@ -19,6 +20,39 @@ const filtered = computed(() => {
 const { page, pageSize, total, paged } = usePaging(filtered);
 
 const selectedIds = computed(() => Object.keys(selected.value).filter((id) => selected.value[id]));
+
+const shipping = ref(false);
+
+function orderNo(id: string) {
+  return rows.value.find((r) => r.pickingOrderId === id)?.orderNo ?? id;
+}
+
+async function markShipped() {
+  const ids = selectedIds.value;
+  if (ids.length === 0 || shipping.value) return;
+  if (!window.confirm(t("admin.pages.shipping.markShippedConfirm", { n: ids.length }))) return;
+  shipping.value = true;
+  error.value = "";
+  try {
+    await flow.shipShippingOrders(ids);
+    await load();
+    selected.value = {};
+  } catch (e: any) {
+    // Partial failure: shipShippingOrders attempts every id and lists the
+    // per-order failures (e.g. 409 order_not_ready_to_ship) on `failed`.
+    const failed: { id: string; message: string }[] = e?.failed ?? [];
+    error.value =
+      failed.length > 0
+        ? t("admin.pages.shipping.markShippedFailed", {
+            orders: failed.map((f) => `${orderNo(f.id)} (${f.message})`).join(", "),
+          })
+        : e.message;
+    await load();
+    selected.value = {};
+  } finally {
+    shipping.value = false;
+  }
+}
 
 async function load() {
   loading.value = true;
@@ -43,6 +77,17 @@ onMounted(load);
       <h1>{{ $t("admin.pages.shipping.title") }}</h1>
       <div class="head-actions">
         <button class="btn" :disabled="loading" @click="load">{{ $t("admin.common.refresh") }}</button>
+        <button
+          class="btn"
+          :disabled="selectedIds.length === 0 || shipping"
+          @click="markShipped"
+        >
+          {{
+            selectedIds.length
+              ? $t("admin.pages.shipping.markShippedSelected", { n: selectedIds.length })
+              : $t("admin.pages.shipping.markShipped")
+          }}
+        </button>
         <button
           class="btn"
           :disabled="selectedIds.length === 0"

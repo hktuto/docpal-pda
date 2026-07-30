@@ -6,16 +6,31 @@ import { allocateAll, parseDateCodeRule } from "./allocate.js";
 
 let client: TestDb;
 
+// Seed ids (see seed-demo-scenario.ts — resolved by business key, never a
+// hardcoded UUID; the seed's deterministic ids keep them valid across reseeds)
+let PO_22: string; // picking order SO-DEMO-0001 (ACME, org 2 / STORE1)
+let ITEM_23: string; // SO-DEMO-0001 item — part RK73H1JTTD1002F, qty 1000
+let ITEM_24: string; // SO-DEMO-0001 item — part RK73H1JTTD2202F, qty 500
+let LOT_18: string; // BOX-H-20260701-0001 lot — part RK73H1JTTD1002F, dc 2603, 1000
+let LOT_19: string; // BOX-H-20260701-0001 lot — part RK73H1JTTD2202F, dc 2603, 500
+let LOT_28: string; // BOX-H-20260701-0002 lot — part RK73B1JTTD181G, dc 2604, 400
+let LOT_29: string; // BOX-H-20260701-0002 lot — part RK73H1JTTD4702F, dc 2604, 200
+
+async function idOf(q: ReturnType<typeof sql>): Promise<string> {
+  const rows = await client.db.execute(q);
+  return (rows[0] as any).id as string;
+}
+
 before(async () => {
   client = await setupTestDb();
+  PO_22 = await idOf(sql`SELECT id FROM picking_orders WHERE order_no = 'SO-DEMO-0001'`);
+  ITEM_23 = await idOf(sql`SELECT id FROM picking_items WHERE picking_order_id = ${PO_22} AND part_no = 'RK73H1JTTD1002F'`);
+  ITEM_24 = await idOf(sql`SELECT id FROM picking_items WHERE picking_order_id = ${PO_22} AND part_no = 'RK73H1JTTD2202F'`);
+  LOT_18 = await idOf(sql`SELECT id FROM inventory_lots WHERE box_id = 'BOX-H-20260701-0001' AND part_no = 'RK73H1JTTD1002F'`);
+  LOT_19 = await idOf(sql`SELECT id FROM inventory_lots WHERE box_id = 'BOX-H-20260701-0001' AND part_no = 'RK73H1JTTD2202F'`);
+  LOT_28 = await idOf(sql`SELECT id FROM inventory_lots WHERE box_id = 'BOX-H-20260701-0002' AND part_no = 'RK73B1JTTD181G'`);
+  LOT_29 = await idOf(sql`SELECT id FROM inventory_lots WHERE box_id = 'BOX-H-20260701-0002' AND part_no = 'RK73H1JTTD4702F'`);
 });
-
-// Seed ids (see seed.ts)
-const ITEM_23 = "00000000-0000-4000-8000-000000000023"; // part RK73H1JTTD1002F, qty 2000
-const ITEM_24 = "00000000-0000-4000-8000-000000000024"; // part RK73H1JTTD2202F, qty 1000
-const LOT_18 = "00000000-0000-4000-8000-000000000018"; // part RK73H1JTTD1002F, dc 2601, 10000
-const LOT_19 = "00000000-0000-4000-8000-000000000019"; // part RK73H1JTTD2202F, dc 2602, 5000
-const PO_22 = "00000000-0000-4000-8000-000000000022";
 
 test("parseDateCodeRule: exact / + / - / year-relative", () => {
   const ref = new Date("2026-07-17T00:00:00Z");
@@ -36,8 +51,8 @@ test("parseDateCodeRule: exact / + / - / year-relative", () => {
 
 test("allocateAll: FIFO from shelf lots, updates lots + picking items", async () => {
   await reseed(client);
-  // keep the demo world hermetic: drop the new_seed real-data picking orders
-  // so allocateAll only sees the two seeded demo demands
+  // keep the demo world hermetic: drop the second demo order (SO-DEMO-0002)
+  // so allocateAll only sees SO-DEMO-0001's two demands
   await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${PO_22}`);
   const s = await allocateAll(client.db);
   assert.equal(s.demands, 2);
@@ -50,8 +65,8 @@ test("allocateAll: FIFO from shelf lots, updates lots + picking items", async ()
   assert.deepEqual(
     rows.map((r: any) => [r.item, r.lot, r.qty]),
     [
-      [ITEM_23, LOT_18, 2000],
-      [ITEM_24, LOT_19, 1000],
+      [ITEM_23, LOT_18, 1000],
+      [ITEM_24, LOT_19, 500],
     ]
   );
 
@@ -60,8 +75,10 @@ test("allocateAll: FIFO from shelf lots, updates lots + picking items", async ()
   assert.deepEqual(
     lots.map((r: any) => [r.id, r.allocated_qty, r.available_qty]),
     [
-      [LOT_18, 2000, 8000],
-      [LOT_19, 1000, 4000],
+      [LOT_18, 1000, 0],
+      [LOT_19, 500, 0],
+      [LOT_28, 0, 400],
+      [LOT_29, 0, 200],
     ]
   );
 
@@ -70,8 +87,8 @@ test("allocateAll: FIFO from shelf lots, updates lots + picking items", async ()
   assert.deepEqual(
     items.map((r: any) => [r.id, r.allocated_qty]),
     [
-      [ITEM_23, 2000],
-      [ITEM_24, 1000],
+      [ITEM_23, 1000],
+      [ITEM_24, 500],
     ]
   );
 });
@@ -86,11 +103,14 @@ test("allocateAll: pair-less demand is org-agnostic — lots in any org match by
   const s = await allocateAll(client.db);
   assert.equal(s.fullyAllocated, 2);
   const a23 = await client.db.execute(sql`SELECT qty FROM allocations WHERE picking_item_id = ${ITEM_23}`);
-  assert.equal(Number((a23[0] as any).qty), 2000);
+  assert.equal(Number((a23[0] as any).qty), 1000);
 });
 
 test("allocateAll: sources must match the picking order's location pair", async () => {
   await reseed(client);
+  // hermetic world: only SO-DEMO-0001 demands (SO-DEMO-0002 would still
+  // allocate from the seeded STORE1 shelf lots)
+  await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${PO_22}`);
   // seeded demand is (org 2, STORE1); a sub-inventory outside its share
   // group finds nothing (STORE1/WSTORE1 share via the demo group — see the
   // share-group test below — so the mismatch case uses OSWF (HK))
@@ -110,6 +130,7 @@ test("allocateAll: sources must match the picking order's location pair", async 
 
 test("allocateAll: share group widens the sub-inventory match", async () => {
   await reseed(client);
+  await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${PO_22}`);
   // demo seed puts org-2 STORE1 + WSTORE1 in share group HK; the lots live in
   // STORE1. A WSTORE1 demand allocates from the shared STORE1 stock.
   await client.db.execute(sql`UPDATE picking_orders SET sub_inventory_code = 'WSTORE1' WHERE id = ${PO_22}`);
@@ -120,8 +141,8 @@ test("allocateAll: share group widens the sub-inventory match", async () => {
   assert.deepEqual(
     rows.map((r: any) => [r.item, r.lot, Number(r.qty)]),
     [
-      [ITEM_23, LOT_18, 2000],
-      [ITEM_24, LOT_19, 1000],
+      [ITEM_23, LOT_18, 1000],
+      [ITEM_24, LOT_19, 500],
     ]
   );
 
@@ -138,7 +159,7 @@ test("allocateAll: sharing does not lift customer segregation", async () => {
   // move lot 18 into the ACME-segregated store and add that store to the
   // same share group as the demand's WSTORE1
   await client.db.execute(sql`UPDATE inventory_lots SET sub_inventory_code = 'ACME-S1' WHERE id = ${LOT_18}`);
-  await client.db.execute(sql`INSERT INTO sub_inventory_share_members (org_id, code, share_group, created_at, updated_at) VALUES (2, 'ACME-S1', 'HK', now(), now())`);
+  await client.db.execute(sql`INSERT INTO sub_inventory_share_members (org_id, code, share_group, created_date, last_update_date) VALUES (2, 'ACME-S1', 'HK', now(), now())`);
   await client.db.execute(sql`UPDATE picking_orders SET sub_inventory_code = 'WSTORE1', customer_code = NULL WHERE id = ${PO_22}`);
 
   // the segregated lot stays off-limits (customer mismatch) even though it
@@ -148,7 +169,7 @@ test("allocateAll: sharing does not lift customer segregation", async () => {
   assert.equal(Number((c23[0] as any).c), 0);
   const a24 = await client.db.execute(sql`SELECT inventory_lot_id AS lot, qty FROM allocations WHERE picking_item_id = ${ITEM_24}`);
   assert.equal((a24[0] as any).lot, LOT_19);
-  assert.equal(Number((a24[0] as any).qty), 1000);
+  assert.equal(Number((a24[0] as any).qty), 500);
 });
 
 test("allocateAll: customer-segregated sub-inventory only serves its customer", async () => {
@@ -163,7 +184,7 @@ test("allocateAll: customer-segregated sub-inventory only serves its customer", 
   assert.equal(s.fullyAllocated, 2);
   const a23 = await client.db.execute(sql`SELECT qty, inventory_lot_id AS lot FROM allocations WHERE picking_item_id = ${ITEM_23}`);
   assert.equal(a23.length, 1);
-  assert.equal(Number((a23[0] as any).qty), 2000);
+  assert.equal(Number((a23[0] as any).qty), 1000);
   assert.equal((a23[0] as any).lot, LOT_18);
 
   // the same demand without a customer cannot touch the segregated lot, but
@@ -173,11 +194,12 @@ test("allocateAll: customer-segregated sub-inventory only serves its customer", 
   const c = await client.db.execute(sql`SELECT count(*)::int AS c FROM allocations WHERE picking_item_id = ${ITEM_23}`);
   assert.equal(Number((c[0] as any).c), 0);
   const a24 = await client.db.execute(sql`SELECT qty FROM allocations WHERE picking_item_id = ${ITEM_24}`);
-  assert.equal(Number((a24[0] as any).qty), 1000);
+  assert.equal(Number((a24[0] as any).qty), 500);
 });
 
 test("allocateAll: idempotent recompute, ledger stays consistent", async () => {
   await reseed(client);
+  await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${PO_22}`);
   await allocateAll(client.db);
   const second = await allocateAll(client.db);
   assert.equal(second.allocationsRemoved, 2);
@@ -188,8 +210,10 @@ test("allocateAll: idempotent recompute, ledger stays consistent", async () => {
   assert.deepEqual(
     lots.map((r: any) => [r.id, r.allocated_qty]),
     [
-      [LOT_18, 2000],
-      [LOT_19, 1000],
+      [LOT_18, 1000],
+      [LOT_19, 500],
+      [LOT_28, 0],
+      [LOT_29, 0],
     ]
   );
 
@@ -202,26 +226,29 @@ test("allocateAll: idempotent recompute, ledger stays consistent", async () => {
   assert.deepEqual(
     deltas.map((r: any) => [r.lot, r.delta]),
     [
-      [LOT_18, 2000],
-      [LOT_19, 1000],
+      [LOT_18, 1000],
+      [LOT_19, 500],
     ]
   );
 });
 
 test("allocateAll: priority_seq decides who wins scarce stock", async () => {
   await reseed(client);
+  // the seeded lot holds only 1000 (SO-DEMO-0001's full demand) — restock it
+  // to 10000 so the scarcity split leaves something for both orders
+  await client.db.execute(sql`UPDATE inventory_lots SET total_qty = 10000 WHERE id = ${LOT_18}`);
   // order B wants 9000 of the same part as ITEM_23; lot 18 holds 10000.
   const ORDER_B = "00000000-0000-4000-8000-0000000000b1";
   const ITEM_B = "00000000-0000-4000-8000-0000000000b2";
   await client.db.execute(sql`
-    INSERT INTO picking_orders (id, order_no, customer_code, org_id, sub_inventory_code, status, priority_seq, created_at, updated_at)
+    INSERT INTO picking_orders (id, order_no, customer_code, org_id, sub_inventory_code, status, priority_seq, created_date, last_update_date)
     VALUES (${ORDER_B}, 'TEST-PRIO', 'ACME', 2, 'STORE1', 'pending', 1, now(), now())`);
   await client.db.execute(sql`
-    INSERT INTO picking_items (id, picking_order_id, part_no, qty, created_at, updated_at)
+    INSERT INTO picking_items (id, picking_order_id, part_no, qty, created_date, last_update_date)
     VALUES (${ITEM_B}, ${ORDER_B}, 'RK73H1JTTD1002F', 9000, now(), now())`);
   await client.db.execute(sql`UPDATE picking_orders SET priority_seq = 2 WHERE id = ${PO_22}`);
 
-  // B (seq 1) takes 9000 first; ITEM_23 gets only the remaining 1000.
+  // B (seq 1) takes 9000 first; ITEM_23 gets the remaining 1000.
   await allocateAll(client.db);
   let rows = await client.db.execute(sql`
     SELECT picking_item_id AS item, qty FROM allocations WHERE inventory_lot_id = ${LOT_18}`);
@@ -236,12 +263,13 @@ test("allocateAll: priority_seq decides who wins scarce stock", async () => {
   rows = await client.db.execute(sql`
     SELECT picking_item_id AS item, qty FROM allocations WHERE inventory_lot_id = ${LOT_18}`);
   const flipped = new Map(rows.map((r: any) => [r.item, Number(r.qty)]));
-  assert.equal(flipped.get(ITEM_23), 2000);
-  assert.equal(flipped.get(ITEM_B), 8000);
+  assert.equal(flipped.get(ITEM_23), 1000);
+  assert.equal(flipped.get(ITEM_B), 9000);
 });
 
 test("allocateAll: live work lock protects the order; expired lock is rebuilt", async () => {
   await reseed(client);
+  await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${PO_22}`);
   const first = await allocateAll(client.db);
   assert.equal(first.allocationsCreated, 2);
 
@@ -271,15 +299,113 @@ test("allocateAll: live work lock protects the order; expired lock is rebuilt", 
 test("allocateAll: open qty subtracts unboxed packages (no double reserve)", async () => {
   await reseed(client);
   await allocateAll(client.db);
-  // simulate a scan: 500 of ITEM_23 consumed into an UNBOXED package
+  // simulate a scan: 500 of ITEM_23's 1000 consumed into an UNBOXED package
   // (picked_qty stays 0 — the old picked_qty-based guard would re-reserve it)
   await client.db.execute(sql`
-    INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, created_at, updated_at)
+    INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, created_date, last_update_date)
     VALUES ('00000000-0000-4000-8000-0000000000c1', ${ITEM_23}, ${PO_22}, 'inventory_lot', ${LOT_18}, 500, now(), now())`);
-  await client.db.execute(sql`UPDATE allocations SET qty = 1500 WHERE picking_item_id = ${ITEM_23}`);
+  await client.db.execute(sql`UPDATE allocations SET qty = 500 WHERE picking_item_id = ${ITEM_23}`);
 
   await allocateAll(client.db);
   const a = await client.db.execute(sql`SELECT qty FROM allocations WHERE picking_item_id = ${ITEM_23}`);
   assert.equal(a.length, 1);
-  assert.equal(Number((a[0] as any).qty), 1500);
+  assert.equal(Number((a[0] as any).qty), 500);
+});
+
+// --- allocation_status (maintained by allocateAll's aggregate refresh) ----------
+
+async function allocationStatusOf(db: TestDb["db"], orderId: string): Promise<string> {
+  const rows = await db.execute(sql`SELECT allocation_status AS s FROM picking_orders WHERE id = ${orderId}`);
+  return (rows[0] as any).s as string;
+}
+
+test("allocation_status: unallocated until allocateAll, then allocated", async () => {
+  await reseed(client);
+  await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${PO_22}`);
+  // fresh seed leaves the column at its default
+  assert.equal(await allocationStatusOf(client.db, PO_22), "unallocated");
+
+  await allocateAll(client.db);
+  assert.equal(await allocationStatusOf(client.db, PO_22), "allocated");
+});
+
+test("allocation_status: scarce stock — priority winner allocated, loser partial; more stock → both allocated", async () => {
+  await reseed(client);
+  // the seeded lot holds only 1000 (SO-DEMO-0001's full demand) — restock it
+  // to 10000 so the scarcity split leaves PO_22 short of its 1000
+  await client.db.execute(sql`UPDATE inventory_lots SET total_qty = 10000 WHERE id = ${LOT_18}`);
+  const ORDER_B = "00000000-0000-4000-8000-0000000000b1";
+  const ITEM_B = "00000000-0000-4000-8000-0000000000b2";
+  await client.db.execute(sql`
+    INSERT INTO picking_orders (id, order_no, customer_code, org_id, sub_inventory_code, status, priority_seq, created_date, last_update_date)
+    VALUES (${ORDER_B}, 'TEST-PRIO', 'ACME', 2, 'STORE1', 'pending', 1, now(), now())`);
+  await client.db.execute(sql`
+    INSERT INTO picking_items (id, picking_order_id, part_no, qty, created_date, last_update_date)
+    VALUES (${ITEM_B}, ${ORDER_B}, 'RK73H1JTTD1002F', 9500, now(), now())`);
+  await client.db.execute(sql`UPDATE picking_orders SET priority_seq = 2 WHERE id = ${PO_22}`);
+
+  // lot 18 holds 10000: B takes 9500 first, PO_22 gets 500 of its 1000 (item
+  // 24 fully covers) → allocated vs partial
+  await allocateAll(client.db);
+  assert.equal(await allocationStatusOf(client.db, ORDER_B), "allocated");
+  assert.equal(await allocationStatusOf(client.db, PO_22), "partial");
+
+  // restock the lot → the recompute covers both orders fully
+  await client.db.execute(sql`UPDATE inventory_lots SET total_qty = total_qty + 8000 WHERE id = ${LOT_18}`);
+  await allocateAll(client.db);
+  assert.equal(await allocationStatusOf(client.db, ORDER_B), "allocated");
+  assert.equal(await allocationStatusOf(client.db, PO_22), "allocated");
+});
+
+test("allocation_status: an order with zero allocation coverage reads unallocated", async () => {
+  await reseed(client);
+  await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${PO_22}`);
+  // no source can match this pair → nothing allocates
+  await client.db.execute(sql`UPDATE picking_orders SET sub_inventory_code = 'OSWF (HK)' WHERE id = ${PO_22}`);
+  await allocateAll(client.db);
+  assert.equal(await allocationStatusOf(client.db, PO_22), "unallocated");
+});
+
+test("allocation_status: work-locked order keeps its status while locked", async () => {
+  await reseed(client);
+  await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${PO_22}`);
+  await allocateAll(client.db);
+  assert.equal(await allocationStatusOf(client.db, PO_22), "allocated");
+
+  const operator = await client.db.execute(sql`SELECT id FROM users WHERE username = 'operator'`);
+  const operatorId = (operator[0] as any).id as string;
+  await client.db.execute(sql`UPDATE picking_orders SET working_by = ${operatorId}, working_at = now() WHERE id = ${PO_22}`);
+
+  // move the lots out of reach: an unlocked recompute would wipe the
+  // allocations (→ unallocated), but the live lock keeps the order out of the
+  // demand set so its rows — and its status — survive
+  await client.db.execute(sql`UPDATE inventory_lots SET org_id = 3, sub_inventory_code = NULL`);
+  const s = await allocateAll(client.db);
+  assert.equal(s.demands, 0);
+  assert.equal(await allocationStatusOf(client.db, PO_22), "allocated");
+
+  // lock expires → the recompute wipes the allocations and the status follows
+  await client.db.execute(sql`UPDATE picking_orders SET working_at = now() - interval '20 minutes' WHERE id = ${PO_22}`);
+  await allocateAll(client.db);
+  assert.equal(await allocationStatusOf(client.db, PO_22), "unallocated");
+});
+
+test("allocation_status: fully-picked (Σ open = 0) order reads allocated", async () => {
+  await reseed(client);
+  await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${PO_22}`);
+  await allocateAll(client.db);
+
+  // simulate both items fully scanned (unboxed packages): the demand filter
+  // sees no open qty, allocations are consumed down to 0
+  await client.db.execute(sql`
+    INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, created_date, last_update_date)
+    VALUES ('00000000-0000-4000-8000-0000000000d1', ${ITEM_23}, ${PO_22}, 'inventory_lot', ${LOT_18}, 1000, now(), now()),
+           ('00000000-0000-4000-8000-0000000000d2', ${ITEM_24}, ${PO_22}, 'inventory_lot', ${LOT_19}, 500, now(), now())`);
+  await client.db.execute(sql`UPDATE picking_items SET allocated_qty = 0 WHERE picking_order_id = ${PO_22}`);
+  await client.db.execute(sql`UPDATE picking_orders SET status = 'picking' WHERE id = ${PO_22}`);
+
+  // no demands at all → the refresh still runs and the 0 = 0 edge holds
+  const s = await allocateAll(client.db);
+  assert.equal(s.demands, 0);
+  assert.equal(await allocationStatusOf(client.db, PO_22), "allocated");
 });

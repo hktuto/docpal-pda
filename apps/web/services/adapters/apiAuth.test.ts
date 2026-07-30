@@ -53,7 +53,7 @@ const EXPECTED_USER = {
   username: 'operator',
   displayName: 'Operator One',
   groupCodes: ['operator'],
-  createdAt: null,
+  createdDate: null,
 };
 
 describe('createApiAuthService', () => {

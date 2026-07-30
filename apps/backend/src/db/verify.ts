@@ -46,7 +46,7 @@ async function logTransition(
     toState: entry.toState,
     actorId: entry.actorId,
     metadata: entry.metadata ?? {},
-    createdAt: now(),
+    createdDate: now(),
   });
 }
 
@@ -62,7 +62,7 @@ export interface VerifyTaskListRow {
   shipTo: string | null;
   boxCount: number;
   closedBoxCount: number;
-  createdAt: Date;
+  createdDate: Date;
 }
 
 /** List rows with per-task box counts; `status` is a pass-through filter. */
@@ -75,13 +75,13 @@ export async function listVerifyTasks(db: AppDb, status?: string): Promise<Verif
         po.order_no AS "orderNo", po.ship_to AS "shipTo",
         COUNT(sb.id)::int AS "boxCount",
         COUNT(sb.id) FILTER (WHERE sb.status <> 'open')::int AS "closedBoxCount",
-        vt.created_at AS "createdAt"
+        vt.created_date AS "createdDate"
       FROM verify_tasks vt
       JOIN picking_orders po ON po.id = vt.picking_order_id
       LEFT JOIN shipping_boxes sb ON sb.picking_order_id = vt.picking_order_id
       ${status ? sql`WHERE vt.status = ${status}` : sql``}
       GROUP BY vt.id, po.order_no, po.ship_to
-      ORDER BY vt.created_at DESC, vt.id DESC
+      ORDER BY vt.created_date DESC, vt.id DESC
     `
   );
 }
@@ -90,7 +90,7 @@ export interface VerifyTaskRow {
   id: string;
   status: string;
   pickingOrderId: string;
-  createdAt: Date;
+  createdDate: Date;
 }
 
 export interface VerifyOrderRow {
@@ -136,7 +136,7 @@ export interface VerifyTaskDetail {
 export async function getVerifyTaskDetail(db: AppDb, taskId: string): Promise<VerifyTaskDetail> {
   const task = await queryGet<VerifyTaskRow>(
     db,
-    sql`SELECT id, status, picking_order_id AS "pickingOrderId", created_at AS "createdAt"
+    sql`SELECT id, status, picking_order_id AS "pickingOrderId", created_date AS "createdDate"
         FROM verify_tasks WHERE id = ${taskId}`
   );
   if (!task) throw new HTTPException(404, { message: "verify_task_not_found" });
@@ -155,7 +155,7 @@ export async function getVerifyTaskDetail(db: AppDb, taskId: string): Promise<Ve
                gross_weight AS "grossWeight", net_weight AS "netWeight",
                destination_country AS "destinationCountry"
         FROM shipping_boxes WHERE picking_order_id = ${task.pickingOrderId}
-        ORDER BY created_at, id`
+        ORDER BY created_date, id`
   );
   const boxIds = boxes.map((b) => b.id);
 
@@ -174,7 +174,7 @@ export async function getVerifyTaskDetail(db: AppDb, taskId: string): Promise<Ve
           JOIN parts p ON p.part_no = pi.part_no
           LEFT JOIN net_weight_formula nwf ON nwf.part_no = pi.part_no
           WHERE ${inArray(sql`pp.shipping_box_id`, boxIds)}
-          ORDER BY pp.created_at, pp.id
+          ORDER BY pp.created_date, pp.id
         `
       )
     : [];

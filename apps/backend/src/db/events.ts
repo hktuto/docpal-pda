@@ -25,7 +25,7 @@ export async function emitEvent(
     type: e.type,
     topics: e.topics,
     data: e.data ?? {},
-    createdAt: now(),
+    createdDate: now(),
   });
 }
 
@@ -36,5 +36,5 @@ export async function fetchEventsSince(db: AppDb, since: number, limit = 200): P
 
 /** Drop rows older than 3 days (events are best-effort notifications, not a command log). */
 export async function pruneEvents(db: AppDb): Promise<void> {
-  await db.delete(appEvents).where(lt(appEvents.createdAt, sql`now() - interval '3 days'`));
+  await db.delete(appEvents).where(lt(appEvents.createdDate, sql`now() - interval '3 days'`));
 }

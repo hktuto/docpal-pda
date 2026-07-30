@@ -59,7 +59,7 @@ async function logTransition(
     toState: entry.toState,
     actorId: entry.actorId,
     metadata: entry.metadata ?? {},
-    createdAt: now(),
+    createdDate: now(),
   });
 }
 
@@ -76,7 +76,7 @@ async function recomputePickingItem(tx: DbOrTx, pickingItemId: string): Promise<
   );
   await queryRun(
     tx,
-    sql`UPDATE picking_items SET allocated_qty = ${alloc?.s ?? 0}, picked_qty = ${boxed?.s ?? 0}, updated_at = ${now()}
+    sql`UPDATE picking_items SET allocated_qty = ${alloc?.s ?? 0}, picked_qty = ${boxed?.s ?? 0}, last_update_date = ${now()}
         WHERE id = ${pickingItemId}`
   );
 }
@@ -123,7 +123,7 @@ interface ShippingBoxRow {
   netWeight: number | null;
   grossWeight: number | null;
   destinationCountry: string | null;
-  createdAt: Date;
+  createdDate: Date;
 }
 
 async function loadShippingBox(tx: DbOrTx, boxId: string): Promise<ShippingBoxRow> {
@@ -131,7 +131,7 @@ async function loadShippingBox(tx: DbOrTx, boxId: string): Promise<ShippingBoxRo
     tx,
     sql`SELECT id, picking_order_id AS "pickingOrderId", status, box_size AS "boxSize",
                net_weight AS "netWeight", gross_weight AS "grossWeight",
-               destination_country AS "destinationCountry", created_at AS "createdAt"
+               destination_country AS "destinationCountry", created_date AS "createdDate"
         FROM shipping_boxes WHERE id = ${boxId}`
   );
   if (!box) throw new HTTPException(404, { message: "shipping_box_not_found" });
@@ -140,7 +140,7 @@ async function loadShippingBox(tx: DbOrTx, boxId: string): Promise<ShippingBoxRo
 
 /** Shrink an allocation by qty (the row stays at 0 when fully consumed), then recompute. */
 async function reduceAllocation(tx: DbOrTx, allocationId: string, qty: number): Promise<void> {
-  await queryRun(tx, sql`UPDATE allocations SET qty = qty - ${qty}, updated_at = ${now()} WHERE id = ${allocationId}`);
+  await queryRun(tx, sql`UPDATE allocations SET qty = qty - ${qty}, last_update_date = ${now()} WHERE id = ${allocationId}`);
   const a = await queryGet<{ pickingItemId: string; inventoryLotId: string | null }>(
     tx,
     sql`SELECT picking_item_id AS "pickingItemId", inventory_lot_id AS "inventoryLotId" FROM allocations WHERE id = ${allocationId}`
@@ -165,11 +165,11 @@ async function bumpAllocation(
         : sql`SELECT id FROM allocations WHERE picking_item_id = ${a.pickingItemId} AND receiving_order_id = ${a.receivingOrderId}`
   );
   if (existing) {
-    await queryRun(tx, sql`UPDATE allocations SET qty = qty + ${a.qty}, updated_at = ${now()} WHERE id = ${existing.id}`);
+    await queryRun(tx, sql`UPDATE allocations SET qty = qty + ${a.qty}, last_update_date = ${now()} WHERE id = ${existing.id}`);
   } else {
     await queryRun(
       tx,
-      sql`INSERT INTO allocations (id, picking_item_id, qty, inventory_lot_id, receiving_invoice_item_id, receiving_order_id, created_at, updated_at)
+      sql`INSERT INTO allocations (id, picking_item_id, qty, inventory_lot_id, receiving_invoice_item_id, receiving_order_id, created_date, last_update_date)
           VALUES (${randomUUID()}, ${a.pickingItemId}, ${a.qty},
                   ${a.inventoryLotId ?? null}, ${a.receivingInvoiceItemId ?? null}, ${a.receivingOrderId ?? null},
                   ${now()}, ${now()})`
@@ -186,7 +186,7 @@ async function assignPackageToBoxTx(tx: DbOrTx, packageId: string, boxId: string
     sql`SELECT picking_item_id AS "pickingItemId" FROM picking_packages WHERE id = ${packageId}`
   );
   if (!pkg) return;
-  await queryRun(tx, sql`UPDATE picking_packages SET shipping_box_id = ${boxId}, updated_at = ${now()} WHERE id = ${packageId}`);
+  await queryRun(tx, sql`UPDATE picking_packages SET shipping_box_id = ${boxId}, last_update_date = ${now()} WHERE id = ${packageId}`);
   await recomputePickingItem(tx, pkg.pickingItemId);
 }
 
@@ -199,7 +199,7 @@ async function unassignPackageFromBoxTx(tx: DbOrTx, packageId: string): Promise<
   if (!pkg || pkg.shippingBoxId === null) return;
   await queryRun(
     tx,
-    sql`UPDATE picking_packages SET shipping_box_id = NULL, verified = false, updated_at = ${now()} WHERE id = ${packageId}`
+    sql`UPDATE picking_packages SET shipping_box_id = NULL, verified = false, last_update_date = ${now()} WHERE id = ${packageId}`
   );
   await recomputePickingItem(tx, pkg.pickingItemId);
 }
@@ -226,18 +226,18 @@ async function maybeAutoFinishPickingOrder(
   if (items.length === 0) return false;
   if (!items.every((i) => i.pickedQty >= i.qty)) return false;
 
-  await queryRun(tx, sql`UPDATE picking_orders SET status = 'finished', working_by = NULL, working_at = NULL, updated_at = ${now()} WHERE id = ${order.id}`);
+  await queryRun(tx, sql`UPDATE picking_orders SET status = 'finished', working_by = NULL, working_at = NULL, last_update_date = ${now()} WHERE id = ${order.id}`);
   if (isStepEnabled("measuring")) {
     await queryRun(
       tx,
-      sql`INSERT INTO measuring_tasks (id, picking_order_id, status, created_at)
+      sql`INSERT INTO measuring_tasks (id, picking_order_id, status, created_date)
           VALUES (${randomUUID()}, ${order.id}, 'pending', ${now()})
           ON CONFLICT (picking_order_id) DO NOTHING`
     );
   } else if (isStepEnabled("verify")) {
     await queryRun(
       tx,
-      sql`INSERT INTO verify_tasks (id, picking_order_id, status, created_at)
+      sql`INSERT INTO verify_tasks (id, picking_order_id, status, created_date)
           VALUES (${randomUUID()}, ${order.id}, 'pending', ${now()})
           ON CONFLICT (picking_order_id) DO NOTHING`
     );
@@ -253,6 +253,216 @@ async function maybeAutoFinishPickingOrder(
 }
 
 // ---------------------------------------------------------------------------
+// Whole-box exact-match claim (spec
+// docs/superpowers/specs/2026-07-29-whole-box-picking-claim-design.md):
+// when a shelf box's CURRENT contents (inventory_lots, box_id set, total_qty
+// > 0 — never the shelf_box_items put-away manifest) exactly equal the
+// order's full remaining open demand, the operator can claim the whole box in
+// one action: the carton is reused as the shipping box (prefilled with the
+// box size / net / gross weight from the source receiving lines'
+// additional_data), all packages are created boxed, the order's allocations
+// are released, and the order auto-finishes like the scan path.
+// ---------------------------------------------------------------------------
+
+export interface ShelfBoxMatch {
+  id: string;
+  shelfCode: string | null;
+  orgId: number | null;
+  subInventoryCode: string | null;
+  contents: { partNo: string; qty: number }[];
+}
+
+interface OrderMatchContext {
+  id: string;
+  customerCode: string | null;
+  orgId: number | null;
+  subInventoryCode: string | null;
+}
+
+interface BoxLotRow {
+  lotId: string;
+  boxId: string;
+  partNo: string;
+  totalQty: number;
+  availableQty: number;
+  ownAllocQty: number;
+  shelfCode: string | null;
+  boxOrgId: number | null;
+  boxSubInventoryCode: string | null;
+  dateCode: string | null;
+  lotCode: string | null;
+  coo: string | null;
+  cow: string | null;
+}
+
+/** Open demand per part_no: qty − Σ picking_packages, zero-open parts excluded. */
+async function loadOpenDemand(dbOrTx: DbOrTx, orderId: string): Promise<Map<string, number>> {
+  const rows = await queryAll<{ partNo: string; openQty: number }>(
+    dbOrTx,
+    sql`SELECT pi.part_no AS "partNo",
+               (pi.qty - COALESCE(pkg.qty, 0))::int AS "openQty"
+        FROM picking_items pi
+        LEFT JOIN (
+          SELECT picking_item_id, SUM(qty)::int AS qty
+          FROM picking_packages GROUP BY picking_item_id
+        ) pkg ON pkg.picking_item_id = pi.id
+        WHERE pi.picking_order_id = ${orderId}`
+  );
+  const demand = new Map<string, number>();
+  for (const r of rows) {
+    if (r.openQty <= 0) continue;
+    demand.set(r.partNo, (demand.get(r.partNo) ?? 0) + r.openQty);
+  }
+  return demand;
+}
+
+/** Boxed lots visible to the order: location pair + share-group widening +
+ *  customer segregation — the same rules allocate.ts applies to lot sources. */
+async function loadBoxLots(dbOrTx: DbOrTx, order: OrderMatchContext): Promise<BoxLotRow[]> {
+  return queryAll<BoxLotRow>(
+    dbOrTx,
+    sql`SELECT il.id AS "lotId", il.box_id AS "boxId", il.part_no AS "partNo",
+               il.total_qty AS "totalQty", il.available_qty AS "availableQty",
+               COALESCE(own.qty, 0)::int AS "ownAllocQty",
+               sb.shelf_code AS "shelfCode",
+               sb.org_id AS "boxOrgId", sb.sub_inventory_code AS "boxSubInventoryCode",
+               il.date_code AS "dateCode", il.lot_code AS "lotCode", il.coo, il.cow
+        FROM inventory_lots il
+        JOIN shelf_boxes sb ON sb.id = il.box_id
+        LEFT JOIN sub_inventories si ON si.org_id = sb.org_id AND si.code = sb.sub_inventory_code
+        LEFT JOIN (
+          SELECT a.inventory_lot_id, SUM(a.qty)::int AS qty
+          FROM allocations a
+          JOIN picking_items pi ON pi.id = a.picking_item_id
+          WHERE pi.picking_order_id = ${order.id}
+          GROUP BY a.inventory_lot_id
+        ) own ON own.inventory_lot_id = il.id
+        WHERE il.box_id IS NOT NULL AND il.total_qty > 0
+          AND (${order.orgId}::int IS NULL OR sb.org_id = ${order.orgId})
+          AND (${order.subInventoryCode}::text IS NULL
+               OR sb.sub_inventory_code = ${order.subInventoryCode}
+               OR EXISTS (SELECT 1 FROM sub_inventory_share_members sm_d
+                          JOIN sub_inventory_share_members sm_s ON sm_s.share_group = sm_d.share_group
+                          WHERE sm_d.org_id = ${order.orgId} AND sm_d.code = ${order.subInventoryCode}
+                            AND sm_s.org_id = sb.org_id AND sm_s.code = sb.sub_inventory_code))
+          AND (si.customer_code IS NULL OR si.customer_code = ${order.customerCode})`
+  );
+}
+
+interface BoxGroup {
+  id: string;
+  shelfCode: string | null;
+  orgId: number | null;
+  subInventoryCode: string | null;
+  lots: BoxLotRow[];
+  contents: Map<string, number>;
+  /** No other order reserves any piece of the box's lots. */
+  fullyAvailable: boolean;
+}
+
+function groupBoxLots(lots: BoxLotRow[]): BoxGroup[] {
+  const byBox = new Map<string, BoxGroup>();
+  for (const l of lots) {
+    let g = byBox.get(l.boxId);
+    if (!g) {
+      g = {
+        id: l.boxId,
+        shelfCode: l.shelfCode,
+        orgId: l.boxOrgId,
+        subInventoryCode: l.boxSubInventoryCode,
+        lots: [],
+        contents: new Map(),
+        fullyAvailable: true,
+      };
+      byBox.set(l.boxId, g);
+    }
+    g.lots.push(l);
+    g.contents.set(l.partNo, (g.contents.get(l.partNo) ?? 0) + l.totalQty);
+    if (l.availableQty + l.ownAllocQty !== l.totalQty) g.fullyAvailable = false;
+  }
+  return [...byBox.values()].sort((a, b) => a.id.localeCompare(b.id));
+}
+
+function mapsEqual(a: Map<string, number>, b: Map<string, number>): boolean {
+  if (a.size !== b.size) return false;
+  for (const [k, v] of a) if (b.get(k) !== v) return false;
+  return true;
+}
+
+function toShelfBoxMatch(g: BoxGroup): ShelfBoxMatch {
+  return {
+    id: g.id,
+    shelfCode: g.shelfCode,
+    orgId: g.orgId,
+    subInventoryCode: g.subInventoryCode,
+    contents: [...g.contents.entries()].map(([partNo, qty]) => ({ partNo, qty })),
+  };
+}
+
+/** First fully-claimable box whose contents exactly equal the open demand. */
+async function findSuggestedBox(dbOrTx: DbOrTx, order: OrderMatchContext): Promise<ShelfBoxMatch | null> {
+  const demand = await loadOpenDemand(dbOrTx, order.id);
+  if (demand.size === 0) return null;
+  const g = groupBoxLots(await loadBoxLots(dbOrTx, order)).find(
+    (g) => g.fullyAvailable && mapsEqual(g.contents, demand)
+  );
+  return g ? toShelfBoxMatch(g) : null;
+}
+
+interface CartonPrefill {
+  boxSize: string | null;
+  netWeightKg: number | null;
+  grossWeightKg: number | null;
+}
+
+/** Shipping-box prefill from the carton metadata the receiving lines carried
+ *  in additional_data ({ boxSize, netWeight, grossWeight, weightUnit: "g" |
+ *  "kg" = default }). Weights are summed across source lines, converted to kg
+ *  (3 dp); box size is the first non-null. Missing keys → NULL. */
+async function cartonPrefillFromSources(dbOrTx: DbOrTx, lotIds: string[]): Promise<CartonPrefill> {
+  const none: CartonPrefill = { boxSize: null, netWeightKg: null, grossWeightKg: null };
+  if (lotIds.length === 0) return none;
+  const rows = await queryAll<{ ad: unknown }>(
+    dbOrTx,
+    sql`SELECT DISTINCT rii.additional_data AS "ad"
+        FROM inventory_lot_sources ils
+        JOIN receiving_invoice_items rii ON rii.id = ils.receiving_invoice_item_id
+        WHERE ${inArray(sql`ils.inventory_lot_id`, lotIds)} AND rii.additional_data IS NOT NULL`
+  );
+  let boxSize: string | null = null;
+  let net = 0;
+  let gross = 0;
+  let hasNet = false;
+  let hasGross = false;
+  const num = (v: unknown): number | null => {
+    const n = typeof v === "number" ? v : Number(v);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  };
+  for (const { ad } of rows) {
+    if (!ad || typeof ad !== "object") continue;
+    const d = ad as Record<string, unknown>;
+    const toKg = d.weightUnit === "g" ? 0.001 : 1;
+    if (boxSize === null && typeof d.boxSize === "string" && d.boxSize.trim() !== "") boxSize = d.boxSize;
+    const nw = d.netWeight == null ? null : num(d.netWeight);
+    if (nw !== null) {
+      net += nw * toKg;
+      hasNet = true;
+    }
+    const gw = d.grossWeight == null ? null : num(d.grossWeight);
+    if (gw !== null) {
+      gross += gw * toKg;
+      hasGross = true;
+    }
+  }
+  const round3 = (n: number) => Math.round(n * 1000) / 1000;
+  return {
+    boxSize,
+    netWeightKg: hasNet ? round3(net) : null,
+    grossWeightKg: hasGross ? round3(gross) : null,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Reads (called by the routes; kept here so tests can exercise them).
 // ---------------------------------------------------------------------------
 
@@ -260,6 +470,7 @@ export interface PickingOrderListRow {
   id: string;
   orderNo: string;
   status: string;
+  allocationStatus: string;
   poNo: string | null;
   shipTo: string | null;
   customerCode: string | null;
@@ -272,6 +483,7 @@ export interface PickingOrderListRow {
   itemCount: number;
   totalQty: number;
   pickedQty: number;
+  allocatedQty: number;
 }
 
 /** List rows with per-order item/qty counts; `status` is a pass-through filter.
@@ -281,7 +493,8 @@ export async function listPickingOrders(db: AppDb, status?: string): Promise<Pic
     db,
     sql`
       SELECT
-        po.id, po.order_no AS "orderNo", po.status, po.po_no AS "poNo", po.ship_to AS "shipTo",
+        po.id, po.order_no AS "orderNo", po.status, po.allocation_status AS "allocationStatus",
+        po.po_no AS "poNo", po.ship_to AS "shipTo",
         po.customer_code AS "customerCode",
         po.delivery_date AS "deliveryDate",
         po.org_id AS "orgId", po.sub_inventory_code AS "subInventoryCode",
@@ -289,7 +502,8 @@ export async function listPickingOrders(db: AppDb, status?: string): Promise<Pic
         po.working_by AS "workingBy", w.display_name AS "workingByName",
         COUNT(pi.id)::int AS "itemCount",
         COALESCE(SUM(pi.qty), 0)::int AS "totalQty",
-        COALESCE(SUM(pi.picked_qty), 0)::int AS "pickedQty"
+        COALESCE(SUM(pi.picked_qty), 0)::int AS "pickedQty",
+        COALESCE(SUM(pi.allocated_qty), 0)::int AS "allocatedQty"
       FROM picking_orders po
       LEFT JOIN picking_items pi ON pi.picking_order_id = po.id
       LEFT JOIN users w ON w.id = po.working_by
@@ -344,7 +558,7 @@ export async function acquireWorkLock(db: AppDb, input: { orderId: string; actor
     }
     await queryRun(
       tx,
-      sql`UPDATE picking_orders SET working_by = ${input.actorId}, working_at = ${now()}, updated_at = ${now()} WHERE id = ${order.id}`
+      sql`UPDATE picking_orders SET working_by = ${input.actorId}, working_at = ${now()}, last_update_date = ${now()} WHERE id = ${order.id}`
     );
     return { orderId: order.id, workingBy: input.actorId };
   });
@@ -354,7 +568,7 @@ export async function acquireWorkLock(db: AppDb, input: { orderId: string; actor
 export async function releaseWorkLock(db: AppDb, input: { orderId: string; actorId: string }): Promise<void> {
   await queryRun(
     db,
-    sql`UPDATE picking_orders SET working_by = NULL, working_at = NULL, updated_at = ${now()}
+    sql`UPDATE picking_orders SET working_by = NULL, working_at = NULL, last_update_date = ${now()}
         WHERE id = ${input.orderId} AND working_by = ${input.actorId}`
   );
 }
@@ -375,7 +589,7 @@ export async function reorderPickingOrders(
     if (rows.length !== ids.length) throw new HTTPException(400, { message: "invalid_order_ids" });
     let seq = 1;
     for (const id of ids) {
-      await queryRun(tx, sql`UPDATE picking_orders SET priority_seq = ${seq}, updated_at = ${now()} WHERE id = ${id}`);
+      await queryRun(tx, sql`UPDATE picking_orders SET priority_seq = ${seq}, last_update_date = ${now()} WHERE id = ${id}`);
       seq += 1;
     }
     await emitEvent(tx, {
@@ -391,6 +605,7 @@ export interface PickingOrderRow {
   id: string;
   orderNo: string;
   status: string;
+  allocationStatus: string;
   deliveryDate: Date | null;
   poNo: string | null;
   shipTo: string | null;
@@ -407,8 +622,8 @@ export interface PickingOrderRow {
   issueReportedAt: Date | null;
   issueReportedBy: string | null;
   issueReportedByName: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  createdDate: Date;
+  lastUpdateDate: Date;
 }
 
 export interface PickingLotDetail {
@@ -472,6 +687,9 @@ export interface PickingOrderDetail extends PickingOrderRow {
   measuringTask: { id: string; status: string } | null;
   items: PickingItemDetail[];
   boxes: PickingBoxDetail[];
+  /** Whole-box claim hint: a fully-claimable shelf box whose current contents
+   *  exactly equal the order's remaining demand (null when none / not active). */
+  suggestedBox: ShelfBoxMatch | null;
 }
 
 interface AllocationQueryRow {
@@ -499,7 +717,7 @@ export async function getPickingOrderDetail(db: AppDb, orderId: string): Promise
     db,
     sql`
       SELECT
-        po.id, po.order_no AS "orderNo", po.status,
+        po.id, po.order_no AS "orderNo", po.status, po.allocation_status AS "allocationStatus",
         po.delivery_date AS "deliveryDate", po.po_no AS "poNo",
         po.ship_to AS "shipTo",
         po.customer_code AS "customerCode",
@@ -509,7 +727,7 @@ export async function getPickingOrderDetail(db: AppDb, orderId: string): Promise
         po.issue_note AS "issueNote", po.issue_remark AS "issueRemark",
         po.issue_reported_at AS "issueReportedAt", po.issue_reported_by AS "issueReportedBy",
         ru.display_name AS "issueReportedByName",
-        po.created_at AS "createdAt", po.updated_at AS "updatedAt"
+        po.created_date AS "createdDate", po.last_update_date AS "lastUpdateDate"
       FROM picking_orders po
       LEFT JOIN users w ON w.id = po.working_by
       LEFT JOIN users ru ON ru.id = po.issue_reported_by
@@ -533,7 +751,7 @@ export async function getPickingOrderDetail(db: AppDb, orderId: string): Promise
       FROM picking_items pi
       JOIN parts p ON p.part_no = pi.part_no
       WHERE pi.picking_order_id = ${orderId}
-      ORDER BY pi.created_at, pi.id
+      ORDER BY pi.created_date, pi.id
     `
   );
   const itemIds = items.map((i) => i.id);
@@ -556,7 +774,7 @@ export async function getPickingOrderDetail(db: AppDb, orderId: string): Promise
           LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
           LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
           WHERE ${inArray(sql`a.picking_item_id`, itemIds)} AND a.qty > 0
-          ORDER BY a.created_at, a.id
+          ORDER BY a.created_date, a.id
         `
       )
     : [];
@@ -572,7 +790,7 @@ export async function getPickingOrderDetail(db: AppDb, orderId: string): Promise
             source_type AS "sourceType", source_id AS "sourceId"
           FROM picking_packages
           WHERE ${inArray(sql`picking_item_id`, itemIds)}
-          ORDER BY created_at, id
+          ORDER BY created_date, id
         `
       )
     : [];
@@ -587,9 +805,12 @@ export async function getPickingOrderDetail(db: AppDb, orderId: string): Promise
         (SELECT COUNT(*)::int FROM picking_packages pp WHERE pp.shipping_box_id = sb.id) AS "packageCount"
       FROM shipping_boxes sb
       WHERE sb.picking_order_id = ${orderId}
-      ORDER BY sb.created_at, sb.id
+      ORDER BY sb.created_date, sb.id
     `
   );
+
+  const suggestedBox =
+    order.status === "pending" || order.status === "picking" ? await findSuggestedBox(db, order) : null;
 
   return {
     ...order,
@@ -624,6 +845,7 @@ export async function getPickingOrderDetail(db: AppDb, orderId: string): Promise
         .map(({ pickingItemId: _pickingItemId, ...rest }) => rest),
     })),
     boxes,
+    suggestedBox,
   };
 }
 
@@ -817,7 +1039,7 @@ export async function scanPickingItem(
       await queryRun(
         tx,
         sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty,
-                                         shipping_box_id, date_code, lot_code, coo, cow, created_at, updated_at)
+                                         shipping_box_id, date_code, lot_code, coo, cow, created_date, last_update_date)
             VALUES (${pid}, ${item.id}, ${item.pickingOrderId}, ${p.sourceType}, ${p.sourceId}, ${p.qty}, NULL,
                     ${dateCode}, ${lotCode}, ${coo}, ${cow}, ${at}, ${at})`
       );
@@ -847,7 +1069,7 @@ export async function scanPickingItem(
     await tx.insert(inventoryTransactions).values(txnRows);
 
     if (order.status === "pending") {
-      await queryRun(tx, sql`UPDATE picking_orders SET status = 'picking', updated_at = ${at} WHERE id = ${order.id}`);
+      await queryRun(tx, sql`UPDATE picking_orders SET status = 'picking', last_update_date = ${at} WHERE id = ${order.id}`);
       await logTransition(tx, {
         entityType: "picking_order",
         entityId: order.id,
@@ -868,6 +1090,194 @@ export async function scanPickingItem(
     await recomputePickingItem(tx, item.id);
     await maybeAutoFinishPickingOrder(tx, { pickingOrderId: item.pickingOrderId, actorId: input.actorId });
     return { packageIds };
+  });
+}
+
+/**
+ * Whole-box exact-match claim: the shelf box's current contents must exactly
+ * equal the order's full remaining open demand (409 box_not_exact_match) and
+ * no other order may reserve any piece of it (409 box_not_fully_available).
+ * The carton is reused as the shipping box (prefilled from the source
+ * receiving lines' additional_data, source_shelf_box_id recorded), one boxed
+ * package per (item, lot) portion, the order's allocations are released
+ * (work-locked orders are skipped by allocateAll, so the tx cleans up
+ * itself), and the auto-finish chain runs like the scan path.
+ */
+export async function claimShelfBox(
+  db: AppDb,
+  input: { orderId: string; shelfBoxId: string; actorId: string }
+): Promise<{ shippingBoxId: string; packageIds: string[] }> {
+  return db.transaction(async (tx) => {
+    const order = await queryGet<OrderMatchContext & { status: string }>(
+      tx,
+      sql`SELECT id, status, customer_code AS "customerCode",
+                 org_id AS "orgId", sub_inventory_code AS "subInventoryCode"
+          FROM picking_orders WHERE id = ${input.orderId}`
+    );
+    if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
+    assertOrderWritable(order);
+    await assertActor(tx, input.actorId);
+    const box = await queryGet<{ id: string }>(tx, sql`SELECT id FROM shelf_boxes WHERE id = ${input.shelfBoxId}`);
+    if (!box) throw new HTTPException(404, { message: "shelf_box_not_found" });
+
+    const demand = await loadOpenDemand(tx, order.id);
+    const group = groupBoxLots(await loadBoxLots(tx, order)).find((g) => g.id === box.id);
+    if (!group || !mapsEqual(group.contents, demand)) {
+      throw new HTTPException(409, { message: "box_not_exact_match" });
+    }
+    if (!group.fullyAvailable) throw new HTTPException(409, { message: "box_not_fully_available" });
+
+    const prefill = await cartonPrefillFromSources(tx, group.lots.map((l) => l.lotId));
+
+    const at = now();
+    const shippingBoxId = await nextBoxId(tx, "S");
+    await queryRun(
+      tx,
+      sql`INSERT INTO shipping_boxes (id, picking_order_id, status, box_size, net_weight, gross_weight,
+                                     source_shelf_box_id, created_date, last_update_date)
+          VALUES (${shippingBoxId}, ${order.id}, 'open', ${prefill.boxSize}, ${prefill.netWeightKg},
+                  ${prefill.grossWeightKg}, ${box.id}, ${at}, ${at})`
+    );
+    await logTransition(tx, {
+      entityType: "shipping_box",
+      entityId: shippingBoxId,
+      fromState: null,
+      toState: "open",
+      actorId: input.actorId,
+      metadata: { picking_order: order.id, source_shelf_box: box.id },
+    });
+
+    // Open items per part (exact match ⇒ Σ lot qty per part == Σ open qty per
+    // part; distribute lot qty FIFO across the part's items, like the
+    // order-level receiving source does across lines).
+    const openItems = await queryAll<{ id: string; partNo: string; openQty: number }>(
+      tx,
+      sql`SELECT pi.id, pi.part_no AS "partNo",
+                 (pi.qty - COALESCE(pkg.qty, 0))::int AS "openQty"
+          FROM picking_items pi
+          LEFT JOIN (
+            SELECT picking_item_id, SUM(qty)::int AS qty
+            FROM picking_packages GROUP BY picking_item_id
+          ) pkg ON pkg.picking_item_id = pi.id
+          WHERE pi.picking_order_id = ${order.id}
+          ORDER BY pi.created_date, pi.id`
+    );
+    const openLeft = new Map(openItems.map((i) => [i.id, i.openQty]));
+    const itemsByPart = new Map<string, { id: string }[]>();
+    for (const i of openItems) {
+      const list = itemsByPart.get(i.partNo) ?? [];
+      list.push({ id: i.id });
+      itemsByPart.set(i.partNo, list);
+    }
+
+    const packageIds: string[] = [];
+    const txnRows: (typeof inventoryTransactions.$inferInsert)[] = [];
+    for (const lot of group.lots) {
+      await queryRun(tx, sql`UPDATE inventory_lots SET total_qty = 0, last_update_date = ${at} WHERE id = ${lot.lotId}`);
+      let left = lot.totalQty;
+      for (const item of itemsByPart.get(lot.partNo) ?? []) {
+        if (left <= 0) break;
+        const take = Math.min(openLeft.get(item.id) ?? 0, left);
+        if (take <= 0) continue;
+        openLeft.set(item.id, (openLeft.get(item.id) ?? 0) - take);
+        left -= take;
+        const pid = randomUUID();
+        await queryRun(
+          tx,
+          sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty,
+                                           shipping_box_id, date_code, lot_code, coo, cow, created_date, last_update_date)
+              VALUES (${pid}, ${item.id}, ${order.id}, 'inventory_lot', ${lot.lotId}, ${take}, ${shippingBoxId},
+                      ${lot.dateCode}, ${lot.lotCode}, ${lot.coo}, ${lot.cow}, ${at}, ${at})`
+        );
+        packageIds.push(pid);
+        txnRows.push({
+          id: randomUUID(),
+          inventoryLotId: lot.lotId,
+          partNo: lot.partNo,
+          shelfCode: lot.shelfCode,
+          boxId: lot.boxId,
+          txnType: "PICK",
+          qtyType: "on_hand",
+          qtyDelta: -take,
+          dateCode: lot.dateCode,
+          lotCode: lot.lotCode,
+          coo: lot.coo,
+          cow: lot.cow,
+          referenceType: "picking_item",
+          referenceId: item.id,
+          receivingInvoiceItemId: null,
+          actorId: input.actorId,
+          txnReason: "whole-box claim",
+          txnAt: at,
+        });
+      }
+    }
+
+    // Release every allocation of the order's items (RESERVE reserved −qty
+    // ledger rows, allocate.ts "recompute: release" shape) and free the lots.
+    const released = await queryAll<{
+      id: string;
+      qty: number;
+      inventoryLotId: string | null;
+      partNo: string;
+      shelfCode: string | null;
+      boxId: string | null;
+      dateCode: string | null;
+      lotCode: string | null;
+      coo: string | null;
+      cow: string | null;
+      receivingInvoiceItemId: string | null;
+    }>(
+      tx,
+      sql`SELECT a.id, a.qty, a.inventory_lot_id AS "inventoryLotId",
+                 pi.part_no AS "partNo",
+                 il.shelf_code AS "shelfCode", COALESCE(il.box_id, rii.ctn_no) AS "boxId",
+                 COALESCE(il.date_code, rii.date_code) AS "dateCode",
+                 COALESCE(il.lot_code, rii.lot_code) AS "lotCode",
+                 COALESCE(il.coo, rii.coo) AS "coo", COALESCE(il.cow, rii.cow) AS "cow",
+                 a.receiving_invoice_item_id AS "receivingInvoiceItemId"
+          FROM allocations a
+          JOIN picking_items pi ON pi.id = a.picking_item_id
+          LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
+          LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
+          WHERE pi.picking_order_id = ${order.id} AND a.qty > 0`
+    );
+    await queryRun(
+      tx,
+      sql`DELETE FROM allocations WHERE picking_item_id IN (
+            SELECT id FROM picking_items WHERE picking_order_id = ${order.id})`
+    );
+    const freedLots = new Set<string>();
+    for (const a of released) {
+      if (a.inventoryLotId) freedLots.add(a.inventoryLotId);
+      txnRows.push({
+        id: randomUUID(),
+        inventoryLotId: a.inventoryLotId,
+        partNo: a.partNo,
+        shelfCode: a.shelfCode,
+        boxId: a.boxId,
+        txnType: "RESERVE",
+        qtyType: "reserved",
+        qtyDelta: -a.qty,
+        dateCode: a.dateCode,
+        lotCode: a.lotCode,
+        coo: a.coo,
+        cow: a.cow,
+        referenceType: "allocation",
+        referenceId: a.id,
+        receivingInvoiceItemId: a.receivingInvoiceItemId,
+        actorId: input.actorId,
+        txnReason: "whole-box claim: release",
+        txnAt: at,
+      });
+    }
+    for (const lotId of freedLots) await recomputeLot(tx, lotId);
+    await tx.insert(inventoryTransactions).values(txnRows);
+
+    await markShelfBoxStockChanged(tx, box.id);
+    for (const i of openItems) await recomputePickingItem(tx, i.id);
+    await maybeAutoFinishPickingOrder(tx, { pickingOrderId: order.id, actorId: input.actorId });
+    return { shippingBoxId, packageIds };
   });
 }
 
@@ -1027,7 +1437,7 @@ export async function verifyPackage(db: AppDb, input: { packageId: string; actor
     if (measuringTask) {
       if (box.status !== "open") throw new HTTPException(409, { message: "shipping_box_not_open" });
       if (pkg.verified) throw new HTTPException(409, { message: "package_already_verified" });
-      await queryRun(tx, sql`UPDATE picking_packages SET verified = true, updated_at = ${now()} WHERE id = ${pkg.id}`);
+      await queryRun(tx, sql`UPDATE picking_packages SET verified = true, last_update_date = ${now()} WHERE id = ${pkg.id}`);
       await logTransition(tx, {
         entityType: "picking_package",
         entityId: pkg.id,
@@ -1046,7 +1456,7 @@ export async function verifyPackage(db: AppDb, input: { packageId: string; actor
     if (pkg.verifyVerified) throw new HTTPException(409, { message: "package_already_verified" });
     await queryRun(
       tx,
-      sql`UPDATE picking_packages SET verified = true, verify_verified = true, updated_at = ${now()} WHERE id = ${pkg.id}`
+      sql`UPDATE picking_packages SET verified = true, verify_verified = true, last_update_date = ${now()} WHERE id = ${pkg.id}`
     );
     await logTransition(tx, {
       entityType: "picking_package",
@@ -1067,7 +1477,7 @@ export interface ShippingBoxDto {
   netWeight: number | null;
   grossWeight: number | null;
   destinationCountry: string | null;
-  createdAt: Date;
+  createdDate: Date;
 }
 
 function toBoxDto(box: ShippingBoxRow): ShippingBoxDto {
@@ -1079,7 +1489,7 @@ function toBoxDto(box: ShippingBoxRow): ShippingBoxDto {
     netWeight: box.netWeight,
     grossWeight: box.grossWeight,
     destinationCountry: box.destinationCountry,
-    createdAt: box.createdAt,
+    createdDate: box.createdDate,
   };
 }
 
@@ -1110,7 +1520,7 @@ export async function createShippingBox(
     const at = now();
     await queryRun(
       tx,
-      sql`INSERT INTO shipping_boxes (id, picking_order_id, status, created_at, updated_at)
+      sql`INSERT INTO shipping_boxes (id, picking_order_id, status, created_date, last_update_date)
           VALUES (${id}, ${input.pickingOrderId}, 'open', ${at}, ${at})`
     );
     await logTransition(tx, {
@@ -1129,7 +1539,7 @@ export async function createShippingBox(
       netWeight: null,
       grossWeight: null,
       destinationCountry: null,
-      createdAt: at,
+      createdDate: at,
     };
   });
 }
@@ -1178,7 +1588,7 @@ export async function updateShippingBox(
             net_weight = ${net === undefined ? box.netWeight : net},
             gross_weight = ${gross === undefined ? box.grossWeight : gross},
             destination_country = ${dest === undefined ? box.destinationCountry : dest},
-            updated_at = ${now()}
+            last_update_date = ${now()}
           WHERE id = ${box.id}`
     );
     return toBoxDto(await loadShippingBox(tx, boxId));
@@ -1237,7 +1647,7 @@ export async function addAllUnboxedToShippingBox(
       sql`SELECT pp.id, pp.picking_item_id AS "pickingItemId", pp.qty
           FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id
           WHERE pi.picking_order_id = ${box.pickingOrderId} AND pp.shipping_box_id IS NULL
-          ORDER BY pp.created_at ASC, pp.id ASC`
+          ORDER BY pp.created_date ASC, pp.id ASC`
     );
     for (const pkg of packages) {
       await assignPackageToBoxTx(tx, pkg.id, box.id);
@@ -1351,7 +1761,7 @@ export async function closeShippingBox(db: AppDb, input: { shippingBoxId: string
 
     await queryRun(
       tx,
-      sql`UPDATE shipping_boxes SET status = 'closed', destination_country = ${dest}, updated_at = ${now()} WHERE id = ${box.id}`
+      sql`UPDATE shipping_boxes SET status = 'closed', destination_country = ${dest}, last_update_date = ${now()} WHERE id = ${box.id}`
     );
     await logTransition(tx, {
       entityType: "shipping_box",
@@ -1443,10 +1853,10 @@ export async function reopenShippingBox(db: AppDb, input: { shippingBoxId: strin
     );
     if (!task || task.status !== "pending") throw new HTTPException(409, { message: "verify_task_not_pending" });
 
-    await queryRun(tx, sql`UPDATE shipping_boxes SET status = 'open', updated_at = ${now()} WHERE id = ${box.id}`);
+    await queryRun(tx, sql`UPDATE shipping_boxes SET status = 'open', last_update_date = ${now()} WHERE id = ${box.id}`);
     await queryRun(
       tx,
-      sql`UPDATE picking_packages SET verified = false, verify_verified = false, updated_at = ${now()} WHERE shipping_box_id = ${box.id}`
+      sql`UPDATE picking_packages SET verified = false, verify_verified = false, last_update_date = ${now()} WHERE shipping_box_id = ${box.id}`
     );
     await logTransition(tx, {
       entityType: "shipping_box",
@@ -1548,7 +1958,7 @@ export async function reportPickingOrderIssues(
                 issue_remark = ${remark},
                 issue_reported_at = ${at},
                 issue_reported_by = ${input.actorId},
-                updated_at = ${at}
+                last_update_date = ${at}
             WHERE id = ${row.id}`
       );
       await logTransition(tx, {
@@ -1604,7 +2014,7 @@ export async function resolvePickingOrderIssue(
               issue_remark = NULL,
               issue_reported_at = NULL,
               issue_reported_by = NULL,
-              updated_at = ${now()}
+              last_update_date = ${now()}
           WHERE id = ${order.id}`
     );
     await logTransition(tx, {
@@ -1635,7 +2045,7 @@ export interface TransactionLogRow {
   actorId: string | null;
   actorName: string | null;
   metadata: Record<string, unknown>;
-  createdAt: Date;
+  createdDate: Date;
 }
 
 /** Audit trail for one picking order: order-level rows plus the rows logged
@@ -1649,7 +2059,7 @@ export async function listPickingOrderLogs(db: AppDb, orderId: string): Promise<
     sql`SELECT tl.id, tl.entity_type AS "entityType", tl.entity_id AS "entityId",
                tl.from_state AS "fromState", tl.to_state AS "toState",
                tl.actor_id AS "actorId", u.display_name AS "actorName",
-               tl.metadata, tl.created_at AS "createdAt"
+               tl.metadata, tl.created_date AS "createdDate"
         FROM transaction_logs tl
         LEFT JOIN users u ON u.id = tl.actor_id
         WHERE (tl.entity_type = 'picking_order' AND tl.entity_id = ${orderId})
@@ -1659,6 +2069,6 @@ export async function listPickingOrderLogs(db: AppDb, orderId: string): Promise<
                  SELECT id FROM picking_packages WHERE picking_order_id = ${orderId}))
            OR (tl.entity_type = 'shipping_box' AND tl.entity_id IN (
                  SELECT id FROM shipping_boxes WHERE picking_order_id = ${orderId}))
-        ORDER BY tl.created_at DESC, tl.id DESC`
+        ORDER BY tl.created_date DESC, tl.id DESC`
   );
 }

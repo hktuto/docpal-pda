@@ -14,8 +14,8 @@ export const allocations = pgTable(
     receivingInvoiceItemId: text("receiving_invoice_item_id").references(() => receivingInvoiceItems.id, { onDelete: "cascade" }),
     receivingOrderId: text("receiving_order_id").references(() => receivingOrders.id, { onDelete: "cascade" }), // 整单分配（行无 box_id 时）
     qty: integer("qty").notNull(),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
-    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
   },
   (t) => ({
     sourceCheck: check(

@@ -29,7 +29,7 @@ async function audit(
     toState: "admin_edit",
     actorId,
     metadata,
-    createdAt: now(),
+    createdDate: now(),
   });
 }
 
@@ -48,7 +48,7 @@ export async function updatePickingDeliveryDate(
   if (!existing) throw new HTTPException(404, { message: "picking_order_not_found" });
   await queryRun(
     db,
-    sql`UPDATE picking_orders SET delivery_date = ${input.deliveryDate}, updated_at = ${now()} WHERE id = ${input.orderId}`
+    sql`UPDATE picking_orders SET delivery_date = ${input.deliveryDate}, last_update_date = ${now()} WHERE id = ${input.orderId}`
   );
   await audit(db, "picking_order", input.orderId, input.actorId, {
     field: "delivery_date",
@@ -73,7 +73,7 @@ export async function updateReceivingDeliveryDate(
   if (!existing) throw new HTTPException(404, { message: "receiving_order_not_found" });
   await queryRun(
     db,
-    sql`UPDATE receiving_orders SET delivery_date = ${input.deliveryDate}, updated_at = ${now()} WHERE id = ${input.orderId}`
+    sql`UPDATE receiving_orders SET delivery_date = ${input.deliveryDate}, last_update_date = ${now()} WHERE id = ${input.orderId}`
   );
   await audit(db, "receiving_order", input.orderId, input.actorId, {
     field: "delivery_date",

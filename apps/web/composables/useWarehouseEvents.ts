@@ -20,7 +20,7 @@ export interface WarehouseEvent {
   type: string;
   topics: string[];
   data: Record<string, unknown>;
-  createdAt: string;
+  createdDate: string;
 }
 
 export type WarehouseEventCallback = (event: WarehouseEvent) => void;

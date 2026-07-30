@@ -55,7 +55,7 @@ function metadataText(log: TransactionLogRow): string {
       </thead>
       <tbody>
         <tr v-for="log in logs" :key="log.id">
-          <td>{{ new Date(log.createdAt).toLocaleString() }}</td>
+          <td>{{ new Date(log.createdDate).toLocaleString() }}</td>
           <td>{{ log.actorName ?? log.actorId ?? "—" }}</td>
           <td>{{ stateLabel(log.fromState) }} → {{ stateLabel(log.toState) }}</td>
           <td>{{ metadataText(log) }}</td>

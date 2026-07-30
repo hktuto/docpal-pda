@@ -201,6 +201,14 @@ export default {
     lockedBy: "拣货中：{name}",
     reportIssue: "上报问题",
     issueReportSummary: "已上报 {reported} 个问题，跳过 {skipped} 个订单。",
+    filter: {
+      title: "筛选订单",
+      status: "状态",
+      allocationStatus: "分配状态",
+      hint: "全部不勾选 = 显示全部。",
+      reset: "重置",
+      apply: "应用"
+    },
     detail: {
       title: "拣货详情",
       customer: "客户",
@@ -219,7 +227,12 @@ export default {
       boxCreated: "箱号 {id} 已创建",
       printComingSoon: "打印功能将在后续版本提供",
       itemQrUseScanMode: "这是物料标签——请使用扫码按钮拣货",
-      heldBy: "此订单正由 {name} 拣货——只读"
+      heldBy: "此订单正由 {name} 拣货——只读",
+      boxMatchHint: "此订单与货架箱 {box} 完全匹配——无需逐件扫描",
+      useWholeBox: "整箱取用",
+      useWholeBoxConfirm: "将货架箱 {box} 整箱用作此订单的发货箱？",
+      boxMatchClaimed: "已将 {box} 用作发货箱",
+      claimingBox: "取用中…"
     },
     scanSession: {
           title: "扫码 — {orderNo}",
@@ -715,7 +728,13 @@ export default {
       pending: "待处理",
       picking: "拣货中",
       finished: "已完成",
-      issue: "异常"
+      issue: "异常",
+      shipped: "已出货"
+    },
+    allocation: {
+      allocated: "已分配",
+      partial: "部分分配",
+      unallocated: "未分配"
     },
     box: {
       open: "打开",
@@ -852,7 +871,8 @@ export default {
       users: "用户",
       userGroups: "用户组",
       groupMembers: "组员",
-      stockSearch: "库存查询"
+      stockSearch: "库存查询",
+      appDownload: "应用下载"
     },
     auth: {
       logout: "退出登录",
@@ -905,6 +925,7 @@ export default {
       name: "名称",
       shortName: "简称",
       supplierCode: "供应商代码",
+      brand: "品牌",
       partNo: "零件编号",
       wclItemNo: "WCL 货号",
       description: "描述",
@@ -921,8 +942,8 @@ export default {
       displayName: "显示名称",
       userId: "用户 ID",
       groupCode: "组代码",
-      createdAt: "创建时间",
-      updatedAt: "更新时间"
+      createdDate: "创建时间",
+      lastUpdateDate: "更新时间"
     },
     entities: {
       shelves: { title: "货架" },
@@ -994,6 +1015,12 @@ export default {
         deliveryDate: "交货日期",
         items: "明细数",
         pickedTotal: "已拣 / 总数",
+        allocation: "分配状态",
+        allocationLabels: {
+          allocated: "已分配",
+          partial: "部分分配",
+          unallocated: "未分配"
+        },
         lockedBy: "锁定人",
         none: "暂无拣货单。",
         detailTitle: "拣货单 {orderNo}",
@@ -1144,6 +1171,10 @@ export default {
         downloadShipper: "下载 Shipper",
         downloadShipperSelected: "下载 Shipper（{n}）",
         downloadPendingSelected: "格式待定 — 将在后续版本提供（已选 {n} 项）",
+        markShipped: "标记出货",
+        markShippedSelected: "标记出货（{n}）",
+        markShippedConfirm: "将已选的 {n} 张订单标记为已出货？",
+        markShippedFailed: "标记出货失败：{orders}",
         searchPlaceholder: "搜索单号 / 收货地",
         orderNo: "单号",
         shipTo: "收货地",
@@ -1189,6 +1220,17 @@ export default {
         availableQty: "可用",
         noParts: "没有匹配的零件。",
         noLots: "暂无库存批次。"
+      },
+      appDownload: {
+        title: "应用下载",
+        version: "版本",
+        builtAt: "构建时间",
+        webUrl: "网址",
+        size: "大小",
+        download: "下载",
+        downloading: "下载中…",
+        emptyTitle: "尚未发布 APK",
+        emptyMessage: "请使用 pnpm build:apk 构建应用，发布后即可在此下载 APK。"
       }
     }
   }

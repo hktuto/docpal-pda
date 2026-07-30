@@ -37,3 +37,8 @@ apps/api/drizzle/
 # Local env files (root .env is tracked intentionally)
 apps/*/.env
 
+# Android release signing + published APK artifacts
+apps/web/android/keystore.properties
+apps/web/android/app/*.keystore
+/apps/backend/public/apk/
+

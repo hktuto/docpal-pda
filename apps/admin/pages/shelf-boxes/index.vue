@@ -147,7 +147,7 @@ onMounted(load);
             <td>{{ b.status }}</td>
             <td>{{ b.itemCount }}</td>
             <td>{{ b.totalQty }}</td>
-            <td>{{ formatCell(b.createdAt) }}</td>
+            <td>{{ formatCell(b.createdDate) }}</td>
             <td class="actions">
               <button class="btn-link" @click="openEdit(b)">{{ $t("admin.common.edit") }}</button>
               <button class="btn-link" @click="remove(b)">{{ $t("admin.common.delete") }}</button>

@@ -168,6 +168,14 @@ export function createBackendWarehouseService(
     async removeScannedPackage(packageId: string): Promise<void> {
       await client.del(`/packages/${packageId}`);
     },
+    // Whole-box exact-match claim: the shelf carton becomes the (prefilled)
+    // shipping box with all packages already inside.
+    async claimShelfBox(
+      orderId: string,
+      shelfBoxId: string
+    ): Promise<{ shippingBoxId: string; packageIds: string[] }> {
+      return client.post(`/picking-orders/${orderId}/claim-shelf-box`, { shelfBoxId });
+    },
     // Measuring-time package verification (boxed, open box, pending task).
     async verifyPackage(packageId: string): Promise<void> {
       await client.post(`/packages/${packageId}/verify`, {});
@@ -384,7 +392,7 @@ export function createBackendWarehouseService(
       filters: StockSearchFilters = {}
     ): Promise<StockSearchResult> {
       return client.get("/stock-search", {
-        supplierId: filters.supplierId,
+        supplierCode: filters.supplierCode,
         partNo: filters.partNo,
         shelfCode: filters.shelfCode,
       });

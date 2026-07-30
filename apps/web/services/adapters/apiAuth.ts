@@ -14,6 +14,8 @@ interface SessionUser {
   username: string;
   displayName: string;
   groupCodes: string[];
+  /** Optional — the auth payload may omit it. */
+  createdDate?: string | null;
 }
 
 /** Read the session token; null when signed out or storage is unavailable. */
@@ -59,8 +61,8 @@ function toUser(user: SessionUser): User {
     username: user.username,
     displayName: user.displayName,
     groupCodes: user.groupCodes,
-    // The API auth payload has no created_at column.
-    createdAt: null,
+    // The API auth payload may omit createdDate.
+    createdDate: user.createdDate ? new Date(user.createdDate) : null,
   };
 }
 

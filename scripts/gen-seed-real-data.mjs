@@ -95,7 +95,7 @@ for (const r of partRows) {
   if (partMap.has(partNo)) continue;
   const coo = String(r[4]).trim();
   partMap.set(partNo, {
-    supplierCode,
+    brand: supplierCode, // parts.brand — plain text, no FK
     partNo,
     wclItemNo: String(r[1]).trim(),
     description: String(r[2]).trim() || null,
@@ -195,7 +195,7 @@ const order210726 = [
   {
     id: ORDER_ID,
     batchNo: "210726",
-    supplierId: null, // multi-supplier order — supplier lives on the invoices
+    supplierCode: null, // multi-supplier order — supplier lives on the invoices
     deliveryDate: "2026-07-21",
     orgId: 2,
     subInventoryCode: "STAGING",
@@ -206,7 +206,7 @@ const order210726Invoices = invList.map((v) => ({
   id: invId.get(v.invoiceNo),
   receivingOrderId: ORDER_ID,
   invoiceNo: v.invoiceNo,
-  supplierCode: v.supplierCode, // resolved to supplierId at seed time
+  supplierCode: v.supplierCode, // invoices carry the supplier code directly
   wclCompanyName: v.wclCompanyName,
   totalQty: v.totalQty,
   totalCtn: v.ctnSet.size || null,
@@ -231,7 +231,7 @@ writeFileSync(
   HEADER +
     "// Source: new_seed/210726.xls — one multi-supplier pending receiving order\n" +
     "// (batch 210726, org 2 / STAGING, delivery 2026-07-21). Invoice supplierCode\n" +
-    "// is resolved to supplierId at seed time. Size/G.W/產品 columns and the\n" +
+    "// is carried directly as supplier_code. Size/G.W/產品 columns and the\n" +
     "// trailing 合板/紙板/膠板 summary rows have no schema home — dropped.\n" +
     `export const order210726 = [\n  ${order210726.map(fmtRow).join(",\n  ")},\n];\n\n` +
     `export const order210726Invoices = [\n  ${order210726Invoices.map(fmtRow).join(",\n  ")},\n];\n\n` +

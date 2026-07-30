@@ -8,7 +8,7 @@ const error = ref("");
 const status = ref("");
 const search = ref("");
 
-const STATUSES = ["", "pending", "picking", "finished", "issue"];
+const STATUSES = ["", "pending", "picking", "finished", "issue", "shipped"];
 
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase();
@@ -73,6 +73,7 @@ onMounted(load);
             <th>{{ $t("admin.pages.pickingOrders.deliveryDate") }}</th>
             <th>{{ $t("admin.pages.pickingOrders.items") }}</th>
             <th>{{ $t("admin.pages.pickingOrders.pickedTotal") }}</th>
+            <th>{{ $t("admin.pages.pickingOrders.allocation") }}</th>
             <th>{{ $t("admin.pages.pickingOrders.lockedBy") }}</th>
           </tr>
         </thead>
@@ -87,10 +88,14 @@ onMounted(load);
             <td>{{ r.deliveryDate ? new Date(r.deliveryDate).toLocaleDateString() : "—" }}</td>
             <td>{{ r.itemCount }}</td>
             <td>{{ r.pickedQty }} / {{ r.totalQty }}</td>
+            <td>
+              {{ $t(`admin.pages.pickingOrders.allocationLabels.${r.allocationStatus}`) }}
+              ({{ r.allocatedQty }} / {{ r.totalQty }})
+            </td>
             <td>{{ r.workingByName ?? "" }}</td>
           </tr>
           <tr v-if="total === 0">
-            <td colspan="10" class="muted">{{ $t("admin.pages.pickingOrders.none") }}</td>
+            <td colspan="11" class="muted">{{ $t("admin.pages.pickingOrders.none") }}</td>
           </tr>
         </tbody>
       </table>

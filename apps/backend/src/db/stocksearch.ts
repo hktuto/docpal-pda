@@ -14,9 +14,9 @@ import { normalizePartNo } from "./scanParse.js";
 //     the same normalizePartNo as scan matching (uppercase + all whitespace
 //     stripped) — the column side applies the identical transform in SQL.
 //   - shelfCode: exact match on the lot's shelf_code.
-//   - supplierId: the lot traces to the supplier via inventory_lot_sources →
+//   - supplierCode: the lot traces to the supplier via inventory_lot_sources →
 //     receiving_invoice_items → receiving_invoices → receiving_orders —
-//     filtered on receiving_orders.supplier_id, mirroring the old
+//     filtered on receiving_orders.supplier_code, mirroring the old
 //     /stock-search/suppliers/:id/parts join.
 // Zero-qty lots are returned: the old /stock-search/parts/lots had no
 // total_qty filter (the >0 rule was only the suppliers-stats CTE and a
@@ -25,7 +25,7 @@ import { normalizePartNo } from "./scanParse.js";
 // ---------------------------------------------------------------------------
 
 export interface StockSearchFilters {
-  supplierId?: string;
+  supplierCode?: string;
   partNo?: string;
   shelfCode?: string;
 }
@@ -101,14 +101,14 @@ export async function searchStock(db: AppDb, filters: StockSearchFilters): Promi
       ${partNoNorm ? sql`AND strpos(regexp_replace(upper(p.part_no), '\\s', '', 'g'), ${partNoNorm}) > 0` : sql``}
       ${filters.shelfCode ? sql`AND il.shelf_code = ${filters.shelfCode}` : sql``}
       ${
-        filters.supplierId
+        filters.supplierCode
           ? sql`AND EXISTS (
               SELECT 1
               FROM inventory_lot_sources ils
               JOIN receiving_invoice_items rii ON rii.id = ils.receiving_invoice_item_id
               JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
               JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
-              WHERE ils.inventory_lot_id = il.id AND ro.supplier_id = ${filters.supplierId}
+              WHERE ils.inventory_lot_id = il.id AND ro.supplier_code = ${filters.supplierCode}
             )`
           : sql``
       }

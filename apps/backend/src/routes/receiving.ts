@@ -79,12 +79,12 @@ receivingRoute.get("/receiving-orders", async (c) => {
             AND (a.receiving_order_id = ro.id OR inv2.receiving_order_id = ro.id)
         ) AS "pendingPickingOrders"
       FROM receiving_orders ro
-      LEFT JOIN suppliers s ON s.id = ro.supplier_id
+      LEFT JOIN suppliers s ON s.code = ro.supplier_code
       LEFT JOIN receiving_invoices inv ON inv.receiving_order_id = ro.id
       LEFT JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = inv.id
       ${status ? sql`WHERE ro.status = ${status}` : sql``}
       GROUP BY ro.id, s.id
-      ORDER BY ro.created_at DESC
+      ORDER BY ro.created_date DESC
     `
   );
   return c.json(rows, 200);
@@ -104,8 +104,8 @@ interface OrderDetailRow {
   subInventoryCode: string;
   arrivedAt: string | null;
   arrivedBy: string | null;
-  createdAt: string;
-  updatedAt: string;
+  createdDate: string;
+  lastUpdateDate: string;
   supplierId: string | null;
   supplierCode: string | null;
   supplierName: string | null;
@@ -120,15 +120,15 @@ interface OrderDetailRow {
 interface InvoiceRow {
   id: string;
   invoiceNo: string;
-  supplierId: string | null;
+  supplierCode: string | null;
   wclCompanyName: string | null;
   totalQty: number | null;
   totalCtn: number | null;
   deliveryDate: string | null;
   orgId: number;
   subInventoryCode: string | null;
-  createdAt: string;
-  updatedAt: string;
+  createdDate: string;
+  lastUpdateDate: string;
 }
 
 interface ItemRow {
@@ -152,6 +152,7 @@ interface ItemRow {
   mismatchQty: number | null;
   wrongPartNo: string | null;
   mismatchNote: string | null;
+  additionalData: unknown;
   allocatedQty: number;
   partPk: string;
   partWclItemNo: string | null;
@@ -173,14 +174,14 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
         ro.org_id AS "orgId",
         ro.sub_inventory_code AS "subInventoryCode",
         ro.arrived_at AS "arrivedAt", ro.arrived_by AS "arrivedBy",
-        ro.created_at AS "createdAt", ro.updated_at AS "updatedAt",
+        ro.created_date AS "createdDate", ro.last_update_date AS "lastUpdateDate",
         s.id AS "supplierId", s.code AS "supplierCode", s.name AS "supplierName",
         s.short_name AS "supplierShortName",
         sp.id AS "profileId", sp.name AS "profileName",
         sp.qr_template AS "profileQrTemplate", sp.qty_encoding AS "profileQtyEncoding",
         sp.remark AS "profileRemark"
       FROM receiving_orders ro
-      LEFT JOIN suppliers s ON s.id = ro.supplier_id
+      LEFT JOIN suppliers s ON s.code = ro.supplier_code
       LEFT JOIN supplier_profiles sp ON sp.supplier_code = s.code
       WHERE ro.id = ${id}
     `
@@ -191,14 +192,14 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
     db,
     sql`
       SELECT
-        id, invoice_no AS "invoiceNo", supplier_id AS "supplierId",
+        id, invoice_no AS "invoiceNo", supplier_code AS "supplierCode",
         wcl_company_name AS "wclCompanyName", total_qty AS "totalQty", total_ctn AS "totalCtn",
         delivery_date AS "deliveryDate", org_id AS "orgId",
         sub_inventory_code AS "subInventoryCode",
-        created_at AS "createdAt", updated_at AS "updatedAt"
+        created_date AS "createdDate", last_update_date AS "lastUpdateDate"
       FROM receiving_invoices
       WHERE receiving_order_id = ${id}
-      ORDER BY created_at, id
+      ORDER BY created_date, id
     `
   );
 
@@ -216,6 +217,7 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
         rii.reported_mismatch AS "reportedMismatch", rii.mismatch_reason AS "mismatchReason",
         rii.mismatch_qty AS "mismatchQty", rii.wrong_part_no AS "wrongPartNo",
         rii.mismatch_note AS "mismatchNote",
+        rii.additional_data AS "additionalData",
         COALESCE((
           SELECT SUM(a.qty) FROM allocations a
           WHERE a.receiving_invoice_item_id = rii.id
@@ -242,8 +244,8 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
       subInventoryCode: order.subInventoryCode,
       arrivedAt: order.arrivedAt,
       arrivedBy: order.arrivedBy,
-      createdAt: order.createdAt,
-      updatedAt: order.updatedAt,
+      createdDate: order.createdDate,
+      lastUpdateDate: order.lastUpdateDate,
       supplier: order.supplierId
         ? {
             id: order.supplierId,
@@ -279,6 +281,7 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
             lotCode: i.lotCode,
             coo: i.coo,
             cow: i.cow,
+            additionalData: i.additionalData,
             allocatedQty: i.allocatedQty,
             part: {
               id: i.partPk,
@@ -378,7 +381,7 @@ interface PickingLogRow {
   fromState: string | null;
   toState: string;
   actorId: string | null;
-  createdAt: string;
+  createdDate: string;
 }
 
 // Picking orders with allocations tracing to this receiving order
@@ -447,7 +450,7 @@ receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
           LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
           LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
           WHERE ${inArray(sql`a.picking_item_id`, itemIds)}
-          ORDER BY a.created_at, a.id
+          ORDER BY a.created_date, a.id
         `
       )
     : [];
@@ -462,7 +465,7 @@ receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
             verified, shipping_box_id AS "shippingBoxId"
           FROM picking_packages
           WHERE ${inArray(sql`picking_item_id`, itemIds)}
-          ORDER BY created_at, id
+          ORDER BY created_date, id
         `
       )
     : [];
@@ -487,10 +490,10 @@ receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
         sql`
           SELECT
             entity_id AS "entityId", from_state AS "fromState", to_state AS "toState",
-            actor_id AS "actorId", created_at AS "createdAt"
+            actor_id AS "actorId", created_date AS "createdDate"
           FROM transaction_logs
           WHERE entity_type = 'picking_item' AND ${inArray(sql`entity_id`, itemIds)}
-          ORDER BY created_at
+          ORDER BY created_date
         `
       )
     : [];
@@ -570,7 +573,7 @@ receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
           fromState: l.fromState,
           toState: l.toState,
           actorId: l.actorId,
-          createdAt: l.createdAt,
+          createdDate: l.createdDate,
         })),
     });
   }

@@ -62,8 +62,8 @@ export const entities: Record<string, EntityConfig> = {
       { key: "zone", label: "admin.fields.zone", type: "text" },
     ],
     extraColumns: [
-      { key: "createdAt", label: "admin.fields.createdAt" },
-      { key: "updatedAt", label: "admin.fields.updatedAt" },
+      { key: "createdDate", label: "admin.fields.createdDate" },
+      { key: "lastUpdateDate", label: "admin.fields.lastUpdateDate" },
     ],
   },
   suppliers: {
@@ -82,9 +82,9 @@ export const entities: Record<string, EntityConfig> = {
     title: "admin.entities.parts.title",
     pk: "id",
     serverPaging: true,
-    filterFields: [{ param: "supplierCode", label: "admin.fields.supplierCode" }],
+    filterFields: [{ param: "brand", label: "admin.fields.brand" }],
     fields: [
-      { key: "supplierCode", label: "admin.fields.supplierCode", type: "text", required: true },
+      { key: "brand", label: "admin.fields.brand", type: "text", required: true },
       { key: "partNo", label: "admin.fields.partNo", type: "text", required: true },
       { key: "wclItemNo", label: "admin.fields.wclItemNo", type: "text" },
       { key: "description", label: "admin.fields.description", type: "text" },
@@ -218,6 +218,7 @@ export const navSections: { title: string; links: { route: string; title: string
       { route: "/users", title: "admin.navLinks.users" },
       { route: "/user-groups", title: "admin.navLinks.userGroups" },
       { route: "/user-group-members", title: "admin.navLinks.groupMembers" },
+      { route: "/app-download", title: "admin.navLinks.appDownload" },
     ],
   },
 ];

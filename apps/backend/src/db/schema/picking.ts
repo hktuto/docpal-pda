@@ -1,6 +1,7 @@
-import { pgTable, text, integer, boolean, real, timestamp, index, uniqueIndex, foreignKey } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, real, timestamp, index, uniqueIndex, foreignKey, jsonb } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
 import { users, parts, customerProfiles, subInventories } from "./master.js";
+import { shelfBoxes } from "./inventory.js";
 
 export const pickingOrders = pgTable(
   "picking_orders",
@@ -15,6 +16,7 @@ export const pickingOrders = pgTable(
     orgId: integer("org_id"), // 出货办公室, 2: HK
     subInventoryCode: text("sub_inventory_code"), // 从哪一个子库存出货
     prioritySeq: integer("priority_seq").notNull().default(0), // allocation/list order — lower first, admin-reorderable
+    commodityInspection: text('commodity_inspection'),
     // Page-driven work lock: a PDA with this order open keeps its allocations
     // from being wiped by allocateAll. Expires 10 min after working_at.
     workingBy: text("working_by").references(() => users.id),
@@ -26,9 +28,14 @@ export const pickingOrders = pgTable(
     issueRemark: text("issue_remark"),
     issueReportedAt: timestamp("issue_reported_at", { mode: "date" }),
     issueReportedBy: text("issue_reported_by").references(() => users.id),
-    status: text("status").notNull().default("pending"), // pending | picking | finished
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
-    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
+    status: text("status").notNull().default("pending"), // pending | picking | issue | finished | shipped
+    // Allocation coverage of the order's open items, maintained by allocateAll:
+    // unallocated | partial | allocated (Σ allocated_qty vs Σ open qty).
+    allocationStatus: text("allocation_status").notNull().default("unallocated"),
+    shippedAt: timestamp("shipped_at", { mode: "date" }),
+    shippedBy: text("shipped_by").references(() => users.id),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
   },
   (t) => ({
     statusIdx: index("idx_picking_orders_status").on(t.status),
@@ -45,8 +52,9 @@ export const pickingItems = pgTable(
     qty: integer("qty").notNull(), // 需求数量（要出货）
     pickedQty: integer("picked_qty").notNull().default(0), // 已扫描装数量
     allocatedQty: integer("allocated_qty").notNull().default(0), // 已预留 Reserved
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
-    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
+    additionalData: jsonb("additional_data"), // 上游额外字段透传（无固定结构）
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
   },
   (t) => ({
     orderIdx: index("idx_picking_items_order").on(t.pickingOrderId),
@@ -60,7 +68,8 @@ export const measuringTasks = pgTable(
     id: text("id").primaryKey(),
     pickingOrderId: text("picking_order_id").notNull().references(() => pickingOrders.id, { onDelete: "cascade" }),
     status: text("status").notNull().default("pending"), // pending | completed
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
   },
   (t) => ({
     pickingOrderUq: uniqueIndex("idx_measuring_tasks_picking_order").on(t.pickingOrderId),
@@ -73,7 +82,8 @@ export const verifyTasks = pgTable(
     id: text("id").primaryKey(),
     pickingOrderId: text("picking_order_id").notNull().references(() => pickingOrders.id, { onDelete: "cascade" }),
     status: text("status").notNull().default("pending"), // pending | completed
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
   },
   (t) => ({
     pickingOrderUq: uniqueIndex("idx_verify_tasks_picking_order").on(t.pickingOrderId),
@@ -91,8 +101,10 @@ export const shippingBoxes = pgTable(
     netWeight: real("net_weight"),
     destinationCountry: text("destination_country"),
     boxSize: text("box_size"),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
-    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
+    // Whole-box claim: the reused shelf carton this box was created from.
+    sourceShelfBoxId: text("source_shelf_box_id").references(() => shelfBoxes.id),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
   },
   (t) => ({
     taskIdx: index("idx_shipping_boxes_task").on(t.measuringTaskId),
@@ -116,8 +128,8 @@ export const pickingPackages = pgTable(
     cow: text("cow"),
     verified: boolean("verified").notNull().default(false),
     verifyVerified: boolean("verify_verified").notNull().default(false), // verify-step re-scan flag
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
-    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
   },
   (t) => ({
     itemIdx: index("idx_picking_packages_item").on(t.pickingItemId),
@@ -135,8 +147,8 @@ export const shippingBoxItems = pgTable(
     pickingItemId: text("picking_item_id").references(() => pickingItems.id),
     partNo: text("part_no").notNull().references(() => parts.partNo),
     qty: integer("qty").notNull(),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
-    updatedAt: timestamp("updated_at", { mode: "date" }).notNull().$defaultFn(now),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
   },
   (t) => ({
     boxIdx: index("idx_shipping_box_items_box").on(t.shippingBoxId),

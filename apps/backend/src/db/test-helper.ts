@@ -1,7 +1,6 @@
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { sql } from "drizzle-orm";
 import { createDb } from "./client.js";
 import { resetAndReseed } from "./seed.js";
 import type { AppDb } from "../db.js";
@@ -20,14 +19,15 @@ export interface TestDb {
 }
 
 /**
- * Wipe + re-seed the demo dataset, minus the new_seed real-data picking
- * orders: two of their items reference a demo part_no and (via the SZHK1 /
- * STORE1 pairs) could compete with the seeded demo demands for demo stock,
- * so the tests stay hermetic against the minimal demo world.
+ * Wipe + re-seed the demo scenario world (Excel-driven demo dataset:
+ * 2 pending receiving orders, 2 picking orders — SO-DEMO-0001 fully
+ * allocated incl. one whole-box match, SO-DEMO-0002 partially allocated —
+ * and 2 stocked shelf boxes). Bulk Oracle parts are skipped to keep the
+ * reseed fast; the seeded shelf boxes stay because many flows assert on
+ * them.
  */
 async function reseedTestWorld(client: TestDb): Promise<void> {
-  await resetAndReseed(client.sql, client.db, { stockBoxes: false, bulkParts: false });
-  await client.db.execute(sql`DELETE FROM picking_orders WHERE order_no <> 'SO-2026-0001'`);
+  await resetAndReseed(client.sql, client.db, { bulkParts: false });
 }
 
 /** Migrate once, then wipe + re-seed the demo dataset. */

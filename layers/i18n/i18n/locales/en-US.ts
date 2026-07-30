@@ -201,6 +201,14 @@ export default {
     lockedBy: "Picking: {name}",
     reportIssue: "Report issue",
     issueReportSummary: "{reported} issue(s) reported, {skipped} order(s) skipped.",
+    filter: {
+      title: "Filter orders",
+      status: "Status",
+      allocationStatus: "Allocation",
+      hint: "Nothing checked = show all.",
+      reset: "Reset",
+      apply: "Apply"
+    },
     detail: {
       title: "Picking Detail",
       customer: "Customer",
@@ -219,7 +227,12 @@ export default {
       boxCreated: "Box {id} created",
       printComingSoon: "Printing will be available in a later update",
       itemQrUseScanMode: "Item label — use the Scan button to pick items",
-      heldBy: "This order is being picked by {name} — read-only"
+      heldBy: "This order is being picked by {name} — read-only",
+      boxMatchHint: "This order exactly matches shelf box {box} — no item-by-item scan needed",
+      useWholeBox: "Use whole box",
+      useWholeBoxConfirm: "Claim the whole shelf box {box} as this order's shipping box?",
+      boxMatchClaimed: "Box {box} claimed as the shipping box",
+      claimingBox: "Claiming…"
     },
     scanSession: {
           title: "Scan — {orderNo}",
@@ -715,7 +728,13 @@ export default {
       pending: "Pending",
       picking: "Picking",
       finished: "Finished",
-      issue: "Issue"
+      issue: "Issue",
+      shipped: "Shipped"
+    },
+    allocation: {
+      allocated: "Allocated",
+      partial: "Partially allocated",
+      unallocated: "Unallocated"
     },
     box: {
       open: "Open",
@@ -852,7 +871,8 @@ export default {
       users: "Users",
       userGroups: "User Groups",
       groupMembers: "Group Members",
-      stockSearch: "Stock Search"
+      stockSearch: "Stock Search",
+      appDownload: "App Download"
     },
     auth: {
       logout: "Logout",
@@ -905,6 +925,7 @@ export default {
       name: "Name",
       shortName: "Short name",
       supplierCode: "Supplier code",
+      brand: "Brand",
       partNo: "Part no",
       wclItemNo: "WCL item no",
       description: "Description",
@@ -921,8 +942,8 @@ export default {
       displayName: "Display name",
       userId: "User ID",
       groupCode: "Group code",
-      createdAt: "Created",
-      updatedAt: "Updated"
+      createdDate: "Created",
+      lastUpdateDate: "Updated"
     },
     entities: {
       shelves: { title: "Shelves" },
@@ -995,6 +1016,12 @@ export default {
         deliveryDate: "Delivery Date",
         items: "Items",
         pickedTotal: "Picked / Total",
+        allocation: "Allocation",
+        allocationLabels: {
+          allocated: "Allocated",
+          partial: "Partially allocated",
+          unallocated: "Unallocated"
+        },
         lockedBy: "Locked By",
         none: "No picking orders.",
         detailTitle: "Picking Order {orderNo}",
@@ -1147,6 +1174,10 @@ export default {
         downloadShipper: "Download shipper",
         downloadShipperSelected: "Download shipper ({n})",
         downloadPendingSelected: "Format pending — available in a later update ({n} selected)",
+        markShipped: "Mark shipped",
+        markShippedSelected: "Mark shipped ({n})",
+        markShippedConfirm: "Mark {n} selected order(s) as shipped?",
+        markShippedFailed: "Failed to mark shipped: {orders}",
         searchPlaceholder: "Search order no / ship-to",
         orderNo: "Order No",
         shipTo: "Ship To",
@@ -1192,6 +1223,17 @@ export default {
         availableQty: "Available",
         noParts: "No matching parts.",
         noLots: "No stock lots."
+      },
+      appDownload: {
+        title: "App Download",
+        version: "Version",
+        builtAt: "Built at",
+        webUrl: "Web URL",
+        size: "Size",
+        download: "Download",
+        downloading: "Downloading…",
+        emptyTitle: "No APK published yet",
+        emptyMessage: "Build the app with pnpm build:apk to publish a downloadable APK here."
       }
     }
   }

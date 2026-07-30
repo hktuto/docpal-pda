@@ -16,7 +16,7 @@ const PUBLIC_COLUMNS = {
   id: users.id,
   username: users.username,
   displayName: users.displayName,
-  createdAt: users.createdAt,
+  createdDate: users.createdDate,
 } as const;
 
 async function readJson(c: Context): Promise<Record<string, unknown>> {

@@ -36,7 +36,7 @@ adminSubInventoryShareGroupsRoute.get("/", async (c) => {
     db,
     sql`SELECT m.share_group AS "shareGroup", m.org_id AS "orgId", m.code,
                si.name AS "subInventoryName", si.customer_code AS "customerCode",
-               m.created_at AS "createdAt", m.updated_at AS "updatedAt"
+               m.created_date AS "createdDate", m.last_update_date AS "lastUpdateDate"
         FROM sub_inventory_share_members m
         JOIN sub_inventories si ON si.org_id = m.org_id AND si.code = m.code
         ORDER BY m.share_group, m.org_id, m.code`
@@ -59,10 +59,10 @@ adminSubInventoryShareGroupsRoute.put("/:id", async (c) => {
     }
     await queryRun(
       db,
-      sql`INSERT INTO sub_inventory_share_members (org_id, code, share_group, created_at, updated_at)
+      sql`INSERT INTO sub_inventory_share_members (org_id, code, share_group, created_date, last_update_date)
           VALUES (${m.orgId}, ${m.code}, ${shareGroup}, now(), now())
           ON CONFLICT (org_id, code)
-          DO UPDATE SET share_group = ${shareGroup}, updated_at = now()`
+          DO UPDATE SET share_group = ${shareGroup}, last_update_date = now()`
     );
     const row = await queryGet(
       db,

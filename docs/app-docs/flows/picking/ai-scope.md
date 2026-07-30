@@ -66,6 +66,18 @@
   sub-inventories page (`/admin/sub-inventory-share-groups`); the seed ships
   a demo group (org 2 STORE1 + WSTORE1 in `HK`). Customer-segregated stores
   keep their customer restriction even inside a share group.
+- Whole-box exact-match claim: when a shelf box's current contents
+  (`inventory_lots`, never the `shelf_box_items` put-away manifest) exactly
+  equal the order's full remaining demand and no other order reserves any
+  piece of it, the detail page shows a hint banner (`suggestedBox` on
+  `GET /picking-orders/:id`) with a "Use whole box" action —
+  `POST /picking-orders/:id/claim-shelf-box` reuses the carton as the
+  shipping box in one tx: prefilled with box size/net/gross weight from the
+  source receiving lines' `additional_data` (`{boxSize, netWeight,
+  grossWeight, weightUnit}`, g→kg, default kg), one boxed package per
+  (item, lot) portion, the order's allocations released, `source_shelf_box_id`
+  recorded on the shipping box, and the order auto-finishes like the scan
+  path (409 `box_not_exact_match` / `box_not_fully_available`).
 
 ## Out of scope
 
@@ -111,7 +123,8 @@
 - `services/adapters/backendWarehouse.ts` — picking + shipping-box methods.
 - `apps/backend/src/routes/picking.ts` + `apps/backend/src/db/picking.ts` —
   `GET /picking-orders`, `GET /picking-orders/:id`,
-  `POST /picking-items/:id/scan`, `/packages/:id` verbs,
+  `POST /picking-items/:id/scan`, `POST /picking-orders/:id/claim-shelf-box`,
+  `/packages/:id` verbs,
   `/shipping-boxes/:id*` lifecycle, `POST /picking-orders/:id/finish`
   (→ measuring task), `POST /picking-orders/report-issues`,
   `POST /picking-orders/:id/resolve-issue`,
@@ -151,6 +164,7 @@
 - `docs/superpowers/specs/2026-07-18-picking-scan-session-design.md`
 - `docs/superpowers/specs/2026-07-19-box-label-print-preprinted-id-design.md`
 - `docs/superpowers/specs/2026-07-23-picking-priority-allocation-design.md`
+- `docs/superpowers/specs/2026-07-29-whole-box-picking-claim-design.md`
 - `docs/superpowers/plans/2026-07-23-picking-priority-allocation.md`
 - `docs/superpowers/plans/2026-07-12-picking-execution.md`
 - `docs/superpowers/plans/2026-07-18-picking-scan-session.md`

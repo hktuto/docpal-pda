@@ -11,7 +11,8 @@ behind that redesign are recorded in
 The typed source of truth remains `apps/backend/src/db/schema/*.ts`;
 migrations live in `apps/backend/drizzle/` and auto-apply on server start.
 All ids are `text` (UUID strings); timestamps are `timestamp` (UTC
-wall-clock); `created_at`/`updated_at` are set by the app.
+wall-clock); every table carries `created_date`/`last_update_date`, set by
+the app.
 
 For the business concepts behind the schema (allocation, stock classes,
 goods verify), see [`concepts.md`](./concepts.md).

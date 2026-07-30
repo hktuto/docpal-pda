@@ -38,8 +38,9 @@
 - Carrier rate shopping.
 - Label printing for shipping boxes.
 - Integration with scales or dimensioners.
-- A `shipped` state — completing verify is the end of the PDA chain; the
-  admin shipping list is a read-only feed.
+- Un-shipping an order — `shipped` is terminal for the POC (mark-shipped
+  itself lives in the admin shipping feed via
+  `POST /shipping-orders/:pickingOrderId/ship`, not in the PDA verify flow).
 - Step-config editing — `FLOW_STEPS_DISABLED` is a backend env var; there is
   no admin UI.
 
@@ -74,8 +75,10 @@
 - `apps/backend/src/config.ts` (`FLOW_STEPS_DISABLED`, `isStepEnabled`) +
   `apps/backend/src/routes/config.ts` (`GET /config`).
 - `apps/backend/src/db/shipping.ts` + `apps/backend/src/routes/shipping.ts` —
-  the config-aware shipping feed (`GET /shipping-orders*`) consumed by
-  `apps/admin/pages/shipping/*` via `utils/flowApi.ts`.
+  the config-aware shipping feed (`GET /shipping-orders*`) plus mark-shipped
+  (`POST /shipping-orders/:pickingOrderId/ship` → order `shipped`, excluded
+  from the feed), consumed by `apps/admin/pages/shipping/*` via
+  `utils/flowApi.ts`.
 
 ## Known limitations
 
@@ -90,5 +93,6 @@
 
 - `docs/superpowers/specs/2026-07-28-verify-step-and-flow-step-config-design.md`
 - `docs/superpowers/specs/2026-07-28-measuring-verify-refinements-design.md`
+- `docs/superpowers/specs/2026-07-29-picking-allocation-status-design.md`
 - `docs/backend/api-design.md` §Verify
 - [Measuring AI scope](../measuring/ai-scope.md)

@@ -26,8 +26,6 @@ async function idOf(table: string, where: ReturnType<typeof sql>): Promise<strin
   return row!.id;
 }
 
-const supplierIdOf = (code: string) => idOf("suppliers", sql`code = ${code}`);
-
 async function catchHttp(p: Promise<unknown>): Promise<HTTPException> {
   try {
     await p;
@@ -74,7 +72,6 @@ function receivingBody(qty2 = 50): IngestReceivingBody {
 
 test("receiving: create → created/changed, order + invoices + items written with schema defaults", async () => {
   await reseed(client);
-  const koaId = await supplierIdOf("KOA");
 
   const res = await upsertReceivingOrder(client.db, "RO-INGEST-1", receivingBody());
   assert.equal(res.created, true);
@@ -85,32 +82,32 @@ test("receiving: create → created/changed, order + invoices + items written wi
     id: string;
     batchNo: string;
     status: string;
-    supplierId: string;
+    supplierCode: string;
     dateCode: string;
     orgId: number;
     subInventoryCode: string;
   }>(
     client.db,
-    sql`SELECT id, batch_no AS "batchNo", status, supplier_id AS "supplierId", date_code AS "dateCode",
+    sql`SELECT id, batch_no AS "batchNo", status, supplier_code AS "supplierCode", date_code AS "dateCode",
                org_id AS "orgId", sub_inventory_code AS "subInventoryCode"
         FROM receiving_orders WHERE batch_no = 'RO-INGEST-1'`
   ))!;
   assert.equal(order.id, res.id);
   assert.equal(order.batchNo, "RO-INGEST-1");
   assert.equal(order.status, "pending");
-  assert.equal(order.supplierId, koaId);
+  assert.equal(order.supplierCode, "KOA");
   assert.equal(order.dateCode, "2610");
   assert.equal(order.orgId, 2); // schema default
   assert.equal(order.subInventoryCode, "STORE1");
 
-  const invoices = await queryAll<{ id: string; invoiceNo: string; supplierId: string; totalQty: number; orgId: number }>(
+  const invoices = await queryAll<{ id: string; invoiceNo: string; supplierCode: string; totalQty: number; orgId: number }>(
     client.db,
-    sql`SELECT id, invoice_no AS "invoiceNo", supplier_id AS "supplierId", total_qty AS "totalQty", org_id AS "orgId"
+    sql`SELECT id, invoice_no AS "invoiceNo", supplier_code AS "supplierCode", total_qty AS "totalQty", org_id AS "orgId"
         FROM receiving_invoices WHERE receiving_order_id = ${res.id}`
   );
   assert.equal(invoices.length, 1);
   assert.equal(invoices[0].invoiceNo, "INV-ING-1");
-  assert.equal(invoices[0].supplierId, koaId); // falls back to the order supplier
+  assert.equal(invoices[0].supplierCode, "KOA"); // falls back to the order supplier
   assert.equal(invoices[0].orgId, 2); // schema default
 
   const items = await queryAll<{ partNo: string; poLine: string; lineQty: number; receivedQty: number; orgId: number }>(
@@ -159,7 +156,7 @@ test("receiving: invoice reconcile — add missing, delete removed (cascade item
     ...receivingBody(),
     invoices: [
       ...receivingBody().invoices,
-      { invoiceNo: "INV-ING-2", items: [{ partNo: "P413", lineQty: 25 }] },
+      { invoiceNo: "INV-ING-2", items: [{ partNo: "RK73H1JTTD4702F", lineQty: 25 }] },
     ],
   };
   const added = await upsertReceivingOrder(client.db, "RO-INGEST-1", withSecond);
@@ -176,7 +173,7 @@ test("receiving: invoice reconcile — add missing, delete removed (cascade item
   // drop the first invoice again → it and its items are gone
   const onlySecond: IngestReceivingBody = {
     ...receivingBody(),
-    invoices: [{ invoiceNo: "INV-ING-2", items: [{ partNo: "P413", lineQty: 25 }] }],
+    invoices: [{ invoiceNo: "INV-ING-2", items: [{ partNo: "RK73H1JTTD4702F", lineQty: 25 }] }],
   };
   const removed = await upsertReceivingOrder(client.db, "RO-INGEST-1", onlySecond);
   assert.equal(removed.changed, true);
@@ -206,7 +203,7 @@ test("receiving: item reconcile — add/remove lines by business key, keep untou
   const body = receivingBody();
   body.invoices[0].items = [
     { partNo: "RK73H1JTTD2202F", poNo: "PO-ING-1", poLine: "2", lineQty: 50 }, // unchanged
-    { partNo: "P413", poNo: "PO-ING-1", poLine: "3", lineQty: 10 }, // new
+    { partNo: "RK73H1JTTD4702F", poNo: "PO-ING-1", poLine: "3", lineQty: 10 }, // new
   ]; // po_line '1' removed
   const res = await upsertReceivingOrder(client.db, "RO-INGEST-1", body);
   assert.equal(res.changed, true);
@@ -223,7 +220,7 @@ test("receiving: item reconcile — add/remove lines by business key, keep untou
     ["2", "3"]
   );
   assert.equal(items[0].id, line2Before.id); // same row, not re-inserted
-  assert.equal(items[1].partNo, "P413");
+  assert.equal(items[1].partNo, "RK73H1JTTD4702F");
 });
 
 test("receiving: missing order.subInventoryCode → 400", async () => {
@@ -328,7 +325,7 @@ function pickingBody(qty1 = 500): IngestPickingBody {
     },
     items: [
       { partNo: "RK73H1JTTD2202F", qty: qty1 },
-      { partNo: "P413", qty: 10 },
+      { partNo: "RK73H1JTTD4702F", qty: 10 },
     ],
   };
 }
@@ -371,13 +368,13 @@ test("picking: create → re-PUT unchanged → reconcile (qty change, add, remov
   assert.equal(order2.subInventoryCode, "store1");
   await upsertPickingOrder(client.db, "PO-INGEST-1", pickingBody()); // restore
 
-  // reconcile: change qty of the P413 line, drop nothing yet → changed
+  // reconcile: change qty of the RK73H1JTTD4702F line, drop nothing yet → changed
   const qtyChanged = pickingBody();
   qtyChanged.items[1].qty = 12;
   const res1 = await upsertPickingOrder(client.db, "PO-INGEST-1", qtyChanged);
   assert.equal(res1.changed, true);
 
-  // reconcile: remove the P413 line, add a new RK73H1JTTD1002F line
+  // reconcile: remove the RK73H1JTTD4702F line, add a new RK73H1JTTD1002F line
   const shuffled = pickingBody();
   shuffled.items = [
     { partNo: "RK73H1JTTD2202F", qty: 500 },
@@ -410,9 +407,12 @@ test("picking: unknown customer → 400 unknown_customer", async () => {
 
 test("picking: upserted pending order allocates from seeded lots via allocateAll", async () => {
   await reseed(client);
+  // Earlier delivery date than the seeded SO-DEMO orders (2026-07-30/08-01) so
+  // this order wins priority_seq 1 — otherwise they consume all seeded stock.
   const created = await upsertPickingOrder(client.db, "PO-INGEST-ALLOC", {
     order: {
       customerCode: "ACME",
+      deliveryDate: "2026-07-20",
     },
     items: [{ partNo: "RK73H1JTTD2202F", qty: 500 }],
   });
@@ -424,7 +424,7 @@ test("picking: upserted pending order allocates from seeded lots via allocateAll
     sql`SELECT id, allocated_qty AS "allocatedQty" FROM picking_items WHERE picking_order_id = ${created.id}`
   ))!;
   assert.equal(item.allocatedQty, 500);
-  const lotId = await idOf("inventory_lots", sql`part_no = 'RK73H1JTTD2202F' AND shelf_code = 'A-01-02'`);
+  const lotId = await idOf("inventory_lots", sql`part_no = 'RK73H1JTTD2202F' AND shelf_code = 'A-01-01'`);
   const allocs = await queryAll<{ qty: number; inventoryLotId: string | null }>(
     client.db,
     sql`SELECT qty, inventory_lot_id AS "inventoryLotId" FROM allocations WHERE picking_item_id = ${item.id}`
@@ -451,7 +451,7 @@ test("picking: new order slots into the queue by delivery date; re-upsert keeps 
   assert.ok(d1 > b1, `undated orders order by order_no: B(${b1}) before D(${d1})`);
 
   // a dated order slots ahead of ALL undated ones (NULLS LAST) — and ahead of
-  // the seeded order when its date is earlier (seed SO-2026-0001 is 2026-07-25)
+  // the seeded orders when its date is earlier (seed SO-DEMO-0001 is 2026-07-30)
   await upsertPickingOrder(client.db, "PO-SEQ-A", mk("2026-07-20"));
   const a1 = await seqOf("PO-SEQ-A");
   assert.equal(a1, 1, "earliest delivery date takes position 1");
@@ -459,8 +459,8 @@ test("picking: new order slots into the queue by delivery date; re-upsert keeps 
   assert.equal(await seqOf("PO-SEQ-B"), b1 + 1, "existing orders shift down by one");
   assert.equal(await seqOf("PO-SEQ-D"), d1 + 1);
 
-  // a date between the seeded order (07-25) and the undated ones slots between them
-  await upsertPickingOrder(client.db, "PO-SEQ-Z", mk("2026-07-30"));
+  // a date after the seeded orders (SO-DEMO-0002 is 2026-08-01) still slots ahead of the undated ones
+  await upsertPickingOrder(client.db, "PO-SEQ-Z", mk("2026-08-02"));
   const zSeq = await seqOf("PO-SEQ-Z");
   assert.ok(zSeq > a1 && zSeq < (await seqOf("PO-SEQ-B")), "Z slots after the dated orders, before undated");
 

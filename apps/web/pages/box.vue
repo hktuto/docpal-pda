@@ -62,7 +62,7 @@ onUnmounted(() => {
       <h1>Warehouse PDA — Box QR Codes</h1>
       <p class="subtitle">
         Shipping (<code>BOX-S-…</code>) and shelf (<code>BOX-H-…</code>) boxes.
-        Search by seq (e.g. <code>0007</code>) or any part of the box id.
+        Search by seq (e.g. <code>0001</code>) or any part of the box id.
       </p>
       <div class="toolbar">
         <input

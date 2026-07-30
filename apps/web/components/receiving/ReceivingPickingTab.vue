@@ -161,7 +161,7 @@
           <p v-if="!pi.transitionLogs.length" class="card__meta">{{ $t('receiving.pickingTab.noLogs') }}</p>
           <ul v-else style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--muted);">
             <li v-for="(log, idx) in pi.transitionLogs" :key="idx" style="margin-bottom: 0.35rem;">
-              {{ new Date(log.createdAt).toLocaleString() }}
+              {{ new Date(log.createdDate).toLocaleString() }}
               · {{ log.actorId || $t('common.actorSystem') }}
               · {{ logStateLabel(log.fromState) }} → {{ logStateLabel(log.toState) }}
             </li>

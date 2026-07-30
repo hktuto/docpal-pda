@@ -101,11 +101,26 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     lot-changing mutations run `allocateAll` best-effort after commit, and
     fully put-away `in_hand` orders auto-flip to `clear` (+ transition log).
 - Picking flow (`apps/backend/src/routes/picking.ts`):
-  - `GET /picking-orders?status=` — list with per-order item counts and
-    total/picked quantities.
+  - `GET /picking-orders?status=` — list with per-order item counts,
+    total/picked quantities, and `allocationStatus`/`allocatedQty` (order-level
+    allocation coverage recomputed by every `allocateAll`: `allocated` when
+    Σ allocated = Σ open qty, `partial` between, `unallocated` when nothing is
+    reserved). `?status=shipped` lists shipped orders.
   - `GET /picking-orders/:id` — nested detail: order (incl. issue fields +
     three-level location) + `measuringTask` + items with `allocations` (lot or
-    receiving source) and `packages`, plus shipping boxes with `packageCount`.
+    receiving source) and `packages`, plus shipping boxes with `packageCount`,
+    and `suggestedBox` (the whole-box claim hint, null when none/inactive).
+  - `POST /picking-orders/:id/claim-shelf-box` `{shelfBoxId}` →
+    `{shippingBoxId, packageIds}` — whole-box exact-match claim (spec
+    `docs/superpowers/specs/2026-07-29-whole-box-picking-claim-design.md`):
+    the shelf box's current `inventory_lots` contents must exactly equal the
+    order's full remaining demand (409 `box_not_exact_match`) and be free of
+    other orders' reservations (409 `box_not_fully_available`). The carton is
+    reused as the shipping box, prefilled with box size/net/gross weight from
+    the source receiving lines' `additional_data`
+    (`{boxSize, netWeight, grossWeight, weightUnit}` — g→kg, default kg),
+    `source_shelf_box_id` recorded; packages are created boxed, the order's
+    allocations released, and the order auto-finishes like the scan path.
   - `POST /picking-items/:id/scan` `{allocationId, qty, dateCode?,
     lotCode?, coo?, cow?}` → `{packageIds}` — the one canonical scan-to-pick:
     consumes the allocation's source (lot `total_qty`/`allocated_qty` −qty,
@@ -218,13 +233,20 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
 - Shipping feed (`apps/backend/src/routes/shipping.ts`) — config-aware read
   for the admin console: completed verify tasks when the verify step is on,
   else completed measuring tasks, else finished picking orders with no task
-  rows.
+  rows. Shipped orders (`picking_orders.status = 'shipped'`) are excluded.
   - `GET /shipping-orders` — rows `{source ('verify'|'measuring'|'picking'),
     taskId, pickingOrderId, orderNo, shipTo, boxCount, closedBoxCount,
     completedAt}`.
   - `GET /shipping-orders/:pickingOrderId` — task-agnostic `{order,
     boxes[{..., packages[]}]` detail (same shape as the measuring/verify
     detail). 404 `picking_order_not_found`.
+  - `POST /shipping-orders/:pickingOrderId/ship` — mark shipped (actor from
+    the JWT; pure workflow transition — stock left at pick-scan). Validated
+    against the same config-aware feed predicate, else 409
+    `order_not_ready_to_ship` (also when already shipped); stamps
+    `shipped_at`/`shipped_by`, writes the transition log, emits
+    `picking_order.shipped`. Shipped orders stay visible via
+    `GET /picking-orders?status=shipped`.
 - Flow-step config (`apps/backend/src/routes/config.ts`):
   - `GET /config` → `{flowSteps}` — one boolean per step (`receiving`,
     `put-away`, `picking`, `goods-verify`, `measuring`, `verify`,
@@ -327,6 +349,8 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   pruned after 3 days. Catalog: `allocation.computed` (from `allocateAll`,
   only on net allocation change), `picking_order.created` /
   `picking_order.updated` (also on issue resolve), `picking_order.issue_reported`,
+  `picking_order.shipped` (ship confirm, topics `/picking-orders` +
+  `/shipping-orders`),
   `picking.reordered` (priority reorder, emitted even
   when allocations did not change), `receiving_order.upserted` (ingest upserts),
   `receiving.mismatch_reported` / `receiving.mismatch_updated` /

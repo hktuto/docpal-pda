@@ -27,6 +27,10 @@ The detail page shows each picking item, the required quantity, and where the st
 - Confirm the source location.
 - The picked quantity is recorded and the allocation is reduced or removed.
 
+### Whole-box shortcut
+
+When everything the order still needs is exactly the contents of one shelf box, a green banner appears at the top of the detail page naming that box. Tap **Use whole box**, confirm, and the box is claimed as-is: it becomes the order's shipping box with everything already packed (its received size and weights are pre-filled), and the order finishes automatically — no item-by-item scanning. If no banner shows, pick the lines normally.
+
 ## 5. Handle issues
 
 If the quantity is wrong, the item is damaged, or stock cannot be found, use the issue-reporting flow. See [Issue reporting](./issue-reporting.md).

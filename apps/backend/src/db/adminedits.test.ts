@@ -26,7 +26,7 @@ test("admin edits: set and clear picking order delivery date + audit row", async
   await reseed(client);
   const orderId = (await queryGet<{ id: string }>(
     client.db,
-    sql`SELECT id FROM picking_orders WHERE order_no = 'SO-2026-0001'`
+    sql`SELECT id FROM picking_orders WHERE order_no = 'SO-DEMO-0001'`
   ))!.id;
   const actorId = (await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'admin'`))!.id;
 
@@ -42,7 +42,7 @@ test("admin edits: set and clear picking order delivery date + audit row", async
     client.db,
     sql`SELECT to_state AS "toState", metadata, actor_id AS "actorId"
         FROM transaction_logs WHERE entity_type = 'picking_order' AND entity_id = ${orderId}
-        ORDER BY created_at DESC LIMIT 1`
+        ORDER BY created_date DESC LIMIT 1`
   );
   assert.equal(log!.toState, "admin_edit");
   assert.equal(log!.metadata.field, "delivery_date");
@@ -62,7 +62,7 @@ test("admin edits: set and clear receiving order delivery date + audit row", asy
   await reseed(client);
   const orderId = (await queryGet<{ id: string }>(
     client.db,
-    sql`SELECT id FROM receiving_orders WHERE batch_no = '65878'`
+    sql`SELECT id FROM receiving_orders WHERE batch_no = '100001'`
   ))!.id;
   const actorId = (await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'admin'`))!.id;
 
@@ -78,7 +78,7 @@ test("admin edits: set and clear receiving order delivery date + audit row", asy
     client.db,
     sql`SELECT to_state AS "toState", metadata, actor_id AS "actorId"
         FROM transaction_logs WHERE entity_type = 'receiving_order' AND entity_id = ${orderId}
-        ORDER BY created_at DESC LIMIT 1`
+        ORDER BY created_date DESC LIMIT 1`
   );
   assert.equal(log!.toState, "admin_edit");
   assert.equal(log!.metadata.field, "delivery_date");
@@ -101,7 +101,7 @@ test("admin edits: set and clear receiving invoice item date code + audit row", 
     sql`SELECT rii.id FROM receiving_invoice_items rii
         JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
         JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
-        WHERE ro.batch_no = '65878' LIMIT 1`
+        WHERE ro.batch_no = '100001' LIMIT 1`
   ))!.id;
   const actorId = (await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'admin'`))!.id;
 
@@ -117,7 +117,7 @@ test("admin edits: set and clear receiving invoice item date code + audit row", 
     client.db,
     sql`SELECT metadata FROM transaction_logs
         WHERE entity_type = 'receiving_invoice_item' AND entity_id = ${itemId}
-        ORDER BY created_at DESC LIMIT 1`
+        ORDER BY created_date DESC LIMIT 1`
   );
   assert.equal(log!.metadata.field, "date_code");
   assert.equal(log!.metadata.to, "2608");

@@ -10,7 +10,7 @@ import { fetchEventsSince, pruneEvents } from "../db/events.js";
 // On connect the backlog is replayed (capped at 500), then the table is
 // polled every 1.5 s; an SSE comment heartbeat every 25 s keeps proxies from
 // idling the connection out. Each frame carries `event: <type>`,
-// `id: <row id>`, and `data: <JSON of {id,type,topics,data,createdAt}>`.
+// `id: <row id>`, and `data: <JSON of {id,type,topics,data,createdDate}>`.
 // Authenticated via the global middleware — the only route where `?token=`
 // is accepted (EventSource cannot set an Authorization header).
 // ---------------------------------------------------------------------------
@@ -44,7 +44,7 @@ eventsRoute.get("/events", (c) => {
             type: row.type,
             topics: row.topics,
             data: row.data,
-            createdAt: row.createdAt,
+            createdDate: row.createdDate,
           }),
           id: String(row.id),
         });

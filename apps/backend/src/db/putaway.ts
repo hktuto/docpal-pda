@@ -58,7 +58,7 @@ async function boxOrderId(tx: DbOrTx, boxId: string): Promise<string | null> {
           (SELECT tl.metadata->>'order'
            FROM transaction_logs tl
            WHERE tl.entity_type = 'shelf_box' AND tl.entity_id = ${boxId} AND tl.to_state = 'open'
-           ORDER BY tl.created_at DESC LIMIT 1)
+           ORDER BY tl.created_date DESC LIMIT 1)
         ) AS "orderId"`
   );
   return row?.orderId ?? null;
@@ -85,7 +85,7 @@ async function logShelfBox(
     toState,
     actorId,
     metadata,
-    createdAt: now(),
+    createdDate: now(),
   });
 }
 
@@ -106,7 +106,7 @@ async function ensureStagingBox(tx: DbOrTx, receivingOrderId: string): Promise<s
             )
             OR NOT EXISTS (SELECT 1 FROM shelf_box_items sbi WHERE sbi.shelf_box_id = sb.id)
           )
-        ORDER BY sb.created_at
+        ORDER BY sb.created_date
         LIMIT 1`
   );
   if (existing) {
@@ -125,7 +125,7 @@ async function ensureStagingBox(tx: DbOrTx, receivingOrderId: string): Promise<s
   const pair = await orderPair(tx, receivingOrderId);
   await queryRun(
     tx,
-    sql`INSERT INTO shelf_boxes (id, shelf_code, org_id, sub_inventory_code, status, created_at)
+    sql`INSERT INTO shelf_boxes (id, shelf_code, org_id, sub_inventory_code, status, created_date)
         VALUES (${id}, NULL, ${pair.orgId}, ${pair.subInventoryCode}, 'open', ${now()})`
   );
   await logShelfBox(tx, id, null, "open", null, { kind: "staging", order: receivingOrderId });
@@ -221,7 +221,7 @@ export async function tryMarkReceivingOrderClear(
     if ((await remainingAfterStaged(tx, it)) > 0) return;
   }
   const at = now();
-  await queryRun(tx, sql`UPDATE receiving_orders SET status = 'clear', updated_at = ${at} WHERE id = ${order.id}`);
+  await queryRun(tx, sql`UPDATE receiving_orders SET status = 'clear', last_update_date = ${at} WHERE id = ${order.id}`);
   await tx.insert(transactionLogs).values({
     id: randomUUID(),
     entityType: "receiving_order",
@@ -229,7 +229,7 @@ export async function tryMarkReceivingOrderClear(
     fromState: "in_hand",
     toState: "clear",
     actorId: input.actorId,
-    createdAt: at,
+    createdDate: at,
   });
 }
 
@@ -267,7 +267,7 @@ export async function listPutAwayCandidates(db: AppDb): Promise<PutAwayCandidate
           rii.received_qty - rii.picked_qty - rii.put_away_qty
             - COALESCE(alloc.qty, 0) - COALESCE(staged.qty, 0) > 0)::int AS "unboxedItems"
       FROM receiving_orders ro
-      LEFT JOIN suppliers s ON s.id = ro.supplier_id
+      LEFT JOIN suppliers s ON s.code = ro.supplier_code
       JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
       JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
       LEFT JOIN (
@@ -285,7 +285,7 @@ export async function listPutAwayCandidates(db: AppDb): Promise<PutAwayCandidate
       ) staged ON staged.receiving_invoice_item_id = rii.id
       WHERE ro.status IN ('in_hand', 'provisional_received')
       GROUP BY ro.id, s.id
-      ORDER BY ro.created_at DESC
+      ORDER BY ro.created_date DESC
     `
   );
 }
@@ -350,7 +350,7 @@ export interface PutAwayAggregate {
     id: string;
     shelfCode: string | null;
     status: string;
-    createdAt: Date;
+    createdDate: Date;
     items: PutAwayBoxItemRow[];
   }[];
 }
@@ -438,10 +438,10 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
     `
   );
 
-  const boxes = await queryAll<{ id: string; shelfCode: string | null; status: string; createdAt: Date }>(
+  const boxes = await queryAll<{ id: string; shelfCode: string | null; status: string; createdDate: Date }>(
     db,
     sql`
-      SELECT sb.id, sb.shelf_code AS "shelfCode", sb.status, sb.created_at AS "createdAt"
+      SELECT sb.id, sb.shelf_code AS "shelfCode", sb.status, sb.created_date AS "createdDate"
       FROM shelf_boxes sb
       WHERE sb.shelf_code IS NOT NULL AND (
         EXISTS (
@@ -459,7 +459,7 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
           )
         )
       )
-      ORDER BY CASE WHEN sb.status = 'open' THEN 0 ELSE 1 END, sb.created_at DESC
+      ORDER BY CASE WHEN sb.status = 'open' THEN 0 ELSE 1 END, sb.created_date DESC
     `
   );
 
@@ -579,7 +579,7 @@ export interface ShelfBoxDto {
   receivingOrderId: string | null;
   shelfCode: string | null;
   status: string;
-  createdAt: Date;
+  createdDate: Date;
 }
 
 /**
@@ -611,9 +611,9 @@ export async function createShelfBox(
       throw new HTTPException(400, { message: "box_id_required" });
     }
     if (requestedId) {
-      const existing = await queryGet<ShelfBoxRow & { createdAt: Date; receivingOrderId: string | null }>(
+      const existing = await queryGet<ShelfBoxRow & { createdDate: Date; receivingOrderId: string | null }>(
         tx,
-        sql`SELECT id, shelf_code AS "shelfCode", status, created_at AS "createdAt"
+        sql`SELECT id, shelf_code AS "shelfCode", status, created_date AS "createdDate"
             FROM shelf_boxes WHERE id = ${requestedId}`
       );
       if (existing) {
@@ -630,14 +630,14 @@ export async function createShelfBox(
     const at = now();
     await queryRun(
       tx,
-      sql`INSERT INTO shelf_boxes (id, shelf_code, org_id, sub_inventory_code, status, created_at)
+      sql`INSERT INTO shelf_boxes (id, shelf_code, org_id, sub_inventory_code, status, created_date)
           VALUES (${id}, ${input.shelfCode}, ${pair.orgId}, ${pair.subInventoryCode}, 'open', ${at})`
     );
     await logShelfBox(tx, id, null, "open", input.actorId, {
       order: input.receivingOrderId,
       shelf: input.shelfCode,
     });
-    return { id, receivingOrderId: input.receivingOrderId, shelfCode: input.shelfCode, status: "open", createdAt: at };
+    return { id, receivingOrderId: input.receivingOrderId, shelfCode: input.shelfCode, status: "open", createdDate: at };
   });
 }
 

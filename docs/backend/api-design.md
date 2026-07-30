@@ -2,7 +2,10 @@
 
 > **Note (2026-07-21):** this is the original design doc. Field names shown
 > below predate the org_id redesign (`ref_no`→`batch_no`/`order_no`,
-> `part_id`→`part_no`, no `warehouse_code`/section/sub-inventory) — the
+> `part_id`→`part_no`, no `warehouse_code`/section/sub-inventory) and the
+> 2026-07-29 system-fields/supplier-code refactor
+> (`createdAt`→`createdDate`/`lastUpdateDate`, `supplierId`→`supplierCode`,
+> `parts.supplier_code`→`parts.brand`) — the
 > current schema contract is `schema-tables.md`, and auth is now JWT (see the
 > Auth section below and `README.md`).
 
@@ -74,7 +77,7 @@ template group or explicit body field) are deduped per order via
 |---|---|
 | `GET /receiving-orders?status=` | List. Rows: `{id, refNo, status, deliveryDate, dateCode, supplierCode, supplierName, warehouseCode, warehouseSectionCode, subInventoryCode, invoiceCount, itemCount, remainingItems, pendingPickingOrders}`. `remainingItems` = items with `put_away_qty < qty`; `pendingPickingOrders` = distinct pending/picking orders allocated to this RO (via `allocations.receiving_order_id` or via receiving item). |
 | `GET /receiving-orders/:id` | Detail: `{order..., supplier{...profile fields}, invoices[{..., items[{..., part, allocatedQty, mismatch}]}]}` — nested; `allocatedQty` embedded per item (no `allocated_by_item` map). |
-| `GET /receiving-orders/:id/picking` | Picking section: `pickingOrders[{id, refNo, status, shipTo, customerCode, items[{id, partId, partNo, qty, pickedQty, allocatedQty, requiredDateCode, allocations[{id, qty, lot{shelfCode, boxId, dateCode, lotCode, coo, cow}, receivingInvoiceItemId, boxId}], packages[{id, qty, dateCode, lotCode, verified, shippingBoxId}], transitionLogs[{fromState, toState, actorId, createdAt}]}], boxes[{id, status, boxSize, grossWeight, netWeight}]}]`. |
+| `GET /receiving-orders/:id/picking` | Picking section: `pickingOrders[{id, refNo, status, shipTo, customerCode, items[{id, partId, partNo, qty, pickedQty, allocatedQty, requiredDateCode, allocations[{id, qty, lot{shelfCode, boxId, dateCode, lotCode, coo, cow}, receivingInvoiceItemId, boxId}], packages[{id, qty, dateCode, lotCode, verified, shippingBoxId}], transitionLogs[{fromState, toState, actorId, createdDate}]}], boxes[{id, status, boxSize, grossWeight, netWeight}]}]`. |
 | `POST /receiving-orders/:id/confirm-arrival` | `{actorId}` → order with `status: "in_hand"`; applies receipt, writes txns, recalculates allocations (concept 5). |
 | `POST /receiving-orders/:id/scan` | `{actorId, raw}` (or parsed fields, incl. `serialNo`) → server-side parse/match/apply; single match auto-applies, else candidates. A parsed/explicit `serialNo` (S-key) is recorded in `receiving_scan_labels` (unique per order) — a repeat serial → 409 `label_already_scanned`; scans without a serial skip dedup. Supersedes `scan-candidates` (client no longer mirrors matching logic). |
 | `GET /receiving-invoice-items/:id/mismatch` | Active mismatch or `null` (item-keyed, on the new flat mismatch columns). |
@@ -137,6 +140,7 @@ materializes inventory lots (concept: lot + `inventory_lot_sources` +
 
 Implemented: `GET /picking-orders`, `GET /picking-orders/:id`,
 `POST /picking-items/:id/scan`, `DELETE /packages/:id`,
+`POST /picking-orders/:id/claim-shelf-box`,
 `POST /packages/:id/verify`, `POST /picking-orders/:id/boxes`,
 `PATCH /shipping-boxes/:id`, `POST /shipping-boxes/:id/packages`,
 `DELETE /shipping-boxes/:id/packages/:packageId`,
@@ -155,8 +159,9 @@ scan/removal run `allocateAll` best-effort).
 
 | Endpoint | Description |
 |---|---|
-| `GET /picking-orders?status=` | List: `{id, refNo, status, poNo, shipTo, customerCode, destinationCountry, deliveryDate, warehouseCode, warehouseSectionCode, subInventoryCode, itemCount, totalQty, pickedQty}`. |
-| `GET /picking-orders/:id` | Nested detail: `{order..., measuringTask, items[{..., allocations[{..., lot|receivingItem, boxId}], packages[]}], boxes[{..., packageCount}]}`. No parallel arrays. |
+| `GET /picking-orders?status=` | List: `{id, refNo, status, allocationStatus, allocatedQty, poNo, shipTo, customerCode, destinationCountry, deliveryDate, warehouseCode, warehouseSectionCode, subInventoryCode, itemCount, totalQty, pickedQty}`. `allocationStatus` is the persisted order-level summary (`unallocated`/`partial`/`allocated`, recomputed by `allocateAll`); `allocatedQty` = Σ item `allocated_qty`. `?status=` accepts `shipped`. |
+| `GET /picking-orders/:id` | Nested detail: `{order..., measuringTask, items[{..., allocations[{..., lot|receivingItem, boxId}], packages[]}], boxes[{..., packageCount}], suggestedBox}`. No parallel arrays. `suggestedBox` (null when none or the order is not active) is the whole-box claim hint: a fully-claimable shelf box whose current `inventory_lots` contents exactly equal the order's remaining demand `{id, shelfCode, orgId, subInventoryCode, contents[{partNo, qty}]}`. |
+| `POST /picking-orders/:id/claim-shelf-box` | `{shelfBoxId}` (actor from the token) → `{shippingBoxId, packageIds}`, 201. Whole-box exact-match claim (spec `docs/superpowers/specs/2026-07-29-whole-box-picking-claim-design.md`): the shelf box's current contents must exactly equal the order's full remaining open demand (409 `box_not_exact_match`) with no other order reserving any piece (409 `box_not_fully_available`). The carton is reused as the shipping box — created prefilled with `box_size`/`net_weight`/`gross_weight` summed from the source receiving lines' `additional_data` (g→kg via `weightUnit`, default kg), `source_shelf_box_id` recorded — with one boxed package per (item, lot) portion, the order's allocations released, and the auto-finish chain run like the scan path. |
 | `POST /picking-items/:id/scan` | `{actorId, allocationId|source, qty, raw?}` → `{packageIds}`. The one canonical scan-to-pick route; OCR/receiving-source picking folds in here (old `ocr-pick` path dies). |
 | `DELETE /packages/:id` | `{actorId}` → removes an unboxed (unverified) package. |
 | `POST /packages/:id/verify` | `{actorId}` — requires a pending measuring OR verify task (409 `no_pending_measure_or_verify_task`). Measuring pass: box must be open, sets `verified`. Verify pass: box may be open OR closed, sets `verified` + `verify_verified` (409 `package_already_verified` per the applicable flag). |
@@ -196,7 +201,7 @@ routes: `PATCH /shipping-boxes/:id`, `POST /packages/:id/verify`,
 
 | Endpoint | Description |
 |---|---|
-| `GET /measuring-tasks?status=` | List: `{id, status, pickingOrderId, refNo, shipTo, boxCount, closedBoxCount, createdAt}`. |
+| `GET /measuring-tasks?status=` | List: `{id, status, pickingOrderId, refNo, shipTo, boxCount, closedBoxCount, createdDate}`. |
 | `GET /measuring-tasks/:id` | Consolidated detail: `{task, order, boxes[{..., suggestedNetWeightKg, packages[{..., partId, partNo, verified, verifyVerified}]}]}`. The one "order + boxes + packages" read. `suggestedNetWeightKg` = Σ over the box's packages of `(formula.weight / formula.qty) × pkg.qty` grams from `net_weight_formula`, in kg (3 dp; parts without a formula contribute 0, `null` when none have one). |
 | `POST /measuring-tasks/:id/complete` | `{actorId}` — also auto-triggered by closing the order's last open box. |
 
@@ -230,14 +235,15 @@ measuring step is disabled.
 
 | Endpoint | Description |
 |---|---|
-| `GET /verify-tasks?status=` | List: `{id, status, pickingOrderId, orderNo, shipTo, boxCount, closedBoxCount, createdAt}`. |
+| `GET /verify-tasks?status=` | List: `{id, status, pickingOrderId, orderNo, shipTo, boxCount, closedBoxCount, createdDate}`. |
 | `GET /verify-tasks/:id` | Consolidated detail: `{task, order, boxes[{..., suggestedNetWeightKg, packages[{..., partNo, wclItemNo, verified, verifyVerified}]}]}`. Same shape as the measuring detail. |
 | `POST /verify-tasks/:id/complete` | `{actorId}` — 409 `packages_not_all_rescanned` until every package is re-scanned (`verify_verified`). |
 
 ## Flow-step config + shipping feed
 
 Implemented: `GET /config`, `GET /shipping-orders`,
-`GET /shipping-orders/:pickingOrderId` (see
+`GET /shipping-orders/:pickingOrderId`,
+`POST /shipping-orders/:pickingOrderId/ship` (see
 `apps/backend/src/routes/config.ts`, `src/routes/shipping.ts` +
 `src/db/shipping.ts`, `src/config.ts`). The `FLOW_STEPS_DISABLED` env var
 (comma-separated step keys from `receiving`, `put-away`, `picking`,
@@ -250,13 +256,20 @@ is off, or nothing; completing measuring spawns a verify task when verify is
 on) and `goods-verify` makes task generation (manual + nightly job) a no-op.
 The shipping feed follows the chain: the list reads completed verify tasks,
 else completed measuring tasks, else finished picking orders with no task
-rows; the detail is task-agnostic.
+rows; the detail is task-agnostic. Shipping is a pure workflow transition
+(stock already left inventory at pick-scan time): `POST
+/shipping-orders/:pickingOrderId/ship` marks the order `shipped`
+(`shipped_at`/`shipped_by` + transition log + SSE event on
+`/picking-orders` + `/shipping-orders`), and shipped orders are excluded
+from the feed (all three source queries) while staying visible via
+`GET /picking-orders?status=shipped`.
 
 | Endpoint | Description |
 |---|---|
 | `GET /config` | `{flowSteps: Record<FlowStep, boolean>}` — the `FLOW_STEPS_DISABLED` env reflected per step. |
-| `GET /shipping-orders` | List: `{source ('verify'|'measuring'|'picking'), taskId, pickingOrderId, orderNo, shipTo, boxCount, closedBoxCount, completedAt}`. Source picked from the flow-step config. |
+| `GET /shipping-orders` | List: `{source ('verify'|'measuring'|'picking'), taskId, pickingOrderId, orderNo, shipTo, boxCount, closedBoxCount, completedAt}`. Source picked from the flow-step config. Shipped orders are excluded. |
 | `GET /shipping-orders/:pickingOrderId` | Task-agnostic detail: `{order, boxes[{..., packages[{..., partNo, wclItemNo}]}]}` (404 `picking_order_not_found`). |
+| `POST /shipping-orders/:pickingOrderId/ship` | `{actorId}` → the updated order. Validates the order is in the config-aware feed (verify on → completed verify task; measuring on → completed measuring task; neither → `finished` with no task rows); 409 `order_not_ready_to_ship` otherwise, including already-shipped orders. |
 
 ## Goods verify (task-based, concept 7)
 
@@ -298,16 +311,16 @@ returns the matching lots (part identity embedded), and the distinct `parts`
 list with `onHandQty = Σ total_qty` over those lots is stitched in TS. All
 filters optional and ANDed: `partNo` is a case-insensitive substring on
 `parts.part_no` normalized like scan matching (uppercase + whitespace
-stripped, both sides), `shelfCode` is exact, `supplierId` traces the lot via
+stripped, both sides), `shelfCode` is exact, `supplierCode` traces the lot via
 `inventory_lot_sources` → invoice items → invoices →
-`receiving_orders.supplier_id` (the old join). Zero-qty lots are returned,
+`receiving_orders.supplier_code` (the old join). Zero-qty lots are returned,
 mirroring the old `/stock-search/parts/lots` (its >0 rule was only the
 suppliers-stats CTE and a client-side toggle). Order: `part_no`, `date_code
 NULLS LAST`, `shelf_code`, `box_id`.
 
 | Endpoint | Description |
 |---|---|
-| `GET /stock-search?supplierId=&partNo=&shelfCode=` | One call → `{parts[{id, partNo, wclItemNo, description, defaultCoo, onHandQty}], lots[{partId, dateCode, lotCode, coo, cow, shelfCode, boxId, warehouseCode, warehouseSectionCode, subInventoryCode, totalQty, allocatedQty, availableQty}]}`. |
+| `GET /stock-search?supplierCode=&partNo=&shelfCode=` | One call → `{parts[{id, partNo, wclItemNo, description, defaultCoo, onHandQty}], lots[{partId, dateCode, lotCode, coo, cow, shelfCode, boxId, warehouseCode, warehouseSectionCode, subInventoryCode, totalQty, allocatedQty, availableQty}]}`. |
 
 Changes vs old: one query endpoint ends the 3-call cascade; location returned
 as fields (client formats labels — no server-side `location_label` string).
@@ -322,8 +335,16 @@ Implemented: `PUT /receiving-orders/:externalId`,
 `partId + requiredDateCode` — no ledger rows, `allocateAll` best-effort after
 commit when a changed upsert touches an order with allocation demand).
 `supplierCode`/`partNo`/`customerCode` resolve to their master rows
-(400 `unknown_supplier` / `unknown_part` / `unknown_customer`), direct ids are
-also accepted.
+(400 `unknown_supplier` / `unknown_part` / `unknown_customer`). Suppliers are
+referenced by `supplierCode` **only** — the old `supplierId` body field was
+removed (2026-07-29, spec
+`docs/superpowers/specs/2026-07-29-schema-system-fields-supplier-code-design.md`).
+Receiving and picking items accept an optional free-form `additionalData`
+object, passed through to the line's `additional_data` jsonb column on
+insert (it is not part of the reconcile business keys). Carton metadata
+convention for receiving items (consumed by the whole-box picking claim —
+see §Picking): `{boxSize, netWeight, grossWeight, weightUnit}` with
+`weightUnit` `"g"` | `"kg"` (default `"kg"`).
 
 | Endpoint | Description |
 |---|---|

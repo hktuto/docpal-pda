@@ -21,6 +21,7 @@ import { adminFlowEditsRoute } from "./flowEdits.js";
 import { adminSubInventoriesRoute } from "./subInventories.js";
 import { adminSubInventoryShareGroupsRoute } from "./subInventoryShareGroups.js";
 import { adminIssuesRoute } from "./issues.js";
+import { adminAppDownloadRoute } from "./appDownload.js";
 
 // Optional id on create: use the client's when given, else generate one.
 function optId(body: Record<string, unknown>): string {
@@ -41,7 +42,7 @@ adminRoute.route(
     }),
     update: (b) => ({
       ...(b.zone !== undefined && { zone: optStr(b, "zone") }),
-      updatedAt: new Date(),
+      lastUpdateDate: new Date(),
     }),
   })
 );
@@ -88,7 +89,7 @@ adminRoute.route(
       ...(b.qrType !== undefined && { qrType: optStr(b, "qrType") }),
       ...(b.qtyEncoding !== undefined && { qtyEncoding: optStr(b, "qtyEncoding") }),
       ...(b.remark !== undefined && { remark: optStr(b, "remark") }),
-      updatedAt: new Date(),
+      lastUpdateDate: new Date(),
     }),
   })
 );
@@ -107,27 +108,27 @@ adminRoute.route(
         ilike(parts.partNo, like),
         ilike(parts.wclItemNo, like),
         ilike(parts.description, like),
-        ilike(parts.supplierCode, like)
+        ilike(parts.brand, like)
       )!;
     },
-    filters: { supplierCode: (v) => ilike(parts.supplierCode, `%${v}%`) },
+    filters: { brand: (v) => ilike(parts.brand, `%${v}%`) },
     sorts: {
       partNo: parts.partNo,
-      supplierCode: parts.supplierCode,
+      brand: parts.brand,
       wclItemNo: parts.wclItemNo,
       description: parts.description,
       defaultCoo: parts.defaultCoo,
     },
     create: (b) => ({
       id: optId(b),
-      supplierCode: reqStr(b, "supplierCode"),
+      brand: reqStr(b, "brand"),
       partNo: reqStr(b, "partNo"),
       wclItemNo: optStr(b, "wclItemNo"),
       description: optStr(b, "description"),
       defaultCoo: optStr(b, "defaultCoo"),
     }),
     update: (b) => ({
-      ...(b.supplierCode !== undefined && { supplierCode: reqStr(b, "supplierCode") }),
+      ...(b.brand !== undefined && { brand: reqStr(b, "brand") }),
       ...(b.partNo !== undefined && { partNo: reqStr(b, "partNo") }),
       ...(b.wclItemNo !== undefined && { wclItemNo: optStr(b, "wclItemNo") }),
       ...(b.description !== undefined && { description: optStr(b, "description") }),
@@ -175,7 +176,7 @@ adminRoute.route(
       ...(b.label !== undefined && { label: reqStr(b, "label") }),
       ...(b.rule !== undefined && { rule: optStr(b, "rule") }),
       ...(b.remark !== undefined && { remark: optStr(b, "remark") }),
-      updatedAt: new Date(),
+      lastUpdateDate: new Date(),
     }),
   })
 );
@@ -230,7 +231,7 @@ adminRoute.route(
     update: (b) => ({
       ...(b.label !== undefined && { label: reqStr(b, "label") }),
       ...(b.remark !== undefined && { remark: optStr(b, "remark") }),
-      updatedAt: new Date(),
+      lastUpdateDate: new Date(),
     }),
   })
 );
@@ -261,3 +262,6 @@ adminRoute.route("/", adminFlowEditsRoute);
 
 // Issues console (cross-order receiving mismatch list).
 adminRoute.route("/", adminIssuesRoute);
+
+// APK download (signed release APK published by `pnpm build:apk`).
+adminRoute.route("/", adminAppDownloadRoute);

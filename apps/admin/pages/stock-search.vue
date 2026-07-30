@@ -5,7 +5,7 @@ const api = useApi();
 const flow = useFlowApi();
 
 const suppliers = ref<{ id: string; code: string; name: string }[]>([]);
-const supplierId = ref("");
+const supplierCode = ref("");
 const partNo = ref("");
 
 const result = ref<StockSearchResult | null>(null);
@@ -26,7 +26,7 @@ async function search() {
   error.value = "";
   try {
     result.value = await flow.stockSearch({
-      supplierId: supplierId.value || undefined,
+      supplierCode: supplierCode.value || undefined,
       partNo: partNo.value.trim() || undefined,
     });
     searched.value = true;
@@ -47,9 +47,9 @@ onMounted(loadSuppliers);
     </div>
 
     <div class="filters">
-      <select v-model="supplierId" :aria-label="$t('admin.pages.stockSearch.supplier')">
+      <select v-model="supplierCode" :aria-label="$t('admin.pages.stockSearch.supplier')">
         <option value="">{{ $t("admin.pages.stockSearch.allSuppliers") }}</option>
-        <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.code }} — {{ s.name }}</option>
+        <option v-for="s in suppliers" :key="s.id" :value="s.code">{{ s.code }} — {{ s.name }}</option>
       </select>
       <input
         v-model="partNo"

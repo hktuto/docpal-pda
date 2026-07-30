@@ -49,7 +49,7 @@ onMounted(async () => {
         </div>
         <div>
           <div class="dt">{{ $t("admin.pages.shelfBoxes.created") }}</div>
-          <div class="dd">{{ formatCell(box.createdAt) }}</div>
+          <div class="dd">{{ formatCell(box.createdDate) }}</div>
         </div>
       </div>
       <h2 style="font-size: 16px">{{ $t("admin.pages.shelfBoxes.items") }}</h2>

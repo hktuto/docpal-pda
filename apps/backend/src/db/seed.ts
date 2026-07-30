@@ -23,28 +23,30 @@ import {
   receivingInvoices,
   receivingInvoiceItems,
   inventoryLots,
-  inventoryLotSources,
   shelfBoxes,
   shelfBoxItems,
   pickingOrders,
   pickingItems,
 } from "./schema/index.js";
-import {
-  realParts,
-  realReceivingOrders,
-  realReceivingInvoices,
-  realReceivingInvoiceItems,
-  realPickingOrders,
-  realPickingItems,
-} from "./seed-real-data.js";
+import { realParts } from "./seed-real-data.js";
 import { realSubInventories } from "./seed-subinventories-data.js";
 import { realNetWeights } from "./seed-net-weight-data.js";
-import { order210726, order210726Invoices, order210726Items } from "./seed-order-210726.js";
+import {
+  demoParts,
+  demoReceivingOrders,
+  demoReceivingInvoices,
+  demoReceivingInvoiceItems,
+  demoPickingOrders,
+  demoPickingItems,
+  demoShelfBoxes,
+  demoShelfBoxItems,
+  demoLots,
+} from "./seed-demo-scenario.js";
 
 interface BulkPartsData {
   suppliers: string[];
   parts: {
-    supplierCode: string;
+    brand: string;
     partNo: string;
     wclItemNo: string | null;
     description: string | null;
@@ -111,19 +113,24 @@ export const ALL_TABLES = [
 
 const uid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
-// Demo dataset, aligned with the apps/web / apps/api demo world:
-//  - one CLEARED KOA receiving order whose two items are fully put away into
-//    on-shelf inventory lots (with lot sources)
-//  - one PENDING DAITO receiving order (expected only)
-//  - one PENDING picking order against the stocked parts
+// Demo dataset (spec docs/superpowers/specs/2026-07-29-excel-demo-seed-design.md):
+// the order/stock world comes from new_seed/demo-scenario.xlsx via
+// scripts/gen-seed-demo-scenario.mjs (seed-demo-scenario.ts) —
+//  - 2 PENDING receiving orders (2 cartons × 2-3 items each, carton metadata
+//    in additional_data) for the receive → put-away journey
+//  - 2 PENDING picking orders: SO-DEMO-0001 exactly matches shelf box
+//    BOX-H-20260701-0001 (whole-box claim demo, fully allocated);
+//    SO-DEMO-0002 is only partially covered by shelf stock (the shortfall
+//    sits on the pending receiving orders)
+// Master data (users, suppliers, parts, sub-inventories, shelves, net
+// weights, profiles) is seeded here / from the real-master artifacts.
 // Derived rows (allocations, transactions, packages) are produced by business
 // logic, not by the seed.
-// opts.stockBoxes: seed the 10 demo stock shelf boxes (default on; tests turn
-// it off so their exact-count assertions keep the minimal demo world).
+// opts.stockBoxes: seed the scenario shelf boxes + stock (default on; tests
+// turn it off so their exact-count assertions keep the minimal world).
 async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boolean }): Promise<void> {
   // bulkParts (default on) seeds the full Oracle parts master (~100k rows),
-  // its 162 auto-created suppliers, the real net-weight table, and the 210726
-  // receiving order (its items FK into the bulk parts). Tests pass
+  // its 162 auto-created suppliers, and the real net-weight table. Tests pass
   // bulkParts: false to keep the small, fast demo world.
   const bulk = opts?.bulkParts !== false ? loadBulkParts() : null;
   // Demo passwords stay DocPal2026! / DocPalAdmin2026!, stored scrypt-hashed.
@@ -152,7 +159,8 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
   ]);
 
   // Auto-created suppliers for every prefix in the Oracle parts master
-  // (parts.supplier_code FK; KOA/DAITO/KOA+TCG already exist above).
+  // (parts.brand holds the code as plain text; KOA/DAITO/KOA+TCG already exist
+  // above). Kept so supplier-facing lists still know every brand code.
   if (bulk) {
     const demoCodes = new Set(["KOA", "DAITO", "KOA+TCG"]);
     await insertChunked(
@@ -201,11 +209,11 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
   ]);
 
   await db.insert(parts).values([
-    { id: uid(5), supplierCode: "KOA", partNo: "RK73H1JTTD1002F", wclItemNo: "RK73H1JTTD1002F", description: "RES 10K OHM 1% 1/10W 0603", defaultCoo: "JP" },
-    { id: uid(6), supplierCode: "KOA", partNo: "RK73H1JTTD2202F", wclItemNo: "RK73H1JTTD2202F", description: "RES 22K OHM 1% 1/10W 0603", defaultCoo: "JP" },
-    { id: uid(7), supplierCode: "KOA", partNo: "RK73B1JTTD181G", wclItemNo: "RK73B1JTTD181G", description: "RES 180 OHM 5% 1/10W 0603", defaultCoo: "JP" },
-    { id: uid(8), supplierCode: "KOA", partNo: "RK73H2ATTD1372F", wclItemNo: "RK73H2ATTD1372F", description: "RES 13.7K OHM 1% 1/8W 0805", defaultCoo: "JP" },
-    { id: uid(9), supplierCode: "DAITO", partNo: "P413", wclItemNo: "P413", description: "DAITO FUSE 1A", defaultCoo: "JP" },
+    { id: uid(5), brand: "KOA", partNo: "RK73H1JTTD1002F", wclItemNo: "RK73H1JTTD1002F", description: "RES 10K OHM 1% 1/10W 0603", defaultCoo: "JP" },
+    { id: uid(6), brand: "KOA", partNo: "RK73H1JTTD2202F", wclItemNo: "RK73H1JTTD2202F", description: "RES 22K OHM 1% 1/10W 0603", defaultCoo: "JP" },
+    { id: uid(7), brand: "KOA", partNo: "RK73B1JTTD181G", wclItemNo: "RK73B1JTTD181G", description: "RES 180 OHM 5% 1/10W 0603", defaultCoo: "JP" },
+    { id: uid(8), brand: "KOA", partNo: "RK73H2ATTD1372F", wclItemNo: "RK73H2ATTD1372F", description: "RES 13.7K OHM 1% 1/8W 0805", defaultCoo: "JP" },
+    { id: uid(9), brand: "KOA", partNo: "RK73H1JTTD4702F", wclItemNo: "RK73H1JTTD4702F", description: "RES 47K OHM 1% 1/10W 0603", defaultCoo: "JP" },
   ]);
 
   // Full Oracle parts master (generated; merges with the demo rows on
@@ -374,291 +382,29 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
     );
   }
 
-  // --- cleared receiving order (fully received + put away) -------------------
-  await db.insert(receivingOrders).values([
-    {
-      id: uid(10),
-      batchNo: "04958166",
-      supplierId: uid(3),
-      deliveryDate: new Date("2026-07-10"),
-      orgId: 2,
-      subInventoryCode: "STORE1",
-      status: "clear",
-      arrivedAt: new Date("2026-07-10T09:30:00Z"),
-      arrivedBy: uid(1),
-    },
-    // --- pending receiving order (expected only) -----------------------------
-    {
-      id: uid(11),
-      batchNo: "04958210",
-      supplierId: uid(4),
-      deliveryDate: new Date("2026-07-20"),
-      orgId: 2,
-      subInventoryCode: "STORE1",
-      status: "pending",
-    },
-  ]);
-
-  await db.insert(receivingInvoices).values([
-    {
-      id: uid(12),
-      receivingOrderId: uid(10),
-      invoiceNo: "04958166-W-01",
-      supplierId: uid(3),
-      wclCompanyName: "WCL Components Ltd",
-      totalQty: 15000,
-      totalCtn: 2,
-      deliveryDate: new Date("2026-07-08"),
-      orgId: 2,
-      subInventoryCode: "STORE1",
-    },
-    {
-      id: uid(13),
-      receivingOrderId: uid(11),
-      invoiceNo: "04958210-W-01",
-      supplierId: uid(4),
-      wclCompanyName: "WCL Components Ltd",
-      totalQty: 8000,
-      totalCtn: 1,
-      deliveryDate: new Date("2026-07-18"),
-      orgId: 2,
-      subInventoryCode: "STORE1",
-    },
-  ]);
-
-  await db.insert(receivingInvoiceItems).values([
-    // cleared order items — fully received and put away
-    {
-      id: uid(14),
-      receivingInvoiceId: uid(12),
-      partNo: "RK73H1JTTD1002F",
-      wclItemNo: "RK73H1JTTD1002F",
-      poNo: "PO-KOA-001",
-      poLine: "1",
-      lineQty: 10000,
-      receivedQty: 10000,
-      putAwayQty: 10000,
-      ctnNo: "BOX-0001",
-      dateCode: "2601",
-      lotCode: "L2601A",
-      coo: "JP",
-      cow: "JP",
-    },
-    {
-      id: uid(15),
-      receivingInvoiceId: uid(12),
-      partNo: "RK73H1JTTD2202F",
-      wclItemNo: "RK73H1JTTD2202F",
-      poNo: "PO-KOA-001",
-      poLine: "2",
-      lineQty: 5000,
-      receivedQty: 5000,
-      putAwayQty: 5000,
-      ctnNo: "BOX-0002",
-      dateCode: "2602",
-      lotCode: "L2602B",
-      coo: "JP",
-      cow: "JP",
-    },
-    // pending order items — expected only
-    {
-      id: uid(16),
-      receivingInvoiceId: uid(13),
-      partNo: "RK73B1JTTD181G",
-      wclItemNo: "RK73B1JTTD181G",
-      poNo: "PO-DAI-001",
-      poLine: "1",
-      lineQty: 5000,
-      dateCode: "2610",
-      coo: "JP",
-    },
-    {
-      id: uid(17),
-      receivingInvoiceId: uid(13),
-      partNo: "P413",
-      wclItemNo: "P413",
-      poNo: "PO-DAI-001",
-      poLine: "2",
-      lineQty: 3000,
-      dateCode: "2612",
-      coo: "JP",
-    },
-  ]);
-
-  // on-shelf stock produced by the cleared order
-  await db.insert(inventoryLots).values([
-    {
-      id: uid(18),
-      partNo: "RK73H1JTTD1002F",
-      dateCode: "2601",
-      lotCode: "L2601A",
-      coo: "JP",
-      cow: "JP",
-      shelfCode: "A-01-01",
-      boxId: "BOX-0001",
-      orgId: 2,
-      subInventoryCode: "STORE1",
-      totalQty: 10000,
-      allocatedQty: 0,
-    },
-    {
-      id: uid(19),
-      partNo: "RK73H1JTTD2202F",
-      dateCode: "2602",
-      lotCode: "L2602B",
-      coo: "JP",
-      cow: "JP",
-      shelfCode: "A-01-02",
-      boxId: "BOX-0002",
-      orgId: 2,
-      subInventoryCode: "STORE1",
-      totalQty: 5000,
-      allocatedQty: 0,
-    },
-  ]);
-
-  await db.insert(inventoryLotSources).values([
-    { id: uid(20), inventoryLotId: uid(18), receivingInvoiceItemId: uid(14), qty: 10000 },
-    { id: uid(21), inventoryLotId: uid(19), receivingInvoiceItemId: uid(15), qty: 5000 },
-  ]);
-
-  // --- stocked shelf boxes ----------------------------------------------------
-  // 10 closed boxes of on-shelf stock so goods verify, box lookup and stock
-  // search have boxes to work with. Lots mirror the runtime put-away shape
-  // (lot.box_id = shelf_boxes.id). Box ids use a past date so nextBoxId's
-  // per-day seq never collides with them.
+  // --- demo scenario (new_seed/demo-scenario.xlsx → seed-demo-scenario.ts) ---
+  // Parts first (FK target; merges with the demo/bulk master keep-first).
+  await db.insert(parts).values([...demoParts]).onConflictDoNothing();
+  // 2 pending receiving orders (2 cartons × 2-3 items each).
+  await db.insert(receivingOrders).values([...demoReceivingOrders]);
+  await db.insert(receivingInvoices).values([...demoReceivingInvoices]);
+  await db.insert(receivingInvoiceItems).values([...demoReceivingInvoiceItems]);
+  // Scenario shelf boxes + stock (tests opt out via stockBoxes: false).
   if (opts?.stockBoxes !== false) {
-    await db.insert(shelfBoxes).values([
-    { id: "BOX-H-20260701-0001", shelfCode: "A-01-01", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
-    { id: "BOX-H-20260701-0002", shelfCode: "A-01-01", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
-    { id: "BOX-H-20260701-0003", shelfCode: "A-01-02", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
-    { id: "BOX-H-20260701-0004", shelfCode: "A-01-02", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
-    { id: "BOX-H-20260701-0005", shelfCode: "A-01-03", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
-    { id: "BOX-H-20260701-0006", shelfCode: "A-01-03", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
-    { id: "BOX-H-20260701-0007", shelfCode: "A-01-04", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
-    { id: "BOX-H-20260701-0008", shelfCode: "A-01-04", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
-    { id: "BOX-H-20260701-0009", shelfCode: "W-01-01", orgId: 2, subInventoryCode: "WSTORE1", status: "closed" },
-    { id: "BOX-H-20260701-0010", shelfCode: "W-01-01", orgId: 2, subInventoryCode: "WSTORE1", status: "closed" },
-  ]);
-
-  await db.insert(shelfBoxItems).values([
-    { id: uid(30), shelfBoxId: "BOX-H-20260701-0001", partNo: "RK73H1JTTD1002F", qty: 10000 },
-    { id: uid(31), shelfBoxId: "BOX-H-20260701-0002", partNo: "RK73H1JTTD2202F", qty: 5000 },
-    { id: uid(32), shelfBoxId: "BOX-H-20260701-0003", partNo: "RK73B1JTTD181G", qty: 8000 },
-    { id: uid(33), shelfBoxId: "BOX-H-20260701-0004", partNo: "RK73H2ATTD1372F", qty: 4000 },
-    { id: uid(34), shelfBoxId: "BOX-H-20260701-0005", partNo: "P413", qty: 2000 },
-    { id: uid(35), shelfBoxId: "BOX-H-20260701-0006", partNo: "RK73H1JTTD1002F", qty: 10000 },
-    { id: uid(36), shelfBoxId: "BOX-H-20260701-0007", partNo: "RK73H1JTTD2202F", qty: 5000 },
-    { id: uid(37), shelfBoxId: "BOX-H-20260701-0008", partNo: "RK73B1JTTD181G", qty: 6000 },
-    { id: uid(38), shelfBoxId: "BOX-H-20260701-0009", partNo: "RK73H2ATTD1372F", qty: 3000 },
-    { id: uid(39), shelfBoxId: "BOX-H-20260701-0010", partNo: "P413", qty: 1500 },
-  ]);
-
-  await db.insert(inventoryLots).values([
-    { id: uid(40), partNo: "RK73H1JTTD1002F", dateCode: "2603", lotCode: "L2603A", coo: "JP", cow: "JP",
-      shelfCode: "A-01-01", boxId: "BOX-H-20260701-0001",
-      orgId: 2, subInventoryCode: "STORE1",
-      totalQty: 10000, allocatedQty: 0 },
-    { id: uid(41), partNo: "RK73H1JTTD2202F", dateCode: "2603", lotCode: "L2603B", coo: "JP", cow: "JP",
-      shelfCode: "A-01-01", boxId: "BOX-H-20260701-0002",
-      orgId: 2, subInventoryCode: "STORE1",
-      totalQty: 5000, allocatedQty: 0 },
-    { id: uid(42), partNo: "RK73B1JTTD181G", dateCode: "2604", lotCode: "L2604A", coo: "JP", cow: "JP",
-      shelfCode: "A-01-02", boxId: "BOX-H-20260701-0003",
-      orgId: 2, subInventoryCode: "STORE1",
-      totalQty: 8000, allocatedQty: 0 },
-    { id: uid(43), partNo: "RK73H2ATTD1372F", dateCode: "2604", lotCode: "L2604B", coo: "JP", cow: "JP",
-      shelfCode: "A-01-02", boxId: "BOX-H-20260701-0004",
-      orgId: 2, subInventoryCode: "STORE1",
-      totalQty: 4000, allocatedQty: 0 },
-    { id: uid(44), partNo: "P413", dateCode: "2605", lotCode: "L2605A", coo: "JP", cow: "JP",
-      shelfCode: "A-01-03", boxId: "BOX-H-20260701-0005",
-      orgId: 2, subInventoryCode: "STORE1",
-      totalQty: 2000, allocatedQty: 0 },
-    { id: uid(45), partNo: "RK73H1JTTD1002F", dateCode: "2605", lotCode: "L2605B", coo: "JP", cow: "JP",
-      shelfCode: "A-01-03", boxId: "BOX-H-20260701-0006",
-      orgId: 2, subInventoryCode: "STORE1",
-      totalQty: 10000, allocatedQty: 0 },
-    { id: uid(46), partNo: "RK73H1JTTD2202F", dateCode: "2606", lotCode: "L2606A", coo: "JP", cow: "JP",
-      shelfCode: "A-01-04", boxId: "BOX-H-20260701-0007",
-      orgId: 2, subInventoryCode: "STORE1",
-      totalQty: 5000, allocatedQty: 0 },
-    { id: uid(47), partNo: "RK73B1JTTD181G", dateCode: "2606", lotCode: "L2606B", coo: "JP", cow: "JP",
-      shelfCode: "A-01-04", boxId: "BOX-H-20260701-0008",
-      orgId: 2, subInventoryCode: "STORE1",
-      totalQty: 6000, allocatedQty: 0 },
-    { id: uid(48), partNo: "RK73H2ATTD1372F", dateCode: "2607", lotCode: "L2607A", coo: "JP", cow: "JP",
-      shelfCode: "W-01-01", boxId: "BOX-H-20260701-0009",
-      orgId: 2, subInventoryCode: "WSTORE1",
-      totalQty: 3000, allocatedQty: 0 },
-    { id: uid(49), partNo: "P413", dateCode: "2607", lotCode: "L2607B", coo: "JP", cow: "JP",
-      shelfCode: "W-01-01", boxId: "BOX-H-20260701-0010",
-      orgId: 2, subInventoryCode: "WSTORE1",
-      totalQty: 1500, allocatedQty: 0 },
-  ]);
+    await db.insert(shelfBoxes).values([...demoShelfBoxes]);
+    await db.insert(shelfBoxItems).values([...demoShelfBoxItems]);
+    await db.insert(inventoryLots).values([...demoLots]);
   }
+  // 2 pending picking orders (SO-DEMO-0001 whole-box-match, SO-DEMO-0002 partial).
+  await db.insert(pickingOrders).values([...demoPickingOrders]);
+  await db.insert(pickingItems).values([...demoPickingItems]);
 
-  // --- pending picking order --------------------------------------------------
-  await db.insert(pickingOrders).values([
-    {
-      id: uid(22),
-      orderNo: "SO-2026-0001",
-      poNo: "CUST-PO-8899",
-      deliveryDate: new Date("2026-07-25"),
-      shipTo: "ACME Electronics (HK)",
-      customerCode: "ACME",
-      orgId: 2,
-      subInventoryCode: "STORE1",
-      status: "pending",
-    },
-  ]);
-
-  await db.insert(pickingItems).values([
-    {
-      id: uid(23),
-      pickingOrderId: uid(22),
-      partNo: "RK73H1JTTD1002F",
-      qty: 2000,
-    },
-    {
-      id: uid(24),
-      pickingOrderId: uid(22),
-      partNo: "RK73H1JTTD2202F",
-      qty: 1000,
-    },
-  ]);
-
-  // --- real data from new_seed/ (see seed-real-data.ts header) ----------------
-  // Two pending receiving orders (batchNo = folder name: 04958184, 65878) with
-  // their real invoices/items, plus the related picking lists: picking.xlsx
-  // invoices for 65878 and the TN (transfer note) PDFs for 04958184.
-  // Map legacy sub-inventory aliases (SZHK1, GZHK2, …) in the real-data seed
-  // rows to their (org_id, code) group per the xlsx structure (the composite
-  // FK rejects alias values at insert time).
-  const mapPair = remapLegacyPair;
+  // Real Oracle parts master reference rows (generated from
+  // new_seed/parts_table.xlsx into seed-real-data.ts; merges keep-first with
+  // the demo/bulk parts — master data only; the real-data ORDERS (04958184,
+  // 65878 + picking lists) and order 210726 are no longer seeded, spec
+  // docs/superpowers/specs/2026-07-29-excel-demo-seed-design.md).
   await db.insert(parts).values([...realParts]).onConflictDoNothing();
-  await db.insert(receivingOrders).values(realReceivingOrders.map(mapPair));
-  await db.insert(receivingInvoices).values(realReceivingInvoices.map(mapPair));
-  await db.insert(receivingInvoiceItems).values(realReceivingInvoiceItems.map(mapPair));
-  await db.insert(pickingOrders).values(realPickingOrders.map(mapPair));
-  await db.insert(pickingItems).values([...realPickingItems]);
-
-  // --- receiving order 210726 (generated from new_seed/210726.xls) -----------
-  // Multi-supplier: the order's supplier_id is NULL and each invoice carries
-  // its own supplier (single-brand invoices), resolved here from the seeded
-  // supplier codes. Its items FK into the bulk parts master → bulk-only.
-  if (bulk) {
-    const supRows = await db.select({ id: suppliers.id, code: suppliers.code }).from(suppliers);
-    const supId = new Map(supRows.map((s) => [s.code, s.id]));
-    await db.insert(receivingOrders).values([...order210726]);
-    await db.insert(receivingInvoices).values(
-      order210726Invoices.map(({ supplierCode, ...inv }) => ({
-        ...inv,
-        supplierId: supId.get(supplierCode) ?? null,
-      }))
-    );
-    await insertChunked(db, receivingInvoiceItems, [...order210726Items]);
-  }
 
   // Allocation priority default: delivery date (sooner first, NULLS LAST),
   // then order no. Admin reorders afterwards via POST /picking-orders/reorder;
@@ -667,25 +413,6 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
     UPDATE picking_orders SET priority_seq = r.seq
     FROM (SELECT id, row_number() OVER (ORDER BY delivery_date ASC NULLS LAST, order_no) AS seq FROM picking_orders) r
     WHERE picking_orders.id = r.id`);
-}
-
-/** Legacy sub-inventory alias → (orgId, subInventoryCode) group (per new_seed/subInventories.xlsx). */
-const LEGACY_TAG_GROUPS: Record<string, { orgId: number; subInventoryCode: string }> = {
-  BJHK1: { orgId: 140, subInventoryCode: "STORE1" },
-  GZHK1: { orgId: 140, subInventoryCode: "STORE1" },
-  SHHK1: { orgId: 140, subInventoryCode: "STORE1" },
-  SZHK1: { orgId: 140, subInventoryCode: "STORE1" },
-  BJHK2: { orgId: 143, subInventoryCode: "store1" },
-  GZHK2: { orgId: 143, subInventoryCode: "store1" },
-  SHHK2: { orgId: 143, subInventoryCode: "store1" },
-  SZHK2: { orgId: 143, subInventoryCode: "store1" },
-  "HUAWEI-CAR": { orgId: 140, subInventoryCode: "HUAWEI" },
-};
-
-function remapLegacyPair<T extends object>(row: T): T {
-  const r = row as { orgId?: number | null; subInventoryCode?: string | null };
-  const g = r.subInventoryCode ? LEGACY_TAG_GROUPS[r.subInventoryCode] : undefined;
-  return g ? { ...row, orgId: g.orgId, subInventoryCode: g.subInventoryCode } : row;
 }
 
 /** Seed demo data when the users table is empty. Returns true when it seeded. */

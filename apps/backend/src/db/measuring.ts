@@ -48,7 +48,7 @@ async function logTransition(
     toState: entry.toState,
     actorId: entry.actorId,
     metadata: entry.metadata ?? {},
-    createdAt: now(),
+    createdDate: now(),
   });
 }
 
@@ -64,7 +64,7 @@ export interface MeasuringTaskListRow {
   shipTo: string | null;
   boxCount: number;
   closedBoxCount: number;
-  createdAt: Date;
+  createdDate: Date;
 }
 
 /** List rows with per-task box counts; `status` is a pass-through filter. */
@@ -77,13 +77,13 @@ export async function listMeasuringTasks(db: AppDb, status?: string): Promise<Me
         po.order_no AS "orderNo", po.ship_to AS "shipTo",
         COUNT(sb.id)::int AS "boxCount",
         COUNT(sb.id) FILTER (WHERE sb.status <> 'open')::int AS "closedBoxCount",
-        mt.created_at AS "createdAt"
+        mt.created_date AS "createdDate"
       FROM measuring_tasks mt
       JOIN picking_orders po ON po.id = mt.picking_order_id
       LEFT JOIN shipping_boxes sb ON sb.picking_order_id = mt.picking_order_id
       ${status ? sql`WHERE mt.status = ${status}` : sql``}
       GROUP BY mt.id, po.order_no, po.ship_to
-      ORDER BY mt.created_at DESC, mt.id DESC
+      ORDER BY mt.created_date DESC, mt.id DESC
     `
   );
 }
@@ -92,7 +92,7 @@ export interface MeasuringTaskRow {
   id: string;
   status: string;
   pickingOrderId: string;
-  createdAt: Date;
+  createdDate: Date;
 }
 
 export interface MeasuringOrderRow {
@@ -138,7 +138,7 @@ export interface MeasuringTaskDetail {
 export async function getMeasuringTaskDetail(db: AppDb, taskId: string): Promise<MeasuringTaskDetail> {
   const task = await queryGet<MeasuringTaskRow>(
     db,
-    sql`SELECT id, status, picking_order_id AS "pickingOrderId", created_at AS "createdAt"
+    sql`SELECT id, status, picking_order_id AS "pickingOrderId", created_date AS "createdDate"
         FROM measuring_tasks WHERE id = ${taskId}`
   );
   if (!task) throw new HTTPException(404, { message: "measuring_task_not_found" });
@@ -157,7 +157,7 @@ export async function getMeasuringTaskDetail(db: AppDb, taskId: string): Promise
                gross_weight AS "grossWeight", net_weight AS "netWeight",
                destination_country AS "destinationCountry"
         FROM shipping_boxes WHERE picking_order_id = ${task.pickingOrderId}
-        ORDER BY created_at, id`
+        ORDER BY created_date, id`
   );
   const boxIds = boxes.map((b) => b.id);
 
@@ -176,7 +176,7 @@ export async function getMeasuringTaskDetail(db: AppDb, taskId: string): Promise
           JOIN parts p ON p.part_no = pi.part_no
           LEFT JOIN net_weight_formula nwf ON nwf.part_no = pi.part_no
           WHERE ${inArray(sql`pp.shipping_box_id`, boxIds)}
-          ORDER BY pp.created_at, pp.id
+          ORDER BY pp.created_date, pp.id
         `
       )
     : [];
@@ -255,7 +255,7 @@ export async function completeMeasuringTaskTx(tx: DbOrTx, input: { taskId: strin
   if (isStepEnabled("verify")) {
     await queryRun(
       tx,
-      sql`INSERT INTO verify_tasks (id, picking_order_id, status, created_at)
+      sql`INSERT INTO verify_tasks (id, picking_order_id, status, created_date)
           VALUES (${randomUUID()}, ${task.pickingOrderId}, 'pending', ${now()})
           ON CONFLICT (picking_order_id) DO NOTHING`
     );

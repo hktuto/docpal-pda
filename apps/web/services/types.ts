@@ -8,8 +8,8 @@ export interface User {
   displayName: string;
   /** Permission group codes from the JWT session (GET /auth/me). */
   groupCodes: string[];
-  // Nullable: the HTTP API auth payload has no created_at column.
-  createdAt: Date | null;
+  // Nullable: the HTTP API auth payload may omit createdDate.
+  createdDate: Date | null;
 }
 
 export interface SupplierQrcodeTemplate {
@@ -66,8 +66,8 @@ export interface ReceivingOrderDetail {
   subInventoryCode: string | null;
   arrivedAt: string | null;
   arrivedBy: string | null;
-  createdAt: string;
-  updatedAt: string;
+  createdDate: string;
+  lastUpdateDate: string;
   supplier: ReceivingOrderSupplier | null;
   invoices: ReceivingInvoice[];
 }
@@ -75,15 +75,15 @@ export interface ReceivingOrderDetail {
 export interface ReceivingInvoice {
   id: string;
   invoiceNo: string;
-  supplierId: string | null;
+  supplierCode: string | null;
   wclCompanyName: string | null;
   totalQty: number | null;
   totalCtn: number | null;
   deliveryDate: string | null;
   orgId: number;
   subInventoryCode: string | null;
-  createdAt: string;
-  updatedAt: string;
+  createdDate: string;
+  lastUpdateDate: string;
   items: ReceivingItem[];
 }
 
@@ -104,6 +104,8 @@ export interface ReceivingItem {
   cow: string | null;
   subInventoryCode: string | null;
   allocatedQty: number;
+  /** Free-form jsonb extras from the upstream sync (nullable). */
+  additionalData: Record<string, unknown> | null;
   part: {
     id: string;
     partNo: string;
@@ -205,7 +207,7 @@ export interface ReceivingPickingLog {
   fromState: string | null;
   toState: string;
   actorId: string | null;
-  createdAt: string;
+  createdDate: string;
 }
 
 export interface ReceivingPickingBox {
@@ -301,6 +303,8 @@ export interface PickingOrderListRow {
   itemCount: number;
   totalQty: number;
   pickedQty: number;
+  allocationStatus: string;
+  allocatedQty: number;
 }
 
 export interface PickingWorkLock {
@@ -352,6 +356,8 @@ export interface PickingItem {
   qty: number;
   pickedQty: number;
   allocatedQty: number;
+  /** Free-form jsonb extras from the upstream sync (nullable). */
+  additionalData: Record<string, unknown> | null;
   allocations: PickingAllocation[];
   packages: PickingPackage[];
 }
@@ -366,12 +372,23 @@ export interface PickingBox {
   packageCount: number;
 }
 
+/** Whole-box claim hint on GET /picking-orders/:id — a fully-claimable shelf
+ *  box whose current contents exactly equal the order's remaining demand. */
+export interface SuggestedShelfBox {
+  id: string;
+  shelfCode: string | null;
+  orgId: number | null;
+  subInventoryCode: string | null;
+  contents: { partNo: string; qty: number }[];
+}
+
 /** GET /picking-orders/:id — nested: order (incl. issue fields) +
  *  measuringTask + items(allocations, packages) + boxes. */
 export interface PickingOrderDetail {
   id: string;
   orderNo: string;
   status: string;
+  allocationStatus: string;
   deliveryDate: string | null;
   poNo: string | null;
   shipTo: string | null;
@@ -387,11 +404,12 @@ export interface PickingOrderDetail {
   issueRemark: string | null;
   issueReportedAt: string | null;
   issueReportedBy: string | null;
-  createdAt: string;
-  updatedAt: string;
+  createdDate: string;
+  lastUpdateDate: string;
   measuringTask: { id: string; status: string } | null;
   items: PickingItem[];
   boxes: PickingBox[];
+  suggestedBox: SuggestedShelfBox | null;
 }
 
 /** POST /picking-items/:id/scan body (the actor comes from the JWT). */
@@ -506,7 +524,7 @@ export interface PutAwayBox {
   id: string;
   shelfCode: string | null;
   status: string;
-  createdAt: string;
+  createdDate: string;
   items: PutAwayBoxItem[];
 }
 
@@ -524,15 +542,15 @@ export interface ShelfBox {
   receivingOrderId: string | null;
   shelfCode: string | null;
   status: string;
-  createdAt: string;
+  createdDate: string;
 }
 
 /** GET /admin/shelves row (the admin CRUD read doubles as the PDA shelf list). */
 export interface Shelf {
   code: string;
   zone: string | null;
-  createdAt: string;
-  updatedAt: string;
+  createdDate: string;
+  lastUpdateDate: string;
 }
 
 // ------------------------------------------------------------------
@@ -553,7 +571,7 @@ export interface MeasuringTaskListRow {
   shipTo: string | null;
   boxCount: number;
   closedBoxCount: number;
-  createdAt: string;
+  createdDate: string;
 }
 
 /** Package row inside a measuring box (part identity embedded). */
@@ -591,7 +609,7 @@ export interface MeasuringTaskDetail {
     id: string;
     status: string;
     pickingOrderId: string;
-    createdAt: string;
+    createdDate: string;
   };
   order: {
     id: string;
@@ -682,7 +700,7 @@ export interface GoodsVerifyTaskDetail {
   task: GoodsVerifyTaskListRow & {
     inventoryLotId: string;
     description: string | null;
-    createdAt: string;
+    createdDate: string;
   };
   lot: {
     id: string;
@@ -711,10 +729,10 @@ export interface GoodsVerifyTaskDetail {
 // ------------------------------------------------------------------
 
 /** Query filters for GET /stock-search (all optional, ANDed; partNo is a
- *  normalized substring, shelfCode exact, supplierId traces the lot back to
+ *  normalized substring, shelfCode exact, supplierCode traces the lot back to
  *  its receiving order). */
 export interface StockSearchFilters {
-  supplierId?: string;
+  supplierCode?: string;
   partNo?: string;
   shelfCode?: string;
 }
@@ -763,6 +781,6 @@ export interface BoxSearchResult {
   kind: "shipping" | "shelf";
   id: string;
   status: string;
-  createdAt: string;
+  createdDate: string;
   orderNo: string | null;
 }

@@ -4,8 +4,10 @@ This document lists every PostgreSQL table in the `apps/backend` database, one
 section per table, grouped by Drizzle schema domain file. The typed source of
 truth is `apps/backend/src/db/schema/*.ts`; migrations live in
 `apps/backend/drizzle/` and auto-apply on server start. All ids are `text`
-UUID strings and all timestamps are UTC wall-clock (`created_at`/`updated_at`
-are set by the app). This document mirrors the TS definitions exactly — fields
+UUID strings and all timestamps are UTC wall-clock (every table carries
+`created_date`/`last_update_date`, set by the app — spec
+`docs/superpowers/specs/2026-07-29-schema-system-fields-supplier-code-design.md`).
+This document mirrors the TS definitions exactly — fields
 commented out in the schema files are omitted even though older migrated
 databases may still carry those legacy columns (e.g. `warehouse_code` on
 `receiving_orders`).
@@ -22,10 +24,12 @@ Pure AP_SUPPLIERS sync mirror; PDA-local fields live in `supplier_profiles`.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| id | text PK | Supplier id (UUID) |
+| id | text PK | Supplier id (UUID, internal use only — external references use `code`) |
 | code | text NOT NULL UNIQUE | Supplier business code |
 | name | text NOT NULL | Supplier name |
 | short_name | text | Supplier short name (from AP_SUPPLIERS sync) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 ## supplier_profiles
 
@@ -43,8 +47,8 @@ supplier rows.
 | qr_type | text | Barcode symbology on the supplier's labels (e.g. QR Code, PDF417, Code 128, ISBN) — informational, unrelated to qr_template parsing |
 | qty_encoding | text | Qty decoding rule, e.g. 'koa_zeros' |
 | remark | text | Free-form remark for extension |
-| created_at | timestamp NOT NULL | Creation time (UTC) |
-| updated_at | timestamp NOT NULL | Last update time (UTC) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 ## parts
 
@@ -54,11 +58,13 @@ provide one); other tables reference parts by `part_no`, not by UUID.
 | Field | Type | Description |
 | --- | --- | --- |
 | id | text PK | Part id (UUID, internal use only) |
-| supplier_code | text NOT NULL UNIQUE FK → suppliers(code) | Business key of the supplier |
+| brand | text NOT NULL | Brand — plain-text copy of the supplier code from the upstream part master (no FK, not unique) |
 | part_no | text UNIQUE | Part number — the reference key used by all other tables |
 | wcl_item_no | text | WCL Part No (same meaning as receiving_invoice_items.wcl_item_no) |
 | description | text | Part description |
 | default_coo | text | Default country of origin |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 ## shelves
 
@@ -70,8 +76,8 @@ location pair (org_id + sub_inventory_code) lives on `shelf_boxes` and
 | --- | --- | --- |
 | code | text PK | Shelf/location code |
 | zone | text | Zone within the warehouse |
-| created_at | timestamp NOT NULL | Creation time (UTC) |
-| updated_at | timestamp NOT NULL | Last update time (UTC) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 ## country_list
 
@@ -81,6 +87,8 @@ Country lookup: short code → display name (destination country, COO, etc.).
 | --- | --- | --- |
 | code | text PK | ISO 3166-1 alpha-2 code, e.g. HK, CN, JP |
 | name | text NOT NULL | Country display name |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 ## box_size_list
 
@@ -90,6 +98,8 @@ Default box sizes offered at measuring/packing.
 | --- | --- | --- |
 | code | text PK | Size code, "L X W X H" in cm, e.g. "26 X 20 X 20" |
 | description | text | Optional description |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 ## net_weight_formula
 
@@ -104,6 +114,8 @@ kg — see `shipping_boxes`).
 | part_no | text NOT NULL UNIQUE FK → parts(part_no) | Part the formula applies to |
 | qty | integer NOT NULL | Reference quantity |
 | weight | real NOT NULL | Grams per `qty` units |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 ## customer_profiles
 
@@ -115,8 +127,8 @@ Customer master used by picking orders and customer-segregated stores.
 | label | text NOT NULL | Display label |
 | rule | text | formual for a customer |
 | remark | text | Free-form remark |
-| created_at | timestamp NOT NULL | Creation time (UTC) |
-| updated_at | timestamp NOT NULL | Last update time (UTC) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 ## sub_inventories
 
@@ -134,8 +146,8 @@ customer from it.
 | code | text NOT NULL, PK part | Sub-inventory code, e.g. STORE1 |
 | name | text | Sub-inventory name |
 | customer_code | text FK → customer_profiles(code) | Set for customer-segregated stores |
-| created_at | timestamp NOT NULL | Creation time (UTC) |
-| updated_at | timestamp NOT NULL | Last update time (UTC) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 ## sub_inventory_share_members
 
@@ -156,8 +168,8 @@ sharable.
 | org_id | integer NOT NULL, PK part, FK → sub_inventories | Owning office |
 | code | text NOT NULL, PK part, FK → sub_inventories | Sub-inventory (group level) |
 | share_group | text NOT NULL, indexed | Free-text group code, e.g. HK — members of the same group share |
-| created_at | timestamp NOT NULL | Creation time (UTC) |
-| updated_at | timestamp NOT NULL | Last update time (UTC) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 ## users
 
@@ -174,7 +186,8 @@ rows are lazily upgraded on login. Roles were replaced by group membership
 | username | text NOT NULL UNIQUE | Login name |
 | password_hash | text NOT NULL | scrypt hash (`scrypt:N:r:p:salt:hash`) |
 | display_name | text NOT NULL | Display name |
-| created_at | timestamp NOT NULL | Creation time (UTC) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 ## user_groups
 
@@ -186,8 +199,8 @@ many-to-many via `user_group_members`.
 | code | text PK | Group code (e.g. operator, admin) |
 | label | text NOT NULL | Display label |
 | remark | text | Free-form remark |
-| created_at | timestamp NOT NULL | Creation time (UTC) |
-| updated_at | timestamp NOT NULL | Last update time (UTC) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 ## user_group_members
 
@@ -197,7 +210,8 @@ Group membership junction; a user can belong to any number of groups.
 | --- | --- | --- |
 | user_id | text PK (composite) FK → users(id) ON DELETE CASCADE | Member user |
 | group_code | text PK (composite) FK → user_groups(code) ON DELETE CASCADE | Group |
-| created_at | timestamp NOT NULL | Creation time (UTC) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 # Receiving (`schema/receiving.ts`)
 
@@ -210,7 +224,7 @@ this app by the user (no upstream sync key).
 | --- | --- | --- |
 | id | text PK | Order id (UUID) |
 | batch_no | text NOT NULL | Batch reference number |
-| supplier_id | text FK → suppliers(id) | Supplier |
+| supplier_code | text FK → suppliers(code) | Supplier (business code; `suppliers.id` is internal-only) |
 | delivery_date | timestamp | Expected delivery date |
 | org_id | integer NOT NULL DEFAULT 2 | Receiving office |
 | sub_inventory_code | text NOT NULL FK → sub_inventories(code) | Sub-inventory the order receives into (mandatory per order; with org_id, the receiving location pair) |
@@ -218,8 +232,8 @@ this app by the user (no upstream sync key).
 | status | text NOT NULL DEFAULT 'pending' | Order status |
 | arrived_at | timestamp | Arrival confirmation time |
 | arrived_by | text FK → users(id) | User who confirmed arrival |
-| created_at | timestamp NOT NULL | Creation time (UTC) |
-| updated_at | timestamp NOT NULL | Last update time (UTC) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 Note: status values `pending` | `in_hand` | `provisional_received` | `clear`;
 index on `status`.
@@ -233,15 +247,15 @@ Packing-list header — one supplier invoice inside a receiving order.
 | id | text PK | Invoice id (UUID) |
 | receiving_order_id | text NOT NULL FK → receiving_orders(id) ON DELETE CASCADE | Parent receiving order |
 | invoice_no | text NOT NULL | Supplier invoice number |
-| supplier_id | text FK → suppliers(id) | Supplier |
+| supplier_code | text FK → suppliers(code) | Supplier (business code) |
 | wcl_company_name | text | Shipper company name (not the supplier name) |
 | total_qty | integer | Total component quantity |
 | total_ctn | integer | Total carton count |
 | delivery_date | timestamp | Ship-out date (not the inbound time) |
 | org_id | integer NOT NULL DEFAULT 2 | Shipper office, 2 = HK |
 | sub_inventory_code | text FK → sub_inventories(code) | Sub-inventory override for this invoice (nullable) |
-| created_at | timestamp NOT NULL | Creation time (UTC) |
-| updated_at | timestamp NOT NULL | Last update time (UTC) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 ## receiving_invoice_items
 
@@ -271,6 +285,9 @@ Packing-list line items.
 | mismatch_qty | integer | Mismatched quantity |
 | wrong_part_no | text | Wrong part number actually received |
 | mismatch_note | text | Free-form mismatch note |
+| additional_data | jsonb NULL | Free-form per-line extension data (ingest passes `additionalData` through on insert; not part of reconcile keys) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 Note: indexes on `receiving_invoice_id` and `part_no`.
 
@@ -293,6 +310,10 @@ external_id).
 | customer_code | text FK → customer_profiles(code) | Customer |
 | org_id | integer | Shipping office (nullable — allocation matches on the pair only when set) |
 | sub_inventory_code | text FK → sub_inventories(code) | Sub-inventory to ship from (nullable — with org_id, the shipping location pair) |
+| priority_seq | integer NOT NULL DEFAULT 0 | Allocation/list order — lower first, admin-reorderable (`POST /picking-orders/reorder`); default seq = delivery date ASC NULLS LAST then order_no |
+| commodity_inspection | text | Commodity inspection flag/value from the upstream order (stored, not yet interpreted) |
+| working_by | text FK → users(id) | Page work lock holder — a PDA with this order open keeps its allocations from being wiped by allocateAll |
+| working_at | timestamp | Work lock heartbeat, refreshed every 3 min by the open PDA page; expires 10 min after |
 | issue_reason | text | Issue-report reason |
 | issue_qty | integer | Issue-report quantity |
 | issue_pack_size | integer | Issue-report pack size |
@@ -301,11 +322,14 @@ external_id).
 | issue_reported_at | timestamp | When the issue was reported |
 | issue_reported_by | text FK → users(id) | User who reported the issue |
 | status | text NOT NULL DEFAULT 'pending' | Order status |
-| created_at | timestamp NOT NULL | Creation time (UTC) |
-| updated_at | timestamp NOT NULL | Last update time (UTC) |
+| allocation_status | text NOT NULL DEFAULT 'unallocated' | Order-level allocation summary: `unallocated` / `partial` / `allocated` — recomputed at the end of every `allocateAll` tx for `pending`/`picking` orders from Σ `allocated_qty` vs Σ open (`qty` − Σ `picking_packages.qty`); `allocated` includes the fully-picked (Σ open = 0) edge; `issue`/`finished`/`shipped` keep their last value |
+| shipped_at | timestamp | When the order was marked shipped |
+| shipped_by | text FK → users(id) | User who marked the order shipped |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
-Note: status values `pending` | `picking` | `finished`; unique index on
-`order_no`; index on `status`.
+Note: status values `pending` | `picking` | `issue` | `finished` | `shipped`;
+unique index on `order_no`; index on `status`.
 
 ## picking_items
 
@@ -319,8 +343,9 @@ Picking order lines.
 | qty | integer NOT NULL | Demand quantity to ship |
 | picked_qty | integer NOT NULL DEFAULT 0 | Quantity scanned/picked |
 | allocated_qty | integer NOT NULL DEFAULT 0 | Quantity reserved (allocated) |
-| created_at | timestamp NOT NULL | Creation time (UTC) |
-| updated_at | timestamp NOT NULL | Last update time (UTC) |
+| additional_data | jsonb NULL | Free-form per-line extension data (ingest passes `additionalData` through on insert; not part of reconcile keys) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 Note: indexes on `picking_order_id` and `part_no`.
 
@@ -333,7 +358,8 @@ Measuring/weighing task created when a picking order is finished.
 | id | text PK | Task id (UUID) |
 | picking_order_id | text NOT NULL FK → picking_orders(id) ON DELETE CASCADE | Order being measured |
 | status | text NOT NULL DEFAULT 'pending' | Task status |
-| created_at | timestamp NOT NULL | Creation time (UTC) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 Note: status values `pending` | `completed`; unique index on
 `picking_order_id` (one measuring task per order).
@@ -350,7 +376,8 @@ Verify (second-pass re-measure) task created when a measuring task completes
 | id | text PK | Task id (UUID) |
 | picking_order_id | text NOT NULL FK → picking_orders(id) ON DELETE CASCADE | Order being verified |
 | status | text NOT NULL DEFAULT 'pending' | Task status |
-| created_at | timestamp NOT NULL | Creation time (UTC) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 Note: status values `pending` | `completed`; unique index on
 `picking_order_id` (one verify task per order). Mirrors `measuring_tasks`.
@@ -369,8 +396,9 @@ Shipping cartons used at picking and measuring.
 | net_weight | real | Net weight (kilograms, decimals ≤ 3 dp) |
 | destination_country | text | Destination country code |
 | box_size | text | Box size code (see box_size_list) |
-| created_at | timestamp NOT NULL | Creation time (UTC) |
-| updated_at | timestamp NOT NULL | Last update time (UTC) |
+| source_shelf_box_id | text FK → shelf_boxes(id) | Whole-box claim: the reused shelf carton this box was created from (migration 0008) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 Note: status values `open` | `closed`; indexes on `measuring_task_id` and
 `picking_order_id`. Weights are kilograms end-to-end (API, PDA, admin) — the
@@ -395,8 +423,8 @@ Picked units per source — the packing truth for what went into which box.
 | cow | text | Country of wafer |
 | verified | boolean NOT NULL DEFAULT false | Package verified (measuring pass) |
 | verify_verified | boolean NOT NULL DEFAULT false | Package re-scanned during the verify pass (migration 0004; set with `verified` by `POST /packages/:id/verify` under a pending verify task, reset by box reopen; gates verify-task completion) |
-| created_at | timestamp NOT NULL | Creation time (UTC) |
-| updated_at | timestamp NOT NULL | Last update time (UTC) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 Note: indexes on `picking_item_id`, `picking_order_id`, and `shipping_box_id`.
 
@@ -411,8 +439,8 @@ Compat table kept for legacy reads; the packing truth is `picking_packages`.
 | picking_item_id | text FK → picking_items(id) | Picking line |
 | part_no | text NOT NULL FK → parts(part_no) | Part |
 | qty | integer NOT NULL | Quantity in the box |
-| created_at | timestamp NOT NULL | Creation time (UTC) |
-| updated_at | timestamp NOT NULL | Last update time (UTC) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 Note: index on `shipping_box_id`.
 
@@ -441,6 +469,8 @@ virtual shelf code so the lot key never goes NULL. The lot's location pair
 | total_qty | integer NOT NULL DEFAULT 0 | Total quantity (dock lots: expected qty; shelf lots: on-hand stock) |
 | allocated_qty | integer NOT NULL DEFAULT 0 | Reserved quantity |
 | available_qty | integer GENERATED ALWAYS AS (total_qty - allocated_qty) | Available (unreserved) quantity |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 Note: partial unique index `inventory_lots_unique_lot` on `(part_no,
 date_code, coo, cow, shelf_code, box_id, org_id, sub_inventory_code)` WHERE
@@ -457,6 +487,8 @@ Provenance of a lot — which receiving invoice items fed it and how much.
 | inventory_lot_id | text NOT NULL FK → inventory_lots(id) ON DELETE CASCADE | Lot |
 | receiving_invoice_item_id | text NOT NULL FK → receiving_invoice_items(id) ON DELETE CASCADE | Contributing receiving line |
 | qty | integer NOT NULL | Quantity contributed |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 Note: unique index on `(inventory_lot_id, receiving_invoice_item_id)`;
 indexes on `receiving_invoice_item_id` and `inventory_lot_id`.
@@ -472,7 +504,8 @@ Physical boxes on shelves used by put-away (printed box label).
 | org_id | integer | Stock location pair member — the box decides the stock partition of its contents (defaults to the receiving order's pair at creation; put-away stamps lots with the box's pair) |
 | sub_inventory_code | text FK → sub_inventories(code) | Stock location pair member (with org_id) |
 | status | text NOT NULL DEFAULT 'open' | Box status |
-| created_at | timestamp NOT NULL | Creation time (UTC) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 Note: status values `open` | `closed` | `verified`; index on `shelf_code`.
 
@@ -490,6 +523,8 @@ Contents of a shelf box.
 | qty | integer NOT NULL | Quantity in the box |
 | verified | boolean DEFAULT false | Item verified (goods verify) |
 | verified_at | timestamp | Verification time |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 Note: index on `shelf_box_id`.
 
@@ -511,7 +546,8 @@ Put-away/verify is box-based (printed box label), so the task carries box_id.
 | status | text NOT NULL DEFAULT 'pending' | Task status |
 | verified_by | text FK → users(id) | Verifying user |
 | verified_at | timestamp | Verification time |
-| created_at | timestamp NOT NULL | Creation time (UTC) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 Note: status values `pending` | `verified` | `skipped`; unique index on
 `(task_date, inventory_lot_id)` (one task per lot per day); indexes on
@@ -533,8 +569,8 @@ Recomputed idempotently by the allocation engine (`allocateAll`).
 | receiving_invoice_item_id | text FK → receiving_invoice_items(id) ON DELETE CASCADE | Source receiving line (not yet put away) |
 | receiving_order_id | text FK → receiving_orders(id) ON DELETE CASCADE | Whole-order allocation (line has no box) |
 | qty | integer NOT NULL | Reserved quantity |
-| created_at | timestamp NOT NULL | Creation time (UTC) |
-| updated_at | timestamp NOT NULL | Last update time (UTC) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 Note: CHECK `chk_allocations_source` requires at least one of
 `inventory_lot_id` / `receiving_invoice_item_id` / `receiving_order_id`;
@@ -555,9 +591,11 @@ Status-transition audit for documents/tasks (uniform name transaction_logs).
 | to_state | text NOT NULL | New status |
 | actor_id | text FK → users(id) | Acting user |
 | metadata | jsonb NOT NULL DEFAULT '{}' | Extra audit info (JSON) |
-| created_at | timestamp NOT NULL | Transition time (UTC) |
+| created_date | timestamp NOT NULL DEFAULT now() | Transition time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
-Note: indexes on `(entity_type, entity_id)` and `created_at`.
+Note: indexes on `(entity_type, entity_id)` and `created_date`
+(`idx_transaction_logs_created_date`).
 
 ## inventory_transactions
 
@@ -586,7 +624,8 @@ stock class; multiple classes changing at once write multiple rows.
 | txn_reason | text | Reason for the movement |
 | metadata | jsonb NOT NULL DEFAULT '{}' | Optional extras (before/after quantities, ...) |
 | txn_at | timestamp NOT NULL | Business occurrence time |
-| created_at | timestamp NOT NULL | Row creation time (UTC) |
+| created_date | timestamp NOT NULL DEFAULT now() | Row creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 Note: CHECK `chk_inventory_transactions_qty_type` constrains `qty_type` to
 `expected` | `dock` | `on_hand` | `reserved`; indexes on `(shelf_code,

@@ -7,933 +7,933 @@
 export const realParts = [
   {
     "id": "00000000-0000-4000-8000-000000001000",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2BTTD1004F",
     "wclItemNo": "KOA+RK73H2BTTD 1004F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001001",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73Z2BTTD",
     "wclItemNo": "KOA+RK73Z2BTTD"
   },
   {
     "id": "00000000-0000-4000-8000-000000001002",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B1JTTD300J",
     "wclItemNo": "KOA+RK73B1JTTD 300J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001003",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JTTD3003F",
     "wclItemNo": "KOA+RK73H1JTTD 3003F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001004",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B1JTTD512J",
     "wclItemNo": "KOA+RK73B1JTTD 512J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001005",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B1JTTD564J",
     "wclItemNo": "KOA+RK73B1JTTD 564J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001006",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B1JTTD680J",
     "wclItemNo": "KOA+RK73B1JTTD 680J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001007",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B1JTTD750J",
     "wclItemNo": "KOA+RK73B1JTTD 750J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001008",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2BTTD22R0F",
     "wclItemNo": "KOA+RK73H2BTTD 22R0F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001009",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2BTTD4753F",
     "wclItemNo": "KOA+RK73H2BTTD 4753F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001010",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2BTTD5R10F",
     "wclItemNo": "KOA+RK73H2BTTD 5R10F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001011",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2BTTD6803F",
     "wclItemNo": "KOA+RK73H2BTTD 6803F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001012",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B3ATTE200J",
     "wclItemNo": "KOA+RK73B3ATTE 200J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001013",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73Z1ETTP",
     "wclItemNo": "KOA+RK73Z1ETTP"
   },
   {
     "id": "00000000-0000-4000-8000-000000001014",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2BTTD3004F",
     "wclItemNo": "KOA+RK73H2BTTD 3004F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001015",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "WK73R2BTTD470J",
     "wclItemNo": "KOA+WK73R2BTTD 470J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001016",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JRTTD1003F",
     "wclItemNo": "KOA+RK73H1JRTTD 1003F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001017",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JRTTD1202F",
     "wclItemNo": "KOA+RK73H1JRTTD 1202F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001018",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JRTTD1542F",
     "wclItemNo": "KOA+RK73H1JRTTD 1542F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001019",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JRTTD2612F",
     "wclItemNo": "KOA+RK73H1JRTTD 2612F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001020",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JRTTD2671F",
     "wclItemNo": "KOA+RK73H1JRTTD 2671F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001021",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JRTTD2803F",
     "wclItemNo": "KOA+RK73H1JRTTD 2803F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001022",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2BRTTD10R0F",
     "wclItemNo": "KOA+RK73H2BRTTD 10R0F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001023",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2BRTTD22R1F",
     "wclItemNo": "KOA+RK73H2BRTTD 22R1F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001024",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1ERTTP33R0F",
     "wclItemNo": "KOA+RK73H1ERTTP 33R0F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001025",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1ERTTP4702F",
     "wclItemNo": "KOA+RK73H1ERTTP 4702F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001026",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2ARTTD1301F",
     "wclItemNo": "KOA+RK73H2ARTTD 1301F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001027",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B2ARTTD1R0J",
     "wclItemNo": "KOA+RK73B2ARTTD 1R0J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001028",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73Z2BRTTD",
     "wclItemNo": "KOA+RK73Z2BRTTD"
   },
   {
     "id": "00000000-0000-4000-8000-000000001029",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2BRTTD12R0F",
     "wclItemNo": "KOA+RK73H2BRTTD 12R0F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001030",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2BRTTD2210F",
     "wclItemNo": "KOA+RK73H2BRTTD 2210F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001031",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JRTTD1503F",
     "wclItemNo": "KOA+RK73H1JRTTD 1503F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001032",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JRTTD4532F",
     "wclItemNo": "KOA+RK73H1JRTTD 4532F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001033",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73Z1JRTTD",
     "wclItemNo": "KOA+RK73Z1JRTTD"
   },
   {
     "id": "00000000-0000-4000-8000-000000001034",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JRTTD1000F",
     "wclItemNo": "KOA+RK73H1JRTTD 1000F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001035",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JRTTD1002F",
     "wclItemNo": "KOA+RK73H1JRTTD 1002F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001036",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JRTTD4990F",
     "wclItemNo": "KOA+RK73H1JRTTD 4990F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001037",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JRTTD5101F",
     "wclItemNo": "KOA+RK73H1JRTTD 5101F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001038",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JRTTD8200F",
     "wclItemNo": "KOA+RK73H1JRTTD 8200F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001039",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2ARTTD10R0F",
     "wclItemNo": "KOA+RK73H2ARTTD 10R0F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001040",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JRTTD3301F",
     "wclItemNo": "KOA+RK73H1JRTTD 3301F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001041",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "HV732HTTE1503F",
     "wclItemNo": "KOA+HV732HTTE 1503F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001042",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H3ATTE1001F",
     "wclItemNo": "KOA+RK73H3ATTE 1001F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001043",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2ATTD6190F",
     "wclItemNo": "KOA+RK73H2ATTD 6190F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001044",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JTTD2002F",
     "wclItemNo": "KOA+RK73H1JTTD 2002F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001045",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JTTD10R0F",
     "wclItemNo": "KOA+RK73H1JTTD 10R0F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001046",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B1JTTD101J",
     "wclItemNo": "KOA+RK73B1JTTD 101J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001047",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B1JTTD223J",
     "wclItemNo": "KOA+RK73B1JTTD 223J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001048",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B1JTTD513J",
     "wclItemNo": "KOA+RK73B1JTTD 513J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001049",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2ATTD4991F",
     "wclItemNo": "KOA+RK73H2ATTD 4991F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001050",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1ETTP1001F",
     "wclItemNo": "KOA+RK73H1ETTP 1001F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001051",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1ETTP22R0F",
     "wclItemNo": "KOA+RK73H1ETTP 22R0F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001052",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B2ATTD201J",
     "wclItemNo": "KOA+RK73B2ATTD 201J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001053",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JTTD2001F",
     "wclItemNo": "KOA+RK73H1JTTD 2001F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001054",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JTTD4701F",
     "wclItemNo": "KOA+RK73H1JTTD 4701F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001055",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2ATTD20R0F",
     "wclItemNo": "KOA+RK73H2ATTD 20R0F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001056",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JTTD3300F",
     "wclItemNo": "KOA+RK73H1JTTD 3300F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001057",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JRTTD5100F",
     "wclItemNo": "KOA+RK73H1JRTTD 5100F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001058",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1ETTP1000F",
     "wclItemNo": "KOA+RK73H1ETTP 1000F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001059",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1ERTTP4701F",
     "wclItemNo": "KOA+RK73H1ERTTP 4701F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001060",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1ETTP2001F",
     "wclItemNo": "KOA+RK73H1ETTP 2001F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001061",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1ETTP2002F",
     "wclItemNo": "KOA+RK73H1ETTP 2002F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001062",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2BTTD47R0F",
     "wclItemNo": "KOA+RK73H2BTTD 47R0F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001063",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73Z1JTTD",
     "wclItemNo": "KOA+RK73Z1JTTD"
   },
   {
     "id": "00000000-0000-4000-8000-000000001064",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JTTD1001F",
     "wclItemNo": "KOA+RK73H1JTTD 1001F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001065",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JTTD4702F",
     "wclItemNo": "KOA+RK73H1JTTD 4702F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001066",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JTTD5101F",
     "wclItemNo": "KOA+RK73H1JTTD 5101F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001067",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JTTD1003F",
     "wclItemNo": "KOA+RK73H1JTTD 1003F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001068",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JTTD1000F",
     "wclItemNo": "KOA+RK73H1JTTD 1000F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001069",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1ETTP1003F",
     "wclItemNo": "KOA+RK73H1ETTP 1003F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001070",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2BTTD2003F",
     "wclItemNo": "KOA+RK73H2BTTD 2003F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001071",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1ETTP5102F",
     "wclItemNo": "KOA+RK73H1ETTP 5102F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001072",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2BTTD7501F",
     "wclItemNo": "KOA+RK73H2BTTD 7501F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001073",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B1ETTP103J",
     "wclItemNo": "KOA+RK73B1ETTP 103J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001074",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B1ETTP330J",
     "wclItemNo": "KOA+RK73B1ETTP 330J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001075",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B2BTTD102J",
     "wclItemNo": "KOA+RK73B2BTTD 102J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001076",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2BTTD4993F",
     "wclItemNo": "KOA+RK73H2BTTD 4993F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001077",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1ETTP1004F",
     "wclItemNo": "KOA+RK73H1ETTP 1004F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001078",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2BTTD1200F",
     "wclItemNo": "KOA+RK73H2BTTD 1200F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001079",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2BTTD62R0F",
     "wclItemNo": "KOA+RK73H2BTTD 62R0F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001080",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73Z2ATTD",
     "wclItemNo": "KOA+RK73Z2ATTD"
   },
   {
     "id": "00000000-0000-4000-8000-000000001081",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2BTTD4701F",
     "wclItemNo": "KOA+RK73H2BTTD 4701F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001082",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "SG73P2ATTD24R0F",
     "wclItemNo": "KOA+SG73P2ATTD 24R0F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001083",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "SG73P2ATTD6R20F",
     "wclItemNo": "KOA+SG73P2ATTD 6R20F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001084",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2ATTD1001F",
     "wclItemNo": "KOA+RK73H2ATTD 1001F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001085",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JTTD1201F",
     "wclItemNo": "KOA+RK73H1JTTD 1201F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001086",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2BTTD1000F",
     "wclItemNo": "KOA+RK73H2BTTD 1000F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001087",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JTTD3012F",
     "wclItemNo": "KOA+RK73H1JTTD 3012F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001088",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JTTD1502F",
     "wclItemNo": "KOA+RK73H1JTTD 1502F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001089",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "HV732HTTE1004F",
     "wclItemNo": "KOA+HV732HTTE 1004F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001090",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JTTD1372D",
     "wclItemNo": "KOA+RK73H1JTTD 1372D"
   },
   {
     "id": "00000000-0000-4000-8000-000000001091",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "SG73P2BTTD220J",
     "wclItemNo": "KOA+SG73P2BTTD 220J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001092",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "HV73V2BTTD1004D",
     "wclItemNo": "KOA+HV73V2BTTD 1004D"
   },
   {
     "id": "00000000-0000-4000-8000-000000001093",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B2ATTD3R3J",
     "wclItemNo": "KOA+RK73B2ATTD 3R3J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001094",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1ERTTP1003F",
     "wclItemNo": "KOA+RK73H1ERTTP 1003F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001095",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1ETTP3303F",
     "wclItemNo": "KOA+RK73H1ETTP 3303F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001096",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73Z1HTTC",
     "wclItemNo": "KOA+RK73Z1HTTC"
   },
   {
     "id": "00000000-0000-4000-8000-000000001097",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B1HTTC180J",
     "wclItemNo": "KOA+RK73B1HTTC 180J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001098",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B1HTTC330J",
     "wclItemNo": "KOA+RK73B1HTTC 330J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001099",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B1HTTC510J",
     "wclItemNo": "KOA+RK73B1HTTC 510J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001100",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2ATTD62R0F",
     "wclItemNo": "KOA+RK73H2ATTD 62R0F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001101",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "WK73R2BTTD62R0F",
     "wclItemNo": "KOA+WK73R2BTTD 62R0F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001102",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B1HTTC103J",
     "wclItemNo": "KOA+RK73B1HTTC 103J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001103",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1HTTC1003F",
     "wclItemNo": "KOA+RK73H1HTTC 1003F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001104",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1HTTC4701F",
     "wclItemNo": "KOA+RK73H1HTTC 4701F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001105",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1HTTC2400F",
     "wclItemNo": "KOA+RK73H1HTTC 2400F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001106",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1HTTC2000F",
     "wclItemNo": "KOA+RK73H1HTTC 2000F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001107",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1HTTC1431F",
     "wclItemNo": "KOA+RK73H1HTTC 1431F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001108",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "SG73P1JTTD1000F",
     "wclItemNo": "KOA+SG73P1JTTD 1000F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001109",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "SG73P1JTTD51R0F",
     "wclItemNo": "KOA+SG73P1JTTD 51R0F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001110",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1ETTP6801F",
     "wclItemNo": "KOA+RK73H1ETTP 6801F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001111",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "SG73P2ATTD18R0F",
     "wclItemNo": "KOA+SG73P2ATTD 18R0F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001112",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "SG73P2ATTD27R0F",
     "wclItemNo": "KOA+SG73P2ATTD 27R0F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001113",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "SG73P2ATTD13R0F",
     "wclItemNo": "KOA+SG73P2ATTD 13R0F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001114",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "SG73P2ATTD20R0F",
     "wclItemNo": "KOA+SG73P2ATTD 20R0F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001115",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "SG73P2ATTD16R0F",
     "wclItemNo": "KOA+SG73P2ATTD 16R0F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001116",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73HW3ATTE33R0F",
     "wclItemNo": "KOA+RK73HW3ATTE 33R0F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001117",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73HW3ATTE4701F",
     "wclItemNo": "KOA+RK73HW3ATTE 4701F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001118",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JTTD43R0F",
     "wclItemNo": "KOA+RK73H1JTTD 43R0F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001119",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2BTTD1692F",
     "wclItemNo": "KOA+RK73H2BTTD 1692F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001120",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2BRTTD1004F",
     "wclItemNo": "KOA+RK73H2BRTTD 1004F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001121",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B1JTTD103J",
     "wclItemNo": "KOA+RK73B1JTTD 103J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001122",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B1JTTD472J",
     "wclItemNo": "KOA+RK73B1JTTD 472J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001123",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JTTD3001F",
     "wclItemNo": "KOA+RK73H1JTTD 3001F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001124",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B1JTTD122J",
     "wclItemNo": "KOA+RK73B1JTTD 122J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001125",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JTTD2003F",
     "wclItemNo": "KOA+RK73H1JTTD 2003F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001126",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2BTTD2203F",
     "wclItemNo": "KOA+RK73H2BTTD 2203F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001127",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H2BTTD1002F",
     "wclItemNo": "KOA+RK73H2BTTD 1002F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001128",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JTTD2702F",
     "wclItemNo": "KOA+RK73H1JTTD 2702F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001129",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73H1JTTD3902F",
     "wclItemNo": "KOA+RK73H1JTTD 3902F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001130",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B1JTTD104J",
     "wclItemNo": "KOA+RK73B1JTTD 104J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001131",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73B2BTTD334J",
     "wclItemNo": "KOA+RK73B2BTTD 334J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001132",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "SG73P2BTTD2R00F",
     "wclItemNo": "KOA+SG73P2BTTD 2R00F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001133",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "SG73P2BTTD4R70F",
     "wclItemNo": "KOA+SG73P2BTTD 4R70F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001134",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "SG73P2BTTD1R00F",
     "wclItemNo": "KOA+SG73P2BTTD 1R00F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001135",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RN412ESTTE2703F50",
     "wclItemNo": "KOA/RN412ESTTE 2703F50"
   },
   {
     "id": "00000000-0000-4000-8000-000000001136",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RN412ESTTE1R50F50",
     "wclItemNo": "KOA/RN412ESTTE 1R50F50"
   },
   {
     "id": "00000000-0000-4000-8000-000000001137",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "SR732BTTDR365F",
     "wclItemNo": "KOA/SR732BTTD R365F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001138",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "SR732BTTDR845F",
     "wclItemNo": "KOA/SR732BTTD R845F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001139",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "SG73P2BTTD1R0J",
     "wclItemNo": "KOA/SG73P2BTTD 1R0J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001140",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "RK73G1JTTD1071D",
     "wclItemNo": "KOA/RK73G1JTTD 1071D"
   },
   {
     "id": "00000000-0000-4000-8000-000000001141",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "SG73P2BTTD1000F",
     "wclItemNo": "KOA/SG73P2BTTD 1000F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001142",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "SR731JTTDR698F",
     "wclItemNo": "KOA/SR731JTTD R698F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001143",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "SG732BTTD220K",
     "wclItemNo": "KOA/SG732BTTD 220K"
   },
   {
     "id": "00000000-0000-4000-8000-000000001144",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "SG73P2ETTD470J",
     "wclItemNo": "KOA/SG73P2ETTD 470J"
   },
   {
     "id": "00000000-0000-4000-8000-000000001145",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "PCF1/2CT52R103K",
     "wclItemNo": "KOA/PCF1/2CT52R 103K"
   },
   {
     "id": "00000000-0000-4000-8000-000000001146",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "SR733ATTER200F",
     "wclItemNo": "KOA/SR733ATTE R200F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001147",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "SR733ATTER120F",
     "wclItemNo": "KOA/SR733ATTE R120F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001148",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "HV732HTTE6493F",
     "wclItemNo": "KOA/HV732HTTE 6493F"
   },
   {
     "id": "00000000-0000-4000-8000-000000001149",
-    "supplierCode": "KOA+TCG",
+    "brand": "KOA+TCG",
     "partNo": "HV733ATTE1304F",
     "wclItemNo": "KOA/HV733ATTE 1304F"
   }
 ] as const;
 
 export const realReceivingOrders = [
-  { id: "00000000-0000-4000-8000-000000002000", batchNo: "04958184", supplierId: "00000000-0000-4000-8000-000000000028", deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "SZHK1", status: "pending" },
-  { id: "00000000-0000-4000-8000-000000002001", batchNo: "65878", supplierId: "00000000-0000-4000-8000-000000000028", deliveryDate: new Date("2026-07-15"), orgId: 2, subInventoryCode: "STORE1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000002000", batchNo: "04958184", supplierCode: "KOA+TCG", deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "SZHK1", status: "pending" },
+  { id: "00000000-0000-4000-8000-000000002001", batchNo: "65878", supplierCode: "KOA+TCG", deliveryDate: new Date("2026-07-15"), orgId: 2, subInventoryCode: "STORE1", status: "pending" },
 ];
 
 export const realReceivingInvoices = [
-  { id: "00000000-0000-4000-8000-000000003000", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-03", supplierId: "00000000-0000-4000-8000-000000000028", wclCompanyName: "WELTRONICS COMPONENT (MACAO COMMERCIAL) LIMITED", totalQty: 393000, totalCtn: 5, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "GZHK1" },
-  { id: "00000000-0000-4000-8000-000000003001", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-03", supplierId: "00000000-0000-4000-8000-000000000028", wclCompanyName: "WELTRONICS COMPONENT (MACAO COMMERCIAL) LIMITED", totalQty: 365000, totalCtn: 3, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "SZHK1" },
-  { id: "00000000-0000-4000-8000-000000003002", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-04", supplierId: "00000000-0000-4000-8000-000000000028", wclCompanyName: "WELTRONICS COMPONENT (MACAO COMMERCIAL) LIMITED", totalQty: 4370000, totalCtn: 15, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "SZHK1" },
-  { id: "00000000-0000-4000-8000-000000003003", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-05", supplierId: "00000000-0000-4000-8000-000000000028", wclCompanyName: "WELTRONICS COMPONENT (MACAO COMMERCIAL) LIMITED", totalQty: 768000, totalCtn: 4, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "GZHK1" },
-  { id: "00000000-0000-4000-8000-000000003004", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-06", supplierId: "00000000-0000-4000-8000-000000000028", wclCompanyName: "WELTRONICS COMPONENT (MACAO COMMERCIAL) LIMITED", totalQty: 72000, totalCtn: 1, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "SZHK1" },
-  { id: "00000000-0000-4000-8000-000000003005", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-07", supplierId: "00000000-0000-4000-8000-000000000028", wclCompanyName: "WELTRONICS COMPONENT (MACAO COMMERCIAL) LIMITED", totalQty: 1390000, totalCtn: 5, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "SZHK1" },
-  { id: "00000000-0000-4000-8000-000000003006", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-08", supplierId: "00000000-0000-4000-8000-000000000028", wclCompanyName: "WELTRONICS COMPONENT (SERVICES & LOGISTICS) LTD", totalQty: 5395000, totalCtn: 17, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "GZHK2" },
-  { id: "00000000-0000-4000-8000-000000003007", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-08", supplierId: "00000000-0000-4000-8000-000000000028", wclCompanyName: "WELTRONICS COMPONENT (SERVICES & LOGISTICS) LTD", totalQty: 1715000, totalCtn: 8, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "SZHK2" },
-  { id: "00000000-0000-4000-8000-000000003008", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-09", supplierId: "00000000-0000-4000-8000-000000000028", wclCompanyName: "WELTRONICS COMPONENT (SERVICES & LOGISTICS) LTD", totalQty: 404000, totalCtn: 2, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "GZHK2" },
-  { id: "00000000-0000-4000-8000-000000003009", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-10", supplierId: "00000000-0000-4000-8000-000000000028", wclCompanyName: "WELTRONICS COMPONENT (SERVICES & LOGISTICS) LTD", totalQty: 3155000, totalCtn: 8, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "SZHK2" },
-  { id: "00000000-0000-4000-8000-000000003010", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-11", supplierId: "00000000-0000-4000-8000-000000000028", wclCompanyName: "WELTRONICS COMPONENT (SERVICES & LOGISTICS) LTD", totalQty: 117000, totalCtn: 1, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "SZHK2" },
-  { id: "00000000-0000-4000-8000-000000003011", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-12", supplierId: "00000000-0000-4000-8000-000000000028", wclCompanyName: "WELTRONICS COMPONENT (SERVICES & LOGISTICS) LTD", totalQty: 820000, totalCtn: 5, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "GZHK2" },
-  { id: "00000000-0000-4000-8000-000000003012", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-13", supplierId: "00000000-0000-4000-8000-000000000028", wclCompanyName: "WELTRONICS COMPONENT (SERVICES & LOGISTICS) LTD", totalQty: 155000, totalCtn: 2, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "GZHK2" },
-  { id: "00000000-0000-4000-8000-000000003013", receivingOrderId: "00000000-0000-4000-8000-000000002001", invoiceNo: "65878-01", supplierId: "00000000-0000-4000-8000-000000000028", wclCompanyName: "WELTRONICS COMPONENT LTD", totalQty: 36000, totalCtn: 1, deliveryDate: new Date("2026-07-15"), orgId: 2, subInventoryCode: "STORE1" },
-  { id: "00000000-0000-4000-8000-000000003014", receivingOrderId: "00000000-0000-4000-8000-000000002001", invoiceNo: "65878-02", supplierId: "00000000-0000-4000-8000-000000000028", wclCompanyName: "WELTRONICS COMPONENT LTD", totalQty: 15000, totalCtn: 1, deliveryDate: new Date("2026-07-15"), orgId: 2, subInventoryCode: "WSTORE1" },
-  { id: "00000000-0000-4000-8000-000000003015", receivingOrderId: "00000000-0000-4000-8000-000000002001", invoiceNo: "65878-03", supplierId: "00000000-0000-4000-8000-000000000028", wclCompanyName: "WELTRONICS COMPONENT LTD", totalQty: 5000, totalCtn: 1, deliveryDate: new Date("2026-07-15"), orgId: 2, subInventoryCode: "STORE1" },
-  { id: "00000000-0000-4000-8000-000000003016", receivingOrderId: "00000000-0000-4000-8000-000000002001", invoiceNo: "65878-04", supplierId: "00000000-0000-4000-8000-000000000028", wclCompanyName: "WELTRONICS COMPONENT LTD", totalQty: 60000, totalCtn: 1, deliveryDate: new Date("2026-07-15"), orgId: 2, subInventoryCode: "STORE1" },
-  { id: "00000000-0000-4000-8000-000000003017", receivingOrderId: "00000000-0000-4000-8000-000000002001", invoiceNo: "65878-05", supplierId: "00000000-0000-4000-8000-000000000028", wclCompanyName: "WELTRONICS COMPONENT LTD", totalQty: 14000, totalCtn: 2, deliveryDate: new Date("2026-07-15"), orgId: 2, subInventoryCode: "STORE1" },
-  { id: "00000000-0000-4000-8000-000000003018", receivingOrderId: "00000000-0000-4000-8000-000000002001", invoiceNo: "65878-06", supplierId: "00000000-0000-4000-8000-000000000028", wclCompanyName: "WELTRONICS COMPONENT LTD", totalQty: 16000, totalCtn: 1, deliveryDate: new Date("2026-07-15"), orgId: 2, subInventoryCode: "STORE1" },
-  { id: "00000000-0000-4000-8000-000000003019", receivingOrderId: "00000000-0000-4000-8000-000000002001", invoiceNo: "65878-07", supplierId: "00000000-0000-4000-8000-000000000028", wclCompanyName: "WELTRONICS COMPONENT LTD", totalQty: 8000, totalCtn: 1, deliveryDate: new Date("2026-07-15"), orgId: 2, subInventoryCode: "STORE1" },
-  { id: "00000000-0000-4000-8000-000000003020", receivingOrderId: "00000000-0000-4000-8000-000000002001", invoiceNo: "65878-08", supplierId: "00000000-0000-4000-8000-000000000028", wclCompanyName: "WELTRONICS COMPONENT LTD", totalQty: 44000, totalCtn: 1, deliveryDate: new Date("2026-07-15"), orgId: 2, subInventoryCode: "WSTORE1" },
+  { id: "00000000-0000-4000-8000-000000003000", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-03", supplierCode: "KOA+TCG", wclCompanyName: "WELTRONICS COMPONENT (MACAO COMMERCIAL) LIMITED", totalQty: 393000, totalCtn: 5, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "GZHK1" },
+  { id: "00000000-0000-4000-8000-000000003001", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-03", supplierCode: "KOA+TCG", wclCompanyName: "WELTRONICS COMPONENT (MACAO COMMERCIAL) LIMITED", totalQty: 365000, totalCtn: 3, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "SZHK1" },
+  { id: "00000000-0000-4000-8000-000000003002", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-04", supplierCode: "KOA+TCG", wclCompanyName: "WELTRONICS COMPONENT (MACAO COMMERCIAL) LIMITED", totalQty: 4370000, totalCtn: 15, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "SZHK1" },
+  { id: "00000000-0000-4000-8000-000000003003", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-05", supplierCode: "KOA+TCG", wclCompanyName: "WELTRONICS COMPONENT (MACAO COMMERCIAL) LIMITED", totalQty: 768000, totalCtn: 4, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "GZHK1" },
+  { id: "00000000-0000-4000-8000-000000003004", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-06", supplierCode: "KOA+TCG", wclCompanyName: "WELTRONICS COMPONENT (MACAO COMMERCIAL) LIMITED", totalQty: 72000, totalCtn: 1, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "SZHK1" },
+  { id: "00000000-0000-4000-8000-000000003005", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-07", supplierCode: "KOA+TCG", wclCompanyName: "WELTRONICS COMPONENT (MACAO COMMERCIAL) LIMITED", totalQty: 1390000, totalCtn: 5, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "SZHK1" },
+  { id: "00000000-0000-4000-8000-000000003006", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-08", supplierCode: "KOA+TCG", wclCompanyName: "WELTRONICS COMPONENT (SERVICES & LOGISTICS) LTD", totalQty: 5395000, totalCtn: 17, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "GZHK2" },
+  { id: "00000000-0000-4000-8000-000000003007", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-08", supplierCode: "KOA+TCG", wclCompanyName: "WELTRONICS COMPONENT (SERVICES & LOGISTICS) LTD", totalQty: 1715000, totalCtn: 8, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "SZHK2" },
+  { id: "00000000-0000-4000-8000-000000003008", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-09", supplierCode: "KOA+TCG", wclCompanyName: "WELTRONICS COMPONENT (SERVICES & LOGISTICS) LTD", totalQty: 404000, totalCtn: 2, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "GZHK2" },
+  { id: "00000000-0000-4000-8000-000000003009", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-10", supplierCode: "KOA+TCG", wclCompanyName: "WELTRONICS COMPONENT (SERVICES & LOGISTICS) LTD", totalQty: 3155000, totalCtn: 8, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "SZHK2" },
+  { id: "00000000-0000-4000-8000-000000003010", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-11", supplierCode: "KOA+TCG", wclCompanyName: "WELTRONICS COMPONENT (SERVICES & LOGISTICS) LTD", totalQty: 117000, totalCtn: 1, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "SZHK2" },
+  { id: "00000000-0000-4000-8000-000000003011", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-12", supplierCode: "KOA+TCG", wclCompanyName: "WELTRONICS COMPONENT (SERVICES & LOGISTICS) LTD", totalQty: 820000, totalCtn: 5, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "GZHK2" },
+  { id: "00000000-0000-4000-8000-000000003012", receivingOrderId: "00000000-0000-4000-8000-000000002000", invoiceNo: "04958184-W-13", supplierCode: "KOA+TCG", wclCompanyName: "WELTRONICS COMPONENT (SERVICES & LOGISTICS) LTD", totalQty: 155000, totalCtn: 2, deliveryDate: new Date("2026-07-17"), orgId: 2, subInventoryCode: "GZHK2" },
+  { id: "00000000-0000-4000-8000-000000003013", receivingOrderId: "00000000-0000-4000-8000-000000002001", invoiceNo: "65878-01", supplierCode: "KOA+TCG", wclCompanyName: "WELTRONICS COMPONENT LTD", totalQty: 36000, totalCtn: 1, deliveryDate: new Date("2026-07-15"), orgId: 2, subInventoryCode: "STORE1" },
+  { id: "00000000-0000-4000-8000-000000003014", receivingOrderId: "00000000-0000-4000-8000-000000002001", invoiceNo: "65878-02", supplierCode: "KOA+TCG", wclCompanyName: "WELTRONICS COMPONENT LTD", totalQty: 15000, totalCtn: 1, deliveryDate: new Date("2026-07-15"), orgId: 2, subInventoryCode: "WSTORE1" },
+  { id: "00000000-0000-4000-8000-000000003015", receivingOrderId: "00000000-0000-4000-8000-000000002001", invoiceNo: "65878-03", supplierCode: "KOA+TCG", wclCompanyName: "WELTRONICS COMPONENT LTD", totalQty: 5000, totalCtn: 1, deliveryDate: new Date("2026-07-15"), orgId: 2, subInventoryCode: "STORE1" },
+  { id: "00000000-0000-4000-8000-000000003016", receivingOrderId: "00000000-0000-4000-8000-000000002001", invoiceNo: "65878-04", supplierCode: "KOA+TCG", wclCompanyName: "WELTRONICS COMPONENT LTD", totalQty: 60000, totalCtn: 1, deliveryDate: new Date("2026-07-15"), orgId: 2, subInventoryCode: "STORE1" },
+  { id: "00000000-0000-4000-8000-000000003017", receivingOrderId: "00000000-0000-4000-8000-000000002001", invoiceNo: "65878-05", supplierCode: "KOA+TCG", wclCompanyName: "WELTRONICS COMPONENT LTD", totalQty: 14000, totalCtn: 2, deliveryDate: new Date("2026-07-15"), orgId: 2, subInventoryCode: "STORE1" },
+  { id: "00000000-0000-4000-8000-000000003018", receivingOrderId: "00000000-0000-4000-8000-000000002001", invoiceNo: "65878-06", supplierCode: "KOA+TCG", wclCompanyName: "WELTRONICS COMPONENT LTD", totalQty: 16000, totalCtn: 1, deliveryDate: new Date("2026-07-15"), orgId: 2, subInventoryCode: "STORE1" },
+  { id: "00000000-0000-4000-8000-000000003019", receivingOrderId: "00000000-0000-4000-8000-000000002001", invoiceNo: "65878-07", supplierCode: "KOA+TCG", wclCompanyName: "WELTRONICS COMPONENT LTD", totalQty: 8000, totalCtn: 1, deliveryDate: new Date("2026-07-15"), orgId: 2, subInventoryCode: "STORE1" },
+  { id: "00000000-0000-4000-8000-000000003020", receivingOrderId: "00000000-0000-4000-8000-000000002001", invoiceNo: "65878-08", supplierCode: "KOA+TCG", wclCompanyName: "WELTRONICS COMPONENT LTD", totalQty: 44000, totalCtn: 1, deliveryDate: new Date("2026-07-15"), orgId: 2, subInventoryCode: "WSTORE1" },
 ];
 
 export const realReceivingInvoiceItems = [

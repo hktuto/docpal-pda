@@ -71,7 +71,7 @@ test("login: legacy plain-text row is upgraded to scrypt on success", async () =
   await reseed(client);
   const id = crypto.randomUUID();
   await client.db.execute(
-    sql`INSERT INTO users (id, username, password_hash, display_name, created_at)
+    sql`INSERT INTO users (id, username, password_hash, display_name, created_date)
         VALUES (${id}, 'legacy', ${"plain-pass"}, 'Legacy User', now())`
   );
   const res = await login("legacy", "plain-pass");
@@ -240,7 +240,7 @@ test("mutations take the actor from the token, not the body", async () => {
   const adminId = await userIdOf("admin");
   const order = await queryGet<{ id: string }>(
     client.db,
-    sql`SELECT id FROM receiving_orders WHERE batch_no = '04958210'`
+    sql`SELECT id FROM receiving_orders WHERE batch_no = '100001'`
   );
   // Empty body — previously 400 actorId_required; now the token is the actor.
   const confirm = await app.request(`/receiving-orders/${order!.id}/confirm-arrival`, {

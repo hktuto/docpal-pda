@@ -27,7 +27,10 @@ export function useAuth() {
     // (groupCodes) is available before the /auth/me round-trip resolves…
     const stored = getStoredUser();
     if (stored) {
-      currentUser.value = { ...stored, createdAt: null };
+      currentUser.value = {
+        ...stored,
+        createdDate: stored.createdDate ? new Date(stored.createdDate) : null,
+      };
     }
     // …then validate against the server; refreshes groups and clears the
     // session on 401.

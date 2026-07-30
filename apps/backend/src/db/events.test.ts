@@ -48,7 +48,7 @@ test("emitEvent: rolls back with a failed tx, persists on commit", async () => {
 test("pruneEvents: deletes rows older than 3 days, keeps recent ones", async () => {
   await reseed(client);
   await emitEvent(client.db, { type: "test.old", topics: ["/test"] });
-  await client.db.execute(sql`UPDATE app_events SET created_at = now() - interval '4 days'`);
+  await client.db.execute(sql`UPDATE app_events SET created_date = now() - interval '4 days'`);
   await emitEvent(client.db, { type: "test.fresh", topics: ["/test"] });
   await pruneEvents(client.db);
   const all = await fetchEventsSince(client.db, 0);

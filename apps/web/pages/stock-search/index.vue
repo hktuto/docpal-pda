@@ -25,9 +25,9 @@
       <div v-if="filtersExpanded" class="filters-panel__body">
         <label class="field">
           <span>{{ $t('stockSearch.filterSupplier') }}</span>
-          <select v-model="selectedSupplierId">
+          <select v-model="selectedSupplierCode">
             <option value="">{{ $t('stockSearch.allSuppliers') }}</option>
-            <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.name }}</option>
+            <option v-for="s in suppliers" :key="s.id" :value="s.code">{{ s.name }}</option>
           </select>
         </label>
 
@@ -96,7 +96,7 @@ const parts = ref<StockSearchPart[]>([]);
 const lots = ref<StockSearchLot[]>([]);
 
 const partNo = ref("");
-const selectedSupplierId = ref("");
+const selectedSupplierCode = ref("");
 const shelfCode = ref("");
 const filtersExpanded = ref(false);
 
@@ -119,7 +119,7 @@ async function load() {
   error.value = null;
   try {
     const result = await warehouse.searchStock({
-      supplierId: selectedSupplierId.value || undefined,
+      supplierCode: selectedSupplierCode.value || undefined,
       partNo: partNo.value.trim() || undefined,
       shelfCode: shelfCode.value.trim() || undefined,
     });
@@ -142,7 +142,7 @@ onMounted(async () => {
   }
 });
 
-watch([partNo, selectedSupplierId, shelfCode], load);
+watch([partNo, selectedSupplierCode, shelfCode], load);
 
 useVisibleReload(load);
 

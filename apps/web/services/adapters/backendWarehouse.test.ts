@@ -685,7 +685,7 @@ describe('backendWarehouse measuring flow', () => {
         shipTo: 'ACME HK',
         boxCount: 2,
         closedBoxCount: 1,
-        createdAt: '2026-07-17T10:00:00.000Z',
+        createdDate: '2026-07-17T10:00:00.000Z',
       },
     ];
     fetchMock.mockResolvedValue(jsonResponse(rows));
@@ -697,7 +697,7 @@ describe('backendWarehouse measuring flow', () => {
 
   it('getMeasuringTask GETs the consolidated detail', async () => {
     const detail = {
-      task: { id: 'mt1', status: 'pending', pickingOrderId: 'po1', createdAt: '2026-07-17T10:00:00.000Z' },
+      task: { id: 'mt1', status: 'pending', pickingOrderId: 'po1', createdDate: '2026-07-17T10:00:00.000Z' },
       order: {
         id: 'po1',
         orderNo: 'SO-2026-0001',
@@ -781,7 +781,7 @@ describe('backendWarehouse verify flow', () => {
 
   it('getVerifyTask GETs the consolidated detail', async () => {
     const detail = {
-      task: { id: 'vt1', status: 'pending', pickingOrderId: 'po1', createdAt: '2026-07-28T10:00:00.000Z' },
+      task: { id: 'vt1', status: 'pending', pickingOrderId: 'po1', createdDate: '2026-07-28T10:00:00.000Z' },
       order: {
         id: 'po1',
         orderNo: 'SO-2026-0001',
@@ -932,7 +932,7 @@ describe('backendWarehouse goods verify flow', () => {
         status: 'pending',
         verifiedBy: null,
         verifiedAt: null,
-        createdAt: '2026-07-17T10:00:00.000Z',
+        createdDate: '2026-07-17T10:00:00.000Z',
       },
       lot: {
         id: 'lot1',
@@ -1016,12 +1016,12 @@ describe('backendWarehouse stock search flow', () => {
     expect(lastCall().url).toBe(`${BASE_URL}/stock-search?partNo=RK73`);
 
     await service().searchStock({
-      supplierId: 'sup1',
+      supplierCode: 'KOA',
       partNo: 'RK73',
       shelfCode: 'A-01-01',
     });
     expect(lastCall().url).toBe(
-      `${BASE_URL}/stock-search?supplierId=sup1&partNo=RK73&shelfCode=A-01-01`
+      `${BASE_URL}/stock-search?supplierCode=KOA&partNo=RK73&shelfCode=A-01-01`
     );
   });
 
@@ -1139,8 +1139,8 @@ describe('backendWarehouse box search', () => {
 
   it('searchBoxes GETs /boxes with the q param and returns rows verbatim', async () => {
     const rows = [
-      { kind: 'shipping', id: 'BOX-S-20260720-0001', status: 'open', createdAt: '2026-07-20T01:00:00.000Z', orderNo: 'SO-2026-0001' },
-      { kind: 'shelf', id: 'BOX-H-20260720-0001', status: 'open', createdAt: '2026-07-20T01:01:00.000Z', orderNo: '04958210' },
+      { kind: 'shipping', id: 'BOX-S-20260720-0001', status: 'open', createdDate: '2026-07-20T01:00:00.000Z', orderNo: 'SO-2026-0001' },
+      { kind: 'shelf', id: 'BOX-H-20260720-0001', status: 'open', createdDate: '2026-07-20T01:01:00.000Z', orderNo: '04958210' },
     ];
     fetchMock.mockResolvedValue(jsonResponse(rows));
 

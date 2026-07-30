@@ -1,11 +1,25 @@
 <template>
   <div>
-    <input
-      v-model="search"
-      class="search"
-      type="text"
-      :placeholder="$t('common.searchByRefPoOrCustomer')"
-    />
+    <div class="search-row">
+      <input
+        v-model="search"
+        class="search"
+        type="text"
+        :placeholder="$t('common.searchByRefPoOrCustomer')"
+      />
+      <button
+        type="button"
+        class="filter-btn"
+        :class="{ 'filter-btn--active': hasActiveFilter }"
+        :aria-label="$t('picking.filter.title')"
+        @click="filterOpen = true"
+      >
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
+        </svg>
+        <span v-if="hasActiveFilter" class="filter-btn__dot" aria-hidden="true"></span>
+      </button>
+    </div>
 
     <p v-if="loading" class="empty">{{ $t('common.loading') }}</p>
     <p v-else-if="loadError" class="empty" style="color: var(--danger);">{{ $t('common.errorPrefix', { message: loadError }) }}</p>
@@ -30,7 +44,12 @@
             {{ po.orderNo }}
           </NuxtLink>
         </div>
-        <span class="badge" :class="badgeClass(po.status)">{{ statusLabel.picking(po.status) }}</span>
+        <div style="display: flex; align-items: center; gap: 0.4rem;">
+          <span class="badge" :class="badgeClass(po.status)">{{ statusLabel.picking(po.status) }}</span>
+          <span v-if="isSelectable(po.status)" class="badge" :class="badgeClass(po.allocationStatus)">
+            {{ statusLabel.allocation(po.allocationStatus) }}
+          </span>
+        </div>
       </div>
       <p class="list-card__meta">
         {{ [po.customerCode, po.poNo].filter(Boolean).join(' · ') || $t('common.noData') }}
@@ -56,6 +75,13 @@
       :orders="selectedOrders"
       :saving="reporting"
       @saved="onReportSaved"
+    />
+
+    <PickingFilterModal
+      v-model="filterOpen"
+      :statuses="filterStatuses"
+      :allocation="filterAllocation"
+      @apply="onFilterApply"
     />
   </div>
 </template>
@@ -87,6 +113,19 @@ const reportMessage = ref<string | null>(null);
 const selectedIds = ref<Set<string>>(new Set());
 const modalOpen = ref(false);
 const reporting = ref(false);
+const filterOpen = ref(false);
+// Applied list filters; an empty array means "no filter" for that group.
+const filterStatuses = ref<string[]>([]);
+const filterAllocation = ref<string[]>([]);
+
+const hasActiveFilter = computed(
+  () => filterStatuses.value.length > 0 || filterAllocation.value.length > 0
+);
+
+function onFilterApply(payload: { statuses: string[]; allocation: string[] }) {
+  filterStatuses.value = payload.statuses;
+  filterAllocation.value = payload.allocation;
+}
 
 async function load() {
   loading.value = true;
@@ -103,9 +142,16 @@ async function load() {
 }
 
 const rows = computed(() => {
+  let list = rawRows.value;
+  if (filterStatuses.value.length > 0) {
+    list = list.filter((r) => filterStatuses.value.includes(r.status));
+  }
+  if (filterAllocation.value.length > 0) {
+    list = list.filter((r) => filterAllocation.value.includes(r.allocationStatus));
+  }
   const term = search.value.trim().toLowerCase();
-  if (!term) return rawRows.value;
-  return rawRows.value.filter(
+  if (!term) return list;
+  return list.filter(
     (r) =>
       r.orderNo.toLowerCase().includes(term) ||
       (r.poNo?.toLowerCase().includes(term) ?? false) ||
@@ -122,7 +168,7 @@ const selectedOrders = computed(() =>
 const hasSelection = computed(() => selectedOrders.value.length > 0);
 
 function isSelectable(status: string) {
-  return status !== "finished" && status !== "issue";
+  return status !== "finished" && status !== "issue" && status !== "shipped";
 }
 
 function toggleSelection(id: string) {
@@ -180,6 +226,46 @@ useVisibleReload(load, ["/picking-orders"]);
 </script>
 
 <style scoped>
+.search-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.search-row .search {
+  flex: 1;
+}
+
+.filter-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.filter-btn--active {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.filter-btn__dot {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--primary);
+}
+
 .list-card__title:hover {
   text-decoration: underline;
 }

@@ -12,6 +12,7 @@ import {
   addAllUnboxedToShippingBox,
   addPackageToBox,
   cancelShippingBox,
+  claimShelfBox,
   closeShippingBox,
   createShippingBox,
   finishPickingOrder,
@@ -107,18 +108,18 @@ async function catchHttp(p: Promise<unknown>): Promise<HTTPException> {
   assert.fail("expected HTTPException");
 }
 
-/** The seeded pending order (SO-2026-0001) with allocations computed. */
+/** The seeded pending order (SO-DEMO-0001) with allocations computed. */
 async function seededOrderAllocated(): Promise<{ orderId: string; actorId: string }> {
   const actorId = await actorIdOf();
   await allocateAll(client.db);
-  return { orderId: await pickingOrderIdOf("SO-2026-0001"), actorId };
+  return { orderId: await pickingOrderIdOf("SO-DEMO-0001"), actorId };
 }
 
 /** Insert a bare picking order via SQL (business-key parts). */
 async function insertPickingOrder(orderNo: string, status: string): Promise<string> {
   const id = randomUUID();
   await client.db.execute(
-    sql`INSERT INTO picking_orders (id, order_no, status, created_at, updated_at)
+    sql`INSERT INTO picking_orders (id, order_no, status, created_date, last_update_date)
         VALUES (${id}, ${orderNo}, ${status}, now(), now())`
   );
   return id;
@@ -127,7 +128,7 @@ async function insertPickingOrder(orderNo: string, status: string): Promise<stri
 async function insertPickingItem(orderId: string, partNo: string, qty: number): Promise<string> {
   const id = randomUUID();
   await client.db.execute(
-    sql`INSERT INTO picking_items (id, picking_order_id, part_no, qty, created_at, updated_at)
+    sql`INSERT INTO picking_items (id, picking_order_id, part_no, qty, created_date, last_update_date)
         VALUES (${id}, ${orderId}, ${partNo}, ${qty}, now(), now())`
   );
   return id;
@@ -138,21 +139,21 @@ async function insertPickingItem(orderId: string, partNo: string, qty: number): 
 test("list: seeded order with item/qty counts; status filter", async () => {
   await reseed(client);
   const { orderId } = await seededOrderAllocated();
-  // keep the demo world hermetic: drop the new_seed real-data picking orders
+  // keep the demo world hermetic: drop the other seeded picking order
   await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${orderId}`);
 
   const rows = await listPickingOrders(client.db);
   assert.equal(rows.length, 1);
   const row = rows[0];
   assert.equal(row.id, orderId);
-  assert.equal(row.orderNo, "SO-2026-0001");
+  assert.equal(row.orderNo, "SO-DEMO-0001");
   assert.equal(row.status, "pending");
-  assert.equal(row.poNo, "CUST-PO-8899");
+  assert.equal(row.poNo, "CUST-PO-9001");
   assert.equal(row.shipTo, "ACME Electronics (HK)");
   assert.equal(row.customerCode, "ACME");
   assert.ok(row.deliveryDate);
   assert.equal(row.itemCount, 2);
-  assert.equal(row.totalQty, 3000);
+  assert.equal(row.totalQty, 1500);
   assert.equal(row.pickedQty, 0);
 
   assert.equal((await listPickingOrders(client.db, "pending")).length, 1);
@@ -166,7 +167,7 @@ test("detail: nested shape — order, measuringTask, items with allocations/pack
   const { orderId } = await seededOrderAllocated();
 
   const detail = await getPickingOrderDetail(client.db, orderId);
-  assert.equal(detail.orderNo, "SO-2026-0001");
+  assert.equal(detail.orderNo, "SO-DEMO-0001");
   assert.equal(detail.status, "pending");
   assert.equal(detail.customerCode, "ACME");
   assert.equal(detail.issueReason, null);
@@ -178,29 +179,29 @@ test("detail: nested shape — order, measuringTask, items with allocations/pack
   const [item1, item2] = detail.items;
   assert.equal(item1.partNo, "RK73H1JTTD1002F");
   assert.equal(item1.wclItemNo, "RK73H1JTTD1002F");
-  assert.equal(item1.qty, 2000);
+  assert.equal(item1.qty, 1000);
   assert.equal(item1.pickedQty, 0);
-  assert.equal(item1.allocatedQty, 2000);
+  assert.equal(item1.allocatedQty, 1000);
   assert.equal(item2.partNo, "RK73H1JTTD2202F");
-  assert.equal(item2.qty, 1000);
-  assert.equal(item2.allocatedQty, 1000);
+  assert.equal(item2.qty, 500);
+  assert.equal(item2.allocatedQty, 500);
 
   assert.equal(item1.allocations.length, 1);
   const alloc = item1.allocations[0];
-  assert.equal(alloc.qty, 2000);
+  assert.equal(alloc.qty, 1000);
   assert.equal(alloc.receivingInvoiceItemId, null);
   assert.equal(alloc.receivingOrderId, null);
   assert.equal(alloc.boxId, null);
   assert.ok(alloc.lot);
   assert.equal(alloc.lot.shelfCode, "A-01-01");
-  assert.equal(alloc.lot.boxId, "BOX-0001");
-  assert.equal(alloc.lot.dateCode, "2601");
-  assert.equal(alloc.lot.lotCode, "L2601A");
+  assert.equal(alloc.lot.boxId, "BOX-H-20260701-0001");
+  assert.equal(alloc.lot.dateCode, "2603");
+  assert.equal(alloc.lot.lotCode, "L2603A");
   assert.equal(alloc.lot.coo, "JP");
   assert.equal(alloc.lot.cow, "JP");
-  assert.equal(alloc.lot.totalQty, 10000);
-  assert.equal(alloc.lot.allocatedQty, 2000);
-  assert.equal(alloc.lot.availableQty, 8000);
+  assert.equal(alloc.lot.totalQty, 1000);
+  assert.equal(alloc.lot.allocatedQty, 1000);
+  assert.equal(alloc.lot.availableQty, 0);
   assert.equal(item1.packages.length, 0);
 
   const notFound = await catchHttp(getPickingOrderDetail(client.db, randomUUID()));
@@ -215,7 +216,7 @@ test("scan: lot source — package + batch snapshot, lot/allocation shrink, PICK
   const { orderId, actorId } = await seededOrderAllocated();
   const itemId = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
   const alloc = await allocationOf(itemId);
-  assert.equal(alloc.qty, 2000);
+  assert.equal(alloc.qty, 1000);
   assert.ok(alloc.inventoryLotId);
   const lotId = alloc.inventoryLotId;
 
@@ -247,8 +248,8 @@ test("scan: lot source — package + batch snapshot, lot/allocation shrink, PICK
   assert.equal(pkg.sourceType, "inventory_lot");
   assert.equal(pkg.sourceId, lotId);
   assert.equal(pkg.qty, 500);
-  assert.equal(pkg.dateCode, "2601");
-  assert.equal(pkg.lotCode, "L2601A");
+  assert.equal(pkg.dateCode, "2603");
+  assert.equal(pkg.lotCode, "L2603A");
   assert.equal(pkg.coo, "JP");
   assert.equal(pkg.cow, "JP");
   assert.equal(pkg.verified, false);
@@ -259,9 +260,9 @@ test("scan: lot source — package + batch snapshot, lot/allocation shrink, PICK
     client.db,
     sql`SELECT total_qty AS "totalQty", allocated_qty AS "allocatedQty" FROM inventory_lots WHERE id = ${lotId}`
   );
-  assert.deepEqual(lot, { totalQty: 9500, allocatedQty: 1500 });
-  assert.equal((await allocationOf(itemId)).qty, 1500);
-  assert.deepEqual(await itemStateOf(itemId), { pickedQty: 0, allocatedQty: 1500 }); // unboxed ⇒ not picked
+  assert.deepEqual(lot, { totalQty: 500, allocatedQty: 500 });
+  assert.equal((await allocationOf(itemId)).qty, 500);
+  assert.deepEqual(await itemStateOf(itemId), { pickedQty: 0, allocatedQty: 500 }); // unboxed ⇒ not picked
 
   // PICK ledger rows: reserved −qty AND on_hand −qty
   const txns = await queryAll<{
@@ -290,11 +291,11 @@ test("scan: lot source — package + batch snapshot, lot/allocation shrink, PICK
   for (const t of txns) {
     assert.equal(t.lotId, lotId);
     assert.equal(t.shelfCode, "A-01-01");
-    assert.equal(t.boxId, "BOX-0001");
+    assert.equal(t.boxId, "BOX-H-20260701-0001");
     assert.equal(t.referenceType, "picking_item");
     assert.equal(t.referenceId, itemId);
     assert.equal(t.actorId, actorId);
-    assert.equal(t.dateCode, "2601");
+    assert.equal(t.dateCode, "2603");
     assert.equal(t.txnReason, "pick");
   }
 
@@ -330,13 +331,13 @@ test("scan: lot source — package + batch snapshot, lot/allocation shrink, PICK
   );
   assert.equal(pkg2!.lotCode, "L-OVR");
   assert.equal(pkg2!.coo, "CN");
-  assert.equal(pkg2!.dateCode, "2601"); // untouched fields still snapshot the source
+  assert.equal(pkg2!.dateCode, "2603"); // untouched fields still snapshot the source
 });
 
 test("scan guards: over-allocation, over-required, ownership, actor, qty, order status", async () => {
   await reseed(client);
   const { orderId, actorId } = await seededOrderAllocated();
-  const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F"); // qty 2000
+  const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F"); // qty 1000
   const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F");
   const alloc1 = await allocationOf(item1);
   const alloc2 = await allocationOf(item2);
@@ -363,16 +364,19 @@ test("scan guards: over-allocation, over-required, ownership, actor, qty, order 
   assert.equal(badActor.message, "actor_not_found");
 
   // shrink the allocation, then qty > remaining allocation → 409
-  await scanPickingItem(client.db, item1, { actorId, allocationId: alloc1.id, qty: 1500 });
+  await scanPickingItem(client.db, item1, { actorId, allocationId: alloc1.id, qty: 500 });
   const overRemaining = await catchHttp(scanPickingItem(client.db, item1, { actorId, allocationId: alloc1.id, qty: 501 }));
   assert.equal(overRemaining.status, 409);
   assert.equal(overRemaining.message, "scanned_qty_exceeds_allocation");
 
-  // packaged (2000 = item qty after the next scan) + qty > item.qty with a
+  // packaged (1000 = item qty after the next scan) + qty > item.qty with a
   // second allocation present → 409 scan_qty_exceeds_required
-  const lot2 = (await queryGet<{ id: string }>(client.db, sql`SELECT id FROM inventory_lots WHERE box_id = 'BOX-0002'`))!;
+  const lot2 = (await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT id FROM inventory_lots WHERE box_id = 'BOX-H-20260701-0002' AND part_no = 'RK73B1JTTD181G'`
+  ))!;
   await client.db.execute(
-    sql`INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, created_at, updated_at)
+    sql`INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, created_date, last_update_date)
         VALUES (${randomUUID()}, ${item1}, ${lot2.id}, 100, now(), now())`
   );
   const extraAlloc = (await queryAll<AllocRow>(
@@ -381,7 +385,7 @@ test("scan guards: over-allocation, over-required, ownership, actor, qty, order 
                receiving_invoice_item_id AS "receivingInvoiceItemId", receiving_order_id AS "receivingOrderId"
         FROM allocations WHERE picking_item_id = ${item1} AND inventory_lot_id = ${lot2.id}`
   ))[0];
-  await scanPickingItem(client.db, item1, { actorId, allocationId: alloc1.id, qty: 500 }); // packaged = 2000
+  await scanPickingItem(client.db, item1, { actorId, allocationId: alloc1.id, qty: 500 }); // packaged = 1000
   const overRequired = await catchHttp(scanPickingItem(client.db, item1, { actorId, allocationId: extraAlloc.id, qty: 100 }));
   assert.equal(overRequired.status, 409);
   assert.equal(overRequired.message, "scan_qty_exceeds_required");
@@ -413,9 +417,9 @@ test("remove package: reverses lot/allocation/ledger; guards", async () => {
     client.db,
     sql`SELECT total_qty AS "totalQty", allocated_qty AS "allocatedQty" FROM inventory_lots WHERE id = ${lotId}`
   );
-  assert.deepEqual(lot, { totalQty: 10000, allocatedQty: 2000 });
-  assert.equal((await allocationOf(itemId)).qty, 2000);
-  assert.deepEqual(await itemStateOf(itemId), { pickedQty: 0, allocatedQty: 2000 });
+  assert.deepEqual(lot, { totalQty: 1000, allocatedQty: 1000 });
+  assert.equal((await allocationOf(itemId)).qty, 1000);
+  assert.deepEqual(await itemStateOf(itemId), { pickedQty: 0, allocatedQty: 1000 });
   assert.equal(await queryGet(client.db, sql`SELECT id FROM picking_packages WHERE id = ${packageIds[0]}`), undefined);
 
   // reverse ledger rows (+qty)
@@ -507,10 +511,13 @@ test("boxes: membership add/remove, cancel; guards incl. different orders", asyn
   // package of a different picking order → 409
   const otherOrderId = await insertPickingOrder("SO-X-OTHER", "pending");
   const otherItemId = await insertPickingItem(otherOrderId, "RK73H1JTTD1002F", 100);
-  const lotId = (await queryGet<{ id: string }>(client.db, sql`SELECT id FROM inventory_lots WHERE box_id = 'BOX-0001'`))!.id;
+  const lotId = (await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT id FROM inventory_lots WHERE box_id = 'BOX-H-20260701-0001' AND part_no = 'RK73H1JTTD1002F'`
+  ))!.id;
   const otherPkgId = randomUUID();
   await client.db.execute(
-    sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, created_at, updated_at)
+    sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, created_date, last_update_date)
         VALUES (${otherPkgId}, ${otherItemId}, ${otherOrderId}, 'inventory_lot', ${lotId}, 100, now(), now())`
   );
   const otherOrder = await catchHttp(addPackageToBox(client.db, { shippingBoxId: boxA.id, packageId: otherPkgId, actorId }));
@@ -557,8 +564,8 @@ test("close flow: add-all-unboxed auto-finishes; verify → measure → close ca
   const { orderId, actorId } = await seededOrderAllocated();
   const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
   const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F");
-  const p1 = (await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 2000 })).packageIds[0];
-  const p2 = (await scanPickingItem(client.db, item2, { actorId, allocationId: (await allocationOf(item2)).id, qty: 1000 })).packageIds[0];
+  const p1 = (await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 1000 })).packageIds[0];
+  const p2 = (await scanPickingItem(client.db, item2, { actorId, allocationId: (await allocationOf(item2)).id, qty: 500 })).packageIds[0];
 
   const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
   const emptyClose = await catchHttp(closeShippingBox(client.db, { shippingBoxId: box.id, actorId }));
@@ -580,7 +587,7 @@ test("close flow: add-all-unboxed auto-finishes; verify → measure → close ca
   const orderLogs = await queryAll<{ fromState: string | null; toState: string }>(
     client.db,
     sql`SELECT from_state AS "fromState", to_state AS "toState"
-        FROM transaction_logs WHERE entity_type = 'picking_order' AND entity_id = ${orderId} ORDER BY created_at, id`
+        FROM transaction_logs WHERE entity_type = 'picking_order' AND entity_id = ${orderId} ORDER BY created_date, id`
   );
   assert.deepEqual(
     orderLogs.map((l) => [l.fromState, l.toState]),
@@ -641,8 +648,8 @@ test("close flow: add-all-unboxed auto-finishes; verify → measure → close ca
   assert.equal(detail.boxes[0].status, "closed");
   assert.equal(detail.boxes[0].boxSize, "26 X 20 X 20");
   assert.equal(detail.boxes[0].packageCount, 2);
-  assert.equal(detail.items[0].pickedQty, 2000);
-  assert.equal(detail.items[1].pickedQty, 1000);
+  assert.equal(detail.items[0].pickedQty, 1000);
+  assert.equal(detail.items[1].pickedQty, 500);
 
   const again = await catchHttp(closeShippingBox(client.db, { shippingBoxId: box.id, actorId }));
   assert.equal(again.status, 409);
@@ -666,7 +673,7 @@ test("finish: explicit finish + guards (unfinished, empty, task exists, already 
 
   const taskOrderId = await insertPickingOrder("SO-MT", "picking");
   await client.db.execute(
-    sql`INSERT INTO measuring_tasks (id, picking_order_id, status, created_at)
+    sql`INSERT INTO measuring_tasks (id, picking_order_id, status, created_date)
         VALUES (${randomUUID()}, ${taskOrderId}, 'pending', now())`
   );
   const taskExists = await catchHttp(finishPickingOrder(client.db, { pickingOrderId: taskOrderId, actorId }));
@@ -676,8 +683,8 @@ test("finish: explicit finish + guards (unfinished, empty, task exists, already 
   // finish the seeded order fully by hand: scan all + box all, then explicit finish
   const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
   const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F");
-  await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 2000 });
-  await scanPickingItem(client.db, item2, { actorId, allocationId: (await allocationOf(item2)).id, qty: 1000 });
+  await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 1000 });
+  await scanPickingItem(client.db, item2, { actorId, allocationId: (await allocationOf(item2)).id, qty: 500 });
   const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
   await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId }); // auto-finishes here
 
@@ -712,8 +719,8 @@ test("verify: guard cascade — unboxed, no task, ok, duplicate, closed box", as
   assert.equal(noTask.message, "no_pending_measure_or_verify_task");
 
   // finish the order (auto) so the measuring task exists
-  const p2 = (await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 1500 })).packageIds[0];
-  const p3 = (await scanPickingItem(client.db, item2, { actorId, allocationId: (await allocationOf(item2)).id, qty: 1000 })).packageIds[0];
+  const p2 = (await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 500 })).packageIds[0];
+  const p3 = (await scanPickingItem(client.db, item2, { actorId, allocationId: (await allocationOf(item2)).id, qty: 500 })).packageIds[0];
   await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
 
   await verifyPackage(client.db, { packageId: p1, actorId });
@@ -758,16 +765,25 @@ test("verify: guard cascade — unboxed, no task, ok, duplicate, closed box", as
 test("scan from receiving sources: order-level (no box) and box-level allocations", async () => {
   await reseed(client);
   const actorId = await actorIdOf();
-  const roId = await receivingOrderIdOf("04958210"); // DAITO, pending in the seed
+  const roId = await receivingOrderIdOf("100002"); // KOA, pending in the seed
 
-  // give the P413 line a box → its allocation becomes box-level; the other
-  // line (no box) pools into an order-level allocation
-  const p413ItemId = await receivingItemIdOf(roId, "P413");
-  await client.db.execute(sql`UPDATE receiving_invoice_items SET ctn_no = 'BOX-DAI-1' WHERE id = ${p413ItemId}`);
+  // keep the world hermetic: the seeded SO-DEMO-0002 competes for the same
+  // parts, and its shelf stock would win FIFO before the receiving sources
+  // under test
+  await client.db.execute(sql`DELETE FROM picking_orders WHERE order_no = 'SO-DEMO-0002'`);
+  await client.db.execute(sql`DELETE FROM inventory_lots WHERE box_id = 'BOX-H-20260701-0002'`);
+
+  // give the RK73H1JTTD4702F line a box → its allocation becomes box-level;
+  // the 181G line (no box, qty raised to cover the demand) pools into an
+  // order-level allocation
+  const f4702ItemId = await receivingItemIdOf(roId, "RK73H1JTTD4702F");
+  await client.db.execute(sql`UPDATE receiving_invoice_items SET ctn_no = 'BOX-KOA-1' WHERE id = ${f4702ItemId}`);
+  const g181ItemId = await receivingItemIdOf(roId, "RK73B1JTTD181G");
+  await client.db.execute(sql`UPDATE receiving_invoice_items SET ctn_no = NULL, line_qty = 1000 WHERE id = ${g181ItemId}`);
 
   const orderId = await insertPickingOrder("SO-2026-0002", "pending");
   const itemA = await insertPickingItem(orderId, "RK73B1JTTD181G", 1000); // order-level source
-  const itemB = await insertPickingItem(orderId, "P413", 500); // box-level source
+  const itemB = await insertPickingItem(orderId, "RK73H1JTTD4702F", 500); // box-level source
 
   await confirmReceivingArrival(client.db, roId, actorId);
   await allocateAll(client.db);
@@ -779,7 +795,7 @@ test("scan from receiving sources: order-level (no box) and box-level allocation
   assert.equal(allocA.receivingOrderId, roId);
   const allocB = await allocationOf(itemB);
   assert.equal(allocB.qty, 500);
-  assert.equal(allocB.receivingInvoiceItemId, p413ItemId);
+  assert.equal(allocB.receivingInvoiceItemId, f4702ItemId);
   assert.equal(allocB.receivingOrderId, null);
 
   // --- order-level scan: FIFO distribution across the order's lines for the part
@@ -794,7 +810,7 @@ test("scan from receiving sources: order-level (no box) and box-level allocation
   assert.equal(pkgA.sourceType, "receiving_order");
   assert.equal(pkgA.sourceId, roId);
   assert.equal(pkgA.qty, 600);
-  assert.equal(pkgA.dateCode, "2610"); // batch snapshot from the consumed line
+  assert.equal(pkgA.dateCode, "2607"); // batch snapshot from the consumed line
   assert.equal(pkgA.coo, "JP");
 
   const resItem = await receivingItemIdOf(roId, "RK73B1JTTD181G");
@@ -828,11 +844,11 @@ test("scan from receiving sources: order-level (no box) and box-level allocation
         FROM picking_packages WHERE id = ${scanB.packageIds[0]}`
   );
   assert.equal(pkgB!.sourceType, "receiving_invoice_item");
-  assert.equal(pkgB!.sourceId, p413ItemId);
-  assert.equal(pkgB!.dateCode, "2612");
+  assert.equal(pkgB!.sourceId, f4702ItemId);
+  assert.equal(pkgB!.dateCode, "2607");
   const riiB = await queryGet<{ pickedQty: number }>(
     client.db,
-    sql`SELECT picked_qty AS "pickedQty" FROM receiving_invoice_items WHERE id = ${p413ItemId}`
+    sql`SELECT picked_qty AS "pickedQty" FROM receiving_invoice_items WHERE id = ${f4702ItemId}`
   );
   assert.equal(riiB!.pickedQty, 200);
   const boxTxn = await queryGet<{ boxId: string | null; riiId: string | null }>(
@@ -840,8 +856,8 @@ test("scan from receiving sources: order-level (no box) and box-level allocation
     sql`SELECT box_id AS "boxId", receiving_invoice_item_id AS "riiId"
         FROM inventory_transactions WHERE txn_type = 'PICK' AND reference_id = ${itemB} AND qty_type = 'on_hand'`
   );
-  assert.equal(boxTxn!.boxId, "BOX-DAI-1");
-  assert.equal(boxTxn!.riiId, p413ItemId);
+  assert.equal(boxTxn!.boxId, "BOX-KOA-1");
+  assert.equal(boxTxn!.riiId, f4702ItemId);
 
   // --- removal of an order-level package credits the line back + restores the allocation
   await removeScannedPackage(client.db, { packageId: scanA.packageIds[0], actorId });
@@ -893,7 +909,7 @@ test("report-issues: reported/skipped, issue fields + log; validations", async (
   const fullQty = await catchHttp(
     reportPickingOrderIssues(client.db, {
       actorId,
-      entries: [{ pickingOrderId: orderId, reason: "insufficient_stock", qty: 3000 }], // = totalQty
+      entries: [{ pickingOrderId: orderId, reason: "insufficient_stock", qty: 1500 }], // = totalQty
     })
   );
   assert.equal(fullQty.status, 400);
@@ -967,6 +983,9 @@ test("report-issues: reported/skipped, issue fields + log; validations", async (
 test("resolve-issue: report → resolve → pending, issue fields cleared, log; allocation restored", async () => {
   await reseed(client);
   const { orderId, actorId } = await seededOrderAllocated();
+  // keep the demo world hermetic: drop the other seeded picking order so the
+  // demand counts below only reflect this order
+  await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${orderId}`);
   const itemId = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
   assert.ok((await itemStateOf(itemId)).allocatedQty > 0);
 
@@ -984,7 +1003,7 @@ test("resolve-issue: report → resolve → pending, issue fields cleared, log; 
     actorId,
     resolutionNote: " label re-printed ",
   });
-  assert.deepEqual(resolved, { id: orderId, orderNo: "SO-2026-0001", status: "pending" });
+  assert.deepEqual(resolved, { id: orderId, orderNo: "SO-DEMO-0001", status: "pending" });
 
   const order = await queryGet<{
     status: string;
@@ -1054,7 +1073,7 @@ test("resolve-issue: report → resolve → pending, issue fields cleared, log; 
 
 test("work lock: acquire, same-user refresh, 409 other user, release, expired re-acquire", async () => {
   await reseed(client);
-  const orderId = await pickingOrderIdOf("SO-2026-0001");
+  const orderId = await pickingOrderIdOf("SO-DEMO-0001");
   const operator = await actorIdOf("operator");
   const admin = await actorIdOf("admin");
 
@@ -1105,11 +1124,11 @@ test("work lock: finishing the order clears the lock", async () => {
   await acquireWorkLock(client.db, { orderId, actorId });
   const boxId = randomUUID();
   await client.db.execute(
-    sql`INSERT INTO shipping_boxes (id, picking_order_id, status, created_at, updated_at)
+    sql`INSERT INTO shipping_boxes (id, picking_order_id, status, created_date, last_update_date)
         VALUES (${boxId}, ${orderId}, 'open', now(), now())`
   );
   await client.db.execute(
-    sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, shipping_box_id, created_at, updated_at)
+    sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, shipping_box_id, created_date, last_update_date)
         VALUES (${randomUUID()}, ${itemId}, ${orderId}, 'inventory_lot', 'test-lot', 5, ${boxId}, now(), now())`
   );
   await client.db.execute(sql`UPDATE picking_items SET picked_qty = 5 WHERE id = ${itemId}`);
@@ -1126,7 +1145,7 @@ test("work lock: finishing the order clears the lock", async () => {
 test("reorder: rewrites priority_seq, emits event, list follows, rejects bad ids", async () => {
   await reseed(client);
   const actorId = await actorIdOf();
-  const a = await pickingOrderIdOf("SO-2026-0001");
+  const a = await pickingOrderIdOf("SO-DEMO-0001");
   const b = await insertPickingOrder("SO-REORDER-B", "pending");
   const cOrder = await insertPickingOrder("SO-REORDER-C", "pending");
 
@@ -1159,8 +1178,8 @@ test("reorder: rewrites priority_seq, emits event, list follows, rejects bad ids
 test("picking order logs: order + item/package/box rows with actor name, newest first; 404 unknown order", async () => {
   await reseed(client);
   const { orderId, actorId } = await seededOrderAllocated();
-  const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F"); // qty 2000
-  const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F"); // qty 1000
+  const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F"); // qty 1000
+  const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F"); // qty 500
 
   assert.deepEqual(await listPickingOrderLogs(client.db, orderId), []);
 
@@ -1168,15 +1187,15 @@ test("picking order logs: order + item/package/box rows with actor name, newest 
   // creates the measuring task) → verify one package
   const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
   const p1 = (
-    await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 2000 })
+    await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 1000 })
   ).packageIds[0]!;
-  await scanPickingItem(client.db, item2, { actorId, allocationId: (await allocationOf(item2)).id, qty: 1000 });
+  await scanPickingItem(client.db, item2, { actorId, allocationId: (await allocationOf(item2)).id, qty: 500 });
   await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
   await verifyPackage(client.db, { packageId: p1, actorId });
 
   // logs can share a millisecond — make the order deterministic
   await client.db.execute(
-    sql`UPDATE transaction_logs SET created_at = created_at - interval '1 minute' WHERE to_state <> 'verified'`
+    sql`UPDATE transaction_logs SET created_date = created_date - interval '1 minute' WHERE to_state <> 'verified'`
   );
 
   const logs = await listPickingOrderLogs(client.db, orderId);
@@ -1202,4 +1221,183 @@ test("picking order logs: order + item/package/box rows with actor name, newest 
   const missing = await catchHttp(listPickingOrderLogs(client.db, randomUUID()));
   assert.equal(missing.status, 404);
   assert.equal(missing.message, "picking_order_not_found");
+});
+
+
+// --- whole-box exact-match claim ------------------------------------------------
+
+interface ClaimWorld {
+  actorId: string;
+  boxId: string;
+  lotIds: string[];
+  orderId: string;
+}
+
+/** Controlled world: one shelf box (500 × RK73H1JTTD1002F + 300 ×
+ *  RK73H1JTTD2202F, sourced from receiving lines carrying carton metadata in
+ *  additional_data) and a pending order with exactly that demand. */
+async function seedClaimWorld(): Promise<ClaimWorld> {
+  await reseed(client);
+  const actorId = await actorIdOf();
+  const boxId = "BOX-H-TEST-CLAIM-1";
+  await client.db.execute(
+    sql`INSERT INTO shelf_boxes (id, shelf_code, org_id, sub_inventory_code, status, created_date, last_update_date)
+        VALUES (${boxId}, 'A-01-01', 2, 'STORE1', 'closed', now(), now())`
+  );
+  const roId = randomUUID();
+  const riId = randomUUID();
+  await client.db.execute(
+    sql`INSERT INTO receiving_orders (id, batch_no, org_id, sub_inventory_code, status, created_date, last_update_date)
+        VALUES (${roId}, 'TEST-CLAIM-BATCH', 2, 'STORE1', 'clear', now(), now())`
+  );
+  await client.db.execute(
+    sql`INSERT INTO receiving_invoices (id, receiving_order_id, invoice_no, org_id, created_date, last_update_date)
+        VALUES (${riId}, ${roId}, 'INV-CLAIM-1', 2, now(), now())`
+  );
+  const lines: { partNo: string; ad: string }[] = [
+    { partNo: "RK73H1JTTD1002F", ad: JSON.stringify({ boxSize: "33 X 24 X 18", netWeight: 1200, grossWeight: 1500, weightUnit: "g" }) },
+    { partNo: "RK73H1JTTD2202F", ad: JSON.stringify({ netWeight: 0.8, grossWeight: 1.1 }) },
+  ];
+  const lotIds: string[] = [];
+  const qtys = [500, 300];
+  for (let i = 0; i < lines.length; i++) {
+    const riiId = randomUUID();
+    const lotId = randomUUID();
+    lotIds.push(lotId);
+    await client.db.execute(
+      sql`INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_no, line_qty, received_qty, put_away_qty,
+                                               org_id, additional_data, created_date, last_update_date)
+          VALUES (${riiId}, ${riId}, ${lines[i]!.partNo}, ${qtys[i]}, ${qtys[i]}, ${qtys[i]}, 2,
+                  ${lines[i]!.ad}::jsonb, now(), now())`
+    );
+    await client.db.execute(
+      sql`INSERT INTO inventory_lots (id, part_no, shelf_code, box_id, org_id, sub_inventory_code, total_qty,
+                                     created_date, last_update_date)
+          VALUES (${lotId}, ${lines[i]!.partNo}, 'A-01-01', ${boxId}, 2, 'STORE1', ${qtys[i]}, now(), now())`
+    );
+    await client.db.execute(
+      sql`INSERT INTO inventory_lot_sources (id, inventory_lot_id, receiving_invoice_item_id, qty, created_date, last_update_date)
+          VALUES (${randomUUID()}, ${lotId}, ${riiId}, ${qtys[i]}, now(), now())`
+    );
+  }
+  const orderId = await insertPickingOrder("SO-TEST-CLAIM", "pending");
+  await insertPickingItem(orderId, "RK73H1JTTD1002F", 500);
+  await insertPickingItem(orderId, "RK73H1JTTD2202F", 300);
+  return { actorId, boxId, lotIds, orderId };
+}
+
+test("claim-shelf-box: detail hints the exact-match box, claim reuses the carton as a prefilled shipping box", async () => {
+  const { actorId, boxId, lotIds, orderId } = await seedClaimWorld();
+
+  const before = await getPickingOrderDetail(client.db, orderId);
+  assert.equal(before.suggestedBox?.id, boxId);
+  assert.deepEqual(
+    new Map(before.suggestedBox!.contents.map((c) => [c.partNo, c.qty])),
+    new Map([
+      ["RK73H1JTTD1002F", 500],
+      ["RK73H1JTTD2202F", 300],
+    ])
+  );
+
+  const result = await claimShelfBox(client.db, { orderId, shelfBoxId: boxId, actorId });
+  assert.ok(result.shippingBoxId.startsWith("BOX-S-"));
+  assert.equal(result.packageIds.length, 2);
+
+  const shipBox = await queryGet<{
+    status: string;
+    boxSize: string | null;
+    netWeight: number | null;
+    grossWeight: number | null;
+    sourceShelfBoxId: string | null;
+  }>(
+    client.db,
+    sql`SELECT status, box_size AS "boxSize", net_weight AS "netWeight", gross_weight AS "grossWeight",
+               source_shelf_box_id AS "sourceShelfBoxId"
+        FROM shipping_boxes WHERE id = ${result.shippingBoxId}`
+  );
+  assert.equal(shipBox!.status, "open");
+  assert.equal(shipBox!.boxSize, "33 X 24 X 18");
+  assert.equal(shipBox!.netWeight, 2); // 1200 g → 1.2 kg + 0.8 kg
+  assert.equal(shipBox!.grossWeight, 2.6); // 1500 g → 1.5 kg + 1.1 kg
+  assert.equal(shipBox!.sourceShelfBoxId, boxId);
+
+  // packages are boxed, sourced from the box's lots
+  const packages = await queryAll<{ qty: number; shippingBoxId: string | null; sourceId: string }>(
+    client.db,
+    sql`SELECT qty, shipping_box_id AS "shippingBoxId", source_id AS "sourceId"
+        FROM picking_packages WHERE picking_order_id = ${orderId}`
+  );
+  assert.equal(packages.length, 2);
+  for (const p of packages) {
+    assert.equal(p.shippingBoxId, result.shippingBoxId);
+    assert.ok(lotIds.includes(p.sourceId));
+  }
+
+  // lots emptied, allocations gone, order auto-finished with a measuring task
+  for (const lotId of lotIds) {
+    const lot = await queryGet<{ totalQty: number; allocatedQty: number }>(
+      client.db,
+      sql`SELECT total_qty AS "totalQty", allocated_qty AS "allocatedQty" FROM inventory_lots WHERE id = ${lotId}`
+    );
+    assert.equal(lot!.totalQty, 0);
+    assert.equal(lot!.allocatedQty, 0);
+  }
+  const allocCount = await queryGet<{ c: number }>(
+    client.db,
+    sql`SELECT COUNT(*)::int AS c FROM allocations a JOIN picking_items pi ON pi.id = a.picking_item_id
+        WHERE pi.picking_order_id = ${orderId}`
+  );
+  assert.equal(allocCount!.c, 0);
+
+  const after = await getPickingOrderDetail(client.db, orderId);
+  assert.equal(after.status, "finished");
+  assert.equal(after.measuringTask?.status, "pending");
+  assert.equal(after.suggestedBox, null); // finished orders never hint
+});
+
+test("claim-shelf-box: non-exact box is rejected", async () => {
+  const { actorId, boxId } = await seedClaimWorld();
+  const orderId = await insertPickingOrder("SO-TEST-CLAIM-NOMATCH", "pending");
+  await insertPickingItem(orderId, "RK73H1JTTD1002F", 500);
+  await insertPickingItem(orderId, "RK73H1JTTD2202F", 301); // off by one
+
+  const detail = await getPickingOrderDetail(client.db, orderId);
+  assert.equal(detail.suggestedBox, null);
+
+  const err = await catchHttp(claimShelfBox(client.db, { orderId, shelfBoxId: boxId, actorId }));
+  assert.equal(err.status, 409);
+  assert.equal(err.message, "box_not_exact_match");
+});
+
+test("claim-shelf-box: box partially reserved by another order is rejected", async () => {
+  const { actorId, boxId, lotIds, orderId } = await seedClaimWorld();
+  // another order holds a reservation on the 1002F box lot
+  const otherOrderId = await insertPickingOrder("SO-TEST-CLAIM-HOLDER", "pending");
+  const otherItemId = await insertPickingItem(otherOrderId, "RK73H1JTTD1002F", 100);
+  await client.db.execute(
+    sql`INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, created_date, last_update_date)
+        VALUES (${randomUUID()}, ${otherItemId}, ${lotIds[0]}, 100, now(), now())`
+  );
+  await client.db.execute(sql`UPDATE inventory_lots SET allocated_qty = 100 WHERE id = ${lotIds[0]}`);
+
+  const detail = await getPickingOrderDetail(client.db, orderId);
+  assert.equal(detail.suggestedBox, null); // matched but not fully claimable → no hint
+
+  const err = await catchHttp(claimShelfBox(client.db, { orderId, shelfBoxId: boxId, actorId }));
+  assert.equal(err.status, 409);
+  assert.equal(err.message, "box_not_fully_available");
+
+  // the holder's reservation is untouched
+  const alloc = await queryGet<{ qty: number }>(
+    client.db,
+    sql`SELECT qty FROM allocations WHERE picking_item_id = ${otherItemId}`
+  );
+  assert.equal(alloc!.qty, 100);
+});
+
+test("claim-shelf-box: unknown shelf box → 404", async () => {
+  const { actorId, orderId } = await seedClaimWorld();
+  const err = await catchHttp(claimShelfBox(client.db, { orderId, shelfBoxId: "BOX-H-NOPE", actorId }));
+  assert.equal(err.status, 404);
+  assert.equal(err.message, "shelf_box_not_found");
 });

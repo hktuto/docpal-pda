@@ -50,7 +50,7 @@ export interface BoxSearchRow {
   kind: "shipping" | "shelf";
   id: string;
   status: string;
-  createdAt: Date;
+  createdDate: Date;
   /** Owning order's number (shipping boxes only; shelf boxes have no order). */
   orderNo: string | null;
 }
@@ -62,18 +62,18 @@ export async function searchBoxes(db: DbOrTx, q: string): Promise<BoxSearchRow[]
   const rows = await queryAll<BoxSearchRow>(
     db,
     sql`SELECT * FROM (
-          SELECT 'shipping' AS kind, sb.id, sb.status, sb.created_at AS "createdAt",
+          SELECT 'shipping' AS kind, sb.id, sb.status, sb.created_date AS "createdDate",
                  po.order_no AS "orderNo"
           FROM shipping_boxes sb
           LEFT JOIN picking_orders po ON po.id = sb.picking_order_id
           WHERE sb.id ILIKE ${term}
           UNION ALL
-          SELECT 'shelf' AS kind, hb.id, hb.status, hb.created_at AS "createdAt",
+          SELECT 'shelf' AS kind, hb.id, hb.status, hb.created_date AS "createdDate",
                  NULL AS "orderNo"
           FROM shelf_boxes hb
           WHERE hb.id ILIKE ${term}
         ) boxes
-        ORDER BY boxes."createdAt" DESC
+        ORDER BY boxes."createdDate" DESC
         LIMIT 50`
   );
   return rows;

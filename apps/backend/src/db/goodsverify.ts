@@ -58,7 +58,7 @@ async function logTransition(
     toState: entry.toState,
     actorId: entry.actorId,
     metadata: entry.metadata ?? {},
-    createdAt: now(),
+    createdDate: now(),
   });
 }
 
@@ -93,7 +93,7 @@ export async function generateGoodsVerifyTasks(
     db,
     sql`
       INSERT INTO goods_verify_tasks
-        (id, task_date, inventory_lot_id, shelf_code, box_id, part_no, expected_qty, status, created_at)
+        (id, task_date, inventory_lot_id, shelf_code, box_id, part_no, expected_qty, status, created_date)
       SELECT gen_random_uuid()::text, ${date}::date, il.id, il.shelf_code, il.box_id, il.part_no,
              il.total_qty, 'pending', ${at}
       FROM (
@@ -182,7 +182,7 @@ export async function getGoodsVerifyTaskRow(db: AppDb, taskId: string): Promise<
 export interface GoodsVerifyTaskDetailRow extends GoodsVerifyTaskQueueRow {
   inventoryLotId: string;
   description: string | null;
-  createdAt: Date;
+  createdDate: Date;
 }
 
 export interface GoodsVerifyLotRow {
@@ -231,7 +231,7 @@ export async function getGoodsVerifyTaskDetail(db: AppDb, taskId: string): Promi
         p.description,
         gvt.expected_qty AS "expectedQty", gvt.status,
         gvt.verified_by AS "verifiedBy", gvt.verified_at AS "verifiedAt",
-        gvt.created_at AS "createdAt"
+        gvt.created_date AS "createdDate"
       FROM goods_verify_tasks gvt
       JOIN parts p ON p.part_no = gvt.part_no
       WHERE gvt.id = ${taskId}

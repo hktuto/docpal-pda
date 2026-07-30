@@ -55,6 +55,20 @@
         {{ $t('picking.detail.heldBy', { name: heldByOther }) }}
       </div>
 
+      <div v-if="order.suggestedBox && actionable" class="box-match-banner">
+        <span>
+          {{ $t('picking.detail.boxMatchHint', { box: order.suggestedBox.id }) }}<template v-if="order.suggestedBox.shelfCode"> ({{ order.suggestedBox.shelfCode }})</template>
+        </span>
+        <button class="btn btn--small" :disabled="claimingBox" @click="claimBox">
+          <template v-if="claimingBox">
+            <InlineSpinner /> {{ $t('picking.detail.claimingBox') }}
+          </template>
+          <template v-else>
+            {{ $t('picking.detail.useWholeBox') }}
+          </template>
+        </button>
+      </div>
+
       <PickingBoxesSection
         v-model:expanded="boxesExpanded"
         :boxes="order.boxes"
@@ -122,6 +136,7 @@ const creatingBox = ref(false);
 const cancellingBox = ref<Record<string, boolean>>({});
 const addingAll = ref<Record<string, boolean>>({});
 const finishing = ref(false);
+const claimingBox = ref(false);
 const headerExpanded = ref(false);
 const boxesExpanded = ref(false);
 const boxSelections = ref<Record<string, string>>({});
@@ -228,6 +243,26 @@ async function createBox() {
   }
 }
 
+// Whole-box exact-match claim: the hinted shelf carton becomes this order's
+// (prefilled) shipping box with everything already packed.
+async function claimBox() {
+  const box = order.value?.suggestedBox;
+  if (!box || claimingBox.value) return;
+  const confirmed = window.confirm(t("picking.detail.useWholeBoxConfirm", { box: box.id }));
+  if (!confirmed) return;
+  claimingBox.value = true;
+  try {
+    const result = await warehouse.claimShelfBox(orderId, box.id);
+    boxesExpanded.value = true;
+    await load();
+    showToast(t("picking.detail.boxMatchClaimed", { box: result.shippingBoxId }));
+  } catch (e) {
+    showToast(errorMessage(e));
+  } finally {
+    claimingBox.value = false;
+  }
+}
+
 async function cancelBox(boxId: string) {
   cancellingBox.value[boxId] = true;
   try {
@@ -318,6 +353,20 @@ useVisibleReload(load);
   border: 1px solid #f59e0b;
   border-radius: 6px;
   color: #92400e;
+  font-size: 0.875rem;
+  padding: 0.6rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.box-match-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: #ecfdf5;
+  border: 1px solid #10b981;
+  border-radius: 6px;
+  color: #065f46;
   font-size: 0.875rem;
   padding: 0.6rem 1rem;
   margin-bottom: 1rem;

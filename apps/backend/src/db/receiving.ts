@@ -73,7 +73,7 @@ export async function confirmReceivingArrival(
     await queryRun(
       tx,
       sql`UPDATE receiving_orders
-          SET status = 'in_hand', arrived_at = ${at}, arrived_by = ${actorId}, updated_at = ${at}
+          SET status = 'in_hand', arrived_at = ${at}, arrived_by = ${actorId}, last_update_date = ${at}
           WHERE id = ${orderId}`
     );
     // Full receipt + date-code fallback from the order for lines without one.
@@ -119,7 +119,7 @@ export async function confirmReceivingArrival(
       fromState: ro.status,
       toState: "in_hand",
       actorId,
-      createdAt: at,
+      createdDate: at,
     });
 
     return { id: ro.id, batchNo: ro.batchNo, status: "in_hand", arrivedAt: at, arrivedBy: actorId };
@@ -213,7 +213,7 @@ export async function scanReceivingOrder(
       sql`SELECT ro.id, ro.status, ro.date_code AS "dateCode",
                  sp.qr_template AS "qrTemplate", sp.qty_encoding AS "qtyEncoding"
           FROM receiving_orders ro
-          LEFT JOIN suppliers s ON s.id = ro.supplier_id
+          LEFT JOIN suppliers s ON s.code = ro.supplier_code
           LEFT JOIN supplier_profiles sp ON sp.supplier_code = s.code
           WHERE ro.id = ${orderId}`
     );
@@ -287,7 +287,7 @@ export async function scanReceivingOrder(
     if (ro.status === "pending") {
       await queryRun(
         tx,
-        sql`UPDATE receiving_orders SET status = 'provisional_received', updated_at = ${at} WHERE id = ${orderId}`
+        sql`UPDATE receiving_orders SET status = 'provisional_received', last_update_date = ${at} WHERE id = ${orderId}`
       );
       await tx.insert(transactionLogs).values({
         id: randomUUID(),
@@ -296,7 +296,7 @@ export async function scanReceivingOrder(
         fromState: "pending",
         toState: "provisional_received",
         actorId: input.actorId,
-        createdAt: at,
+        createdDate: at,
       });
     }
     await tx.insert(inventoryTransactions).values({
@@ -413,7 +413,7 @@ async function logMismatch(
     toState,
     actorId,
     metadata,
-    createdAt: now(),
+    createdDate: now(),
   });
 }
 
@@ -583,7 +583,7 @@ export async function listReceivingMismatches(db: AppDb): Promise<ReceivingMisma
                ri.id AS "invoiceId",
                ri.invoice_no AS "invoiceNo",
                rii.part_no AS "partNo",
-               COALESCE(inv_sup.code, ord_sup.code) AS "supplierCode",
+               COALESCE(ri.supplier_code, ro.supplier_code) AS "supplierCode",
                rii.mismatch_reason AS "reason",
                rii.mismatch_qty AS "mismatchQty",
                rii.wrong_part_no AS "wrongPartNo",
@@ -591,10 +591,8 @@ export async function listReceivingMismatches(db: AppDb): Promise<ReceivingMisma
         FROM receiving_invoice_items rii
         JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
         JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
-        LEFT JOIN suppliers inv_sup ON inv_sup.id = ri.supplier_id
-        LEFT JOIN suppliers ord_sup ON ord_sup.id = ro.supplier_id
         WHERE rii.reported_mismatch = true
-        ORDER BY ro.created_at DESC, ri.created_at DESC, rii.id DESC`
+        ORDER BY ro.created_date DESC, ri.created_date DESC, rii.id DESC`
   );
 }
 
@@ -609,7 +607,7 @@ export interface TransactionLogRow {
   actorId: string | null;
   actorName: string | null;
   metadata: Record<string, unknown>;
-  createdAt: Date;
+  createdDate: Date;
 }
 
 /** Audit trail for one receiving order: order-level rows plus the rows logged
@@ -623,7 +621,7 @@ export async function listReceivingOrderLogs(db: AppDb, orderId: string): Promis
     sql`SELECT tl.id, tl.entity_type AS "entityType", tl.entity_id AS "entityId",
                tl.from_state AS "fromState", tl.to_state AS "toState",
                tl.actor_id AS "actorId", u.display_name AS "actorName",
-               tl.metadata, tl.created_at AS "createdAt"
+               tl.metadata, tl.created_date AS "createdDate"
         FROM transaction_logs tl
         LEFT JOIN users u ON u.id = tl.actor_id
         WHERE (tl.entity_type = 'receiving_order' AND tl.entity_id = ${orderId})
@@ -631,7 +629,7 @@ export async function listReceivingOrderLogs(db: AppDb, orderId: string): Promis
                  SELECT rii.id FROM receiving_invoice_items rii
                  JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
                  WHERE ri.receiving_order_id = ${orderId}))
-        ORDER BY tl.created_at DESC, tl.id DESC`
+        ORDER BY tl.created_date DESC, tl.id DESC`
   );
 }
 
@@ -701,7 +699,7 @@ export async function deleteReceivingInvoiceItem(
         poLine: item.poLine,
         hadMismatch: item.reportedMismatch,
       },
-      createdAt: now(),
+      createdDate: now(),
     });
     await emitEvent(tx, {
       type: "receiving_order.item_removed",

@@ -6,6 +6,7 @@ import { HTTPException } from "hono/http-exception";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { queryAll, queryGet } from "./query.js";
 import { confirmReceivingArrival } from "./receiving.js";
+import { upsertReceivingOrder } from "./ingest.js";
 import {
   addAllUnboxedToBox,
   assignScanToBox,
@@ -61,7 +62,7 @@ async function stagingBoxIdOf(orderId: string): Promise<string | undefined> {
             )
             OR NOT EXISTS (SELECT 1 FROM shelf_box_items sbi WHERE sbi.shelf_box_id = sb.id)
           )
-        ORDER BY sb.created_at
+        ORDER BY sb.created_date
         LIMIT 1`
   );
   return row?.id;
@@ -77,9 +78,28 @@ async function catchHttp(p: Promise<unknown>): Promise<HTTPException> {
   assert.fail("expected HTTPException");
 }
 
-/** Confirm the pending DAITO order (04958210) into in_hand for put-away tests. */
+/**
+ * Create + confirm the DAITO order (04958210) into in_hand for put-away tests.
+ * The demo seed only carries pending orders, so each test ingests its own
+ * two-line order (RK73B1JTTD181G ×5000 lotCode NULL / RK73H1JTTD4702F ×3000) first.
+ */
 async function daitoInHand(): Promise<{ orderId: string; actorId: string }> {
   const actorId = await actorIdOf("operator");
+  await upsertReceivingOrder(client.db, "04958210", {
+    order: { supplierCode: "DAITO", deliveryDate: "2026-07-29", dateCode: "2610", subInventoryCode: "STORE1" },
+    invoices: [
+      {
+        invoiceNo: "INV-04958210-01",
+        wclCompanyName: "WCL Components Ltd",
+        totalQty: 8000,
+        totalCtn: 2,
+        items: [
+          { partNo: "RK73B1JTTD181G", poNo: "PO-DAI-301", poLine: "1", lineQty: 5000, dateCode: "2610", coo: "JP", cow: "JP" },
+          { partNo: "RK73H1JTTD4702F", poNo: "PO-DAI-301", poLine: "2", lineQty: 3000, dateCode: "2610", coo: "JP", cow: "JP" },
+        ],
+      },
+    ],
+  });
   const orderId = await orderIdOf("04958210");
   await confirmReceivingArrival(client.db, orderId, actorId);
   return { orderId, actorId };
@@ -90,7 +110,7 @@ async function daitoInHand(): Promise<{ orderId: string; actorId: string }> {
 test("candidates: receivable orders with received/unboxed item counts", async () => {
   await reseed(client);
 
-  // seed has only a clear + a pending order → no candidates
+  // seed has only pending orders → no candidates
   assert.equal((await listPutAwayCandidates(client.db)).length, 0);
 
   const { orderId, actorId } = await daitoInHand();
@@ -108,8 +128,8 @@ test("candidates: receivable orders with received/unboxed item counts", async ()
   assert.equal(row.unboxedItems, 2);
 
   // fully stage one item → it no longer counts as unboxed
-  const p413 = await itemIdOf(orderId, "P413"); // qty 3000
-  await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: p413, qty: 3000 });
+  const r4702 = await itemIdOf(orderId, "RK73H1JTTD4702F"); // qty 3000
+  await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: r4702, qty: 3000 });
   rows = await listPutAwayCandidates(client.db);
   assert.equal(rows.length, 1);
   assert.equal(rows[0].receivedItems, 2);
@@ -180,7 +200,7 @@ test("scan: staging insert creates staging box + backfills batch attrs; guards",
   assert.equal(badItem.message, "receiving_invoice_item_not_found");
 
   // item belonging to a different order → 404
-  const koaItemId = await itemIdOf(await orderIdOf("04958166"), "RK73H1JTTD1002F");
+  const koaItemId = await itemIdOf(await orderIdOf("100001"), "RK73H1JTTD1002F");
   const wrongOrder = await catchHttp(
     recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: koaItemId, qty: 1 })
   );
@@ -215,13 +235,13 @@ test("delete staged scan: mis-scan correction; boxed scan rejected", async () =>
   const again = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 5000 });
   assert.equal(again.qty, 5000);
 
-  // guards: 404 missing, 409 for a boxed scan (use the untouched P413 item)
+  // guards: 404 missing, 409 for a boxed scan (use the untouched RK73H1JTTD4702F item)
   const missing = await catchHttp(deleteStagedPutAwayScan(client.db, { scanId: randomUUID(), actorId }));
   assert.equal(missing.status, 404);
   assert.equal(missing.message, "scan_not_found");
 
-  const p413 = await itemIdOf(orderId, "P413"); // qty 3000
-  const scan2 = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: p413, qty: 100 });
+  const r4702 = await itemIdOf(orderId, "RK73H1JTTD4702F"); // qty 3000
+  const scan2 = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: r4702, qty: 100 });
   const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
   await assignScanToBox(client.db, { scanId: scan2.id, shelfBoxId: box.id, actorId });
   const boxed = await catchHttp(deleteStagedPutAwayScan(client.db, { scanId: scan2.id, actorId }));
@@ -230,7 +250,7 @@ test("delete staged scan: mis-scan correction; boxed scan rejected", async () =>
 
   const badActor = await catchHttp(
     (async () => {
-      const s = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: p413, qty: 1 });
+      const s = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: r4702, qty: 1 });
       await deleteStagedPutAwayScan(client.db, { scanId: s.id, actorId: randomUUID() });
     })()
   );
@@ -399,9 +419,9 @@ test("assign guards: staging/box state/order mismatch/actor", async () => {
   assert.equal(intoStaging.status, 409);
   assert.equal(intoStaging.message, "cannot_assign_into_staging_box");
 
-  // box of a different receiving order (the cleared KOA order)
+  // box of a different receiving order (the seeded KOA order)
   const koaBox = await createShelfBox(client.db, {
-    receivingOrderId: await orderIdOf("04958166"),
+    receivingOrderId: await orderIdOf("100001"),
     shelfCode: "A-01-04",
     actorId,
   });
@@ -527,10 +547,10 @@ test("remove-from-box: 409 when the lot has pick allocations", async () => {
     client.db,
     sql`SELECT pi.id FROM picking_items pi
         JOIN picking_orders po ON po.id = pi.picking_order_id
-        WHERE po.order_no = 'SO-2026-0001' LIMIT 1`
+        WHERE po.order_no = 'SO-DEMO-0001' LIMIT 1`
   );
   await client.db.execute(
-    sql`INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, created_at, updated_at)
+    sql`INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, created_date, last_update_date)
         VALUES (${randomUUID()}, ${pickingItem!.id}, ${lot.id}, 100, now(), now())`
   );
 
@@ -557,7 +577,7 @@ test("add-all-unboxed: assigns every staging scan of the order", async () => {
   await reseed(client);
   const { orderId, actorId } = await daitoInHand();
   const item1 = await itemIdOf(orderId, "RK73B1JTTD181G"); // qty 5000
-  const item2 = await itemIdOf(orderId, "P413"); // qty 3000
+  const item2 = await itemIdOf(orderId, "RK73H1JTTD4702F"); // qty 3000
   await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: item1, qty: 2000 });
   await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: item1, qty: 1000 });
   await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: item2, qty: 3000 });
@@ -621,7 +641,7 @@ test("close: guards + happy path + transition log", async () => {
     client.db,
     sql`SELECT from_state AS "fromState", to_state AS "toState", actor_id AS "actorId"
         FROM transaction_logs WHERE entity_type = 'shelf_box' AND entity_id = ${box.id}
-        ORDER BY created_at, id`
+        ORDER BY created_date, id`
   );
   assert.deepEqual(
     logs.map((l) => [l.fromState, l.toState, l.actorId]),
@@ -642,7 +662,7 @@ test("auto-clear: fully put-away order flips to clear (+ transition log)", async
   await reseed(client);
   const { orderId, actorId } = await daitoInHand();
   const item1 = await itemIdOf(orderId, "RK73B1JTTD181G"); // qty 5000
-  const item2 = await itemIdOf(orderId, "P413"); // qty 3000
+  const item2 = await itemIdOf(orderId, "RK73H1JTTD4702F"); // qty 3000
   await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: item1, qty: 5000 });
   await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: item2, qty: 3000 });
 
@@ -659,7 +679,7 @@ test("auto-clear: fully put-away order flips to clear (+ transition log)", async
     client.db,
     sql`SELECT from_state AS "fromState", to_state AS "toState"
         FROM transaction_logs WHERE entity_type = 'receiving_order' AND entity_id = ${orderId}
-        ORDER BY created_at, id`
+        ORDER BY created_date, id`
   );
   assert.deepEqual(
     logs.map((l) => [l.fromState, l.toState]),
@@ -727,7 +747,7 @@ test("aggregate: order + lots + staging scans + boxes with items; 404", async ()
   await reseed(client);
   const { orderId, actorId } = await daitoInHand();
   const item1 = await itemIdOf(orderId, "RK73B1JTTD181G"); // qty 5000
-  const item2 = await itemIdOf(orderId, "P413"); // qty 3000
+  const item2 = await itemIdOf(orderId, "RK73H1JTTD4702F"); // qty 3000
   const assigned = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: item1, qty: 2000 });
   await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: item1, qty: 500 });
   await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: item2, qty: 3000 });
@@ -749,7 +769,7 @@ test("aggregate: order + lots + staging scans + boxes with items; 404", async ()
   );
   assert.equal(exp1.dateCode, "2610");
   assert.equal(exp1.coo, "JP");
-  const exp2 = byPart.get("P413")!;
+  const exp2 = byPart.get("RK73H1JTTD4702F")!;
   assert.deepEqual(
     [exp2.id, exp2.lineQty, exp2.receivedQty, exp2.putAwayQty, exp2.remainingQty],
     [item2, 3000, 3000, 0, 0] // fully staged
@@ -829,7 +849,7 @@ test("create with scanned boxId: custom id, open-same-order reuse, conflicts", a
 
   // open box belonging to a different order → 409
   await createShelfBox(client.db, {
-    receivingOrderId: await orderIdOf("04958166"),
+    receivingOrderId: await orderIdOf("100001"),
     shelfCode: "A-01-04",
     actorId,
     boxId: "PHYS-BOX-002",
@@ -923,7 +943,7 @@ test("scan with shelfBoxId: lands directly in the box (lot + ledger); guards rol
 
   // box of a different order → 409
   const koaBox = await createShelfBox(client.db, {
-    receivingOrderId: await orderIdOf("04958166"),
+    receivingOrderId: await orderIdOf("100001"),
     shelfCode: "A-01-04",
     actorId,
   });

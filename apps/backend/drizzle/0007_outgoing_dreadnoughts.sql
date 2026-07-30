@@ -1,0 +1,1 @@
+ALTER TABLE "picking_orders" ADD COLUMN "commodity_inspection" text;

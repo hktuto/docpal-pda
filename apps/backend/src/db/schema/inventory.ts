@@ -23,6 +23,8 @@ export const inventoryLots = pgTable(
     totalQty: integer("total_qty").notNull().default(0),
     allocatedQty: integer("allocated_qty").notNull().default(0), // 已预留数量
     availableQty: integer("available_qty").generatedAlwaysAs(sql`total_qty - allocated_qty`),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
   },
   (t) => ({
     // GIT/DOCK 也使用虚拟 shelf_code，避免 NULL 导致重复 lot
@@ -43,6 +45,8 @@ export const inventoryLotSources = pgTable(
     inventoryLotId: text("inventory_lot_id").notNull().references(() => inventoryLots.id, { onDelete: "cascade" }),
     receivingInvoiceItemId: text("receiving_invoice_item_id").notNull().references(() => receivingInvoiceItems.id, { onDelete: "cascade" }),
     qty: integer("qty").notNull(),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
   },
   (t) => ({
     lotItemUq: uniqueIndex("inventory_lot_sources_unique").on(t.inventoryLotId, t.receivingInvoiceItemId),
@@ -62,7 +66,8 @@ export const shelfBoxes = pgTable(
     orgId: integer("org_id"), // 库存所属办公室, 2: HK
     subInventoryCode: text("sub_inventory_code"), // 库存所属子库存
     status: text("status").notNull().default("open"), // open | closed | verified
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
   },
   (t) => ({
     shelfIdx: index("idx_shelf_boxes_shelf").on(t.shelfCode),
@@ -81,6 +86,8 @@ export const shelfBoxItems = pgTable(
     qty: integer("qty").notNull(),
     verified: boolean("verified").default(false),
     verifiedAt: timestamp("verified_at", { mode: "date" }),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
   },
   (t) => ({
     boxIdx: index("idx_shelf_box_items_box").on(t.shelfBoxId),
@@ -103,7 +110,8 @@ export const goodsVerifyTasks = pgTable(
     status: text("status").notNull().default("pending"), // pending | verified | skipped
     verifiedBy: text("verified_by").references(() => users.id),
     verifiedAt: timestamp("verified_at", { mode: "date" }),
-    createdAt: timestamp("created_at", { mode: "date" }).notNull().$defaultFn(now),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
   },
   (t) => ({
     lotDayUq: uniqueIndex("goods_verify_tasks_lot_day_unique").on(t.taskDate, t.inventoryLotId),
