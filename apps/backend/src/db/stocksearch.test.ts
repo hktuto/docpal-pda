@@ -61,9 +61,9 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     boxId: "BOX-H-20260701-0002",
     orgId: 2,
     subInventoryCode: "STORE1",
-    totalQty: 400,
+    totalQty: 700,
     allocatedQty: 0,
-    availableQty: 400,
+    availableQty: 700,
   });
   assert.deepEqual(lots[1], {
     partNo: "RK73H1JTTD1002F",
@@ -115,7 +115,7 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     wclItemNo: "RK73B1JTTD181G",
     description: "RES 180 OHM 5% 1/10W 0603",
     defaultCoo: "JP",
-    onHandQty: 400,
+    onHandQty: 700,
   });
   assert.deepEqual(parts[1], {
     id: id1002,

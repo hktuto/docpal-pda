@@ -1,4 +1,4 @@
-import { pgTable, text, integer, boolean, real, timestamp, index, uniqueIndex, foreignKey, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, bigint, boolean, real, timestamp, index, uniqueIndex, foreignKey, jsonb } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
 import { users, parts, customerProfiles, subInventories } from "./master.js";
 import { shelfBoxes } from "./inventory.js";
@@ -52,6 +52,11 @@ export const pickingItems = pgTable(
     qty: integer("qty").notNull(), // 需求数量（要出货）
     pickedQty: integer("picked_qty").notNull().default(0), // 已扫描装数量
     allocatedQty: integer("allocated_qty").notNull().default(0), // 已预留 Reserved
+    // 上游 Oracle 订单行标识（ingest 透传；reconcile 仍以 part_no 为 key）
+    lineId: bigint("line_id", { mode: "number" }).notNull(),
+    lineNumber: integer("line_number").notNull(),
+    shipmentNumber: integer("shipment_number").notNull(),
+    status: text("status").notNull().default("pending"), // pending | picked — backend-maintained from picked_qty vs qty
     additionalData: jsonb("additional_data"), // 上游额外字段透传（无固定结构）
     createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),

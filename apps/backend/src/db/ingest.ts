@@ -88,6 +88,9 @@ export interface IngestPickingOrder {
 export interface IngestPickingItem {
   partNo: string;
   qty: number;
+  lineId: number;
+  lineNumber: number;
+  shipmentNumber: number;
   additionalData?: unknown;
 }
 
@@ -518,6 +521,11 @@ function validatePickingBody(body: IngestPickingBody): void {
     if (!Number.isInteger(it.qty) || it.qty < 0) {
       throw new HTTPException(400, { message: "qty must be a non-negative integer" });
     }
+    for (const f of ["lineId", "lineNumber", "shipmentNumber"] as const) {
+      if (!Number.isInteger(it[f])) {
+        throw new HTTPException(400, { message: `${f} must be an integer` });
+      }
+    }
   }
 }
 
@@ -528,6 +536,9 @@ async function insertPickingItem(tx: DbOrTx, orderId: string, it: IngestPickingI
     pickingOrderId: orderId,
     partNo,
     qty: it.qty,
+    lineId: it.lineId,
+    lineNumber: it.lineNumber,
+    shipmentNumber: it.shipmentNumber,
     additionalData: it.additionalData ?? null,
   });
 }
@@ -538,6 +549,9 @@ interface ExistingPickingItemRow {
   qty: number;
   pickedQty: number;
   allocCount: number;
+  lineId: string;
+  lineNumber: number;
+  shipmentNumber: number;
 }
 
 /**
@@ -653,6 +667,7 @@ export async function upsertPickingOrder(
     const existingItems = await queryAll<ExistingPickingItemRow>(
       tx,
       sql`SELECT pi.id, pi.part_no AS "partNo", pi.qty, pi.picked_qty AS "pickedQty",
+                 pi.line_id AS "lineId", pi.line_number AS "lineNumber", pi.shipment_number AS "shipmentNumber",
                  (SELECT COUNT(*)::int FROM allocations a WHERE a.picking_item_id = pi.id) AS "allocCount"
           FROM picking_items pi WHERE pi.picking_order_id = ${orderId}`
     );
@@ -670,11 +685,18 @@ export async function upsertPickingOrder(
       if (it.qty < ex.pickedQty) {
         throw new HTTPException(409, { message: `qty_below_picked: ${it.qty} < ${ex.pickedQty}` });
       }
-      if (ex.qty !== it.qty) {
+      if (
+        ex.qty !== it.qty ||
+        ex.lineId !== String(it.lineId) ||
+        ex.lineNumber !== it.lineNumber ||
+        ex.shipmentNumber !== it.shipmentNumber
+      ) {
         // Expected-side fields only — picked_qty / allocated_qty stay untouched.
         await queryRun(
           tx,
-          sql`UPDATE picking_items SET qty = ${it.qty}, last_update_date = ${now()}
+          sql`UPDATE picking_items SET qty = ${it.qty}, line_id = ${it.lineId},
+                line_number = ${it.lineNumber}, shipment_number = ${it.shipmentNumber},
+                last_update_date = ${now()}
               WHERE id = ${ex.id}`
         );
         changed = true;

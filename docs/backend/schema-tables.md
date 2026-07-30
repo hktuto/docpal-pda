@@ -343,6 +343,10 @@ Picking order lines.
 | qty | integer NOT NULL | Demand quantity to ship |
 | picked_qty | integer NOT NULL DEFAULT 0 | Quantity scanned/picked |
 | allocated_qty | integer NOT NULL DEFAULT 0 | Quantity reserved (allocated) |
+| line_id | bigint NOT NULL | Upstream Oracle order-line id (ingest passes `lineId` through) |
+| line_number | integer NOT NULL | Upstream Oracle line number |
+| shipment_number | integer NOT NULL | Upstream Oracle shipment number |
+| status | text NOT NULL DEFAULT 'pending' | Line status (`pending`/`picked`), backend-maintained from `picked_qty` vs `qty` |
 | additional_data | jsonb NULL | Free-form per-line extension data (ingest passes `additionalData` through on insert; not part of reconcile keys) |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
@@ -631,3 +635,22 @@ Note: CHECK `chk_inventory_transactions_qty_type` constrains `qty_type` to
 `expected` | `dock` | `on_hand` | `reserved`; indexes on `(shelf_code,
 txn_at)`, `(inventory_lot_id, txn_at)`, `(part_no, txn_at)`, `txn_type`,
 `(reference_type, reference_id)`, and `receiving_invoice_item_id`.
+
+## sync_events
+
+Table-change feed for the external sync service (full contract + event
+catalog: `docs/backend/event-catalog.md`). Rows are written by the
+`sync_events_notify()` trigger attached to every business table — never by
+application code — and only for changes committed by the backend's own
+Postgres role (`warehouse`); writes by the sync service's `warehouse_sync`
+role (or any other account) are skipped to break the circular-event loop, and
+seed/reset paths suppress the trigger via `SET LOCAL app.sync_events_off = 1`.
+Polled via `GET /sync-events?since=<id>`.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | bigserial PK | Monotonic row id — the sync service's resume cursor |
+| event_type | text NOT NULL | `<table>.<insert\|update\|delete>` |
+| event_data | jsonb NOT NULL | `{table, action, new, old}` — full row images (`to_jsonb(NEW)`/`to_jsonb(OLD)`; `old` null on INSERT, `new` null on DELETE) |
+| created_date | timestamp NOT NULL DEFAULT now() | Commit time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Same as created_date (rows are immutable) |

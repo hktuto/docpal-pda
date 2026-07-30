@@ -80,11 +80,13 @@ async function finishedOrder(): Promise<FinishedFixture> {
   const orderId = await pickingOrderIdOf("SO-DEMO-0001");
   const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F"); // qty 1000
   const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F"); // qty 500
+  const item3 = await pickingItemIdOf(orderId, "RK73B1JTTD181G"); // qty 300 (A-01-02 / BOX-H-20260701-0002 lot)
   const p1 = (await scanPickingItem(client.db, item1, { actorId, allocationId: await allocationIdOf(item1), qty: 1000 })).packageIds[0];
   const p2 = (await scanPickingItem(client.db, item2, { actorId, allocationId: await allocationIdOf(item2), qty: 500 })).packageIds[0];
+  const p3 = (await scanPickingItem(client.db, item3, { actorId, allocationId: await allocationIdOf(item3), qty: 300 })).packageIds[0];
   const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
   await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId }); // auto-finishes
-  return { orderId, actorId, boxId: box.id, packageIds: [p1, p2] };
+  return { orderId, actorId, boxId: box.id, packageIds: [p1, p2, p3] };
 }
 
 /** Verify the given packages, stamp measurements (kg), close the box. */

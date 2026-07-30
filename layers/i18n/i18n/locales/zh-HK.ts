@@ -265,6 +265,8 @@ export default {
     itemsSection: {
       title: "項目",
       part: "料號",
+      line: "行號",
+      shipment: "裝運",
       requiredQty: "需求數量",
       scannedQty: "已掃描數量",
       boxedQty: "已裝箱數量",
@@ -1029,6 +1031,7 @@ export default {
         orgSubInventory: "Org / 子庫",
         measuringTask: "測量任務",
         required: "需求",
+        line: "行號 / 裝運",
         allocated: "已分配",
         picked: "已揀",
         allocations: "分配",

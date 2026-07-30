@@ -63,7 +63,8 @@ async function logTransition(
   });
 }
 
-/** picking_items: allocated_qty = Σ allocations, picked_qty = Σ BOXED packages (old semantics). */
+/** picking_items: allocated_qty = Σ allocations, picked_qty = Σ BOXED packages (old semantics);
+ *  status = 'picked' once picked_qty covers qty, else 'pending'. */
 async function recomputePickingItem(tx: DbOrTx, pickingItemId: string): Promise<void> {
   const alloc = await queryGet<{ s: number }>(
     tx,
@@ -76,7 +77,9 @@ async function recomputePickingItem(tx: DbOrTx, pickingItemId: string): Promise<
   );
   await queryRun(
     tx,
-    sql`UPDATE picking_items SET allocated_qty = ${alloc?.s ?? 0}, picked_qty = ${boxed?.s ?? 0}, last_update_date = ${now()}
+    sql`UPDATE picking_items SET allocated_qty = ${alloc?.s ?? 0}, picked_qty = ${boxed?.s ?? 0},
+          status = CASE WHEN ${boxed?.s ?? 0} >= qty THEN 'picked' ELSE 'pending' END,
+          last_update_date = ${now()}
         WHERE id = ${pickingItemId}`
   );
 }
@@ -669,6 +672,10 @@ export interface PickingItemDetail {
   qty: number;
   pickedQty: number;
   allocatedQty: number;
+  lineId: string;
+  lineNumber: number;
+  shipmentNumber: number;
+  status: string;
   allocations: PickingAllocationDetail[];
   packages: PickingPackageDetail[];
 }
@@ -747,7 +754,9 @@ export async function getPickingOrderDetail(db: AppDb, orderId: string): Promise
     sql`
       SELECT
         pi.id, pi.part_no AS "partNo", p.wcl_item_no AS "wclItemNo",
-        pi.qty, pi.picked_qty AS "pickedQty", pi.allocated_qty AS "allocatedQty"
+        pi.qty, pi.picked_qty AS "pickedQty", pi.allocated_qty AS "allocatedQty",
+        pi.line_id AS "lineId", pi.line_number AS "lineNumber",
+        pi.shipment_number AS "shipmentNumber", pi.status
       FROM picking_items pi
       JOIN parts p ON p.part_no = pi.part_no
       WHERE pi.picking_order_id = ${orderId}

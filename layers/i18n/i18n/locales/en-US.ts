@@ -265,6 +265,8 @@ export default {
     itemsSection: {
       title: "Items",
       part: "Part",
+      line: "Line",
+      shipment: "shipment",
       requiredQty: "Required qty",
       scannedQty: "Scanned qty",
       boxedQty: "Boxed qty",
@@ -1030,6 +1032,7 @@ export default {
         orgSubInventory: "Org / Sub-inventory",
         measuringTask: "Measuring task",
         required: "Required",
+        line: "Line / Ship",
         allocated: "Allocated",
         picked: "Picked",
         allocations: "Allocations",

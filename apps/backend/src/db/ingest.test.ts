@@ -324,8 +324,8 @@ function pickingBody(qty1 = 500): IngestPickingBody {
       subInventoryCode: "STORE1",
     },
     items: [
-      { partNo: "RK73H1JTTD2202F", qty: qty1 },
-      { partNo: "RK73H1JTTD4702F", qty: 10 },
+      { partNo: "RK73H1JTTD2202F", qty: qty1, lineId: 8001, lineNumber: 1, shipmentNumber: 1 },
+      { partNo: "RK73H1JTTD4702F", qty: 10, lineId: 8002, lineNumber: 2, shipmentNumber: 1 },
     ],
   };
 }
@@ -377,8 +377,8 @@ test("picking: create → re-PUT unchanged → reconcile (qty change, add, remov
   // reconcile: remove the RK73H1JTTD4702F line, add a new RK73H1JTTD1002F line
   const shuffled = pickingBody();
   shuffled.items = [
-    { partNo: "RK73H1JTTD2202F", qty: 500 },
-    { partNo: "RK73H1JTTD1002F", qty: 200 },
+    { partNo: "RK73H1JTTD2202F", qty: 500, lineId: 8001, lineNumber: 1, shipmentNumber: 1 },
+    { partNo: "RK73H1JTTD1002F", qty: 200, lineId: 8003, lineNumber: 3, shipmentNumber: 1 },
   ];
   const res2 = await upsertPickingOrder(client.db, "PO-INGEST-1", shuffled);
   assert.equal(res2.changed, true);
@@ -414,7 +414,7 @@ test("picking: upserted pending order allocates from seeded lots via allocateAll
       customerCode: "ACME",
       deliveryDate: "2026-07-20",
     },
-    items: [{ partNo: "RK73H1JTTD2202F", qty: 500 }],
+    items: [{ partNo: "RK73H1JTTD2202F", qty: 500, lineId: 8010, lineNumber: 1, shipmentNumber: 1 }],
   });
 
   await allocateAll(client.db);
@@ -440,7 +440,7 @@ test("picking: new order slots into the queue by delivery date; re-upsert keeps 
     Number((await queryGet<{ seq: number }>(client.db, sql`SELECT priority_seq AS seq FROM picking_orders WHERE order_no = ${orderNo}`))!.seq);
   const mk = (deliveryDate?: string) => ({
     order: { customerCode: "ACME", ...(deliveryDate ? { deliveryDate } : {}) },
-    items: [{ partNo: "RK73H1JTTD2202F", qty: 10 }],
+    items: [{ partNo: "RK73H1JTTD2202F", qty: 10, lineId: 8020, lineNumber: 1, shipmentNumber: 1 }],
   });
 
   // two undated orders: NULLS LAST, ordered by order_no between themselves
@@ -465,6 +465,6 @@ test("picking: new order slots into the queue by delivery date; re-upsert keeps 
   assert.ok(zSeq > a1 && zSeq < (await seqOf("PO-SEQ-B")), "Z slots after the dated orders, before undated");
 
   // re-upsert does not move the order
-  await upsertPickingOrder(client.db, "PO-SEQ-Z", { order: { customerCode: "ACME" }, items: [{ partNo: "RK73H1JTTD2202F", qty: 20 }] });
+  await upsertPickingOrder(client.db, "PO-SEQ-Z", { order: { customerCode: "ACME" }, items: [{ partNo: "RK73H1JTTD2202F", qty: 20, lineId: 8020, lineNumber: 1, shipmentNumber: 1 }] });
   assert.equal(await seqOf("PO-SEQ-Z"), zSeq);
 });

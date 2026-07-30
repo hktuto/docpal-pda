@@ -15,10 +15,15 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-warehouse_backend}
       POSTGRES_USER: ${POSTGRES_USER:-warehouse}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      # Password for the warehouse_sync role created by the init script below.
+      SYNC_DB_PASSWORD: ${SYNC_DB_PASSWORD:-warehouse_sync}
     # Not published to the host — only the backend talks to it. Add a ports
     # mapping here if you need external DB access.
     volumes:
       - pgdata:/var/lib/postgresql/data
+      # First container init only (empty data dir): create the warehouse_sync
+      # role. Migration 0010 repeats it idempotently for existing volumes.
+      - ./scripts/sql/create-sync-role.sh:/docker-entrypoint-initdb.d/00-create-sync-role.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s

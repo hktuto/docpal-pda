@@ -76,7 +76,7 @@ test("allocateAll: emits one allocation.computed on change, none on an idempoten
 
 const pickingBody: IngestPickingBody = {
   order: {},
-  items: [{ partNo: "RK73H1JTTD2202F", qty: 5 }],
+  items: [{ partNo: "RK73H1JTTD2202F", qty: 5, lineId: 7001, lineNumber: 1, shipmentNumber: 1 }],
 };
 
 test("ingest picking: emits created on insert, nothing on no-change, updated on change", async () => {
@@ -95,7 +95,7 @@ test("ingest picking: emits created on insert, nothing on no-change, updated on 
 
   const r3 = await upsertPickingOrder(client.db, "PO-EVT-1", {
     order: {},
-    items: [{ partNo: "RK73H1JTTD2202F", qty: 7 }],
+    items: [{ partNo: "RK73H1JTTD2202F", qty: 7, lineId: 7001, lineNumber: 1, shipmentNumber: 1 }],
   });
   assert.equal(r3.changed, true);
   const updated = await eventsOfType("picking_order.updated");

@@ -31,7 +31,10 @@
       <template v-else>
         <div class="card scan-session__progress">
           <div v-for="item in order.items" :key="item.id" class="scan-session__progress-row">
-            <span class="scan-session__part">{{ item.partNo }}</span>
+            <span class="scan-session__part">
+              <span class="scan-session__line">L{{ item.lineNumber }}/S{{ item.shipmentNumber }}</span>
+              {{ item.partNo }}
+            </span>
             <span class="scan-session__counts">
               {{ $t('picking.scanSession.progress', {
                 required: item.qty,
@@ -492,6 +495,12 @@ onUnmounted(() => window.removeEventListener("beforeunload", beforeUnload));
 
 .scan-session__part {
   font-weight: 600;
+}
+
+.scan-session__line {
+  font-weight: 400;
+  color: var(--muted);
+  margin-right: 0.25rem;
 }
 
 .scan-session__counts {

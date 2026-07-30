@@ -127,9 +127,10 @@ async function insertPickingOrder(orderNo: string, status: string): Promise<stri
 
 async function insertPickingItem(orderId: string, partNo: string, qty: number): Promise<string> {
   const id = randomUUID();
+  const lineId = 9000 + Math.floor(Math.random() * 100000);
   await client.db.execute(
-    sql`INSERT INTO picking_items (id, picking_order_id, part_no, qty, created_date, last_update_date)
-        VALUES (${id}, ${orderId}, ${partNo}, ${qty}, now(), now())`
+    sql`INSERT INTO picking_items (id, picking_order_id, part_no, qty, line_id, line_number, shipment_number, created_date, last_update_date)
+        VALUES (${id}, ${orderId}, ${partNo}, ${qty}, ${lineId}, 1, 1, now(), now())`
   );
   return id;
 }
@@ -152,8 +153,8 @@ test("list: seeded order with item/qty counts; status filter", async () => {
   assert.equal(row.shipTo, "ACME Electronics (HK)");
   assert.equal(row.customerCode, "ACME");
   assert.ok(row.deliveryDate);
-  assert.equal(row.itemCount, 2);
-  assert.equal(row.totalQty, 1500);
+  assert.equal(row.itemCount, 3);
+  assert.equal(row.totalQty, 1800);
   assert.equal(row.pickedQty, 0);
 
   assert.equal((await listPickingOrders(client.db, "pending")).length, 1);
@@ -175,8 +176,8 @@ test("detail: nested shape — order, measuringTask, items with allocations/pack
   assert.equal(detail.measuringTask, null);
   assert.equal(detail.boxes.length, 0);
 
-  assert.equal(detail.items.length, 2);
-  const [item1, item2] = detail.items;
+  assert.equal(detail.items.length, 3);
+  const [item1, item2, item3] = detail.items;
   assert.equal(item1.partNo, "RK73H1JTTD1002F");
   assert.equal(item1.wclItemNo, "RK73H1JTTD1002F");
   assert.equal(item1.qty, 1000);
@@ -185,6 +186,9 @@ test("detail: nested shape — order, measuringTask, items with allocations/pack
   assert.equal(item2.partNo, "RK73H1JTTD2202F");
   assert.equal(item2.qty, 500);
   assert.equal(item2.allocatedQty, 500);
+  assert.equal(item3.partNo, "RK73B1JTTD181G");
+  assert.equal(item3.qty, 300);
+  assert.equal(item3.allocatedQty, 300);
 
   assert.equal(item1.allocations.length, 1);
   const alloc = item1.allocations[0];
@@ -203,6 +207,21 @@ test("detail: nested shape — order, measuringTask, items with allocations/pack
   assert.equal(alloc.lot.allocatedQty, 1000);
   assert.equal(alloc.lot.availableQty, 0);
   assert.equal(item1.packages.length, 0);
+
+  // the 181G item allocates from the A-01-02 lot, which SO-DEMO-0002 also
+  // draws on (300 + 400 = the full 700)
+  assert.equal(item3.allocations.length, 1);
+  const alloc3 = item3.allocations[0];
+  assert.equal(alloc3.qty, 300);
+  assert.ok(alloc3.lot);
+  assert.equal(alloc3.lot.shelfCode, "A-01-02");
+  assert.equal(alloc3.lot.boxId, "BOX-H-20260701-0002");
+  assert.equal(alloc3.lot.dateCode, "2604");
+  assert.equal(alloc3.lot.lotCode, "L2604A");
+  assert.equal(alloc3.lot.totalQty, 700);
+  assert.equal(alloc3.lot.allocatedQty, 700);
+  assert.equal(alloc3.lot.availableQty, 0);
+  assert.equal(item3.packages.length, 0);
 
   const notFound = await catchHttp(getPickingOrderDetail(client.db, randomUUID()));
   assert.equal(notFound.status, 404);
@@ -564,8 +583,10 @@ test("close flow: add-all-unboxed auto-finishes; verify → measure → close ca
   const { orderId, actorId } = await seededOrderAllocated();
   const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
   const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F");
+  const item3 = await pickingItemIdOf(orderId, "RK73B1JTTD181G");
   const p1 = (await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 1000 })).packageIds[0];
   const p2 = (await scanPickingItem(client.db, item2, { actorId, allocationId: (await allocationOf(item2)).id, qty: 500 })).packageIds[0];
+  const p3 = (await scanPickingItem(client.db, item3, { actorId, allocationId: (await allocationOf(item3)).id, qty: 300 })).packageIds[0];
 
   const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
   const emptyClose = await catchHttp(closeShippingBox(client.db, { shippingBoxId: box.id, actorId }));
@@ -573,7 +594,7 @@ test("close flow: add-all-unboxed auto-finishes; verify → measure → close ca
   assert.equal(emptyClose.message, "cannot_close_empty_shipping_box");
 
   const { packed } = await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
-  assert.equal(packed, 2);
+  assert.equal(packed, 3);
 
   // last package boxed → order auto-finished + measuring task (exactly one)
   const order = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM picking_orders WHERE id = ${orderId}`);
@@ -603,6 +624,7 @@ test("close flow: add-all-unboxed auto-finishes; verify → measure → close ca
 
   await verifyPackage(client.db, { packageId: p1, actorId });
   await verifyPackage(client.db, { packageId: p2, actorId });
+  await verifyPackage(client.db, { packageId: p3, actorId });
 
   // destination falls back to the order's ship_to, so the
   // first failing requirement is the missing box size
@@ -647,9 +669,10 @@ test("close flow: add-all-unboxed auto-finishes; verify → measure → close ca
   assert.equal(detail.boxes.length, 1);
   assert.equal(detail.boxes[0].status, "closed");
   assert.equal(detail.boxes[0].boxSize, "26 X 20 X 20");
-  assert.equal(detail.boxes[0].packageCount, 2);
+  assert.equal(detail.boxes[0].packageCount, 3);
   assert.equal(detail.items[0].pickedQty, 1000);
   assert.equal(detail.items[1].pickedQty, 500);
+  assert.equal(detail.items[2].pickedQty, 300);
 
   const again = await catchHttp(closeShippingBox(client.db, { shippingBoxId: box.id, actorId }));
   assert.equal(again.status, 409);
@@ -683,8 +706,10 @@ test("finish: explicit finish + guards (unfinished, empty, task exists, already 
   // finish the seeded order fully by hand: scan all + box all, then explicit finish
   const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
   const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F");
+  const item3 = await pickingItemIdOf(orderId, "RK73B1JTTD181G");
   await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 1000 });
   await scanPickingItem(client.db, item2, { actorId, allocationId: (await allocationOf(item2)).id, qty: 500 });
+  await scanPickingItem(client.db, item3, { actorId, allocationId: (await allocationOf(item3)).id, qty: 300 });
   const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
   await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId }); // auto-finishes here
 
@@ -719,8 +744,10 @@ test("verify: guard cascade — unboxed, no task, ok, duplicate, closed box", as
   assert.equal(noTask.message, "no_pending_measure_or_verify_task");
 
   // finish the order (auto) so the measuring task exists
+  const item3 = await pickingItemIdOf(orderId, "RK73B1JTTD181G");
   const p2 = (await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 500 })).packageIds[0];
   const p3 = (await scanPickingItem(client.db, item2, { actorId, allocationId: (await allocationOf(item2)).id, qty: 500 })).packageIds[0];
+  const p4 = (await scanPickingItem(client.db, item3, { actorId, allocationId: (await allocationOf(item3)).id, qty: 300 })).packageIds[0];
   await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
 
   await verifyPackage(client.db, { packageId: p1, actorId });
@@ -742,6 +769,7 @@ test("verify: guard cascade — unboxed, no task, ok, duplicate, closed box", as
 
   await verifyPackage(client.db, { packageId: p2, actorId });
   await verifyPackage(client.db, { packageId: p3, actorId });
+  await verifyPackage(client.db, { packageId: p4, actorId });
   await updateShippingBox(client.db, box.id, { actorId, boxSize: "26 X 20 X 20", netWeightKg: 0.5, grossWeightKg: 0.8 });
   await closeShippingBox(client.db, { shippingBoxId: box.id, actorId });
 
@@ -767,10 +795,10 @@ test("scan from receiving sources: order-level (no box) and box-level allocation
   const actorId = await actorIdOf();
   const roId = await receivingOrderIdOf("100002"); // KOA, pending in the seed
 
-  // keep the world hermetic: the seeded SO-DEMO-0002 competes for the same
-  // parts, and its shelf stock would win FIFO before the receiving sources
-  // under test
-  await client.db.execute(sql`DELETE FROM picking_orders WHERE order_no = 'SO-DEMO-0002'`);
+  // keep the world hermetic: the seeded orders compete for the same parts
+  // (SO-DEMO-0001 now also demands 181G, and the seeded shelf stock would win
+  // FIFO before the receiving sources under test)
+  await client.db.execute(sql`DELETE FROM picking_orders WHERE order_no IN ('SO-DEMO-0001', 'SO-DEMO-0002')`);
   await client.db.execute(sql`DELETE FROM inventory_lots WHERE box_id = 'BOX-H-20260701-0002'`);
 
   // give the RK73H1JTTD4702F line a box → its allocation becomes box-level;
@@ -909,7 +937,7 @@ test("report-issues: reported/skipped, issue fields + log; validations", async (
   const fullQty = await catchHttp(
     reportPickingOrderIssues(client.db, {
       actorId,
-      entries: [{ pickingOrderId: orderId, reason: "insufficient_stock", qty: 1500 }], // = totalQty
+      entries: [{ pickingOrderId: orderId, reason: "insufficient_stock", qty: 1800 }], // = totalQty
     })
   );
   assert.equal(fullQty.status, 400);
@@ -1056,7 +1084,7 @@ test("resolve-issue: report → resolve → pending, issue fields cleared, log; 
 
   // participates in allocation again (the route runs allocateAll post-commit)
   const afterResolve = await allocateAll(client.db);
-  assert.equal(afterResolve.demands, 2);
+  assert.equal(afterResolve.demands, 3);
   assert.ok((await itemStateOf(itemId)).allocatedQty > 0);
 
   // error paths
@@ -1180,16 +1208,18 @@ test("picking order logs: order + item/package/box rows with actor name, newest 
   const { orderId, actorId } = await seededOrderAllocated();
   const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F"); // qty 1000
   const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F"); // qty 500
+  const item3 = await pickingItemIdOf(orderId, "RK73B1JTTD181G"); // qty 300
 
   assert.deepEqual(await listPickingOrderLogs(client.db, orderId), []);
 
-  // full flow: box → scan both items in full → box everything (auto-finish
+  // full flow: box → scan all items in full → box everything (auto-finish
   // creates the measuring task) → verify one package
   const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
   const p1 = (
     await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 1000 })
   ).packageIds[0]!;
   await scanPickingItem(client.db, item2, { actorId, allocationId: (await allocationOf(item2)).id, qty: 500 });
+  await scanPickingItem(client.db, item3, { actorId, allocationId: (await allocationOf(item3)).id, qty: 300 });
   await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
   await verifyPackage(client.db, { packageId: p1, actorId });
 
@@ -1214,7 +1244,7 @@ test("picking order logs: order + item/package/box rows with actor name, newest 
   const byType = new Map<string, string[]>();
   for (const l of logs) byType.set(l.entityType, [...(byType.get(l.entityType) ?? []), l.entityId]);
   assert.ok(byType.get("picking_order")!.includes(orderId));
-  assert.deepEqual(new Set(byType.get("picking_item")), new Set([item1, item2]));
+  assert.deepEqual(new Set(byType.get("picking_item")), new Set([item1, item2, item3]));
   assert.deepEqual(byType.get("picking_package"), [p1]);
   assert.deepEqual(byType.get("shipping_box"), [box.id]);
 

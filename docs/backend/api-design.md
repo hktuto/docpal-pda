@@ -341,7 +341,12 @@ removed (2026-07-29, spec
 `docs/superpowers/specs/2026-07-29-schema-system-fields-supplier-code-design.md`).
 Receiving and picking items accept an optional free-form `additionalData`
 object, passed through to the line's `additional_data` jsonb column on
-insert (it is not part of the reconcile business keys). Carton metadata
+insert (it is not part of the reconcile business keys). Picking items
+additionally require the upstream Oracle line identifiers `lineId`
+(bigint), `lineNumber`, `shipmentNumber` (integers — 400 when missing or
+non-integer); they are stored on the line and updated on reconcile
+(expected-side fields, like `qty`) but the reconcile business key stays
+`partNo`. Carton metadata
 convention for receiving items (consumed by the whole-box picking claim —
 see §Picking): `{boxSize, netWeight, grossWeight, weightUnit}` with
 `weightUnit` `"g"` | `"kg"` (default `"kg"`).

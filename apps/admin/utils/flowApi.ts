@@ -33,6 +33,10 @@ export interface PickingItemRow {
   qty: number;
   pickedQty: number;
   allocatedQty: number;
+  lineId: string;
+  lineNumber: number;
+  shipmentNumber: number;
+  status: string;
   allocations: {
     id: string;
     qty: number;

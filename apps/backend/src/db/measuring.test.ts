@@ -70,7 +70,7 @@ interface FinishedFixture {
 
 /**
  * The seeded pending order (SO-DEMO-0001) driven to auto-finish through the
- * Phase 3 domain functions: allocate → scan both items in full → box all
+ * Phase 3 domain functions: allocate → scan all three items in full → box all
  * (auto-finish creates the measuring task). The box is left OPEN.
  */
 async function finishedOrder(): Promise<FinishedFixture> {
@@ -79,12 +79,14 @@ async function finishedOrder(): Promise<FinishedFixture> {
   const orderId = await pickingOrderIdOf("SO-DEMO-0001");
   const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F"); // qty 1000
   const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F"); // qty 500
+  const item3 = await pickingItemIdOf(orderId, "RK73B1JTTD181G"); // qty 300, from the A-01-02 / BOX-H-20260701-0002 lot
   const p1 = (await scanPickingItem(client.db, item1, { actorId, allocationId: await allocationIdOf(item1), qty: 1000 })).packageIds[0];
   const p2 = (await scanPickingItem(client.db, item2, { actorId, allocationId: await allocationIdOf(item2), qty: 500 })).packageIds[0];
+  const p3 = (await scanPickingItem(client.db, item3, { actorId, allocationId: await allocationIdOf(item3), qty: 300 })).packageIds[0];
   const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
   await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId }); // auto-finishes
   const task = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM measuring_tasks WHERE picking_order_id = ${orderId}`);
-  return { orderId, actorId, boxId: box.id, taskId: task!.id, packageIds: [p1, p2] };
+  return { orderId, actorId, boxId: box.id, taskId: task!.id, packageIds: [p1, p2, p3] };
 }
 
 /** Verify the given packages, stamp measurements (kg), close the box. */
@@ -153,9 +155,10 @@ test("detail: consolidated task/order/boxes, packages carry part identity; 404",
   assert.equal(box.netWeight, null);
   assert.equal(box.destinationCountry, null);
   // 1000 pcs + 500 pcs at 6.3 g per 1000 pcs = 9.45 g → 0.009 kg
+  // (the 181G package has no net_weight_formula row, so it contributes 0)
   assert.equal(box.suggestedNetWeightKg, 0.009);
 
-  assert.equal(box.packages.length, 2);
+  assert.equal(box.packages.length, 3);
   const byPartNo = new Map(box.packages.map((p) => [p.partNo, p]));
   const pkg1 = byPartNo.get("RK73H1JTTD1002F")!;
   assert.equal(pkg1.id, packageIds[0]);
@@ -172,6 +175,11 @@ test("detail: consolidated task/order/boxes, packages carry part identity; 404",
   assert.equal(pkg2.qty, 500);
   assert.equal(pkg2.dateCode, "2603");
   assert.equal(pkg2.lotCode, "L2603B");
+  const pkg3 = byPartNo.get("RK73B1JTTD181G")!;
+  assert.equal(pkg3.id, packageIds[2]);
+  assert.equal(pkg3.qty, 300);
+  assert.equal(pkg3.dateCode, "2604");
+  assert.equal(pkg3.lotCode, "L2604A");
 
   const notFound = await catchHttp(getMeasuringTaskDetail(client.db, randomUUID()));
   assert.equal(notFound.status, 404);
@@ -201,7 +209,7 @@ test("complete guards: 404, actor_not_found, boxes open, unboxed packages", asyn
   // a package is left unboxed → 409 (the old "picking item not fully packed"
   // guard — new-schema form of packed !== picked).
   await removePackageFromBox(client.db, { shippingBoxId: boxId, packageId: packageIds[1], actorId });
-  await closeTheBox(boxId, actorId, [packageIds[0]]);
+  await closeTheBox(boxId, actorId, [packageIds[0], packageIds[2]]);
   const unboxed = await catchHttp(completeMeasuringTask(client.db, { taskId, actorId }));
   assert.equal(unboxed.status, 409);
   assert.equal(unboxed.message, "picking_items_not_fully_packed");
@@ -259,15 +267,17 @@ test("auto-complete: not the last box / unboxed package → task stays pending",
   const orderId = await pickingOrderIdOf("SO-DEMO-0001");
   const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F"); // qty 1000
   const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F"); // qty 500
+  const item3 = await pickingItemIdOf(orderId, "RK73B1JTTD181G"); // qty 300
   const p1 = (await scanPickingItem(client.db, item1, { actorId, allocationId: await allocationIdOf(item1), qty: 1000 })).packageIds[0];
   const p2 = (await scanPickingItem(client.db, item2, { actorId, allocationId: await allocationIdOf(item2), qty: 500 })).packageIds[0];
+  const p3 = (await scanPickingItem(client.db, item3, { actorId, allocationId: await allocationIdOf(item3), qty: 300 })).packageIds[0];
   const box1 = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
   await createShippingBox(client.db, { pickingOrderId: orderId, actorId }); // second (empty) box, left open
   await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box1.id, actorId }); // auto-finishes
   const taskId = (await queryGet<{ id: string }>(client.db, sql`SELECT id FROM measuring_tasks WHERE picking_order_id = ${orderId}`))!.id;
 
   // another box is still open → closing box1 does not auto-complete
-  await closeTheBox(box1.id, actorId, [p1, p2]);
+  await closeTheBox(box1.id, actorId, [p1, p2, p3]);
   const task = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM measuring_tasks WHERE id = ${taskId}`);
   assert.equal(task!.status, "pending");
 });
@@ -281,15 +291,19 @@ test("suggested net weight: formula-driven per box; null without any formula", a
   const orderId = await pickingOrderIdOf("SO-DEMO-0001");
   const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F"); // qty 1000
   const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F"); // qty 500
+  const item3 = await pickingItemIdOf(orderId, "RK73B1JTTD181G"); // qty 300
   const p1 = (await scanPickingItem(client.db, item1, { actorId, allocationId: await allocationIdOf(item1), qty: 1000 })).packageIds[0];
   const p2 = (await scanPickingItem(client.db, item2, { actorId, allocationId: await allocationIdOf(item2), qty: 500 })).packageIds[0];
+  const p3 = (await scanPickingItem(client.db, item3, { actorId, allocationId: await allocationIdOf(item3), qty: 300 })).packageIds[0];
 
-  // one package per box (box2 finishes the order): 1000 pcs of RK73H1JTTD1002F
-  // at 6.3 g per 1000 pcs → 6.3 g → 0.006 kg; 500 pcs → 3.15 g → 0.003 kg
+  // box1 holds the 1000 pcs of RK73H1JTTD1002F at 6.3 g per 1000 pcs → 6.3 g
+  // → 0.006 kg; box2 holds the 500 pcs → 3.15 g → 0.003 kg plus the 181G
+  // package, which has no formula row and contributes 0 (box2 finishes the order)
   const box1 = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
   await addPackageToBox(client.db, { shippingBoxId: box1.id, packageId: p1, actorId });
   const box2 = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
-  await addPackageToBox(client.db, { shippingBoxId: box2.id, packageId: p2, actorId }); // auto-finishes here
+  await addPackageToBox(client.db, { shippingBoxId: box2.id, packageId: p2, actorId });
+  await addPackageToBox(client.db, { shippingBoxId: box2.id, packageId: p3, actorId }); // auto-finishes here
 
   const taskId = (await queryGet<{ id: string }>(client.db, sql`SELECT id FROM measuring_tasks WHERE picking_order_id = ${orderId}`))!.id;
   const detail = await getMeasuringTaskDetail(client.db, taskId);
@@ -307,8 +321,8 @@ test("suggested net weight: formula-driven per box; null without any formula", a
       VALUES (${bareOrderId}, 'SO-BARE', 'finished', now(), now())`);
   await client.db.execute(sql`INSERT INTO measuring_tasks (id, picking_order_id, status, created_date)
       VALUES (${randomUUID()}, ${bareOrderId}, 'pending', now())`);
-  await client.db.execute(sql`INSERT INTO picking_items (id, picking_order_id, part_no, qty, created_date, last_update_date)
-      VALUES (${bareItemId}, ${bareOrderId}, 'RK73B1JTTD181G', 100, now(), now())`);
+  await client.db.execute(sql`INSERT INTO picking_items (id, picking_order_id, part_no, qty, line_id, line_number, shipment_number, created_date, last_update_date)
+      VALUES (${bareItemId}, ${bareOrderId}, 'RK73B1JTTD181G', 100, 9003, 1, 1, now(), now())`);
   await client.db.execute(sql`INSERT INTO shipping_boxes (id, picking_order_id, status, created_date, last_update_date)
       VALUES (${bareBoxId}, ${bareOrderId}, 'open', now(), now())`);
   await client.db.execute(sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, shipping_box_id, created_date, last_update_date)

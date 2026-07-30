@@ -78,8 +78,8 @@ interface FinishedFixture {
 
 /**
  * The seeded pending order (SO-DEMO-0001) driven to auto-finish through the
- * domain functions: allocate → scan both items in full → box all. The box is
- * left OPEN. Which task the finish creates depends on the flow-step config.
+ * domain functions: allocate → scan all three items in full → box all. The box
+ * is left OPEN. Which task the finish creates depends on the flow-step config.
  */
 async function finishedOrder(): Promise<FinishedFixture> {
   const actorId = await actorIdOf();
@@ -87,11 +87,13 @@ async function finishedOrder(): Promise<FinishedFixture> {
   const orderId = await pickingOrderIdOf("SO-DEMO-0001");
   const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F"); // qty 1000
   const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F"); // qty 500
+  const item3 = await pickingItemIdOf(orderId, "RK73B1JTTD181G"); // qty 300 (from the A-01-02 / BOX-H-20260701-0002 lot)
   const p1 = (await scanPickingItem(client.db, item1, { actorId, allocationId: await allocationIdOf(item1), qty: 1000 })).packageIds[0];
   const p2 = (await scanPickingItem(client.db, item2, { actorId, allocationId: await allocationIdOf(item2), qty: 500 })).packageIds[0];
+  const p3 = (await scanPickingItem(client.db, item3, { actorId, allocationId: await allocationIdOf(item3), qty: 300 })).packageIds[0];
   const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
   await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId }); // auto-finishes
-  return { orderId, actorId, boxId: box.id, packageIds: [p1, p2] };
+  return { orderId, actorId, boxId: box.id, packageIds: [p1, p2, p3] };
 }
 
 /** Verify the given packages, stamp measurements (kg), close the box. */
@@ -180,13 +182,15 @@ test("detail: consolidated task/order/boxes; 404", async () => {
   assert.equal(box.id, boxId);
   assert.equal(box.status, "closed");
   assert.equal(box.boxSize, "26 X 20 X 20");
-  assert.equal(box.suggestedNetWeightKg, 0.009); // 1000+500 pcs at 6.3 g per 1000 pcs
-  assert.equal(box.packages.length, 2);
+  assert.equal(box.suggestedNetWeightKg, 0.009); // 1000+500 pcs at 6.3 g per 1000 pcs (181G has no formula row)
+  assert.equal(box.packages.length, 3);
   const byPartNo = new Map(box.packages.map((p) => [p.partNo, p]));
   assert.equal(byPartNo.get("RK73H1JTTD1002F")!.id, packageIds[0]);
   assert.equal(byPartNo.get("RK73H1JTTD1002F")!.verified, true);
   assert.equal(byPartNo.get("RK73H1JTTD1002F")!.verifyVerified, false);
   assert.equal(byPartNo.get("RK73H1JTTD2202F")!.id, packageIds[1]);
+  assert.equal(byPartNo.get("RK73B1JTTD181G")!.id, packageIds[2]);
+  assert.equal(byPartNo.get("RK73B1JTTD181G")!.qty, 300);
 
   const notFound = await catchHttp(getVerifyTaskDetail(client.db, randomUUID()));
   assert.equal(notFound.status, 404);
@@ -219,6 +223,7 @@ test("complete: happy path + guards (404, actor, not pending, re-scan required)"
   assert.equal(halfRescanned.message, "packages_not_all_rescanned");
 
   await verifyPackage(client.db, { packageId: packageIds[1], actorId });
+  await verifyPackage(client.db, { packageId: packageIds[2], actorId });
   await completeVerifyTask(client.db, { taskId: verifyTaskId, actorId });
 
   const task = await verifyTaskOf(orderId);
@@ -354,7 +359,7 @@ test("reopen: closed box → open + both package flags reset; re-verify + re-clo
     client.db,
     sql`SELECT id, verified, verify_verified AS "verifyVerified" FROM picking_packages WHERE shipping_box_id = ${boxId}`
   );
-  assert.equal(pkgs.length, 2);
+  assert.equal(pkgs.length, 3);
   assert.ok(pkgs.every((p) => !p.verified && !p.verifyVerified));
 
   const log = await queryGet<{ fromState: string; toState: string; actorId: string | null }>(
@@ -408,7 +413,8 @@ test("reopen: 409 verify_task_not_pending when the order only has a pending meas
   // keep the measuring task pending: an unboxed package blocks the
   // last-box-close auto-complete, so no verify task is spawned
   await removePackageFromBox(client.db, { shippingBoxId: fx.boxId, packageId: fx.packageIds[1], actorId: fx.actorId });
-  await closeTheBox(fx.boxId, fx.actorId, [fx.packageIds[0]]);
+  // the box still holds packages 1 and 3 — both must be verified to close
+  await closeTheBox(fx.boxId, fx.actorId, [fx.packageIds[0], fx.packageIds[2]]);
   assert.equal((await measuringTaskOf(fx.orderId))!.status, "pending");
 
   const noVerify = await catchHttp(reopenShippingBox(client.db, { shippingBoxId: fx.boxId, actorId: fx.actorId }));

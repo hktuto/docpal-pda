@@ -305,7 +305,9 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     reconcile by business key (`partNo`), `picked_qty`/`allocated_qty` never
     written, `customerCode` resolves to `customer_profiles.code`; a changed
     upsert on a `pending`/`picking` order runs `allocateAll` best-effort
-    after commit.
+    after commit. Each item requires the upstream Oracle line identifiers
+    `lineId` (bigint), `lineNumber`, `shipmentNumber` (400 when missing);
+    they are stored/updated as expected-side fields like `qty`.
   - Both reference parts by `partNo` and resolve `supplierCode` /
     `customerCode` (400 `unknown_part` / `unknown_supplier` /
     `unknown_customer` with the code in the message); `org_id` is accepted
@@ -361,6 +363,14 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   invalidate their local API cache.
   Authenticated like every other route, with one exception: as the only
   route where `?token=` is accepted (EventSource cannot set headers).
+- `GET /sync-events?since=<id>&limit=<n>` — JSON poll endpoint
+  (`src/routes/sync-events.ts`) over the `sync_events` table-change feed for
+  the external sync service. Rows are written by the `sync_events_notify()`
+  trigger on every business table (only for commits by the backend's own
+  `warehouse` role — the sync service writes as `warehouse_sync` and is
+  skipped, breaking the circular-event loop; seed/reset suppresses via
+  `SET LOCAL app.sync_events_off = 1`). Event contract + full event list:
+  `docs/backend/event-catalog.md`.
 
 ## Run it
 

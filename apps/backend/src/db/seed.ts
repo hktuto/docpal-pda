@@ -1,5 +1,5 @@
 import postgres from "postgres";
-import { sql } from "drizzle-orm";
+import { sql, sql as dsql } from "drizzle-orm";
 import type { PgTableWithColumns } from "drizzle-orm/pg-core";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -77,6 +77,7 @@ async function insertChunked<T extends PgTableWithColumns<any>>(
 
 // every table created by Drizzle migrations
 export const ALL_TABLES = [
+  "sync_events",
   "app_events",
   "inventory_transactions",
   "transaction_logs",
@@ -118,8 +119,9 @@ const uid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0"
 // scripts/gen-seed-demo-scenario.mjs (seed-demo-scenario.ts) —
 //  - 2 PENDING receiving orders (2 cartons × 2-3 items each, carton metadata
 //    in additional_data) for the receive → put-away journey
-//  - 2 PENDING picking orders: SO-DEMO-0001 exactly matches shelf box
-//    BOX-H-20260701-0001 (whole-box claim demo, fully allocated);
+//  - 2 PENDING picking orders: SO-DEMO-0001 is fully allocated — scan its
+//    extra 181G×300 line item-by-item first, then the remaining demand
+//    exactly matches shelf box BOX-H-20260701-0001 (whole-box claim demo);
 //    SO-DEMO-0002 is only partially covered by shelf stock (the shortfall
 //    sits on the pending receiving orders)
 // Master data (users, suppliers, parts, sub-inventories, shelves, net
@@ -395,7 +397,7 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
     await db.insert(shelfBoxItems).values([...demoShelfBoxItems]);
     await db.insert(inventoryLots).values([...demoLots]);
   }
-  // 2 pending picking orders (SO-DEMO-0001 whole-box-match, SO-DEMO-0002 partial).
+  // 2 pending picking orders (SO-DEMO-0001 item-by-item line + whole-box match, SO-DEMO-0002 partial).
   await db.insert(pickingOrders).values([...demoPickingOrders]);
   await db.insert(pickingItems).values([...demoPickingItems]);
 
@@ -420,7 +422,11 @@ export async function seedIfEmpty(sql: postgres.Sql, db: AppDb): Promise<boolean
   const rows = await sql`SELECT COUNT(*)::int AS c FROM users`;
   const c = Number((rows[0] as { c: string | number }).c);
   if (c > 0) return false;
-  await seedAll(db);
+  await db.transaction(async (tx) => {
+    // Demo seeding must not flood the sync-service event feed.
+    await tx.execute(dsql`SET LOCAL app.sync_events_off = 1`);
+    await seedAll(tx as unknown as AppDb);
+  });
   return true;
 }
 
@@ -431,6 +437,8 @@ export async function resetAndReseed(
   opts?: { stockBoxes?: boolean; bulkParts?: boolean }
 ): Promise<void> {
   await db.transaction(async (tx) => {
+    // Demo seeding must not flood the sync-service event feed.
+    await tx.execute(sql`SET LOCAL app.sync_events_off = 1`);
     await tx.execute(sql`TRUNCATE TABLE ${sql.raw(ALL_TABLES.join(", "))} CASCADE`);
     await seedAll(tx as unknown as AppDb, opts);
   });

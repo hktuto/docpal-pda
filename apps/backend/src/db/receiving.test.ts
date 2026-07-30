@@ -182,7 +182,9 @@ test("scan: happy path — partial receipt, provisional_received, ledger row", a
   );
 
   // (SO-DEMO-0002 has open demand for this part, so allocation RESERVE
-  // rows also reference the item — filter to the receipt rows)
+  // rows also reference the item — filter to the receipt rows.
+  // SO-DEMO-0001's 181G×300 demand is fully covered by the A-01-02 shelf
+  // lot, so dock receipts here only ever allocate to SO-DEMO-0002.)
   const txns = await queryAll<{
     txnType: string;
     qtyType: string;

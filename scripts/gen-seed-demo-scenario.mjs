@@ -56,12 +56,14 @@ const INITIAL = {
     ["SO-DEMO-0002", "CUST-PO-9002", "2026-08-01", "ACME Electronics (HK)", "ACME", 2, "STORE1"],
   ],
   picking_items: [
-    ["orderNo", "partNo", "qty"],
-    ["SO-DEMO-0001", "RK73H1JTTD1002F", 1000],
-    ["SO-DEMO-0001", "RK73H1JTTD2202F", 500],
-    ["SO-DEMO-0002", "RK73B1JTTD181G", 1000],
-    ["SO-DEMO-0002", "RK73H1JTTD4702F", 600],
-    ["SO-DEMO-0002", "RK73H2ATTD1372F", 700],
+    ["orderNo", "partNo", "qty", "lineId", "lineNumber", "shipmentNumber"],
+    ["SO-DEMO-0001", "RK73H1JTTD1002F", 1000, 1001, 1, 1],
+    ["SO-DEMO-0001", "RK73H1JTTD2202F", 500, 1002, 2, 1],
+    // scanned item-by-item first; THEN the remaining demand == BOX-H-20260701-0001
+    ["SO-DEMO-0001", "RK73B1JTTD181G", 300, 1003, 3, 1],
+    ["SO-DEMO-0002", "RK73B1JTTD181G", 1000, 2001, 1, 1],
+    ["SO-DEMO-0002", "RK73H1JTTD4702F", 600, 2002, 2, 1],
+    ["SO-DEMO-0002", "RK73H2ATTD1372F", 700, 2003, 3, 1],
   ],
   shelf_boxes: [
     ["boxId", "shelfCode", "orgId", "subInventoryCode", "status"],
@@ -72,7 +74,7 @@ const INITIAL = {
     ["boxId", "shelfCode", "partNo", "qty", "dateCode", "lotCode", "coo", "cow"],
     ["BOX-H-20260701-0001", "A-01-01", "RK73H1JTTD1002F", 1000, "2603", "L2603A", "JP", "JP"],
     ["BOX-H-20260701-0001", "A-01-01", "RK73H1JTTD2202F", 500, "2603", "L2603B", "JP", "JP"],
-    ["BOX-H-20260701-0002", "A-01-02", "RK73B1JTTD181G", 400, "2604", "L2604A", "JP", "JP"],
+    ["BOX-H-20260701-0002", "A-01-02", "RK73B1JTTD181G", 700, "2604", "L2604A", "JP", "JP"],
     ["BOX-H-20260701-0002", "A-01-02", "RK73H1JTTD4702F", 200, "2604", "L2604B", "JP", "JP"],
   ],
   README: [
@@ -83,7 +85,8 @@ const INITIAL = {
     ["3. pnpm --filter @warehouse/backend db:seed   (or POST /dev/reset)"],
     [""],
     ["Story: 2 pending receiving orders (2 cartons each, 2-3 items per carton),"],
-    ["PO SO-DEMO-0001 exactly matches shelf box BOX-H-20260701-0001 (whole-box claim),"],
+    ["PO SO-DEMO-0001: scan the 181G×300 line item-by-item first — then the"],
+    ["remaining demand exactly matches shelf box BOX-H-20260701-0001 (whole-box claim),"],
     ["PO SO-DEMO-0002 is only partially covered by shelf stock — the rest arrives"],
     ["on the two receiving orders (process them, then re-allocate)."],
     [""],
@@ -188,6 +191,9 @@ const orderNos = new Set(pickOrders.map((o) => str(o.orderNo)));
 for (const it of pickItems) {
   if (!orderNos.has(str(it.orderNo))) fail(`picking_items row ${it.__row}: unknown orderNo "${it.orderNo}"`);
   int(it.qty, "picking_items", it.__row, "qty");
+  int(it.lineId, "picking_items", it.__row, "lineId");
+  int(it.lineNumber, "picking_items", it.__row, "lineNumber");
+  int(it.shipmentNumber, "picking_items", it.__row, "shipmentNumber");
 }
 const boxIds = new Set(shelfBoxes.map((b) => str(b.boxId)));
 for (const s of shelfStock) {
@@ -291,6 +297,9 @@ const demoPickingItems = pickItems.map((it) => ({
   pickingOrderId: pickIdByNo.get(str(it.orderNo)),
   partNo: str(it.partNo),
   qty: Number(it.qty),
+  lineId: Number(it.lineId),
+  lineNumber: Number(it.lineNumber),
+  shipmentNumber: Number(it.shipmentNumber),
 }));
 
 const demoShelfBoxes = shelfBoxes.map((b) => ({
@@ -347,7 +356,7 @@ ${ts("demoReceivingOrders", demoReceivingOrders, (r) => `id: ${j(r.id)}, batchNo
 ${ts("demoReceivingInvoices", demoReceivingInvoices, (r) => `id: ${j(r.id)}, receivingOrderId: ${j(r.receivingOrderId)}, invoiceNo: ${j(r.invoiceNo)}, supplierCode: ${j(r.supplierCode)}, wclCompanyName: ${j(r.wclCompanyName)}, totalQty: ${r.totalQty}, totalCtn: ${r.totalCtn}, deliveryDate: ${d(r.deliveryDate)}, orgId: ${r.orgId}`)}
 ${ts("demoReceivingInvoiceItems", demoReceivingInvoiceItems, (r) => `id: ${j(r.id)}, receivingInvoiceId: ${j(r.receivingInvoiceId)}, partNo: ${j(r.partNo)}, wclItemNo: ${j(r.wclItemNo)}, poNo: ${j(r.poNo)}, poLine: ${j(r.poLine)}, lineQty: ${r.lineQty}, ctnNo: ${j(r.ctnNo)}, dateCode: ${j(r.dateCode)}, lotCode: ${j(r.lotCode)}, coo: ${j(r.coo)}, cow: ${j(r.cow)}, orgId: ${r.orgId}, additionalData: ${j(r.additionalData)}`)}
 ${ts("demoPickingOrders", demoPickingOrders, (r) => `id: ${j(r.id)}, orderNo: ${j(r.orderNo)}, poNo: ${j(r.poNo)}, deliveryDate: ${d(r.deliveryDate)}, shipTo: ${j(r.shipTo)}, customerCode: ${j(r.customerCode)}, orgId: ${r.orgId}, subInventoryCode: ${j(r.subInventoryCode)}, status: "pending" as const`)}
-${ts("demoPickingItems", demoPickingItems, (r) => `id: ${j(r.id)}, pickingOrderId: ${j(r.pickingOrderId)}, partNo: ${j(r.partNo)}, qty: ${r.qty}`)}
+${ts("demoPickingItems", demoPickingItems, (r) => `id: ${j(r.id)}, pickingOrderId: ${j(r.pickingOrderId)}, partNo: ${j(r.partNo)}, qty: ${r.qty}, lineId: ${r.lineId}, lineNumber: ${r.lineNumber}, shipmentNumber: ${r.shipmentNumber}`)}
 ${ts("demoShelfBoxes", demoShelfBoxes, (r) => `id: ${j(r.id)}, shelfCode: ${j(r.shelfCode)}, orgId: ${r.orgId}, subInventoryCode: ${j(r.subInventoryCode)}, status: ${j(r.status)}`)}
 ${ts("demoShelfBoxItems", demoShelfBoxItems, (r) => `id: ${j(r.id)}, shelfBoxId: ${j(r.shelfBoxId)}, partNo: ${j(r.partNo)}, qty: ${r.qty}`)}
 ${ts("demoLots", demoLots, (r) => `id: ${j(r.id)}, partNo: ${j(r.partNo)}, dateCode: ${j(r.dateCode)}, lotCode: ${j(r.lotCode)}, coo: ${j(r.coo)}, cow: ${j(r.cow)}, shelfCode: ${j(r.shelfCode)}, boxId: ${j(r.boxId)}, orgId: ${r.orgId}, subInventoryCode: ${j(r.subInventoryCode)}, totalQty: ${r.totalQty}`)}`;

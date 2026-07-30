@@ -21,7 +21,8 @@ export interface TestDb {
 /**
  * Wipe + re-seed the demo scenario world (Excel-driven demo dataset:
  * 2 pending receiving orders, 2 picking orders — SO-DEMO-0001 fully
- * allocated incl. one whole-box match, SO-DEMO-0002 partially allocated —
+ * allocated (181G×300 line scanned item-by-item, then the rest is a
+ * whole-box match), SO-DEMO-0002 partially allocated —
  * and 2 stocked shelf boxes). Bulk Oracle parts are skipped to keep the
  * reseed fast; the seeded shelf boxes stay because many flows assert on
  * them.

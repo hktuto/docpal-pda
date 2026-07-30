@@ -356,6 +356,12 @@ export interface PickingItem {
   qty: number;
   pickedQty: number;
   allocatedQty: number;
+  /** Upstream Oracle order-line identifiers (stringified bigint). */
+  lineId: string;
+  lineNumber: number;
+  shipmentNumber: number;
+  /** Backend-maintained: pending | picked. */
+  status: string;
   /** Free-form jsonb extras from the upstream sync (nullable). */
   additionalData: Record<string, unknown> | null;
   allocations: PickingAllocation[];
