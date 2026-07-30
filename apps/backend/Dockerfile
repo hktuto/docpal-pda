@@ -15,7 +15,7 @@ RUN pnpm --filter @warehouse/backend build \
   && cp -r apps/backend/drizzle /deploy/drizzle \
   && cp apps/backend/src/db/seed-parts-data.json /deploy/dist/db/seed-parts-data.json
 
-FROM node:20-alpine
+FROM node:22-alpine
 WORKDIR /app
 COPY --from=build /deploy .
 ENV NODE_ENV=production \
