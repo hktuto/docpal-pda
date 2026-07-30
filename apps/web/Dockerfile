@@ -16,7 +16,7 @@ COPY layers/i18n layers/i18n
 COPY apps/web apps/web
 RUN pnpm --filter @warehouse/web build
 
-FROM node:20-alpine
+FROM node:22-alpine
 WORKDIR /app
 COPY --from=build /repo/apps/web/.output .
 ENV NODE_ENV=production \
