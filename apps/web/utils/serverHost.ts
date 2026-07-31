@@ -16,7 +16,7 @@ export interface ServerHostOption {
 }
 
 export const SERVER_HOSTS: ServerHostOption[] = [
-  { id: "hk", url: "https://wms-hk.docpal.weltronics.com:3000" },
+  { id: "hk", url: "https://mobile-wms.wclsolution.com:3000" },
   { id: "sz", url: "https://wms-sz.docpal.weltronics.com:3000" },
   { id: "sh", url: "https://wms-sh.docpal.weltronics.com:3000" },
   { id: "gz", url: "https://wms-gz.docpal.weltronics.com:3000" },
