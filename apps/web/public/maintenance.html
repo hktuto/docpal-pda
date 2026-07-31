@@ -36,7 +36,7 @@
 <body>
   <div class="card">
     <h1>系統暫時無法連線</h1>
-    <p>無法連到 Warehouse PDA 伺服器，可能正在維護或尚未啟動。系統會自動重試。</p>
+    <p>無法連到 Warehouse PDA 伺服器，可能正在維護或尚未啟動。請按「立即重試」重新連線。</p>
     <p class="url" id="target"></p>
     <button id="retry">立即重試</button>
     <button class="secondary" id="pick">選擇伺服器</button>
@@ -60,8 +60,6 @@
   // Legacy override key from before the /server picker existed — still
   // honored so existing devices keep their setting.
   var LEGACY_STORAGE_KEY = 'pda-server-url-override';
-  var RETRY_MS = 10000;
-  var timer = null;
 
   function override() {
     try { return localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY) || ''; } catch (e) { return ''; }
@@ -80,11 +78,6 @@
   function go() {
     statusEl.textContent = '連線中…';
     window.location.href = targetUrl();
-  }
-
-  function schedule() {
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(go, RETRY_MS);
   }
 
   document.getElementById('retry').addEventListener('click', go);
@@ -113,7 +106,6 @@
   });
 
   render();
-  schedule();
 })();
 </script>
 </body>
