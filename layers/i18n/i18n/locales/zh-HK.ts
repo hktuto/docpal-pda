@@ -111,7 +111,20 @@ export default {
     username: "用戶名稱",
     password: "密碼",
     placeholderUsername: "operator",
-    placeholderPassword: "••••••••"
+    placeholderPassword: "••••••••",
+    changeServer: "更改伺服器"
+  },
+  server: {
+    title: "選擇伺服器",
+    subtitle: "選擇此裝置要連接的伺服器，應用程式會記住您的選擇。",
+    regions: {
+      hk: "香港",
+      sz: "深圳",
+      sh: "上海",
+      gz: "廣州",
+      bj: "北京",
+      local: "本機（開發）"
+    }
   },
   receiving: {
     title: "收貨",

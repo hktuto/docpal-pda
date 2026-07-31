@@ -111,7 +111,20 @@ export default {
     username: "Username",
     password: "Password",
     placeholderUsername: "operator",
-    placeholderPassword: "••••••••"
+    placeholderPassword: "••••••••",
+    changeServer: "Change server"
+  },
+  server: {
+    title: "Choose server",
+    subtitle: "Select the server for this device. The app remembers your choice.",
+    regions: {
+      hk: "Hong Kong",
+      sz: "Shenzhen",
+      sh: "Shanghai",
+      gz: "Guangzhou",
+      bj: "Beijing",
+      local: "Local (dev)"
+    }
   },
   receiving: {
     title: "Receiving",

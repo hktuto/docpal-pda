@@ -39,6 +39,7 @@
     <p>無法連到 Warehouse PDA 伺服器，可能正在維護或尚未啟動。系統會自動重試。</p>
     <p class="url" id="target"></p>
     <button id="retry">立即重試</button>
+    <button class="secondary" id="pick">選擇伺服器</button>
     <div class="status" id="status"></div>
 
     <details>
@@ -52,13 +53,18 @@
 
 <script>
 (function () {
+  // Dev default — production APK builds (scripts/build-android-apk.mjs) rewrite
+  // this line to the PRODUCTION_URL from the root .env after `nuxt generate`.
   var DEFAULT_URL = 'http://localhost:3000';
-  var STORAGE_KEY = 'pda-server-url-override';
+  var STORAGE_KEY = 'pda-server-host';
+  // Legacy override key from before the /server picker existed — still
+  // honored so existing devices keep their setting.
+  var LEGACY_STORAGE_KEY = 'pda-server-url-override';
   var RETRY_MS = 10000;
   var timer = null;
 
   function override() {
-    try { return localStorage.getItem(STORAGE_KEY) || ''; } catch (e) { return ''; }
+    try { return localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY) || ''; } catch (e) { return ''; }
   }
   function targetUrl() { return override() || DEFAULT_URL; }
 
@@ -82,6 +88,11 @@
   }
 
   document.getElementById('retry').addEventListener('click', go);
+  // The /server picker shares this bundled origin's localStorage, so it can
+  // read and replace the host this page retries.
+  document.getElementById('pick').addEventListener('click', function () {
+    window.location.href = '/?picker=1';
+  });
   document.getElementById('save').addEventListener('click', function () {
     var v = inputEl.value.trim().replace(/\/+$/, '');
     if (v && !/^https?:\/\//i.test(v)) v = 'http://' + v;
@@ -93,7 +104,10 @@
     go();
   });
   document.getElementById('reset').addEventListener('click', function () {
-    try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+    } catch (e) { /* ignore */ }
     render();
     statusEl.textContent = '已回復預設';
   });

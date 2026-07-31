@@ -7,6 +7,7 @@ Page and component locations mapped to source files.
 | Page | Route | Source file |
 |------|-------|-------------|
 | Login | `/login` | `pages/login.vue` |
+| Server picker | `/server` | `pages/server.vue` (boot redirect `plugins/serverHost.client.ts` + `middleware/00-server-host.global.ts`, host list/storage `utils/serverHost.ts`, fallback page `public/maintenance.html`) |
 | Home / Menu | `/` | `pages/index.vue` |
 | Picking list | `/picking` | `pages/picking/index.vue` |
 | Picking detail | `/picking/:id` | `pages/picking/[id].vue` or equivalent |

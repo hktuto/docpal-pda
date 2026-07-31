@@ -12,7 +12,11 @@ import { Capacitor } from "@capacitor/core";
 const { start: startServerHealth } = useServerHealth();
 
 // Backend reachability watchdog: drives the global maintenance overlay.
-onMounted(startServerHealth);
+// Skipped on the bundled origin (release-APK launcher): its placeholder
+// apiBaseUrl would raise a false overlay over the /server picker.
+onMounted(() => {
+  if (!isBundledOrigin()) startServerHealth();
+});
 
 let lastBackAt = 0;
 const DOUBLE_TAP_MS = 2000;

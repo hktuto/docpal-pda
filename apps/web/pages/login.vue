@@ -48,11 +48,18 @@
         </button>
       </form>
 
+      <div class="login__server">
+        <button type="button" class="login__change-server" @click="onChangeServer">
+          {{ $t('login.changeServer') }}
+        </button>
+        <p class="login__current-host">{{ currentHost }}</p>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { Capacitor } from "@capacitor/core";
 import { useErrorMessage } from "~/composables/errorMessage";
 
 definePageMeta({ layout: false });
@@ -68,6 +75,21 @@ const password = ref("DocPal2026!");
 const showPassword = ref(false);
 const error = ref<string | null>(null);
 const submitting = ref(false);
+const currentHost = ref("");
+
+onMounted(() => {
+  currentHost.value = window.location.origin;
+});
+
+// The picker must run on the bundled origin (http://localhost) because the
+// saved host lives in that origin's localStorage; from a remote-served app we
+// navigate the WebView back to the bundled page with ?picker=1.
+function onChangeServer() {
+  if (isBundledOrigin() || !Capacitor.isNativePlatform()) {
+    return navigateTo("/server");
+  }
+  window.location.href = "http://localhost/?picker=1";
+}
 
 async function onSubmit() {
   error.value = null;
@@ -186,6 +208,33 @@ async function onSubmit() {
 .login__submit {
   width: 100%;
   margin-top: 0.5rem;
+}
+
+.login__server {
+  margin-top: 1.25rem;
+  text-align: center;
+}
+
+.login__change-server {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0.25rem 0.5rem;
+}
+
+.login__change-server:hover {
+  color: var(--primary);
+}
+
+.login__current-host {
+  margin: 0.25rem 0 0;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  color: var(--muted);
+  word-break: break-all;
 }
 
 .login__footer {

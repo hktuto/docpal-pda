@@ -4,10 +4,13 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 
-// Production release APK build: generates the web assets, points the WebView
-// at https://<PRODUCTION_URL> (from the root .env), signs the release APK
-// (auto-generating a keystore on first run), and publishes the APK plus a
-// version.json into apps/backend/public/apk/ for the admin download page.
+// Production release APK build: generates the web assets, stamps
+// PRODUCTION_URL (from the root .env) into the bundled maintenance page as
+// its last-resort retry URL, signs the release APK (auto-generating a
+// keystore on first run), and publishes the APK plus a version.json into
+// apps/backend/public/apk/ for the admin download page. The APK itself boots
+// bundled and lets the user pick the environment on the /server page, so it
+// is not tied to PRODUCTION_URL.
 // Usage:
 //   pnpm build:apk
 
@@ -42,7 +45,7 @@ if (!productionUrl) {
   process.exit(1);
 }
 const webUrl = /^https?:\/\//.test(productionUrl) ? productionUrl : `https://${productionUrl}`;
-console.log(`Production WebView URL: ${webUrl}`);
+console.log(`Production fallback URL (maintenance page): ${webUrl}`);
 
 // b. The web dev server pollutes .nuxt/dist/client with dev URLs — refuse to
 // generate while it is running.
@@ -56,6 +59,19 @@ try {
 
 // c. Static web export.
 run('pnpm', ['--filter', '@warehouse/web', 'generate'], { cwd: repoRoot });
+
+// c2. The maintenance page is bundled into the APK and cannot read
+// capacitor.config at runtime — stamp the production URL in as its default
+// retry target (the source file keeps the dev default http://localhost:3000).
+const maintenanceFile = join(webDir, '.output/public/maintenance.html');
+const maintenanceMarker = "var DEFAULT_URL = 'http://localhost:3000';";
+const maintenance = readFileSync(maintenanceFile, 'utf8');
+if (!maintenance.includes(maintenanceMarker)) {
+  console.error(`Default-URL marker not found in ${maintenanceFile} — update the marker or the page.`);
+  process.exit(1);
+}
+writeFileSync(maintenanceFile, maintenance.replace(maintenanceMarker, `var DEFAULT_URL = '${webUrl}';`));
+console.log(`Maintenance page default URL: ${webUrl}`);
 
 // d. Auto-increment versionCode so Android treats the new APK as an update.
 const gradle = readFileSync(gradleFile, 'utf8');
@@ -84,6 +100,7 @@ if (!existsSync(keystorePropsPath)) {
       : 'keytool';
   run(keytool, [
     '-genkeypair', '-v',
+    '-storetype', 'JKS',
     '-keystore', join(androidDir, 'app/warehouse-release.keystore'),
     '-alias', 'warehouse',
     '-keyalg', 'RSA', '-keysize', '2048', '-validity', '10950',
@@ -98,9 +115,12 @@ if (!existsSync(keystorePropsPath)) {
   console.log('Keep keystore.properties and the keystore safe — re-installs need the same signature.');
 }
 
-// f. Sync the generated assets into the native project, pointed at the
-// production URL (capacitor.config.ts maps CAPACITOR_SERVER_URL → server.url).
-run('cap', ['sync', 'android'], { cwd: webDir, env: { ...process.env, CAPACITOR_SERVER_URL: webUrl } });
+// f. Sync the generated assets into the native project as a bundled build
+// (CAPACITOR_SERVER_URL=off → no server.url). The WebView boots from the
+// bundled assets and the plugins/serverHost.client.ts boot redirect sends it
+// to the host chosen on the /server picker page, so one APK serves every
+// environment (capacitor.config.ts maps CAPACITOR_SERVER_URL → server.url).
+run('cap', ['sync', 'android'], { cwd: webDir, env: { ...process.env, CAPACITOR_SERVER_URL: 'off' } });
 
 // g. Assemble the signed release APK.
 const androidStudioJbr = 'C:/Program Files/Android/Android Studio/jbr';
