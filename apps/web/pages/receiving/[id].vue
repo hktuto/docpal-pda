@@ -207,6 +207,7 @@ useHardwareScanner({
     const result = await submitRaw(orderId, rawValue, order.value?.supplier?.code ?? undefined);
     if (result.status === "error") {
       showToast(result.message);
+      return false;
     }
     // applied → onApplied reloaded + toasted; review → modal opened.
   },

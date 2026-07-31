@@ -127,13 +127,14 @@ useHardwareScanner({
   onScan: (rawValue) => {
     const boxes = task.value?.boxes ?? [];
     const q = rawValue.trim().toLowerCase();
-    if (!q) return;
+    if (!q) return false;
     const exact = boxes.find((b) => b.id.toLowerCase() === q);
     const matches = exact ? [exact] : boxes.filter((b) => b.id.toLowerCase().includes(q));
     if (matches.length === 1) {
       router.push(`/measuring/${taskId}/box/${matches[0].id}`);
     } else {
       showToast(t("measuring.detail.boxNotFound", { id: rawValue.trim() }));
+      return false;
     }
   },
 });

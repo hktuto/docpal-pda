@@ -9,6 +9,7 @@ import { I18nError } from '~/composables/i18nError';
 import { useErrorMessage } from '~/composables/errorMessage';
 import { useWarehouse } from '~/composables/useWarehouse';
 import { parseAndIdentify, parseQrCapture, type CandidateOptions, type OcrParseResult, type RawOcrCapture, type OcrBarcode, type ParsedFields } from '~/utils/parseOcrScan';
+import { playScanError, playScanSuccess } from '~/utils/scanBeep';
 import type { OcrInput } from './useMockOcr';
 import type { SupplierQrcodeTemplate } from '~/services/types';
 import type { WarehouseService } from '~/services/warehouse';
@@ -187,8 +188,12 @@ export function useLabelScan() {
       if (!capture) {
         return { status: 'cancelled' };
       }
-      return await processCapture(capture, context);
+      const result = await processCapture(capture, context);
+      if (result.status === 'error') playScanError();
+      else playScanSuccess();
+      return result;
     } catch (e: unknown) {
+      playScanError();
       const message = e instanceof I18nError ? errorMessage(e) : (e instanceof Error ? e.message : String(e));
       return { status: 'error', message };
     } finally {

@@ -258,7 +258,7 @@ useHardwareScanner({
     !reviewOpen.value &&
     !measureOpen.value,
   onScan: async (rawValue: string) => {
-    if (!box.value) return;
+    if (!box.value) return false;
     verifying.value = true;
     try {
       const parsedResult = await parseRawValue(rawValue);
@@ -267,11 +267,14 @@ useHardwareScanner({
         await result.apply();
         showToast(t("common.scanSuccess"));
         await onScanApplied();
-      } else if (result.type === "none") {
+        return true;
+      }
+      if (result.type === "none") {
         showToast(t("measuring.measureBox.noMatch"));
       } else if (result.type === "error") {
         showToast(result.message);
       }
+      return false;
     } finally {
       verifying.value = false;
     }

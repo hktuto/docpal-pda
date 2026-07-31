@@ -121,6 +121,7 @@ import {
   type ScanMultiRow,
   type ScanMultiRowResult,
 } from "~/utils/parseOcrScan";
+import { playScanError, playScanSuccess } from "~/utils/scanBeep";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import ScanMultiItemModal from "~/components/ScanMultiItemModal.vue";
 import SelectShelfDialog from "~/components/SelectShelfDialog.vue";
@@ -243,7 +244,7 @@ useHardwareScanner({
       scannedBoxId.value = rawValue.trim();
       return;
     }
-    if (!order.value) return;
+    if (!order.value) return false;
     scanning.value = true;
     try {
       const parsedResult = await parseRawValue(
@@ -255,7 +256,7 @@ useHardwareScanner({
       const target = findPutAwayTarget(visibleItems.value, parsed.partNo, qty);
       if (!target) {
         showToast(t("errors.scanned_part_does_not_match_item"));
-        return;
+        return false;
       }
       await warehouse.recordPutAwayScan(
         orderId,
@@ -270,8 +271,10 @@ useHardwareScanner({
       showToast(t("common.scanSuccess"));
       scrollTargetItemId.value = target.id;
       await load();
+      return true;
     } catch (e) {
       showToast(errorMessage(e));
+      return false;
     } finally {
       scanning.value = false;
     }
@@ -478,6 +481,7 @@ async function openScan(item: PutAwayExpectedItem) {
       };
       multiResults.value = null;
       multiOpen.value = true;
+      playScanSuccess();
       return;
     }
     // Single record: always pop the confirm form (confirmSingleMatch).
@@ -490,16 +494,21 @@ async function openScan(item: PutAwayExpectedItem) {
       shelfBoxId: activeBoxId.value,
     });
     if (result.status === "review") {
+      playScanSuccess();
       review.value = result;
       reviewOpen.value = true;
     } else {
       scrollTargetItemId.value = null;
       if (result.status === "error") {
+        playScanError();
         showToast(result.message);
+      } else {
+        playScanSuccess();
       }
     }
   } catch (e) {
     scrollTargetItemId.value = null;
+    playScanError();
     showToast(errorMessage(e));
   } finally {
     scanning.value = false;

@@ -8,6 +8,7 @@ import {
 import { useErrorMessage } from "~/composables/errorMessage";
 import { useWarehouse } from "~/composables/useWarehouse";
 import { extractMultiItemRows } from "~/utils/parseOcrScan";
+import { playScanError, playScanSuccess } from "~/utils/scanBeep";
 import type {
   ReceivingScanCandidate,
   ReceivingScanInput,
@@ -179,8 +180,12 @@ export function useReceivingScan(options: UseReceivingScanOptions = {}) {
     try {
       const capture = await captureLabel();
       if (!capture) return { status: "cancelled" };
-      return await submit(orderId, { raw: captureRawLabelValue(capture) }, supplierCode);
+      const result = await submit(orderId, { raw: captureRawLabelValue(capture) }, supplierCode);
+      if (result.status === "error") playScanError();
+      else playScanSuccess();
+      return result;
     } catch (e) {
+      playScanError();
       return { status: "error", message: errorMessage(e) };
     } finally {
       scanning.value = false;

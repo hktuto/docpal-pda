@@ -131,6 +131,7 @@ import {
   type ScanMultiRow,
   type ScanMultiRowResult,
 } from "~/utils/parseOcrScan";
+import { playScanError, playScanSuccess } from "~/utils/scanBeep";
 import EmptyState from "~/components/EmptyState.vue";
 import InlineSpinner from "~/components/InlineSpinner.vue";
 import PickingScanReviewModal from "~/components/picking/PickingScanReviewModal.vue";
@@ -241,13 +242,14 @@ async function load() {
   }
 }
 
-function handleParsed(parsed: ReturnType<typeof ocrResultToInput>, raw: string, source: "qr" | "ocr") {
+function handleParsed(parsed: ReturnType<typeof ocrResultToInput>, raw: string, source: "qr" | "ocr"): boolean {
   const result = addScan(parsed, raw, source);
   if (!result.ok) {
     showToast(t(`picking.scanSession.${result.message}`));
-    return;
+    return false;
   }
   showToast(t("common.scanSuccess"));
+  return true;
 }
 
 useHardwareScanner({
@@ -260,9 +262,9 @@ useHardwareScanner({
     !heldByOther.value &&
     !!order.value,
   onScan: async (rawValue: string) => {
-    if (!order.value) return;
+    if (!order.value) return false;
     const parsedResult = await parseRawValue(rawValue);
-    handleParsed(ocrResultToInput(parsedResult.parsed), rawValue, "qr");
+    return handleParsed(ocrResultToInput(parsedResult.parsed), rawValue, "qr");
   },
 });
 
@@ -282,7 +284,9 @@ async function captureOcr() {
     if (!capture.imagePath && barcodes.length === 1 && barcodes[0].format === "4") {
       const qrValue = barcodes[0].value;
       const parsedResult = await parseRawValue(qrValue);
-      handleParsed(ocrResultToInput(parsedResult.parsed), qrValue, "qr");
+      const ok = handleParsed(ocrResultToInput(parsedResult.parsed), qrValue, "qr");
+      if (ok) playScanSuccess();
+      else playScanError();
       return;
     }
     const targets = orderPartNos.value;
@@ -296,6 +300,7 @@ async function captureOcr() {
       };
       multiResults.value = null;
       multiOpen.value = true;
+      playScanSuccess();
       return;
     }
     // Single record: pop the confirm form with the OCR candidates as chips.
@@ -306,7 +311,9 @@ async function captureOcr() {
       raw: capture.text,
     };
     reviewOpen.value = true;
+    playScanSuccess();
   } catch (e) {
+    playScanError();
     showToast(errorMessage(e));
   } finally {
     ocrCapturing.value = false;

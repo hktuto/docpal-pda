@@ -1,13 +1,19 @@
 import { onMounted, onUnmounted, ref } from 'vue';
 import type { PluginListenerHandle } from '@capacitor/core';
 import { ScannerBroadcast } from './useScannerBroadcast';
+import { playScanError, playScanSuccess } from '~/utils/scanBeep';
 
 /** After a broadcast scan, consume wedge key echo for this long (ms). */
 const WEDGE_SUPPRESS_MS = 1500;
 
 export interface UseHardwareScannerOptions {
-  /** Called with the full scanned string when Enter is pressed. */
-  onScan: (value: string) => void | Promise<void>;
+  /**
+   * Called with the full scanned string when Enter is pressed (wedge) or a
+   * broadcast scan arrives. Return `false` (or throw) when the scan is
+   * rejected — a low error buzz plays; any other result plays a short
+   * success beep.
+   */
+  onScan: (value: string) => boolean | void | Promise<boolean | void>;
   /**
    * Additional guard to disable scanning (e.g. while a modal is open).
    * The listener already skips input/textarea/select/contenteditable elements.
@@ -98,7 +104,15 @@ export function useHardwareScanner(options: UseHardwareScannerOptions) {
   async function deliver(source: string, value: string) {
     console.log(`[SCAN-TIME] ${source}:`, value);
     const start = performance.now();
-    await options.onScan(value);
+    let ok = true;
+    try {
+      ok = (await options.onScan(value)) !== false;
+    } catch (e) {
+      ok = false;
+      console.error('[SCAN] onScan handler threw:', e);
+    }
+    if (ok) playScanSuccess();
+    else playScanError();
     console.log('[SCAN-TIME] onScan done in', (performance.now() - start).toFixed(1), 'ms');
   }
 
@@ -119,6 +133,7 @@ export function useHardwareScanner(options: UseHardwareScannerOptions) {
     suppressWedgeUntil = Date.now() + WEDGE_SUPPRESS_MS;
     if (fillFocusedInput(value)) {
       console.log('[SCAN-TIME] broadcast scan → focused input:', value);
+      playScanSuccess();
       return;
     }
     await deliver('broadcast scan', value);

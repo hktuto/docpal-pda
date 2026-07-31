@@ -108,6 +108,7 @@ import { useWarehouse } from "~/composables/useWarehouse";
 import { usePickingWorkLock } from "~/composables/usePickingWorkLock";
 import { useHardwareScanner } from "~/composables/useHardwareScanner";
 import { useLabelScan, captureLabel, captureRawLabelValue } from "~/composables/useLabelScan";
+import { playScanError, playScanSuccess } from "~/utils/scanBeep";
 import PickingBoxesSection from "~/components/picking/PickingBoxesSection.vue";
 import PickingItemsSection from "~/components/picking/PickingItemsSection.vue";
 import PickingIssueBanner from "~/components/picking/PickingIssueBanner.vue";
@@ -148,17 +149,19 @@ const scanningBox = ref(false);
 // Scan-to-create-box: on this page a scan that matches a supplier QR template
 // is an item label (point the operator at scan mode); anything else is treated
 // as a pre-printed box id and creates an open box with that id.
-async function createBoxWithId(boxId: string) {
+async function createBoxWithId(boxId: string): Promise<boolean> {
   const trimmed = boxId.trim();
-  if (!trimmed || scanningBox.value) return;
+  if (!trimmed || scanningBox.value) return false;
   scanningBox.value = true;
   try {
     await warehouse.createShippingBoxForPickingOrder(orderId, trimmed);
     boxesExpanded.value = true;
     await load();
     showToast(t("picking.detail.boxCreated", { id: trimmed }));
+    return true;
   } catch (e) {
     showToast(errorMessage(e));
+    return false;
   } finally {
     scanningBox.value = false;
   }
@@ -170,9 +173,9 @@ useHardwareScanner({
     const parsedResult = await parseRawValue(rawValue);
     if (parsedResult.matched) {
       showToast(t("picking.detail.itemQrUseScanMode"));
-      return;
+      return false;
     }
-    await createBoxWithId(rawValue);
+    return await createBoxWithId(rawValue);
   },
 });
 
@@ -182,8 +185,11 @@ async function scanBoxId() {
     const capture = await captureLabel();
     if (!capture) return;
     const value = captureRawLabelValue(capture).trim();
-    if (value) await createBoxWithId(value);
+    const ok = value.length > 0 && (await createBoxWithId(value));
+    if (ok) playScanSuccess();
+    else playScanError();
   } catch (e) {
+    playScanError();
     showToast(errorMessage(e));
   }
 }
