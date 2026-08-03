@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>DocPal 用戶選單導覽 — 客戶端網站（Client Site）</title>
+<style>
+@page { size: A4; margin: 16mm 14mm; }
+body {
+  font-family: "Segoe UI", "Microsoft JhengHei", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 10.5pt; line-height: 1.55; color: #1a1a1a; max-width: 180mm; margin: 0 auto;
+}
+h1.doc-title { font-size: 20pt; border-bottom: 2px solid #0d9488; padding-bottom: 6px; }
+h1:not(.doc-title) { font-size: 17pt; color: #0d9488; page-break-before: always; page-break-after: avoid; }
+h2 { font-size: 14pt; color: #0d9488; margin-top: 1.3em; page-break-after: avoid; }
+h3 { font-size: 12pt; margin-top: 1.2em; page-break-after: avoid; }
+figure { margin: 0.8em 0 1.2em; text-align: center; page-break-inside: avoid; }
+figure img { max-width: 165mm; max-height: 105mm; border: 1px solid #ccc; border-radius: 4px; }
+figcaption { font-size: 9pt; color: #666; margin-top: 4px; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; }
+th, td { border: 1px solid #ccc; padding: 5px 8px; text-align: left; font-size: 10pt; }
+th { background: #f0fdfa; }
+code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 9.5pt; }
+a { color: #0d9488; text-decoration: none; }
+hr { border: none; border-top: 1px solid #ddd; margin: 1.6em 0; }
+ul, ol { padding-left: 1.4em; }
+li { margin: 0.3em 0; }
+</style></head><body>
+<h1 class="doc-title">DocPal 用戶選單導覽 — 客戶端網站（Client Site）</h1>
+<h1>Home</h1>
+<p><strong>Menu path:</strong> Client → Home</p>
+<figure><img alt="Home 畫面" src="assets/client-01-home.png"><figcaption>Home 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>每位用戶登入後都會到達這個個人儀表板——它是每日工作的單一起點。它把個人活動與檔案概覽匯集於一處，並提供匯出工具，可將目前檢視匯出作報告分享。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>PERSONAL tab</strong>（個人分頁）——此畫面顯示的儀表板分區。<strong>Home</strong> 儀表板顯示於其下。</li>
+<li><strong>Start date / End date</strong>（開始／結束日期）——儀表板內容的日期範圍篩選。點擊其中一個欄位會開啟雙月曆選擇器，並附一鍵快捷選項：</li>
+<ul>
+<li>This month（本月）</li>
+<li>Last month（上月）</li>
+<li>Last 3 months（過去三個月）</li>
+<li>This year（本年）</li>
+<li>Last year（去年）</li>
+<li>本站點的預設範圍為年初至今（2026-01-01 至 2026-07-31）。</li>
+</ul>
+<li><strong>Download PDF</strong>——將目前儀表板檢視匯出為 PDF 檔案，作報告或分享之用。在此測試站點上，點擊後沒有可見的確認提示；下載會直接開始。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li>此畫面沒有列表或表格——它是儀表板檢視。</li>
+</ul>
+<h2>對話框與面板</h2>
+<h3>日期範圍選擇器</h3>
+<figure><img alt="日期範圍選擇器" src="assets/client-01-home-date-range.png"><figcaption>日期範圍選擇器</figcaption></figure>
+<ul>
+<li>左右並排的雙月曆（附上一個月／下一個月及年份導航箭嘴），用於選取開始與結束日期。</li>
+<li>常用範圍的快捷按鈕（列於上文）可一鍵填入兩個日期。</li>
+</ul>
+<h2>測試站點備註</h2>
+<ul>
+<li>在此測試站點上，儀表板主體並未渲染任何圖表或小工具——只顯示儀表板標頭（日期範圍 + Download PDF）。</li>
+</ul>
+<h2>誰會使用</h2>
+<p>每位 DocPal 用戶——這是登入後的第一個畫面。</p>
+<h1>Browse</h1>
+<p><strong>Menu path:</strong> Client → Browse → Browse</p>
+<figure><img alt="Browse 畫面" src="assets/client-02-browse.png"><figcaption>Browse 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>以熟悉的資料夾與檔案檢視呈現整個檔案庫，讓尋找文件就像翻閱整理得井井有條的檔案櫃。建立資料夾和檔案、上傳內容、分享、加標籤及管理權限——全部可在同一個網格內完成。根層級顯示頂層資料夾（Case、Default、default-domain、Domain 及團隊資料夾）。</p>
+<h2>工具列與操作</h2>
+<p>未選取任何項目時（對目前資料夾操作）：</p>
+<ul>
+<li><strong>Search (magnifier)</strong>（搜尋放大鏡）——展開一個行內的「Search...」輸入框，篩選目前列表；× 圖示可將其收起。</li>
+<li><strong>Add Hold Policy</strong>——套用保留政策（hold policy）的下拉選單。本站點的選單為空（未設定任何保留政策）。</li>
+<li><strong>Subscribe</strong>——訂閱目前項目／位置的通知。</li>
+<li><strong>Edit Details</strong>——編輯目前項目的詳細資料。</li>
+<li><strong>New File/Folder</strong>（下拉選單）——建立內容：</li>
+<ul>
+<li>New Folder</li>
+<li>New File</li>
+<li>File Upload</li>
+<li>Folder Upload</li>
+</ul>
+<li><strong>Delete</strong>——刪除項目。</li>
+<li><strong>Copy Path</strong>——將目前資料夾路徑複製到剪貼簿。</li>
+<li><strong>Upload Request</strong>——提出上傳請求（向外部人士）。</li>
+<li><strong>Info</strong>——開啟詳細資料側邊面板（見下文）。</li>
+<li><strong>Refresh</strong>——重新載入列表。</li>
+<li><strong>Full screen</strong>——切換網格全螢幕顯示。</li>
+<li><strong>Column settings</strong>——自訂網格（見下文）。</li>
+</ul>
+<p>勾選一或多列後，工具列會切換至選取模式，顯示 <strong>「No. of Files Selected: N」</strong>（已選取檔案數目）及一個可清除選取的 ×，另加：</p>
+<ul>
+<li><strong>Search</strong>、<strong>Delete</strong>、<strong>Info</strong>、<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>（同上）</li>
+<li><strong>Share</strong>——將所選項目加入 <strong>Share Queue</strong>（分享佇列，底部中央顯示一個寫著「Share Queue N」的膠囊標籤，附 <strong>Share</strong> 按鈕及一個可清除的 ×）。點擊 <strong>Share</strong> 會開啟 Share Queue 分頁：Recipients（輸入電郵地址）、Password、Due Date（預設約 30 日後），以及一個檔案表格（Name、Watermark、Read-Only 切換開關、Last Modified Date、Actions），並附 <strong>Confirm</strong> 按鈕。</li>
+<li><strong>Add To Collection</strong>（圖層圖示）——開啟 Add To Collection 對話框（見下文）。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li>欄位：<strong>File / Folder Name</strong>（列核取方塊 + 資料夾的展開箭嘴）、<strong>File Type</strong>、<strong>Document Type</strong>、<strong>File Size</strong>、<strong>Last Modified Date</strong>、<strong>Create Date</strong>、<strong>File Modified Date</strong>、<strong>Tags</strong>、<strong>Authors</strong>、<strong>Actions</strong>（⋮ 選單）。</li>
+<li>每列的 <strong>Actions (⋮)</strong> 內容選單：</li>
+<ul>
+<li>Open</li>
+<li>New Folder</li>
+<li>New File</li>
+<li>File Upload</li>
+<li>Folder Upload</li>
+<li>Rename</li>
+<li>Change Document Type</li>
+<li>Copy</li>
+<li>Cut</li>
+<li>Create Internal Sharing</li>
+<li>Delete</li>
+<li>Refresh</li>
+<li>Preview in New Tab</li>
+</ul>
+</ul>
+<figure><img alt="列內容選單" src="assets/client-02-browse-context-menu.png"><figcaption>列內容選單</figcaption></figure>
+<h2>對話框與面板</h2>
+<h3>New Folder</h3>
+<figure><img alt="New Folder 對話框" src="assets/client-02-browse-new-folder.png"><figcaption>New Folder 對話框</figcaption></figure>
+<ul>
+<li>標題顯示目標位置（在根層級時為「New Folder in //」）。</li>
+<li><strong>Name</strong>*——文字欄位，預填「New Folder」。</li>
+<li><strong>Document Type</strong>*——下拉選單，預設「Folder」。本站點的選項：Case、Contract、Contract Attachment、ContractFolder、Customer、Folder、Pre-Sales、Prospect、Prospect Profile、Prospects、steve_test_2。</li>
+<li><strong>Submit</strong>——建立資料夾。（已測試：建立「MKT-TEST Folder」，隨即出現在列表中。）</li>
+</ul>
+<h3>New File</h3>
+<figure><img alt="New File 對話框" src="assets/client-02-browse-new-file.png"><figcaption>New File 對話框</figcaption></figure>
+<ul>
+<li><strong>File Name</strong>*——文字欄位。</li>
+<li><strong>File Type</strong>*——文件類型下拉選單（已設定的類型列表很長；預設「File」）。</li>
+<li><strong>File Type</strong>*——檔案副檔名下拉選單：xlsx、docx（預設）、ppt。</li>
+<li><strong>Metadata fields</strong>（元數據欄位）——會根據所選文件類型顯示額外欄位。本站點類型「File」的欄位：<strong>local address</strong>（文字，最多 255 字元）、<strong>Docpal Typecc</strong>（文字，最多 255 字元）、<strong>Approve Date</strong>（日期選擇器，預設為今天）、<strong>Country</strong>（文字，最多 255 字元）、<strong>Approver</strong>（文字，最多 255 字元）。每個文字欄位均顯示即時字元計數器（「0 / 255」）。</li>
+<li><strong>Submit</strong>——建立檔案（測試期間未提交）。</li>
+</ul>
+<h3>Add To Collection</h3>
+<ul>
+<li><strong>Search a collection or Create new</strong>——選取現有集合，或輸入新名稱。</li>
+<li><strong>Submit</strong>——加入所選項目。</li>
+</ul>
+<h3>Column settings</h3>
+<figure><img alt="Column settings" src="assets/client-02-browse-column-settings.png"><figcaption>Column settings</figcaption></figure>
+<ul>
+<li><strong>All</strong> 主控核取方塊，加上每個欄位各自的顯示／隱藏核取方塊。</li>
+<li>每個欄位可設 <strong>Freeze left / Freeze right / Unfreeze</strong>（向左凍結／向右凍結／取消凍結）。</li>
+<li><strong>Restore default</strong>（未改動時停用）、<strong>Cancel</strong>、<strong>Confirm</strong>。</li>
+</ul>
+<h3>Info 側邊面板</h3>
+<figure><img alt="Info 面板" src="assets/client-02-browse-info-panel.png"><figcaption>Info 面板</figcaption></figure>
+<p>以右側抽屜形式為目前位置／所選項目開啟，設有四個分頁：</p>
+<ul>
+<li><strong>Info</strong>——Document Type、Last Modified Date、File Modified Date、Create Date、Created By、Authors；一個 <strong>Tags &amp; Collection</strong> 分區（Tags 輸入框、Collection 新增按鈕）；以及按 Read / Write / Manage 分組的 <strong>User / User Group</strong> 權限（例如 Administrators Group 歸於 Manage）。頂部的鉛筆圖示可編輯詳細資料。</li>
+<li><strong>Activities</strong>——項目操作紀錄的審計訊息流（例如「File Management — User administrator preview document [/] — 2026-07-31 09:47」），附 <strong>loadMore</strong> 按鈕。</li>
+<li><strong>Comments</strong>——留言輸入框，附 <strong>Send</strong> 按鈕。</li>
+<li><strong>Related</strong>——相關項目（本站點根層級顯示「No Data」）。</li>
+</ul>
+<h2>測試站點備註</h2>
+<ul>
+<li>已建立測試數據：Browse 根層級的資料夾 <strong>「MKT-TEST Folder」</strong>（可見於主要截圖，作者為「demo」）。</li>
+<li>本文件於 sit-v3 測試站點上編寫；上述所有對話框均已在該站點開啟並驗證。</li>
+</ul>
+<h2>誰會使用</h2>
+<p>日常處理檔案的最終用戶及文件管理人員。</p>
+<h1>Collection</h1>
+<p><strong>Menu path:</strong> Client → Browse → Collection</p>
+<figure><img alt="Collection 畫面" src="assets/client-03-collection.png"><figcaption>Collection 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>把相關文件分組成集合（Collection），讓專案檔案、個案檔案或工作組合無論原件放在哪裡都能聚在一起。在左邊選取一個集合，即可在右邊看到當中所有項目——每個項目都保留指向其真實位置的連結。此列表顯示你自己的集合。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Create New Collection</strong>——開啟建立對話框（見下文）。</li>
+<li><strong>Collapse icon</strong>（箭嘴圖示，位於按鈕旁）——摺疊／展開集合列表面板。</li>
+<li><strong>Collection list</strong>（左側面板）——按名稱列出你的集合；點擊其中一個以載入其內容。每個集合都有一個紅色<strong>垃圾桶圖示</strong>，用於刪除該集合。</li>
+<li>已開啟集合標題旁：</li>
+<ul>
+<li><strong>Edit Collection Info</strong>（鉛筆圖示）——編輯集合的詳細資料。</li>
+<li><strong>Add to Share Queue</strong>（分享圖示）——將整個集合加入 Share Queue 作分享。</li>
+</ul>
+<li><strong>Refresh</strong>——重新載入內容表格。</li>
+<li><strong>Full screen</strong>——切換表格全螢幕顯示。</li>
+<li><strong>Column settings</strong>——顯示／隱藏表格欄位。</li>
+</ul>
+<p>項目從 Browse 加入集合：選取檔案／資料夾，然後使用 <strong>Add To Collection</strong>（見 02-browse）。Add To Collection 選擇器會列出現有集合（本站點：12dsd、2、MKT-TEST Collection、Test-1、Ups），亦可讓你輸入新名稱。</p>
+<h2>列表與欄位</h2>
+<ul>
+<li>欄位：<strong>File/Folder Name</strong>、<strong>File / Folder Path</strong>（項目的真實位置，例如 <code>/MKT-TEST Folder</code>）、<strong>Last Modified Date</strong>、<strong>Document Type</strong>、<strong>Actions</strong>。</li>
+<li>內容列的 <strong>Actions (⋮)</strong> 只有一個項目：<strong>Remove File / Folder Path</strong>——將項目從集合中移除（原始檔案仍留在其資料夾內）。</li>
+</ul>
+<figure><img alt="列操作" src="assets/client-03-collection-row-menu.png"><figcaption>列操作</figcaption></figure>
+<h2>對話框與面板</h2>
+<h3>Create New Collection</h3>
+<figure><img alt="Create New Collection 對話框" src="assets/client-03-collection-create.png"><figcaption>Create New Collection 對話框</figcaption></figure>
+<ul>
+<li><strong>Collection Name</strong>*——文字欄位。</li>
+<li><strong>Submit</strong>——建立集合；集合隨即出現在左邊列表。（已測試：建立「MKT-TEST Collection」。）</li>
+</ul>
+<h2>測試站點備註</h2>
+<ul>
+<li>已建立測試數據：集合 <strong>「MKT-TEST Collection」</strong>，並已將 <strong>「MKT-TEST Folder」</strong> 加入其中（可見於主要截圖）。</li>
+<li>左邊列表只顯示登入用戶（demo）建立的集合——其他用戶建立的集合（12dsd、2、Test-1、Ups）會出現在 Add To Collection 選擇器中，但不會出現在此列表。</li>
+</ul>
+<h2>誰會使用</h2>
+<p>需要把分散在不同資料夾的文件匯集成單一工作組合的用戶。</p>
+<h1>Upload</h1>
+<p><strong>Menu path:</strong> Client → Browse → Upload</p>
+<figure><img alt="Upload 畫面" src="assets/client-04-upload.png"><figcaption>Upload 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>以可追蹤的檢視呈現各個上傳批次——每個上傳工作都會記錄於此，包括目標路徑、日期、檔案數目及狀態，讓用戶準確掌握甚麼內容在何時進入了檔案庫。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Hide columns</strong>（隱藏欄位）——「Column Visibility」彈出面板：拖曳手柄（⋮⋮）可重新排列欄位次序，每個欄位設有開關切換，並附 <strong>Hide All</strong> / <strong>Show All</strong> 按鈕。其中包括一個預設隱藏的 <strong>Modified Date</strong> 欄位。</li>
+<li><strong>Filter</strong>（篩選）——建立篩選規則的彈出面板（「View configuration is auto-saved. Your changes are saved in real time and synced to other members.」，即檢視設定會自動儲存、實時保存並同步給其他成員）：</li>
+<ul>
+<li><strong>+ Add filter condition</strong> 新增一列規則：<strong>When</strong> + <strong>Select field</strong> + <strong>Select operator</strong> + <strong>Enter value</strong>，並附垃圾桶圖示以移除該規則。</li>
+<li>可篩選欄位：File / Folder Path、Upload Date、Files Count、Status、Modified Date。</li>
+</ul>
+<li><strong>Sort</strong>（排序）——建立排序規則的彈出面板（「View settings are saved automatically...」，即檢視設定會自動儲存……）：</li>
+<ul>
+<li><strong>+ Add sort rule</strong> 新增一列：欄位下拉選單（同樣五個欄位），加上 <strong>A → Z</strong> / <strong>Z → A</strong> 方向按鈕及垃圾桶圖示。</li>
+</ul>
+</ul>
+<figure><img alt="篩選條件建立器" src="assets/client-04-upload-filter.png"><figcaption>篩選條件建立器</figcaption></figure>
+<figure><img alt="隱藏欄位" src="assets/client-04-upload-hide-columns.png"><figcaption>隱藏欄位</figcaption></figure>
+<h2>列表與欄位</h2>
+<ul>
+<li>列號加上以下欄位：<strong>File / Folder Path</strong>（批次上傳到的位置，例如 <code>/Steve/Test Watermark</code>）、<strong>Upload Date</strong>、<strong>Files Count</strong>、<strong>Status</strong>。</li>
+<li>本站點所見的狀態值：<strong>Confirmed</strong>、<strong>Canceled</strong>、<strong>Ready</strong>。</li>
+<li>此處各列均為唯讀——點擊某列不會開啟任何詳細檢視。</li>
+<li>分頁列：<strong>Jump up page</strong>（第一頁）、<strong>Previous page</strong>（上一頁）、頁碼輸入框（例如「1 / 2」）、<strong>Next page</strong>（下一頁）、<strong>Jump down page</strong>（最後一頁）、每頁筆數選擇器（<strong>10 / 15 / 20 / 50 / 100 items/page</strong>，預設 100），以及 <strong>Total N records</strong> 總筆數計數器（本站點為 104 筆）。</li>
+</ul>
+<h2>測試站點備註</h2>
+<ul>
+<li>列表在 sit-v3 測試站點上載入及分頁均正常（104 個上傳批次）。未發現錯誤。</li>
+</ul>
+<h2>誰會使用</h2>
+<p>任何需要把文件放入 DocPal 並追蹤已上傳內容的用戶。</p>
+<h1>Upload Management</h1>
+<p><strong>Menu path:</strong> Client → Browse → Upload Management</p>
+<figure><img alt="Upload Management 畫面" src="assets/client-05-upload-management.png"><figcaption>Upload Management 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>你向外部人士發出的每個上傳請求，都會在這個列表中一一追蹤——邀請了誰、檔案應上傳到哪裡，以及上傳是否已經完成。它讓外部提供的檔案清晰可見、易於掌控，而無需為外部人士開設帳戶。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Refresh</strong>——重新載入列表。</li>
+<li><strong>Full screen</strong>——切換表格全螢幕顯示。</li>
+<li><strong>Column settings</strong>——顯示／隱藏表格欄位。</li>
+</ul>
+<p>新的上傳請求從 <strong>Browse</strong> 頁面的工具列建立（<strong>Upload Request</strong> 圖示——見 02-browse）。</p>
+<h2>列表與欄位</h2>
+<ul>
+<li>欄位：<strong>Email Address</strong>（收件人）、<strong>Folder Path</strong>（其檔案的上傳目的地）、<strong>Message</strong>、<strong>Status</strong>、<strong>Upload Date</strong>、<strong>Actions</strong>。</li>
+<li>分頁列：<strong>Jump up page</strong>（第一頁）、<strong>Previous page</strong>（上一頁）、頁碼輸入框、<strong>Next page</strong>（下一頁）、<strong>Jump down page</strong>（最後一頁）、每頁筆數選擇器（預設 <strong>20 items/page</strong>）、<strong>Total N records</strong> 總筆數計數器。</li>
+<li>在此測試站點上，列表為空（「No data yet」，0 筆記錄）——此用戶尚未發出任何上傳請求。</li>
+</ul>
+<h2>對話框與面板</h2>
+<h3>Upload Request（從 Browse → Upload Request 圖示開啟）</h3>
+<figure><img alt="Upload Request 對話框" src="assets/client-05-upload-request-dialog.png"><figcaption>Upload Request 對話框</figcaption></figure>
+<ul>
+<li><strong>Recipient</strong>*——外部人士的電郵地址。</li>
+<li><strong>Message</strong>*——附於邀請中的多行訊息。</li>
+<li><strong>Password</strong>*——收件人開啟上傳連結所需的密碼。</li>
+<li><strong>Minimum number of upload files</strong>*——上傳檔案數目下限，預設 1。</li>
+<li><strong>Maximum number of upload files</strong>*——上傳檔案數目上限，預設 100。</li>
+<li><strong>File Type</strong>——允許的檔案類型，可多選；選項：.xls、.xlsx、.doc、.docx、.pptx、.ppt、.mp3、.mp4（預設「All」）。</li>
+<li><strong>Expiry Date</strong>*——日期選擇器；上傳連結在此日期後失效。</li>
+<li><strong>Confirm</strong>——發出請求。測試期間未提交（因會真實發出邀請電郵）；你確認的請求會出現在本頁的列表中。</li>
+</ul>
+<h2>測試站點備註</h2>
+<ul>
+<li>頁面在 sit-v3 上載入正常；未發現錯誤。</li>
+</ul>
+<h2>誰會使用</h2>
+<p>需要向客戶、供應商或合作夥伴收集文件，並希望清晰記錄每個未完成請求的用戶。</p>
+<h1>Folder Cabinet</h1>
+<p><strong>選單路徑：</strong> Client → Browse → Folder Cabinet</p>
+<figure><img alt="Folder Cabinet 畫面" src="assets/client-06-folder-cabinet.png"><figcaption>Folder Cabinet 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>以團隊由實體檔案記錄沿用下來、熟悉的檔案櫃及資料夾結構來整理文件。</p>
+<h2>你可以在此做甚麼</h2>
+<ul>
+<li>瀏覽各個檔案櫃及其下的資料夾</li>
+<li>開啟按檔案櫃結構整理的文件</li>
+</ul>
+<h2>誰會使用</h2>
+<p>習慣以檔案櫃、抽屜及資料夾思維工作的檔案管理人員及一般用戶。</p>
+<h1>Search</h1>
+<p><strong>選單路徑：</strong> Client → Search</p>
+<figure><img alt="Search 畫面" src="assets/client-07-search.png"><figcaption>Search 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>橫跨整個文件庫的進階搜尋——透過組合精確的搜尋條件找出任何文件，毋須逐層翻查資料夾。你可以儲存常用的搜尋，日後一按即可重新執行。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Define Search Criteria (funnel icon)</strong> — 開關左側的已儲存搜尋面板：</li>
+<ul>
+<li><strong>Filter By Label</strong> — 輸入文字以篩選已儲存的搜尋；旁邊的 <strong>+</strong> 按鈕可將目前的搜尋儲存為新條件（見下文對話框）。</li>
+<li><strong>User Define</strong> — 你自己儲存的搜尋。</li>
+<li><strong>System Define</strong> — 系統隨附的預設搜尋（在此測試網站為：YUILY、SK-II2、Query documents）。</li>
+</ul>
+<li><strong>Save (floppy icon)</strong> — 儲存目前的搜尋。</li>
+<li><strong>Recent (clock icon)</strong> — 最近執行過的搜尋。</li>
+<li><strong>Refresh</strong> — 重新載入結果。</li>
+<li><strong>Full screen</strong> — 將結果表格切換為全螢幕。</li>
+<li><strong>Column settings</strong> — 顯示／隱藏結果欄位。</li>
+</ul>
+<figure><img alt="Define Search Criteria 面板" src="assets/client-07-search-saved-panel.png"><figcaption>Define Search Criteria 面板</figcaption></figure>
+<h2>建立查詢</h2>
+<ul>
+<li><strong>Condition Type</strong> — 下拉選單提供 12 種條件類型：</li>
+<ul>
+<li>Author groups、Authors、Collections、Create Date、Created By、Creator groups、Document Type、File Size、File Type、Keyword、Last Modified Date、Metadata</li>
+</ul>
+<li><strong>Keyword</strong> — 要搜尋的關鍵字。按 <strong>Enter</strong> 即執行搜尋（介面沒有獨立的 Search 按鈕）。</li>
+<li><strong>Synonyms</strong> — 開關；開啟後亦會同時搜尋相關詞彙。</li>
+<li><strong>And / Or</strong> — 分割按鈕，以 And 或 Or 邏輯組合多個條件。</li>
+</ul>
+<figure><img alt="Condition Type 選項" src="assets/client-07-search-condition-type.png"><figcaption>Condition Type 選項</figcaption></figure>
+<h2>列表與欄位</h2>
+<ul>
+<li>結果欄位：<strong>File / Folder Name</strong>（附檔案類型圖示）、<strong>Document Type</strong>、<strong>File Type</strong>（副檔名）、<strong>Created By</strong>、<strong>Authors</strong>、<strong>File Size</strong>、<strong>File / Folder Path</strong>（附複製路徑圖示）、<strong>Summary</strong>（顯示符合的內容，例如 "File Name" 或 "content"）、<strong>Create Date</strong>、<strong>Last Modified Date</strong>、<strong>Tags</strong>。</li>
+<li>分頁列：<strong>Jump up page</strong>（第一頁）、<strong>Previous page</strong>、頁碼輸入框（例如 "1 / 5"）、<strong>Next page</strong>、<strong>Jump down page</strong>（最後一頁）、每頁筆數選擇器（預設 <strong>20 items/page</strong>）、<strong>Total N records</strong> 計數器。</li>
+<li>此測試網站的實際範例：以關鍵字 <code>MKT-TEST</code> 搜尋 → 共 92 筆記錄，首個結果為 MKT-TEST Folder。</li>
+</ul>
+<h2>對話框與面板</h2>
+<h3>Save search criterion（由 Define Search Criteria → + 開啟）</h3>
+<figure><img alt="Save criterion 對話框" src="assets/client-07-search-save-dialog.png"><figcaption>Save criterion 對話框</figcaption></figure>
+<ul>
+<li><strong>Label</strong> — 已儲存搜尋的名稱。</li>
+<li><strong>Include filter</strong> — 開關；一併儲存目前的篩選條件。</li>
+<li><strong>Submit</strong> — 將搜尋儲存至 User Define。</li>
+</ul>
+<h2>測試網站的備註</h2>
+<ul>
+<li><strong>測試網站的已知問題：</strong> 儲存自訂搜尋條件（Define Search Criteria → + → Submit）會因後端 500 錯誤而失敗，並令 Search 分頁崩潰，其後顯示「ERROR : Search — AxiosError: Request failed with status code 500」及 Refresh 按鈕（見 <code>client-07-search-save-500-error.png</code>）。搜尋功能本身運作正常。</li>
+</ul>
+<figure><img alt="儲存失敗後的錯誤畫面" src="assets/client-07-search-save-500-error.png"><figcaption>儲存失敗後的錯誤畫面</figcaption></figure>
+<h2>誰會使用</h2>
+<p>所有用戶——由偶爾搜尋文件的用戶，到建立精確多條件查詢的進階用戶。</p>
+<h1>External Sharing</h1>
+<p><strong>選單路徑：</strong> Client → Share → External Sharing</p>
+<figure><img alt="External Sharing 畫面" src="assets/client-08-external-sharing.png"><figcaption>External Sharing 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>你分享給 DocPal 以外人士的所有連結都集中在此追蹤——誰收到連結、包含多少檔案、何時到期——讓外部存取一目了然，並可隨時撤銷。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Refresh</strong> — 重新載入列表。</li>
+<li><strong>Full screen</strong> — 將表格切換為全螢幕。</li>
+<li><strong>Column settings</strong> — 顯示／隱藏表格欄位。</li>
+</ul>
+<p>新的外部分享由 <strong>Browse</strong> 建立：選取檔案／資料夾，按 <strong>Share</strong> 將它們加入 <strong>Share Queue</strong>，然後在 Share Queue 的浮標按鈕上按 <strong>Share</strong> 開啟分享表格（見下文）。</p>
+<h2>列表與欄位</h2>
+<ul>
+<li>欄位：<strong>Recipients</strong>、<strong>No. of Files Shared</strong>、<strong>Shared Date</strong>、<strong>Sharing End Date</strong>、<strong>Actions</strong>。</li>
+<li>分頁列：<strong>Jump up page</strong>（第一頁）、<strong>Previous page</strong>、頁碼輸入框、<strong>Next page</strong>、<strong>Jump down page</strong>（最後一頁）、每頁筆數選擇器（預設 <strong>20 items/page</strong>）、<strong>Total N records</strong> 計數器。</li>
+<li>此測試網站的列表為空（「No data yet」，0 筆記錄）——此用戶沒有任何外發的外部分享。</li>
+</ul>
+<h2>對話框與面板</h2>
+<h3>Share Queue — 外部分享表格（由 Browse → Share 開啟）</h3>
+<figure><img alt="外部分享表格" src="assets/client-08-external-sharing-create.png"><figcaption>外部分享表格</figcaption></figure>
+<ul>
+<li><strong>Recipients</strong>* — 一個或多個電郵地址（「Enter the email」）。</li>
+<li><strong>Password</strong>* — 收件人開啟分享連結所需的密碼。</li>
+<li><strong>Due Date</strong>* — 分享的到期日；預設為約 30 日後（例如 2026-08-30）。</li>
+<li><strong>File table</strong> — 已排入隊列的項目，欄位包括：<strong>Name</strong>、<strong>Watermark</strong>、<strong>Read-Only</strong>（每個項目設有開關，預設開啟）、<strong>Last Modified Date</strong>、<strong>Actions</strong>。</li>
+<li><strong>Confirm</strong> — 建立分享（測試期間並未提交，以免向真實收件人發送電郵）；已確認的分享會顯示在本頁的列表中。</li>
+</ul>
+<h2>測試網站的備註</h2>
+<ul>
+<li>此頁面及分享表格在 sit-v3 上均正常載入；未發現錯誤。測試期間並未提交任何分享。</li>
+</ul>
+<h2>誰會使用</h2>
+<p>任何需要與機構以外的客戶、合作夥伴或審閱者分享文件，並需要追蹤哪些分享仍然有效的人士。</p>
+<h1>Share With Me</h1>
+<p><strong>選單路徑：</strong> Client → Share → Share With Me</p>
+<figure><img alt="Share With Me 畫面" src="assets/client-09-share-with-me.png"><figcaption>Share With Me 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>以收件匣形式列出其他人分享給你的所有項目——內容是甚麼、由誰分享、分享有效期多久，以及你可以對它進行哪些操作。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Refresh</strong> — 重新載入列表。</li>
+<li><strong>Full screen</strong> — 將表格切換為全螢幕。</li>
+<li><strong>Column settings</strong> — 顯示／隱藏表格欄位。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li>欄位：<strong>File/Folder Name</strong>、<strong>File / Folder Path</strong>、<strong>Shared By</strong>、<strong>Shared Date</strong>、<strong>Sharing Start Date</strong>、<strong>Sharing End Date</strong>、<strong>Permission</strong>、<strong>Status</strong>、<strong>Actions</strong>。</li>
+<li>分頁列：<strong>Jump up page</strong>（第一頁）、<strong>Previous page</strong>、頁碼輸入框、<strong>Next page</strong>、<strong>Jump down page</strong>（最後一頁）、每頁筆數選擇器（預設 <strong>20 items/page</strong>）、<strong>Total N records</strong> 計數器。</li>
+<li>此測試網站的列表為空（「No data yet」，0 筆記錄）——沒有任何項目分享給此用戶。</li>
+</ul>
+<h2>測試網站的備註</h2>
+<ul>
+<li>此頁面在 sit-v3 上正常載入；未發現錯誤。</li>
+</ul>
+<h2>誰會使用</h2>
+<p>所有用戶——這裡是接收同事或外部人士交付文件的集中地。</p>
+<h1>Internal Sharing</h1>
+<p><strong>選單路徑：</strong> Client → Share → Internal Sharing</p>
+<figure><img alt="Internal Sharing 畫面" src="assets/client-10-internal-sharing.png"><figcaption>Internal Sharing 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>清晰記錄你在 DocPal 內部分享給同事的所有項目——誰收到、對方可以進行哪些操作，以及分享的有效期。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Refresh</strong> — 重新載入列表。</li>
+<li><strong>Full screen</strong> — 將表格切換為全螢幕。</li>
+<li><strong>Column settings</strong> — 顯示／隱藏表格欄位。</li>
+</ul>
+<p>新的內部分享由 <strong>Browse</strong> 建立：在列的 ⋮ 選單中選擇 <strong>Create Internal Sharing</strong>（見下文對話框）。</p>
+<h2>列表與欄位</h2>
+<ul>
+<li>欄位：<strong>File/Folder Name</strong>、<strong>File / Folder Path</strong>、<strong>Shared To</strong>、<strong>Shared Date</strong>、<strong>Sharing Start Date</strong>、<strong>Sharing End Date</strong>、<strong>Permission</strong>、<strong>Status</strong>、<strong>Actions</strong>。</li>
+<li>分頁列：<strong>Jump up page</strong>（第一頁）、<strong>Previous page</strong>、頁碼輸入框、<strong>Next page</strong>、<strong>Jump down page</strong>（最後一頁）、每頁筆數選擇器（預設 <strong>20 items/page</strong>）、<strong>Total N records</strong> 計數器。</li>
+<li>此測試網站的列表為空（「No data yet」，0 筆記錄）——此用戶沒有任何外發的內部分享。</li>
+</ul>
+<h2>對話框與面板</h2>
+<h3>Create Internal Sharing（由 Browse → 列的 ⋮ 選單開啟）</h3>
+<figure><img alt="Create Internal Sharing 對話框" src="assets/client-10-internal-sharing-create.png"><figcaption>Create Internal Sharing 對話框</figcaption></figure>
+<ul>
+<li><strong>User / User Group / User Role</strong>* — 選擇器，列出各個用戶群組（例如 President's Office、Personal Dept、Finance Dept、Onedrive Team）及個別用戶。</li>
+<li><strong>Right</strong>* — 權限級別：<strong>Read</strong>、<strong>Write</strong>（預設）、<strong>Manage</strong>。</li>
+<li><strong>Validity Period</strong>* — <strong>Permanent</strong>（預設）或 <strong>Limited</strong> 單選按鈕。</li>
+<li><strong>Send Email Notification</strong> — 核取方塊，預設勾選。</li>
+<li><strong>Submit</strong> — 建立分享（測試期間並未提交）；已確認的分享會顯示在本頁的列表中。</li>
+</ul>
+<h2>測試網站的備註</h2>
+<ul>
+<li>此頁面及對話框在 sit-v3 上均正常載入；未發現錯誤。測試期間並未提交任何分享。</li>
+</ul>
+<h2>誰會使用</h2>
+<p>任何需要向團隊成員交付文件，並希望集中檢視已分享項目、對象及分享條件的人士。</p>
+<h1>Trash（回收站）</h1>
+<p><strong>選單路徑：</strong> Client → Trash</p>
+<figure><img alt="Trash 畫面" src="assets/client-11-trash.png"><figcaption>Trash 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>這是刪除操作的安全網——從檔案庫移除的所有內容都會先進入這裡，因此誤刪只需一按即可還原，而毋須變成支援工單。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Filter By Name</strong>（按名稱篩選）——輸入文字以按檔案／資料夾名稱篩選回收站列表。</li>
+<li><strong>Delete All</strong>（全部刪除）——清空整個回收站（永久性；未經測試——破壞性操作）。</li>
+<li><strong>Refresh</strong>（重新整理）——重新載入列表。</li>
+<li><strong>Full screen</strong>（全螢幕）——切換表格全螢幕顯示。</li>
+<li><strong>Column settings</strong>（欄位設定）——顯示／隱藏表格欄位。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li>每列設有剔選框，欄位包括：<strong>File / Folder Name</strong>、<strong>File / Folder Path</strong>（項目被刪除前的所在位置）、<strong>Document Type</strong>、<strong>Last Modified By</strong>、<strong>Last Modified Date</strong>、<strong>Actions</strong>。</li>
+<li>每列的 <strong>Actions (⋮)</strong>（操作）：</li>
+<ul>
+<li><strong>Restore File / Folder</strong>——將項目還原至原本位置。</li>
+<li><strong>Permanently Delete File / Folder</strong>——永久移除該項目。</li>
+</ul>
+<li>分頁列：<strong>Jump up page</strong>（第一頁）、<strong>Previous page</strong>（上一頁）、頁碼輸入框、<strong>Next page</strong>（下一頁）、<strong>Jump down page</strong>（最後一頁）、每頁筆數選擇器（預設 <strong>20 items/page</strong>）、<strong>Total N records</strong> 總筆數計數器（此網站共 20 筆記錄）。</li>
+</ul>
+<figure><img alt="每列操作選單" src="assets/client-11-trash-row-menu.png"><figcaption>每列操作選單</figcaption></figure>
+<h2>測試網站觀察記錄</h2>
+<ul>
+<li>列表載入了真實的已刪除項目（例如從 <code>/Joshua Test-1/</code> 移除的 PDF）。測試期間並未執行任何還原或永久刪除操作。</li>
+</ul>
+<h2>誰會使用</h2>
+<p>所有用戶——任何曾經誤刪檔案的人。</p>
+<h1>Workflow（工作流程）</h1>
+<p><strong>選單路徑：</strong> Client → Workflow</p>
+<figure><img alt="Workflow 畫面" src="assets/client-12-workflow.png"><figcaption>Workflow 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>你的工作流程中控台——在同一處啟動新流程、接手正等待你處理的任務，以及追蹤所有已在審批鏈中流轉的項目。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Personal Workflow</strong>（個人工作流程，下拉選單）——個人工作流程操作。此網站上顯示：<strong>Generate Document</strong>（產生文件）。</li>
+<li><strong>New Workflow</strong>（新增工作流程，下拉選單）——啟動工作流程。第一個選項為 <strong>New Start Task</strong>（新開始任務），其後列出所有已設定的工作流程範本（此網站共 22 個，例如 Joshua Test Email、Joshua Test Document Generation、Batch Update Dynamic Database、Test Script Task）。選擇其中一個即會啟動該工作流程——未經測試，以免在真實資料上啟動工作流程。</li>
+<li><strong>Workflow Name</strong>（工作流程名稱）——按工作流程篩選任務列表（選項：All 加上同樣的 22 個範本）。</li>
+<li><strong>Refresh</strong>（重新整理）——重新載入列表。</li>
+<li><strong>Full screen</strong>（全螢幕）——切換表格全螢幕顯示。</li>
+<li><strong>Column settings</strong>（欄位設定）——顯示／隱藏表格欄位。</li>
+</ul>
+<figure><img alt="New Workflow 選單" src="assets/client-12-workflow-new.png"><figcaption>New Workflow 選單</figcaption></figure>
+<figure><img alt="Personal Workflow 選單" src="assets/client-12-workflow-personal.png"><figcaption>Personal Workflow 選單</figcaption></figure>
+<h2>分頁</h2>
+<ul>
+<li><strong>Available Task</strong>（可接手的任務）——你可以認領的任務。欄位：Task Name、Task Owner、Status、Task Start Date、Task Due Date。（此網站為空白。）</li>
+<li><strong>My Task</strong>（我的任務）——你的任務。欄位：Job Name、Task Owner、Task Start Date、Last Modified Date。（此網站為空白；此為預設分頁。）</li>
+<li><strong>Task in Progress</strong>（進行中的任務）——正在執行的工作流程作業。欄位：Job Name、Task Owner、Task Start Date。（此網站共 15 筆記錄——由 administrator、lyle、ooyy、nine 擁有的「Verify Task」作業。）</li>
+<li><strong>Completed Task</strong>（已完成任務）——已完成的執行。欄位：Workflow Name、Task Start Date、Task Completion Date、Task Duration。（此網站為空白。）</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li>每個分頁各有自己的欄位組合（如上所列），並設有標準分頁列：<strong>Jump up page</strong>（第一頁）、<strong>Previous page</strong>（上一頁）、頁碼輸入框、<strong>Next page</strong>（下一頁）、<strong>Jump down page</strong>（最後一頁）、每頁筆數選擇器（預設 <strong>20 items/page</strong>）、<strong>Total N records</strong> 總筆數計數器。</li>
+</ul>
+<h2>測試網站觀察記錄</h2>
+<ul>
+<li>全部四個分頁及兩個下拉選單在 sit-v3 上均正常載入；未發現錯誤。測試期間並未啟動任何工作流程。</li>
+</ul>
+<h2>誰會使用</h2>
+<p>任何需要審批、檢閱或啟動文件流程的人——由偶爾批核的用戶到流程負責人皆適用。</p>
+<h1>Retention List（保存期限列表）</h1>
+<p><strong>選單路徑：</strong> Client → Retention → Retention List</p>
+<figure><img alt="Retention List 畫面" src="assets/client-13-retention-list.png"><figcaption>Retention List 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>追蹤需要進行保存期限覆核的文件——哪些正在等待決定、哪些已獲批准——確保保存期限不會在不知不覺間溜走。</p>
+<h2>分頁</h2>
+<ul>
+<li><strong>Pending List</strong>（待處理列表，預設）——等待保存期限覆核的項目。欄位：<strong>Name</strong>、<strong>File Path</strong>、<strong>Policy Name</strong>、<strong>Due Date</strong>、<strong>Approver</strong>、<strong>Actions</strong>。此網站共 3 筆記錄（例如 <code>/Case/SSL/2026-01-4-171828.pptx</code>，到期日 2026-04-23 14:21）。</li>
+<li><strong>Done List</strong>（已完成列表）——已獲批准的項目。欄位：<strong>Name</strong>、<strong>File Path</strong>、<strong>Policy Name</strong>、<strong>Approver</strong>、<strong>Approved Date</strong>、<strong>Actions</strong>。（此網站為空白。）</li>
+</ul>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Filter By Name</strong>（按名稱篩選）——輸入文字以按名稱篩選列表。</li>
+<li><strong>Sort By</strong>（排序依據）／ <strong>Sort Order</strong>（排序方式）——排序下拉選單。在此測試網站上，兩者打開後均顯示空白面板（沒有顯示任何選項）。</li>
+<li><strong>Policy</strong>（政策）——按保存政策篩選。在此測試網站上打開後顯示空白面板。</li>
+<li><strong>Approval</strong>（審批）——按審批狀態篩選。在此測試網站上打開後顯示空白面板。</li>
+<li><strong>Refresh</strong>（重新整理）——重新載入列表。</li>
+<li><strong>Full screen</strong>（全螢幕）——切換表格全螢幕顯示。</li>
+<li><strong>Column settings</strong>（欄位設定）——顯示／隱藏表格欄位。</li>
+<li><strong>每列 Actions (⋯)</strong>——在此測試網站上點按後沒有顯示任何選單（這些項目沒有可用的操作）。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li>各分頁的欄位如上所列。</li>
+<li>分頁列：<strong>Jump up page</strong>（第一頁）、<strong>Previous page</strong>（上一頁）、頁碼輸入框、<strong>Next page</strong>（下一頁）、<strong>Jump down page</strong>（最後一頁）、每頁筆數選擇器（預設 <strong>20 items/page</strong>）、<strong>Total N records</strong> 總筆數計數器。</li>
+</ul>
+<h2>測試網站觀察記錄</h2>
+<ul>
+<li>頁面正常載入；沒有錯誤提示橫額。在 sit-v3 上觀察到的異常情況：Sort By／Sort Order／Policy／Approval 下拉選單及每列的 ⋯ 操作按鈕均顯示為空白／無內容。並未對任何文件執行保存操作。</li>
+</ul>
+<h2>誰會使用</h2>
+<p>負責覆核保存期限即將屆滿之文件的記錄管理人員及合規人員。</p>
+<h1>Hold Policy（保留政策）</h1>
+<p><strong>選單路徑：</strong> Client → Retention → Hold Policy</p>
+<figure><img alt="Hold Policy 畫面" src="assets/client-14-hold-policy.png"><figcaption>Hold Policy 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>檢視目前處於法律／合規保留狀態的每個資料夾——由哪項政策保留、誰提出申請、誰批准——確保受保護的記錄不會被意外更改或銷毀。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Filter by Folder Name</strong>（按資料夾名稱篩選）——輸入文字以按名稱篩選被保留的資料夾。</li>
+<li><strong>Sort By</strong>（排序依據）／ <strong>Sort Order</strong>（排序方式）——排序下拉選單。在此測試網站上打開後顯示空白面板（沒有顯示任何選項）。</li>
+<li><strong>Policy</strong>（政策）——按保留政策篩選。在此測試網站上打開後顯示空白面板。</li>
+<li><strong>Apply By</strong>（申請人）——按提出保留申請的人篩選。</li>
+<li><strong>Approver</strong>（審批人）——按審批人篩選。</li>
+<li><strong>Refresh</strong>（重新整理）——重新載入列表。</li>
+<li><strong>Full screen</strong>（全螢幕）——切換表格全螢幕顯示。</li>
+<li><strong>Column settings</strong>（欄位設定）——顯示／隱藏表格欄位。</li>
+</ul>
+<p>保留是在 <strong>Browse</strong>（瀏覽）中施加的（工具列 → <strong>Add Hold Policy</strong>——見 02-browse）。</p>
+<h2>列表與欄位</h2>
+<ul>
+<li>欄位：<strong>Folder Name</strong>、<strong>Folder Path</strong>、<strong>Policy Name</strong>、<strong>Requester</strong>、<strong>Approver</strong>、<strong>Approved Date</strong>、<strong>Actions</strong>。</li>
+<li>此網站共 1 筆記錄——資料夾 <strong>Support</strong>（<code>/Case/Support</code>）由政策 <strong>"Automatic Test"</strong> 保留，由 lyle 於 2026-04-28 11:19 提出並批准。</li>
+<li><strong>每列 Actions (⋯)</strong>——在此測試網站上點按後沒有顯示任何選單。</li>
+<li>分頁列：<strong>Jump up page</strong>（第一頁）、<strong>Previous page</strong>（上一頁）、頁碼輸入框、<strong>Next page</strong>（下一頁）、<strong>Jump down page</strong>（最後一頁）、每頁筆數選擇器（預設 <strong>20 items/page</strong>）、<strong>Total N records</strong> 總筆數計數器。</li>
+</ul>
+<h2>測試網站觀察記錄</h2>
+<ul>
+<li>頁面正常載入；沒有錯誤提示橫額。與 Retention List 相同的異常情況：篩選下拉選單及每列的 ⋯ 按鈕在 sit-v3 上均顯示為空白／無內容。測試期間並未施加或解除任何保留。</li>
+</ul>
+<h2>誰會使用</h2>
+<p>需要即時檢視所有處於法律保留狀態項目的合規人員及記錄管理人員。</p>
+<h1>Easy Form（簡易表格）</h1>
+<p><strong>選單路徑：</strong> Client → Easy Form</p>
+<figure><img alt="Easy Form 畫面" src="assets/client-15-easy-form.png"><figcaption>Easy Form 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>你的 Easy Form 表格庫——毋須紙張即可收集資訊的數碼表格。每份表格均顯示其狀態及是否已連結工作流程，讓你隨時掌握哪些表格已可使用。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Sort By</strong>（排序依據）——排序表格列表。</li>
+<li><strong>Sort Order</strong>（排序方式）——遞增／遞減。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li>欄位：<strong>Form Name</strong>、<strong>Create Date</strong>、<strong>Last Modified Date</strong>、<strong>Status</strong>、<strong>Linked with Workflow</strong>、<strong>Actions</strong>。</li>
+<li>分頁列：頁面導覽及 <strong>Total N records</strong> 總筆數計數器。</li>
+</ul>
+<h2>測試網站觀察記錄</h2>
+<ul>
+<li><strong>測試網站上的已知問題：</strong> Easy Form 列表因後端 500 錯誤而載入失敗（提示訊息："Request failed with status code 500"），因此無法顯示表格——出錯後頁面顯示「No data yet / Total 0 records」（見 <code>client-15-easy-form-500-error.png</code>）。受此問題影響，表格列、填寫表格檢視及任何新增選項均無法探索。</li>
+</ul>
+<figure><img alt="錯誤狀態" src="assets/client-15-easy-form-500-error.png"><figcaption>錯誤狀態</figcaption></figure>
+<h2>誰會使用</h2>
+<p>需要填寫、提交或管理數碼表格的用戶。</p>
+<h1>ROLE-Page</h1>
+<p><strong>選單路徑:</strong> Client → ROLE-Page</p>
+<figure><img alt="ROLE-Page 畫面" src="assets/client-16-role-page.png"><figcaption>ROLE-Page 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>一個按角色度身訂做的登陸頁面，讓每類用戶都能看到對他們最重要的工具與資訊。此處顯示的內容由管理員按角色設定。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li>此畫面沒有可見的工具列——它是一個顯示頁，內容取決於角色設定。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li>沒有列表或表格。</li>
+</ul>
+<h2>測試網站備註</h2>
+<ul>
+<li>示範帳戶看到 <strong>"User role not detected"</strong>——這是按角色設定後的狀態，並非錯誤：此帳戶尚未指派任何角色頁面。已設定角色的帳戶會在此看到其角色專屬的儀表板。</li>
+</ul>
+<h2>誰會使用</h2>
+<p>每位用戶——頁面內容會隨管理員所指派的角色而調整。</p>
+<h1>Contact Book</h1>
+<p><strong>選單路徑:</strong> Client → Contact Book</p>
+<figure><img alt="Contact Book 畫面" src="assets/client-17-contact-book.png"><figcaption>Contact Book 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>把共享通訊錄放在文件旁邊，讓文件背後的人員永遠只需一按即可找到。細緻的權限控制可精確設定誰可以讀取、新增、編輯、刪除或管理每本通訊錄。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Name</strong>——按通訊錄名稱篩選列表。</li>
+<li><strong>Sort By</strong> / <strong>Sort Order</strong>——排序列表。</li>
+<li><strong>Add</strong>——建立新通訊錄（見下方對話框）。</li>
+<li><strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>——標準表格工具。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li>欄位：<strong>Name</strong>、<strong>Read</strong>、<strong>Create</strong>、<strong>Edit</strong>、<strong>Delete</strong>、<strong>Manage</strong>（每個權限欄列出獲授權的用戶/群組，例如 "administrator, Administrators Group"）、<strong>Created By</strong>、<strong>Create Date</strong>、<strong>Last Modified Date</strong>、<strong>Actions</strong>。</li>
+<li>分頁列：<strong>Jump up page</strong>（第一頁）、<strong>Previous page</strong>、頁碼輸入框、<strong>Next page</strong>、<strong>Jump down page</strong>（最後一頁）、每頁筆數選擇器（預設 <strong>20 items/page</strong>）、<strong>Total N records</strong> 計數器（此網站有 2 本通訊錄，例如 "Contact Group Bacon"）。</li>
+<li>點按一本通訊錄會開啟其詳細檢視（見下）。</li>
+</ul>
+<h2>對話框與面板</h2>
+<h3>New Contact Book (Add)</h3>
+<figure><img alt="New Contact Book 對話框" src="assets/client-17-contact-book-add.png"><figcaption>New Contact Book 對話框</figcaption></figure>
+<ul>
+<li><strong>Name</strong>*——通訊錄名稱。</li>
+<li><strong>Permission</strong>——按動作分別選擇用戶/群組：<strong>Read</strong>、<strong>Create</strong>、<strong>Edit</strong>、<strong>Delete</strong>、<strong>Manage</strong>（建立者會自動加入 Read 及 Manage）。</li>
+<li><strong>Fields</strong>——此通訊錄內每位聯絡人所需的欄位；預設為 <strong>Name</strong> 及 <strong>Email</strong>，可按 <strong>Add Field</strong> 加入更多。</li>
+<li><strong>Submit</strong>——建立通訊錄並開啟其詳細檢視。（已測試：建立了 "MKT-TEST Contact Book"。）</li>
+</ul>
+<h3>通訊錄詳細檢視</h3>
+<figure><img alt="通訊錄詳細檢視" src="assets/client-17-contact-book-detail.png"><figcaption>通訊錄詳細檢視</figcaption></figure>
+<ul>
+<li>頂部表單顯示通訊錄的 <strong>Name</strong>、<strong>Permission</strong> 選擇器（標籤顯示目前獲授權者，例如 demo）及 <strong>Fields</strong>（Email、Name、Add Field）。</li>
+<li>聯絡人列表工具列：<strong>Name</strong> 篩選、<strong>Sort By</strong>、<strong>Sort Order</strong>、<strong>Export Data</strong>（下拉選單：<strong>Export Excel</strong>、<strong>Export CSV</strong>、<strong>Export vCard(VCF)</strong>）、<strong>Import Data</strong>、<strong>Add</strong>（新增聯絡人）。</li>
+<li>聯絡人欄位：<strong>Email</strong>*、<strong>Name</strong>*（兩者均標示為必填）、<strong>Created By</strong>、<strong>Create Date</strong>、<strong>Last Modified Date</strong>、<strong>Actions</strong>。</li>
+</ul>
+<h3>新增聯絡人</h3>
+<figure><img alt="新增聯絡人對話框" src="assets/client-17-contact-book-add-contact.png"><figcaption>新增聯絡人對話框</figcaption></figure>
+<ul>
+<li>每個通訊錄欄位各有一個輸入框——此處為 <strong>Email</strong>* 及 <strong>Name</strong>*——再加上 <strong>Submit</strong>。（已測試：建立了 "MKT-TEST Contact" &lt;mkt-test@example.com&gt;。）</li>
+</ul>
+<h2>測試網站備註</h2>
+<ul>
+<li>已建立的測試資料：通訊錄 <strong>"MKT-TEST Contact Book"</strong>，內有一位聯絡人 <strong>"MKT-TEST Contact"</strong>（mkt-test@example.com）。</li>
+<li>現有範例通訊錄："Contact Group Bacon"、"Contact Group Shirt"。（它們的權限欄顯示字面的 "null" 項目——此網站的資料小異常。）</li>
+</ul>
+<h2>誰會使用</h2>
+<p>為客戶、供應商或專案管理共享聯絡人名單的團隊。</p>
+<h1>Dynamic DB</h1>
+<p><strong>選單路徑:</strong> Client → Dynamic DB</p>
+<figure><img alt="Dynamic DB 畫面" src="assets/client-18-dynamic-db.png"><figcaption>Dynamic DB 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>你的動態資料庫就在文件旁邊——可以瀏覽、搜尋及在其中建立資料表的結構化業務資料，全程無需離開 DocPal。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Create Databases (N)</strong>——開啟建立表單（見下）；括號內的數字顯示現有資料庫數量（測試前此網站有 3 個）。</li>
+<li><strong>Search...</strong>——按名稱篩選資料庫卡片。</li>
+<li>資料庫以<strong>卡片</strong>形式顯示（圖示 + 名稱）：此網站上有 Joshua Test、Test_Weltronics_DB、wcl_test。點按卡片即可開啟其工作區。</li>
+</ul>
+<h2>對話框與面板</h2>
+<h3>Create Database</h3>
+<figure><img alt="Create Database 表單" src="assets/client-18-dynamic-db-create.png"><figcaption>Create Database 表單</figcaption></figure>
+<ul>
+<li><strong>Database Name</strong>*——文字欄位（"Enter Database name"）。</li>
+<li><strong>Database Description</strong>——多行文字。</li>
+<li><strong>Database Icon</strong>——"Select an icon" 選擇器（+ 按鈕）。</li>
+<li><strong>Create Database</strong>——建立資料庫並開啟其工作區。（已測試：建立了 "MKT-TEST DB"。）</li>
+</ul>
+<h3>資料庫工作區（建立後或點按卡片後開啟）</h3>
+<figure><img alt="資料庫工作區" src="assets/client-18-dynamic-db-workspace.png"><figcaption>資料庫工作區</figcaption></figure>
+<ul>
+<li>顯示資料庫名稱、一個 <strong>Online</strong> 狀態徽章，以及描述（"No description. Double-click to add one."）。</li>
+<li><strong>Analyze Relations</strong>——分析資料表之間的關係。</li>
+<li>空白狀態："No items yet — Click + to add your first table, or upload an Excel file (or drag and drop)"。</li>
+</ul>
+<h2>測試網站備註</h2>
+<ul>
+<li>已建立的測試資料：資料庫 <strong>"MKT-TEST DB"</strong>（空白，沒有資料表）。</li>
+<li>頁面及建立流程在 sit-v3 上運作正常；未發現錯誤。</li>
+</ul>
+<h2>誰會使用</h2>
+<p>需要結構化業務資料、又不想離開 DocPal 的用戶。</p>
+<h1>Account Menu</h1>
+<p><strong>選單路徑:</strong> Client → Account Menu（左側邊欄底部的頭像）</p>
+<figure><img alt="Account 選單" src="assets/client-19-account-menu.png"><figcaption>Account 選單</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>頭像下拉選單——你的個人控制項隨手可得：設定、語言及工作階段操作，全部收納在一個小巧的選單中。</p>
+<h2>選單項目</h2>
+<ul>
+<li><strong>My Setting</strong>——開啟你的個人設定頁面（見下）。</li>
+<li><strong>ENG / 简体中文 / 繁體中文</strong>——介面語言選項（英文、簡體中文、繁體中文）。目前使用的語言會以停用狀態顯示（此帳戶為 ENG）。</li>
+<li><strong>Switch to Admin</strong>——跳轉至管理後台（僅限管理員；未測試）。</li>
+<li><strong>Log Out</strong>——結束工作階段（未測試）。</li>
+</ul>
+<h2>對話框與面板</h2>
+<h3>My Setting</h3>
+<figure><img alt="My Setting 頁面" src="assets/client-19-account-menu-my-setting.png"><figcaption>My Setting 頁面</figcaption></figure>
+<p>以獨立頁面開啟，分為三個部分：</p>
+<ul>
+<li><strong>User Profile</strong></li>
+<ul>
+<li><strong>Username</strong>——唯讀（demo）。</li>
+<li><strong>First Name</strong> / <strong>Last Name</strong>——可編輯（demo / user）。</li>
+<li><strong>Email</strong>——唯讀。</li>
+<li><strong>Contact Details</strong>——可編輯文字。</li>
+<li><strong>Status</strong>——Active/Deactive 開關，唯讀（Active）。</li>
+<li><strong>Groups</strong>——唯讀；顯示你所屬的群組（此帳戶：Members Group、Administrators Group）。</li>
+<li><strong>Role</strong>、<strong>Department</strong>、<strong>Company</strong>——唯讀。</li>
+<li><strong>Registered</strong>——唯讀（此帳戶顯示 "Pending"）。</li>
+<li><strong>User Level</strong>——唯讀（"Standard"）。</li>
+</ul>
+<li><strong>Password</strong>——<strong>Change Password</strong> 按鈕。</li>
+<li><strong>Preference</strong>——<strong>Font Size</strong> 滑桿（10–24，預設 14）。</li>
+<li><strong>Save</strong>——儲存個人資料及偏好設定的變更（未測試）。</li>
+</ul>
+<h3>Update Password（由 Change Password 開啟）</h3>
+<figure><img alt="Update Password 頁面" src="assets/client-19-account-menu-change-password.png"><figcaption>Update Password 頁面</figcaption></figure>
+<p>Change Password 會開啟一個專用頁面（"Password must be change each 30 days."）：</p>
+<ul>
+<li><strong>Old Password</strong>、<strong>New Password</strong>、<strong>Confirm Password</strong> 及 <strong>Confirm</strong>（未提交）。</li>
+</ul>
+<h2>測試網站備註</h2>
+<ul>
+<li>以上內容已在 sit-v3 以 demo 帳戶驗證；未發現錯誤。語言未曾切換，Switch to Admin / Log Out 亦未曾點按。</li>
+</ul>
+<h2>誰會使用</h2>
+<p>每位已登入用戶；Switch to Admin 選項僅對管理員顯示。</p>
+<h1>WMS Verification</h1>
+<p><strong>選單路徑：</strong> Client → Workflow → New Workflow → Packing List</p>
+<h2>此畫面的用途</h2>
+<p>透過工作流程上載裝箱單（Packing List）等文件，由系統進行 OCR 辨識；用戶核對及修正辨識結果並批准後，數據會傳送至 WMS PDA 系統。</p>
+<h2>操作步驟</h2>
+<ul>
+<li><strong>步驟 1：</strong> 開啟 <strong>Workflow</strong>，按一下 <strong>New Workflow</strong>，選擇 <strong>Packing List</strong>。</li>
+</ul>
+<figure><img alt="選擇 Packing List 工作流程" src="assets/client-20-wms-verification-01.png"><figcaption>選擇 Packing List 工作流程</figcaption></figure>
+<ul>
+<li><strong>步驟 2：</strong> 系統會顯示一個新表格。</li>
+</ul>
+<figure><img alt="新工作流程表格" src="assets/client-20-wms-verification-02.png"><figcaption>新工作流程表格</figcaption></figure>
+<ul>
+<li><strong>步驟 3：</strong> 用戶可以從本機電腦或從 DocPal 選取檔案。</li>
+</ul>
+<figure><img alt="從本機或 DocPal 選取檔案" src="assets/client-20-wms-verification-03.png"><figcaption>從本機或 DocPal 選取檔案</figcaption></figure>
+<ul>
+<li><strong>步驟 4：</strong> 所有文件上載完成後，按一下 <strong>Submit</strong>。</li>
+</ul>
+<figure><img alt="上載文件後按 Submit" src="assets/client-20-wms-verification-04.png"><figcaption>上載文件後按 Submit</figcaption></figure>
+<ul>
+<li><strong>步驟 5：</strong> 系統會處理檔案，用戶可查看任務詳情：左側是已上載的文件列表，接著是所選文件的預覽；右側是以表格形式顯示的 OCR 數據，用戶可按一下儲存格編輯內容；下方是發票（invoice）資料，同樣可按一下編輯。</li>
+</ul>
+<figure><img alt="OCR 數據核對畫面" src="assets/client-20-wms-verification-05.png"><figcaption>OCR 數據核對畫面</figcaption></figure>
+<ul>
+<li><strong>步驟 6：</strong> 用戶核對內容後，勾選 <strong>Verify</strong> 核取方塊，然後在 invoice detail 上按一下 <strong>Approve</strong>，批准該發票。</li>
+</ul>
+<figure><img alt="勾選 Verify 並批准發票" src="assets/client-20-wms-verification-06.png"><figcaption>勾選 Verify 並批准發票</figcaption></figure>
+<ul>
+<li><strong>步驟 7：</strong> 確認後，左側文件列表的檔名旁會顯示 <strong>[ok]</strong> 標記。所有文件確認完成後，用戶即可提交工作流程，數據會傳送至 PDA。</li>
+</ul>
+<h2>誰會使用</h2>
+<p>需要把裝箱單等紙本或電子文件數據核對後匯入 WMS PDA 系統的倉務及文件處理人員。</p>
+</body></html>

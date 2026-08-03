@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>DocPal 用戶選單導覽 — 管理網站（Admin Site）</title>
+<style>
+@page { size: A4; margin: 16mm 14mm; }
+body {
+  font-family: "Segoe UI", "Microsoft JhengHei", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: 10.5pt; line-height: 1.55; color: #1a1a1a; max-width: 180mm; margin: 0 auto;
+}
+h1.doc-title { font-size: 20pt; border-bottom: 2px solid #0d9488; padding-bottom: 6px; }
+h1:not(.doc-title) { font-size: 17pt; color: #0d9488; page-break-before: always; page-break-after: avoid; }
+h2 { font-size: 14pt; color: #0d9488; margin-top: 1.3em; page-break-after: avoid; }
+h3 { font-size: 12pt; margin-top: 1.2em; page-break-after: avoid; }
+figure { margin: 0.8em 0 1.2em; text-align: center; page-break-inside: avoid; }
+figure img { max-width: 165mm; max-height: 105mm; border: 1px solid #ccc; border-radius: 4px; }
+figcaption { font-size: 9pt; color: #666; margin-top: 4px; }
+table { border-collapse: collapse; width: 100%; margin: 0.8em 0; }
+th, td { border: 1px solid #ccc; padding: 5px 8px; text-align: left; font-size: 10pt; }
+th { background: #f0fdfa; }
+code { background: #f3f4f6; padding: 1px 5px; border-radius: 3px; font-size: 9.5pt; }
+a { color: #0d9488; text-decoration: none; }
+hr { border: none; border-top: 1px solid #ddd; margin: 1.6em 0; }
+ul, ol { padding-left: 1.4em; }
+li { margin: 0.3em 0; }
+</style></head><body>
+<h1 class="doc-title">DocPal 用戶選單導覽 — 管理網站（Admin Site）</h1>
+<h1>User List</h1>
+<p><strong>Menu path:</strong> Admin → User → User List</p>
+<figure><img alt="User List 畫面" src="assets/admin-01-user-list.png"><figcaption>User List 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>這是系統中所有用戶帳號的中央登記冊。管理員可以在同一個畫面查看誰擁有存取權限、篩選及排序列表、建立新帳號、啟用或停用用戶、指派用戶群組，以及管理邀請。建立按鈕上的授權計數器（例如「43 / 200」）顯示已使用的用戶席位數與授權上限。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Filter by Username / Email Address</strong>（按用戶名稱／電郵地址篩選）— 自由文字搜尋框；輸入後按 Enter 即可收窄列表範圍。</li>
+<li><strong>Sort By</strong>（排序依據）— 核取方塊群組，用於選擇以哪一個（些）欄位排序：Username、Email Address、User Level、Status、Registered。</li>
+</ul>
+<figure><img alt="Sort By 選項" src="assets/admin-01-user-list-sort-by.png"><figcaption>Sort By 選項</figcaption></figure>
+<ul>
+<li><strong>Sort Order</strong>（排序方式）— 核取方塊群組：A–Z 或 Z–A。</li>
+<li><strong>Active</strong> — 按帳號狀態篩選：Active 或 Deactive。</li>
+<li><strong>Groups</strong>（群組）— 按所屬用戶群組篩選（例如 Administrators Group、IT Team、Members Group、SSF Admin、SSF Creator、SSF Dashboard、SSF Exporter、SSF Verifier、Test Sales — 反映此網站上已定義的群組）。</li>
+<li><strong>Registered</strong>（已註冊）— 按註冊狀態篩選：Pending 或 Registered。</li>
+<li><strong>User Level</strong>（用戶級別）— 按級別篩選：Essential、Premium、Standard。</li>
+<li><strong>Create New User (x / 200)</strong>（建立新用戶）— 開啟建立對話框；計數器顯示已使用席位數與 200 席授權上限。</li>
+<li>表格工具圖示：<strong>Refresh</strong>（重新整理）、<strong>Full screen</strong>（全螢幕）及 <strong>Column settings</strong>（欄位設定，顯示／隱藏欄位）。</li>
+<li>分頁頁尾：跳至第一頁／上一頁／下一頁／最後一頁、頁碼輸入框、每頁項目數選擇器（預設每頁 20 項），以及總記錄數。</li>
+</ul>
+<h2>列表與欄位</h2>
+<p>每一列顯示一位用戶，包括：</p>
+<ul>
+<li><strong>Username</strong>（用戶名稱）— 登入名稱。</li>
+<li><strong>Email Address</strong>（電郵地址）— 帳號電郵。</li>
+<li><strong>Role</strong>（角色）— 已指派的角色（如有）。</li>
+<li><strong>Assigned User Group</strong>（已指派用戶群組）— 用戶所屬的所有群組（可有多個值）。</li>
+<li><strong>User Level</strong>（用戶級別）— Essential / Standard / Premium 級別。</li>
+<li><strong>Status</strong>（狀態）— 內嵌的 Active/Deactive 切換開關及目前狀態標籤，管理員可直接在表格中啟用或暫停帳號。</li>
+<li><strong>Registered</strong>（已註冊）— 用戶是否已完成註冊（Pending / Registered）。</li>
+<li><strong>Actions</strong>（操作）— 每列的 ⋯ 選單。</li>
+</ul>
+<figure><img alt="列表中已建立的新用戶" src="assets/admin-01-user-list-mkt-test-user.png"><figcaption>列表中已建立的新用戶</figcaption></figure>
+<h2>對話框與面板</h2>
+<h3>Create New User</h3>
+<p>由工具列按鈕開啟。欄位包括：</p>
+<ul>
+<li><strong>Username</strong>（必填）— 必須以字母開頭；只可使用字母、數字、底線（_）及連字號（-）。</li>
+<li><strong>First Name</strong>（必填）— 只可使用字母、數字、底線或中文字元。</li>
+<li><strong>Last Name</strong>（必填）— 字元規則相同。</li>
+<li><strong>Email Address</strong>（必填）。</li>
+<li><strong>User Level</strong> — 下拉選單，預設為 Standard（Essential / Premium / Standard）。</li>
+<li><strong>User Groups Assigned</strong>（已指派用戶群組）— 多選欄位；預先填入「Members Group」，標籤可以移除。</li>
+<li><strong>Status</strong> — Activate 開關（預設為開啟）。</li>
+<li><strong>Submit</strong> 會建立帳號；關閉（X）按鈕會取消操作。</li>
+</ul>
+<figure><img alt="Create New User 對話框" src="assets/admin-01-user-list-create-dialog.png"><figcaption>Create New User 對話框</figcaption></figure>
+<h3>列操作選單（⋯）</h3>
+<p>每位用戶的選單提供三項操作：</p>
+<ul>
+<li><strong>Edit User</strong>（編輯用戶）— 開啟用戶詳情面板（見下文）。</li>
+<li><strong>Send Invitation</strong>（發送邀請）— 重新發送邀請電郵給該用戶。</li>
+<li><strong>Delete User</strong>（刪除用戶）— 移除該帳號。</li>
+</ul>
+<figure><img alt="列操作選單" src="assets/admin-01-user-list-row-actions.png"><figcaption>列操作選單</figcaption></figure>
+<h3>Edit User 面板</h3>
+<p>顯示所選用戶的詳情及群組成員資格：</p>
+<ul>
+<li><strong>User Info</strong>（用戶資料）— First Name、Last Name、Email Address、User Level，以及 Status（Active/Deactive）開關，均提供內嵌編輯功能；此處亦設有 <strong>Delete</strong> 按鈕。</li>
+<li><strong>User Group Assignment</strong>（用戶群組指派）— 設有 <strong>Assign User Group</strong> 按鈕，以及一個可篩選的小型表格（User Group Name、User Group Identifier，附 Refresh / Full screen / Column settings），列出用戶所屬的所有群組，例如「Members Group (members)」。</li>
+</ul>
+<figure><img alt="Edit User 面板" src="assets/admin-01-user-list-edit-panel.png"><figcaption>Edit User 面板</figcaption></figure>
+<h2>誰會使用</h2>
+<p>負責開設帳號、管理群組成員資格與用戶級別、啟用或暫停存取權限，以及追蹤授權席位使用情況的系統管理員與用戶管理員。</p>
+<h1>User Group List</h1>
+<p><strong>Menu path:</strong> Admin → User → User Group List</p>
+<figure><img alt="User Group List 畫面" src="assets/admin-02-user-group-list.png"><figcaption>User Group List 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>這是網站上所有用戶群組的登記冊。群組是 DocPal 中權限與指派的基本單位 — 它們會出現在用戶篩選、分享、工作流程及安全性設定中。管理員可在此建立新群組、重新命名或刪除群組，並管理每位用戶屬於哪些群組。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Filter by User Group Name</strong>（按用戶群組名稱篩選）— 自由文字篩選框。</li>
+<li><strong>Add New User Group</strong>（新增用戶群組）— 開啟建立對話框。</li>
+<li>表格工具圖示：<strong>Refresh</strong>、<strong>Full screen</strong> 及 <strong>Column settings</strong>。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li><strong>User Group Name</strong>（用戶群組名稱）— 群組的顯示名稱（例如 Administrators Group、Members Group、IT Team）。</li>
+<li><strong>User Group Identifier</strong>（用戶群組識別碼）— 由名稱衍生而成的系統識別碼（例如 <code>administrators</code>、<code>members</code>、<code>MKT-TEST_Group</code>）。</li>
+<li><strong>Actions</strong>（操作）— 每列的 ⋯ 選單，包括：</li>
+<ul>
+<li><strong>Edit</strong>（編輯）— 開啟群組詳情面板。</li>
+<li><strong>Delete</strong>（刪除）— 移除該群組。</li>
+</ul>
+</ul>
+<figure><img alt="群組列操作" src="assets/admin-02-user-group-list-row-actions.png"><figcaption>群組列操作</figcaption></figure>
+<h2>對話框與面板</h2>
+<h3>Add New User Group</h3>
+<p>單一欄位的對話框：</p>
+<ul>
+<li><strong>User Group Name</strong>（必填）— 識別碼會由名稱自動產生。</li>
+<li><strong>Submit</strong> 會建立群組；關閉（X）按鈕會取消操作。</li>
+</ul>
+<figure><img alt="Add New User Group 對話框" src="assets/admin-02-user-group-list-add-dialog.png"><figcaption>Add New User Group 對話框</figcaption></figure>
+<h3>群組詳情面板（Edit）</h3>
+<p>由該列的 Edit 操作開啟。頂部顯示群組名稱，下方的 <strong>Users</strong> 區段列出目前成員：</p>
+<ul>
+<li><strong>Add Users to User Group</strong>（新增用戶至群組）— 開啟成員選擇對話框。</li>
+<li><strong>Filter By Name</strong>，以及成員表格的 Refresh / Full screen / Column settings。</li>
+<li>成員表格欄位：<strong>Username</strong>、<strong>Group Identifier</strong>、<strong>Actions</strong>。</li>
+<li>每位成員列的 ⋯ 選單提供 <strong>Remove</strong>（將該用戶從群組移除）。</li>
+</ul>
+<figure><img alt="群組詳情面板" src="assets/admin-02-user-group-list-edit-panel.png"><figcaption>群組詳情面板</figcaption></figure>
+<h3>Add Users to User Group 對話框</h3>
+<ul>
+<li><strong>Username</strong>（必填）— 可搜尋的多選欄位，涵蓋所有用戶（「Please select one or more users」）；已選用戶會以可移除的標籤顯示。</li>
+<li><strong>Submit</strong> 會將所選用戶加入群組。</li>
+</ul>
+<figure><img alt="Add Users to User Group 對話框" src="assets/admin-02-user-group-list-add-users-dialog.png"><figcaption>Add Users to User Group 對話框</figcaption></figure>
+<figure><img alt="已加入一名成員的群組" src="assets/admin-02-user-group-list-group-member.png"><figcaption>已加入一名成員的群組</figcaption></figure>
+<h2>誰會使用</h2>
+<p>負責將組織劃分為群組，以進行權限指派、分享範圍設定、工作流程路由及用戶篩選的系統管理員。</p>
+<h1>ROLE-Page</h1>
+<p><strong>Menu path:</strong> Admin → User → ROLE-Page</p>
+<figure><img alt="ROLE-Page 圖表檢視" src="assets/admin-03-role-page.png"><figcaption>ROLE-Page 圖表檢視</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>這是角色階層的設定畫面。角色用於模擬組織架構（例如 President's Office → Personal Dept / Finance Dept → Onedrive Team），凡 DocPal 按角色路由或指派的地方都會用到。此頁面提供同一組資料的兩種檢視方式：視覺化的階層 <strong>Graph</strong>（圖表），以及用於管理的 <strong>Table</strong>（表格）。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Graph / Table 分頁</strong> — 在視覺化階層圖與列表檢視之間切換。</li>
+<li>在 Table 檢視中：</li>
+<ul>
+<li><strong>Filter By Name</strong>（按名稱篩選）— 自由文字篩選。</li>
+<li><strong>Status</strong> — 按 Active / Deactive 篩選（徽章會顯示已啟用的篩選值數目）。</li>
+<li><strong>Parent Role</strong>（上層角色）— 按任何現有角色篩選（例如 President's Office、Personal Dept、Finance Dept、Onedrive Team）。</li>
+<li><strong>Sort By</strong> — Name、Last Modified、Parent Role、Status。</li>
+<li><strong>Sort Order</strong> — A–Z / Z–A。</li>
+<li><strong>Add</strong> — 開啟 Add Role 對話框。</li>
+<li>Refresh、Full screen 及 Column settings 圖示，另設附總記錄數的分頁頁尾。</li>
+</ul>
+</ul>
+<h2>列表與欄位</h2>
+<h3>Graph 檢視</h3>
+<p>以組織架構圖形式呈現的圖表，置於網格畫布上。每個角色是一張節點卡片，顯示角色名稱及成員 <strong>Count</strong>（數目）（例如「President's Office — Count: 1」）；連接線顯示上下層階層關係。</p>
+<h3>Table 檢視</h3>
+<ul>
+<li><strong>Role Label</strong>（角色標籤）— 角色名稱（例如 Finance Dept、Personal Dept）。</li>
+<li><strong>Parent Role</strong>（上層角色）— 該角色所隸屬的上層角色（例如 President's Office）。</li>
+<li><strong>Status</strong> — Active / Deactive。</li>
+<li><strong>Last Modified</strong>（最後修改）— 最後一次變更的時間戳記。</li>
+<li><strong>Actions</strong> — 每列的操作選單。</li>
+</ul>
+<figure><img alt="ROLE-Page 表格檢視" src="assets/admin-03-role-page-table.png"><figcaption>ROLE-Page 表格檢視</figcaption></figure>
+<h2>對話框與面板</h2>
+<h3>Add Role</h3>
+<p>由 Table 檢視中的 <strong>Add</strong> 按鈕開啟：</p>
+<ul>
+<li><strong>Role Label</strong>（必填）— 自由文字的角色名稱。</li>
+<li><strong>Parent Role</strong> — 下拉選單，用於將角色置於某個現有角色之下（「Please enter parent role」）。</li>
+<li><strong>Cancel</strong> 及 <strong>Save</strong> 按鈕，另設關閉（X）按鈕。</li>
+</ul>
+<figure><img alt="Add Role 對話框" src="assets/admin-03-role-page-add-dialog.png"><figcaption>Add Role 對話框</figcaption></figure>
+<p>&gt; <strong>在此網站觀察到的已知問題：</strong> 在 Role Label 有效且未選擇上層角色的情況下按 Save，<code>POST /admin/api/docpal/acl/role</code> 回傳 HTTP 500（「Internal server error, please contact administrator」），對話框維持開啟，角色並未建立。</p>
+<figure><img alt="Add Role 500 錯誤" src="assets/admin-03-role-page-add-role-500-error.png"><figcaption>Add Role 500 錯誤</figcaption></figure>
+<h2>誰會使用</h2>
+<p>負責定義及維護角色階層的系統管理員，此階層用於整個平台的角色式路由、指派及權限管理。</p>
+<h1>User Profile</h1>
+<p><strong>Menu path:</strong> Admin → User → User Profile</p>
+<figure><img alt="User Profile 設定畫面" src="assets/admin-04-user-profile.png"><figcaption>User Profile 設定畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>此畫面用於設定用戶個人檔案（「User Profile View」）上顯示哪些欄位。管理員可決定顯示哪些資料及其排列次序 — 方法是將系統欄位拖曳至顯示列表、重新命名欄位標籤，以及移除需要隱藏的欄位。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Save</strong>（頁面底部）— 儲存目前的顯示欄位設定。</li>
+<li>Display Field 列表中每個欄位的控制項：</li>
+<ul>
+<li><strong>拖曳手柄（⋮⋮）</strong> — 以拖曳方式重新排列欄位。</li>
+<li><strong>Edit（鉛筆圖示）</strong> — 開啟該欄位的 Edit Field 對話框。</li>
+<li><strong>Delete（垃圾桶圖示）</strong> — 將該欄位從顯示列表中移除。</li>
+</ul>
+</ul>
+<h2>列表與欄位</h2>
+<h3>Display Field（左面板）</h3>
+<p>目前顯示於用戶個人檔案上的欄位，按顯示次序排列。此網站已啟用全部十二個欄位：</p>
+<ol>
+<li>Username</li>
+<li>First Name</li>
+<li>Last Name</li>
+<li>Email</li>
+<li>Contact Details</li>
+<li>Status</li>
+<li>Groups</li>
+<li>Role</li>
+<li>Department</li>
+<li>Company</li>
+<li>Registered</li>
+<li>User Level</li>
+</ol>
+<h3>System Field（右面板）</h3>
+<p>可用欄位的資源池，每個欄位均標示為「System Field」，並附提示「Drag the fields you need to display to the left.」。資源池與顯示列表對應，同時亦顯示原始的內部綁定（例如 <code>user.setting.groupDTOList</code>、<code>user.setting.aclUserDetail</code>）：Username、First Name、Last Name、Email、Contact Details、Status、Groups、Role、Department、Company、User Level、Registered。</p>
+<h2>對話框與面板</h2>
+<h3>Edit Field</h3>
+<p>由顯示欄位的鉛筆圖示開啟：</p>
+<ul>
+<li><strong>Label</strong> — 文字輸入框，預先填入欄位的目前標籤（例如「Username」）；可重新命名欄位在個人檔案上的顯示名稱。</li>
+<li><strong>Cancel</strong> 及 <strong>Save</strong> 按鈕，另設關閉（X）按鈕。</li>
+</ul>
+<figure><img alt="Edit Field 對話框" src="assets/admin-04-user-profile-edit-field.png"><figcaption>Edit Field 對話框</figcaption></figure>
+<h2>誰會使用</h2>
+<p>負責按組織需要度身訂造用戶個人檔案版面的系統管理員 — 顯示用戶需要的欄位（部門、公司、聯絡資料），並隱藏其餘欄位。</p>
+<h1>My Setting</h1>
+<p><strong>Menu path:</strong> Admin → User → My Setting</p>
+<figure><img alt="My Setting 畫面" src="assets/admin-05-my-setting.png"><figcaption>My Setting 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>這是管理員在管理主控台的個人喜好設定 — 只套用於目前登入的帳號，不影響整個網站。</p>
+<h2>工具列與操作</h2>
+<p>此頁面是一個只有一項喜好設定的小型表單：</p>
+<ul>
+<li><strong>Date format</strong>（日期格式）— 下拉選單，選擇此用戶的日期顯示方式。選項：</li>
+<ul>
+<li><code>YYYY-MM-DD</code></li>
+<li><code>YYYY/MM/DD</code></li>
+<li><code>MM/DD/YYYY</code></li>
+<li><code>DD/MM/YYYY</code></li>
+<li><code>YYYY-MM-DD HH:mm</code>（目前選擇）</li>
+</ul>
+</ul>
+<figure><img alt="Date format 選項" src="assets/admin-05-my-setting-date-format.png"><figcaption>Date format 選項</figcaption></figure>
+<h2>列表與欄位</h2>
+<p>沒有列表 — 此頁面只包含上述的喜好設定表單。</p>
+<h2>對話框與面板</h2>
+<h3>頭像選單（側欄底部）</h3>
+<p>管理側欄左下角的圓形頭像按鈕（示範帳號顯示「d」）會開啟帳號選單：</p>
+<ul>
+<li><strong>My Setting</strong> — 跳轉至此頁面。</li>
+<li><strong>ENG</strong> — 將介面切換為英文。</li>
+<li><strong>简体中文</strong> — 將介面切換為簡體中文。</li>
+<li><strong>繁體中文</strong> — 將介面切換為繁體中文。</li>
+<li><strong>Switch to Client</strong> — 離開管理主控台，開啟客戶端（一般用戶）網站。</li>
+<li><strong>Log Out</strong> — 登出目前的工作階段。</li>
+</ul>
+<figure><img alt="管理員頭像選單" src="assets/admin-05-my-setting-avatar-menu.png"><figcaption>管理員頭像選單</figcaption></figure>
+<h2>誰會使用</h2>
+<p>每位管理員 — 各自設定自己的日期顯示喜好，並使用頭像選單切換語言、轉換使用環境及登出。</p>
+<h1>Company Profile</h1>
+<p><strong>Menu path:</strong> Admin → User → Company Profile</p>
+<figure><img alt="Company Profile 畫面" src="assets/admin-06-company-profile.png"><figcaption>Company Profile 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>公司檔案（Company Profile）的登記冊——用戶可以關聯的機構（即用戶檔案中所見的「Company」欄位）。管理員可在此建立、編輯、啟用／停用及移除公司檔案。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Filter by company profile</strong>（按公司檔案篩選）——自由文字篩選框。</li>
+<li><strong>Sort By</strong>（排序方式）——複選框群組：Company Profile、Create Date、Status、Last Modified Date。</li>
+<li><strong>Sort Order</strong>（排序次序）——A–Z 或 Z–A。</li>
+<li><strong>New Profile</strong>——開啟建立對話框。</li>
+<li>表格工具圖示：<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>，以及顯示總記錄數的分頁頁尾。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li><strong>Company Profile</strong>——公司名稱（例如 Raynor LLC、NS、WCL）。</li>
+<li><strong>Creator</strong>——建立該檔案的帳戶（例如 administrator、joshua）。</li>
+<li><strong>Create Date</strong>——建立時間戳記。</li>
+<li><strong>Last Modified Date</strong>——最後修改時間戳記。</li>
+<li><strong>Status</strong>——Active 或 Deactive。</li>
+<li><strong>Actions</strong>——每列的 ⋯ 選單，包括：</li>
+<ul>
+<li><strong>Edit</strong>——編輯該檔案。</li>
+<li><strong>Deactive</strong>——停用該檔案。</li>
+<li><strong>Remove</strong>——刪除該檔案。</li>
+</ul>
+</ul>
+<figure><img alt="公司檔案列操作選單" src="assets/admin-06-company-profile-row-actions.png"><figcaption>公司檔案列操作選單</figcaption></figure>
+<h2>對話框與面板</h2>
+<h3>New Profile</h3>
+<p>由 <strong>New Profile</strong> 按鈕開啟。欄位：</p>
+<ul>
+<li><strong>Company Profile</strong>（必填）——公司名稱。</li>
+<li><strong>Phone</strong>——選填。</li>
+<li><strong>Website</strong>——選填。</li>
+<li><strong>Fax</strong>——選填。</li>
+<li><strong>Email</strong>——選填。</li>
+<li><strong>Address</strong>——選填的多行文字。</li>
+<li><strong>Status</strong>——Active 開關（預設為開啟）。</li>
+<li><strong>Submit</strong> 建立檔案；關閉（X）按鈕則取消。</li>
+</ul>
+<figure><img alt="New Profile 對話框" src="assets/admin-06-company-profile-new-dialog.png"><figcaption>New Profile 對話框</figcaption></figure>
+<h2>誰會使用</h2>
+<p>負責維護公司清單的系統管理員——平台上用戶帳戶所連結的公司皆由此管理。</p>
+<h1>Contact Book</h1>
+<p><strong>Menu path:</strong> Admin → User → Contact Book</p>
+<figure><img alt="Contact Book 畫面" src="assets/admin-07-contact-book.png"><figcaption>Contact Book 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>集中管理網站上的所有通訊錄（Contact Book）。每個通訊錄都是一本共用的地址簿，擁有專屬的欄位組合及細緻的權限設定——管理員可以查看誰獲准讀取、建立、編輯、刪除及管理每本通訊錄，並可開啟任何通訊錄以管理當中的聯絡人。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Name</strong>——自由文字篩選框。</li>
+<li><strong>Sort By</strong>——複選框群組：Name、Created By、Create Date、Last Modified Date。</li>
+<li><strong>Sort Order</strong>——A–Z 或 Z–A。</li>
+<li><strong>Add</strong>——開啟 New Contact Book 對話框。</li>
+<li>表格工具圖示：<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>，以及顯示總記錄數的分頁頁尾。</li>
+</ul>
+<h2>列表與欄位</h2>
+<p>每列代表一本通訊錄：</p>
+<ul>
+<li><strong>Name</strong>——通訊錄名稱（例如 MKT-TEST Contact Book、Contact Group Bacon）。</li>
+<li><strong>Read / Create / Edit / Delete / Manage</strong>——五個權限欄，各自列出獲授該權限的用戶及用戶群組（以逗號分隔；沒有時顯示「-」）。</li>
+<li><strong>Created By</strong>——建立該通訊錄的帳戶。</li>
+<li><strong>Create Date</strong> / <strong>Last Modified Date</strong>——時間戳記。</li>
+<li><strong>Actions</strong>——每列的 ⋯ 選單，包括 <strong>Edit</strong>（開啟該通訊錄，見下文）及 <strong>Remove</strong>（刪除該通訊錄）。</li>
+</ul>
+<figure><img alt="通訊錄列操作選單" src="assets/admin-07-contact-book-row-actions.png"><figcaption>通訊錄列操作選單</figcaption></figure>
+<h2>對話框與面板</h2>
+<h3>New Contact Book</h3>
+<p>由 <strong>Add</strong> 按鈕開啟：</p>
+<ul>
+<li><strong>Name</strong>（必填）——通訊錄名稱。</li>
+<li><strong>Permission</strong>——五個用戶／群組選擇下拉框：<strong>Read</strong>、<strong>Create</strong>、<strong>Edit</strong>、<strong>Delete</strong>、<strong>Manage</strong>（顯示「Select an option」；選擇器列出所有用戶及群組）。</li>
+<li><strong>Fields</strong> 區段——通訊錄所儲存的聯絡人欄位；預設包含 <strong>Name</strong> 及 <strong>Email</strong>，可按 <strong>Add Field</strong> 新增更多欄位。</li>
+<li><strong>Submit</strong> 建立通訊錄；關閉（X）按鈕則取消。</li>
+</ul>
+<figure><img alt="New Contact Book 對話框" src="assets/admin-07-contact-book-add-dialog.png"><figcaption>New Contact Book 對話框</figcaption></figure>
+<h3>Contact book edit view（通訊錄編輯檢視）</h3>
+<p>由某列的 <strong>Edit</strong> 操作開啟。在同一畫面結合通訊錄的設定與內容：</p>
+<ul>
+<li><strong>Name</strong>（必填）及五個 <strong>Permission</strong> 選擇器，已預填現有授權（以可移除的標籤顯示）。</li>
+<li><strong>Fields</strong> 區段，附 <strong>Add Field</strong>。</li>
+<li>聯絡人表格，附專屬工具列——<strong>Name</strong> 篩選、<strong>Sort By</strong>、<strong>Sort Order</strong>、<strong>Export Data</strong>（Export Excel / Export CSV / Export vCard (VCF)）、<strong>Import Data</strong>、<strong>Add</strong>（新增聯絡人），以及 Refresh / Full screen / Column settings。</li>
+<li>聯絡人欄位：<strong>Email</strong>（必填）、<strong>Name</strong>（必填）、<strong>Created By</strong>、<strong>Create Date</strong>、<strong>Last Modified Date</strong>、<strong>Actions</strong>。</li>
+<li>範例：MKT-TEST Contact Book 包含一個聯絡人——「MKT-TEST Contact」（mkt-test@example.com），由 demo 建立。</li>
+</ul>
+<figure><img alt="通訊錄編輯檢視" src="assets/admin-07-contact-book-edit-view.png"><figcaption>通訊錄編輯檢視</figcaption></figure>
+<h2>誰會使用</h2>
+<p>負責管理共用通訊錄的系統管理員——管理其欄位、內容，以及哪些用戶和群組可以讀取、貢獻或管理每本通訊錄。</p>
+<h1>Smart Folder Setting</h1>
+<p><strong>Menu path:</strong> Admin → Browse Setting → Smart Folder Setting</p>
+<figure><img alt="Smart Folder Setting 畫面" src="assets/admin-08-smart-folder-setting.png"><figcaption>Smart Folder Setting 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>智能資料夾（Smart Folder）是已儲存的搜尋查詢，對最終用戶顯示為虛擬資料夾。管理員在此畫面建立智能資料夾、定義每個資料夾背後的查詢，並控制哪些用戶、群組或角色可以看到它們。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Filter by Smart Folder Name</strong>（按智能資料夾名稱篩選）——自由文字篩選框。</li>
+<li><strong>User / User Group</strong>——按指派對象篩選列表（複選框群組；本網站上有：Members Group、administrator、Administrators Group）。</li>
+<li><strong>Create New Smart Folder</strong>——開啟建立對話框。</li>
+<li>表格工具圖示：<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>，以及顯示總記錄數的分頁頁尾。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li><strong>Smart Folder Name</strong>——資料夾名稱（例如 YUILY、SK-II2、Query documents）。</li>
+<li><strong>Assigned User / User Group / User Role</strong>——該智能資料夾對誰可見。</li>
+<li><strong>Actions</strong>——每列的 ⋯ 選單，包括：</li>
+<ul>
+<li><strong>Edit Smart Folder Query</strong>——開啟查詢編輯器（見下文）。</li>
+<li><strong>Edit Smart Folder Info</strong>——編輯名稱及指派對象。</li>
+<li><strong>Delete Smart Folder</strong>——移除該智能資料夾。</li>
+</ul>
+</ul>
+<figure><img alt="智能資料夾列操作選單" src="assets/admin-08-smart-folder-setting-row-actions.png"><figcaption>智能資料夾列操作選單</figcaption></figure>
+<h2>對話框與面板</h2>
+<h3>Create New Smart Folder</h3>
+<ul>
+<li><strong>Smart Folder Name</strong>（必填）。</li>
+<li><strong>User / User Group</strong>（必填）——用戶及群組的多選欄位，預填「Members Group」（可移除的標籤）。</li>
+<li><strong>Submit</strong> 建立資料夾；關閉（X）按鈕則取消。</li>
+</ul>
+<figure><img alt="Create New Smart Folder 對話框" src="assets/admin-08-smart-folder-setting-create-dialog.png"><figcaption>Create New Smart Folder 對話框</figcaption></figure>
+<h3>Edit Smart Folder Query</h3>
+<p>智能資料夾的完整查詢建構畫面：</p>
+<ul>
+<li><strong>Condition Type</strong>——可搜尋屬性的下拉框：Author groups、Authors、Collections、Create Date、Created By、Creator groups、Document Type、File Size、File Type、Keyword、Last Modified Date、Metadata。</li>
+<li>條件的數值輸入框（例如 <strong>Keyword</strong> 文字框），以及關鍵字條件專用的 <strong>Synonyms</strong>（同義詞）開關。</li>
+<li><strong>And</strong> 按鈕，附 <strong>Toggle Dropdown</strong> 提供 <strong>And / Or</strong> 選項——以布林邏輯組合多個條件。</li>
+<li><strong>Clear Filter</strong>、<strong>Test</strong>（執行查詢）及 <strong>Save</strong>。</li>
+<li><strong>Search Result</strong> 表格顯示符合條件的文件，欄位包括：File / Folder Name、Document Type、File Type、Created By、Authors、File Size、File / Folder Path、Summary、Create Date、Last Modified Date、Tags。</li>
+</ul>
+<figure><img alt="智能資料夾查詢編輯器" src="assets/admin-08-smart-folder-setting-query-editor.png"><figcaption>智能資料夾查詢編輯器</figcaption></figure>
+<h2>誰會使用</h2>
+<p>系統管理員及知識管理員——他們將經常使用的搜尋包裝成現成的虛擬資料夾供團隊使用（例如「本月修改過的所有合約」），並指派給合適的對象。</p>
+<h1>Document Type Setting</h1>
+<p><strong>Menu path:</strong> Admin → Browse Setting → Document Type Setting</p>
+<figure><img alt="Document Type Setting 畫面" src="assets/admin-09-document-type-setting.png"><figcaption>Document Type Setting 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>系統中所有文件類型（Document Type）的登記冊（本網站共 238 個）。文件類型定義了一類檔案或資料夾——其所屬類別、誰可以使用，以及該類型文件所附帶的中繼資料欄位。管理員可在此建立、複製、停用及豐富文件類型。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Filter by Document Type Name</strong>（按文件類型名稱篩選）——自由文字篩選框。</li>
+<li><strong>Category</strong>——按類別篩選：HR / Admin、Sales、Finance、Legal、IT、Marketing、Project、Operation、Customer Service、General、Logistic、CRM、Workflow（另有 intranet）。</li>
+<li><strong>Active</strong>——按 Enable / Disable 篩選。</li>
+<li><strong>Data Type</strong>——按 File / Folder 篩選。</li>
+<li><strong>CreateBy</strong>——按建立者篩選（admin、administrator）。</li>
+<li><strong>More</strong>——顯示額外的排序／篩選控制項（Sort By、Sort Order），以及在篩選生效時顯示 <strong>Clear Filter</strong> 按鈕。</li>
+<li><strong>Create New Document Type</strong>——開啟建立對話框。</li>
+<li><strong>Exprot XLS</strong>［原文如此］——將文件類型清單匯出至 Excel。</li>
+<li>表格工具圖示：<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>，以及分頁頁尾（每頁 20 項；此處共 12 頁）。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li><strong>Document Type Name</strong>——類型名稱。</li>
+<li><strong>Category</strong>——其業務類別（例如 Finance、Workflow）。</li>
+<li><strong>Status</strong>——Active / inactive。</li>
+<li><strong>Created By</strong>——建立者帳戶。</li>
+<li><strong>Last Modified Date</strong>——最後修改時間戳記。</li>
+<li><strong>Actions</strong>——每列的 ⋯ 選單，包括：</li>
+<ul>
+<li><strong>Edit Display Meta</strong>——開啟該類型的詳細資料／中繼資料畫面（見下文）。</li>
+<li><strong>Duplicate Document Type</strong>——複製該類型。</li>
+<li><strong>Inactivate Document Type</strong>——停用該類型。</li>
+</ul>
+</ul>
+<figure><img alt="文件類型列操作選單" src="assets/admin-09-document-type-setting-row-actions.png"><figcaption>文件類型列操作選單</figcaption></figure>
+<h2>對話框與面板</h2>
+<h3>Create New Document Type</h3>
+<ul>
+<li><strong>Document Type Name</strong>（必填）。</li>
+<li><strong>Category</strong>（必填）——上述 13 個類別的下拉框。</li>
+<li><strong>Is Folder</strong>——開關；令該類型套用於資料夾而非檔案。</li>
+<li><strong>Permission</strong>——按 <strong>Users</strong>、<strong>Role</strong> 及 <strong>Assigned User Group</strong> 分組的多選欄位：誰可以使用該類型。</li>
+<li><strong>Submit</strong> 建立類型；關閉（X）按鈕則取消。</li>
+</ul>
+<figure><img alt="Create New Document Type 對話框" src="assets/admin-09-document-type-setting-create-dialog.png"><figcaption>Create New Document Type 對話框</figcaption></figure>
+<h3>Document type detail (Edit Display Meta)（文件類型詳細資料）</h3>
+<p>顯示類型的三語名稱（<strong>ENG / 简体中文 / 繁體中文</strong> 輸入框）及 <strong>Category</strong>，並附 <strong>Display Meta</strong> 分頁，列出附於該類型的中繼資料欄位：</p>
+<ul>
+<li><strong>Filter by Meta</strong> 篩選框及 <strong>Add New Display Meta</strong> 按鈕。</li>
+<li>欄位：<strong>No.</strong>、<strong>Meta</strong>、<strong>Data Type</strong>、<strong>Last Modified</strong>、<strong>Actions</strong>。</li>
+</ul>
+<figure><img alt="文件類型 Display Meta 分頁" src="assets/admin-09-document-type-setting-display-meta.png"><figcaption>文件類型 Display Meta 分頁</figcaption></figure>
+<h3>Add New Display Meta</h3>
+<p>將中繼資料欄位關聯至文件類型：</p>
+<ul>
+<li><strong>Meta</strong>（必填）——Metadata 登記冊中所有中繼資料定義的下拉框。</li>
+<li><strong>Display</strong>——Yes/No 開關（預設為開啟）。</li>
+<li><strong>Hidden</strong>——附 <strong>Add Rule</strong> 的區段（設定欄位於何時隱藏的規則）。</li>
+<li><strong>Mask</strong>——附 <strong>Add Rule</strong> 的區段（設定遮蔽欄位數值的規則）。</li>
+<li><strong>Read only</strong>——附 <strong>Add Rule</strong> 的區段（設定令欄位變為唯讀的規則）。</li>
+<li><strong>Language Set</strong>——<strong>ENG / 简体中文 / 繁體中文</strong> 顯示標籤輸入框。</li>
+<li><strong>Submit</strong> 及 <strong>Submit And Add More</strong> 按鈕。</li>
+</ul>
+<figure><img alt="Add New Display Meta 對話框" src="assets/admin-09-document-type-setting-add-meta-dialog.png"><figcaption>Add New Display Meta 對話框</figcaption></figure>
+<h2>誰會使用</h2>
+<p>系統管理員及資訊架構師——他們為機構建立文件分類體系，控制有哪些類型存在、誰可以將文件歸入各類型，以及每個類型收集哪些中繼資料。</p>
+<h1>Metadata</h1>
+<p><strong>Menu path:</strong> Admin → Browse Setting → Metadata</p>
+<figure><img alt="Metadata 登記冊畫面" src="assets/admin-10-metadata.png"><figcaption>Metadata 登記冊畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>系統中所有中繼資料（Metadata）欄位的主登記冊（本網站共 883 個定義）。每個定義——其名稱、資料類型及驗證／遮蔽規則——皆可透過 Display Meta 設定附加到文件類型，令文件能擷取一致而結構化的資訊。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Filter by Document Type Name</strong>——自由文字篩選框（按名稱篩選中繼資料列表）。</li>
+<li><strong>New Metadata</strong>——開啟建立對話框。</li>
+<li><strong>Exprot XLS</strong>［原文如此］——將登記冊匯出至 Excel；檔案在瀏覽器中產生，並下載為 <code>metadata.xlsx</code>（觀察所得為約 24 KB 的 <code>.xlsx</code> 活頁簿）。</li>
+<li>表格工具圖示：<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>，以及分頁頁尾（每頁 20 項；此處共 45 頁）。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li><strong>Name</strong>——中繼資料欄位名稱（例如 Contract ID、Approve Date、Work Instruction Type）。</li>
+<li><strong>Data Type</strong>——欄位類型（例如 text、select、date）。</li>
+<li><strong>Last Modified Date</strong>——最後修改時間戳記。</li>
+<li><strong>Actions</strong>——每列的 ⋯ 選單，包括 <strong>Edit</strong>、<strong>Duplicate</strong> 及 <strong>Remove</strong>。</li>
+</ul>
+<figure><img alt="中繼資料列操作選單" src="assets/admin-10-metadata-row-actions.png"><figcaption>中繼資料列操作選單</figcaption></figure>
+<h2>對話框與面板</h2>
+<h3>New Metadata</h3>
+<ul>
+<li><strong>Name</strong>（必填）——欄位名稱。</li>
+<li><strong>Data Type</strong>（必填）——包含 11 種類型的下拉框：Text、Number、Boolean、Select、Date、Document、Case、Workflow、MasterTable、User、UserRoleUserGroup。</li>
+<li>視乎類型顯示相應選項：</li>
+<ul>
+<li><strong>Text</strong>——*Max Length* 微調輸入框（1–4000，預設 255）。</li>
+<li><strong>Select</strong>——<strong>Options</strong> 區段，附 <strong>Add Option</strong> 以定義選項，另設 <strong>Multiple</strong> 開關以允許多選。</li>
+</ul>
+<li><strong>Mask Setting</strong>——*Mask type* 下拉框（預設 MASK_ALL）及 *Mask Length* 微調輸入框（1–24，預設 10），控制數值顯示時的遮蔽方式。</li>
+<li><strong>Submit</strong> 建立定義；關閉（X）按鈕則取消。</li>
+</ul>
+<figure><img alt="New Metadata 對話框" src="assets/admin-10-metadata-new-dialog.png"><figcaption>New Metadata 對話框</figcaption></figure>
+<figure><img alt="Select 資料類型選項" src="assets/admin-10-metadata-select-type.png"><figcaption>Select 資料類型選項</figcaption></figure>
+<h2>誰會使用</h2>
+<p>系統管理員及資訊架構師——他們一次定義機構的中繼資料詞彙，並在文件類型、搜尋及智能資料夾中重複使用。</p>
+<h1>Folder Cabinet Setting</h1>
+<p><strong>Menu path:</strong> Admin → Browse Setting → Folder Cabinet Setting</p>
+<figure><img alt="Folder Cabinet Setting 畫面" src="assets/admin-11-folder-cabinet-setting.png"><figcaption>Folder Cabinet Setting 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>Folder cabinet（檔案櫃）是進入儲存庫的精選入口：每個檔案櫃會釘選一個儲存庫路徑，並以「檔案櫃」的形式呈現給客戶端上指定的用戶、群組或角色。管理員在此畫面建立檔案櫃、將其指向儲存庫路徑，並控制其可見對象。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Filter by Cabinet Name</strong> — 自由文字篩選框。</li>
+<li><strong>Sort By</strong> — 核取方塊群組：Cabinet Path、Document Type、Name。</li>
+<li><strong>Sort Order</strong> — A–Z 或 Z–A。</li>
+<li><strong>Create New Folder Cabinet</strong> — 開啟建立對話框。</li>
+<li>表格工具圖示：<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>，另設顯示總記錄數的分頁頁尾。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li><strong>Name</strong> — 檔案櫃的顯示名稱（此網站上為：IKS、Test 1、Personal File）。</li>
+<li><strong>Cabinet Path</strong> — 檔案櫃所指向的儲存庫路徑（例如 <code>/default-domain/workspaces/Home</code>）。</li>
+<li><strong>Assigned User / User Group / User Role</strong> — 可看到此檔案櫃的對象（例如 Administrators Group、Members Group、lyle）。</li>
+<li><strong>Document Type</strong> — 檔案櫃的類型（目前所有列均為 Folder）。</li>
+<li><strong>Actions</strong> — 每列的 ⋯ 選單，包括：</li>
+<ul>
+<li><strong>Edit Folder Cabinet</strong> — 編輯名稱、路徑及指派對象。</li>
+<li><strong>Config Folder Cabinet</strong> — 開啟同一個編輯對話框以設定檔案櫃的配置。</li>
+<li><strong>Delete Folder Cabinet</strong> — 移除檔案櫃。</li>
+</ul>
+</ul>
+<figure><img alt="檔案櫃列操作選單" src="assets/admin-11-folder-cabinet-setting-row-actions.png"><figcaption>檔案櫃列操作選單</figcaption></figure>
+<h2>對話框與面板</h2>
+<h3>Create New Folder Cabinet / Edit Folder Cabinet</h3>
+<ul>
+<li><strong>Name</strong>（必填）— 檔案櫃的顯示名稱。</li>
+<li><strong>Cabinet Path</strong>（必填）— 儲存庫路徑（以麵包屑形式顯示，例如「default-domain / workspaces / Home」）。</li>
+<li><strong>User / User Group / User Role</strong>（必填）— 用戶、群組及角色的多選欄位；目前的指派會以可移除的標籤顯示。</li>
+<li><strong>Submit</strong> 儲存；關閉（X）按鈕取消。</li>
+</ul>
+<figure><img alt="Create New Folder Cabinet 對話框" src="assets/admin-11-folder-cabinet-setting-create-dialog.png"><figcaption>Create New Folder Cabinet 對話框</figcaption></figure>
+<h2>誰會使用</h2>
+<p>負責策劃的系統管理員：決定儲存庫的哪些部分會以現成檔案櫃的形式呈現給哪些對象。</p>
+<h2>實地備註 — 客戶端「folder cabinet is abnormal」錯誤（2026-07-31 觀察所得）</h2>
+<p>客戶端的 Folder Cabinet 頁面持續顯示「The folder cabinet is abnormal, please contact the administrator」。唯讀調查結果（未更改任何設定）：</p>
+<ul>
+<li>三個已設定的檔案櫃全部出現在客戶端的檔案櫃列表中，其項目表亦能載入（Test 1：2 筆記錄、Personal File：4 筆記錄、IKS：0 筆記錄）——但無論選取哪個檔案櫃，錯誤區塊仍然可見。</li>
+<li>所有 <code>/api/dms/cabinet/*</code> 呼叫均回傳 HTTP 200；未觀察到失敗的請求，因此錯誤很可能由檔案櫃資料觸發，而非硬性的 API 故障。</li>
+<li>最大嫌疑：檔案櫃 <strong>IKS</strong> 指向 <code>/Case/Mauritania/intuitive/Markets</code> ——一個看似隨機自動產生的路徑，很可能在儲存庫中已不存在（其項目列表為空）。檔案櫃 <strong>Test 1</strong>（<code>/Joshua Test-1</code>）是第二個可疑的殘留項目。當檔案櫃的根路徑無法解析時，很可能令整個頁面被標記為異常。</li>
+</ul>
+<h1>DAM Setting</h1>
+<p><strong>Menu path:</strong> Admin → Browse Setting → DAM Setting</p>
+<figure><img alt="DAM Setting 畫面" src="assets/admin-12-dam-setting.png"><figcaption>DAM Setting 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>Digital Asset Management（數碼資產管理）的轉換規則。管理員可為每種媒體檔案類型定義一個或多個具名轉換（標籤 + 目標格式）——例如將上傳的 <code>mp4</code> 轉為 <code>mov</code>，或將 <code>jpg</code> 轉為 <code>png</code>/<code>tif</code> 版本——讓資產自動以後續工作流程所需的格式提供。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Add</strong> — 開啟 Add New DAM 對話框以建立轉換規則。</li>
+<li>表格工具圖示：<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li><strong>File Type</strong> — 來源副檔名（例如 mp4、jpg）。</li>
+<li><strong>Convertion</strong>［原文如此］— 為該類型定義的轉換，以可移除的標籤顯示，附標籤及目標格式，例如「MP4 To ISP (mov)」；jpg 有三個：「JPG-PNG (png)」、「tif to jpg (tif)」、「JPGS (png)」。</li>
+<li><strong>Actions</strong> — 每列的 ⋯ 選單，包括 <strong>Add</strong>（為該檔案類型新增另一個轉換）。</li>
+</ul>
+<figure><img alt="DAM 列操作選單" src="assets/admin-12-dam-setting-row-actions.png"><figcaption>DAM 列操作選單</figcaption></figure>
+<h2>對話框與面板</h2>
+<h3>Add New DAM</h3>
+<ul>
+<li><strong>Setup file type</strong> 區段：</li>
+<ul>
+<li><strong>File Type</strong>（必填）— 下拉選單：jpg、tif、mp4、mov、avi、mpeg、png、jpeg。</li>
+</ul>
+<li><strong>Convertion</strong> 區段：</li>
+<ul>
+<li><strong>Label</strong>（必填）— 轉換的自由文字名稱。</li>
+<li><strong>Target Format</strong>（必填）— 下拉選單，選項視乎所選的 File Type 而定（例如 png 的選項為 jpeg、tif、jpg）；未選擇 File Type 前為空白。</li>
+</ul>
+<li><strong>Submit</strong> 儲存規則；關閉（X）按鈕取消。</li>
+</ul>
+<figure><img alt="Add New DAM 對話框" src="assets/admin-12-dam-setting-add-dialog.png"><figcaption>Add New DAM 對話框</figcaption></figure>
+<h2>誰會使用</h2>
+<p>負責統一媒體轉換版本的系統管理員及 DAM 管理人員——確保每項上傳的資產都能以預覽、發佈及整合所需的格式產出。</p>
+<h1>Watermark Setting</h1>
+<p><strong>Menu path:</strong> Admin → Browse Setting → Watermark Setting</p>
+<figure><img alt="Watermark Setting 畫面" src="assets/admin-13-watermark-setting.png"><figcaption>Watermark Setting 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>水印設計工作室。管理員在此建立具名水印——放置於文件頁面預覽上的文字或圖像元素——儲存後可在系統為文件蓋印的任何位置重複使用（例如檢視、下載或列印時）。此網站上現有三個水印：IMG、Test-1 及 View Chop。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Create New Watermark</strong> — 開啟建立對話框。</li>
+<li><strong>Watermark list</strong>（左面板）— 所有已儲存的水印，每個均附<strong>編輯（鉛筆）</strong>及<strong>刪除（垃圾桶）</strong>圖示。</li>
+<li><strong>Save</strong>（右下）— 儲存在編輯器中所作的變更。</li>
+</ul>
+<h2>列表與欄位</h2>
+<p>此頁沒有表格——版面為列表加編輯器：</p>
+<ul>
+<li><strong>左面板</strong> — 具名水印列表；選取其中一個即載入編輯器。</li>
+<li><strong>編輯器畫布</strong> — 完整的文件頁面預覽（頁首、內文及頁尾佔位符），以格線為背景。所選水印的元素會就地呈現——例如 IMG 水印顯示一個位於頁面左下方的圖像元素。畫布旁設有小型垂直工具列，提供水印元素工具（新增圖像／文字元素），元素可直接在頁面預覽上定位。</li>
+</ul>
+<figure><img alt="水印編輯器顯示一個新的空白水印" src="assets/admin-13-watermark-setting-editor.png"><figcaption>水印編輯器顯示一個新的空白水印</figcaption></figure>
+<h2>對話框與面板</h2>
+<h3>Create New Watermark</h3>
+<ul>
+<li><strong>Watermark Name</strong> — 新水印的自由文字名稱。</li>
+<li><strong>Submit</strong> 建立水印（會在編輯器中以空白畫布開啟）；關閉（X）按鈕取消。</li>
+</ul>
+<figure><img alt="Create New Watermark 對話框" src="assets/admin-13-watermark-setting-create-dialog.png"><figcaption>Create New Watermark 對話框</figcaption></figure>
+<h2>誰會使用</h2>
+<p>負責設計正式蓋印的系統管理員及檔案管理人員——包括機密聲明文字、公司印鑑、圖像印章等——套用於整個平台的文件。</p>
+<h1>Home (Browse Home Setting)</h1>
+<p><strong>Menu path:</strong> Admin → Browse Setting → Home</p>
+<figure><img alt="Browse Home Setting 畫面" src="assets/admin-14-browse-home-setting.png"><figcaption>Browse Home Setting 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>設定客戶端 Browse 首頁檢視。每個「home page」都是為檔案瀏覽器度身訂造的登陸檢視，針對特定用戶群組——例如供所有人使用的 Personal View、供 members 群組使用的 Finance View，或供 SSF_Dashboard 群組使用的 HKHS 儀表板。管理員在此建立、編輯、複製及停用這些檢視。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Filter by Home Page Name</strong> — 自由文字篩選框。</li>
+<li><strong>Sort By</strong> — 核取方塊群組：Access by User Group、Task Start Date、Home Page Name。</li>
+<li><strong>Sort Order</strong> — A–Z 或 Z–A。</li>
+<li><strong>Create New Home Page</strong> — 開啟建立對話框。</li>
+<li>表格工具圖示：<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>，另設顯示總記錄數的分頁頁尾。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li><strong>Home Page Name</strong> — 檢視的名稱（Personal View、Finance View、HKHS、Test New Workflow）。</li>
+<li><strong>Access by User Group</strong> — 可看到此首頁檢視的群組（例如 members、administrators、SSF_Dashboard）。</li>
+<li><strong>Task Start Date</strong> — 檢視顯示的時間戳（例如 2026-01-30 08:41）。</li>
+<li><strong>Actions</strong> — 每列的 ⋯ 選單，包括：</li>
+<ul>
+<li><strong>Edit Home Page Content</strong> — 編輯檢視的版面／小工具。</li>
+<li><strong>Edit Home Page Info</strong> — 編輯名稱及群組存取設定。</li>
+<li><strong>Duplicate</strong> — 複製此首頁。</li>
+<li><strong>Delete Home Page</strong> — 將其移除。</li>
+</ul>
+</ul>
+<figure><img alt="首頁列操作選單" src="assets/admin-14-browse-home-setting-row-actions.png"><figcaption>首頁列操作選單</figcaption></figure>
+<h2>對話框與面板</h2>
+<h3>Create New Home Page</h3>
+<ul>
+<li><strong>Home Page Name</strong>（必填）。</li>
+<li><strong>Access by User Group</strong> — 用戶群組多選欄位，預填「Members Group」（可移除標籤）。</li>
+<li><strong>Submit</strong> 建立首頁；關閉（X）按鈕取消。</li>
+</ul>
+<figure><img alt="Create New Home Page 對話框" src="assets/admin-14-browse-home-setting-create-dialog.png"><figcaption>Create New Home Page 對話框</figcaption></figure>
+<h2>誰會使用</h2>
+<p>塑造每個團隊首先看到什麼的系統管理員——為每個對象提供切合其文件、儀表板及日常工作的 Browse 首頁。</p>
+<h1>Internal Sharing</h1>
+<p><strong>Menu path:</strong> Admin → Share Module → Internal Sharing</p>
+<figure><img alt="Internal Sharing 畫面" src="assets/admin-15-internal-sharing.png"><figcaption>Internal Sharing 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>管理員監察網站內所有內部分享的總覽頁——即機構內用戶與其他用戶或群組分享的每個檔案或資料夾。此頁讓管理員在單一位置審核誰分享了什麼、該項目位於何處，以及分享給誰。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Filter by File / Folder Name</strong> — 自由文字篩選框。</li>
+<li><strong>Sort By</strong> — 核取方塊群組：File/Folder Name、Shared By、Shared To、Task Start Date。</li>
+<li><strong>Sort Order</strong> — A–Z 或 Z–A。</li>
+<li>表格工具圖示：<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>，另設顯示總記錄數的分頁頁尾。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li><strong>File/Folder Name</strong> — 被分享項目的名稱。</li>
+<li><strong>Shared By</strong> — 建立分享的用戶。</li>
+<li><strong>File / Folder Path</strong> — 該項目在儲存庫中的位置。</li>
+<li><strong>Shared To</strong> — 接收的用戶或群組。</li>
+<li><strong>Task Start Date</strong> — 分享開始的時間。</li>
+</ul>
+<p>列表目前為空（「No data yet」，0 筆記錄）——此網站上沒有任何內部分享。</p>
+<h2>對話框與面板</h2>
+<p>沒有——此頁為唯讀的審核列表；分享本身由終端用戶在客戶端網站上建立。</p>
+<h2>誰會使用</h2>
+<p>需要掌握內部資訊分享情況的系統管理員及合規人員——在不接觸用戶內容的情況下，識別過度分享的檔案並審核存取情況。</p>
+<h1>External Sharing</h1>
+<p><strong>Menu path:</strong> Admin → Share Module → External Sharing</p>
+<figure><img alt="External Sharing 畫面" src="assets/admin-16-external-sharing.png"><figcaption>External Sharing 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>管理員對所有外部分享的監察視圖 —— 即用戶發送到機構以外的檔案。管理員可以在同一個列表中審核誰收到了甚麼、分享了多少檔案,以及每個分享何時到期。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li>表格工具圖示:<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>,另設分頁頁尾顯示記錄總數。</li>
+<li>(此頁沒有篩選列。)</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li><strong>Recipients</strong> —— 分享的外部收件人。</li>
+<li><strong>No. of Files Shared</strong> —— 該分享包含的檔案數量。</li>
+<li><strong>Create Date</strong> —— 分享的建立日期。</li>
+<li><strong>Due Date</strong> —— 分享的到期日期。</li>
+<li><strong>Actions</strong> —— 針對個別分享的行內操作。</li>
+</ul>
+<p>此列表目前為空(顯示「No data yet」,0 筆記錄)—— 此站點上沒有任何外部分享。</p>
+<h2>對話框與面板</h2>
+<p>無 —— 此頁為唯讀的審核列表;外部分享本身由終端用戶在客戶端網站建立。</p>
+<h2>誰會使用</h2>
+<p>系統管理員、合規及保安主任 —— 負責追蹤流出機構的資訊,核實每個外部分享的收件人、數量及到期日。</p>
+<h1>Workflow Management</h1>
+<p><strong>Menu path:</strong> Admin → Workflow Management → Workflow Management</p>
+<figure><img alt="Workflow Management 畫面" src="assets/admin-17-workflow-management.png"><figcaption>Workflow Management 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>運作中工作流程的營運儀表板。管理員可監察全站每個進行中的工作流程任務 —— 誰是負責人、狀態如何、何時開始 —— 並可檢視一個需要跟進的失敗任務專屬佇列。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Available Task / Fail Task 分頁</strong> —— 在現行任務與失敗任務之間切換。</li>
+<li>表格工具圖示:<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>,另設分頁頁尾顯示記錄總數。</li>
+<li>列為唯讀(沒有行內操作);此畫面屬監察視圖。</li>
+</ul>
+<h2>列表與欄位</h2>
+<h3>Available Task 分頁</h3>
+<ul>
+<li><strong>Workflow Name</strong> —— 工作流程定義(例如 Packing List、teo)。</li>
+<li><strong>Task Name</strong> —— 目前的步驟(例如 Verify Task、New User Task)。</li>
+<li><strong>Task Owner</strong> —— 被指派者(例如 administrator、lyle、ooyy;未能解析的範本負責人會顯示為 <code>${__system__user_creator_id}</code>)。</li>
+<li><strong>Status</strong> —— 任務狀態(assigned、created)。</li>
+<li><strong>Task Start Date</strong> —— 任務開始日期。</li>
+</ul>
+<p>此站點有 25 個進行中的任務(共 2 頁)。</p>
+<h3>Fail Task 分頁</h3>
+<ul>
+<li><strong>Workflow Name</strong>、<strong>Task Name</strong>、<strong>Node Type</strong>、<strong>Task Failed Date</strong>、<strong>Failure Reason</strong>、<strong>Actions</strong> —— 目前為空(沒有失敗任務)。</li>
+</ul>
+<figure><img alt="Fail Task 分頁" src="assets/admin-17-workflow-management-fail-task.png"><figcaption>Fail Task 分頁</figcaption></figure>
+<h2>對話框與面板</h2>
+<p>未見任何對話框 —— 兩個分頁均為唯讀監察列表。</p>
+<h2>誰會使用</h2>
+<p>系統管理員及工作流程操作員 —— 負責確保流程順暢運作:及早發現卡住或未指派的任務,並在用戶察覺前處理失敗項目。</p>
+<h1>Workflow Editor</h1>
+<p><strong>Menu path:</strong> Admin → Workflow Management → Workflow Editor</p>
+<figure><img alt="Workflow Editor 定義列表" src="assets/admin-18-workflow-editor.png"><figcaption>Workflow Editor 定義列表</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>工作流程設計的中心:列出站點上所有工作流程定義(此處有 41 個),並提供視覺化設計器,用於繪製、設定、發佈及分享流程。每個工作流程都是一個帶版本的定義 —— 草稿可安全編輯,之後再啟用投入運作。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Create Workflow</strong> —— 開啟建立對話框。</li>
+<li>表格工具圖示:<strong>Refresh</strong>、<strong>Full screen</strong>,另設分頁頁尾(41 筆記錄,共 3 頁)。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li><strong>Workflow Name</strong> —— 定義的名稱。</li>
+<li><strong>Description</strong> —— 自由文字描述。</li>
+<li><strong>Status</strong> —— <strong>A</strong>(已啟用/已發佈)或 <strong>D</strong>(草稿/已停用)。</li>
+<li><strong>Create Date</strong> —— 建立時間戳。</li>
+<li><strong>Actions</strong> —— 每列的 ⋯ 選單,包括:</li>
+<ul>
+<li><strong>Edit Info</strong> —— 編輯名稱/描述。</li>
+<li><strong>Duplicate</strong> —— 複製該工作流程。</li>
+<li><strong>Active</strong> —— 啟用/發佈。</li>
+<li><strong>Remove</strong> —— 刪除。</li>
+<li><strong>workflow_editorPermission</strong>[未翻譯的標籤] —— 開啟分享對話框(見下文)。</li>
+</ul>
+</ul>
+<figure><img alt="工作流程行內操作" src="assets/admin-18-workflow-editor-row-actions.png"><figcaption>工作流程行內操作</figcaption></figure>
+<h2>對話框與面板</h2>
+<h3>Create Workflow</h3>
+<ul>
+<li><strong>Workflow Name</strong>(必填)。</li>
+<li><strong>Workflow Description</strong> —— 可選的自由文字。</li>
+<li><strong>Submit</strong> 建立草稿並在設計器中開啟。</li>
+</ul>
+<figure><img alt="Create Workflow 對話框" src="assets/admin-18-workflow-editor-create-dialog.png"><figcaption>Create Workflow 對話框</figcaption></figure>
+<h3>視覺化設計器</h3>
+<p>拖放式畫布(支援平移)。新草稿會以一個 <strong>Start Event</strong> 節點及一個 <strong>End Event</strong> 節點開始,在其間建立流程。</p>
+<ul>
+<li><strong>左側工具列</strong> —— 頂部為復原/重做/歷史記錄圖示(未有變更前停用),其下是包含 18 種可拖曳節點類型的<strong>節點面板</strong>:</li>
+<ul>
+<li>User Form、User Signature Task</li>
+<li>Condition Task、Transform Task、Validate Task</li>
+<li>Sub Process、Upload File</li>
+<li>Document Generation Task、Filing Documents Task</li>
+<li>Email Task、HTTP Task</li>
+<li>Unique Id Generator</li>
+<li>Insert Dynamic Database、Batch Insert Dynamic Database、Update Dynamic Database、Batch Update Dynamic Database</li>
+<li>Http JSON Edit、Script Task</li>
+</ul>
+<li><strong>底部工具列</strong> —— <strong>Activate</strong>(發佈草稿;會驗證 Start 任務是否已設定表單)及 <strong>workflow_editorPermission</strong>(分享)。</li>
+<li><strong>Properties 面板</strong>(右側)—— 顯示所選節點的設定。</li>
+</ul>
+<figure><img alt="工作流程設計器畫布" src="assets/admin-18-workflow-editor-canvas.png"><figcaption>工作流程設計器畫布</figcaption></figure>
+<h3>Workflow permission 對話框</h3>
+<p>控制誰可以使用/編輯該工作流程:</p>
+<ul>
+<li><strong>User/ Role/ Group/ Attribute Set</strong> —— 可搜尋的選擇器(「Search and select user, role, group or service」)。</li>
+<li><strong>Add Permission</strong> —— 向所選項目授予存取權。</li>
+<li><strong>Permission List</strong> —— 現有的授權,欄位包括 User/Role/Group/Attribute Set、Permissions、Actions(每項授權可 Delete);觀察到的預設值:Administrators Group(Assigned User Group,預設)及建立者(Users,預設)。</li>
+<li><strong>Close</strong> 按鈕。</li>
+</ul>
+<figure><img alt="Workflow permission 對話框" src="assets/admin-18-workflow-editor-permission.png"><figcaption>Workflow permission 對話框</figcaption></figure>
+<h2>誰會使用</h2>
+<p>系統管理員及流程設計人員 —— 負責設計審批及自動化流程,由簡單的簽核到以指令碼及數據驅動的流程,然後發佈並分享給執行這些流程的團隊。</p>
+<h1>Document Template</h1>
+<p><strong>Menu path:</strong> Admin → Template Management → Document Template</p>
+<figure><img alt="Document Template 畫面" src="assets/admin-19-document-template.png"><figcaption>Document Template 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>文件範本(Word、Excel、PowerPoint)的範本庫,供整個平台產生文件之用 —— 由工作流程的文件產生任務到用戶自行建立文件均會使用。管理員在此上載、編輯、預覽及停用範本;每列會顯示範本的檔案類型圖示。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Filter by Document Template Name</strong> —— 自由文字篩選框。</li>
+<li><strong>Sort By</strong> —— 核取方塊群組:Document Template Creator、Document Template Name、Document Type、Task Start Date。</li>
+<li><strong>Sort Order</strong> —— A–Z 或 Z–A。</li>
+<li><strong>Create New Document Template</strong> —— 開啟建立對話框。</li>
+<li>表格工具圖示:<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>,另設分頁頁尾顯示記錄總數。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li><strong>(圖示)</strong> —— 檔案類型圖示(Word / Excel / PPT)。</li>
+<li><strong>Document Template Name</strong> —— 範本名稱。</li>
+<li><strong>Document Type</strong> —— Word、Excel 或 PPT。</li>
+<li><strong>Document Template Creator</strong> —— 上載者。</li>
+<li><strong>Task Start Date</strong> —— 建立時間戳。</li>
+<li><strong>Actions</strong> —— 每列的 ⋯ 選單,包括:</li>
+<ul>
+<li><strong>Preview Document</strong> —— 檢視範本。</li>
+<li><strong>Replace Document</strong> —— 上載新檔案取代原有範本。</li>
+<li><strong>Edit Document</strong> —— 在線上編輯器中開啟範本。</li>
+<li><strong>Edit Document Template Info</strong> —— 編輯名稱/描述。</li>
+<li><strong>Delete Document</strong> —— 刪除。</li>
+<li><strong>Download Document</strong> —— 下載範本檔案。</li>
+</ul>
+</ul>
+<figure><img alt="文件範本行內操作" src="assets/admin-19-document-template-row-actions.png"><figcaption>文件範本行內操作</figcaption></figure>
+<h2>對話框與面板</h2>
+<h3>Create New Document Template</h3>
+<ul>
+<li><strong>Document Template Name</strong>(必填)。</li>
+<li><strong>Document Type</strong>(必填)—— 下拉選單:Word、Excel、PPT。</li>
+<li><strong>Description</strong> —— 可選的多行文字。</li>
+<li><strong>Submit</strong> 建立範本並在線上編輯器中開啟。</li>
+</ul>
+<figure><img alt="Create New Document Template 對話框" src="assets/admin-19-document-template-create-dialog.png"><figcaption>Create New Document Template 對話框</figcaption></figure>
+<h3>範本編輯器</h3>
+<p>建立(或編輯)範本會開啟線上文件編輯器,附設 <strong>Template Variables</strong> 側面板及 <strong>Test Template Download</strong> 按鈕(以範本產生一份示例文件)。另有一個頁面設定對話框用於設定文件:</p>
+<ul>
+<li><strong>Title</strong>(必填,已預先填入)。</li>
+<li><strong>Page Mode</strong> —— 下拉選單(PAGE)。</li>
+<li><strong>Text Counter</strong> —— 開關。</li>
+<li><strong>Page Size</strong> —— 下拉選單(A4)。</li>
+<li><strong>Orientation</strong> —— 下拉選單(Portrait)。</li>
+<li><strong>Page Margin</strong> —— Left / Top / Right / Bottom 微調框(各預設為 5)。</li>
+<li><strong>Save</strong> 及 <strong>Close</strong> 按鈕。</li>
+</ul>
+<figure><img alt="範本頁面設定" src="assets/admin-19-document-template-editor.png"><figcaption>範本頁面設定</figcaption></figure>
+<h2>誰會使用</h2>
+<p>系統管理員及範本負責人 —— 負責維護機構的標準信件、表格及試算表,確保每份產生的文件保持品牌一致及內容最新。</p>
+<h1>Email Content Template</h1>
+<p><strong>Menu path:</strong> Admin → Template Management → Email Content Template</p>
+<figure><img alt="Email Content Template 畫面" src="assets/admin-20-email-content-template.png"><figcaption>Email Content Template 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>平台所發出所有電郵的登記冊 —— 工作流程通知、分享邀請、密碼重設、上載請求等(此處有 46 個範本,大部分屬系統所有)。管理員可管理這些電郵的主旨、內文及版面,並可自行新增自訂範本。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Filter by Email Template Name</strong> —— 自由文字篩選框。</li>
+<li><strong>Sort By</strong> —— 核取方塊群組:Email Template Creator、Email Template ID、Email Template Name、Subject。</li>
+<li><strong>Sort Order</strong> —— A–Z 或 Z–A。</li>
+<li><strong>Email Layout Used</strong> —— 按版面篩選(此站點:Jacinto Email Layout)。</li>
+<li><strong>Edit Email Layout</strong> —— 開啟共用電郵版面進行編輯。</li>
+<li><strong>Create New Email Template</strong> —— 開啟建立對話框及編輯器。</li>
+<li>表格工具圖示:<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>,另設分頁頁尾(此處共 3 頁)。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li><strong>Email Template Name</strong> —— 顯示名稱(例如 New Workflow Notification、forgetPassword、Easy Share)。</li>
+<li><strong>Subject</strong> —— 電郵主旨行,支援佔位符,例如 <code>[(${businessKey})]</code>。</li>
+<li><strong>Email Template ID</strong> —— 觸發該範本的機器鍵值(例如 <code>notification.adhocApproval.submitted</code>、<code>notification.forgetPassword</code>;自訂範本會獲派自動產生的 ID,如 <code>notification.mkt-test.email.template</code>)。</li>
+<li><strong>Email Layout Used</strong> —— 包裹電郵的共用版面(Jacinto Email Layout)。</li>
+<li><strong>Email Template Creator</strong> —— 內建範本顯示為 <code>system</code>,否則為建立者。</li>
+<li><strong>Actions</strong> —— 每列的 ⋯ 選單,包括 <strong>Edit Email Template</strong> 及 <strong>Delete Email Template</strong>。</li>
+</ul>
+<figure><img alt="電郵範本行內操作" src="assets/admin-20-email-content-template-row-actions.png"><figcaption>電郵範本行內操作</figcaption></figure>
+<h2>對話框與面板</h2>
+<h3>Create New Email Template</h3>
+<ul>
+<li><strong>Email Template Name</strong>(必填)。</li>
+<li><strong>Subject</strong>(必填)—— 電郵的主旨行。</li>
+<li><strong>Submit</strong> 建立範本並開啟編輯器。</li>
+</ul>
+<figure><img alt="Create New Email Template 對話框" src="assets/admin-20-email-content-template-create-dialog.png"><figcaption>Create New Email Template 對話框</figcaption></figure>
+<h3>電郵範本編輯器</h3>
+<ul>
+<li><strong>Layout selector</strong> —— 選擇電郵版面的下拉選單(Jacinto Email Layout)。</li>
+<li><strong>Send Test</strong> —— 發送測試電郵。</li>
+<li><strong>Save</strong> —— 儲存變更。</li>
+<li>一個富文本內文編輯器(contenteditable),內文下方顯示標準頁尾(「Copyright © 2008 - 2023 DocPal All Rights Reserved.」)。</li>
+</ul>
+<figure><img alt="電郵範本編輯器" src="assets/admin-20-email-content-template-editor.png"><figcaption>電郵範本編輯器</figcaption></figure>
+<h2>誰會使用</h2>
+<p>系統管理員 —— 負責掌管平台的對外形象:用戶及外部收件人所收到每封通知電郵的品牌風格、措辭及版面。</p>
+<h1>Message Template</h1>
+<p><strong>Menu path:</strong> Admin → Template Management → Message Template</p>
+<figure><img alt="Message Template 畫面" src="assets/admin-21-message-template.png"><figcaption>Message Template 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>聊天頻道（WhatsApp、WeChat）訊息範本的註冊表。Email Content Templates 負責電郵內容，而此畫面管理透過即時通訊應用程式發送的範本——包括各頻道的發佈狀態，以及開啟／發送統計數據。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Sort By</strong> — 複選框群組：Created By、Language、Last Modified By、Last Modified Date、Name、Status。</li>
+<li><strong>Sort Order</strong> — A–Z 或 Z–A。</li>
+<li><strong>New Template</strong> — 開啟建立對話框。</li>
+<li>表格工具圖示：<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>，以及附總記錄數的分頁頁尾。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li><strong>Name</strong> — 範本名稱。</li>
+<li><strong>Usage</strong> — 範本的用途。</li>
+<li><strong>Language</strong> — 範本的語言地區設定（例如 en_US）。</li>
+<li><strong>Status</strong> — 發佈狀態。</li>
+<li><strong>Created By</strong> / <strong>Last Modified By</strong> — 擁有者及最後編輯者。</li>
+<li><strong>Last Modified Date</strong> — 最後變更時間戳。</li>
+<li><strong>Actions</strong> — 每列的 ⋯ 選單，包括：</li>
+<ul>
+<li><strong>View Details</strong> — 開啟詳情面板（見下文）。</li>
+<li><strong>Edit Template</strong> — 編輯範本。</li>
+<li><strong>Duplicate</strong> — 複製範本。</li>
+<li><strong>Delete</strong> — 刪除範本。</li>
+</ul>
+</ul>
+<figure><img alt="訊息範本列操作" src="assets/admin-21-message-template-row-actions.png"><figcaption>訊息範本列操作</figcaption></figure>
+<h2>對話框與面板</h2>
+<h3>New Template</h3>
+<ul>
+<li><strong>Name</strong> — 範本名稱。</li>
+<li><strong>Submit</strong> 建立範本；關閉（X）按鈕取消。</li>
+</ul>
+<figure><img alt="New Template 對話框" src="assets/admin-21-message-template-new-dialog.png"><figcaption>New Template 對話框</figcaption></figure>
+<h3>範本詳情面板（View Details）</h3>
+<ul>
+<li>標頭顯示範本名稱、<strong>Edit Template</strong> 按鈕及選單按鈕。</li>
+<li><strong>Stat</strong> — 各頻道的使用計數（Message Open/Sent，例如 whatsapp 0/0）。</li>
+<li><strong>Publish Status</strong> — 各頻道的發佈狀態（例如 whatsapp）。</li>
+<li>頻道列表：<strong>Whatsapp</strong>、<strong>Wechat</strong>。</li>
+</ul>
+<figure><img alt="訊息範本詳情" src="assets/admin-21-message-template-details.png"><figcaption>訊息範本詳情</figcaption></figure>
+<h2>誰會使用</h2>
+<p>管理官方 WhatsApp／WeChat 訊息的系統管理員及客戶互動團隊——追蹤哪些範本已在各頻道發佈，以及其表現如何。</p>
+<h1>Hold Policy Setting</h1>
+<p><strong>Menu path:</strong> Admin → Retention → Hold Policy Setting</p>
+<figure><img alt="Hold Policy Setting 畫面" src="assets/admin-22-hold-policy-setting.png"><figcaption>Hold Policy Setting 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>法律凍結（Legal Hold）管理。Hold Policy 會凍結文件，防止其被刪除或銷毀——可手動或自動套用——直至凍結解除為止。管理員在此建立政策、控制凍結是否自動套用及解除，並啟用或停用每項政策。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Filter by Hold Policy Name</strong> — 自由文字篩選框。</li>
+<li><strong>Sort By</strong> — 複選框群組：Hold Policy Name、Policy Creation Date、Policy Creator、Policy Status。</li>
+<li><strong>Sort Order</strong> — A–Z 或 Z–A。</li>
+<li><strong>Policy Status</strong> — 按 Active / Deactive 篩選。</li>
+<li><strong>Create New Hold Policy</strong> — 開啟建立對話框。</li>
+<li>表格工具圖示：<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>，以及附總記錄數的分頁頁尾。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li><strong>Hold Policy Name</strong> — 政策名稱（例如 Automatic Test、Approval By (Nine)）。</li>
+<li><strong>Policy Creator</strong> — 建立者。</li>
+<li><strong>Policy Creation Date</strong> — 建立時間戳。</li>
+<li><strong>Policy Status</strong> — Active 或 Deactive（新政策初始為 Deactive）。</li>
+<li><strong>Actions</strong> — 每列的 ⋯ 選單，包括：</li>
+<ul>
+<li><strong>Edit Policy</strong> — 編輯政策設定。</li>
+<li><strong>Delete Policy</strong> — 刪除政策。</li>
+<li><strong>Activate Policy</strong> — 啟用政策。</li>
+</ul>
+</ul>
+<figure><img alt="Hold Policy 列操作" src="assets/admin-22-hold-policy-setting-row-actions.png"><figcaption>Hold Policy 列操作</figcaption></figure>
+<h2>對話框與面板</h2>
+<h3>Create New Hold Policy</h3>
+<ul>
+<li><strong>Hold Policy Name</strong>（必填）。</li>
+<li><strong>Approval Setting</strong> 區段：</li>
+<ul>
+<li><strong>Enable Auto Hold Application</strong> — 開關（預設開啟）：凍結自動套用，無需手動審批。</li>
+<li><strong>Enable Auto Hold Removal</strong> — 開關（預設開啟）：凍結自動解除。</li>
+</ul>
+<li><strong>Submit</strong> 建立政策（狀態為 Deactive，直至啟用）；關閉（X）按鈕取消。</li>
+</ul>
+<figure><img alt="Create New Hold Policy 對話框" src="assets/admin-22-hold-policy-setting-create-dialog.png"><figcaption>Create New Hold Policy 對話框</figcaption></figure>
+<h2>誰會使用</h2>
+<p>負責執行法律凍結的檔案管理人員、合規主任及管理員——確保涉及調查或訴訟的文件不會被銷毀，並以受控、可審計的方式解除凍結。</p>
+<h1>Retention Policy Setting</h1>
+<p><strong>Menu path:</strong> Admin → Retention → Retention Policy Setting</p>
+<figure><img alt="Retention Policy Setting 畫面" src="assets/admin-23-retention-policy-setting.png"><figcaption>Retention Policy Setting 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>檔案保留規則管理。Retention Policy 定義指定類型的文件須保留多久、保留期屆滿後的處理方式（歸檔或刪除），以及可延長保留期的事件。政策初始為 Deactive，啟用後方會生效。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Filter by Retention Policy Name.</strong> — 自由文字篩選框。</li>
+<li><strong>Sort By</strong> — 複選框群組：Approver、Policy Creation Date、Policy Status、Retention Period、Retention Policy Name。</li>
+<li><strong>Sort Order</strong> — A–Z 或 Z–A。</li>
+<li><strong>Document Type</strong> — 按文件類型篩選（沒有政策時顯示 "No Data"）。</li>
+<li><strong>Active</strong> — 按 Active / Deactive 篩選。</li>
+<li><strong>More</strong> — 顯示更多排序／篩選控制項。</li>
+<li><strong>Create New Retention Policy</strong> — 開啟建立對話框。</li>
+<li>表格工具圖示：<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>，以及附總記錄數的分頁頁尾。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li><strong>Retention Policy Name</strong> — 政策名稱。</li>
+<li><strong>Document Type</strong> — 政策所管轄的類型。</li>
+<li><strong>Retention Period</strong> — 例如 "1 Years"。</li>
+<li><strong>Policy Creation Date</strong> — 建立時間戳。</li>
+<li><strong>Approver</strong> — 審批負責人（如有設定）。</li>
+<li><strong>Auto Retention</strong> — 啟用自動保留時顯示 ✓。</li>
+<li><strong>Policy Status</strong> — Active 或 Deactive（新政策初始為 Deactive）。</li>
+<li><strong>Actions</strong> — 每列的 ⋯ 選單，包括 <strong>Edit Policy</strong>、<strong>Delete Policy</strong> 及 <strong>Activate Policy</strong>。</li>
+</ul>
+<figure><img alt="Retention Policy 列操作" src="assets/admin-23-retention-policy-setting-row-actions.png"><figcaption>Retention Policy 列操作</figcaption></figure>
+<h2>對話框與面板</h2>
+<h3>Create New Retention Policy</h3>
+<ul>
+<li><strong>Retention Policy Name</strong>（必填）。</li>
+<li><strong>Retention Period</strong>（必填）+ <strong>Period Unit</strong>（必填）— 下拉選單：Years、Months、Days。</li>
+<li><strong>Actions</strong> — Archive ⇄ Delete 切換：保留期屆滿時的處置動作。</li>
+<li><strong>Action Delay Days</strong>（必填）— 執行動作前的等候日數，附 "Days Delay" 單位按鈕。</li>
+<li><strong>Enable Auto Hold Application</strong> — 開關（預設開啟）。</li>
+<li><strong>Retention Trigger Condition</strong> — 可重複的列（Add / Remove，可拖曳重新排序）；每列將一個 <strong>Document Type</strong>（必填，來自 238 種類型的註冊表）與一個 <strong>Metadata</strong> 日期欄位（必填；選項：create_date、modify_date）配對，保留時鐘即由該日期起計。</li>
+<li><strong>Retention Event</strong> — 可重複的列（Add / Remove，可拖曳重新排序）；每列設有 <strong>Event Type</strong>（必填 — Retain Now 或 Extend）、<strong>Label</strong>（必填）及 <strong>Extend Retention by</strong>（必填，附 "Days" 單位按鈕）——即可延長保留期的事件。</li>
+<li><strong>Submit</strong> 建立政策（Deactive，直至啟用）；關閉（X）按鈕取消。</li>
+</ul>
+<figure><img alt="Create New Retention Policy 對話框" src="assets/admin-23-retention-policy-setting-create-dialog.png"><figcaption>Create New Retention Policy 對話框</figcaption></figure>
+<h2>誰會使用</h2>
+<p>負責執行保留時間表的檔案管理人員及合規主任——確保文件按法規要求保存確切的期限，其後準時歸檔或銷毀，並以合規事件合理地延長保留時鐘。</p>
+<h1>Access Control List</h1>
+<p><strong>Menu path:</strong> Admin → System Setting → Access Control List</p>
+<figure><img alt="Access Control List 畫面" src="assets/admin-24-access-control-list.png"><figcaption>Access Control List 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>整個文件庫的安全地圖。每個根資料夾——以及其下的每個資料夾和檔案——均以可展開的樹狀結構列出，並顯示其有效的 Read / Write / Manage / Custom 權限授予，讓管理員清楚看到各處誰可以做甚麼，並可深入查看任何項目的詳細權限列表。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>More</strong> — 顯示 Sort By 及 Sort Order 控制項。</li>
+<li>表格工具圖示：<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>。</li>
+</ul>
+<h2>列表與欄位</h2>
+<p>文件庫的可展開樹狀結構（⌄）——根層例如 Case、Default、Domain、Workspace、default-domain、test-request、workflowHiddenFolder；展開資料夾即可顯示其子資料夾及檔案。</p>
+<ul>
+<li><strong>File / Folder Name</strong> — 項目名稱。</li>
+<li><strong>Document Type</strong> — 資料夾或檔案。</li>
+<li><strong>Read</strong> — 獲授予讀取權限的用戶／群組（例如 workflowHiddenFolder：Members Group）。</li>
+<li><strong>Write</strong> — 獲授予寫入權限的用戶／群組。</li>
+<li><strong>Manage</strong> — 獲授予管理權限的用戶／群組（例如 Administrators Group、administrator）。</li>
+<li><strong>Custom</strong> — 自訂權限授予。</li>
+<li><strong>Actions</strong> — 每列的 ⋯ 選單，包括 <strong>View Details</strong>（權限詳情面板）及 <strong>toggleExpand</strong>（展開／收合樹狀節點）。</li>
+</ul>
+<figure><img alt="ACL 樹狀結構已展開" src="assets/admin-24-access-control-list-expanded.png"><figcaption>ACL 樹狀結構已展開</figcaption></figure>
+<figure><img alt="ACL 列操作" src="assets/admin-24-access-control-list-row-actions.png"><figcaption>ACL 列操作</figcaption></figure>
+<h2>對話框與面板</h2>
+<h3>權限詳情面板（View Details）</h3>
+<p>顯示所選項目的完整權限列表：</p>
+<ul>
+<li><strong>Sort By</strong>、<strong>Sort Order</strong>、<strong>Add Permission</strong>、<strong>Add Attribute Set</strong> 及 <strong>More</strong> 控制項。</li>
+<li>欄位：<strong>User/ Role/ Group/ Attribute Set</strong>（被授權者）、<strong>Permissions</strong>（例如 Custom）、<strong>Is inherit</strong>（該授予是否繼承而來）、<strong>Inherit From</strong>（授予來源的上層，例如 <code>/</code>）、<strong>Actions</strong>。</li>
+</ul>
+<figure><img alt="權限詳情面板" src="assets/admin-24-access-control-list-details.png"><figcaption>權限詳情面板</figcaption></figure>
+<h2>誰會使用</h2>
+<p>負責審計及管治整個文件庫存取權限的系統管理員及安全主任——核實權限繼承、發現過於寬鬆的授予，並將權限管理細緻至單一檔案。</p>
+<h1>External Connection</h1>
+<p><strong>Menu path:</strong> Admin → System Setting → External Connection</p>
+<figure><img alt="External Connection 畫面" src="assets/admin-25-external-connection.png"><figcaption>External Connection 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>外部訊息服務的整合中心。在此網站上，它託管 WhatsApp 連接：憑證、連線測試、即時健康監察及錯誤日誌——管理員維持 WhatsApp 訊息範本所依賴的頻道正常運作所需的一切，盡在這裡。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>WhatsApps</strong> 區段標頭附 <strong>enable switch</strong>（目前為開啟）— 開啟或關閉此整合。</li>
+<li>連接表單：</li>
+<ul>
+<li><strong>Access Token</strong> — WhatsApp Business API 存取權杖（以憑證欄位形式儲存及顯示）。</li>
+<li><strong>telephone number</strong> — 已連接的電話號碼。</li>
+<li><strong>Account No.</strong> — WhatsApp Business 帳戶號碼。</li>
+</ul>
+<li><strong>Test Connection</strong> — 向外部服務驗證憑證。</li>
+<li><strong>Save</strong> — 儲存連接設定。</li>
+</ul>
+<h2>列表與欄位</h2>
+<h3>Status Monitor</h3>
+<p>連接的即時健康狀況：</p>
+<ul>
+<li><strong>Response Time</strong> — 最近一次量得的延遲（0.00ms）。</li>
+<li><strong>Uptime</strong> — 可用率百分比（0%）。</li>
+<li><strong>Status</strong> — 目前狀態（此網站上為 <strong>Token Error</strong>，即已設定的權杖現時被外部服務拒絕）。</li>
+</ul>
+<h3>Error Log</h3>
+<p>連接錯誤的表格，設有 <strong>Create Date</strong>、<strong>Message</strong> 及 <strong>Status</strong> 欄位（目前為空），附 Refresh 及 Full screen 控制項和分頁頁尾。</p>
+<h2>對話框與面板</h2>
+<p>無——本頁為單一設定表單加上監察區段。</p>
+<h2>誰會使用</h2>
+<p>負責第三方整合的系統管理員——將 DocPal 連接至 WhatsApp Business、監察其健康狀況，並在用戶察覺之前診斷憑證故障。</p>
+<h1>Password Policy</h1>
+<p><strong>Menu path:</strong> Admin → System Setting → Password Policy</p>
+<figure><img alt="Password Policy 畫面" src="assets/admin-26-password-policy.png"><figcaption>Password Policy 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>整個網站的密碼規則。單一表單控制網站上每位用戶的密碼強度要求、首次登入強制執行、到期、帳戶鎖定及密碼重用限制。此網站的目前設定如下所示。</p>
+<h2>工具列與操作</h2>
+<p>沒有工具列——本頁為單一政策表單，以開關及數值微調器（spinner）操作（未見明確的 Save 按鈕；各切換開關即為控制項）。</p>
+<h2>列表與欄位</h2>
+<p>並非列表——而是政策欄位：</p>
+<h3>Complexity</h3>
+<ul>
+<li><strong>Minimum password length</strong> — 微調器，8–24（目前：8）。</li>
+<li><strong>Lower and Uppercase</strong> — 必須包含大寫及小寫字母 [a-z][A-Z]（目前：關閉）。</li>
+<li><strong>Numeric Digits</strong> — 必須包含數字 [0-9]（目前：<strong>開啟</strong>）。</li>
+<li><strong>Special Characters</strong> — 必須包含特殊字符 [ !,@,#,$,%,&amp;,* ]（目前：關閉）。</li>
+</ul>
+<h3>Enforcement</h3>
+<ul>
+<li><strong>Force First Password Reset</strong> — 如密碼不符合政策，首次登入時強制重設密碼（目前：關閉）。</li>
+<li><strong>Username check</strong> — 密碼不得包含用戶名、名字、姓氏，或任何以空格、連字號或底線分隔的名字片段；不區分大小寫（目前：關閉）。</li>
+<li><strong>Enable Expiration Time</strong> — 設定密碼到期時間（目前：關閉）。</li>
+</ul>
+<h3>Lockout policy（目前：<strong>開啟</strong>）</h3>
+<p>"How many times can a user try to log in"——附即時提示 "Enter the wrong password 5 times in 5 minutes and the password will be locked for 5 minutes"：</p>
+<ul>
+<li><strong>Retry Period (Minutes)</strong> — 1–255（目前：5）。</li>
+<li><strong>Lock Period (Minutes)</strong> —（目前：5）。</li>
+<li><strong>Lock Count</strong> — 1–255（目前：5）。</li>
+</ul>
+<h3>Password reuse（目前：<strong>開啟</strong>）</h3>
+<ul>
+<li><strong>Enable Password Reuse Restriction</strong> — 用戶不得重用近期密碼。</li>
+<li><strong>Reuse Lock Count</strong> — 封鎖多少個先前密碼，1–10（目前：5）。</li>
+</ul>
+<h2>對話框與面板</h2>
+<p>無。</p>
+<h2>誰會使用</h2>
+<p>制定機構憑證標準的系統管理員及安全主任——在易用性與暴力破解及密碼循環再用風險之間取得平衡。</p>
+<h1>Audit Log</h1>
+<p><strong>Menu path:</strong> Admin → System Setting → Audit Log</p>
+<figure><img alt="Audit Log 畫面" src="assets/admin-27-audit-log.png"><figcaption>Audit Log 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>平台的完整活動紀錄（此網站共有 10,160 條紀錄）。每個用戶操作——包括文件下載、資料庫更新等——都會記錄操作者、涉及的對象、來源位置及時間，為管理員及審計人員提供單一的鑑證級資料來源。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li>表格工具圖示：<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>，另設分頁頁尾（此處共 508 頁——每頁 20 項）。</li>
+<li>此頁沒有篩選列或匯出按鈕；紀錄按頁瀏覽，最新者排最前。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li><strong>User</strong> — 執行操作的帳戶（例如 ooyy）。</li>
+<li><strong>Category</strong> — 所屬功能範疇（例如 File Management、Dynamic DB）。</li>
+<li><strong>Source Id</strong> — 受影響對象的 ID（例如文件或紀錄的 UUID）。</li>
+<li><strong>Details</strong> — 操作的可讀描述，例如「Download original version of document […]」或「Update dataId= [ … ] record in tableId= [ … ]」。</li>
+<li><strong>IP Address</strong> — 用戶端的 IP（例如 <code>[::1]</code>）。</li>
+<li><strong>Date</strong> — 操作的時間戳。</li>
+</ul>
+<h2>對話框與面板</h2>
+<p>無——此頁為唯讀的日誌檢視器。</p>
+<h2>誰會使用</h2>
+<p>系統管理員、保安團隊及審計人員，用於調查事故、證明合規，以及重組任何文件或紀錄的完整事發經過。</p>
+<h1>Jobs Status</h1>
+<p><strong>Menu path:</strong> Admin → System Setting → Jobs Status</p>
+<figure><img alt="Jobs Status 畫面" src="assets/admin-28-jobs-status.png"><figcaption>Jobs Status 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>背景工作監察器。平台處理的每個檔案相關工作——轉換、傳輸、訊息發送及其他非同步作業——都會列出其目標檔案、類別、目前事件狀態及時間戳，讓管理員監察佇列，並及早發現卡住或失敗的工作。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Event</strong> — 按工作事件／狀態篩選：CREATE、PENDING、COMPLETED、FINISH、ERROR、PENDING_FOR_SENDING_MESSAGE。</li>
+<li>表格工具圖示：<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>，另設顯示總紀錄數的分頁頁尾。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li><strong>File Name</strong> — 工作所處理的檔案。</li>
+<li><strong>Path</strong> — 檔案在儲存庫中的路徑。</li>
+<li><strong>Category</strong> — 工作的類別。</li>
+<li><strong>Event</strong> — 工作的目前狀態（CREATE / PENDING / COMPLETED / FINISH / ERROR / PENDING_FOR_SENDING_MESSAGE）。</li>
+<li><strong>Transaction Date</strong> — 記錄工作事件的時間。</li>
+</ul>
+<p>此列表目前為空（「No data yet」，0 條紀錄）——此網站沒有已排入佇列或已記錄的工作。</p>
+<h2>對話框與面板</h2>
+<p>無——此頁為唯讀的監察列表。</p>
+<h2>誰會使用</h2>
+<p>系統管理員及營運人員，負責維持平台非同步流水線的健康運作——確認工作順利完成，並在錯誤演變成用戶投訴之前將其截獲。</p>
+<h1>Unique ID Generator</h1>
+<p><strong>Menu path:</strong> Admin → Unique ID Generator</p>
+<figure><img alt="Unique ID Generator 畫面" src="assets/admin-29-unique-id-generator.png"><figcaption>Unique ID Generator 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>ID 產生規則的登記冊（此網站共有 53 條）。每條規則透過組合固定文字、日期代碼及遞增序號，產生獨一無二且易讀的識別碼——訂單編號、個案編號、批次 ID 等。規則可供文件類型、工作流程及任何需要受控唯一 ID 的地方使用。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Filter by Item Name</strong> — 自由文字篩選框。</li>
+<li><strong>Sort By</strong> — 複選框群組：Name、Latest Id、Created By、Last Modified By、Last Modified Date。</li>
+<li><strong>Sort Order</strong> — A–Z 或 Z–A。</li>
+<li><strong>Add</strong> — 透過複製現有設定來建立規則（會提示輸入新名稱）。</li>
+<li>表格工具圖示：<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>，另設分頁頁尾（此處共 3 頁）。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li><strong>Name</strong> — 規則名稱（例如 ORDER CASE、system-worthy）。</li>
+<li><strong>Latest Id</strong> — 最近簽發的 ID（例如 <code>ORD-202604-00010</code>、<code>${yyyy-MM-dd-HH-mm}_010015</code>、<code>BatchID_010000</code>）。</li>
+<li><strong>Created By</strong> / <strong>Last Modified By</strong> — 建立及修改者。</li>
+<li><strong>Last Modified Date</strong> — 最後修改時間戳。</li>
+<li><strong>Actions</strong> — 每列的 ⋯ 選單，提供 <strong>Edit</strong>（開啟規則編輯器）、<strong>Duplicate</strong>（以新名稱複製規則）及 <strong>Delete</strong>。</li>
+</ul>
+<figure><img alt="MKT-TEST ID 規則已建立" src="assets/admin-29-unique-id-generator-mkt-test.png"><figcaption>MKT-TEST ID 規則已建立</figcaption></figure>
+<h2>對話框與面板</h2>
+<h3>Rule editor (Edit)</h3>
+<ul>
+<li><strong>Id Generator Name</strong>（必填）。</li>
+<li><strong>Prefix</strong>（必填）— 以可移除標籤形式顯示的有序代碼列表，例如 <code>ORD-</code>、<code>{date(yyyy)}</code>、<code>{date(MM)}</code>、<code>-</code>；<strong>Date</strong> 及 <strong>Variable</strong> 按鈕可分別插入日期格式代碼及變數，兩者之間亦可直接輸入自由文字。</li>
+<li><strong>Suffix</strong> — 可選的結尾文字，同樣設有 <strong>Date</strong> / <strong>Variable</strong> 代碼按鈕。</li>
+<li><strong>Id digit</strong>（必填）— 序號位數（例如 5 → <code>00010</code>）。</li>
+<li><strong>Starting Number</strong>（必填）— 序號的起始值（例如 1）。</li>
+<li><strong>Save</strong> 儲存規則。</li>
+<li><strong>Example</strong> 區塊 — 一個 <strong>Id</strong> 預覽欄位及一個 <strong>Generate</strong> 按鈕，可在不實際簽發的情況下預覽下一個 ID（例如按上述格式產生 <code>ORD-202607-00001</code>）。</li>
+</ul>
+<figure><img alt="ID 規則編輯器" src="assets/admin-29-unique-id-generator-editor.png"><figcaption>ID 規則編輯器</figcaption></figure>
+<h2>誰會使用</h2>
+<p>系統管理員，負責統一全機構的編號方式——讓每個個案、訂單及批次都擁有可預測、可審計、不會重複的識別碼。</p>
+<h1>External Storage</h1>
+<p><strong>Menu path:</strong> Admin → External Storage</p>
+<figure><img alt="External Storage 畫面" src="assets/admin-30-external-storage.png"><figcaption>External Storage 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>外部儲存連線的登記冊——即網絡共享（SMB），文件檔案可存放於主要儲存庫以外的位置。管理員可在此新增連線、保管其登入憑證，並將每個連線切換為 Active 或 Deactive，以控制檔案是否流向該連線。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Filter By Name</strong> — 自由文字篩選框。</li>
+<li><strong>Sort By</strong> — 複選框群組：Name、Create Date、Status、Last Modified Date。</li>
+<li><strong>Sort Order</strong> — A–Z 或 Z–A。</li>
+<li><strong>Add New</strong> — 開啟連線對話框。</li>
+<li>表格工具圖示：<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>，另設顯示總紀錄數的分頁頁尾。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li><strong>Name</strong> — 連線名稱（Test1、Test）。</li>
+<li><strong>Connection Type</strong> — 目前兩列均為 SMB。</li>
+<li><strong>Path</strong> — 共享路徑。</li>
+<li><strong>Host</strong> — 伺服器地址。</li>
+<li><strong>Status</strong> — Active 或 Deactive。</li>
+<li><strong>Creator</strong> — 連線的建立者。</li>
+<li><strong>Create Date</strong> / <strong>Last Modified Date</strong> — 時間戳。</li>
+<li><strong>Actions</strong> — 每列的 ⋯ 選單，提供 <strong>Edit Connection</strong>、<strong>Edit Detail</strong> 及 <strong>Active</strong>（啟用連線）。</li>
+</ul>
+<figure><img alt="External Storage 列操作" src="assets/admin-30-external-storage-row-actions.png"><figcaption>External Storage 列操作</figcaption></figure>
+<h2>對話框與面板</h2>
+<h3>Add New</h3>
+<ul>
+<li><strong>Name</strong>（必填）。</li>
+<li><strong>Connection Type</strong>（必填）— 下拉選單；此網站為 SMB。</li>
+<li><strong>Platform</strong>（必填）— 下拉選單：WINDOW、LINIX [sic]。</li>
+<li><strong>Work Group</strong>（必填）— SMB 工作群組。</li>
+<li><strong>Path</strong>（必填）— 共享路徑。</li>
+<li><strong>Credential</strong> 區塊 — <strong>host</strong>（必填）、<strong>Username</strong>（必填）、<strong>Password</strong>（必填）、<strong>Shared Secret</strong>（可選）、<strong>Port</strong>（必填，預設遮罩顯示）。</li>
+<li><strong>Status</strong> — Active 開關（預設開啟）。</li>
+<li><strong>Submit</strong> 建立連線；關閉（X）按鈕則取消。</li>
+</ul>
+<figure><img alt="Add New 儲存對話框" src="assets/admin-30-external-storage-add-dialog.png"><figcaption>Add New 儲存對話框</figcaption></figure>
+<h2>誰會使用</h2>
+<p>系統管理員及基礎架構負責人，將 DocPal 的儲存延伸至企業檔案伺服器——擴充容量之餘，亦讓檔案保留在機構自行掌控的基礎架構之上。</p>
+<h1>Import Jobs</h1>
+<p><strong>Menu path:</strong> Admin → Import Jobs</p>
+<figure><img alt="Import Jobs 畫面" src="assets/admin-31-import-jobs.png"><figcaption>Import Jobs 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>批量匯入及處理工作的監察器。來自受監察網絡來源的檔案會按批次處理（例如 OCR Processing）；此畫面顯示每個批次、其來源、在佇列中的位置，以及完成或失敗的狀態。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Filter By Name</strong> — 自由文字篩選框。</li>
+<li><strong>Sort By</strong> — 複選框群組：Profile Name、Create Date、Status。</li>
+<li><strong>Sort Order</strong> — A–Z 或 Z–A。</li>
+<li>表格工具圖示：<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>，另設顯示總紀錄數的分頁頁尾。</li>
+<li>沒有新增按鈕——工作源自已設定的匯入來源，而非從此畫面建立。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li><strong>Batch Id</strong> — 工作的批次識別碼（例如 Batch00011754）。</li>
+<li><strong>Profile Name</strong> — 處理設定檔（例如 OCR Processing）。</li>
+<li><strong>File Name</strong> — 已匯入的檔案（例如 test ocr.docx）。</li>
+<li><strong>Status</strong> — completed 或 failed。</li>
+<li><strong>Queue Order</strong> — 工作在處理佇列中的位置。</li>
+<li><strong>Source</strong> — 檔案的來源網絡路徑（例如 <code>\\132.148.160.53\Docpaltest\processing\Batch00011754</code>）。</li>
+<li><strong>Create Date</strong> — 工作的建立時間。</li>
+<li><strong>Actions</strong> — 每列的 ⋯ 選單，提供 <strong>Edit</strong>。</li>
+</ul>
+<figure><img alt="Import Job 列操作" src="assets/admin-31-import-jobs-row-actions.png"><figcaption>Import Job 列操作</figcaption></figure>
+<h2>對話框與面板</h2>
+<p>除每列的 Edit 操作外，未見其他對話框或面板。</p>
+<h2>誰會使用</h2>
+<p>系統管理員及營運人員，負責監察匯入流水線——確認批次依序處理，並截獲失敗的匯入以便重新處理。</p>
+<h1>Easy Form</h1>
+<p><strong>Menu path:</strong> Admin → Easy Form</p>
+<figure><img alt="Easy Form 畫面" src="assets/admin-32-easy-form.png"><figcaption>Easy Form 畫面</figcaption></figure>
+<h2>此畫面的用途</h2>
+<p>Easy Form 的登記冊——可設計、發佈並連結至工作流程的輕量級資料擷取表格（列表設有「Linked with Workflow」欄）。管理員在此建立表格，並管理其狀態及工作流程關聯。</p>
+<h2>工具列與操作</h2>
+<ul>
+<li><strong>Filter by Form Name</strong> — 自由文字篩選框。</li>
+<li><strong>Sort By</strong> — 複選框群組：Create Date、Form Name、Status、Last Modified Date。</li>
+<li><strong>Sort Order</strong> — A–Z 或 Z–A。</li>
+<li><strong>Create New Form</strong> — 開啟建立對話框。</li>
+<li>表格工具圖示：<strong>Refresh</strong>、<strong>Full screen</strong>、<strong>Column settings</strong>，另設顯示總紀錄數的分頁頁尾。</li>
+</ul>
+<h2>列表與欄位</h2>
+<ul>
+<li><strong>（選取複選框）</strong> — 列選取。</li>
+<li><strong>Form Name</strong> — 表格名稱。</li>
+<li><strong>Create Date</strong> / <strong>Last Modified Date</strong> — 時間戳。</li>
+<li><strong>Status</strong> — 表格的發佈狀態。</li>
+<li><strong>Linked with Workflow</strong> — 表格所連結的工作流程。</li>
+<li><strong>Actions</strong> — 每列的操作選單。</li>
+</ul>
+<h2>對話框與面板</h2>
+<h3>Create New Form</h3>
+<ul>
+<li><strong>Form Name</strong>（必填）。</li>
+<li><strong>Submit</strong> 建立表格；關閉（X）按鈕則取消。</li>
+</ul>
+<figure><img alt="Create New Form 對話框" src="assets/admin-32-easy-form-create-dialog.png"><figcaption>Create New Form 對話框</figcaption></figure>
+<h2>此網站觀察到的已知問題（2026-07-31）</h2>
+<p>表格列表 API 故障：<code>POST /admin/api/dms/easy-form/page</code> 回傳 HTTP 500，內容為 <code>{"code":700,"data":null,"message":null,"result":false}</code>，因此即使已有表格存在，列表仍一律顯示「No data yet」。表格建立本身正常——建立測試表格時 <code>POST /admin/api/dms/easy-form</code> 回傳 200——但之後列表無法載入（同樣回傳 500），與已知的用戶端 Easy Form 故障情況一致。</p>
+<figure><img alt="Easy Form 列表 500 錯誤" src="assets/admin-32-easy-form-page-500.png"><figcaption>Easy Form 列表 500 錯誤</figcaption></figure>
+<h2>誰會使用</h2>
+<p>系統管理員及流程負責人，用於建立快速資料擷取表格並將其接入工作流程。</p>
+</body></html>
