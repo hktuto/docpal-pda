@@ -32,6 +32,7 @@ import type {
   SupplierListRow,
   SupplierQrcodeTemplate,
   BoxSearchResult,
+  LabelsData,
 } from "../types";
 import type { WarehouseService } from "../warehouse";
 import { createApiClient } from "../apiClient";
@@ -406,6 +407,12 @@ export function createBackendWarehouseService(
     // Box lookup for the /box QR page (shipping + shelf boxes, id substring).
     async searchBoxes(q: string): Promise<BoxSearchResult[]> {
       return client.get("/boxes", { q });
+    },
+
+    // Printable labels for the /print-labels page. The 60 s GET cache is
+    // bypassed so a just-received / just-put-away world shows up immediately.
+    async getLabelsData(): Promise<LabelsData> {
+      return client.get("/labels-data", { t: Date.now() });
     },
   };
 }

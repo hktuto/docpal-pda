@@ -103,6 +103,23 @@ hardcodes templates.
 |---|---|
 | `GET /scan-templates` | → `[{supplierCode, qrTemplate, qtyEncoding}]`, every profile ordered by `supplier_code`; `qrTemplate` null when the supplier has none (clients filter). |
 
+## Label printing
+
+Implemented: `GET /labels-data` (see `apps/backend/src/routes/labels.ts` +
+`src/db/labels.ts`). One aggregate read behind the web `/print-labels` page:
+shelf boxes (with current lot contents), distinct shelf codes, every
+open receiving order's invoices/items, current shelf-stock lots, and
+`pickLabels` — one label per open-order allocation with the exact share qty
+(a lot/carton split across orders gets one label per share). Part-label
+`qrValue`s are built per the supplier QR template (`encodeKoaQty` /
+`buildKoaLabelRaw` in `src/db/scanParse.ts`; null for template-less
+suppliers); receiving items and lots carry `pickingOrderRefs` for page
+filtering. Read-only.
+
+| Endpoint | Description |
+|---|---|
+| `GET /labels-data` | → `{generatedAt, shelfBoxes, shelfCodes, receivingOrders, shelfLots, pickLabels}`. |
+
 ## Put-away
 
 Implemented: `GET /put-away/candidates`,

@@ -25,6 +25,7 @@ Page and component locations mapped to source files.
 | Goods verify queue | `/goods-verify` | `pages/goods-verify/index.vue` |
 | Goods verify detail | `/goods-verify/:id` | `pages/goods-verify/[id].vue` |
 | Stock Search | `/stock-search` | `pages/stock-search/index.vue` |
+| Print labels (boxes / shelves / cartons / parts) | `/print-labels` | `pages/print-labels.vue` (codes `components/labels/ScanCode.vue`, data `GET /labels-data`) |
 
 ## Layouts and global UI
 

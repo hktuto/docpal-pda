@@ -790,3 +790,53 @@ export interface BoxSearchResult {
   createdDate: string;
   orderNo: string | null;
 }
+
+// ---------------------------------------------------------------------------
+// GET /labels-data — printable labels for the /print-labels page.
+// ---------------------------------------------------------------------------
+
+export interface LabelPartRow {
+  partNo: string;
+  qty: number;
+  lotCode: string | null;
+  dateCode: string | null;
+  /** Raw scan value per the supplier QR template; null when unbuildable. */
+  qrValue: string | null;
+  /** Open picking orders demanding this part (for page filtering). */
+  pickingOrderRefs: string[];
+}
+
+export interface LabelsData {
+  generatedAt: string;
+  shelfBoxes: {
+    id: string;
+    shelfCode: string | null;
+    status: string;
+    items: { partNo: string; qty: number }[];
+  }[];
+  shelfCodes: string[];
+  receivingOrders: {
+    batchNo: string;
+    supplierCode: string | null;
+    status: string;
+    invoices: {
+      invoiceNo: string;
+      items: (LabelPartRow & {
+        id: string;
+        ctnNo: string | null;
+        poNo: string | null;
+        poLine: string | null;
+      })[];
+    }[];
+  }[];
+  /** Current shelf stock (boxed lots) — labels for picking from a shelf box. */
+  shelfLots: (LabelPartRow & { boxId: string; shelfCode: string | null })[];
+  /** One label per open-order allocation — the "pick ticket" with the exact
+   *  qty the order takes from that source (a lot/carton split across orders
+   *  gets one label per share). */
+  pickLabels: (LabelPartRow & {
+    orderNo: string;
+    /** CTN <ctn_no> / <box> @ <shelf> / <shelf> / "receiving" display hint. */
+    source: string;
+  })[];
+}

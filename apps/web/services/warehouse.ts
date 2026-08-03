@@ -32,6 +32,7 @@ import type {
   SupplierListRow,
   SupplierQrcodeTemplate,
   BoxSearchResult,
+  LabelsData,
 } from "./types";
 import { createBackendWarehouseService } from "./adapters/backendWarehouse";
 
@@ -152,6 +153,9 @@ export interface WarehouseService {
   // Box lookup for the /box QR page — searches both box tables by id
   // substring (a bare daily seq like "0007" matches).
   searchBoxes(q: string): Promise<BoxSearchResult[]>;
+
+  // Printable-label data for the /print-labels page (GET /labels-data).
+  getLabelsData(): Promise<LabelsData>;
 }
 
 export interface CreateWarehouseServiceOptions {

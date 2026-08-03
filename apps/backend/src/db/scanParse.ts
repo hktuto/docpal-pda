@@ -31,6 +31,39 @@ export function decodeKoaQty(encoded: string): number | undefined {
   return result;
 }
 
+/** Inverse of decodeKoaQty (for printing labels): 25000 → "253", 1234 → "12340". */
+export function encodeKoaQty(qty: number): string | undefined {
+  if (!Number.isInteger(qty) || qty <= 0) return undefined;
+  let prefix = String(qty);
+  let zeroCount = 0;
+  while (prefix.endsWith("0") && zeroCount < 9) {
+    prefix = prefix.slice(0, -1);
+    zeroCount += 1;
+  }
+  return `${prefix}${zeroCount}`;
+}
+
+/**
+ * Build a raw label value matching the seeded KOA qr_template
+ * ("^:(?<itemId>…):(?<subId>…):(?<qty>…):(?<ignore1>…):(?<lotCode>…):(?<serialNo>…):(?<fullName>.+)$"
+ * with koa_zeros qty encoding) — used to print scannable demo part labels.
+ * Round-trips through parseQrRaw with that template. `fullName` defaults to
+ * the "KOA+<partNo>" marking style seen on real reels.
+ */
+export function buildKoaLabelRaw(input: {
+  partNo: string;
+  qty: number;
+  lotCode?: string | null;
+  serialNo: string;
+  fullName?: string;
+}): string | undefined {
+  const qty = encodeKoaQty(input.qty);
+  if (!qty) return undefined;
+  const fullName = input.fullName ?? `KOA+${input.partNo}`;
+  // the template's lotCode/serialNo groups require 1+ chars — never emit empties
+  return `:${input.partNo}::${qty}:X:${input.lotCode?.trim() || "-"}:${input.serialNo}:${fullName}`;
+}
+
 /** Part-number comparison key: uppercase with all whitespace collapsed out. */
 export function normalizePartNo(value: string): string {
   return value.toUpperCase().replace(/\s+/g, "");
