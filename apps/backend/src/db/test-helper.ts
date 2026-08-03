@@ -20,10 +20,13 @@ export interface TestDb {
 
 /**
  * Wipe + re-seed the demo scenario world (Excel-driven demo dataset:
- * 2 pending receiving orders, 2 picking orders — SO-DEMO-0001 fully
+ * 3 pending receiving orders, 5 picking orders — SO-DEMO-0001 fully
  * allocated (181G×300 line scanned item-by-item, then the rest is a
- * whole-box match), SO-DEMO-0002 partially allocated —
- * and 2 stocked shelf boxes). Bulk Oracle parts are skipped to keep the
+ * whole-box match), SO-DEMO-0002 partially allocated, SO-DEMO-0003 an
+ * exact carton match (pick straight from carton C3001 → prefilled
+ * shipping box), SO-DEMO-0004 under-supplied (stays partial),
+ * SO-DEMO-0005 split shelf + receiving —
+ * and 4 shelf boxes, 3 stocked, 1 empty). Bulk Oracle parts are skipped to keep the
  * reseed fast; the seeded shelf boxes stay because many flows assert on
  * them.
  */

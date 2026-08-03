@@ -44,12 +44,14 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
   await reseed(client);
   const { parts, lots } = await searchStock(client.db, {});
 
-  assert.equal(lots.length, 4);
-  // ordered by part_no: ...181G, ...1002F, ...2202F, ...4702F
+  assert.equal(lots.length, 6);
+  // ordered by part_no: ...181G, ...1002F, ...2202F, ...4702F, ...5602F, ...2212F
   const id181 = await partIdOf("RK73B1JTTD181G");
   const id1002 = await partIdOf("RK73H1JTTD1002F");
   const id2202 = await partIdOf("RK73H1JTTD2202F");
   const id4702 = await partIdOf("RK73H1JTTD4702F");
+  const id5602 = await partIdOf("RK73H1JTTD5602F");
+  const id2212 = await partIdOf("RK73H2ATTD2212F");
 
   assert.deepEqual(lots[0], {
     partNo: "RK73B1JTTD181G",
@@ -107,8 +109,36 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     allocatedQty: 0,
     availableQty: 200,
   });
+  assert.deepEqual(lots[4], {
+    partNo: "RK73H1JTTD5602F",
+    dateCode: "2609",
+    lotCode: "L2609A",
+    coo: "JP",
+    cow: "JP",
+    shelfCode: "A-02-01",
+    boxId: "BOX-H-20260701-0003",
+    orgId: 2,
+    subInventoryCode: "STORE1",
+    totalQty: 1000,
+    allocatedQty: 0,
+    availableQty: 1000,
+  });
+  assert.deepEqual(lots[5], {
+    partNo: "RK73H2ATTD2212F",
+    dateCode: "2609",
+    lotCode: "L2609B",
+    coo: "JP",
+    cow: "JP",
+    shelfCode: "A-02-01",
+    boxId: "BOX-H-20260701-0003",
+    orgId: 2,
+    subInventoryCode: "STORE1",
+    totalQty: 400,
+    allocatedQty: 0,
+    availableQty: 400,
+  });
 
-  assert.equal(parts.length, 4);
+  assert.equal(parts.length, 6);
   assert.deepEqual(parts[0], {
     id: id181,
     partNo: "RK73B1JTTD181G",
@@ -141,6 +171,22 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     defaultCoo: "JP",
     onHandQty: 200,
   });
+  assert.deepEqual(parts[4], {
+    id: id5602,
+    partNo: "RK73H1JTTD5602F",
+    wclItemNo: "RK73H1JTTD5602F",
+    description: null,
+    defaultCoo: null,
+    onHandQty: 1000,
+  });
+  assert.deepEqual(parts[5], {
+    id: id2212,
+    partNo: "RK73H2ATTD2212F",
+    wclItemNo: "RK73H2ATTD2212F",
+    description: null,
+    defaultCoo: null,
+    onHandQty: 400,
+  });
 });
 
 // --- partNo filter --------------------------------------------------------------
@@ -154,10 +200,10 @@ test("partNo: case-insensitive substring, whitespace-normalized like scan matchi
   assert.equal(r.parts.length, 1);
   assert.equal(r.parts[0].partNo, "RK73H1JTTD1002F");
 
-  // shared substring matches all four stocked RK73 parts, order by part_no
+  // shared substring matches all six stocked RK73 parts, order by part_no
   r = await searchStock(client.db, { partNo: "RK73" });
-  assert.equal(r.lots.length, 4);
-  assert.deepEqual(r.parts.map((p) => p.partNo), ["RK73B1JTTD181G", "RK73H1JTTD1002F", "RK73H1JTTD2202F", "RK73H1JTTD4702F"]);
+  assert.equal(r.lots.length, 6);
+  assert.deepEqual(r.parts.map((p) => p.partNo), ["RK73B1JTTD181G", "RK73H1JTTD1002F", "RK73H1JTTD2202F", "RK73H1JTTD4702F", "RK73H1JTTD5602F", "RK73H2ATTD2212F"]);
 
   // whitespace in the query is stripped (normalizePartNo), so a spaced
   // fragment still matches the continuous part_no
@@ -236,7 +282,7 @@ test("zero-qty lots are returned (old /stock-search/parts/lots had no qty filter
   );
 
   const { parts, lots } = await searchStock(client.db, {});
-  assert.equal(lots.length, 4); // the zero-qty lot is still there
+  assert.equal(lots.length, 6); // the zero-qty lot is still there
   assert.equal(lots[2].totalQty, 0);
   assert.equal(lots[2].availableQty, 0);
   const p = parts.find((p) => p.partNo === "RK73H1JTTD2202F")!;

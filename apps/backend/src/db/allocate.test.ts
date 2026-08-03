@@ -16,6 +16,8 @@ let LOT_18: string; // BOX-H-20260701-0001 lot — part RK73H1JTTD1002F, dc 2603
 let LOT_19: string; // BOX-H-20260701-0001 lot — part RK73H1JTTD2202F, dc 2603, 500
 let LOT_28: string; // BOX-H-20260701-0002 lot — part RK73B1JTTD181G, dc 2604, 700
 let LOT_29: string; // BOX-H-20260701-0002 lot — part RK73H1JTTD4702F, dc 2604, 200
+let LOT_30: string; // BOX-H-20260701-0003 lot — part RK73H1JTTD5602F, dc 2609, 1000
+let LOT_31: string; // BOX-H-20260701-0003 lot — part RK73H2ATTD2212F, dc 2609, 400
 
 async function idOf(q: ReturnType<typeof sql>): Promise<string> {
   const rows = await client.db.execute(q);
@@ -32,6 +34,8 @@ before(async () => {
   LOT_19 = await idOf(sql`SELECT id FROM inventory_lots WHERE box_id = 'BOX-H-20260701-0001' AND part_no = 'RK73H1JTTD2202F'`);
   LOT_28 = await idOf(sql`SELECT id FROM inventory_lots WHERE box_id = 'BOX-H-20260701-0002' AND part_no = 'RK73B1JTTD181G'`);
   LOT_29 = await idOf(sql`SELECT id FROM inventory_lots WHERE box_id = 'BOX-H-20260701-0002' AND part_no = 'RK73H1JTTD4702F'`);
+  LOT_30 = await idOf(sql`SELECT id FROM inventory_lots WHERE box_id = 'BOX-H-20260701-0003' AND part_no = 'RK73H1JTTD5602F'`);
+  LOT_31 = await idOf(sql`SELECT id FROM inventory_lots WHERE box_id = 'BOX-H-20260701-0003' AND part_no = 'RK73H2ATTD2212F'`);
 });
 
 test("parseDateCodeRule: exact / + / - / year-relative", () => {
@@ -82,6 +86,8 @@ test("allocateAll: FIFO from shelf lots, updates lots + picking items", async ()
       [LOT_19, 500, 0],
       [LOT_28, 300, 400],
       [LOT_29, 0, 200],
+      [LOT_30, 0, 1000],
+      [LOT_31, 0, 400],
     ]
   );
 
@@ -219,6 +225,8 @@ test("allocateAll: idempotent recompute, ledger stays consistent", async () => {
       [LOT_19, 500],
       [LOT_28, 300],
       [LOT_29, 0],
+      [LOT_30, 0],
+      [LOT_31, 0],
     ]
   );
 

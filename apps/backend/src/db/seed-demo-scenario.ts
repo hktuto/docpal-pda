@@ -4,65 +4,91 @@
 const d = (s: string) => new Date(s);
 
 export const demoParts = [
-  { id: "00000000-0000-4000-9000-000000000031", brand: "KOA", partNo: "RK73H1JTTD1002F", wclItemNo: "RK73H1JTTD1002F", description: null, defaultCoo: null },
-  { id: "00000000-0000-4000-9000-000000000032", brand: "KOA", partNo: "RK73H1JTTD2202F", wclItemNo: "RK73H1JTTD2202F", description: null, defaultCoo: null },
-  { id: "00000000-0000-4000-9000-000000000033", brand: "KOA", partNo: "RK73B1JTTD181G", wclItemNo: "RK73B1JTTD181G", description: null, defaultCoo: null },
-  { id: "00000000-0000-4000-9000-000000000034", brand: "KOA", partNo: "RK73H2ATTD1372F", wclItemNo: "RK73H2ATTD1372F", description: null, defaultCoo: null },
-  { id: "00000000-0000-4000-9000-000000000035", brand: "KOA", partNo: "RK73H1JTTD4702F", wclItemNo: "RK73H1JTTD4702F", description: null, defaultCoo: null }
+  { id: "00000000-0000-4000-9000-000000000050", brand: "KOA", partNo: "RK73H1JTTD1002F", wclItemNo: "RK73H1JTTD1002F", description: null, defaultCoo: null },
+  { id: "00000000-0000-4000-9000-000000000051", brand: "KOA", partNo: "RK73H1JTTD2202F", wclItemNo: "RK73H1JTTD2202F", description: null, defaultCoo: null },
+  { id: "00000000-0000-4000-9000-000000000052", brand: "KOA", partNo: "RK73B1JTTD181G", wclItemNo: "RK73B1JTTD181G", description: null, defaultCoo: null },
+  { id: "00000000-0000-4000-9000-000000000053", brand: "KOA", partNo: "RK73H2ATTD1372F", wclItemNo: "RK73H2ATTD1372F", description: null, defaultCoo: null },
+  { id: "00000000-0000-4000-9000-000000000054", brand: "KOA", partNo: "RK73H1JTTD4702F", wclItemNo: "RK73H1JTTD4702F", description: null, defaultCoo: null },
+  { id: "00000000-0000-4000-9000-000000000055", brand: "KOA", partNo: "RK73H1JTTD3302F", wclItemNo: "RK73H1JTTD3302F", description: null, defaultCoo: null },
+  { id: "00000000-0000-4000-9000-000000000056", brand: "KOA", partNo: "RK73H1JTTD6802F", wclItemNo: "RK73H1JTTD6802F", description: null, defaultCoo: null },
+  { id: "00000000-0000-4000-9000-000000000057", brand: "KOA", partNo: "RK73B1JTTD102G", wclItemNo: "RK73B1JTTD102G", description: null, defaultCoo: null },
+  { id: "00000000-0000-4000-9000-000000000058", brand: "KOA", partNo: "RK73H1JTTD5602F", wclItemNo: "RK73H1JTTD5602F", description: null, defaultCoo: null },
+  { id: "00000000-0000-4000-9000-000000000059", brand: "KOA", partNo: "RK73H2ATTD2212F", wclItemNo: "RK73H2ATTD2212F", description: null, defaultCoo: null }
 ];
 
 export const demoReceivingOrders = [
   { id: "00000000-0000-4000-9000-000000000001", batchNo: "100001", supplierCode: "KOA", deliveryDate: d("2026-07-28"), orgId: 2, subInventoryCode: "STORE1", status: "pending" },
-  { id: "00000000-0000-4000-9000-000000000002", batchNo: "100002", supplierCode: "KOA", deliveryDate: d("2026-07-29"), orgId: 2, subInventoryCode: "STORE1", status: "pending" }
+  { id: "00000000-0000-4000-9000-000000000002", batchNo: "100002", supplierCode: "KOA", deliveryDate: d("2026-07-29"), orgId: 2, subInventoryCode: "STORE1", status: "pending" },
+  { id: "00000000-0000-4000-9000-000000000003", batchNo: "100003", supplierCode: "KOA", deliveryDate: d("2026-08-03"), orgId: 2, subInventoryCode: "STORE1", status: "pending" }
 ];
 
 export const demoReceivingInvoices = [
-  { id: "00000000-0000-4000-9000-000000000003", receivingOrderId: "00000000-0000-4000-9000-000000000001", invoiceNo: "INV-100001-01", supplierCode: "KOA", wclCompanyName: "WCL Components Ltd", totalQty: 5800, totalCtn: 2, deliveryDate: d("2026-07-25"), orgId: 2 },
-  { id: "00000000-0000-4000-9000-000000000004", receivingOrderId: "00000000-0000-4000-9000-000000000002", invoiceNo: "INV-100002-01", supplierCode: "KOA", wclCompanyName: "WCL Components Ltd", totalQty: 3400, totalCtn: 2, deliveryDate: d("2026-07-26"), orgId: 2 }
+  { id: "00000000-0000-4000-9000-000000000004", receivingOrderId: "00000000-0000-4000-9000-000000000001", invoiceNo: "INV-100001-01", supplierCode: "KOA", wclCompanyName: "WCL Components Ltd", totalQty: 5800, totalCtn: 2, deliveryDate: d("2026-07-25"), orgId: 2 },
+  { id: "00000000-0000-4000-9000-000000000005", receivingOrderId: "00000000-0000-4000-9000-000000000002", invoiceNo: "INV-100002-01", supplierCode: "KOA", wclCompanyName: "WCL Components Ltd", totalQty: 3400, totalCtn: 2, deliveryDate: d("2026-07-26"), orgId: 2 },
+  { id: "00000000-0000-4000-9000-000000000006", receivingOrderId: "00000000-0000-4000-9000-000000000003", invoiceNo: "INV-100003-01", supplierCode: "KOA", wclCompanyName: "WCL Components Ltd", totalQty: 4500, totalCtn: 3, deliveryDate: d("2026-08-01"), orgId: 2 }
 ];
 
 export const demoReceivingInvoiceItems = [
-  { id: "00000000-0000-4000-9000-000000000005", receivingInvoiceId: "00000000-0000-4000-9000-000000000003", partNo: "RK73H1JTTD1002F", wclItemNo: "RK73H1JTTD1002F", poNo: "PO-KOA-101", poLine: "1", lineQty: 2000, ctnNo: "C1001", dateCode: "2605", lotCode: "L2605A", coo: "JP", cow: "JP", orgId: 2, additionalData: {"boxSize":"26 X 22 X 22","netWeight":1300,"grossWeight":1450,"weightUnit":"g"} },
-  { id: "00000000-0000-4000-9000-000000000006", receivingInvoiceId: "00000000-0000-4000-9000-000000000003", partNo: "RK73H1JTTD2202F", wclItemNo: "RK73H1JTTD2202F", poNo: "PO-KOA-101", poLine: "2", lineQty: 1000, ctnNo: "C1001", dateCode: "2605", lotCode: "L2605B", coo: "JP", cow: "JP", orgId: 2, additionalData: null },
-  { id: "00000000-0000-4000-9000-000000000007", receivingInvoiceId: "00000000-0000-4000-9000-000000000003", partNo: "RK73B1JTTD181G", wclItemNo: "RK73B1JTTD181G", poNo: "PO-KOA-101", poLine: "3", lineQty: 1500, ctnNo: "C1002", dateCode: "2606", lotCode: "L2606A", coo: "JP", cow: "JP", orgId: 2, additionalData: {"boxSize":"33 X 24 X 18","netWeight":950,"grossWeight":1100,"weightUnit":"g"} },
-  { id: "00000000-0000-4000-9000-000000000008", receivingInvoiceId: "00000000-0000-4000-9000-000000000003", partNo: "RK73H2ATTD1372F", wclItemNo: "RK73H2ATTD1372F", poNo: "PO-KOA-101", poLine: "4", lineQty: 800, ctnNo: "C1002", dateCode: "2606", lotCode: "L2606B", coo: "JP", cow: "JP", orgId: 2, additionalData: null },
-  { id: "00000000-0000-4000-9000-000000000009", receivingInvoiceId: "00000000-0000-4000-9000-000000000003", partNo: "RK73H1JTTD4702F", wclItemNo: "RK73H1JTTD4702F", poNo: "PO-KOA-101", poLine: "5", lineQty: 500, ctnNo: "C1002", dateCode: "2606", lotCode: "L2606C", coo: "JP", cow: "JP", orgId: 2, additionalData: null },
-  { id: "00000000-0000-4000-9000-000000000010", receivingInvoiceId: "00000000-0000-4000-9000-000000000004", partNo: "RK73H1JTTD4702F", wclItemNo: "RK73H1JTTD4702F", poNo: "PO-DAI-201", poLine: "1", lineQty: 1200, ctnNo: "C2001", dateCode: "2607", lotCode: "L2607A", coo: "JP", cow: "JP", orgId: 2, additionalData: {"boxSize":"32 X 22 X 30","netWeight":2100,"grossWeight":2350,"weightUnit":"g"} },
-  { id: "00000000-0000-4000-9000-000000000011", receivingInvoiceId: "00000000-0000-4000-9000-000000000004", partNo: "RK73B1JTTD181G", wclItemNo: "RK73B1JTTD181G", poNo: "PO-DAI-201", poLine: "2", lineQty: 600, ctnNo: "C2001", dateCode: "2607", lotCode: "L2607B", coo: "JP", cow: "JP", orgId: 2, additionalData: null },
-  { id: "00000000-0000-4000-9000-000000000012", receivingInvoiceId: "00000000-0000-4000-9000-000000000004", partNo: "RK73H2ATTD1372F", wclItemNo: "RK73H2ATTD1372F", poNo: "PO-DAI-201", poLine: "3", lineQty: 900, ctnNo: "C2002", dateCode: "2608", lotCode: "L2608A", coo: "JP", cow: "JP", orgId: 2, additionalData: {"boxSize":"35 X 35 X 22","netWeight":1600,"grossWeight":1800,"weightUnit":"g"} },
-  { id: "00000000-0000-4000-9000-000000000013", receivingInvoiceId: "00000000-0000-4000-9000-000000000004", partNo: "RK73H1JTTD1002F", wclItemNo: "RK73H1JTTD1002F", poNo: "PO-DAI-201", poLine: "4", lineQty: 400, ctnNo: "C2002", dateCode: "2608", lotCode: "L2608B", coo: "JP", cow: "JP", orgId: 2, additionalData: null },
-  { id: "00000000-0000-4000-9000-000000000014", receivingInvoiceId: "00000000-0000-4000-9000-000000000004", partNo: "RK73H1JTTD2202F", wclItemNo: "RK73H1JTTD2202F", poNo: "PO-DAI-201", poLine: "5", lineQty: 300, ctnNo: "C2002", dateCode: "2608", lotCode: "L2608C", coo: "JP", cow: "JP", orgId: 2, additionalData: null }
+  { id: "00000000-0000-4000-9000-000000000007", receivingInvoiceId: "00000000-0000-4000-9000-000000000004", partNo: "RK73H1JTTD1002F", wclItemNo: "RK73H1JTTD1002F", poNo: "PO-KOA-101", poLine: "1", lineQty: 2000, ctnNo: "C1001", dateCode: "2605", lotCode: "L2605A", coo: "JP", cow: "JP", orgId: 2, additionalData: {"boxSize":"26 X 22 X 22","netWeight":1300,"grossWeight":1450,"weightUnit":"g"} },
+  { id: "00000000-0000-4000-9000-000000000008", receivingInvoiceId: "00000000-0000-4000-9000-000000000004", partNo: "RK73H1JTTD2202F", wclItemNo: "RK73H1JTTD2202F", poNo: "PO-KOA-101", poLine: "2", lineQty: 1000, ctnNo: "C1001", dateCode: "2605", lotCode: "L2605B", coo: "JP", cow: "JP", orgId: 2, additionalData: null },
+  { id: "00000000-0000-4000-9000-000000000009", receivingInvoiceId: "00000000-0000-4000-9000-000000000004", partNo: "RK73B1JTTD181G", wclItemNo: "RK73B1JTTD181G", poNo: "PO-KOA-101", poLine: "3", lineQty: 1500, ctnNo: "C1002", dateCode: "2606", lotCode: "L2606A", coo: "JP", cow: "JP", orgId: 2, additionalData: {"boxSize":"33 X 24 X 18","netWeight":950,"grossWeight":1100,"weightUnit":"g"} },
+  { id: "00000000-0000-4000-9000-000000000010", receivingInvoiceId: "00000000-0000-4000-9000-000000000004", partNo: "RK73H2ATTD1372F", wclItemNo: "RK73H2ATTD1372F", poNo: "PO-KOA-101", poLine: "4", lineQty: 800, ctnNo: "C1002", dateCode: "2606", lotCode: "L2606B", coo: "JP", cow: "JP", orgId: 2, additionalData: null },
+  { id: "00000000-0000-4000-9000-000000000011", receivingInvoiceId: "00000000-0000-4000-9000-000000000004", partNo: "RK73H1JTTD4702F", wclItemNo: "RK73H1JTTD4702F", poNo: "PO-KOA-101", poLine: "5", lineQty: 500, ctnNo: "C1002", dateCode: "2606", lotCode: "L2606C", coo: "JP", cow: "JP", orgId: 2, additionalData: null },
+  { id: "00000000-0000-4000-9000-000000000012", receivingInvoiceId: "00000000-0000-4000-9000-000000000005", partNo: "RK73H1JTTD4702F", wclItemNo: "RK73H1JTTD4702F", poNo: "PO-DAI-201", poLine: "1", lineQty: 1200, ctnNo: "C2001", dateCode: "2607", lotCode: "L2607A", coo: "JP", cow: "JP", orgId: 2, additionalData: {"boxSize":"32 X 22 X 30","netWeight":2100,"grossWeight":2350,"weightUnit":"g"} },
+  { id: "00000000-0000-4000-9000-000000000013", receivingInvoiceId: "00000000-0000-4000-9000-000000000005", partNo: "RK73B1JTTD181G", wclItemNo: "RK73B1JTTD181G", poNo: "PO-DAI-201", poLine: "2", lineQty: 600, ctnNo: "C2001", dateCode: "2607", lotCode: "L2607B", coo: "JP", cow: "JP", orgId: 2, additionalData: null },
+  { id: "00000000-0000-4000-9000-000000000014", receivingInvoiceId: "00000000-0000-4000-9000-000000000005", partNo: "RK73H2ATTD1372F", wclItemNo: "RK73H2ATTD1372F", poNo: "PO-DAI-201", poLine: "3", lineQty: 900, ctnNo: "C2002", dateCode: "2608", lotCode: "L2608A", coo: "JP", cow: "JP", orgId: 2, additionalData: {"boxSize":"35 X 35 X 22","netWeight":1600,"grossWeight":1800,"weightUnit":"g"} },
+  { id: "00000000-0000-4000-9000-000000000015", receivingInvoiceId: "00000000-0000-4000-9000-000000000005", partNo: "RK73H1JTTD1002F", wclItemNo: "RK73H1JTTD1002F", poNo: "PO-DAI-201", poLine: "4", lineQty: 400, ctnNo: "C2002", dateCode: "2608", lotCode: "L2608B", coo: "JP", cow: "JP", orgId: 2, additionalData: null },
+  { id: "00000000-0000-4000-9000-000000000016", receivingInvoiceId: "00000000-0000-4000-9000-000000000005", partNo: "RK73H1JTTD2202F", wclItemNo: "RK73H1JTTD2202F", poNo: "PO-DAI-201", poLine: "5", lineQty: 300, ctnNo: "C2002", dateCode: "2608", lotCode: "L2608C", coo: "JP", cow: "JP", orgId: 2, additionalData: null },
+  { id: "00000000-0000-4000-9000-000000000017", receivingInvoiceId: "00000000-0000-4000-9000-000000000006", partNo: "RK73H1JTTD3302F", wclItemNo: "RK73H1JTTD3302F", poNo: "PO-KOA-301", poLine: "1", lineQty: 500, ctnNo: "C3001", dateCode: "2609", lotCode: "L2609C", coo: "JP", cow: "JP", orgId: 2, additionalData: {"boxSize":"30 X 24 X 20","netWeight":1100,"grossWeight":1250,"weightUnit":"g"} },
+  { id: "00000000-0000-4000-9000-000000000018", receivingInvoiceId: "00000000-0000-4000-9000-000000000006", partNo: "RK73H1JTTD6802F", wclItemNo: "RK73H1JTTD6802F", poNo: "PO-KOA-301", poLine: "2", lineQty: 800, ctnNo: "C3001", dateCode: "2609", lotCode: "L2609D", coo: "JP", cow: "JP", orgId: 2, additionalData: null },
+  { id: "00000000-0000-4000-9000-000000000019", receivingInvoiceId: "00000000-0000-4000-9000-000000000006", partNo: "RK73B1JTTD102G", wclItemNo: "RK73B1JTTD102G", poNo: "PO-KOA-301", poLine: "3", lineQty: 1200, ctnNo: "C3002", dateCode: "2610", lotCode: "L2610A", coo: "JP", cow: "JP", orgId: 2, additionalData: {"boxSize":"28 X 20 X 18","netWeight":800,"grossWeight":950,"weightUnit":"g"} },
+  { id: "00000000-0000-4000-9000-000000000020", receivingInvoiceId: "00000000-0000-4000-9000-000000000006", partNo: "RK73H1JTTD5602F", wclItemNo: "RK73H1JTTD5602F", poNo: "PO-KOA-301", poLine: "4", lineQty: 1500, ctnNo: "C3003", dateCode: "2611", lotCode: "L2611A", coo: "JP", cow: "JP", orgId: 2, additionalData: {"boxSize":"36 X 26 X 24","netWeight":1900,"grossWeight":2100,"weightUnit":"g"} },
+  { id: "00000000-0000-4000-9000-000000000021", receivingInvoiceId: "00000000-0000-4000-9000-000000000006", partNo: "RK73H2ATTD2212F", wclItemNo: "RK73H2ATTD2212F", poNo: "PO-KOA-301", poLine: "5", lineQty: 500, ctnNo: "C3003", dateCode: "2611", lotCode: "L2611B", coo: "JP", cow: "JP", orgId: 2, additionalData: null }
 ];
 
 export const demoPickingOrders = [
-  { id: "00000000-0000-4000-9000-000000000015", orderNo: "SO-DEMO-0001", poNo: "CUST-PO-9001", deliveryDate: d("2026-07-30"), shipTo: "ACME Electronics (HK)", customerCode: "ACME", orgId: 2, subInventoryCode: "STORE1", status: "pending" as const },
-  { id: "00000000-0000-4000-9000-000000000016", orderNo: "SO-DEMO-0002", poNo: "CUST-PO-9002", deliveryDate: d("2026-08-01"), shipTo: "ACME Electronics (HK)", customerCode: "ACME", orgId: 2, subInventoryCode: "STORE1", status: "pending" as const }
+  { id: "00000000-0000-4000-9000-000000000022", orderNo: "SO-DEMO-0001", poNo: "CUST-PO-9001", deliveryDate: d("2026-07-30"), shipTo: "ACME Electronics (HK)", customerCode: "ACME", orgId: 2, subInventoryCode: "STORE1", status: "pending" as const },
+  { id: "00000000-0000-4000-9000-000000000023", orderNo: "SO-DEMO-0002", poNo: "CUST-PO-9002", deliveryDate: d("2026-08-01"), shipTo: "ACME Electronics (HK)", customerCode: "ACME", orgId: 2, subInventoryCode: "STORE1", status: "pending" as const },
+  { id: "00000000-0000-4000-9000-000000000024", orderNo: "SO-DEMO-0003", poNo: "CUST-PO-9003", deliveryDate: d("2026-08-04"), shipTo: "ACME Electronics (HK)", customerCode: "ACME", orgId: 2, subInventoryCode: "STORE1", status: "pending" as const },
+  { id: "00000000-0000-4000-9000-000000000025", orderNo: "SO-DEMO-0004", poNo: "CUST-PO-9004", deliveryDate: d("2026-08-05"), shipTo: "ACME Electronics (HK)", customerCode: "ACME", orgId: 2, subInventoryCode: "STORE1", status: "pending" as const },
+  { id: "00000000-0000-4000-9000-000000000026", orderNo: "SO-DEMO-0005", poNo: "CUST-PO-9005", deliveryDate: d("2026-08-06"), shipTo: "ACME Electronics (HK)", customerCode: "ACME", orgId: 2, subInventoryCode: "STORE1", status: "pending" as const }
 ];
 
 export const demoPickingItems = [
-  { id: "00000000-0000-4000-9000-000000000017", pickingOrderId: "00000000-0000-4000-9000-000000000015", partNo: "RK73H1JTTD1002F", qty: 1000, lineId: 1001, lineNumber: 1, shipmentNumber: 1 },
-  { id: "00000000-0000-4000-9000-000000000018", pickingOrderId: "00000000-0000-4000-9000-000000000015", partNo: "RK73H1JTTD2202F", qty: 500, lineId: 1002, lineNumber: 2, shipmentNumber: 1 },
-  { id: "00000000-0000-4000-9000-000000000019", pickingOrderId: "00000000-0000-4000-9000-000000000016", partNo: "RK73B1JTTD181G", qty: 1000, lineId: 2001, lineNumber: 1, shipmentNumber: 1 },
-  { id: "00000000-0000-4000-9000-000000000020", pickingOrderId: "00000000-0000-4000-9000-000000000016", partNo: "RK73H1JTTD4702F", qty: 600, lineId: 2002, lineNumber: 2, shipmentNumber: 1 },
-  { id: "00000000-0000-4000-9000-000000000021", pickingOrderId: "00000000-0000-4000-9000-000000000016", partNo: "RK73H2ATTD1372F", qty: 700, lineId: 2003, lineNumber: 3, shipmentNumber: 1 },
-  { id: "00000000-0000-4000-9000-000000000022", pickingOrderId: "00000000-0000-4000-9000-000000000015", partNo: "RK73B1JTTD181G", qty: 300, lineId: 1003, lineNumber: 3, shipmentNumber: 1 }
+  { id: "00000000-0000-4000-9000-000000000027", pickingOrderId: "00000000-0000-4000-9000-000000000022", partNo: "RK73H1JTTD1002F", qty: 1000, lineId: 1001, lineNumber: 1, shipmentNumber: 1 },
+  { id: "00000000-0000-4000-9000-000000000028", pickingOrderId: "00000000-0000-4000-9000-000000000022", partNo: "RK73H1JTTD2202F", qty: 500, lineId: 1002, lineNumber: 2, shipmentNumber: 1 },
+  { id: "00000000-0000-4000-9000-000000000029", pickingOrderId: "00000000-0000-4000-9000-000000000022", partNo: "RK73B1JTTD181G", qty: 300, lineId: 1003, lineNumber: 3, shipmentNumber: 1 },
+  { id: "00000000-0000-4000-9000-000000000030", pickingOrderId: "00000000-0000-4000-9000-000000000023", partNo: "RK73B1JTTD181G", qty: 1000, lineId: 2001, lineNumber: 1, shipmentNumber: 1 },
+  { id: "00000000-0000-4000-9000-000000000031", pickingOrderId: "00000000-0000-4000-9000-000000000023", partNo: "RK73H1JTTD4702F", qty: 600, lineId: 2002, lineNumber: 2, shipmentNumber: 1 },
+  { id: "00000000-0000-4000-9000-000000000032", pickingOrderId: "00000000-0000-4000-9000-000000000023", partNo: "RK73H2ATTD1372F", qty: 700, lineId: 2003, lineNumber: 3, shipmentNumber: 1 },
+  { id: "00000000-0000-4000-9000-000000000033", pickingOrderId: "00000000-0000-4000-9000-000000000024", partNo: "RK73H1JTTD3302F", qty: 500, lineId: 3001, lineNumber: 1, shipmentNumber: 1 },
+  { id: "00000000-0000-4000-9000-000000000034", pickingOrderId: "00000000-0000-4000-9000-000000000024", partNo: "RK73H1JTTD6802F", qty: 800, lineId: 3002, lineNumber: 2, shipmentNumber: 1 },
+  { id: "00000000-0000-4000-9000-000000000035", pickingOrderId: "00000000-0000-4000-9000-000000000025", partNo: "RK73B1JTTD102G", qty: 3000, lineId: 4001, lineNumber: 1, shipmentNumber: 1 },
+  { id: "00000000-0000-4000-9000-000000000036", pickingOrderId: "00000000-0000-4000-9000-000000000026", partNo: "RK73H1JTTD5602F", qty: 2500, lineId: 5001, lineNumber: 1, shipmentNumber: 1 },
+  { id: "00000000-0000-4000-9000-000000000037", pickingOrderId: "00000000-0000-4000-9000-000000000026", partNo: "RK73H2ATTD2212F", qty: 900, lineId: 5002, lineNumber: 2, shipmentNumber: 1 }
 ];
 
 export const demoShelfBoxes = [
   { id: "BOX-H-20260701-0001", shelfCode: "A-01-01", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
-  { id: "BOX-H-20260701-0002", shelfCode: "A-01-02", orgId: 2, subInventoryCode: "STORE1", status: "closed" }
+  { id: "BOX-H-20260701-0002", shelfCode: "A-01-02", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
+  { id: "BOX-H-20260701-0003", shelfCode: "A-02-01", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
+  { id: "BOX-H-20260701-0004", shelfCode: "A-02-02", orgId: 2, subInventoryCode: "STORE1", status: "open" }
 ];
 
 export const demoShelfBoxItems = [
-  { id: "00000000-0000-4000-9000-000000000023", shelfBoxId: "BOX-H-20260701-0001", partNo: "RK73H1JTTD1002F", qty: 1000 },
-  { id: "00000000-0000-4000-9000-000000000024", shelfBoxId: "BOX-H-20260701-0001", partNo: "RK73H1JTTD2202F", qty: 500 },
-  { id: "00000000-0000-4000-9000-000000000025", shelfBoxId: "BOX-H-20260701-0002", partNo: "RK73B1JTTD181G", qty: 700 },
-  { id: "00000000-0000-4000-9000-000000000026", shelfBoxId: "BOX-H-20260701-0002", partNo: "RK73H1JTTD4702F", qty: 200 }
+  { id: "00000000-0000-4000-9000-000000000038", shelfBoxId: "BOX-H-20260701-0001", partNo: "RK73H1JTTD1002F", qty: 1000 },
+  { id: "00000000-0000-4000-9000-000000000039", shelfBoxId: "BOX-H-20260701-0001", partNo: "RK73H1JTTD2202F", qty: 500 },
+  { id: "00000000-0000-4000-9000-000000000040", shelfBoxId: "BOX-H-20260701-0002", partNo: "RK73B1JTTD181G", qty: 700 },
+  { id: "00000000-0000-4000-9000-000000000041", shelfBoxId: "BOX-H-20260701-0002", partNo: "RK73H1JTTD4702F", qty: 200 },
+  { id: "00000000-0000-4000-9000-000000000042", shelfBoxId: "BOX-H-20260701-0003", partNo: "RK73H1JTTD5602F", qty: 1000 },
+  { id: "00000000-0000-4000-9000-000000000043", shelfBoxId: "BOX-H-20260701-0003", partNo: "RK73H2ATTD2212F", qty: 400 }
 ];
 
 export const demoLots = [
-  { id: "00000000-0000-4000-9000-000000000027", partNo: "RK73H1JTTD1002F", dateCode: "2603", lotCode: "L2603A", coo: "JP", cow: "JP", shelfCode: "A-01-01", boxId: "BOX-H-20260701-0001", orgId: 2, subInventoryCode: "STORE1", totalQty: 1000 },
-  { id: "00000000-0000-4000-9000-000000000028", partNo: "RK73H1JTTD2202F", dateCode: "2603", lotCode: "L2603B", coo: "JP", cow: "JP", shelfCode: "A-01-01", boxId: "BOX-H-20260701-0001", orgId: 2, subInventoryCode: "STORE1", totalQty: 500 },
-  { id: "00000000-0000-4000-9000-000000000029", partNo: "RK73B1JTTD181G", dateCode: "2604", lotCode: "L2604A", coo: "JP", cow: "JP", shelfCode: "A-01-02", boxId: "BOX-H-20260701-0002", orgId: 2, subInventoryCode: "STORE1", totalQty: 700 },
-  { id: "00000000-0000-4000-9000-000000000030", partNo: "RK73H1JTTD4702F", dateCode: "2604", lotCode: "L2604B", coo: "JP", cow: "JP", shelfCode: "A-01-02", boxId: "BOX-H-20260701-0002", orgId: 2, subInventoryCode: "STORE1", totalQty: 200 }
+  { id: "00000000-0000-4000-9000-000000000044", partNo: "RK73H1JTTD1002F", dateCode: "2603", lotCode: "L2603A", coo: "JP", cow: "JP", shelfCode: "A-01-01", boxId: "BOX-H-20260701-0001", orgId: 2, subInventoryCode: "STORE1", totalQty: 1000 },
+  { id: "00000000-0000-4000-9000-000000000045", partNo: "RK73H1JTTD2202F", dateCode: "2603", lotCode: "L2603B", coo: "JP", cow: "JP", shelfCode: "A-01-01", boxId: "BOX-H-20260701-0001", orgId: 2, subInventoryCode: "STORE1", totalQty: 500 },
+  { id: "00000000-0000-4000-9000-000000000046", partNo: "RK73B1JTTD181G", dateCode: "2604", lotCode: "L2604A", coo: "JP", cow: "JP", shelfCode: "A-01-02", boxId: "BOX-H-20260701-0002", orgId: 2, subInventoryCode: "STORE1", totalQty: 700 },
+  { id: "00000000-0000-4000-9000-000000000047", partNo: "RK73H1JTTD4702F", dateCode: "2604", lotCode: "L2604B", coo: "JP", cow: "JP", shelfCode: "A-01-02", boxId: "BOX-H-20260701-0002", orgId: 2, subInventoryCode: "STORE1", totalQty: 200 },
+  { id: "00000000-0000-4000-9000-000000000048", partNo: "RK73H1JTTD5602F", dateCode: "2609", lotCode: "L2609A", coo: "JP", cow: "JP", shelfCode: "A-02-01", boxId: "BOX-H-20260701-0003", orgId: 2, subInventoryCode: "STORE1", totalQty: 1000 },
+  { id: "00000000-0000-4000-9000-000000000049", partNo: "RK73H2ATTD2212F", dateCode: "2609", lotCode: "L2609B", coo: "JP", cow: "JP", shelfCode: "A-02-01", boxId: "BOX-H-20260701-0003", orgId: 2, subInventoryCode: "STORE1", totalQty: 400 }
 ];

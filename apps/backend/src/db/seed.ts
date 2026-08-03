@@ -117,13 +117,19 @@ const uid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0"
 // Demo dataset (spec docs/superpowers/specs/2026-07-29-excel-demo-seed-design.md):
 // the order/stock world comes from new_seed/demo-scenario.xlsx via
 // scripts/gen-seed-demo-scenario.mjs (seed-demo-scenario.ts) —
-//  - 2 PENDING receiving orders (2 cartons × 2-3 items each, carton metadata
-//    in additional_data) for the receive → put-away journey
-//  - 2 PENDING picking orders: SO-DEMO-0001 is fully allocated — scan its
+//  - 3 PENDING receiving orders: 100001/100002 (2 cartons × 2-3 items each,
+//    carton metadata in additional_data) for the receive → put-away journey;
+//    100003 feeds the three allocation demo cases below
+//  - 5 PENDING picking orders: SO-DEMO-0001 is fully allocated — scan its
 //    extra 181G×300 line item-by-item first, then the remaining demand
 //    exactly matches shelf box BOX-H-20260701-0001 (whole-box claim demo);
 //    SO-DEMO-0002 is only partially covered by shelf stock (the shortfall
-//    sits on the pending receiving orders)
+//    sits on the pending receiving orders); SO-DEMO-0003 == carton C3001
+//    exactly (scan the carton + part labels on the picking page, pack into
+//    a new shipping box — box size/weights prefill from the carton's
+//    additional_data); SO-DEMO-0004 is under-supplied (stays
+//    partial); SO-DEMO-0005 splits every line across shelf box
+//    BOX-H-20260701-0003 and receiving carton C3003
 // Master data (users, suppliers, parts, sub-inventories, shelves, net
 // weights, profiles) is seeded here / from the real-master artifacts.
 // Derived rows (allocations, transactions, packages) are produced by business
@@ -359,6 +365,9 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
     { code: "A-01-02", zone: "A" },
     { code: "A-01-03", zone: "A" },
     { code: "A-01-04", zone: "A" },
+    // case-1/3 demo boxes (BOX-H-20260701-0003/-0004)
+    { code: "A-02-01", zone: "A" },
+    { code: "A-02-02", zone: "A" },
     // virtual dock shelf — dock/GIT lots hang off this code (never NULL)
     { code: "DOCK", zone: "DOCK" },
     // shelves for the real-data orders (new_seed/)
@@ -387,7 +396,7 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
   // --- demo scenario (new_seed/demo-scenario.xlsx → seed-demo-scenario.ts) ---
   // Parts first (FK target; merges with the demo/bulk master keep-first).
   await db.insert(parts).values([...demoParts]).onConflictDoNothing();
-  // 2 pending receiving orders (2 cartons × 2-3 items each).
+  // 3 pending receiving orders (see the block comment above).
   await db.insert(receivingOrders).values([...demoReceivingOrders]);
   await db.insert(receivingInvoices).values([...demoReceivingInvoices]);
   await db.insert(receivingInvoiceItems).values([...demoReceivingInvoiceItems]);

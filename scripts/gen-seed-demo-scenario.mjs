@@ -31,11 +31,13 @@ const INITIAL = {
     ["batchNo", "supplierCode", "deliveryDate", "orgId", "subInventoryCode", "status"],
     ["100001", "KOA", "2026-07-28", 2, "STORE1", "pending"],
     ["100002", "KOA", "2026-07-29", 2, "STORE1", "pending"],
+    ["100003", "KOA", "2026-08-03", 2, "STORE1", "pending"],
   ],
   receiving_invoices: [
     ["batchNo", "invoiceNo", "supplierCode", "wclCompanyName", "deliveryDate"],
     ["100001", "INV-100001-01", "KOA", "WCL Components Ltd", "2026-07-25"],
     ["100002", "INV-100002-01", "KOA", "WCL Components Ltd", "2026-07-26"],
+    ["100003", "INV-100003-01", "KOA", "WCL Components Ltd", "2026-08-01"],
   ],
   receiving_items: [
     ["invoiceNo", "ctnNo", "partNo", "wclItemNo", "poNo", "poLine", "lineQty", "dateCode", "lotCode", "coo", "cow", "boxSize", "netWeight", "grossWeight", "weightUnit"],
@@ -49,11 +51,22 @@ const INITIAL = {
     ["INV-100002-01", "C2002", "RK73H2ATTD1372F", "RK73H2ATTD1372F", "PO-DAI-201", "3", 900, "2608", "L2608A", "JP", "JP", "35 X 35 X 22", 1600, 1800, "g"],
     ["INV-100002-01", "C2002", "RK73H1JTTD1002F", "RK73H1JTTD1002F", "PO-DAI-201", "4", 400, "2608", "L2608B", "JP", "JP", "", "", "", ""],
     ["INV-100002-01", "C2002", "RK73H1JTTD2202F", "RK73H1JTTD2202F", "PO-DAI-201", "5", 300, "2608", "L2608C", "JP", "JP", "", "", "", ""],
+    // case 1 carton: contents == SO-DEMO-0003 exactly (whole-box claim after put-away)
+    ["INV-100003-01", "C3001", "RK73H1JTTD3302F", "RK73H1JTTD3302F", "PO-KOA-301", "1", 500, "2609", "L2609C", "JP", "JP", "30 X 24 X 20", 1100, 1250, "g"],
+    ["INV-100003-01", "C3001", "RK73H1JTTD6802F", "RK73H1JTTD6802F", "PO-KOA-301", "2", 800, "2609", "L2609D", "JP", "JP", "", "", "", ""],
+    // case 2 supply: only 1200 of the 3000 SO-DEMO-0004 needs (never fully allocated)
+    ["INV-100003-01", "C3002", "RK73B1JTTD102G", "RK73B1JTTD102G", "PO-KOA-301", "3", 1200, "2610", "L2610A", "JP", "JP", "28 X 20 X 18", 800, 950, "g"],
+    // case 3 receiving portion: SO-DEMO-0005 also takes these parts from shelf box ...-0003
+    ["INV-100003-01", "C3003", "RK73H1JTTD5602F", "RK73H1JTTD5602F", "PO-KOA-301", "4", 1500, "2611", "L2611A", "JP", "JP", "36 X 26 X 24", 1900, 2100, "g"],
+    ["INV-100003-01", "C3003", "RK73H2ATTD2212F", "RK73H2ATTD2212F", "PO-KOA-301", "5", 500, "2611", "L2611B", "JP", "JP", "", "", "", ""],
   ],
   picking_orders: [
     ["orderNo", "poNo", "deliveryDate", "shipTo", "customerCode", "orgId", "subInventoryCode"],
     ["SO-DEMO-0001", "CUST-PO-9001", "2026-07-30", "ACME Electronics (HK)", "ACME", 2, "STORE1"],
     ["SO-DEMO-0002", "CUST-PO-9002", "2026-08-01", "ACME Electronics (HK)", "ACME", 2, "STORE1"],
+    ["SO-DEMO-0003", "CUST-PO-9003", "2026-08-04", "ACME Electronics (HK)", "ACME", 2, "STORE1"],
+    ["SO-DEMO-0004", "CUST-PO-9004", "2026-08-05", "ACME Electronics (HK)", "ACME", 2, "STORE1"],
+    ["SO-DEMO-0005", "CUST-PO-9005", "2026-08-06", "ACME Electronics (HK)", "ACME", 2, "STORE1"],
   ],
   picking_items: [
     ["orderNo", "partNo", "qty", "lineId", "lineNumber", "shipmentNumber"],
@@ -64,11 +77,24 @@ const INITIAL = {
     ["SO-DEMO-0002", "RK73B1JTTD181G", 1000, 2001, 1, 1],
     ["SO-DEMO-0002", "RK73H1JTTD4702F", 600, 2002, 2, 1],
     ["SO-DEMO-0002", "RK73H2ATTD1372F", 700, 2003, 3, 1],
+    // case 1: exactly carton C3001 of receiving 100003 — receive it, scan the
+    // carton + part labels on the picking page, pack into a new shipping box
+    // (box size / weights prefill from the carton's additional_data)
+    ["SO-DEMO-0003", "RK73H1JTTD3302F", 500, 3001, 1, 1],
+    ["SO-DEMO-0003", "RK73H1JTTD6802F", 800, 3002, 2, 1],
+    // case 2: needs 3000 but only 1200 exists (C3002) — stays partially allocated
+    ["SO-DEMO-0004", "RK73B1JTTD102G", 3000, 4001, 1, 1],
+    // case 3: both lines split across shelf stock (box ...-0003) and receiving (C3003)
+    ["SO-DEMO-0005", "RK73H1JTTD5602F", 2500, 5001, 1, 1],
+    ["SO-DEMO-0005", "RK73H2ATTD2212F", 900, 5002, 2, 1],
   ],
   shelf_boxes: [
     ["boxId", "shelfCode", "orgId", "subInventoryCode", "status"],
     ["BOX-H-20260701-0001", "A-01-01", 2, "STORE1", "closed"],
     ["BOX-H-20260701-0002", "A-01-02", 2, "STORE1", "closed"],
+    ["BOX-H-20260701-0003", "A-02-01", 2, "STORE1", "closed"],
+    // empty spare box (print its label from /print-labels for put-away demos)
+    ["BOX-H-20260701-0004", "A-02-02", 2, "STORE1", "open"],
   ],
   shelf_stock: [
     ["boxId", "shelfCode", "partNo", "qty", "dateCode", "lotCode", "coo", "cow"],
@@ -76,6 +102,8 @@ const INITIAL = {
     ["BOX-H-20260701-0001", "A-01-01", "RK73H1JTTD2202F", 500, "2603", "L2603B", "JP", "JP"],
     ["BOX-H-20260701-0002", "A-01-02", "RK73B1JTTD181G", 700, "2604", "L2604A", "JP", "JP"],
     ["BOX-H-20260701-0002", "A-01-02", "RK73H1JTTD4702F", 200, "2604", "L2604B", "JP", "JP"],
+    ["BOX-H-20260701-0003", "A-02-01", "RK73H1JTTD5602F", 1000, "2609", "L2609A", "JP", "JP"],
+    ["BOX-H-20260701-0003", "A-02-01", "RK73H2ATTD2212F", 400, "2609", "L2609B", "JP", "JP"],
   ],
   README: [
     ["Demo scenario workbook — edit me, then regenerate the seed."],
@@ -84,11 +112,24 @@ const INITIAL = {
     ["2. node scripts/gen-seed-demo-scenario.mjs"],
     ["3. pnpm --filter @warehouse/backend db:seed   (or POST /dev/reset)"],
     [""],
-    ["Story: 2 pending receiving orders (2 cartons each, 2-3 items per carton),"],
+    ["Story: 3 pending receiving orders. 100001/100002 are the original pair:"],
     ["PO SO-DEMO-0001: scan the 181G×300 line item-by-item first — then the"],
     ["remaining demand exactly matches shelf box BOX-H-20260701-0001 (whole-box claim),"],
     ["PO SO-DEMO-0002 is only partially covered by shelf stock — the rest arrives"],
-    ["on the two receiving orders (process them, then re-allocate)."],
+    ["on receiving orders 100001/100002 (process them, then re-allocate)."],
+    [""],
+    ["100003 feeds the three allocation demo cases:"],
+    ["case 1 (SO-DEMO-0003): demand == carton C3001 exactly — receive 100003,"],
+    ["then on the picking page scan the C3001 carton label and its two part"],
+    ["labels; pack the packages into a new shipping box — its box size/weights"],
+    ["prefill from the carton's additional_data and flow to measuring."],
+    ["case 2 (SO-DEMO-0004): needs 102G×3000, only 1200 exists (C3002) — the order"],
+    ["stays partially allocated on the picking list."],
+    ["case 3 (SO-DEMO-0005): both lines split across shelf box BOX-H-20260701-0003"],
+    ["and receiving carton C3003."],
+    [""],
+    ["Print scannable labels (parts, cartons, boxes, shelves) from the web app's"],
+    ["/print-labels page (live data from GET /labels-data)."],
     [""],
     ["receiving_items metadata columns boxSize/netWeight/grossWeight/weightUnit"],
     ["are packed into the item's additional_data (weightUnit: g | kg, default kg)."],
