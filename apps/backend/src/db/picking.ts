@@ -418,20 +418,11 @@ interface CartonPrefill {
   grossWeightKg: number | null;
 }
 
-/** Shipping-box prefill from the carton metadata the receiving lines carried
- *  in additional_data ({ boxSize, netWeight, grossWeight, weightUnit: "g" |
+/** Shipping-box prefill from carton metadata the receiving lines carried in
+ *  additional_data ({ boxSize, netWeight, grossWeight, weightUnit: "g" |
  *  "kg" = default }). Weights are summed across source lines, converted to kg
  *  (3 dp); box size is the first non-null. Missing keys → NULL. */
-async function cartonPrefillFromSources(dbOrTx: DbOrTx, lotIds: string[]): Promise<CartonPrefill> {
-  const none: CartonPrefill = { boxSize: null, netWeightKg: null, grossWeightKg: null };
-  if (lotIds.length === 0) return none;
-  const rows = await queryAll<{ ad: unknown }>(
-    dbOrTx,
-    sql`SELECT DISTINCT rii.additional_data AS "ad"
-        FROM inventory_lot_sources ils
-        JOIN receiving_invoice_items rii ON rii.id = ils.receiving_invoice_item_id
-        WHERE ${inArray(sql`ils.inventory_lot_id`, lotIds)} AND rii.additional_data IS NOT NULL`
-  );
+function accumulateCartonPrefill(rows: { ad: unknown }[]): CartonPrefill {
   let boxSize: string | null = null;
   let net = 0;
   let gross = 0;
@@ -463,6 +454,54 @@ async function cartonPrefillFromSources(dbOrTx: DbOrTx, lotIds: string[]): Promi
     netWeightKg: hasNet ? round3(net) : null,
     grossWeightKg: hasGross ? round3(gross) : null,
   };
+}
+
+/** Prefill from the source receiving lines of the given lots (whole-box claim). */
+async function cartonPrefillFromSources(dbOrTx: DbOrTx, lotIds: string[]): Promise<CartonPrefill> {
+  const none: CartonPrefill = { boxSize: null, netWeightKg: null, grossWeightKg: null };
+  if (lotIds.length === 0) return none;
+  const rows = await queryAll<{ ad: unknown }>(
+    dbOrTx,
+    sql`SELECT DISTINCT rii.additional_data AS "ad"
+        FROM inventory_lot_sources ils
+        JOIN receiving_invoice_items rii ON rii.id = ils.receiving_invoice_item_id
+        WHERE ${inArray(sql`ils.inventory_lot_id`, lotIds)} AND rii.additional_data IS NOT NULL`
+  );
+  return accumulateCartonPrefill(rows);
+}
+
+/**
+ * Pack-path prefill: when a package lands in a shipping box, fill the box's
+ * still-NULL box size / net / gross from the receiving lines behind the box's
+ * packages — receiving_invoice_item sources directly, lot sources via
+ * inventory_lot_sources (order-level receiving sources record no line, so
+ * those stay manual). COALESCE only: operator edits are never clobbered, and
+ * last_update_date is left alone (derived fill, not an edit).
+ */
+async function prefillShippingBoxFromSources(tx: DbOrTx, boxId: string): Promise<void> {
+  const rows = await queryAll<{ ad: unknown }>(
+    tx,
+    sql`SELECT rii.additional_data AS "ad"
+        FROM picking_packages pp
+        JOIN receiving_invoice_items rii ON pp.source_type = 'receiving_invoice_item' AND rii.id = pp.source_id
+        WHERE pp.shipping_box_id = ${boxId} AND rii.additional_data IS NOT NULL
+        UNION
+        SELECT rii.additional_data AS "ad"
+        FROM picking_packages pp
+        JOIN inventory_lot_sources ils ON pp.source_type = 'inventory_lot' AND ils.inventory_lot_id = pp.source_id
+        JOIN receiving_invoice_items rii ON rii.id = ils.receiving_invoice_item_id
+        WHERE pp.shipping_box_id = ${boxId} AND rii.additional_data IS NOT NULL`
+  );
+  const prefill = accumulateCartonPrefill(rows);
+  if (prefill.boxSize === null && prefill.netWeightKg === null && prefill.grossWeightKg === null) return;
+  await queryRun(
+    tx,
+    sql`UPDATE shipping_boxes SET
+          box_size = COALESCE(box_size, ${prefill.boxSize}),
+          net_weight = COALESCE(net_weight, ${prefill.netWeightKg}),
+          gross_weight = COALESCE(gross_weight, ${prefill.grossWeightKg})
+        WHERE id = ${boxId}`
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -1628,6 +1667,7 @@ export async function addPackageToBox(
     assertOrderWritable(order);
 
     await assignPackageToBoxTx(tx, pkg.id, box.id);
+    await prefillShippingBoxFromSources(tx, box.id);
     await logTransition(tx, {
       entityType: "picking_item",
       entityId: pkg.pickingItemId,
@@ -1669,6 +1709,7 @@ export async function addAllUnboxedToShippingBox(
         metadata: { qty: pkg.qty, box: box.id },
       });
     }
+    await prefillShippingBoxFromSources(tx, box.id);
     await maybeAutoFinishPickingOrder(tx, { pickingOrderId: order.id, actorId: input.actorId });
     return { packed: packages.length };
   });

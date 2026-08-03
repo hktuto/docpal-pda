@@ -1431,3 +1431,36 @@ test("claim-shelf-box: unknown shelf box → 404", async () => {
   assert.equal(err.status, 404);
   assert.equal(err.message, "shelf_box_not_found");
 });
+
+test("pack path: boxing packages prefills the box from the source carton's additional_data (no clobber)", async () => {
+  await reseed(client);
+  const actorId = await actorIdOf();
+  // case-1 demo world: receiving 100003's carton C3001 == SO-DEMO-0003 exactly;
+  // the 3302F line carries { boxSize, netWeight 1100 g, grossWeight 1250 g }
+  await confirmReceivingArrival(client.db, await receivingOrderIdOf("100003"), actorId);
+  await allocateAll(client.db);
+  const orderId = await pickingOrderIdOf("SO-DEMO-0003");
+
+  // pick both lines straight from the receiving carton (scan path)
+  for (const [partNo, qty] of [["RK73H1JTTD3302F", 500], ["RK73H1JTTD6802F", 800]] as const) {
+    const itemId = await pickingItemIdOf(orderId, partNo);
+    const alloc = await allocationOf(itemId);
+    assert.ok(alloc.receivingInvoiceItemId, `${partNo} should allocate from a receiving line`);
+    await scanPickingItem(client.db, itemId, { actorId, allocationId: alloc.id, qty });
+  }
+
+  // an operator-set field is kept; NULL fields are filled from the carton
+  const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
+  await updateShippingBox(client.db, box.id, { actorId, netWeightKg: 9 });
+  const { packed } = await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
+  assert.equal(packed, 2);
+
+  const filled = await queryGet<{ boxSize: string | null; netWeight: number | null; grossWeight: number | null }>(
+    client.db,
+    sql`SELECT box_size AS "boxSize", net_weight AS "netWeight", gross_weight AS "grossWeight"
+        FROM shipping_boxes WHERE id = ${box.id}`
+  );
+  assert.equal(filled!.boxSize, "30 X 24 X 20");
+  assert.equal(filled!.netWeight, 9); // operator value wins
+  assert.equal(filled!.grossWeight, 1.25); // 1250 g → kg
+});
