@@ -20,7 +20,7 @@
             <span>{{ $t('boxMeasurementsModal.boxSize') }} <span class="required">{{ $t('boxMeasurementsModal.required') }}</span></span>
             <select v-model="form.boxSize" :disabled="isBusy">
               <option value="">{{ $t('boxMeasurementsModal.placeholderBoxSize') }}</option>
-              <option v-for="size in boxSizeOptions" :key="size" :value="size">{{ size }}</option>
+              <option v-for="size in sizeOptions" :key="size" :value="size">{{ size }}</option>
             </select>
           </label>
 
@@ -68,6 +68,16 @@ const countryLabels = computed(() => t('countryLabels') as unknown as Record<str
 function countryName(value: string) {
   return countryLabels.value[value] ?? value;
 }
+
+// A prefilled box size (e.g. from the source carton's metadata) is often not
+// one of the master options — show it as an extra option so the select
+// renders the value instead of looking blank.
+const sizeOptions = computed(() => {
+  const initial = props.initialValues?.boxSize;
+  return initial && !boxSizeOptions.includes(initial)
+    ? [initial, ...boxSizeOptions]
+    : boxSizeOptions;
+});
 
 interface MeasurementForm {
   boxSize: string;

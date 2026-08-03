@@ -127,6 +127,10 @@ watch(
   },
   { flush: "post" }
 );
+
+function print() {
+  window.print();
+}
 </script>
 
 <template>
@@ -155,7 +159,7 @@ watch(
             Picking {{ refNo }}
           </option>
         </select>
-        <button class="print-btn" @click="() => window.print()">Print labels</button>
+        <button class="print-btn" @click="print">Print labels</button>
       </div>
     </header>
 

@@ -106,6 +106,10 @@ function renderBarcodes() {
 
 onMounted(renderBarcodes);
 watch(cartons, renderBarcodes, { flush: "post" });
+
+function print() {
+  window.print();
+}
 </script>
 
 <template>
@@ -124,7 +128,7 @@ watch(cartons, renderBarcodes, { flush: "post" });
           placeholder="Search part, PO, invoice or box..."
           class="search-input"
         />
-        <button class="print-btn" @click="() => window.print()">Print carton labels</button>
+        <button class="print-btn" @click="print">Print carton labels</button>
       </div>
     </header>
 

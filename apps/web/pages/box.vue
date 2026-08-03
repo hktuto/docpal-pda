@@ -54,6 +54,10 @@ onMounted(load);
 onUnmounted(() => {
   if (debounce) clearTimeout(debounce);
 });
+
+function print() {
+  window.print();
+}
 </script>
 
 <template>
@@ -71,7 +75,7 @@ onUnmounted(() => {
           placeholder="Search box id or seq..."
           class="search-input"
         />
-        <button class="print-btn" @click="() => window.print()">Print</button>
+        <button class="print-btn" @click="print">Print</button>
       </div>
     </header>
 
