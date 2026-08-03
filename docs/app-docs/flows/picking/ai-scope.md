@@ -12,7 +12,23 @@
   each QR scan is validated client-side (part matches an order item, qty fits
   the first allocation with enough remaining minus already-queued qty,
   duplicate raw QR rejected) and appended to a local queue table — no per-scan
-  confirm/review. An OCR button captures a label with the camera: a capture
+  confirm/review. Each item row shows where its remaining qty is allocated
+  from (`allocationSources` — `CTN <ctn>`, `<box> @ <shelf>`, or a bare shelf
+  code) so the operator knows what/where to scan. A raw scan that matches no
+  supplier QR template is treated as a location barcode, with two behaviors:
+  a **receiving carton** (`ctn_no` — `matchCartonAllocations`) auto-queues
+  everything the order still needs from that carton (`addCartonScan`, one
+  row per allocation at its full remaining; re-scan = duplicate), because a
+  supplier carton's contents are known and sealed; a **shelf box id or shelf
+  code** (`lot.boxId` / `lot.shelfCode` — `matchBoxAllocations`) opens the
+  "pick from box" dialog (`PickFromBoxDialog`) listing what the order
+  still needs from it, and part-label scans while it is open are queued
+  against that box's allocations only (`addAllocationScan` — part must
+  match, label qty must fit the allocation's remaining; distinct
+  `part_not_in_box` / `qty_exceeds` toasts). Scanning another box/shelf
+  barcode switches the dialog to it; scanning a carton closes it and queues
+  the carton. An OCR button captures a label with the
+  camera: a capture
   that parses into a single record opens a confirm form
   (`PickingScanReviewModal` — editable fields with OCR candidate chips),
   while a multi-item label (2+ rows via `extractMultiItemRows`) opens an
@@ -78,6 +94,13 @@
   (item, lot) portion, the order's allocations released, `source_shelf_box_id`
   recorded on the shipping box, and the order auto-finishes like the scan
   path (409 `box_not_exact_match` / `box_not_fully_available`).
+- Shipping-box prefill on the pack path: when a package lands in a shipping
+  box (`addPackageToBox` / `add-all-unboxed`), the box's still-NULL box
+  size/net/gross are filled from the receiving lines behind the box's
+  packages (`receiving_invoice_item` sources directly, lot sources via
+  `inventory_lot_sources`; order-level receiving sources record no line and
+  stay manual). COALESCE only — operator edits are never clobbered. This is
+  what carries a picked carton's `additional_data` into measuring.
 
 ## Out of scope
 

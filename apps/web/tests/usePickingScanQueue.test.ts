@@ -187,4 +187,90 @@ describe('usePickingScanQueue', () => {
     q.reresolveQueued();
     expect(q.rows.value[0]).toMatchObject({ status: 'failed', error: 'allocation_changed' });
   });
+
+  function makeShelfItems(): Items {
+    const items = makeItems() as any;
+    items[0].allocations = [
+      {
+        id: 'alloc-1', qty: 2000, receivingInvoiceItemId: null, receivingOrderId: null, boxId: null,
+        lot: { id: 'lot-1', shelfCode: 'A-01-01', boxId: 'BOX-H-20260701-0001', dateCode: '2603', lotCode: 'L2603A', coo: 'JP', cow: 'JP', totalQty: 2000, allocatedQty: 2000, availableQty: 0 },
+      },
+    ];
+    items[1].allocations = [
+      {
+        id: 'alloc-3', qty: 1000, receivingInvoiceItemId: null, receivingOrderId: null, boxId: null,
+        lot: { id: 'lot-2', shelfCode: 'A-01-01', boxId: 'BOX-H-20260701-0001', dateCode: '2603', lotCode: 'L2603B', coo: 'JP', cow: 'JP', totalQty: 1000, allocatedQty: 1000, availableQty: 0 },
+      },
+    ];
+    return items as Items;
+  }
+
+  it('matchBoxAllocations finds allocations by box id or shelf code (never carton)', () => {
+    const q = usePickingScanQueue(ref(makeShelfItems()));
+    expect(q.matchBoxAllocations('BOX-H-20260701-0001').map((m) => m.allocation.id)).toEqual(['alloc-1', 'alloc-3']);
+    expect(q.matchBoxAllocations('a-01-01').map((m) => m.allocation.id)).toEqual(['alloc-1', 'alloc-3']);
+    expect(q.matchBoxAllocations('BOX-H-99999999-9999')).toEqual([]);
+    expect(q.matchBoxAllocations('')).toEqual([]);
+    // receiving cartons (allocation.boxId) are the auto-queue path instead
+    const items = makeItems() as any;
+    items[0].allocations[0].boxId = 'C1001';
+    const q2 = usePickingScanQueue(ref(items as Items));
+    expect(q2.matchBoxAllocations('C1001')).toEqual([]);
+    expect(q2.matchCartonAllocations(' c1001 ').map((m) => m.allocation.id)).toEqual(['alloc-1']);
+    expect(q.matchCartonAllocations('BOX-H-20260701-0001')).toEqual([]);
+  });
+
+  it('addCartonScan queues every matched allocation at its remaining qty', () => {
+    const items = makeItems() as any;
+    items[0].allocations[0].boxId = 'C1001';
+    items[0].allocations[1].boxId = 'C1001';
+    const q = usePickingScanQueue(ref(items as Items));
+    const res = q.addCartonScan(q.matchCartonAllocations('C1001'), 'C1001');
+    expect(res).toEqual({ ok: true, count: 2, qty: 3000 });
+    expect(q.queuedRows.value.map((r) => [r.allocationId, r.qty])).toEqual([
+      ['alloc-1', 2000],
+      ['alloc-2', 1000],
+    ]);
+    // re-scan of the same carton is a duplicate
+    expect(q.addCartonScan(q.matchCartonAllocations('C1001'), 'C1001').ok).toBe(false);
+  });
+
+  it('addCartonScan nets out already-queued qty; nothing left → no_match', () => {
+    const items = makeItems() as any;
+    items[0].allocations[0].boxId = 'C1001';
+    const q = usePickingScanQueue(ref(items as Items));
+    // queue 1500 of alloc-1 (2000) via a part label first
+    expect(q.addScan(qr('RK73H1JTTD1002F', 1500), ':A::152:X:L:S1:F', 'qr')).toEqual({ ok: true });
+    const res = q.addCartonScan(q.matchCartonAllocations('C1001'), 'C1001');
+    expect(res).toEqual({ ok: true, count: 1, qty: 500 });
+    // carton fully queued (its raw is in the queue) → duplicate on rescan
+    expect(q.addCartonScan(q.matchCartonAllocations('C1001'), 'C1001').message).toBe('duplicate');
+    // a different carton barcode with zero remaining → no_match
+    items[0].allocations[1].boxId = 'C2002';
+    expect(q.addCartonScan(q.matchCartonAllocations('C2002'), 'C2002').ok).toBe(true); // alloc-2 untouched
+  });
+
+  it('addAllocationScan queues a part scan against a specific allocation', () => {
+    const q = usePickingScanQueue(ref(makeShelfItems()));
+    const res = q.addAllocationScan('item-1', 'alloc-1', qr('RK73H1JTTD1002F', 1500), ':A::152:X:L:S:F', 'qr');
+    expect(res).toEqual({ ok: true });
+    expect(q.rows.value[0]).toMatchObject({ itemId: 'item-1', allocationId: 'alloc-1', qty: 1500, status: 'queued' });
+  });
+
+  it('addAllocationScan rejects wrong parts and qty beyond the allocation', () => {
+    const q = usePickingScanQueue(ref(makeShelfItems()));
+    // part of another item, even if that item shares the box
+    expect(q.addAllocationScan('item-1', 'alloc-1', qr('RK73H1JTTD2202F', 100), ':B::12:X:L:S:F', 'qr')).toEqual({ ok: false, message: 'no_match' });
+    // alloc-1 holds 2000
+    expect(q.addAllocationScan('item-1', 'alloc-1', qr('RK73H1JTTD1002F', 2001), ':A::20012:X:L:S:F', 'qr')).toEqual({ ok: false, message: 'qty_exceeds' });
+    expect(q.addAllocationScan('item-1', 'alloc-1', qr('RK73H1JTTD1002F', 0), ':A::0:X:L:S:F', 'qr')).toEqual({ ok: false, message: 'invalid' });
+    expect(q.rows.value).toHaveLength(0);
+  });
+
+  it('addAllocationScan accounts for already-queued qty on the allocation', () => {
+    const q = usePickingScanQueue(ref(makeShelfItems()));
+    expect(q.addAllocationScan('item-1', 'alloc-1', qr('RK73H1JTTD1002F', 2000), ':A::202:X:L:S1:F', 'qr')).toEqual({ ok: true });
+    expect(q.addAllocationScan('item-1', 'alloc-1', qr('RK73H1JTTD1002F', 1), ':A::1:X:L:S2:F', 'qr')).toEqual({ ok: false, message: 'qty_exceeds' });
+    expect(q.addAllocationScan('item-1', 'alloc-1', qr('RK73H1JTTD1002F', 2000), ':A::202:X:L:S1:F', 'qr')).toEqual({ ok: false, message: 'duplicate' });
+  });
 });

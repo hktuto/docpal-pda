@@ -34,6 +34,9 @@
             <span class="scan-session__part">
               <span class="scan-session__line">L{{ item.lineNumber }}/S{{ item.shipmentNumber }}</span>
               {{ item.partNo }}
+              <span v-if="allocationSources(item)" class="scan-session__sources">
+                {{ allocationSources(item) }}
+              </span>
             </span>
             <span class="scan-session__counts">
               {{ $t('picking.scanSession.progress', {
@@ -111,6 +114,13 @@
         @apply="onApplyMulti"
         @remove="onMultiRowRemoved"
       />
+
+      <PickFromBoxDialog
+        v-if="boxPickId"
+        :box-id="boxPickId"
+        :entries="boxPickEntries"
+        @close="boxPickId = null"
+      />
     </template>
   </div>
 </template>
@@ -135,8 +145,9 @@ import { playScanError, playScanSuccess } from "~/utils/scanBeep";
 import EmptyState from "~/components/EmptyState.vue";
 import InlineSpinner from "~/components/InlineSpinner.vue";
 import PickingScanReviewModal from "~/components/picking/PickingScanReviewModal.vue";
+import PickFromBoxDialog, { type PickFromBoxEntry } from "~/components/picking/PickFromBoxDialog.vue";
 import ScanMultiItemModal from "~/components/ScanMultiItemModal.vue";
-import type { OcrInput } from "~/composables/useMockOcr";
+import { normalize, type OcrInput } from "~/composables/useMockOcr";
 import type { PickingOrderDetail } from "~/services/types";
 
 definePageMeta({ title: "meta.pickingScan", props: { noPadding: true } });
@@ -161,7 +172,7 @@ const ocrCapturing = ref(false);
 const completed = ref(false);
 
 const orderItems = computed(() => order.value?.items ?? []);
-const { rows, queuedQtyByItem, addScan, removeRow, reresolveQueued, applyAll } = usePickingScanQueue(orderItems);
+const { rows, queuedQtyByItem, addScan, matchBoxAllocations, matchCartonAllocations, addCartonScan, allocationRemaining, addAllocationScan, removeRow, reresolveQueued, applyAll } = usePickingScanQueue(orderItems);
 const queuedCount = computed(() => rows.value.filter((r) => r.status === "queued").length);
 
 // The table aggregates scans of the same item + batch fields into one row
@@ -232,6 +243,22 @@ function serverScannedQty(item: PickingOrderDetail["items"][number]): number {
   return (item.packages ?? []).reduce((sum, p) => sum + p.qty, 0);
 }
 
+/** Where this item's open qty is allocated from — the "what/where to scan"
+ *  hint shown under each item: receiving carton (CTN), shelf box @ shelf, or
+ *  a bare shelf code for loose lots. */
+function allocationSources(item: PickingOrderDetail["items"][number]): string {
+  return (item.allocations ?? [])
+    .filter((a) => a.qty > 0)
+    .map((a) => {
+      if (a.lot?.boxId) return `${a.lot.boxId}${a.lot.shelfCode ? ` @ ${a.lot.shelfCode}` : ""} ×${a.qty}`;
+      if (a.lot?.shelfCode) return `${a.lot.shelfCode} ×${a.qty}`;
+      if (a.boxId) return `CTN ${a.boxId} ×${a.qty}`;
+      return null;
+    })
+    .filter((s): s is string => !!s)
+    .join(" · ");
+}
+
 async function load() {
   try {
     order.value = await warehouse.getPickingOrder(orderId);
@@ -252,6 +279,104 @@ function handleParsed(parsed: ReturnType<typeof ocrResultToInput>, raw: string, 
   return true;
 }
 
+// "Pick from box" flow: scanning a shelf box/shelf barcode opens a dialog
+// listing what the order still needs from it; part-label scans while it is
+// open are queued against that box's allocations only (never auto-picked).
+// Receiving cartons skip the dialog — a carton scan queues everything the
+// order needs from it in one go (queueCarton).
+const boxPickId = ref<string | null>(null);
+
+const boxPickEntries = computed<PickFromBoxEntry[]>(() => {
+  if (!boxPickId.value) return [];
+  return matchBoxAllocations(boxPickId.value).map(({ item, allocation }) => ({
+    itemId: item.id,
+    allocationId: allocation.id,
+    lineNumber: item.lineNumber,
+    shipmentNumber: item.shipmentNumber,
+    partNo: item.partNo,
+    lotCode: allocation.lot?.lotCode ?? null,
+    dateCode: allocation.lot?.dateCode ?? null,
+    required: allocation.qty,
+    queued: allocation.qty - allocationRemaining(allocation.id),
+  }));
+});
+
+function openBoxPick(rawValue: string): boolean {
+  if (matchBoxAllocations(rawValue).length === 0) {
+    showToast(t("picking.scanSession.no_match"));
+    return false;
+  }
+  boxPickId.value = rawValue.trim();
+  return true;
+}
+
+/** Receiving-carton scan: queue everything this order still needs from the
+ *  carton (known, sealed contents — no per-part scans). */
+function queueCarton(rawValue: string): boolean {
+  const matches = matchCartonAllocations(rawValue);
+  if (matches.length === 0) return false;
+  const result = addCartonScan(matches, rawValue.trim());
+  if (!result.ok) {
+    showToast(t(`picking.scanSession.${result.message}`));
+    return true;
+  }
+  showToast(
+    t("picking.scanSession.cartonQueued", {
+      carton: rawValue.trim(),
+      count: result.count,
+      qty: result.qty,
+    })
+  );
+  playScanSuccess();
+  return true;
+}
+
+/** A scan while the pick-from-box dialog is open: a new box/shelf barcode
+ * switches the dialog; a carton barcode queues the carton (and closes the
+ * dialog); anything else must be a part label for one of the box's items. */
+async function handleBoxPickScan(rawValue: string): Promise<boolean> {
+  if (matchBoxAllocations(rawValue).length > 0) {
+    boxPickId.value = rawValue.trim();
+    return true;
+  }
+  if (matchCartonAllocations(rawValue).length > 0) {
+    boxPickId.value = null;
+    return queueCarton(rawValue);
+  }
+  const parsedResult = await parseRawValue(rawValue);
+  if (!parsedResult.matched) {
+    showToast(t("picking.scanSession.no_match"));
+    return false;
+  }
+  const parsed = ocrResultToInput(parsedResult.parsed);
+  const wanted = normalize(String(parsed.partNo ?? ""));
+  const entry = boxPickEntries.value.find((e) => normalize(e.partNo) === wanted);
+  if (!entry) {
+    showToast(t("picking.scanSession.part_not_in_box"));
+    return false;
+  }
+  const result = addAllocationScan(entry.itemId, entry.allocationId, parsed, rawValue, "qr");
+  if (!result.ok) {
+    showToast(t(`picking.scanSession.${result.message}`));
+    return false;
+  }
+  showToast(t("common.scanSuccess"));
+  return true;
+}
+
+/** Hardware/camera QR path: supplier label first, receiving carton second
+ *  (auto-queue), shelf box/shelf barcode last (pick-from-box dialog). */
+async function handleQrOrBoxScan(rawValue: string): Promise<boolean> {
+  const parsedResult = await parseRawValue(rawValue);
+  if (parsedResult.matched) {
+    return handleParsed(ocrResultToInput(parsedResult.parsed), rawValue, "qr");
+  }
+  if (matchCartonAllocations(rawValue).length > 0) {
+    return queueCarton(rawValue);
+  }
+  return openBoxPick(rawValue);
+}
+
 useHardwareScanner({
   enabled: () =>
     !applying.value &&
@@ -263,8 +388,8 @@ useHardwareScanner({
     !!order.value,
   onScan: async (rawValue: string) => {
     if (!order.value) return false;
-    const parsedResult = await parseRawValue(rawValue);
-    return handleParsed(ocrResultToInput(parsedResult.parsed), rawValue, "qr");
+    if (boxPickId.value) return handleBoxPickScan(rawValue);
+    return handleQrOrBoxScan(rawValue);
   },
 });
 
@@ -283,8 +408,7 @@ async function captureOcr() {
     // camera captures go through OCR text parsing.
     if (!capture.imagePath && barcodes.length === 1 && barcodes[0].format === "4") {
       const qrValue = barcodes[0].value;
-      const parsedResult = await parseRawValue(qrValue);
-      const ok = handleParsed(ocrResultToInput(parsedResult.parsed), qrValue, "qr");
+      const ok = await handleQrOrBoxScan(qrValue);
       if (ok) playScanSuccess();
       else playScanError();
       return;
@@ -394,6 +518,7 @@ function onMultiRowRemoved(index: number) {
 async function confirm() {
   if (applying.value || queuedCount.value === 0 || heldByOther.value) return;
   applying.value = true;
+  boxPickId.value = null;
   try {
     const failed = await applyAll(
       async (row) => {
@@ -508,6 +633,14 @@ onUnmounted(() => window.removeEventListener("beforeunload", beforeUnload));
   font-weight: 400;
   color: var(--muted);
   margin-right: 0.25rem;
+}
+
+.scan-session__sources {
+  display: block;
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: 0.1rem;
 }
 
 .scan-session__counts {
