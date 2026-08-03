@@ -55,7 +55,7 @@ services:
     volumes:
       - ./apps/backend/public/apk:/app/public/apk:ro
     ports:
-      - "3002:3002"
+      - "9002:3002"
     depends_on:
       db:
         condition: service_healthy
@@ -72,7 +72,7 @@ services:
       # applied at container start — no rebuild needed).
       NUXT_PUBLIC_API_BASE_URL: ${WEB_API_BASE_URL:-https://${PRODUCTION_URL}:3002}
     ports:
-      - "3000:3000"
+      - "9000:3000"
     depends_on:
       - backend
     restart: unless-stopped
