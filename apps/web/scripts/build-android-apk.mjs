@@ -28,7 +28,7 @@ function run(cmd, args, options = {}) {
   }
 }
 
-// a. PRODUCTION_URL from the root .env (schemeless host → https://).
+// a. PRODUCTION_URL from the root .env (scheme + host; schemeless hosts default to https://).
 const envFile = join(repoRoot, '.env');
 let productionUrl;
 if (existsSync(envFile)) {
