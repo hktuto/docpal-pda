@@ -7,31 +7,25 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, '..');
 const outputPath = join(repoRoot, 'public', 'box-shelf-labels.pdf');
 
-const boxIds = Array.from({ length: 15 }, (_, i) =>
-  `BOX-HK1-2826-${String(i + 1).padStart(6, '0')}`
-);
-
-const shelfCodes = [
-  'A-01-01',
-  'A-01-02',
-  'A-01-03',
-  'A-01-04',
-  'A-01-05',
-  'A-01-06',
-  'A-01-07',
-  'A-01-08',
-  'B-01-01',
-  'B-02-01',
-];
-
+// The 10 pre-generated empty put-away boxes from the demo seed
+// (new_seed/demo-scenario.xlsx → shelf_boxes). Each label carries the box id
+// (scanned during put-away) and the shelf the box belongs to.
 const items = [
-  ...boxIds.map((code) => ({ type: 'BOX ID', code })),
-  ...shelfCodes.map((code) => ({ type: 'SHELF CODE', code })),
+  { boxId: 'BOX-H-20260701-0005', shelfCode: 'A-03-01' },
+  { boxId: 'BOX-H-20260701-0006', shelfCode: 'A-03-02' },
+  { boxId: 'BOX-H-20260701-0007', shelfCode: 'A-03-03' },
+  { boxId: 'BOX-H-20260701-0008', shelfCode: 'A-03-04' },
+  { boxId: 'BOX-H-20260701-0009', shelfCode: 'A-03-05' },
+  { boxId: 'BOX-H-20260701-0010', shelfCode: 'A-04-01' },
+  { boxId: 'BOX-H-20260701-0011', shelfCode: 'A-04-02' },
+  { boxId: 'BOX-H-20260701-0012', shelfCode: 'A-04-03' },
+  { boxId: 'BOX-H-20260701-0013', shelfCode: 'A-04-04' },
+  { boxId: 'BOX-H-20260701-0014', shelfCode: 'A-04-05' },
 ];
 
 const qrSvgs = await Promise.all(
   items.map((item) =>
-    QRCode.toString(item.code, {
+    QRCode.toString(item.boxId, {
       type: 'svg',
       width: 200,
       margin: 1,
@@ -42,9 +36,10 @@ const qrSvgs = await Promise.all(
 
 const labelHtml = (item, svg) => `
   <div class="label">
-    <div class="label-type">${item.type}</div>
+    <div class="label-type">Shelf box</div>
     <div class="qr">${svg}</div>
-    <div class="label-code">${item.code}</div>
+    <div class="label-code">${item.boxId}</div>
+    <div class="label-shelf">Shelf ${item.shelfCode}</div>
   </div>
 `;
 
@@ -52,7 +47,7 @@ const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Box &amp; Shelf QR Labels</title>
+  <title>Shelf Box QR Labels</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -63,14 +58,14 @@ const html = `<!DOCTYPE html>
     .sheet {
       width: 100%;
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(2, 1fr);
       gap: 4mm;
       padding: 4mm;
     }
     .label {
       border: 1px solid #111;
       padding: 3mm;
-      height: 50mm;
+      height: 60mm;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -86,8 +81,8 @@ const html = `<!DOCTYPE html>
       letter-spacing: 0.05em;
     }
     .qr {
-      width: 28mm;
-      height: 28mm;
+      width: 32mm;
+      height: 32mm;
     }
     .qr svg {
       width: 100%;
@@ -95,10 +90,14 @@ const html = `<!DOCTYPE html>
       display: block;
     }
     .label-code {
-      font-size: 10pt;
+      font-size: 12pt;
       font-weight: bold;
       word-break: break-all;
       line-height: 1.2;
+    }
+    .label-shelf {
+      font-size: 9pt;
+      color: #444;
     }
   </style>
 </head>
@@ -120,4 +119,4 @@ await page.pdf({
 });
 await browser.close();
 
-console.log(`PDF generated: ${outputPath}`);
+console.log(`PDF generated: ${outputPath} (${items.length} labels)`);

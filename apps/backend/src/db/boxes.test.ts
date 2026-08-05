@@ -102,10 +102,10 @@ test("searchBoxes: finds both kinds by full id and seq substring, with kind + or
   const shipping = await createShippingBox(client.db, { pickingOrderId, actorId });
   const shelf = await createShelfBox(client.db, { receivingOrderId, shelfCode: "A-01-03", actorId });
 
-  // blank query → the latest boxes across both tables (the 4 seeded shelf
+  // blank query → the latest boxes across both tables (the 14 seeded shelf
   // boxes plus the 2 just created, newest first)
   const all = await searchBoxes(client.db, "");
-  assert.equal(all.length, 6);
+  assert.equal(all.length, 16);
   assert.deepEqual(
     new Set(all.slice(0, 2).map((r) => r.id)),
     new Set([shipping.id, shelf.id])

@@ -368,6 +368,17 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
     // case-1/3 demo boxes (BOX-H-20260701-0003/-0004)
     { code: "A-02-01", zone: "A" },
     { code: "A-02-02", zone: "A" },
+    // pre-generated empty put-away boxes (BOX-H-20260701-0005..-0014)
+    { code: "A-03-01", zone: "A" },
+    { code: "A-03-02", zone: "A" },
+    { code: "A-03-03", zone: "A" },
+    { code: "A-03-04", zone: "A" },
+    { code: "A-03-05", zone: "A" },
+    { code: "A-04-01", zone: "A" },
+    { code: "A-04-02", zone: "A" },
+    { code: "A-04-03", zone: "A" },
+    { code: "A-04-04", zone: "A" },
+    { code: "A-04-05", zone: "A" },
     // virtual dock shelf — dock/GIT lots hang off this code (never NULL)
     { code: "DOCK", zone: "DOCK" },
     // shelves for the real-data orders (new_seed/)

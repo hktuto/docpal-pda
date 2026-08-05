@@ -72,7 +72,17 @@ export const demoShelfBoxes = [
   { id: "BOX-H-20260701-0001", shelfCode: "A-01-01", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
   { id: "BOX-H-20260701-0002", shelfCode: "A-01-02", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
   { id: "BOX-H-20260701-0003", shelfCode: "A-02-01", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
-  { id: "BOX-H-20260701-0004", shelfCode: "A-02-02", orgId: 2, subInventoryCode: "STORE1", status: "open" }
+  { id: "BOX-H-20260701-0004", shelfCode: "A-02-02", orgId: 2, subInventoryCode: "STORE1", status: "open" },
+  { id: "BOX-H-20260701-0005", shelfCode: "A-03-01", orgId: 2, subInventoryCode: "STORE1", status: "open" },
+  { id: "BOX-H-20260701-0006", shelfCode: "A-03-02", orgId: 2, subInventoryCode: "STORE1", status: "open" },
+  { id: "BOX-H-20260701-0007", shelfCode: "A-03-03", orgId: 2, subInventoryCode: "STORE1", status: "open" },
+  { id: "BOX-H-20260701-0008", shelfCode: "A-03-04", orgId: 2, subInventoryCode: "STORE1", status: "open" },
+  { id: "BOX-H-20260701-0009", shelfCode: "A-03-05", orgId: 2, subInventoryCode: "STORE1", status: "open" },
+  { id: "BOX-H-20260701-0010", shelfCode: "A-04-01", orgId: 2, subInventoryCode: "STORE1", status: "open" },
+  { id: "BOX-H-20260701-0011", shelfCode: "A-04-02", orgId: 2, subInventoryCode: "STORE1", status: "open" },
+  { id: "BOX-H-20260701-0012", shelfCode: "A-04-03", orgId: 2, subInventoryCode: "STORE1", status: "open" },
+  { id: "BOX-H-20260701-0013", shelfCode: "A-04-04", orgId: 2, subInventoryCode: "STORE1", status: "open" },
+  { id: "BOX-H-20260701-0014", shelfCode: "A-04-05", orgId: 2, subInventoryCode: "STORE1", status: "open" }
 ];
 
 export const demoShelfBoxItems = [

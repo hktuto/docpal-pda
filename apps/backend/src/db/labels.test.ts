@@ -62,7 +62,7 @@ test("buildKoaLabelRaw round-trips through parseQrRaw with the seeded KOA templa
 test("getLabelsData: shelf boxes, shelf codes, receiving orders and shelf lots", async () => {
   const data = await getLabelsData(client.db);
 
-  assert.equal(data.shelfBoxes.length, 4);
+  assert.equal(data.shelfBoxes.length, 14);
   const box1 = data.shelfBoxes.find((b) => b.id === "BOX-H-20260701-0001");
   assert.ok(box1);
   assert.deepEqual(box1.items, [
@@ -74,7 +74,11 @@ test("getLabelsData: shelf boxes, shelf codes, receiving orders and shelf lots",
   assert.ok(box4);
   assert.deepEqual(box4.items, []);
 
-  assert.deepEqual(data.shelfCodes, ["A-01-01", "A-01-02", "A-02-01", "A-02-02"]);
+  assert.deepEqual(data.shelfCodes, [
+    "A-01-01", "A-01-02", "A-02-01", "A-02-02",
+    "A-03-01", "A-03-02", "A-03-03", "A-03-04", "A-03-05",
+    "A-04-01", "A-04-02", "A-04-03", "A-04-04", "A-04-05",
+  ]);
 
   assert.deepEqual(
     data.receivingOrders.map((o) => o.batchNo),

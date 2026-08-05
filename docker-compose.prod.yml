@@ -44,8 +44,9 @@ services:
       # PDAs/desktops reach the web/admin UIs by anything other than localhost.
       # PRODUCTION_URL from .env includes the scheme and host, e.g.
       # https://mobile-wms-admin.wclsolution.com or http://192.168.1.10
-      # (no port — the API URLs below append :3002).
-      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3100,http://127.0.0.1:3000,http://127.0.0.1:3100,${PRODUCTION_URL}}
+      # (no port — the API URLs below append :9002; admin on port 80 uses the
+      # bare host as origin, web on port 9000 appends :9000).
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:9000,http://localhost,http://127.0.0.1:9000,http://127.0.0.1,${PRODUCTION_URL},${PRODUCTION_URL}:9000}
       DEV_ROUTES: off
       # Demo dataset auto-seeds on first boot (empty users table). Change the
       # demo passwords, or set WAREHOUSE_SEED=off once real users exist.
@@ -72,7 +73,7 @@ services:
       PORT: 3000
       # API origin as seen from the PDA browser/WebView (public runtime config,
       # applied at container start — no rebuild needed).
-      NUXT_PUBLIC_API_BASE_URL: ${WEB_API_BASE_URL:-${PRODUCTION_URL}:3002}
+      NUXT_PUBLIC_API_BASE_URL: ${WEB_API_BASE_URL:-${PRODUCTION_URL}:9002}
     ports:
       - "9000:3000"
     depends_on:
@@ -85,7 +86,7 @@ services:
       dockerfile: apps/admin/Dockerfile
     environment:
       PORT: 3100
-      NUXT_PUBLIC_API_BASE_URL: ${ADMIN_API_BASE_URL:-${PRODUCTION_URL}:3002}
+      NUXT_PUBLIC_API_BASE_URL: ${ADMIN_API_BASE_URL:-${PRODUCTION_URL}:9002}
     ports:
       - "80:3100"
     depends_on:

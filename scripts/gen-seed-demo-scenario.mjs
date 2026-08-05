@@ -95,6 +95,17 @@ const INITIAL = {
     ["BOX-H-20260701-0003", "A-02-01", 2, "STORE1", "closed"],
     // empty spare box (print its label from /print-labels for put-away demos)
     ["BOX-H-20260701-0004", "A-02-02", 2, "STORE1", "open"],
+    // 10 pre-generated empty boxes for put-away (labels: box-shelf-labels.pdf)
+    ["BOX-H-20260701-0005", "A-03-01", 2, "STORE1", "open"],
+    ["BOX-H-20260701-0006", "A-03-02", 2, "STORE1", "open"],
+    ["BOX-H-20260701-0007", "A-03-03", 2, "STORE1", "open"],
+    ["BOX-H-20260701-0008", "A-03-04", 2, "STORE1", "open"],
+    ["BOX-H-20260701-0009", "A-03-05", 2, "STORE1", "open"],
+    ["BOX-H-20260701-0010", "A-04-01", 2, "STORE1", "open"],
+    ["BOX-H-20260701-0011", "A-04-02", 2, "STORE1", "open"],
+    ["BOX-H-20260701-0012", "A-04-03", 2, "STORE1", "open"],
+    ["BOX-H-20260701-0013", "A-04-04", 2, "STORE1", "open"],
+    ["BOX-H-20260701-0014", "A-04-05", 2, "STORE1", "open"],
   ],
   shelf_stock: [
     ["boxId", "shelfCode", "partNo", "qty", "dateCode", "lotCode", "coo", "cow"],
@@ -130,6 +141,10 @@ const INITIAL = {
     [""],
     ["Print scannable labels (parts, cartons, boxes, shelves) from the web app's"],
     ["/print-labels page (live data from GET /labels-data)."],
+    [""],
+    ["BOX-H-20260701-0005..0014 are 10 empty pre-generated put-away boxes on"],
+    ["A-03-01..A-04-05 — print their labels with apps/web's"],
+    ["generate:box-shelf-labels-pdf script (box-shelf-labels.pdf)."],
     [""],
     ["receiving_items metadata columns boxSize/netWeight/grossWeight/weightUnit"],
     ["are packed into the item's additional_data (weightUnit: g | kg, default kg)."],
