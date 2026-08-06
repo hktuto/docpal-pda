@@ -34,8 +34,8 @@ export const pickingOrders = pgTable(
     allocationStatus: text("allocation_status").notNull().default("unallocated"),
     shippedAt: timestamp("shipped_at", { mode: "date" }),
     shippedBy: text("shipped_by").references(() => users.id),
-    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
-    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
   (t) => ({
     statusIdx: index("idx_picking_orders_status").on(t.status),
@@ -58,8 +58,8 @@ export const pickingItems = pgTable(
     shipmentNumber: integer("shipment_number").notNull(),
     status: text("status").notNull().default("pending"), // pending | picked — backend-maintained from picked_qty vs qty
     additionalData: jsonb("additional_data"), // 上游额外字段透传（无固定结构）
-    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
-    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
   (t) => ({
     orderIdx: index("idx_picking_items_order").on(t.pickingOrderId),
@@ -73,8 +73,8 @@ export const measuringTasks = pgTable(
     id: text("id").primaryKey(),
     pickingOrderId: text("picking_order_id").notNull().references(() => pickingOrders.id, { onDelete: "cascade" }),
     status: text("status").notNull().default("pending"), // pending | completed
-    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
-    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
   (t) => ({
     pickingOrderUq: uniqueIndex("idx_measuring_tasks_picking_order").on(t.pickingOrderId),
@@ -87,8 +87,8 @@ export const verifyTasks = pgTable(
     id: text("id").primaryKey(),
     pickingOrderId: text("picking_order_id").notNull().references(() => pickingOrders.id, { onDelete: "cascade" }),
     status: text("status").notNull().default("pending"), // pending | completed
-    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
-    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
   (t) => ({
     pickingOrderUq: uniqueIndex("idx_verify_tasks_picking_order").on(t.pickingOrderId),
@@ -108,8 +108,8 @@ export const shippingBoxes = pgTable(
     boxSize: text("box_size"),
     // Whole-box claim: the reused shelf carton this box was created from.
     sourceShelfBoxId: text("source_shelf_box_id").references(() => shelfBoxes.id),
-    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
-    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
   (t) => ({
     taskIdx: index("idx_shipping_boxes_task").on(t.measuringTaskId),
@@ -133,8 +133,8 @@ export const pickingPackages = pgTable(
     cow: text("cow"),
     verified: boolean("verified").notNull().default(false),
     verifyVerified: boolean("verify_verified").notNull().default(false), // verify-step re-scan flag
-    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
-    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
   (t) => ({
     itemIdx: index("idx_picking_packages_item").on(t.pickingItemId),
@@ -152,8 +152,8 @@ export const shippingBoxItems = pgTable(
     pickingItemId: text("picking_item_id").references(() => pickingItems.id),
     partNo: text("part_no").notNull().references(() => parts.partNo),
     qty: integer("qty").notNull(),
-    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
-    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
   (t) => ({
     boxIdx: index("idx_shipping_box_items_box").on(t.shippingBoxId),

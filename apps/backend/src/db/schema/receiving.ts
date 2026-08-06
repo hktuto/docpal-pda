@@ -16,8 +16,8 @@ export const receivingOrders = pgTable(
     status: text("status").notNull().default("pending"), // pending | in_hand | provisional_received | clear
     arrivedAt: timestamp("arrived_at", { mode: "date" }),
     arrivedBy: text("arrived_by").references(() => users.id),
-    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
-    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
   (t) => ({
     statusIdx: index("idx_receiving_orders_status").on(t.status),
@@ -40,8 +40,8 @@ export const receivingInvoices = pgTable(
     deliveryDate: timestamp("delivery_date", { mode: "date" }), // 出货日期，非入库时间
     orgId: integer("org_id").notNull().default(2), // 出货方办公室, 2: HK
     subInventoryCode: text("sub_inventory_code"), // 放到哪一个子库存中，如 STORE1，允许为空
-    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
-    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
   (t) => ({
     subInvFk: foreignKey({ name: "receiving_invoices_sub_inv_fk", columns: [t.orgId, t.subInventoryCode], foreignColumns: [subInventories.orgId, subInventories.code] }),
@@ -75,8 +75,8 @@ export const receivingInvoiceItems = pgTable(
     wrongPartNo: text("wrong_part_no"),
     mismatchNote: text("mismatch_note"),
     additionalData: jsonb("additional_data"), // 上游额外字段透传（无固定结构）
-    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
-    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
   (t) => ({
     invoiceIdx: index("idx_receiving_invoice_items_invoice").on(t.receivingInvoiceId),
@@ -98,9 +98,9 @@ export const receivingScanLabels = pgTable(
     serialNo: text("serial_no").notNull(),
     qty: integer("qty").notNull(),
     scannedBy: text("scanned_by").references(() => users.id),
-    scannedAt: timestamp("scanned_at", { mode: "date" }).notNull().$defaultFn(now),
-    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
-    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
+    scannedAt: timestamp("scanned_at", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
   (t) => ({
     orderSerialUq: uniqueIndex("idx_receiving_scan_labels_order_serial").on(t.receivingOrderId, t.serialNo),

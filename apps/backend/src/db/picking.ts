@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { newId } from "./id.js";
 import { HTTPException } from "hono/http-exception";
 import { inArray, sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
@@ -52,7 +52,7 @@ async function logTransition(
   }
 ): Promise<void> {
   await tx.insert(transactionLogs).values({
-    id: randomUUID(),
+    id: newId(),
     entityType: entry.entityType,
     entityId: entry.entityId,
     fromState: entry.fromState,
@@ -173,7 +173,7 @@ async function bumpAllocation(
     await queryRun(
       tx,
       sql`INSERT INTO allocations (id, picking_item_id, qty, inventory_lot_id, receiving_invoice_item_id, receiving_order_id, created_date, last_update_date)
-          VALUES (${randomUUID()}, ${a.pickingItemId}, ${a.qty},
+          VALUES (${newId()}, ${a.pickingItemId}, ${a.qty},
                   ${a.inventoryLotId ?? null}, ${a.receivingInvoiceItemId ?? null}, ${a.receivingOrderId ?? null},
                   ${now()}, ${now()})`
     );
@@ -234,14 +234,14 @@ async function maybeAutoFinishPickingOrder(
     await queryRun(
       tx,
       sql`INSERT INTO measuring_tasks (id, picking_order_id, status, created_date)
-          VALUES (${randomUUID()}, ${order.id}, 'pending', ${now()})
+          VALUES (${newId()}, ${order.id}, 'pending', ${now()})
           ON CONFLICT (picking_order_id) DO NOTHING`
     );
   } else if (isStepEnabled("verify")) {
     await queryRun(
       tx,
       sql`INSERT INTO verify_tasks (id, picking_order_id, status, created_date)
-          VALUES (${randomUUID()}, ${order.id}, 'pending', ${now()})
+          VALUES (${newId()}, ${order.id}, 'pending', ${now()})
           ON CONFLICT (picking_order_id) DO NOTHING`
     );
   }
@@ -1079,7 +1079,7 @@ export async function scanPickingItem(
     const packageIds: string[] = [];
     const txnRows: (typeof inventoryTransactions.$inferInsert)[] = [];
     for (const p of portions) {
-      const pid = randomUUID();
+      const pid = newId();
       const dateCode = input.dateCode ?? p.dateCode;
       const lotCode = input.lotCode ?? p.lotCode;
       const coo = input.coo ?? p.coo;
@@ -1110,8 +1110,8 @@ export async function scanPickingItem(
         txnAt: at,
       };
       txnRows.push(
-        { ...base, id: randomUUID(), qtyType: "reserved", qtyDelta: -p.qty },
-        { ...base, id: randomUUID(), qtyType: "on_hand", qtyDelta: -p.qty }
+        { ...base, id: newId(), qtyType: "reserved", qtyDelta: -p.qty },
+        { ...base, id: newId(), qtyType: "on_hand", qtyDelta: -p.qty }
       );
     }
     await tx.insert(inventoryTransactions).values(txnRows);
@@ -1229,7 +1229,7 @@ export async function claimShelfBox(
         if (take <= 0) continue;
         openLeft.set(item.id, (openLeft.get(item.id) ?? 0) - take);
         left -= take;
-        const pid = randomUUID();
+        const pid = newId();
         await queryRun(
           tx,
           sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty,
@@ -1239,7 +1239,7 @@ export async function claimShelfBox(
         );
         packageIds.push(pid);
         txnRows.push({
-          id: randomUUID(),
+          id: newId(),
           inventoryLotId: lot.lotId,
           partNo: lot.partNo,
           shelfCode: lot.shelfCode,
@@ -1299,7 +1299,7 @@ export async function claimShelfBox(
     for (const a of released) {
       if (a.inventoryLotId) freedLots.add(a.inventoryLotId);
       txnRows.push({
-        id: randomUUID(),
+        id: newId(),
         inventoryLotId: a.inventoryLotId,
         partNo: a.partNo,
         shelfCode: a.shelfCode,
@@ -1395,8 +1395,8 @@ export async function removeScannedPackage(db: AppDb, input: { packageId: string
       if (lot.boxId) await markShelfBoxStockChanged(tx, lot.boxId);
       await bumpAllocation(tx, { pickingItemId: pkg.pickingItemId, qty: pkg.qty, inventoryLotId: lot.id });
       txnRows.push(
-        { ...base, id: randomUUID(), inventoryLotId: lot.id, shelfCode: lot.shelfCode, boxId: lot.boxId, receivingInvoiceItemId: null, qtyType: "reserved", qtyDelta: pkg.qty },
-        { ...base, id: randomUUID(), inventoryLotId: lot.id, shelfCode: lot.shelfCode, boxId: lot.boxId, receivingInvoiceItemId: null, qtyType: "on_hand", qtyDelta: pkg.qty }
+        { ...base, id: newId(), inventoryLotId: lot.id, shelfCode: lot.shelfCode, boxId: lot.boxId, receivingInvoiceItemId: null, qtyType: "reserved", qtyDelta: pkg.qty },
+        { ...base, id: newId(), inventoryLotId: lot.id, shelfCode: lot.shelfCode, boxId: lot.boxId, receivingInvoiceItemId: null, qtyType: "on_hand", qtyDelta: pkg.qty }
       );
     } else if (pkg.sourceType === "receiving_invoice_item") {
       const rii = await queryGet<{ id: string; boxId: string | null }>(
@@ -1407,8 +1407,8 @@ export async function removeScannedPackage(db: AppDb, input: { packageId: string
       await queryRun(tx, sql`UPDATE receiving_invoice_items SET picked_qty = picked_qty - ${pkg.qty} WHERE id = ${rii.id}`);
       await bumpAllocation(tx, { pickingItemId: pkg.pickingItemId, qty: pkg.qty, receivingInvoiceItemId: rii.id });
       txnRows.push(
-        { ...base, id: randomUUID(), inventoryLotId: null, shelfCode: null, boxId: rii.boxId, receivingInvoiceItemId: rii.id, qtyType: "reserved", qtyDelta: pkg.qty },
-        { ...base, id: randomUUID(), inventoryLotId: null, shelfCode: null, boxId: rii.boxId, receivingInvoiceItemId: rii.id, qtyType: "on_hand", qtyDelta: pkg.qty }
+        { ...base, id: newId(), inventoryLotId: null, shelfCode: null, boxId: rii.boxId, receivingInvoiceItemId: rii.id, qtyType: "reserved", qtyDelta: pkg.qty },
+        { ...base, id: newId(), inventoryLotId: null, shelfCode: null, boxId: rii.boxId, receivingInvoiceItemId: rii.id, qtyType: "on_hand", qtyDelta: pkg.qty }
       );
     } else if (pkg.sourceType === "receiving_order") {
       const lines = await queryAll<{ id: string; pickedQty: number; boxId: string | null }>(
@@ -1425,8 +1425,8 @@ export async function removeScannedPackage(db: AppDb, input: { packageId: string
         const give = Math.min(line.pickedQty, left);
         await queryRun(tx, sql`UPDATE receiving_invoice_items SET picked_qty = picked_qty - ${give} WHERE id = ${line.id}`);
         txnRows.push(
-          { ...base, id: randomUUID(), inventoryLotId: null, shelfCode: null, boxId: line.boxId, receivingInvoiceItemId: line.id, qtyType: "reserved", qtyDelta: give },
-          { ...base, id: randomUUID(), inventoryLotId: null, shelfCode: null, boxId: line.boxId, receivingInvoiceItemId: line.id, qtyType: "on_hand", qtyDelta: give }
+          { ...base, id: newId(), inventoryLotId: null, shelfCode: null, boxId: line.boxId, receivingInvoiceItemId: line.id, qtyType: "reserved", qtyDelta: give },
+          { ...base, id: newId(), inventoryLotId: null, shelfCode: null, boxId: line.boxId, receivingInvoiceItemId: line.id, qtyType: "on_hand", qtyDelta: give }
         );
         left -= give;
       }

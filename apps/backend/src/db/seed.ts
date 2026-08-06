@@ -1,7 +1,7 @@
 import postgres from "postgres";
 import { sql, sql as dsql } from "drizzle-orm";
 import type { PgTableWithColumns } from "drizzle-orm/pg-core";
-import { randomUUID } from "node:crypto";
+import { newId } from "./id.js";
 import { readFileSync } from "node:fs";
 import type { AppDb } from "../db.js";
 import { hashPassword } from "../auth/password.js";
@@ -112,7 +112,7 @@ export const ALL_TABLES = [
   "users",
 ];
 
-const uid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+const uid = (n: number) => `00000000-0000-7000-8000-${String(n).padStart(12, "0")}`; // deterministic v7-shaped seed id
 
 // Demo dataset (spec docs/superpowers/specs/2026-07-29-excel-demo-seed-design.md):
 // the order/stock world comes from new_seed/demo-scenario.xlsx via
@@ -148,15 +148,15 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
   ]);
 
   await db.insert(userGroups).values([
-    { code: "operator", label: "Operator" },
-    { code: "admin", label: "Administrator" },
+    { id: uid(30), code: "operator", label: "Operator" },
+    { id: uid(31), code: "admin", label: "Administrator" },
   ]);
 
   // operator → operator; admin → admin + operator (many-to-many demo).
   await db.insert(userGroupMembers).values([
-    { userId: uid(1), groupCode: "operator" },
-    { userId: uid(2), groupCode: "admin" },
-    { userId: uid(2), groupCode: "operator" },
+    { id: uid(32), userId: uid(1), groupCode: "operator" },
+    { id: uid(33), userId: uid(2), groupCode: "admin" },
+    { id: uid(34), userId: uid(2), groupCode: "operator" },
   ]);
 
   await db.insert(suppliers).values([
@@ -176,7 +176,7 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
       suppliers,
       bulk.suppliers
         .filter((code) => !demoCodes.has(code))
-        .map((code) => ({ id: randomUUID(), code, name: code, shortName: code }))
+        .map((code) => ({ id: newId(), code, name: code, shortName: code }))
     );
   }
 
@@ -230,7 +230,7 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
     await insertChunked(
       db,
       parts,
-      bulk.parts.map((p) => ({ id: randomUUID(), ...p }))
+      bulk.parts.map((p) => ({ id: newId(), ...p }))
     );
   }
 
@@ -275,7 +275,7 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
     { code: "GB", name: "United Kingdom" },
     { code: "US", name: "USA" },
     { code: "VN", name: "Vietnam" },
-  ]);
+  ].map((c, i) => ({ id: uid(100 + i), ...c })));
 
   // Default box sizes from the POC sheet, normalized to "L X W X H" (cm).
   await db.insert(boxSizeList).values(
@@ -316,14 +316,14 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
       "58.5 X 20 X 10",
       "58.5 X 20 X 20",
       "63 X 16 X 12",
-    ].map((code) => ({ code }))
+    ].map((code, i) => ({ id: uid(140 + i), code }))
   );
 
   await db.insert(customerProfiles).values([
-    { code: "ACME", label: "ACME Electronics (HK)", remark: "requires segregated storage" },
+    { id: uid(180), code: "ACME", label: "ACME Electronics (HK)", remark: "requires segregated storage" },
     // real-data customers (new_seed/65878/picking.xlsx)
-    { code: "HK-SUN64", label: "HK-SUN64" },
-    { code: "HK-WIN84", label: "HK-WIN84" },
+    { id: uid(181), code: "HK-SUN64", label: "HK-SUN64" },
+    { id: uid(182), code: "HK-WIN84", label: "HK-WIN84" },
   ]);
 
   // Sub-inventories: the (org_id, code) group level that all stock/doc
@@ -345,19 +345,22 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
     { orgId: 143, code: "OSWF (MCI)" },
     { orgId: 143, code: "DEFAULT" },
     { orgId: 2, code: "ACME-S1", name: "ACME segregated store", customerCode: "ACME" },
-  ]);
+  ].map((s, i) => ({ id: uid(183 + i), ...s })));
 
   // Real Oracle org → sub-inventory master (generated from the mapping xlsx —
   // 151 groups across 13 orgs). Rows colliding with the demo groups above
   // (e.g. org-2 STORE1/WSTORE1) are skipped keep-first.
-  await db.insert(subInventories).values([...realSubInventories]).onConflictDoNothing();
+  await db
+    .insert(subInventories)
+    .values(realSubInventories.map((s) => ({ id: newId(), ...s })))
+    .onConflictDoNothing();
 
   // Demo share group: org-2 STORE1 + WSTORE1 serve each other's picking
   // demands. Real warehouses configure their own groups via the admin console
   // (/admin/sub-inventory-share-groups).
   await db.insert(subInventoryShareMembers).values([
-    { orgId: 2, code: "STORE1", shareGroup: "HK" },
-    { orgId: 2, code: "WSTORE1", shareGroup: "HK" },
+    { id: uid(198), orgId: 2, code: "STORE1", shareGroup: "HK" },
+    { id: uid(199), orgId: 2, code: "WSTORE1", shareGroup: "HK" },
   ]);
 
   await db.insert(shelves).values([
@@ -387,7 +390,7 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
     { code: "SZ-01-01", zone: "SZ" },
     { code: "SZ-01-02", zone: "SZ" },
     { code: "W-01-01", zone: "W" },
-  ]);
+  ].map((s, i) => ({ id: uid(200 + i), ...s })));
 
   // Net-weight reference: 1000 pcs of each 0603 resistor ≈ 6.3 g.
   await db.insert(netWeightFormula).values([
@@ -400,7 +403,7 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
     await insertChunked(
       db,
       netWeightFormula,
-      realNetWeights.map((w) => ({ id: randomUUID(), partNo: w.partNo, qty: 1, weight: w.weight }))
+      realNetWeights.map((w) => ({ id: newId(), partNo: w.partNo, qty: 1, weight: w.weight }))
     );
   }
 

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { newId } from "./id.js";
 import { HTTPException } from "hono/http-exception";
 import { inArray, sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
@@ -41,7 +41,7 @@ async function logTransition(
   }
 ): Promise<void> {
   await tx.insert(transactionLogs).values({
-    id: randomUUID(),
+    id: newId(),
     entityType: entry.entityType,
     entityId: entry.entityId,
     fromState: entry.fromState,
@@ -256,7 +256,7 @@ export async function completeMeasuringTaskTx(tx: DbOrTx, input: { taskId: strin
     await queryRun(
       tx,
       sql`INSERT INTO verify_tasks (id, picking_order_id, status, created_date)
-          VALUES (${randomUUID()}, ${task.pickingOrderId}, 'pending', ${now()})
+          VALUES (${newId()}, ${task.pickingOrderId}, 'pending', ${now()})
           ON CONFLICT (picking_order_id) DO NOTHING`
     );
   }

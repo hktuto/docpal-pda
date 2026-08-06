@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { newId } from "./id.js";
 import { inArray, sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { queryAll, type DbOrTx } from "./query.js";
@@ -329,7 +329,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
         lotDelta.set(a.inventoryLotId, (lotDelta.get(a.inventoryLotId) ?? 0) - a.qty);
       }
       txnRows.push({
-        id: randomUUID(),
+        id: newId(),
         inventoryLotId: a.inventoryLotId,
         partNo: a.partNo,
         shelfCode: a.shelfCode,
@@ -406,7 +406,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
       else summary.partiallyAllocated += 1;
 
       for (const alloc of allocatedForItem) {
-        const id = randomUUID();
+        const id = newId();
         await tx.insert(allocations).values({
           id,
           pickingItemId: d.pickingItemId,
@@ -429,7 +429,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
           lotDelta.set(alloc.lotId, (lotDelta.get(alloc.lotId) ?? 0) + alloc.qty);
         }
         txnRows.push({
-          id: randomUUID(),
+          id: newId(),
           inventoryLotId: alloc.lotId ?? null,
           partNo: d.partNo,
           shelfCode: null,

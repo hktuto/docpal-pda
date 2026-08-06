@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { newId } from "./id.js";
 import { HTTPException } from "hono/http-exception";
 import { inArray, sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
@@ -39,7 +39,7 @@ async function logTransition(
   }
 ): Promise<void> {
   await tx.insert(transactionLogs).values({
-    id: randomUUID(),
+    id: newId(),
     entityType: entry.entityType,
     entityId: entry.entityId,
     fromState: entry.fromState,

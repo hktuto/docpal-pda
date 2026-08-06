@@ -4,7 +4,9 @@ This document lists every PostgreSQL table in the `apps/backend` database, one
 section per table, grouped by Drizzle schema domain file. The typed source of
 truth is `apps/backend/src/db/schema/*.ts`; migrations live in
 `apps/backend/drizzle/` and auto-apply on server start. All ids are `text`
-UUID strings and all timestamps are UTC wall-clock (every table carries
+UUID v7 strings (generated app-side by `newId()` in `src/db/id.ts`, SQL-side
+by the `app_uuid_v7()` function) and all timestamps are UTC wall-clock (every
+table carries
 `created_date`/`last_update_date`, set by the app — spec
 `docs/superpowers/specs/2026-07-29-schema-system-fields-supplier-code-design.md`).
 This document mirrors the TS definitions exactly — fields
@@ -74,7 +76,8 @@ location pair (org_id + sub_inventory_code) lives on `shelf_boxes` and
 
 | Field | Type | Description |
 | --- | --- | --- |
-| code | text PK | Shelf/location code |
+| id | text PK | Shelf id (UUID v7) |
+| code | text NOT NULL UNIQUE | Shelf/location code |
 | zone | text | Zone within the warehouse |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
@@ -85,7 +88,8 @@ Country lookup: short code → display name (destination country, COO, etc.).
 
 | Field | Type | Description |
 | --- | --- | --- |
-| code | text PK | ISO 3166-1 alpha-2 code, e.g. HK, CN, JP |
+| id | text PK | Row id (UUID v7) |
+| code | text NOT NULL UNIQUE | ISO 3166-1 alpha-2 code, e.g. HK, CN, JP |
 | name | text NOT NULL | Country display name |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
@@ -96,7 +100,8 @@ Default box sizes offered at measuring/packing.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| code | text PK | Size code, "L X W X H" in cm, e.g. "26 X 20 X 20" |
+| id | text PK | Row id (UUID v7) |
+| code | text NOT NULL UNIQUE | Size code, "L X W X H" in cm, e.g. "26 X 20 X 20" |
 | description | text | Optional description |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
@@ -123,7 +128,8 @@ Customer master used by picking orders and customer-segregated stores.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| code | text PK | Customer code |
+| id | text PK | Row id (UUID v7) |
+| code | text NOT NULL UNIQUE | Customer code |
 | label | text NOT NULL | Display label |
 | rule | text | formual for a customer |
 | remark | text | Free-form remark |
@@ -142,8 +148,9 @@ customer from it.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| org_id | integer NOT NULL, PK part | Owning office (2 / 140 / 143 / 220; plain integer, no FK to a lookup) |
-| code | text NOT NULL, PK part | Sub-inventory code, e.g. STORE1 |
+| id | text PK | Row id (UUID v7) |
+| org_id | integer NOT NULL, UNIQUE (composite with code) | Owning office (2 / 140 / 143 / 220; plain integer, no FK to a lookup) |
+| code | text NOT NULL, UNIQUE (composite with org_id) | Sub-inventory code, e.g. STORE1 |
 | name | text | Sub-inventory name |
 | customer_code | text FK → customer_profiles(code) | Set for customer-segregated stores |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
@@ -156,7 +163,7 @@ Warehouse-declared stock sharing between sub-inventories (2026-07-27,
 Allocation still matches a picking order's `(org_id, sub_inventory_code)`
 pair against the source's pair — membership in the same `share_group` widens
 the code match to sibling members (symmetric; org rule unchanged). A
-sub-inventory belongs to at most one group (PK). Customer-segregated stores
+sub-inventory belongs to at most one group (composite UNIQUE on org_id+code). Customer-segregated stores
 keep their `customer_code` restriction, so grouping one does not leak its
 stock to other customers. Configured per warehouse via
 `/admin/sub-inventory-share-groups`; the real Oracle sub-inventory mapping has
@@ -165,8 +172,9 @@ sharable.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| org_id | integer NOT NULL, PK part, FK → sub_inventories | Owning office |
-| code | text NOT NULL, PK part, FK → sub_inventories | Sub-inventory (group level) |
+| id | text PK | Row id (UUID v7) |
+| org_id | integer NOT NULL, UNIQUE (composite with code), FK → sub_inventories | Owning office |
+| code | text NOT NULL, UNIQUE (composite with org_id), FK → sub_inventories | Sub-inventory (group level) |
 | share_group | text NOT NULL, indexed | Free-text group code, e.g. HK — members of the same group share |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
@@ -196,7 +204,8 @@ many-to-many via `user_group_members`.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| code | text PK | Group code (e.g. operator, admin) |
+| id | text PK | Group id (UUID v7) |
+| code | text NOT NULL UNIQUE | Group code (e.g. operator, admin) |
 | label | text NOT NULL | Display label |
 | remark | text | Free-form remark |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
@@ -208,8 +217,9 @@ Group membership junction; a user can belong to any number of groups.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| user_id | text PK (composite) FK → users(id) ON DELETE CASCADE | Member user |
-| group_code | text PK (composite) FK → user_groups(code) ON DELETE CASCADE | Group |
+| id | text PK | Row id (UUID v7) |
+| user_id | text UNIQUE (composite with group_code) FK → users(id) ON DELETE CASCADE | Member user |
+| group_code | text UNIQUE (composite with user_id) FK → user_groups(code) ON DELETE CASCADE | Group |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 

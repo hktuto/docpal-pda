@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { randomUUID } from "node:crypto";
+import { newId } from "../../db/id.js";
 import { and, eq, or, ilike } from "drizzle-orm";
 import {
   shelves,
@@ -26,7 +26,7 @@ import { adminAppDownloadRoute } from "./appDownload.js";
 // Optional id on create: use the client's when given, else generate one.
 function optId(body: Record<string, unknown>): string {
   const v = body.id;
-  return typeof v === "string" && v.trim() !== "" ? v.trim() : randomUUID();
+  return typeof v === "string" && v.trim() !== "" ? v.trim() : newId();
 }
 
 export const adminRoute = new Hono();
@@ -37,6 +37,7 @@ adminRoute.route(
     table: shelves,
     pk: shelves.code,
     create: (b) => ({
+      id: optId(b),
       code: reqStr(b, "code"),
       zone: optStr(b, "zone"),
     }),
@@ -142,7 +143,7 @@ adminRoute.route(
   createCrudRouter({
     table: countryList,
     pk: countryList.code,
-    create: (b) => ({ code: reqStr(b, "code"), name: reqStr(b, "name") }),
+    create: (b) => ({ id: optId(b), code: reqStr(b, "code"), name: reqStr(b, "name") }),
     update: (b) => ({
       ...(b.name !== undefined && { name: reqStr(b, "name") }),
     }),
@@ -154,7 +155,7 @@ adminRoute.route(
   createCrudRouter({
     table: boxSizeList,
     pk: boxSizeList.code,
-    create: (b) => ({ code: reqStr(b, "code"), description: optStr(b, "description") }),
+    create: (b) => ({ id: optId(b), code: reqStr(b, "code"), description: optStr(b, "description") }),
     update: (b) => ({
       ...(b.description !== undefined && { description: optStr(b, "description") }),
     }),
@@ -167,6 +168,7 @@ adminRoute.route(
     table: customerProfiles,
     pk: customerProfiles.code,
     create: (b) => ({
+      id: optId(b),
       code: reqStr(b, "code"),
       label: reqStr(b, "label"),
       rule: optStr(b, "rule"),
@@ -224,6 +226,7 @@ adminRoute.route(
     table: userGroups,
     pk: userGroups.code,
     create: (b) => ({
+      id: optId(b),
       code: reqStr(b, "code"),
       label: reqStr(b, "label"),
       remark: optStr(b, "remark"),
@@ -236,7 +239,7 @@ adminRoute.route(
   })
 );
 
-// Composite PK — rows are addressed as `:userId::groupCode` in the URL.
+// Composite business key (UNIQUE) — rows are addressed as `:userId::groupCode` in the URL.
 adminRoute.route(
   "/user-group-members",
   createCrudRouter({
@@ -248,6 +251,7 @@ adminRoute.route(
       return and(eq(userGroupMembers.userId, id.slice(0, sep)), eq(userGroupMembers.groupCode, id.slice(sep + 1)))!;
     },
     create: (b) => ({
+      id: optId(b),
       userId: reqStr(b, "userId"),
       groupCode: reqStr(b, "groupCode"),
     }),

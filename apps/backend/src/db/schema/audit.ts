@@ -16,8 +16,8 @@ export const transactionLogs = pgTable(
     toState: text("to_state").notNull(), // 变更后状态
     actorId: text("actor_id").references(() => users.id), // 操作人
     metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`), // 扩展审计信息（JSON）
-    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now), // 状态变更时间
-    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now), // 状态变更时间
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
   (t) => ({
     entityIdx: index("idx_transaction_logs_entity").on(t.entityType, t.entityId),
@@ -49,8 +49,8 @@ export const inventoryTransactions = pgTable(
     txnReason: text("txn_reason"),
     metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`), // 可选：变动前/后数量等扩展信息
     txnAt: timestamp("txn_at", { mode: "date" }).notNull(), // 业务发生时间
-    createdDate: timestamp("created_date", { mode: "date" }).notNull().$defaultFn(now),
-    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().$defaultFn(now),
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
   (t) => ({
     qtyTypeCheck: check("chk_inventory_transactions_qty_type", sql`qty_type IN ('expected', 'dock', 'on_hand', 'reserved')`),

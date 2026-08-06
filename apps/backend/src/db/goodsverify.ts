@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { newId } from "./id.js";
 import { HTTPException } from "hono/http-exception";
 import { sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
@@ -51,7 +51,7 @@ async function logTransition(
   }
 ): Promise<void> {
   await tx.insert(transactionLogs).values({
-    id: randomUUID(),
+    id: newId(),
     entityType: entry.entityType,
     entityId: entry.entityId,
     fromState: entry.fromState,
@@ -94,7 +94,7 @@ export async function generateGoodsVerifyTasks(
     sql`
       INSERT INTO goods_verify_tasks
         (id, task_date, inventory_lot_id, shelf_code, box_id, part_no, expected_qty, status, created_date)
-      SELECT gen_random_uuid()::text, ${date}::date, il.id, il.shelf_code, il.box_id, il.part_no,
+      SELECT app_uuid_v7(), ${date}::date, il.id, il.shelf_code, il.box_id, il.part_no,
              il.total_qty, 'pending', ${at}
       FROM (
         SELECT DISTINCT inventory_lot_id
@@ -342,7 +342,7 @@ export async function verifyGoodsVerifyTask(
       }
       await queryRun(tx, sql`UPDATE inventory_lots SET total_qty = ${input.countedQty} WHERE id = ${lot.id}`);
       await tx.insert(inventoryTransactions).values({
-        id: randomUUID(),
+        id: newId(),
         inventoryLotId: lot.id,
         partNo: lot.partNo,
         shelfCode: lot.shelfCode,

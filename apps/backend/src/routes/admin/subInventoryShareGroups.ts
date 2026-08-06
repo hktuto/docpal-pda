@@ -59,8 +59,8 @@ adminSubInventoryShareGroupsRoute.put("/:id", async (c) => {
     }
     await queryRun(
       db,
-      sql`INSERT INTO sub_inventory_share_members (org_id, code, share_group, created_date, last_update_date)
-          VALUES (${m.orgId}, ${m.code}, ${shareGroup}, now(), now())
+      sql`INSERT INTO sub_inventory_share_members (id, org_id, code, share_group, created_date, last_update_date)
+          VALUES (app_uuid_v7(), ${m.orgId}, ${m.code}, ${shareGroup}, now(), now())
           ON CONFLICT (org_id, code)
           DO UPDATE SET share_group = ${shareGroup}, last_update_date = now()`
     );

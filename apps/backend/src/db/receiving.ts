@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { newId } from "./id.js";
 import { HTTPException } from "hono/http-exception";
 import { sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
@@ -90,7 +90,7 @@ export async function confirmReceivingArrival(
       .map((it) => ({ it, delta: it.lineQty - it.receivedQty }))
       .filter(({ delta }) => delta !== 0)
       .map(({ it, delta }) => ({
-        id: randomUUID(),
+        id: newId(),
         inventoryLotId: null,
         partNo: it.partNo,
         shelfCode: null,
@@ -113,7 +113,7 @@ export async function confirmReceivingArrival(
       await tx.insert(inventoryTransactions).values(txnRows);
     }
     await tx.insert(transactionLogs).values({
-      id: randomUUID(),
+      id: newId(),
       entityType: "receiving_order",
       entityId: orderId,
       fromState: ro.status,
@@ -290,7 +290,7 @@ export async function scanReceivingOrder(
         sql`UPDATE receiving_orders SET status = 'provisional_received', last_update_date = ${at} WHERE id = ${orderId}`
       );
       await tx.insert(transactionLogs).values({
-        id: randomUUID(),
+        id: newId(),
         entityType: "receiving_order",
         entityId: orderId,
         fromState: "pending",
@@ -300,7 +300,7 @@ export async function scanReceivingOrder(
       });
     }
     await tx.insert(inventoryTransactions).values({
-      id: randomUUID(),
+      id: newId(),
       inventoryLotId: null,
       partNo: item.partNo,
       shelfCode: null,
@@ -322,7 +322,7 @@ export async function scanReceivingOrder(
     // Record the label for S-key dedup (only when a serial is present).
     if (serialNo) {
       await tx.insert(receivingScanLabels).values({
-        id: randomUUID(),
+        id: newId(),
         receivingOrderId: orderId,
         receivingInvoiceItemId: item.id,
         serialNo,
@@ -406,7 +406,7 @@ async function logMismatch(
   metadata: Record<string, unknown>
 ): Promise<void> {
   await tx.insert(transactionLogs).values({
-    id: randomUUID(),
+    id: newId(),
     entityType: "receiving_invoice_item",
     entityId: itemId,
     fromState: toState === "mismatch_reported" ? null : "mismatch_reported",
@@ -685,7 +685,7 @@ export async function deleteReceivingInvoiceItem(
 
     await queryRun(tx, sql`DELETE FROM receiving_invoice_items WHERE id = ${item.id}`);
     await tx.insert(transactionLogs).values({
-      id: randomUUID(),
+      id: newId(),
       entityType: "receiving_order",
       entityId: item.receivingOrderId,
       fromState: null,

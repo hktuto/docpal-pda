@@ -9,7 +9,7 @@ import { mapDbError, optStr, reqInt, reqStr } from "./crud.js";
 // ---------------------------------------------------------------------------
 // Sub-inventories: the (org_id, code) group level all stock/doc tables
 // reference. Custom router (not createCrudRouter): rows are addressed as
-// `:orgId::code` (composite PK).
+// `:orgId::code` (composite UNIQUE business key under the id PK).
 // ---------------------------------------------------------------------------
 
 export const adminSubInventoriesRoute = new Hono();
@@ -62,8 +62,8 @@ adminSubInventoriesRoute.post("/", async (c) => {
   try {
     const row = await queryGet(
       db,
-      sql`INSERT INTO sub_inventories (org_id, code, name, customer_code, created_date, last_update_date)
-          VALUES (${orgId}, ${code}, ${optStr(b, "name")}, ${optStr(b, "customerCode")}, now(), now())
+      sql`INSERT INTO sub_inventories (id, org_id, code, name, customer_code, created_date, last_update_date)
+          VALUES (app_uuid_v7(), ${orgId}, ${code}, ${optStr(b, "name")}, ${optStr(b, "customerCode")}, now(), now())
           RETURNING org_id AS "orgId", code`
     );
     return c.json(row, 201);

@@ -170,7 +170,7 @@ test("allocateAll: sharing does not lift customer segregation", async () => {
   // move lot 18 into the ACME-segregated store and add that store to the
   // same share group as the demand's WSTORE1
   await client.db.execute(sql`UPDATE inventory_lots SET sub_inventory_code = 'ACME-S1' WHERE id = ${LOT_18}`);
-  await client.db.execute(sql`INSERT INTO sub_inventory_share_members (org_id, code, share_group, created_date, last_update_date) VALUES (2, 'ACME-S1', 'HK', now(), now())`);
+  await client.db.execute(sql`INSERT INTO sub_inventory_share_members (id, org_id, code, share_group, created_date, last_update_date) VALUES (app_uuid_v7(), 2, 'ACME-S1', 'HK', now(), now())`);
   await client.db.execute(sql`UPDATE picking_orders SET sub_inventory_code = 'WSTORE1', customer_code = NULL WHERE id = ${PO_22}`);
 
   // the segregated lot stays off-limits (customer mismatch) even though it

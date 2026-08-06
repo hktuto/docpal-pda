@@ -1,1 +1,0 @@
-ALTER TABLE "picking_packages" ADD COLUMN "verify_verified" boolean DEFAULT false NOT NULL;

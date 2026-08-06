@@ -5,78 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1785043622037,
-      "tag": "0000_milky_ted_forrester",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1785117173124,
-      "tag": "0001_talented_star_brand",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1785122511830,
-      "tag": "0002_famous_sunspot",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1785206065295,
-      "tag": "0003_tidy_red_skull",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1785219641131,
-      "tag": "0004_misty_triton",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1785296698068,
-      "tag": "0005_system_fields_supplier_code_brand",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1785300373947,
-      "tag": "0006_bright_dreaming_celestial",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1785306952216,
-      "tag": "0007_outgoing_dreadnoughts",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1785309472535,
-      "tag": "0008_complex_moondragon",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "7",
-      "when": 1785393728494,
-      "tag": "0009_perfect_molly_hayes",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "7",
-      "when": 1785401187644,
-      "tag": "0010_free_hammerhead",
+      "when": 1785989844191,
+      "tag": "0000_nasty_wrecker",
       "breakpoints": true
     }
   ]

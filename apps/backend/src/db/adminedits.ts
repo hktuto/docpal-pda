@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { newId } from "./id.js";
 import { HTTPException } from "hono/http-exception";
 import { sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
@@ -22,7 +22,7 @@ async function audit(
   metadata: Record<string, unknown>
 ): Promise<void> {
   await db.insert(transactionLogs).values({
-    id: randomUUID(),
+    id: newId(),
     entityType,
     entityId,
     fromState: null,

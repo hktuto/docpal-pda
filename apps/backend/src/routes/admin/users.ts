@@ -5,7 +5,7 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { Context } from "hono";
-import { randomUUID } from "node:crypto";
+import { newId } from "../../db/id.js";
 import { eq } from "drizzle-orm";
 import { db } from "../../db.js";
 import { users } from "../../db/schema/index.js";
@@ -45,7 +45,7 @@ adminUsersRoute.post("/", async (c) => {
   const body = await readJson(c);
   const v = body.id;
   const row = {
-    id: typeof v === "string" && v.trim() !== "" ? v.trim() : randomUUID(),
+    id: typeof v === "string" && v.trim() !== "" ? v.trim() : newId(),
     username: reqStr(body, "username"),
     passwordHash: await hashPassword(reqStr(body, "password")),
     displayName: reqStr(body, "displayName"),

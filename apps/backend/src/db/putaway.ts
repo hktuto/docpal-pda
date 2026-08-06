@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { newId } from "./id.js";
 import { HTTPException } from "hono/http-exception";
 import { inArray, sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
@@ -78,7 +78,7 @@ async function logShelfBox(
   metadata: Record<string, unknown> = {}
 ): Promise<void> {
   await tx.insert(transactionLogs).values({
-    id: randomUUID(),
+    id: newId(),
     entityType: "shelf_box",
     entityId: boxId,
     fromState,
@@ -223,7 +223,7 @@ export async function tryMarkReceivingOrderClear(
   const at = now();
   await queryRun(tx, sql`UPDATE receiving_orders SET status = 'clear', last_update_date = ${at} WHERE id = ${order.id}`);
   await tx.insert(transactionLogs).values({
-    id: randomUUID(),
+    id: newId(),
     entityType: "receiving_order",
     entityId: order.id,
     fromState: "in_hand",
@@ -549,7 +549,7 @@ export async function recordPutAwayScan(
     );
 
     const stagingBoxId = await ensureStagingBox(tx, item.receivingOrderId);
-    const id = randomUUID();
+    const id = newId();
     await queryRun(
       tx,
       sql`INSERT INTO shelf_box_items (id, shelf_box_id, receiving_invoice_item_id, part_no, qty, verified)
@@ -715,7 +715,7 @@ async function assignScanToBoxTx(
     lotId = lot.id;
     await queryRun(tx, sql`UPDATE inventory_lots SET total_qty = total_qty + ${scan.qty} WHERE id = ${lotId}`);
   } else {
-    lotId = randomUUID();
+    lotId = newId();
     await queryRun(
       tx,
       sql`INSERT INTO inventory_lots (id, part_no, date_code, lot_code, coo, cow, shelf_code, box_id,
@@ -737,7 +737,7 @@ async function assignScanToBoxTx(
     await queryRun(
       tx,
       sql`INSERT INTO inventory_lot_sources (id, inventory_lot_id, receiving_invoice_item_id, qty)
-          VALUES (${randomUUID()}, ${lotId}, ${scan.itemId}, ${scan.qty})`
+          VALUES (${newId()}, ${lotId}, ${scan.itemId}, ${scan.qty})`
     );
   }
 
@@ -767,8 +767,8 @@ async function assignScanToBoxTx(
     txnAt: at,
   };
   await tx.insert(inventoryTransactions).values([
-    { ...base, id: randomUUID(), qtyType: "dock", qtyDelta: -scan.qty },
-    { ...base, id: randomUUID(), qtyType: "on_hand", qtyDelta: scan.qty },
+    { ...base, id: newId(), qtyType: "dock", qtyDelta: -scan.qty },
+    { ...base, id: newId(), qtyType: "on_hand", qtyDelta: scan.qty },
   ]);
 
   await markBoxStockChanged(tx, box.id);
@@ -918,8 +918,8 @@ export async function removeScanFromBox(
       txnAt: at,
     };
     await tx.insert(inventoryTransactions).values([
-      { ...base, id: randomUUID(), qtyType: "dock", qtyDelta: scan.qty },
-      { ...base, id: randomUUID(), qtyType: "on_hand", qtyDelta: -scan.qty },
+      { ...base, id: newId(), qtyType: "dock", qtyDelta: scan.qty },
+      { ...base, id: newId(), qtyType: "on_hand", qtyDelta: -scan.qty },
     ]);
 
     await markBoxStockChanged(tx, box.id);

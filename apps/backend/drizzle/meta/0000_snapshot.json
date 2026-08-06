@@ -1,5 +1,5 @@
 {
-  "id": "30a37ab0-bbcb-4f91-9304-16d1b04f1873",
+  "id": "6319208c-c4a7-4224-880c-a401dbb4dd20",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -8,10 +8,16 @@
       "name": "box_size_list",
       "schema": "",
       "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
         "code": {
           "name": "code",
           "type": "text",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true
         },
         "description": {
@@ -19,12 +25,34 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "created_date": {
+          "name": "created_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "box_size_list_code_unique": {
+          "name": "box_size_list_code_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "code"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -33,10 +61,16 @@
       "name": "country_list",
       "schema": "",
       "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
         "code": {
           "name": "code",
           "type": "text",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true
         },
         "name": {
@@ -44,12 +78,34 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "created_date": {
+          "name": "created_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "country_list_code_unique": {
+          "name": "country_list_code_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "code"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -58,10 +114,16 @@
       "name": "customer_profiles",
       "schema": "",
       "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
         "code": {
           "name": "code",
           "type": "text",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true
         },
         "label": {
@@ -82,23 +144,33 @@
           "primaryKey": false,
           "notNull": false
         },
-        "created_at": {
-          "name": "created_at",
+        "created_date": {
+          "name": "created_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         },
-        "updated_at": {
-          "name": "updated_at",
+        "last_update_date": {
+          "name": "last_update_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "customer_profiles_code_unique": {
+          "name": "customer_profiles_code_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "code"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -130,6 +202,20 @@
           "type": "real",
           "primaryKey": false,
           "notNull": true
+        },
+        "created_date": {
+          "name": "created_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {},
@@ -172,8 +258,8 @@
           "primaryKey": true,
           "notNull": true
         },
-        "supplier_code": {
-          "name": "supplier_code",
+        "brand": {
+          "name": "brand",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -201,24 +287,24 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "created_date": {
+          "name": "created_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "parts_supplier_code_suppliers_code_fk": {
-          "name": "parts_supplier_code_suppliers_code_fk",
-          "tableFrom": "parts",
-          "tableTo": "suppliers",
-          "columnsFrom": [
-            "supplier_code"
-          ],
-          "columnsTo": [
-            "code"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "parts_part_no_unique": {
@@ -237,10 +323,16 @@
       "name": "shelves",
       "schema": "",
       "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
         "code": {
           "name": "code",
           "type": "text",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true
         },
         "zone": {
@@ -249,23 +341,33 @@
           "primaryKey": false,
           "notNull": false
         },
-        "created_at": {
-          "name": "created_at",
+        "created_date": {
+          "name": "created_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         },
-        "updated_at": {
-          "name": "updated_at",
+        "last_update_date": {
+          "name": "last_update_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "shelves_code_unique": {
+          "name": "shelves_code_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "code"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -274,6 +376,12 @@
       "name": "sub_inventories",
       "schema": "",
       "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
         "org_id": {
           "name": "org_id",
           "type": "integer",
@@ -298,17 +406,19 @@
           "primaryKey": false,
           "notNull": false
         },
-        "created_at": {
-          "name": "created_at",
+        "created_date": {
+          "name": "created_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         },
-        "updated_at": {
-          "name": "updated_at",
+        "last_update_date": {
+          "name": "last_update_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {},
@@ -327,24 +437,31 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {
-        "sub_inventories_org_id_code_pk": {
-          "name": "sub_inventories_org_id_code_pk",
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "sub_inventories_org_code_unique": {
+          "name": "sub_inventories_org_code_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "org_id",
             "code"
           ]
         }
       },
-      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.sub_inventory_tags": {
-      "name": "sub_inventory_tags",
+    "public.sub_inventory_share_members": {
+      "name": "sub_inventory_share_members",
       "schema": "",
       "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
         "org_id": {
           "name": "org_id",
           "type": "integer",
@@ -357,42 +474,69 @@
           "primaryKey": false,
           "notNull": true
         },
-        "tag": {
-          "name": "tag",
+        "share_group": {
+          "name": "share_group",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "description": {
-          "name": "description",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
+        "created_date": {
+          "name": "created_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         },
-        "updated_at": {
-          "name": "updated_at",
+        "last_update_date": {
+          "name": "last_update_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "sub_inv_share_members_org_code_unique": {
+          "name": "sub_inv_share_members_org_code_unique",
+          "columns": [
+            {
+              "expression": "org_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_sub_inv_share_members_group": {
+          "name": "idx_sub_inv_share_members_group",
+          "columns": [
+            {
+              "expression": "share_group",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
-        "sub_inventory_tags_group_fk": {
-          "name": "sub_inventory_tags_group_fk",
-          "tableFrom": "sub_inventory_tags",
+        "sub_inventory_share_members_group_fk": {
+          "name": "sub_inventory_share_members_group_fk",
+          "tableFrom": "sub_inventory_share_members",
           "tableTo": "sub_inventories",
           "columnsFrom": [
             "org_id",
@@ -406,16 +550,7 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {
-        "sub_inventory_tags_org_id_code_tag_pk": {
-          "name": "sub_inventory_tags_org_id_code_tag_pk",
-          "columns": [
-            "org_id",
-            "code",
-            "tag"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -473,17 +608,19 @@
           "primaryKey": false,
           "notNull": false
         },
-        "created_at": {
-          "name": "created_at",
+        "created_date": {
+          "name": "created_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         },
-        "updated_at": {
-          "name": "updated_at",
+        "last_update_date": {
+          "name": "last_update_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {},
@@ -543,6 +680,20 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "created_date": {
+          "name": "created_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {},
@@ -565,6 +716,12 @@
       "name": "user_group_members",
       "schema": "",
       "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
         "user_id": {
           "name": "user_id",
           "type": "text",
@@ -577,14 +734,44 @@
           "primaryKey": false,
           "notNull": true
         },
-        "created_at": {
-          "name": "created_at",
+        "created_date": {
+          "name": "created_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "user_group_members_user_group_unique": {
+          "name": "user_group_members_user_group_unique",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "group_code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "user_group_members_user_id_users_id_fk": {
           "name": "user_group_members_user_id_users_id_fk",
@@ -613,15 +800,7 @@
           "onUpdate": "no action"
         }
       },
-      "compositePrimaryKeys": {
-        "user_group_members_user_id_group_code_pk": {
-          "name": "user_group_members_user_id_group_code_pk",
-          "columns": [
-            "user_id",
-            "group_code"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
@@ -631,10 +810,16 @@
       "name": "user_groups",
       "schema": "",
       "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
         "code": {
           "name": "code",
           "type": "text",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true
         },
         "label": {
@@ -649,23 +834,33 @@
           "primaryKey": false,
           "notNull": false
         },
-        "created_at": {
-          "name": "created_at",
+        "created_date": {
+          "name": "created_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         },
-        "updated_at": {
-          "name": "updated_at",
+        "last_update_date": {
+          "name": "last_update_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "user_groups_code_unique": {
+          "name": "user_groups_code_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "code"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -698,11 +893,19 @@
           "primaryKey": false,
           "notNull": true
         },
-        "created_at": {
-          "name": "created_at",
+        "created_date": {
+          "name": "created_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {},
@@ -861,6 +1064,26 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "additional_data": {
+          "name": "additional_data",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_date": {
+          "name": "created_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
@@ -966,8 +1189,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "supplier_id": {
-          "name": "supplier_id",
+        "supplier_code": {
+          "name": "supplier_code",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -1009,17 +1232,19 @@
           "primaryKey": false,
           "notNull": false
         },
-        "created_at": {
-          "name": "created_at",
+        "created_date": {
+          "name": "created_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         },
-        "updated_at": {
-          "name": "updated_at",
+        "last_update_date": {
+          "name": "last_update_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {},
@@ -1037,15 +1262,15 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "receiving_invoices_supplier_id_suppliers_id_fk": {
-          "name": "receiving_invoices_supplier_id_suppliers_id_fk",
+        "receiving_invoices_supplier_code_suppliers_code_fk": {
+          "name": "receiving_invoices_supplier_code_suppliers_code_fk",
           "tableFrom": "receiving_invoices",
           "tableTo": "suppliers",
           "columnsFrom": [
-            "supplier_id"
+            "supplier_code"
           ],
           "columnsTo": [
-            "id"
+            "code"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -1088,8 +1313,8 @@
           "primaryKey": false,
           "notNull": true
         },
-        "supplier_id": {
-          "name": "supplier_id",
+        "supplier_code": {
+          "name": "supplier_code",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -1138,17 +1363,19 @@
           "primaryKey": false,
           "notNull": false
         },
-        "created_at": {
-          "name": "created_at",
+        "created_date": {
+          "name": "created_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         },
-        "updated_at": {
-          "name": "updated_at",
+        "last_update_date": {
+          "name": "last_update_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
@@ -1169,15 +1396,15 @@
         }
       },
       "foreignKeys": {
-        "receiving_orders_supplier_id_suppliers_id_fk": {
-          "name": "receiving_orders_supplier_id_suppliers_id_fk",
+        "receiving_orders_supplier_code_suppliers_code_fk": {
+          "name": "receiving_orders_supplier_code_suppliers_code_fk",
           "tableFrom": "receiving_orders",
           "tableTo": "suppliers",
           "columnsFrom": [
-            "supplier_id"
+            "supplier_code"
           ],
           "columnsTo": [
-            "id"
+            "code"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -1261,7 +1488,22 @@
           "name": "scanned_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_date": {
+          "name": "created_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
@@ -1357,11 +1599,19 @@
           "notNull": true,
           "default": "'pending'"
         },
-        "created_at": {
-          "name": "created_at",
+        "created_date": {
+          "name": "created_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
@@ -1444,17 +1694,50 @@
           "notNull": true,
           "default": 0
         },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
+        "line_id": {
+          "name": "line_id",
+          "type": "bigint",
           "primaryKey": false,
           "notNull": true
         },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
+        "line_number": {
+          "name": "line_number",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true
+        },
+        "shipment_number": {
+          "name": "shipment_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "additional_data": {
+          "name": "additional_data",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_date": {
+          "name": "created_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
@@ -1582,6 +1865,12 @@
           "notNull": true,
           "default": 0
         },
+        "commodity_inspection": {
+          "name": "commodity_inspection",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "working_by": {
           "name": "working_by",
           "type": "text",
@@ -1643,17 +1932,38 @@
           "notNull": true,
           "default": "'pending'"
         },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
+        "allocation_status": {
+          "name": "allocation_status",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "'unallocated'"
         },
-        "updated_at": {
-          "name": "updated_at",
+        "shipped_at": {
+          "name": "shipped_at",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "shipped_by": {
+          "name": "shipped_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_date": {
+          "name": "created_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
@@ -1706,6 +2016,19 @@
           "tableTo": "users",
           "columnsFrom": [
             "issue_reported_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "picking_orders_shipped_by_users_id_fk": {
+          "name": "picking_orders_shipped_by_users_id_fk",
+          "tableFrom": "picking_orders",
+          "tableTo": "users",
+          "columnsFrom": [
+            "shipped_by"
           ],
           "columnsTo": [
             "id"
@@ -1820,17 +2143,26 @@
           "notNull": true,
           "default": false
         },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
+        "verify_verified": {
+          "name": "verify_verified",
+          "type": "boolean",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": false
         },
-        "updated_at": {
-          "name": "updated_at",
+        "created_date": {
+          "name": "created_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
@@ -1961,17 +2293,19 @@
           "primaryKey": false,
           "notNull": true
         },
-        "created_at": {
-          "name": "created_at",
+        "created_date": {
+          "name": "created_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         },
-        "updated_at": {
-          "name": "updated_at",
+        "last_update_date": {
+          "name": "last_update_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
@@ -2091,17 +2425,25 @@
           "primaryKey": false,
           "notNull": false
         },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
+        "source_shelf_box_id": {
+          "name": "source_shelf_box_id",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
-        "updated_at": {
-          "name": "updated_at",
+        "created_date": {
+          "name": "created_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
@@ -2161,6 +2503,95 @@
             "id"
           ],
           "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "shipping_boxes_source_shelf_box_id_shelf_boxes_id_fk": {
+          "name": "shipping_boxes_source_shelf_box_id_shelf_boxes_id_fk",
+          "tableFrom": "shipping_boxes",
+          "tableTo": "shelf_boxes",
+          "columnsFrom": [
+            "source_shelf_box_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.verify_tasks": {
+      "name": "verify_tasks",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "picking_order_id": {
+          "name": "picking_order_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "created_date": {
+          "name": "created_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_verify_tasks_picking_order": {
+          "name": "idx_verify_tasks_picking_order",
+          "columns": [
+            {
+              "expression": "picking_order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "verify_tasks_picking_order_id_picking_orders_id_fk": {
+          "name": "verify_tasks_picking_order_id_picking_orders_id_fk",
+          "tableFrom": "verify_tasks",
+          "tableTo": "picking_orders",
+          "columnsFrom": [
+            "picking_order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -2235,11 +2666,19 @@
           "primaryKey": false,
           "notNull": false
         },
-        "created_at": {
-          "name": "created_at",
+        "created_date": {
+          "name": "created_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
@@ -2388,6 +2827,20 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true
+        },
+        "created_date": {
+          "name": "created_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
@@ -2570,6 +3023,20 @@
             "as": "total_qty - allocated_qty",
             "type": "stored"
           }
+        },
+        "created_date": {
+          "name": "created_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
@@ -2790,6 +3257,20 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false
+        },
+        "created_date": {
+          "name": "created_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
@@ -2891,11 +3372,19 @@
           "notNull": true,
           "default": "'open'"
         },
-        "created_at": {
-          "name": "created_at",
+        "created_date": {
+          "name": "created_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
@@ -2991,17 +3480,19 @@
           "primaryKey": false,
           "notNull": true
         },
-        "created_at": {
-          "name": "created_at",
+        "created_date": {
+          "name": "created_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         },
-        "updated_at": {
-          "name": "updated_at",
+        "last_update_date": {
+          "name": "last_update_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
@@ -3250,11 +3741,19 @@
           "primaryKey": false,
           "notNull": true
         },
-        "created_at": {
-          "name": "created_at",
+        "created_date": {
+          "name": "created_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
@@ -3498,11 +3997,19 @@
           "notNull": true,
           "default": "'{}'::jsonb"
         },
-        "created_at": {
-          "name": "created_at",
+        "created_date": {
+          "name": "created_date",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {
@@ -3527,11 +4034,11 @@
           "method": "btree",
           "with": {}
         },
-        "idx_transaction_logs_created_at": {
-          "name": "idx_transaction_logs_created_at",
+        "idx_transaction_logs_created_date": {
+          "name": "idx_transaction_logs_created_date",
           "columns": [
             {
-              "expression": "created_at",
+              "expression": "created_date",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -3593,11 +4100,64 @@
           "notNull": true,
           "default": "'{}'::jsonb"
         },
-        "created_at": {
-          "name": "created_at",
+        "created_date": {
+          "name": "created_date",
           "type": "timestamp",
           "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.sync_events": {
+      "name": "sync_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigserial",
+          "primaryKey": true,
           "notNull": true
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_data": {
+          "name": "event_data",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_date": {
+          "name": "created_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
         }
       },
       "indexes": {},

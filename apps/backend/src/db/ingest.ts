@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { newId } from "./id.js";
 import { HTTPException } from "hono/http-exception";
 import { sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
@@ -185,7 +185,7 @@ function validateReceivingBody(body: IngestReceivingBody): void {
 async function insertReceivingItem(tx: DbOrTx, invoiceId: string, it: IngestReceivingItem): Promise<void> {
   const partNo = await assertPartNo(tx, it.partNo);
   await tx.insert(receivingInvoiceItems).values({
-    id: randomUUID(),
+    id: newId(),
     receivingInvoiceId: invoiceId,
     partNo,
     wclItemNo: it.wclItemNo ?? null,
@@ -219,7 +219,7 @@ async function insertInvoiceWithItems(
   fallbackSupplierCode: string | null
 ): Promise<string> {
   const supplierCode = await resolveInvoiceSupplierCode(tx, inv, fallbackSupplierCode);
-  const invoiceId = randomUUID();
+  const invoiceId = newId();
   await tx.insert(receivingInvoices).values({
     id: invoiceId,
     receivingOrderId: orderId,
@@ -299,7 +299,7 @@ export async function upsertReceivingOrder(
     );
 
     if (!existing) {
-      const orderId = randomUUID();
+      const orderId = newId();
       await tx.insert(receivingOrders).values({
         id: orderId,
         batchNo,
@@ -532,7 +532,7 @@ function validatePickingBody(body: IngestPickingBody): void {
 async function insertPickingItem(tx: DbOrTx, orderId: string, it: IngestPickingItem): Promise<void> {
   const partNo = await assertPartNo(tx, it.partNo);
   await tx.insert(pickingItems).values({
-    id: randomUUID(),
+    id: newId(),
     pickingOrderId: orderId,
     partNo,
     qty: it.qty,
@@ -576,7 +576,7 @@ export async function upsertPickingOrder(
     );
 
     if (!existing) {
-      const orderId = randomUUID();
+      const orderId = newId();
       // Slot the new order into the priority queue by (delivery_date ASC
       // NULLS LAST, order_no): bump open orders that sort at-or-after it and
       // take the freed position. Existing (incl. manually reordered) relative

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { newId } from "./id.js";
 import { HTTPException } from "hono/http-exception";
 import { inArray, sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
@@ -246,7 +246,7 @@ export async function shipOrder(
           WHERE id = ${order.id}`
     );
     await tx.insert(transactionLogs).values({
-      id: randomUUID(),
+      id: newId(),
       entityType: "picking_order",
       entityId: order.id,
       fromState: order.status,
