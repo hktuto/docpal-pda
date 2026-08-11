@@ -146,6 +146,9 @@ useHead({ title: t("putAway.detail.title") });
 
 const route = useRoute();
 const orderId = route.params.id as string;
+// Arriving from the task queue (?task=<id>): read the task detail instead of
+// the plain receiving-order aggregate — same data plus per-item shelf hints.
+const taskId = (route.query.task as string) || null;
 
 const headerExpanded = ref(false);
 const boxesExpanded = ref(false);
@@ -331,7 +334,9 @@ async function load() {
   try {
     const [orderData, detail, shelvesData] = await Promise.all([
       warehouse.getReceivingOrder(orderId),
-      warehouse.getPutAwayDetail(orderId),
+      taskId
+        ? warehouse.getPutAwayTaskDetail(taskId)
+        : warehouse.getPutAwayDetail(orderId),
       warehouse.getShelves(),
     ]);
     order.value = orderData;

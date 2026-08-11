@@ -12,7 +12,7 @@ export default defineNuxtConfig({
       viewport: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
     },
   },
-  css: ["~/assets/css/main.css"],
+  css: ["~/assets/css/main.scss"],
   // i18n config, locales, LanguageSwitcher, and locale persistence come from
   // the shared layer (also used by apps/admin).
   extends: ["../../layers/i18n"],

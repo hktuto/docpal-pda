@@ -21,6 +21,9 @@
       <DetailRow :label="$t('putAway.lotsPanel.totalQty') +' / '+ $t('putAway.lotsPanel.scannedQty')  +' / '+ $t('putAway.lotsPanel.boxedQty')">
         <span>{{ item.lineQty }}</span> / <span>{{ scannedQty(item) || 0 }}</span> / <span>{{ item.putAwayQty }}</span>
       </DetailRow>
+      <DetailRow v-if="item.suggestedShelfCode" :label="$t('putAway.lotsPanel.suggestedShelf')">
+        <span class="shelf-hint">→ {{ item.suggestedShelfCode }}</span>
+      </DetailRow>
 
       <div class="lot-actions">
         <button
@@ -169,6 +172,10 @@ function toggleExpand(itemId: string) {
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+.shelf-hint {
+  font-weight: 600;
 }
 
 .scans-list {

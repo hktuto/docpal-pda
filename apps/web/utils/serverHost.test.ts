@@ -31,8 +31,11 @@ beforeEach(() => {
 describe('SERVER_HOSTS', () => {
   it('lists the five regional hosts in order', () => {
     expect(SERVER_HOSTS.map((h) => h.id)).toEqual(['hk', 'sz', 'sh', 'gz', 'bj']);
+    const overrides: Record<string, string> = {
+      hk: 'https://mobile-wms.wclsolution.com:3000',
+    };
     for (const host of SERVER_HOSTS) {
-      expect(host.url).toBe(`https://wms-${host.id}.docpal.weltronics.com:3000`);
+      expect(host.url).toBe(overrides[host.id] ?? `https://wms-${host.id}.docpal.weltronics.com:3000`);
     }
   });
 

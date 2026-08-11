@@ -8,6 +8,27 @@
       "when": 1785989844191,
       "tag": "0000_nasty_wrecker",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786335081124,
+      "tag": "0001_clumsy_random",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786336115199,
+      "tag": "0002_put_away_tasks_sync_trigger",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786341873870,
+      "tag": "0003_busy_morlun",
+      "breakpoints": true
     }
   ]
 }

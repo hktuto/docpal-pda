@@ -7,6 +7,8 @@ import { transactionLogs, inventoryTransactions, receivingScanLabels } from "./s
 import { now } from "./now.js";
 import { emitEvent } from "./events.js";
 import { normalizePartNo, parseQrRaw } from "./scanParse.js";
+import { createPutAwayTaskTx } from "./putawaytasks.js";
+import { isStepEnabled, putAwayConfig } from "../config.js";
 
 // ---------------------------------------------------------------------------
 // Receiving flow mutations (concepts 4-5 in docs/backend/concepts.md).
@@ -121,6 +123,12 @@ export async function confirmReceivingArrival(
       actorId,
       createdDate: at,
     });
+
+    // Auto-create the put-away task in the same tx when the warehouse runs
+    // task-based put-away (FLOW_CONFIG steps.put-away.autoCreateTasks).
+    if (isStepEnabled("put-away") && putAwayConfig().autoCreateTasks) {
+      await createPutAwayTaskTx(tx, { receivingOrderId: orderId, actorId });
+    }
 
     return { id: ro.id, batchNo: ro.batchNo, status: "in_hand", arrivedAt: at, arrivedBy: actorId };
   });

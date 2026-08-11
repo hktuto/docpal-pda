@@ -2,14 +2,21 @@ import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
-import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
+import { setupTestDb, reseed, TEST_DATABASE_URL, type TestDb } from "./test-helper.js";
 import { listScanTemplates } from "./scantemplates.js";
-import { optJson } from "../routes/admin/crud.js";
+
+// optJson lives in routes/admin/crud.js, which pulls in the module-level db
+// (src/db.ts — connects + migrates at import). DATABASE_URL must point at the
+// test database before that import happens — hence the dynamic import below
+// (same pattern as auth.test.ts).
+process.env.DATABASE_URL = TEST_DATABASE_URL;
 
 let client: TestDb;
+let optJson: (typeof import("../routes/admin/crud.js"))["optJson"];
 
 before(async () => {
   client = await setupTestDb();
+  ({ optJson } = await import("../routes/admin/crud.js"));
 });
 
 test("scan-templates: every supplier profile, ordered by supplier_code (null templates included)", async () => {

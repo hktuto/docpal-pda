@@ -3,6 +3,7 @@ export function useStatusLabel() {
 
   return {
     receiving: (code: string) => t(`status.receiving.${code}`),
+    putAway: (code: string) => t(`status.putAway.${code}`),
     picking: (code: string) => t(`status.picking.${code}`),
     allocation: (code: string) => t(`status.allocation.${code}`),
     box: (code: string) => t(`status.box.${code}`),

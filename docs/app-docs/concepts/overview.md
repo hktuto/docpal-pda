@@ -11,7 +11,7 @@ The Warehouse PDA app is a Nuxt 3 proof-of-concept for warehouse mobile/Android 
 - Verifying packed boxes a second time before shipping.
 - Verifying goods during the process (goods verify).
 
-Individual flow steps (e.g. measuring, verify) can be turned on/off per warehouse via the backend `FLOW_STEPS_DISABLED` config — hidden steps are skipped in the flow chain and their home tiles disappear.
+Individual flow steps (e.g. measuring, verify) can be turned on/off per warehouse via the backend `warehouse_config` row `"flow"` (JSON; `FLOW_CONFIG` env override; legacy `FLOW_STEPS_DISABLED` comma-list still works, deprecated) — hidden steps are skipped in the flow chain and their home tiles disappear. `steps.picking.allocation.allowDockStock=false` requires received stock to be put away before it can allocate to picking.
 
 ## Key design ideas
 

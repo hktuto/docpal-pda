@@ -51,7 +51,17 @@ services:
       # Demo dataset auto-seeds on first boot (empty users table). Change the
       # demo passwords, or set WAREHOUSE_SEED=off once real users exist.
       WAREHOUSE_SEED: ${WAREHOUSE_SEED:-on}
-      # Comma-separated flow steps to turn off, e.g. "measuring,verify".
+      # Demo receiving/picking ORDERS are skipped by default on a fresh prod
+      # database (master data + shelf stock only); set WAREHOUSE_SEED_ORDERS=on
+      # to include the demo orders.
+      WAREHOUSE_SEED_ORDERS: ${WAREHOUSE_SEED_ORDERS:-off}
+      # Optional flow config override (JSON merged over defaults), e.g.
+      # '{"steps":{"picking":{"allocation":{"allowDockStock":false}}}}' to make
+      # put-away a hard gate before picking allocation. The primary source is
+      # the warehouse_config row "flow" (edit the seed for fresh DBs, or SQL
+      # UPDATE + backend restart for existing ones). Deprecated comma-separated
+      # step kill-switch (e.g. "measuring,verify") still applies when FLOW_CONFIG is unset.
+      FLOW_CONFIG: ${FLOW_CONFIG:-}
       FLOW_STEPS_DISABLED: ${FLOW_STEPS_DISABLED:-}
     # Published release APK + version.json (built by `pnpm build:apk`),
     # served via GET /admin/app-download/file.

@@ -421,6 +421,14 @@ input:focus {
   background: var(--bg);
   border-radius: var(--radius);
   padding: 0.75rem;
+  display: flex;
+  flex-flow: row wrap;
+  .detail-row{
+      width: 50%;
+  }
+  .detail-row:nth-child(even) {
+    align-items: flex-end;
+  }
 }
 
 .card--done {

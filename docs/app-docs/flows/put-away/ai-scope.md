@@ -3,7 +3,16 @@
 ## In scope
 
 - List put-away candidates (in-hand receiving orders with unboxed received
-  pieces).
+  pieces) — manual mode.
+- Task mode (flow config `steps.put-away.autoCreateTasks`, `warehouse_config`
+  row `"flow"`): the list
+  page shows the `put_away_tasks` queue instead (`GET /put-away-tasks`) — one
+  pending task per receiving order, auto-created in the arrival-confirm tx,
+  completed by the auto-clear. The task detail (`GET /put-away-tasks/:id`) is
+  the same per-order aggregate plus a per-item `suggestedShelfCode` hint
+  (existing-stock strategy: shelf of the most recent lot of the same part in
+  the order's org + sub-inventory; `steps.put-away.suggestShelf=off`
+  suppresses it). Advisory only, computed at read time, never stored.
 - Show the put-away detail as **one aggregate read**
   (`GET /receiving-orders/:id/put-away`): expected invoice items (with
   remaining qty), materialized inventory lots, staging scans, and the
@@ -39,9 +48,12 @@
 
 ## Out of scope
 
-- Automated put-away suggestions based on velocity or zone.
+- Velocity/zone/capacity-aware slotting (the `suggestedShelfCode` hint is
+  existing-stock only; fixed slots would be a new `suggestShelf` strategy).
 - Forklift or robot integration.
 - Multi-step directed put-away with confirmation checkpoints.
+- Operator assignment / work locks on put-away tasks; manual
+  complete/cancel task endpoints.
 
 ## Key files
 
@@ -71,6 +83,10 @@
   /put-away-scans/:scanId`, `/shelf-boxes*` lifecycle (lot materialization
   + receiving-order auto-clear; `POST /shelf-boxes` takes an optional `boxId`
   for scanned physical boxes).
+- `apps/backend/src/db/putawaytasks.ts` — task mode: `createPutAwayTaskTx`
+  (called from `confirmReceivingArrival` when `autoCreateTasks` is on),
+  `completePutAwayTaskTx` (called from `tryMarkReceivingOrderClear`),
+  `listPutAwayTasks`, `getPutAwayTaskDetail` (+ shelf suggestion).
 
 ## Known limitations
 
@@ -83,6 +99,8 @@
 ## Related specs/plans
 
 - `docs/backend/api-design.md` §Put-away
+- `docs/superpowers/specs/2026-08-10-put-away-tasks-design.md`
+- `docs/superpowers/specs/2026-08-10-flow-config-design.md`
 - `docs/superpowers/specs/2026-07-03-cancel-empty-box-design.md`
 - `docs/superpowers/specs/2026-07-06-put-away-scan-first-design.md`
 - `docs/superpowers/plans/2026-07-06-put-away-scan-first.md`

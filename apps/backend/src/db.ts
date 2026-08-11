@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createDb } from "./db/client.js";
 import { seedIfEmpty } from "./db/seed.js";
+import { loadFlowConfig } from "./config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -19,3 +20,7 @@ export type AppDb = typeof db;
 if (process.env.WAREHOUSE_SEED !== "off") {
   await seedIfEmpty(sql, db);
 }
+
+// Resolve the flow config after migrate+seed: FLOW_CONFIG env wins, else the
+// warehouse_config "flow" row (created with defaults when missing).
+await loadFlowConfig(db);

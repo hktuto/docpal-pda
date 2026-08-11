@@ -42,6 +42,15 @@ public class ScannerBroadcastPlugin extends Plugin {
     private static final String EXTRA_BARCODE = "barcode";
     /** This scanner firmware's default "Scan Result Data Key" is misspelled. */
     private static final String EXTRA_BARCODE_TYPO = "bacode";
+    /**
+     * Urovo (ubx datawedge) firmware: the decoded text arrives as a String
+     * under these keys, while the "barcode"/"barocode" keys hold byte[].
+     */
+    private static final String[] STRING_EXTRA_KEYS = {
+        EXTRA_BARCODE, EXTRA_BARCODE_TYPO, "barcode_string", "com.ubx.datawedge.data_string"
+    };
+    /** Byte-array payload keys (Urovo sends "barcode" and a "barocode" typo as byte[]). */
+    private static final String[] BYTES_EXTRA_KEYS = { EXTRA_BARCODE, "barocode", "com.ubx.datawedge.data_raw" };
 
     /** Window in which an identical value counts as a double delivery of one scan. */
     private static final long DEDUP_WINDOW_MS = 400;
@@ -56,8 +65,7 @@ public class ScannerBroadcastPlugin extends Plugin {
      * scan (two physical trigger pulls cannot realistically land that close).
      */
     public static void dispatchScan(Intent intent) {
-        String value = intent.getStringExtra(EXTRA_BARCODE);
-        if (value == null) value = intent.getStringExtra(EXTRA_BARCODE_TYPO);
+        String value = extractValue(intent);
         if (value == null || value.isEmpty()) {
             Log.i(TAG, "scan broadcast without barcode extra, extras: " + dumpExtras(intent));
             return;
@@ -78,6 +86,26 @@ public class ScannerBroadcastPlugin extends Plugin {
         JSObject data = new JSObject();
         data.put("value", value);
         instance.notifyListeners("scan", data);
+    }
+
+    /**
+     * Pulls the decoded text out of the broadcast. Different firmwares send it
+     * differently: NLS sends a plain String extra; Urovo sends the text as a
+     * String under "barcode_string"/"com.ubx.datawedge.data_string" and only
+     * byte[] under "barcode"/"barocode" (getStringExtra returns null for those).
+     */
+    private static String extractValue(Intent intent) {
+        for (String key : STRING_EXTRA_KEYS) {
+            String value = intent.getStringExtra(key);
+            if (value != null && !value.isEmpty()) return value;
+        }
+        for (String key : BYTES_EXTRA_KEYS) {
+            byte[] bytes = intent.getByteArrayExtra(key);
+            if (bytes != null && bytes.length > 0) {
+                return new String(bytes, java.nio.charset.StandardCharsets.UTF_8).trim();
+            }
+        }
+        return null;
     }
 
     private static String dumpExtras(Intent intent) {

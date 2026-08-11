@@ -5,3 +5,4 @@ export * from "./inventory.js";
 export * from "./allocation.js";
 export * from "./audit.js";
 export * from "./events.js";
+export * from "./config.js";

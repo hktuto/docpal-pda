@@ -6,6 +6,7 @@ import { queryAll, queryGet, queryRun, type DbOrTx } from "./query.js";
 import { transactionLogs, inventoryTransactions } from "./schema/index.js";
 import { nextBoxId } from "./boxes.js";
 import { now } from "./now.js";
+import { completePutAwayTaskTx } from "./putawaytasks.js";
 
 // ---------------------------------------------------------------------------
 // Put-away flow — staging-box model (ported from apps/api putAway.ts).
@@ -231,6 +232,9 @@ export async function tryMarkReceivingOrderClear(
     actorId: input.actorId,
     createdDate: at,
   });
+  // Complete the put-away task (if one exists) in the same tx — nothing left
+  // to put away means the task is done, however the stock was consumed.
+  await completePutAwayTaskTx(tx, { receivingOrderId: order.id, actorId: input.actorId });
 }
 
 // ---------------------------------------------------------------------------

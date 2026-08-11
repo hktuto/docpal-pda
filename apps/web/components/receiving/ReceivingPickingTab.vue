@@ -151,7 +151,7 @@
         </div>
       </div>
 
-      <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
+      <!-- <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
         <button class="btn btn--small" @click="toggleExpand(pi.id)">
           {{ expandedItems.has(pi.id) ? $t('receiving.pickingTab.hideLogs') : $t('receiving.pickingTab.showLogs') }}
           ({{ pi.transitionLogs.length }})
@@ -167,7 +167,7 @@
             </li>
           </ul>
         </div>
-      </div>
+      </div> -->
     </div>
   </div>
 </template>

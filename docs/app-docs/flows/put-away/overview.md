@@ -10,6 +10,13 @@ Use the Put-away flow after receiving has created receiving-area inventory and t
 
 1. The operator opens the Put-away list.
 
+   The list shows receiving orders with goods still to be shelved. Warehouses
+   that run task mode (flow config `steps.put-away.autoCreateTasks`,
+   `warehouse_config` row `"flow"`)
+   see an auto-created put-away task per arrived order instead — the queue is
+   the same work, tracked as tasks, and the detail can show a suggested shelf
+   per item (based on where that part is already stored).
+
    ![Put-away list](./assets/put-away-list.png)
 
 2. The operator selects a put-away task or receiving order.

@@ -5,6 +5,7 @@ import { queryAll, type DbOrTx } from "./query.js";
 import { allocations, inventoryTransactions } from "./schema/index.js";
 import { emitEvent } from "./events.js";
 import { now } from "./now.js";
+import { allowDockStock } from "../config.js";
 
 // ---------------------------------------------------------------------------
 // Allocation engine (concepts 5-6 in docs/backend/concepts.md).
@@ -15,7 +16,9 @@ import { now } from "./now.js";
 // scanned-but-unboxed packages must not be re-reserved).
 // Sources, in priority order:
 //   1. shelf stock (inventory_lots with available_qty > 0)
-//   2. in-hand / provisional receiving stock (received, not yet picked)
+//   2. in-hand / provisional receiving stock (received, not yet picked) —
+//      skipped when FLOW_CONFIG sets picking.allocation.allowDockStock=false
+//      (put-away becomes a hard gate; spec 2026-08-10-flow-config-design.md)
 // Rules (confirmed with the business):
 //   - Order: demands are allocated in picking_orders.priority_seq order
 //     (admin-reorderable via POST /picking-orders/reorder).
@@ -385,8 +388,10 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
         remaining -= take;
       }
 
-      // 2. in-hand / provisional receiving stock, FIFO by date_code
-      if (remaining > 0) {
+      // 2. in-hand / provisional receiving stock, FIFO by date_code —
+      // skipped when the warehouse requires put-away before picking
+      // (FLOW_CONFIG steps.picking.allocation.allowDockStock=false).
+      if (remaining > 0 && allowDockStock()) {
         const rows = await loadReceivingSources(tx, d);
         for (const r of rows) {
           if (remaining <= 0) break;

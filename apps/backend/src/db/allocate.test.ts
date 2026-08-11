@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { sql } from "drizzle-orm";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { allocateAll, parseDateCodeRule } from "./allocate.js";
+import { confirmReceivingArrival } from "./receiving.js";
+import { _setPickingAllocationForTests } from "../config.js";
 
 let client: TestDb;
 
@@ -423,4 +425,40 @@ test("allocation_status: fully-picked (Σ open = 0) order reads allocated", asyn
   const s = await allocateAll(client.db);
   assert.equal(s.demands, 0);
   assert.equal(await allocationStatusOf(client.db, PO_22), "allocated");
+});
+
+// --- picking.allocation.allowDockStock gate (spec 2026-08-10-flow-config) ---
+
+test("allowDockStock=false: dock stock is held until put-away", async () => {
+  await reseed(client);
+  // demo world: receiving 100003's carton C3001 exactly covers SO-DEMO-0003
+  // (parts RK73H1JTTD3302F 500 / RK73H1JTTD6802F 800, no shelf stock).
+  const operator = await client.db.execute(sql`SELECT id FROM users WHERE username = 'operator'`);
+  const actorId = (operator[0] as any).id as string;
+  const receivingOrderId = await idOf(sql`SELECT id FROM receiving_orders WHERE batch_no = '100003'`);
+  await confirmReceivingArrival(client.db, receivingOrderId, actorId);
+
+  const orderId = await idOf(sql`SELECT id FROM picking_orders WHERE order_no = 'SO-DEMO-0003'`);
+  const itemId = await idOf(
+    sql`SELECT id FROM picking_items WHERE picking_order_id = ${orderId} AND part_no = 'RK73H1JTTD3302F'`
+  );
+
+  _setPickingAllocationForTests({ allowDockStock: false });
+  try {
+    await allocateAll(client.db);
+    const held = await client.db.execute(sql`SELECT id FROM allocations WHERE picking_item_id = ${itemId}`);
+    assert.equal(held.length, 0);
+    assert.equal(await allocationStatusOf(client.db, orderId), "unallocated");
+  } finally {
+    _setPickingAllocationForTests({ allowDockStock: true });
+  }
+
+  // default mode: the same world allocates straight from the receiving line
+  await allocateAll(client.db);
+  const alloc = await client.db.execute(
+    sql`SELECT receiving_invoice_item_id AS rii FROM allocations WHERE picking_item_id = ${itemId}`
+  );
+  assert.equal(alloc.length, 1);
+  assert.ok((alloc[0] as any).rii, "should allocate from the receiving line");
+  assert.equal(await allocationStatusOf(client.db, orderId), "allocated");
 });
