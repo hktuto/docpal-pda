@@ -10,20 +10,21 @@
 
     <NuxtLink
       v-for="task in rows"
-      :key="task.id"
-      :to="`/verify/${task.id}`"
+      :key="task.taskId"
+      :to="`/verify/${task.shippingBoxId}`"
       class="card list-card"
     >
       <div class="list-card__header">
-        <span class="list-card__title">{{ task.orderNo }}</span>
-        <span class="badge" :class="badgeClass(task.status)">{{ statusLabel.verify(task.status) }}</span>
+        <span class="list-card__title">{{ task.shippingBoxId }}</span>
+        <span class="badge" :class="badgeClass(task.boxStatus)">{{ statusLabel.box(task.boxStatus) }}</span>
       </div>
       <p class="list-card__meta">
-        {{ task.shipTo || $t('common.noData') }}
+        {{ task.orderNos.join(', ') || $t('common.noData') }}
+        <template v-if="task.destinationCountry"> · {{ task.destinationCountry }}</template>
       </p>
       <div class="list-card__footer">
         <span class="list-card__date">
-          {{ $t('verify.boxesClosed', { count: task.closedBoxCount, total: task.boxCount }) }}
+          {{ $t('common.packagesVerified', { verified: task.verifyVerifiedCount, total: task.packageCount }) }}
         </span>
       </div>
     </NuxtLink>
@@ -34,6 +35,8 @@
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { useErrorMessage } from "~/composables/errorMessage";
 import { useWarehouse } from "~/composables/useWarehouse";
+import { useHardwareScanner } from "~/composables/useHardwareScanner";
+import { useToast } from "~/composables/useToast";
 import { badgeClass } from "~/composables/useStatusBadge";
 import type { VerifyTaskListRow } from "~/services/types";
 
@@ -43,6 +46,8 @@ const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const warehouse = useWarehouse();
+const router = useRouter();
+const { showToast } = useToast();
 
 useHead({ title: t('verify.title') });
 
@@ -67,6 +72,25 @@ async function load() {
 const rows = computed(() => rawRows.value);
 
 useVisibleReload(load);
+
+// Scanning a box QR (or typing its id on the wedge) opens that box directly.
+// Exact id wins; otherwise a unique substring match (e.g. the daily seq).
+useHardwareScanner({
+  enabled: () => rows.value.length > 0,
+  onScan: (rawValue) => {
+    const boxes = rows.value;
+    const q = rawValue.trim().toLowerCase();
+    if (!q) return false;
+    const exact = boxes.find((b) => b.shippingBoxId.toLowerCase() === q);
+    const matches = exact ? [exact] : boxes.filter((b) => b.shippingBoxId.toLowerCase().includes(q));
+    if (matches.length === 1) {
+      router.push(`/verify/${matches[0].shippingBoxId}`);
+    } else {
+      showToast(t("verify.boxNotFound", { id: rawValue.trim() }));
+      return false;
+    }
+  },
+});
 </script>
 
 <style scoped>

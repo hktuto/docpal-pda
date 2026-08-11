@@ -109,7 +109,7 @@ Default box sizes offered at measuring/packing.
 ## net_weight_formula
 
 Net-weight reference per item: `qty` units weigh `weight` grams → unit net =
-weight / qty. Stays in grams; the measuring/verify task details convert it to
+weight / qty. Stays in grams; the measuring/verify box reads convert it to
 kg for the per-box `suggestedNetWeightKg` auto-calc (shipping-box weights are
 kg — see `shipping_boxes`).
 
@@ -363,38 +363,26 @@ Picking order lines.
 
 Note: indexes on `picking_order_id` and `part_no`.
 
-## measuring_tasks
-
-Measuring/weighing task created when a picking order is finished.
-
-| Field | Type | Description |
-| --- | --- | --- |
-| id | text PK | Task id (UUID) |
-| picking_order_id | text NOT NULL FK → picking_orders(id) ON DELETE CASCADE | Order being measured |
-| status | text NOT NULL DEFAULT 'pending' | Task status |
-| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
-| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
-
-Note: status values `pending` | `completed`; unique index on
-`picking_order_id` (one measuring task per order).
-
 ## verify_tasks
 
-Verify (second-pass re-measure) task created when a measuring task completes
-— or directly at picking finish when the measuring step is disabled
-(`FLOW_STEPS_DISABLED`; spec
-`docs/superpowers/specs/2026-07-28-verify-step-and-flow-step-config-design.md`).
+Verify (second-pass re-scan) task keyed on the shipping box (spec
+`docs/superpowers/specs/2026-08-11-box-scoped-measuring-verify-design.md`):
+one task per box, created by `closeShippingBox` when the verify step is
+enabled (flow config, `warehouse_config` row `"flow"`). The old order-keyed
+`measuring_tasks` table is dropped — closing a box IS the measuring
+completion.
 
 | Field | Type | Description |
 | --- | --- | --- |
 | id | text PK | Task id (UUID) |
-| picking_order_id | text NOT NULL FK → picking_orders(id) ON DELETE CASCADE | Order being verified |
+| shipping_box_id | text NOT NULL FK → shipping_boxes(id) ON DELETE CASCADE | Box being verified |
 | status | text NOT NULL DEFAULT 'pending' | Task status |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
-Note: status values `pending` | `completed`; unique index on
-`picking_order_id` (one verify task per order). Mirrors `measuring_tasks`.
+Note: status values `pending` | `completed`; unique index
+`idx_verify_tasks_shipping_box` on `shipping_box_id` (one verify task per
+box).
 
 ## shipping_boxes
 
@@ -402,21 +390,23 @@ Shipping cartons used at picking and measuring.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| id | text PK | Box id (server-generated `BOX-S-<date>-<seq>`; format to be finalized now that warehouse_code is removed) |
-| picking_order_id | text FK → picking_orders(id) | Order the box belongs to |
-| measuring_task_id | text FK → measuring_tasks(id) | Measuring task the box is attached to |
+| id | text PK | Box id (server-generated `BOX-S-<YYYYMMDD>-<seq>`) |
+| picking_order_id | text FK → picking_orders(id) | Informational "created for" order only — a box may hold packages from any open picking order (cross-order packing) |
 | status | text NOT NULL DEFAULT 'open' | Box status |
 | gross_weight | real | Gross weight (kilograms, decimals ≤ 3 dp) |
 | net_weight | real | Net weight (kilograms, decimals ≤ 3 dp) |
 | destination_country | text | Destination country code |
 | box_size | text | Box size code (see box_size_list) |
+| shipped_at | timestamp | Per-box shipping: when the box was marked shipped (admin) |
+| shipped_by | text FK → users(id) | User who marked the box shipped |
 | source_shelf_box_id | text FK → shelf_boxes(id) | Whole-box claim: the reused shelf carton this box was created from (migration 0008) |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
-Note: status values `open` | `closed`; indexes on `measuring_task_id` and
-`picking_order_id`. Weights are kilograms end-to-end (API, PDA, admin) — the
-`real` columns are unchanged; only the unit semantics moved from grams to kg.
+Note: status values `open` | `closed`; index on `picking_order_id`. The dead
+`measuring_task_id` column was dropped with `measuring_tasks`. Weights are
+kilograms end-to-end (API, PDA, admin) — the `real` columns are unchanged;
+only the unit semantics moved from grams to kg.
 
 ## picking_packages
 
@@ -542,6 +532,30 @@ Contents of a shelf box.
 
 Note: index on `shelf_box_id`.
 
+## put_away_tasks
+
+Put-away tasks (spec `docs/superpowers/specs/2026-08-10-put-away-tasks-design.md`):
+one task per receiving order, auto-created inside the arrival-confirm
+transaction when flow config `steps.put-away.autoCreateTasks` is on
+(`warehouse_config` row `"flow"`), completed
+by the receiving auto-clear. The `org_id`/`sub_inventory_code` pair is a
+denormalized copy from the order (shelf-suggestion query convenience). Task
+mode is an overlay — the derived `GET /put-away/candidates` list stays the
+source for manual mode.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Task id (UUID) |
+| receiving_order_id | text NOT NULL FK → receiving_orders(id) ON DELETE CASCADE | Order to put away |
+| org_id | integer | Stock location pair copy from the order |
+| sub_inventory_code | text | Stock location pair copy from the order |
+| status | text NOT NULL DEFAULT 'pending' | `pending` \| `completed` |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
+
+Note: unique index on `receiving_order_id` (one task per order); index on
+`status`.
+
 ## goods_verify_tasks
 
 Daily goods-verify tasks (concept 7): generated at day end from
@@ -664,3 +678,24 @@ Polled via `GET /sync-events?since=<id>`.
 | event_data | jsonb NOT NULL | `{table, action, new, old}` — full row images (`to_jsonb(NEW)`/`to_jsonb(OLD)`; `old` null on INSERT, `new` null on DELETE) |
 | created_date | timestamp NOT NULL DEFAULT now() | Commit time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Same as created_date (rows are immutable) |
+
+# Config (`schema/config.ts`)
+
+## warehouse_config
+
+Per-warehouse settings, one row per key. The `"flow"` row holds the flow
+config JSON (same shape as the `FLOW_CONFIG` env var — spec
+`docs/superpowers/specs/2026-08-10-flow-config-design.md`), merged over
+defaults and loaded once at boot by `loadFlowConfig` (`src/config.ts`, called
+from `src/db.ts` after migrate+seed): a missing row is auto-created with `{}`
+(= defaults), an invalid value fails boot. Written by seed / SQL UPDATE —
+changes need a backend restart; the `FLOW_CONFIG` env var overrides the row
+when set. Intentionally no `sync_events` trigger: internal config, not synced
+out.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| key | text PK | Config key (e.g. `flow`) |
+| value | jsonb NOT NULL | Config payload (partial JSON merged over defaults) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |

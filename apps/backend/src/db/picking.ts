@@ -9,7 +9,6 @@ import { now } from "./now.js";
 import { emitEvent } from "./events.js";
 import { workLockExpiry } from "./allocate.js";
 import { isStepEnabled } from "../config.js";
-import { completeMeasuringTaskTx } from "./measuring.js";
 
 // ---------------------------------------------------------------------------
 // Picking flow (ported from apps/api pickScan.ts + measure.ts + pickingIssues.ts,
@@ -31,8 +30,13 @@ import { completeMeasuringTaskTx } from "./measuring.js";
 // consumed allocation / on_hand −qty for the stock leaving); removing a
 // package reverses the source, the allocation, and the ledger rows.
 // picking_items.picked_qty tracks BOXED packages only (old recomputePickingItem
-// semantics), so an order auto-finishes (→ measuring_tasks row) when its last
-// package is boxed. The caller runs allocateAll after scan/remove commits.
+// semantics), so an order auto-finishes when its last package is boxed. The
+// caller runs allocateAll after scan/remove commits.
+//
+// Box-scoped measuring/verify (2026-08-11 design): no measuring task exists —
+// closing a box IS the measuring completion; close spawns the box's verify
+// task when the verify step is enabled. Boxes accept packages from any open
+// order (cross-order packing); shipping is per-box.
 // ---------------------------------------------------------------------------
 
 async function assertActor(tx: DbOrTx, actorId: string): Promise<void> {
@@ -126,6 +130,8 @@ interface ShippingBoxRow {
   netWeight: number | null;
   grossWeight: number | null;
   destinationCountry: string | null;
+  shippedAt: Date | null;
+  shippedBy: string | null;
   createdDate: Date;
 }
 
@@ -134,7 +140,8 @@ async function loadShippingBox(tx: DbOrTx, boxId: string): Promise<ShippingBoxRo
     tx,
     sql`SELECT id, picking_order_id AS "pickingOrderId", status, box_size AS "boxSize",
                net_weight AS "netWeight", gross_weight AS "grossWeight",
-               destination_country AS "destinationCountry", created_date AS "createdDate"
+               destination_country AS "destinationCountry",
+               shipped_at AS "shippedAt", shipped_by AS "shippedBy", created_date AS "createdDate"
         FROM shipping_boxes WHERE id = ${boxId}`
   );
   if (!box) throw new HTTPException(404, { message: "shipping_box_not_found" });
@@ -208,12 +215,10 @@ async function unassignPackageFromBoxTx(tx: DbOrTx, packageId: string): Promise<
 }
 
 /**
- * Finish the order + create the next-step task when every item is fully
- * picked (boxed). Call only after picked_qty is fresh in this tx.
- * The chain is config-aware (FLOW_STEPS_DISABLED): measuring enabled →
- * measuring task; else verify enabled → verify task; else nothing (order
- * finished = ready to ship). The status guard above already keeps a re-close
- * after a verify-time reopen from re-running this for a finished order.
+ * Finish the order when every item is fully picked (boxed). Call only after
+ * picked_qty is fresh in this tx. No next-step task is created anymore
+ * (box-scoped design): closing a box is the measuring completion, and the
+ * box's verify task is spawned by closeShippingBox.
  */
 async function maybeAutoFinishPickingOrder(
   tx: DbOrTx,
@@ -230,21 +235,6 @@ async function maybeAutoFinishPickingOrder(
   if (!items.every((i) => i.pickedQty >= i.qty)) return false;
 
   await queryRun(tx, sql`UPDATE picking_orders SET status = 'finished', working_by = NULL, working_at = NULL, last_update_date = ${now()} WHERE id = ${order.id}`);
-  if (isStepEnabled("measuring")) {
-    await queryRun(
-      tx,
-      sql`INSERT INTO measuring_tasks (id, picking_order_id, status, created_date)
-          VALUES (${newId()}, ${order.id}, 'pending', ${now()})
-          ON CONFLICT (picking_order_id) DO NOTHING`
-    );
-  } else if (isStepEnabled("verify")) {
-    await queryRun(
-      tx,
-      sql`INSERT INTO verify_tasks (id, picking_order_id, status, created_date)
-          VALUES (${newId()}, ${order.id}, 'pending', ${now()})
-          ON CONFLICT (picking_order_id) DO NOTHING`
-    );
-  }
   await logTransition(tx, {
     entityType: "picking_order",
     entityId: order.id,
@@ -730,7 +720,6 @@ export interface PickingBoxDetail {
 }
 
 export interface PickingOrderDetail extends PickingOrderRow {
-  measuringTask: { id: string; status: string } | null;
   items: PickingItemDetail[];
   boxes: PickingBoxDetail[];
   /** Whole-box claim hint: a fully-claimable shelf box whose current contents
@@ -757,7 +746,7 @@ interface AllocationQueryRow {
   lotAvailableQty: number | null;
 }
 
-/** Complete nested read: order + measuringTask + items (allocations, packages) + boxes. */
+/** Complete nested read: order + items (allocations, packages) + boxes. */
 export async function getPickingOrderDetail(db: AppDb, orderId: string): Promise<PickingOrderDetail> {
   const order = await queryGet<PickingOrderRow>(
     db,
@@ -781,12 +770,6 @@ export async function getPickingOrderDetail(db: AppDb, orderId: string): Promise
     `
   );
   if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
-
-  const measuringTask =
-    (await queryGet<{ id: string; status: string }>(
-      db,
-      sql`SELECT id, status FROM measuring_tasks WHERE picking_order_id = ${orderId}`
-    )) ?? null;
 
   const items = await queryAll<Omit<PickingItemDetail, "allocations" | "packages">>(
     db,
@@ -862,7 +845,6 @@ export async function getPickingOrderDetail(db: AppDb, orderId: string): Promise
 
   return {
     ...order,
-    measuringTask,
     items: items.map((i) => ({
       ...i,
       allocations: allocations
@@ -905,6 +887,9 @@ export interface ScanPickingItemInput {
   actorId: string;
   allocationId: string;
   qty: number;
+  /** When set, the created package(s) are boxed straight into this (open)
+   *  shipping box — the scan-into-box flow behind POST /shipping-boxes/:id/scan. */
+  shippingBoxId?: string;
   /** Batch-attr overrides for the created package(s); the source's attrs win
    *  when a field is absent. */
   dateCode?: string | null;
@@ -946,7 +931,9 @@ interface PackagePortion extends Omit<SourceLine, "id"> {
  * picked_qty +qty, allocation shrunk), the batch snapshot rides on the
  * package, and two PICK ledger rows are written per portion. Order-level
  * receiving allocations (new schema) distribute FIFO across the order's lines
- * for the part — one package per consumed portion.
+ * for the part — one package per consumed portion. With `shippingBoxId` the
+ * package(s) land boxed in that (open) box straight away (scanned→boxed
+ * transitions + carton prefill), skipping the separate add-to-box step.
  */
 export async function scanPickingItem(
   db: AppDb,
@@ -977,6 +964,13 @@ export async function scanPickingItem(
     }
     const order = await loadOrderForWrite(tx, item.pickingOrderId);
     assertOrderWritable(order);
+    // Scan-into-box: the target box must exist and be open (cross-order
+    // packing — any open order's item may join any open box).
+    let box: ShippingBoxRow | null = null;
+    if (input.shippingBoxId) {
+      box = await loadShippingBox(tx, input.shippingBoxId);
+      if (box.status !== "open") throw new HTTPException(409, { message: "shipping_box_not_open" });
+    }
     // allocations.qty is the remaining (scans shrink it), so this covers
     // "qty ≤ allocation.qty − already-packaged-from-that-allocation".
     if (input.qty > alloc.qty) throw new HTTPException(409, { message: "scanned_qty_exceeds_allocation" });
@@ -1088,7 +1082,7 @@ export async function scanPickingItem(
         tx,
         sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty,
                                          shipping_box_id, date_code, lot_code, coo, cow, created_date, last_update_date)
-            VALUES (${pid}, ${item.id}, ${item.pickingOrderId}, ${p.sourceType}, ${p.sourceId}, ${p.qty}, NULL,
+            VALUES (${pid}, ${item.id}, ${item.pickingOrderId}, ${p.sourceType}, ${p.sourceId}, ${p.qty}, ${box?.id ?? null},
                     ${dateCode}, ${lotCode}, ${coo}, ${cow}, ${at}, ${at})`
       );
       packageIds.push(pid);
@@ -1134,10 +1128,79 @@ export async function scanPickingItem(
       actorId: input.actorId,
       metadata: { qty: input.qty, allocation: alloc.id },
     });
+    // Scan-into-box: the packages landed boxed, so log the scanned→boxed
+    // transition per portion (same shape as addPackageToBox) and prefill the
+    // box's carton metadata from the sources.
+    if (box) {
+      for (const p of portions) {
+        await logTransition(tx, {
+          entityType: "picking_item",
+          entityId: item.id,
+          fromState: "scanned",
+          toState: "boxed",
+          actorId: input.actorId,
+          metadata: { qty: p.qty, box: box.id },
+        });
+      }
+      await prefillShippingBoxFromSources(tx, box.id);
+    }
 
     await recomputePickingItem(tx, item.id);
     await maybeAutoFinishPickingOrder(tx, { pickingOrderId: item.pickingOrderId, actorId: input.actorId });
     return { packageIds };
+  });
+}
+
+/**
+ * Scan-to-box across orders (spec 2026-08-11 box-scoped design): resolve a
+ * scanned barcode to the ONE open picking item it could mean — part_no or
+ * parts.wcl_item_no match on an item of a pending/picking order that still
+ * has open qty (picked < qty) and an allocation with remaining qty. 404
+ * `no_matching_picking_item` when nothing matches, 409
+ * `ambiguous_picking_item` when more than one item does. Then delegates to
+ * scanPickingItem with the item's first remaining allocation; the default qty
+ * mirrors the picking page — the item's remaining open qty capped by the
+ * allocation's remaining qty.
+ */
+export async function scanIntoShippingBox(
+  db: AppDb,
+  input: { shippingBoxId: string; barcode: string; qty?: number; actorId: string }
+): Promise<{ packageIds: string[] }> {
+  const barcode = input.barcode.trim();
+  if (barcode === "") throw new HTTPException(400, { message: "barcode_required" });
+  const rows = await queryAll<{
+    pickingItemId: string;
+    allocationId: string;
+    allocQty: number;
+    openQty: number;
+  }>(
+    db,
+    sql`SELECT pi.id AS "pickingItemId", a.id AS "allocationId", a.qty AS "allocQty",
+               (pi.qty - COALESCE(pkg.qty, 0))::int AS "openQty"
+        FROM picking_items pi
+        JOIN picking_orders po ON po.id = pi.picking_order_id
+        LEFT JOIN parts p ON p.part_no = pi.part_no
+        JOIN allocations a ON a.picking_item_id = pi.id AND a.qty > 0
+        LEFT JOIN (
+          SELECT picking_item_id, SUM(qty)::int AS qty
+          FROM picking_packages GROUP BY picking_item_id
+        ) pkg ON pkg.picking_item_id = pi.id
+        WHERE po.status IN ('pending', 'picking')
+          AND (pi.part_no = ${barcode} OR p.wcl_item_no = ${barcode})
+          AND pi.picked_qty < pi.qty
+        ORDER BY a.created_date, a.id`
+  );
+  if (rows.length === 0) throw new HTTPException(404, { message: "no_matching_picking_item" });
+  if (new Set(rows.map((r) => r.pickingItemId)).size > 1) {
+    throw new HTTPException(409, { message: "ambiguous_picking_item" });
+  }
+  const target = rows[0];
+  const qty = input.qty ?? Math.min(target.openQty, target.allocQty);
+  return scanPickingItem(db, target.pickingItemId, {
+    actorId: input.actorId,
+    allocationId: target.allocationId,
+    qty,
+    shippingBoxId: input.shippingBoxId,
   });
 }
 
@@ -1451,11 +1514,12 @@ export async function removeScannedPackage(db: AppDb, input: { packageId: string
 }
 
 /**
- * Verify-scan a package. Branching on the order's pending task:
- *  - pending measuring task → the box must be open; sets `verified`.
- *  - else pending verify task → the box may be open OR closed (verifying
- *    parts against a sealed box is the normal verify pass); sets
- *    `verify_verified` AND `verified` (so a reopened box can re-close).
+ * Verify-scan a package. Branching on the package's box (box-scoped design):
+ *  - box open (or box-less correction flow) → measuring-time scan; sets
+ *    `verified`.
+ *  - box closed AND a pending verify task exists for that box → verify-step
+ *    re-scan; sets `verify_verified` AND `verified`.
+ *  - box closed without a pending verify task → 409.
  * 409 `package_already_verified` only when the applicable flag is already set.
  */
 export async function verifyPackage(db: AppDb, input: { packageId: string; actorId: string }): Promise<void> {
@@ -1478,12 +1542,7 @@ export async function verifyPackage(db: AppDb, input: { packageId: string; actor
     if (pkg.shippingBoxId === null) throw new HTTPException(409, { message: "package_not_in_box" });
     await assertActor(tx, input.actorId);
     const box = await loadShippingBox(tx, pkg.shippingBoxId);
-    const measuringTask = await queryGet<{ id: string }>(
-      tx,
-      sql`SELECT id FROM measuring_tasks WHERE picking_order_id = ${pkg.pickingOrderId} AND status = 'pending'`
-    );
-    if (measuringTask) {
-      if (box.status !== "open") throw new HTTPException(409, { message: "shipping_box_not_open" });
+    if (box.status === "open") {
       if (pkg.verified) throw new HTTPException(409, { message: "package_already_verified" });
       await queryRun(tx, sql`UPDATE picking_packages SET verified = true, last_update_date = ${now()} WHERE id = ${pkg.id}`);
       await logTransition(tx, {
@@ -1498,7 +1557,7 @@ export async function verifyPackage(db: AppDb, input: { packageId: string; actor
     }
     const verifyTask = await queryGet<{ id: string }>(
       tx,
-      sql`SELECT id FROM verify_tasks WHERE picking_order_id = ${pkg.pickingOrderId} AND status = 'pending'`
+      sql`SELECT id FROM verify_tasks WHERE shipping_box_id = ${box.id} AND status = 'pending'`
     );
     if (!verifyTask) throw new HTTPException(409, { message: "no_pending_measure_or_verify_task" });
     if (pkg.verifyVerified) throw new HTTPException(409, { message: "package_already_verified" });
@@ -1525,6 +1584,8 @@ export interface ShippingBoxDto {
   netWeight: number | null;
   grossWeight: number | null;
   destinationCountry: string | null;
+  shippedAt: Date | null;
+  shippedBy: string | null;
   createdDate: Date;
 }
 
@@ -1537,6 +1598,8 @@ function toBoxDto(box: ShippingBoxRow): ShippingBoxDto {
     netWeight: box.netWeight,
     grossWeight: box.grossWeight,
     destinationCountry: box.destinationCountry,
+    shippedAt: box.shippedAt,
+    shippedBy: box.shippedBy,
     createdDate: box.createdDate,
   };
 }
@@ -1587,6 +1650,8 @@ export async function createShippingBox(
       netWeight: null,
       grossWeight: null,
       destinationCountry: null,
+      shippedAt: null,
+      shippedBy: null,
       createdDate: at,
     };
   });
@@ -1643,7 +1708,8 @@ export async function updateShippingBox(
   });
 }
 
-/** Add one unboxed package of the box's order into an open box (+ auto-finish check). */
+/** Add one unboxed package into an open box (+ auto-finish check). Any open
+ *  order's package may join any open box (cross-order packing). */
 export async function addPackageToBox(
   db: AppDb,
   input: { shippingBoxId: string; packageId: string; actorId: string }
@@ -1660,9 +1726,6 @@ export async function addPackageToBox(
     await assertActor(tx, input.actorId);
     const box = await loadShippingBox(tx, input.shippingBoxId);
     if (box.status !== "open") throw new HTTPException(409, { message: "shipping_box_not_open" });
-    if (box.pickingOrderId !== pkg.pickingOrderId) {
-      throw new HTTPException(409, { message: "different_picking_orders" });
-    }
     const order = await loadOrderForWrite(tx, pkg.pickingOrderId);
     assertOrderWritable(order);
 
@@ -1779,9 +1842,9 @@ export async function cancelShippingBox(db: AppDb, input: { shippingBoxId: strin
  * verified, destination (box → order ship_to), box
  * size, and positive weights with gross ≥ net are required. Stamps the
  * resolved destination, logs the transition, and runs the auto-finish check.
- * Auto-complete chain: when this was the order's last open box and nothing is
- * left unboxed, a pending measuring task completes itself (which spawns the
- * verify task when the verify step is enabled).
+ * Closing IS the measuring completion (box-scoped design — no measuring task
+ * exists); when the verify step is enabled, closing spawns the box's pending
+ * verify task (idempotent ON CONFLICT DO NOTHING).
  */
 export async function closeShippingBox(db: AppDb, input: { shippingBoxId: string; actorId: string }): Promise<void> {
   return db.transaction(async (tx) => {
@@ -1822,48 +1885,32 @@ export async function closeShippingBox(db: AppDb, input: { shippingBoxId: string
     });
     if (box.pickingOrderId) {
       await maybeAutoFinishPickingOrder(tx, { pickingOrderId: box.pickingOrderId, actorId: input.actorId });
-      // Auto-complete chain: a pending measuring task completes once every
-      // box of the order is closed and no package is left unboxed.
-      const pendingMeasuring = await queryGet<{ id: string }>(
+    }
+    // Chain: box closed (measured) → the box's verify task (unless the verify
+    // step is off). The unique index keeps a re-close idempotent.
+    if (isStepEnabled("verify")) {
+      await queryRun(
         tx,
-        sql`SELECT id FROM measuring_tasks WHERE picking_order_id = ${box.pickingOrderId} AND status = 'pending'`
+        sql`INSERT INTO verify_tasks (id, shipping_box_id, status, created_date)
+            VALUES (${newId()}, ${box.id}, 'pending', ${now()})
+            ON CONFLICT (shipping_box_id) DO NOTHING`
       );
-      if (pendingMeasuring) {
-        const openBox = await queryGet<{ id: string }>(
-          tx,
-          sql`SELECT id FROM shipping_boxes WHERE picking_order_id = ${box.pickingOrderId} AND status <> 'closed' LIMIT 1`
-        );
-        const unboxed = await queryGet<{ id: string }>(
-          tx,
-          sql`SELECT id FROM picking_packages WHERE picking_order_id = ${box.pickingOrderId} AND shipping_box_id IS NULL LIMIT 1`
-        );
-        if (!openBox && !unboxed) {
-          await completeMeasuringTaskTx(tx, { taskId: pendingMeasuring.id, actorId: input.actorId });
-        }
-      }
     }
   });
 }
 
 /**
- * Explicit finish: all items fully picked (boxed) → order 'finished' + the
- * next-step task (measuring, or verify when measuring is disabled — unique
- * per order). Returns the created task, or null when both steps are off.
+ * Explicit finish: all items fully picked (boxed) → order 'finished'. No task
+ * is created (box-scoped design) — returns the finished order's id + status.
  */
 export async function finishPickingOrder(
   db: AppDb,
   input: { pickingOrderId: string; actorId: string }
-): Promise<{ id: string; pickingOrderId: string; status: string } | null> {
+): Promise<{ id: string; status: string }> {
   return db.transaction(async (tx) => {
     const order = await loadOrderForWrite(tx, input.pickingOrderId);
     assertOrderWritable(order);
     await assertActor(tx, input.actorId);
-    const existingTask = await queryGet<{ id: string }>(
-      tx,
-      sql`SELECT id FROM measuring_tasks WHERE picking_order_id = ${order.id}
-          UNION ALL SELECT id FROM verify_tasks WHERE picking_order_id = ${order.id} LIMIT 1`
-    );
-    if (existingTask) throw new HTTPException(409, { message: "measuring_task_exists" });
     const items = await queryAll<{ qty: number; pickedQty: number }>(
       tx,
       sql`SELECT qty, picked_qty AS "pickedQty" FROM picking_items WHERE picking_order_id = ${order.id}`
@@ -1874,23 +1921,15 @@ export async function finishPickingOrder(
     }
     const done = await maybeAutoFinishPickingOrder(tx, { pickingOrderId: order.id, actorId: input.actorId });
     if (!done) throw new HTTPException(409, { message: "picking_order_could_not_be_finished" });
-    const task = await queryGet<{ id: string; pickingOrderId: string; status: string }>(
-      tx,
-      sql`SELECT id, picking_order_id AS "pickingOrderId", status FROM measuring_tasks WHERE picking_order_id = ${order.id}
-          UNION ALL
-          SELECT id, picking_order_id AS "pickingOrderId", status FROM verify_tasks WHERE picking_order_id = ${order.id}
-          LIMIT 1`
-    );
-    return task ?? null;
+    return { id: order.id, status: "finished" };
   });
 }
 
 /**
- * Reopen a closed shipping box during the verify step: the order must have a
+ * Reopen a closed shipping box during the verify step: THIS box must have a
  * pending verify task (reopen is a verify-step action only). The box goes
  * back to 'open' and its packages lose both verified flags so the worker
- * re-scans them before re-closing (closeShippingBox re-checks auto-finish,
- * which is a no-op for the already-finished order).
+ * re-scans them before re-closing; the task stays pending.
  */
 export async function reopenShippingBox(db: AppDb, input: { shippingBoxId: string; actorId: string }): Promise<void> {
   return db.transaction(async (tx) => {
@@ -1899,7 +1938,7 @@ export async function reopenShippingBox(db: AppDb, input: { shippingBoxId: strin
     if (box.status !== "closed") throw new HTTPException(409, { message: "shipping_box_not_closed" });
     const task = await queryGet<{ status: string }>(
       tx,
-      sql`SELECT status FROM verify_tasks WHERE picking_order_id = ${box.pickingOrderId}`
+      sql`SELECT status FROM verify_tasks WHERE shipping_box_id = ${box.id}`
     );
     if (!task || task.status !== "pending") throw new HTTPException(409, { message: "verify_task_not_pending" });
 

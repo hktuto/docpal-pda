@@ -31,13 +31,6 @@
               </template>
             </button>
           </template>
-          <NuxtLink
-            v-if="order.status === 'finished' && order.measuringTask"
-            :to="`/measuring/${order.measuringTask.id}`"
-            class="btn btn--small"
-          >
-            {{ $t('picking.detail.measuring') }}
-          </NuxtLink>
         </template>
 
         <DetailRow :label="$t('picking.detail.customer')" :value="order.customerCode" />
@@ -79,10 +72,13 @@
         :adding-all="addingAll"
         :any-adding-all="anyAddingAll"
         :unboxed-count="unboxedCountForOrder"
+        :scan-into-box-id="scanIntoBoxId"
+        :scanning-into-box="scanningIntoBox"
         @create-box="createBox"
         @scan-box="scanBoxId"
         @cancel-box="cancelBox"
         @add-all-to-box="addAllToBox"
+        @toggle-scan-into-box="toggleScanIntoBox"
       />
 
       <PickingItemsSection
@@ -145,6 +141,31 @@ const boxSelections = ref<Record<string, string>>({});
 const { showToast } = useToast();
 const { parseRawValue } = useLabelScan();
 const scanningBox = ref(false);
+const scanIntoBoxId = ref<string | null>(null);
+const scanningIntoBox = ref(false);
+
+// Cross-order packing: with a box armed ("scan into box"), item barcode
+// scans from ANY order pick straight into that box (404
+// no_matching_picking_item / 409 ambiguous_picking_item surface as toasts).
+function toggleScanIntoBox(boxId: string) {
+  scanIntoBoxId.value = scanIntoBoxId.value === boxId ? null : boxId;
+}
+
+async function scanIntoBox(boxId: string, barcode: string): Promise<boolean> {
+  if (scanningIntoBox.value) return false;
+  scanningIntoBox.value = true;
+  try {
+    await warehouse.scanIntoShippingBox(boxId, { barcode });
+    await load();
+    showToast(t("picking.boxesSection.scanIntoBoxSuccess", { box: boxId }));
+    return true;
+  } catch (e) {
+    showToast(errorMessage(e));
+    return false;
+  } finally {
+    scanningIntoBox.value = false;
+  }
+}
 
 // Scan-to-create-box: on this page a scan that matches a supplier QR template
 // is an item label (point the operator at scan mode); anything else is treated
@@ -168,8 +189,14 @@ async function createBoxWithId(boxId: string): Promise<boolean> {
 }
 
 useHardwareScanner({
-  enabled: () => actionable.value && !scanningBox.value,
+  enabled: () => actionable.value && !scanningBox.value && !scanningIntoBox.value,
   onScan: async (rawValue: string) => {
+    // An armed "scan into box" takes every scan — the barcode may belong to
+    // another order, so the usual supplier-template / box-id routing below
+    // is bypassed until the operator disarms.
+    if (scanIntoBoxId.value) {
+      return await scanIntoBox(scanIntoBoxId.value, rawValue);
+    }
     const parsedResult = await parseRawValue(rawValue);
     if (parsedResult.matched) {
       showToast(t("picking.detail.itemQrUseScanMode"));
@@ -220,6 +247,14 @@ async function load() {
   try {
     const data = await warehouse.getPickingOrder(orderId);
     order.value = data;
+    // An armed scan-into box that left the open state (closed/cancelled
+    // elsewhere) disarms itself.
+    if (
+      scanIntoBoxId.value &&
+      !data.boxes.some((b) => b.id === scanIntoBoxId.value && b.status === "open")
+    ) {
+      scanIntoBoxId.value = null;
+    }
     const nextBoxSelections: Record<string, string> = {};
     for (const item of data.items) {
       for (const pkg of item.packages ?? []) {
@@ -333,16 +368,10 @@ async function removeFromBox(packageId: string) {
 async function finish() {
   finishing.value = true;
   try {
+    // Finish only flips the order — measuring follows the boxes, not the
+    // order, so there is nothing else to kick off here.
     await warehouse.finishPickingOrder(orderId);
     await load();
-    if (order.value?.measuringTask) {
-      showToast(t("picking.detail.measuringTaskCreated"), {
-        action: {
-          label: t("picking.detail.goToMeasuring"),
-          to: `/measuring/${order.value.measuringTask.id}`,
-        },
-      });
-    }
   } catch (e) {
     error.value = errorMessage(e);
   } finally {

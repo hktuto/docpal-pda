@@ -27,6 +27,7 @@ import {
   shelfBoxItems,
   pickingOrders,
   pickingItems,
+  warehouseConfig,
 } from "./schema/index.js";
 import { realParts } from "./seed-real-data.js";
 import { realSubInventories } from "./seed-subinventories-data.js";
@@ -79,10 +80,11 @@ async function insertChunked<T extends PgTableWithColumns<any>>(
 export const ALL_TABLES = [
   "sync_events",
   "app_events",
+  "warehouse_config",
   "inventory_transactions",
   "transaction_logs",
   "goods_verify_tasks",
-  "measuring_tasks",
+  "verify_tasks",
   "picking_packages",
   "shipping_box_items",
   "shipping_boxes",
@@ -136,7 +138,19 @@ const uid = (n: number) => `00000000-0000-7000-8000-${String(n).padStart(12, "0"
 // logic, not by the seed.
 // opts.stockBoxes: seed the scenario shelf boxes + stock (default on; tests
 // turn it off so their exact-count assertions keep the minimal world).
-async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boolean }): Promise<void> {
+// opts.orders: seed the scenario receiving/picking orders (default on; the
+// boot-time auto-seed turns it off when WAREHOUSE_SEED_ORDERS=off so a fresh
+// UAT/production database starts with master data + shelf stock only).
+async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boolean; orders?: boolean }): Promise<void> {
+  // Flow config for this warehouse (spec
+  // docs/superpowers/specs/2026-08-10-flow-config-design.md): the "flow" row
+  // of warehouse_config, loaded once at boot. {} = defaults (all steps on,
+  // dock stock allocatable). Edit per warehouse — e.g. require put-away
+  // before picking:
+  //   {"steps":{"put-away":{"autoCreateTasks":true},"picking":{"allocation":{"allowDockStock":false}}}}
+  // FLOW_CONFIG env (when set) overrides this row at boot.
+  await db.insert(warehouseConfig).values([{ key: "flow", value: {} }]);
+
   // bulkParts (default on) seeds the full Oracle parts master (~100k rows),
   // its 162 auto-created suppliers, and the real net-weight table. Tests pass
   // bulkParts: false to keep the small, fast demo world.
@@ -410,10 +424,13 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
   // --- demo scenario (new_seed/demo-scenario.xlsx → seed-demo-scenario.ts) ---
   // Parts first (FK target; merges with the demo/bulk master keep-first).
   await db.insert(parts).values([...demoParts]).onConflictDoNothing();
-  // 3 pending receiving orders (see the block comment above).
-  await db.insert(receivingOrders).values([...demoReceivingOrders]);
-  await db.insert(receivingInvoices).values([...demoReceivingInvoices]);
-  await db.insert(receivingInvoiceItems).values([...demoReceivingInvoiceItems]);
+  // 3 pending receiving orders (see the block comment above). Skipped when
+  // opts.orders is false (WAREHOUSE_SEED_ORDERS=off at boot).
+  if (opts?.orders !== false) {
+    await db.insert(receivingOrders).values([...demoReceivingOrders]);
+    await db.insert(receivingInvoices).values([...demoReceivingInvoices]);
+    await db.insert(receivingInvoiceItems).values([...demoReceivingInvoiceItems]);
+  }
   // Scenario shelf boxes + stock (tests opt out via stockBoxes: false).
   if (opts?.stockBoxes !== false) {
     await db.insert(shelfBoxes).values([...demoShelfBoxes]);
@@ -421,8 +438,10 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
     await db.insert(inventoryLots).values([...demoLots]);
   }
   // 2 pending picking orders (SO-DEMO-0001 item-by-item line + whole-box match, SO-DEMO-0002 partial).
-  await db.insert(pickingOrders).values([...demoPickingOrders]);
-  await db.insert(pickingItems).values([...demoPickingItems]);
+  if (opts?.orders !== false) {
+    await db.insert(pickingOrders).values([...demoPickingOrders]);
+    await db.insert(pickingItems).values([...demoPickingItems]);
+  }
 
   // Real Oracle parts master reference rows (generated from
   // new_seed/parts_table.xlsx into seed-real-data.ts; merges keep-first with
@@ -448,7 +467,9 @@ export async function seedIfEmpty(sql: postgres.Sql, db: AppDb): Promise<boolean
   await db.transaction(async (tx) => {
     // Demo seeding must not flood the sync-service event feed.
     await tx.execute(dsql`SET LOCAL app.sync_events_off = 1`);
-    await seedAll(tx as unknown as AppDb);
+    // WAREHOUSE_SEED_ORDERS=off: master data + shelf stock only, no demo
+    // receiving/picking orders (UAT/production fresh databases).
+    await seedAll(tx as unknown as AppDb, { orders: process.env.WAREHOUSE_SEED_ORDERS !== "off" });
   });
   return true;
 }

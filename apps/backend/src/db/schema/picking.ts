@@ -67,31 +67,21 @@ export const pickingItems = pgTable(
   })
 );
 
-export const measuringTasks = pgTable(
-  "measuring_tasks",
-  {
-    id: text("id").primaryKey(),
-    pickingOrderId: text("picking_order_id").notNull().references(() => pickingOrders.id, { onDelete: "cascade" }),
-    status: text("status").notNull().default("pending"), // pending | completed
-    createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
-    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
-  },
-  (t) => ({
-    pickingOrderUq: uniqueIndex("idx_measuring_tasks_picking_order").on(t.pickingOrderId),
-  })
-);
-
+// Verify tasks bind to the shipping box (2026-08-11 box-scoped design): one
+// pending task per closed box, created by closeShippingBox when the verify
+// step is enabled. measuring_tasks is gone — closing a box IS the measuring
+// completion.
 export const verifyTasks = pgTable(
   "verify_tasks",
   {
     id: text("id").primaryKey(),
-    pickingOrderId: text("picking_order_id").notNull().references(() => pickingOrders.id, { onDelete: "cascade" }),
+    shippingBoxId: text("shipping_box_id").notNull().references(() => shippingBoxes.id, { onDelete: "cascade" }),
     status: text("status").notNull().default("pending"), // pending | completed
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
   (t) => ({
-    pickingOrderUq: uniqueIndex("idx_verify_tasks_picking_order").on(t.pickingOrderId),
+    shippingBoxUq: uniqueIndex("idx_verify_tasks_shipping_box").on(t.shippingBoxId),
   })
 );
 
@@ -99,20 +89,23 @@ export const shippingBoxes = pgTable(
   "shipping_boxes",
   {
     id: text("id").primaryKey(), // server-generated BOX-S-<YYYYMMDD>-<seq>
+    // Informational "created for" order only — a box may hold packages from
+    // any open picking order (cross-order packing).
     pickingOrderId: text("picking_order_id").references(() => pickingOrders.id),
-    measuringTaskId: text("measuring_task_id").references(() => measuringTasks.id),
     status: text("status").notNull().default("open"), // open | closed
     grossWeight: real("gross_weight"),
     netWeight: real("net_weight"),
     destinationCountry: text("destination_country"),
     boxSize: text("box_size"),
+    // Per-box shipping: stamped by shipShippingBox (admin).
+    shippedAt: timestamp("shipped_at", { mode: "date" }),
+    shippedBy: text("shipped_by").references(() => users.id),
     // Whole-box claim: the reused shelf carton this box was created from.
     sourceShelfBoxId: text("source_shelf_box_id").references(() => shelfBoxes.id),
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
   (t) => ({
-    taskIdx: index("idx_shipping_boxes_task").on(t.measuringTaskId),
     orderIdx: index("idx_shipping_boxes_order").on(t.pickingOrderId),
   })
 );

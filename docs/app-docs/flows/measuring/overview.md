@@ -1,23 +1,22 @@
 # Measuring Overview
 
-Measuring is the process of recording shipping-box dimensions and packing items after a picking order is finished.
+Measuring is the process of verifying a shipping box's contents and recording its measurements (box size, weights, destination) before closing it.
 
 ## When to use it
 
-Use the Measuring flow when a picking order status becomes finished and a measuring task is created.
+Use the Measuring flow once picking has packed items into shipping boxes. There is no measuring task: the list shows the open shipping boxes that contain packages, and closing a box *is* the measuring completion.
 
 ## Concept
 
 1. The operator opens the Measuring list.
 
    ![Measuring list](./assets/measuring-list.png)
-   *Measuring list (empty state when no tasks are ready)*
+   *Measuring list — open boxes that contain packages (empty state when none are ready)*
 
-2. The operator selects a measuring task — the detail shows the picking order's shipping boxes with their verification progress.
-3. The operator opens a box — tap **Open box**, or scan the box's QR code to jump straight in.
-4. On the box page (a table of the box's packages) the operator scans each package's QR label to verify it; a per-row camera Scan button is the OCR fallback.
-5. Once all packages are verified, the operator records box size, net/gross weight (kg — the net weight is pre-filled from the part net-weight master and can be adjusted), and destination country, then taps **Confirm box** — one action that saves and closes the box.
-6. When the last box of the order is confirmed, the measuring task completes automatically (no separate complete step); when the verify step is enabled, a verify task is created for the order.
+2. The operator selects a box — the page shows the box's packages with their verification progress. A box may contain packages from several picking orders (cross-order packing).
+3. On the box page (a table of the box's packages) the operator scans each package's QR label to verify it; a per-row camera Scan button is the OCR fallback.
+4. Once all packages are verified, the operator records box size, net/gross weight (kg — the net weight is pre-filled from the part net-weight master and can be adjusted), and destination country, then taps **Confirm box** — one action that saves and closes the box.
+5. Closing the box completes its measuring; when the verify step is enabled, a verify task is created for the box.
 
 ## Related guides
 

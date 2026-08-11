@@ -131,7 +131,6 @@ API call touching N rows produces N events).
 | `picking_packages` | `picking_packages.insert` / `picking_packages.update` / `picking_packages.delete` |
 | `shipping_boxes` | `shipping_boxes.insert` / `shipping_boxes.update` / `shipping_boxes.delete` |
 | `shipping_box_items` | `shipping_box_items.insert` / `shipping_box_items.update` / `shipping_box_items.delete` |
-| `measuring_tasks` | `measuring_tasks.insert` / `measuring_tasks.update` / `measuring_tasks.delete` |
 | `verify_tasks` | `verify_tasks.insert` / `verify_tasks.update` / `verify_tasks.delete` |
 
 ### Inventory
@@ -144,6 +143,7 @@ API call touching N rows produces N events).
 | `shelf_box_items` | `shelf_box_items.insert` / `shelf_box_items.update` / `shelf_box_items.delete` |
 | `allocations` | `allocations.insert` / `allocations.update` / `allocations.delete` |
 | `goods_verify_tasks` | `goods_verify_tasks.insert` / `goods_verify_tasks.update` / `goods_verify_tasks.delete` |
+| `put_away_tasks` | `put_away_tasks.insert` / `put_away_tasks.update` / `put_away_tasks.delete` |
 
 ### Excluded (housekeeping — no trigger)
 

@@ -29,6 +29,20 @@
       "when": 1786341873870,
       "tag": "0003_busy_morlun",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786415899834,
+      "tag": "0004_many_silverclaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786415940128,
+      "tag": "0005_tearful_inertia",
+      "breakpoints": true
     }
   ]
 }

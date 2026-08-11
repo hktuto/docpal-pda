@@ -194,10 +194,6 @@ onMounted(load);
             <span v-if="dateMsg" class="muted">{{ $t("admin.pages.pickingOrders.saved") }}</span>
           </div>
         </div>
-        <div v-if="order.measuringTask">
-          <div class="dt">{{ $t("admin.pages.pickingOrders.measuringTask") }}</div>
-          <div class="dd">{{ order.measuringTask.status }}</div>
-        </div>
       </div>
 
       <template v-if="order.status === 'issue'">
@@ -272,7 +268,10 @@ onMounted(load);
           <tbody>
             <tr v-for="b in order.boxes" :key="b.id">
               <td>{{ b.id }}</td>
-              <td>{{ b.status }}</td>
+              <td>
+                {{ b.status }}
+                <div v-if="b.shippedAt" class="muted">{{ new Date(b.shippedAt).toLocaleDateString() }}</div>
+              </td>
               <td>{{ b.boxSize ?? "—" }}</td>
               <td>{{ b.netWeight ?? "—" }} / {{ b.grossWeight ?? "—" }}</td>
               <td>{{ b.destinationCountry ?? "—" }}</td>

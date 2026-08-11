@@ -63,6 +63,17 @@
           </template>
         </button>
         <button
+          class="btn btn--small"
+          :class="{ 'btn--ghost': scanIntoBoxId !== box.id }"
+          :disabled="scanningIntoBox"
+          @click="emit('toggle-scan-into-box', box.id)"
+        >
+          <template v-if="scanningIntoBox && scanIntoBoxId === box.id">
+            <InlineSpinner />
+          </template>
+          {{ scanIntoBoxId === box.id ? $t('picking.boxesSection.scanIntoBoxStop') : $t('picking.boxesSection.scanIntoBox') }}
+        </button>
+        <button
           v-if="box.packageCount === 0"
           class="btn btn--small btn--danger"
           :disabled="cancellingBox[box.id]"
@@ -71,6 +82,9 @@
           {{ cancellingBox[box.id] ? $t('actions.canceling') : $t('picking.boxesSection.cancelBox') }}
         </button>
       </div>
+      <p v-if="box.status === 'open' && scanIntoBoxId === box.id" class="scan-into-hint">
+        {{ $t('picking.boxesSection.scanIntoBoxHint') }}
+      </p>
     </div>
   </div>
 </template>
@@ -91,6 +105,9 @@ const props = defineProps<{
   anyAddingAll: boolean;
   unboxedCount: number;
   expanded: boolean;
+  /** The box armed for cross-order "scan item into box", if any. */
+  scanIntoBoxId: string | null;
+  scanningIntoBox: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -98,6 +115,7 @@ const emit = defineEmits<{
   "scan-box": [];
   "cancel-box": [boxId: string];
   "add-all-to-box": [boxId: string];
+  "toggle-scan-into-box": [boxId: string];
   "update:expanded": [value: boolean];
 }>();
 
@@ -138,5 +156,11 @@ const expanded = computed({
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
+}
+
+.scan-into-hint {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+  font-size: 0.8125rem;
 }
 </style>

@@ -132,14 +132,13 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
   const MUTATION_INVALIDATIONS: Record<string, string[]> = {
     "receiving-orders": ["/put-away", "/stock-search"],
     "receiving-invoice-items": ["/receiving-orders"],
-    "picking-orders": ["/measuring-tasks", "/receiving-orders", "/put-away", "/stock-search"],
+    "picking-orders": ["/measuring-boxes", "/verify-tasks", "/receiving-orders", "/put-away", "/stock-search"],
     "picking-items": ["/picking-orders", "/receiving-orders", "/stock-search"],
-    packages: ["/picking-orders", "/measuring-tasks", "/verify-tasks", "/receiving-orders"],
-    "shipping-boxes": ["/picking-orders", "/measuring-tasks", "/verify-tasks", "/receiving-orders"],
+    packages: ["/picking-orders", "/measuring-boxes", "/verify-tasks", "/receiving-orders"],
+    "shipping-boxes": ["/picking-orders", "/measuring-boxes", "/verify-tasks", "/receiving-orders"],
     "shelf-boxes": ["/put-away", "/receiving-orders", "/stock-search"],
     "put-away-scans": ["/put-away", "/receiving-orders"],
-    "measuring-tasks": ["/picking-orders", "/verify-tasks"],
-    "verify-tasks": ["/picking-orders", "/measuring-tasks"],
+    "verify-tasks": ["/picking-orders", "/measuring-boxes"],
     "goods-verify-tasks": ["/stock-search"],
   };
 

@@ -25,6 +25,7 @@ import {
   reorderPickingOrders,
   reportPickingOrderIssues,
   resolvePickingOrderIssue,
+  scanIntoShippingBox,
   scanPickingItem,
   updateShippingBox,
   verifyPackage,
@@ -163,7 +164,7 @@ test("list: seeded order with item/qty counts; status filter", async () => {
 
 // --- detail ---------------------------------------------------------------------
 
-test("detail: nested shape — order, measuringTask, items with allocations/packages, boxes; 404", async () => {
+test("detail: nested shape — order, items with allocations/packages, boxes; 404", async () => {
   await reseed(client);
   const { orderId } = await seededOrderAllocated();
 
@@ -173,7 +174,6 @@ test("detail: nested shape — order, measuringTask, items with allocations/pack
   assert.equal(detail.customerCode, "ACME");
   assert.equal(detail.issueReason, null);
   assert.equal(detail.issueReportedBy, null);
-  assert.equal(detail.measuringTask, null);
   assert.equal(detail.boxes.length, 0);
 
   assert.equal(detail.items.length, 3);
@@ -498,7 +498,7 @@ test("boxes: create with pre-printed boxId; duplicate and empty guards", async (
 
 // --- box membership + cancel --------------------------------------------------------
 
-test("boxes: membership add/remove, cancel; guards incl. different orders", async () => {
+test("boxes: membership add/remove, cancel; cross-order add allowed (box-scoped packing)", async () => {
   await reseed(client);
   const { orderId, actorId } = await seededOrderAllocated();
   const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
@@ -527,7 +527,8 @@ test("boxes: membership add/remove, cancel; guards incl. different orders", asyn
   assert.equal(noPkg.status, 404);
   assert.equal(noPkg.message, "package_not_found");
 
-  // package of a different picking order → 409
+  // cross-order packing: an unboxed package of ANOTHER open order joins the
+  // box (the box's picking_order_id is informational only)
   const otherOrderId = await insertPickingOrder("SO-X-OTHER", "pending");
   const otherItemId = await insertPickingItem(otherOrderId, "RK73H1JTTD1002F", 100);
   const lotId = (await queryGet<{ id: string }>(
@@ -539,9 +540,12 @@ test("boxes: membership add/remove, cancel; guards incl. different orders", asyn
     sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, created_date, last_update_date)
         VALUES (${otherPkgId}, ${otherItemId}, ${otherOrderId}, 'inventory_lot', ${lotId}, 100, now(), now())`
   );
-  const otherOrder = await catchHttp(addPackageToBox(client.db, { shippingBoxId: boxA.id, packageId: otherPkgId, actorId }));
-  assert.equal(otherOrder.status, 409);
-  assert.equal(otherOrder.message, "different_picking_orders");
+  await addPackageToBox(client.db, { shippingBoxId: boxA.id, packageId: otherPkgId, actorId });
+  const crossBoxed = await queryGet<{ shippingBoxId: string | null }>(
+    client.db,
+    sql`SELECT shipping_box_id AS "shippingBoxId" FROM picking_packages WHERE id = ${otherPkgId}`
+  );
+  assert.equal(crossBoxed!.shippingBoxId, boxA.id);
 
   // cancel: non-empty box → 409; emptied → cancelled + hard delete
   const boxB = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
@@ -596,15 +600,15 @@ test("close flow: add-all-unboxed auto-finishes; verify → measure → close ca
   const { packed } = await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
   assert.equal(packed, 3);
 
-  // last package boxed → order auto-finished + measuring task (exactly one)
+  // last package boxed → order auto-finished; no task rows are created at
+  // finish anymore (verify tasks are spawned per box at close time)
   const order = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM picking_orders WHERE id = ${orderId}`);
   assert.equal(order!.status, "finished");
   const tasks = await queryAll<{ id: string; status: string }>(
     client.db,
-    sql`SELECT id, status FROM measuring_tasks WHERE picking_order_id = ${orderId}`
+    sql`SELECT id, status FROM verify_tasks WHERE shipping_box_id = ${box.id}`
   );
-  assert.equal(tasks.length, 1);
-  assert.equal(tasks[0].status, "pending");
+  assert.equal(tasks.length, 0);
   const orderLogs = await queryAll<{ fromState: string | null; toState: string }>(
     client.db,
     sql`SELECT from_state AS "fromState", to_state AS "toState"
@@ -659,11 +663,10 @@ test("close flow: add-all-unboxed auto-finishes; verify → measure → close ca
   assert.deepEqual(closed, { status: "closed", destinationCountry: "ACME Electronics (HK)" });
 
   const detail = await getPickingOrderDetail(client.db, orderId);
-  // last-box close auto-completed the measuring task (and spawned the verify task)
-  assert.equal(detail.measuringTask?.status, "completed");
+  // the close spawned the box's pending verify task (verify step enabled)
   const verifyTask = await queryGet<{ status: string }>(
     client.db,
-    sql`SELECT status FROM verify_tasks WHERE picking_order_id = ${orderId}`
+    sql`SELECT status FROM verify_tasks WHERE shipping_box_id = ${box.id}`
   );
   assert.equal(verifyTask!.status, "pending");
   assert.equal(detail.boxes.length, 1);
@@ -681,7 +684,7 @@ test("close flow: add-all-unboxed auto-finishes; verify → measure → close ca
 
 // --- finish ------------------------------------------------------------------------
 
-test("finish: explicit finish + guards (unfinished, empty, task exists, already finished)", async () => {
+test("finish: explicit finish + guards (unfinished, empty, already finished)", async () => {
   await reseed(client);
   const { orderId, actorId } = await seededOrderAllocated();
 
@@ -693,15 +696,6 @@ test("finish: explicit finish + guards (unfinished, empty, task exists, already 
   const noItems = await catchHttp(finishPickingOrder(client.db, { pickingOrderId: emptyOrderId, actorId }));
   assert.equal(noItems.status, 409);
   assert.equal(noItems.message, "no_items_to_pick");
-
-  const taskOrderId = await insertPickingOrder("SO-MT", "picking");
-  await client.db.execute(
-    sql`INSERT INTO measuring_tasks (id, picking_order_id, status, created_date)
-        VALUES (${randomUUID()}, ${taskOrderId}, 'pending', now())`
-  );
-  const taskExists = await catchHttp(finishPickingOrder(client.db, { pickingOrderId: taskOrderId, actorId }));
-  assert.equal(taskExists.status, 409);
-  assert.equal(taskExists.message, "measuring_task_exists");
 
   // finish the seeded order fully by hand: scan all + box all, then explicit finish
   const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
@@ -726,7 +720,7 @@ test("finish: explicit finish + guards (unfinished, empty, task exists, already 
 
 // --- verify cascade --------------------------------------------------------------------
 
-test("verify: guard cascade — unboxed, no task, ok, duplicate, closed box", async () => {
+test("verify: guard cascade — unboxed, open box ok, duplicate, closed box re-scan", async () => {
   await reseed(client);
   const { orderId, actorId } = await seededOrderAllocated();
   const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
@@ -737,19 +731,10 @@ test("verify: guard cascade — unboxed, no task, ok, duplicate, closed box", as
   assert.equal(unboxed.status, 409);
   assert.equal(unboxed.message, "package_not_in_box");
 
+  // box-scoped branching: an OPEN box accepts the measuring-time scan
+  // regardless of any task (measuring tasks no longer exist)
   const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
   await addPackageToBox(client.db, { shippingBoxId: box.id, packageId: p1, actorId });
-  const noTask = await catchHttp(verifyPackage(client.db, { packageId: p1, actorId }));
-  assert.equal(noTask.status, 409);
-  assert.equal(noTask.message, "no_pending_measure_or_verify_task");
-
-  // finish the order (auto) so the measuring task exists
-  const item3 = await pickingItemIdOf(orderId, "RK73B1JTTD181G");
-  const p2 = (await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 500 })).packageIds[0];
-  const p3 = (await scanPickingItem(client.db, item2, { actorId, allocationId: (await allocationOf(item2)).id, qty: 500 })).packageIds[0];
-  const p4 = (await scanPickingItem(client.db, item3, { actorId, allocationId: (await allocationOf(item3)).id, qty: 300 })).packageIds[0];
-  await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
-
   await verifyPackage(client.db, { packageId: p1, actorId });
   const verified = await queryGet<{ verified: boolean }>(
     client.db,
@@ -767,15 +752,21 @@ test("verify: guard cascade — unboxed, no task, ok, duplicate, closed box", as
   assert.equal(dup.status, 409);
   assert.equal(dup.message, "package_already_verified");
 
+  // finish the order (auto): scan the rest + box all
+  const item3 = await pickingItemIdOf(orderId, "RK73B1JTTD181G");
+  const p2 = (await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 500 })).packageIds[0];
+  const p3 = (await scanPickingItem(client.db, item2, { actorId, allocationId: (await allocationOf(item2)).id, qty: 500 })).packageIds[0];
+  const p4 = (await scanPickingItem(client.db, item3, { actorId, allocationId: (await allocationOf(item3)).id, qty: 300 })).packageIds[0];
+  await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
+
   await verifyPackage(client.db, { packageId: p2, actorId });
   await verifyPackage(client.db, { packageId: p3, actorId });
   await verifyPackage(client.db, { packageId: p4, actorId });
   await updateShippingBox(client.db, box.id, { actorId, boxSize: "26 X 20 X 20", netWeightKg: 0.5, grossWeightKg: 0.8 });
   await closeShippingBox(client.db, { shippingBoxId: box.id, actorId });
 
-  // closing the last box auto-completed the measuring task and spawned the
-  // verify task — scanning now runs in verify mode: closed box allowed, both
-  // flags set
+  // the close spawned the box's pending verify task — scanning now runs in
+  // verify mode: closed box allowed, both flags set
   await verifyPackage(client.db, { packageId: p1, actorId });
   const rescanned = await queryGet<{ verified: boolean; verifyVerified: boolean }>(
     client.db,
@@ -1161,8 +1152,8 @@ test("work lock: finishing the order clears the lock", async () => {
   );
   await client.db.execute(sql`UPDATE picking_items SET picked_qty = 5 WHERE id = ${itemId}`);
 
-  const task = await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
-  assert.equal(task.status, "pending");
+  const result = await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
+  assert.deepEqual(result, { id: orderId, status: "finished" });
   const row = await queryGet<{ w: string | null }>(
     client.db,
     sql`SELECT working_by AS w FROM picking_orders WHERE id = ${orderId}`
@@ -1212,8 +1203,8 @@ test("picking order logs: order + item/package/box rows with actor name, newest 
 
   assert.deepEqual(await listPickingOrderLogs(client.db, orderId), []);
 
-  // full flow: box → scan all items in full → box everything (auto-finish
-  // creates the measuring task) → verify one package
+  // full flow: box → scan all items in full → box everything (auto-finish)
+  // → verify one package
   const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
   const p1 = (
     await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 1000 })
@@ -1363,7 +1354,8 @@ test("claim-shelf-box: detail hints the exact-match box, claim reuses the carton
     assert.ok(lotIds.includes(p.sourceId));
   }
 
-  // lots emptied, allocations gone, order auto-finished with a measuring task
+  // lots emptied, allocations gone, order auto-finished (no task rows — the
+  // box's verify task is only spawned when the box closes)
   for (const lotId of lotIds) {
     const lot = await queryGet<{ totalQty: number; allocatedQty: number }>(
       client.db,
@@ -1381,7 +1373,6 @@ test("claim-shelf-box: detail hints the exact-match box, claim reuses the carton
 
   const after = await getPickingOrderDetail(client.db, orderId);
   assert.equal(after.status, "finished");
-  assert.equal(after.measuringTask?.status, "pending");
   assert.equal(after.suggestedBox, null); // finished orders never hint
 });
 
@@ -1463,4 +1454,74 @@ test("pack path: boxing packages prefills the box from the source carton's addit
   assert.equal(filled!.boxSize, "30 X 24 X 20");
   assert.equal(filled!.netWeight, 9); // operator value wins
   assert.equal(filled!.grossWeight, 1.25); // 1250 g → kg
+});
+
+// --- scan-into-box (cross-order packing) ------------------------------------------
+
+test("scan-into-box: resolves the barcode across orders, boxes straight away; guards + qty default", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await seededOrderAllocated();
+  const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
+
+  // default qty = the item's full remaining open qty capped by the
+  // allocation's remaining qty (1000 for the seeded 1002F line)
+  const r1 = await scanIntoShippingBox(client.db, { shippingBoxId: box.id, barcode: "RK73H1JTTD1002F", actorId });
+  assert.equal(r1.packageIds.length, 1);
+  const pkg1 = await queryGet<{ qty: number; shippingBoxId: string | null }>(
+    client.db,
+    sql`SELECT qty, shipping_box_id AS "shippingBoxId" FROM picking_packages WHERE id = ${r1.packageIds[0]}`
+  );
+  assert.equal(pkg1!.qty, 1000);
+  assert.equal(pkg1!.shippingBoxId, box.id); // boxed straight away
+  const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
+  assert.equal((await itemStateOf(item1)).pickedQty, 1000); // boxed ⇒ picked
+
+  // scanned→boxed transition logged (like addPackageToBox)
+  const boxLog = await queryGet<{ fromState: string; toState: string }>(
+    client.db,
+    sql`SELECT from_state AS "fromState", to_state AS "toState"
+        FROM transaction_logs WHERE entity_type = 'picking_item' AND entity_id = ${item1} AND to_state = 'boxed'`
+  );
+  assert.deepEqual(boxLog, { fromState: "scanned", toState: "boxed" });
+
+  // explicit qty is honored
+  const r2 = await scanIntoShippingBox(client.db, { shippingBoxId: box.id, barcode: "RK73H1JTTD2202F", qty: 200, actorId });
+  const pkg2 = await queryGet<{ qty: number; shippingBoxId: string | null }>(
+    client.db,
+    sql`SELECT qty, shipping_box_id AS "shippingBoxId" FROM picking_packages WHERE id = ${r2.packageIds[0]}`
+  );
+  assert.equal(pkg2!.qty, 200);
+  assert.equal(pkg2!.shippingBoxId, box.id);
+
+  // cross-order: 5602F only exists on SO-DEMO-0005 — it resolves and lands in
+  // THIS box (the box's creator order is informational only)
+  const r3 = await scanIntoShippingBox(client.db, { shippingBoxId: box.id, barcode: "RK73H1JTTD5602F", qty: 100, actorId });
+  const order5 = await pickingOrderIdOf("SO-DEMO-0005");
+  const pkg3 = await queryGet<{ pickingOrderId: string; shippingBoxId: string | null }>(
+    client.db,
+    sql`SELECT picking_order_id AS "pickingOrderId", shipping_box_id AS "shippingBoxId"
+        FROM picking_packages WHERE id = ${r3.packageIds[0]}`
+  );
+  assert.deepEqual(pkg3, { pickingOrderId: order5, shippingBoxId: box.id });
+
+  // 181G has open allocated items on BOTH SO-DEMO-0001 (300) and
+  // SO-DEMO-0002 (400) → ambiguous
+  const ambiguous = await catchHttp(scanIntoShippingBox(client.db, { shippingBoxId: box.id, barcode: "RK73B1JTTD181G", actorId }));
+  assert.equal(ambiguous.status, 409);
+  assert.equal(ambiguous.message, "ambiguous_picking_item");
+
+  // unknown barcode → 404
+  const noMatch = await catchHttp(scanIntoShippingBox(client.db, { shippingBoxId: box.id, barcode: "NO-SUCH-PART", actorId }));
+  assert.equal(noMatch.status, 404);
+  assert.equal(noMatch.message, "no_matching_picking_item");
+
+  // unknown box → 404; non-open box → 409
+  const noBox = await catchHttp(scanIntoShippingBox(client.db, { shippingBoxId: "BOX-NOPE", barcode: "RK73H1JTTD2202F", qty: 1, actorId }));
+  assert.equal(noBox.status, 404);
+  assert.equal(noBox.message, "shipping_box_not_found");
+
+  await client.db.execute(sql`UPDATE shipping_boxes SET status = 'closed' WHERE id = ${box.id}`);
+  const notOpen = await catchHttp(scanIntoShippingBox(client.db, { shippingBoxId: box.id, barcode: "RK73H1JTTD2202F", qty: 1, actorId }));
+  assert.equal(notOpen.status, 409);
+  assert.equal(notOpen.message, "shipping_box_not_open");
 });

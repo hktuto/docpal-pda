@@ -13,6 +13,13 @@
         style="margin-bottom: 1.5rem;"
       >
         <template #actions>
+          <NuxtLink
+            v-if="box.pickingOrderId"
+            :to="`/picking/${box.pickingOrderId}`"
+            class="btn btn--small btn--ghost"
+          >
+            {{ $t('actions.viewPickingOrder') }}
+          </NuxtLink>
           <button
             v-if="box.status === 'open' && allVerified"
             class="btn btn--small"
@@ -22,14 +29,14 @@
           </button>
         </template>
 
-        <DetailRow :label="$t('measuring.measureBox.pickingOrder')" :value="detail?.order.orderNo" />
+        <DetailRow :label="$t('measuring.measureBox.pickingOrders')" :value="orderNosText" />
       </DetailHeader>
 
       <div class="card" style="margin-bottom: 1.5rem;">
         <h3 style="margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--muted);">
-          {{ $t('measuring.measureBox.packagesVerified', { verified: verifiedCount, total: box.packages.length }) }}
+          {{ $t('measuring.measureBox.packagesVerified', { verified: verifiedCount, total: packages.length }) }}
         </h3>
-        <p v-if="!box.packages.length" class="empty" style="padding: 0;">{{ $t('common.noPackages') }}</p>
+        <p v-if="!packages.length" class="empty" style="padding: 0;">{{ $t('common.noPackages') }}</p>
         <table v-else class="pkg-table">
           <thead>
             <tr>
@@ -41,7 +48,7 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="pkg in box.packages" :key="pkg.id">
+            <tr v-for="pkg in packages" :key="pkg.id">
               <td>{{ pkg.partNo }}</td>
               <td>{{ pkg.qty }}</td>
               <td>{{ pkg.dateCode || $t('common.noData') }} / {{ pkg.lotCode || $t('common.noData') }} / {{ pkg.coo || $t('common.noData') }} / {{ pkg.cow || $t('common.noData') }}</td>
@@ -95,7 +102,7 @@
         :box-id="boxId"
         :initial-values="measurementInitialValues"
         :suggested-net-weight-kg="box.suggestedNetWeightKg"
-        @finished="load"
+        @finished="onMeasurementsFinished"
       />
     </template>
   </div>
@@ -111,24 +118,56 @@ import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import BoxMeasurementsModal from "~/components/BoxMeasurementsModal.vue";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { runScanMatcher, useScanMatchers, type ScanTaskContext } from "~/composables/useScanMatchers";
-import type { MeasuringTaskDetail, MeasuringPackage } from "~/services/types";
+import type { MeasuringPackage } from "~/services/types";
+
+/** Normalized box view the pages hand in via `loadDetail` (measuring box
+ *  detail and verify task detail both map onto this). */
+interface MeasureBoxView {
+  id: string;
+  /** Informational "created for" order (boxes may span orders). */
+  pickingOrderId: string;
+  status: string;
+  boxSize: string | null;
+  grossWeight: number | null;
+  netWeight: number | null;
+  suggestedNetWeightKg?: number | null;
+  destinationCountry: string | null;
+}
+
+interface MeasureBoxDetail {
+  box: MeasureBoxView;
+  packages: MeasuringPackage[];
+}
 
 // Shared box (re)measure body used by both the measuring and the verify box
-// pages — the two flows have the identical {task, order, boxes} detail
-// shape, so the only difference is which task read feeds the page and which
-// per-package flag (`verified` vs `verifyVerified`) gates the scan.
+// pages — both load one box plus its packages, so the only difference is
+// which read feeds the page and which per-package flag (`verified` vs
+// `verifyVerified`) gates the scan.
 const props = defineProps<{
-  taskId: string;
   boxId: string;
-  loadDetail: (taskId: string) => Promise<MeasuringTaskDetail>;
+  loadDetail: () => Promise<MeasureBoxDetail>;
   mode: 'measuring' | 'verify';
+  /** Order numbers of every picking order with packages in the box. */
+  orderNos?: string[];
+  /** Bump to force a reload from the parent (e.g. after a box reopen). */
+  reloadToken?: number;
 }>();
+
+// After the measurements modal confirms (update + close): the box is
+// closed, the page decides what comes next (measuring → back to the list,
+// verify → stay and re-scan).
+const emit = defineEmits<{ (e: "finished"): void }>();
 
 async function onScanApplied() {
   await load();
   if (allVerified.value && box.value?.status === "open") {
     measureOpen.value = true;
   }
+}
+
+async function onMeasurementsFinished() {
+  await load();
+  emit("finished");
 }
 
 async function onRetake() {
@@ -145,9 +184,9 @@ const { showToast } = useToast();
 
 const pending = ref(true);
 const error = ref<string | null>(null);
-// The consolidated task detail is the one read; the box is a view onto it
-// (no per-box fetch, no server-side package search).
-const detail = ref<MeasuringTaskDetail | null>(null);
+// The page's loader is the one read (box + packages); no per-package fetch,
+// no server-side package search.
+const detail = ref<MeasureBoxDetail | null>(null);
 const scanTargetPackageId = ref<string | undefined>(undefined);
 const measureOpen = ref(false);
 const headerExpanded = ref(false);
@@ -166,14 +205,16 @@ const verifying = ref(false);
 
 useVisibleReload(load);
 
+watch(
+  () => props.reloadToken,
+  (value, prev) => {
+    if (value != null && value !== prev) load();
+  }
+);
+
 async function load() {
   try {
-    const data = await props.loadDetail(props.taskId);
-    detail.value = data;
-    if (!data.boxes.some((b) => b.id === props.boxId)) {
-      error.value = t("measuring.measureBox.boxNotFound");
-      return;
-    }
+    detail.value = await props.loadDetail();
     error.value = null;
   } catch (e: unknown) {
     error.value = errorMessage(e);
@@ -182,19 +223,24 @@ async function load() {
   }
 }
 
-const box = computed(() => detail.value?.boxes.find((b) => b.id === props.boxId) ?? null);
+const box = computed(() => detail.value?.box ?? null);
+const packages = computed(() => detail.value?.packages ?? []);
+
+const orderNosText = computed(() =>
+  props.orderNos?.length ? props.orderNos.join(", ") : t("common.noData")
+);
 
 // The verify pass re-scans every package against the verify-specific flag.
 function isVerified(pkg: MeasuringPackage) {
   return props.mode === 'verify' ? pkg.verifyVerified : pkg.verified;
 }
 
-const verifiedCount = computed(() => box.value?.packages.filter(isVerified).length ?? 0);
+const verifiedCount = computed(() => packages.value.filter(isVerified).length);
 const allVerified = computed(
   () =>
     !!box.value &&
-    box.value.packages.length > 0 &&
-    box.value.packages.every(isVerified)
+    packages.value.length > 0 &&
+    packages.value.every(isVerified)
 );
 
 // Scanning is allowed on open boxes in both modes; the verify pass also
@@ -215,8 +261,7 @@ const measurementInitialValues = computed(() => {
 });
 
 const scanTargets = computed(() => {
-  if (!box.value) return [];
-  return box.value.packages
+  return packages.value
     .filter((pkg) => !isVerified(pkg))
     .map((pkg) => pkg.partNo)
     .filter((partNo): partNo is string => !!partNo);
@@ -228,7 +273,7 @@ const scanTargets = computed(() => {
 const scanContext = computed<ScanTaskContext>(() => ({
   task: "measuring",
   flow: props.mode,
-  packages: box.value?.packages ?? [],
+  packages: packages.value,
 }));
 
 async function openScan(packageId?: string) {

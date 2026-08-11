@@ -1,8 +1,8 @@
 # Box Measurements
 
 Each shipping box must have its measurements recorded before it can be
-closed. Confirming the order's last open box completes the measuring task
-automatically.
+closed. Closing the box completes its measuring — no separate task or
+complete step exists.
 
 ## Required fields
 
@@ -13,12 +13,12 @@ automatically.
   adjust it if the scale disagrees.
 - **Gross weight** — total weight of the packed box, in **kilograms** (must
   be at least the net weight).
-- **Destination country** — falls back to the picking order's destination
+- **Destination country** — falls back to the box's creator order's ship-to
   when left unset.
 
 ## How to enter
 
-1. Open the box page from the measuring task detail.
+1. Open the box page from the measuring list.
 2. Tap the measurements action to open the `BoxMeasurementsModal`.
 3. Enter the box size and weights (kg, up to 3 decimals) and tap
    **Confirm box** — one action that saves the measurements and closes the

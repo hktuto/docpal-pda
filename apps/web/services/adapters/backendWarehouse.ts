@@ -17,10 +17,12 @@ import type {
   PutAwayCandidate,
   PutAwayDetail,
   PutAwayScan,
+  PutAwayTaskDetail,
+  PutAwayTaskListRow,
   ShelfBox,
   Shelf,
-  MeasuringTaskListRow,
-  MeasuringTaskDetail,
+  MeasuringBoxListRow,
+  MeasuringBoxDetail,
   VerifyTaskListRow,
   VerifyTaskDetail,
   FlowConfig,
@@ -59,16 +61,17 @@ interface ScanTemplateRow {
  * Step 4 (picking flow): list/detail reads, scan-to-pick, package removal,
  * the shared shipping-box verbs (create/update/membership/add-all/cancel/
  * close), package verification, finish, and batch issue reports are real
- * HTTP calls. Step 5 (measuring flow): task list, the consolidated
- * task/order/boxes detail, and task completion are real HTTP calls (box
- * measurement itself reuses the step-4 verbs). Step 6 (goods verify flow):
+ * HTTP calls. Step 5 (measuring flow): box-scoped — the open-boxes list
+ * and the per-box detail are real HTTP calls (box measurement itself
+ * reuses the step-4 verbs; closing the box is the completion). Step 6
+ * (goods verify flow):
  * day-end task generation, the task queue reads, and per-task verify are
  * real HTTP calls. Step 7 (stock search): the one aggregate
  * `/stock-search` read plus the admin suppliers dropdown list are real
  * HTTP calls — every flow is now migrated (see docs/backend/api-design.md).
- * Step 8 (verify flow): task list/detail/complete plus the closed-box reopen
- * are real HTTP calls, and GET /config exposes the env-driven flow-step
- * toggles.
+ * Step 8 (verify flow): box-keyed task list/detail/complete plus the
+ * closed-box reopen are real HTTP calls, and GET /config exposes the
+ * env-driven flow-step toggles.
  *
  * Auth: every request carries `Authorization: Bearer <token>` (wired in
  * apiClient via the shared token getter); the server derives the actor from
@@ -215,11 +218,22 @@ export function createBackendWarehouseService(
     async closeShippingBox(id: string): Promise<void> {
       await client.post(`/shipping-boxes/${id}/close`, {});
     },
-    // Explicit finish: all items fully boxed → order finished + the measuring
-    // task (returned). Boxing the last package also auto-finishes.
-    async finishPickingOrder(
-      id: string
-    ): Promise<{ id: string; pickingOrderId: string; status: string }> {
+    // Cross-order packing: resolve the barcode to an open picking item +
+    // allocation across all orders and pick it straight into this box
+    // (404 no_matching_picking_item / 409 ambiguous_picking_item /
+    // shipping_box_not_open).
+    async scanIntoShippingBox(
+      shippingBoxId: string,
+      input: { barcode: string; qty?: number }
+    ): Promise<{ packageIds: string[] }> {
+      return client.post(`/shipping-boxes/${shippingBoxId}/scan`, {
+        barcode: input.barcode,
+        qty: input.qty ?? undefined,
+      });
+    },
+    // Explicit finish: all items fully boxed → order finished. Boxing the
+    // last package also auto-finishes (no task is created either way).
+    async finishPickingOrder(id: string): Promise<{ id: string; status: string }> {
       return client.post(`/picking-orders/${id}/finish`, {});
     },
     // Batch issue report: per-order entries (the dialog's shared fields are
@@ -245,6 +259,15 @@ export function createBackendWarehouseService(
     },
     async getPutAwayDetail(receivingOrderId: string): Promise<PutAwayDetail> {
       return client.get(`/receiving-orders/${receivingOrderId}/put-away`);
+    },
+    // Put-away tasks — the auto-created work queue (list source when
+    // putAway.autoCreateTasks is on); the detail is the same aggregate as
+    // getPutAwayDetail plus the task row and per-item shelf hints.
+    async listPutAwayTasks(status?: string): Promise<PutAwayTaskListRow[]> {
+      return client.get("/put-away-tasks", { status });
+    },
+    async getPutAwayTaskDetail(id: string): Promise<PutAwayTaskDetail> {
+      return client.get(`/put-away-tasks/${id}`);
     },
     // The admin CRUD read doubles as the PDA shelf list.
     async getShelves(): Promise<Shelf[]> {
@@ -312,23 +335,21 @@ export function createBackendWarehouseService(
       await client.del(`/shelf-boxes/${id}`);
     },
 
-    // Measuring — list/detail reads plus completion. Box measurement
-    // reuses the shared picking verbs above (verifyPackage /
+    // Measuring — box-scoped reads (no tasks): the list is the open boxes
+    // with ≥1 package, the detail one box plus its packages. Box
+    // measurement reuses the shared picking verbs above (verifyPackage /
     // updateShippingBox / closeShippingBox); scanned labels are matched
-    // to packages client-side from the consolidated detail.
-    async getMeasuringTasks(status?: string): Promise<MeasuringTaskListRow[]> {
-      return client.get("/measuring-tasks", { status });
+    // to packages client-side from the box detail.
+    async getMeasuringBoxes(): Promise<MeasuringBoxListRow[]> {
+      return client.get("/measuring-boxes");
     },
-    async getMeasuringTask(id: string): Promise<MeasuringTaskDetail> {
-      return client.get(`/measuring-tasks/${id}`);
-    },
-    async completeMeasuringTask(id: string): Promise<void> {
-      await client.post(`/measuring-tasks/${id}/complete`, {});
+    async getMeasuringBox(boxId: string): Promise<MeasuringBoxDetail> {
+      return client.get(`/measuring-boxes/${boxId}`);
     },
 
-    // Verify — list/detail reads plus completion, mirroring measuring.
-    // Reopen is the verify-step-only escape hatch: closed box → open,
-    // packages un-verified, so the worker can re-measure and re-close.
+    // Verify — box-keyed list/detail reads plus completion. Reopen is the
+    // verify-step-only escape hatch: closed box → open, packages
+    // un-verified, so the worker can re-measure and re-close.
     async getVerifyTasks(status?: string): Promise<VerifyTaskListRow[]> {
       return client.get("/verify-tasks", { status });
     },

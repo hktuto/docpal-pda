@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { pgTable, text, integer, boolean, timestamp, date, index, uniqueIndex, foreignKey } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
 import { parts, shelves, subInventories, users } from "./master.js";
-import { receivingInvoiceItems } from "./receiving.js";
+import { receivingInvoiceItems, receivingOrders } from "./receiving.js";
 
 export const inventoryLots = pgTable(
   "inventory_lots",
@@ -117,5 +117,27 @@ export const goodsVerifyTasks = pgTable(
     lotDayUq: uniqueIndex("goods_verify_tasks_lot_day_unique").on(t.taskDate, t.inventoryLotId),
     shelfDayIdx: index("idx_goods_verify_tasks_shelf").on(t.shelfCode, t.taskDate),
     statusIdx: index("idx_goods_verify_tasks_status").on(t.status),
+  })
+);
+
+// Put-away tasks (spec 2026-08-10-put-away-tasks-design.md): one task per
+// receiving order, auto-created on arrival when FLOW_CONFIG
+// steps.put-away.autoCreateTasks is on; completed by the auto-clear in
+// putaway.ts. The pair is a denormalized copy from the order (suggestion
+// query convenience). No assignee/lock columns in v1 (mirrors verify_tasks).
+export const putAwayTasks = pgTable(
+  "put_away_tasks",
+  {
+    id: text("id").primaryKey(),
+    receivingOrderId: text("receiving_order_id").notNull().references(() => receivingOrders.id, { onDelete: "cascade" }),
+    orgId: integer("org_id"), // 收货办公室, 2: HK
+    subInventoryCode: text("sub_inventory_code"), // 收货子库存
+    status: text("status").notNull().default("pending"), // pending | completed
+    createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+  },
+  (t) => ({
+    receivingOrderUq: uniqueIndex("idx_put_away_tasks_receiving_order").on(t.receivingOrderId),
+    statusIdx: index("idx_put_away_tasks_status").on(t.status),
   })
 );

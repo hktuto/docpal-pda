@@ -16,12 +16,10 @@ Page and component locations mapped to source files.
 | Receiving detail | `/receiving/:id` | `pages/receiving/[id].vue` or equivalent |
 | Put-away list | `/put-away` | `pages/put-away/index.vue` |
 | Put-away detail | `/put-away/:id` | `pages/put-away/[id].vue` or equivalent |
-| Measuring list | `/measuring` | `pages/measuring/index.vue` |
-| Measuring task detail | `/measuring/:id` | `pages/measuring/[id].vue` |
-| Measuring box | `/measuring/:taskId/box/:boxId` | `pages/measuring/[taskId]/box/[boxId].vue` (wrapper over `components/MeasureBox.vue`) |
-| Verify list | `/verify` | `pages/verify/index.vue` |
-| Verify task detail | `/verify/:id` | `pages/verify/[id].vue` |
-| Verify box | `/verify/:taskId/box/:boxId` | `pages/verify/[taskId]/box/[boxId].vue` (wrapper over `components/MeasureBox.vue`) |
+| Measuring list | `/measuring` | `pages/measuring/index.vue` (open boxes with packages) |
+| Measuring box | `/measuring/:boxId` | `pages/measuring/[boxId].vue` (wrapper over `components/MeasureBox.vue`) |
+| Verify list | `/verify` | `pages/verify/index.vue` (boxes with a pending verify task) |
+| Verify box | `/verify/:boxId` | `pages/verify/[boxId].vue` (resolves the box's task; wrapper over `components/MeasureBox.vue` + reopen/complete) |
 | Goods verify queue | `/goods-verify` | `pages/goods-verify/index.vue` |
 | Goods verify detail | `/goods-verify/:id` | `pages/goods-verify/[id].vue` |
 | Stock Search | `/stock-search` | `pages/stock-search/index.vue` |
@@ -143,7 +141,7 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Picking orders list / detail (delivery-date edit) | `/picking-orders`, `/picking-orders/:id` | `apps/admin/pages/picking-orders/index.vue`, `apps/admin/pages/picking-orders/[id].vue` |
 | Picking priority reorder | `/picking/reorder` | `apps/admin/pages/picking/reorder.vue` |
 | Receiving orders list / detail (delivery-date + item date-code edit, invoice filter) | `/receiving`, `/receiving/:id` | `apps/admin/pages/receiving/index.vue`, `apps/admin/pages/receiving/[id].vue` |
-| Shipping orders list / detail | `/shipping`, `/shipping/:id` | `apps/admin/pages/shipping/index.vue`, `apps/admin/pages/shipping/[id].vue` |
+| Shipping boxes list / detail (orders-in-box, per-box ship) | `/shipping`, `/shipping/:boxId` | `apps/admin/pages/shipping/index.vue`, `apps/admin/pages/shipping/[id].vue` |
 | Generic CRUD table (search / column sorting / server paging) | — | `apps/admin/components/CrudTable.vue` (+ `components/CrudForm.vue`, `components/Pager.vue`, `composables/useColumnSort.ts`) |
 | Sidebar layout + userbox popover | — | `apps/admin/app.vue` |
 | Flow API typed wrappers | — | `apps/admin/utils/flowApi.ts` |
@@ -163,11 +161,11 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | `GET|POST|PATCH /receiving-invoice-items/:id/mismatch`, `POST .../mismatch/confirm|cancel` | `apps/backend/src/routes/receiving.ts` |
 | `GET /picking-orders`, `GET /picking-orders/:id`, `POST /picking-orders/:id/finish`, `POST /picking-orders/report-issues` | `apps/backend/src/routes/picking.ts` |
 | `POST /picking-items/:id/scan`, `/packages/:id*` verbs, `/shipping-boxes/:id*` lifecycle | `apps/backend/src/routes/picking.ts` |
-| `GET /put-away/candidates`, `POST /receiving-orders/:id/put-away-scans`, `DELETE /put-away-scans/:scanId`, `/shelf-boxes*` lifecycle (create / cancel / assign-scan / remove-scan / add-all-unboxed / close) | `apps/backend/src/routes/putaway.ts` |
-| `GET /measuring-tasks`, `GET /measuring-tasks/:id`, `POST /measuring-tasks/:id/complete` | `apps/backend/src/routes/measuring.ts` |
+| `GET /put-away/candidates`, `GET /put-away-tasks`, `GET /put-away-tasks/:id`, `POST /receiving-orders/:id/put-away-scans`, `DELETE /put-away-scans/:scanId`, `/shelf-boxes*` lifecycle (create / cancel / assign-scan / remove-scan / add-all-unboxed / close) | `apps/backend/src/routes/putaway.ts` |
+| `GET /measuring-boxes`, `GET /measuring-boxes/:id` | `apps/backend/src/routes/measuring.ts` |
 | `GET /verify-tasks`, `GET /verify-tasks/:id`, `POST /verify-tasks/:id/complete` | `apps/backend/src/routes/verify.ts` |
-| `GET /shipping-orders`, `GET /shipping-orders/:pickingOrderId` | `apps/backend/src/routes/shipping.ts` |
-| `GET /config` (flow-step config from `FLOW_STEPS_DISABLED`) | `apps/backend/src/routes/config.ts` |
+| `GET /shipping-orders`, `GET /shipping-orders/:boxId`, `POST /shipping-orders/:boxId/ship` | `apps/backend/src/routes/shipping.ts` |
+| `GET /config` (flow config from the `warehouse_config` row `"flow"`, `FLOW_CONFIG` env override, deprecated `FLOW_STEPS_DISABLED` fallback) | `apps/backend/src/routes/config.ts` |
 | `POST /goods-verify-tasks/generate`, `GET /goods-verify-tasks`, `GET /goods-verify-tasks/:id`, `POST /goods-verify-tasks/:id/verify` | `apps/backend/src/routes/goodsverify.ts` |
 | `GET /stock-search` | `apps/backend/src/routes/stocksearch.ts` |
 | `GET /scan-templates` | `apps/backend/src/routes/scantemplates.ts` |
@@ -184,10 +182,11 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | Label parsing for receiving scans (QR templates, serial extraction) | `apps/backend/src/db/scanParse.ts` |
 | Picking execution (scan, packages, boxes, finish, issues) | `apps/backend/src/db/picking.ts` |
 | Put-away (scans, shelf boxes, lot materialization, auto-clear) | `apps/backend/src/db/putaway.ts` |
-| Measuring (task reads, completion + `completeMeasuringTaskTx` auto-complete on last box close; spawns the verify task) | `apps/backend/src/db/measuring.ts` |
-| Verify (task reads, completion with the `packages_not_all_rescanned` re-scan guard) | `apps/backend/src/db/verify.ts` |
-| Shipping feed (config-aware list/detail) | `apps/backend/src/db/shipping.ts` |
-| Flow-step config (`FLOW_STEPS_DISABLED`, `isStepEnabled`) | `apps/backend/src/config.ts` |
+| Put-away tasks (create/complete hooks, queue list, detail + shelf suggestion) | `apps/backend/src/db/putawaytasks.ts` |
+| Measuring (box reads — open boxes with packages + per-box `suggestedNetWeightKg`; no tasks — closing a box is the completion) | `apps/backend/src/db/measuring.ts` |
+| Verify (box-keyed task reads, completion with the `packages_not_all_rescanned` re-scan guard) | `apps/backend/src/db/verify.ts` |
+| Shipping feed (per-box list/detail + ship, derives order `shipped`) | `apps/backend/src/db/shipping.ts` |
+| Flow config (`warehouse_config` row `"flow"` + `FLOW_CONFIG` env override, `isStepEnabled`, `allowDockStock`) | `apps/backend/src/config.ts` |
 | Goods verify (generation, queue, verify with ADJUST) | `apps/backend/src/db/goodsverify.ts` |
 | Stock search | `apps/backend/src/db/stocksearch.ts` |
 | Ingest upserts | `apps/backend/src/db/ingest.ts` |

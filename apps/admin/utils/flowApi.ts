@@ -49,7 +49,6 @@ export interface PickingItemRow {
 }
 
 export interface PickingOrderDetail extends Omit<PickingOrderRow, "itemCount" | "totalQty" | "pickedQty" | "prioritySeq" | "workingBy" | "workingByName"> {
-  measuringTask: { id: string; status: string } | null;
   issueReason: string | null;
   issueQty: number | null;
   issuePackSize: number | null;
@@ -59,7 +58,7 @@ export interface PickingOrderDetail extends Omit<PickingOrderRow, "itemCount" | 
   issueReportedBy: string | null;
   issueReportedByName: string | null;
   items: PickingItemRow[];
-  boxes: { id: string; status: string; boxSize: string | null; grossWeight: number | null; netWeight: number | null; destinationCountry: string | null; packageCount: number }[];
+  boxes: { id: string; status: string; boxSize: string | null; grossWeight: number | null; netWeight: number | null; destinationCountry: string | null; packageCount: number; shippedAt: string | null }[];
 }
 
 // ---- receiving ----
@@ -121,30 +120,35 @@ export interface ReceivingOrderDetail {
   }[];
 }
 
-// ---- shipping (config-aware feed: verify / measuring / picking source) ----
+// ---- shipping (per-box: closed, unshipped boxes ready to ship) ----
 
-export interface ShippingOrderRow {
-  source: "verify" | "measuring" | "picking";
-  taskId: string | null;
-  pickingOrderId: string;
-  orderNo: string;
-  shipTo: string | null;
-  boxCount: number;
-  closedBoxCount: number;
-  completedAt: string;
+export interface ShippingBoxRow {
+  boxId: string;
+  orderNos: string[];
+  shipTos: string[];
+  destinationCountry: string | null;
+  boxSize: string | null;
+  grossWeight: number | null;
+  netWeight: number | null;
+  packageCount: number;
+  closedAt: string;
 }
 
-export interface ShippingOrderDetail {
-  order: { id: string; orderNo: string; status: string; shipTo: string | null; customerCode: string | null; poNo: string | null };
-  boxes: {
-    id: string;
+export interface ShippingBoxDetail {
+  box: {
+    boxId: string;
+    pickingOrderId: string | null;
     status: string;
     boxSize: string | null;
     grossWeight: number | null;
     netWeight: number | null;
     destinationCountry: string | null;
-    packages: { id: string; qty: number; dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null; verified: boolean; verifyVerified: boolean; partNo: string; wclItemNo: string | null }[];
-  }[];
+    shippedAt: string | null;
+    shippedBy: string | null;
+    createdDate: string;
+  };
+  packages: { id: string; qty: number; dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null; verified: boolean; partNo: string; wclItemNo: string | null }[];
+  orders: { id: string; orderNo: string; status: string; shipTo: string | null; customerCode: string | null; poNo: string | null }[];
 }
 
 // ---- stock search ----
@@ -263,16 +267,16 @@ export function useFlowApi() {
       return api.get<StockSearchResult>(`/stock-search?${qs}`);
     },
 
-    // Shipping (config-aware feed — the backend picks the source step)
-    listShippingOrders: () => api.get<ShippingOrderRow[]>("/shipping-orders"),
-    getShippingOrder: (pickingOrderId: string) =>
-      api.get<ShippingOrderDetail>(`/shipping-orders/${pickingOrderId}`),
-    // Marks each order shipped (POST /shipping-orders/:id/ship). Attempts all
+    // Shipping (per-box — closed, unshipped boxes ready to ship)
+    listShippingBoxes: () => api.get<ShippingBoxRow[]>("/shipping-orders"),
+    getShippingBox: (boxId: string) =>
+      api.get<ShippingBoxDetail>(`/shipping-orders/${boxId}`),
+    // Marks each box shipped (POST /shipping-orders/:boxId/ship). Attempts all
     // ids; on any failure throws an Error whose `failed` property lists the
-    // per-order failures ({ id, message }) so callers can surface them.
-    shipShippingOrders: async (pickingOrderIds: string[]): Promise<void> => {
+    // per-box failures ({ id, message }) so callers can surface them.
+    shipShippingBoxes: async (boxIds: string[]): Promise<void> => {
       const failed: { id: string; message: string }[] = [];
-      for (const id of pickingOrderIds) {
+      for (const id of boxIds) {
         try {
           await api.post(`/shipping-orders/${id}/ship`);
         } catch (e: any) {

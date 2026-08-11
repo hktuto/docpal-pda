@@ -1,19 +1,18 @@
 # Verify Overview
 
-Verify is a second check of the shipping boxes after measuring: another worker scans each box and re-scans every item in it, and can re-open boxes to correct measurements, before the order goes to shipping.
+Verify is a second check of a closed shipping box: another worker re-scans every item in the box, and can re-open the box to correct measurements, before the box goes to shipping.
 
 ## When to use it
 
-Use the Verify flow when a measuring task is completed and a verify task is created for the picking order (or, when the measuring step is disabled, as soon as a picking order is finished). The step can be turned off entirely via the backend `FLOW_STEPS_DISABLED` config — then completed measuring tasks go straight to shipping and the Verify tile is hidden.
+Use the Verify flow when a box has been measured and closed and a verify task was created for it (one task per box, created on close). The step can be turned off entirely in the flow config (`steps.verify.enabled=false` in the `warehouse_config` row `"flow"`; legacy `FLOW_STEPS_DISABLED` still works, deprecated) — then no verify tasks are created, closed boxes go straight to shipping, and the Verify tile is hidden.
 
 ## Concept
 
-1. The operator opens the Verify list — pending verify tasks for finished picking orders.
-2. The operator selects a verify task — the detail shows the order's shipping boxes with their re-scan progress and recorded measurements.
-3. If a box needs correction, the operator taps **Reopen** on the closed box — the box opens and its packages must be re-scanned before it can be re-closed.
-4. The operator opens a box — tap **Open box**, or scan the box's QR code to jump straight in.
-5. On the box page (shared with measuring) the operator scans each package's QR label again to re-verify it — this works on closed boxes too (checking contents against the sealed box is the normal verify pass). Box size, weights (kg), and destination country can be edited on open boxes.
-6. When every package of every box has been re-scanned and every box is closed, the operator completes the verify task — the order is now ready to ship.
+1. The operator opens the Verify list — boxes with a pending verify task. A box may contain packages from several picking orders (cross-order packing).
+2. The operator selects a box — the page shows the box's packages with their re-scan progress and recorded measurements.
+3. If the box needs correction, the operator taps **Reopen** — the box opens and its packages must be re-scanned before it can be re-closed.
+4. On the box page (shared with measuring) the operator scans each package's QR label again to re-verify it — this works on the closed box (checking contents against the sealed box is the normal verify pass). Box size, weights (kg), and destination country can be edited while the box is open.
+5. When every package has been re-scanned and the box is closed, the operator completes the verify task — the box is now ready to ship.
 
 ## Related guides
 

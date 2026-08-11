@@ -17,10 +17,12 @@ import type {
   PutAwayCandidate,
   PutAwayDetail,
   PutAwayScan,
+  PutAwayTaskDetail,
+  PutAwayTaskListRow,
   ShelfBox,
   Shelf,
-  MeasuringTaskListRow,
-  MeasuringTaskDetail,
+  MeasuringBoxListRow,
+  MeasuringBoxDetail,
   VerifyTaskListRow,
   VerifyTaskDetail,
   FlowConfig,
@@ -73,9 +75,15 @@ export interface WarehouseService {
   addAllUnboxedPackagesToBox(boxId: string): Promise<number>;
   cancelShippingBox(id: string): Promise<void>;
   closeShippingBox(id: string): Promise<void>;
-  finishPickingOrder(
-    id: string
-  ): Promise<{ id: string; pickingOrderId: string; status: string }>;
+  // Cross-order packing: scan ANY order's item barcode straight into this
+  // open box (404 no_matching_picking_item / 409 ambiguous_picking_item).
+  scanIntoShippingBox(
+    shippingBoxId: string,
+    input: { barcode: string; qty?: number }
+  ): Promise<{ packageIds: string[] }>;
+  // Explicit finish: all items fully boxed → order finished. Boxing the
+  // last package also auto-finishes (no task is created either way).
+  finishPickingOrder(id: string): Promise<{ id: string; status: string }>;
   reportPickingOrderIssues(
     entries: ReportPickingIssueEntry[]
   ): Promise<ReportPickingIssuesResult>;
@@ -90,6 +98,11 @@ export interface WarehouseService {
   // scan matching stays client-side (QR templates), mutations are per-verb.
   getPutAwayCandidates(): Promise<PutAwayCandidate[]>;
   getPutAwayDetail(receivingOrderId: string): Promise<PutAwayDetail>;
+  // Put-away tasks (GET /put-away-tasks*) — the auto-created work queue used
+  // when the backend's putAway.autoCreateTasks config is on; the detail is
+  // the same aggregate plus the task row and per-item shelf hints.
+  listPutAwayTasks(status?: string): Promise<PutAwayTaskListRow[]>;
+  getPutAwayTaskDetail(id: string): Promise<PutAwayTaskDetail>;
   getShelves(): Promise<Shelf[]>;
   recordPutAwayScan(
     receivingOrderId: string,
@@ -109,24 +122,26 @@ export interface WarehouseService {
   closeShelfBox(id: string): Promise<void>;
   cancelShelfBox(id: string): Promise<void>;
 
-  // Measuring — the consolidated detail (task + order + boxes with
-  // packages) feeds both the task page and the box page; box measurement
-  // reuses the picking verbs above (verifyPackage / updateShippingBox /
-  // closeShippingBox). Scanned labels are matched to packages client-side.
-  getMeasuringTasks(status?: string): Promise<MeasuringTaskListRow[]>;
-  getMeasuringTask(id: string): Promise<MeasuringTaskDetail>;
-  completeMeasuringTask(id: string): Promise<void>;
+  // Measuring — box-scoped (no tasks): the list is the open boxes with
+  // ≥1 package (any order); the detail is one box plus its packages. Box
+  // measurement reuses the shared picking verbs above (verifyPackage /
+  // updateShippingBox / closeShippingBox) — closing IS completion.
+  // Scanned labels are matched to packages client-side.
+  getMeasuringBoxes(): Promise<MeasuringBoxListRow[]>;
+  getMeasuringBox(boxId: string): Promise<MeasuringBoxDetail>;
 
-  // Verify — the second measuring pass (GET /verify-tasks* mirrors
-  // /measuring-tasks*). Reopen flips a closed box back to open (packages
-  // un-verified) so the worker can re-measure during a pending verify task.
+  // Verify — the second measuring pass, one task per shipping box
+  // (GET /verify-tasks* is box-keyed). Reopen flips a closed box back to
+  // open (packages un-verified) so the worker can re-measure during a
+  // pending verify task.
   getVerifyTasks(status?: string): Promise<VerifyTaskListRow[]>;
   getVerifyTask(id: string): Promise<VerifyTaskDetail>;
   completeVerifyTask(id: string): Promise<void>;
   reopenShippingBox(boxId: string): Promise<void>;
 
-  // Flow-step config (GET /config) — which home tiles the backend's
-  // FLOW_STEPS_DISABLED env var disables.
+  // Flow config (GET /config) — which home tiles the backend's flow config
+  // (warehouse_config row "flow") disables, plus the picking allocation
+  // policy (allowDockStock).
   getFlowConfig(): Promise<FlowConfig>;
 
   // Goods verify — task-based (docs/backend/api-design.md §Goods verify).

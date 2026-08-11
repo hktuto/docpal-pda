@@ -30,7 +30,7 @@ The demo models an event-driven warehouse with two overlapping workflows that sh
 5. On the picking order detail page the worker creates shipping boxes. The system auto-generates box IDs such as `BOX-S-20260720-0001`.
 6. The worker adds scanned packages into boxes. Once every package for a picking item is in a box, the item is finished.
 7. If any stock is left over, the worker can **Shelve (put away)** the remainder into a shelf box. The system logs where every item went.
-8. When a picking order is fully boxed, the next enabled step's task is created — measuring, or verify when measuring is off.
+8. When a picking order is fully boxed, it flips to `finished` — the packed boxes move on to measuring (no task is created at finish; closing a box is the measuring completion, and each closed box gets a verify task when the verify step is on).
 
 ### Workflow B: a picking order arrives first
 
@@ -45,11 +45,11 @@ The demo models an event-driven warehouse with two overlapping workflows that sh
 - **Picking by receiving** — look at one receiving order and see every picking order consuming its stock.
 - **Shelve / Put-away** — move unallocated receiving-area stock into a shelf box; this creates new shelved inventory for future picking.
 - **Goods Verify** — day-end count of the lots that had stock movements.
-- **Measuring** — weigh and close the shipping boxes of finished picking orders. Weights are in **kg** (decimals); the net weight is auto-calculated from the part net-weight master and pre-filled. A single **Confirm box** action saves and closes a box, and confirming the last box completes the task automatically — there is no manual complete step.
-- **Verify** — a second worker scans each box and re-scans every package (works on sealed boxes) before the order can ship; the task can only complete when everything has been re-scanned.
+- **Measuring** — verify and weigh open shipping boxes, then close them (a box may hold packages from several orders). Weights are in **kg** (decimals); the net weight is auto-calculated from the part net-weight master and pre-filled. A single **Confirm box** action saves and closes a box — closing IS the measuring completion; there is no measuring task.
+- **Verify** — a second worker re-scans every package of a closed box (works on the sealed box) before it can ship; the box's verify task can only complete when everything has been re-scanned.
 - **Stock Search** — look up where a part is stored (shelf, box, quantities).
-- **Flow-step config** — the backend `FLOW_STEPS_DISABLED` env turns individual steps (`receiving`/`put-away`/`picking`/`goods-verify`/`measuring`/`verify`/`stock-search`) on or off: hidden steps disappear from the PDA home menu, and disabling measuring/verify rewires the picking → shipping chain.
-- **Admin console** (`apps/admin`) — desktop UI for master data (suppliers, parts, shelves, sub-inventories, net-weight formulas, …), picking-order priority, issue handling, audit logs, and a config-aware shipping feed (`GET /shipping-orders`: completed verify tasks, completed measuring tasks, or finished picking orders, depending on which steps are enabled).
+- **Flow config** — the per-warehouse `warehouse_config` row `"flow"` (JSON merged over defaults, seeded; `FLOW_CONFIG` env override; legacy `FLOW_STEPS_DISABLED` deprecated but still works) turns individual steps (`receiving`/`put-away`/`picking`/`goods-verify`/`measuring`/`verify`/`stock-search`) on or off: hidden steps disappear from the PDA home menu, and disabling `verify` skips the box verify task and its shipping-feed gate. `steps.picking.allocation.allowDockStock=false` makes put-away a hard gate — received stock only becomes allocatable to picking after it is put away.
+- **Admin console** (`apps/admin`) — desktop UI for master data (suppliers, parts, shelves, sub-inventories, net-weight formulas, …), picking-order priority, issue handling, audit logs, and a per-box shipping feed (`GET /shipping-orders`: closed, unshipped boxes — gated on the box's completed verify task when the verify step is enabled).
 
 ---
 
@@ -85,8 +85,8 @@ picking_orders
     ├── allocations                (picking_item → inventory_lot, reserved not yet scanned)
     └── picking_packages           (physical packages scanned then boxed)
 
-measuring_tasks / verify_tasks
-└── shipping_boxes                 (created in picking, packed with picking_packages)
+verify_tasks                     (one per shipping box, created on box close)
+shipping_boxes                   (created in picking, packed with picking_packages; shipped per box)
 
 shelf_boxes                        (created during put-away)
 └── shelf_box_items                (verified during goods verify)
@@ -131,7 +131,7 @@ inventory_transactions             (stock ledger)
 - **Scan package** consumes the allocation and source stock, then creates a `picking_packages` row with `shipping_box_id = NULL`. The package is now "scanned".
 - The operator creates one or more `shipping_boxes`. The system auto-generates the box ID as `BOX-S-<YYYYMMDD>-<seq>`.
 - **Add to box** sets `picking_packages.shipping_box_id` and recalculates the item's picked quantity as the sum of boxed package quantities.
-- When every item is fully boxed, the operator finishes the order. The system creates the next enabled step's task — a `measuring_tasks` row, or a `verify_tasks` row when measuring is disabled.
+- When every item is fully boxed, the operator finishes the order. No task is created — closing a box is the measuring completion, and each closed box gets a `verify_tasks` row when the verify step is enabled.
 
 ### Picking directly from a receiving order
 
@@ -161,15 +161,14 @@ inventory_transactions             (stock ledger)
 
 ### Measuring
 
-- When a picking order is finished, a pending `measuring_tasks` row exists and the shipping boxes were already created and packed during picking.
+- There is no measuring task — the measuring page lists the open shipping boxes that contain packages (a box may hold packages from several picking orders).
 - The operator scans each package in a box to verify it, then records box size, destination country, and net/gross weight in **kg** (decimals; the net weight is pre-filled with the auto-calculated value from the part net-weight master and can be adjusted).
-- A single **Confirm box** action saves the measurements and closes the box.
-- When the order's last open box is confirmed, the measuring task completes automatically (no manual complete step) and — when the verify step is enabled — a `verify_tasks` row is created.
+- A single **Confirm box** action saves the measurements and closes the box — closing IS the measuring completion, and when the verify step is enabled a `verify_tasks` row is created for the box.
 
 ### Verify
 
-- A second full check of the same boxes: the operator scans each box and re-scans every package (scanning works on sealed boxes), and can reopen a box to correct measurements.
-- The task can only complete when every package has been re-scanned; after that the order is ready to ship and appears in the admin shipping feed.
+- A second full check of a closed box: the operator re-scans every package (scanning works on the sealed box), and can reopen the box to correct measurements.
+- The box's task can only complete when every package has been re-scanned; after that the box is ready to ship and appears in the admin shipping feed.
 
 ---
 
@@ -186,10 +185,10 @@ inventory_transactions             (stock ledger)
 | `/put-away` | List receiving orders ready for put-away |
 | `/put-away/:id` | Create shelf box and move receiving-area stock |
 | `/goods-verify` | List day-end goods-verify tasks |
-| `/measuring` | List pending measuring tasks |
-| `/measuring/:id` | Verify packages, weigh (kg), and confirm/close shipping boxes |
-| `/verify` | List pending verify tasks |
-| `/verify/:id` | Re-scan boxes and packages, then complete the verify task |
+| `/measuring` | List open shipping boxes that contain packages |
+| `/measuring/:boxId` | Verify packages, weigh (kg), and confirm/close the shipping box |
+| `/verify` | List boxes with a pending verify task |
+| `/verify/:boxId` | Re-scan the box's packages, then complete its verify task |
 | `/stock-search` | Search stock by part / supplier |
 | `/box` | Cross-flow box lookup (shipping + shelf boxes) |
 

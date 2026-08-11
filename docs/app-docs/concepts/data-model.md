@@ -24,15 +24,11 @@ A box created during put-away that groups items moved onto a shelf.
 
 ## Shipping box
 
-A box created during picking that groups packages shipped to a customer; it is weighed and closed in measuring and re-checked in verify.
-
-## Measuring task
-
-A packing task created when a picking order is finished. The operator weighs shipping boxes (net/gross in kg — the net weight is pre-filled from the part net-weight master), records dimensions, and closes them. The task completes automatically when the last box is confirmed.
+A box created during picking that groups packages shipped to a customer — it may hold packages from several picking orders (cross-order packing). It is weighed and closed in measuring (closing IS the measuring completion — there is no measuring task) and re-checked in verify before being shipped per box.
 
 ## Verify task
 
-A second re-measure pass created when a measuring task completes (or when a picking order finishes, if measuring is disabled). Another worker scans each box and re-scans every package before the task can be completed and the order goes to shipping.
+A second re-scan pass over one closed shipping box (one task per box, created when the box is closed). Another worker re-scans every package before the task can be completed and the box goes to shipping.
 
 ## Transition log
 

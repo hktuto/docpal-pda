@@ -330,10 +330,10 @@ describe('createApiClient', () => {
     const client = createApiClient({ baseUrl: 'http://api.test' });
 
     await client.get('/picking-orders/po1'); // cached
-    await client.get('/measuring-tasks/mt1'); // cached
+    await client.get('/measuring-boxes/box1'); // cached
     await client.post('/picking-items/pi1/scan', {});
     await client.get('/picking-orders/po1'); // invalidated via map → refetch
-    await client.get('/measuring-tasks/mt1'); // not mapped from picking-items → cached
+    await client.get('/measuring-boxes/box1'); // not mapped from picking-items → cached
 
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
@@ -343,10 +343,10 @@ describe('createApiClient', () => {
     const client = createApiClient({ baseUrl: 'http://api.test' });
 
     await client.get('/picking-orders/po1'); // cached
-    await client.get('/measuring-tasks/mt1'); // cached
+    await client.get('/measuring-boxes/box1'); // cached
     await client.post('/shipping-boxes/sb1/close', {});
     await client.get('/picking-orders/po1'); // refetch
-    await client.get('/measuring-tasks/mt1'); // refetch
+    await client.get('/measuring-boxes/box1'); // refetch
 
     expect(fetchMock).toHaveBeenCalledTimes(5);
   });

@@ -376,6 +376,8 @@ export interface PickingBox {
   netWeight: number | null;
   destinationCountry: string | null;
   packageCount: number;
+  shippedAt: string | null;
+  shippedBy: string | null;
 }
 
 /** Whole-box claim hint on GET /picking-orders/:id — a fully-claimable shelf
@@ -389,7 +391,7 @@ export interface SuggestedShelfBox {
 }
 
 /** GET /picking-orders/:id — nested: order (incl. issue fields) +
- *  measuringTask + items(allocations, packages) + boxes. */
+ *  items(allocations, packages) + boxes. */
 export interface PickingOrderDetail {
   id: string;
   orderNo: string;
@@ -412,7 +414,6 @@ export interface PickingOrderDetail {
   issueReportedBy: string | null;
   createdDate: string;
   lastUpdateDate: string;
-  measuringTask: { id: string; status: string } | null;
   items: PickingItem[];
   boxes: PickingBox[];
   suggestedBox: SuggestedShelfBox | null;
@@ -472,6 +473,24 @@ export interface PutAwayCandidate {
   unboxedItems: number;
 }
 
+/** GET /put-away-tasks?status= row — the auto-created put-away work queue
+ *  (one task per receiving order, oldest first; pending | completed). Only
+ *  exists when the backend's putAway.autoCreateTasks config is on; the
+ *  candidates list above stays the manual-mode list source. */
+export interface PutAwayTaskListRow {
+  id: string;
+  status: string;
+  receivingOrderId: string;
+  batchNo: string;
+  supplierCode: string | null;
+  supplierName: string | null;
+  orgId: number;
+  subInventoryCode: string | null;
+  receivedItems: number;
+  unboxedItems: number;
+  createdDate: string;
+}
+
 /** Expected (receivable) invoice item; remainingQty = received − picked −
  *  putAway − allocated − staged. */
 export interface PutAwayExpectedItem {
@@ -488,6 +507,10 @@ export interface PutAwayExpectedItem {
   lotCode: string | null;
   coo: string | null;
   cow: string | null;
+  /** Task-detail only (GET /put-away-tasks/:id): advisory shelf suggestion
+   *  from the backend's suggestShelf strategy — null when the part has no
+   *  stock history or suggestions are off. Absent on the plain aggregate. */
+  suggestedShelfCode?: string | null;
 }
 
 /** Inventory lot materialized from this order (via inventory_lot_sources). */
@@ -542,6 +565,17 @@ export interface PutAwayDetail {
   boxes: PutAwayBox[];
 }
 
+/** GET /put-away-tasks/:id — the same aggregate as PutAwayDetail plus the
+ *  task row; each item carries suggestedShelfCode (see PutAwayExpectedItem). */
+export interface PutAwayTaskDetail extends PutAwayDetail {
+  task: {
+    id: string;
+    status: string;
+    receivingOrderId: string;
+    createdDate: string;
+  };
+}
+
 /** POST /shelf-boxes response (a real, non-staging box). */
 export interface ShelfBox {
   id: string;
@@ -560,23 +594,22 @@ export interface Shelf {
 }
 
 // ------------------------------------------------------------------
-// Measuring — DTOs matching apps/backend (:3002), see
-// docs/backend/api-design.md §Measuring. The consolidated detail is the
-// one task/order/boxes read (packages carry part identity, so the box
-// page matches scanned labels client-side); box measurement reuses the
-// shared picking verbs (verifyPackage / updateShippingBox /
-// closeShippingBox). Weights are kilograms (decimals).
+// Measuring — box-scoped (docs/backend/api-design.md §Measuring). There
+// are no measuring tasks anymore: GET /measuring-boxes lists the open
+// boxes with ≥1 package (a box may hold packages from several picking
+// orders), and closing the box — after measurements via the shared
+// picking verbs (verifyPackage / updateShippingBox / closeShippingBox) —
+// IS the measuring completion. Weights are kilograms (decimals).
 // ------------------------------------------------------------------
 
-/** GET /measuring-tasks?status= row (box counts computed server-side). */
-export interface MeasuringTaskListRow {
-  id: string;
+/** GET /measuring-boxes row — open boxes with ≥1 package. */
+export interface MeasuringBoxListRow {
+  boxId: string;
   status: string;
-  pickingOrderId: string;
-  orderNo: string;
-  shipTo: string | null;
-  boxCount: number;
-  closedBoxCount: number;
+  /** Order numbers of every picking order with packages in the box. */
+  orderNos: string[];
+  packageCount: number;
+  verifiedCount: number;
   createdDate: string;
 }
 
@@ -595,8 +628,11 @@ export interface MeasuringPackage {
   wclItemNo: string | null;
 }
 
-export interface MeasuringBox {
-  id: string;
+/** GET /measuring-boxes/:id — the box plus its packages. */
+export interface MeasuringBoxDetail {
+  boxId: string;
+  /** Informational "created for" order (boxes may span orders). */
+  pickingOrderId: string;
   status: string;
   boxSize: string | null;
   /** Kilograms (decimals). */
@@ -606,43 +642,56 @@ export interface MeasuringBox {
   /** Auto-calculated net weight suggestion from the net-weight formula master (kg), null when no part has a formula. */
   suggestedNetWeightKg?: number | null;
   destinationCountry: string | null;
+  shippedAt: string | null;
+  createdDate: string;
   packages: MeasuringPackage[];
-}
-
-/** GET /measuring-tasks/:id — consolidated {task, order, boxes}. */
-export interface MeasuringTaskDetail {
-  task: {
-    id: string;
-    status: string;
-    pickingOrderId: string;
-    createdDate: string;
-  };
-  order: {
-    id: string;
-    orderNo: string;
-    status: string;
-    shipTo: string | null;
-    customerCode: string | null;
-    poNo: string | null;
-  };
-  boxes: MeasuringBox[];
 }
 
 // ------------------------------------------------------------------
 // Verify — the second measuring pass (picking → measuring → verify →
-// shipping). DTOs are the same {task, order, boxes[packages]} shape as
-// measuring (GET /verify-tasks* mirrors /measuring-tasks*).
+// shipping). One verify task per shipping box (GET /verify-tasks* is
+// box-keyed: the list row carries the box id + its order numbers).
 // ------------------------------------------------------------------
 
-/** GET /verify-tasks?status= row (same shape as the measuring list). */
-export type VerifyTaskListRow = MeasuringTaskListRow;
+/** GET /verify-tasks?status= row. */
+export interface VerifyTaskListRow {
+  taskId: string;
+  status: string;
+  shippingBoxId: string;
+  boxStatus: string;
+  orderNos: string[];
+  destinationCountry: string | null;
+  packageCount: number;
+  verifyVerifiedCount: number;
+  createdDate: string;
+}
 
-/** GET /verify-tasks/:id — consolidated {task, order, boxes}. */
-export type VerifyTaskDetail = MeasuringTaskDetail;
+/** GET /verify-tasks/:id — task + box + packages. */
+export interface VerifyTaskDetail {
+  task: {
+    id: string;
+    status: string;
+    shippingBoxId: string;
+    createdDate: string;
+  };
+  box: {
+    id: string;
+    pickingOrderId: string;
+    status: string;
+    boxSize: string | null;
+    grossWeight: number | null;
+    netWeight: number | null;
+    destinationCountry: string | null;
+    shippedAt: string | null;
+    suggestedNetWeightKg?: number | null;
+  };
+  packages: MeasuringPackage[];
+}
 
 // ------------------------------------------------------------------
-// Flow-step config — GET /config, driven by the backend's
-// FLOW_STEPS_DISABLED env var. Disabled steps hide their home tile.
+// Flow config — GET /config, driven by the backend's warehouse_config row
+// "flow" (FLOW_CONFIG env override; legacy FLOW_STEPS_DISABLED deprecated).
+// Disabled steps hide their home tile.
 // ------------------------------------------------------------------
 
 export type FlowStep =
@@ -656,6 +705,10 @@ export type FlowStep =
 
 export interface FlowConfig {
   flowSteps: Record<FlowStep, boolean>;
+  /** Resolved steps.put-away section: autoCreateTasks switches the PDA
+   *  put-away list from derived candidates to the task queue; suggestShelf
+   *  is the backend's shelf-hint strategy ("existing-stock" | "off"). */
+  putAway: { autoCreateTasks: boolean; suggestShelf: string };
 }
 
 // ------------------------------------------------------------------

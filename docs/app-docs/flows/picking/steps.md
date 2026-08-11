@@ -41,10 +41,14 @@ Each item row on the scan session page shows where its remaining qty is allocate
 
 Apply the queued scans with **Confirm** as usual.
 
+### Scan item into box (cross-order)
+
+The boxes section of the detail page has a **Scan item into box** toggle per open box. With it armed, scanning a part barcode picks that item straight into the box — even when the item belongs to a *different* picking order (a box may hold packages from several orders). The system resolves the barcode across all open orders; if nothing matches or more than one order's item could match, a message explains why nothing was added. Scanning another box's toggle switches the armed box.
+
 ## 5. Handle issues
 
 If the quantity is wrong, the item is damaged, or stock cannot be found, use the issue-reporting flow. See [Issue reporting](./issue-reporting.md).
 
 ## 6. Finish the order
 
-When all lines are fully picked, the order status changes to finished and the next enabled step's task is created — a measuring task, or a verify task when measuring is disabled (nothing when both are off, in which case the order goes straight to shipping).
+When all lines are fully picked, the order status changes to finished and the order's packed boxes move on to measuring. No task is created at finish anymore — closing a box is the measuring completion, and each closed box gets its own verify task when the verify step is enabled.

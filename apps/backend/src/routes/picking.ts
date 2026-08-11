@@ -20,6 +20,7 @@ import {
   reorderPickingOrders,
   reportPickingOrderIssues,
   resolvePickingOrderIssue,
+  scanIntoShippingBox,
   scanPickingItem,
   updateShippingBox,
   verifyPackage,
@@ -76,7 +77,7 @@ pickingRoute.post("/picking-orders/reorder", async (c) => {
   return c.json(result, 200);
 });
 
-// Nested detail: order + measuringTask + items (allocations, packages) + boxes.
+// Nested detail: order + items (allocations, packages) + boxes.
 pickingRoute.get("/picking-orders/:id", async (c) => {
   return c.json(await getPickingOrderDetail(db, c.req.param("id")), 200);
 });
@@ -127,7 +128,8 @@ pickingRoute.post("/picking-orders/:id/claim-shelf-box", async (c) => {
   return c.json(result, 201);
 });
 
-// Measuring-time package verification (boxed, open box, pending task).
+// Package verify-scan: open box → measuring-time `verified`; closed box with
+// a pending verify task → verify-step `verify_verified`.
 pickingRoute.post("/packages/:id/verify", async (c) => {
   await verifyPackage(db, { packageId: c.req.param("id"), actorId: actorFrom(c).id });
   return c.json({ ok: true }, 200);
@@ -192,6 +194,22 @@ pickingRoute.post("/shipping-boxes/:id/add-all-unboxed", async (c) => {
   return c.json(result, 200);
 });
 
+// Scan-into-box (cross-order packing): resolve the barcode to the one open
+// picking item + allocation it could mean across ALL orders, pick it straight
+// into this box (404 no_matching_picking_item / 409 ambiguous_picking_item).
+pickingRoute.post("/shipping-boxes/:id/scan", async (c) => {
+  const body = await readJson<{ barcode?: string; qty?: number }>(c);
+  if (!body.barcode) throw new HTTPException(400, { message: "barcode is required" });
+  const result = await scanIntoShippingBox(db, {
+    shippingBoxId: c.req.param("id"),
+    barcode: body.barcode,
+    qty: body.qty,
+    actorId: actorFrom(c).id,
+  });
+  await reallocateBestEffort("box scan");
+  return c.json(result, 201);
+});
+
 // Cancel (empty + open, hard delete) / close (verified + measured) a box.
 pickingRoute.post("/shipping-boxes/:id/cancel", async (c) => {
   await cancelShippingBox(db, { shippingBoxId: c.req.param("id"), actorId: actorFrom(c).id });
@@ -204,7 +222,7 @@ pickingRoute.post("/shipping-boxes/:id/close", async (c) => {
 });
 
 // Verify-step reopen: closed box → open + packages un-verified, so the worker
-// can re-measure (409 unless the order has a pending verify task).
+// can re-measure (409 unless THIS box has a pending verify task).
 pickingRoute.post("/shipping-boxes/:id/reopen", async (c) => {
   await reopenShippingBox(db, { shippingBoxId: c.req.param("id"), actorId: actorFrom(c).id });
   return c.json({ ok: true }, 200);
@@ -223,10 +241,10 @@ pickingRoute.post("/picking-orders/:id/resolve-issue", async (c) => {
   return c.json(result, 200);
 });
 
-// Explicit finish: all items fully boxed → order finished + measuring task.
+// Explicit finish: all items fully boxed → order finished → {id, status}.
 pickingRoute.post("/picking-orders/:id/finish", async (c) => {
-  const task = await finishPickingOrder(db, { pickingOrderId: c.req.param("id"), actorId: actorFrom(c).id });
-  return c.json(task, 200);
+  const result = await finishPickingOrder(db, { pickingOrderId: c.req.param("id"), actorId: actorFrom(c).id });
+  return c.json(result, 200);
 });
 
 // Page-driven work lock: acquire/refresh while the order page is open

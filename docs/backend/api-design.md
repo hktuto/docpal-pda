@@ -135,11 +135,18 @@ assign materializes the inventory lot stamped with the shelf's
 warehouse/section/sub-inventory + `inventory_lot_sources` + `put_away_qty` and
 writes two PUT_AWAY ledger rows (dock −qty / on_hand +qty), remove reverses,
 assign/remove/add-all run `allocateAll` best-effort, in-hand orders auto-clear
-when nothing remains).
+when nothing remains). Task mode (spec
+`docs/superpowers/specs/2026-08-10-put-away-tasks-design.md`): when flow
+config `steps.put-away.autoCreateTasks` is on, confirming an arrival
+creates a `put_away_tasks` row (one per order, `pending`, unique per order) in
+the same tx; the auto-clear completes it. The PDA then works from the task
+queue instead of the derived candidates list.
 
 | Endpoint | Description |
 |---|---|
 | `GET /put-away/candidates` | List of receivable orders with per-order received/unboxed counts. |
+| `GET /put-away-tasks?status=` | Task queue (task mode), oldest first: `{id, status, receivingOrderId, batchNo, supplierCode, supplierName, orgId, subInventoryCode, receivedItems, unboxedItems, createdDate}`. |
+| `GET /put-away-tasks/:id` | The per-order put-away aggregate + `{task}` and per-item `suggestedShelfCode` (existing-stock strategy unless `steps.put-away.suggestShelf=off`); 404 `put_away_task_not_found`. |
 | `GET /receiving-orders/:id/put-away` | One aggregate: `{order, items[], lots[], scans[], boxes[{..., items[]}]}` for the put-away detail screen. `items[]` = the order's expected (receivable) invoice items `{id, partId, partNo, qty, receivedQty, pickedQty, putAwayQty, allocatedQty, remainingQty, dateCode, lotCode, coo, cow}` with `remainingQty = received − picked − put_away − allocated − staged` (the candidates-list formula). |
 | `POST /receiving-orders/:id/put-away-scans` | `{actorId, raw|fields, qty}` → complete scan row (no fix-up query). |
 | `DELETE /put-away-scans/:scanId` | `{actorId}` → hard-delete a staged scan (mis-scan correction); 409 `scan_not_in_staging_box` for boxed scans (use remove-from-box). |
@@ -162,6 +169,7 @@ Implemented: `GET /picking-orders`, `GET /picking-orders/:id`,
 `PATCH /shipping-boxes/:id`, `POST /shipping-boxes/:id/packages`,
 `DELETE /shipping-boxes/:id/packages/:packageId`,
 `POST /shipping-boxes/:id/add-all-unboxed`,
+`POST /shipping-boxes/:id/scan`,
 `POST /shipping-boxes/:id/cancel`, `POST /shipping-boxes/:id/close`,
 `POST /shipping-boxes/:id/reopen`,
 `POST /picking-orders/:id/finish`, `POST /picking-orders/report-issues` (see
@@ -170,25 +178,26 @@ allocation's source — lot `total_qty`/`allocated_qty`, receiving
 `picked_qty`, or FIFO distribution across an order-level receiving source —
 into `picking_packages` + two PICK ledger rows (reserved −qty / on_hand −qty)
 per portion, removal reverses; `picked_qty` tracks boxed packages so the last
-box add auto-finishes the order with the next-step task row (measuring, or
-verify when the measuring step is disabled — see "Flow-step config" below);
-scan/removal run `allocateAll` best-effort).
+box add auto-finishes the order — no next-step task is created (box-scoped
+design; see "Measuring"/"Verify" below); scan/removal run `allocateAll`
+best-effort).
 
 | Endpoint | Description |
 |---|---|
 | `GET /picking-orders?status=` | List: `{id, refNo, status, allocationStatus, allocatedQty, poNo, shipTo, customerCode, destinationCountry, deliveryDate, warehouseCode, warehouseSectionCode, subInventoryCode, itemCount, totalQty, pickedQty}`. `allocationStatus` is the persisted order-level summary (`unallocated`/`partial`/`allocated`, recomputed by `allocateAll`); `allocatedQty` = Σ item `allocated_qty`. `?status=` accepts `shipped`. |
-| `GET /picking-orders/:id` | Nested detail: `{order..., measuringTask, items[{..., allocations[{..., lot|receivingItem, boxId}], packages[]}], boxes[{..., packageCount}], suggestedBox}`. No parallel arrays. `suggestedBox` (null when none or the order is not active) is the whole-box claim hint: a fully-claimable shelf box whose current `inventory_lots` contents exactly equal the order's remaining demand `{id, shelfCode, orgId, subInventoryCode, contents[{partNo, qty}]}`. |
+| `GET /picking-orders/:id` | Nested detail: `{order..., items[{..., allocations[{..., lot|receivingItem, boxId}], packages[]}], boxes[{..., packageCount}], suggestedBox}`. No parallel arrays. `suggestedBox` (null when none or the order is not active) is the whole-box claim hint: a fully-claimable shelf box whose current `inventory_lots` contents exactly equal the order's remaining demand `{id, shelfCode, orgId, subInventoryCode, contents[{partNo, qty}]}`. |
 | `POST /picking-orders/:id/claim-shelf-box` | `{shelfBoxId}` (actor from the token) → `{shippingBoxId, packageIds}`, 201. Whole-box exact-match claim (spec `docs/superpowers/specs/2026-07-29-whole-box-picking-claim-design.md`): the shelf box's current contents must exactly equal the order's full remaining open demand (409 `box_not_exact_match`) with no other order reserving any piece (409 `box_not_fully_available`). The carton is reused as the shipping box — created prefilled with `box_size`/`net_weight`/`gross_weight` summed from the source receiving lines' `additional_data` (g→kg via `weightUnit`, default kg), `source_shelf_box_id` recorded — with one boxed package per (item, lot) portion, the order's allocations released, and the auto-finish chain run like the scan path. |
 | `POST /picking-items/:id/scan` | `{actorId, allocationId|source, qty, raw?}` → `{packageIds}`. The one canonical scan-to-pick route; OCR/receiving-source picking folds in here (old `ocr-pick` path dies). |
 | `DELETE /packages/:id` | `{actorId}` → removes an unboxed (unverified) package. |
-| `POST /packages/:id/verify` | `{actorId}` — requires a pending measuring OR verify task (409 `no_pending_measure_or_verify_task`). Measuring pass: box must be open, sets `verified`. Verify pass: box may be open OR closed, sets `verified` + `verify_verified` (409 `package_already_verified` per the applicable flag). |
+| `POST /packages/:id/verify` | `{actorId}` — package must be boxed (409 `package_not_in_box`). Measuring pass: the box is **open**, sets `verified` (no task involved). Verify pass: the box is **closed** and must carry a pending verify task (409 `no_pending_measure_or_verify_task`), sets `verified` + `verify_verified` (409 `package_already_verified` per the applicable flag). |
 | `POST /picking-orders/:id/boxes` | `{actorId}` → box. |
 | `PATCH /shipping-boxes/:id` | `{boxSize?, netWeightKg?, grossWeightKg?, destinationCountry?, actorId}` (kilograms, one unit everywhere — decimals allowed, rounded to 3 dp; 400 `invalid_net_weight_kg` / `invalid_gross_weight_kg`). |
-| `POST /shipping-boxes/:id/packages {packageId, actorId}` · `DELETE /shipping-boxes/:id/packages/:packageId` | Box membership. |
-| `POST /shipping-boxes/:id/add-all-unboxed` | `{actorId}` → `{packed}`. |
-| `POST /shipping-boxes/:id/cancel` · `/close` | `{actorId}`. Closing the order's last open box (nothing unboxed) auto-completes a pending measuring task in the same tx. |
-| `POST /shipping-boxes/:id/reopen` | `{actorId}` — verify-step re-measure: closed box → `open` + packages un-verified (both `verified` and `verify_verified`; 409 `shipping_box_not_closed`, 409 `verify_task_not_pending`). |
-| `POST /picking-orders/:id/finish` | `{actorId}` → creates the next-step task row (measuring, or verify when measuring is disabled; 409 `measuring_task_exists` when either task exists). |
+| `POST /shipping-boxes/:id/packages {packageId, actorId}` · `DELETE /shipping-boxes/:id/packages/:packageId` | Box membership. Cross-order packing: any open picking order's unboxed package may be added to the box (the old 409 `different_picking_orders` guard is gone; `shipping_boxes.picking_order_id` stays as the informational "created for" order only). |
+| `POST /shipping-boxes/:id/scan` | `{barcode, qty?, actorId}` → `{packageIds}`, 201. Scan-to-box across orders: resolves the barcode to the one open picking item it could mean across **all** orders (part_no or `wcl_item_no` match on an item of a pending/picking order with open qty and a remaining allocation; 404 `no_matching_picking_item`, 409 `ambiguous_picking_item`), then picks it straight into this box via the scan path (default qty = the item's open qty capped by the allocation's remaining). |
+| `POST /shipping-boxes/:id/add-all-unboxed` | `{actorId}` → `{packed}`. Stays scoped to the box's creator order. |
+| `POST /shipping-boxes/:id/cancel` · `/close` | `{actorId}`. Close guards: non-empty, every package `verified`, destination (box → creator order's ship_to), box size, positive weights (gross ≥ net). Closing IS the measuring completion — and, when the verify step is enabled, spawns the box's pending verify task in the same tx (`ON CONFLICT DO NOTHING`, idempotent on re-close). |
+| `POST /shipping-boxes/:id/reopen` | `{actorId}` — verify-step re-measure, box-scoped: the box's own pending verify task is required (409 `verify_task_not_pending`); closed box → `open` + packages un-verified (both `verified` and `verify_verified`; 409 `shipping_box_not_closed`). |
+| `POST /picking-orders/:id/finish` | `{actorId}` → `{id, status}` — flips the order to `finished` (409 `not_all_items_fully_boxed` until every item is fully picked/boxed). No next-step task is created anymore: closing a box is the measuring completion, and the box's verify task comes from `closeShippingBox`. |
 | `POST /picking-orders/report-issues` | `{actorId, entries: [{pickingOrderId, reason, qty?, packSize?, note?, remark?}]}` → `{reported[], skipped[]}`. Per-order entries — no `"; "`-joined remark hack. |
 
 Changes vs old: flat-by-id mutations only (nested twins die); polymorphic
@@ -197,96 +206,92 @@ weight unit (kilograms); nested detail kills client joins.
 
 ## Measuring
 
-Implemented: `GET /measuring-tasks`, `GET /measuring-tasks/:id`,
-`POST /measuring-tasks/:id/complete` (see
-`apps/backend/src/routes/measuring.ts` + `src/db/measuring.ts`; list computes
-`boxCount`/`closedBoxCount` server-side — closed = any status but `open`;
-detail is the one consolidated task/order/boxes read with part identity on the
-packages and a formula-derived `suggestedNetWeightKg` per box; complete guards
-pending → all boxes closed → nothing unboxed (the
-old "picking item not fully packed" guard, which in this schema is "no
-unboxed packages" since `picked_qty` tracks boxed-only), sets `completed` +
-transition log, no stock movement, and leaves the picking order `finished`
-like the old `completeMeasuringTask`. The same core (`completeMeasuringTaskTx`)
-also runs automatically inside `POST /shipping-boxes/:id/close` when the
-closed box was the order's last open box — the PDA confirms boxes and never
-calls the complete endpoint. When the verify step is enabled,
-completion also inserts the order's `verify_tasks` row (`ON CONFLICT
-DO NOTHING`). Box measurement reuses the picking
-routes: `PATCH /shipping-boxes/:id`, `POST /packages/:id/verify`,
-`POST /shipping-boxes/:id/close`).
+Implemented: `GET /measuring-boxes`, `GET /measuring-boxes/:id` (see
+`apps/backend/src/routes/measuring.ts` + `src/db/measuring.ts`; spec
+`docs/superpowers/specs/2026-08-11-box-scoped-measuring-verify-design.md`).
+`measuring_tasks` is gone: closing a shipping box already requires non-empty
+contents, every package `verified`, a destination, a box size and positive
+weights (gross ≥ net) — closing *is* the measuring completion, so no pending
+measuring task exists. The measuring work list is therefore the open shipping
+boxes that contain packages; a box may hold packages from several picking
+orders (cross-order packing), so order numbers are aggregated per box. Box
+measurement itself reuses the picking routes: `PATCH /shipping-boxes/:id`,
+`POST /packages/:id/verify`, `POST /shipping-boxes/:id/close`.
 
 | Endpoint | Description |
 |---|---|
-| `GET /measuring-tasks?status=` | List: `{id, status, pickingOrderId, refNo, shipTo, boxCount, closedBoxCount, createdDate}`. |
-| `GET /measuring-tasks/:id` | Consolidated detail: `{task, order, boxes[{..., suggestedNetWeightKg, packages[{..., partId, partNo, verified, verifyVerified}]}]}`. The one "order + boxes + packages" read. `suggestedNetWeightKg` = Σ over the box's packages of `(formula.weight / formula.qty) × pkg.qty` grams from `net_weight_formula`, in kg (3 dp; parts without a formula contribute 0, `null` when none have one). |
-| `POST /measuring-tasks/:id/complete` | `{actorId}` — also auto-triggered by closing the order's last open box. |
+| `GET /measuring-boxes` | The work list: open boxes with at least one package, newest first — `{boxId, status, orderNos[], packageCount, verifiedCount, createdDate}`. |
+| `GET /measuring-boxes/:id` | Box detail: `{boxId, pickingOrderId, status, boxSize, grossWeight, netWeight, destinationCountry, shippedAt, createdDate, suggestedNetWeightKg, packages[{..., partNo, wclItemNo, verified, verifyVerified}]}` (404 `shipping_box_not_found`). `suggestedNetWeightKg` = Σ over the box's packages of `(formula.weight / formula.qty) × pkg.qty` grams from `net_weight_formula`, in kg (3 dp; parts without a formula contribute 0, `null` when none have one). |
 
-Changes vs old: `GET /shipping-boxes/:id/for-measuring` and the competing
-picking-detail bundle are superseded by this one shape (packages carry
-`partId`/`partNo` — no second request, no client-side matching).
+Changes vs old: `GET /measuring-tasks*` and
+`POST /measuring-tasks/:id/complete` are deleted — the box-keyed read
+supersedes the consolidated task detail (packages carry `partNo`/`wclItemNo`
+— no second request, no client-side matching).
 
 ## Verify
 
 Implemented: `GET /verify-tasks`, `GET /verify-tasks/:id`,
 `POST /verify-tasks/:id/complete` (see `apps/backend/src/routes/verify.ts` +
-`src/db/verify.ts`; specs
-`docs/superpowers/specs/2026-07-28-verify-step-and-flow-step-config-design.md`
-+ `docs/superpowers/specs/2026-07-28-measuring-verify-refinements-design.md`).
-Verify is a second full re-measure pass over the same boxes after measuring:
-the reads mirror the measuring task API (`boxCount`/`closedBoxCount` list,
-consolidated `{task, order, boxes[packages]}` detail), completion has the
-same guards (pending → all boxes closed → nothing unboxed) plus a re-scan
-guard — every package must carry `verify_verified` (409
-`packages_not_all_rescanned`) — then `completed` +
-transition log, no stock movement, order stays `finished`, and box re-work
-reuses the picking verbs — `POST /packages/:id/verify` accepts a pending
-measuring OR verify task, and during the verify pass it works on open or
-closed boxes (re-scan against the sealed box is the normal pass), setting
-`verify_verified` alongside `verified`; the verify-only
-`POST /shipping-boxes/:id/reopen` returns a closed box to `open` with its
-packages un-verified (both flags) so the worker can re-measure and re-close. A
-`verify_tasks` row (unique index `idx_verify_tasks_picking_order`) is created
-when a measuring task completes, or directly at picking finish when the
-measuring step is disabled.
+`src/db/verify.ts`; spec
+`docs/superpowers/specs/2026-08-11-box-scoped-measuring-verify-design.md`).
+Verify tasks are keyed on the shipping box (`verify_tasks.shipping_box_id`,
+unique — one task per box), created by `closeShippingBox` when the verify
+step is enabled (`ON CONFLICT DO NOTHING` keeps a re-close idempotent).
+Verify is a second full re-scan pass over that one box: the worker re-scans
+every package (`verify_verified`; scanning works on the closed box — checking
+contents against the sealed box is the normal pass), then completes.
+Completion guards: pending task → box closed → every package re-scanned →
+`completed` + transition log, no stock movement. Box re-work reuses the
+picking verbs, including the verify-only `POST /shipping-boxes/:id/reopen`
+(returns a closed box to `open` with its packages un-verified on both flags,
+requires the box's pending verify task).
 
 | Endpoint | Description |
 |---|---|
-| `GET /verify-tasks?status=` | List: `{id, status, pickingOrderId, orderNo, shipTo, boxCount, closedBoxCount, createdDate}`. |
-| `GET /verify-tasks/:id` | Consolidated detail: `{task, order, boxes[{..., suggestedNetWeightKg, packages[{..., partNo, wclItemNo, verified, verifyVerified}]}]}`. Same shape as the measuring detail. |
-| `POST /verify-tasks/:id/complete` | `{actorId}` — 409 `packages_not_all_rescanned` until every package is re-scanned (`verify_verified`). |
+| `GET /verify-tasks?status=` | List: `{taskId, status, shippingBoxId, boxStatus, orderNos[], destinationCountry, packageCount, verifyVerifiedCount, createdDate}`. |
+| `GET /verify-tasks/:id` | Detail: `{task{id, status, shippingBoxId, createdDate}, box{..., suggestedNetWeightKg}, packages[{..., partNo, wclItemNo, verified, verifyVerified}]}` (404 `verify_task_not_found`). Same per-box shape as the measuring detail. |
+| `POST /verify-tasks/:id/complete` | `{actorId}` — 404 `verify_task_not_found`, 409 `verify_task_not_pending`, 409 `shipping_box_not_closed`, 409 `packages_not_all_rescanned` until every package is re-scanned (`verify_verified`). |
 
 ## Flow-step config + shipping feed
 
 Implemented: `GET /config`, `GET /shipping-orders`,
-`GET /shipping-orders/:pickingOrderId`,
-`POST /shipping-orders/:pickingOrderId/ship` (see
+`GET /shipping-orders/:boxId`,
+`POST /shipping-orders/:boxId/ship` (see
 `apps/backend/src/routes/config.ts`, `src/routes/shipping.ts` +
-`src/db/shipping.ts`, `src/config.ts`). The `FLOW_STEPS_DISABLED` env var
-(comma-separated step keys from `receiving`, `put-away`, `picking`,
-`goods-verify`, `measuring`, `verify`, `stock-search`; unset = all enabled)
-toggles flow steps; `GET /config` → `{flowSteps}` exposes the result to
-clients (the PDA hides disabled home tiles; changes need a backend restart).
-Only three toggles change backend behavior: `measuring`/`verify` rewire the
-finish chain (finish picking → measuring task, or verify task when measuring
-is off, or nothing; completing measuring spawns a verify task when verify is
-on) and `goods-verify` makes task generation (manual + nightly job) a no-op.
-The shipping feed follows the chain: the list reads completed verify tasks,
-else completed measuring tasks, else finished picking orders with no task
-rows; the detail is task-agnostic. Shipping is a pure workflow transition
-(stock already left inventory at pick-scan time): `POST
-/shipping-orders/:pickingOrderId/ship` marks the order `shipped`
-(`shipped_at`/`shipped_by` + transition log + SSE event on
-`/picking-orders` + `/shipping-orders`), and shipped orders are excluded
-from the feed (all three source queries) while staying visible via
+`src/db/shipping.ts`, `src/config.ts`). The flow config — the
+`warehouse_config` row key `"flow"` (JSON merged over defaults and validated
+at boot; the `FLOW_CONFIG` env var overrides the row when set; legacy
+`FLOW_STEPS_DISABLED` comma-separated step keys still map onto step
+enablement on top, deprecated) toggles flow steps (`receiving`, `put-away`,
+`picking`,
+`goods-verify`, `measuring`, `verify`, `stock-search`) and carries behavior
+flags; `GET /config` → `{flowSteps, pickingAllocation, putAway}` exposes the
+result to clients (the PDA hides disabled home tiles; changes need a backend
+restart). The behavior-changing keys: `verify` wires the close chain
+(closing a box spawns its pending verify task, and the shipping feed is
+gated on completed verify tasks), `goods-verify` makes task generation
+(manual + nightly job) a no-op,
+`steps.picking.allocation.allowDockStock=false` makes put-away a hard gate
+for allocation, and `steps.put-away.autoCreateTasks`/`suggestShelf` switch
+put-away to task mode with shelf suggestions; `measuring` and the remaining
+steps only toggle PDA home tiles (there is no measuring task to gate).
+The shipping feed is per-box: the list reads closed, unshipped boxes — gated
+on the box's completed verify task when the verify step is enabled
+("measured" ≡ closed). Shipping is a pure workflow transition (stock already
+left inventory at pick-scan time): `POST /shipping-orders/:boxId/ship` stamps
+the box `shipped_at`/`shipped_by` + transition log and then derives order
+`shipped` for every order in the box whose items are all boxed, has nothing
+unboxed, and has every box holding its packages shipped. The ship event is
+`shipping_box.shipped` (topics `/shipping-orders` + `/picking-orders`).
+Shipped boxes drop out of the feed; shipped orders stay visible via
 `GET /picking-orders?status=shipped`.
 
 | Endpoint | Description |
 |---|---|
-| `GET /config` | `{flowSteps: Record<FlowStep, boolean>}` — the `FLOW_STEPS_DISABLED` env reflected per step. |
-| `GET /shipping-orders` | List: `{source ('verify'|'measuring'|'picking'), taskId, pickingOrderId, orderNo, shipTo, boxCount, closedBoxCount, completedAt}`. Source picked from the flow-step config. Shipped orders are excluded. |
-| `GET /shipping-orders/:pickingOrderId` | Task-agnostic detail: `{order, boxes[{..., packages[{..., partNo, wclItemNo}]}]}` (404 `picking_order_not_found`). |
-| `POST /shipping-orders/:pickingOrderId/ship` | `{actorId}` → the updated order. Validates the order is in the config-aware feed (verify on → completed verify task; measuring on → completed measuring task; neither → `finished` with no task rows); 409 `order_not_ready_to_ship` otherwise, including already-shipped orders. |
+| `GET /config` | `{flowSteps: Record<FlowStep, boolean>, pickingAllocation: {allowDockStock: boolean}, putAway: {autoCreateTasks: boolean, suggestShelf: "existing-stock"\|"off"}}` — the resolved flow config (`warehouse_config` row `"flow"`, `FLOW_CONFIG` env override; legacy `FLOW_STEPS_DISABLED` maps onto `flowSteps` on top, deprecated). `pickingAllocation.allowDockStock=false` = put-away is a hard gate for allocation; `putAway` drives the put-away task mode + shelf suggestions. |
+| `GET /shipping-orders` | Box rows: `{boxId, orderNos[], shipTos[], destinationCountry, boxSize, grossWeight, netWeight, packageCount, closedAt}` — closed, unshipped boxes (verify-gated when the verify step is on). |
+| `GET /shipping-orders/:boxId` | Box detail: `{box{..., shippedAt, shippedBy}, packages[{..., partNo, wclItemNo, verified}], orders[{id, orderNo, status, shipTo, customerCode, poNo}]}` (404 `shipping_box_not_found`). |
+| `POST /shipping-orders/:boxId/ship` | `{actorId}` → `{id, status, shippedOrderIds}`. Re-checks the feed predicate (closed, unshipped, verify-gated; 409 `box_not_ready_to_ship` otherwise, including already-shipped boxes), stamps the box, derives order `shipped`, emits `shipping_box.shipped`. |
 
 ## Goods verify (task-based, concept 7)
 

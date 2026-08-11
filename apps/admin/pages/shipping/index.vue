@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import type { ShippingOrderRow } from "~/utils/flowApi";
+import type { ShippingBoxRow } from "~/utils/flowApi";
 
 const flow = useFlowApi();
 const { t } = useI18n();
-const rows = ref<ShippingOrderRow[]>([]);
+const rows = ref<ShippingBoxRow[]>([]);
 const loading = ref(false);
 const error = ref("");
 const search = ref("");
@@ -13,7 +13,10 @@ const filtered = computed(() => {
   const q = search.value.trim().toLowerCase();
   if (!q) return rows.value;
   return rows.value.filter(
-    (r) => r.orderNo.toLowerCase().includes(q) || (r.shipTo ?? "").toLowerCase().includes(q)
+    (r) =>
+      r.boxId.toLowerCase().includes(q) ||
+      r.orderNos.some((o) => o.toLowerCase().includes(q)) ||
+      r.shipTos.some((s) => s.toLowerCase().includes(q))
   );
 });
 
@@ -23,10 +26,6 @@ const selectedIds = computed(() => Object.keys(selected.value).filter((id) => se
 
 const shipping = ref(false);
 
-function orderNo(id: string) {
-  return rows.value.find((r) => r.pickingOrderId === id)?.orderNo ?? id;
-}
-
 async function markShipped() {
   const ids = selectedIds.value;
   if (ids.length === 0 || shipping.value) return;
@@ -34,17 +33,17 @@ async function markShipped() {
   shipping.value = true;
   error.value = "";
   try {
-    await flow.shipShippingOrders(ids);
+    await flow.shipShippingBoxes(ids);
     await load();
     selected.value = {};
   } catch (e: any) {
-    // Partial failure: shipShippingOrders attempts every id and lists the
-    // per-order failures (e.g. 409 order_not_ready_to_ship) on `failed`.
+    // Partial failure: shipShippingBoxes attempts every id and lists the
+    // per-box failures (e.g. 409 box_not_ready_to_ship) on `failed`.
     const failed: { id: string; message: string }[] = e?.failed ?? [];
     error.value =
       failed.length > 0
         ? t("admin.pages.shipping.markShippedFailed", {
-            orders: failed.map((f) => `${orderNo(f.id)} (${f.message})`).join(", "),
+            boxes: failed.map((f) => `${f.id} (${f.message})`).join(", "),
           })
         : e.message;
     await load();
@@ -58,8 +57,7 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    // The backend's config-aware feed: whatever step ends the enabled chain.
-    rows.value = await flow.listShippingOrders();
+    rows.value = await flow.listShippingBoxes();
     selected.value = {};
   } catch (e: any) {
     error.value = e.message;
@@ -114,24 +112,32 @@ onMounted(load);
         <thead>
           <tr>
             <th></th>
-            <th>{{ $t("admin.pages.shipping.orderNo") }}</th>
+            <th>{{ $t("admin.pages.shipping.boxId") }}</th>
+            <th>{{ $t("admin.pages.shipping.orders") }}</th>
             <th>{{ $t("admin.pages.shipping.shipTo") }}</th>
-            <th>{{ $t("admin.pages.shipping.boxes") }}</th>
-            <th>{{ $t("admin.pages.shipping.completed") }}</th>
+            <th>{{ $t("admin.pages.shipping.destination") }}</th>
+            <th>{{ $t("admin.pages.shipping.size") }}</th>
+            <th>{{ $t("admin.pages.shipping.netGross") }}</th>
+            <th>{{ $t("admin.pages.shipping.packages") }}</th>
+            <th>{{ $t("admin.pages.shipping.closedAt") }}</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="r in paged" :key="r.pickingOrderId">
+          <tr v-for="r in paged" :key="r.boxId">
             <td @click.stop>
-              <input v-model="selected[r.pickingOrderId]" type="checkbox" />
+              <input v-model="selected[r.boxId]" type="checkbox" />
             </td>
-            <td class="clickable" @click="navigateTo(`/shipping/${r.pickingOrderId}`)">{{ r.orderNo }}</td>
-            <td>{{ r.shipTo ?? "—" }}</td>
-            <td>{{ $t("admin.pages.shipping.boxesClosed", { closed: r.closedBoxCount, total: r.boxCount }) }}</td>
-            <td>{{ new Date(r.completedAt).toLocaleDateString() }}</td>
+            <td class="clickable" @click="navigateTo(`/shipping/${r.boxId}`)">{{ r.boxId }}</td>
+            <td>{{ r.orderNos.join(", ") }}</td>
+            <td>{{ r.shipTos.length ? r.shipTos.join(", ") : "—" }}</td>
+            <td>{{ r.destinationCountry ?? "—" }}</td>
+            <td>{{ r.boxSize ?? "—" }}</td>
+            <td>{{ r.netWeight ?? "—" }} / {{ r.grossWeight ?? "—" }}</td>
+            <td>{{ r.packageCount }}</td>
+            <td>{{ new Date(r.closedAt).toLocaleDateString() }}</td>
           </tr>
           <tr v-if="total === 0">
-            <td colspan="5" class="muted">{{ $t("admin.pages.shipping.none") }}</td>
+            <td colspan="9" class="muted">{{ $t("admin.pages.shipping.none") }}</td>
           </tr>
         </tbody>
       </table>

@@ -300,6 +300,60 @@ describe('backendWarehouse put-away flow', () => {
     expect(detail.boxes[0].items).toEqual([]);
   });
 
+  it('listPutAwayTasks passes the status filter through and skips it when absent', async () => {
+    fetchMock.mockResolvedValue(jsonResponse([]));
+
+    await service().listPutAwayTasks();
+    expect(lastCall().url).toBe(`${BASE_URL}/put-away-tasks`);
+    expect(lastCall().init.method).toBe('GET');
+
+    await service().listPutAwayTasks('pending');
+    expect(lastCall().url).toBe(`${BASE_URL}/put-away-tasks?status=pending`);
+  });
+
+  it('listPutAwayTasks returns the task queue rows verbatim', async () => {
+    const rows = [
+      {
+        id: 'pat1',
+        status: 'pending',
+        receivingOrderId: 'ro1',
+        batchNo: '04958210',
+        supplierCode: 'DAITO',
+        supplierName: 'DAITO',
+        orgId: 2,
+        subInventoryCode: 'ACME-S1',
+        receivedItems: 2,
+        unboxedItems: 2,
+        createdDate: '2026-08-10T10:00:00.000Z',
+      },
+    ];
+    fetchMock.mockResolvedValue(jsonResponse(rows));
+
+    const result = await service().listPutAwayTasks('pending');
+
+    expect(result).toEqual(rows);
+  });
+
+  it('getPutAwayTaskDetail GETs the task aggregate with shelf hints', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        task: { id: 'pat1', status: 'pending', receivingOrderId: 'ro1', createdDate: '2026-08-10T10:00:00.000Z' },
+        order: { id: 'ro1', batchNo: '04958210', status: 'in_hand', subInventoryCode: 'ACME-S1' },
+        items: [{ id: 'rii1', remainingQty: 100, suggestedShelfCode: 'A-01-03' }],
+        lots: [],
+        scans: [],
+        boxes: [],
+      })
+    );
+
+    const detail = await service().getPutAwayTaskDetail('pat1');
+
+    expect(lastCall().url).toBe(`${BASE_URL}/put-away-tasks/pat1`);
+    expect(lastCall().init.method).toBe('GET');
+    expect(detail.task.receivingOrderId).toBe('ro1');
+    expect(detail.items[0].suggestedShelfCode).toBe('A-01-03');
+  });
+
   it('getShelves reads the admin shelves list', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse([{ code: 'A-01-01', zone: 'A', orgId: 2, subInventoryCode: 'ACME-S1' }])
@@ -481,7 +535,6 @@ describe('backendWarehouse picking flow', () => {
         status: 'picking',
         orgId: 2,
         subInventoryCode: 'ACME-S1',
-        measuringTask: null,
         items: [
           {
             id: 'pi1',
@@ -601,17 +654,29 @@ describe('backendWarehouse picking flow', () => {
     expect(JSON.parse(lastCall().init.body as string)).toEqual({});
   });
 
-  it('finishPickingOrder POSTs the finish verb and returns the measuring task', async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse({ id: 'mt1', pickingOrderId: 'po1', status: 'pending' })
-    );
+  it('scanIntoShippingBox POSTs the barcode (and optional qty) to the box scan verb', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ packageIds: ['pkg1'] }, 201));
 
-    const task = await service().finishPickingOrder('po1');
+    const result = await service().scanIntoShippingBox('box1', { barcode: 'ABC-123' });
+
+    expect(lastCall().url).toBe(`${BASE_URL}/shipping-boxes/box1/scan`);
+    expect(lastCall().init.method).toBe('POST');
+    expect(JSON.parse(lastCall().init.body as string)).toEqual({ barcode: 'ABC-123' });
+    expect(result).toEqual({ packageIds: ['pkg1'] });
+
+    await service().scanIntoShippingBox('box1', { barcode: 'ABC-123', qty: 500 });
+    expect(JSON.parse(lastCall().init.body as string)).toEqual({ barcode: 'ABC-123', qty: 500 });
+  });
+
+  it('finishPickingOrder POSTs the finish verb and returns the order status', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ id: 'po1', status: 'finished' }));
+
+    const result = await service().finishPickingOrder('po1');
 
     expect(lastCall().url).toBe(`${BASE_URL}/picking-orders/po1/finish`);
     expect(lastCall().init.method).toBe('POST');
     expect(JSON.parse(lastCall().init.body as string)).toEqual({});
-    expect(task).toEqual({ id: 'mt1', pickingOrderId: 'po1', status: 'pending' });
+    expect(result).toEqual({ id: 'po1', status: 'finished' });
   });
 
   it('reportPickingOrderIssues POSTs per-order entries and returns id arrays', async () => {
@@ -664,90 +729,61 @@ describe('backendWarehouse measuring flow', () => {
     return { url: url as string, init: init as RequestInit };
   }
 
-  it('getMeasuringTasks passes the status filter through and skips it when absent', async () => {
-    fetchMock.mockResolvedValue(jsonResponse([]));
-
-    await service().getMeasuringTasks();
-    expect(lastCall().url).toBe(`${BASE_URL}/measuring-tasks`);
-    expect(lastCall().init.method).toBe('GET');
-
-    await service().getMeasuringTasks('pending');
-    expect(lastCall().url).toBe(`${BASE_URL}/measuring-tasks?status=pending`);
-  });
-
-  it('getMeasuringTasks returns the list rows verbatim', async () => {
+  it('getMeasuringBoxes GETs the open-boxes list verbatim', async () => {
     const rows = [
       {
-        id: 'mt1',
-        status: 'pending',
-        pickingOrderId: 'po1',
-        orderNo: 'SO-2026-0001',
-        shipTo: 'ACME HK',
-        boxCount: 2,
-        closedBoxCount: 1,
-        createdDate: '2026-07-17T10:00:00.000Z',
+        boxId: 'box1',
+        status: 'open',
+        orderNos: ['SO-2026-0001', 'SO-2026-0002'],
+        packageCount: 3,
+        verifiedCount: 1,
+        createdDate: '2026-08-11T10:00:00.000Z',
       },
     ];
     fetchMock.mockResolvedValue(jsonResponse(rows));
 
-    const result = await service().getMeasuringTasks('pending');
+    const result = await service().getMeasuringBoxes();
 
+    expect(lastCall().url).toBe(`${BASE_URL}/measuring-boxes`);
+    expect(lastCall().init.method).toBe('GET');
     expect(result).toEqual(rows);
   });
 
-  it('getMeasuringTask GETs the consolidated detail', async () => {
+  it('getMeasuringBox GETs the box detail with its packages', async () => {
     const detail = {
-      task: { id: 'mt1', status: 'pending', pickingOrderId: 'po1', createdDate: '2026-07-17T10:00:00.000Z' },
-      order: {
-        id: 'po1',
-        orderNo: 'SO-2026-0001',
-        status: 'finished',
-        shipTo: 'ACME HK',
-        customerCode: 'ACME',
-        poNo: 'PO-1',
-      },
-      boxes: [
+      boxId: 'box1',
+      pickingOrderId: 'po1',
+      status: 'open',
+      boxSize: null,
+      grossWeight: null,
+      netWeight: null,
+      destinationCountry: null,
+      shippedAt: null,
+      createdDate: '2026-08-11T10:00:00.000Z',
+      suggestedNetWeightKg: 1.2,
+      packages: [
         {
-          id: 'box1',
-          status: 'open',
-          boxSize: null,
-          grossWeight: null,
-          netWeight: null,
-          destinationCountry: null,
-          packages: [
-            {
-              id: 'pkg1',
-              qty: 500,
-              dateCode: '2601',
-              lotCode: 'L1',
-              coo: 'JP',
-              cow: 'TW',
-              verified: false,
-              partNo: 'RK73H1JTTD1002F',
-              wclItemNo: 'WCL-1',
-            },
-          ],
+          id: 'pkg1',
+          qty: 500,
+          dateCode: '2601',
+          lotCode: 'L1',
+          coo: 'JP',
+          cow: 'TW',
+          verified: false,
+          verifyVerified: false,
+          partNo: 'RK73H1JTTD1002F',
+          wclItemNo: 'WCL-1',
         },
       ],
     };
     fetchMock.mockResolvedValue(jsonResponse(detail));
 
-    const result = await service().getMeasuringTask('mt1');
+    const result = await service().getMeasuringBox('box1');
 
-    expect(lastCall().url).toBe(`${BASE_URL}/measuring-tasks/mt1`);
+    expect(lastCall().url).toBe(`${BASE_URL}/measuring-boxes/box1`);
     expect(lastCall().init.method).toBe('GET');
     expect(result).toEqual(detail);
-    expect(result.boxes[0].packages[0].partNo).toBe('RK73H1JTTD1002F');
-  });
-
-  it('completeMeasuringTask POSTs the complete verb', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
-
-    await service().completeMeasuringTask('mt1');
-
-    expect(lastCall().url).toBe(`${BASE_URL}/measuring-tasks/mt1/complete`);
-    expect(lastCall().init.method).toBe('POST');
-    expect(JSON.parse(lastCall().init.body as string)).toEqual({});
+    expect(result.packages[0].partNo).toBe('RK73H1JTTD1002F');
   });
 });
 
@@ -779,38 +815,32 @@ describe('backendWarehouse verify flow', () => {
     expect(lastCall().url).toBe(`${BASE_URL}/verify-tasks?status=pending`);
   });
 
-  it('getVerifyTask GETs the consolidated detail', async () => {
+  it('getVerifyTask GETs the box-keyed detail', async () => {
     const detail = {
-      task: { id: 'vt1', status: 'pending', pickingOrderId: 'po1', createdDate: '2026-07-28T10:00:00.000Z' },
-      order: {
-        id: 'po1',
-        orderNo: 'SO-2026-0001',
-        status: 'finished',
-        shipTo: 'ACME HK',
-        customerCode: 'ACME',
-        poNo: 'PO-1',
+      task: { id: 'vt1', status: 'pending', shippingBoxId: 'box1', createdDate: '2026-08-11T10:00:00.000Z' },
+      box: {
+        id: 'box1',
+        pickingOrderId: 'po1',
+        status: 'closed',
+        boxSize: 'M',
+        grossWeight: 1.45,
+        netWeight: 1.2,
+        destinationCountry: 'Japan',
+        shippedAt: null,
+        suggestedNetWeightKg: 1.2,
       },
-      boxes: [
+      packages: [
         {
-          id: 'box1',
-          status: 'closed',
-          boxSize: 'M',
-          grossWeight: 1450,
-          netWeight: 1200,
-          destinationCountry: 'Japan',
-          packages: [
-            {
-              id: 'pkg1',
-              qty: 500,
-              dateCode: '2601',
-              lotCode: 'L1',
-              coo: 'JP',
-              cow: 'TW',
-              verified: true,
-              partNo: 'RK73H1JTTD1002F',
-              wclItemNo: 'WCL-1',
-            },
-          ],
+          id: 'pkg1',
+          qty: 500,
+          dateCode: '2601',
+          lotCode: 'L1',
+          coo: 'JP',
+          cow: 'TW',
+          verified: true,
+          verifyVerified: false,
+          partNo: 'RK73H1JTTD1002F',
+          wclItemNo: 'WCL-1',
         },
       ],
     };

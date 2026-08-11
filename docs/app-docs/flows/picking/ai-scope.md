@@ -4,8 +4,8 @@
 
 - List picking orders with a status filter and text search; multi-select
   batch issue reporting.
-- Show picking order detail as one nested read: order (incl. issue fields
-  and its measuring task), items → allocations (with lot or receiving-area
+- Show picking order detail as one nested read: order (incl. issue fields),
+  items → allocations (with lot or receiving-area
   source) and packages, plus the shipping boxes.
 - Scan-to-pick ("checkout" scan session): one Scan button per picking order
   opens `/picking/scan/:id`. The hardware scanner is armed only on that page;
@@ -44,19 +44,27 @@
   create / cancel / close boxes, add/remove packages, add-all-unboxed;
   box sizes and weights in kilograms (decimals, 3 dp — see the measuring
   flow for the kg convention and the formula-based net-weight pre-fill).
+  Cross-order packing: a box accepts any open order's unboxed packages, and
+  the boxes section's **Scan item into box** mode (`POST
+  /shipping-boxes/:id/scan`) resolves a scanned part barcode across ALL open
+  orders (404 `no_matching_picking_item`, 409 `ambiguous_picking_item`) and
+  picks it straight into the box — `shipping_boxes.picking_order_id` stays
+  as the informational creator order only.
 - Box labels + pre-printed box ids: on the picking detail page the
   hardware scanner is armed for box ids — a scan that does not match a
   supplier QR template creates an open box with that scanned (pre-printed)
   id; item QRs get a "use scan mode" toast. A "Scan box id" button covers
   camera/manual entry. Server side, `createShippingBox` accepts an optional
   `boxId` (409 `box_id_exists` on duplicates — the id is the global PK);
-  server-generated ids follow `BOX-S-<warehouse>-<YYYYMMDD>-<seq>` (per-day
+  server-generated ids follow `BOX-S-<YYYYMMDD>-<seq>` (per-day
   seq, `nextBoxId` in `apps/backend/src/db/boxes.ts`).
   The per-box Print button on the picking detail was removed (2026-07);
   the receiving picking tab's Print button remains a placeholder — real
   printing will be added backend-side later.
 - Finish a picking order manually, or automatically when the last package
-  is boxed — finishing creates a measuring task.
+  is boxed — finish just flips the order to `finished`; no next-step task is
+  created (closing a box is the measuring completion, and the box's verify
+  task is spawned by `closeShippingBox`).
 - Per-order issue reporting (`POST /picking-orders/report-issues`). An issued
   order is frozen (scan/unpack 409, excluded from `allocateAll`) until an
   admin resolves it — `POST /picking-orders/:id/resolve-issue` returns it to
@@ -82,6 +90,14 @@
   sub-inventories page (`/admin/sub-inventory-share-groups`); the seed ships
   a demo group (org 2 STORE1 + WSTORE1 in `HK`). Customer-segregated stores
   keep their customer restriction even inside a share group.
+- Allocation sources: shelf lots first, then in-hand receiving (dock) stock —
+  a picking order can allocate straight off the receiving dock before
+  put-away (cross-dock). When the flow config (`warehouse_config` row
+  `"flow"`) sets
+  `steps.picking.allocation.allowDockStock=false`, dock stock is skipped and
+  only put-away lots allocate — put-away becomes a hard gate and uncovered
+  orders stay `unallocated`/`partial` until put-away happens (spec
+  `docs/superpowers/specs/2026-08-10-flow-config-design.md`).
 - Whole-box exact-match claim: when a shelf box's current contents
   (`inventory_lots`, never the `shelf_box_items` put-away manifest) exactly
   equal the order's full remaining demand and no other order reserves any
@@ -135,7 +151,8 @@
   refresh/keepalive release + `heldByOther` state (tests in
   `tests/usePickingWorkLock.test.ts`).
 - `components/picking/PickingItemsSection.vue`,
-  `components/picking/PickingBoxesSection.vue`,
+  `components/picking/PickingBoxesSection.vue` (incl. the per-box
+  **Scan item into box** cross-order toggle),
   `components/picking/PickingIssueBanner.vue` — detail sub-views.
 - `components/PickingIssueReportModal.vue` — batch issue report dialog.
 - `composables/useLabelScan.ts` + `utils/parseOcrScan.ts` — label parsing
@@ -148,8 +165,9 @@
   `GET /picking-orders`, `GET /picking-orders/:id`,
   `POST /picking-items/:id/scan`, `POST /picking-orders/:id/claim-shelf-box`,
   `/packages/:id` verbs,
-  `/shipping-boxes/:id*` lifecycle, `POST /picking-orders/:id/finish`
-  (→ measuring task), `POST /picking-orders/report-issues`,
+  `/shipping-boxes/:id*` lifecycle (incl. `POST /shipping-boxes/:id/scan`
+  cross-order scan-to-box), `POST /picking-orders/:id/finish`
+  (→ `{id, status}`, no task), `POST /picking-orders/report-issues`,
   `POST /picking-orders/:id/resolve-issue`,
   `POST`/`DELETE /picking-orders/:id/work-lock`, `POST /picking-orders/reorder`.
 - `apps/backend/src/db/allocate.ts` — allocation engine: demands in
@@ -178,6 +196,7 @@
 ## Related specs/plans
 
 - `docs/backend/api-design.md` §Picking
+- `docs/superpowers/specs/2026-08-11-box-scoped-measuring-verify-design.md`
 - `docs/superpowers/specs/2026-07-01-ocr-assisted-picking-design.md`
 - `docs/superpowers/specs/2026-07-03-picking-issue-reporting-design.md`
 - `docs/superpowers/specs/2026-07-27-admin-issue-handling-design.md`

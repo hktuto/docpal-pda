@@ -9,21 +9,21 @@
     <p v-else-if="rows.length === 0" class="empty">{{ $t('common.noPendingMeasuringTasks') }}</p>
 
     <NuxtLink
-      v-for="task in rows"
-      :key="task.id"
-      :to="`/measuring/${task.id}`"
+      v-for="box in rows"
+      :key="box.boxId"
+      :to="`/measuring/${box.boxId}`"
       class="card list-card"
     >
       <div class="list-card__header">
-        <span class="list-card__title">{{ task.orderNo }}</span>
-        <span class="badge" :class="badgeClass(task.status)">{{ statusLabel.measuring(task.status) }}</span>
+        <span class="list-card__title">{{ box.boxId }}</span>
+        <span class="badge" :class="badgeClass(box.status)">{{ statusLabel.box(box.status) }}</span>
       </div>
       <p class="list-card__meta">
-        {{ task.shipTo || $t('common.noData') }}
+        {{ box.orderNos.join(', ') || $t('common.noData') }}
       </p>
       <div class="list-card__footer">
         <span class="list-card__date">
-          {{ $t('measuring.boxesClosed', { count: task.closedBoxCount, total: task.boxCount }) }}
+          {{ $t('common.packagesVerified', { verified: box.verifiedCount, total: box.packageCount }) }}
         </span>
       </div>
     </NuxtLink>
@@ -34,8 +34,10 @@
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { useErrorMessage } from "~/composables/errorMessage";
 import { useWarehouse } from "~/composables/useWarehouse";
+import { useHardwareScanner } from "~/composables/useHardwareScanner";
+import { useToast } from "~/composables/useToast";
 import { badgeClass } from "~/composables/useStatusBadge";
-import type { MeasuringTaskListRow } from "~/services/types";
+import type { MeasuringBoxListRow } from "~/services/types";
 
 definePageMeta({ title: "meta.measuring" });
 
@@ -43,10 +45,12 @@ const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const warehouse = useWarehouse();
+const router = useRouter();
+const { showToast } = useToast();
 
 useHead({ title: t('measuring.title') });
 
-const rawRows = ref<MeasuringTaskListRow[]>([]);
+const rawRows = ref<MeasuringBoxListRow[]>([]);
 const loading = ref(true);
 const loadError = ref<string | null>(null);
 
@@ -54,8 +58,8 @@ async function load() {
   loading.value = true;
   loadError.value = null;
   try {
-    // Pending only — the old client behavior (completed tasks are history).
-    rawRows.value = await warehouse.getMeasuringTasks("pending");
+    // The list is already the work queue: open boxes with ≥1 package.
+    rawRows.value = await warehouse.getMeasuringBoxes();
   } catch (e: unknown) {
     loadError.value = errorMessage(e);
     rawRows.value = [];
@@ -67,6 +71,25 @@ async function load() {
 const rows = computed(() => rawRows.value);
 
 useVisibleReload(load);
+
+// Scanning a box QR (or typing its id on the wedge) opens that box directly.
+// Exact id wins; otherwise a unique substring match (e.g. the daily seq).
+useHardwareScanner({
+  enabled: () => rows.value.length > 0,
+  onScan: (rawValue) => {
+    const boxes = rows.value;
+    const q = rawValue.trim().toLowerCase();
+    if (!q) return false;
+    const exact = boxes.find((b) => b.boxId.toLowerCase() === q);
+    const matches = exact ? [exact] : boxes.filter((b) => b.boxId.toLowerCase().includes(q));
+    if (matches.length === 1) {
+      router.push(`/measuring/${matches[0].boxId}`);
+    } else {
+      showToast(t("measuring.boxNotFound", { id: rawValue.trim() }));
+      return false;
+    }
+  },
+});
 </script>
 
 <style scoped>
