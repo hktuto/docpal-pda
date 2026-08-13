@@ -139,21 +139,28 @@ Customer master used by picking orders and customer-segregated stores.
 ## sub_inventories
 
 Warehouse sub-inventories: logical partitions of stock inside one org (Oracle
-EBS organization + subinventory). This table is the **(org_id, code) group
-level** — the composite-FK target of all stock/doc tables
-(`receiving_orders`, `receiving_invoices`, `receiving_invoice_items`,
-`inventory_lots`, `picking_orders`, `shelf_boxes`). `customer_code` marks a
-customer-segregated store — allocation only serves picking orders of that
-customer from it.
+EBS organization + subinventory). Column names mirror the upstream
+DocPal/Oracle subinventory schema (2026-08-13 rename, spec
+`docs/superpowers/specs/2026-08-13-subinventory-rename-and-masterdata-ingest-design.md`);
+`office_code` / `organization_id` are upstream fields the PDA does not use
+(nullable), `customer_code` is PDA-local (upstream has none). This table is
+the **(org_id, secondary_inventory_name) group level** — the composite-FK
+target of all stock/doc tables (`receiving_orders`, `receiving_invoices`,
+`receiving_invoice_items`, `inventory_lots`, `picking_orders`, `shelf_boxes`);
+the referencing columns keep the name `sub_inventory_code`. `customer_code`
+marks a customer-segregated store — allocation only serves picking orders of
+that customer from it.
 
 | Field | Type | Description |
 | --- | --- | --- |
 | id | text PK | Row id (UUID v7) |
-| org_id | integer NOT NULL, UNIQUE (composite with code) | Owning office (2 / 140 / 143 / 220; plain integer, no FK to a lookup) |
-| code | text NOT NULL, UNIQUE (composite with org_id) | Sub-inventory code, e.g. STORE1 |
-| name | text | Sub-inventory name |
+| office_code | text | Upstream office code (unused locally) |
+| organization_id | integer | Upstream organization id (Oracle NUMBER → integer here) |
+| org_id | integer NOT NULL, UNIQUE (composite with secondary_inventory_name) | Owning office (2 / 140 / 143 / 220; plain integer, no FK to a lookup) |
+| secondary_inventory_name | text NOT NULL, UNIQUE (composite with org_id) | Sub-inventory code, e.g. STORE1 |
+| subinv_description | text | Sub-inventory description |
 | customer_code | text FK → customer_profiles(code) | Set for customer-segregated stores |
-| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| creation_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 ## sub_inventory_share_members
@@ -237,7 +244,7 @@ this app by the user (no upstream sync key).
 | supplier_code | text FK → suppliers(code) | Supplier (business code; `suppliers.id` is internal-only) |
 | delivery_date | timestamp | Expected delivery date |
 | org_id | integer NOT NULL DEFAULT 2 | Receiving office |
-| sub_inventory_code | text NOT NULL FK → sub_inventories(code) | Sub-inventory the order receives into (mandatory per order; with org_id, the receiving location pair) |
+| sub_inventory_code | text NOT NULL FK → sub_inventories(secondary_inventory_name) | Sub-inventory the order receives into (mandatory per order; with org_id, the receiving location pair) |
 | date_code | text | Batch-level date code; items without one inherit it |
 | status | text NOT NULL DEFAULT 'pending' | Order status |
 | arrived_at | timestamp | Arrival confirmation time |
@@ -263,7 +270,7 @@ Packing-list header — one supplier invoice inside a receiving order.
 | total_ctn | integer | Total carton count |
 | delivery_date | timestamp | Ship-out date (not the inbound time) |
 | org_id | integer NOT NULL DEFAULT 2 | Shipper office, 2 = HK |
-| sub_inventory_code | text FK → sub_inventories(code) | Sub-inventory override for this invoice (nullable) |
+| sub_inventory_code | text FK → sub_inventories(secondary_inventory_name) | Sub-inventory override for this invoice (nullable) |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
@@ -289,7 +296,7 @@ Packing-list line items.
 | coo | text | Country of origin |
 | cow | text | Country of wafer |
 | org_id | integer NOT NULL DEFAULT 2 | Receiving office |
-| sub_inventory_code | text FK → sub_inventories(code) | Sub-inventory override for this line (nullable) |
+| sub_inventory_code | text FK → sub_inventories(secondary_inventory_name) | Sub-inventory override for this line (nullable) |
 | reported_mismatch | boolean NOT NULL DEFAULT false | A mismatch was reported on this line |
 | mismatch_reason | text | Mismatch reason |
 | mismatch_qty | integer | Mismatched quantity |
@@ -319,7 +326,7 @@ external_id).
 | ship_to | text | Ship-to description (merged with destination country; unstructured, not a full address) |
 | customer_code | text FK → customer_profiles(code) | Customer |
 | org_id | integer | Shipping office (nullable — allocation matches on the pair only when set) |
-| sub_inventory_code | text FK → sub_inventories(code) | Sub-inventory to ship from (nullable — with org_id, the shipping location pair) |
+| sub_inventory_code | text FK → sub_inventories(secondary_inventory_name) | Sub-inventory to ship from (nullable — with org_id, the shipping location pair) |
 | priority_seq | integer NOT NULL DEFAULT 0 | Allocation/list order — lower first, admin-reorderable (`POST /picking-orders/reorder`); default seq = delivery date ASC NULLS LAST then order_no |
 | commodity_inspection | text | Commodity inspection flag/value from the upstream order (stored, not yet interpreted) |
 | working_by | text FK → users(id) | Page work lock holder — a PDA with this order open keeps its allocations from being wiped by allocateAll |
@@ -469,7 +476,7 @@ virtual shelf code so the lot key never goes NULL. The lot's location pair
 | shelf_code | text FK → shelves(code) | Location (virtual shelf for dock/GIT lots) |
 | box_id | text | Shelf box holding the stock |
 | org_id | integer | Lot's office (stamped from the shelf at put-away) |
-| sub_inventory_code | text FK → sub_inventories(code) | Lot's sub-inventory (stamped from the shelf at put-away) |
+| sub_inventory_code | text FK → sub_inventories(secondary_inventory_name) | Lot's sub-inventory (stamped from the shelf at put-away) |
 | total_qty | integer NOT NULL DEFAULT 0 | Total quantity (dock lots: expected qty; shelf lots: on-hand stock) |
 | allocated_qty | integer NOT NULL DEFAULT 0 | Reserved quantity |
 | available_qty | integer GENERATED ALWAYS AS (total_qty - allocated_qty) | Available (unreserved) quantity |
@@ -506,7 +513,7 @@ Physical boxes on shelves used by put-away (printed box label).
 | id | text PK | Box id (server-generated `BOX-H-<date>-<seq>`; format to be finalized now that warehouse_code is removed) |
 | shelf_code | text FK → shelves(code) | Shelf the box sits on |
 | org_id | integer | Stock location pair member — the box decides the stock partition of its contents (defaults to the receiving order's pair at creation; put-away stamps lots with the box's pair) |
-| sub_inventory_code | text FK → sub_inventories(code) | Stock location pair member (with org_id) |
+| sub_inventory_code | text FK → sub_inventories(secondary_inventory_name) | Stock location pair member (with org_id) |
 | status | text NOT NULL DEFAULT 'open' | Box status |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |

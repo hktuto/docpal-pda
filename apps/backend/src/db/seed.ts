@@ -340,25 +340,25 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
     { id: uid(182), code: "HK-WIN84", label: "HK-WIN84" },
   ]);
 
-  // Sub-inventories: the (org_id, code) group level that all stock/doc
-  // tables reference via composite FK. ACME-S1 is the demo
+  // Sub-inventories: the (org_id, secondary_inventory_name) group level that
+  // all stock/doc tables reference via composite FK. ACME-S1 is the demo
   // customer-segregated store.
   await db.insert(subInventories).values([
-    { orgId: 2, code: "STORE1", name: "Store 1" },
-    { orgId: 2, code: "WSTORE1" },
-    { orgId: 2, code: "OSWF (HK)" },
-    { orgId: 220, code: "THHK2" },
-    { orgId: 220, code: "OSWF (TH)" },
-    { orgId: 140, code: "STORE1" },
-    { orgId: 140, code: "ZTE" },
-    { orgId: 140, code: "OSWF (MCE)" },
-    { orgId: 140, code: "HUAWEI" },
-    { orgId: 140, code: "HWOS (HUAWEI)" },
-    { orgId: 140, code: "DEFAULT" },
-    { orgId: 143, code: "store1" },
-    { orgId: 143, code: "OSWF (MCI)" },
-    { orgId: 143, code: "DEFAULT" },
-    { orgId: 2, code: "ACME-S1", name: "ACME segregated store", customerCode: "ACME" },
+    { orgId: 2, secondaryInventoryName: "STORE1", subinvDescription: "Store 1" },
+    { orgId: 2, secondaryInventoryName: "WSTORE1" },
+    { orgId: 2, secondaryInventoryName: "OSWF (HK)" },
+    { orgId: 220, secondaryInventoryName: "THHK2" },
+    { orgId: 220, secondaryInventoryName: "OSWF (TH)" },
+    { orgId: 140, secondaryInventoryName: "STORE1" },
+    { orgId: 140, secondaryInventoryName: "ZTE" },
+    { orgId: 140, secondaryInventoryName: "OSWF (MCE)" },
+    { orgId: 140, secondaryInventoryName: "HUAWEI" },
+    { orgId: 140, secondaryInventoryName: "HWOS (HUAWEI)" },
+    { orgId: 140, secondaryInventoryName: "DEFAULT" },
+    { orgId: 143, secondaryInventoryName: "store1" },
+    { orgId: 143, secondaryInventoryName: "OSWF (MCI)" },
+    { orgId: 143, secondaryInventoryName: "DEFAULT" },
+    { orgId: 2, secondaryInventoryName: "ACME-S1", subinvDescription: "ACME segregated store", customerCode: "ACME" },
   ].map((s, i) => ({ id: uid(183 + i), ...s })));
 
   // Real Oracle org → sub-inventory master (generated from the mapping xlsx —

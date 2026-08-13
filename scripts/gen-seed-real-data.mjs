@@ -51,26 +51,27 @@ function sheet(file, name) {
 }
 
 // ---------------------------------------------------------------------------
-// 1. Sub-inventory master (151 rows, 13 orgs) — plain (org_id, code) groups.
+// 1. Sub-inventory master (151 rows, 13 orgs) — plain (org_id,
+//    secondary_inventory_name) groups.
 // ---------------------------------------------------------------------------
 const subRows = sheet("ORIGINAL_ID + ORG_ID + Sub Inventory mapping.xlsx", "Enable Subinv Data").slice(1);
 const seenSub = new Set();
 const realSubInventories = [];
 for (const r of subRows) {
   const orgId = Number(r[2]);
-  const code = String(r[3]).trim();
-  const name = String(r[4]).trim() || null;
-  if (!Number.isInteger(orgId) || !code) continue;
-  const key = `${orgId}|${code}`;
+  const secondaryInventoryName = String(r[3]).trim();
+  const subinvDescription = String(r[4]).trim() || null;
+  if (!Number.isInteger(orgId) || !secondaryInventoryName) continue;
+  const key = `${orgId}|${secondaryInventoryName}`;
   if (seenSub.has(key)) continue;
   seenSub.add(key);
-  realSubInventories.push({ orgId, code, name });
+  realSubInventories.push({ orgId, secondaryInventoryName, subinvDescription });
 }
 writeFileSync(
   path.join(outDir, "seed-subinventories-data.ts"),
   HEADER +
     "// Source: new_seed/ORIGINAL_ID + ORG_ID + Sub Inventory mapping.xlsx (Enable Subinv Data).\n" +
-    "// Plain (org_id, code) groups; sharing between stores is configured per\n" +
+    "// Plain (org_id, secondary_inventory_name) groups; sharing between stores is configured per\n" +
     "// warehouse via sub_inventory_share_members.\n" +
     `export const realSubInventories = ${JSON.stringify(realSubInventories, null, 1)};\n`
 );

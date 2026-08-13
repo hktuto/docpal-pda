@@ -322,7 +322,7 @@ async function loadBoxLots(dbOrTx: DbOrTx, order: OrderMatchContext): Promise<Bo
                il.date_code AS "dateCode", il.lot_code AS "lotCode", il.coo, il.cow
         FROM inventory_lots il
         JOIN shelf_boxes sb ON sb.id = il.box_id
-        LEFT JOIN sub_inventories si ON si.org_id = sb.org_id AND si.code = sb.sub_inventory_code
+        LEFT JOIN sub_inventories si ON si.org_id = sb.org_id AND si.secondary_inventory_name = sb.sub_inventory_code
         LEFT JOIN (
           SELECT a.inventory_lot_id, SUM(a.qty)::int AS qty
           FROM allocations a

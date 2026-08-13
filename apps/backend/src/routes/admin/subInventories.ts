@@ -4,12 +4,13 @@ import type { Context } from "hono";
 import { sql } from "drizzle-orm";
 import { db } from "../../db.js";
 import { queryAll, queryGet } from "../../db/query.js";
-import { mapDbError, optStr, reqInt, reqStr } from "./crud.js";
+import { mapDbError, optInt, optStr, reqInt, reqStr } from "./crud.js";
 
 // ---------------------------------------------------------------------------
-// Sub-inventories: the (org_id, code) group level all stock/doc tables
-// reference. Custom router (not createCrudRouter): rows are addressed as
-// `:orgId::code` (composite UNIQUE business key under the id PK).
+// Sub-inventories: the (org_id, secondary_inventory_name) group level all
+// stock/doc tables reference. Custom router (not createCrudRouter): rows are
+// addressed as `:orgId::code` (composite UNIQUE business key under the id PK).
+// Column names mirror the upstream DocPal/Oracle subinventory schema.
 // ---------------------------------------------------------------------------
 
 export const adminSubInventoriesRoute = new Hono();
@@ -30,15 +31,17 @@ function parseGroupId(id: string): { orgId: number; code: string } {
   return { orgId: Number(id.slice(0, sep)), code: id.slice(sep + 1) };
 }
 
-const GROUP_COLS = sql`si.org_id AS "orgId", si.code, si.name, si.customer_code AS "customerCode",
-       si.created_date AS "createdDate", si.last_update_date AS "lastUpdateDate"`;
+const GROUP_COLS = sql`si.org_id AS "orgId", si.secondary_inventory_name AS "secondaryInventoryName",
+       si.subinv_description AS "subinvDescription", si.office_code AS "officeCode",
+       si.organization_id AS "organizationId", si.customer_code AS "customerCode",
+       si.creation_date AS "creationDate", si.last_update_date AS "lastUpdateDate"`;
 
 adminSubInventoriesRoute.get("/", async (c) => {
   const rows = await queryAll(
     db,
     sql`SELECT ${GROUP_COLS}
         FROM sub_inventories si
-        ORDER BY si.org_id, si.code`
+        ORDER BY si.org_id, si.secondary_inventory_name`
   );
   return c.json(rows);
 });
@@ -49,7 +52,7 @@ adminSubInventoriesRoute.get("/:id", async (c) => {
     db,
     sql`SELECT ${GROUP_COLS}
         FROM sub_inventories si
-        WHERE si.org_id = ${g.orgId} AND si.code = ${g.code}`
+        WHERE si.org_id = ${g.orgId} AND si.secondary_inventory_name = ${g.code}`
   );
   if (!row) throw new HTTPException(404, { message: "not found" });
   return c.json(row);
@@ -62,9 +65,11 @@ adminSubInventoriesRoute.post("/", async (c) => {
   try {
     const row = await queryGet(
       db,
-      sql`INSERT INTO sub_inventories (id, org_id, code, name, customer_code, created_date, last_update_date)
-          VALUES (app_uuid_v7(), ${orgId}, ${code}, ${optStr(b, "name")}, ${optStr(b, "customerCode")}, now(), now())
-          RETURNING org_id AS "orgId", code`
+      sql`INSERT INTO sub_inventories (id, org_id, secondary_inventory_name, subinv_description,
+                  office_code, organization_id, customer_code, creation_date, last_update_date)
+          VALUES (app_uuid_v7(), ${orgId}, ${code}, ${optStr(b, "subinvDescription")},
+                  ${optStr(b, "officeCode")}, ${optInt(b, "organizationId")}, ${optStr(b, "customerCode")}, now(), now())
+          RETURNING org_id AS "orgId", secondary_inventory_name AS "secondaryInventoryName"`
     );
     return c.json(row, 201);
   } catch (e) {
@@ -75,18 +80,26 @@ adminSubInventoriesRoute.post("/", async (c) => {
 adminSubInventoriesRoute.patch("/:id", async (c) => {
   const g = parseGroupId(c.req.param("id"));
   const b = await readJson(c);
-  const hasName = b.name !== undefined;
+  const hasDesc = b.subinvDescription !== undefined;
+  const hasOffice = b.officeCode !== undefined;
+  const hasOrg = b.organizationId !== undefined;
   const hasCustomer = b.customerCode !== undefined;
-  if (!hasName && !hasCustomer) throw new HTTPException(400, { message: "no fields to update" });
+  if (!hasDesc && !hasOffice && !hasOrg && !hasCustomer) {
+    throw new HTTPException(400, { message: "no fields to update" });
+  }
   try {
     const row = await queryGet(
       db,
       sql`UPDATE sub_inventories
-          SET name = CASE WHEN ${hasName} THEN ${optStr(b, "name")} ELSE name END,
+          SET subinv_description = CASE WHEN ${hasDesc} THEN ${optStr(b, "subinvDescription")} ELSE subinv_description END,
+              office_code = CASE WHEN ${hasOffice} THEN ${optStr(b, "officeCode")} ELSE office_code END,
+              organization_id = CASE WHEN ${hasOrg} THEN ${optInt(b, "organizationId")} ELSE organization_id END,
               customer_code = CASE WHEN ${hasCustomer} THEN ${optStr(b, "customerCode")} ELSE customer_code END,
               last_update_date = now()
-          WHERE org_id = ${g.orgId} AND code = ${g.code}
-          RETURNING org_id AS "orgId", code, name, customer_code AS "customerCode"`
+          WHERE org_id = ${g.orgId} AND secondary_inventory_name = ${g.code}
+          RETURNING org_id AS "orgId", secondary_inventory_name AS "secondaryInventoryName",
+                    subinv_description AS "subinvDescription", office_code AS "officeCode",
+                    organization_id AS "organizationId", customer_code AS "customerCode"`
     );
     if (!row) throw new HTTPException(404, { message: "not found" });
     return c.json(row);
@@ -101,7 +114,8 @@ adminSubInventoriesRoute.delete("/:id", async (c) => {
   try {
     const row = await queryGet(
       db,
-      sql`DELETE FROM sub_inventories WHERE org_id = ${g.orgId} AND code = ${g.code} RETURNING code`
+      sql`DELETE FROM sub_inventories WHERE org_id = ${g.orgId} AND secondary_inventory_name = ${g.code}
+          RETURNING secondary_inventory_name AS "secondaryInventoryName"`
     );
     if (!row) throw new HTTPException(404, { message: "not found" });
     return c.json({ ok: true });

@@ -78,6 +78,13 @@
       "when": 1786519831025,
       "tag": "0010_exotic_argent",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1786614010562,
+      "tag": "0011_majestic_triton",
+      "breakpoints": true
     }
   ]
 }

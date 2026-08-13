@@ -39,7 +39,7 @@ export const pickingOrders = pgTable(
   },
   (t) => ({
     statusIdx: index("idx_picking_orders_status").on(t.status),
-    subInvFk: foreignKey({ name: "picking_orders_sub_inv_fk", columns: [t.orgId, t.subInventoryCode], foreignColumns: [subInventories.orgId, subInventories.code] }),
+    subInvFk: foreignKey({ name: "picking_orders_sub_inv_fk", columns: [t.orgId, t.subInventoryCode], foreignColumns: [subInventories.orgId, subInventories.secondaryInventoryName] }),
   })
 );
 

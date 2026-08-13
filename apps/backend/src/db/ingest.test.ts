@@ -9,6 +9,8 @@ import { confirmReceivingArrival } from "./receiving.js";
 import {
   upsertReceivingOrder,
   upsertPickingOrder,
+  deleteReceivingOrder,
+  deletePickingOrder,
   type IngestReceivingBody,
   type IngestPickingBody,
 } from "./ingest.js";
@@ -467,4 +469,244 @@ test("picking: new order slots into the queue by delivery date; re-upsert keeps 
   // re-upsert does not move the order
   await upsertPickingOrder(client.db, "PO-SEQ-Z", { order: { customerCode: "ACME" }, items: [{ partNo: "RK73H1JTTD2202F", qty: 20, lineId: 8020, lineNumber: 1, shipmentNumber: 1 }] });
   assert.equal(await seqOf("PO-SEQ-Z"), zSeq);
+});
+
+// --- caller-supplied ids ------------------------------------------------------
+
+const ID_ORDER = "11111111-1111-4111-8111-111111111111";
+const ID_INVOICE = "22222222-2222-4222-8222-222222222222";
+const ID_ITEM_1 = "33333333-3333-4333-8333-333333333333";
+const ID_ITEM_2 = "44444444-4444-4444-8444-444444444444";
+
+test("receiving: caller-supplied ids on create are used at every level", async () => {
+  await reseed(client);
+  const body = receivingBody();
+  body.order.id = ID_ORDER;
+  body.invoices[0].id = ID_INVOICE;
+  body.invoices[0].items[0].id = ID_ITEM_1;
+  body.invoices[0].items[1].id = ID_ITEM_2;
+
+  const res = await upsertReceivingOrder(client.db, "RO-INGEST-IDS", body);
+  assert.equal(res.created, true);
+  assert.equal(res.id, ID_ORDER);
+
+  const invoice = (await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT id FROM receiving_invoices WHERE receiving_order_id = ${ID_ORDER}`
+  ))!;
+  assert.equal(invoice.id, ID_INVOICE);
+  const itemIds = await queryAll<{ id: string }>(
+    client.db,
+    sql`SELECT id FROM receiving_invoice_items WHERE receiving_invoice_id = ${ID_INVOICE} ORDER BY id`
+  );
+  assert.deepEqual(
+    itemIds.map((i) => i.id),
+    [ID_ITEM_1, ID_ITEM_2].sort()
+  );
+});
+
+test("receiving: re-PUT with different supplied ids → reconcile keeps the server ids", async () => {
+  await reseed(client);
+  const body = receivingBody();
+  body.order.id = ID_ORDER;
+  body.invoices[0].id = ID_INVOICE;
+  body.invoices[0].items[0].id = ID_ITEM_1;
+  body.invoices[0].items[1].id = ID_ITEM_2;
+  await upsertReceivingOrder(client.db, "RO-INGEST-IDS", body);
+
+  // same natural keys, different supplied ids → ignored, no error, no change
+  const again = receivingBody();
+  again.order.id = "55555555-5555-4555-8555-555555555555";
+  again.invoices[0].id = "66666666-6666-4666-8666-666666666666";
+  again.invoices[0].items[0].id = "77777777-7777-4777-8777-777777777777";
+  again.invoices[0].items[1].id = "88888888-8888-4888-8888-888888888888";
+  const res = await upsertReceivingOrder(client.db, "RO-INGEST-IDS", again);
+  assert.equal(res.created, false);
+  assert.equal(res.changed, false);
+  assert.equal(res.id, ID_ORDER);
+  const invoice = (await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT id FROM receiving_invoices WHERE receiving_order_id = ${ID_ORDER}`
+  ))!;
+  assert.equal(invoice.id, ID_INVOICE);
+});
+
+test("receiving: malformed supplied id → 400 invalid_id", async () => {
+  await reseed(client);
+  const body = receivingBody();
+  body.order.id = "not-a-uuid";
+  const err = await catchHttp(upsertReceivingOrder(client.db, "RO-INGEST-1", body));
+  assert.equal(err.status, 400);
+  assert.equal(err.message, "invalid_id");
+
+  const empty = receivingBody();
+  empty.invoices[0].items[0].id = "";
+  const err2 = await catchHttp(upsertReceivingOrder(client.db, "RO-INGEST-1", empty));
+  assert.equal(err2.status, 400);
+  assert.equal(err2.message, "invalid_id");
+});
+
+test("receiving: supplied id colliding with another row's PK → 409 id_already_exists", async () => {
+  await reseed(client);
+  const first = receivingBody();
+  first.order.id = ID_ORDER;
+  first.invoices[0].id = ID_INVOICE;
+  await upsertReceivingOrder(client.db, "RO-INGEST-1", first);
+
+  // same order id under a different natural key
+  const clash = receivingBody();
+  clash.order.id = ID_ORDER;
+  const err = await catchHttp(upsertReceivingOrder(client.db, "RO-INGEST-2", clash));
+  assert.equal(err.status, 409);
+  assert.equal(err.message, "id_already_exists");
+
+  // same invoice id under a different order
+  const invClash = receivingBody();
+  invClash.invoices[0].id = ID_INVOICE;
+  const err2 = await catchHttp(upsertReceivingOrder(client.db, "RO-INGEST-3", invClash));
+  assert.equal(err2.status, 409);
+  assert.equal(err2.message, "id_already_exists");
+});
+
+test("picking: caller-supplied ids on create; reconcile ignores them", async () => {
+  await reseed(client);
+  const body = pickingBody();
+  body.order.id = ID_ORDER;
+  body.items[0].id = ID_ITEM_1;
+  body.items[1].id = ID_ITEM_2;
+
+  const res = await upsertPickingOrder(client.db, "PO-INGEST-IDS", body);
+  assert.equal(res.created, true);
+  assert.equal(res.id, ID_ORDER);
+  const itemIds = await queryAll<{ id: string }>(
+    client.db,
+    sql`SELECT id FROM picking_items WHERE picking_order_id = ${ID_ORDER} ORDER BY id`
+  );
+  assert.deepEqual(
+    itemIds.map((i) => i.id),
+    [ID_ITEM_1, ID_ITEM_2].sort()
+  );
+
+  // re-PUT with different supplied ids → ignored
+  const again = pickingBody();
+  again.order.id = "55555555-5555-4555-8555-555555555555";
+  again.items[0].id = "66666666-6666-4666-8666-666666666666";
+  again.items[1].id = "77777777-7777-4777-8777-777777777777";
+  const res2 = await upsertPickingOrder(client.db, "PO-INGEST-IDS", again);
+  assert.equal(res2.created, false);
+  assert.equal(res2.changed, false);
+  assert.equal(res2.id, ID_ORDER);
+});
+
+test("picking: malformed / colliding supplied id → 400 invalid_id / 409 id_already_exists", async () => {
+  await reseed(client);
+  const bad = pickingBody();
+  bad.items[0].id = "xyz";
+  const err = await catchHttp(upsertPickingOrder(client.db, "PO-INGEST-1", bad));
+  assert.equal(err.status, 400);
+  assert.equal(err.message, "invalid_id");
+
+  const first = pickingBody();
+  first.order.id = ID_ORDER;
+  await upsertPickingOrder(client.db, "PO-INGEST-1", first);
+  const clash = pickingBody();
+  clash.order.id = ID_ORDER;
+  const err2 = await catchHttp(upsertPickingOrder(client.db, "PO-INGEST-2", clash));
+  assert.equal(err2.status, 409);
+  assert.equal(err2.message, "id_already_exists");
+});
+
+// --- whole-order delete --------------------------------------------------------
+
+test("delete receiving: unknown batchNo → 404 not_found", async () => {
+  await reseed(client);
+  const err = await catchHttp(deleteReceivingOrder(client.db, "RO-NOPE"));
+  assert.equal(err.status, 404);
+  assert.equal(err.message, "not_found");
+});
+
+test("delete receiving: pending order → order + invoices + items gone", async () => {
+  await reseed(client);
+  const created = await upsertReceivingOrder(client.db, "RO-INGEST-DEL", receivingBody());
+
+  const res = await deleteReceivingOrder(client.db, "RO-INGEST-DEL");
+  assert.equal(res.id, created.id);
+
+  const order = await queryGet(client.db, sql`SELECT id FROM receiving_orders WHERE id = ${created.id}`);
+  assert.equal(order, undefined);
+  const invoices = await queryAll(client.db, sql`SELECT id FROM receiving_invoices WHERE receiving_order_id = ${created.id}`);
+  assert.equal(invoices.length, 0);
+  const items = await queryAll(
+    client.db,
+    sql`SELECT rii.id FROM receiving_invoice_items rii
+        JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+        WHERE ri.receiving_order_id = ${created.id}`
+  );
+  assert.equal(items.length, 0);
+});
+
+test("delete receiving: past pending → 409 cannot_delete_once_<status>", async () => {
+  await reseed(client);
+  const created = await upsertReceivingOrder(client.db, "RO-INGEST-DEL", receivingBody());
+  const actor = await idOf("users", sql`username = 'operator'`);
+  await confirmReceivingArrival(client.db, created.id, actor); // status in_hand
+
+  const err = await catchHttp(deleteReceivingOrder(client.db, "RO-INGEST-DEL"));
+  assert.equal(err.status, 409);
+  assert.equal(err.message, "cannot_delete_once_in_hand");
+});
+
+test("delete receiving: work started on a line → 409 cannot_delete_after_work_started", async () => {
+  await reseed(client);
+  const created = await upsertReceivingOrder(client.db, "RO-INGEST-DEL", receivingBody());
+  const itemId = await idOf(
+    "receiving_invoice_items",
+    sql`receiving_invoice_id IN (SELECT id FROM receiving_invoices WHERE receiving_order_id = ${created.id})`
+  );
+  await client.db.execute(sql`UPDATE receiving_invoice_items SET received_qty = 1 WHERE id = ${itemId}`);
+
+  const err = await catchHttp(deleteReceivingOrder(client.db, "RO-INGEST-DEL"));
+  assert.equal(err.status, 409);
+  assert.equal(err.message, "cannot_delete_after_work_started");
+});
+
+test("delete picking: unknown orderNo → 404 not_found", async () => {
+  await reseed(client);
+  const err = await catchHttp(deletePickingOrder(client.db, "PO-NOPE"));
+  assert.equal(err.status, 404);
+  assert.equal(err.message, "not_found");
+});
+
+test("delete picking: pending order → order + items gone", async () => {
+  await reseed(client);
+  const created = await upsertPickingOrder(client.db, "PO-INGEST-DEL", pickingBody());
+
+  const res = await deletePickingOrder(client.db, "PO-INGEST-DEL");
+  assert.equal(res.id, created.id);
+
+  const order = await queryGet(client.db, sql`SELECT id FROM picking_orders WHERE id = ${created.id}`);
+  assert.equal(order, undefined);
+  const items = await queryAll(client.db, sql`SELECT id FROM picking_items WHERE picking_order_id = ${created.id}`);
+  assert.equal(items.length, 0);
+});
+
+test("delete picking: past pending → 409 cannot_delete_once_<status>", async () => {
+  await reseed(client);
+  const created = await upsertPickingOrder(client.db, "PO-INGEST-DEL", pickingBody());
+  await client.db.execute(sql`UPDATE picking_orders SET status = 'picking' WHERE id = ${created.id}`);
+
+  const err = await catchHttp(deletePickingOrder(client.db, "PO-INGEST-DEL"));
+  assert.equal(err.status, 409);
+  assert.equal(err.message, "cannot_delete_once_picking");
+});
+
+test("delete picking: work started on a line → 409 cannot_delete_after_work_started", async () => {
+  await reseed(client);
+  const created = await upsertPickingOrder(client.db, "PO-INGEST-DEL", pickingBody());
+  const itemId = await idOf("picking_items", sql`picking_order_id = ${created.id}`);
+  await client.db.execute(sql`UPDATE picking_items SET picked_qty = 5 WHERE id = ${itemId}`);
+
+  const err = await catchHttp(deletePickingOrder(client.db, "PO-INGEST-DEL"));
+  assert.equal(err.status, 409);
+  assert.equal(err.message, "cannot_delete_after_work_started");
 });

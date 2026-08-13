@@ -26,9 +26,9 @@ const subInventoryOptions = ref<{ value: string; label: string }[]>([]);
 onMounted(async () => {
   if (!props.fields.some((f) => f.optionsSource === "subInventories")) return;
   try {
-    const rows = await api.get<{ orgId: number; code: string }[]>("/admin/sub-inventories");
+    const rows = await api.get<{ orgId: number; secondaryInventoryName: string }[]>("/admin/sub-inventories");
     subInventoryOptions.value = rows
-      .map((r) => ({ value: r.code, label: `${r.code} (org ${r.orgId})` }))
+      .map((r) => ({ value: r.secondaryInventoryName, label: `${r.secondaryInventoryName} (org ${r.orgId})` }))
       .sort((a, b) => a.label.localeCompare(b.label));
   } catch {
     subInventoryOptions.value = []; // options stay empty; the field can still be cleared

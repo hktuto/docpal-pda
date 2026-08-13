@@ -9,6 +9,10 @@ import {
   receivingInvoiceItems,
   pickingOrders,
   pickingItems,
+  parts,
+  suppliers,
+  supplierProfiles,
+  subInventories,
 } from "./schema/index.js";
 import { emitEvent } from "./events.js";
 import { now } from "./now.js";
@@ -35,6 +39,8 @@ export interface IngestUpsertResult {
 // --- payload types (camelCase, per the API conventions) ----------------------
 
 export interface IngestReceivingOrder {
+  /** Optional caller-supplied UUID — used on the INSERT path only. */
+  id?: string;
   supplierCode?: string | null;
   deliveryDate?: string | null;
   dateCode?: string | null;
@@ -44,6 +50,8 @@ export interface IngestReceivingOrder {
 }
 
 export interface IngestReceivingItem {
+  /** Optional caller-supplied UUID — used on the INSERT path only. */
+  id?: string;
   partNo: string;
   wclItemNo?: string | null;
   poNo?: string | null;
@@ -60,6 +68,8 @@ export interface IngestReceivingItem {
 }
 
 export interface IngestReceivingInvoice {
+  /** Optional caller-supplied UUID — used on the INSERT path only. */
+  id?: string;
   invoiceNo: string;
   supplierCode?: string | null;
   wclCompanyName?: string | null;
@@ -77,6 +87,8 @@ export interface IngestReceivingBody {
 }
 
 export interface IngestPickingOrder {
+  /** Optional caller-supplied UUID — used on the INSERT path only. */
+  id?: string;
   poNo?: string | null;
   shipTo?: string | null;
   customerCode?: string | null;
@@ -86,6 +98,8 @@ export interface IngestPickingOrder {
 }
 
 export interface IngestPickingItem {
+  /** Optional caller-supplied UUID — used on the INSERT path only. */
+  id?: string;
   partNo: string;
   qty: number;
   lineId: number;
@@ -158,6 +172,34 @@ async function resolveCustomerCode(tx: DbOrTx, customerCode: string | null | und
 const receivingItemKey = (partNo: string, poNo: string | null, poLine: string | null) =>
   `${partNo}|${poNo ?? ""}|${poLine ?? ""}`;
 
+// Permissive UUID shape (any version) for caller-supplied ids.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Caller-supplied id (DocPal sync) — 400 invalid_id when present but not a
+ * non-empty UUID-shaped string. Checked up front in the validate* fns.
+ */
+function assertValidSuppliedId(id: string | undefined): void {
+  if (id === undefined) return;
+  if (typeof id !== "string" || !UUID_RE.test(id)) {
+    throw new HTTPException(400, { message: "invalid_id" });
+  }
+}
+
+/**
+ * INSERT path only: use the supplied id or mint a UUID v7. A supplied id that
+ * already exists as another row's PK (different natural key) → 409
+ * id_already_exists (pre-checked; the raw PK violation would be uglier).
+ */
+async function insertId(tx: DbOrTx, table: string, supplied: string | undefined): Promise<string> {
+  if (supplied !== undefined) {
+    const clash = await queryGet<{ id: string }>(tx, sql`SELECT id FROM ${sql.raw(table)} WHERE id = ${supplied}`);
+    if (clash) throw new HTTPException(409, { message: "id_already_exists" });
+    return supplied;
+  }
+  return newId();
+}
+
 // ---------------------------------------------------------------------------
 // Receiving
 // ---------------------------------------------------------------------------
@@ -165,16 +207,19 @@ const receivingItemKey = (partNo: string, poNo: string | null, poLine: string | 
 function validateReceivingBody(body: IngestReceivingBody): void {
   if (!body?.order) throw new HTTPException(400, { message: "order is required" });
   if (!body.order.subInventoryCode) throw new HTTPException(400, { message: "order.subInventoryCode is required" });
+  assertValidSuppliedId(body.order.id);
   if (!Array.isArray(body.invoices) || body.invoices.length === 0) {
     throw new HTTPException(400, { message: "invoices[] is required" });
   }
   for (const inv of body.invoices) {
     if (!inv.invoiceNo) throw new HTTPException(400, { message: "invoiceNo is required" });
+    assertValidSuppliedId(inv.id);
     if (!Array.isArray(inv.items) || inv.items.length === 0) {
       throw new HTTPException(400, { message: `invoice ${inv.invoiceNo}: items[] required` });
     }
     for (const it of inv.items) {
       if (!it.partNo) throw new HTTPException(400, { message: "partNo is required" });
+      assertValidSuppliedId(it.id);
       if (!Number.isInteger(it.lineQty) || it.lineQty < 0) {
         throw new HTTPException(400, { message: "lineQty must be a non-negative integer" });
       }
@@ -185,7 +230,7 @@ function validateReceivingBody(body: IngestReceivingBody): void {
 async function insertReceivingItem(tx: DbOrTx, invoiceId: string, it: IngestReceivingItem): Promise<void> {
   const partNo = await assertPartNo(tx, it.partNo);
   await tx.insert(receivingInvoiceItems).values({
-    id: newId(),
+    id: await insertId(tx, "receiving_invoice_items", it.id),
     receivingInvoiceId: invoiceId,
     partNo,
     wclItemNo: it.wclItemNo ?? null,
@@ -219,7 +264,7 @@ async function insertInvoiceWithItems(
   fallbackSupplierCode: string | null
 ): Promise<string> {
   const supplierCode = await resolveInvoiceSupplierCode(tx, inv, fallbackSupplierCode);
-  const invoiceId = newId();
+  const invoiceId = await insertId(tx, "receiving_invoices", inv.id);
   await tx.insert(receivingInvoices).values({
     id: invoiceId,
     receivingOrderId: orderId,
@@ -277,7 +322,9 @@ function itemWorkStarted(it: Pick<ExistingReceivingItemRow, "allocLinks" | "rece
  * Idempotent upsert keyed by batch_no. No existing row → INSERT order +
  * invoices + items (status pending, org_id default 2; order.subInventoryCode
  * is required — every receiving order lands in exactly one sub-inventory).
- * Existing row →
+ * A caller-supplied `id` (order/invoice/item) is used on this INSERT path
+ * only; on reconcile it is ignored — existing rows keep their server ids and
+ * matching stays on the natural keys. Existing row →
  * reconcile: order fields when different; invoices by invoice_no (add /
  * update / delete — delete cascades the items); items by business key
  * (part_no + po_no + po_line). Derived state is never touched; qty decreases
@@ -299,7 +346,7 @@ export async function upsertReceivingOrder(
     );
 
     if (!existing) {
-      const orderId = newId();
+      const orderId = await insertId(tx, "receiving_orders", body.order.id);
       await tx.insert(receivingOrders).values({
         id: orderId,
         batchNo,
@@ -507,17 +554,59 @@ export async function upsertReceivingOrder(
   });
 }
 
+/**
+ * Whole-order delete (DocPal cancellation), keyed by batch_no. Only a pending
+ * order with no work started on any line is deletable — same guards as the
+ * reconcile line/invoice removals (pending + no work implies nothing
+ * downstream exists). Children cascade (invoices, items, scan labels,
+ * allocations.receiving_order_id, put_away_tasks). Returns the deleted id.
+ */
+export async function deleteReceivingOrder(db: AppDb, batchNo: string): Promise<{ id: string }> {
+  return db.transaction(async (tx) => {
+    const order = await queryGet<{ id: string; status: string }>(
+      tx,
+      sql`SELECT id, status FROM receiving_orders WHERE batch_no = ${batchNo} LIMIT 1`
+    );
+    if (!order) throw new HTTPException(404, { message: "not_found" });
+    if (order.status !== "pending") {
+      throw new HTTPException(409, { message: `cannot_delete_once_${order.status}` });
+    }
+    const worked = await queryGet<{ n: number }>(
+      tx,
+      sql`SELECT COUNT(*)::int AS n
+          FROM receiving_invoice_items rii
+          JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+          WHERE ri.receiving_order_id = ${order.id}
+            AND (rii.received_qty > 0 OR rii.picked_qty > 0 OR rii.put_away_qty > 0
+                 OR EXISTS (SELECT 1 FROM allocations a WHERE a.receiving_invoice_item_id = rii.id)
+                 OR EXISTS (SELECT 1 FROM receiving_scan_labels sl WHERE sl.receiving_invoice_item_id = rii.id))`
+    );
+    if (worked && worked.n > 0) {
+      throw new HTTPException(409, { message: "cannot_delete_after_work_started" });
+    }
+    await queryRun(tx, sql`DELETE FROM receiving_orders WHERE id = ${order.id}`);
+    await emitEvent(tx, {
+      type: "receiving_order.deleted",
+      topics: ["/receiving-orders"],
+      data: { id: order.id, batchNo },
+    });
+    return { id: order.id };
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Picking
 // ---------------------------------------------------------------------------
 
 function validatePickingBody(body: IngestPickingBody): void {
   if (!body?.order) throw new HTTPException(400, { message: "order is required" });
+  assertValidSuppliedId(body.order.id);
   if (!Array.isArray(body.items) || body.items.length === 0) {
     throw new HTTPException(400, { message: "items[] is required" });
   }
   for (const it of body.items) {
     if (!it.partNo) throw new HTTPException(400, { message: "partNo is required" });
+    assertValidSuppliedId(it.id);
     if (!Number.isInteger(it.qty) || it.qty < 0) {
       throw new HTTPException(400, { message: "qty must be a non-negative integer" });
     }
@@ -532,7 +621,7 @@ function validatePickingBody(body: IngestPickingBody): void {
 async function insertPickingItem(tx: DbOrTx, orderId: string, it: IngestPickingItem): Promise<void> {
   const partNo = await assertPartNo(tx, it.partNo);
   await tx.insert(pickingItems).values({
-    id: newId(),
+    id: await insertId(tx, "picking_items", it.id),
     pickingOrderId: orderId,
     partNo,
     qty: it.qty,
@@ -576,7 +665,7 @@ export async function upsertPickingOrder(
     );
 
     if (!existing) {
-      const orderId = newId();
+      const orderId = await insertId(tx, "picking_orders", body.order.id);
       // Slot the new order into the priority queue by (delivery_date ASC
       // NULLS LAST, order_no): bump open orders that sort at-or-after it and
       // take the freed position. Existing (incl. manually reordered) relative
@@ -720,5 +809,360 @@ export async function upsertPickingOrder(
       });
     }
     return { id: orderId, created: false, changed, orderStatus: existing.status };
+  });
+}
+
+/**
+ * Whole-order delete (DocPal cancellation), keyed by order_no. Only a pending
+ * order with no work started (picked_qty > 0 or allocation links on any line)
+ * is deletable — the guard implies no packages/shipping_boxes exist, so the
+ * children all cascade (picking_items, picking_packages, allocations).
+ * priority_seq is NOT compacted — gaps are harmless (ordering is by seq
+ * value). Returns the deleted id.
+ */
+export async function deletePickingOrder(db: AppDb, orderNo: string): Promise<{ id: string }> {
+  return db.transaction(async (tx) => {
+    const order = await queryGet<{ id: string; status: string }>(
+      tx,
+      sql`SELECT id, status FROM picking_orders WHERE order_no = ${orderNo} LIMIT 1`
+    );
+    if (!order) throw new HTTPException(404, { message: "not_found" });
+    if (order.status !== "pending") {
+      throw new HTTPException(409, { message: `cannot_delete_once_${order.status}` });
+    }
+    const worked = await queryGet<{ n: number }>(
+      tx,
+      sql`SELECT COUNT(*)::int AS n
+          FROM picking_items pi
+          WHERE pi.picking_order_id = ${order.id}
+            AND (pi.picked_qty > 0
+                 OR EXISTS (SELECT 1 FROM allocations a WHERE a.picking_item_id = pi.id))`
+    );
+    if (worked && worked.n > 0) {
+      throw new HTTPException(409, { message: "cannot_delete_after_work_started" });
+    }
+    await queryRun(tx, sql`DELETE FROM picking_orders WHERE id = ${order.id}`);
+    await emitEvent(tx, {
+      type: "picking_order.deleted",
+      topics: ["/picking-orders"],
+      data: { id: order.id, orderNo },
+    });
+    return { id: order.id };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Master data (parts / suppliers / supplier_profiles / sub_inventories)
+// ---------------------------------------------------------------------------
+// Same upsert/delete pattern as the order ingests, keyed by the master rows'
+// natural keys. No app_events — the admin master-data CRUD (routes/admin/
+// crud.ts) emits none either; the sync_events DB triggers already record these
+// writes for the external sync service.
+
+export interface MasterDataUpsertResult {
+  id: string;
+  created: boolean;
+  changed: boolean;
+}
+
+export interface IngestPart {
+  /** Optional caller-supplied UUID — used on the INSERT path only. */
+  id?: string;
+  brand: string;
+  wclItemNo?: string | null;
+  description?: string | null;
+  defaultCoo?: string | null;
+}
+
+export interface IngestSupplier {
+  /** Optional caller-supplied UUID — used on the INSERT path only. */
+  id?: string;
+  name: string;
+  shortName?: string | null;
+}
+
+export interface IngestSupplierProfile {
+  /** Optional caller-supplied UUID — used on the INSERT path only. */
+  id?: string;
+  name?: string | null;
+  qrTemplate?: string | null;
+  qrTemplateConfig?: unknown;
+  qrType?: string | null;
+  qtyEncoding?: string | null;
+  remark?: string | null;
+}
+
+export interface IngestSubInventory {
+  /** Optional caller-supplied UUID — used on the INSERT path only. */
+  id?: string;
+  subinvDescription?: string | null;
+  officeCode?: string | null;
+  organizationId?: number | null;
+  customerCode?: string | null;
+}
+
+/** Postgres FK violation (23503) on a master-data delete → 409 cannot_delete_referenced. */
+function mapFkViolation(e: unknown): never {
+  const err = e as { code?: string; cause?: { code?: string } };
+  if ((err?.code ?? err?.cause?.code) === "23503") {
+    throw new HTTPException(409, { message: "cannot_delete_referenced" });
+  }
+  throw e;
+}
+
+/** jsonb param for raw SQL: JSON-stringified (null stays null). */
+function jsonbParam(value: unknown): string | null {
+  return value === undefined || value === null ? null : JSON.stringify(value);
+}
+
+/** Idempotent upsert keyed by part_no. A supplied id is INSERT-only. */
+export async function upsertPart(db: AppDb, partNo: string, body: IngestPart): Promise<MasterDataUpsertResult> {
+  if (!body?.brand) throw new HTTPException(400, { message: "brand is required" });
+  assertValidSuppliedId(body.id);
+  return db.transaction(async (tx) => {
+    const fields = {
+      brand: body.brand,
+      wclItemNo: body.wclItemNo ?? null,
+      description: body.description ?? null,
+      defaultCoo: body.defaultCoo ?? null,
+    };
+    const existing = await queryGet<{ id: string }>(
+      tx,
+      sql`SELECT id,
+                 NOT (brand IS NOT DISTINCT FROM ${fields.brand}) AS "dBrand",
+                 NOT (wcl_item_no IS NOT DISTINCT FROM ${fields.wclItemNo}) AS "dWcl",
+                 NOT (description IS NOT DISTINCT FROM ${fields.description}) AS "dDesc",
+                 NOT (default_coo IS NOT DISTINCT FROM ${fields.defaultCoo}) AS "dCoo"
+          FROM parts WHERE part_no = ${partNo}`
+    );
+    if (!existing) {
+      const id = await insertId(tx, "parts", body.id);
+      await tx.insert(parts).values({ id, partNo, ...fields });
+      return { id, created: true, changed: true };
+    }
+    const d = existing as unknown as Record<string, unknown>;
+    if (d.dBrand || d.dWcl || d.dDesc || d.dCoo) {
+      await queryRun(
+        tx,
+        sql`UPDATE parts SET brand = ${fields.brand}, wcl_item_no = ${fields.wclItemNo},
+                  description = ${fields.description}, default_coo = ${fields.defaultCoo},
+                  last_update_date = ${now()}
+            WHERE id = ${existing.id}`
+      );
+      return { id: existing.id, created: false, changed: true };
+    }
+    return { id: existing.id, created: false, changed: false };
+  });
+}
+
+/** Delete keyed by part_no; 23503 (referenced anywhere) → 409 cannot_delete_referenced. */
+export async function deletePart(db: AppDb, partNo: string): Promise<{ id: string }> {
+  return db.transaction(async (tx) => {
+    const row = await queryGet<{ id: string }>(tx, sql`SELECT id FROM parts WHERE part_no = ${partNo}`);
+    if (!row) throw new HTTPException(404, { message: "not_found" });
+    try {
+      await queryRun(tx, sql`DELETE FROM parts WHERE id = ${row.id}`);
+    } catch (e) {
+      mapFkViolation(e);
+    }
+    return { id: row.id };
+  });
+}
+
+/** Idempotent upsert keyed by code. A supplied id is INSERT-only. */
+export async function upsertSupplier(db: AppDb, code: string, body: IngestSupplier): Promise<MasterDataUpsertResult> {
+  if (!body?.name) throw new HTTPException(400, { message: "name is required" });
+  assertValidSuppliedId(body.id);
+  return db.transaction(async (tx) => {
+    const fields = { name: body.name, shortName: body.shortName ?? null };
+    const existing = await queryGet<{ id: string }>(
+      tx,
+      sql`SELECT id,
+                 NOT (name IS NOT DISTINCT FROM ${fields.name}) AS "dName",
+                 NOT (short_name IS NOT DISTINCT FROM ${fields.shortName}) AS "dShort"
+          FROM suppliers WHERE code = ${code}`
+    );
+    if (!existing) {
+      const id = await insertId(tx, "suppliers", body.id);
+      await tx.insert(suppliers).values({ id, code, ...fields });
+      return { id, created: true, changed: true };
+    }
+    const d = existing as unknown as Record<string, unknown>;
+    if (d.dName || d.dShort) {
+      await queryRun(
+        tx,
+        sql`UPDATE suppliers SET name = ${fields.name}, short_name = ${fields.shortName},
+                  last_update_date = ${now()}
+            WHERE id = ${existing.id}`
+      );
+      return { id: existing.id, created: false, changed: true };
+    }
+    return { id: existing.id, created: false, changed: false };
+  });
+}
+
+/** Delete keyed by code; 23503 (orders/profile reference it) → 409 cannot_delete_referenced. */
+export async function deleteSupplier(db: AppDb, code: string): Promise<{ id: string }> {
+  return db.transaction(async (tx) => {
+    const row = await queryGet<{ id: string }>(tx, sql`SELECT id FROM suppliers WHERE code = ${code}`);
+    if (!row) throw new HTTPException(404, { message: "not_found" });
+    try {
+      await queryRun(tx, sql`DELETE FROM suppliers WHERE id = ${row.id}`);
+    } catch (e) {
+      mapFkViolation(e);
+    }
+    return { id: row.id };
+  });
+}
+
+/**
+ * Idempotent upsert keyed by supplier_code (FK → suppliers.code; 400
+ * unknown_supplier when the supplier does not exist). A supplied id is
+ * INSERT-only.
+ */
+export async function upsertSupplierProfile(
+  db: AppDb,
+  supplierCode: string,
+  body: IngestSupplierProfile
+): Promise<MasterDataUpsertResult> {
+  assertValidSuppliedId(body?.id);
+  return db.transaction(async (tx) => {
+    // supplierCode comes from the path — assertSupplierCode returns it or throws.
+    const code = (await assertSupplierCode(tx, supplierCode))!;
+    const cfg = jsonbParam(body.qrTemplateConfig);
+    const existing = await queryGet<{ id: string }>(
+      tx,
+      sql`SELECT id,
+                 NOT (name IS NOT DISTINCT FROM ${body.name ?? null}) AS "dName",
+                 NOT (qr_template IS NOT DISTINCT FROM ${body.qrTemplate ?? null}) AS "dTpl",
+                 NOT (qr_template_config IS NOT DISTINCT FROM ${cfg}::jsonb) AS "dCfg",
+                 NOT (qr_type IS NOT DISTINCT FROM ${body.qrType ?? null}) AS "dType",
+                 NOT (qty_encoding IS NOT DISTINCT FROM ${body.qtyEncoding ?? null}) AS "dQty",
+                 NOT (remark IS NOT DISTINCT FROM ${body.remark ?? null}) AS "dRemark"
+          FROM supplier_profiles WHERE supplier_code = ${code}`
+    );
+    if (!existing) {
+      const id = await insertId(tx, "supplier_profiles", body.id);
+      await tx.insert(supplierProfiles).values({
+        id,
+        supplierCode: code,
+        name: body.name ?? null,
+        qrTemplate: body.qrTemplate ?? null,
+        qrTemplateConfig: body.qrTemplateConfig ?? null,
+        qrType: body.qrType ?? null,
+        qtyEncoding: body.qtyEncoding ?? null,
+        remark: body.remark ?? null,
+      });
+      return { id, created: true, changed: true };
+    }
+    const d = existing as unknown as Record<string, unknown>;
+    if (d.dName || d.dTpl || d.dCfg || d.dType || d.dQty || d.dRemark) {
+      await queryRun(
+        tx,
+        sql`UPDATE supplier_profiles SET name = ${body.name ?? null}, qr_template = ${body.qrTemplate ?? null},
+                  qr_template_config = ${cfg}::jsonb, qr_type = ${body.qrType ?? null},
+                  qty_encoding = ${body.qtyEncoding ?? null}, remark = ${body.remark ?? null},
+                  last_update_date = ${now()}
+            WHERE id = ${existing.id}`
+      );
+      return { id: existing.id, created: false, changed: true };
+    }
+    return { id: existing.id, created: false, changed: false };
+  });
+}
+
+/** Delete keyed by supplier_code; 404 when no profile exists. */
+export async function deleteSupplierProfile(db: AppDb, supplierCode: string): Promise<{ id: string }> {
+  return db.transaction(async (tx) => {
+    const row = await queryGet<{ id: string }>(
+      tx,
+      sql`SELECT id FROM supplier_profiles WHERE supplier_code = ${supplierCode}`
+    );
+    if (!row) throw new HTTPException(404, { message: "not_found" });
+    try {
+      await queryRun(tx, sql`DELETE FROM supplier_profiles WHERE id = ${row.id}`);
+    } catch (e) {
+      mapFkViolation(e);
+    }
+    return { id: row.id };
+  });
+}
+
+/**
+ * Idempotent upsert keyed by the path pair (orgId, code) →
+ * (org_id, secondary_inventory_name). customerCode resolves to
+ * customer_profiles.code (400 unknown_customer). A supplied id is INSERT-only.
+ */
+export async function upsertSubInventory(
+  db: AppDb,
+  orgIdParam: string,
+  code: string,
+  body: IngestSubInventory
+): Promise<MasterDataUpsertResult> {
+  const orgId = Number(orgIdParam);
+  if (!Number.isInteger(orgId)) throw new HTTPException(400, { message: "invalid_org_id" });
+  if (!code) throw new HTTPException(400, { message: "code is required" });
+  assertValidSuppliedId(body?.id);
+  if (body.organizationId !== undefined && body.organizationId !== null && !Number.isInteger(body.organizationId)) {
+    throw new HTTPException(400, { message: "organizationId must be an integer" });
+  }
+  return db.transaction(async (tx) => {
+    const customerCode = await resolveCustomerCode(tx, body.customerCode);
+    const fields = {
+      subinvDescription: body.subinvDescription ?? null,
+      officeCode: body.officeCode ?? null,
+      organizationId: body.organizationId ?? null,
+      customerCode,
+    };
+    const existing = await queryGet<{ id: string }>(
+      tx,
+      sql`SELECT id,
+                 NOT (subinv_description IS NOT DISTINCT FROM ${fields.subinvDescription}) AS "dDesc",
+                 NOT (office_code IS NOT DISTINCT FROM ${fields.officeCode}) AS "dOffice",
+                 NOT (organization_id IS NOT DISTINCT FROM ${fields.organizationId}) AS "dOrg",
+                 NOT (customer_code IS NOT DISTINCT FROM ${fields.customerCode}) AS "dCust"
+          FROM sub_inventories WHERE org_id = ${orgId} AND secondary_inventory_name = ${code}`
+    );
+    if (!existing) {
+      const id = await insertId(tx, "sub_inventories", body.id);
+      await tx.insert(subInventories).values({
+        id,
+        orgId,
+        secondaryInventoryName: code,
+        ...fields,
+      });
+      return { id, created: true, changed: true };
+    }
+    const d = existing as unknown as Record<string, unknown>;
+    if (d.dDesc || d.dOffice || d.dOrg || d.dCust) {
+      await queryRun(
+        tx,
+        sql`UPDATE sub_inventories SET subinv_description = ${fields.subinvDescription},
+                  office_code = ${fields.officeCode}, organization_id = ${fields.organizationId},
+                  customer_code = ${fields.customerCode}, last_update_date = ${now()}
+            WHERE id = ${existing.id}`
+      );
+      return { id: existing.id, created: false, changed: true };
+    }
+    return { id: existing.id, created: false, changed: false };
+  });
+}
+
+/** Delete keyed by (orgId, code); 23503 (stock/doc FKs) → 409 cannot_delete_referenced. */
+export async function deleteSubInventory(db: AppDb, orgIdParam: string, code: string): Promise<{ id: string }> {
+  const orgId = Number(orgIdParam);
+  if (!Number.isInteger(orgId)) throw new HTTPException(400, { message: "invalid_org_id" });
+  return db.transaction(async (tx) => {
+    const row = await queryGet<{ id: string }>(
+      tx,
+      sql`SELECT id FROM sub_inventories WHERE org_id = ${orgId} AND secondary_inventory_name = ${code}`
+    );
+    if (!row) throw new HTTPException(404, { message: "not_found" });
+    try {
+      await queryRun(tx, sql`DELETE FROM sub_inventories WHERE id = ${row.id}`);
+    } catch (e) {
+      mapFkViolation(e);
+    }
+    return { id: row.id };
   });
 }

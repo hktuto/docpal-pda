@@ -34,7 +34,7 @@ export const inventoryLots = pgTable(
     partIdx: index("idx_inventory_lots_part").on(t.partNo),
     availIdx: index("idx_inventory_lots_available").on(t.partNo, t.availableQty),
     locationIdx: index("idx_inventory_lots_location").on(t.shelfCode, t.boxId),
-    subInvFk: foreignKey({ name: "inventory_lots_sub_inv_fk", columns: [t.orgId, t.subInventoryCode], foreignColumns: [subInventories.orgId, subInventories.code] }),
+    subInvFk: foreignKey({ name: "inventory_lots_sub_inv_fk", columns: [t.orgId, t.subInventoryCode], foreignColumns: [subInventories.orgId, subInventories.secondaryInventoryName] }),
   })
 );
 
@@ -71,7 +71,7 @@ export const shelfBoxes = pgTable(
   },
   (t) => ({
     shelfIdx: index("idx_shelf_boxes_shelf").on(t.shelfCode),
-    subInvFk: foreignKey({ name: "shelf_boxes_sub_inv_fk", columns: [t.orgId, t.subInventoryCode], foreignColumns: [subInventories.orgId, subInventories.code] }),
+    subInvFk: foreignKey({ name: "shelf_boxes_sub_inv_fk", columns: [t.orgId, t.subInventoryCode], foreignColumns: [subInventories.orgId, subInventories.secondaryInventoryName] }),
   })
 );
 

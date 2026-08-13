@@ -21,8 +21,8 @@ export const receivingOrders = pgTable(
   },
   (t) => ({
     statusIdx: index("idx_receiving_orders_status").on(t.status),
-    // Composite FK → sub_inventories (org_id, code) group (3-level model).
-    subInvFk: foreignKey({ name: "receiving_orders_sub_inv_fk", columns: [t.orgId, t.subInventoryCode], foreignColumns: [subInventories.orgId, subInventories.code] }),
+    // Composite FK → sub_inventories (org_id, secondary_inventory_name) group (3-level model).
+    subInvFk: foreignKey({ name: "receiving_orders_sub_inv_fk", columns: [t.orgId, t.subInventoryCode], foreignColumns: [subInventories.orgId, subInventories.secondaryInventoryName] }),
   })
 );
 
@@ -44,7 +44,7 @@ export const receivingInvoices = pgTable(
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
   (t) => ({
-    subInvFk: foreignKey({ name: "receiving_invoices_sub_inv_fk", columns: [t.orgId, t.subInventoryCode], foreignColumns: [subInventories.orgId, subInventories.code] }),
+    subInvFk: foreignKey({ name: "receiving_invoices_sub_inv_fk", columns: [t.orgId, t.subInventoryCode], foreignColumns: [subInventories.orgId, subInventories.secondaryInventoryName] }),
   })
 );
 
@@ -81,7 +81,7 @@ export const receivingInvoiceItems = pgTable(
   (t) => ({
     invoiceIdx: index("idx_receiving_invoice_items_invoice").on(t.receivingInvoiceId),
     partIdx: index("idx_receiving_invoice_items_part").on(t.partNo),
-    subInvFk: foreignKey({ name: "receiving_invoice_items_sub_inv_fk", columns: [t.orgId, t.subInventoryCode], foreignColumns: [subInventories.orgId, subInventories.code] }),
+    subInvFk: foreignKey({ name: "receiving_invoice_items_sub_inv_fk", columns: [t.orgId, t.subInventoryCode], foreignColumns: [subInventories.orgId, subInventories.secondaryInventoryName] }),
   })
 );
 

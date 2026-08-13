@@ -1,8 +1,10 @@
 <script setup lang="ts">
 interface SubInventoryRow {
   orgId: number;
-  code: string;
-  name: string | null;
+  secondaryInventoryName: string;
+  subinvDescription: string | null;
+  officeCode: string | null;
+  organizationId: number | null;
   customerCode: string | null;
 }
 
@@ -33,7 +35,7 @@ const displayed = computed(() => {
   let list = rows.value;
   if (needle) {
     list = list.filter((r) =>
-      [String(r.orgId), r.code, r.name, r.customerCode, shareGroups.value[rowId(r)]].some((v) =>
+      [String(r.orgId), r.secondaryInventoryName, r.subinvDescription, r.officeCode, r.customerCode, shareGroups.value[rowId(r)]].some((v) =>
         String(v ?? "")
           .toLowerCase()
           .includes(needle)
@@ -46,18 +48,18 @@ const displayed = computed(() => {
 const { page, pageSize, total, paged } = usePaging(displayed);
 
 const showNew = ref(false);
-const newForm = reactive({ orgId: "", code: "", name: "", customerCode: "" });
+const newForm = reactive({ orgId: "", code: "", subinvDescription: "", officeCode: "", organizationId: "", customerCode: "" });
 const newError = ref("");
 
 const editing = ref<SubInventoryRow | null>(null);
-const editForm = reactive({ name: "", customerCode: "" });
+const editForm = reactive({ subinvDescription: "", officeCode: "", organizationId: "", customerCode: "" });
 const editError = ref("");
 
 const newDlg = useOverlayDismiss(() => { showNew.value = false; });
 const editDlg = useOverlayDismiss(() => { editing.value = null; });
 
 function rowId(r: SubInventoryRow): string {
-  return `${r.orgId}:${r.code}`;
+  return `${r.orgId}:${r.secondaryInventoryName}`;
 }
 
 async function load() {
@@ -98,9 +100,17 @@ async function saveShare(r: SubInventoryRow) {
 }
 
 function openNew() {
-  Object.assign(newForm, { orgId: "", code: "", name: "", customerCode: "" });
+  Object.assign(newForm, { orgId: "", code: "", subinvDescription: "", officeCode: "", organizationId: "", customerCode: "" });
   newError.value = "";
   showNew.value = true;
+}
+
+/** Optional integer field (organizationId): empty = null, else must be an integer. */
+function optIntField(raw: string): number | null | undefined {
+  const s = raw.trim();
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isInteger(n) ? n : undefined;
 }
 
 async function createGroup() {
@@ -110,9 +120,16 @@ async function createGroup() {
     newError.value = t("admin.common.orgIdInteger");
     return;
   }
+  const organizationId = optIntField(newForm.organizationId);
+  if (organizationId === undefined) {
+    newError.value = t("admin.common.orgIdInteger");
+    return;
+  }
   try {
     const body: Record<string, unknown> = { orgId, code: newForm.code.trim() };
-    if (newForm.name.trim()) body.name = newForm.name.trim();
+    if (newForm.subinvDescription.trim()) body.subinvDescription = newForm.subinvDescription.trim();
+    if (newForm.officeCode.trim()) body.officeCode = newForm.officeCode.trim();
+    if (organizationId !== null) body.organizationId = organizationId;
     if (newForm.customerCode.trim()) body.customerCode = newForm.customerCode.trim();
     await api.post("/admin/sub-inventories", body);
     showNew.value = false;
@@ -124,7 +141,9 @@ async function createGroup() {
 
 function openEdit(row: SubInventoryRow) {
   editing.value = row;
-  editForm.name = row.name ?? "";
+  editForm.subinvDescription = row.subinvDescription ?? "";
+  editForm.officeCode = row.officeCode ?? "";
+  editForm.organizationId = row.organizationId === null ? "" : String(row.organizationId);
   editForm.customerCode = row.customerCode ?? "";
   editError.value = "";
 }
@@ -132,9 +151,16 @@ function openEdit(row: SubInventoryRow) {
 async function saveEdit() {
   if (!editing.value) return;
   editError.value = "";
+  const organizationId = optIntField(editForm.organizationId);
+  if (organizationId === undefined) {
+    editError.value = t("admin.common.orgIdInteger");
+    return;
+  }
   try {
     await api.patch(`/admin/sub-inventories/${rowId(editing.value)}`, {
-      name: editForm.name.trim() || null,
+      subinvDescription: editForm.subinvDescription.trim() || null,
+      officeCode: editForm.officeCode.trim() || null,
+      organizationId,
       customerCode: editForm.customerCode.trim() || null,
     });
     editing.value = null;
@@ -145,7 +171,7 @@ async function saveEdit() {
 }
 
 async function remove(row: SubInventoryRow) {
-  if (!confirm(t("admin.pages.subInventories.deleteConfirm", { id: `${row.orgId} / ${row.code}` }))) return;
+  if (!confirm(t("admin.pages.subInventories.deleteConfirm", { id: `${row.orgId} / ${row.secondaryInventoryName}` }))) return;
   error.value = "";
   try {
     await api.del(`/admin/sub-inventories/${rowId(row)}`);
@@ -191,13 +217,21 @@ onMounted(load);
               {{ $t("admin.pages.subInventories.orgId") }}
               <span v-if="sortKey === 'orgId'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
             </th>
-            <th class="sortable" @click="toggleSort('code')">
+            <th class="sortable" @click="toggleSort('secondaryInventoryName')">
               {{ $t("admin.pages.subInventories.code") }}
-              <span v-if="sortKey === 'code'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+              <span v-if="sortKey === 'secondaryInventoryName'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
             </th>
-            <th class="sortable" @click="toggleSort('name')">
+            <th class="sortable" @click="toggleSort('subinvDescription')">
               {{ $t("admin.pages.subInventories.name") }}
-              <span v-if="sortKey === 'name'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+              <span v-if="sortKey === 'subinvDescription'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('officeCode')">
+              {{ $t("admin.pages.subInventories.officeCode") }}
+              <span v-if="sortKey === 'officeCode'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('organizationId')">
+              {{ $t("admin.pages.subInventories.organizationId") }}
+              <span v-if="sortKey === 'organizationId'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
             </th>
             <th class="sortable" @click="toggleSort('customerCode')">
               {{ $t("admin.pages.subInventories.customer") }}
@@ -210,8 +244,10 @@ onMounted(load);
         <tbody>
           <tr v-for="r in paged" :key="rowId(r)">
             <td>{{ r.orgId }}</td>
-            <td>{{ r.code }}</td>
-            <td>{{ r.name ?? "—" }}</td>
+            <td>{{ r.secondaryInventoryName }}</td>
+            <td>{{ r.subinvDescription ?? "—" }}</td>
+            <td>{{ r.officeCode ?? "—" }}</td>
+            <td>{{ r.organizationId ?? "—" }}</td>
             <td>{{ r.customerCode ?? "—" }}</td>
             <td class="share-cell">
               <input
@@ -231,7 +267,7 @@ onMounted(load);
             </td>
           </tr>
           <tr v-if="total === 0">
-            <td colspan="6" class="muted">{{ $t("admin.pages.subInventories.none") }}</td>
+            <td colspan="8" class="muted">{{ $t("admin.pages.subInventories.none") }}</td>
           </tr>
         </tbody>
       </table>
@@ -253,7 +289,15 @@ onMounted(load);
           </div>
           <div class="form-row">
             <label for="ns-name">{{ $t("admin.pages.subInventories.name") }}</label>
-            <input id="ns-name" v-model="newForm.name" type="text" />
+            <input id="ns-name" v-model="newForm.subinvDescription" type="text" />
+          </div>
+          <div class="form-row">
+            <label for="ns-office">{{ $t("admin.pages.subInventories.officeCode") }}</label>
+            <input id="ns-office" v-model="newForm.officeCode" type="text" />
+          </div>
+          <div class="form-row">
+            <label for="ns-orgid">{{ $t("admin.pages.subInventories.organizationId") }}</label>
+            <input id="ns-orgid" v-model="newForm.organizationId" type="text" />
           </div>
           <div class="form-row">
             <label for="ns-cust">{{ $t("admin.pages.subInventories.customerCode") }}</label>
@@ -270,12 +314,20 @@ onMounted(load);
 
     <div v-if="editing" class="overlay" @mousedown="editDlg.onMousedown" @click="editDlg.onClick">
       <div class="dialog">
-        <h2>{{ $t("admin.pages.subInventories.editTitle", { id: `${editing.orgId} / ${editing.code}` }) }}</h2>
+        <h2>{{ $t("admin.pages.subInventories.editTitle", { id: `${editing.orgId} / ${editing.secondaryInventoryName}` }) }}</h2>
         <div v-if="editError" class="error-banner">{{ editError }}</div>
         <form @submit.prevent="saveEdit">
           <div class="form-row">
             <label for="es-name">{{ $t("admin.pages.subInventories.name") }}</label>
-            <input id="es-name" v-model="editForm.name" type="text" />
+            <input id="es-name" v-model="editForm.subinvDescription" type="text" />
+          </div>
+          <div class="form-row">
+            <label for="es-office">{{ $t("admin.pages.subInventories.officeCode") }}</label>
+            <input id="es-office" v-model="editForm.officeCode" type="text" />
+          </div>
+          <div class="form-row">
+            <label for="es-orgid">{{ $t("admin.pages.subInventories.organizationId") }}</label>
+            <input id="es-orgid" v-model="editForm.organizationId" type="text" />
           </div>
           <div class="form-row">
             <label for="es-cust">{{ $t("admin.pages.subInventories.customerCode") }}</label>

@@ -19,6 +19,8 @@ services:
       SYNC_DB_PASSWORD: ${SYNC_DB_PASSWORD:-warehouse_sync}
     # Not published to the host — only the backend talks to it. Add a ports
     # mapping here if you need external DB access.
+    ports:
+      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       # First container init only (empty data dir): create the warehouse_sync
