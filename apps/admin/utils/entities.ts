@@ -131,39 +131,6 @@ export const entities: Record<string, EntityConfig> = {
       { key: "weight", label: "admin.fields.weightGrams", type: "number", required: true },
     ],
   },
-  users: {
-    path: "users",
-    title: "admin.entities.users.title",
-    pk: "id",
-    fields: [
-      { key: "username", label: "admin.fields.username", type: "text", required: true },
-      // Write-only: required on create, blank on edit keeps the current password.
-      { key: "password", label: "admin.fields.password", type: "password", required: true, omitWhenEmpty: true },
-      { key: "displayName", label: "admin.fields.displayName", type: "text", required: true },
-    ],
-  },
-  "user-groups": {
-    path: "user-groups",
-    title: "admin.entities.userGroups.title",
-    pk: "code",
-    fields: [
-      { key: "code", label: "admin.fields.code", type: "text", required: true, readonlyOnEdit: true },
-      { key: "label", label: "admin.fields.label", type: "text", required: true },
-      { key: "remark", label: "admin.fields.remark", type: "text" },
-    ],
-  },
-  "user-group-members": {
-    path: "user-group-members",
-    title: "admin.entities.userGroupMembers.title",
-    // Composite-key table: rows may carry no `id`, so fall back to userId:groupCode.
-    pk: "id",
-    deriveId: (row: any) => `${row.userId}:${row.groupCode}`,
-    noEdit: true,
-    fields: [
-      { key: "userId", label: "admin.fields.userId", type: "text", required: true },
-      { key: "groupCode", label: "admin.fields.groupCode", type: "text", required: true },
-    ],
-  },
 };
 
 /** Top-nav grouping per the admin TOC (apps/admin/TOC.md).
@@ -214,11 +181,6 @@ export const navSections: { title: string; links: { route: string; title: string
   },
   {
     title: "admin.nav.settings",
-    links: [
-      { route: "/users", title: "admin.navLinks.users" },
-      { route: "/user-groups", title: "admin.navLinks.userGroups" },
-      { route: "/user-group-members", title: "admin.navLinks.groupMembers" },
-      { route: "/app-download", title: "admin.navLinks.appDownload" },
-    ],
+    links: [{ route: "/app-download", title: "admin.navLinks.appDownload" }],
   },
 ];

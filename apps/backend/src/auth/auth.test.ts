@@ -1,5 +1,5 @@
 // Route-level auth tests: real login (scrypt), JWT middleware enforcement,
-// /events?token=, change-password, admin users hashing, actor-from-token.
+// /events?token=, actor-from-token, DocPal-delegated login.
 // The app routers use the module-level db (src/db.ts), so DATABASE_URL must
 // point at the test database before src/index.ts is imported — hence the
 // dynamic import inside before().
@@ -8,7 +8,7 @@ import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { sql } from "drizzle-orm";
 import { setupTestDb, reseed, TEST_DATABASE_URL, type TestDb } from "../db/test-helper.js";
-import { queryGet } from "../db/query.js";
+import { queryAll, queryGet } from "../db/query.js";
 import { verifyPassword } from "./password.js";
 
 process.env.DATABASE_URL = TEST_DATABASE_URL;
@@ -118,7 +118,7 @@ test("?token= is only accepted for GET /events, not other routes", async () => {
   assert.equal((await app.request(`/receiving-orders?token=${encodeURIComponent(token)}`)).status, 401);
 });
 
-// --- /auth/me + change-password --------------------------------------------
+// --- /auth/me ------------------------------------------------------------------
 
 test("GET /auth/me returns the token user; 401 without a token", async () => {
   await reseed(client);
@@ -129,106 +129,6 @@ test("GET /auth/me returns the token user; 401 without a token", async () => {
   const body = await res.json();
   assert.equal(body.username, "operator");
   assert.deepEqual(body.groupCodes, ["operator"]);
-});
-
-test("change-password: wrong old → 401; success → new password logs in, old does not", async () => {
-  await reseed(client);
-  const token = await operatorToken();
-  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
-
-  const wrong = await app.request("/auth/change-password", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ oldPassword: "nope", newPassword: "NewPass2026!" }),
-  });
-  assert.equal(wrong.status, 401);
-
-  const ok = await app.request("/auth/change-password", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ oldPassword: "DocPal2026!", newPassword: "NewPass2026!" }),
-  });
-  assert.equal(ok.status, 200);
-
-  assert.equal((await login("operator", "NewPass2026!")).status, 200);
-  assert.equal((await login("operator", "DocPal2026!")).status, 401);
-});
-
-// --- admin users + groups ----------------------------------------------------
-
-test("admin users: create hashes the password; responses never expose the hash", async () => {
-  await reseed(client);
-  const token = await operatorToken();
-  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
-
-  assert.equal((await app.request("/admin/users")).status, 401);
-
-  const created = await app.request("/admin/users", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ username: "newguy", password: "secret123", displayName: "New Guy" }),
-  });
-  assert.equal(created.status, 201);
-  const createdBody = await created.json();
-  assert.equal(createdBody.username, "newguy");
-  assert.ok(!("passwordHash" in createdBody) && !("password_hash" in createdBody) && !("password" in createdBody));
-
-  const row = await queryGet<{ passwordHash: string }>(
-    client.db,
-    sql`SELECT password_hash AS "passwordHash" FROM users WHERE username = 'newguy'`
-  );
-  assert.ok(row!.passwordHash.startsWith("scrypt:"));
-  assert.equal((await login("newguy", "secret123")).status, 200);
-
-  const list = await app.request("/admin/users", { headers: { Authorization: `Bearer ${token}` } });
-  assert.equal(list.status, 200);
-  for (const u of await list.json()) {
-    assert.ok(!("passwordHash" in u) && !("password_hash" in u));
-  }
-
-  // Edit without password keeps the current one.
-  const patch = await app.request(`/admin/users/${createdBody.id}`, {
-    method: "PATCH",
-    headers,
-    body: JSON.stringify({ displayName: "Renamed Guy" }),
-  });
-  assert.equal(patch.status, 200);
-  assert.equal((await login("newguy", "secret123")).status, 200);
-});
-
-test("admin user-groups + user-group-members CRUD (id = userId:groupCode)", async () => {
-  await reseed(client);
-  const token = await operatorToken();
-  const headers = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
-
-  const groups = await app.request("/admin/user-groups", { headers: { Authorization: `Bearer ${token}` } });
-  assert.equal(groups.status, 200);
-  assert.deepEqual(
-    (await groups.json()).map((g: { code: string }) => g.code).sort(),
-    ["admin", "operator"]
-  );
-
-  const operatorId = await userIdOf("operator");
-  const created = await app.request("/admin/user-group-members", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ userId: operatorId, groupCode: "admin" }),
-  });
-  assert.equal(created.status, 201);
-
-  const one = await app.request(`/admin/user-group-members/${operatorId}:admin`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  assert.equal(one.status, 200);
-
-  const del = await app.request(`/admin/user-group-members/${operatorId}:admin`, {
-    method: "DELETE",
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  assert.equal(del.status, 200);
-  assert.equal((await app.request(`/admin/user-group-members/${operatorId}:admin`, {
-    headers: { Authorization: `Bearer ${token}` },
-  })).status, 404);
 });
 
 // --- actor from token ---------------------------------------------------------
@@ -253,4 +153,156 @@ test("mutations take the actor from the token, not the body", async () => {
     sql`SELECT arrived_by AS "arrivedBy" FROM receiving_orders WHERE id = ${order!.id}`
   );
   assert.equal(arrived!.arrivedBy, adminId);
+});
+
+// --- DocPal-delegated login (spec 2026-08-13-docpal-auth-design) ------------
+// A node:http fake stands in for the DocPal API. DOCPAL_URL is toggled only
+// inside this block (test files run in separate processes), so the local-path
+// tests above are unaffected.
+
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
+
+const fakeState = {
+  password: "good-pass",
+  lastName: "Pal",
+  groups: [
+    { groupId: "WMS_Admin_Group_(HK)", groupName: "WMS Admin Group (HK)" },
+    { groupId: "WMS_Dashboard_Group_(HK)", groupName: "WMS Dashboard Group (HK)" },
+  ] as { groupId: string; groupName: string }[],
+};
+
+function startFakeDocpal(): Promise<{ server: Server; url: string }> {
+  const server = createServer((req, res) => {
+    const json = (status: number, body: unknown) => {
+      res.writeHead(status, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(body));
+    };
+    if (req.method === "POST" && req.url === "/auth/login") {
+      let raw = "";
+      req.on("data", (c) => (raw += c));
+      req.on("end", () => {
+        const body = JSON.parse(raw || "{}");
+        if (body.password !== fakeState.password) return json(401, { message: "bad credentials" });
+        json(200, { access_token: `tok-${body.username}`, refresh_token: "r1" });
+      });
+      return;
+    }
+    if (req.method === "GET" && req.url === "/dms/user/getApplication") {
+      const username = (req.headers.authorization ?? "").replace("Bearer tok-", "");
+      if (!req.headers.authorization?.startsWith("Bearer tok-")) return json(401, { message: "unauthorized" });
+      return json(200, {
+        code: 200,
+        result: true,
+        message: "success",
+        data: {
+          username,
+          firstName: "Doc",
+          lastName: fakeState.lastName,
+          aclUserDetail: { groups: fakeState.groups },
+        },
+      });
+    }
+    json(404, { message: "not found" });
+  });
+  return new Promise((resolve) => {
+    server.listen(0, "127.0.0.1", () => {
+      const { port } = server.address() as AddressInfo;
+      resolve({ server, url: `http://127.0.0.1:${port}` });
+    });
+  });
+}
+
+test("docpal login: happy path provisions the local user and maps groups to local codes", async (t) => {
+  const { server, url } = await startFakeDocpal();
+  t.after(() => server.close());
+  process.env.DOCPAL_URL = url;
+  t.after(() => delete process.env.DOCPAL_URL);
+  await reseed(client);
+
+  const res = await login("chris", "good-pass");
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.user.username, "chris");
+  assert.equal(body.user.displayName, "Doc Pal");
+  // WMS_Admin_Group_(HK) → admin + operator; the dashboard group maps to nothing.
+  assert.deepEqual(body.user.groupCodes, ["admin", "operator"]);
+
+  const row = await queryGet<{ passwordHash: string }>(
+    client.db,
+    sql`SELECT password_hash AS "passwordHash" FROM users WHERE username = 'chris'`
+  );
+  assert.equal(row!.passwordHash, "");
+
+  const memberships = await queryAll<{ groupCode: string }>(
+    client.db,
+    sql`SELECT group_code AS "groupCode" FROM user_group_members WHERE user_id = ${body.user.id} ORDER BY group_code`
+  );
+  assert.deepEqual(memberships, [{ groupCode: "admin" }, { groupCode: "operator" }]);
+
+  // /auth/me works off the provisioned row.
+  const me = await app.request("/auth/me", { headers: { Authorization: `Bearer ${body.token}` } });
+  assert.equal(me.status, 200);
+  assert.equal((await me.json()).username, "chris");
+});
+
+test("docpal login: second login keeps the id, refreshes name, replaces groups", async (t) => {
+  const { server, url } = await startFakeDocpal();
+  t.after(() => server.close());
+  process.env.DOCPAL_URL = url;
+  t.after(() => delete process.env.DOCPAL_URL);
+  await reseed(client);
+
+  const first = (await (await login("chris", "good-pass")).json()).user;
+  fakeState.lastName = "Lu";
+  fakeState.groups = [{ groupId: "WMS_PDA_Group_(HK)", groupName: "WMS PDA Group (HK)" }];
+  const secondRes = await login("chris", "good-pass");
+  const second = (await secondRes.json()).user;
+  assert.equal(second.id, first.id);
+  assert.equal(second.displayName, "Doc Lu");
+  assert.deepEqual(second.groupCodes, ["operator"]);
+
+  const memberships = await queryAll<{ groupCode: string }>(
+    client.db,
+    sql`SELECT group_code AS "groupCode" FROM user_group_members WHERE user_id = ${first.id}`
+  );
+  assert.deepEqual(memberships, [{ groupCode: "operator" }]);
+});
+
+test("docpal login: user with no mapped group gets 403", async (t) => {
+  const { server, url } = await startFakeDocpal();
+  t.after(() => server.close());
+  process.env.DOCPAL_URL = url;
+  t.after(() => delete process.env.DOCPAL_URL);
+  await reseed(client);
+
+  fakeState.groups = [
+    { groupId: "WMS_Dashboard_Group_(HK)", groupName: "WMS Dashboard Group (HK)" },
+    { groupId: "HK_TH_Group_(HK)", groupName: "HK TH Group (HK)" },
+  ];
+  const res = await login("yoyo", "good-pass");
+  assert.equal(res.status, 403);
+  // No local row is provisioned for a rejected user.
+  assert.equal(
+    await queryGet(client.db, sql`SELECT id FROM users WHERE username = 'yoyo'`),
+    undefined
+  );
+});
+
+test("docpal login: wrong password → 401; provider down → 502", async (t) => {
+  const { server, url } = await startFakeDocpal();
+  t.after(() => server.close());
+  process.env.DOCPAL_URL = url;
+  await reseed(client);
+  fakeState.groups = [{ groupId: "WMS_Admin_Group_(HK)", groupName: "WMS Admin Group (HK)" }];
+
+  assert.equal((await login("chris", "wrong")).status, 401);
+
+  // Provider unreachable: nothing listens on this port.
+  process.env.DOCPAL_URL = "http://127.0.0.1:1";
+  assert.equal((await login("chris", "good-pass")).status, 502);
+
+  // Unsetting DOCPAL_URL restores the local login path.
+  delete process.env.DOCPAL_URL;
+  assert.equal((await login("operator", "DocPal2026!")).status, 200);
 });

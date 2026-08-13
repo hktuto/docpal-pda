@@ -224,23 +224,18 @@ li { margin: 0.3em 0; }
 <li>下載按鈕為佔位功能（承運商文件格式待定，暫未開通）。</li>
 </ul>
 <h2>設定</h2>
-<h3>用戶</h3>
-<figure><img alt="用戶" src="./assets/users.png"><figcaption>用戶</figcaption></figure>
+<h3>流程設定</h3>
 <ul>
-<li>用戶主檔：新增、編輯、刪除用戶（登入名稱、顯示姓名、密碼）。</li>
-<li>用戶本身沒有角色欄位 — 權限由所屬群組決定。</li>
+<li>編輯倉庫流程設定（各流程步驟開關、揀貨分配及上架設定），儲存後即時生效，無需重啟後端。</li>
 </ul>
-<h3>用戶群組</h3>
-<figure><img alt="用戶群組" src="./assets/user-groups.png"><figcaption>用戶群組</figcaption></figure>
+<h3>App 下載</h3>
 <ul>
-<li>群組主檔：新增、編輯、刪除群組（例如 admin、operator）。</li>
-<li>只有 <strong>admin</strong> 群組的成員可以登入此後台。</li>
+<li>下載 PDA Android 應用（已簽署的 release APK，由 <code>pnpm build:apk</code> 發佈）。</li>
 </ul>
-<h3>群組成員</h3>
-<figure><img alt="群組成員" src="./assets/user-group-members.png"><figcaption>群組成員</figcaption></figure>
+<h3>用戶與權限</h3>
 <ul>
-<li>群組與用戶的多對多關係：把用戶加入或移出群組。</li>
-<li>一個用戶可屬於多個群組。</li>
+<li>用戶帳號及群組由 <strong>DocPal 統一管理</strong> — 本後台不再提供用戶／群組維護頁面。</li>
+<li>登入時後端按 DocPal 群組對應權限：<strong>WMS Admin Group (HK)</strong> 及 <strong>Administrators Group</strong> 成員可登入此後台；<strong>WMS PDA Group (HK)</strong> 成員只可登入 PDA；其餘群組（Dashboard、電郵通知等）無法登入。</li>
 </ul>
 <hr>
 <h2>通用操作說明</h2>

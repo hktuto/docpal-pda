@@ -1,7 +1,6 @@
 import { Hono } from "hono";
-import { HTTPException } from "hono/http-exception";
 import { newId } from "../../db/id.js";
-import { and, eq, or, ilike } from "drizzle-orm";
+import { eq, or, ilike } from "drizzle-orm";
 import {
   shelves,
   suppliers,
@@ -11,12 +10,9 @@ import {
   boxSizeList,
   customerProfiles,
   netWeightFormula,
-  userGroups,
-  userGroupMembers,
 } from "../../db/schema/index.js";
 import { createCrudRouter, reqStr, optStr, reqInt, reqNum, optJson } from "./crud.js";
 import { shelfBoxesRoute } from "./shelfBoxes.js";
-import { adminUsersRoute } from "./users.js";
 import { adminFlowEditsRoute } from "./flowEdits.js";
 import { adminSubInventoriesRoute } from "./subInventories.js";
 import { adminSubInventoryShareGroupsRoute } from "./subInventoryShareGroups.js";
@@ -214,48 +210,6 @@ adminRoute.route(
       ...(b.qty !== undefined && { qty: reqInt(b, "qty") }),
       ...(b.weight !== undefined && { weight: reqNum(b, "weight") }),
     }),
-  })
-);
-
-// Users: custom router (write-only `password`, never returns password_hash).
-adminRoute.route("/users", adminUsersRoute);
-
-adminRoute.route(
-  "/user-groups",
-  createCrudRouter({
-    table: userGroups,
-    pk: userGroups.code,
-    create: (b) => ({
-      id: optId(b),
-      code: reqStr(b, "code"),
-      label: reqStr(b, "label"),
-      remark: optStr(b, "remark"),
-    }),
-    update: (b) => ({
-      ...(b.label !== undefined && { label: reqStr(b, "label") }),
-      ...(b.remark !== undefined && { remark: optStr(b, "remark") }),
-      lastUpdateDate: new Date(),
-    }),
-  })
-);
-
-// Composite business key (UNIQUE) — rows are addressed as `:userId::groupCode` in the URL.
-adminRoute.route(
-  "/user-group-members",
-  createCrudRouter({
-    table: userGroupMembers,
-    pk: userGroupMembers.userId,
-    match: (id) => {
-      const sep = id.indexOf(":");
-      if (sep <= 0) throw new HTTPException(400, { message: "id must be userId:groupCode" });
-      return and(eq(userGroupMembers.userId, id.slice(0, sep)), eq(userGroupMembers.groupCode, id.slice(sep + 1)))!;
-    },
-    create: (b) => ({
-      id: optId(b),
-      userId: reqStr(b, "userId"),
-      groupCode: reqStr(b, "groupCode"),
-    }),
-    update: () => ({}),
   })
 );
 

@@ -55,6 +55,11 @@ services:
       # database (master data + shelf stock only); set WAREHOUSE_SEED_ORDERS=on
       # to include the demo orders.
       WAREHOUSE_SEED_ORDERS: ${WAREHOUSE_SEED_ORDERS:-off}
+      # Optional: delegate login to the DocPal API (e.g.
+      # https://uat.docpal.weltronics.com/api). When set, local passwords are
+      # ignored — DocPal verifies credentials and local users are
+      # auto-provisioned. Spec: docs/superpowers/specs/2026-08-13-docpal-auth-design.md
+      DOCPAL_URL: ${DOCPAL_URL:-}
       # Optional flow config override (JSON merged over defaults), e.g.
       # '{"steps":{"picking":{"allocation":{"allowDockStock":false}}}}' to make
       # put-away a hard gate before picking allocation. The primary source is

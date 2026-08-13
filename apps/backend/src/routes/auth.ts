@@ -4,9 +4,12 @@ import type { Context } from "hono";
 import { sql } from "drizzle-orm";
 import { db } from "../db.js";
 import { queryAll, queryGet } from "../db/query.js";
+import { newId } from "../db/id.js";
 import { hashPassword, isLegacyPlaintext, verifyPassword } from "../auth/password.js";
 import { signAuthToken } from "../auth/jwt.js";
 import { actorFrom } from "../auth/middleware.js";
+import { docpalBaseUrl, docpalGroupMapping } from "../config.js";
+import { DocpalAuthError, docpalGetUser, docpalLogin } from "../auth/docpal.js";
 
 export interface LoginRequest {
   username: string;
@@ -58,13 +61,65 @@ async function toAuthUser(user: UserRow): Promise<AuthUser> {
   };
 }
 
-// Login: scrypt verify against users.password_hash. Legacy plain-text rows
-// (pre-auth demo data) verify by direct compare and are lazily re-hashed on
-// success, upgrading the row in place.
+// DocPal-delegated login (spec: docs/superpowers/specs/2026-08-13-docpal-auth-design.md):
+// DocPal verifies the credentials, we auto-provision the local users row and
+// replace its group membership with the mapped local groups, then sign our
+// own JWT. DocPal groups are mapped through docpalGroupMapping (the API
+// returns groups, not permissions); a user with no mapped group gets 403.
+async function loginViaDocpal(username: string, password: string): Promise<LoginResponse> {
+  try {
+    const accessToken = await docpalLogin(username, password);
+    const profile = await docpalGetUser(accessToken);
+    const groupCodes = [...new Set(profile.groups.flatMap((g) => docpalGroupMapping[g.id] ?? []))].sort();
+    if (groupCodes.length === 0) {
+      throw new HTTPException(403, { message: "user has no WMS access" });
+    }
+    const authUser = await db.transaction(async (tx) => {
+      // Upsert the local user. password_hash = "" is an unverifiable sentinel
+      // (empty passwords are rejected at the 400 check before any compare).
+      const existing = await queryGet<UserRow>(
+        tx,
+        sql`SELECT id, username, display_name AS "displayName" FROM users WHERE username = ${profile.username}`
+      );
+      const userId = existing?.id ?? newId();
+      if (existing) {
+        await tx.execute(sql`UPDATE users SET display_name = ${profile.displayName}, last_update_date = now() WHERE id = ${userId}`);
+      } else {
+        await tx.execute(sql`INSERT INTO users (id, username, password_hash, display_name) VALUES (${userId}, ${profile.username}, '', ${profile.displayName})`);
+      }
+      // Replace membership with the mapped local groups (admin/operator).
+      await tx.execute(sql`DELETE FROM user_group_members WHERE user_id = ${userId}`);
+      for (const code of groupCodes) {
+        await tx.execute(
+          sql`INSERT INTO user_groups (id, code, label) VALUES (${newId()}, ${code}, ${code})
+              ON CONFLICT (code) DO NOTHING`
+        );
+        await tx.execute(sql`INSERT INTO user_group_members (id, user_id, group_code) VALUES (${newId()}, ${userId}, ${code})`);
+      }
+      return { id: userId, username: profile.username, displayName: profile.displayName, groupCodes };
+    });
+    const token = await signAuthToken(authUser);
+    return { user: authUser, token };
+  } catch (e) {
+    if (e instanceof DocpalAuthError) {
+      throw new HTTPException(e.status, { message: e.status === 401 ? "invalid credentials" : "identity provider unavailable" });
+    }
+    throw e;
+  }
+}
+
+// Login: when DOCPAL_URL is set, credentials are verified against the DocPal
+// API (see loginViaDocpal). Otherwise scrypt verify against
+// users.password_hash. Legacy plain-text rows (pre-auth demo data) verify by
+// direct compare and are lazily re-hashed on success, upgrading the row in
+// place.
 authRoute.post("/auth/login", async (c) => {
   const body = await readJson<LoginRequest>(c);
   if (!body.username || !body.password) {
     throw new HTTPException(400, { message: "username and password are required" });
+  }
+  if (docpalBaseUrl()) {
+    return c.json(await loginViaDocpal(body.username, body.password), 200);
   }
   const user = await queryGet<UserRow & { passwordHash: string }>(
     db,
@@ -108,23 +163,4 @@ authRoute.get("/auth/users/:id", async (c) => {
   );
   if (!user) throw new HTTPException(404, { message: "user not found" });
   return c.json(await toAuthUser(user), 200);
-});
-
-// Self-service password change; existing tokens stay valid (logout = client
-// discards the token — see the spec's revocation stance).
-authRoute.post("/auth/change-password", async (c) => {
-  const body = await readJson<{ oldPassword?: string; newPassword?: string }>(c);
-  if (!body.oldPassword || !body.newPassword) {
-    throw new HTTPException(400, { message: "oldPassword and newPassword are required" });
-  }
-  const actor = actorFrom(c);
-  const user = await queryGet<{ id: string; passwordHash: string }>(
-    db,
-    sql`SELECT id, password_hash AS "passwordHash" FROM users WHERE id = ${actor.id}`
-  );
-  if (!user || !(await verifyPassword(body.oldPassword, user.passwordHash))) {
-    throw new HTTPException(401, { message: "invalid credentials" });
-  }
-  await db.execute(sql`UPDATE users SET password_hash = ${await hashPassword(body.newPassword)} WHERE id = ${user.id}`);
-  return c.json({ ok: true }, 200);
 });

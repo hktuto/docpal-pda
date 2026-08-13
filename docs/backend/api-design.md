@@ -43,17 +43,18 @@ live in `concepts.md`; tables in `schema.md`.
 
 | Endpoint | Body → Response | Note |
 |---|---|---|
-| `POST /auth/login` | `{username, password}` → 200 `{user{id, username, displayName, groupCodes}, token}` / 401 | scrypt verify (+ lazy upgrade of legacy plain-text rows) |
+| `POST /auth/login` | `{username, password}` → 200 `{user{id, username, displayName, groupCodes}, token}` / 401 / 403 | when `DOCPAL_URL` is set: DocPal-verified, auto-provisioned, 403 `user has no WMS access` when no group maps; otherwise scrypt verify (+ lazy upgrade of legacy plain-text rows) |
 | `POST /auth/logout` | — → `{ok: true}` | no-op (client discards the token) |
 | `GET /auth/me` | — → AuthUser / 401 | session restore from the bearer token |
 | `GET /auth/users/:id` | — → AuthUser / 404 | |
-| `POST /auth/change-password` | `{oldPassword, newPassword}` → `{ok: true}` | self-service |
 
 JWT bearer (HS256, `hono/jwt`, secret from `AUTH_SECRET`, 12 h TTL) required on
 all routes except `/health`, `POST /auth/login`, and `/dev/*`; `GET /events`
 also accepts `?token=` (EventSource can't set headers). Users belong to groups
-via `user_group_members` (many-to-many); `users.role` is gone. Design:
-`docs/superpowers/specs/2026-07-21-real-login-design.md`.
+via `user_group_members` (many-to-many); `users.role` is gone. When
+`DOCPAL_URL` is set, login is delegated to the DocPal API and local users are
+auto-provisioned (spec `docs/superpowers/specs/2026-08-13-docpal-auth-design.md`);
+otherwise: `docs/superpowers/specs/2026-07-21-real-login-design.md`.
 
 ## Receiving
 

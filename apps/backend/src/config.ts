@@ -18,6 +18,34 @@ if (!process.env.AUTH_SECRET) {
 export const authTokenTtlSeconds = Number(process.env.AUTH_TOKEN_TTL_SECONDS ?? 43200);
 
 // ---------------------------------------------------------------------------
+// DocPal identity provider (spec: docs/superpowers/specs/2026-08-13-docpal-auth-design.md).
+// When DOCPAL_URL is set, /auth/login delegates credential verification to the
+// DocPal API and auto-provisions the local users row; when unset, the local
+// scrypt login stays (dev/test/demo). Read at call time so tests can toggle it.
+// ---------------------------------------------------------------------------
+
+export function docpalBaseUrl(): string | undefined {
+  return process.env.DOCPAL_URL?.replace(/\/+$/, "") || undefined;
+}
+
+/** Timeout for each DocPal API call during login. */
+export const docpalFetchTimeoutMs = 10_000;
+
+// DocPal groupId → local group codes. DocPal has 1 group = 1 role and the
+// role carries the permissions (UAT credentials sheet): the API only returns
+// groups, so permissions are enforced through this mapping:
+//   Administrators Group → full control                    → admin + operator
+//   WMS Admin Group (HK) → WMS Admin: Full Access + PDA    → admin + operator
+//   WMS PDA Group (HK)   → PDA: Full Access                → operator
+// Dashboard / email-notification groups (WMS Dashboard, MCI MCE, HK TH) map
+// to nothing; a user with no mapped group is rejected at login (403).
+export const docpalGroupMapping: Record<string, string[]> = {
+  administrators: ["admin", "operator"],
+  "WMS_Admin_Group_(HK)": ["admin", "operator"],
+  "WMS_PDA_Group_(HK)": ["operator"],
+};
+
+// ---------------------------------------------------------------------------
 // Flow config (spec: docs/superpowers/specs/2026-08-10-flow-config-design.md).
 // Per-warehouse flow settings, merged over the defaults below:
 //

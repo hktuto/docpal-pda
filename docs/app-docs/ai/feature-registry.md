@@ -47,7 +47,7 @@ The backend the web app talks to. Route layer: `apps/backend/src/routes/<flow>.t
 
 | Feature | Flow | Status | Key Files | Scope Doc |
 |---------|------|--------|-----------|-----------|
-| Demo auth API | Auth | Shipped | `POST /auth/login`, `POST /auth/logout`, `GET /auth/users/:id` in `apps/backend/src/routes/auth.ts` (plain-text compare, no tokens; `actorId` stays a trusted client param) | [roles](../concepts/roles.md) |
+| Auth API (JWT; DocPal-delegated when `DOCPAL_URL` set) | Auth | Shipped | `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`, `GET /auth/users/:id` in `apps/backend/src/routes/auth.ts`; DocPal client in `apps/backend/src/auth/docpal.ts` (spec `docs/superpowers/specs/2026-08-13-docpal-auth-design.md`) | [roles](../concepts/roles.md) |
 | Receiving list/detail reads | Receiving | Shipped | `GET /receiving-orders?status=`, `GET /receiving-orders/:id` in `apps/backend/src/routes/receiving.ts` | [ai-scope](../flows/receiving/ai-scope.md) |
 | Receiving scan (server parse/match + S-key dedup) | Receiving | Shipped | `POST /receiving-orders/:id/scan` in `apps/backend/src/routes/receiving.ts`, `apps/backend/src/db/scanParse.ts`; 409 `{message, candidates}` on no/multiple match, 409 `label_already_scanned` on a repeat serial (`receiving_scan_labels`) | [ai-scope](../flows/receiving/ai-scope.md) |
 | Confirm arrival + allocation trigger | Receiving | Shipped | `POST /receiving-orders/:id/confirm-arrival` in `apps/backend/src/routes/receiving.ts`; triggers best-effort `allocateAll` in `apps/backend/src/db/allocate.ts` | [ai-scope](../flows/receiving/ai-scope.md) |

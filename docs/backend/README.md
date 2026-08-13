@@ -34,7 +34,6 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   - `GET /auth/me` → the same `user` object, resolved fresh from the DB by
     token `sub` (client session restore).
   - `GET /auth/users/:id` → the same `user` object for any user.
-  - `POST /auth/change-password` `{oldPassword, newPassword}` → `{ok}`.
   - `POST /auth/logout` → `{ok}` no-op (client discards the token; no
     server-side revocation).
   - Tokens are HS256 JWTs (`src/auth/jwt.ts`), payload
@@ -336,9 +335,7 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   generic CRUD for shelves (code/zone), suppliers, supplier-profiles
   (incl. `qrType`), parts (referenced by `partNo`, `supplierCode` required),
   countries, box-sizes, customer-profiles (incl. `rule`), net-weight-formulas
-  (`partNo`), user-groups, and user-group-members (composite key addressed as
-  `:userId::groupCode`), plus custom routers for users (write-only `password`
-  hashed server-side, `password_hash` never returned), `shelf-boxes`, and
+  (`partNo`), plus custom routers for `shelf-boxes` and
   `sub-inventories` (groups addressed as `:orgId::code`), and
   `sub-inventory-share-groups`
   (`GET` all memberships, `PUT /admin/sub-inventory-share-groups/:orgId::code`

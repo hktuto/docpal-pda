@@ -7,6 +7,12 @@ import type { AppDb } from "../db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// Tests always use the local scrypt login: force the DocPal delegation off.
+// Set BEFORE db.ts is imported (dotenv/config does not override existing env
+// vars, so "" survives the .env load and reads as "unset" in docpalBaseUrl()).
+// Suites that test the DocPal path (auth.test.ts) set it explicitly per test.
+process.env.DOCPAL_URL = "";
+
 export const TEST_DATABASE_URL =
   process.env.TEST_DATABASE_URL ??
   "postgresql://warehouse:warehouse@localhost:5432/warehouse_backend_test";

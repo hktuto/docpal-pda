@@ -866,9 +866,6 @@ export default {
       receivingIssues: "Receiving Issues",
       pickingIssues: "Picking Issues",
       shippingOrders: "Shipping Boxes",
-      users: "Users",
-      userGroups: "User Groups",
-      groupMembers: "Group Members",
       stockSearch: "Stock Search",
       appDownload: "App Download"
     },
@@ -935,11 +932,6 @@ export default {
       weight: "Weight",
       qtyPcs: "Qty (pcs)",
       weightGrams: "Weight (g)",
-      username: "Username",
-      password: "Password",
-      displayName: "Display name",
-      userId: "User ID",
-      groupCode: "Group code",
       createdDate: "Created",
       lastUpdateDate: "Updated"
     },
@@ -950,10 +942,7 @@ export default {
       countries: { title: "Countries" },
       boxSizes: { title: "Box Sizes" },
       customerProfiles: { title: "Customer Profiles" },
-      netWeightFormulas: { title: "Net-weight Formulas" },
-      users: { title: "Users" },
-      userGroups: { title: "User Groups" },
-      userGroupMembers: { title: "User Group Members" }
+      netWeightFormulas: { title: "Net-weight Formulas" }
     },
     pages: {
       suppliers: {

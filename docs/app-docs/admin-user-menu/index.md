@@ -237,26 +237,18 @@ PDA 操作員畫面請參閱 [PDA 用戶指南](../user-menu/index.md)；本頁�
 
 ## 設定
 
-### 用戶
+### 流程設定
 
-![用戶](./assets/users.png)
+- 編輯倉庫流程設定（各流程步驟開關、揀貨分配及上架設定），儲存後即時生效，無需重啟後端。
 
-- 用戶主檔：新增、編輯、刪除用戶（登入名稱、顯示姓名、密碼）。
-- 用戶本身沒有角色欄位 — 權限由所屬群組決定。
+### App 下載
 
-### 用戶群組
+- 下載 PDA Android 應用（已簽署的 release APK，由 `pnpm build:apk` 發佈）。
 
-![用戶群組](./assets/user-groups.png)
+### 用戶與權限
 
-- 群組主檔：新增、編輯、刪除群組（例如 admin、operator）。
-- 只有 **admin** 群組的成員可以登入此後台。
-
-### 群組成員
-
-![群組成員](./assets/user-group-members.png)
-
-- 群組與用戶的多對多關係：把用戶加入或移出群組。
-- 一個用戶可屬於多個群組。
+- 用戶帳號及群組由 **DocPal 統一管理** — 本後台不再提供用戶／群組維護頁面。
+- 登入時後端按 DocPal 群組對應權限：**WMS Admin Group (HK)** 及 **Administrators Group** 成員可登入此後台；**WMS PDA Group (HK)** 成員只可登入 PDA；其餘群組（Dashboard、電郵通知等）無法登入。
 
 ---
 

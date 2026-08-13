@@ -866,9 +866,6 @@ export default {
       receivingIssues: "收貨問題",
       pickingIssues: "揀貨問題",
       shippingOrders: "出貨箱",
-      users: "用戶",
-      userGroups: "用戶組",
-      groupMembers: "組員",
       stockSearch: "庫存查詢",
       appDownload: "App 下載"
     },
@@ -935,11 +932,6 @@ export default {
       weight: "重量",
       qtyPcs: "數量（件）",
       weightGrams: "重量（克）",
-      username: "用戶名",
-      password: "密碼",
-      displayName: "顯示名稱",
-      userId: "用戶 ID",
-      groupCode: "組代碼",
       createdDate: "建立時間",
       lastUpdateDate: "更新時間"
     },
@@ -950,10 +942,7 @@ export default {
       countries: { title: "國家" },
       boxSizes: { title: "箱型" },
       customerProfiles: { title: "客戶資料" },
-      netWeightFormulas: { title: "淨重公式" },
-      users: { title: "用戶" },
-      userGroups: { title: "用戶組" },
-      userGroupMembers: { title: "組員" }
+      netWeightFormulas: { title: "淨重公式" }
     },
     pages: {
       suppliers: {
