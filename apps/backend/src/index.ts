@@ -27,7 +27,10 @@ export const app = new Hono<{ Variables: AuthVariables }>();
 // host (the APK's fixed server.url, LAN IPs, dev servers) and auth is a
 // Bearer header, not cookies, so reflecting any origin leaks nothing. Set
 // CORS_ORIGINS (comma-separated) to restrict to an allowlist instead.
-const origins = process.env.CORS_ORIGINS?.split(",") ?? "*";
+// NB: "*" must reach hono as a STRING — an array ["*"] only matches a literal
+// Origin: * request header and silently sends no Allow-Origin at all.
+const corsOriginsEnv = process.env.CORS_ORIGINS?.trim();
+const origins = !corsOriginsEnv || corsOriginsEnv === "*" ? "*" : corsOriginsEnv.split(",");
 
 app.use("*", cors({ origin: origins, allowHeaders: ["Content-Type", "Last-Event-ID", "Authorization"] }));
 // Everything below requires a bearer token except /health, POST /auth/login
