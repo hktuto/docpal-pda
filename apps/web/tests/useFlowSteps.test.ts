@@ -45,6 +45,18 @@ describe('useFlowSteps putAway config', () => {
     expect(flowSteps.value['put-away']).toBe(false);
   });
 
+  it('merges the resolved pickingAllocation config (drives the receiving-detail picking tab)', async () => {
+    getFlowConfigMock.mockResolvedValue({
+      flowSteps: {},
+      pickingAllocation: { allowDockStock: false },
+    });
+    const { pickingAllocation, loadFlowSteps } = await freshUseFlowSteps();
+
+    expect(pickingAllocation.value.allowDockStock).toBe(true); // default before fetch
+    await loadFlowSteps();
+    expect(pickingAllocation.value.allowDockStock).toBe(false);
+  });
+
   it('keeps the defaults when the backend omits the putAway section', async () => {
     getFlowConfigMock.mockResolvedValue({ flowSteps: {} });
     const { putAwayConfig, loadFlowSteps } = await freshUseFlowSteps();

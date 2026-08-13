@@ -6,8 +6,7 @@ import { queryAll, queryGet, type DbOrTx } from "./query.js";
 import { transactionLogs } from "./schema/index.js";
 import { emitEvent } from "./events.js";
 import { now } from "./now.js";
-import { getPutAwayAggregate, type PutAwayAggregate, type PutAwayExpectedItemRow } from "./putaway.js";
-import { putAwayConfig } from "../config.js";
+import { getPutAwayAggregate, type PutAwayAggregate } from "./putaway.js";
 
 // ---------------------------------------------------------------------------
 // Put-away tasks (spec 2026-08-10-put-away-tasks-design.md). One task per
@@ -115,52 +114,26 @@ export async function listPutAwayTasks(db: AppDb, status?: string): Promise<PutA
   );
 }
 
-export interface PutAwayTaskDetail extends Omit<PutAwayAggregate, "items"> {
+export interface PutAwayTaskDetail extends PutAwayAggregate {
   task: { id: string; status: string; receivingOrderId: string; createdDate: Date };
-  items: (PutAwayExpectedItemRow & { suggestedShelfCode: string | null })[];
 }
 
 /**
- * Task detail = the per-order put-away aggregate plus a per-item shelf
- * suggestion ("existing-stock": the shelf of the most recent lot of the same
- * part in the task's org + sub-inventory; null when the part has no stock
- * history). Advisory, computed at read time, never stored.
+ * Task detail = the per-order put-away aggregate (which already includes the
+ * per-item shelf/box suggestions, ranked within the order's org +
+ * sub-inventory) plus the task row.
  */
 export async function getPutAwayTaskDetail(db: AppDb, taskId: string): Promise<PutAwayTaskDetail> {
-  const task = await queryGet<PutAwayTaskDetail["task"] & { orgId: number; subInventoryCode: string }>(
+  const task = await queryGet<PutAwayTaskDetail["task"]>(
     db,
     sql`SELECT id, status, receiving_order_id AS "receivingOrderId",
-               org_id AS "orgId", sub_inventory_code AS "subInventoryCode",
                created_date AS "createdDate"
         FROM put_away_tasks WHERE id = ${taskId}`
   );
   if (!task) throw new HTTPException(404, { message: "put_away_task_not_found" });
 
   const aggregate = await getPutAwayAggregate(db, task.receivingOrderId);
-
-  const suggestions = new Map<string, string | null>();
-  if (putAwayConfig().suggestShelf !== "off") {
-    const partNos = [...new Set(aggregate.items.map((it) => it.partNo))];
-    if (partNos.length > 0) {
-      const rows = await queryAll<{ partNo: string; shelfCode: string }>(
-        db,
-        sql`SELECT DISTINCT ON (part_no) part_no AS "partNo", shelf_code AS "shelfCode"
-            FROM inventory_lots
-            WHERE part_no IN (${sql.join(partNos.map((p) => sql`${p}`), sql`, `)})
-              AND org_id = ${task.orgId}
-              AND sub_inventory_code = ${task.subInventoryCode}
-              AND shelf_code IS NOT NULL
-            ORDER BY part_no, created_date DESC, id`
-      );
-      for (const r of rows) suggestions.set(r.partNo, r.shelfCode);
-    }
-  }
-
-  return {
-    ...aggregate,
-    task: { id: task.id, status: task.status, receivingOrderId: task.receivingOrderId, createdDate: task.createdDate },
-    items: aggregate.items.map((it) => ({ ...it, suggestedShelfCode: suggestions.get(it.partNo) ?? null })),
-  };
+  return { ...aggregate, task };
 }
 
 /**

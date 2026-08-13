@@ -141,6 +141,7 @@ import type {
 } from "~/composables/useReceivingScan";
 import { useHardwareScanner } from "~/composables/useHardwareScanner";
 import { useWarehouse } from "~/composables/useWarehouse";
+import { useFlowSteps } from "~/composables/useFlowSteps";
 import { useToast } from "~/composables/useToast";
 import ReportIssueModal from "~/components/ReportIssueModal.vue";
 import { DisplayReceivingItem, DisplayReceivingOrder } from "~/components/receiving/types";
@@ -155,6 +156,7 @@ definePageMeta({ title: "meta.receivingDetail", props: { noPadding: true } });
 const { t } = useI18n();
 const errorMessage = useErrorMessage();
 const warehouse = useWarehouse();
+const { pickingAllocation, loadFlowSteps } = useFlowSteps();
 const { showToast } = useToast();
 
 useHead({ title: t("receiving.detail.title") });
@@ -259,10 +261,27 @@ const boxSelections = ref<Record<string, string>>({});
 const reportModalOpen = ref(false);
 const reportModalItem = ref<DisplayReceivingItem | null>(null);
 
-const views = [
-  { labelKey: "receiving.detail.tabReceiving", value: "receiving" as const },
-  { labelKey: "receiving.detail.tabPicking", value: "picking" as const },
-];
+const views = computed(() => {
+  const all = [
+    { labelKey: "receiving.detail.tabReceiving", value: "receiving" as const },
+    { labelKey: "receiving.detail.tabPicking", value: "picking" as const },
+  ];
+  // allowDockStock=false decouples receiving from picking (put-away is a hard
+  // gate) — the picking tab is noise on the receiving detail then.
+  return pickingAllocation.value.allowDockStock
+    ? all
+    : all.filter((v) => v.value === "receiving");
+});
+
+// A ?tab=picking deep link (or a live config change) can leave the view on a
+// hidden tab — fall back to receiving.
+watch(
+  views,
+  (v) => {
+    if (!v.some((opt) => opt.value === view.value)) view.value = "receiving";
+  },
+  { immediate: true }
+);
 
 const filteredPickingOrders = computed<ReceivingPickingOrder[]>(() => {
   const query = searchQuery.value.trim().toLowerCase();
@@ -294,9 +313,14 @@ const remainingItems = computed(() => {
 
 async function load() {
   try {
+    // Resolve the flow config first — allowDockStock=false hides the picking
+    // tab, so the picking fetch is skipped too.
+    await loadFlowSteps();
     const [detail, picking] = await Promise.all([
       warehouse.getReceivingOrder(orderId),
-      warehouse.getPickingOrdersByReceivingOrder(orderId),
+      pickingAllocation.value.allowDockStock
+        ? warehouse.getPickingOrdersByReceivingOrder(orderId)
+        : Promise.resolve({ pickingOrders: [] }),
     ]);
     order.value = detail;
     pickingOrders.value = picking.pickingOrders;

@@ -39,6 +39,9 @@
   (`GET /admin/receiving-orders/:id/logs`).
 - Show the order's picking section (nested orders with items, allocations,
   packages, transition logs, and shipping boxes) on the detail's Picking tab.
+  The tab (and its fetch) is hidden when flow config
+  `picking.allocation.allowDockStock=false` — put-away is then a hard gate
+  and receiving is decoupled from picking.
 
 ## Out of scope
 

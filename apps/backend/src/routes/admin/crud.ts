@@ -61,6 +61,16 @@ export function optInt(body: Record<string, unknown>, field: string): number | n
   return v;
 }
 
+export function optStrArray(body: Record<string, unknown>, field: string): string[] | null {
+  const v = body[field];
+  if (v === undefined || v === null) return null;
+  if (!Array.isArray(v) || v.some((s) => typeof s !== "string")) {
+    throw new HTTPException(400, { message: `${field} must be an array of strings` });
+  }
+  const trimmed = (v as string[]).map((s) => s.trim()).filter((s) => s !== "");
+  return trimmed.length > 0 ? trimmed : null;
+}
+
 export function reqNum(body: Record<string, unknown>, field: string): number {
   const v = body[field];
   if (typeof v !== "number" || !Number.isFinite(v)) {

@@ -262,7 +262,7 @@ export function createBackendWarehouseService(
     },
     // Put-away tasks — the auto-created work queue (list source when
     // putAway.autoCreateTasks is on); the detail is the same aggregate as
-    // getPutAwayDetail plus the task row and per-item shelf hints.
+    // getPutAwayDetail plus the task row.
     async listPutAwayTasks(status?: string): Promise<PutAwayTaskListRow[]> {
       return client.get("/put-away-tasks", { status });
     },

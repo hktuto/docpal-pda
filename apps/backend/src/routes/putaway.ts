@@ -54,14 +54,15 @@ putawayRoute.get("/put-away-tasks", async (c) => {
   return c.json(await listPutAwayTasks(db, c.req.query("status")), 200);
 });
 
-// Task detail: the per-order put-away aggregate + per-item suggestedShelfCode
-// (existing-stock strategy unless FLOW_CONFIG steps.put-away.suggestShelf=off).
+// Task detail: the per-order put-away aggregate (with per-item shelf hints)
+// plus the task row.
 putawayRoute.get("/put-away-tasks/:id", async (c) => {
   return c.json(await getPutAwayTaskDetail(db, c.req.param("id")), 200);
 });
 
 // One aggregate for the put-away detail screen: order + lots + staging scans
-// + non-staging boxes with their items (replaces the old 3-call stitch).
+// + non-staging boxes with their items (replaces the old 3-call stitch), with
+// per-item shelf suggestions (unless FLOW_CONFIG steps.put-away.suggestShelf=off).
 putawayRoute.get("/receiving-orders/:id/put-away", async (c) => {
   return c.json(await getPutAwayAggregate(db, c.req.param("id")), 200);
 });

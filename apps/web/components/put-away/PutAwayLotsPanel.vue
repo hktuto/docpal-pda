@@ -24,6 +24,9 @@
       <DetailRow v-if="item.suggestedShelfCode" :label="$t('putAway.lotsPanel.suggestedShelf')">
         <span class="shelf-hint">→ {{ item.suggestedShelfCode }}</span>
       </DetailRow>
+      <DetailRow v-if="item.suggestedBoxId" :label="$t('putAway.lotsPanel.suggestedBox')">
+        <span class="shelf-hint">→ {{ item.suggestedBoxId }}</span>
+      </DetailRow>
 
       <div class="lot-actions">
         <button

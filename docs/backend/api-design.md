@@ -147,8 +147,8 @@ queue instead of the derived candidates list.
 |---|---|
 | `GET /put-away/candidates` | List of receivable orders with per-order received/unboxed counts. |
 | `GET /put-away-tasks?status=` | Task queue (task mode), oldest first: `{id, status, receivingOrderId, batchNo, supplierCode, supplierName, orgId, subInventoryCode, receivedItems, unboxedItems, createdDate}`. |
-| `GET /put-away-tasks/:id` | The per-order put-away aggregate + `{task}` and per-item `suggestedShelfCode` (existing-stock strategy unless `steps.put-away.suggestShelf=off`); 404 `put_away_task_not_found`. |
-| `GET /receiving-orders/:id/put-away` | One aggregate: `{order, items[], lots[], scans[], boxes[{..., items[]}]}` for the put-away detail screen. `items[]` = the order's expected (receivable) invoice items `{id, partId, partNo, qty, receivedQty, pickedQty, putAwayQty, allocatedQty, remainingQty, dateCode, lotCode, coo, cow}` with `remainingQty = received − picked − put_away − allocated − staged` (the candidates-list formula). |
+| `GET /put-away-tasks/:id` | The per-order put-away aggregate + `{task}`; 404 `put_away_task_not_found`. |
+| `GET /receiving-orders/:id/put-away` | One aggregate: `{order, items[], lots[], scans[], boxes[{..., items[]}]}` for the put-away detail screen. `items[]` = the order's expected (receivable) invoice items `{id, partId, partNo, qty, receivedQty, pickedQty, putAwayQty, allocatedQty, remainingQty, dateCode, lotCode, coo, cow}` with `remainingQty = received − picked − put_away − allocated − staged` (the candidates-list formula), each carrying the advisory per-item `suggestedShelfCode`/`suggestedBoxId`/`suggestionReason` (existing-stock strategy unless `steps.put-away.suggestShelf=off`). |
 | `POST /receiving-orders/:id/put-away-scans` | `{actorId, raw|fields, qty}` → complete scan row (no fix-up query). |
 | `DELETE /put-away-scans/:scanId` | `{actorId}` → hard-delete a staged scan (mis-scan correction); 409 `scan_not_in_staging_box` for boxed scans (use remove-from-box). |
 | `POST /shelf-boxes` | `{receivingOrderId, shelfCode?, actorId}` → box. |

@@ -395,7 +395,9 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
     { code: "A-04-02", zone: "A" },
     { code: "A-04-03", zone: "A" },
     { code: "A-04-04", zone: "A" },
-    { code: "A-04-05", zone: "A" },
+    // sub-inventory-tagged demo shelf: put-away sub-inventory-shelf fallback
+    // target (STORE1)
+    { code: "A-04-05", zone: "A", subInventoryCodes: ["STORE1"] },
     // virtual dock shelf — dock/GIT lots hang off this code (never NULL)
     { code: "DOCK", zone: "DOCK" },
     // shelves for the real-data orders (new_seed/)

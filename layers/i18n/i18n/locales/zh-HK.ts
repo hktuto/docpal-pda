@@ -403,6 +403,7 @@ export default {
       expandScans: "顯示件",
       collapseScans: "隱藏件",
       suggestedShelf: "建議貨架",
+      suggestedBox: "建議箱（內有相同物料）",
     }
   },
   goodsVerify: {
@@ -867,7 +868,8 @@ export default {
       pickingIssues: "揀貨問題",
       shippingOrders: "出貨箱",
       stockSearch: "庫存查詢",
-      appDownload: "App 下載"
+      appDownload: "App 下載",
+      flowConfig: "流程設定"
     },
     auth: {
       logout: "登出",
@@ -917,6 +919,7 @@ export default {
       id: "ID",
       code: "代碼",
       zone: "區域",
+      subInventoryCodes: "子庫存（可多選）",
       name: "名稱",
       shortName: "簡稱",
       supplierCode: "供應商代碼",
@@ -1227,6 +1230,28 @@ export default {
         downloading: "下載中…",
         emptyTitle: "尚未發佈 APK",
         emptyMessage: "請使用 pnpm build:apk 建置應用程式，發佈後即可在此下載 APK。"
+      },
+      flowConfig: {
+        title: "流程設定",
+        envOverrideWarning: "後端目前使用 FLOW_CONFIG 環境變數覆蓋 — 在此儲存只會寫入資料庫，要移除該環境變數後才會生效。",
+        stepsSection: "流程步驟（啟用的步驟會顯示在 PDA 主選單）",
+        steps: {
+          receiving: "收貨",
+          "put-away": "上架",
+          picking: "執貨",
+          "goods-verify": "查貨",
+          measuring: "度箱",
+          verify: "覆核",
+          "stock-search": "庫存查詢"
+        },
+        pickingSection: "執貨分配",
+        allowDockStock: "允許分配收貨區存貨（上架前）",
+        putAwaySection: "上架",
+        autoCreateTasks: "確認收貨到達時自動建立上架任務",
+        suggestShelf: "貨架建議策略",
+        suggestShelfOn: "建議貨架/箱（相同物料）",
+        suggestShelfOff: "關閉",
+        saved: "已儲存。"
       }
     }
   }

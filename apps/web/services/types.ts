@@ -507,10 +507,14 @@ export interface PutAwayExpectedItem {
   lotCode: string | null;
   coo: string | null;
   cow: string | null;
-  /** Task-detail only (GET /put-away-tasks/:id): advisory shelf suggestion
-   *  from the backend's suggestShelf strategy — null when the part has no
-   *  stock history or suggestions are off. Absent on the plain aggregate. */
+  /** Advisory shelf suggestion from the backend's suggestShelf strategy —
+   *  null when the part has no stock history or suggestions are off. */
   suggestedShelfCode?: string | null;
+  /** An OPEN shelf box already containing the same part (part_no match, any
+   *  date code) — set when suggestionReason is "same-part-box". */
+  suggestedBoxId?: string | null;
+  /** Which strategy produced the suggestion. */
+  suggestionReason?: "same-part-box" | "same-part-stock" | "sub-inventory-shelf" | null;
 }
 
 /** Inventory lot materialized from this order (via inventory_lot_sources). */
@@ -709,6 +713,9 @@ export interface FlowConfig {
    *  put-away list from derived candidates to the task queue; suggestShelf
    *  is the backend's shelf-hint strategy ("existing-stock" | "off"). */
   putAway: { autoCreateTasks: boolean; suggestShelf: string };
+  /** Resolved steps.picking.allocation section: allowDockStock=false means
+   *  only put-away stock allocates — receiving and picking are decoupled. */
+  pickingAllocation: { allowDockStock: boolean };
 }
 
 // ------------------------------------------------------------------

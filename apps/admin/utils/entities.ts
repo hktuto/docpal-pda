@@ -2,7 +2,13 @@ export interface EntityField {
   key: string;
   /** i18n key (under admin.fields.*) resolved by CrudTable/CrudForm via $t. */
   label: string;
-  type: "text" | "number" | "password";
+  type: "text" | "number" | "password" | "multiSelect";
+  /**
+   * multiSelect only: where the option list comes from.
+   * "subInventories" = sub-inventory codes from GET /admin/sub-inventories.
+   * The payload is a string array (null when nothing is selected).
+   */
+  optionsSource?: "subInventories";
   required?: boolean;
   /** Disabled in the edit form (used for primary keys, which are immutable). */
   readonlyOnEdit?: boolean;
@@ -60,6 +66,9 @@ export const entities: Record<string, EntityConfig> = {
     fields: [
       { key: "code", label: "admin.fields.code", type: "text", required: true, readonlyOnEdit: true },
       { key: "zone", label: "admin.fields.zone", type: "text" },
+      // Advisory sub-inventory affinity for put-away shelf suggestions
+      // (empty = shared).
+      { key: "subInventoryCodes", label: "admin.fields.subInventoryCodes", type: "multiSelect", optionsSource: "subInventories" },
     ],
     extraColumns: [
       { key: "createdDate", label: "admin.fields.createdDate" },
@@ -181,6 +190,9 @@ export const navSections: { title: string; links: { route: string; title: string
   },
   {
     title: "admin.nav.settings",
-    links: [{ route: "/app-download", title: "admin.navLinks.appDownload" }],
+    links: [
+      { route: "/flow-config", title: "admin.navLinks.flowConfig" },
+      { route: "/app-download", title: "admin.navLinks.appDownload" },
+    ],
   },
 ];

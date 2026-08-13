@@ -78,17 +78,19 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     auto-clear; rows carry order/supplier + received/unboxed item counts,
     oldest first (spec
     `docs/superpowers/specs/2026-08-10-put-away-tasks-design.md`).
-  - `GET /put-away-tasks/:id` — the per-order put-away aggregate + `{task}`
-    and per-item `suggestedShelfCode` (most recent lot of the same part in
-    the task's org + sub-inventory; `steps.put-away.suggestShelf=off`
-    suppresses); 404 `put_away_task_not_found`.
+  - `GET /put-away-tasks/:id` — the per-order put-away aggregate + `{task}`;
+    404 `put_away_task_not_found`.
   - `GET /put-away/candidates` — receivable orders (`in_hand` /
     `provisional_received`) with per-order received/unboxed item counts
     (unboxed = received − picked − put away − allocated − staged).
   - `GET /receiving-orders/:id/put-away` — one aggregate for the detail
     screen: order + expected items (per invoice item: qty counters,
-    `allocatedQty`, `remainingQty` = the candidates formula, batch fields) +
-    materialized lots + staging scans + non-staging boxes with their items.
+    `allocatedQty`, `remainingQty` = the candidates formula, batch fields),
+    each with the advisory per-item `suggestedShelfCode`/`suggestedBoxId`/
+    `suggestionReason` (most recent open box or lot of the same part in the
+    order's org + sub-inventory, else the sub-inventory-tagged shelf;
+    `steps.put-away.suggestShelf=off` suppresses), + materialized lots +
+    staging scans + non-staging boxes with their items.
   - `POST /receiving-orders/:id/put-away-scans` `{receivingInvoiceItemId, qty, dateCode?, lotCode?, coo?, cow?, shelfBoxId?}`
     — staging scan insert (auto-creates the staging box), batch-attr backfill
     on the item, 409 `scanned_qty_exceeds_remaining`; with `shelfBoxId` the

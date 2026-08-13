@@ -11,13 +11,14 @@ import {
   customerProfiles,
   netWeightFormula,
 } from "../../db/schema/index.js";
-import { createCrudRouter, reqStr, optStr, reqInt, reqNum, optJson } from "./crud.js";
+import { createCrudRouter, reqStr, optStr, reqInt, reqNum, optInt, optStrArray, optJson } from "./crud.js";
 import { shelfBoxesRoute } from "./shelfBoxes.js";
 import { adminFlowEditsRoute } from "./flowEdits.js";
 import { adminSubInventoriesRoute } from "./subInventories.js";
 import { adminSubInventoryShareGroupsRoute } from "./subInventoryShareGroups.js";
 import { adminIssuesRoute } from "./issues.js";
 import { adminAppDownloadRoute } from "./appDownload.js";
+import { adminFlowConfigRoute } from "./flowConfig.js";
 
 // Optional id on create: use the client's when given, else generate one.
 function optId(body: Record<string, unknown>): string {
@@ -36,9 +37,11 @@ adminRoute.route(
       id: optId(b),
       code: reqStr(b, "code"),
       zone: optStr(b, "zone"),
+      subInventoryCodes: optStrArray(b, "subInventoryCodes"),
     }),
     update: (b) => ({
       ...(b.zone !== undefined && { zone: optStr(b, "zone") }),
+      ...(b.subInventoryCodes !== undefined && { subInventoryCodes: optStrArray(b, "subInventoryCodes") }),
       lastUpdateDate: new Date(),
     }),
   })
@@ -214,6 +217,9 @@ adminRoute.route(
 );
 
 adminRoute.route("/shelf-boxes", shelfBoxesRoute);
+
+// Flow config editing (warehouse_config row "flow", applied at runtime).
+adminRoute.route("/flow-config", adminFlowConfigRoute);
 
 // Flow-data edits for the admin console (delivery date / item date code).
 adminRoute.route("/", adminFlowEditsRoute);

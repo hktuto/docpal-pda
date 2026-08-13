@@ -30,6 +30,13 @@ const putAwayConfig = ref<{ autoCreateTasks: boolean; suggestShelf: string }>({
   suggestShelf: "existing-stock",
 });
 
+// Resolved steps.picking.allocation config (GET /config pickingAllocation).
+// Default = dock stock allocatable (cross-dock), so pages behave as before
+// until the first fetch resolves.
+const pickingAllocation = ref<{ allowDockStock: boolean }>({
+  allowDockStock: true,
+});
+
 let loading: Promise<void> | null = null;
 
 async function loadFlowSteps(): Promise<void> {
@@ -41,6 +48,9 @@ async function loadFlowSteps(): Promise<void> {
       steps.value = { ...steps.value, ...config.flowSteps };
       if (config.putAway) {
         putAwayConfig.value = { ...putAwayConfig.value, ...config.putAway };
+      }
+      if (config.pickingAllocation) {
+        pickingAllocation.value = { ...pickingAllocation.value, ...config.pickingAllocation };
       }
     } catch {
       // Config unavailable (old backend, offline) — keep the defaults.
@@ -55,6 +65,7 @@ export function useFlowSteps() {
   return {
     flowSteps: readonly(steps),
     putAwayConfig: readonly(putAwayConfig),
+    pickingAllocation: readonly(pickingAllocation),
     loadFlowSteps,
   };
 }

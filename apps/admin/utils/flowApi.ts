@@ -198,6 +198,23 @@ export interface MismatchListRow {
   note: string | null;
 }
 
+// ---- flow config (warehouse_config row "flow") ----
+
+export interface FlowConfigState {
+  /** Effective config currently in force on the backend. */
+  config: {
+    steps: Record<string, { enabled: boolean }>;
+    pickingAllocation: { allowDockStock: boolean };
+    putAway: { autoCreateTasks: boolean; suggestShelf: "existing-stock" | "off" };
+  };
+  /** Raw warehouse_config row value (partial JSON as stored). */
+  stored: Record<string, unknown>;
+  /** True when the FLOW_CONFIG env override is active — DB edits don't apply. */
+  envOverride: boolean;
+  /** PUT only: false when the env override blocked runtime apply. */
+  applied?: boolean;
+}
+
 // ---- audit logs (transaction_logs rows for an order + its child entities) ----
 
 export interface TransactionLogRow {
@@ -252,6 +269,12 @@ export function useFlowApi() {
       body: { reason: string; mismatchQty?: number; wrongPartNo?: string; note?: string }
     ) => api.post(`/receiving-invoice-items/${itemId}/mismatch`, body),
     removeReceivingItem: (itemId: string) => api.del(`/admin/receiving-invoice-items/${itemId}`),
+
+    // Flow config (warehouse_config row "flow"; applies at runtime on save
+    // unless the FLOW_CONFIG env override is active)
+    getFlowConfig: () => api.get<FlowConfigState>("/admin/flow-config"),
+    saveFlowConfig: (value: Record<string, unknown>) =>
+      api.put<FlowConfigState>("/admin/flow-config", value),
 
     // Audit logs
     listReceivingOrderLogs: (orderId: string) =>

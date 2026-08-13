@@ -9,14 +9,18 @@
   page shows the `put_away_tasks` queue instead (`GET /put-away-tasks`) — one
   pending task per receiving order, auto-created in the arrival-confirm tx,
   completed by the auto-clear. The task detail (`GET /put-away-tasks/:id`) is
-  the same per-order aggregate plus a per-item `suggestedShelfCode` hint
-  (existing-stock strategy: shelf of the most recent lot of the same part in
-  the order's org + sub-inventory; `steps.put-away.suggestShelf=off`
-  suppresses it). Advisory only, computed at read time, never stored.
+  the same per-order aggregate plus the task row.
 - Show the put-away detail as **one aggregate read**
   (`GET /receiving-orders/:id/put-away`): expected invoice items (with
-  remaining qty), materialized inventory lots, staging scans, and the
-  non-staging shelf boxes with their item rows.
+  remaining qty and a per-item shelf/box suggestion —
+  `suggestedShelfCode` / `suggestedBoxId` / `suggestionReason`, ranked
+  within the order's org + sub-inventory: most recent OPEN shelf box
+  containing the same part → shelf of the most recent lot of the same part →
+  first shelf whose advisory `shelves.sub_inventory_codes` contain the
+  order's sub-inventory;
+  `steps.put-away.suggestShelf=off` suppresses it; advisory only, computed
+  at read time, never stored), materialized inventory lots, staging scans,
+  and the non-staging shelf boxes with their item rows.
 - Scan physical pieces into the order's staging box (client-side label
   validation against supplier QR templates). The hardware scanner is armed on
   the detail page: a QR/wedge scan parses via the supplier templates and
@@ -48,8 +52,12 @@
 
 ## Out of scope
 
-- Velocity/zone/capacity-aware slotting (the `suggestedShelfCode` hint is
-  existing-stock only; fixed slots would be a new `suggestShelf` strategy).
+- Velocity/zone/capacity-aware slotting (the suggestion hint is
+  same-part-box / existing-stock / org-affinity only; fixed slots would be a
+  new `suggestShelf` strategy). `shelves.sub_inventory_codes` is advisory — it
+  ranks suggestions but is not enforced at scan time. It is a
+  text array (a shelf can serve several sub-inventories), edited as a
+  multi-select in the admin shelves CRUD.
 - Forklift or robot integration.
 - Multi-step directed put-away with confirmation checkpoints.
 - Operator assignment / work locks on put-away tasks; manual
@@ -100,6 +108,7 @@
 
 - `docs/backend/api-design.md` §Put-away
 - `docs/superpowers/specs/2026-08-10-put-away-tasks-design.md`
+- `docs/superpowers/specs/2026-08-12-put-away-shelf-org-suggestion-design.md`
 - `docs/superpowers/specs/2026-08-10-flow-config-design.md`
 - `docs/superpowers/specs/2026-07-03-cancel-empty-box-design.md`
 - `docs/superpowers/specs/2026-07-06-put-away-scan-first-design.md`

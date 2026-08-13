@@ -7,6 +7,7 @@ import { transactionLogs, inventoryTransactions } from "./schema/index.js";
 import { nextBoxId } from "./boxes.js";
 import { now } from "./now.js";
 import { completePutAwayTaskTx } from "./putawaytasks.js";
+import { putAwayConfig } from "../config.js";
 
 // ---------------------------------------------------------------------------
 // Put-away flow — staging-box model (ported from apps/api putAway.ts).
@@ -330,6 +331,8 @@ export interface PutAwayBoxItemRow {
   verifiedAt: Date | null;
 }
 
+export type PutAwaySuggestionReason = "same-part-box" | "same-part-stock" | "sub-inventory-shelf";
+
 export interface PutAwayExpectedItemRow {
   id: string;
   partNo: string;
@@ -343,6 +346,11 @@ export interface PutAwayExpectedItemRow {
   lotCode: string | null;
   coo: string | null;
   cow: string | null;
+  /** Advisory shelf/box suggestion (spec 2026-08-12-put-away-shelf-org-suggestion-design.md);
+   *  all null when nothing matches or suggestShelf is "off". */
+  suggestedShelfCode: string | null;
+  suggestedBoxId: string | null;
+  suggestionReason: PutAwaySuggestionReason | null;
 }
 
 export interface PutAwayAggregate {
@@ -362,14 +370,16 @@ export interface PutAwayAggregate {
 /**
  * The one aggregate read for the put-away detail screen: the order's expected
  * items (receivable list with remaining = received − picked − put away −
- * allocated − staged, the candidates-list formula), lots materialized from
- * this order (via inventory_lot_sources), scans still in the staging box, and
- * the non-staging boxes with their item rows.
+ * allocated − staged, the candidates-list formula), each with an advisory
+ * shelf/box suggestion, lots materialized from this order (via
+ * inventory_lot_sources), scans still in the staging box, and the
+ * non-staging boxes with their item rows.
  */
 export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<PutAwayAggregate> {
-  const order = await queryGet<{ id: string; batchNo: string; status: string }>(
+  const order = await queryGet<{ id: string; batchNo: string; status: string; orgId: number; subInventoryCode: string }>(
     db,
-    sql`SELECT id, batch_no AS "batchNo", status FROM receiving_orders WHERE id = ${orderId}`
+    sql`SELECT id, batch_no AS "batchNo", status, org_id AS "orgId", sub_inventory_code AS "subInventoryCode"
+        FROM receiving_orders WHERE id = ${orderId}`
   );
   if (!order) throw new HTTPException(404, { message: "receiving_order_not_found" });
 
@@ -425,6 +435,23 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
       ORDER BY rii.po_no, rii.po_line, rii.id
     `
   );
+
+  // Per-item shelf/box suggestion, ranked within the order's org +
+  // sub-inventory (same rules as the put-away task detail). Advisory, computed
+  // at read time, never stored; all null when suggestShelf is "off".
+  const suggestions =
+    putAwayConfig().suggestShelf !== "off"
+      ? await computeShelfSuggestions(db, [...new Set(items.map((it) => it.partNo))], order.orgId, order.subInventoryCode)
+      : new Map<string, ShelfSuggestion>();
+  const itemsWithSuggestions: PutAwayExpectedItemRow[] = items.map((it) => {
+    const s = suggestions.get(it.partNo);
+    return {
+      ...it,
+      suggestedShelfCode: s?.shelfCode ?? null,
+      suggestedBoxId: s?.boxId ?? null,
+      suggestionReason: s?.reason ?? null,
+    };
+  });
 
   const scans = await queryAll<PutAwayScanRow>(
     db,
@@ -485,8 +512,8 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
     : [];
 
   return {
-    order,
-    items,
+    order: { id: order.id, batchNo: order.batchNo, status: order.status },
+    items: itemsWithSuggestions,
     lots,
     scans,
     boxes: boxes.map((b) => ({
@@ -496,6 +523,74 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
         .map(({ shelfBoxId: _shelfBoxId, ...rest }) => rest),
     })),
   };
+}
+
+interface ShelfSuggestion {
+  shelfCode: string | null;
+  boxId: string | null;
+  reason: PutAwaySuggestionReason;
+}
+
+/**
+ * Shelf/box suggestions per part_no, ranked within the order's org +
+ * sub-inventory (spec 2026-08-12-put-away-shelf-org-suggestion-design.md):
+ *   1. same-part-box   — most recent OPEN shelf box already containing the
+ *                        part (part_no only, any date code) → its shelf + box
+ *   2. same-part-stock — shelf of the most recent lot of the same part
+ *   3. sub-inventory-shelf — first shelf (by code) tagged with the
+ *      sub-inventory
+ */
+async function computeShelfSuggestions(
+  db: AppDb,
+  partNos: string[],
+  orgId: number,
+  subInventoryCode: string
+): Promise<Map<string, ShelfSuggestion>> {
+  const suggestions = new Map<string, ShelfSuggestion>();
+  if (partNos.length === 0) return suggestions;
+  const partList = sql.join(partNos.map((p) => sql`${p}`), sql`, `);
+  // 1. same-part-box: most recent OPEN shelf box already holding the part
+  //    (part_no only — date code intentionally not matched)
+  const boxRows = await queryAll<{ partNo: string; boxId: string; shelfCode: string }>(
+    db,
+    sql`SELECT DISTINCT ON (sbi.part_no) sbi.part_no AS "partNo",
+               sb.id AS "boxId", sb.shelf_code AS "shelfCode"
+        FROM shelf_box_items sbi
+        JOIN shelf_boxes sb ON sb.id = sbi.shelf_box_id
+        WHERE sbi.part_no IN (${partList})
+          AND sb.status = 'open'
+          AND sb.org_id = ${orgId}
+          AND sb.sub_inventory_code = ${subInventoryCode}
+          AND sb.shelf_code IS NOT NULL
+        ORDER BY sbi.part_no, sb.created_date DESC, sb.id`
+  );
+  for (const r of boxRows) suggestions.set(r.partNo, { shelfCode: r.shelfCode, boxId: r.boxId, reason: "same-part-box" });
+  // 2. same-part-stock: shelf of the most recent lot of the same part
+  const stockRows = await queryAll<{ partNo: string; shelfCode: string }>(
+    db,
+    sql`SELECT DISTINCT ON (part_no) part_no AS "partNo", shelf_code AS "shelfCode"
+        FROM inventory_lots
+        WHERE part_no IN (${partList})
+          AND org_id = ${orgId}
+          AND sub_inventory_code = ${subInventoryCode}
+          AND shelf_code IS NOT NULL
+        ORDER BY part_no, created_date DESC, id`
+  );
+  for (const r of stockRows) {
+    if (!suggestions.has(r.partNo)) suggestions.set(r.partNo, { shelfCode: r.shelfCode, boxId: null, reason: "same-part-stock" });
+  }
+  // 3. sub-inventory-shelf fallback for parts with no stock history at all
+  const missing = partNos.filter((p) => !suggestions.has(p));
+  if (missing.length > 0) {
+    const taggedShelf = await queryGet<{ code: string }>(
+      db,
+      sql`SELECT code FROM shelves WHERE ${subInventoryCode} = ANY(sub_inventory_codes) ORDER BY code LIMIT 1`
+    );
+    if (taggedShelf) {
+      for (const p of missing) suggestions.set(p, { shelfCode: taggedShelf.code, boxId: null, reason: "sub-inventory-shelf" });
+    }
+  }
+  return suggestions;
 }
 
 // ---------------------------------------------------------------------------

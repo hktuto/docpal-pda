@@ -258,6 +258,19 @@ export function putAwayConfig(): PutAwayConfig {
   return flowConfig.putAway;
 }
 
+/** Current effective flow config (post-boot resolution). */
+export function getFlowConfig(): FlowConfig {
+  return flowConfig;
+}
+
+/**
+ * Apply a validated config at runtime (admin console PUT /admin/flow-config).
+ * Callers skip this when the FLOW_CONFIG env override is active.
+ */
+export function applyFlowConfig(cfg: FlowConfig): void {
+  flowConfig = cfg;
+}
+
 /** Test-only override (env is read once at import time). Pass [] to reset. */
 export function _setFlowStepsDisabledForTests(disabled: FlowStep[]): void {
   flowConfig = defaultFlowConfig();

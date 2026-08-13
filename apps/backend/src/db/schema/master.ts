@@ -86,6 +86,11 @@ export const shelves = pgTable("shelves", {
   id: text("id").primaryKey(),
   code: text("code").notNull().unique(),
   zone: text("zone"),
+  // 货架偏好子库存列表 (advisory, multi sub-inventory) — ranks put-away shelf
+  // suggestions for parts with no stock history; NULL/empty = shared / any
+  // sub-inventory. Not enforced at scan time
+  // (spec 2026-08-12-put-away-shelf-org-suggestion-design.md).
+  subInventoryCodes: text("sub_inventory_codes").array(),
   createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
 });

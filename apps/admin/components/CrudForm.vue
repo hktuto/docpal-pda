@@ -16,8 +16,28 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
-const form = reactive<Record<string, string>>({});
+const api = useApi();
+const form = reactive<Record<string, string | string[]>>({});
 const localError = ref("");
+
+// multiSelect option lists (per optionsSource). Loaded once on mount.
+const subInventoryOptions = ref<{ value: string; label: string }[]>([]);
+
+onMounted(async () => {
+  if (!props.fields.some((f) => f.optionsSource === "subInventories")) return;
+  try {
+    const rows = await api.get<{ orgId: number; code: string }[]>("/admin/sub-inventories");
+    subInventoryOptions.value = rows
+      .map((r) => ({ value: r.code, label: `${r.code} (org ${r.orgId})` }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  } catch {
+    subInventoryOptions.value = []; // options stay empty; the field can still be cleared
+  }
+});
+
+function optionsFor(f: EntityField): { value: string; label: string }[] {
+  return f.optionsSource === "subInventories" ? subInventoryOptions.value : [];
+}
 
 // Dismiss only on a genuine overlay click (press starts and ends on the
 // overlay), so selecting text inside the dialog doesn't close it.
@@ -30,7 +50,14 @@ watch(
   (val) => {
     for (const f of props.fields) {
       const v = val?.[f.key];
-      form[f.key] = v === null || v === undefined ? "" : String(v);
+      form[f.key] =
+        f.type === "multiSelect"
+          ? Array.isArray(v)
+            ? v.map(String)
+            : []
+          : v === null || v === undefined
+            ? ""
+            : String(v);
     }
     localError.value = "";
   },
@@ -51,6 +78,11 @@ function submit() {
   const payload: Record<string, unknown> = {};
   for (const f of props.fields) {
     if (disabled(f)) continue;
+    if (f.type === "multiSelect") {
+      const selected = Array.isArray(form[f.key]) ? (form[f.key] as string[]) : [];
+      payload[f.key] = selected.length > 0 ? selected : null; // null = clear
+      continue;
+    }
     const raw = String(form[f.key] ?? "").trim();
     if (raw === "") {
       // Write-only fields (e.g. password): blank means "don't send" — on edit
@@ -94,7 +126,18 @@ function submit() {
           <label :for="`ff-${f.key}`">
             {{ $t(f.label) }}<span v-if="showRequired(f)" class="req"> *</span>
           </label>
+          <select
+            v-if="f.type === 'multiSelect'"
+            :id="`ff-${f.key}`"
+            v-model="form[f.key]"
+            multiple
+            :disabled="disabled(f)"
+            class="multi-select"
+          >
+            <option v-for="o in optionsFor(f)" :key="o.value" :value="o.value">{{ o.label }}</option>
+          </select>
           <input
+            v-else
             :id="`ff-${f.key}`"
             v-model="form[f.key]"
             :type="f.type === 'number' ? 'number' : f.type === 'password' ? 'password' : 'text'"
@@ -110,3 +153,10 @@ function submit() {
     </div>
   </div>
 </template>
+
+<style scoped>
+.multi-select {
+  min-height: 5rem;
+  width: 100%;
+}
+</style>

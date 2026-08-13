@@ -403,6 +403,7 @@ export default {
       expandScans: "显示件",
       collapseScans: "隐藏件",
       suggestedShelf: "建议货架",
+      suggestedBox: "建议箱（内有相同物料）",
     }
   },
   goodsVerify: {
@@ -867,7 +868,8 @@ export default {
       pickingIssues: "拣货问题",
       shippingOrders: "出货箱",
       stockSearch: "库存查询",
-      appDownload: "应用下载"
+      appDownload: "应用下载",
+      flowConfig: "流程设置"
     },
     auth: {
       logout: "退出登录",
@@ -917,6 +919,7 @@ export default {
       id: "ID",
       code: "代码",
       zone: "区域",
+      subInventoryCodes: "子库存（可多选）",
       name: "名称",
       shortName: "简称",
       supplierCode: "供应商代码",
@@ -1227,6 +1230,28 @@ export default {
         downloading: "下载中…",
         emptyTitle: "尚未发布 APK",
         emptyMessage: "请使用 pnpm build:apk 构建应用，发布后即可在此下载 APK。"
+      },
+      flowConfig: {
+        title: "流程设置",
+        envOverrideWarning: "后端当前使用 FLOW_CONFIG 环境变量覆盖 — 在此保存只会写入数据库，需移除该环境变量后才会生效。",
+        stepsSection: "流程步骤（启用的步骤会显示在 PDA 主菜单）",
+        steps: {
+          receiving: "收货",
+          "put-away": "上架",
+          picking: "拣货",
+          "goods-verify": "盘点",
+          measuring: "量箱",
+          verify: "复核",
+          "stock-search": "库存查询"
+        },
+        pickingSection: "拣货分配",
+        allowDockStock: "允许分配收货区库存（上架前）",
+        putAwaySection: "上架",
+        autoCreateTasks: "确认收货到达时自动创建上架任务",
+        suggestShelf: "货架建议策略",
+        suggestShelfOn: "建议货架/箱（相同物料）",
+        suggestShelfOff: "关闭",
+        saved: "已保存。"
       }
     }
   }

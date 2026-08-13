@@ -1,0 +1,1 @@
+ALTER TABLE "shelves" ADD COLUMN "sub_inventory_codes" text[];

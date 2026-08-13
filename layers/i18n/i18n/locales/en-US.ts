@@ -403,6 +403,7 @@ export default {
       expandScans: "Show pieces",
       collapseScans: "Hide pieces",
       suggestedShelf: "Suggested shelf",
+      suggestedBox: "Suggested box (same part inside)",
     }
   },
   goodsVerify: {
@@ -867,7 +868,8 @@ export default {
       pickingIssues: "Picking Issues",
       shippingOrders: "Shipping Boxes",
       stockSearch: "Stock Search",
-      appDownload: "App Download"
+      appDownload: "App Download",
+      flowConfig: "Flow Config"
     },
     auth: {
       logout: "Logout",
@@ -917,6 +919,7 @@ export default {
       id: "ID",
       code: "Code",
       zone: "Zone",
+      subInventoryCodes: "Sub-inventories",
       name: "Name",
       shortName: "Short name",
       supplierCode: "Supplier code",
@@ -1230,6 +1233,28 @@ export default {
         downloading: "Downloading…",
         emptyTitle: "No APK published yet",
         emptyMessage: "Build the app with pnpm build:apk to publish a downloadable APK here."
+      },
+      flowConfig: {
+        title: "Flow Config",
+        envOverrideWarning: "The FLOW_CONFIG environment override is active on the backend — saving here stores the row but does NOT change the running config until the override is removed.",
+        stepsSection: "Flow steps (enabled steps appear on the PDA home menu)",
+        steps: {
+          receiving: "Receiving",
+          "put-away": "Put-away",
+          picking: "Picking",
+          "goods-verify": "Goods Verify",
+          measuring: "Measuring",
+          verify: "Verify",
+          "stock-search": "Stock Search"
+        },
+        pickingSection: "Picking allocation",
+        allowDockStock: "Allow allocation from receiving dock stock (before put-away)",
+        putAwaySection: "Put-away",
+        autoCreateTasks: "Auto-create a put-away task when a receiving arrival is confirmed",
+        suggestShelf: "Shelf suggestion strategy",
+        suggestShelfOn: "Suggest shelf/box (same part)",
+        suggestShelfOff: "Off",
+        saved: "Saved."
       }
     }
   }
