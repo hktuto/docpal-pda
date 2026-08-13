@@ -3,7 +3,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 // Tunnel the PDA's localhost ports back to this dev machine, so the
-// Capacitor WebView can load http://localhost:3000 (web dev server) and
+// Capacitor WebView can load http://localhost:3103 (web dev server) and
 // call http://localhost:3002 (backend API) on-device.
 // NOTE: `adb reverse` does not survive device reboots / reconnects —
 // re-run this script after plugging the device back in.
@@ -28,8 +28,8 @@ function findAdb() {
 }
 
 const adb = findAdb();
-for (const port of [3000, 3002]) {
+for (const port of [3103, 3002]) {
   const res = spawnSync(adb, ['reverse', `tcp:${port}`, `tcp:${port}`], { stdio: 'inherit', shell: true });
   if (res.status !== 0) process.exit(res.status ?? 1);
 }
-console.log('[cap-android-proxy] adb reverse tcp:3000 + tcp:3002 active');
+console.log('[cap-android-proxy] adb reverse tcp:3103 + tcp:3002 active');

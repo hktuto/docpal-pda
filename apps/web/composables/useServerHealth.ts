@@ -1,4 +1,5 @@
 import { setNetworkErrorHandler } from "~/services/apiClient";
+import { getApiBaseUrl } from "~/utils/serverHost";
 
 const POLL_MS = 20_000;
 const FETCH_TIMEOUT_MS = 4_000;
@@ -15,8 +16,6 @@ const checking = ref(false);
 let started = false;
 
 export function useServerHealth() {
-  const { public: { apiBaseUrl } } = useRuntimeConfig();
-
   async function checkServer(): Promise<boolean> {
     if (checking.value) return !serverDown.value;
     checking.value = true;
@@ -24,7 +23,7 @@ export function useServerHealth() {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
       try {
-        const res = await fetch(`${apiBaseUrl}/health`, { signal: controller.signal });
+        const res = await fetch(`${getApiBaseUrl()}/health`, { signal: controller.signal });
         serverDown.value = !res.ok;
       } finally {
         clearTimeout(timer);

@@ -23,10 +23,11 @@ import { devRoute } from "./routes/dev.js";
 
 export const app = new Hono<{ Variables: AuthVariables }>();
 
-const origins = (
-  process.env.CORS_ORIGINS ??
-  "http://localhost:3000,http://localhost:3100,http://localhost,http://127.0.0.1:3000,http://127.0.0.1,capacitor://localhost"
-).split(",");
+// POC: allow every origin by default — the app can be served from any web
+// host (the APK's fixed server.url, LAN IPs, dev servers) and auth is a
+// Bearer header, not cookies, so reflecting any origin leaks nothing. Set
+// CORS_ORIGINS (comma-separated) to restrict to an allowlist instead.
+const origins = process.env.CORS_ORIGINS?.split(",") ?? "*";
 
 app.use("*", cors({ origin: origins, allowHeaders: ["Content-Type", "Last-Event-ID", "Authorization"] }));
 // Everything below requires a bearer token except /health, POST /auth/login

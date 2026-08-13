@@ -113,8 +113,8 @@ export default {
     changeServer: "Change server"
   },
   server: {
-    title: "Choose server",
-    subtitle: "Select the server for this device. The app remembers your choice.",
+    title: "Choose backend server",
+    subtitle: "Select the backend server (API) for this device. The app remembers your choice.",
     regions: {
       hk: "Hong Kong",
       sz: "Shenzhen",

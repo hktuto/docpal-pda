@@ -113,8 +113,8 @@ export default {
     changeServer: "更改伺服器"
   },
   server: {
-    title: "選擇伺服器",
-    subtitle: "選擇此裝置要連接的伺服器，應用程式會記住您的選擇。",
+    title: "選擇後台伺服器",
+    subtitle: "選擇此裝置要連接的後台伺服器（API），應用程式會記住您的選擇。",
     regions: {
       hk: "香港",
       sz: "深圳",

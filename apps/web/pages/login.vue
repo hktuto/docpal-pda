@@ -59,7 +59,6 @@
 </template>
 
 <script setup lang="ts">
-import { Capacitor } from "@capacitor/core";
 import { useErrorMessage } from "~/composables/errorMessage";
 
 definePageMeta({ layout: false });
@@ -78,17 +77,11 @@ const submitting = ref(false);
 const currentHost = ref("");
 
 onMounted(() => {
-  currentHost.value = window.location.origin;
+  currentHost.value = getApiBaseUrl();
 });
 
-// The picker must run on the bundled origin (http://localhost) because the
-// saved host lives in that origin's localStorage; from a remote-served app we
-// navigate the WebView back to the bundled page with ?picker=1.
 function onChangeServer() {
-  if (isBundledOrigin() || !Capacitor.isNativePlatform()) {
-    return navigateTo("/server");
-  }
-  window.location.href = "http://localhost/?picker=1";
+  return navigateTo("/server");
 }
 
 async function onSubmit() {

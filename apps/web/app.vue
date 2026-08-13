@@ -12,10 +12,10 @@ import { Capacitor } from "@capacitor/core";
 const { start: startServerHealth } = useServerHealth();
 
 // Backend reachability watchdog: drives the global maintenance overlay.
-// Skipped on the bundled origin (release-APK launcher): its placeholder
-// apiBaseUrl would raise a false overlay over the /server picker.
+// Skipped on native until a backend is chosen (first boot shows the /server
+// picker; pinging the fallback apiBaseUrl could raise a false overlay over it).
 onMounted(() => {
-  if (!isBundledOrigin()) startServerHealth();
+  if (!Capacitor.isNativePlatform() || getSavedServerHost()) startServerHealth();
 });
 
 let lastBackAt = 0;

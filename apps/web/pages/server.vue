@@ -38,9 +38,14 @@ useHead({ title: t('server.title') });
 const hosts = getServerHostOptions();
 const current = ref(getSavedServerHost());
 
+// The picker only switches the backend API base URL — the WebView stays on
+// its served origin (leaving it would lose the Capacitor bridge and hardware
+// scanning). switchServerHost clears backend-scoped state (session, API
+// cache, SSE cursor); the navigation reboots the app against the new backend
+// and lands on /login via the auth middleware.
 function choose(url: string) {
-  saveServerHost(url);
-  window.location.href = url;
+  switchServerHost(url);
+  window.location.replace("/");
 }
 </script>
 

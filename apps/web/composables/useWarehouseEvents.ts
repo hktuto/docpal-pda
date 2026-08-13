@@ -1,6 +1,7 @@
 import { ref, readonly } from "vue";
 import { invalidatePrefix } from "~/services/apiCache";
 import { getToken } from "~/services/adapters/apiAuth";
+import { getApiBaseUrl } from "~/utils/serverHost";
 import { useToast } from "~/composables/useToast";
 
 /**
@@ -111,7 +112,7 @@ function connect(): void {
   const token = getToken();
   if (!token) return;
   if (lastEventId === null) lastEventId = readCursor();
-  const base = (useRuntimeConfig().public.apiBaseUrl as string).replace(/\/+$/, "");
+  const base = getApiBaseUrl().replace(/\/+$/, "");
   const source = new EventSource(
     `${base}/events?since=${lastEventId}&token=${encodeURIComponent(token)}`
   );

@@ -1,7 +1,10 @@
 # Server host picker — design
 
 Date: 2026-07-31
-Status: implemented
+Status: **superseded 2026-08-13** by `2026-08-13-backend-server-picker-design.md` —
+the boot redirect broke every Capacitor native plugin (the bridge is injected
+for the bundled origin only), so the picker now switches only the backend API
+base URL and the web host is fixed at build time via `server.url`.
 Plan: `docs/superpowers/plans/2026-07-31-server-host-picker.md`
 
 ## Problem

@@ -1,5 +1,6 @@
 import { createAuthService } from "~/services/auth";
 import { getStoredUser } from "~/services/adapters/apiAuth";
+import { getApiBaseUrl } from "~/utils/serverHost";
 import type { User } from "~/services/types";
 
 // The session (warehouse-token + warehouse-user-id + warehouse-user) lives in
@@ -8,7 +9,7 @@ export function useAuth() {
   const currentUser = useState<User | null>("auth-user", () => null);
 
   const authService = createAuthService({
-    apiBaseUrl: useRuntimeConfig().public.apiBaseUrl as string | undefined,
+    apiBaseUrl: getApiBaseUrl(),
   });
 
   async function login(username: string, password: string) {

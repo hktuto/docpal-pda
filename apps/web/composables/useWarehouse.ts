@@ -1,9 +1,8 @@
 import { createWarehouseService, type WarehouseService } from "~/services/warehouse";
+import { getApiBaseUrl } from "~/utils/serverHost";
 
 export function useWarehouse(): WarehouseService {
-  const config = useRuntimeConfig();
-
   return createWarehouseService({
-    apiBaseUrl: config.public.apiBaseUrl as string | undefined,
+    apiBaseUrl: getApiBaseUrl(),
   });
 }

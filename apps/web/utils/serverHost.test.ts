@@ -2,12 +2,12 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   SERVER_HOSTS,
   SERVER_HOST_STORAGE_KEY,
-  LEGACY_SERVER_HOST_STORAGE_KEY,
   getServerHostOptions,
   getSavedServerHost,
-  getEffectiveServerHost,
+  getApiBaseUrl,
   saveServerHost,
   clearSavedServerHost,
+  switchServerHost,
 } from './serverHost';
 
 function createLocalStorageFake(): Storage {
@@ -29,13 +29,11 @@ beforeEach(() => {
 });
 
 describe('SERVER_HOSTS', () => {
-  it('lists the five regional hosts in order', () => {
+  it('lists the five regional backend API URLs in order', () => {
     expect(SERVER_HOSTS.map((h) => h.id)).toEqual(['hk', 'sz', 'sh', 'gz', 'bj']);
-    const overrides: Record<string, string> = {
-      hk: 'https://mobile-wms.wclsolution.com:3000',
-    };
-    for (const host of SERVER_HOSTS) {
-      expect(host.url).toBe(overrides[host.id] ?? `https://wms-${host.id}.docpal.weltronics.com:3000`);
+    expect(SERVER_HOSTS[0].url).toBe('http://192.168.1.132:3002'); // hk
+    for (const host of SERVER_HOSTS.slice(1)) {
+      expect(host.url).toBe('http://192.168.5.116:9002');
     }
   });
 
@@ -48,10 +46,10 @@ describe('SERVER_HOSTS', () => {
 describe('saved host storage', () => {
   it('round-trips save / get / clear', () => {
     expect(getSavedServerHost()).toBe('');
-    saveServerHost('https://wms-hk.docpal.weltronics.com');
-    expect(getSavedServerHost()).toBe('https://wms-hk.docpal.weltronics.com');
+    saveServerHost('https://wms-hk.docpal.weltronics.com:9002');
+    expect(getSavedServerHost()).toBe('https://wms-hk.docpal.weltronics.com:9002');
     expect(window.localStorage.getItem(SERVER_HOST_STORAGE_KEY)).toBe(
-      'https://wms-hk.docpal.weltronics.com',
+      'https://wms-hk.docpal.weltronics.com:9002',
     );
     clearSavedServerHost();
     expect(getSavedServerHost()).toBe('');
@@ -68,10 +66,45 @@ describe('saved host storage', () => {
     expect(getSavedServerHost()).toBe('');
   });
 
-  it('getEffectiveServerHost prefers the saved host and falls back to legacy', () => {
-    window.localStorage.setItem(LEGACY_SERVER_HOST_STORAGE_KEY, 'https://legacy.example.com');
-    expect(getEffectiveServerHost()).toBe('https://legacy.example.com');
-    saveServerHost('https://wms-sz.docpal.weltronics.com');
-    expect(getEffectiveServerHost()).toBe('https://wms-sz.docpal.weltronics.com');
+  it('discards stale web-host values written by boot-redirect builds', () => {
+    for (const stale of [
+      'https://mobile-wms.wclsolution.com:3000',
+      'http://127.0.0.1:3103',
+    ]) {
+      window.localStorage.setItem(SERVER_HOST_STORAGE_KEY, stale);
+      expect(getSavedServerHost()).toBe('');
+      expect(window.localStorage.getItem(SERVER_HOST_STORAGE_KEY)).toBeNull();
+    }
+  });
+});
+
+describe('getApiBaseUrl', () => {
+  it('prefers the saved backend over the runtime-config default', () => {
+    // No Nuxt runtime in tests → the fallback is "".
+    expect(getApiBaseUrl()).toBe('');
+    saveServerHost('https://wms-sz.docpal.weltronics.com:9002');
+    expect(getApiBaseUrl()).toBe('https://wms-sz.docpal.weltronics.com:9002');
+  });
+});
+
+describe('switchServerHost', () => {
+  it('saves the backend and clears backend-scoped state, keeping locale', () => {
+    const storage = window.localStorage;
+    storage.setItem('warehouse-token', 'tok');
+    storage.setItem('warehouse-user-id', 'u1');
+    storage.setItem('warehouse-user', '{}');
+    storage.setItem('wms-events-last-id', '42');
+    storage.setItem('wms-cache:http://old/api', '{}');
+    storage.setItem('warehouse-locale', 'zh-HK');
+
+    switchServerHost('https://wms-bj.docpal.weltronics.com:9002');
+
+    expect(getSavedServerHost()).toBe('https://wms-bj.docpal.weltronics.com:9002');
+    expect(storage.getItem('warehouse-token')).toBeNull();
+    expect(storage.getItem('warehouse-user-id')).toBeNull();
+    expect(storage.getItem('warehouse-user')).toBeNull();
+    expect(storage.getItem('wms-events-last-id')).toBeNull();
+    expect(storage.getItem('wms-cache:http://old/api')).toBeNull();
+    expect(storage.getItem('warehouse-locale')).toBe('zh-HK');
   });
 });

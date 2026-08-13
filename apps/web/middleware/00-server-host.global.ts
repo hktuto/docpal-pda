@@ -1,15 +1,18 @@
+import { Capacitor } from "@capacitor/core";
+
 /**
- * Launcher guard for bundled builds — runs before auth.global.ts
- * (alphabetical order). On the bundled origin (release APK boot) the app is
- * only a launcher: without a chosen server host (or with ?picker=1), every
- * route redirects to the /server picker. The redirect to a chosen host
- * happens earlier in plugins/serverHost.client.ts.
+ * Backend-picker guard for the native app — runs before auth.global.ts
+ * (alphabetical order). Until a backend is chosen on the /server picker (or
+ * ?picker=1 asks for it), every route redirects there. The chosen API base
+ * URL is applied by getApiBaseUrl() (utils/serverHost.ts). Skipped in the
+ * browser and under the dev server, where the runtime-config apiBaseUrl
+ * default is used directly.
  */
 export default defineNuxtRouteMiddleware((to) => {
-  if (!isBundledOrigin() || to.path === "/server") return;
+  if (import.meta.dev || !Capacitor.isNativePlatform() || to.path === "/server") return;
 
   const forcePicker = new URLSearchParams(window.location.search).has("picker");
-  if (forcePicker || !getEffectiveServerHost()) {
+  if (forcePicker || !getSavedServerHost()) {
     return navigateTo("/server");
   }
 });

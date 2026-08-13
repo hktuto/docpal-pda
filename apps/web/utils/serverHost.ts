@@ -1,12 +1,14 @@
-import { Capacitor } from "@capacitor/core";
-
 /**
- * Server host picker support. The release APK boots from the bundled assets
- * (origin http://localhost), so the boot plugin, the /server picker page, and
- * public/maintenance.html all share this one localStorage key on that origin.
- * The saved value is the full base URL the WebView should load the app from;
- * the chosen host serves the app with its own matching apiBaseUrl runtime
- * config, so content and API can never drift apart.
+ * Backend server picker support. The APK is built with `server.url` pointing
+ * at the one fixed web host (see scripts/build-android-apk.mjs), so the
+ * Capacitor bridge — injected natively for exactly that origin — always works
+ * and hardware scanning keeps functioning. The /server picker therefore only
+ * chooses which BACKEND the app calls: the saved value is an API base URL
+ * applied by getApiBaseUrl() everywhere (apiClient, health check, SSE).
+ *
+ * Older APKs stored a WEB host URL (:3000/:3103) under the same key for the
+ * retired boot redirect; those values are invalid as API base URLs and are
+ * discarded on read so the device falls back to the picker.
  */
 export const SERVER_HOST_STORAGE_KEY = "pda-server-host";
 
@@ -16,14 +18,14 @@ export interface ServerHostOption {
 }
 
 export const SERVER_HOSTS: ServerHostOption[] = [
-  { id: "hk", url: "https://mobile-wms.wclsolution.com:3000" },
-  { id: "sz", url: "https://wms-sz.docpal.weltronics.com:3000" },
-  { id: "sh", url: "https://wms-sh.docpal.weltronics.com:3000" },
-  { id: "gz", url: "https://wms-gz.docpal.weltronics.com:3000" },
-  { id: "bj", url: "https://wms-bj.docpal.weltronics.com:3000" },
+  { id: "hk", url: "http://192.168.1.132:3002" },
+  { id: "sz", url: "http://192.168.5.116:9002" },
+  { id: "sh", url: "http://192.168.5.116:9002" },
+  { id: "gz", url: "http://192.168.5.116:9002" },
+  { id: "bj", url: "http://192.168.5.116:9002" },
 ];
 
-const LOCAL_DEV_HOST: ServerHostOption = { id: "local", url: "http://127.0.0.1:3000" };
+const LOCAL_DEV_HOST: ServerHostOption = { id: "local", url: "http://127.0.0.1:3002" };
 
 // The local entry shows automatically under the Nuxt dev server
 // (import.meta.dev), or in bundled builds generated with
@@ -42,10 +44,18 @@ export function getServerHostOptions(): ServerHostOption[] {
   return showLocalServerHost() ? [...SERVER_HOSTS, LOCAL_DEV_HOST] : SERVER_HOSTS;
 }
 
+/** Web-host ports written by the retired boot-redirect builds — not API URLs. */
+const STALE_WEB_HOST_PORT = /:(3000|3103)$/;
+
 export function getSavedServerHost(): string {
   if (typeof window === "undefined") return "";
   try {
-    return window.localStorage.getItem(SERVER_HOST_STORAGE_KEY) || "";
+    const saved = window.localStorage.getItem(SERVER_HOST_STORAGE_KEY) || "";
+    if (saved && STALE_WEB_HOST_PORT.test(saved)) {
+      window.localStorage.removeItem(SERVER_HOST_STORAGE_KEY);
+      return "";
+    }
+    return saved;
   } catch {
     return "";
   }
@@ -55,7 +65,7 @@ export function saveServerHost(url: string) {
   try {
     window.localStorage.setItem(SERVER_HOST_STORAGE_KEY, url);
   } catch {
-    /* WebView storage unavailable — picker still navigates */
+    /* WebView storage unavailable */
   }
 }
 
@@ -67,34 +77,39 @@ export function clearSavedServerHost() {
   }
 }
 
-/** Legacy override key written by older maintenance.html builds. */
-export const LEGACY_SERVER_HOST_STORAGE_KEY = "pda-server-url-override";
-
 /**
- * The host the boot redirect should use: the picker-saved host, falling back
- * to a legacy maintenance-page override so existing devices keep working.
+ * The API base URL the app should call: the picker-saved backend, falling
+ * back to the build-time runtime config default.
  */
-export function getEffectiveServerHost(): string {
+export function getApiBaseUrl(): string {
   const saved = getSavedServerHost();
   if (saved) return saved;
-  if (typeof window === "undefined") return "";
   try {
-    return window.localStorage.getItem(LEGACY_SERVER_HOST_STORAGE_KEY) || "";
+    return (useRuntimeConfig().public.apiBaseUrl as string) || "";
   } catch {
-    return "";
+    return ""; // outside Nuxt (unit tests)
   }
 }
 
-/**
- * True when the app is running from the assets bundled into the APK
- * (androidScheme http → http://localhost). Dev live reload serves from
- * 127.0.0.1:3000 and remote hosts serve from their own origin — both false,
- * so neither ever triggers the boot redirect.
- */
-export function isBundledOrigin(): boolean {
-  return (
-    typeof window !== "undefined" &&
-    Capacitor.isNativePlatform() &&
-    window.location.hostname === "localhost"
-  );
+// Backend-scoped state cleared on a backend switch so nothing leaks across
+// environments: the session (token belongs to the old backend), the SWR GET
+// cache, and the SSE event cursor. The locale preference is kept.
+const SESSION_KEYS = ["warehouse-token", "warehouse-user-id", "warehouse-user"];
+const API_CACHE_PREFIX = "wms-cache:";
+const SSE_CURSOR_KEY = "wms-events-last-id";
+
+export function switchServerHost(url: string) {
+  saveServerHost(url);
+  try {
+    for (const key of SESSION_KEYS) window.localStorage.removeItem(key);
+    window.localStorage.removeItem(SSE_CURSOR_KEY);
+    const cacheKeys: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (key?.startsWith(API_CACHE_PREFIX)) cacheKeys.push(key);
+    }
+    for (const key of cacheKeys) window.localStorage.removeItem(key);
+  } catch {
+    /* WebView storage unavailable — the new host is still saved */
+  }
 }
