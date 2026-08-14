@@ -102,6 +102,8 @@ async function loginViaDocpal(username: string, password: string): Promise<Login
     return { user: authUser, token };
   } catch (e) {
     if (e instanceof DocpalAuthError) {
+      // Client gets a generic message; the underlying reason stays in the log.
+      console.error(`[auth] DocPal login for "${username}" failed: ${e.message}`);
       throw new HTTPException(e.status, { message: e.status === 401 ? "invalid credentials" : "identity provider unavailable" });
     }
     throw e;
