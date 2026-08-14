@@ -103,8 +103,9 @@ ingestRoute.delete("/picking-orders/:orderNo", async (c) => {
 // ---------------------------------------------------------------------------
 // Master-data ingest (parts / suppliers / supplier_profiles / sub_inventories)
 // — same upsert/delete pattern, keyed by the master rows' natural keys. No
-// allocateAll (master rows move no stock); no app_events (the admin CRUD
-// emits none either — the sync_events DB triggers record these writes).
+// allocateAll (master rows move no stock); no app_events (the admin CRUD emits
+// none either). All ingest transactions run with suppressSyncEvents, so these
+// upstream-originated writes never enter the sync_events feed.
 // ---------------------------------------------------------------------------
 
 // PUT /parts/:partNo — upsert keyed by part_no → {id, created, changed}.

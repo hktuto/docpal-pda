@@ -405,8 +405,11 @@ see §Picking): `{boxSize, netWeight, grossWeight, weightUnit}` with
 | `DELETE /sub-inventories/:orgId/:code` | → `{id, deleted: true}` (200); 400 `invalid_org_id`; 404 `not_found`; 409 `cannot_delete_referenced` (stock/doc composite FKs). |
 
 Master-data ingests move no stock, so they run no `allocateAll` and emit no
-`app_events` (matching the admin master-data CRUD — the `sync_events` DB
-triggers already record these writes for the external sync service).
+`app_events` (matching the admin master-data CRUD). All ingest transactions run
+with the trigger's `app.sync_events_off` suppression — ingest writes are
+upstream-originated and are NOT recorded in `sync_events` (recording them
+would echo DocPal's own changes back into the sync feed). Warehouse-originated
+side effects (the post-commit `allocateAll`) are still recorded.
 
 ## Dev
 

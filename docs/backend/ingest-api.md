@@ -25,7 +25,10 @@ allocated quantities, mismatch flags) is never writable — the warehouse comput
   belongs to a different row.
 - **Errors** — `{ "message": "<snake_code>" }` with a 4xx status; codes listed per endpoint.
 - Every write is recorded in the `sync_events` feed (`GET /sync-events?since=`) for the
-  external sync service.
+  external sync service — **except ingest writes themselves**: ingest transactions run with
+  the trigger's `app.sync_events_off` suppression, so DocPal-originated changes are never
+  echoed back into the feed (that would be a circular loop). Warehouse-originated side
+  effects (e.g. the post-upsert allocation recompute) are still recorded.
 
 ---
 

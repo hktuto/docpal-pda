@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { fetchSyncEventsSince } from "./sync-events.js";
+import { upsertPart, deletePart, upsertPickingOrder, deletePickingOrder } from "./ingest.js";
 
 // Trigger-driven table-change feed (catalog: docs/backend/event-catalog.md).
 // reseed() suppresses the trigger (SET LOCAL app.sync_events_off), so each
@@ -73,5 +74,24 @@ test("trigger: rolled-back writes leave no events", async () => {
       throw new Error("boom");
     })
   );
+  assert.equal((await fetchSyncEventsSince(client.db, 0)).length, 0);
+});
+
+test("ingest: upsert/delete writes are suppressed from the feed", async () => {
+  await reseed(client);
+
+  // Master-data ingest: create + update + delete.
+  const partNo = "SYNC-INGEST-1";
+  await upsertPart(client.db, partNo, { brand: "KOA", description: "ingest" });
+  await upsertPart(client.db, partNo, { brand: "KOA", description: "ingest v2" });
+  await deletePart(client.db, partNo);
+
+  // Order ingest: create (pending) + delete. Seeded part RK73H1JTTD1002F.
+  await upsertPickingOrder(client.db, "SYNC-INGEST-PO-1", {
+    order: {},
+    items: [{ partNo: "RK73H1JTTD1002F", qty: 5, lineId: 1, lineNumber: 1, shipmentNumber: 1 }],
+  });
+  await deletePickingOrder(client.db, "SYNC-INGEST-PO-1");
+
   assert.equal((await fetchSyncEventsSince(client.db, 0)).length, 0);
 });

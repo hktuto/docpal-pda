@@ -200,6 +200,17 @@ async function insertId(tx: DbOrTx, table: string, supplied: string | undefined)
   return newId();
 }
 
+/**
+ * Suppress the sync_events table-change trigger for this transaction
+ * (SET LOCAL is tx-scoped). Ingest writes are upstream-originated — logging
+ * them would echo DocPal's own changes back into the sync feed (circular
+ * loop). Warehouse-originated side effects outside the ingest tx (e.g. the
+ * post-commit allocateAll) are still recorded.
+ */
+async function suppressSyncEvents(tx: DbOrTx): Promise<void> {
+  await tx.execute(sql`SET LOCAL app.sync_events_off = 1`);
+}
+
 // ---------------------------------------------------------------------------
 // Receiving
 // ---------------------------------------------------------------------------
@@ -338,6 +349,7 @@ export async function upsertReceivingOrder(
 ): Promise<IngestUpsertResult> {
   validateReceivingBody(body);
   return db.transaction(async (tx) => {
+    await suppressSyncEvents(tx);
     const orderSupplierCode = await assertSupplierCode(tx, body.order.supplierCode);
     const orderDeliveryDate = toDate(body.order.deliveryDate);
     const existing = await queryGet<{ id: string; status: string }>(
@@ -563,6 +575,7 @@ export async function upsertReceivingOrder(
  */
 export async function deleteReceivingOrder(db: AppDb, batchNo: string): Promise<{ id: string }> {
   return db.transaction(async (tx) => {
+    await suppressSyncEvents(tx);
     const order = await queryGet<{ id: string; status: string }>(
       tx,
       sql`SELECT id, status FROM receiving_orders WHERE batch_no = ${batchNo} LIMIT 1`
@@ -657,6 +670,7 @@ export async function upsertPickingOrder(
 ): Promise<IngestUpsertResult> {
   validatePickingBody(body);
   return db.transaction(async (tx) => {
+    await suppressSyncEvents(tx);
     const customerCode = await resolveCustomerCode(tx, body.order.customerCode);
     const deliveryDate = toDate(body.order.deliveryDate);
     const existing = await queryGet<{ id: string; status: string }>(
@@ -822,6 +836,7 @@ export async function upsertPickingOrder(
  */
 export async function deletePickingOrder(db: AppDb, orderNo: string): Promise<{ id: string }> {
   return db.transaction(async (tx) => {
+    await suppressSyncEvents(tx);
     const order = await queryGet<{ id: string; status: string }>(
       tx,
       sql`SELECT id, status FROM picking_orders WHERE order_no = ${orderNo} LIMIT 1`
@@ -856,8 +871,8 @@ export async function deletePickingOrder(db: AppDb, orderNo: string): Promise<{ 
 // ---------------------------------------------------------------------------
 // Same upsert/delete pattern as the order ingests, keyed by the master rows'
 // natural keys. No app_events — the admin master-data CRUD (routes/admin/
-// crud.ts) emits none either; the sync_events DB triggers already record these
-// writes for the external sync service.
+// crud.ts) emits none either. Like all ingest writes, these run with
+// suppressSyncEvents (upstream-originated — not logged to sync_events).
 
 export interface MasterDataUpsertResult {
   id: string;
@@ -920,6 +935,7 @@ export async function upsertPart(db: AppDb, partNo: string, body: IngestPart): P
   if (!body?.brand) throw new HTTPException(400, { message: "brand is required" });
   assertValidSuppliedId(body.id);
   return db.transaction(async (tx) => {
+    await suppressSyncEvents(tx);
     const fields = {
       brand: body.brand,
       wclItemNo: body.wclItemNo ?? null,
@@ -958,6 +974,7 @@ export async function upsertPart(db: AppDb, partNo: string, body: IngestPart): P
 /** Delete keyed by part_no; 23503 (referenced anywhere) → 409 cannot_delete_referenced. */
 export async function deletePart(db: AppDb, partNo: string): Promise<{ id: string }> {
   return db.transaction(async (tx) => {
+    await suppressSyncEvents(tx);
     const row = await queryGet<{ id: string }>(tx, sql`SELECT id FROM parts WHERE part_no = ${partNo}`);
     if (!row) throw new HTTPException(404, { message: "not_found" });
     try {
@@ -974,6 +991,7 @@ export async function upsertSupplier(db: AppDb, code: string, body: IngestSuppli
   if (!body?.name) throw new HTTPException(400, { message: "name is required" });
   assertValidSuppliedId(body.id);
   return db.transaction(async (tx) => {
+    await suppressSyncEvents(tx);
     const fields = { name: body.name, shortName: body.shortName ?? null };
     const existing = await queryGet<{ id: string }>(
       tx,
@@ -1004,6 +1022,7 @@ export async function upsertSupplier(db: AppDb, code: string, body: IngestSuppli
 /** Delete keyed by code; 23503 (orders/profile reference it) → 409 cannot_delete_referenced. */
 export async function deleteSupplier(db: AppDb, code: string): Promise<{ id: string }> {
   return db.transaction(async (tx) => {
+    await suppressSyncEvents(tx);
     const row = await queryGet<{ id: string }>(tx, sql`SELECT id FROM suppliers WHERE code = ${code}`);
     if (!row) throw new HTTPException(404, { message: "not_found" });
     try {
@@ -1027,6 +1046,7 @@ export async function upsertSupplierProfile(
 ): Promise<MasterDataUpsertResult> {
   assertValidSuppliedId(body?.id);
   return db.transaction(async (tx) => {
+    await suppressSyncEvents(tx);
     // supplierCode comes from the path — assertSupplierCode returns it or throws.
     const code = (await assertSupplierCode(tx, supplierCode))!;
     const cfg = jsonbParam(body.qrTemplateConfig);
@@ -1074,6 +1094,7 @@ export async function upsertSupplierProfile(
 /** Delete keyed by supplier_code; 404 when no profile exists. */
 export async function deleteSupplierProfile(db: AppDb, supplierCode: string): Promise<{ id: string }> {
   return db.transaction(async (tx) => {
+    await suppressSyncEvents(tx);
     const row = await queryGet<{ id: string }>(
       tx,
       sql`SELECT id FROM supplier_profiles WHERE supplier_code = ${supplierCode}`
@@ -1107,6 +1128,7 @@ export async function upsertSubInventory(
     throw new HTTPException(400, { message: "organizationId must be an integer" });
   }
   return db.transaction(async (tx) => {
+    await suppressSyncEvents(tx);
     const customerCode = await resolveCustomerCode(tx, body.customerCode);
     const fields = {
       subinvDescription: body.subinvDescription ?? null,
@@ -1153,6 +1175,7 @@ export async function deleteSubInventory(db: AppDb, orgIdParam: string, code: st
   const orgId = Number(orgIdParam);
   if (!Number.isInteger(orgId)) throw new HTTPException(400, { message: "invalid_org_id" });
   return db.transaction(async (tx) => {
+    await suppressSyncEvents(tx);
     const row = await queryGet<{ id: string }>(
       tx,
       sql`SELECT id FROM sub_inventories WHERE org_id = ${orgId} AND secondary_inventory_name = ${code}`
