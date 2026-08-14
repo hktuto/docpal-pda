@@ -25,7 +25,8 @@ export const authTokenTtlSeconds = Number(process.env.AUTH_TOKEN_TTL_SECONDS ?? 
 // ---------------------------------------------------------------------------
 
 export function docpalBaseUrl(): string | undefined {
-  return process.env.DOCPAL_URL?.replace(/\/+$/, "") || undefined;
+  // trim() guards against stray whitespace/CR from hand-edited env files.
+  return process.env.DOCPAL_URL?.trim().replace(/\/+$/, "") || undefined;
 }
 
 /** Timeout for each DocPal API call during login. */

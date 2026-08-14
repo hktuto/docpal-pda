@@ -22,16 +22,48 @@ export class DocpalAuthError extends Error {
   }
 }
 
+/** Render an undici fetch failure with the OS-level reason from `cause`
+ *  (ENOTFOUND / ECONNREFUSED / ETIMEDOUT / CERT_* / TimeoutError...). */
+function describeFetchError(err: unknown): string {
+  const e = err as { name?: string; message?: string; cause?: { code?: string; message?: string } } | null;
+  const parts = [e?.name, e?.cause?.code, e?.cause?.message ?? e?.message].filter(Boolean);
+  return parts.join(": ") || String(err);
+}
+
 async function docpalFetch(path: string, init: RequestInit): Promise<Response> {
   const base = docpalBaseUrl();
   if (!base) throw new DocpalAuthError(502, "DOCPAL_URL is not set");
+  const url = `${base}${path}`;
+  const method = init.method ?? "GET";
+  const started = Date.now();
   try {
-    return await fetch(`${base}${path}`, {
+    const res = await fetch(url, {
       ...init,
       signal: AbortSignal.timeout(docpalFetchTimeoutMs),
     });
-  } catch {
-    throw new DocpalAuthError(502, "DocPal API unreachable");
+    console.log(`[docpal] ${method} ${url} -> ${res.status} in ${Date.now() - started}ms`);
+    return res;
+  } catch (err) {
+    const detail = describeFetchError(err);
+    console.error(`[docpal] ${method} ${url} failed after ${Date.now() - started}ms: ${detail}`);
+    throw new DocpalAuthError(502, `DocPal API unreachable (${detail})`);
+  }
+}
+
+/** Boot-time reachability probe (fire-and-forget from server.ts). GETs the
+ *  DOCPAL_URL base and logs the outcome: any HTTP status (even 404/405) proves
+ *  the container can reach DocPal; a throw logs the OS-level reason
+ *  (ENOTFOUND / ECONNREFUSED / ETIMEDOUT / CERT_* ...) so a broken container →
+ *  DocPal link is visible in the log before the first login attempt. */
+export async function logDocpalConnectivity(): Promise<void> {
+  const base = docpalBaseUrl();
+  if (!base) return;
+  const started = Date.now();
+  try {
+    const res = await fetch(base, { signal: AbortSignal.timeout(docpalFetchTimeoutMs) });
+    console.log(`[docpal] connectivity check: GET ${base} -> HTTP ${res.status} in ${Date.now() - started}ms (reachable)`);
+  } catch (err) {
+    console.error(`[docpal] connectivity check: GET ${base} FAILED after ${Date.now() - started}ms: ${describeFetchError(err)}`);
   }
 }
 
@@ -45,7 +77,11 @@ export async function docpalLogin(username: string, password: string): Promise<s
   if (res.status === 401 || res.status === 403) {
     throw new DocpalAuthError(401, "invalid credentials");
   }
-  if (!res.ok) throw new DocpalAuthError(502, `DocPal login failed (${res.status})`);
+  if (!res.ok) {
+    const snippet = await res.text().catch(() => "");
+    console.error(`[docpal] login rejected with ${res.status}: ${snippet.slice(0, 300)}`);
+    throw new DocpalAuthError(502, `DocPal login failed (${res.status})`);
+  }
   // Live API wraps the tokens in the standard envelope ({code, result, data});
   // accept a flat {access_token} body too, per the API doc.
   const body = (await res.json().catch(() => null)) as {
@@ -54,6 +90,7 @@ export async function docpalLogin(username: string, password: string): Promise<s
   } | null;
   const token = body?.data?.access_token ?? body?.access_token;
   if (typeof token !== "string" || !token) {
+    console.error(`[docpal] login 200 but no access_token; body: ${JSON.stringify(body)?.slice(0, 300)}`);
     throw new DocpalAuthError(502, "DocPal login returned no access_token");
   }
   return token;
@@ -67,7 +104,11 @@ export async function docpalGetUser(accessToken: string): Promise<DocpalUser> {
   if (res.status === 401 || res.status === 403) {
     throw new DocpalAuthError(401, "invalid credentials");
   }
-  if (!res.ok) throw new DocpalAuthError(502, `DocPal getApplication failed (${res.status})`);
+  if (!res.ok) {
+    const snippet = await res.text().catch(() => "");
+    console.error(`[docpal] getApplication rejected with ${res.status}: ${snippet.slice(0, 300)}`);
+    throw new DocpalAuthError(502, `DocPal getApplication failed (${res.status})`);
+  }
   const body = (await res.json().catch(() => null)) as {
     code?: unknown;
     result?: unknown;
@@ -81,6 +122,10 @@ export async function docpalGetUser(accessToken: string): Promise<DocpalUser> {
   } | null;
   const data = body?.data;
   if (!body || body.result !== true || body.code !== 200 || !data) {
+    // Log the envelope shape only — the payload carries user PII.
+    console.error(
+      `[docpal] getApplication unexpected envelope: code=${JSON.stringify(body?.code)} result=${JSON.stringify(body?.result)} hasData=${data != null}`
+    );
     throw new DocpalAuthError(502, "DocPal getApplication returned an unexpected response");
   }
   const username =
