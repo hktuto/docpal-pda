@@ -3,7 +3,10 @@
 Base URL: `http://<backend-host>:3002` (prod stack: `:9002`). All endpoints require a JWT
 bearer token (`POST /auth/login` → `{user, token}`).
 
-All endpoints are **idempotent upserts keyed by natural keys** (never by UUID), plus matching
+All endpoints are **idempotent upserts keyed by natural keys** (never by UUID) — with two
+exceptions: **picking orders are keyed by the caller-supplied UUID `id` in the path**
+(`order_no` is not unique) and **parts by `wclItemNo` in the body** (`part_no` is not
+unique and wcl_item_no contains `/`, so it cannot be a path param) — plus matching
 DELETEs. Bodies and responses are camelCase JSON. Derived state (received/picked/put-away/
 allocated quantities, mismatch flags) is never writable — the warehouse computes it.
 
@@ -22,7 +25,8 @@ allocated quantities, mismatch flags) is never writable — the warehouse comput
   order/invoice/item/master level and it becomes the row's primary key on **create only**.
   On update (same natural key), a supplied `id` is ignored — reconciliation stays keyed by
   the natural keys. `400 invalid_id` for a malformed id, `409 id_already_exists` if the id
-  belongs to a different row.
+  belongs to a different row. **Picking orders are the exception:** the id is the dedup key
+  itself, passed in the URL (`PUT /picking-orders/:id`), always identifying the row.
 - **Errors** — `{ "message": "<snake_code>" }` with a 4xx status; codes listed per endpoint.
 - Every write is recorded in the `sync_events` feed (`GET /sync-events?since=`) for the
   external sync service — **except ingest writes themselves**: ingest transactions run with
@@ -153,11 +157,13 @@ Authorization: Bearer <token>
 
 ## Picking orders
 
-### `PUT /picking-orders/:orderNo`
+### `PUT /picking-orders/:id`
 
 Upserts a picking order and its items.
 
-- Reconcile keys: order by `order_no` (path), items by `part_no`.
+- Reconcile keys: order by the caller-supplied UUID `:id` (the path — `order_no` is NOT
+  unique, so it lives in the body as `order.orderNo` and is updated on reconcile like any
+  other order field), items by `part_no`.
 - Items **missing from the payload are deleted** (guarded).
 - `customerCode` must exist in `customer_profiles`; `partNo` must exist in `parts`.
 - On create the order is slotted into the priority queue by (delivery date, order_no).
@@ -165,7 +171,7 @@ Upserts a picking order and its items.
 Request:
 
 ```http
-PUT /picking-orders/TN-2026-00912 HTTP/1.1
+PUT /picking-orders/018f4d11-1a2b-7c3d-8e4f-5a6b7c8d9e0f HTTP/1.1
 Authorization: Bearer <token>
 Content-Type: application/json
 ```
@@ -173,7 +179,7 @@ Content-Type: application/json
 ```json
 {
   "order": {
-    "id": "018f4d11-1a2b-7c3d-8e4f-5a6b7c8d9e0f",
+    "orderNo": "TN-2026-00912",
     "poNo": "PO-CUST-77",
     "shipTo": "ACME SHENZHEN, CN",
     "customerCode": "C1001",
@@ -203,7 +209,8 @@ Content-Type: application/json
 ```
 
 Required per item: `partNo`, `qty`, `lineId`, `lineNumber`, `shipmentNumber`
-(the Oracle line identifiers — integers). All order fields are optional.
+(the Oracle line identifiers — integers). `order.orderNo` is required; all other order
+fields are optional.
 
 Responses:
 
@@ -215,23 +222,24 @@ Responses:
 { "id": "018f4d11-1a2b-7c3d-8e4f-5a6b7c8d9e0f", "created": false, "changed": false }
 ```
 
-Errors: `400` `order is required` / `items[] is required` / `partNo is required` /
+Errors: `400` `order is required` / `order.orderNo is required` / `items[] is required` / `partNo is required` /
 `qty must be a non-negative integer` / `lineId must be an integer` /
-`unknown_customer: <code>` / `unknown_part: <partNo>` / `invalid_delivery_date` / `invalid_id` —
-`409` `id_already_exists` / `qty_below_picked: <qty> < <picked>` /
+`unknown_customer: <code>` / `unknown_part: <partNo>` / `invalid_delivery_date` / `invalid_id`
+(malformed route id or item id) —
+`409` `qty_below_picked: <qty> < <picked>` /
 `cannot_remove_line_after_work_started`.
 
 Side effect: a changed upsert on an open (`pending`/`picking`) order triggers a best-effort
 re-allocation.
 
-### `DELETE /picking-orders/:orderNo`
+### `DELETE /picking-orders/:id`
 
-Deletes the order; items, packages and allocations cascade. Only allowed while the order is
+Deletes the order (looked up by the UUID id); items, packages and allocations cascade. Only allowed while the order is
 `pending` and nothing has been picked or allocated. `priority_seq` of remaining orders is
 not compacted (gaps are harmless).
 
 ```http
-DELETE /picking-orders/TN-2026-00912 HTTP/1.1
+DELETE /picking-orders/018f4d11-1a2b-7c3d-8e4f-5a6b7c8d9e0f HTTP/1.1
 Authorization: Bearer <token>
 ```
 
@@ -251,13 +259,14 @@ Authorization: Bearer <token>
 
 ## Parts (master data)
 
-### `PUT /parts/:partNo`
+### `PUT /parts`
 
-Upsert keyed by `part_no`. All other warehouse tables reference parts by `part_no`, so the
-UUID `id` is internal-only.
+Upsert keyed by `wcl_item_no` carried in the body (`part_no` is NOT unique — several WCL
+items can share one supplier part number — and wcl_item_no contains `/`, so it cannot be a
+path param). `parts.id` is internal-only.
 
 ```http
-PUT /parts/ABC%2F1234-XYZ HTTP/1.1
+PUT /parts HTTP/1.1
 Authorization: Bearer <token>
 Content-Type: application/json
 ```
@@ -265,6 +274,7 @@ Content-Type: application/json
 ```json
 {
   "id": "018f4e00-aa01-7000-8000-000000000001",
+  "partNo": "ABC/1234-XYZ",
   "brand": "S1001",
   "wclItemNo": "W-7788",
   "description": "IC MCU 32BIT 256KB FLASH",
@@ -272,25 +282,26 @@ Content-Type: application/json
 }
 ```
 
-`brand` is required (the supplier business code, plain text — no FK). URL-encode `/` in the
-path (`%2F`).
+`partNo`, `brand` (the supplier business code, plain text — no FK) and `wclItemNo` are
+required. Reconcile updates `partNo`/`brand`/`description`/`defaultCoo`.
 
 ```json
 // 201 / 200
 { "id": "018f4e00-aa01-7000-8000-000000000001", "created": true, "changed": true }
 ```
 
-### `DELETE /parts/:partNo`
+### `DELETE /parts?wclItemNo=W-7788`
 
 ```json
 // 200
 { "id": "018f4e00-aa01-7000-8000-000000000001", "deleted": true }
 
+// 400 — { "message": "wclItemNo query param is required" }
 // 404 — { "message": "not_found" }
-// 409 — part is referenced by orders/stock: { "message": "cannot_delete_referenced" }
 ```
 
-Errors on PUT: `400` `brand is required` / `invalid_id` — `409` `id_already_exists`.
+Errors on PUT: `400` `partNo is required` / `wclItemNo is required` / `brand is required` /
+`invalid_id` — `409` `id_already_exists`.
 
 ---
 

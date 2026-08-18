@@ -315,9 +315,21 @@ test("receiving: re-PUT on an in_hand order updates expected fields but never de
 
 // --- picking upsert -----------------------------------------------------------
 
-function pickingBody(qty1 = 500): IngestPickingBody {
+// Caller-supplied UUID ids — the dedup keys (order_no is NOT unique).
+const PO_1 = "aaaaaaaa-0000-4000-8000-000000000001";
+const PO_ALLOC = "aaaaaaaa-0000-4000-8000-000000000002";
+const PO_SEQ_A = "aaaaaaaa-0000-4000-8000-000000000003";
+const PO_SEQ_B = "aaaaaaaa-0000-4000-8000-000000000004";
+const PO_SEQ_D = "aaaaaaaa-0000-4000-8000-000000000005";
+const PO_SEQ_Z = "aaaaaaaa-0000-4000-8000-000000000006";
+const PO_DEL = "aaaaaaaa-0000-4000-8000-000000000007";
+const PO_DUP = "aaaaaaaa-0000-4000-8000-000000000008";
+const PO_NOPE = "aaaaaaaa-0000-4000-8000-0000000000ff";
+
+function pickingBody(qty1 = 500, orderNo = "PO-INGEST-1"): IngestPickingBody {
   return {
     order: {
+      orderNo,
       poNo: "CUST-PO-ING",
       shipTo: "ACME Electronics (HK)",
       customerCode: "ACME",
@@ -334,7 +346,7 @@ function pickingBody(qty1 = 500): IngestPickingBody {
 
 test("picking: create → re-PUT unchanged → reconcile (qty change, add, remove)", async () => {
   await reseed(client);
-  const created = await upsertPickingOrder(client.db, "PO-INGEST-1", pickingBody());
+  const created = await upsertPickingOrder(client.db, PO_1, pickingBody());
   assert.equal(created.created, true);
   assert.equal(created.changed, true);
   assert.equal(created.orderStatus, "pending");
@@ -351,7 +363,7 @@ test("picking: create → re-PUT unchanged → reconcile (qty change, add, remov
   assert.equal(order.orgId, 2);
   assert.equal(order.subInventoryCode, "STORE1");
 
-  const same = await upsertPickingOrder(client.db, "PO-INGEST-1", pickingBody());
+  const same = await upsertPickingOrder(client.db, PO_1, pickingBody());
   assert.equal(same.created, false);
   assert.equal(same.changed, false);
 
@@ -359,7 +371,7 @@ test("picking: create → re-PUT unchanged → reconcile (qty change, add, remov
   const pairChanged = pickingBody();
   pairChanged.order.orgId = 143;
   pairChanged.order.subInventoryCode = "store1";
-  const resPair = await upsertPickingOrder(client.db, "PO-INGEST-1", pairChanged);
+  const resPair = await upsertPickingOrder(client.db, PO_1, pairChanged);
   assert.equal(resPair.changed, true);
   const order2 = (await queryGet<{ orgId: number; subInventoryCode: string }>(
     client.db,
@@ -368,12 +380,12 @@ test("picking: create → re-PUT unchanged → reconcile (qty change, add, remov
   ))!;
   assert.equal(order2.orgId, 143);
   assert.equal(order2.subInventoryCode, "store1");
-  await upsertPickingOrder(client.db, "PO-INGEST-1", pickingBody()); // restore
+  await upsertPickingOrder(client.db, PO_1, pickingBody()); // restore
 
   // reconcile: change qty of the RK73H1JTTD4702F line, drop nothing yet → changed
   const qtyChanged = pickingBody();
   qtyChanged.items[1].qty = 12;
-  const res1 = await upsertPickingOrder(client.db, "PO-INGEST-1", qtyChanged);
+  const res1 = await upsertPickingOrder(client.db, PO_1, qtyChanged);
   assert.equal(res1.changed, true);
 
   // reconcile: remove the RK73H1JTTD4702F line, add a new RK73H1JTTD1002F line
@@ -382,7 +394,7 @@ test("picking: create → re-PUT unchanged → reconcile (qty change, add, remov
     { partNo: "RK73H1JTTD2202F", qty: 500, lineId: 8001, lineNumber: 1, shipmentNumber: 1 },
     { partNo: "RK73H1JTTD1002F", qty: 200, lineId: 8003, lineNumber: 3, shipmentNumber: 1 },
   ];
-  const res2 = await upsertPickingOrder(client.db, "PO-INGEST-1", shuffled);
+  const res2 = await upsertPickingOrder(client.db, PO_1, shuffled);
   assert.equal(res2.changed, true);
   const items = await queryAll<{ partNo: string; qty: number; pickedQty: number; allocatedQty: number }>(
     client.db,
@@ -402,7 +414,7 @@ test("picking: unknown customer → 400 unknown_customer", async () => {
   await reseed(client);
   const body = pickingBody();
   body.order.customerCode = "NOPE";
-  const err = await catchHttp(upsertPickingOrder(client.db, "PO-INGEST-1", body));
+  const err = await catchHttp(upsertPickingOrder(client.db, PO_1, body));
   assert.equal(err.status, 400);
   assert.match(err.message, /^unknown_customer: NOPE$/);
 });
@@ -411,8 +423,9 @@ test("picking: upserted pending order allocates from seeded lots via allocateAll
   await reseed(client);
   // Earlier delivery date than the seeded SO-DEMO orders (2026-07-30/08-01) so
   // this order wins priority_seq 1 — otherwise they consume all seeded stock.
-  const created = await upsertPickingOrder(client.db, "PO-INGEST-ALLOC", {
+  const created = await upsertPickingOrder(client.db, PO_ALLOC, {
     order: {
+      orderNo: "PO-INGEST-ALLOC",
       customerCode: "ACME",
       deliveryDate: "2026-07-20",
     },
@@ -440,21 +453,21 @@ test("picking: new order slots into the queue by delivery date; re-upsert keeps 
   await reseed(client);
   const seqOf = async (orderNo: string) =>
     Number((await queryGet<{ seq: number }>(client.db, sql`SELECT priority_seq AS seq FROM picking_orders WHERE order_no = ${orderNo}`))!.seq);
-  const mk = (deliveryDate?: string) => ({
-    order: { customerCode: "ACME", ...(deliveryDate ? { deliveryDate } : {}) },
+  const mk = (orderNo: string, deliveryDate?: string) => ({
+    order: { orderNo, customerCode: "ACME", ...(deliveryDate ? { deliveryDate } : {}) },
     items: [{ partNo: "RK73H1JTTD2202F", qty: 10, lineId: 8020, lineNumber: 1, shipmentNumber: 1 }],
   });
 
   // two undated orders: NULLS LAST, ordered by order_no between themselves
-  await upsertPickingOrder(client.db, "PO-SEQ-B", mk());
-  await upsertPickingOrder(client.db, "PO-SEQ-D", mk());
+  await upsertPickingOrder(client.db, PO_SEQ_B, mk("PO-SEQ-B"));
+  await upsertPickingOrder(client.db, PO_SEQ_D, mk("PO-SEQ-D"));
   const b1 = await seqOf("PO-SEQ-B");
   const d1 = await seqOf("PO-SEQ-D");
   assert.ok(d1 > b1, `undated orders order by order_no: B(${b1}) before D(${d1})`);
 
   // a dated order slots ahead of ALL undated ones (NULLS LAST) — and ahead of
   // the seeded orders when its date is earlier (seed SO-DEMO-0001 is 2026-07-30)
-  await upsertPickingOrder(client.db, "PO-SEQ-A", mk("2026-07-20"));
+  await upsertPickingOrder(client.db, PO_SEQ_A, mk("PO-SEQ-A", "2026-07-20"));
   const a1 = await seqOf("PO-SEQ-A");
   assert.equal(a1, 1, "earliest delivery date takes position 1");
   assert.ok(a1 < b1, `dated order A(${a1}) slots ahead of undated B(${b1})`);
@@ -462,12 +475,12 @@ test("picking: new order slots into the queue by delivery date; re-upsert keeps 
   assert.equal(await seqOf("PO-SEQ-D"), d1 + 1);
 
   // a date after the seeded orders (SO-DEMO-0002 is 2026-08-01) still slots ahead of the undated ones
-  await upsertPickingOrder(client.db, "PO-SEQ-Z", mk("2026-08-02"));
+  await upsertPickingOrder(client.db, PO_SEQ_Z, mk("PO-SEQ-Z", "2026-08-02"));
   const zSeq = await seqOf("PO-SEQ-Z");
   assert.ok(zSeq > a1 && zSeq < (await seqOf("PO-SEQ-B")), "Z slots after the dated orders, before undated");
 
   // re-upsert does not move the order
-  await upsertPickingOrder(client.db, "PO-SEQ-Z", { order: { customerCode: "ACME" }, items: [{ partNo: "RK73H1JTTD2202F", qty: 20, lineId: 8020, lineNumber: 1, shipmentNumber: 1 }] });
+  await upsertPickingOrder(client.db, PO_SEQ_Z, { order: { orderNo: "PO-SEQ-Z", customerCode: "ACME" }, items: [{ partNo: "RK73H1JTTD2202F", qty: 20, lineId: 8020, lineNumber: 1, shipmentNumber: 1 }] });
   assert.equal(await seqOf("PO-SEQ-Z"), zSeq);
 });
 
@@ -570,12 +583,12 @@ test("receiving: supplied id colliding with another row's PK → 409 id_already_
 
 test("picking: caller-supplied ids on create; reconcile ignores them", async () => {
   await reseed(client);
+  // the order id is the upsert arg itself; item supplied ids ride in the body
   const body = pickingBody();
-  body.order.id = ID_ORDER;
   body.items[0].id = ID_ITEM_1;
   body.items[1].id = ID_ITEM_2;
 
-  const res = await upsertPickingOrder(client.db, "PO-INGEST-IDS", body);
+  const res = await upsertPickingOrder(client.db, ID_ORDER, body);
   assert.equal(res.created, true);
   assert.equal(res.id, ID_ORDER);
   const itemIds = await queryAll<{ id: string }>(
@@ -587,33 +600,55 @@ test("picking: caller-supplied ids on create; reconcile ignores them", async () 
     [ID_ITEM_1, ID_ITEM_2].sort()
   );
 
-  // re-PUT with different supplied ids → ignored
+  // re-PUT with different supplied item ids → ignored
   const again = pickingBody();
-  again.order.id = "55555555-5555-4555-8555-555555555555";
   again.items[0].id = "66666666-6666-4666-8666-666666666666";
   again.items[1].id = "77777777-7777-4777-8777-777777777777";
-  const res2 = await upsertPickingOrder(client.db, "PO-INGEST-IDS", again);
+  const res2 = await upsertPickingOrder(client.db, ID_ORDER, again);
   assert.equal(res2.created, false);
   assert.equal(res2.changed, false);
   assert.equal(res2.id, ID_ORDER);
 });
 
-test("picking: malformed / colliding supplied id → 400 invalid_id / 409 id_already_exists", async () => {
+test("picking: malformed route/item id → 400 invalid_id", async () => {
   await reseed(client);
   const bad = pickingBody();
   bad.items[0].id = "xyz";
-  const err = await catchHttp(upsertPickingOrder(client.db, "PO-INGEST-1", bad));
+  const err = await catchHttp(upsertPickingOrder(client.db, PO_1, bad));
   assert.equal(err.status, 400);
   assert.equal(err.message, "invalid_id");
 
-  const first = pickingBody();
-  first.order.id = ID_ORDER;
-  await upsertPickingOrder(client.db, "PO-INGEST-1", first);
-  const clash = pickingBody();
-  clash.order.id = ID_ORDER;
-  const err2 = await catchHttp(upsertPickingOrder(client.db, "PO-INGEST-2", clash));
-  assert.equal(err2.status, 409);
-  assert.equal(err2.message, "id_already_exists");
+  // the route id is the dedup key — a non-UUID one is rejected up front
+  const err2 = await catchHttp(upsertPickingOrder(client.db, "PO-INGEST-1", pickingBody()));
+  assert.equal(err2.status, 400);
+  assert.equal(err2.message, "invalid_id");
+});
+
+test("picking: re-upsert of the same id with a different orderNo renames the order", async () => {
+  await reseed(client);
+  await upsertPickingOrder(client.db, PO_1, pickingBody());
+  const res = await upsertPickingOrder(client.db, PO_1, pickingBody(500, "PO-INGEST-1-RENAMED"));
+  assert.equal(res.created, false);
+  assert.equal(res.changed, true);
+  assert.equal(res.id, PO_1);
+  const row = (await queryGet<{ orderNo: string }>(
+    client.db,
+    sql`SELECT order_no AS "orderNo" FROM picking_orders WHERE id = ${PO_1}`
+  ))!;
+  assert.equal(row.orderNo, "PO-INGEST-1-RENAMED");
+});
+
+test("picking: same orderNo under two different ids both insert (order_no not unique)", async () => {
+  await reseed(client);
+  const r1 = await upsertPickingOrder(client.db, PO_1, pickingBody());
+  const r2 = await upsertPickingOrder(client.db, PO_DUP, pickingBody());
+  assert.equal(r1.created, true);
+  assert.equal(r2.created, true);
+  const rows = await queryAll<{ id: string }>(
+    client.db,
+    sql`SELECT id FROM picking_orders WHERE order_no = 'PO-INGEST-1'`
+  );
+  assert.equal(rows.length, 2);
 });
 
 // --- whole-order delete --------------------------------------------------------
@@ -670,18 +705,18 @@ test("delete receiving: work started on a line → 409 cannot_delete_after_work_
   assert.equal(err.message, "cannot_delete_after_work_started");
 });
 
-test("delete picking: unknown orderNo → 404 not_found", async () => {
+test("delete picking: unknown id → 404 not_found", async () => {
   await reseed(client);
-  const err = await catchHttp(deletePickingOrder(client.db, "PO-NOPE"));
+  const err = await catchHttp(deletePickingOrder(client.db, PO_NOPE));
   assert.equal(err.status, 404);
   assert.equal(err.message, "not_found");
 });
 
 test("delete picking: pending order → order + items gone", async () => {
   await reseed(client);
-  const created = await upsertPickingOrder(client.db, "PO-INGEST-DEL", pickingBody());
+  const created = await upsertPickingOrder(client.db, PO_DEL, pickingBody());
 
-  const res = await deletePickingOrder(client.db, "PO-INGEST-DEL");
+  const res = await deletePickingOrder(client.db, PO_DEL);
   assert.equal(res.id, created.id);
 
   const order = await queryGet(client.db, sql`SELECT id FROM picking_orders WHERE id = ${created.id}`);
@@ -692,21 +727,21 @@ test("delete picking: pending order → order + items gone", async () => {
 
 test("delete picking: past pending → 409 cannot_delete_once_<status>", async () => {
   await reseed(client);
-  const created = await upsertPickingOrder(client.db, "PO-INGEST-DEL", pickingBody());
+  const created = await upsertPickingOrder(client.db, PO_DEL, pickingBody());
   await client.db.execute(sql`UPDATE picking_orders SET status = 'picking' WHERE id = ${created.id}`);
 
-  const err = await catchHttp(deletePickingOrder(client.db, "PO-INGEST-DEL"));
+  const err = await catchHttp(deletePickingOrder(client.db, PO_DEL));
   assert.equal(err.status, 409);
   assert.equal(err.message, "cannot_delete_once_picking");
 });
 
 test("delete picking: work started on a line → 409 cannot_delete_after_work_started", async () => {
   await reseed(client);
-  const created = await upsertPickingOrder(client.db, "PO-INGEST-DEL", pickingBody());
+  const created = await upsertPickingOrder(client.db, PO_DEL, pickingBody());
   const itemId = await idOf("picking_items", sql`picking_order_id = ${created.id}`);
   await client.db.execute(sql`UPDATE picking_items SET picked_qty = 5 WHERE id = ${itemId}`);
 
-  const err = await catchHttp(deletePickingOrder(client.db, "PO-INGEST-DEL"));
+  const err = await catchHttp(deletePickingOrder(client.db, PO_DEL));
   assert.equal(err.status, 409);
   assert.equal(err.message, "cannot_delete_after_work_started");
 });

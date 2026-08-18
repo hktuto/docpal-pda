@@ -74,27 +74,29 @@ test("allocateAll: emits one allocation.computed on change, none on an idempoten
   assert.equal((await eventsOfType("allocation.computed")).length, 1);
 });
 
+const ID_PO_EVT = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+
 const pickingBody: IngestPickingBody = {
-  order: {},
+  order: { orderNo: "PO-EVT-1" },
   items: [{ partNo: "RK73H1JTTD2202F", qty: 5, lineId: 7001, lineNumber: 1, shipmentNumber: 1 }],
 };
 
 test("ingest picking: emits created on insert, nothing on no-change, updated on change", async () => {
   await reseed(client);
-  const r1 = await upsertPickingOrder(client.db, "PO-EVT-1", pickingBody);
+  const r1 = await upsertPickingOrder(client.db, ID_PO_EVT, pickingBody);
   assert.equal(r1.created, true);
   let created = await eventsOfType("picking_order.created");
   assert.equal(created.length, 1);
   assert.deepEqual(created[0]!.topics, ["/picking-orders"]);
   assert.equal(created[0]!.data.orderNo, "PO-EVT-1");
 
-  const r2 = await upsertPickingOrder(client.db, "PO-EVT-1", pickingBody);
+  const r2 = await upsertPickingOrder(client.db, ID_PO_EVT, pickingBody);
   assert.equal(r2.changed, false);
   assert.equal((await eventsOfType("picking_order.created")).length, 1);
   assert.equal((await eventsOfType("picking_order.updated")).length, 0);
 
-  const r3 = await upsertPickingOrder(client.db, "PO-EVT-1", {
-    order: {},
+  const r3 = await upsertPickingOrder(client.db, ID_PO_EVT, {
+    order: { orderNo: "PO-EVT-1" },
     items: [{ partNo: "RK73H1JTTD2202F", qty: 7, lineId: 7001, lineNumber: 1, shipmentNumber: 1 }],
   });
   assert.equal(r3.changed, true);

@@ -47,7 +47,7 @@ export const suppliers = pgTable("suppliers", {
   code: text("code").notNull().unique(),
   name: text("name").notNull(),
   shortName: text("short_name"), // 供应商简称（来自 AP_SUPPLIERS 同步）
-  createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+  creationDate: timestamp("creation_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
 });
 
@@ -65,22 +65,30 @@ export const supplierProfiles = pgTable("supplier_profiles", {
   qrType: text("qr_type"), // qrcode type, e.g. isbn, ban 14, ban 16
   qtyEncoding: text("qty_encoding"), // qty decoding rule, e.g. 'koa_zeros'
   remark: text("remark"), // other remark for extension
-  createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+  creationDate: timestamp("creation_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
 });
 
 // Part master. Kept in this database (the upstream system may or may not
-// provide one); other tables reference parts by part_no, not by UUID.
+// provide one). part_no is NOT unique (the same supplier part number can
+// appear under several WCL item numbers) — wcl_item_no is the unique business
+// key and the ingest dedup key. Other tables carry part_no as plain text (no
+// FK — Postgres requires a unique FK target).
 export const parts = pgTable("parts", {
   id: text("id").primaryKey(),
   brand: text("brand").notNull(), // 品牌（供应商业务代码的纯文本拷贝，无 FK — 一个供应商有多个 part，不唯一）
-  partNo: text("part_no").notNull().unique(), // 所有其他表通过 part_no 引用
-  wclItemNo: text("wcl_item_no"), // WCL Part No（同 receiving_invoice_items.wcl_item_no）
+  partNo: text("part_no").notNull(), // 供应商 part number — 不唯一
+  wclItemNo: text("wcl_item_no").unique(), // WCL Part No（唯一业务 key — ingest dedup key；同 receiving_invoice_items.wcl_item_no）
   description: text("description"),
   defaultCoo: text("default_coo"),
-  createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+  creationDate: timestamp("creation_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
-});
+},
+(t) => ({
+  // part_no is not unique — plain lookup index (ingest existence checks, stock search)
+  partNoIdx: index("idx_parts_part_no").on(t.partNo),
+})
+);
 
 export const shelves = pgTable("shelves", {
   id: text("id").primaryKey(),
@@ -118,9 +126,10 @@ export const boxSizeList = pgTable("box_size_list", {
 });
 
 // Net-weight reference per item: `qty` units weigh `weight` grams → unit net = weight / qty
+// part_no is plain text (no FK — parts.part_no is not unique).
 export const netWeightFormula = pgTable("net_weight_formula", {
   id: text("id").primaryKey(),
-  partNo: text("part_no").notNull().unique().references(() => parts.partNo),
+  partNo: text("part_no").notNull().unique(),
   qty: integer("qty").notNull(),
   weight: real("weight").notNull(), // grams per `qty` units
   createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),

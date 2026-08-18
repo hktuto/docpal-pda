@@ -1,13 +1,13 @@
 import { pgTable, text, integer, bigint, boolean, real, timestamp, index, uniqueIndex, foreignKey, jsonb } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
-import { users, parts, customerProfiles, subInventories } from "./master.js";
+import { users, customerProfiles, subInventories } from "./master.js";
 import { shelfBoxes } from "./inventory.js";
 
 export const pickingOrders = pgTable(
   "picking_orders",
   {
     id: text("id").primaryKey(),
-    orderNo: text("order_no").notNull().unique(), // 订单/发票/TN 号 — 上游 DB 复制同步/dedup key
+    orderNo: text("order_no").notNull(), // 订单/发票/TN 号 — 不唯一；上游 DB 复制同步/dedup key 是 caller-supplied id
     deliveryDate: timestamp("delivery_date", { mode: "date" }),
     poNo: text("po_no"),
     shipTo: text("ship_to"), // 收货方 / 出货目的描述（含目的国家，非结构化地址全文）
@@ -48,7 +48,7 @@ export const pickingItems = pgTable(
   {
     id: text("id").primaryKey(),
     pickingOrderId: text("picking_order_id").notNull().references(() => pickingOrders.id, { onDelete: "cascade" }),
-    partNo: text("part_no").notNull().references(() => parts.partNo),
+    partNo: text("part_no").notNull(), // plain text (no FK — parts.part_no is not unique)
     qty: integer("qty").notNull(), // 需求数量（要出货）
     pickedQty: integer("picked_qty").notNull().default(0), // 已扫描装数量
     allocatedQty: integer("allocated_qty").notNull().default(0), // 已预留 Reserved
@@ -143,7 +143,7 @@ export const shippingBoxItems = pgTable(
     id: text("id").primaryKey(),
     shippingBoxId: text("shipping_box_id").notNull().references(() => shippingBoxes.id, { onDelete: "cascade" }),
     pickingItemId: text("picking_item_id").references(() => pickingItems.id),
-    partNo: text("part_no").notNull().references(() => parts.partNo),
+    partNo: text("part_no").notNull(), // plain text (no FK — parts.part_no is not unique)
     qty: integer("qty").notNull(),
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),

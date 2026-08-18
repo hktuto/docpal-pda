@@ -353,14 +353,15 @@ as fields (client formats labels — no server-side `location_label` string).
 **Full request/response reference with examples: [`ingest-api.md`](./ingest-api.md).**
 
 Implemented: `PUT /receiving-orders/:batchNo`,
-`PUT /picking-orders/:orderNo`, `DELETE /receiving-orders/:batchNo`,
-`DELETE /picking-orders/:orderNo`, plus the master-data upsert/deletes
-`PUT|DELETE /parts/:partNo`, `PUT|DELETE /suppliers/:code`,
+`PUT /picking-orders/:id`, `DELETE /receiving-orders/:batchNo`,
+`DELETE /picking-orders/:id`, plus the master-data upsert/deletes
+`PUT /parts` + `DELETE /parts?wclItemNo=`, `PUT|DELETE /suppliers/:code`,
 `PUT|DELETE /supplier-profiles/:supplierCode`,
 `PUT|DELETE /sub-inventories/:orgId/:code` (see
 `apps/backend/src/routes/ingest.ts` + `src/db/ingest.ts`). CamelCase bodies, idempotent upserts keyed by the natural
-keys (`receiving_orders.batch_no` / `picking_orders.order_no` — the upstream
-sync/dedup keys, no `external_id`), business-key map reconciles, no ledger
+keys (`receiving_orders.batch_no`; picking orders by the **caller-supplied UUID `id`** —
+`order_no` is NOT unique; parts by `wclItemNo` in the body — `part_no` is NOT
+unique and wcl_item_no contains `/`, so it cannot be a path param), business-key map reconciles, no ledger
 rows. Auth: these routes sit behind the global JWT middleware like everything
 except `/health`, `/auth/login`, `/dev/*`.
 `supplierCode`/`partNo`/`customerCode` resolve to their master rows
@@ -375,7 +376,9 @@ without it the server mints a UUID v7. A malformed value → 400 `invalid_id`;
 a value that already exists as another row's PK (different natural key) → 409
 `id_already_exists`. On the reconcile path (existing order) a supplied `id` is
 ignored — matching stays on the natural keys and existing rows keep their
-server-assigned ids.
+server-assigned ids. **Exception: picking orders are keyed by the route's
+caller-supplied UUID `id` itself** — the id is the dedup key, so it is
+required (in the URL, not the body) and always identifies the row.
 
 Receiving and picking items accept an optional free-form `additionalData`
 object, passed through to the line's `additional_data` jsonb column on
@@ -392,11 +395,11 @@ see §Picking): `{boxSize, netWeight, grossWeight, weightUnit}` with
 | Endpoint | Description |
 |---|---|
 | `PUT /receiving-orders/:batchNo` | Idempotent upsert. Body `{order: {id?, supplierCode?, deliveryDate?, dateCode?, orgId?, subInventoryCode}, invoices: [{id?, invoiceNo, supplierCode?, wclCompanyName?, totalQty?, totalCtn?, deliveryDate?, orgId?, subInventoryCode?, items: [{id?, partNo, wclItemNo?, poNo?, poLine?, lineQty, ctnNo?, dateCode?, lotCode?, coo?, cow?, orgId?, subInventoryCode?, additionalData?}]}]}` (`order.subInventoryCode` required) → `{id, created, changed}`, 201 on create / 200 on reconcile. Reconcile: order fields when different; invoices by `invoice_no`, items by `part_no + po_no + po_line` (add/update/delete); invoices/lines missing from the payload are deleted with 409 guards (`cannot_remove_invoice_once_<status>` / `cannot_remove_invoice_after_work_started`, `cannot_remove_line_once_<status>` / `cannot_remove_line_after_work_started`); qty decreases guarded (`qty_may_only_increase_once_<status>` past pending, `cannot_decrease_qty_after_work_started`). Derived state (`received_qty`/`picked_qty`/`put_away_qty`/allocations/mismatch flags) is never written. Errors: 400 invalid JSON / validation / `unknown_supplier` / `unknown_part` / `invalid_id`; 409 `id_already_exists` + the guards above. Changed upsert on an order past pending → best-effort `allocateAll` after commit. |
-| `PUT /picking-orders/:orderNo` | Same pattern. Body `{order: {id?, poNo?, shipTo?, customerCode?, deliveryDate?, orgId?, subInventoryCode?}, items: [{id?, partNo, qty, lineId, lineNumber, shipmentNumber, additionalData?}]}` → `{id, created, changed}`, 201/200. Items reconciled by `part_no`; on create the order is auto-slotted into the priority queue (`priority_seq` by delivery date ASC NULLS LAST then order_no; re-upsert keeps its seq). Errors: 400 invalid JSON / validation / `unknown_customer` / `unknown_part` / `invalid_id`; 409 `id_already_exists` / `qty_below_picked` / `cannot_remove_line_after_work_started`. Changed upsert on an open (pending/picking) order → best-effort `allocateAll` after commit. |
+| `PUT /picking-orders/:id` | Same pattern, keyed by the caller-supplied UUID `:id` (the upstream sync/dedup key — `order_no` is NOT unique). Body `{order: {orderNo, poNo?, shipTo?, customerCode?, deliveryDate?, orgId?, subInventoryCode?}, items: [{id?, partNo, qty, lineId, lineNumber, shipmentNumber, additionalData?}]}` (`order.orderNo` required) → `{id, created, changed}`, 201/200. Reconcile updates `order_no` like any other order field (re-upsert with a different `orderNo` renames the order). Items reconciled by `part_no`; on create the order is auto-slotted into the priority queue (`priority_seq` by delivery date ASC NULLS LAST then order_no; re-upsert keeps its seq). Errors: 400 invalid JSON / validation / `order.orderNo is required` / `unknown_customer` / `unknown_part` / `invalid_id` (malformed route id); 409 `qty_below_picked` / `cannot_remove_line_after_work_started`. Changed upsert on an open (pending/picking) order → best-effort `allocateAll` after commit. |
 | `DELETE /receiving-orders/:batchNo` | Whole-order delete (cancellation). Only while `status = 'pending'` and no line has work started (received/picked/put-away qty, allocation links, scan labels) — children cascade (`receiving_invoices`, `receiving_invoice_items`, `receiving_scan_labels`, `allocations.receiving_order_id`, `put_away_tasks`). → `{id, deleted: true}` (200); 404 `not_found`; 409 `cannot_delete_once_<status>` / `cannot_delete_after_work_started`. Emits `receiving_order.deleted`; best-effort `allocateAll` after commit. |
-| `DELETE /picking-orders/:orderNo` | Whole-order delete. Only while `status = 'pending'` and no line has `picked_qty > 0` or allocation links — children cascade (`picking_items`, `picking_packages`, `allocations`); `priority_seq` is not compacted (gaps are harmless). → `{id, deleted: true}` (200); 404 `not_found`; 409 `cannot_delete_once_<status>` / `cannot_delete_after_work_started`. Emits `picking_order.deleted`; best-effort `allocateAll` after commit. |
-| `PUT /parts/:partNo` | Master-data upsert keyed by `parts.part_no`. Body `{id?, brand, wclItemNo?, description?, defaultCoo?}` (`brand` required) → `{id, created, changed}`, 201/200. Errors: 400 invalid JSON / `brand is required` / `invalid_id`; 409 `id_already_exists`. |
-| `DELETE /parts/:partNo` | → `{id, deleted: true}` (200); 404 `not_found`; 409 `cannot_delete_referenced` (FK-referenced anywhere). |
+| `DELETE /picking-orders/:id` | Whole-order delete, keyed by the UUID id. Only while `status = 'pending'` and no line has `picked_qty > 0` or allocation links — children cascade (`picking_items`, `picking_packages`, `allocations`); `priority_seq` is not compacted (gaps are harmless). → `{id, deleted: true}` (200); 404 `not_found`; 409 `cannot_delete_once_<status>` / `cannot_delete_after_work_started`. Emits `picking_order.deleted`; best-effort `allocateAll` after commit. |
+| `PUT /parts` | Master-data upsert keyed by `parts.wcl_item_no` carried in the body (part_no is NOT unique; wcl_item_no contains `/`, so no path param). Body `{id?, partNo, brand, wclItemNo, description?, defaultCoo?}` (`partNo`, `brand`, `wclItemNo` required) → `{id, created, changed}`, 201/200. Reconcile updates `part_no`/`brand`/`description`/`default_coo`. Errors: 400 invalid JSON / `partNo is required` / `wclItemNo is required` / `brand is required` / `invalid_id`; 409 `id_already_exists`. |
+| `DELETE /parts?wclItemNo=` | Keyed by the `wclItemNo` query param → `{id, deleted: true}` (200); 400 missing param; 404 `not_found`. |
 | `PUT /suppliers/:code` | Upsert keyed by `suppliers.code`. Body `{id?, name, shortName?}` (`name` required) → `{id, created, changed}`, 201/200. Errors: 400 invalid JSON / `name is required` / `invalid_id`; 409 `id_already_exists`. |
 | `DELETE /suppliers/:code` | → `{id, deleted: true}` (200); 404 `not_found`; 409 `cannot_delete_referenced` (orders / profile reference it). |
 | `PUT /supplier-profiles/:supplierCode` | Upsert keyed by `supplier_profiles.supplier_code`. Body `{id?, name?, qrTemplate?, qrTemplateConfig?, qrType?, qtyEncoding?, remark?}` → `{id, created, changed}`, 201/200. Errors: 400 invalid JSON / `unknown_supplier` (no such `suppliers.code`) / `invalid_id`; 409 `id_already_exists`. |

@@ -7,7 +7,9 @@ truth is `apps/backend/src/db/schema/*.ts`; migrations live in
 UUID v7 strings (generated app-side by `newId()` in `src/db/id.ts`, SQL-side
 by the `app_uuid_v7()` function) and all timestamps are UTC wall-clock (every
 table carries
-`created_date`/`last_update_date`, set by the app — spec
+`created_date`/`last_update_date` — `parts`, `suppliers`, `supplier_profiles`
+and `sub_inventories` name the first column `creation_date` instead — set by
+the app — spec
 `docs/superpowers/specs/2026-07-29-schema-system-fields-supplier-code-design.md`).
 This document mirrors the TS definitions exactly — fields
 commented out in the schema files are omitted even though older migrated
@@ -30,7 +32,7 @@ Pure AP_SUPPLIERS sync mirror; PDA-local fields live in `supplier_profiles`.
 | code | text NOT NULL UNIQUE | Supplier business code |
 | name | text NOT NULL | Supplier name |
 | short_name | text | Supplier short name (from AP_SUPPLIERS sync) |
-| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| creation_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 ## supplier_profiles
@@ -49,23 +51,26 @@ supplier rows.
 | qr_type | text | Barcode symbology on the supplier's labels (e.g. QR Code, PDF417, Code 128, ISBN) — informational, unrelated to qr_template parsing |
 | qty_encoding | text | Qty decoding rule, e.g. 'koa_zeros' |
 | remark | text | Free-form remark for extension |
-| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| creation_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 ## parts
 
 Part master. Kept in this database (the upstream system may or may not
-provide one); other tables reference parts by `part_no`, not by UUID.
+provide one). `part_no` is NOT unique (the same supplier part number can
+appear under several WCL item numbers) — `wcl_item_no` is the unique business
+key. Other tables carry `part_no` as plain text (no FK — Postgres requires a
+unique FK target).
 
 | Field | Type | Description |
 | --- | --- | --- |
 | id | text PK | Part id (UUID, internal use only) |
 | brand | text NOT NULL | Brand — plain-text copy of the supplier code from the upstream part master (no FK, not unique) |
-| part_no | text UNIQUE | Part number — the reference key used by all other tables |
-| wcl_item_no | text | WCL Part No (same meaning as receiving_invoice_items.wcl_item_no) |
+| part_no | text NOT NULL | Supplier part number (NOT unique; plain index `idx_parts_part_no`) |
+| wcl_item_no | text UNIQUE | WCL Part No — unique business key and ingest dedup key (same meaning as receiving_invoice_items.wcl_item_no) |
 | description | text | Part description |
 | default_coo | text | Default country of origin |
-| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| creation_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 ## shelves
@@ -116,7 +121,7 @@ kg — see `shipping_boxes`).
 | Field | Type | Description |
 | --- | --- | --- |
 | id | text PK | Row id (UUID) |
-| part_no | text NOT NULL UNIQUE FK → parts(part_no) | Part the formula applies to |
+| part_no | text NOT NULL UNIQUE | Part the formula applies to (plain text — no FK, parts.part_no is not unique) |
 | qty | integer NOT NULL | Reference quantity |
 | weight | real NOT NULL | Grams per `qty` units |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
@@ -282,7 +287,7 @@ Packing-list line items.
 | --- | --- | --- |
 | id | text PK | Line id (UUID) |
 | receiving_invoice_id | text NOT NULL FK → receiving_invoices(id) ON DELETE CASCADE | Parent invoice |
-| part_no | text NOT NULL FK → parts(part_no) | Part |
+| part_no | text NOT NULL | Part (plain text — no FK, parts.part_no is not unique) |
 | wcl_item_no | text | WCL Part No (line-level copy, eases OCR reconciliation) |
 | po_no | text | Purchase order number |
 | po_line | text | Purchase order line |
@@ -314,13 +319,13 @@ Note: indexes on `receiving_invoice_id` and `part_no`.
 ## picking_orders
 
 Outbound order (invoice / transfer note) to pick and ship. Replicated from an
-upstream database — `order_no` is the sync/dedup key (no separate
-external_id).
+upstream database — the sync/dedup key is the caller-supplied UUID `id`
+(`order_no` is NOT unique; no separate external_id).
 
 | Field | Type | Description |
 | --- | --- | --- |
 | id | text PK | Order id (UUID) |
-| order_no | text NOT NULL UNIQUE | Order / invoice / TN number — replication sync key from the upstream DB |
+| order_no | text NOT NULL | Order / invoice / TN number (NOT unique — the upstream sync/dedup key is the caller-supplied `id`) |
 | delivery_date | timestamp | Requested delivery date |
 | po_no | text | Customer PO number |
 | ship_to | text | Ship-to description (merged with destination country; unstructured, not a full address) |
@@ -346,7 +351,7 @@ external_id).
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 Note: status values `pending` | `picking` | `issue` | `finished` | `shipped`;
-unique index on `order_no`; index on `status`.
+index on `status`.
 
 ## picking_items
 
@@ -356,7 +361,7 @@ Picking order lines.
 | --- | --- | --- |
 | id | text PK | Line id (UUID) |
 | picking_order_id | text NOT NULL FK → picking_orders(id) ON DELETE CASCADE | Parent picking order |
-| part_no | text NOT NULL FK → parts(part_no) | Part |
+| part_no | text NOT NULL | Part (plain text — no FK, parts.part_no is not unique) |
 | qty | integer NOT NULL | Demand quantity to ship |
 | picked_qty | integer NOT NULL DEFAULT 0 | Quantity scanned/picked |
 | allocated_qty | integer NOT NULL DEFAULT 0 | Quantity reserved (allocated) |
@@ -448,7 +453,7 @@ Compat table kept for legacy reads; the packing truth is `picking_packages`.
 | id | text PK | Row id (UUID) |
 | shipping_box_id | text NOT NULL FK → shipping_boxes(id) ON DELETE CASCADE | Box |
 | picking_item_id | text FK → picking_items(id) | Picking line |
-| part_no | text NOT NULL FK → parts(part_no) | Part |
+| part_no | text NOT NULL | Part (plain text — no FK, parts.part_no is not unique) |
 | qty | integer NOT NULL | Quantity in the box |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
@@ -467,7 +472,7 @@ virtual shelf code so the lot key never goes NULL. The lot's location pair
 | Field | Type | Description |
 | --- | --- | --- |
 | id | text PK | Lot id (UUID) |
-| part_no | text NOT NULL FK → parts(part_no) | Part |
+| part_no | text NOT NULL | Part (plain text — no FK, parts.part_no is not unique) |
 | wcl_item_no | text | WCL Part No |
 | date_code | text | Date code |
 | lot_code | text | Lot number |
@@ -529,7 +534,7 @@ Contents of a shelf box.
 | id | text PK | Row id (UUID) |
 | shelf_box_id | text NOT NULL FK → shelf_boxes(id) ON DELETE CASCADE | Box |
 | receiving_invoice_item_id | text FK → receiving_invoice_items(id) | Source receiving line |
-| part_no | text NOT NULL FK → parts(part_no) | Part |
+| part_no | text NOT NULL | Part (plain text — no FK, parts.part_no is not unique) |
 | wcl_item_no | text | WCL Part No |
 | qty | integer NOT NULL | Quantity in the box |
 | verified | boolean DEFAULT false | Item verified (goods verify) |
@@ -576,7 +581,7 @@ Put-away/verify is box-based (printed box label), so the task carries box_id.
 | inventory_lot_id | text NOT NULL FK → inventory_lots(id) | Lot to verify |
 | shelf_code | text FK → shelves(code) | Shelf (task queue grouping) |
 | box_id | text | Box to verify (box-based verify) |
-| part_no | text NOT NULL FK → parts(part_no) | Part |
+| part_no | text NOT NULL | Part (plain text — no FK, parts.part_no is not unique) |
 | expected_qty | integer NOT NULL | Stock snapshot at generation time |
 | status | text NOT NULL DEFAULT 'pending' | Task status |
 | verified_by | text FK → users(id) | Verifying user |
@@ -642,7 +647,7 @@ stock class; multiple classes changing at once write multiple rows.
 | --- | --- | --- |
 | id | text PK | Row id (UUID) |
 | inventory_lot_id | text FK → inventory_lots(id) | Related lot (nullable) |
-| part_no | text NOT NULL FK → parts(part_no) | Part |
+| part_no | text NOT NULL | Part (plain text — no FK, parts.part_no is not unique) |
 | shelf_code | text FK → shelves(code) | Location of the movement (used by cycle-count filtering) |
 | box_id | text | Box number (nullable) |
 | txn_type | text NOT NULL | Business action: EXPECTED_CREATE / RECEIVE_TO_DOCK / PUT_AWAY / RESERVE / PICK / SHIP_CONFIRM / ADJUST |

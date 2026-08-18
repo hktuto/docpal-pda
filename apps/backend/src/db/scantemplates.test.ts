@@ -44,7 +44,7 @@ test("scan-templates: every supplier profile, ordered by supplier_code (null tem
     sql`INSERT INTO suppliers (id, code, name) VALUES (${randomUUID()}, 'ACME', 'ACME')`
   );
   await client.db.execute(
-    sql`INSERT INTO supplier_profiles (id, supplier_code, created_date, last_update_date)
+    sql`INSERT INTO supplier_profiles (id, supplier_code, creation_date, last_update_date)
         VALUES (${randomUUID()}, 'ACME', now(), now())`
   );
   rows = await listScanTemplates(client.db);

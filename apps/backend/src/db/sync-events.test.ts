@@ -82,16 +82,18 @@ test("ingest: upsert/delete writes are suppressed from the feed", async () => {
 
   // Master-data ingest: create + update + delete.
   const partNo = "SYNC-INGEST-1";
-  await upsertPart(client.db, partNo, { brand: "KOA", description: "ingest" });
-  await upsertPart(client.db, partNo, { brand: "KOA", description: "ingest v2" });
-  await deletePart(client.db, partNo);
+  const wclItemNo = "WCL/SYNC-INGEST-1";
+  await upsertPart(client.db, { partNo, wclItemNo, brand: "KOA", description: "ingest" });
+  await upsertPart(client.db, { partNo, wclItemNo, brand: "KOA", description: "ingest v2" });
+  await deletePart(client.db, wclItemNo);
 
   // Order ingest: create (pending) + delete. Seeded part RK73H1JTTD1002F.
-  await upsertPickingOrder(client.db, "SYNC-INGEST-PO-1", {
-    order: {},
+  const orderId = "eeeeeeee-0000-4000-8000-0000000000ee";
+  await upsertPickingOrder(client.db, orderId, {
+    order: { orderNo: "SYNC-INGEST-PO-1" },
     items: [{ partNo: "RK73H1JTTD1002F", qty: 5, lineId: 1, lineNumber: 1, shipmentNumber: 1 }],
   });
-  await deletePickingOrder(client.db, "SYNC-INGEST-PO-1");
+  await deletePickingOrder(client.db, orderId);
 
   assert.equal((await fetchSyncEventsSince(client.db, 0)).length, 0);
 });

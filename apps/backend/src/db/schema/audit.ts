@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { pgTable, text, integer, timestamp, jsonb, index, check } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
-import { users, parts, shelves } from "./master.js";
+import { users, shelves } from "./master.js";
 import { inventoryLots } from "./inventory.js";
 import { receivingInvoiceItems } from "./receiving.js";
 
@@ -32,7 +32,7 @@ export const inventoryTransactions = pgTable(
   {
     id: text("id").primaryKey(),
     inventoryLotId: text("inventory_lot_id").references(() => inventoryLots.id), // 关联库存批次（可空）
-    partNo: text("part_no").notNull().references(() => parts.partNo),
+    partNo: text("part_no").notNull(), // plain text (no FK — parts.part_no is not unique)
     shelfCode: text("shelf_code").references(() => shelves.code), // 发生出入的仓位（盘点筛选用）
     boxId: text("box_id"), // 箱号（可空）
     txnType: text("txn_type").notNull(), // 业务动作：EXPECTED_CREATE / RECEIVE_TO_DOCK / PUT_AWAY / RESERVE / PICK / SHIP_CONFIRM / ADJUST

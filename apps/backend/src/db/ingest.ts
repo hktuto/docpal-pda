@@ -20,10 +20,11 @@ import { now } from "./now.js";
 // ---------------------------------------------------------------------------
 // Ingest upserts (server-to-server sync; plan decision 6 — no ledger rows).
 // Ported from apps/api/src/ingest/{receiving,picking}.ts: idempotent upserts
-// keyed by the natural keys (receiving batch_no / picking order_no — no
-// external_id), with the old O(n²) line scan replaced by business-key map
-// reconciles (invoices by invoice_no, receiving items by part_no+po_no+po_line,
-// picking items by part_no).
+// keyed by the natural keys (receiving batch_no; picking by the caller-supplied
+// UUID id — order_no is not unique — and parts by wcl_item_no carried in the
+// body — no external_id), with the old O(n²) line scan replaced by
+// business-key map reconciles (invoices by invoice_no, receiving items by
+// part_no+po_no+po_line, picking items by part_no).
 // Derived state (received_qty / picked_qty / put_away_qty / allocated_qty /
 // mismatch flags) is never written here.
 // ---------------------------------------------------------------------------
@@ -87,8 +88,8 @@ export interface IngestReceivingBody {
 }
 
 export interface IngestPickingOrder {
-  /** Optional caller-supplied UUID — used on the INSERT path only. */
-  id?: string;
+  /** 订单/发票/TN 号 — not unique; the dedup key is the route's caller-supplied UUID id. */
+  orderNo: string;
   poNo?: string | null;
   shipTo?: string | null;
   customerCode?: string | null;
@@ -613,7 +614,7 @@ export async function deleteReceivingOrder(db: AppDb, batchNo: string): Promise<
 
 function validatePickingBody(body: IngestPickingBody): void {
   if (!body?.order) throw new HTTPException(400, { message: "order is required" });
-  assertValidSuppliedId(body.order.id);
+  if (!body.order.orderNo) throw new HTTPException(400, { message: "order.orderNo is required" });
   if (!Array.isArray(body.items) || body.items.length === 0) {
     throw new HTTPException(400, { message: "items[] is required" });
   }
@@ -657,29 +658,32 @@ interface ExistingPickingItemRow {
 }
 
 /**
- * Idempotent upsert keyed by order_no (the upstream sync/dedup key), same
- * pattern as receiving: INSERT order + items when new, otherwise reconcile
- * order fields and items by business key (part_no). picked_qty /
- * allocated_qty on existing lines are never written; removals and
- * below-picked qty decreases are guarded like the old ingest.
+ * Idempotent upsert keyed by the caller-supplied UUID id (the upstream
+ * sync/dedup key — order_no is NOT unique), same pattern as receiving:
+ * INSERT order + items when new, otherwise reconcile order fields (order_no
+ * included) and items by business key (part_no). picked_qty / allocated_qty
+ * on existing lines are never written; removals and below-picked qty
+ * decreases are guarded like the old ingest.
  */
 export async function upsertPickingOrder(
   db: AppDb,
-  orderNo: string,
+  id: string,
   body: IngestPickingBody
 ): Promise<IngestUpsertResult> {
+  assertValidSuppliedId(id);
   validatePickingBody(body);
+  const orderNo = body.order.orderNo;
   return db.transaction(async (tx) => {
     await suppressSyncEvents(tx);
     const customerCode = await resolveCustomerCode(tx, body.order.customerCode);
     const deliveryDate = toDate(body.order.deliveryDate);
     const existing = await queryGet<{ id: string; status: string }>(
       tx,
-      sql`SELECT id, status FROM picking_orders WHERE order_no = ${orderNo}`
+      sql`SELECT id, status FROM picking_orders WHERE id = ${id}`
     );
 
     if (!existing) {
-      const orderId = await insertId(tx, "picking_orders", body.order.id);
+      const orderId = id;
       // Slot the new order into the priority queue by (delivery_date ASC
       // NULLS LAST, order_no): bump open orders that sort at-or-after it and
       // take the freed position. Existing (incl. manually reordered) relative
@@ -729,6 +733,7 @@ export async function upsertPickingOrder(
     let changed = false;
 
     const po = (await queryGet<{
+      orderNo: string;
       customerCode: string | null;
       poNo: string | null;
       shipTo: string | null;
@@ -736,11 +741,12 @@ export async function upsertPickingOrder(
       subInventoryCode: string | null;
     }>(
       tx,
-      sql`SELECT customer_code AS "customerCode", po_no AS "poNo", ship_to AS "shipTo",
+      sql`SELECT order_no AS "orderNo", customer_code AS "customerCode", po_no AS "poNo", ship_to AS "shipTo",
                  org_id AS "orgId", sub_inventory_code AS "subInventoryCode"
           FROM picking_orders WHERE id = ${orderId}`
     ))!;
     const orderFields = {
+      orderNo,
       customerCode,
       poNo: body.order.poNo ?? null,
       shipTo: body.order.shipTo ?? null,
@@ -749,6 +755,7 @@ export async function upsertPickingOrder(
       subInventoryCode: body.order.subInventoryCode ?? null,
     };
     if (
+      po.orderNo !== orderFields.orderNo ||
       po.customerCode !== orderFields.customerCode ||
       po.poNo !== orderFields.poNo ||
       po.shipTo !== orderFields.shipTo ||
@@ -758,7 +765,8 @@ export async function upsertPickingOrder(
     ) {
       await queryRun(
         tx,
-        sql`UPDATE picking_orders SET customer_code = ${orderFields.customerCode}, po_no = ${orderFields.poNo},
+        sql`UPDATE picking_orders SET order_no = ${orderFields.orderNo}, customer_code = ${orderFields.customerCode},
+              po_no = ${orderFields.poNo},
               ship_to = ${orderFields.shipTo}, delivery_date = ${orderFields.deliveryDate},
               org_id = ${orderFields.orgId}, sub_inventory_code = ${orderFields.subInventoryCode},
               last_update_date = ${now()}
@@ -827,19 +835,20 @@ export async function upsertPickingOrder(
 }
 
 /**
- * Whole-order delete (DocPal cancellation), keyed by order_no. Only a pending
+ * Whole-order delete (DocPal cancellation), keyed by the caller-supplied UUID
+ * id (order_no is not unique). Only a pending
  * order with no work started (picked_qty > 0 or allocation links on any line)
  * is deletable — the guard implies no packages/shipping_boxes exist, so the
  * children all cascade (picking_items, picking_packages, allocations).
  * priority_seq is NOT compacted — gaps are harmless (ordering is by seq
  * value). Returns the deleted id.
  */
-export async function deletePickingOrder(db: AppDb, orderNo: string): Promise<{ id: string }> {
+export async function deletePickingOrder(db: AppDb, id: string): Promise<{ id: string }> {
   return db.transaction(async (tx) => {
     await suppressSyncEvents(tx);
-    const order = await queryGet<{ id: string; status: string }>(
+    const order = await queryGet<{ id: string; status: string; orderNo: string }>(
       tx,
-      sql`SELECT id, status FROM picking_orders WHERE order_no = ${orderNo} LIMIT 1`
+      sql`SELECT id, status, order_no AS "orderNo" FROM picking_orders WHERE id = ${id}`
     );
     if (!order) throw new HTTPException(404, { message: "not_found" });
     if (order.status !== "pending") {
@@ -860,7 +869,7 @@ export async function deletePickingOrder(db: AppDb, orderNo: string): Promise<{ 
     await emitEvent(tx, {
       type: "picking_order.deleted",
       topics: ["/picking-orders"],
-      data: { id: order.id, orderNo },
+      data: { id: order.id, orderNo: order.orderNo },
     });
     return { id: order.id };
   });
@@ -883,8 +892,11 @@ export interface MasterDataUpsertResult {
 export interface IngestPart {
   /** Optional caller-supplied UUID — used on the INSERT path only. */
   id?: string;
+  /** 供应商 part number — NOT unique (several WCL items may share it). */
+  partNo: string;
   brand: string;
-  wclItemNo?: string | null;
+  /** WCL Part No — the unique business key and the dedup key for this upsert. */
+  wclItemNo: string;
   description?: string | null;
   defaultCoo?: string | null;
 }
@@ -930,37 +942,43 @@ function jsonbParam(value: unknown): string | null {
   return value === undefined || value === null ? null : JSON.stringify(value);
 }
 
-/** Idempotent upsert keyed by part_no. A supplied id is INSERT-only. */
-export async function upsertPart(db: AppDb, partNo: string, body: IngestPart): Promise<MasterDataUpsertResult> {
+/**
+ * Idempotent upsert keyed by wcl_item_no (carried in the body — it contains
+ * '/', so it cannot be a path param). part_no is a regular updatable field.
+ * A supplied id is INSERT-only.
+ */
+export async function upsertPart(db: AppDb, body: IngestPart): Promise<MasterDataUpsertResult> {
+  if (!body?.partNo) throw new HTTPException(400, { message: "partNo is required" });
+  if (!body?.wclItemNo) throw new HTTPException(400, { message: "wclItemNo is required" });
   if (!body?.brand) throw new HTTPException(400, { message: "brand is required" });
   assertValidSuppliedId(body.id);
   return db.transaction(async (tx) => {
     await suppressSyncEvents(tx);
     const fields = {
+      partNo: body.partNo,
       brand: body.brand,
-      wclItemNo: body.wclItemNo ?? null,
       description: body.description ?? null,
       defaultCoo: body.defaultCoo ?? null,
     };
     const existing = await queryGet<{ id: string }>(
       tx,
       sql`SELECT id,
+                 NOT (part_no IS NOT DISTINCT FROM ${fields.partNo}) AS "dPartNo",
                  NOT (brand IS NOT DISTINCT FROM ${fields.brand}) AS "dBrand",
-                 NOT (wcl_item_no IS NOT DISTINCT FROM ${fields.wclItemNo}) AS "dWcl",
                  NOT (description IS NOT DISTINCT FROM ${fields.description}) AS "dDesc",
                  NOT (default_coo IS NOT DISTINCT FROM ${fields.defaultCoo}) AS "dCoo"
-          FROM parts WHERE part_no = ${partNo}`
+          FROM parts WHERE wcl_item_no = ${body.wclItemNo}`
     );
     if (!existing) {
       const id = await insertId(tx, "parts", body.id);
-      await tx.insert(parts).values({ id, partNo, ...fields });
+      await tx.insert(parts).values({ id, wclItemNo: body.wclItemNo, ...fields });
       return { id, created: true, changed: true };
     }
     const d = existing as unknown as Record<string, unknown>;
-    if (d.dBrand || d.dWcl || d.dDesc || d.dCoo) {
+    if (d.dPartNo || d.dBrand || d.dDesc || d.dCoo) {
       await queryRun(
         tx,
-        sql`UPDATE parts SET brand = ${fields.brand}, wcl_item_no = ${fields.wclItemNo},
+        sql`UPDATE parts SET part_no = ${fields.partNo}, brand = ${fields.brand},
                   description = ${fields.description}, default_coo = ${fields.defaultCoo},
                   last_update_date = ${now()}
             WHERE id = ${existing.id}`
@@ -971,17 +989,13 @@ export async function upsertPart(db: AppDb, partNo: string, body: IngestPart): P
   });
 }
 
-/** Delete keyed by part_no; 23503 (referenced anywhere) → 409 cannot_delete_referenced. */
-export async function deletePart(db: AppDb, partNo: string): Promise<{ id: string }> {
+/** Delete keyed by wcl_item_no. */
+export async function deletePart(db: AppDb, wclItemNo: string): Promise<{ id: string }> {
   return db.transaction(async (tx) => {
     await suppressSyncEvents(tx);
-    const row = await queryGet<{ id: string }>(tx, sql`SELECT id FROM parts WHERE part_no = ${partNo}`);
+    const row = await queryGet<{ id: string }>(tx, sql`SELECT id FROM parts WHERE wcl_item_no = ${wclItemNo}`);
     if (!row) throw new HTTPException(404, { message: "not_found" });
-    try {
-      await queryRun(tx, sql`DELETE FROM parts WHERE id = ${row.id}`);
-    } catch (e) {
-      mapFkViolation(e);
-    }
+    await queryRun(tx, sql`DELETE FROM parts WHERE id = ${row.id}`);
     return { id: row.id };
   });
 }

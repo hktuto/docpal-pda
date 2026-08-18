@@ -64,7 +64,9 @@ function loadBulkParts(): BulkPartsData {
 }
 
 /** Insert rows in chunks, ignoring unique conflicts (parts/net-weights merge
- *  with the hand-written demo rows on part_no). */
+ *  with the hand-written demo rows on part_no). part_no is no longer UNIQUE,
+ *  so the keep-first part_no merge is enforced in TS — see seenPartNos in
+ *  seedAll; onConflictDoNothing still covers the wcl_item_no unique key. */
 async function insertChunked<T extends PgTableWithColumns<any>>(
   db: AppDb,
   table: T,
@@ -230,21 +232,28 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
     },
   ]);
 
-  await db.insert(parts).values([
+  const demoMasterParts = [
     { id: uid(5), brand: "KOA", partNo: "RK73H1JTTD1002F", wclItemNo: "RK73H1JTTD1002F", description: "RES 10K OHM 1% 1/10W 0603", defaultCoo: "JP" },
     { id: uid(6), brand: "KOA", partNo: "RK73H1JTTD2202F", wclItemNo: "RK73H1JTTD2202F", description: "RES 22K OHM 1% 1/10W 0603", defaultCoo: "JP" },
     { id: uid(7), brand: "KOA", partNo: "RK73B1JTTD181G", wclItemNo: "RK73B1JTTD181G", description: "RES 180 OHM 5% 1/10W 0603", defaultCoo: "JP" },
     { id: uid(8), brand: "KOA", partNo: "RK73H2ATTD1372F", wclItemNo: "RK73H2ATTD1372F", description: "RES 13.7K OHM 1% 1/8W 0805", defaultCoo: "JP" },
     { id: uid(9), brand: "KOA", partNo: "RK73H1JTTD4702F", wclItemNo: "RK73H1JTTD4702F", description: "RES 47K OHM 1% 1/10W 0603", defaultCoo: "JP" },
-  ]);
+  ];
+  await db.insert(parts).values(demoMasterParts);
+
+  // part_no is not unique anymore, so the keep-first part_no merge of the
+  // generated masters (bulk/demo-scenario/real-data) is enforced in TS.
+  const seenPartNos = new Set(demoMasterParts.map((p) => p.partNo));
+  const unseenParts = <P extends { partNo: string }>(rows: readonly P[]): P[] =>
+    rows.filter((p) => !seenPartNos.has(p.partNo) && (seenPartNos.add(p.partNo), true));
 
   // Full Oracle parts master (generated; merges with the demo rows on
-  // part_no — the demo rows above win via keep-first conflict skip).
+  // part_no — the demo rows above win via keep-first skip).
   if (bulk) {
     await insertChunked(
       db,
       parts,
-      bulk.parts.map((p) => ({ id: newId(), ...p }))
+      unseenParts(bulk.parts).map((p) => ({ id: newId(), ...p }))
     );
   }
 
@@ -425,7 +434,10 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
 
   // --- demo scenario (new_seed/demo-scenario.xlsx → seed-demo-scenario.ts) ---
   // Parts first (FK target; merges with the demo/bulk master keep-first).
-  await db.insert(parts).values([...demoParts]).onConflictDoNothing();
+  const newDemoParts = unseenParts(demoParts);
+  if (newDemoParts.length > 0) {
+    await db.insert(parts).values(newDemoParts).onConflictDoNothing();
+  }
   // 3 pending receiving orders (see the block comment above). Skipped when
   // opts.orders is false (WAREHOUSE_SEED_ORDERS=off at boot).
   if (opts?.orders !== false) {
@@ -450,7 +462,10 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
   // the demo/bulk parts — master data only; the real-data ORDERS (04958184,
   // 65878 + picking lists) and order 210726 are no longer seeded, spec
   // docs/superpowers/specs/2026-07-29-excel-demo-seed-design.md).
-  await db.insert(parts).values([...realParts]).onConflictDoNothing();
+  const newRealParts = unseenParts(realParts);
+  if (newRealParts.length > 0) {
+    await db.insert(parts).values(newRealParts).onConflictDoNothing();
+  }
 
   // Allocation priority default: delivery date (sooner first, NULLS LAST),
   // then order no. Admin reorders afterwards via POST /picking-orders/reorder;

@@ -66,10 +66,11 @@ function receivingBody(over: {
 test("parts: create (caller id honored) → update reconcile → delete", async () => {
   await reseed(client);
 
-  const res = await upsertPart(client.db, "ING-MD-PART-1", {
+  const res = await upsertPart(client.db, {
     id: ID_PART,
+    partNo: "ING-MD-PART-1",
     brand: "INGBRAND",
-    wclItemNo: "INGBRAND/ING-MD-PART-1",
+    wclItemNo: "WCL/ING-MD-PART-1",
     description: "ingest test part",
   });
   assert.equal(res.created, true);
@@ -78,17 +79,18 @@ test("parts: create (caller id honored) → update reconcile → delete", async 
 
   const row = (await queryGet<{ brand: string; wclItemNo: string; defaultCoo: string | null }>(
     client.db,
-    sql`SELECT brand, wcl_item_no AS "wclItemNo", default_coo AS "defaultCoo" FROM parts WHERE part_no = 'ING-MD-PART-1'`
+    sql`SELECT brand, wcl_item_no AS "wclItemNo", default_coo AS "defaultCoo" FROM parts WHERE wcl_item_no = 'WCL/ING-MD-PART-1'`
   ))!;
   assert.equal(row.brand, "INGBRAND");
-  assert.equal(row.wclItemNo, "INGBRAND/ING-MD-PART-1");
+  assert.equal(row.wclItemNo, "WCL/ING-MD-PART-1");
   assert.equal(row.defaultCoo, null);
 
   // identical re-upsert → nothing changed; a different supplied id is ignored
-  const same = await upsertPart(client.db, "ING-MD-PART-1", {
+  const same = await upsertPart(client.db, {
     id: ID_OTHER,
+    partNo: "ING-MD-PART-1",
     brand: "INGBRAND",
-    wclItemNo: "INGBRAND/ING-MD-PART-1",
+    wclItemNo: "WCL/ING-MD-PART-1",
     description: "ingest test part",
   });
   assert.equal(same.created, false);
@@ -96,9 +98,10 @@ test("parts: create (caller id honored) → update reconcile → delete", async 
   assert.equal(same.id, ID_PART);
 
   // changed field → changed: true
-  const upd = await upsertPart(client.db, "ING-MD-PART-1", {
+  const upd = await upsertPart(client.db, {
+    partNo: "ING-MD-PART-1",
     brand: "INGBRAND",
-    wclItemNo: "INGBRAND/ING-MD-PART-1",
+    wclItemNo: "WCL/ING-MD-PART-1",
     description: "ingest test part",
     defaultCoo: "JP",
   });
@@ -106,10 +109,10 @@ test("parts: create (caller id honored) → update reconcile → delete", async 
   assert.equal(upd.changed, true);
 
   // delete unknown → 404; happy-path delete
-  const err = await catchHttp(deletePart(client.db, "ING-MD-NOPE"));
+  const err = await catchHttp(deletePart(client.db, "WCL/ING-MD-NOPE"));
   assert.equal(err.status, 404);
   assert.equal(err.message, "not_found");
-  const del = await deletePart(client.db, "ING-MD-PART-1");
+  const del = await deletePart(client.db, "WCL/ING-MD-PART-1");
   assert.equal(del.id, ID_PART);
   assert.equal(
     await queryGet(client.db, sql`SELECT id FROM parts WHERE part_no = 'ING-MD-PART-1'`),
@@ -117,33 +120,56 @@ test("parts: create (caller id honored) → update reconcile → delete", async 
   );
 });
 
-test("parts: delete referenced by a receiving line → 409 cannot_delete_referenced", async () => {
+test("parts: delete referenced by a receiving line → deletes cleanly (no FK on parts.part_no)", async () => {
   await reseed(client);
-  await upsertPart(client.db, "ING-MD-PART-2", { brand: "INGBRAND" });
+  await upsertPart(client.db, { partNo: "ING-MD-PART-2", wclItemNo: "WCL/ING-MD-PART-2", brand: "INGBRAND" });
   await upsertReceivingOrder(client.db, "RO-MD-1", receivingBody({ partNo: "ING-MD-PART-2" }));
 
-  const err = await catchHttp(deletePart(client.db, "ING-MD-PART-2"));
-  assert.equal(err.status, 409);
-  assert.equal(err.message, "cannot_delete_referenced");
+  const del = await deletePart(client.db, "WCL/ING-MD-PART-2");
+  assert.ok(del.id);
+  assert.equal(
+    await queryGet(client.db, sql`SELECT id FROM parts WHERE wcl_item_no = 'WCL/ING-MD-PART-2'`),
+    undefined
+  );
 });
 
 test("parts: validation — brand required, invalid_id, id_already_exists", async () => {
   await reseed(client);
-  const noBrand = await catchHttp(upsertPart(client.db, "ING-MD-PART-3", { brand: "" }));
+  const noBrand = await catchHttp(
+    upsertPart(client.db, { partNo: "ING-MD-PART-3", wclItemNo: "WCL/ING-MD-PART-3", brand: "" })
+  );
   assert.equal(noBrand.status, 400);
 
   const badId = await catchHttp(
-    upsertPart(client.db, "ING-MD-PART-3", { id: "not-a-uuid", brand: "INGBRAND" })
+    upsertPart(client.db, { id: "not-a-uuid", partNo: "ING-MD-PART-3", wclItemNo: "WCL/ING-MD-PART-3", brand: "INGBRAND" })
   );
   assert.equal(badId.status, 400);
   assert.equal(badId.message, "invalid_id");
 
-  await upsertPart(client.db, "ING-MD-PART-3", { id: ID_PART, brand: "INGBRAND" });
+  await upsertPart(client.db, { id: ID_PART, partNo: "ING-MD-PART-3", wclItemNo: "WCL/ING-MD-PART-3", brand: "INGBRAND" });
   const clash = await catchHttp(
-    upsertPart(client.db, "ING-MD-PART-4", { id: ID_PART, brand: "INGBRAND" })
+    upsertPart(client.db, { id: ID_PART, partNo: "ING-MD-PART-4", wclItemNo: "WCL/ING-MD-PART-4", brand: "INGBRAND" })
   );
   assert.equal(clash.status, 409);
   assert.equal(clash.message, "id_already_exists");
+});
+
+test("parts: duplicate part_no under different wcl_item_no; re-upsert renames part_no", async () => {
+  await reseed(client);
+  const r1 = await upsertPart(client.db, { partNo: "ING-MD-DUP", wclItemNo: "WCL/ING-MD-DUP-1", brand: "INGBRAND" });
+  const r2 = await upsertPart(client.db, { partNo: "ING-MD-DUP", wclItemNo: "WCL/ING-MD-DUP-2", brand: "INGBRAND" });
+  assert.equal(r1.created, true);
+  assert.equal(r2.created, true);
+
+  const upd = await upsertPart(client.db, { partNo: "ING-MD-RENAMED", wclItemNo: "WCL/ING-MD-DUP-1", brand: "INGBRAND" });
+  assert.equal(upd.created, false);
+  assert.equal(upd.changed, true);
+  assert.equal(upd.id, r1.id);
+  const row = (await queryGet<{ partNo: string }>(
+    client.db,
+    sql`SELECT part_no AS "partNo" FROM parts WHERE wcl_item_no = 'WCL/ING-MD-DUP-1'`
+  ))!;
+  assert.equal(row.partNo, "ING-MD-RENAMED");
 });
 
 // --- suppliers ---------------------------------------------------------------

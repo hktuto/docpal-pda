@@ -68,12 +68,13 @@ ingestRoute.delete("/receiving-orders/:batchNo", async (c) => {
   return c.json({ id: result.id, deleted: true }, 200);
 });
 
-// PUT /picking-orders/:orderNo — same upsert pattern for picking orders
-// (order_no is the upstream sync/dedup key). Any change to an open
+// PUT /picking-orders/:id — same upsert pattern for picking orders, keyed by
+// the caller-supplied UUID id (order_no is NOT unique and moves into the
+// body as order.orderNo). Any change to an open
 // (pending/picking) order → best-effort allocateAll after commit.
-ingestRoute.put("/picking-orders/:orderNo", async (c) => {
+ingestRoute.put("/picking-orders/:id", async (c) => {
   const body = await readJson<IngestPickingBody>(c);
-  const result = await upsertPickingOrder(db, c.req.param("orderNo"), body);
+  const result = await upsertPickingOrder(db, c.req.param("id"), body);
   if (result.changed && (result.orderStatus === "pending" || result.orderStatus === "picking")) {
     try {
       await allocateAll(db);
@@ -87,11 +88,11 @@ ingestRoute.put("/picking-orders/:orderNo", async (c) => {
   );
 });
 
-// DELETE /picking-orders/:orderNo — whole-order delete (DocPal cancellation).
+// DELETE /picking-orders/:id — whole-order delete (DocPal cancellation).
 // Pending + no work started only; children cascade, priority_seq is not
 // compacted. Removing a demand changes allocation → best-effort allocateAll.
-ingestRoute.delete("/picking-orders/:orderNo", async (c) => {
-  const result = await deletePickingOrder(db, c.req.param("orderNo"));
+ingestRoute.delete("/picking-orders/:id", async (c) => {
+  const result = await deletePickingOrder(db, c.req.param("id"));
   try {
     await allocateAll(db);
   } catch (err) {
@@ -108,16 +109,19 @@ ingestRoute.delete("/picking-orders/:orderNo", async (c) => {
 // upstream-originated writes never enter the sync_events feed.
 // ---------------------------------------------------------------------------
 
-// PUT /parts/:partNo — upsert keyed by part_no → {id, created, changed}.
-ingestRoute.put("/parts/:partNo", async (c) => {
+// PUT /parts — upsert keyed by wclItemNo in the body (part_no is NOT unique;
+// wcl_item_no contains '/', so it cannot be a path param) → {id, created, changed}.
+ingestRoute.put("/parts", async (c) => {
   const body = await readJson<IngestPart>(c);
-  const result = await upsertPart(db, c.req.param("partNo"), body);
+  const result = await upsertPart(db, body);
   return c.json(result, result.created ? 201 : 200);
 });
 
-// DELETE /parts/:partNo — 404 not_found; 409 cannot_delete_referenced (FK).
-ingestRoute.delete("/parts/:partNo", async (c) => {
-  const result = await deletePart(db, c.req.param("partNo"));
+// DELETE /parts?wclItemNo=... — 404 not_found.
+ingestRoute.delete("/parts", async (c) => {
+  const wclItemNo = c.req.query("wclItemNo");
+  if (!wclItemNo) throw new HTTPException(400, { message: "wclItemNo query param is required" });
+  const result = await deletePart(db, wclItemNo);
   return c.json({ id: result.id, deleted: true }, 200);
 });
 

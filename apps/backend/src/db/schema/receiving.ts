@@ -1,6 +1,6 @@
 import { pgTable, text, integer, boolean, timestamp, index, uniqueIndex, foreignKey, jsonb } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
-import { users, suppliers, parts, subInventories } from "./master.js";
+import { users, suppliers, subInventories } from "./master.js";
 
 // = Packing List Batch
 export const receivingOrders = pgTable(
@@ -54,7 +54,7 @@ export const receivingInvoiceItems = pgTable(
   {
     id: text("id").primaryKey(),
     receivingInvoiceId: text("receiving_invoice_id").notNull().references(() => receivingInvoices.id, { onDelete: "cascade" }),
-    partNo: text("part_no").notNull().references(() => parts.partNo),
+    partNo: text("part_no").notNull(), // plain text (no FK — parts.part_no is not unique)
     wclItemNo: text("wcl_item_no"), // WCL Part No（行级冗余，便于 OCR 对账）
     poNo: text("po_no"),
     poLine: text("po_line"),

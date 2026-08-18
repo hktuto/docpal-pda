@@ -1,14 +1,14 @@
 import { sql } from "drizzle-orm";
 import { pgTable, text, integer, boolean, timestamp, date, index, uniqueIndex, foreignKey } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
-import { parts, shelves, subInventories, users } from "./master.js";
+import { shelves, subInventories, users } from "./master.js";
 import { receivingInvoiceItems, receivingOrders } from "./receiving.js";
 
 export const inventoryLots = pgTable(
   "inventory_lots",
   {
     id: text("id").primaryKey(),
-    partNo: text("part_no").notNull().references(() => parts.partNo),
+    partNo: text("part_no").notNull(), // plain text (no FK — parts.part_no is not unique)
     wclItemNo: text("wcl_item_no"),
     dateCode: text("date_code"),
     lotCode: text("lot_code"), // lot_no
@@ -81,7 +81,7 @@ export const shelfBoxItems = pgTable(
     id: text("id").primaryKey(),
     shelfBoxId: text("shelf_box_id").notNull().references(() => shelfBoxes.id, { onDelete: "cascade" }),
     receivingInvoiceItemId: text("receiving_invoice_item_id").references(() => receivingInvoiceItems.id),
-    partNo: text("part_no").notNull().references(() => parts.partNo),
+    partNo: text("part_no").notNull(), // plain text (no FK — parts.part_no is not unique)
     wclItemNo: text("wcl_item_no"),
     qty: integer("qty").notNull(),
     verified: boolean("verified").default(false),
@@ -105,7 +105,7 @@ export const goodsVerifyTasks = pgTable(
     inventoryLotId: text("inventory_lot_id").notNull().references(() => inventoryLots.id),
     shelfCode: text("shelf_code").references(() => shelves.code),
     boxId: text("box_id"), // box-based verify (put-away is per box)
-    partNo: text("part_no").notNull().references(() => parts.partNo),
+    partNo: text("part_no").notNull(), // plain text (no FK — parts.part_no is not unique)
     expectedQty: integer("expected_qty").notNull(), // stock snapshot at generation time
     status: text("status").notNull().default("pending"), // pending | verified | skipped
     verifiedBy: text("verified_by").references(() => users.id),
