@@ -287,7 +287,6 @@ function toPart(row: typeof schema.parts.$inferSelect): Part {
     partNo: row.partNo,
     internalCode: row.internalCode ?? null,
     description: row.description ?? null,
-    defaultCoo: row.defaultCoo ?? null,
   };
 }
 

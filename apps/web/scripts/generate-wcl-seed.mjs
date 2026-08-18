@@ -26,7 +26,6 @@ const wclPartRecords = partNos.map((partNo) => ({
   partNo,
   internalCode: "",
   description: "",
-  defaultCoo: coo,
 }));
 const wclPartByNo = Object.fromEntries(wclPartRecords.map((p) => [p.partNo, p]));
 

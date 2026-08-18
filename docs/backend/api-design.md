@@ -343,76 +343,61 @@ NULLS LAST`, `shelf_code`, `box_id`.
 
 | Endpoint | Description |
 |---|---|
-| `GET /stock-search?supplierCode=&partNo=&shelfCode=` | One call → `{parts[{id, partNo, wclItemNo, description, defaultCoo, onHandQty}], lots[{partId, dateCode, lotCode, coo, cow, shelfCode, boxId, warehouseCode, warehouseSectionCode, subInventoryCode, totalQty, allocatedQty, availableQty}]}`. |
+| `GET /stock-search?supplierCode=&partNo=&shelfCode=` | One call → `{parts[{id, partNo, wclItemNo, description, onHandQty}], lots[{partId, dateCode, lotCode, coo, cow, shelfCode, boxId, warehouseCode, warehouseSectionCode, subInventoryCode, totalQty, allocatedQty, availableQty}]}`. |
 
 Changes vs old: one query endpoint ends the 3-call cascade; location returned
 as fields (client formats labels — no server-side `location_label` string).
 
-## Ingest (server-to-server)
+## Upstream sync (Electric)
 
-**Full request/response reference with examples: [`ingest-api.md`](./ingest-api.md).**
+**The server-to-server ingest HTTP API was retired 2026-08-18** — the former
+request/response reference [`ingest-api.md`](./ingest-api.md) is now a
+tombstone. Upstream data no longer arrives over HTTP; the warehouse backend
+**pulls** it via ElectricSQL logical replication from the remote DocPal
+Postgres master (schema `demo`, `wms_*` tables).
 
-Implemented: `PUT /receiving-orders/:batchNo`,
-`PUT /picking-orders/:id`, `DELETE /receiving-orders/:batchNo`,
-`DELETE /picking-orders/:id`, plus the master-data upsert/deletes
-`PUT /parts` + `DELETE /parts?wclItemNo=`, `PUT|DELETE /suppliers/:code`,
-`PUT|DELETE /supplier-profiles/:supplierCode`,
-`PUT|DELETE /sub-inventories/:orgId/:code` (see
-`apps/backend/src/routes/ingest.ts` + `src/db/ingest.ts`). CamelCase bodies, idempotent upserts keyed by the natural
-keys (`receiving_orders.batch_no`; picking orders by the **caller-supplied UUID `id`** —
-`order_no` is NOT unique; parts by `wclItemNo` in the body — `part_no` is NOT
-unique and wcl_item_no contains `/`, so it cannot be a path param), business-key map reconciles, no ledger
-rows. Auth: these routes sit behind the global JWT middleware like everything
-except `/health`, `/auth/login`, `/dev/*`.
-`supplierCode`/`partNo`/`customerCode` resolve to their master rows
-(400 `unknown_supplier` / `unknown_part` / `unknown_customer`). Suppliers are
-referenced by `supplierCode` **only** — the old `supplierId` body field was
-removed (2026-07-29, spec
-`docs/superpowers/specs/2026-07-29-schema-system-fields-supplier-code-design.md`).
+- Self-hosted Electric service (`electricsql/electric:1.7.11`) in both compose
+  files: dev `docker compose --profile sync up -d electric` (needs
+  `DOCPAL_SYNC_DATABASE_URL`, API on host :3101); prod runs it in the same
+  compose project, internal-only. Electric auto-manages its own
+  publication/slot on the remote (stream id `warehouse`).
+- Consumer: `startElectricSync` in `apps/backend/src/sync/consumer.ts` (master
+  tables) + `src/sync/orders.ts` (order tables), wired in `src/server.ts`,
+  started only when `ELECTRIC_URL` is set and `ELECTRIC_SYNC != off`
+  (`ELECTRIC_SECRET` is passed as the `?secret=` shape param in prod). One
+  `ShapeStream` per synced table (`demo.wms_parts` → parts,
+  `demo.wms_suppliers` → suppliers, `demo.wms_org_info` → sub_inventories,
+  `demo.wms_receiving_orders` / `wms_receiving_invoices` /
+  `wms_receiving_invoice_items`, `demo.wms_picking_orders` /
+  `wms_picking_items`; `supplier_profiles` is NOT synced — it stays
+  local-only), resuming from its `sync_checkpoints` row
+  (`src/db/schema/sync.ts`).
+- Apply layer: the former ingest domain functions in `src/db/ingest.ts`
+  (`upsertPart`/`deletePart`, `upsertSupplier`, guarded
+  `deleteReceivingOrder`/`deletePickingOrder`, …) — order rows apply per-row
+  keyed on the REMOTE id, adopted as the local PK. All apply transactions set
+  `app.sync_events_off = 1` AND `app.upstream_write = 1`
+  (`suppressSyncEvents`): synced writes stay out of the `sync_events` feed
+  (they are upstream-originated; recording them would loop DocPal's own
+  changes back) and pass the column-ownership triggers.
+- Column ownership is DB-enforced: `enforce_remote_owned_columns()` BEFORE
+  UPDATE triggers (custom SQL at the end of `drizzle/0000_baseline.sql`)
+  reject updates to remote-owned columns unless the writer is the
+  `wms_sync_consumer` role (the consumer's DB login; password env
+  `SYNC_CONSUMER_DB_PASSWORD`) or a transaction with `app.upstream_write = 1`.
+  INSERT/DELETE are unrestricted; `delivery_date`/`date_code` are deliberately
+  SHARED (the admin console edits them). Test fixtures use the `upstreamWrite`
+  helper in `src/db/test-helper.ts`.
+- Deletes: a remote delete of an in-flight order is rejected + skipped with a
+  loud log (the guarded deletes return 404/409 → warn-skip). After any applied
+  order-table change the consumer runs a best-effort `allocateAll`
+  (`flushAllocation`, once per batch).
 
-Every insert level accepts an optional caller-supplied UUID `id` (DocPal
-sync), used **on the INSERT path only** (no existing row for the natural key);
-without it the server mints a UUID v7. A malformed value → 400 `invalid_id`;
-a value that already exists as another row's PK (different natural key) → 409
-`id_already_exists`. On the reconcile path (existing order) a supplied `id` is
-ignored — matching stays on the natural keys and existing rows keep their
-server-assigned ids. **Exception: picking orders are keyed by the route's
-caller-supplied UUID `id` itself** — the id is the dedup key, so it is
-required (in the URL, not the body) and always identifies the row.
-
-Receiving and picking items accept an optional free-form `additionalData`
-object, passed through to the line's `additional_data` jsonb column on
-insert (it is not part of the reconcile business keys). Picking items
-additionally require the upstream Oracle line identifiers `lineId`
-(bigint), `lineNumber`, `shipmentNumber` (integers — 400 when missing or
-non-integer); they are stored on the line and updated on reconcile
-(expected-side fields, like `qty`) but the reconcile business key stays
-`partNo`. Carton metadata
-convention for receiving items (consumed by the whole-box picking claim —
-see §Picking): `{boxSize, netWeight, grossWeight, weightUnit}` with
-`weightUnit` `"g"` | `"kg"` (default `"kg"`).
-
-| Endpoint | Description |
-|---|---|
-| `PUT /receiving-orders/:batchNo` | Idempotent upsert. Body `{order: {id?, supplierCode?, deliveryDate?, dateCode?, orgId?, subInventoryCode}, invoices: [{id?, invoiceNo, supplierCode?, wclCompanyName?, totalQty?, totalCtn?, deliveryDate?, orgId?, subInventoryCode?, items: [{id?, partNo, wclItemNo?, poNo?, poLine?, lineQty, ctnNo?, dateCode?, lotCode?, coo?, cow?, orgId?, subInventoryCode?, additionalData?}]}]}` (`order.subInventoryCode` required) → `{id, created, changed}`, 201 on create / 200 on reconcile. Reconcile: order fields when different; invoices by `invoice_no`, items by `part_no + po_no + po_line` (add/update/delete); invoices/lines missing from the payload are deleted with 409 guards (`cannot_remove_invoice_once_<status>` / `cannot_remove_invoice_after_work_started`, `cannot_remove_line_once_<status>` / `cannot_remove_line_after_work_started`); qty decreases guarded (`qty_may_only_increase_once_<status>` past pending, `cannot_decrease_qty_after_work_started`). Derived state (`received_qty`/`picked_qty`/`put_away_qty`/allocations/mismatch flags) is never written. Errors: 400 invalid JSON / validation / `unknown_supplier` / `unknown_part` / `invalid_id`; 409 `id_already_exists` + the guards above. Changed upsert on an order past pending → best-effort `allocateAll` after commit. |
-| `PUT /picking-orders/:id` | Same pattern, keyed by the caller-supplied UUID `:id` (the upstream sync/dedup key — `order_no` is NOT unique). Body `{order: {orderNo, poNo?, shipTo?, customerCode?, deliveryDate?, orgId?, subInventoryCode?}, items: [{id?, partNo, qty, lineId, lineNumber, shipmentNumber, additionalData?}]}` (`order.orderNo` required) → `{id, created, changed}`, 201/200. Reconcile updates `order_no` like any other order field (re-upsert with a different `orderNo` renames the order). Items reconciled by `part_no`; on create the order is auto-slotted into the priority queue (`priority_seq` by delivery date ASC NULLS LAST then order_no; re-upsert keeps its seq). Errors: 400 invalid JSON / validation / `order.orderNo is required` / `unknown_customer` / `unknown_part` / `invalid_id` (malformed route id); 409 `qty_below_picked` / `cannot_remove_line_after_work_started`. Changed upsert on an open (pending/picking) order → best-effort `allocateAll` after commit. |
-| `DELETE /receiving-orders/:batchNo` | Whole-order delete (cancellation). Only while `status = 'pending'` and no line has work started (received/picked/put-away qty, allocation links, scan labels) — children cascade (`receiving_invoices`, `receiving_invoice_items`, `receiving_scan_labels`, `allocations.receiving_order_id`, `put_away_tasks`). → `{id, deleted: true}` (200); 404 `not_found`; 409 `cannot_delete_once_<status>` / `cannot_delete_after_work_started`. Emits `receiving_order.deleted`; best-effort `allocateAll` after commit. |
-| `DELETE /picking-orders/:id` | Whole-order delete, keyed by the UUID id. Only while `status = 'pending'` and no line has `picked_qty > 0` or allocation links — children cascade (`picking_items`, `picking_packages`, `allocations`); `priority_seq` is not compacted (gaps are harmless). → `{id, deleted: true}` (200); 404 `not_found`; 409 `cannot_delete_once_<status>` / `cannot_delete_after_work_started`. Emits `picking_order.deleted`; best-effort `allocateAll` after commit. |
-| `PUT /parts` | Master-data upsert keyed by `parts.wcl_item_no` carried in the body (part_no is NOT unique; wcl_item_no contains `/`, so no path param). Body `{id?, partNo, brand, wclItemNo, description?, defaultCoo?}` (`partNo`, `brand`, `wclItemNo` required) → `{id, created, changed}`, 201/200. Reconcile updates `part_no`/`brand`/`description`/`default_coo`. Errors: 400 invalid JSON / `partNo is required` / `wclItemNo is required` / `brand is required` / `invalid_id`; 409 `id_already_exists`. |
-| `DELETE /parts?wclItemNo=` | Keyed by the `wclItemNo` query param → `{id, deleted: true}` (200); 400 missing param; 404 `not_found`. |
-| `PUT /suppliers/:code` | Upsert keyed by `suppliers.code`. Body `{id?, name, shortName?}` (`name` required) → `{id, created, changed}`, 201/200. Errors: 400 invalid JSON / `name is required` / `invalid_id`; 409 `id_already_exists`. |
-| `DELETE /suppliers/:code` | → `{id, deleted: true}` (200); 404 `not_found`; 409 `cannot_delete_referenced` (orders / profile reference it). |
-| `PUT /supplier-profiles/:supplierCode` | Upsert keyed by `supplier_profiles.supplier_code`. Body `{id?, name?, qrTemplate?, qrTemplateConfig?, qrType?, qtyEncoding?, remark?}` → `{id, created, changed}`, 201/200. Errors: 400 invalid JSON / `unknown_supplier` (no such `suppliers.code`) / `invalid_id`; 409 `id_already_exists`. |
-| `DELETE /supplier-profiles/:supplierCode` | → `{id, deleted: true}` (200); 404 `not_found`. |
-| `PUT /sub-inventories/:orgId/:code` | Upsert keyed by the path pair `(orgId, code)` → `sub_inventories(org_id, secondary_inventory_name)`. Body `{id?, subinvDescription?, officeCode?, organizationId?, customerCode?}` → `{id, created, changed}`, 201/200. Errors: 400 invalid JSON / `invalid_org_id` (non-integer path orgId or body `organizationId`) / `unknown_customer` / `invalid_id`; 409 `id_already_exists`. |
-| `DELETE /sub-inventories/:orgId/:code` | → `{id, deleted: true}` (200); 400 `invalid_org_id`; 404 `not_found`; 409 `cannot_delete_referenced` (stock/doc composite FKs). |
-
-Master-data ingests move no stock, so they run no `allocateAll` and emit no
-`app_events` (matching the admin master-data CRUD). All ingest transactions run
-with the trigger's `app.sync_events_off` suppression — ingest writes are
-upstream-originated and are NOT recorded in `sync_events` (recording them
-would echo DocPal's own changes back into the sync feed). Warehouse-originated
-side effects (the post-commit `allocateAll`) are still recorded.
+Design spec: `docs/superpowers/specs/2026-08-18-electric-sql-sync-design.md`;
+plan: `docs/superpowers/plans/2026-08-18-electric-sql-sync.md`. Known caveats:
+the initial parts snapshot (~131k rows) applies row-by-row (~28 min one-time);
+NULL `receiving_invoice_items.sub_inventory_code` is defaulted by a rule Sean
+ships later (stub `applyItemSubInventoryDefault` warns today).
 
 ## Dev
 

@@ -35,7 +35,6 @@ export interface StockSearchPartRow {
   partNo: string;
   wclItemNo: string | null;
   description: string | null;
-  defaultCoo: string | null;
   onHandQty: number;
 }
 
@@ -65,7 +64,6 @@ interface LotJoinRow extends StockSearchLotRow {
   partPk: string;
   wclItemNo: string | null;
   description: string | null;
-  defaultCoo: string | null;
 }
 
 /**
@@ -93,8 +91,7 @@ export async function searchStock(db: AppDb, filters: StockSearchFilters): Promi
         il.available_qty AS "availableQty",
         p.id AS "partPk",
         p.wcl_item_no AS "wclItemNo",
-        p.description,
-        p.default_coo AS "defaultCoo"
+        p.description
       FROM inventory_lots il
       JOIN parts p ON p.part_no = il.part_no
       WHERE TRUE
@@ -120,12 +117,12 @@ export async function searchStock(db: AppDb, filters: StockSearchFilters): Promi
   const partIndexById = new Map<string, number>();
   const lots: StockSearchLotRow[] = [];
   for (const row of rows) {
-    const { partPk, wclItemNo, description, defaultCoo, ...lot } = row;
+    const { partPk, wclItemNo, description, ...lot } = row;
     lots.push(lot);
     const idx = partIndexById.get(partPk);
     if (idx === undefined) {
       partIndexById.set(partPk, parts.length);
-      parts.push({ id: partPk, partNo: row.partNo, wclItemNo, description, defaultCoo, onHandQty: row.totalQty });
+      parts.push({ id: partPk, partNo: row.partNo, wclItemNo, description, onHandQty: row.totalQty });
     } else {
       parts[idx].onHandQty += row.totalQty;
     }

@@ -20,6 +20,8 @@ export interface ConfirmArrivalResult {
   status: string;
   arrivedAt: Date | null;
   arrivedBy: string | null;
+  /** Items whose line_qty is NULL — received_qty left at 0, manual confirm needed. */
+  needsAttentionItems: number;
 }
 
 /**
@@ -27,7 +29,9 @@ export interface ConfirmArrivalResult {
  *   - order: status → in_hand, arrived_at / arrived_by stamped
  *   - items: full receipt (received_qty = line_qty) + date-code fallback from
  *     the order (concept 4); for provisional orders this completes the
- *     remaining receipt on top of any scanned partials
+ *     remaining receipt on top of any scanned partials. An item with NULL
+ *     line_qty (upstream omitted the expected qty) keeps its received_qty and
+ *     is counted as needsAttentionItems in the response.
  *   - ledger: RECEIVE_TO_DOCK (qty_type 'dock') row per item for the applied
  *     delta, plus a transaction_logs state transition
  * The caller runs `allocateAll` after commit (concept 5) — allocation is
@@ -52,7 +56,7 @@ export async function confirmReceivingArrival(
 
     const items = await queryAll<{
       id: string;
-      lineQty: number;
+      lineQty: number | null;
       receivedQty: number;
       partNo: string;
       ctnNo: string | null;
@@ -79,17 +83,20 @@ export async function confirmReceivingArrival(
           WHERE id = ${orderId}`
     );
     // Full receipt + date-code fallback from the order for lines without one.
+    // NULL line_qty (no upstream expected qty) keeps its received_qty.
     await queryRun(
       tx,
       sql`UPDATE receiving_invoice_items rii
-          SET received_qty = rii.line_qty,
+          SET received_qty = CASE WHEN rii.line_qty IS NULL THEN rii.received_qty ELSE rii.line_qty END,
               date_code = COALESCE(rii.date_code, ${ro.dateCode})
           FROM receiving_invoices ri
           WHERE rii.receiving_invoice_id = ri.id AND ri.receiving_order_id = ${orderId}`
     );
 
+    const needsAttentionItems = items.filter((it) => it.lineQty === null).length;
     const txnRows = items
-      .map((it) => ({ it, delta: it.lineQty - it.receivedQty }))
+      .filter((it) => it.lineQty !== null)
+      .map((it) => ({ it, delta: it.lineQty! - it.receivedQty }))
       .filter(({ delta }) => delta !== 0)
       .map(({ it, delta }) => ({
         id: newId(),
@@ -130,7 +137,7 @@ export async function confirmReceivingArrival(
       await createPutAwayTaskTx(tx, { receivingOrderId: orderId, actorId });
     }
 
-    return { id: ro.id, batchNo: ro.batchNo, status: "in_hand", arrivedAt: at, arrivedBy: actorId };
+    return { id: ro.id, batchNo: ro.batchNo, status: "in_hand", arrivedAt: at, arrivedBy: actorId, needsAttentionItems };
   });
 }
 
@@ -155,7 +162,7 @@ export interface ScanMatchCandidate {
   id: string;
   partNo: string;
   wclItemNo: string | null;
-  lineQty: number;
+  lineQty: number | null;
   receivedQty: number;
 }
 
@@ -283,7 +290,9 @@ export async function scanReceivingOrder(
       if (dup) throw new HTTPException(409, { message: "label_already_scanned" });
     }
 
-    if (qty > item.lineQty - item.receivedQty) {
+    // Over-receipt guard — skipped when the expected qty is unknown upstream
+    // (NULL line_qty; the mismatch flow is the safety net for over-receipt).
+    if (item.lineQty !== null && qty > item.lineQty - item.receivedQty) {
       throw new HTTPException(409, { message: "scanned_qty_exceeds_remaining" });
     }
 

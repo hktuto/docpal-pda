@@ -15,5 +15,29 @@ services:
       timeout: 5s
       retries: 5
 
+  # Electric sync service — pulls changes from the remote DocPal master DB
+  # (demo.wms_* tables) for the backend's sync consumer. Only started on
+  # demand: `docker compose --profile sync up -d electric`. In dev the backend
+  # runs on the host, so the API is published on :3101.
+  # Requires DOCPAL_SYNC_DATABASE_URL in the root .env, e.g.
+  #   DOCPAL_SYNC_DATABASE_URL=postgresql://user:pass@host:5432/docpal?sslmode=disable
+  # Electric auto-creates its own publication/slot (stream id "warehouse" →
+  # electric_publication_warehouse / electric_slot_warehouse) on the remote —
+  # the remote role needs REPLICATION + ownership rights on the wms_* tables.
+  electric:
+    image: electricsql/electric:1.7.11
+    profiles: ["sync"]
+    environment:
+      DATABASE_URL: ${DOCPAL_SYNC_DATABASE_URL:-}
+      ELECTRIC_INSECURE: "true" # dev only — prod uses ELECTRIC_SECRET
+      ELECTRIC_REPLICATION_STREAM_ID: warehouse
+      ELECTRIC_STORAGE_DIR: /electric-data
+    ports:
+      - "3101:3000"
+    volumes:
+      - electric-data:/electric-data
+    restart: unless-stopped
+
 volumes:
   pgdata:
+  electric-data:

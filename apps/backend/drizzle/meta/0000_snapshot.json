@@ -1,5 +1,5 @@
 {
-  "id": "6319208c-c4a7-4224-880c-a401dbb4dd20",
+  "id": "d647982a-3770-4953-ac29-bfc258da42cc",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -219,21 +219,7 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "net_weight_formula_part_no_parts_part_no_fk": {
-          "name": "net_weight_formula_part_no_parts_part_no_fk",
-          "tableFrom": "net_weight_formula",
-          "tableTo": "parts",
-          "columnsFrom": [
-            "part_no"
-          ],
-          "columnsTo": [
-            "part_no"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "net_weight_formula_part_no_unique": {
@@ -282,14 +268,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "default_coo": {
-          "name": "default_coo",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_date": {
-          "name": "created_date",
+        "creation_date": {
+          "name": "creation_date",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
@@ -303,15 +283,31 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "idx_parts_part_no": {
+          "name": "idx_parts_part_no",
+          "columns": [
+            {
+              "expression": "part_no",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "parts_part_no_unique": {
-          "name": "parts_part_no_unique",
+        "parts_wcl_item_no_unique": {
+          "name": "parts_wcl_item_no_unique",
           "nullsNotDistinct": false,
           "columns": [
-            "part_no"
+            "wcl_item_no"
           ]
         }
       },
@@ -338,6 +334,12 @@
         "zone": {
           "name": "zone",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sub_inventory_codes": {
+          "name": "sub_inventory_codes",
+          "type": "text[]",
           "primaryKey": false,
           "notNull": false
         },
@@ -382,20 +384,32 @@
           "primaryKey": true,
           "notNull": true
         },
+        "office_code": {
+          "name": "office_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "organization_id": {
+          "name": "organization_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "org_id": {
           "name": "org_id",
           "type": "integer",
           "primaryKey": false,
           "notNull": true
         },
-        "code": {
-          "name": "code",
+        "secondary_inventory_name": {
+          "name": "secondary_inventory_name",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "name": {
-          "name": "name",
+        "subinv_description": {
+          "name": "subinv_description",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -406,8 +420,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "created_date": {
-          "name": "created_date",
+        "creation_date": {
+          "name": "creation_date",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
@@ -439,12 +453,12 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "sub_inventories_org_code_unique": {
-          "name": "sub_inventories_org_code_unique",
+        "sub_inventories_org_subinv_unique": {
+          "name": "sub_inventories_org_subinv_unique",
           "nullsNotDistinct": false,
           "columns": [
             "org_id",
-            "code"
+            "secondary_inventory_name"
           ]
         }
       },
@@ -544,7 +558,7 @@
           ],
           "columnsTo": [
             "org_id",
-            "code"
+            "secondary_inventory_name"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -608,8 +622,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "created_date": {
-          "name": "created_date",
+        "creation_date": {
+          "name": "creation_date",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
@@ -681,8 +695,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "created_date": {
-          "name": "created_date",
+        "creation_date": {
+          "name": "creation_date",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
@@ -968,7 +982,7 @@
           "name": "line_qty",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "received_qty": {
           "name": "received_qty",
@@ -1071,6 +1085,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "order_data": {
+          "name": "order_data",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_date": {
           "name": "created_date",
           "type": "timestamp",
@@ -1132,19 +1152,6 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "receiving_invoice_items_part_no_parts_part_no_fk": {
-          "name": "receiving_invoice_items_part_no_parts_part_no_fk",
-          "tableFrom": "receiving_invoice_items",
-          "tableTo": "parts",
-          "columnsFrom": [
-            "part_no"
-          ],
-          "columnsTo": [
-            "part_no"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
         "receiving_invoice_items_sub_inv_fk": {
           "name": "receiving_invoice_items_sub_inv_fk",
           "tableFrom": "receiving_invoice_items",
@@ -1155,7 +1162,7 @@
           ],
           "columnsTo": [
             "org_id",
-            "code"
+            "secondary_inventory_name"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -1226,12 +1233,6 @@
           "notNull": true,
           "default": 2
         },
-        "sub_inventory_code": {
-          "name": "sub_inventory_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_date": {
           "name": "created_date",
           "type": "timestamp",
@@ -1270,21 +1271,6 @@
             "supplier_code"
           ],
           "columnsTo": [
-            "code"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "receiving_invoices_sub_inv_fk": {
-          "name": "receiving_invoices_sub_inv_fk",
-          "tableFrom": "receiving_invoices",
-          "tableTo": "sub_inventories",
-          "columnsFrom": [
-            "org_id",
-            "sub_inventory_code"
-          ],
-          "columnsTo": [
-            "org_id",
             "code"
           ],
           "onDelete": "no action",
@@ -1331,12 +1317,6 @@
           "primaryKey": false,
           "notNull": true,
           "default": 2
-        },
-        "sub_inventory_code": {
-          "name": "sub_inventory_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
         },
         "date_code": {
           "name": "date_code",
@@ -1418,21 +1398,6 @@
           ],
           "columnsTo": [
             "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "receiving_orders_sub_inv_fk": {
-          "name": "receiving_orders_sub_inv_fk",
-          "tableFrom": "receiving_orders",
-          "tableTo": "sub_inventories",
-          "columnsFrom": [
-            "org_id",
-            "sub_inventory_code"
-          ],
-          "columnsTo": [
-            "org_id",
-            "code"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -1576,82 +1541,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.measuring_tasks": {
-      "name": "measuring_tasks",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "picking_order_id": {
-          "name": "picking_order_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'pending'"
-        },
-        "created_date": {
-          "name": "created_date",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "last_update_date": {
-          "name": "last_update_date",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "idx_measuring_tasks_picking_order": {
-          "name": "idx_measuring_tasks_picking_order",
-          "columns": [
-            {
-              "expression": "picking_order_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "measuring_tasks_picking_order_id_picking_orders_id_fk": {
-          "name": "measuring_tasks_picking_order_id_picking_orders_id_fk",
-          "tableFrom": "measuring_tasks",
-          "tableTo": "picking_orders",
-          "columnsFrom": [
-            "picking_order_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.picking_items": {
       "name": "picking_items",
       "schema": "",
@@ -1698,19 +1587,19 @@
           "name": "line_id",
           "type": "bigint",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "line_number": {
           "name": "line_number",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "shipment_number": {
           "name": "shipment_number",
           "type": "integer",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "status": {
           "name": "status",
@@ -1784,19 +1673,6 @@
             "id"
           ],
           "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "picking_items_part_no_parts_part_no_fk": {
-          "name": "picking_items_part_no_parts_part_no_fk",
-          "tableFrom": "picking_items",
-          "tableTo": "parts",
-          "columnsFrom": [
-            "part_no"
-          ],
-          "columnsTo": [
-            "part_no"
-          ],
-          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -2046,22 +1922,14 @@
           ],
           "columnsTo": [
             "org_id",
-            "code"
+            "secondary_inventory_name"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "picking_orders_order_no_unique": {
-          "name": "picking_orders_order_no_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "order_no"
-          ]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -2351,19 +2219,6 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
-        },
-        "shipping_box_items_part_no_parts_part_no_fk": {
-          "name": "shipping_box_items_part_no_parts_part_no_fk",
-          "tableFrom": "shipping_box_items",
-          "tableTo": "parts",
-          "columnsFrom": [
-            "part_no"
-          ],
-          "columnsTo": [
-            "part_no"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -2384,12 +2239,6 @@
         },
         "picking_order_id": {
           "name": "picking_order_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "measuring_task_id": {
-          "name": "measuring_task_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -2425,6 +2274,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "shipped_at": {
+          "name": "shipped_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "shipped_by": {
+          "name": "shipped_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "source_shelf_box_id": {
           "name": "source_shelf_box_id",
           "type": "text",
@@ -2447,21 +2308,6 @@
         }
       },
       "indexes": {
-        "idx_shipping_boxes_task": {
-          "name": "idx_shipping_boxes_task",
-          "columns": [
-            {
-              "expression": "measuring_task_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "idx_shipping_boxes_order": {
           "name": "idx_shipping_boxes_order",
           "columns": [
@@ -2492,12 +2338,12 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "shipping_boxes_measuring_task_id_measuring_tasks_id_fk": {
-          "name": "shipping_boxes_measuring_task_id_measuring_tasks_id_fk",
+        "shipping_boxes_shipped_by_users_id_fk": {
+          "name": "shipping_boxes_shipped_by_users_id_fk",
           "tableFrom": "shipping_boxes",
-          "tableTo": "measuring_tasks",
+          "tableTo": "users",
           "columnsFrom": [
-            "measuring_task_id"
+            "shipped_by"
           ],
           "columnsTo": [
             "id"
@@ -2535,8 +2381,8 @@
           "primaryKey": true,
           "notNull": true
         },
-        "picking_order_id": {
-          "name": "picking_order_id",
+        "shipping_box_id": {
+          "name": "shipping_box_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -2564,11 +2410,11 @@
         }
       },
       "indexes": {
-        "idx_verify_tasks_picking_order": {
-          "name": "idx_verify_tasks_picking_order",
+        "idx_verify_tasks_shipping_box": {
+          "name": "idx_verify_tasks_shipping_box",
           "columns": [
             {
-              "expression": "picking_order_id",
+              "expression": "shipping_box_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2581,12 +2427,12 @@
         }
       },
       "foreignKeys": {
-        "verify_tasks_picking_order_id_picking_orders_id_fk": {
-          "name": "verify_tasks_picking_order_id_picking_orders_id_fk",
+        "verify_tasks_shipping_box_id_shipping_boxes_id_fk": {
+          "name": "verify_tasks_shipping_box_id_shipping_boxes_id_fk",
           "tableFrom": "verify_tasks",
-          "tableTo": "picking_orders",
+          "tableTo": "shipping_boxes",
           "columnsFrom": [
-            "picking_order_id"
+            "shipping_box_id"
           ],
           "columnsTo": [
             "id"
@@ -2763,19 +2609,6 @@
           ],
           "columnsTo": [
             "code"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "goods_verify_tasks_part_no_parts_part_no_fk": {
-          "name": "goods_verify_tasks_part_no_parts_part_no_fk",
-          "tableFrom": "goods_verify_tasks",
-          "tableTo": "parts",
-          "columnsFrom": [
-            "part_no"
-          ],
-          "columnsTo": [
-            "part_no"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -3157,19 +2990,6 @@
         }
       },
       "foreignKeys": {
-        "inventory_lots_part_no_parts_part_no_fk": {
-          "name": "inventory_lots_part_no_parts_part_no_fk",
-          "tableFrom": "inventory_lots",
-          "tableTo": "parts",
-          "columnsFrom": [
-            "part_no"
-          ],
-          "columnsTo": [
-            "part_no"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
         "inventory_lots_shelf_code_shelves_code_fk": {
           "name": "inventory_lots_shelf_code_shelves_code_fk",
           "tableFrom": "inventory_lots",
@@ -3193,9 +3013,112 @@
           ],
           "columnsTo": [
             "org_id",
-            "code"
+            "secondary_inventory_name"
           ],
           "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.put_away_tasks": {
+      "name": "put_away_tasks",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "receiving_order_id": {
+          "name": "receiving_order_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "org_id": {
+          "name": "org_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sub_inventory_code": {
+          "name": "sub_inventory_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "created_date": {
+          "name": "created_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_put_away_tasks_receiving_order": {
+          "name": "idx_put_away_tasks_receiving_order",
+          "columns": [
+            {
+              "expression": "receiving_order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_put_away_tasks_status": {
+          "name": "idx_put_away_tasks_status",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "put_away_tasks_receiving_order_id_receiving_orders_id_fk": {
+          "name": "put_away_tasks_receiving_order_id_receiving_orders_id_fk",
+          "tableFrom": "put_away_tasks",
+          "tableTo": "receiving_orders",
+          "columnsFrom": [
+            "receiving_order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -3316,19 +3239,6 @@
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
-        },
-        "shelf_box_items_part_no_parts_part_no_fk": {
-          "name": "shelf_box_items_part_no_parts_part_no_fk",
-          "tableFrom": "shelf_box_items",
-          "tableTo": "parts",
-          "columnsFrom": [
-            "part_no"
-          ],
-          "columnsTo": [
-            "part_no"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -3428,7 +3338,7 @@
           ],
           "columnsTo": [
             "org_id",
-            "code"
+            "secondary_inventory_name"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -3886,19 +3796,6 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "inventory_transactions_part_no_parts_part_no_fk": {
-          "name": "inventory_transactions_part_no_parts_part_no_fk",
-          "tableFrom": "inventory_transactions",
-          "tableTo": "parts",
-          "columnsFrom": [
-            "part_no"
-          ],
-          "columnsTo": [
-            "part_no"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
         "inventory_transactions_shelf_code_shelves_code_fk": {
           "name": "inventory_transactions_shelf_code_shelves_code_fk",
           "tableFrom": "inventory_transactions",
@@ -4142,6 +4039,90 @@
         "event_data": {
           "name": "event_data",
           "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_date": {
+          "name": "created_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.warehouse_config": {
+      "name": "warehouse_config",
+      "schema": "",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "value": {
+          "name": "value",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_date": {
+          "name": "created_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_update_date": {
+          "name": "last_update_date",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.sync_checkpoints": {
+      "name": "sync_checkpoints",
+      "schema": "",
+      "columns": {
+        "table_name": {
+          "name": "table_name",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "shape_handle": {
+          "name": "shape_handle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "shape_offset": {
+          "name": "shape_offset",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },

@@ -308,7 +308,8 @@ const remainingItems = computed(() => {
   if (!order.value) return 0;
   return order.value.invoices
     .flatMap((invoice) => invoice.items)
-    .filter((item) => item.putAwayQty < item.lineQty).length;
+    // lineQty null = expected qty unknown upstream — treat as not fully put away.
+    .filter((item) => item.lineQty === null || item.putAwayQty < item.lineQty).length;
 });
 
 async function load() {

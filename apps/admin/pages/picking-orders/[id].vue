@@ -231,7 +231,7 @@ onMounted(load);
           <tbody>
             <tr v-for="item in order.items" :key="item.id">
               <td>{{ item.partNo }}<span v-if="item.wclItemNo" class="muted"> ({{ item.wclItemNo }})</span></td>
-              <td>{{ item.lineNumber }} / {{ item.shipmentNumber }}</td>
+              <td>{{ item.lineNumber ?? "—" }} / {{ item.shipmentNumber ?? "—" }}</td>
               <td>{{ item.qty }}</td>
               <td>{{ item.allocatedQty }}</td>
               <td>{{ item.pickedQty }}</td>

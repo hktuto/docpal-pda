@@ -169,7 +169,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | `POST /goods-verify-tasks/generate`, `GET /goods-verify-tasks`, `GET /goods-verify-tasks/:id`, `POST /goods-verify-tasks/:id/verify` | `apps/backend/src/routes/goodsverify.ts` |
 | `GET /stock-search` | `apps/backend/src/routes/stocksearch.ts` |
 | `GET /scan-templates` | `apps/backend/src/routes/scantemplates.ts` |
-| `PUT /receiving-orders/:externalId`, `PUT /picking-orders/:externalId` | `apps/backend/src/routes/ingest.ts` |
+| Upstream sync (Electric consumer — no HTTP endpoints; one ShapeStream per `demo.wms_*` table) | `apps/backend/src/sync/consumer.ts`, `apps/backend/src/sync/orders.ts` |
 | `POST /dev/reset`, `POST /dev/allocate` | `apps/backend/src/routes/dev.ts` |
 | `/admin/*` master-data CRUD | `apps/backend/src/routes/admin/` |
 | `/admin/sub-inventory-share-groups` (share-group membership upsert/remove) | `apps/backend/src/routes/admin/subInventoryShareGroups.ts` |
@@ -189,7 +189,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | Flow config (`warehouse_config` row `"flow"` + `FLOW_CONFIG` env override, `isStepEnabled`, `allowDockStock`) | `apps/backend/src/config.ts` |
 | Goods verify (generation, queue, verify with ADJUST) | `apps/backend/src/db/goodsverify.ts` |
 | Stock search | `apps/backend/src/db/stocksearch.ts` |
-| Ingest upserts | `apps/backend/src/db/ingest.ts` |
+| Sync-consumer apply layer (upsert/delete domain functions reused by the Electric consumer; guarded order deletes) | `apps/backend/src/db/ingest.ts` |
 | Allocation engine (`allocateAll`) | `apps/backend/src/db/allocate.ts` |
 | Demo seed (+ generated real-data artifacts) | `apps/backend/src/db/seed.ts` (+ `seed-parts-data.json`, `seed-subinventories-data.ts`, `seed-net-weight-data.ts`, `seed-order-210726.ts`; generator `scripts/gen-seed-real-data.mjs`) |
 

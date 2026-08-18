@@ -33,9 +33,9 @@ export interface PickingItemRow {
   qty: number;
   pickedQty: number;
   allocatedQty: number;
-  lineId: string;
-  lineNumber: number;
-  shipmentNumber: number;
+  lineId: string | null;
+  lineNumber: number | null;
+  shipmentNumber: number | null;
   status: string;
   allocations: {
     id: string;
@@ -72,7 +72,6 @@ export interface ReceivingOrderRow {
   supplierCode: string | null;
   supplierName: string | null;
   orgId: number;
-  subInventoryCode: string;
   invoiceCount: number;
   itemCount: number;
   remainingItems: number;
@@ -86,7 +85,7 @@ export interface ReceivingItemRow {
   wclItemNo: string | null;
   poNo: string | null;
   poLine: string | null;
-  lineQty: number;
+  lineQty: number | null;
   receivedQty: number;
   pickedQty: number;
   putAwayQty: number;
@@ -96,6 +95,8 @@ export interface ReceivingItemRow {
   coo: string | null;
   cow: string | null;
   allocatedQty: number;
+  /** Passthrough jsonb from the upstream order sync (optional). */
+  orderData?: Record<string, unknown> | null;
   mismatch: { reason: string | null; mismatchQty: number | null; wrongPartNo: string | null; note: string | null } | null;
 }
 
@@ -106,7 +107,6 @@ export interface ReceivingOrderDetail {
   deliveryDate: string | null;
   dateCode: string | null;
   orgId: number;
-  subInventoryCode: string;
   supplier: { id: string; code: string; name: string; shortName: string | null } | null;
   invoices: {
     id: string;
@@ -115,7 +115,6 @@ export interface ReceivingOrderDetail {
     totalCtn: number | null;
     deliveryDate: string | null;
     orgId: number;
-    subInventoryCode: string | null;
     items: ReceivingItemRow[];
   }[];
 }
@@ -158,7 +157,6 @@ export interface StockSearchPart {
   partNo: string;
   wclItemNo: string | null;
   description: string | null;
-  defaultCoo: string | null;
   onHandQty: number;
 }
 

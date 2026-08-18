@@ -39,18 +39,20 @@ org_id (integer office, e.g. 2 = HK) + sub_inventory_code (e.g. STORE1)
   lookup; its own `org_id` anchors which org the sub-inventory belongs to).
   Stock/docs reference the `(org_id, code)` group via composite FK. A
   customer may request their goods be stored separately
-  (`sub_inventories.customer_code`). On receiving orders it is mandatory
-  (`NOT NULL`); on `picking_orders` and `inventory_lots` it is nullable.
+  (`sub_inventories.customer_code`). On receiving it is **item-level**
+  (`receiving_invoice_items`, nullable — order/invoice-level columns were
+  dropped 2026-08-18); on `picking_orders` and `inventory_lots` it is nullable.
 
 The pair rides together on `shelf_boxes` (moved from `shelves` 2026-07-23 —
 the box decides the stock partition of its contents; it defaults to the
-receiving order's pair at creation and put-away stamps lots with the box's
-pair), `receiving_orders`,
-`receiving_invoices`, `receiving_invoice_items`, `picking_orders`, and
+receiving order's item-derived pair at creation and put-away stamps lots with the box's
+pair), `receiving_invoice_items`, `picking_orders`, and
 `inventory_lots`, and both columns are part of the
 `inventory_lots_unique_lot` identity — the same lot tuple can exist
 independently per org / sub-inventory. Allocation matches demand to sources
-on the pair (a NULL on the picking order side matches anything); sources in a
+on the pair (a NULL on the picking order side matches anything; a NULL on a
+receiving ITEM skips that source — it is logged, never silently allocated);
+sources in a
 customer-segregated sub-inventory only serve that customer's orders.
 
 ## 4. Date-code fallback from order to items
@@ -90,7 +92,10 @@ Selection rules (confirmed with the business):
   customer profile remark (e.g. "less than 2 years" / "more than 2 years"
   relative to today). Forms: `2601` exact, `2601+`, `2601-`, year-relative.
 - **Location match** — sources must match the picking order's `(org_id,
-  sub_inventory_code)` pair (a pair-less order is org-agnostic). The code
+  sub_inventory_code)` pair (a pair-less order is org-agnostic): shelf lots on
+  their own pair, receiving sources on the receiving **item's** pair
+  (`receiving_invoice_items.org_id` + `sub_inventory_code`; item-level since
+  2026-08-18). The code
   match is widened by `sub_inventory_share_members` (2026-07-27): sources
   whose sub-inventory shares the order's `share_group` also match.
   Customer-segregated sub-inventories only serve their customer's orders.

@@ -156,12 +156,14 @@ API call touching N rows produces N events).
 
 (Seed/reset paths (`db:seed`, `POST /dev/reset`) set
 `SET LOCAL app.sync_events_off = 1` so demo reseeding does not flood the
-table; the trigger checks the same setting. All ingest transactions
-(`src/db/ingest.ts` — DocPal → warehouse upserts/deletes) set it too via
-`suppressSyncEvents()`: ingest writes are upstream-originated, and logging
-them would echo DocPal's own changes back into this feed — a circular loop.
-Warehouse-originated side effects of an ingest (the post-commit
-`allocateAll` recompute) run in their own transaction and ARE recorded.)
+table; the trigger checks the same setting. The sync-consumer apply
+transactions (`src/db/ingest.ts`, driven by `src/sync/consumer.ts` — the
+Electric sync from the DocPal master that replaced the retired ingest HTTP
+API) set it too via `suppressSyncEvents()`: synced writes are
+upstream-originated, and logging them would echo DocPal's own changes back
+into this feed — a circular loop. Warehouse-originated side effects of a
+synced change (the post-batch `allocateAll` recompute) run in their own
+transaction and ARE recorded.)
 
 ## Related: the SSE typed events (separate mechanism)
 

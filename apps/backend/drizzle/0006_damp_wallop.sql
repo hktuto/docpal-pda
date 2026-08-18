@@ -1,1 +1,0 @@
-ALTER TABLE "shelves" ADD COLUMN "org_id" integer;

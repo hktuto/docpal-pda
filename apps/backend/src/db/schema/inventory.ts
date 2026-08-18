@@ -123,8 +123,9 @@ export const goodsVerifyTasks = pgTable(
 // Put-away tasks (spec 2026-08-10-put-away-tasks-design.md): one task per
 // receiving order, auto-created on arrival when FLOW_CONFIG
 // steps.put-away.autoCreateTasks is on; completed by the auto-clear in
-// putaway.ts. The pair is a denormalized copy from the order (suggestion
-// query convenience). No assignee/lock columns in v1 (mirrors verify_tasks).
+// putaway.ts. The pair is derived from the order's items (uniform pair;
+// NULL when mixed — suggestion query convenience). No assignee/lock columns
+// in v1 (mirrors verify_tasks).
 export const putAwayTasks = pgTable(
   "put_away_tasks",
   {

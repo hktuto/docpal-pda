@@ -71,1120 +71,964 @@ export async function seedDb(
   >;
 
   const partRecords = [
-    { id: uuid(), partNo: "RK73B1JTTD181G", internalCode: "", description: "", defaultCoo: "CN" },
-    { id: uuid(), partNo: "RK73H2ATTD1372F", internalCode: "", description: "", defaultCoo: "CN" },
-    { id: uuid(), partNo: "RK73H1JTTD1501F", internalCode: "", description: "", defaultCoo: "CN" },
-    { id: uuid(), partNo: "RK73H1JTTD2202F", internalCode: "", description: "", defaultCoo: "CN" },
-    { id: uuid(), partNo: "RK73H2ATTD1002F", internalCode: "", description: "", defaultCoo: "CN" },
-    { id: uuid(), partNo: "S-1206B18-M3T1U", internalCode: "", description: "", defaultCoo: "JP" },
-    { id: uuid(), partNo: "S-80860CNNB-B9LT2U", internalCode: "", description: "", defaultCoo: "JP" },
-    { id: uuid(), partNo: "S-8240ADJ-I6T1U", internalCode: "", description: "", defaultCoo: "JP" },
-    { id: uuid(), partNo: "DBI25-16A", internalCode: "", description: "", defaultCoo: "IN" },
-    { id: uuid(), partNo: "MM1Z4733A", internalCode: "", description: "", defaultCoo: "CN" },
-    { id: uuid(), partNo: "SL1M", internalCode: "", description: "", defaultCoo: "CN" },
-    { id: uuid(), partNo: "SMF51CA", internalCode: "", description: "", defaultCoo: "CN" },
-    { id: uuid(), partNo: "Z1SMA1020", internalCode: "", description: "", defaultCoo: "DE" },
-    { id: uuid(), partNo: "IL34063ADT", internalCode: "", description: "", defaultCoo: "KR" },
-    { id: uuid(), partNo: "CX2016SA20000D0HSSCC", internalCode: "", description: "", defaultCoo: "JP" },
-    { id: uuid(), partNo: "NCC-TND14V-471KB00AAA0", internalCode: "", description: "", defaultCoo: "ID" },
-    { id: uuid(), partNo: "NX8045GB", internalCode: "", description: "", defaultCoo: "CN" },
-    { id: uuid(), partNo: "Q-SPT7P0327620C5GF", internalCode: "", description: "", defaultCoo: "MY" },
-    { id: uuid(), partNo: "OKAYA-RE104-L", internalCode: "", description: "", defaultCoo: "CN" },
-    { id: uuid(), partNo: "D1FL20U", internalCode: "", description: "", defaultCoo: "JP" },
-    { id: uuid(), partNo: "04028DA12RBUFB", internalCode: "", description: "", defaultCoo: "CN" },
+    { id: uuid(), partNo: "RK73B1JTTD181G", internalCode: "", description: "" },
+    { id: uuid(), partNo: "RK73H2ATTD1372F", internalCode: "", description: "" },
+    { id: uuid(), partNo: "RK73H1JTTD1501F", internalCode: "", description: "" },
+    { id: uuid(), partNo: "RK73H1JTTD2202F", internalCode: "", description: "" },
+    { id: uuid(), partNo: "RK73H2ATTD1002F", internalCode: "", description: "" },
+    { id: uuid(), partNo: "S-1206B18-M3T1U", internalCode: "", description: "" },
+    { id: uuid(), partNo: "S-80860CNNB-B9LT2U", internalCode: "", description: "" },
+    { id: uuid(), partNo: "S-8240ADJ-I6T1U", internalCode: "", description: "" },
+    { id: uuid(), partNo: "DBI25-16A", internalCode: "", description: "" },
+    { id: uuid(), partNo: "MM1Z4733A", internalCode: "", description: "" },
+    { id: uuid(), partNo: "SL1M", internalCode: "", description: "" },
+    { id: uuid(), partNo: "SMF51CA", internalCode: "", description: "" },
+    { id: uuid(), partNo: "Z1SMA1020", internalCode: "", description: "" },
+    { id: uuid(), partNo: "IL34063ADT", internalCode: "", description: "" },
+    { id: uuid(), partNo: "CX2016SA20000D0HSSCC", internalCode: "", description: "" },
+    { id: uuid(), partNo: "NCC-TND14V-471KB00AAA0", internalCode: "", description: "" },
+    { id: uuid(), partNo: "NX8045GB", internalCode: "", description: "" },
+    { id: uuid(), partNo: "Q-SPT7P0327620C5GF", internalCode: "", description: "" },
+    { id: uuid(), partNo: "OKAYA-RE104-L", internalCode: "", description: "" },
+    { id: uuid(), partNo: "D1FL20U", internalCode: "", description: "" },
+    { id: uuid(), partNo: "04028DA12RBUFB", internalCode: "", description: "" },
   ] as const;
 const wclPartRecords = [
   {
     id: 'aceaf4f8-6ec1-49d2-8811-979dde22b641',
     partNo: 'HV732HTTE1004F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '9f77389b-d986-43f6-87a2-7c5974287bce',
     partNo: 'HV732HTTE1503F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '55a0a166-a724-436b-bcc3-c43d8730290d',
     partNo: 'HV73V2BTTD1004D',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'cb16d31a-aabc-45ce-8428-37f053c757d9',
     partNo: 'RK73B1ETTP102J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '10b7b513-bbb6-4447-944d-4bef2cd85758',
     partNo: 'RK73B1ETTP105J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'badc0f33-7e21-4a94-891a-a1a5a401ed5d',
     partNo: 'RK73B1ETTP330J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '29b6d3fc-cb7a-49ec-9755-902d40a5b316',
     partNo: 'RK73B1ETTP512J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'f88f6c9e-1a52-4830-bf57-f78bd9b33107',
     partNo: 'RK73B1ETTP5R1J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '41a84185-8975-47be-8c0b-97d9046a1afa',
     partNo: 'RK73B1HTTC103J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'd22dea87-eb2e-4cfd-b00d-4c4b4d6f3a9b',
     partNo: 'RK73B1HTTC151J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '254f690c-2771-409c-a441-bf4a4c9d80bf',
     partNo: 'RK73B1HTTC180J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '7ef662f0-f4f5-4d80-b219-4d047af8f460',
     partNo: 'RK73B1HTTC330J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '41e9b0b2-fb4e-4718-9f25-8c2d575dac34',
     partNo: 'RK73B1HTTC510J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '91505389-545c-45c0-a38d-4ceca6658bfc',
     partNo: 'RK73B1JRTTD105J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'e0eb4d8e-fd3d-4621-8dac-88bcae5944b1',
     partNo: 'RK73B1JTTD103J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '7f17b556-0934-4800-bd2f-c4da5d671fcd',
     partNo: 'RK73B1JTTD331J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '200ff76d-8108-45cb-9da7-cabb344d2869',
     partNo: 'RK73B1JTTD392J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'b3a727f6-0ed4-4914-85b4-019481f51aed',
     partNo: 'RK73B1JTTD472J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '0ec6332c-0de7-4d01-9746-b5c993256df8',
     partNo: 'RK73B1JTTD680J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'd2e69616-aa57-49f9-8f92-d439855c1d13',
     partNo: 'RK73B2ATTD1R1J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '0ecd39f3-297b-42ef-b05f-65541eb6f7e6',
     partNo: 'RK73B2ATTD271J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'f51f0dcf-c447-4c10-bdf6-1eeee80a03b6',
     partNo: 'RK73B2ATTD513J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '63fefd3c-6a36-4390-a240-7a980cb458f4',
     partNo: 'RK73B2BTTD103J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '5776621b-e457-416c-b1d5-574f0a45e5e5',
     partNo: 'RK73B2ETTD102J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '2dba852a-ddb6-4881-8278-0d354524cce6',
     partNo: 'RK73B2ETTD270J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '2ad6bc02-3e4f-4e7f-acfc-aeb06cf3acb9',
     partNo: 'RK73B3ATTE101J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '39987998-84bc-4645-be81-6d3a59ca7898',
     partNo: 'RK73B3ATTE510J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '2437d365-6e7f-489f-bcc8-65c62766d953',
     partNo: 'RK73B3ATTE563J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '0ff00b36-4f6a-43e6-9185-16815d0d9809',
     partNo: 'RK73BW3ATTE300J',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'b244282b-fa96-4451-b623-dd2e6e25fcd9',
     partNo: 'RK73H1ERTTP1004F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '1090ccc1-1d2e-4a6d-a733-ac791e4fb40e',
     partNo: 'RK73H1ERTTP2431F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'a0fa0a21-ac45-4f43-9c4d-813399e49ba7',
     partNo: 'RK73H1ERTTP3301F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'f10886d9-8acc-467e-a3aa-24e891a8772e',
     partNo: 'RK73H1ERTTP3303F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'b9e62a21-f431-4646-a399-d4b0a22cf39a',
     partNo: 'RK73H1ERTTP33R0F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'c3190b4b-be85-439a-b650-88b51d551c73',
     partNo: 'RK73H1ERTTP3922F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'c57814bb-3ba1-467a-8398-6e7f81014c73',
     partNo: 'RK73H1ERTTP4702F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '4e0fe5a4-c165-4468-94ac-bf52586feef2',
     partNo: 'RK73H1ETTP1000F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '6e19622a-ffee-4889-8056-0217ff9ef54f',
     partNo: 'RK73H1ETTP1001F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '10ca12c8-90b4-4629-85a1-74dd37a2c307',
     partNo: 'RK73H1ETTP1002D',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '93362afc-62a6-4467-bad6-b1313a101c7c',
     partNo: 'RK73H1ETTP1002F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '30e78353-9a26-4969-83c5-52a5f249dd78',
     partNo: 'RK73H1ETTP1003F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '02dfb364-e666-4aad-8aef-bbf1555bb2bb',
     partNo: 'RK73H1ETTP10R0F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '77e0c0ba-0a5e-43de-8fef-a173f9cfa2c5',
     partNo: 'RK73H1ETTP1202F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'f689f382-5d14-49c9-878b-c86f51666079',
     partNo: 'RK73H1ETTP1501F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '98476710-3904-482c-a1c3-15c41b2162ae',
     partNo: 'RK73H1ETTP2001F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '4e1e696d-8000-4eb9-8758-84ed1f8a528d',
     partNo: 'RK73H1ETTP20R0F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'f06020ac-6564-4b41-a18d-cd67d1aae6f6',
     partNo: 'RK73H1ETTP2213F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'c1ef1f9f-1921-49c3-ba6f-6a60fec25967',
     partNo: 'RK73H1ETTP2400F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'f894d767-4d70-40b2-85f6-3cbb2dfecbc6',
     partNo: 'RK73H1ETTP2401F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'e9cc9f01-a9e3-472b-b069-ef22db9cbb46',
     partNo: 'RK73H1ETTP2702D',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'ce7e8a36-daba-47eb-98fb-5abc4aeaba6f',
     partNo: 'RK73H1ETTP2702F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '83409801-6633-4fd7-9935-1a7d33370943',
     partNo: 'RK73H1ETTP2703D',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '029d619a-30ce-410d-9f5a-f36716b0eec2',
     partNo: 'RK73H1ETTP3001F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '3c15c330-90aa-4731-a9a8-cc3557f4f241',
     partNo: 'RK73H1ETTP3002F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '8cb2b697-8897-41e9-9335-5e1c8abdf24a',
     partNo: 'RK73H1ETTP3003F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'f82a834e-20a4-463d-ab1e-2a3344623c86',
     partNo: 'RK73H1ETTP3012F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '8f013ab3-9480-4cfd-8712-2c62f723f8b5',
     partNo: 'RK73H1ETTP3302D',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '287cc490-1139-48d0-b084-421c1d381844',
     partNo: 'RK73H1ETTP3303D',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '2aadbf41-4830-4aea-a7f1-5de5d72d798d',
     partNo: 'RK73H1ETTP33R0F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '2e58f06b-1c39-4396-83fc-80a2fa6c9a36',
     partNo: 'RK73H1ETTP33R2F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '5bda3fd4-f4cd-4273-95b9-f17ef1848adf',
     partNo: 'RK73H1ETTP3901F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '8f17acb7-883f-4ac5-9c3a-88beeb176455',
     partNo: 'RK73H1ETTP4022F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '8f8a9742-e2be-4e7c-bdf3-588a5b85058b',
     partNo: 'RK73H1ETTP4701D',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'f23df07e-bba5-42c1-afe1-f003465169d7',
     partNo: 'RK73H1ETTP4701F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '3b75b617-f8be-43d6-8c85-97c7fa5dd499',
     partNo: 'RK73H1ETTP4703F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '1d14fe5b-8419-4bc5-94ca-686e52b82d2b',
     partNo: 'RK73H1ETTP49R9F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '9d470be0-2d61-4cf4-9abb-a746cd8b9f95',
     partNo: 'RK73H1ETTP5100F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'b01648c8-92ad-42be-a42e-dcde9fb7c8c0',
     partNo: 'RK73H1ETTP5101F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'f6ecf24a-0d58-4bc8-bf03-c534d28a3b8e',
     partNo: 'RK73H1ETTP5102F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '3e57a98b-7626-4a49-ac33-d6558e07bdc3',
     partNo: 'RK73H1ETTP6041F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '8ad4e107-2bbb-4146-8677-497094f04cd1',
     partNo: 'RK73H1ETTP6801F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '14f79847-9b34-4469-bc8f-b3b1e422a22e',
     partNo: 'RK73H1ETTP8061F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '26bb4735-9052-4906-8135-77da41243553',
     partNo: 'RK73H1ETTP82R0F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '44f77ee2-0d91-4a9d-8112-4e6ace042293',
     partNo: 'RK73H1ETTP9101D',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'fae8645b-4881-45e7-b6a7-55dc37699af4',
     partNo: 'RK73H1ETTPB1002F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '4ff42631-50a1-4cbd-b3b6-99b6bf31cef3',
     partNo: 'RK73H1HRTTC1001F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '5c740799-cd00-48a2-9bd1-5d00d4176fc0',
     partNo: 'RK73H1HRTTC1332F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '886baa61-f9ca-4494-ba40-b08235399453',
     partNo: 'RK73H1HTTC1002F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '3c904755-d1fa-483c-9688-7e0ba42f7204',
     partNo: 'RK73H1HTTC1431F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '5bfb322b-9cfa-4a48-94d0-c15743b24249',
     partNo: 'RK73H1HTTC2203F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'd8afaa4a-c3c9-4873-ae1e-adfc4a10d464',
     partNo: 'RK73H1HTTC2400F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '644f6abb-1d4e-4a33-a9c4-27a60ccec758',
     partNo: 'RK73H1HTTC5492F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'cf5c2f4a-57ed-4e0b-9cf6-a6660a92144e',
     partNo: 'RK73H1JRTTD1001F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'b2b3ab3a-5e00-4afa-83a4-3e6f35351cbc',
     partNo: 'RK73H1JRTTD1002F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'd6b2d8d3-22cd-470a-ab98-9b0bb0f8f463',
     partNo: 'RK73H1JRTTD1003F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'a19e32c3-4e30-4011-8bbc-21d28dafcb61',
     partNo: 'RK73H1JRTTD1503F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'fa7e48de-ea79-43f8-9a49-235e86c4eb4a',
     partNo: 'RK73H1JRTTD2210F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'f203cc1d-2e29-4f81-b137-08ec1893eeae',
     partNo: 'RK73H1JRTTD3301F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'a4bb688b-91a7-4837-b5ab-2a0730727e2a',
     partNo: 'RK73H1JRTTD4022F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '8792dd3a-9e51-4aa6-8943-0797f353655e',
     partNo: 'RK73H1JRTTD4532F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '393b01c2-909b-4dc4-880e-713259fac7a5',
     partNo: 'RK73H1JTTD1000F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '4928e221-419c-41db-bb89-1cd7442ce4b8',
     partNo: 'RK73H1JTTD1001F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'e1c8bda5-5096-49fe-bec6-20c6210e03dd',
     partNo: 'RK73H1JTTD1002F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '9a173a77-25aa-44d0-a3e1-5395a04b0841',
     partNo: 'RK73H1JTTD1003F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '86c6506a-185b-416f-ac50-47475adbde01',
     partNo: 'RK73H1JTTD1004F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '0d888fb7-eed4-4740-baf0-5ad962a923b8',
     partNo: 'RK73H1JTTD10R0F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'c83eedf5-2c0d-4d73-a987-36284366af05',
     partNo: 'RK73H1JTTD1200F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '2bb4f582-00ce-442f-904c-e27eb60a3335',
     partNo: 'RK73H1JTTD1212F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '05e17fcb-9253-4c4d-b7c8-3a8356b2788d',
     partNo: 'RK73H1JTTD1303F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'b133aa62-207d-4b74-8d2a-c77db87f2ab5',
     partNo: 'RK73H1JTTD1502F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '3a3f4d5d-5bc8-4a1c-9da9-56ba7016c603',
     partNo: 'RK73H1JTTD1542F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'e775b3d9-840b-4581-bcf6-3dff3280b592',
     partNo: 'RK73H1JTTD1603F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '8455e94e-77f8-44f1-8d7b-30113de7a851',
     partNo: 'RK73H1JTTD1R00F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '223dd788-890e-402d-8bc2-1a20753044a4',
     partNo: 'RK73H1JTTD2001F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '0d85b6b1-6025-4a27-8b66-5f3f7356d7ab',
     partNo: 'RK73H1JTTD2002F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'cce68296-1782-426c-944a-27fae6c5eca4',
     partNo: 'RK73H1JTTD2200F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'ec2f2e9b-ad9c-44af-906a-ba6bff47ce98',
     partNo: 'RK73H1JTTD2493F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '3623c959-d145-48ec-8f7d-dae260330558',
     partNo: 'RK73H1JTTD3001F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'adacedf5-3abd-44db-8a8c-e70b21c772ee',
     partNo: 'RK73H1JTTD3002F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '375994fa-a313-445e-8c32-eb70b0567da0',
     partNo: 'RK73H1JTTD3301F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'e7679b72-fa52-4fbb-8c10-b166d8476f81',
     partNo: 'RK73H1JTTD3302F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '58474723-3c76-4e06-9538-959615ac7281',
     partNo: 'RK73H1JTTD3303D',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'f15f90f7-25b2-43aa-b789-ce5a3c33aea5',
     partNo: 'RK73H1JTTD3572F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'ccfdb199-5e16-48f5-9116-7934c9964eac',
     partNo: 'RK73H1JTTD43R0F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '322e687e-872d-4a3c-81ce-6485477fe88f',
     partNo: 'RK73H1JTTD4701D',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '46e4a12a-8ea5-42fc-89cb-39758f07e8f2',
     partNo: 'RK73H1JTTD4701F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '2ceb2fb6-2c12-47d6-b3a5-698a9d069269',
     partNo: 'RK73H1JTTD4703F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '0ee0fb45-a082-4c2e-84c9-afe2b8fbfba9',
     partNo: 'RK73H1JTTD4990F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'f0340dfa-4a25-4bf9-b46b-f381d420b26e',
     partNo: 'RK73H1JTTD4992F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '1d81a6a4-88df-4d74-947a-e83b5b068f93',
     partNo: 'RK73H1JTTD6201F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'c8beb594-eb60-43c6-9e42-49a8fb0c3c13',
     partNo: 'RK73H1JTTD6801F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '93d9b1c6-3bb5-47c8-81d1-2e6f633f9652',
     partNo: 'RK73H1JTTD6981F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '70f1a409-79f9-49c5-afa1-c1b4af2c1559',
     partNo: 'RK73H1JTTD7500F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'a71148ef-2ec9-4b58-9255-23e284329803',
     partNo: 'RK73H1JTTD82R5F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '92337d51-0e44-4cf7-84f3-78b549afec21',
     partNo: 'RK73H1JTTD9R10F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '5abdb8eb-f933-45d3-a4ac-8c7ae012d921',
     partNo: 'RK73H2ARTTD1002F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'ef900bda-f356-4743-9fd0-a9ff765c7430',
     partNo: 'RK73H2ATTD1003F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '1ddbd219-9f69-4f1c-8492-868ee4ee4ac6',
     partNo: 'RK73H2ATTD10R0F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '5bd4da4d-64cc-4f72-91e2-38c10a29992e',
     partNo: 'RK73H2ATTD1302F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '639cbb15-e7e1-4522-978f-64ec2dd7de1d',
     partNo: 'RK73H2ATTD15R0F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '16049a45-fe97-4044-a9a6-a101eae07cd6',
     partNo: 'RK73H2ATTD20R0F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '25e1bfb0-bb02-4e18-95c9-bfb4cfd13d69',
     partNo: 'RK73H2ATTD22R1F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '91a61713-2463-49cd-9a03-88dfa45c9ae7',
     partNo: 'RK73H2ATTD3161D',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'b098f147-4c7e-46a1-882c-76ed67c3efd5',
     partNo: 'RK73H2ATTD4320F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '80d11ce0-2a77-404b-bd41-0d0839aa0c65',
     partNo: 'RK73H2ATTD4702F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'bb93870f-68ba-4191-aeed-bb27a5fd3f44',
     partNo: 'RK73H2ATTD51R0F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'feb01cf2-b228-484e-ac42-e6816202742d',
     partNo: 'RK73H2BRTTD12R0F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '2f887dc4-a3b1-433d-b1ce-a2484b7b91f1',
     partNo: 'RK73H2BTTD1000F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '9df11cf5-79aa-47ed-9bff-d3ddf1478e4e',
     partNo: 'RK73H2BTTD1002F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '065c168f-7b30-4724-a1b5-78ceec62d8ee',
     partNo: 'RK73H2BTTD1003F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '366d0a5d-0243-4a5d-9023-8641e62614b7',
     partNo: 'RK73H2BTTD2004F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'ac45eade-c492-40cf-a557-5105d9f036d5',
     partNo: 'RK73H2BTTD3303F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'a080e435-fb85-4a3d-8dd1-b9bc6a6d7aba',
     partNo: 'RK73H2BTTD3900F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '30181128-08a3-4702-b727-fe7705958d17',
     partNo: 'RK73H2BTTD4701F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'a15673bf-f899-4f41-937d-ccc311d69868',
     partNo: 'RK73H3ATTE1001F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '7e093daa-6327-4127-acfe-885cc0ac1f99',
     partNo: 'RK73Z1ETTP',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'c3aa8633-97ac-4de5-96e2-8f9c2ab968c1',
     partNo: 'RK73Z1HTTC',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'e4e586f3-1c61-4879-bab1-a579917f0d0c',
     partNo: 'RK73Z1JRTTD',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'd3ec55ca-8233-42b3-b692-3107e3e63c7a',
     partNo: 'RK73Z1JTTD',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'cb5c1265-8eeb-4327-96ed-a217ff70ce01',
     partNo: 'RK73Z2ARTTD',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'fd892cb3-94ed-4a28-abfd-d4f0ab6f44c2',
     partNo: 'RK73Z2ATTD',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'a9210d79-0899-4ffd-adbc-a643ee94c4e8',
     partNo: 'RK73Z2BTTD',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: 'db017eb1-2393-4ba3-a406-c9ae43e7fd66',
     partNo: 'SG73P1JTTD10R0F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '1d5794bb-44ef-4081-8f0b-103bd5690454',
     partNo: 'SG73P1JTTD2R00F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '96ca3e71-11de-4c4c-8481-fb92d734f4f8',
     partNo: 'SG73P2ATTD4701F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   },
   {
     id: '9d267515-e492-41b9-97ed-57c0528e696c',
     partNo: 'WK73R2BTTD62R0F',
     internalCode: '',
-    description: '',
-    defaultCoo: 'CN'
+    description: ''
   }
 ] as const;
 const wclPartByNo = Object.fromEntries(wclPartRecords.map((p) => [p.partNo, p])) as Record<

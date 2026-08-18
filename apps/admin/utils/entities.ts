@@ -97,7 +97,6 @@ export const entities: Record<string, EntityConfig> = {
       { key: "partNo", label: "admin.fields.partNo", type: "text", required: true },
       { key: "wclItemNo", label: "admin.fields.wclItemNo", type: "text" },
       { key: "description", label: "admin.fields.description", type: "text" },
-      { key: "defaultCoo", label: "admin.fields.defaultCoo", type: "text" },
     ],
   },
   countries: {

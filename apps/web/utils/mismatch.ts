@@ -31,7 +31,7 @@ export function computeReceivedQty(
 }
 
 export function validateMismatchInputs(
-  expectedQty: number,
+  expectedQty: number | null,
   reason: MismatchReason | null,
   mismatchQty: number | null,
   wrongPartNo: string | null
@@ -50,7 +50,9 @@ export function validateMismatchInputs(
     throw new I18nError("quantity_must_be_non_negative_integer");
   }
 
-  if (reason === "damaged" || reason === "quality_rejection") {
+  // expectedQty null = line qty unknown upstream — the expected-bound check
+  // can't apply (the server re-validates on submit anyway).
+  if (expectedQty !== null && (reason === "damaged" || reason === "quality_rejection")) {
     if (qty > expectedQty) {
       throw new I18nError("damaged_rejected_quantity_exceeds_expected");
     }
@@ -70,8 +72,10 @@ export function validateMismatchInputs(
     throw new I18nError("quantity_mismatch_requires_valid_received_qty");
   }
 
-  const receivedQty = computeReceivedQty(expectedQty, reason, mismatchQty);
-  if (receivedQty < 0) {
-    throw new I18nError("computed_received_quantity_cannot_be_negative");
+  if (expectedQty !== null) {
+    const receivedQty = computeReceivedQty(expectedQty, reason, mismatchQty);
+    if (receivedQty < 0) {
+      throw new I18nError("computed_received_quantity_cannot_be_negative");
+    }
   }
 }

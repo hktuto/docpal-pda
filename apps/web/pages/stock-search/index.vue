@@ -147,7 +147,7 @@ watch([partNo, selectedSupplierCode, shelfCode], load);
 useVisibleReload(load);
 
 function partMeta(part: StockSearchPart): string {
-  return [part.wclItemNo, part.description, part.defaultCoo]
+  return [part.wclItemNo, part.description]
     .filter(Boolean)
     .join(" · ");
 }

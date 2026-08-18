@@ -927,7 +927,6 @@ export default {
       partNo: "Part no",
       wclItemNo: "WCL item no",
       description: "Description",
-      defaultCoo: "Default COO",
       label: "Label",
       rule: "Rule",
       remark: "Remark",

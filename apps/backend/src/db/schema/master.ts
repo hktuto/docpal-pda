@@ -80,7 +80,6 @@ export const parts = pgTable("parts", {
   partNo: text("part_no").notNull(), // 供应商 part number — 不唯一
   wclItemNo: text("wcl_item_no").unique(), // WCL Part No（唯一业务 key — ingest dedup key；同 receiving_invoice_items.wcl_item_no）
   description: text("description"),
-  defaultCoo: text("default_coo"),
   creationDate: timestamp("creation_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
 },

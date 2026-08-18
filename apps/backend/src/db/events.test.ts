@@ -107,8 +107,10 @@ test("ingest picking: emits created on insert, nothing on no-change, updated on 
 
 function receivingBody(): IngestReceivingBody {
   return {
-    order: { subInventoryCode: "STORE1" },
-    invoices: [{ invoiceNo: "INV-EVT-1", items: [{ partNo: "RK73H1JTTD2202F", lineQty: 10 }] }],
+    order: {},
+    invoices: [
+      { invoiceNo: "INV-EVT-1", items: [{ partNo: "RK73H1JTTD2202F", lineQty: 10, orgId: 2, subInventoryCode: "STORE1" }] },
+    ],
   };
 }
 

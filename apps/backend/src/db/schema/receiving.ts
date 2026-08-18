@@ -11,7 +11,6 @@ export const receivingOrders = pgTable(
     supplierCode: text("supplier_code").references(() => suppliers.code),
     deliveryDate: timestamp("delivery_date", { mode: "date" }),
     orgId: integer("org_id").notNull().default(2), // 收货办公室, 2: HK
-    subInventoryCode: text("sub_inventory_code").notNull(), // 收货入哪一个子库存（每单必有）
     dateCode: text("date_code"), // 整单 date code；行无 date_code 时继承此值
     status: text("status").notNull().default("pending"), // pending | in_hand | provisional_received | clear
     arrivedAt: timestamp("arrived_at", { mode: "date" }),
@@ -21,8 +20,6 @@ export const receivingOrders = pgTable(
   },
   (t) => ({
     statusIdx: index("idx_receiving_orders_status").on(t.status),
-    // Composite FK → sub_inventories (org_id, secondary_inventory_name) group (3-level model).
-    subInvFk: foreignKey({ name: "receiving_orders_sub_inv_fk", columns: [t.orgId, t.subInventoryCode], foreignColumns: [subInventories.orgId, subInventories.secondaryInventoryName] }),
   })
 );
 
@@ -39,13 +36,9 @@ export const receivingInvoices = pgTable(
     totalCtn: integer("total_ctn"), // 总箱数
     deliveryDate: timestamp("delivery_date", { mode: "date" }), // 出货日期，非入库时间
     orgId: integer("org_id").notNull().default(2), // 出货方办公室, 2: HK
-    subInventoryCode: text("sub_inventory_code"), // 放到哪一个子库存中，如 STORE1，允许为空
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
-  },
-  (t) => ({
-    subInvFk: foreignKey({ name: "receiving_invoices_sub_inv_fk", columns: [t.orgId, t.subInventoryCode], foreignColumns: [subInventories.orgId, subInventories.secondaryInventoryName] }),
-  })
+  }
 );
 
 // = Packing List Line Items
@@ -58,7 +51,7 @@ export const receivingInvoiceItems = pgTable(
     wclItemNo: text("wcl_item_no"), // WCL Part No（行级冗余，便于 OCR 对账）
     poNo: text("po_no"),
     poLine: text("po_line"),
-    lineQty: integer("line_qty").notNull(), // 应收 / Expected 单据量（与 Oracle DB line qty 一致）
+    lineQty: integer("line_qty"), // 应收 / Expected 单据量（与 Oracle DB line qty 一致；可空 — 上游缺失时走人工确认）
     receivedQty: integer("received_qty").notNull().default(0),
     pickedQty: integer("picked_qty").notNull().default(0),
     putAwayQty: integer("put_away_qty").notNull().default(0),
@@ -75,6 +68,7 @@ export const receivingInvoiceItems = pgTable(
     wrongPartNo: text("wrong_part_no"),
     mismatchNote: text("mismatch_note"),
     additionalData: jsonb("additional_data"), // 上游额外字段透传（无固定结构）
+    orderData: jsonb("order_data"), // 上游 order_data 透传（无固定结构，同 additional_data）
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },

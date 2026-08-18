@@ -23,8 +23,7 @@ CREATE TABLE IF NOT EXISTS parts (
   id TEXT PRIMARY KEY,
   part_no TEXT NOT NULL UNIQUE,
   internal_code TEXT,
-  description TEXT,
-  default_coo TEXT
+  description TEXT
 );
 
 CREATE TABLE IF NOT EXISTS shelves (

@@ -28,10 +28,10 @@ const uid = (() => {
 
 const INITIAL = {
   receiving_orders: [
-    ["batchNo", "supplierCode", "deliveryDate", "orgId", "subInventoryCode", "status"],
-    ["100001", "KOA", "2026-07-28", 2, "STORE1", "pending"],
-    ["100002", "KOA", "2026-07-29", 2, "STORE1", "pending"],
-    ["100003", "KOA", "2026-08-03", 2, "STORE1", "pending"],
+    ["batchNo", "supplierCode", "deliveryDate", "orgId", "status"],
+    ["100001", "KOA", "2026-07-28", 2, "pending"],
+    ["100002", "KOA", "2026-07-29", 2, "pending"],
+    ["100003", "KOA", "2026-08-03", 2, "pending"],
   ],
   receiving_invoices: [
     ["batchNo", "invoiceNo", "supplierCode", "wclCompanyName", "deliveryDate"],
@@ -40,25 +40,25 @@ const INITIAL = {
     ["100003", "INV-100003-01", "KOA", "WCL Components Ltd", "2026-08-01"],
   ],
   receiving_items: [
-    ["invoiceNo", "ctnNo", "partNo", "wclItemNo", "poNo", "poLine", "lineQty", "dateCode", "lotCode", "coo", "cow", "boxSize", "netWeight", "grossWeight", "weightUnit"],
-    ["INV-100001-01", "C1001", "RK73H1JTTD1002F", "RK73H1JTTD1002F", "PO-KOA-101", "1", 2000, "2605", "L2605A", "JP", "JP", "26 X 22 X 22", 1300, 1450, "g"],
-    ["INV-100001-01", "C1001", "RK73H1JTTD2202F", "RK73H1JTTD2202F", "PO-KOA-101", "2", 1000, "2605", "L2605B", "JP", "JP", "", "", "", ""],
-    ["INV-100001-01", "C1002", "RK73B1JTTD181G", "RK73B1JTTD181G", "PO-KOA-101", "3", 1500, "2606", "L2606A", "JP", "JP", "33 X 24 X 18", 950, 1100, "g"],
-    ["INV-100001-01", "C1002", "RK73H2ATTD1372F", "RK73H2ATTD1372F", "PO-KOA-101", "4", 800, "2606", "L2606B", "JP", "JP", "", "", "", ""],
-    ["INV-100001-01", "C1002", "RK73H1JTTD4702F", "RK73H1JTTD4702F", "PO-KOA-101", "5", 500, "2606", "L2606C", "JP", "JP", "", "", "", ""],
-    ["INV-100002-01", "C2001", "RK73H1JTTD4702F", "RK73H1JTTD4702F", "PO-DAI-201", "1", 1200, "2607", "L2607A", "JP", "JP", "32 X 22 X 30", 2100, 2350, "g"],
-    ["INV-100002-01", "C2001", "RK73B1JTTD181G", "RK73B1JTTD181G", "PO-DAI-201", "2", 600, "2607", "L2607B", "JP", "JP", "", "", "", ""],
-    ["INV-100002-01", "C2002", "RK73H2ATTD1372F", "RK73H2ATTD1372F", "PO-DAI-201", "3", 900, "2608", "L2608A", "JP", "JP", "35 X 35 X 22", 1600, 1800, "g"],
-    ["INV-100002-01", "C2002", "RK73H1JTTD1002F", "RK73H1JTTD1002F", "PO-DAI-201", "4", 400, "2608", "L2608B", "JP", "JP", "", "", "", ""],
-    ["INV-100002-01", "C2002", "RK73H1JTTD2202F", "RK73H1JTTD2202F", "PO-DAI-201", "5", 300, "2608", "L2608C", "JP", "JP", "", "", "", ""],
+    ["invoiceNo", "ctnNo", "partNo", "wclItemNo", "poNo", "poLine", "lineQty", "dateCode", "lotCode", "coo", "cow", "subInventoryCode", "boxSize", "netWeight", "grossWeight", "weightUnit"],
+    ["INV-100001-01", "C1001", "RK73H1JTTD1002F", "RK73H1JTTD1002F", "PO-KOA-101", "1", 2000, "2605", "L2605A", "JP", "JP", "STORE1", "26 X 22 X 22", 1300, 1450, "g"],
+    ["INV-100001-01", "C1001", "RK73H1JTTD2202F", "RK73H1JTTD2202F", "PO-KOA-101", "2", 1000, "2605", "L2605B", "JP", "JP", "STORE1", "", "", "", ""],
+    ["INV-100001-01", "C1002", "RK73B1JTTD181G", "RK73B1JTTD181G", "PO-KOA-101", "3", 1500, "2606", "L2606A", "JP", "JP", "STORE1", "33 X 24 X 18", 950, 1100, "g"],
+    ["INV-100001-01", "C1002", "RK73H2ATTD1372F", "RK73H2ATTD1372F", "PO-KOA-101", "4", 800, "2606", "L2606B", "JP", "JP", "STORE1", "", "", "", ""],
+    ["INV-100001-01", "C1002", "RK73H1JTTD4702F", "RK73H1JTTD4702F", "PO-KOA-101", "5", 500, "2606", "L2606C", "JP", "JP", "STORE1", "", "", "", ""],
+    ["INV-100002-01", "C2001", "RK73H1JTTD4702F", "RK73H1JTTD4702F", "PO-DAI-201", "1", 1200, "2607", "L2607A", "JP", "JP", "STORE1", "32 X 22 X 30", 2100, 2350, "g"],
+    ["INV-100002-01", "C2001", "RK73B1JTTD181G", "RK73B1JTTD181G", "PO-DAI-201", "2", 600, "2607", "L2607B", "JP", "JP", "STORE1", "", "", "", ""],
+    ["INV-100002-01", "C2002", "RK73H2ATTD1372F", "RK73H2ATTD1372F", "PO-DAI-201", "3", 900, "2608", "L2608A", "JP", "JP", "STORE1", "35 X 35 X 22", 1600, 1800, "g"],
+    ["INV-100002-01", "C2002", "RK73H1JTTD1002F", "RK73H1JTTD1002F", "PO-DAI-201", "4", 400, "2608", "L2608B", "JP", "JP", "STORE1", "", "", "", ""],
+    ["INV-100002-01", "C2002", "RK73H1JTTD2202F", "RK73H1JTTD2202F", "PO-DAI-201", "5", 300, "2608", "L2608C", "JP", "JP", "STORE1", "", "", "", ""],
     // case 1 carton: contents == SO-DEMO-0003 exactly (whole-box claim after put-away)
-    ["INV-100003-01", "C3001", "RK73H1JTTD3302F", "RK73H1JTTD3302F", "PO-KOA-301", "1", 500, "2609", "L2609C", "JP", "JP", "30 X 24 X 20", 1100, 1250, "g"],
-    ["INV-100003-01", "C3001", "RK73H1JTTD6802F", "RK73H1JTTD6802F", "PO-KOA-301", "2", 800, "2609", "L2609D", "JP", "JP", "", "", "", ""],
+    ["INV-100003-01", "C3001", "RK73H1JTTD3302F", "RK73H1JTTD3302F", "PO-KOA-301", "1", 500, "2609", "L2609C", "JP", "JP", "STORE1", "30 X 24 X 20", 1100, 1250, "g"],
+    ["INV-100003-01", "C3001", "RK73H1JTTD6802F", "RK73H1JTTD6802F", "PO-KOA-301", "2", 800, "2609", "L2609D", "JP", "JP", "STORE1", "", "", "", ""],
     // case 2 supply: only 1200 of the 3000 SO-DEMO-0004 needs (never fully allocated)
-    ["INV-100003-01", "C3002", "RK73B1JTTD102G", "RK73B1JTTD102G", "PO-KOA-301", "3", 1200, "2610", "L2610A", "JP", "JP", "28 X 20 X 18", 800, 950, "g"],
+    ["INV-100003-01", "C3002", "RK73B1JTTD102G", "RK73B1JTTD102G", "PO-KOA-301", "3", 1200, "2610", "L2610A", "JP", "JP", "STORE1", "28 X 20 X 18", 800, 950, "g"],
     // case 3 receiving portion: SO-DEMO-0005 also takes these parts from shelf box ...-0003
-    ["INV-100003-01", "C3003", "RK73H1JTTD5602F", "RK73H1JTTD5602F", "PO-KOA-301", "4", 1500, "2611", "L2611A", "JP", "JP", "36 X 26 X 24", 1900, 2100, "g"],
-    ["INV-100003-01", "C3003", "RK73H2ATTD2212F", "RK73H2ATTD2212F", "PO-KOA-301", "5", 500, "2611", "L2611B", "JP", "JP", "", "", "", ""],
+    ["INV-100003-01", "C3003", "RK73H1JTTD5602F", "RK73H1JTTD5602F", "PO-KOA-301", "4", 1500, "2611", "L2611A", "JP", "JP", "STORE1", "36 X 26 X 24", 1900, 2100, "g"],
+    ["INV-100003-01", "C3003", "RK73H2ATTD2212F", "RK73H2ATTD2212F", "PO-KOA-301", "5", 500, "2611", "L2611B", "JP", "JP", "STORE1", "", "", "", ""],
   ],
   picking_orders: [
     ["orderNo", "poNo", "deliveryDate", "shipTo", "customerCode", "orgId", "subInventoryCode"],
@@ -280,7 +280,6 @@ const demoReceivingOrders = recOrders.map((o) => {
     supplierCode: opt(o.supplierCode),
     deliveryDate: date(o.deliveryDate, "receiving_orders", o.__row, "deliveryDate"),
     orgId: Number(o.orgId) || 2,
-    subInventoryCode: str(o.subInventoryCode) || "STORE1",
     status: str(o.status) || "pending",
   };
 });
@@ -328,6 +327,7 @@ const demoReceivingInvoiceItems = recItems.map((it) => {
     coo: opt(it.coo),
     cow: opt(it.cow),
     orgId: 2,
+    subInventoryCode: opt(it.subInventoryCode),
     additionalData: Object.keys(ad).length ? ad : null,
   };
 });
@@ -392,7 +392,6 @@ const demoParts = [...partBrand.entries()].map(([partNo, brand]) => ({
   partNo,
   wclItemNo: partNo,
   description: null,
-  defaultCoo: null,
 }));
 
 // emit TS
@@ -407,10 +406,10 @@ const out = `// GENERATED by scripts/gen-seed-demo-scenario.mjs from new_seed/de
 // docs/superpowers/specs/2026-07-29-excel-demo-seed-design.md
 const d = (s: string) => new Date(s);
 
-${ts("demoParts", demoParts, (r) => `id: ${j(r.id)}, brand: ${j(r.brand)}, partNo: ${j(r.partNo)}, wclItemNo: ${j(r.wclItemNo)}, description: null, defaultCoo: null`)}
-${ts("demoReceivingOrders", demoReceivingOrders, (r) => `id: ${j(r.id)}, batchNo: ${j(r.batchNo)}, supplierCode: ${j(r.supplierCode)}, deliveryDate: ${d(r.deliveryDate)}, orgId: ${r.orgId}, subInventoryCode: ${j(r.subInventoryCode)}, status: ${j(r.status)}`)}
+${ts("demoParts", demoParts, (r) => `id: ${j(r.id)}, brand: ${j(r.brand)}, partNo: ${j(r.partNo)}, wclItemNo: ${j(r.wclItemNo)}, description: null`)}
+${ts("demoReceivingOrders", demoReceivingOrders, (r) => `id: ${j(r.id)}, batchNo: ${j(r.batchNo)}, supplierCode: ${j(r.supplierCode)}, deliveryDate: ${d(r.deliveryDate)}, orgId: ${r.orgId}, status: ${j(r.status)}`)}
 ${ts("demoReceivingInvoices", demoReceivingInvoices, (r) => `id: ${j(r.id)}, receivingOrderId: ${j(r.receivingOrderId)}, invoiceNo: ${j(r.invoiceNo)}, supplierCode: ${j(r.supplierCode)}, wclCompanyName: ${j(r.wclCompanyName)}, totalQty: ${r.totalQty}, totalCtn: ${r.totalCtn}, deliveryDate: ${d(r.deliveryDate)}, orgId: ${r.orgId}`)}
-${ts("demoReceivingInvoiceItems", demoReceivingInvoiceItems, (r) => `id: ${j(r.id)}, receivingInvoiceId: ${j(r.receivingInvoiceId)}, partNo: ${j(r.partNo)}, wclItemNo: ${j(r.wclItemNo)}, poNo: ${j(r.poNo)}, poLine: ${j(r.poLine)}, lineQty: ${r.lineQty}, ctnNo: ${j(r.ctnNo)}, dateCode: ${j(r.dateCode)}, lotCode: ${j(r.lotCode)}, coo: ${j(r.coo)}, cow: ${j(r.cow)}, orgId: ${r.orgId}, additionalData: ${j(r.additionalData)}`)}
+${ts("demoReceivingInvoiceItems", demoReceivingInvoiceItems, (r) => `id: ${j(r.id)}, receivingInvoiceId: ${j(r.receivingInvoiceId)}, partNo: ${j(r.partNo)}, wclItemNo: ${j(r.wclItemNo)}, poNo: ${j(r.poNo)}, poLine: ${j(r.poLine)}, lineQty: ${r.lineQty}, ctnNo: ${j(r.ctnNo)}, dateCode: ${j(r.dateCode)}, lotCode: ${j(r.lotCode)}, coo: ${j(r.coo)}, cow: ${j(r.cow)}, orgId: ${r.orgId}, subInventoryCode: ${j(r.subInventoryCode)}, additionalData: ${j(r.additionalData)}`)}
 ${ts("demoPickingOrders", demoPickingOrders, (r) => `id: ${j(r.id)}, orderNo: ${j(r.orderNo)}, poNo: ${j(r.poNo)}, deliveryDate: ${d(r.deliveryDate)}, shipTo: ${j(r.shipTo)}, customerCode: ${j(r.customerCode)}, orgId: ${r.orgId}, subInventoryCode: ${j(r.subInventoryCode)}, status: "pending" as const`)}
 ${ts("demoPickingItems", demoPickingItems, (r) => `id: ${j(r.id)}, pickingOrderId: ${j(r.pickingOrderId)}, partNo: ${j(r.partNo)}, qty: ${r.qty}, lineId: ${r.lineId}, lineNumber: ${r.lineNumber}, shipmentNumber: ${r.shipmentNumber}`)}
 ${ts("demoShelfBoxes", demoShelfBoxes, (r) => `id: ${j(r.id)}, shelfCode: ${j(r.shelfCode)}, orgId: ${r.orgId}, subInventoryCode: ${j(r.subInventoryCode)}, status: ${j(r.status)}`)}

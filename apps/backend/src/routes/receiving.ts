@@ -37,7 +37,6 @@ export interface ReceivingOrderListRow {
   supplierCode: string | null;
   supplierName: string | null;
   orgId: number;
-  subInventoryCode: string;
   invoiceCount: number;
   itemCount: number;
   remainingItems: number;
@@ -64,10 +63,9 @@ receivingRoute.get("/receiving-orders", async (c) => {
         s.code AS "supplierCode",
         s.name AS "supplierName",
         ro.org_id AS "orgId",
-        ro.sub_inventory_code AS "subInventoryCode",
         COUNT(DISTINCT inv.id)::int AS "invoiceCount",
         COUNT(rii.id)::int AS "itemCount",
-        COUNT(rii.id) FILTER (WHERE rii.put_away_qty < rii.line_qty)::int AS "remainingItems",
+        COUNT(rii.id) FILTER (WHERE rii.line_qty IS NULL OR rii.put_away_qty < rii.line_qty)::int AS "remainingItems",
         (
           SELECT COUNT(DISTINCT po.id)::int
           FROM picking_orders po
@@ -101,7 +99,6 @@ interface OrderDetailRow {
   deliveryDate: string | null;
   dateCode: string | null;
   orgId: number;
-  subInventoryCode: string;
   arrivedAt: string | null;
   arrivedBy: string | null;
   createdDate: string;
@@ -126,7 +123,6 @@ interface InvoiceRow {
   totalCtn: number | null;
   deliveryDate: string | null;
   orgId: number;
-  subInventoryCode: string | null;
   createdDate: string;
   lastUpdateDate: string;
 }
@@ -138,7 +134,7 @@ interface ItemRow {
   wclItemNo: string | null;
   poNo: string | null;
   poLine: string | null;
-  lineQty: number;
+  lineQty: number | null;
   receivedQty: number;
   pickedQty: number;
   putAwayQty: number;
@@ -157,7 +153,6 @@ interface ItemRow {
   partPk: string;
   partWclItemNo: string | null;
   partDescription: string | null;
-  partDefaultCoo: string | null;
 }
 
 // Complete nested read: order + supplier (with profile) + invoices + items,
@@ -172,7 +167,6 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
         ro.id, ro.batch_no AS "batchNo", ro.status,
         ro.delivery_date AS "deliveryDate", ro.date_code AS "dateCode",
         ro.org_id AS "orgId",
-        ro.sub_inventory_code AS "subInventoryCode",
         ro.arrived_at AS "arrivedAt", ro.arrived_by AS "arrivedBy",
         ro.created_date AS "createdDate", ro.last_update_date AS "lastUpdateDate",
         s.id AS "supplierId", s.code AS "supplierCode", s.name AS "supplierName",
@@ -195,7 +189,6 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
         id, invoice_no AS "invoiceNo", supplier_code AS "supplierCode",
         wcl_company_name AS "wclCompanyName", total_qty AS "totalQty", total_ctn AS "totalCtn",
         delivery_date AS "deliveryDate", org_id AS "orgId",
-        sub_inventory_code AS "subInventoryCode",
         created_date AS "createdDate", last_update_date AS "lastUpdateDate"
       FROM receiving_invoices
       WHERE receiving_order_id = ${id}
@@ -223,8 +216,7 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
           WHERE a.receiving_invoice_item_id = rii.id
         ), 0)::int AS "allocatedQty",
         p.id AS "partPk", p.wcl_item_no AS "partWclItemNo",
-        p.description AS "partDescription",
-        p.default_coo AS "partDefaultCoo"
+        p.description AS "partDescription"
       FROM receiving_invoice_items rii
       JOIN receiving_invoices inv ON inv.id = rii.receiving_invoice_id
       JOIN parts p ON p.part_no = rii.part_no
@@ -241,7 +233,6 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
       deliveryDate: order.deliveryDate,
       dateCode: order.dateCode,
       orgId: order.orgId,
-      subInventoryCode: order.subInventoryCode,
       arrivedAt: order.arrivedAt,
       arrivedBy: order.arrivedBy,
       createdDate: order.createdDate,
@@ -288,7 +279,6 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
               partNo: i.partNo,
               wclItemNo: i.partWclItemNo,
               description: i.partDescription,
-              defaultCoo: i.partDefaultCoo,
             },
             mismatch: i.reportedMismatch
               ? {

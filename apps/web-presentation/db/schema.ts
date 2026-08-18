@@ -27,7 +27,6 @@ export const parts = pgTable("parts", {
   partNo: text("part_no").notNull().unique(),        // customer part-id
   internalCode: text("internal_code"),                // e.g. KOA item code
   description: text("description"),
-  defaultCoo: text("default_coo"),
 });
 
 export const shelves = pgTable("shelves", {

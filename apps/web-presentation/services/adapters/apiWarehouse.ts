@@ -84,7 +84,7 @@ function toMismatch(row: RawRow): ReceivingItemMismatch {
 }
 
 // The API detail query does not return po_no/po_line on items nor
-// internal_code/default_coo on parts; they default to null.
+// internal_code on parts; they default to null.
 function toDetailItem(row: RawRow): ReceivingItemWithMismatch {
   return {
     id: String(row.id),
@@ -107,7 +107,6 @@ function toDetailItem(row: RawRow): ReceivingItemWithMismatch {
           partNo: String(row.part.part_no),
           internalCode: row.part.internal_code ?? null,
           description: row.part.description ?? null,
-          defaultCoo: row.part.default_coo ?? null,
         }
       : null,
     mismatch: row.mismatch ? toMismatch(row.mismatch) : null,
@@ -210,7 +209,6 @@ function toBundlePart(row: RawRow): Part {
     partNo: String(row.part_no),
     internalCode: row.internal_code ?? null,
     description: row.description ?? null,
-    defaultCoo: row.default_coo ?? null,
   };
 }
 
@@ -441,7 +439,6 @@ function toApiMeasuringPackage(
           : info?.partNo ?? "",
         internalCode: null,
         description: null,
-        defaultCoo: null,
       },
     },
   };
@@ -490,7 +487,6 @@ function toApiMeasuringPickingOrder(
         partNo: String(it.part_no),
         internalCode: null,
         description: null,
-        defaultCoo: null,
       },
       allocations: [],
     })),
@@ -569,15 +565,14 @@ function toStockSupplierStats(row: RawRow): StockSearchSupplierWithStats {
   };
 }
 
-// The API parts table lacks internal_code/default_coo (API gap), so they
-// default to null unless a row happens to carry them.
+// The API parts table lacks internal_code (API gap), so it defaults to null
+// unless a row happens to carry it.
 function toStockPart(row: RawRow): StockSearchPart {
   return {
     id: String(row.id),
     partNo: String(row.part_no),
     internalCode: row.internal_code ?? null,
     description: row.description ?? null,
-    defaultCoo: row.default_coo ?? null,
   };
 }
 

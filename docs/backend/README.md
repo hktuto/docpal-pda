@@ -88,7 +88,7 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     `allocatedQty`, `remainingQty` = the candidates formula, batch fields),
     each with the advisory per-item `suggestedShelfCode`/`suggestedBoxId`/
     `suggestionReason` (most recent open box or lot of the same part in the
-    order's org + sub-inventory, else the sub-inventory-tagged shelf;
+    item's org + sub-inventory, else the sub-inventory-tagged shelf;
     `steps.put-away.suggestShelf=off` suppresses), + materialized lots +
     staging scans + non-staging boxes with their items.
   - `POST /receiving-orders/:id/put-away-scans` `{receivingInvoiceItemId, qty, dateCode?, lotCode?, coo?, cow?, shelfBoxId?}`
@@ -312,27 +312,25 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     `shelfCode` exact, `supplierId` via lot sources → receiving order's
     supplier; zero-qty lots included (old `/stock-search/parts/lots`
     semantics).
-- Ingest (`apps/backend/src/routes/ingest.ts`, server-to-server):
-  - `PUT /receiving-orders/:batchNo` `{order, invoices[{..., items[]}]}`
-    (camelCase) → 201/200 `{id, created, changed}` — idempotent upsert keyed
-    by the natural `batch_no` (no `external_id`); invoices reconcile by
-    `invoiceNo` (add/update/delete — delete cascades items), items by business
-    key (`partNo + poNo + poLine`, `lineQty`/`ctnNo` fields). Derived state
-    (`received_qty`, `picked_qty`, `put_away_qty`, mismatch flags) is never
-    written; qty decreases / removals are 409-guarded once the order is past
-    pending or work has started. A changed upsert on an order past `pending`
-    runs `allocateAll` best-effort after commit; no ledger rows on ingest.
-  - `PUT /picking-orders/:orderNo` `{order, items[]}` → same shape — items
-    reconcile by business key (`partNo`), `picked_qty`/`allocated_qty` never
-    written, `customerCode` resolves to `customer_profiles.code`; a changed
-    upsert on a `pending`/`picking` order runs `allocateAll` best-effort
-    after commit. Each item requires the upstream Oracle line identifiers
-    `lineId` (bigint), `lineNumber`, `shipmentNumber` (400 when missing);
-    they are stored/updated as expected-side fields like `qty`.
-  - Both reference parts by `partNo` and resolve `supplierCode` /
-    `customerCode` (400 `unknown_part` / `unknown_supplier` /
-    `unknown_customer` with the code in the message); `org_id` is accepted
-    with a `2` default.
+- Upstream sync — Electric consumer (`apps/backend/src/sync/consumer.ts` +
+  `src/sync/orders.ts`, wired in `src/server.ts`; the ingest HTTP API was
+  retired 2026-08-18, `src/routes/ingest.ts` deleted): pulls the 8 `demo.wms_*`
+  tables from the remote DocPal Postgres master through the self-hosted
+  Electric service (dev: `docker compose --profile sync up -d electric`, needs
+  `DOCPAL_SYNC_DATABASE_URL` in the root `.env`; prod: internal-only in the
+  same compose project). One `ShapeStream` per table resuming from its
+  `sync_checkpoints` row (`src/db/schema/sync.ts`), applying through the
+  `src/db/ingest.ts` domain functions (synced rows adopt the remote UUID id);
+  best-effort `allocateAll` after order-changing batches; remote deletes of
+  in-flight orders reuse the guarded deletes (404/409 → warn + skip). Runs
+  only when `ELECTRIC_URL` is set and `ELECTRIC_SYNC != off`
+  (`ELECTRIC_SECRET` as the `?secret=` shape param in prod); connects to the
+  local DB as the `wms_sync_consumer` role (`SYNC_CONSUMER_DB_PASSWORD`) and
+  sets `app.upstream_write = 1` in its apply transactions — the
+  `enforce_remote_owned_columns()` BEFORE UPDATE triggers reject local updates
+  to remote-owned columns (`delivery_date`/`date_code` stay shared for admin
+  edits). Spec:
+  `docs/superpowers/specs/2026-08-18-electric-sql-sync-design.md`.
 - `/admin/*` — master-data CRUD (see `apps/backend/src/routes/admin/`):
   generic CRUD for shelves (code/zone), suppliers, supplier-profiles
   (incl. `qrType`), parts (referenced by `partNo`, `supplierCode` required),
@@ -373,7 +371,10 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   `shipping_box.shipped` (per-box ship confirm, topics `/shipping-orders` +
   `/picking-orders`, data `{shippingBoxId, shippedOrderIds, actorId}`),
   `picking.reordered` (priority reorder, emitted even
-  when allocations did not change), `receiving_order.upserted` (ingest upserts),
+  when allocations did not change), `receiving_order.upserted` (from the
+  `src/db/ingest.ts` apply functions — the Electric consumer's per-row order
+  upserts emit no `app_events`; its guarded order deletes emit
+  `receiving_order.deleted` / `picking_order.deleted`),
   `receiving.mismatch_reported` / `receiving.mismatch_updated` /
   `receiving.mismatch_confirmed` / `receiving.mismatch_cancelled`,
   `receiving_order.item_removed` (admin issue-item delete),

@@ -11,7 +11,8 @@ import { buildKoaLabelRaw } from "./scanParse.js";
 
 export interface LabelPartRow {
   partNo: string;
-  qty: number;
+  /** NULL on receiving items whose line_qty is unknown upstream (print blank). */
+  qty: number | null;
   lotCode: string | null;
   dateCode: string | null;
   /** Raw scan value per the supplier QR template; null when unbuildable. */
@@ -163,7 +164,7 @@ export async function getLabelsData(db: DbOrTx): Promise<LabelsData> {
     invoiceNo: string;
     itemId: string;
     partNo: string;
-    qty: number;
+    qty: number | null;
     ctnNo: string | null;
     poNo: string | null;
     poLine: string | null;
@@ -203,7 +204,7 @@ export async function getLabelsData(db: DbOrTx): Promise<LabelsData> {
       poLine: r.poLine,
       lotCode: r.lotCode,
       dateCode: r.dateCode,
-      qrValue: partLabel(r.supplierCode, r.partNo, r.qty, r.lotCode),
+      qrValue: r.qty === null ? null : partLabel(r.supplierCode, r.partNo, r.qty, r.lotCode),
       pickingOrderRefs: refs(r.partNo),
     });
   }
@@ -233,7 +234,7 @@ export async function getLabelsData(db: DbOrTx): Promise<LabelsData> {
         LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
         LEFT JOIN parts p ON p.part_no = pi.part_no
         WHERE po.status IN ('pending', 'picking') AND a.qty > 0
-        ORDER BY po.priority_seq, po.order_no, pi.line_number, a.id`
+        ORDER BY po.priority_seq, po.order_no, pi.line_number NULLS LAST, a.id`
   );
   const pickLabels: LabelsData["pickLabels"] = allocs.map((a) => ({
     orderNo: a.orderNo,

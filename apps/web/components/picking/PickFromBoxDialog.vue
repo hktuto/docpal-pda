@@ -28,7 +28,7 @@
           <tbody>
             <tr v-for="entry in entries" :key="entry.allocationId">
               <td>
-                <span class="box-pick__line">L{{ entry.lineNumber }}/S{{ entry.shipmentNumber }}</span>
+                <span class="box-pick__line">L{{ entry.lineNumber ?? '—' }}/S{{ entry.shipmentNumber ?? '—' }}</span>
                 {{ entry.partNo }}
               </td>
               <td>{{ entry.lotCode || $t('common.stateNone') }} / {{ entry.dateCode || $t('common.stateNone') }}</td>
@@ -56,8 +56,8 @@
 export interface PickFromBoxEntry {
   itemId: string;
   allocationId: string;
-  lineNumber: number;
-  shipmentNumber: number;
+  lineNumber: number | null;
+  shipmentNumber: number | null;
   partNo: string;
   lotCode: string | null;
   dateCode: string | null;

@@ -927,7 +927,6 @@ export default {
       partNo: "零件編號",
       wclItemNo: "WCL 貨號",
       description: "描述",
-      defaultCoo: "預設產地",
       label: "標籤",
       rule: "規則",
       remark: "備註",

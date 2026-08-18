@@ -1,7 +1,7 @@
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { sql } from "drizzle-orm";
-import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
+import { setupTestDb, reseed, upstreamWrite, type TestDb } from "./test-helper.js";
 import { allocateAll, parseDateCodeRule } from "./allocate.js";
 import { confirmReceivingArrival } from "./receiving.js";
 import { _setPickingAllocationForTests } from "../config.js";
@@ -110,7 +110,7 @@ test("allocateAll: pair-less demand is org-agnostic — lots in any org match by
   await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${PO_22}`);
   // strip the demand's location pair and move lot 18 into a different org —
   // allocation must still find it (a demand without the pair matches anything)
-  await client.db.execute(sql`UPDATE picking_orders SET org_id = NULL, sub_inventory_code = NULL WHERE id = ${PO_22}`);
+  await upstreamWrite(client, (tx) => tx.execute(sql`UPDATE picking_orders SET org_id = NULL, sub_inventory_code = NULL WHERE id = ${PO_22}`));
   await client.db.execute(sql`UPDATE inventory_lots SET org_id = 3, sub_inventory_code = NULL WHERE id = ${LOT_18}`);
   const s = await allocateAll(client.db);
   assert.equal(s.fullyAllocated, 3);
@@ -126,14 +126,14 @@ test("allocateAll: sources must match the picking order's location pair", async 
   // seeded demand is (org 2, STORE1); a sub-inventory outside its share
   // group finds nothing (STORE1/WSTORE1 share via the demo group — see the
   // share-group test below — so the mismatch case uses OSWF (HK))
-  await client.db.execute(sql`UPDATE picking_orders SET sub_inventory_code = 'OSWF (HK)' WHERE id = ${PO_22}`);
+  await upstreamWrite(client, (tx) => tx.execute(sql`UPDATE picking_orders SET sub_inventory_code = 'OSWF (HK)' WHERE id = ${PO_22}`));
   let s = await allocateAll(client.db);
   assert.equal(s.allocationsCreated, 0);
   let c = await client.db.execute(sql`SELECT count(*)::int AS c FROM allocations`);
   assert.equal(Number((c[0] as any).c), 0);
 
   // a different org finds nothing either
-  await client.db.execute(sql`UPDATE picking_orders SET sub_inventory_code = 'store1', org_id = 143 WHERE id = ${PO_22}`);
+  await upstreamWrite(client, (tx) => tx.execute(sql`UPDATE picking_orders SET sub_inventory_code = 'store1', org_id = 143 WHERE id = ${PO_22}`));
   s = await allocateAll(client.db);
   assert.equal(s.allocationsCreated, 0);
   c = await client.db.execute(sql`SELECT count(*)::int AS c FROM allocations`);
@@ -145,7 +145,7 @@ test("allocateAll: share group widens the sub-inventory match", async () => {
   await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${PO_22}`);
   // demo seed puts org-2 STORE1 + WSTORE1 in share group HK; the lots live in
   // STORE1. A WSTORE1 demand allocates from the shared STORE1 stock.
-  await client.db.execute(sql`UPDATE picking_orders SET sub_inventory_code = 'WSTORE1' WHERE id = ${PO_22}`);
+  await upstreamWrite(client, (tx) => tx.execute(sql`UPDATE picking_orders SET sub_inventory_code = 'WSTORE1' WHERE id = ${PO_22}`));
   let s = await allocateAll(client.db);
   assert.equal(s.fullyAllocated, 3);
   let rows = await client.db.execute(sql`
@@ -173,7 +173,7 @@ test("allocateAll: sharing does not lift customer segregation", async () => {
   // same share group as the demand's WSTORE1
   await client.db.execute(sql`UPDATE inventory_lots SET sub_inventory_code = 'ACME-S1' WHERE id = ${LOT_18}`);
   await client.db.execute(sql`INSERT INTO sub_inventory_share_members (id, org_id, code, share_group, created_date, last_update_date) VALUES (app_uuid_v7(), 2, 'ACME-S1', 'HK', now(), now())`);
-  await client.db.execute(sql`UPDATE picking_orders SET sub_inventory_code = 'WSTORE1', customer_code = NULL WHERE id = ${PO_22}`);
+  await upstreamWrite(client, (tx) => tx.execute(sql`UPDATE picking_orders SET sub_inventory_code = 'WSTORE1', customer_code = NULL WHERE id = ${PO_22}`));
 
   // the segregated lot stays off-limits (customer mismatch) even though it
   // shares the group; item 24's plain STORE1 lot still allocates via sharing
@@ -190,7 +190,7 @@ test("allocateAll: customer-segregated sub-inventory only serves its customer", 
   // move lot 18 into the ACME-segregated store; keep the demand pair-less so
   // the pair match cannot mask the segregation rule
   await client.db.execute(sql`UPDATE inventory_lots SET sub_inventory_code = 'ACME-S1' WHERE id = ${LOT_18}`);
-  await client.db.execute(sql`UPDATE picking_orders SET org_id = NULL, sub_inventory_code = NULL WHERE id = ${PO_22}`);
+  await upstreamWrite(client, (tx) => tx.execute(sql`UPDATE picking_orders SET org_id = NULL, sub_inventory_code = NULL WHERE id = ${PO_22}`));
 
   // seeded demand is customer ACME → the segregated lot serves it
   let s = await allocateAll(client.db);
@@ -202,7 +202,7 @@ test("allocateAll: customer-segregated sub-inventory only serves its customer", 
 
   // the same demand without a customer cannot touch the segregated lot, but
   // item 24's STORE1 lot (not segregated) still allocates
-  await client.db.execute(sql`UPDATE picking_orders SET customer_code = NULL WHERE id = ${PO_22}`);
+  await upstreamWrite(client, (tx) => tx.execute(sql`UPDATE picking_orders SET customer_code = NULL WHERE id = ${PO_22}`));
   await allocateAll(client.db);
   const c = await client.db.execute(sql`SELECT count(*)::int AS c FROM allocations WHERE picking_item_id = ${ITEM_23}`);
   assert.equal(Number((c[0] as any).c), 0);
@@ -377,7 +377,7 @@ test("allocation_status: an order with zero allocation coverage reads unallocate
   await reseed(client);
   await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${PO_22}`);
   // no source can match this pair → nothing allocates
-  await client.db.execute(sql`UPDATE picking_orders SET sub_inventory_code = 'OSWF (HK)' WHERE id = ${PO_22}`);
+  await upstreamWrite(client, (tx) => tx.execute(sql`UPDATE picking_orders SET sub_inventory_code = 'OSWF (HK)' WHERE id = ${PO_22}`));
   await allocateAll(client.db);
   assert.equal(await allocationStatusOf(client.db, PO_22), "unallocated");
 });

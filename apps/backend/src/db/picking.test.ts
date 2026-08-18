@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
-import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
+import { setupTestDb, reseed, upstreamWrite, type TestDb } from "./test-helper.js";
 import { queryAll, queryGet } from "./query.js";
 import { allocateAll } from "./allocate.js";
 import { confirmReceivingArrival } from "./receiving.js";
@@ -796,9 +796,9 @@ test("scan from receiving sources: order-level (no box) and box-level allocation
   // the 181G line (no box, qty raised to cover the demand) pools into an
   // order-level allocation
   const f4702ItemId = await receivingItemIdOf(roId, "RK73H1JTTD4702F");
-  await client.db.execute(sql`UPDATE receiving_invoice_items SET ctn_no = 'BOX-KOA-1' WHERE id = ${f4702ItemId}`);
+  await upstreamWrite(client, (tx) => tx.execute(sql`UPDATE receiving_invoice_items SET ctn_no = 'BOX-KOA-1' WHERE id = ${f4702ItemId}`));
   const g181ItemId = await receivingItemIdOf(roId, "RK73B1JTTD181G");
-  await client.db.execute(sql`UPDATE receiving_invoice_items SET ctn_no = NULL, line_qty = 1000 WHERE id = ${g181ItemId}`);
+  await upstreamWrite(client, (tx) => tx.execute(sql`UPDATE receiving_invoice_items SET ctn_no = NULL, line_qty = 1000 WHERE id = ${g181ItemId}`));
 
   const orderId = await insertPickingOrder("SO-2026-0002", "pending");
   const itemA = await insertPickingItem(orderId, "RK73B1JTTD181G", 1000); // order-level source
@@ -1268,8 +1268,8 @@ async function seedClaimWorld(): Promise<ClaimWorld> {
   const roId = randomUUID();
   const riId = randomUUID();
   await client.db.execute(
-    sql`INSERT INTO receiving_orders (id, batch_no, org_id, sub_inventory_code, status, created_date, last_update_date)
-        VALUES (${roId}, 'TEST-CLAIM-BATCH', 2, 'STORE1', 'clear', now(), now())`
+    sql`INSERT INTO receiving_orders (id, batch_no, org_id, status, created_date, last_update_date)
+        VALUES (${roId}, 'TEST-CLAIM-BATCH', 2, 'clear', now(), now())`
   );
   await client.db.execute(
     sql`INSERT INTO receiving_invoices (id, receiving_order_id, invoice_no, org_id, created_date, last_update_date)
@@ -1287,8 +1287,8 @@ async function seedClaimWorld(): Promise<ClaimWorld> {
     lotIds.push(lotId);
     await client.db.execute(
       sql`INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_no, line_qty, received_qty, put_away_qty,
-                                               org_id, additional_data, created_date, last_update_date)
-          VALUES (${riiId}, ${riId}, ${lines[i]!.partNo}, ${qtys[i]}, ${qtys[i]}, ${qtys[i]}, 2,
+                                               org_id, sub_inventory_code, additional_data, created_date, last_update_date)
+          VALUES (${riiId}, ${riId}, ${lines[i]!.partNo}, ${qtys[i]}, ${qtys[i]}, ${qtys[i]}, 2, 'STORE1',
                   ${lines[i]!.ad}::jsonb, now(), now())`
     );
     await client.db.execute(

@@ -20,7 +20,6 @@ export interface StockSearchPart {
   partNo: string;
   internalCode: string | null;
   description: string | null;
-  defaultCoo: string | null;
 }
 
 export interface StockSearchInventoryLot {
@@ -101,7 +100,7 @@ export async function getPartsBySupplierId(
   supplierId: string
 ): Promise<StockSearchPart[]> {
   const result = await db.execute(sql`
-    SELECT DISTINCT p.id, p.part_no, p.internal_code, p.description, p.default_coo
+    SELECT DISTINCT p.id, p.part_no, p.internal_code, p.description
     FROM parts p
     WHERE p.id IN (
       SELECT rii.part_id
@@ -125,7 +124,6 @@ export async function getPartsBySupplierId(
     partNo: String(row.part_no),
     internalCode: row.internal_code ? String(row.internal_code) : null,
     description: row.description ? String(row.description) : null,
-    defaultCoo: row.default_coo ? String(row.default_coo) : null,
   }));
 }
 

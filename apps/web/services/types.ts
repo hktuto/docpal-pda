@@ -36,7 +36,6 @@ export interface ReceivingOrderListRow {
   supplierCode: string | null;
   supplierName: string | null;
   orgId: number;
-  subInventoryCode: string | null;
   invoiceCount: number;
   itemCount: number;
   remainingItems: number;
@@ -63,7 +62,6 @@ export interface ReceivingOrderDetail {
   deliveryDate: string | null;
   dateCode: string | null;
   orgId: number;
-  subInventoryCode: string | null;
   arrivedAt: string | null;
   arrivedBy: string | null;
   createdDate: string;
@@ -81,7 +79,6 @@ export interface ReceivingInvoice {
   totalCtn: number | null;
   deliveryDate: string | null;
   orgId: number;
-  subInventoryCode: string | null;
   createdDate: string;
   lastUpdateDate: string;
   items: ReceivingItem[];
@@ -93,7 +90,8 @@ export interface ReceivingItem {
   wclItemNo: string | null;
   poNo: string | null;
   poLine: string | null;
-  lineQty: number;
+  /** Expected qty; null = unknown upstream. */
+  lineQty: number | null;
   receivedQty: number;
   pickedQty: number;
   putAwayQty: number;
@@ -106,12 +104,13 @@ export interface ReceivingItem {
   allocatedQty: number;
   /** Free-form jsonb extras from the upstream sync (nullable). */
   additionalData: Record<string, unknown> | null;
+  /** Passthrough jsonb from the upstream order sync (optional). */
+  orderData?: Record<string, unknown> | null;
   part: {
     id: string;
     partNo: string;
     wclItemNo: string | null;
     description: string | null;
-    defaultCoo: string | null;
   };
   mismatch: ReceivingItemMismatch | null;
 }
@@ -241,7 +240,8 @@ export interface ReceivingScanCandidate {
   id: string;
   partNo: string;
   wclItemNo: string | null;
-  lineQty: number;
+  /** Expected qty; null = unknown upstream. */
+  lineQty: number | null;
   receivedQty: number;
 }
 
@@ -356,10 +356,11 @@ export interface PickingItem {
   qty: number;
   pickedQty: number;
   allocatedQty: number;
-  /** Upstream Oracle order-line identifiers (stringified bigint). */
-  lineId: string;
-  lineNumber: number;
-  shipmentNumber: number;
+  /** Upstream Oracle order-line identifiers (stringified bigint); null when
+   *  the upstream order line is unknown. */
+  lineId: string | null;
+  lineNumber: number | null;
+  shipmentNumber: number | null;
   /** Backend-maintained: pending | picked. */
   status: string;
   /** Free-form jsonb extras from the upstream sync (nullable). */
@@ -497,7 +498,8 @@ export interface PutAwayExpectedItem {
   /** Receiving invoice item id. */
   id: string;
   partNo: string;
-  lineQty: number;
+  /** Expected qty; null = unknown upstream. */
+  lineQty: number | null;
   receivedQty: number;
   pickedQty: number;
   putAwayQty: number;
@@ -562,7 +564,7 @@ export interface PutAwayBox {
 }
 
 export interface PutAwayDetail {
-  order: { id: string; batchNo: string; status: string; subInventoryCode: string | null };
+  order: { id: string; batchNo: string; status: string };
   items: PutAwayExpectedItem[];
   lots: PutAwayLot[];
   scans: PutAwayScan[];
@@ -808,7 +810,6 @@ export interface StockSearchPart {
   partNo: string;
   wclItemNo: string | null;
   description: string | null;
-  defaultCoo: string | null;
   onHandQty: number;
 }
 

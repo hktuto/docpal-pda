@@ -17,6 +17,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
       # Password for the warehouse_sync role created by the init script below.
       SYNC_DB_PASSWORD: ${SYNC_DB_PASSWORD:-warehouse_sync}
+      # Password for the wms_sync_consumer role (Electric sync consumer —
+      # migration 0015 creates it idempotently for existing volumes).
+      SYNC_CONSUMER_DB_PASSWORD: ${SYNC_CONSUMER_DB_PASSWORD:-wms_sync_consumer}
     # Not published to the host — only the backend talks to it. Add a ports
     # mapping here if you need external DB access.
     ports:
@@ -26,6 +29,7 @@ services:
       # First container init only (empty data dir): create the warehouse_sync
       # role. Migration 0010 repeats it idempotently for existing volumes.
       - ./scripts/sql/create-sync-role.sh:/docker-entrypoint-initdb.d/00-create-sync-role.sh:ro
+      - ./scripts/sql/create-sync-consumer-role.sh:/docker-entrypoint-initdb.d/01-create-sync-consumer-role.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
@@ -68,6 +72,14 @@ services:
       # step kill-switch (e.g. "measuring,verify") still applies when FLOW_CONFIG is unset.
       FLOW_CONFIG: ${FLOW_CONFIG:-}
       FLOW_STEPS_DISABLED: ${FLOW_STEPS_DISABLED:-}
+      # Electric sync consumer: base URL of the electric service + its secret.
+      # Empty ELECTRIC_URL disables the consumer (ingest API stays the only
+      # upstream path). ELECTRIC_SECRET must match the electric service.
+      ELECTRIC_URL: ${ELECTRIC_URL:-http://electric:3000}
+      ELECTRIC_SECRET: ${ELECTRIC_SECRET:?Set ELECTRIC_SECRET in .env}
+      # Local-DB role the sync consumer connects as (migration 0015 creates
+      # it; password must match SYNC_CONSUMER_DB_PASSWORD on the db service).
+      SYNC_CONSUMER_DB_PASSWORD: ${SYNC_CONSUMER_DB_PASSWORD:-wms_sync_consumer}
     # Published release APK + version.json (built by `pnpm build:apk`),
     # served via GET /admin/app-download/file.
     volumes:
@@ -77,6 +89,27 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      electric:
+        condition: service_started
+    restart: unless-stopped
+
+  # Electric sync service — pulls changes from the remote DocPal master DB
+  # (demo.wms_* tables). Internal only: the backend's sync consumer reaches it
+  # at http://electric:3000; no host port is published. Electric auto-creates
+  # its own publication/slot on the remote (stream id "warehouse" →
+  # electric_publication_warehouse / electric_slot_warehouse); the remote role
+  # needs REPLICATION + ownership rights on the wms_* tables.
+  electric:
+    image: electricsql/electric:1.7.11
+    environment:
+      # Remote DocPal master DB, e.g.
+      # postgresql://docpal:...@132.148.160.54:5432/docpal?sslmode=disable
+      DATABASE_URL: ${DOCPAL_SYNC_DATABASE_URL:?Set DOCPAL_SYNC_DATABASE_URL in .env}
+      ELECTRIC_SECRET: ${ELECTRIC_SECRET:?Set ELECTRIC_SECRET in .env}
+      ELECTRIC_REPLICATION_STREAM_ID: warehouse
+      ELECTRIC_STORAGE_DIR: /electric-data
+    volumes:
+      - electric-data:/electric-data
     restart: unless-stopped
 
   web:
@@ -110,3 +143,4 @@ services:
 
 volumes:
   pgdata:
+  electric-data:

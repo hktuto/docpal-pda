@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
-import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
+import { setupTestDb, reseed, upstreamWrite, type TestDb } from "./test-helper.js";
 import { queryAll, queryGet } from "./query.js";
 import { decodeKoaQty, normalizePartNo, parseQrRaw } from "./scanParse.js";
 import {
@@ -307,8 +307,8 @@ test("scan: multiple matches → 409 JSON with the matching candidates", async (
   const orderId = await orderIdOf("100002");
   // make the RK73H1JTTD4702F item also match the scanned part number via its wcl_item_no
   const rk4702ItemId = await itemIdOf(orderId, "RK73H1JTTD4702F");
-  await client.db.execute(
-    sql`UPDATE receiving_invoice_items SET wcl_item_no = 'RK73B1JTTD181G' WHERE id = ${rk4702ItemId}`
+  await upstreamWrite(client, (tx) =>
+    tx.execute(sql`UPDATE receiving_invoice_items SET wcl_item_no = 'RK73B1JTTD181G' WHERE id = ${rk4702ItemId}`)
   );
 
   const err = await catchHttp(

@@ -32,7 +32,6 @@ export interface Part {
   partNo: string;
   internalCode: string | null;
   description: string | null;
-  defaultCoo: string | null;
 }
 
 // ------------------------------------------------------------------
@@ -708,7 +707,6 @@ export interface StockSearchPart {
   partNo: string;
   internalCode: string | null;
   description: string | null;
-  defaultCoo: string | null;
 }
 
 export interface StockSearchInventoryLot {

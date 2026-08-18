@@ -16,7 +16,6 @@ import { stockSearchRoute } from "./routes/stocksearch.js";
 import { boxesRoute } from "./routes/boxes.js";
 import { labelsRoute } from "./routes/labels.js";
 import { scanTemplatesRoute } from "./routes/scantemplates.js";
-import { ingestRoute } from "./routes/ingest.js";
 import { eventsRoute } from "./routes/events.js";
 import { syncEventsRoute } from "./routes/sync-events.js";
 import { devRoute } from "./routes/dev.js";
@@ -52,7 +51,6 @@ app.route("/", stockSearchRoute);
 app.route("/", boxesRoute);
 app.route("/", labelsRoute);
 app.route("/", scanTemplatesRoute);
-app.route("/", ingestRoute);
 app.route("/", eventsRoute);
 app.route("/", syncEventsRoute);
 // Demo-only routes (/dev/reset, /dev/allocate); disable with DEV_ROUTES=off.

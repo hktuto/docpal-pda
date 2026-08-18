@@ -53,7 +53,7 @@ async function taskOf(orderId: string): Promise<{ id: string; status: string } |
 async function daitoInHand(): Promise<{ orderId: string; actorId: string }> {
   const actorId = await actorIdOf("operator");
   await upsertReceivingOrder(client.db, "04958210", {
-    order: { supplierCode: "DAITO", deliveryDate: "2026-07-29", dateCode: "2610", subInventoryCode: "STORE1" },
+    order: { supplierCode: "DAITO", deliveryDate: "2026-07-29", dateCode: "2610" },
     invoices: [
       {
         invoiceNo: "INV-04958210-01",
@@ -61,8 +61,8 @@ async function daitoInHand(): Promise<{ orderId: string; actorId: string }> {
         totalQty: 8000,
         totalCtn: 2,
         items: [
-          { partNo: "RK73B1JTTD181G", poNo: "PO-DAI-301", poLine: "1", lineQty: 5000, dateCode: "2610", coo: "JP", cow: "JP" },
-          { partNo: "RK73H1JTTD4702F", poNo: "PO-DAI-301", poLine: "2", lineQty: 3000, dateCode: "2610", coo: "JP", cow: "JP" },
+          { partNo: "RK73B1JTTD181G", poNo: "PO-DAI-301", poLine: "1", lineQty: 5000, dateCode: "2610", coo: "JP", cow: "JP", orgId: 2, subInventoryCode: "STORE1" },
+          { partNo: "RK73H1JTTD4702F", poNo: "PO-DAI-301", poLine: "2", lineQty: 3000, dateCode: "2610", coo: "JP", cow: "JP", orgId: 2, subInventoryCode: "STORE1" },
         ],
       },
     ],
@@ -217,14 +217,14 @@ test("detail: sub-inventory-shelf fallback when the part has no stock history", 
       sql`INSERT INTO parts (id, brand, part_no) VALUES ('test-part-new-1', 'DAITO', 'ZZZ-NEW-PART-1')`
     );
     await upsertReceivingOrder(client.db, "04958211", {
-      order: { supplierCode: "DAITO", deliveryDate: "2026-07-29", dateCode: "2610", subInventoryCode: "STORE1" },
+      order: { supplierCode: "DAITO", deliveryDate: "2026-07-29", dateCode: "2610" },
       invoices: [
         {
           invoiceNo: "INV-04958211-01",
           wclCompanyName: "WCL Components Ltd",
           totalQty: 100,
           totalCtn: 1,
-          items: [{ partNo: "ZZZ-NEW-PART-1", poNo: "PO-DAI-999", poLine: "1", lineQty: 100, dateCode: "2610" }],
+          items: [{ partNo: "ZZZ-NEW-PART-1", poNo: "PO-DAI-999", poLine: "1", lineQty: 100, dateCode: "2610", orgId: 2, subInventoryCode: "STORE1" }],
         },
       ],
     });

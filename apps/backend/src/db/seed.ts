@@ -51,7 +51,6 @@ interface BulkPartsData {
     partNo: string;
     wclItemNo: string | null;
     description: string | null;
-    defaultCoo: string | null;
   }[];
 }
 
@@ -233,11 +232,11 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
   ]);
 
   const demoMasterParts = [
-    { id: uid(5), brand: "KOA", partNo: "RK73H1JTTD1002F", wclItemNo: "RK73H1JTTD1002F", description: "RES 10K OHM 1% 1/10W 0603", defaultCoo: "JP" },
-    { id: uid(6), brand: "KOA", partNo: "RK73H1JTTD2202F", wclItemNo: "RK73H1JTTD2202F", description: "RES 22K OHM 1% 1/10W 0603", defaultCoo: "JP" },
-    { id: uid(7), brand: "KOA", partNo: "RK73B1JTTD181G", wclItemNo: "RK73B1JTTD181G", description: "RES 180 OHM 5% 1/10W 0603", defaultCoo: "JP" },
-    { id: uid(8), brand: "KOA", partNo: "RK73H2ATTD1372F", wclItemNo: "RK73H2ATTD1372F", description: "RES 13.7K OHM 1% 1/8W 0805", defaultCoo: "JP" },
-    { id: uid(9), brand: "KOA", partNo: "RK73H1JTTD4702F", wclItemNo: "RK73H1JTTD4702F", description: "RES 47K OHM 1% 1/10W 0603", defaultCoo: "JP" },
+    { id: uid(5), brand: "KOA", partNo: "RK73H1JTTD1002F", wclItemNo: "RK73H1JTTD1002F", description: "RES 10K OHM 1% 1/10W 0603" },
+    { id: uid(6), brand: "KOA", partNo: "RK73H1JTTD2202F", wclItemNo: "RK73H1JTTD2202F", description: "RES 22K OHM 1% 1/10W 0603" },
+    { id: uid(7), brand: "KOA", partNo: "RK73B1JTTD181G", wclItemNo: "RK73B1JTTD181G", description: "RES 180 OHM 5% 1/10W 0603" },
+    { id: uid(8), brand: "KOA", partNo: "RK73H2ATTD1372F", wclItemNo: "RK73H2ATTD1372F", description: "RES 13.7K OHM 1% 1/8W 0805" },
+    { id: uid(9), brand: "KOA", partNo: "RK73H1JTTD4702F", wclItemNo: "RK73H1JTTD4702F", description: "RES 47K OHM 1% 1/10W 0603" },
   ];
   await db.insert(parts).values(demoMasterParts);
 

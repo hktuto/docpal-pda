@@ -6,7 +6,7 @@ import { queryAll, queryGet, type DbOrTx } from "./query.js";
 import { transactionLogs } from "./schema/index.js";
 import { emitEvent } from "./events.js";
 import { now } from "./now.js";
-import { getPutAwayAggregate, type PutAwayAggregate } from "./putaway.js";
+import { getPutAwayAggregate, orderPair, type PutAwayAggregate } from "./putaway.js";
 
 // ---------------------------------------------------------------------------
 // Put-away tasks (spec 2026-08-10-put-away-tasks-design.md). One task per
@@ -26,17 +26,19 @@ export async function createPutAwayTaskTx(
   tx: DbOrTx,
   input: { receivingOrderId: string; actorId: string }
 ): Promise<void> {
-  const order = await queryGet<{ id: string; orgId: number; subInventoryCode: string }>(
+  const order = await queryGet<{ id: string }>(
     tx,
-    sql`SELECT id, org_id AS "orgId", sub_inventory_code AS "subInventoryCode"
-        FROM receiving_orders WHERE id = ${input.receivingOrderId}`
+    sql`SELECT id FROM receiving_orders WHERE id = ${input.receivingOrderId}`
   );
   if (!order) return;
+  // The task's denormalized pair is the order's item-derived uniform pair
+  // (NULL when the items are mixed — see orderPair in putaway.ts).
+  const pair = await orderPair(tx, input.receivingOrderId);
   const id = newId();
   const inserted = await queryAll<{ id: string }>(
     tx,
     sql`INSERT INTO put_away_tasks (id, receiving_order_id, org_id, sub_inventory_code, status)
-        VALUES (${id}, ${order.id}, ${order.orgId}, ${order.subInventoryCode}, 'pending')
+        VALUES (${id}, ${order.id}, ${pair.orgId}, ${pair.subInventoryCode}, 'pending')
         ON CONFLICT (receiving_order_id) DO NOTHING
         RETURNING id`
   );
@@ -64,8 +66,8 @@ export interface PutAwayTaskListRow {
   batchNo: string;
   supplierCode: string | null;
   supplierName: string | null;
-  orgId: number;
-  subInventoryCode: string;
+  orgId: number | null;
+  subInventoryCode: string | null;
   receivedItems: number;
   unboxedItems: number;
   createdDate: Date;
@@ -120,7 +122,7 @@ export interface PutAwayTaskDetail extends PutAwayAggregate {
 
 /**
  * Task detail = the per-order put-away aggregate (which already includes the
- * per-item shelf/box suggestions, ranked within the order's org +
+ * per-item shelf/box suggestions, ranked within each item's org +
  * sub-inventory) plus the task row.
  */
 export async function getPutAwayTaskDetail(db: AppDb, taskId: string): Promise<PutAwayTaskDetail> {

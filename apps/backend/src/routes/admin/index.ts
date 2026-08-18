@@ -117,7 +117,6 @@ adminRoute.route(
       brand: parts.brand,
       wclItemNo: parts.wclItemNo,
       description: parts.description,
-      defaultCoo: parts.defaultCoo,
     },
     create: (b) => ({
       id: optId(b),
@@ -125,14 +124,12 @@ adminRoute.route(
       partNo: reqStr(b, "partNo"),
       wclItemNo: optStr(b, "wclItemNo"),
       description: optStr(b, "description"),
-      defaultCoo: optStr(b, "defaultCoo"),
     }),
     update: (b) => ({
       ...(b.brand !== undefined && { brand: reqStr(b, "brand") }),
       ...(b.partNo !== undefined && { partNo: reqStr(b, "partNo") }),
       ...(b.wclItemNo !== undefined && { wclItemNo: optStr(b, "wclItemNo") }),
       ...(b.description !== undefined && { description: optStr(b, "description") }),
-      ...(b.defaultCoo !== undefined && { defaultCoo: optStr(b, "defaultCoo") }),
     }),
   })
 );

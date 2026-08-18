@@ -6,6 +6,7 @@ import { pruneEvents } from "./db/events.js";
 import { startGoodsVerifyDayEndCron } from "./jobs/goodsVerifyDayEnd.js";
 import { docpalBaseUrl } from "./config.js";
 import { logDocpalConnectivity } from "./auth/docpal.js";
+import { startElectricSync } from "./sync/consumer.js";
 
 const port = Number(process.env.PORT ?? 3002);
 
@@ -25,3 +26,7 @@ void pruneEvents(db).catch((err) => console.error("pruneEvents at boot failed", 
 // Nightly goods-verify day-end generation at local 00:00 (GOODS_VERIFY_CRON=off
 // to disable).
 startGoodsVerifyDayEndCron(db);
+
+// Electric sync consumer: pulls remote DocPal master-data changes (Electric
+// service from the compose stack). No-op when ELECTRIC_URL is unset.
+startElectricSync(db);

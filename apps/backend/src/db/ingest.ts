@@ -46,8 +46,6 @@ export interface IngestReceivingOrder {
   deliveryDate?: string | null;
   dateCode?: string | null;
   orgId?: number | null;
-  /** Required — every receiving order goes into exactly one sub-inventory. */
-  subInventoryCode: string;
 }
 
 export interface IngestReceivingItem {
@@ -57,7 +55,8 @@ export interface IngestReceivingItem {
   wclItemNo?: string | null;
   poNo?: string | null;
   poLine?: string | null;
-  lineQty: number;
+  /** Expected 单据量 — optional (upstream may omit it; NULL → manual confirm flow). */
+  lineQty?: number | null;
   ctnNo?: string | null;
   dateCode?: string | null;
   lotCode?: string | null;
@@ -66,6 +65,8 @@ export interface IngestReceivingItem {
   orgId?: number | null;
   subInventoryCode?: string | null;
   additionalData?: unknown;
+  /** 上游 order_data 透传（无固定结构，同 additionalData）。 */
+  orderData?: unknown;
 }
 
 export interface IngestReceivingInvoice {
@@ -78,7 +79,6 @@ export interface IngestReceivingInvoice {
   totalCtn?: number | null;
   deliveryDate?: string | null;
   orgId?: number | null;
-  subInventoryCode?: string | null;
   items: IngestReceivingItem[];
 }
 
@@ -103,9 +103,10 @@ export interface IngestPickingItem {
   id?: string;
   partNo: string;
   qty: number;
-  lineId: number;
-  lineNumber: number;
-  shipmentNumber: number;
+  /** 上游 Oracle 订单行标识 — optional (NULL when upstream lacks them). */
+  lineId?: number | null;
+  lineNumber?: number | null;
+  shipmentNumber?: number | null;
   additionalData?: unknown;
 }
 
@@ -207,18 +208,38 @@ async function insertId(tx: DbOrTx, table: string, supplied: string | undefined)
  * them would echo DocPal's own changes back into the sync feed (circular
  * loop). Warehouse-originated side effects outside the ingest tx (e.g. the
  * post-commit allocateAll) are still recorded.
+ *
+ * Also marks the transaction as an upstream writer: the
+ * enforce_remote_owned_columns trigger (migration 0015) lets it update
+ * remote-owned columns on synced tables.
  */
 async function suppressSyncEvents(tx: DbOrTx): Promise<void> {
   await tx.execute(sql`SET LOCAL app.sync_events_off = 1`);
+  await tx.execute(sql`SET LOCAL app.upstream_write = 1`);
 }
 
 // ---------------------------------------------------------------------------
 // Receiving
 // ---------------------------------------------------------------------------
 
+/**
+ * Sub-inventory defaulting rule hook — runs per receiving item at ingest/apply
+ * time. The real rule (assigning sub_inventory_code to every item row) is
+ * owned by Sean and ships later; until then the item passes through unchanged
+ * and a NULL location pair is surfaced with a warning (allocation skips +
+ * counts such rows instead of guessing).
+ */
+export function applyItemSubInventoryDefault(item: IngestReceivingItem): IngestReceivingItem {
+  if (item.subInventoryCode == null) {
+    console.warn(
+      `applyItemSubInventoryDefault: ${item.partNo} (po=${item.poNo ?? "-"}/${item.poLine ?? "-"}) has no subInventoryCode — defaulting rule pending (owner: Sean)`
+    );
+  }
+  return item;
+}
+
 function validateReceivingBody(body: IngestReceivingBody): void {
   if (!body?.order) throw new HTTPException(400, { message: "order is required" });
-  if (!body.order.subInventoryCode) throw new HTTPException(400, { message: "order.subInventoryCode is required" });
   assertValidSuppliedId(body.order.id);
   if (!Array.isArray(body.invoices) || body.invoices.length === 0) {
     throw new HTTPException(400, { message: "invoices[] is required" });
@@ -232,7 +253,7 @@ function validateReceivingBody(body: IngestReceivingBody): void {
     for (const it of inv.items) {
       if (!it.partNo) throw new HTTPException(400, { message: "partNo is required" });
       assertValidSuppliedId(it.id);
-      if (!Number.isInteger(it.lineQty) || it.lineQty < 0) {
+      if (it.lineQty != null && (!Number.isInteger(it.lineQty) || it.lineQty < 0)) {
         throw new HTTPException(400, { message: "lineQty must be a non-negative integer" });
       }
     }
@@ -248,7 +269,7 @@ async function insertReceivingItem(tx: DbOrTx, invoiceId: string, it: IngestRece
     wclItemNo: it.wclItemNo ?? null,
     poNo: it.poNo ?? null,
     poLine: it.poLine ?? null,
-    lineQty: it.lineQty,
+    lineQty: it.lineQty ?? null,
     ctnNo: it.ctnNo ?? null,
     dateCode: it.dateCode ?? null,
     lotCode: it.lotCode ?? null,
@@ -257,6 +278,7 @@ async function insertReceivingItem(tx: DbOrTx, invoiceId: string, it: IngestRece
     orgId: it.orgId ?? 2,
     subInventoryCode: it.subInventoryCode ?? null,
     additionalData: it.additionalData ?? null,
+    orderData: it.orderData ?? null,
   });
 }
 
@@ -287,10 +309,9 @@ async function insertInvoiceWithItems(
     totalCtn: inv.totalCtn ?? null,
     deliveryDate: toDate(inv.deliveryDate),
     orgId: inv.orgId ?? 2,
-    subInventoryCode: inv.subInventoryCode ?? null,
   });
   for (const it of inv.items) {
-    await insertReceivingItem(tx, invoiceId, it);
+    await insertReceivingItem(tx, invoiceId, applyItemSubInventoryDefault(it));
   }
   return invoiceId;
 }
@@ -303,7 +324,6 @@ interface ExistingInvoiceRow {
   totalQty: number | null;
   totalCtn: number | null;
   orgId: number;
-  subInventoryCode: string | null;
 }
 
 interface ExistingReceivingItemRow {
@@ -313,7 +333,7 @@ interface ExistingReceivingItemRow {
   wclItemNo: string | null;
   poNo: string | null;
   poLine: string | null;
-  lineQty: number;
+  lineQty: number | null;
   ctnNo: string | null;
   dateCode: string | null;
   lotCode: string | null;
@@ -332,8 +352,9 @@ function itemWorkStarted(it: Pick<ExistingReceivingItemRow, "allocLinks" | "rece
 
 /**
  * Idempotent upsert keyed by batch_no. No existing row → INSERT order +
- * invoices + items (status pending, org_id default 2; order.subInventoryCode
- * is required — every receiving order lands in exactly one sub-inventory).
+ * invoices + items (status pending, org_id default 2; the sub-inventory
+ * partition lives on the ITEMS — item.orgId/subInventoryCode, nullable until
+ * the defaulting rule lands).
  * A caller-supplied `id` (order/invoice/item) is used on this INSERT path
  * only; on reconcile it is ignored — existing rows keep their server ids and
  * matching stays on the natural keys. Existing row →
@@ -367,7 +388,6 @@ export async function upsertReceivingOrder(
         deliveryDate: orderDeliveryDate,
         dateCode: body.order.dateCode ?? null,
         orgId: body.order.orgId ?? 2,
-        subInventoryCode: body.order.subInventoryCode,
         status: "pending",
       });
       for (const inv of body.invoices) {
@@ -389,11 +409,9 @@ export async function upsertReceivingOrder(
       supplierCode: string | null;
       dateCode: string | null;
       orgId: number;
-      subInventoryCode: string;
     }>(
       tx,
-      sql`SELECT supplier_code AS "supplierCode", date_code AS "dateCode", org_id AS "orgId",
-                 sub_inventory_code AS "subInventoryCode"
+      sql`SELECT supplier_code AS "supplierCode", date_code AS "dateCode", org_id AS "orgId"
           FROM receiving_orders WHERE id = ${orderId}`
     ))!;
     const orderFields = {
@@ -401,20 +419,18 @@ export async function upsertReceivingOrder(
       deliveryDate: orderDeliveryDate,
       dateCode: body.order.dateCode ?? null,
       orgId: body.order.orgId ?? 2,
-      subInventoryCode: body.order.subInventoryCode,
     };
     if (
       ro.supplierCode !== orderFields.supplierCode ||
       (await deliveryDateDiffers(tx, "receiving_orders", orderId, orderFields.deliveryDate)) ||
       ro.dateCode !== orderFields.dateCode ||
-      ro.orgId !== orderFields.orgId ||
-      ro.subInventoryCode !== orderFields.subInventoryCode
+      ro.orgId !== orderFields.orgId
     ) {
       await queryRun(
         tx,
         sql`UPDATE receiving_orders SET supplier_code = ${orderFields.supplierCode},
               delivery_date = ${orderFields.deliveryDate}, date_code = ${orderFields.dateCode},
-              org_id = ${orderFields.orgId}, sub_inventory_code = ${orderFields.subInventoryCode},
+              org_id = ${orderFields.orgId},
               last_update_date = ${now()}
             WHERE id = ${orderId}`
       );
@@ -426,7 +442,7 @@ export async function upsertReceivingOrder(
       tx,
       sql`SELECT id, invoice_no AS "invoiceNo", supplier_code AS "supplierCode",
                  wcl_company_name AS "wclCompanyName", total_qty AS "totalQty", total_ctn AS "totalCtn",
-                 org_id AS "orgId", sub_inventory_code AS "subInventoryCode"
+                 org_id AS "orgId"
           FROM receiving_invoices WHERE receiving_order_id = ${orderId}`
     );
     const existingItems = await queryAll<ExistingReceivingItemRow>(
@@ -470,7 +486,6 @@ export async function upsertReceivingOrder(
         totalCtn: inv.totalCtn ?? null,
         deliveryDate: toDate(inv.deliveryDate),
         orgId: inv.orgId ?? 2,
-        subInventoryCode: inv.subInventoryCode ?? null,
       };
       if (
         ex.supplierCode !== invFields.supplierCode ||
@@ -478,15 +493,14 @@ export async function upsertReceivingOrder(
         ex.totalQty !== invFields.totalQty ||
         ex.totalCtn !== invFields.totalCtn ||
         (await deliveryDateDiffers(tx, "receiving_invoices", ex.id, invFields.deliveryDate)) ||
-        ex.orgId !== invFields.orgId ||
-        ex.subInventoryCode !== invFields.subInventoryCode
+        ex.orgId !== invFields.orgId
       ) {
         await queryRun(
           tx,
           sql`UPDATE receiving_invoices SET supplier_code = ${invFields.supplierCode},
                 wcl_company_name = ${invFields.wclCompanyName}, total_qty = ${invFields.totalQty},
                 total_ctn = ${invFields.totalCtn}, delivery_date = ${invFields.deliveryDate},
-                org_id = ${invFields.orgId}, sub_inventory_code = ${invFields.subInventoryCode},
+                org_id = ${invFields.orgId},
                 last_update_date = ${now()}
               WHERE id = ${ex.id}`
         );
@@ -494,7 +508,8 @@ export async function upsertReceivingOrder(
       }
 
       const byKey = itemsByInvoice.get(ex.id) ?? new Map<string, ExistingReceivingItemRow>();
-      for (const it of inv.items) {
+      for (const rawItem of inv.items) {
+        const it = applyItemSubInventoryDefault(rawItem);
         const partNo = await assertPartNo(tx, it.partNo);
         const key = receivingItemKey(partNo, it.poNo ?? null, it.poLine ?? null);
         const exItem = byKey.get(key);
@@ -504,14 +519,14 @@ export async function upsertReceivingOrder(
           continue;
         }
         byKey.delete(key);
-        if (it.lineQty < exItem.lineQty) {
+        if (it.lineQty != null && exItem.lineQty != null && it.lineQty < exItem.lineQty) {
           if (locked) throw new HTTPException(409, { message: `qty_may_only_increase_once_${status}` });
           if (itemWorkStarted(exItem)) {
             throw new HTTPException(409, { message: "cannot_decrease_qty_after_work_started" });
           }
         }
         const same =
-          exItem.lineQty === it.lineQty &&
+          exItem.lineQty === (it.lineQty ?? null) &&
           (exItem.wclItemNo ?? null) === (it.wclItemNo ?? null) &&
           (exItem.ctnNo ?? null) === (it.ctnNo ?? null) &&
           (exItem.dateCode ?? null) === (it.dateCode ?? null) &&
@@ -523,7 +538,7 @@ export async function upsertReceivingOrder(
           // Expected-side fields only — derived state stays untouched.
           await queryRun(
             tx,
-            sql`UPDATE receiving_invoice_items SET line_qty = ${it.lineQty}, wcl_item_no = ${it.wclItemNo ?? null},
+            sql`UPDATE receiving_invoice_items SET line_qty = ${it.lineQty ?? null}, wcl_item_no = ${it.wclItemNo ?? null},
                   ctn_no = ${it.ctnNo ?? null}, date_code = ${it.dateCode ?? null}, lot_code = ${it.lotCode ?? null},
                   coo = ${it.coo ?? null}, cow = ${it.cow ?? null},
                   sub_inventory_code = ${it.subInventoryCode ?? null}
@@ -625,7 +640,7 @@ function validatePickingBody(body: IngestPickingBody): void {
       throw new HTTPException(400, { message: "qty must be a non-negative integer" });
     }
     for (const f of ["lineId", "lineNumber", "shipmentNumber"] as const) {
-      if (!Number.isInteger(it[f])) {
+      if (it[f] != null && !Number.isInteger(it[f])) {
         throw new HTTPException(400, { message: `${f} must be an integer` });
       }
     }
@@ -639,9 +654,9 @@ async function insertPickingItem(tx: DbOrTx, orderId: string, it: IngestPickingI
     pickingOrderId: orderId,
     partNo,
     qty: it.qty,
-    lineId: it.lineId,
-    lineNumber: it.lineNumber,
-    shipmentNumber: it.shipmentNumber,
+    lineId: it.lineId ?? null,
+    lineNumber: it.lineNumber ?? null,
+    shipmentNumber: it.shipmentNumber ?? null,
     additionalData: it.additionalData ?? null,
   });
 }
@@ -652,9 +667,9 @@ interface ExistingPickingItemRow {
   qty: number;
   pickedQty: number;
   allocCount: number;
-  lineId: string;
-  lineNumber: number;
-  shipmentNumber: number;
+  lineId: string | null; // bigint round-trips as string
+  lineNumber: number | null;
+  shipmentNumber: number | null;
 }
 
 /**
@@ -798,15 +813,15 @@ export async function upsertPickingOrder(
       }
       if (
         ex.qty !== it.qty ||
-        ex.lineId !== String(it.lineId) ||
-        ex.lineNumber !== it.lineNumber ||
-        ex.shipmentNumber !== it.shipmentNumber
+        ex.lineId !== (it.lineId == null ? null : String(it.lineId)) ||
+        (ex.lineNumber ?? null) !== (it.lineNumber ?? null) ||
+        (ex.shipmentNumber ?? null) !== (it.shipmentNumber ?? null)
       ) {
         // Expected-side fields only — picked_qty / allocated_qty stay untouched.
         await queryRun(
           tx,
-          sql`UPDATE picking_items SET qty = ${it.qty}, line_id = ${it.lineId},
-                line_number = ${it.lineNumber}, shipment_number = ${it.shipmentNumber},
+          sql`UPDATE picking_items SET qty = ${it.qty}, line_id = ${it.lineId ?? null},
+                line_number = ${it.lineNumber ?? null}, shipment_number = ${it.shipmentNumber ?? null},
                 last_update_date = ${now()}
               WHERE id = ${ex.id}`
         );
@@ -898,7 +913,6 @@ export interface IngestPart {
   /** WCL Part No — the unique business key and the dedup key for this upsert. */
   wclItemNo: string;
   description?: string | null;
-  defaultCoo?: string | null;
 }
 
 export interface IngestSupplier {
@@ -958,15 +972,13 @@ export async function upsertPart(db: AppDb, body: IngestPart): Promise<MasterDat
       partNo: body.partNo,
       brand: body.brand,
       description: body.description ?? null,
-      defaultCoo: body.defaultCoo ?? null,
     };
     const existing = await queryGet<{ id: string }>(
       tx,
       sql`SELECT id,
                  NOT (part_no IS NOT DISTINCT FROM ${fields.partNo}) AS "dPartNo",
                  NOT (brand IS NOT DISTINCT FROM ${fields.brand}) AS "dBrand",
-                 NOT (description IS NOT DISTINCT FROM ${fields.description}) AS "dDesc",
-                 NOT (default_coo IS NOT DISTINCT FROM ${fields.defaultCoo}) AS "dCoo"
+                 NOT (description IS NOT DISTINCT FROM ${fields.description}) AS "dDesc"
           FROM parts WHERE wcl_item_no = ${body.wclItemNo}`
     );
     if (!existing) {
@@ -975,11 +987,11 @@ export async function upsertPart(db: AppDb, body: IngestPart): Promise<MasterDat
       return { id, created: true, changed: true };
     }
     const d = existing as unknown as Record<string, unknown>;
-    if (d.dPartNo || d.dBrand || d.dDesc || d.dCoo) {
+    if (d.dPartNo || d.dBrand || d.dDesc) {
       await queryRun(
         tx,
         sql`UPDATE parts SET part_no = ${fields.partNo}, brand = ${fields.brand},
-                  description = ${fields.description}, default_coo = ${fields.defaultCoo},
+                  description = ${fields.description},
                   last_update_date = ${now()}
             WHERE id = ${existing.id}`
       );

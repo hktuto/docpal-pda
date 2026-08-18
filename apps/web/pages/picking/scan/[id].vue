@@ -32,7 +32,7 @@
         <div class="card scan-session__progress">
           <div v-for="item in order.items" :key="item.id" class="scan-session__progress-row">
             <span class="scan-session__part">
-              <span class="scan-session__line">L{{ item.lineNumber }}/S{{ item.shipmentNumber }}</span>
+              <span class="scan-session__line">L{{ item.lineNumber ?? '—' }}/S{{ item.shipmentNumber ?? '—' }}</span>
               {{ item.partNo }}
               <span v-if="allocationSources(item)" class="scan-session__sources">
                 {{ allocationSources(item) }}

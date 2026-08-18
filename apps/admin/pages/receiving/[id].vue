@@ -153,12 +153,14 @@ function parseIssueQty(): number | null {
 }
 
 // Returns an admin.pages.receiving.issueErr* key, or null when valid.
-function validateIssue(expectedQty: number, qty: number | null): string | null {
+// expectedQty null = line qty unknown upstream — the expected-bound check
+// can't apply (the server re-validates on submit anyway).
+function validateIssue(expectedQty: number | null, qty: number | null): string | null {
   const reason = issueReason.value;
   if (!reason) return "issueErrReasonRequired";
   if (reason === "not_found" && qty !== null) return "issueErrNotFoundNoQty";
   if (qty !== null && (!Number.isInteger(qty) || qty < 0)) return "issueErrQtyNonNegativeInt";
-  if ((reason === "damaged" || reason === "quality_rejection") && qty !== null && qty > expectedQty)
+  if (expectedQty !== null && (reason === "damaged" || reason === "quality_rejection") && qty !== null && qty > expectedQty)
     return "issueErrQtyExceedsExpected";
   if ((reason === "over_shipment" || reason === "wrong_part") && (qty === null || qty <= 0))
     return "issueErrQtyGreaterThanZero";
@@ -173,7 +175,7 @@ async function submitIssue() {
   const qty = parseIssueQty();
   const errKey = validateIssue(item.lineQty, qty);
   if (errKey) {
-    issueError.value = t(`admin.pages.receiving.${errKey}`, { qty: item.lineQty });
+    issueError.value = t(`admin.pages.receiving.${errKey}`, { qty: item.lineQty ?? "—" });
     return;
   }
   issueSubmitting.value = true;
@@ -266,7 +268,7 @@ onMounted(load);
         <h2 class="section-title">
           {{ $t("admin.pages.receiving.invoiceTitle", { invoiceNo: inv.invoiceNo }) }}
           <span class="muted">
-            — {{ $t("admin.pages.receiving.orgSubInventory") }}: {{ inv.orgId }} / {{ inv.subInventoryCode ?? order.subInventoryCode }}
+            — {{ $t("admin.pages.receiving.orgSubInventory") }}: {{ inv.orgId }}
             · {{ $t("admin.pages.receiving.itemsCount", { count: inv.items.length })
             }}{{ inv.deliveryDate ? $t("admin.pages.receiving.deliverySuffix", { date: new Date(inv.deliveryDate).toLocaleDateString() }) : "" }}
           </span>
@@ -309,7 +311,7 @@ onMounted(load);
                   </div>
                 </td>
                 <td class="wrap">{{ item.poNo ?? "—" }}<span v-if="item.poLine"> / {{ item.poLine }}</span></td>
-                <td>{{ item.lineQty }}</td>
+                <td>{{ item.lineQty ?? "—" }}</td>
                 <td>{{ item.receivedQty }}</td>
                 <td>{{ item.putAwayQty }}</td>
                 <td>{{ item.allocatedQty }}</td>
@@ -391,7 +393,7 @@ onMounted(load);
           <div class="form-row">
             <label for="mi-qty">{{ $t("admin.pages.receiving.issueQty") }}</label>
             <input id="mi-qty" v-model="issueQtyInput" type="number" min="0" step="1" />
-            <div class="hint">{{ $t("admin.pages.receiving.issueQtyHint", { qty: issueItem.lineQty }) }}</div>
+            <div class="hint">{{ $t("admin.pages.receiving.issueQtyHint", { qty: issueItem.lineQty ?? "—" }) }}</div>
           </div>
           <div class="form-row">
             <label for="mi-wrong">{{ $t("admin.pages.receiving.issueWrongPartNo") }}</label>

@@ -19,7 +19,7 @@
         <span>{{ item.coo || $t('common.noData') }} / {{ item.cow || $t('common.noData') }}</span>
       </DetailRow>
       <DetailRow :label="$t('putAway.lotsPanel.totalQty') +' / '+ $t('putAway.lotsPanel.scannedQty')  +' / '+ $t('putAway.lotsPanel.boxedQty')">
-        <span>{{ item.lineQty }}</span> / <span>{{ scannedQty(item) || 0 }}</span> / <span>{{ item.putAwayQty }}</span>
+        <span>{{ item.lineQty ?? '—' }}</span> / <span>{{ scannedQty(item) || 0 }}</span> / <span>{{ item.putAwayQty }}</span>
       </DetailRow>
       <DetailRow v-if="item.suggestedShelfCode" :label="$t('putAway.lotsPanel.suggestedShelf')">
         <span class="shelf-hint">→ {{ item.suggestedShelfCode }}</span>

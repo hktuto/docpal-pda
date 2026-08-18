@@ -132,7 +132,7 @@ describe('backendWarehouse receiving flow', () => {
   it('scanReceiving surfaces 409 candidate bodies on the ApiError', async () => {
     const candidates = [
       { id: 'rii1', partNo: 'ABC', wclItemNo: null, lineQty: 100, receivedQty: 0 },
-      { id: 'rii2', partNo: 'ABC', wclItemNo: 'W-1', lineQty: 200, receivedQty: 0 },
+      { id: 'rii2', partNo: 'ABC', wclItemNo: 'W-1', lineQty: null, receivedQty: 0 },
     ];
     fetchMock.mockResolvedValue(
       jsonResponse({ message: 'multiple_matches', candidates }, 409)
@@ -283,7 +283,7 @@ describe('backendWarehouse put-away flow', () => {
   it('getPutAwayDetail GETs the one aggregate', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse({
-        order: { id: 'ro1', batchNo: '04958210', status: 'in_hand', subInventoryCode: 'ACME-S1' },
+        order: { id: 'ro1', batchNo: '04958210', status: 'in_hand' },
         items: [{ id: 'rii1', remainingQty: 100 }],
         lots: [],
         scans: [{ id: 'scan1', receivingInvoiceItemId: 'rii1', qty: 5 }],
@@ -338,7 +338,7 @@ describe('backendWarehouse put-away flow', () => {
     fetchMock.mockResolvedValue(
       jsonResponse({
         task: { id: 'pat1', status: 'pending', receivingOrderId: 'ro1', createdDate: '2026-08-10T10:00:00.000Z' },
-        order: { id: 'ro1', batchNo: '04958210', status: 'in_hand', subInventoryCode: 'ACME-S1' },
+        order: { id: 'ro1', batchNo: '04958210', status: 'in_hand' },
         items: [{ id: 'rii1', remainingQty: 100, suggestedShelfCode: 'A-01-03' }],
         lots: [],
         scans: [],
@@ -1063,7 +1063,6 @@ describe('backendWarehouse stock search flow', () => {
           partNo: 'RK73H1JTTD1002F',
           wclItemNo: 'WCL-1',
           description: 'RES 10K 1%',
-          defaultCoo: 'JP',
           onHandQty: 500,
         },
       ],

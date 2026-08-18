@@ -10,11 +10,12 @@
     "db:generate": "tsx node_modules/drizzle-kit/bin.cjs generate",
     "db:migrate": "tsx node_modules/drizzle-kit/bin.cjs migrate",
     "db:seed": "tsx src/seed.ts",
-    "connect:android":"'/d/android/platform-tools/adb.exe' reverse tcp:3002 tcp:3002",
+    "connect:android": "'/d/android/platform-tools/adb.exe' reverse tcp:3002 tcp:3002",
     "test": "tsx --test --test-force-exit --test-concurrency=1 src/**/*.test.ts",
     "db:studio": "tsx node_modules/drizzle-kit/bin.cjs studio"
   },
   "dependencies": {
+    "@electric-sql/client": "^1.5.26",
     "@hono/node-server": "^2.0.8",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",

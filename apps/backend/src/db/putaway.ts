@@ -134,14 +134,23 @@ async function ensureStagingBox(tx: DbOrTx, receivingOrderId: string): Promise<s
   return id;
 }
 
-/** The receiving order's stock location pair (mandatory on the order). */
-async function orderPair(tx: DbOrTx, receivingOrderId: string): Promise<{ orgId: number; subInventoryCode: string }> {
-  const row = await queryGet<{ orgId: number; subInventoryCode: string }>(
+/**
+ * The receiving order's stock location pair, derived from its items
+ * (receiving_invoice_items.org_id + sub_inventory_code — order-level
+ * partitioning is gone since 2026-08-18). Uniform pair across the order's
+ * items → that pair; mixed pairs (or no items) → both NULL. A uniform pair
+ * with a NULL component comes back as-is (box pair stamps accept NULL).
+ */
+export async function orderPair(tx: DbOrTx, receivingOrderId: string): Promise<{ orgId: number | null; subInventoryCode: string | null }> {
+  const rows = await queryAll<{ orgId: number | null; subInventoryCode: string | null }>(
     tx,
-    sql`SELECT org_id AS "orgId", sub_inventory_code AS "subInventoryCode" FROM receiving_orders WHERE id = ${receivingOrderId}`
+    sql`SELECT DISTINCT rii.org_id AS "orgId", rii.sub_inventory_code AS "subInventoryCode"
+        FROM receiving_invoice_items rii
+        JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+        WHERE ri.receiving_order_id = ${receivingOrderId}`
   );
-  if (!row) throw new HTTPException(404, { message: "receiving_order_not_found" });
-  return row;
+  if (rows.length === 1) return rows[0];
+  return { orgId: null, subInventoryCode: null };
 }
 
 interface PutAwayItemRow {
@@ -248,8 +257,8 @@ export interface PutAwayCandidateRow {
   status: string;
   supplierCode: string | null;
   supplierName: string | null;
-  orgId: number;
-  subInventoryCode: string;
+  orgId: number | null;
+  subInventoryCode: string | null;
   receivedItems: number;
   unboxedItems: number;
 }
@@ -265,8 +274,8 @@ export async function listPutAwayCandidates(db: AppDb): Promise<PutAwayCandidate
         ro.status,
         s.code AS "supplierCode",
         s.name AS "supplierName",
-        ro.org_id AS "orgId",
-        ro.sub_inventory_code AS "subInventoryCode",
+        pair."orgId" AS "orgId",
+        pair."subInventoryCode" AS "subInventoryCode",
         COUNT(rii.id) FILTER (WHERE rii.received_qty > 0)::int AS "receivedItems",
         COUNT(rii.id) FILTER (WHERE
           rii.received_qty - rii.picked_qty - rii.put_away_qty
@@ -275,6 +284,17 @@ export async function listPutAwayCandidates(db: AppDb): Promise<PutAwayCandidate
       LEFT JOIN suppliers s ON s.code = ro.supplier_code
       JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
       JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = ri.id
+      -- item-derived pair: the single DISTINCT item pair, NULL when mixed
+      LEFT JOIN LATERAL (
+        SELECT CASE WHEN COUNT(*) = 1 THEN MAX(p.org_id) END AS "orgId",
+               CASE WHEN COUNT(*) = 1 THEN MAX(p.sub_inventory_code) END AS "subInventoryCode"
+        FROM (
+          SELECT DISTINCT rii2.org_id, rii2.sub_inventory_code
+          FROM receiving_invoice_items rii2
+          JOIN receiving_invoices ri2 ON ri2.id = rii2.receiving_invoice_id
+          WHERE ri2.receiving_order_id = ro.id
+        ) p
+      ) pair ON true
       LEFT JOIN (
         SELECT receiving_invoice_item_id, SUM(qty)::int AS qty
         FROM allocations
@@ -289,7 +309,7 @@ export async function listPutAwayCandidates(db: AppDb): Promise<PutAwayCandidate
         GROUP BY sbi.receiving_invoice_item_id
       ) staged ON staged.receiving_invoice_item_id = rii.id
       WHERE ro.status IN ('in_hand', 'provisional_received')
-      GROUP BY ro.id, s.id
+      GROUP BY ro.id, s.id, pair."orgId", pair."subInventoryCode"
       ORDER BY ro.created_date DESC
     `
   );
@@ -336,7 +356,7 @@ export type PutAwaySuggestionReason = "same-part-box" | "same-part-stock" | "sub
 export interface PutAwayExpectedItemRow {
   id: string;
   partNo: string;
-  lineQty: number;
+  lineQty: number | null;
   receivedQty: number;
   pickedQty: number;
   putAwayQty: number;
@@ -376,9 +396,9 @@ export interface PutAwayAggregate {
  * non-staging boxes with their item rows.
  */
 export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<PutAwayAggregate> {
-  const order = await queryGet<{ id: string; batchNo: string; status: string; orgId: number; subInventoryCode: string }>(
+  const order = await queryGet<{ id: string; batchNo: string; status: string }>(
     db,
-    sql`SELECT id, batch_no AS "batchNo", status, org_id AS "orgId", sub_inventory_code AS "subInventoryCode"
+    sql`SELECT id, batch_no AS "batchNo", status
         FROM receiving_orders WHERE id = ${orderId}`
   );
   if (!order) throw new HTTPException(404, { message: "receiving_order_not_found" });
@@ -404,8 +424,9 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
 
   // Expected items with the candidates-list remaining formula (received −
   // picked − put away − allocated − staged) — the put-away page's receivable
-  // item list.
-  const items = await queryAll<PutAwayExpectedItemRow>(
+  // item list. Each row also carries the item's own location pair (used for
+  // the per-item shelf suggestion below; stripped from the response rows).
+  const items = await queryAll<PutAwayExpectedItemRow & { itemOrgId: number | null; itemSubInventoryCode: string | null }>(
     db,
     sql`
       SELECT
@@ -415,7 +436,8 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
         COALESCE(alloc.qty, 0)::int AS "allocatedQty",
         (rii.received_qty - rii.picked_qty - rii.put_away_qty
           - COALESCE(alloc.qty, 0) - COALESCE(staged.qty, 0))::int AS "remainingQty",
-        rii.date_code AS "dateCode", rii.lot_code AS "lotCode", rii.coo, rii.cow
+        rii.date_code AS "dateCode", rii.lot_code AS "lotCode", rii.coo, rii.cow,
+        rii.org_id AS "itemOrgId", rii.sub_inventory_code AS "itemSubInventoryCode"
       FROM receiving_invoice_items rii
       JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
       LEFT JOIN (
@@ -436,17 +458,19 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
     `
   );
 
-  // Per-item shelf/box suggestion, ranked within the order's org +
-  // sub-inventory (same rules as the put-away task detail). Advisory, computed
-  // at read time, never stored; all null when suggestShelf is "off".
+  // Per-item shelf/box suggestion, ranked within the ITEM's org +
+  // sub-inventory (item-level partitioning since 2026-08-18; same rules as
+  // the put-away task detail). Advisory, computed at read time, never stored;
+  // all null when the item's pair is NULL or suggestShelf is "off".
   const suggestions =
     putAwayConfig().suggestShelf !== "off"
-      ? await computeShelfSuggestions(db, [...new Set(items.map((it) => it.partNo))], order.orgId, order.subInventoryCode)
+      ? await computeItemShelfSuggestions(db, items)
       : new Map<string, ShelfSuggestion>();
   const itemsWithSuggestions: PutAwayExpectedItemRow[] = items.map((it) => {
     const s = suggestions.get(it.partNo);
+    const { itemOrgId: _o, itemSubInventoryCode: _si, ...row } = it;
     return {
-      ...it,
+      ...row,
       suggestedShelfCode: s?.shelfCode ?? null,
       suggestedBoxId: s?.boxId ?? null,
       suggestionReason: s?.reason ?? null,
@@ -532,8 +556,8 @@ interface ShelfSuggestion {
 }
 
 /**
- * Shelf/box suggestions per part_no, ranked within the order's org +
- * sub-inventory (spec 2026-08-12-put-away-shelf-org-suggestion-design.md):
+ * Shelf/box suggestions per part_no, ranked within the given org +
+ * sub-inventory pair (spec 2026-08-12-put-away-shelf-org-suggestion-design.md):
  *   1. same-part-box   — most recent OPEN shelf box already containing the
  *                        part (part_no only, any date code) → its shelf + box
  *   2. same-part-stock — shelf of the most recent lot of the same part
@@ -588,6 +612,36 @@ async function computeShelfSuggestions(
     );
     if (taggedShelf) {
       for (const p of missing) suggestions.set(p, { shelfCode: taggedShelf.code, boxId: null, reason: "sub-inventory-shelf" });
+    }
+  }
+  return suggestions;
+}
+
+/**
+ * Suggestions for the aggregate's expected items: items are grouped by their
+ * own location pair (item-level partitioning since 2026-08-18) and each group
+ * is ranked within that pair; items with a NULL pair get no suggestion.
+ */
+async function computeItemShelfSuggestions(
+  db: AppDb,
+  items: { partNo: string; itemOrgId: number | null; itemSubInventoryCode: string | null }[]
+): Promise<Map<string, ShelfSuggestion>> {
+  const byPair = new Map<string, { orgId: number; subInventoryCode: string; partNos: Set<string> }>();
+  for (const it of items) {
+    if (it.itemOrgId === null || it.itemSubInventoryCode === null) continue;
+    const key = `${it.itemOrgId}|${it.itemSubInventoryCode}`;
+    let group = byPair.get(key);
+    if (!group) {
+      group = { orgId: it.itemOrgId, subInventoryCode: it.itemSubInventoryCode, partNos: new Set() };
+      byPair.set(key, group);
+    }
+    group.partNos.add(it.partNo);
+  }
+  const suggestions = new Map<string, ShelfSuggestion>();
+  for (const group of byPair.values()) {
+    const groupSuggestions = await computeShelfSuggestions(db, [...group.partNos], group.orgId, group.subInventoryCode);
+    for (const [partNo, s] of groupSuggestions) {
+      if (!suggestions.has(partNo)) suggestions.set(partNo, s);
     }
   }
   return suggestions;

@@ -2,7 +2,7 @@ import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
+import { setupTestDb, reseed, upstreamWrite, type TestDb } from "./test-helper.js";
 import { fetchSyncEventsSince } from "./sync-events.js";
 import { upsertPart, deletePart, upsertPickingOrder, deletePickingOrder } from "./ingest.js";
 
@@ -24,7 +24,7 @@ test("trigger: backend-role writes emit <table>.<op> events with new/old row ima
   await client.db.execute(
     sql`INSERT INTO parts (id, brand, part_no) VALUES (${partId}, 'KOA', 'SYNC-TEST-1')`
   );
-  await client.db.execute(sql`UPDATE parts SET description = 'desc' WHERE id = ${partId}`);
+  await upstreamWrite(client, (tx) => tx.execute(sql`UPDATE parts SET description = 'desc' WHERE id = ${partId}`));
   await client.db.execute(sql`DELETE FROM parts WHERE id = ${partId}`);
 
   const rows = await fetchSyncEventsSince(client.db, 0);

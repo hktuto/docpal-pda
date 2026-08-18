@@ -144,7 +144,6 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     partNo: "RK73B1JTTD181G",
     wclItemNo: "RK73B1JTTD181G",
     description: "RES 180 OHM 5% 1/10W 0603",
-    defaultCoo: "JP",
     onHandQty: 700,
   });
   assert.deepEqual(parts[1], {
@@ -152,7 +151,6 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     partNo: "RK73H1JTTD1002F",
     wclItemNo: "RK73H1JTTD1002F",
     description: "RES 10K OHM 1% 1/10W 0603",
-    defaultCoo: "JP",
     onHandQty: 1000,
   });
   assert.deepEqual(parts[2], {
@@ -160,7 +158,6 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     partNo: "RK73H1JTTD2202F",
     wclItemNo: "RK73H1JTTD2202F",
     description: "RES 22K OHM 1% 1/10W 0603",
-    defaultCoo: "JP",
     onHandQty: 500,
   });
   assert.deepEqual(parts[3], {
@@ -168,7 +165,6 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     partNo: "RK73H1JTTD4702F",
     wclItemNo: "RK73H1JTTD4702F",
     description: "RES 47K OHM 1% 1/10W 0603",
-    defaultCoo: "JP",
     onHandQty: 200,
   });
   assert.deepEqual(parts[4], {
@@ -176,7 +172,6 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     partNo: "RK73H1JTTD5602F",
     wclItemNo: "RK73H1JTTD5602F",
     description: null,
-    defaultCoo: null,
     onHandQty: 1000,
   });
   assert.deepEqual(parts[5], {
@@ -184,7 +179,6 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     partNo: "RK73H2ATTD2212F",
     wclItemNo: "RK73H2ATTD2212F",
     description: null,
-    defaultCoo: null,
     onHandQty: 400,
   });
 });

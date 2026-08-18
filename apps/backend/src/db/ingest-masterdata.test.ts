@@ -42,7 +42,7 @@ const ID_PROFILE = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
 const ID_SUBINV = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
 const ID_OTHER = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
 
-/** Minimal receiving order that references a part / supplier / sub-inventory. */
+/** Minimal receiving order that references a part / supplier / sub-inventory (via the item pair). */
 function receivingBody(over: {
   partNo?: string;
   supplierCode?: string;
@@ -52,11 +52,19 @@ function receivingBody(over: {
   return {
     order: {
       supplierCode: over.supplierCode ?? null,
-      orgId: over.orgId,
-      subInventoryCode: over.subInventoryCode ?? "STORE1",
     },
     invoices: [
-      { invoiceNo: "INV-MD-1", items: [{ partNo: over.partNo ?? "RK73H1JTTD1002F", lineQty: 5 }] },
+      {
+        invoiceNo: "INV-MD-1",
+        items: [
+          {
+            partNo: over.partNo ?? "RK73H1JTTD1002F",
+            lineQty: 5,
+            orgId: over.orgId ?? 2,
+            subInventoryCode: over.subInventoryCode ?? "STORE1",
+          },
+        ],
+      },
     ],
   };
 }
@@ -77,13 +85,12 @@ test("parts: create (caller id honored) → update reconcile → delete", async 
   assert.equal(res.changed, true);
   assert.equal(res.id, ID_PART);
 
-  const row = (await queryGet<{ brand: string; wclItemNo: string; defaultCoo: string | null }>(
+  const row = (await queryGet<{ brand: string; wclItemNo: string }>(
     client.db,
-    sql`SELECT brand, wcl_item_no AS "wclItemNo", default_coo AS "defaultCoo" FROM parts WHERE wcl_item_no = 'WCL/ING-MD-PART-1'`
+    sql`SELECT brand, wcl_item_no AS "wclItemNo" FROM parts WHERE wcl_item_no = 'WCL/ING-MD-PART-1'`
   ))!;
   assert.equal(row.brand, "INGBRAND");
   assert.equal(row.wclItemNo, "WCL/ING-MD-PART-1");
-  assert.equal(row.defaultCoo, null);
 
   // identical re-upsert → nothing changed; a different supplied id is ignored
   const same = await upsertPart(client.db, {
@@ -102,8 +109,7 @@ test("parts: create (caller id honored) → update reconcile → delete", async 
     partNo: "ING-MD-PART-1",
     brand: "INGBRAND",
     wclItemNo: "WCL/ING-MD-PART-1",
-    description: "ingest test part",
-    defaultCoo: "JP",
+    description: "ingest test part v2",
   });
   assert.equal(upd.created, false);
   assert.equal(upd.changed, true);

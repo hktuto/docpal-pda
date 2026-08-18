@@ -69,7 +69,6 @@ unique FK target).
 | part_no | text NOT NULL | Supplier part number (NOT unique; plain index `idx_parts_part_no`) |
 | wcl_item_no | text UNIQUE | WCL Part No — unique business key and ingest dedup key (same meaning as receiving_invoice_items.wcl_item_no) |
 | description | text | Part description |
-| default_coo | text | Default country of origin |
 | creation_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
@@ -249,7 +248,6 @@ this app by the user (no upstream sync key).
 | supplier_code | text FK → suppliers(code) | Supplier (business code; `suppliers.id` is internal-only) |
 | delivery_date | timestamp | Expected delivery date |
 | org_id | integer NOT NULL DEFAULT 2 | Receiving office |
-| sub_inventory_code | text NOT NULL FK → sub_inventories(secondary_inventory_name) | Sub-inventory the order receives into (mandatory per order; with org_id, the receiving location pair) |
 | date_code | text | Batch-level date code; items without one inherit it |
 | status | text NOT NULL DEFAULT 'pending' | Order status |
 | arrived_at | timestamp | Arrival confirmation time |
@@ -275,7 +273,6 @@ Packing-list header — one supplier invoice inside a receiving order.
 | total_ctn | integer | Total carton count |
 | delivery_date | timestamp | Ship-out date (not the inbound time) |
 | org_id | integer NOT NULL DEFAULT 2 | Shipper office, 2 = HK |
-| sub_inventory_code | text FK → sub_inventories(secondary_inventory_name) | Sub-inventory override for this invoice (nullable) |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
@@ -291,7 +288,7 @@ Packing-list line items.
 | wcl_item_no | text | WCL Part No (line-level copy, eases OCR reconciliation) |
 | po_no | text | Purchase order number |
 | po_line | text | Purchase order line |
-| line_qty | integer NOT NULL | Expected quantity per the document (matches Oracle DB line qty) |
+| line_qty | integer | Expected quantity per the document (matches Oracle DB line qty); nullable — when upstream omits it the line goes through manual confirm (arrival confirm leaves received_qty at 0, the scan over-receipt guard is skipped) |
 | received_qty | integer NOT NULL DEFAULT 0 | Quantity scanned/received |
 | picked_qty | integer NOT NULL DEFAULT 0 | Quantity picked from this line |
 | put_away_qty | integer NOT NULL DEFAULT 0 | Quantity put away |
@@ -301,13 +298,14 @@ Packing-list line items.
 | coo | text | Country of origin |
 | cow | text | Country of wafer |
 | org_id | integer NOT NULL DEFAULT 2 | Receiving office |
-| sub_inventory_code | text FK → sub_inventories(secondary_inventory_name) | Sub-inventory override for this line (nullable) |
+| sub_inventory_code | text FK → sub_inventories(secondary_inventory_name) | Sub-inventory this line is received into (nullable) — with org_id, THE receiving location pair (item-level partitioning since 2026-08-18; order/invoice-level columns are gone; an ingest-time defaulting rule assigns it, owner: Sean) |
 | reported_mismatch | boolean NOT NULL DEFAULT false | A mismatch was reported on this line |
 | mismatch_reason | text | Mismatch reason |
 | mismatch_qty | integer | Mismatched quantity |
 | wrong_part_no | text | Wrong part number actually received |
 | mismatch_note | text | Free-form mismatch note |
 | additional_data | jsonb NULL | Free-form per-line extension data (ingest passes `additionalData` through on insert; not part of reconcile keys) |
+| order_data | jsonb NULL | Upstream `order_data` passthrough (same treatment as `additional_data`) |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
@@ -365,9 +363,9 @@ Picking order lines.
 | qty | integer NOT NULL | Demand quantity to ship |
 | picked_qty | integer NOT NULL DEFAULT 0 | Quantity scanned/picked |
 | allocated_qty | integer NOT NULL DEFAULT 0 | Quantity reserved (allocated) |
-| line_id | bigint NOT NULL | Upstream Oracle order-line id (ingest passes `lineId` through) |
-| line_number | integer NOT NULL | Upstream Oracle line number |
-| shipment_number | integer NOT NULL | Upstream Oracle shipment number |
+| line_id | bigint | Upstream Oracle order-line id (ingest passes `lineId` through; nullable — reconcile falls back to part_no when upstream omits it) |
+| line_number | integer | Upstream Oracle line number (nullable) |
+| shipment_number | integer | Upstream Oracle shipment number (nullable) |
 | status | text NOT NULL DEFAULT 'pending' | Line status (`pending`/`picked`), backend-maintained from `picked_qty` vs `qty` |
 | additional_data | jsonb NULL | Free-form per-line extension data (ingest passes `additionalData` through on insert; not part of reconcile keys) |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
@@ -550,8 +548,9 @@ Put-away tasks (spec `docs/superpowers/specs/2026-08-10-put-away-tasks-design.md
 one task per receiving order, auto-created inside the arrival-confirm
 transaction when flow config `steps.put-away.autoCreateTasks` is on
 (`warehouse_config` row `"flow"`), completed
-by the receiving auto-clear. The `org_id`/`sub_inventory_code` pair is a
-denormalized copy from the order (shelf-suggestion query convenience). Task
+by the receiving auto-clear. The `org_id`/`sub_inventory_code` pair is
+derived from the order's items (the uniform item pair; NULL when mixed) —
+shelf-suggestion query convenience. Task
 mode is an overlay — the derived `GET /put-away/candidates` list stays the
 source for manual mode.
 
@@ -559,8 +558,8 @@ source for manual mode.
 | --- | --- | --- |
 | id | text PK | Task id (UUID) |
 | receiving_order_id | text NOT NULL FK → receiving_orders(id) ON DELETE CASCADE | Order to put away |
-| org_id | integer | Stock location pair copy from the order |
-| sub_inventory_code | text | Stock location pair copy from the order |
+| org_id | integer | Item-derived stock location pair (NULL when the order's items are mixed) |
+| sub_inventory_code | text | Item-derived stock location pair (NULL when the order's items are mixed) |
 | status | text NOT NULL DEFAULT 'pending' | `pending` \| `completed` |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |

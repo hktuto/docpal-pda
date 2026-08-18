@@ -14,10 +14,12 @@
   (`GET /receiving-orders/:id/put-away`): expected invoice items (with
   remaining qty and a per-item shelf/box suggestion —
   `suggestedShelfCode` / `suggestedBoxId` / `suggestionReason`, ranked
-  within the order's org + sub-inventory: most recent OPEN shelf box
-  containing the same part → shelf of the most recent lot of the same part →
+  within the item's org + sub-inventory (the partition pair lives on
+  receiving ITEMS — items with no pair get no suggestion): most recent OPEN
+  shelf box containing the same part → shelf of the most recent lot of the
+  same part →
   first shelf whose advisory `shelves.sub_inventory_codes` contain the
-  order's sub-inventory;
+  item's sub-inventory;
   `steps.put-away.suggestShelf=off` suppresses it; advisory only, computed
   at read time, never stored), materialized inventory lots, staging scans,
   and the non-staging shelf boxes with their item rows.

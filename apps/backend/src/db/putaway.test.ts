@@ -86,7 +86,7 @@ async function catchHttp(p: Promise<unknown>): Promise<HTTPException> {
 async function daitoInHand(): Promise<{ orderId: string; actorId: string }> {
   const actorId = await actorIdOf("operator");
   await upsertReceivingOrder(client.db, "04958210", {
-    order: { supplierCode: "DAITO", deliveryDate: "2026-07-29", dateCode: "2610", subInventoryCode: "STORE1" },
+    order: { supplierCode: "DAITO", deliveryDate: "2026-07-29", dateCode: "2610" },
     invoices: [
       {
         invoiceNo: "INV-04958210-01",
@@ -94,8 +94,8 @@ async function daitoInHand(): Promise<{ orderId: string; actorId: string }> {
         totalQty: 8000,
         totalCtn: 2,
         items: [
-          { partNo: "RK73B1JTTD181G", poNo: "PO-DAI-301", poLine: "1", lineQty: 5000, dateCode: "2610", coo: "JP", cow: "JP" },
-          { partNo: "RK73H1JTTD4702F", poNo: "PO-DAI-301", poLine: "2", lineQty: 3000, dateCode: "2610", coo: "JP", cow: "JP" },
+          { partNo: "RK73B1JTTD181G", poNo: "PO-DAI-301", poLine: "1", lineQty: 5000, dateCode: "2610", coo: "JP", cow: "JP", orgId: 2, subInventoryCode: "STORE1" },
+          { partNo: "RK73H1JTTD4702F", poNo: "PO-DAI-301", poLine: "2", lineQty: 3000, dateCode: "2610", coo: "JP", cow: "JP", orgId: 2, subInventoryCode: "STORE1" },
         ],
       },
     ],

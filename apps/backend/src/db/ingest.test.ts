@@ -44,7 +44,6 @@ function receivingBody(qty2 = 50): IngestReceivingBody {
       supplierCode: "KOA",
       deliveryDate: "2026-07-20",
       dateCode: "2610",
-      subInventoryCode: "STORE1",
     },
     invoices: [
       {
@@ -62,8 +61,10 @@ function receivingBody(qty2 = 50): IngestReceivingBody {
             lotCode: "L-ING-A",
             coo: "JP",
             cow: "JP",
+            orgId: 2,
+            subInventoryCode: "STORE1",
           },
-          { partNo: "RK73H1JTTD2202F", poNo: "PO-ING-1", poLine: "2", lineQty: qty2 },
+          { partNo: "RK73H1JTTD2202F", poNo: "PO-ING-1", poLine: "2", lineQty: qty2, orgId: 2, subInventoryCode: "STORE1" },
         ],
       },
     ],
@@ -87,11 +88,10 @@ test("receiving: create → created/changed, order + invoices + items written wi
     supplierCode: string;
     dateCode: string;
     orgId: number;
-    subInventoryCode: string;
   }>(
     client.db,
     sql`SELECT id, batch_no AS "batchNo", status, supplier_code AS "supplierCode", date_code AS "dateCode",
-               org_id AS "orgId", sub_inventory_code AS "subInventoryCode"
+               org_id AS "orgId"
         FROM receiving_orders WHERE batch_no = 'RO-INGEST-1'`
   ))!;
   assert.equal(order.id, res.id);
@@ -100,7 +100,6 @@ test("receiving: create → created/changed, order + invoices + items written wi
   assert.equal(order.supplierCode, "KOA");
   assert.equal(order.dateCode, "2610");
   assert.equal(order.orgId, 2); // schema default
-  assert.equal(order.subInventoryCode, "STORE1");
 
   const invoices = await queryAll<{ id: string; invoiceNo: string; supplierCode: string; totalQty: number; orgId: number }>(
     client.db,
@@ -112,18 +111,20 @@ test("receiving: create → created/changed, order + invoices + items written wi
   assert.equal(invoices[0].supplierCode, "KOA"); // falls back to the order supplier
   assert.equal(invoices[0].orgId, 2); // schema default
 
-  const items = await queryAll<{ partNo: string; poLine: string; lineQty: number; receivedQty: number; orgId: number }>(
+  const items = await queryAll<{ partNo: string; poLine: string; lineQty: number; receivedQty: number; orgId: number; subInventoryCode: string | null }>(
     client.db,
     sql`SELECT part_no AS "partNo", po_line AS "poLine", line_qty AS "lineQty",
-               received_qty AS "receivedQty", org_id AS "orgId"
+               received_qty AS "receivedQty", org_id AS "orgId", sub_inventory_code AS "subInventoryCode"
         FROM receiving_invoice_items WHERE receiving_invoice_id = ${invoices[0].id} ORDER BY po_line`
   );
   assert.equal(items.length, 2);
   assert.equal(items[0].partNo, "RK73H1JTTD1002F");
   assert.equal(items[0].lineQty, 100);
   assert.equal(items[0].receivedQty, 0);
-  assert.equal(items[0].orgId, 2); // schema default
+  assert.equal(items[0].orgId, 2);
+  assert.equal(items[0].subInventoryCode, "STORE1"); // the pair lives on the item now
   assert.equal(items[1].lineQty, 50);
+  assert.equal(items[1].subInventoryCode, "STORE1");
 });
 
 test("receiving: identical re-PUT → created:false changed:false", async () => {
@@ -225,36 +226,15 @@ test("receiving: item reconcile — add/remove lines by business key, keep untou
   assert.equal(items[1].partNo, "RK73H1JTTD4702F");
 });
 
-test("receiving: missing order.subInventoryCode → 400", async () => {
-  await reseed(client);
-  const body = receivingBody();
-  body.order.subInventoryCode = undefined as unknown as string;
-  const err = await catchHttp(upsertReceivingOrder(client.db, "RO-INGEST-1", body));
-  assert.equal(err.status, 400);
-  assert.equal(err.message, "order.subInventoryCode is required");
-});
-
-test("receiving: changed subInventoryCode (order/invoice/item) → changed:true and updated", async () => {
+test("receiving: changed item subInventoryCode → changed:true and updated", async () => {
   await reseed(client);
   await upsertReceivingOrder(client.db, "RO-INGEST-1", receivingBody());
   const body = receivingBody();
-  body.order.subInventoryCode = "WSTORE1";
-  body.invoices[0].subInventoryCode = "WSTORE1";
   body.invoices[0].items[0].subInventoryCode = "WSTORE1";
   const res = await upsertReceivingOrder(client.db, "RO-INGEST-1", body);
   assert.equal(res.created, false);
   assert.equal(res.changed, true);
 
-  const order = (await queryGet<{ subInventoryCode: string }>(
-    client.db,
-    sql`SELECT sub_inventory_code AS "subInventoryCode" FROM receiving_orders WHERE id = ${res.id}`
-  ))!;
-  assert.equal(order.subInventoryCode, "WSTORE1");
-  const inv = (await queryGet<{ subInventoryCode: string }>(
-    client.db,
-    sql`SELECT sub_inventory_code AS "subInventoryCode" FROM receiving_invoices WHERE receiving_order_id = ${res.id}`
-  ))!;
-  assert.equal(inv.subInventoryCode, "WSTORE1");
   const item = (await queryGet<{ subInventoryCode: string | null }>(
     client.db,
     sql`SELECT rii.sub_inventory_code AS "subInventoryCode" FROM receiving_invoice_items rii

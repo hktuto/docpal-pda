@@ -17,7 +17,7 @@
         <span class="card__title">{{ item.partNo }}</span>
       </DetailRow>
 
-      <DetailRow :label="$t('receiving.itemsTab.expected')" :value="item.lineQty" />
+      <DetailRow :label="$t('receiving.itemsTab.expected')" :value="item.lineQty ?? '—'" />
       <DetailRow :label="$t('receiving.itemsTab.boxId')" :value="item.ctnNo" />
       <template v-if="expanded">
         <DetailRow :label="$t('receiving.itemsTab.poLine')" :value="`${item.poNo} / ${item.poLine}`" />

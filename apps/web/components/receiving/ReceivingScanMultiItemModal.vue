@@ -129,7 +129,10 @@ const partNoOptions = computed(() => {
 function progressOf(partNo: string): string {
   const matches = props.candidates.filter((c) => c.partNo === partNo);
   const received = matches.reduce((sum, c) => sum + c.receivedQty, 0);
-  const expected = matches.reduce((sum, c) => sum + c.lineQty, 0);
+  // lineQty null = expected qty unknown upstream.
+  const expected = matches.some((c) => c.lineQty === null)
+    ? "—"
+    : matches.reduce((sum, c) => sum + (c.lineQty ?? 0), 0);
   return `${received} / ${expected}`;
 }
 

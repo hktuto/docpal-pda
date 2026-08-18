@@ -94,13 +94,11 @@ for (const r of partRows) {
   const [supplierCode, partNo] = sp;
   supplierCodes.add(supplierCode);
   if (partMap.has(partNo)) continue;
-  const coo = String(r[4]).trim();
   partMap.set(partNo, {
     brand: supplierCode, // parts.brand — plain text, no FK
     partNo,
     wclItemNo: String(r[1]).trim(),
     description: String(r[2]).trim() || null,
-    defaultCoo: coo && coo !== "--" ? coo : null,
   });
 }
 const bulkParts = [...partMap.values()];
@@ -199,7 +197,6 @@ const order210726 = [
     supplierCode: null, // multi-supplier order — supplier lives on the invoices
     deliveryDate: "2026-07-21",
     orgId: 2,
-    subInventoryCode: "STAGING",
     status: "pending",
   },
 ];
@@ -231,7 +228,7 @@ writeFileSync(
   path.join(outDir, "seed-order-210726.ts"),
   HEADER +
     "// Source: new_seed/210726.xls — one multi-supplier pending receiving order\n" +
-    "// (batch 210726, org 2 / STAGING, delivery 2026-07-21). Invoice supplierCode\n" +
+    "// (batch 210726, org 2, delivery 2026-07-21). Invoice supplierCode\n" +
     "// is carried directly as supplier_code. Size/G.W/產品 columns and the\n" +
     "// trailing 合板/紙板/膠板 summary rows have no schema home — dropped.\n" +
     `export const order210726 = [\n  ${order210726.map(fmtRow).join(",\n  ")},\n];\n\n` +

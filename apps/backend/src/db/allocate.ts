@@ -24,11 +24,16 @@ import { allowDockStock } from "../config.js";
 //     (admin-reorderable via POST /picking-orders/reorder).
 //   - Location: the picking order's (org_id, sub_inventory_code) pair must
 //     match the source's pair — lots match on their own pair, receiving
-//     sources on the receiving order's pair. A demand without the pair
-//     (both columns NULL) is org-agnostic and matches any source. The code
-//     match is widened by sub_inventory_share_members: a source whose
-//     sub-inventory shares a share_group with the demand's sub-inventory
-//     (same org) also matches.
+//     sources on the receiving ITEM's pair (receiving_invoice_items.org_id +
+//     sub_inventory_code; order-level partitioning is gone since 2026-08-18).
+//     A demand without the pair (both columns NULL) is org-agnostic and
+//     matches any source. The code match is widened by
+//     sub_inventory_share_members: a source whose sub-inventory shares a
+//     share_group with the demand's sub-inventory (same org) also matches.
+//   - A receiving item with a NULL pair (org_id or sub_inventory_code) is
+//     skipped and counted (AllocateSummary.skippedReceivingSources) — the
+//     ingest-time defaulting rule (owner: Sean) is meant to populate it;
+//     until then such stock is surfaced, never silently allocated.
 //   - Customer segregation: a source in a sub-inventory with
 //     sub_inventories.customer_code only allocates to picking orders of that
 //     customer (customer_profiles.rule stays stored-not-interpreted).
@@ -118,6 +123,8 @@ interface ReceivingRow {
   receivingOrderId: string;
   ctnNo: string | null;
   dateCode: string | null;
+  orgId: number | null;
+  subInventoryCode: string | null;
   available: number;
 }
 
@@ -127,6 +134,8 @@ export interface AllocateSummary {
   partiallyAllocated: number;
   allocationsCreated: number;
   allocationsRemoved: number;
+  /** Receiving source rows skipped because the item's location pair is NULL. */
+  skippedReceivingSources: number;
 }
 
 async function loadDemands(dbOrTx: DbOrTx): Promise<DemandRow[]> {
@@ -184,12 +193,14 @@ async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow): Promise<Recei
                ro.id AS "receivingOrderId",
                rii.ctn_no AS "ctnNo",
                rii.date_code AS "dateCode",
+               rii.org_id AS "orgId",
+               rii.sub_inventory_code AS "subInventoryCode",
                (rii.received_qty - rii.picked_qty
                  - COALESCE(locked_ii.qty, 0) - COALESCE(locked_ro.qty, 0)) AS "available"
         FROM receiving_invoice_items rii
         JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
         JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
-        LEFT JOIN sub_inventories si ON si.org_id = ro.org_id AND si.secondary_inventory_name = ro.sub_inventory_code
+        LEFT JOIN sub_inventories si ON si.org_id = rii.org_id AND si.secondary_inventory_name = rii.sub_inventory_code
         LEFT JOIN (
           SELECT a.receiving_invoice_item_id AS rii_id, SUM(a.qty)::int AS qty
           FROM allocations a
@@ -210,13 +221,13 @@ async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow): Promise<Recei
         ) locked_ro ON locked_ro.ro_id = ro.id
         WHERE rii.part_no = ${d.partNo}
           AND ro.status IN ('in_hand', 'provisional_received')
-          AND (${d.orgId}::int IS NULL OR ro.org_id = ${d.orgId})
+          AND (${d.orgId}::int IS NULL OR rii.org_id = ${d.orgId})
           AND (${d.subInventoryCode}::text IS NULL
-               OR ro.sub_inventory_code = ${d.subInventoryCode}
+               OR rii.sub_inventory_code = ${d.subInventoryCode}
                OR EXISTS (SELECT 1 FROM sub_inventory_share_members sm_d
                           JOIN sub_inventory_share_members sm_s ON sm_s.share_group = sm_d.share_group
                           WHERE sm_d.org_id = ${d.orgId} AND sm_d.code = ${d.subInventoryCode}
-                            AND sm_s.org_id = ro.org_id AND sm_s.code = ro.sub_inventory_code))
+                            AND sm_s.org_id = rii.org_id AND sm_s.code = rii.sub_inventory_code))
           AND (si.customer_code IS NULL OR si.customer_code = ${d.customerCode})
           AND (rii.received_qty - rii.picked_qty
                 - COALESCE(locked_ii.qty, 0) - COALESCE(locked_ro.qty, 0)) > 0
@@ -267,6 +278,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
       partiallyAllocated: 0,
       allocationsCreated: 0,
       allocationsRemoved: 0,
+      skippedReceivingSources: 0,
     };
     const demands = await loadDemands(tx);
     summary.demands = demands.length;
@@ -395,6 +407,11 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
         const rows = await loadReceivingSources(tx, d);
         for (const r of rows) {
           if (remaining <= 0) break;
+          // NULL item pair → skip + count (surfaced, never silently allocated)
+          if (r.orgId === null || r.subInventoryCode === null) {
+            summary.skippedReceivingSources += 1;
+            continue;
+          }
           // box-level sources track per item; order-level sources pool per order+part
           const key = r.ctnNo ? `item:${r.receivingInvoiceItemId}` : `order:${r.receivingOrderId}:${d.partNo}`;
           const usable = r.available - (recvUsed.get(key) ?? 0);
@@ -472,6 +489,11 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
             SELECT DISTINCT picking_item_id FROM allocations WHERE ${inArray(sql`picking_item_id`, itemIds)}
           )`
     );
+    if (summary.skippedReceivingSources > 0) {
+      console.warn(
+        `allocateAll: skipped ${summary.skippedReceivingSources} receiving source(s) with a NULL item location pair (org_id/sub_inventory_code)`
+      );
+    }
     if (beforeKeys.slice().sort().join("\n") !== afterKeys.slice().sort().join("\n")) {
       await emitEvent(tx, {
         type: "allocation.computed",

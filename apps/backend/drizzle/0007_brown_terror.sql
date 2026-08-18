@@ -1,1 +1,0 @@
-ALTER TABLE "shelves" DROP COLUMN "org_id";
