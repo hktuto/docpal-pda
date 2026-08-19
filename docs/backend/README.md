@@ -406,7 +406,11 @@ step enablement + `steps.picking.allocation.allowDockStock`, served as
 `GET /config`; the primary source is the seeded `warehouse_config` row
 `"flow"`, and the deprecated `FLOW_STEPS_DISABLED` comma-separated step keys
 still apply when unset),
-`WAREHOUSE_SEED=off` to disable auto-seed.
+`WAREHOUSE_SEED=off` to disable auto-seed, `WAREHOUSE_SEED_DEMO=1` to seed the
+full demo world (users/masters/demo orders — needed for local dev login). The
+default boot seed is reference data + shelves only: masters (parts, suppliers,
+org_info, customer profiles) and orders sync in from the DocPal master DB via
+Electric, and users come from DocPal auth.
 
 `pnpm --filter @warehouse/backend db:seed` wipes and re-seeds the demo dataset;
 `db:generate` / `db:migrate` manage migrations. A PM2 setup for a VM lives in

@@ -117,6 +117,116 @@ export const ALL_TABLES = [
 
 const uid = (n: number) => `00000000-0000-7000-8000-${String(n).padStart(12, "0")}`; // deterministic v7-shaped seed id
 
+// Country lookup — codes are ISO 3166-1 alpha-2; names kept verbatim from
+// the POC sheet ("Taiwan,China", "USA", "Korea" as given there).
+const COUNTRIES = [
+  { code: "AU", name: "Australia" },
+  { code: "AT", name: "Austria" },
+  { code: "BE", name: "Belgium" },
+  { code: "BR", name: "Brazil" },
+  { code: "KH", name: "Cambodia" },
+  { code: "CA", name: "Canada" },
+  { code: "CN", name: "China" },
+  { code: "HR", name: "Croatia" },
+  { code: "CZ", name: "Czechia" },
+  { code: "DK", name: "Denmark" },
+  { code: "FR", name: "France" },
+  { code: "DE", name: "Germany" },
+  { code: "GR", name: "Greece" },
+  { code: "IN", name: "India" },
+  { code: "ID", name: "Indonesia" },
+  { code: "IL", name: "Israel" },
+  { code: "IT", name: "Italy" },
+  { code: "JP", name: "Japan" },
+  { code: "KR", name: "Korea" },
+  { code: "LA", name: "Laos" },
+  { code: "MY", name: "Malaysia" },
+  { code: "MX", name: "Mexico" },
+  { code: "MA", name: "Morocco" },
+  { code: "NL", name: "Netherlands" },
+  { code: "PH", name: "Philippines" },
+  { code: "PT", name: "Portugal" },
+  { code: "SA", name: "Saudi Arabia" },
+  { code: "SG", name: "Singapore" },
+  { code: "SI", name: "Slovenia" },
+  { code: "SK", name: "Slovakia" },
+  { code: "ES", name: "Spain" },
+  { code: "LK", name: "Sri Lanka" },
+  { code: "CH", name: "Switzerland" },
+  { code: "TW", name: "Taiwan,China" },
+  { code: "TH", name: "Thailand" },
+  { code: "GB", name: "United Kingdom" },
+  { code: "US", name: "USA" },
+  { code: "VN", name: "Vietnam" },
+];
+
+// Default box sizes from the POC sheet, normalized to "L X W X H" (cm).
+const BOX_SIZES = [
+  "18 X 11 X 29",
+  "20 X 16 X 20",
+  "21 X 21 X 9",
+  "25 X 22 X 30",
+  "26 X 20 X 20",
+  "26 X 22 X 22",
+  "26.5 X 10 X 34",
+  "26.5 X 10 X 35",
+  "26.5 X 17 X 34",
+  "26.5 X 17 X 35",
+  "28 X 32.5 X 35",
+  "32 X 22 X 30",
+  "32.5 X 28 X 35",
+  "33 X 24 X 16",
+  "33 X 24 X 18",
+  "33 X 24 X 25",
+  "33 X 33 X 22",
+  "34 X 25 X 9",
+  "35 X 35 X 22",
+  "35.5 X 35.5 X 30.5",
+  "36 X 22 X 22",
+  "37 X 15 X 37",
+  "37 X 8.5 X 37",
+  "40 X 40 X 28",
+  "41 X 17 X 41",
+  "41 X 41 X 28",
+  "41 X 8.5 X 41",
+  "42 X 40 X 42",
+  "44 X 20 X 20",
+  "45 X 44 X 33",
+  "46 X 24 X 21.5",
+  "46.5 X 21.5 X 30",
+  "47 X 24 X 21.5",
+  "58.5 X 20 X 10",
+  "58.5 X 20 X 20",
+  "63 X 16 X 12",
+];
+
+// Warehouse shelf layout. DOCK is the virtual dock shelf — dock/GIT lots hang
+// off this code (never NULL).
+const SHELVES = [
+  { code: "A-01-01", zone: "A" },
+  { code: "A-01-02", zone: "A" },
+  { code: "A-01-03", zone: "A" },
+  { code: "A-01-04", zone: "A" },
+  { code: "A-02-01", zone: "A" },
+  { code: "A-02-02", zone: "A" },
+  { code: "A-03-01", zone: "A" },
+  { code: "A-03-02", zone: "A" },
+  { code: "A-03-03", zone: "A" },
+  { code: "A-03-04", zone: "A" },
+  { code: "A-03-05", zone: "A" },
+  { code: "A-04-01", zone: "A" },
+  { code: "A-04-02", zone: "A" },
+  { code: "A-04-03", zone: "A" },
+  { code: "A-04-04", zone: "A" },
+  { code: "A-04-05", zone: "A", subInventoryCodes: ["STORE1"] },
+  { code: "DOCK", zone: "DOCK" },
+  { code: "GZ-01-01", zone: "GZ" },
+  { code: "GZ-01-02", zone: "GZ" },
+  { code: "SZ-01-01", zone: "SZ" },
+  { code: "SZ-01-02", zone: "SZ" },
+  { code: "W-01-01", zone: "W" },
+];
+
 // Demo dataset (spec docs/superpowers/specs/2026-07-29-excel-demo-seed-design.md):
 // the order/stock world comes from new_seed/demo-scenario.xlsx via
 // scripts/gen-seed-demo-scenario.mjs (seed-demo-scenario.ts) —
@@ -256,90 +366,9 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
     );
   }
 
-  // Country lookup — codes are ISO 3166-1 alpha-2; names kept verbatim from
-  // the POC sheet ("Taiwan,China", "USA", "Korea" as given there).
-  await db.insert(countryList).values([
-    { code: "AU", name: "Australia" },
-    { code: "AT", name: "Austria" },
-    { code: "BE", name: "Belgium" },
-    { code: "BR", name: "Brazil" },
-    { code: "KH", name: "Cambodia" },
-    { code: "CA", name: "Canada" },
-    { code: "CN", name: "China" },
-    { code: "HR", name: "Croatia" },
-    { code: "CZ", name: "Czechia" },
-    { code: "DK", name: "Denmark" },
-    { code: "FR", name: "France" },
-    { code: "DE", name: "Germany" },
-    { code: "GR", name: "Greece" },
-    { code: "IN", name: "India" },
-    { code: "ID", name: "Indonesia" },
-    { code: "IL", name: "Israel" },
-    { code: "IT", name: "Italy" },
-    { code: "JP", name: "Japan" },
-    { code: "KR", name: "Korea" },
-    { code: "LA", name: "Laos" },
-    { code: "MY", name: "Malaysia" },
-    { code: "MX", name: "Mexico" },
-    { code: "MA", name: "Morocco" },
-    { code: "NL", name: "Netherlands" },
-    { code: "PH", name: "Philippines" },
-    { code: "PT", name: "Portugal" },
-    { code: "SA", name: "Saudi Arabia" },
-    { code: "SG", name: "Singapore" },
-    { code: "SI", name: "Slovenia" },
-    { code: "SK", name: "Slovakia" },
-    { code: "ES", name: "Spain" },
-    { code: "LK", name: "Sri Lanka" },
-    { code: "CH", name: "Switzerland" },
-    { code: "TW", name: "Taiwan,China" },
-    { code: "TH", name: "Thailand" },
-    { code: "GB", name: "United Kingdom" },
-    { code: "US", name: "USA" },
-    { code: "VN", name: "Vietnam" },
-  ].map((c, i) => ({ id: uid(100 + i), ...c })));
+  await db.insert(countryList).values(COUNTRIES.map((c, i) => ({ id: uid(100 + i), ...c })));
 
-  // Default box sizes from the POC sheet, normalized to "L X W X H" (cm).
-  await db.insert(boxSizeList).values(
-    [
-      "18 X 11 X 29",
-      "20 X 16 X 20",
-      "21 X 21 X 9",
-      "25 X 22 X 30",
-      "26 X 20 X 20",
-      "26 X 22 X 22",
-      "26.5 X 10 X 34",
-      "26.5 X 10 X 35",
-      "26.5 X 17 X 34",
-      "26.5 X 17 X 35",
-      "28 X 32.5 X 35",
-      "32 X 22 X 30",
-      "32.5 X 28 X 35",
-      "33 X 24 X 16",
-      "33 X 24 X 18",
-      "33 X 24 X 25",
-      "33 X 33 X 22",
-      "34 X 25 X 9",
-      "35 X 35 X 22",
-      "35.5 X 35.5 X 30.5",
-      "36 X 22 X 22",
-      "37 X 15 X 37",
-      "37 X 8.5 X 37",
-      "40 X 40 X 28",
-      "41 X 17 X 41",
-      "41 X 41 X 28",
-      "41 X 8.5 X 41",
-      "42 X 40 X 42",
-      "44 X 20 X 20",
-      "45 X 44 X 33",
-      "46 X 24 X 21.5",
-      "46.5 X 21.5 X 30",
-      "47 X 24 X 21.5",
-      "58.5 X 20 X 10",
-      "58.5 X 20 X 20",
-      "63 X 16 X 12",
-    ].map((code, i) => ({ id: uid(140 + i), code }))
-  );
+  await db.insert(boxSizeList).values(BOX_SIZES.map((code, i) => ({ id: uid(140 + i), code })));
 
   await db.insert(customerProfiles).values([
     { id: uid(180), code: "ACME", label: "ACME Electronics (HK)", remark: "requires segregated storage" },
@@ -384,36 +413,7 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
     { id: uid(199), orgId: 2, code: "WSTORE1", shareGroup: "HK" },
   ]);
 
-  await db.insert(shelves).values([
-    { code: "A-01-01", zone: "A" },
-    { code: "A-01-02", zone: "A" },
-    { code: "A-01-03", zone: "A" },
-    { code: "A-01-04", zone: "A" },
-    // case-1/3 demo boxes (BOX-H-20260701-0003/-0004)
-    { code: "A-02-01", zone: "A" },
-    { code: "A-02-02", zone: "A" },
-    // pre-generated empty put-away boxes (BOX-H-20260701-0005..-0014)
-    { code: "A-03-01", zone: "A" },
-    { code: "A-03-02", zone: "A" },
-    { code: "A-03-03", zone: "A" },
-    { code: "A-03-04", zone: "A" },
-    { code: "A-03-05", zone: "A" },
-    { code: "A-04-01", zone: "A" },
-    { code: "A-04-02", zone: "A" },
-    { code: "A-04-03", zone: "A" },
-    { code: "A-04-04", zone: "A" },
-    // sub-inventory-tagged demo shelf: put-away sub-inventory-shelf fallback
-    // target (STORE1)
-    { code: "A-04-05", zone: "A", subInventoryCodes: ["STORE1"] },
-    // virtual dock shelf — dock/GIT lots hang off this code (never NULL)
-    { code: "DOCK", zone: "DOCK" },
-    // shelves for the real-data orders (new_seed/)
-    { code: "GZ-01-01", zone: "GZ" },
-    { code: "GZ-01-02", zone: "GZ" },
-    { code: "SZ-01-01", zone: "SZ" },
-    { code: "SZ-01-02", zone: "SZ" },
-    { code: "W-01-01", zone: "W" },
-  ].map((s, i) => ({ id: uid(200 + i), ...s })));
+  await db.insert(shelves).values(SHELVES.map((s, i) => ({ id: uid(200 + i), ...s })));
 
   // Net-weight reference: 1000 pcs of each 0603 resistor ≈ 6.3 g.
   await db.insert(netWeightFormula).values([
@@ -474,17 +474,51 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
     WHERE picking_orders.id = r.id`);
 }
 
-/** Seed demo data when the users table is empty. Returns true when it seeded. */
+/** Minimal boot seed: reference data + shelf layout only. Masters (parts,
+ *  suppliers, org_info, customer profiles) and all orders/stock arrive via the
+ *  Electric sync from the DocPal master DB; users come from DocPal auth, so no
+ *  local users are seeded. */
+async function seedReferenceOnly(db: AppDb): Promise<void> {
+  // Flow config row — required for boot ({} = all defaults on).
+  await db.insert(warehouseConfig).values([{ key: "flow", value: {} }]);
+
+  await db.insert(countryList).values(COUNTRIES.map((c, i) => ({ id: uid(100 + i), ...c })));
+
+  await db.insert(boxSizeList).values(BOX_SIZES.map((code, i) => ({ id: uid(140 + i), code })));
+
+  await db.insert(shelves).values(SHELVES.map((s, i) => ({ id: uid(200 + i), ...s })));
+
+  // Net-weight reference: the two demo rows + the real master (part_no is
+  // plain text with no FK to parts, so this is safe before parts sync in).
+  await db.insert(netWeightFormula).values([
+    { id: uid(26), partNo: "RK73H1JTTD1002F", qty: 1000, weight: 6.3 },
+    { id: uid(27), partNo: "RK73H1JTTD2202F", qty: 1000, weight: 6.3 },
+  ]);
+  await insertChunked(
+    db,
+    netWeightFormula,
+    realNetWeights.map((w) => ({ id: newId(), partNo: w.partNo, qty: 1, weight: w.weight }))
+  );
+}
+
+/** Seed when the warehouse_config table is empty (fresh database). Default
+ *  seeds reference data + shelves only; WAREHOUSE_SEED_DEMO=1 seeds the full
+ *  demo world (users/masters/orders) for local dev login. Returns true when
+ *  it seeded. */
 export async function seedIfEmpty(sql: postgres.Sql, db: AppDb): Promise<boolean> {
-  const rows = await sql`SELECT COUNT(*)::int AS c FROM users`;
+  const rows = await sql`SELECT COUNT(*)::int AS c FROM warehouse_config`;
   const c = Number((rows[0] as { c: string | number }).c);
   if (c > 0) return false;
   await db.transaction(async (tx) => {
-    // Demo seeding must not flood the sync-service event feed.
+    // Seeding must not flood the sync-service event feed.
     await tx.execute(dsql`SET LOCAL app.sync_events_off = 1`);
-    // WAREHOUSE_SEED_ORDERS=off: master data + shelf stock only, no demo
-    // receiving/picking orders (UAT/production fresh databases).
-    await seedAll(tx as unknown as AppDb, { orders: process.env.WAREHOUSE_SEED_ORDERS !== "off" });
+    if (process.env.WAREHOUSE_SEED_DEMO === "1") {
+      // WAREHOUSE_SEED_ORDERS=off: master data + shelf stock only, no demo
+      // receiving/picking orders (UAT/production fresh databases).
+      await seedAll(tx as unknown as AppDb, { orders: process.env.WAREHOUSE_SEED_ORDERS !== "off" });
+    } else {
+      await seedReferenceOnly(tx as unknown as AppDb);
+    }
   });
   return true;
 }
