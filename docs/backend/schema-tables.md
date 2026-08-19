@@ -67,7 +67,7 @@ unique FK target).
 | id | text PK | Part id (UUID, internal use only) |
 | brand | text NOT NULL | Brand — plain-text copy of the supplier code from the upstream part master (no FK, not unique) |
 | part_no | text NOT NULL | Supplier part number (NOT unique; plain index `idx_parts_part_no`) |
-| wcl_item_no | text UNIQUE | WCL Part No — unique business key and ingest dedup key (same meaning as receiving_invoice_items.wcl_item_no) |
+| wcl_item_no | text NOT NULL UNIQUE | WCL Part No — unique business key and ingest/sync dedup key (same meaning as receiving_invoice_items.wcl_item_no) |
 | description | text | Part description |
 | creation_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |

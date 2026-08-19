@@ -122,13 +122,13 @@ adminRoute.route(
       id: optId(b),
       brand: reqStr(b, "brand"),
       partNo: reqStr(b, "partNo"),
-      wclItemNo: optStr(b, "wclItemNo"),
+      wclItemNo: reqStr(b, "wclItemNo"),
       description: optStr(b, "description"),
     }),
     update: (b) => ({
       ...(b.brand !== undefined && { brand: reqStr(b, "brand") }),
       ...(b.partNo !== undefined && { partNo: reqStr(b, "partNo") }),
-      ...(b.wclItemNo !== undefined && { wclItemNo: optStr(b, "wclItemNo") }),
+      ...(b.wclItemNo !== undefined && { wclItemNo: reqStr(b, "wclItemNo") }),
       ...(b.description !== undefined && { description: optStr(b, "description") }),
     }),
   })

@@ -41,7 +41,7 @@ CREATE TABLE "parts" (
 	"id" text PRIMARY KEY NOT NULL,
 	"brand" text NOT NULL,
 	"part_no" text NOT NULL,
-	"wcl_item_no" text,
+	"wcl_item_no" text NOT NULL,
 	"description" text,
 	"creation_date" timestamp DEFAULT now() NOT NULL,
 	"last_update_date" timestamp DEFAULT now() NOT NULL,

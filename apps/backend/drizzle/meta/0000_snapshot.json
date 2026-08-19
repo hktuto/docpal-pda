@@ -260,7 +260,7 @@
           "name": "wcl_item_no",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "description": {
           "name": "description",

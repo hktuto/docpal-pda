@@ -49,7 +49,7 @@ interface BulkPartsData {
   parts: {
     brand: string;
     partNo: string;
-    wclItemNo: string | null;
+    wclItemNo: string;
     description: string | null;
   }[];
 }

@@ -90,16 +90,24 @@ const TABLE_SYNCS: TableSync[] = [
     remoteTable: "demo.wms_parts",
     columns: ["id", "part_no", "wcl_item_no", "brand", "description"],
     upsert: (db, r) => {
+      // Local parts.wcl_item_no is NOT NULL UNIQUE (the dedup key); remote is
+      // nullable. A NULL would otherwise sync in as the literal string "null"
+      // via str() — skip the row instead.
+      const wclItemNo = strOrNull(r.wcl_item_no);
+      if (wclItemNo === null) {
+        console.warn(`[sync] wms_parts ${str(r.id)}: NULL wcl_item_no — row skipped`);
+        return Promise.resolve();
+      }
       // Local parts.brand is NOT NULL; remote is nullable — coalesce + warn.
       let brand = strOrNull(r.brand);
       if (brand === null) {
-        console.warn(`[sync] wms_parts ${str(r.wcl_item_no)}: NULL brand coerced to ""`);
+        console.warn(`[sync] wms_parts ${wclItemNo}: NULL brand coerced to ""`);
         brand = "";
       }
       return upsertPart(db, {
         id: str(r.id),
         partNo: str(r.part_no),
-        wclItemNo: str(r.wcl_item_no),
+        wclItemNo,
         brand,
         description: strOrNull(r.description),
       }).then(() => undefined);
