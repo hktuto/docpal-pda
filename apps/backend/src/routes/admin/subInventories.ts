@@ -33,14 +33,14 @@ function parseGroupId(id: string): { orgId: number; code: string } {
 
 const GROUP_COLS = sql`si.org_id AS "orgId", si.secondary_inventory_name AS "secondaryInventoryName",
        si.subinv_description AS "subinvDescription", si.office_code AS "officeCode",
-       si.organization_id AS "organizationId", si.customer_code AS "customerCode",
+       si.organization_id AS "organizationId",
        si.creation_date AS "creationDate", si.last_update_date AS "lastUpdateDate"`;
 
 adminSubInventoriesRoute.get("/", async (c) => {
   const rows = await queryAll(
     db,
     sql`SELECT ${GROUP_COLS}
-        FROM sub_inventories si
+        FROM org_info si
         ORDER BY si.org_id, si.secondary_inventory_name`
   );
   return c.json(rows);
@@ -51,7 +51,7 @@ adminSubInventoriesRoute.get("/:id", async (c) => {
   const row = await queryGet(
     db,
     sql`SELECT ${GROUP_COLS}
-        FROM sub_inventories si
+        FROM org_info si
         WHERE si.org_id = ${g.orgId} AND si.secondary_inventory_name = ${g.code}`
   );
   if (!row) throw new HTTPException(404, { message: "not found" });
@@ -65,10 +65,10 @@ adminSubInventoriesRoute.post("/", async (c) => {
   try {
     const row = await queryGet(
       db,
-      sql`INSERT INTO sub_inventories (id, org_id, secondary_inventory_name, subinv_description,
-                  office_code, organization_id, customer_code, creation_date, last_update_date)
+      sql`INSERT INTO org_info (id, org_id, secondary_inventory_name, subinv_description,
+                  office_code, organization_id, creation_date, last_update_date)
           VALUES (app_uuid_v7(), ${orgId}, ${code}, ${optStr(b, "subinvDescription")},
-                  ${optStr(b, "officeCode")}, ${optInt(b, "organizationId")}, ${optStr(b, "customerCode")}, now(), now())
+                  ${optStr(b, "officeCode")}, ${optInt(b, "organizationId")}, now(), now())
           RETURNING org_id AS "orgId", secondary_inventory_name AS "secondaryInventoryName"`
     );
     return c.json(row, 201);
@@ -83,23 +83,21 @@ adminSubInventoriesRoute.patch("/:id", async (c) => {
   const hasDesc = b.subinvDescription !== undefined;
   const hasOffice = b.officeCode !== undefined;
   const hasOrg = b.organizationId !== undefined;
-  const hasCustomer = b.customerCode !== undefined;
-  if (!hasDesc && !hasOffice && !hasOrg && !hasCustomer) {
+  if (!hasDesc && !hasOffice && !hasOrg) {
     throw new HTTPException(400, { message: "no fields to update" });
   }
   try {
     const row = await queryGet(
       db,
-      sql`UPDATE sub_inventories
+      sql`UPDATE org_info
           SET subinv_description = CASE WHEN ${hasDesc} THEN ${optStr(b, "subinvDescription")} ELSE subinv_description END,
               office_code = CASE WHEN ${hasOffice} THEN ${optStr(b, "officeCode")} ELSE office_code END,
               organization_id = CASE WHEN ${hasOrg} THEN ${optInt(b, "organizationId")} ELSE organization_id END,
-              customer_code = CASE WHEN ${hasCustomer} THEN ${optStr(b, "customerCode")} ELSE customer_code END,
               last_update_date = now()
           WHERE org_id = ${g.orgId} AND secondary_inventory_name = ${g.code}
           RETURNING org_id AS "orgId", secondary_inventory_name AS "secondaryInventoryName",
                     subinv_description AS "subinvDescription", office_code AS "officeCode",
-                    organization_id AS "organizationId", customer_code AS "customerCode"`
+                    organization_id AS "organizationId"`
     );
     if (!row) throw new HTTPException(404, { message: "not found" });
     return c.json(row);
@@ -114,7 +112,7 @@ adminSubInventoriesRoute.delete("/:id", async (c) => {
   try {
     const row = await queryGet(
       db,
-      sql`DELETE FROM sub_inventories WHERE org_id = ${g.orgId} AND secondary_inventory_name = ${g.code}
+      sql`DELETE FROM org_info WHERE org_id = ${g.orgId} AND secondary_inventory_name = ${g.code}
           RETURNING secondary_inventory_name AS "secondaryInventoryName"`
     );
     if (!row) throw new HTTPException(404, { message: "not found" });

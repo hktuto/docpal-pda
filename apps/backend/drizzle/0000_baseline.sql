@@ -58,17 +58,16 @@ CREATE TABLE "shelves" (
 	CONSTRAINT "shelves_code_unique" UNIQUE("code")
 );
 --> statement-breakpoint
-CREATE TABLE "sub_inventories" (
+CREATE TABLE "org_info" (
 	"id" text PRIMARY KEY NOT NULL,
 	"office_code" text,
 	"organization_id" integer,
 	"org_id" integer NOT NULL,
 	"secondary_inventory_name" text NOT NULL,
 	"subinv_description" text,
-	"customer_code" text,
 	"creation_date" timestamp DEFAULT now() NOT NULL,
 	"last_update_date" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "sub_inventories_org_subinv_unique" UNIQUE("org_id","secondary_inventory_name")
+	CONSTRAINT "org_info_org_subinv_unique" UNIQUE("org_id","secondary_inventory_name")
 );
 --> statement-breakpoint
 CREATE TABLE "sub_inventory_share_members" (
@@ -453,13 +452,12 @@ CREATE TABLE "sync_checkpoints" (
 	"last_update_date" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "sub_inventories" ADD CONSTRAINT "sub_inventories_customer_code_customer_profiles_code_fk" FOREIGN KEY ("customer_code") REFERENCES "public"."customer_profiles"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "sub_inventory_share_members" ADD CONSTRAINT "sub_inventory_share_members_group_fk" FOREIGN KEY ("org_id","code") REFERENCES "public"."sub_inventories"("org_id","secondary_inventory_name") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sub_inventory_share_members" ADD CONSTRAINT "sub_inventory_share_members_group_fk" FOREIGN KEY ("org_id","code") REFERENCES "public"."org_info"("org_id","secondary_inventory_name") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "supplier_profiles" ADD CONSTRAINT "supplier_profiles_supplier_code_suppliers_code_fk" FOREIGN KEY ("supplier_code") REFERENCES "public"."suppliers"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_group_members" ADD CONSTRAINT "user_group_members_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "user_group_members" ADD CONSTRAINT "user_group_members_group_code_user_groups_code_fk" FOREIGN KEY ("group_code") REFERENCES "public"."user_groups"("code") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "receiving_invoice_items" ADD CONSTRAINT "receiving_invoice_items_receiving_invoice_id_receiving_invoices_id_fk" FOREIGN KEY ("receiving_invoice_id") REFERENCES "public"."receiving_invoices"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "receiving_invoice_items" ADD CONSTRAINT "receiving_invoice_items_sub_inv_fk" FOREIGN KEY ("org_id","sub_inventory_code") REFERENCES "public"."sub_inventories"("org_id","secondary_inventory_name") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "receiving_invoice_items" ADD CONSTRAINT "receiving_invoice_items_sub_inv_fk" FOREIGN KEY ("org_id","sub_inventory_code") REFERENCES "public"."org_info"("org_id","secondary_inventory_name") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "receiving_invoices" ADD CONSTRAINT "receiving_invoices_receiving_order_id_receiving_orders_id_fk" FOREIGN KEY ("receiving_order_id") REFERENCES "public"."receiving_orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "receiving_invoices" ADD CONSTRAINT "receiving_invoices_supplier_code_suppliers_code_fk" FOREIGN KEY ("supplier_code") REFERENCES "public"."suppliers"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "receiving_orders" ADD CONSTRAINT "receiving_orders_supplier_code_suppliers_code_fk" FOREIGN KEY ("supplier_code") REFERENCES "public"."suppliers"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -472,7 +470,7 @@ ALTER TABLE "picking_orders" ADD CONSTRAINT "picking_orders_customer_code_custom
 ALTER TABLE "picking_orders" ADD CONSTRAINT "picking_orders_working_by_users_id_fk" FOREIGN KEY ("working_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "picking_orders" ADD CONSTRAINT "picking_orders_issue_reported_by_users_id_fk" FOREIGN KEY ("issue_reported_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "picking_orders" ADD CONSTRAINT "picking_orders_shipped_by_users_id_fk" FOREIGN KEY ("shipped_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "picking_orders" ADD CONSTRAINT "picking_orders_sub_inv_fk" FOREIGN KEY ("org_id","sub_inventory_code") REFERENCES "public"."sub_inventories"("org_id","secondary_inventory_name") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "picking_orders" ADD CONSTRAINT "picking_orders_sub_inv_fk" FOREIGN KEY ("org_id","sub_inventory_code") REFERENCES "public"."org_info"("org_id","secondary_inventory_name") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "picking_packages" ADD CONSTRAINT "picking_packages_picking_item_id_picking_items_id_fk" FOREIGN KEY ("picking_item_id") REFERENCES "public"."picking_items"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "picking_packages" ADD CONSTRAINT "picking_packages_picking_order_id_picking_orders_id_fk" FOREIGN KEY ("picking_order_id") REFERENCES "public"."picking_orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "picking_packages" ADD CONSTRAINT "picking_packages_shipping_box_id_shipping_boxes_id_fk" FOREIGN KEY ("shipping_box_id") REFERENCES "public"."shipping_boxes"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -488,12 +486,12 @@ ALTER TABLE "goods_verify_tasks" ADD CONSTRAINT "goods_verify_tasks_verified_by_
 ALTER TABLE "inventory_lot_sources" ADD CONSTRAINT "inventory_lot_sources_inventory_lot_id_inventory_lots_id_fk" FOREIGN KEY ("inventory_lot_id") REFERENCES "public"."inventory_lots"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "inventory_lot_sources" ADD CONSTRAINT "inventory_lot_sources_receiving_invoice_item_id_receiving_invoice_items_id_fk" FOREIGN KEY ("receiving_invoice_item_id") REFERENCES "public"."receiving_invoice_items"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "inventory_lots" ADD CONSTRAINT "inventory_lots_shelf_code_shelves_code_fk" FOREIGN KEY ("shelf_code") REFERENCES "public"."shelves"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "inventory_lots" ADD CONSTRAINT "inventory_lots_sub_inv_fk" FOREIGN KEY ("org_id","sub_inventory_code") REFERENCES "public"."sub_inventories"("org_id","secondary_inventory_name") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "inventory_lots" ADD CONSTRAINT "inventory_lots_sub_inv_fk" FOREIGN KEY ("org_id","sub_inventory_code") REFERENCES "public"."org_info"("org_id","secondary_inventory_name") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "put_away_tasks" ADD CONSTRAINT "put_away_tasks_receiving_order_id_receiving_orders_id_fk" FOREIGN KEY ("receiving_order_id") REFERENCES "public"."receiving_orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "shelf_box_items" ADD CONSTRAINT "shelf_box_items_shelf_box_id_shelf_boxes_id_fk" FOREIGN KEY ("shelf_box_id") REFERENCES "public"."shelf_boxes"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "shelf_box_items" ADD CONSTRAINT "shelf_box_items_receiving_invoice_item_id_receiving_invoice_items_id_fk" FOREIGN KEY ("receiving_invoice_item_id") REFERENCES "public"."receiving_invoice_items"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "shelf_boxes" ADD CONSTRAINT "shelf_boxes_shelf_code_shelves_code_fk" FOREIGN KEY ("shelf_code") REFERENCES "public"."shelves"("code") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "shelf_boxes" ADD CONSTRAINT "shelf_boxes_sub_inv_fk" FOREIGN KEY ("org_id","sub_inventory_code") REFERENCES "public"."sub_inventories"("org_id","secondary_inventory_name") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "shelf_boxes" ADD CONSTRAINT "shelf_boxes_sub_inv_fk" FOREIGN KEY ("org_id","sub_inventory_code") REFERENCES "public"."org_info"("org_id","secondary_inventory_name") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "allocations" ADD CONSTRAINT "allocations_picking_item_id_picking_items_id_fk" FOREIGN KEY ("picking_item_id") REFERENCES "public"."picking_items"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "allocations" ADD CONSTRAINT "allocations_inventory_lot_id_inventory_lots_id_fk" FOREIGN KEY ("inventory_lot_id") REFERENCES "public"."inventory_lots"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "allocations" ADD CONSTRAINT "allocations_receiving_invoice_item_id_receiving_invoice_items_id_fk" FOREIGN KEY ("receiving_invoice_item_id") REFERENCES "public"."receiving_invoice_items"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
@@ -545,11 +543,7 @@ CREATE INDEX "idx_inventory_transactions_txn_type" ON "inventory_transactions" U
 CREATE INDEX "idx_inventory_transactions_reference" ON "inventory_transactions" USING btree ("reference_type","reference_id");--> statement-breakpoint
 CREATE INDEX "idx_inventory_transactions_receiving_item" ON "inventory_transactions" USING btree ("receiving_invoice_item_id");--> statement-breakpoint
 CREATE INDEX "idx_transaction_logs_entity" ON "transaction_logs" USING btree ("entity_type","entity_id");--> statement-breakpoint
-CREATE INDEX "idx_transaction_logs_created_date" ON "transaction_logs" USING btree ("created_date");
---> statement-breakpoint
--- UUID v7 generator for raw-SQL INSERT...SELECT sites (Node side uses
--- newId() from src/db/id.ts; Postgres 16 has no built-in uuidv7()).
-CREATE OR REPLACE FUNCTION app_uuid_v7() RETURNS text AS $$
+CREATE INDEX "idx_transaction_logs_created_date" ON "transaction_logs" USING btree ("created_date");CREATE OR REPLACE FUNCTION app_uuid_v7() RETURNS text AS $$
   SELECT lpad(to_hex((extract(epoch from clock_timestamp()) * 1000)::bigint), 12, '0')
     || '-7' || substr(md5(random()::text), 1, 3)
     || '-' || substr('89ab', 1 + floor(random() * 4)::int, 1) || substr(md5(random()::text), 1, 3)
@@ -623,7 +617,7 @@ CREATE TRIGGER sync_events_notify AFTER INSERT OR UPDATE OR DELETE ON "country_l
 CREATE TRIGGER sync_events_notify AFTER INSERT OR UPDATE OR DELETE ON "box_size_list" FOR EACH ROW EXECUTE FUNCTION sync_events_notify();--> statement-breakpoint
 CREATE TRIGGER sync_events_notify AFTER INSERT OR UPDATE OR DELETE ON "net_weight_formula" FOR EACH ROW EXECUTE FUNCTION sync_events_notify();--> statement-breakpoint
 CREATE TRIGGER sync_events_notify AFTER INSERT OR UPDATE OR DELETE ON "customer_profiles" FOR EACH ROW EXECUTE FUNCTION sync_events_notify();--> statement-breakpoint
-CREATE TRIGGER sync_events_notify AFTER INSERT OR UPDATE OR DELETE ON "sub_inventories" FOR EACH ROW EXECUTE FUNCTION sync_events_notify();--> statement-breakpoint
+CREATE TRIGGER sync_events_notify AFTER INSERT OR UPDATE OR DELETE ON "org_info" FOR EACH ROW EXECUTE FUNCTION sync_events_notify();--> statement-breakpoint
 CREATE TRIGGER sync_events_notify AFTER INSERT OR UPDATE OR DELETE ON "sub_inventory_share_members" FOR EACH ROW EXECUTE FUNCTION sync_events_notify();--> statement-breakpoint
 CREATE TRIGGER sync_events_notify AFTER INSERT OR UPDATE OR DELETE ON "receiving_orders" FOR EACH ROW EXECUTE FUNCTION sync_events_notify();--> statement-breakpoint
 CREATE TRIGGER sync_events_notify AFTER INSERT OR UPDATE OR DELETE ON "receiving_invoices" FOR EACH ROW EXECUTE FUNCTION sync_events_notify();--> statement-breakpoint
@@ -659,7 +653,7 @@ CREATE TRIGGER sync_events_notify AFTER INSERT OR UPDATE OR DELETE ON "goods_ver
 -- admin console edits them to fix upstream data; last writer wins.
 -- receiving_invoice_items.lot_code / coo / cow are also SHARED: the warehouse
 -- floor backfills them from the scanned carton when upstream leaves them NULL.
--- sub_inventories.subinv_description / office_code / organization_id are SHARED:
+-- org_info.subinv_description / office_code / organization_id are SHARED:
 -- the admin console edits them to annotate the synced group.
 CREATE OR REPLACE FUNCTION enforce_remote_owned_columns() RETURNS trigger AS $func$
 DECLARE
@@ -683,7 +677,7 @@ CREATE TRIGGER parts_remote_owned BEFORE UPDATE ON parts
   FOR EACH ROW EXECUTE FUNCTION enforce_remote_owned_columns('brand', 'part_no', 'wcl_item_no', 'description');--> statement-breakpoint
 CREATE TRIGGER suppliers_remote_owned BEFORE UPDATE ON suppliers
   FOR EACH ROW EXECUTE FUNCTION enforce_remote_owned_columns('code', 'name', 'short_name');--> statement-breakpoint
-CREATE TRIGGER sub_inventories_remote_owned BEFORE UPDATE ON sub_inventories
+CREATE TRIGGER org_info_remote_owned BEFORE UPDATE ON org_info
   FOR EACH ROW EXECUTE FUNCTION enforce_remote_owned_columns('org_id', 'secondary_inventory_name');--> statement-breakpoint
 CREATE TRIGGER receiving_orders_remote_owned BEFORE UPDATE ON receiving_orders
   FOR EACH ROW EXECUTE FUNCTION enforce_remote_owned_columns('batch_no', 'supplier_code', 'org_id');--> statement-breakpoint

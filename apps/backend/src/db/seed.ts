@@ -103,7 +103,7 @@ export const ALL_TABLES = [
   "net_weight_formula",
   "shelves",
   "sub_inventory_share_members",
-  "sub_inventories",
+  "org_info",
   "customer_profiles",
   "box_size_list",
   "country_list",
@@ -349,8 +349,7 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
   ]);
 
   // Sub-inventories: the (org_id, secondary_inventory_name) group level that
-  // all stock/doc tables reference via composite FK. ACME-S1 is the demo
-  // customer-segregated store.
+  // all stock/doc tables reference via composite FK.
   await db.insert(subInventories).values([
     { orgId: 2, secondaryInventoryName: "STORE1", subinvDescription: "Store 1" },
     { orgId: 2, secondaryInventoryName: "WSTORE1" },
@@ -366,7 +365,7 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
     { orgId: 143, secondaryInventoryName: "store1" },
     { orgId: 143, secondaryInventoryName: "OSWF (MCI)" },
     { orgId: 143, secondaryInventoryName: "DEFAULT" },
-    { orgId: 2, secondaryInventoryName: "ACME-S1", subinvDescription: "ACME segregated store", customerCode: "ACME" },
+    { orgId: 2, secondaryInventoryName: "ACME-S1", subinvDescription: "ACME segregated store" },
   ].map((s, i) => ({ id: uid(183 + i), ...s })));
 
   // Real Oracle org → sub-inventory master (generated from the mapping xlsx —

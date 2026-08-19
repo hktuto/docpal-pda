@@ -8,7 +8,7 @@ UUID v7 strings (generated app-side by `newId()` in `src/db/id.ts`, SQL-side
 by the `app_uuid_v7()` function) and all timestamps are UTC wall-clock (every
 table carries
 `created_date`/`last_update_date` — `parts`, `suppliers`, `supplier_profiles`
-and `sub_inventories` name the first column `creation_date` instead — set by
+and `org_info` name the first column `creation_date` instead — set by
 the app — spec
 `docs/superpowers/specs/2026-07-29-schema-system-fields-supplier-code-design.md`).
 This document mirrors the TS definitions exactly — fields
@@ -128,7 +128,7 @@ kg — see `shipping_boxes`).
 
 ## customer_profiles
 
-Customer master used by picking orders and customer-segregated stores.
+Customer master used by picking orders and picking-order customers.
 
 | Field | Type | Description |
 | --- | --- | --- |
@@ -140,20 +140,17 @@ Customer master used by picking orders and customer-segregated stores.
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
-## sub_inventories
+## org_info
 
 Warehouse sub-inventories: logical partitions of stock inside one org (Oracle
 EBS organization + subinventory). Column names mirror the upstream
-DocPal/Oracle subinventory schema (2026-08-13 rename, spec
-`docs/superpowers/specs/2026-08-13-subinventory-rename-and-masterdata-ingest-design.md`);
+DocPal/Oracle org_info schema (renamed from `sub_inventories` 2026-08-18 to
+match the remote `demo.wms_org_info`);
 `office_code` / `organization_id` are upstream fields the PDA does not use
-(nullable), `customer_code` is PDA-local (upstream has none). This table is
-the **(org_id, secondary_inventory_name) group level** — the composite-FK
+(nullable). This table is the **(org_id, secondary_inventory_name) group level** — the composite-FK
 target of all stock/doc tables (`receiving_orders`, `receiving_invoices`,
 `receiving_invoice_items`, `inventory_lots`, `picking_orders`, `shelf_boxes`);
-the referencing columns keep the name `sub_inventory_code`. `customer_code`
-marks a customer-segregated store — allocation only serves picking orders of
-that customer from it.
+the referencing columns keep the name `sub_inventory_code`.
 
 | Field | Type | Description |
 | --- | --- | --- |
@@ -163,7 +160,6 @@ that customer from it.
 | org_id | integer NOT NULL, UNIQUE (composite with secondary_inventory_name) | Owning office (2 / 140 / 143 / 220; plain integer, no FK to a lookup) |
 | secondary_inventory_name | text NOT NULL, UNIQUE (composite with org_id) | Sub-inventory code, e.g. STORE1 |
 | subinv_description | text | Sub-inventory description |
-| customer_code | text FK → customer_profiles(code) | Set for customer-segregated stores |
 | creation_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
@@ -174,9 +170,7 @@ Warehouse-declared stock sharing between sub-inventories (2026-07-27,
 Allocation still matches a picking order's `(org_id, sub_inventory_code)`
 pair against the source's pair — membership in the same `share_group` widens
 the code match to sibling members (symmetric; org rule unchanged). A
-sub-inventory belongs to at most one group (composite UNIQUE on org_id+code). Customer-segregated stores
-keep their `customer_code` restriction, so grouping one does not leak its
-stock to other customers. Configured per warehouse via
+sub-inventory belongs to at most one group (composite UNIQUE on org_id+code). Configured per warehouse via
 `/admin/sub-inventory-share-groups`; the real Oracle sub-inventory mapping has
 no tag column, so this table is how the picking logic learns which stores are
 sharable.
@@ -184,8 +178,8 @@ sharable.
 | Field | Type | Description |
 | --- | --- | --- |
 | id | text PK | Row id (UUID v7) |
-| org_id | integer NOT NULL, UNIQUE (composite with code), FK → sub_inventories | Owning office |
-| code | text NOT NULL, UNIQUE (composite with org_id), FK → sub_inventories | Sub-inventory (group level) |
+| org_id | integer NOT NULL, UNIQUE (composite with code), FK → org_info | Owning office |
+| code | text NOT NULL, UNIQUE (composite with org_id), FK → org_info | Sub-inventory (group level) |
 | share_group | text NOT NULL, indexed | Free-text group code, e.g. HK — members of the same group share |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
@@ -298,7 +292,7 @@ Packing-list line items.
 | coo | text | Country of origin |
 | cow | text | Country of wafer |
 | org_id | integer NOT NULL DEFAULT 2 | Receiving office |
-| sub_inventory_code | text FK → sub_inventories(secondary_inventory_name) | Sub-inventory this line is received into (nullable) — with org_id, THE receiving location pair (item-level partitioning since 2026-08-18; order/invoice-level columns are gone; an ingest-time defaulting rule assigns it, owner: Sean) |
+| sub_inventory_code | text FK → org_info(secondary_inventory_name) | Sub-inventory this line is received into (nullable) — with org_id, THE receiving location pair (item-level partitioning since 2026-08-18; order/invoice-level columns are gone; an ingest-time defaulting rule assigns it, owner: Sean) |
 | reported_mismatch | boolean NOT NULL DEFAULT false | A mismatch was reported on this line |
 | mismatch_reason | text | Mismatch reason |
 | mismatch_qty | integer | Mismatched quantity |
@@ -329,7 +323,7 @@ upstream database — the sync/dedup key is the caller-supplied UUID `id`
 | ship_to | text | Ship-to description (merged with destination country; unstructured, not a full address) |
 | customer_code | text FK → customer_profiles(code) | Customer |
 | org_id | integer | Shipping office (nullable — allocation matches on the pair only when set) |
-| sub_inventory_code | text FK → sub_inventories(secondary_inventory_name) | Sub-inventory to ship from (nullable — with org_id, the shipping location pair) |
+| sub_inventory_code | text FK → org_info(secondary_inventory_name) | Sub-inventory to ship from (nullable — with org_id, the shipping location pair) |
 | priority_seq | integer NOT NULL DEFAULT 0 | Allocation/list order — lower first, admin-reorderable (`POST /picking-orders/reorder`); default seq = delivery date ASC NULLS LAST then order_no |
 | commodity_inspection | text | Commodity inspection flag/value from the upstream order (stored, not yet interpreted) |
 | working_by | text FK → users(id) | Page work lock holder — a PDA with this order open keeps its allocations from being wiped by allocateAll |
@@ -479,7 +473,7 @@ virtual shelf code so the lot key never goes NULL. The lot's location pair
 | shelf_code | text FK → shelves(code) | Location (virtual shelf for dock/GIT lots) |
 | box_id | text | Shelf box holding the stock |
 | org_id | integer | Lot's office (stamped from the shelf at put-away) |
-| sub_inventory_code | text FK → sub_inventories(secondary_inventory_name) | Lot's sub-inventory (stamped from the shelf at put-away) |
+| sub_inventory_code | text FK → org_info(secondary_inventory_name) | Lot's sub-inventory (stamped from the shelf at put-away) |
 | total_qty | integer NOT NULL DEFAULT 0 | Total quantity (dock lots: expected qty; shelf lots: on-hand stock) |
 | allocated_qty | integer NOT NULL DEFAULT 0 | Reserved quantity |
 | available_qty | integer GENERATED ALWAYS AS (total_qty - allocated_qty) | Available (unreserved) quantity |
@@ -516,7 +510,7 @@ Physical boxes on shelves used by put-away (printed box label).
 | id | text PK | Box id (server-generated `BOX-H-<date>-<seq>`; format to be finalized now that warehouse_code is removed) |
 | shelf_code | text FK → shelves(code) | Shelf the box sits on |
 | org_id | integer | Stock location pair member — the box decides the stock partition of its contents (defaults to the receiving order's pair at creation; put-away stamps lots with the box's pair) |
-| sub_inventory_code | text FK → sub_inventories(secondary_inventory_name) | Stock location pair member (with org_id) |
+| sub_inventory_code | text FK → org_info(secondary_inventory_name) | Stock location pair member (with org_id) |
 | status | text NOT NULL DEFAULT 'open' | Box status |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |

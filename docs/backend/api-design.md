@@ -366,7 +366,7 @@ Postgres master (schema `demo`, `wms_*` tables).
   started only when `ELECTRIC_URL` is set and `ELECTRIC_SYNC != off`
   (`ELECTRIC_SECRET` is passed as the `?secret=` shape param in prod). One
   `ShapeStream` per synced table (`demo.wms_parts` → parts,
-  `demo.wms_suppliers` → suppliers, `demo.wms_org_info` → sub_inventories,
+  `demo.wms_suppliers` → suppliers, `demo.wms_org_info` → org_info,
   `demo.wms_receiving_orders` / `wms_receiving_invoices` /
   `wms_receiving_invoice_items`, `demo.wms_picking_orders` /
   `wms_picking_items`; `supplier_profiles` is NOT synced — it stays

@@ -22,7 +22,7 @@ ul, ol { padding-left: 1.4em; }
 li { margin: 0.3em 0; }
 </style></head><body>
 <h1>Admin 後台用戶指南</h1>
-<p>本指南是 Warehouse Admin 後台（桌面版管理主控台）所有頁面的完整視覺參考：每個頁面顯示甚麼、每個功能做甚麼。所有截圖均以桌面瀏覽器拍攝，並使用示範種子資料（預設語言為繁體中文（香港））。</p>
+<p>本指南是 Warehouse Admin 後台（桌面版管理主控台）所有頁面的完整視覺參考：每個頁面顯示甚麼、每個功能做甚麼。所有截圖均以桌面瀏覽器拍攝（預設語言為繁體中文（香港））。</p>
 <p>PDA 操作員畫面請參閱 <a href="../user-menu/index.md">PDA 用戶指南</a>；本頁是整個後台的地圖。</p>
 <h2>登入畫面</h2>
 <p>開啟後台網址時，管理員會看到 DocPal 登入畫面。</p>
@@ -33,14 +33,14 @@ li { margin: 0.3em 0; }
 <li>點按<strong>登入</strong>。</li>
 <li>登入前可在下方切換<strong>語言</strong>（English／简体中文／繁體中文（香港））。</li>
 </ol>
-<p>只有屬於 admin 群組的用戶才能登入後台。示範種子用戶為 <code>admin</code> / <code>DocPalAdmin2026!</code>（正式部署前必須更改）。</p>
+<p>以 <strong>DocPal 帳號</strong>登入 — 只有屬於 <strong>Administrators Group</strong> 或 <strong>WMS Admin Group (HK)</strong> 的用戶才能登入後台（見下文「用戶與權限」）。</p>
 <h2>主頁與版面導覽</h2>
 <p>登入後，主頁以卡片列出所有功能入口，與左邊側欄的分組相同。</p>
 <figure><img alt="主頁" src="./assets/home.png"><figcaption>主頁</figcaption></figure>
 <ul>
 <li><strong>側欄</strong> — 功能分為：客戶、供應商、倉庫、揀貨、收貨、問題、出貨、設定；點按分組可展開／收起。</li>
 <li><strong>主頁卡片</strong> — 與側欄項目一一對應，點按直接進入該頁。</li>
-<li><strong>左下角用戶名</strong>（圖中「Demo Admin」）— 點按開啟彈出選單：切換語言及<strong>登出</strong>。</li>
+<li><strong>左下角用戶名</strong>（顯示 DocPal 帳戶的姓名）— 點按開啟彈出選單：切換語言及<strong>登出</strong>。</li>
 </ul>
 <hr>
 <h2>客戶</h2>
@@ -213,14 +213,14 @@ li { margin: 0.3em 0; }
 <li>點按單號進入詳情，按<strong>解決問題</strong> — 訂單回到 pending 並重新分配庫存。</li>
 </ul>
 <h2>出貨</h2>
-<h3>出貨單</h3>
-<figure><img alt="出貨單" src="./assets/shipping.png"><figcaption>出貨單</figcaption></figure>
+<h3>出貨箱</h3>
+<figure><img alt="出貨箱" src="./assets/shipping.png"><figcaption>出貨箱</figcaption></figure>
 <ul>
 <li>列出<strong>可以出貨的運輸箱</strong>：箱號、相關單號、收貨地、目的地、箱型、淨重／毛重（公斤）、包裹數及封箱時間；頂部搜尋欄可按箱號／單號／收貨地即時篩選。</li>
 <li>列表以<strong>箱</strong>為單位（一箱可裝多張訂單的項目）：所有<strong>已封箱且未出貨</strong>的箱都會出現；覆核步驟啟用時，該箱必須先完成覆核任務。</li>
 <li>點按箱號開啟出貨箱詳情：顯示箱狀態、箱型、<strong>淨重／毛重（公斤）</strong>、目的地、出貨時間／經手人（如已出貨）、箱內包裹清單，以及箱內項目所屬的訂單。</li>
 <li><strong>核取方塊</strong>可多選多個箱，按<strong>標記出貨</strong>一次過出貨；箱詳情頁亦有單箱的<strong>出貨</strong>按鈕。出貨以箱為單位 — 當一張訂單的項目全部裝箱、且所有裝其包裹的箱都已出貨，該訂單才會轉為<strong>已出貨</strong>。</li>
-<li>示範種子資料沒有走完流程的箱，所以列表為空 — 需先在 PDA 完成揀貨、測量（及覆核）流程才會出現資料。</li>
+<li>若未有完成流程的箱，列表會顯示「暫無待出貨的箱」— 需先在 PDA 完成揀貨、測量（及覆核）流程才會出現資料。</li>
 <li>下載按鈕為佔位功能（承運商文件格式待定，暫未開通）。</li>
 </ul>
 <h2>設定</h2>
@@ -251,7 +251,7 @@ li { margin: 0.3em 0; }
 <h2>注意事項</h2>
 <ul>
 <li>後台直接修改主檔及訂單資料，<strong>沒有二次確認以外的安全網</strong> — 刪除及移除操作請謹慎。</li>
-<li>示範種子密碼（<code>admin</code> / <code>DocPalAdmin2026!</code>）只供演示，正式部署前必須更改。</li>
+<li>登入密碼由 DocPal 統一管理 — 忘記密碼或需要更改，請聯絡 DocPal 管理員。</li>
 <li>後台的資料改動（例如解決問題、調整優先順序）會即時反映到 PDA — PDA 列表會在重新聚焦或收到伺服器事件時自動更新。</li>
 </ul>
 </body></html>

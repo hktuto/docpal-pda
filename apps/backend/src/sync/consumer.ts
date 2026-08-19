@@ -25,10 +25,10 @@ import { ORDER_TABLE_SYNCS, ParentNotReadyError } from "./orders.js";
 // update/delete carry the whole row so the natural-key apply functions have
 // everything they need.
 //
-// Column ownership: the consumer writes ONLY remote-owned columns. Local-only
-// columns (e.g. sub_inventories.customer_code) are never touched — which is
-// why sub_inventories applies through its own SQL instead of
-// upsertSubInventory (that function nulls customer_code when unspecified).
+// Column ownership: the consumer writes ONLY remote-owned columns. org_info
+// has no local-only columns left (customer_code was dropped with the rename),
+// but it still applies through its own SQL — keyed on the natural pair
+// (org_id, secondary_inventory_name) rather than the remote id.
 // ---------------------------------------------------------------------------
 
 export type Row = Record<string, unknown>;
@@ -110,15 +110,14 @@ const TABLE_SYNCS: TableSync[] = [
     remoteTable: "demo.wms_org_info",
     columns: ["id", "office_code", "organization_id", "org_id", "secondary_inventory_name", "subinv_description"],
     // Dedicated apply: upsert keyed on (org_id, secondary_inventory_name),
-    // adopting the remote id on insert and never touching the local-only
-    // customer_code column.
+    // adopting the remote id on insert.
     upsert: async (db, r) => {
       await db.transaction(async (tx) => {
         await tx.execute(sql`SET LOCAL app.sync_events_off = 1`);
         await tx.execute(sql`SET LOCAL app.upstream_write = 1`);
         const ts = now();
         await tx.execute(sql`
-          INSERT INTO sub_inventories
+          INSERT INTO org_info
             (id, org_id, secondary_inventory_name, subinv_description, office_code, organization_id, creation_date, last_update_date)
           VALUES
             (${str(r.id)}, ${Number(r.org_id)}, ${str(r.secondary_inventory_name)},

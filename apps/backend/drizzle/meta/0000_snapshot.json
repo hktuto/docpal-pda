@@ -1,5 +1,5 @@
 {
-  "id": "d647982a-3770-4953-ac29-bfc258da42cc",
+  "id": "9cd0e4a9-ff27-4b8f-bf8f-23f9a69e33dc",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -374,8 +374,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.sub_inventories": {
-      "name": "sub_inventories",
+    "public.org_info": {
+      "name": "org_info",
       "schema": "",
       "columns": {
         "id": {
@@ -414,12 +414,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "customer_code": {
-          "name": "customer_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "creation_date": {
           "name": "creation_date",
           "type": "timestamp",
@@ -436,25 +430,11 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "sub_inventories_customer_code_customer_profiles_code_fk": {
-          "name": "sub_inventories_customer_code_customer_profiles_code_fk",
-          "tableFrom": "sub_inventories",
-          "tableTo": "customer_profiles",
-          "columnsFrom": [
-            "customer_code"
-          ],
-          "columnsTo": [
-            "code"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "sub_inventories_org_subinv_unique": {
-          "name": "sub_inventories_org_subinv_unique",
+        "org_info_org_subinv_unique": {
+          "name": "org_info_org_subinv_unique",
           "nullsNotDistinct": false,
           "columns": [
             "org_id",
@@ -551,7 +531,7 @@
         "sub_inventory_share_members_group_fk": {
           "name": "sub_inventory_share_members_group_fk",
           "tableFrom": "sub_inventory_share_members",
-          "tableTo": "sub_inventories",
+          "tableTo": "org_info",
           "columnsFrom": [
             "org_id",
             "code"
@@ -1155,7 +1135,7 @@
         "receiving_invoice_items_sub_inv_fk": {
           "name": "receiving_invoice_items_sub_inv_fk",
           "tableFrom": "receiving_invoice_items",
-          "tableTo": "sub_inventories",
+          "tableTo": "org_info",
           "columnsFrom": [
             "org_id",
             "sub_inventory_code"
@@ -1915,7 +1895,7 @@
         "picking_orders_sub_inv_fk": {
           "name": "picking_orders_sub_inv_fk",
           "tableFrom": "picking_orders",
-          "tableTo": "sub_inventories",
+          "tableTo": "org_info",
           "columnsFrom": [
             "org_id",
             "sub_inventory_code"
@@ -3006,7 +2986,7 @@
         "inventory_lots_sub_inv_fk": {
           "name": "inventory_lots_sub_inv_fk",
           "tableFrom": "inventory_lots",
-          "tableTo": "sub_inventories",
+          "tableTo": "org_info",
           "columnsFrom": [
             "org_id",
             "sub_inventory_code"
@@ -3331,7 +3311,7 @@
         "shelf_boxes_sub_inv_fk": {
           "name": "shelf_boxes_sub_inv_fk",
           "tableFrom": "shelf_boxes",
-          "tableTo": "sub_inventories",
+          "tableTo": "org_info",
           "columnsFrom": [
             "org_id",
             "sub_inventory_code"

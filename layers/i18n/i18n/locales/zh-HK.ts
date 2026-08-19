@@ -110,7 +110,9 @@ export default {
     password: "密碼",
     placeholderUsername: "operator",
     placeholderPassword: "••••••••",
-    changeServer: "更改伺服器"
+    changeServer: "更改伺服器",
+    qrHint: "請掃描格式為 username:password 的登入 QR code。",
+    qrInvalidFormat: "登入 QR code 格式錯誤，應為 username:password。"
   },
   server: {
     title: "選擇後台伺服器",

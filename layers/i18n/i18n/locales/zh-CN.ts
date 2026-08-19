@@ -110,7 +110,9 @@ export default {
     password: "密码",
     placeholderUsername: "operator",
     placeholderPassword: "••••••••",
-    changeServer: "更改服务器"
+    changeServer: "更改服务器",
+    qrHint: "请扫描格式为 username:password 的登录二维码。",
+    qrInvalidFormat: "登录二维码格式错误，应为 username:password。"
   },
   server: {
     title: "选择后台服务器",

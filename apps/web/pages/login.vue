@@ -48,6 +48,8 @@
         </button>
       </form>
 
+      <p class="login__qr-hint">{{ $t('login.qrHint') }}</p>
+
       <div class="login__server">
         <button type="button" class="login__change-server" @click="onChangeServer">
           {{ $t('login.changeServer') }}
@@ -60,6 +62,7 @@
 
 <script setup lang="ts">
 import { useErrorMessage } from "~/composables/errorMessage";
+import { useHardwareScanner } from "~/composables/useHardwareScanner";
 
 definePageMeta({ layout: false });
 
@@ -69,12 +72,23 @@ useHead({ title: t('login.brand') });
 const { login } = useAuth();
 const errorMessage = useErrorMessage();
 
-const username = ref("operator");
-const password = ref("DocPal2026!");
+const username = ref("");
+const password = ref("");
 const showPassword = ref(false);
 const error = ref<string | null>(null);
 const submitting = ref(false);
 const currentHost = ref("");
+
+useHardwareScanner({
+  onScan(value) {
+    const parsed = parseQrLogin(value);
+    if (parsed) {
+      applyQrLogin(parsed.username, parsed.password);
+      return true;
+    }
+    return false;
+  },
+});
 
 onMounted(() => {
   currentHost.value = getApiBaseUrl();
@@ -82,6 +96,21 @@ onMounted(() => {
 
 function onChangeServer() {
   return navigateTo("/server");
+}
+
+function parseQrLogin(value: string): { username: string; password: string } | null {
+  const idx = value.indexOf(":");
+  if (idx <= 0 || idx === value.length - 1) return null;
+  return {
+    username: value.slice(0, idx).trim(),
+    password: value.slice(idx + 1),
+  };
+}
+
+function applyQrLogin(u: string, p: string) {
+  username.value = u;
+  password.value = p;
+  void onSubmit();
 }
 
 async function onSubmit() {
@@ -201,6 +230,13 @@ async function onSubmit() {
 .login__submit {
   width: 100%;
   margin-top: 0.5rem;
+}
+
+.login__qr-hint {
+  margin: 1rem 0 0;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--muted);
 }
 
 .login__server {

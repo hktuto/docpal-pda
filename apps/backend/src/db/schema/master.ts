@@ -147,17 +147,15 @@ export const customerProfiles = pgTable("customer_profiles", {
 
 // Warehouse sub-inventories: logical partitions of stock inside one org
 // (Oracle EBS organization + subinventory — the pair org_id +
-// sub_inventory_code identifies stock partitioning). This table is the
-// (org_id, secondary_inventory_name) GROUP level that all stock/doc tables
-// reference (composite FK — referencing columns keep the name
-// sub_inventory_code). Column names mirror the upstream DocPal/Oracle
-// subinventory schema; office_code / organization_id are upstream fields the
-// PDA does not use (nullable), customer_code is PDA-local (upstream has none).
+// Org info group table (formerly sub_inventories): the (org_id,
+// secondary_inventory_name) GROUP level that all stock/doc tables reference
+// (composite FK — referencing columns keep the name sub_inventory_code).
+// Column names mirror the upstream DocPal/Oracle org_info schema; office_code /
+// organization_id are upstream fields the PDA does not use (nullable).
 // Cross-store sharing for allocation is declared per warehouse in
-// sub_inventory_share_members below. customer_code is set for
-// customer-segregated stores.
+// sub_inventory_share_members below.
 export const subInventories = pgTable(
-  "sub_inventories",
+  "org_info",
   {
     id: text("id").primaryKey(),
     officeCode: text("office_code"), // upstream office code (unused locally)
@@ -165,7 +163,6 @@ export const subInventories = pgTable(
     orgId: integer("org_id").notNull(), // 所属办公室 — 与 secondary_inventory_name 配对识别库存分区
     secondaryInventoryName: text("secondary_inventory_name").notNull(), // 子库存 (group level), e.g. STORE1
     subinvDescription: text("subinv_description"),
-    customerCode: text("customer_code").references(() => customerProfiles.code), // set for customer-segregated stores
     creationDate: timestamp("creation_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
@@ -173,7 +170,7 @@ export const subInventories = pgTable(
     // table-level UNIQUE constraint (not a bare index) so composite FKs to
     // (org_id, secondary_inventory_name) resolve — the constraint lands inline
     // in CREATE TABLE, before the FK ALTERs in the migration.
-    orgSubinvUq: unique("sub_inventories_org_subinv_unique").on(t.orgId, t.secondaryInventoryName),
+    orgSubinvUq: unique("org_info_org_subinv_unique").on(t.orgId, t.secondaryInventoryName),
   })
 );
 
@@ -181,10 +178,8 @@ export const subInventories = pgTable(
 // same share_group may serve each other's picking demands (allocation still
 // matches org_id + sub_inventory_code — the group widens the code match to
 // sibling members). UNIQUE (org_id, code): a sub-inventory joins at most one
-// group. Customer-segregated stores keep their customer_code restriction, so
-// grouping one does not leak its stock to other customers. Configured per
-// warehouse via /admin/sub-inventory-share-groups; lookup-only for everything
-// except the allocation engine.
+// group. Configured per warehouse via /admin/sub-inventory-share-groups;
+// lookup-only for everything except the allocation engine.
 export const subInventoryShareMembers = pgTable(
   "sub_inventory_share_members",
   {

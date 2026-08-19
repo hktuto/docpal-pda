@@ -309,8 +309,8 @@ async function loadOpenDemand(dbOrTx: DbOrTx, orderId: string): Promise<Map<stri
   return demand;
 }
 
-/** Boxed lots visible to the order: location pair + share-group widening +
- *  customer segregation — the same rules allocate.ts applies to lot sources. */
+/** Boxed lots visible to the order: location pair + share-group widening —
+ *  the same rules allocate.ts applies to lot sources. */
 async function loadBoxLots(dbOrTx: DbOrTx, order: OrderMatchContext): Promise<BoxLotRow[]> {
   return queryAll<BoxLotRow>(
     dbOrTx,
@@ -322,7 +322,6 @@ async function loadBoxLots(dbOrTx: DbOrTx, order: OrderMatchContext): Promise<Bo
                il.date_code AS "dateCode", il.lot_code AS "lotCode", il.coo, il.cow
         FROM inventory_lots il
         JOIN shelf_boxes sb ON sb.id = il.box_id
-        LEFT JOIN sub_inventories si ON si.org_id = sb.org_id AND si.secondary_inventory_name = sb.sub_inventory_code
         LEFT JOIN (
           SELECT a.inventory_lot_id, SUM(a.qty)::int AS qty
           FROM allocations a
@@ -337,8 +336,7 @@ async function loadBoxLots(dbOrTx: DbOrTx, order: OrderMatchContext): Promise<Bo
                OR EXISTS (SELECT 1 FROM sub_inventory_share_members sm_d
                           JOIN sub_inventory_share_members sm_s ON sm_s.share_group = sm_d.share_group
                           WHERE sm_d.org_id = ${order.orgId} AND sm_d.code = ${order.subInventoryCode}
-                            AND sm_s.org_id = sb.org_id AND sm_s.code = sb.sub_inventory_code))
-          AND (si.customer_code IS NULL OR si.customer_code = ${order.customerCode})`
+                            AND sm_s.org_id = sb.org_id AND sm_s.code = sb.sub_inventory_code))`
   );
 }
 

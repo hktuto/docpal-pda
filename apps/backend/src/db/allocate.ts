@@ -34,9 +34,6 @@ import { allowDockStock } from "../config.js";
 //     skipped and counted (AllocateSummary.skippedReceivingSources) — the
 //     ingest-time defaulting rule (owner: Sean) is meant to populate it;
 //     until then such stock is surfaced, never silently allocated.
-//   - Customer segregation: a source in a sub-inventory with
-//     sub_inventories.customer_code only allocates to picking orders of that
-//     customer (customer_profiles.rule stays stored-not-interpreted).
 //   - FIFO: oldest date_code first (NULLS LAST).
 //   - Box granularity: a receiving line WITH ctn_no allocates down to that box
 //     (receiving_invoice_item_id); a line WITHOUT ctn_no allocates to the
@@ -167,7 +164,6 @@ async function loadLotSources(dbOrTx: DbOrTx, d: DemandRow): Promise<LotRow[]> {
                il.date_code AS "dateCode",
                (il.total_qty - il.allocated_qty) AS "available"
         FROM inventory_lots il
-        LEFT JOIN sub_inventories si ON si.org_id = il.org_id AND si.secondary_inventory_name = il.sub_inventory_code
         WHERE il.part_no = ${d.partNo}
           AND (${d.orgId}::int IS NULL OR il.org_id = ${d.orgId})
           AND (${d.subInventoryCode}::text IS NULL
@@ -176,7 +172,6 @@ async function loadLotSources(dbOrTx: DbOrTx, d: DemandRow): Promise<LotRow[]> {
                           JOIN sub_inventory_share_members sm_s ON sm_s.share_group = sm_d.share_group
                           WHERE sm_d.org_id = ${d.orgId} AND sm_d.code = ${d.subInventoryCode}
                             AND sm_s.org_id = il.org_id AND sm_s.code = il.sub_inventory_code))
-          AND (si.customer_code IS NULL OR si.customer_code = ${d.customerCode})
           AND il.total_qty - il.allocated_qty > 0
         ORDER BY il.date_code ASC NULLS LAST, il.id`
   );
@@ -200,7 +195,6 @@ async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow): Promise<Recei
         FROM receiving_invoice_items rii
         JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
         JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
-        LEFT JOIN sub_inventories si ON si.org_id = rii.org_id AND si.secondary_inventory_name = rii.sub_inventory_code
         LEFT JOIN (
           SELECT a.receiving_invoice_item_id AS rii_id, SUM(a.qty)::int AS qty
           FROM allocations a
@@ -228,7 +222,6 @@ async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow): Promise<Recei
                           JOIN sub_inventory_share_members sm_s ON sm_s.share_group = sm_d.share_group
                           WHERE sm_d.org_id = ${d.orgId} AND sm_d.code = ${d.subInventoryCode}
                             AND sm_s.org_id = rii.org_id AND sm_s.code = rii.sub_inventory_code))
-          AND (si.customer_code IS NULL OR si.customer_code = ${d.customerCode})
           AND (rii.received_qty - rii.picked_qty
                 - COALESCE(locked_ii.qty, 0) - COALESCE(locked_ro.qty, 0)) > 0
         ORDER BY rii.date_code ASC NULLS LAST, rii.id`

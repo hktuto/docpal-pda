@@ -1,9 +1,8 @@
 <script setup lang="ts">
 const api = useApi();
 const { t } = useI18n();
-// Demo convenience: prefill the seeded admin credentials.
-const username = ref("admin");
-const password = ref("DocPalAdmin2026!");
+const username = ref("");
+const password = ref("");
 const error = ref("");
 const busy = ref(false);
 

@@ -891,7 +891,7 @@ export async function deletePickingOrder(db: AppDb, id: string): Promise<{ id: s
 }
 
 // ---------------------------------------------------------------------------
-// Master data (parts / suppliers / supplier_profiles / sub_inventories)
+// Master data (parts / suppliers / supplier_profiles / org_info)
 // ---------------------------------------------------------------------------
 // Same upsert/delete pattern as the order ingests, keyed by the master rows'
 // natural keys. No app_events — the admin master-data CRUD (routes/admin/
@@ -939,7 +939,6 @@ export interface IngestSubInventory {
   subinvDescription?: string | null;
   officeCode?: string | null;
   organizationId?: number | null;
-  customerCode?: string | null;
 }
 
 /** Postgres FK violation (23503) on a master-data delete → 409 cannot_delete_referenced. */
@@ -1137,8 +1136,7 @@ export async function deleteSupplierProfile(db: AppDb, supplierCode: string): Pr
 
 /**
  * Idempotent upsert keyed by the path pair (orgId, code) →
- * (org_id, secondary_inventory_name). customerCode resolves to
- * customer_profiles.code (400 unknown_customer). A supplied id is INSERT-only.
+ * (org_id, secondary_inventory_name). A supplied id is INSERT-only.
  */
 export async function upsertSubInventory(
   db: AppDb,
@@ -1155,24 +1153,21 @@ export async function upsertSubInventory(
   }
   return db.transaction(async (tx) => {
     await suppressSyncEvents(tx);
-    const customerCode = await resolveCustomerCode(tx, body.customerCode);
     const fields = {
       subinvDescription: body.subinvDescription ?? null,
       officeCode: body.officeCode ?? null,
       organizationId: body.organizationId ?? null,
-      customerCode,
     };
     const existing = await queryGet<{ id: string }>(
       tx,
       sql`SELECT id,
                  NOT (subinv_description IS NOT DISTINCT FROM ${fields.subinvDescription}) AS "dDesc",
                  NOT (office_code IS NOT DISTINCT FROM ${fields.officeCode}) AS "dOffice",
-                 NOT (organization_id IS NOT DISTINCT FROM ${fields.organizationId}) AS "dOrg",
-                 NOT (customer_code IS NOT DISTINCT FROM ${fields.customerCode}) AS "dCust"
-          FROM sub_inventories WHERE org_id = ${orgId} AND secondary_inventory_name = ${code}`
+                 NOT (organization_id IS NOT DISTINCT FROM ${fields.organizationId}) AS "dOrg"
+          FROM org_info WHERE org_id = ${orgId} AND secondary_inventory_name = ${code}`
     );
     if (!existing) {
-      const id = await insertId(tx, "sub_inventories", body.id);
+      const id = await insertId(tx, "org_info", body.id);
       await tx.insert(subInventories).values({
         id,
         orgId,
@@ -1182,12 +1177,12 @@ export async function upsertSubInventory(
       return { id, created: true, changed: true };
     }
     const d = existing as unknown as Record<string, unknown>;
-    if (d.dDesc || d.dOffice || d.dOrg || d.dCust) {
+    if (d.dDesc || d.dOffice || d.dOrg) {
       await queryRun(
         tx,
-        sql`UPDATE sub_inventories SET subinv_description = ${fields.subinvDescription},
+        sql`UPDATE org_info SET subinv_description = ${fields.subinvDescription},
                   office_code = ${fields.officeCode}, organization_id = ${fields.organizationId},
-                  customer_code = ${fields.customerCode}, last_update_date = ${now()}
+                  last_update_date = ${now()}
             WHERE id = ${existing.id}`
       );
       return { id: existing.id, created: false, changed: true };
@@ -1204,11 +1199,11 @@ export async function deleteSubInventory(db: AppDb, orgIdParam: string, code: st
     await suppressSyncEvents(tx);
     const row = await queryGet<{ id: string }>(
       tx,
-      sql`SELECT id FROM sub_inventories WHERE org_id = ${orgId} AND secondary_inventory_name = ${code}`
+      sql`SELECT id FROM org_info WHERE org_id = ${orgId} AND secondary_inventory_name = ${code}`
     );
     if (!row) throw new HTTPException(404, { message: "not_found" });
     try {
-      await queryRun(tx, sql`DELETE FROM sub_inventories WHERE id = ${row.id}`);
+      await queryRun(tx, sql`DELETE FROM org_info WHERE id = ${row.id}`);
     } catch (e) {
       mapFkViolation(e);
     }

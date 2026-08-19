@@ -110,7 +110,7 @@ API call touching N rows produces N events).
 | `box_size_list` | `box_size_list.insert` / `box_size_list.update` / `box_size_list.delete` |
 | `net_weight_formula` | `net_weight_formula.insert` / `net_weight_formula.update` / `net_weight_formula.delete` |
 | `customer_profiles` | `customer_profiles.insert` / `customer_profiles.update` / `customer_profiles.delete` |
-| `sub_inventories` | `sub_inventories.insert` / `sub_inventories.update` / `sub_inventories.delete` |
+| `org_info` | `org_info.insert` / `org_info.update` / `org_info.delete` |
 | `sub_inventory_share_members` | `sub_inventory_share_members.insert` / `sub_inventory_share_members.update` / `sub_inventory_share_members.delete` |
 
 ### Receiving

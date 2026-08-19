@@ -18,7 +18,7 @@ import {
 } from "./ingest.js";
 
 // Master-data ingest: upsert/delete for parts, suppliers, supplier_profiles,
-// sub_inventories (same pattern as the order ingests in ingest.test.ts).
+// org_info (same pattern as the order ingests in ingest.test.ts).
 
 let client: TestDb;
 
@@ -275,7 +275,7 @@ test("supplier-profiles: unknown supplier → 400 unknown_supplier", async () =>
   assert.match(err.message, /^unknown_supplier/);
 });
 
-// --- sub_inventories -----------------------------------------------------------
+// --- org_info --------------------------------------------------------------
 
 test("sub-inventories: create (caller id honored) → update reconcile → delete", async () => {
   await reseed(client);
@@ -293,7 +293,7 @@ test("sub-inventories: create (caller id honored) → update reconcile → delet
   const row = (await queryGet<{ orgId: number; officeCode: string | null; organizationId: number | null }>(
     client.db,
     sql`SELECT org_id AS "orgId", office_code AS "officeCode", organization_id AS "organizationId"
-        FROM sub_inventories WHERE org_id = 999 AND secondary_inventory_name = 'ING-MD-S1'`
+        FROM org_info WHERE org_id = 999 AND secondary_inventory_name = 'ING-MD-S1'`
   ))!;
   assert.equal(row.officeCode, "HK");
   assert.equal(row.organizationId, 12345);
@@ -332,7 +332,7 @@ test("sub-inventories: delete referenced by a receiving order → 409 cannot_del
   assert.equal(err.message, "cannot_delete_referenced");
 });
 
-test("sub-inventories: invalid orgId / unknown customer / bad organizationId → 400", async () => {
+test("sub-inventories: invalid orgId / bad organizationId → 400", async () => {
   await reseed(client);
   const badOrg = await catchHttp(upsertSubInventory(client.db, "abc", "ING-MD-S3", {}));
   assert.equal(badOrg.status, 400);
@@ -341,16 +341,11 @@ test("sub-inventories: invalid orgId / unknown customer / bad organizationId →
   assert.equal(badOrgDel.status, 400);
   assert.equal(badOrgDel.message, "invalid_org_id");
 
-  const badCust = await catchHttp(upsertSubInventory(client.db, "999", "ING-MD-S3", { customerCode: "NOPE" }));
-  assert.equal(badCust.status, 400);
-  assert.match(badCust.message, /^unknown_customer/);
-
   const badOrgIdField = await catchHttp(
     upsertSubInventory(client.db, "999", "ING-MD-S3", { organizationId: 1.5 })
   );
   assert.equal(badOrgIdField.status, 400);
 
-  // customerCode resolves against customer_profiles
-  const ok = await upsertSubInventory(client.db, "999", "ING-MD-S3", { customerCode: "ACME" });
+  const ok = await upsertSubInventory(client.db, "999", "ING-MD-S3", {});
   assert.equal(ok.created, true);
 });

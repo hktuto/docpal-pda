@@ -167,49 +167,6 @@ test("allocateAll: share group widens the sub-inventory match", async () => {
   assert.equal(Number((c[0] as any).c), 0);
 });
 
-test("allocateAll: sharing does not lift customer segregation", async () => {
-  await reseed(client);
-  // move lot 18 into the ACME-segregated store and add that store to the
-  // same share group as the demand's WSTORE1
-  await client.db.execute(sql`UPDATE inventory_lots SET sub_inventory_code = 'ACME-S1' WHERE id = ${LOT_18}`);
-  await client.db.execute(sql`INSERT INTO sub_inventory_share_members (id, org_id, code, share_group, created_date, last_update_date) VALUES (app_uuid_v7(), 2, 'ACME-S1', 'HK', now(), now())`);
-  await upstreamWrite(client, (tx) => tx.execute(sql`UPDATE picking_orders SET sub_inventory_code = 'WSTORE1', customer_code = NULL WHERE id = ${PO_22}`));
-
-  // the segregated lot stays off-limits (customer mismatch) even though it
-  // shares the group; item 24's plain STORE1 lot still allocates via sharing
-  await allocateAll(client.db);
-  const c23 = await client.db.execute(sql`SELECT count(*)::int AS c FROM allocations WHERE picking_item_id = ${ITEM_23}`);
-  assert.equal(Number((c23[0] as any).c), 0);
-  const a24 = await client.db.execute(sql`SELECT inventory_lot_id AS lot, qty FROM allocations WHERE picking_item_id = ${ITEM_24}`);
-  assert.equal((a24[0] as any).lot, LOT_19);
-  assert.equal(Number((a24[0] as any).qty), 500);
-});
-
-test("allocateAll: customer-segregated sub-inventory only serves its customer", async () => {
-  await reseed(client);
-  // move lot 18 into the ACME-segregated store; keep the demand pair-less so
-  // the pair match cannot mask the segregation rule
-  await client.db.execute(sql`UPDATE inventory_lots SET sub_inventory_code = 'ACME-S1' WHERE id = ${LOT_18}`);
-  await upstreamWrite(client, (tx) => tx.execute(sql`UPDATE picking_orders SET org_id = NULL, sub_inventory_code = NULL WHERE id = ${PO_22}`));
-
-  // seeded demand is customer ACME → the segregated lot serves it
-  let s = await allocateAll(client.db);
-  assert.equal(s.fullyAllocated, 3);
-  const a23 = await client.db.execute(sql`SELECT qty, inventory_lot_id AS lot FROM allocations WHERE picking_item_id = ${ITEM_23}`);
-  assert.equal(a23.length, 1);
-  assert.equal(Number((a23[0] as any).qty), 1000);
-  assert.equal((a23[0] as any).lot, LOT_18);
-
-  // the same demand without a customer cannot touch the segregated lot, but
-  // item 24's STORE1 lot (not segregated) still allocates
-  await upstreamWrite(client, (tx) => tx.execute(sql`UPDATE picking_orders SET customer_code = NULL WHERE id = ${PO_22}`));
-  await allocateAll(client.db);
-  const c = await client.db.execute(sql`SELECT count(*)::int AS c FROM allocations WHERE picking_item_id = ${ITEM_23}`);
-  assert.equal(Number((c[0] as any).c), 0);
-  const a24 = await client.db.execute(sql`SELECT qty FROM allocations WHERE picking_item_id = ${ITEM_24}`);
-  assert.equal(Number((a24[0] as any).qty), 500);
-});
-
 test("allocateAll: idempotent recompute, ledger stays consistent", async () => {
   await reseed(client);
   await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${PO_22}`);

@@ -110,7 +110,9 @@ export default {
     password: "Password",
     placeholderUsername: "operator",
     placeholderPassword: "••••••••",
-    changeServer: "Change server"
+    changeServer: "Change server",
+    qrHint: "Scan a login QR code formatted as username:password.",
+    qrInvalidFormat: "Invalid login QR code. Expected username:password."
   },
   server: {
     title: "Choose backend server",

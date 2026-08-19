@@ -35,11 +35,10 @@ org_id (integer office, e.g. 2 = HK) + sub_inventory_code (e.g. STORE1)
 - `org_id` — the office/organization the stock belongs to (plain integer, no
   lookup table). `NOT NULL DEFAULT 2` on the receiving tables; nullable
   elsewhere.
-- `sub_inventory_code` — the store the goods go into (`sub_inventories`
+- `sub_inventory_code` — the store the goods go into (`org_info`
   lookup; its own `org_id` anchors which org the sub-inventory belongs to).
-  Stock/docs reference the `(org_id, code)` group via composite FK. A
-  customer may request their goods be stored separately
-  (`sub_inventories.customer_code`). On receiving it is **item-level**
+  Stock/docs reference the `(org_id, code)` group via composite FK. On
+  receiving it is **item-level**
   (`receiving_invoice_items`, nullable — order/invoice-level columns were
   dropped 2026-08-18); on `picking_orders` and `inventory_lots` it is nullable.
 
@@ -98,7 +97,6 @@ Selection rules (confirmed with the business):
   2026-08-18). The code
   match is widened by `sub_inventory_share_members` (2026-07-27): sources
   whose sub-inventory shares the order's `share_group` also match.
-  Customer-segregated sub-inventories only serve their customer's orders.
 - **FIFO** — oldest `date_code` first (NULLS LAST).
 
 > Implementation: `apps/backend/src/db/allocate.ts` (`allocateAll`) — full

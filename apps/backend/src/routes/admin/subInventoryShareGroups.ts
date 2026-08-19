@@ -35,10 +35,10 @@ adminSubInventoryShareGroupsRoute.get("/", async (c) => {
   const rows = await queryAll(
     db,
     sql`SELECT m.share_group AS "shareGroup", m.org_id AS "orgId", m.code,
-               si.subinv_description AS "subinvDescription", si.customer_code AS "customerCode",
+               si.subinv_description AS "subinvDescription",
                m.created_date AS "createdDate", m.last_update_date AS "lastUpdateDate"
         FROM sub_inventory_share_members m
-        JOIN sub_inventories si ON si.org_id = m.org_id AND si.secondary_inventory_name = m.code
+        JOIN org_info si ON si.org_id = m.org_id AND si.secondary_inventory_name = m.code
         ORDER BY m.share_group, m.org_id, m.code`
   );
   return c.json(rows);
