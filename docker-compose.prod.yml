@@ -85,7 +85,8 @@ services:
     volumes:
       - ./apps/backend/public/apk:/app/public/apk:ro
     ports:
-      - "9002:3002"
+      - "3002:3002"
+      # - "9002:3002"
     depends_on:
       db:
         condition: service_healthy
