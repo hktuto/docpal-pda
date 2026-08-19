@@ -14,6 +14,8 @@ Tap the box to open its page — or scan the box's QR code (or type its box id o
 
 The box page lists the box's packages in a table. Scan each package's QR label with the hardware scanner — a matching package is verified immediately and its row flips to **Verified**. The per-row **Scan** button (camera OCR with review) is the fallback for labels the QR parser cannot handle.
 
+![Measuring box page](./assets/measuring-box.png)
+
 ## 4. Record measurements and confirm
 
 When every package is verified, the measurements form opens automatically (or tap **Enter measurements**). Enter box size, net/gross weight in **kg** (decimals allowed — the net weight is pre-filled with the auto-calculated value from the part net-weight master; adjust it if needed), and destination country, then **Confirm box** to save and close the box in one action. See [Box measurements](./box-measurements.md).
