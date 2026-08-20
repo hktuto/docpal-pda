@@ -42,6 +42,8 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       apiBaseUrl: "http://localhost:3002", // override with NUXT_PUBLIC_API_BASE_URL
+      // Print service base URL; empty = derive from apiBaseUrl host on port 9003.
+      printBaseUrl: "http://192.168.5.116:9003", // override with NUXT_PUBLIC_PRINT_BASE_URL
     },
   },
 });

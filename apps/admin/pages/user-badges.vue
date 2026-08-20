@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import QRCode from "qrcode";
+import { getPrintBaseUrl, printFile, waitForPrintJob } from "~/utils/print";
 
 interface User {
   id: string;
@@ -52,6 +53,7 @@ function startBadge(u: User) {
   password.value = "";
   badgeQr.value = null;
   badgeError.value = "";
+  printed.value = false;
 }
 
 function closeBadge() {
@@ -59,6 +61,7 @@ function closeBadge() {
   password.value = "";
   badgeQr.value = null;
   badgeError.value = "";
+  printed.value = false;
 }
 
 async function generateBadge() {
@@ -79,9 +82,58 @@ async function generateBadge() {
   }
 }
 
-function printBadge() {
-  // TODO: replace with the provided print API when ready.
-  window.print();
+const printerName = ref(import.meta.client ? localStorage.getItem("badge_printer") ?? "" : "");
+const printing = ref(false);
+const printed = ref(false);
+
+/** Render the badge card (name + username + QR) to a PNG for the print service. */
+async function renderBadgePng(): Promise<Blob> {
+  const u = selectedUser.value!;
+  const canvas = document.createElement("canvas");
+  canvas.width = 400;
+  canvas.height = 420;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#0f1720";
+  ctx.font = "700 28px sans-serif";
+  ctx.fillText(u.displayName || u.username, 200, 56);
+  ctx.fillStyle = "#64748b";
+  ctx.font = "18px sans-serif";
+  ctx.fillText(u.username, 200, 88);
+  const img = new Image();
+  img.src = badgeQr.value!;
+  await img.decode();
+  ctx.drawImage(img, 80, 120, 240, 240);
+  return await new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("canvas.toBlob returned null"))),
+      "image/png"
+    )
+  );
+}
+
+async function printBadge() {
+  const u = selectedUser.value;
+  const printer = printerName.value.trim();
+  if (!u || !badgeQr.value || !printer || printing.value) return;
+  printing.value = true;
+  printed.value = false;
+  badgeError.value = "";
+  try {
+    const baseUrl = getPrintBaseUrl();
+    const png = await renderBadgePng();
+    const job = await printFile(baseUrl, png, `badge-${u.username}.png`, { printerName: printer });
+    // Submission accepted — now confirm the job actually printed.
+    await waitForPrintJob(baseUrl, job.jobId);
+    printed.value = true;
+    localStorage.setItem("badge_printer", printer);
+  } catch (e) {
+    badgeError.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    printing.value = false;
+  }
 }
 
 onMounted(load);
@@ -101,6 +153,9 @@ onMounted(load);
         v-model="q"
         type="search"
         class="search-input"
+        autocomplete="off"
+        data-1p-ignore
+        data-lpignore="true"
         :placeholder="$t('admin.userBadges.searchPlaceholder')"
       />
     </div>
@@ -151,7 +206,9 @@ onMounted(load);
               id="badge-password"
               v-model="password"
               type="password"
-              autocomplete="off"
+              autocomplete="new-password"
+              data-1p-ignore
+              data-lpignore="true"
               :placeholder="$t('admin.userBadges.passwordPlaceholder')"
               @keydown.enter="generateBadge"
             />
@@ -172,11 +229,28 @@ onMounted(load);
             <div class="badge-user">{{ selectedUser.username }}</div>
             <img :src="badgeQr" :alt="$t('admin.userBadges.qrAlt')" class="badge-qr" />
           </div>
+          <div class="form-row">
+            <label for="badge-printer">{{ $t("admin.userBadges.printerName") }}</label>
+            <input
+              id="badge-printer"
+              v-model="printerName"
+              type="text"
+              autocomplete="off"
+              data-1p-ignore
+              data-lpignore="true"
+              :placeholder="$t('admin.userBadges.printerPlaceholder')"
+            />
+          </div>
           <div v-if="badgeError" class="error-banner">{{ badgeError }}</div>
+          <div v-if="printed" class="success-banner">{{ $t("admin.userBadges.printSuccess") }}</div>
           <div class="modal-actions">
             <button class="btn" @click="closeBadge">{{ $t("admin.common.close") }}</button>
-            <button class="btn btn-primary" @click="printBadge">
-              {{ $t("admin.userBadges.print") }}
+            <button
+              class="btn btn-primary"
+              :disabled="!printerName.trim() || printing"
+              @click="printBadge"
+            >
+              {{ printing ? $t("admin.common.loading") : $t("admin.userBadges.print") }}
             </button>
           </div>
         </div>
@@ -307,20 +381,12 @@ onMounted(load);
   image-rendering: pixelated;
 }
 
-@media print {
-  .modal-overlay {
-    position: static;
-    background: none;
-    padding: 0;
-  }
-  .modal-box {
-    box-shadow: none;
-    max-width: none;
-    width: auto;
-  }
-  .modal-close,
-  .modal-actions {
-    display: none;
-  }
+.success-banner {
+  padding: 8px 12px;
+  border: 1px solid #86c8a0;
+  border-radius: 6px;
+  background: #ecf9f1;
+  color: #1e7a46;
+  font-size: 13px;
 }
 </style>

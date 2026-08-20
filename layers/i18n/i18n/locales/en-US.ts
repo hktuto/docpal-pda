@@ -111,8 +111,8 @@ export default {
     placeholderUsername: "operator",
     placeholderPassword: "••••••••",
     changeServer: "Change server",
-    qrHint: "Scan a login QR code formatted as username:password.",
-    qrInvalidFormat: "Invalid login QR code. Expected username:password."
+    qrHint: "Scan a login QR code",
+    qrInvalidFormat: "Invalid login QR code."
   },
   server: {
     title: "Choose backend server",
@@ -898,7 +898,10 @@ export default {
       generate: "Generate badge",
       badgeTitle: "Badge preview",
       qrAlt: "Login QR code",
-      print: "Print badge"
+      printerName: "Printer name",
+      printerPlaceholder: "e.g. MYPRINTER",
+      print: "Print badge",
+      printSuccess: "Badge sent to the printer."
     },
     common: {
       refresh: "Refresh",

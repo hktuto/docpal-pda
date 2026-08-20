@@ -111,8 +111,8 @@ export default {
     placeholderUsername: "operator",
     placeholderPassword: "••••••••",
     changeServer: "更改服务器",
-    qrHint: "请扫描格式为 username:password 的登录二维码。",
-    qrInvalidFormat: "登录二维码格式错误，应为 username:password。"
+    qrHint: "请扫描登录二维码。",
+    qrInvalidFormat: "登录二维码格式错误。"
   },
   server: {
     title: "选择后台服务器",
@@ -898,7 +898,10 @@ export default {
       generate: "生成工牌",
       badgeTitle: "工牌预览",
       qrAlt: "登录二维码",
-      print: "打印工牌"
+      printerName: "打印机名称",
+      printerPlaceholder: "例如 MYPRINTER",
+      print: "打印工牌",
+      printSuccess: "工牌已发送到打印机。"
     },
     common: {
       refresh: "刷新",

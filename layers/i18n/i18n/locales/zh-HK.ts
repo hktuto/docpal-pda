@@ -111,8 +111,8 @@ export default {
     placeholderUsername: "operator",
     placeholderPassword: "••••••••",
     changeServer: "更改伺服器",
-    qrHint: "請掃描格式為 username:password 的登入 QR code。",
-    qrInvalidFormat: "登入 QR code 格式錯誤，應為 username:password。"
+    qrHint: "請掃描登入 QR code。",
+    qrInvalidFormat: "登入 QR code 格式錯誤"
   },
   server: {
     title: "選擇後台伺服器",
@@ -898,7 +898,10 @@ export default {
       generate: "建立證件",
       badgeTitle: "證件預覽",
       qrAlt: "登入 QR code",
-      print: "列印證件"
+      printerName: "打印機名稱",
+      printerPlaceholder: "例如 MYPRINTER",
+      print: "列印證件",
+      printSuccess: "證件已傳送到打印機。"
     },
     common: {
       refresh: "重新整理",
