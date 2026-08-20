@@ -103,7 +103,7 @@ services:
       PORT: 3100
       NUXT_PUBLIC_API_BASE_URL: ${ADMIN_API_BASE_URL:-${PRODUCTION_URL}:9002}
     ports:
-      - "80:3100"
+      - "8080:3100"
     depends_on:
       - backend
     restart: unless-stopped
