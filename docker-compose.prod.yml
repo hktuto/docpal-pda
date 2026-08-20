@@ -89,7 +89,7 @@ services:
       PORT: 3103
       # API origin as seen from the PDA browser/WebView (public runtime config,
       # applied at container start — no rebuild needed).
-      NUXT_PUBLIC_API_BASE_URL: ${WEB_API_BASE_URL:-${PRODUCTION_URL}:9002}
+      NUXT_PUBLIC_API_BASE_URL: ${WEB_API_BASE_URL:-${PRODUCTION_URL}:3002}
     ports:
       - "3000:3103"
     depends_on:
@@ -102,7 +102,7 @@ services:
       dockerfile: apps/admin/Dockerfile
     environment:
       PORT: 3100
-      NUXT_PUBLIC_API_BASE_URL: ${ADMIN_API_BASE_URL:-${PRODUCTION_URL}:9002}
+      NUXT_PUBLIC_API_BASE_URL: ${ADMIN_API_BASE_URL:-${PRODUCTION_URL}:3002}
     ports:
       - "8080:3100"
     depends_on:
