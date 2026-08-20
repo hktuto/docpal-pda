@@ -1,4 +1,11 @@
-# ElectricSQL sync from DocPal master DB — design (2026-08-18)
+# ElectricSQL sync from DocPal master DB — design (2026-08-18) — RETIRED
+
+> **Retired 2026-08-20.** The ElectricSQL sync service, consumer, and
+> supporting DB artifacts (`sync_checkpoints`, `wms_sync_consumer` role,
+> `enforce_remote_owned_columns` triggers) were removed. Upstream sync is now
+> performed by an external service consuming the `GET /sync-events` feed or
+> writing through the reusable apply layer in `src/db/ingest.ts`.
+> This document is kept for historical context.
 
 Replaces the push-based ingest HTTP API with pull-based Postgres logical
 replication (ElectricSQL) from the DocPal master database. Motivation: the

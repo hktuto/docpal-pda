@@ -57,18 +57,4 @@ export async function reseed(client: TestDb): Promise<void> {
   await reseedTestWorld(client);
 }
 
-/**
- * Run fixture writes that simulate an upstream (DocPal) change: the tx sets
- * `app.upstream_write = 1` so the remote-owned-column triggers allow updates
- * to synced columns (org_id, wcl_item_no, ...) that the warehouse role can
- * no longer touch directly.
- */
-export async function upstreamWrite(
-  client: TestDb,
-  fn: (tx: Parameters<Parameters<TestDb["db"]["transaction"]>[0]>[0]) => Promise<unknown>,
-): Promise<void> {
-  await client.db.transaction(async (tx) => {
-    await tx.execute(sql`SET LOCAL app.upstream_write = 1`);
-    await fn(tx);
-  });
-}
+

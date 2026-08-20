@@ -2,7 +2,7 @@ import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { setupTestDb, reseed, upstreamWrite, type TestDb } from "./test-helper.js";
+import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { fetchSyncEventsSince } from "./sync-events.js";
 import { upsertPart, deletePart, upsertPickingOrder, deletePickingOrder } from "./ingest.js";
 
@@ -22,9 +22,9 @@ test("trigger: backend-role writes emit <table>.<op> events with new/old row ima
 
   const partId = randomUUID();
   await client.db.execute(
-    sql`INSERT INTO parts (id, brand, part_no) VALUES (${partId}, 'KOA', 'SYNC-TEST-1')`
+    sql`INSERT INTO parts (id, brand, part_no, wcl_item_no) VALUES (${partId}, 'KOA', 'SYNC-TEST-1', 'WCL/SYNC-TEST-1')`
   );
-  await upstreamWrite(client, (tx) => tx.execute(sql`UPDATE parts SET description = 'desc' WHERE id = ${partId}`));
+  await client.db.execute(sql`UPDATE parts SET description = 'desc' WHERE id = ${partId}`);
   await client.db.execute(sql`DELETE FROM parts WHERE id = ${partId}`);
 
   const rows = await fetchSyncEventsSince(client.db, 0);
@@ -58,7 +58,7 @@ test("trigger: app.sync_events_off suppresses events", async () => {
   await client.db.transaction(async (tx) => {
     await tx.execute(sql`SET LOCAL app.sync_events_off = 1`);
     await tx.execute(
-      sql`INSERT INTO parts (id, brand, part_no) VALUES (${randomUUID()}, 'KOA', 'SYNC-TEST-2')`
+      sql`INSERT INTO parts (id, brand, part_no, wcl_item_no) VALUES (${randomUUID()}, 'KOA', 'SYNC-TEST-2', 'WCL/SYNC-TEST-2')`
     );
   });
   assert.equal((await fetchSyncEventsSince(client.db, 0)).length, 0);
@@ -69,7 +69,7 @@ test("trigger: rolled-back writes leave no events", async () => {
   await assert.rejects(
     client.db.transaction(async (tx) => {
       await tx.execute(
-        sql`INSERT INTO parts (id, brand, part_no) VALUES (${randomUUID()}, 'KOA', 'SYNC-TEST-3')`
+        sql`INSERT INTO parts (id, brand, part_no, wcl_item_no) VALUES (${randomUUID()}, 'KOA', 'SYNC-TEST-3', 'WCL/SYNC-TEST-3')`
       );
       throw new Error("boom");
     })

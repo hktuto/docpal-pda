@@ -18,15 +18,18 @@ import { emitEvent } from "./events.js";
 import { now } from "./now.js";
 
 // ---------------------------------------------------------------------------
-// Ingest upserts (server-to-server sync; plan decision 6 — no ledger rows).
-// Ported from apps/api/src/ingest/{receiving,picking}.ts: idempotent upserts
-// keyed by the natural keys (receiving batch_no; picking by the caller-supplied
+// Sync apply layer — idempotent upserts/deletes for upstream sync mechanisms.
+//
+// Keyed by the natural keys (receiving batch_no; picking by the caller-supplied
 // UUID id — order_no is not unique — and parts by wcl_item_no carried in the
-// body — no external_id), with the old O(n²) line scan replaced by
-// business-key map reconciles (invoices by invoice_no, receiving items by
-// part_no+po_no+po_line, picking items by part_no).
+// body — no external_id), with business-key map reconciles (invoices by
+// invoice_no, receiving items by part_no+po_no+po_line, picking items by
+// part_no).
+//
 // Derived state (received_qty / picked_qty / put_away_qty / allocated_qty /
-// mismatch flags) is never written here.
+// mismatch flags) is never written here. Every transaction runs with
+// app.sync_events_off = 1 so upstream-originated writes do not echo back into
+// the outbound sync_events feed.
 // ---------------------------------------------------------------------------
 
 export interface IngestUpsertResult {
@@ -204,18 +207,13 @@ async function insertId(tx: DbOrTx, table: string, supplied: string | undefined)
 
 /**
  * Suppress the sync_events table-change trigger for this transaction
- * (SET LOCAL is tx-scoped). Ingest writes are upstream-originated — logging
- * them would echo DocPal's own changes back into the sync feed (circular
- * loop). Warehouse-originated side effects outside the ingest tx (e.g. the
- * post-commit allocateAll) are still recorded.
- *
- * Also marks the transaction as an upstream writer: the
- * enforce_remote_owned_columns trigger (migration 0015) lets it update
- * remote-owned columns on synced tables.
+ * (SET LOCAL is tx-scoped). Sync writes are upstream-originated — logging
+ * them would echo the upstream system's own changes back into the outbound
+ * sync feed (circular loop). Warehouse-originated side effects outside the
+ * sync tx (e.g. the post-commit allocateAll) are still recorded.
  */
 async function suppressSyncEvents(tx: DbOrTx): Promise<void> {
   await tx.execute(sql`SET LOCAL app.sync_events_off = 1`);
-  await tx.execute(sql`SET LOCAL app.upstream_write = 1`);
 }
 
 // ---------------------------------------------------------------------------
@@ -893,9 +891,9 @@ export async function deletePickingOrder(db: AppDb, id: string): Promise<{ id: s
 // ---------------------------------------------------------------------------
 // Master data (parts / suppliers / supplier_profiles / org_info)
 // ---------------------------------------------------------------------------
-// Same upsert/delete pattern as the order ingests, keyed by the master rows'
+// Same upsert/delete pattern as the order syncs, keyed by the master rows'
 // natural keys. No app_events — the admin master-data CRUD (routes/admin/
-// crud.ts) emits none either. Like all ingest writes, these run with
+// crud.ts) emits none either. Like all sync writes, these run with
 // suppressSyncEvents (upstream-originated — not logged to sync_events).
 
 export interface MasterDataUpsertResult {

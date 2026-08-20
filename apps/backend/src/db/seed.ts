@@ -475,9 +475,9 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
 }
 
 /** Minimal boot seed: reference data + shelf layout only. Masters (parts,
- *  suppliers, org_info, customer profiles) and all orders/stock arrive via the
- *  Electric sync from the DocPal master DB; users come from DocPal auth, so no
- *  local users are seeded. */
+ *  suppliers, org_info, customer profiles), all orders/stock, and users arrive
+ *  via upstream sync / DocPal auth, so no local users or masters are seeded
+ *  in this mode. */
 async function seedReferenceOnly(db: AppDb): Promise<void> {
   // Flow config row — required for boot ({} = all defaults on).
   await db.insert(warehouseConfig).values([{ key: "flow", value: {} }]);

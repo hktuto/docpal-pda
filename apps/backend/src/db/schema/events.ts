@@ -14,11 +14,11 @@ export const appEvents = pgTable("app_events", {
   lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
 });
 
-// Table-change feed for the external sync service (catalog:
+// Table-change feed for external sync services (catalog:
 // docs/backend/event-catalog.md). Rows are written by the
 // sync_events_notify() trigger on every business table — only for changes
 // committed by the backend's own Postgres role — never by application code.
-// GET /sync-events?since= lets the service poll with id as its cursor.
+// GET /sync-events?since= lets a service poll with id as its cursor.
 export const syncEvents = pgTable("sync_events", {
   id: bigserial("id", { mode: "number" }).primaryKey(), // monotonic resume cursor
   eventType: text("event_type").notNull(), // <table>.<insert|update|delete>

@@ -169,7 +169,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | `POST /goods-verify-tasks/generate`, `GET /goods-verify-tasks`, `GET /goods-verify-tasks/:id`, `POST /goods-verify-tasks/:id/verify` | `apps/backend/src/routes/goodsverify.ts` |
 | `GET /stock-search` | `apps/backend/src/routes/stocksearch.ts` |
 | `GET /scan-templates` | `apps/backend/src/routes/scantemplates.ts` |
-| Upstream sync (Electric consumer — no HTTP endpoints; one ShapeStream per `demo.wms_*` table) | `apps/backend/src/sync/consumer.ts`, `apps/backend/src/sync/orders.ts` |
+| Upstream sync (outbound `GET /sync-events` feed + inbound apply layer; no embedded consumer) | `apps/backend/src/routes/sync-events.ts`, `apps/backend/src/db/sync-events.ts`, `apps/backend/src/db/ingest.ts` |
 | `POST /dev/reset`, `POST /dev/allocate` | `apps/backend/src/routes/dev.ts` |
 | `/admin/*` master-data CRUD | `apps/backend/src/routes/admin/` |
 | `/admin/sub-inventory-share-groups` (share-group membership upsert/remove) | `apps/backend/src/routes/admin/subInventoryShareGroups.ts` |
@@ -189,11 +189,11 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | Flow config (`warehouse_config` row `"flow"` + `FLOW_CONFIG` env override, `isStepEnabled`, `allowDockStock`) | `apps/backend/src/config.ts` |
 | Goods verify (generation, queue, verify with ADJUST) | `apps/backend/src/db/goodsverify.ts` |
 | Stock search | `apps/backend/src/db/stocksearch.ts` |
-| Sync-consumer apply layer (upsert/delete domain functions reused by the Electric consumer; guarded order deletes) | `apps/backend/src/db/ingest.ts` |
+| Sync apply layer (idempotent upsert/delete domain functions for upstream sync; guarded order deletes) | `apps/backend/src/db/ingest.ts` |
 | Allocation engine (`allocateAll`) | `apps/backend/src/db/allocate.ts` |
 | Demo seed (+ generated real-data artifacts) | `apps/backend/src/db/seed.ts` (+ `seed-parts-data.json`, `seed-subinventories-data.ts`, `seed-net-weight-data.ts`, `seed-order-210726.ts`; generator `scripts/gen-seed-real-data.mjs`) |
 
-- Server entry / app wiring: `apps/backend/src/index.ts` (migrations auto-apply on startup; boot seed runs when `warehouse_config` is empty unless `WAREHOUSE_SEED=off` — default is reference data + shelves only, masters/orders come from the Electric sync and users from DocPal; `WAREHOUSE_SEED_DEMO=1` seeds the full demo world for local dev login).
+- Server entry / app wiring: `apps/backend/src/index.ts` (migrations auto-apply on startup; boot seed runs when `warehouse_config` is empty unless `WAREHOUSE_SEED=off` — default is reference data + shelves only, masters/orders come from upstream sync and users from DocPal; `WAREHOUSE_SEED_DEMO=1` seeds the full demo world for local dev login).
 - All web pages go through `WarehouseService` → these HTTP endpoints.
 - The retired `apps/api` (:3001) routes are gone from the web app's runtime path; the package remains in the repo for history (see `apps/api/README.md`).
 

@@ -8,20 +8,16 @@ The DocPal → warehouse server-to-server ingest HTTP API (`PUT`/`DELETE
 `apps/backend/src/routes/ingest.ts` is deleted; nothing is mounted at those
 paths anymore.
 
-It is replaced by **pull-based ElectricSQL sync** from the remote DocPal
-Postgres master: a self-hosted Electric service replicates the 8 `demo.wms_*`
-tables and the backend's sync consumer applies the changes locally.
+The ElectricSQL sync service that replaced it was removed on 2026-08-20.
+Upstream sync is now performed by an external service, which can either:
 
-- Design spec: `docs/superpowers/specs/2026-08-18-electric-sql-sync-design.md`
-  (table mapping, column ownership, delete policy).
-- Plan: `docs/superpowers/plans/2026-08-18-electric-sql-sync.md`.
-- Consumer: `apps/backend/src/sync/consumer.ts` (master data) +
-  `apps/backend/src/sync/orders.ts` (order tables), started from
-  `apps/backend/src/server.ts` when `ELECTRIC_URL` is set and
-  `ELECTRIC_SYNC != off`.
-- Apply layer: `apps/backend/src/db/ingest.ts` — the former ingest domain
-  functions (`upsertPart`, `upsertSupplier`, `deleteReceivingOrder`, …),
-  kept and reused by the consumer; no longer behind HTTP.
+- Consume the outbound table-change feed at `GET /sync-events?since=` to learn
+  what changed in the warehouse backend.
+- Write into the backend through the reusable apply layer in
+  `apps/backend/src/db/ingest.ts` (`upsertPart`, `upsertSupplier`,
+  `upsertReceivingOrder`, `upsertPickingOrder`, guarded deletes, …). These
+  functions run with `app.sync_events_off = 1` so upstream-originated writes
+  do not echo back into `sync_events`.
 
 This file is kept as a tombstone because other docs link to it. For the old
 request/response contract, see git history.

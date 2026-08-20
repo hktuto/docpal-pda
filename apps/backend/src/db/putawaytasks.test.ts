@@ -214,7 +214,7 @@ test("detail: sub-inventory-shelf fallback when the part has no stock history", 
     // seed: A-04-05 is the only sub-inventory-tagged shelf (STORE1)
     // brand-new part (no lots, no boxes anywhere)
     await client.db.execute(
-      sql`INSERT INTO parts (id, brand, part_no) VALUES ('test-part-new-1', 'DAITO', 'ZZZ-NEW-PART-1')`
+      sql`INSERT INTO parts (id, brand, part_no, wcl_item_no) VALUES ('test-part-new-1', 'DAITO', 'ZZZ-NEW-PART-1', 'WCL/ZZZ-NEW-PART-1')`
     );
     await upsertReceivingOrder(client.db, "04958211", {
       order: { supplierCode: "DAITO", deliveryDate: "2026-07-29", dateCode: "2610" },

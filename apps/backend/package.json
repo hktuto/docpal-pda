@@ -15,7 +15,6 @@
     "db:studio": "tsx node_modules/drizzle-kit/bin.cjs studio"
   },
   "dependencies": {
-    "@electric-sql/client": "^1.5.26",
     "@hono/node-server": "^2.0.8",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",

@@ -667,14 +667,16 @@ txn_at)`, `(inventory_lot_id, txn_at)`, `(part_no, txn_at)`, `txn_type`,
 
 ## sync_events
 
-Table-change feed for the external sync service (full contract + event
+Table-change feed for external sync services (full contract + event
 catalog: `docs/backend/event-catalog.md`). Rows are written by the
 `sync_events_notify()` trigger attached to every business table — never by
 application code — and only for changes committed by the backend's own
 Postgres role (`warehouse`); writes by the sync service's `warehouse_sync`
 role (or any other account) are skipped to break the circular-event loop, and
 seed/reset paths suppress the trigger via `SET LOCAL app.sync_events_off = 1`.
-Polled via `GET /sync-events?since=<id>`.
+Upstream sync apply transactions (`src/db/ingest.ts`) also suppress the
+trigger so upstream-originated writes do not echo back. Polled via
+`GET /sync-events?since=<id>`.
 
 | Field | Type | Description |
 | --- | --- | --- |

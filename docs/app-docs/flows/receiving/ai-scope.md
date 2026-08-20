@@ -74,10 +74,9 @@
   `POST .../confirm-arrival`, `POST .../scan` (with serial dedup), and the
   item-keyed mismatch CRUD: `GET|POST|PATCH
   /receiving-invoice-items/:id/mismatch`, `POST .../mismatch/confirm|cancel`.
-- `apps/backend/src/sync/consumer.ts` + `apps/backend/src/sync/orders.ts` +
-  `apps/backend/src/db/ingest.ts` — Electric sync consumer pulling
-  `demo.wms_receiving_*` from the DocPal master (replaced the retired
-  `PUT /receiving-orders/:batchNo` ingest route).
+- `apps/backend/src/db/ingest.ts` — reusable sync apply layer for upstream
+  receiving orders (replaced the retired `PUT /receiving-orders/:batchNo`
+  ingest route and the ElectricSQL consumer).
 - `apps/backend/src/db/allocate.ts` — `allocateAll` runs best-effort after
   confirm-arrival and other stock-changing commits.
 

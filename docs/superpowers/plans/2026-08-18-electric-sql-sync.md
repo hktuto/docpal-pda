@@ -1,4 +1,9 @@
-# ElectricSQL sync — implementation plan (2026-08-18)
+# ElectricSQL sync — implementation plan (2026-08-18) — RETIRED
+
+> **Retired 2026-08-20.** The ElectricSQL sync service, consumer, and
+> supporting DB artifacts were removed; this plan is no longer actionable.
+> Upstream sync is now performed by an external service. See
+> `docs/backend/api-design.md` §Upstream sync and `docs/backend/event-catalog.md`.
 
 Spec: `docs/superpowers/specs/2026-08-18-electric-sql-sync-design.md`
 (all decisions recorded there; this plan sequences the work).

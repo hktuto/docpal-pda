@@ -348,56 +348,39 @@ NULLS LAST`, `shelf_code`, `box_id`.
 Changes vs old: one query endpoint ends the 3-call cascade; location returned
 as fields (client formats labels — no server-side `location_label` string).
 
-## Upstream sync (Electric)
+## Upstream sync
 
-**The server-to-server ingest HTTP API was retired 2026-08-18** — the former
-request/response reference [`ingest-api.md`](./ingest-api.md) is now a
-tombstone. Upstream data no longer arrives over HTTP; the warehouse backend
-**pulls** it via ElectricSQL logical replication from the remote DocPal
-Postgres master (schema `demo`, `wms_*` tables).
+**The server-to-server ingest HTTP API was retired 2026-08-18**, and the
+ElectricSQL sync service was removed 2026-08-20. Upstream data no longer
+arrives over HTTP, nor is it pulled by an embedded Electric consumer. Instead,
+an external sync service is responsible for replicating master data and orders
+into the warehouse backend.
 
-- Self-hosted Electric service (`electricsql/electric:1.7.11`) in both compose
-  files: dev `docker compose --profile sync up -d electric` (needs
-  `DOCPAL_SYNC_DATABASE_URL`, API on host :3101); prod runs it in the same
-  compose project, internal-only. Electric auto-manages its own
-  publication/slot on the remote (stream id `warehouse`).
-- Consumer: `startElectricSync` in `apps/backend/src/sync/consumer.ts` (master
-  tables) + `src/sync/orders.ts` (order tables), wired in `src/server.ts`,
-  started only when `ELECTRIC_URL` is set and `ELECTRIC_SYNC != off`
-  (`ELECTRIC_SECRET` is passed as the `?secret=` shape param in prod). One
-  `ShapeStream` per synced table (`demo.wms_parts` → parts,
-  `demo.wms_suppliers` → suppliers, `demo.wms_org_info` → org_info,
-  `demo.wms_receiving_orders` / `wms_receiving_invoices` /
-  `wms_receiving_invoice_items`, `demo.wms_picking_orders` /
-  `wms_picking_items`; `supplier_profiles` is NOT synced — it stays
-  local-only), resuming from its `sync_checkpoints` row
-  (`src/db/schema/sync.ts`).
-- Apply layer: the former ingest domain functions in `src/db/ingest.ts`
-  (`upsertPart`/`deletePart`, `upsertSupplier`, guarded
-  `deleteReceivingOrder`/`deletePickingOrder`, …) — order rows apply per-row
-  keyed on the REMOTE id, adopted as the local PK. All apply transactions set
-  `app.sync_events_off = 1` AND `app.upstream_write = 1`
-  (`suppressSyncEvents`): synced writes stay out of the `sync_events` feed
-  (they are upstream-originated; recording them would loop DocPal's own
-  changes back) and pass the column-ownership triggers.
-- Column ownership is DB-enforced: `enforce_remote_owned_columns()` BEFORE
-  UPDATE triggers (custom SQL at the end of `drizzle/0000_baseline.sql`)
-  reject updates to remote-owned columns unless the writer is the
-  `wms_sync_consumer` role (the consumer's DB login; password env
-  `SYNC_CONSUMER_DB_PASSWORD`) or a transaction with `app.upstream_write = 1`.
-  INSERT/DELETE are unrestricted; `delivery_date`/`date_code` are deliberately
-  SHARED (the admin console edits them). Test fixtures use the `upstreamWrite`
-  helper in `src/db/test-helper.ts`.
-- Deletes: a remote delete of an in-flight order is rejected + skipped with a
-  loud log (the guarded deletes return 404/409 → warn-skip). After any applied
-  order-table change the consumer runs a best-effort `allocateAll`
-  (`flushAllocation`, once per batch).
+The backend exposes two integration surfaces for that service:
 
-Design spec: `docs/superpowers/specs/2026-08-18-electric-sql-sync-design.md`;
-plan: `docs/superpowers/plans/2026-08-18-electric-sql-sync.md`. Known caveats:
-the initial parts snapshot (~131k rows) applies row-by-row (~28 min one-time);
-NULL `receiving_invoice_items.sub_inventory_code` is defaulted by a rule Sean
-ships later (stub `applyItemSubInventoryDefault` warns today).
+1. **Outbound table-change feed** — `GET /sync-events?since=<id>&limit=<n>`
+   (`src/routes/sync-events.ts`) over the trigger-written `sync_events` table.
+   The external service polls this to learn what changed locally. Only writes
+   committed by the backend's own `warehouse` role are recorded; the service's
+   own `warehouse_sync` role writes are skipped, breaking the circular-event
+   loop. See `docs/backend/event-catalog.md` for the full contract.
+
+2. **Inbound apply layer** — the reusable domain functions in
+   `src/db/ingest.ts` (`upsertPart`/`deletePart`, `upsertSupplier`, guarded
+   `deleteReceivingOrder`/`deletePickingOrder`, …). They are idempotent,
+   keyed by natural keys, and run every transaction with
+   `app.sync_events_off = 1` (`suppressSyncEvents`) so upstream-originated
+   writes do not echo back into the outbound `sync_events` feed. The external
+   service can call these functions directly (same Node process) or reimplement
+   the same semantics. `supplier_profiles` is NOT synced — it stays local-only.
+
+There is no dedicated sync consumer in this repo anymore; the external service
+brings its own transport. The `warehouse_sync` DB role (password from
+`SYNC_DB_PASSWORD`, default `warehouse_sync`) is created idempotently for the
+service to write into the business tables.
+
+Known caveat: NULL `receiving_invoice_items.sub_inventory_code` is defaulted by
+a rule Sean ships later (stub `applyItemSubInventoryDefault` warns today).
 
 ## Dev
 

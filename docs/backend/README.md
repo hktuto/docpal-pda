@@ -312,25 +312,16 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     `shelfCode` exact, `supplierId` via lot sources → receiving order's
     supplier; zero-qty lots included (old `/stock-search/parts/lots`
     semantics).
-- Upstream sync — Electric consumer (`apps/backend/src/sync/consumer.ts` +
-  `src/sync/orders.ts`, wired in `src/server.ts`; the ingest HTTP API was
-  retired 2026-08-18, `src/routes/ingest.ts` deleted): pulls the 8 `demo.wms_*`
-  tables from the remote DocPal Postgres master through the self-hosted
-  Electric service (dev: `docker compose --profile sync up -d electric`, needs
-  `DOCPAL_SYNC_DATABASE_URL` in the root `.env`; prod: internal-only in the
-  same compose project). One `ShapeStream` per table resuming from its
-  `sync_checkpoints` row (`src/db/schema/sync.ts`), applying through the
-  `src/db/ingest.ts` domain functions (synced rows adopt the remote UUID id);
-  best-effort `allocateAll` after order-changing batches; remote deletes of
-  in-flight orders reuse the guarded deletes (404/409 → warn + skip). Runs
-  only when `ELECTRIC_URL` is set and `ELECTRIC_SYNC != off`
-  (`ELECTRIC_SECRET` as the `?secret=` shape param in prod); connects to the
-  local DB as the `wms_sync_consumer` role (`SYNC_CONSUMER_DB_PASSWORD`) and
-  sets `app.upstream_write = 1` in its apply transactions — the
-  `enforce_remote_owned_columns()` BEFORE UPDATE triggers reject local updates
-  to remote-owned columns (`delivery_date`/`date_code` stay shared for admin
-  edits). Spec:
-  `docs/superpowers/specs/2026-08-18-electric-sql-sync-design.md`.
+- Upstream sync — the ingest HTTP API was retired 2026-08-18 and the
+  ElectricSQL sync service was removed 2026-08-20. An external sync service
+  now replicates master data and orders into the backend, either by consuming
+  the outbound `GET /sync-events?since=` table-change feed
+  (`src/routes/sync-events.ts`, `src/db/sync-events.ts`) or by writing through
+  the reusable apply layer in `src/db/ingest.ts`. The apply transactions set
+  `app.sync_events_off = 1` so upstream-originated writes do not echo back
+  into `sync_events`. The `warehouse_sync` DB role (password from
+  `SYNC_DB_PASSWORD`) is available for the service to write into the business
+  tables.
 - `/admin/*` — master-data CRUD (see `apps/backend/src/routes/admin/`):
   generic CRUD for shelves (code/zone), suppliers, supplier-profiles
   (incl. `qrType`), parts (referenced by `partNo`, `supplierCode` required),
@@ -372,9 +363,9 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   `/picking-orders`, data `{shippingBoxId, shippedOrderIds, actorId}`),
   `picking.reordered` (priority reorder, emitted even
   when allocations did not change), `receiving_order.upserted` (from the
-  `src/db/ingest.ts` apply functions — the Electric consumer's per-row order
-  upserts emit no `app_events`; its guarded order deletes emit
-  `receiving_order.deleted` / `picking_order.deleted`),
+  `src/db/ingest.ts` apply functions — upstream sync per-row order upserts emit
+  no `app_events`; guarded order deletes emit `receiving_order.deleted` /
+  `picking_order.deleted`),
   `receiving.mismatch_reported` / `receiving.mismatch_updated` /
   `receiving.mismatch_confirmed` / `receiving.mismatch_cancelled`,
   `receiving_order.item_removed` (admin issue-item delete),
@@ -409,8 +400,8 @@ still apply when unset),
 `WAREHOUSE_SEED=off` to disable auto-seed, `WAREHOUSE_SEED_DEMO=1` to seed the
 full demo world (users/masters/demo orders — needed for local dev login). The
 default boot seed is reference data + shelves only: masters (parts, suppliers,
-org_info, customer profiles) and orders sync in from the DocPal master DB via
-Electric, and users come from DocPal auth.
+org_info, customer profiles), orders, and users arrive via upstream sync /
+DocPal auth.
 
 `pnpm --filter @warehouse/backend db:seed` wipes and re-seeds the demo dataset;
 `db:generate` / `db:migrate` manage migrations. A PM2 setup for a VM lives in

@@ -173,10 +173,9 @@
 - `apps/backend/src/db/allocate.ts` — allocation engine: demands in
   `priority_seq` order, skips work-locked orders, open qty = `qty − Σ
   picking_packages`.
-- `apps/backend/src/sync/consumer.ts` + `apps/backend/src/sync/orders.ts` +
-  `apps/backend/src/db/ingest.ts` — Electric sync consumer pulling
-  `demo.wms_picking_*` from the DocPal master (replaced the retired
-  `PUT /picking-orders/:id` ingest route); a synced order change triggers
+- `apps/backend/src/db/ingest.ts` — reusable sync apply layer for upstream
+  picking orders (replaced the retired `PUT /picking-orders/:id` ingest route
+  and the ElectricSQL consumer); a synced order change should trigger
   re-allocation.
 
 ## Known limitations
