@@ -8,9 +8,11 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
-    "nuxt": "^3.21.8"
+    "nuxt": "^3.21.8",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.5",
     "typescript": "^6.0.3",
     "vue-tsc": "^3.3.7"
   }

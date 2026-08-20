@@ -871,7 +871,8 @@ export default {
       shippingOrders: "出貨箱",
       stockSearch: "庫存查詢",
       appDownload: "App 下載",
-      flowConfig: "流程設定"
+      flowConfig: "流程設定",
+      userBadges: "用戶證件"
     },
     auth: {
       logout: "登出",
@@ -883,6 +884,21 @@ export default {
     },
     home: {
       title: "倉庫管理後台"
+    },
+    userBadges: {
+      title: "用戶證件",
+      username: "用戶名",
+      displayName: "顯示名稱",
+      groups: "用戶群組",
+      createBadge: "建立證件",
+      searchPlaceholder: "搜尋用戶…",
+      passwordTitle: "{user} 的證件",
+      passwordHint: "請輸入該用戶的密碼，以將其編碼到登入 QR code 中。",
+      passwordPlaceholder: "密碼",
+      generate: "建立證件",
+      badgeTitle: "證件預覽",
+      qrAlt: "登入 QR code",
+      print: "列印證件"
     },
     common: {
       refresh: "重新整理",

@@ -192,6 +192,7 @@ export const navSections: { title: string; links: { route: string; title: string
     links: [
       { route: "/flow-config", title: "admin.navLinks.flowConfig" },
       { route: "/app-download", title: "admin.navLinks.appDownload" },
+      { route: "/user-badges", title: "admin.navLinks.userBadges" },
     ],
   },
 ];

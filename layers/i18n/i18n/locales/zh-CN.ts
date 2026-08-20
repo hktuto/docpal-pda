@@ -871,7 +871,8 @@ export default {
       shippingOrders: "出货箱",
       stockSearch: "库存查询",
       appDownload: "应用下载",
-      flowConfig: "流程设置"
+      flowConfig: "流程设置",
+      userBadges: "用户工牌"
     },
     auth: {
       logout: "退出登录",
@@ -883,6 +884,21 @@ export default {
     },
     home: {
       title: "仓库管理后台"
+    },
+    userBadges: {
+      title: "用户工牌",
+      username: "用户名",
+      displayName: "显示名称",
+      groups: "用户组",
+      createBadge: "创建工牌",
+      searchPlaceholder: "搜索用户…",
+      passwordTitle: "{user} 的工牌",
+      passwordHint: "请输入该用户的密码，以将其编码到登录二维码中。",
+      passwordPlaceholder: "密码",
+      generate: "生成工牌",
+      badgeTitle: "工牌预览",
+      qrAlt: "登录二维码",
+      print: "打印工牌"
     },
     common: {
       refresh: "刷新",

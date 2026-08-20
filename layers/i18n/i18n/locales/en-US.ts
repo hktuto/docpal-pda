@@ -871,7 +871,8 @@ export default {
       shippingOrders: "Shipping Boxes",
       stockSearch: "Stock Search",
       appDownload: "App Download",
-      flowConfig: "Flow Config"
+      flowConfig: "Flow Config",
+      userBadges: "User Badges"
     },
     auth: {
       logout: "Logout",
@@ -883,6 +884,21 @@ export default {
     },
     home: {
       title: "Warehouse Admin"
+    },
+    userBadges: {
+      title: "User Badges",
+      username: "Username",
+      displayName: "Display name",
+      groups: "Groups",
+      createBadge: "Create badge",
+      searchPlaceholder: "Search users…",
+      passwordTitle: "Badge for {user}",
+      passwordHint: "Enter the user's password to encode it in the login QR code.",
+      passwordPlaceholder: "Password",
+      generate: "Generate badge",
+      badgeTitle: "Badge preview",
+      qrAlt: "Login QR code",
+      print: "Print badge"
     },
     common: {
       refresh: "Refresh",

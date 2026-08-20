@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { newId } from "../../db/id.js";
-import { eq, or, ilike } from "drizzle-orm";
+import { eq, or, ilike, sql } from "drizzle-orm";
+import { db } from "../../db.js";
 import {
   shelves,
   suppliers,
@@ -12,6 +13,7 @@ import {
   netWeightFormula,
 } from "../../db/schema/index.js";
 import { createCrudRouter, reqStr, optStr, reqInt, reqNum, optInt, optStrArray, optJson } from "./crud.js";
+import { queryAll } from "../../db/query.js";
 import { shelfBoxesRoute } from "./shelfBoxes.js";
 import { adminFlowEditsRoute } from "./flowEdits.js";
 import { adminSubInventoriesRoute } from "./subInventories.js";
@@ -226,3 +228,28 @@ adminRoute.route("/", adminIssuesRoute);
 
 // APK download (signed release APK published by `pnpm build:apk`).
 adminRoute.route("/", adminAppDownloadRoute);
+
+async function groupCodesOf(userId: string): Promise<string[]> {
+  const rows = await queryAll<{ groupCode: string }>(
+    db,
+    sql`SELECT group_code AS "groupCode" FROM user_group_members WHERE user_id = ${userId} ORDER BY group_code`
+  );
+  return rows.map((r) => r.groupCode);
+}
+
+// User list for the badge-printing page. Passwords are never returned.
+adminRoute.get("/users", async (c) => {
+  const rows = await queryAll<{ id: string; username: string; displayName: string }>(
+    db,
+    sql`SELECT id, username, display_name AS "displayName" FROM users ORDER BY username`
+  );
+  const users = await Promise.all(
+    rows.map(async (u) => ({
+      id: u.id,
+      username: u.username,
+      displayName: u.displayName,
+      groupCodes: await groupCodesOf(u.id),
+    }))
+  );
+  return c.json(users);
+});
