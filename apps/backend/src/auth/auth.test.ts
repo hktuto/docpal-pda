@@ -51,14 +51,14 @@ test("login: ok → {user, token} with group codes", async () => {
   const body = await res.json();
   assert.equal(body.user.username, "operator");
   assert.equal(body.user.displayName, "Demo Operator");
-  assert.deepEqual(body.user.groupCodes, ["operator"]);
+  assert.deepEqual(body.user.groupCodes, ["PDA Group"]);
   assert.equal(typeof body.token, "string");
   assert.ok(!("passwordHash" in body.user) && !("password" in body.user));
 
   const adminRes = await login("admin", "DocPalAdmin2026!");
   assert.equal(adminRes.status, 200);
   const adminBody = await adminRes.json();
-  assert.deepEqual(adminBody.user.groupCodes, ["admin", "operator"]);
+  assert.deepEqual(adminBody.user.groupCodes, ["PDA Group", "admin"]);
 });
 
 test("login: wrong password and unknown user → 401", async () => {
@@ -128,7 +128,7 @@ test("GET /auth/me returns the token user; 401 without a token", async () => {
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.username, "operator");
-  assert.deepEqual(body.groupCodes, ["operator"]);
+  assert.deepEqual(body.groupCodes, ["PDA Group"]);
 });
 
 // --- actor from token ---------------------------------------------------------
@@ -225,8 +225,8 @@ test("docpal login: happy path provisions the local user and maps groups to loca
   const body = await res.json();
   assert.equal(body.user.username, "chris");
   assert.equal(body.user.displayName, "Doc Pal");
-  // WMS_Admin_Group_(HK) → admin + operator; the dashboard group maps to nothing.
-  assert.deepEqual(body.user.groupCodes, ["admin", "operator"]);
+  // WMS_Admin_Group_(HK) → admin + PDA Group; the dashboard group maps to nothing.
+  assert.deepEqual(body.user.groupCodes, ["PDA Group", "admin"]);
 
   const row = await queryGet<{ passwordHash: string }>(
     client.db,
@@ -238,7 +238,7 @@ test("docpal login: happy path provisions the local user and maps groups to loca
     client.db,
     sql`SELECT group_code AS "groupCode" FROM user_group_members WHERE user_id = ${body.user.id} ORDER BY group_code`
   );
-  assert.deepEqual(memberships, [{ groupCode: "admin" }, { groupCode: "operator" }]);
+  assert.deepEqual(memberships, [{ groupCode: "PDA Group" }, { groupCode: "admin" }]);
 
   // /auth/me works off the provisioned row.
   const me = await app.request("/auth/me", { headers: { Authorization: `Bearer ${body.token}` } });
@@ -260,13 +260,13 @@ test("docpal login: second login keeps the id, refreshes name, replaces groups",
   const second = (await secondRes.json()).user;
   assert.equal(second.id, first.id);
   assert.equal(second.displayName, "Doc Lu");
-  assert.deepEqual(second.groupCodes, ["operator"]);
+  assert.deepEqual(second.groupCodes, ["PDA Group"]);
 
   const memberships = await queryAll<{ groupCode: string }>(
     client.db,
     sql`SELECT group_code AS "groupCode" FROM user_group_members WHERE user_id = ${first.id}`
   );
-  assert.deepEqual(memberships, [{ groupCode: "operator" }]);
+  assert.deepEqual(memberships, [{ groupCode: "PDA Group" }]);
 });
 
 test("docpal login: user with no mapped group gets 403", async (t) => {

@@ -87,7 +87,7 @@ async function loginViaDocpal(username: string, password: string): Promise<Login
       } else {
         await tx.execute(sql`INSERT INTO users (id, username, password_hash, display_name) VALUES (${userId}, ${profile.username}, '', ${profile.displayName})`);
       }
-      // Replace membership with the mapped local groups (admin/operator).
+      // Replace membership with the mapped local groups (admin / PDA Group).
       await tx.execute(sql`DELETE FROM user_group_members WHERE user_id = ${userId}`);
       for (const code of groupCodes) {
         await tx.execute(

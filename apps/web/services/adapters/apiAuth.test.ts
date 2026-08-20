@@ -45,14 +45,14 @@ const SESSION_USER = {
   id: 'u1',
   username: 'operator',
   displayName: 'Operator One',
-  groupCodes: ['operator'],
+  groupCodes: ['PDA Group'],
 };
 
 const EXPECTED_USER = {
   id: 'u1',
   username: 'operator',
   displayName: 'Operator One',
-  groupCodes: ['operator'],
+  groupCodes: ['PDA Group'],
   createdDate: null,
 };
 

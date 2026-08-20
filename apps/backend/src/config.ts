@@ -35,15 +35,15 @@ export const docpalFetchTimeoutMs = 10_000;
 // DocPal groupId → local group codes. DocPal has 1 group = 1 role and the
 // role carries the permissions (UAT credentials sheet): the API only returns
 // groups, so permissions are enforced through this mapping:
-//   Administrators Group → full control                    → admin + operator
-//   WMS Admin Group (HK) → WMS Admin: Full Access + PDA    → admin + operator
-//   WMS PDA Group (HK)   → PDA: Full Access                → operator
+//   Administrators Group → full control                    → admin + PDA Group
+//   WMS Admin Group (HK) → WMS Admin: Full Access + PDA    → admin + PDA Group
+//   WMS PDA Group (HK)   → PDA: Full Access                → PDA Group
 // Dashboard / email-notification groups (WMS Dashboard, MCI MCE, HK TH) map
 // to nothing; a user with no mapped group is rejected at login (403).
 export const docpalGroupMapping: Record<string, string[]> = {
-  administrators: ["admin", "operator"],
-  "WMS_Admin_Group_(HK)": ["admin", "operator"],
-  "WMS_PDA_Group_(HK)": ["operator"],
+  administrators: ["admin", "PDA Group"],
+  "WMS_Admin_Group_(HK)": ["admin", "PDA Group"],
+  "WMS_PDA_Group_(HK)": ["PDA Group"],
 };
 
 // ---------------------------------------------------------------------------

@@ -273,15 +273,15 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
   ]);
 
   await db.insert(userGroups).values([
-    { id: uid(30), code: "operator", label: "Operator" },
+    { id: uid(30), code: "PDA Group", label: "PDA Group" },
     { id: uid(31), code: "admin", label: "Administrator" },
   ]);
 
-  // operator → operator; admin → admin + operator (many-to-many demo).
+  // operator → PDA Group; admin → admin + PDA Group (many-to-many demo).
   await db.insert(userGroupMembers).values([
-    { id: uid(32), userId: uid(1), groupCode: "operator" },
+    { id: uid(32), userId: uid(1), groupCode: "PDA Group" },
     { id: uid(33), userId: uid(2), groupCode: "admin" },
-    { id: uid(34), userId: uid(2), groupCode: "operator" },
+    { id: uid(34), userId: uid(2), groupCode: "PDA Group" },
   ]);
 
   await db.insert(suppliers).values([

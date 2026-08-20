@@ -53,14 +53,14 @@ local group codes:
 
 | DocPal group | DocPal permissions | Local codes |
 |---|---|---|
-| `administrators` (Administrators Group) | full control | `admin`, `operator` |
-| `WMS_Admin_Group_(HK)` | WMS Admin: Full Access + PDA | `admin`, `operator` |
-| `WMS_PDA_Group_(HK)` | PDA: Full Access | `operator` |
+| `administrators` (Administrators Group) | full control | `admin`, `PDA Group` |
+| `WMS_Admin_Group_(HK)` | WMS Admin: Full Access + PDA | `admin`, `PDA Group` |
+| `WMS_PDA_Group_(HK)` | PDA: Full Access | `PDA Group` |
 | `WMS_Dashboard_Group_(HK)`, `MCI_MCE_Group_(HK)`, `HK_TH_Group_(HK)` | dashboard / email only | — (none) |
 
 The mapped local codes become the token's `groupCodes`; the user's
 `user_group_members` is *replaced* with them on every login (`admin`/
-`operator` `user_groups` rows are upserted as needed). A user whose DocPal
+`PDA Group` `user_groups` rows are upserted as needed). A user whose DocPal
 groups map to nothing is rejected at login with **403 `user has no WMS
 access`** — no token, no local row — because our JWT would otherwise grant
 API access to dashboard-only users.
