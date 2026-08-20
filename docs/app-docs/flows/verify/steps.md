@@ -4,9 +4,13 @@
 
 From the home screen, tap **Verify**. The list shows the boxes with a pending verify task (one task per box, created when the box was closed).
 
+![Verify list](./assets/verify-list.png)
+
 ## 2. Select a box
 
 Tap the box to open its page. The page shows the box's packages with their re-scan progress and recorded measurements — a box may hold packages from several picking orders.
+
+![Verify box page](./assets/verify-box.png)
 
 ## 3. Reopen the box if it needs correction
 
