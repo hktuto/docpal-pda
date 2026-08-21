@@ -67,12 +67,12 @@ export async function logDocpalConnectivity(): Promise<void> {
   }
 }
 
-/** POST /auth/login against DocPal → access_token. */
+/** POST /apis/v1/ucenter/auth/login against DocPal → access_token. */
 export async function docpalLogin(username: string, password: string): Promise<string> {
-  const res = await docpalFetch("/auth/login", {
+  const res = await docpalFetch("/apis/v1/ucenter/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password, serviceId: "docpal", rememberMe: true }),
   });
   if (res.status === 401 || res.status === 403) {
     throw new DocpalAuthError(401, "invalid credentials");
@@ -96,9 +96,9 @@ export async function docpalLogin(username: string, password: string): Promise<s
   return token;
 }
 
-/** GET /dms/user/getApplication → normalized profile. */
+/** GET /apis/v1/ucenter/users/application → normalized profile. */
 export async function docpalGetUser(accessToken: string): Promise<DocpalUser> {
-  const res = await docpalFetch("/dms/user/getApplication", {
+  const res = await docpalFetch("/apis/v1/ucenter/users/application", {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
   if (res.status === 401 || res.status === 403) {
@@ -128,9 +128,11 @@ export async function docpalGetUser(accessToken: string): Promise<DocpalUser> {
     );
     throw new DocpalAuthError(502, "DocPal getApplication returned an unexpected response");
   }
+  // The new ucenter API returns the display name in `username`; the login
+  // identity lives in `userId`, so prefer it for the local users row.
   const username =
-    (typeof data.username === "string" && data.username) ||
     (typeof data.userId === "string" && data.userId) ||
+    (typeof data.username === "string" && data.username) ||
     "";
   if (!username) throw new DocpalAuthError(502, "DocPal profile has no username");
   const name = [data.firstName, data.lastName]

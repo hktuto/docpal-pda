@@ -14,10 +14,13 @@ used only inside the login call and never leave it.
 
 ```
 PDA/admin → POST /auth/login {username, password}
-  backend → POST {DOCPAL_URL}/auth/login           → {access_token, ...}
-  backend → GET  {DOCPAL_URL}/dms/user/getApplication (Bearer access_token)
-          → {code: 200, result: true, data: {username, firstName, lastName,
+  backend → POST {DOCPAL_URL}/apis/v1/ucenter/auth/login
+               {username, password, serviceId: "docpal", rememberMe: true}
+           → {code: 200, result: true, data: {access_token, refresh_token, ...}}
+  backend → GET  {DOCPAL_URL}/apis/v1/ucenter/users/application (Bearer access_token)
+          → {code: 200, result: true, data: {userId, firstName, lastName,
                aclUserDetail: {groups: [{groupId, groupName}]}}}
+             (login identity = data.userId; data.username is the display name)
   backend upserts local users row + syncs groups (one transaction)
   backend signs its own JWT → {user, token} (response shape unchanged)
 ```

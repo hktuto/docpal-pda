@@ -178,17 +178,22 @@ function startFakeDocpal(): Promise<{ server: Server; url: string }> {
       res.writeHead(status, { "Content-Type": "application/json" });
       res.end(JSON.stringify(body));
     };
-    if (req.method === "POST" && req.url === "/auth/login") {
+    if (req.method === "POST" && req.url === "/apis/v1/ucenter/auth/login") {
       let raw = "";
       req.on("data", (c) => (raw += c));
       req.on("end", () => {
         const body = JSON.parse(raw || "{}");
         if (body.password !== fakeState.password) return json(401, { message: "bad credentials" });
-        json(200, { access_token: `tok-${body.username}`, refresh_token: "r1" });
+        json(200, {
+          result: true,
+          code: 200,
+          message: "success",
+          data: { access_token: `tok-${body.username}`, refresh_token: "r1" },
+        });
       });
       return;
     }
-    if (req.method === "GET" && req.url === "/dms/user/getApplication") {
+    if (req.method === "GET" && req.url === "/apis/v1/ucenter/users/application") {
       const username = (req.headers.authorization ?? "").replace("Bearer tok-", "");
       if (!req.headers.authorization?.startsWith("Bearer tok-")) return json(401, { message: "unauthorized" });
       return json(200, {
@@ -196,7 +201,8 @@ function startFakeDocpal(): Promise<{ server: Server; url: string }> {
         result: true,
         message: "success",
         data: {
-          username,
+          username: username.charAt(0).toUpperCase() + username.slice(1),
+          userId: username,
           firstName: "Doc",
           lastName: fakeState.lastName,
           aclUserDetail: { groups: fakeState.groups },
