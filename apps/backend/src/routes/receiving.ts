@@ -219,7 +219,7 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
         p.description AS "partDescription"
       FROM receiving_invoice_items rii
       JOIN receiving_invoices inv ON inv.id = rii.receiving_invoice_id
-      JOIN parts p ON p.part_no = rii.part_no
+      JOIN parts p ON p.wcl_item_no = rii.wcl_item_no
       WHERE inv.receiving_order_id = ${id}
       ORDER BY rii.po_no, rii.po_line, rii.id
     `
@@ -326,6 +326,7 @@ interface PickingDemandRow {
   customerCode: string | null;
   itemId: string;
   partNo: string;
+  wclItemNo: string | null;
   itemQty: number;
   pickedQty: number;
   allocatedQty: number;
@@ -393,10 +394,11 @@ receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
       SELECT
         po.id AS "orderId", po.order_no AS "orderNo", po.status,
         po.ship_to AS "shipTo", po.customer_code AS "customerCode",
-        pi.id AS "itemId", pi.part_no AS "partNo",
+        pi.id AS "itemId", pi.part_no AS "partNo", p.wcl_item_no AS "wclItemNo",
         pi.qty AS "itemQty", pi.picked_qty AS "pickedQty", pi.allocated_qty AS "allocatedQty"
       FROM picking_items pi
       JOIN picking_orders po ON po.id = pi.picking_order_id
+      LEFT JOIN parts p ON p.wcl_item_no = pi.part_no
       WHERE EXISTS (
         SELECT 1 FROM allocations a
         LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
@@ -525,6 +527,7 @@ receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
     o.items.push({
       id: r.itemId,
       partNo: r.partNo,
+      wclItemNo: r.wclItemNo,
       qty: r.itemQty,
       pickedQty: r.pickedQty,
       allocatedQty: r.allocatedQty,

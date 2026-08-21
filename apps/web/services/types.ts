@@ -169,6 +169,7 @@ export interface ReceivingPickingOrder {
 export interface ReceivingPickingItem {
   id: string;
   partNo: string;
+  wclItemNo: string | null;
   qty: number;
   pickedQty: number;
   allocatedQty: number;
@@ -498,6 +499,7 @@ export interface PutAwayExpectedItem {
   /** Receiving invoice item id. */
   id: string;
   partNo: string;
+  wclItemNo: string | null;
   /** Expected qty; null = unknown upstream. */
   lineQty: number | null;
   receivedQty: number;
@@ -523,6 +525,7 @@ export interface PutAwayExpectedItem {
 export interface PutAwayLot {
   id: string;
   partNo: string;
+  wclItemNo: string | null;
   dateCode: string | null;
   lotCode: string | null;
   coo: string | null;
@@ -539,6 +542,7 @@ export interface PutAwayScan {
   id: string;
   receivingInvoiceItemId: string | null;
   partNo: string;
+  wclItemNo: string | null;
   qty: number;
   dateCode: string | null;
   lotCode: string | null;
@@ -550,6 +554,7 @@ export interface PutAwayBoxItem {
   id: string;
   receivingInvoiceItemId: string | null;
   partNo: string;
+  wclItemNo: string | null;
   qty: number;
   verified: boolean | null;
   verifiedAt: string | null;
@@ -756,6 +761,7 @@ export interface GoodsVerifyTaskFilters {
 export interface GoodsVerifyBoxItem {
   id: string;
   partNo: string;
+  wclItemNo: string | null;
   qty: number;
   verified: boolean | null;
   verifiedAt: string | null;
@@ -815,6 +821,7 @@ export interface StockSearchPart {
 
 export interface StockSearchLot {
   partNo: string;
+  wclItemNo: string | null;
   dateCode: string | null;
   lotCode: string | null;
   coo: string | null;

@@ -133,7 +133,7 @@ export async function getVerifyTaskDetail(db: AppDb, taskId: string): Promise<Ve
         nwf.weight AS "formulaWeight", nwf.qty AS "formulaQty"
       FROM picking_packages pp
       JOIN picking_items pi ON pi.id = pp.picking_item_id
-      JOIN parts p ON p.part_no = pi.part_no
+      JOIN parts p ON p.wcl_item_no = pi.part_no
       LEFT JOIN net_weight_formula nwf ON nwf.part_no = pi.part_no
       WHERE pp.shipping_box_id = ${task.shippingBoxId}
       ORDER BY pp.created_date, pp.id

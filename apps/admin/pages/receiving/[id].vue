@@ -302,7 +302,7 @@ onMounted(load);
             <tbody>
               <tr v-for="item in inv.items" :key="item.id">
                 <td class="wrap">
-                  {{ item.partNo }}<span v-if="item.wclItemNo" class="muted"> ({{ item.wclItemNo }})</span>
+                  {{ item.wclItemNo ?? item.partNo }}
                   <div v-if="item.mismatch" class="mismatch-line">
                     {{ $t("admin.pages.receiving.mismatch") }}: {{ item.mismatch.reason ?? "—"
                     }}<template v-if="item.mismatch.mismatchQty != null"> × {{ item.mismatch.mismatchQty }}</template

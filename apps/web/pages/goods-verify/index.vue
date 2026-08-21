@@ -36,7 +36,7 @@
       class="card list-card"
     >
       <div class="list-card__header">
-        <span class="list-card__title">{{ task.partNo }}</span>
+        <span class="list-card__title">{{ task.wclItemNo ?? task.partNo }}</span>
         <span class="badge" :class="badgeClass(task.status)">{{ statusLabel.goodsVerify(task.status) }}</span>
       </div>
       <p class="list-card__meta">
@@ -110,7 +110,8 @@ const rows = computed(() => {
     (r) =>
       (r.shelfCode?.toLowerCase().includes(term) ?? false) ||
       (r.boxId?.toLowerCase().includes(term) ?? false) ||
-      r.partNo.toLowerCase().includes(term)
+      r.partNo.toLowerCase().includes(term) ||
+      (r.wclItemNo?.toLowerCase().includes(term) ?? false)
   );
 });
 

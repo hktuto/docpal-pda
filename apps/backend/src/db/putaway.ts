@@ -318,6 +318,7 @@ export async function listPutAwayCandidates(db: AppDb): Promise<PutAwayCandidate
 export interface PutAwayLotRow {
   id: string;
   partNo: string;
+  wclItemNo: string | null;
   dateCode: string | null;
   lotCode: string | null;
   coo: string | null;
@@ -335,6 +336,7 @@ export interface PutAwayScanRow {
   id: string;
   receivingInvoiceItemId: string | null;
   partNo: string;
+  wclItemNo: string | null;
   qty: number;
   dateCode: string | null;
   lotCode: string | null;
@@ -346,6 +348,7 @@ export interface PutAwayBoxItemRow {
   id: string;
   receivingInvoiceItemId: string | null;
   partNo: string;
+  wclItemNo: string | null;
   qty: number;
   verified: boolean | null;
   verifiedAt: Date | null;
@@ -356,6 +359,7 @@ export type PutAwaySuggestionReason = "same-part-box" | "same-part-stock" | "sub
 export interface PutAwayExpectedItemRow {
   id: string;
   partNo: string;
+  wclItemNo: string | null;
   lineQty: number | null;
   receivedQty: number;
   pickedQty: number;
@@ -408,6 +412,7 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
     sql`
       SELECT DISTINCT
         il.id, il.part_no AS "partNo",
+        COALESCE(il.wcl_item_no, rii.wcl_item_no) AS "wclItemNo",
         il.date_code AS "dateCode", il.lot_code AS "lotCode", il.coo, il.cow,
         il.shelf_code AS "shelfCode", il.box_id AS "boxId",
         il.org_id AS "orgId", il.sub_inventory_code AS "subInventoryCode",
@@ -430,7 +435,7 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
     db,
     sql`
       SELECT
-        rii.id, rii.part_no AS "partNo",
+        rii.id, rii.part_no AS "partNo", rii.wcl_item_no AS "wclItemNo",
         rii.line_qty AS "lineQty", rii.received_qty AS "receivedQty", rii.picked_qty AS "pickedQty",
         rii.put_away_qty AS "putAwayQty",
         COALESCE(alloc.qty, 0)::int AS "allocatedQty",
@@ -482,7 +487,7 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
     sql`
       SELECT
         sbi.id, sbi.receiving_invoice_item_id AS "receivingInvoiceItemId",
-        sbi.part_no AS "partNo", sbi.qty,
+        sbi.part_no AS "partNo", COALESCE(sbi.wcl_item_no, rii.wcl_item_no) AS "wclItemNo", sbi.qty,
         rii.date_code AS "dateCode", rii.lot_code AS "lotCode", rii.coo, rii.cow
       FROM shelf_box_items sbi
       JOIN shelf_boxes sb ON sb.id = sbi.shelf_box_id
@@ -526,9 +531,10 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
           SELECT
             sbi.id, sbi.shelf_box_id AS "shelfBoxId",
             sbi.receiving_invoice_item_id AS "receivingInvoiceItemId",
-            sbi.part_no AS "partNo", sbi.qty,
+            sbi.part_no AS "partNo", COALESCE(sbi.wcl_item_no, rii.wcl_item_no) AS "wclItemNo", sbi.qty,
             sbi.verified, sbi.verified_at AS "verifiedAt"
           FROM shelf_box_items sbi
+          LEFT JOIN receiving_invoice_items rii ON rii.id = sbi.receiving_invoice_item_id
           WHERE ${inArray(sql`sbi.shelf_box_id`, boxIds)}
           ORDER BY sbi.id
         `

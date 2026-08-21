@@ -10,7 +10,7 @@
       class="card"
     >
       <DetailRow :label="$t('putAway.lotsPanel.part')">
-        <span class="card__title">{{ item.partNo || $t('common.noData') }}</span>
+        <span class="card__title">{{ (item.wclItemNo ?? item.partNo) || $t('common.noData') }}</span>
       </DetailRow>
       <DetailRow :label="$t('putAway.lotsPanel.dateLot')">
         <span>{{ item.dateCode || $t('common.noData') }} / {{ item.lotCode || $t('common.noData') }}</span>

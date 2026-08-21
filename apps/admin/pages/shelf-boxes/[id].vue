@@ -65,7 +65,7 @@ onMounted(async () => {
           </thead>
           <tbody>
             <tr v-for="item in box.items" :key="item.id">
-              <td>{{ item.partNo }}</td>
+              <td>{{ item.wclItemNo ?? item.partNo }}</td>
               <td>{{ item.qty }}</td>
               <td>{{ formatCell(item.verified) }}</td>
               <td>{{ formatCell(item.verifiedAt) }}</td>

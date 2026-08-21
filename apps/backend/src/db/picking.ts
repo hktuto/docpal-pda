@@ -778,7 +778,7 @@ export async function getPickingOrderDetail(db: AppDb, orderId: string): Promise
         pi.line_id AS "lineId", pi.line_number AS "lineNumber",
         pi.shipment_number AS "shipmentNumber", pi.status
       FROM picking_items pi
-      JOIN parts p ON p.part_no = pi.part_no
+      JOIN parts p ON p.wcl_item_no = pi.part_no
       WHERE pi.picking_order_id = ${orderId}
       ORDER BY pi.created_date, pi.id
     `
@@ -1177,7 +1177,7 @@ export async function scanIntoShippingBox(
                (pi.qty - COALESCE(pkg.qty, 0))::int AS "openQty"
         FROM picking_items pi
         JOIN picking_orders po ON po.id = pi.picking_order_id
-        LEFT JOIN parts p ON p.part_no = pi.part_no
+        LEFT JOIN parts p ON p.wcl_item_no = pi.part_no
         JOIN allocations a ON a.picking_item_id = pi.id AND a.qty > 0
         LEFT JOIN (
           SELECT picking_item_id, SUM(qty)::int AS qty

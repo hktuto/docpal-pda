@@ -162,6 +162,7 @@ export interface StockSearchPart {
 
 export interface StockSearchLot {
   partNo: string;
+  wclItemNo: string | null;
   dateCode: string | null;
   lotCode: string | null;
   coo: string | null;
@@ -189,6 +190,7 @@ export interface MismatchListRow {
   invoiceId: string;
   invoiceNo: string;
   partNo: string;
+  wclItemNo: string | null;
   supplierCode: string | null;
   reason: string | null;
   mismatchQty: number | null;

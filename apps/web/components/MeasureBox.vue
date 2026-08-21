@@ -49,7 +49,7 @@
           </thead>
           <tbody>
             <tr v-for="pkg in packages" :key="pkg.id">
-              <td>{{ pkg.partNo }}</td>
+              <td>{{ pkg.wclItemNo ?? pkg.partNo }}</td>
               <td>{{ pkg.qty }}</td>
               <td>{{ pkg.dateCode || $t('common.noData') }} / {{ pkg.lotCode || $t('common.noData') }} / {{ pkg.coo || $t('common.noData') }} / {{ pkg.cow || $t('common.noData') }}</td>
               <td>

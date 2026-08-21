@@ -122,7 +122,7 @@ export async function getShippingOrderDetail(db: AppDb, boxId: string): Promise<
         pi.part_no AS "partNo", p.wcl_item_no AS "wclItemNo"
       FROM picking_packages pp
       JOIN picking_items pi ON pi.id = pp.picking_item_id
-      JOIN parts p ON p.part_no = pi.part_no
+      JOIN parts p ON p.wcl_item_no = pi.part_no
       WHERE pp.shipping_box_id = ${boxId}
       ORDER BY pp.created_date, pp.id
     `

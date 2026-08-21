@@ -40,6 +40,8 @@ export interface StockSearchPartRow {
 
 export interface StockSearchLotRow {
   partNo: string;
+  /** The part's WCL item no (via the parts join) — primary display key. */
+  wclItemNo: string | null;
   dateCode: string | null;
   lotCode: string | null;
   coo: string | null;
@@ -62,7 +64,6 @@ export interface StockSearchResult {
 /** Lot row joined with its part's identity fields (part fields stitched away in TS). */
 interface LotJoinRow extends StockSearchLotRow {
   partPk: string;
-  wclItemNo: string | null;
   description: string | null;
 }
 
@@ -117,12 +118,12 @@ export async function searchStock(db: AppDb, filters: StockSearchFilters): Promi
   const partIndexById = new Map<string, number>();
   const lots: StockSearchLotRow[] = [];
   for (const row of rows) {
-    const { partPk, wclItemNo, description, ...lot } = row;
+    const { partPk, description, ...lot } = row;
     lots.push(lot);
     const idx = partIndexById.get(partPk);
     if (idx === undefined) {
       partIndexById.set(partPk, parts.length);
-      parts.push({ id: partPk, partNo: row.partNo, wclItemNo, description, onHandQty: row.totalQty });
+      parts.push({ id: partPk, partNo: row.partNo, wclItemNo: row.wclItemNo, description, onHandQty: row.totalQty });
     } else {
       parts[idx].onHandQty += row.totalQty;
     }

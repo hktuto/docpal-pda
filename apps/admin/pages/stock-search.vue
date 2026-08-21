@@ -71,16 +71,16 @@ onMounted(loadSuppliers);
         <table class="data">
           <thead>
             <tr>
-              <th>{{ $t("admin.pages.stockSearch.partNo") }}</th>
               <th>{{ $t("admin.pages.stockSearch.wclItemNo") }}</th>
+              <th>{{ $t("admin.pages.stockSearch.partNo") }}</th>
               <th>{{ $t("admin.pages.stockSearch.description") }}</th>
               <th>{{ $t("admin.pages.stockSearch.onHandQty") }}</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="p in result.parts" :key="p.id">
+              <td>{{ p.wclItemNo ?? p.partNo }}</td>
               <td>{{ p.partNo }}</td>
-              <td>{{ p.wclItemNo ?? "—" }}</td>
               <td class="wrap">{{ p.description ?? "—" }}</td>
               <td>{{ p.onHandQty }}</td>
             </tr>
@@ -109,7 +109,7 @@ onMounted(loadSuppliers);
           </thead>
           <tbody>
             <tr v-for="(l, i) in result.lots" :key="i">
-              <td>{{ l.partNo }}</td>
+              <td>{{ l.wclItemNo ?? l.partNo }}</td>
               <td>{{ l.dateCode ?? "—" }}</td>
               <td>{{ l.lotCode ?? "—" }}</td>
               <td>{{ l.shelfCode ?? "—" }}</td>

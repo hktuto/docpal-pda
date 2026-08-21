@@ -8,7 +8,7 @@
     :class="{ 'card--done': item.pickedQty >= item.qty }"
   >
     <DetailRow :label="$t('picking.itemsSection.part')">
-      <span class="card__title">{{ item.partNo || $t('common.noData') }}</span>
+      <span class="card__title">{{ (item.wclItemNo ?? item.partNo) || $t('common.noData') }}</span>
     </DetailRow>
     <DetailRow :label="$t('picking.itemsSection.line')" :value="`${item.lineNumber ?? '—'} (${$t('picking.itemsSection.shipment')} ${item.shipmentNumber ?? '—'})`" />
     <DetailRow :label="$t('picking.itemsSection.requiredQty')" :value="item.qty" />

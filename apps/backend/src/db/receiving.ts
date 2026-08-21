@@ -257,7 +257,7 @@ export async function scanReceivingOrder(
                  rii.coo, rii.cow
           FROM receiving_invoice_items rii
           JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-          JOIN parts p ON p.part_no = rii.part_no
+          JOIN parts p ON p.wcl_item_no = rii.wcl_item_no
           WHERE ri.receiving_order_id = ${orderId}
           ORDER BY rii.po_no, rii.po_line, rii.id`
     );
@@ -581,6 +581,7 @@ export interface ReceivingMismatchRow {
   invoiceId: string;
   invoiceNo: string;
   partNo: string;
+  wclItemNo: string | null;
   supplierCode: string | null;
   reason: string | null;
   mismatchQty: number | null;
@@ -600,6 +601,7 @@ export async function listReceivingMismatches(db: AppDb): Promise<ReceivingMisma
                ri.id AS "invoiceId",
                ri.invoice_no AS "invoiceNo",
                rii.part_no AS "partNo",
+               rii.wcl_item_no AS "wclItemNo",
                COALESCE(ri.supplier_code, ro.supplier_code) AS "supplierCode",
                rii.mismatch_reason AS "reason",
                rii.mismatch_qty AS "mismatchQty",

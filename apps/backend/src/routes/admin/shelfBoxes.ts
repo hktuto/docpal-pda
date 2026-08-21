@@ -98,11 +98,13 @@ shelfBoxesRoute.get("/:id", async (c) => {
     db,
     sql`SELECT sbi.id,
                sbi.part_no                 AS "partNo",
+               COALESCE(sbi.wcl_item_no, rii.wcl_item_no) AS "wclItemNo",
                sbi.qty,
                sbi.verified,
                sbi.verified_at             AS "verifiedAt",
                sbi.receiving_invoice_item_id AS "receivingInvoiceItemId"
         FROM shelf_box_items sbi
+        LEFT JOIN receiving_invoice_items rii ON rii.id = sbi.receiving_invoice_item_id
         WHERE sbi.shelf_box_id = ${id}
         ORDER BY sbi.part_no`
   );

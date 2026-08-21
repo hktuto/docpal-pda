@@ -51,7 +51,7 @@
 
       <div v-for="part in parts" :key="part.id" class="part-item">
         <div class="part-item__header">
-          <strong>{{ part.partNo }}</strong>
+          <strong>{{ part.wclItemNo ?? part.partNo }}</strong>
           <span class="part-item__qty">{{ $t('stockSearch.onHand', { qty: part.onHandQty }) }}</span>
         </div>
 

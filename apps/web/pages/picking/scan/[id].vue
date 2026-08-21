@@ -33,7 +33,7 @@
           <div v-for="item in order.items" :key="item.id" class="scan-session__progress-row">
             <span class="scan-session__part">
               <span class="scan-session__line">L{{ item.lineNumber ?? '—' }}/S{{ item.shipmentNumber ?? '—' }}</span>
-              {{ item.partNo }}
+              {{ item.wclItemNo ?? item.partNo }}
               <span v-if="allocationSources(item)" class="scan-session__sources">
                 {{ allocationSources(item) }}
               </span>
@@ -68,7 +68,7 @@
               :class="{ 'scan-session__row--failed': row.status === 'failed' }"
             >
               <td>{{ displayRows.length - index }}</td>
-              <td>{{ row.partNo }}</td>
+              <td>{{ row.wclItemNo ?? row.partNo }}</td>
               <td>{{ row.qty }}</td>
               <td>{{ row.lotCode || $t('common.stateNone') }} / {{ row.dateCode || $t('common.stateNone') }}</td>
               <td>{{ row.source === 'mixed' ? 'QR/OCR' : row.source === 'ocr' ? 'OCR' : 'QR' }}</td>
@@ -182,6 +182,7 @@ interface DisplayRow {
   key: string;
   keys: string[];
   partNo: string;
+  wclItemNo: string | null;
   qty: number;
   lotCode: string | null;
   dateCode: string | null;
@@ -208,6 +209,7 @@ const displayRows = computed<DisplayRow[]>(() => {
         key: row.key,
         keys: [row.key],
         partNo: row.partNo,
+        wclItemNo: orderItems.value.find((i) => i.id === row.itemId)?.wclItemNo ?? null,
         qty: row.qty,
         lotCode: row.lotCode,
         dateCode: row.dateCode,
@@ -294,6 +296,7 @@ const boxPickEntries = computed<PickFromBoxEntry[]>(() => {
     lineNumber: item.lineNumber,
     shipmentNumber: item.shipmentNumber,
     partNo: item.partNo,
+    wclItemNo: item.wclItemNo,
     lotCode: allocation.lot?.lotCode ?? null,
     dateCode: allocation.lot?.dateCode ?? null,
     required: allocation.qty,

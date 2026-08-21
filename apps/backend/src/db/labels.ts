@@ -232,7 +232,7 @@ export async function getLabelsData(db: DbOrTx): Promise<LabelsData> {
         JOIN picking_orders po ON po.id = pi.picking_order_id
         LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
         LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
-        LEFT JOIN parts p ON p.part_no = pi.part_no
+        LEFT JOIN parts p ON p.wcl_item_no = pi.part_no
         WHERE po.status IN ('pending', 'picking') AND a.qty > 0
         ORDER BY po.priority_seq, po.order_no, pi.line_number NULLS LAST, a.id`
   );

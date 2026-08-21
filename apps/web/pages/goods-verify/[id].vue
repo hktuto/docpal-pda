@@ -6,7 +6,7 @@
     <template v-else-if="detail">
       <DetailHeader
         v-model="headerExpanded"
-        :title="detail.task.partNo"
+        :title="detail.task.wclItemNo ?? detail.task.partNo"
         :status="detail.task.status"
         :label="statusLabel.goodsVerify(detail.task.status)"
         :badge-class="badgeClass(detail.task.status)"
@@ -33,8 +33,7 @@
       <div class="card" style="margin-bottom: 1.5rem;">
         <DetailRow :label="$t('goodsVerify.detail.part')">
           <span>
-            {{ detail.task.partNo }}
-            <template v-if="detail.task.wclItemNo"> · {{ detail.task.wclItemNo }}</template>
+            {{ detail.task.wclItemNo ?? detail.task.partNo }}
           </span>
         </DetailRow>
         <DetailRow
@@ -73,7 +72,7 @@
           class="card"
           :class="{ 'card--done': item.verified }"
         >
-          <DetailRow :label="$t('goodsVerify.detail.part')" :value="item.partNo" />
+          <DetailRow :label="$t('goodsVerify.detail.part')" :value="item.wclItemNo ?? item.partNo" />
           <DetailRow :label="$t('goodsVerify.detail.qty')" :value="item.qty" />
           <DetailRow :label="$t('goodsVerify.detail.itemVerified')">
             <span class="badge" :class="badgeClass(item.verified ? 'verified' : 'pending')">

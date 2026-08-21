@@ -62,7 +62,7 @@
     </div>
 
     <div v-for="pi in po.items" :key="pi.id" class="lot" style="margin-top: 0.75rem;">
-      <DetailRow :label="$t('receiving.itemsTab.part')" :value="pi.partNo" />
+      <DetailRow :label="$t('receiving.itemsTab.part')" :value="pi.wclItemNo ?? pi.partNo" />
       <DetailRow :label="$t('receiving.pickingTab.requiredScannedBoxed')" :value="`${pi.qty} / ${scannedQty(pi)} / ${boxedQty(pi)}`" />
       <DetailRow :label="$t('receiving.pickingTab.status')">
         <span

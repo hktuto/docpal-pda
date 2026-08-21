@@ -80,7 +80,7 @@ onMounted(load);
           >
             <td>{{ r.batchNo }}</td>
             <td>{{ r.invoiceNo }}</td>
-            <td>{{ r.partNo }}</td>
+            <td>{{ r.wclItemNo ?? r.partNo }}</td>
             <td>{{ r.supplierCode ?? "—" }}</td>
             <td>{{ r.reason ?? "—" }}</td>
             <td>{{ r.mismatchQty ?? "—" }}</td>

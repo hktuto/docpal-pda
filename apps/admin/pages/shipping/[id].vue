@@ -108,7 +108,7 @@ onMounted(async () => {
           </thead>
           <tbody>
             <tr v-for="p in detail.packages" :key="p.id">
-              <td>{{ p.partNo }}<span v-if="p.wclItemNo" class="muted"> ({{ p.wclItemNo }})</span></td>
+              <td>{{ p.wclItemNo ?? p.partNo }}</td>
               <td>{{ p.qty }}</td>
               <td>{{ p.dateCode ?? "—" }}</td>
               <td>{{ p.lotCode ?? "—" }}</td>

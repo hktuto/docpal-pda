@@ -14,7 +14,7 @@
       class="card"
     >
       <DetailRow :label="$t('receiving.itemsTab.part')">
-        <span class="card__title">{{ item.partNo }}</span>
+        <span class="card__title">{{ item.wclItemNo ?? item.partNo }}</span>
       </DetailRow>
 
       <DetailRow :label="$t('receiving.itemsTab.expected')" :value="item.lineQty ?? '—'" />

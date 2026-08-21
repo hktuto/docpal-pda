@@ -29,7 +29,7 @@
             <tr v-for="entry in entries" :key="entry.allocationId">
               <td>
                 <span class="box-pick__line">L{{ entry.lineNumber ?? '—' }}/S{{ entry.shipmentNumber ?? '—' }}</span>
-                {{ entry.partNo }}
+                {{ entry.wclItemNo ?? entry.partNo }}
               </td>
               <td>{{ entry.lotCode || $t('common.stateNone') }} / {{ entry.dateCode || $t('common.stateNone') }}</td>
               <td>{{ entry.queued }} / {{ entry.required }}</td>
@@ -59,6 +59,7 @@ export interface PickFromBoxEntry {
   lineNumber: number | null;
   shipmentNumber: number | null;
   partNo: string;
+  wclItemNo: string | null;
   lotCode: string | null;
   dateCode: string | null;
   required: number;

@@ -204,6 +204,7 @@ export interface GoodsVerifyLotRow {
 export interface GoodsVerifyBoxItemRow {
   id: string;
   partNo: string;
+  wclItemNo: string | null;
   qty: number;
   verified: boolean | null;
   verifiedAt: Date | null;
@@ -263,7 +264,7 @@ export async function getGoodsVerifyTaskDetail(db: AppDb, taskId: string): Promi
         db,
         sql`
           SELECT
-            sbi.id, sbi.part_no AS "partNo", sbi.qty,
+            sbi.id, sbi.part_no AS "partNo", sbi.wcl_item_no AS "wclItemNo", sbi.qty,
             sbi.verified, sbi.verified_at AS "verifiedAt"
           FROM shelf_box_items sbi
           WHERE sbi.shelf_box_id = ${boxRow.id}

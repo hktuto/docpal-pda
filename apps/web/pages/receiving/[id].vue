@@ -291,6 +291,7 @@ const filteredPickingOrders = computed<ReceivingPickingOrder[]>(() => {
     const itemMatch = po.items.some(
       (pi) =>
         pi.partNo.toLowerCase().includes(query) ||
+        (pi.wclItemNo?.toLowerCase().includes(query) ?? false) ||
         pi.allocations.some(
           (a) =>
             (a.lot?.dateCode ?? "").toLowerCase().includes(query) ||

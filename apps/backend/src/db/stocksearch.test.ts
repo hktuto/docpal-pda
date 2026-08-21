@@ -55,6 +55,7 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
 
   assert.deepEqual(lots[0], {
     partNo: "RK73B1JTTD181G",
+    wclItemNo: "RK73B1JTTD181G",
     dateCode: "2604",
     lotCode: "L2604A",
     coo: "JP",
@@ -69,6 +70,7 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
   });
   assert.deepEqual(lots[1], {
     partNo: "RK73H1JTTD1002F",
+    wclItemNo: "RK73H1JTTD1002F",
     dateCode: "2603",
     lotCode: "L2603A",
     coo: "JP",
@@ -83,6 +85,7 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
   });
   assert.deepEqual(lots[2], {
     partNo: "RK73H1JTTD2202F",
+    wclItemNo: "RK73H1JTTD2202F",
     dateCode: "2603",
     lotCode: "L2603B",
     coo: "JP",
@@ -97,6 +100,7 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
   });
   assert.deepEqual(lots[3], {
     partNo: "RK73H1JTTD4702F",
+    wclItemNo: "RK73H1JTTD4702F",
     dateCode: "2604",
     lotCode: "L2604B",
     coo: "JP",
@@ -111,6 +115,7 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
   });
   assert.deepEqual(lots[4], {
     partNo: "RK73H1JTTD5602F",
+    wclItemNo: "RK73H1JTTD5602F",
     dateCode: "2609",
     lotCode: "L2609A",
     coo: "JP",
@@ -125,6 +130,7 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
   });
   assert.deepEqual(lots[5], {
     partNo: "RK73H2ATTD2212F",
+    wclItemNo: "RK73H2ATTD2212F",
     dateCode: "2609",
     lotCode: "L2609B",
     coo: "JP",

@@ -73,7 +73,7 @@
                 :key="item.id"
                 class="lot"
               >
-                <span>{{ item.partNo || $t('common.noData') }}</span>
+                <span>{{ (item.wclItemNo ?? item.partNo) || $t('common.noData') }}</span>
                 <span class="lot-qty">× {{ item.qty }}</span>
                 <button
                   v-if="box.status === 'open'"
