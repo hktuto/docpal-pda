@@ -32,9 +32,13 @@ function run(cmd, args, options = {}) {
 }
 
 // a. PRODUCTION_URL from the root .env (scheme + host; schemeless hosts default to https://).
+// Optional env APK_WEB_URL overrides the full WebView URL, e.g. when the
+// hosted PDA runs on a non-default port: https://host:9000.
 const envFile = join(repoRoot, '.env');
 let productionUrl;
-if (existsSync(envFile)) {
+if (process.env.APK_WEB_URL) {
+  productionUrl = process.env.APK_WEB_URL;
+} else if (existsSync(envFile)) {
   for (const line of readFileSync(envFile, 'utf8').split(/\r?\n/)) {
     const match = line.match(/^\s*PRODUCTION_URL\s*=\s*(.+?)\s*$/);
     if (match && !line.trimStart().startsWith('#')) {
@@ -44,13 +48,14 @@ if (existsSync(envFile)) {
   }
 }
 if (!productionUrl) {
-  console.error('PRODUCTION_URL is not set in the root .env — set it to the production host (e.g. mobile-wms-admin.wclsolution.com).');
+  console.error('PRODUCTION_URL is not set in the root .env — set it to the production host (e.g. mobile-wms-admin.wclsolution.com), or pass APK_WEB_URL.');
   process.exit(1);
 }
 const webUrl = /^https?:\/\//.test(productionUrl) ? productionUrl : `https://${productionUrl}`;
-// The app the WebView loads: PRODUCTION_URL is scheme + host (no port); the
-// prod web container serves the PDA on :3000 (docker-compose.prod.yml).
-const appUrl = `${webUrl}:3000`;
+// The app the WebView loads: PRODUCTION_URL is scheme + host (no port) by
+// default, served on :3000 in docker-compose.prod.yml. APK_WEB_URL overrides
+// this for custom ports.
+const appUrl = process.env.APK_WEB_URL || `${webUrl}:3000`;
 console.log(`App URL (WebView + maintenance page): ${appUrl}`);
 
 // b. The web dev server pollutes .nuxt/dist/client with dev URLs — refuse to
