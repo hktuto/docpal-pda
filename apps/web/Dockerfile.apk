@@ -1,0 +1,45 @@
+# APK builder image: builds the signed release APK inside Docker so a
+# server-side deploy needs no Android SDK on the host. One-shot container —
+# see scripts/deploy-prod.sh and the `apk` service in docker-compose.prod.yml.
+# Build context: repo root
+#   docker build -f apps/web/Dockerfile.apk .
+FROM node:22-bookworm
+
+# JDK 17 (AGP 8.13 requires it) + Android SDK command-line tools.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      openjdk-17-jdk-headless unzip curl \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV ANDROID_HOME=/opt/android-sdk \
+    ANDROID_SDK_ROOT=/opt/android-sdk
+# cmdline-tools version must support sdkmanager for api 36 (compileSdk 36).
+RUN mkdir -p $ANDROID_HOME/cmdline-tools \
+ && curl -fsSL https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/tools.zip \
+ && unzip -q /tmp/tools.zip -d $ANDROID_HOME/cmdline-tools \
+ && mv $ANDROID_HOME/cmdline-tools/cmdline-tools $ANDROID_HOME/cmdline-tools/latest \
+ && rm /tmp/tools.zip \
+ && yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null \
+ && $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+      "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+
+ENV PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+
+RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
+WORKDIR /repo
+
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+# Full workspace install: the app extends layers/i18n via a relative path and
+# the layer's own deps (@nuxtjs/i18n) must be present for the build.
+COPY apps/web/package.json apps/web/
+COPY layers/i18n/package.json layers/i18n/
+RUN pnpm install --filter @warehouse/web... --filter @warehouse/i18n-layer... --frozen-lockfile
+
+COPY layers/i18n layers/i18n
+COPY apps/web apps/web
+
+# Runtime contract:
+#   env  PRODUCTION_URL  scheme + host, no port (required)
+#   vol  /keystore       persists the release keystore + versionCode counter
+#                        (NEVER delete — PDAs can't update without it)
+#   vol  /out            receives warehouse-pda.apk + version.json
+ENTRYPOINT ["bash", "apps/web/scripts/docker-apk-build.sh"]
