@@ -35,25 +35,6 @@ services:
       retries: 10
     restart: unless-stopped
 
-  # One-shot APK builder: builds the signed release APK in Docker (no Android
-  # SDK needed on the host) and publishes it to ./apps/backend/public/apk,
-  # which the backend service below mounts and serves via the admin download
-  # route. The apk-keystore volume holds the release keystore + versionCode
-  # counter — NEVER delete it, PDAs can't update in place without the same
-  # signature.
-  apk:
-    env_file: ./.env
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile.apk
-    environment:
-      PRODUCTION_URL: ${PRODUCTION_URL:?Set PRODUCTION_URL in .env}
-    volumes:
-      - apk-keystore:/keystore
-      - apk-gradle-cache:/root/.gradle
-      - ./apps/backend/public/apk:/out
-    restart: "no"
-
   backend:
     env_file: ./.env
     build:
@@ -89,8 +70,8 @@ services:
       # step kill-switch (e.g. "measuring,verify") still applies when FLOW_CONFIG is unset.
       FLOW_CONFIG: ${FLOW_CONFIG:-}
       FLOW_STEPS_DISABLED: ${FLOW_STEPS_DISABLED:-}
-    # Published release APK + version.json, built by the one-shot `apk`
-    # service above, served via GET /admin/app-download/file.
+    # Published release APK + version.json (built by `pnpm build:apk` on the
+    # host), served via GET /admin/app-download/file.
     volumes:
       - ./apps/backend/public/apk:/app/public/apk:ro
     ports:
@@ -101,8 +82,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      apk:
-        condition: service_completed_successfully
     restart: unless-stopped
 
   web:
@@ -136,5 +115,3 @@ services:
 
 volumes:
   pgdata:
-  apk-keystore:
-  apk-gradle-cache:

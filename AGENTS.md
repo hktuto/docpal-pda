@@ -59,9 +59,9 @@ The web dev workflow needs TWO servers: `pnpm dev:backend` (:3002) and `pnpm --f
 
 ### Production docker stack
 
-`docker-compose.prod.yml` runs the full stack (db + backend + web + admin + one-shot `apk` builder) as a separate compose project (`warehouse-prod`) so it coexists with the dev db on :5432. The `apk` service builds the signed release APK inside Docker (no Android SDK on the host) and publishes it to `apps/backend/public/apk`, which the backend mounts read-only and serves via `GET /admin/app-download/file`. The builder keeps the release keystore and `versionCode` counter in a named Docker volume (`apk-keystore`) — never delete that volume, PDAs can't update in place without the same signature.
+`docker-compose.prod.yml` runs the full stack (db + backend + web + admin) as a separate compose project (`warehouse-prod`) so it coexists with the dev db on :5432. Per-app Dockerfiles in `apps/*/Dockerfile` (build context = repo root). Required env: `POSTGRES_PASSWORD`, `AUTH_SECRET`; optional: `CORS_ORIGINS`, `SYNC_DB_PASSWORD`, `FLOW_CONFIG`, `WAREHOUSE_SEED=off`, `WAREHOUSE_SEED_ORDERS=on`. Ports: web 3000, admin 80, backend 9002 (also exposes 3002 internally for local-LAN access); `DEV_ROUTES=off`. When `PRODUCTION_URL` is set, web/admin `NUXT_PUBLIC_API_BASE_URL` default to `${PRODUCTION_URL}:9002`. The backend mounts `apps/backend/public/apk` read-only so `pnpm build:apk` output is served without a rebuild.
 
-Use `scripts/deploy-prod.sh` (run on the Linux server from the repo root) — it prompts for `PRODUCTION_URL` and `DOCPAL_URL`, preserves/generates `POSTGRES_PASSWORD`/`AUTH_SECRET` in the gitignored `.env`, then runs compose. Required env is generated on first run; optional overrides: `CORS_ORIGINS`, `SYNC_DB_PASSWORD`, `FLOW_CONFIG`, `WAREHOUSE_SEED=off`, `WAREHOUSE_SEED_ORDERS=on`. Ports: web 3000, admin 80, backend 9002 (also exposes 3002 internally for local-LAN access); `DEV_ROUTES=off`. When `PRODUCTION_URL` is set, web/admin `NUXT_PUBLIC_API_BASE_URL` default to `${PRODUCTION_URL}:9002`.
+Use `scripts/deploy-prod.sh` (run on the server from the repo root) — it prompts for `PRODUCTION_URL` and `DOCPAL_URL`, preserves/generates `POSTGRES_PASSWORD`/`AUTH_SECRET` in the gitignored `.env`, then runs compose.
 
 ```bash
 scripts/deploy-prod.sh
@@ -95,15 +95,7 @@ export PATH="$JAVA_HOME/bin:$PATH"
 ./gradlew :app:installDebug
 ```
 
-**Production release APK.** On the Linux server, `scripts/deploy-prod.sh` automatically builds a signed release APK through the Dockerized `apk` service, pointed at the fixed web host `${PRODUCTION_URL}:3000`. The WebView boots from the hosted app so the Capacitor bridge keeps working (hardware scanning, camera, back button). The first-launch `/server` picker only chooses the **backend API** (`utils/serverHost.ts`, saved as `pda-server-host`). The builder persists the release keystore in the Docker `apk-keystore` volume (auto-generated on first server deploy) and the `versionCode` counter there — never delete that volume: Android only treats a new APK as an in-place update when the signature matches. The APK + `version.json` are published to `apps/backend/public/apk/` (gitignored), served by `GET /admin/app-download/file`, and downloaded from the admin console's `/app-download` page. Web content updates with every deploy — only native changes (or a web-host move) need a new APK.
-
-For local Windows builds, the existing host-side script still works:
-
-```bash
-pnpm build:apk
-```
-
-(Stop the web dev server first — the script refuses to run while :3103 is up.)
+**Production release APK.** `pnpm build:apk` (script `apps/web/scripts/build-android-apk.mjs`) builds a signed release APK pointed at the fixed web host `${PRODUCTION_URL}:3000` (or override with `APK_WEB_URL`). Stop the web dev server first — the script refuses to run while it is up. The WebView boots from the hosted app so the Capacitor bridge keeps working (hardware scanning, camera, back button). The first-launch `/server` picker only chooses the **backend API** (`utils/serverHost.ts`, saved as `pda-server-host`). First run generates the gitignored release keystore (`apps/web/android/app/warehouse-release.keystore`) and `keystore.properties` with random passwords — keep them: Android only treats a new APK as an in-place update when the signature matches. The APK + `version.json` are published to `apps/backend/public/apk/` (gitignored), served by `GET /admin/app-download/file`, and downloaded from the admin console's `/app-download` page. Web content updates with every deploy — only native changes (or a web-host move) need a new APK.
 
 If `adb` is not on your `PATH`, use the SDK in `android/local.properties`; on this machine `'/d/android/platform-tools/adb.exe'`.
 
