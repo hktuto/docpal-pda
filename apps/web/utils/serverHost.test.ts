@@ -31,9 +31,9 @@ beforeEach(() => {
 describe('SERVER_HOSTS', () => {
   it('lists the five regional backend API URLs in order', () => {
     expect(SERVER_HOSTS.map((h) => h.id)).toEqual(['hk', 'sz', 'sh', 'gz', 'bj']);
-    expect(SERVER_HOSTS[0].url).toBe('http://192.168.1.132:3002'); // hk
+    expect(SERVER_HOSTS[0].url).toBe('https://mobile-wms.wclsolution.com:9002'); // hk
     for (const host of SERVER_HOSTS.slice(1)) {
-      expect(host.url).toBe('http://192.168.5.116:3002');
+      expect(host.url).toBe('http://192.168.5.116:9002');
     }
   });
 
