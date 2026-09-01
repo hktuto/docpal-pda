@@ -1,0 +1,15 @@
+# One-off SQL Server container purely for INSPECTING the old BVSDB backup.
+# Nothing here touches the warehouse Postgres stack. Stop/remove with:
+#   docker compose -f docker-compose.mssql-inspect.yml down -v
+services:
+  mssql-inspect:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: bvsdb-inspect
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "Inspect!Passw0rd2026"
+      MSSQL_PID: Developer
+    ports:
+      - "11433:1433" # host port 11433 -> container 1433 (avoids clashing with anything local)
+    volumes:
+      - ./:/bak:ro # BVSDB20260813.BAK appears inside the container at /bak/BVSDB20260813.BAK
