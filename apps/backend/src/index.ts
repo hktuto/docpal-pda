@@ -18,6 +18,7 @@ import { labelsRoute } from "./routes/labels.js";
 import { scanTemplatesRoute } from "./routes/scantemplates.js";
 import { eventsRoute } from "./routes/events.js";
 import { syncEventsRoute } from "./routes/sync-events.js";
+import { printRoute } from "./routes/print.js";
 import { devRoute } from "./routes/dev.js";
 
 export const app = new Hono<{ Variables: AuthVariables }>();
@@ -53,6 +54,7 @@ app.route("/", labelsRoute);
 app.route("/", scanTemplatesRoute);
 app.route("/", eventsRoute);
 app.route("/", syncEventsRoute);
+app.route("/", printRoute);
 // Demo-only routes (/dev/reset, /dev/allocate); disable with DEV_ROUTES=off.
 if (process.env.DEV_ROUTES !== "off") {
   app.route("/", devRoute);

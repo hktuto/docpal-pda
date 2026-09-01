@@ -20,8 +20,16 @@ const { sortKey, sortDir, toggleSort, sortRows } = useColumnSort();
 const q = ref("");
 // Server mode only: extra query-param filters (config.filterFields).
 const filterValues = reactive<Record<string, string>>({});
+// Client mode only: dropdown exact-match filters (config.clientFilters).
+const clientFilterValues = reactive<Record<string, string>>({});
 
-// Client mode: sort + optional clientSearch filter happen before paging.
+/** Distinct non-empty values of a column across the loaded rows (dropdown options). */
+function clientFilterOptions(key: string): string[] {
+  return [...new Set(rows.value.map((r) => String(r[key] ?? "")).filter(Boolean))].sort();
+}
+
+// Client mode: sort + optional clientSearch/clientFilters filtering happen
+// before paging.
 const processed = computed(() => {
   let list = sortRows(rows.value);
   if (!serverMode.value && props.config.clientSearch) {
@@ -35,6 +43,12 @@ const processed = computed(() => {
             .includes(needle)
         )
       );
+    }
+  }
+  if (!serverMode.value) {
+    for (const f of props.config.clientFilters ?? []) {
+      const v = clientFilterValues[f.key];
+      if (v) list = list.filter((row) => String(row[f.key] ?? "") === v);
     }
   }
   return list;
@@ -87,7 +101,9 @@ const columns = computed(() => {
   return cols;
 });
 
-const showSearch = computed(() => serverMode.value || !!props.config.clientSearch);
+const showSearch = computed(
+  () => serverMode.value || !!props.config.clientSearch || !!props.config.clientFilters?.length
+);
 
 function canSort(c: { key: string; sortable?: boolean }): boolean {
   return props.config.sortable !== false && c.sortable !== false;
@@ -102,6 +118,37 @@ const formTitle = computed(() =>
 /** Row identity for keys and /:id URLs; falls back to deriveId for composite-key rows. */
 function rowId(row: any): string {
   return row[props.config.pk] ?? props.config.deriveId?.(row);
+}
+
+// Multi-row selection (config.selectable): checkboxes per row + a header
+// checkbox toggling the current page; the `bulk-actions` slot receives the
+// selected rows.
+const selected = ref<Set<string>>(new Set());
+const selectedRows = computed(() => rows.value.filter((r) => selected.value.has(rowId(r))));
+const allPageSelected = computed(
+  () => paged.value.length > 0 && paged.value.every((r) => selected.value.has(rowId(r)))
+);
+
+function toggleRowSelected(row: any) {
+  const next = new Set(selected.value);
+  const id = rowId(row);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  selected.value = next;
+}
+
+function togglePageSelected() {
+  const next = new Set(selected.value);
+  for (const row of paged.value) {
+    const id = rowId(row);
+    if (allPageSelected.value) next.delete(id);
+    else next.add(id);
+  }
+  selected.value = next;
+}
+
+function clearSelection() {
+  selected.value = new Set();
 }
 
 async function load() {
@@ -232,13 +279,29 @@ onMounted(load);
         class="search-input filter-input"
         :placeholder="$t(f.label)"
       />
+      <select
+        v-for="f in config.clientFilters ?? []"
+        :key="f.key"
+        v-model="clientFilterValues[f.key]"
+        class="search-input filter-input"
+      >
+        <option value="">{{ $t("admin.common.all") }} — {{ $t(f.label) }}</option>
+        <option v-for="opt in clientFilterOptions(f.key)" :key="opt" :value="opt">{{ opt }}</option>
+      </select>
     </div>
     <div v-if="error" class="error-banner">{{ error }}</div>
+    <div v-if="config.selectable && selected.size" class="bulk-bar">
+      <span>{{ $t("admin.print.selectedCount", { count: selected.size }) }}</span>
+      <slot name="bulk-actions" :rows="selectedRows" :clear="clearSelection" />
+    </div>
     <div v-if="loading && rows.length === 0" class="loading">{{ $t("admin.common.loading") }}</div>
     <div v-else class="table-wrap" :class="{ 'is-loading': loading }">
       <table class="data">
         <thead>
           <tr>
+            <th v-if="config.selectable" class="select-col">
+              <input type="checkbox" :checked="allPageSelected" @change="togglePageSelected" />
+            </th>
             <th
               v-for="c in columns"
               :key="c.key"
@@ -253,6 +316,13 @@ onMounted(load);
         </thead>
         <tbody>
           <tr v-for="row in paged" :key="rowId(row)">
+            <td v-if="config.selectable" class="select-col">
+              <input
+                type="checkbox"
+                :checked="selected.has(rowId(row))"
+                @change="toggleRowSelected(row)"
+              />
+            </td>
             <td v-for="c in columns" :key="c.key">{{ formatCell(row[c.key]) }}</td>
             <td class="actions">
               <slot name="row-actions" :row="row" />
@@ -263,7 +333,7 @@ onMounted(load);
             </td>
           </tr>
           <tr v-if="paged.length === 0">
-            <td :colspan="columns.length + 1" class="muted">{{ $t("admin.common.noRecords") }}</td>
+            <td :colspan="columns.length + (config.selectable ? 2 : 1)" class="muted">{{ $t("admin.common.noRecords") }}</td>
           </tr>
         </tbody>
       </table>
@@ -285,6 +355,17 @@ onMounted(load);
 .filter-input {
   width: 200px;
   margin-left: 8px;
+}
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+.select-col {
+  width: 32px;
+  text-align: center;
 }
 th.sortable {
   cursor: pointer;

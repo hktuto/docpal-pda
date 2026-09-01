@@ -903,6 +903,17 @@ export default {
       print: "列印證件",
       printSuccess: "證件已傳送到打印機。"
     },
+    print: {
+      title: "列印標籤（{count}）",
+      printer: "打印機",
+      printerPlaceholder: "選擇或輸入打印機…",
+      copies: "份數",
+      print: "列印",
+      printSelected: "列印所選（{count}）",
+      printing: "列印中… {progress}",
+      selectedCount: "已選 {count} 項",
+      success: "已傳送 {count} 張標籤到打印機。"
+    },
     common: {
       refresh: "重新整理",
       new: "新增",
@@ -926,6 +937,7 @@ export default {
       required: "{label}為必填項",
       mustBeNumber: "{label}必須是數字",
       allStatuses: "全部狀態",
+      all: "全部",
       orgIdInteger: "Org ID 必須是整數",
       downloadPendingTitle: "格式待定 — 將於後續版本提供"
     },

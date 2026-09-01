@@ -32,6 +32,7 @@ import {
 import { realParts } from "./seed-real-data.js";
 import { realSubInventories } from "./seed-subinventories-data.js";
 import { realNetWeights } from "./seed-net-weight-data.js";
+import { hkShelves } from "./seed-shelves-hk.js";
 import {
   demoParts,
   demoReceivingOrders,
@@ -200,8 +201,9 @@ const BOX_SIZES = [
   "63 X 16 X 12",
 ];
 
-// Warehouse shelf layout. DOCK is the virtual dock shelf — dock/GIT lots hang
-// off this code (never NULL).
+// Demo warehouse shelf layout (used by seedAll — the demo scenario's shelf
+// boxes and lots FK to these codes). The real HK layout in seed-shelves-hk.ts
+// is the default seed for a fresh non-demo database (seedReferenceOnly).
 const SHELVES = [
   { code: "A-01-01", zone: "A" },
   { code: "A-01-02", zone: "A" },
@@ -219,7 +221,6 @@ const SHELVES = [
   { code: "A-04-03", zone: "A" },
   { code: "A-04-04", zone: "A" },
   { code: "A-04-05", zone: "A", subInventoryCodes: ["STORE1"] },
-  { code: "DOCK", zone: "DOCK" },
   { code: "GZ-01-01", zone: "GZ" },
   { code: "GZ-01-02", zone: "GZ" },
   { code: "SZ-01-01", zone: "SZ" },
@@ -486,7 +487,8 @@ async function seedReferenceOnly(db: AppDb): Promise<void> {
 
   await db.insert(boxSizeList).values(BOX_SIZES.map((code, i) => ({ id: uid(140 + i), code })));
 
-  await db.insert(shelves).values(SHELVES.map((s, i) => ({ id: uid(200 + i), ...s })));
+  // Default shelf layout: the real HK warehouse layout (seed-shelves-hk.ts).
+  await db.insert(shelves).values(hkShelves.map((s, i) => ({ id: uid(200 + i), ...s })));
 
   // Net-weight reference: the two demo rows + the real master (part_no is
   // plain text with no FK to parts, so this is safe before parts sync in).

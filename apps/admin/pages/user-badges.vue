@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import QRCode from "qrcode";
-import { getPrintBaseUrl, printFile, waitForPrintJob } from "~/utils/print";
+import { listPrinters, printFile, waitForPrintJob } from "~/utils/print";
 
 interface User {
   id: string;
@@ -83,8 +83,19 @@ async function generateBadge() {
 }
 
 const printerName = ref(import.meta.client ? localStorage.getItem("badge_printer") ?? "" : "");
+const printers = ref<string[]>([]);
 const printing = ref(false);
 const printed = ref(false);
+
+// Printer names come from the print service via the backend proxy; failure is
+// non-fatal — the field stays a free-text input.
+async function loadPrinters() {
+  try {
+    printers.value = await listPrinters();
+  } catch {
+    printers.value = [];
+  }
+}
 
 /** Render the badge card (name + username + QR) to a PNG for the print service. */
 async function renderBadgePng(): Promise<Blob> {
@@ -122,11 +133,10 @@ async function printBadge() {
   printed.value = false;
   badgeError.value = "";
   try {
-    const baseUrl = getPrintBaseUrl();
     const png = await renderBadgePng();
-    const job = await printFile(baseUrl, png, `badge-${u.username}.png`, { printerName: printer });
+    const job = await printFile(png, `badge-${u.username}.png`, { printerName: printer });
     // Submission accepted — now confirm the job actually printed.
-    await waitForPrintJob(baseUrl, job.jobId);
+    await waitForPrintJob(job.jobId);
     printed.value = true;
     localStorage.setItem("badge_printer", printer);
   } catch (e) {
@@ -136,7 +146,10 @@ async function printBadge() {
   }
 }
 
-onMounted(load);
+onMounted(() => {
+  load();
+  loadPrinters();
+});
 </script>
 
 <template>
@@ -235,11 +248,15 @@ onMounted(load);
               id="badge-printer"
               v-model="printerName"
               type="text"
+              list="badge-printers"
               autocomplete="off"
               data-1p-ignore
               data-lpignore="true"
               :placeholder="$t('admin.userBadges.printerPlaceholder')"
             />
+            <datalist id="badge-printers">
+              <option v-for="p in printers" :key="p" :value="p" />
+            </datalist>
           </div>
           <div v-if="badgeError" class="error-banner">{{ badgeError }}</div>
           <div v-if="printed" class="success-banner">{{ $t("admin.userBadges.printSuccess") }}</div>

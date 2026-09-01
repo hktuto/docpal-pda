@@ -38,6 +38,11 @@ export interface EntityConfig {
   /** Hide the Edit action (create/delete-only resources). */
   noEdit?: boolean;
   /**
+   * Show a leading checkbox column and a `bulk-actions` slot (above the table,
+   * receives `{ rows, clear }`) for multi-row actions like label printing.
+   */
+  selectable?: boolean;
+  /**
    * Large tables (e.g. the ~100k-row parts master): fetch pages from the
    * server (?page=&pageSize=&q= → { rows, total }) instead of paging the
    * full list client-side. Shows a search box.
@@ -48,6 +53,12 @@ export interface EntityConfig {
    * (case-insensitive substring across all rendered columns) before paging.
    */
   clientSearch?: boolean;
+  /**
+   * Client mode only: dropdown filters rendered next to the search box;
+   * options are the distinct values of `key` across the loaded rows, matched
+   * exactly. `label` is an i18n key.
+   */
+  clientFilters?: { key: string; label: string }[];
   /** Clickable sort headers (default true). Set false to opt the entity out. */
   sortable?: boolean;
   /**
@@ -63,6 +74,9 @@ export const entities: Record<string, EntityConfig> = {
     path: "shelves",
     title: "admin.entities.shelves.title",
     pk: "code",
+    selectable: true,
+    clientSearch: true,
+    clientFilters: [{ key: "zone", label: "admin.fields.zone" }],
     fields: [
       { key: "code", label: "admin.fields.code", type: "text", required: true, readonlyOnEdit: true },
       { key: "zone", label: "admin.fields.zone", type: "text" },

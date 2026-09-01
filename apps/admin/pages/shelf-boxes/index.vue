@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { boxLabelParams } from "~/utils/print";
+
 const { t } = useI18n();
 const api = useApi();
 
@@ -7,6 +9,43 @@ const loading = ref(false);
 const error = ref("");
 
 const { page, pageSize, total, paged } = usePaging(boxes);
+
+// Multi-select for label printing (checkbox column + "Print selected").
+const selected = ref<Set<string>>(new Set());
+const selectedBoxes = computed(() => boxes.value.filter((b) => selected.value.has(b.id)));
+const allPageSelected = computed(
+  () => paged.value.length > 0 && paged.value.every((b) => selected.value.has(b.id))
+);
+
+function toggleSelected(id: string) {
+  const next = new Set(selected.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  selected.value = next;
+}
+
+function togglePageSelected() {
+  const next = new Set(selected.value);
+  for (const b of paged.value) {
+    if (allPageSelected.value) next.delete(b.id);
+    else next.add(b.id);
+  }
+  selected.value = next;
+}
+
+const printItems = ref<{ title: string; params: Record<string, unknown> }[] | null>(null);
+
+function printOne(b: any) {
+  printItems.value = [{ title: b.id.slice(0, 8), params: boxLabelParams(b) }];
+}
+
+function printSelectedBoxes() {
+  printItems.value = selectedBoxes.value.map((b) => ({
+    title: b.id.slice(0, 8),
+    params: boxLabelParams(b),
+  }));
+  selected.value = new Set();
+}
 
 const statuses = ["open", "closed", "verified"];
 
@@ -115,6 +154,9 @@ onMounted(load);
     <div class="page-head">
       <h1>{{ $t("admin.pages.shelfBoxes.title") }}</h1>
       <div class="head-actions">
+        <button v-if="selected.size" class="btn btn-primary" @click="printSelectedBoxes">
+          {{ $t("admin.print.printSelected", { count: selected.size }) }}
+        </button>
         <button class="btn" :disabled="loading" @click="load">{{ $t("admin.common.refresh") }}</button>
         <button class="btn btn-primary" @click="openNew">{{ $t("admin.common.new") }}</button>
       </div>
@@ -125,6 +167,9 @@ onMounted(load);
       <table class="data">
         <thead>
           <tr>
+            <th class="select-col">
+              <input type="checkbox" :checked="allPageSelected" @change="togglePageSelected" />
+            </th>
             <th>{{ $t("admin.pages.shelfBoxes.id") }}</th>
             <th>{{ $t("admin.pages.shelfBoxes.shelf") }}</th>
             <th>{{ $t("admin.pages.shelfBoxes.orgId") }}</th>
@@ -138,6 +183,9 @@ onMounted(load);
         </thead>
         <tbody>
           <tr v-for="b in paged" :key="b.id">
+            <td class="select-col">
+              <input type="checkbox" :checked="selected.has(b.id)" @change="toggleSelected(b.id)" />
+            </td>
             <td>
               <NuxtLink :to="`/shelf-boxes/${b.id}`" :title="b.id">{{ b.id.slice(0, 8) }}</NuxtLink>
             </td>
@@ -149,12 +197,13 @@ onMounted(load);
             <td>{{ b.totalQty }}</td>
             <td>{{ formatCell(b.createdDate) }}</td>
             <td class="actions">
+              <button class="btn-link" @click="printOne(b)">{{ $t("admin.print.print") }}</button>
               <button class="btn-link" @click="openEdit(b)">{{ $t("admin.common.edit") }}</button>
               <button class="btn-link" @click="remove(b)">{{ $t("admin.common.delete") }}</button>
             </td>
           </tr>
           <tr v-if="total === 0">
-            <td colspan="9" class="muted">{{ $t("admin.pages.shelfBoxes.none") }}</td>
+            <td colspan="10" class="muted">{{ $t("admin.pages.shelfBoxes.none") }}</td>
           </tr>
         </tbody>
       </table>
@@ -225,5 +274,14 @@ onMounted(load);
         </form>
       </div>
     </div>
+
+    <PrintLabelsDialog v-if="printItems" :items="printItems" @close="printItems = null" />
   </div>
 </template>
+
+<style scoped>
+.select-col {
+  width: 32px;
+  text-align: center;
+}
+</style>

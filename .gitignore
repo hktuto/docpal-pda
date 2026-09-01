@@ -44,3 +44,6 @@ apps/web/android/keystore.properties
 apps/web/android/app/*.keystore
 /apps/backend/public/apk/
 
+
+# SQL Server backups
+*.BAK

@@ -32,6 +32,18 @@ export function docpalBaseUrl(): string | undefined {
 /** Timeout for each DocPal API call during login. */
 export const docpalFetchTimeoutMs = 10_000;
 
+// ---------------------------------------------------------------------------
+// Print service (label-printing-center). The backend proxies every print call
+// (printer list, template dynamic print, direct file print, job status — see
+// src/routes/print.ts) so clients never talk to the print service directly.
+// API doc: docs/backend/print-service.md. Read at call time so tests can
+// point it at a stub server.
+// ---------------------------------------------------------------------------
+
+export function printApiBaseUrl(): string {
+  return process.env.PRINT_API_BASE_URL?.trim().replace(/\/+$/, "") || "http://192.168.5.116:9003";
+}
+
 // DocPal groupId → local group codes. DocPal has 1 group = 1 role and the
 // role carries the permissions (UAT credentials sheet): the API only returns
 // groups, so permissions are enforced through this mapping:

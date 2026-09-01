@@ -94,7 +94,7 @@ export async function searchStock(db: AppDb, filters: StockSearchFilters): Promi
         p.wcl_item_no AS "wclItemNo",
         p.description
       FROM inventory_lots il
-      JOIN parts p ON p.part_no = il.part_no
+      JOIN parts p ON p.wcl_item_no = il.wcl_item_no
       WHERE TRUE
       ${partNoNorm ? sql`AND strpos(regexp_replace(upper(p.part_no), '\\s', '', 'g'), ${partNoNorm}) > 0` : sql``}
       ${filters.shelfCode ? sql`AND il.shelf_code = ${filters.shelfCode}` : sql``}

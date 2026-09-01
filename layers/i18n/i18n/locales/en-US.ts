@@ -903,6 +903,17 @@ export default {
       print: "Print badge",
       printSuccess: "Badge sent to the printer."
     },
+    print: {
+      title: "Print labels ({count})",
+      printer: "Printer",
+      printerPlaceholder: "Select or type a printer…",
+      copies: "Copies",
+      print: "Print",
+      printSelected: "Print selected ({count})",
+      printing: "Printing… {progress}",
+      selectedCount: "{count} selected",
+      success: "Sent {count} label(s) to the printer."
+    },
     common: {
       refresh: "Refresh",
       new: "New",
@@ -926,6 +937,7 @@ export default {
       required: "{label} is required",
       mustBeNumber: "{label} must be a number",
       allStatuses: "All statuses",
+      all: "All",
       orgIdInteger: "Org ID must be an integer",
       downloadPendingTitle: "Format pending — available in a later update"
     },

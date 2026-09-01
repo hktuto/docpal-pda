@@ -16,10 +16,11 @@ export const inventoryLots = pgTable(
     cow: text("cow"),
     shelfCode: text("shelf_code").references(() => shelves.code),
     boxId: text("box_id"),
+    // Dock stock is ledger-based (RECEIVE_TO_DOCK rows, qty_type 'dock'),
+    // not a lot on a virtual shelf — shelf_code stays NULL until put-away.
     // 库存位置配对（put-away 时从 shelf box 盖章）— 与 org_id 一起识别库存分区
     orgId: integer("org_id"), // 批次所属办公室, 2: HK
     subInventoryCode: text("sub_inventory_code"), // 批次所属子库存
-    // 如果 location 是 DOCK（虚拟 shelf_code），totalQty 值为 expected_qty；SHELF 则为货架存量
     totalQty: integer("total_qty").notNull().default(0),
     allocatedQty: integer("allocated_qty").notNull().default(0), // 已预留数量
     availableQty: integer("available_qty").generatedAlwaysAs(sql`total_qty - allocated_qty`),
@@ -27,7 +28,8 @@ export const inventoryLots = pgTable(
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
   (t) => ({
-    // GIT/DOCK 也使用虚拟 shelf_code，避免 NULL 导致重复 lot
+    // Uniqueness only applies once a lot has a location — dock/expected rows
+    // (both NULL) are exempt so duplicates there don't collide.
     uniqueLot: uniqueIndex("inventory_lots_unique_lot")
       .on(t.partNo, t.dateCode, t.coo, t.cow, t.shelfCode, t.boxId, t.orgId, t.subInventoryCode)
       .where(sql`shelf_code IS NOT NULL OR box_id IS NOT NULL`),

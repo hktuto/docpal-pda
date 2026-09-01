@@ -121,6 +121,24 @@ filtering. Read-only.
 |---|---|
 | `GET /labels-data` | → `{generatedAt, shelfBoxes, shelfCodes, receivingOrders, shelfLots, pickLabels}`. |
 
+## Printing proxy
+
+Implemented: `GET /print/printers`, `POST /print/dynamic`, `POST /print/files`,
+`GET /print/jobs/:jobId` (see `apps/backend/src/routes/print.ts` + thin upstream
+client `src/print.ts`). Pass-through to the label-printing-center print service
+(base URL from `PRINT_API_BASE_URL`, default `http://192.168.5.116:9003`) so
+clients never call it directly; upstream errors come back as 502 with the
+upstream message. `POST /print/dynamic` validates `templateId` + non-empty
+`printingParams` before forwarding. No preview endpoints. Upstream API doc:
+`docs/backend/print-service.md`.
+
+| Endpoint | Description |
+|---|---|
+| `GET /print/printers` | Available system printer names (for the `printerName` picker). |
+| `POST /print/dynamic` | Print a template by `{templateId, printingParams, printerName?, copies?, mode?, orientation?}` → upstream `data` incl. `jobs[]`. |
+| `POST /print/files` | Direct file print — multipart upload or JSON forwarded verbatim → job object. |
+| `GET /print/jobs/:jobId` | Current status of one print job. |
+
 ## Put-away
 
 Implemented: `GET /put-away/candidates`,

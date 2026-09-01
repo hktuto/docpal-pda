@@ -903,6 +903,17 @@ export default {
       print: "打印工牌",
       printSuccess: "工牌已发送到打印机。"
     },
+    print: {
+      title: "打印标签（{count}）",
+      printer: "打印机",
+      printerPlaceholder: "选择或输入打印机…",
+      copies: "份数",
+      print: "打印",
+      printSelected: "打印所选（{count}）",
+      printing: "打印中… {progress}",
+      selectedCount: "已选 {count} 项",
+      success: "已发送 {count} 张标签到打印机。"
+    },
     common: {
       refresh: "刷新",
       new: "新增",
@@ -926,6 +937,7 @@ export default {
       required: "{label}为必填项",
       mustBeNumber: "{label}必须是数字",
       allStatuses: "全部状态",
+      all: "全部",
       orgIdInteger: "Org ID 必须是整数",
       downloadPendingTitle: "格式待定 — 将在后续版本提供"
     },

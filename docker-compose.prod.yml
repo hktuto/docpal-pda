@@ -70,6 +70,10 @@ services:
       # step kill-switch (e.g. "measuring,verify") still applies when FLOW_CONFIG is unset.
       FLOW_CONFIG: ${FLOW_CONFIG:-}
       FLOW_STEPS_DISABLED: ${FLOW_STEPS_DISABLED:-}
+      # label-printing-center print service — the backend proxies /print/*
+      # (printer list, template print, job status) to it. Default is the LAN
+      # print host; override in .env when it moves.
+      PRINT_API_BASE_URL: ${PRINT_API_BASE_URL:-http://192.168.5.116:9003}
     # Published release APK + version.json (built by `pnpm build:apk` on the
     # host), served via GET /admin/app-download/file.
     volumes:

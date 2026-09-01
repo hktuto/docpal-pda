@@ -142,7 +142,8 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Picking priority reorder | `/picking/reorder` | `apps/admin/pages/picking/reorder.vue` |
 | Receiving orders list / detail (delivery-date + item date-code edit, invoice filter) | `/receiving`, `/receiving/:id` | `apps/admin/pages/receiving/index.vue`, `apps/admin/pages/receiving/[id].vue` |
 | Shipping boxes list / detail (orders-in-box, per-box ship) | `/shipping`, `/shipping/:boxId` | `apps/admin/pages/shipping/index.vue`, `apps/admin/pages/shipping/[id].vue` |
-| Generic CRUD table (search / column sorting / server paging) | — | `apps/admin/components/CrudTable.vue` (+ `components/CrudForm.vue`, `components/Pager.vue`, `composables/useColumnSort.ts`) |
+| Generic CRUD table (search / column sorting / server paging / multi-select) | — | `apps/admin/components/CrudTable.vue` (+ `components/CrudForm.vue`, `components/Pager.vue`, `composables/useColumnSort.ts`) |
+| Shelf / shelf-box label printing (single + multi-select dialog; `katata-label` template via the backend `/print/*` proxy) | `/shelves`, `/shelf-boxes` | `apps/admin/components/PrintLabelsDialog.vue`, `apps/admin/utils/print.ts` |
 | Sidebar layout + userbox popover | — | `apps/admin/app.vue` |
 | Flow API typed wrappers | — | `apps/admin/utils/flowApi.ts` |
 
@@ -169,6 +170,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | `POST /goods-verify-tasks/generate`, `GET /goods-verify-tasks`, `GET /goods-verify-tasks/:id`, `POST /goods-verify-tasks/:id/verify` | `apps/backend/src/routes/goodsverify.ts` |
 | `GET /stock-search` | `apps/backend/src/routes/stocksearch.ts` |
 | `GET /scan-templates` | `apps/backend/src/routes/scantemplates.ts` |
+| Print proxy: `GET /print/printers`, `POST /print/dynamic`, `POST /print/files`, `GET /print/jobs/:jobId` | `apps/backend/src/routes/print.ts`, `apps/backend/src/print.ts` |
 | Upstream sync (outbound `GET /sync-events` feed + inbound apply layer; no embedded consumer) | `apps/backend/src/routes/sync-events.ts`, `apps/backend/src/db/sync-events.ts`, `apps/backend/src/db/ingest.ts` |
 | `POST /dev/reset`, `POST /dev/allocate` | `apps/backend/src/routes/dev.ts` |
 | `/admin/*` master-data CRUD | `apps/backend/src/routes/admin/` |

@@ -1,10 +1,24 @@
 # Print Service API (label-printing-center)
 
-Server-side print service. Base URL: same host as `PRODUCTION_URL` (root `.env`), port **9003**
-(e.g. `http://192.168.1.10:9003`). The admin console calls it from the browser via
-`apps/admin/utils/print.ts` (`printFile`), which derives the base URL from
-`NUXT_PUBLIC_API_BASE_URL` by swapping the port to 9003 (override with
-`NUXT_PUBLIC_PRINT_BASE_URL`).
+Server-side print service. Clients never call it directly — the backend proxies it under `/print/*`
+(`apps/backend/src/routes/print.ts` + `src/print.ts`), with the base URL from the `PRINT_API_BASE_URL`
+env var (default `http://192.168.5.116:9003`). Upstream failures surface as `502` with the upstream
+error message.
+
+Backend endpoints (all require the usual bearer token):
+
+| Endpoint | Proxies | Description |
+|---|---|---|
+| `GET /print/printers` | `GET /api/v1/printers` | Available system printer names (for the `printerName` picker). |
+| `POST /print/dynamic` | `POST /api/v1/templates/dynamic-print` | Print a template by `templateId` + `printingParams`; validates `templateId` / non-empty `printingParams`. |
+| `POST /print/files` | `POST /api/v1/print/files` | Direct file print — multipart upload or JSON forwarded verbatim. |
+| `GET /print/jobs/:jobId` | `GET /api/v1/print/jobs/{jobId}` | Status of one print job. |
+
+No preview endpoints are proxied (`/render/preview`, `/print/route-preview`) — printing only.
+
+The admin console calls these via `apps/admin/utils/print.ts` (`listPrinters`, `printFile`,
+`dynamicPrint`, `waitForPrintJob`), which talks to the backend API base URL
+(`NUXT_PUBLIC_API_BASE_URL`) with the admin JWT.
 
 ## POST /api/v1/print/files — 直接打印 PDF / 图片文件
 
@@ -64,7 +78,7 @@ curl -X POST "http://127.0.0.1:9003/api/v1/print/files" \
 ## 使用位置
 
 - 用户证件打印（admin `/user-badges`）：把证件（姓名 + 用户名 + 登入 QR code）渲染成 PNG，用
-  multipart 上传打印。
+  multipart 上传打印（经后端 `POST /print/files` 代理）。
 
 ---
 
