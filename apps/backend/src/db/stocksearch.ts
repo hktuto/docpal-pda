@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { queryAll } from "./query.js";
 import { normalizePartNo } from "./scanParse.js";
+import { allowedOrgFilter } from "./org-filter.js";
 
 // ---------------------------------------------------------------------------
 // Stock search (read-only). One aggregate query replaces the old 3-call
@@ -96,6 +97,7 @@ export async function searchStock(db: AppDb, filters: StockSearchFilters): Promi
       FROM inventory_lots il
       JOIN parts p ON p.wcl_item_no = il.wcl_item_no
       WHERE TRUE
+      ${allowedOrgFilter(sql`il.org_id`)}
       ${partNoNorm ? sql`AND strpos(regexp_replace(upper(p.part_no), '\\s', '', 'g'), ${partNoNorm}) > 0` : sql``}
       ${filters.shelfCode ? sql`AND il.shelf_code = ${filters.shelfCode}` : sql``}
       ${

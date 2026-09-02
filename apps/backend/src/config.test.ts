@@ -82,3 +82,16 @@ test("parseFlowConfig: put-away task key validation", () => {
   assert.throws(() => parseFlowConfig('{"steps":{"picking":{"autoCreateTasks":true}}}'), /unknown key "autoCreateTasks"/);
   assert.throws(() => parseFlowConfig('{"steps":{"receiving":{"suggestShelf":"off"}}}'), /unknown key "suggestShelf"/);
 });
+
+test("parseFlowConfig: allowedOrgIds merges over the [] default", () => {
+  assert.deepEqual(parseFlowConfig(undefined).allowedOrgIds, []);
+  assert.deepEqual(parseFlowConfig("{}").allowedOrgIds, []);
+  assert.deepEqual(parseFlowConfig('{"allowedOrgIds":[2,3]}').allowedOrgIds, [2, 3]);
+});
+
+test("parseFlowConfig: allowedOrgIds validation", () => {
+  assert.throws(() => parseFlowConfig('{"allowedOrgIds":2}'), /allowedOrgIds must be an array of integers/);
+  assert.throws(() => parseFlowConfig('{"allowedOrgIds":["2"]}'), /allowedOrgIds must be an array of integers/);
+  assert.throws(() => parseFlowConfig('{"allowedOrgIds":[2.5]}'), /allowedOrgIds must be an array of integers/);
+  assert.throws(() => parseFlowConfig('{"allowedOrgIds":[null]}'), /allowedOrgIds must be an array of integers/);
+});

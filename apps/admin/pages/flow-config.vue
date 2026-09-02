@@ -6,6 +6,7 @@ import type { FlowConfigState } from "~/utils/flowApi";
 // runtime on the backend unless the FLOW_CONFIG env override is active.
 
 const flow = useFlowApi();
+const { t } = useI18n();
 
 const STEPS = ["receiving", "put-away", "picking", "goods-verify", "measuring", "verify", "stock-search"] as const;
 
@@ -14,6 +15,7 @@ const stepEnabled = reactive<Record<string, boolean>>({});
 const allowDockStock = ref(true);
 const autoCreateTasks = ref(false);
 const suggestShelf = ref<"existing-stock" | "off">("existing-stock");
+const allowedOrgIdsText = ref("");
 
 const loading = ref(true);
 const saving = ref(false);
@@ -29,6 +31,7 @@ async function load() {
     allowDockStock.value = state.value.config.pickingAllocation.allowDockStock;
     autoCreateTasks.value = state.value.config.putAway.autoCreateTasks;
     suggestShelf.value = state.value.config.putAway.suggestShelf;
+    allowedOrgIdsText.value = state.value.config.allowedOrgIds.join(", ");
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -41,6 +44,13 @@ async function save() {
   error.value = "";
   saved.value = false;
   try {
+    // Comma/whitespace-separated integers; empty = all orgs (no filtering).
+    const tokens = allowedOrgIdsText.value.split(/[,\s]+/).filter(Boolean);
+    const allowedOrgIds = tokens.map(Number);
+    if (allowedOrgIds.some((n) => !Number.isInteger(n))) {
+      error.value = t("admin.pages.flowConfig.allowedOrgIdsInvalid");
+      return;
+    }
     // Fully-expanded steps JSON — same shape the boot merge produces.
     const steps: Record<string, unknown> = {};
     for (const s of STEPS) steps[s] = { enabled: !!stepEnabled[s] };
@@ -50,7 +60,7 @@ async function save() {
       autoCreateTasks: autoCreateTasks.value,
       suggestShelf: suggestShelf.value,
     };
-    state.value = await flow.saveFlowConfig({ steps });
+    state.value = await flow.saveFlowConfig({ steps, allowedOrgIds });
     saved.value = true;
   } catch (e: any) {
     error.value = e.message;
@@ -105,6 +115,15 @@ onMounted(load);
         </div>
       </div>
 
+      <div class="card form-card">
+        <h2>{{ $t("admin.pages.flowConfig.orgIdsSection") }}</h2>
+        <div class="form-row">
+          <label for="fc-org-ids">{{ $t("admin.pages.flowConfig.allowedOrgIds") }}</label>
+          <input id="fc-org-ids" v-model="allowedOrgIdsText" type="text" placeholder="2, 3" />
+        </div>
+        <p class="hint-text">{{ $t("admin.pages.flowConfig.allowedOrgIdsHint") }}</p>
+      </div>
+
       <div class="actions-row">
         <button class="btn btn-primary" :disabled="saving" @click="save">
           {{ saving ? $t("admin.common.saving") : $t("admin.common.save") }}
@@ -139,6 +158,12 @@ onMounted(load);
   display: flex;
   align-items: center;
   gap: 0.75rem;
+}
+
+.hint-text {
+  margin: 0.5rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted, #666);
 }
 
 .warn-banner {

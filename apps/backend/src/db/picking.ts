@@ -9,6 +9,7 @@ import { now } from "./now.js";
 import { emitEvent } from "./events.js";
 import { workLockExpiry } from "./allocate.js";
 import { isStepEnabled } from "../config.js";
+import { allowedOrgFilter } from "./org-filter.js";
 
 // ---------------------------------------------------------------------------
 // Picking flow (ported from apps/api pickScan.ts + measure.ts + pickingIssues.ts,
@@ -517,7 +518,8 @@ export interface PickingOrderListRow {
 }
 
 /** List rows with per-order item/qty counts; `status` is a pass-through filter.
- *  Ordered by priority_seq (allocation order, admin-reorderable). */
+ *  Ordered by priority_seq (allocation order, admin-reorderable).
+ *  Scoped to the flow config's allowedOrgIds when set. */
 export async function listPickingOrders(db: AppDb, status?: string): Promise<PickingOrderListRow[]> {
   return queryAll<PickingOrderListRow>(
     db,
@@ -537,7 +539,9 @@ export async function listPickingOrders(db: AppDb, status?: string): Promise<Pic
       FROM picking_orders po
       LEFT JOIN picking_items pi ON pi.picking_order_id = po.id
       LEFT JOIN users w ON w.id = po.working_by
-      ${status ? sql`WHERE po.status = ${status}` : sql``}
+      WHERE TRUE
+      ${status ? sql`AND po.status = ${status}` : sql``}
+      ${allowedOrgFilter(sql`po.org_id`)}
       GROUP BY po.id, w.display_name
       ORDER BY po.priority_seq ASC, po.delivery_date ASC NULLS LAST, po.order_no
     `
@@ -765,6 +769,7 @@ export async function getPickingOrderDetail(db: AppDb, orderId: string): Promise
       LEFT JOIN users w ON w.id = po.working_by
       LEFT JOIN users ru ON ru.id = po.issue_reported_by
       WHERE po.id = ${orderId}
+      ${allowedOrgFilter(sql`po.org_id`)}
     `
   );
   if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });

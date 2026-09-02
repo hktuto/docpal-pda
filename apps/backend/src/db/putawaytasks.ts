@@ -7,6 +7,7 @@ import { transactionLogs } from "./schema/index.js";
 import { emitEvent } from "./events.js";
 import { now } from "./now.js";
 import { getPutAwayAggregate, orderPair, type PutAwayAggregate } from "./putaway.js";
+import { allowedOrgFilter } from "./org-filter.js";
 
 // ---------------------------------------------------------------------------
 // Put-away tasks (spec 2026-08-10-put-away-tasks-design.md). One task per
@@ -109,7 +110,9 @@ export async function listPutAwayTasks(db: AppDb, status?: string): Promise<PutA
         WHERE sb.shelf_code IS NULL
         GROUP BY sbi.receiving_invoice_item_id
       ) staged ON staged.receiving_invoice_item_id = rii.id
-      ${status ? sql`WHERE t.status = ${status}` : sql``}
+      WHERE TRUE
+      ${status ? sql`AND t.status = ${status}` : sql``}
+      ${allowedOrgFilter(sql`t.org_id`)}
       GROUP BY t.id, ro.id, s.id
       ORDER BY t.created_date ASC, t.id
     `

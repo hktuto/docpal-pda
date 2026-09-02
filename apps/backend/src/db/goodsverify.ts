@@ -7,6 +7,7 @@ import { transactionLogs, inventoryTransactions } from "./schema/index.js";
 import { emitEvent } from "./events.js";
 import { now } from "./now.js";
 import { isStepEnabled } from "../config.js";
+import { allowedOrgCondition } from "./org-filter.js";
 
 // ---------------------------------------------------------------------------
 // Goods verify flow (concept 7 — daily cycle count).
@@ -151,6 +152,9 @@ export async function listGoodsVerifyTasks(
   if (filters.date) conditions.push(sql`gvt.task_date = ${filters.date}::date`);
   if (filters.status) conditions.push(sql`gvt.status = ${filters.status}`);
   if (filters.shelfCode) conditions.push(sql`gvt.shelf_code = ${filters.shelfCode}`);
+  // allowedOrgIds scope: tasks belong to a lot, lots carry the org partition.
+  const orgCond = allowedOrgCondition(sql`il.org_id`);
+  if (orgCond) conditions.push(orgCond);
   let where = sql``;
   conditions.forEach((cond, i) => {
     where = sql`${where}${i === 0 ? sql`WHERE ` : sql` AND `}${cond}`;
@@ -166,6 +170,7 @@ export async function listGoodsVerifyTasks(
         gvt.verified_by AS "verifiedBy", gvt.verified_at AS "verifiedAt"
       FROM goods_verify_tasks gvt
       JOIN parts p ON p.part_no = gvt.part_no
+      JOIN inventory_lots il ON il.id = gvt.inventory_lot_id
       ${where}
       ORDER BY gvt.shelf_code, gvt.box_id, p.part_no
     `

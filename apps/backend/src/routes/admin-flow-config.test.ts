@@ -51,6 +51,7 @@ test("GET /admin/flow-config: effective config + stored row + envOverride", asyn
   assert.deepEqual(body.stored, {});
   assert.equal(body.config.putAway.autoCreateTasks, false); // default
   assert.equal(body.config.steps.picking.enabled, true);
+  assert.deepEqual(body.config.allowedOrgIds, []); // default = all orgs
 });
 
 test("GET /admin/flow-config: env override active → form shows the stored row, envOverride=true", async () => {
@@ -72,7 +73,10 @@ test("GET /admin/flow-config: env override active → form shows the stored row,
 test("PUT /admin/flow-config: validates, persists, applies at runtime", async () => {
   await reseed(client);
   try {
-    const payload = { steps: { "put-away": { autoCreateTasks: true, suggestShelf: "off" }, measuring: { enabled: false } } };
+    const payload = {
+      steps: { "put-away": { autoCreateTasks: true, suggestShelf: "off" }, measuring: { enabled: false } },
+      allowedOrgIds: [2, 3],
+    };
     const res = await req("/admin/flow-config", { method: "PUT", body: JSON.stringify(payload) });
     assert.equal(res.status, 200);
     const body = await res.json();
@@ -80,6 +84,7 @@ test("PUT /admin/flow-config: validates, persists, applies at runtime", async ()
     assert.equal(body.config.putAway.autoCreateTasks, true);
     assert.equal(body.config.putAway.suggestShelf, "off");
     assert.equal(body.config.steps.measuring.enabled, false);
+    assert.deepEqual(body.config.allowedOrgIds, [2, 3]);
     // persisted to the row
     const row = await queryGet<{ value: unknown }>(
       client.db,
@@ -101,6 +106,9 @@ test("PUT /admin/flow-config: invalid JSON shapes → 400, row untouched", async
       { steps: { nope: { enabled: true } } }, // unknown step
       { steps: { picking: { enabled: "yes" } } }, // wrong type
       { steps: { "put-away": { suggestShelf: "magic" } } }, // bad enum
+      { allowedOrgIds: "2" }, // not an array
+      { allowedOrgIds: ["2"] }, // non-integer element
+      { allowedOrgIds: [2.5] }, // non-integer element
       // conflict: put-away disabled + dock stock disallowed — stock could
       // never become allocatable
       { steps: { "put-away": { enabled: false }, picking: { allocation: { allowDockStock: false } } } },

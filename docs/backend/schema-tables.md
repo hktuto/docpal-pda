@@ -698,7 +698,9 @@ from `src/db.ts` after migrate+seed): a missing row is auto-created with `{}`
 (= defaults), an invalid value fails boot. Written by seed / SQL UPDATE —
 changes need a backend restart; the `FLOW_CONFIG` env var overrides the row
 when set. Intentionally no `sync_events` trigger: internal config, not synced
-out.
+out. Top-level keys: `steps` (per-step enablement + behavior flags) and
+`allowedOrgIds` (integer array of accepted org partitions, [] = all — spec
+`docs/superpowers/specs/2026-09-01-flow-config-allowed-org-ids-design.md`).
 
 | Field | Type | Description |
 | --- | --- | --- |

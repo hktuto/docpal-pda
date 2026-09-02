@@ -1288,6 +1288,10 @@ export default {
         suggestShelf: "Shelf suggestion strategy",
         suggestShelfOn: "Suggest shelf/box (same part)",
         suggestShelfOff: "Off",
+        orgIdsSection: "Accepted org IDs",
+        allowedOrgIds: "Org IDs this warehouse accepts (comma-separated)",
+        allowedOrgIdsHint: "Picking, receiving, stock search, put-away and goods-verify lists are filtered to these orgs. Empty = all orgs.",
+        allowedOrgIdsInvalid: "Org IDs must be integers separated by commas (e.g. 2, 3).",
         saved: "Saved."
       }
     }

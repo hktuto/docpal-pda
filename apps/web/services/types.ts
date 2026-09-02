@@ -723,6 +723,9 @@ export interface FlowConfig {
   /** Resolved steps.picking.allocation section: allowDockStock=false means
    *  only put-away stock allocates — receiving and picking are decoupled. */
   pickingAllocation: { allowDockStock: boolean };
+  /** Org partitions this warehouse accepts ([] = all). Informational — the
+   *  backend filters list/detail queries server-side. */
+  allowedOrgIds: number[];
 }
 
 // ------------------------------------------------------------------

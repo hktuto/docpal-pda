@@ -8,6 +8,7 @@ import { nextBoxId } from "./boxes.js";
 import { now } from "./now.js";
 import { completePutAwayTaskTx } from "./putawaytasks.js";
 import { putAwayConfig } from "../config.js";
+import { allowedOrgFilter } from "./org-filter.js";
 
 // ---------------------------------------------------------------------------
 // Put-away flow — staging-box model (ported from apps/api putAway.ts).
@@ -309,6 +310,7 @@ export async function listPutAwayCandidates(db: AppDb): Promise<PutAwayCandidate
         GROUP BY sbi.receiving_invoice_item_id
       ) staged ON staged.receiving_invoice_item_id = rii.id
       WHERE ro.status IN ('in_hand', 'provisional_received')
+      ${allowedOrgFilter(sql`ro.org_id`)}
       GROUP BY ro.id, s.id, pair."orgId", pair."subInventoryCode"
       ORDER BY ro.created_date DESC
     `

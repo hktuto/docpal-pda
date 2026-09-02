@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { FLOW_STEPS, allowDockStock, isStepEnabled, putAwayConfig, type FlowStep } from "../config.js";
+import { FLOW_STEPS, allowDockStock, allowedOrgIds, isStepEnabled, putAwayConfig, type FlowStep } from "../config.js";
 
 export const configRoute = new Hono();
 
@@ -8,10 +8,16 @@ export const configRoute = new Hono();
 // put-away list source; changes need a backend restart.
 // pickingAllocation.allowDockStock=false = put-away is a hard gate for
 // picking allocation; putAway carries the put-away task/suggestion config.
+// allowedOrgIds is informational — org filtering happens server-side.
 configRoute.get("/config", async (c) => {
   const flowSteps = Object.fromEntries(FLOW_STEPS.map((s) => [s, isStepEnabled(s)])) as Record<FlowStep, boolean>;
   return c.json(
-    { flowSteps, pickingAllocation: { allowDockStock: allowDockStock() }, putAway: putAwayConfig() },
+    {
+      flowSteps,
+      pickingAllocation: { allowDockStock: allowDockStock() },
+      putAway: putAwayConfig(),
+      allowedOrgIds: allowedOrgIds(),
+    },
     200
   );
 });

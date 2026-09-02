@@ -294,6 +294,13 @@ gated on completed verify tasks), `goods-verify` makes task generation
 for allocation, and `steps.put-away.autoCreateTasks`/`suggestShelf` switch
 put-away to task mode with shelf suggestions; `measuring` and the remaining
 steps only toggle PDA home tiles (there is no measuring task to gate).
+The top-level `allowedOrgIds: number[]` key (spec
+`2026-09-01-flow-config-allowed-org-ids-design.md`; [] = all orgs) scopes
+PDA-facing queries to the listed org partitions: the picking/receiving order
+lists + details (detail 404s out of scope), stock search, put-away tasks +
+candidates, and the goods-verify queue hide rows with another (or NULL)
+`org_id`; the verify/measuring/shipping box queues and `allocateAll` are
+unaffected.
 The shipping feed is per-box: the list reads closed, unshipped boxes — gated
 on the box's completed verify task when the verify step is enabled
 ("measured" ≡ closed). Shipping is a pure workflow transition (stock already
@@ -307,7 +314,7 @@ Shipped boxes drop out of the feed; shipped orders stay visible via
 
 | Endpoint | Description |
 |---|---|
-| `GET /config` | `{flowSteps: Record<FlowStep, boolean>, pickingAllocation: {allowDockStock: boolean}, putAway: {autoCreateTasks: boolean, suggestShelf: "existing-stock"\|"off"}}` — the resolved flow config (`warehouse_config` row `"flow"`, `FLOW_CONFIG` env override; legacy `FLOW_STEPS_DISABLED` maps onto `flowSteps` on top, deprecated). `pickingAllocation.allowDockStock=false` = put-away is a hard gate for allocation; `putAway` drives the put-away task mode + shelf suggestions. |
+| `GET /config` | `{flowSteps: Record<FlowStep, boolean>, pickingAllocation: {allowDockStock: boolean}, putAway: {autoCreateTasks: boolean, suggestShelf: "existing-stock"\|"off"}, allowedOrgIds: number[]}` — the resolved flow config (`warehouse_config` row `"flow"`, `FLOW_CONFIG` env override; legacy `FLOW_STEPS_DISABLED` maps onto `flowSteps` on top, deprecated). `pickingAllocation.allowDockStock=false` = put-away is a hard gate for allocation; `putAway` drives the put-away task mode + shelf suggestions; `allowedOrgIds` ([] = all orgs) scopes picking/receiving/stock/put-away/goods-verify queries to the listed org partitions server-side. |
 | `GET /shipping-orders` | Box rows: `{boxId, orderNos[], shipTos[], destinationCountry, boxSize, grossWeight, netWeight, packageCount, closedAt}` — closed, unshipped boxes (verify-gated when the verify step is on). |
 | `GET /shipping-orders/:boxId` | Box detail: `{box{..., shippedAt, shippedBy}, packages[{..., partNo, wclItemNo, verified}], orders[{id, orderNo, status, shipTo, customerCode, poNo}]}` (404 `shipping_box_not_found`). |
 | `POST /shipping-orders/:boxId/ship` | `{actorId}` → `{id, status, shippedOrderIds}`. Re-checks the feed predicate (closed, unshipped, verify-gated; 409 `box_not_ready_to_ship` otherwise, including already-shipped boxes), stamps the box, derives order `shipped`, emits `shipping_box.shipped`. |

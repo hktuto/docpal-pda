@@ -1285,6 +1285,10 @@ export default {
         suggestShelf: "货架建议策略",
         suggestShelfOn: "建议货架/箱（相同物料）",
         suggestShelfOff: "关闭",
+        orgIdsSection: "接受的 Org ID",
+        allowedOrgIds: "此仓库接受的 Org ID（以逗号分隔）",
+        allowedOrgIdsHint: "拣货、收货、库存查询、上架及盘点列表将按这些 Org 过滤。留空 = 所有 Org。",
+        allowedOrgIdsInvalid: "Org ID 必须是以逗号分隔的整数（例如 2, 3）。",
         saved: "已保存。"
       }
     }

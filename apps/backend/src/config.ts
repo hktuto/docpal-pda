@@ -62,7 +62,13 @@ export const docpalGroupMapping: Record<string, string[]> = {
 // Flow config (spec: docs/superpowers/specs/2026-08-10-flow-config-design.md).
 // Per-warehouse flow settings, merged over the defaults below:
 //
-//   { "steps": { "picking": { "allocation": { "allowDockStock": false } } } }
+//   { "steps": { "picking": { "allocation": { "allowDockStock": false } } },
+//     "allowedOrgIds": [2, 3] }
+//
+// allowedOrgIds (spec 2026-09-01-flow-config-allowed-org-ids-design.md):
+// org_id partitions this warehouse accepts; [] = all orgs (no filtering).
+// When set, PDA-facing list/detail queries hide rows with another (or NULL)
+// org_id via src/db/org-filter.ts.
 //
 // Resolution order (loadFlowConfig, called once at boot from db.ts):
 //   1. FLOW_CONFIG env var (JSON) — always wins when set (tests, Vercel)
@@ -111,6 +117,8 @@ export interface FlowConfig {
   steps: Record<FlowStep, { enabled: boolean }>;
   pickingAllocation: PickingAllocationConfig;
   putAway: PutAwayConfig;
+  /** Org partitions this warehouse accepts; [] = all orgs (no filtering). */
+  allowedOrgIds: number[];
 }
 
 function defaultFlowConfig(): FlowConfig {
@@ -118,6 +126,7 @@ function defaultFlowConfig(): FlowConfig {
     steps: Object.fromEntries(FLOW_STEPS.map((s) => [s, { enabled: true }])) as FlowConfig["steps"],
     pickingAllocation: { allowDockStock: true },
     putAway: { autoCreateTasks: false, suggestShelf: "existing-stock" },
+    allowedOrgIds: [],
   };
 }
 
@@ -160,6 +169,13 @@ export function mergeFlowConfigJson(parsed: unknown): FlowConfig {
 
   const cfg = defaultFlowConfig();
   for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (key === "allowedOrgIds") {
+      if (!Array.isArray(value) || value.some((v) => !Number.isInteger(v))) {
+        throw new Error("[config] flow config.allowedOrgIds must be an array of integers");
+      }
+      cfg.allowedOrgIds = value as number[];
+      continue;
+    }
     if (key !== "steps") throw new Error(`[config] flow config: unknown key "${key}"`);
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
       throw new Error("[config] flow config.steps must be an object");
@@ -271,6 +287,11 @@ export function putAwayConfig(): PutAwayConfig {
   return flowConfig.putAway;
 }
 
+/** Org partitions this warehouse accepts; [] = all orgs (no filtering). */
+export function allowedOrgIds(): number[] {
+  return flowConfig.allowedOrgIds;
+}
+
 /** Current effective flow config (post-boot resolution). */
 export function getFlowConfig(): FlowConfig {
   return flowConfig;
@@ -298,6 +319,11 @@ export function _setPickingAllocationForTests(allocation: Partial<PickingAllocat
 /** Test-only override for the put-away config. */
 export function _setPutAwayConfigForTests(putAway: Partial<PutAwayConfig>): void {
   flowConfig.putAway = { ...flowConfig.putAway, ...putAway };
+}
+
+/** Test-only override for the accepted org partitions. */
+export function _setAllowedOrgIdsForTests(orgs: number[]): void {
+  flowConfig.allowedOrgIds = orgs;
 }
 
 /** Test-only full reset to the built-in defaults (e.g. after loadFlowConfig tests). */

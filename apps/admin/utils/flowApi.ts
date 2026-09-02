@@ -206,6 +206,8 @@ export interface FlowConfigState {
     steps: Record<string, { enabled: boolean }>;
     pickingAllocation: { allowDockStock: boolean };
     putAway: { autoCreateTasks: boolean; suggestShelf: "existing-stock" | "off" };
+    /** Org partitions this warehouse accepts; [] = all orgs (no filtering). */
+    allowedOrgIds: number[];
   };
   /** Raw warehouse_config row value (partial JSON as stored). */
   stored: Record<string, unknown>;

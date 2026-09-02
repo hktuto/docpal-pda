@@ -15,6 +15,7 @@ import {
 } from "../db/receiving.js";
 import { allocateAll } from "../db/allocate.js";
 import { actorFrom } from "../auth/middleware.js";
+import { allowedOrgFilter } from "../db/org-filter.js";
 
 // Empty bodies parse as {} — after the auth migration several mutations no
 // longer carry any body fields (the actor comes from the token).
@@ -80,7 +81,9 @@ receivingRoute.get("/receiving-orders", async (c) => {
       LEFT JOIN suppliers s ON s.code = ro.supplier_code
       LEFT JOIN receiving_invoices inv ON inv.receiving_order_id = ro.id
       LEFT JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = inv.id
-      ${status ? sql`WHERE ro.status = ${status}` : sql``}
+      WHERE TRUE
+      ${status ? sql`AND ro.status = ${status}` : sql``}
+      ${allowedOrgFilter(sql`ro.org_id`)}
       GROUP BY ro.id, s.id
       ORDER BY ro.created_date DESC
     `
@@ -178,6 +181,7 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
       LEFT JOIN suppliers s ON s.code = ro.supplier_code
       LEFT JOIN supplier_profiles sp ON sp.supplier_code = s.code
       WHERE ro.id = ${id}
+      ${allowedOrgFilter(sql`ro.org_id`)}
     `
   );
   if (!order) throw new HTTPException(404, { message: "receiving_order_not_found" });
