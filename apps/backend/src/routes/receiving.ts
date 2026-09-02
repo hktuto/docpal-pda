@@ -13,7 +13,7 @@ import {
   reportReceivingItemMismatch,
   scanReceivingOrder,
 } from "../db/receiving.js";
-import { allocateAll } from "../db/allocate.js";
+import { scheduleAllocateAll } from "../db/allocate.js";
 import { actorFrom } from "../auth/middleware.js";
 import { allowedOrgFilter } from "../db/org-filter.js";
 
@@ -305,16 +305,13 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
 
 // Applies full receipt (received_qty = qty per line, date-code fallback from
 // the order), writes RECEIVE_TO_DOCK ledger rows + a transition log, then
-// recalculates allocations (concept 5) — best-effort, after commit.
+// schedules the allocation recompute (concept 5) in the background — the
+// response does not wait for it.
 // Accepts pending and provisional_received orders (a provisional order is
 // completed to full receipt).
 receivingRoute.post("/receiving-orders/:id/confirm-arrival", async (c) => {
   const result = await confirmReceivingArrival(db, c.req.param("id"), actorFrom(c).id);
-  try {
-    await allocateAll(db);
-  } catch (err) {
-    console.error("allocateAll after confirm-arrival failed", err);
-  }
+  scheduleAllocateAll(db, "confirm-arrival");
   return c.json(result, 200);
 });
 
@@ -613,11 +610,7 @@ receivingRoute.post("/receiving-orders/:id/scan", async (c) => {
     ctnNo: body.ctnNo ?? null,
     serialNo: body.serialNo ?? null,
   });
-  try {
-    await allocateAll(db);
-  } catch (err) {
-    console.error("allocateAll after scan failed", err);
-  }
+  scheduleAllocateAll(db, "scan");
   return c.json(result, 200);
 });
 

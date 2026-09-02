@@ -200,6 +200,15 @@ export interface MismatchListRow {
 
 // ---- flow config (warehouse_config row "flow") ----
 
+export interface SubInventoryRuleRow {
+  /** Item org_ids the rule applies to. */
+  orgIds: number[];
+  /** po_no glob pattern: "*" matches any run — "319*" prefix, "*W" suffix, "*" catch-all. */
+  poNoPattern: string;
+  /** sub_inventory_code stamped on matching items. */
+  subInventoryCode: string;
+}
+
 export interface FlowConfigState {
   /** Effective config currently in force on the backend. */
   config: {
@@ -208,6 +217,8 @@ export interface FlowConfigState {
     putAway: { autoCreateTasks: boolean; suggestShelf: "existing-stock" | "off" };
     /** Org partitions this warehouse accepts; [] = all orgs (no filtering). */
     allowedOrgIds: number[];
+    /** Confirm-arrival sub-inventory defaulting rules; ordered, first match wins. */
+    receivingSubInventoryRules: SubInventoryRuleRow[];
   };
   /** Raw warehouse_config row value (partial JSON as stored). */
   stored: Record<string, unknown>;

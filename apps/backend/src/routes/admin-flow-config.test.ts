@@ -99,6 +99,50 @@ test("PUT /admin/flow-config: validates, persists, applies at runtime", async ()
   }
 });
 
+test("PUT /admin/flow-config: receivingSubInventoryRules round-trips", async () => {
+  await reseed(client);
+  try {
+    const payload = {
+      receivingSubInventoryRules: [
+        { orgIds: [140, 143, 120], poNoPattern: "319*", subInventoryCode: "SZHK2" },
+        { orgIds: [140, 143, 120], poNoPattern: "11*W", subInventoryCode: "GZHK2" },
+        { orgIds: [140, 143, 120], poNoPattern: "*", subInventoryCode: "STORE1" },
+      ],
+    };
+    const res = await req("/admin/flow-config", { method: "PUT", body: JSON.stringify(payload) });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.deepEqual(body.config.receivingSubInventoryRules, payload.receivingSubInventoryRules);
+    // persisted verbatim + a follow-up GET reflects it without restart
+    const row = await queryGet<{ value: unknown }>(
+      client.db,
+      sql`SELECT value FROM warehouse_config WHERE key = 'flow'`
+    );
+    assert.deepEqual(row!.value, payload);
+    const get = await (await req("/admin/flow-config")).json();
+    assert.deepEqual(get.config.receivingSubInventoryRules, payload.receivingSubInventoryRules);
+    // legacy poNoPrefix shape is accepted and normalized to a glob
+    const legacy = await req("/admin/flow-config", {
+      method: "PUT",
+      body: JSON.stringify({
+        receivingSubInventoryRules: [{ orgIds: [140], poNoPrefix: "329", subInventoryCode: "GZHK2" }],
+      }),
+    });
+    assert.equal(legacy.status, 200);
+    assert.deepEqual((await legacy.json()).config.receivingSubInventoryRules, [
+      { orgIds: [140], poNoPattern: "329*", subInventoryCode: "GZHK2" },
+    ]);
+    // invalid rule shape → 400
+    const bad = await req("/admin/flow-config", {
+      method: "PUT",
+      body: JSON.stringify({ receivingSubInventoryRules: [{ orgIds: [], poNoPattern: "*", subInventoryCode: "A" }] }),
+    });
+    assert.equal(bad.status, 400);
+  } finally {
+    _resetFlowConfigForTests();
+  }
+});
+
 test("PUT /admin/flow-config: invalid JSON shapes → 400, row untouched", async () => {
   await reseed(client);
   try {

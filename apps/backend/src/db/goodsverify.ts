@@ -21,8 +21,9 @@ import { allowedOrgCondition } from "./org-filter.js";
 //
 // Verify: pending task → 'verified' (+ transition log). When countedQty is
 // given and differs from expected_qty, the lot's total_qty is corrected and
-// an ADJUST (on_hand) ledger row records the delta — the caller then runs
-// allocateAll after commit, best-effort. When the task carries a box_id that
+// an ADJUST (on_hand) ledger row records the delta — the caller then
+// schedules the allocation recompute after commit (scheduleAllocateAll).
+// When the task carries a box_id that
 // resolves to a shelf_boxes row, that box's items are marked verified and the
 // box transitions 'closed' → 'verified' (mirroring the Android
 // mark-box-verified flow); an 'open' box means put-away may still be in
@@ -298,7 +299,7 @@ export interface VerifyGoodsVerifyTaskInput {
  * a difference from expected_qty corrects the lot's total_qty (guarded
  * against allocated_qty so the generated available_qty never goes negative)
  * and writes an ADJUST on_hand ledger row referencing the task; the caller
- * runs allocateAll after commit when `adjusted` is true. Box handling per the
+ * schedules the allocation recompute after commit when `adjusted` is true. Box handling per the
  * header: 'closed' → items verified + box 'verified' (+ transition log);
  * 'open' → 409; 'verified' (another task for the same box got there first) or
  * an unresolvable box_id → nothing to do.

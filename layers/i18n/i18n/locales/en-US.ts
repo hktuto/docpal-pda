@@ -1292,6 +1292,14 @@ export default {
         allowedOrgIds: "Org IDs this warehouse accepts (comma-separated)",
         allowedOrgIdsHint: "Picking, receiving, stock search, put-away and goods-verify lists are filtered to these orgs. Empty = all orgs.",
         allowedOrgIdsInvalid: "Org IDs must be integers separated by commas (e.g. 2, 3).",
+        rulesSection: "Receiving sub-inventory rules (confirm arrival)",
+        ruleOrgIds: "Org IDs (e.g. 140, 143)",
+        rulePoPattern: "PO pattern (e.g. 319*, 11*W, * = any)",
+        ruleSubInventory: "Sub-inventory",
+        addRule: "Add rule",
+        removeRule: "Remove",
+        rulesHint: "Applied when a receiving arrival is confirmed, before allocation runs. First matching rule wins. The PO pattern is a glob: * matches any characters, everything else is literal — 319* prefix, *W suffix, 11*W both, * matches every PO. Only the sub-inventory is stamped — the item's org is never changed. Items matching no rule keep their value.",
+        rulesInvalid: "Every rule needs comma-separated integer org IDs, a non-empty PO pattern, and a non-empty sub-inventory code.",
         saved: "Saved."
       }
     }

@@ -26,7 +26,7 @@ import {
   verifyPackage,
   type PickingIssueEntry,
 } from "../db/picking.js";
-import { allocateAll } from "../db/allocate.js";
+import { scheduleAllocateAll } from "../db/allocate.js";
 import { actorFrom } from "../auth/middleware.js";
 
 // Empty bodies parse as {} — after the auth migration several mutations no
@@ -42,13 +42,10 @@ async function readJson<T>(c: Context): Promise<T> {
 }
 
 // Source-availability-changing mutations (scan / package removal) recalculate
-// allocations after commit — best-effort, never roll back the mutation.
-async function reallocateBestEffort(after: string): Promise<void> {
-  try {
-    await allocateAll(db);
-  } catch (err) {
-    console.error(`allocateAll after ${after} failed`, err);
-  }
+// allocations after commit — scheduled in the background, never rolled back
+// into the mutation response.
+function reallocateBestEffort(after: string): void {
+  scheduleAllocateAll(db, after);
 }
 
 export const pickingRoute = new Hono();
@@ -73,7 +70,7 @@ pickingRoute.post("/picking-orders/reorder", async (c) => {
   const body = await readJson<{ orderIds?: string[] }>(c);
   if (!Array.isArray(body.orderIds)) throw new HTTPException(400, { message: "orderIds is required" });
   const result = await reorderPickingOrders(db, { actorId: actorFrom(c).id, orderIds: body.orderIds });
-  await reallocateBestEffort("reorder");
+  reallocateBestEffort("reorder");
   return c.json(result, 200);
 });
 
@@ -103,14 +100,14 @@ pickingRoute.post("/picking-items/:id/scan", async (c) => {
     coo: body.coo ?? null,
     cow: body.cow ?? null,
   });
-  await reallocateBestEffort("pick scan");
+  reallocateBestEffort("pick scan");
   return c.json(result, 201);
 });
 
 // Remove an unboxed, unverified package (reverses source + allocation + ledger).
 pickingRoute.delete("/packages/:id", async (c) => {
   await removeScannedPackage(db, { packageId: c.req.param("id"), actorId: actorFrom(c).id });
-  await reallocateBestEffort("package removal");
+  reallocateBestEffort("package removal");
   return c.json({ ok: true }, 200);
 });
 
@@ -124,7 +121,7 @@ pickingRoute.post("/picking-orders/:id/claim-shelf-box", async (c) => {
     shelfBoxId: body.shelfBoxId,
     actorId: actorFrom(c).id,
   });
-  await reallocateBestEffort("whole-box claim");
+  reallocateBestEffort("whole-box claim");
   return c.json(result, 201);
 });
 
@@ -206,7 +203,7 @@ pickingRoute.post("/shipping-boxes/:id/scan", async (c) => {
     qty: body.qty,
     actorId: actorFrom(c).id,
   });
-  await reallocateBestEffort("box scan");
+  reallocateBestEffort("box scan");
   return c.json(result, 201);
 });
 
@@ -237,7 +234,7 @@ pickingRoute.post("/picking-orders/:id/resolve-issue", async (c) => {
     actorId: actorFrom(c).id,
     resolutionNote: body.resolutionNote ?? null,
   });
-  await reallocateBestEffort("issue resolve");
+  reallocateBestEffort("issue resolve");
   return c.json(result, 200);
 });
 

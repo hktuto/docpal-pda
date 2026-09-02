@@ -63,12 +63,20 @@ export const docpalGroupMapping: Record<string, string[]> = {
 // Per-warehouse flow settings, merged over the defaults below:
 //
 //   { "steps": { "picking": { "allocation": { "allowDockStock": false } } },
-//     "allowedOrgIds": [2, 3] }
+//     "allowedOrgIds": [2, 3],
+//     "receivingSubInventoryRules": [
+//       { "orgIds": [140, 143], "poNoPattern": "319*", "subInventoryCode": "SZHK2" },
+//       { "orgIds": [140, 143], "poNoPattern": "*", "subInventoryCode": "STORE1" } ] }
 //
 // allowedOrgIds (spec 2026-09-01-flow-config-allowed-org-ids-design.md):
 // org_id partitions this warehouse accepts; [] = all orgs (no filtering).
 // When set, PDA-facing list/detail queries hide rows with another (or NULL)
 // org_id via src/db/org-filter.ts.
+//
+// receivingSubInventoryRules (spec 2026-09-02-receiving-subinventory-rules-design.md):
+// ordered rules applied at receiving confirm-arrival — matching items
+// (org_id ∈ orgIds AND po_no matches the poNoPattern glob; "*" = catch-all)
+// get sub_inventory_code stamped before allocation runs. [] = feature off.
 //
 // Resolution order (loadFlowConfig, called once at boot from db.ts):
 //   1. FLOW_CONFIG env var (JSON) — always wins when set (tests, Vercel)
@@ -113,12 +121,28 @@ export interface PutAwayConfig {
   suggestShelf: PutAwaySuggestShelf;
 }
 
+/** Confirm-arrival sub-inventory defaulting rule (spec
+ *  2026-09-02-receiving-subinventory-rules-design.md). Ordered, first match
+ *  wins. Sets only sub_inventory_code — org_id is never rewritten. */
+export interface SubInventoryRule {
+  /** Item org_ids the rule applies to. */
+  orgIds: number[];
+  /** po_no glob pattern: "*" matches any run of characters, everything else
+   *  is literal — "319*" prefix, "*W" suffix, "11*W" both, "*" catch-all
+   *  (matches a NULL po_no too). */
+  poNoPattern: string;
+  /** sub_inventory_code stamped on matching items. */
+  subInventoryCode: string;
+}
+
 export interface FlowConfig {
   steps: Record<FlowStep, { enabled: boolean }>;
   pickingAllocation: PickingAllocationConfig;
   putAway: PutAwayConfig;
   /** Org partitions this warehouse accepts; [] = all orgs (no filtering). */
   allowedOrgIds: number[];
+  /** Receiving sub-inventory defaulting rules; [] = feature off. */
+  receivingSubInventoryRules: SubInventoryRule[];
 }
 
 function defaultFlowConfig(): FlowConfig {
@@ -127,6 +151,7 @@ function defaultFlowConfig(): FlowConfig {
     pickingAllocation: { allowDockStock: true },
     putAway: { autoCreateTasks: false, suggestShelf: "existing-stock" },
     allowedOrgIds: [],
+    receivingSubInventoryRules: [],
   };
 }
 
@@ -160,6 +185,40 @@ export function parseFlowConfig(raw: string | undefined): FlowConfig {
   return mergeFlowConfigJson(parsed);
 }
 
+/** Validate one receivingSubInventoryRules entry. A legacy `poNoPrefix`
+ *  (2026-09-02 shape) is normalized to the glob `poNoPattern` (`prefix +
+ *  "*"`, `""` → `"*"`) so stored rows keep loading after the rename. */
+function validateSubInventoryRule(rule: unknown, index: number): SubInventoryRule {
+  const at = `flow config.receivingSubInventoryRules[${index}]`;
+  if (typeof rule !== "object" || rule === null || Array.isArray(rule)) {
+    throw new Error(`[config] ${at} must be an object`);
+  }
+  const { orgIds, poNoPattern, poNoPrefix, subInventoryCode, ...rest } = rule as Record<string, unknown>;
+  const unknown = Object.keys(rest);
+  if (unknown.length > 0) throw new Error(`[config] ${at}: unknown key "${unknown[0]}"`);
+  if (!Array.isArray(orgIds) || orgIds.length === 0 || orgIds.some((v) => !Number.isInteger(v))) {
+    throw new Error(`[config] ${at}.orgIds must be a non-empty array of integers`);
+  }
+  let pattern: string;
+  if (poNoPattern !== undefined) {
+    if (typeof poNoPattern !== "string" || poNoPattern === "") {
+      throw new Error(`[config] ${at}.poNoPattern must be a non-empty glob string ("*" = catch-all)`);
+    }
+    pattern = poNoPattern;
+  } else if (poNoPrefix !== undefined) {
+    if (typeof poNoPrefix !== "string") {
+      throw new Error(`[config] ${at}.poNoPrefix must be a string`);
+    }
+    pattern = poNoPrefix === "" ? "*" : `${poNoPrefix}*`;
+  } else {
+    throw new Error(`[config] ${at}.poNoPattern must be a non-empty glob string ("*" = catch-all)`);
+  }
+  if (typeof subInventoryCode !== "string" || subInventoryCode === "") {
+    throw new Error(`[config] ${at}.subInventoryCode must be a non-empty string`);
+  }
+  return { orgIds: orgIds as number[], poNoPattern: pattern, subInventoryCode };
+}
+
 /** Validate a partial flow-config JSON object and merge it over the defaults.
  *  Shared by the FLOW_CONFIG env path and the warehouse_config DB row. */
 export function mergeFlowConfigJson(parsed: unknown): FlowConfig {
@@ -174,6 +233,13 @@ export function mergeFlowConfigJson(parsed: unknown): FlowConfig {
         throw new Error("[config] flow config.allowedOrgIds must be an array of integers");
       }
       cfg.allowedOrgIds = value as number[];
+      continue;
+    }
+    if (key === "receivingSubInventoryRules") {
+      if (!Array.isArray(value)) {
+        throw new Error("[config] flow config.receivingSubInventoryRules must be an array");
+      }
+      cfg.receivingSubInventoryRules = value.map((rule, i) => validateSubInventoryRule(rule, i));
       continue;
     }
     if (key !== "steps") throw new Error(`[config] flow config: unknown key "${key}"`);
@@ -292,6 +358,11 @@ export function allowedOrgIds(): number[] {
   return flowConfig.allowedOrgIds;
 }
 
+/** Confirm-arrival sub-inventory defaulting rules; [] = feature off. */
+export function receivingSubInventoryRules(): SubInventoryRule[] {
+  return flowConfig.receivingSubInventoryRules;
+}
+
 /** Current effective flow config (post-boot resolution). */
 export function getFlowConfig(): FlowConfig {
   return flowConfig;
@@ -324,6 +395,11 @@ export function _setPutAwayConfigForTests(putAway: Partial<PutAwayConfig>): void
 /** Test-only override for the accepted org partitions. */
 export function _setAllowedOrgIdsForTests(orgs: number[]): void {
   flowConfig.allowedOrgIds = orgs;
+}
+
+/** Test-only override for the receiving sub-inventory defaulting rules. */
+export function _setReceivingSubInventoryRulesForTests(rules: SubInventoryRule[]): void {
+  flowConfig.receivingSubInventoryRules = rules;
 }
 
 /** Test-only full reset to the built-in defaults (e.g. after loadFlowConfig tests). */

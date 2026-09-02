@@ -2,7 +2,7 @@ import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { sql } from "drizzle-orm";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
-import { allocateAll, parseDateCodeRule } from "./allocate.js";
+import { allocateAll, parseDateCodeRule, scheduleAllocateAll } from "./allocate.js";
 import { confirmReceivingArrival } from "./receiving.js";
 import { _setPickingAllocationForTests } from "../config.js";
 
@@ -285,6 +285,50 @@ test("allocateAll: open qty subtracts unboxed packages (no double reserve)", asy
   assert.equal(Number((a[0] as any).qty), 500);
 });
 
+test("allocateAll: sources match by wcl_item_no when part_no is the supplier number", async () => {
+  await reseed(client);
+  await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${PO_22}`);
+  // real-data shape: picking items carry the WCL key (RK73H1JTTD1002F), the
+  // shelf lot stores the supplier part number with the WCL key in wcl_item_no
+  await client.db.execute(
+    sql`UPDATE inventory_lots SET part_no = 'SUPPLIER-1002F', wcl_item_no = 'RK73H1JTTD1002F' WHERE id = ${LOT_18}`
+  );
+  const s = await allocateAll(client.db);
+  assert.equal(s.fullyAllocated, 3);
+  const a23 = await client.db.execute(
+    sql`SELECT inventory_lot_id AS lot, qty FROM allocations WHERE picking_item_id = ${ITEM_23}`
+  );
+  assert.deepEqual(a23.map((r: any) => [r.lot, Number(r.qty)]), [[LOT_18, 1000]]);
+});
+
+test("allocateAll: receiving source matches by wcl_item_no when part_no is the supplier number", async () => {
+  await reseed(client);
+  const operator = await client.db.execute(sql`SELECT id FROM users WHERE username = 'operator'`);
+  const actorId = (operator[0] as any).id as string;
+  const receivingOrderId = await idOf(sql`SELECT id FROM receiving_orders WHERE batch_no = '100003'`);
+  // same real-data shape on the dock stock: supplier part_no, WCL key in
+  // wcl_item_no — the demand is SO-DEMO-0003's RK73H1JTTD3302F line
+  await client.db.execute(sql`
+    UPDATE receiving_invoice_items rii
+    SET part_no = 'SUPPLIER-3302F', wcl_item_no = 'RK73H1JTTD3302F'
+    FROM receiving_invoices ri
+    WHERE ri.id = rii.receiving_invoice_id
+      AND ri.receiving_order_id = ${receivingOrderId}
+      AND rii.part_no = 'RK73H1JTTD3302F'`);
+  await confirmReceivingArrival(client.db, receivingOrderId, actorId);
+
+  const orderId = await idOf(sql`SELECT id FROM picking_orders WHERE order_no = 'SO-DEMO-0003'`);
+  const itemId = await idOf(
+    sql`SELECT id FROM picking_items WHERE picking_order_id = ${orderId} AND part_no = 'RK73H1JTTD3302F'`
+  );
+  await allocateAll(client.db);
+  const alloc = await client.db.execute(
+    sql`SELECT receiving_invoice_item_id AS rii FROM allocations WHERE picking_item_id = ${itemId}`
+  );
+  assert.equal(alloc.length, 1);
+  assert.ok((alloc[0] as any).rii, "should allocate from the receiving line");
+});
+
 // --- allocation_status (maintained by allocateAll's aggregate refresh) ----------
 
 async function allocationStatusOf(db: TestDb["db"], orderId: string): Promise<string> {
@@ -418,4 +462,32 @@ test("allowDockStock=false: dock stock is held until put-away", async () => {
   assert.equal(alloc.length, 1);
   assert.ok((alloc[0] as any).rii, "should allocate from the receiving line");
   assert.equal(await allocationStatusOf(client.db, orderId), "allocated");
+});
+
+// --- scheduleAllocateAll (background runner used by mutation routes) --------
+
+test("scheduleAllocateAll: one run at a time, triggers during a run coalesce into one follow-up", async () => {
+  let calls = 0;
+  let resolveFirst!: () => void;
+  const firstGate = new Promise<void>((r) => (resolveFirst = r));
+  const run = async () => {
+    calls++;
+    if (calls === 1) await firstGate;
+  };
+
+  scheduleAllocateAll(client.db, "test", run);
+  scheduleAllocateAll(client.db, "test", run);
+  scheduleAllocateAll(client.db, "test", run);
+  assert.equal(calls, 1); // run 1 in flight, triggers coalesced
+
+  resolveFirst();
+  const deadline = Date.now() + 5000;
+  while (calls < 2 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => setTimeout(r, 50)); // let the queue drain fully
+  assert.equal(calls, 2); // one coalesced follow-up, not three
+
+  // after the queue drains, a new trigger starts a fresh run
+  scheduleAllocateAll(client.db, "test", run);
+  while (calls < 3 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 5));
+  assert.equal(calls, 3);
 });

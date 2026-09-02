@@ -15,7 +15,7 @@ import {
   deleteStagedPutAwayScan,
 } from "../db/putaway.js";
 import { getPutAwayTaskDetail, listPutAwayTasks } from "../db/putawaytasks.js";
-import { allocateAll } from "../db/allocate.js";
+import { scheduleAllocateAll } from "../db/allocate.js";
 import { actorFrom } from "../auth/middleware.js";
 
 // Empty bodies parse as {} — after the auth migration several mutations no
@@ -31,13 +31,10 @@ async function readJson<T>(c: Context): Promise<T> {
 }
 
 // Lot/put-away-qty-changing mutations recalculate allocations after commit —
-// best-effort, never roll back the mutation (concept 5).
-async function reallocateBestEffort(after: string): Promise<void> {
-  try {
-    await allocateAll(db);
-  } catch (err) {
-    console.error(`allocateAll after ${after} failed`, err);
-  }
+// scheduled in the background, never rolled back into the mutation response
+// (concept 5).
+function reallocateBestEffort(after: string): void {
+  scheduleAllocateAll(db, after);
 }
 
 export const putawayRoute = new Hono();
@@ -93,7 +90,7 @@ putawayRoute.post("/receiving-orders/:id/put-away-scans", async (c) => {
     shelfBoxId: body.shelfBoxId ?? null,
   });
   // A scan straight into a box moves stock (dock → on_hand): re-run allocation.
-  if (body.shelfBoxId) await reallocateBestEffort("put-away scan-to-box");
+  if (body.shelfBoxId) reallocateBestEffort("put-away scan-to-box");
   return c.json(row, 201);
 });
 
@@ -123,7 +120,7 @@ putawayRoute.post("/shelf-boxes/:id/scans", async (c) => {
   const body = await readJson<{ scanId?: string }>(c);
   if (!body.scanId) throw new HTTPException(400, { message: "scanId is required" });
   await assignScanToBox(db, { scanId: body.scanId, shelfBoxId: c.req.param("id"), actorId: actorFrom(c).id });
-  await reallocateBestEffort("put-away assign");
+  reallocateBestEffort("put-away assign");
   return c.json({ ok: true }, 200);
 });
 
@@ -134,7 +131,7 @@ putawayRoute.delete("/shelf-boxes/:id/scans/:scanId", async (c) => {
     scanId: c.req.param("scanId"),
     actorId: actorFrom(c).id,
   });
-  await reallocateBestEffort("put-away remove");
+  reallocateBestEffort("put-away remove");
   return c.json({ ok: true }, 200);
 });
 
@@ -147,7 +144,7 @@ putawayRoute.delete("/put-away-scans/:scanId", async (c) => {
 // Assign every staging scan of the box's order into the box.
 putawayRoute.post("/shelf-boxes/:id/add-all-unboxed", async (c) => {
   const result = await addAllUnboxedToBox(db, { shelfBoxId: c.req.param("id"), actorId: actorFrom(c).id });
-  await reallocateBestEffort("put-away add-all-unboxed");
+  reallocateBestEffort("put-away add-all-unboxed");
   return c.json(result, 200);
 });
 

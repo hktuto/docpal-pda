@@ -1,6 +1,6 @@
 import { newId } from "./id.js";
 import { HTTPException } from "hono/http-exception";
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { queryAll, queryGet, queryRun, type DbOrTx } from "./query.js";
 import { transactionLogs, inventoryTransactions, receivingScanLabels } from "./schema/index.js";
@@ -8,7 +8,7 @@ import { now } from "./now.js";
 import { emitEvent } from "./events.js";
 import { normalizePartNo, parseQrRaw } from "./scanParse.js";
 import { createPutAwayTaskTx } from "./putawaytasks.js";
-import { isStepEnabled, putAwayConfig } from "../config.js";
+import { isStepEnabled, putAwayConfig, receivingSubInventoryRules, type SubInventoryRule } from "../config.js";
 
 // ---------------------------------------------------------------------------
 // Receiving flow mutations (concepts 4-5 in docs/backend/concepts.md).
@@ -25,17 +25,55 @@ export interface ConfirmArrivalResult {
 }
 
 /**
+ * First-match-wins lookup of the configured confirm-arrival sub-inventory
+ * rules (flow config receivingSubInventoryRules; spec
+ * 2026-09-02-receiving-subinventory-rules-design.md). An item matches when
+ * its org_id is in the rule's orgIds AND its po_no matches the rule's glob
+ * poNoPattern ("*" matches any run of characters, everything else is literal;
+ * NULL po_no is matched as ""). null = no rule matched → the item's
+ * sub_inventory_code is left unchanged.
+ */
+export function matchSubInventoryRule(
+  orgId: number,
+  poNo: string | null,
+  rules: SubInventoryRule[]
+): string | null {
+  const po = poNo ?? "";
+  for (const rule of rules) {
+    if (rule.orgIds.includes(orgId) && poNoGlobTest(rule.poNoPattern, po)) {
+      return rule.subInventoryCode;
+    }
+  }
+  return null;
+}
+
+/** Glob match: "*" matches any run (including empty); every other character
+ *  is literal. Full-string, case-sensitive (same semantics as the old
+ *  startsWith prefix rule). */
+export function poNoGlobTest(pattern: string, poNo: string): boolean {
+  const source = pattern.split("*").map(escapeRegExp).join(".*");
+  return new RegExp(`^${source}$`).test(poNo);
+}
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
  * Confirm a pending or provisionally-received receiving order as in-hand:
  *   - order: status → in_hand, arrived_at / arrived_by stamped
  *   - items: full receipt (received_qty = line_qty) + date-code fallback from
  *     the order (concept 4); for provisional orders this completes the
  *     remaining receipt on top of any scanned partials. An item with NULL
  *     line_qty (upstream omitted the expected qty) keeps its received_qty and
- *     is counted as needsAttentionItems in the response.
+ *     is counted as needsAttentionItems in the response. Items are also
+ *     re-stamped with sub_inventory_code per the configured
+ *     receivingSubInventoryRules (org_id + po_no glob pattern) — upstream often
+ *     omits it and allocation matches on the (org_id, sub_inventory_code) pair.
  *   - ledger: RECEIVE_TO_DOCK (qty_type 'dock') row per item for the applied
  *     delta, plus a transaction_logs state transition
- * The caller runs `allocateAll` after commit (concept 5) — allocation is
- * best-effort and must never roll back a confirmed arrival.
+ * The caller schedules the allocation recompute after commit (concept 5) —
+ * allocation is best-effort and must never roll back a confirmed arrival.
  */
 export async function confirmReceivingArrival(
   db: AppDb,
@@ -64,12 +102,15 @@ export async function confirmReceivingArrival(
       lotCode: string | null;
       coo: string | null;
       cow: string | null;
+      orgId: number;
+      poNo: string | null;
     }>(
       tx,
       sql`SELECT rii.id, rii.line_qty AS "lineQty", rii.received_qty AS "receivedQty",
                  rii.part_no AS "partNo", rii.ctn_no AS "ctnNo",
                  rii.date_code AS "dateCode", rii.lot_code AS "lotCode",
-                 rii.coo, rii.cow
+                 rii.coo, rii.cow,
+                 rii.org_id AS "orgId", rii.po_no AS "poNo"
           FROM receiving_invoice_items rii
           JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
           WHERE ri.receiving_order_id = ${orderId}`
@@ -92,6 +133,30 @@ export async function confirmReceivingArrival(
           FROM receiving_invoices ri
           WHERE rii.receiving_invoice_id = ri.id AND ri.receiving_order_id = ${orderId}`
     );
+
+    // Sub-inventory defaulting (flow config receivingSubInventoryRules):
+    // upstream often omits the item location pair, and allocation matches on
+    // it — stamp sub_inventory_code per the configured rules before the
+    // caller schedules the allocation recompute. Recomputes every item of
+    // the order that a rule matches (rule output overwrites upstream values);
+    // items matched by no rule keep their value. org_id is never rewritten.
+    const subInvRules = receivingSubInventoryRules();
+    if (subInvRules.length > 0) {
+      const byCode = new Map<string, string[]>();
+      for (const it of items) {
+        const code = matchSubInventoryRule(it.orgId, it.poNo, subInvRules);
+        if (code === null) continue;
+        const ids = byCode.get(code);
+        if (ids) ids.push(it.id);
+        else byCode.set(code, [it.id]);
+      }
+      for (const [code, ids] of byCode) {
+        await queryRun(
+          tx,
+          sql`UPDATE receiving_invoice_items SET sub_inventory_code = ${code} WHERE ${inArray(sql`id`, ids)}`
+        );
+      }
+    }
 
     const needsAttentionItems = items.filter((it) => it.lineQty === null).length;
     const txnRows = items
@@ -209,7 +274,7 @@ function toCandidate(it: ScanItemRow): ScanMatchCandidate {
  *     double-scan reports the dedup error, not "qty exceeds remaining").
  *     Scans without a serial skip dedup (no row).
  *   - zero / multiple matches: 409 with the candidate list for the review dialog
- * The caller runs `allocateAll` after commit — best-effort, never roll back.
+ * The caller schedules the allocation recompute after commit — background, never roll back.
  */
 export async function scanReceivingOrder(
   db: AppDb,

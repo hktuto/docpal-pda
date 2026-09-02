@@ -23,7 +23,7 @@ The detail shows each invoice and each line item (part, expected quantity, recei
 
 ## 5. Create receiving-area inventory
 
-Confirmed items become receiving-area inventory lots that can be picked or put away.
+Confirmed items become receiving-area inventory lots that can be picked or put away. If the warehouse configures sub-inventory rules (Admin → Flow Config), each item's sub-inventory is assigned automatically at this point from its org and PO number, so the stock can match picking demand right away.
 
 ## 6. Switch to Picking view (optional)
 

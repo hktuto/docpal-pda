@@ -1289,6 +1289,14 @@ export default {
         allowedOrgIds: "此仓库接受的 Org ID（以逗号分隔）",
         allowedOrgIdsHint: "拣货、收货、库存查询、上架及盘点列表将按这些 Org 过滤。留空 = 所有 Org。",
         allowedOrgIdsInvalid: "Org ID 必须是以逗号分隔的整数（例如 2, 3）。",
+        rulesSection: "收货子库存规则（确认到货）",
+        ruleOrgIds: "Org ID（例如 140, 143）",
+        rulePoPattern: "PO 模式（例如 319*、11*W，* = 任意）",
+        ruleSubInventory: "子库存",
+        addRule: "新增规则",
+        removeRule: "删除",
+        rulesHint: "在确认收货到货时、分配计算之前应用。按顺序匹配，命中的第一条规则生效。PO 模式为通配符匹配：* 匹配任意字符，其余字符按字面匹配 —— 319* 匹配前缀、*W 匹配后缀、11*W 同时限定前后缀、* 匹配所有 PO。只会写入子库存，不会修改项目的 Org。未命中任何规则的项目保持原值。",
+        rulesInvalid: "每条规则都需要以逗号分隔的整数 Org ID、非空的 PO 模式和非空的子库存代码。",
         saved: "已保存。"
       }
     }

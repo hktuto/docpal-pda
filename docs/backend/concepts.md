@@ -85,6 +85,10 @@ Allocation sources, in priority order:
 
 Selection rules (confirmed with the business):
 
+- **Part key** — a source matches the demand when either its supplier
+  `part_no` or its `wcl_item_no` equals the picking item's `part_no`; real
+  picking items carry the WCL business key while receiving items / lots store
+  the supplier part number in `part_no`.
 - **Date-code rule** — if the demand carries a date-code requirement, sources
   must satisfy it; otherwise plain FIFO. Source precedence: picking item's
   `required_date_code` → picking order's `required_date_code_notice` →
@@ -96,7 +100,12 @@ Selection rules (confirmed with the business):
   (`receiving_invoice_items.org_id` + `sub_inventory_code`; item-level since
   2026-08-18). The code
   match is widened by `sub_inventory_share_members` (2026-07-27): sources
-  whose sub-inventory shares the order's `share_group` also match.
+  whose sub-inventory shares the order's `share_group` also match. Upstream
+  often omits the receiving item's pair — confirm-arrival re-stamps
+  `sub_inventory_code` from the configurable `receivingSubInventoryRules`
+  (org_id + po_no glob pattern; spec
+  `docs/superpowers/specs/2026-09-02-receiving-subinventory-rules-design.md`)
+  inside the arrival transaction, before the recompute runs.
 - **FIFO** — oldest `date_code` first (NULLS LAST).
 
 > Implementation: `apps/backend/src/db/allocate.ts` (`allocateAll`) — full

@@ -939,8 +939,8 @@ async function assignScanToBoxTx(
 /**
  * Assign one staging scan into a real box: moves the row, materializes/merges
  * the inventory lot (+ sources + put_away_qty), writes the two PUT_AWAY
- * ledger rows, and runs the auto-clear check. The caller runs `allocateAll`
- * after commit (best-effort).
+ * ledger rows, and runs the auto-clear check. The caller schedules the
+ * allocation recompute after commit.
  */
 export async function assignScanToBox(
   db: AppDb,
@@ -983,8 +983,8 @@ export async function addAllUnboxedToBox(
 /**
  * Remove one scan from its box back to staging: reverses the lot / sources /
  * put_away_qty and writes the reverse ledger rows (dock +qty / on_hand −qty).
- * 409 when the lot has pick allocations. The caller runs `allocateAll` after
- * commit (best-effort).
+ * 409 when the lot has pick allocations. The caller schedules the allocation
+ * recompute after commit.
  */
 export async function removeScanFromBox(
   db: AppDb,

@@ -34,6 +34,10 @@ import { allowDockStock } from "../config.js";
 //     skipped and counted (AllocateSummary.skippedReceivingSources) — the
 //     ingest-time defaulting rule (owner: Sean) is meant to populate it;
 //     until then such stock is surfaced, never silently allocated.
+//   - Part key: a source matches the demand when either its supplier part_no
+//     or its wcl_item_no equals the picking item's part_no — real picking
+//     items carry the WCL business key (e.g. "NCC-…") while receiving items /
+//     lots store the supplier part number in part_no.
 //   - FIFO: oldest date_code first (NULLS LAST).
 //   - Box granularity: a receiving line WITH ctn_no allocates down to that box
 //     (receiving_invoice_item_id); a line WITHOUT ctn_no allocates to the
@@ -164,7 +168,7 @@ async function loadLotSources(dbOrTx: DbOrTx, d: DemandRow): Promise<LotRow[]> {
                il.date_code AS "dateCode",
                (il.total_qty - il.allocated_qty) AS "available"
         FROM inventory_lots il
-        WHERE il.part_no = ${d.partNo}
+        WHERE (il.part_no = ${d.partNo} OR il.wcl_item_no = ${d.partNo})
           AND (${d.orgId}::int IS NULL OR il.org_id = ${d.orgId})
           AND (${d.subInventoryCode}::text IS NULL
                OR il.sub_inventory_code = ${d.subInventoryCode}
@@ -213,7 +217,7 @@ async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow): Promise<Recei
             AND po.working_by IS NOT NULL AND po.working_at >= ${expiry}
           GROUP BY a.receiving_order_id
         ) locked_ro ON locked_ro.ro_id = ro.id
-        WHERE rii.part_no = ${d.partNo}
+        WHERE (rii.part_no = ${d.partNo} OR rii.wcl_item_no = ${d.partNo})
           AND ro.status IN ('in_hand', 'provisional_received')
           AND (${d.orgId}::int IS NULL OR rii.org_id = ${d.orgId})
           AND (${d.subInventoryCode}::text IS NULL
@@ -497,4 +501,40 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
     await refreshAllocationStatus(tx);
     return summary;
   });
+}
+
+// ---------------------------------------------------------------------------
+// Background scheduler. allocateAll is a full-fleet recompute, so mutation
+// routes must not await it in the request path (a confirm-arrival / scan
+// would otherwise hang for the whole recompute). scheduleAllocateAll runs it
+// after the response, serialized: one run at a time, and triggers that arrive
+// during a run coalesce into a single follow-up run. UI freshness comes from
+// the allocation.computed SSE event, not the mutation response.
+// ---------------------------------------------------------------------------
+
+let allocateActive = false;
+let allocateQueued = false;
+
+export function scheduleAllocateAll(
+  db: AppDb,
+  after: string,
+  run: (db: AppDb) => Promise<unknown> = allocateAll
+): void {
+  allocateQueued = true;
+  if (allocateActive) return;
+  allocateActive = true;
+  void (async () => {
+    while (allocateQueued) {
+      allocateQueued = false;
+      try {
+        await run(db);
+      } catch (err) {
+        console.error(`allocateAll after ${after} failed`, err);
+      }
+    }
+    allocateActive = false;
+    // a trigger that landed between the last loop check and clearing the flag
+    // would otherwise be lost
+    if (allocateQueued) scheduleAllocateAll(db, after, run);
+  })();
 }

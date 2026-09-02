@@ -8,8 +8,10 @@
 - Show receiving order detail as one nested read: supplier (+ PDA profile),
   invoices → items (part embedded), each item carrying its flat mismatch
   columns.
-- Confirm arrival (flips the order toward `in_hand` and triggers the
-  backend's best-effort allocation pass).
+- Confirm arrival (flips the order toward `in_hand`, re-stamps each item's
+  `sub_inventory_code` from the configured `receivingSubInventoryRules`
+  org/po-pattern rules, and triggers the backend's best-effort allocation
+  pass).
 - Label scanning with **server-side parse/match**: the raw label goes to
   `POST /receiving-orders/:id/scan`; on a 409 `{message, candidates}`
   (`no_match` / `multiple_matches`) the review modal lets the operator pick
@@ -95,3 +97,4 @@
 - `docs/superpowers/specs/2026-07-03-receiving-mismatch-design.md`
 - `docs/superpowers/specs/2026-07-27-admin-issue-handling-design.md`
 - `docs/superpowers/specs/2026-07-27-admin-item-removal-and-audit-logs-design.md`
+- `docs/superpowers/specs/2026-09-02-receiving-subinventory-rules-design.md`

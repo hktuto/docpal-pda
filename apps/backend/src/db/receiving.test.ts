@@ -1,11 +1,12 @@
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { queryAll, queryGet } from "./query.js";
 import { decodeKoaQty, normalizePartNo, parseQrRaw } from "./scanParse.js";
+import { _setReceivingSubInventoryRulesForTests } from "../config.js";
 import {
   cancelReceivingItemMismatch,
   confirmReceivingArrival,
@@ -15,6 +16,7 @@ import {
   getReceivingItemMismatch,
   listReceivingMismatches,
   listReceivingOrderLogs,
+  poNoGlobTest,
   reportReceivingItemMismatch,
   scanReceivingOrder,
 } from "./receiving.js";
@@ -659,6 +661,63 @@ test("confirm-arrival: provisional_received completes the remaining receipt", as
   const again = await catchHttp(confirmReceivingArrival(client.db, orderId, actorId));
   assert.equal(again.status, 409);
   assert.equal(again.message, "cannot_confirm_arrival_from_in_hand");
+});
+
+// --- confirm-arrival sub-inventory defaulting (spec 2026-09-02) --------------
+
+test("poNoGlobTest: glob semantics — prefix, suffix, both, catch-all, literals", () => {
+  assert.equal(poNoGlobTest("319*", "319/ABC"), true); // prefix
+  assert.equal(poNoGlobTest("319*", "0319"), false);
+  assert.equal(poNoGlobTest("*W", "11AB/W"), true); // suffix
+  assert.equal(poNoGlobTest("*W", "W123"), false);
+  assert.equal(poNoGlobTest("11*W", "11AB/W"), true); // prefix + suffix
+  assert.equal(poNoGlobTest("11*W", "11W"), true); // * matches the empty run
+  assert.equal(poNoGlobTest("11*W", "11AB/X"), false);
+  assert.equal(poNoGlobTest("*", ""), true); // catch-all, matches empty/NULL
+  assert.equal(poNoGlobTest("A.B", "AXB"), false); // regex chars are literal
+  assert.equal(poNoGlobTest("A.B", "A.B"), true);
+});
+
+test("confirm-arrival: receivingSubInventoryRules stamp sub_inventory_code (glob, catch-all, org filter)", async () => {
+  await reseed(client);
+  const actorId = await actorIdOf("operator");
+  const orderId = await orderIdOf("100002");
+
+  // Controlled (org_id, po_no, sub_inventory_code) per item — codes must be
+  // org_info pairs that exist in the seed (composite FK).
+  const org140Prefix = await itemIdOf(orderId, "RK73H1JTTD4702F");
+  const org143Suffix = await itemIdOf(orderId, "RK73H1JTTD2202F");
+  const org143CatchAll = await itemIdOf(orderId, "RK73B1JTTD181G");
+  const org2Unmatched = await itemIdOf(orderId, "RK73H2ATTD1372F");
+  const org140NullPo = await itemIdOf(orderId, "RK73H1JTTD1002F");
+  await client.db.execute(sql`UPDATE receiving_invoice_items SET org_id = 140, po_no = '319/ABC', sub_inventory_code = NULL WHERE id = ${org140Prefix}`);
+  await client.db.execute(sql`UPDATE receiving_invoice_items SET org_id = 143, po_no = '11AB/W', sub_inventory_code = NULL WHERE id = ${org143Suffix}`);
+  await client.db.execute(sql`UPDATE receiving_invoice_items SET org_id = 143, po_no = '999/XYZ', sub_inventory_code = 'STAGING' WHERE id = ${org143CatchAll}`);
+  await client.db.execute(sql`UPDATE receiving_invoice_items SET org_id = 2, po_no = '319/ABC', sub_inventory_code = 'WSTORE1' WHERE id = ${org2Unmatched}`);
+  await client.db.execute(sql`UPDATE receiving_invoice_items SET org_id = 140, po_no = NULL, sub_inventory_code = NULL WHERE id = ${org140NullPo}`);
+
+  _setReceivingSubInventoryRulesForTests([
+    { orgIds: [140, 143, 120], poNoPattern: "319*", subInventoryCode: "SZHK1" },
+    { orgIds: [140, 143, 120], poNoPattern: "11*W", subInventoryCode: "STAGING" },
+    { orgIds: [140, 143, 120], poNoPattern: "*", subInventoryCode: "STORE1" },
+  ]);
+  try {
+    await confirmReceivingArrival(client.db, orderId, actorId);
+  } finally {
+    _setReceivingSubInventoryRulesForTests([]);
+  }
+
+  const rows = await queryAll<{ id: string; subInventoryCode: string | null }>(
+    client.db,
+    sql`SELECT id, sub_inventory_code AS "subInventoryCode" FROM receiving_invoice_items
+        WHERE ${inArray(sql`id`, [org140Prefix, org143Suffix, org143CatchAll, org2Unmatched, org140NullPo])}`
+  );
+  const byId = new Map(rows.map((r) => [r.id, r.subInventoryCode]));
+  assert.equal(byId.get(org140Prefix), "SZHK1"); // prefix glob
+  assert.equal(byId.get(org143Suffix), "STAGING"); // prefix+suffix glob
+  assert.equal(byId.get(org143CatchAll), "STORE1"); // catch-all overwrites upstream value
+  assert.equal(byId.get(org2Unmatched), "WSTORE1"); // org in no rule → untouched
+  assert.equal(byId.get(org140NullPo), "STORE1"); // NULL po_no hits the catch-all
 });
 
 // --- admin audit logs + item removal (2026-07-27 design) ---------------------

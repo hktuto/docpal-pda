@@ -32,7 +32,7 @@ import { allowedOrgFilter } from "./org-filter.js";
 // package reverses the source, the allocation, and the ledger rows.
 // picking_items.picked_qty tracks BOXED packages only (old recomputePickingItem
 // semantics), so an order auto-finishes when its last package is boxed. The
-// caller runs allocateAll after scan/remove commits.
+// caller schedules the allocation recompute after scan/remove commits.
 //
 // Box-scoped measuring/verify (2026-08-11 design): no measuring task exists —
 // closing a box IS the measuring completion; close spawns the box's verify
@@ -608,7 +608,7 @@ export async function releaseWorkLock(db: AppDb, input: { orderId: string; actor
 }
 
 /** Admin reorder: rewrite priority_seq 1..n for the given open orders, emit the SSE event.
- *  The caller runs allocateAll after commit. */
+ *  The caller schedules the allocation recompute after commit. */
 export async function reorderPickingOrders(
   db: AppDb,
   input: { actorId: string; orderIds: string[] }
@@ -2078,8 +2078,8 @@ export async function reportPickingOrderIssues(
 }
 
 /** Resolve an open picking issue (admin): back to 'pending' with the issue
- *  fields cleared, transition log + SSE event. The caller runs allocateAll
- *  after commit so the order takes part in allocation again. */
+ *  fields cleared, transition log + SSE event. The caller schedules the
+ *  allocation recompute after commit so the order takes part in allocation again. */
 export async function resolvePickingOrderIssue(
   db: AppDb,
   input: { orderId: string; actorId: string; resolutionNote?: string | null }

@@ -95,3 +95,60 @@ test("parseFlowConfig: allowedOrgIds validation", () => {
   assert.throws(() => parseFlowConfig('{"allowedOrgIds":[2.5]}'), /allowedOrgIds must be an array of integers/);
   assert.throws(() => parseFlowConfig('{"allowedOrgIds":[null]}'), /allowedOrgIds must be an array of integers/);
 });
+
+test("parseFlowConfig: receivingSubInventoryRules merges over the [] default", () => {
+  assert.deepEqual(parseFlowConfig(undefined).receivingSubInventoryRules, []);
+  assert.deepEqual(parseFlowConfig("{}").receivingSubInventoryRules, []);
+  const cfg = parseFlowConfig(
+    '{"receivingSubInventoryRules":[' +
+      '{"orgIds":[140,143],"poNoPattern":"319*","subInventoryCode":"SZHK2"},' +
+      '{"orgIds":[140,143],"poNoPattern":"11*W","subInventoryCode":"GZHK2"},' +
+      '{"orgIds":[140,143],"poNoPattern":"*","subInventoryCode":"STORE1"}]}'
+  );
+  assert.deepEqual(cfg.receivingSubInventoryRules, [
+    { orgIds: [140, 143], poNoPattern: "319*", subInventoryCode: "SZHK2" },
+    { orgIds: [140, 143], poNoPattern: "11*W", subInventoryCode: "GZHK2" },
+    { orgIds: [140, 143], poNoPattern: "*", subInventoryCode: "STORE1" },
+  ]);
+});
+
+test("parseFlowConfig: legacy poNoPrefix rules normalize to glob patterns", () => {
+  const cfg = parseFlowConfig(
+    '{"receivingSubInventoryRules":[' +
+      '{"orgIds":[140],"poNoPrefix":"319","subInventoryCode":"SZHK2"},' +
+      '{"orgIds":[140],"poNoPrefix":"","subInventoryCode":"STORE1"}]}'
+  );
+  assert.deepEqual(cfg.receivingSubInventoryRules, [
+    { orgIds: [140], poNoPattern: "319*", subInventoryCode: "SZHK2" },
+    { orgIds: [140], poNoPattern: "*", subInventoryCode: "STORE1" },
+  ]);
+});
+
+test("parseFlowConfig: receivingSubInventoryRules validation", () => {
+  assert.throws(() => parseFlowConfig('{"receivingSubInventoryRules":{}}'), /must be an array/);
+  assert.throws(() => parseFlowConfig('{"receivingSubInventoryRules":["x"]}'), /\[0\] must be an object/);
+  assert.throws(
+    () => parseFlowConfig('{"receivingSubInventoryRules":[{"orgIds":[],"poNoPattern":"*","subInventoryCode":"A"}]}'),
+    /orgIds must be a non-empty array of integers/
+  );
+  assert.throws(
+    () => parseFlowConfig('{"receivingSubInventoryRules":[{"orgIds":[1.5],"poNoPattern":"*","subInventoryCode":"A"}]}'),
+    /orgIds must be a non-empty array of integers/
+  );
+  assert.throws(
+    () => parseFlowConfig('{"receivingSubInventoryRules":[{"orgIds":[1],"subInventoryCode":"A"}]}'),
+    /poNoPattern must be a non-empty glob string/
+  );
+  assert.throws(
+    () => parseFlowConfig('{"receivingSubInventoryRules":[{"orgIds":[1],"poNoPattern":"","subInventoryCode":"A"}]}'),
+    /poNoPattern must be a non-empty glob string/
+  );
+  assert.throws(
+    () => parseFlowConfig('{"receivingSubInventoryRules":[{"orgIds":[1],"poNoPattern":"*","subInventoryCode":""}]}'),
+    /subInventoryCode must be a non-empty string/
+  );
+  assert.throws(
+    () => parseFlowConfig('{"receivingSubInventoryRules":[{"orgIds":[1],"poNoPattern":"*","subInventoryCode":"A","x":1}]}'),
+    /unknown key "x"/
+  );
+});

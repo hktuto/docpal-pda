@@ -9,7 +9,7 @@ import {
   listGoodsVerifyTasks,
   verifyGoodsVerifyTask,
 } from "../db/goodsverify.js";
-import { allocateAll } from "../db/allocate.js";
+import { scheduleAllocateAll } from "../db/allocate.js";
 import { actorFrom } from "../auth/middleware.js";
 
 // Empty bodies parse as {} — after the auth migration the actor comes from
@@ -25,13 +25,10 @@ async function readJson<T>(c: Context): Promise<T> {
 }
 
 // An ADJUST changes available_qty → recalculate allocations after commit,
-// best-effort, never roll back the verify (concept 5).
-async function reallocateBestEffort(after: string): Promise<void> {
-  try {
-    await allocateAll(db);
-  } catch (err) {
-    console.error(`allocateAll after ${after} failed`, err);
-  }
+// scheduled in the background, never rolled back into the verify response
+// (concept 5).
+function reallocateBestEffort(after: string): void {
+  scheduleAllocateAll(db, after);
 }
 
 export const goodsVerifyRoute = new Hono();
@@ -64,7 +61,7 @@ goodsVerifyRoute.get("/goods-verify-tasks/:id", async (c) => {
 
 // Verify a pending task: stamps verified_by/at (+ transition log), closes out
 // the box when the task has one, and on a count mismatch corrects the lot and
-// writes the ADJUST ledger row → best-effort allocateAll after commit.
+// writes the ADJUST ledger row → schedules the allocation recompute after commit.
 goodsVerifyRoute.post("/goods-verify-tasks/:id/verify", async (c) => {
   const body = await readJson<{ countedQty?: number }>(c);
   const { adjusted } = await verifyGoodsVerifyTask(db, {
@@ -72,6 +69,6 @@ goodsVerifyRoute.post("/goods-verify-tasks/:id/verify", async (c) => {
     actorId: actorFrom(c).id,
     countedQty: body.countedQty,
   });
-  if (adjusted) await reallocateBestEffort("goods-verify adjust");
+  if (adjusted) reallocateBestEffort("goods-verify adjust");
   return c.json(await getGoodsVerifyTaskRow(db, c.req.param("id")), 200);
 });
