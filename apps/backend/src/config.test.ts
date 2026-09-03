@@ -101,26 +101,36 @@ test("parseFlowConfig: receivingSubInventoryRules merges over the [] default", (
   assert.deepEqual(parseFlowConfig("{}").receivingSubInventoryRules, []);
   const cfg = parseFlowConfig(
     '{"receivingSubInventoryRules":[' +
-      '{"orgIds":[140,143],"poNoPattern":"319*","subInventoryCode":"SZHK2"},' +
-      '{"orgIds":[140,143],"poNoPattern":"11*W","subInventoryCode":"GZHK2"},' +
-      '{"orgIds":[140,143],"poNoPattern":"*","subInventoryCode":"STORE1"}]}'
+      '{"orgIds":[140,143],"patterns":[' +
+        '{"poNoPattern":"319*","subInventoryCode":"SZHK2"},' +
+        '{"poNoPattern":"11*W","subInventoryCode":"GZHK2"}],' +
+      '"default":"STORE1"},' +
+      '{"orgIds":[9],"patterns":[],"default":null}]}'
   );
   assert.deepEqual(cfg.receivingSubInventoryRules, [
-    { orgIds: [140, 143], poNoPattern: "319*", subInventoryCode: "SZHK2" },
-    { orgIds: [140, 143], poNoPattern: "11*W", subInventoryCode: "GZHK2" },
-    { orgIds: [140, 143], poNoPattern: "*", subInventoryCode: "STORE1" },
+    {
+      orgIds: [140, 143],
+      patterns: [
+        { poNoPattern: "319*", subInventoryCode: "SZHK2" },
+        { poNoPattern: "11*W", subInventoryCode: "GZHK2" },
+      ],
+      default: "STORE1",
+    },
+    { orgIds: [9], patterns: [], default: null },
   ]);
 });
 
-test("parseFlowConfig: legacy poNoPrefix rules normalize to glob patterns", () => {
+test("parseFlowConfig: legacy flat rules normalize to groups", () => {
   const cfg = parseFlowConfig(
     '{"receivingSubInventoryRules":[' +
-      '{"orgIds":[140],"poNoPrefix":"319","subInventoryCode":"SZHK2"},' +
+      '{"orgIds":[140],"poNoPattern":"319*","subInventoryCode":"SZHK2"},' +
+      '{"orgIds":[140],"poNoPrefix":"329","subInventoryCode":"GZHK2"},' +
       '{"orgIds":[140],"poNoPrefix":"","subInventoryCode":"STORE1"}]}'
   );
   assert.deepEqual(cfg.receivingSubInventoryRules, [
-    { orgIds: [140], poNoPattern: "319*", subInventoryCode: "SZHK2" },
-    { orgIds: [140], poNoPattern: "*", subInventoryCode: "STORE1" },
+    { orgIds: [140], patterns: [{ poNoPattern: "319*", subInventoryCode: "SZHK2" }], default: null },
+    { orgIds: [140], patterns: [{ poNoPattern: "329*", subInventoryCode: "GZHK2" }], default: null },
+    { orgIds: [140], patterns: [{ poNoPattern: "*", subInventoryCode: "STORE1" }], default: null },
   ]);
 });
 
@@ -128,27 +138,77 @@ test("parseFlowConfig: receivingSubInventoryRules validation", () => {
   assert.throws(() => parseFlowConfig('{"receivingSubInventoryRules":{}}'), /must be an array/);
   assert.throws(() => parseFlowConfig('{"receivingSubInventoryRules":["x"]}'), /\[0\] must be an object/);
   assert.throws(
-    () => parseFlowConfig('{"receivingSubInventoryRules":[{"orgIds":[],"poNoPattern":"*","subInventoryCode":"A"}]}'),
+    () => parseFlowConfig('{"receivingSubInventoryRules":[{"orgIds":[],"patterns":[],"default":null}]}'),
     /orgIds must be a non-empty array of integers/
   );
   assert.throws(
-    () => parseFlowConfig('{"receivingSubInventoryRules":[{"orgIds":[1.5],"poNoPattern":"*","subInventoryCode":"A"}]}'),
+    () => parseFlowConfig('{"receivingSubInventoryRules":[{"orgIds":[1.5],"patterns":[],"default":null}]}'),
     /orgIds must be a non-empty array of integers/
   );
   assert.throws(
-    () => parseFlowConfig('{"receivingSubInventoryRules":[{"orgIds":[1],"subInventoryCode":"A"}]}'),
+    () => parseFlowConfig('{"receivingSubInventoryRules":[{"orgIds":[1]}]}'),
+    /needs patterns\[\]/
+  );
+  assert.throws(
+    () => parseFlowConfig('{"receivingSubInventoryRules":[{"orgIds":[1],"patterns":["x"]}]}'),
+    /patterns\[0\] must be an object/
+  );
+  assert.throws(
+    () => parseFlowConfig('{"receivingSubInventoryRules":[{"orgIds":[1],"patterns":[{"poNoPattern":"","subInventoryCode":"A"}]}]}'),
     /poNoPattern must be a non-empty glob string/
   );
   assert.throws(
-    () => parseFlowConfig('{"receivingSubInventoryRules":[{"orgIds":[1],"poNoPattern":"","subInventoryCode":"A"}]}'),
-    /poNoPattern must be a non-empty glob string/
-  );
-  assert.throws(
-    () => parseFlowConfig('{"receivingSubInventoryRules":[{"orgIds":[1],"poNoPattern":"*","subInventoryCode":""}]}'),
+    () => parseFlowConfig('{"receivingSubInventoryRules":[{"orgIds":[1],"patterns":[{"poNoPattern":"*","subInventoryCode":""}]}]}'),
     /subInventoryCode must be a non-empty string/
   );
   assert.throws(
-    () => parseFlowConfig('{"receivingSubInventoryRules":[{"orgIds":[1],"poNoPattern":"*","subInventoryCode":"A","x":1}]}'),
+    () => parseFlowConfig('{"receivingSubInventoryRules":[{"orgIds":[1],"patterns":[],"default":2}]}'),
+    /default must be a non-empty string or null/
+  );
+  assert.throws(
+    () => parseFlowConfig('{"receivingSubInventoryRules":[{"orgIds":[1],"patterns":[],"default":null,"x":1}]}'),
     /unknown key "x"/
+  );
+});
+
+test("parseFlowConfig: pickingFromSubinventoryOrgs merges over the [] default", () => {
+  assert.deepEqual(parseFlowConfig(undefined).pickingFromSubinventoryOrgs, []);
+  assert.deepEqual(parseFlowConfig("{}").pickingFromSubinventoryOrgs, []);
+  const cfg = parseFlowConfig(
+    '{"pickingFromSubinventoryOrgs":[' +
+      '{"orgId":143,"fromSubinventories":["SZHK2","GZHK2","SHHK2","BJHK2"]},' +
+      '{"orgId":220,"fromSubinventories":["THHK2"]}]}'
+  );
+  assert.deepEqual(cfg.pickingFromSubinventoryOrgs, [
+    { orgId: 143, fromSubinventories: ["SZHK2", "GZHK2", "SHHK2", "BJHK2"] },
+    { orgId: 220, fromSubinventories: ["THHK2"] },
+  ]);
+});
+
+test("parseFlowConfig: pickingFromSubinventoryOrgs validation", () => {
+  assert.throws(() => parseFlowConfig('{"pickingFromSubinventoryOrgs":{}}'), /must be an array/);
+  assert.throws(() => parseFlowConfig('{"pickingFromSubinventoryOrgs":["x"]}'), /\[0\] must be an object/);
+  assert.throws(
+    () => parseFlowConfig('{"pickingFromSubinventoryOrgs":[{"orgId":"143","fromSubinventories":["A"]}]}'),
+    /orgId must be an integer/
+  );
+  assert.throws(
+    () => parseFlowConfig('{"pickingFromSubinventoryOrgs":[{"orgId":143,"fromSubinventories":[]}]}'),
+    /fromSubinventories must be a non-empty array of non-empty strings/
+  );
+  assert.throws(
+    () => parseFlowConfig('{"pickingFromSubinventoryOrgs":[{"orgId":143,"fromSubinventories":["A",""]}]}'),
+    /fromSubinventories must be a non-empty array of non-empty strings/
+  );
+  assert.throws(
+    () => parseFlowConfig('{"pickingFromSubinventoryOrgs":[{"orgId":143,"fromSubinventories":["A"],"x":1}]}'),
+    /unknown key "x"/
+  );
+  assert.throws(
+    () =>
+      parseFlowConfig(
+        '{"pickingFromSubinventoryOrgs":[{"orgId":143,"fromSubinventories":["A"]},{"orgId":140,"fromSubinventories":["A"]}]}'
+      ),
+    /duplicate from_subinventory "A"/
   );
 });

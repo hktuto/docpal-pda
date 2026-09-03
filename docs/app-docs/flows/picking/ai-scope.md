@@ -89,7 +89,15 @@
   org) also match. Groups are configured per warehouse on the admin
   sub-inventories page (`/admin/sub-inventory-share-groups`); the seed ships
   a demo group (org 2 STORE1 + WSTORE1 in `HK`). Customer-segregated stores
-  keep their customer restriction even inside a share group.
+  keep their customer restriction even inside a share group. Transfer orders
+  are the exception: items carrying `additional_data.from_subinventory` name
+  their source there (the order's pair is the destination) — `allocateAll`
+  converts the demand's pair via flow-config `pickingFromSubinventoryOrgs`
+  (from_subinventory → org), taking the sub-inventory from
+  `receivingSubInventoryRules` over the order's `po_no` (no match → the
+  from_subinventory code itself; no org group → order pair unchanged). Pure
+  lookup at allocation time, nothing is written back (spec
+  `docs/superpowers/specs/2026-09-03-picking-from-subinventory-orgs-design.md`).
 - Allocation sources: shelf lots first, then in-hand receiving (dock) stock —
   a picking order can allocate straight off the receiving dock before
   put-away (cross-dock). When the flow config (`warehouse_config` row

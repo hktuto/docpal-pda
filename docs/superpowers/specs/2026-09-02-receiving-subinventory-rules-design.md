@@ -36,37 +36,50 @@ but it is per-warehouse data, not code.
 
 ## Config shape
 
+Rules are **grouped by org set** (2026-09-02, revised same day): each group
+carries the org_ids it applies to, an ordered pattern list, and an explicit
+default — so orgs that share a mapping (e.g. 140/143/120) are configured once.
+
 ```json
 "receivingSubInventoryRules": [
-  { "orgIds": [140, 143, 120], "poNoPattern": "319*", "subInventoryCode": "SZHK2" },
-  { "orgIds": [140, 143, 120], "poNoPattern": "329*", "subInventoryCode": "GZHK2" },
-  { "orgIds": [140, 143, 120], "poNoPattern": "339*", "subInventoryCode": "SHHK2" },
-  { "orgIds": [140, 143, 120], "poNoPattern": "349*", "subInventoryCode": "BJHK2" },
-  { "orgIds": [140, 143, 120], "poNoPattern": "11*W", "subInventoryCode": "ITSTORE1" },
-  { "orgIds": [140, 143, 120], "poNoPattern": "*",    "subInventoryCode": "STORE1" }
+  { "orgIds": [140, 143, 120],
+    "patterns": [
+      { "poNoPattern": "319*", "subInventoryCode": "SZHK2" },
+      { "poNoPattern": "329*", "subInventoryCode": "GZHK2" },
+      { "poNoPattern": "339*", "subInventoryCode": "SHHK2" },
+      { "poNoPattern": "349*", "subInventoryCode": "BJHK2" },
+      { "poNoPattern": "11*W", "subInventoryCode": "ITSTORE1" }
+    ],
+    "default": "STORE1" }
 ]
 ```
 
-- Ordered; **first match wins**.
-- An item matches when `item.org_id ∈ orgIds` AND its `po_no` matches the
-  `poNoPattern` **glob**: `*` matches any run of characters, every other
+- An item enters the **first group whose `orgIds` contains its org_id**;
+  groups for other orgs (and later groups for the same org) are skipped.
+- Inside the group, patterns are tried in order — **first match wins**. The
+  `poNoPattern` is a **glob**: `*` matches any run of characters, every other
   character is literal — `319*` prefix, `*W` suffix, `11*W` prefix+suffix,
-  `*` catch-all (also matches a NULL `po_no`, which is matched as `""`).
-  Full-string, case-sensitive.
-- A legacy rule stored with `poNoPrefix` (the initial 2026-09-02 shape) is
-  normalized at load to the glob `prefix + "*"` (`""` → `"*"`).
+  `*` catch-all. A NULL `po_no` is matched as `""`. Full-string,
+  case-sensitive.
+- When no pattern matches, the group's **`default`** is stamped
+  (`null`/absent = leave the item unchanged). Items whose org is in no group
+  keep their value.
+- Legacy stored shapes are normalized at load: a flat
+  `{orgIds, poNoPattern, subInventoryCode}` rule becomes a single-pattern
+  group with `default: null`; the oldest `poNoPrefix` form maps to the glob
+  `prefix + "*"` (`""` → `"*"`).
 - Default `[]` = feature off.
 
 ## Implementation
 
-- `apps/backend/src/config.ts` — `SubInventoryRule` type, key validation in
-  `mergeFlowConfigJson` (`orgIds` non-empty int array, `poNoPattern` non-empty
-  glob string, `subInventoryCode` non-empty), `receivingSubInventoryRules()`
-  getter.
+- `apps/backend/src/config.ts` — `SubInventoryRuleGroup` /
+  `SubInventoryPatternRule` types, key validation in `mergeFlowConfigJson`
+  (with legacy-shape normalization), `receivingSubInventoryRules()` getter.
 - `apps/backend/src/db/receiving.ts` — `poNoGlobTest` (glob → anchored RegExp,
-  regex chars escaped) and pure `matchSubInventoryRule(orgId, poNo, rules)`;
+  regex chars escaped) and pure `matchSubInventoryRule(orgId, poNo, groups)`;
   `confirmReceivingArrival` groups the order's items by the resulting code and
   runs one UPDATE per distinct code.
 - Admin: `routes/admin/flowConfig.ts` needed no change (the key passes through
   the existing validate/persist/apply pipeline); the console's Flow Config
-  page (`apps/admin/pages/flow-config.vue`) gained a rule-list editor.
+  page (`apps/admin/pages/flow-config.vue`) gained a grouped rule editor
+  (org group → pattern rows + default).

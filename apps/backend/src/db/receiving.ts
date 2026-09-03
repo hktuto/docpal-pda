@@ -8,7 +8,7 @@ import { now } from "./now.js";
 import { emitEvent } from "./events.js";
 import { normalizePartNo, parseQrRaw } from "./scanParse.js";
 import { createPutAwayTaskTx } from "./putawaytasks.js";
-import { isStepEnabled, putAwayConfig, receivingSubInventoryRules, type SubInventoryRule } from "../config.js";
+import { isStepEnabled, putAwayConfig, receivingSubInventoryRules, type SubInventoryRuleGroup } from "../config.js";
 
 // ---------------------------------------------------------------------------
 // Receiving flow mutations (concepts 4-5 in docs/backend/concepts.md).
@@ -26,23 +26,26 @@ export interface ConfirmArrivalResult {
 
 /**
  * First-match-wins lookup of the configured confirm-arrival sub-inventory
- * rules (flow config receivingSubInventoryRules; spec
- * 2026-09-02-receiving-subinventory-rules-design.md). An item matches when
- * its org_id is in the rule's orgIds AND its po_no matches the rule's glob
- * poNoPattern ("*" matches any run of characters, everything else is literal;
- * NULL po_no is matched as ""). null = no rule matched → the item's
- * sub_inventory_code is left unchanged.
+ * rule groups (flow config receivingSubInventoryRules; spec
+ * 2026-09-02-receiving-subinventory-rules-design.md). An item enters the
+ * first group whose orgIds contains its org_id; the group's patterns are
+ * tried in order (glob poNoPattern — "*" matches any run of characters,
+ * everything else is literal; NULL po_no is matched as ""), falling back to
+ * the group's default. null = no group/pattern matched and no default → the
+ * item's sub_inventory_code is left unchanged.
  */
 export function matchSubInventoryRule(
   orgId: number,
   poNo: string | null,
-  rules: SubInventoryRule[]
+  groups: SubInventoryRuleGroup[]
 ): string | null {
   const po = poNo ?? "";
-  for (const rule of rules) {
-    if (rule.orgIds.includes(orgId) && poNoGlobTest(rule.poNoPattern, po)) {
-      return rule.subInventoryCode;
+  for (const group of groups) {
+    if (!group.orgIds.includes(orgId)) continue;
+    for (const p of group.patterns) {
+      if (poNoGlobTest(p.poNoPattern, po)) return p.subInventoryCode;
     }
+    return group.default;
   }
   return null;
 }

@@ -678,7 +678,7 @@ test("poNoGlobTest: glob semantics — prefix, suffix, both, catch-all, literals
   assert.equal(poNoGlobTest("A.B", "A.B"), true);
 });
 
-test("confirm-arrival: receivingSubInventoryRules stamp sub_inventory_code (glob, catch-all, org filter)", async () => {
+test("confirm-arrival: receivingSubInventoryRules stamp sub_inventory_code (glob, group default, org filter)", async () => {
   await reseed(client);
   const actorId = await actorIdOf("operator");
   const orderId = await orderIdOf("100002");
@@ -697,9 +697,14 @@ test("confirm-arrival: receivingSubInventoryRules stamp sub_inventory_code (glob
   await client.db.execute(sql`UPDATE receiving_invoice_items SET org_id = 140, po_no = NULL, sub_inventory_code = NULL WHERE id = ${org140NullPo}`);
 
   _setReceivingSubInventoryRulesForTests([
-    { orgIds: [140, 143, 120], poNoPattern: "319*", subInventoryCode: "SZHK1" },
-    { orgIds: [140, 143, 120], poNoPattern: "11*W", subInventoryCode: "STAGING" },
-    { orgIds: [140, 143, 120], poNoPattern: "*", subInventoryCode: "STORE1" },
+    {
+      orgIds: [140, 143, 120],
+      patterns: [
+        { poNoPattern: "319*", subInventoryCode: "SZHK1" },
+        { poNoPattern: "11*W", subInventoryCode: "STAGING" },
+      ],
+      default: "STORE1",
+    },
   ]);
   try {
     await confirmReceivingArrival(client.db, orderId, actorId);
@@ -715,9 +720,9 @@ test("confirm-arrival: receivingSubInventoryRules stamp sub_inventory_code (glob
   const byId = new Map(rows.map((r) => [r.id, r.subInventoryCode]));
   assert.equal(byId.get(org140Prefix), "SZHK1"); // prefix glob
   assert.equal(byId.get(org143Suffix), "STAGING"); // prefix+suffix glob
-  assert.equal(byId.get(org143CatchAll), "STORE1"); // catch-all overwrites upstream value
-  assert.equal(byId.get(org2Unmatched), "WSTORE1"); // org in no rule → untouched
-  assert.equal(byId.get(org140NullPo), "STORE1"); // NULL po_no hits the catch-all
+  assert.equal(byId.get(org143CatchAll), "STORE1"); // group default overwrites upstream value
+  assert.equal(byId.get(org2Unmatched), "WSTORE1"); // org in no group → untouched
+  assert.equal(byId.get(org140NullPo), "STORE1"); // NULL po_no falls to the group default
 });
 
 // --- admin audit logs + item removal (2026-07-27 design) ---------------------

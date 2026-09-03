@@ -200,13 +200,27 @@ export interface MismatchListRow {
 
 // ---- flow config (warehouse_config row "flow") ----
 
-export interface SubInventoryRuleRow {
-  /** Item org_ids the rule applies to. */
-  orgIds: number[];
-  /** po_no glob pattern: "*" matches any run — "319*" prefix, "*W" suffix, "*" catch-all. */
+export interface SubInventoryPatternRuleRow {
+  /** po_no glob pattern: "*" matches any run — "319*" prefix, "*W" suffix. */
   poNoPattern: string;
   /** sub_inventory_code stamped on matching items. */
   subInventoryCode: string;
+}
+
+export interface SubInventoryRuleGroupRow {
+  /** Item org_ids the group applies to. */
+  orgIds: number[];
+  /** Ordered glob patterns, first match wins. */
+  patterns: SubInventoryPatternRuleRow[];
+  /** Stamped when the org matches but no pattern does; null = leave unchanged. */
+  default: string | null;
+}
+
+export interface FromSubinventoryOrgGroupRow {
+  /** Converted org_id used for allocation matching. */
+  orgId: number;
+  /** Exact additional_data.from_subinventory codes (case-sensitive). */
+  fromSubinventories: string[];
 }
 
 export interface FlowConfigState {
@@ -217,8 +231,10 @@ export interface FlowConfigState {
     putAway: { autoCreateTasks: boolean; suggestShelf: "existing-stock" | "off" };
     /** Org partitions this warehouse accepts; [] = all orgs (no filtering). */
     allowedOrgIds: number[];
-    /** Confirm-arrival sub-inventory defaulting rules; ordered, first match wins. */
-    receivingSubInventoryRules: SubInventoryRuleRow[];
+    /** Confirm-arrival sub-inventory defaulting rule groups. */
+    receivingSubInventoryRules: SubInventoryRuleGroupRow[];
+    /** Transfer-order from_subinventory → org conversion groups. */
+    pickingFromSubinventoryOrgs: FromSubinventoryOrgGroupRow[];
   };
   /** Raw warehouse_config row value (partial JSON as stored). */
   stored: Record<string, unknown>;

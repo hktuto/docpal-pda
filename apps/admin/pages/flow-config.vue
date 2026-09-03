@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { FlowConfigState, SubInventoryRuleRow } from "~/utils/flowApi";
+import type { FlowConfigState, SubInventoryRuleGroupRow, FromSubinventoryOrgGroupRow } from "~/utils/flowApi";
 
 // Flow config editor (spec 2026-08-12-admin-flow-config-design.md): a
 // structured form over the warehouse_config row "flow". Saves apply at
@@ -10,10 +10,20 @@ const { t } = useI18n();
 
 const STEPS = ["receiving", "put-away", "picking", "goods-verify", "measuring", "verify", "stock-search"] as const;
 
-interface RuleDraft {
-  orgIdsText: string;
+interface PatternDraft {
   poNoPattern: string;
   subInventoryCode: string;
+}
+
+interface GroupDraft {
+  orgIdsText: string;
+  defaultCode: string;
+  patterns: PatternDraft[];
+}
+
+interface FromOrgGroupDraft {
+  orgIdText: string;
+  codesText: string;
 }
 
 const state = ref<FlowConfigState | null>(null);
@@ -22,7 +32,8 @@ const allowDockStock = ref(true);
 const autoCreateTasks = ref(false);
 const suggestShelf = ref<"existing-stock" | "off">("existing-stock");
 const allowedOrgIdsText = ref("");
-const rules = ref<RuleDraft[]>([]);
+const groups = ref<GroupDraft[]>([]);
+const fromOrgGroups = ref<FromOrgGroupDraft[]>([]);
 
 const loading = ref(true);
 const saving = ref(false);
@@ -46,10 +57,14 @@ async function load() {
     autoCreateTasks.value = state.value.config.putAway.autoCreateTasks;
     suggestShelf.value = state.value.config.putAway.suggestShelf;
     allowedOrgIdsText.value = state.value.config.allowedOrgIds.join(", ");
-    rules.value = state.value.config.receivingSubInventoryRules.map((r) => ({
-      orgIdsText: r.orgIds.join(", "),
-      poNoPattern: r.poNoPattern,
-      subInventoryCode: r.subInventoryCode,
+    groups.value = state.value.config.receivingSubInventoryRules.map((g) => ({
+      orgIdsText: g.orgIds.join(", "),
+      defaultCode: g.default ?? "",
+      patterns: g.patterns.map((p) => ({ poNoPattern: p.poNoPattern, subInventoryCode: p.subInventoryCode })),
+    }));
+    fromOrgGroups.value = (state.value.config.pickingFromSubinventoryOrgs ?? []).map((g) => ({
+      orgIdText: String(g.orgId),
+      codesText: g.fromSubinventories.join(", "),
     }));
   } catch (e: any) {
     error.value = e.message;
@@ -58,12 +73,28 @@ async function load() {
   }
 }
 
-function addRule() {
-  rules.value.push({ orgIdsText: "", poNoPattern: "", subInventoryCode: "" });
+function addGroup() {
+  groups.value.push({ orgIdsText: "", defaultCode: "", patterns: [{ poNoPattern: "", subInventoryCode: "" }] });
 }
 
-function removeRule(index: number) {
-  rules.value.splice(index, 1);
+function removeGroup(index: number) {
+  groups.value.splice(index, 1);
+}
+
+function addPattern(group: GroupDraft) {
+  group.patterns.push({ poNoPattern: "", subInventoryCode: "" });
+}
+
+function removePattern(group: GroupDraft, index: number) {
+  group.patterns.splice(index, 1);
+}
+
+function addFromOrgGroup() {
+  fromOrgGroups.value.push({ orgIdText: "", codesText: "" });
+}
+
+function removeFromOrgGroup(index: number) {
+  fromOrgGroups.value.splice(index, 1);
 }
 
 async function save() {
@@ -76,18 +107,35 @@ async function save() {
       error.value = t("admin.pages.flowConfig.allowedOrgIdsInvalid");
       return;
     }
-    const receivingSubInventoryRules: SubInventoryRuleRow[] = [];
-    for (const r of rules.value) {
-      const orgIds = parseIntList(r.orgIdsText);
-      if (orgIds === null || orgIds.length === 0 || r.poNoPattern.trim() === "" || r.subInventoryCode.trim() === "") {
+    const receivingSubInventoryRules: SubInventoryRuleGroupRow[] = [];
+    for (const g of groups.value) {
+      const orgIds = parseIntList(g.orgIdsText);
+      const patterns = g.patterns
+        .filter((p) => p.poNoPattern.trim() !== "" || p.subInventoryCode.trim() !== "")
+        .map((p) => ({ poNoPattern: p.poNoPattern.trim(), subInventoryCode: p.subInventoryCode.trim() }));
+      if (
+        orgIds === null ||
+        orgIds.length === 0 ||
+        patterns.some((p) => p.poNoPattern === "" || p.subInventoryCode === "")
+      ) {
         error.value = t("admin.pages.flowConfig.rulesInvalid");
         return;
       }
       receivingSubInventoryRules.push({
         orgIds,
-        poNoPattern: r.poNoPattern.trim(),
-        subInventoryCode: r.subInventoryCode.trim(),
+        patterns,
+        default: g.defaultCode.trim() === "" ? null : g.defaultCode.trim(),
       });
+    }
+    const pickingFromSubinventoryOrgs: FromSubinventoryOrgGroupRow[] = [];
+    for (const g of fromOrgGroups.value) {
+      const orgId = Number(g.orgIdText.trim());
+      const fromSubinventories = g.codesText.split(/[,\s]+/).filter(Boolean);
+      if (!Number.isInteger(orgId) || fromSubinventories.length === 0) {
+        error.value = t("admin.pages.flowConfig.fromOrgsInvalid");
+        return;
+      }
+      pickingFromSubinventoryOrgs.push({ orgId, fromSubinventories });
     }
     // Fully-expanded steps JSON — same shape the boot merge produces.
     const steps: Record<string, unknown> = {};
@@ -98,7 +146,7 @@ async function save() {
       autoCreateTasks: autoCreateTasks.value,
       suggestShelf: suggestShelf.value,
     };
-    state.value = await flow.saveFlowConfig({ steps, allowedOrgIds, receivingSubInventoryRules });
+    state.value = await flow.saveFlowConfig({ steps, allowedOrgIds, receivingSubInventoryRules, pickingFromSubinventoryOrgs });
     saved.value = true;
   } catch (e: any) {
     error.value = e.message;
@@ -164,36 +212,84 @@ onMounted(load);
 
       <div class="card form-card">
         <h2>{{ $t("admin.pages.flowConfig.rulesSection") }}</h2>
-        <div v-for="(rule, i) in rules" :key="i" class="rule-row">
-          <input
-            v-model="rule.orgIdsText"
-            type="text"
-            class="rule-orgs"
-            :placeholder="$t('admin.pages.flowConfig.ruleOrgIds')"
-            :title="$t('admin.pages.flowConfig.ruleOrgIds')"
-          />
-          <input
-            v-model="rule.poNoPattern"
-            type="text"
-            class="rule-prefix"
-            :placeholder="$t('admin.pages.flowConfig.rulePoPattern')"
-            :title="$t('admin.pages.flowConfig.rulePoPattern')"
-          />
-          <input
-            v-model="rule.subInventoryCode"
-            type="text"
-            class="rule-code"
-            :placeholder="$t('admin.pages.flowConfig.ruleSubInventory')"
-            :title="$t('admin.pages.flowConfig.ruleSubInventory')"
-          />
-          <button class="btn btn-danger" type="button" @click="removeRule(i)">
-            {{ $t("admin.pages.flowConfig.removeRule") }}
-          </button>
+        <div v-for="(group, gi) in groups" :key="gi" class="rule-group">
+          <div class="rule-row">
+            <input
+              v-model="group.orgIdsText"
+              type="text"
+              class="rule-orgs"
+              :placeholder="$t('admin.pages.flowConfig.ruleOrgIds')"
+              :title="$t('admin.pages.flowConfig.ruleOrgIds')"
+            />
+            <input
+              v-model="group.defaultCode"
+              type="text"
+              class="rule-code"
+              :placeholder="$t('admin.pages.flowConfig.groupDefault')"
+              :title="$t('admin.pages.flowConfig.groupDefaultHint')"
+            />
+            <button class="btn btn-danger" type="button" @click="removeGroup(gi)">
+              {{ $t("admin.pages.flowConfig.removeGroup") }}
+            </button>
+          </div>
+          <div v-for="(pattern, pi) in group.patterns" :key="pi" class="rule-row rule-pattern-row">
+            <input
+              v-model="pattern.poNoPattern"
+              type="text"
+              class="rule-prefix"
+              :placeholder="$t('admin.pages.flowConfig.rulePoPattern')"
+              :title="$t('admin.pages.flowConfig.rulePoPattern')"
+            />
+            <input
+              v-model="pattern.subInventoryCode"
+              type="text"
+              class="rule-code"
+              :placeholder="$t('admin.pages.flowConfig.ruleSubInventory')"
+              :title="$t('admin.pages.flowConfig.ruleSubInventory')"
+            />
+            <button class="btn btn-danger" type="button" @click="removePattern(group, pi)">
+              {{ $t("admin.pages.flowConfig.removeRule") }}
+            </button>
+          </div>
+          <div class="rule-pattern-row">
+            <button class="btn" type="button" @click="addPattern(group)">
+              {{ $t("admin.pages.flowConfig.addPattern") }}
+            </button>
+          </div>
         </div>
-        <button class="btn" type="button" @click="addRule">
-          {{ $t("admin.pages.flowConfig.addRule") }}
+        <button class="btn" type="button" @click="addGroup">
+          {{ $t("admin.pages.flowConfig.addGroup") }}
         </button>
         <p class="hint-text">{{ $t("admin.pages.flowConfig.rulesHint") }}</p>
+      </div>
+
+      <div class="card form-card">
+        <h2>{{ $t("admin.pages.flowConfig.fromOrgsSection") }}</h2>
+        <div v-for="(group, gi) in fromOrgGroups" :key="gi" class="rule-group">
+          <div class="rule-row">
+            <input
+              v-model="group.orgIdText"
+              type="text"
+              class="rule-code"
+              :placeholder="$t('admin.pages.flowConfig.ruleTargetOrgId')"
+              :title="$t('admin.pages.flowConfig.ruleTargetOrgId')"
+            />
+            <input
+              v-model="group.codesText"
+              type="text"
+              class="rule-codes"
+              :placeholder="$t('admin.pages.flowConfig.ruleFromSubinventories')"
+              :title="$t('admin.pages.flowConfig.ruleFromSubinventories')"
+            />
+            <button class="btn btn-danger" type="button" @click="removeFromOrgGroup(gi)">
+              {{ $t("admin.pages.flowConfig.removeGroup") }}
+            </button>
+          </div>
+        </div>
+        <button class="btn" type="button" @click="addFromOrgGroup">
+          {{ $t("admin.pages.flowConfig.addGroup") }}
+        </button>
+        <p class="hint-text">{{ $t("admin.pages.flowConfig.fromOrgsHint") }}</p>
       </div>
 
       <div class="actions-row">
@@ -232,11 +328,22 @@ onMounted(load);
   gap: 0.75rem;
 }
 
+.rule-group {
+  border: 1px solid #dde4ea;
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
 .rule-row {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
+}
+
+.rule-pattern-row {
+  margin-left: 1.5rem;
 }
 
 /* match the global .form-row input look (main.css) — rule rows are inline,
@@ -259,6 +366,10 @@ onMounted(load);
 
 .rule-row .rule-code {
   width: 10rem;
+}
+
+.rule-row .rule-codes {
+  width: 22rem;
 }
 
 .hint-text {

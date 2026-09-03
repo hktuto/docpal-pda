@@ -2,9 +2,13 @@ import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { sql } from "drizzle-orm";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
-import { allocateAll, parseDateCodeRule, scheduleAllocateAll } from "./allocate.js";
+import { allocateAll, parseDateCodeRule, resolveDemandLocation, scheduleAllocateAll, type DemandRow } from "./allocate.js";
 import { confirmReceivingArrival } from "./receiving.js";
-import { _setPickingAllocationForTests } from "../config.js";
+import {
+  _setPickingAllocationForTests,
+  _setPickingFromSubinventoryOrgsForTests,
+  _setReceivingSubInventoryRulesForTests,
+} from "../config.js";
 
 let client: TestDb;
 
@@ -490,4 +494,82 @@ test("scheduleAllocateAll: one run at a time, triggers during a run coalesce int
   scheduleAllocateAll(client.db, "test", run);
   while (calls < 3 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 5));
   assert.equal(calls, 3);
+});
+
+// --- transfer orders: additional_data.from_subinventory conversion ---------
+
+test("resolveDemandLocation: org group + receiving-rule sub-inventory via order po_no", () => {
+  _setPickingFromSubinventoryOrgsForTests([
+    { orgId: 143, fromSubinventories: ["SZHK2", "GZHK2", "SHHK2", "BJHK2"] },
+    { orgId: 220, fromSubinventories: ["THHK2"] },
+  ]);
+  _setReceivingSubInventoryRulesForTests([
+    { orgIds: [143], patterns: [{ poNoPattern: "329*", subInventoryCode: "GZHK2" }], default: null },
+  ]);
+  try {
+    const base: DemandRow = {
+      pickingItemId: "i1",
+      partNo: "P1",
+      openQty: 5,
+      customerCode: null,
+      orgId: 14, // destination org on the transfer order
+      subInventoryCode: "GZSZ", // destination sub-inventory
+      poNo: "32900123",
+      fromSubinventory: "GZHK2",
+    };
+    // group match + receiving-rule match → converted pair
+    assert.deepEqual(resolveDemandLocation(base), { ...base, orgId: 143, subInventoryCode: "GZHK2" });
+    // group match but no receiving-rule match → from_subinventory code itself
+    assert.deepEqual(resolveDemandLocation({ ...base, poNo: "999" }), { ...base, poNo: "999", orgId: 143, subInventoryCode: "GZHK2" });
+    // code in no group → order pair unchanged
+    assert.deepEqual(resolveDemandLocation({ ...base, fromSubinventory: "WSTORE1" }), { ...base, fromSubinventory: "WSTORE1" });
+    // no transfer marker → unchanged
+    assert.deepEqual(resolveDemandLocation({ ...base, fromSubinventory: null }), { ...base, fromSubinventory: null });
+  } finally {
+    _setPickingFromSubinventoryOrgsForTests([]);
+    _setReceivingSubInventoryRulesForTests([]);
+  }
+});
+
+test("allocateAll: transfer item allocates from the converted source location", async () => {
+  await reseed(client);
+  await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${PO_22}`);
+  // the transfer order's pair is the DESTINATION (no stock there);
+  // the stock physically sits in the from_subinventory's org
+  await client.db.execute(
+    sql`UPDATE picking_orders SET org_id = 2, sub_inventory_code = 'ACME-S1', po_no = '319-DEMO' WHERE id = ${PO_22}`
+  );
+  await client.db.execute(
+    sql`UPDATE picking_items SET additional_data = '{"from_subinventory":"SZHK1","to_subinventory":"GZSZ"}'::jsonb WHERE id = ${ITEM_23}`
+  );
+  await client.db.execute(
+    sql`UPDATE inventory_lots SET org_id = 140, sub_inventory_code = 'SZHK1' WHERE id = ${LOT_18}`
+  );
+
+  _setPickingFromSubinventoryOrgsForTests([{ orgId: 140, fromSubinventories: ["SZHK1"] }]);
+  _setReceivingSubInventoryRulesForTests([
+    { orgIds: [140], patterns: [{ poNoPattern: "319*", subInventoryCode: "SZHK1" }], default: null },
+  ]);
+  try {
+    const s = await allocateAll(client.db);
+    assert.equal(s.allocationsCreated, 1);
+    const a = await client.db.execute(
+      sql`SELECT inventory_lot_id AS lot, qty FROM allocations WHERE picking_item_id = ${ITEM_23}`
+    );
+    assert.deepEqual(a.map((r: any) => [r.lot, Number(r.qty)]), [[LOT_18, 1000]]);
+
+    // no receiving-rule match → the from_subinventory code itself is the sub-inventory
+    _setReceivingSubInventoryRulesForTests([]);
+    const s2 = await allocateAll(client.db);
+    assert.equal(s2.allocationsCreated, 1);
+  } finally {
+    _setPickingFromSubinventoryOrgsForTests([]);
+    _setReceivingSubInventoryRulesForTests([]);
+  }
+
+  // without the conversion rule the destination pair finds nothing
+  const s3 = await allocateAll(client.db);
+  assert.equal(s3.allocationsCreated, 0);
+  const gone = await client.db.execute(sql`SELECT count(*)::int AS c FROM allocations`);
+  assert.equal(Number((gone[0] as any).c), 0);
 });

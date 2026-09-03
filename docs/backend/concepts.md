@@ -103,9 +103,16 @@ Selection rules (confirmed with the business):
   whose sub-inventory shares the order's `share_group` also match. Upstream
   often omits the receiving item's pair — confirm-arrival re-stamps
   `sub_inventory_code` from the configurable `receivingSubInventoryRules`
-  (org_id + po_no glob pattern; spec
+  (rule groups by org_id set + po_no glob pattern, with a per-group default; spec
   `docs/superpowers/specs/2026-09-02-receiving-subinventory-rules-design.md`)
-  inside the arrival transaction, before the recompute runs.
+  inside the arrival transaction, before the recompute runs. Transfer orders
+  (2026-09-03): items with `additional_data.from_subinventory` name their
+  source there (the order's pair is the destination) — `allocateAll` converts
+  the demand's pair via the configurable `pickingFromSubinventoryOrgs`
+  (from_subinventory → org groups; sub-inventory from the same
+  `receivingSubInventoryRules` over the order's `po_no`, else the code
+  itself; no group match → order pair as-is; spec
+  `docs/superpowers/specs/2026-09-03-picking-from-subinventory-orgs-design.md`).
 - **FIFO** — oldest `date_code` first (NULLS LAST).
 
 > Implementation: `apps/backend/src/db/allocate.ts` (`allocateAll`) — full

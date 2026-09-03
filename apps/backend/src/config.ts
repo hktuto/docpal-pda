@@ -65,8 +65,11 @@ export const docpalGroupMapping: Record<string, string[]> = {
 //   { "steps": { "picking": { "allocation": { "allowDockStock": false } } },
 //     "allowedOrgIds": [2, 3],
 //     "receivingSubInventoryRules": [
-//       { "orgIds": [140, 143], "poNoPattern": "319*", "subInventoryCode": "SZHK2" },
-//       { "orgIds": [140, 143], "poNoPattern": "*", "subInventoryCode": "STORE1" } ] }
+//       { "orgIds": [140, 143],
+//         "patterns": [ { "poNoPattern": "319*", "subInventoryCode": "SZHK2" } ],
+//         "default": "STORE1" } ],
+//     "pickingFromSubinventoryOrgs": [
+//       { "orgId": 143, "fromSubinventories": ["SZHK2", "GZHK2"] } ] }
 //
 // allowedOrgIds (spec 2026-09-01-flow-config-allowed-org-ids-design.md):
 // org_id partitions this warehouse accepts; [] = all orgs (no filtering).
@@ -74,9 +77,19 @@ export const docpalGroupMapping: Record<string, string[]> = {
 // org_id via src/db/org-filter.ts.
 //
 // receivingSubInventoryRules (spec 2026-09-02-receiving-subinventory-rules-design.md):
-// ordered rules applied at receiving confirm-arrival — matching items
-// (org_id ∈ orgIds AND po_no matches the poNoPattern glob; "*" = catch-all)
-// get sub_inventory_code stamped before allocation runs. [] = feature off.
+// rule groups applied at receiving confirm-arrival — an item whose org_id is
+// in a group's orgIds gets sub_inventory_code from the first matching
+// poNoPattern glob ("*" = catch-all), or the group's default when no pattern
+// matches (null = unchanged). Orgs in no group stay unchanged. [] = off.
+//
+// pickingFromSubinventoryOrgs (spec 2026-09-03-picking-from-subinventory-orgs-design.md):
+// transfer-order conversion for allocation — a picking item whose
+// additional_data.from_subinventory is in a group's fromSubinventories is
+// matched against stock in the group's orgId; its sub_inventory_code comes
+// from the SAME receivingSubInventoryRules above, evaluated with the parent
+// picking order's po_no under the converted org (no receiving-rule match →
+// the from_subinventory code itself). Items with no matching group keep the
+// order's location pair. [] = off.
 //
 // Resolution order (loadFlowConfig, called once at boot from db.ts):
 //   1. FLOW_CONFIG env var (JSON) — always wins when set (tests, Vercel)
@@ -121,12 +134,8 @@ export interface PutAwayConfig {
   suggestShelf: PutAwaySuggestShelf;
 }
 
-/** Confirm-arrival sub-inventory defaulting rule (spec
- *  2026-09-02-receiving-subinventory-rules-design.md). Ordered, first match
- *  wins. Sets only sub_inventory_code — org_id is never rewritten. */
-export interface SubInventoryRule {
-  /** Item org_ids the rule applies to. */
-  orgIds: number[];
+/** One po_no glob pattern → sub_inventory_code mapping inside a rule group. */
+export interface SubInventoryPatternRule {
   /** po_no glob pattern: "*" matches any run of characters, everything else
    *  is literal — "319*" prefix, "*W" suffix, "11*W" both, "*" catch-all
    *  (matches a NULL po_no too). */
@@ -135,14 +144,43 @@ export interface SubInventoryRule {
   subInventoryCode: string;
 }
 
+/** Confirm-arrival sub-inventory defaulting rule group (spec
+ *  2026-09-02-receiving-subinventory-rules-design.md). An item enters the
+ *  group when its org_id ∈ orgIds; its patterns are then tried in order
+ *  (first match wins), falling back to `default`. Sets only
+ *  sub_inventory_code — org_id is never rewritten. */
+export interface SubInventoryRuleGroup {
+  /** Item org_ids the group applies to. */
+  orgIds: number[];
+  /** Ordered glob patterns, first match wins. */
+  patterns: SubInventoryPatternRule[];
+  /** Stamped when the org matches but no pattern does; null = leave unchanged. */
+  default: string | null;
+}
+
+/** Transfer-order location conversion group (spec
+ *  2026-09-03-picking-from-subinventory-orgs-design.md). A picking item whose
+ *  additional_data.from_subinventory is in fromSubinventories allocates
+ *  against orgId; its sub-inventory comes from the receiving
+ *  sub-inventory rules evaluated with the picking order's po_no (no match →
+ *  the from_subinventory code itself). */
+export interface FromSubinventoryOrgGroup {
+  /** Converted org_id used for allocation matching. */
+  orgId: number;
+  /** Exact additional_data.from_subinventory codes (case-sensitive). */
+  fromSubinventories: string[];
+}
+
 export interface FlowConfig {
   steps: Record<FlowStep, { enabled: boolean }>;
   pickingAllocation: PickingAllocationConfig;
   putAway: PutAwayConfig;
   /** Org partitions this warehouse accepts; [] = all orgs (no filtering). */
   allowedOrgIds: number[];
-  /** Receiving sub-inventory defaulting rules; [] = feature off. */
-  receivingSubInventoryRules: SubInventoryRule[];
+  /** Receiving sub-inventory defaulting rule groups; [] = feature off. */
+  receivingSubInventoryRules: SubInventoryRuleGroup[];
+  /** Transfer-order from_subinventory → org conversion groups; [] = off. */
+  pickingFromSubinventoryOrgs: FromSubinventoryOrgGroup[];
 }
 
 function defaultFlowConfig(): FlowConfig {
@@ -152,6 +190,7 @@ function defaultFlowConfig(): FlowConfig {
     putAway: { autoCreateTasks: false, suggestShelf: "existing-stock" },
     allowedOrgIds: [],
     receivingSubInventoryRules: [],
+    pickingFromSubinventoryOrgs: [],
   };
 }
 
@@ -185,38 +224,114 @@ export function parseFlowConfig(raw: string | undefined): FlowConfig {
   return mergeFlowConfigJson(parsed);
 }
 
-/** Validate one receivingSubInventoryRules entry. A legacy `poNoPrefix`
- *  (2026-09-02 shape) is normalized to the glob `poNoPattern` (`prefix +
- *  "*"`, `""` → `"*"`) so stored rows keep loading after the rename. */
-function validateSubInventoryRule(rule: unknown, index: number): SubInventoryRule {
+/** Validate one receivingSubInventoryRules entry. Legacy flat shapes are
+ *  normalized to a group: {orgIds, poNoPattern, subInventoryCode} →
+ *  {orgIds, patterns: […], default: null}, and the oldest {…, poNoPrefix}
+ *  form maps the prefix to the glob `prefix + "*"` (`""` → `"*"`) — stored
+ *  rows keep loading after each shape change. */
+function validateSubInventoryRule(rule: unknown, index: number): SubInventoryRuleGroup {
   const at = `flow config.receivingSubInventoryRules[${index}]`;
   if (typeof rule !== "object" || rule === null || Array.isArray(rule)) {
     throw new Error(`[config] ${at} must be an object`);
   }
-  const { orgIds, poNoPattern, poNoPrefix, subInventoryCode, ...rest } = rule as Record<string, unknown>;
+  const raw = rule as Record<string, unknown>;
+  if ("patterns" in raw) return validateSubInventoryRuleGroup(raw, at);
+  // legacy flat rule → single-pattern group
+  const { orgIds, poNoPattern, poNoPrefix, subInventoryCode, ...rest } = raw;
   const unknown = Object.keys(rest);
   if (unknown.length > 0) throw new Error(`[config] ${at}: unknown key "${unknown[0]}"`);
+  const group: SubInventoryRuleGroup = {
+    orgIds: validateRuleOrgIds(orgIds, at),
+    patterns: [{ poNoPattern: legacyPoNoPattern(poNoPattern, poNoPrefix, at), subInventoryCode: validateRuleCode(subInventoryCode, at) }],
+    default: null,
+  };
+  return group;
+}
+
+function validateSubInventoryRuleGroup(raw: Record<string, unknown>, at: string): SubInventoryRuleGroup {
+  const { orgIds, patterns, default: def, ...rest } = raw;
+  const unknown = Object.keys(rest);
+  if (unknown.length > 0) throw new Error(`[config] ${at}: unknown key "${unknown[0]}"`);
+  if (!Array.isArray(patterns)) {
+    throw new Error(`[config] ${at}.patterns must be an array`);
+  }
+  return {
+    orgIds: validateRuleOrgIds(orgIds, at),
+    patterns: patterns.map((p, i) => {
+      const pat = `${at}.patterns[${i}]`;
+      if (typeof p !== "object" || p === null || Array.isArray(p)) {
+        throw new Error(`[config] ${pat} must be an object`);
+      }
+      const { poNoPattern, subInventoryCode, ...pRest } = p as Record<string, unknown>;
+      const pUnknown = Object.keys(pRest);
+      if (pUnknown.length > 0) throw new Error(`[config] ${pat}: unknown key "${pUnknown[0]}"`);
+      if (typeof poNoPattern !== "string" || poNoPattern === "") {
+        throw new Error(`[config] ${pat}.poNoPattern must be a non-empty glob string ("*" = catch-all)`);
+      }
+      return { poNoPattern, subInventoryCode: validateRuleCode(subInventoryCode, pat) };
+    }),
+    default: validateRuleDefault(def, at),
+  };
+}
+
+function validateRuleOrgIds(orgIds: unknown, at: string): number[] {
   if (!Array.isArray(orgIds) || orgIds.length === 0 || orgIds.some((v) => !Number.isInteger(v))) {
     throw new Error(`[config] ${at}.orgIds must be a non-empty array of integers`);
   }
-  let pattern: string;
+  return orgIds as number[];
+}
+
+function validateRuleCode(code: unknown, at: string): string {
+  if (typeof code !== "string" || code === "") {
+    throw new Error(`[config] ${at}.subInventoryCode must be a non-empty string`);
+  }
+  return code;
+}
+
+function validateRuleDefault(def: unknown, at: string): string | null {
+  if (def === undefined || def === null) return null;
+  if (typeof def !== "string" || def === "") {
+    throw new Error(`[config] ${at}.default must be a non-empty string or null`);
+  }
+  return def;
+}
+
+function legacyPoNoPattern(poNoPattern: unknown, poNoPrefix: unknown, at: string): string {
   if (poNoPattern !== undefined) {
     if (typeof poNoPattern !== "string" || poNoPattern === "") {
       throw new Error(`[config] ${at}.poNoPattern must be a non-empty glob string ("*" = catch-all)`);
     }
-    pattern = poNoPattern;
-  } else if (poNoPrefix !== undefined) {
+    return poNoPattern;
+  }
+  if (poNoPrefix !== undefined) {
     if (typeof poNoPrefix !== "string") {
       throw new Error(`[config] ${at}.poNoPrefix must be a string`);
     }
-    pattern = poNoPrefix === "" ? "*" : `${poNoPrefix}*`;
-  } else {
-    throw new Error(`[config] ${at}.poNoPattern must be a non-empty glob string ("*" = catch-all)`);
+    return poNoPrefix === "" ? "*" : `${poNoPrefix}*`;
   }
-  if (typeof subInventoryCode !== "string" || subInventoryCode === "") {
-    throw new Error(`[config] ${at}.subInventoryCode must be a non-empty string`);
+  throw new Error(`[config] ${at}: needs patterns[] (or legacy poNoPattern/poNoPrefix)`);
+}
+
+/** Validate one pickingFromSubinventoryOrgs entry. */
+function validateFromSubinventoryOrgGroup(rule: unknown, index: number): FromSubinventoryOrgGroup {
+  const at = `flow config.pickingFromSubinventoryOrgs[${index}]`;
+  if (typeof rule !== "object" || rule === null || Array.isArray(rule)) {
+    throw new Error(`[config] ${at} must be an object`);
   }
-  return { orgIds: orgIds as number[], poNoPattern: pattern, subInventoryCode };
+  const { orgId, fromSubinventories, ...rest } = rule as Record<string, unknown>;
+  const unknown = Object.keys(rest);
+  if (unknown.length > 0) throw new Error(`[config] ${at}: unknown key "${unknown[0]}"`);
+  if (!Number.isInteger(orgId)) {
+    throw new Error(`[config] ${at}.orgId must be an integer`);
+  }
+  if (
+    !Array.isArray(fromSubinventories) ||
+    fromSubinventories.length === 0 ||
+    fromSubinventories.some((v) => typeof v !== "string" || v === "")
+  ) {
+    throw new Error(`[config] ${at}.fromSubinventories must be a non-empty array of non-empty strings`);
+  }
+  return { orgId: orgId as number, fromSubinventories: fromSubinventories as string[] };
 }
 
 /** Validate a partial flow-config JSON object and merge it over the defaults.
@@ -240,6 +355,23 @@ export function mergeFlowConfigJson(parsed: unknown): FlowConfig {
         throw new Error("[config] flow config.receivingSubInventoryRules must be an array");
       }
       cfg.receivingSubInventoryRules = value.map((rule, i) => validateSubInventoryRule(rule, i));
+      continue;
+    }
+    if (key === "pickingFromSubinventoryOrgs") {
+      if (!Array.isArray(value)) {
+        throw new Error("[config] flow config.pickingFromSubinventoryOrgs must be an array");
+      }
+      const groups = value.map((rule, i) => validateFromSubinventoryOrgGroup(rule, i));
+      const seen = new Set<string>();
+      for (const g of groups) {
+        for (const code of g.fromSubinventories) {
+          if (seen.has(code)) {
+            throw new Error(`[config] flow config.pickingFromSubinventoryOrgs: duplicate from_subinventory "${code}"`);
+          }
+          seen.add(code);
+        }
+      }
+      cfg.pickingFromSubinventoryOrgs = groups;
       continue;
     }
     if (key !== "steps") throw new Error(`[config] flow config: unknown key "${key}"`);
@@ -358,9 +490,14 @@ export function allowedOrgIds(): number[] {
   return flowConfig.allowedOrgIds;
 }
 
-/** Confirm-arrival sub-inventory defaulting rules; [] = feature off. */
-export function receivingSubInventoryRules(): SubInventoryRule[] {
+/** Confirm-arrival sub-inventory defaulting rule groups; [] = feature off. */
+export function receivingSubInventoryRules(): SubInventoryRuleGroup[] {
   return flowConfig.receivingSubInventoryRules;
+}
+
+/** Transfer-order from_subinventory → org conversion groups; [] = off. */
+export function pickingFromSubinventoryOrgs(): FromSubinventoryOrgGroup[] {
+  return flowConfig.pickingFromSubinventoryOrgs;
 }
 
 /** Current effective flow config (post-boot resolution). */
@@ -398,8 +535,13 @@ export function _setAllowedOrgIdsForTests(orgs: number[]): void {
 }
 
 /** Test-only override for the receiving sub-inventory defaulting rules. */
-export function _setReceivingSubInventoryRulesForTests(rules: SubInventoryRule[]): void {
+export function _setReceivingSubInventoryRulesForTests(rules: SubInventoryRuleGroup[]): void {
   flowConfig.receivingSubInventoryRules = rules;
+}
+
+/** Test-only override for the transfer-order from_subinventory → org groups. */
+export function _setPickingFromSubinventoryOrgsForTests(groups: FromSubinventoryOrgGroup[]): void {
+  flowConfig.pickingFromSubinventoryOrgs = groups;
 }
 
 /** Test-only full reset to the built-in defaults (e.g. after loadFlowConfig tests). */

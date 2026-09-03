@@ -5,7 +5,8 @@ import { queryAll, type DbOrTx } from "./query.js";
 import { allocations, inventoryTransactions } from "./schema/index.js";
 import { emitEvent } from "./events.js";
 import { now } from "./now.js";
-import { allowDockStock } from "../config.js";
+import { allowDockStock, pickingFromSubinventoryOrgs, receivingSubInventoryRules } from "../config.js";
+import { matchSubInventoryRule } from "./receiving.js";
 
 // ---------------------------------------------------------------------------
 // Allocation engine (concepts 5-6 in docs/backend/concepts.md).
@@ -30,6 +31,14 @@ import { allowDockStock } from "../config.js";
 //     matches any source. The code match is widened by
 //     sub_inventory_share_members: a source whose sub-inventory shares a
 //     share_group with the demand's sub-inventory (same org) also matches.
+//     Transfer orders (spec 2026-09-03-picking-from-subinventory-orgs-design.md):
+//     an item carrying additional_data.from_subinventory is a transfer — the
+//     order's pair is the DESTINATION, not the source. When a
+//     pickingFromSubinventoryOrgs group lists the code, the demand's pair is
+//     converted before matching: org_id from the group, sub_inventory_code
+//     from the receivingSubInventoryRules evaluated with the order's po_no
+//     under the converted org (no receiving-rule match → the from_subinventory
+//     code itself). No group match → the order's pair is used as-is.
 //   - A receiving item with a NULL pair (org_id or sub_inventory_code) is
 //     skipped and counted (AllocateSummary.skippedReceivingSources) — the
 //     ingest-time defaulting rule (owner: Sean) is meant to populate it;
@@ -104,13 +113,20 @@ export function parseDateCodeRule(text: string | null | undefined, ref: Date = n
   return null;
 }
 
-interface DemandRow {
+export interface DemandRow {
   pickingItemId: string;
   partNo: string;
   openQty: number;
   customerCode: string | null;
   orgId: number | null;
   subInventoryCode: string | null;
+  /** Parent order's po_no — input to the receiving-rule sub-inventory lookup
+   *  for transfer items. */
+  poNo: string | null;
+  /** Transfer marker from upstream (picking_items.additional_data): the
+   *  sub-inventory the stock physically comes FROM; the order's own pair is
+   *  the destination. */
+  fromSubinventory: string | null;
 }
 
 interface LotRow {
@@ -147,7 +163,9 @@ async function loadDemands(dbOrTx: DbOrTx): Promise<DemandRow[]> {
                (pi.qty - COALESCE(pkg.qty, 0)) AS "openQty",
                po.customer_code AS "customerCode",
                po.org_id AS "orgId",
-               po.sub_inventory_code AS "subInventoryCode"
+               po.sub_inventory_code AS "subInventoryCode",
+               po.po_no AS "poNo",
+               pi.additional_data ->> 'from_subinventory' AS "fromSubinventory"
         FROM picking_items pi
         JOIN picking_orders po ON po.id = pi.picking_order_id
         LEFT JOIN (
@@ -159,6 +177,29 @@ async function loadDemands(dbOrTx: DbOrTx): Promise<DemandRow[]> {
           AND pi.qty > COALESCE(pkg.qty, 0)
         ORDER BY po.priority_seq, po.delivery_date NULLS LAST, po.order_no, pi.id`
   );
+}
+
+/**
+ * Transfer-order location conversion (FLOW_CONFIG pickingFromSubinventoryOrgs).
+ * An item with additional_data.from_subinventory is a transfer: the order's
+ * (org_id, sub_inventory_code) is the destination. When a group lists the
+ * code, the demand matches stock in the group's orgId, with the sub-inventory
+ * resolved by the receivingSubInventoryRules over the order's po_no (same
+ * matcher as receiving confirm-arrival); when no receiving rule matches, the
+ * from_subinventory code itself is used. Items without from_subinventory, or
+ * whose code no group lists, keep the order's pair unchanged.
+ */
+export function resolveDemandLocation(d: DemandRow): DemandRow {
+  if (!d.fromSubinventory) return d;
+  const groups = pickingFromSubinventoryOrgs();
+  if (groups.length === 0) return d;
+  const group = groups.find((g) => g.fromSubinventories.includes(d.fromSubinventory!));
+  if (!group) return d;
+  return {
+    ...d,
+    orgId: group.orgId,
+    subInventoryCode: matchSubInventoryRule(group.orgId, d.poNo, receivingSubInventoryRules()) ?? d.fromSubinventory,
+  };
 }
 
 async function loadLotSources(dbOrTx: DbOrTx, d: DemandRow): Promise<LotRow[]> {
@@ -381,7 +422,10 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
     const lotUsed = new Map<string, number>(); // lotId → qty allocated this run
     const recvUsed = new Map<string, number>(); // receiving source key → qty allocated this run
 
-    for (const d of demands) {
+    for (const raw of demands) {
+      // Transfer items match stock at the converted source location, never
+      // at the order's destination pair.
+      const d = resolveDemandLocation(raw);
       let remaining = d.openQty;
       const allocatedForItem: { qty: number; lotId?: string; recv?: ReceivingRow }[] = [];
 
