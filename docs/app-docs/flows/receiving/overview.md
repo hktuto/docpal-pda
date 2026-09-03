@@ -16,7 +16,7 @@ Use the Receiving flow when a supplier shipment arrives at the warehouse.
 
    ![Receiving detail](./assets/receiving-detail.png)
 
-3. The order detail shows invoices and invoice items.
+3. The order detail shows invoices and invoice items — compact rows grouped by carton number when the invoice carries carton numbers; tap a row to expand quantities and mismatch actions.
 4. The operator confirms quantities and reports any mismatches.
 5. Confirmed items create receiving-area inventory lots.
 6. The Receiving list can also show how many picking orders still need stock from each receiving order.

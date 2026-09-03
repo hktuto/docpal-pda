@@ -140,8 +140,8 @@
 
 ## Key files
 
-- `pages/picking/index.vue` — list page (search, status filter, batch issue
-  report dialog).
+- `pages/picking/index.vue` — list page (compact rows, sticky search,
+  status filter, batch issue report dialog).
 - `pages/picking/[id].vue` — detail page (items/allocations/packages,
   boxes, logs, finish; single Scan action → scan session).
 - `pages/picking/scan/[id].vue` — scan-session ("checkout") page: armed
@@ -158,7 +158,10 @@
 - `composables/usePickingWorkLock.ts` — page work lock acquire/3-min
   refresh/keepalive release + `heldByOther` state (tests in
   `tests/usePickingWorkLock.test.ts`).
-- `components/picking/PickingItemsSection.vue`,
+- `components/picking/PickingItemsSection.vue` — items sub-view: compact
+  per-row-expand rows (status badge + required/scanned and boxed/total
+  progress at a glance; allocations and package/box actions inside the
+  expanded row),
   `components/picking/PickingBoxesSection.vue` (incl. the per-box
   **Scan item into box** cross-order toggle),
   `components/picking/PickingIssueBanner.vue` — detail sub-views.

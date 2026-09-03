@@ -2,7 +2,7 @@
 
 ## 1. Open the picking list
 
-From the home screen, tap **Picking**. The list shows open picking orders with status and summary information.
+From the home screen, tap **Picking**. The list shows open picking orders as compact rows with status and summary information; the search bar and filter button stay pinned at the top while scrolling.
 
 ![Picking list](./assets/picking-list.png)
 
@@ -18,7 +18,7 @@ The list order is the priority order set by the office — work from the top.
 
 ## 3. Review allocated lines
 
-The detail page shows each picking item, the required quantity, and where the stock is allocated from (lot or receiving-area item). For allocations against a receiving order, any recorded box IDs from the receiving invoice items are shown as a "Box IDs" remark so the operator knows which boxes to pick from.
+The detail page lists each picking item as a compact row: part, status badge, required / scanned quantities, and a boxed/required progress count at a glance. Tap a row to expand its required quantity and where the stock is allocated from (lot or receiving-area item), plus the package/box actions. For allocations against a receiving order, any recorded box IDs from the receiving invoice items are shown as a "Box IDs" remark so the operator knows which boxes to pick from.
 
 ## 4. Pick each line
 

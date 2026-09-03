@@ -14,7 +14,7 @@ inventory lot that moved that day — there is nothing to tap to generate them.
 
 ## 2. Select a task
 
-Tap a task card to open its detail page.
+Tap a task row to open its detail page.
 
 ## 3. Review the lot
 

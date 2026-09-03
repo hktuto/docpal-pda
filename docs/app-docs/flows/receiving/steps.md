@@ -2,7 +2,7 @@
 
 ## 1. Open the receiving list
 
-From the home screen, tap **Receiving**. The list shows receiving orders with status and a pending picking-order count badge.
+From the home screen, tap **Receiving**. The list shows receiving orders as compact rows with status and a pending picking-order count badge; the status filters and search bar stay pinned at the top while scrolling.
 
 ![Receiving list](./assets/receiving-list.png)
 
@@ -14,7 +14,7 @@ Tap the order you want to receive. The detail page opens on the Receiving view.
 
 ## 3. Review invoices and items
 
-The detail shows each invoice and each line item (part, expected quantity, received quantity).
+The detail shows each invoice and its line items as compact rows. When the invoice carries carton numbers, items are grouped under a carton (`ctnNo`) header with a trailing **No carton** group for the rest; otherwise the rows are flat. Tap a row to expand its quantities (expected / reserved / picked / put away / available, date/lot/COO/COW) and its actions — mismatch report, confirm, and cancel live inside the expanded row.
 
 ## 4. Confirm or adjust quantities
 

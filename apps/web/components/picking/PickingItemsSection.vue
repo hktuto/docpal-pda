@@ -21,7 +21,6 @@
         <div class="list-row__meta">
           {{ $t('picking.itemsSection.requiredQty') }}: {{ item.qty }}
           · {{ $t('picking.itemsSection.scannedQty') }}: {{ scannedQty(item) }}
-          · {{ $t('picking.itemsSection.boxedQty') }}: {{ item.pickedQty }}
         </div>
       </button>
       <div class="list-row__aside">

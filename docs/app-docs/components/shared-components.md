@@ -28,6 +28,22 @@ Simple labeled-value row used throughout detail pages.
 
 Placeholder shown when a list has no items.
 
+## List rows
+
+CSS primitives in `assets/css/main.scss` (no Vue component).
+
+The shared work-queue list pattern: a `.list-panel` container holds dense
+`.list-row` items separated by hairline dividers (~60 px each) instead of
+spaced cards. Rows are two lines — title + status badges, then a muted meta
+line — with a `.list-row__aside` on the right for counts/dates and a chevron.
+Variants: `.list-row--disabled`, `.list-row--done` / `.list-row--danger`
+(left accent), `.list-row--expandable` (the main area is a `.list-row__toggle`
+button that opens a full-width `.list-row__detail` block; chevron rotates via
+`.list-row__chevron--open`), and `.list-group-header` subheaders inside the
+panel (used for carton groups on the receiving detail). `.list-toolbar` keeps
+filters/search sticky under the app header. Used by every flow list page and
+the receiving/picking detail item sections.
+
 ## ScanFab
 
 `components/ScanFab.vue`

@@ -44,6 +44,7 @@ Page and component locations mapped to source files.
 | Status badge (inline) | `composables/useStatusBadge.ts` |
 | EmptyState | `components/EmptyState.vue` |
 | ScanFab | `components/ScanFab.vue` |
+| List rows (`.list-panel` / `.list-row` / `.list-toolbar` CSS, incl. expandable rows + group headers) | `assets/css/main.scss` |
 
 ## Modals
 

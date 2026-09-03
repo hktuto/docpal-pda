@@ -56,11 +56,15 @@
 
 ## Key files
 
-- `pages/receiving/index.vue` — list page (status filter + picking badge).
+- `pages/receiving/index.vue` — list page (compact rows, sticky status
+  filter + search, picking badge).
 - `pages/receiving/[id].vue` — detail page (items + picking tabs, confirm
   arrival, scan entry points).
-- `components/receiving/ReceivingItemsTab.vue`,
-  `components/receiving/ReceivingPickingTab.vue` — detail sub-views.
+- `components/receiving/ReceivingItemsTab.vue` — items sub-view: compact
+  per-row-expand rows grouped by carton number (`ctnNo`, trailing "no
+  carton" group; flat when no carton numbers exist), mismatch actions
+  inside the expanded row.
+- `components/receiving/ReceivingPickingTab.vue` — picking sub-view.
 - `components/receiving/ReceivingScanReviewModal.vue` — candidate review
   dialog for scan 409s.
 - `components/receiving/ReceivingScanMultiItemModal.vue` — multi-item label

@@ -72,8 +72,9 @@ li { margin: 0.3em 0; }
 <ul>
 <li><strong>狀態篩選</strong> — 全部、待處理、已收貨、已完成。</li>
 <li><strong>搜尋</strong> — 按參考編號或供應商篩選。</li>
-<li>每張卡片顯示訂單參考編號、供應商、交貨日期、狀態徽章及尚餘項目數量。</li>
-<li>點按卡片開啟收貨詳情。</li>
+<li>每行顯示訂單參考編號、供應商 · 交貨日期、狀態徽章及尚餘項目數量。</li>
+<li>狀態篩選及搜尋列會固定在頂部，捲動長列表時保持可見。</li>
+<li>點按該行開啟收貨詳情。</li>
 </ul>
 <h3>收貨詳情 — 收貨分頁</h3>
 <figure><img alt="收貨詳情" src="./assets/receiving-detail.png"><figcaption>收貨詳情</figcaption></figure>
@@ -81,7 +82,7 @@ li { margin: 0.3em 0; }
 <li>訂單標題連狀態徽章；點按 ▼ 展開供應商及交貨詳情。</li>
 <li><strong>確認到貨</strong> — 一步將整張訂單標記為已到貨。</li>
 <li><strong>上架剩餘庫存</strong> — 貨物在手後前往上架的捷徑（此圖未顯示）。</li>
-<li>發票區段列出每個項目：料號、預期數量、箱號，展開後顯示每項進度。</li>
+<li>發票區段以緊湊行列出每個項目：料號、預期數量及 PO / 行號；發票有箱號時項目會按箱號分組（無箱號的項目歸入「無箱號」組）。點按該行可展開數量進度（預期 / 預留 / 已揀 / 已上架 / 可用、日期 / 批次 / 產地）及操作按鈕。</li>
 <li><strong>匯報問題</strong> — 標記項目的異常（見下文）。</li>
 <li>浮動<strong>相機按鈕</strong>掃描標籤（見下文）— 只在收貨進行中（provisional_received）顯示；訂單仍為待處理（pending）時不會出現。</li>
 </ul>
@@ -133,7 +134,7 @@ li { margin: 0.3em 0; }
 <figure><img alt="上架列表" src="./assets/put-away-list.png"><figcaption>上架列表</figcaption></figure>
 <ul>
 <li>列出仍有庫存留在收貨區的收貨單（已收貨），並顯示待上架項目數量。</li>
-<li>點按卡片開啟上架詳情。</li>
+<li>點按該行開啟上架詳情。</li>
 </ul>
 <h3>上架詳情</h3>
 <figure><img alt="上架詳情" src="./assets/put-away-detail.png"><figcaption>上架詳情</figcaption></figure>
@@ -152,24 +153,24 @@ li { margin: 0.3em 0; }
 <h3>揀貨列表</h3>
 <figure><img alt="揀貨列表" src="./assets/picking-list.png"><figcaption>揀貨列表</figcaption></figure>
 <ul>
-<li><strong>搜尋</strong> — 按單號、PO 或客戶篩選。</li>
-<li>每張卡片顯示揀貨單參考編號、日期、狀態及收貨方。</li>
+<li><strong>搜尋</strong> — 按單號、PO 或客戶篩選；搜尋列固定在頂部，捲動時保持可見。</li>
+<li>每行顯示揀貨單參考編號、客戶 · PO、日期、狀態及收貨方。</li>
 <li><strong>核取方塊</strong>可選擇多張訂單作批量問題匯報。</li>
-<li>點按卡片開啟揀貨詳情。</li>
+<li>點按該行開啟揀貨詳情。</li>
 </ul>
 <h3>揀貨詳情</h3>
 <figure><img alt="揀貨詳情" src="./assets/picking-detail.png"><figcaption>揀貨詳情</figcaption></figure>
 <ul>
 <li><strong>箱號</strong> — 此訂單的運輸箱；<strong>新增箱號</strong>建立箱號，<strong>掃描箱號</strong>以掃描方式分配；<strong>掃描物料入箱</strong>模式可掃描任何訂單的項目條碼直接裝入該箱（一箱可裝多張訂單的項目）。</li>
-<li><strong>項目</strong> — 每張卡片顯示料號、需求數量、已掃描數量、已裝箱數量、需求日期代碼及狀態。</li>
+<li><strong>項目</strong> — 每行顯示料號、狀態徽章及需求 / 已掃描 / 已裝箱數量；點按該行展開分配來源及裝箱操作。</li>
 <li><strong>掃碼</strong>進入掃描頁（見上文「揀貨掃描頁」），根據分配掃描標籤；完成最後一件包裝後訂單自動完成 — 不再建立下一步任務，關閉箱號即完成測量。</li>
 </ul>
 <hr>
 <h2>測量</h2>
 <figure><img alt="測量列表" src="./assets/measuring-list.png"><figcaption>測量列表</figcaption></figure>
 <ul>
-<li>列出已裝有包裹、等待核對及量度的<strong>運輸箱</strong>（已開啟狀態） — 不再有測量任務；一箱可裝多張揀貨單的項目，卡片會列出相關單號。</li>
-<li>每張卡片顯示箱號、狀態、相關單號及包裹核對進度；點按卡片開啟測量箱號頁。</li>
+<li>列出已裝有包裹、等待核對及量度的<strong>運輸箱</strong>（已開啟狀態） — 不再有測量任務；一箱可裝多張揀貨單的項目，該行會列出相關單號。</li>
+<li>每行顯示箱號、狀態、相關單號及包裹核對進度；點按該行開啟測量箱號頁。</li>
 </ul>
 <h3>測量箱號頁</h3>
 <figure><img alt="測量箱號頁" src="./assets/measuring-box.png"><figcaption>測量箱號頁</figcaption></figure>
@@ -186,7 +187,7 @@ li { margin: 0.3em 0; }
 <figure><img alt="覆核列表" src="./assets/verify-list.png"><figcaption>覆核列表</figcaption></figure>
 <ul>
 <li>列出有待覆核任務的<strong>運輸箱</strong> — 箱號關閉後，覆核任務會自動在此出現（每箱一個任務）。</li>
-<li>每張卡片顯示箱號、狀態、相關單號、目的地及包裹覆核進度；點按卡片開啟覆核箱號頁。</li>
+<li>每行顯示箱號、狀態、相關單號、目的地及包裹覆核進度；點按該行開啟覆核箱號頁。</li>
 </ul>
 <h3>覆核箱號頁</h3>
 <figure><img alt="覆核箱號頁" src="./assets/verify-box.png"><figcaption>覆核箱號頁</figcaption></figure>
@@ -210,7 +211,7 @@ li { margin: 0.3em 0; }
 <li>選擇<strong>日期</strong>查看該日的任務（預設今日）。</li>
 <li><strong>狀態篩選</strong> — 全部、待處理、已查貨、已略過。</li>
 <li><strong>搜尋</strong> — 按貨架、箱號或料號篩選。</li>
-<li>每張任務卡片顯示料號、貨架 · 箱號及預期數量；點按卡片開啟任務詳情。</li>
+<li>每行顯示料號、貨架 · 箱號及預期數量；點按該行開啟任務詳情。</li>
 </ul>
 <h3>查貨任務詳情</h3>
 <figure><img alt="查貨任務詳情" src="./assets/goods-verify-detail.png"><figcaption>查貨任務詳情</figcaption></figure>
