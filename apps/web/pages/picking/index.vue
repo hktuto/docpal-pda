@@ -1,24 +1,26 @@
 <template>
   <div>
-    <div class="search-row">
-      <input
-        v-model="search"
-        class="search"
-        type="text"
-        :placeholder="$t('common.searchByRefPoOrCustomer')"
-      />
-      <button
-        type="button"
-        class="filter-btn"
-        :class="{ 'filter-btn--active': hasActiveFilter }"
-        :aria-label="$t('picking.filter.title')"
-        @click="filterOpen = true"
-      >
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
-        </svg>
-        <span v-if="hasActiveFilter" class="filter-btn__dot" aria-hidden="true"></span>
-      </button>
+    <div class="list-toolbar">
+      <div class="search-row">
+        <input
+          v-model="search"
+          class="search"
+          type="text"
+          :placeholder="$t('common.searchByRefPoOrCustomer')"
+        />
+        <button
+          type="button"
+          class="filter-btn"
+          :class="{ 'filter-btn--active': hasActiveFilter }"
+          :aria-label="$t('picking.filter.title')"
+          @click="filterOpen = true"
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" />
+          </svg>
+          <span v-if="hasActiveFilter" class="filter-btn__dot" aria-hidden="true"></span>
+        </button>
+      </div>
     </div>
 
     <p v-if="loading" class="empty">{{ $t('common.loading') }}</p>
@@ -26,40 +28,38 @@
     <p v-else-if="reportMessage" class="empty" style="color: #92400e;">{{ reportMessage }}</p>
     <p v-else-if="rows.length === 0" class="empty">{{ $t('common.noPickingOrders') }}</p>
 
-    <div
-      v-for="po in rows"
-      :key="po.id"
-      class="card list-card"
-      :class="{ 'card--disabled': !isSelectable(po.status) }"
-    >
-      <div class="list-card__header">
-        <div style="display: flex; align-items: flex-start; gap: 0.75rem; flex: 1;">
-          <input
-            v-if="isSelectable(po.status)"
-            type="checkbox"
-            :checked="selectedIds.has(po.id)"
-            @change="toggleSelection(po.id)"
-          />
-          <NuxtLink :to="`/picking/${po.id}`" class="list-card__title">
-            {{ po.orderNo }}
-          </NuxtLink>
+    <div v-else class="list-panel list-panel--clear-bulk-bar">
+      <div
+        v-for="po in rows"
+        :key="po.id"
+        class="list-row"
+        :class="{ 'list-row--disabled': !isSelectable(po.status) }"
+      >
+        <input
+          v-if="isSelectable(po.status)"
+          type="checkbox"
+          class="list-row__check"
+          :checked="selectedIds.has(po.id)"
+          @change="toggleSelection(po.id)"
+        />
+        <NuxtLink :to="`/picking/${po.id}`" class="list-row__main">
+          <div class="list-row__line1">
+            <span class="list-row__title">{{ po.orderNo }}</span>
+            <span class="badge" :class="badgeClass(po.status)">{{ statusLabel.picking(po.status) }}</span>
+            <span v-if="isSelectable(po.status)" class="badge" :class="badgeClass(po.allocationStatus)">
+              {{ statusLabel.allocation(po.allocationStatus) }}
+            </span>
+          </div>
+          <div class="list-row__meta">
+            {{ [po.customerCode, po.poNo].filter(Boolean).join(' · ') || $t('common.noData') }}
+          </div>
+        </NuxtLink>
+        <div class="list-row__aside">
+          <span>{{ po.deliveryDate ? new Date(po.deliveryDate).toLocaleDateString() : $t('common.noDate') }}</span>
+          <span v-if="po.workingByName" class="list-row__lock">{{ $t('picking.lockedBy', { name: po.workingByName }) }}</span>
+          <span>{{ $t('picking.shipTo', { destination: po.shipTo || $t('common.noData') }) }}</span>
         </div>
-        <div style="display: flex; align-items: center; gap: 0.4rem;">
-          <span class="badge" :class="badgeClass(po.status)">{{ statusLabel.picking(po.status) }}</span>
-          <span v-if="isSelectable(po.status)" class="badge" :class="badgeClass(po.allocationStatus)">
-            {{ statusLabel.allocation(po.allocationStatus) }}
-          </span>
-        </div>
-      </div>
-      <p class="list-card__meta">
-        {{ [po.customerCode, po.poNo].filter(Boolean).join(' · ') || $t('common.noData') }}
-      </p>
-      <div class="list-card__footer">
-        <span class="list-card__date">
-          {{ po.deliveryDate ? new Date(po.deliveryDate).toLocaleDateString() : $t('common.noDate') }}
-        </span>
-        <span v-if="po.workingByName" class="list-card__lock">{{ $t('picking.lockedBy', { name: po.workingByName }) }}</span>
-        <span class="list-card__ship">{{ $t('picking.shipTo', { destination: po.shipTo || $t('common.noData') }) }}</span>
+        <svg class="list-row__chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
       </div>
     </div>
 
@@ -266,18 +266,8 @@ useVisibleReload(load, ["/picking-orders"]);
   background: var(--primary);
 }
 
-.list-card__title:hover {
-  text-decoration: underline;
-}
-
-.list-card__ship {
-  margin-left: auto;
-  font-size: 0.8125rem;
-  color: var(--muted);
-}
-
-.list-card__lock {
-  font-size: 0.8125rem;
+.list-row__lock {
+  font-size: 0.75rem;
   color: #92400e;
   background: #fef3c7;
   border-radius: 4px;
@@ -299,11 +289,7 @@ useVisibleReload(load, ["/picking-orders"]);
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.06);
 }
 
-.card--disabled {
-  opacity: 0.65;
-}
-
-.list-card:last-child {
+.list-panel--clear-bulk-bar {
   margin-bottom: 5rem;
 }
 </style>

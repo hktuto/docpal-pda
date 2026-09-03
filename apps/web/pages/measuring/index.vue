@@ -8,25 +8,28 @@
     <p v-else-if="loadError" class="empty" style="color: var(--danger);">{{ $t('common.errorPrefix', { message: loadError }) }}</p>
     <p v-else-if="rows.length === 0" class="empty">{{ $t('common.noPendingMeasuringTasks') }}</p>
 
-    <NuxtLink
-      v-for="box in rows"
-      :key="box.boxId"
-      :to="`/measuring/${box.boxId}`"
-      class="card list-card"
-    >
-      <div class="list-card__header">
-        <span class="list-card__title">{{ box.boxId }}</span>
-        <span class="badge" :class="badgeClass(box.status)">{{ statusLabel.box(box.status) }}</span>
-      </div>
-      <p class="list-card__meta">
-        {{ box.orderNos.join(', ') || $t('common.noData') }}
-      </p>
-      <div class="list-card__footer">
-        <span class="list-card__date">
-          {{ $t('common.packagesVerified', { verified: box.verifiedCount, total: box.packageCount }) }}
-        </span>
-      </div>
-    </NuxtLink>
+    <div v-if="rows.length > 0" class="list-panel">
+      <NuxtLink
+        v-for="box in rows"
+        :key="box.boxId"
+        :to="`/measuring/${box.boxId}`"
+        class="list-row"
+      >
+        <div class="list-row__main">
+          <div class="list-row__line1">
+            <span class="list-row__title">{{ box.boxId }}</span>
+          </div>
+          <div class="list-row__meta">
+            {{ box.orderNos.join(', ') || $t('common.noData') }}
+          </div>
+        </div>
+        <div class="list-row__aside">
+          <span class="badge" :class="badgeClass(box.status)">{{ statusLabel.box(box.status) }}</span>
+          <span>{{ $t('common.packagesVerified', { verified: box.verifiedCount, total: box.packageCount }) }}</span>
+        </div>
+        <svg class="list-row__chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+      </NuxtLink>
+    </div>
   </div>
 </template>
 

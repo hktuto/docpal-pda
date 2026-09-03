@@ -151,6 +151,7 @@ export default {
       confirmMismatch: "Confirm",
       cancelMismatch: "Cancel",
       boxId:"Box",
+      noCarton: "No carton",
       editIssue: "Edit issue",
       reportIssue: "Report issue",
       mismatch: {

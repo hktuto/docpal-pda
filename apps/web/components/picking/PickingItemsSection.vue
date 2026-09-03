@@ -1,116 +1,132 @@
 <template>
   <h2 class="section-title">{{ $t('picking.itemsSection.title') }}</h2>
-  <div
-    v-for="item in items"
-    :key="item.id"
-    :data-item-id="item.id"
-    class="card item-card"
-    :class="{ 'card--done': item.pickedQty >= item.qty }"
-  >
-    <DetailRow :label="$t('picking.itemsSection.part')">
-      <span class="card__title">{{ (item.wclItemNo ?? item.partNo) || $t('common.noData') }}</span>
-    </DetailRow>
-    <DetailRow :label="$t('picking.itemsSection.line')" :value="`${item.lineNumber ?? '—'} (${$t('picking.itemsSection.shipment')} ${item.shipmentNumber ?? '—'})`" />
-    <DetailRow :label="$t('picking.itemsSection.requiredQty')" :value="item.qty" />
-    <DetailRow :label="$t('picking.itemsSection.scannedQty')" :value="scannedQty(item)" />
-    <DetailRow :label="$t('picking.itemsSection.boxedQty')" :value="item.pickedQty" />
-    <DetailRow :label="$t('picking.itemsSection.status')">
-      <span
-        class="badge"
-        :class="badgeClass(item.pickedQty >= item.qty ? 'finished' : 'picking')"
-      >
-        {{ item.pickedQty >= item.qty ? statusLabel.picking('finished') : statusLabel.picking('picking') }}
-      </span>
-    </DetailRow>
-
-    <div v-if="activeAllocations(item).length && actionable && item.pickedQty < item.qty" class="allocations">
-      <h3 class="subsection-title">{{ $t('picking.itemsSection.allocations') }}</h3>
-      <div
-        v-for="allocation in activeAllocations(item)"
-        :key="allocation.id"
-        class="lot"
-      >
-        <template v-if="allocation.lot">
-          <DetailRow :label="$t('picking.itemsSection.location')">
-            <span v-if="allocation.lot.shelfCode && allocation.lot.boxId">
-              {{ allocation.lot.shelfCode }} / {{ allocation.lot.boxId }}
-            </span>
-            <span v-else-if="allocation.lot.shelfCode">{{ allocation.lot.shelfCode }}</span>
-            <span v-else-if="allocation.lot.boxId">{{ allocation.lot.boxId }}</span>
-            <span v-else>{{ $t('picking.itemsSection.receivingArea') }}</span>
-          </DetailRow>
-          <DetailRow :label="$t('picking.itemsSection.dateLotCooCow')">
-            {{ formatLotFields(allocation.lot) }}
-          </DetailRow>
-          <DetailRow :label="$t('picking.itemsSection.allocatedQty')" :value="allocation.qty" />
-        </template>
-
-        <template v-else>
-          <DetailRow :label="$t('picking.itemsSection.source')">
-            {{ $t('picking.itemsSection.receivingArea') }}
-            <span v-if="allocation.boxId">
-              ({{ allocation.boxId }})
-            </span>
-          </DetailRow>
-          <DetailRow :label="$t('picking.itemsSection.allocatedQty')" :value="allocation.qty" />
-        </template>
-      </div>
-    </div>
-
-    <div v-if="unboxedPackages(item).length && actionable" class="unboxed-packages">
-      <h3 class="subsection-title">{{ $t('picking.itemsSection.unboxedPackages') }}</h3>
-      <div
-        v-for="pkg in unboxedPackages(item)"
-        :key="pkg.id"
-        class="lot package-row"
-      >
-        <span class="package-info">
-          {{ pkg.qty }} {{ $t('common.pcs') }} · {{ formatLotFields(pkg) }}
-        </span>
-        <div class="package-actions">
-          <select :value="boxSelections[pkg.id]" :disabled="adding[pkg.id]" class="box-select" @change="updateBoxSelection(pkg.id, ($event.target as HTMLSelectElement).value)">
-            <option value="">{{ $t('picking.itemsSection.selectBox') }}</option>
-            <option v-for="box in openBoxes" :key="box.id" :value="box.id">{{ box.id }}</option>
-          </select>
-          <button
-            class="btn btn--small"
-            :disabled="adding[pkg.id] || !boxSelections[pkg.id]"
-            @click="emit('add-to-box', pkg.id)"
+  <div class="list-panel">
+    <div
+      v-for="item in items"
+      :key="item.id"
+      :data-item-id="item.id"
+      class="list-row list-row--expandable"
+      :class="{ 'list-row--done': item.pickedQty >= item.qty }"
+    >
+      <button type="button" class="list-row__main list-row__toggle" @click="toggle(item.id)">
+        <div class="list-row__line1">
+          <span class="list-row__title">{{ (item.wclItemNo ?? item.partNo) || $t('common.noData') }}</span>
+          <span
+            class="badge"
+            :class="badgeClass(item.pickedQty >= item.qty ? 'finished' : 'picking')"
           >
-            <template v-if="adding[pkg.id]">
-              <InlineSpinner /> {{ $t('picking.itemsSection.adding') }}
-            </template>
-            <template v-else>
-              {{ $t('picking.itemsSection.addToBox') }}
-            </template>
-          </button>
+            {{ item.pickedQty >= item.qty ? statusLabel.picking('finished') : statusLabel.picking('picking') }}
+          </span>
         </div>
+        <div class="list-row__meta">
+          {{ $t('picking.itemsSection.requiredQty') }}: {{ item.qty }}
+          · {{ $t('picking.itemsSection.scannedQty') }}: {{ scannedQty(item) }}
+          · {{ $t('picking.itemsSection.boxedQty') }}: {{ item.pickedQty }}
+        </div>
+      </button>
+      <div class="list-row__aside">
+        <span class="list-row__qty">{{ item.pickedQty }}/{{ item.qty }}</span>
       </div>
-    </div>
+      <svg
+        class="list-row__chevron"
+        :class="{ 'list-row__chevron--open': expandedItems.has(item.id) }"
+        viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+      ><path d="m9 18 6-6-6-6"/></svg>
 
-    <div v-if="boxedPackages(item).length && actionable" class="boxed-packages">
-      <h3 class="boxed-title">{{ $t('picking.itemsSection.boxedPackages') }}</h3>
-      <div
-        v-for="pkg in boxedPackages(item)"
-        :key="pkg.id"
-        class="lot package-row"
-      >
-        <span class="package-info">
-          {{ pkg.qty }} {{ $t('common.pcs') }} · {{ pkg.shippingBoxId }}
-        </span>
-        <button
-          v-if="openBoxById[pkg.shippingBoxId!]?.status === 'open'"
-          class="btn btn--small"
-          :disabled="removing[pkg.id]"
-          @click="emit('remove-from-box', pkg.id)"
-        >
-          <template v-if="removing[pkg.id]">
-            <InlineSpinner /> {{ $t('picking.itemsSection.removing') }}
-          </template>
-          <template v-else>
-            {{ $t('picking.itemsSection.remove') }}
-          </template>
-        </button>
+      <div v-if="expandedItems.has(item.id)" class="list-row__detail">
+        <DetailRow :label="$t('picking.itemsSection.line')" :value="`${item.lineNumber ?? '—'} (${$t('picking.itemsSection.shipment')} ${item.shipmentNumber ?? '—'})`" />
+
+        <div v-if="activeAllocations(item).length && actionable && item.pickedQty < item.qty" class="allocations">
+          <h3 class="subsection-title">{{ $t('picking.itemsSection.allocations') }}</h3>
+          <div
+            v-for="allocation in activeAllocations(item)"
+            :key="allocation.id"
+            class="lot"
+          >
+            <template v-if="allocation.lot">
+              <DetailRow :label="$t('picking.itemsSection.location')">
+                <span v-if="allocation.lot.shelfCode && allocation.lot.boxId">
+                  {{ allocation.lot.shelfCode }} / {{ allocation.lot.boxId }}
+                </span>
+                <span v-else-if="allocation.lot.shelfCode">{{ allocation.lot.shelfCode }}</span>
+                <span v-else-if="allocation.lot.boxId">{{ allocation.lot.boxId }}</span>
+                <span v-else>{{ $t('picking.itemsSection.receivingArea') }}</span>
+              </DetailRow>
+              <DetailRow :label="$t('picking.itemsSection.dateLotCooCow')">
+                {{ formatLotFields(allocation.lot) }}
+              </DetailRow>
+              <DetailRow :label="$t('picking.itemsSection.allocatedQty')" :value="allocation.qty" />
+            </template>
+
+            <template v-else>
+              <DetailRow :label="$t('picking.itemsSection.source')">
+                {{ $t('picking.itemsSection.receivingArea') }}
+                <span v-if="allocation.boxId">
+                  ({{ allocation.boxId }})
+                </span>
+              </DetailRow>
+              <DetailRow :label="$t('picking.itemsSection.allocatedQty')" :value="allocation.qty" />
+            </template>
+          </div>
+        </div>
+
+        <div v-if="unboxedPackages(item).length && actionable" class="unboxed-packages">
+          <h3 class="subsection-title">{{ $t('picking.itemsSection.unboxedPackages') }}</h3>
+          <div
+            v-for="pkg in unboxedPackages(item)"
+            :key="pkg.id"
+            class="lot package-row"
+          >
+            <span class="package-info">
+              {{ pkg.qty }} {{ $t('common.pcs') }} · {{ formatLotFields(pkg) }}
+            </span>
+            <div class="package-actions">
+              <select :value="boxSelections[pkg.id]" :disabled="adding[pkg.id]" class="box-select" @change="updateBoxSelection(pkg.id, ($event.target as HTMLSelectElement).value)">
+                <option value="">{{ $t('picking.itemsSection.selectBox') }}</option>
+                <option v-for="box in openBoxes" :key="box.id" :value="box.id">{{ box.id }}</option>
+              </select>
+              <button
+                class="btn btn--small"
+                :disabled="adding[pkg.id] || !boxSelections[pkg.id]"
+                @click="emit('add-to-box', pkg.id)"
+              >
+                <template v-if="adding[pkg.id]">
+                  <InlineSpinner /> {{ $t('picking.itemsSection.adding') }}
+                </template>
+                <template v-else>
+                  {{ $t('picking.itemsSection.addToBox') }}
+                </template>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="boxedPackages(item).length && actionable" class="boxed-packages">
+          <h3 class="boxed-title">{{ $t('picking.itemsSection.boxedPackages') }}</h3>
+          <div
+            v-for="pkg in boxedPackages(item)"
+            :key="pkg.id"
+            class="lot package-row"
+          >
+            <span class="package-info">
+              {{ pkg.qty }} {{ $t('common.pcs') }} · {{ pkg.shippingBoxId }}
+            </span>
+            <button
+              v-if="openBoxById[pkg.shippingBoxId!]?.status === 'open'"
+              class="btn btn--small"
+              :disabled="removing[pkg.id]"
+              @click="emit('remove-from-box', pkg.id)"
+            >
+              <template v-if="removing[pkg.id]">
+                <InlineSpinner /> {{ $t('picking.itemsSection.removing') }}
+              </template>
+              <template v-else>
+                {{ $t('picking.itemsSection.remove') }}
+              </template>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -141,6 +157,18 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const statusLabel = useStatusLabel();
+
+const expandedItems = ref<Set<string>>(new Set());
+
+function toggle(itemId: string) {
+  const next = new Set(expandedItems.value);
+  if (next.has(itemId)) {
+    next.delete(itemId);
+  } else {
+    next.add(itemId);
+  }
+  expandedItems.value = next;
+}
 
 const openBoxById = computed(() => {
   const map: Record<string, ShippingBox> = {};
@@ -207,10 +235,6 @@ function formatLotFields(source: { dateCode: string | null; lotCode: string | nu
   margin: 0 0 0.5rem;
   font-size: 0.875rem;
   color: var(--muted);
-}
-
-.item-card {
-  margin-bottom: 1.5rem;
 }
 
 .box-select {

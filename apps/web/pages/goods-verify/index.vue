@@ -2,56 +2,61 @@
   <div>
     <p class="page-hint">{{ $t('goodsVerify.hint') }}</p>
 
-    <div class="toolbar">
-      <input v-model="date" class="date-input" type="date" @change="load" />
-    </div>
+    <div class="list-toolbar">
+      <div class="toolbar">
+        <input v-model="date" class="date-input" type="date" @change="load" />
+      </div>
 
-    <div class="filters">
-      <button
-        v-for="opt in statusFilters"
-        :key="opt.value"
-        class="filter-chip"
-        :class="{ 'filter-chip--active': status === opt.value }"
-        @click="status = opt.value"
-      >
-        {{ $t(opt.labelKey) }}
-      </button>
-    </div>
+      <div class="filters">
+        <button
+          v-for="opt in statusFilters"
+          :key="opt.value"
+          class="filter-chip"
+          :class="{ 'filter-chip--active': status === opt.value }"
+          @click="status = opt.value"
+        >
+          {{ $t(opt.labelKey) }}
+        </button>
+      </div>
 
-    <input
-      v-model="search"
-      class="search"
-      type="text"
-      :placeholder="$t('goodsVerify.searchPlaceholder')"
-    />
+      <input
+        v-model="search"
+        class="search"
+        type="text"
+        :placeholder="$t('goodsVerify.searchPlaceholder')"
+      />
+    </div>
 
     <p v-if="loading" class="empty">{{ $t('common.loading') }}</p>
     <p v-else-if="loadError" class="empty" style="color: var(--danger);">{{ $t('common.errorPrefix', { message: loadError }) }}</p>
     <p v-else-if="rows.length === 0" class="empty">{{ $t('goodsVerify.empty') }}</p>
 
-    <NuxtLink
-      v-for="task in rows"
-      :key="task.id"
-      :to="`/goods-verify/${task.id}`"
-      class="card list-card"
-    >
-      <div class="list-card__header">
-        <span class="list-card__title">{{ task.wclItemNo ?? task.partNo }}</span>
-        <span class="badge" :class="badgeClass(task.status)">{{ statusLabel.goodsVerify(task.status) }}</span>
-      </div>
-      <p class="list-card__meta">
-        {{ task.shelfCode || $t('common.noData') }}
-        · {{ task.boxId || $t('common.noData') }}
-      </p>
-      <div class="list-card__footer">
-        <span class="list-card__date">
-          {{ $t('goodsVerify.expectedQty', { qty: task.expectedQty }) }}
-        </span>
-        <span v-if="task.verifiedAt" class="badge badge--info">
-          {{ new Date(task.verifiedAt).toLocaleString() }}
-        </span>
-      </div>
-    </NuxtLink>
+    <div v-else class="list-panel">
+      <NuxtLink
+        v-for="task in rows"
+        :key="task.id"
+        :to="`/goods-verify/${task.id}`"
+        class="list-row"
+      >
+        <div class="list-row__main">
+          <div class="list-row__line1">
+            <span class="list-row__title">{{ task.wclItemNo ?? task.partNo }}</span>
+          </div>
+          <div class="list-row__meta">
+            {{ task.shelfCode || $t('common.noData') }}
+            · {{ task.boxId || $t('common.noData') }}
+          </div>
+        </div>
+        <div class="list-row__aside">
+          <span class="badge" :class="badgeClass(task.status)">{{ statusLabel.goodsVerify(task.status) }}</span>
+          <span>{{ $t('goodsVerify.expectedQty', { qty: task.expectedQty }) }}</span>
+          <span v-if="task.verifiedAt" class="badge badge--info">
+            {{ new Date(task.verifiedAt).toLocaleString() }}
+          </span>
+        </div>
+        <svg class="list-row__chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+      </NuxtLink>
+    </div>
   </div>
 </template>
 
@@ -130,7 +135,7 @@ useVisibleReload(load, ["/goods-verify-tasks"]);
   display: flex;
   gap: 0.5rem;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
 }
 
 .date-input {
@@ -147,7 +152,7 @@ useVisibleReload(load, ["/goods-verify-tasks"]);
 .filters {
   display: flex;
   gap: 0.5rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
   overflow-x: auto;
   padding-bottom: 0.25rem;
 }

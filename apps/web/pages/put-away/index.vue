@@ -8,43 +8,53 @@
     <p v-else-if="error" class="empty" style="color: var(--danger);">{{ $t('common.errorPrefix', { message: error }) }}</p>
     <template v-else-if="taskMode">
       <p v-if="tasks.length === 0" class="empty">{{ $t('putAway.noTasks') }}</p>
-      <NuxtLink
-        v-for="task in tasks"
-        :key="task.id"
-        :to="`/put-away/${task.receivingOrderId}?task=${task.id}`"
-        class="card list-card"
-      >
-        <div class="list-card__header">
-          <span class="list-card__title">{{ task.batchNo }}</span>
-          <span class="badge" :class="badgeClass(task.status)">{{ statusLabel.putAway(task.status) }}</span>
-        </div>
-        <p class="list-card__meta">
-          {{ task.supplierName || $t('common.noSupplier') }}
-        </p>
-        <div class="list-card__footer">
-          <span class="list-card__date">{{ $t('putAway.taskProgress', { unboxed: task.unboxedItems, received: task.receivedItems }) }}</span>
-        </div>
-      </NuxtLink>
+      <div v-else class="list-panel">
+        <NuxtLink
+          v-for="task in tasks"
+          :key="task.id"
+          :to="`/put-away/${task.receivingOrderId}?task=${task.id}`"
+          class="list-row"
+        >
+          <div class="list-row__main">
+            <div class="list-row__line1">
+              <span class="list-row__title">{{ task.batchNo }}</span>
+            </div>
+            <div class="list-row__meta">
+              {{ task.supplierName || $t('common.noSupplier') }}
+            </div>
+          </div>
+          <div class="list-row__aside">
+            <span class="badge" :class="badgeClass(task.status)">{{ statusLabel.putAway(task.status) }}</span>
+            <span>{{ $t('putAway.taskProgress', { unboxed: task.unboxedItems, received: task.receivedItems }) }}</span>
+          </div>
+          <svg class="list-row__chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+        </NuxtLink>
+      </div>
     </template>
     <template v-else>
       <p v-if="candidates.length === 0" class="empty">{{ $t('common.noReceivingOrdersNeedPutAway') }}</p>
-      <NuxtLink
-        v-for="ro in candidates"
-        :key="ro.id"
-        :to="`/put-away/${ro.id}`"
-        class="card list-card"
-      >
-        <div class="list-card__header">
-          <span class="list-card__title">{{ ro.batchNo }}</span>
-          <span class="badge" :class="badgeClass(ro.status)">{{ statusLabel.receiving(ro.status) }}</span>
-        </div>
-        <p class="list-card__meta">
-          {{ ro.supplierName || $t('common.noSupplier') }}
-        </p>
-        <div class="list-card__footer">
-          <span class="list-card__date">{{ $t('putAway.unboxedItems', { count: ro.unboxedItems }) }}</span>
-        </div>
-      </NuxtLink>
+      <div v-else class="list-panel">
+        <NuxtLink
+          v-for="ro in candidates"
+          :key="ro.id"
+          :to="`/put-away/${ro.id}`"
+          class="list-row"
+        >
+          <div class="list-row__main">
+            <div class="list-row__line1">
+              <span class="list-row__title">{{ ro.batchNo }}</span>
+            </div>
+            <div class="list-row__meta">
+              {{ ro.supplierName || $t('common.noSupplier') }}
+            </div>
+          </div>
+          <div class="list-row__aside">
+            <span class="badge" :class="badgeClass(ro.status)">{{ statusLabel.receiving(ro.status) }}</span>
+            <span>{{ $t('putAway.unboxedItems', { count: ro.unboxedItems }) }}</span>
+          </div>
+          <svg class="list-row__chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+        </NuxtLink>
+      </div>
     </template>
   </div>
 </template>

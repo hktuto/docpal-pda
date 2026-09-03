@@ -1,56 +1,58 @@
 <template>
   <div>
-    <div class="filters">
-      <button
-        v-for="opt in filters"
-        :key="opt.value"
-        class="filter-chip"
-        :class="{ 'filter-chip--active': filter === opt.value }"
-        @click="filter = opt.value"
-      >
-        {{ $t(opt.labelKey) }}
-      </button>
-    </div>
+    <div class="list-toolbar">
+      <div class="filters">
+        <button
+          v-for="opt in filters"
+          :key="opt.value"
+          class="filter-chip"
+          :class="{ 'filter-chip--active': filter === opt.value }"
+          @click="filter = opt.value"
+        >
+          {{ $t(opt.labelKey) }}
+        </button>
+      </div>
 
-    <input
-      v-model="search"
-      class="search"
-      type="text"
-      :placeholder="$t('common.searchByRefOrSupplier')"
-    />
+      <input
+        v-model="search"
+        class="search"
+        type="text"
+        :placeholder="$t('common.searchByRefOrSupplier')"
+      />
+    </div>
 
     <p v-if="loading" class="empty">{{ $t('common.loading') }}</p>
     <p v-else-if="loadError" class="empty" style="color: var(--danger);">{{ $t('common.errorPrefix', { message: loadError }) }}</p>
     <p v-else-if="rows.length === 0" class="empty">{{ $t('common.noReceivingOrders') }}</p>
 
-    <NuxtLink
-      v-for="ro in rows"
-      :key="ro.id"
-      :to="`/receiving/${ro.id}`"
-      class="card list-card"
-    >
-      <div class="list-card__header">
-        <span class="list-card__title">{{ ro.batchNo }}</span>
-        <span class="badge" :class="badgeClass(ro.status)">{{ statusLabel.receiving(ro.status) }}</span>
-      </div>
-      <p class="list-card__meta">
-        {{ ro.supplierName || $t('common.noSupplier') }}
-      </p>
-      <div class="list-card__footer">
-        <span class="list-card__date">
-          {{ ro.deliveryDate ? new Date(ro.deliveryDate).toLocaleDateString() : $t('common.noDate') }}
-        </span>
-        <span v-if="ro.remainingItems > 0" class="badge badge--info">
-          {{ $t('receiving.remaining', { count: ro.remainingItems }) }}
-        </span>
-        <span
-          v-if="ro.pendingPickingOrders > 0"
-          class="badge badge--info"
-        >
-          {{ ro.pendingPickingOrders }} {{ $t('status.picking.picking') }}
-        </span>
-      </div>
-    </NuxtLink>
+    <div v-else class="list-panel">
+      <NuxtLink
+        v-for="ro in rows"
+        :key="ro.id"
+        :to="`/receiving/${ro.id}`"
+        class="list-row"
+      >
+        <div class="list-row__main">
+          <div class="list-row__line1">
+            <span class="list-row__title">{{ ro.batchNo }}</span>
+          </div>
+          <div class="list-row__meta">
+            {{ ro.supplierName || $t('common.noSupplier') }}
+            · {{ ro.deliveryDate ? new Date(ro.deliveryDate).toLocaleDateString() : $t('common.noDate') }}
+          </div>
+        </div>
+        <div class="list-row__aside">
+          <span class="badge" :class="badgeClass(ro.status)">{{ statusLabel.receiving(ro.status) }}</span>
+          <span v-if="ro.remainingItems > 0" class="badge badge--info">
+            {{ $t('receiving.remaining', { count: ro.remainingItems }) }}
+          </span>
+          <span v-if="ro.pendingPickingOrders > 0" class="badge badge--info">
+            {{ ro.pendingPickingOrders }} {{ $t('status.picking.picking') }}
+          </span>
+        </div>
+        <svg class="list-row__chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+      </NuxtLink>
+    </div>
   </div>
 </template>
 
@@ -115,7 +117,7 @@ useVisibleReload(load, ["/receiving-orders"]);
 .filters {
   display: flex;
   gap: 0.5rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
   overflow-x: auto;
   padding-bottom: 0.25rem;
 }

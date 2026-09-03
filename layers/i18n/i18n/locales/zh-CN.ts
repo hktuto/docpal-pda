@@ -151,6 +151,7 @@ export default {
       confirmMismatch: "确认",
       cancelMismatch: "取消",
       boxId:"箱",
+      noCarton: "无箱号",
       editIssue: "编辑问题",
       reportIssue: "上报问题",
       mismatch: {
