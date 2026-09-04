@@ -64,6 +64,7 @@ export const supplierProfiles = pgTable("supplier_profiles", {
   qrTemplateConfig: jsonb("qr_template_config"),
   qrType: text("qr_type"), // qrcode type, e.g. isbn, ban 14, ban 16
   qtyEncoding: text("qty_encoding"), // qty decoding rule, e.g. 'koa_zeros'
+  barcodeTypes: text("barcode_types").array(), // allowed barcode types whitelist; null = no restriction
   remark: text("remark"), // other remark for extension
   creationDate: timestamp("creation_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),

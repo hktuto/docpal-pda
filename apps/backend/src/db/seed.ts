@@ -30,6 +30,7 @@ import {
   warehouseConfig,
 } from "./schema/index.js";
 import { realParts } from "./seed-real-data.js";
+import { builtinSupplierProfiles } from "./seed-supplier-profiles.js";
 import { realSubInventories } from "./seed-subinventories-data.js";
 import { realNetWeights } from "./seed-net-weight-data.js";
 import { hkShelves } from "./seed-shelves-hk.js";
@@ -489,6 +490,22 @@ async function seedReferenceOnly(db: AppDb): Promise<void> {
 
   // Default shelf layout: the real HK warehouse layout (seed-shelves-hk.ts).
   await db.insert(shelves).values(hkShelves.map((s, i) => ({ id: uid(200 + i), ...s })));
+
+  // Supplier QR label templates restored from the retired BVS system (see
+  // scripts/sql/restore-supplier-profiles-whhk.sql). FK-safe: only codes that
+  // already exist in suppliers are inserted — on a truly fresh DB suppliers
+  // arrive via upstream sync later, so apply the SQL script after the first
+  // sync for those.
+  const existingSupplierCodes = new Set(
+    (await db.select({ code: suppliers.code }).from(suppliers)).map((r) => r.code)
+  );
+  const profileRows = builtinSupplierProfiles.filter((p) => existingSupplierCodes.has(p.supplierCode));
+  if (profileRows.length > 0) {
+    await db
+      .insert(supplierProfiles)
+      .values(profileRows.map((p) => ({ id: newId(), ...p })))
+      .onConflictDoNothing({ target: supplierProfiles.supplierCode });
+  }
 
   // Net-weight reference: the two demo rows + the real master (part_no is
   // plain text with no FK to parts, so this is safe before parts sync in).
