@@ -12,6 +12,7 @@ export interface ScanTemplateRow {
   supplierCode: string;
   qrTemplate: string | null;
   qtyEncoding: string | null;
+  barcodeTypes: string[] | null;
 }
 
 /**
@@ -22,7 +23,7 @@ export interface ScanTemplateRow {
 export async function listScanTemplates(db: AppDb): Promise<ScanTemplateRow[]> {
   return queryAll<ScanTemplateRow>(
     db,
-    sql`SELECT supplier_code AS "supplierCode", qr_template AS "qrTemplate", qty_encoding AS "qtyEncoding"
+    sql`SELECT supplier_code AS "supplierCode", qr_template AS "qrTemplate", qty_encoding AS "qtyEncoding", barcode_types AS "barcodeTypes"
         FROM supplier_profiles ORDER BY supplier_code`
   );
 }

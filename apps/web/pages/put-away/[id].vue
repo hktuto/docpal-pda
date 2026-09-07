@@ -185,6 +185,10 @@ const boxSelections = ref<Record<string, string>>({});
 const expandedItems = ref<Set<string>>(new Set());
 const addingAll = ref<Record<string, boolean>>({});
 
+// Restrict the hardware decoder to the supplier's barcode-type whitelist
+// while this order is open (no-op when the profile has none).
+useSupplierSymbologyScope(computed(() => order.value?.supplier?.code ?? undefined));
+
 // scans[] are the staging rows (never boxed), so they are all unboxed.
 const unboxedCountForOrder = computed(() => scans.value.length);
 

@@ -10,7 +10,10 @@
   (date code, lot code, COO/COW), and total / allocated / available
   quantities.
 - Supplier dropdown is populated from the admin suppliers CRUD read
-  (`GET /admin/suppliers`).
+  (`GET /admin/suppliers`). Selecting a supplier also restricts the hardware
+  decoder to that supplier profile's `barcode_types` whitelist (when set);
+  cleared/restored when the filter changes or the page is left
+  (`useSupplierSymbologyScope`, xcheng/Movfast only).
 
 ## Out of scope
 

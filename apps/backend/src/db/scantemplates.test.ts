@@ -30,12 +30,14 @@ test("scan-templates: every supplier profile, ordered by supplier_code (null tem
       qrTemplate:
         "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<fullName>.+)$",
       qtyEncoding: "koa_zeros",
+      barcodeTypes: null,
     },
     {
       supplierCode: "KOA+TCG",
       qrTemplate:
         "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<fullName>.+)$",
       qtyEncoding: "koa_zeros",
+      barcodeTypes: null,
     },
   ]);
 
@@ -44,12 +46,12 @@ test("scan-templates: every supplier profile, ordered by supplier_code (null tem
     sql`INSERT INTO suppliers (id, code, name) VALUES (${randomUUID()}, 'ACME', 'ACME')`
   );
   await client.db.execute(
-    sql`INSERT INTO supplier_profiles (id, supplier_code, creation_date, last_update_date)
-        VALUES (${randomUUID()}, 'ACME', now(), now())`
+    sql`INSERT INTO supplier_profiles (id, supplier_code, barcode_types, creation_date, last_update_date)
+        VALUES (${randomUUID()}, 'ACME', ARRAY['code128', 'qr']::text[], now(), now())`
   );
   rows = await listScanTemplates(client.db);
   assert.equal(rows.length, 3);
-  assert.deepEqual(rows[0], { supplierCode: "ACME", qrTemplate: null, qtyEncoding: null });
+  assert.deepEqual(rows[0], { supplierCode: "ACME", qrTemplate: null, qtyEncoding: null, barcodeTypes: ["code128", "qr"] });
   assert.equal(rows[1].supplierCode, "KOA");
   assert.equal(rows[2].supplierCode, "KOA+TCG");
 });

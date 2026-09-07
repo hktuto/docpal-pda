@@ -32,6 +32,9 @@
   record pops the `LabelScanReviewModal` confirm form
   (`confirmSingleMatch: true`); a multi-item (carton) label pops the shared
   `ScanMultiItemModal` table and rows are applied one by one.
+- Scanner symbology whitelist: while the detail page is open, the hardware
+  decoder is restricted to the supplier profile's `barcode_types` (when set);
+  restored on page leave (`useSupplierSymbologyScope`, xcheng/Movfast only).
 - Assign staging scans into shelf boxes (one box per shelf), add-all-unboxed,
   remove-from-box, and remove scanned pieces.
 - Scan a physical box QR to create a box: the "Scan box" button opens a

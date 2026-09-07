@@ -48,6 +48,7 @@ interface ScanTemplateRow {
   supplierCode: string;
   qrTemplate: string | null;
   qtyEncoding: string | null;
+  barcodeTypes: string[] | null;
 }
 
 /**
@@ -400,6 +401,7 @@ export function createBackendWarehouseService(
         code: row.supplierCode,
         qrcodeTemplate: row.qrTemplate ?? "",
         qrcodeQtyEncoding: row.qtyEncoding,
+        barcodeTypes: row.barcodeTypes ?? null,
       }));
     },
 

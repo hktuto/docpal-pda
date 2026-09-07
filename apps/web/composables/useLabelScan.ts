@@ -17,7 +17,8 @@ import type { WarehouseService } from '~/services/warehouse';
 let supplierTemplateCache: SupplierQrcodeTemplate[] | null = null;
 let supplierTemplateCachePromise: Promise<SupplierQrcodeTemplate[]> | null = null;
 
-async function getCachedSupplierQrTemplates(
+/** Shared cache of the /scan-templates list (supplier QR templates + barcode-type whitelists). */
+export async function getCachedSupplierQrTemplates(
   warehouse: WarehouseService
 ): Promise<SupplierQrcodeTemplate[]> {
   if (supplierTemplateCache) return supplierTemplateCache;

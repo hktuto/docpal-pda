@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(RectangleDetectionPlugin.class);
         registerPlugin(ScannerBroadcastPlugin.class);
+        registerPlugin(ScannerConfigPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

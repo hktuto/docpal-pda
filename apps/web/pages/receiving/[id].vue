@@ -203,6 +203,10 @@ const {
 
 const multiResults = ref<MultiApplyResult[] | null>(null);
 
+// Restrict the hardware decoder to the supplier's barcode-type whitelist
+// while this order is open (no-op when the profile has none).
+useSupplierSymbologyScope(computed(() => order.value?.supplier?.code ?? undefined));
+
 useHardwareScanner({
   enabled: () => !reviewOpen.value && !multiOpen.value,
   onScan: async (rawValue: string) => {

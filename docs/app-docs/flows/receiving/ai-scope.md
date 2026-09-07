@@ -27,6 +27,10 @@
 - S-key serial dedup: a parsed `serialNo` (KOA S-key) is recorded per order
   in `receiving_scan_labels`; a repeat serial is rejected with
   `409 label_already_scanned`. Scans without a serial skip dedup.
+- Scanner symbology whitelist: while the detail page is open, the hardware
+  decoder is restricted to the supplier profile's `barcode_types` (when set),
+  so other symbologies on multi-barcode labels don't decode at all; restored
+  on page leave (`useSupplierSymbologyScope`, xcheng/Movfast devices only).
 - Report, edit, confirm, and cancel receiving item mismatches — **item-keyed**
   (every call addresses the receiving invoice item id; the mismatch is a set
   of flat columns on the item, no separate table, no status/reporter).

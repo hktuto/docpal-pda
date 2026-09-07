@@ -100,6 +100,10 @@ const selectedSupplierCode = ref("");
 const shelfCode = ref("");
 const filtersExpanded = ref(false);
 
+// Restrict the hardware decoder to the selected supplier's barcode-type
+// whitelist (no-op when no supplier is chosen or the profile has none).
+useSupplierSymbologyScope(computed(() => selectedSupplierCode.value || undefined));
+
 const lotsByPart = computed(() => {
   const map: Record<string, StockSearchLot[]> = {};
   for (const lot of lots.value) {
