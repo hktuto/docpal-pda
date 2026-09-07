@@ -910,6 +910,7 @@ export default {
       printerPlaceholder: "选择或输入打印机…",
       copies: "份数",
       print: "打印",
+      downloadQr: "下载二维码",
       printSelected: "打印所选（{count}）",
       printing: "打印中… {progress}",
       selectedCount: "已选 {count} 项",

@@ -910,6 +910,7 @@ export default {
       printerPlaceholder: "Select or type a printer…",
       copies: "Copies",
       print: "Print",
+      downloadQr: "Download QR",
       printSelected: "Print selected ({count})",
       printing: "Printing… {progress}",
       selectedCount: "{count} selected",
