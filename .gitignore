@@ -47,3 +47,6 @@ apps/web/android/app/*.keystore
 
 # SQL Server backups
 *.BAK
+
+# Agent scratch space (pulled APKs, decompilers, decompiled sources)
+.kimi-code/tmp/
