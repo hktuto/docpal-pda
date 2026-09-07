@@ -272,10 +272,12 @@ onMounted(load);
     <div class="page-head">
       <h1>{{ $t("admin.pages.receiving.detailTitle", { batchNo: order?.batchNo ?? "" }) }}</h1>
       <div class="head-actions">
-        <button class="btn" disabled :title="$t('admin.common.downloadPendingTitle')">
+        <!-- <button class="btn" disabled :title="$t('admin.common.downloadPendingTitle')">
           {{ $t("admin.pages.receiving.downloadDeliveryOrderList") }}
-        </button>
-        <button class="btn" :disabled="downloadingPickingList || !order" @click="downloadPickingList">
+        </button> -->
+        <button
+          v-if="order && (order.status === 'in_hand')"
+        class="btn" :disabled="downloadingPickingList || !order" @click="downloadPickingList">
           {{ $t("admin.pages.receiving.downloadPickingList") }}
         </button>
         <button
