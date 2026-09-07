@@ -110,8 +110,10 @@ Selection rules (confirmed with the business):
   source there (the order's pair is the destination) — `allocateAll` converts
   the demand's pair via the configurable `pickingFromSubinventoryOrgs`
   (from_subinventory → org groups; sub-inventory from the same
-  `receivingSubInventoryRules` over the order's `po_no`, else the code
-  itself; no group match → order pair as-is; spec
+  `receivingSubInventoryRules` over the item's `additional_data.order_no`,
+  falling back to `additional_data.po_no`, else the group default; no rule
+  match → the from_subinventory code itself; no group match → order pair
+  as-is; spec
   `docs/superpowers/specs/2026-09-03-picking-from-subinventory-orgs-design.md`).
 - **FIFO** — oldest `date_code` first (NULLS LAST).
 

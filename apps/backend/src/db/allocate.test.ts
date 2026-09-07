@@ -498,7 +498,7 @@ test("scheduleAllocateAll: one run at a time, triggers during a run coalesce int
 
 // --- transfer orders: additional_data.from_subinventory conversion ---------
 
-test("resolveDemandLocation: org group + receiving-rule sub-inventory via order po_no", () => {
+test("resolveDemandLocation: org group + receiving-rule sub-inventory via item order_no/po_no", () => {
   _setPickingFromSubinventoryOrgsForTests([
     { orgId: 143, fromSubinventories: ["SZHK2", "GZHK2", "SHHK2", "BJHK2"] },
     { orgId: 220, fromSubinventories: ["THHK2"] },
@@ -514,13 +514,34 @@ test("resolveDemandLocation: org group + receiving-rule sub-inventory via order 
       customerCode: null,
       orgId: 14, // destination org on the transfer order
       subInventoryCode: "GZSZ", // destination sub-inventory
-      poNo: "32900123",
+      orderNo: "32900123",
+      itemPoNo: null,
       fromSubinventory: "GZHK2",
     };
-    // group match + receiving-rule match → converted pair
+    // group match + receiving-rule match on order_no → converted pair
     assert.deepEqual(resolveDemandLocation(base), { ...base, orgId: 143, subInventoryCode: "GZHK2" });
+    // order_no wins over po_no: po_no matches no pattern but order_no does
+    assert.deepEqual(resolveDemandLocation({ ...base, itemPoNo: "999" }), { ...base, itemPoNo: "999", orgId: 143, subInventoryCode: "GZHK2" });
+    // order_no empty → po_no is the rule input
+    assert.deepEqual(
+      resolveDemandLocation({ ...base, orderNo: "  ", itemPoNo: "32900456" }),
+      { ...base, orderNo: "  ", itemPoNo: "32900456", orgId: 143, subInventoryCode: "GZHK2" }
+    );
     // group match but no receiving-rule match → from_subinventory code itself
-    assert.deepEqual(resolveDemandLocation({ ...base, poNo: "999" }), { ...base, poNo: "999", orgId: 143, subInventoryCode: "GZHK2" });
+    assert.deepEqual(resolveDemandLocation({ ...base, orderNo: "999" }), { ...base, orderNo: "999", orgId: 143, subInventoryCode: "GZHK2" });
+    // both empty → no pattern matches an empty ref → group default (null) → from_subinventory
+    assert.deepEqual(
+      resolveDemandLocation({ ...base, orderNo: null, itemPoNo: "" }),
+      { ...base, orderNo: null, itemPoNo: "", orgId: 143, subInventoryCode: "GZHK2" }
+    );
+    // both empty + a group default → the default sub-inventory
+    _setReceivingSubInventoryRulesForTests([
+      { orgIds: [143], patterns: [{ poNoPattern: "329*", subInventoryCode: "SHHK2" }], default: "BJHK2" },
+    ]);
+    assert.deepEqual(
+      resolveDemandLocation({ ...base, orderNo: null, itemPoNo: null }),
+      { ...base, orderNo: null, itemPoNo: null, orgId: 143, subInventoryCode: "BJHK2" }
+    );
     // code in no group → order pair unchanged
     assert.deepEqual(resolveDemandLocation({ ...base, fromSubinventory: "WSTORE1" }), { ...base, fromSubinventory: "WSTORE1" });
     // no transfer marker → unchanged
@@ -535,12 +556,13 @@ test("allocateAll: transfer item allocates from the converted source location", 
   await reseed(client);
   await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${PO_22}`);
   // the transfer order's pair is the DESTINATION (no stock there);
-  // the stock physically sits in the from_subinventory's org
+  // the stock physically sits in the from_subinventory's org; the rule
+  // reference comes from the item's additional_data (order_no / po_no)
   await client.db.execute(
-    sql`UPDATE picking_orders SET org_id = 2, sub_inventory_code = 'ACME-S1', po_no = '319-DEMO' WHERE id = ${PO_22}`
+    sql`UPDATE picking_orders SET org_id = 2, sub_inventory_code = 'ACME-S1', po_no = 'IGNORED-ORDER-PO' WHERE id = ${PO_22}`
   );
   await client.db.execute(
-    sql`UPDATE picking_items SET additional_data = '{"from_subinventory":"SZHK1","to_subinventory":"GZSZ"}'::jsonb WHERE id = ${ITEM_23}`
+    sql`UPDATE picking_items SET additional_data = '{"from_subinventory":"SZHK1","to_subinventory":"GZSZ","order_no":"319-DEMO"}'::jsonb WHERE id = ${ITEM_23}`
   );
   await client.db.execute(
     sql`UPDATE inventory_lots SET org_id = 140, sub_inventory_code = 'SZHK1' WHERE id = ${LOT_18}`

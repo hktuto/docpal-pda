@@ -86,9 +86,10 @@ export const docpalGroupMapping: Record<string, string[]> = {
 // transfer-order conversion for allocation — a picking item whose
 // additional_data.from_subinventory is in a group's fromSubinventories is
 // matched against stock in the group's orgId; its sub_inventory_code comes
-// from the SAME receivingSubInventoryRules above, evaluated with the parent
-// picking order's po_no under the converted org (no receiving-rule match →
-// the from_subinventory code itself). Items with no matching group keep the
+// from the SAME receivingSubInventoryRules above, evaluated with the item's
+// additional_data.order_no (fallback: additional_data.po_no, else the group
+// default) under the converted org (no receiving-rule match → the
+// from_subinventory code itself). Items with no matching group keep the
 // order's location pair. [] = off.
 //
 // Resolution order (loadFlowConfig, called once at boot from db.ts):
@@ -162,7 +163,8 @@ export interface SubInventoryRuleGroup {
  *  2026-09-03-picking-from-subinventory-orgs-design.md). A picking item whose
  *  additional_data.from_subinventory is in fromSubinventories allocates
  *  against orgId; its sub-inventory comes from the receiving
- *  sub-inventory rules evaluated with the picking order's po_no (no match →
+ *  sub-inventory rules evaluated with the item's additional_data.order_no
+ *  (fallback: additional_data.po_no, else the group default; no match →
  *  the from_subinventory code itself). */
 export interface FromSubinventoryOrgGroup {
   /** Converted org_id used for allocation matching. */

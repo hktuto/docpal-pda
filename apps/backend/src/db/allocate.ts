@@ -36,9 +36,11 @@ import { matchSubInventoryRule } from "./receiving.js";
 //     order's pair is the DESTINATION, not the source. When a
 //     pickingFromSubinventoryOrgs group lists the code, the demand's pair is
 //     converted before matching: org_id from the group, sub_inventory_code
-//     from the receivingSubInventoryRules evaluated with the order's po_no
-//     under the converted org (no receiving-rule match → the from_subinventory
-//     code itself). No group match → the order's pair is used as-is.
+//     from the receivingSubInventoryRules evaluated with the item's
+//     additional_data.order_no (fallback: additional_data.po_no, else the
+//     group default) under the converted org (no receiving-rule match → the
+//     from_subinventory code itself). No group match → the order's pair is
+//     used as-is.
 //   - A receiving item with a NULL pair (org_id or sub_inventory_code) is
 //     skipped and counted (AllocateSummary.skippedReceivingSources) — the
 //     ingest-time defaulting rule (owner: Sean) is meant to populate it;
@@ -120,9 +122,12 @@ export interface DemandRow {
   customerCode: string | null;
   orgId: number | null;
   subInventoryCode: string | null;
-  /** Parent order's po_no — input to the receiving-rule sub-inventory lookup
-   *  for transfer items. */
-  poNo: string | null;
+  /** Item-level order no from picking_items.additional_data — first input to
+   *  the receiving-rule sub-inventory lookup for transfer items. */
+  orderNo: string | null;
+  /** Item-level po no from picking_items.additional_data — used when orderNo
+   *  is empty. */
+  itemPoNo: string | null;
   /** Transfer marker from upstream (picking_items.additional_data): the
    *  sub-inventory the stock physically comes FROM; the order's own pair is
    *  the destination. */
@@ -164,7 +169,8 @@ async function loadDemands(dbOrTx: DbOrTx): Promise<DemandRow[]> {
                po.customer_code AS "customerCode",
                po.org_id AS "orgId",
                po.sub_inventory_code AS "subInventoryCode",
-               po.po_no AS "poNo",
+               pi.additional_data ->> 'order_no' AS "orderNo",
+               pi.additional_data ->> 'po_no' AS "itemPoNo",
                pi.additional_data ->> 'from_subinventory' AS "fromSubinventory"
         FROM picking_items pi
         JOIN picking_orders po ON po.id = pi.picking_order_id
@@ -184,10 +190,12 @@ async function loadDemands(dbOrTx: DbOrTx): Promise<DemandRow[]> {
  * An item with additional_data.from_subinventory is a transfer: the order's
  * (org_id, sub_inventory_code) is the destination. When a group lists the
  * code, the demand matches stock in the group's orgId, with the sub-inventory
- * resolved by the receivingSubInventoryRules over the order's po_no (same
- * matcher as receiving confirm-arrival); when no receiving rule matches, the
- * from_subinventory code itself is used. Items without from_subinventory, or
- * whose code no group lists, keep the order's pair unchanged.
+ * resolved by the receivingSubInventoryRules over the item's own reference
+ * (same matcher as receiving confirm-arrival): additional_data.order_no when
+ * set, else additional_data.po_no, else null (no pattern matches an empty
+ * reference, so the group's default applies); when no receiving rule matches,
+ * the from_subinventory code itself is used. Items without from_subinventory,
+ * or whose code no group lists, keep the order's pair unchanged.
  */
 export function resolveDemandLocation(d: DemandRow): DemandRow {
   if (!d.fromSubinventory) return d;
@@ -195,10 +203,11 @@ export function resolveDemandLocation(d: DemandRow): DemandRow {
   if (groups.length === 0) return d;
   const group = groups.find((g) => g.fromSubinventories.includes(d.fromSubinventory!));
   if (!group) return d;
+  const ruleRef = d.orderNo?.trim() || d.itemPoNo?.trim() || null;
   return {
     ...d,
     orgId: group.orgId,
-    subInventoryCode: matchSubInventoryRule(group.orgId, d.poNo, receivingSubInventoryRules()) ?? d.fromSubinventory,
+    subInventoryCode: matchSubInventoryRule(group.orgId, ruleRef, receivingSubInventoryRules()) ?? d.fromSubinventory,
   };
 }
 

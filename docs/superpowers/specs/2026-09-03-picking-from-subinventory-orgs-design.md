@@ -32,9 +32,15 @@ org mapping is per-warehouse business data, not derivable.
   1. `org_id` ← the group whose `fromSubinventories` lists the item's
      `additional_data.from_subinventory` (exact, case-sensitive).
   2. `sub_inventory_code` ← the **same `receivingSubInventoryRules`** used at
-     receiving confirm-arrival, evaluated with the parent picking order's
-     `po_no` under the converted org (`matchSubInventoryRule`). No
+     receiving confirm-arrival, evaluated under the converted org
+     (`matchSubInventoryRule`) with the item's own reference from
+     `additional_data`: `order_no` when set, else `po_no`, else null (no
+     pattern matches an empty reference → the group's default). No
      receiving-rule match → the `from_subinventory` code itself.
+     *(Amended 2026-09-07: the rule input was the parent picking order's
+     `po_no`; upstream now stamps `order_no`/`po_no` per item, so the lookup
+     uses the item-level chain — see
+     `2026-09-07-transfer-subinventory-order-no-design.md`.)*
 - **Leave-as-is fallback**: an item with no `from_subinventory`, or whose
   code is in no group, keeps the order's pair — today's behavior. Nothing is
   skipped or surfaced; an unmatched transfer simply allocates from the
@@ -61,8 +67,9 @@ Grouped by target org (mirrors how the business states the rule):
 ]
 ```
 
-Worked example (order `GZ-26080231`, item `from_subinventory = GZHK2`, order
-`po_no = 329…`, receiving rules `329* → GZHK2` under orgs `[140,143,120]`):
+Worked example (order `GZ-26080231`, item `from_subinventory = GZHK2` with
+`additional_data.order_no = 329…`, receiving rules `329* → GZHK2` under orgs
+`[140,143,120]`):
 converted pair = `(143, GZHK2)` → allocation matches receiving stock stamped
 `GZHK2` at confirm-arrival, closing the receiving → transfer-picking loop.
 

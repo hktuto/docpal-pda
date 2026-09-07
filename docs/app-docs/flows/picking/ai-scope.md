@@ -94,8 +94,9 @@
   their source there (the order's pair is the destination) — `allocateAll`
   converts the demand's pair via flow-config `pickingFromSubinventoryOrgs`
   (from_subinventory → org), taking the sub-inventory from
-  `receivingSubInventoryRules` over the order's `po_no` (no match → the
-  from_subinventory code itself; no org group → order pair unchanged). Pure
+  `receivingSubInventoryRules` over the item's `additional_data.order_no`
+  (fallback: `additional_data.po_no`, else the group default; no rule match →
+  the from_subinventory code itself; no org group → order pair unchanged). Pure
   lookup at allocation time, nothing is written back (spec
   `docs/superpowers/specs/2026-09-03-picking-from-subinventory-orgs-design.md`).
 - Allocation sources: shelf lots first, then in-hand receiving (dock) stock —
