@@ -137,12 +137,13 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Login | `/login` | `apps/admin/pages/login.vue` |
 | Home / section cards | `/` | `apps/admin/pages/index.vue` |
 | Master-data CRUD lists | `/<entity>` | `apps/admin/pages/<entity>.vue` (thin wrappers over `components/CrudTable.vue` + `utils/entities.ts` configs) |
+| Supplier profile (QR scan template) editor | `/suppliers/:code` | `apps/admin/pages/suppliers/[code].vue` + `apps/admin/components/SupplierProfileEditor.vue` |
 | Stock search (read-only; supplier + part-no filter) | `/stock-search` | `apps/admin/pages/stock-search.vue` |
 | Sub-inventories (+ share-group editor, filter/sort) | `/sub-inventories` | `apps/admin/pages/sub-inventories.vue` |
 | Shelf boxes list / detail | `/shelf-boxes`, `/shelf-boxes/:id` | `apps/admin/pages/shelf-boxes/index.vue`, `apps/admin/pages/shelf-boxes/[id].vue` |
 | Picking orders list / detail (delivery-date edit) | `/picking-orders`, `/picking-orders/:id` | `apps/admin/pages/picking-orders/index.vue`, `apps/admin/pages/picking-orders/[id].vue` |
 | Picking priority reorder | `/picking/reorder` | `apps/admin/pages/picking/reorder.vue` |
-| Receiving orders list / detail (delivery-date + item date-code edit, invoice filter) | `/receiving`, `/receiving/:id` | `apps/admin/pages/receiving/index.vue`, `apps/admin/pages/receiving/[id].vue` |
+| Receiving orders list / detail (delivery-date + item date-code edit, invoice filter, confirm in-hand, picking-list xlsx download) | `/receiving`, `/receiving/:id` | `apps/admin/pages/receiving/index.vue`, `apps/admin/pages/receiving/[id].vue` |
 | Shipping boxes list / detail (orders-in-box, per-box ship) | `/shipping`, `/shipping/:boxId` | `apps/admin/pages/shipping/index.vue`, `apps/admin/pages/shipping/[id].vue` |
 | Generic CRUD table (search / column sorting / server paging / multi-select) | — | `apps/admin/components/CrudTable.vue` (+ `components/CrudForm.vue`, `components/Pager.vue`, `composables/useColumnSort.ts`) |
 | Shelf / shelf-box label printing (single + multi-select dialog; `katata-label` template via the backend `/print/*` proxy) | `/shelves`, `/shelf-boxes` | `apps/admin/components/PrintLabelsDialog.vue`, `apps/admin/utils/print.ts` |

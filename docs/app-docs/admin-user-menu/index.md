@@ -46,13 +46,13 @@ PDA 操作員畫面請參閱 [PDA 用戶指南](../user-menu/index.md)；本頁�
 
 - 供應商主檔（與 Oracle AP_SUPPLIERS 同步的鏡像）：**新增**、**編輯**、**刪除**。
 - 頂部**搜尋欄**可按關鍵字即時篩選列表。
-- 每行的**編輯資料**開啟供應商資料（Supplier profile）對話框 — 編輯 PDA 本地的供應商設定，包括 QR 掃描模板（見下文）。
+- 每行的**編輯資料**開啟供應商資料（Supplier profile）詳情頁 — 編輯 PDA 本地的供應商設定，包括 QR 掃描模板（見下文）。
 
 ### QR 掃描模板編輯器
 
 ![QR 掃描模板編輯器](./assets/supplier-qr-template.png)
 
-- 供應商資料對話框內的 **Scan template** 區段，用於教 PDA 解析該供應商標籤的 QR／條碼內容（此對話框內部維持英文介面）。
+- 供應商資料詳情頁內的 **Scan template** 區段，用於教 PDA 解析該供應商標籤的 QR／條碼內容。
 - **Sample scan** — 貼上或掃描一個真實標籤內容作為範例。
 - **Format** — 選擇解析方式：以分隔字元拆分（Separated by a character）、固定位置（Fixed positions）或進階（直接編輯規則）。
 - 為每段內容標記欄位（料號、數量、日期碼等）後，下方會即時顯示解析預覽，並可用測試台驗證其他標籤。
