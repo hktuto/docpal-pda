@@ -630,7 +630,7 @@ async function computeShelfSuggestions(
  * own location pair (item-level partitioning since 2026-08-18) and each group
  * is ranked within that pair; items with a NULL pair get no suggestion.
  */
-async function computeItemShelfSuggestions(
+export async function computeItemShelfSuggestions(
   db: AppDb,
   items: { partNo: string; itemOrgId: number | null; itemSubInventoryCode: string | null }[]
 ): Promise<Map<string, ShelfSuggestion>> {

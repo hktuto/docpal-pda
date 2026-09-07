@@ -19,7 +19,8 @@
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.29",
-    "postgres": "^3.4.5"
+    "postgres": "^3.4.5",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",

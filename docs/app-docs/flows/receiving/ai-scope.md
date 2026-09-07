@@ -48,6 +48,16 @@
   The tab (and its fetch) is hidden when flow config
   `picking.allocation.allowDockStock=false` — put-away is then a hard gate
   and receiving is decoupled from picking.
+- The admin console's receiving detail (`apps/admin/pages/receiving/[id].vue`)
+  can confirm arrival itself (Confirm In-hand button while `pending` /
+  `provisional_received`, same `confirm-arrival` endpoint) and download the
+  shipper-style picking list xlsx (`GET
+  /admin/receiving-orders/:id/picking-list`,
+  `apps/backend/src/routes/admin/receivingPickingList.ts`): receipts grouped
+  by part, each receipt a 3-row block (customer names / recommended shelf +
+  order_nos / `invoice_no ctn_no` item row) with per-row allocation slots,
+  per-group Total/Balance, whole-order (no `ctn_no`) allocations on a closing
+  `(order-level)` block.
 
 ## Out of scope
 
@@ -106,3 +116,4 @@
 - `docs/superpowers/specs/2026-07-27-admin-issue-handling-design.md`
 - `docs/superpowers/specs/2026-07-27-admin-item-removal-and-audit-logs-design.md`
 - `docs/superpowers/specs/2026-09-02-receiving-subinventory-rules-design.md`
+- `docs/superpowers/specs/2026-09-07-admin-receiving-picking-list-design.md`

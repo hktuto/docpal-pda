@@ -5,6 +5,7 @@ const route = useRoute();
 const orderId = route.params.id as string;
 const flow = useFlowApi();
 const { t } = useI18n();
+const apiBaseUrl = useRuntimeConfig().public.apiBaseUrl as string;
 
 const order = ref<ReceivingOrderDetail | null>(null);
 const logs = ref<TransactionLogRow[]>([]);
@@ -103,6 +104,52 @@ async function saveDateCode(item: ReceivingItemRow) {
 
 // Per-item mismatch confirm/cancel (same semantics as the Issues page).
 const mismatchActing = ref<Record<string, string>>({});
+
+// Admin-side arrival confirmation (pending / provisional_received → in_hand),
+// same endpoint the PDA uses.
+const confirmingArrival = ref(false);
+
+async function confirmInHand() {
+  if (!order.value) return;
+  if (!window.confirm(t("admin.pages.receiving.confirmInHandConfirm", { batchNo: order.value.batchNo }))) return;
+  confirmingArrival.value = true;
+  error.value = "";
+  try {
+    await flow.confirmReceivingArrival(orderId);
+    await load();
+  } catch (e: any) {
+    error.value = e.message;
+  } finally {
+    confirmingArrival.value = false;
+  }
+}
+
+// Picking-list xlsx download (backend-generated, shipper layout).
+const downloadingPickingList = ref(false);
+
+async function downloadPickingList() {
+  if (!order.value || downloadingPickingList.value) return;
+  downloadingPickingList.value = true;
+  error.value = "";
+  try {
+    const token = localStorage.getItem("admin_token");
+    const res = await fetch(`${apiBaseUrl}/admin/receiving-orders/${orderId}/picking-list`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!res.ok) throw new Error((await res.text()).trim() || `Request failed (${res.status})`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `picking-list-${order.value.batchNo}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e: any) {
+    error.value = `${t("admin.pages.receiving.pickingListError")}: ${e.message}`;
+  } finally {
+    downloadingPickingList.value = false;
+  }
+}
 
 async function actMismatch(item: ReceivingItemRow, action: "confirm" | "cancel") {
   mismatchActing.value[item.id] = action;
@@ -228,8 +275,16 @@ onMounted(load);
         <button class="btn" disabled :title="$t('admin.common.downloadPendingTitle')">
           {{ $t("admin.pages.receiving.downloadDeliveryOrderList") }}
         </button>
-        <button class="btn" disabled :title="$t('admin.common.downloadPendingTitle')">
+        <button class="btn" :disabled="downloadingPickingList || !order" @click="downloadPickingList">
           {{ $t("admin.pages.receiving.downloadPickingList") }}
+        </button>
+        <button
+          v-if="order && (order.status === 'pending' || order.status === 'provisional_received')"
+          class="btn btn-primary"
+          :disabled="confirmingArrival"
+          @click="confirmInHand"
+        >
+          {{ confirmingArrival ? $t("admin.common.saving") : $t("admin.pages.receiving.confirmInHand") }}
         </button>
         <NuxtLink to="/receiving" class="btn">{{ $t("admin.common.back") }}</NuxtLink>
       </div>

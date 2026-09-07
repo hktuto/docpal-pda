@@ -178,6 +178,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | `POST /dev/reset`, `POST /dev/allocate` | `apps/backend/src/routes/dev.ts` |
 | `/admin/*` master-data CRUD | `apps/backend/src/routes/admin/` |
 | `/admin/sub-inventory-share-groups` (share-group membership upsert/remove) | `apps/backend/src/routes/admin/subInventoryShareGroups.ts` |
+| `GET /admin/receiving-orders/:id/picking-list` (shipper-style xlsx download) | `apps/backend/src/routes/admin/receivingPickingList.ts` |
 
 ### Domain modules
 

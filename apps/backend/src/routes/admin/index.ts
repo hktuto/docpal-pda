@@ -21,6 +21,7 @@ import { adminSubInventoryShareGroupsRoute } from "./subInventoryShareGroups.js"
 import { adminIssuesRoute } from "./issues.js";
 import { adminAppDownloadRoute } from "./appDownload.js";
 import { adminFlowConfigRoute } from "./flowConfig.js";
+import { adminReceivingPickingListRoute } from "./receivingPickingList.js";
 
 // Optional id on create: use the client's when given, else generate one.
 function optId(body: Record<string, unknown>): string {
@@ -81,6 +82,7 @@ adminRoute.route(
       qrTemplateConfig: optJson(b, "qrTemplateConfig"),
       qrType: optStr(b, "qrType"),
       qtyEncoding: optStr(b, "qtyEncoding"),
+      barcodeTypes: optStrArray(b, "barcodeTypes"),
       remark: optStr(b, "remark"),
     }),
     update: (b) => ({
@@ -90,6 +92,7 @@ adminRoute.route(
       ...(b.qrTemplateConfig !== undefined && { qrTemplateConfig: optJson(b, "qrTemplateConfig") }),
       ...(b.qrType !== undefined && { qrType: optStr(b, "qrType") }),
       ...(b.qtyEncoding !== undefined && { qtyEncoding: optStr(b, "qtyEncoding") }),
+      ...(b.barcodeTypes !== undefined && { barcodeTypes: optStrArray(b, "barcodeTypes") }),
       ...(b.remark !== undefined && { remark: optStr(b, "remark") }),
       lastUpdateDate: new Date(),
     }),
@@ -228,6 +231,9 @@ adminRoute.route("/", adminIssuesRoute);
 
 // APK download (signed release APK published by `pnpm build:apk`).
 adminRoute.route("/", adminAppDownloadRoute);
+
+// Picking-list xlsx download for a receiving order.
+adminRoute.route("/", adminReceivingPickingListRoute);
 
 async function groupCodesOf(userId: string): Promise<string[]> {
   const rows = await queryAll<{ groupCode: string }>(

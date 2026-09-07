@@ -274,6 +274,7 @@ export function useFlowApi() {
     listReceivingOrders: (status?: string) =>
       api.get<ReceivingOrderRow[]>(`/receiving-orders${status ? `?status=${status}` : ""}`),
     getReceivingOrder: (id: string) => api.get<ReceivingOrderDetail>(`/receiving-orders/${id}`),
+    confirmReceivingArrival: (id: string) => api.post(`/receiving-orders/${id}/confirm-arrival`, {}),
     updateReceivingDeliveryDate: (id: string, deliveryDate: string | null) =>
       api.patch(`/admin/receiving-orders/${id}`, { deliveryDate }),
     updateReceivingItemDateCode: (id: string, dateCode: string | null) =>
