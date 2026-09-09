@@ -399,9 +399,12 @@ step enablement + `steps.picking.allocation.allowDockStock`, served as
 still apply when unset),
 `WAREHOUSE_SEED=off` to disable auto-seed, `WAREHOUSE_SEED_DEMO=1` to seed the
 full demo world (users/masters/demo orders — needed for local dev login). The
-default boot seed is reference data + shelves only: masters (parts, suppliers,
-org_info, customer profiles), orders, and users arrive via upstream sync /
-DocPal auth.
+default boot seed is reference data + shelves only — including the HK
+warehouse flow config (`HK_FLOW_CONFIG` in `apps/backend/src/db/seed.ts` —
+all steps on, put-away `suggestShelf: "existing-stock"`, `allowedOrgIds`,
+receiving sub-inventory rules, transfer picking from-sub-inventory groups).
+Masters (parts, suppliers, org_info, customer profiles), orders, and users
+arrive via upstream sync / DocPal auth.
 
 `pnpm --filter @warehouse/backend db:seed` wipes and re-seeds the demo dataset;
 `db:generate` / `db:migrate` manage migrations. A PM2 setup for a VM lives in

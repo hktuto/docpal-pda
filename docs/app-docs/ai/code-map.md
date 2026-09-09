@@ -199,7 +199,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | Allocation engine (`allocateAll`) | `apps/backend/src/db/allocate.ts` |
 | Demo seed (+ generated real-data artifacts) | `apps/backend/src/db/seed.ts` (+ `seed-parts-data.json`, `seed-subinventories-data.ts`, `seed-net-weight-data.ts`, `seed-order-210726.ts`; generator `scripts/gen-seed-real-data.mjs`) |
 
-- Server entry / app wiring: `apps/backend/src/index.ts` (migrations auto-apply on startup; boot seed runs when `warehouse_config` is empty unless `WAREHOUSE_SEED=off` — default is reference data + shelves only, masters/orders come from upstream sync and users from DocPal; `WAREHOUSE_SEED_DEMO=1` seeds the full demo world for local dev login).
+- Server entry / app wiring: `apps/backend/src/index.ts` (migrations auto-apply on startup; boot seed runs when `warehouse_config` is empty unless `WAREHOUSE_SEED=off` — default is reference data + shelves only (incl. the HK warehouse flow config, `HK_FLOW_CONFIG` in `seed.ts`), masters/orders come from upstream sync and users from DocPal; `WAREHOUSE_SEED_DEMO=1` seeds the full demo world for local dev login).
 - All web pages go through `WarehouseService` → these HTTP endpoints.
 - The retired `apps/api` (:3001) routes are gone from the web app's runtime path; the package remains in the repo for history (see `apps/api/README.md`).
 

@@ -480,9 +480,65 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
  *  suppliers, org_info, customer profiles), all orders/stock, and users arrive
  *  via upstream sync / DocPal auth, so no local users or masters are seeded
  *  in this mode. */
+// Default flow config for the HK warehouse: all steps on, put-away shelf
+// suggestion = existing-stock, org scoping, receiving sub-inventory routing,
+// and transfer picking from-sub-inventory groups. FLOW_CONFIG env overrides
+// this row at boot; admins can edit it afterwards via /admin/flow-config.
+const HK_FLOW_CONFIG = {
+  steps: {
+    verify: { enabled: true },
+    picking: { enabled: true, allocation: { allowDockStock: true } },
+    "put-away": { enabled: true, suggestShelf: "existing-stock", autoCreateTasks: false },
+    measuring: { enabled: true },
+    receiving: { enabled: true },
+    "goods-verify": { enabled: true },
+    "stock-search": { enabled: true },
+  },
+  allowedOrgIds: [2,140,143,120,220],
+  receivingSubInventoryRules: [
+    { orgIds: [143], default: "STORE1", patterns: [] },
+    {
+      orgIds: [140],
+      default: "STORE1",
+      patterns: [
+        { poNoPattern: "*HWN", subInventoryCode: "HUAWEI" },
+        { poNoPattern: "*HWA", subInventoryCode: "HUAWEI" },
+        { poNoPattern: "*HWT", subInventoryCode: "HUAWEI" },
+        { poNoPattern: "*ZTE", subInventoryCode: "ZTE" },
+        { poNoPattern: "317*", subInventoryCode: "SZHK1" },
+        { poNoPattern: "327*", subInventoryCode: "GZHK1" },
+        { poNoPattern: "337*", subInventoryCode: "SHHK1" },
+        { poNoPattern: "347*", subInventoryCode: "BJHK1" },
+      ],
+    },
+    {
+      orgIds: [220],
+      default: "DEFAULT",
+      patterns: [{ poNoPattern: "35*", subInventoryCode: "THHK2" }],
+    },
+    {
+      orgIds: [2],
+      default: "DEFAULT",
+      patterns: [
+        { poNoPattern: "11*W", subInventoryCode: "WSTORE1" },
+        { poNoPattern: "11*", subInventoryCode: "STORE1" },
+      ],
+    },
+  ],
+  pickingFromSubinventoryOrgs: [
+    { orgId: 143, fromSubinventories: ["SZHK2", "GZHK2", "SHHK2", "BJHK2"] },
+    { orgId: 220, fromSubinventories: ["THHK2"] },
+    {
+      orgId: 140,
+      fromSubinventories: ["HUAWEI", "ZTE", "SZHK1", "GZHK1", "SHHK1", "BJHK1"],
+    },
+    { orgId: 2, fromSubinventories: ["WSTORE1", "STORE1"] },
+  ],
+};
+
 async function seedReferenceOnly(db: AppDb): Promise<void> {
-  // Flow config row — required for boot ({} = all defaults on).
-  await db.insert(warehouseConfig).values([{ key: "flow", value: {} }]);
+  // Flow config row — required for boot.
+  await db.insert(warehouseConfig).values([{ key: "flow", value: HK_FLOW_CONFIG }]);
 
   await db.insert(countryList).values(COUNTRIES.map((c, i) => ({ id: uid(100 + i), ...c })));
 
