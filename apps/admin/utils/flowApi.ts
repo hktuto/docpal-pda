@@ -277,8 +277,10 @@ export function useFlowApi() {
     confirmReceivingArrival: (id: string) => api.post(`/receiving-orders/${id}/confirm-arrival`, {}),
     updateReceivingDeliveryDate: (id: string, deliveryDate: string | null) =>
       api.patch(`/admin/receiving-orders/${id}`, { deliveryDate }),
-    updateReceivingItemDateCode: (id: string, dateCode: string | null) =>
-      api.patch(`/admin/receiving-invoice-items/${id}`, { dateCode }),
+    updateReceivingItem: (
+      id: string,
+      fields: Partial<Record<"dateCode" | "lotCode" | "coo" | "cow" | "ctnNo", string | null>>
+    ) => api.patch(`/admin/receiving-invoice-items/${id}`, fields),
 
     // Issues (actor comes from the JWT — the backend ignores any body actorId)
     listReceivingMismatches: () => api.get<MismatchListRow[]>("/admin/receiving-mismatches"),

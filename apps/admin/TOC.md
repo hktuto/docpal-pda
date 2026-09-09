@@ -64,7 +64,7 @@
     - detail picking order ( change item datacode, delevery date, download packing list and TN  ) 4.1, 4.2, 7.2, 7.4
 - Receving Management
   - list receiving order with filter and sort
-    - detail receiving order ( update date code, download related picking list, and delivery order list ) 7.2, 7.2
+    - detail receiving order ( edit item details — date code / lot code / COO / COW / ctn no, single or batch, download related picking list, and delivery order list ) 7.2, 7.2
 - Shipping Management
   - list shipping order with filter and sort, multiple select to download shipper 7.3
     - detail shipping order

@@ -50,7 +50,11 @@
   and receiving is decoupled from picking.
 - The admin console's receiving detail (`apps/admin/pages/receiving/[id].vue`)
   can confirm arrival itself (Confirm In-hand button while `pending` /
-  `provisional_received`, same `confirm-arrival` endpoint) and download the
+  `provisional_received`, same `confirm-arrival` endpoint), edit item batch
+  details (date code / lot code / COO / COW / ctn no via
+  `PATCH /admin/receiving-invoice-items/:id` — per-row edit modal or
+  multi-select batch edit where blank fields keep each item's current value;
+  `apps/admin/components/receiving/ItemEditModal.vue`), and download the
   shipper-style picking list xlsx (`GET
   /admin/receiving-orders/:id/picking-list`,
   `apps/backend/src/routes/admin/receivingPickingList.ts`): receipts grouped

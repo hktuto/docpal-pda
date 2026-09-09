@@ -83,24 +83,44 @@ export async function updateReceivingDeliveryDate(
   return { id: input.orderId, deliveryDate: input.deliveryDate };
 }
 
-/** Set (or clear with null) one receiving invoice item's date code. */
-export async function updateReceivingItemDateCode(
+/** Editable fields on a receiving invoice item (camelCase → column). */
+const RECEIVING_ITEM_FIELDS = {
+  dateCode: "date_code",
+  lotCode: "lot_code",
+  coo: "coo",
+  cow: "cow",
+  ctnNo: "ctn_no",
+} as const;
+
+export type ReceivingItemField = keyof typeof RECEIVING_ITEM_FIELDS;
+
+/** Set (or clear with null) editable fields on one receiving invoice item. */
+export async function updateReceivingItemFields(
   db: AppDb,
-  input: { itemId: string; dateCode: string | null; actorId: string | null }
-): Promise<{ id: string; dateCode: string | null }> {
-  const existing = await queryGet<{ dateCode: string | null }>(
+  input: { itemId: string; fields: Partial<Record<ReceivingItemField, string | null>>; actorId: string | null }
+): Promise<{ id: string }> {
+  const keys = (Object.keys(RECEIVING_ITEM_FIELDS) as ReceivingItemField[]).filter((k) => k in input.fields);
+  if (keys.length === 0) throw new HTTPException(400, { message: "no_fields" });
+  const existing = await queryGet<Record<string, string | null>>(
     db,
-    sql`SELECT date_code AS "dateCode" FROM receiving_invoice_items WHERE id = ${input.itemId}`
+    sql`SELECT date_code AS "dateCode", lot_code AS "lotCode", coo, cow, ctn_no AS "ctnNo" FROM receiving_invoice_items WHERE id = ${input.itemId}`
   );
   if (!existing) throw new HTTPException(404, { message: "receiving_invoice_item_not_found" });
   await queryRun(
     db,
-    sql`UPDATE receiving_invoice_items SET date_code = ${input.dateCode} WHERE id = ${input.itemId}`
+    sql`UPDATE receiving_invoice_items SET ${sql.join(
+      keys.map((k) => sql`${sql.raw(RECEIVING_ITEM_FIELDS[k])} = ${input.fields[k] ?? null}`),
+      sql`, `
+    )}, last_update_date = ${now()} WHERE id = ${input.itemId}`
   );
-  await audit(db, "receiving_invoice_item", input.itemId, input.actorId, {
-    field: "date_code",
-    from: existing.dateCode,
-    to: input.dateCode,
-  });
-  return { id: input.itemId, dateCode: input.dateCode };
+  for (const k of keys) {
+    const to = input.fields[k] ?? null;
+    if (existing[k] === to) continue;
+    await audit(db, "receiving_invoice_item", input.itemId, input.actorId, {
+      field: RECEIVING_ITEM_FIELDS[k],
+      from: existing[k],
+      to,
+    });
+  }
+  return { id: input.itemId };
 }

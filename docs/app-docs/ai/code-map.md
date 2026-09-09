@@ -143,7 +143,7 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Shelf boxes list / detail | `/shelf-boxes`, `/shelf-boxes/:id` | `apps/admin/pages/shelf-boxes/index.vue`, `apps/admin/pages/shelf-boxes/[id].vue` |
 | Picking orders list / detail (delivery-date edit) | `/picking-orders`, `/picking-orders/:id` | `apps/admin/pages/picking-orders/index.vue`, `apps/admin/pages/picking-orders/[id].vue` |
 | Picking priority reorder | `/picking/reorder` | `apps/admin/pages/picking/reorder.vue` |
-| Receiving orders list / detail (delivery-date + item date-code edit, invoice filter, confirm in-hand, picking-list xlsx download) | `/receiving`, `/receiving/:id` | `apps/admin/pages/receiving/index.vue`, `apps/admin/pages/receiving/[id].vue` |
+| Receiving orders list / detail (delivery-date edit, item detail edit single/batch — date code / lot code / COO / COW / ctn no, invoice filter, confirm in-hand, picking-list xlsx download) | `/receiving`, `/receiving/:id` | `apps/admin/pages/receiving/index.vue`, `apps/admin/pages/receiving/[id].vue`, `apps/admin/components/receiving/ItemEditModal.vue` |
 | Shipping boxes list / detail (orders-in-box, per-box ship) | `/shipping`, `/shipping/:boxId` | `apps/admin/pages/shipping/index.vue`, `apps/admin/pages/shipping/[id].vue` |
 | Generic CRUD table (search / column sorting / server paging / multi-select) | — | `apps/admin/components/CrudTable.vue` (+ `components/CrudForm.vue`, `components/Pager.vue`, `composables/useColumnSort.ts`) |
 | Shelf / shelf-box label printing (single + multi-select dialog; `katata-label` template via the backend `/print/*` proxy) | `/shelves`, `/shelf-boxes` | `apps/admin/components/PrintLabelsDialog.vue`, `apps/admin/utils/print.ts` |

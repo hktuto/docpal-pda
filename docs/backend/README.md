@@ -336,7 +336,8 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   supplier_code).
   Flow-data edits for the admin console: `PATCH /admin/picking-orders/:id`
   `{deliveryDate}` (`YYYY-MM-DD` or null) and
-  `PATCH /admin/receiving-invoice-items/:id` `{dateCode}` (or null) — both in
+  `PATCH /admin/receiving-invoice-items/:id` `{dateCode?, lotCode?, coo?, cow?, ctnNo?}`
+  (any subset; empty string / null clears, absent keys unchanged) — both in
   `src/db/adminedits.ts`, each leaving a `transaction_logs` audit row.
   `GET /admin/receiving-mismatches` (`src/routes/admin/issues.ts`) lists open
   receiving-item mismatches across orders (order/invoice/part/supplier joins,

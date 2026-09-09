@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import type { Context } from "hono";
 import { db } from "../../db.js";
-import { updatePickingDeliveryDate, updateReceivingDeliveryDate, updateReceivingItemDateCode } from "../../db/adminedits.js";
+import { updatePickingDeliveryDate, updateReceivingDeliveryDate, updateReceivingItemFields } from "../../db/adminedits.js";
 import { actorFrom } from "../../auth/middleware.js";
 
 // Thin routes over db/adminedits.ts — admin console edits to flow data.
@@ -49,16 +49,25 @@ adminFlowEditsRoute.patch("/receiving-orders/:id", async (c) => {
   );
 });
 
-// Change one receiving invoice item's date code (TOC 4.1). `null` clears it.
+// Change editable fields on one receiving invoice item (date code, lot code,
+// COO, COW, CTN no). `null` or "" clears a field; absent keys stay unchanged.
+const RECEIVING_ITEM_EDITABLE = ["dateCode", "lotCode", "coo", "cow", "ctnNo"] as const;
+
 adminFlowEditsRoute.patch("/receiving-invoice-items/:id", async (c) => {
   const body = await readJson(c);
-  if (!("dateCode" in body)) throw new HTTPException(400, { message: "dateCode is required" });
-  const v = body.dateCode;
-  if (v !== null && typeof v !== "string") throw new HTTPException(400, { message: "dateCode must be a string" });
+  const fields: Record<string, string | null> = {};
+  for (const k of RECEIVING_ITEM_EDITABLE) {
+    if (!(k in body)) continue;
+    const v = body[k];
+    if (v !== null && typeof v !== "string") throw new HTTPException(400, { message: `${k} must be a string` });
+    fields[k] = v === null || v.trim() === "" ? null : v.trim();
+  }
+  if (Object.keys(fields).length === 0)
+    throw new HTTPException(400, { message: `at least one of ${RECEIVING_ITEM_EDITABLE.join(", ")} is required` });
   return c.json(
-    await updateReceivingItemDateCode(db, {
+    await updateReceivingItemFields(db, {
       itemId: c.req.param("id"),
-      dateCode: v === null || (v as string).trim() === "" ? null : (v as string).trim(),
+      fields,
       actorId: actorFrom(c).id,
     }),
     200

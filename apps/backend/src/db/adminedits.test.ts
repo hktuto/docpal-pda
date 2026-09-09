@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { queryGet } from "./query.js";
-import { updatePickingDeliveryDate, updateReceivingDeliveryDate, updateReceivingItemDateCode } from "./adminedits.js";
+import { updatePickingDeliveryDate, updateReceivingDeliveryDate, updateReceivingItemFields } from "./adminedits.js";
 
 let client: TestDb;
 
@@ -105,13 +105,14 @@ test("admin edits: set and clear receiving invoice item date code + audit row", 
   ))!.id;
   const actorId = (await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'admin'`))!.id;
 
-  const set = await updateReceivingItemDateCode(client.db, { itemId, dateCode: "2608", actorId });
-  assert.equal(set.dateCode, "2608");
-  const row = await queryGet<{ d: string | null }>(
+  const set = await updateReceivingItemFields(client.db, { itemId, fields: { dateCode: "2608", coo: "HK" }, actorId });
+  assert.equal(set.id, itemId);
+  const row = await queryGet<{ d: string | null; coo: string | null }>(
     client.db,
-    sql`SELECT date_code AS d FROM receiving_invoice_items WHERE id = ${itemId}`
+    sql`SELECT date_code AS d, coo FROM receiving_invoice_items WHERE id = ${itemId}`
   );
   assert.equal(row!.d, "2608");
+  assert.equal(row!.coo, "HK");
 
   const log = await queryGet<{ metadata: { field: string; to: string } }>(
     client.db,
@@ -119,12 +120,19 @@ test("admin edits: set and clear receiving invoice item date code + audit row", 
         WHERE entity_type = 'receiving_invoice_item' AND entity_id = ${itemId}
         ORDER BY created_date DESC LIMIT 1`
   );
-  assert.equal(log!.metadata.field, "date_code");
-  assert.equal(log!.metadata.to, "2608");
+  assert.equal(log!.metadata.to, "HK");
+  const dcLog = await queryGet<{ metadata: { field: string; to: string } }>(
+    client.db,
+    sql`SELECT metadata FROM transaction_logs
+        WHERE entity_type = 'receiving_invoice_item' AND entity_id = ${itemId}
+          AND metadata->>'field' = 'date_code'
+        ORDER BY created_date DESC LIMIT 1`
+  );
+  assert.equal(dcLog!.metadata.to, "2608");
 
-  const cleared = await updateReceivingItemDateCode(client.db, { itemId, dateCode: null, actorId });
-  assert.equal(cleared.dateCode, null);
+  const cleared = await updateReceivingItemFields(client.db, { itemId, fields: { dateCode: null }, actorId });
+  assert.equal(cleared.id, itemId);
 
-  const missing = await catchHttp(updateReceivingItemDateCode(client.db, { itemId: "nope", dateCode: "2608", actorId }));
+  const missing = await catchHttp(updateReceivingItemFields(client.db, { itemId: "nope", fields: { dateCode: "2608" }, actorId }));
   assert.equal(missing.status, 404);
 });
