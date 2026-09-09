@@ -17,13 +17,68 @@ const deliveryDate = ref("");
 const savingDate = ref(false);
 const dateMsg = ref("");
 
-// Per-item inline date-code editing.
-const editDateCode = ref<Record<string, string>>({});
-const savingItem = ref<Record<string, boolean>>({});
-const savedItem = ref<Record<string, boolean>>({});
+// Per-item / batch detail editing (date code, lot code, COO, COW, ctn no).
+const selected = ref<Set<string>>(new Set());
+const editItems = ref<ReceivingItemRow[] | null>(null);
+const savingEdit = ref(false);
+
+const allItems = computed(() => (order.value?.invoices ?? []).flatMap((inv) => inv.items));
+const selectedItems = computed(() => allItems.value.filter((it) => selected.value.has(it.id)));
+
+function toggleItem(itemId: string, checked: boolean) {
+  const next = new Set(selected.value);
+  if (checked) next.add(itemId);
+  else next.delete(itemId);
+  selected.value = next;
+}
+
+function invoiceAllSelected(inv: { items: ReceivingItemRow[] }): boolean {
+  return inv.items.length > 0 && inv.items.every((it) => selected.value.has(it.id));
+}
+
+function toggleInvoice(inv: { items: ReceivingItemRow[] }, checked: boolean) {
+  const next = new Set(selected.value);
+  for (const it of inv.items) {
+    if (checked) next.add(it.id);
+    else next.delete(it.id);
+  }
+  selected.value = next;
+}
+
+function openEdit(item: ReceivingItemRow) {
+  editItems.value = [item];
+}
+
+function openBatchEdit() {
+  if (selectedItems.value.length > 0) editItems.value = selectedItems.value;
+}
+
+async function saveEdit(fields: Partial<Record<"dateCode" | "lotCode" | "coo" | "cow" | "ctnNo", string | null>>) {
+  const items = editItems.value;
+  if (!items || Object.keys(fields).length === 0) {
+    editItems.value = null;
+    return;
+  }
+  savingEdit.value = true;
+  error.value = "";
+  const failed: { id: string; message: string }[] = [];
+  for (const item of items) {
+    try {
+      await flow.updateReceivingItem(item.id, fields);
+    } catch (e: any) {
+      failed.push({ id: item.wclItemNo ?? item.partNo, message: e?.message ?? String(e) });
+    }
+  }
+  savingEdit.value = false;
+  editItems.value = null;
+  if (failed.length > 0) {
+    error.value = failed.map((f) => `${f.id}: ${f.message}`).join("; ");
+  }
+  await load();
+}
 
 // Client-side invoice filter: an invoice matches when its invoiceNo contains
-// the keyword (all items shown) or any item's partNo/wclItemNo/poNo does.
+// the keyword (all items shown) or any item's partNo/wclItemNo/poNo/ctnNo does.
 const invoiceFilter = ref("");
 
 const filteredInvoices = computed(() => {
@@ -41,7 +96,8 @@ const filteredInvoices = computed(() => {
       (it) =>
         it.partNo.toLowerCase().includes(needle) ||
         (it.wclItemNo ?? "").toLowerCase().includes(needle) ||
-        (it.poNo ?? "").toLowerCase().includes(needle)
+        (it.poNo ?? "").toLowerCase().includes(needle) ||
+        (it.ctnNo ?? "").toLowerCase().includes(needle)
     );
     if (items.length > 0) out.push({ ...i, items });
   }
@@ -59,12 +115,7 @@ async function load() {
     order.value = detail;
     logs.value = logRows;
     deliveryDate.value = order.value.deliveryDate ? order.value.deliveryDate.slice(0, 10) : "";
-    const map: Record<string, string> = {};
-    for (const inv of order.value.invoices) {
-      for (const item of inv.items) map[item.id] = item.dateCode ?? "";
-    }
-    editDateCode.value = map;
-    savedItem.value = {};
+    selected.value = new Set();
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -84,21 +135,6 @@ async function saveDeliveryDate() {
     error.value = e.message;
   } finally {
     savingDate.value = false;
-  }
-}
-
-async function saveDateCode(item: ReceivingItemRow) {
-  savingItem.value[item.id] = true;
-  error.value = "";
-  try {
-    const v = (editDateCode.value[item.id] ?? "").trim();
-    await flow.updateReceivingItemDateCode(item.id, v || null);
-    savedItem.value[item.id] = true;
-    await load();
-  } catch (e: any) {
-    error.value = e.message;
-  } finally {
-    savingItem.value[item.id] = false;
   }
 }
 
@@ -321,6 +357,16 @@ onMounted(load);
         />
       </div>
 
+      <div v-if="selected.size > 0" class="batch-bar">
+        <span>{{ $t("admin.pages.receiving.selectedCount", { count: selected.size }) }}</span>
+        <button class="btn btn-small btn-primary" @click="openBatchEdit">
+          {{ $t("admin.pages.receiving.batchEdit") }}
+        </button>
+        <button class="btn btn-small" @click="selected = new Set()">
+          {{ $t("admin.pages.receiving.clearSelection") }}
+        </button>
+      </div>
+
       <template v-for="inv in filteredInvoices" :key="inv.id">
         <h2 class="section-title">
           {{ $t("admin.pages.receiving.invoiceTitle", { invoiceNo: inv.invoiceNo }) }}
@@ -333,6 +379,7 @@ onMounted(load);
         <div class="table-wrap">
           <table class="data invoice-table">
             <colgroup>
+              <col class="col-select" />
               <col class="col-part" />
               <col class="col-po" />
               <col class="col-qty" />
@@ -345,6 +392,13 @@ onMounted(load);
             </colgroup>
             <thead>
               <tr>
+                <th>
+                  <input
+                    type="checkbox"
+                    :checked="invoiceAllSelected(inv)"
+                    @change="toggleInvoice(inv, ($event.target as HTMLInputElement).checked)"
+                  />
+                </th>
                 <th>{{ $t("admin.pages.receiving.partNo") }}</th>
                 <th>{{ $t("admin.pages.receiving.poLine") }}</th>
                 <th>{{ $t("admin.pages.receiving.expected") }}</th>
@@ -358,6 +412,13 @@ onMounted(load);
             </thead>
             <tbody>
               <tr v-for="item in inv.items" :key="item.id">
+                <td>
+                  <input
+                    type="checkbox"
+                    :checked="selected.has(item.id)"
+                    @change="toggleItem(item.id, ($event.target as HTMLInputElement).checked)"
+                  />
+                </td>
                 <td class="wrap">
                   {{ item.wclItemNo ?? item.partNo }}
                   <div v-if="item.mismatch" class="mismatch-line">
@@ -373,23 +434,11 @@ onMounted(load);
                 <td>{{ item.putAwayQty }}</td>
                 <td>{{ item.allocatedQty }}</td>
                 <td>{{ item.ctnNo ?? "—" }}</td>
-                <td>
-                  <input
-                    v-model="editDateCode[item.id]"
-                    class="dc-input"
-                    placeholder="—"
-                    @keyup.enter="saveDateCode(item)"
-                  />
-                </td>
+                <td>{{ item.dateCode ?? "—" }}</td>
                 <td class="actions">
-                  <button
-                    class="btn btn-small btn-primary"
-                    :disabled="savingItem[item.id]"
-                    @click="saveDateCode(item)"
-                  >
-                    {{ savingItem[item.id] ? $t("admin.common.saving") : $t("admin.common.save") }}
+                  <button class="btn btn-small" @click="openEdit(item)">
+                    {{ $t("admin.pages.receiving.editDetail") }}
                   </button>
-                  <span v-if="savedItem[item.id]" class="muted">{{ $t("admin.pages.receiving.saved") }}</span>
                   <template v-if="item.mismatch">
                     <button
                       class="btn btn-small btn-primary"
@@ -469,6 +518,14 @@ onMounted(load);
         </form>
       </div>
     </div>
+
+    <ReceivingItemEditModal
+      v-if="editItems"
+      :items="editItems"
+      :saving="savingEdit"
+      @close="editItems = null"
+      @save="saveEdit"
+    />
   </div>
 </template>
 
@@ -482,11 +539,15 @@ onMounted(load);
   margin: 18px 0 8px;
   color: #52606d;
 }
-.dc-input {
-  width: 90px;
-  padding: 5px 7px;
-  border: 1px solid #b6c2cd;
-  border-radius: 4px;
+.batch-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  padding: 8px 10px;
+  background: #eef2f7;
+  border: 1px solid #d5dee7;
+  border-radius: 6px;
 }
 .date-edit {
   display: flex;
@@ -507,11 +568,14 @@ onMounted(load);
 .invoice-table {
   table-layout: fixed;
 }
+.col-select {
+  width: 3%;
+}
 .col-part {
-  width: 22%;
+  width: 20%;
 }
 .col-po {
-  width: 11%;
+  width: 10%;
 }
 .col-qty {
   width: 8%;
@@ -520,10 +584,10 @@ onMounted(load);
   width: 9%;
 }
 .col-dc {
-  width: 11%;
+  width: 10%;
 }
 .col-actions {
-  width: 15%;
+  width: 18%;
 }
 .invoice-table th {
   white-space: normal;
