@@ -515,6 +515,8 @@ export interface PickingOrderListRow {
   totalQty: number;
   pickedQty: number;
   allocatedQty: number;
+  createdDate: Date;
+  lastUpdateDate: Date;
 }
 
 /** List rows with per-order item/qty counts; `status` is a pass-through filter.
@@ -535,7 +537,9 @@ export async function listPickingOrders(db: AppDb, status?: string): Promise<Pic
         COUNT(pi.id)::int AS "itemCount",
         COALESCE(SUM(pi.qty), 0)::int AS "totalQty",
         COALESCE(SUM(pi.picked_qty), 0)::int AS "pickedQty",
-        COALESCE(SUM(pi.allocated_qty), 0)::int AS "allocatedQty"
+        COALESCE(SUM(pi.allocated_qty), 0)::int AS "allocatedQty",
+        po.created_date AS "createdDate",
+        po.last_update_date AS "lastUpdateDate"
       FROM picking_orders po
       LEFT JOIN picking_items pi ON pi.picking_order_id = po.id
       LEFT JOIN users w ON w.id = po.working_by

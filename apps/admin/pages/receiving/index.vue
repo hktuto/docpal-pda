@@ -10,6 +10,8 @@ const search = ref("");
 
 const STATUSES = ["", "pending", "in_hand", "provisional_received", "clear"];
 
+const { sortKey, sortDir, toggleSort, sortRows } = useColumnSort("admin-sort:receiving-list");
+
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase();
   if (!q) return rows.value;
@@ -21,7 +23,25 @@ const filtered = computed(() => {
   );
 });
 
-const { page, pageSize, total, paged } = usePaging(filtered);
+// Display values for derived columns (mirror what the <td> renders).
+function getVal(r: ReceivingOrderRow, key: string): unknown {
+  switch (key) {
+    case "supplier":
+      return r.supplierName ?? r.supplierCode ?? "";
+    case "deliveryDate":
+      return r.deliveryDate ?? "";
+    case "createdDate":
+      return r.createdDate;
+    case "lastUpdateDate":
+      return r.lastUpdateDate;
+    default:
+      return (r as any)[key];
+  }
+}
+
+const sorted = computed(() => sortRows(filtered.value, getVal));
+
+const { page, pageSize, total, paged } = usePaging(sorted);
 
 async function load() {
   loading.value = true;
@@ -60,14 +80,46 @@ onMounted(load);
       <table class="data">
         <thead>
           <tr>
-            <th>{{ $t("admin.pages.receiving.batchNo") }}</th>
-            <th>{{ $t("admin.pages.receiving.status") }}</th>
-            <th>{{ $t("admin.pages.receiving.supplier") }}</th>
-            <th>{{ $t("admin.pages.receiving.deliveryDate") }}</th>
-            <th>{{ $t("admin.pages.receiving.invoices") }}</th>
-            <th>{{ $t("admin.pages.receiving.items") }}</th>
-            <th>{{ $t("admin.pages.receiving.remaining") }}</th>
-            <th>{{ $t("admin.pages.receiving.pendingPicking") }}</th>
+            <th class="sortable" @click="toggleSort('batchNo')">
+              {{ $t("admin.pages.receiving.batchNo") }}
+              <span v-if="sortKey === 'batchNo'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('status')">
+              {{ $t("admin.pages.receiving.status") }}
+              <span v-if="sortKey === 'status'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('supplier')">
+              {{ $t("admin.pages.receiving.supplier") }}
+              <span v-if="sortKey === 'supplier'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('deliveryDate')">
+              {{ $t("admin.pages.receiving.deliveryDate") }}
+              <span v-if="sortKey === 'deliveryDate'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('invoiceCount')">
+              {{ $t("admin.pages.receiving.invoices") }}
+              <span v-if="sortKey === 'invoiceCount'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('itemCount')">
+              {{ $t("admin.pages.receiving.items") }}
+              <span v-if="sortKey === 'itemCount'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('remainingItems')">
+              {{ $t("admin.pages.receiving.remaining") }}
+              <span v-if="sortKey === 'remainingItems'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('pendingPickingOrders')">
+              {{ $t("admin.pages.receiving.pendingPicking") }}
+              <span v-if="sortKey === 'pendingPickingOrders'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('createdDate')">
+              {{ $t("admin.common.createdDate") }}
+              <span v-if="sortKey === 'createdDate'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('lastUpdateDate')">
+              {{ $t("admin.common.lastUpdateDate") }}
+              <span v-if="sortKey === 'lastUpdateDate'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -80,9 +132,11 @@ onMounted(load);
             <td>{{ r.itemCount }}</td>
             <td>{{ r.remainingItems }}</td>
             <td>{{ r.pendingPickingOrders }}</td>
+            <td>{{ new Date(r.createdDate).toLocaleString() }}</td>
+            <td>{{ new Date(r.lastUpdateDate).toLocaleString() }}</td>
           </tr>
           <tr v-if="total === 0">
-            <td colspan="8" class="muted">{{ $t("admin.pages.receiving.none") }}</td>
+            <td colspan="10" class="muted">{{ $t("admin.pages.receiving.none") }}</td>
           </tr>
         </tbody>
       </table>
@@ -109,5 +163,16 @@ onMounted(load);
 }
 tr.clickable {
   cursor: pointer;
+}
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+th.sortable:hover {
+  color: var(--brand-teal-dark);
+}
+.sort-arrow {
+  font-size: 9px;
+  margin-left: 3px;
 }
 </style>

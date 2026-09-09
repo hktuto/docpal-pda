@@ -24,6 +24,8 @@ export interface PickingOrderRow {
   pickedQty: number;
   allocationStatus: string;
   allocatedQty: number;
+  createdDate: string;
+  lastUpdateDate: string;
 }
 
 export interface PickingItemRow {
@@ -76,6 +78,8 @@ export interface ReceivingOrderRow {
   itemCount: number;
   remainingItems: number;
   pendingPickingOrders: number;
+  createdDate: string;
+  lastUpdateDate: string;
 }
 
 export interface ReceivingItemRow {
