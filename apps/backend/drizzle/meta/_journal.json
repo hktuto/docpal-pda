@@ -22,6 +22,13 @@
       "when": 1788485305734,
       "tag": "0002_third_titania",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789025896679,
+      "tag": "0003_strange_cammi",
+      "breakpoints": true
     }
   ]
 }

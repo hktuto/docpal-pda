@@ -1,4 +1,4 @@
-import { pgTable, foreignKey, index, unique, uniqueIndex, text, integer, real, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, foreignKey, index, unique, uniqueIndex, text, varchar, bigint, integer, real, timestamp, jsonb } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
 
 // Local users table; a ucenter_user integration may replace this later
@@ -136,9 +136,31 @@ export const netWeightFormula = pgTable("net_weight_formula", {
   lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
 });
 
+// Synced customer account master (party/account data from upstream).
+// customer_profiles.code carries the account_number this table is keyed by.
+export const customerAccounts = pgTable(
+  "customer_accounts",
+  {
+    custAccountId: bigint("cust_account_id", { mode: "number" }).primaryKey(),
+    partyId: bigint("party_id", { mode: "number" }).notNull(),
+    partyName: varchar("party_name", { length: 360 }).notNull(),
+    partyType: varchar("party_type", { length: 30 }).notNull(), // PERSON / ORGANIZATION / GROUP
+    accountNumber: varchar("account_number", { length: 30 }).notNull(),
+    accountStatus: varchar("account_status", { length: 1 }).notNull(), // A=Active, I=Inactive
+    lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+  },
+  (t) => [
+    index("idx_customer_accounts_party_id").on(t.partyId),
+    // unique because customer_profiles.code references it (FK target must be unique)
+    uniqueIndex("idx_customer_accounts_account_number").on(t.accountNumber),
+    index("idx_customer_accounts_status").on(t.accountStatus),
+  ]
+);
+
 export const customerProfiles = pgTable("customer_profiles", {
   id: text("id").primaryKey(),
-  code: text("code").notNull().unique(),
+  // business key — matches customer_accounts.account_number
+  code: varchar("code", { length: 30 }).notNull().unique().references(() => customerAccounts.accountNumber),
   label: text("label").notNull(),
   rule: text("rule"), // customer custom requirement/formula (stored, not yet interpreted)
   remark: text("remark"),

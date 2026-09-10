@@ -41,7 +41,7 @@ export const docpalFetchTimeoutMs = 10_000;
 // ---------------------------------------------------------------------------
 
 export function printApiBaseUrl(): string {
-  return process.env.PRINT_API_BASE_URL?.trim().replace(/\/+$/, "") || "http://192.168.5.116:9003";
+  return process.env.PRINT_API_BASE_URL?.trim().replace(/\/+$/, "") || "http://localhost:9003";
 }
 
 // DocPal groupId → local group codes. DocPal has 1 group = 1 role and the
