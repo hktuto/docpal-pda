@@ -39,6 +39,7 @@ export interface ReceivingOrderListRow {
   supplierName: string | null;
   orgId: number;
   invoiceCount: number;
+  invoiceNos: string | null;
   itemCount: number;
   remainingItems: number;
   pendingPickingOrders: number;
@@ -52,7 +53,7 @@ export const receivingRoute = new Hono();
 // `pendingPickingOrders` = distinct open picking orders with allocations
 // pointing at this order (whole-order or via a boxed invoice item).
 // `?status=` is a pass-through filter (statuses evolve, no enum here);
-// `?search=` matches batch_no / supplier name; `?limit=`/`?offset=` page.
+// `?search=` matches batch_no / supplier name / invoice no; `?limit=`/`?offset=` page.
 receivingRoute.get("/receiving-orders", async (c) => {
   const status = c.req.query("status");
   const search = c.req.query("search")?.trim();
@@ -73,6 +74,7 @@ receivingRoute.get("/receiving-orders", async (c) => {
         s.name AS "supplierName",
         ro.org_id AS "orgId",
         COUNT(DISTINCT inv.id)::int AS "invoiceCount",
+        string_agg(DISTINCT inv.invoice_no, ', ') AS "invoiceNos",
         COUNT(rii.id)::int AS "itemCount",
         COUNT(rii.id) FILTER (WHERE rii.line_qty IS NULL OR rii.put_away_qty < rii.line_qty)::int AS "remainingItems",
         (
@@ -94,7 +96,7 @@ receivingRoute.get("/receiving-orders", async (c) => {
       LEFT JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = inv.id
       WHERE TRUE
       ${status ? sql`AND ro.status = ${status}` : sql``}
-      ${search ? sql`AND (ro.batch_no ILIKE ${"%" + search + "%"} OR s.name ILIKE ${"%" + search + "%"})` : sql``}
+      ${search ? sql`AND (ro.batch_no ILIKE ${"%" + search + "%"} OR s.name ILIKE ${"%" + search + "%"} OR inv.invoice_no ILIKE ${"%" + search + "%"})` : sql``}
       ${allowedOrgFilter(sql`ro.org_id`)}
       GROUP BY ro.id, s.id
       ORDER BY ro.created_date DESC, ro.id

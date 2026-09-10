@@ -19,7 +19,8 @@ const filtered = computed(() => {
     (r) =>
       r.batchNo.toLowerCase().includes(q) ||
       (r.supplierCode ?? "").toLowerCase().includes(q) ||
-      (r.supplierName ?? "").toLowerCase().includes(q)
+      (r.supplierName ?? "").toLowerCase().includes(q) ||
+      (r.invoiceNos ?? "").toLowerCase().includes(q)
   );
 });
 
@@ -40,6 +41,12 @@ const columnDefs = computed<AdminColumnDef<ReceivingOrderRow>[]>(() => [
     size: 120,
   },
   { key: "invoiceCount", label: t("admin.pages.receiving.invoices"), size: 90 },
+  {
+    key: "invoiceNos",
+    label: t("admin.pages.receiving.invoiceNos"),
+    accessor: (r) => r.invoiceNos ?? "",
+    size: 200,
+  },
   { key: "itemCount", label: t("admin.pages.receiving.items"), size: 80 },
   { key: "remainingItems", label: t("admin.pages.receiving.remaining"), size: 100 },
   { key: "pendingPickingOrders", label: t("admin.pages.receiving.pendingPicking"), size: 130 },

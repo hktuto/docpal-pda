@@ -75,6 +75,7 @@ export interface ReceivingOrderRow {
   supplierName: string | null;
   orgId: number;
   invoiceCount: number;
+  invoiceNos: string | null;
   itemCount: number;
   remainingItems: number;
   pendingPickingOrders: number;
