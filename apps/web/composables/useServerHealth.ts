@@ -1,7 +1,7 @@
 import { setNetworkErrorHandler } from "~/services/apiClient";
 import { getApiBaseUrl } from "~/utils/serverHost";
 
-const POLL_MS = 20_000;
+const POLL_MS = 60_000;
 const FETCH_TIMEOUT_MS = 4_000;
 
 /**
