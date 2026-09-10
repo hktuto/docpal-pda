@@ -14,7 +14,7 @@ has two gaps:
 2. The 下載揀貨清單 button is a disabled placeholder. Warehouse staff need a
    printable picking list per receiving order, laid out like the supplier's
    shipper workbook (`66232-01,3,4,5 (shipper).xls`): receipts grouped by
-   part, each receipt a 3-row block with per-row customer/order slots.
+   part, one merged block per part with per-block customer/order slots.
 
 ## Decisions
 
@@ -34,25 +34,35 @@ has two gaps:
   root dev dependency for the seed scripts, added to the backend).
 
 - **Layout follows the shipper example** (its rows 60–62): allocation columns
-  are **per-row slots**, not a global column per picking order (each receipt's
-  order set differs — global columns would sprawl). Every receipt prints as a
-  **3-row block**:
-  1. customer name per slot (`customer_profiles.label`, fallback
-     `customer_code`, else `order_no`),
-  2. **recommended put-away shelf one row above the part name** (same ranking
-     as the put-away task detail — `computeItemShelfSuggestions` in
-     `src/db/putaway.ts`; blank when the receipt is already fully allocated,
-     and off when `putAway.suggestShelf="off"`) + the slot orders' `order_no`
-     (fallback `po_no`),
-  3. the item row: **`invoice_no` + `ctn_no`** (e.g. `66291-02 08040`, like
-     the shipper's combined `單尾號 C/N`) | part (`wcl_item_no`, fallback
-     `part_no`) | received qty | per-slot allocated qty.
+  are **per-block slots**, not a global column per picking order (each
+  receipt's order set differs — global columns would sprawl). Every part
+  group prints as **one merged block** (revised 2026-09-09: cartons of the
+  same part no longer repeat their own customer/order rows):
+  - one **item row per carton**: **`invoice_no` + `ctn_no`** (e.g.
+    `66291-02 08040`, like the shipper's combined `單尾號 C/N`) | part
+    (`wcl_item_no`, fallback `part_no`) | received qty,
+  - the slot rows — customer name per slot (`customer_profiles.label`,
+    fallback `customer_code`, else `order_no`), the slot orders' `order_no`
+    (fallback `po_no`), and the per-slot allocated qty — **overlay the
+    block's last three rows**, spilling into standalone rows above the item
+    rows when the group has fewer than 3 cartons (1 carton → the original
+    3-row block). Slots concatenate every carton's allocations in item order
+    (a picking order can occupy several slots when it draws from several
+    cartons).
+  - **recommended put-away shelf** (same ranking as the put-away task detail
+    — `computeItemShelfSuggestions` in `src/db/putaway.ts`; blank when the
+    group is already fully allocated, and off when
+    `putAway.suggestShelf="off"`): column B of the order-ref row for
+    single-carton blocks; in merged blocks column B holds the part on every
+    row, so the shelf moves to the Total Qty column of the order-ref row.
   "Fully allocated" for a no-`ctn_no` receipt counts its FIFO share of the
   part group's whole-order allocations (those aren't pinned to a line).
-  Slots within a row are ordered by `priority_seq`, then `order_no`; the
-  sheet-wide slot count is the widest row's allocation count. Leading columns:
-  `Invoice / Ctn` | `Part Number` | `Qty` | `Total Qty`; trailing `Balance`
-  column. Rows grouped by part, one blank row between groups.
+  Slots are ordered by `priority_seq`, then `order_no` within each carton;
+  the sheet-wide slot count is the widest block's merged allocation count.
+  Leading columns: `Invoice / Ctn` | `Part Number` | `Qty` | `Total Qty`;
+  trailing `Balance` column. Rows grouped by part, one blank row between
+  groups and one blank row between the header and the first group.
+  All numeric cells carry the `#,##0` format (thousands separator).
   - Title block: `Picking List — {batchNo}` (+ supplier name), `Date:`,
     `Total Ctn:` (= `SUM(receiving_invoices.total_ctn)`).
   - `Total Qty` (group received sum) and `Balance` (group received − group
