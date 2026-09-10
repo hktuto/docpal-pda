@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { AdminColumnDef } from "~/composables/useAdminTable";
+
 interface SubInventoryRow {
   orgId: number;
   secondaryInventoryName: string;
@@ -26,26 +28,58 @@ const shareGroups = ref<Record<string, string>>({});
 const shareDrafts = ref<Record<string, string>>({});
 const shareError = ref("");
 
-// Client-side keyword filter + clickable sort headers, applied before paging.
+// Client-side keyword filter; TanStack owns sorting + paging.
 const search = ref("");
-const { sortKey, sortDir, toggleSort, sortRows } = useColumnSort();
 
-const displayed = computed(() => {
+const filtered = computed(() => {
   const needle = search.value.trim().toLowerCase();
-  let list = rows.value;
-  if (needle) {
-    list = list.filter((r) =>
-      [String(r.orgId), r.secondaryInventoryName, r.subinvDescription, r.officeCode, r.customerCode, shareGroups.value[rowId(r)]].some((v) =>
-        String(v ?? "")
-          .toLowerCase()
-          .includes(needle)
-      )
-    );
-  }
-  return sortRows(list);
+  if (!needle) return rows.value;
+  return rows.value.filter((r) =>
+    [String(r.orgId), r.secondaryInventoryName, r.subinvDescription, r.officeCode, r.customerCode, shareGroups.value[rowId(r)]].some((v) =>
+      String(v ?? "")
+        .toLowerCase()
+        .includes(needle)
+    )
+  );
 });
 
-const { page, pageSize, total, paged } = usePaging(displayed);
+const columnDefs = computed<AdminColumnDef<SubInventoryRow>[]>(() => [
+  { key: "orgId", label: t("admin.pages.subInventories.orgId"), size: 70 },
+  { key: "secondaryInventoryName", label: t("admin.pages.subInventories.code"), size: 110 },
+  { key: "subinvDescription", label: t("admin.pages.subInventories.name"), size: 180 },
+  { key: "officeCode", label: t("admin.pages.subInventories.officeCode"), size: 100 },
+  { key: "organizationId", label: t("admin.pages.subInventories.organizationId"), size: 110 },
+  { key: "customerCode", label: t("admin.pages.subInventories.customer"), size: 110 },
+  {
+    key: "shareGroup",
+    label: t("admin.pages.subInventories.shareGroup"),
+    sortable: false,
+    accessor: (r) => shareGroups.value[rowId(r)] ?? "",
+    size: 190,
+  },
+]);
+
+const { table, pagination, resetColumnState } = useAdminTable({
+  tableId: "sub-inventories",
+  columns: columnDefs,
+  rows: filtered,
+  getRowId: rowId,
+});
+
+// Pager uses a 1-based page; the table uses a 0-based pageIndex.
+const page = computed({
+  get: () => pagination.value.pageIndex + 1,
+  set: (v: number) => {
+    pagination.value = { ...pagination.value, pageIndex: v - 1 };
+  },
+});
+const pageSize = computed({
+  get: () => pagination.value.pageSize,
+  set: (v: number) => {
+    pagination.value = { pageIndex: 0, pageSize: v };
+  },
+});
+const total = computed(() => filtered.value.length);
 
 const showNew = ref(false);
 const newForm = reactive({ orgId: "", code: "", subinvDescription: "", officeCode: "", organizationId: "", customerCode: "" });
@@ -209,69 +243,35 @@ onMounted(load);
     <div v-if="shareError" class="error-banner">{{ shareError }}</div>
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
-    <div v-else class="table-wrap">
-      <table class="data">
-        <thead>
-          <tr>
-            <th class="sortable" @click="toggleSort('orgId')">
-              {{ $t("admin.pages.subInventories.orgId") }}
-              <span v-if="sortKey === 'orgId'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('secondaryInventoryName')">
-              {{ $t("admin.pages.subInventories.code") }}
-              <span v-if="sortKey === 'secondaryInventoryName'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('subinvDescription')">
-              {{ $t("admin.pages.subInventories.name") }}
-              <span v-if="sortKey === 'subinvDescription'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('officeCode')">
-              {{ $t("admin.pages.subInventories.officeCode") }}
-              <span v-if="sortKey === 'officeCode'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('organizationId')">
-              {{ $t("admin.pages.subInventories.organizationId") }}
-              <span v-if="sortKey === 'organizationId'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('customerCode')">
-              {{ $t("admin.pages.subInventories.customer") }}
-              <span v-if="sortKey === 'customerCode'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th>{{ $t("admin.pages.subInventories.shareGroup") }}</th>
-            <th>{{ $t("admin.common.actions") }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="r in paged" :key="rowId(r)">
-            <td>{{ r.orgId }}</td>
-            <td>{{ r.secondaryInventoryName }}</td>
-            <td>{{ r.subinvDescription ?? "—" }}</td>
-            <td>{{ r.officeCode ?? "—" }}</td>
-            <td>{{ r.organizationId ?? "—" }}</td>
-            <td>{{ r.customerCode ?? "—" }}</td>
-            <td class="share-cell">
-              <input
-                v-model="shareDrafts[rowId(r)]"
-                type="text"
-                class="share-input"
-                placeholder="—"
-                @keyup.enter="saveShare(r)"
-              />
-              <button v-if="shareDirty(r)" class="btn btn-small" @click="saveShare(r)">
-                {{ $t("admin.common.save") }}
-              </button>
-            </td>
-            <td class="actions">
-              <button class="btn-link" @click="openEdit(r)">{{ $t("admin.common.edit") }}</button>
-              <button class="btn-link" @click="remove(r)">{{ $t("admin.common.delete") }}</button>
-            </td>
-          </tr>
-          <tr v-if="total === 0">
-            <td colspan="8" class="muted">{{ $t("admin.pages.subInventories.none") }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      v-else
+      :table="table"
+      :empty-text="$t('admin.pages.subInventories.none')"
+      :on-reset-columns="resetColumnState"
+    >
+      <template #cell-subinvDescription="{ row }">{{ row.subinvDescription ?? "—" }}</template>
+      <template #cell-officeCode="{ row }">{{ row.officeCode ?? "—" }}</template>
+      <template #cell-organizationId="{ row }">{{ row.organizationId ?? "—" }}</template>
+      <template #cell-customerCode="{ row }">{{ row.customerCode ?? "—" }}</template>
+      <template #cell-shareGroup="{ row }">
+        <div class="share-cell">
+          <input
+            v-model="shareDrafts[rowId(row)]"
+            type="text"
+            class="share-input"
+            placeholder="—"
+            @keyup.enter="saveShare(row)"
+          />
+          <button v-if="shareDirty(row)" class="btn btn-small" @click="saveShare(row)">
+            {{ $t("admin.common.save") }}
+          </button>
+        </div>
+      </template>
+      <template #actions="{ row }">
+        <button class="btn-link" @click="openEdit(row)">{{ $t("admin.common.edit") }}</button>
+        <button class="btn-link" @click="remove(row)">{{ $t("admin.common.delete") }}</button>
+      </template>
+    </DataTable>
     <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
 
     <div v-if="showNew" class="overlay" @mousedown="newDlg.onMousedown" @click="newDlg.onClick">
@@ -344,17 +344,6 @@ onMounted(load);
 </template>
 
 <style scoped>
-th.sortable {
-  cursor: pointer;
-  user-select: none;
-}
-th.sortable:hover {
-  color: var(--brand-teal-dark);
-}
-.sort-arrow {
-  font-size: 9px;
-  margin-left: 3px;
-}
 .share-cell {
   display: flex;
   gap: 6px;

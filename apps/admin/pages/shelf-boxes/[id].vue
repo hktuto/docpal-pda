@@ -1,10 +1,34 @@
 <script setup lang="ts">
+import type { AdminColumnDef } from "~/composables/useAdminTable";
+
 const route = useRoute();
 const api = useApi();
+const { t } = useI18n();
 
 const box = ref<any | null>(null);
 const error = ref("");
 const loading = ref(true);
+
+const items = computed<any[]>(() => box.value?.items ?? []);
+
+const columnDefs = computed<AdminColumnDef[]>(() => [
+  {
+    key: "partNo",
+    label: t("admin.pages.shelfBoxes.partNo"),
+    accessor: (item) => item.wclItemNo ?? item.partNo,
+    size: 160,
+  },
+  { key: "qty", label: t("admin.pages.shelfBoxes.qty"), size: 80 },
+  { key: "verified", label: t("admin.pages.shelfBoxes.verified"), size: 100 },
+  { key: "verifiedAt", label: t("admin.pages.shelfBoxes.verifiedAt"), size: 170 },
+]);
+
+const { table, resetColumnState } = useAdminTable({
+  tableId: "shelf-box-detail-items",
+  columns: columnDefs,
+  rows: items,
+  getRowId: (item) => item.id,
+});
 
 onMounted(async () => {
   try {
@@ -53,29 +77,11 @@ onMounted(async () => {
         </div>
       </div>
       <h2 style="font-size: 16px">{{ $t("admin.pages.shelfBoxes.items") }}</h2>
-      <div class="table-wrap">
-        <table class="data">
-          <thead>
-            <tr>
-              <th>{{ $t("admin.pages.shelfBoxes.partNo") }}</th>
-              <th>{{ $t("admin.pages.shelfBoxes.qty") }}</th>
-              <th>{{ $t("admin.pages.shelfBoxes.verified") }}</th>
-              <th>{{ $t("admin.pages.shelfBoxes.verifiedAt") }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in box.items" :key="item.id">
-              <td>{{ item.wclItemNo ?? item.partNo }}</td>
-              <td>{{ item.qty }}</td>
-              <td>{{ formatCell(item.verified) }}</td>
-              <td>{{ formatCell(item.verifiedAt) }}</td>
-            </tr>
-            <tr v-if="box.items.length === 0">
-              <td colspan="4" class="muted">{{ $t("admin.pages.shelfBoxes.noItems") }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        :table="table"
+        :empty-text="$t('admin.pages.shelfBoxes.noItems')"
+        :on-reset-columns="resetColumnState"
+      />
     </template>
   </div>
 </template>

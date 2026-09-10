@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import type { StockSearchResult } from "~/utils/flowApi";
+import type { StockSearchLot, StockSearchPart, StockSearchResult } from "~/utils/flowApi";
+import type { AdminColumnDef } from "~/composables/useAdminTable";
 
 const api = useApi();
 const flow = useFlowApi();
+const { t } = useI18n();
 
 const suppliers = ref<{ id: string; code: string; name: string }[]>([]);
 const supplierCode = ref("");
@@ -12,6 +14,107 @@ const result = ref<StockSearchResult | null>(null);
 const searched = ref(false);
 const loading = ref(false);
 const error = ref("");
+
+const partsRows = computed(() => result.value?.parts ?? []);
+const lotsRows = computed(() => result.value?.lots ?? []);
+
+const partsColumnDefs = computed<AdminColumnDef<StockSearchPart>[]>(() => [
+  {
+    key: "wclItemNo",
+    label: t("admin.pages.stockSearch.wclItemNo"),
+    accessor: (p) => p.wclItemNo ?? p.partNo,
+    size: 140,
+  },
+  { key: "partNo", label: t("admin.pages.stockSearch.partNo"), size: 150 },
+  {
+    key: "description",
+    label: t("admin.pages.stockSearch.description"),
+    accessor: (p) => p.description ?? "",
+    size: 220,
+  },
+  { key: "onHandQty", label: t("admin.pages.stockSearch.onHandQty"), size: 90 },
+]);
+
+const lotsColumnDefs = computed<AdminColumnDef<StockSearchLot>[]>(() => [
+  {
+    key: "partNo",
+    label: t("admin.pages.stockSearch.partNo"),
+    accessor: (l) => l.wclItemNo ?? l.partNo,
+    size: 150,
+  },
+  {
+    key: "dateCode",
+    label: t("admin.pages.stockSearch.dateCode"),
+    accessor: (l) => l.dateCode ?? "",
+    size: 100,
+  },
+  {
+    key: "lotCode",
+    label: t("admin.pages.stockSearch.lotCode"),
+    accessor: (l) => l.lotCode ?? "",
+    size: 110,
+  },
+  {
+    key: "shelfCode",
+    label: t("admin.pages.stockSearch.shelf"),
+    accessor: (l) => l.shelfCode ?? "",
+    size: 90,
+  },
+  {
+    key: "boxId",
+    label: t("admin.pages.stockSearch.box"),
+    accessor: (l) => l.boxId ?? "",
+    size: 100,
+  },
+  {
+    key: "orgSubInventory",
+    label: t("admin.pages.stockSearch.orgSubInventory"),
+    accessor: (l) => `${l.orgId ?? "—"} / ${l.subInventoryCode ?? "—"}`,
+    size: 130,
+  },
+  { key: "totalQty", label: t("admin.pages.stockSearch.totalQty"), size: 90 },
+  { key: "allocatedQty", label: t("admin.pages.stockSearch.allocatedQty"), size: 100 },
+  { key: "availableQty", label: t("admin.pages.stockSearch.availableQty"), size: 100 },
+]);
+
+const { table: partsTable, pagination: partsPagination, resetColumnState: resetPartsColumns } = useAdminTable({
+  tableId: "stock-search-parts",
+  columns: partsColumnDefs,
+  rows: partsRows,
+  getRowId: (p) => p.id,
+});
+
+const { table: lotsTable, pagination: lotsPagination, resetColumnState: resetLotsColumns } = useAdminTable({
+  tableId: "stock-search-lots",
+  columns: lotsColumnDefs,
+  rows: lotsRows,
+});
+
+// Pager uses a 1-based page; the table uses a 0-based pageIndex.
+const partsPage = computed({
+  get: () => partsPagination.value.pageIndex + 1,
+  set: (v: number) => {
+    partsPagination.value = { ...partsPagination.value, pageIndex: v - 1 };
+  },
+});
+const partsPageSize = computed({
+  get: () => partsPagination.value.pageSize,
+  set: (v: number) => {
+    partsPagination.value = { pageIndex: 0, pageSize: v };
+  },
+});
+const lotsPage = computed({
+  get: () => lotsPagination.value.pageIndex + 1,
+  set: (v: number) => {
+    lotsPagination.value = { ...lotsPagination.value, pageIndex: v - 1 };
+  },
+});
+const lotsPageSize = computed({
+  get: () => lotsPagination.value.pageSize,
+  set: (v: number) => {
+    lotsPagination.value = { pageIndex: 0, pageSize: v };
+  },
+});
 
 async function loadSuppliers() {
   try {
@@ -67,64 +170,24 @@ onMounted(loadSuppliers);
 
     <template v-else-if="result">
       <h2 class="section-title">{{ $t("admin.pages.stockSearch.parts") }}</h2>
-      <div class="table-wrap">
-        <table class="data">
-          <thead>
-            <tr>
-              <th>{{ $t("admin.pages.stockSearch.wclItemNo") }}</th>
-              <th>{{ $t("admin.pages.stockSearch.partNo") }}</th>
-              <th>{{ $t("admin.pages.stockSearch.description") }}</th>
-              <th>{{ $t("admin.pages.stockSearch.onHandQty") }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="p in result.parts" :key="p.id">
-              <td>{{ p.wclItemNo ?? p.partNo }}</td>
-              <td>{{ p.partNo }}</td>
-              <td class="wrap">{{ p.description ?? "—" }}</td>
-              <td>{{ p.onHandQty }}</td>
-            </tr>
-            <tr v-if="result.parts.length === 0">
-              <td colspan="4" class="muted">{{ $t("admin.pages.stockSearch.noParts") }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        :table="partsTable"
+        :empty-text="$t('admin.pages.stockSearch.noParts')"
+        :on-reset-columns="resetPartsColumns"
+      >
+        <template #cell-description="{ row }">
+          <span class="wrap">{{ row.description ?? "—" }}</span>
+        </template>
+      </DataTable>
+      <Pager v-model:page="partsPage" v-model:page-size="partsPageSize" :total="partsRows.length" />
 
       <h2 class="section-title">{{ $t("admin.pages.stockSearch.lots") }}</h2>
-      <div class="table-wrap">
-        <table class="data">
-          <thead>
-            <tr>
-              <th>{{ $t("admin.pages.stockSearch.partNo") }}</th>
-              <th>{{ $t("admin.pages.stockSearch.dateCode") }}</th>
-              <th>{{ $t("admin.pages.stockSearch.lotCode") }}</th>
-              <th>{{ $t("admin.pages.stockSearch.shelf") }}</th>
-              <th>{{ $t("admin.pages.stockSearch.box") }}</th>
-              <th>{{ $t("admin.pages.stockSearch.orgSubInventory") }}</th>
-              <th>{{ $t("admin.pages.stockSearch.totalQty") }}</th>
-              <th>{{ $t("admin.pages.stockSearch.allocatedQty") }}</th>
-              <th>{{ $t("admin.pages.stockSearch.availableQty") }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(l, i) in result.lots" :key="i">
-              <td>{{ l.wclItemNo ?? l.partNo }}</td>
-              <td>{{ l.dateCode ?? "—" }}</td>
-              <td>{{ l.lotCode ?? "—" }}</td>
-              <td>{{ l.shelfCode ?? "—" }}</td>
-              <td>{{ l.boxId ?? "—" }}</td>
-              <td>{{ l.orgId ?? "—" }} / {{ l.subInventoryCode ?? "—" }}</td>
-              <td>{{ l.totalQty }}</td>
-              <td>{{ l.allocatedQty }}</td>
-              <td>{{ l.availableQty }}</td>
-            </tr>
-            <tr v-if="result.lots.length === 0">
-              <td colspan="9" class="muted">{{ $t("admin.pages.stockSearch.noLots") }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        :table="lotsTable"
+        :empty-text="$t('admin.pages.stockSearch.noLots')"
+        :on-reset-columns="resetLotsColumns"
+      />
+      <Pager v-model:page="lotsPage" v-model:page-size="lotsPageSize" :total="lotsRows.length" />
     </template>
   </div>
 </template>
@@ -150,7 +213,7 @@ onMounted(loadSuppliers);
   margin: 18px 0 8px;
   color: #52606d;
 }
-td.wrap {
+.wrap {
   white-space: normal;
 }
 </style>

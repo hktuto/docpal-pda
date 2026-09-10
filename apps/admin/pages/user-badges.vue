@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import QRCode from "qrcode";
 import { listPrinters, printFile, waitForPrintJob } from "~/utils/print";
+import type { AdminColumnDef } from "~/composables/useAdminTable";
 
 interface User {
   id: string;
@@ -40,7 +41,38 @@ const filtered = computed(() => {
   );
 });
 
-const { page, pageSize, total, paged } = usePaging(filtered);
+const columnDefs = computed<AdminColumnDef<User>[]>(() => [
+  { key: "username", label: t("admin.userBadges.username"), size: 140 },
+  { key: "displayName", label: t("admin.userBadges.displayName"), size: 180 },
+  {
+    key: "groups",
+    label: t("admin.userBadges.groups"),
+    accessor: (u) => u.groupCodes.join(", "),
+    size: 220,
+  },
+]);
+
+const { table, pagination, resetColumnState } = useAdminTable({
+  tableId: "user-badges",
+  columns: columnDefs,
+  rows: filtered,
+  getRowId: (u) => u.id,
+});
+
+// Pager uses a 1-based page; the table uses a 0-based pageIndex.
+const page = computed({
+  get: () => pagination.value.pageIndex + 1,
+  set: (v: number) => {
+    pagination.value = { ...pagination.value, pageIndex: v - 1 };
+  },
+});
+const pageSize = computed({
+  get: () => pagination.value.pageSize,
+  set: (v: number) => {
+    pagination.value = { pageIndex: 0, pageSize: v };
+  },
+});
+const total = computed(() => filtered.value.length);
 
 const selectedUser = ref<User | null>(null);
 const password = ref("");
@@ -176,33 +208,20 @@ onMounted(() => {
     <div v-if="error" class="error-banner">{{ error }}</div>
     <div v-if="loading && users.length === 0" class="loading">{{ $t("admin.common.loading") }}</div>
 
-    <div v-else class="table-wrap" :class="{ 'is-loading': loading }">
-      <table class="data">
-        <thead>
-          <tr>
-            <th>{{ $t("admin.userBadges.username") }}</th>
-            <th>{{ $t("admin.userBadges.displayName") }}</th>
-            <th>{{ $t("admin.userBadges.groups") }}</th>
-            <th>{{ $t("admin.common.actions") }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="u in paged" :key="u.id">
-            <td>{{ u.username }}</td>
-            <td>{{ u.displayName }}</td>
-            <td>{{ u.groupCodes.join(", ") || "—" }}</td>
-            <td class="actions">
-              <button class="btn-link" @click="startBadge(u)">
-                {{ $t("admin.userBadges.createBadge") }}
-              </button>
-            </td>
-          </tr>
-          <tr v-if="paged.length === 0">
-            <td colspan="4" class="muted">{{ $t("admin.common.noRecords") }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      v-else
+      :table="table"
+      :loading="loading"
+      :empty-text="$t('admin.common.noRecords')"
+      :on-reset-columns="resetColumnState"
+    >
+      <template #cell-groups="{ row }">{{ row.groupCodes.join(", ") || "—" }}</template>
+      <template #actions="{ row }">
+        <button class="btn-link" @click="startBadge(row)">
+          {{ $t("admin.userBadges.createBadge") }}
+        </button>
+      </template>
+    </DataTable>
 
     <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
 
@@ -287,15 +306,6 @@ onMounted(() => {
   border: 1px solid #b6c2cd;
   border-radius: 6px;
   font-size: 14px;
-}
-
-.table-wrap.is-loading {
-  opacity: 0.5;
-  pointer-events: none;
-}
-
-.actions {
-  white-space: nowrap;
 }
 
 .modal-overlay {

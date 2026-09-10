@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { boxLabelParams } from "~/utils/print";
+import type { AdminColumnDef } from "~/composables/useAdminTable";
 
 const { t } = useI18n();
 const api = useApi();
@@ -8,30 +9,42 @@ const boxes = ref<any[]>([]);
 const loading = ref(false);
 const error = ref("");
 
-const { page, pageSize, total, paged } = usePaging(boxes);
+const columnDefs = computed<AdminColumnDef<any>[]>(() => [
+  { key: "id", label: t("admin.pages.shelfBoxes.id"), size: 100 },
+  { key: "shelfCode", label: t("admin.pages.shelfBoxes.shelf"), size: 110 },
+  { key: "orgId", label: t("admin.pages.shelfBoxes.orgId"), size: 80 },
+  { key: "subInventoryCode", label: t("admin.pages.shelfBoxes.subInventory"), size: 120 },
+  { key: "status", label: t("admin.pages.shelfBoxes.status"), size: 100 },
+  { key: "itemCount", label: t("admin.pages.shelfBoxes.items"), size: 80 },
+  { key: "totalQty", label: t("admin.pages.shelfBoxes.totalQty"), size: 90 },
+  { key: "createdDate", label: t("admin.pages.shelfBoxes.created"), size: 170 },
+]);
+
+const { table, pagination, resetColumnState } = useAdminTable({
+  tableId: "shelf-boxes-list",
+  columns: columnDefs,
+  rows: boxes,
+  getRowId: (b) => b.id,
+});
+
+// Pager uses a 1-based page; the table uses a 0-based pageIndex.
+const page = computed({
+  get: () => pagination.value.pageIndex + 1,
+  set: (v: number) => {
+    pagination.value = { ...pagination.value, pageIndex: v - 1 };
+  },
+});
+const pageSize = computed({
+  get: () => pagination.value.pageSize,
+  set: (v: number) => {
+    pagination.value = { pageIndex: 0, pageSize: v };
+  },
+});
+const total = computed(() => boxes.value.length);
 
 // Multi-select for label printing (checkbox column + "Print selected").
 const selected = ref<Set<string>>(new Set());
 const selectedBoxes = computed(() => boxes.value.filter((b) => selected.value.has(b.id)));
-const allPageSelected = computed(
-  () => paged.value.length > 0 && paged.value.every((b) => selected.value.has(b.id))
-);
-
-function toggleSelected(id: string) {
-  const next = new Set(selected.value);
-  if (next.has(id)) next.delete(id);
-  else next.add(id);
-  selected.value = next;
-}
-
-function togglePageSelected() {
-  const next = new Set(selected.value);
-  for (const b of paged.value) {
-    if (allPageSelected.value) next.delete(b.id);
-    else next.add(b.id);
-  }
-  selected.value = next;
-}
 
 const printItems = ref<{ title: string; params: Record<string, unknown> }[] | null>(null);
 
@@ -163,51 +176,24 @@ onMounted(load);
     </div>
     <div v-if="error" class="error-banner">{{ error }}</div>
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
-    <div v-else class="table-wrap">
-      <table class="data">
-        <thead>
-          <tr>
-            <th class="select-col">
-              <input type="checkbox" :checked="allPageSelected" @change="togglePageSelected" />
-            </th>
-            <th>{{ $t("admin.pages.shelfBoxes.id") }}</th>
-            <th>{{ $t("admin.pages.shelfBoxes.shelf") }}</th>
-            <th>{{ $t("admin.pages.shelfBoxes.orgId") }}</th>
-            <th>{{ $t("admin.pages.shelfBoxes.subInventory") }}</th>
-            <th>{{ $t("admin.pages.shelfBoxes.status") }}</th>
-            <th>{{ $t("admin.pages.shelfBoxes.items") }}</th>
-            <th>{{ $t("admin.pages.shelfBoxes.totalQty") }}</th>
-            <th>{{ $t("admin.pages.shelfBoxes.created") }}</th>
-            <th>{{ $t("admin.common.actions") }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="b in paged" :key="b.id">
-            <td class="select-col">
-              <input type="checkbox" :checked="selected.has(b.id)" @change="toggleSelected(b.id)" />
-            </td>
-            <td>
-              <NuxtLink :to="`/shelf-boxes/${b.id}`" :title="b.id">{{ b.id.slice(0, 8) }}</NuxtLink>
-            </td>
-            <td>{{ formatCell(b.shelfCode) }}</td>
-            <td>{{ formatCell(b.orgId) }}</td>
-            <td>{{ formatCell(b.subInventoryCode) }}</td>
-            <td>{{ b.status }}</td>
-            <td>{{ b.itemCount }}</td>
-            <td>{{ b.totalQty }}</td>
-            <td>{{ formatCell(b.createdDate) }}</td>
-            <td class="actions">
-              <button class="btn-link" @click="printOne(b)">{{ $t("admin.print.print") }}</button>
-              <button class="btn-link" @click="openEdit(b)">{{ $t("admin.common.edit") }}</button>
-              <button class="btn-link" @click="remove(b)">{{ $t("admin.common.delete") }}</button>
-            </td>
-          </tr>
-          <tr v-if="total === 0">
-            <td colspan="10" class="muted">{{ $t("admin.pages.shelfBoxes.none") }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      v-else
+      :table="table"
+      selectable
+      :row-id="(b: any) => b.id"
+      v-model:selected="selected"
+      :empty-text="$t('admin.pages.shelfBoxes.none')"
+      :on-reset-columns="resetColumnState"
+    >
+      <template #cell-id="{ row }">
+        <NuxtLink :to="`/shelf-boxes/${row.id}`" :title="row.id">{{ row.id.slice(0, 8) }}</NuxtLink>
+      </template>
+      <template #actions="{ row }">
+        <button class="btn-link" @click="printOne(row)">{{ $t("admin.print.print") }}</button>
+        <button class="btn-link" @click="openEdit(row)">{{ $t("admin.common.edit") }}</button>
+        <button class="btn-link" @click="remove(row)">{{ $t("admin.common.delete") }}</button>
+      </template>
+    </DataTable>
     <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
 
     <div v-if="showNew" class="overlay" @mousedown="newDlg.onMousedown" @click="newDlg.onClick">
@@ -278,10 +264,3 @@ onMounted(load);
     <PrintLabelsDialog v-if="printItems" :items="printItems" @close="printItems = null" />
   </div>
 </template>
-
-<style scoped>
-.select-col {
-  width: 32px;
-  text-align: center;
-}
-</style>

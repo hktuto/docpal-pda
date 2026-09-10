@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { OrderLogsParams, OrderLogsPage, PickingOrderDetail } from "~/utils/flowApi";
+import type { AdminColumnDef } from "~/composables/useAdminTable";
 
 const route = useRoute();
 const orderId = route.params.id as string;
@@ -38,37 +39,71 @@ const reportDismiss = useOverlayDismiss(() => (reportOpen.value = false));
 
 const totalQty = computed(() => (order.value?.items ?? []).reduce((sum, i) => sum + i.qty, 0));
 
-// Independent sort state per table (items vs shipping boxes).
-const itemsSort = useColumnSort("admin-sort:picking-detail-items");
-const boxesSort = useColumnSort("admin-sort:picking-detail-boxes");
+// Detail lists are small and were previously shown in full — no Pager, so
+// the tables get a generous default page size (TanStack still owns sorting).
+const itemsColumnDefs = computed<AdminColumnDef<PickingOrderDetail["items"][number]>[]>(() => [
+  {
+    key: "partNo",
+    label: t("admin.fields.partNo"),
+    accessor: (item) => item.wclItemNo ?? item.partNo,
+    size: 150,
+  },
+  {
+    key: "line",
+    label: t("admin.pages.pickingOrders.line"),
+    accessor: (item) => item.lineNumber ?? 0,
+    size: 110,
+  },
+  { key: "qty", label: t("admin.pages.pickingOrders.required"), size: 90 },
+  { key: "allocatedQty", label: t("admin.pages.pickingOrders.allocated"), size: 90 },
+  { key: "pickedQty", label: t("admin.pages.pickingOrders.picked"), size: 80 },
+  {
+    key: "allocations",
+    label: t("admin.pages.pickingOrders.allocations"),
+    accessor: (item) => item.allocations.length,
+    size: 240,
+  },
+  {
+    key: "packages",
+    label: t("admin.pages.pickingOrders.packages"),
+    accessor: (item) => item.packages.length,
+    size: 240,
+  },
+]);
 
-function itemSortVal(item: PickingOrderDetail["items"][number], key: string): unknown {
-  switch (key) {
-    case "partNo":
-      return item.wclItemNo ?? item.partNo;
-    case "line":
-      return item.lineNumber ?? 0;
-    case "allocations":
-      return item.allocations.length;
-    case "packages":
-      return item.packages.length;
-    default:
-      return (item as any)[key];
-  }
-}
+const itemsRows = computed(() => order.value?.items ?? []);
 
-const sortedItems = computed(() => itemsSort.sortRows(order.value?.items ?? [], itemSortVal));
+const { table: itemsTable, resetColumnState: resetItemsColumns } = useAdminTable({
+  tableId: "picking-detail-items",
+  columns: itemsColumnDefs,
+  rows: itemsRows,
+  getRowId: (item) => item.id,
+  defaultPageSize: 100,
+});
 
-function boxSortVal(b: PickingOrderDetail["boxes"][number], key: string): unknown {
-  switch (key) {
-    case "netGross":
-      return b.netWeight ?? 0;
-    default:
-      return (b as any)[key];
-  }
-}
+const boxesColumnDefs = computed<AdminColumnDef<PickingOrderDetail["boxes"][number]>[]>(() => [
+  { key: "id", label: t("admin.pages.pickingOrders.boxId"), size: 130 },
+  { key: "status", label: t("admin.pages.pickingOrders.status"), size: 140 },
+  { key: "boxSize", label: t("admin.pages.pickingOrders.size"), size: 80 },
+  {
+    key: "netGross",
+    label: t("admin.pages.pickingOrders.netGross"),
+    accessor: (b) => b.netWeight ?? 0,
+    size: 110,
+  },
+  { key: "destinationCountry", label: t("admin.pages.pickingOrders.destination"), size: 130 },
+  { key: "packageCount", label: t("admin.pages.pickingOrders.packages"), size: 100 },
+]);
 
-const sortedBoxes = computed(() => boxesSort.sortRows(order.value?.boxes ?? [], boxSortVal));
+const boxesRows = computed(() => order.value?.boxes ?? []);
+
+const { table: boxesTable, resetColumnState: resetBoxesColumns } = useAdminTable({
+  tableId: "picking-detail-boxes",
+  columns: boxesColumnDefs,
+  rows: boxesRows,
+  getRowId: (b) => b.id,
+  defaultPageSize: 100,
+});
 
 function openReportModal() {
   reportReason.value = "";
@@ -248,113 +283,37 @@ onMounted(load);
       </template>
 
       <h2 class="section-title">{{ $t("admin.pages.pickingOrders.items") }}</h2>
-      <div class="table-wrap">
-        <table class="data">
-          <thead>
-            <tr>
-              <th class="sortable" @click="itemsSort.toggleSort('partNo')">
-                {{ $t("admin.fields.partNo") }}
-                <span v-if="itemsSort.sortKey.value === 'partNo'" class="sort-arrow">{{ itemsSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
-              </th>
-              <th class="sortable" @click="itemsSort.toggleSort('line')">
-                {{ $t("admin.pages.pickingOrders.line") }}
-                <span v-if="itemsSort.sortKey.value === 'line'" class="sort-arrow">{{ itemsSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
-              </th>
-              <th class="sortable" @click="itemsSort.toggleSort('qty')">
-                {{ $t("admin.pages.pickingOrders.required") }}
-                <span v-if="itemsSort.sortKey.value === 'qty'" class="sort-arrow">{{ itemsSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
-              </th>
-              <th class="sortable" @click="itemsSort.toggleSort('allocatedQty')">
-                {{ $t("admin.pages.pickingOrders.allocated") }}
-                <span v-if="itemsSort.sortKey.value === 'allocatedQty'" class="sort-arrow">{{ itemsSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
-              </th>
-              <th class="sortable" @click="itemsSort.toggleSort('pickedQty')">
-                {{ $t("admin.pages.pickingOrders.picked") }}
-                <span v-if="itemsSort.sortKey.value === 'pickedQty'" class="sort-arrow">{{ itemsSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
-              </th>
-              <th class="sortable" @click="itemsSort.toggleSort('allocations')">
-                {{ $t("admin.pages.pickingOrders.allocations") }}
-                <span v-if="itemsSort.sortKey.value === 'allocations'" class="sort-arrow">{{ itemsSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
-              </th>
-              <th class="sortable" @click="itemsSort.toggleSort('packages')">
-                {{ $t("admin.pages.pickingOrders.packages") }}
-                <span v-if="itemsSort.sortKey.value === 'packages'" class="sort-arrow">{{ itemsSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in sortedItems" :key="item.id">
-              <td>{{ item.wclItemNo ?? item.partNo }}</td>
-              <td>{{ item.lineNumber ?? "—" }} / {{ item.shipmentNumber ?? "—" }}</td>
-              <td>{{ item.qty }}</td>
-              <td>{{ item.allocatedQty }}</td>
-              <td>{{ item.pickedQty }}</td>
-              <td>
-                <div v-for="a in item.allocations" :key="a.id">{{ a.qty }} × {{ allocationSource(a) }}</div>
-                <span v-if="item.allocations.length === 0" class="muted">—</span>
-              </td>
-              <td>
-                <div v-for="p in item.packages" :key="p.id">
-                  {{ p.qty }} (dc {{ p.dateCode ?? "—"
-                  }}{{ p.shippingBoxId ? `, ${$t("admin.pages.pickingOrders.boxed")}` : `, ${$t("admin.pages.pickingOrders.unboxed")}`
-                  }}{{ p.verified ? `, ${$t("admin.pages.pickingOrders.verified")}` : "" }})
-                </div>
-                <span v-if="item.packages.length === 0" class="muted">—</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <DataTable :table="itemsTable" :on-reset-columns="resetItemsColumns">
+        <template #cell-partNo="{ row }">{{ row.wclItemNo ?? row.partNo }}</template>
+        <template #cell-line="{ row }">{{ row.lineNumber ?? "—" }} / {{ row.shipmentNumber ?? "—" }}</template>
+        <template #cell-allocations="{ row }">
+          <div v-for="a in row.allocations" :key="a.id">{{ a.qty }} × {{ allocationSource(a) }}</div>
+          <span v-if="row.allocations.length === 0" class="muted">—</span>
+        </template>
+        <template #cell-packages="{ row }">
+          <div v-for="p in row.packages" :key="p.id">
+            {{ p.qty }} (dc {{ p.dateCode ?? "—"
+            }}{{ p.shippingBoxId ? `, ${$t("admin.pages.pickingOrders.boxed")}` : `, ${$t("admin.pages.pickingOrders.unboxed")}`
+            }}{{ p.verified ? `, ${$t("admin.pages.pickingOrders.verified")}` : "" }})
+          </div>
+          <span v-if="row.packages.length === 0" class="muted">—</span>
+        </template>
+      </DataTable>
 
       <h2 class="section-title">{{ $t("admin.pages.pickingOrders.shippingBoxes") }}</h2>
-      <div class="table-wrap">
-        <table class="data">
-          <thead>
-            <tr>
-              <th class="sortable" @click="boxesSort.toggleSort('id')">
-                {{ $t("admin.pages.pickingOrders.boxId") }}
-                <span v-if="boxesSort.sortKey.value === 'id'" class="sort-arrow">{{ boxesSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
-              </th>
-              <th class="sortable" @click="boxesSort.toggleSort('status')">
-                {{ $t("admin.pages.pickingOrders.status") }}
-                <span v-if="boxesSort.sortKey.value === 'status'" class="sort-arrow">{{ boxesSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
-              </th>
-              <th class="sortable" @click="boxesSort.toggleSort('boxSize')">
-                {{ $t("admin.pages.pickingOrders.size") }}
-                <span v-if="boxesSort.sortKey.value === 'boxSize'" class="sort-arrow">{{ boxesSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
-              </th>
-              <th class="sortable" @click="boxesSort.toggleSort('netGross')">
-                {{ $t("admin.pages.pickingOrders.netGross") }}
-                <span v-if="boxesSort.sortKey.value === 'netGross'" class="sort-arrow">{{ boxesSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
-              </th>
-              <th class="sortable" @click="boxesSort.toggleSort('destinationCountry')">
-                {{ $t("admin.pages.pickingOrders.destination") }}
-                <span v-if="boxesSort.sortKey.value === 'destinationCountry'" class="sort-arrow">{{ boxesSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
-              </th>
-              <th class="sortable" @click="boxesSort.toggleSort('packageCount')">
-                {{ $t("admin.pages.pickingOrders.packages") }}
-                <span v-if="boxesSort.sortKey.value === 'packageCount'" class="sort-arrow">{{ boxesSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="b in sortedBoxes" :key="b.id">
-              <td>{{ b.id }}</td>
-              <td>
-                {{ b.status }}
-                <div v-if="b.shippedAt" class="muted">{{ new Date(b.shippedAt).toLocaleDateString() }}</div>
-              </td>
-              <td>{{ b.boxSize ?? "—" }}</td>
-              <td>{{ b.netWeight ?? "—" }} / {{ b.grossWeight ?? "—" }}</td>
-              <td>{{ b.destinationCountry ?? "—" }}</td>
-              <td>{{ b.packageCount }}</td>
-            </tr>
-            <tr v-if="order.boxes.length === 0">
-              <td colspan="6" class="muted">{{ $t("admin.pages.pickingOrders.noBoxes") }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        :table="boxesTable"
+        :empty-text="$t('admin.pages.pickingOrders.noBoxes')"
+        :on-reset-columns="resetBoxesColumns"
+      >
+        <template #cell-status="{ row }">
+          {{ row.status }}
+          <div v-if="row.shippedAt" class="muted">{{ new Date(row.shippedAt).toLocaleDateString() }}</div>
+        </template>
+        <template #cell-boxSize="{ row }">{{ row.boxSize ?? "—" }}</template>
+        <template #cell-netGross="{ row }">{{ row.netWeight ?? "—" }} / {{ row.grossWeight ?? "—" }}</template>
+        <template #cell-destinationCountry="{ row }">{{ row.destinationCountry ?? "—" }}</template>
+      </DataTable>
 
       <AuditLogTable :fetch-logs="fetchLogs" :refresh-key="logsKey" />
     </template>
@@ -424,16 +383,5 @@ onMounted(load);
   padding: 5px 7px;
   border: 1px solid #b6c2cd;
   border-radius: 4px;
-}
-th.sortable {
-  cursor: pointer;
-  user-select: none;
-}
-th.sortable:hover {
-  color: var(--brand-teal-dark);
-}
-.sort-arrow {
-  font-size: 9px;
-  margin-left: 3px;
 }
 </style>

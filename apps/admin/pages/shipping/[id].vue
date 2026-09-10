@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ShippingBoxDetail } from "~/utils/flowApi";
+import type { AdminColumnDef } from "~/composables/useAdminTable";
 
 const route = useRoute();
 const boxId = route.params.id as string;
@@ -10,6 +11,53 @@ const detail = ref<ShippingBoxDetail | null>(null);
 const loading = ref(true);
 const error = ref("");
 const shipping = ref(false);
+
+type OrderRow = ShippingBoxDetail["orders"][number];
+type PackageRow = ShippingBoxDetail["packages"][number];
+
+const orderRows = computed(() => detail.value?.orders ?? []);
+const packageRows = computed(() => detail.value?.packages ?? []);
+
+const orderColumnDefs = computed<AdminColumnDef<OrderRow>[]>(() => [
+  { key: "orderNo", label: t("admin.pages.shipping.orderNo"), size: 140 },
+  { key: "status", label: t("admin.pages.shipping.orderStatus"), size: 110 },
+  { key: "shipTo", label: t("admin.pages.shipping.shipTo"), accessor: (o) => o.shipTo ?? "", size: 160 },
+  { key: "customerCode", label: t("admin.pages.shipping.customer"), accessor: (o) => o.customerCode ?? "", size: 110 },
+  { key: "poNo", label: t("admin.pages.shipping.poNo"), accessor: (o) => o.poNo ?? "", size: 140 },
+]);
+
+const packageColumnDefs = computed<AdminColumnDef<PackageRow>[]>(() => [
+  {
+    key: "partNo",
+    label: t("admin.pages.shipping.partNo"),
+    accessor: (p) => p.wclItemNo ?? p.partNo,
+    size: 160,
+  },
+  { key: "qty", label: t("admin.pages.shipping.qty"), size: 80 },
+  { key: "dateCode", label: t("admin.pages.shipping.dateCode"), accessor: (p) => p.dateCode ?? "", size: 110 },
+  { key: "lotCode", label: t("admin.pages.shipping.lot"), accessor: (p) => p.lotCode ?? "", size: 110 },
+  {
+    key: "cooCow",
+    label: t("admin.pages.shipping.cooCow"),
+    accessor: (p) => `${p.coo ?? "—"} / ${p.cow ?? "—"}`,
+    size: 120,
+  },
+  { key: "verified", label: t("admin.pages.shipping.verified"), accessor: (p) => (p.verified ? 1 : 0), size: 90 },
+]);
+
+const { table: orderTable, resetColumnState: resetOrderColumns } = useAdminTable({
+  tableId: "shipping-detail-orders",
+  columns: orderColumnDefs,
+  rows: orderRows,
+  getRowId: (o) => o.id,
+});
+
+const { table: packageTable, resetColumnState: resetPackageColumns } = useAdminTable({
+  tableId: "shipping-detail-packages",
+  columns: packageColumnDefs,
+  rows: packageRows,
+  getRowId: (p) => p.id,
+});
 
 async function shipBox() {
   if (shipping.value) return;
@@ -70,57 +118,30 @@ onMounted(async () => {
       </div>
 
       <h2 class="section-title">{{ $t("admin.pages.shipping.ordersInBox") }}</h2>
-      <div class="table-wrap">
-        <table class="data">
-          <thead>
-            <tr>
-              <th>{{ $t("admin.pages.shipping.orderNo") }}</th>
-              <th>{{ $t("admin.pages.shipping.orderStatus") }}</th>
-              <th>{{ $t("admin.pages.shipping.shipTo") }}</th>
-              <th>{{ $t("admin.pages.shipping.customer") }}</th>
-              <th>{{ $t("admin.pages.shipping.poNo") }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="o in detail.orders" :key="o.id">
-              <td class="clickable" @click="navigateTo(`/picking-orders/${o.id}`)">{{ o.orderNo }}</td>
-              <td>{{ o.status }}</td>
-              <td>{{ o.shipTo ?? "—" }}</td>
-              <td>{{ o.customerCode ?? "—" }}</td>
-              <td>{{ o.poNo ?? "—" }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        :table="orderTable"
+        :on-reset-columns="resetOrderColumns"
+      >
+        <template #cell-orderNo="{ row }">
+          <span class="clickable" @click="navigateTo(`/picking-orders/${row.id}`)">{{ row.orderNo }}</span>
+        </template>
+        <template #cell-shipTo="{ row }">{{ row.shipTo ?? "—" }}</template>
+        <template #cell-customerCode="{ row }">{{ row.customerCode ?? "—" }}</template>
+        <template #cell-poNo="{ row }">{{ row.poNo ?? "—" }}</template>
+      </DataTable>
 
       <h2 class="section-title">{{ $t("admin.pages.shipping.packages") }}</h2>
-      <div class="table-wrap">
-        <table class="data">
-          <thead>
-            <tr>
-              <th>{{ $t("admin.pages.shipping.partNo") }}</th>
-              <th>{{ $t("admin.pages.shipping.qty") }}</th>
-              <th>{{ $t("admin.pages.shipping.dateCode") }}</th>
-              <th>{{ $t("admin.pages.shipping.lot") }}</th>
-              <th>{{ $t("admin.pages.shipping.cooCow") }}</th>
-              <th>{{ $t("admin.pages.shipping.verified") }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="p in detail.packages" :key="p.id">
-              <td>{{ p.wclItemNo ?? p.partNo }}</td>
-              <td>{{ p.qty }}</td>
-              <td>{{ p.dateCode ?? "—" }}</td>
-              <td>{{ p.lotCode ?? "—" }}</td>
-              <td>{{ p.coo ?? "—" }} / {{ p.cow ?? "—" }}</td>
-              <td>{{ p.verified ? "✓" : "" }}</td>
-            </tr>
-            <tr v-if="detail.packages.length === 0">
-              <td colspan="6" class="muted">{{ $t("admin.pages.shipping.emptyBox") }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        :table="packageTable"
+        :empty-text="$t('admin.pages.shipping.emptyBox')"
+        :on-reset-columns="resetPackageColumns"
+      >
+        <template #cell-partNo="{ row }">{{ row.wclItemNo ?? row.partNo }}</template>
+        <template #cell-dateCode="{ row }">{{ row.dateCode ?? "—" }}</template>
+        <template #cell-lotCode="{ row }">{{ row.lotCode ?? "—" }}</template>
+        <template #cell-cooCow="{ row }">{{ row.coo ?? "—" }} / {{ row.cow ?? "—" }}</template>
+        <template #cell-verified="{ row }">{{ row.verified ? "✓" : "" }}</template>
+      </DataTable>
     </template>
   </div>
 </template>

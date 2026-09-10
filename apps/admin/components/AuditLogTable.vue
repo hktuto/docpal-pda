@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { OrderLogsPage, TransactionLogRow } from "~/utils/flowApi";
+import type { AdminColumnDef } from "~/composables/useAdminTable";
 
 // Shared audit-log table for the receiving / picking order detail pages.
 // Server-paged: the parent passes a fetcher; page/search/sort state lives
@@ -16,23 +17,62 @@ const { t, te } = useI18n();
 
 const rows = ref<TransactionLogRow[]>([]);
 const total = ref(0);
-const page = ref(1);
-const pageSize = ref(20);
 const searchInput = ref("");
 const q = ref("");
 const loading = ref(false);
 
-const { sortKey, sortDir, toggleSort } = useColumnSort();
+function stateLabel(code: string | null): string {
+  if (!code) return t("logStates.none");
+  return te(`logStates.${code}`) ? t(`logStates.${code}`) : code;
+}
+
+// Sorting is server-side; the `toState` column displays the full
+// "from → to" transition but sorts on the destination state, as before.
+const columnDefs = computed<AdminColumnDef<TransactionLogRow>[]>(() => [
+  { key: "createdDate", label: t("admin.pages.auditLog.time"), size: 170 },
+  {
+    key: "actorName",
+    label: t("admin.pages.auditLog.actor"),
+    accessor: (log) => log.actorName ?? log.actorId ?? "",
+    size: 150,
+  },
+  { key: "toState", label: t("admin.pages.auditLog.transition"), size: 210 },
+  { key: "item", label: t("admin.pages.auditLog.item"), sortable: false, size: 160 },
+  { key: "details", label: t("admin.pages.auditLog.details"), sortable: false, size: 240 },
+]);
+
+const { table, sorting, pagination, resetColumnState } = useAdminTable({
+  tableId: "audit-log",
+  columns: columnDefs,
+  rows,
+  getRowId: (log) => log.id,
+  server: { total },
+});
+
+// Pager uses a 1-based page; the table uses a 0-based pageIndex.
+const page = computed({
+  get: () => pagination.value.pageIndex + 1,
+  set: (v: number) => {
+    pagination.value = { ...pagination.value, pageIndex: v - 1 };
+  },
+});
+const pageSize = computed({
+  get: () => pagination.value.pageSize,
+  set: (v: number) => {
+    pagination.value = { pageIndex: 0, pageSize: v };
+  },
+});
 
 async function loadLogs() {
   loading.value = true;
+  const sort = sorting.value[0];
   try {
     const res = await props.fetchLogs({
       page: page.value,
       pageSize: pageSize.value,
       q: q.value,
-      sort: sortKey.value ?? "createdDate",
-      dir: sortKey.value ? sortDir.value : "desc",
+      sort: sort?.id ?? "createdDate",
+      dir: sort ? (sort.desc ? "desc" : "asc") : "desc",
     });
     rows.value = res.rows;
     total.value = res.total;
@@ -51,15 +91,10 @@ watch(searchInput, (v) => {
     page.value = 1;
   }, 300);
 });
-watch([sortKey, sortDir], () => {
+watch(sorting, () => {
   page.value = 1;
 });
-watch([page, pageSize, q, sortKey, sortDir, () => props.refreshKey], loadLogs, { immediate: true });
-
-function stateLabel(code: string | null): string {
-  if (!code) return t("logStates.none");
-  return te(`logStates.${code}`) ? t(`logStates.${code}`) : code;
-}
+watch([page, pageSize, q, sorting, () => props.refreshKey], loadLogs, { immediate: true });
 
 // Known metadata keys rendered compactly; field/from/to get a dedicated
 // "field: from → to" rendering; anything else (incl. {}) renders nothing.
@@ -106,40 +141,18 @@ function itemText(log: TransactionLogRow): string {
       :placeholder="t('admin.pages.auditLog.searchPlaceholder')"
     />
   </div>
-  <div class="table-wrap">
-    <table class="data">
-      <thead>
-        <tr>
-          <th class="sortable" @click="toggleSort('createdDate')">
-            {{ t("admin.pages.auditLog.time") }}
-            <span v-if="sortKey === 'createdDate'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-          </th>
-          <th class="sortable" @click="toggleSort('actorName')">
-            {{ t("admin.pages.auditLog.actor") }}
-            <span v-if="sortKey === 'actorName'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-          </th>
-          <th class="sortable" @click="toggleSort('toState')">
-            {{ t("admin.pages.auditLog.transition") }}
-            <span v-if="sortKey === 'toState'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-          </th>
-          <th>{{ t("admin.pages.auditLog.item") }}</th>
-          <th>{{ t("admin.pages.auditLog.details") }}</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="log in rows" :key="log.id">
-          <td>{{ new Date(log.createdDate).toLocaleString() }}</td>
-          <td>{{ log.actorName ?? log.actorId ?? "—" }}</td>
-          <td>{{ stateLabel(log.fromState) }} → {{ stateLabel(log.toState) }}</td>
-          <td>{{ itemText(log) }}</td>
-          <td>{{ metadataText(log) }}</td>
-        </tr>
-        <tr v-if="rows.length === 0 && !loading">
-          <td colspan="5" class="muted">{{ t("admin.pages.auditLog.empty") }}</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
+  <DataTable
+    :table="table"
+    :loading="loading"
+    :empty-text="t('admin.pages.auditLog.empty')"
+    :on-reset-columns="resetColumnState"
+  >
+    <template #cell-createdDate="{ row }">{{ new Date(row.createdDate).toLocaleString() }}</template>
+    <template #cell-actorName="{ row }">{{ row.actorName ?? row.actorId ?? "—" }}</template>
+    <template #cell-toState="{ row }">{{ stateLabel(row.fromState) }} → {{ stateLabel(row.toState) }}</template>
+    <template #cell-item="{ row }">{{ itemText(row) }}</template>
+    <template #cell-details="{ row }">{{ metadataText(row) }}</template>
+  </DataTable>
   <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
 </template>
 
@@ -154,16 +167,5 @@ function itemText(log: TransactionLogRow): string {
   align-items: center;
   gap: 10px;
   padding: 8px 0;
-}
-th.sortable {
-  cursor: pointer;
-  user-select: none;
-}
-th.sortable:hover {
-  color: var(--brand-teal-dark);
-}
-.sort-arrow {
-  font-size: 9px;
-  margin-left: 3px;
 }
 </style>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { OrderLogsParams, OrderLogsPage, ReceivingOrderDetail, ReceivingItemRow } from "~/utils/flowApi";
+import type { AdminColumnDef } from "~/composables/useAdminTable";
 
 const route = useRoute();
 const orderId = route.params.id as string;
@@ -27,26 +28,6 @@ const savingEdit = ref(false);
 
 const allItems = computed(() => (order.value?.invoices ?? []).flatMap((inv) => inv.items));
 const selectedItems = computed(() => allItems.value.filter((it) => selected.value.has(it.id)));
-
-function toggleItem(itemId: string, checked: boolean) {
-  const next = new Set(selected.value);
-  if (checked) next.add(itemId);
-  else next.delete(itemId);
-  selected.value = next;
-}
-
-function invoiceAllSelected(inv: { items: ReceivingItemRow[] }): boolean {
-  return inv.items.length > 0 && inv.items.every((it) => selected.value.has(it.id));
-}
-
-function toggleInvoice(inv: { items: ReceivingItemRow[] }, checked: boolean) {
-  const next = new Set(selected.value);
-  for (const it of inv.items) {
-    if (checked) next.add(it.id);
-    else next.delete(it.id);
-  }
-  selected.value = next;
-}
 
 function openEdit(item: ReceivingItemRow) {
   editItems.value = [item];
@@ -152,22 +133,50 @@ const groups = computed<ItemGroup[]>(() => {
     .map(([key, items]) => ({ key, invoice: null, items }));
 });
 
-// Shared sort state across all group tables; checkbox/actions columns unsorted.
-const { sortKey, sortDir, toggleSort, sortRows } = useColumnSort("admin-sort:receiving-detail-items");
+// One DataTable per group, each with its own useAdminTable instance (created
+// lazily and cached by group key). Sort/column state is per group table and
+// persists under `admin-table:receiving-detail-items-<groupKey>`; the
+// selection Set is shared across all group tables via v-model:selected, so
+// DataTable's header checkbox matches the old per-invoice toggle.
+// Group item lists were never paged, so pageSize stays large enough to render
+// every row (no Pager on this page).
+const itemColumnDefs = computed<AdminColumnDef<ReceivingItemRow>[]>(() => [
+  {
+    key: "partNo",
+    label: t("admin.pages.receiving.partNo"),
+    accessor: (it) => it.wclItemNo ?? it.partNo,
+    size: 180,
+  },
+  {
+    key: "poLine",
+    label: t("admin.pages.receiving.poLine"),
+    accessor: (it) => `${it.poNo ?? ""}/${it.poLine ?? ""}`,
+    size: 140,
+  },
+  { key: "lineQty", label: t("admin.pages.receiving.expected"), size: 90 },
+  { key: "receivedQty", label: t("admin.pages.receiving.received"), size: 90 },
+  { key: "putAwayQty", label: t("admin.pages.receiving.putAway"), size: 90 },
+  { key: "allocatedQty", label: t("admin.pages.receiving.allocated"), size: 90 },
+  { key: "ctnNo", label: t("admin.pages.receiving.ctnNo"), size: 110 },
+  { key: "dateCode", label: t("admin.pages.receiving.dateCode"), size: 100 },
+]);
 
-function itemSortVal(item: ReceivingItemRow, key: string): unknown {
-  switch (key) {
-    case "partNo":
-      return item.wclItemNo ?? item.partNo;
-    case "poLine":
-      return `${item.poNo ?? ""}/${item.poLine ?? ""}`;
-    default:
-      return (item as any)[key];
+type GroupTable = ReturnType<typeof useAdminTable<ReceivingItemRow>>;
+const groupTables = new Map<string, GroupTable>();
+
+function tableForGroup(key: string): GroupTable {
+  let inst = groupTables.get(key);
+  if (!inst) {
+    inst = useAdminTable<ReceivingItemRow>({
+      tableId: `receiving-detail-items-${key}`,
+      columns: itemColumnDefs,
+      rows: computed(() => groups.value.find((g) => g.key === key)?.items ?? []),
+      getRowId: (it) => it.id,
+      defaultPageSize: 1000,
+    });
+    groupTables.set(key, inst);
   }
-}
-
-function groupItems(group: ItemGroup): ReceivingItemRow[] {
-  return sortRows(group.items, itemSortVal);
+  return inst;
 }
 
 async function load() {
@@ -457,124 +466,57 @@ onMounted(load);
             <span class="muted">— {{ $t("admin.pages.receiving.itemsCount", { count: group.items.length }) }}</span>
           </template>
         </h2>
-        <div class="table-wrap">
-          <table class="data invoice-table">
-            <colgroup>
-              <col class="col-select" />
-              <col class="col-part" />
-              <col class="col-po" />
-              <col class="col-qty" />
-              <col class="col-qty" />
-              <col class="col-qty" />
-              <col class="col-qty" />
-              <col class="col-ctn" />
-              <col class="col-dc" />
-              <col class="col-actions" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th>
-                  <input
-                    type="checkbox"
-                    :checked="invoiceAllSelected(group)"
-                    @change="toggleInvoice(group, ($event.target as HTMLInputElement).checked)"
-                  />
-                </th>
-                <th class="sortable" @click="toggleSort('partNo')">
-                  {{ $t("admin.pages.receiving.partNo") }}
-                  <span v-if="sortKey === 'partNo'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-                </th>
-                <th class="sortable" @click="toggleSort('poLine')">
-                  {{ $t("admin.pages.receiving.poLine") }}
-                  <span v-if="sortKey === 'poLine'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-                </th>
-                <th class="sortable" @click="toggleSort('lineQty')">
-                  {{ $t("admin.pages.receiving.expected") }}
-                  <span v-if="sortKey === 'lineQty'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-                </th>
-                <th class="sortable" @click="toggleSort('receivedQty')">
-                  {{ $t("admin.pages.receiving.received") }}
-                  <span v-if="sortKey === 'receivedQty'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-                </th>
-                <th class="sortable" @click="toggleSort('putAwayQty')">
-                  {{ $t("admin.pages.receiving.putAway") }}
-                  <span v-if="sortKey === 'putAwayQty'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-                </th>
-                <th class="sortable" @click="toggleSort('allocatedQty')">
-                  {{ $t("admin.pages.receiving.allocated") }}
-                  <span v-if="sortKey === 'allocatedQty'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-                </th>
-                <th class="sortable" @click="toggleSort('ctnNo')">
-                  {{ $t("admin.pages.receiving.ctnNo") }}
-                  <span v-if="sortKey === 'ctnNo'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-                </th>
-                <th class="sortable" @click="toggleSort('dateCode')">
-                  {{ $t("admin.pages.receiving.dateCode") }}
-                  <span v-if="sortKey === 'dateCode'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-                </th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in groupItems(group)" :key="item.id">
-                <td>
-                  <input
-                    type="checkbox"
-                    :checked="selected.has(item.id)"
-                    @change="toggleItem(item.id, ($event.target as HTMLInputElement).checked)"
-                  />
-                </td>
-                <td class="wrap">
-                  {{ item.wclItemNo ?? item.partNo }}
-                  <div v-if="item.mismatch" class="mismatch-line">
-                    {{ $t("admin.pages.receiving.mismatch") }}: {{ item.mismatch.reason ?? "—"
-                    }}<template v-if="item.mismatch.mismatchQty != null"> × {{ item.mismatch.mismatchQty }}</template
-                    ><template v-if="item.mismatch.wrongPartNo"> — {{ item.mismatch.wrongPartNo }}</template
-                    ><template v-if="item.mismatch.note"> — {{ item.mismatch.note }}</template>
-                  </div>
-                </td>
-                <td class="wrap">{{ item.poNo ?? "—" }}<span v-if="item.poLine"> / {{ item.poLine }}</span></td>
-                <td>{{ item.lineQty ?? "—" }}</td>
-                <td>{{ item.receivedQty }}</td>
-                <td>{{ item.putAwayQty }}</td>
-                <td>{{ item.allocatedQty }}</td>
-                <td>{{ item.ctnNo ?? "—" }}</td>
-                <td>{{ item.dateCode ?? "—" }}</td>
-                <td class="actions">
-                  <button class="btn btn-small" @click="openEdit(item)">
-                    {{ $t("admin.pages.receiving.editDetail") }}
-                  </button>
-                  <template v-if="item.mismatch">
-                    <button
-                      class="btn btn-small btn-primary"
-                      :disabled="!!mismatchActing[item.id]"
-                      @click="actMismatch(item, 'confirm')"
-                    >
-                      {{ mismatchActing[item.id] === "confirm" ? $t("admin.common.saving") : $t("admin.pages.issues.confirm") }}
-                    </button>
-                    <button
-                      class="btn btn-small"
-                      :disabled="!!mismatchActing[item.id]"
-                      @click="actMismatch(item, 'cancel')"
-                    >
-                      {{ mismatchActing[item.id] === "cancel" ? $t("admin.common.saving") : $t("admin.common.cancel") }}
-                    </button>
-                    <button
-                      class="btn btn-small"
-                      :disabled="!!removingItem[item.id]"
-                      @click="removeItem(item)"
-                    >
-                      {{ removingItem[item.id] ? $t("admin.common.saving") : $t("admin.pages.receiving.removeItem") }}
-                    </button>
-                  </template>
-                  <button v-else class="btn btn-small" @click="openIssueModal(item)">
-                    {{ $t("admin.pages.receiving.markIssue") }}
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          :table="tableForGroup(group.key).table"
+          v-model:selected="selected"
+          selectable
+          :empty-text="$t('admin.common.noRecords')"
+          :on-reset-columns="tableForGroup(group.key).resetColumnState"
+        >
+          <template #cell-partNo="{ row }">
+            {{ row.wclItemNo ?? row.partNo }}
+            <div v-if="row.mismatch" class="mismatch-line">
+              {{ $t("admin.pages.receiving.mismatch") }}: {{ row.mismatch.reason ?? "—"
+              }}<template v-if="row.mismatch.mismatchQty != null"> × {{ row.mismatch.mismatchQty }}</template
+              ><template v-if="row.mismatch.wrongPartNo"> — {{ row.mismatch.wrongPartNo }}</template
+              ><template v-if="row.mismatch.note"> — {{ row.mismatch.note }}</template>
+            </div>
+          </template>
+          <template #cell-poLine="{ row }">
+            {{ row.poNo ?? "—" }}<span v-if="row.poLine"> / {{ row.poLine }}</span>
+          </template>
+          <template #actions="{ row }">
+            <button class="btn btn-small" @click="openEdit(row)">
+              {{ $t("admin.pages.receiving.editDetail") }}
+            </button>
+            <template v-if="row.mismatch">
+              <button
+                class="btn btn-small btn-primary"
+                :disabled="!!mismatchActing[row.id]"
+                @click="actMismatch(row, 'confirm')"
+              >
+                {{ mismatchActing[row.id] === "confirm" ? $t("admin.common.saving") : $t("admin.pages.issues.confirm") }}
+              </button>
+              <button
+                class="btn btn-small"
+                :disabled="!!mismatchActing[row.id]"
+                @click="actMismatch(row, 'cancel')"
+              >
+                {{ mismatchActing[row.id] === "cancel" ? $t("admin.common.saving") : $t("admin.common.cancel") }}
+              </button>
+              <button
+                class="btn btn-small"
+                :disabled="!!removingItem[row.id]"
+                @click="removeItem(row)"
+              >
+                {{ removingItem[row.id] ? $t("admin.common.saving") : $t("admin.pages.receiving.removeItem") }}
+              </button>
+            </template>
+            <button v-else class="btn btn-small" @click="openIssueModal(row)">
+              {{ $t("admin.pages.receiving.markIssue") }}
+            </button>
+          </template>
+        </DataTable>
       </template>
       <p v-if="order.invoices.length === 0" class="muted">{{ $t("admin.pages.receiving.noInvoices") }}</p>
       <p v-else-if="groups.length === 0" class="muted">
@@ -682,53 +624,7 @@ onMounted(load);
   gap: 10px;
   padding: 8px 0;
 }
-th.sortable {
-  cursor: pointer;
-  user-select: none;
-}
-th.sortable:hover {
-  color: var(--brand-teal-dark);
-}
-.sort-arrow {
-  font-size: 9px;
-  margin-left: 3px;
-}
-/* Fixed layout + identical colgroup keeps every invoice table's columns aligned. */
-.invoice-table {
-  table-layout: fixed;
-}
-.col-select {
-  width: 3%;
-}
-.col-part {
-  width: 20%;
-}
-.col-po {
-  width: 10%;
-}
-.col-qty {
-  width: 8%;
-}
-.col-ctn {
-  width: 9%;
-}
-.col-dc {
-  width: 10%;
-}
-.col-actions {
-  width: 18%;
-}
-.invoice-table th {
-  white-space: normal;
-  padding: 8px 6px;
-  font-size: 11px;
-  letter-spacing: 0;
-}
-.invoice-table td.wrap {
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-td.actions .btn {
+:deep(td.actions) .btn {
   margin: 0 6px 4px 0;
 }
 </style>

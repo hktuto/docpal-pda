@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import type { MismatchListRow } from "~/utils/flowApi";
+import type { AdminColumnDef } from "~/composables/useAdminTable";
 
 const flow = useFlowApi();
+const { t } = useI18n();
 const rows = ref<MismatchListRow[]>([]);
 const loading = ref(false);
 const error = ref("");
@@ -9,7 +11,44 @@ const error = ref("");
 // Per-row action in flight: itemId -> "confirm" | "cancel".
 const acting = ref<Record<string, string>>({});
 
-const { page, pageSize, total, paged } = usePaging(rows);
+// accessors resolve the derived display values used for sorting.
+const columnDefs = computed<AdminColumnDef<MismatchListRow>[]>(() => [
+  { key: "batchNo", label: t("admin.pages.issues.batchNo"), size: 140 },
+  { key: "invoiceNo", label: t("admin.pages.issues.invoiceNo"), size: 130 },
+  {
+    key: "partNo",
+    label: t("admin.pages.issues.partNo"),
+    accessor: (r) => r.wclItemNo ?? r.partNo,
+    size: 130,
+  },
+  { key: "supplier", label: t("admin.pages.issues.supplier"), accessor: (r) => r.supplierCode ?? "", size: 150 },
+  { key: "reason", label: t("admin.pages.issues.reason"), accessor: (r) => r.reason ?? "", size: 120 },
+  { key: "qty", label: t("admin.pages.issues.qty"), accessor: (r) => r.mismatchQty ?? "", size: 80 },
+  { key: "wrongPartNo", label: t("admin.pages.issues.wrongPartNo"), accessor: (r) => r.wrongPartNo ?? "", size: 130 },
+  { key: "note", label: t("admin.pages.issues.note"), accessor: (r) => r.note ?? "", size: 200 },
+]);
+
+const { table, pagination, resetColumnState } = useAdminTable({
+  tableId: "issues-receiving-mismatches",
+  columns: columnDefs,
+  rows,
+  getRowId: (r) => r.itemId,
+});
+
+// Pager uses a 1-based page; the table uses a 0-based pageIndex.
+const page = computed({
+  get: () => pagination.value.pageIndex + 1,
+  set: (v: number) => {
+    pagination.value = { ...pagination.value, pageIndex: v - 1 };
+  },
+});
+const pageSize = computed({
+  get: () => pagination.value.pageSize,
+  set: (v: number) => {
+    pagination.value = { pageIndex: 0, pageSize: v };
+  },
+});
+const total = computed(() => rows.value.length);
 
 async function load() {
   loading.value = true;
@@ -56,59 +95,32 @@ onMounted(load);
     <div v-if="error" class="error-banner">{{ error }}</div>
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
-    <div v-else class="table-wrap">
-      <table class="data">
-        <thead>
-          <tr>
-            <th>{{ $t("admin.pages.issues.batchNo") }}</th>
-            <th>{{ $t("admin.pages.issues.invoiceNo") }}</th>
-            <th>{{ $t("admin.pages.issues.partNo") }}</th>
-            <th>{{ $t("admin.pages.issues.supplier") }}</th>
-            <th>{{ $t("admin.pages.issues.reason") }}</th>
-            <th>{{ $t("admin.pages.issues.qty") }}</th>
-            <th>{{ $t("admin.pages.issues.wrongPartNo") }}</th>
-            <th>{{ $t("admin.pages.issues.note") }}</th>
-            <th>{{ $t("admin.common.actions") }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="r in paged"
-            :key="r.itemId"
-            class="clickable"
-            @click="navigateTo(`/receiving/${r.receivingOrderId}`)"
-          >
-            <td>{{ r.batchNo }}</td>
-            <td>{{ r.invoiceNo }}</td>
-            <td>{{ r.wclItemNo ?? r.partNo }}</td>
-            <td>{{ r.supplierCode ?? "—" }}</td>
-            <td>{{ r.reason ?? "—" }}</td>
-            <td>{{ r.mismatchQty ?? "—" }}</td>
-            <td>{{ r.wrongPartNo ?? "—" }}</td>
-            <td>{{ r.note ?? "—" }}</td>
-            <td class="actions">
-              <button
-                class="btn btn-small btn-primary"
-                :disabled="!!acting[r.itemId]"
-                @click.stop="act(r, 'confirm')"
-              >
-                {{ acting[r.itemId] === "confirm" ? $t("admin.common.saving") : $t("admin.pages.issues.confirm") }}
-              </button>
-              <button
-                class="btn btn-small"
-                :disabled="!!acting[r.itemId]"
-                @click.stop="act(r, 'cancel')"
-              >
-                {{ acting[r.itemId] === "cancel" ? $t("admin.common.saving") : $t("admin.common.cancel") }}
-              </button>
-            </td>
-          </tr>
-          <tr v-if="total === 0">
-            <td colspan="9" class="muted">{{ $t("admin.pages.issues.noReceivingIssues") }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      v-else
+      :table="table"
+      :empty-text="$t('admin.pages.issues.noReceivingIssues')"
+      :on-reset-columns="resetColumnState"
+      @row-click="(r) => navigateTo(`/receiving/${r.receivingOrderId}`)"
+    >
+      <template #cell-partNo="{ row }">{{ row.wclItemNo ?? row.partNo }}</template>
+      <template #cell-supplier="{ row }">{{ row.supplierCode ?? "—" }}</template>
+      <template #cell-reason="{ row }">{{ row.reason ?? "—" }}</template>
+      <template #cell-qty="{ row }">{{ row.mismatchQty ?? "—" }}</template>
+      <template #cell-wrongPartNo="{ row }">{{ row.wrongPartNo ?? "—" }}</template>
+      <template #cell-note="{ row }">{{ row.note ?? "—" }}</template>
+      <template #actions="{ row }">
+        <button
+          class="btn btn-small btn-primary"
+          :disabled="!!acting[row.itemId]"
+          @click="act(row, 'confirm')"
+        >
+          {{ acting[row.itemId] === "confirm" ? $t("admin.common.saving") : $t("admin.pages.issues.confirm") }}
+        </button>
+        <button class="btn btn-small" :disabled="!!acting[row.itemId]" @click="act(row, 'cancel')">
+          {{ acting[row.itemId] === "cancel" ? $t("admin.common.saving") : $t("admin.common.cancel") }}
+        </button>
+      </template>
+    </DataTable>
     <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
   </div>
 </template>
@@ -121,13 +133,10 @@ onMounted(load);
 .explainer {
   margin: 0 0 12px;
 }
-tr.clickable {
-  cursor: pointer;
-}
-td.actions {
+:deep(td.actions) {
   white-space: nowrap;
 }
-td.actions .btn + .btn {
+:deep(td.actions .btn + .btn) {
   margin-left: 6px;
 }
 </style>

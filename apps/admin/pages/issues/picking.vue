@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { PickingOrderDetail, PickingOrderRow } from "~/utils/flowApi";
+import type { AdminColumnDef } from "~/composables/useAdminTable";
 
 const flow = useFlowApi();
 const { t } = useI18n();
@@ -16,7 +17,53 @@ const loading = ref(false);
 const error = ref("");
 const resolving = ref<Record<string, boolean>>({});
 
-const { page, pageSize, total, paged } = usePaging(rows);
+// accessors resolve the order/detail-derived values used for sorting.
+const columnDefs = computed<AdminColumnDef<IssueRow>[]>(() => [
+  { key: "orderNo", label: t("admin.pages.issues.orderNo"), accessor: (r) => r.order.orderNo, size: 140 },
+  {
+    key: "customer",
+    label: t("admin.pages.issues.customer"),
+    accessor: (r) => r.order.customerCode ?? "",
+    size: 150,
+  },
+  { key: "reason", label: t("admin.pages.issues.reason"), accessor: (r) => r.detail.issueReason ?? "", size: 150 },
+  { key: "qty", label: t("admin.pages.issues.qty"), accessor: (r) => r.detail.issueQty ?? 0, size: 80 },
+  {
+    key: "packSize",
+    label: t("admin.pages.issues.packSize"),
+    accessor: (r) => r.detail.issuePackSize ?? "",
+    size: 100,
+  },
+  { key: "note", label: t("admin.pages.issues.note"), accessor: (r) => r.detail.issueNote ?? "", size: 200 },
+  {
+    key: "reportedAt",
+    label: t("admin.pages.issues.reportedAt"),
+    accessor: (r) => r.detail.issueReportedAt ?? "",
+    size: 170,
+  },
+]);
+
+const { table, pagination, resetColumnState } = useAdminTable({
+  tableId: "issues-picking",
+  columns: columnDefs,
+  rows,
+  getRowId: (r) => r.order.id,
+});
+
+// Pager uses a 1-based page; the table uses a 0-based pageIndex.
+const page = computed({
+  get: () => pagination.value.pageIndex + 1,
+  set: (v: number) => {
+    pagination.value = { ...pagination.value, pageIndex: v - 1 };
+  },
+});
+const pageSize = computed({
+  get: () => pagination.value.pageSize,
+  set: (v: number) => {
+    pagination.value = { pageIndex: 0, pageSize: v };
+  },
+});
+const total = computed(() => rows.value.length);
 
 async function load() {
   loading.value = true;
@@ -67,50 +114,31 @@ onMounted(load);
     <div v-if="error" class="error-banner">{{ error }}</div>
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
-    <div v-else class="table-wrap">
-      <table class="data">
-        <thead>
-          <tr>
-            <th>{{ $t("admin.pages.issues.orderNo") }}</th>
-            <th>{{ $t("admin.pages.issues.customer") }}</th>
-            <th>{{ $t("admin.pages.issues.reason") }}</th>
-            <th>{{ $t("admin.pages.issues.qty") }}</th>
-            <th>{{ $t("admin.pages.issues.packSize") }}</th>
-            <th>{{ $t("admin.pages.issues.note") }}</th>
-            <th>{{ $t("admin.pages.issues.reportedAt") }}</th>
-            <th>{{ $t("admin.common.actions") }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="r in paged"
-            :key="r.order.id"
-            class="clickable"
-            @click="navigateTo(`/picking-orders/${r.order.id}`)"
-          >
-            <td>{{ r.order.orderNo }}</td>
-            <td>{{ r.order.customerCode ?? "—" }}</td>
-            <td>{{ r.detail.issueReason ?? "—" }}</td>
-            <td>{{ r.detail.issueQty ?? "—" }}</td>
-            <td>{{ r.detail.issuePackSize ?? "—" }}</td>
-            <td>{{ r.detail.issueNote ?? "—" }}</td>
-            <td>{{ r.detail.issueReportedAt ? new Date(r.detail.issueReportedAt).toLocaleString() : "—" }}</td>
-            <td class="actions">
-              <button
-                class="btn btn-small btn-primary"
-                :disabled="resolving[r.order.id]"
-                @click.stop="resolve(r)"
-              >
-                {{ resolving[r.order.id] ? $t("admin.common.saving") : $t("admin.pages.issues.resolve") }}
-              </button>
-            </td>
-          </tr>
-          <tr v-if="total === 0">
-            <td colspan="8" class="muted">{{ $t("admin.pages.issues.noPickingIssues") }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      v-else
+      :table="table"
+      :empty-text="$t('admin.pages.issues.noPickingIssues')"
+      :on-reset-columns="resetColumnState"
+      @row-click="(r: IssueRow) => navigateTo(`/picking-orders/${r.order.id}`)"
+    >
+      <template #cell-customer="{ row }">{{ row.order.customerCode ?? "—" }}</template>
+      <template #cell-reason="{ row }">{{ row.detail.issueReason ?? "—" }}</template>
+      <template #cell-qty="{ row }">{{ row.detail.issueQty ?? "—" }}</template>
+      <template #cell-packSize="{ row }">{{ row.detail.issuePackSize ?? "—" }}</template>
+      <template #cell-note="{ row }">{{ row.detail.issueNote ?? "—" }}</template>
+      <template #cell-reportedAt="{ row }">
+        {{ row.detail.issueReportedAt ? new Date(row.detail.issueReportedAt).toLocaleString() : "—" }}
+      </template>
+      <template #actions="{ row }">
+        <button
+          class="btn btn-small btn-primary"
+          :disabled="resolving[row.order.id]"
+          @click="resolve(row)"
+        >
+          {{ resolving[row.order.id] ? $t("admin.common.saving") : $t("admin.pages.issues.resolve") }}
+        </button>
+      </template>
+    </DataTable>
     <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
   </div>
 </template>
@@ -122,8 +150,5 @@ onMounted(load);
 }
 .explainer {
   margin: 0 0 12px;
-}
-tr.clickable {
-  cursor: pointer;
 }
 </style>
