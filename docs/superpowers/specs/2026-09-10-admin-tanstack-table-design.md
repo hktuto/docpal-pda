@@ -43,10 +43,11 @@ would have to be wired into every page by hand.
     conflicts with the resize handles on the same `th`.
 
 - **Persistence per table.** One localStorage key `admin-table:<tableId>`
-  holding `{ sorting, sizing, order, visibility }` (same pattern as
-  `useColumnSort`'s `storageKey`). `tableId` is the entity path for
-  `CrudTable` and a page-specific slug for list pages. The old `admin-sort:*`
-  keys are abandoned (saved sort resets once).
+  holding `{ sorting, sizing, order, visibility }` (same pattern as the old
+  `useColumnSort` storageKey). Pages rendering the same table repeatedly
+  (receiving detail's per-group item tables) pass `syncKey` instead: those
+  instances share the column-state refs **live** and persist together under
+  `admin-table:<syncKey>`; pagination and rows stay per-instance.
 
 - **Scope of this branch.** `CrudTable` refactor (covers all 6 CRUD pages)
   plus the 3 main list pages (`picking-orders/index.vue`,

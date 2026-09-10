@@ -168,7 +168,10 @@ function tableForGroup(key: string): GroupTable {
   let inst = groupTables.get(key);
   if (!inst) {
     inst = useAdminTable<ReceivingItemRow>({
-      tableId: `receiving-detail-items-${key}`,
+      // All group tables are the same shape — syncKey makes them share
+      // sort/column order/width/visibility live and persist under one key.
+      tableId: "receiving-detail-items",
+      syncKey: "receiving-detail-items",
       columns: itemColumnDefs,
       rows: computed(() => groups.value.find((g) => g.key === key)?.items ?? []),
       getRowId: (it) => it.id,

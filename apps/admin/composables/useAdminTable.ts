@@ -45,6 +45,14 @@ export interface AdminColumnDef<T = any> {
 export interface AdminTableOptions<T> {
   /** Persistence identity: state is stored under `admin-table:<tableId>`. */
   tableId: string;
+  /**
+   * Share column state (sort, sizing, order, visibility) live across table
+   * instances with the same key — for pages rendering the same table
+   * repeatedly (e.g. per-group tables on receiving detail). Persistence is
+   * stored under `admin-table:<syncKey>`; defaults to tableId (no sharing).
+   * Pagination and rows always stay per-instance.
+   */
+  syncKey?: string;
   columns: MaybeRef<AdminColumnDef<T>[]>;
   rows: Ref<T[]>;
   getRowId?: (row: T) => string;
@@ -52,6 +60,17 @@ export interface AdminTableOptions<T> {
   server?: { total: Ref<number> };
   defaultPageSize?: number;
 }
+
+interface ColumnStateRefs {
+  sorting: Ref<SortingState>;
+  columnSizing: Ref<ColumnSizingState>;
+  columnOrder: Ref<ColumnOrderState>;
+  columnVisibility: Ref<ColumnVisibilityState>;
+}
+
+// Live column-state registry for syncKey sharing (module-level; the admin
+// app is SPA-only, so no cross-request leakage).
+const columnStateRegistry = new Map<string, ColumnStateRefs>();
 
 // Client processing + column-state features. Server mode reuses the same
 // features with manualSorting/manualPagination, which bypass the row models.
@@ -101,7 +120,8 @@ export function orderedLeafColumns(table: AdminTable<any>) {
 export function useAdminTable<T>(options: AdminTableOptions<T>) {
   const isServer = !!options.server;
   const defaultPageSize = options.defaultPageSize ?? 20;
-  const storageKey = `admin-table:${options.tableId}`;
+  const stateKey = options.syncKey ?? options.tableId;
+  const storageKey = `admin-table:${stateKey}`;
 
   const defaultVisibility = (): ColumnVisibilityState => {
     const visibility: ColumnVisibilityState = {};
@@ -111,63 +131,73 @@ export function useAdminTable<T>(options: AdminTableOptions<T>) {
     return visibility;
   };
 
-  const sorting = ref<SortingState>([]);
-  const pagination = ref<PaginationState>({ pageIndex: 0, pageSize: defaultPageSize });
-  const columnSizing = ref<ColumnSizingState>({});
-  const columnOrder = ref<ColumnOrderState>([]);
-  const columnVisibility = ref<ColumnVisibilityState>(defaultVisibility());
+  // Column state (sort/sizing/order/visibility) is shared live between
+  // instances with the same stateKey; the first instance creates and
+  // persists it. Pagination stays per-instance below.
+  let shared = columnStateRegistry.get(stateKey);
+  if (!shared) {
+    const sorting = ref<SortingState>([]);
+    const columnSizing = ref<ColumnSizingState>({});
+    const columnOrder = ref<ColumnOrderState>([]);
+    const columnVisibility = ref<ColumnVisibilityState>(defaultVisibility());
 
-  // Restore persisted state, dropping entries for columns that no longer exist.
-  if (typeof localStorage !== "undefined") {
-    try {
-      const raw = localStorage.getItem(storageKey);
-      if (raw) {
-        const persisted = JSON.parse(raw) as PersistedTableState;
-        const known = new Set(toValue(options.columns).map((d) => d.key));
-        if (Array.isArray(persisted.sorting)) {
-          sorting.value = persisted.sorting.filter((s) => known.has(s?.id));
-        }
-        if (persisted.sizing && typeof persisted.sizing === "object") {
-          columnSizing.value = Object.fromEntries(
-            Object.entries(persisted.sizing).filter(([k, v]) => known.has(k) && typeof v === "number")
-          );
-        }
-        if (Array.isArray(persisted.order)) {
-          columnOrder.value = persisted.order.filter((k): k is string => typeof k === "string" && known.has(k));
-        }
-        if (persisted.visibility && typeof persisted.visibility === "object") {
-          for (const [k, v] of Object.entries(persisted.visibility)) {
-            if (known.has(k) && typeof v === "boolean") columnVisibility.value[k] = v;
+    // Restore persisted state, dropping entries for columns that no longer exist.
+    if (typeof localStorage !== "undefined") {
+      try {
+        const raw = localStorage.getItem(storageKey);
+        if (raw) {
+          const persisted = JSON.parse(raw) as PersistedTableState;
+          const known = new Set(toValue(options.columns).map((d) => d.key));
+          if (Array.isArray(persisted.sorting)) {
+            sorting.value = persisted.sorting.filter((s) => known.has(s?.id));
+          }
+          if (persisted.sizing && typeof persisted.sizing === "object") {
+            columnSizing.value = Object.fromEntries(
+              Object.entries(persisted.sizing).filter(([k, v]) => known.has(k) && typeof v === "number")
+            );
+          }
+          if (Array.isArray(persisted.order)) {
+            columnOrder.value = persisted.order.filter((k): k is string => typeof k === "string" && known.has(k));
+          }
+          if (persisted.visibility && typeof persisted.visibility === "object") {
+            for (const [k, v] of Object.entries(persisted.visibility)) {
+              if (known.has(k) && typeof v === "boolean") columnVisibility.value[k] = v;
+            }
           }
         }
+      } catch {
+        // Corrupt/legacy value — ignore and start from defaults.
       }
-    } catch {
-      // Corrupt/legacy value — ignore and start from defaults.
     }
-  }
 
-  let saveTimer: ReturnType<typeof setTimeout> | undefined;
-  watch(
-    [sorting, columnSizing, columnOrder, columnVisibility],
-    () => {
-      if (typeof localStorage === "undefined") return;
-      clearTimeout(saveTimer);
-      saveTimer = setTimeout(() => {
-        try {
-          const state: PersistedTableState = {
-            sorting: sorting.value,
-            sizing: columnSizing.value,
-            order: columnOrder.value,
-            visibility: columnVisibility.value,
-          };
-          localStorage.setItem(storageKey, JSON.stringify(state));
-        } catch {
-          // Storage unavailable (quota/private mode) — the table still works.
-        }
-      }, 200);
-    },
-    { deep: true }
-  );
+    let saveTimer: ReturnType<typeof setTimeout> | undefined;
+    watch(
+      [sorting, columnSizing, columnOrder, columnVisibility],
+      () => {
+        if (typeof localStorage === "undefined") return;
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => {
+          try {
+            const state: PersistedTableState = {
+              sorting: sorting.value,
+              sizing: columnSizing.value,
+              order: columnOrder.value,
+              visibility: columnVisibility.value,
+            };
+            localStorage.setItem(storageKey, JSON.stringify(state));
+          } catch {
+            // Storage unavailable (quota/private mode) — the table still works.
+          }
+        }, 200);
+      },
+      { deep: true }
+    );
+
+    shared = { sorting, columnSizing, columnOrder, columnVisibility };
+    columnStateRegistry.set(stateKey, shared);
+  }
+  const { sorting, columnSizing, columnOrder, columnVisibility } = shared;
+  const pagination = ref<PaginationState>({ pageIndex: 0, pageSize: defaultPageSize });
 
   const tableColumns = computed<ColumnDef<typeof adminTableFeatures, T, any>[]>(() =>
     toValue(options.columns).map((def) => ({
