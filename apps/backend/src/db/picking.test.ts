@@ -1317,6 +1317,28 @@ test("picking order logs: order + item/package/box rows with actor name, newest 
   assert.deepEqual(byType.get("picking_package"), [p1]);
   assert.deepEqual(byType.get("shipping_box"), [box.id]);
 
+  // item transitions carry partNo in metadata
+  const scanned1 = logs.find((l) => l.entityType === "picking_item" && l.entityId === item1 && l.toState === "scanned");
+  assert.equal(scanned1!.metadata.partNo, "RK73H1JTTD1002F");
+  const boxed3 = logs.find((l) => l.entityType === "picking_item" && l.entityId === item3 && l.toState === "boxed");
+  assert.equal(boxed3!.metadata.partNo, "RK73B1JTTD181G");
+
+  // paged variant: { rows, total } with LIMIT/OFFSET over the same WHERE
+  const page1 = await listPickingOrderLogs(client.db, orderId, { page: 1, pageSize: 2 });
+  assert.ok(!Array.isArray(page1));
+  assert.equal(page1.total, logs.length);
+  assert.equal(page1.rows.length, 2);
+  assert.deepEqual(
+    page1.rows.map((l) => l.id),
+    logs.slice(0, 2).map((l) => l.id)
+  );
+
+  // q searches metadata::text — the partNo shows up in the item's scanned/boxed rows
+  const byPart = await listPickingOrderLogs(client.db, orderId, { page: 1, q: "RK73B1JTTD181G" });
+  assert.ok(!Array.isArray(byPart));
+  assert.equal(byPart.total, 2);
+  assert.deepEqual(byPart.rows.map((l) => l.toState), ["boxed", "scanned"]);
+
   const missing = await catchHttp(listPickingOrderLogs(client.db, randomUUID()));
   assert.equal(missing.status, 404);
   assert.equal(missing.message, "picking_order_not_found");

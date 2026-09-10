@@ -1203,6 +1203,12 @@ export default {
         orgSubInventory: "Org / 子库",
         invoiceTitle: "发票 {invoiceNo}",
         itemsCount: "{count} 项",
+        groupBy: "分组方式",
+        groupByInvoice: "发票",
+        groupByCarton: "箱号",
+        groupByItem: "料号",
+        ctnGroupTitle: "箱号 {ctnNo}",
+        itemGroupTitle: "料号 {itemNo}",
         deliverySuffix: "，交货 {date}",
         partNo: "零件编号",
         poLine: "PO / 行",
@@ -1251,8 +1257,10 @@ export default {
         time: "时间",
         actor: "操作者",
         transition: "状态变更",
+        item: "料号",
         details: "详情",
-        empty: "暂无记录。"
+        empty: "暂无记录。",
+        searchPlaceholder: "搜索记录…"
       },
       issues: {
         receivingTitle: "收货差异",

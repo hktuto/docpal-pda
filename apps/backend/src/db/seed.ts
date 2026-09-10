@@ -4,7 +4,6 @@ import type { PgTableWithColumns } from "drizzle-orm/pg-core";
 import { newId } from "./id.js";
 import { readFileSync } from "node:fs";
 import type { AppDb } from "../db.js";
-import { hashPassword } from "../auth/password.js";
 import {
   users,
   userGroups,
@@ -268,10 +267,11 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
   // its 162 auto-created suppliers, and the real net-weight table. Tests pass
   // bulkParts: false to keep the small, fast demo world.
   const bulk = opts?.bulkParts !== false ? loadBulkParts() : null;
-  // Demo passwords stay DocPal2026! / DocPalAdmin2026!, stored scrypt-hashed.
+  // Demo users — passwords are never stored locally (DocPal verifies
+  // credentials); the "" sentinel keeps the NOT NULL column happy.
   await db.insert(users).values([
-    { id: uid(1), username: "operator", passwordHash: await hashPassword("DocPal2026!"), displayName: "Demo Operator" },
-    { id: uid(2), username: "admin", passwordHash: await hashPassword("DocPalAdmin2026!"), displayName: "Demo Admin" },
+    { id: uid(1), username: "operator", passwordHash: "", displayName: "Demo Operator" },
+    { id: uid(2), username: "admin", passwordHash: "", displayName: "Demo Admin" },
   ]);
 
   await db.insert(userGroups).values([

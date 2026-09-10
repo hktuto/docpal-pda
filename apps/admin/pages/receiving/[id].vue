@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ReceivingOrderDetail, ReceivingItemRow, TransactionLogRow } from "~/utils/flowApi";
+import type { OrderLogsParams, OrderLogsPage, ReceivingOrderDetail, ReceivingItemRow } from "~/utils/flowApi";
 
 const route = useRoute();
 const orderId = route.params.id as string;
@@ -8,7 +8,10 @@ const { t } = useI18n();
 const apiBaseUrl = useRuntimeConfig().public.apiBaseUrl as string;
 
 const order = ref<ReceivingOrderDetail | null>(null);
-const logs = ref<TransactionLogRow[]>([]);
+// The audit-log table fetches itself; bump this key after mutations that
+// write logs so it reloads.
+const logsKey = ref(0);
+const fetchLogs = (p: OrderLogsParams): Promise<OrderLogsPage> => flow.listReceivingOrderLogs(orderId, p);
 const loading = ref(true);
 const error = ref("");
 
@@ -75,6 +78,7 @@ async function saveEdit(fields: Partial<Record<"dateCode" | "lotCode" | "coo" | 
     error.value = failed.map((f) => `${f.id}: ${f.message}`).join("; ");
   }
   await load();
+  logsKey.value++;
 }
 
 // Client-side invoice filter: an invoice matches when its invoiceNo contains
@@ -104,16 +108,73 @@ const filteredInvoices = computed(() => {
   return out;
 });
 
+// Group-by selector: invoice (default, current behavior), carton no, or item no.
+// Persisted in localStorage so the choice survives reloads/navigation.
+type GroupBy = "invoice" | "ctnNo" | "item";
+const GROUP_BY_STORAGE_KEY = "admin-group:receiving-detail";
+const groupBy = ref<GroupBy>("invoice");
+
+if (typeof localStorage !== "undefined") {
+  const stored = localStorage.getItem(GROUP_BY_STORAGE_KEY);
+  if (stored === "invoice" || stored === "ctnNo" || stored === "item") groupBy.value = stored;
+  watch(groupBy, (v) => {
+    try {
+      localStorage.setItem(GROUP_BY_STORAGE_KEY, v);
+    } catch {
+      // Storage unavailable — grouping still works.
+    }
+  });
+}
+
+type InvoiceRow = ReceivingOrderDetail["invoices"][number];
+interface ItemGroup {
+  key: string;
+  invoice: InvoiceRow | null;
+  items: ReceivingItemRow[];
+}
+
+const groups = computed<ItemGroup[]>(() => {
+  const invoices = filteredInvoices.value;
+  if (groupBy.value === "invoice") {
+    return invoices.map((inv) => ({ key: inv.id, invoice: inv, items: inv.items }));
+  }
+  const buckets = new Map<string, ReceivingItemRow[]>();
+  for (const inv of invoices) {
+    for (const it of inv.items) {
+      const k = groupBy.value === "ctnNo" ? (it.ctnNo ?? "") : (it.wclItemNo ?? it.partNo);
+      const arr = buckets.get(k);
+      if (arr) arr.push(it);
+      else buckets.set(k, [it]);
+    }
+  }
+  return [...buckets.entries()]
+    .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
+    .map(([key, items]) => ({ key, invoice: null, items }));
+});
+
+// Shared sort state across all group tables; checkbox/actions columns unsorted.
+const { sortKey, sortDir, toggleSort, sortRows } = useColumnSort("admin-sort:receiving-detail-items");
+
+function itemSortVal(item: ReceivingItemRow, key: string): unknown {
+  switch (key) {
+    case "partNo":
+      return item.wclItemNo ?? item.partNo;
+    case "poLine":
+      return `${item.poNo ?? ""}/${item.poLine ?? ""}`;
+    default:
+      return (item as any)[key];
+  }
+}
+
+function groupItems(group: ItemGroup): ReceivingItemRow[] {
+  return sortRows(group.items, itemSortVal);
+}
+
 async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const [detail, logRows] = await Promise.all([
-      flow.getReceivingOrder(orderId),
-      flow.listReceivingOrderLogs(orderId),
-    ]);
-    order.value = detail;
-    logs.value = logRows;
+    order.value = await flow.getReceivingOrder(orderId);
     deliveryDate.value = order.value.deliveryDate ? order.value.deliveryDate.slice(0, 10) : "";
     selected.value = new Set();
   } catch (e: any) {
@@ -130,6 +191,7 @@ async function saveDeliveryDate() {
   try {
     await flow.updateReceivingDeliveryDate(orderId, deliveryDate.value || null);
     await load();
+    logsKey.value++;
     dateMsg.value = "saved";
   } catch (e: any) {
     error.value = e.message;
@@ -153,6 +215,7 @@ async function confirmInHand() {
   try {
     await flow.confirmReceivingArrival(orderId);
     await load();
+    logsKey.value++;
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -194,6 +257,7 @@ async function actMismatch(item: ReceivingItemRow, action: "confirm" | "cancel")
     if (action === "confirm") await flow.confirmReceivingMismatch(item.id);
     else await flow.cancelReceivingMismatch(item.id);
     await load();
+    logsKey.value++;
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -275,6 +339,7 @@ async function submitIssue() {
     await flow.reportReceivingMismatch(item.id, body);
     issueItem.value = null;
     await load();
+    logsKey.value++;
   } catch (e: any) {
     issueError.value = e.message;
   } finally {
@@ -293,6 +358,7 @@ async function removeItem(item: ReceivingItemRow) {
   try {
     await flow.removeReceivingItem(item.id);
     await load();
+    logsKey.value++;
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -355,6 +421,11 @@ onMounted(load);
           class="search-input"
           :placeholder="$t('admin.pages.receiving.invoiceFilterPlaceholder')"
         />
+        <select v-model="groupBy" class="group-by-select" :aria-label="$t('admin.pages.receiving.groupBy')">
+          <option value="invoice">{{ $t("admin.pages.receiving.groupBy") }}: {{ $t("admin.pages.receiving.groupByInvoice") }}</option>
+          <option value="ctnNo">{{ $t("admin.pages.receiving.groupBy") }}: {{ $t("admin.pages.receiving.groupByCarton") }}</option>
+          <option value="item">{{ $t("admin.pages.receiving.groupBy") }}: {{ $t("admin.pages.receiving.groupByItem") }}</option>
+        </select>
       </div>
 
       <div v-if="selected.size > 0" class="batch-bar">
@@ -367,14 +438,24 @@ onMounted(load);
         </button>
       </div>
 
-      <template v-for="inv in filteredInvoices" :key="inv.id">
+      <template v-for="group in groups" :key="group.key">
         <h2 class="section-title">
-          {{ $t("admin.pages.receiving.invoiceTitle", { invoiceNo: inv.invoiceNo }) }}
-          <span class="muted">
-            — {{ $t("admin.pages.receiving.orgSubInventory") }}: {{ inv.orgId }}
-            · {{ $t("admin.pages.receiving.itemsCount", { count: inv.items.length })
-            }}{{ inv.deliveryDate ? $t("admin.pages.receiving.deliverySuffix", { date: new Date(inv.deliveryDate).toLocaleDateString() }) : "" }}
-          </span>
+          <template v-if="group.invoice">
+            {{ $t("admin.pages.receiving.invoiceTitle", { invoiceNo: group.invoice.invoiceNo }) }}
+            <span class="muted">
+              — {{ $t("admin.pages.receiving.orgSubInventory") }}: {{ group.invoice.orgId }}
+              · {{ $t("admin.pages.receiving.itemsCount", { count: group.items.length })
+              }}{{ group.invoice.deliveryDate ? $t("admin.pages.receiving.deliverySuffix", { date: new Date(group.invoice.deliveryDate).toLocaleDateString() }) : "" }}
+            </span>
+          </template>
+          <template v-else-if="groupBy === 'ctnNo'">
+            {{ $t("admin.pages.receiving.ctnGroupTitle", { ctnNo: group.key || "—" }) }}
+            <span class="muted">— {{ $t("admin.pages.receiving.itemsCount", { count: group.items.length }) }}</span>
+          </template>
+          <template v-else>
+            {{ $t("admin.pages.receiving.itemGroupTitle", { itemNo: group.key }) }}
+            <span class="muted">— {{ $t("admin.pages.receiving.itemsCount", { count: group.items.length }) }}</span>
+          </template>
         </h2>
         <div class="table-wrap">
           <table class="data invoice-table">
@@ -395,23 +476,47 @@ onMounted(load);
                 <th>
                   <input
                     type="checkbox"
-                    :checked="invoiceAllSelected(inv)"
-                    @change="toggleInvoice(inv, ($event.target as HTMLInputElement).checked)"
+                    :checked="invoiceAllSelected(group)"
+                    @change="toggleInvoice(group, ($event.target as HTMLInputElement).checked)"
                   />
                 </th>
-                <th>{{ $t("admin.pages.receiving.partNo") }}</th>
-                <th>{{ $t("admin.pages.receiving.poLine") }}</th>
-                <th>{{ $t("admin.pages.receiving.expected") }}</th>
-                <th>{{ $t("admin.pages.receiving.received") }}</th>
-                <th>{{ $t("admin.pages.receiving.putAway") }}</th>
-                <th>{{ $t("admin.pages.receiving.allocated") }}</th>
-                <th>{{ $t("admin.pages.receiving.ctnNo") }}</th>
-                <th>{{ $t("admin.pages.receiving.dateCode") }}</th>
+                <th class="sortable" @click="toggleSort('partNo')">
+                  {{ $t("admin.pages.receiving.partNo") }}
+                  <span v-if="sortKey === 'partNo'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+                </th>
+                <th class="sortable" @click="toggleSort('poLine')">
+                  {{ $t("admin.pages.receiving.poLine") }}
+                  <span v-if="sortKey === 'poLine'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+                </th>
+                <th class="sortable" @click="toggleSort('lineQty')">
+                  {{ $t("admin.pages.receiving.expected") }}
+                  <span v-if="sortKey === 'lineQty'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+                </th>
+                <th class="sortable" @click="toggleSort('receivedQty')">
+                  {{ $t("admin.pages.receiving.received") }}
+                  <span v-if="sortKey === 'receivedQty'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+                </th>
+                <th class="sortable" @click="toggleSort('putAwayQty')">
+                  {{ $t("admin.pages.receiving.putAway") }}
+                  <span v-if="sortKey === 'putAwayQty'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+                </th>
+                <th class="sortable" @click="toggleSort('allocatedQty')">
+                  {{ $t("admin.pages.receiving.allocated") }}
+                  <span v-if="sortKey === 'allocatedQty'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+                </th>
+                <th class="sortable" @click="toggleSort('ctnNo')">
+                  {{ $t("admin.pages.receiving.ctnNo") }}
+                  <span v-if="sortKey === 'ctnNo'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+                </th>
+                <th class="sortable" @click="toggleSort('dateCode')">
+                  {{ $t("admin.pages.receiving.dateCode") }}
+                  <span v-if="sortKey === 'dateCode'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+                </th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="item in inv.items" :key="item.id">
+              <tr v-for="item in groupItems(group)" :key="item.id">
                 <td>
                   <input
                     type="checkbox"
@@ -472,11 +577,11 @@ onMounted(load);
         </div>
       </template>
       <p v-if="order.invoices.length === 0" class="muted">{{ $t("admin.pages.receiving.noInvoices") }}</p>
-      <p v-else-if="filteredInvoices.length === 0" class="muted">
+      <p v-else-if="groups.length === 0" class="muted">
         {{ $t("admin.pages.receiving.noInvoicesMatch") }}
       </p>
 
-      <AuditLogTable :logs="logs" />
+      <AuditLogTable :fetch-logs="fetchLogs" :refresh-key="logsKey" />
     </template>
 
     <div
@@ -563,6 +668,30 @@ onMounted(load);
   color: #b91c1c;
   font-size: 12px;
   margin-top: 2px;
+}
+.group-by-select {
+  padding: 7px 9px;
+  border: 1px solid #b6c2cd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+.search-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px 0;
+}
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+th.sortable:hover {
+  color: var(--brand-teal-dark);
+}
+.sort-arrow {
+  font-size: 9px;
+  margin-left: 3px;
 }
 /* Fixed layout + identical colgroup keeps every invoice table's columns aligned. */
 .invoice-table {

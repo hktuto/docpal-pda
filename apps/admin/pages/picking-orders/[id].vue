@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { PickingOrderDetail, TransactionLogRow } from "~/utils/flowApi";
+import type { OrderLogsParams, OrderLogsPage, PickingOrderDetail } from "~/utils/flowApi";
 
 const route = useRoute();
 const orderId = route.params.id as string;
@@ -7,7 +7,10 @@ const flow = useFlowApi();
 const { t } = useI18n();
 
 const order = ref<PickingOrderDetail | null>(null);
-const logs = ref<TransactionLogRow[]>([]);
+// The audit-log table fetches itself; bump this key after mutations that
+// write logs so it reloads.
+const logsKey = ref(0);
+const fetchLogs = (p: OrderLogsParams): Promise<OrderLogsPage> => flow.listPickingOrderLogs(orderId, p);
 const loading = ref(true);
 const error = ref("");
 
@@ -34,6 +37,38 @@ const reportSubmitting = ref(false);
 const reportDismiss = useOverlayDismiss(() => (reportOpen.value = false));
 
 const totalQty = computed(() => (order.value?.items ?? []).reduce((sum, i) => sum + i.qty, 0));
+
+// Independent sort state per table (items vs shipping boxes).
+const itemsSort = useColumnSort("admin-sort:picking-detail-items");
+const boxesSort = useColumnSort("admin-sort:picking-detail-boxes");
+
+function itemSortVal(item: PickingOrderDetail["items"][number], key: string): unknown {
+  switch (key) {
+    case "partNo":
+      return item.wclItemNo ?? item.partNo;
+    case "line":
+      return item.lineNumber ?? 0;
+    case "allocations":
+      return item.allocations.length;
+    case "packages":
+      return item.packages.length;
+    default:
+      return (item as any)[key];
+  }
+}
+
+const sortedItems = computed(() => itemsSort.sortRows(order.value?.items ?? [], itemSortVal));
+
+function boxSortVal(b: PickingOrderDetail["boxes"][number], key: string): unknown {
+  switch (key) {
+    case "netGross":
+      return b.netWeight ?? 0;
+    default:
+      return (b as any)[key];
+  }
+}
+
+const sortedBoxes = computed(() => boxesSort.sortRows(order.value?.boxes ?? [], boxSortVal));
 
 function openReportModal() {
   reportReason.value = "";
@@ -82,6 +117,7 @@ async function submitReport() {
     await flow.reportPickingIssue(orderId, entry);
     reportOpen.value = false;
     await load();
+    logsKey.value++;
   } catch (e: any) {
     reportError.value = e.message;
   } finally {
@@ -93,12 +129,7 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const [detail, logRows] = await Promise.all([
-      flow.getPickingOrder(orderId),
-      flow.listPickingOrderLogs(orderId),
-    ]);
-    order.value = detail;
-    logs.value = logRows;
+    order.value = await flow.getPickingOrder(orderId);
     deliveryDate.value = order.value.deliveryDate ? order.value.deliveryDate.slice(0, 10) : "";
   } catch (e: any) {
     error.value = e.message;
@@ -114,6 +145,7 @@ async function saveDeliveryDate() {
   try {
     await flow.updatePickingDeliveryDate(orderId, deliveryDate.value || null);
     await load();
+    logsKey.value++;
     dateMsg.value = "saved";
   } catch (e: any) {
     error.value = e.message;
@@ -130,6 +162,7 @@ async function resolveIssue() {
   try {
     await flow.resolvePickingIssue(orderId, note);
     await load();
+    logsKey.value++;
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -219,17 +252,38 @@ onMounted(load);
         <table class="data">
           <thead>
             <tr>
-              <th>{{ $t("admin.fields.partNo") }}</th>
-              <th>{{ $t("admin.pages.pickingOrders.line") }}</th>
-              <th>{{ $t("admin.pages.pickingOrders.required") }}</th>
-              <th>{{ $t("admin.pages.pickingOrders.allocated") }}</th>
-              <th>{{ $t("admin.pages.pickingOrders.picked") }}</th>
-              <th>{{ $t("admin.pages.pickingOrders.allocations") }}</th>
-              <th>{{ $t("admin.pages.pickingOrders.packages") }}</th>
+              <th class="sortable" @click="itemsSort.toggleSort('partNo')">
+                {{ $t("admin.fields.partNo") }}
+                <span v-if="itemsSort.sortKey.value === 'partNo'" class="sort-arrow">{{ itemsSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
+              </th>
+              <th class="sortable" @click="itemsSort.toggleSort('line')">
+                {{ $t("admin.pages.pickingOrders.line") }}
+                <span v-if="itemsSort.sortKey.value === 'line'" class="sort-arrow">{{ itemsSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
+              </th>
+              <th class="sortable" @click="itemsSort.toggleSort('qty')">
+                {{ $t("admin.pages.pickingOrders.required") }}
+                <span v-if="itemsSort.sortKey.value === 'qty'" class="sort-arrow">{{ itemsSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
+              </th>
+              <th class="sortable" @click="itemsSort.toggleSort('allocatedQty')">
+                {{ $t("admin.pages.pickingOrders.allocated") }}
+                <span v-if="itemsSort.sortKey.value === 'allocatedQty'" class="sort-arrow">{{ itemsSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
+              </th>
+              <th class="sortable" @click="itemsSort.toggleSort('pickedQty')">
+                {{ $t("admin.pages.pickingOrders.picked") }}
+                <span v-if="itemsSort.sortKey.value === 'pickedQty'" class="sort-arrow">{{ itemsSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
+              </th>
+              <th class="sortable" @click="itemsSort.toggleSort('allocations')">
+                {{ $t("admin.pages.pickingOrders.allocations") }}
+                <span v-if="itemsSort.sortKey.value === 'allocations'" class="sort-arrow">{{ itemsSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
+              </th>
+              <th class="sortable" @click="itemsSort.toggleSort('packages')">
+                {{ $t("admin.pages.pickingOrders.packages") }}
+                <span v-if="itemsSort.sortKey.value === 'packages'" class="sort-arrow">{{ itemsSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
+              </th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in order.items" :key="item.id">
+            <tr v-for="item in sortedItems" :key="item.id">
               <td>{{ item.wclItemNo ?? item.partNo }}</td>
               <td>{{ item.lineNumber ?? "—" }} / {{ item.shipmentNumber ?? "—" }}</td>
               <td>{{ item.qty }}</td>
@@ -257,16 +311,34 @@ onMounted(load);
         <table class="data">
           <thead>
             <tr>
-              <th>{{ $t("admin.pages.pickingOrders.boxId") }}</th>
-              <th>{{ $t("admin.pages.pickingOrders.status") }}</th>
-              <th>{{ $t("admin.pages.pickingOrders.size") }}</th>
-              <th>{{ $t("admin.pages.pickingOrders.netGross") }}</th>
-              <th>{{ $t("admin.pages.pickingOrders.destination") }}</th>
-              <th>{{ $t("admin.pages.pickingOrders.packages") }}</th>
+              <th class="sortable" @click="boxesSort.toggleSort('id')">
+                {{ $t("admin.pages.pickingOrders.boxId") }}
+                <span v-if="boxesSort.sortKey.value === 'id'" class="sort-arrow">{{ boxesSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
+              </th>
+              <th class="sortable" @click="boxesSort.toggleSort('status')">
+                {{ $t("admin.pages.pickingOrders.status") }}
+                <span v-if="boxesSort.sortKey.value === 'status'" class="sort-arrow">{{ boxesSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
+              </th>
+              <th class="sortable" @click="boxesSort.toggleSort('boxSize')">
+                {{ $t("admin.pages.pickingOrders.size") }}
+                <span v-if="boxesSort.sortKey.value === 'boxSize'" class="sort-arrow">{{ boxesSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
+              </th>
+              <th class="sortable" @click="boxesSort.toggleSort('netGross')">
+                {{ $t("admin.pages.pickingOrders.netGross") }}
+                <span v-if="boxesSort.sortKey.value === 'netGross'" class="sort-arrow">{{ boxesSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
+              </th>
+              <th class="sortable" @click="boxesSort.toggleSort('destinationCountry')">
+                {{ $t("admin.pages.pickingOrders.destination") }}
+                <span v-if="boxesSort.sortKey.value === 'destinationCountry'" class="sort-arrow">{{ boxesSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
+              </th>
+              <th class="sortable" @click="boxesSort.toggleSort('packageCount')">
+                {{ $t("admin.pages.pickingOrders.packages") }}
+                <span v-if="boxesSort.sortKey.value === 'packageCount'" class="sort-arrow">{{ boxesSort.sortDir.value === "asc" ? "▲" : "▼" }}</span>
+              </th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="b in order.boxes" :key="b.id">
+            <tr v-for="b in sortedBoxes" :key="b.id">
               <td>{{ b.id }}</td>
               <td>
                 {{ b.status }}
@@ -284,7 +356,7 @@ onMounted(load);
         </table>
       </div>
 
-      <AuditLogTable :logs="logs" />
+      <AuditLogTable :fetch-logs="fetchLogs" :refresh-key="logsKey" />
     </template>
 
     <div
@@ -352,5 +424,16 @@ onMounted(load);
   padding: 5px 7px;
   border: 1px solid #b6c2cd;
   border-radius: 4px;
+}
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+th.sortable:hover {
+  color: var(--brand-teal-dark);
+}
+.sort-arrow {
+  font-size: 9px;
+  margin-left: 3px;
 }
 </style>

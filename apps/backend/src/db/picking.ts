@@ -1,6 +1,6 @@
 import { newId } from "./id.js";
 import { HTTPException } from "hono/http-exception";
-import { inArray, sql } from "drizzle-orm";
+import { inArray, sql, type SQL } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { queryAll, queryGet, queryRun, type DbOrTx } from "./query.js";
 import { transactionLogs, inventoryTransactions } from "./schema/index.js";
@@ -515,6 +515,8 @@ export interface PickingOrderListRow {
   totalQty: number;
   pickedQty: number;
   allocatedQty: number;
+  createdDate: Date;
+  lastUpdateDate: Date;
 }
 
 /** List rows with per-order item/qty counts. `status`/`allocation` accept
@@ -544,6 +546,8 @@ export async function listPickingOrders(
         COALESCE(SUM(pi.qty), 0)::int AS "totalQty",
         COALESCE(SUM(pi.picked_qty), 0)::int AS "pickedQty",
         COALESCE(SUM(pi.allocated_qty), 0)::int AS "allocatedQty",
+        po.created_date AS "createdDate",
+        po.last_update_date AS "lastUpdateDate",
         COUNT(*) OVER ()::int AS "total"
       FROM picking_orders po
       LEFT JOIN picking_items pi ON pi.picking_order_id = po.id
@@ -1143,7 +1147,7 @@ export async function scanPickingItem(
       fromState: "picking",
       toState: "scanned",
       actorId: input.actorId,
-      metadata: { qty: input.qty, allocation: alloc.id },
+      metadata: { qty: input.qty, allocation: alloc.id, partNo: item.partNo },
     });
     // Scan-into-box: the packages landed boxed, so log the scanned→boxed
     // transition per portion (same shape as addPackageToBox) and prefill the
@@ -1156,7 +1160,7 @@ export async function scanPickingItem(
           fromState: "scanned",
           toState: "boxed",
           actorId: input.actorId,
-          metadata: { qty: p.qty, box: box.id },
+          metadata: { qty: p.qty, box: box.id, partNo: item.partNo },
         });
       }
       await prefillShippingBoxFromSources(tx, box.id);
@@ -1525,7 +1529,7 @@ export async function removeScannedPackage(db: AppDb, input: { packageId: string
       fromState: "scanned",
       toState: "removed",
       actorId: input.actorId,
-      metadata: { qty: pkg.qty, package: pkg.id },
+      metadata: { qty: pkg.qty, package: pkg.id, partNo: pkg.partNo },
     });
   });
 }
@@ -1732,10 +1736,10 @@ export async function addPackageToBox(
   input: { shippingBoxId: string; packageId: string; actorId: string }
 ): Promise<void> {
   return db.transaction(async (tx) => {
-    const pkg = await queryGet<{ id: string; pickingItemId: string; pickingOrderId: string; shippingBoxId: string | null; qty: number }>(
+    const pkg = await queryGet<{ id: string; pickingItemId: string; pickingOrderId: string; shippingBoxId: string | null; qty: number; partNo: string }>(
       tx,
       sql`SELECT pp.id, pp.picking_item_id AS "pickingItemId", pi.picking_order_id AS "pickingOrderId",
-                 pp.shipping_box_id AS "shippingBoxId", pp.qty
+                 pp.shipping_box_id AS "shippingBoxId", pp.qty, pi.part_no AS "partNo"
           FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id WHERE pp.id = ${input.packageId}`
     );
     if (!pkg) throw new HTTPException(404, { message: "package_not_found" });
@@ -1754,7 +1758,7 @@ export async function addPackageToBox(
       fromState: "scanned",
       toState: "boxed",
       actorId: input.actorId,
-      metadata: { qty: pkg.qty, box: box.id },
+      metadata: { qty: pkg.qty, box: box.id, partNo: pkg.partNo },
     });
     await maybeAutoFinishPickingOrder(tx, { pickingOrderId: pkg.pickingOrderId, actorId: input.actorId });
   });
@@ -1771,9 +1775,9 @@ export async function addAllUnboxedToShippingBox(
     if (box.status !== "open") throw new HTTPException(409, { message: "shipping_box_not_open" });
     const order = await loadOrderForWrite(tx, box.pickingOrderId!);
     assertOrderWritable(order);
-    const packages = await queryAll<{ id: string; pickingItemId: string; qty: number }>(
+    const packages = await queryAll<{ id: string; pickingItemId: string; qty: number; partNo: string }>(
       tx,
-      sql`SELECT pp.id, pp.picking_item_id AS "pickingItemId", pp.qty
+      sql`SELECT pp.id, pp.picking_item_id AS "pickingItemId", pp.qty, pi.part_no AS "partNo"
           FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id
           WHERE pi.picking_order_id = ${box.pickingOrderId} AND pp.shipping_box_id IS NULL
           ORDER BY pp.created_date ASC, pp.id ASC`
@@ -1786,7 +1790,7 @@ export async function addAllUnboxedToShippingBox(
         fromState: "scanned",
         toState: "boxed",
         actorId: input.actorId,
-        metadata: { qty: pkg.qty, box: box.id },
+        metadata: { qty: pkg.qty, box: box.id, partNo: pkg.partNo },
       });
     }
     await prefillShippingBoxFromSources(tx, box.id);
@@ -1805,10 +1809,10 @@ export async function removePackageFromBox(
   input: { shippingBoxId: string; packageId: string; actorId: string }
 ): Promise<void> {
   return db.transaction(async (tx) => {
-    const pkg = await queryGet<{ id: string; pickingItemId: string; pickingOrderId: string; shippingBoxId: string | null; qty: number }>(
+    const pkg = await queryGet<{ id: string; pickingItemId: string; pickingOrderId: string; shippingBoxId: string | null; qty: number; partNo: string }>(
       tx,
       sql`SELECT pp.id, pp.picking_item_id AS "pickingItemId", pi.picking_order_id AS "pickingOrderId",
-                 pp.shipping_box_id AS "shippingBoxId", pp.qty
+                 pp.shipping_box_id AS "shippingBoxId", pp.qty, pi.part_no AS "partNo"
           FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id WHERE pp.id = ${input.packageId}`
     );
     if (!pkg || pkg.shippingBoxId !== input.shippingBoxId) {
@@ -1827,7 +1831,7 @@ export async function removePackageFromBox(
       fromState: "boxed",
       toState: "scanned",
       actorId: input.actorId,
-      metadata: { qty: pkg.qty, box: box.id },
+      metadata: { qty: pkg.qty, box: box.id, partNo: pkg.partNo },
     });
   });
 }
@@ -2154,27 +2158,85 @@ export interface TransactionLogRow {
   createdDate: Date;
 }
 
+/** Server-paging params for the order audit-log lists (same convention as
+ *  the CRUD routes: page 1-based, pageSize default 50 max 200). */
+export interface OrderLogsParams {
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  sort?: string;
+  dir?: "asc" | "desc";
+}
+
+export interface OrderLogsPage {
+  rows: TransactionLogRow[];
+  total: number;
+}
+
+const LOG_SORTS: Record<string, SQL> = {
+  createdDate: sql`tl.created_date`,
+  actorName: sql`u.display_name`,
+  toState: sql`tl.to_state`,
+};
+
+/** Shared SELECT/ORDER BY helpers for the order-log queries. `where` already
+ *  scopes the rows to one order; `q` adds the ILIKE search predicate. */
+function logsQueryParts(params: OrderLogsParams | undefined, scope: SQL) {
+  const q = params?.q?.trim();
+  const like = `%${(q ?? "").replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
+  const where = q
+    ? sql`${scope} AND (u.display_name ILIKE ${like} OR tl.from_state ILIKE ${like} OR tl.to_state ILIKE ${like} OR tl.entity_type ILIKE ${like} OR tl.metadata::text ILIKE ${like})`
+    : scope;
+  const col = LOG_SORTS[params?.sort ?? ""] ?? LOG_SORTS.createdDate;
+  const dir = params?.dir === "asc" ? sql`ASC` : sql`DESC`;
+  return { where, orderBy: sql`ORDER BY ${col} ${dir} NULLS LAST, tl.id ${dir}` };
+}
+
 /** Audit trail for one picking order: order-level rows plus the rows logged
- *  against its items, packages, and shipping boxes, newest first. 404 when
- *  the order does not exist. */
-export async function listPickingOrderLogs(db: AppDb, orderId: string): Promise<TransactionLogRow[]> {
+ *  against its items, packages, and shipping boxes, newest first by default.
+ *  With `params.page` set returns `{ rows, total }` (LIMIT/OFFSET + COUNT
+ *  over the same WHERE); otherwise the full array. 404 when the order does
+ *  not exist. */
+export async function listPickingOrderLogs(
+  db: AppDb,
+  orderId: string,
+  params?: OrderLogsParams
+): Promise<TransactionLogRow[] | OrderLogsPage> {
   const order = await queryGet<{ id: string }>(db, sql`SELECT id FROM picking_orders WHERE id = ${orderId}`);
   if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
+  const { where, orderBy } = logsQueryParts(
+    params,
+    sql`(tl.entity_type = 'picking_order' AND tl.entity_id = ${orderId})
+        OR (tl.entity_type = 'picking_item' AND tl.entity_id IN (
+              SELECT id FROM picking_items WHERE picking_order_id = ${orderId}))
+        OR (tl.entity_type = 'picking_package' AND tl.entity_id IN (
+              SELECT id FROM picking_packages WHERE picking_order_id = ${orderId}))
+        OR (tl.entity_type = 'shipping_box' AND tl.entity_id IN (
+              SELECT id FROM shipping_boxes WHERE picking_order_id = ${orderId}))`
+  );
+  const from = sql`FROM transaction_logs tl LEFT JOIN users u ON u.id = tl.actor_id WHERE ${where}`;
+  if (params?.page !== undefined) {
+    const page = Math.max(1, params.page);
+    const pageSize = Math.min(200, Math.max(1, params.pageSize ?? 50));
+    const [rows, count] = await Promise.all([
+      queryAll<TransactionLogRow>(
+        db,
+        sql`SELECT tl.id, tl.entity_type AS "entityType", tl.entity_id AS "entityId",
+                   tl.from_state AS "fromState", tl.to_state AS "toState",
+                   tl.actor_id AS "actorId", u.display_name AS "actorName",
+                   tl.metadata, tl.created_date AS "createdDate"
+            ${from} ${orderBy} LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`
+      ),
+      queryGet<{ total: number }>(db, sql`SELECT COUNT(*)::int AS total ${from}`),
+    ]);
+    return { rows, total: count?.total ?? 0 };
+  }
   return queryAll<TransactionLogRow>(
     db,
     sql`SELECT tl.id, tl.entity_type AS "entityType", tl.entity_id AS "entityId",
                tl.from_state AS "fromState", tl.to_state AS "toState",
                tl.actor_id AS "actorId", u.display_name AS "actorName",
                tl.metadata, tl.created_date AS "createdDate"
-        FROM transaction_logs tl
-        LEFT JOIN users u ON u.id = tl.actor_id
-        WHERE (tl.entity_type = 'picking_order' AND tl.entity_id = ${orderId})
-           OR (tl.entity_type = 'picking_item' AND tl.entity_id IN (
-                 SELECT id FROM picking_items WHERE picking_order_id = ${orderId}))
-           OR (tl.entity_type = 'picking_package' AND tl.entity_id IN (
-                 SELECT id FROM picking_packages WHERE picking_order_id = ${orderId}))
-           OR (tl.entity_type = 'shipping_box' AND tl.entity_id IN (
-                 SELECT id FROM shipping_boxes WHERE picking_order_id = ${orderId}))
-        ORDER BY tl.created_date DESC, tl.id DESC`
+        ${from} ${orderBy}`
   );
 }

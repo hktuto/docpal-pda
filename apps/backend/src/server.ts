@@ -10,7 +10,11 @@ const port = Number(process.env.PORT ?? 3002);
 
 serve({ fetch: app.fetch, port }, (info) => {
   console.log(`backend listening on http://localhost:${info.port}`);
-  console.log(`[auth] login mode: ${docpalBaseUrl() ? `DocPal-delegated (${docpalBaseUrl()})` : "local scrypt (DOCPAL_URL not set)"}`);
+  if (docpalBaseUrl()) {
+    console.log(`[auth] DocPal identity provider: ${docpalBaseUrl()}`);
+  } else {
+    console.warn("[auth] DOCPAL_URL is not set — /auth/login will fail (500). Set it to the DocPal API base URL.");
+  }
 });
 
 // Probe DocPal reachability once at boot so container → DocPal network

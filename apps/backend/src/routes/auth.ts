@@ -5,7 +5,6 @@ import { sql } from "drizzle-orm";
 import { db } from "../db.js";
 import { queryAll, queryGet } from "../db/query.js";
 import { newId } from "../db/id.js";
-import { hashPassword, isLegacyPlaintext, verifyPassword } from "../auth/password.js";
 import { signAuthToken } from "../auth/jwt.js";
 import { actorFrom } from "../auth/middleware.js";
 import { docpalBaseUrl, docpalGroupMapping } from "../config.js";
@@ -75,8 +74,8 @@ async function loginViaDocpal(username: string, password: string): Promise<Login
       throw new HTTPException(403, { message: "user has no WMS access" });
     }
     const authUser = await db.transaction(async (tx) => {
-      // Upsert the local user. password_hash = "" is an unverifiable sentinel
-      // (empty passwords are rejected at the 400 check before any compare).
+      // Upsert the local user. password_hash = "" — passwords are never
+      // stored locally; DocPal is the only credential verifier.
       const existing = await queryGet<UserRow>(
         tx,
         sql`SELECT id, username, display_name AS "displayName" FROM users WHERE username = ${profile.username}`
@@ -110,33 +109,18 @@ async function loginViaDocpal(username: string, password: string): Promise<Login
   }
 }
 
-// Login: when DOCPAL_URL is set, credentials are verified against the DocPal
-// API (see loginViaDocpal). Otherwise scrypt verify against
-// users.password_hash. Legacy plain-text rows (pre-auth demo data) verify by
-// direct compare and are lazily re-hashed on success, upgrading the row in
-// place.
+// Login: credentials are always verified against the DocPal API (see
+// loginViaDocpal) — users must be DocPal users. Without DOCPAL_URL there is
+// no identity provider, so login fails fast with 500.
 authRoute.post("/auth/login", async (c) => {
   const body = await readJson<LoginRequest>(c);
   if (!body.username || !body.password) {
     throw new HTTPException(400, { message: "username and password are required" });
   }
-  if (docpalBaseUrl()) {
-    return c.json(await loginViaDocpal(body.username, body.password), 200);
+  if (!docpalBaseUrl()) {
+    throw new HTTPException(500, { message: "DOCPAL_URL is not configured" });
   }
-  const user = await queryGet<UserRow & { passwordHash: string }>(
-    db,
-    sql`SELECT id, username, display_name AS "displayName", password_hash AS "passwordHash" FROM users WHERE username = ${body.username}`
-  );
-  if (!user || !(await verifyPassword(body.password, user.passwordHash))) {
-    throw new HTTPException(401, { message: "invalid credentials" });
-  }
-  if (isLegacyPlaintext(user.passwordHash)) {
-    await db.execute(sql`UPDATE users SET password_hash = ${await hashPassword(body.password)} WHERE id = ${user.id}`);
-  }
-  const authUser = await toAuthUser(user);
-  const token = await signAuthToken(authUser);
-  const response: LoginResponse = { user: authUser, token };
-  return c.json(response, 200);
+  return c.json(await loginViaDocpal(body.username, body.password), 200);
 });
 
 // Stateless: the client discards the token. The endpoint exists so clients

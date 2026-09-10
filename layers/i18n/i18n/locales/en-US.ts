@@ -1205,6 +1205,12 @@ export default {
         orgSubInventory: "Org / Sub-inventory",
         invoiceTitle: "Invoice {invoiceNo}",
         itemsCount: "{count} items",
+        groupBy: "Group by",
+        groupByInvoice: "Invoice",
+        groupByCarton: "Carton",
+        groupByItem: "Item No",
+        ctnGroupTitle: "Carton {ctnNo}",
+        itemGroupTitle: "Item {itemNo}",
         deliverySuffix: ", delivery {date}",
         partNo: "Part No",
         poLine: "PO / Line",
@@ -1254,8 +1260,10 @@ export default {
         time: "Time",
         actor: "Actor",
         transition: "Transition",
+        item: "Item",
         details: "Details",
-        empty: "No log entries."
+        empty: "No log entries.",
+        searchPlaceholder: "Search logs…"
       },
       issues: {
         receivingTitle: "Receiving Mismatches",

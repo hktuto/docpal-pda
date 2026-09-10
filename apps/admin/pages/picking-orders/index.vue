@@ -10,6 +10,8 @@ const search = ref("");
 
 const STATUSES = ["", "pending", "picking", "finished", "issue", "shipped"];
 
+const { sortKey, sortDir, toggleSort, sortRows } = useColumnSort("admin-sort:picking-list");
+
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase();
   if (!q) return rows.value;
@@ -22,7 +24,27 @@ const filtered = computed(() => {
   );
 });
 
-const { page, pageSize, total, paged } = usePaging(filtered);
+// Display values for derived columns (mirror what the <td> renders).
+function getVal(r: PickingOrderRow, key: string): unknown {
+  switch (key) {
+    case "pickedRatio":
+      return r.totalQty > 0 ? r.pickedQty / r.totalQty : 0;
+    case "allocation":
+      return r.totalQty > 0 ? r.allocatedQty / r.totalQty : 0;
+    case "deliveryDate":
+      return r.deliveryDate ?? "";
+    case "createdDate":
+      return r.createdDate;
+    case "lastUpdateDate":
+      return r.lastUpdateDate;
+    default:
+      return (r as any)[key];
+  }
+}
+
+const sorted = computed(() => sortRows(filtered.value, getVal));
+
+const { page, pageSize, total, paged } = usePaging(sorted);
 
 async function load() {
   loading.value = true;
@@ -64,17 +86,58 @@ onMounted(load);
       <table class="data">
         <thead>
           <tr>
-            <th>#</th>
-            <th>{{ $t("admin.pages.pickingOrders.orderNo") }}</th>
-            <th>{{ $t("admin.pages.pickingOrders.status") }}</th>
-            <th>{{ $t("admin.pages.pickingOrders.customer") }}</th>
-            <th>{{ $t("admin.pages.pickingOrders.poNo") }}</th>
-            <th>{{ $t("admin.pages.pickingOrders.shipTo") }}</th>
-            <th>{{ $t("admin.pages.pickingOrders.deliveryDate") }}</th>
-            <th>{{ $t("admin.pages.pickingOrders.items") }}</th>
-            <th>{{ $t("admin.pages.pickingOrders.pickedTotal") }}</th>
-            <th>{{ $t("admin.pages.pickingOrders.allocation") }}</th>
-            <th>{{ $t("admin.pages.pickingOrders.lockedBy") }}</th>
+            <th class="sortable" @click="toggleSort('prioritySeq')">
+              #
+              <span v-if="sortKey === 'prioritySeq'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('orderNo')">
+              {{ $t("admin.pages.pickingOrders.orderNo") }}
+              <span v-if="sortKey === 'orderNo'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('status')">
+              {{ $t("admin.pages.pickingOrders.status") }}
+              <span v-if="sortKey === 'status'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('customerCode')">
+              {{ $t("admin.pages.pickingOrders.customer") }}
+              <span v-if="sortKey === 'customerCode'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('poNo')">
+              {{ $t("admin.pages.pickingOrders.poNo") }}
+              <span v-if="sortKey === 'poNo'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('shipTo')">
+              {{ $t("admin.pages.pickingOrders.shipTo") }}
+              <span v-if="sortKey === 'shipTo'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('deliveryDate')">
+              {{ $t("admin.pages.pickingOrders.deliveryDate") }}
+              <span v-if="sortKey === 'deliveryDate'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('itemCount')">
+              {{ $t("admin.pages.pickingOrders.items") }}
+              <span v-if="sortKey === 'itemCount'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('pickedRatio')">
+              {{ $t("admin.pages.pickingOrders.pickedTotal") }}
+              <span v-if="sortKey === 'pickedRatio'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('allocation')">
+              {{ $t("admin.pages.pickingOrders.allocation") }}
+              <span v-if="sortKey === 'allocation'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('workingByName')">
+              {{ $t("admin.pages.pickingOrders.lockedBy") }}
+              <span v-if="sortKey === 'workingByName'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('createdDate')">
+              {{ $t("admin.common.createdDate") }}
+              <span v-if="sortKey === 'createdDate'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
+            <th class="sortable" @click="toggleSort('lastUpdateDate')">
+              {{ $t("admin.common.lastUpdateDate") }}
+              <span v-if="sortKey === 'lastUpdateDate'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -93,9 +156,11 @@ onMounted(load);
               ({{ r.allocatedQty }} / {{ r.totalQty }})
             </td>
             <td>{{ r.workingByName ?? "" }}</td>
+            <td>{{ new Date(r.createdDate).toLocaleString() }}</td>
+            <td>{{ new Date(r.lastUpdateDate).toLocaleString() }}</td>
           </tr>
           <tr v-if="total === 0">
-            <td colspan="11" class="muted">{{ $t("admin.pages.pickingOrders.none") }}</td>
+            <td colspan="13" class="muted">{{ $t("admin.pages.pickingOrders.none") }}</td>
           </tr>
         </tbody>
       </table>
@@ -122,5 +187,16 @@ onMounted(load);
 }
 tr.clickable {
   cursor: pointer;
+}
+th.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+th.sortable:hover {
+  color: var(--brand-teal-dark);
+}
+.sort-arrow {
+  font-size: 9px;
+  margin-left: 3px;
 }
 </style>

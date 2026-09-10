@@ -43,7 +43,9 @@
   (`DELETE /admin/receiving-invoice-items/:id`, 409 `item_work_started`,
   `item_removed` log row against the order). Both admin detail pages render
   the order's `transaction_logs` audit trail
-  (`GET /admin/receiving-orders/:id/logs`).
+  (`GET /admin/receiving-orders/:id/logs`, server-paged/searchable/sortable
+  via `?page=&pageSize=&q=&sort=&dir=`; item-typed rows carry
+  partNo/poNo/poLine in `metadata`).
 - Show the order's picking section (nested orders with items, allocations,
   packages, transition logs, and shipping boxes) on the detail's Picking tab.
   The tab (and its fetch) is hidden when flow config

@@ -1,15 +1,15 @@
-// Route-level auth tests: real login (scrypt), JWT middleware enforcement,
-// /events?token=, actor-from-token, DocPal-delegated login.
-// The app routers use the module-level db (src/db.ts), so DATABASE_URL must
-// point at the test database before src/index.ts is imported — hence the
-// dynamic import inside before().
+// Route-level auth tests: DocPal-delegated login, JWT middleware enforcement,
+// /events?token=, actor-from-token. The app routers use the module-level db
+// (src/db.ts), so DATABASE_URL must point at the test database before
+// src/index.ts is imported — hence the dynamic import inside before().
+// The demo-user logins (operator / admin) go through the shared fake DocPal
+// API started by test-helper.
 
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { sql } from "drizzle-orm";
-import { setupTestDb, reseed, TEST_DATABASE_URL, type TestDb } from "../db/test-helper.js";
+import { setupTestDb, reseed, TEST_DATABASE_URL, FAKE_DOCPAL_URL, type TestDb } from "../db/test-helper.js";
 import { queryAll, queryGet } from "../db/query.js";
-import { verifyPassword } from "./password.js";
 
 process.env.DATABASE_URL = TEST_DATABASE_URL;
 
@@ -67,21 +67,13 @@ test("login: wrong password and unknown user → 401", async () => {
   assert.equal((await login("nobody", "DocPal2026!")).status, 401);
 });
 
-test("login: legacy plain-text row is upgraded to scrypt on success", async () => {
-  await reseed(client);
-  const id = crypto.randomUUID();
-  await client.db.execute(
-    sql`INSERT INTO users (id, username, password_hash, display_name, created_date)
-        VALUES (${id}, 'legacy', ${"plain-pass"}, 'Legacy User', now())`
-  );
-  const res = await login("legacy", "plain-pass");
-  assert.equal(res.status, 200);
-  const row = await queryGet<{ passwordHash: string }>(
-    client.db,
-    sql`SELECT password_hash AS "passwordHash" FROM users WHERE id = ${id}`
-  );
-  assert.ok(row!.passwordHash.startsWith("scrypt:"), `expected scrypt hash, got ${row!.passwordHash}`);
-  assert.ok(await verifyPassword("plain-pass", row!.passwordHash));
+test("login: no DOCPAL_URL → 500 (DocPal is the only identity provider)", async (t) => {
+  const saved = process.env.DOCPAL_URL;
+  delete process.env.DOCPAL_URL;
+  t.after(() => {
+    process.env.DOCPAL_URL = saved ?? FAKE_DOCPAL_URL;
+  });
+  assert.equal((await login("operator", "DocPal2026!")).status, 500);
 });
 
 // --- middleware --------------------------------------------------------------
@@ -156,9 +148,10 @@ test("mutations take the actor from the token, not the body", async () => {
 });
 
 // --- DocPal-delegated login (spec 2026-08-13-docpal-auth-design) ------------
-// A node:http fake stands in for the DocPal API. DOCPAL_URL is toggled only
-// inside this block (test files run in separate processes), so the local-path
-// tests above are unaffected.
+// A second, per-test fake stands in for the DocPal API so each test controls
+// the profile/groups it returns. DOCPAL_URL is toggled only inside this block
+// (test files run in separate processes) and restored to the shared
+// test-helper fake afterwards.
 
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -223,7 +216,7 @@ test("docpal login: happy path provisions the local user and maps groups to loca
   const { server, url } = await startFakeDocpal();
   t.after(() => server.close());
   process.env.DOCPAL_URL = url;
-  t.after(() => delete process.env.DOCPAL_URL);
+  t.after(() => { process.env.DOCPAL_URL = FAKE_DOCPAL_URL; });
   await reseed(client);
 
   const res = await login("chris", "good-pass");
@@ -256,7 +249,7 @@ test("docpal login: second login keeps the id, refreshes name, replaces groups",
   const { server, url } = await startFakeDocpal();
   t.after(() => server.close());
   process.env.DOCPAL_URL = url;
-  t.after(() => delete process.env.DOCPAL_URL);
+  t.after(() => { process.env.DOCPAL_URL = FAKE_DOCPAL_URL; });
   await reseed(client);
 
   const first = (await (await login("chris", "good-pass")).json()).user;
@@ -279,7 +272,7 @@ test("docpal login: user with no mapped group gets 403", async (t) => {
   const { server, url } = await startFakeDocpal();
   t.after(() => server.close());
   process.env.DOCPAL_URL = url;
-  t.after(() => delete process.env.DOCPAL_URL);
+  t.after(() => { process.env.DOCPAL_URL = FAKE_DOCPAL_URL; });
   await reseed(client);
 
   fakeState.groups = [
@@ -299,6 +292,9 @@ test("docpal login: wrong password → 401; provider down → 502", async (t) =>
   const { server, url } = await startFakeDocpal();
   t.after(() => server.close());
   process.env.DOCPAL_URL = url;
+  t.after(() => {
+    process.env.DOCPAL_URL = FAKE_DOCPAL_URL;
+  });
   await reseed(client);
   fakeState.groups = [{ groupId: "WMS_Admin_Group_(HK)", groupName: "WMS Admin Group (HK)" }];
 
@@ -307,8 +303,4 @@ test("docpal login: wrong password → 401; provider down → 502", async (t) =>
   // Provider unreachable: nothing listens on this port.
   process.env.DOCPAL_URL = "http://127.0.0.1:1";
   assert.equal((await login("chris", "good-pass")).status, 502);
-
-  // Unsetting DOCPAL_URL restores the local login path.
-  delete process.env.DOCPAL_URL;
-  assert.equal((await login("operator", "DocPal2026!")).status, 200);
 });

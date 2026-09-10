@@ -28,9 +28,10 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   Failures are 401 `unauthorized`. The actor for every mutation comes from
   the token (`c.get("user")`) — request bodies no longer carry `actorId`.
   - `POST /auth/login` `{username, password}` →
-    `{user: {id, username, displayName, groupCodes}, token}` — scrypt verify
-    (`src/auth/password.ts`, `scrypt:N:r:p:salt:hash`); legacy plain-text rows
-    are lazily re-hashed on success. 401 `invalid credentials`.
+    `{user: {id, username, displayName, groupCodes}, token}` — credentials are
+    verified against the DocPal API (`DOCPAL_URL` required, 500 when unset) and
+    the local users row is auto-provisioned; 401 `invalid credentials`, 403
+    when no DocPal group maps to a WMS group.
   - `GET /auth/me` → the same `user` object, resolved fresh from the DB by
     token `sub` (client session restore).
   - `GET /auth/users/:id` → the same `user` object for any user.
@@ -344,7 +345,15 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   newest first) for the admin Issues page. The same router serves the admin
   audit-log reads `GET /admin/receiving-orders/:id/logs` /
   `GET /admin/picking-orders/:id/logs` (`transaction_logs` rows for the order
-  and its child entities, actor display name joined, newest first) and
+  and its child entities, actor display name joined, newest first by default).
+  The logs endpoints accept the CRUD-style server-paging params
+  `?page=&pageSize=&q=&sort=&dir=` (page 1-based, pageSize default 50 max 200;
+  `q` ILIKEs actor display_name / from_state / to_state / entity_type /
+  metadata::text; `sort` whitelist `createdDate` (default), `actorName`,
+  `toState`; `dir` asc|desc, default desc) and return `{rows, total}` when
+  `page` or `q` is present, the bare array otherwise. Item-typed rows carry
+  the item identifiers (`partNo`, plus `wclItemNo`/`poNo`/`poLine` where they
+  exist) in `metadata`. The router also serves
   `DELETE /admin/receiving-invoice-items/:id` — removes a not-yet-worked item
   (409 `item_work_started` when received/picked/put-away qty > 0 or
   allocations/shelf-box items reference it), logging `item_removed` against

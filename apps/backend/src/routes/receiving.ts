@@ -42,6 +42,8 @@ export interface ReceivingOrderListRow {
   itemCount: number;
   remainingItems: number;
   pendingPickingOrders: number;
+  createdDate: Date;
+  lastUpdateDate: Date;
 }
 
 export const receivingRoute = new Hono();
@@ -83,6 +85,8 @@ receivingRoute.get("/receiving-orders", async (c) => {
           WHERE po.status IN ('pending', 'picking')
             AND (a.receiving_order_id = ro.id OR inv2.receiving_order_id = ro.id)
         ) AS "pendingPickingOrders",
+        ro.created_date AS "createdDate",
+        ro.last_update_date AS "lastUpdateDate",
         COUNT(*) OVER ()::int AS "total"
       FROM receiving_orders ro
       LEFT JOIN suppliers s ON s.code = ro.supplier_code

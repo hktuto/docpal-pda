@@ -24,6 +24,8 @@ export interface PickingOrderRow {
   pickedQty: number;
   allocationStatus: string;
   allocatedQty: number;
+  createdDate: string;
+  lastUpdateDate: string;
 }
 
 export interface PickingItemRow {
@@ -76,6 +78,8 @@ export interface ReceivingOrderRow {
   itemCount: number;
   remainingItems: number;
   pendingPickingOrders: number;
+  createdDate: string;
+  lastUpdateDate: string;
 }
 
 export interface ReceivingItemRow {
@@ -258,6 +262,29 @@ export interface TransactionLogRow {
   createdDate: string;
 }
 
+export interface OrderLogsParams {
+  page: number;
+  pageSize: number;
+  q: string;
+  sort: string;
+  dir: "asc" | "desc";
+}
+
+export interface OrderLogsPage {
+  rows: TransactionLogRow[];
+  total: number;
+}
+
+function logsQuery(p: OrderLogsParams): string {
+  const qs = new URLSearchParams();
+  qs.set("page", String(p.page));
+  qs.set("pageSize", String(p.pageSize));
+  if (p.q) qs.set("q", p.q);
+  if (p.sort) qs.set("sort", p.sort);
+  qs.set("dir", p.dir);
+  return `?${qs}`;
+}
+
 export function useFlowApi() {
   const api = useApi();
   return {
@@ -308,11 +335,11 @@ export function useFlowApi() {
     saveFlowConfig: (value: Record<string, unknown>) =>
       api.put<FlowConfigState>("/admin/flow-config", value),
 
-    // Audit logs
-    listReceivingOrderLogs: (orderId: string) =>
-      api.get<TransactionLogRow[]>(`/admin/receiving-orders/${orderId}/logs`),
-    listPickingOrderLogs: (orderId: string) =>
-      api.get<TransactionLogRow[]>(`/admin/picking-orders/${orderId}/logs`),
+    // Audit logs (server-paged)
+    listReceivingOrderLogs: (orderId: string, params: OrderLogsParams) =>
+      api.get<OrderLogsPage>(`/admin/receiving-orders/${orderId}/logs${logsQuery(params)}`),
+    listPickingOrderLogs: (orderId: string, params: OrderLogsParams) =>
+      api.get<OrderLogsPage>(`/admin/picking-orders/${orderId}/logs${logsQuery(params)}`),
 
     // Stock search
     stockSearch: (params: { supplierCode?: string; partNo?: string }) => {

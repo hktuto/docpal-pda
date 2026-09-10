@@ -103,9 +103,11 @@ export async function updateReceivingItemFields(
   if (keys.length === 0) throw new HTTPException(400, { message: "no_fields" });
   const existing = await queryGet<Record<string, string | null>>(
     db,
-    sql`SELECT date_code AS "dateCode", lot_code AS "lotCode", coo, cow, ctn_no AS "ctnNo" FROM receiving_invoice_items WHERE id = ${input.itemId}`
+    sql`SELECT part_no AS "partNo", wcl_item_no AS "wclItemNo", date_code AS "dateCode", lot_code AS "lotCode", coo, cow, ctn_no AS "ctnNo" FROM receiving_invoice_items WHERE id = ${input.itemId}`
   );
   if (!existing) throw new HTTPException(404, { message: "receiving_invoice_item_not_found" });
+  const itemMeta: Record<string, unknown> = { partNo: existing.partNo };
+  if (existing.wclItemNo) itemMeta.wclItemNo = existing.wclItemNo;
   await queryRun(
     db,
     sql`UPDATE receiving_invoice_items SET ${sql.join(
@@ -117,6 +119,7 @@ export async function updateReceivingItemFields(
     const to = input.fields[k] ?? null;
     if (existing[k] === to) continue;
     await audit(db, "receiving_invoice_item", input.itemId, input.actorId, {
+      ...itemMeta,
       field: RECEIVING_ITEM_FIELDS[k],
       from: existing[k],
       to,
