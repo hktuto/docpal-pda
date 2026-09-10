@@ -949,7 +949,9 @@ export default {
       columns: "欄",
       resetColumns: "重設欄",
       moveToTop: "置頂",
-      fitToContent: "適應內容寬度（雙擊欄邊緣）"
+      fitToContent: "適應內容寬度（雙擊欄邊緣）",
+      sortBy: "排序",
+      noSort: "不排序"
     },
     pager: {
       rows: "共 {n} 行",
@@ -1187,12 +1189,13 @@ export default {
       },
       receiving: {
         title: "收貨單",
-        searchPlaceholder: "搜尋批次號 / 供應商",
+        searchPlaceholder: "搜尋批次號 / 供應商 / 發票號",
         batchNo: "批次號",
         status: "狀態",
         supplier: "供應商",
         deliveryDate: "交貨日期",
         invoices: "發票數",
+        invoiceNos: "發票號碼",
         items: "明細數",
         remaining: "剩餘",
         pendingPicking: "待揀貨",

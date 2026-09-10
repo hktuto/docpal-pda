@@ -949,7 +949,9 @@ export default {
       columns: "Columns",
       resetColumns: "Reset columns",
       moveToTop: "Move to top",
-      fitToContent: "Fit to content (double-click the column edge)"
+      fitToContent: "Fit to content (double-click the column edge)",
+      sortBy: "Sort by",
+      noSort: "No sorting"
     },
     pager: {
       rows: "{n} rows",
@@ -1189,12 +1191,13 @@ export default {
       },
       receiving: {
         title: "Receiving Orders",
-        searchPlaceholder: "Search batch no / supplier",
+        searchPlaceholder: "Search batch no / supplier / invoice no",
         batchNo: "Batch No",
         status: "Status",
         supplier: "Supplier",
         deliveryDate: "Delivery Date",
         invoices: "Invoices",
+        invoiceNos: "Invoice Numbers",
         items: "Items",
         remaining: "Remaining",
         pendingPicking: "Pending Picking",

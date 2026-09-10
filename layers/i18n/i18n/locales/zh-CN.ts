@@ -949,7 +949,9 @@ export default {
       columns: "列",
       resetColumns: "重置列",
       moveToTop: "置顶",
-      fitToContent: "适应内容宽度（双击列边缘）"
+      fitToContent: "适应内容宽度（双击列边缘）",
+      sortBy: "排序",
+      noSort: "不排序"
     },
     pager: {
       rows: "共 {n} 行",
@@ -1187,12 +1189,13 @@ export default {
       },
       receiving: {
         title: "收货单",
-        searchPlaceholder: "搜索批次号 / 供应商",
+        searchPlaceholder: "搜索批次号 / 供应商 / 发票号",
         batchNo: "批次号",
         status: "状态",
         supplier: "供应商",
         deliveryDate: "交货日期",
         invoices: "发票数",
+        invoiceNos: "发票号码",
         items: "明细数",
         remaining: "剩余",
         pendingPicking: "待拣货",

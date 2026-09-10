@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { VueDraggable } from "vue-draggable-plus";
 import { orderedLeafColumns, type AdminTable } from "~/composables/useAdminTable";
+import type { SortingState } from "@tanstack/vue-table";
 
 // Feature-inferred instance types (plain `Header<any, any, any>` loses the
 // registered-feature methods and fails assignability against our table).
@@ -125,16 +126,45 @@ function moveColumnToTop(index: number) {
   if (id) props.table.setColumnOrder([id, ...ids]);
 }
 
+// Sort-by dropdown next to the column switcher: makes the active sort
+// visible even when the sorted column is scrolled out of view, and offers
+// the same none→asc→desc cycle as clicking a header title.
+const { t } = useI18n();
+const sortMenuOpen = ref(false);
+const sortMenuRef = ref<HTMLElement | null>(null);
+
 function onDocumentClick(event: MouseEvent) {
   if (columnMenuRef.value && !columnMenuRef.value.contains(event.target as Node)) {
     columnMenuOpen.value = false;
   }
+  if (sortMenuRef.value && !sortMenuRef.value.contains(event.target as Node)) {
+    sortMenuOpen.value = false;
+  }
 }
-watch(columnMenuOpen, (open) => {
-  if (open) document.addEventListener("click", onDocumentClick);
+watch([columnMenuOpen, sortMenuOpen], ([colOpen, sortOpen]) => {
+  if (colOpen || sortOpen) document.addEventListener("click", onDocumentClick);
   else document.removeEventListener("click", onDocumentClick);
 });
 onBeforeUnmount(() => document.removeEventListener("click", onDocumentClick));
+
+// Sort-by dropdown state (refs declared above, next to onDocumentClick).
+const sortingState = computed<SortingState>(() => props.table.atoms.sorting?.get() ?? []);
+const sortableColumns = computed(() => orderedLeafColumns(props.table).filter((c) => c.getCanSort()));
+const activeSort = computed(() => sortingState.value[0]);
+const sortButtonLabel = computed(() => {
+  const s = activeSort.value;
+  if (!s) return t("admin.common.sortBy");
+  const col = props.table.getAllLeafColumns().find((c) => c.id === s.id);
+  return `${t("admin.common.sortBy")}: ${col ? columnLabel(col) : s.id} ${s.desc ? "▼" : "▲"}`;
+});
+
+function cycleSort(column: AnyColumn) {
+  column.toggleSorting(undefined, false);
+}
+
+function clearSort() {
+  props.table.setSorting([]);
+}
 
 // Selection: header checkbox toggles the current page's rows.
 function rowKey(row: { id: string; original: any }): string {
@@ -172,6 +202,34 @@ const emptyColspan = computed(
 <template>
   <div ref="rootRef">
     <div class="table-toolbar">
+      <div ref="sortMenuRef" class="column-menu-wrap">
+        <button
+          type="button"
+          class="btn btn-small"
+          :class="{ 'sort-active': !!activeSort }"
+          @click="sortMenuOpen = !sortMenuOpen"
+        >
+          {{ sortButtonLabel }} ▾
+        </button>
+        <div v-if="sortMenuOpen" class="column-menu">
+          <div class="column-menu-list">
+            <div class="column-menu-item">
+              <label class="column-menu-label sort-label" @click="clearSort()">
+                {{ $t("admin.common.noSort") }}
+                <span v-if="!activeSort" class="sort-arrow">✓</span>
+              </label>
+            </div>
+            <div v-for="col in sortableColumns" :key="col.id" class="column-menu-item">
+              <label class="column-menu-label sort-label" @click="cycleSort(col)">
+                {{ columnLabel(col) }}
+                <span v-if="col.getIsSorted()" class="sort-arrow">
+                  {{ col.getIsSorted() === "asc" ? "▲" : "▼" }}
+                </span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
       <div ref="columnMenuRef" class="column-menu-wrap">
         <button type="button" class="btn btn-small" @click="columnMenuOpen = !columnMenuOpen">
           {{ $t("admin.common.columns") }} ▾
@@ -295,6 +353,7 @@ const emptyColspan = computed(
 .table-toolbar {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   margin-bottom: 6px;
 }
 .column-menu-wrap {
@@ -365,6 +424,19 @@ const emptyColspan = computed(
   width: 100%;
   text-align: left;
   font-size: 13px;
+}
+.sort-label {
+  cursor: pointer;
+}
+.sort-label:hover {
+  color: var(--brand-teal-dark);
+}
+.sort-label .sort-arrow {
+  margin-left: auto;
+}
+.btn.sort-active {
+  border-color: var(--brand-teal);
+  color: var(--brand-teal-dark);
 }
 .select-col {
   width: 32px;
