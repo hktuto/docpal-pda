@@ -18,9 +18,14 @@ const props = defineProps<{
   emptyText?: string;
   /** Provided by useAdminTable consumers; enables the "Reset columns" button. */
   onResetColumns?: () => void;
+  /** Share horizontal scroll position with other DataTables using the same key. */
+  syncScrollKey?: string;
 }>();
 const emit = defineEmits<{ (e: "row-click", row: any): void }>();
 const slots = useSlots();
+
+const wrapRef = ref<HTMLElement | null>(null);
+useSyncedScroll(props.syncScrollKey, wrapRef);
 
 // v-model Set<string> of selected row ids (replicates CrudTable's selection).
 const selected = defineModel<Set<string>>("selected", { default: () => new Set<string>() });
@@ -211,7 +216,7 @@ const emptyColspan = computed(
         </div>
       </div>
     </div>
-    <div class="table-wrap" :class="{ 'is-loading': loading }">
+    <div ref="wrapRef" class="table-wrap" :class="{ 'is-loading': loading }">
       <table class="data" :class="{ 'table-fixed': hasSizing }">
         <thead>
           <tr v-for="headerGroup in table.getHeaderGroups()" :key="headerGroup.id">

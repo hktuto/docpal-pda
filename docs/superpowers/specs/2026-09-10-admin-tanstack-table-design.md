@@ -47,7 +47,9 @@ would have to be wired into every page by hand.
   `useColumnSort` storageKey). Pages rendering the same table repeatedly
   (receiving detail's per-group item tables) pass `syncKey` instead: those
   instances share the column-state refs **live** and persist together under
-  `admin-table:<syncKey>`; pagination and rows stay per-instance.
+  `admin-table:<syncKey>`; pagination and rows stay per-instance. DataTable
+  also accepts `syncScrollKey` (`composables/useSyncedScroll.ts`) to share
+  horizontal scroll position between repeated tables on the same page.
 
 - **Scope of this branch.** `CrudTable` refactor (covers all 6 CRUD pages)
   plus the 3 main list pages (`picking-orders/index.vue`,

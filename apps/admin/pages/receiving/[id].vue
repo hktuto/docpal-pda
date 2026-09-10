@@ -473,6 +473,7 @@ onMounted(load);
           :table="tableForGroup(group.key).table"
           v-model:selected="selected"
           selectable
+          sync-scroll-key="receiving-detail-items"
           :empty-text="$t('admin.common.noRecords')"
           :on-reset-columns="tableForGroup(group.key).resetColumnState"
         >
