@@ -2,7 +2,7 @@
 
 ## 1. Open the receiving list
 
-From the home screen, tap **Receiving**. The list shows receiving orders as compact rows with status and a pending picking-order count badge; the status filters and search bar stay pinned at the top while scrolling.
+From the home screen, tap **Receiving**. The list shows receiving orders as compact rows with status and a pending picking-order count badge; the status filters and search bar stay pinned at the top while scrolling. The list loads 50 orders at a time — tap **Load more** at the bottom for the next page, or the refresh button to reload. Search and filters apply to all orders, not just the loaded ones.
 
 ![Receiving list](./assets/receiving-list.png)
 

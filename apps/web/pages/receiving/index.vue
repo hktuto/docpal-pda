@@ -11,6 +11,15 @@
         >
           {{ $t(opt.labelKey) }}
         </button>
+        <button
+          type="button"
+          class="refresh-btn"
+          :aria-label="$t('common.refresh')"
+          :disabled="loading"
+          @click="refresh"
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+        </button>
       </div>
 
       <input
@@ -21,7 +30,7 @@
       />
     </div>
 
-    <p v-if="loading" class="empty">{{ $t('common.loading') }}</p>
+    <p v-if="loading && rows.length === 0" class="empty">{{ $t('common.loading') }}</p>
     <p v-else-if="loadError" class="empty" style="color: var(--danger);">{{ $t('common.errorPrefix', { message: loadError }) }}</p>
     <p v-else-if="rows.length === 0" class="empty">{{ $t('common.noReceivingOrders') }}</p>
 
@@ -53,6 +62,19 @@
         <svg class="list-row__chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
       </NuxtLink>
     </div>
+
+    <div v-if="rows.length > 0" class="list-footer">
+      <span class="list-footer__count">{{ $t('common.showingOf', { shown: rows.length, total }) }}</span>
+      <button
+        v-if="hasMore"
+        type="button"
+        class="btn btn--small"
+        :disabled="loading"
+        @click="load(false)"
+      >
+        {{ $t('common.loadMore') }}
+      </button>
+    </div>
   </div>
 </template>
 
@@ -60,7 +82,7 @@
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { useWarehouse } from "~/composables/useWarehouse";
-import type { ReceivingFilter, ReceivingOrderListRow } from "~/services/types";
+import type { ReceivingFilter, ReceivingOrderListQuery, ReceivingOrderListRow } from "~/services/types";
 
 definePageMeta({ title: "meta.receiving" });
 
@@ -82,35 +104,67 @@ const filters: { labelKey: string; value: ReceivingFilter }[] = [
 const filter = ref<ReceivingFilter>("pending");
 const search = ref("");
 
-const rawRows = ref<ReceivingOrderListRow[]>([]);
+const PAGE_SIZE = 50;
+const rows = ref<ReceivingOrderListRow[]>([]);
+const total = ref(0);
 const loading = ref(true);
 const loadError = ref<string | null>(null);
+const hasMore = computed(() => rows.value.length < total.value);
 
-async function load() {
+function listQuery(limit: number, offset: number): ReceivingOrderListQuery {
+  const term = search.value.trim();
+  return { search: term || undefined, limit, offset };
+}
+
+async function load(reset: boolean) {
   loading.value = true;
   loadError.value = null;
   try {
-    rawRows.value = await warehouse.getReceivingOrders(filter.value);
+    const page = await warehouse.getReceivingOrders(
+      filter.value,
+      listQuery(PAGE_SIZE, reset ? 0 : rows.value.length)
+    );
+    rows.value = reset ? page.rows : [...rows.value, ...page.rows];
+    total.value = page.total;
   } catch (e: any) {
     loadError.value = errorMessage(e);
-    rawRows.value = [];
+    if (reset) {
+      rows.value = [];
+      total.value = 0;
+    }
   } finally {
     loading.value = false;
   }
 }
 
-const rows = computed(() => {
-  const term = search.value.trim().toLowerCase();
-  if (!term) return rawRows.value;
-  return rawRows.value.filter(
-    (r) =>
-      r.batchNo.toLowerCase().includes(term) ||
-      (r.supplierName?.toLowerCase().includes(term) ?? false)
-  );
+async function refresh() {
+  loading.value = true;
+  loadError.value = null;
+  try {
+    const page = await warehouse.getReceivingOrders(
+      filter.value,
+      listQuery(Math.max(rows.value.length, PAGE_SIZE), 0)
+    );
+    rows.value = page.rows;
+    total.value = page.total;
+  } catch (e: any) {
+    loadError.value = errorMessage(e);
+  } finally {
+    loading.value = false;
+  }
+}
+
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
+watch(search, () => {
+  if (searchTimer) clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => load(true), 300);
+});
+onUnmounted(() => {
+  if (searchTimer) clearTimeout(searchTimer);
 });
 
-watch(filter, load);
-useVisibleReload(load, ["/receiving-orders"]);
+watch(filter, () => load(true));
+useVisibleReload(refresh, ["/receiving-orders"]);
 </script>
 
 <style scoped>
@@ -139,6 +193,37 @@ useVisibleReload(load, ["/receiving-orders"]);
   background: var(--primary);
   border-color: var(--primary);
   color: #fff;
+}
+
+.refresh-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: var(--surface);
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.list-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.list-footer__count {
+  font-size: 0.8125rem;
+  color: var(--muted);
 }
 
 </style>

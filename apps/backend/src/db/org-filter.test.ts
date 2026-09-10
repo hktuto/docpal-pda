@@ -28,17 +28,17 @@ test("picking orders: list + detail are scoped to allowedOrgIds", async () => {
   await reseed(client);
 
   const all = await listPickingOrders(client.db);
-  assert.ok(all.length > 0);
-  const orderId = all[0].id;
-  assert.equal(all[0].orgId, 2); // demo world sanity check
+  assert.ok(all.rows.length > 0);
+  const orderId = all.rows[0].id;
+  assert.equal(all.rows[0].orgId, 2); // demo world sanity check
 
   _setAllowedOrgIdsForTests([2, 3]);
-  assert.equal((await listPickingOrders(client.db)).length, all.length);
+  assert.equal((await listPickingOrders(client.db)).rows.length, all.rows.length);
   const detail = await getPickingOrderDetail(client.db, orderId);
   assert.equal(detail.id, orderId);
 
   _setAllowedOrgIdsForTests([99]);
-  assert.equal((await listPickingOrders(client.db)).length, 0);
+  assert.equal((await listPickingOrders(client.db)).rows.length, 0);
   await assert.rejects(getPickingOrderDetail(client.db, orderId), /picking_order_not_found/);
 });
 

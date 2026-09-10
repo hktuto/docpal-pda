@@ -46,7 +46,6 @@ export default defineNuxtConfig({
       // 127.0.0.1, not localhost: some Android ROMs (NLS-MT95) fail to resolve
       // "localhost" inside the WebView, breaking adb-reverse API access.
       apiBaseUrl: "http://127.0.0.1:3002", // override with NUXT_PUBLIC_API_BASE_URL (device builds need a LAN-reachable host)
-      apiCache: "on", // set NUXT_PUBLIC_API_CACHE=off to disable the client-side GET cache entirely
       // Set NUXT_PUBLIC_SHOW_LOCAL_SERVER_HOST=1 to add a "Local (dev)"
       // (http://127.0.0.1:3002) entry to the /server backend picker in bundled
       // builds; always on under the dev server.

@@ -94,7 +94,6 @@ describe('switchServerHost', () => {
     storage.setItem('warehouse-user-id', 'u1');
     storage.setItem('warehouse-user', '{}');
     storage.setItem('wms-events-last-id', '42');
-    storage.setItem('wms-cache:http://old/api', '{}');
     storage.setItem('warehouse-locale', 'zh-HK');
 
     switchServerHost('https://wms-bj.docpal.weltronics.com:9002');
@@ -104,7 +103,6 @@ describe('switchServerHost', () => {
     expect(storage.getItem('warehouse-user-id')).toBeNull();
     expect(storage.getItem('warehouse-user')).toBeNull();
     expect(storage.getItem('wms-events-last-id')).toBeNull();
-    expect(storage.getItem('wms-cache:http://old/api')).toBeNull();
     expect(storage.getItem('warehouse-locale')).toBe('zh-HK');
   });
 });

@@ -2,14 +2,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createBackendWarehouseService } from './backendWarehouse';
 import { createWarehouseService } from '../warehouse';
 import { ApiError } from '../apiClient';
-import { clearApiCache } from '../apiCache';
 
 const BASE_URL = 'http://backend.test';
-
-// The apiClient GET cache is module-level; keep tests isolated from it.
-beforeEach(() => {
-  clearApiCache();
-});
 
 function jsonResponse(data: unknown, status = 200): Response {
   return {
@@ -76,14 +70,15 @@ describe('backendWarehouse receiving flow', () => {
   }
 
   it('getReceivingOrders filters by status and skips the param for "all"', async () => {
-    fetchMock.mockResolvedValue(jsonResponse([]));
+    fetchMock.mockResolvedValue(jsonResponse({ rows: [], total: 0 }));
 
-    await service().getReceivingOrders('in_hand');
+    const page = await service().getReceivingOrders('in_hand');
     expect(lastCall().url).toBe(`${BASE_URL}/receiving-orders?status=in_hand`);
     expect(lastCall().init.method).toBe('GET');
+    expect(page).toEqual({ rows: [], total: 0 });
 
-    await service().getReceivingOrders('all');
-    expect(lastCall().url).toBe(`${BASE_URL}/receiving-orders`);
+    await service().getReceivingOrders('all', { search: '049', limit: 50, offset: 50 });
+    expect(lastCall().url).toBe(`${BASE_URL}/receiving-orders?search=049&limit=50&offset=50`);
   });
 
   it('getReceivingOrder GETs the nested detail', async () => {
@@ -516,15 +511,18 @@ describe('backendWarehouse picking flow', () => {
     return { url: url as string, init: init as RequestInit };
   }
 
-  it('getPickingOrders passes the status filter through and skips it when absent', async () => {
-    fetchMock.mockResolvedValue(jsonResponse([]));
+  it('getPickingOrders passes the query params through and skips absent ones', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ rows: [], total: 0 }));
 
-    await service().getPickingOrders();
+    const page = await service().getPickingOrders();
     expect(lastCall().url).toBe(`${BASE_URL}/picking-orders`);
     expect(lastCall().init.method).toBe('GET');
+    expect(page).toEqual({ rows: [], total: 0 });
 
-    await service().getPickingOrders('picking');
-    expect(lastCall().url).toBe(`${BASE_URL}/picking-orders?status=picking`);
+    await service().getPickingOrders({ status: 'picking,issue', allocation: 'full', search: 'SO-', limit: 50 });
+    expect(lastCall().url).toBe(
+      `${BASE_URL}/picking-orders?status=picking%2Cissue&allocation=full&search=SO-&limit=50`
+    );
   });
 
   it('getPickingOrder GETs the nested detail', async () => {

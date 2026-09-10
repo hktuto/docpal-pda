@@ -2,7 +2,7 @@
 
 ## 1. Open the picking list
 
-From the home screen, tap **Picking**. The list shows open picking orders as compact rows with status and summary information; the search bar and filter button stay pinned at the top while scrolling.
+From the home screen, tap **Picking**. The list shows open picking orders as compact rows with status and summary information; the search bar and filter button stay pinned at the top while scrolling. The list loads 50 orders at a time — tap **Load more** at the bottom for the next page, or the refresh button to reload. Search and filters apply to all orders, not just the loaded ones.
 
 ![Picking list](./assets/picking-list.png)
 

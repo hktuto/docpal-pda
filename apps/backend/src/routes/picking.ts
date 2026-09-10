@@ -50,9 +50,21 @@ function reallocateBestEffort(after: string): void {
 
 export const pickingRoute = new Hono();
 
-// List with per-order item/qty counts; `?status=` is a pass-through filter.
+// List with per-order item/qty counts. `?status=`/`?allocation=` accept
+// comma-separated lists; `?search=` + `?limit=`/`?offset=` page server-side.
 pickingRoute.get("/picking-orders", async (c) => {
-  return c.json(await listPickingOrders(db, c.req.query("status")), 200);
+  const limit = Number(c.req.query("limit"));
+  const offset = Number(c.req.query("offset"));
+  return c.json(
+    await listPickingOrders(db, {
+      status: c.req.query("status"),
+      allocation: c.req.query("allocation"),
+      search: c.req.query("search"),
+      limit: Number.isNaN(limit) ? undefined : limit,
+      offset: Number.isNaN(offset) ? undefined : offset,
+    }),
+    200
+  );
 });
 
 // Batch issue report (registered before /picking-orders/:id verbs — no path

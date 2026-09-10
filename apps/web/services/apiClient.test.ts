@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createApiClient, ApiError, setTokenGetter } from './apiClient';
-import { clearApiCache } from './apiCache';
 import { I18nError } from '~/composables/i18nError';
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -45,7 +44,6 @@ describe('createApiClient', () => {
     vi.stubGlobal('fetch', fetchMock);
     // The token getter is module-level (shared with apiAuth) — reset it.
     setTokenGetter(() => null);
-    clearApiCache();
   });
 
   afterEach(() => {
@@ -276,78 +274,5 @@ describe('createApiClient', () => {
       'http://api.test/orders?q=a+b%26c',
       expect.objectContaining({ method: 'GET' })
     );
-  });
-
-  it('serves a repeated GET from the cache (fetch called once)', async () => {
-    fetchMock.mockResolvedValue(jsonResponse([{ id: '1' }]));
-    const client = createApiClient({ baseUrl: 'http://api.test' });
-
-    const first = await client.get('/orders', { status: 'open' });
-    const second = await client.get('/orders', { status: 'open' });
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(second).toEqual(first);
-  });
-
-  it('GET with { cache: false } always fetches', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ id: '1' }));
-    const client = createApiClient({ baseUrl: 'http://api.test' });
-
-    await client.get('/orders');
-    await client.get('/orders', undefined, { cache: false });
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('POST invalidates the cached first-path-segment prefix', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
-    const client = createApiClient({ baseUrl: 'http://api.test' });
-
-    await client.get('/orders'); // cached
-    await client.get('/orders/1'); // different URL: separate fetch + cache entry
-    await client.post('/orders/1/confirm', {});
-    await client.get('/orders'); // prefix /orders invalidated → refetch
-    await client.get('/orders/1'); // same prefix → refetch too
-
-    expect(fetchMock).toHaveBeenCalledTimes(5);
-    expect(fetchMock.mock.calls[3][0]).toBe('http://api.test/orders');
-    expect(fetchMock.mock.calls[4][0]).toBe('http://api.test/orders/1');
-  });
-
-  it('POST does not invalidate other prefixes', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
-    const client = createApiClient({ baseUrl: 'http://api.test' });
-
-    await client.get('/orders'); // cached
-    await client.post('/picking-items/pi1/scan', {});
-    await client.get('/orders'); // still cached
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('POST invalidates mapped cross-prefix reads (scan → picking detail)', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
-    const client = createApiClient({ baseUrl: 'http://api.test' });
-
-    await client.get('/picking-orders/po1'); // cached
-    await client.get('/measuring-boxes/box1'); // cached
-    await client.post('/picking-items/pi1/scan', {});
-    await client.get('/picking-orders/po1'); // invalidated via map → refetch
-    await client.get('/measuring-boxes/box1'); // not mapped from picking-items → cached
-
-    expect(fetchMock).toHaveBeenCalledTimes(4);
-  });
-
-  it('POST /shipping-boxes invalidates picking + measuring reads', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
-    const client = createApiClient({ baseUrl: 'http://api.test' });
-
-    await client.get('/picking-orders/po1'); // cached
-    await client.get('/measuring-boxes/box1'); // cached
-    await client.post('/shipping-boxes/sb1/close', {});
-    await client.get('/picking-orders/po1'); // refetch
-    await client.get('/measuring-boxes/box1'); // refetch
-
-    expect(fetchMock).toHaveBeenCalledTimes(5);
   });
 });

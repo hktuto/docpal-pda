@@ -1,6 +1,5 @@
 import { I18nError } from "~/composables/i18nError";
 import { createApiClient, ApiError, setTokenGetter } from "../apiClient";
-import { clearApiCache } from "../apiCache";
 import type { AuthService, CreateAuthServiceOptions } from "../auth";
 import type { User } from "../types";
 
@@ -91,19 +90,17 @@ export function createApiAuthService(options: CreateAuthServiceOptions): AuthSer
     },
 
     async logout(): Promise<void> {
-      // Stateless JWT: signing out is just dropping the stored session. The
-      // GET cache goes too — its entries were fetched under this session.
+      // Stateless JWT: signing out is just dropping the stored session.
       clearSession();
-      clearApiCache();
     },
 
     async getCurrentUser(): Promise<User | null> {
       if (!getToken()) return null;
 
       try {
-        // Never cached: this is the session-validity check. The fresh user
-        // also refreshes the persisted copy (group membership can change).
-        const me = await client.get<SessionUser>("/auth/me", undefined, { cache: false });
+        // The fresh user also refreshes the persisted copy (group membership
+        // can change).
+        const me = await client.get<SessionUser>("/auth/me");
         localStorage.setItem(USER_KEY, JSON.stringify(me));
         return toUser(me);
       } catch (e) {
