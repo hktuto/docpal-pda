@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { db } from "../db.js";
 import { fetchEventsSince, pruneEvents } from "../db/events.js";
+import { getAllocationRunStatus } from "../db/allocate.js";
 
 // ---------------------------------------------------------------------------
 // GET /events — SSE stream over the app_events outbox (design:
@@ -21,6 +22,12 @@ const BACKLOG_LIMIT = 500;
 const POLL_LIMIT = 200;
 
 export const eventsRoute = new Hono();
+
+// In-memory status of the background allocateAll runner (scoped
+// confirm-arrival recompute is synchronous and never appears here). UIs poll
+// this once on load to catch an in-flight run, then follow
+// allocation.started / allocation.finished over SSE.
+eventsRoute.get("/allocation/status", (c) => c.json(getAllocationRunStatus(), 200));
 
 eventsRoute.get("/events", (c) => {
   const raw = c.req.query("since") ?? c.req.header("last-event-id");

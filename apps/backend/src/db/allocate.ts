@@ -160,7 +160,7 @@ export interface AllocateSummary {
   skippedReceivingSources: number;
 }
 
-async function loadDemands(dbOrTx: DbOrTx): Promise<DemandRow[]> {
+async function loadDemands(dbOrTx: DbOrTx, partKeys?: string[]): Promise<DemandRow[]> {
   return queryAll<DemandRow>(
     dbOrTx,
     sql`SELECT pi.id AS "pickingItemId",
@@ -181,6 +181,7 @@ async function loadDemands(dbOrTx: DbOrTx): Promise<DemandRow[]> {
         WHERE po.status IN ('pending', 'picking')
           AND (po.working_by IS NULL OR po.working_at IS NULL OR po.working_at < ${workLockExpiry()})
           AND pi.qty > COALESCE(pkg.qty, 0)
+          ${partKeys && partKeys.length > 0 ? sql`AND ${inArray(sql`pi.part_no`, partKeys)}` : sql``}
         ORDER BY po.priority_seq, po.delivery_date NULLS LAST, po.order_no, pi.id`
   );
 }
@@ -570,6 +571,281 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
 }
 
 // ---------------------------------------------------------------------------
+// Scoped recompute after confirm-arrival. confirm-arrival only makes ONE
+// receiving order's stock allocatable, and sources/demands are per-part (a
+// lot / receiving item / picking item each carries one part number, parts
+// never compete), so the only allocations that can change are for the part
+// keys in that order's invoices. This recomputes exactly that scope with the
+// same rules as allocateAll — fast enough to await in the request path, so
+// the caller (admin/PDA confirm screen) gets the final state immediately.
+// allocateAll stays the background path for cross-part changes (order
+// create/cancel, priority reorder, picks, sync batches).
+// NOTE: the wipe/rebuild core below mirrors allocateAll on purpose (the
+// fleet-wide engine was left untouched); keep the two in sync when the
+// allocation rules change.
+// ---------------------------------------------------------------------------
+
+export interface ScopedAllocateResult extends AllocateSummary {
+  /** Distinct part_no + wcl_item_no of the confirmed order's items. */
+  partKeys: string[];
+  /** Whether the allocation set changed (same multiset compare as allocateAll). */
+  changed: boolean;
+  durationMs: number;
+}
+
+export async function allocateForReceivingOrder(db: AppDb, receivingOrderId: string): Promise<ScopedAllocateResult> {
+  const startedAt = Date.now();
+  return db.transaction(async (tx) => {
+    const keyRows = await queryAll<{ partKey: string }>(
+      tx,
+      sql`SELECT DISTINCT k AS "partKey" FROM (
+            SELECT rii.part_no AS k
+            FROM receiving_invoice_items rii
+            JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+            WHERE ri.receiving_order_id = ${receivingOrderId}
+            UNION
+            SELECT rii.wcl_item_no
+            FROM receiving_invoice_items rii
+            JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+            WHERE ri.receiving_order_id = ${receivingOrderId}
+          ) keys
+          WHERE k IS NOT NULL`
+    );
+    const partKeys = keyRows.map((r) => r.partKey);
+
+    const summary: AllocateSummary = {
+      demands: 0,
+      fullyAllocated: 0,
+      partiallyAllocated: 0,
+      allocationsCreated: 0,
+      allocationsRemoved: 0,
+      skippedReceivingSources: 0,
+    };
+
+    if (partKeys.length === 0) {
+      await refreshAllocationStatus(tx);
+      await emitEvent(tx, {
+        type: "allocation.finished",
+        topics: ["/picking-orders", "/receiving-orders"],
+        data: { ...summary, changed: false, scope: "receiving-order", receivingOrderId },
+      });
+      return { ...summary, partKeys, changed: false, durationMs: Date.now() - startedAt };
+    }
+
+    const demands = await loadDemands(tx, partKeys);
+    summary.demands = demands.length;
+
+    const allocationKey = (
+      pickingItemId: string,
+      inventoryLotId: string | null,
+      receivingInvoiceItemId: string | null,
+      receivingOrderIdKey: string | null,
+      qty: number
+    ) => `${pickingItemId}|${inventoryLotId ?? ""}|${receivingInvoiceItemId ?? ""}|${receivingOrderIdKey ?? ""}|${qty}`;
+
+    const beforeKeys: string[] = [];
+    const afterKeys: string[] = [];
+    const txnRows: (typeof inventoryTransactions.$inferInsert)[] = [];
+    const lotDelta = new Map<string, number>();
+
+    if (demands.length > 0) {
+      const itemIds = demands.map((d) => d.pickingItemId);
+      const existing = await queryAll<{
+        id: string;
+        pickingItemId: string;
+        inventoryLotId: string | null;
+        receivingInvoiceItemId: string | null;
+        receivingOrderId: string | null;
+        qty: number;
+        partNo: string;
+        dateCode: string | null;
+        lotCode: string | null;
+        coo: string | null;
+        cow: string | null;
+        shelfCode: string | null;
+        boxId: string | null;
+      }>(
+        tx,
+        sql`SELECT a.id, a.picking_item_id AS "pickingItemId", a.inventory_lot_id AS "inventoryLotId",
+                   a.receiving_invoice_item_id AS "receivingInvoiceItemId",
+                   a.receiving_order_id AS "receivingOrderId", a.qty,
+                   COALESCE(il.part_no, rii.part_no, pi.part_no) AS "partNo",
+                   COALESCE(il.date_code, rii.date_code) AS "dateCode",
+                   COALESCE(il.lot_code, rii.lot_code) AS "lotCode",
+                   COALESCE(il.coo, rii.coo) AS "coo",
+                   COALESCE(il.cow, rii.cow) AS "cow",
+                   il.shelf_code AS "shelfCode",
+                   COALESCE(il.box_id, rii.ctn_no) AS "boxId"
+            FROM allocations a
+            JOIN picking_items pi ON pi.id = a.picking_item_id
+            LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
+            LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
+            WHERE ${inArray(sql`a.picking_item_id`, itemIds)}`
+      );
+      for (const a of existing) {
+        beforeKeys.push(allocationKey(a.pickingItemId, a.inventoryLotId, a.receivingInvoiceItemId, a.receivingOrderId, a.qty));
+      }
+
+      for (const a of existing) {
+        summary.allocationsRemoved += 1;
+        if (a.inventoryLotId) {
+          lotDelta.set(a.inventoryLotId, (lotDelta.get(a.inventoryLotId) ?? 0) - a.qty);
+        }
+        txnRows.push({
+          id: newId(),
+          inventoryLotId: a.inventoryLotId,
+          partNo: a.partNo,
+          shelfCode: a.shelfCode,
+          boxId: a.boxId,
+          txnType: "RESERVE",
+          qtyType: "reserved",
+          qtyDelta: -a.qty,
+          dateCode: a.dateCode,
+          lotCode: a.lotCode,
+          coo: a.coo,
+          cow: a.cow,
+          referenceType: "allocation",
+          referenceId: a.id,
+          receivingInvoiceItemId: a.receivingInvoiceItemId,
+          txnReason: "recompute: release",
+          txnAt: now(),
+        });
+      }
+      await tx.execute(sql`DELETE FROM allocations WHERE ${inArray(sql`picking_item_id`, itemIds)}`);
+      // Apply the wipe to lot allocated_qty up front so the per-demand source
+      // queries see availability net of the removed reservations.
+      for (const [lotId, delta] of lotDelta) {
+        if (delta === 0) continue;
+        await tx.execute(sql`UPDATE inventory_lots SET allocated_qty = allocated_qty + ${delta} WHERE id = ${lotId}`);
+      }
+      lotDelta.clear();
+
+      const lotUsed = new Map<string, number>();
+      const recvUsed = new Map<string, number>();
+
+      for (const raw of demands) {
+        const d = resolveDemandLocation(raw);
+        let remaining = d.openQty;
+        const allocatedForItem: { qty: number; lotId?: string; recv?: ReceivingRow }[] = [];
+
+        const lots = await loadLotSources(tx, d);
+        for (const lot of lots) {
+          if (remaining <= 0) break;
+          const usable = lot.available - (lotUsed.get(lot.lotId) ?? 0);
+          if (usable <= 0) continue;
+          const take = Math.min(usable, remaining);
+          allocatedForItem.push({ qty: take, lotId: lot.lotId });
+          lotUsed.set(lot.lotId, (lotUsed.get(lot.lotId) ?? 0) + take);
+          remaining -= take;
+        }
+
+        if (remaining > 0 && allowDockStock()) {
+          const rows = await loadReceivingSources(tx, d);
+          for (const r of rows) {
+            if (remaining <= 0) break;
+            if (r.orgId === null || r.subInventoryCode === null) {
+              summary.skippedReceivingSources += 1;
+              continue;
+            }
+            const key = r.ctnNo ? `item:${r.receivingInvoiceItemId}` : `order:${r.receivingOrderId}:${d.partNo}`;
+            const usable = r.available - (recvUsed.get(key) ?? 0);
+            if (usable <= 0) continue;
+            const take = Math.min(usable, remaining);
+            allocatedForItem.push({ qty: take, recv: r });
+            recvUsed.set(key, (recvUsed.get(key) ?? 0) + take);
+            remaining -= take;
+          }
+        }
+
+        if (allocatedForItem.length === 0) continue;
+        if (remaining <= 0) summary.fullyAllocated += 1;
+        else summary.partiallyAllocated += 1;
+
+        for (const alloc of allocatedForItem) {
+          const id = newId();
+          await tx.insert(allocations).values({
+            id,
+            pickingItemId: d.pickingItemId,
+            inventoryLotId: alloc.lotId ?? null,
+            receivingInvoiceItemId: alloc.recv?.ctnNo ? alloc.recv.receivingInvoiceItemId : null,
+            receivingOrderId: alloc.recv && !alloc.recv.ctnNo ? alloc.recv.receivingOrderId : null,
+            qty: alloc.qty,
+          });
+          summary.allocationsCreated += 1;
+          afterKeys.push(
+            allocationKey(
+              d.pickingItemId,
+              alloc.lotId ?? null,
+              alloc.recv?.ctnNo ? alloc.recv.receivingInvoiceItemId : null,
+              alloc.recv && !alloc.recv.ctnNo ? alloc.recv.receivingOrderId : null,
+              alloc.qty
+            )
+          );
+          if (alloc.lotId) {
+            lotDelta.set(alloc.lotId, (lotDelta.get(alloc.lotId) ?? 0) + alloc.qty);
+          }
+          txnRows.push({
+            id: newId(),
+            inventoryLotId: alloc.lotId ?? null,
+            partNo: d.partNo,
+            shelfCode: null,
+            boxId: alloc.recv?.ctnNo ?? null,
+            txnType: "RESERVE",
+            qtyType: "reserved",
+            qtyDelta: alloc.qty,
+            dateCode: alloc.recv?.dateCode ?? null,
+            referenceType: "allocation",
+            referenceId: id,
+            receivingInvoiceItemId: alloc.recv?.ctnNo ? alloc.recv.receivingInvoiceItemId : null,
+            txnReason: "recompute: reserve",
+            txnAt: now(),
+          });
+        }
+        await tx.execute(
+          sql`UPDATE picking_items SET allocated_qty = ${d.openQty - remaining}, last_update_date = ${now()} WHERE id = ${d.pickingItemId}`
+        );
+      }
+
+      for (const [lotId, delta] of lotDelta) {
+        if (delta === 0) continue;
+        await tx.execute(sql`UPDATE inventory_lots SET allocated_qty = allocated_qty + ${delta} WHERE id = ${lotId}`);
+      }
+      if (txnRows.length > 0) {
+        await tx.insert(inventoryTransactions).values(txnRows);
+      }
+      // Demands with no source leave allocated_qty at 0.
+      await tx.execute(
+        sql`UPDATE picking_items SET allocated_qty = 0, last_update_date = ${now()}
+            WHERE ${inArray(sql`id`, itemIds)} AND id NOT IN (
+              SELECT DISTINCT picking_item_id FROM allocations WHERE ${inArray(sql`picking_item_id`, itemIds)}
+            )`
+      );
+      if (summary.skippedReceivingSources > 0) {
+        console.warn(
+          `allocateForReceivingOrder: skipped ${summary.skippedReceivingSources} receiving source(s) with a NULL item location pair (org_id/sub_inventory_code)`
+        );
+      }
+    }
+
+    const changed = beforeKeys.slice().sort().join("\n") !== afterKeys.slice().sort().join("\n");
+    if (changed) {
+      await emitEvent(tx, {
+        type: "allocation.computed",
+        topics: ["/picking-orders"],
+        data: { ...summary, scope: "receiving-order", receivingOrderId },
+      });
+    }
+    await emitEvent(tx, {
+      type: "allocation.finished",
+      topics: ["/picking-orders", "/receiving-orders"],
+      data: { ...summary, changed, scope: "receiving-order", receivingOrderId },
+    });
+    await refreshAllocationStatus(tx);
+    return { ...summary, partKeys, changed, durationMs: Date.now() - startedAt };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Background scheduler. allocateAll is a full-fleet recompute, so mutation
 // routes must not await it in the request path (a confirm-arrival / scan
 // would otherwise hang for the whole recompute). scheduleAllocateAll runs it
@@ -580,6 +856,36 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
 
 let allocateActive = false;
 let allocateQueued = false;
+
+// In-memory status of the background runner, exposed via GET
+// /allocation/status so UIs can show a global "allocation running" indicator
+// even for runs started by someone else (scoped confirm-arrival recompute is
+// synchronous and does not appear here).
+export interface AllocationRunStatus {
+  running: boolean;
+  queued: boolean;
+  trigger: string | null;
+  startedAt: string | null;
+  lastRun:
+    | (AllocateSummary & { finishedAt: string; durationMs: number; trigger: string })
+    | null;
+}
+
+const runState: { trigger: string | null; startedAt: string | null; lastRun: AllocationRunStatus["lastRun"] } = {
+  trigger: null,
+  startedAt: null,
+  lastRun: null,
+};
+
+export function getAllocationRunStatus(): AllocationRunStatus {
+  return {
+    running: allocateActive,
+    queued: allocateQueued,
+    trigger: runState.trigger,
+    startedAt: runState.startedAt,
+    lastRun: runState.lastRun,
+  };
+}
 
 export function scheduleAllocateAll(
   db: AppDb,
@@ -592,13 +898,38 @@ export function scheduleAllocateAll(
   void (async () => {
     while (allocateQueued) {
       allocateQueued = false;
+      runState.trigger = after;
+      runState.startedAt = new Date().toISOString();
       try {
-        await run(db);
+        await emitEvent(db, {
+          type: "allocation.started",
+          topics: ["/picking-orders", "/receiving-orders"],
+          data: { trigger: after },
+        });
+      } catch (err) {
+        console.error("allocation.started event failed", err);
+      }
+      const runStarted = Date.now();
+      try {
+        const summary = (await run(db)) as AllocateSummary | undefined;
+        runState.lastRun = {
+          demands: summary?.demands ?? 0,
+          fullyAllocated: summary?.fullyAllocated ?? 0,
+          partiallyAllocated: summary?.partiallyAllocated ?? 0,
+          allocationsCreated: summary?.allocationsCreated ?? 0,
+          allocationsRemoved: summary?.allocationsRemoved ?? 0,
+          skippedReceivingSources: summary?.skippedReceivingSources ?? 0,
+          finishedAt: new Date().toISOString(),
+          durationMs: Date.now() - runStarted,
+          trigger: after,
+        };
       } catch (err) {
         console.error(`allocateAll after ${after} failed`, err);
       }
     }
     allocateActive = false;
+    runState.trigger = null;
+    runState.startedAt = null;
     // a trigger that landed between the last loop check and clearing the flag
     // would otherwise be lost
     if (allocateQueued) scheduleAllocateAll(db, after, run);

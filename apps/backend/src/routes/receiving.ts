@@ -13,7 +13,7 @@ import {
   reportReceivingItemMismatch,
   scanReceivingOrder,
 } from "../db/receiving.js";
-import { scheduleAllocateAll } from "../db/allocate.js";
+import { scheduleAllocateAll, allocateForReceivingOrder } from "../db/allocate.js";
 import { actorFrom } from "../auth/middleware.js";
 import { allowedOrgFilter } from "../db/org-filter.js";
 
@@ -320,15 +320,23 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
 // ------------------------------------------------------------------
 
 // Applies full receipt (received_qty = qty per line, date-code fallback from
-// the order), writes RECEIVE_TO_DOCK ledger rows + a transition log, then
-// schedules the allocation recompute (concept 5) in the background — the
-// response does not wait for it.
+// the order), writes RECEIVE_TO_DOCK ledger rows + a transition log, then runs
+// the allocation recompute SCOPED to this order's part keys
+// (allocateForReceivingOrder) synchronously — it only touches demands/sources
+// of those parts, so it fits in the request. On scoped failure it falls back
+// to the background full recompute (allocation: null in the response).
 // Accepts pending and provisional_received orders (a provisional order is
 // completed to full receipt).
 receivingRoute.post("/receiving-orders/:id/confirm-arrival", async (c) => {
   const result = await confirmReceivingArrival(db, c.req.param("id"), actorFrom(c).id);
-  scheduleAllocateAll(db, "confirm-arrival");
-  return c.json(result, 200);
+  try {
+    const allocation = await allocateForReceivingOrder(db, c.req.param("id"));
+    return c.json({ ...result, allocation }, 200);
+  } catch (err) {
+    console.error("scoped allocation after confirm-arrival failed; falling back to background allocateAll", err);
+    scheduleAllocateAll(db, "confirm-arrival");
+    return c.json({ ...result, allocation: null }, 200);
+  }
 });
 
 // ------------------------------------------------------------------

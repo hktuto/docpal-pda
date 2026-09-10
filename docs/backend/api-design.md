@@ -55,6 +55,13 @@ via `user_group_members` (many-to-many); `users.role` is gone. Login is always
 delegated to the DocPal API (`DOCPAL_URL` required) and local users are
 auto-provisioned (spec `docs/superpowers/specs/2026-08-13-docpal-auth-design.md`).
 
+`GET /allocation/status` → in-memory status of the background `allocateAll`
+runner: `{running, queued, trigger, startedAt, lastRun | null}` where
+`lastRun` = `{demands, fullyAllocated, partiallyAllocated, allocationsCreated,
+allocationsRemoved, skippedReceivingSources, finishedAt, durationMs, trigger}`.
+Pair with the `allocation.started` / `allocation.finished` SSE events
+(`GET /events`) for live "allocation running" indicators.
+
 ## Receiving
 
 Implemented: `GET /receiving-orders`, `GET /receiving-orders/:id`,
@@ -75,10 +82,10 @@ template group or explicit body field) are deduped per order via
 
 | Endpoint | Description |
 |---|---|
-| `GET /receiving-orders?status=&search=&limit=&offset=` | Paged list → `{rows, total}`. Rows: `{id, refNo, status, deliveryDate, dateCode, supplierCode, supplierName, warehouseCode, warehouseSectionCode, subInventoryCode, invoiceCount, itemCount, remainingItems, pendingPickingOrders}`. `remainingItems` = items with `put_away_qty < qty`; `pendingPickingOrders` = distinct pending/picking orders allocated to this RO (via `allocations.receiving_order_id` or via receiving item). `search` = case-insensitive substring on `batchNo`/`supplierName`; `limit`/`offset` page the result (omit `limit` for all rows); `total` = full match count. |
+| `GET /receiving-orders?status=&search=&limit=&offset=` | Paged list → `{rows, total}`. Rows: `{id, refNo, status, deliveryDate, dateCode, supplierCode, supplierName, warehouseCode, warehouseSectionCode, subInventoryCode, invoiceCount, itemCount, remainingItems, pendingPickingOrders}`. `remainingItems` = items with `put_away_qty < qty`; `pendingPickingOrders` = distinct pending/picking orders allocated to this RO (via `allocations.receiving_order_id` or via receiving item). `search` = case-insensitive substring on `batchNo`/`supplierName`/`invoice_no`; `limit`/`offset` page the result (omit `limit` for all rows); `total` = full match count. Rows also carry `invoiceNos` (comma-joined distinct invoice numbers). |
 | `GET /receiving-orders/:id` | Detail: `{order..., supplier{...profile fields}, invoices[{..., items[{..., part, allocatedQty, mismatch}]}]}` — nested; `allocatedQty` embedded per item (no `allocated_by_item` map). |
 | `GET /receiving-orders/:id/picking` | Picking section: `pickingOrders[{id, refNo, status, shipTo, customerCode, items[{id, partId, partNo, qty, pickedQty, allocatedQty, requiredDateCode, allocations[{id, qty, lot{shelfCode, boxId, dateCode, lotCode, coo, cow}, receivingInvoiceItemId, boxId}], packages[{id, qty, dateCode, lotCode, verified, shippingBoxId}], transitionLogs[{fromState, toState, actorId, createdDate}]}], boxes[{id, status, boxSize, grossWeight, netWeight}]}]`. |
-| `POST /receiving-orders/:id/confirm-arrival` | `{actorId}` → order with `status: "in_hand"`; applies receipt, writes txns, recalculates allocations (concept 5). |
+| `POST /receiving-orders/:id/confirm-arrival` | `{actorId}` → order with `status: "in_hand"` + `allocation` (scoped recompute summary `{demands, fullyAllocated, partiallyAllocated, allocationsCreated, allocationsRemoved, skippedReceivingSources, partKeys, changed, durationMs}`, or `null` when it fell back to the background full recompute); applies receipt, writes txns, then awaits `allocateForReceivingOrder` (same rules as `allocateAll`, restricted to the order's part keys — parts never compete, so other parts are provably untouched). |
 | `POST /receiving-orders/:id/scan` | `{actorId, raw}` (or parsed fields, incl. `serialNo`) → server-side parse/match/apply; single match auto-applies, else candidates. A parsed/explicit `serialNo` (S-key) is recorded in `receiving_scan_labels` (unique per order) — a repeat serial → 409 `label_already_scanned`; scans without a serial skip dedup. Supersedes `scan-candidates` (client no longer mirrors matching logic). |
 | `GET /receiving-invoice-items/:id/mismatch` | Active mismatch or `null` (item-keyed, on the new flat mismatch columns). |
 | `POST /receiving-invoice-items/:id/mismatch` | `{actorId, reason, mismatchQty?, wrongPartNo?, note?}` → item. |

@@ -2,7 +2,7 @@ import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { sql } from "drizzle-orm";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
-import { allocateAll, parseDateCodeRule, resolveDemandLocation, scheduleAllocateAll, type DemandRow } from "./allocate.js";
+import { allocateAll, allocateForReceivingOrder, parseDateCodeRule, resolveDemandLocation, scheduleAllocateAll, type DemandRow } from "./allocate.js";
 import { confirmReceivingArrival } from "./receiving.js";
 import {
   _setPickingAllocationForTests,
@@ -333,6 +333,46 @@ test("allocateAll: receiving source matches by wcl_item_no when part_no is the s
   assert.ok((alloc[0] as any).rii, "should allocate from the receiving line");
 });
 
+test("allocateForReceivingOrder: scoped recompute touches only the order's part keys", async () => {
+  await reseed(client);
+  const operator = await client.db.execute(sql`SELECT id FROM users WHERE username = 'operator'`);
+  const actorId = (operator[0] as any).id as string;
+  const receivingOrderId = await idOf(sql`SELECT id FROM receiving_orders WHERE batch_no = '100003'`);
+  await confirmReceivingArrival(client.db, receivingOrderId, actorId);
+
+  const order3 = await idOf(sql`SELECT id FROM picking_orders WHERE order_no = 'SO-DEMO-0003'`);
+  const item3302 = await idOf(
+    sql`SELECT id FROM picking_items WHERE picking_order_id = ${order3} AND part_no = 'RK73H1JTTD3302F'`
+  );
+
+  const s = await allocateForReceivingOrder(client.db, receivingOrderId);
+  assert.ok(s.partKeys.includes("RK73H1JTTD3302F"));
+  assert.ok(s.durationMs >= 0);
+  assert.equal(s.changed, true);
+  // only the 100003 part's demand was recomputed
+  assert.ok(s.demands >= 1);
+  const alloc = await client.db.execute(
+    sql`SELECT receiving_invoice_item_id AS rii FROM allocations WHERE picking_item_id = ${item3302}`
+  );
+  assert.equal(alloc.length, 1);
+  assert.ok((alloc[0] as any).rii, "should allocate from the receiving line");
+  // unrelated demand (RK73H1JTTD1002F has shelf stock, but a different part
+  // key) is untouched by the scoped run
+  const item23 = await client.db.execute(
+    sql`SELECT allocated_qty FROM picking_items WHERE id = ${ITEM_23}`
+  );
+  assert.equal(Number((item23[0] as any).allocated_qty), 0);
+  assert.equal(
+    (await client.db.execute(sql`SELECT id FROM allocations WHERE picking_item_id = ${ITEM_23}`)).length,
+    0
+  );
+
+  // idempotent re-run: same allocation set → changed = false
+  const s2 = await allocateForReceivingOrder(client.db, receivingOrderId);
+  assert.equal(s2.changed, false);
+  assert.equal(s2.allocationsCreated, s.allocationsCreated);
+});
+
 // --- allocation_status (maintained by allocateAll's aggregate refresh) ----------
 
 async function allocationStatusOf(db: TestDb["db"], orderId: string): Promise<string> {
@@ -482,10 +522,13 @@ test("scheduleAllocateAll: one run at a time, triggers during a run coalesce int
   scheduleAllocateAll(client.db, "test", run);
   scheduleAllocateAll(client.db, "test", run);
   scheduleAllocateAll(client.db, "test", run);
+  // the runner emits allocation.started before each run, so run 1 starts
+  // asynchronously — wait for it instead of asserting synchronously
+  const deadline = Date.now() + 5000;
+  while (calls < 1 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 5));
   assert.equal(calls, 1); // run 1 in flight, triggers coalesced
 
   resolveFirst();
-  const deadline = Date.now() + 5000;
   while (calls < 2 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 5));
   await new Promise((r) => setTimeout(r, 50)); // let the queue drain fully
   assert.equal(calls, 2); // one coalesced follow-up, not three

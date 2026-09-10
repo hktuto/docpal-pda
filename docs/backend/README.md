@@ -367,9 +367,10 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   `emitEvent` (`src/db/events.ts`); each open stream polls
   `WHERE id > since` every ~1.5 s (heartbeat comment every 25 s) and rows are
   pruned after 3 days. Catalog: `allocation.computed` (from `allocateAll`,
-  only on net allocation change), `allocation.finished` (every `allocateAll`
-  run, data `{...summary, changed}` — lets UIs that triggered a background
-  recompute tell the user when it completes), `picking_order.created` /
+  only on net allocation change), `allocation.started` (background runner
+  begins a run, data `{trigger}`), `allocation.finished` (every `allocateAll`
+  / scoped `allocateForReceivingOrder` run, data `{...summary, changed}` —
+  lets UIs that triggered a recompute tell the user when it completes), `picking_order.created` /
   `picking_order.updated` (also on issue resolve), `picking_order.issue_reported`,
   `shipping_box.shipped` (per-box ship confirm, topics `/shipping-orders` +
   `/picking-orders`, data `{shippingBoxId, shippedOrderIds, actorId}`),
