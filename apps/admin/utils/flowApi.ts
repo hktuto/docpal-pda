@@ -289,8 +289,14 @@ export function useFlowApi() {
   const api = useApi();
   return {
     // Picking
-    listPickingOrders: (status?: string) =>
-      api.get<PickingOrderRow[]>(`/picking-orders${status ? `?status=${status}` : ""}`),
+    // The backend list endpoints return { rows, total } (limit/offset paging
+    // added for the PDA); admin tables fetch the full list and page client-side.
+    listPickingOrders: async (status?: string) =>
+      (
+        await api.get<{ rows: PickingOrderRow[]; total: number }>(
+          `/picking-orders${status ? `?status=${status}` : ""}`
+        )
+      ).rows,
     getPickingOrder: (id: string) => api.get<PickingOrderDetail>(`/picking-orders/${id}`),
     reorderPickingOrders: (orderIds: string[]) =>
       api.post<{ reordered: number }>(`/picking-orders/reorder`, { orderIds }),
@@ -298,8 +304,12 @@ export function useFlowApi() {
       api.patch(`/admin/picking-orders/${id}`, { deliveryDate }),
 
     // Receiving
-    listReceivingOrders: (status?: string) =>
-      api.get<ReceivingOrderRow[]>(`/receiving-orders${status ? `?status=${status}` : ""}`),
+    listReceivingOrders: async (status?: string) =>
+      (
+        await api.get<{ rows: ReceivingOrderRow[]; total: number }>(
+          `/receiving-orders${status ? `?status=${status}` : ""}`
+        )
+      ).rows,
     getReceivingOrder: (id: string) => api.get<ReceivingOrderDetail>(`/receiving-orders/${id}`),
     confirmReceivingArrival: (id: string) => api.post(`/receiving-orders/${id}/confirm-arrival`, {}),
     updateReceivingDeliveryDate: (id: string, deliveryDate: string | null) =>
