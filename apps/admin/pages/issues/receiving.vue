@@ -79,6 +79,22 @@ async function act(row: MismatchListRow, action: "confirm" | "cancel") {
 }
 
 onMounted(load);
+
+// Reload when a receiving mismatch is reported or resolved elsewhere.
+const {
+  pending: changePending,
+  justUpdated: changeUpdated,
+  refreshNow,
+  dismiss,
+} = useChangeNotice(
+  [
+    "receiving.mismatch_reported",
+    "receiving.mismatch_updated",
+    "receiving.mismatch_confirmed",
+    "receiving.mismatch_cancelled",
+  ],
+  load
+);
 </script>
 
 <template>
@@ -93,6 +109,7 @@ onMounted(load);
     <p class="muted explainer">{{ $t("admin.pages.issues.receivingExplainer") }}</p>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
+    <ChangeNotice :pending="changePending" :just-updated="changeUpdated" @refresh="refreshNow" @dismiss="dismiss" />
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
     <DataTable

@@ -90,6 +90,14 @@ async function load() {
 
 watch(status, load);
 onMounted(load);
+
+// Reload when receiving data changes elsewhere (PDA scans, sync, confirms).
+const {
+  pending: changePending,
+  justUpdated: changeUpdated,
+  refreshNow,
+  dismiss,
+} = useChangeNotice(["receiving_order.upserted", "receiving_order.deleted", "allocation.finished"], load);
 </script>
 
 <template>
@@ -107,6 +115,7 @@ onMounted(load);
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
+    <ChangeNotice :pending="changePending" :just-updated="changeUpdated" @refresh="refreshNow" @dismiss="dismiss" />
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
     <DataTable

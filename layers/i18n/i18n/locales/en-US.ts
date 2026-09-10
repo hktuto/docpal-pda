@@ -952,7 +952,10 @@ export default {
       fitToContent: "Fit to content (double-click the column edge)",
       sortBy: "Sort by",
       noSort: "No sorting",
-      allocating: "Allocating stock…"
+      allocating: "Allocating stock…",
+      dataChangedElsewhere: "This data was updated elsewhere.",
+      dataUpdated: "Data updated.",
+      dismiss: "Dismiss"
     },
     pager: {
       rows: "{n} rows",

@@ -98,6 +98,14 @@ async function resolve(row: IssueRow) {
 }
 
 onMounted(load);
+
+// Reload when a picking issue is reported or the order changes elsewhere.
+const {
+  pending: changePending,
+  justUpdated: changeUpdated,
+  refreshNow,
+  dismiss,
+} = useChangeNotice(["picking_order.issue_reported", "picking_order.updated"], load);
 </script>
 
 <template>
@@ -112,6 +120,7 @@ onMounted(load);
     <p class="muted explainer">{{ $t("admin.pages.issues.pickingExplainer") }}</p>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
+    <ChangeNotice :pending="changePending" :just-updated="changeUpdated" @refresh="refreshNow" @dismiss="dismiss" />
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
     <DataTable

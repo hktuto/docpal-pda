@@ -74,7 +74,9 @@ async function shipBox() {
   }
 }
 
-onMounted(async () => {
+async function load() {
+  loading.value = true;
+  error.value = "";
   try {
     detail.value = await flow.getShippingBox(boxId);
   } catch (e: any) {
@@ -82,7 +84,17 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
-});
+}
+
+onMounted(load);
+
+// Reload when the box is shipped or its orders change elsewhere.
+const {
+  pending: changePending,
+  justUpdated: changeUpdated,
+  refreshNow,
+  dismiss,
+} = useChangeNotice(["shipping_box.shipped", "picking_order.updated"], load);
 </script>
 
 <template>
@@ -103,6 +115,7 @@ onMounted(async () => {
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
+    <ChangeNotice :pending="changePending" :just-updated="changeUpdated" @refresh="refreshNow" @dismiss="dismiss" />
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
     <template v-else-if="detail">

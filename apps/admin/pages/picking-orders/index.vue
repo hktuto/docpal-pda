@@ -92,6 +92,23 @@ async function load() {
 
 watch(status, load);
 onMounted(load);
+
+// Reload when picking data changes elsewhere (PDA picks, sync, allocation).
+const {
+  pending: changePending,
+  justUpdated: changeUpdated,
+  refreshNow,
+  dismiss,
+} = useChangeNotice(
+  [
+    "picking_order.created",
+    "picking_order.updated",
+    "picking_order.deleted",
+    "picking.reordered",
+    "allocation.computed",
+  ],
+  load
+);
 </script>
 
 <template>
@@ -112,6 +129,7 @@ onMounted(load);
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
+    <ChangeNotice :pending="changePending" :just-updated="changeUpdated" @refresh="refreshNow" @dismiss="dismiss" />
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
     <DataTable

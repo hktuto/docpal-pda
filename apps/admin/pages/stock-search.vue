@@ -141,6 +141,17 @@ async function search() {
 }
 
 onMounted(loadSuppliers);
+
+// Re-run the current search when stock levels change elsewhere. No-op until
+// the user has searched at least once.
+const {
+  pending: changePending,
+  justUpdated: changeUpdated,
+  refreshNow,
+  dismiss,
+} = useChangeNotice(["allocation.computed", "put_away_task.completed"], async () => {
+  if (searched.value) await search();
+});
 </script>
 
 <template>
@@ -165,6 +176,7 @@ onMounted(loadSuppliers);
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
+    <ChangeNotice :pending="changePending" :just-updated="changeUpdated" @refresh="refreshNow" @dismiss="dismiss" />
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
     <p v-else-if="!searched" class="muted">{{ $t("admin.pages.stockSearch.hint") }}</p>
 

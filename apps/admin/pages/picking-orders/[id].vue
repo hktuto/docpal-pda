@@ -218,6 +218,29 @@ function allocationSource(a: PickingOrderDetail["items"][number]["allocations"][
 }
 
 onMounted(load);
+
+// Reload when the order changes elsewhere (PDA picks, issue reports, allocation).
+// Busy while the report-issue modal is open: banner instead of a silent reload.
+const changeBusy = computed(() => reportOpen.value);
+const {
+  pending: changePending,
+  justUpdated: changeUpdated,
+  refreshNow,
+  dismiss,
+} = useChangeNotice(
+  [
+    "picking_order.created",
+    "picking_order.updated",
+    "picking_order.deleted",
+    "picking.reordered",
+    "allocation.computed",
+  ],
+  async () => {
+    await load();
+    logsKey.value++;
+  },
+  { busy: changeBusy }
+);
 </script>
 
 <template>
@@ -243,6 +266,7 @@ onMounted(load);
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
+    <ChangeNotice :pending="changePending" :just-updated="changeUpdated" @refresh="refreshNow" @dismiss="dismiss" />
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
     <template v-else-if="order">

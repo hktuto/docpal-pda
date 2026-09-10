@@ -109,6 +109,16 @@ async function load() {
 }
 
 onMounted(load);
+
+// Reload when boxes are shipped or orders change elsewhere. Busy while rows
+// are selected (load() clears the selection): banner instead of silent reload.
+const changeBusy = computed(() => selected.value.size > 0);
+const {
+  pending: changePending,
+  justUpdated: changeUpdated,
+  refreshNow,
+  dismiss,
+} = useChangeNotice(["shipping_box.shipped", "picking_order.updated"], load, { busy: changeBusy });
 </script>
 
 <template>
@@ -147,6 +157,7 @@ onMounted(load);
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
+    <ChangeNotice :pending="changePending" :just-updated="changeUpdated" @refresh="refreshNow" @dismiss="dismiss" />
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
     <DataTable

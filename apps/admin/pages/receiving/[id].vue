@@ -424,6 +424,24 @@ async function removeItem(item: ReceivingItemRow) {
 }
 
 onMounted(load);
+
+// Reload when this order's data changes elsewhere (PDA scans, sync,
+// allocation runs). While the user is editing or has rows selected, show a
+// refresh banner instead of yanking the data out from under them.
+const changeBusy = computed(() => editItems.value !== null || selected.value.size > 0);
+const {
+  pending: changePending,
+  justUpdated: changeUpdated,
+  refreshNow,
+  dismiss,
+} = useChangeNotice(
+  ["receiving_order.upserted", "receiving_order.item_removed", "allocation.finished"],
+  async () => {
+    await load();
+    logsKey.value++;
+  },
+  { busy: changeBusy }
+);
 </script>
 
 <template>
@@ -452,6 +470,7 @@ onMounted(load);
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
+    <ChangeNotice :pending="changePending" :just-updated="changeUpdated" @refresh="refreshNow" @dismiss="dismiss" />
     <div v-if="allocState" class="alloc-banner" :class="`alloc-${allocState}`">
       {{ allocState === "done" && allocDurationMs > 0
         ? $t("admin.pages.receiving.allocation.doneIn", { ms: allocDurationMs })

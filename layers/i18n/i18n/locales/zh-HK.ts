@@ -952,7 +952,10 @@ export default {
       fitToContent: "適應內容寬度（雙擊欄邊緣）",
       sortBy: "排序",
       noSort: "不排序",
-      allocating: "正在計算庫存分配…"
+      allocating: "正在計算庫存分配…",
+      dataChangedElsewhere: "此數據已在別處更新。",
+      dataUpdated: "數據已更新。",
+      dismiss: "忽略"
     },
     pager: {
       rows: "共 {n} 行",
