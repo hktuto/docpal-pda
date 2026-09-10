@@ -92,6 +92,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </nav>
+      <AllocationIndicator />
       <div ref="userboxEl" class="userbox">
         <button class="username" @click="showUserMenu = !showUserMenu">
           {{ user?.displayName }}

@@ -951,7 +951,8 @@ export default {
       moveToTop: "Move to top",
       fitToContent: "Fit to content (double-click the column edge)",
       sortBy: "Sort by",
-      noSort: "No sorting"
+      noSort: "No sorting",
+      allocating: "Allocating stock…"
     },
     pager: {
       rows: "{n} rows",
@@ -1204,6 +1205,7 @@ export default {
         allocation: {
           running: "Stock allocation is running in the background…",
           done: "Stock allocation finished — data refreshed.",
+          doneIn: "Stock allocation finished in {ms} ms — data refreshed.",
           slow: "Allocation is taking longer than expected — it keeps running in the background."
         },
         none: "No receiving orders.",

@@ -951,7 +951,8 @@ export default {
       moveToTop: "置頂",
       fitToContent: "適應內容寬度（雙擊欄邊緣）",
       sortBy: "排序",
-      noSort: "不排序"
+      noSort: "不排序",
+      allocating: "正在計算庫存分配…"
     },
     pager: {
       rows: "共 {n} 行",
@@ -1202,6 +1203,7 @@ export default {
         allocation: {
           running: "後台正在計算庫存分配…",
           done: "庫存分配已完成 — 數據已刷新。",
+          doneIn: "庫存分配已完成（{ms} 毫秒）— 數據已刷新。",
           slow: "分配需時較長 — 將在後台繼續運行。"
         },
         none: "暫無收貨單。",

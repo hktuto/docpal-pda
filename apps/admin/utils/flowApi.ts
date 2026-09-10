@@ -65,6 +65,24 @@ export interface PickingOrderDetail extends Omit<PickingOrderRow, "itemCount" | 
 
 // ---- receiving ----
 
+export interface AllocationRunSummary {
+  demands: number;
+  fullyAllocated: number;
+  partiallyAllocated: number;
+  allocationsCreated: number;
+  allocationsRemoved: number;
+  skippedReceivingSources: number;
+  changed: boolean;
+  durationMs: number;
+}
+
+export interface ConfirmArrivalResult {
+  id: string;
+  batchNo: string;
+  status: string;
+  allocation: AllocationRunSummary | null;
+}
+
 export interface ReceivingOrderRow {
   id: string;
   batchNo: string;
@@ -312,7 +330,10 @@ export function useFlowApi() {
         )
       ).rows,
     getReceivingOrder: (id: string) => api.get<ReceivingOrderDetail>(`/receiving-orders/${id}`),
-    confirmReceivingArrival: (id: string) => api.post(`/receiving-orders/${id}/confirm-arrival`, {}),
+    // confirm-arrival runs the scoped allocation recompute synchronously;
+    // allocation is null when it fell back to the background full recompute.
+    confirmReceivingArrival: (id: string) =>
+      api.post<ConfirmArrivalResult>(`/receiving-orders/${id}/confirm-arrival`, {}),
     updateReceivingDeliveryDate: (id: string, deliveryDate: string | null) =>
       api.patch(`/admin/receiving-orders/${id}`, { deliveryDate }),
     updateReceivingItem: (

@@ -219,27 +219,35 @@ const mismatchActing = ref<Record<string, string>>({});
 // same endpoint the PDA uses.
 const confirmingArrival = ref(false);
 
-// Allocation runs in the background after confirm-arrival; allocation.finished
-// (SSE) tells us when the recompute is done so the page can refresh itself.
+// Allocation after confirm-arrival runs SCOPED + synchronously in the
+// request (allocateForReceivingOrder) — the response carries the summary.
+// Only when the backend fell back to the background full recompute
+// (allocation: null) do we wait for allocation.finished over SSE.
 const events = useAdminEvents();
 const allocState = ref<"" | "running" | "done" | "slow">("");
+const allocDurationMs = ref(0);
 let allocUnsub: (() => void) | undefined;
 let allocTimer: ReturnType<typeof setTimeout> | undefined;
+
+function showAllocationDone(durationMs: number | null) {
+  allocUnsub?.();
+  allocUnsub = undefined;
+  clearTimeout(allocTimer);
+  allocDurationMs.value = durationMs ?? 0;
+  allocState.value = "done";
+  setTimeout(() => {
+    if (allocState.value === "done") allocState.value = "";
+  }, 8000);
+}
 
 function waitForAllocation() {
   allocUnsub?.();
   clearTimeout(allocTimer);
   allocState.value = "running";
   allocUnsub = events.subscribe("allocation.finished", async () => {
-    allocUnsub?.();
-    allocUnsub = undefined;
-    clearTimeout(allocTimer);
     await load();
     logsKey.value++;
-    allocState.value = "done";
-    setTimeout(() => {
-      if (allocState.value === "done") allocState.value = "";
-    }, 8000);
+    showAllocationDone(null);
   });
   // No hard failure state — a slow recompute just keeps running in the
   // background; tell the user instead of spinning forever.
@@ -258,11 +266,13 @@ async function confirmInHand() {
   if (!window.confirm(t("admin.pages.receiving.confirmInHandConfirm", { batchNo: order.value.batchNo }))) return;
   confirmingArrival.value = true;
   error.value = "";
+  allocState.value = "";
   try {
-    await flow.confirmReceivingArrival(orderId);
+    const res = await flow.confirmReceivingArrival(orderId);
     await load();
     logsKey.value++;
-    waitForAllocation();
+    if (res.allocation) showAllocationDone(res.allocation.durationMs);
+    else waitForAllocation();
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -443,7 +453,9 @@ onMounted(load);
 
     <div v-if="error" class="error-banner">{{ error }}</div>
     <div v-if="allocState" class="alloc-banner" :class="`alloc-${allocState}`">
-      {{ $t(`admin.pages.receiving.allocation.${allocState}`) }}
+      {{ allocState === "done" && allocDurationMs > 0
+        ? $t("admin.pages.receiving.allocation.doneIn", { ms: allocDurationMs })
+        : $t(`admin.pages.receiving.allocation.${allocState}`) }}
     </div>
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
