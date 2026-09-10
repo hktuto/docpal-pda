@@ -1254,8 +1254,10 @@ export default {
         time: "時間",
         actor: "操作者",
         transition: "狀態變更",
+        item: "料號",
         details: "詳情",
-        empty: "暫無記錄。"
+        empty: "暫無記錄。",
+        searchPlaceholder: "搜尋記錄…"
       },
       issues: {
         receivingTitle: "收貨差異",

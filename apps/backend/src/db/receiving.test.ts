@@ -766,6 +766,32 @@ test("receiving order logs: order + item rows with actor name, newest first; 404
   assert.equal(itemLog!.actorName, "Demo Operator");
   assert.equal(itemLog!.metadata.reason, "damaged");
   assert.equal(itemLog!.metadata.note, "wet carton");
+  assert.equal(itemLog!.metadata.partNo, "RK73B1JTTD181G");
+
+  // paged variant: { rows, total } with LIMIT/OFFSET over the same WHERE
+  const page1 = await listReceivingOrderLogs(client.db, orderId, { page: 1, pageSize: 1 });
+  assert.ok(!Array.isArray(page1));
+  assert.equal(page1.total, 2);
+  assert.equal(page1.rows.length, 1);
+  assert.equal(page1.rows[0]!.toState, "in_hand");
+  const page2 = await listReceivingOrderLogs(client.db, orderId, { page: 2, pageSize: 1 });
+  assert.ok(!Array.isArray(page2));
+  assert.equal(page2.total, 2);
+  assert.equal(page2.rows[0]!.toState, "mismatch_reported");
+
+  // q searches actor name and metadata::text (partNo lands there via itemMeta)
+  const byActor = await listReceivingOrderLogs(client.db, orderId, { page: 1, q: "Demo Operator" });
+  assert.ok(!Array.isArray(byActor));
+  assert.equal(byActor.total, 2);
+  const byPart = await listReceivingOrderLogs(client.db, orderId, { page: 1, q: "RK73B1JTTD181G" });
+  assert.ok(!Array.isArray(byPart));
+  assert.equal(byPart.total, 1);
+  assert.equal(byPart.rows[0]!.entityType, "receiving_invoice_item");
+
+  // sort whitelist: toState asc puts in_hand before mismatch_reported
+  const sorted = await listReceivingOrderLogs(client.db, orderId, { page: 1, sort: "toState", dir: "asc" });
+  assert.ok(!Array.isArray(sorted));
+  assert.deepEqual(sorted.rows.map((l) => l.toState), ["in_hand", "mismatch_reported"]);
 
   const missing = await catchHttp(listReceivingOrderLogs(client.db, randomUUID()));
   assert.equal(missing.status, 404);

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { PickingOrderDetail, TransactionLogRow } from "~/utils/flowApi";
+import type { OrderLogsParams, OrderLogsPage, PickingOrderDetail } from "~/utils/flowApi";
 
 const route = useRoute();
 const orderId = route.params.id as string;
@@ -7,7 +7,10 @@ const flow = useFlowApi();
 const { t } = useI18n();
 
 const order = ref<PickingOrderDetail | null>(null);
-const logs = ref<TransactionLogRow[]>([]);
+// The audit-log table fetches itself; bump this key after mutations that
+// write logs so it reloads.
+const logsKey = ref(0);
+const fetchLogs = (p: OrderLogsParams): Promise<OrderLogsPage> => flow.listPickingOrderLogs(orderId, p);
 const loading = ref(true);
 const error = ref("");
 
@@ -114,6 +117,7 @@ async function submitReport() {
     await flow.reportPickingIssue(orderId, entry);
     reportOpen.value = false;
     await load();
+    logsKey.value++;
   } catch (e: any) {
     reportError.value = e.message;
   } finally {
@@ -125,12 +129,7 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const [detail, logRows] = await Promise.all([
-      flow.getPickingOrder(orderId),
-      flow.listPickingOrderLogs(orderId),
-    ]);
-    order.value = detail;
-    logs.value = logRows;
+    order.value = await flow.getPickingOrder(orderId);
     deliveryDate.value = order.value.deliveryDate ? order.value.deliveryDate.slice(0, 10) : "";
   } catch (e: any) {
     error.value = e.message;
@@ -146,6 +145,7 @@ async function saveDeliveryDate() {
   try {
     await flow.updatePickingDeliveryDate(orderId, deliveryDate.value || null);
     await load();
+    logsKey.value++;
     dateMsg.value = "saved";
   } catch (e: any) {
     error.value = e.message;
@@ -162,6 +162,7 @@ async function resolveIssue() {
   try {
     await flow.resolvePickingIssue(orderId, note);
     await load();
+    logsKey.value++;
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -355,7 +356,7 @@ onMounted(load);
         </table>
       </div>
 
-      <AuditLogTable :logs="logs" />
+      <AuditLogTable :fetch-logs="fetchLogs" :refresh-key="logsKey" />
     </template>
 
     <div

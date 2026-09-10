@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ReceivingOrderDetail, ReceivingItemRow, TransactionLogRow } from "~/utils/flowApi";
+import type { OrderLogsParams, OrderLogsPage, ReceivingOrderDetail, ReceivingItemRow } from "~/utils/flowApi";
 
 const route = useRoute();
 const orderId = route.params.id as string;
@@ -8,7 +8,10 @@ const { t } = useI18n();
 const apiBaseUrl = useRuntimeConfig().public.apiBaseUrl as string;
 
 const order = ref<ReceivingOrderDetail | null>(null);
-const logs = ref<TransactionLogRow[]>([]);
+// The audit-log table fetches itself; bump this key after mutations that
+// write logs so it reloads.
+const logsKey = ref(0);
+const fetchLogs = (p: OrderLogsParams): Promise<OrderLogsPage> => flow.listReceivingOrderLogs(orderId, p);
 const loading = ref(true);
 const error = ref("");
 
@@ -75,6 +78,7 @@ async function saveEdit(fields: Partial<Record<"dateCode" | "lotCode" | "coo" | 
     error.value = failed.map((f) => `${f.id}: ${f.message}`).join("; ");
   }
   await load();
+  logsKey.value++;
 }
 
 // Client-side invoice filter: an invoice matches when its invoiceNo contains
@@ -170,12 +174,7 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const [detail, logRows] = await Promise.all([
-      flow.getReceivingOrder(orderId),
-      flow.listReceivingOrderLogs(orderId),
-    ]);
-    order.value = detail;
-    logs.value = logRows;
+    order.value = await flow.getReceivingOrder(orderId);
     deliveryDate.value = order.value.deliveryDate ? order.value.deliveryDate.slice(0, 10) : "";
     selected.value = new Set();
   } catch (e: any) {
@@ -192,6 +191,7 @@ async function saveDeliveryDate() {
   try {
     await flow.updateReceivingDeliveryDate(orderId, deliveryDate.value || null);
     await load();
+    logsKey.value++;
     dateMsg.value = "saved";
   } catch (e: any) {
     error.value = e.message;
@@ -215,6 +215,7 @@ async function confirmInHand() {
   try {
     await flow.confirmReceivingArrival(orderId);
     await load();
+    logsKey.value++;
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -256,6 +257,7 @@ async function actMismatch(item: ReceivingItemRow, action: "confirm" | "cancel")
     if (action === "confirm") await flow.confirmReceivingMismatch(item.id);
     else await flow.cancelReceivingMismatch(item.id);
     await load();
+    logsKey.value++;
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -337,6 +339,7 @@ async function submitIssue() {
     await flow.reportReceivingMismatch(item.id, body);
     issueItem.value = null;
     await load();
+    logsKey.value++;
   } catch (e: any) {
     issueError.value = e.message;
   } finally {
@@ -355,6 +358,7 @@ async function removeItem(item: ReceivingItemRow) {
   try {
     await flow.removeReceivingItem(item.id);
     await load();
+    logsKey.value++;
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -577,7 +581,7 @@ onMounted(load);
         {{ $t("admin.pages.receiving.noInvoicesMatch") }}
       </p>
 
-      <AuditLogTable :logs="logs" />
+      <AuditLogTable :fetch-logs="fetchLogs" :refresh-key="logsKey" />
     </template>
 
     <div

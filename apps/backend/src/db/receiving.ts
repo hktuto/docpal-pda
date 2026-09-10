@@ -1,6 +1,6 @@
 import { newId } from "./id.js";
 import { HTTPException } from "hono/http-exception";
-import { inArray, sql } from "drizzle-orm";
+import { inArray, sql, type SQL } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { queryAll, queryGet, queryRun, type DbOrTx } from "./query.js";
 import { transactionLogs, inventoryTransactions, receivingScanLabels } from "./schema/index.js";
@@ -451,6 +451,10 @@ export interface MismatchInput {
 
 interface MismatchItemRow {
   id: string;
+  partNo: string;
+  wclItemNo: string | null;
+  poNo: string | null;
+  poLine: string | null;
   reportedMismatch: boolean;
   mismatchReason: string | null;
   mismatchQty: number | null;
@@ -461,7 +465,8 @@ interface MismatchItemRow {
 async function loadMismatchItem(tx: DbOrTx, itemId: string): Promise<MismatchItemRow> {
   const item = await queryGet<MismatchItemRow>(
     tx,
-    sql`SELECT id, reported_mismatch AS "reportedMismatch", mismatch_reason AS "mismatchReason",
+    sql`SELECT id, part_no AS "partNo", wcl_item_no AS "wclItemNo", po_no AS "poNo", po_line AS "poLine",
+               reported_mismatch AS "reportedMismatch", mismatch_reason AS "mismatchReason",
                mismatch_qty AS "mismatchQty", wrong_part_no AS "wrongPartNo", mismatch_note AS "mismatchNote"
         FROM receiving_invoice_items WHERE id = ${itemId}`
   );
@@ -483,9 +488,18 @@ function toMismatchInfo(item: MismatchItemRow): MismatchInfo {
   };
 }
 
+/** Item identifiers that make an item-typed log row self-describing. */
+function itemMeta(item: MismatchItemRow): Record<string, unknown> {
+  const m: Record<string, unknown> = { partNo: item.partNo };
+  if (item.wclItemNo) m.wclItemNo = item.wclItemNo;
+  if (item.poNo) m.poNo = item.poNo;
+  if (item.poLine) m.poLine = item.poLine;
+  return m;
+}
+
 async function logMismatch(
   tx: DbOrTx,
-  itemId: string,
+  item: MismatchItemRow,
   toState: string,
   actorId: string,
   metadata: Record<string, unknown>
@@ -493,11 +507,11 @@ async function logMismatch(
   await tx.insert(transactionLogs).values({
     id: newId(),
     entityType: "receiving_invoice_item",
-    entityId: itemId,
+    entityId: item.id,
     fromState: toState === "mismatch_reported" ? null : "mismatch_reported",
     toState,
     actorId,
-    metadata,
+    metadata: { ...itemMeta(item), ...metadata },
     createdDate: now(),
   });
 }
@@ -532,7 +546,7 @@ export async function reportReceivingItemMismatch(
             mismatch_note = ${note}
           WHERE id = ${item.id}`
     );
-    await logMismatch(tx, item.id, "mismatch_reported", input.actorId, {
+    await logMismatch(tx, item, "mismatch_reported", input.actorId, {
       reason: input.reason,
       mismatchQty,
       wrongPartNo,
@@ -571,7 +585,7 @@ export async function editReceivingItemMismatch(
             mismatch_note = ${note}
           WHERE id = ${item.id}`
     );
-    await logMismatch(tx, item.id, "mismatch_updated", input.actorId, { reason, mismatchQty, wrongPartNo, note });
+    await logMismatch(tx, item, "mismatch_updated", input.actorId, { reason, mismatchQty, wrongPartNo, note });
     await emitEvent(tx, {
       type: "receiving.mismatch_updated",
       topics: ["/receiving-orders"],
@@ -596,7 +610,7 @@ export async function confirmReceivingItemMismatch(
     await assertActor(tx, actorId);
     if (!item.reportedMismatch) throw new HTTPException(404, { message: "mismatch_not_found" });
 
-    await logMismatch(tx, item.id, "mismatch_confirmed", actorId, {
+    await logMismatch(tx, item, "mismatch_confirmed", actorId, {
       reason: item.mismatchReason,
       mismatchQty: item.mismatchQty,
       wrongPartNo: item.wrongPartNo,
@@ -632,7 +646,7 @@ export async function cancelReceivingItemMismatch(
             mismatch_note = NULL
           WHERE id = ${item.id}`
     );
-    await logMismatch(tx, item.id, "mismatch_cancelled", actorId, {});
+    await logMismatch(tx, item, "mismatch_cancelled", actorId, {});
     await emitEvent(tx, {
       type: "receiving.mismatch_cancelled",
       topics: ["/receiving-orders"],
@@ -697,26 +711,84 @@ export interface TransactionLogRow {
   createdDate: Date;
 }
 
+/** Server-paging params for the order audit-log lists (same convention as
+ *  the CRUD routes: page 1-based, pageSize default 50 max 200). */
+export interface OrderLogsParams {
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  sort?: string;
+  dir?: "asc" | "desc";
+}
+
+export interface OrderLogsPage {
+  rows: TransactionLogRow[];
+  total: number;
+}
+
+const LOG_SORTS: Record<string, SQL> = {
+  createdDate: sql`tl.created_date`,
+  actorName: sql`u.display_name`,
+  toState: sql`tl.to_state`,
+};
+
+/** Shared SELECT/ORDER BY helpers for the order-log queries. `where` already
+ *  scopes the rows to one order; `q` adds the ILIKE search predicate. */
+function logsQueryParts(params: OrderLogsParams | undefined, scope: SQL) {
+  const q = params?.q?.trim();
+  const like = `%${(q ?? "").replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
+  const where = q
+    ? sql`${scope} AND (u.display_name ILIKE ${like} OR tl.from_state ILIKE ${like} OR tl.to_state ILIKE ${like} OR tl.entity_type ILIKE ${like} OR tl.metadata::text ILIKE ${like})`
+    : scope;
+  const col = LOG_SORTS[params?.sort ?? ""] ?? LOG_SORTS.createdDate;
+  const dir = params?.dir === "asc" ? sql`ASC` : sql`DESC`;
+  return { where, orderBy: sql`ORDER BY ${col} ${dir} NULLS LAST, tl.id ${dir}` };
+}
+
 /** Audit trail for one receiving order: order-level rows plus the rows logged
  *  against its invoice items (mismatch report/edit/confirm/cancel), newest
- *  first. 404 when the order does not exist. */
-export async function listReceivingOrderLogs(db: AppDb, orderId: string): Promise<TransactionLogRow[]> {
+ *  first by default. With `params.page` set returns `{ rows, total }`
+ *  (LIMIT/OFFSET + COUNT over the same WHERE); otherwise the full array.
+ *  404 when the order does not exist. */
+export async function listReceivingOrderLogs(
+  db: AppDb,
+  orderId: string,
+  params?: OrderLogsParams
+): Promise<TransactionLogRow[] | OrderLogsPage> {
   const order = await queryGet<{ id: string }>(db, sql`SELECT id FROM receiving_orders WHERE id = ${orderId}`);
   if (!order) throw new HTTPException(404, { message: "receiving_order_not_found" });
+  const { where, orderBy } = logsQueryParts(
+    params,
+    sql`(tl.entity_type = 'receiving_order' AND tl.entity_id = ${orderId})
+        OR (tl.entity_type = 'receiving_invoice_item' AND tl.entity_id IN (
+              SELECT rii.id FROM receiving_invoice_items rii
+              JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+              WHERE ri.receiving_order_id = ${orderId}))`
+  );
+  const from = sql`FROM transaction_logs tl LEFT JOIN users u ON u.id = tl.actor_id WHERE ${where}`;
+  if (params?.page !== undefined) {
+    const page = Math.max(1, params.page);
+    const pageSize = Math.min(200, Math.max(1, params.pageSize ?? 50));
+    const [rows, count] = await Promise.all([
+      queryAll<TransactionLogRow>(
+        db,
+        sql`SELECT tl.id, tl.entity_type AS "entityType", tl.entity_id AS "entityId",
+                   tl.from_state AS "fromState", tl.to_state AS "toState",
+                   tl.actor_id AS "actorId", u.display_name AS "actorName",
+                   tl.metadata, tl.created_date AS "createdDate"
+            ${from} ${orderBy} LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`
+      ),
+      queryGet<{ total: number }>(db, sql`SELECT COUNT(*)::int AS total ${from}`),
+    ]);
+    return { rows, total: count?.total ?? 0 };
+  }
   return queryAll<TransactionLogRow>(
     db,
     sql`SELECT tl.id, tl.entity_type AS "entityType", tl.entity_id AS "entityId",
                tl.from_state AS "fromState", tl.to_state AS "toState",
                tl.actor_id AS "actorId", u.display_name AS "actorName",
                tl.metadata, tl.created_date AS "createdDate"
-        FROM transaction_logs tl
-        LEFT JOIN users u ON u.id = tl.actor_id
-        WHERE (tl.entity_type = 'receiving_order' AND tl.entity_id = ${orderId})
-           OR (tl.entity_type = 'receiving_invoice_item' AND tl.entity_id IN (
-                 SELECT rii.id FROM receiving_invoice_items rii
-                 JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-                 WHERE ri.receiving_order_id = ${orderId}))
-        ORDER BY tl.created_date DESC, tl.id DESC`
+        ${from} ${orderBy}`
   );
 }
 

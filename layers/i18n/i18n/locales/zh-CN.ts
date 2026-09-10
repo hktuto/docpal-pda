@@ -1254,8 +1254,10 @@ export default {
         time: "时间",
         actor: "操作者",
         transition: "状态变更",
+        item: "料号",
         details: "详情",
-        empty: "暂无记录。"
+        empty: "暂无记录。",
+        searchPlaceholder: "搜索记录…"
       },
       issues: {
         receivingTitle: "收货差异",

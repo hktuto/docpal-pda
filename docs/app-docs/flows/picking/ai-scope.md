@@ -71,7 +71,9 @@
   `pending`, clears the `issue_*` columns and re-allocates (admin Issues page
   `apps/admin/pages/issues/picking.vue` + picking order detail). The full
   history (report, resolve, and all other transitions) is visible on the
-  admin detail's audit-log table (`GET /admin/picking-orders/:id/logs`).
+  admin detail's audit-log table (`GET /admin/picking-orders/:id/logs`,
+  server-paged/searchable/sortable via `?page=&pageSize=&q=&sort=&dir=`;
+  item-typed rows carry partNo in `metadata`).
 - Page work lock: opening the picking detail or scan-session page acquires
   the server-side work lock on the order (`POST /picking-orders/:id/work-lock`,
   refreshed every 3 min while open, keepalive release on leave, expires 10 min

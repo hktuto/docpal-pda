@@ -344,7 +344,15 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   newest first) for the admin Issues page. The same router serves the admin
   audit-log reads `GET /admin/receiving-orders/:id/logs` /
   `GET /admin/picking-orders/:id/logs` (`transaction_logs` rows for the order
-  and its child entities, actor display name joined, newest first) and
+  and its child entities, actor display name joined, newest first by default).
+  The logs endpoints accept the CRUD-style server-paging params
+  `?page=&pageSize=&q=&sort=&dir=` (page 1-based, pageSize default 50 max 200;
+  `q` ILIKEs actor display_name / from_state / to_state / entity_type /
+  metadata::text; `sort` whitelist `createdDate` (default), `actorName`,
+  `toState`; `dir` asc|desc, default desc) and return `{rows, total}` when
+  `page` or `q` is present, the bare array otherwise. Item-typed rows carry
+  the item identifiers (`partNo`, plus `wclItemNo`/`poNo`/`poLine` where they
+  exist) in `metadata`. The router also serves
   `DELETE /admin/receiving-invoice-items/:id` — removes a not-yet-worked item
   (409 `item_work_started` when received/picked/put-away qty > 0 or
   allocations/shelf-box items reference it), logging `item_removed` against

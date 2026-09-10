@@ -1257,8 +1257,10 @@ export default {
         time: "Time",
         actor: "Actor",
         transition: "Transition",
+        item: "Item",
         details: "Details",
-        empty: "No log entries."
+        empty: "No log entries.",
+        searchPlaceholder: "Search logs…"
       },
       issues: {
         receivingTitle: "Receiving Mismatches",
