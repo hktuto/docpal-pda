@@ -1,8 +1,9 @@
 // Route-level tests for GET /admin/receiving-orders/:id/picking-list (spec
 // 2026-09-07-admin-receiving-picking-list-design.md): shipper-style xlsx —
-// part groups, one column per picking order, order-level (no ctn) rows,
-// Total/Balance. Dynamic app import so DATABASE_URL points at the test DB
-// first (same pattern as src/routes/admin-flow-config.test.ts).
+// merged per-part blocks (one row per carton, slot rows overlaid on the
+// block's last three rows), order-level (no ctn) rows, Total/Balance.
+// Dynamic app import so DATABASE_URL points at the test DB first (same
+// pattern as src/routes/admin-flow-config.test.ts).
 
 import { test, before } from "node:test";
 import assert from "node:assert/strict";
@@ -97,7 +98,7 @@ test("GET picking-list: 404 for an unknown receiving order", async () => {
   assert.equal(res.status, 404);
 });
 
-test("GET picking-list: shipper 3-row blocks with per-row order slots and balance", async () => {
+test("GET picking-list: merged part blocks with per-block order slots and balance", async () => {
   await reseed(client);
   const orderId = await seedScenario();
 
@@ -116,32 +117,33 @@ test("GET picking-list: shipper 3-row blocks with per-row order slots and balanc
   assert.equal(rows[1]![0], "Date: 2026-09-07");
   assert.equal(rows[2]![0], "Total Ctn: 2");
 
-  // Generic slot headers (the widest row has 2 allocations): the actual
-  // customer / order_no values ride on each item's own 3-row block.
-  assert.deepEqual(rows[4], ["Invoice / Ctn", "Part Number", "Qty", "Total Qty", "Customer", "Customer", "Balance"]);
-  assert.deepEqual(rows[5], ["", "Shelf", "", "", "Order No", "Order No", ""]);
+  // Generic slot headers (the widest block — the 2-carton group — merges 3
+  // allocations): the actual customer / order_no values ride on each group's
+  // own block.
+  assert.deepEqual(rows[4], ["Invoice / Ctn", "Part Number", "Qty", "Total Qty", "Customer", "Customer", "Customer", "Balance"]);
+  assert.deepEqual(rows[5], ["", "Shelf", "", "", "Order No", "Order No", "Order No", ""]);
+  assert.deepEqual(rows[6], ["", "", "", "", "", "", "", ""]); // blank row after the header
 
   // RK73H1JTTD3302F group first (alphabetical): the receipt has no item-level
   // allocations; order-level covers 200 of 500, so the shelf suggestion still
   // shows (seed fallback shelf for STORE1 = A-04-05). The whole-order block
   // closes the group carrying Total/Balance.
-  assert.deepEqual(rows[6], ["", "", "", "", "", "", ""]); // customer names (none)
-  assert.deepEqual(rows[7], ["", "A-04-05", "", "", "", "", ""]); // shelf + order refs
-  assert.deepEqual(rows[8], ["INV-PL-01", "RK73H1JTTD3302F", 500, "", "", "", ""]);
-  assert.deepEqual(rows[9], ["", "", "", "", "ACME Electronics (HK)", "", ""]);
-  assert.deepEqual(rows[10], ["", "", "", "", "SO-PL-001", "", ""]);
-  assert.deepEqual(rows[11], ["(order-level)", "RK73H1JTTD3302F", "", 500, 200, "", 300]);
-  assert.deepEqual(rows[12], ["", "", "", "", "", "", ""]); // group separator
+  assert.deepEqual(rows[7], ["", "", "", "", "", "", "", ""]); // customer names (none)
+  assert.deepEqual(rows[8], ["", "A-04-05", "", "", "", "", "", ""]); // shelf + order refs
+  assert.deepEqual(rows[9], ["INV-PL-01", "RK73H1JTTD3302F", 500, "", "", "", "", ""]);
+  assert.deepEqual(rows[10], ["", "", "", "", "ACME Electronics (HK)", "", "", ""]);
+  assert.deepEqual(rows[11], ["", "", "", "", "SO-PL-001", "", "", ""]);
+  assert.deepEqual(rows[12], ["(order-level)", "RK73H1JTTD3302F", "", 500, 200, "", "", 300]);
+  assert.deepEqual(rows[13], ["", "", "", "", "", "", "", ""]); // group separator
 
-  // RK73H2ATTD1372F group: FIFO gives SO-PL-001 1000 from ctn 7001 + 500 from
-  // ctn 7002; SO-PL-002 takes 1000 from ctn 7002. Col A = invoice_no + ctn_no;
-  // ctn 7001 is fully allocated → its shelf cell stays blank.
-  assert.deepEqual(rows[13], ["", "", "", "", "ACME Electronics (HK)", "", ""]);
-  assert.deepEqual(rows[14], ["", "", "", "", "SO-PL-001", "", ""]);
-  assert.deepEqual(rows[15], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, "", 1000, "", ""]);
-  assert.deepEqual(rows[16], ["", "", "", "", "ACME Electronics (HK)", "SO-PL-002", ""]);
-  assert.deepEqual(rows[17], ["", "A-04-05", "", "", "SO-PL-001", "SO-PL-002", ""]);
-  assert.deepEqual(rows[18], ["INV-PL-01 7002", "RK73H2ATTD1372F", 2000, 3000, 500, 1000, 500]);
+  // RK73H2ATTD1372F group: both cartons merge into ONE block — item rows
+  // stack, the slot rows overlay the block's last three rows. FIFO gives
+  // SO-PL-001 1000 from ctn 7001 + 500 from ctn 7002; SO-PL-002 takes 1000
+  // from ctn 7002, so SO-PL-001 occupies two slots. ctn 7002 is short 500 →
+  // the shelf suggestion sits in the Total Qty column of the order-ref row.
+  assert.deepEqual(rows[14], ["", "", "", "", "ACME Electronics (HK)", "ACME Electronics (HK)", "SO-PL-002", ""]);
+  assert.deepEqual(rows[15], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, "A-04-05", "SO-PL-001", "SO-PL-001", "SO-PL-002", ""]);
+  assert.deepEqual(rows[16], ["INV-PL-01 7002", "RK73H2ATTD1372F", 2000, 3000, 1000, 500, 1000, 500]);
 
-  assert.equal(rows.length, 19);
+  assert.equal(rows.length, 17);
 });

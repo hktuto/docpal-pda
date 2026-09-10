@@ -10,8 +10,9 @@ import { putAwayConfig } from "../../config.js";
 // Admin picking-list download (spec
 // docs/superpowers/specs/2026-09-07-admin-receiving-picking-list-design.md):
 // a shipper-style xlsx per receiving order — receipts grouped by part, each
-// receipt a 3-row block (customer names / recommended shelf + order numbers /
-// the item row as `invoice_no ctn_no` with per-slot allocated qtys).
+// group one merged block: one item row per carton (`invoice_no ctn_no` |
+// part | qty) with the slot rows (customer / order numbers / per-slot
+// allocated qtys) overlaid on the block's last three rows.
 
 interface OrderHeadRow {
   batchNo: string;
@@ -138,13 +139,13 @@ adminReceivingPickingListRoute.get("/receiving-orders/:id/picking-list", async (
     `
   );
 
-  // Shipper 3-row block layout: allocation columns are PER-ROW slots, not a
+  // Shipper block layout: allocation columns are PER-BLOCK slots, not a
   // global column per picking order (each receipt's order set differs, so
-  // global columns would sprawl). Every receipt prints as:
-  //   row 1: customer name per slot
-  //   row 2: recommended shelf above the part name + order_no per slot
-  //   row 3: `invoice_no ctn_no` | part | qty | per-slot allocated qty
-  // Slot count = the widest row's allocation count.
+  // global columns would sprawl). Every part group prints as one block:
+  //   one row per carton: `invoice_no ctn_no` | part | qty
+  //   customer names / order_nos / per-slot allocated qtys overlaid on the
+  //   block's last three rows (standalone rows above when fewer than 3)
+  // Slot count = the widest block's merged allocation count.
   interface SlotAlloc {
     customer: string; // customer name (fallback code / order_no)
     orderRef: string; // order_no (fallback po_no)
@@ -208,10 +209,15 @@ adminReceivingPickingListRoute.get("/receiving-orders/:id/picking-list", async (
         )
       : new Map<string, { shelfCode: string | null }>();
 
+  // Slot count = the widest block's allocation count. Cartons of the same
+  // part merge into one block, so a group's slots are the SUM of its items'
+  // allocations, not the max.
   let slotCount = 0;
   for (const group of groups) {
     slotCount = Math.max(slotCount, group.orderAllocs.length);
-    for (const item of group.items) slotCount = Math.max(slotCount, allocsByItem.get(item.id)?.length ?? 0);
+    let merged = 0;
+    for (const item of group.items) merged += allocsByItem.get(item.id)?.length ?? 0;
+    slotCount = Math.max(slotCount, merged);
   }
 
   const aoa: (string | number)[][] = [];
@@ -221,26 +227,66 @@ adminReceivingPickingListRoute.get("/receiving-orders/:id/picking-list", async (
   aoa.push([]);
   aoa.push(["Invoice / Ctn", "Part Number", "Qty", "Total Qty", ...Array(slotCount).fill("Customer"), "Balance"]);
   aoa.push(["", "Shelf", "", "", ...Array(slotCount).fill("Order No"), ""]);
+  aoa.push([]);
 
-  // A 3-row block: customer names / shelf + order refs / the receipt itself.
-  // `totalBalance` (totalQty, balance) lands on the block's item row when
-  // `last` — i.e. the closing row of the part group.
+  const width = 4 + slotCount + 1;
+
+  // Merged part block: every carton of the part is an item row
+  // (`invoice_no ctn_no` | part | qty), and the slot rows (customer / order
+  // ref / allocated qty) overlay the block's LAST THREE rows — spilling into
+  // standalone rows above the item rows when the group has fewer than 3
+  // cartons (1 carton → the original 3-row block). `totalBalance` (totalQty,
+  // balance) lands on the block's last row.
+  function pushGroupBlock(
+    partKey: string,
+    blockItems: { invoiceCtn: string; qty: number }[],
+    shelf: string,
+    allocs: SlotAlloc[],
+    totalBalance: [number, number] | null
+  ) {
+    const height = Math.max(blockItems.length, 3);
+    const rows: (string | number)[][] = Array.from({ length: height }, () =>
+      Array<string | number>(width).fill("")
+    );
+    blockItems.forEach((item, i) => {
+      const row = rows[height - blockItems.length + i];
+      row[0] = item.invoiceCtn;
+      row[1] = partKey;
+      row[2] = item.qty;
+    });
+    allocs.slice(0, slotCount).forEach((a, i) => {
+      rows[height - 3][4 + i] = a.customer;
+      rows[height - 2][4 + i] = a.orderRef;
+      rows[height - 1][4 + i] = a.qty;
+    });
+    // Shelf keeps its column-B seat for single-carton blocks; in merged
+    // blocks column B holds the part on every row, so it moves to the Total
+    // Qty column of the order-ref row (empty there — totals only land on the
+    // block's last row).
+    if (shelf) rows[height - 2][blockItems.length === 1 ? 1 : 3] = shelf;
+    if (totalBalance) {
+      rows[height - 1][3] = totalBalance[0];
+      rows[height - 1][width - 1] = totalBalance[1];
+    }
+    aoa.push(...rows);
+  }
+
+  // A standalone 3-row block (customer names / order refs / one qty row) —
+  // used for whole-order allocations that can't be pinned to a carton row.
   function pushBlock(
     partKey: string,
     invoiceCtn: string,
-    shelf: string,
-    qty: number | "",
     allocs: SlotAlloc[],
     totalBalance: [number, number] | null
   ) {
     const pad = <T>(fn: (a: SlotAlloc) => T | ""): (T | "")[] =>
       Array.from({ length: slotCount }, (_, i) => (allocs[i] ? fn(allocs[i]) : ""));
     aoa.push(["", "", "", "", ...pad((a) => a.customer), ""]);
-    aoa.push(["", shelf, "", "", ...pad((a) => a.orderRef), ""]);
+    aoa.push(["", "", "", "", ...pad((a) => a.orderRef), ""]);
     aoa.push([
       invoiceCtn,
       partKey,
-      qty,
+      "",
       totalBalance ? totalBalance[0] : "",
       ...pad((a) => a.qty),
       totalBalance ? totalBalance[1] : "",
@@ -260,30 +306,38 @@ adminReceivingPickingListRoute.get("/receiving-orders/:id/picking-list", async (
     // is fully allocated (fully allocated → no shelf suggestion needed).
     let orderLevelRemaining = group.orderAllocs.reduce((s, a) => s + a.qty, 0);
 
-    group.items.forEach((item, idx) => {
+    const blockItems: { invoiceCtn: string; qty: number }[] = [];
+    const mergedSlots: SlotAlloc[] = [];
+    let shelf = "";
+    for (const item of group.items) {
       const itemAllocsList = allocsByItem.get(item.id) ?? [];
+      mergedSlots.push(...itemAllocsList);
       let covered = itemAllocsList.reduce((s, a) => s + a.qty, 0);
       if (!item.ctnNo && orderLevelRemaining > 0) {
         const extra = Math.min(orderLevelRemaining, Math.max(0, item.receivedQty - covered));
         covered += extra;
         orderLevelRemaining -= extra;
       }
-      const shelf = covered >= item.receivedQty ? "" : (suggestions.get(item.partNo)?.shelfCode ?? "");
-      const last = idx === group.items.length - 1 && group.orderAllocs.length === 0;
-      pushBlock(
-        item.partKey,
-        [item.invoiceNo, item.ctnNo].filter(Boolean).join(" "),
-        shelf,
-        item.receivedQty,
-        itemAllocsList,
-        last ? [totalQty, totalQty - allocatedTotal] : null
-      );
-    });
+      if (!shelf && covered < item.receivedQty)
+        shelf = suggestions.get(item.partNo)?.shelfCode ?? "";
+      blockItems.push({
+        invoiceCtn: [item.invoiceNo, item.ctnNo].filter(Boolean).join(" "),
+        qty: item.receivedQty,
+      });
+    }
+
+    pushGroupBlock(
+      group.partKey,
+      blockItems,
+      shelf,
+      mergedSlots,
+      group.orderAllocs.length === 0 ? [totalQty, totalQty - allocatedTotal] : null
+    );
 
     // Whole-order (no ctn_no) allocations can't be pinned to a carton row —
     // they close the group as their own block so the Balance still adds up.
     if (group.orderAllocs.length > 0) {
-      pushBlock(group.partKey, "(order-level)", "", "", group.orderAllocs, [
+      pushBlock(group.partKey, "(order-level)", group.orderAllocs, [
         totalQty,
         totalQty - allocatedTotal,
       ]);
@@ -293,6 +347,11 @@ adminReceivingPickingListRoute.get("/receiving-orders/:id/picking-list", async (
   });
 
   const ws = XLSX.utils.aoa_to_sheet(aoa);
+  for (const addr of Object.keys(ws)) {
+    if (addr.startsWith("!")) continue;
+    const cell = ws[addr];
+    if (cell.t === "n") cell.z = "#,##0";
+  }
   ws["!cols"] = [
     { wch: 20 }, // Invoice / Ctn
     { wch: 26 }, // Part Number
