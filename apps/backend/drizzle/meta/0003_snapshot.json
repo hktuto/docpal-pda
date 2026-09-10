@@ -1,5 +1,5 @@
 {
-  "id": "ea205566-8411-40cb-8b63-b7491e2b0859",
+  "id": "88274ca1-ecc1-442e-b160-cd2b363c6947",
   "prevId": "0b9ffcd6-473b-429c-9806-3d29f01bfed3",
   "version": "7",
   "dialect": "postgresql",
@@ -184,7 +184,7 @@
               "nulls": "last"
             }
           ],
-          "isUnique": true,
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -224,7 +224,7 @@
         },
         "code": {
           "name": "code",
-          "type": "varchar(30)",
+          "type": "text",
           "primaryKey": false,
           "notNull": true
         },
@@ -262,21 +262,7 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "customer_profiles_code_customer_accounts_account_number_fk": {
-          "name": "customer_profiles_code_customer_accounts_account_number_fk",
-          "tableFrom": "customer_profiles",
-          "tableTo": "customer_accounts",
-          "columnsFrom": [
-            "code"
-          ],
-          "columnsTo": [
-            "account_number"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "customer_profiles_code_unique": {

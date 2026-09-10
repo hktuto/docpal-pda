@@ -137,7 +137,7 @@ export const netWeightFormula = pgTable("net_weight_formula", {
 });
 
 // Synced customer account master (party/account data from upstream).
-// customer_profiles.code carries the account_number this table is keyed by.
+// Not yet linked to customer_profiles — the relation is still being designed.
 export const customerAccounts = pgTable(
   "customer_accounts",
   {
@@ -151,16 +151,14 @@ export const customerAccounts = pgTable(
   },
   (t) => [
     index("idx_customer_accounts_party_id").on(t.partyId),
-    // unique because customer_profiles.code references it (FK target must be unique)
-    uniqueIndex("idx_customer_accounts_account_number").on(t.accountNumber),
+    index("idx_customer_accounts_account_number").on(t.accountNumber),
     index("idx_customer_accounts_status").on(t.accountStatus),
   ]
 );
 
 export const customerProfiles = pgTable("customer_profiles", {
   id: text("id").primaryKey(),
-  // business key — matches customer_accounts.account_number
-  code: varchar("code", { length: 30 }).notNull().unique().references(() => customerAccounts.accountNumber),
+  code: text("code").notNull().unique(),
   label: text("label").notNull(),
   rule: text("rule"), // customer custom requirement/formula (stored, not yet interpreted)
   remark: text("remark"),
