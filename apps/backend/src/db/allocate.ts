@@ -331,6 +331,11 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
     summary.demands = demands.length;
     if (demands.length === 0) {
       await refreshAllocationStatus(tx);
+      await emitEvent(tx, {
+        type: "allocation.finished",
+        topics: ["/picking-orders", "/receiving-orders"],
+        data: { ...summary, changed: false },
+      });
       return summary;
     }
 
@@ -544,13 +549,21 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
         `allocateAll: skipped ${summary.skippedReceivingSources} receiving source(s) with a NULL item location pair (org_id/sub_inventory_code)`
       );
     }
-    if (beforeKeys.slice().sort().join("\n") !== afterKeys.slice().sort().join("\n")) {
+    const changed = beforeKeys.slice().sort().join("\n") !== afterKeys.slice().sort().join("\n");
+    if (changed) {
       await emitEvent(tx, {
         type: "allocation.computed",
         topics: ["/picking-orders"],
         data: { ...summary },
       });
     }
+    // Fires on every run (unlike allocation.computed, which is change-gated)
+    // so UIs that triggered a recompute can tell the user when it is done.
+    await emitEvent(tx, {
+      type: "allocation.finished",
+      topics: ["/picking-orders", "/receiving-orders"],
+      data: { ...summary, changed },
+    });
     await refreshAllocationStatus(tx);
     return summary;
   });
