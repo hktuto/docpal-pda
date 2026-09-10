@@ -219,6 +219,40 @@ const mismatchActing = ref<Record<string, string>>({});
 // same endpoint the PDA uses.
 const confirmingArrival = ref(false);
 
+// Allocation runs in the background after confirm-arrival; allocation.finished
+// (SSE) tells us when the recompute is done so the page can refresh itself.
+const events = useAdminEvents();
+const allocState = ref<"" | "running" | "done" | "slow">("");
+let allocUnsub: (() => void) | undefined;
+let allocTimer: ReturnType<typeof setTimeout> | undefined;
+
+function waitForAllocation() {
+  allocUnsub?.();
+  clearTimeout(allocTimer);
+  allocState.value = "running";
+  allocUnsub = events.subscribe("allocation.finished", async () => {
+    allocUnsub?.();
+    allocUnsub = undefined;
+    clearTimeout(allocTimer);
+    await load();
+    logsKey.value++;
+    allocState.value = "done";
+    setTimeout(() => {
+      if (allocState.value === "done") allocState.value = "";
+    }, 8000);
+  });
+  // No hard failure state — a slow recompute just keeps running in the
+  // background; tell the user instead of spinning forever.
+  allocTimer = setTimeout(() => {
+    if (allocState.value === "running") allocState.value = "slow";
+  }, 60_000);
+}
+
+onBeforeUnmount(() => {
+  allocUnsub?.();
+  clearTimeout(allocTimer);
+});
+
 async function confirmInHand() {
   if (!order.value) return;
   if (!window.confirm(t("admin.pages.receiving.confirmInHandConfirm", { batchNo: order.value.batchNo }))) return;
@@ -228,6 +262,7 @@ async function confirmInHand() {
     await flow.confirmReceivingArrival(orderId);
     await load();
     logsKey.value++;
+    waitForAllocation();
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -407,6 +442,9 @@ onMounted(load);
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
+    <div v-if="allocState" class="alloc-banner" :class="`alloc-${allocState}`">
+      {{ $t(`admin.pages.receiving.allocation.${allocState}`) }}
+    </div>
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
     <template v-else-if="order">
@@ -630,5 +668,26 @@ onMounted(load);
 }
 :deep(td.actions) .btn {
   margin: 0 6px 4px 0;
+}
+.alloc-banner {
+  margin-bottom: 12px;
+  padding: 9px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+.alloc-running {
+  background: #fff8e6;
+  border: 1px solid #f0dca0;
+  color: #8a6d1a;
+}
+.alloc-done {
+  background: #e9f7ef;
+  border: 1px solid #b5e2c8;
+  color: #1e7a46;
+}
+.alloc-slow {
+  background: #eef2f7;
+  border: 1px solid #d5dee7;
+  color: #52606d;
 }
 </style>

@@ -1199,6 +1199,11 @@ export default {
         items: "明细数",
         remaining: "剩余",
         pendingPicking: "待拣货",
+        allocation: {
+          running: "后台正在计算库存分配…",
+          done: "库存分配已完成 — 数据已刷新。",
+          slow: "分配耗时较长 — 将在后台继续运行。"
+        },
         none: "暂无收货单。",
         detailTitle: "收货单 {batchNo}",
         downloadDeliveryOrderList: "下载送货单列表",

@@ -1201,6 +1201,11 @@ export default {
         items: "Items",
         remaining: "Remaining",
         pendingPicking: "Pending Picking",
+        allocation: {
+          running: "Stock allocation is running in the background…",
+          done: "Stock allocation finished — data refreshed.",
+          slow: "Allocation is taking longer than expected — it keeps running in the background."
+        },
         none: "No receiving orders.",
         detailTitle: "Receiving Order {batchNo}",
         downloadDeliveryOrderList: "Download delivery order list",

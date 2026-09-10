@@ -1199,6 +1199,11 @@ export default {
         items: "明細數",
         remaining: "剩餘",
         pendingPicking: "待揀貨",
+        allocation: {
+          running: "後台正在計算庫存分配…",
+          done: "庫存分配已完成 — 數據已刷新。",
+          slow: "分配需時較長 — 將在後台繼續運行。"
+        },
         none: "暫無收貨單。",
         detailTitle: "收貨單 {batchNo}",
         downloadDeliveryOrderList: "下載送貨單列表",
