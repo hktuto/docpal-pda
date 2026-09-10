@@ -109,7 +109,9 @@ const {
 
     <div class="filters">
       <select v-model="status">
-        <option v-for="s in STATUSES" :key="s" :value="s">{{ s || $t("admin.common.allStatuses") }}</option>
+        <option v-for="s in STATUSES" :key="s" :value="s">
+          {{ s ? $t(`status.receiving.${s}`) : $t("admin.common.allStatuses") }}
+        </option>
       </select>
       <input v-model="search" :placeholder="$t('admin.pages.receiving.searchPlaceholder')" />
     </div>
@@ -125,6 +127,7 @@ const {
       :on-reset-columns="resetColumnState"
       @row-click="(r) => navigateTo(`/receiving/${r.id}`)"
     >
+      <template #cell-status="{ row }">{{ $t(`status.receiving.${row.status}`) }}</template>
       <template #cell-supplier="{ row }">{{ row.supplierName ?? row.supplierCode ?? "—" }}</template>
       <template #cell-deliveryDate="{ row }">
         {{ row.deliveryDate ? new Date(row.deliveryDate).toLocaleDateString() : "—" }}

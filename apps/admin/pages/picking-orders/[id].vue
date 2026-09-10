@@ -271,7 +271,7 @@ const {
 
     <template v-else-if="order">
       <div class="detail-grid">
-        <div><div class="dt">{{ $t("admin.pages.pickingOrders.status") }}</div><div class="dd">{{ order.status }}</div></div>
+        <div><div class="dt">{{ $t("admin.pages.pickingOrders.status") }}</div><div class="dd">{{ $t(`status.picking.${order.status}`) }}</div></div>
         <div><div class="dt">{{ $t("admin.pages.pickingOrders.customer") }}</div><div class="dd">{{ order.customerCode ?? "—" }}</div></div>
         <div><div class="dt">{{ $t("admin.pages.pickingOrders.poNo") }}</div><div class="dd">{{ order.poNo ?? "—" }}</div></div>
         <div><div class="dt">{{ $t("admin.pages.pickingOrders.shipTo") }}</div><div class="dd">{{ order.shipTo ?? "—" }}</div></div>
@@ -331,7 +331,7 @@ const {
         :on-reset-columns="resetBoxesColumns"
       >
         <template #cell-status="{ row }">
-          {{ row.status }}
+          {{ $t(`status.box.${row.status}`) }}
           <div v-if="row.shippedAt" class="muted">{{ new Date(row.shippedAt).toLocaleDateString() }}</div>
         </template>
         <template #cell-boxSize="{ row }">{{ row.boxSize ?? "—" }}</template>

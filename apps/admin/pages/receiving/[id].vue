@@ -480,7 +480,7 @@ const {
 
     <template v-else-if="order">
       <div class="detail-grid">
-        <div><div class="dt">{{ $t("admin.pages.receiving.status") }}</div><div class="dd">{{ order.status }}</div></div>
+        <div><div class="dt">{{ $t("admin.pages.receiving.status") }}</div><div class="dd">{{ $t(`status.receiving.${order.status}`) }}</div></div>
         <div><div class="dt">{{ $t("admin.pages.receiving.supplier") }}</div><div class="dd">{{ order.supplier?.name ?? "—" }}</div></div>
         <div>
           <div class="dt">{{ $t("admin.pages.receiving.deliveryDate") }}</div>

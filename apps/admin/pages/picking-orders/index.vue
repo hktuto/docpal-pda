@@ -123,7 +123,9 @@ const {
 
     <div class="filters">
       <select v-model="status">
-        <option v-for="s in STATUSES" :key="s" :value="s">{{ s || $t("admin.common.allStatuses") }}</option>
+        <option v-for="s in STATUSES" :key="s" :value="s">
+          {{ s ? $t(`status.picking.${s}`) : $t("admin.common.allStatuses") }}
+        </option>
       </select>
       <input v-model="search" :placeholder="$t('admin.pages.pickingOrders.searchPlaceholder')" />
     </div>
@@ -139,6 +141,7 @@ const {
       :on-reset-columns="resetColumnState"
       @row-click="(r) => navigateTo(`/picking-orders/${r.id}`)"
     >
+      <template #cell-status="{ row }">{{ $t(`status.picking.${row.status}`) }}</template>
       <template #cell-prioritySeq="{ row }">
         <span class="muted">{{ row.prioritySeq }}</span>
       </template>
