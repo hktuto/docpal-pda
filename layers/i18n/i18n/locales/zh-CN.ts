@@ -38,6 +38,9 @@ export default {
   },
   common: {
     loading: "加载中…",
+    refresh: "刷新",
+    loadMore: "加载更多",
+    showingOf: "显示 {shown}/{total}",
     errorPrefix: "错误：{message}",
     serverDownTitle: "服务器暂时无法连接",
     serverDownMessage: "无法连接到 Warehouse 服务器，可能正在维护。系统会自动重试。",

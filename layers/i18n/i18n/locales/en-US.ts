@@ -38,6 +38,9 @@ export default {
   },
   common: {
     loading: "Loading…",
+    refresh: "Refresh",
+    loadMore: "Load more",
+    showingOf: "Showing {shown} of {total}",
     errorPrefix: "Error: {message}",
     serverDownTitle: "Server unavailable",
     serverDownMessage: "Cannot reach the Warehouse server. It may be under maintenance — the app will keep retrying automatically.",

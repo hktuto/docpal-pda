@@ -144,9 +144,11 @@ test("list: seeded order with item/qty counts; status filter", async () => {
   // keep the demo world hermetic: drop the other seeded picking order
   await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${orderId}`);
 
-  const rows = await listPickingOrders(client.db);
+  const { rows, total } = await listPickingOrders(client.db);
   assert.equal(rows.length, 1);
+  assert.equal(total, 1);
   const row = rows[0];
+  assert.ok(!("total" in row));
   assert.equal(row.id, orderId);
   assert.equal(row.orderNo, "SO-DEMO-0001");
   assert.equal(row.status, "pending");
@@ -158,8 +160,84 @@ test("list: seeded order with item/qty counts; status filter", async () => {
   assert.equal(row.totalQty, 1800);
   assert.equal(row.pickedQty, 0);
 
-  assert.equal((await listPickingOrders(client.db, "pending")).length, 1);
-  assert.equal((await listPickingOrders(client.db, "finished")).length, 0);
+  assert.equal((await listPickingOrders(client.db, { status: "pending" })).rows.length, 1);
+  assert.equal((await listPickingOrders(client.db, { status: "finished" })).rows.length, 0);
+});
+
+test("list: limit/offset slice the ordered window; total counts all matches", async () => {
+  await reseed(client);
+
+  const all = await listPickingOrders(client.db);
+  assert.equal(all.rows.length, 5);
+  assert.equal(all.total, 5);
+
+  const page1 = await listPickingOrders(client.db, { limit: 2 });
+  assert.equal(page1.total, 5);
+  assert.deepEqual(page1.rows.map((r) => r.id), all.rows.slice(0, 2).map((r) => r.id));
+
+  const page2 = await listPickingOrders(client.db, { limit: 2, offset: 2 });
+  assert.equal(page2.total, 5);
+  assert.deepEqual(page2.rows.map((r) => r.id), all.rows.slice(2, 4).map((r) => r.id));
+
+  const rest = await listPickingOrders(client.db, { limit: 2, offset: 4 });
+  assert.equal(rest.total, 5);
+  assert.deepEqual(rest.rows.map((r) => r.id), all.rows.slice(4).map((r) => r.id));
+});
+
+test("list: comma-separated status list matches each value", async () => {
+  await reseed(client);
+  const shipped = await insertPickingOrder("SO-LIST-SHIPPED", "shipped");
+
+  const single = await listPickingOrders(client.db, { status: "shipped" });
+  assert.equal(single.total, 1);
+  assert.deepEqual(single.rows.map((r) => r.id), [shipped]);
+
+  const multi = await listPickingOrders(client.db, { status: "pending, shipped" });
+  assert.equal(multi.total, 6);
+  assert.ok(multi.rows.every((r) => r.status === "pending" || r.status === "shipped"));
+
+  assert.equal((await listPickingOrders(client.db, { status: "" })).total, 6);
+});
+
+test("list: allocation filter matches allocation_status", async () => {
+  await reseed(client);
+  await allocateAll(client.db);
+
+  const expected = async (statuses: string[]) =>
+    (
+      await queryGet<{ n: number }>(
+        client.db,
+        sql`SELECT COUNT(*)::int AS n FROM picking_orders WHERE allocation_status = ANY(ARRAY[${sql.join(statuses, sql`, `)}])`
+      )
+    )!.n;
+
+  const allocated = await listPickingOrders(client.db, { allocation: "allocated" });
+  assert.ok(allocated.rows.length > 0);
+  assert.ok(allocated.rows.every((r) => r.allocationStatus === "allocated"));
+  assert.equal(allocated.total, await expected(["allocated"]));
+
+  const multi = await listPickingOrders(client.db, { allocation: "partial,unallocated" });
+  assert.ok(multi.rows.every((r) => r.allocationStatus === "partial" || r.allocationStatus === "unallocated"));
+  assert.equal(multi.total, await expected(["partial", "unallocated"]));
+});
+
+test("list: search matches order_no/po_no/customer_code case-insensitively", async () => {
+  await reseed(client);
+
+  const byOrderNo = await listPickingOrders(client.db, { search: "so-demo-0001" });
+  assert.equal(byOrderNo.total, 1);
+  assert.deepEqual(byOrderNo.rows.map((r) => r.orderNo), ["SO-DEMO-0001"]);
+
+  const byPoNo = await listPickingOrders(client.db, { search: "cust-po-9002" });
+  assert.equal(byPoNo.total, 1);
+  assert.deepEqual(byPoNo.rows.map((r) => r.orderNo), ["SO-DEMO-0002"]);
+
+  const byCustomer = await listPickingOrders(client.db, { search: "ACME" });
+  assert.equal(byCustomer.total, 5);
+
+  const none = await listPickingOrders(client.db, { search: "no-such-order" });
+  assert.equal(none.total, 0);
+  assert.equal(none.rows.length, 0);
 });
 
 // --- detail ---------------------------------------------------------------------
@@ -1183,7 +1261,7 @@ test("reorder: rewrites priority_seq, emits event, list follows, rejects bad ids
   assert.ok(ev);
 
   const list = await listPickingOrders(client.db);
-  const wanted = list.map((o) => o.id).filter((id) => [cOrder, a, b].includes(id));
+  const wanted = list.rows.map((o) => o.id).filter((id) => [cOrder, a, b].includes(id));
   assert.deepEqual(wanted, [cOrder, a, b]);
 
   const fin = await insertPickingOrder("SO-REORDER-FIN", "finished");

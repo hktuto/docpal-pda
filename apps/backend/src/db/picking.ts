@@ -519,11 +519,19 @@ export interface PickingOrderListRow {
   lastUpdateDate: Date;
 }
 
-/** List rows with per-order item/qty counts; `status` is a pass-through filter.
- *  Ordered by priority_seq (allocation order, admin-reorderable).
- *  Scoped to the flow config's allowedOrgIds when set. */
-export async function listPickingOrders(db: AppDb, status?: string): Promise<PickingOrderListRow[]> {
-  return queryAll<PickingOrderListRow>(
+/** List rows with per-order item/qty counts. `status`/`allocation` accept
+ *  comma-separated lists; `search` is a case-insensitive substring on
+ *  order_no/po_no/customer_code; `limit`/`offset` page the result (`total`
+ *  counts all matches). Ordered by priority_seq (allocation order,
+ *  admin-reorderable). Scoped to the flow config's allowedOrgIds when set. */
+export async function listPickingOrders(
+  db: AppDb,
+  opts?: { status?: string; allocation?: string; search?: string; limit?: number; offset?: number }
+): Promise<{ rows: PickingOrderListRow[]; total: number }> {
+  const statuses = (opts?.status ?? "").split(",").map((v) => v.trim()).filter(Boolean);
+  const allocations = (opts?.allocation ?? "").split(",").map((v) => v.trim()).filter(Boolean);
+  const search = opts?.search?.trim();
+  const rows = await queryAll<PickingOrderListRow & { total: number }>(
     db,
     sql`
       SELECT
@@ -539,17 +547,23 @@ export async function listPickingOrders(db: AppDb, status?: string): Promise<Pic
         COALESCE(SUM(pi.picked_qty), 0)::int AS "pickedQty",
         COALESCE(SUM(pi.allocated_qty), 0)::int AS "allocatedQty",
         po.created_date AS "createdDate",
-        po.last_update_date AS "lastUpdateDate"
+        po.last_update_date AS "lastUpdateDate",
+        COUNT(*) OVER ()::int AS "total"
       FROM picking_orders po
       LEFT JOIN picking_items pi ON pi.picking_order_id = po.id
       LEFT JOIN users w ON w.id = po.working_by
       WHERE TRUE
-      ${status ? sql`AND po.status = ${status}` : sql``}
+      ${statuses.length ? sql`AND po.status = ANY(ARRAY[${sql.join(statuses, sql`, `)}])` : sql``}
+      ${allocations.length ? sql`AND po.allocation_status = ANY(ARRAY[${sql.join(allocations, sql`, `)}])` : sql``}
+      ${search ? sql`AND (po.order_no ILIKE ${"%" + search + "%"} OR po.po_no ILIKE ${"%" + search + "%"} OR po.customer_code ILIKE ${"%" + search + "%"})` : sql``}
       ${allowedOrgFilter(sql`po.org_id`)}
       GROUP BY po.id, w.display_name
       ORDER BY po.priority_seq ASC, po.delivery_date ASC NULLS LAST, po.order_no
+      ${opts?.limit && opts.limit > 0 ? sql`LIMIT ${opts.limit} OFFSET ${opts.offset ?? 0}` : sql``}
     `
   );
+  const total = rows[0]?.total ?? 0;
+  return { rows: rows.map(({ total: _total, ...row }) => row), total };
 }
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { setCached, getCached, clearApiCache } from '~/services/apiCache';
 import { useWarehouseEvents } from '~/composables/useWarehouseEvents';
 
 const { showToastMock } = vi.hoisted(() => ({ showToastMock: vi.fn() }));
@@ -94,7 +93,6 @@ describe('useWarehouseEvents', () => {
     storage.setItem('warehouse-token', 'jwt-1');
     MockEventSource.instances = [];
     showToastMock.mockReset();
-    clearApiCache();
   });
 
   afterEach(() => {
@@ -128,7 +126,7 @@ describe('useWarehouseEvents', () => {
     expect(MockEventSource.instances).toHaveLength(1);
   });
 
-  it('a message persists the cursor, notifies matching subscribers and invalidates the cache', () => {
+  it('a message persists the cursor and notifies matching subscribers', () => {
     const events = useWarehouseEvents();
     events.connect();
     const source = MockEventSource.instances[0];
@@ -137,7 +135,6 @@ describe('useWarehouseEvents', () => {
     const unsubscribe = events.subscribe(['/picking-orders'], (e) => received.push(e));
     const otherCb = vi.fn();
     const unsubscribeOther = events.subscribe(['/receiving-orders'], otherCb);
-    setCached('http://api.test/picking-orders?status=open', [1]);
 
     const payload = makeEvent(42, 'picking_order.updated', ['/picking-orders']);
     source.emit('picking_order.updated', payload, '42');
@@ -145,7 +142,6 @@ describe('useWarehouseEvents', () => {
     expect(storage.getItem('wms-events-last-id')).toBe('42');
     expect(received).toEqual([payload]);
     expect(otherCb).not.toHaveBeenCalled();
-    expect(getCached('http://api.test/picking-orders?status=open')).toBeNull();
     // picking_order.updated is not a toastable type
     expect(showToastMock).not.toHaveBeenCalled();
 

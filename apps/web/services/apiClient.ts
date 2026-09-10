@@ -1,5 +1,4 @@
 import { I18nError } from "~/composables/i18nError";
-import { getCached, setCached, invalidatePrefix, clearApiCache } from "./apiCache";
 
 /** Plain Error with the HTTP status attached, for errors without an i18n key. */
 export class ApiError extends Error {
@@ -46,7 +45,7 @@ export interface ApiClientOptions {
 }
 
 export interface ApiClient {
-  get<T>(path: string, params?: QueryParams, opts?: { cache?: boolean }): Promise<T>;
+  get<T>(path: string, params?: QueryParams): Promise<T>;
   post<T>(path: string, body?: unknown): Promise<T>;
   patch<T>(path: string, body?: unknown): Promise<T>;
   del<T>(path: string, body?: unknown): Promise<T>;
@@ -94,8 +93,6 @@ function handleUnauthorized(path: string): void {
   } catch {
     // Storage unavailable (tests/SSR) — nothing to clear.
   }
-  // Drop every cached GET: responses were fetched under the dead session.
-  clearApiCache();
   if (typeof window === "undefined") return;
   if (window.location.pathname === "/login") return;
   // navigateTo is a Nuxt auto-import; fall back to a hard navigation where it
@@ -123,33 +120,6 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       if (qs) url += `?${qs}`;
     }
     return url;
-  }
-
-  // Local mutations invalidate cached GETs. The own first-path-segment prefix
-  // is always invalidated; MUTATION_INVALIDATIONS adds the related read models
-  // whose URLs live under a different segment (e.g. scan-to-pick POSTs under
-  // /picking-items but the picking detail reads /picking-orders/:id).
-  const MUTATION_INVALIDATIONS: Record<string, string[]> = {
-    "receiving-orders": ["/put-away", "/stock-search"],
-    "receiving-invoice-items": ["/receiving-orders"],
-    "picking-orders": ["/measuring-boxes", "/verify-tasks", "/receiving-orders", "/put-away", "/stock-search"],
-    "picking-items": ["/picking-orders", "/receiving-orders", "/stock-search"],
-    packages: ["/picking-orders", "/measuring-boxes", "/verify-tasks", "/receiving-orders"],
-    "shipping-boxes": ["/picking-orders", "/measuring-boxes", "/verify-tasks", "/receiving-orders"],
-    "shelf-boxes": ["/put-away", "/receiving-orders", "/stock-search"],
-    "put-away-scans": ["/put-away", "/receiving-orders"],
-    "verify-tasks": ["/picking-orders", "/measuring-boxes"],
-    "goods-verify-tasks": ["/stock-search"],
-  };
-
-  function invalidateForMutation(method: string, path: string): void {
-    if (method === "GET") return;
-    const segment = path.split("/")[1];
-    if (!segment) return;
-    invalidatePrefix(`/${segment}`);
-    for (const extra of MUTATION_INVALIDATIONS[segment] ?? []) {
-      invalidatePrefix(extra);
-    }
   }
 
   async function request<T>(
@@ -208,32 +178,17 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     }
 
     if (res.status === 204) {
-      invalidateForMutation(method, path);
       return undefined as T;
     }
     try {
-      const data = (await res.json()) as T;
-      invalidateForMutation(method, path);
-      return data;
+      return (await res.json()) as T;
     } catch {
       throw new ApiError(`${res.status}: invalid JSON response`, res.status);
     }
   }
 
-  async function get<T>(
-    path: string,
-    params?: QueryParams,
-    opts?: { cache?: boolean }
-  ): Promise<T> {
-    if (opts?.cache === false) {
-      return request<T>("GET", path, { params });
-    }
-    const url = buildUrl(path, params);
-    const hit = getCached<T>(url);
-    if (hit !== null) return hit;
-    const data = await request<T>("GET", path, { params });
-    setCached(url, data);
-    return data;
+  function get<T>(path: string, params?: QueryParams): Promise<T> {
+    return request<T>("GET", path, { params });
   }
 
   return {

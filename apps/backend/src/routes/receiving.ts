@@ -51,10 +51,16 @@ export const receivingRoute = new Hono();
 // List endpoint. `remainingItems` = invoice items not fully put away;
 // `pendingPickingOrders` = distinct open picking orders with allocations
 // pointing at this order (whole-order or via a boxed invoice item).
-// `?status=` is a pass-through filter (statuses evolve, no enum here).
+// `?status=` is a pass-through filter (statuses evolve, no enum here);
+// `?search=` matches batch_no / supplier name; `?limit=`/`?offset=` page.
 receivingRoute.get("/receiving-orders", async (c) => {
   const status = c.req.query("status");
-  const rows = await queryAll<ReceivingOrderListRow>(
+  const search = c.req.query("search")?.trim();
+  const limitParam = Number(c.req.query("limit"));
+  const offsetParam = Number(c.req.query("offset"));
+  const limit = Number.isNaN(limitParam) ? undefined : limitParam;
+  const offset = Number.isNaN(offsetParam) ? undefined : offsetParam;
+  const rows = await queryAll<ReceivingOrderListRow & { total: number }>(
     db,
     sql`
       SELECT
@@ -80,19 +86,23 @@ receivingRoute.get("/receiving-orders", async (c) => {
             AND (a.receiving_order_id = ro.id OR inv2.receiving_order_id = ro.id)
         ) AS "pendingPickingOrders",
         ro.created_date AS "createdDate",
-        ro.last_update_date AS "lastUpdateDate"
+        ro.last_update_date AS "lastUpdateDate",
+        COUNT(*) OVER ()::int AS "total"
       FROM receiving_orders ro
       LEFT JOIN suppliers s ON s.code = ro.supplier_code
       LEFT JOIN receiving_invoices inv ON inv.receiving_order_id = ro.id
       LEFT JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = inv.id
       WHERE TRUE
       ${status ? sql`AND ro.status = ${status}` : sql``}
+      ${search ? sql`AND (ro.batch_no ILIKE ${"%" + search + "%"} OR s.name ILIKE ${"%" + search + "%"})` : sql``}
       ${allowedOrgFilter(sql`ro.org_id`)}
       GROUP BY ro.id, s.id
-      ORDER BY ro.created_date DESC
+      ORDER BY ro.created_date DESC, ro.id
+      ${limit && limit > 0 ? sql`LIMIT ${limit} OFFSET ${offset ?? 0}` : sql``}
     `
   );
-  return c.json(rows, 200);
+  const total = rows[0]?.total ?? 0;
+  return c.json({ rows: rows.map(({ total: _total, ...row }) => row), total }, 200);
 });
 
 // ------------------------------------------------------------------

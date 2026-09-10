@@ -1,5 +1,4 @@
 import { ref, readonly } from "vue";
-import { invalidatePrefix } from "~/services/apiCache";
 import { getToken } from "~/services/adapters/apiAuth";
 import { getApiBaseUrl } from "~/utils/serverHost";
 import { useToast } from "~/composables/useToast";
@@ -11,9 +10,7 @@ import { useToast } from "~/composables/useToast";
  * Module-level singleton (same pattern as useToast): one EventSource for the
  * whole app, a persisted `wms-events-last-id` cursor used for the manual
  * reconnect loop (never the browser's Last-Event-ID auto-reconnect), topic
- * subscribers for mounted pages, and toasts for "new work" events. Every
- * event also invalidates its topics in the api cache (imported directly —
- * apiCache has no imports back, so there is no cycle).
+ * subscribers for mounted pages, and toasts for "new work" events.
  */
 
 export interface WarehouseEvent {
@@ -37,7 +34,7 @@ const KNOWN_EVENT_TYPES = [
   "receiving_order.upserted",
 ] as const;
 
-// Only "new work" events toast; the rest are cache invalidation only.
+// Only "new work" events toast; the rest are subscriber notification only.
 const TOASTS: Record<string, { key: string; to: string }> = {
   "allocation.computed": { key: "event_allocation_computed", to: "/picking" },
   "picking_order.created": { key: "event_picking_order_created", to: "/picking" },
@@ -88,9 +85,6 @@ function handleEvent(type: string, raw: MessageEvent): void {
     return; // malformed frame — ignore
   }
   const topics = Array.isArray(event.topics) ? event.topics : [];
-  for (const topic of topics) {
-    invalidatePrefix(topic);
-  }
   for (const sub of [...subscribers]) {
     if (sub.topics.some((t) => topics.includes(t))) {
       sub.cb(event);

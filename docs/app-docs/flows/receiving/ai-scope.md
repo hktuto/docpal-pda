@@ -4,7 +4,8 @@
 
 - List receiving orders with a status filter
   (`pending` / `provisional_received` / `in_hand` / `clear`) and a pending
-  picking-order count badge per order (computed server-side).
+  picking-order count badge per order (computed server-side); the list is
+  paged server-side (50 per page, Load more) with server-side search.
 - Show receiving order detail as one nested read: supplier (+ PDA profile),
   invoices → items (part embedded), each item carrying its flat mismatch
   columns.
@@ -77,7 +78,8 @@
 ## Key files
 
 - `pages/receiving/index.vue` — list page (compact rows, sticky status
-  filter + search, picking badge).
+  filter + search, picking badge; server-side paging — 50-row pages with
+  Load more, refresh button, debounced server-side search).
 - `pages/receiving/[id].vue` — detail page (items + picking tabs, confirm
   arrival, scan entry points).
 - `components/receiving/ReceivingItemsTab.vue` — items sub-view: compact

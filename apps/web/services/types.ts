@@ -33,6 +33,26 @@ export interface SupplierQrcodeTemplate {
 
 export type ReceivingFilter = "all" | "pending" | "provisional_received" | "in_hand" | "clear";
 
+/** Paged list envelope returned by the order list endpoints. */
+export interface ListPage<T> {
+  rows: T[];
+  total: number;
+}
+
+export interface ReceivingOrderListQuery {
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface PickingOrderListQuery {
+  status?: string;
+  allocation?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}
+
 export interface ReceivingOrderListRow {
   id: string;
   batchNo: string;

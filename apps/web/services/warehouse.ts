@@ -1,5 +1,8 @@
 import type {
   ReceivingFilter,
+  ReceivingOrderListQuery,
+  PickingOrderListQuery,
+  ListPage,
   ReceivingOrderListRow,
   ReceivingOrderDetail,
   ReceivingPickingSection,
@@ -40,7 +43,7 @@ import { createBackendWarehouseService } from "./adapters/backendWarehouse";
 
 export interface WarehouseService {
   // Receiving
-  getReceivingOrders(filter: ReceivingFilter): Promise<ReceivingOrderListRow[]>;
+  getReceivingOrders(filter: ReceivingFilter, query?: ReceivingOrderListQuery): Promise<ListPage<ReceivingOrderListRow>>;
   getReceivingOrder(id: string): Promise<ReceivingOrderDetail>;
   confirmReceivingOrderArrived(id: string): Promise<void>;
   scanReceiving(orderId: string, input: ReceivingScanInput): Promise<ReceivingScanResult>;
@@ -58,7 +61,7 @@ export interface WarehouseService {
   // Picking — nested detail read; mutations mirror the backend verbs
   // one-to-one (docs/backend/api-design.md §Picking). The shipping-box
   // verbs are shared with the receiving picking tab and the measuring flow.
-  getPickingOrders(status?: string): Promise<PickingOrderListRow[]>;
+  getPickingOrders(query?: PickingOrderListQuery): Promise<ListPage<PickingOrderListRow>>;
   getPickingOrder(id: string): Promise<PickingOrderDetail>;
   scanPickingItem(
     itemId: string,

@@ -1,5 +1,8 @@
 import type {
   ReceivingFilter,
+  ReceivingOrderListQuery,
+  PickingOrderListQuery,
+  ListPage,
   ReceivingOrderListRow,
   ReceivingOrderDetail,
   ReceivingPickingSection,
@@ -86,10 +89,14 @@ export function createBackendWarehouseService(
   return {
     // Receiving
     async getReceivingOrders(
-      filter: ReceivingFilter
-    ): Promise<ReceivingOrderListRow[]> {
+      filter: ReceivingFilter,
+      query?: ReceivingOrderListQuery
+    ): Promise<ListPage<ReceivingOrderListRow>> {
       return client.get("/receiving-orders", {
         status: filter === "all" ? undefined : filter,
+        search: query?.search,
+        limit: query?.limit,
+        offset: query?.offset,
       });
     },
     async getReceivingOrder(id: string): Promise<ReceivingOrderDetail> {
@@ -147,8 +154,14 @@ export function createBackendWarehouseService(
     // Picking — list + nested detail, then the mutation verbs in design-doc
     // order. Allocation ids are unstable after scans (allocateAll rebuilds
     // them), so callers must re-fetch the detail rather than cache ids.
-    async getPickingOrders(status?: string): Promise<PickingOrderListRow[]> {
-      return client.get("/picking-orders", { status });
+    async getPickingOrders(query?: PickingOrderListQuery): Promise<ListPage<PickingOrderListRow>> {
+      return client.get("/picking-orders", {
+        status: query?.status,
+        allocation: query?.allocation,
+        search: query?.search,
+        limit: query?.limit,
+        offset: query?.offset,
+      });
     },
     async getPickingOrder(id: string): Promise<PickingOrderDetail> {
       return client.get(`/picking-orders/${id}`);

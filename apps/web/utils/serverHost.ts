@@ -92,10 +92,9 @@ export function getApiBaseUrl(): string {
 }
 
 // Backend-scoped state cleared on a backend switch so nothing leaks across
-// environments: the session (token belongs to the old backend), the SWR GET
-// cache, and the SSE event cursor. The locale preference is kept.
+// environments: the session (token belongs to the old backend) and the SSE
+// event cursor. The locale preference is kept.
 const SESSION_KEYS = ["warehouse-token", "warehouse-user-id", "warehouse-user"];
-const API_CACHE_PREFIX = "wms-cache:";
 const SSE_CURSOR_KEY = "wms-events-last-id";
 
 export function switchServerHost(url: string) {
@@ -103,12 +102,6 @@ export function switchServerHost(url: string) {
   try {
     for (const key of SESSION_KEYS) window.localStorage.removeItem(key);
     window.localStorage.removeItem(SSE_CURSOR_KEY);
-    const cacheKeys: string[] = [];
-    for (let i = 0; i < window.localStorage.length; i++) {
-      const key = window.localStorage.key(i);
-      if (key?.startsWith(API_CACHE_PREFIX)) cacheKeys.push(key);
-    }
-    for (const key of cacheKeys) window.localStorage.removeItem(key);
   } catch {
     /* WebView storage unavailable — the new host is still saved */
   }

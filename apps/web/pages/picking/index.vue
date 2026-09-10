@@ -20,10 +20,19 @@
           </svg>
           <span v-if="hasActiveFilter" class="filter-btn__dot" aria-hidden="true"></span>
         </button>
+        <button
+          type="button"
+          class="filter-btn"
+          :aria-label="$t('common.refresh')"
+          :disabled="loading"
+          @click="refresh"
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+        </button>
       </div>
     </div>
 
-    <p v-if="loading" class="empty">{{ $t('common.loading') }}</p>
+    <p v-if="loading && rows.length === 0" class="empty">{{ $t('common.loading') }}</p>
     <p v-else-if="loadError" class="empty" style="color: var(--danger);">{{ $t('common.errorPrefix', { message: loadError }) }}</p>
     <p v-else-if="reportMessage" class="empty" style="color: #92400e;">{{ reportMessage }}</p>
     <p v-else-if="rows.length === 0" class="empty">{{ $t('common.noPickingOrders') }}</p>
@@ -63,6 +72,23 @@
       </div>
     </div>
 
+    <div
+      v-if="rows.length > 0"
+      class="list-footer"
+      :class="{ 'list-footer--clear-bulk-bar': hasSelection }"
+    >
+      <span class="list-footer__count">{{ $t('common.showingOf', { shown: rows.length, total }) }}</span>
+      <button
+        v-if="hasMore"
+        type="button"
+        class="btn btn--small"
+        :disabled="loading"
+        @click="load(false)"
+      >
+        {{ $t('common.loadMore') }}
+      </button>
+    </div>
+
     <div v-if="hasSelection" class="bulk-actions">
       <span>{{ $t('common.selectedCount', { count: selectedOrders.length }) }}</span>
       <button class="btn btn--small btn--danger" @click="openModal">
@@ -92,6 +118,7 @@ import { badgeClass } from "~/composables/useStatusBadge";
 import { useWarehouse } from "~/composables/useWarehouse";
 import type {
   PickingOrderListRow,
+  PickingOrderListQuery,
   PickingIssueReason,
   ReportPickingIssueEntry,
 } from "~/services/types";
@@ -106,7 +133,9 @@ const warehouse = useWarehouse();
 useHead({ title: t("picking.title") });
 
 const search = ref("");
-const rawRows = ref<PickingOrderListRow[]>([]);
+const PAGE_SIZE = 50;
+const rows = ref<PickingOrderListRow[]>([]);
+const total = ref(0);
 const loading = ref(true);
 const loadError = ref<string | null>(null);
 const reportMessage = ref<string | null>(null);
@@ -122,45 +151,74 @@ const hasActiveFilter = computed(
   () => filterStatuses.value.length > 0 || filterAllocation.value.length > 0
 );
 
+const hasMore = computed(() => rows.value.length < total.value);
+
 function onFilterApply(payload: { statuses: string[]; allocation: string[] }) {
   filterStatuses.value = payload.statuses;
   filterAllocation.value = payload.allocation;
+  load(true);
 }
 
-async function load() {
+function listQuery(limit: number, offset: number): PickingOrderListQuery {
+  const term = search.value.trim();
+  return {
+    status: filterStatuses.value.length > 0 ? filterStatuses.value.join(",") : undefined,
+    allocation: filterAllocation.value.length > 0 ? filterAllocation.value.join(",") : undefined,
+    search: term || undefined,
+    limit,
+    offset,
+  };
+}
+
+async function load(reset: boolean) {
   loading.value = true;
   loadError.value = null;
   reportMessage.value = null;
   try {
-    rawRows.value = await warehouse.getPickingOrders();
+    const page = await warehouse.getPickingOrders(
+      listQuery(PAGE_SIZE, reset ? 0 : rows.value.length)
+    );
+    rows.value = reset ? page.rows : [...rows.value, ...page.rows];
+    total.value = page.total;
   } catch (e) {
     loadError.value = errorMessage(e);
-    rawRows.value = [];
+    if (reset) {
+      rows.value = [];
+      total.value = 0;
+    }
   } finally {
     loading.value = false;
   }
 }
 
-const rows = computed(() => {
-  let list = rawRows.value;
-  if (filterStatuses.value.length > 0) {
-    list = list.filter((r) => filterStatuses.value.includes(r.status));
+async function refresh() {
+  loading.value = true;
+  loadError.value = null;
+  reportMessage.value = null;
+  try {
+    const page = await warehouse.getPickingOrders(
+      listQuery(Math.max(rows.value.length, PAGE_SIZE), 0)
+    );
+    rows.value = page.rows;
+    total.value = page.total;
+  } catch (e) {
+    loadError.value = errorMessage(e);
+  } finally {
+    loading.value = false;
   }
-  if (filterAllocation.value.length > 0) {
-    list = list.filter((r) => filterAllocation.value.includes(r.allocationStatus));
-  }
-  const term = search.value.trim().toLowerCase();
-  if (!term) return list;
-  return list.filter(
-    (r) =>
-      r.orderNo.toLowerCase().includes(term) ||
-      (r.poNo?.toLowerCase().includes(term) ?? false) ||
-      (r.customerCode?.toLowerCase().includes(term) ?? false)
-  );
+}
+
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
+watch(search, () => {
+  if (searchTimer) clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => load(true), 300);
+});
+onUnmounted(() => {
+  if (searchTimer) clearTimeout(searchTimer);
 });
 
 const selectedOrders = computed(() =>
-  rawRows.value
+  rows.value
     .filter((r) => selectedIds.value.has(r.id))
     .map((r) => ({ id: r.id, orderNo: r.orderNo, totalQty: r.totalQty }))
 );
@@ -208,7 +266,7 @@ async function onReportSaved(payload: {
     const result = await warehouse.reportPickingOrderIssues(entries);
     selectedIds.value = new Set();
     modalOpen.value = false;
-    await load();
+    await load(true);
     if (result.reported.length > 0) {
       reportMessage.value = t('picking.issueReportSummary', {
         reported: result.reported.length,
@@ -222,7 +280,7 @@ async function onReportSaved(payload: {
   }
 }
 
-useVisibleReload(load, ["/picking-orders"]);
+useVisibleReload(refresh, ["/picking-orders"]);
 </script>
 
 <style scoped>
@@ -264,6 +322,28 @@ useVisibleReload(load, ["/picking-orders"]);
   height: 0.5rem;
   border-radius: 50%;
   background: var(--primary);
+}
+
+.filter-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.list-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.list-footer--clear-bulk-bar {
+  margin-bottom: 5rem;
+}
+
+.list-footer__count {
+  font-size: 0.8125rem;
+  color: var(--muted);
 }
 
 .list-row__lock {

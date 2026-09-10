@@ -2,8 +2,8 @@
 
 ## In scope
 
-- List picking orders with a status filter and text search; multi-select
-  batch issue reporting.
+- List picking orders with a status filter and text search (both
+  server-side, paged 50 at a time); multi-select batch issue reporting.
 - Show picking order detail as one nested read: order (incl. issue fields),
   items → allocations (with lot or receiving-area
   source) and packages, plus the shipping boxes.
@@ -144,7 +144,9 @@
 ## Key files
 
 - `pages/picking/index.vue` — list page (compact rows, sticky search,
-  status filter, batch issue report dialog).
+  status filter, batch issue report dialog; server-side paging — 50-row
+  pages with Load more, refresh button, debounced server-side search and
+  multi-status/allocation filters).
 - `pages/picking/[id].vue` — detail page (items/allocations/packages,
   boxes, logs, finish; single Scan action → scan session).
 - `pages/picking/scan/[id].vue` — scan-session ("checkout") page: armed

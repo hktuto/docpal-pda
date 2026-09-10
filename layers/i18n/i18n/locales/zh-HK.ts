@@ -38,6 +38,9 @@ export default {
   },
   common: {
     loading: "載入中…",
+    refresh: "刷新",
+    loadMore: "載入更多",
+    showingOf: "顯示 {shown}/{total}",
     errorPrefix: "錯誤：{message}",
     serverDownTitle: "伺服器暫時無法連線",
     serverDownMessage: "無法連到 Warehouse 伺服器，可能正在維護。系統會自動重試。",
