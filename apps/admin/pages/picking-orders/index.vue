@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import type { PickingOrderRow } from "~/utils/flowApi";
+import type { AdminColumnDef } from "~/composables/useAdminTable";
 
 const flow = useFlowApi();
+const { t } = useI18n();
 const rows = ref<PickingOrderRow[]>([]);
 const loading = ref(false);
 const error = ref("");
@@ -9,8 +11,6 @@ const status = ref("");
 const search = ref("");
 
 const STATUSES = ["", "pending", "picking", "finished", "issue", "shipped"];
-
-const { sortKey, sortDir, toggleSort, sortRows } = useColumnSort("admin-sort:picking-list");
 
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase();
@@ -24,27 +24,59 @@ const filtered = computed(() => {
   );
 });
 
-// Display values for derived columns (mirror what the <td> renders).
-function getVal(r: PickingOrderRow, key: string): unknown {
-  switch (key) {
-    case "pickedRatio":
-      return r.totalQty > 0 ? r.pickedQty / r.totalQty : 0;
-    case "allocation":
-      return r.totalQty > 0 ? r.allocatedQty / r.totalQty : 0;
-    case "deliveryDate":
-      return r.deliveryDate ?? "";
-    case "createdDate":
-      return r.createdDate;
-    case "lastUpdateDate":
-      return r.lastUpdateDate;
-    default:
-      return (r as any)[key];
-  }
-}
+// accessors resolve the derived display values used for sorting.
+const columnDefs = computed<AdminColumnDef<PickingOrderRow>[]>(() => [
+  { key: "prioritySeq", label: "#", size: 50 },
+  { key: "orderNo", label: t("admin.pages.pickingOrders.orderNo"), size: 150 },
+  { key: "status", label: t("admin.pages.pickingOrders.status"), size: 100 },
+  { key: "customerCode", label: t("admin.pages.pickingOrders.customer"), size: 110 },
+  { key: "poNo", label: t("admin.pages.pickingOrders.poNo"), size: 130 },
+  { key: "shipTo", label: t("admin.pages.pickingOrders.shipTo"), size: 200 },
+  {
+    key: "deliveryDate",
+    label: t("admin.pages.pickingOrders.deliveryDate"),
+    accessor: (r) => r.deliveryDate ?? "",
+    size: 120,
+  },
+  { key: "itemCount", label: t("admin.pages.pickingOrders.items"), size: 80 },
+  {
+    key: "pickedRatio",
+    label: t("admin.pages.pickingOrders.pickedTotal"),
+    accessor: (r) => (r.totalQty > 0 ? r.pickedQty / r.totalQty : 0),
+    size: 100,
+  },
+  {
+    key: "allocation",
+    label: t("admin.pages.pickingOrders.allocation"),
+    accessor: (r) => (r.totalQty > 0 ? r.allocatedQty / r.totalQty : 0),
+    size: 170,
+  },
+  { key: "workingByName", label: t("admin.pages.pickingOrders.lockedBy"), size: 110 },
+  { key: "createdDate", label: t("admin.fields.createdDate"), size: 170 },
+  { key: "lastUpdateDate", label: t("admin.fields.lastUpdateDate"), size: 170 },
+]);
 
-const sorted = computed(() => sortRows(filtered.value, getVal));
+const { table, pagination, resetColumnState } = useAdminTable({
+  tableId: "picking-list",
+  columns: columnDefs,
+  rows: filtered,
+  getRowId: (r) => r.id,
+});
 
-const { page, pageSize, total, paged } = usePaging(sorted);
+// Pager uses a 1-based page; the table uses a 0-based pageIndex.
+const page = computed({
+  get: () => pagination.value.pageIndex + 1,
+  set: (v: number) => {
+    pagination.value = { ...pagination.value, pageIndex: v - 1 };
+  },
+});
+const pageSize = computed({
+  get: () => pagination.value.pageSize,
+  set: (v: number) => {
+    pagination.value = { pageIndex: 0, pageSize: v };
+  },
+});
+const total = computed(() => filtered.value.length);
 
 async function load() {
   loading.value = true;
@@ -82,89 +114,28 @@ onMounted(load);
     <div v-if="error" class="error-banner">{{ error }}</div>
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
-    <div v-else class="table-wrap">
-      <table class="data">
-        <thead>
-          <tr>
-            <th class="sortable" @click="toggleSort('prioritySeq')">
-              #
-              <span v-if="sortKey === 'prioritySeq'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('orderNo')">
-              {{ $t("admin.pages.pickingOrders.orderNo") }}
-              <span v-if="sortKey === 'orderNo'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('status')">
-              {{ $t("admin.pages.pickingOrders.status") }}
-              <span v-if="sortKey === 'status'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('customerCode')">
-              {{ $t("admin.pages.pickingOrders.customer") }}
-              <span v-if="sortKey === 'customerCode'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('poNo')">
-              {{ $t("admin.pages.pickingOrders.poNo") }}
-              <span v-if="sortKey === 'poNo'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('shipTo')">
-              {{ $t("admin.pages.pickingOrders.shipTo") }}
-              <span v-if="sortKey === 'shipTo'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('deliveryDate')">
-              {{ $t("admin.pages.pickingOrders.deliveryDate") }}
-              <span v-if="sortKey === 'deliveryDate'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('itemCount')">
-              {{ $t("admin.pages.pickingOrders.items") }}
-              <span v-if="sortKey === 'itemCount'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('pickedRatio')">
-              {{ $t("admin.pages.pickingOrders.pickedTotal") }}
-              <span v-if="sortKey === 'pickedRatio'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('allocation')">
-              {{ $t("admin.pages.pickingOrders.allocation") }}
-              <span v-if="sortKey === 'allocation'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('workingByName')">
-              {{ $t("admin.pages.pickingOrders.lockedBy") }}
-              <span v-if="sortKey === 'workingByName'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('createdDate')">
-              {{ $t("admin.common.createdDate") }}
-              <span v-if="sortKey === 'createdDate'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('lastUpdateDate')">
-              {{ $t("admin.common.lastUpdateDate") }}
-              <span v-if="sortKey === 'lastUpdateDate'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="r in paged" :key="r.id" class="clickable" @click="navigateTo(`/picking-orders/${r.id}`)">
-            <td class="muted">{{ r.prioritySeq }}</td>
-            <td>{{ r.orderNo }}</td>
-            <td>{{ r.status }}</td>
-            <td>{{ r.customerCode ?? "—" }}</td>
-            <td>{{ r.poNo ?? "—" }}</td>
-            <td>{{ r.shipTo ?? "—" }}</td>
-            <td>{{ r.deliveryDate ? new Date(r.deliveryDate).toLocaleDateString() : "—" }}</td>
-            <td>{{ r.itemCount }}</td>
-            <td>{{ r.pickedQty }} / {{ r.totalQty }}</td>
-            <td>
-              {{ $t(`admin.pages.pickingOrders.allocationLabels.${r.allocationStatus}`) }}
-              ({{ r.allocatedQty }} / {{ r.totalQty }})
-            </td>
-            <td>{{ r.workingByName ?? "" }}</td>
-            <td>{{ new Date(r.createdDate).toLocaleString() }}</td>
-            <td>{{ new Date(r.lastUpdateDate).toLocaleString() }}</td>
-          </tr>
-          <tr v-if="total === 0">
-            <td colspan="13" class="muted">{{ $t("admin.pages.pickingOrders.none") }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      v-else
+      :table="table"
+      :empty-text="$t('admin.pages.pickingOrders.none')"
+      :on-reset-columns="resetColumnState"
+      @row-click="(r) => navigateTo(`/picking-orders/${r.id}`)"
+    >
+      <template #cell-prioritySeq="{ row }">
+        <span class="muted">{{ row.prioritySeq }}</span>
+      </template>
+      <template #cell-deliveryDate="{ row }">
+        {{ row.deliveryDate ? new Date(row.deliveryDate).toLocaleDateString() : "—" }}
+      </template>
+      <template #cell-pickedRatio="{ row }">{{ row.pickedQty }} / {{ row.totalQty }}</template>
+      <template #cell-allocation="{ row }">
+        {{ $t(`admin.pages.pickingOrders.allocationLabels.${row.allocationStatus}`) }}
+        ({{ row.allocatedQty }} / {{ row.totalQty }})
+      </template>
+      <template #cell-workingByName="{ row }">{{ row.workingByName ?? "" }}</template>
+      <template #cell-createdDate="{ row }">{{ new Date(row.createdDate).toLocaleString() }}</template>
+      <template #cell-lastUpdateDate="{ row }">{{ new Date(row.lastUpdateDate).toLocaleString() }}</template>
+    </DataTable>
     <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
   </div>
 </template>
@@ -184,19 +155,5 @@ onMounted(load);
 }
 .filters input {
   flex: 1;
-}
-tr.clickable {
-  cursor: pointer;
-}
-th.sortable {
-  cursor: pointer;
-  user-select: none;
-}
-th.sortable:hover {
-  color: var(--brand-teal-dark);
-}
-.sort-arrow {
-  font-size: 9px;
-  margin-left: 3px;
 }
 </style>

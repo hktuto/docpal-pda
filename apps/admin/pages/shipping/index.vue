@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ShippingBoxRow } from "~/utils/flowApi";
+import type { AdminColumnDef } from "~/composables/useAdminTable";
 
 const flow = useFlowApi();
 const { t } = useI18n();
@@ -7,7 +8,7 @@ const rows = ref<ShippingBoxRow[]>([]);
 const loading = ref(false);
 const error = ref("");
 const search = ref("");
-const selected = ref<Record<string, boolean>>({});
+const selected = ref<Set<string>>(new Set());
 
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase();
@@ -20,9 +21,52 @@ const filtered = computed(() => {
   );
 });
 
-const { page, pageSize, total, paged } = usePaging(filtered);
+const columnDefs = computed<AdminColumnDef<ShippingBoxRow>[]>(() => [
+  { key: "boxId", label: t("admin.pages.shipping.boxId") },
+  {
+    key: "orderNos",
+    label: t("admin.pages.shipping.orders"),
+    accessor: (r) => r.orderNos.join(", "),
+  },
+  {
+    key: "shipTos",
+    label: t("admin.pages.shipping.shipTo"),
+    accessor: (r) => r.shipTos.join(", "),
+  },
+  { key: "destinationCountry", label: t("admin.pages.shipping.destination") },
+  { key: "boxSize", label: t("admin.pages.shipping.size") },
+  {
+    key: "netGross",
+    label: t("admin.pages.shipping.netGross"),
+    accessor: (r) => r.netWeight ?? "",
+  },
+  { key: "packageCount", label: t("admin.pages.shipping.packages") },
+  { key: "closedAt", label: t("admin.pages.shipping.closedAt") },
+]);
 
-const selectedIds = computed(() => Object.keys(selected.value).filter((id) => selected.value[id]));
+const { table, pagination, resetColumnState } = useAdminTable({
+  tableId: "shipping-list",
+  columns: columnDefs,
+  rows: filtered,
+  getRowId: (r) => r.boxId,
+});
+
+// Pager uses a 1-based page; the table uses a 0-based pageIndex.
+const page = computed({
+  get: () => pagination.value.pageIndex + 1,
+  set: (v: number) => {
+    pagination.value = { ...pagination.value, pageIndex: v - 1 };
+  },
+});
+const pageSize = computed({
+  get: () => pagination.value.pageSize,
+  set: (v: number) => {
+    pagination.value = { pageIndex: 0, pageSize: v };
+  },
+});
+const total = computed(() => filtered.value.length);
+
+const selectedIds = computed(() => [...selected.value]);
 
 const shipping = ref(false);
 
@@ -35,7 +79,6 @@ async function markShipped() {
   try {
     await flow.shipShippingBoxes(ids);
     await load();
-    selected.value = {};
   } catch (e: any) {
     // Partial failure: shipShippingBoxes attempts every id and lists the
     // per-box failures (e.g. 409 box_not_ready_to_ship) on `failed`.
@@ -47,7 +90,6 @@ async function markShipped() {
           })
         : e.message;
     await load();
-    selected.value = {};
   } finally {
     shipping.value = false;
   }
@@ -58,7 +100,7 @@ async function load() {
   error.value = "";
   try {
     rows.value = await flow.listShippingBoxes();
-    selected.value = {};
+    selected.value = new Set();
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -107,41 +149,21 @@ onMounted(load);
     <div v-if="error" class="error-banner">{{ error }}</div>
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
-    <div v-else class="table-wrap">
-      <table class="data">
-        <thead>
-          <tr>
-            <th></th>
-            <th>{{ $t("admin.pages.shipping.boxId") }}</th>
-            <th>{{ $t("admin.pages.shipping.orders") }}</th>
-            <th>{{ $t("admin.pages.shipping.shipTo") }}</th>
-            <th>{{ $t("admin.pages.shipping.destination") }}</th>
-            <th>{{ $t("admin.pages.shipping.size") }}</th>
-            <th>{{ $t("admin.pages.shipping.netGross") }}</th>
-            <th>{{ $t("admin.pages.shipping.packages") }}</th>
-            <th>{{ $t("admin.pages.shipping.closedAt") }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="r in paged" :key="r.boxId">
-            <td @click.stop>
-              <input v-model="selected[r.boxId]" type="checkbox" />
-            </td>
-            <td class="clickable" @click="navigateTo(`/shipping/${r.boxId}`)">{{ r.boxId }}</td>
-            <td>{{ r.orderNos.join(", ") }}</td>
-            <td>{{ r.shipTos.length ? r.shipTos.join(", ") : "—" }}</td>
-            <td>{{ r.destinationCountry ?? "—" }}</td>
-            <td>{{ r.boxSize ?? "—" }}</td>
-            <td>{{ r.netWeight ?? "—" }} / {{ r.grossWeight ?? "—" }}</td>
-            <td>{{ r.packageCount }}</td>
-            <td>{{ new Date(r.closedAt).toLocaleDateString() }}</td>
-          </tr>
-          <tr v-if="total === 0">
-            <td colspan="9" class="muted">{{ $t("admin.pages.shipping.none") }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      v-else
+      v-model:selected="selected"
+      :table="table"
+      selectable
+      :row-id="(r: ShippingBoxRow) => r.boxId"
+      :empty-text="$t('admin.pages.shipping.none')"
+      :on-reset-columns="resetColumnState"
+    >
+      <template #cell-boxId="{ row }">
+        <span class="clickable" @click="navigateTo(`/shipping/${row.boxId}`)">{{ row.boxId }}</span>
+      </template>
+      <template #cell-netGross="{ row }">{{ row.netWeight ?? "—" }} / {{ row.grossWeight ?? "—" }}</template>
+      <template #cell-closedAt="{ row }">{{ new Date(row.closedAt).toLocaleDateString() }}</template>
+    </DataTable>
     <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
   </div>
 </template>

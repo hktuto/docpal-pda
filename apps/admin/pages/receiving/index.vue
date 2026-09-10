@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import type { ReceivingOrderRow } from "~/utils/flowApi";
+import type { AdminColumnDef } from "~/composables/useAdminTable";
 
 const flow = useFlowApi();
+const { t } = useI18n();
 const rows = ref<ReceivingOrderRow[]>([]);
 const loading = ref(false);
 const error = ref("");
@@ -9,8 +11,6 @@ const status = ref("");
 const search = ref("");
 
 const STATUSES = ["", "pending", "in_hand", "provisional_received", "clear"];
-
-const { sortKey, sortDir, toggleSort, sortRows } = useColumnSort("admin-sort:receiving-list");
 
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase();
@@ -23,25 +23,51 @@ const filtered = computed(() => {
   );
 });
 
-// Display values for derived columns (mirror what the <td> renders).
-function getVal(r: ReceivingOrderRow, key: string): unknown {
-  switch (key) {
-    case "supplier":
-      return r.supplierName ?? r.supplierCode ?? "";
-    case "deliveryDate":
-      return r.deliveryDate ?? "";
-    case "createdDate":
-      return r.createdDate;
-    case "lastUpdateDate":
-      return r.lastUpdateDate;
-    default:
-      return (r as any)[key];
-  }
-}
+// accessors resolve the derived display values used for sorting.
+const columnDefs = computed<AdminColumnDef<ReceivingOrderRow>[]>(() => [
+  { key: "batchNo", label: t("admin.pages.receiving.batchNo"), size: 130 },
+  { key: "status", label: t("admin.pages.receiving.status"), size: 160 },
+  {
+    key: "supplier",
+    label: t("admin.pages.receiving.supplier"),
+    accessor: (r) => r.supplierName ?? r.supplierCode ?? "",
+    size: 180,
+  },
+  {
+    key: "deliveryDate",
+    label: t("admin.pages.receiving.deliveryDate"),
+    accessor: (r) => r.deliveryDate ?? "",
+    size: 120,
+  },
+  { key: "invoiceCount", label: t("admin.pages.receiving.invoices"), size: 90 },
+  { key: "itemCount", label: t("admin.pages.receiving.items"), size: 80 },
+  { key: "remainingItems", label: t("admin.pages.receiving.remaining"), size: 100 },
+  { key: "pendingPickingOrders", label: t("admin.pages.receiving.pendingPicking"), size: 130 },
+  { key: "createdDate", label: t("admin.fields.createdDate"), size: 170 },
+  { key: "lastUpdateDate", label: t("admin.fields.lastUpdateDate"), size: 170 },
+]);
 
-const sorted = computed(() => sortRows(filtered.value, getVal));
+const { table, pagination, resetColumnState } = useAdminTable({
+  tableId: "receiving-list",
+  columns: columnDefs,
+  rows: filtered,
+  getRowId: (r) => r.id,
+});
 
-const { page, pageSize, total, paged } = usePaging(sorted);
+// Pager uses a 1-based page; the table uses a 0-based pageIndex.
+const page = computed({
+  get: () => pagination.value.pageIndex + 1,
+  set: (v: number) => {
+    pagination.value = { ...pagination.value, pageIndex: v - 1 };
+  },
+});
+const pageSize = computed({
+  get: () => pagination.value.pageSize,
+  set: (v: number) => {
+    pagination.value = { pageIndex: 0, pageSize: v };
+  },
+});
+const total = computed(() => filtered.value.length);
 
 async function load() {
   loading.value = true;
@@ -76,71 +102,20 @@ onMounted(load);
     <div v-if="error" class="error-banner">{{ error }}</div>
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
-    <div v-else class="table-wrap">
-      <table class="data">
-        <thead>
-          <tr>
-            <th class="sortable" @click="toggleSort('batchNo')">
-              {{ $t("admin.pages.receiving.batchNo") }}
-              <span v-if="sortKey === 'batchNo'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('status')">
-              {{ $t("admin.pages.receiving.status") }}
-              <span v-if="sortKey === 'status'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('supplier')">
-              {{ $t("admin.pages.receiving.supplier") }}
-              <span v-if="sortKey === 'supplier'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('deliveryDate')">
-              {{ $t("admin.pages.receiving.deliveryDate") }}
-              <span v-if="sortKey === 'deliveryDate'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('invoiceCount')">
-              {{ $t("admin.pages.receiving.invoices") }}
-              <span v-if="sortKey === 'invoiceCount'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('itemCount')">
-              {{ $t("admin.pages.receiving.items") }}
-              <span v-if="sortKey === 'itemCount'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('remainingItems')">
-              {{ $t("admin.pages.receiving.remaining") }}
-              <span v-if="sortKey === 'remainingItems'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('pendingPickingOrders')">
-              {{ $t("admin.pages.receiving.pendingPicking") }}
-              <span v-if="sortKey === 'pendingPickingOrders'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('createdDate')">
-              {{ $t("admin.common.createdDate") }}
-              <span v-if="sortKey === 'createdDate'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th class="sortable" @click="toggleSort('lastUpdateDate')">
-              {{ $t("admin.common.lastUpdateDate") }}
-              <span v-if="sortKey === 'lastUpdateDate'" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="r in paged" :key="r.id" class="clickable" @click="navigateTo(`/receiving/${r.id}`)">
-            <td>{{ r.batchNo }}</td>
-            <td>{{ r.status }}</td>
-            <td>{{ r.supplierName ?? r.supplierCode ?? "—" }}</td>
-            <td>{{ r.deliveryDate ? new Date(r.deliveryDate).toLocaleDateString() : "—" }}</td>
-            <td>{{ r.invoiceCount }}</td>
-            <td>{{ r.itemCount }}</td>
-            <td>{{ r.remainingItems }}</td>
-            <td>{{ r.pendingPickingOrders }}</td>
-            <td>{{ new Date(r.createdDate).toLocaleString() }}</td>
-            <td>{{ new Date(r.lastUpdateDate).toLocaleString() }}</td>
-          </tr>
-          <tr v-if="total === 0">
-            <td colspan="10" class="muted">{{ $t("admin.pages.receiving.none") }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      v-else
+      :table="table"
+      :empty-text="$t('admin.pages.receiving.none')"
+      :on-reset-columns="resetColumnState"
+      @row-click="(r) => navigateTo(`/receiving/${r.id}`)"
+    >
+      <template #cell-supplier="{ row }">{{ row.supplierName ?? row.supplierCode ?? "—" }}</template>
+      <template #cell-deliveryDate="{ row }">
+        {{ row.deliveryDate ? new Date(row.deliveryDate).toLocaleDateString() : "—" }}
+      </template>
+      <template #cell-createdDate="{ row }">{{ new Date(row.createdDate).toLocaleString() }}</template>
+      <template #cell-lastUpdateDate="{ row }">{{ new Date(row.lastUpdateDate).toLocaleString() }}</template>
+    </DataTable>
     <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
   </div>
 </template>
@@ -160,19 +135,5 @@ onMounted(load);
 }
 .filters input {
   flex: 1;
-}
-tr.clickable {
-  cursor: pointer;
-}
-th.sortable {
-  cursor: pointer;
-  user-select: none;
-}
-th.sortable:hover {
-  color: var(--brand-teal-dark);
-}
-.sort-arrow {
-  font-size: 9px;
-  margin-left: 3px;
 }
 </style>

@@ -4,6 +4,18 @@ pnpm monorepo proof-of-concept for warehouse mobile/Android flows: `apps/web` (N
 
 **Authoritative references — read these before non-trivial backend work instead of relying on memory:** route catalog `docs/backend/api-design.md`, SSE event catalog `docs/backend/event-catalog.md`, table-by-table schema `docs/backend/schema-tables.md`, design specs `docs/superpowers/specs/`.
 
+<!-- intent-skills:start -->
+
+## Skill Loading
+
+Before editing files for a substantial TanStack Table task (`@tanstack/vue-table` v9, used by `apps/admin`):
+
+- Browse the skills bundled with the installed packages: `ls apps/admin/node_modules/@tanstack/vue-table/skills/` and `ls apps/admin/node_modules/@tanstack/table-core/skills/`.
+- Read the `SKILL.md` files relevant to the task (start with `vue-table/skills/getting-started`, which requires `table-core/skills/core` and `table-core/skills/table-features`) before changing table code, and follow them — v9 APIs differ from v8 (`useTable`, explicit `tableFeatures()`, no v8 rendering patterns).
+- Skills are versioned with the packages; after a TanStack version bump, re-read the skills rather than relying on memory.
+
+<!-- intent-skills:end -->
+
 ## Tech stack
 
 - **Workspace:** pnpm monorepo — `apps/web`, `apps/backend`, `apps/admin`, `layers/i18n` (shared Nuxt i18n layer: `@nuxtjs/i18n` config, `i18n/locales/{en-US,zh-CN,zh-HK}.ts`, `warehouse-locale` localStorage persistence; apps add only `extends: ["../../layers/i18n"]`).

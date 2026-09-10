@@ -942,7 +942,11 @@ export default {
       allStatuses: "All statuses",
       all: "All",
       orgIdInteger: "Org ID must be an integer",
-      downloadPendingTitle: "Format pending — available in a later update"
+      downloadPendingTitle: "Format pending — available in a later update",
+      columns: "Columns",
+      resetColumns: "Reset columns",
+      moveToTop: "Move to top",
+      fitToContent: "Fit to content (double-click the column edge)"
     },
     pager: {
       rows: "{n} rows",

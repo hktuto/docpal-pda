@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { EntityConfig } from "~/utils/entities";
+import type { AdminColumnDef } from "~/composables/useAdminTable";
 
 const props = defineProps<{ config: EntityConfig }>();
 
@@ -13,10 +14,6 @@ const error = ref("");
 // large tables fetch { rows, total } page by page).
 const serverMode = computed(() => !!props.config.serverPaging);
 
-// Column sorting (none → asc → desc → none). Client mode sorts in memory;
-// server mode sends sort/dir params and reloads.
-const { sortKey, sortDir, toggleSort, sortRows } = useColumnSort();
-
 const q = ref("");
 // Server mode only: extra query-param filters (config.filterFields).
 const filterValues = reactive<Record<string, string>>({});
@@ -28,14 +25,37 @@ function clientFilterOptions(key: string): string[] {
   return [...new Set(rows.value.map((r) => String(r[key] ?? "")).filter(Boolean))].sort();
 }
 
-// Client mode: sort + optional clientSearch/clientFilters filtering happen
-// before paging.
+// Column defs from the entity config: a synthetic pk (deriveId) is not a real
+// column, and internal UUID pks ("id") are hidden — they carry no business
+// meaning. extraColumns append after the form fields.
+const columnDefs = computed<AdminColumnDef[]>(() => {
+  const labels: Record<string, string> = {};
+  labels[props.config.pk] = t(props.config.pk === "id" ? "admin.fields.id" : "admin.fields.code");
+  for (const f of props.config.fields) labels[f.key] = t(f.label);
+  const fieldKeys = props.config.fields.map((f) => f.key);
+  const keys =
+    props.config.pk === "id" || (props.config.deriveId && !fieldKeys.includes(props.config.pk))
+      ? fieldKeys
+      : [props.config.pk, ...fieldKeys];
+  const sortable = props.config.sortable !== false;
+  const cols: AdminColumnDef[] = [...new Set(keys)].map((key) => ({
+    key,
+    label: labels[key] ?? key,
+    sortable,
+  }));
+  for (const extra of props.config.extraColumns ?? [])
+    cols.push({ key: extra.key, label: t(extra.label), sortable: sortable && extra.sortable !== false });
+  return cols;
+});
+
+// Client mode: clientSearch/clientFilters filtering happens before the table;
+// sorting and paging are owned by the table itself.
 const processed = computed(() => {
-  let list = sortRows(rows.value);
+  let list = rows.value;
   if (!serverMode.value && props.config.clientSearch) {
     const needle = q.value.trim().toLowerCase();
     if (needle) {
-      const keys = columns.value.map((c) => c.key);
+      const keys = columnDefs.value.map((c) => c.key);
       list = list.filter((row) =>
         keys.some((k) =>
           String(row[k] ?? "")
@@ -54,60 +74,39 @@ const processed = computed(() => {
   return list;
 });
 
-const { page: cPage, pageSize: cPageSize, total: cTotal, paged: cPaged } = usePaging(processed);
-const sPage = ref(1);
-const sPageSize = ref(50);
 const sTotal = ref(0);
 
+const { table, sorting, pagination, resetColumnState } = useAdminTable({
+  tableId: `crud-${props.config.path}`,
+  columns: columnDefs,
+  rows: processed,
+  getRowId: rowId,
+  server: serverMode.value ? { total: sTotal } : undefined,
+  defaultPageSize: serverMode.value ? 50 : 20,
+});
+
+// Pager uses a 1-based page; the table uses a 0-based pageIndex.
 const page = computed({
-  get: () => (serverMode.value ? sPage.value : cPage.value),
+  get: () => pagination.value.pageIndex + 1,
   set: (v: number) => {
-    if (serverMode.value) sPage.value = v;
-    else cPage.value = v;
+    pagination.value = { ...pagination.value, pageIndex: v - 1 };
   },
 });
 const pageSize = computed({
-  get: () => (serverMode.value ? sPageSize.value : cPageSize.value),
+  get: () => pagination.value.pageSize,
   set: (v: number) => {
-    if (serverMode.value) {
-      sPageSize.value = v;
-      sPage.value = 1;
-    } else {
-      cPageSize.value = v;
-    }
+    pagination.value = { pageIndex: 0, pageSize: v };
   },
 });
-const total = computed(() => (serverMode.value ? sTotal.value : cTotal.value));
-const paged = computed(() => (serverMode.value ? rows.value : cPaged.value));
+const total = computed(() => (serverMode.value ? sTotal.value : processed.value.length));
 
 const showForm = ref(false);
 const editing = ref<any | null>(null);
 const saveError = ref("");
 
-const columns = computed(() => {
-  const labels: Record<string, string> = {};
-  labels[props.config.pk] = t(props.config.pk === "id" ? "admin.fields.id" : "admin.fields.code");
-  for (const f of props.config.fields) labels[f.key] = t(f.label);
-  const fieldKeys = props.config.fields.map((f) => f.key);
-  // A synthetic pk (deriveId) is not a real column — don't render it. Internal
-  // UUID pks ("id") are hidden too: they carry no business meaning.
-  const keys =
-    props.config.pk === "id" || (props.config.deriveId && !fieldKeys.includes(props.config.pk))
-      ? fieldKeys
-      : [props.config.pk, ...fieldKeys];
-  const cols = [...new Set(keys)].map((key) => ({ key, label: labels[key] ?? key, sortable: true }));
-  for (const extra of props.config.extraColumns ?? [])
-    cols.push({ key: extra.key, label: t(extra.label), sortable: extra.sortable !== false });
-  return cols;
-});
-
 const showSearch = computed(
   () => serverMode.value || !!props.config.clientSearch || !!props.config.clientFilters?.length
 );
-
-function canSort(c: { key: string; sortable?: boolean }): boolean {
-  return props.config.sortable !== false && c.sortable !== false;
-}
 
 const formTitle = computed(() =>
   editing.value
@@ -120,32 +119,10 @@ function rowId(row: any): string {
   return row[props.config.pk] ?? props.config.deriveId?.(row);
 }
 
-// Multi-row selection (config.selectable): checkboxes per row + a header
-// checkbox toggling the current page; the `bulk-actions` slot receives the
-// selected rows.
+// Multi-row selection (config.selectable): the checkbox column lives in
+// DataTable; the `bulk-actions` slot receives the selected rows.
 const selected = ref<Set<string>>(new Set());
 const selectedRows = computed(() => rows.value.filter((r) => selected.value.has(rowId(r))));
-const allPageSelected = computed(
-  () => paged.value.length > 0 && paged.value.every((r) => selected.value.has(rowId(r)))
-);
-
-function toggleRowSelected(row: any) {
-  const next = new Set(selected.value);
-  const id = rowId(row);
-  if (next.has(id)) next.delete(id);
-  else next.add(id);
-  selected.value = next;
-}
-
-function togglePageSelected() {
-  const next = new Set(selected.value);
-  for (const row of paged.value) {
-    const id = rowId(row);
-    if (allPageSelected.value) next.delete(id);
-    else next.add(id);
-  }
-  selected.value = next;
-}
 
 function clearSelection() {
   selected.value = new Set();
@@ -157,13 +134,14 @@ async function load() {
   try {
     if (serverMode.value) {
       const params = new URLSearchParams({
-        page: String(sPage.value),
-        pageSize: String(sPageSize.value),
+        page: String(pagination.value.pageIndex + 1),
+        pageSize: String(pagination.value.pageSize),
       });
       if (q.value.trim()) params.set("q", q.value.trim());
-      if (sortKey.value) {
-        params.set("sort", sortKey.value);
-        params.set("dir", sortDir.value);
+      const sort = sorting.value[0];
+      if (sort) {
+        params.set("sort", sort.id);
+        params.set("dir", sort.desc ? "desc" : "asc");
       }
       for (const f of props.config.filterFields ?? []) {
         const v = (filterValues[f.param] ?? "").trim();
@@ -183,34 +161,37 @@ async function load() {
 }
 
 // Server mode: reload on page/page-size change, debounced reload on search.
-watch([sPage, sPageSize], () => {
+watch(pagination, () => {
   if (serverMode.value) load();
 });
+
+function resetPageAndLoad() {
+  if (pagination.value.pageIndex !== 0) {
+    // The pagination watcher above performs the reload.
+    pagination.value = { ...pagination.value, pageIndex: 0 };
+  } else {
+    load();
+  }
+}
+
 let qTimer: ReturnType<typeof setTimeout> | undefined;
 watch(q, () => {
   if (!serverMode.value) return;
   clearTimeout(qTimer);
-  qTimer = setTimeout(() => {
-    sPage.value = 1;
-    load();
-  }, 300);
+  qTimer = setTimeout(resetPageAndLoad, 300);
 });
 watch(
   () => ({ ...filterValues }),
   () => {
     if (!serverMode.value) return;
     clearTimeout(qTimer);
-    qTimer = setTimeout(() => {
-      sPage.value = 1;
-      load();
-    }, 300);
+    qTimer = setTimeout(resetPageAndLoad, 300);
   }
 );
 // Sort change: server mode reloads from page 1 (client mode is reactive).
-watch([sortKey, sortDir], () => {
+watch(sorting, () => {
   if (!serverMode.value) return;
-  sPage.value = 1;
-  load();
+  resetPageAndLoad();
 });
 
 function startNew() {
@@ -295,49 +276,23 @@ onMounted(load);
       <slot name="bulk-actions" :rows="selectedRows" :clear="clearSelection" />
     </div>
     <div v-if="loading && rows.length === 0" class="loading">{{ $t("admin.common.loading") }}</div>
-    <div v-else class="table-wrap" :class="{ 'is-loading': loading }">
-      <table class="data">
-        <thead>
-          <tr>
-            <th v-if="config.selectable" class="select-col">
-              <input type="checkbox" :checked="allPageSelected" @change="togglePageSelected" />
-            </th>
-            <th
-              v-for="c in columns"
-              :key="c.key"
-              :class="{ sortable: canSort(c), sorted: sortKey === c.key }"
-              @click="canSort(c) && toggleSort(c.key)"
-            >
-              {{ c.label }}
-              <span v-if="sortKey === c.key" class="sort-arrow">{{ sortDir === "asc" ? "▲" : "▼" }}</span>
-            </th>
-            <th>{{ $t("admin.common.actions") }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="row in paged" :key="rowId(row)">
-            <td v-if="config.selectable" class="select-col">
-              <input
-                type="checkbox"
-                :checked="selected.has(rowId(row))"
-                @change="toggleRowSelected(row)"
-              />
-            </td>
-            <td v-for="c in columns" :key="c.key">{{ formatCell(row[c.key]) }}</td>
-            <td class="actions">
-              <slot name="row-actions" :row="row" />
-              <button v-if="!config.noEdit" class="btn-link" @click="startEdit(row)">
-                {{ $t("admin.common.edit") }}
-              </button>
-              <button class="btn-link" @click="onDelete(row)">{{ $t("admin.common.delete") }}</button>
-            </td>
-          </tr>
-          <tr v-if="paged.length === 0">
-            <td :colspan="columns.length + (config.selectable ? 2 : 1)" class="muted">{{ $t("admin.common.noRecords") }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      v-else
+      v-model:selected="selected"
+      :table="table"
+      :selectable="config.selectable"
+      :row-id="rowId"
+      :loading="loading"
+      :on-reset-columns="resetColumnState"
+    >
+      <template #actions="{ row }">
+        <slot name="row-actions" :row="row" />
+        <button v-if="!config.noEdit" class="btn-link" @click="startEdit(row)">
+          {{ $t("admin.common.edit") }}
+        </button>
+        <button class="btn-link" @click="onDelete(row)">{{ $t("admin.common.delete") }}</button>
+      </template>
+    </DataTable>
     <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
     <CrudForm
       v-if="showForm"
@@ -362,24 +317,5 @@ onMounted(load);
   gap: 12px;
   margin-bottom: 10px;
   font-size: 13px;
-}
-.select-col {
-  width: 32px;
-  text-align: center;
-}
-th.sortable {
-  cursor: pointer;
-  user-select: none;
-}
-th.sortable:hover {
-  color: var(--brand-teal-dark);
-}
-.sort-arrow {
-  font-size: 9px;
-  margin-left: 3px;
-}
-.table-wrap.is-loading {
-  opacity: 0.5;
-  pointer-events: none;
 }
 </style>

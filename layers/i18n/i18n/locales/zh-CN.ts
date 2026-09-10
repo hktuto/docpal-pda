@@ -942,7 +942,11 @@ export default {
       allStatuses: "全部状态",
       all: "全部",
       orgIdInteger: "Org ID 必须是整数",
-      downloadPendingTitle: "格式待定 — 将在后续版本提供"
+      downloadPendingTitle: "格式待定 — 将在后续版本提供",
+      columns: "列",
+      resetColumns: "重置列",
+      moveToTop: "置顶",
+      fitToContent: "适应内容宽度（双击列边缘）"
     },
     pager: {
       rows: "共 {n} 行",
