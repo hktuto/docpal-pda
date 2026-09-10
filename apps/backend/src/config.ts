@@ -19,9 +19,9 @@ export const authTokenTtlSeconds = Number(process.env.AUTH_TOKEN_TTL_SECONDS ?? 
 
 // ---------------------------------------------------------------------------
 // DocPal identity provider (spec: docs/superpowers/specs/2026-08-13-docpal-auth-design.md).
-// When DOCPAL_URL is set, /auth/login delegates credential verification to the
-// DocPal API and auto-provisions the local users row; when unset, the local
-// scrypt login stays (dev/test/demo). Read at call time so tests can toggle it.
+// /auth/login always delegates credential verification to the DocPal API and
+// auto-provisions the local users row; DOCPAL_URL is required (login fails
+// with 500 when unset). Read at call time so tests can toggle it.
 // ---------------------------------------------------------------------------
 
 export function docpalBaseUrl(): string | undefined {

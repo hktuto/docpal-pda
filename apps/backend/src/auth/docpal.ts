@@ -1,7 +1,7 @@
 // DocPal identity-provider client (spec: docs/superpowers/specs/2026-08-13-docpal-auth-design.md).
-// Used only inside POST /auth/login when DOCPAL_URL is set: verify the
-// credentials against DocPal, then fetch the user's profile + groups. DocPal
-// tokens never leave this module — the backend issues its own JWT.
+// Used by POST /auth/login: verify the credentials against DocPal, then fetch
+// the user's profile + groups. DocPal tokens never leave this module — the
+// backend issues its own JWT.
 
 import { docpalBaseUrl, docpalFetchTimeoutMs } from "../config.js";
 

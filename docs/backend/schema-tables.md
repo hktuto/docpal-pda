@@ -187,9 +187,9 @@ sharable.
 ## users
 
 Local users for login (a ucenter/external user-system sync may replace this
-later; syncable by `username`). `password_hash` holds
-`scrypt:N:r:p:<salt>:<hash>` (see `src/auth/password.ts`); legacy plain-text
-rows are lazily upgraded on login. Roles were replaced by group membership
+later; syncable by `username`). Passwords are never verified locally — DocPal
+is the only credential verifier — so `password_hash` stays the empty-string
+sentinel. Roles were replaced by group membership
 (`user_groups` / `user_group_members`) — a user's groups ride in the JWT as
 `groupCodes`.
 
@@ -197,7 +197,7 @@ rows are lazily upgraded on login. Roles were replaced by group membership
 | --- | --- | --- |
 | id | text PK | User id (UUID) |
 | username | text NOT NULL UNIQUE | Login name |
-| password_hash | text NOT NULL | scrypt hash (`scrypt:N:r:p:salt:hash`) |
+| password_hash | text NOT NULL | unused — empty-string sentinel (DocPal verifies credentials) |
 | display_name | text NOT NULL | Display name |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |

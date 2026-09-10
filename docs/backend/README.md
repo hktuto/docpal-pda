@@ -28,9 +28,10 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   Failures are 401 `unauthorized`. The actor for every mutation comes from
   the token (`c.get("user")`) — request bodies no longer carry `actorId`.
   - `POST /auth/login` `{username, password}` →
-    `{user: {id, username, displayName, groupCodes}, token}` — scrypt verify
-    (`src/auth/password.ts`, `scrypt:N:r:p:salt:hash`); legacy plain-text rows
-    are lazily re-hashed on success. 401 `invalid credentials`.
+    `{user: {id, username, displayName, groupCodes}, token}` — credentials are
+    verified against the DocPal API (`DOCPAL_URL` required, 500 when unset) and
+    the local users row is auto-provisioned; 401 `invalid credentials`, 403
+    when no DocPal group maps to a WMS group.
   - `GET /auth/me` → the same `user` object, resolved fresh from the DB by
     token `sub` (client session restore).
   - `GET /auth/users/:id` → the same `user` object for any user.
