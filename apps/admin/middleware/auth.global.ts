@@ -31,5 +31,8 @@ export default defineNuxtRouteMiddleware(async (to) => {
     if (valid) return navigateTo("/");
     return;
   }
+  // Token-login links validate and store their own session (the link may be
+  // for a different user than any stored one).
+  if (to.path === "/login-token") return;
   if (!valid) return navigateTo("/login");
 });

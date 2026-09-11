@@ -304,3 +304,65 @@ test("docpal login: wrong password → 401; provider down → 502", async (t) =>
   process.env.DOCPAL_URL = "http://127.0.0.1:1";
   assert.equal((await login("chris", "good-pass")).status, 502);
 });
+
+// --- token login (POST /auth/login-token) ------------------------------------
+// Same DocPal delegation as password login, but the caller presents a DocPal
+// access token (e.g. carried by a sign-in link) instead of credentials.
+
+async function loginWithToken(accessToken: string) {
+  return app.request("/auth/login-token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ accessToken }),
+  });
+}
+
+test("token login: open route, happy path provisions and signs like password login", async (t) => {
+  const { server, url } = await startFakeDocpal();
+  t.after(() => server.close());
+  process.env.DOCPAL_URL = url;
+  t.after(() => { process.env.DOCPAL_URL = FAKE_DOCPAL_URL; });
+  await reseed(client);
+  fakeState.groups = [{ groupId: "WMS_Admin_Group_(HK)", groupName: "WMS Admin Group (HK)" }];
+
+  // No Authorization header — the route is open; the DocPal token is the credential.
+  const res = await loginWithToken("tok-chris");
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.user.username, "chris");
+  assert.deepEqual(body.user.groupCodes, ["PDA Group", "admin"]);
+
+  // The returned warehouse JWT works for normal requests.
+  const me = await app.request("/auth/me", { headers: { Authorization: `Bearer ${body.token}` } });
+  assert.equal(me.status, 200);
+  assert.equal((await me.json()).username, "chris");
+});
+
+test("token login: invalid DocPal token → 401; no mapped group → 403", async (t) => {
+  const { server, url } = await startFakeDocpal();
+  t.after(() => server.close());
+  process.env.DOCPAL_URL = url;
+  t.after(() => { process.env.DOCPAL_URL = FAKE_DOCPAL_URL; });
+  await reseed(client);
+
+  assert.equal((await loginWithToken("not-a-docpal-token")).status, 401);
+
+  fakeState.groups = [{ groupId: "WMS_Dashboard_Group_(HK)", groupName: "WMS Dashboard Group (HK)" }];
+  assert.equal((await loginWithToken("tok-yoyo")).status, 403);
+});
+
+test("token login: missing accessToken → 400; no DOCPAL_URL → 500", async (t) => {
+  const res = await app.request("/auth/login-token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  assert.equal(res.status, 400);
+
+  const saved = process.env.DOCPAL_URL;
+  delete process.env.DOCPAL_URL;
+  t.after(() => {
+    process.env.DOCPAL_URL = saved ?? FAKE_DOCPAL_URL;
+  });
+  assert.equal((await loginWithToken("tok-chris")).status, 500);
+});

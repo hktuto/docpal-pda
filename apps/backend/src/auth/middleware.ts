@@ -3,7 +3,6 @@
 // token user is stored as c.get("user"); failures are 401 `unauthorized`.
 // `?token=` is accepted ONLY for GET /events because EventSource cannot set
 // headers.
-
 import type { Context, MiddlewareHandler, Next } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { verifyAuthToken, type AuthTokenUser } from "./jwt.js";
@@ -15,6 +14,7 @@ export interface AuthVariables {
 function isOpenPath(path: string, method: string): boolean {
   if (path === "/health") return true;
   if (path === "/auth/login" && method === "POST") return true;
+  if (path === "/auth/login-token" && method === "POST") return true;
   if (path.startsWith("/dev/")) return true; // demo reset stays open
   return false;
 }

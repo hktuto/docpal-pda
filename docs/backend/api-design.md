@@ -44,6 +44,7 @@ live in `concepts.md`; tables in `schema.md`.
 | Endpoint | Body → Response | Note |
 |---|---|---|
 | `POST /auth/login` | `{username, password}` → 200 `{user{id, username, displayName, groupCodes}, token}` / 401 / 403 / 500 | DocPal-verified, auto-provisioned; 403 `user has no WMS access` when no group maps; 500 when `DOCPAL_URL` is not configured |
+| `POST /auth/login-token` | `{accessToken}` → same as `/auth/login` | DocPal access-token exchange (sign-in links); validated via DocPal `users/application`, then the same provision+sign path |
 | `POST /auth/logout` | — → `{ok: true}` | no-op (client discards the token) |
 | `GET /auth/me` | — → AuthUser / 401 | session restore from the bearer token |
 | `GET /auth/users/:id` | — → AuthUser / 404 | |
@@ -58,7 +59,8 @@ live in `concepts.md`; tables in `schema.md`.
 | `PUT /admin/user-profiles/:username` | `{subInventoryScopes: [{orgId, code}]}` → the saved profile | same validation as the self-service PUT (400 `unknown_sub_inventory`); username need not exist in `users` yet (pre-provisioning) |
 
 JWT bearer (HS256, `hono/jwt`, secret from `AUTH_SECRET`, 12 h TTL) required on
-all routes except `/health`, `POST /auth/login`, and `/dev/*`; `GET /events`
+all routes except `/health`, `POST /auth/login`, `POST /auth/login-token`, and
+`/dev/*`; `GET /events`
 also accepts `?token=` (EventSource can't set headers). Users belong to groups
 via `user_group_members` (many-to-many); `users.role` is gone. Login is always
 delegated to the DocPal API (`DOCPAL_URL` required) and local users are
