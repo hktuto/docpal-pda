@@ -207,6 +207,7 @@ export const navSections: { title: string; links: { route: string; title: string
       { route: "/flow-config", title: "admin.navLinks.flowConfig" },
       { route: "/app-download", title: "admin.navLinks.appDownload" },
       { route: "/user-badges", title: "admin.navLinks.userBadges" },
+      { route: "/user-profiles", title: "admin.navLinks.userProfiles" },
     ],
   },
 ];

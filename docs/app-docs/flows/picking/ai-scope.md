@@ -2,6 +2,14 @@
 
 ## In scope
 
+- Per-user sub-inventory scope on list + detail reads: when the caller has a
+  scope set (`user_profiles`, managed via `GET`/`PUT /auth/me/profile` or
+  `/admin/user-profiles`), the list/detail are filtered by a predicate on the
+  order's `(org_id, sub_inventory_code)` pair (NULL sub-inventory stays
+  visible; out-of-scope detail = 404). Enforcement is server-side
+  (`apps/backend/src/db/user-scope.ts`), composes with `allowedOrgIds` by
+  AND, reads only — mutations, allocation and SSE events unaffected (spec
+  `docs/superpowers/specs/2026-09-11-user-subinventory-scope-design.md`).
 - List picking orders with a status filter and text search (both
   server-side, paged 50 at a time); multi-select batch issue reporting.
 - Show picking order detail as one nested read: order (incl. issue fields),
@@ -224,6 +232,7 @@
 - `docs/superpowers/specs/2026-07-19-box-label-print-preprinted-id-design.md`
 - `docs/superpowers/specs/2026-07-23-picking-priority-allocation-design.md`
 - `docs/superpowers/specs/2026-07-29-whole-box-picking-claim-design.md`
+- `docs/superpowers/specs/2026-09-11-user-subinventory-scope-design.md`
 - `docs/superpowers/plans/2026-07-23-picking-priority-allocation.md`
 - `docs/superpowers/plans/2026-07-12-picking-execution.md`
 - `docs/superpowers/plans/2026-07-18-picking-scan-session.md`

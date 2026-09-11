@@ -877,10 +877,12 @@ export default {
       stockSearch: "Stock Search",
       appDownload: "App Download",
       flowConfig: "Flow Config",
-      userBadges: "User Badges"
+      userBadges: "User Badges",
+      userProfiles: "User Scope"
     },
     auth: {
       logout: "Logout",
+      settings: "Settings",
       username: "Username",
       password: "Password",
       signIn: "Sign in",
@@ -907,6 +909,21 @@ export default {
       printerPlaceholder: "e.g. MYPRINTER",
       print: "Print badge",
       printSuccess: "Badge sent to the printer."
+    },
+    scopePicker: {
+      hint: "Checked sub-inventories limit what the user sees on receiving and picking lists. Leave everything unchecked for no restriction (the user sees all sub-inventories).",
+      orgFallback: "Org {orgId}",
+      loading: "Loading sub-inventories…",
+      loadError: "Could not load sub-inventories: {message}",
+      none: "No sub-inventories available.",
+      selectAll: "Select all",
+      clearAll: "Clear"
+    },
+    scopeFilter: {
+      button: "Filter: {scope}",
+      buttonTitle: "Limit receiving and picking lists to selected sub-inventories",
+      unrestricted: "Filter: all sub-inventories",
+      dialogTitle: "My sub-inventory filter"
     },
     print: {
       title: "Print labels ({count})",
@@ -996,6 +1013,23 @@ export default {
       netWeightFormulas: { title: "Net-weight Formulas" }
     },
     pages: {
+      userProfiles: {
+        title: "User Sub-inventory Scope",
+        explainer: "Limit which sub-inventories each user sees on receiving and picking lists. No scope = unrestricted.",
+        searchPlaceholder: "Search users…",
+        username: "Username",
+        displayName: "Display name",
+        groups: "Groups",
+        scope: "Sub-inventory scope",
+        none: "No users.",
+        editScope: "Edit scope",
+        dialogTitle: "Sub-inventory scope — {user}"
+      },
+      settings: {
+        title: "Settings",
+        scopeSection: "My sub-inventory scope",
+        scopeExplainer: "Receiving and picking lists are filtered to the sub-inventories selected below. Leave all unchecked to see everything."
+      },
       suppliers: {
         editProfile: "Edit profile",
         noProfileYet: "No profile yet"

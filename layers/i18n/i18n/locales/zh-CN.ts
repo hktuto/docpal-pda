@@ -877,10 +877,12 @@ export default {
       stockSearch: "库存查询",
       appDownload: "应用下载",
       flowConfig: "流程设置",
-      userBadges: "用户工牌"
+      userBadges: "用户工牌",
+      userProfiles: "用户子库范围"
     },
     auth: {
       logout: "退出登录",
+      settings: "设置",
       username: "用户名",
       password: "密码",
       signIn: "登录",
@@ -907,6 +909,21 @@ export default {
       printerPlaceholder: "例如 MYPRINTER",
       print: "打印工牌",
       printSuccess: "工牌已发送到打印机。"
+    },
+    scopePicker: {
+      hint: "勾选的子库会限制该用户在收货及拣货列表中看到的数据。全部不勾选即不设限制（用户可看到所有子库）。",
+      orgFallback: "Org {orgId}",
+      loading: "加载子库中…",
+      loadError: "无法加载子库：{message}",
+      none: "没有可用的子库。",
+      selectAll: "全选",
+      clearAll: "清除"
+    },
+    scopeFilter: {
+      button: "筛选：{scope}",
+      buttonTitle: "将收货及拣货列表限制在所选子库",
+      unrestricted: "筛选：所有子库",
+      dialogTitle: "我的子库筛选"
     },
     print: {
       title: "打印标签（{count}）",
@@ -996,6 +1013,23 @@ export default {
       netWeightFormulas: { title: "净重公式" }
     },
     pages: {
+      userProfiles: {
+        title: "用户子库范围",
+        explainer: "限制每位用户在收货及拣货列表中看到的子库。未设范围即不设限制。",
+        searchPlaceholder: "搜索用户…",
+        username: "用户名",
+        displayName: "显示名称",
+        groups: "用户组",
+        scope: "子库范围",
+        none: "暂无用户。",
+        editScope: "编辑范围",
+        dialogTitle: "子库范围 — {user}"
+      },
+      settings: {
+        title: "设置",
+        scopeSection: "我的子库范围",
+        scopeExplainer: "收货及拣货列表会按以下勾选的子库筛选。全部不勾选即可查看全部数据。"
+      },
       suppliers: {
         editProfile: "编辑资料",
         noProfileYet: "暂无资料"

@@ -114,6 +114,7 @@ const {
         </option>
       </select>
       <input v-model="search" :placeholder="$t('admin.pages.receiving.searchPlaceholder')" />
+      <UserScopeFilterButton @saved="load" />
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>

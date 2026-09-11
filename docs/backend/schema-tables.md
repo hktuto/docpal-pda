@@ -228,6 +228,25 @@ Group membership junction; a user can belong to any number of groups.
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
+## user_profiles
+
+PDA-local per-user sub-inventory scope (2026-09-11,
+`docs/superpowers/specs/2026-09-11-user-subinventory-scope-design.md`).
+Keyed by `username` — **no FK to `users` by design**: a profile may be
+pre-created before the user's first login (the `users` row only exists after
+login), and it survives `users` being replaced by an external user-system
+sync. Same rationale as `supplier_profiles` vs `suppliers`. Applied to the
+receiving/picking list + detail reads via `src/db/user-scope.ts`;
+NULL/[] scope = unrestricted.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Profile id (UUID v7) |
+| username | text NOT NULL UNIQUE | Business key matching `users.username` (no FK — profile may pre-exist the users row) |
+| sub_inventory_scopes | jsonb | `[{orgId: number, code: string}]` pairs validated against `org_info` — sub-inventory identity is the composite `(org_id, secondary_inventory_name)`; NULL/[] = unrestricted |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
+
 # Receiving (`schema/receiving.ts`)
 
 ## receiving_orders

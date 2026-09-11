@@ -105,6 +105,7 @@ export const ALL_TABLES = [
   "shelves",
   "sub_inventory_share_members",
   "org_info",
+  "customer_accounts",
   "customer_profiles",
   "box_size_list",
   "country_list",
@@ -113,6 +114,7 @@ export const ALL_TABLES = [
   "suppliers",
   "user_group_members",
   "user_groups",
+  "user_profiles",
   "users",
 ];
 

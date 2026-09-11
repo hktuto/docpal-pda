@@ -2,6 +2,15 @@
 
 ## In scope
 
+- Per-user sub-inventory scope on list + detail reads: when the caller has a
+  scope set (`user_profiles`, managed via `GET`/`PUT /auth/me/profile` or
+  `/admin/user-profiles`), the list keeps an order only when it has no items
+  or any item whose `sub_inventory_code` is NULL or in scope (aggregates
+  unchanged); the detail 404s when out of scope and filters the returned
+  items to NULL/in-scope. Enforcement is server-side
+  (`apps/backend/src/db/user-scope.ts`), composes with `allowedOrgIds` by
+  AND, reads only — mutations unaffected (spec
+  `docs/superpowers/specs/2026-09-11-user-subinventory-scope-design.md`).
 - List receiving orders with a status filter
   (`pending` / `provisional_received` / `in_hand` / `clear`) and a pending
   picking-order count badge per order (computed server-side); the list is
@@ -125,3 +134,4 @@
 - `docs/superpowers/specs/2026-07-27-admin-item-removal-and-audit-logs-design.md`
 - `docs/superpowers/specs/2026-09-02-receiving-subinventory-rules-design.md`
 - `docs/superpowers/specs/2026-09-07-admin-receiving-picking-list-design.md`
+- `docs/superpowers/specs/2026-09-11-user-subinventory-scope-design.md`

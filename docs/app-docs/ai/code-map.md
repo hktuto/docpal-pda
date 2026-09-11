@@ -148,6 +148,8 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Generic CRUD table (search / column sorting / server paging / multi-select) | — | `apps/admin/components/CrudTable.vue` (+ `components/CrudForm.vue`, `components/Pager.vue`) built on `components/DataTable.vue` + `composables/useAdminTable.ts` (TanStack Table v9: sorting, paging, column resize/reorder/visibility persisted to localStorage) |
 | Shelf / shelf-box label printing (single + multi-select dialog; `katata-label` template via the backend `/print/*` proxy) | `/shelves`, `/shelf-boxes` | `apps/admin/components/PrintLabelsDialog.vue`, `apps/admin/utils/print.ts` |
 | Sidebar layout + userbox popover | — | `apps/admin/app.vue` |
+| User profiles (per-user sub-inventory scope) | `/user-profiles` | `apps/admin/pages/user-profiles.vue` + `apps/admin/components/SubInventoryScopePicker.vue` (shared org-grouped checkbox picker) + `apps/admin/utils/userScope.ts` |
+| Personal settings (own sub-inventory scope, from the user popover) | `/settings` | `apps/admin/pages/settings.vue` |
 | Flow API typed wrappers | — | `apps/admin/utils/flowApi.ts` |
 
 ## Warehouse backend (apps/backend)
@@ -160,6 +162,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 |----------------|-------------|
 | `GET /health` | `apps/backend/src/routes/health.ts` |
 | `POST /auth/login`, `POST /auth/logout`, `GET /auth/users/:id` | `apps/backend/src/routes/auth.ts` |
+| `GET /auth/me/profile`, `PUT /auth/me/profile` (per-user sub-inventory scope) | `apps/backend/src/routes/auth.ts` |
 | `GET /receiving-orders`, `GET /receiving-orders/:id` (+`/picking`, +`/put-away`) | `apps/backend/src/routes/receiving.ts` |
 | `POST /receiving-orders/:id/confirm-arrival`, `POST /receiving-orders/:id/scan` | `apps/backend/src/routes/receiving.ts` |
 | `GET|POST|PATCH /receiving-invoice-items/:id/mismatch`, `POST .../mismatch/confirm|cancel` | `apps/backend/src/routes/receiving.ts` |
@@ -179,6 +182,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | `/admin/*` master-data CRUD | `apps/backend/src/routes/admin/` |
 | `/admin/sub-inventory-share-groups` (share-group membership upsert/remove) | `apps/backend/src/routes/admin/subInventoryShareGroups.ts` |
 | `GET /admin/receiving-orders/:id/picking-list` (shipper-style xlsx download) | `apps/backend/src/routes/admin/receivingPickingList.ts` |
+| `GET /admin/user-profiles`, `PUT /admin/user-profiles/:username` (per-user sub-inventory scope; pre-provisioning allowed) | `apps/backend/src/routes/admin/userProfiles.ts` |
 
 ### Domain modules
 
@@ -193,6 +197,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | Verify (box-keyed task reads, completion with the `packages_not_all_rescanned` re-scan guard) | `apps/backend/src/db/verify.ts` |
 | Shipping feed (per-box list/detail + ship, derives order `shipped`) | `apps/backend/src/db/shipping.ts` |
 | Flow config (`warehouse_config` row `"flow"` + `FLOW_CONFIG` env override, `isStepEnabled`, `allowDockStock`) | `apps/backend/src/config.ts` |
+| Per-user sub-inventory scope (`user_profiles` read + filter fragments for receiving/picking list/detail reads) | `apps/backend/src/db/user-scope.ts` |
 | Goods verify (generation, queue, verify with ADJUST) | `apps/backend/src/db/goodsverify.ts` |
 | Stock search | `apps/backend/src/db/stocksearch.ts` |
 | Sync apply layer (idempotent upsert/delete domain functions for upstream sync; guarded order deletes) | `apps/backend/src/db/ingest.ts` |

@@ -10,6 +10,7 @@ import { emitEvent } from "./events.js";
 import { workLockExpiry } from "./allocate.js";
 import { isStepEnabled } from "../config.js";
 import { allowedOrgFilter } from "./org-filter.js";
+import { userScopeFilter, type UserScopeEntry } from "./user-scope.js";
 
 // ---------------------------------------------------------------------------
 // Picking flow (ported from apps/api pickScan.ts + measure.ts + pickingIssues.ts,
@@ -523,10 +524,14 @@ export interface PickingOrderListRow {
  *  comma-separated lists; `search` is a case-insensitive substring on
  *  order_no/po_no/customer_code; `limit`/`offset` page the result (`total`
  *  counts all matches). Ordered by priority_seq (allocation order,
- *  admin-reorderable). Scoped to the flow config's allowedOrgIds when set. */
+ *  admin-reorderable). Scoped to the flow config's allowedOrgIds when set;
+ *  `opts.scope` additionally scopes to the user's sub-inventory pairs. */
 export async function listPickingOrders(
   db: AppDb,
-  opts?: { status?: string; allocation?: string; search?: string; limit?: number; offset?: number }
+  opts?: {
+    status?: string; allocation?: string; search?: string; limit?: number; offset?: number;
+    scope?: UserScopeEntry[] | null;
+  }
 ): Promise<{ rows: PickingOrderListRow[]; total: number }> {
   const statuses = (opts?.status ?? "").split(",").map((v) => v.trim()).filter(Boolean);
   const allocations = (opts?.allocation ?? "").split(",").map((v) => v.trim()).filter(Boolean);
@@ -557,6 +562,7 @@ export async function listPickingOrders(
       ${allocations.length ? sql`AND po.allocation_status = ANY(ARRAY[${sql.join(allocations, sql`, `)}])` : sql``}
       ${search ? sql`AND (po.order_no ILIKE ${"%" + search + "%"} OR po.po_no ILIKE ${"%" + search + "%"} OR po.customer_code ILIKE ${"%" + search + "%"})` : sql``}
       ${allowedOrgFilter(sql`po.org_id`)}
+      ${userScopeFilter(sql`po.org_id`, sql`po.sub_inventory_code`, opts?.scope)}
       GROUP BY po.id, w.display_name
       ORDER BY po.priority_seq ASC, po.delivery_date ASC NULLS LAST, po.order_no
       ${opts?.limit && opts.limit > 0 ? sql`LIMIT ${opts.limit} OFFSET ${opts.offset ?? 0}` : sql``}
@@ -766,8 +772,14 @@ interface AllocationQueryRow {
   lotAvailableQty: number | null;
 }
 
-/** Complete nested read: order + items (allocations, packages) + boxes. */
-export async function getPickingOrderDetail(db: AppDb, orderId: string): Promise<PickingOrderDetail> {
+/** Complete nested read: order + items (allocations, packages) + boxes.
+ *  `scope` scopes the order to the user's sub-inventory pairs (out-of-scope
+ *  → 404, same as allowedOrgIds). */
+export async function getPickingOrderDetail(
+  db: AppDb,
+  orderId: string,
+  scope?: UserScopeEntry[] | null
+): Promise<PickingOrderDetail> {
   const order = await queryGet<PickingOrderRow>(
     db,
     sql`
@@ -788,6 +800,7 @@ export async function getPickingOrderDetail(db: AppDb, orderId: string): Promise
       LEFT JOIN users ru ON ru.id = po.issue_reported_by
       WHERE po.id = ${orderId}
       ${allowedOrgFilter(sql`po.org_id`)}
+      ${userScopeFilter(sql`po.org_id`, sql`po.sub_inventory_code`, scope)}
     `
   );
   if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });

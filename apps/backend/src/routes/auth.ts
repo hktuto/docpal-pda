@@ -9,6 +9,7 @@ import { signAuthToken } from "../auth/jwt.js";
 import { actorFrom } from "../auth/middleware.js";
 import { docpalBaseUrl, docpalGroupMapping } from "../config.js";
 import { DocpalAuthError, docpalGetUser, docpalLogin } from "../auth/docpal.js";
+import { getUserScope, parseScopeEntries, upsertUserScope } from "../db/user-scope.js";
 
 export interface LoginRequest {
   username: string;
@@ -140,6 +141,24 @@ authRoute.get("/auth/me", async (c) => {
   );
   if (!user) throw new HTTPException(401, { message: "unauthorized" });
   return c.json(await toAuthUser(user), 200);
+});
+
+// Per-user sub-inventory scope (spec 2026-09-11-user-subinventory-scope-design.md).
+// GET returns [] when unrestricted (no profile row / NULL scope); PUT stores
+// the array as-is ([] clears the scope) after validating every pair against
+// org_info.
+authRoute.get("/auth/me/profile", async (c) => {
+  const actor = actorFrom(c);
+  const scope = await getUserScope(db, actor.username);
+  return c.json({ username: actor.username, subInventoryScopes: scope ?? [] }, 200);
+});
+
+authRoute.put("/auth/me/profile", async (c) => {
+  const actor = actorFrom(c);
+  const body = await readJson<{ subInventoryScopes?: unknown }>(c);
+  const scope = parseScopeEntries(body.subInventoryScopes);
+  await upsertUserScope(db, actor.username, scope);
+  return c.json({ username: actor.username, subInventoryScopes: scope }, 200);
 });
 
 authRoute.get("/auth/users/:id", async (c) => {

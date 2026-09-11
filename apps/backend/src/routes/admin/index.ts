@@ -22,6 +22,7 @@ import { adminIssuesRoute } from "./issues.js";
 import { adminAppDownloadRoute } from "./appDownload.js";
 import { adminFlowConfigRoute } from "./flowConfig.js";
 import { adminReceivingPickingListRoute } from "./receivingPickingList.js";
+import { adminUserProfilesRoute } from "./userProfiles.js";
 
 // Optional id on create: use the client's when given, else generate one.
 function optId(body: Record<string, unknown>): string {
@@ -235,7 +236,11 @@ adminRoute.route("/", adminAppDownloadRoute);
 // Picking-list xlsx download for a receiving order.
 adminRoute.route("/", adminReceivingPickingListRoute);
 
-async function groupCodesOf(userId: string): Promise<string[]> {
+// Per-user sub-inventory scope profiles (spec
+// 2026-09-11-user-subinventory-scope-design.md).
+adminRoute.route("/user-profiles", adminUserProfilesRoute);
+
+export async function groupCodesOf(userId: string): Promise<string[]> {
   const rows = await queryAll<{ groupCode: string }>(
     db,
     sql`SELECT group_code AS "groupCode" FROM user_group_members WHERE user_id = ${userId} ORDER BY group_code`

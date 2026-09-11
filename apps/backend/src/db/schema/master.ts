@@ -13,6 +13,19 @@ export const users = pgTable("users", {
   lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
 });
 
+// Per-user profile: PDA-local fields keyed by the username business key.
+// No FK to users — a profile may be pre-created before the user's first
+// login (the users row only exists after login), same rationale as
+// supplier_profiles vs suppliers. sub_inventory_scopes: NULL/[] = the user
+// sees every sub-inventory (spec 2026-09-11-user-subinventory-scope-design).
+export const userProfiles = pgTable("user_profiles", {
+  id: text("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  subInventoryScopes: jsonb("sub_inventory_scopes"), // [{ orgId: number, code: string }]
+  createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+  lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+});
+
 // User groups (replaces the old users.role text column). Membership is
 // many-to-many via user_group_members; tokens carry the full group-code list.
 export const userGroups = pgTable("user_groups", {

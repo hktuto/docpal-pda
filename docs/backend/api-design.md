@@ -47,6 +47,15 @@ live in `concepts.md`; tables in `schema.md`.
 | `POST /auth/logout` | — → `{ok: true}` | no-op (client discards the token) |
 | `GET /auth/me` | — → AuthUser / 401 | session restore from the bearer token |
 | `GET /auth/users/:id` | — → AuthUser / 404 | |
+| `GET /auth/me/profile` | — → `{username, subInventoryScopes: [{orgId, code}]}` | caller's per-user sub-inventory scope (NULL/[] = unrestricted) |
+| `PUT /auth/me/profile` | `{subInventoryScopes: [{orgId, code}]}` → the saved profile | upsert by the actor's username; every pair validated against `org_info` (400 `unknown_sub_inventory` with the bad pairs listed) |
+
+### Admin: user profiles
+
+| Endpoint | Body → Response | Note |
+|---|---|---|
+| `GET /admin/user-profiles` | — → `[{id, username, displayName, groupCodes, subInventoryScopes}]` | users LEFT JOIN profiles |
+| `PUT /admin/user-profiles/:username` | `{subInventoryScopes: [{orgId, code}]}` → the saved profile | same validation as the self-service PUT (400 `unknown_sub_inventory`); username need not exist in `users` yet (pre-provisioning) |
 
 JWT bearer (HS256, `hono/jwt`, secret from `AUTH_SECRET`, 12 h TTL) required on
 all routes except `/health`, `POST /auth/login`, and `/dev/*`; `GET /events`
@@ -54,6 +63,16 @@ also accepts `?token=` (EventSource can't set headers). Users belong to groups
 via `user_group_members` (many-to-many); `users.role` is gone. Login is always
 delegated to the DocPal API (`DOCPAL_URL` required) and local users are
 auto-provisioned (spec `docs/superpowers/specs/2026-08-13-docpal-auth-design.md`).
+
+**Per-user sub-inventory scope** (spec
+`docs/superpowers/specs/2026-09-11-user-subinventory-scope-design.md`): the
+scope set via `/auth/me/profile` / `/admin/user-profiles` filters the
+receiving and picking list + detail reads server-side, resolved per request
+from the JWT actor's username. A row carrying `(org_id, sub_inventory_code)`
+passes when `sub_inventory_code` IS NULL or the pair is in the scope;
+empty/absent scope = unrestricted; composes with `allowedOrgIds` by AND.
+Reads only — mutations, stock search, put-away, goods verify and SSE events
+are unaffected.
 
 `GET /allocation/status` → in-memory status of the background `allocateAll`
 runner: `{running, queued, trigger, startedAt, lastRun | null}` where
@@ -82,8 +101,8 @@ template group or explicit body field) are deduped per order via
 
 | Endpoint | Description |
 |---|---|
-| `GET /receiving-orders?status=&search=&limit=&offset=` | Paged list → `{rows, total}`. Rows: `{id, refNo, status, deliveryDate, dateCode, supplierCode, supplierName, warehouseCode, warehouseSectionCode, subInventoryCode, invoiceCount, itemCount, remainingItems, pendingPickingOrders}`. `remainingItems` = items with `put_away_qty < qty`; `pendingPickingOrders` = distinct pending/picking orders allocated to this RO (via `allocations.receiving_order_id` or via receiving item). `search` = case-insensitive substring on `batchNo`/`supplierName`/`invoice_no`; `limit`/`offset` page the result (omit `limit` for all rows); `total` = full match count. Rows also carry `invoiceNos` (comma-joined distinct invoice numbers). |
-| `GET /receiving-orders/:id` | Detail: `{order..., supplier{...profile fields}, invoices[{..., items[{..., part, allocatedQty, mismatch}]}]}` — nested; `allocatedQty` embedded per item (no `allocated_by_item` map). |
+| `GET /receiving-orders?status=&search=&limit=&offset=` | Paged list → `{rows, total}`. Rows: `{id, refNo, status, deliveryDate, dateCode, supplierCode, supplierName, warehouseCode, warehouseSectionCode, subInventoryCode, invoiceCount, itemCount, remainingItems, pendingPickingOrders}`. `remainingItems` = items with `put_away_qty < qty`; `pendingPickingOrders` = distinct pending/picking orders allocated to this RO (via `allocations.receiving_order_id` or via receiving item). `search` = case-insensitive substring on `batchNo`/`supplierName`/`invoice_no`; `limit`/`offset` page the result (omit `limit` for all rows); `total` = full match count. Rows also carry `invoiceNos` (comma-joined distinct invoice numbers). Per-user sub-inventory scope (see §Auth): when the caller has a scope set, an order stays visible only when it has no items or any item whose `sub_inventory_code` is NULL or in scope (list aggregates still computed over all items). |
+| `GET /receiving-orders/:id` | Detail: `{order..., supplier{...profile fields}, invoices[{..., items[{..., part, allocatedQty, mismatch}]}]}` — nested; `allocatedQty` embedded per item (no `allocated_by_item` map). Per-user scope: 404 when the order is out of the caller's scope; the returned items are additionally filtered to NULL/in-scope `sub_inventory_code`. |
 | `GET /receiving-orders/:id/picking` | Picking section: `pickingOrders[{id, refNo, status, shipTo, customerCode, items[{id, partId, partNo, qty, pickedQty, allocatedQty, requiredDateCode, allocations[{id, qty, lot{shelfCode, boxId, dateCode, lotCode, coo, cow}, receivingInvoiceItemId, boxId}], packages[{id, qty, dateCode, lotCode, verified, shippingBoxId}], transitionLogs[{fromState, toState, actorId, createdDate}]}], boxes[{id, status, boxSize, grossWeight, netWeight}]}]`. |
 | `POST /receiving-orders/:id/confirm-arrival` | `{actorId}` → order with `status: "in_hand"` + `allocation` (scoped recompute summary `{demands, fullyAllocated, partiallyAllocated, allocationsCreated, allocationsRemoved, skippedReceivingSources, partKeys, changed, durationMs}`, or `null` when it fell back to the background full recompute); applies receipt, writes txns, then awaits `allocateForReceivingOrder` (same rules as `allocateAll`, restricted to the order's part keys — parts never compete, so other parts are provably untouched). |
 | `POST /receiving-orders/:id/scan` | `{actorId, raw}` (or parsed fields, incl. `serialNo`) → server-side parse/match/apply; single match auto-applies, else candidates. A parsed/explicit `serialNo` (S-key) is recorded in `receiving_scan_labels` (unique per order) — a repeat serial → 409 `label_already_scanned`; scans without a serial skip dedup. Supersedes `scan-candidates` (client no longer mirrors matching logic). |
@@ -210,8 +229,8 @@ best-effort).
 
 | Endpoint | Description |
 |---|---|
-| `GET /picking-orders?status=&allocation=&search=&limit=&offset=` | Paged list → `{rows, total}`. Rows: `{id, refNo, status, allocationStatus, allocatedQty, poNo, shipTo, customerCode, destinationCountry, deliveryDate, warehouseCode, warehouseSectionCode, subInventoryCode, itemCount, totalQty, pickedQty}`. `allocationStatus` is the persisted order-level summary (`unallocated`/`partial`/`allocated`, recomputed by `allocateAll`); `allocatedQty` = Σ item `allocated_qty`. `?status=` and `?allocation=` accept comma-separated lists (`?status=shipped` still works); `search` = case-insensitive substring on `orderNo`/`poNo`/`customerCode`; `limit`/`offset` page the result (omit `limit` for all rows); `total` = full match count. |
-| `GET /picking-orders/:id` | Nested detail: `{order..., items[{..., allocations[{..., lot|receivingItem, boxId}], packages[]}], boxes[{..., packageCount}], suggestedBox}`. No parallel arrays. `suggestedBox` (null when none or the order is not active) is the whole-box claim hint: a fully-claimable shelf box whose current `inventory_lots` contents exactly equal the order's remaining demand `{id, shelfCode, orgId, subInventoryCode, contents[{partNo, qty}]}`. |
+| `GET /picking-orders?status=&allocation=&search=&limit=&offset=` | Paged list → `{rows, total}`. Rows: `{id, refNo, status, allocationStatus, allocatedQty, poNo, shipTo, customerCode, destinationCountry, deliveryDate, warehouseCode, warehouseSectionCode, subInventoryCode, itemCount, totalQty, pickedQty}`. `allocationStatus` is the persisted order-level summary (`unallocated`/`partial`/`allocated`, recomputed by `allocateAll`); `allocatedQty` = Σ item `allocated_qty`. `?status=` and `?allocation=` accept comma-separated lists (`?status=shipped` still works); `search` = case-insensitive substring on `orderNo`/`poNo`/`customerCode`; `limit`/`offset` page the result (omit `limit` for all rows); `total` = full match count. Per-user sub-inventory scope (see §Auth): when the caller has a scope set, only orders whose `(org_id, sub_inventory_code)` pair is in scope (or NULL sub-inventory) are returned. |
+| `GET /picking-orders/:id` | Nested detail: `{order..., items[{..., allocations[{..., lot|receivingItem, boxId}], packages[]}], boxes[{..., packageCount}], suggestedBox}`. No parallel arrays. Per-user scope: 404 when the order's `(org_id, sub_inventory_code)` pair is out of the caller's scope. `suggestedBox` (null when none or the order is not active) is the whole-box claim hint: a fully-claimable shelf box whose current `inventory_lots` contents exactly equal the order's remaining demand `{id, shelfCode, orgId, subInventoryCode, contents[{partNo, qty}]}`. |
 | `POST /picking-orders/:id/claim-shelf-box` | `{shelfBoxId}` (actor from the token) → `{shippingBoxId, packageIds}`, 201. Whole-box exact-match claim (spec `docs/superpowers/specs/2026-07-29-whole-box-picking-claim-design.md`): the shelf box's current contents must exactly equal the order's full remaining open demand (409 `box_not_exact_match`) with no other order reserving any piece (409 `box_not_fully_available`). The carton is reused as the shipping box — created prefilled with `box_size`/`net_weight`/`gross_weight` summed from the source receiving lines' `additional_data` (g→kg via `weightUnit`, default kg), `source_shelf_box_id` recorded — with one boxed package per (item, lot) portion, the order's allocations released, and the auto-finish chain run like the scan path. |
 | `POST /picking-items/:id/scan` | `{actorId, allocationId|source, qty, raw?}` → `{packageIds}`. The one canonical scan-to-pick route; OCR/receiving-source picking folds in here (old `ocr-pick` path dies). |
 | `DELETE /packages/:id` | `{actorId}` → removes an unboxed (unverified) package. |

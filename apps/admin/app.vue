@@ -99,6 +99,9 @@ onBeforeUnmount(() => {
         </button>
         <div v-if="showUserMenu" class="user-popover">
           <LanguageSwitcher />
+          <NuxtLink to="/settings" class="btn btn-small settings-link">
+            {{ $t("admin.auth.settings") }}
+          </NuxtLink>
           <button class="btn btn-small logout-btn" @click="logout">
             {{ $t("admin.auth.logout") }}
           </button>
@@ -251,6 +254,14 @@ onBeforeUnmount(() => {
 }
 .logout-btn {
   align-self: flex-start;
+}
+.settings-link {
+  align-self: flex-start;
+  display: inline-block;
+  text-align: center;
+}
+.settings-link:hover {
+  text-decoration: none;
 }
 
 .content {

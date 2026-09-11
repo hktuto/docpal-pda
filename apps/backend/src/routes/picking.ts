@@ -28,6 +28,7 @@ import {
 } from "../db/picking.js";
 import { scheduleAllocateAll } from "../db/allocate.js";
 import { actorFrom } from "../auth/middleware.js";
+import { getUserScope } from "../db/user-scope.js";
 
 // Empty bodies parse as {} — after the auth migration several mutations no
 // longer carry any body fields (the actor comes from the token).
@@ -55,6 +56,7 @@ export const pickingRoute = new Hono();
 pickingRoute.get("/picking-orders", async (c) => {
   const limit = Number(c.req.query("limit"));
   const offset = Number(c.req.query("offset"));
+  const scope = await getUserScope(db, actorFrom(c).username);
   return c.json(
     await listPickingOrders(db, {
       status: c.req.query("status"),
@@ -62,6 +64,7 @@ pickingRoute.get("/picking-orders", async (c) => {
       search: c.req.query("search"),
       limit: Number.isNaN(limit) ? undefined : limit,
       offset: Number.isNaN(offset) ? undefined : offset,
+      scope,
     }),
     200
   );
@@ -88,7 +91,8 @@ pickingRoute.post("/picking-orders/reorder", async (c) => {
 
 // Nested detail: order + items (allocations, packages) + boxes.
 pickingRoute.get("/picking-orders/:id", async (c) => {
-  return c.json(await getPickingOrderDetail(db, c.req.param("id")), 200);
+  const scope = await getUserScope(db, actorFrom(c).username);
+  return c.json(await getPickingOrderDetail(db, c.req.param("id"), scope), 200);
 });
 
 // The one canonical scan-to-pick: consumes the allocation's source into

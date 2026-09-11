@@ -16,6 +16,7 @@ import {
 import { scheduleAllocateAll, allocateForReceivingOrder } from "../db/allocate.js";
 import { actorFrom } from "../auth/middleware.js";
 import { allowedOrgFilter } from "../db/org-filter.js";
+import { getUserScope, receivingOrderScopeFilter, userScopeFilter } from "../db/user-scope.js";
 
 // Empty bodies parse as {} — after the auth migration several mutations no
 // longer carry any body fields (the actor comes from the token).
@@ -61,6 +62,9 @@ receivingRoute.get("/receiving-orders", async (c) => {
   const offsetParam = Number(c.req.query("offset"));
   const limit = Number.isNaN(limitParam) ? undefined : limitParam;
   const offset = Number.isNaN(offsetParam) ? undefined : offsetParam;
+  // Per-user scope applies at order level: an order stays visible when it
+  // has no items, or any item unstamped/in scope; aggregates are unchanged.
+  const scope = await getUserScope(db, actorFrom(c).username);
   const rows = await queryAll<ReceivingOrderListRow & { total: number }>(
     db,
     sql`
@@ -98,6 +102,7 @@ receivingRoute.get("/receiving-orders", async (c) => {
       ${status ? sql`AND ro.status = ${status}` : sql``}
       ${search ? sql`AND (ro.batch_no ILIKE ${"%" + search + "%"} OR s.name ILIKE ${"%" + search + "%"} OR inv.invoice_no ILIKE ${"%" + search + "%"})` : sql``}
       ${allowedOrgFilter(sql`ro.org_id`)}
+      ${receivingOrderScopeFilter(sql`ro.id`, scope)}
       GROUP BY ro.id, s.id
       ORDER BY ro.created_date DESC, ro.id
       ${limit && limit > 0 ? sql`LIMIT ${limit} OFFSET ${offset ?? 0}` : sql``}
@@ -178,6 +183,7 @@ interface ItemRow {
 // each item embedding its part, allocation total, and active mismatch.
 receivingRoute.get("/receiving-orders/:id", async (c) => {
   const id = c.req.param("id");
+  const scope = await getUserScope(db, actorFrom(c).username);
 
   const order = await queryGet<OrderDetailRow>(
     db,
@@ -198,6 +204,7 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
       LEFT JOIN supplier_profiles sp ON sp.supplier_code = s.code
       WHERE ro.id = ${id}
       ${allowedOrgFilter(sql`ro.org_id`)}
+      ${receivingOrderScopeFilter(sql`ro.id`, scope)}
     `
   );
   if (!order) throw new HTTPException(404, { message: "receiving_order_not_found" });
@@ -241,6 +248,7 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
       JOIN receiving_invoices inv ON inv.id = rii.receiving_invoice_id
       JOIN parts p ON p.wcl_item_no = rii.wcl_item_no
       WHERE inv.receiving_order_id = ${id}
+      ${userScopeFilter(sql`rii.org_id`, sql`rii.sub_inventory_code`, scope)}
       ORDER BY rii.po_no, rii.po_line, rii.id
     `
   );
