@@ -241,6 +241,7 @@ onMounted(load);
     <div class="page-head">
       <h1>{{ $t(config.title) }}</h1>
       <div class="head-actions">
+        <slot name="head-actions" :rows="rows" />
         <button class="btn" :disabled="loading" @click="load">{{ $t("admin.common.refresh") }}</button>
         <button class="btn btn-primary" @click="startNew">{{ $t("admin.common.new") }}</button>
       </div>
