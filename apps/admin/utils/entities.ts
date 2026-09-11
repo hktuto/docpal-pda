@@ -131,17 +131,6 @@ export const entities: Record<string, EntityConfig> = {
       { key: "description", label: "admin.fields.description", type: "text" },
     ],
   },
-  "customer-profiles": {
-    path: "customer-profiles",
-    title: "admin.entities.customerProfiles.title",
-    pk: "code",
-    fields: [
-      { key: "code", label: "admin.fields.code", type: "text", required: true, readonlyOnEdit: true },
-      { key: "label", label: "admin.fields.label", type: "text", required: true },
-      { key: "rule", label: "admin.fields.rule", type: "text" },
-      { key: "remark", label: "admin.fields.remark", type: "text" },
-    ],
-  },
   "net-weight-formulas": {
     path: "net-weight-formulas",
     title: "admin.entities.netWeightFormulas.title",

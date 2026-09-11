@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { newId } from "../../db/id.js";
-import { eq, or, ilike, sql } from "drizzle-orm";
+import { and, asc, eq, or, ilike, sql, type SQL } from "drizzle-orm";
 import { db } from "../../db.js";
 import {
   shelves,
@@ -9,6 +9,7 @@ import {
   parts,
   countryList,
   boxSizeList,
+  customerAccounts,
   customerProfiles,
   netWeightFormula,
 } from "../../db/schema/index.js";
@@ -184,6 +185,30 @@ adminRoute.route(
     }),
   })
 );
+
+// Customer account master (upstream-synced, read-only — data arrives via
+// upstream sync; no POST/PATCH/DELETE). The admin customer-profile pages list
+// accounts here and soft-link profiles by customer_profiles.code = party_name.
+// ?q= searches party_name / account_number (ilike); ?partyName= filters by an
+// exact party name (the detail page loads one account that way).
+adminRoute.get("/customer-accounts", async (c) => {
+  const conditions: SQL[] = [];
+  const partyName = c.req.query("partyName")?.trim();
+  if (partyName) conditions.push(eq(customerAccounts.partyName, partyName));
+  const q = c.req.query("q")?.trim();
+  if (q) {
+    const like = `%${q}%`;
+    conditions.push(
+      or(ilike(customerAccounts.partyName, like), ilike(customerAccounts.accountNumber, like))!
+    );
+  }
+  const rows = await db
+    .select()
+    .from(customerAccounts)
+    .where(conditions.length === 0 ? undefined : and(...conditions))
+    .orderBy(asc(customerAccounts.partyName));
+  return c.json(rows);
+});
 
 // Sub-inventories: custom router (3-level model — list aggregates tags,
 // group create makes its default tag).
