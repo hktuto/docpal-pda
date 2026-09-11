@@ -887,7 +887,9 @@ export default {
       password: "Password",
       signIn: "Sign in",
       signingIn: "Signing in…",
-      noAdminAccess: "This account does not have admin access."
+      noAdminAccess: "This account does not have admin access.",
+      signingInWithLink: "Signing you in…",
+      invalidOrExpiredLink: "This sign-in link is invalid or has expired."
     },
     home: {
       title: "Warehouse Admin"
@@ -931,8 +933,10 @@ export default {
       printerPlaceholder: "Select or type a printer…",
       copies: "Copies",
       print: "Print",
-      downloadQr: "Download QR",
+      downloadQr: "Download label",
       printSelected: "Print selected ({count})",
+      printAll: "Print all ({count})",
+      batchTitle: "Batch print shelf labels ({count})",
       printing: "Printing… {progress}",
       selectedCount: "{count} selected",
       success: "Sent {count} label(s) to the printer."
@@ -1009,7 +1013,6 @@ export default {
       parts: { title: "Parts" },
       countries: { title: "Countries" },
       boxSizes: { title: "Box Sizes" },
-      customerProfiles: { title: "Customer Profiles" },
       netWeightFormulas: { title: "Net-weight Formulas" }
     },
     pages: {
@@ -1033,6 +1036,28 @@ export default {
       suppliers: {
         editProfile: "Edit profile",
         noProfileYet: "No profile yet"
+      },
+      customerProfiles: {
+        title: "Customer Profiles",
+        explainer: "Synced customer accounts (read-only master data). Profiles are linked by customer name.",
+        filterPlaceholder: "Filter by name / code / ID…",
+        none: "No customer accounts.",
+        id: "ID",
+        customerName: "Customer Name",
+        customerCode: "Customer Code",
+        status: "Status",
+        active: "Active",
+        inactive: "Inactive",
+        editProfile: "Edit profile",
+        createProfile: "Create profile",
+        noProfileYet: "No profile yet"
+      },
+      customerProfile: {
+        title: "Customer profile — {name}",
+        accountInfo: "Account",
+        profileInfo: "Profile",
+        accountNotFound: "Customer account not found in the synced master data.",
+        saveProfile: "Save profile"
       },
       supplierProfile: {
         title: "Supplier profile — {code}",

@@ -887,7 +887,9 @@ export default {
       password: "密码",
       signIn: "登录",
       signingIn: "登录中…",
-      noAdminAccess: "此账户没有管理员权限。"
+      noAdminAccess: "此账户没有管理员权限。",
+      signingInWithLink: "正在为您登录…",
+      invalidOrExpiredLink: "此登录链接无效或已过期。"
     },
     home: {
       title: "仓库管理后台"
@@ -931,8 +933,10 @@ export default {
       printerPlaceholder: "选择或输入打印机…",
       copies: "份数",
       print: "打印",
-      downloadQr: "下载二维码",
+      downloadQr: "下载标签",
       printSelected: "打印所选（{count}）",
+      printAll: "打印全部（{count}）",
+      batchTitle: "批量打印货架标签（{count}）",
       printing: "打印中… {progress}",
       selectedCount: "已选 {count} 项",
       success: "已发送 {count} 张标签到打印机。"
@@ -1009,7 +1013,6 @@ export default {
       parts: { title: "零件" },
       countries: { title: "国家" },
       boxSizes: { title: "箱型" },
-      customerProfiles: { title: "客户资料" },
       netWeightFormulas: { title: "净重公式" }
     },
     pages: {
@@ -1033,6 +1036,28 @@ export default {
       suppliers: {
         editProfile: "编辑资料",
         noProfileYet: "暂无资料"
+      },
+      customerProfiles: {
+        title: "客户资料",
+        explainer: "上游同步的客户主数据（只读）。资料按客户名称关联。",
+        filterPlaceholder: "按名称 / 代码 / ID 筛选…",
+        none: "暂无客户。",
+        id: "ID",
+        customerName: "客户名称",
+        customerCode: "客户代码",
+        status: "状态",
+        active: "启用",
+        inactive: "停用",
+        editProfile: "编辑资料",
+        createProfile: "新建资料",
+        noProfileYet: "暂无资料"
+      },
+      customerProfile: {
+        title: "客户资料 — {name}",
+        accountInfo: "客户账户",
+        profileInfo: "资料",
+        accountNotFound: "同步的客户主数据中找不到此客户。",
+        saveProfile: "保存资料"
       },
       supplierProfile: {
         title: "供应商资料 — {code}",

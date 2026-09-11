@@ -887,7 +887,9 @@ export default {
       password: "密碼",
       signIn: "登入",
       signingIn: "登入中…",
-      noAdminAccess: "此帳戶沒有管理員權限。"
+      noAdminAccess: "此帳戶沒有管理員權限。",
+      signingInWithLink: "正在為您登入…",
+      invalidOrExpiredLink: "此登入連結無效或已過期。"
     },
     home: {
       title: "倉庫管理後台"
@@ -931,8 +933,10 @@ export default {
       printerPlaceholder: "選擇或輸入打印機…",
       copies: "份數",
       print: "列印",
-      downloadQr: "下載二維碼",
+      downloadQr: "下載標籤",
       printSelected: "列印所選（{count}）",
+      printAll: "列印全部（{count}）",
+      batchTitle: "批量列印貨架標籤（{count}）",
       printing: "列印中… {progress}",
       selectedCount: "已選 {count} 項",
       success: "已傳送 {count} 張標籤到打印機。"
@@ -1009,7 +1013,6 @@ export default {
       parts: { title: "零件" },
       countries: { title: "國家" },
       boxSizes: { title: "箱型" },
-      customerProfiles: { title: "客戶資料" },
       netWeightFormulas: { title: "淨重公式" }
     },
     pages: {
@@ -1033,6 +1036,28 @@ export default {
       suppliers: {
         editProfile: "編輯資料",
         noProfileYet: "暫無資料"
+      },
+      customerProfiles: {
+        title: "客戶資料",
+        explainer: "上游同步的客戶主數據（只讀）。資料按客戶名稱關聯。",
+        filterPlaceholder: "按名稱 / 代碼 / ID 篩選…",
+        none: "暫無客戶。",
+        id: "ID",
+        customerName: "客戶名稱",
+        customerCode: "客戶代碼",
+        status: "狀態",
+        active: "啟用",
+        inactive: "停用",
+        editProfile: "編輯資料",
+        createProfile: "新增資料",
+        noProfileYet: "暫無資料"
+      },
+      customerProfile: {
+        title: "客戶資料 — {name}",
+        accountInfo: "客戶賬戶",
+        profileInfo: "資料",
+        accountNotFound: "同步的客戶主數據中找不到此客戶。",
+        saveProfile: "儲存資料"
       },
       supplierProfile: {
         title: "供應商資料 — {code}",
