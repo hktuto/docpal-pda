@@ -93,6 +93,35 @@ async function load() {
 watch(status, load);
 onMounted(load);
 
+// "Allocate all": awaited full-fleet recompute. Work-locked orders (open on
+// a PDA) are skipped by the engine — the confirm text says so.
+const allocating = ref(false);
+const allocDoneMs = ref(0);
+let allocDoneTimer: ReturnType<typeof setTimeout> | undefined;
+
+async function allocateAllNow() {
+  if (allocating.value) return;
+  if (!window.confirm(t("admin.pages.pickingOrders.allocateAllConfirm"))) return;
+  allocating.value = true;
+  error.value = "";
+  const startedAt = Date.now();
+  try {
+    await flow.allocateAll();
+    await load();
+    clearTimeout(allocDoneTimer);
+    allocDoneMs.value = Date.now() - startedAt;
+    allocDoneTimer = setTimeout(() => {
+      allocDoneMs.value = 0;
+    }, 8000);
+  } catch (e: any) {
+    error.value = e.message;
+  } finally {
+    allocating.value = false;
+  }
+}
+
+onBeforeUnmount(() => clearTimeout(allocDoneTimer));
+
 // Reload when picking data changes elsewhere (PDA picks, sync, allocation).
 const {
   pending: changePending,
@@ -117,6 +146,9 @@ const {
       <h1>{{ $t("admin.pages.pickingOrders.title") }}</h1>
       <div class="head-actions">
         <button class="btn" :disabled="loading" @click="load">{{ $t("admin.common.refresh") }}</button>
+        <button class="btn" :disabled="allocating" @click="allocateAllNow">
+          {{ allocating ? $t("admin.common.saving") : $t("admin.pages.pickingOrders.allocateAll") }}
+        </button>
         <NuxtLink to="/picking/reorder" class="btn">{{ $t("admin.pages.pickingOrders.reorderPriority") }}</NuxtLink>
       </div>
     </div>
@@ -132,6 +164,9 @@ const {
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
+    <div v-if="allocDoneMs" class="alloc-done-banner">
+      {{ $t("admin.pages.pickingOrders.allocationDoneIn", { ms: allocDoneMs }) }}
+    </div>
     <ChangeNotice :pending="changePending" :just-updated="changeUpdated" @refresh="refreshNow" @dismiss="dismiss" />
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
@@ -177,5 +212,14 @@ const {
 }
 .filters input {
   flex: 1;
+}
+.alloc-done-banner {
+  margin-bottom: 12px;
+  padding: 9px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  background: #e9f7ef;
+  border: 1px solid #b5e2c8;
+  color: #1e7a46;
 }
 </style>

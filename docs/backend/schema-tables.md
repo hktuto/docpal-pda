@@ -348,6 +348,8 @@ upstream database — the sync/dedup key is the caller-supplied UUID `id`
 | sub_inventory_code | text FK → org_info(secondary_inventory_name) | Sub-inventory to ship from (nullable — with org_id, the shipping location pair) |
 | priority_seq | integer NOT NULL DEFAULT 0 | Allocation/list order — lower first, admin-reorderable (`POST /picking-orders/reorder`); default seq = delivery date ASC NULLS LAST then order_no |
 | commodity_inspection | text | Commodity inspection flag/value from the upstream order (stored, not yet interpreted) |
+| picking_order_type | varchar(64) | Order type classification (nullable, upstream-provided) |
+| remark | text | Free-text order remark (nullable) |
 | working_by | text FK → users(id) | Page work lock holder — a PDA with this order open keeps its allocations from being wiped by allocateAll |
 | working_at | timestamp | Work lock heartbeat, refreshed every 3 min by the open PDA page; expires 10 min after |
 | issue_reason | text | Issue-report reason |

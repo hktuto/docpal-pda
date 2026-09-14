@@ -189,6 +189,52 @@ async function saveDeliveryDate() {
   }
 }
 
+// "Re-allocate": awaited recompute scoped to this order's part keys (the
+// engine preserves global priority/FIFO; other orders sharing a part are
+// rebuilt too, work-locked ones are protected).
+const reallocating = ref(false);
+const reallocDoneMs = ref(0);
+let reallocTimer: ReturnType<typeof setTimeout> | undefined;
+
+async function reallocate() {
+  if (!order.value || reallocating.value) return;
+  if (!window.confirm(t("admin.pages.pickingOrders.reallocateConfirm", { orderNo: order.value.orderNo }))) return;
+  reallocating.value = true;
+  error.value = "";
+  const startedAt = Date.now();
+  try {
+    await flow.reallocatePickingOrder(orderId);
+    await load();
+    logsKey.value++;
+    clearTimeout(reallocTimer);
+    reallocDoneMs.value = Date.now() - startedAt;
+    reallocTimer = setTimeout(() => {
+      reallocDoneMs.value = 0;
+    }, 8000);
+  } catch (e: any) {
+    // 409 lock_held carries a JSON body ({error, holderId, holderName}) —
+    // the api client throws the raw body text as the message.
+    let handled = false;
+    try {
+      const body = JSON.parse(e.message);
+      if (body?.error === "lock_held") {
+        error.value = t("admin.pages.pickingOrders.reallocateLocked", {
+          orderNo: order.value.orderNo,
+          name: body.holderName ?? body.holderId,
+        });
+        handled = true;
+      }
+    } catch {
+      // not JSON — fall through to the raw message
+    }
+    if (!handled) error.value = e.message;
+  } finally {
+    reallocating.value = false;
+  }
+}
+
+onBeforeUnmount(() => clearTimeout(reallocTimer));
+
 async function resolveIssue() {
   const note = window.prompt(t("admin.pages.pickingOrders.resolvePrompt"));
   if (note === null) return;
@@ -257,6 +303,14 @@ const {
         <button
           v-if="order && (order.status === 'pending' || order.status === 'picking')"
           class="btn"
+          :disabled="reallocating"
+          @click="reallocate"
+        >
+          {{ reallocating ? $t("admin.common.saving") : $t("admin.pages.pickingOrders.reallocate") }}
+        </button>
+        <button
+          v-if="order && (order.status === 'pending' || order.status === 'picking')"
+          class="btn"
           @click="openReportModal"
         >
           {{ $t("admin.pages.pickingOrders.reportIssue") }}
@@ -266,6 +320,9 @@ const {
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
+    <div v-if="reallocDoneMs" class="alloc-done-banner">
+      {{ $t("admin.pages.pickingOrders.allocationDoneIn", { ms: reallocDoneMs }) }}
+    </div>
     <ChangeNotice :pending="changePending" :just-updated="changeUpdated" @refresh="refreshNow" @dismiss="dismiss" />
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
 
@@ -407,5 +464,14 @@ const {
   padding: 5px 7px;
   border: 1px solid #b6c2cd;
   border-radius: 4px;
+}
+.alloc-done-banner {
+  margin-bottom: 12px;
+  padding: 9px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  background: #e9f7ef;
+  border: 1px solid #b5e2c8;
+  color: #1e7a46;
 }
 </style>

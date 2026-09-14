@@ -65,6 +65,15 @@ export interface PickingOrderDetail extends Omit<PickingOrderRow, "itemCount" | 
 
 // ---- receiving ----
 
+export interface AllocateAllSummary {
+  demands: number;
+  fullyAllocated: number;
+  partiallyAllocated: number;
+  allocationsCreated: number;
+  allocationsRemoved: number;
+  skippedReceivingSources: number;
+}
+
 export interface AllocationRunSummary {
   demands: number;
   fullyAllocated: number;
@@ -319,6 +328,10 @@ export function useFlowApi() {
     getPickingOrder: (id: string) => api.get<PickingOrderDetail>(`/picking-orders/${id}`),
     reorderPickingOrders: (orderIds: string[]) =>
       api.post<{ reordered: number }>(`/picking-orders/reorder`, { orderIds }),
+    // Manual allocation triggers — both await the recompute in the request.
+    allocateAll: () => api.post<AllocateAllSummary>(`/admin/allocation/run`, {}),
+    reallocatePickingOrder: (id: string) =>
+      api.post<{ allocation: AllocationRunSummary }>(`/admin/picking-orders/${id}/reallocate`, {}),
     updatePickingDeliveryDate: (id: string, deliveryDate: string | null) =>
       api.patch(`/admin/picking-orders/${id}`, { deliveryDate }),
 

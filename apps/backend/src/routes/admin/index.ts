@@ -23,6 +23,7 @@ import { adminIssuesRoute } from "./issues.js";
 import { adminAppDownloadRoute } from "./appDownload.js";
 import { adminFlowConfigRoute } from "./flowConfig.js";
 import { adminReceivingShipperRoute } from "./receivingShipper.js";
+import { adminAllocationRoute } from "./allocation.js";
 import { adminUserProfilesRoute } from "./userProfiles.js";
 import { adminCustomerProfilesRoute } from "./customerProfiles.js";
 
@@ -246,6 +247,9 @@ adminRoute.route("/", adminAppDownloadRoute);
 
 // Shipper xlsx download for a receiving order (live + finished modes).
 adminRoute.route("/", adminReceivingShipperRoute);
+
+// Manual allocation triggers (allocate-all / per-order re-allocate).
+adminRoute.route("/", adminAllocationRoute);
 
 // Per-user sub-inventory scope profiles (spec
 // 2026-09-11-user-subinventory-scope-design.md).

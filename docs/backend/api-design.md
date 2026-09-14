@@ -59,6 +59,13 @@ live in `concepts.md`; tables in `schema.md`.
 | `PUT /admin/user-profiles/:username` | `{subInventoryScopes: [{orgId, code}]}` → the saved profile | same validation as the self-service PUT (400 `unknown_sub_inventory`); username need not exist in `users` yet (pre-provisioning) |
 | `GET /admin/docpal-url` | — → `{url: string | null}` | `DOCPAL_URL` base for the admin console's "Open DocPal" popover link; null when unconfigured |
 
+### Admin: manual allocation
+
+| Endpoint | Body → Response | Note |
+|---|---|---|
+| `POST /admin/allocation/run` | — → `allocateAll` summary | awaits the full-fleet recompute in the request (deliberately blocking — the admin clicked to wait) |
+| `POST /admin/picking-orders/:id/reallocate` | — → `{allocation}` (scoped summary incl. `partKeys`) | recompute scoped to the order's part keys (`allocateForPickingOrder`); 404 `picking_order_not_found`, 409 `order_not_open` unless pending/picking, 409 `lock_held` with `{error, holderId, holderName}` when a live PDA work lock is held. Spec `docs/superpowers/specs/2026-09-14-admin-allocation-buttons-design.md` |
+
 JWT bearer (HS256, `hono/jwt`, secret from `AUTH_SECRET`, 12 h TTL) required on
 all routes except `/health`, `POST /auth/login`, `POST /auth/login-token`, and
 `/dev/*`; `GET /events`

@@ -177,12 +177,13 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | `GET /stock-search` | `apps/backend/src/routes/stocksearch.ts` |
 | `GET /scan-templates` | `apps/backend/src/routes/scantemplates.ts` |
 | Print proxy: `GET /print/printers`, `POST /print/dynamic`, `POST /print/files`, `GET /print/jobs/:jobId` | `apps/backend/src/routes/print.ts`, `apps/backend/src/print.ts` |
-| Upstream sync (outbound `GET /sync-events` feed + inbound apply layer; no embedded consumer) | `apps/backend/src/routes/sync-events.ts`, `apps/backend/src/db/sync-events.ts`, `apps/backend/src/db/ingest.ts` |
+| Upstream sync (outbound `GET /sync-events` feed; the external service writes the business tables directly) | `apps/backend/src/routes/sync-events.ts`, `apps/backend/src/db/sync-events.ts` |
 | `POST /dev/reset`, `POST /dev/allocate` | `apps/backend/src/routes/dev.ts` |
 | `/admin/*` master-data CRUD | `apps/backend/src/routes/admin/` |
 | `/admin/sub-inventory-share-groups` (share-group membership upsert/remove) | `apps/backend/src/routes/admin/subInventoryShareGroups.ts` |
 | `GET /admin/receiving-orders/:id/shipper` (shipper xlsx download; `?mode=finished` for actuals) | `apps/backend/src/routes/admin/receivingShipper.ts` |
 | `GET /admin/user-profiles`, `PUT /admin/user-profiles/:username` (per-user sub-inventory scope; pre-provisioning allowed) | `apps/backend/src/routes/admin/userProfiles.ts` |
+| `POST /admin/allocation/run`, `POST /admin/picking-orders/:id/reallocate` (manual allocation triggers) | `apps/backend/src/routes/admin/allocation.ts` |
 
 ### Domain modules
 
@@ -200,8 +201,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | Per-user sub-inventory scope (`user_profiles` read + filter fragments for receiving/picking list/detail reads) | `apps/backend/src/db/user-scope.ts` |
 | Goods verify (generation, queue, verify with ADJUST) | `apps/backend/src/db/goodsverify.ts` |
 | Stock search | `apps/backend/src/db/stocksearch.ts` |
-| Sync apply layer (idempotent upsert/delete domain functions for upstream sync; guarded order deletes) | `apps/backend/src/db/ingest.ts` |
-| Allocation engine (`allocateAll`) | `apps/backend/src/db/allocate.ts` |
+| Allocation engine (`allocateAll`, `allocateForReceivingOrder`, `allocateForPickingOrder`) | `apps/backend/src/db/allocate.ts` |
 | Demo seed (+ generated real-data artifacts) | `apps/backend/src/db/seed.ts` (+ `seed-parts-data.json`, `seed-subinventories-data.ts`, `seed-net-weight-data.ts`, `seed-order-210726.ts`; generator `scripts/gen-seed-real-data.mjs`) |
 
 - Server entry / app wiring: `apps/backend/src/index.ts` (migrations auto-apply on startup; boot seed runs when `warehouse_config` is empty unless `WAREHOUSE_SEED=off` — default is reference data + shelves only (incl. the HK warehouse flow config, `HK_FLOW_CONFIG` in `seed.ts`), masters/orders come from upstream sync and users from DocPal; `WAREHOUSE_SEED_DEMO=1` seeds the full demo world for local dev login).

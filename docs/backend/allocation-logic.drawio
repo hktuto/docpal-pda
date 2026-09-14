@@ -1,0 +1,228 @@
+<mxfile host="app.diagrams.net" modified="2026-09-14T00:00:00.000Z" agent="kimi-code" version="24.7.5" type="device">
+  <diagram id="allocation-logic" name="Allocation Engine">
+    <mxGraphModel dx="1400" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="1800" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="trig" value="Triggers" style="swimlane;fontSize=14;fontStyle=1;align=center;verticalAlign=top;startSize=30;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="80" y="40" width="1120" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="t1" value="Mutation routes (receive, pick, order create/cancel, priority reorder, sync)&lt;br&gt;→ scheduleAllocateAll — background, serialized, triggers coalesce" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;" vertex="1" parent="trig">
+          <mxGeometry x="30" y="40" width="520" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="t2" value="POST /receiving-orders/:id/confirm-arrival&lt;br&gt;→ allocateForReceivingOrder — awaited, scoped to the confirmed order's part keys" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;" vertex="1" parent="trig">
+          <mxGeometry x="580" y="40" width="510" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="start" value="allocateAll — full idempotent recompute (one DB transaction)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d1c4e9;strokeColor=#512da8;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="480" y="190" width="320" height="45" as="geometry" />
+        </mxCell>
+
+        <mxCell id="load" value="Load DEMANDS: open picking items&lt;br&gt;• order status pending / picking&lt;br&gt;• no live work lock (working_at older than 10 min = expired)&lt;br&gt;• open qty = qty − Σ picking_packages &amp;gt; 0&lt;br&gt;• ordered by priority_seq, delivery_date NULLS LAST, order_no" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="440" y="270" width="400" height="95" as="geometry" />
+        </mxCell>
+
+        <mxCell id="any" value="any demands?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fffde7;strokeColor=#f9a825;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="560" y="405" width="160" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="refresh0" value="refreshAllocationStatus + emit allocation.finished (changed=false)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="940" y="415" width="270" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="done" value="end" style="ellipse;whiteSpace=wrap;html=1;fillColor=#eceff1;strokeColor=#455a64;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="990" y="1560" width="80" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="wipe" value="WIPE existing allocations of those items&lt;br&gt;• delete rows + RESERVE reversal ledger txns&lt;br&gt;• decrement inventory_lots.allocated_qty immediately&lt;br&gt;(work-locked orders' rows survive)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="450" y="525" width="380" height="75" as="geometry" />
+        </mxCell>
+
+        <mxCell id="loop" value="FOR EACH demand (in priority order)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d1c4e9;strokeColor=#512da8;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="490" y="640" width="300" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="loc" value="item has additional_data.from_subinventory AND a pickingFromSubinventoryOrgs group lists it?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fffde7;strokeColor=#f9a825;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="500" y="720" width="280" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="conv" value="Transfer: order pair = DESTINATION.&lt;br&gt;Convert demand location → org_id from group,&lt;br&gt;sub-inventory from receivingSubInventoryRules&lt;br&gt;(item's order_no → po_no → group default;&lt;br&gt;no rule match → from_subinventory code)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3c4;strokeColor=#f9a825;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="880" y="720" width="320" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="src1" value="SOURCE 1 — shelf stock (inventory_lots)&lt;br&gt;• part_no OR wcl_item_no = demand part_no&lt;br&gt;• org + sub-inventory match (widened by sub_inventory_share_members)&lt;br&gt;• total_qty − allocated_qty &amp;gt; 0&lt;br&gt;• FIFO: date_code ASC NULLS LAST&lt;br&gt;take min(usable, remaining)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e3f2fd;strokeColor=#1565c0;fontSize=11;align=left;spacingLeft=8;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="470" y="870" width="360" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rem" value="remaining &amp;gt; 0 AND allowDockStock = true?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fffde7;strokeColor=#f9a825;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="520" y="1020" width="260" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="src2" value="SOURCE 2 — dock stock (receiving_invoice_items)&lt;br&gt;• order status in_hand / provisional_received&lt;br&gt;• same part / org / sub-inventory match&lt;br&gt;• available = received − picked − locked allocations&lt;br&gt;• FIFO: date_code ASC NULLS LAST" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e3f2fd;strokeColor=#1565c0;fontSize=11;align=left;spacingLeft=8;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="80" y="1150" width="360" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="nullpair" value="item org_id or sub_inventory_code NULL?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fffde7;strokeColor=#f9a825;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="90" y="1300" width="240" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="skip" value="skip + count&lt;br&gt;(surfaced, never silently allocated)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffcdd2;strokeColor=#c62828;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="90" y="1440" width="220" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="grain" value="ctn_no set?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fffde7;strokeColor=#f9a825;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="400" y="1300" width="140" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="box" value="allocate at BOX level (allocation.receiving_invoice_item_id)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="400" y="1440" width="220" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ord" value="allocate at ORDER level, pooled per order+part (allocation.receiving_order_id)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="660" y="1440" width="230" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="result" value="allocated anything for this item?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fffde7;strokeColor=#f9a825;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="1150" width="220" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="zero" value="allocated_qty = 0" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffcdd2;strokeColor=#c62828;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="1300" width="140" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ins" value="insert allocations rows + RESERVE ledger txns;&lt;br&gt;update picking_items.allocated_qty;&lt;br&gt;fully vs partially allocated" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#c8e6c9;strokeColor=#2e7d32;fontSize=11;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="970" y="990" width="280" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="next" value="more demands?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fffde7;strokeColor=#f9a825;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="1290" y="1280" width="140" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="finish" value="apply lot allocated_qty deltas, write ledger,&lt;br&gt;refreshAllocationStatus (allocated / partial / unallocated)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="560" y="1560" width="360" height="55" as="geometry" />
+        </mxCell>
+
+        <mxCell id="changed" value="allocation set changed? (multiset compare before/after)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fffde7;strokeColor=#f9a825;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="560" y="1660" width="260" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="evt1" value="emit allocation.computed → /picking-orders" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#c8e6c9;strokeColor=#2e7d32;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="880" y="1670" width="240" height="45" as="geometry" />
+        </mxCell>
+
+        <mxCell id="evt2" value="emit allocation.finished (every run)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#c8e6c9;strokeColor=#2e7d32;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="880" y="1740" width="240" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_t1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0;entryY=0.5;" edge="1" parent="1" source="t1" target="start">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_t2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=1;entryY=0.5;" edge="1" parent="1" source="t2" target="start">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_start_load" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="start" target="load">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_load_any" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="load" target="any">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_any_refresh0" value="no" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=11;fontColor=#c62828;" edge="1" parent="1" source="any" target="refresh0">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_refresh0_done" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="refresh0" target="done">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_any_wipe" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fontSize=11;fontColor=#2e7d32;" edge="1" parent="1" source="any" target="wipe">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_wipe_loop" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="wipe" target="loop">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_loop_loc" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="loop" target="loc">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_loc_conv" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=11;fontColor=#2e7d32;" edge="1" parent="1" source="loc" target="conv">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_conv_src1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=1;entryY=0.5;" edge="1" parent="1" source="conv" target="src1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_loc_src1" value="no" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fontSize=11;fontColor=#c62828;" edge="1" parent="1" source="loc" target="src1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_src1_rem" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="src1" target="rem">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_rem_src2" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;fontSize=11;fontColor=#2e7d32;" edge="1" parent="1" source="rem" target="src2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_rem_result" value="no (put-away is a hard gate)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0.5;entryY=0;fontSize=10;fontColor=#c62828;" edge="1" parent="1" source="rem" target="result">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_src2_nullpair" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;" edge="1" parent="1" source="src2" target="nullpair">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_nullpair_skip" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fontSize=11;fontColor=#c62828;" edge="1" parent="1" source="nullpair" target="skip">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_nullpair_grain" value="no" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=11;fontColor=#2e7d32;" edge="1" parent="1" source="nullpair" target="grain">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_grain_box" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fontSize=11;fontColor=#2e7d32;" edge="1" parent="1" source="grain" target="box">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_grain_ord" value="no" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=11;fontColor=#c62828;" edge="1" parent="1" source="grain" target="ord">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_skip_result" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="skip" target="result">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_box_result" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.75;" edge="1" parent="1" source="box" target="result">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ord_result" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0.5;entryY=1;" edge="1" parent="1" source="ord" target="result">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_result_zero" value="no" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fontSize=11;fontColor=#c62828;" edge="1" parent="1" source="result" target="zero">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_result_ins" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=0;entryX=0.5;entryY=1;fontSize=11;fontColor=#2e7d32;" edge="1" parent="1" source="result" target="ins">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_zero_next" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="zero" target="next">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ins_next" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0.5;entryY=0;" edge="1" parent="1" source="ins" target="next">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_next_loop" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=0;entryX=1;entryY=0.5;fontSize=11;fontColor=#2e7d32;" edge="1" parent="1" source="next" target="loop">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1360" y="660" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e_next_finish" value="no" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;fontSize=11;fontColor=#c62828;" edge="1" parent="1" source="next" target="finish">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_finish_changed" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="finish" target="changed">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_changed_evt1" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=11;fontColor=#2e7d32;" edge="1" parent="1" source="changed" target="evt1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_changed_evt2" value="no" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0;entryY=0.5;fontSize=11;fontColor=#c62828;" edge="1" parent="1" source="changed" target="evt2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_evt1_evt2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="evt1" target="evt2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_evt2_done" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" edge="1" parent="1" source="evt2" target="done">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

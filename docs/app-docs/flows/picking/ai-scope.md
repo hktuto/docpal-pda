@@ -92,6 +92,15 @@
   first) drives both `allocateAll` demand order and the picking list order;
   `POST /picking-orders/reorder` rewrites it and re-allocates (admin UI
   comes with the console revamp).
+- Admin manual allocation triggers (spec
+  `docs/superpowers/specs/2026-09-14-admin-allocation-buttons-design.md`):
+  "Allocate all" on the admin picking-order list page awaits the full
+  `allocateAll` via `POST /admin/allocation/run`; "Re-allocate" on the admin
+  picking-order detail page (visible while pending/picking) awaits
+  `POST /admin/picking-orders/:id/reallocate` — a recompute scoped to that
+  order's part keys (`allocateForPickingOrder`), which also rebuilds sibling
+  orders sharing a part and 409s on a live work lock (`lock_held` with the
+  holder's name) or a non-open order (`order_not_open`).
 - Allocation location matching: a picking order's `(org_id,
   sub_inventory_code)` pair must match the stock source's pair (pair-less
   orders are org-agnostic), widened by `sub_inventory_share_members` —
