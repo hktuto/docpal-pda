@@ -1,0 +1,108 @@
+<mxfile host="app.diagrams.net" modified="2026-09-14T00:00:00.000Z" agent="kimi-code" version="24.7.5" type="device">
+  <diagram id="sync-filter" name="Upstream Sync Filter">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="850" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="up" value="Upstream source system" style="swimlane;fontSize=14;fontStyle=1;align=center;verticalAlign=top;startSize=30;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="40" y="120" width="240" height="420" as="geometry" />
+        </mxCell>
+        <mxCell id="ro" value="receiving_orders" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=12;fontFamily=Courier New;" vertex="1" parent="up">
+          <mxGeometry x="40" y="50" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="ri" value="receiving_invoices" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=12;fontFamily=Courier New;" vertex="1" parent="up">
+          <mxGeometry x="40" y="110" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="rii" value="receiving_invoice_items" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=12;fontFamily=Courier New;" vertex="1" parent="up">
+          <mxGeometry x="40" y="170" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="po" value="picking_orders" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=12;fontFamily=Courier New;" vertex="1" parent="up">
+          <mxGeometry x="40" y="280" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="pi" value="picking_items" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#333333;fontSize=12;fontFamily=Courier New;" vertex="1" parent="up">
+          <mxGeometry x="40" y="340" width="160" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="cfg" value="WMS DB: warehouse_config row &quot;flow&quot;&lt;br&gt;config.allowedOrgIds (integer array, e.g. [2] = HK)&lt;br&gt;empty array = accept all orgs" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e3f2fd;strokeColor=#1565c0;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="380" y="20" width="320" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="q1" value="org_id ∈ allowedOrgIds?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fffde7;strokeColor=#f9a825;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="420" y="160" width="200" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="sync1" value="✔ Sync to WMS DB" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#c8e6c9;strokeColor=#2e7d32;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="760" y="120" width="200" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="drop1" value="✘ Skip — belongs to another warehouse" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffcdd2;strokeColor=#c62828;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="760" y="240" width="200" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="q2" value="org_id ∈ allowedOrgIds?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fffde7;strokeColor=#f9a825;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="420" y="380" width="200" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="sync2" value="✔ Sync to WMS DB" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#c8e6c9;strokeColor=#2e7d32;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="760" y="330" width="200" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="q3" value="picking_items.additional_data has key &quot;from_subinventory&quot;?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fffde7;strokeColor=#f9a825;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="400" y="560" width="240" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="sync3" value="✔ Sync to HK warehouse (transfer order)&lt;br&gt;order's org/sub-inventory = DESTINATION&lt;br&gt;'from_subinventory' = source location&lt;br&gt;(resolved via pickingFromSubinventoryOrgs&lt;br&gt;+ receivingSubInventoryRules)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3c4;strokeColor=#f9a825;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="760" y="500" width="260" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="drop2" value="✘ Skip — belongs to another warehouse" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffcdd2;strokeColor=#c62828;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="760" y="640" width="200" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_ro_q1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="ro" target="q1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ri_q1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="ri" target="q1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_rii_q1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="rii" target="q1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_po_q2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="po" target="q2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_pi_q2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="pi" target="q2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_cfg_q1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;strokeColor=#1565c0;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="cfg" target="q1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_cfg_q2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;strokeColor=#1565c0;exitX=1;exitY=1;entryX=1;entryY=0;" edge="1" parent="1" source="cfg" target="q2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_q1_sync1" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=11;fontColor=#2e7d32;" edge="1" parent="1" source="q1" target="sync1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_q1_drop1" value="no / NULL" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0;entryY=0.5;fontSize=11;fontColor=#c62828;" edge="1" parent="1" source="q1" target="drop1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_q2_sync2" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=11;fontColor=#2e7d32;" edge="1" parent="1" source="q2" target="sync2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_q2_q3" value="no" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;fontSize=11;fontColor=#c62828;" edge="1" parent="1" source="q2" target="q3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e_q3_sync3" value="yes" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=1;exitY=0.5;entryX=0;entryY=0.5;fontSize=11;fontColor=#2e7d32;" edge="1" parent="1" source="q3" target="sync3">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_q3_drop2" value="no" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;exitX=0.5;exitY=1;entryX=0;entryY=0.5;fontSize=11;fontColor=#c62828;" edge="1" parent="1" source="q3" target="drop2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
