@@ -171,6 +171,24 @@ test("allocateAll: share group widens the sub-inventory match", async () => {
   assert.equal(Number((c[0] as any).c), 0);
 });
 
+test("allocateAll: sub-inventory code match is case-insensitive", async () => {
+  await reseed(client);
+  await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${PO_22}`);
+  // upstream-synced lots can carry a differently-cased code than org_info /
+  // share members — simulate by moving the lots onto a lowercase 'store1'
+  // org_info row (a distinct value under the DB's case-sensitive collation)
+  await client.db.execute(sql`INSERT INTO org_info (id, org_id, secondary_inventory_name) VALUES ('test-store1-lc', 2, 'store1')`);
+  await client.db.execute(sql`UPDATE inventory_lots SET sub_inventory_code = 'store1' WHERE org_id = 2`);
+  // direct match: "STORE1" demand, "store1" lots
+  let s = await allocateAll(client.db);
+  assert.equal(s.fullyAllocated, 3);
+
+  // same through the share group: WSTORE1 demand, "STORE1" member, "store1" lots
+  await client.db.execute(sql`UPDATE picking_orders SET sub_inventory_code = 'WSTORE1' WHERE id = ${PO_22}`);
+  s = await allocateAll(client.db);
+  assert.equal(s.fullyAllocated, 3);
+});
+
 test("allocateAll: idempotent recompute, ledger stays consistent", async () => {
   await reseed(client);
   await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${PO_22}`);

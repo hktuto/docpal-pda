@@ -32,6 +32,9 @@ import { matchSubInventoryRule } from "./receiving.js";
 //     matches any source. The code match is widened by
 //     sub_inventory_share_members: a source whose sub-inventory shares a
 //     share_group with the demand's sub-inventory (same org) also matches.
+//     All sub-inventory code comparisons are case-insensitive (upper()):
+//     upstream-synced inventory_lots can carry differently-cased codes
+//     (e.g. "Store1") than org_info / share members ("STORE1").
 //     Transfer orders (spec 2026-09-03-picking-from-subinventory-orgs-design.md):
 //     an item carrying additional_data.from_subinventory is a transfer — the
 //     order's pair is the DESTINATION, not the source. When a
@@ -223,11 +226,11 @@ async function loadLotSources(dbOrTx: DbOrTx, d: DemandRow): Promise<LotRow[]> {
         WHERE (il.part_no = ${d.partNo} OR il.wcl_item_no = ${d.partNo})
           AND (${d.orgId}::int IS NULL OR il.org_id = ${d.orgId})
           AND (${d.subInventoryCode}::text IS NULL
-               OR il.sub_inventory_code = ${d.subInventoryCode}
+               OR upper(il.sub_inventory_code) = upper(${d.subInventoryCode})
                OR EXISTS (SELECT 1 FROM sub_inventory_share_members sm_d
                           JOIN sub_inventory_share_members sm_s ON sm_s.share_group = sm_d.share_group
-                          WHERE sm_d.org_id = ${d.orgId} AND sm_d.code = ${d.subInventoryCode}
-                            AND sm_s.org_id = il.org_id AND sm_s.code = il.sub_inventory_code))
+                          WHERE sm_d.org_id = ${d.orgId} AND upper(sm_d.code) = upper(${d.subInventoryCode})
+                            AND sm_s.org_id = il.org_id AND upper(sm_s.code) = upper(il.sub_inventory_code)))
           AND il.total_qty - il.allocated_qty > 0
         ORDER BY il.date_code ASC NULLS LAST, il.id`
   );
@@ -273,11 +276,11 @@ async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow): Promise<Recei
           AND ro.status IN ('in_hand', 'provisional_received')
           AND (${d.orgId}::int IS NULL OR rii.org_id = ${d.orgId})
           AND (${d.subInventoryCode}::text IS NULL
-               OR rii.sub_inventory_code = ${d.subInventoryCode}
+               OR upper(rii.sub_inventory_code) = upper(${d.subInventoryCode})
                OR EXISTS (SELECT 1 FROM sub_inventory_share_members sm_d
                           JOIN sub_inventory_share_members sm_s ON sm_s.share_group = sm_d.share_group
-                          WHERE sm_d.org_id = ${d.orgId} AND sm_d.code = ${d.subInventoryCode}
-                            AND sm_s.org_id = rii.org_id AND sm_s.code = rii.sub_inventory_code))
+                          WHERE sm_d.org_id = ${d.orgId} AND upper(sm_d.code) = upper(${d.subInventoryCode})
+                            AND sm_s.org_id = rii.org_id AND upper(sm_s.code) = upper(rii.sub_inventory_code)))
           AND (rii.received_qty - rii.picked_qty
                 - COALESCE(locked_ii.qty, 0) - COALESCE(locked_ro.qty, 0)) > 0
         ORDER BY rii.date_code ASC NULLS LAST, rii.id`
