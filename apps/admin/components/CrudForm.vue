@@ -22,21 +22,35 @@ const localError = ref("");
 
 // multiSelect option lists (per optionsSource). Loaded once on mount.
 const subInventoryOptions = ref<{ value: string; label: string }[]>([]);
+const customerAccountOptions = ref<{ value: string; label: string }[]>([]);
 
 onMounted(async () => {
-  if (!props.fields.some((f) => f.optionsSource === "subInventories")) return;
-  try {
-    const rows = await api.get<{ orgId: number; secondaryInventoryName: string }[]>("/admin/sub-inventories");
-    subInventoryOptions.value = rows
-      .map((r) => ({ value: r.secondaryInventoryName, label: `${r.secondaryInventoryName} (org ${r.orgId})` }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  } catch {
-    subInventoryOptions.value = []; // options stay empty; the field can still be cleared
+  if (props.fields.some((f) => f.optionsSource === "subInventories")) {
+    try {
+      const rows = await api.get<{ orgId: number; secondaryInventoryName: string }[]>("/admin/sub-inventories");
+      subInventoryOptions.value = rows
+        .map((r) => ({ value: r.secondaryInventoryName, label: `${r.secondaryInventoryName} (org ${r.orgId})` }))
+        .sort((a, b) => a.label.localeCompare(b.label));
+    } catch {
+      subInventoryOptions.value = []; // options stay empty; the field can still be cleared
+    }
+  }
+  if (props.fields.some((f) => f.optionsSource === "customerAccounts")) {
+    try {
+      const rows = await api.get<{ partyName: string; accountNumber: string }[]>("/admin/customer-accounts");
+      customerAccountOptions.value = rows
+        .map((r) => ({ value: r.partyName, label: `${r.partyName} (${r.accountNumber})` }))
+        .sort((a, b) => a.label.localeCompare(b.label));
+    } catch {
+      customerAccountOptions.value = [];
+    }
   }
 });
 
 function optionsFor(f: EntityField): { value: string; label: string }[] {
-  return f.optionsSource === "subInventories" ? subInventoryOptions.value : [];
+  if (f.optionsSource === "subInventories") return subInventoryOptions.value;
+  if (f.optionsSource === "customerAccounts") return customerAccountOptions.value;
+  return [];
 }
 
 // Dismiss only on a genuine overlay click (press starts and ends on the
@@ -55,9 +69,13 @@ watch(
           ? Array.isArray(v)
             ? v.map(String)
             : []
-          : v === null || v === undefined
-            ? ""
-            : String(v);
+          : f.type === "json"
+            ? v === null || v === undefined
+              ? ""
+              : JSON.stringify(v, null, 2)
+            : v === null || v === undefined
+              ? ""
+              : String(v);
     }
     localError.value = "";
   },
@@ -101,7 +119,14 @@ function submit() {
       payload[f.key] = null; // server treats null as "clear this optional field"
       continue;
     }
-    if (f.type === "number") {
+    if (f.type === "json") {
+      try {
+        payload[f.key] = JSON.parse(raw);
+      } catch {
+        localError.value = t("admin.common.invalidJson", { label: t(f.label) });
+        return;
+      }
+    } else if (f.type === "number") {
       const n = Number(raw);
       if (!Number.isFinite(n)) {
         localError.value = t("admin.common.mustBeNumber", { label: t(f.label) });
@@ -136,6 +161,14 @@ function submit() {
           >
             <option v-for="o in optionsFor(f)" :key="o.value" :value="o.value">{{ o.label }}</option>
           </select>
+          <textarea
+            v-else-if="f.type === 'json'"
+            :id="`ff-${f.key}`"
+            v-model="form[f.key]"
+            rows="5"
+            :disabled="disabled(f)"
+            class="json-input"
+          ></textarea>
           <input
             v-else
             :id="`ff-${f.key}`"
@@ -158,5 +191,10 @@ function submit() {
 .multi-select {
   min-height: 5rem;
   width: 100%;
+}
+.json-input {
+  width: 100%;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
 }
 </style>

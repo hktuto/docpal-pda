@@ -410,7 +410,7 @@ arrives over HTTP, nor is it pulled by an embedded Electric consumer. Instead,
 an external sync service is responsible for replicating master data and orders
 into the warehouse backend.
 
-The backend exposes two integration surfaces for that service:
+The backend exposes one integration surface for that service:
 
 1. **Outbound table-change feed** — `GET /sync-events?since=<id>&limit=<n>`
    (`src/routes/sync-events.ts`) over the trigger-written `sync_events` table.
@@ -419,14 +419,11 @@ The backend exposes two integration surfaces for that service:
    own `warehouse_sync` role writes are skipped, breaking the circular-event
    loop. See `docs/backend/event-catalog.md` for the full contract.
 
-2. **Inbound apply layer** — the reusable domain functions in
-   `src/db/ingest.ts` (`upsertPart`/`deletePart`, `upsertSupplier`, guarded
-   `deleteReceivingOrder`/`deletePickingOrder`, …). They are idempotent,
-   keyed by natural keys, and run every transaction with
-   `app.sync_events_off = 1` (`suppressSyncEvents`) so upstream-originated
-   writes do not echo back into the outbound `sync_events` feed. The external
-   service can call these functions directly (same Node process) or reimplement
-   the same semantics. `supplier_profiles` is NOT synced — it stays local-only.
+Inbound writes are the service's own job: it writes the business tables
+directly over SQL as the `warehouse_sync` role (idempotent upserts keyed by
+the natural keys — `receiving_orders.batch_no`, the caller-supplied picking
+`id`, `parts.wcl_item_no`), so its writes never echo back into the outbound
+feed. `supplier_profiles` is NOT synced — it stays local-only.
 
 There is no dedicated sync consumer in this repo anymore; the external service
 brings its own transport. The `warehouse_sync` DB role (password from
@@ -434,7 +431,7 @@ brings its own transport. The `warehouse_sync` DB role (password from
 service to write into the business tables.
 
 Known caveat: NULL `receiving_invoice_items.sub_inventory_code` is defaulted by
-a rule Sean ships later (stub `applyItemSubInventoryDefault` warns today).
+a rule Sean ships later.
 
 ## Dev
 

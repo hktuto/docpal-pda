@@ -375,10 +375,10 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
   await db.insert(boxSizeList).values(BOX_SIZES.map((code, i) => ({ id: uid(140 + i), code })));
 
   await db.insert(customerProfiles).values([
-    { id: uid(180), code: "ACME", label: "ACME Electronics (HK)", remark: "requires segregated storage" },
+    { id: uid(180), code: "ACME", label: "ACME Electronics (HK)", remark: "requires segregated storage", customers: ["ACME"] },
     // real-data customers (new_seed/65878/picking.xlsx)
-    { id: uid(181), code: "HK-SUN64", label: "HK-SUN64" },
-    { id: uid(182), code: "HK-WIN84", label: "HK-WIN84" },
+    { id: uid(181), code: "HK-SUN64", label: "HK-SUN64", customers: ["HK-SUN64"] },
+    { id: uid(182), code: "HK-WIN84", label: "HK-WIN84", customers: ["HK-WIN84"] },
   ]);
 
   // Sub-inventories: the (org_id, secondary_inventory_name) group level that

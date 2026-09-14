@@ -6,7 +6,7 @@ import { HTTPException } from "hono/http-exception";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { queryAll, queryGet } from "./query.js";
 import { confirmReceivingArrival } from "./receiving.js";
-import { upsertReceivingOrder } from "./ingest.js";
+import { insertReceivingOrder } from "./test-fixtures.js";
 import {
   addAllUnboxedToBox,
   assignScanToBox,
@@ -80,12 +80,12 @@ async function catchHttp(p: Promise<unknown>): Promise<HTTPException> {
 
 /**
  * Create + confirm the DAITO order (04958210) into in_hand for put-away tests.
- * The demo seed only carries pending orders, so each test ingests its own
+ * The demo seed only carries pending orders, so each test inserts its own
  * two-line order (RK73B1JTTD181G ×5000 lotCode NULL / RK73H1JTTD4702F ×3000) first.
  */
 async function daitoInHand(): Promise<{ orderId: string; actorId: string }> {
   const actorId = await actorIdOf("operator");
-  await upsertReceivingOrder(client.db, "04958210", {
+  await insertReceivingOrder(client.db, "04958210", {
     order: { supplierCode: "DAITO", deliveryDate: "2026-07-29", dateCode: "2610" },
     invoices: [
       {

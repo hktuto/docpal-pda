@@ -1,4 +1,5 @@
 import { pgTable, foreignKey, index, unique, uniqueIndex, text, varchar, bigint, integer, real, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { now } from "../now.js";
 
 // Local users table; a ucenter_user integration may replace this later
@@ -173,8 +174,11 @@ export const customerProfiles = pgTable("customer_profiles", {
   id: text("id").primaryKey(),
   code: text("code").notNull().unique(),
   label: text("label").notNull(),
-  rule: text("rule"), // customer custom requirement/formula (stored, not yet interpreted)
+  rule: jsonb("rule").$type<Record<string, unknown>>(), // structured customer requirements (stored, not interpreted)
   remark: text("remark"),
+  // Party names (customer_accounts.party_name) this profile applies to; a party
+  // name appears in at most one profile (enforced at the app layer).
+  customers: jsonb("customers").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
   createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
 });

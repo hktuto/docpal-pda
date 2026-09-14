@@ -860,6 +860,7 @@ export default {
     },
     navLinks: {
       customerProfiles: "客戶資料",
+      customerProfileList: "資料列表",
       suppliers: "供應商",
       shelves: "貨架",
       shelfBoxes: "貨架箱",
@@ -964,6 +965,7 @@ export default {
       newTitle: "新增{title}",
       required: "{label}為必填項",
       mustBeNumber: "{label}必須是數字",
+      invalidJson: "{label} 必須是有效的 JSON",
       allStatuses: "全部狀態",
       all: "全部",
       orgIdInteger: "Org ID 必須是整數",
@@ -1001,6 +1003,7 @@ export default {
       label: "標籤",
       rule: "規則",
       remark: "備註",
+      customers: "客戶",
       qty: "數量",
       weight: "重量",
       qtyPcs: "數量（件）",
@@ -1014,7 +1017,8 @@ export default {
       parts: { title: "零件" },
       countries: { title: "國家" },
       boxSizes: { title: "箱型" },
-      netWeightFormulas: { title: "淨重公式" }
+      netWeightFormulas: { title: "淨重公式" },
+      customerProfiles: { title: "客戶資料配置" }
     },
     pages: {
       userProfiles: {
@@ -1051,14 +1055,27 @@ export default {
         inactive: "停用",
         editProfile: "編輯資料",
         createProfile: "新增資料",
-        noProfileYet: "暫無資料"
+        noProfileYet: "暫無資料",
+        profileFilter: "資料",
+        profileAll: "全部資料",
+        profileWith: "已有資料",
+        profileWithout: "沒有資料",
+        profile: "資料",
+        manageProfiles: "管理資料配置"
       },
       customerProfile: {
         title: "客戶資料 — {name}",
         accountInfo: "客戶賬戶",
         profileInfo: "資料",
         accountNotFound: "同步的客戶主數據中找不到此客戶。",
-        saveProfile: "儲存資料"
+        saveProfile: "儲存資料",
+        assignedProfile: "所屬資料",
+        noProfile: "無",
+        createNewProfile: "新增資料",
+        newProfileCodePlaceholder: "新資料代碼…",
+        ruleJsonPlaceholder: "JSON 物件，例如 {'{'}\"key\": \"value\"{'}'} — 留空代表沒有",
+        invalidRuleJson: "rule 必須是有效的 JSON（或留空）。",
+        customerAlreadyAssigned: "此客戶已分配到另一個資料。"
       },
       supplierProfile: {
         title: "供應商資料 — {code}",

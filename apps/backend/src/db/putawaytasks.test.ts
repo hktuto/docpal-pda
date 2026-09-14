@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { queryAll, queryGet } from "./query.js";
 import { confirmReceivingArrival } from "./receiving.js";
-import { upsertReceivingOrder } from "./ingest.js";
+import { insertReceivingOrder } from "./test-fixtures.js";
 import { addAllUnboxedToBox, createShelfBox, getPutAwayAggregate, recordPutAwayScan } from "./putaway.js";
 import { createPutAwayTaskTx, getPutAwayTaskDetail, listPutAwayTasks } from "./putawaytasks.js";
 import { _setPutAwayConfigForTests } from "../config.js";
@@ -52,7 +52,7 @@ async function taskOf(orderId: string): Promise<{ id: string; status: string } |
 
 async function daitoInHand(): Promise<{ orderId: string; actorId: string }> {
   const actorId = await actorIdOf("operator");
-  await upsertReceivingOrder(client.db, "04958210", {
+  await insertReceivingOrder(client.db, "04958210", {
     order: { supplierCode: "DAITO", deliveryDate: "2026-07-29", dateCode: "2610" },
     invoices: [
       {
@@ -216,7 +216,7 @@ test("detail: sub-inventory-shelf fallback when the part has no stock history", 
     await client.db.execute(
       sql`INSERT INTO parts (id, brand, part_no, wcl_item_no) VALUES ('test-part-new-1', 'DAITO', 'ZZZ-NEW-PART-1', 'WCL/ZZZ-NEW-PART-1')`
     );
-    await upsertReceivingOrder(client.db, "04958211", {
+    await insertReceivingOrder(client.db, "04958211", {
       order: { supplierCode: "DAITO", deliveryDate: "2026-07-29", dateCode: "2610" },
       invoices: [
         {

@@ -2,13 +2,14 @@ export interface EntityField {
   key: string;
   /** i18n key (under admin.fields.*) resolved by CrudTable/CrudForm via $t. */
   label: string;
-  type: "text" | "number" | "password" | "multiSelect";
+  type: "text" | "number" | "password" | "multiSelect" | "json";
   /**
    * multiSelect only: where the option list comes from.
    * "subInventories" = sub-inventory codes from GET /admin/sub-inventories.
+   * "customerAccounts" = party names from GET /admin/customer-accounts.
    * The payload is a string array (null when nothing is selected).
    */
-  optionsSource?: "subInventories";
+  optionsSource?: "subInventories" | "customerAccounts";
   required?: boolean;
   /** Disabled in the edit form (used for primary keys, which are immutable). */
   readonlyOnEdit?: boolean;
@@ -89,6 +90,23 @@ export const entities: Record<string, EntityConfig> = {
       { key: "lastUpdateDate", label: "admin.fields.lastUpdateDate" },
     ],
   },
+  customerProfiles: {
+    path: "customer-profiles",
+    title: "admin.entities.customerProfiles.title",
+    pk: "code",
+    clientSearch: true,
+    fields: [
+      { key: "code", label: "admin.fields.code", type: "text", required: true, readonlyOnEdit: true },
+      { key: "label", label: "admin.fields.label", type: "text", required: true },
+      { key: "rule", label: "admin.fields.rule", type: "json" },
+      { key: "remark", label: "admin.fields.remark", type: "text" },
+      { key: "customers", label: "admin.fields.customers", type: "multiSelect", optionsSource: "customerAccounts" },
+    ],
+    extraColumns: [
+      { key: "createdDate", label: "admin.fields.createdDate" },
+      { key: "lastUpdateDate", label: "admin.fields.lastUpdateDate" },
+    ],
+  },
   suppliers: {
     path: "suppliers",
     title: "admin.entities.suppliers.title",
@@ -149,7 +167,10 @@ export const entities: Record<string, EntityConfig> = {
 export const navSections: { title: string; links: { route: string; title: string }[] }[] = [
   {
     title: "admin.nav.customer",
-    links: [{ route: "/customer-profiles", title: "admin.navLinks.customerProfiles" }],
+    links: [
+      { route: "/customer-profiles", title: "admin.navLinks.customerProfiles" },
+      { route: "/customer-profile-list", title: "admin.navLinks.customerProfileList" },
+    ],
   },
   {
     title: "admin.nav.supplier",

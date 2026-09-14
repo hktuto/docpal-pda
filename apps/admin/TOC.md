@@ -41,6 +41,7 @@
 - Customer Management
   - List of all customer with filter and sort, click to open detail
     - detail of customer (1.1, 1.2)
+  - Profile list (CRUD profiles, assign member customers, jsonb rule)
 - Supplier Management
   - list of supplier with filter and sort
     - detail of supplier (2.1 2.2)

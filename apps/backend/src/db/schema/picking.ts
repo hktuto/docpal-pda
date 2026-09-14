@@ -1,6 +1,6 @@
-import { pgTable, text, integer, bigint, boolean, real, timestamp, index, uniqueIndex, foreignKey, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, bigint, boolean, real, timestamp, index, uniqueIndex, foreignKey, jsonb } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
-import { users, customerProfiles, subInventories } from "./master.js";
+import { users, subInventories } from "./master.js";
 import { shelfBoxes } from "./inventory.js";
 
 export const pickingOrders = pgTable(
@@ -11,12 +11,14 @@ export const pickingOrders = pgTable(
     deliveryDate: timestamp("delivery_date", { mode: "date" }),
     poNo: text("po_no"),
     shipTo: text("ship_to"), // 收货方 / 出货目的描述（含目的国家，非结构化地址全文）
-    customerCode: text("customer_code").references(() => customerProfiles.code), // 出货客户
+    customerCode: text("customer_code"), // 出货客户 — opaque upstream customer text (by convention a customer_accounts.party_name), no FK
     // 出货位置配对（nullable — allocation 只在订单带配对时按位置匹配）
     orgId: integer("org_id"), // 出货办公室, 2: HK
     subInventoryCode: text("sub_inventory_code"), // 从哪一个子库存出货
     prioritySeq: integer("priority_seq").notNull().default(0), // allocation/list order — lower first, admin-reorderable
     commodityInspection: text('commodity_inspection'),
+    pickingOrderType: varchar("picking_order_type", { length: 64 }),
+    remark: text("remark"),
     // Page-driven work lock: a PDA with this order open keeps its allocations
     // from being wiped by allocateAll. Expires 10 min after working_at.
     workingBy: text("working_by").references(() => users.id),

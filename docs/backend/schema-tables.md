@@ -128,15 +128,18 @@ kg — see `shipping_boxes`).
 
 ## customer_profiles
 
-Customer master used by picking orders and picking-order customers.
+Per-customer requirements, PDA-local (not synced upstream). One profile
+applies to many customers (party names in `customers`); a party name appears
+in at most one profile (enforced at the app layer by the admin route).
 
 | Field | Type | Description |
 | --- | --- | --- |
 | id | text PK | Row id (UUID v7) |
-| code | text NOT NULL UNIQUE | Customer code |
+| code | text NOT NULL UNIQUE | Profile code |
 | label | text NOT NULL | Display label |
-| rule | text | formual for a customer |
+| rule | jsonb | Structured per-customer requirements (stored, not interpreted) |
 | remark | text | Free-form remark |
+| customers | jsonb NOT NULL DEFAULT '[]' | Party names (`customer_accounts.party_name`) this profile applies to |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
@@ -340,7 +343,7 @@ upstream database — the sync/dedup key is the caller-supplied UUID `id`
 | delivery_date | timestamp | Requested delivery date |
 | po_no | text | Customer PO number |
 | ship_to | text | Ship-to description (merged with destination country; unstructured, not a full address) |
-| customer_code | text FK → customer_profiles(code) | Customer |
+| customer_code | text | Customer — opaque upstream customer text (by convention a `customer_accounts.party_name`; no FK, same convention as `parts.part_no`/`brand`) |
 | org_id | integer | Shipping office (nullable — allocation matches on the pair only when set) |
 | sub_inventory_code | text FK → org_info(secondary_inventory_name) | Sub-inventory to ship from (nullable — with org_id, the shipping location pair) |
 | priority_seq | integer NOT NULL DEFAULT 0 | Allocation/list order — lower first, admin-reorderable (`POST /picking-orders/reorder`); default seq = delivery date ASC NULLS LAST then order_no |
@@ -693,9 +696,7 @@ application code — and only for changes committed by the backend's own
 Postgres role (`warehouse`); writes by the sync service's `warehouse_sync`
 role (or any other account) are skipped to break the circular-event loop, and
 seed/reset paths suppress the trigger via `SET LOCAL app.sync_events_off = 1`.
-Upstream sync apply transactions (`src/db/ingest.ts`) also suppress the
-trigger so upstream-originated writes do not echo back. Polled via
-`GET /sync-events?since=<id>`.
+Polled via `GET /sync-events?since=<id>`.
 
 | Field | Type | Description |
 | --- | --- | --- |

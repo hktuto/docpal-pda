@@ -10,7 +10,6 @@ import {
   countryList,
   boxSizeList,
   customerAccounts,
-  customerProfiles,
   netWeightFormula,
 } from "../../db/schema/index.js";
 import { createCrudRouter, reqStr, optStr, reqInt, reqNum, optInt, optStrArray, optJson } from "./crud.js";
@@ -25,6 +24,7 @@ import { adminAppDownloadRoute } from "./appDownload.js";
 import { adminFlowConfigRoute } from "./flowConfig.js";
 import { adminReceivingPickingListRoute } from "./receivingPickingList.js";
 import { adminUserProfilesRoute } from "./userProfiles.js";
+import { adminCustomerProfilesRoute } from "./customerProfiles.js";
 
 // Optional id on create: use the client's when given, else generate one.
 function optId(body: Record<string, unknown>): string {
@@ -166,30 +166,15 @@ adminRoute.route(
   })
 );
 
-adminRoute.route(
-  "/customer-profiles",
-  createCrudRouter({
-    table: customerProfiles,
-    pk: customerProfiles.code,
-    create: (b) => ({
-      id: optId(b),
-      code: reqStr(b, "code"),
-      label: reqStr(b, "label"),
-      rule: optStr(b, "rule"),
-      remark: optStr(b, "remark"),
-    }),
-    update: (b) => ({
-      ...(b.label !== undefined && { label: reqStr(b, "label") }),
-      ...(b.rule !== undefined && { rule: optStr(b, "rule") }),
-      ...(b.remark !== undefined && { remark: optStr(b, "remark") }),
-      lastUpdateDate: new Date(),
-    }),
-  })
-);
+// Customer profiles: custom router — membership via the jsonb `customers`
+// array with app-level party-name uniqueness (spec
+// 2026-09-14-customer-profile-multi-customer-design.md).
+adminRoute.route("/customer-profiles", adminCustomerProfilesRoute);
 
 // Customer account master (upstream-synced, read-only — data arrives via
 // upstream sync; no POST/PATCH/DELETE). The admin customer-profile pages list
-// accounts here and soft-link profiles by customer_profiles.code = party_name.
+// accounts here and soft-link profiles by customer_profiles.customers
+// containing the party name.
 // ?q= searches party_name / account_number (ilike); ?partyName= filters by an
 // exact party name (the detail page loads one account that way).
 adminRoute.get("/customer-accounts", async (c) => {

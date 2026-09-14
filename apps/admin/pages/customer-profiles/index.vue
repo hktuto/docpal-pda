@@ -16,24 +16,31 @@ const rows = ref<CustomerAccount[]>([]);
 const loading = ref(false);
 const error = ref("");
 
-// PDA-local customer profiles (one per customer_accounts.party_name), loaded
-// here only to distinguish "has profile" vs "no profile yet" in the row action;
-// edited on the detail page /customer-profiles/<partyName>.
+// PDA-local customer profiles; each profile's `customers` array lists the
+// customer_accounts.party_name values it applies to (a customer belongs to at
+// most one profile). Loaded here to distinguish "has profile" vs "no profile
+// yet" and to show the assigned profile's label; edited on the detail page.
 const profiles = ref<any[]>([]);
 
 function profileFor(partyName: string) {
-  return profiles.value.find((p) => p.code === partyName);
+  return profiles.value.find((p) => Array.isArray(p.customers) && p.customers.includes(partyName));
 }
 
-// Client-side keyword filter; TanStack owns sorting + paging.
+// Client-side filters; TanStack owns sorting + paging.
 const search = ref("");
+const statusFilter = ref<"" | "A" | "I">("");
+const profileFilter = ref<"" | "with" | "without">("");
 
 const filtered = computed(() => {
   const needle = search.value.trim().toLowerCase();
-  if (!needle) return rows.value;
-  return rows.value.filter((r) =>
-    [r.partyName, r.accountNumber, String(r.custAccountId)].some((v) => v.toLowerCase().includes(needle))
-  );
+  return rows.value.filter((r) => {
+    if (statusFilter.value && r.accountStatus !== statusFilter.value) return false;
+    const hasProfile = !!profileFor(r.partyName);
+    if (profileFilter.value === "with" && !hasProfile) return false;
+    if (profileFilter.value === "without" && hasProfile) return false;
+    if (!needle) return true;
+    return [r.partyName, r.accountNumber, String(r.custAccountId)].some((v) => v.toLowerCase().includes(needle));
+  });
 });
 
 const columnDefs = computed<AdminColumnDef<CustomerAccount>[]>(() => [
@@ -41,6 +48,7 @@ const columnDefs = computed<AdminColumnDef<CustomerAccount>[]>(() => [
   { key: "partyName", label: t("admin.pages.customerProfiles.customerName"), size: 260 },
   { key: "accountNumber", label: t("admin.pages.customerProfiles.customerCode"), size: 140 },
   { key: "accountStatus", label: t("admin.pages.customerProfiles.status"), size: 100 },
+  { key: "profile", label: t("admin.pages.customerProfiles.profile"), size: 160, accessor: (r) => profileFor(r.partyName)?.label ?? "" },
 ]);
 
 const { table, pagination, resetColumnState } = useAdminTable({
@@ -94,6 +102,9 @@ onMounted(load);
     <div class="page-head">
       <h1>{{ $t("admin.pages.customerProfiles.title") }}</h1>
       <div class="head-actions">
+        <NuxtLink to="/customer-profile-list" class="btn">
+          {{ $t("admin.pages.customerProfiles.manageProfiles") }}
+        </NuxtLink>
         <button class="btn" :disabled="loading" @click="load">{{ $t("admin.common.refresh") }}</button>
       </div>
     </div>
@@ -107,6 +118,16 @@ onMounted(load);
         class="search-input"
         :placeholder="$t('admin.pages.customerProfiles.filterPlaceholder')"
       />
+      <select v-model="statusFilter" :aria-label="$t('admin.pages.customerProfiles.status')">
+        <option value="">{{ $t("admin.common.allStatuses") }}</option>
+        <option value="A">{{ $t("admin.pages.customerProfiles.active") }}</option>
+        <option value="I">{{ $t("admin.pages.customerProfiles.inactive") }}</option>
+      </select>
+      <select v-model="profileFilter" :aria-label="$t('admin.pages.customerProfiles.profileFilter')">
+        <option value="">{{ $t("admin.pages.customerProfiles.profileAll") }}</option>
+        <option value="with">{{ $t("admin.pages.customerProfiles.profileWith") }}</option>
+        <option value="without">{{ $t("admin.pages.customerProfiles.profileWithout") }}</option>
+      </select>
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
@@ -127,6 +148,9 @@ onMounted(load);
           }}
         </span>
       </template>
+      <template #cell-profile="{ row }">
+        {{ profileFor(row.partyName)?.label ?? "—" }}
+      </template>
       <template #actions="{ row }">
         <button
           class="btn-link"
@@ -146,6 +170,19 @@ onMounted(load);
 </template>
 
 <style scoped>
+.search-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.search-bar select {
+  padding: 7px 9px;
+  border: 1px solid #b6c2cd;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: inherit;
+}
 .status-badge {
   display: inline-block;
   padding: 2px 10px;

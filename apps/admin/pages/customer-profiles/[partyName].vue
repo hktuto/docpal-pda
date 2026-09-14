@@ -2,27 +2,40 @@
 const route = useRoute();
 const partyName = route.params.partyName as string;
 const api = useApi();
+const { t } = useI18n();
 
-// The upstream-synced customer account (read-only) and the PDA-local profile
-// soft-linked by customer_profiles.code = party_name — null when this customer
-// has none yet, saving then creates it.
+// The upstream-synced customer account (read-only) plus all PDA-local
+// profiles; the assigned one is the profile whose `customers` array contains
+// this party name (a customer belongs to at most one profile).
 const account = ref<any | null>(null);
-const profile = ref<any | null>(null);
+const profiles = ref<any[]>([]);
 const loaded = ref(false);
 const error = ref("");
 const saveError = ref("");
+const assigning = ref(false);
+const newProfileCode = ref("");
+
+const profile = computed(
+  () => profiles.value.find((p) => Array.isArray(p.customers) && p.customers.includes(partyName)) ?? null,
+);
 
 const form = reactive({ label: "", rule: "", remark: "" });
 
+function resetForm() {
+  form.label = profile.value?.label ?? "";
+  form.rule = profile.value?.rule == null ? "" : JSON.stringify(profile.value.rule, null, 2);
+  form.remark = profile.value?.remark ?? "";
+}
+
 async function load() {
   try {
-    const accounts = await api.get(`/admin/customer-accounts?partyName=${encodeURIComponent(partyName)}`);
+    const [accounts, profileRows] = await Promise.all([
+      api.get(`/admin/customer-accounts?partyName=${encodeURIComponent(partyName)}`),
+      api.get("/admin/customer-profiles"),
+    ]);
     account.value = accounts[0] ?? null;
-    const profiles = await api.get("/admin/customer-profiles");
-    profile.value = profiles.find((p: any) => p.code === partyName) ?? null;
-    form.label = profile.value?.label ?? "";
-    form.rule = profile.value?.rule ?? "";
-    form.remark = profile.value?.remark ?? "";
+    profiles.value = profileRows;
+    resetForm();
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -30,22 +43,80 @@ async function load() {
   }
 }
 
-async function save() {
+function friendlyError(e: any): string {
+  return typeof e?.message === "string" && e.message.includes("customer_already_assigned")
+    ? t("admin.pages.customerProfile.customerAlreadyAssigned")
+    : e.message;
+}
+
+async function assignTo(event: Event) {
+  const code = (event.target as HTMLSelectElement).value;
+  const oldCode = profile.value?.code ?? "";
+  if (code === oldCode) return;
   saveError.value = "";
+  assigning.value = true;
+  try {
+    if (oldCode) {
+      await api.put(`/admin/customer-profiles/${encodeURIComponent(oldCode)}/customers`, { remove: [partyName] });
+    }
+    if (code) {
+      await api.put(`/admin/customer-profiles/${encodeURIComponent(code)}/customers`, { add: [partyName] });
+    }
+    profiles.value = await api.get("/admin/customer-profiles");
+    resetForm();
+  } catch (e: any) {
+    saveError.value = friendlyError(e);
+    await load();
+  } finally {
+    assigning.value = false;
+  }
+}
+
+async function createProfile() {
+  const code = newProfileCode.value.trim();
+  if (!code) return;
+  saveError.value = "";
+  assigning.value = true;
+  try {
+    if (profile.value) {
+      await api.put(`/admin/customer-profiles/${encodeURIComponent(profile.value.code)}/customers`, {
+        remove: [partyName],
+      });
+    }
+    await api.post("/admin/customer-profiles", { code, label: code, customers: [partyName] });
+    newProfileCode.value = "";
+    profiles.value = await api.get("/admin/customer-profiles");
+    resetForm();
+  } catch (e: any) {
+    saveError.value = friendlyError(e);
+    await load();
+  } finally {
+    assigning.value = false;
+  }
+}
+
+async function save() {
+  if (!profile.value) return;
+  saveError.value = "";
+  let rule: unknown = null;
+  if (form.rule.trim()) {
+    try {
+      rule = JSON.parse(form.rule);
+    } catch {
+      saveError.value = t("admin.pages.customerProfile.invalidRuleJson");
+      return;
+    }
+  }
   const payload = {
     label: form.label.trim(),
-    rule: form.rule.trim() || null,
+    rule,
     remark: form.remark.trim() || null,
   };
   try {
-    if (profile.value) {
-      await api.patch(`/admin/customer-profiles/${encodeURIComponent(profile.value.code)}`, payload);
-    } else {
-      await api.post("/admin/customer-profiles", { code: partyName, ...payload });
-    }
+    await api.patch(`/admin/customer-profiles/${encodeURIComponent(profile.value.code)}`, payload);
     navigateTo("/customer-profiles");
   } catch (e: any) {
-    saveError.value = e.message;
+    saveError.value = friendlyError(e);
   }
 }
 
@@ -94,24 +165,58 @@ onMounted(load);
       <div class="detail-card">
         <h3>{{ $t("admin.pages.customerProfile.profileInfo") }}</h3>
         <div v-if="saveError" class="error-banner">{{ saveError }}</div>
+        <div class="form-row">
+          <label for="cp-assign">{{ $t("admin.pages.customerProfile.assignedProfile") }}</label>
+          <select
+            id="cp-assign"
+            :value="profile?.code ?? ''"
+            :disabled="!account || assigning"
+            @change="assignTo"
+          >
+            <option value="">{{ $t("admin.pages.customerProfile.noProfile") }}</option>
+            <option v-for="p in profiles" :key="p.code" :value="p.code">{{ p.label }} ({{ p.code }})</option>
+          </select>
+        </div>
+        <div class="form-row create-profile-row">
+          <input
+            v-model="newProfileCode"
+            type="text"
+            :placeholder="$t('admin.pages.customerProfile.newProfileCodePlaceholder')"
+            :disabled="!account || assigning"
+          />
+          <button
+            type="button"
+            class="btn"
+            :disabled="!account || assigning || !newProfileCode.trim()"
+            @click="createProfile"
+          >
+            {{ $t("admin.pages.customerProfile.createNewProfile") }}
+          </button>
+        </div>
         <form @submit.prevent="save">
           <div class="form-row">
             <label for="cp-label">{{ $t("admin.fields.label") }} <span class="req">*</span></label>
-            <input id="cp-label" v-model="form.label" type="text" required :disabled="!account" />
+            <input id="cp-label" v-model="form.label" type="text" required :disabled="!profile" />
           </div>
           <div class="form-row">
             <label for="cp-rule">{{ $t("admin.fields.rule") }}</label>
-            <input id="cp-rule" v-model="form.rule" type="text" :disabled="!account" />
+            <textarea
+              id="cp-rule"
+              v-model="form.rule"
+              rows="5"
+              :placeholder="$t('admin.pages.customerProfile.ruleJsonPlaceholder')"
+              :disabled="!profile"
+            ></textarea>
           </div>
           <div class="form-row">
             <label for="cp-remark">{{ $t("admin.fields.remark") }}</label>
-            <input id="cp-remark" v-model="form.remark" type="text" :disabled="!account" />
+            <input id="cp-remark" v-model="form.remark" type="text" :disabled="!profile" />
           </div>
           <div class="dialog-actions">
             <button type="button" class="btn" @click="navigateTo('/customer-profiles')">
               {{ $t("admin.common.cancel") }}
             </button>
-            <button type="submit" class="btn btn-primary" :disabled="!account">
+            <button type="submit" class="btn btn-primary" :disabled="!profile">
               {{ $t("admin.pages.customerProfile.saveProfile") }}
             </button>
           </div>
@@ -153,5 +258,13 @@ h3 {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 18px;
+}
+.create-profile-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.create-profile-row input {
+  flex: 1;
 }
 </style>

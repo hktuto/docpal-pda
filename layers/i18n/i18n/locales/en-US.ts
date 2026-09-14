@@ -860,6 +860,7 @@ export default {
     },
     navLinks: {
       customerProfiles: "Customer Profiles",
+      customerProfileList: "Profile List",
       suppliers: "Suppliers",
       shelves: "Shelves",
       shelfBoxes: "Shelf Boxes",
@@ -964,6 +965,7 @@ export default {
       newTitle: "New {title}",
       required: "{label} is required",
       mustBeNumber: "{label} must be a number",
+      invalidJson: "{label} must be valid JSON",
       allStatuses: "All statuses",
       all: "All",
       orgIdInteger: "Org ID must be an integer",
@@ -1001,6 +1003,7 @@ export default {
       label: "Label",
       rule: "Rule",
       remark: "Remark",
+      customers: "Customers",
       qty: "Qty",
       weight: "Weight",
       qtyPcs: "Qty (pcs)",
@@ -1010,6 +1013,7 @@ export default {
     },
     entities: {
       shelves: { title: "Shelves" },
+      customerProfiles: { title: "Customer Profiles" },
       suppliers: { title: "Suppliers" },
       parts: { title: "Parts" },
       countries: { title: "Countries" },
@@ -1051,14 +1055,27 @@ export default {
         inactive: "Inactive",
         editProfile: "Edit profile",
         createProfile: "Create profile",
-        noProfileYet: "No profile yet"
+        noProfileYet: "No profile yet",
+        profileFilter: "Profile",
+        profileAll: "All profiles",
+        profileWith: "With profile",
+        profileWithout: "Without profile",
+        profile: "Profile",
+        manageProfiles: "Manage profiles"
       },
       customerProfile: {
         title: "Customer profile — {name}",
         accountInfo: "Account",
         profileInfo: "Profile",
         accountNotFound: "Customer account not found in the synced master data.",
-        saveProfile: "Save profile"
+        saveProfile: "Save profile",
+        assignedProfile: "Assigned profile",
+        noProfile: "None",
+        createNewProfile: "Create new profile",
+        newProfileCodePlaceholder: "New profile code…",
+        ruleJsonPlaceholder: "JSON object, e.g. {'{'}\"key\": \"value\"{'}'} — empty means none",
+        invalidRuleJson: "Rule must be valid JSON (or left empty).",
+        customerAlreadyAssigned: "This customer is already assigned to another profile."
       },
       supplierProfile: {
         title: "Supplier profile — {code}",
