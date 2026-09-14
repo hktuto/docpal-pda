@@ -280,30 +280,40 @@ async function confirmInHand() {
   }
 }
 
-// Picking-list xlsx download (backend-generated, shipper layout).
-const downloadingPickingList = ref(false);
+// Shipper xlsx downloads (backend-generated, shipper layout). Live mode
+// (in-hand order) re-runs the scoped allocation recompute in the request;
+// finished mode (clear order) reports actual picked qtys.
+const downloadingShipper = ref(false);
 
-async function downloadPickingList() {
-  if (!order.value || downloadingPickingList.value) return;
-  downloadingPickingList.value = true;
+async function downloadShipper(finished: boolean) {
+  if (!order.value || downloadingShipper.value) return;
+  downloadingShipper.value = true;
   error.value = "";
   try {
     const token = localStorage.getItem("admin_token");
-    const res = await fetch(`${apiBaseUrl}/admin/receiving-orders/${orderId}/picking-list`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    });
+    const res = await fetch(
+      `${apiBaseUrl}/admin/receiving-orders/${orderId}/shipper${finished ? "?mode=finished" : ""}`,
+      {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      }
+    );
     if (!res.ok) throw new Error((await res.text()).trim() || `Request failed (${res.status})`);
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `picking-list-${order.value.batchNo}.xlsx`;
+    a.download = `${finished ? "finished-shipper" : "shipper"}-${order.value.batchNo}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
+    if (!finished) {
+      // The in-request recompute may have changed allocations/logs — refresh.
+      await load();
+      logsKey.value++;
+    }
   } catch (e: any) {
-    error.value = `${t("admin.pages.receiving.pickingListError")}: ${e.message}`;
+    error.value = `${t("admin.pages.receiving.shipperError")}: ${e.message}`;
   } finally {
-    downloadingPickingList.value = false;
+    downloadingShipper.value = false;
   }
 }
 
@@ -454,8 +464,13 @@ const {
         </button> -->
         <button
           v-if="order && (order.status === 'in_hand')"
-        class="btn" :disabled="downloadingPickingList || !order" @click="downloadPickingList">
-          {{ $t("admin.pages.receiving.downloadPickingList") }}
+        class="btn" :disabled="downloadingShipper || !order" @click="downloadShipper(false)">
+          {{ $t("admin.pages.receiving.downloadShipper") }}
+        </button>
+        <button
+          v-if="order && (order.status === 'clear')"
+        class="btn" :disabled="downloadingShipper || !order" @click="downloadShipper(true)">
+          {{ $t("admin.pages.receiving.downloadFinishedShipper") }}
         </button>
         <button
           v-if="order && (order.status === 'pending' || order.status === 'provisional_received')"

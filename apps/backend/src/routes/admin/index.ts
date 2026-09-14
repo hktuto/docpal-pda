@@ -22,7 +22,7 @@ import { adminSubInventoryShareGroupsRoute } from "./subInventoryShareGroups.js"
 import { adminIssuesRoute } from "./issues.js";
 import { adminAppDownloadRoute } from "./appDownload.js";
 import { adminFlowConfigRoute } from "./flowConfig.js";
-import { adminReceivingPickingListRoute } from "./receivingPickingList.js";
+import { adminReceivingShipperRoute } from "./receivingShipper.js";
 import { adminUserProfilesRoute } from "./userProfiles.js";
 import { adminCustomerProfilesRoute } from "./customerProfiles.js";
 
@@ -244,8 +244,8 @@ adminRoute.route("/", adminIssuesRoute);
 // APK download (signed release APK published by `pnpm build:apk`).
 adminRoute.route("/", adminAppDownloadRoute);
 
-// Picking-list xlsx download for a receiving order.
-adminRoute.route("/", adminReceivingPickingListRoute);
+// Shipper xlsx download for a receiving order (live + finished modes).
+adminRoute.route("/", adminReceivingShipperRoute);
 
 // Per-user sub-inventory scope profiles (spec
 // 2026-09-11-user-subinventory-scope-design.md).

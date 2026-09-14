@@ -143,7 +143,7 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Shelf boxes list / detail | `/shelf-boxes`, `/shelf-boxes/:id` | `apps/admin/pages/shelf-boxes/index.vue`, `apps/admin/pages/shelf-boxes/[id].vue` |
 | Picking orders list / detail (delivery-date edit) | `/picking-orders`, `/picking-orders/:id` | `apps/admin/pages/picking-orders/index.vue`, `apps/admin/pages/picking-orders/[id].vue` |
 | Picking priority reorder | `/picking/reorder` | `apps/admin/pages/picking/reorder.vue` |
-| Receiving orders list / detail (delivery-date edit, item detail edit single/batch — date code / lot code / COO / COW / ctn no, invoice filter, confirm in-hand, picking-list xlsx download) | `/receiving`, `/receiving/:id` | `apps/admin/pages/receiving/index.vue`, `apps/admin/pages/receiving/[id].vue`, `apps/admin/components/receiving/ItemEditModal.vue` |
+| Receiving orders list / detail (delivery-date edit, item detail edit single/batch — date code / lot code / COO / COW / ctn no, invoice filter, confirm in-hand, shipper xlsx download + finished-shipper for clear orders) | `/receiving`, `/receiving/:id` | `apps/admin/pages/receiving/index.vue`, `apps/admin/pages/receiving/[id].vue`, `apps/admin/components/receiving/ItemEditModal.vue` |
 | Shipping boxes list / detail (orders-in-box, per-box ship) | `/shipping`, `/shipping/:boxId` | `apps/admin/pages/shipping/index.vue`, `apps/admin/pages/shipping/[id].vue` |
 | Generic CRUD table (search / column sorting / server paging / multi-select) | — | `apps/admin/components/CrudTable.vue` (+ `components/CrudForm.vue`, `components/Pager.vue`) built on `components/DataTable.vue` + `composables/useAdminTable.ts` (TanStack Table v9: sorting, paging, column resize/reorder/visibility persisted to localStorage) |
 | Shelf / shelf-box label printing (single + shelf-box multi-select dialog; `katata-label` template via the backend `/print/*` proxy; shelf multi-select / Print all opens an A4 batch sheet — 3 x 4 grid, QR + shelf code + zone, browser print) | `/shelves`, `/shelf-boxes` | `apps/admin/components/PrintLabelsDialog.vue`, `apps/admin/components/ShelfBatchPrintDialog.vue`, `apps/admin/utils/print.ts` |
@@ -181,7 +181,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | `POST /dev/reset`, `POST /dev/allocate` | `apps/backend/src/routes/dev.ts` |
 | `/admin/*` master-data CRUD | `apps/backend/src/routes/admin/` |
 | `/admin/sub-inventory-share-groups` (share-group membership upsert/remove) | `apps/backend/src/routes/admin/subInventoryShareGroups.ts` |
-| `GET /admin/receiving-orders/:id/picking-list` (shipper-style xlsx download) | `apps/backend/src/routes/admin/receivingPickingList.ts` |
+| `GET /admin/receiving-orders/:id/shipper` (shipper xlsx download; `?mode=finished` for actuals) | `apps/backend/src/routes/admin/receivingShipper.ts` |
 | `GET /admin/user-profiles`, `PUT /admin/user-profiles/:username` (per-user sub-inventory scope; pre-provisioning allowed) | `apps/backend/src/routes/admin/userProfiles.ts` |
 
 ### Domain modules

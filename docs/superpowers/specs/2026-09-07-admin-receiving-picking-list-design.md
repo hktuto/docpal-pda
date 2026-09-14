@@ -1,7 +1,7 @@
 # Admin receiving detail: confirm in-hand + picking-list download — design
 
 Date: 2026-09-07
-Status: implemented
+Status: superseded by 2026-09-14-admin-receiving-shipper-download-design.md (shipper rename, in-request recompute, finished mode)
 
 ## Problem
 

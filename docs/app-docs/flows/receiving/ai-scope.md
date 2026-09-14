@@ -67,13 +67,16 @@
   `PATCH /admin/receiving-invoice-items/:id` — per-row edit modal or
   multi-select batch edit where blank fields keep each item's current value;
   `apps/admin/components/receiving/ItemEditModal.vue`), and download the
-  shipper-style picking list xlsx (`GET
-  /admin/receiving-orders/:id/picking-list`,
-  `apps/backend/src/routes/admin/receivingPickingList.ts`): receipts grouped
-  by part, each receipt a 3-row block (customer names / recommended shelf +
-  order_nos / `invoice_no ctn_no` item row) with per-row allocation slots,
-  per-group Total/Balance, whole-order (no `ctn_no`) allocations on a closing
-  `(order-level)` block.
+  shipper xlsx (`GET /admin/receiving-orders/:id/shipper`,
+  `apps/backend/src/routes/admin/receivingShipper.ts`): receipts grouped
+  by part, each group one merged block (customer names / recommended shelf +
+  order_nos overlaid on the block's last rows, one `invoice_no ctn_no` item
+  row per carton) with per-block slots, per-group Total/Balance. In-hand
+  orders are re-allocated in the request before the sheet is built;
+  whole-order (no `ctn_no`) allocations close each group on a closing
+  `(order-level)` block. Completed (`clear`) orders get
+  `?mode=finished` instead — same layout, slots from actual
+  `picking_packages` (direct + lot-traced via `inventory_lot_sources`).
 
 ## Out of scope
 
@@ -133,5 +136,5 @@
 - `docs/superpowers/specs/2026-07-27-admin-issue-handling-design.md`
 - `docs/superpowers/specs/2026-07-27-admin-item-removal-and-audit-logs-design.md`
 - `docs/superpowers/specs/2026-09-02-receiving-subinventory-rules-design.md`
-- `docs/superpowers/specs/2026-09-07-admin-receiving-picking-list-design.md`
+- `docs/superpowers/specs/2026-09-14-admin-receiving-shipper-download-design.md`
 - `docs/superpowers/specs/2026-09-11-user-subinventory-scope-design.md`

@@ -3,7 +3,7 @@
 // customer account master is exposed read-only — list ordered by party name,
 // ?q= ilike search on party_name / account_number, exact ?partyName= filter,
 // and no mutations. Dynamic app import so DATABASE_URL points at the test DB
-// first (same pattern as receivingPickingList.test.ts).
+// first (same pattern as receivingShipper.test.ts).
 
 import { test, before } from "node:test";
 import assert from "node:assert/strict";

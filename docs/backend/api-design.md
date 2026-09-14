@@ -113,7 +113,7 @@ template group or explicit body field) are deduped per order via
 | `POST /receiving-invoice-items/:id/mismatch` | `{actorId, reason, mismatchQty?, wrongPartNo?, note?}` → item. |
 | `PATCH /receiving-invoice-items/:id/mismatch` | Edit pending mismatch. |
 | `POST /receiving-invoice-items/:id/mismatch/confirm` · `/cancel` | `{actorId}` → item. |
-| `GET /admin/receiving-orders/:id/picking-list` | Admin console: shipper-style picking-list `.xlsx` attachment — receipts grouped by part, each receipt a 3-row block (customer names / recommended shelf + order_nos / `invoice_no ctn_no` item row) with per-row allocation slots; Total/Balance per group; whole-order (no `ctn_no`) allocations close each group on an `(order-level)` block. Spec `docs/superpowers/specs/2026-09-07-admin-receiving-picking-list-design.md`. |
+| `GET /admin/receiving-orders/:id/shipper` | Admin console: shipper `.xlsx` attachment — receipts grouped by part, each group one merged block (customer names / recommended shelf + order_nos overlaid on the block's last rows, one `invoice_no ctn_no` item row per carton) with per-block allocation slots; Total/Balance per group; whole-order (no `ctn_no`) allocations close each group on an `(order-level)` block. In-hand orders are re-allocated in the request (`allocateForReceivingOrder`) before the sheet is built. `?mode=finished` (for `clear` orders): same layout, slots from actual `picking_packages` (direct receiving-item picks + lot-traced via `inventory_lot_sources`) instead of live allocations. Spec `docs/superpowers/specs/2026-09-14-admin-receiving-shipper-download-design.md`. |
 
 Changes vs old: `/picking` returns nested DTOs with logs embedded per item —
 `POST /picking-items/transition-logs` dies; scan-candidates dies (server-side
