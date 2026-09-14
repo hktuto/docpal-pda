@@ -883,6 +883,7 @@ export default {
     auth: {
       logout: "Logout",
       settings: "Settings",
+      openDocpal: "Open DocPal",
       username: "Username",
       password: "Password",
       signIn: "Sign in",

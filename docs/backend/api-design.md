@@ -57,6 +57,7 @@ live in `concepts.md`; tables in `schema.md`.
 |---|---|---|
 | `GET /admin/user-profiles` | — → `[{id, username, displayName, groupCodes, subInventoryScopes}]` | users LEFT JOIN profiles |
 | `PUT /admin/user-profiles/:username` | `{subInventoryScopes: [{orgId, code}]}` → the saved profile | same validation as the self-service PUT (400 `unknown_sub_inventory`); username need not exist in `users` yet (pre-provisioning) |
+| `GET /admin/docpal-url` | — → `{url: string | null}` | `DOCPAL_URL` base for the admin console's "Open DocPal" popover link; null when unconfigured |
 
 JWT bearer (HS256, `hono/jwt`, secret from `AUTH_SECRET`, 12 h TTL) required on
 all routes except `/health`, `POST /auth/login`, `POST /auth/login-token`, and

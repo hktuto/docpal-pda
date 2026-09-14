@@ -883,6 +883,7 @@ export default {
     auth: {
       logout: "退出登录",
       settings: "设置",
+      openDocpal: "前往 DocPal",
       username: "用户名",
       password: "密码",
       signIn: "登录",

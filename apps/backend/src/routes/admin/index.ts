@@ -14,6 +14,7 @@ import {
   netWeightFormula,
 } from "../../db/schema/index.js";
 import { createCrudRouter, reqStr, optStr, reqInt, reqNum, optInt, optStrArray, optJson } from "./crud.js";
+import { docpalBaseUrl } from "../../config.js";
 import { queryAll } from "../../db/query.js";
 import { shelfBoxesRoute } from "./shelfBoxes.js";
 import { adminFlowEditsRoute } from "./flowEdits.js";
@@ -264,6 +265,10 @@ adminRoute.route("/", adminReceivingPickingListRoute);
 // Per-user sub-inventory scope profiles (spec
 // 2026-09-11-user-subinventory-scope-design.md).
 adminRoute.route("/user-profiles", adminUserProfilesRoute);
+
+// DocPal console link for the admin user popover — null when DOCPAL_URL is
+// not configured (login itself requires it, so real deployments always have it).
+adminRoute.get("/docpal-url", (c) => c.json({ url: docpalBaseUrl() ?? null }));
 
 export async function groupCodesOf(userId: string): Promise<string[]> {
   const rows = await queryAll<{ groupCode: string }>(

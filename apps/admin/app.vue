@@ -4,6 +4,18 @@ import { navSections } from "~/utils/entities";
 const route = useRoute();
 const user = ref<{ displayName?: string } | null>(null);
 
+// DocPal console link in the user popover; hidden when the backend has no
+// DOCPAL_URL configured (or the fetch fails).
+const docpalUrl = ref<string | null>(null);
+onMounted(async () => {
+  try {
+    const res = await useApi().get<{ url: string | null }>("/admin/docpal-url");
+    docpalUrl.value = res.url;
+  } catch {
+    docpalUrl.value = null;
+  }
+});
+
 function refreshUser() {
   if (!import.meta.client) return;
   const raw = localStorage.getItem("admin_user");
@@ -102,6 +114,15 @@ onBeforeUnmount(() => {
           <NuxtLink to="/settings" class="btn btn-small settings-link">
             {{ $t("admin.auth.settings") }}
           </NuxtLink>
+          <a
+            v-if="docpalUrl"
+            :href="docpalUrl"
+            target="_blank"
+            rel="noopener"
+            class="btn btn-small settings-link"
+          >
+            {{ $t("admin.auth.openDocpal") }}
+          </a>
           <button class="btn btn-small logout-btn" @click="logout">
             {{ $t("admin.auth.logout") }}
           </button>
