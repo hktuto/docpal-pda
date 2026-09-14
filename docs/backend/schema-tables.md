@@ -83,6 +83,7 @@ location pair (org_id + sub_inventory_code) lives on `shelf_boxes` and
 | id | text PK | Shelf id (UUID v7) |
 | code | text NOT NULL UNIQUE | Shelf/location code |
 | zone | text | Zone within the warehouse |
+| sub_inventory_scopes | jsonb | Advisory put-away affinity as `[{ orgId, code }]` pairs (same shape as `user_profiles.sub_inventory_scopes`; codes repeat across orgs); NULL/empty = shared shelf |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 

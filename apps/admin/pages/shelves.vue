@@ -62,11 +62,22 @@ async function downloadQr(row: any) {
   a.download = `shelf-${row.code}.png`;
   a.click();
 }
+// Batch edit of the selected shelves' sub-inventory affinity
+// (ShelfBulkSubInventoryDialog): saving PATCHes each shelf, then the table
+// reloads and the selection clears.
+const table = ref<{ reload: () => Promise<void> } | null>(null);
+const bulkEdit = ref<{ rows: any[]; clear: () => void } | null>(null);
+
+async function onBulkEditSaved() {
+  bulkEdit.value?.clear();
+  bulkEdit.value = null;
+  await table.value?.reload();
+}
 </script>
 
 <template>
   <div>
-    <CrudTable :config="entities.shelves">
+    <CrudTable ref="table" :config="entities.shelves">
       <template #head-actions="{ rows }">
         <button class="btn" :disabled="!rows.length" @click="printAll(rows)">
           {{ $t("admin.print.printAll", { count: rows.length }) }}
@@ -80,6 +91,9 @@ async function downloadQr(row: any) {
         <button class="btn btn-primary" @click="printSelected(rows, clear)">
           {{ $t("admin.print.printSelected", { count: rows.length }) }}
         </button>
+        <button class="btn" @click="bulkEdit = { rows, clear }">
+          {{ $t("admin.shelves.bulkEditSubinv", { count: rows.length }) }}
+        </button>
       </template>
     </CrudTable>
     <PrintLabelsDialog v-if="printItems" :items="printItems" @close="printItems = null" />
@@ -87,6 +101,12 @@ async function downloadQr(row: any) {
       v-if="batchPrintItems"
       :items="batchPrintItems"
       @close="batchPrintItems = null"
+    />
+    <ShelfBulkSubInventoryDialog
+      v-if="bulkEdit"
+      :shelves="bulkEdit.rows"
+      @saved="onBulkEditSaved"
+      @close="bulkEdit = null"
     />
   </div>
 </template>

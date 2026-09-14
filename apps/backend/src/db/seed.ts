@@ -222,7 +222,7 @@ const SHELVES = [
   { code: "A-04-02", zone: "A" },
   { code: "A-04-03", zone: "A" },
   { code: "A-04-04", zone: "A" },
-  { code: "A-04-05", zone: "A", subInventoryCodes: ["STORE1"] },
+  { code: "A-04-05", zone: "A", subInventoryScopes: [{ orgId: 2, code: "STORE1" }] },
   { code: "GZ-01-01", zone: "GZ" },
   { code: "GZ-01-02", zone: "GZ" },
   { code: "SZ-01-01", zone: "SZ" },

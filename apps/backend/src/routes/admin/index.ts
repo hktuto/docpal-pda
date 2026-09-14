@@ -26,11 +26,20 @@ import { adminReceivingShipperRoute } from "./receivingShipper.js";
 import { adminAllocationRoute } from "./allocation.js";
 import { adminUserProfilesRoute } from "./userProfiles.js";
 import { adminCustomerProfilesRoute } from "./customerProfiles.js";
+import { parseScopeEntries, type UserScopeEntry } from "../../db/user-scope.js";
 
 // Optional id on create: use the client's when given, else generate one.
 function optId(body: Record<string, unknown>): string {
   const v = body.id;
   return typeof v === "string" && v.trim() !== "" ? v.trim() : newId();
+}
+
+// shelves.sub_inventory_scopes body field: [{ orgId, code }] pairs, []/null →
+// null (shared shelf). Shape-validated only (no org_info existence check —
+// createCrudRouter callbacks are sync).
+function optScopes(body: Record<string, unknown>): UserScopeEntry[] | null {
+  const entries = parseScopeEntries(body.subInventoryScopes);
+  return entries.length > 0 ? entries : null;
 }
 
 export const adminRoute = new Hono();
@@ -44,11 +53,12 @@ adminRoute.route(
       id: optId(b),
       code: reqStr(b, "code"),
       zone: optStr(b, "zone"),
-      subInventoryCodes: optStrArray(b, "subInventoryCodes"),
+      // [] collapses to null (shared shelf), same as user_profiles scopes.
+      subInventoryScopes: optScopes(b),
     }),
     update: (b) => ({
       ...(b.zone !== undefined && { zone: optStr(b, "zone") }),
-      ...(b.subInventoryCodes !== undefined && { subInventoryCodes: optStrArray(b, "subInventoryCodes") }),
+      ...(b.subInventoryScopes !== undefined && { subInventoryScopes: optScopes(b) }),
       lastUpdateDate: new Date(),
     }),
   })

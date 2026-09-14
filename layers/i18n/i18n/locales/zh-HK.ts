@@ -929,6 +929,11 @@ export default {
       unrestricted: "篩選：所有子庫",
       dialogTitle: "我的子庫篩選"
     },
+    shelves: {
+      bulkEditSubinv: "編輯子庫（{count}）",
+      bulkEditTitle: "批量編輯子庫（{count} 個貨架）",
+      bulkEditHint: "所選子庫將會取代全部 {count} 個已選貨架的目前設定。全部不勾選代表改為共用貨架。"
+    },
     print: {
       title: "列印標籤（{count}）",
       printer: "打印機",
@@ -993,6 +998,7 @@ export default {
       code: "代碼",
       zone: "區域",
       subInventoryCodes: "子庫存（可多選）",
+      subInventoryCodesHint: "勾選的子庫用於上架建議的貨架歸屬。全部不勾選代表共用貨架（所有子庫均可獲建議）。",
       name: "名稱",
       shortName: "簡稱",
       supplierCode: "供應商代碼",
@@ -1164,7 +1170,21 @@ export default {
         editTitle: "編輯 {id}",
         customerCode: "客戶代碼",
         customerCodeHint: "僅客戶專用倉需要設定。",
-        deleteConfirm: "刪除子庫 {id}？"
+        deleteConfirm: "刪除子庫 {id}？",
+        shareManager: {
+          button: "共享組",
+          title: "管理共享組",
+          groups: "群組",
+          noGroups: "暫無共享組。",
+          newPlaceholder: "新群組名稱…",
+          groupName: "群組名稱",
+          members: "成員",
+          memberCount: "{n} 個成員",
+          inOtherGroup: "屬於 {group}",
+          emptyGroupHint: "群組至少有一個成員才會被保存。勾選屬於其他群組的子庫會將其移至本群組。",
+          nameRequired: "請輸入群組名稱。",
+          nameExists: "已存在同名群組。"
+        }
       },
       shelfBoxes: {
         title: "貨架箱",

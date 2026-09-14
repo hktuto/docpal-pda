@@ -3,7 +3,7 @@ const page = defineModel<number>("page", { required: true });
 const pageSize = defineModel<number>("pageSize", { required: true });
 const props = defineProps<{ total: number }>();
 
-const SIZES = [20, 50, 100];
+const SIZES = [20, 50, 100,200];
 const pageCount = computed(() => Math.max(1, Math.ceil(props.total / pageSize.value)));
 </script>
 

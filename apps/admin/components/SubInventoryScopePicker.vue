@@ -14,6 +14,9 @@ interface SubInventoryRow {
 
 const props = defineProps<{
   modelValue: SubInventoryScope[];
+  disabled?: boolean;
+  /** Optional i18n key overriding the default user-scope hint. */
+  hintKey?: string;
 }>();
 
 const emit = defineEmits<{
@@ -127,7 +130,7 @@ onMounted(async () => {
 
 <template>
   <div class="scope-picker">
-    <p class="hint">{{ $t("admin.scopePicker.hint") }}</p>
+    <p class="hint">{{ $t(hintKey ?? "admin.scopePicker.hint") }}</p>
     <div v-if="loading" class="loading">{{ $t("admin.scopePicker.loading") }}</div>
     <div v-else-if="loadError" class="error-banner">
       {{ $t("admin.scopePicker.loadError", { message: loadError }) }}
@@ -135,21 +138,21 @@ onMounted(async () => {
     <div v-else-if="groups.length === 0" class="muted">{{ $t("admin.scopePicker.none") }}</div>
     <template v-else>
       <div class="picker-toolbar">
-        <button type="button" class="btn btn-small" @click="selectAll">
+        <button type="button" class="btn btn-small" :disabled="disabled" @click="selectAll">
           {{ $t("admin.scopePicker.selectAll") }}
         </button>
-        <button type="button" class="btn btn-small" :disabled="modelValue.length === 0" @click="clearAll">
+        <button type="button" class="btn btn-small" :disabled="disabled || modelValue.length === 0" @click="clearAll">
           {{ $t("admin.scopePicker.clearAll") }}
         </button>
       </div>
       <div class="scope-groups">
         <div v-for="g in groups" :key="g.orgId" class="scope-group">
           <label class="scope-org scope-group-toggle">
-            <input type="checkbox" :checked="isGroupChecked(g)" @change="toggleGroup(g)" />
+            <input type="checkbox" :checked="isGroupChecked(g)" :disabled="disabled" @change="toggleGroup(g)" />
             <span>{{ g.office ?? $t("admin.scopePicker.orgFallback", { orgId: g.orgId }) }}</span>
           </label>
           <label v-for="r in g.items" :key="r.secondaryInventoryName" class="scope-option">
-            <input type="checkbox" :checked="isChecked(r)" @change="toggle(r)" />
+            <input type="checkbox" :checked="isChecked(r)" :disabled="disabled" @change="toggle(r)" />
             <span>{{ label(r) }}</span>
           </label>
         </div>

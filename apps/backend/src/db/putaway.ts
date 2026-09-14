@@ -612,11 +612,15 @@ async function computeShelfSuggestions(
     if (!suggestions.has(r.partNo)) suggestions.set(r.partNo, { shelfCode: r.shelfCode, boxId: null, reason: "same-part-stock" });
   }
   // 3. sub-inventory-shelf fallback for parts with no stock history at all
+  //    (affinity pairs are org-scoped: sub-inventory codes repeat across orgs)
   const missing = partNos.filter((p) => !suggestions.has(p));
   if (missing.length > 0) {
     const taggedShelf = await queryGet<{ code: string }>(
       db,
-      sql`SELECT code FROM shelves WHERE ${subInventoryCode} = ANY(sub_inventory_codes) ORDER BY code LIMIT 1`
+      sql`SELECT code FROM shelves
+          WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(sub_inventory_scopes) e
+                        WHERE (e->>'orgId')::int = ${orgId} AND e->>'code' = ${subInventoryCode})
+          ORDER BY code LIMIT 1`
     );
     if (taggedShelf) {
       for (const p of missing) suggestions.set(p, { shelfCode: taggedShelf.code, boxId: null, reason: "sub-inventory-shelf" });

@@ -929,6 +929,11 @@ export default {
       unrestricted: "Filter: all sub-inventories",
       dialogTitle: "My sub-inventory filter"
     },
+    shelves: {
+      bulkEditSubinv: "Edit sub-inventories ({count})",
+      bulkEditTitle: "Batch edit sub-inventories ({count} shelves)",
+      bulkEditHint: "The selected sub-inventories will REPLACE the current value on all {count} selected shelves. Leave everything unchecked to make them shared."
+    },
     print: {
       title: "Print labels ({count})",
       printer: "Printer",
@@ -993,6 +998,7 @@ export default {
       code: "Code",
       zone: "Zone",
       subInventoryCodes: "Sub-inventories",
+      subInventoryCodesHint: "Checked sub-inventories mark this shelf's put-away affinity. Leave everything unchecked for a shared shelf (suggested for all sub-inventories).",
       name: "Name",
       shortName: "Short name",
       supplierCode: "Supplier code",
@@ -1165,7 +1171,21 @@ export default {
         editTitle: "Edit {id}",
         customerCode: "Customer code",
         customerCodeHint: "Set only for customer-segregated stores.",
-        deleteConfirm: "Delete sub-inventory {id}?"
+        deleteConfirm: "Delete sub-inventory {id}?",
+        shareManager: {
+          button: "Share groups",
+          title: "Manage share groups",
+          groups: "Groups",
+          noGroups: "No share groups yet.",
+          newPlaceholder: "New group name…",
+          groupName: "Group name",
+          members: "Members",
+          memberCount: "{n} members",
+          inOtherGroup: "in {group}",
+          emptyGroupHint: "A group is saved only when it has at least one member. Checking a sub-inventory that belongs to another group moves it here.",
+          nameRequired: "Enter a group name.",
+          nameExists: "A group with this name already exists."
+        }
       },
       shelfBoxes: {
         title: "Shelf Boxes",

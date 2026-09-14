@@ -2,14 +2,20 @@ export interface EntityField {
   key: string;
   /** i18n key (under admin.fields.*) resolved by CrudTable/CrudForm via $t. */
   label: string;
-  type: "text" | "number" | "password" | "multiSelect" | "json";
+  type: "text" | "number" | "password" | "multiSelect" | "subInventoryPicker" | "json";
   /**
    * multiSelect only: where the option list comes from.
-   * "subInventories" = sub-inventory codes from GET /admin/sub-inventories.
    * "customerAccounts" = party names from GET /admin/customer-accounts.
    * The payload is a string array (null when nothing is selected).
+   * ("subInventoryPicker" fields always use the org-grouped sub-inventory
+   * scope picker — payload [{ orgId, code }] pairs, null when empty — and
+   * need no optionsSource.)
    */
-  optionsSource?: "subInventories" | "customerAccounts";
+  optionsSource?: "customerAccounts";
+  /** Optional i18n key for explanatory text shown above the field input. */
+  hint?: string;
+  /** Optional table-cell formatter (overrides the default formatCell). */
+  format?: (value: unknown) => string;
   required?: boolean;
   /** Disabled in the edit form (used for primary keys, which are immutable). */
   readonlyOnEdit?: boolean;
@@ -70,6 +76,14 @@ export interface EntityConfig {
   filterFields?: { param: string; label: string }[];
 }
 
+/** Table-cell rendering for [{ orgId, code }] scope pairs: "2 / STORE1, …". */
+function formatScopes(value: unknown): string {
+  if (!Array.isArray(value) || value.length === 0) return "—";
+  return value
+    .map((s) => (s && typeof s === "object" ? `${(s as any).orgId} / ${(s as any).code}` : String(s)))
+    .join(", ");
+}
+
 export const entities: Record<string, EntityConfig> = {
   shelves: {
     path: "shelves",
@@ -81,9 +95,15 @@ export const entities: Record<string, EntityConfig> = {
     fields: [
       { key: "code", label: "admin.fields.code", type: "text", required: true, readonlyOnEdit: true },
       { key: "zone", label: "admin.fields.zone", type: "text" },
-      // Advisory sub-inventory affinity for put-away shelf suggestions
-      // (empty = shared).
-      { key: "subInventoryCodes", label: "admin.fields.subInventoryCodes", type: "multiSelect", optionsSource: "subInventories" },
+      // Advisory sub-inventory affinity for put-away shelf suggestions,
+      // org-scoped [{ orgId, code }] pairs (empty = shared).
+      {
+        key: "subInventoryScopes",
+        label: "admin.fields.subInventoryCodes",
+        type: "subInventoryPicker",
+        hint: "admin.fields.subInventoryCodesHint",
+        format: formatScopes,
+      },
     ],
     extraColumns: [
       { key: "createdDate", label: "admin.fields.createdDate" },

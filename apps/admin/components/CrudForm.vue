@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { EntityField } from "~/utils/entities";
+import type { SubInventoryScope } from "~/utils/userScope";
 
 const props = defineProps<{
   title: string;
@@ -17,24 +18,13 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const api = useApi();
-const form = reactive<Record<string, string | string[]>>({});
+const form = reactive<Record<string, string | unknown[]>>({});
 const localError = ref("");
 
 // multiSelect option lists (per optionsSource). Loaded once on mount.
-const subInventoryOptions = ref<{ value: string; label: string }[]>([]);
 const customerAccountOptions = ref<{ value: string; label: string }[]>([]);
 
 onMounted(async () => {
-  if (props.fields.some((f) => f.optionsSource === "subInventories")) {
-    try {
-      const rows = await api.get<{ orgId: number; secondaryInventoryName: string }[]>("/admin/sub-inventories");
-      subInventoryOptions.value = rows
-        .map((r) => ({ value: r.secondaryInventoryName, label: `${r.secondaryInventoryName} (org ${r.orgId})` }))
-        .sort((a, b) => a.label.localeCompare(b.label));
-    } catch {
-      subInventoryOptions.value = []; // options stay empty; the field can still be cleared
-    }
-  }
   if (props.fields.some((f) => f.optionsSource === "customerAccounts")) {
     try {
       const rows = await api.get<{ partyName: string; accountNumber: string }[]>("/admin/customer-accounts");
@@ -48,7 +38,6 @@ onMounted(async () => {
 });
 
 function optionsFor(f: EntityField): { value: string; label: string }[] {
-  if (f.optionsSource === "subInventories") return subInventoryOptions.value;
   if (f.optionsSource === "customerAccounts") return customerAccountOptions.value;
   return [];
 }
@@ -69,6 +58,10 @@ watch(
           ? Array.isArray(v)
             ? v.map(String)
             : []
+          : f.type === "subInventoryPicker"
+            ? Array.isArray(v)
+              ? v // [{ orgId, code }] pairs, passed through verbatim
+              : []
           : f.type === "json"
             ? v === null || v === undefined
               ? ""
@@ -96,8 +89,8 @@ function submit() {
   const payload: Record<string, unknown> = {};
   for (const f of props.fields) {
     if (disabled(f)) continue;
-    if (f.type === "multiSelect") {
-      const selected = Array.isArray(form[f.key]) ? (form[f.key] as string[]) : [];
+    if (f.type === "multiSelect" || f.type === "subInventoryPicker") {
+      const selected = Array.isArray(form[f.key]) ? (form[f.key] as unknown[]) : [];
       payload[f.key] = selected.length > 0 ? selected : null; // null = clear
       continue;
     }
@@ -151,8 +144,15 @@ function submit() {
           <label :for="`ff-${f.key}`">
             {{ $t(f.label) }}<span v-if="showRequired(f)" class="req"> *</span>
           </label>
+          <SubInventoryScopePicker
+            v-if="f.type === 'subInventoryPicker'"
+            :id="`ff-${f.key}`"
+            v-model="form[f.key] as SubInventoryScope[]"
+            :disabled="disabled(f)"
+            :hint-key="f.hint"
+          />
           <select
-            v-if="f.type === 'multiSelect'"
+            v-else-if="f.type === 'multiSelect'"
             :id="`ff-${f.key}`"
             v-model="form[f.key]"
             multiple

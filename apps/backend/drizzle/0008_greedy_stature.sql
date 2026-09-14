@@ -1,0 +1,1 @@
+ALTER TABLE "shelves" DROP COLUMN "sub_inventory_codes";

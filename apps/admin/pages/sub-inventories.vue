@@ -22,11 +22,15 @@ const rows = ref<SubInventoryRow[]>([]);
 const loading = ref(false);
 const error = ref("");
 
-// Share-group membership per "orgId:code" + the editable drafts beside it.
-// Members of the same group may serve each other's picking demands.
+// Share-group membership per "orgId:code". Members of the same group may
+// serve each other's picking demands. A group exists only via its members
+// (no groups table) — removing the last member deletes the group.
 const shareGroups = ref<Record<string, string>>({});
-const shareDrafts = ref<Record<string, string>>({});
 const shareError = ref("");
+
+const groupNames = computed(() =>
+  [...new Set(Object.values(shareGroups.value))].sort((a, b) => a.localeCompare(b))
+);
 
 // Client-side keyword filter; TanStack owns sorting + paging.
 const search = ref("");
@@ -108,7 +112,6 @@ async function load() {
     const map: Record<string, string> = {};
     for (const m of members as ShareMemberRow[]) map[`${m.orgId}:${m.code}`] = m.shareGroup;
     shareGroups.value = map;
-    shareDrafts.value = { ...map };
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -116,20 +119,137 @@ async function load() {
   }
 }
 
-function shareDirty(r: SubInventoryRow): boolean {
-  const id = rowId(r);
-  return (shareDrafts.value[id] ?? "").trim() !== (shareGroups.value[id] ?? "");
-}
-
-async function saveShare(r: SubInventoryRow) {
+// Table-cell select: assign/clear one row's group.
+async function setShare(r: SubInventoryRow, group: string) {
   shareError.value = "";
   try {
-    await api.put(`/admin/sub-inventory-share-groups/${rowId(r)}`, {
-      shareGroup: (shareDrafts.value[rowId(r)] ?? "").trim() || null,
-    });
+    await api.put(`/admin/sub-inventory-share-groups/${rowId(r)}`, { shareGroup: group || null });
     await load();
   } catch (e: any) {
     shareError.value = e.message;
+  }
+}
+
+// --- Share-group manager dialog --------------------------------------------
+
+const showShareMgr = ref(false);
+const shareMgrError = ref("");
+const shareMgrSaving = ref(false);
+// New groups staged in the dialog before any member is saved.
+const draftGroups = ref<string[]>([]);
+const selectedGroup = ref<string | null>(null);
+const groupNameDraft = ref("");
+const memberDraft = ref<Set<string>>(new Set());
+const newGroupName = ref("");
+
+const shareMgrDlg = useOverlayDismiss(() => { showShareMgr.value = false; });
+
+// Groups = names from membership rows + staged drafts; value = member ids.
+const mgrGroups = computed(() => {
+  const map = new Map<string, string[]>();
+  for (const [id, g] of Object.entries(shareGroups.value)) {
+    const list = map.get(g) ?? [];
+    list.push(id);
+    map.set(g, list);
+  }
+  for (const d of draftGroups.value) if (!map.has(d)) map.set(d, []);
+  return [...map.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, members]) => ({ name, members: members.sort() }));
+});
+
+// Member picker: sub-inventories grouped by org. Codes repeat across orgs,
+// so options are keyed on orgId:code, not code alone.
+const mgrOrgs = computed(() => {
+  const byOrg = new Map<number, SubInventoryRow[]>();
+  for (const r of rows.value) {
+    const list = byOrg.get(r.orgId) ?? [];
+    list.push(r);
+    byOrg.set(r.orgId, list);
+  }
+  return [...byOrg.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([orgId, items]) => ({
+      orgId,
+      office: items[0]?.officeCode ?? null,
+      items: items.sort((a, b) => a.secondaryInventoryName.localeCompare(b.secondaryInventoryName)),
+    }));
+});
+
+function openShareMgr() {
+  draftGroups.value = [];
+  shareMgrError.value = "";
+  newGroupName.value = "";
+  showShareMgr.value = true;
+  selectGroup(mgrGroups.value[0]?.name ?? null);
+}
+
+function selectGroup(name: string | null) {
+  selectedGroup.value = name;
+  groupNameDraft.value = name ?? "";
+  memberDraft.value = new Set(mgrGroups.value.find((g) => g.name === name)?.members ?? []);
+}
+
+function createDraftGroup() {
+  shareMgrError.value = "";
+  const name = newGroupName.value.trim();
+  if (!name) {
+    shareMgrError.value = t("admin.pages.subInventories.shareManager.nameRequired");
+    return;
+  }
+  if (mgrGroups.value.some((g) => g.name === name)) {
+    shareMgrError.value = t("admin.pages.subInventories.shareManager.nameExists");
+    return;
+  }
+  draftGroups.value = [...draftGroups.value, name];
+  newGroupName.value = "";
+  selectGroup(name);
+}
+
+function toggleMgrMember(id: string) {
+  const next = new Set(memberDraft.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  memberDraft.value = next;
+}
+
+// The group a sub-inventory currently belongs to (for the "in X" badge).
+function currentGroupOf(id: string): string | null {
+  return shareGroups.value[id] ?? null;
+}
+
+async function saveMgrGroup() {
+  const originalName = selectedGroup.value;
+  if (!originalName || shareMgrSaving.value) return;
+  shareMgrError.value = "";
+  const name = groupNameDraft.value.trim();
+  if (!name) {
+    shareMgrError.value = t("admin.pages.subInventories.shareManager.nameRequired");
+    return;
+  }
+  if (name !== originalName && mgrGroups.value.some((g) => g.name === name)) {
+    shareMgrError.value = t("admin.pages.subInventories.shareManager.nameExists");
+    return;
+  }
+  shareMgrSaving.value = true;
+  try {
+    const originalMembers = mgrGroups.value.find((g) => g.name === originalName)?.members ?? [];
+    for (const id of memberDraft.value) {
+      await api.put(`/admin/sub-inventory-share-groups/${id}`, { shareGroup: name });
+    }
+    for (const id of originalMembers) {
+      if (!memberDraft.value.has(id)) {
+        await api.put(`/admin/sub-inventory-share-groups/${id}`, { shareGroup: null });
+      }
+    }
+    draftGroups.value = draftGroups.value.filter((d) => d !== originalName);
+    await load();
+    // A group saved with zero members no longer exists — select another.
+    selectGroup(memberDraft.value.size ? name : (mgrGroups.value[0]?.name ?? null));
+  } catch (e: any) {
+    shareMgrError.value = e.message;
+  } finally {
+    shareMgrSaving.value = false;
   }
 }
 
@@ -223,6 +343,7 @@ onMounted(load);
     <div class="page-head">
       <h1>{{ $t("admin.pages.subInventories.title") }}</h1>
       <div class="head-actions">
+        <button class="btn" @click="openShareMgr">{{ $t("admin.pages.subInventories.shareManager.button") }}</button>
         <button class="btn" :disabled="loading" @click="load">{{ $t("admin.common.refresh") }}</button>
         <button class="btn btn-primary" @click="openNew">{{ $t("admin.common.new") }}</button>
       </div>
@@ -254,18 +375,14 @@ onMounted(load);
       <template #cell-organizationId="{ row }">{{ row.organizationId ?? "—" }}</template>
       <template #cell-customerCode="{ row }">{{ row.customerCode ?? "—" }}</template>
       <template #cell-shareGroup="{ row }">
-        <div class="share-cell">
-          <input
-            v-model="shareDrafts[rowId(row)]"
-            type="text"
-            class="share-input"
-            placeholder="—"
-            @keyup.enter="saveShare(row)"
-          />
-          <button v-if="shareDirty(row)" class="btn btn-small" @click="saveShare(row)">
-            {{ $t("admin.common.save") }}
-          </button>
-        </div>
+        <select
+          class="share-select"
+          :value="shareGroups[rowId(row)] ?? ''"
+          @change="setShare(row, ($event.target as HTMLSelectElement).value)"
+        >
+          <option value="">—</option>
+          <option v-for="g in groupNames" :key="g" :value="g">{{ g }}</option>
+        </select>
       </template>
       <template #actions="{ row }">
         <button class="btn-link" @click="openEdit(row)">{{ $t("admin.common.edit") }}</button>
@@ -340,24 +457,189 @@ onMounted(load);
         </form>
       </div>
     </div>
+
+    <div v-if="showShareMgr" class="overlay" @mousedown="shareMgrDlg.onMousedown" @click="shareMgrDlg.onClick">
+      <div class="dialog share-mgr-dialog">
+        <h2>{{ $t("admin.pages.subInventories.shareManager.title") }}</h2>
+        <div v-if="shareMgrError" class="error-banner">{{ shareMgrError }}</div>
+        <div class="share-mgr-body">
+          <div class="share-mgr-groups">
+            <div class="share-mgr-label">{{ $t("admin.pages.subInventories.shareManager.groups") }}</div>
+            <div v-if="mgrGroups.length === 0" class="muted">
+              {{ $t("admin.pages.subInventories.shareManager.noGroups") }}
+            </div>
+            <button
+              v-for="g in mgrGroups"
+              :key="g.name"
+              type="button"
+              class="share-mgr-group"
+              :class="{ active: g.name === selectedGroup }"
+              @click="selectGroup(g.name)"
+            >
+              <span>{{ g.name }}</span>
+              <span class="muted">{{ $t("admin.pages.subInventories.shareManager.memberCount", { n: g.members.length }) }}</span>
+            </button>
+            <div class="share-mgr-new">
+              <input
+                v-model="newGroupName"
+                type="text"
+                :placeholder="$t('admin.pages.subInventories.shareManager.newPlaceholder')"
+                @keyup.enter="createDraftGroup"
+              />
+              <button type="button" class="btn btn-small" @click="createDraftGroup">
+                {{ $t("admin.common.create") }}
+              </button>
+            </div>
+          </div>
+          <div v-if="selectedGroup" class="share-mgr-members">
+            <div class="form-row">
+              <label for="sm-name">{{ $t("admin.pages.subInventories.shareManager.groupName") }}</label>
+              <input id="sm-name" v-model="groupNameDraft" type="text" />
+            </div>
+            <div class="share-mgr-label">{{ $t("admin.pages.subInventories.shareManager.members") }}</div>
+            <div class="share-mgr-picker">
+              <div v-for="o in mgrOrgs" :key="o.orgId" class="share-mgr-org">
+                <div class="share-mgr-org-name">
+                  {{ o.office ?? $t("admin.scopePicker.orgFallback", { orgId: o.orgId }) }}
+                </div>
+                <label v-for="r in o.items" :key="rowId(r)" class="share-mgr-option">
+                  <input
+                    type="checkbox"
+                    :checked="memberDraft.has(rowId(r))"
+                    @change="toggleMgrMember(rowId(r))"
+                  />
+                  <span>
+                    {{ r.secondaryInventoryName }}<template v-if="r.subinvDescription"> — {{ r.subinvDescription }}</template>
+                  </span>
+                  <span
+                    v-if="currentGroupOf(rowId(r)) && currentGroupOf(rowId(r)) !== selectedGroup"
+                    class="share-mgr-badge"
+                  >
+                    {{ $t("admin.pages.subInventories.shareManager.inOtherGroup", { group: currentGroupOf(rowId(r)) }) }}
+                  </span>
+                </label>
+              </div>
+            </div>
+            <div class="hint">{{ $t("admin.pages.subInventories.shareManager.emptyGroupHint") }}</div>
+            <div class="dialog-actions">
+              <button type="button" class="btn" @click="showShareMgr = false">{{ $t("admin.common.close") }}</button>
+              <button type="button" class="btn btn-primary" :disabled="shareMgrSaving" @click="saveMgrGroup">
+                {{ shareMgrSaving ? $t("admin.common.saving") : $t("admin.common.save") }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.share-cell {
+.share-select {
+  width: 150px;
+  padding: 5px 7px;
+  border: 1px solid #dde3e9;
+  border-radius: 4px;
+  font-size: 12px;
+  background: #fff;
+}
+.share-select:focus {
+  border-color: var(--brand-teal, #0e9594);
+  outline: none;
+}
+
+.share-mgr-dialog {
+  width: 760px;
+  max-width: 92vw;
+}
+.share-mgr-body {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+}
+.share-mgr-groups {
+  width: 220px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.share-mgr-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+.share-mgr-group {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid #dde3e9;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+.share-mgr-group.active {
+  border-color: var(--brand-teal, #0e9594);
+  background: #f0fafa;
+}
+.share-mgr-new {
   display: flex;
   gap: 6px;
-  align-items: center;
+  margin-top: 8px;
 }
-.share-input {
-  width: 110px;
+.share-mgr-new input {
+  flex: 1;
+  min-width: 0;
   padding: 5px 7px;
   border: 1px solid #dde3e9;
   border-radius: 4px;
   font-size: 12px;
 }
-.share-input:focus {
-  border-color: var(--brand-teal, #0e9594);
-  outline: none;
+.share-mgr-members {
+  flex: 1;
+  min-width: 0;
+}
+.share-mgr-picker {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid #d8e1ea;
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.share-mgr-org-name {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+.share-mgr-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 14px;
+  cursor: pointer;
+}
+.share-mgr-badge {
+  font-size: 11px;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.share-mgr-members .hint {
+  margin-top: 8px;
 }
 </style>

@@ -160,6 +160,10 @@ async function load() {
   }
 }
 
+// Pages can trigger a reload after out-of-band mutations (e.g. batch edits
+// from the bulk-actions slot).
+defineExpose({ reload: load });
+
 // Server mode: reload on page/page-size change, debounced reload on search.
 watch(pagination, () => {
   if (serverMode.value) load();
@@ -286,6 +290,9 @@ onMounted(load);
       :loading="loading"
       :on-reset-columns="resetColumnState"
     >
+      <template v-for="f in config.fields.filter((f) => f.format)" :key="f.key" #[`cell-${f.key}`]="{ value }">
+        {{ f.format!(value) }}
+      </template>
       <template #actions="{ row }">
         <slot name="row-actions" :row="row" />
         <button v-if="!config.noEdit" class="btn-link" @click="startEdit(row)">

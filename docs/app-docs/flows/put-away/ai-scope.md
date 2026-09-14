@@ -18,8 +18,8 @@
   receiving ITEMS — items with no pair get no suggestion): most recent OPEN
   shelf box containing the same part → shelf of the most recent lot of the
   same part →
-  first shelf whose advisory `shelves.sub_inventory_codes` contain the
-  item's sub-inventory;
+  first shelf whose advisory `shelves.sub_inventory_scopes` contain the
+  item's org + sub-inventory pair;
   `steps.put-away.suggestShelf=off` suppresses it; advisory only, computed
   at read time, never stored), materialized inventory lots, staging scans,
   and the non-staging shelf boxes with their item rows.
@@ -59,10 +59,11 @@
 
 - Velocity/zone/capacity-aware slotting (the suggestion hint is
   same-part-box / existing-stock / org-affinity only; fixed slots would be a
-  new `suggestShelf` strategy). `shelves.sub_inventory_codes` is advisory — it
+  new `suggestShelf` strategy). `shelves.sub_inventory_scopes` is advisory — it
   ranks suggestions but is not enforced at scan time. It is a
-  text array (a shelf can serve several sub-inventories), edited as a
-  multi-select in the admin shelves CRUD.
+  jsonb array of `{ orgId, code }` pairs (a shelf can serve several
+  sub-inventories, org-scoped since codes repeat across orgs), edited with an
+  org-grouped picker in the admin shelves CRUD.
 - Forklift or robot integration.
 - Multi-step directed put-away with confirmation checkpoints.
 - Operator assignment / work locks on put-away tasks; manual

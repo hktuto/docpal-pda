@@ -929,6 +929,11 @@ export default {
       unrestricted: "筛选：所有子库",
       dialogTitle: "我的子库筛选"
     },
+    shelves: {
+      bulkEditSubinv: "编辑子库（{count}）",
+      bulkEditTitle: "批量编辑子库（{count} 个货架）",
+      bulkEditHint: "所选子库将会取代全部 {count} 个已选货架的当前设置。全部不勾选代表改为共用货架。"
+    },
     print: {
       title: "打印标签（{count}）",
       printer: "打印机",
@@ -993,6 +998,7 @@ export default {
       code: "代码",
       zone: "区域",
       subInventoryCodes: "子库存（可多选）",
+      subInventoryCodesHint: "勾选的子库用于上架建议的货架归属。全部不勾选代表共用货架（所有子库均可获建议）。",
       name: "名称",
       shortName: "简称",
       supplierCode: "供应商代码",
@@ -1164,7 +1170,21 @@ export default {
         editTitle: "编辑 {id}",
         customerCode: "客户代码",
         customerCodeHint: "仅客户专用仓需要设置。",
-        deleteConfirm: "删除子库 {id}？"
+        deleteConfirm: "删除子库 {id}？",
+        shareManager: {
+          button: "共享组",
+          title: "管理共享组",
+          groups: "群组",
+          noGroups: "暂无共享组。",
+          newPlaceholder: "新群组名称…",
+          groupName: "群组名称",
+          members: "成员",
+          memberCount: "{n} 个成员",
+          inOtherGroup: "属于 {group}",
+          emptyGroupHint: "群组至少有一个成员才会被保存。勾选属于其他群组的子库会将其移至本群组。",
+          nameRequired: "请输入群组名称。",
+          nameExists: "已存在同名群组。"
+        }
       },
       shelfBoxes: {
         title: "货架箱",

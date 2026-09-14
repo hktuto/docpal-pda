@@ -50,6 +50,20 @@
       "when": 1789365061988,
       "tag": "0006_puzzling_ultron",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789374538053,
+      "tag": "0007_curious_skaar",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1789374599031,
+      "tag": "0008_greedy_stature",
+      "breakpoints": true
     }
   ]
 }
