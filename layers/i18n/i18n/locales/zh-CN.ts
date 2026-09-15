@@ -1245,6 +1245,10 @@ export default {
         allocationDoneIn: "分配完成（{ms} ms）— 数据已更新。",
         reallocateLocked: "订单 {orderNo} 正由 {name} 操作中 — 请稍后再试。",
         orgSubInventory: "Org / 子库",
+        locationOrg: "Org",
+        locationSubInventory: "子库",
+        locationNone: "— 无 —",
+        locationPairRequired: "请同时选择 Org 和子库（或两者都清空）。",
         required: "需求",
         line: "行号 / 装运",
         allocated: "已分配",
@@ -1296,6 +1300,9 @@ export default {
         availabilityReceiving: "收货来源",
         availabilityNoneStock: "此零件暂无库存批次。",
         availabilityNoneReceiving: "此零件暂无未完成的收货来源。",
+        availabilityDateCodeFrom: "日期代码从",
+        availabilityDateCodeTo: "至",
+        availabilityDateCodeClear: "清除",
         availabilityLineQty: "行数量",
         availabilityAllocate: "分配",
         availabilityOpenDemand: "待分配需求：{qty}"
@@ -1391,9 +1398,15 @@ export default {
         allocate: "分配",
         manualBadge: "人工",
         removeAllocationConfirm: "从订单 {orderNo} 移除此 {qty} × {partNo} 的分配？",
-        demandTitle: "分配至拣货需求 — {partNo}",
         demandAllocatable: "此项目可分配数量：{qty}",
-        demandNone: "此料号没有未完成的拣货需求。"
+        demandNone: "此料号没有未完成的拣货需求。",
+        demandMatching: "符合此项目的 org / 子库",
+        demandAll: "其他所有未完成需求",
+        demandGroupEmpty: "此分组没有需求。",
+        searchTitle: "料号搜索 — {partNo}",
+        searchContext: "此项目：org {org} / 子库 {subInventory}（相符的行会标亮）。",
+        searchDemand: "相关拣货订单",
+        searchStock: "相关库存"
       },
       auditLog: {
         title: "操作记录",

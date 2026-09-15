@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { OrderLogsParams, OrderLogsPage, PartDemandRow, ReceivingItemAllocation, ReceivingOrderDetail, ReceivingItemRow } from "~/utils/flowApi";
+import type { OrderLogsParams, OrderLogsPage, ReceivingItemAllocation, ReceivingOrderDetail, ReceivingItemRow } from "~/utils/flowApi";
 import type { AdminColumnDef } from "~/composables/useAdminTable";
 import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 
@@ -453,16 +453,22 @@ async function removeItem(item: ReceivingItemRow) {
 
 onMounted(load);
 
-// Part availability modal (read-only here): stock lots + open receiving
-// sources for the row's part, across all orgs/sub-inventories.
+// Part search + allocate modal: the row's 🔍 icon opens it; shows the part's
+// open picking demand (matching/all tables with per-row Allocate) plus
+// related stock lots.
 const availOpen = ref(false);
 const availItem = ref<ReceivingItemRow | null>(null);
 const availOrgId = ref<number | null>(null);
 
 function openAvailability(row: ReceivingItemRow, invoice: InvoiceRow | null) {
   availItem.value = row;
-  availOrgId.value = invoice?.orgId ?? order.value?.orgId ?? null;
+  availOrgId.value = row.orgId ?? invoice?.orgId ?? order.value?.orgId ?? null;
   availOpen.value = true;
+}
+
+async function onSearchAllocated() {
+  await load();
+  logsKey.value++;
 }
 
 // Per-allocation "Remove" (x) in the allocatedQty cell: DELETEs that one
@@ -500,101 +506,11 @@ async function removeAllocation(row: ReceivingItemRow, a: ReceivingItemAllocatio
   }
 }
 
-// "Allocate" modal: open picking demand for the row's part; each demand row
-// pins a MANUAL allocation sourced from THIS receiving item. Qty per row is
-// capped by the demand's uncovered remainder AND the receiving item's
-// remaining allocatable qty (received − picked − allocated − this session).
-const demandItem = ref<ReceivingItemRow | null>(null);
-const demandRows = ref<PartDemandRow[]>([]);
-const demandLoading = ref(false);
-const demandError = ref("");
-const demandQty = ref<Record<string, number>>({});
-const demandAllocating = ref<Record<string, boolean>>({});
-const demandSession = ref(0);
-const demandUsed = ref<Record<string, number>>({});
-const demandDismiss = useOverlayDismiss(() => (demandItem.value = null));
-
-const demandReceivingLeft = computed(() => {
-  const row = demandItem.value;
-  if (!row) return 0;
-  return Math.max(0, row.receivedQty - row.pickedQty - row.allocatedQty - demandSession.value);
-});
-
-function demandLeft(d: PartDemandRow): number {
-  return Math.max(0, d.remainingQty - (demandUsed.value[d.pickingItemId] ?? 0));
-}
-function demandCap(d: PartDemandRow): number {
-  return Math.max(0, Math.min(demandLeft(d), demandReceivingLeft.value));
-}
-function canAllocateDemand(d: PartDemandRow): boolean {
-  const q = demandQty.value[d.pickingItemId];
-  return Number.isInteger(q) && q >= 1 && q <= demandCap(d) && !demandAllocating.value[d.pickingItemId];
-}
-
-async function openDemand(row: ReceivingItemRow) {
-  demandItem.value = row;
-  demandRows.value = [];
-  demandError.value = "";
-  demandQty.value = {};
-  demandAllocating.value = {};
-  demandSession.value = 0;
-  demandUsed.value = {};
-  demandLoading.value = true;
-  try {
-    const res = await flow.getPartDemand(row.partNo, row.wclItemNo);
-    demandRows.value = res.demand;
-    const inputs: Record<string, number> = {};
-    for (const d of res.demand) inputs[d.pickingItemId] = demandCap(d);
-    demandQty.value = inputs;
-  } catch (e: any) {
-    demandError.value = e.message;
-  } finally {
-    demandLoading.value = false;
-  }
-}
-
-async function allocateDemand(d: PartDemandRow) {
-  const row = demandItem.value;
-  if (!row || !canAllocateDemand(d)) return;
-  const qty = demandQty.value[d.pickingItemId];
-  demandAllocating.value = { ...demandAllocating.value, [d.pickingItemId]: true };
-  demandError.value = "";
-  try {
-    await flow.addManualPickingAllocation(d.pickingOrderId, d.pickingItemId, {
-      qty,
-      receivingInvoiceItemId: row.id,
-    });
-    demandSession.value += qty;
-    demandUsed.value = { ...demandUsed.value, [d.pickingItemId]: (demandUsed.value[d.pickingItemId] ?? 0) + qty };
-    // Suggest the next qty from the refreshed cap.
-    demandQty.value = { ...demandQty.value, [d.pickingItemId]: demandCap(d) };
-    await load();
-    logsKey.value++;
-  } catch (e: any) {
-    let handled = false;
-    try {
-      const body = JSON.parse(e.message);
-      if (body?.error === "lock_held") {
-        demandError.value = t("admin.pages.pickingOrders.reallocateLocked", {
-          orderNo: d.orderNo,
-          name: body.holderName ?? body.holderId,
-        });
-        handled = true;
-      }
-    } catch {
-      // not JSON — fall through to the raw message
-    }
-    if (!handled) demandError.value = e.message;
-  } finally {
-    demandAllocating.value = { ...demandAllocating.value, [d.pickingItemId]: false };
-  }
-}
-
 // Reload when this order's data changes elsewhere (PDA scans, sync,
 // allocation runs). While the user is editing or has rows selected, show a
 // refresh banner instead of yanking the data out from under them.
 const changeBusy = computed(
-  () => editItems.value !== null || selected.value.size > 0 || availOpen.value || demandItem.value !== null
+  () => editItems.value !== null || selected.value.size > 0 || availOpen.value
 );
 const {
   pending: changePending,
@@ -760,9 +676,6 @@ const {
             </div>
           </template>
           <template #actions="{ row }">
-            <button class="btn btn-small" @click="openDemand(row)">
-              {{ $t("admin.pages.receiving.allocate") }}
-            </button>
             <button class="btn btn-small" @click="openEdit(row)">
               {{ $t("admin.pages.receiving.editDetail") }}
             </button>
@@ -855,79 +768,13 @@ const {
       @save="saveEdit"
     />
 
-    <PartAvailabilityModal
+    <ReceivingPartSearchModal
       :open="availOpen"
-      :part-no="availItem?.partNo ?? ''"
-      :wcl-item-no="availItem?.wclItemNo ?? null"
+      :item="availItem"
       :context-org-id="availOrgId"
       @close="availOpen = false"
+      @allocated="onSearchAllocated"
     />
-
-    <div
-      v-if="demandItem"
-      class="overlay"
-      @mousedown="demandDismiss.onMousedown"
-      @click="demandDismiss.onClick"
-    >
-      <div class="dialog demand-dialog">
-        <h2>{{ $t("admin.pages.receiving.demandTitle", { partNo: demandItem.wclItemNo ?? demandItem.partNo }) }}</h2>
-        <div class="muted avail-context">
-          {{ $t("admin.pages.receiving.demandAllocatable", { qty: demandReceivingLeft }) }}
-        </div>
-        <div v-if="demandError" class="error-banner">{{ demandError }}</div>
-        <div v-if="demandLoading" class="loading">{{ $t("admin.common.loading") }}</div>
-        <template v-else>
-          <table v-if="demandRows.length > 0" class="avail-table">
-            <thead>
-              <tr>
-                <th>{{ $t("admin.pages.pickingOrders.orderNo") }}</th>
-                <th>{{ $t("admin.pages.pickingOrders.status") }}</th>
-                <th>{{ $t("admin.pages.receiving.orgSubInventory") }}</th>
-                <th class="num">{{ $t("admin.pages.pickingOrders.required") }}</th>
-                <th class="num">{{ $t("admin.pages.pickingOrders.picked") }}</th>
-                <th class="num">{{ $t("admin.pages.pickingOrders.allocated") }}</th>
-                <th class="num">{{ $t("admin.pages.receiving.remaining") }}</th>
-                <th class="num">{{ $t("admin.pages.receiving.allocate") }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="d in demandRows" :key="d.pickingItemId">
-                <td>{{ d.orderNo }}</td>
-                <td>{{ $t(`status.picking.${d.orderStatus}`) }}</td>
-                <td>{{ d.orgId ?? "—" }} / {{ d.subInventoryCode ?? "—" }}</td>
-                <td class="num">{{ d.qty }}</td>
-                <td class="num">{{ d.pickedQty }}</td>
-                <td class="num">{{ d.allocatedQty + (demandUsed[d.pickingItemId] ?? 0) }}</td>
-                <td class="num">{{ demandLeft(d) }}</td>
-                <td class="num">
-                  <span class="alloc-cell">
-                    <input
-                      v-model.number="demandQty[d.pickingItemId]"
-                      type="number"
-                      min="1"
-                      :max="demandCap(d)"
-                      class="avail-qty"
-                      :disabled="demandCap(d) <= 0"
-                    />
-                    <button
-                      class="btn btn-small btn-primary"
-                      :disabled="!canAllocateDemand(d)"
-                      @click="allocateDemand(d)"
-                    >
-                      {{ demandAllocating[d.pickingItemId] ? $t("admin.common.saving") : $t("admin.pages.receiving.allocate") }}
-                    </button>
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <div v-else class="muted">{{ $t("admin.pages.receiving.demandNone") }}</div>
-        </template>
-        <div class="dialog-actions">
-          <button class="btn" @click="demandItem = null">{{ $t("admin.common.cancel") }}</button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -1009,43 +856,5 @@ const {
   background: #eef2f7;
   border: 1px solid #d5dee7;
   color: #52606d;
-}
-.demand-dialog {
-  width: 900px;
-}
-.avail-context {
-  margin: -8px 0 12px;
-  font-size: 13px;
-}
-.avail-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-.avail-table th,
-.avail-table td {
-  padding: 5px 8px;
-  border-bottom: 1px solid #e2e8ee;
-  text-align: left;
-  white-space: nowrap;
-}
-.avail-table th {
-  color: #52606d;
-  font-weight: 600;
-}
-.avail-table .num {
-  text-align: right;
-}
-.alloc-cell {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.avail-qty {
-  width: 70px;
-  padding: 4px 6px;
-  border: 1px solid #b6c2cd;
-  border-radius: 4px;
-  text-align: right;
 }
 </style>

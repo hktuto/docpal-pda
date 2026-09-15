@@ -79,17 +79,18 @@
   `picking_packages` (direct + lot-traced via `inventory_lot_sources`).
 - Admin receiving detail per-item actions (spec
   `docs/superpowers/specs/2026-09-15-admin-picking-item-actions-design.md`):
-  a search icon on the part-no cell opens the shared availability modal
-  (`apps/admin/components/PartAvailabilityModal.vue` over
-  `GET /admin/part-availability`, read-only here — no picking target);
-  `GET /receiving-orders/:id` embeds each item's `allocations` (qty, manual
-  flag, picking order no/status), rendered in the allocated-qty cell with a
-  per-allocation (x) → `DELETE /admin/picking-orders/:id/items/:itemId/allocations/:allocationId`;
-  and a per-item Allocate button opens a picking-demand dialog over
-  `GET /admin/part-demand?partNo=&wclItemNo=` (open pending/picking items
-  with remaining qty) whose per-row qty + Allocate pins a manual allocation
-  sourced from this receiving item, capped by the item's received qty minus
-  already-allocated/picked.
+  a search icon on the part-no cell opens the part-search + allocate dialog
+  (`apps/admin/components/receiving/PartSearchModal.vue`): the part's open
+  picking demand (`GET /admin/part-demand`, split by
+  `components/receiving/PartDemandTables.vue` into rows matching the item's
+  org/sub-inventory vs all other demand) with a per-row qty input + Allocate
+  that pins a manual allocation sourced from this receiving item (capped by
+  the item's received qty minus already-allocated/picked), plus a read-only
+  related-stock table (`GET /admin/part-availability`, stock only);
+  `GET /receiving-orders/:id` embeds each item's `orgId`/`subInventoryCode`
+  and `allocations` (qty, manual flag, picking order no/status), rendered in
+  the allocated-qty cell with a per-allocation (x) →
+  `DELETE /admin/picking-orders/:id/items/:itemId/allocations/:allocationId`.
 
 ## Out of scope
 

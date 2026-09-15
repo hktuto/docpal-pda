@@ -1246,6 +1246,10 @@ export default {
         allocationDoneIn: "Allocation finished in {ms} ms — data refreshed.",
         reallocateLocked: "Order {orderNo} is being worked on by {name} — try again later.",
         orgSubInventory: "Org / Sub-inventory",
+        locationOrg: "Org",
+        locationSubInventory: "Sub-inventory",
+        locationNone: "— none —",
+        locationPairRequired: "Select both an org and a sub-inventory (or clear both).",
         required: "Required",
         line: "Line / Ship",
         allocated: "Allocated",
@@ -1297,6 +1301,9 @@ export default {
         availabilityReceiving: "Receiving sources",
         availabilityNoneStock: "No stock lots for this part.",
         availabilityNoneReceiving: "No open receiving sources for this part.",
+        availabilityDateCodeFrom: "Date code from",
+        availabilityDateCodeTo: "to",
+        availabilityDateCodeClear: "Clear",
         availabilityLineQty: "Line qty",
         availabilityAllocate: "Allocate",
         availabilityOpenDemand: "Open demand: {qty}"
@@ -1394,9 +1401,15 @@ export default {
         allocate: "Allocate",
         manualBadge: "manual",
         removeAllocationConfirm: "Remove this allocation of {qty} × {partNo} from order {orderNo}?",
-        demandTitle: "Allocate to picking demand — {partNo}",
         demandAllocatable: "Allocatable from this item: {qty}",
-        demandNone: "No open picking demand for this part."
+        demandNone: "No open picking demand for this part.",
+        demandMatching: "Matching this item's org / sub-inventory",
+        demandAll: "All other open demand",
+        demandGroupEmpty: "No demand in this group.",
+        searchTitle: "Part search — {partNo}",
+        searchContext: "This item: org {org} / sub-inventory {subInventory} (matching rows highlighted).",
+        searchDemand: "Related picking orders",
+        searchStock: "Related stock"
       },
       auditLog: {
         title: "Audit Log",

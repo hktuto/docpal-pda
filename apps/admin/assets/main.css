@@ -260,6 +260,51 @@ td.actions {
   gap: 6px;
 }
 
+/* ---- part availability / demand modal tables ---- */
+.avail-context {
+  margin: -8px 0 12px;
+  font-size: 13px;
+}
+.avail-section {
+  font-size: 14px;
+  margin: 14px 0 6px;
+  color: #52606d;
+}
+.avail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.avail-table th,
+.avail-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid #e2e8ee;
+  text-align: left;
+  white-space: nowrap;
+}
+.avail-table th {
+  color: #52606d;
+  font-weight: 600;
+}
+.avail-table .num {
+  text-align: right;
+}
+.avail-table tr.avail-match td {
+  background: #eaf3fc;
+}
+.alloc-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.avail-qty {
+  width: 70px;
+  padding: 4px 6px;
+  border: 1px solid #b6c2cd;
+  border-radius: 4px;
+  text-align: right;
+}
+
 /* ---- modal-ish dialog ---- */
 .overlay {
   position: fixed;

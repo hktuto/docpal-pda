@@ -84,18 +84,25 @@ location pairing).
 The receiving order detail page (`apps/admin/pages/receiving/[id].vue`) gets
 the mirror-image actions per item row:
 
-- **Search** — the same 🔍 availability modal, extracted as
-  `apps/admin/components/PartAvailabilityModal.vue` (read-only without a
-  picking-item target; with one it renders the Allocate columns — the
-  picking detail page now uses the shared component).
+- **Search + Allocate (one dialog)** — the 🔍 icon on the part-no cell opens
+  the part-search dialog
+  (`apps/admin/components/receiving/PartSearchModal.vue`; it replaces the
+  row's Allocate action — there is no separate button). It shows the part's
+  open picking demand (`GET /admin/part-demand`) with a qty input + Allocate
+  per row, plus a read-only related-stock table
+  (`GET /admin/part-availability`, stock section only — no receiving
+  sources). Both demand groups render through
+  `apps/admin/components/receiving/PartDemandTables.vue`, which splits rows
+  into two tables: matching the item's org/sub-inventory (the allocation
+  rule) first, then all other open demand. The picking detail page keeps the
+  shared `apps/admin/components/PartAvailabilityModal.vue` unchanged.
 - **Allocations + (x)** — `GET /receiving-orders/:id` now embeds per-item
+  `orgId`/`subInventoryCode` and
   `allocations: [{id, qty, manual, pickingItemId, pickingOrderId, orderNo,
   orderStatus}]` (allocation rows sourced from that receiving line); the
   allocatedQty cell lists them as `{qty} × {orderNo}` with a manual badge
   and an (x) that calls the same DELETE endpoint.
-- **Allocate** — a per-row button opens a demand modal over
-  `GET /admin/part-demand?partNo=&wclItemNo=` (open pending/picking picking
-  items with `remainingQty > 0`), qty input + Allocate per row, pinning
+- **Allocate behaviour** — each demand row's Allocate pins
   `addManualPickingAllocation(pickingOrderId, pickingItemId, {qty,
   receivingInvoiceItemId: <the receiving item>})`. Cap = `min(remainingQty,
   receivedQty − pickedQty − allocatedQty − session-allocated)`; header shows

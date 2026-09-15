@@ -43,6 +43,21 @@ const qtyInputs = ref<Record<string, number>>({});
 const allocating = ref<Record<string, boolean>>({});
 const done = ref<Record<string, number>>({});
 
+// Date-code (WWYY) range filter: native calendar pickers, converted to WWYY.
+const dcFrom = ref("");
+const dcTo = ref("");
+const dcFromDate = computed(() => (dcFrom.value ? new Date(`${dcFrom.value}T00:00:00`) : null));
+const dcToDate = computed(() => (dcTo.value ? new Date(`${dcTo.value}T00:00:00`) : null));
+const dcFromCode = computed(() => (dcFromDate.value ? dateToDateCode(dcFromDate.value) : ""));
+const dcToCode = computed(() => (dcToDate.value ? dateToDateCode(dcToDate.value) : ""));
+const dcActive = computed(() => !!dcFromDate.value || !!dcToDate.value);
+const filteredStock = computed(() =>
+  (data.value?.stock ?? []).filter((s) => dateCodeInRange(s.dateCode, dcFromDate.value, dcToDate.value))
+);
+const filteredReceiving = computed(() =>
+  (data.value?.receiving ?? []).filter((r) => dateCodeInRange(r.dateCode, dcFromDate.value, dcToDate.value))
+);
+
 const allocatable = computed(() => !!props.pickingOrderId && !!props.pickingItem);
 
 // Open demand snapshot from the item row (qty − picked − existing allocations).
@@ -112,6 +127,8 @@ watch(
     qtyInputs.value = {};
     done.value = {};
     allocating.value = {};
+    dcFrom.value = "";
+    dcTo.value = "";
     loading.value = true;
     try {
       data.value = await flow.getPartAvailability(props.partNo, props.wclItemNo);
@@ -145,10 +162,25 @@ watch(
         </template>
       </div>
       <div v-if="error" class="error-banner">{{ error }}</div>
+      <div class="avail-filter">
+        <label>
+          {{ $t("admin.pages.pickingOrders.availabilityDateCodeFrom") }}
+          <input v-model="dcFrom" type="date" />
+          <span v-if="dcFromCode" class="muted">{{ dcFromCode }}</span>
+        </label>
+        <label>
+          {{ $t("admin.pages.pickingOrders.availabilityDateCodeTo") }}
+          <input v-model="dcTo" type="date" />
+          <span v-if="dcToCode" class="muted">{{ dcToCode }}</span>
+        </label>
+        <button v-if="dcActive" class="btn btn-small" @click="dcFrom = ''; dcTo = ''">
+          {{ $t("admin.pages.pickingOrders.availabilityDateCodeClear") }}
+        </button>
+      </div>
       <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
       <template v-else-if="data">
         <h3 class="avail-section">{{ $t("admin.pages.pickingOrders.availabilityStock") }}</h3>
-        <table v-if="data.stock.length > 0" class="avail-table">
+        <table v-if="filteredStock.length > 0" class="avail-table">
           <thead>
             <tr>
               <th>{{ $t("admin.pages.shelfBoxes.orgId") }}</th>
@@ -164,7 +196,7 @@ watch(
             </tr>
           </thead>
           <tbody>
-            <tr v-for="s in data.stock" :key="s.lotId" :class="{ 'avail-match': highlight(s) }">
+            <tr v-for="s in filteredStock" :key="s.lotId" :class="{ 'avail-match': highlight(s) }">
               <td>{{ s.orgId ?? "—" }}</td>
               <td>{{ s.subInventoryCode ?? "—" }}</td>
               <td>{{ s.shelfCode ?? "—" }}</td>
@@ -199,7 +231,7 @@ watch(
         <div v-else class="muted">{{ $t("admin.pages.pickingOrders.availabilityNoneStock") }}</div>
 
         <h3 class="avail-section">{{ $t("admin.pages.pickingOrders.availabilityReceiving") }}</h3>
-        <table v-if="data.receiving.length > 0" class="avail-table">
+        <table v-if="filteredReceiving.length > 0" class="avail-table">
           <thead>
             <tr>
               <th>{{ $t("admin.pages.receiving.batchNo") }}</th>
@@ -218,7 +250,7 @@ watch(
           </thead>
           <tbody>
             <tr
-              v-for="r in data.receiving"
+              v-for="r in filteredReceiving"
               :key="r.receivingInvoiceItemId"
               :class="{ 'avail-match': highlight(r) }"
             >
@@ -268,47 +300,23 @@ watch(
 .avail-dialog {
   width: 900px;
 }
-.avail-context {
-  margin: -8px 0 12px;
+.avail-filter {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 10px;
   font-size: 13px;
-}
-.avail-section {
-  font-size: 14px;
-  margin: 14px 0 6px;
   color: #52606d;
 }
-.avail-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-.avail-table th,
-.avail-table td {
-  padding: 5px 8px;
-  border-bottom: 1px solid #e2e8ee;
-  text-align: left;
-  white-space: nowrap;
-}
-.avail-table th {
-  color: #52606d;
-  font-weight: 600;
-}
-.avail-table .num {
-  text-align: right;
-}
-.alloc-cell {
+.avail-filter label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
-.avail-qty {
-  width: 70px;
+.avail-filter input[type="date"] {
   padding: 4px 6px;
   border: 1px solid #b6c2cd;
   border-radius: 4px;
-  text-align: right;
-}
-.avail-table tr.avail-match td {
-  background: #eaf3fc;
+  font-size: 13px;
 }
 </style>

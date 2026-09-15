@@ -1245,6 +1245,10 @@ export default {
         allocationDoneIn: "分配完成（{ms} ms）— 資料已更新。",
         reallocateLocked: "訂單 {orderNo} 正由 {name} 操作中 — 請稍後再試。",
         orgSubInventory: "Org / 子庫",
+        locationOrg: "Org",
+        locationSubInventory: "子庫",
+        locationNone: "— 無 —",
+        locationPairRequired: "請同時選擇 Org 和子庫（或兩者都清空）。",
         required: "需求",
         line: "行號 / 裝運",
         allocated: "已分配",
@@ -1296,6 +1300,9 @@ export default {
         availabilityReceiving: "收貨來源",
         availabilityNoneStock: "此零件暫無庫存批次。",
         availabilityNoneReceiving: "此零件暫無未完成的收貨來源。",
+        availabilityDateCodeFrom: "日期代碼由",
+        availabilityDateCodeTo: "至",
+        availabilityDateCodeClear: "清除",
         availabilityLineQty: "行數量",
         availabilityAllocate: "分配",
         availabilityOpenDemand: "待分配需求：{qty}"
@@ -1391,9 +1398,15 @@ export default {
         allocate: "分配",
         manualBadge: "人手",
         removeAllocationConfirm: "從訂單 {orderNo} 移除此 {qty} × {partNo} 的分配？",
-        demandTitle: "分配至揀貨需求 — {partNo}",
         demandAllocatable: "此項目可分配數量：{qty}",
-        demandNone: "此料號沒有未完成的揀貨需求。"
+        demandNone: "此料號沒有未完成的揀貨需求。",
+        demandMatching: "符合此項目的 org / 子庫",
+        demandAll: "其他所有未完成需求",
+        demandGroupEmpty: "此群組沒有需求。",
+        searchTitle: "料號搜尋 — {partNo}",
+        searchContext: "此項目：org {org} / 子庫 {subInventory}（相符的列會標亮）。",
+        searchDemand: "相關揀貨訂單",
+        searchStock: "相關庫存"
       },
       auditLog: {
         title: "操作記錄",
