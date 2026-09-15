@@ -151,16 +151,15 @@ function submit() {
             :disabled="disabled(f)"
             :hint-key="f.hint"
           />
-          <select
+          <SearchableSelect
             v-else-if="f.type === 'multiSelect'"
-            :id="`ff-${f.key}`"
-            v-model="form[f.key]"
-            multiple
+            v-model="form[f.key] as string[]"
+            :options="optionsFor(f)"
+            :all-label="$t(f.label)"
+            :aria-label="$t(f.label)"
+            :show-all="false"
             :disabled="disabled(f)"
-            class="multi-select"
-          >
-            <option v-for="o in optionsFor(f)" :key="o.value" :value="o.value">{{ o.label }}</option>
-          </select>
+          />
           <textarea
             v-else-if="f.type === 'json'"
             :id="`ff-${f.key}`"
@@ -188,10 +187,6 @@ function submit() {
 </template>
 
 <style scoped>
-.multi-select {
-  min-height: 5rem;
-  width: 100%;
-}
 .json-input {
   width: 100%;
   font-family: ui-monospace, monospace;

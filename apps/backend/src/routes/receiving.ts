@@ -174,6 +174,8 @@ interface ItemRow {
   mismatchNote: string | null;
   additionalData: unknown;
   allocatedQty: number;
+  orgId: number | null;
+  subInventoryCode: string | null;
   partPk: string;
   partWclItemNo: string | null;
   partDescription: string | null;
@@ -238,6 +240,7 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
         rii.mismatch_qty AS "mismatchQty", rii.wrong_part_no AS "wrongPartNo",
         rii.mismatch_note AS "mismatchNote",
         rii.additional_data AS "additionalData",
+        rii.org_id AS "orgId", rii.sub_inventory_code AS "subInventoryCode",
         COALESCE((
           SELECT SUM(a.qty) FROM allocations a
           WHERE a.receiving_invoice_item_id = rii.id
@@ -252,6 +255,36 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
       ORDER BY rii.po_no, rii.po_line, rii.id
     `
   );
+
+  // Per-item allocation rows (which picking order/item holds stock from this
+  // receiving line) — powers the admin console's per-allocation (x) remove.
+  const itemIds = items.map((i) => i.id);
+  const allocRows = itemIds.length === 0
+    ? []
+    : await queryAll<{
+        id: string;
+        receivingInvoiceItemId: string;
+        qty: number;
+        manual: boolean;
+        pickingItemId: string;
+        pickingOrderId: string;
+        orderNo: string;
+        orderStatus: string;
+      }>(
+        db,
+        sql`
+          SELECT
+            a.id, a.receiving_invoice_item_id AS "receivingInvoiceItemId",
+            a.qty, a.manual,
+            pi.id AS "pickingItemId",
+            po.id AS "pickingOrderId", po.order_no AS "orderNo", po.status AS "orderStatus"
+          FROM allocations a
+          JOIN picking_items pi ON pi.id = a.picking_item_id
+          JOIN picking_orders po ON po.id = pi.picking_order_id
+          WHERE ${inArray(sql`a.receiving_invoice_item_id`, itemIds)}
+          ORDER BY po.order_no, a.id
+        `
+      );
 
   return c.json(
     {
@@ -302,6 +335,19 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
             cow: i.cow,
             additionalData: i.additionalData,
             allocatedQty: i.allocatedQty,
+            orgId: i.orgId,
+            subInventoryCode: i.subInventoryCode,
+            allocations: allocRows
+              .filter((a) => a.receivingInvoiceItemId === i.id)
+              .map((a) => ({
+                id: a.id,
+                qty: a.qty,
+                manual: a.manual,
+                pickingItemId: a.pickingItemId,
+                pickingOrderId: a.pickingOrderId,
+                orderNo: a.orderNo,
+                orderStatus: a.orderStatus,
+              })),
             part: {
               id: i.partPk,
               partNo: i.partNo,

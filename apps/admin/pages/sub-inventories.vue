@@ -121,6 +121,7 @@ async function load() {
 
 // Table-cell select: assign/clear one row's group.
 async function setShare(r: SubInventoryRow, group: string) {
+  if (group === (shareGroups.value[rowId(r)] ?? "")) return;
   shareError.value = "";
   try {
     await api.put(`/admin/sub-inventory-share-groups/${rowId(r)}`, { shareGroup: group || null });
@@ -375,14 +376,16 @@ onMounted(load);
       <template #cell-organizationId="{ row }">{{ row.organizationId ?? "—" }}</template>
       <template #cell-customerCode="{ row }">{{ row.customerCode ?? "—" }}</template>
       <template #cell-shareGroup="{ row }">
-        <select
+        <SearchableSelect
           class="share-select"
-          :value="shareGroups[rowId(row)] ?? ''"
-          @change="setShare(row, ($event.target as HTMLSelectElement).value)"
-        >
-          <option value="">—</option>
-          <option v-for="g in groupNames" :key="g" :value="g">{{ g }}</option>
-        </select>
+          :model-value="shareGroups[rowId(row)] ?? ''"
+          :options="[{ value: '', label: '—' }, ...groupNames.map((g) => ({ value: g, label: g }))]"
+          all-label="—"
+          :aria-label="$t('admin.pages.subInventories.shareGroup')"
+          :multiple="false"
+          :show-all="false"
+          @update:model-value="setShare(row, $event as string)"
+        />
       </template>
       <template #actions="{ row }">
         <button class="btn-link" @click="openEdit(row)">{{ $t("admin.common.edit") }}</button>
@@ -537,15 +540,7 @@ onMounted(load);
 <style scoped>
 .share-select {
   width: 150px;
-  padding: 5px 7px;
-  border: 1px solid #dde3e9;
-  border-radius: 4px;
   font-size: 12px;
-  background: #fff;
-}
-.share-select:focus {
-  border-color: var(--brand-teal, #0e9594);
-  outline: none;
 }
 
 .share-mgr-dialog {

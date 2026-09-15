@@ -46,7 +46,7 @@ async function assertActor(tx: DbOrTx, actorId: string): Promise<void> {
   if (!actor) throw new HTTPException(400, { message: "actor_not_found" });
 }
 
-async function logTransition(
+export async function logTransition(
   tx: DbOrTx,
   entry: {
     entityType: string;
@@ -71,7 +71,7 @@ async function logTransition(
 
 /** picking_items: allocated_qty = Σ allocations, picked_qty = Σ BOXED packages (old semantics);
  *  status = 'picked' once picked_qty covers qty, else 'pending'. */
-async function recomputePickingItem(tx: DbOrTx, pickingItemId: string): Promise<void> {
+export async function recomputePickingItem(tx: DbOrTx, pickingItemId: string): Promise<void> {
   const alloc = await queryGet<{ s: number }>(
     tx,
     sql`SELECT COALESCE(SUM(qty), 0)::int AS s FROM allocations WHERE picking_item_id = ${pickingItemId}`
@@ -91,7 +91,7 @@ async function recomputePickingItem(tx: DbOrTx, pickingItemId: string): Promise<
 }
 
 /** inventory_lots.allocated_qty = Σ allocations (available_qty is generated). */
-async function recomputeLot(tx: DbOrTx, lotId: string): Promise<void> {
+export async function recomputeLot(tx: DbOrTx, lotId: string): Promise<void> {
   const alloc = await queryGet<{ s: number }>(
     tx,
     sql`SELECT COALESCE(SUM(qty), 0)::int AS s FROM allocations WHERE inventory_lot_id = ${lotId}`
@@ -503,6 +503,8 @@ export interface PickingOrderListRow {
   orderNo: string;
   status: string;
   allocationStatus: string;
+  pickingOrderType: string | null;
+  remark: string | null;
   poNo: string | null;
   shipTo: string | null;
   customerCode: string | null;
@@ -541,6 +543,7 @@ export async function listPickingOrders(
     sql`
       SELECT
         po.id, po.order_no AS "orderNo", po.status, po.allocation_status AS "allocationStatus",
+        po.picking_order_type AS "pickingOrderType", po.remark,
         po.po_no AS "poNo", po.ship_to AS "shipTo",
         po.customer_code AS "customerCode",
         po.delivery_date AS "deliveryDate",
@@ -670,6 +673,8 @@ export interface PickingOrderRow {
   customerCode: string | null;
   orgId: number | null;
   subInventoryCode: string | null;
+  pickingOrderType: string | null;
+  remark: string | null;
   workingBy: string | null;
   workingByName: string | null;
   issueReason: string | null;

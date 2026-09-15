@@ -65,6 +65,10 @@ live in `concepts.md`; tables in `schema.md`.
 |---|---|---|
 | `POST /admin/allocation/run` | — → `allocateAll` summary | awaits the full-fleet recompute in the request (deliberately blocking — the admin clicked to wait) |
 | `POST /admin/picking-orders/:id/reallocate` | — → `{allocation}` (scoped summary incl. `partKeys`) | recompute scoped to the order's part keys (`allocateForPickingOrder`); 404 `picking_order_not_found`, 409 `order_not_open` unless pending/picking, 409 `lock_held` with `{error, holderId, holderName}` when a live PDA work lock is held. Spec `docs/superpowers/specs/2026-09-14-admin-allocation-buttons-design.md` |
+| `DELETE /admin/picking-orders/:id/items/:itemId/allocations/:allocationId` | — → `{removed: 1, qty}` | deletes ONE allocation row (`removePickingAllocation`): releases the lot's `allocated_qty`, RESERVE-release ledger row, audit log, `allocation.computed` event; 404 `picking_order_not_found` / `picking_item_not_found` / `allocation_not_found`, 409 `lock_held`; **no order-status check**. Transient — the next recompute may re-allocate the item. Spec `docs/superpowers/specs/2026-09-15-admin-picking-item-actions-design.md` |
+| `POST /admin/picking-orders/:id/items/:itemId/allocations` | `{qty, inventoryLotId}` or `{qty, receivingInvoiceItemId}` → `{allocationId, qty}` | pins a MANUAL allocation (`allocations.manual = true`, any location) from the availability modal; the engine preserves pinned rows and auto-allocates only the remaining open demand. 400 `invalid_qty`/`source_required`, 404 `inventory_lot_not_found`/`receiving_invoice_item_not_found`, 409 `lock_held`/`insufficient_available`/`over_allocation` (Σ allocations may not exceed open qty). No order-status check. Same spec |
+| `GET /admin/part-availability?partNo=&wclItemNo=` | — → `{stock: [{lotId, orgId, subInventoryCode, shelfCode, boxId, partNo, wclItemNo, dateCode, lotCode, totalQty, allocatedQty, availableQty}], receiving: [{receivingOrderId, batchNo, supplierCode, status, invoiceNo, receivingInvoiceItemId, lineQty, receivedQty, putAwayQty, pickedQty, orgId, subInventoryCode, ctnNo, dateCode}]}` | exact part_no / wcl_item_no match across ALL org/sub-inventory locations (no org filter); powers the admin picking-detail per-item availability modal; 400 `part_no_required`. Same spec |
+| `GET /admin/part-demand?partNo=&wclItemNo=` | — → `{demand: [{pickingOrderId, orderNo, orderStatus, deliveryDate, orgId, subInventoryCode, pickingItemId, partNo, qty, pickedQty, allocatedQty, remainingQty}]}` | open (pending/picking) picking items needing the part with uncovered qty > 0; powers the receiving-detail Allocate modal; 400 `part_no_required`. Same spec |
 
 JWT bearer (HS256, `hono/jwt`, secret from `AUTH_SECRET`, 12 h TTL) required on
 all routes except `/health`, `POST /auth/login`, `POST /auth/login-token`, and
@@ -396,16 +400,21 @@ returns the matching lots (part identity embedded), and the distinct `parts`
 list with `onHandQty = Σ total_qty` over those lots is stitched in TS. All
 filters optional and ANDed: `partNo` is a case-insensitive substring on
 `parts.part_no` normalized like scan matching (uppercase + whitespace
-stripped, both sides), `shelfCode` is exact, `supplierCode` traces the lot via
+stripped, both sides); `shelfCode`, `brand` (parts.brand), `zone` (the
+shelf's zone via the shelves join), `orgId` and `subInventoryCode` are
+multi-value any-of filters (repeat the query param); `supplierCode` (also
+multi-value) traces the lot via
 `inventory_lot_sources` → invoice items → invoices →
-`receiving_orders.supplier_code` (the old join). Zero-qty lots are returned,
+`receiving_orders.supplier_code` (the old join). Lot rows also carry the
+part's `description`/`brand` and the shelf's `zone`. Zero-qty lots are returned,
 mirroring the old `/stock-search/parts/lots` (its >0 rule was only the
 suppliers-stats CTE and a client-side toggle). Order: `part_no`, `date_code
 NULLS LAST`, `shelf_code`, `box_id`.
 
 | Endpoint | Description |
 |---|---|
-| `GET /stock-search?supplierCode=&partNo=&shelfCode=` | One call → `{parts[{id, partNo, wclItemNo, description, onHandQty}], lots[{partId, dateCode, lotCode, coo, cow, shelfCode, boxId, warehouseCode, warehouseSectionCode, subInventoryCode, totalQty, allocatedQty, availableQty}]}`. |
+| `GET /stock-search?supplierCode=&partNo=&shelfCode=&zone=&brand=&orgId=&subInventoryCode=` | One call → `{parts[{id, partNo, wclItemNo, description, onHandQty}], lots[{partNo, wclItemNo, description, brand, dateCode, lotCode, coo, cow, shelfCode, zone, boxId, orgId, subInventoryCode, totalQty, allocatedQty, availableQty}]}`. Multi-value filters repeat the query param. |
+| `GET /stock-search/options` | Distinct filter values present in the current stock → `{brands[], zones[], shelves[{code, zone}], locations[{orgId, subInventoryCode, description}]}` (for searchable filter dropdowns; same allowed-org scope). |
 
 Changes vs old: one query endpoint ends the 3-call cascade; location returned
 as fields (client formats labels — no server-side `location_label` string).

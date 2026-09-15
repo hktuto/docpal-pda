@@ -448,10 +448,15 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
     await db.insert(receivingInvoiceItems).values([...demoReceivingInvoiceItems]);
   }
   // Scenario shelf boxes + stock (tests opt out via stockBoxes: false).
+  // demoLots carries partNo only; stamp wcl_item_no from the seeded parts so
+  // the parts join (parts.wcl_item_no = inventory_lots.wcl_item_no) resolves.
   if (opts?.stockBoxes !== false) {
+    const wclByPartNo = new Map([...demoMasterParts, ...demoParts].map((p) => [p.partNo, p.wclItemNo]));
     await db.insert(shelfBoxes).values([...demoShelfBoxes]);
     await db.insert(shelfBoxItems).values([...demoShelfBoxItems]);
-    await db.insert(inventoryLots).values([...demoLots]);
+    await db.insert(inventoryLots).values(
+      demoLots.map((l) => ({ ...l, wclItemNo: wclByPartNo.get(l.partNo) ?? l.partNo }))
+    );
   }
   // 2 pending picking orders (SO-DEMO-0001 item-by-item line + whole-box match, SO-DEMO-0002 partial).
   if (opts?.orders !== false) {

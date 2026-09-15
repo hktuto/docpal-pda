@@ -138,13 +138,15 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Home / section cards | `/` | `apps/admin/pages/index.vue` |
 | Master-data CRUD lists | `/<entity>` | `apps/admin/pages/<entity>.vue` (thin wrappers over `components/CrudTable.vue` + `utils/entities.ts` configs) |
 | Supplier profile (QR scan template) editor | `/suppliers/:code` | `apps/admin/pages/suppliers/[code].vue` + `apps/admin/components/SupplierProfileEditor.vue` |
-| Stock search (read-only; supplier + part-no filter) | `/stock-search` | `apps/admin/pages/stock-search.vue` |
+| Stock search (read-only; multi-value supplier/brand/zone/shelf/org/sub-inventory + part-no filters, group by brand/shelf/zone) | `/stock-search` | `apps/admin/pages/stock-search.vue` |
 | Sub-inventories (+ share-group manager dialog, filter/sort) | `/sub-inventories` | `apps/admin/pages/sub-inventories.vue` |
 | Shelf boxes list / detail | `/shelf-boxes`, `/shelf-boxes/:id` | `apps/admin/pages/shelf-boxes/index.vue`, `apps/admin/pages/shelf-boxes/[id].vue` |
-| Picking orders list / detail (delivery-date edit, picking-list xlsx download) | `/picking-orders`, `/picking-orders/:id` | `apps/admin/pages/picking-orders/index.vue`, `apps/admin/pages/picking-orders/[id].vue` |
+| Picking orders list / detail (delivery-date edit, picking-list xlsx download, per-item remove-allocation + availability search) | `/picking-orders`, `/picking-orders/:id` | `apps/admin/pages/picking-orders/index.vue`, `apps/admin/pages/picking-orders/[id].vue` |
 | Picking priority reorder | `/picking/reorder` | `apps/admin/pages/picking/reorder.vue` |
-| Receiving orders list / detail (delivery-date edit, item detail edit single/batch — date code / lot code / COO / COW / ctn no, invoice filter, confirm in-hand, shipper xlsx download + finished-shipper for clear orders) | `/receiving`, `/receiving/:id` | `apps/admin/pages/receiving/index.vue`, `apps/admin/pages/receiving/[id].vue`, `apps/admin/components/receiving/ItemEditModal.vue` |
+| Receiving orders list / detail (delivery-date edit, item detail edit single/batch — date code / lot code / COO / COW / ctn no, invoice filter, confirm in-hand, shipper xlsx download + finished-shipper for clear orders; per-item availability search modal, allocations list with per-allocation remove, Allocate-to-picking-demand modal) | `/receiving`, `/receiving/:id` | `apps/admin/pages/receiving/index.vue`, `apps/admin/pages/receiving/[id].vue`, `apps/admin/components/receiving/ItemEditModal.vue` |
+| Shared part-availability modal (stock lots + inbound receiving rows for a part; read-only without a picking target, manual-allocate per row with one) | — | `apps/admin/components/PartAvailabilityModal.vue` |
 | Shipping boxes list / detail (orders-in-box, per-box ship) | `/shipping`, `/shipping/:boxId` | `apps/admin/pages/shipping/index.vue`, `apps/admin/pages/shipping/[id].vue` |
+| SearchableSelect (searchable dropdown: type-to-filter; multi-select by default — checkboxes, `v-model: string[]`, empty = "all"; `multiple: false` → single-select, `v-model: string`, `""` = "all". Props `options: {value, label}[]` / `allLabel` / `ariaLabel`) | — | `apps/admin/components/SearchableSelect.vue` (reference usage: `pages/stock-search.vue` filters) |
 | Generic CRUD table (search / column sorting / server paging / multi-select) | — | `apps/admin/components/CrudTable.vue` (+ `components/CrudForm.vue`, `components/Pager.vue`) built on `components/DataTable.vue` + `composables/useAdminTable.ts` (TanStack Table v9: sorting, paging, column resize/reorder/visibility persisted to localStorage) |
 | Shelf / shelf-box label printing (single + shelf-box multi-select dialog; `katata-label` template via the backend `/print/*` proxy; shelf multi-select / Print all opens an A4 batch sheet — 3 x 4 grid, QR + shelf code + zone, browser print) | `/shelves`, `/shelf-boxes` | `apps/admin/components/PrintLabelsDialog.vue`, `apps/admin/components/ShelfBatchPrintDialog.vue`, `apps/admin/utils/print.ts` |
 | Sidebar layout + userbox popover | — | `apps/admin/app.vue` |
@@ -185,6 +187,10 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | `GET /admin/picking-orders/:id/picking-list` (picking-list xlsx download, read-only) | `apps/backend/src/routes/admin/pickingList.ts` |
 | `GET /admin/user-profiles`, `PUT /admin/user-profiles/:username` (per-user sub-inventory scope; pre-provisioning allowed) | `apps/backend/src/routes/admin/userProfiles.ts` |
 | `POST /admin/allocation/run`, `POST /admin/picking-orders/:id/reallocate` (manual allocation triggers) | `apps/backend/src/routes/admin/allocation.ts` |
+| `DELETE /admin/picking-orders/:id/items/:itemId/allocations/:allocationId` (per-allocation remove, transient) | `apps/backend/src/routes/admin/allocation.ts` (`removePickingAllocation` in `apps/backend/src/db/allocate.ts`) |
+| `POST /admin/picking-orders/:id/items/:itemId/allocations` (pinned manual allocation, any location; `allocations.manual`) | `apps/backend/src/routes/admin/allocation.ts` (`addManualPickingAllocation` in `apps/backend/src/db/allocate.ts`) |
+| `GET /admin/part-availability?partNo=&wclItemNo=` (stock lots + receiving orders with the part, all locations) | `apps/backend/src/routes/admin/partAvailability.ts` |
+| `GET /admin/part-demand?partNo=&wclItemNo=` (open picking items needing the part: per-order qty / picked / allocated / remaining) | `apps/backend/src/routes/admin/partAvailability.ts` |
 
 ### Domain modules
 

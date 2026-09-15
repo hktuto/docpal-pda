@@ -8,6 +8,7 @@ import { emitEvent } from "./events.js";
 import { now } from "./now.js";
 import { allowDockStock, pickingFromSubinventoryOrgs, receivingSubInventoryRules } from "../config.js";
 import { matchSubInventoryRule } from "./receiving.js";
+import { logTransition, recomputeLot, recomputePickingItem } from "./picking.js";
 
 // ---------------------------------------------------------------------------
 // Allocation engine (concepts 5-6 in docs/backend/concepts.md).
@@ -237,9 +238,9 @@ async function loadLotSources(dbOrTx: DbOrTx, d: DemandRow): Promise<LotRow[]> {
 }
 
 async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow): Promise<ReceivingRow[]> {
-  // Availability must net out allocations held by work-locked orders (their
-  // rows survive the wipe). Lot sources get this for free via
-  // inventory_lots.allocated_qty; receiving sources have no such counter.
+  // Availability must net out allocations that survive the wipe: rows held by
+  // work-locked orders and pinned manual rows. Lot sources get this for free
+  // via inventory_lots.allocated_qty; receiving sources have no such counter.
   const expiry = workLockExpiry();
   return queryAll<ReceivingRow>(
     dbOrTx,
@@ -260,7 +261,7 @@ async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow): Promise<Recei
           JOIN picking_items pi ON pi.id = a.picking_item_id
           JOIN picking_orders po ON po.id = pi.picking_order_id
           WHERE a.receiving_invoice_item_id IS NOT NULL
-            AND po.working_by IS NOT NULL AND po.working_at >= ${expiry}
+            AND (a.manual OR (po.working_by IS NOT NULL AND po.working_at >= ${expiry}))
           GROUP BY a.receiving_invoice_item_id
         ) locked_ii ON locked_ii.rii_id = rii.id
         LEFT JOIN (
@@ -269,7 +270,7 @@ async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow): Promise<Recei
           JOIN picking_items pi ON pi.id = a.picking_item_id
           JOIN picking_orders po ON po.id = pi.picking_order_id
           WHERE a.receiving_order_id IS NOT NULL AND pi.part_no = ${d.partNo}
-            AND po.working_by IS NOT NULL AND po.working_at >= ${expiry}
+            AND (a.manual OR (po.working_by IS NOT NULL AND po.working_at >= ${expiry}))
           GROUP BY a.receiving_order_id
         ) locked_ro ON locked_ro.ro_id = ro.id
         WHERE (rii.part_no = ${d.partNo} OR rii.wcl_item_no = ${d.partNo})
@@ -353,6 +354,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
       receivingInvoiceItemId: string | null;
       receivingOrderId: string | null;
       qty: number;
+      manual: boolean;
       partNo: string;
       dateCode: string | null;
       lotCode: string | null;
@@ -364,7 +366,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
       tx,
       sql`SELECT a.id, a.picking_item_id AS "pickingItemId", a.inventory_lot_id AS "inventoryLotId",
                  a.receiving_invoice_item_id AS "receivingInvoiceItemId",
-                 a.receiving_order_id AS "receivingOrderId", a.qty,
+                 a.receiving_order_id AS "receivingOrderId", a.qty, a.manual,
                  COALESCE(il.part_no, rii.part_no, pi.part_no) AS "partNo",
                  COALESCE(il.date_code, rii.date_code) AS "dateCode",
                  COALESCE(il.lot_code, rii.lot_code) AS "lotCode",
@@ -381,6 +383,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
     // Net-change detection for the SSE event: the wipe-and-rebuild counters
     // are non-zero on every run with open demand, so emit only when the
     // allocation set actually changed (multiset compare of canonical keys).
+    // Manual (pinned) rows are excluded — they survive the wipe untouched.
     const allocationKey = (
       pickingItemId: string,
       inventoryLotId: string | null,
@@ -388,14 +391,21 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
       receivingOrderId: string | null,
       qty: number
     ) => `${pickingItemId}|${inventoryLotId ?? ""}|${receivingInvoiceItemId ?? ""}|${receivingOrderId ?? ""}|${qty}`;
-    const beforeKeys = existing.map((a) =>
+    const beforeKeys = existing.filter((a) => !a.manual).map((a) =>
       allocationKey(a.pickingItemId, a.inventoryLotId, a.receivingInvoiceItemId, a.receivingOrderId, a.qty)
     );
     const afterKeys: string[] = [];
     const txnRows: (typeof inventoryTransactions.$inferInsert)[] = [];
     const lotDelta = new Map<string, number>(); // lotId → allocated_qty delta
+    // Pinned manual allocations survive the wipe; their qty is pre-subtracted
+    // from each item's auto-allocation demand below.
+    const manualQtyByItem = new Map<string, number>();
 
     for (const a of existing) {
+      if (a.manual) {
+        manualQtyByItem.set(a.pickingItemId, (manualQtyByItem.get(a.pickingItemId) ?? 0) + a.qty);
+        continue;
+      }
       summary.allocationsRemoved += 1;
       if (a.inventoryLotId) {
         lotDelta.set(a.inventoryLotId, (lotDelta.get(a.inventoryLotId) ?? 0) - a.qty);
@@ -421,7 +431,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
       });
     }
     await tx.execute(
-      sql`DELETE FROM allocations WHERE ${inArray(sql`picking_item_id`, itemIds)}`
+      sql`DELETE FROM allocations WHERE ${inArray(sql`picking_item_id`, itemIds)} AND NOT manual`
     );
     // Apply the wipe to lot allocated_qty up front (negative deltas only):
     // the per-demand source queries below must see availability net of the
@@ -445,7 +455,8 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
       // Transfer items match stock at the converted source location, never
       // at the order's destination pair.
       const d = resolveDemandLocation(raw);
-      let remaining = d.openQty;
+      // Pinned manual allocations pre-cover part (or all) of the open demand.
+      let remaining = Math.max(0, d.openQty - (manualQtyByItem.get(d.pickingItemId) ?? 0));
       const allocatedForItem: { qty: number; lotId?: string; recv?: ReceivingRow }[] = [];
 
       // 1. shelf stock, FIFO by date_code
@@ -483,7 +494,9 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
         }
       }
 
-      if (allocatedForItem.length === 0) continue;
+      // Items covered only by pinned manual rows still pass through here so
+      // their allocated_qty cache is refreshed (manual + auto).
+      if (d.openQty - remaining <= 0) continue;
       if (remaining <= 0) summary.fullyAllocated += 1;
       else summary.partiallyAllocated += 1;
 
@@ -666,6 +679,346 @@ export async function allocateForPickingOrder(db: AppDb, pickingOrderId: string)
   });
 }
 
+export interface RemoveAllocationResult {
+  removed: number;
+  qty: number;
+}
+
+/**
+ * Admin "remove allocation": delete ONE allocation row of a picking item
+ * (RESERVE-release ledger row, lot/item recomputes, audit log, SSE).
+ * 404 picking_order_not_found / picking_item_not_found / allocation_not_found;
+ * 409 lock_held when a PDA holds the order's work lock (the PDA's open scan
+ * session scans against these rows). No order-status check — admins may fix
+ * allocations on orders in any status.
+ *
+ * The removal is transient — the next allocateAll / scoped recompute may
+ * re-allocate the item (deliberate product decision: this is a manual
+ * override, not a persistent exclusion).
+ */
+export async function removePickingAllocation(
+  db: AppDb,
+  pickingOrderId: string,
+  pickingItemId: string,
+  allocationId: string,
+  actorId: string
+): Promise<RemoveAllocationResult> {
+  const order = await queryGet<{
+    id: string;
+    status: string;
+    workingBy: string | null;
+    workingAt: Date | null;
+    holderName: string | null;
+  }>(
+    db,
+    sql`SELECT po.id, po.status, po.working_by AS "workingBy", po.working_at AS "workingAt",
+               u.display_name AS "holderName"
+        FROM picking_orders po
+        LEFT JOIN users u ON u.id = po.working_by
+        WHERE po.id = ${pickingOrderId}`
+  );
+  if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
+  if (order.workingBy && order.workingAt && order.workingAt >= workLockExpiry()) {
+    throw new HTTPException(409, {
+      res: new Response(
+        JSON.stringify({ error: "lock_held", holderId: order.workingBy, holderName: order.holderName }),
+        { status: 409, headers: { "content-type": "application/json" } }
+      ),
+    });
+  }
+
+  const item = await queryGet<{ id: string; partNo: string }>(
+    db,
+    sql`SELECT id, part_no AS "partNo" FROM picking_items WHERE id = ${pickingItemId} AND picking_order_id = ${pickingOrderId}`
+  );
+  if (!item) throw new HTTPException(404, { message: "picking_item_not_found" });
+
+  return db.transaction(async (tx) => {
+    const existing = await queryGet<{
+      id: string;
+      inventoryLotId: string | null;
+      receivingInvoiceItemId: string | null;
+      qty: number;
+      partNo: string;
+      dateCode: string | null;
+      lotCode: string | null;
+      coo: string | null;
+      cow: string | null;
+      shelfCode: string | null;
+      boxId: string | null;
+    }>(
+      tx,
+      sql`SELECT a.id, a.inventory_lot_id AS "inventoryLotId",
+                 a.receiving_invoice_item_id AS "receivingInvoiceItemId", a.qty,
+                 COALESCE(il.part_no, rii.part_no, pi.part_no) AS "partNo",
+                 COALESCE(il.date_code, rii.date_code) AS "dateCode",
+                 COALESCE(il.lot_code, rii.lot_code) AS "lotCode",
+                 COALESCE(il.coo, rii.coo) AS "coo",
+                 COALESCE(il.cow, rii.cow) AS "cow",
+                 il.shelf_code AS "shelfCode",
+                 COALESCE(il.box_id, rii.ctn_no) AS "boxId"
+          FROM allocations a
+          JOIN picking_items pi ON pi.id = a.picking_item_id
+          LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
+          LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
+          WHERE a.id = ${allocationId} AND a.picking_item_id = ${pickingItemId}`
+    );
+    if (!existing) throw new HTTPException(404, { message: "allocation_not_found" });
+
+    await tx.execute(sql`DELETE FROM allocations WHERE id = ${allocationId}`);
+
+    if (existing.inventoryLotId) {
+      await recomputeLot(tx, existing.inventoryLotId);
+    }
+    await recomputePickingItem(tx, pickingItemId);
+
+    await tx.insert(inventoryTransactions).values({
+      id: newId(),
+      inventoryLotId: existing.inventoryLotId,
+      partNo: existing.partNo,
+      shelfCode: existing.shelfCode,
+      boxId: existing.boxId,
+      txnType: "RESERVE",
+      qtyType: "reserved",
+      qtyDelta: -existing.qty,
+      dateCode: existing.dateCode,
+      lotCode: existing.lotCode,
+      coo: existing.coo,
+      cow: existing.cow,
+      referenceType: "allocation",
+      referenceId: existing.id,
+      receivingInvoiceItemId: existing.receivingInvoiceItemId,
+      txnReason: "admin: remove allocation",
+      txnAt: now(),
+    });
+
+    await refreshAllocationStatus(tx);
+
+    await logTransition(tx, {
+      entityType: "picking_order",
+      entityId: pickingOrderId,
+      fromState: order.status,
+      toState: order.status,
+      actorId,
+      metadata: { action: "remove_allocation", allocationId, itemId: pickingItemId, partNo: item.partNo, qty: existing.qty },
+    });
+
+    await emitEvent(tx, {
+      type: "allocation.computed",
+      topics: ["/picking-orders"],
+      data: { scope: "picking-order-item", pickingOrderId, pickingItemId, allocationId, removed: 1, qty: existing.qty },
+    });
+
+    return { removed: 1, qty: existing.qty };
+  });
+}
+
+/**
+ * Admin "manual allocation" (availability modal Allocate): pin one allocation
+ * row for a picking item against a specific stock lot or receiving invoice
+ * item, in ANY location (admins may override the engine's location pairing).
+ * Guards: 404 picking_order_not_found / picking_item_not_found /
+ * inventory_lot_not_found / receiving_invoice_item_not_found; 409 lock_held
+ * (same rationale as remove); 400 invalid_qty / source_required; 409
+ * insufficient_available (source can't cover qty) / over_allocation (Σ
+ * allocations would exceed the item's open qty = qty − Σ packages).
+ * No order-status check, matching the remove action.
+ *
+ * The row is created with manual = true: allocateAll / runScopedAllocation
+ * preserve pinned rows and only auto-allocate the remaining open demand.
+ */
+export async function addManualPickingAllocation(
+  db: AppDb,
+  pickingOrderId: string,
+  pickingItemId: string,
+  input: { qty: number; inventoryLotId?: string; receivingInvoiceItemId?: string },
+  actorId: string
+): Promise<{ allocationId: string; qty: number }> {
+  const qty = input.qty;
+  if (!Number.isInteger(qty) || qty <= 0) {
+    throw new HTTPException(400, { message: "invalid_qty" });
+  }
+  const hasLot = !!input.inventoryLotId;
+  const hasRecv = !!input.receivingInvoiceItemId;
+  if (hasLot === hasRecv) {
+    throw new HTTPException(400, { message: "source_required" });
+  }
+
+  const order = await queryGet<{
+    id: string;
+    status: string;
+    workingBy: string | null;
+    workingAt: Date | null;
+    holderName: string | null;
+  }>(
+    db,
+    sql`SELECT po.id, po.status, po.working_by AS "workingBy", po.working_at AS "workingAt",
+               u.display_name AS "holderName"
+        FROM picking_orders po
+        LEFT JOIN users u ON u.id = po.working_by
+        WHERE po.id = ${pickingOrderId}`
+  );
+  if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
+  if (order.workingBy && order.workingAt && order.workingAt >= workLockExpiry()) {
+    throw new HTTPException(409, {
+      res: new Response(
+        JSON.stringify({ error: "lock_held", holderId: order.workingBy, holderName: order.holderName }),
+        { status: 409, headers: { "content-type": "application/json" } }
+      ),
+    });
+  }
+
+  const item = await queryGet<{ id: string; partNo: string; qty: number }>(
+    db,
+    sql`SELECT id, part_no AS "partNo", qty FROM picking_items WHERE id = ${pickingItemId} AND picking_order_id = ${pickingOrderId}`
+  );
+  if (!item) throw new HTTPException(404, { message: "picking_item_not_found" });
+
+  return db.transaction(async (tx) => {
+    // Source existence + availability.
+    let source: {
+      partNo: string;
+      dateCode: string | null;
+      lotCode: string | null;
+      coo: string | null;
+      cow: string | null;
+      shelfCode: string | null;
+      boxId: string | null;
+      available: number;
+    };
+    if (hasLot) {
+      const lot = await queryGet<{
+        id: string;
+        partNo: string;
+        dateCode: string | null;
+        lotCode: string | null;
+        coo: string | null;
+        cow: string | null;
+        shelfCode: string | null;
+        boxId: string | null;
+        available: number;
+      }>(
+        tx,
+        sql`SELECT id, part_no AS "partNo", date_code AS "dateCode", lot_code AS "lotCode",
+                   coo, cow, shelf_code AS "shelfCode", box_id AS "boxId",
+                   (total_qty - allocated_qty) AS "available"
+            FROM inventory_lots WHERE id = ${input.inventoryLotId!}`
+      );
+      if (!lot) throw new HTTPException(404, { message: "inventory_lot_not_found" });
+      source = lot;
+    } else {
+      const recv = await queryGet<{
+        id: string;
+        partNo: string;
+        dateCode: string | null;
+        lotCode: string | null;
+        coo: string | null;
+        cow: string | null;
+        boxId: string | null;
+        available: number;
+      }>(
+        tx,
+        sql`SELECT rii.id, rii.part_no AS "partNo", rii.date_code AS "dateCode",
+                   rii.lot_code AS "lotCode", rii.coo, rii.cow, rii.ctn_no AS "boxId",
+                   (rii.received_qty - rii.picked_qty - COALESCE(alloc.qty, 0)) AS "available"
+            FROM receiving_invoice_items rii
+            LEFT JOIN (
+              SELECT receiving_invoice_item_id, SUM(qty)::int AS qty
+              FROM allocations WHERE receiving_invoice_item_id IS NOT NULL
+              GROUP BY receiving_invoice_item_id
+            ) alloc ON alloc.receiving_invoice_item_id = rii.id
+            WHERE rii.id = ${input.receivingInvoiceItemId!}`
+      );
+      if (!recv) throw new HTTPException(404, { message: "receiving_invoice_item_not_found" });
+      source = { ...recv, shelfCode: null };
+    }
+    if (qty > source.available) {
+      throw new HTTPException(409, { message: "insufficient_available" });
+    }
+
+    // Total allocated for the item must not exceed its open qty.
+    const open = await queryGet<{ openQty: number; allocated: number }>(
+      tx,
+      sql`SELECT (pi.qty - COALESCE(pkg.qty, 0)) AS "openQty",
+                 COALESCE(alloc.qty, 0) AS "allocated"
+          FROM picking_items pi
+          LEFT JOIN (
+            SELECT picking_item_id, SUM(qty)::int AS qty FROM picking_packages GROUP BY picking_item_id
+          ) pkg ON pkg.picking_item_id = pi.id
+          LEFT JOIN (
+            SELECT picking_item_id, SUM(qty)::int AS qty FROM allocations GROUP BY picking_item_id
+          ) alloc ON alloc.picking_item_id = pi.id
+          WHERE pi.id = ${pickingItemId}`
+    );
+    if (open!.allocated + qty > open!.openQty) {
+      throw new HTTPException(409, { message: "over_allocation" });
+    }
+
+    const allocationId = newId();
+    await tx.insert(allocations).values({
+      id: allocationId,
+      pickingItemId,
+      inventoryLotId: input.inventoryLotId ?? null,
+      receivingInvoiceItemId: input.receivingInvoiceItemId ?? null,
+      receivingOrderId: null,
+      qty,
+      manual: true,
+    });
+
+    if (input.inventoryLotId) {
+      await recomputeLot(tx, input.inventoryLotId);
+    }
+    await recomputePickingItem(tx, pickingItemId);
+
+    await tx.insert(inventoryTransactions).values({
+      id: newId(),
+      inventoryLotId: input.inventoryLotId ?? null,
+      partNo: source.partNo,
+      shelfCode: source.shelfCode,
+      boxId: source.boxId,
+      txnType: "RESERVE",
+      qtyType: "reserved",
+      qtyDelta: qty,
+      dateCode: source.dateCode,
+      lotCode: source.lotCode,
+      coo: source.coo,
+      cow: source.cow,
+      referenceType: "allocation",
+      referenceId: allocationId,
+      receivingInvoiceItemId: input.receivingInvoiceItemId ?? null,
+      txnReason: "admin: manual allocation",
+      txnAt: now(),
+    });
+
+    await refreshAllocationStatus(tx);
+
+    await logTransition(tx, {
+      entityType: "picking_order",
+      entityId: pickingOrderId,
+      fromState: order.status,
+      toState: order.status,
+      actorId,
+      metadata: {
+        action: "manual_allocation",
+        allocationId,
+        itemId: pickingItemId,
+        partNo: item.partNo,
+        qty,
+        inventoryLotId: input.inventoryLotId ?? null,
+        receivingInvoiceItemId: input.receivingInvoiceItemId ?? null,
+      },
+    });
+
+    await emitEvent(tx, {
+      type: "allocation.computed",
+      topics: ["/picking-orders"],
+      data: { scope: "picking-order-item", pickingOrderId, pickingItemId, allocationId, manual: true, qty },
+    });
+
+    return { allocationId, qty };
+  });
+}
+
 // Shared wipe/rebuild core for the two scoped recomputes above (mirrors
 // allocateAll on purpose — keep them in sync). `scope` rides on the
 // allocation.computed / allocation.finished event payloads so UIs can tell
@@ -720,6 +1073,7 @@ async function runScopedAllocation(
       receivingInvoiceItemId: string | null;
       receivingOrderId: string | null;
       qty: number;
+      manual: boolean;
       partNo: string;
       dateCode: string | null;
       lotCode: string | null;
@@ -731,7 +1085,7 @@ async function runScopedAllocation(
       tx,
       sql`SELECT a.id, a.picking_item_id AS "pickingItemId", a.inventory_lot_id AS "inventoryLotId",
                  a.receiving_invoice_item_id AS "receivingInvoiceItemId",
-                 a.receiving_order_id AS "receivingOrderId", a.qty,
+                 a.receiving_order_id AS "receivingOrderId", a.qty, a.manual,
                  COALESCE(il.part_no, rii.part_no, pi.part_no) AS "partNo",
                  COALESCE(il.date_code, rii.date_code) AS "dateCode",
                  COALESCE(il.lot_code, rii.lot_code) AS "lotCode",
@@ -745,11 +1099,20 @@ async function runScopedAllocation(
           LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
           WHERE ${inArray(sql`a.picking_item_id`, itemIds)}`
     );
+    // Pinned manual allocations survive the wipe: excluded from the
+    // net-change keys, not deleted, and their qty is pre-subtracted from each
+    // item's auto-allocation demand below.
+    const manualQtyByItem = new Map<string, number>();
     for (const a of existing) {
+      if (a.manual) {
+        manualQtyByItem.set(a.pickingItemId, (manualQtyByItem.get(a.pickingItemId) ?? 0) + a.qty);
+        continue;
+      }
       beforeKeys.push(allocationKey(a.pickingItemId, a.inventoryLotId, a.receivingInvoiceItemId, a.receivingOrderId, a.qty));
     }
 
     for (const a of existing) {
+      if (a.manual) continue;
       summary.allocationsRemoved += 1;
       if (a.inventoryLotId) {
         lotDelta.set(a.inventoryLotId, (lotDelta.get(a.inventoryLotId) ?? 0) - a.qty);
@@ -774,7 +1137,7 @@ async function runScopedAllocation(
         txnAt: now(),
       });
     }
-    await tx.execute(sql`DELETE FROM allocations WHERE ${inArray(sql`picking_item_id`, itemIds)}`);
+    await tx.execute(sql`DELETE FROM allocations WHERE ${inArray(sql`picking_item_id`, itemIds)} AND NOT manual`);
     // Apply the wipe to lot allocated_qty up front so the per-demand source
     // queries see availability net of the removed reservations.
     for (const [lotId, delta] of lotDelta) {
@@ -788,7 +1151,8 @@ async function runScopedAllocation(
 
     for (const raw of demands) {
       const d = resolveDemandLocation(raw);
-      let remaining = d.openQty;
+      // Pinned manual allocations pre-cover part (or all) of the open demand.
+      let remaining = Math.max(0, d.openQty - (manualQtyByItem.get(d.pickingItemId) ?? 0));
       const allocatedForItem: { qty: number; lotId?: string; recv?: ReceivingRow }[] = [];
 
       const lots = await loadLotSources(tx, d);
@@ -820,7 +1184,9 @@ async function runScopedAllocation(
         }
       }
 
-      if (allocatedForItem.length === 0) continue;
+      // Items covered only by pinned manual rows still pass through here so
+      // their allocated_qty cache is refreshed (manual + auto).
+      if (d.openQty - remaining <= 0) continue;
       if (remaining <= 0) summary.fullyAllocated += 1;
       else summary.partiallyAllocated += 1;
 

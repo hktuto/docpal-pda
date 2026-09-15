@@ -265,15 +265,16 @@ onMounted(load);
         class="search-input filter-input"
         :placeholder="$t(f.label)"
       />
-      <select
+      <SearchableSelect
         v-for="f in config.clientFilters ?? []"
         :key="f.key"
         v-model="clientFilterValues[f.key]"
-        class="search-input filter-input"
-      >
-        <option value="">{{ $t("admin.common.all") }} — {{ $t(f.label) }}</option>
-        <option v-for="opt in clientFilterOptions(f.key)" :key="opt" :value="opt">{{ opt }}</option>
-      </select>
+        :options="clientFilterOptions(f.key).map((opt) => ({ value: opt, label: opt }))"
+        :all-label="`${$t('admin.common.all')} — ${$t(f.label)}`"
+        :aria-label="$t(f.label)"
+        :multiple="false"
+        class="filter-input"
+      />
     </div>
     <div v-if="error" class="error-banner">{{ error }}</div>
     <div v-if="config.selectable && selected.size" class="bulk-bar">

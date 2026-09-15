@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
+
 const route = useRoute();
 const partyName = route.params.partyName as string;
 const api = useApi();
@@ -18,6 +20,16 @@ const newProfileCode = ref("");
 const profile = computed(
   () => profiles.value.find((p) => Array.isArray(p.customers) && p.customers.includes(partyName)) ?? null,
 );
+
+// SearchableSelect needs a writable model; setting it triggers the assign.
+const assignedCode = computed({
+  get: () => profile.value?.code ?? "",
+  set: (code: string) => assignTo(code),
+});
+const profileOptions = computed<SearchableSelectOption[]>(() => [
+  { value: "", label: t("admin.pages.customerProfile.noProfile") },
+  ...profiles.value.map((p) => ({ value: p.code, label: `${p.label} (${p.code})` })),
+]);
 
 const form = reactive({ label: "", rule: "", remark: "" });
 
@@ -49,8 +61,7 @@ function friendlyError(e: any): string {
     : e.message;
 }
 
-async function assignTo(event: Event) {
-  const code = (event.target as HTMLSelectElement).value;
+async function assignTo(code: string) {
   const oldCode = profile.value?.code ?? "";
   if (code === oldCode) return;
   saveError.value = "";
@@ -167,15 +178,15 @@ onMounted(load);
         <div v-if="saveError" class="error-banner">{{ saveError }}</div>
         <div class="form-row">
           <label for="cp-assign">{{ $t("admin.pages.customerProfile.assignedProfile") }}</label>
-          <select
-            id="cp-assign"
-            :value="profile?.code ?? ''"
+          <SearchableSelect
+            v-model="assignedCode"
+            :options="profileOptions"
+            :all-label="$t('admin.pages.customerProfile.noProfile')"
+            :aria-label="$t('admin.pages.customerProfile.assignedProfile')"
+            :multiple="false"
+            :show-all="false"
             :disabled="!account || assigning"
-            @change="assignTo"
-          >
-            <option value="">{{ $t("admin.pages.customerProfile.noProfile") }}</option>
-            <option v-for="p in profiles" :key="p.code" :value="p.code">{{ p.label }} ({{ p.code }})</option>
-          </select>
+          />
         </div>
         <div class="form-row create-profile-row">
           <input

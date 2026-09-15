@@ -2,9 +2,22 @@
 const page = defineModel<number>("page", { required: true });
 const pageSize = defineModel<number>("pageSize", { required: true });
 const props = defineProps<{ total: number }>();
+const { t } = useI18n();
 
-const SIZES = [20, 50, 100,200];
+const SIZES = [5, 10, 20, 50, 100,200];
 const pageCount = computed(() => Math.max(1, Math.ceil(props.total / pageSize.value)));
+
+// SearchableSelect is string-valued; bridge to the numeric pageSize model.
+const pageSizeText = computed({
+  get: () => String(pageSize.value),
+  set: (v: string) => {
+    const n = Number(v);
+    if (SIZES.includes(n)) pageSize.value = n;
+  },
+});
+const pageSizeOptions = computed(() =>
+  SIZES.map((s) => ({ value: String(s), label: t("admin.pager.perPage", { n: s }) }))
+);
 </script>
 
 <template>
@@ -19,9 +32,15 @@ const pageCount = computed(() => Math.max(1, Math.ceil(props.total / pageSize.va
         {{ $t("admin.pager.next") }} ›
       </button>
     </span>
-    <select v-model.number="pageSize" class="pager-size">
-      <option v-for="s in SIZES" :key="s" :value="s">{{ $t("admin.pager.perPage", { n: s }) }}</option>
-    </select>
+    <SearchableSelect
+      v-model="pageSizeText"
+      :options="pageSizeOptions"
+      :all-label="$t('admin.pager.perPage', { n: pageSize })"
+      :aria-label="$t('admin.pager.perPage', { n: pageSize })"
+      :multiple="false"
+      :show-all="false"
+      class="pager-size"
+    />
   </div>
 </template>
 
@@ -40,9 +59,6 @@ const pageCount = computed(() => Math.max(1, Math.ceil(props.total / pageSize.va
   gap: 10px;
 }
 .pager-size {
-  padding: 4px 6px;
-  border: 1px solid #b6c2cd;
-  border-radius: 4px;
-  font-size: 13px;
+  width: auto;
 }
 </style>

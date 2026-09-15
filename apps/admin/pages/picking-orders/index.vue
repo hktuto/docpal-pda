@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { PickingOrderRow } from "~/utils/flowApi";
 import type { AdminColumnDef } from "~/composables/useAdminTable";
+import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 
 const flow = useFlowApi();
 const { t } = useI18n();
@@ -8,14 +9,28 @@ const rows = ref<PickingOrderRow[]>([]);
 const loading = ref(false);
 const error = ref("");
 const status = ref("");
+const orderTypes = ref<string[]>([]);
 const search = ref("");
 
-const STATUSES = ["", "pending", "picking", "finished", "issue", "shipped"];
+const STATUSES = ["pending", "picking", "finished", "issue", "shipped"];
+const ORDER_TYPES = ["invoice", "tn"];
+
+const statusOptions = computed<SearchableSelectOption[]>(() =>
+  STATUSES.map((s) => ({ value: s, label: t(`status.picking.${s}`) }))
+);
+
+const orderTypeOptions = computed<SearchableSelectOption[]>(() =>
+  ORDER_TYPES.map((v) => ({ value: v, label: v }))
+);
 
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase();
-  if (!q) return rows.value;
-  return rows.value.filter(
+  let list = rows.value;
+  if (orderTypes.value.length) {
+    list = list.filter((r) => r.pickingOrderType !== null && orderTypes.value.includes(r.pickingOrderType));
+  }
+  if (!q) return list;
+  return list.filter(
     (r) =>
       r.orderNo.toLowerCase().includes(q) ||
       (r.customerCode ?? "").toLowerCase().includes(q) ||
@@ -26,9 +41,14 @@ const filtered = computed(() => {
 
 // accessors resolve the derived display values used for sorting.
 const columnDefs = computed<AdminColumnDef<PickingOrderRow>[]>(() => [
-  { key: "prioritySeq", label: "#", size: 50 },
   { key: "orderNo", label: t("admin.pages.pickingOrders.orderNo"), size: 150 },
   { key: "status", label: t("admin.pages.pickingOrders.status"), size: 100 },
+  {
+    key: "pickingOrderType",
+    label: t("admin.pages.pickingOrders.type"),
+    accessor: (r) => r.pickingOrderType ?? "",
+    size: 90,
+  },
   { key: "customerCode", label: t("admin.pages.pickingOrders.customer"), size: 110 },
   { key: "poNo", label: t("admin.pages.pickingOrders.poNo"), size: 130 },
   { key: "shipTo", label: t("admin.pages.pickingOrders.shipTo"), size: 200 },
@@ -52,6 +72,12 @@ const columnDefs = computed<AdminColumnDef<PickingOrderRow>[]>(() => [
     size: 170,
   },
   { key: "workingByName", label: t("admin.pages.pickingOrders.lockedBy"), size: 110 },
+  {
+    key: "remark",
+    label: t("admin.pages.pickingOrders.remark"),
+    accessor: (r) => r.remark ?? "",
+    size: 200,
+  },
   { key: "createdDate", label: t("admin.fields.createdDate"), size: 170 },
   { key: "lastUpdateDate", label: t("admin.fields.lastUpdateDate"), size: 170 },
 ]);
@@ -154,11 +180,20 @@ const {
     </div>
 
     <div class="filters">
-      <select v-model="status">
-        <option v-for="s in STATUSES" :key="s" :value="s">
-          {{ s ? $t(`status.picking.${s}`) : $t("admin.common.allStatuses") }}
-        </option>
-      </select>
+      <SearchableSelect
+        v-model="status"
+        :options="statusOptions"
+        :all-label="$t('admin.common.allStatuses')"
+        :aria-label="$t('admin.pages.pickingOrders.status')"
+        :multiple="false"
+      />
+      <SearchableSelect
+        v-model="orderTypes"
+        :options="orderTypeOptions"
+        :all-label="$t('admin.pages.pickingOrders.allTypes')"
+        :aria-label="$t('admin.pages.pickingOrders.type')"
+        class="filter-type"
+      />
       <input v-model="search" :placeholder="$t('admin.pages.pickingOrders.searchPlaceholder')" />
       <UserScopeFilterButton @saved="load" />
     </div>
@@ -178,6 +213,7 @@ const {
       @row-click="(r) => navigateTo(`/picking-orders/${r.id}`)"
     >
       <template #cell-status="{ row }">{{ $t(`status.picking.${row.status}`) }}</template>
+      <template #cell-pickingOrderType="{ row }">{{ row.pickingOrderType ?? "" }}</template>
       <template #cell-prioritySeq="{ row }">
         <span class="muted">{{ row.prioritySeq }}</span>
       </template>
@@ -190,6 +226,7 @@ const {
         ({{ row.allocatedQty }} / {{ row.totalQty }})
       </template>
       <template #cell-workingByName="{ row }">{{ row.workingByName ?? "" }}</template>
+      <template #cell-remark="{ row }">{{ row.remark ?? "" }}</template>
       <template #cell-createdDate="{ row }">{{ new Date(row.createdDate).toLocaleString() }}</template>
       <template #cell-lastUpdateDate="{ row }">{{ new Date(row.lastUpdateDate).toLocaleString() }}</template>
     </DataTable>
@@ -203,15 +240,11 @@ const {
   gap: 10px;
   margin-bottom: 12px;
 }
-.filters select,
-.filters input {
-  padding: 7px 9px;
-  border: 1px solid #b6c2cd;
-  border-radius: 4px;
-  font-size: 14px;
-}
 .filters input {
   flex: 1;
+}
+.filter-type {
+  width: 180px;
 }
 .alloc-done-banner {
   margin-bottom: 12px;

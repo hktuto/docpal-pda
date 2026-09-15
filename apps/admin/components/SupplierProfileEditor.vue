@@ -39,7 +39,16 @@ const initialQrType = props.profile?.qrType ?? "";
 const qrTypePreset = ref(QR_TYPES.includes(initialQrType) ? initialQrType : initialQrType ? "other" : "");
 const qrTypeOther = ref(QR_TYPES.includes(initialQrType) ? "" : initialQrType);
 const qrType = computed(() => (qrTypePreset.value === "other" ? qrTypeOther.value.trim() : qrTypePreset.value));
+const qrTypeOptions = computed(() => [
+  { value: "", label: t("admin.pages.supplierProfile.notSpecified") },
+  ...QR_TYPES.map((qt) => ({ value: qt, label: qt })),
+  { value: "other", label: t("admin.pages.supplierProfile.other") },
+]);
 const qtyEncoding = ref(props.profile?.qtyEncoding ?? "");
+const qtyEncodingOptions = computed(() => [
+  { value: "", label: t("admin.pages.supplierProfile.qtyPlain") },
+  { value: "koa_zeros", label: t("admin.pages.supplierProfile.qtyKoa") },
+]);
 
 // ---- template builder ----
 type Mode = "delimited" | "fixed" | "advanced";
@@ -58,6 +67,10 @@ const initialDelimiter = stored.mode === "delimited" ? stored.delimiter : ":";
 const delimiterPreset = ref(DELIMITERS.some((d) => d.value === initialDelimiter) ? initialDelimiter : "other");
 const delimiterOther = ref(DELIMITERS.some((d) => d.value === initialDelimiter) ? "" : initialDelimiter);
 const delimiter = computed(() => (delimiterPreset.value === "other" ? delimiterOther.value || ":" : delimiterPreset.value));
+const delimiterOptions = computed(() => [
+  ...DELIMITERS,
+  { value: "other", label: t("admin.pages.supplierProfile.other") },
+]);
 
 const fields = ref<{ role: FieldRole }[]>(
   stored.mode === "delimited" ? stored.fields.map((f) => ({ role: f.role })) : []
@@ -239,11 +252,14 @@ function save() {
       </div>
       <div class="form-row">
         <label for="qt-type">{{ $t("admin.pages.supplierProfile.labelCodeType") }}</label>
-        <select id="qt-type" v-model="qrTypePreset">
-          <option value="">{{ $t("admin.pages.supplierProfile.notSpecified") }}</option>
-          <option v-for="qt in QR_TYPES" :key="qt" :value="qt">{{ qt }}</option>
-          <option value="other">{{ $t("admin.pages.supplierProfile.other") }}</option>
-        </select>
+        <SearchableSelect
+          v-model="qrTypePreset"
+          :options="qrTypeOptions"
+          :all-label="$t('admin.pages.supplierProfile.notSpecified')"
+          :aria-label="$t('admin.pages.supplierProfile.labelCodeType')"
+          :multiple="false"
+          :show-all="false"
+        />
         <input
           v-if="qrTypePreset === 'other'"
           v-model="qrTypeOther"
@@ -255,10 +271,14 @@ function save() {
       </div>
       <div class="form-row">
         <label for="qt-qty">{{ $t("admin.pages.supplierProfile.qtyFormat") }}</label>
-        <select id="qt-qty" v-model="qtyEncoding">
-          <option value="">{{ $t("admin.pages.supplierProfile.qtyPlain") }}</option>
-          <option value="koa_zeros">{{ $t("admin.pages.supplierProfile.qtyKoa") }}</option>
-        </select>
+        <SearchableSelect
+          v-model="qtyEncoding"
+          :options="qtyEncodingOptions"
+          :all-label="$t('admin.pages.supplierProfile.qtyPlain')"
+          :aria-label="$t('admin.pages.supplierProfile.qtyFormat')"
+          :multiple="false"
+          :show-all="false"
+        />
       </div>
       <div class="form-row">
         <label for="qt-remark">{{ $t("admin.fields.remark") }}</label>
@@ -292,10 +312,14 @@ function save() {
       <template v-if="mode === 'delimited'">
         <div class="form-row">
           <label for="qt-delim">{{ $t("admin.pages.supplierProfile.separator") }}</label>
-          <select id="qt-delim" v-model="delimiterPreset">
-            <option v-for="d in DELIMITERS" :key="d.value" :value="d.value">{{ d.label }}</option>
-            <option value="other">{{ $t("admin.pages.supplierProfile.other") }}</option>
-          </select>
+          <SearchableSelect
+            v-model="delimiterPreset"
+            :options="delimiterOptions"
+            :all-label="$t('admin.pages.supplierProfile.separator')"
+            :aria-label="$t('admin.pages.supplierProfile.separator')"
+            :multiple="false"
+            :show-all="false"
+          />
           <input
             v-if="delimiterPreset === 'other'"
             v-model="delimiterOther"
@@ -311,9 +335,14 @@ function save() {
               <span class="chip-value" :class="{ muted: seg === '' }">
                 {{ seg === "" ? $t("admin.pages.supplierProfile.emptyPiece") : seg }}
               </span>
-              <select v-model="fields[i].role">
-                <option v-for="r in roleOptions" :key="r.value" :value="r.value">{{ r.label }}</option>
-              </select>
+              <SearchableSelect
+                v-model="fields[i].role"
+                :options="roleOptions"
+                :all-label="$t('admin.pages.supplierProfile.labelEachPiece')"
+                :aria-label="$t('admin.pages.supplierProfile.labelEachPiece')"
+                :multiple="false"
+                :show-all="false"
+              />
             </div>
           </div>
         </div>
@@ -327,17 +356,27 @@ function save() {
           <div v-for="(f, i) in fixedFields" :key="i" class="fixed-row">
             <span class="mono">{{ $t("admin.pages.supplierProfile.charsRange", { start: f.start, end: f.start + f.length - 1 }) }}</span>
             <span class="mono fixed-value">{{ sample.trim().slice(f.start, f.start + f.length) }}</span>
-            <select v-model="f.role">
-              <option v-for="r in roleOptions" :key="r.value" :value="r.value">{{ r.label }}</option>
-            </select>
+            <SearchableSelect
+              v-model="f.role"
+              :options="roleOptions"
+              :all-label="$t('admin.pages.supplierProfile.labelEachPiece')"
+              :aria-label="$t('admin.pages.supplierProfile.labelEachPiece')"
+              :multiple="false"
+              :show-all="false"
+            />
             <button type="button" class="tag-x" :title="$t('admin.pages.supplierProfile.removeField')" @click="removeFixedField(i)">×</button>
           </div>
           <div class="fixed-row">
             <label class="fixed-lab">{{ $t("admin.pages.supplierProfile.start") }} <input v-model.number="newFixed.start" type="number" min="0" class="num" /></label>
             <label class="fixed-lab">{{ $t("admin.pages.supplierProfile.length") }} <input v-model.number="newFixed.length" type="number" min="1" class="num" /></label>
-            <select v-model="newFixed.role">
-              <option v-for="r in roleOptions" :key="r.value" :value="r.value">{{ r.label }}</option>
-            </select>
+            <SearchableSelect
+              v-model="newFixed.role"
+              :options="roleOptions"
+              :all-label="$t('admin.pages.supplierProfile.labelEachPiece')"
+              :aria-label="$t('admin.pages.supplierProfile.labelEachPiece')"
+              :multiple="false"
+              :show-all="false"
+            />
             <button type="button" class="btn btn-small" @click="addFixedField">{{ $t("admin.pages.supplierProfile.add") }}</button>
           </div>
           <div class="hint">{{ $t("admin.pages.supplierProfile.positionsHint") }}</div>
@@ -426,9 +465,10 @@ function save() {
   resize: vertical;
 }
 .form-row .num,
-.form-row .fixed-row select,
-.form-row .chip select {
+.form-row .fixed-row .ssel,
+.form-row .chip .ssel {
   width: auto;
+  min-width: 140px;
 }
 h3 {
   margin: 4px 0 10px;

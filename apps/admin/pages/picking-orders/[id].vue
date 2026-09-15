@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { OrderLogsParams, OrderLogsPage, PickingOrderDetail } from "~/utils/flowApi";
 import type { AdminColumnDef } from "~/composables/useAdminTable";
+import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 
 const route = useRoute();
 const orderId = route.params.id as string;
@@ -29,6 +30,10 @@ const PICKING_ISSUE_REASONS = ["insufficient_stock", "cannot_divide", "other"] a
 
 const reportOpen = ref(false);
 const reportReason = ref("");
+
+const reportReasonOptions = computed<SearchableSelectOption[]>(() =>
+  PICKING_ISSUE_REASONS.map((r) => ({ value: r, label: t(`picking.issueReasons.${r}`) }))
+);
 const reportQtyInput = ref("");
 const reportPackSizeInput = ref("");
 const reportNote = ref("");
@@ -235,6 +240,61 @@ async function reallocate() {
 
 onBeforeUnmount(() => clearTimeout(reallocTimer));
 
+// Per-allocation "Remove" (x): DELETEs that one allocation row. No order
+// status check (admins may fix allocations in any state); 409 lock_held
+// carries the same JSON body as reallocate.
+const removingAlloc = ref<Record<string, boolean>>({});
+
+async function removeAllocation(
+  item: PickingOrderDetail["items"][number],
+  alloc: PickingOrderDetail["items"][number]["allocations"][number]
+) {
+  if (!order.value || removingAlloc.value[alloc.id]) return;
+  const partNo = item.wclItemNo ?? item.partNo;
+  if (!window.confirm(t("admin.pages.pickingOrders.removeAllocationConfirm", { partNo, qty: alloc.qty }))) return;
+  removingAlloc.value = { ...removingAlloc.value, [alloc.id]: true };
+  error.value = "";
+  try {
+    await flow.removePickingAllocation(orderId, item.id, alloc.id);
+    await load();
+    logsKey.value++;
+  } catch (e: any) {
+    let handled = false;
+    try {
+      const body = JSON.parse(e.message);
+      if (body?.error === "lock_held") {
+        error.value = t("admin.pages.pickingOrders.reallocateLocked", {
+          orderNo: order.value.orderNo,
+          name: body.holderName ?? body.holderId,
+        });
+        handled = true;
+      }
+    } catch {
+      // not JSON — fall through to the raw message
+    }
+    if (!handled) error.value = e.message;
+  } finally {
+    removingAlloc.value = { ...removingAlloc.value, [alloc.id]: false };
+  }
+}
+
+// "Search availability" modal (PartAvailabilityModal): stock lots + open
+// receiving sources for the item's part, with manual-allocation pins. The
+// component fetches itself on open; on each successful Allocate we reload the
+// order and bump the audit logs.
+const availOpen = ref(false);
+const availItem = ref<PickingOrderDetail["items"][number] | null>(null);
+
+async function onAllocated() {
+  await load();
+  logsKey.value++;
+}
+
+function openAvailability(item: PickingOrderDetail["items"][number]) {
+  availItem.value = item;
+  availOpen.value = true;
+}
+
 // Picking-list xlsx download (backend-generated; read-only — reflects current
 // allocations, no in-request recompute, so no reload afterwards).
 const apiBaseUrl = useRuntimeConfig().public.apiBaseUrl as string;
@@ -296,7 +356,7 @@ onMounted(load);
 
 // Reload when the order changes elsewhere (PDA picks, issue reports, allocation).
 // Busy while the report-issue modal is open: banner instead of a silent reload.
-const changeBusy = computed(() => reportOpen.value);
+const changeBusy = computed(() => reportOpen.value || availOpen.value);
 const {
   pending: changePending,
   justUpdated: changeUpdated,
@@ -391,10 +451,31 @@ const {
 
       <h2 class="section-title">{{ $t("admin.pages.pickingOrders.items") }}</h2>
       <DataTable :table="itemsTable" :on-reset-columns="resetItemsColumns">
-        <template #cell-partNo="{ row }">{{ row.wclItemNo ?? row.partNo }}</template>
+        <template #cell-partNo="{ row }">
+          <span class="partno-cell">
+            {{ row.wclItemNo ?? row.partNo }}
+            <button
+              class="icon-btn"
+              :title="$t('admin.pages.pickingOrders.searchAvailability')"
+              @click.stop="openAvailability(row)"
+            >
+              🔍
+            </button>
+          </span>
+        </template>
         <template #cell-line="{ row }">{{ row.lineNumber ?? "—" }} / {{ row.shipmentNumber ?? "—" }}</template>
         <template #cell-allocations="{ row }">
-          <div v-for="a in row.allocations" :key="a.id">{{ a.qty }} × {{ allocationSource(a) }}</div>
+          <div v-for="a in row.allocations" :key="a.id" class="alloc-row">
+            <span>{{ a.qty }} × {{ allocationSource(a) }}</span>
+            <button
+              class="icon-btn alloc-remove"
+              :disabled="removingAlloc[a.id]"
+              :title="$t('admin.pages.pickingOrders.removeAllocation')"
+              @click.stop="removeAllocation(row, a)"
+            >
+              {{ removingAlloc[a.id] ? "…" : "✕" }}
+            </button>
+          </div>
           <span v-if="row.allocations.length === 0" class="muted">—</span>
         </template>
         <template #cell-packages="{ row }">
@@ -437,10 +518,14 @@ const {
         <form @submit.prevent="submitReport">
           <div class="form-row">
             <label for="pi-reason">{{ $t("admin.pages.pickingOrders.issueReason") }}</label>
-            <select id="pi-reason" v-model="reportReason">
-              <option value="" disabled>{{ $t("admin.pages.pickingOrders.reportReasonPlaceholder") }}</option>
-              <option v-for="r in PICKING_ISSUE_REASONS" :key="r" :value="r">{{ $t(`picking.issueReasons.${r}`) }}</option>
-            </select>
+            <SearchableSelect
+              v-model="reportReason"
+              :options="reportReasonOptions"
+              :all-label="$t('admin.pages.pickingOrders.reportReasonPlaceholder')"
+              :aria-label="$t('admin.pages.pickingOrders.issueReason')"
+              :multiple="false"
+              :show-all="false"
+            />
           </div>
           <div v-if="reportReason === 'insufficient_stock'" class="form-row">
             <label for="pi-qty">{{ $t("admin.pages.pickingOrders.reportQty") }}</label>
@@ -468,6 +553,18 @@ const {
         </form>
       </div>
     </div>
+    <PartAvailabilityModal
+      :open="availOpen"
+      :part-no="availItem?.partNo ?? ''"
+      :wcl-item-no="availItem?.wclItemNo ?? null"
+      :context-org-id="order?.orgId ?? null"
+      :context-sub-inventory="order?.subInventoryCode ?? null"
+      :order-no="order?.orderNo ?? null"
+      :picking-order-id="orderId"
+      :picking-item="availItem"
+      @close="availOpen = false"
+      @allocated="onAllocated"
+    />
   </div>
 </template>
 

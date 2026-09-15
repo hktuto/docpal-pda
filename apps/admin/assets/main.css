@@ -152,8 +152,9 @@ a:hover {
   margin: 8px 0 14px;
 }
 .page-head h1 {
-  font-size: 20px;
+  font-size: 2rem;
   margin: 0;
+  color: var(--primary, #000);
 }
 .head-actions {
   display: flex;
@@ -224,6 +225,39 @@ td.actions {
   padding: 8px 10px;
   border: 1px solid #b6c2cd;
   border-radius: 4px;
+}
+
+/* ---- inline icon buttons (part-no availability, allocation remove) ---- */
+.icon-btn {
+  padding: 0 4px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #52606d;
+  border-radius: 4px;
+}
+.icon-btn:hover:not(:disabled) {
+  background: #e2e8ee;
+  color: #1f2933;
+}
+.icon-btn:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.alloc-remove {
+  color: #b43535;
+}
+.partno-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.alloc-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* ---- modal-ish dialog ---- */

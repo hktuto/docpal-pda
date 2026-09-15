@@ -1,13 +1,22 @@
 <script setup lang="ts">
-import type { StockSearchLot, StockSearchPart, StockSearchResult } from "~/utils/flowApi";
+import type { StockSearchLot, StockSearchOptions, StockSearchPart, StockSearchResult } from "~/utils/flowApi";
 import type { AdminColumnDef } from "~/composables/useAdminTable";
+import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 
 const api = useApi();
 const flow = useFlowApi();
 const { t } = useI18n();
 
 const suppliers = ref<{ id: string; code: string; name: string }[]>([]);
-const supplierCode = ref("");
+const options = ref<StockSearchOptions | null>(null);
+
+// Filters (empty array = no filter / all).
+const supplierCode = ref<string[]>([]);
+const brand = ref<string[]>([]);
+const orgId = ref<string[]>([]);
+const subInventoryCode = ref<string[]>([]);
+const zone = ref<string[]>([]);
+const shelfCode = ref<string[]>([]);
 const partNo = ref("");
 
 const result = ref<StockSearchResult | null>(null);
@@ -17,6 +26,103 @@ const error = ref("");
 
 const partsRows = computed(() => result.value?.parts ?? []);
 const lotsRows = computed(() => result.value?.lots ?? []);
+
+// --- filter dropdown options (from /stock-search/options + /admin/suppliers) ---
+
+const supplierOptions = computed<SearchableSelectOption[]>(() =>
+  suppliers.value.map((s) => ({ value: s.code, label: `${s.code} — ${s.name}` }))
+);
+const brandOptions = computed<SearchableSelectOption[]>(() =>
+  (options.value?.brands ?? []).map((b) => ({ value: b, label: b }))
+);
+const orgOptions = computed<SearchableSelectOption[]>(() => {
+  const seen = new Set<number>();
+  for (const l of options.value?.locations ?? []) {
+    if (l.orgId !== null) seen.add(l.orgId);
+  }
+  return [...seen].sort((a, b) => a - b).map((o) => ({ value: String(o), label: String(o) }));
+});
+const subInventoryOptions = computed<SearchableSelectOption[]>(() => {
+  const byCode = new Map<string, string | null>();
+  for (const l of options.value?.locations ?? []) {
+    if (!l.subInventoryCode) continue;
+    if (orgId.value.length && !orgId.value.includes(String(l.orgId))) continue;
+    if (!byCode.has(l.subInventoryCode)) byCode.set(l.subInventoryCode, l.description);
+  }
+  return [...byCode.entries()]
+    .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
+    .map(([code, desc]) => ({ value: code, label: desc ? `${code} — ${desc}` : code }));
+});
+const zoneOptions = computed<SearchableSelectOption[]>(() =>
+  (options.value?.zones ?? []).map((z) => ({ value: z, label: z }))
+);
+const shelfOptions = computed<SearchableSelectOption[]>(() =>
+  (options.value?.shelves ?? [])
+    .filter((s) => !zone.value.length || (s.zone !== null && zone.value.includes(s.zone)))
+    .map((s) => ({ value: s.code, label: s.zone ? `${s.code} — ${s.zone}` : s.code }))
+);
+
+// Prune dependent selections when the parent filter no longer contains them.
+watch(orgId, () => {
+  const valid = new Set(subInventoryOptions.value.map((o) => o.value));
+  const next = subInventoryCode.value.filter((v) => valid.has(v));
+  if (next.length !== subInventoryCode.value.length) subInventoryCode.value = next;
+});
+watch(zone, () => {
+  const valid = new Set(shelfOptions.value.map((o) => o.value));
+  const next = shelfCode.value.filter((v) => valid.has(v));
+  if (next.length !== shelfCode.value.length) shelfCode.value = next;
+});
+
+// --- group-by (lots table): none / brand / shelf / zone ----------------------
+
+type GroupBy = "none" | "brand" | "shelf" | "zone";
+const GROUP_BY_STORAGE_KEY = "admin-group:stock-search";
+const groupBy = ref<GroupBy>("none");
+
+const groupByOptions = computed<SearchableSelectOption[]>(() => [
+  { value: "none", label: t("admin.pages.stockSearch.groupNone") },
+  { value: "brand", label: t("admin.pages.stockSearch.groupBrand") },
+  { value: "shelf", label: t("admin.pages.stockSearch.groupShelf") },
+  { value: "zone", label: t("admin.pages.stockSearch.groupZone") },
+]);
+
+if (typeof localStorage !== "undefined") {
+  const stored = localStorage.getItem(GROUP_BY_STORAGE_KEY);
+  if (stored === "none" || stored === "brand" || stored === "shelf" || stored === "zone") {
+    groupBy.value = stored;
+  }
+  watch(groupBy, (v) => {
+    try {
+      localStorage.setItem(GROUP_BY_STORAGE_KEY, v);
+    } catch {
+      // Storage unavailable — grouping still works.
+    }
+  });
+}
+
+interface LotGroup {
+  key: string;
+  lots: StockSearchLot[];
+}
+
+const lotGroups = computed<LotGroup[]>(() => {
+  if (groupBy.value === "none") return [];
+  const keyOf = (l: StockSearchLot) =>
+    groupBy.value === "brand" ? l.brand : groupBy.value === "shelf" ? (l.shelfCode ?? "") : (l.zone ?? "");
+  const buckets = new Map<string, StockSearchLot[]>();
+  for (const l of lotsRows.value) {
+    const k = keyOf(l);
+    const arr = buckets.get(k);
+    if (arr) arr.push(l);
+    else buckets.set(k, [l]);
+  }
+  return [...buckets.entries()]
+    .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
+    .map(([key, lots]) => ({ key, lots }));
+});
+
+// --- tables -------------------------------------------------------------------
 
 const partsColumnDefs = computed<AdminColumnDef<StockSearchPart>[]>(() => [
   {
@@ -43,6 +149,13 @@ const lotsColumnDefs = computed<AdminColumnDef<StockSearchLot>[]>(() => [
     size: 150,
   },
   {
+    key: "description",
+    label: t("admin.pages.stockSearch.description"),
+    accessor: (l) => l.description ?? "",
+    size: 200,
+  },
+  { key: "brand", label: t("admin.pages.stockSearch.brand"), size: 80 },
+  {
     key: "dateCode",
     label: t("admin.pages.stockSearch.dateCode"),
     accessor: (l) => l.dateCode ?? "",
@@ -59,6 +172,12 @@ const lotsColumnDefs = computed<AdminColumnDef<StockSearchLot>[]>(() => [
     label: t("admin.pages.stockSearch.shelf"),
     accessor: (l) => l.shelfCode ?? "",
     size: 90,
+  },
+  {
+    key: "zone",
+    label: t("admin.pages.stockSearch.zone"),
+    accessor: (l) => l.zone ?? "",
+    size: 70,
   },
   {
     key: "boxId",
@@ -81,6 +200,7 @@ const { table: partsTable, pagination: partsPagination, resetColumnState: resetP
   tableId: "stock-search-parts",
   columns: partsColumnDefs,
   rows: partsRows,
+  defaultPageSize: 5,
   getRowId: (p) => p.id,
 });
 
@@ -89,6 +209,28 @@ const { table: lotsTable, pagination: lotsPagination, resetColumnState: resetLot
   columns: lotsColumnDefs,
   rows: lotsRows,
 });
+
+// Grouped mode: one DataTable per group, lazily created and cached by group
+// key (same idiom as receiving detail). syncKey shares sort/column state
+// across all group tables and with the ungrouped lots table. Groups render
+// all their rows (no Pager), so pageSize stays large.
+type GroupTable = ReturnType<typeof useAdminTable<StockSearchLot>>;
+const groupTables = new Map<string, GroupTable>();
+
+function tableForGroup(key: string): GroupTable {
+  let inst = groupTables.get(key);
+  if (!inst) {
+    inst = useAdminTable<StockSearchLot>({
+      tableId: "stock-search-lots",
+      syncKey: "stock-search-lots",
+      columns: lotsColumnDefs,
+      rows: computed(() => lotGroups.value.find((g) => g.key === key)?.lots ?? []),
+      defaultPageSize: 1000,
+    });
+    groupTables.set(key, inst);
+  }
+  return inst;
+}
 
 // Pager uses a 1-based page; the table uses a 0-based pageIndex.
 const partsPage = computed({
@@ -124,15 +266,30 @@ async function loadSuppliers() {
   }
 }
 
+async function loadOptions() {
+  try {
+    options.value = await flow.stockSearchOptions();
+  } catch {
+    options.value = null;
+  }
+}
+
 async function search() {
   loading.value = true;
   error.value = "";
   try {
     result.value = await flow.stockSearch({
-      supplierCode: supplierCode.value || undefined,
+      supplierCode: supplierCode.value.length ? supplierCode.value : undefined,
+      brand: brand.value.length ? brand.value : undefined,
+      orgId: orgId.value.length ? orgId.value.map(Number) : undefined,
+      subInventoryCode: subInventoryCode.value.length ? subInventoryCode.value : undefined,
+      zone: zone.value.length ? zone.value : undefined,
+      shelfCode: shelfCode.value.length ? shelfCode.value : undefined,
       partNo: partNo.value.trim() || undefined,
     });
     searched.value = true;
+    // Stock may have changed — refresh the dropdown option sets too.
+    loadOptions();
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -140,7 +297,10 @@ async function search() {
   }
 }
 
-onMounted(loadSuppliers);
+onMounted(() => {
+  loadSuppliers();
+  loadOptions();
+});
 
 // Re-run the current search when stock levels change elsewhere. No-op until
 // the user has searched at least once.
@@ -161,14 +321,60 @@ const {
     </div>
 
     <div class="filters">
-      <select v-model="supplierCode" :aria-label="$t('admin.pages.stockSearch.supplier')">
-        <option value="">{{ $t("admin.pages.stockSearch.allSuppliers") }}</option>
-        <option v-for="s in suppliers" :key="s.id" :value="s.code">{{ s.code }} — {{ s.name }}</option>
-      </select>
+      <SearchableSelect
+        v-model="supplierCode"
+        :options="supplierOptions"
+        :all-label="$t('admin.pages.stockSearch.allSuppliers')"
+        :aria-label="$t('admin.pages.stockSearch.supplier')"
+        class="filter-item"
+      />
+      <SearchableSelect
+        v-model="brand"
+        :options="brandOptions"
+        :all-label="$t('admin.pages.stockSearch.allBrands')"
+        :aria-label="$t('admin.pages.stockSearch.brand')"
+        class="filter-item"
+      />
+      <SearchableSelect
+        v-model="orgId"
+        :options="orgOptions"
+        :all-label="$t('admin.pages.stockSearch.allOrgs')"
+        :aria-label="$t('admin.pages.stockSearch.org')"
+        class="filter-item filter-narrow"
+      />
+      <SearchableSelect
+        v-model="subInventoryCode"
+        :options="subInventoryOptions"
+        :all-label="$t('admin.pages.stockSearch.allSubInventories')"
+        :aria-label="$t('admin.pages.stockSearch.subInventory')"
+        class="filter-item"
+      />
+      <SearchableSelect
+        v-model="zone"
+        :options="zoneOptions"
+        :all-label="$t('admin.pages.stockSearch.allZones')"
+        :aria-label="$t('admin.pages.stockSearch.zone')"
+        class="filter-item filter-narrow"
+      />
+      <SearchableSelect
+        v-model="shelfCode"
+        :options="shelfOptions"
+        :all-label="$t('admin.pages.stockSearch.allShelves')"
+        :aria-label="$t('admin.pages.stockSearch.shelf')"
+        class="filter-item"
+      />
       <input
         v-model="partNo"
         :placeholder="$t('admin.pages.stockSearch.partNoPlaceholder')"
         @keyup.enter="search"
+      />
+      <SearchableSelect
+        v-model="groupBy"
+        :options="groupByOptions"
+        :all-label="$t('admin.pages.stockSearch.groupBy')"
+        :aria-label="$t('admin.pages.stockSearch.groupBy')"
+        :multiple="false"
+        :show-all="false"
       />
       <button class="btn btn-primary" :disabled="loading" @click="search">
         {{ $t("admin.common.search") }}
@@ -194,12 +400,37 @@ const {
       <Pager v-model:page="partsPage" v-model:page-size="partsPageSize" :total="partsRows.length" />
 
       <h2 class="section-title">{{ $t("admin.pages.stockSearch.lots") }}</h2>
-      <DataTable
-        :table="lotsTable"
-        :empty-text="$t('admin.pages.stockSearch.noLots')"
-        :on-reset-columns="resetLotsColumns"
-      />
-      <Pager v-model:page="lotsPage" v-model:page-size="lotsPageSize" :total="lotsRows.length" />
+      <template v-if="groupBy === 'none'">
+        <DataTable
+          :table="lotsTable"
+          :empty-text="$t('admin.pages.stockSearch.noLots')"
+          :on-reset-columns="resetLotsColumns"
+        >
+          <template #cell-description="{ row }">
+            <span class="wrap">{{ row.description ?? "—" }}</span>
+          </template>
+        </DataTable>
+        <Pager v-model:page="lotsPage" v-model:page-size="lotsPageSize" :total="lotsRows.length" />
+      </template>
+      <template v-else>
+        <template v-for="g in lotGroups" :key="g.key">
+          <h3 class="group-title">
+            {{ g.key || "—" }}
+            <span class="muted">— {{ $t("admin.pages.stockSearch.lotsCount", { count: g.lots.length }) }}</span>
+          </h3>
+          <DataTable
+            :table="tableForGroup(g.key).table"
+            sync-scroll-key="stock-search-lots"
+            :empty-text="$t('admin.pages.stockSearch.noLots')"
+            :on-reset-columns="tableForGroup(g.key).resetColumnState"
+          >
+            <template #cell-description="{ row }">
+              <span class="wrap">{{ row.description ?? "—" }}</span>
+            </template>
+          </DataTable>
+        </template>
+        <p v-if="lotGroups.length === 0" class="muted">{{ $t("admin.pages.stockSearch.noLots") }}</p>
+      </template>
     </template>
   </div>
 </template>
@@ -207,23 +438,29 @@ const {
 <style scoped>
 .filters {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 12px;
 }
-.filters select,
-.filters input {
-  padding: 7px 9px;
-  border: 1px solid #b6c2cd;
-  border-radius: 4px;
-  font-size: 14px;
-}
 .filters input {
   flex: 1;
+  min-width: 160px;
+}
+.filter-item {
+  width: 190px;
+}
+.filter-narrow {
+  width: 120px;
 }
 .section-title {
   font-size: 15px;
   margin: 18px 0 8px;
   color: #52606d;
+}
+.group-title {
+  font-size: 14px;
+  margin: 14px 0 4px;
+  color: #37424e;
 }
 .wrap {
   white-space: normal;

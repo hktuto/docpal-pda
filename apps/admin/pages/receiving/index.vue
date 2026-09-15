@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ReceivingOrderRow } from "~/utils/flowApi";
 import type { AdminColumnDef } from "~/composables/useAdminTable";
+import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 
 const flow = useFlowApi();
 const { t } = useI18n();
@@ -10,7 +11,11 @@ const error = ref("");
 const status = ref("");
 const search = ref("");
 
-const STATUSES = ["", "pending", "in_hand", "provisional_received", "clear"];
+const STATUSES = ["pending", "in_hand", "provisional_received", "clear"];
+
+const statusOptions = computed<SearchableSelectOption[]>(() =>
+  STATUSES.map((s) => ({ value: s, label: t(`status.receiving.${s}`) }))
+);
 
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase();
@@ -108,11 +113,13 @@ const {
     </div>
 
     <div class="filters">
-      <select v-model="status">
-        <option v-for="s in STATUSES" :key="s" :value="s">
-          {{ s ? $t(`status.receiving.${s}`) : $t("admin.common.allStatuses") }}
-        </option>
-      </select>
+      <SearchableSelect
+        v-model="status"
+        :options="statusOptions"
+        :all-label="$t('admin.common.allStatuses')"
+        :aria-label="$t('admin.pages.receiving.status')"
+        :multiple="false"
+      />
       <input v-model="search" :placeholder="$t('admin.pages.receiving.searchPlaceholder')" />
       <UserScopeFilterButton @saved="load" />
     </div>
@@ -145,13 +152,6 @@ const {
   display: flex;
   gap: 10px;
   margin-bottom: 12px;
-}
-.filters select,
-.filters input {
-  padding: 7px 9px;
-  border: 1px solid #b6c2cd;
-  border-radius: 4px;
-  font-size: 14px;
 }
 .filters input {
   flex: 1;

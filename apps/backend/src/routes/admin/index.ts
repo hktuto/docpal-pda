@@ -25,6 +25,7 @@ import { adminFlowConfigRoute } from "./flowConfig.js";
 import { adminReceivingShipperRoute } from "./receivingShipper.js";
 import { adminPickingListRoute } from "./pickingList.js";
 import { adminAllocationRoute } from "./allocation.js";
+import { adminPartAvailabilityRoute } from "./partAvailability.js";
 import { adminUserProfilesRoute } from "./userProfiles.js";
 import { adminCustomerProfilesRoute } from "./customerProfiles.js";
 import { parseScopeEntries, type UserScopeEntry } from "../../db/user-scope.js";
@@ -262,8 +263,12 @@ adminRoute.route("/", adminReceivingShipperRoute);
 // Picking-list xlsx download for a picking order (read-only, flat allocation rows).
 adminRoute.route("/", adminPickingListRoute);
 
-// Manual allocation triggers (allocate-all / per-order re-allocate).
+// Manual allocation triggers (allocate-all / per-order re-allocate /
+// per-item remove-allocation).
 adminRoute.route("/", adminAllocationRoute);
+
+// Part availability lookup (stock + receiving rows for a part).
+adminRoute.route("/", adminPartAvailabilityRoute);
 
 // Per-user sub-inventory scope profiles (spec
 // 2026-09-11-user-subinventory-scope-design.md).

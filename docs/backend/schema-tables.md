@@ -627,6 +627,7 @@ Recomputed idempotently by the allocation engine (`allocateAll`).
 | receiving_invoice_item_id | text FK → receiving_invoice_items(id) ON DELETE CASCADE | Source receiving line (not yet put away) |
 | receiving_order_id | text FK → receiving_orders(id) ON DELETE CASCADE | Whole-order allocation (line has no box) |
 | qty | integer NOT NULL | Reserved quantity |
+| manual | boolean NOT NULL DEFAULT false | Pinned hand-made allocation (admin console) — the wipe/rebuild engine preserves it and subtracts its qty from the item's auto-allocation demand |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 

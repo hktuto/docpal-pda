@@ -101,6 +101,27 @@
   order's part keys (`allocateForPickingOrder`), which also rebuilds sibling
   orders sharing a part and 409s on a live work lock (`lock_held` with the
   holder's name) or a non-open order (`order_not_open`).
+- Admin picking-item actions (spec
+  `docs/superpowers/specs/2026-09-15-admin-picking-item-actions-design.md`):
+  each allocation row in the items table of the admin picking-order detail
+  page has an (x) remove button
+  (`DELETE /admin/picking-orders/:id/items/:itemId/allocations/:allocationId`
+  → `removePickingAllocation`) that deletes that one allocation row,
+  releases the lot's `allocated_qty`, and logs an audit row — deliberately
+  transient, so the next `allocateAll`/scoped recompute may re-allocate the
+  item (404 `picking_order_not_found`/`picking_item_not_found`/
+  `allocation_not_found`, 409 `lock_held`; NO order-status check); and the
+  part-no cell has a search icon opening a modal over
+  `GET /admin/part-availability?partNo=&wclItemNo=` listing every stock lot
+  and receiving order containing the part across ALL org/sub-inventory
+  locations (rows matching the order's pair are highlighted). The modal
+  also pins MANUAL allocations: each row has a qty input + Allocate button
+  (`POST /admin/picking-orders/:id/items/:itemId/allocations`, any
+  location, capped by source availability and the item's open demand —
+  409 `insufficient_available` / `over_allocation`). Manual rows
+  (`allocations.manual = true`) are pinned: `allocateAll` /
+  `runScopedAllocation` never wipe them and subtract their qty from the
+  item's auto-allocation demand.
 - Admin picking-list download (spec
   `docs/superpowers/specs/2026-09-14-admin-picking-list-download-design.md`):
   "Download picking list" on the admin picking-order detail page fetches
@@ -111,9 +132,6 @@
   / `(dock)` for dock sources, `UNALLOCATED` shortfall rows, `(no allocation)`
   for unallocated items). It never recomputes allocations — the operator uses
   the explicit Re-allocate action first if the sheet might be stale.
-- Allocation location matching: a picking order's `(org_id,
-  sub_inventory_code)` pair must match the stock source's pair (pair-less
-  orders are org-agnostic), widened by `sub_inventory_share_members` —
 - Allocation location matching: a picking order's `(org_id,
   sub_inventory_code)` pair must match the stock source's pair (pair-less
   orders are org-agnostic), widened by `sub_inventory_share_members` —

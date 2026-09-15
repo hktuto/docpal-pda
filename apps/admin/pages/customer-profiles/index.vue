@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AdminColumnDef } from "~/composables/useAdminTable";
+import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 
 interface CustomerAccount {
   custAccountId: number;
@@ -30,6 +31,15 @@ function profileFor(partyName: string) {
 const search = ref("");
 const statusFilter = ref<"" | "A" | "I">("");
 const profileFilter = ref<"" | "with" | "without">("");
+
+const statusFilterOptions = computed<SearchableSelectOption[]>(() => [
+  { value: "A", label: t("admin.pages.customerProfiles.active") },
+  { value: "I", label: t("admin.pages.customerProfiles.inactive") },
+]);
+const profileFilterOptions = computed<SearchableSelectOption[]>(() => [
+  { value: "with", label: t("admin.pages.customerProfiles.profileWith") },
+  { value: "without", label: t("admin.pages.customerProfiles.profileWithout") },
+]);
 
 const filtered = computed(() => {
   const needle = search.value.trim().toLowerCase();
@@ -118,16 +128,20 @@ onMounted(load);
         class="search-input"
         :placeholder="$t('admin.pages.customerProfiles.filterPlaceholder')"
       />
-      <select v-model="statusFilter" :aria-label="$t('admin.pages.customerProfiles.status')">
-        <option value="">{{ $t("admin.common.allStatuses") }}</option>
-        <option value="A">{{ $t("admin.pages.customerProfiles.active") }}</option>
-        <option value="I">{{ $t("admin.pages.customerProfiles.inactive") }}</option>
-      </select>
-      <select v-model="profileFilter" :aria-label="$t('admin.pages.customerProfiles.profileFilter')">
-        <option value="">{{ $t("admin.pages.customerProfiles.profileAll") }}</option>
-        <option value="with">{{ $t("admin.pages.customerProfiles.profileWith") }}</option>
-        <option value="without">{{ $t("admin.pages.customerProfiles.profileWithout") }}</option>
-      </select>
+      <SearchableSelect
+        v-model="statusFilter"
+        :options="statusFilterOptions"
+        :all-label="$t('admin.common.allStatuses')"
+        :aria-label="$t('admin.pages.customerProfiles.status')"
+        :multiple="false"
+      />
+      <SearchableSelect
+        v-model="profileFilter"
+        :options="profileFilterOptions"
+        :all-label="$t('admin.pages.customerProfiles.profileAll')"
+        :aria-label="$t('admin.pages.customerProfiles.profileFilter')"
+        :multiple="false"
+      />
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
@@ -175,13 +189,6 @@ onMounted(load);
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-}
-.search-bar select {
-  padding: 7px 9px;
-  border: 1px solid #b6c2cd;
-  border-radius: 4px;
-  font-size: 14px;
-  font-family: inherit;
 }
 .status-badge {
   display: inline-block;

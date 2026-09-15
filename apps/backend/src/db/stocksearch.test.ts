@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { sql } from "drizzle-orm";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { queryGet, queryRun } from "./query.js";
-import { searchStock } from "./stocksearch.js";
+import { searchStock, stockSearchOptions } from "./stocksearch.js";
 
 let client: TestDb;
 
@@ -56,6 +56,9 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
   assert.deepEqual(lots[0], {
     partNo: "RK73B1JTTD181G",
     wclItemNo: "RK73B1JTTD181G",
+    description: "RES 180 OHM 5% 1/10W 0603",
+    brand: "KOA",
+    zone: "A",
     dateCode: "2604",
     lotCode: "L2604A",
     coo: "JP",
@@ -71,6 +74,9 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
   assert.deepEqual(lots[1], {
     partNo: "RK73H1JTTD1002F",
     wclItemNo: "RK73H1JTTD1002F",
+    description: "RES 10K OHM 1% 1/10W 0603",
+    brand: "KOA",
+    zone: "A",
     dateCode: "2603",
     lotCode: "L2603A",
     coo: "JP",
@@ -86,6 +92,9 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
   assert.deepEqual(lots[2], {
     partNo: "RK73H1JTTD2202F",
     wclItemNo: "RK73H1JTTD2202F",
+    description: "RES 22K OHM 1% 1/10W 0603",
+    brand: "KOA",
+    zone: "A",
     dateCode: "2603",
     lotCode: "L2603B",
     coo: "JP",
@@ -101,6 +110,9 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
   assert.deepEqual(lots[3], {
     partNo: "RK73H1JTTD4702F",
     wclItemNo: "RK73H1JTTD4702F",
+    description: "RES 47K OHM 1% 1/10W 0603",
+    brand: "KOA",
+    zone: "A",
     dateCode: "2604",
     lotCode: "L2604B",
     coo: "JP",
@@ -116,6 +128,9 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
   assert.deepEqual(lots[4], {
     partNo: "RK73H1JTTD5602F",
     wclItemNo: "RK73H1JTTD5602F",
+    description: null,
+    brand: "KOA",
+    zone: "A",
     dateCode: "2609",
     lotCode: "L2609A",
     coo: "JP",
@@ -131,6 +146,9 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
   assert.deepEqual(lots[5], {
     partNo: "RK73H2ATTD2212F",
     wclItemNo: "RK73H2ATTD2212F",
+    description: null,
+    brand: "KOA",
+    zone: "A",
     dateCode: "2609",
     lotCode: "L2609B",
     coo: "JP",
@@ -220,22 +238,27 @@ test("partNo: no match returns empty parts and lots", async () => {
 
 // --- shelfCode filter -----------------------------------------------------------
 
-test("shelfCode: exact match only", async () => {
+test("shelfCode: any-of match", async () => {
   await reseed(client);
 
-  let r = await searchStock(client.db, { shelfCode: "A-01-01" });
+  let r = await searchStock(client.db, { shelfCode: ["A-01-01"] });
   assert.equal(r.lots.length, 2);
   assert.ok(r.lots.every((l) => l.shelfCode === "A-01-01"));
   assert.deepEqual(r.parts.map((p) => p.partNo), ["RK73H1JTTD1002F", "RK73H1JTTD2202F"]);
   assert.equal(r.parts[0].onHandQty, 1000);
   assert.equal(r.parts[1].onHandQty, 500);
 
+  // multi-value: union of both shelves
+  r = await searchStock(client.db, { shelfCode: ["A-01-01", "A-02-01"] });
+  assert.equal(r.lots.length, 4);
+  assert.ok(r.lots.every((l) => ["A-01-01", "A-02-01"].includes(l.shelfCode!)));
+
   // prefix is not a match — the filter is exact
-  r = await searchStock(client.db, { shelfCode: "A-01" });
+  r = await searchStock(client.db, { shelfCode: ["A-01"] });
   assert.deepEqual(r, { parts: [], lots: [] });
 
   // a seeded shelf with no stock
-  r = await searchStock(client.db, { shelfCode: "A-01-03" });
+  r = await searchStock(client.db, { shelfCode: ["A-01-03"] });
   assert.deepEqual(r, { parts: [], lots: [] });
 });
 
@@ -245,12 +268,12 @@ test("supplierCode: lot traces via lot sources to the receiving order's supplier
   await reseed(client);
   await linkBoxLotsToKoaOrder();
 
-  const r = await searchStock(client.db, { supplierCode: "KOA" });
+  const r = await searchStock(client.db, { supplierCode: ["KOA"] });
   assert.equal(r.lots.length, 2);
   assert.deepEqual(r.parts.map((p) => p.partNo), ["RK73H1JTTD1002F", "RK73H1JTTD2202F"]);
 
   // DAITO has no receiving orders — no lots trace to it
-  const empty = await searchStock(client.db, { supplierCode: "DAITO" });
+  const empty = await searchStock(client.db, { supplierCode: ["DAITO"] });
   assert.deepEqual(empty, { parts: [], lots: [] });
 });
 
@@ -260,15 +283,85 @@ test("combined: all provided filters must match (AND)", async () => {
   await reseed(client);
   await linkBoxLotsToKoaOrder();
 
-  const r = await searchStock(client.db, { partNo: "1002", shelfCode: "A-01-01", supplierCode: "KOA" });
+  const r = await searchStock(client.db, { partNo: "1002", shelfCode: ["A-01-01"], supplierCode: ["KOA"] });
   assert.equal(r.lots.length, 1);
   assert.equal(r.lots[0].shelfCode, "A-01-01");
   assert.deepEqual(r.parts.map((p) => p.partNo), ["RK73H1JTTD1002F"]);
   assert.equal(r.parts[0].onHandQty, 1000);
 
   // same supplier, but the part is on a different shelf → empty
-  const conflict = await searchStock(client.db, { partNo: "1002", shelfCode: "A-01-02", supplierCode: "KOA" });
+  const conflict = await searchStock(client.db, { partNo: "1002", shelfCode: ["A-01-02"], supplierCode: ["KOA"] });
   assert.deepEqual(conflict, { parts: [], lots: [] });
+});
+
+// --- brand / zone / location filters ----------------------------------------------
+
+test("brand: any-of match on the part's brand", async () => {
+  await reseed(client);
+
+  const r = await searchStock(client.db, { brand: ["KOA"] });
+  assert.equal(r.lots.length, 6);
+  assert.ok(r.lots.every((l) => l.brand === "KOA"));
+
+  // multi-value: same result when adding a brand with no stock
+  const multi = await searchStock(client.db, { brand: ["KOA", "DAITO"] });
+  assert.equal(multi.lots.length, 6);
+
+  // a seeded supplier/brand with no stocked parts
+  const empty = await searchStock(client.db, { brand: ["DAITO"] });
+  assert.deepEqual(empty, { parts: [], lots: [] });
+});
+
+test("zone: any-of match on the shelf's zone", async () => {
+  await reseed(client);
+
+  const r = await searchStock(client.db, { zone: ["A"] });
+  assert.equal(r.lots.length, 6);
+  assert.ok(r.lots.every((l) => l.zone === "A"));
+
+  // multi-value: adding an unstocked zone changes nothing
+  const multi = await searchStock(client.db, { zone: ["A", "GZ"] });
+  assert.equal(multi.lots.length, 6);
+
+  // seeded zone with no stock
+  const empty = await searchStock(client.db, { zone: ["GZ"] });
+  assert.deepEqual(empty, { parts: [], lots: [] });
+});
+
+test("orgId/subInventoryCode: any-of match on the lot's location pair", async () => {
+  await reseed(client);
+
+  let r = await searchStock(client.db, { orgId: [2] });
+  assert.equal(r.lots.length, 6);
+  assert.ok(r.lots.every((l) => l.orgId === 2));
+
+  r = await searchStock(client.db, { subInventoryCode: ["STORE1"] });
+  assert.equal(r.lots.length, 6);
+  assert.ok(r.lots.every((l) => l.subInventoryCode === "STORE1"));
+
+  // multi-value: union with an unstocked org/sub-inventory
+  assert.equal((await searchStock(client.db, { orgId: [2, 140] })).lots.length, 6);
+  assert.equal((await searchStock(client.db, { subInventoryCode: ["STORE1", "WSTORE1"] })).lots.length, 6);
+
+  // seeded org/sub-inventory with no stock
+  assert.deepEqual(await searchStock(client.db, { orgId: [140] }), { parts: [], lots: [] });
+  assert.deepEqual(await searchStock(client.db, { orgId: [2], subInventoryCode: ["WSTORE1"] }), { parts: [], lots: [] });
+});
+
+// --- options (distinct filter values in stock) -------------------------------------
+
+test("options: distinct brands/zones/shelves/locations present in stock", async () => {
+  await reseed(client);
+  const opts = await stockSearchOptions(client.db);
+
+  assert.deepEqual(opts.brands, ["KOA"]);
+  assert.deepEqual(opts.zones, ["A"]);
+  assert.deepEqual(opts.shelves, [
+    { code: "A-01-01", zone: "A" },
+    { code: "A-01-02", zone: "A" },
+    { code: "A-02-01", zone: "A" },
+  ]);
+  assert.deepEqual(opts.locations, [{ orgId: 2, subInventoryCode: "STORE1", description: "Store 1" }]);
 });
 
 // --- zero-qty lots ----------------------------------------------------------------

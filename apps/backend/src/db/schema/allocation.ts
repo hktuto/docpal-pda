@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, integer, timestamp, index, check } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, timestamp, index, check } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
 import { pickingItems } from "./picking.js";
 import { inventoryLots } from "./inventory.js";
@@ -14,6 +14,10 @@ export const allocations = pgTable(
     receivingInvoiceItemId: text("receiving_invoice_item_id").references(() => receivingInvoiceItems.id, { onDelete: "cascade" }),
     receivingOrderId: text("receiving_order_id").references(() => receivingOrders.id, { onDelete: "cascade" }), // 整单分配（行无 box_id 时）
     qty: integer("qty").notNull(),
+    // Pinned hand-made allocation (admin console): allocateAll /
+    // runScopedAllocation never wipe it and subtract its qty from the item's
+    // auto-allocation demand. Removed only via the admin (x) action.
+    manual: boolean("manual").notNull().default(false),
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },

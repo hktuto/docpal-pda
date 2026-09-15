@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { FlowConfigState, SubInventoryRuleGroupRow, FromSubinventoryOrgGroupRow } from "~/utils/flowApi";
+import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 
 // Flow config editor (spec 2026-08-12-admin-flow-config-design.md): a
 // structured form over the warehouse_config row "flow". Saves apply at
@@ -31,6 +32,11 @@ const stepEnabled = reactive<Record<string, boolean>>({});
 const allowDockStock = ref(true);
 const autoCreateTasks = ref(false);
 const suggestShelf = ref<"existing-stock" | "off">("existing-stock");
+
+const suggestShelfOptions = computed<SearchableSelectOption[]>(() => [
+  { value: "existing-stock", label: t("admin.pages.flowConfig.suggestShelfOn") },
+  { value: "off", label: t("admin.pages.flowConfig.suggestShelfOff") },
+]);
 const allowedOrgIdsText = ref("");
 const groups = ref<GroupDraft[]>([]);
 const fromOrgGroups = ref<FromOrgGroupDraft[]>([]);
@@ -194,10 +200,14 @@ onMounted(load);
         </label>
         <div class="form-row">
           <label for="fc-suggest">{{ $t("admin.pages.flowConfig.suggestShelf") }}</label>
-          <select id="fc-suggest" v-model="suggestShelf">
-            <option value="existing-stock">{{ $t("admin.pages.flowConfig.suggestShelfOn") }}</option>
-            <option value="off">{{ $t("admin.pages.flowConfig.suggestShelfOff") }}</option>
-          </select>
+          <SearchableSelect
+            v-model="suggestShelf"
+            :options="suggestShelfOptions"
+            :all-label="$t('admin.pages.flowConfig.suggestShelf')"
+            :aria-label="$t('admin.pages.flowConfig.suggestShelf')"
+            :multiple="false"
+            :show-all="false"
+          />
         </div>
       </div>
 

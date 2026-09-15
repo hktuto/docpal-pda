@@ -10,6 +10,8 @@ export interface PickingOrderRow {
   id: string;
   orderNo: string;
   status: string;
+  pickingOrderType: string | null;
+  remark: string | null;
   poNo: string | null;
   shipTo: string | null;
   customerCode: string | null;
@@ -110,6 +112,16 @@ export interface ReceivingOrderRow {
   lastUpdateDate: string;
 }
 
+export interface ReceivingItemAllocation {
+  id: string;
+  qty: number;
+  manual: boolean;
+  pickingItemId: string;
+  pickingOrderId: string;
+  orderNo: string;
+  orderStatus: string;
+}
+
 export interface ReceivingItemRow {
   id: string;
   receivingInvoiceId: string;
@@ -127,6 +139,11 @@ export interface ReceivingItemRow {
   coo: string | null;
   cow: string | null;
   allocatedQty: number;
+  /** Item's stock partition (re-stamped by receivingSubInventoryRules at confirm-arrival). */
+  orgId: number | null;
+  subInventoryCode: string | null;
+  /** Allocation rows sourced from this receiving item. */
+  allocations: ReceivingItemAllocation[];
   /** Passthrough jsonb from the upstream order sync (optional). */
   orderData?: Record<string, unknown> | null;
   mismatch: { reason: string | null; mismatchQty: number | null; wrongPartNo: string | null; note: string | null } | null;
@@ -195,11 +212,14 @@ export interface StockSearchPart {
 export interface StockSearchLot {
   partNo: string;
   wclItemNo: string | null;
+  description: string | null;
+  brand: string;
   dateCode: string | null;
   lotCode: string | null;
   coo: string | null;
   cow: string | null;
   shelfCode: string | null;
+  zone: string | null;
   boxId: string | null;
   orgId: number | null;
   subInventoryCode: string | null;
@@ -211,6 +231,14 @@ export interface StockSearchLot {
 export interface StockSearchResult {
   parts: StockSearchPart[];
   lots: StockSearchLot[];
+}
+
+/** Distinct filter values present in the current stock (for dropdowns). */
+export interface StockSearchOptions {
+  brands: string[];
+  zones: string[];
+  shelves: { code: string; zone: string | null }[];
+  locations: { orgId: number | null; subInventoryCode: string | null; description: string | null }[];
 }
 
 // ---- issues ----
@@ -228,6 +256,66 @@ export interface MismatchListRow {
   mismatchQty: number | null;
   wrongPartNo: string | null;
   note: string | null;
+}
+
+// ---- part availability (stock lots + open receiving sources for a part) ----
+
+export interface PartAvailabilityStockRow {
+  lotId: string;
+  orgId: number | null;
+  subInventoryCode: string | null;
+  shelfCode: string | null;
+  boxId: string | null;
+  partNo: string;
+  wclItemNo: string | null;
+  dateCode: string | null;
+  lotCode: string | null;
+  totalQty: number;
+  allocatedQty: number;
+  availableQty: number;
+}
+
+export interface PartAvailabilityReceivingRow {
+  receivingOrderId: string;
+  batchNo: string;
+  supplierCode: string | null;
+  status: string;
+  invoiceNo: string;
+  receivingInvoiceItemId: string;
+  lineQty: number | null;
+  receivedQty: number;
+  putAwayQty: number;
+  pickedQty: number;
+  orgId: number | null;
+  subInventoryCode: string | null;
+  ctnNo: string | null;
+  dateCode: string | null;
+}
+
+export interface PartAvailability {
+  stock: PartAvailabilityStockRow[];
+  receiving: PartAvailabilityReceivingRow[];
+}
+
+// ---- part demand (open picking items needing a part) ----
+
+export interface PartDemandRow {
+  pickingOrderId: string;
+  orderNo: string;
+  orderStatus: string;
+  deliveryDate: string | null;
+  orgId: number | null;
+  subInventoryCode: string | null;
+  pickingItemId: string;
+  partNo: string;
+  qty: number;
+  pickedQty: number;
+  allocatedQty: number;
+  remainingQty: number;
+}
+
+export interface PartDemand {
+  demand: PartDemandRow[];
 }
 
 // ---- flow config (warehouse_config row "flow") ----
@@ -332,6 +420,17 @@ export function useFlowApi() {
     allocateAll: () => api.post<AllocateAllSummary>(`/admin/allocation/run`, {}),
     reallocatePickingOrder: (id: string) =>
       api.post<{ allocation: AllocationRunSummary }>(`/admin/picking-orders/${id}/reallocate`, {}),
+    removePickingAllocation: (orderId: string, itemId: string, allocationId: string) =>
+      api.del<{ removed: number; qty: number }>(`/admin/picking-orders/${orderId}/items/${itemId}/allocations/${allocationId}`),
+    addManualPickingAllocation: (
+      orderId: string,
+      itemId: string,
+      body: { qty: number; inventoryLotId?: string; receivingInvoiceItemId?: string }
+    ) =>
+      api.post<{ allocationId: string; qty: number }>(
+        `/admin/picking-orders/${orderId}/items/${itemId}/allocations`,
+        body
+      ),
     updatePickingDeliveryDate: (id: string, deliveryDate: string | null) =>
       api.patch(`/admin/picking-orders/${id}`, { deliveryDate }),
 
@@ -386,12 +485,42 @@ export function useFlowApi() {
     listPickingOrderLogs: (orderId: string, params: OrderLogsParams) =>
       api.get<OrderLogsPage>(`/admin/picking-orders/${orderId}/logs${logsQuery(params)}`),
 
-    // Stock search
-    stockSearch: (params: { supplierCode?: string; partNo?: string }) => {
+    // Stock search (multi-value filters — each value appended as a repeated
+    // query param; the backend treats them as any-of)
+    stockSearch: (params: {
+      supplierCode?: string[];
+      partNo?: string;
+      shelfCode?: string[];
+      zone?: string[];
+      brand?: string[];
+      orgId?: number[];
+      subInventoryCode?: string[];
+    }) => {
       const qs = new URLSearchParams();
-      if (params.supplierCode) qs.set("supplierCode", params.supplierCode);
+      for (const v of params.supplierCode ?? []) qs.append("supplierCode", v);
       if (params.partNo) qs.set("partNo", params.partNo);
+      for (const v of params.shelfCode ?? []) qs.append("shelfCode", v);
+      for (const v of params.zone ?? []) qs.append("zone", v);
+      for (const v of params.brand ?? []) qs.append("brand", v);
+      for (const v of params.orgId ?? []) qs.append("orgId", String(v));
+      for (const v of params.subInventoryCode ?? []) qs.append("subInventoryCode", v);
       return api.get<StockSearchResult>(`/stock-search?${qs}`);
+    },
+    stockSearchOptions: () => api.get<StockSearchOptions>("/stock-search/options"),
+    // Part availability for the picking-detail modal (stock lots + open
+    // receiving sources, all orgs/sub-inventories).
+    getPartAvailability: (partNo: string, wclItemNo?: string | null) => {
+      const qs = new URLSearchParams();
+      qs.set("partNo", partNo);
+      if (wclItemNo) qs.set("wclItemNo", wclItemNo);
+      return api.get<PartAvailability>(`/admin/part-availability?${qs}`);
+    },
+    // Open picking-order demand for a part (uncovered remaining qty > 0).
+    getPartDemand: (partNo: string, wclItemNo?: string | null) => {
+      const qs = new URLSearchParams();
+      qs.set("partNo", partNo);
+      if (wclItemNo) qs.set("wclItemNo", wclItemNo);
+      return api.get<PartDemand>(`/admin/part-demand?${qs}`);
     },
 
     // Shipping (per-box — closed, unshipped boxes ready to ship)

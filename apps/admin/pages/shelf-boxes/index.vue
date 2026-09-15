@@ -61,6 +61,7 @@ function printSelectedBoxes() {
 }
 
 const statuses = ["open", "closed", "verified"];
+const statusOptions = statuses.map((s) => ({ value: s, label: s }));
 
 const showNew = ref(false);
 const newForm = reactive({ shelfCode: "", orgId: "", subInventoryCode: "", status: "open" });
@@ -215,9 +216,14 @@ onMounted(load);
           </div>
           <div class="form-row">
             <label for="nb-status">{{ $t("admin.pages.shelfBoxes.status") }}</label>
-            <select id="nb-status" v-model="newForm.status">
-              <option v-for="s in statuses" :key="s" :value="s">{{ s }}</option>
-            </select>
+            <SearchableSelect
+              v-model="newForm.status"
+              :options="statusOptions"
+              :all-label="$t('admin.pages.shelfBoxes.status')"
+              :aria-label="$t('admin.pages.shelfBoxes.status')"
+              :multiple="false"
+              :show-all="false"
+            />
           </div>
           <div class="dialog-actions">
             <button type="button" class="btn" @click="showNew = false">{{ $t("admin.common.cancel") }}</button>
@@ -249,9 +255,14 @@ onMounted(load);
           </div>
           <div class="form-row">
             <label for="eb-status">{{ $t("admin.pages.shelfBoxes.status") }}</label>
-            <select id="eb-status" v-model="editForm.status">
-              <option v-for="s in statuses" :key="s" :value="s">{{ s }}</option>
-            </select>
+            <SearchableSelect
+              v-model="editForm.status"
+              :options="statusOptions"
+              :all-label="$t('admin.pages.shelfBoxes.status')"
+              :aria-label="$t('admin.pages.shelfBoxes.status')"
+              :multiple="false"
+              :show-all="false"
+            />
           </div>
           <div class="dialog-actions">
             <button type="button" class="btn" @click="editing = null">{{ $t("admin.common.cancel") }}</button>
