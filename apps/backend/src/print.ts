@@ -47,13 +47,13 @@ async function callPrintService(path: string, init: RequestInit, timeoutMs: numb
 
 /** GET /api/v1/printers — available system printers. */
 export async function listPrinters(): Promise<unknown> {
-  return callPrintService("/api/v1/printers", {}, READ_TIMEOUT_MS);
+  return callPrintService("/api/v1/usb/agent-printers", {}, READ_TIMEOUT_MS);
 }
 
 /** POST /api/v1/templates/dynamic-print — print one template with params. */
 export async function dynamicPrint(payload: DynamicPrintBody): Promise<unknown> {
   return callPrintService(
-    "/api/v1/templates/dynamic-print",
+    "/api/v1/templates/service-dynamic-print",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
