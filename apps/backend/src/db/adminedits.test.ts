@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { queryGet } from "./query.js";
-import { updatePickingDeliveryDate, updateReceivingDeliveryDate, updateReceivingItemFields } from "./adminedits.js";
+import { updatePickingDeliveryDate, updatePickingOrderFields, updateReceivingDeliveryDate, updateReceivingItemFields } from "./adminedits.js";
 
 let client: TestDb;
 
@@ -134,5 +134,66 @@ test("admin edits: set and clear receiving invoice item date code + audit row", 
   assert.equal(cleared.id, itemId);
 
   const missing = await catchHttp(updateReceivingItemFields(client.db, { itemId: "nope", fields: { dateCode: "2608" }, actorId }));
+  assert.equal(missing.status, 404);
+});
+
+test("admin edits: picking order ship-to + location pair + audit rows", async () => {
+  await reseed(client);
+  const orderId = (await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT id FROM picking_orders WHERE order_no = 'SO-DEMO-0001'`
+  ))!.id;
+  const actorId = (await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'admin'`))!.id;
+
+  const set = await updatePickingOrderFields(client.db, {
+    orderId,
+    shipTo: "ACME HK Warehouse",
+    orgId: 2,
+    subInventoryCode: "WSTORE1",
+    actorId,
+  });
+  assert.equal(set.id, orderId);
+  const row = await queryGet<{ shipTo: string | null; orgId: number | null; sub: string | null }>(
+    client.db,
+    sql`SELECT ship_to AS "shipTo", org_id AS "orgId", sub_inventory_code AS sub FROM picking_orders WHERE id = ${orderId}`
+  );
+  assert.equal(row!.shipTo, "ACME HK Warehouse");
+  assert.equal(row!.orgId, 2);
+  assert.equal(row!.sub, "WSTORE1");
+
+  const shipLog = await queryGet<{ metadata: { field: string; to: string } }>(
+    client.db,
+    sql`SELECT metadata FROM transaction_logs
+        WHERE entity_type = 'picking_order' AND entity_id = ${orderId} AND metadata->>'field' = 'ship_to'
+        ORDER BY created_date DESC LIMIT 1`
+  );
+  assert.equal(shipLog!.metadata.to, "ACME HK Warehouse");
+  const locLog = await queryGet<{ metadata: { field: string; to: { orgId: number; subInventoryCode: string } } }>(
+    client.db,
+    sql`SELECT metadata FROM transaction_logs
+        WHERE entity_type = 'picking_order' AND entity_id = ${orderId} AND metadata->>'field' = 'org_sub_inventory'
+        ORDER BY created_date DESC LIMIT 1`
+  );
+  assert.equal(locLog!.metadata.to.orgId, 2);
+  assert.equal(locLog!.metadata.to.subInventoryCode, "WSTORE1");
+
+  // Clearing the pair (both null) is allowed.
+  await updatePickingOrderFields(client.db, { orderId, orgId: null, subInventoryCode: null, actorId });
+  const cleared = await queryGet<{ orgId: number | null; sub: string | null }>(
+    client.db,
+    sql`SELECT org_id AS "orgId", sub_inventory_code AS sub FROM picking_orders WHERE id = ${orderId}`
+  );
+  assert.equal(cleared!.orgId, null);
+  assert.equal(cleared!.sub, null);
+
+  const halfPair = await catchHttp(updatePickingOrderFields(client.db, { orderId, orgId: 2, actorId }));
+  assert.equal(halfPair.status, 400);
+  const badPair = await catchHttp(
+    updatePickingOrderFields(client.db, { orderId, orgId: 2, subInventoryCode: "NOPE", actorId })
+  );
+  assert.equal(badPair.status, 400);
+  const noFields = await catchHttp(updatePickingOrderFields(client.db, { orderId, actorId }));
+  assert.equal(noFields.status, 400);
+  const missing = await catchHttp(updatePickingOrderFields(client.db, { orderId: "nope", shipTo: "x", actorId }));
   assert.equal(missing.status, 404);
 });

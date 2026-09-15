@@ -1,10 +1,11 @@
 import { newId } from "./id.js";
 import { HTTPException } from "hono/http-exception";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { queryGet, queryRun } from "./query.js";
 import { transactionLogs } from "./schema/index.js";
 import { now } from "./now.js";
+import { scheduleAllocateAll } from "./allocate.js";
 
 // ---------------------------------------------------------------------------
 // Admin console edits to flow data (not master data): picking order delivery
@@ -56,6 +57,73 @@ export async function updatePickingDeliveryDate(
     to: input.deliveryDate,
   });
   return { id: input.orderId, deliveryDate: input.deliveryDate };
+}
+
+/**
+ * Admin edit of a picking order's ship-to text and/or ship-from location pair
+ * (org_id + sub_inventory_code, composite FK → org_info). The pair must be set
+ * together (both null clears it). A location change makes location-matched
+ * allocations stale, so a full recompute is scheduled after the write.
+ */
+export async function updatePickingOrderFields(
+  db: AppDb,
+  input: {
+    orderId: string;
+    shipTo?: string | null;
+    orgId?: number | null;
+    subInventoryCode?: string | null;
+    actorId: string | null;
+  }
+): Promise<{ id: string }> {
+  const hasShipTo = input.shipTo !== undefined;
+  const hasLocation = input.orgId !== undefined || input.subInventoryCode !== undefined;
+  if (!hasShipTo && !hasLocation) throw new HTTPException(400, { message: "no_fields" });
+  if (hasLocation && (input.orgId === undefined || input.subInventoryCode === undefined)) {
+    throw new HTTPException(400, { message: "orgId and subInventoryCode must be set together" });
+  }
+  if (hasLocation && (input.orgId === null) !== (input.subInventoryCode === null)) {
+    throw new HTTPException(400, { message: "orgId and subInventoryCode must be set together" });
+  }
+  const existing = await queryGet<{ shipTo: string | null; orgId: number | null; subInventoryCode: string | null }>(
+    db,
+    sql`SELECT ship_to AS "shipTo", org_id AS "orgId", sub_inventory_code AS "subInventoryCode"
+        FROM picking_orders WHERE id = ${input.orderId}`
+  );
+  if (!existing) throw new HTTPException(404, { message: "picking_order_not_found" });
+  if (hasLocation && input.orgId !== null && input.subInventoryCode !== null) {
+    const pair = await queryGet<{ orgId: number }>(
+      db,
+      sql`SELECT org_id AS "orgId" FROM org_info
+          WHERE org_id = ${input.orgId} AND secondary_inventory_name = ${input.subInventoryCode}`
+    );
+    if (!pair) throw new HTTPException(400, { message: "invalid_sub_inventory" });
+  }
+  const sets: SQL[] = [];
+  if (hasShipTo) sets.push(sql`ship_to = ${input.shipTo ?? null}`);
+  if (hasLocation) {
+    sets.push(sql`org_id = ${input.orgId ?? null}`);
+    sets.push(sql`sub_inventory_code = ${input.subInventoryCode ?? null}`);
+  }
+  await queryRun(
+    db,
+    sql`UPDATE picking_orders SET ${sql.join(sets, sql`, `)}, last_update_date = ${now()} WHERE id = ${input.orderId}`
+  );
+  if (hasShipTo && existing.shipTo !== (input.shipTo ?? null)) {
+    await audit(db, "picking_order", input.orderId, input.actorId, {
+      field: "ship_to",
+      from: existing.shipTo,
+      to: input.shipTo ?? null,
+    });
+  }
+  if (hasLocation && (existing.orgId !== (input.orgId ?? null) || existing.subInventoryCode !== (input.subInventoryCode ?? null))) {
+    await audit(db, "picking_order", input.orderId, input.actorId, {
+      field: "org_sub_inventory",
+      from: { orgId: existing.orgId, subInventoryCode: existing.subInventoryCode },
+      to: { orgId: input.orgId ?? null, subInventoryCode: input.subInventoryCode ?? null },
+    });
+    scheduleAllocateAll(db, "admin_edit");
+  }
+  return { id: input.orderId };
 }
 
 /** Set (or clear with null) the receiving order's delivery date. */

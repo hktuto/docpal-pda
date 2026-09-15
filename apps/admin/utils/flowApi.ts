@@ -65,6 +65,29 @@ export interface PickingOrderDetail extends Omit<PickingOrderRow, "itemCount" | 
   boxes: { id: string; status: string; boxSize: string | null; grossWeight: number | null; netWeight: number | null; destinationCountry: string | null; packageCount: number; shippedAt: string | null }[];
 }
 
+/** Admin-editable picking order fields (PATCH /admin/picking-orders/:id). */
+export interface PickingOrderEditFields {
+  deliveryDate?: string | null;
+  shipTo?: string | null;
+  orgId?: number | null;
+  subInventoryCode?: string | null;
+}
+
+/** org_info row from GET /admin/sub-inventories (location-pair picker). */
+export interface SubInventoryRow {
+  orgId: number;
+  secondaryInventoryName: string;
+  subinvDescription: string | null;
+  officeCode: string | null;
+}
+
+/** country_list row from GET /admin/countries (ship-to picker: show name, store code). */
+export interface CountryRow {
+  id: string;
+  code: string;
+  name: string;
+}
+
 // ---- receiving ----
 
 export interface AllocateAllSummary {
@@ -431,8 +454,13 @@ export function useFlowApi() {
         `/admin/picking-orders/${orderId}/items/${itemId}/allocations`,
         body
       ),
-    updatePickingDeliveryDate: (id: string, deliveryDate: string | null) =>
-      api.patch(`/admin/picking-orders/${id}`, { deliveryDate }),
+    // Order info edit: delivery date, ship-to (country code) and/or the
+    // ship-from location pair (orgId + subInventoryCode, set together; both
+    // null clears the pair) — one PATCH for the whole info section.
+    updatePickingOrder: (id: string, fields: PickingOrderEditFields) =>
+      api.patch(`/admin/picking-orders/${id}`, fields),
+    listSubInventories: () => api.get<SubInventoryRow[]>("/admin/sub-inventories"),
+    listCountries: () => api.get<CountryRow[]>("/admin/countries"),
 
     // Receiving
     listReceivingOrders: async (status?: string) =>

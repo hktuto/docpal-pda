@@ -22,6 +22,7 @@ interface OrderHeadRow {
   subInventoryCode: string | null;
   status: string;
   allocationStatus: string;
+  remark: string | null;
 }
 
 interface ItemRow {
@@ -63,7 +64,8 @@ adminPickingListRoute.get("/picking-orders/:id/picking-list", async (c) => {
         po.org_id AS "orgId",
         po.sub_inventory_code AS "subInventoryCode",
         po.status,
-        po.allocation_status AS "allocationStatus"
+        po.allocation_status AS "allocationStatus",
+        po.remark
       FROM picking_orders po
       WHERE po.id = ${id}
     `
@@ -123,6 +125,7 @@ adminPickingListRoute.get("/picking-orders/:id/picking-list", async (c) => {
   aoa.push(["Org / Sub-Inventory", [head.orgId ?? "", head.subInventoryCode ?? ""].join(" / ")]);
   aoa.push(["Status", head.status]);
   aoa.push(["Allocation Status", head.allocationStatus]);
+  aoa.push(["Remark", head.remark ?? ""]);
   aoa.push(["Generated At", new Date().toISOString()]);
   aoa.push([]);
   aoa.push([
@@ -144,46 +147,46 @@ adminPickingListRoute.get("/picking-orders/:id/picking-list", async (c) => {
     const itemBase: (string | number)[] = [item.partNo, item.qty, item.allocatedQty, item.pickedQty];
     const blankBase: (string | number)[] = ["", "", "", ""];
     const allocs = allocsByItem.get(item.id) ?? [];
-    if (allocs.length === 0) {
-      aoa.push([...itemBase, "(no allocation)", "", "", "", "", "", "", ""]);
-      continue;
-    }
-    let allocSum = 0;
-    // Item columns only on the item's first row; continuation rows and the
-    // UNALLOCATED footer carry just the allocation info.
-    let first = true;
-    for (const a of allocs) {
-      const base = first ? itemBase : blankBase;
-      first = false;
-      allocSum += a.qty;
-      if (a.lotId) {
-        aoa.push([
-          ...base,
-          "Shelf",
-          a.shelfCode ?? "",
-          a.boxId ?? "",
-          a.dateCode ?? "",
-          a.lotCode ?? "",
-          [a.coo ?? "", a.cow ?? ""].join(" / "),
-          [a.lotOrgId ?? "", a.lotSubInventoryCode ?? ""].join(" / "),
-          a.qty,
-        ]);
-      } else {
-        aoa.push([
-          ...base,
-          `Receiving ${a.receivingBatchNo ?? ""}`.trim(),
-          "(dock)",
-          "",
-          "",
-          "",
-          "",
-          "",
-          a.qty,
-        ]);
+    if (allocs.length > 0) {
+      let allocSum = 0;
+      // Item columns only on the item's first row; continuation rows and the
+      // UNALLOCATED footer carry just the allocation info.
+      let first = true;
+      for (const a of allocs) {
+        const base = first ? itemBase : blankBase;
+        first = false;
+        allocSum += a.qty;
+        if (a.lotId) {
+          aoa.push([
+            ...base,
+            "Shelf",
+            a.shelfCode ?? "",
+            a.boxId ?? "",
+            a.dateCode ?? "",
+            a.lotCode ?? "",
+            [a.coo ?? "", a.cow ?? ""].join(" / "),
+            [a.lotOrgId ?? "", a.lotSubInventoryCode ?? ""].join(" / "),
+            a.qty,
+          ]);
+        } else {
+          aoa.push([
+            ...base,
+            `Receiving ${a.receivingBatchNo ?? ""}`.trim(),
+            "(dock)",
+            "",
+            "",
+            "",
+            "",
+            "",
+            a.qty,
+          ]);
+        }
       }
-    }
-    if (item.qty > allocSum) {
-      aoa.push([...blankBase, "UNALLOCATED", "", "", "", "", "", "", item.qty - allocSum]);
+      if (item.qty > allocSum) {
+        aoa.push([...blankBase, "UNALLOCATED", "", "", "", "", "", "", item.qty - allocSum]);
+      }
+    } else {
+      aoa.push([...itemBase, "(no allocation)", "", "", "", "", "", "", ""]);
     }
     if (itemIdx < items.length - 1) aoa.push([]); // blank separator between item blocks
   }

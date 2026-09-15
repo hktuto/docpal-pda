@@ -98,6 +98,7 @@ async function seedScenario(): Promise<string> {
     ],
   });
   await allocateAll(client.db);
+  await client.db.execute(sql`UPDATE picking_orders SET remark = 'Handle with care' WHERE id = ${orderId}`);
   return orderId;
 }
 
@@ -130,10 +131,11 @@ test("GET picking-list: order-info block and flat allocation rows", async () => 
   assert.deepEqual(rows[5]!.slice(0, 2), ["Org / Sub-Inventory", "2 / STORE1"]);
   assert.deepEqual(rows[6]!.slice(0, 2), ["Status", "pending"]);
   assert.deepEqual(rows[7]!.slice(0, 2), ["Allocation Status", "partial"]);
-  assert.equal(rows[8]![0], "Generated At");
+  assert.deepEqual(rows[8]!.slice(0, 2), ["Remark", "Handle with care"]);
+  assert.equal(rows[9]![0], "Generated At");
 
   // Header row after the blank separator.
-  assert.deepEqual(rows[10], [
+  assert.deepEqual(rows[11], [
     "Part Number", "Item Qty", "Allocated Qty", "Picked Qty", "Source",
     "Location (Shelf)", "Box", "Date Code", "Lot Code", "COO / COW",
     "Source Org / Sub-Inv", "Alloc Qty",
@@ -143,7 +145,7 @@ test("GET picking-list: order-info block and flat allocation rows", async () => 
   // block by its first row rather than assuming a fixed order). Item blocks
   // are separated by a fully blank row; continuation rows have blank item
   // columns but non-empty allocation columns.
-  const data = rows.slice(11);
+  const data = rows.slice(12);
   assert.equal(data.length, 7); // 5 data rows + 2 blank separators
   const isBlank = (r: (string | number)[]) => r.every((cell) => cell === "");
   assert.equal(data.filter(isBlank).length, 2); // separators between the 3 items
@@ -158,6 +160,10 @@ test("GET picking-list: order-info block and flat allocation rows", async () => 
     ) {
       block.push(data[i + block.length]!);
     }
+    // Every non-last block — including a `(no allocation)` one — is followed
+    // by a blank separator row.
+    const next = data[i + block.length];
+    if (next !== undefined) assert.ok(isBlank(next), `blank separator after ${partNo}`);
     return block;
   };
 

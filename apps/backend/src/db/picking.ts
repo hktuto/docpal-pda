@@ -794,6 +794,7 @@ export async function getPickingOrderDetail(
         po.ship_to AS "shipTo",
         po.customer_code AS "customerCode",
         po.org_id AS "orgId", po.sub_inventory_code AS "subInventoryCode",
+        po.picking_order_type AS "pickingOrderType", po.remark,
         po.working_by AS "workingBy", w.display_name AS "workingByName",
         po.issue_reason AS "issueReason", po.issue_qty AS "issueQty", po.issue_pack_size AS "issuePackSize",
         po.issue_note AS "issueNote", po.issue_remark AS "issueRemark",

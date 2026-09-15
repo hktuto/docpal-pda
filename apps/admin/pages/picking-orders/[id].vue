@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { OrderLogsParams, OrderLogsPage, PickingOrderDetail } from "~/utils/flowApi";
+import type { CountryRow, OrderLogsParams, OrderLogsPage, PickingOrderDetail, SubInventoryRow } from "~/utils/flowApi";
 import type { AdminColumnDef } from "~/composables/useAdminTable";
 import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 
@@ -17,8 +17,49 @@ const loading = ref(true);
 const error = ref("");
 
 const deliveryDate = ref("");
-const savingDate = ref(false);
-const dateMsg = ref("");
+
+// Info-section edit (delivery date, ship-to, location pair) — one Save
+// button at the section's bottom right PATCHes all three in one call.
+// Ship-to is a country dropdown (show name, store the country_list code);
+// the location pair is a composite FK to org_info, so it must be set
+// together (both empty clears it) and the backend schedules an allocation
+// recompute on change.
+const shipToInput = ref(""); // country code; "" = none
+const savingInfo = ref(false);
+const infoSaved = ref(false);
+
+const countries = ref<CountryRow[]>([]);
+const countryOptions = computed<SearchableSelectOption[]>(() =>
+  [...countries.value].sort((a, b) => a.name.localeCompare(b.name)).map((c) => ({ value: c.code, label: c.name }))
+);
+
+const subInventories = ref<SubInventoryRow[]>([]);
+const editOrgId = ref(""); // "" = none
+const editSubInventory = ref(""); // "" = none
+const locationError = ref("");
+
+const orgOptions = computed<SearchableSelectOption[]>(() => {
+  const seen = new Set<number>();
+  for (const r of subInventories.value) seen.add(r.orgId);
+  return [...seen].sort((a, b) => a - b).map((o) => ({ value: String(o), label: String(o) }));
+});
+
+const subInventoryOptions = computed<SearchableSelectOption[]>(() =>
+  subInventories.value
+    .filter((r) => String(r.orgId) === editOrgId.value)
+    .map((r) => ({
+      value: r.secondaryInventoryName,
+      label: r.subinvDescription ? `${r.secondaryInventoryName} — ${r.subinvDescription}` : r.secondaryInventoryName,
+    }))
+);
+
+// A sub-inventory code only exists under its own org — drop the selection
+// when the org changes to one that doesn't have it.
+watch(editOrgId, () => {
+  if (editSubInventory.value && !subInventoryOptions.value.some((o) => o.value === editSubInventory.value)) {
+    editSubInventory.value = "";
+  }
+});
 
 // Issue resolution (status === 'issue'): optional note, then back to pending.
 const resolvingIssue = ref(false);
@@ -171,6 +212,9 @@ async function load() {
   try {
     order.value = await flow.getPickingOrder(orderId);
     deliveryDate.value = order.value.deliveryDate ? order.value.deliveryDate.slice(0, 10) : "";
+    shipToInput.value = order.value.shipTo ?? "";
+    editOrgId.value = order.value.orgId != null ? String(order.value.orgId) : "";
+    editSubInventory.value = order.value.subInventoryCode ?? "";
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -178,19 +222,31 @@ async function load() {
   }
 }
 
-async function saveDeliveryDate() {
-  savingDate.value = true;
-  dateMsg.value = "";
+async function saveInfo() {
+  infoSaved.value = false;
+  locationError.value = "";
+  const orgSet = editOrgId.value !== "";
+  const subSet = editSubInventory.value !== "";
+  if (orgSet !== subSet) {
+    locationError.value = t("admin.pages.pickingOrders.locationPairRequired");
+    return;
+  }
+  savingInfo.value = true;
   error.value = "";
   try {
-    await flow.updatePickingDeliveryDate(orderId, deliveryDate.value || null);
+    await flow.updatePickingOrder(orderId, {
+      deliveryDate: deliveryDate.value || null,
+      shipTo: shipToInput.value || null,
+      orgId: orgSet ? Number(editOrgId.value) : null,
+      subInventoryCode: subSet ? editSubInventory.value : null,
+    });
     await load();
     logsKey.value++;
-    dateMsg.value = "saved";
+    infoSaved.value = true;
   } catch (e: any) {
     error.value = e.message;
   } finally {
-    savingDate.value = false;
+    savingInfo.value = false;
   }
 }
 
@@ -352,7 +408,17 @@ function allocationSource(a: PickingOrderDetail["items"][number]["allocations"][
   return "—";
 }
 
-onMounted(load);
+onMounted(() => {
+  load();
+  flow
+    .listSubInventories()
+    .then((rows) => (subInventories.value = rows))
+    .catch(() => {}); // picker options stay empty; the order still loads
+  flow
+    .listCountries()
+    .then((rows) => (countries.value = rows))
+    .catch(() => {});
+});
 
 // Reload when the order changes elsewhere (PDA picks, issue reports, allocation).
 // Busy while the report-issue modal is open: banner instead of a silent reload.
@@ -417,18 +483,53 @@ const {
         <div><div class="dt">{{ $t("admin.pages.pickingOrders.status") }}</div><div class="dd">{{ $t(`status.picking.${order.status}`) }}</div></div>
         <div><div class="dt">{{ $t("admin.pages.pickingOrders.customer") }}</div><div class="dd">{{ order.customerCode ?? "—" }}</div></div>
         <div><div class="dt">{{ $t("admin.pages.pickingOrders.poNo") }}</div><div class="dd">{{ order.poNo ?? "—" }}</div></div>
-        <div><div class="dt">{{ $t("admin.pages.pickingOrders.shipTo") }}</div><div class="dd">{{ order.shipTo ?? "—" }}</div></div>
-        <div><div class="dt">{{ $t("admin.pages.pickingOrders.orgSubInventory") }}</div><div class="dd">{{ order.orgId ?? "—" }} / {{ order.subInventoryCode ?? "—" }}</div></div>
+        <div><div class="dt">{{ $t("admin.pages.pickingOrders.type") }}</div><div class="dd">{{ order.pickingOrderType ?? "—" }}</div></div>
+        <div><div class="dt">{{ $t("admin.pages.pickingOrders.remark") }}</div><div class="dd">{{ order.remark ?? "—" }}</div></div>
+        <div>
+          <div class="dt">{{ $t("admin.pages.pickingOrders.shipTo") }}</div>
+          <div class="dd date-edit">
+            <SearchableSelect
+              v-model="shipToInput"
+              :options="countryOptions"
+              :all-label="$t('admin.pages.pickingOrders.locationNone')"
+              :aria-label="$t('admin.pages.pickingOrders.shipTo')"
+              :multiple="false"
+              class="ship-to-select"
+            />
+          </div>
+        </div>
+        <div>
+          <div class="dt">{{ $t("admin.pages.pickingOrders.orgSubInventory") }}</div>
+          <div class="dd location-edit">
+            <SearchableSelect
+              v-model="editOrgId"
+              :options="orgOptions"
+              :all-label="$t('admin.pages.pickingOrders.locationNone')"
+              :aria-label="$t('admin.pages.pickingOrders.locationOrg')"
+              :multiple="false"
+            />
+            <SearchableSelect
+              v-model="editSubInventory"
+              :options="subInventoryOptions"
+              :all-label="$t('admin.pages.pickingOrders.locationNone')"
+              :aria-label="$t('admin.pages.pickingOrders.locationSubInventory')"
+              :multiple="false"
+            />
+          </div>
+          <div v-if="locationError" class="field-error">{{ locationError }}</div>
+        </div>
         <div>
           <div class="dt">{{ $t("admin.pages.pickingOrders.deliveryDate") }}</div>
           <div class="dd date-edit">
             <input v-model="deliveryDate" type="date" />
-            <button class="btn btn-small btn-primary" :disabled="savingDate" @click="saveDeliveryDate">
-              {{ savingDate ? $t("admin.common.saving") : $t("admin.common.save") }}
-            </button>
-            <span v-if="dateMsg" class="muted">{{ $t("admin.pages.pickingOrders.saved") }}</span>
           </div>
         </div>
+      </div>
+      <div class="info-actions">
+        <span v-if="infoSaved" class="muted">{{ $t("admin.pages.pickingOrders.saved") }}</span>
+        <button class="btn btn-primary" :disabled="savingInfo" @click="saveInfo">
+          {{ savingInfo ? $t("admin.common.saving") : $t("admin.common.save") }}
+        </button>
       </div>
 
       <template v-if="order.status === 'issue'">
@@ -587,6 +688,34 @@ const {
   padding: 5px 7px;
   border: 1px solid #b6c2cd;
   border-radius: 4px;
+}
+.info-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.ship-to-select {
+  min-width: 220px;
+}
+.location-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.location-edit > * {
+  min-width: 140px;
+}
+.location-edit .btn,
+.location-edit .muted {
+  min-width: 0;
+}
+.field-error {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #b3261e;
 }
 .alloc-done-banner {
   margin-bottom: 12px;

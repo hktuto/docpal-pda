@@ -132,6 +132,20 @@
   / `(dock)` for dock sources, `UNALLOCATED` shortfall rows, `(no allocation)`
   for unallocated items). It never recomputes allocations — the operator uses
   the explicit Re-allocate action first if the sheet might be stale.
+- Admin order-field edits: the admin picking-order detail page inline-edits
+  the delivery date, the ship-to (single-select dropdown over
+  `GET /admin/countries` — shows the `country_list` name, stores the code),
+  and the ship-from location pair
+  (org + sub-inventory, chosen from `GET /admin/sub-inventories`; the pair is
+  a composite FK to `org_info` so both must be set together, both empty
+  clears it) via `PATCH /admin/picking-orders/:id`
+  (`apps/backend/src/db/adminedits.ts` `updatePickingDeliveryDate` /
+  `updatePickingOrderFields`). Each change writes a `transaction_logs`
+  `admin_edit` audit row (metadata field/from/to); a location change also
+  schedules a background `allocateAll` because location-matched allocations
+  go stale. The detail grid also shows the read-only `picking_order_type`
+  and `remark` (also list columns; the list filters type client-side,
+  invoice/tn).
 - Allocation location matching: a picking order's `(org_id,
   sub_inventory_code)` pair must match the stock source's pair (pair-less
   orders are org-agnostic), widened by `sub_inventory_share_members` —

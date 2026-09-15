@@ -68,13 +68,15 @@ Title row: `Picking List — {orderNo}`. Then a two-column order-info block
 | Org / Sub-Inventory | `org_id` / `sub_inventory_code` (ship-from partition) |
 | Status | `picking_orders.status` |
 | Allocation Status | `picking_orders.allocation_status` |
+| Remark | `picking_orders.remark` |
 | Generated At | server timestamp |
 
 Blank row, then the item/allocation table. Items are ordered by
 `picking_items` row order; within an item, allocations are sorted by
 `shelf_code` then `box_id` (NULLS LAST) so the sheet reads as a walking
-route. A blank separator row appears **between item blocks** (rows within
-one item stay contiguous). Columns:
+route. A blank separator row appears **between every pair of item blocks** —
+including after `(no allocation)` items (rows within one item stay
+contiguous). Columns:
 
 | Column | Content |
 |---|---|
