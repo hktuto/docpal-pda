@@ -101,6 +101,19 @@
   order's part keys (`allocateForPickingOrder`), which also rebuilds sibling
   orders sharing a part and 409s on a live work lock (`lock_held` with the
   holder's name) or a non-open order (`order_not_open`).
+- Admin picking-list download (spec
+  `docs/superpowers/specs/2026-09-14-admin-picking-list-download-design.md`):
+  "Download picking list" on the admin picking-order detail page fetches
+  `GET /admin/picking-orders/:id/picking-list`
+  (`apps/backend/src/routes/admin/pickingList.ts`) — a read-only xlsx with an
+  order-info block and one flat row per allocation (shelf / box / date code /
+  lot / source org+sub-inventory / qty for lot sources, `Receiving {batchNo}`
+  / `(dock)` for dock sources, `UNALLOCATED` shortfall rows, `(no allocation)`
+  for unallocated items). It never recomputes allocations — the operator uses
+  the explicit Re-allocate action first if the sheet might be stale.
+- Allocation location matching: a picking order's `(org_id,
+  sub_inventory_code)` pair must match the stock source's pair (pair-less
+  orders are org-agnostic), widened by `sub_inventory_share_members` —
 - Allocation location matching: a picking order's `(org_id,
   sub_inventory_code)` pair must match the stock source's pair (pair-less
   orders are org-agnostic), widened by `sub_inventory_share_members` —

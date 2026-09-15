@@ -235,6 +235,35 @@ async function reallocate() {
 
 onBeforeUnmount(() => clearTimeout(reallocTimer));
 
+// Picking-list xlsx download (backend-generated; read-only — reflects current
+// allocations, no in-request recompute, so no reload afterwards).
+const apiBaseUrl = useRuntimeConfig().public.apiBaseUrl as string;
+const downloadingPickingList = ref(false);
+
+async function downloadPickingList() {
+  if (!order.value || downloadingPickingList.value) return;
+  downloadingPickingList.value = true;
+  error.value = "";
+  try {
+    const token = localStorage.getItem("admin_token");
+    const res = await fetch(`${apiBaseUrl}/admin/picking-orders/${orderId}/picking-list`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!res.ok) throw new Error((await res.text()).trim() || `Request failed (${res.status})`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `picking-list-${order.value.orderNo}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e: any) {
+    error.value = `${t("admin.pages.pickingOrders.pickingListError")}: ${e.message}`;
+  } finally {
+    downloadingPickingList.value = false;
+  }
+}
+
 async function resolveIssue() {
   const note = window.prompt(t("admin.pages.pickingOrders.resolvePrompt"));
   if (note === null) return;
@@ -294,11 +323,8 @@ const {
     <div class="page-head">
       <h1>{{ $t("admin.pages.pickingOrders.detailTitle", { orderNo: order?.orderNo ?? "" }) }}</h1>
       <div class="head-actions">
-        <button class="btn" disabled :title="$t('admin.common.downloadPendingTitle')">
-          {{ $t("admin.pages.pickingOrders.downloadPackingList") }}
-        </button>
-        <button class="btn" disabled :title="$t('admin.common.downloadPendingTitle')">
-          {{ $t("admin.pages.pickingOrders.downloadTN") }}
+        <button class="btn" :disabled="downloadingPickingList" @click="downloadPickingList">
+          {{ $t("admin.pages.pickingOrders.downloadPickingList") }}
         </button>
         <button
           v-if="order && (order.status === 'pending' || order.status === 'picking')"

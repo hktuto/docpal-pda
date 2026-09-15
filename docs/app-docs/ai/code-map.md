@@ -141,7 +141,7 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Stock search (read-only; supplier + part-no filter) | `/stock-search` | `apps/admin/pages/stock-search.vue` |
 | Sub-inventories (+ share-group manager dialog, filter/sort) | `/sub-inventories` | `apps/admin/pages/sub-inventories.vue` |
 | Shelf boxes list / detail | `/shelf-boxes`, `/shelf-boxes/:id` | `apps/admin/pages/shelf-boxes/index.vue`, `apps/admin/pages/shelf-boxes/[id].vue` |
-| Picking orders list / detail (delivery-date edit) | `/picking-orders`, `/picking-orders/:id` | `apps/admin/pages/picking-orders/index.vue`, `apps/admin/pages/picking-orders/[id].vue` |
+| Picking orders list / detail (delivery-date edit, picking-list xlsx download) | `/picking-orders`, `/picking-orders/:id` | `apps/admin/pages/picking-orders/index.vue`, `apps/admin/pages/picking-orders/[id].vue` |
 | Picking priority reorder | `/picking/reorder` | `apps/admin/pages/picking/reorder.vue` |
 | Receiving orders list / detail (delivery-date edit, item detail edit single/batch — date code / lot code / COO / COW / ctn no, invoice filter, confirm in-hand, shipper xlsx download + finished-shipper for clear orders) | `/receiving`, `/receiving/:id` | `apps/admin/pages/receiving/index.vue`, `apps/admin/pages/receiving/[id].vue`, `apps/admin/components/receiving/ItemEditModal.vue` |
 | Shipping boxes list / detail (orders-in-box, per-box ship) | `/shipping`, `/shipping/:boxId` | `apps/admin/pages/shipping/index.vue`, `apps/admin/pages/shipping/[id].vue` |
@@ -182,6 +182,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | `/admin/*` master-data CRUD | `apps/backend/src/routes/admin/` |
 | `/admin/sub-inventory-share-groups` (share-group membership upsert/remove) | `apps/backend/src/routes/admin/subInventoryShareGroups.ts` |
 | `GET /admin/receiving-orders/:id/shipper` (shipper xlsx download; `?mode=finished` for actuals) | `apps/backend/src/routes/admin/receivingShipper.ts` |
+| `GET /admin/picking-orders/:id/picking-list` (picking-list xlsx download, read-only) | `apps/backend/src/routes/admin/pickingList.ts` |
 | `GET /admin/user-profiles`, `PUT /admin/user-profiles/:username` (per-user sub-inventory scope; pre-provisioning allowed) | `apps/backend/src/routes/admin/userProfiles.ts` |
 | `POST /admin/allocation/run`, `POST /admin/picking-orders/:id/reallocate` (manual allocation triggers) | `apps/backend/src/routes/admin/allocation.ts` |
 
