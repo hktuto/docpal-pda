@@ -26,6 +26,7 @@ body {
   font-size: 14px;
   color: #1f2933;
   background: #f7f9fc;
+  position: relative;
 }
 
 a {

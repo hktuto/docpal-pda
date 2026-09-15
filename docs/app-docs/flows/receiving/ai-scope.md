@@ -71,8 +71,11 @@
   `apps/backend/src/routes/admin/receivingShipper.ts`): receipts grouped
   by part, each group one merged block (customer names / recommended shelf +
   order_nos overlaid on the block's last rows, one `invoice_no ctn_no` item
-  row per carton) with per-block slots, per-group Total/Balance. In-hand
-  orders are re-allocated in the request before the sheet is built;
+  row per carton) with per-block slots, per-group Total/Balance. The
+  download is read-only; a separate Re-allocate button (`in_hand` only)
+  awaits `POST /admin/receiving-orders/:id/reallocate` (same scoped core as
+  confirm-arrival; 404 `receiving_order_not_found`, 409
+  `order_not_in_hand`) to recompute the order's allocations first if stale;
   whole-order (no `ctn_no`) allocations close each group on a closing
   `(order-level)` block. Completed (`clear`) orders get
   `?mode=finished` instead — same layout, slots from actual

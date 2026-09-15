@@ -443,6 +443,10 @@ export function useFlowApi() {
     allocateAll: () => api.post<AllocateAllSummary>(`/admin/allocation/run`, {}),
     reallocatePickingOrder: (id: string) =>
       api.post<{ allocation: AllocationRunSummary }>(`/admin/picking-orders/${id}/reallocate`, {}),
+    // allocation is null when the scoped recompute fell back to the
+    // background full recompute (same as confirm-arrival).
+    reallocateReceivingOrder: (id: string) =>
+      api.post<{ allocation: AllocationRunSummary | null }>(`/admin/receiving-orders/${id}/reallocate`, {}),
     removePickingAllocation: (orderId: string, itemId: string, allocationId: string) =>
       api.del<{ removed: number; qty: number }>(`/admin/picking-orders/${orderId}/items/${itemId}/allocations/${allocationId}`),
     addManualPickingAllocation: (

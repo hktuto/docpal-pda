@@ -566,17 +566,22 @@ const {
         </template>
         <template #cell-line="{ row }">{{ row.lineNumber ?? "—" }} / {{ row.shipmentNumber ?? "—" }}</template>
         <template #cell-allocations="{ row }">
-          <div v-for="a in row.allocations" :key="a.id" class="alloc-row">
-            <span>{{ a.qty }} × {{ allocationSource(a) }}</span>
-            <button
-              class="icon-btn alloc-remove"
-              :disabled="removingAlloc[a.id]"
-              :title="$t('admin.pages.pickingOrders.removeAllocation')"
-              @click.stop="removeAllocation(row, a)"
-            >
-              {{ removingAlloc[a.id] ? "…" : "✕" }}
-            </button>
-          </div>
+          <template v-for="a in row.allocations" :key="a.id">
+            <AllocationsStockAllocationRow
+              v-if="a.lot"
+              :qty="a.qty"
+              :removing="!!removingAlloc[a.id]"
+              :remove-title="$t('admin.pages.pickingOrders.removeAllocation')"
+              @remove="removeAllocation(row, a)"
+            >{{ allocationSource(a) }}</AllocationsStockAllocationRow>
+            <AllocationsReceivingAllocationRow
+              v-else
+              :qty="a.qty"
+              :removing="!!removingAlloc[a.id]"
+              :remove-title="$t('admin.pages.pickingOrders.removeAllocation')"
+              @remove="removeAllocation(row, a)"
+            >{{ allocationSource(a) }}</AllocationsReceivingAllocationRow>
+          </template>
           <span v-if="row.allocations.length === 0" class="muted">—</span>
         </template>
         <template #cell-packages="{ row }">

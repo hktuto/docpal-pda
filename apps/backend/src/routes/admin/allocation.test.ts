@@ -3,6 +3,8 @@
 //   POST /admin/allocation/run                  — full-fleet recompute
 //   POST /admin/picking-orders/:id/reallocate   — recompute scoped to the
 //     order's part keys (404 unknown / 409 order_not_open / 409 lock_held)
+//   POST /admin/receiving-orders/:id/reallocate — same scoped recompute for
+//     a receiving order (404 unknown / 409 order_not_in_hand unless in_hand)
 // Dynamic app import so DATABASE_URL points at the test DB first (same
 // pattern as src/routes/admin/receivingShipper.test.ts).
 
@@ -166,6 +168,58 @@ test("reallocate: 409 order_not_open for a finished order", async () => {
   const res = await req(`/admin/picking-orders/${orderA}/reallocate`, { method: "POST" });
   assert.equal(res.status, 409);
   assert.match(await res.text(), /order_not_open/);
+});
+
+// --- POST /admin/receiving-orders/:id/reallocate -----------------------------
+
+test("receiving-reallocate: 404 for an unknown receiving order", async () => {
+  await reseed(client);
+  const res = await req(`/admin/receiving-orders/${randomUUID()}/reallocate`, { method: "POST" });
+  assert.equal(res.status, 404);
+  assert.match(await res.text(), /receiving_order_not_found/);
+});
+
+test("receiving-reallocate: 409 order_not_in_hand for a pending order", async () => {
+  await reseed(client);
+  const receivingOrderId = await insertReceivingOrder(client.db, "RA-PENDING-01", {
+    order: { supplierCode: "DAITO", deliveryDate: "2026-09-14" },
+    invoices: [
+      {
+        invoiceNo: "INV-RA-P01",
+        totalCtn: 1,
+        items: [{ partNo: "REALLOC-P1", poNo: "PO-9", poLine: "1", lineQty: 10, orgId: 2, subInventoryCode: "STORE1" }],
+      },
+    ],
+  });
+
+  const res = await req(`/admin/receiving-orders/${receivingOrderId}/reallocate`, { method: "POST" });
+  assert.equal(res.status, 409);
+  assert.match(await res.text(), /order_not_in_hand/);
+});
+
+test("receiving-reallocate: rebuilds the order's part scope for an in-hand order", async () => {
+  await reseed(client);
+  const { orderA } = await seedScenario();
+  const receivingOrderId = (
+    await queryGet<{ id: string }>(client.db, sql`SELECT id FROM receiving_orders WHERE batch_no = 'RA-TEST-01'`)
+  )!.id;
+
+  // New shelf stock arrives after the last allocateAll — stale until the
+  // scoped recompute runs.
+  await client.db.execute(sql`
+    INSERT INTO inventory_lots (id, part_no, date_code, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
+    VALUES ('LOT-REALLOC-R1', 'REALLOC-P1', '2001', 'A-04-05', 'REALLOCRBX1', 2, 'STORE1', 700, now(), now())
+  `);
+  assert.ok((await allocRows(orderA)).every((a) => a.receivingItemId !== null));
+
+  const res = await req(`/admin/receiving-orders/${receivingOrderId}/reallocate`, { method: "POST" });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.ok(body.allocation.durationMs >= 0);
+
+  // Order A (priority first) now holds 600 from the new lot.
+  const a = await allocRows(orderA);
+  assert.deepEqual(a.map((r) => [r.lotId, r.qty]), [["LOT-REALLOC-R1", 600]]);
 });
 
 test("allocate-all: full recompute returns the summary and rebuilds allocations", async () => {

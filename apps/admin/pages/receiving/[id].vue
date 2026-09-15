@@ -294,9 +294,52 @@ async function confirmInHand() {
   }
 }
 
-// Shipper xlsx downloads (backend-generated, shipper layout). Live mode
-// (in-hand order) re-runs the scoped allocation recompute in the request;
-// finished mode (clear order) reports actual picked qtys.
+// "Re-allocate": awaited scoped recompute (allocateForReceivingOrder) —
+// only meaningful once the order is in-hand (409 order_not_in_hand).
+const reallocating = ref(false);
+
+async function reallocate() {
+  if (!order.value || reallocating.value) return;
+  if (!window.confirm(t("admin.pages.receiving.reallocateConfirm", { batchNo: order.value.batchNo }))) return;
+  reallocating.value = true;
+  error.value = "";
+  allocState.value = "";
+  try {
+    const res = await flow.reallocateReceivingOrder(orderId);
+    await load();
+    logsKey.value++;
+    if (res.allocation) showAllocationDone(res.allocation.durationMs);
+    else waitForAllocation();
+  } catch (e: any) {
+    let handled = false;
+    try {
+      const body = JSON.parse(e.message);
+      if (body?.error === "lock_held") {
+        error.value = t("admin.pages.pickingOrders.reallocateLocked", {
+          orderNo: order.value.batchNo,
+          name: body.holderName ?? body.holderId,
+        });
+        handled = true;
+      } else if (body?.error === "order_not_in_hand") {
+        error.value = t("admin.pages.receiving.reallocateNotInHand");
+        handled = true;
+      } else if (body?.error === "receiving_order_not_found") {
+        error.value = t("admin.pages.receiving.reallocateNotFound");
+        handled = true;
+      }
+    } catch {
+      // not JSON — fall through to the raw message
+    }
+    if (!handled) error.value = e.message;
+  } finally {
+    reallocating.value = false;
+  }
+}
+
+// Shipper xlsx downloads (backend-generated, shipper layout) — read-only;
+// re-allocation moved to the Re-allocate button above. Live mode (in-hand
+// order) reports current allocations; finished mode (clear order) reports
+// actual picked qtys.
 const downloadingShipper = ref(false);
 
 async function downloadShipper(finished: boolean) {
@@ -319,11 +362,6 @@ async function downloadShipper(finished: boolean) {
     a.download = `${finished ? "finished-shipper" : "shipper"}-${order.value.batchNo}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
-    if (!finished) {
-      // The in-request recompute may have changed allocations/logs — refresh.
-      await load();
-      logsKey.value++;
-    }
   } catch (e: any) {
     error.value = `${t("admin.pages.receiving.shipperError")}: ${e.message}`;
   } finally {
@@ -546,6 +584,14 @@ const {
           {{ $t("admin.pages.receiving.downloadFinishedShipper") }}
         </button>
         <button
+          v-if="order && order.status === 'in_hand'"
+          class="btn"
+          :disabled="reallocating"
+          @click="reallocate"
+        >
+          {{ reallocating ? $t("admin.common.saving") : $t("admin.pages.receiving.reallocate") }}
+        </button>
+        <button
           v-if="order && (order.status === 'pending' || order.status === 'provisional_received')"
           class="btn btn-primary"
           :disabled="confirmingArrival"
@@ -660,20 +706,18 @@ const {
           </template>
           <template #cell-allocatedQty="{ row }">
             <div>{{ row.allocatedQty }}</div>
-            <div v-for="a in row.allocations" :key="a.id" class="alloc-row alloc-line">
-              <span>
-                {{ a.qty }} × {{ a.orderNo }}
-                <span v-if="a.manual" class="manual-badge">{{ $t("admin.pages.receiving.manualBadge") }}</span>
-              </span>
-              <button
-                class="icon-btn alloc-remove"
-                :disabled="removingAlloc[a.id]"
-                :title="$t('admin.pages.pickingOrders.removeAllocation')"
-                @click.stop="removeAllocation(row, a)"
-              >
-                {{ removingAlloc[a.id] ? "…" : "✕" }}
-              </button>
-            </div>
+            <AllocationsReceivingAllocationRow
+              v-for="a in row.allocations"
+              :key="a.id"
+              class="alloc-line"
+              :qty="a.qty"
+              :removing="!!removingAlloc[a.id]"
+              :remove-title="$t('admin.pages.pickingOrders.removeAllocation')"
+              @remove="removeAllocation(row, a)"
+            >
+              {{ a.orderNo }}
+              <span v-if="a.manual" class="manual-badge">{{ $t("admin.pages.receiving.manualBadge") }}</span>
+            </AllocationsReceivingAllocationRow>
           </template>
           <template #actions="{ row }">
             <button class="btn btn-small" @click="openEdit(row)">

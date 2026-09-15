@@ -1,6 +1,9 @@
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
+import { sql } from "drizzle-orm";
 import { db } from "../../db.js";
-import { allocateAll, allocateForPickingOrder, addManualPickingAllocation, removePickingAllocation } from "../../db/allocate.js";
+import { queryGet } from "../../db/query.js";
+import { allocateAll, allocateForPickingOrder, allocateForReceivingOrder, addManualPickingAllocation, removePickingAllocation } from "../../db/allocate.js";
 import { actorFrom } from "../../auth/middleware.js";
 
 // Manual allocation triggers for the admin console (spec
@@ -23,6 +26,23 @@ adminAllocationRoute.post("/allocation/run", async (c) => {
 // keys (404 picking_order_not_found / 409 order_not_open / 409 lock_held).
 adminAllocationRoute.post("/picking-orders/:id/reallocate", async (c) => {
   const allocation = await allocateForPickingOrder(db, c.req.param("id"));
+  return c.json({ allocation });
+});
+
+// "Re-allocate" on the receiving order detail: scoped to the order's part
+// keys (same core as confirm-arrival). 404 receiving_order_not_found; 409
+// order_not_in_hand unless the order has arrived (re-allocation is only
+// meaningful once in-hand). allocateForReceivingOrder doesn't throw on
+// unknown orders, so existence/status are checked here first.
+adminAllocationRoute.post("/receiving-orders/:id/reallocate", async (c) => {
+  const id = c.req.param("id");
+  const head = await queryGet<{ status: string }>(
+    db,
+    sql`SELECT status FROM receiving_orders WHERE id = ${id}`
+  );
+  if (!head) throw new HTTPException(404, { message: "receiving_order_not_found" });
+  if (head.status !== "in_hand") throw new HTTPException(409, { message: "order_not_in_hand" });
+  const allocation = await allocateForReceivingOrder(db, id);
   return c.json({ allocation });
 });
 

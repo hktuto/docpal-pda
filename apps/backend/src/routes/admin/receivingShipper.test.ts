@@ -2,8 +2,8 @@
 // 2026-09-14-admin-receiving-shipper-download-design.md): shipper-style xlsx —
 // merged per-part blocks (one row per carton, slot rows overlaid on the
 // block's last three rows), order-level (no ctn) rows, Total/Balance.
-// Modes: default (live — in-request scoped recompute for in-hand orders,
-// slots from `allocations`) and ?mode=finished (slots from actual
+// Modes: default (live — slots from the current `allocations` table, no
+// in-request recompute) and ?mode=finished (slots from actual
 // `picking_packages` traced back to the order's invoice items).
 // Dynamic app import so DATABASE_URL points at the test DB first (same
 // pattern as src/routes/admin-flow-config.test.ts).
@@ -151,24 +151,36 @@ test("GET shipper: merged part blocks with per-block order slots and balance", a
   assert.equal(rows.length, 17);
 });
 
-test("GET shipper: in-hand download re-runs the scoped allocation first", async () => {
+test("GET shipper: reflects current allocations — recompute happens on the reallocate endpoint, not the download", async () => {
   await reseed(client);
   const orderId = await seedScenario();
 
-  // New demand arrives AFTER the last allocateAll — without the in-request
-  // recompute the sheet would not mention SO-PL-003.
+  // New demand arrives AFTER the last allocateAll — the download alone must
+  // NOT pick it up (no in-request recompute since 2026-09-15).
   await insertPickingOrder(client.db, randomUUID(), {
     order: { orderNo: "SO-PL-003", orgId: 2, subInventoryCode: "STORE1" },
     items: [{ partNo: "RK73H2ATTD1372F", qty: 500 }],
   });
 
+  const resBefore = await req(`/admin/receiving-orders/${orderId}/shipper`);
+  assert.equal(resBefore.status, 200);
+  const rowsBefore = await sheetRows(await resBefore.arrayBuffer());
+  // Still 3 slots (SO-PL-001 ×2, SO-PL-002); SO-PL-003 absent, balance 500.
+  assert.deepEqual(rowsBefore[4], ["Invoice / Ctn", "Part Number", "Qty", "Total Qty", "Customer", "Customer", "Customer", "Balance"]);
+  assert.deepEqual(rowsBefore[16], ["INV-PL-01 7002", "RK73H2ATTD1372F", 2000, 3000, 1000, 500, 1000, 500]);
+
+  // The separate re-allocate endpoint runs the scoped recompute…
+  const re = await req(`/admin/receiving-orders/${orderId}/reallocate`, { method: "POST" });
+  assert.equal(re.status, 200);
+  assert.ok((await re.json()).allocation);
+
+  // …and the next download reflects it: the 500 balance of ctn 7002 goes to
+  // SO-PL-003 — the merged RK73H2ATTD1372F block now has 4 slots, zero balance.
   const res = await req(`/admin/receiving-orders/${orderId}/shipper`);
   assert.equal(res.status, 200);
 
   const rows = await sheetRows(await res.arrayBuffer());
 
-  // The recompute allocated the 500 balance of ctn 7002 to SO-PL-003: the
-  // merged RK73H2ATTD1372F block now has 4 slots and a zero balance.
   assert.deepEqual(rows[4], ["Invoice / Ctn", "Part Number", "Qty", "Total Qty", "Customer", "Customer", "Customer", "Customer", "Balance"]);
   assert.deepEqual(rows[14], ["", "", "", "", "ACME Electronics (HK)", "ACME Electronics (HK)", "SO-PL-002", "SO-PL-003", ""]);
   assert.deepEqual(rows[15], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, "", "SO-PL-001", "SO-PL-001", "SO-PL-002", "SO-PL-003", ""]);

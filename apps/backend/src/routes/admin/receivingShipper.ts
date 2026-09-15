@@ -4,7 +4,6 @@ import { sql } from "drizzle-orm";
 import * as XLSX from "xlsx";
 import { db } from "../../db.js";
 import { queryAll, queryGet } from "../../db/query.js";
-import { allocateForReceivingOrder } from "../../db/allocate.js";
 import { computeItemShelfSuggestions } from "../../db/putaway.js";
 import { putAwayConfig } from "../../config.js";
 
@@ -15,10 +14,10 @@ import { putAwayConfig } from "../../config.js";
 // group one merged block: one item row per carton (`invoice_no ctn_no` |
 // part | qty) with the slot rows (customer / order numbers / per-slot
 // qtys) overlaid on the block's last three rows.
-// Two modes:
+// Two modes (both read-only — re-allocation lives on
+// POST /admin/receiving-orders/:id/reallocate):
 //   default (?mode omitted): LIVE shipper for an in-hand order — slots come
-//     from the `allocations` table after an in-request scoped recompute
-//     (allocateForReceivingOrder) so the sheet is never stale.
+//     from the current `allocations` table.
 //   ?mode=finished: for a completed (`clear`) order — same layout, but slots
 //     come from `picking_packages` (what was actually packed), because live
 //     allocations are consumed/emptied once picking finishes.
@@ -85,14 +84,6 @@ adminReceivingShipperRoute.get("/receiving-orders/:id/shipper", async (c) => {
     `
   );
   if (!head) throw new HTTPException(404, { message: "receiving_order_not_found" });
-
-  // Live shipper for an in-hand order: re-run the scoped allocation recompute
-  // in the request (same as confirm-arrival) so the sheet reflects the latest
-  // demands/priorities. Skipped in finished mode — actuals don't depend on
-  // the allocations table.
-  if (!finished && head.status === "in_hand") {
-    await allocateForReceivingOrder(db, id);
-  }
 
   const items = await queryAll<ItemRow>(
     db,
