@@ -19,10 +19,15 @@ export const users = pgTable("users", {
 // login (the users row only exists after login), same rationale as
 // supplier_profiles vs suppliers. sub_inventory_scopes: NULL/[] = the user
 // sees every sub-inventory (spec 2026-09-11-user-subinventory-scope-design).
+// date_format / date_time_format: Unicode-token display patterns
+// (date-fns semantics), NULL = the app defaults
+// (spec 2026-09-16-admin-date-format-setting-design.md).
 export const userProfiles = pgTable("user_profiles", {
   id: text("id").primaryKey(),
   username: text("username").notNull().unique(),
   subInventoryScopes: jsonb("sub_inventory_scopes"), // [{ orgId: number, code: string }]
+  dateFormat: text("date_format"),
+  dateTimeFormat: text("date_time_format"),
   createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
 });

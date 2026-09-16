@@ -69,3 +69,6 @@
 - Shipping Management
   - list shipping order with filter and sort, multiple select to download shipper 7.3
     - detail shipping order
+- Settings
+  - flow config, app download, user badges, user scope
+  - Label Print Rules — CRUD rules mapping AND/OR conditions (org / sub-inventory / supplier / order no / customer) to a print template per label type (carton / item box / item), with priority and activate/deactivate

@@ -128,11 +128,12 @@ test("GET shipper: merged part blocks with per-block order slots and balance", a
   assert.deepEqual(rows[6], ["", "", "", "", "", "", "", ""]); // blank row after the header
 
   // RK73H1JTTD3302F group first (alphabetical): the receipt has no item-level
-  // allocations; order-level covers 200 of 500, so the shelf suggestion still
-  // shows (seed fallback shelf for STORE1 = A-04-05). The whole-order block
-  // closes the group carrying Total/Balance.
+  // allocations; order-level covers 200 of 500. The group header cell shows
+  // the related-order allocated qty: SO-PL-001 + SO-PL-002 are related (both
+  // draw on this order), and their allocations for this part sum to 200. The
+  // whole-order block closes the group carrying Total/Balance.
   assert.deepEqual(rows[7], ["", "", "", "", "", "", "", ""]); // customer names (none)
-  assert.deepEqual(rows[8], ["", "A-04-05", "", "", "", "", "", ""]); // shelf + order refs
+  assert.deepEqual(rows[8], ["", 200, "", "", "", "", "", ""]); // related allocated + order refs
   assert.deepEqual(rows[9], ["INV-PL-01", "RK73H1JTTD3302F", 500, "", "", "", "", ""]);
   assert.deepEqual(rows[10], ["", "", "", "", "ACME Electronics (HK)", "", "", ""]);
   assert.deepEqual(rows[11], ["", "", "", "", "SO-PL-001", "", "", ""]);
@@ -142,10 +143,11 @@ test("GET shipper: merged part blocks with per-block order slots and balance", a
   // RK73H2ATTD1372F group: both cartons merge into ONE block — item rows
   // stack, the slot rows overlay the block's last three rows. FIFO gives
   // SO-PL-001 1000 from ctn 7001 + 500 from ctn 7002; SO-PL-002 takes 1000
-  // from ctn 7002, so SO-PL-001 occupies two slots. ctn 7002 is short 500 →
-  // the shelf suggestion sits in the Total Qty column of the order-ref row.
+  // from ctn 7002, so SO-PL-001 occupies two slots. The related-order
+  // allocated qty (1500 + 1000 = 2500) sits in the Total Qty column of the
+  // order-ref row.
   assert.deepEqual(rows[14], ["", "", "", "", "ACME Electronics (HK)", "ACME Electronics (HK)", "SO-PL-002", ""]);
-  assert.deepEqual(rows[15], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, "A-04-05", "SO-PL-001", "SO-PL-001", "SO-PL-002", ""]);
+  assert.deepEqual(rows[15], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, 2500, "SO-PL-001", "SO-PL-001", "SO-PL-002", ""]);
   assert.deepEqual(rows[16], ["INV-PL-01 7002", "RK73H2ATTD1372F", 2000, 3000, 1000, 500, 1000, 500]);
 
   assert.equal(rows.length, 17);
@@ -166,7 +168,9 @@ test("GET shipper: reflects current allocations — recompute happens on the rea
   assert.equal(resBefore.status, 200);
   const rowsBefore = await sheetRows(await resBefore.arrayBuffer());
   // Still 3 slots (SO-PL-001 ×2, SO-PL-002); SO-PL-003 absent, balance 500.
+  // The related-order allocated cell still sums only SO-PL-001 + SO-PL-002.
   assert.deepEqual(rowsBefore[4], ["Invoice / Ctn", "Part Number", "Qty", "Total Qty", "Customer", "Customer", "Customer", "Balance"]);
+  assert.deepEqual(rowsBefore[15], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, 2500, "SO-PL-001", "SO-PL-001", "SO-PL-002", ""]);
   assert.deepEqual(rowsBefore[16], ["INV-PL-01 7002", "RK73H2ATTD1372F", 2000, 3000, 1000, 500, 1000, 500]);
 
   // The separate re-allocate endpoint runs the scoped recompute…
@@ -183,8 +187,62 @@ test("GET shipper: reflects current allocations — recompute happens on the rea
 
   assert.deepEqual(rows[4], ["Invoice / Ctn", "Part Number", "Qty", "Total Qty", "Customer", "Customer", "Customer", "Customer", "Balance"]);
   assert.deepEqual(rows[14], ["", "", "", "", "ACME Electronics (HK)", "ACME Electronics (HK)", "SO-PL-002", "SO-PL-003", ""]);
-  assert.deepEqual(rows[15], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, "", "SO-PL-001", "SO-PL-001", "SO-PL-002", "SO-PL-003", ""]);
+  assert.deepEqual(rows[15], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, 3000, "SO-PL-001", "SO-PL-001", "SO-PL-002", "SO-PL-003", ""]);
   assert.deepEqual(rows[16], ["INV-PL-01 7002", "RK73H2ATTD1372F", 2000, 3000, 1000, 500, 1000, 500, 0]);
+});
+
+test("GET shipper: group header counts stock-sourced allocations on related orders, ignores unrelated orders", async () => {
+  await reseed(client);
+  const orderId = await seedScenario();
+
+  const so1 = await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT id FROM picking_orders WHERE order_no = 'SO-PL-001'`
+  );
+  const piH1 = await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT id FROM picking_items WHERE picking_order_id = ${so1!.id} AND part_no = 'RK73H1JTTD3302F'`
+  );
+
+  // Stock-sourced allocation on a RELATED order (SO-PL-001 also draws on this
+  // receiving order): +50 for the RK73H1JTTD3302F group.
+  await client.db.execute(sql`
+    INSERT INTO inventory_lots (id, part_no, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
+    VALUES ('LOT-REL-01', 'RK73H1JTTD3302F', 'A-04-05', 'RELBOX1', 2, 'STORE1', 200, now(), now())
+  `);
+  await client.db.execute(sql`
+    INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, created_date, last_update_date)
+    VALUES (${randomUUID()}, ${piH1!.id}, 'LOT-REL-01', 50, now(), now())
+  `);
+
+  // An UNRELATED order (nothing traces back to this receiving order) with its
+  // own stock-sourced allocation: must NOT be counted.
+  await insertPickingOrder(client.db, randomUUID(), {
+    order: { orderNo: "SO-PL-009", orgId: 2, subInventoryCode: "STORE1" },
+    items: [{ partNo: "RK73H2ATTD1372F", qty: 800 }],
+  });
+  const piH2Unrelated = await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT pi.id FROM picking_items pi JOIN picking_orders po ON po.id = pi.picking_order_id
+        WHERE po.order_no = 'SO-PL-009' AND pi.part_no = 'RK73H2ATTD1372F'`
+  );
+  await client.db.execute(sql`
+    INSERT INTO inventory_lots (id, part_no, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
+    VALUES ('LOT-UNREL-01', 'RK73H2ATTD1372F', 'A-04-05', 'UNRELBOX1', 2, 'STORE1', 800, now(), now())
+  `);
+  await client.db.execute(sql`
+    INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, created_date, last_update_date)
+    VALUES (${randomUUID()}, ${piH2Unrelated!.id}, 'LOT-UNREL-01', 800, now(), now())
+  `);
+
+  const res = await req(`/admin/receiving-orders/${orderId}/shipper`);
+  assert.equal(res.status, 200);
+  const rows = await sheetRows(await res.arrayBuffer());
+
+  // RK73H1JTTD3302F: 200 order-level (from this receiving) + 50 stock = 250.
+  assert.deepEqual(rows[8], ["", 250, "", "", "", "", "", ""]);
+  // RK73H2ATTD1372F: still 2500 — SO-PL-009's 800 is not related.
+  assert.deepEqual(rows[15], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, 2500, "SO-PL-001", "SO-PL-001", "SO-PL-002", ""]);
 });
 
 test("GET shipper?mode=finished: slots come from actual picked packages", async () => {
@@ -250,7 +308,7 @@ test("GET shipper?mode=finished: slots come from actual picked packages", async 
   assert.deepEqual(rows[6], ["", "", "", "", "", ""]);
 
   // RK73H1JTTD3302F: 150 of 500 actually picked (lot-traced) → balance 350.
-  // No shelf suggestion in finished mode.
+  // No group header cell in finished mode.
   assert.deepEqual(rows[7], ["", "", "", "", "ACME Electronics (HK)", ""]);
   assert.deepEqual(rows[8], ["", "", "", "", "SO-PL-001", ""]);
   assert.deepEqual(rows[9], ["INV-PL-01", "RK73H1JTTD3302F", 500, 500, 150, 350]);

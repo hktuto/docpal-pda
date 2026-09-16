@@ -10,6 +10,13 @@ import { actorFrom } from "../auth/middleware.js";
 import { docpalBaseUrl, docpalGroupMapping } from "../config.js";
 import { DocpalAuthError, docpalGetUser, docpalLogin, type DocpalUser } from "../auth/docpal.js";
 import { getUserScope, parseScopeEntries, upsertUserScope } from "../db/user-scope.js";
+import {
+  DEFAULT_DATE_FORMAT,
+  DEFAULT_DATE_TIME_FORMAT,
+  getUserDateFormats,
+  parseDateFormat,
+  upsertUserDateFormats,
+} from "../db/user-profile.js";
 
 export interface LoginRequest {
   username: string;
@@ -176,22 +183,43 @@ authRoute.get("/auth/me", async (c) => {
   return c.json(await toAuthUser(user), 200);
 });
 
-// Per-user sub-inventory scope (spec 2026-09-11-user-subinventory-scope-design.md).
-// GET returns [] when unrestricted (no profile row / NULL scope); PUT stores
-// the array as-is ([] clears the scope) after validating every pair against
-// org_info.
+// Per-user profile (spec 2026-09-11-user-subinventory-scope-design.md,
+// 2026-09-16-admin-date-format-setting-design.md). subInventoryScopes:
+// GET returns [] when unrestricted (no profile row / NULL scope); dateFormat /
+// dateTimeFormat: GET returns the app defaults when NULL. PUT merges: only
+// fields present in the body are updated (scope pairs validated against
+// org_info, formats against the token whitelist).
 authRoute.get("/auth/me/profile", async (c) => {
   const actor = actorFrom(c);
   const scope = await getUserScope(db, actor.username);
-  return c.json({ username: actor.username, subInventoryScopes: scope ?? [] }, 200);
+  const formats = await getUserDateFormats(db, actor.username);
+  return c.json({ username: actor.username, subInventoryScopes: scope ?? [], ...formats }, 200);
 });
 
 authRoute.put("/auth/me/profile", async (c) => {
   const actor = actorFrom(c);
-  const body = await readJson<{ subInventoryScopes?: unknown }>(c);
-  const scope = parseScopeEntries(body.subInventoryScopes);
-  await upsertUserScope(db, actor.username, scope);
-  return c.json({ username: actor.username, subInventoryScopes: scope }, 200);
+  const body = await readJson<{
+    subInventoryScopes?: unknown;
+    dateFormat?: unknown;
+    dateTimeFormat?: unknown;
+  }>(c);
+  const dateFormat = parseDateFormat(body.dateFormat);
+  const dateTimeFormat = parseDateFormat(body.dateTimeFormat);
+  if (body.subInventoryScopes !== undefined) {
+    const scope = parseScopeEntries(body.subInventoryScopes);
+    await upsertUserScope(db, actor.username, scope);
+  }
+  if (dateFormat !== undefined || dateTimeFormat !== undefined) {
+    await upsertUserDateFormats(
+      db,
+      actor.username,
+      dateFormat ?? DEFAULT_DATE_FORMAT,
+      dateTimeFormat ?? DEFAULT_DATE_TIME_FORMAT
+    );
+  }
+  const scope = await getUserScope(db, actor.username);
+  const formats = await getUserDateFormats(db, actor.username);
+  return c.json({ username: actor.username, subInventoryScopes: scope ?? [], ...formats }, 200);
 });
 
 authRoute.get("/auth/users/:id", async (c) => {

@@ -173,7 +173,7 @@ const {
         <span class="clickable" @click="navigateTo(`/shipping/${row.boxId}`)">{{ row.boxId }}</span>
       </template>
       <template #cell-netGross="{ row }">{{ row.netWeight ?? "—" }} / {{ row.grossWeight ?? "—" }}</template>
-      <template #cell-closedAt="{ row }">{{ new Date(row.closedAt).toLocaleDateString() }}</template>
+      <template #cell-closedAt="{ row }">{{ formatDateTime(row.closedAt) }}</template>
     </DataTable>
     <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
   </div>

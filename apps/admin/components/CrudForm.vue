@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { EntityField } from "~/utils/entities";
 import type { SubInventoryScope } from "~/utils/userScope";
+import type { RuleConditions } from "~/components/RuleConditionsEditor.vue";
 
 const props = defineProps<{
   title: string;
@@ -18,7 +19,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const api = useApi();
-const form = reactive<Record<string, string | unknown[]>>({});
+const form = reactive<Record<string, any>>({});
 const localError = ref("");
 
 // multiSelect option lists (per optionsSource). Loaded once on mount.
@@ -42,6 +43,19 @@ function optionsFor(f: EntityField): { value: string; label: string }[] {
   return [];
 }
 
+/** select fields: static options; labels starting with "admin." are i18n keys. */
+function selectOptionsFor(f: EntityField): { value: string; label: string }[] {
+  return (f.options ?? []).map((o) => ({
+    value: o.value,
+    label: o.label.startsWith("admin.") ? t(o.label) : o.label,
+  }));
+}
+
+/** Empty draft for a new conditions field (one blank row to fill in). */
+function emptyConditions(): RuleConditions {
+  return { combinator: "and", conditions: [{ field: "org_id", operator: "eq", value: "" }] };
+}
+
 // Dismiss only on a genuine overlay click (press starts and ends on the
 // overlay), so selecting text inside the dialog doesn't close it.
 const { onMousedown, onClick } = useOverlayDismiss(() => emit("cancel"));
@@ -62,6 +76,14 @@ watch(
             ? Array.isArray(v)
               ? v // [{ orgId, code }] pairs, passed through verbatim
               : []
+          : f.type === "boolean"
+            ? val
+              ? !!v
+              : !!f.defaultValue
+          : f.type === "conditions"
+            ? v && Array.isArray((v as RuleConditions).conditions)
+              ? JSON.parse(JSON.stringify(v)) // detach the draft from the row
+              : emptyConditions()
           : f.type === "json"
             ? v === null || v === undefined
               ? ""
@@ -89,6 +111,28 @@ function submit() {
   const payload: Record<string, unknown> = {};
   for (const f of props.fields) {
     if (disabled(f)) continue;
+    if (f.type === "boolean") {
+      payload[f.key] = !!form[f.key];
+      continue;
+    }
+    if (f.type === "conditions") {
+      const c = form[f.key] as RuleConditions | undefined;
+      const rows = (c?.conditions ?? []).map((r) => ({
+        field: r.field,
+        operator: r.operator,
+        value: String(r.value ?? "").trim(),
+      }));
+      const valid =
+        (c?.combinator === "and" || c?.combinator === "or") &&
+        rows.length > 0 &&
+        rows.every((r) => r.value !== "" && (r.field !== "org_id" || /^\d+$/.test(r.value)));
+      if (!valid) {
+        localError.value = t("admin.pages.labelPrintRules.conditionsInvalid");
+        return;
+      }
+      payload[f.key] = { combinator: c!.combinator, conditions: rows };
+      continue;
+    }
     if (f.type === "multiSelect" || f.type === "subInventoryPicker") {
       const selected = Array.isArray(form[f.key]) ? (form[f.key] as unknown[]) : [];
       payload[f.key] = selected.length > 0 ? selected : null; // null = clear
@@ -160,6 +204,28 @@ function submit() {
             :show-all="false"
             :disabled="disabled(f)"
           />
+          <SearchableSelect
+            v-else-if="f.type === 'select'"
+            v-model="form[f.key] as string"
+            :options="selectOptionsFor(f)"
+            :all-label="$t(f.label)"
+            :aria-label="$t(f.label)"
+            :multiple="false"
+            :show-all="false"
+            :disabled="disabled(f)"
+          />
+          <RuleConditionsEditor
+            v-else-if="f.type === 'conditions'"
+            v-model="form[f.key] as RuleConditions"
+          />
+          <input
+            v-else-if="f.type === 'boolean'"
+            :id="`ff-${f.key}`"
+            v-model="form[f.key]"
+            type="checkbox"
+            class="bool-input"
+            :disabled="disabled(f)"
+          />
           <textarea
             v-else-if="f.type === 'json'"
             :id="`ff-${f.key}`"
@@ -176,6 +242,7 @@ function submit() {
             :step="f.type === 'number' ? 'any' : undefined"
             :disabled="disabled(f)"
           />
+          <p v-if="f.hint && f.type !== 'subInventoryPicker'" class="hint">{{ $t(f.hint) }}</p>
         </div>
         <div class="dialog-actions">
           <button type="button" class="btn" @click="emit('cancel')">{{ $t("admin.common.cancel") }}</button>
@@ -191,5 +258,8 @@ function submit() {
   width: 100%;
   font-family: ui-monospace, monospace;
   font-size: 13px;
+}
+.bool-input {
+  width: auto;
 }
 </style>

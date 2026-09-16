@@ -732,3 +732,29 @@ out. Top-level keys: `steps` (per-step enablement + behavior flags) and
 | value | jsonb NOT NULL | Config payload (partial JSON merged over defaults) |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
+
+# Label printing (`schema/label-print.ts`)
+
+## label_print_rules
+
+Admin-managed rules deciding which print template a picking label of a
+given type uses (2026-09-16,
+`docs/superpowers/specs/2026-09-16-label-print-rules-design.md`).
+Admin-local config — intentionally no `sync_events` trigger (same
+rationale as `user_profiles`). Evaluated by priority ascending,
+first matching active rule wins (contract for the later web picking
+printing flow; nothing evaluates these rules yet). Managed via
+`/admin/label-print-rules` CRUD.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Rule id (UUID v7) |
+| name | text NOT NULL | Display name |
+| label_type | text NOT NULL | `carton` \| `item_box` \| `item` |
+| conditions | jsonb NOT NULL | `{combinator: "and"\|"or", conditions: [{field, operator, value}]}` — field ∈ `org_id`/`sub_inventory`/`supplier`/`order_no`/`order_type`/`customer`, operator ∈ `eq` (exact, case-sensitive) / `match` (glob, `*` = any run; plain string = exact), min 1 condition, `org_id` value numeric |
+| print_template_id | text NOT NULL | Upstream print-service template slug (e.g. `katata-label`) — free text, no template-list API exists to validate against |
+| priority | integer NOT NULL DEFAULT 100 | Evaluation order (ascending) |
+| active | boolean NOT NULL DEFAULT true | Inactive rules are skipped at evaluation |
+| remark | text | Optional note |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |

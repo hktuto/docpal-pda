@@ -125,8 +125,8 @@ const {
         <div><div class="dt">{{ $t("admin.pages.shipping.netWeight") }}</div><div class="dd">{{ detail.box.netWeight ?? "—" }}</div></div>
         <div><div class="dt">{{ $t("admin.pages.shipping.grossWeight") }}</div><div class="dd">{{ detail.box.grossWeight ?? "—" }}</div></div>
         <div><div class="dt">{{ $t("admin.pages.shipping.destination") }}</div><div class="dd">{{ detail.box.destinationCountry ?? "—" }}</div></div>
-        <div><div class="dt">{{ $t("admin.pages.shipping.createdAt") }}</div><div class="dd">{{ new Date(detail.box.createdDate).toLocaleString() }}</div></div>
-        <div v-if="detail.box.shippedAt"><div class="dt">{{ $t("admin.pages.shipping.shippedAt") }}</div><div class="dd">{{ new Date(detail.box.shippedAt).toLocaleString() }}</div></div>
+        <div><div class="dt">{{ $t("admin.pages.shipping.createdAt") }}</div><div class="dd">{{ formatDateTime(detail.box.createdDate) }}</div></div>
+        <div v-if="detail.box.shippedAt"><div class="dt">{{ $t("admin.pages.shipping.shippedAt") }}</div><div class="dd">{{ formatDateTime(detail.box.shippedAt) }}</div></div>
         <div v-if="detail.box.shippedBy"><div class="dt">{{ $t("admin.pages.shipping.shippedBy") }}</div><div class="dd">{{ detail.box.shippedBy }}</div></div>
       </div>
 

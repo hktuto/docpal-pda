@@ -144,7 +144,7 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Picking orders list / detail (delivery-date edit, picking-list xlsx download, per-item remove-allocation + availability search) | `/picking-orders`, `/picking-orders/:id` | `apps/admin/pages/picking-orders/index.vue`, `apps/admin/pages/picking-orders/[id].vue` |
 | Picking priority reorder | `/picking/reorder` | `apps/admin/pages/picking/reorder.vue` |
 | Receiving orders list / detail (delivery-date edit, item detail edit single/batch — date code / lot code / COO / COW / ctn no, invoice filter, confirm in-hand, shipper xlsx download + finished-shipper for clear orders; per-item part search + allocate dialog — picking demand matching/all + stock, per-item allocations list with per-allocation remove) | `/receiving`, `/receiving/:id` | `apps/admin/pages/receiving/index.vue`, `apps/admin/pages/receiving/[id].vue`, `apps/admin/components/receiving/ItemEditModal.vue`, `apps/admin/components/receiving/PartSearchModal.vue`, `apps/admin/components/receiving/PartDemandTables.vue` |
-| Shared allocation-row components used by both order details (green dot = stock lot, blue dot = receiving item; `qty × <slot>` + per-row remove) | — | `apps/admin/components/allocations/AllocationDot.vue`, `apps/admin/components/allocations/StockAllocationRow.vue`, `apps/admin/components/allocations/ReceivingAllocationRow.vue` |
+| Shared allocation-row components used by both order details (dot + `qty × <slot>` + per-row remove; hover tooltip via a body-teleported fixed popup — lot detail for stock rows, order/invoice/item + link for receiving rows) | — | `apps/admin/components/allocations/Dot.vue`, `apps/admin/components/allocations/Tooltip.vue`, `apps/admin/components/allocations/StockAllocationRow.vue`, `apps/admin/components/allocations/ReceivingAllocationRow.vue` |
 | Shared part-availability modal, picking side (stock lots + inbound receiving rows for a part; read-only without a picking target, manual-allocate per row with one) | — | `apps/admin/components/PartAvailabilityModal.vue` |
 | Shipping boxes list / detail (orders-in-box, per-box ship) | `/shipping`, `/shipping/:boxId` | `apps/admin/pages/shipping/index.vue`, `apps/admin/pages/shipping/[id].vue` |
 | SearchableSelect (searchable dropdown: type-to-filter; multi-select by default — checkboxes, `v-model: string[]`, empty = "all"; `multiple: false` → single-select, `v-model: string`, `""` = "all". Props `options: {value, label}[]` / `allLabel` / `ariaLabel`) | — | `apps/admin/components/SearchableSelect.vue` (reference usage: `pages/stock-search.vue` filters) |
@@ -152,8 +152,9 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Shelf / shelf-box label printing (single + shelf-box multi-select dialog; `katata-label` template via the backend `/print/*` proxy; shelf multi-select / Print all opens an A4 batch sheet — 3 x 4 grid, QR + shelf code + zone, browser print) | `/shelves`, `/shelf-boxes` | `apps/admin/components/PrintLabelsDialog.vue`, `apps/admin/components/ShelfBatchPrintDialog.vue`, `apps/admin/utils/print.ts` |
 | Sidebar layout + userbox popover | — | `apps/admin/app.vue` |
 | User profiles (per-user sub-inventory scope) | `/user-profiles` | `apps/admin/pages/user-profiles.vue` + `apps/admin/components/SubInventoryScopePicker.vue` (shared org-grouped checkbox picker) + `apps/admin/utils/userScope.ts` |
-| Personal settings (own sub-inventory scope, from the user popover) | `/settings` | `apps/admin/pages/settings.vue` |
+| Personal settings (own sub-inventory scope + date format preferences, from the user popover) | `/settings` | `apps/admin/pages/settings.vue`; formatting via `apps/admin/utils/dateFormat.ts` (token formatter) + `apps/admin/utils/datePreferences.ts` (reactive per-user store driving `formatDate`/`formatDateTime`, wired into `utils/format.ts` `formatCell`) |
 | Flow API typed wrappers | — | `apps/admin/utils/flowApi.ts` |
+| Label print rules (template-selection rules CRUD + Activate/Deactivate; structured AND/OR conditions editor; detail-page edit with draft-condition match preview) | `/label-print-rules`, `/label-print-rules/:id` | `apps/admin/pages/label-print-rules/index.vue`, `apps/admin/pages/label-print-rules/[id].vue` (2fr/1fr edit form + match-preview panel over `POST /admin/label-print-rules/test-match`), `apps/admin/utils/entities.ts` (`entities.labelPrintRules`, `noEdit: true`), `apps/admin/components/RuleConditionsEditor.vue`; reusable CrudForm field types boolean/select/conditions in `apps/admin/components/CrudForm.vue` |
 
 ## Warehouse backend (apps/backend)
 
@@ -165,7 +166,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 |----------------|-------------|
 | `GET /health` | `apps/backend/src/routes/health.ts` |
 | `POST /auth/login`, `POST /auth/logout`, `GET /auth/users/:id` | `apps/backend/src/routes/auth.ts` |
-| `GET /auth/me/profile`, `PUT /auth/me/profile` (per-user sub-inventory scope) | `apps/backend/src/routes/auth.ts` |
+| `GET /auth/me/profile`, `PUT /auth/me/profile` (per-user sub-inventory scope + date format preferences) | `apps/backend/src/routes/auth.ts` |
 | `GET /receiving-orders`, `GET /receiving-orders/:id` (+`/picking`, +`/put-away`) | `apps/backend/src/routes/receiving.ts` |
 | `POST /receiving-orders/:id/confirm-arrival`, `POST /receiving-orders/:id/scan` | `apps/backend/src/routes/receiving.ts` |
 | `GET|POST|PATCH /receiving-invoice-items/:id/mismatch`, `POST .../mismatch/confirm|cancel` | `apps/backend/src/routes/receiving.ts` |
@@ -192,6 +193,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | `POST /admin/picking-orders/:id/items/:itemId/allocations` (pinned manual allocation, any location; `allocations.manual`) | `apps/backend/src/routes/admin/allocation.ts` (`addManualPickingAllocation` in `apps/backend/src/db/allocate.ts`) |
 | `GET /admin/part-availability?partNo=&wclItemNo=` (stock lots + receiving orders with the part, all locations) | `apps/backend/src/routes/admin/partAvailability.ts` |
 | `GET /admin/part-demand?partNo=&wclItemNo=` (open picking items needing the part: per-order qty / picked / allocated / remaining) | `apps/backend/src/routes/admin/partAvailability.ts` |
+| `/admin/label-print-rules` CRUD (picking label-template selection rules; list sorted priority asc) + `POST /admin/label-print-rules/test-match` (draft-condition preview over picking_orders) | `apps/backend/src/routes/admin/index.ts`, `apps/backend/src/routes/admin/labelPrintRules.ts`, `apps/backend/src/db/labelPrint.ts` (evaluator), `apps/backend/src/db/schema/label-print.ts` |
 
 ### Domain modules
 

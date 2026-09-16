@@ -106,7 +106,7 @@ onMounted(load);
             <td>{{ r.orderNo }}</td>
             <td>{{ r.status }}</td>
             <td>{{ r.customerCode ?? "—" }}</td>
-            <td>{{ r.deliveryDate ? new Date(r.deliveryDate).toLocaleDateString() : "—" }}</td>
+            <td>{{ r.deliveryDate ? formatDate(r.deliveryDate) : "—" }}</td>
             <td>{{ r.pickedQty }} / {{ r.totalQty }}</td>
             <td>{{ r.workingByName ?? "" }}</td>
           </tr>

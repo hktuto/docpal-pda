@@ -709,6 +709,17 @@ export interface PickingAllocationDetail {
   receivingInvoiceItemId: string | null;
   receivingOrderId: string | null;
   boxId: string | null;
+  /** Receiving-source detail (order/invoice/item) for dock-stock allocations;
+   *  null for stock-lot allocations. */
+  receiving: {
+    orderId: string;
+    batchNo: string;
+    invoiceNo: string | null;
+    partNo: string | null;
+    poNo: string | null;
+    receivedQty: number | null;
+    dateCode: string | null;
+  } | null;
 }
 
 export interface PickingPackageDetail {
@@ -775,6 +786,13 @@ interface AllocationQueryRow {
   lotTotalQty: number | null;
   lotAllocatedQty: number | null;
   lotAvailableQty: number | null;
+  recvOrderId: string | null;
+  recvBatchNo: string | null;
+  recvInvoiceNo: string | null;
+  recvPartNo: string | null;
+  recvPoNo: string | null;
+  recvReceivedQty: number | null;
+  recvDateCode: string | null;
 }
 
 /** Complete nested read: order + items (allocations, packages) + boxes.
@@ -840,10 +858,16 @@ export async function getPickingOrderDetail(
             il.date_code AS "lotDateCode", il.lot_code AS "lotLotCode",
             il.coo AS "lotCoo", il.cow AS "lotCow",
             il.total_qty AS "lotTotalQty", il.allocated_qty AS "lotAllocatedQty",
-            il.available_qty AS "lotAvailableQty"
+            il.available_qty AS "lotAvailableQty",
+            ro.batch_no AS "recvBatchNo", ri.invoice_no AS "recvInvoiceNo",
+            ri.receiving_order_id AS "recvOrderId",
+            rii.part_no AS "recvPartNo", rii.po_no AS "recvPoNo",
+            rii.received_qty AS "recvReceivedQty", rii.date_code AS "recvDateCode"
           FROM allocations a
           LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
           LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
+          LEFT JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+          LEFT JOIN receiving_orders ro ON ro.id = COALESCE(a.receiving_order_id, ri.receiving_order_id)
           WHERE ${inArray(sql`a.picking_item_id`, itemIds)} AND a.qty > 0
           ORDER BY a.created_date, a.id
         `
@@ -909,6 +933,17 @@ export async function getPickingOrderDetail(
           receivingInvoiceItemId: a.receivingInvoiceItemId,
           receivingOrderId: a.receivingOrderId,
           boxId: a.boxId,
+          receiving: a.receivingOrderId || a.receivingInvoiceItemId
+            ? {
+                orderId: a.receivingOrderId ?? a.recvOrderId ?? "",
+                batchNo: a.recvBatchNo ?? "",
+                invoiceNo: a.recvInvoiceNo,
+                partNo: a.recvPartNo,
+                poNo: a.recvPoNo,
+                receivedQty: a.recvReceivedQty,
+                dateCode: a.recvDateCode,
+              }
+            : null,
         })),
       packages: packages
         .filter((p) => p.pickingItemId === i.id)

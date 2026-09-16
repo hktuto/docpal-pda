@@ -136,12 +136,12 @@ const {
       @row-click="(r) => navigateTo(`/receiving/${r.id}`)"
     >
       <template #cell-status="{ row }">{{ $t(`status.receiving.${row.status}`) }}</template>
-      <template #cell-supplier="{ row }">{{ row.supplierName ?? row.supplierCode ?? "—" }}</template>
       <template #cell-deliveryDate="{ row }">
-        {{ row.deliveryDate ? new Date(row.deliveryDate).toLocaleDateString() : "—" }}
+        {{ row.deliveryDate ? formatDate(row.deliveryDate) : "—" }}
       </template>
-      <template #cell-createdDate="{ row }">{{ new Date(row.createdDate).toLocaleString() }}</template>
-      <template #cell-lastUpdateDate="{ row }">{{ new Date(row.lastUpdateDate).toLocaleString() }}</template>
+      <template #cell-supplier="{ row }">{{ row.supplierName ?? row.supplierCode ?? "—" }}</template>
+      <template #cell-createdDate="{ row }">{{ formatDateTime(row.createdDate) }}</template>
+      <template #cell-lastUpdateDate="{ row }">{{ formatDateTime(row.lastUpdateDate) }}</template>
     </DataTable>
     <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
   </div>

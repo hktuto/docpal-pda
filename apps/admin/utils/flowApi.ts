@@ -47,7 +47,27 @@ export interface PickingItemRow {
     boxId: string | null;
     receivingInvoiceItemId: string | null;
     receivingOrderId: string | null;
-    lot: { id: string; shelfCode: string | null; boxId: string | null; dateCode: string | null; lotCode: string | null } | null;
+    lot: {
+      id: string;
+      shelfCode: string | null;
+      boxId: string | null;
+      dateCode: string | null;
+      lotCode: string | null;
+      coo: string | null;
+      cow: string | null;
+      totalQty: number;
+      allocatedQty: number;
+      availableQty: number;
+    } | null;
+    receiving: {
+      orderId: string;
+      batchNo: string;
+      invoiceNo: string | null;
+      partNo: string | null;
+      poNo: string | null;
+      receivedQty: number | null;
+      dateCode: string | null;
+    } | null;
   }[];
   packages: { id: string; qty: number; dateCode: string | null; lotCode: string | null; verified: boolean; verifyVerified: boolean; shippingBoxId: string | null }[];
 }

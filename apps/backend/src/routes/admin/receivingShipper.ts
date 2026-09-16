@@ -4,11 +4,10 @@ import { sql } from "drizzle-orm";
 import * as XLSX from "xlsx";
 import { db } from "../../db.js";
 import { queryAll, queryGet } from "../../db/query.js";
-import { computeItemShelfSuggestions } from "../../db/putaway.js";
-import { putAwayConfig } from "../../config.js";
 
 // Admin shipper download (spec
-// docs/superpowers/specs/2026-09-14-admin-receiving-shipper-download-design.md;
+// docs/superpowers/specs/2026-09-14-admin-receiving-shipper-download-design.md
+// + 2026-09-16-admin-receiving-shipper-related-allocated-design.md;
 // supersedes 2026-09-07-admin-receiving-picking-list-design.md):
 // a shipper-style xlsx per receiving order — receipts grouped by part, each
 // group one merged block: one item row per carton (`invoice_no ctn_no` |
@@ -54,6 +53,11 @@ interface AllocRow {
   prioritySeq: number;
   customerCode: string | null;
   customerLabel: string | null;
+  qty: number;
+}
+
+interface RelatedAllocRow {
+  demandPartNo: string;
   qty: number;
 }
 
@@ -113,6 +117,7 @@ adminReceivingShipperRoute.get("/receiving-orders/:id/shipper", async (c) => {
   let itemAllocs: AllocRow[] = [];
   let orderAllocs: AllocRow[] = [];
   let packageAllocs: AllocRow[] = [];
+  let relatedAllocs: RelatedAllocRow[] = [];
 
   if (finished) {
     // Actual picked qtys traced back to this order's invoice items:
@@ -207,6 +212,32 @@ adminReceivingShipperRoute.get("/receiving-orders/:id/shipper", async (c) => {
         GROUP BY pi.part_no, po.id, po.order_no, po.po_no, po.priority_seq, po.customer_code, cp.label
       `
     );
+
+    // Related-order allocated qty per demand part (spec 2026-09-16): the
+    // group header cell shows how much of each part is already allocated to
+    // the picking orders this receiving order feeds. Related = the order has
+    // ≥1 allocation tracing back to this receiving order (item-level or
+    // whole-order); the sum counts every allocation of the part on those
+    // orders whatever its source (stock lot, this or another receiving
+    // order). Matched back to a part group via the allocate.ts part-key rule.
+    relatedAllocs = await queryAll<RelatedAllocRow>(
+      db,
+      sql`
+        WITH related_orders AS (
+          SELECT DISTINCT pi.picking_order_id AS order_id
+          FROM allocations a
+          JOIN picking_items pi ON pi.id = a.picking_item_id
+          LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
+          LEFT JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+          WHERE a.receiving_order_id = ${id} OR ri.receiving_order_id = ${id}
+        )
+        SELECT pi.part_no AS "demandPartNo", SUM(a.qty)::int AS qty
+        FROM allocations a
+        JOIN picking_items pi ON pi.id = a.picking_item_id
+        JOIN related_orders ro ON ro.order_id = pi.picking_order_id
+        GROUP BY pi.part_no
+      `
+    );
   }
 
   // Shipper block layout: allocation columns are PER-BLOCK slots, not a
@@ -275,20 +306,19 @@ adminReceivingShipperRoute.get("/receiving-orders/:id/shipper", async (c) => {
     group.orderAllocs = [...byOrder.values()].sort(bySlotOrder);
   }
 
-  // Recommended put-away shelf per part (same ranking as the put-away task
-  // detail; off when flow config putAway.suggestShelf="off"). Live mode only —
-  // a finished order has nothing left to put away.
-  const suggestions =
-    !finished && putAwayConfig().suggestShelf !== "off"
-      ? await computeItemShelfSuggestions(
-          db,
-          items.map((i) => ({
-            partNo: i.partNo,
-            itemOrgId: i.orgId,
-            itemSubInventoryCode: i.subInventoryCode,
-          }))
-        )
-      : new Map<string, { shelfCode: string | null }>();
+  // Related-order allocated qty per part group (same part-key rule as the
+  // whole-order slot matching above). Live mode only — finished mode has no
+  // group header cell.
+  const relatedAllocatedByGroup = new Map<string, number>();
+  for (const group of groups) {
+    let sum = 0;
+    for (const r of relatedAllocs) {
+      if (group.items.some((i) => i.partNo === r.demandPartNo || i.wclItemNo === r.demandPartNo)) {
+        sum += r.qty;
+      }
+    }
+    relatedAllocatedByGroup.set(group.partKey, sum);
+  }
 
   // Slot count = the widest block's slot count. Live mode: cartons of the
   // same part merge into one block, so a group's slots are the SUM of its
@@ -327,7 +357,7 @@ adminReceivingShipperRoute.get("/receiving-orders/:id/shipper", async (c) => {
   function pushGroupBlock(
     partKey: string,
     blockItems: { invoiceCtn: string; qty: number }[],
-    shelf: string,
+    relatedAllocated: number,
     allocs: SlotAlloc[],
     totalBalance: [number, number] | null
   ) {
@@ -346,11 +376,11 @@ adminReceivingShipperRoute.get("/receiving-orders/:id/shipper", async (c) => {
       rows[height - 2][4 + i] = a.orderRef;
       rows[height - 1][4 + i] = a.qty;
     });
-    // Shelf keeps its column-B seat for single-carton blocks; in merged
-    // blocks column B holds the part on every row, so it moves to the Total
-    // Qty column of the order-ref row (empty there — totals only land on the
-    // block's last row).
-    if (shelf) rows[height - 2][blockItems.length === 1 ? 1 : 3] = shelf;
+    // The related-order allocated qty keeps the old shelf cell's seat:
+    // column B for single-carton blocks; in merged blocks column B holds the
+    // part on every row, so it moves to the Total Qty column of the
+    // order-ref row (empty there — totals only land on the block's last row).
+    if (relatedAllocated > 0) rows[height - 2][blockItems.length === 1 ? 1 : 3] = relatedAllocated;
     if (totalBalance) {
       rows[height - 1][3] = totalBalance[0];
       rows[height - 1][width - 1] = totalBalance[1];
@@ -384,7 +414,6 @@ adminReceivingShipperRoute.get("/receiving-orders/:id/shipper", async (c) => {
     const totalQty = group.items.reduce((s, i) => s + i.receivedQty, 0);
 
     const blockItems: { invoiceCtn: string; qty: number }[] = [];
-    let shelf = "";
     let mergedSlots: SlotAlloc[];
     let allocatedTotal: number;
 
@@ -398,23 +427,9 @@ adminReceivingShipperRoute.get("/receiving-orders/:id/shipper", async (c) => {
           0
         ) + group.orderAllocs.reduce((s, a) => s + a.qty, 0);
 
-      // Whole-order allocations cover no-ctn items of the group in row order
-      // (they aren't pinned to a line) — used only to decide whether a receipt
-      // is fully allocated (fully allocated → no shelf suggestion needed).
-      let orderLevelRemaining = group.orderAllocs.reduce((s, a) => s + a.qty, 0);
-
       mergedSlots = [];
       for (const item of group.items) {
-        const itemAllocsList = allocsByItem.get(item.id) ?? [];
-        mergedSlots.push(...itemAllocsList);
-        let covered = itemAllocsList.reduce((s, a) => s + a.qty, 0);
-        if (!item.ctnNo && orderLevelRemaining > 0) {
-          const extra = Math.min(orderLevelRemaining, Math.max(0, item.receivedQty - covered));
-          covered += extra;
-          orderLevelRemaining -= extra;
-        }
-        if (!shelf && covered < item.receivedQty)
-          shelf = suggestions.get(item.partNo)?.shelfCode ?? "";
+        mergedSlots.push(...(allocsByItem.get(item.id) ?? []));
       }
     }
 
@@ -428,7 +443,7 @@ adminReceivingShipperRoute.get("/receiving-orders/:id/shipper", async (c) => {
     pushGroupBlock(
       group.partKey,
       blockItems,
-      shelf,
+      finished ? 0 : relatedAllocatedByGroup.get(group.partKey) ?? 0,
       mergedSlots,
       // Live mode defers Total/Balance to the (order-level) closing block
       // when whole-order allocations exist; finished mode never has those.

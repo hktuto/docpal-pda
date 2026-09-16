@@ -11,8 +11,9 @@ import {
   boxSizeList,
   customerAccounts,
   netWeightFormula,
+  labelPrintRules,
 } from "../../db/schema/index.js";
-import { createCrudRouter, reqStr, optStr, reqInt, reqNum, optInt, optStrArray, optJson } from "./crud.js";
+import { createCrudRouter, reqStr, optStr, reqInt, reqNum, optInt, optStrArray, optJson, optBool, reqBool, reqLabelType, reqConditions } from "./crud.js";
 import { docpalBaseUrl } from "../../config.js";
 import { queryAll } from "../../db/query.js";
 import { shelfBoxesRoute } from "./shelfBoxes.js";
@@ -27,6 +28,7 @@ import { adminPickingListRoute } from "./pickingList.js";
 import { adminAllocationRoute } from "./allocation.js";
 import { adminPartAvailabilityRoute } from "./partAvailability.js";
 import { adminUserProfilesRoute } from "./userProfiles.js";
+import { adminLabelPrintRulesRoute } from "./labelPrintRules.js";
 import { adminCustomerProfilesRoute } from "./customerProfiles.js";
 import { parseScopeEntries, type UserScopeEntry } from "../../db/user-scope.js";
 
@@ -244,6 +246,41 @@ adminRoute.route(
 );
 
 adminRoute.route("/shelf-boxes", shelfBoxesRoute);
+
+// Label print rules (spec 2026-09-16-label-print-rules-design) — which print
+// template a label type uses under which conditions; first matching active
+// rule wins (priority asc).
+adminRoute.route(
+  "/label-print-rules",
+  createCrudRouter({
+    table: labelPrintRules,
+    pk: labelPrintRules.id,
+    orderBy: sql`${labelPrintRules.priority} ASC, ${labelPrintRules.createdDate} ASC`,
+    create: (b) => ({
+      id: optId(b),
+      name: reqStr(b, "name"),
+      labelType: reqLabelType(b, "labelType"),
+      conditions: reqConditions(b, "conditions"),
+      printTemplateId: reqStr(b, "printTemplateId"),
+      priority: optInt(b, "priority") ?? 100,
+      active: optBool(b, "active") ?? true,
+      remark: optStr(b, "remark"),
+    }),
+    update: (b) => ({
+      ...(b.name !== undefined && { name: reqStr(b, "name") }),
+      ...(b.labelType !== undefined && { labelType: reqLabelType(b, "labelType") }),
+      ...(b.conditions !== undefined && { conditions: reqConditions(b, "conditions") }),
+      ...(b.printTemplateId !== undefined && { printTemplateId: reqStr(b, "printTemplateId") }),
+      ...(b.priority !== undefined && { priority: reqInt(b, "priority") }),
+      ...(b.active !== undefined && { active: reqBool(b, "active") }),
+      ...(b.remark !== undefined && { remark: optStr(b, "remark") }),
+      lastUpdateDate: new Date(),
+    }),
+  })
+);
+
+// Match preview for draft rule conditions (POST /test-match).
+adminRoute.route("/label-print-rules", adminLabelPrintRulesRoute);
 
 // Flow config editing (warehouse_config row "flow", applied at runtime).
 adminRoute.route("/flow-config", adminFlowConfigRoute);

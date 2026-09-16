@@ -3,6 +3,7 @@
 Date: 2026-09-14 (updated 2026-09-15: download made read-only; re-allocation moved to a dedicated endpoint + button)
 Status: implemented
 Supersedes: 2026-09-07-admin-receiving-picking-list-design.md
+Amended: 2026-09-16-admin-receiving-shipper-related-allocated-design.md (group header cell: related-order allocated qty replaces the shelf suggestion)
 
 ## Problem
 

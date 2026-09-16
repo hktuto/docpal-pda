@@ -110,7 +110,17 @@
   releases the lot's `allocated_qty`, and logs an audit row — deliberately
   transient, so the next `allocateAll`/scoped recompute may re-allocate the
   item (404 `picking_order_not_found`/`picking_item_not_found`/
-  `allocation_not_found`, 409 `lock_held`; NO order-status check); and the
+  `allocation_not_found`, 409 `lock_held`; NO order-status check). Each row
+  is a shared component (`apps/admin/components/allocations/` —
+  `StockAllocationRow` green dot for lot-sourced, `ReceivingAllocationRow`
+  blue dot for receiving-sourced) with a hover tooltip: lot rows show the
+  lot's shelf/box/date code/lot code/COO/COW and total/allocated/available
+  qtys; receiving rows show the source receiving order (link), invoice,
+  part, PO, received qty and date code — the order/invoice/item fields are
+  embedded on each allocation of `getPickingOrderDetail` as `receiving`
+  (null for lot allocations). The tooltip popup teleports to `<body>` +
+  fixed positioning (`allocations/Tooltip.vue`) because DataTable cells clip
+  overflow; and the
   part-no cell has a search icon opening a modal over
   `GET /admin/part-availability?partNo=&wclItemNo=` listing every stock lot
   and receiving order containing the part across ALL org/sub-inventory

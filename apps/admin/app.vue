@@ -22,8 +22,20 @@ function refreshUser() {
   user.value = raw ? JSON.parse(raw) : null;
 }
 
+// Per-user date format prefs drive every table date cell; load once a token
+// exists (the login page has none — the api client would bounce to /login).
+let datePrefsLoaded = false;
+function ensureDatePrefs() {
+  if (!import.meta.client || datePrefsLoaded) return;
+  if (!localStorage.getItem("admin_token")) return;
+  datePrefsLoaded = true;
+  loadDatePreferences(useApi());
+}
+
 watch(() => route.path, refreshUser);
+watch(() => route.path, ensureDatePrefs);
 onMounted(refreshUser);
+onMounted(ensureDatePrefs);
 
 const isLogin = computed(() => route.path === "/login");
 

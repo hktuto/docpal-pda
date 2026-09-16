@@ -540,7 +540,7 @@ const {
           <div><div class="dt">{{ $t("admin.pages.pickingOrders.issuePackSize") }}</div><div class="dd">{{ order.issuePackSize ?? "—" }}</div></div>
           <div><div class="dt">{{ $t("admin.pages.pickingOrders.issueNote") }}</div><div class="dd">{{ order.issueNote ?? "—" }}</div></div>
           <div><div class="dt">{{ $t("admin.pages.pickingOrders.issueRemark") }}</div><div class="dd">{{ order.issueRemark ?? "—" }}</div></div>
-          <div><div class="dt">{{ $t("admin.pages.pickingOrders.issueReportedAt") }}</div><div class="dd">{{ order.issueReportedAt ? new Date(order.issueReportedAt).toLocaleString() : "—" }}</div></div>
+          <div><div class="dt">{{ $t("admin.pages.pickingOrders.issueReportedAt") }}</div><div class="dd">{{ order.issueReportedAt ? formatDateTime(order.issueReportedAt) : "—" }}</div></div>
           <div><div class="dt">{{ $t("admin.pages.pickingOrders.issueReportedBy") }}</div><div class="dd">{{ order.issueReportedByName ?? order.issueReportedBy ?? "—" }}</div></div>
           <div>
             <button class="btn btn-small btn-primary" :disabled="resolvingIssue" @click="resolveIssue">
@@ -573,14 +573,86 @@ const {
               :removing="!!removingAlloc[a.id]"
               :remove-title="$t('admin.pages.pickingOrders.removeAllocation')"
               @remove="removeAllocation(row, a)"
-            >{{ allocationSource(a) }}</AllocationsStockAllocationRow>
+            >
+              {{ allocationSource(a) }}
+              <template #tooltip>
+                <div class="alloc-tip-row">
+                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.shelf") }}</span>
+                  <span>{{ a.lot.shelfCode ?? "—" }}</span>
+                </div>
+                <div class="alloc-tip-row">
+                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.box") }}</span>
+                  <span>{{ a.lot.boxId ?? "—" }}</span>
+                </div>
+                <div class="alloc-tip-row">
+                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.dateCode") }}</span>
+                  <span>{{ a.lot.dateCode ?? "—" }}</span>
+                </div>
+                <div class="alloc-tip-row">
+                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.lotCode") }}</span>
+                  <span>{{ a.lot.lotCode ?? "—" }}</span>
+                </div>
+                <div class="alloc-tip-row">
+                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.coo") }}</span>
+                  <span>{{ a.lot.coo ?? "—" }}</span>
+                </div>
+                <div class="alloc-tip-row">
+                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.cow") }}</span>
+                  <span>{{ a.lot.cow ?? "—" }}</span>
+                </div>
+                <div class="alloc-tip-row">
+                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.lotTotal") }}</span>
+                  <span>{{ a.lot.totalQty }}</span>
+                </div>
+                <div class="alloc-tip-row">
+                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.lotAllocated") }}</span>
+                  <span>{{ a.lot.allocatedQty }}</span>
+                </div>
+                <div class="alloc-tip-row">
+                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.lotAvailable") }}</span>
+                  <span>{{ a.lot.availableQty }}</span>
+                </div>
+              </template>
+            </AllocationsStockAllocationRow>
             <AllocationsReceivingAllocationRow
               v-else
               :qty="a.qty"
               :removing="!!removingAlloc[a.id]"
               :remove-title="$t('admin.pages.pickingOrders.removeAllocation')"
               @remove="removeAllocation(row, a)"
-            >{{ allocationSource(a) }}</AllocationsReceivingAllocationRow>
+            >
+              {{ allocationSource(a) }}
+              <template v-if="a.receiving" #tooltip>
+                <div class="alloc-tip-row">
+                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.receivingOrder") }}</span>
+                  <NuxtLink :to="`/receiving/${a.receiving.orderId}`">{{ a.receiving.batchNo }}</NuxtLink>
+                </div>
+                <div v-if="a.receiving.invoiceNo" class="alloc-tip-row">
+                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.invoice") }}</span>
+                  <span>{{ a.receiving.invoiceNo }}</span>
+                </div>
+                <div v-if="a.receiving.partNo" class="alloc-tip-row">
+                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.partNo") }}</span>
+                  <span>{{ a.receiving.partNo }}</span>
+                </div>
+                <div v-if="a.receiving.poNo" class="alloc-tip-row">
+                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.poNo") }}</span>
+                  <span>{{ a.receiving.poNo }}</span>
+                </div>
+                <div v-if="a.receiving.receivedQty != null" class="alloc-tip-row">
+                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.receivedQty") }}</span>
+                  <span>{{ a.receiving.receivedQty }}</span>
+                </div>
+                <div v-if="a.receiving.dateCode" class="alloc-tip-row">
+                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.dateCode") }}</span>
+                  <span>{{ a.receiving.dateCode }}</span>
+                </div>
+                <div v-if="a.boxId" class="alloc-tip-row">
+                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.ctnNo") }}</span>
+                  <span>{{ a.boxId }}</span>
+                </div>
+              </template>
+            </AllocationsReceivingAllocationRow>
           </template>
           <span v-if="row.allocations.length === 0" class="muted">—</span>
         </template>
@@ -602,7 +674,7 @@ const {
       >
         <template #cell-status="{ row }">
           {{ $t(`status.box.${row.status}`) }}
-          <div v-if="row.shippedAt" class="muted">{{ new Date(row.shippedAt).toLocaleDateString() }}</div>
+          <div v-if="row.shippedAt" class="muted">{{ formatDateTime(row.shippedAt) }}</div>
         </template>
         <template #cell-boxSize="{ row }">{{ row.boxSize ?? "—" }}</template>
         <template #cell-netGross="{ row }">{{ row.netWeight ?? "—" }} / {{ row.grossWeight ?? "—" }}</template>

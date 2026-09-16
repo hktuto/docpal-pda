@@ -147,7 +147,7 @@ function itemText(log: TransactionLogRow): string {
     :empty-text="t('admin.pages.auditLog.empty')"
     :on-reset-columns="resetColumnState"
   >
-    <template #cell-createdDate="{ row }">{{ new Date(row.createdDate).toLocaleString() }}</template>
+    <template #cell-createdDate="{ row }">{{ formatDateTime(row.createdDate) }}</template>
     <template #cell-actorName="{ row }">{{ row.actorName ?? row.actorId ?? "—" }}</template>
     <template #cell-toState="{ row }">{{ stateLabel(row.fromState) }} → {{ stateLabel(row.toState) }}</template>
     <template #cell-item="{ row }">{{ itemText(row) }}</template>

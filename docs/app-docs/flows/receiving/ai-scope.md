@@ -69,9 +69,13 @@
   `apps/admin/components/receiving/ItemEditModal.vue`), and download the
   shipper xlsx (`GET /admin/receiving-orders/:id/shipper`,
   `apps/backend/src/routes/admin/receivingShipper.ts`): receipts grouped
-  by part, each group one merged block (customer names / recommended shelf +
-  order_nos overlaid on the block's last rows, one `invoice_no ctn_no` item
-  row per carton) with per-block slots, per-group Total/Balance. The
+  by part, each group one merged block (customer names / order_nos overlaid
+  on the block's last rows, one `invoice_no ctn_no` item row per carton)
+  with per-block slots, per-group Total/Balance, and a group header cell
+  showing the related-order allocated qty (Σ allocations of the part on the
+  picking orders tracing back to this receiving order, any source; spec
+  `docs/superpowers/specs/2026-09-16-admin-receiving-shipper-related-allocated-design.md`).
+  The
   download is read-only; a separate Re-allocate button (`in_hand` only)
   awaits `POST /admin/receiving-orders/:id/reallocate` (same scoped core as
   confirm-arrival; 404 `receiving_order_not_found`, 409
@@ -92,8 +96,11 @@
   related-stock table (`GET /admin/part-availability`, stock only);
   `GET /receiving-orders/:id` embeds each item's `orgId`/`subInventoryCode`
   and `allocations` (qty, manual flag, picking order no/status), rendered in
-  the allocated-qty cell with a per-allocation (x) →
-  `DELETE /admin/picking-orders/:id/items/:itemId/allocations/:allocationId`.
+  the allocated-qty cell (shared `apps/admin/components/allocations/`
+  `ReceivingAllocationRow`, blue dot) with a per-allocation (x) →
+  `DELETE /admin/picking-orders/:id/items/:itemId/allocations/:allocationId`;
+  a hover tooltip on each row shows the target picking order (link to the
+  admin picking-order detail), its status and the allocated qty.
 
 ## Out of scope
 

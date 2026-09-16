@@ -63,7 +63,7 @@ function left(d: PartDemandRow): number {
           <tr v-for="d in group" :key="d.pickingItemId">
             <td>{{ d.orderNo }}</td>
             <td>{{ $t(`status.picking.${d.orderStatus}`) }}</td>
-            <td>{{ d.deliveryDate ? new Date(d.deliveryDate).toLocaleDateString() : "—" }}</td>
+            <td>{{ d.deliveryDate ? formatDate(d.deliveryDate) : "—" }}</td>
             <td>{{ d.orgId ?? "—" }} / {{ d.subInventoryCode ?? "—" }}</td>
             <td class="num">{{ d.qty }}</td>
             <td class="num">{{ d.pickedQty }}</td>

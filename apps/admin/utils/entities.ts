@@ -2,7 +2,7 @@ export interface EntityField {
   key: string;
   /** i18n key (under admin.fields.*) resolved by CrudTable/CrudForm via $t. */
   label: string;
-  type: "text" | "number" | "password" | "multiSelect" | "subInventoryPicker" | "json";
+  type: "text" | "number" | "password" | "multiSelect" | "subInventoryPicker" | "json" | "boolean" | "select" | "conditions";
   /**
    * multiSelect only: where the option list comes from.
    * "customerAccounts" = party names from GET /admin/customer-accounts.
@@ -12,6 +12,13 @@ export interface EntityField {
    * need no optionsSource.)
    */
   optionsSource?: "customerAccounts";
+  /**
+   * select only: static option list (single-select). `label` may be a plain
+   * string or an i18n key (resolved with $t when it starts with "admin.").
+   */
+  options?: { value: string; label: string }[];
+  /** Create-mode initial value (currently used by boolean fields). */
+  defaultValue?: unknown;
   /** Optional i18n key for explanatory text shown above the field input. */
   hint?: string;
   /** Optional table-cell formatter (overrides the default formatCell). */
@@ -82,6 +89,19 @@ function formatScopes(value: unknown): string {
   return value
     .map((s) => (s && typeof s === "object" ? `${(s as any).orgId} / ${(s as any).code}` : String(s)))
     .join(", ");
+}
+
+/** Compact summary of a label-print-rule conditions object, e.g. "org_id = 2 AND customer ~ C00*". */
+function formatConditions(value: unknown): string {
+  const c = value as { combinator?: string; conditions?: { field: string; operator: string; value: string }[] } | null;
+  if (!c || !Array.isArray(c.conditions) || c.conditions.length === 0) return "—";
+  const joiner = c.combinator === "or" ? " OR " : " AND ";
+  return c.conditions.map((x) => `${x.field} ${x.operator === "match" ? "~" : "="} ${x.value}`).join(joiner);
+}
+
+/** Active flag as a check/cross marker. */
+function formatActive(value: unknown): string {
+  return value ? "✔" : "✘";
 }
 
 export const entities: Record<string, EntityConfig> = {
@@ -180,6 +200,48 @@ export const entities: Record<string, EntityConfig> = {
       { key: "weight", label: "admin.fields.weightGrams", type: "number", required: true },
     ],
   },
+  labelPrintRules: {
+    path: "label-print-rules",
+    title: "admin.entities.labelPrintRules.title",
+    pk: "id",
+    noEdit: true,
+    clientSearch: true,
+    fields: [
+      { key: "name", label: "admin.fields.name", type: "text", required: true },
+      {
+        key: "labelType",
+        label: "admin.fields.labelType",
+        type: "select",
+        required: true,
+        options: [
+          { value: "carton", label: "admin.pages.labelPrintRules.labelTypes.carton" },
+          { value: "item_box", label: "admin.pages.labelPrintRules.labelTypes.item_box" },
+          { value: "item", label: "admin.pages.labelPrintRules.labelTypes.item" },
+        ],
+      },
+      {
+        key: "conditions",
+        label: "admin.fields.conditions",
+        type: "conditions",
+        required: true,
+        format: formatConditions,
+      },
+      {
+        key: "printTemplateId",
+        label: "admin.fields.printTemplateId",
+        type: "text",
+        required: true,
+        hint: "admin.fields.printTemplateIdHint",
+      },
+      { key: "priority", label: "admin.fields.priority", type: "number" },
+      { key: "active", label: "admin.fields.active", type: "boolean", format: formatActive, defaultValue: true },
+      { key: "remark", label: "admin.fields.remark", type: "text" },
+    ],
+    extraColumns: [
+      { key: "createdDate", label: "admin.fields.createdDate" },
+      { key: "lastUpdateDate", label: "admin.fields.lastUpdateDate" },
+    ],
+  },
 };
 
 /** Top-nav grouping per the admin TOC (apps/admin/TOC.md).
@@ -238,6 +300,7 @@ export const navSections: { title: string; links: { route: string; title: string
       { route: "/app-download", title: "admin.navLinks.appDownload" },
       { route: "/user-badges", title: "admin.navLinks.userBadges" },
       { route: "/user-profiles", title: "admin.navLinks.userProfiles" },
+      { route: "/label-print-rules", title: "admin.navLinks.labelPrintRules" },
     ],
   },
 ];

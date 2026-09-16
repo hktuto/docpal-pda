@@ -261,6 +261,39 @@ td.actions {
   gap: 6px;
 }
 
+/* ---- allocation row tooltip (popup teleports to <body>, see allocations/Tooltip.vue) ---- */
+.alloc-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  outline: none;
+}
+.alloc-tip-pop {
+  position: fixed;
+  z-index: 200;
+  min-width: 220px;
+  padding: 8px 10px;
+  background: #fff;
+  color: #000;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: nowrap;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+}
+.alloc-tip-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+}
+.alloc-tip-label {
+  color: #9aa5b1;
+}
+.alloc-tip-pop a {
+  color: #9ecbff;
+}
+
 /* ---- part availability / demand modal tables ---- */
 .avail-context {
   margin: -8px 0 12px;

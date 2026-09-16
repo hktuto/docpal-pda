@@ -663,7 +663,7 @@ const {
             <span class="muted">
               — {{ $t("admin.pages.receiving.orgSubInventory") }}: {{ group.invoice.orgId }}
               · {{ $t("admin.pages.receiving.itemsCount", { count: group.items.length })
-              }}{{ group.invoice.deliveryDate ? $t("admin.pages.receiving.deliverySuffix", { date: new Date(group.invoice.deliveryDate).toLocaleDateString() }) : "" }}
+              }}{{ group.invoice.deliveryDate ? $t("admin.pages.receiving.deliverySuffix", { date: formatDate(group.invoice.deliveryDate) }) : "" }}
             </span>
           </template>
           <template v-else-if="groupBy === 'ctnNo'">
@@ -717,6 +717,20 @@ const {
             >
               {{ a.orderNo }}
               <span v-if="a.manual" class="manual-badge">{{ $t("admin.pages.receiving.manualBadge") }}</span>
+              <template #tooltip>
+                <div class="alloc-tip-row">
+                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.pickingOrder") }}</span>
+                  <NuxtLink :to="`/picking-orders/${a.pickingOrderId}`">{{ a.orderNo }}</NuxtLink>
+                </div>
+                <div class="alloc-tip-row">
+                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.status") }}</span>
+                  <span>{{ $t(`status.picking.${a.orderStatus}`) }}</span>
+                </div>
+                <div class="alloc-tip-row">
+                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.qty") }}</span>
+                  <span>{{ a.qty }}</span>
+                </div>
+              </template>
             </AllocationsReceivingAllocationRow>
           </template>
           <template #actions="{ row }">

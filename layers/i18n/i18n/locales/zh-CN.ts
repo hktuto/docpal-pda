@@ -879,7 +879,8 @@ export default {
       appDownload: "应用下载",
       flowConfig: "流程设置",
       userBadges: "用户工牌",
-      userProfiles: "用户子库范围"
+      userProfiles: "用户子库范围",
+      labelPrintRules: "标签打印规则"
     },
     auth: {
       logout: "退出登录",
@@ -1016,7 +1017,14 @@ export default {
       qtyPcs: "数量（件）",
       weightGrams: "重量（克）",
       createdDate: "创建时间",
-      lastUpdateDate: "更新时间"
+      lastUpdateDate: "更新时间",
+      labelType: "标签类型",
+      printTemplateId: "打印模板 ID",
+      printTemplateIdHint: "标签打印服务的模板 slug。已知模板：katata-label、katata-3-8、carton-a4-sheet、carton-label-canvas、LABEL-FLEXTRONICS-2-5、LABEL-HET-CAR-3-4、LABEL-HET-INTELLIGENT-3-4、LABEL-HW-1、rohs-7、rohs-18。",
+      priority: "优先级",
+      active: "启用",
+      conditions: "条件",
+      combinator: "组合方式"
     },
     entities: {
       shelves: { title: "货架" },
@@ -1025,6 +1033,7 @@ export default {
       countries: { title: "国家" },
       boxSizes: { title: "箱型" },
       netWeightFormulas: { title: "净重公式" },
+      labelPrintRules: { title: "标签打印规则" },
       customerProfiles: { title: "客户资料配置" }
     },
     pages: {
@@ -1042,6 +1051,11 @@ export default {
       },
       settings: {
         title: "设置",
+        dateSection: "日期和时间格式",
+        dateExplainer: "控制台各表格中日期和时间的显示格式。符号：dd d MMM MM M yyyy yy HH H hh mm m ss a。",
+        dateFormat: "日期格式",
+        dateTimeFormat: "日期时间格式",
+        preview: "预览",
         scopeSection: "我的子库范围",
         scopeExplainer: "收货及拣货列表会按以下勾选的子库筛选。全部不勾选即可查看全部数据。"
       },
@@ -1306,6 +1320,26 @@ export default {
         availabilityLineQty: "行数量",
         availabilityAllocate: "分配",
         availabilityOpenDemand: "待分配需求：{qty}"
+      },
+      allocationTip: {
+        shelf: "货架",
+        box: "箱",
+        dateCode: "日期代码",
+        lotCode: "批次代码",
+        coo: "COO",
+        cow: "COW",
+        lotTotal: "批次总量",
+        lotAllocated: "已分配",
+        lotAvailable: "可用",
+        receivingOrder: "收货单",
+        pickingOrder: "拣货单",
+        invoice: "发票",
+        partNo: "零件编号",
+        poNo: "PO 号",
+        qty: "数量",
+        receivedQty: "收货数量",
+        ctnNo: "箱号",
+        status: "状态"
       },
       reorder: {
         title: "调整拣货优先级",
@@ -1580,6 +1614,52 @@ export default {
         fromOrgsHint: "在分配计算时应用于带有 additional_data.from_subinventory 的调拨拣货项目：代码命中分组后，位置匹配改用该分组的目标 Org ID，子库存按上方收货子库存规则、以拣货单的 PO 号在转换后的 Org 下匹配（无规则命中时使用 from_subinventory 代码本身）。代码不在任何分组中的项目保持订单原有位置。",
         fromOrgsInvalid: "每个分组都需要一个整数目标 Org ID 和至少一个 from_subinventory 代码。",
         saved: "已保存。"
+      },
+      labelPrintRules: {
+        activate: "启用",
+        deactivate: "停用",
+        addCondition: "新增条件",
+        removeCondition: "删除",
+        combinatorAnd: "全部符合（AND）",
+        combinatorOr: "任一符合（OR）",
+        conditionField: "字段",
+        conditionOperator: "运算符",
+        conditionValue: "值",
+        valuePlaceholder: "值，例如 319* 或 C001",
+        conditionsInvalid: "每个条件都需要非空的值；org_id 必须是数字。",
+        fields: {
+          org_id: "Org ID",
+          sub_inventory: "子库存",
+          supplier: "供应商",
+          order_no: "订单号",
+          order_type: "订单类型",
+          customer: "客户"
+        },
+        operators: {
+          eq: "等于",
+          match: "匹配（通配符）"
+        },
+        labelTypes: {
+          carton: "箱",
+          item_box: "零件盒",
+          item: "零件"
+        },
+        editTitle: "编辑标签打印规则 — {name}",
+        requiredFields: "名称、标签类型及打印模板 ID 为必填。",
+        previewTitle: "匹配预览",
+        previewNote: "以表单当前的条件测试，包括未保存的修改。",
+        keywordPlaceholder: "订单号 / PO 号…",
+        testMatch: "测试",
+        testing: "测试中…",
+        matchedCount: "{total} 张匹配的拣货单",
+        cappedNotice: "显示前 {shown} 张",
+        emptyPreview: "没有拣货单符合这些条件。",
+        colOrderNo: "订单号",
+        colPoNo: "PO 号",
+        colCustomer: "客户",
+        colLocation: "Org / 子库",
+        colType: "类型",
+        colStatus: "状态"
       }
     }
   }

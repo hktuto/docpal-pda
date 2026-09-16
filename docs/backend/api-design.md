@@ -71,6 +71,26 @@ live in `concepts.md`; tables in `schema.md`.
 | `GET /admin/part-availability?partNo=&wclItemNo=` | — → `{stock: [{lotId, orgId, subInventoryCode, shelfCode, boxId, partNo, wclItemNo, dateCode, lotCode, totalQty, allocatedQty, availableQty}], receiving: [{receivingOrderId, batchNo, supplierCode, status, invoiceNo, receivingInvoiceItemId, lineQty, receivedQty, putAwayQty, pickedQty, orgId, subInventoryCode, ctnNo, dateCode}]}` | exact part_no / wcl_item_no match across ALL org/sub-inventory locations (no org filter); powers the admin picking-detail per-item availability modal; 400 `part_no_required`. Same spec |
 | `GET /admin/part-demand?partNo=&wclItemNo=` | — → `{demand: [{pickingOrderId, orderNo, orderStatus, deliveryDate, orgId, subInventoryCode, pickingItemId, partNo, qty, pickedQty, allocatedQty, remainingQty}]}` | open (pending/picking) picking items needing the part with uncovered qty > 0; powers the receiving-detail Allocate modal; 400 `part_no_required`. Same spec |
 
+### Admin: label print rules
+
+Rules that decide which print template a picking label of a given type
+uses under which conditions (spec
+`docs/superpowers/specs/2026-09-16-label-print-rules-design.md`). Standard
+CRUD over the `label_print_rules` table; `conditions` is a JSON object
+`{combinator: "and"|"or", conditions: [{field: "org_id"|"sub_inventory"|"supplier"|"order_no"|"order_type"|"customer", operator: "eq"|"match", value: string}]}`
+(min 1 condition; `org_id` value numeric; `eq` exact case-sensitive,
+`match` glob with `*` — plain string = exact). 400 on an invalid
+`labelType`/`conditions`.
+
+| Endpoint | Body → Response | Note |
+|---|---|---|
+| `GET /admin/label-print-rules` | — → `[rule]` | sorted `priority` asc, then `created_date` asc |
+| `GET /admin/label-print-rules/:id` | — → rule / 404 | |
+| `POST /admin/label-print-rules` | `{name, labelType, conditions, printTemplateId, priority?, active?, remark?}` → rule | `labelType` ∈ `carton|item_box|item`; `priority` default 100, `active` default true |
+| `PATCH /admin/label-print-rules/:id` | partial rule → rule / 404 | used by the admin Activate/Deactivate row action (`{active}`) |
+| `DELETE /admin/label-print-rules/:id` | — → `{deleted: 1}` / 404 | |
+| `POST /admin/label-print-rules/test-match` | `{conditions, keyword?, limit?}` → `{rows: [{id, orderNo, poNo, customerCode, orgId, subInventoryCode, pickingOrderType, status}], total}` | evaluates DRAFT conditions against `picking_orders` for the edit-page match preview (`testLabelPrintRuleMatch` in `src/db/labelPrint.ts`); `keyword` ILIKEs `order_no`/`po_no`; rows ordered by `priority_seq`, `limit` default 50 cap 200, `total` = count of all matches; `supplier` condition = EXISTS over `picking_items` JOIN `parts` on `wcl_item_no` (ANY item's brand matches); 400 on invalid conditions |
+
 JWT bearer (HS256, `hono/jwt`, secret from `AUTH_SECRET`, 12 h TTL) required on
 all routes except `/health`, `POST /auth/login`, `POST /auth/login-token`, and
 `/dev/*`; `GET /events`
@@ -125,7 +145,7 @@ template group or explicit body field) are deduped per order via
 | `POST /receiving-invoice-items/:id/mismatch` | `{actorId, reason, mismatchQty?, wrongPartNo?, note?}` → item. |
 | `PATCH /receiving-invoice-items/:id/mismatch` | Edit pending mismatch. |
 | `POST /receiving-invoice-items/:id/mismatch/confirm` · `/cancel` | `{actorId}` → item. |
-| `GET /admin/receiving-orders/:id/shipper` | Admin console: shipper `.xlsx` attachment — receipts grouped by part, each group one merged block (customer names / recommended shelf + order_nos overlaid on the block's last rows, one `invoice_no ctn_no` item row per carton) with per-block allocation slots; Total/Balance per group; whole-order (no `ctn_no`) allocations close each group on an `(order-level)` block. Read-only — no in-request recompute (use `POST /admin/receiving-orders/:id/reallocate` first if stale). `?mode=finished` (for `clear` orders): same layout, slots from actual `picking_packages` (direct receiving-item picks + lot-traced via `inventory_lot_sources`) instead of live allocations. Spec `docs/superpowers/specs/2026-09-14-admin-receiving-shipper-download-design.md`. |
+| `GET /admin/receiving-orders/:id/shipper` | Admin console: shipper `.xlsx` attachment — receipts grouped by part, each group one merged block (customer names / order_nos overlaid on the block's last rows, one `invoice_no ctn_no` item row per carton) with per-block allocation slots; the group header cell shows the related-order allocated qty (Σ allocations of the part on the picking orders tracing back to this receiving order, any source — spec `docs/superpowers/specs/2026-09-16-admin-receiving-shipper-related-allocated-design.md`); Total/Balance per group; whole-order (no `ctn_no`) allocations close each group on an `(order-level)` block. Read-only — no in-request recompute (use `POST /admin/receiving-orders/:id/reallocate` first if stale). `?mode=finished` (for `clear` orders): same layout, slots from actual `picking_packages` (direct receiving-item picks + lot-traced via `inventory_lot_sources`) instead of live allocations, no group header cell. Spec `docs/superpowers/specs/2026-09-14-admin-receiving-shipper-download-design.md`. |
 | `GET /admin/picking-orders/:id/picking-list` | Admin console: picking-list `.xlsx` attachment (`picking-list-{orderNo}.xlsx`, sheet `Picking List`) — title + order-info block, then one flat row per allocation sorted by shelf/box: lot sources render shelf / box / date code / lot code / COO-COW / source org+sub-inventory; dock sources render `Receiving {batchNo}` + `(dock)`; `UNALLOCATED` shortfall row when an item is partially allocated, `(no allocation)` row when not at all. Read-only — no in-request recompute (use `POST /admin/picking-orders/:id/reallocate` first if stale). Spec `docs/superpowers/specs/2026-09-14-admin-picking-list-download-design.md`. |
 
 Changes vs old: `/picking` returns nested DTOs with logs embedded per item —

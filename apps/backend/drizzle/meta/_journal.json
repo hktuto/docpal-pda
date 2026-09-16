@@ -71,6 +71,20 @@
       "when": 1789443286246,
       "tag": "0009_mushy_morph",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789532760851,
+      "tag": "0010_chilly_speed_demon",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1789538694259,
+      "tag": "0011_fair_squadron_sinister",
+      "breakpoints": true
     }
   ]
 }

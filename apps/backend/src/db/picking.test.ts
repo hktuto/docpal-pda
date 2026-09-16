@@ -274,6 +274,7 @@ test("detail: nested shape — order, items with allocations/packages, boxes; 40
   assert.equal(alloc.receivingInvoiceItemId, null);
   assert.equal(alloc.receivingOrderId, null);
   assert.equal(alloc.boxId, null);
+  assert.equal(alloc.receiving, null);
   assert.ok(alloc.lot);
   assert.equal(alloc.lot.shelfCode, "A-01-01");
   assert.equal(alloc.lot.boxId, "BOX-H-20260701-0001");
@@ -1531,6 +1532,16 @@ test("pack path: boxing packages prefills the box from the source carton's addit
   await confirmReceivingArrival(client.db, await receivingOrderIdOf("100003"), actorId);
   await allocateAll(client.db);
   const orderId = await pickingOrderIdOf("SO-DEMO-0003");
+
+  // receiving-source allocations embed order/invoice/item detail for tooltips
+  const detail = await getPickingOrderDetail(client.db, orderId);
+  const recvAlloc = detail.items[0].allocations[0];
+  assert.ok(recvAlloc.receiving);
+  assert.equal(recvAlloc.receiving!.orderId, await receivingOrderIdOf("100003"));
+  assert.equal(recvAlloc.receiving!.batchNo, "100003");
+  assert.ok(recvAlloc.receiving!.invoiceNo);
+  assert.equal(recvAlloc.receiving!.partNo, "RK73H1JTTD3302F");
+  assert.ok(recvAlloc.receiving!.receivedQty! > 0);
 
   // pick both lines straight from the receiving carton (scan path)
   for (const [partNo, qty] of [["RK73H1JTTD3302F", 500], ["RK73H1JTTD6802F", 800]] as const) {

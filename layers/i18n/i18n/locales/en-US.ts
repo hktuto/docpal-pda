@@ -879,7 +879,8 @@ export default {
       appDownload: "App Download",
       flowConfig: "Flow Config",
       userBadges: "User Badges",
-      userProfiles: "User Scope"
+      userProfiles: "User Scope",
+      labelPrintRules: "Label Print Rules"
     },
     auth: {
       logout: "Logout",
@@ -1016,7 +1017,14 @@ export default {
       qtyPcs: "Qty (pcs)",
       weightGrams: "Weight (g)",
       createdDate: "Created",
-      lastUpdateDate: "Updated"
+      lastUpdateDate: "Updated",
+      labelType: "Label type",
+      printTemplateId: "Print template ID",
+      printTemplateIdHint: "Template slug on the label print service. Known templates: katata-label, katata-3-8, carton-a4-sheet, carton-label-canvas, LABEL-FLEXTRONICS-2-5, LABEL-HET-CAR-3-4, LABEL-HET-INTELLIGENT-3-4, LABEL-HW-1, rohs-7, rohs-18.",
+      priority: "Priority",
+      active: "Active",
+      conditions: "Conditions",
+      combinator: "Combinator"
     },
     entities: {
       shelves: { title: "Shelves" },
@@ -1025,7 +1033,8 @@ export default {
       parts: { title: "Parts" },
       countries: { title: "Countries" },
       boxSizes: { title: "Box Sizes" },
-      netWeightFormulas: { title: "Net-weight Formulas" }
+      netWeightFormulas: { title: "Net-weight Formulas" },
+      labelPrintRules: { title: "Label Print Rules" }
     },
     pages: {
       userProfiles: {
@@ -1042,6 +1051,11 @@ export default {
       },
       settings: {
         title: "Settings",
+        dateSection: "Date & time format",
+        dateExplainer: "How dates and timestamps are shown in tables across the console. Tokens: dd d MMM MM M yyyy yy HH H hh mm m ss a.",
+        dateFormat: "Date format",
+        dateTimeFormat: "Date and time format",
+        preview: "Preview",
         scopeSection: "My sub-inventory scope",
         scopeExplainer: "Receiving and picking lists are filtered to the sub-inventories selected below. Leave all unchecked to see everything."
       },
@@ -1307,6 +1321,26 @@ export default {
         availabilityLineQty: "Line qty",
         availabilityAllocate: "Allocate",
         availabilityOpenDemand: "Open demand: {qty}"
+      },
+      allocationTip: {
+        shelf: "Shelf",
+        box: "Box",
+        dateCode: "Date code",
+        lotCode: "Lot code",
+        coo: "COO",
+        cow: "COW",
+        lotTotal: "Lot total",
+        lotAllocated: "Lot allocated",
+        lotAvailable: "Lot available",
+        receivingOrder: "Receiving order",
+        pickingOrder: "Picking order",
+        invoice: "Invoice",
+        partNo: "Part no",
+        poNo: "PO no",
+        qty: "Qty",
+        receivedQty: "Received qty",
+        ctnNo: "Carton no",
+        status: "Status"
       },
       reorder: {
         title: "Reorder Picking Priority",
@@ -1583,6 +1617,52 @@ export default {
         fromOrgsHint: "Applied during allocation to transfer picking items carrying additional_data.from_subinventory: a code listed in a group switches location matching to that group's org ID, and the sub-inventory comes from the receiving sub-inventory rules above, evaluated with the picking order's PO number under the converted org (no rule match → the from_subinventory code itself). Items whose code is in no group keep the order's own location.",
         fromOrgsInvalid: "Every group needs an integer target org ID and at least one from_subinventory code.",
         saved: "Saved."
+      },
+      labelPrintRules: {
+        activate: "Activate",
+        deactivate: "Deactivate",
+        addCondition: "Add condition",
+        removeCondition: "Remove",
+        combinatorAnd: "Match ALL (AND)",
+        combinatorOr: "Match ANY (OR)",
+        conditionField: "Field",
+        conditionOperator: "Operator",
+        conditionValue: "Value",
+        valuePlaceholder: "Value, e.g. 319* or C001",
+        conditionsInvalid: "Every condition needs a non-empty value; org_id must be numeric.",
+        fields: {
+          org_id: "Org ID",
+          sub_inventory: "Sub-inventory",
+          supplier: "Supplier",
+          order_no: "Order no",
+          order_type: "Order type",
+          customer: "Customer"
+        },
+        operators: {
+          eq: "equals",
+          match: "matches (glob)"
+        },
+        labelTypes: {
+          carton: "Carton",
+          item_box: "Item box",
+          item: "Item"
+        },
+        editTitle: "Edit Label Print Rule — {name}",
+        requiredFields: "Name, label type and print template ID are required.",
+        previewTitle: "Match preview",
+        previewNote: "Tests the conditions currently in the form, including unsaved changes.",
+        keywordPlaceholder: "Order no / PO no…",
+        testMatch: "Test",
+        testing: "Testing…",
+        matchedCount: "{total} matching picking orders",
+        cappedNotice: "showing first {shown}",
+        emptyPreview: "No picking orders match these conditions.",
+        colOrderNo: "Order no",
+        colPoNo: "PO no",
+        colCustomer: "Customer",
+        colLocation: "Org / Sub-inv",
+        colType: "Type",
+        colStatus: "Status"
       }
     }
   }

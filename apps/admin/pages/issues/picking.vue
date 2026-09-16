@@ -136,7 +136,7 @@ const {
       <template #cell-packSize="{ row }">{{ row.detail.issuePackSize ?? "—" }}</template>
       <template #cell-note="{ row }">{{ row.detail.issueNote ?? "—" }}</template>
       <template #cell-reportedAt="{ row }">
-        {{ row.detail.issueReportedAt ? new Date(row.detail.issueReportedAt).toLocaleString() : "—" }}
+        {{ row.detail.issueReportedAt ? formatDateTime(row.detail.issueReportedAt) : "—" }}
       </template>
       <template #actions="{ row }">
         <button

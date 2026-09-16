@@ -218,7 +218,7 @@ const {
         <span class="muted">{{ row.prioritySeq }}</span>
       </template>
       <template #cell-deliveryDate="{ row }">
-        {{ row.deliveryDate ? new Date(row.deliveryDate).toLocaleDateString() : "—" }}
+        {{ row.deliveryDate ? formatDate(row.deliveryDate) : "—" }}
       </template>
       <template #cell-pickedRatio="{ row }">{{ row.pickedQty }} / {{ row.totalQty }}</template>
       <template #cell-allocation="{ row }">
@@ -227,8 +227,8 @@ const {
       </template>
       <template #cell-workingByName="{ row }">{{ row.workingByName ?? "" }}</template>
       <template #cell-remark="{ row }">{{ row.remark ?? "" }}</template>
-      <template #cell-createdDate="{ row }">{{ new Date(row.createdDate).toLocaleString() }}</template>
-      <template #cell-lastUpdateDate="{ row }">{{ new Date(row.lastUpdateDate).toLocaleString() }}</template>
+      <template #cell-createdDate="{ row }">{{ formatDateTime(row.createdDate) }}</template>
+      <template #cell-lastUpdateDate="{ row }">{{ formatDateTime(row.lastUpdateDate) }}</template>
     </DataTable>
     <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
   </div>

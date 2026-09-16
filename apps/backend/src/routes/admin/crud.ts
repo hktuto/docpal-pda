@@ -86,6 +86,97 @@ export function optJson(body: Record<string, unknown>, field: string): unknown |
   return v;
 }
 
+export function optBool(body: Record<string, unknown>, field: string): boolean | null {
+  const v = body[field];
+  if (v === undefined || v === null) return null;
+  if (typeof v !== "boolean") throw new HTTPException(400, { message: `${field} must be a boolean` });
+  return v;
+}
+
+export function reqBool(body: Record<string, unknown>, field: string): boolean {
+  const v = body[field];
+  if (typeof v !== "boolean") throw new HTTPException(400, { message: `${field} must be a boolean` });
+  return v;
+}
+
+// Label-print rules: label_type ∈ carton | item_box | item.
+const LABEL_TYPES = new Set(["carton", "item_box", "item"]);
+
+export function reqLabelType(body: Record<string, unknown>, field: string): string {
+  const v = reqStr(body, field);
+  if (!LABEL_TYPES.has(v)) {
+    throw new HTTPException(400, { message: `${field} must be one of carton|item_box|item` });
+  }
+  return v;
+}
+
+// Label-print rules: conditions JSON shape —
+// { combinator: "and"|"or", conditions: [{ field, operator, value }] } with
+// field ∈ org_id|sub_inventory|supplier|order_no|order_type|customer, operator ∈ eq|match,
+// value a non-empty string (numeric when field is org_id), ≥1 condition.
+const CONDITION_FIELDS = new Set(["org_id", "sub_inventory", "supplier", "order_no", "order_type", "customer"]);
+const CONDITION_OPERATORS = new Set(["eq", "match"]);
+
+export interface RuleCondition {
+  field: "org_id" | "sub_inventory" | "supplier" | "order_no" | "order_type" | "customer";
+  operator: "eq" | "match";
+  value: string;
+}
+
+export interface RuleConditions {
+  combinator: "and" | "or";
+  conditions: RuleCondition[];
+}
+
+export function validateConditions(v: unknown): RuleConditions {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) {
+    throw new HTTPException(400, { message: "conditions must be an object" });
+  }
+  const o = v as Record<string, unknown>;
+  if (o.combinator !== "and" && o.combinator !== "or") {
+    throw new HTTPException(400, { message: "conditions.combinator must be one of and|or" });
+  }
+  const list = o.conditions;
+  if (!Array.isArray(list) || list.length === 0) {
+    throw new HTTPException(400, { message: "conditions.conditions must be a non-empty array" });
+  }
+  for (const entry of list) {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      throw new HTTPException(400, { message: "condition entries must be objects" });
+    }
+    const e = entry as Record<string, unknown>;
+    if (typeof e.field !== "string" || !CONDITION_FIELDS.has(e.field)) {
+      throw new HTTPException(400, {
+        message: "condition field must be one of org_id|sub_inventory|supplier|order_no|order_type|customer",
+      });
+    }
+    if (typeof e.operator !== "string" || !CONDITION_OPERATORS.has(e.operator)) {
+      throw new HTTPException(400, { message: "condition operator must be one of eq|match" });
+    }
+    if (typeof e.value !== "string" || e.value.trim() === "") {
+      throw new HTTPException(400, { message: "condition value must be a non-empty string" });
+    }
+    if (e.field === "org_id" && !/^\d+$/.test(e.value.trim())) {
+      throw new HTTPException(400, { message: "condition value must be numeric when field is org_id" });
+    }
+  }
+  return o as unknown as RuleConditions;
+}
+
+export function reqConditions(body: Record<string, unknown>, field: string): RuleConditions {
+  const v = body[field];
+  if (v === undefined || v === null) {
+    throw new HTTPException(400, { message: `${field} is required` });
+  }
+  return validateConditions(v);
+}
+
+export function optConditions(body: Record<string, unknown>, field: string): RuleConditions | null {
+  const v = body[field];
+  if (v === undefined || v === null) return null;
+  return validateConditions(v);
+}
+
 export interface CrudConfig<T extends PgTableWithColumns<any>> {
   table: T;
   /** Text primary-key column used in /:id lookups and list ordering. */
@@ -103,8 +194,8 @@ export interface CrudConfig<T extends PgTableWithColumns<any>> {
   /** Whitelisted sortable columns keyed by sort name (server-paging branch only).
    *  ?sort=<name>&dir=asc|desc (default dir asc; unknown name falls back to orderBy). */
   sorts?: Record<string, AnyPgColumn>;
-  /** List ordering column; defaults to pk. */
-  orderBy?: AnyPgColumn;
+  /** List ordering column (or SQL expression for multi-column ordering); defaults to pk. */
+  orderBy?: AnyPgColumn | SQL;
   /** Build the insert row from a validated body (throw HTTPException(400) on bad input). */
   create: (body: Record<string, unknown>) => T["$inferInsert"];
   /** Build the update set from a validated body; only provided fields are updated. */
