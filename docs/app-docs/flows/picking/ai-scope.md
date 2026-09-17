@@ -14,7 +14,9 @@
   (`apps/backend/src/routes/admin/pickingList.ts`, same filters/paging shape
   as the PDA list) which is unscoped — it ignores both `allowedOrgIds` and
   the caller's user scope (`listPickingOrders` `unscoped: true`), so admins
-  always see every order.
+  always see every order. The admin detail page likewise reads
+  `GET /admin/picking-orders/:id` (`getPickingOrderDetail`
+  `unscoped: true`) — out-of-scope orders 404 on the PDA but open in admin.
 - List picking orders with a status filter and text search (both
   server-side, paged 50 at a time); multi-select batch issue reporting.
 - Show picking order detail as one nested read: order (incl. issue fields),
