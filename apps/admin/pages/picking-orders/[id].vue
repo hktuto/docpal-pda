@@ -396,6 +396,28 @@ async function resolveIssue() {
   }
 }
 
+// "Override status" modal (spec 2026-09-17): admin sets the order to any of
+// pending/picking/issue/finished/shipped — no transition guards; a live PDA
+// work lock is force-cleared and leftover allocations released when closing.
+const overrideOpen = ref(false);
+const overriding = ref(false);
+
+async function onOverrideStatus(payload: { status: string; reason: string }) {
+  if (!order.value || overriding.value) return;
+  overriding.value = true;
+  error.value = "";
+  try {
+    await flow.overridePickingOrderStatus(orderId, payload.status, payload.reason);
+    overrideOpen.value = false;
+    await load();
+    logsKey.value++;
+  } catch (e: any) {
+    error.value = e.message;
+  } finally {
+    overriding.value = false;
+  }
+}
+
 function allocationSource(a: PickingOrderDetail["items"][number]["allocations"][number]): string {
   if (a.lot)
     return t("admin.pages.pickingOrders.allocLot", {
@@ -421,8 +443,8 @@ onMounted(() => {
 });
 
 // Reload when the order changes elsewhere (PDA picks, issue reports, allocation).
-// Busy while the report-issue modal is open: banner instead of a silent reload.
-const changeBusy = computed(() => reportOpen.value || availOpen.value);
+// Busy while a modal is open: banner instead of a silent reload.
+const changeBusy = computed(() => reportOpen.value || availOpen.value || overrideOpen.value);
 const {
   pending: changePending,
   justUpdated: changeUpdated,
@@ -466,6 +488,9 @@ const {
           @click="openReportModal"
         >
           {{ $t("admin.pages.pickingOrders.reportIssue") }}
+        </button>
+        <button class="btn" @click="overrideOpen = true">
+          {{ $t("admin.pages.pickingOrders.overrideStatus") }}
         </button>
         <NuxtLink to="/picking-orders" class="btn">{{ $t("admin.common.back") }}</NuxtLink>
       </div>
@@ -747,6 +772,13 @@ const {
       :picking-item="availItem"
       @close="availOpen = false"
       @allocated="onAllocated"
+    />
+    <PickingOrdersStatusOverrideModal
+      :open="overrideOpen"
+      :order-nos="order ? [order.orderNo] : []"
+      :current-statuses="order ? [order.status] : []"
+      @close="overrideOpen = false"
+      @apply="onOverrideStatus"
     />
   </div>
 </template>

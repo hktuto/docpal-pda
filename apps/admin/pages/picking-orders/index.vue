@@ -11,6 +11,7 @@ const error = ref("");
 const status = ref("");
 const orderTypes = ref<string[]>([]);
 const search = ref("");
+const selected = ref<Set<string>>(new Set());
 
 const STATUSES = ["pending", "picking", "finished", "issue", "shipped"];
 const ORDER_TYPES = ["invoice", "tn"];
@@ -109,6 +110,7 @@ async function load() {
   error.value = "";
   try {
     rows.value = await flow.listPickingOrders(status.value || undefined);
+    selected.value = new Set();
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -148,7 +150,42 @@ async function allocateAllNow() {
 
 onBeforeUnmount(() => clearTimeout(allocDoneTimer));
 
+// Batch "Set status": one override per selected order (the API helper
+// attempts every id and lists per-order failures on `failed`, same as the
+// shipping batch). The modal is shared with the detail page.
+const selectedIds = computed(() => [...selected.value]);
+const selectedRows = computed(() => rows.value.filter((r) => selected.value.has(r.id)));
+const overrideOpen = ref(false);
+const overriding = ref(false);
+
+async function onOverrideStatus(payload: { status: string; reason: string }) {
+  const ids = selectedIds.value;
+  if (ids.length === 0 || overriding.value) return;
+  overriding.value = true;
+  error.value = "";
+  try {
+    await flow.overridePickingOrdersStatus(ids, payload.status, payload.reason);
+    overrideOpen.value = false;
+    await load();
+  } catch (e: any) {
+    // Partial failure: failed lists the per-order failures.
+    const failed: { id: string; message: string }[] = e?.failed ?? [];
+    error.value =
+      failed.length > 0
+        ? t("admin.pages.pickingOrders.overrideFailed", {
+            orders: failed.map((f) => rows.value.find((r) => r.id === f.id)?.orderNo ?? f.id).join(", "),
+          })
+        : e.message;
+    await load();
+  } finally {
+    overriding.value = false;
+  }
+}
+
 // Reload when picking data changes elsewhere (PDA picks, sync, allocation).
+// Busy while a selection is active (load() clears it): banner instead of
+// silent reload.
+const changeBusy = computed(() => selected.value.size > 0);
 const {
   pending: changePending,
   justUpdated: changeUpdated,
@@ -162,7 +199,8 @@ const {
     "picking.reordered",
     "allocation.computed",
   ],
-  load
+  load,
+  { busy: changeBusy }
 );
 </script>
 
@@ -174,6 +212,17 @@ const {
         <button class="btn" :disabled="loading" @click="load">{{ $t("admin.common.refresh") }}</button>
         <button class="btn" :disabled="allocating" @click="allocateAllNow">
           {{ allocating ? $t("admin.common.saving") : $t("admin.pages.pickingOrders.allocateAll") }}
+        </button>
+        <button
+          class="btn"
+          :disabled="selectedIds.length === 0 || overriding"
+          @click="overrideOpen = true"
+        >
+          {{
+            selectedIds.length
+              ? $t("admin.pages.pickingOrders.overrideStatusSelected", { n: selectedIds.length })
+              : $t("admin.pages.pickingOrders.overrideStatus")
+          }}
         </button>
         <NuxtLink to="/picking/reorder" class="btn">{{ $t("admin.pages.pickingOrders.reorderPriority") }}</NuxtLink>
       </div>
@@ -207,11 +256,16 @@ const {
 
     <DataTable
       v-else
+      v-model:selected="selected"
       :table="table"
+      selectable
+      :row-id="(r: PickingOrderRow) => r.id"
       :empty-text="$t('admin.pages.pickingOrders.none')"
       :on-reset-columns="resetColumnState"
-      @row-click="(r) => navigateTo(`/picking-orders/${r.id}`)"
     >
+      <template #cell-orderNo="{ row }">
+        <span class="clickable" @click="navigateTo(`/picking-orders/${row.id}`)">{{ row.orderNo }}</span>
+      </template>
       <template #cell-status="{ row }">{{ $t(`status.picking.${row.status}`) }}</template>
       <template #cell-pickingOrderType="{ row }">{{ row.pickingOrderType ?? "" }}</template>
       <template #cell-prioritySeq="{ row }">
@@ -231,6 +285,13 @@ const {
       <template #cell-lastUpdateDate="{ row }">{{ formatDateTime(row.lastUpdateDate) }}</template>
     </DataTable>
     <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
+    <PickingOrdersStatusOverrideModal
+      :open="overrideOpen"
+      :order-nos="selectedRows.map((r) => r.orderNo)"
+      :current-statuses="selectedRows.map((r) => r.status)"
+      @close="overrideOpen = false"
+      @apply="onOverrideStatus"
+    />
   </div>
 </template>
 
@@ -245,6 +306,10 @@ const {
 }
 .filter-type {
   width: 180px;
+}
+.clickable {
+  cursor: pointer;
+  color: #0b5cab;
 }
 .alloc-done-banner {
   margin-bottom: 12px;

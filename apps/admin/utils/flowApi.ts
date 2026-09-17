@@ -503,6 +503,14 @@ export function useFlowApi() {
     // null clears the pair) — one PATCH for the whole info section.
     updatePickingOrder: (id: string, fields: PickingOrderEditFields) =>
       api.patch(`/admin/picking-orders/${id}`, fields),
+    // Admin status override (spec 2026-09-17-admin-picking-status-override-design.md):
+    // any of pending/picking/issue/finished/shipped, no transition guards; a
+    // live PDA work lock is force-cleared. changed=false when already the target.
+    overridePickingOrderStatus: (id: string, status: string, reason?: string) =>
+      api.patch<{ id: string; orderNo: string; status: string; previousStatus: string; changed: boolean }>(
+        `/admin/picking-orders/${id}/status`,
+        { status, ...(reason?.trim() ? { reason: reason.trim() } : {}) }
+      ),
     listSubInventories: () => api.get<SubInventoryRow[]>("/admin/sub-inventories"),
     listCountries: () => api.get<CountryRow[]>("/admin/countries"),
 
@@ -612,6 +620,27 @@ export function useFlowApi() {
       for (const id of boxIds) {
         try {
           await api.post(`/shipping-orders/${id}/ship`);
+        } catch (e: any) {
+          failed.push({ id, message: e?.message ?? String(e) });
+        }
+      }
+      if (failed.length > 0) {
+        const err = new Error(failed.map((f) => `${f.id}: ${f.message}`).join("; "));
+        (err as any).failed = failed;
+        throw err;
+      }
+    },
+    // Batch status override on the picking order list: one PATCH per id (same
+    // shipShippingBoxes contract — attempts every id, throws with `failed`
+    // listing the per-order failures on partial failure).
+    overridePickingOrdersStatus: async (ids: string[], status: string, reason?: string): Promise<void> => {
+      const failed: { id: string; message: string }[] = [];
+      for (const id of ids) {
+        try {
+          await api.patch(`/admin/picking-orders/${id}/status`, {
+            status,
+            ...(reason?.trim() ? { reason: reason.trim() } : {}),
+          });
         } catch (e: any) {
           failed.push({ id, message: e?.message ?? String(e) });
         }

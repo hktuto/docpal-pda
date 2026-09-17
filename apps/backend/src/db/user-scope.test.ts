@@ -163,9 +163,9 @@ test("GET /picking-orders + /:id are scoped by the actor's profile", async () =>
 // --- picking type-split visibility (invoice / tn / NULL) ---------------------
 
 // pickingOrderOrgFilter: invoice orders get allowedOrgIds + the exact
-// (org, sub) scope pairs; tn (transfer) orders are visible when org_id = 143
-// and the caller's scope includes ANY sub-inventory of org 143; NULL-typed
-// orders are always visible.
+// (org, sub) scope pairs; tn (transfer) orders ignore the order's org and
+// are visible whenever the caller's scope includes ANY sub-inventory of
+// org 143; NULL-typed orders are always visible.
 test("picking visibility splits by picking_order_type (invoice / tn / NULL)", async () => {
   await reseed(client);
   _setAllowedOrgIdsForTests([]);
@@ -189,25 +189,32 @@ test("picking visibility splits by picking_order_type (invoice / tn / NULL)", as
   const visible = async (scope?: { orgId: number; code: string }[] | null) =>
     (await listPickingOrders(client.db, { scope })).rows.map((r) => r.id).sort();
 
-  // Invoice scope: exact pairs only; tn needs an org-143 pair the caller has.
+  // Invoice scope: exact pairs only. tn: hidden without any org-143 pair.
   assert.deepEqual(await visible(STORE1), [invoiceIn, nullType].sort());
-  assert.deepEqual(await visible([{ orgId: 143, code: "store1" }]), [nullType, tn143].sort());
-  // Any 143 pair counts — the caller need not hold the order's own store.
-  assert.deepEqual(await visible([{ orgId: 143, code: "OSWF (MCI)" }]), [nullType, tn143].sort());
-  // Unrestricted caller: all invoice orders, tn only from org 143.
+  // Any 143 pair shows ALL tn orders — the order's own org is ignored.
+  assert.deepEqual(
+    await visible([{ orgId: 143, code: "store1" }]),
+    [nullType, tn143, tnOtherOrg].sort()
+  );
+  assert.deepEqual(
+    await visible([{ orgId: 143, code: "OSWF (MCI)" }]),
+    [nullType, tn143, tnOtherOrg].sort()
+  );
+  // Unrestricted caller: everything.
   assert.deepEqual(
     await visible(null),
-    [invoiceIn, invoiceOut, nullType, tn143].sort()
+    [invoiceIn, invoiceOut, nullType, tn143, tnOtherOrg].sort()
   );
 
   // allowedOrgIds filters invoice orders only; tn and NULL bypass it.
   _setAllowedOrgIdsForTests([99]);
-  assert.deepEqual(await visible(null), [nullType, tn143].sort());
+  assert.deepEqual(await visible(null), [nullType, tn143, tnOtherOrg].sort());
   _setAllowedOrgIdsForTests([]);
 
   // Detail reads follow the same rule (404 = hidden).
   await assert.rejects(getPickingOrderDetail(client.db, tn143, WSTORE1), /picking_order_not_found/);
   assert.equal((await getPickingOrderDetail(client.db, tn143, [{ orgId: 143, code: "store1" }])).id, tn143);
+  assert.equal((await getPickingOrderDetail(client.db, tnOtherOrg, [{ orgId: 143, code: "store1" }])).id, tnOtherOrg);
   assert.equal((await getPickingOrderDetail(client.db, nullType, WSTORE1)).id, nullType);
   await assert.rejects(getPickingOrderDetail(client.db, tnOtherOrg, STORE1), /picking_order_not_found/);
 });

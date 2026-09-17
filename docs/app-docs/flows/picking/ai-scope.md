@@ -13,9 +13,9 @@
   The predicate splits by `picking_order_type`
   (`pickingOrderOrgFilter` in `apps/backend/src/db/picking.ts`): only
   `invoice` orders get the allowedOrgIds + exact-pair scope filter; `tn`
-  (transfer) orders are visible when the order's `org_id = 143` and the
+  (transfer) orders ignore the order's org entirely — visible whenever the
   caller's scope includes ANY sub-inventory of org 143 (unscoped callers see
-  all org-143 transfers); orders with NULL type (freshly synced, no type
+  all transfers); orders with NULL type (freshly synced, no type
   yet) are always visible.
 - List picking orders with a status filter and text search (both
   server-side, paged 50 at a time); multi-select batch issue reporting.
@@ -172,6 +172,27 @@
   go stale. The detail grid also shows the read-only `picking_order_type`
   and `remark` (also list columns; the list filters type client-side,
   invoice/tn).
+- Admin status override (spec
+  `docs/superpowers/specs/2026-09-17-admin-picking-status-override-design.md`):
+  "Override status" on the admin picking-order detail page, and a batch
+  "Set status" over the multi-selectable list page, both driving
+  `PATCH /admin/picking-orders/:id/status` (`overridePickingOrderStatus` in
+  `apps/backend/src/db/picking.ts`). The status can be set to any of
+  pending/picking/issue/finished/shipped with NO transition guards; a live
+  PDA work lock is force-cleared (the override "steals" it), leaving open
+  releases ALL the order's leftover allocations (incl. manual pins) with
+  RESERVE-release ledger rows and zeroes `picking_items.allocated_qty`,
+  leaving `shipped` clears `shipped_at`/`shipped_by` (entering stamps them),
+  leaving `issue` clears the issue fields. Same-status calls are no-ops
+  (`changed: false`, no audit row). On change: one tx writes the status +
+  `transaction_logs` transition (`metadata.override = true`, optional
+  `reason`) + `picking_order.updated` SSE, and the route schedules a
+  background `allocateAll` (reopening re-enters demand). The batch action
+  (`flow.overridePickingOrdersStatus`) loops the route per id with
+  per-order failure aggregation, same contract as `shipShippingBoxes`; both
+  pages share `apps/admin/components/picking-orders/StatusOverrideModal.vue`
+  (target status + optional reason + a reopen warning when any selected
+  order is finished/shipped and the target is open).
 - Allocation location matching: a picking order's `(org_id,
   sub_inventory_code)` pair must match the stock source's pair (pair-less
   orders are org-agnostic), widened by `sub_inventory_share_members` —

@@ -15,9 +15,9 @@ import { userScopeCondition, type UserScopeEntry } from "./user-scope.js";
 // Picking-order org visibility, split by picking_order_type:
 //   invoice → the flow config's allowedOrgIds AND the caller's exact
 //             (org_id, sub_inventory_code) scope pairs;
-//   tn      → org_id = TN_ORG_ID and (unscoped caller, or the caller's scope
-//             includes ANY sub-inventory of that org) — transfers belong to
-//             the org, not to one store;
+//   tn      → ignore the order's org: visible whenever the caller's scope
+//             includes ANY sub-inventory under TN_ORG_ID (unscoped callers
+//             see all transfers);
 //   NULL    → unfiltered (freshly synced orders carry no type yet).
 // `AND (...)` fragment for interpolation after a WHERE.
 const TN_ORG_ID = 143;
@@ -29,7 +29,7 @@ function pickingOrderOrgFilter(orgCol: SQL, subCol: SQL, typeCol: SQL, scope?: U
     ? sql`(${typeCol} = 'invoice' AND ${sql.join(invoiceConds, sql` AND `)})`
     : sql`${typeCol} = 'invoice'`;
   const tnInScope = !scope || scope.length === 0 || scope.some((e) => e.orgId === TN_ORG_ID);
-  const tn = tnInScope ? sql`(${typeCol} = 'tn' AND ${orgCol} = ${TN_ORG_ID})` : sql`FALSE`;
+  const tn = tnInScope ? sql`${typeCol} = 'tn'` : sql`FALSE`;
   return sql`AND (${typeCol} IS NULL OR ${invoice} OR ${tn})`;
 }
 
@@ -549,7 +549,8 @@ export interface PickingOrderListRow {
  *  counts all matches). Ordered by priority_seq (allocation order,
  *  admin-reorderable). Org visibility splits by picking_order_type —
  *  see pickingOrderOrgFilter (invoice → allowedOrgIds + `opts.scope`,
- *  tn → org 143 with any in-scope 143 store, NULL → unfiltered). */
+ *  tn → caller's scope has any org-143 store, order org ignored,
+ *  NULL → unfiltered). */
 export async function listPickingOrders(
   db: AppDb,
   opts?: {
@@ -2222,6 +2223,157 @@ export async function resolvePickingOrderIssue(
       data: { id: order.id, orderNo: order.orderNo, actorId: input.actorId },
     });
     return { id: order.id, orderNo: order.orderNo, status: "pending" };
+  });
+}
+
+export const PICKING_ORDER_STATUSES = ["pending", "picking", "issue", "finished", "shipped"] as const;
+const OPEN_PICKING_STATUSES = new Set(["pending", "picking"]);
+
+/** Admin status override (spec docs/superpowers/specs/2026-09-17-admin-picking-status-override-design.md).
+ *  Sets the status to any of the 5 values with no transition guards. Side
+ *  effects inside the tx:
+ *  - leaving open (pending/picking) releases ALL the order's leftover
+ *    allocations (incl. manual pins — a closed order is out of demand so
+ *    nothing would ever rebuild them), with RESERVE-release ledger rows;
+ *  - the PDA work lock is always force-cleared (the override "steals" it);
+ *  - leaving `shipped` clears shipped_at/shipped_by; entering `shipped`
+ *    stamps them with the admin actor; leaving `issue` clears the issue fields.
+ *  No-op (changed: false, no audit/event) when the status is already the target.
+ *  The caller schedules the allocation recompute after commit whenever
+ *  `changed` — reopening re-enters demand, closing frees stock. */
+export async function overridePickingOrderStatus(
+  db: AppDb,
+  input: { orderId: string; status: string; reason?: string | null; actorId: string }
+): Promise<{ id: string; orderNo: string; status: string; previousStatus: string; changed: boolean }> {
+  const status = input.status;
+  if (!(PICKING_ORDER_STATUSES as readonly string[]).includes(status)) {
+    throw new HTTPException(400, { message: "invalid_status" });
+  }
+  return db.transaction(async (tx) => {
+    const order = await queryGet<{ id: string; orderNo: string; status: string }>(
+      tx,
+      sql`SELECT id, order_no AS "orderNo", status FROM picking_orders WHERE id = ${input.orderId}`
+    );
+    if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
+    if (order.status === status) {
+      return { id: order.id, orderNo: order.orderNo, status, previousStatus: order.status, changed: false };
+    }
+    await assertActor(tx, input.actorId);
+
+    const previousStatus = order.status;
+    const leavingOpen = OPEN_PICKING_STATUSES.has(previousStatus);
+    const leavingShipped = previousStatus === "shipped";
+    const enteringShipped = status === "shipped";
+    const leavingIssue = previousStatus === "issue";
+    const at = now();
+
+    if (leavingOpen) {
+      // Release every allocation of the order's items (same shape as the
+      // whole-box claim release): RESERVE reserved −qty ledger rows and free
+      // the lots.
+      const released = await queryAll<{
+        id: string;
+        qty: number;
+        inventoryLotId: string | null;
+        partNo: string;
+        shelfCode: string | null;
+        boxId: string | null;
+        dateCode: string | null;
+        lotCode: string | null;
+        coo: string | null;
+        cow: string | null;
+        receivingInvoiceItemId: string | null;
+      }>(
+        tx,
+        sql`SELECT a.id, a.qty, a.inventory_lot_id AS "inventoryLotId",
+                   pi.part_no AS "partNo",
+                   il.shelf_code AS "shelfCode", COALESCE(il.box_id, rii.ctn_no) AS "boxId",
+                   COALESCE(il.date_code, rii.date_code) AS "dateCode",
+                   COALESCE(il.lot_code, rii.lot_code) AS "lotCode",
+                   COALESCE(il.coo, rii.coo) AS "coo", COALESCE(il.cow, rii.cow) AS "cow",
+                   a.receiving_invoice_item_id AS "receivingInvoiceItemId"
+            FROM allocations a
+            JOIN picking_items pi ON pi.id = a.picking_item_id
+            LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
+            LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
+            WHERE pi.picking_order_id = ${order.id} AND a.qty > 0`
+      );
+      await queryRun(
+        tx,
+        sql`DELETE FROM allocations WHERE picking_item_id IN (
+              SELECT id FROM picking_items WHERE picking_order_id = ${order.id})`
+      );
+      const freedLots = new Set<string>();
+      const txnRows = released.map((a) => {
+        if (a.inventoryLotId) freedLots.add(a.inventoryLotId);
+        return {
+          id: newId(),
+          inventoryLotId: a.inventoryLotId,
+          partNo: a.partNo,
+          shelfCode: a.shelfCode,
+          boxId: a.boxId,
+          txnType: "RESERVE",
+          qtyType: "reserved",
+          qtyDelta: -a.qty,
+          dateCode: a.dateCode,
+          lotCode: a.lotCode,
+          coo: a.coo,
+          cow: a.cow,
+          referenceType: "allocation",
+          referenceId: a.id,
+          receivingInvoiceItemId: a.receivingInvoiceItemId,
+          actorId: input.actorId,
+          txnReason: "status override: release",
+          txnAt: at,
+        };
+      });
+      for (const lotId of freedLots) await recomputeLot(tx, lotId);
+      if (txnRows.length > 0) await tx.insert(inventoryTransactions).values(txnRows);
+      // Allocated_qty on the items is Σ allocations — refresh after the wipe.
+      await queryRun(
+        tx,
+        sql`UPDATE picking_items SET allocated_qty = 0, last_update_date = ${at}
+            WHERE picking_order_id = ${order.id}`
+      );
+    }
+
+    // JS-side CASE operands (avoids boolean params in the SQL template).
+    const shippedAtVal = leavingShipped ? sql`NULL` : enteringShipped ? sql`${at}` : sql`shipped_at`;
+    const shippedByVal = leavingShipped ? sql`NULL` : enteringShipped ? sql`${input.actorId}` : sql`shipped_by`;
+    const issueVal = (col: SQL) => (leavingIssue ? sql`NULL` : col);
+    await queryRun(
+      tx,
+      sql`UPDATE picking_orders
+          SET status = ${status},
+              working_by = NULL,
+              working_at = NULL,
+              shipped_at = ${shippedAtVal},
+              shipped_by = ${shippedByVal},
+              issue_reason = ${issueVal(sql`issue_reason`)},
+              issue_qty = ${issueVal(sql`issue_qty`)},
+              issue_pack_size = ${issueVal(sql`issue_pack_size`)},
+              issue_note = ${issueVal(sql`issue_note`)},
+              issue_remark = ${issueVal(sql`issue_remark`)},
+              issue_reported_at = ${issueVal(sql`issue_reported_at`)},
+              issue_reported_by = ${issueVal(sql`issue_reported_by`)},
+              last_update_date = ${at}
+          WHERE id = ${order.id}`
+    );
+    const reason = input.reason?.trim() || null;
+    await logTransition(tx, {
+      entityType: "picking_order",
+      entityId: order.id,
+      fromState: previousStatus,
+      toState: status,
+      actorId: input.actorId,
+      metadata: { override: true, ...(reason ? { reason } : {}) },
+    });
+    await emitEvent(tx, {
+      type: "picking_order.updated",
+      topics: ["/picking-orders"],
+      data: { id: order.id, orderNo: order.orderNo, actorId: input.actorId },
+    });
+    return { id: order.id, orderNo: order.orderNo, status, previousStatus, changed: true };
   });
 }
 
