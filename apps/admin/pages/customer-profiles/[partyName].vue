@@ -239,40 +239,40 @@ onMounted(load);
 
 <style scoped>
 .detail-card {
-  max-width: 720px;
+  max-width: 45rem;
   background: #fff;
   border: 1px solid #e3e8ee;
-  border-radius: 8px;
-  padding: 14px 16px;
-  margin-bottom: 14px;
+  border-radius: 0.5rem;
+  padding: 0.875rem 1rem;
+  margin-bottom: 0.875rem;
 }
 h3 {
-  margin: 0 0 10px;
-  font-size: 15px;
+  margin: 0 0 0.625rem;
+  font-size: 0.9375rem;
 }
 .detail-list {
   margin: 0;
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: 6px 24px;
+  gap: 0.375rem 1.5rem;
 }
 .detail-list dt {
   color: #4a5560;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .detail-list dd {
   margin: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  margin-top: 18px;
+  gap: 0.625rem;
+  margin-top: 1.125rem;
 }
 .create-profile-row {
   display: flex;
-  gap: 10px;
+  gap: 0.625rem;
   align-items: center;
 }
 .create-profile-row input {

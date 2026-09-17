@@ -84,34 +84,34 @@ function printSheet() {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 20px;
+  gap: 0.75rem;
+  padding: 1.25rem;
   background: rgba(0, 0, 0, 0.45);
 }
 .shelf-batch-chrome {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  width: min(760px, 100%);
-  padding: 12px 16px;
+  gap: 1rem;
+  width: min(47.5rem, 100%);
+  padding: 0.75rem 1rem;
   background: #fff;
-  border-radius: 8px;
+  border-radius: 0.5rem;
 }
 .shelf-batch-chrome h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: 1rem;
 }
 .shelf-batch-actions {
   display: flex;
-  gap: 8px;
+  gap: 0.5rem;
 }
 .shelf-sheet-preview {
   overflow: auto;
-  max-height: calc(100vh - 130px);
-  padding: 16px;
+  max-height: calc(100vh - 8.125rem);
+  padding: 1rem;
   background: #e5e7eb;
-  border-radius: 8px;
+  border-radius: 0.5rem;
 }
 .shelf-sheet-page {
   display: grid;
@@ -125,7 +125,7 @@ function printSheet() {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 .shelf-sheet-page + .shelf-sheet-page {
-  margin-top: 16px;
+  margin-top: 1rem;
 }
 .shelf-sheet-cell {
   display: flex;

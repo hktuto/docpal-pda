@@ -147,7 +147,7 @@ template group or explicit body field) are deduped per order via
 | `PATCH /receiving-invoice-items/:id/mismatch` | Edit pending mismatch. |
 | `POST /receiving-invoice-items/:id/mismatch/confirm` · `/cancel` | `{actorId}` → item. |
 | `GET /admin/receiving-orders/:id/shipper` | Admin console: shipper `.xlsx` attachment — receipts grouped by part, each group one merged block (customer names / order_nos overlaid on the block's last rows, one `invoice_no ctn_no` item row per carton) with per-block allocation slots; the group header cell shows the related-order allocated qty (Σ allocations of the part on the picking orders tracing back to this receiving order, any source — spec `docs/superpowers/specs/2026-09-16-admin-receiving-shipper-related-allocated-design.md`); Total/Balance per group; whole-order (no `ctn_no`) allocations close each group on an `(order-level)` block. Read-only — no in-request recompute (use `POST /admin/receiving-orders/:id/reallocate` first if stale). `?mode=finished` (for `clear` orders): same layout, slots from actual `picking_packages` (direct receiving-item picks + lot-traced via `inventory_lot_sources`) instead of live allocations, no group header cell. Spec `docs/superpowers/specs/2026-09-14-admin-receiving-shipper-download-design.md`. |
-| `GET /admin/picking-orders/:id/picking-list` | Admin console: picking-list `.xlsx` attachment (`picking-list-{orderNo}.xlsx`, sheet `Picking List`) — title + order-info block, then one flat row per allocation sorted by shelf/box: lot sources render shelf / box / date code / lot code / COO-COW / source org+sub-inventory; dock sources render `Receiving {batchNo}` + `(dock)`; `UNALLOCATED` shortfall row when an item is partially allocated, `(no allocation)` row when not at all. Read-only — no in-request recompute (use `POST /admin/picking-orders/:id/reallocate` first if stale). Spec `docs/superpowers/specs/2026-09-14-admin-picking-list-download-design.md`. |
+| `GET /admin/picking-orders/:id/picking-list` | Admin console: picking-list `.xlsx` attachment (`picking-list-{orderNo}.xlsx`, sheet `Picking List`) — title + order-info block, then one flat row per allocation sorted by shelf/box: lot sources render shelf / box / date code / lot code / COO-COW / source org+sub-inventory; dock sources render `Receiving {batchNo}` + `(dock)`; `UNALLOCATED` shortfall row when an item is partially allocated, `(no allocation)` row when not at all. Items sharing a part number are merged into ONE block (summed Item/Allocated/Picked Qty, allocation rows from all lines, one blank separator between part blocks), and allocations from the same location + date code + COO merge into one row with a summed Alloc Qty. Read-only — no in-request recompute (use `POST /admin/picking-orders/:id/reallocate` first if stale). Spec `docs/superpowers/specs/2026-09-14-admin-picking-list-download-design.md`. |
 
 Changes vs old: `/picking` returns nested DTOs with logs embedded per item —
 `POST /picking-items/transition-logs` dies; scan-candidates dies (server-side
@@ -421,9 +421,10 @@ Implemented: `GET /stock-search` (see `apps/backend/src/routes/stocksearch.ts`
 returns the matching lots (part identity embedded), and the distinct `parts`
 list with `onHandQty = Σ total_qty` over those lots is stitched in TS. All
 filters optional and ANDed: `partNo` is a case-insensitive substring on
-`parts.part_no` normalized like scan matching (uppercase + whitespace
-stripped, both sides); `shelfCode`, `brand` (parts.brand), `zone` (the
-shelf's zone via the shelves join), `orgId` and `subInventoryCode` are
+`parts.part_no` **or** `parts.wcl_item_no`, normalized like scan matching
+(uppercase + whitespace stripped, both sides); `shelfCode`, `brand`
+(parts.brand), `zone` (the shelf's zone via the shelves join), `orgId` and
+`subInventoryCode` are
 multi-value any-of filters (repeat the query param); `supplierCode` (also
 multi-value) traces the lot via
 `inventory_lot_sources` → invoice items → invoices →

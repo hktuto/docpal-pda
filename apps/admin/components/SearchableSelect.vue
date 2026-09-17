@@ -153,13 +153,13 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocumentClick));
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 0.375rem;
   width: 100%;
-  padding: 7px 9px;
+  padding: 0.4375rem 0.5625rem;
   border: 1px solid #b6c2cd;
-  border-radius: 4px;
+  border-radius: 0.25rem;
   background: #fff;
-  font-size: 14px;
+  font-size: 0.875rem;
   cursor: pointer;
   text-align: left;
 }
@@ -179,45 +179,45 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocumentClick));
   white-space: nowrap;
 }
 .ssel-caret {
-  font-size: 10px;
+  font-size: 0.625rem;
   color: #52606d;
 }
 .ssel-panel {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 0.25rem);
   left: 0;
   z-index: 30;
   min-width: 100%;
   width: max-content;
-  max-width: 340px;
+  max-width: 21.25rem;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: 0 6px 18px rgba(15, 23, 32, 0.14);
-  padding: 6px;
+  padding: 0.375rem;
 }
 .ssel-search {
   width: 100%;
-  padding: 6px 8px;
+  padding: 0.375rem 0.5rem;
   border: 1px solid #b6c2cd;
-  border-radius: 4px;
-  font-size: 13px;
-  margin-bottom: 4px;
+  border-radius: 0.25rem;
+  font-size: 0.8125rem;
+  margin-bottom: 0.25rem;
   box-sizing: border-box;
 }
 .ssel-list {
-  max-height: 260px;
+  max-height: 16.25rem;
   overflow-y: auto;
 }
 .ssel-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 8px;
-  font-size: 13px;
+  gap: 0.5rem;
+  padding: 0.3125rem 0.5rem;
+  font-size: 0.8125rem;
   white-space: nowrap;
   cursor: pointer;
-  border-radius: 3px;
+  border-radius: 0.1875rem;
 }
 .ssel-item:hover {
   background: #eef4f6;
@@ -232,7 +232,7 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocumentClick));
   text-overflow: ellipsis;
 }
 .ssel-check {
-  font-size: 11px;
+  font-size: 0.6875rem;
   margin-left: auto;
 }
 </style>

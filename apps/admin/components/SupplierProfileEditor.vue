@@ -447,20 +447,20 @@ function save() {
 
 <style scoped>
 .profile-editor {
-  max-width: 720px;
+  max-width: 45rem;
 }
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  margin-top: 18px;
+  gap: 0.625rem;
+  margin-top: 1.125rem;
 }
 .form-row textarea {
   width: 100%;
-  padding: 7px 9px;
+  padding: 0.4375rem 0.5625rem;
   border: 1px solid #b6c2cd;
-  border-radius: 4px;
-  font-size: 13px;
+  border-radius: 0.25rem;
+  font-size: 0.8125rem;
   font-family: inherit;
   resize: vertical;
 }
@@ -468,26 +468,26 @@ function save() {
 .form-row .fixed-row .ssel,
 .form-row .chip .ssel {
   width: auto;
-  min-width: 140px;
+  min-width: 8.75rem;
 }
 h3 {
-  margin: 4px 0 10px;
-  font-size: 15px;
+  margin: 0.25rem 0 0.625rem;
+  font-size: 0.9375rem;
 }
 h4 {
-  margin: 0 0 6px;
-  font-size: 13px;
+  margin: 0 0 0.375rem;
+  font-size: 0.8125rem;
 }
 .dlg-sep {
   border: none;
   border-top: 1px solid #e3e8ee;
-  margin: 14px 0;
+  margin: 0.875rem 0;
 }
 .mode-radios {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding-top: 4px;
+  gap: 0.25rem;
+  padding-top: 0.25rem;
 }
 .mode-radios input[type="radio"] {
   width: auto;
@@ -496,32 +496,32 @@ h4 {
   font-weight: normal;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
 }
 .inline-other {
-  margin-top: 6px;
+  margin-top: 0.375rem;
 }
 .delim-input {
-  width: 60px;
+  width: 3.75rem;
 }
 .chips {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0.375rem;
 }
 .chip {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   background: #f6f8fa;
   border: 1px solid #e3e8ee;
-  border-radius: 6px;
-  padding: 4px 8px;
+  border-radius: 0.375rem;
+  padding: 0.25rem 0.5rem;
 }
 .chip-value {
   flex: 1;
   font-family: monospace;
-  font-size: 13px;
+  font-size: 0.8125rem;
   overflow-wrap: anywhere;
 }
 .muted {
@@ -529,23 +529,23 @@ h4 {
 }
 .mono {
   font-family: monospace;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .mono-sample {
   font-family: monospace;
-  font-size: 13px;
+  font-size: 0.8125rem;
   background: #f6f8fa;
   border: 1px solid #e3e8ee;
-  border-radius: 6px;
-  padding: 6px 8px;
-  margin-bottom: 8px;
+  border-radius: 0.375rem;
+  padding: 0.375rem 0.5rem;
+  margin-bottom: 0.5rem;
   overflow-wrap: anywhere;
 }
 .fixed-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: 0.5rem;
+  margin-bottom: 0.375rem;
 }
 .fixed-value {
   flex: 1;
@@ -555,43 +555,43 @@ h4 {
   font-weight: normal;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 0.25rem;
 }
 .num {
-  width: 64px;
+  width: 4rem;
 }
 .tag-x {
   border: none;
   background: none;
   color: #922b21;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 0.875rem;
 }
 .preview {
   background: #f0f7f0;
   border: 1px solid #d4e6d4;
-  border-radius: 6px;
-  padding: 10px 12px;
-  margin-bottom: 12px;
+  border-radius: 0.375rem;
+  padding: 0.625rem 0.75rem;
+  margin-bottom: 0.75rem;
 }
 .preview table {
   border-collapse: collapse;
-  margin-bottom: 6px;
+  margin-bottom: 0.375rem;
 }
 .pv-label {
-  padding: 2px 12px 2px 0;
+  padding: 0.125rem 0.75rem 0.125rem 0;
   color: #4a5560;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .tests {
-  margin-bottom: 12px;
+  margin-bottom: 0.75rem;
 }
 .test-line {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  padding: 3px 0;
-  font-size: 13px;
+  gap: 0.5rem;
+  padding: 0.1875rem 0;
+  font-size: 0.8125rem;
 }
 .test-mark {
   font-weight: bold;

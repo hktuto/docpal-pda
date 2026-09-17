@@ -111,7 +111,7 @@ function print() {
 }
 
 .no-print {
-  max-width: 1200px;
+  max-width: 75rem;
   margin: 0 auto 1.5rem;
 }
 
@@ -127,7 +127,7 @@ h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
 
 .search-input {
   flex: 1;
-  min-width: 240px;
+  min-width: 15rem;
   padding: 0.5rem 0.75rem;
   border: 1px solid #000;
   font-family: inherit;
@@ -150,7 +150,7 @@ h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
 }
 
 .box-grid {
-  max-width: 1200px;
+  max-width: 75rem;
   margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -187,8 +187,8 @@ h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
 }
 
 .qr-code {
-  width: 160px;
-  height: 160px;
+  width: 10rem;
+  height: 10rem;
 }
 
 .qr-code :deep(svg) {

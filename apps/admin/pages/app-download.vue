@@ -106,11 +106,11 @@ async function download() {
 
 <style scoped>
 .section-title {
-  font-size: 15px;
-  margin: 18px 0 8px;
+  font-size: 0.9375rem;
+  margin: 1.125rem 0 0.5rem;
   color: #52606d;
 }
 .actions {
-  margin-top: 16px;
+  margin-top: 1rem;
 }
 </style>

@@ -237,7 +237,7 @@ function print() {
 }
 
 .no-print {
-  max-width: 1200px;
+  max-width: 75rem;
   margin: 0 auto 1.5rem;
 }
 
@@ -253,7 +253,7 @@ h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
 
 .search-input {
   flex: 1;
-  min-width: 240px;
+  min-width: 15rem;
   padding: 0.5rem 0.75rem;
   border: 1px solid #000;
   font-family: inherit;
@@ -266,7 +266,7 @@ h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
   font-family: inherit;
   font-size: 0.9rem;
   background: #fff;
-  min-width: 180px;
+  min-width: 11.25rem;
 }
 
 .print-btn {
@@ -280,7 +280,7 @@ h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
 }
 
 .labels-grid {
-  max-width: 1200px;
+  max-width: 75rem;
   margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
@@ -294,7 +294,7 @@ h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  min-height: 260px;
+  min-height: 16.25rem;
   box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.15);
   position: relative;
   overflow: hidden;
@@ -320,14 +320,14 @@ h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
 }
 
 .barcode {
-  height: 28px;
+  height: 1.75rem;
   width: 100%;
   display: block;
 }
 
 .pdf417 {
-  height: 64px;
-  max-width: 240px;
+  height: 4rem;
+  max-width: 15rem;
   flex-shrink: 0;
   display: block;
 }

@@ -188,13 +188,13 @@ onMounted(load);
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 0.625rem;
 }
 .status-badge {
   display: inline-block;
-  padding: 2px 10px;
-  border-radius: 10px;
-  font-size: 12px;
+  padding: 0.125rem 0.625rem;
+  border-radius: 0.625rem;
+  font-size: 0.75rem;
 }
 .status-badge.active {
   background: #e3f4e5;

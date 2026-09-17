@@ -90,7 +90,7 @@ function confirm() {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   width: 100%;
-  max-width: 360px;
+  max-width: 22.5rem;
 }
 
 .modal__header {

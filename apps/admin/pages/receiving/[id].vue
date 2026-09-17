@@ -839,53 +839,53 @@ const {
 <style scoped>
 .head-actions {
   display: flex;
-  gap: 10px;
+  gap: 0.625rem;
 }
 .section-title {
-  font-size: 15px;
-  margin: 18px 0 8px;
+  font-size: 0.9375rem;
+  margin: 1.125rem 0 0.5rem;
   color: #52606d;
 }
 .batch-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin: 10px 0;
-  padding: 8px 10px;
+  gap: 0.625rem;
+  margin: 0.625rem 0;
+  padding: 0.5rem 0.625rem;
   background: #eef2f7;
   border: 1px solid #d5dee7;
-  border-radius: 6px;
+  border-radius: 0.375rem;
 }
 .date-edit {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 .date-edit input {
-  padding: 5px 7px;
+  padding: 0.3125rem 0.4375rem;
   border: 1px solid #b6c2cd;
-  border-radius: 4px;
+  border-radius: 0.25rem;
 }
 .mismatch-line {
   color: #b91c1c;
-  font-size: 12px;
-  margin-top: 2px;
+  font-size: 0.75rem;
+  margin-top: 0.125rem;
 }
 .search-bar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 10px;
-  padding: 8px 0;
+  gap: 0.625rem;
+  padding: 0.5rem 0;
 }
 :deep(td.actions) .btn {
-  margin: 0 6px 4px 0;
+  margin: 0 0.375rem 0.25rem 0;
 }
 .alloc-banner {
-  margin-bottom: 12px;
-  padding: 9px 12px;
-  border-radius: 6px;
-  font-size: 14px;
+  margin-bottom: 0.75rem;
+  padding: 0.5625rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
 }
 .alloc-running {
   background: #fff8e6;
@@ -903,14 +903,14 @@ const {
   color: #52606d;
 }
 .alloc-line {
-  font-size: 12px;
+  font-size: 0.75rem;
   color: #52606d;
 }
 .manual-badge {
-  margin-left: 4px;
-  padding: 0 5px;
-  border-radius: 4px;
-  font-size: 11px;
+  margin-left: 0.25rem;
+  padding: 0 0.3125rem;
+  border-radius: 0.25rem;
+  font-size: 0.6875rem;
   background: #eef2f7;
   border: 1px solid #d5dee7;
   color: #52606d;

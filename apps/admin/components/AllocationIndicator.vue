@@ -43,14 +43,14 @@ onBeforeUnmount(() => unsubs.forEach((u) => u()));
 .alloc-indicator {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin: 4px 18px 0;
-  padding: 6px 10px;
-  border-radius: 6px;
+  gap: 0.375rem;
+  margin: 0.25rem 1.125rem 0;
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.375rem;
   background: rgba(240, 220, 160, 0.18);
   border: 1px solid rgba(240, 220, 160, 0.45);
   color: #b08d2a;
-  font-size: 12px;
+  font-size: 0.75rem;
 }
 .alloc-spinner {
   display: inline-block;

@@ -539,44 +539,44 @@ onMounted(load);
 
 <style scoped>
 .share-select {
-  width: 150px;
-  font-size: 12px;
+  width: 9.375rem;
+  font-size: 0.75rem;
 }
 
 .share-mgr-dialog {
-  width: 760px;
+  width: 47.5rem;
   max-width: 92vw;
 }
 .share-mgr-body {
   display: flex;
-  gap: 18px;
+  gap: 1.125rem;
   align-items: flex-start;
 }
 .share-mgr-groups {
-  width: 220px;
+  width: 13.75rem;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0.375rem;
 }
 .share-mgr-label {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: #64748b;
-  margin-bottom: 4px;
+  margin-bottom: 0.25rem;
 }
 .share-mgr-group {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
+  gap: 0.5rem;
+  padding: 0.375rem 0.625rem;
   border: 1px solid #dde3e9;
-  border-radius: 6px;
+  border-radius: 0.375rem;
   background: #fff;
-  font-size: 13px;
+  font-size: 0.8125rem;
   cursor: pointer;
   text-align: left;
 }
@@ -586,55 +586,55 @@ onMounted(load);
 }
 .share-mgr-new {
   display: flex;
-  gap: 6px;
-  margin-top: 8px;
+  gap: 0.375rem;
+  margin-top: 0.5rem;
 }
 .share-mgr-new input {
   flex: 1;
   min-width: 0;
-  padding: 5px 7px;
+  padding: 0.3125rem 0.4375rem;
   border: 1px solid #dde3e9;
-  border-radius: 4px;
-  font-size: 12px;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
 }
 .share-mgr-members {
   flex: 1;
   min-width: 0;
 }
 .share-mgr-picker {
-  max-height: 320px;
+  max-height: 20rem;
   overflow-y: auto;
   border: 1px solid #d8e1ea;
-  border-radius: 8px;
-  padding: 10px 12px;
+  border-radius: 0.5rem;
+  padding: 0.625rem 0.75rem;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0.75rem;
 }
 .share-mgr-org-name {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: #64748b;
-  margin-bottom: 4px;
+  margin-bottom: 0.25rem;
 }
 .share-mgr-option {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 3px 0;
-  font-size: 14px;
+  gap: 0.5rem;
+  padding: 0.1875rem 0;
+  font-size: 0.875rem;
   cursor: pointer;
 }
 .share-mgr-badge {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: #92400e;
   background: #fef3c7;
-  border-radius: 4px;
-  padding: 1px 6px;
+  border-radius: 0.25rem;
+  padding: 0.0625rem 0.375rem;
 }
 .share-mgr-members .hint {
-  margin-top: 8px;
+  margin-top: 0.5rem;
 }
 </style>

@@ -386,7 +386,7 @@ useVisibleReload(load);
 .work-lock-banner {
   background: #fef3c7;
   border: 1px solid #f59e0b;
-  border-radius: 6px;
+  border-radius: 0.375rem;
   color: #92400e;
   font-size: 0.875rem;
   padding: 0.6rem 1rem;
@@ -400,7 +400,7 @@ useVisibleReload(load);
   gap: 0.75rem;
   background: #ecfdf5;
   border: 1px solid #10b981;
-  border-radius: 6px;
+  border-radius: 0.375rem;
   color: #065f46;
   font-size: 0.875rem;
   padding: 0.6rem 1rem;

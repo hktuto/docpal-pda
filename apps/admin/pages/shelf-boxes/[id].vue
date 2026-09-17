@@ -76,7 +76,7 @@ onMounted(async () => {
           <div class="dd">{{ formatCell(box.createdDate) }}</div>
         </div>
       </div>
-      <h2 style="font-size: 16px">{{ $t("admin.pages.shelfBoxes.items") }}</h2>
+      <h2 style="font-size: 1rem">{{ $t("admin.pages.shelfBoxes.items") }}</h2>
       <DataTable
         :table="table"
         :empty-text="$t('admin.pages.shelfBoxes.noItems')"

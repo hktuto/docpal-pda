@@ -96,24 +96,24 @@ function apply() {
 
 <style scoped>
 .status-dialog {
-  width: 480px;
+  width: 30rem;
 }
 .override-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin: 14px 0;
+  gap: 0.75rem;
+  margin: 0.875rem 0;
 }
 .override-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  font-size: 14px;
+  gap: 0.375rem;
+  font-size: 0.875rem;
 }
 .override-warning {
-  padding: 9px 12px;
-  border-radius: 6px;
-  font-size: 13px;
+  padding: 0.5625rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
   background: #fdf3e7;
   border: 1px solid #f0c48c;
   color: #9a5b00;

@@ -219,7 +219,7 @@ function print() {
 }
 
 .no-print {
-  max-width: 1000px;
+  max-width: 62.5rem;
   margin: 0 auto 1.5rem;
 }
 
@@ -235,7 +235,7 @@ h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
 
 .search-input {
   flex: 1;
-  min-width: 240px;
+  min-width: 15rem;
   padding: 0.5rem 0.75rem;
   border: 1px solid #000;
   font-family: inherit;
@@ -253,7 +253,7 @@ h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
 }
 
 .cartons {
-  max-width: 1000px;
+  max-width: 62.5rem;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -334,7 +334,7 @@ h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
 }
 
 .barcode {
-  height: 36px;
+  height: 2.25rem;
   width: 70%;
   display: block;
 }

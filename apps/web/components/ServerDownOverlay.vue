@@ -49,9 +49,9 @@ function onChangeServer() {
 
 .server-down__card {
   background: var(--surface, #fff);
-  border-radius: 12px;
+  border-radius: 0.75rem;
   padding: 2rem 1.5rem;
-  max-width: 420px;
+  max-width: 26.25rem;
   width: 100%;
   text-align: center;
 }

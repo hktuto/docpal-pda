@@ -15,6 +15,12 @@ interface MeProfile {
 
 const api = useApi();
 
+const { fontSize, setFontSize } = useFontSize();
+
+function onSliderInput(event: Event) {
+  setFontSize((event.target as HTMLInputElement).valueAsNumber);
+}
+
 const scopes = ref<SubInventoryScope[]>([]);
 const dateFormat = ref(DEFAULT_DATE_FORMAT);
 const dateTimeFormat = ref(DEFAULT_DATE_TIME_FORMAT);
@@ -86,6 +92,42 @@ onMounted(load);
       <h1>{{ $t("admin.pages.settings.title") }}</h1>
     </div>
 
+    <h2 class="section-head">{{ $t("settings.textSize") }}</h2>
+    <p class="muted explainer">{{ $t("settings.textSizeHint") }}</p>
+
+    <div class="scope-card">
+      <div class="size-control">
+        <button
+          class="btn btn-small"
+          :disabled="fontSize <= FONT_SIZE_MIN"
+          @click="setFontSize(fontSize - 1)"
+        >
+          A−
+        </button>
+        <input
+          type="range"
+          class="size-slider"
+          :min="FONT_SIZE_MIN"
+          :max="FONT_SIZE_MAX"
+          step="1"
+          :value="fontSize"
+          :aria-label="$t('settings.textSize')"
+          @input="onSliderInput"
+        />
+        <button
+          class="btn btn-small"
+          :disabled="fontSize >= FONT_SIZE_MAX"
+          @click="setFontSize(fontSize + 1)"
+        >
+          A+
+        </button>
+        <span class="muted size-value">{{ $t("settings.currentValue", { px: fontSize }) }}</span>
+      </div>
+      <p class="muted size-preview">
+        {{ $t("settings.preview") }}: <strong>IC-LM358DR</strong> — 2,500 pcs · A-01-01 · BOX-000123
+      </p>
+    </div>
+
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
     <template v-else>
       <h2 class="section-head">{{ $t("admin.pages.settings.dateSection") }}</h2>
@@ -129,46 +171,69 @@ onMounted(load);
 
 <style scoped>
 .section-head {
-  margin: 0 0 8px;
-  font-size: 16px;
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
 }
 
 .explainer {
-  margin: 0 0 12px;
-  font-size: 13px;
+  margin: 0 0 0.75rem;
+  font-size: 0.8125rem;
 }
 
 .scope-card {
-  max-width: 560px;
-  margin-bottom: 12px;
+  max-width: 35rem;
+  margin-bottom: 0.75rem;
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 12px;
-  font-size: 13px;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.8125rem;
 }
 
 .field select {
-  padding: 6px 8px;
+  padding: 0.375rem 0.5rem;
   border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
 }
 
 .actions {
-  margin-top: 12px;
+  margin-top: 0.75rem;
+}
+
+.size-control {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  max-width: 35rem;
+}
+
+.size-slider {
+  flex: 1;
+  accent-color: var(--brand-teal);
+}
+
+.size-value {
+  min-width: 4.5rem;
+  text-align: right;
+  font-size: 0.8125rem;
+}
+
+.size-preview {
+  margin: 0.625rem 0 0;
+  font-size: 0.8125rem;
 }
 
 .success-banner {
-  max-width: 560px;
-  padding: 8px 12px;
+  max-width: 35rem;
+  padding: 0.5rem 0.75rem;
   border: 1px solid #86c8a0;
-  border-radius: 6px;
+  border-radius: 0.375rem;
   background: #ecf9f1;
   color: #1e7a46;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 </style>

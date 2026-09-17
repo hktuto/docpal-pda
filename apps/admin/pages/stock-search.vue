@@ -517,77 +517,77 @@ const {
 .summary {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 14px;
+  gap: 0.625rem;
+  margin-bottom: 0.875rem;
 }
 .summary-card {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 8px 14px;
+  gap: 0.125rem;
+  padding: 0.5rem 0.875rem;
   border: 1px solid #d9e2ec;
-  border-radius: 6px;
+  border-radius: 0.375rem;
   background: #f8fafc;
-  min-width: 110px;
+  min-width: 6.875rem;
 }
 .summary-label {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: #7b8794;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 .summary-value {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 600;
   color: #243b53;
 }
 .summary-date {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 500;
   align-self: flex-end;
   margin-top: auto;
 }
 .summary-note {
-  font-size: 11px;
+  font-size: 0.6875rem;
   color: #7b8794;
 }
 .dc-filter {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 13px;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
   color: #52606d;
 }
 .dc-filter input[type="date"] {
-  padding: 4px 6px;
+  padding: 0.25rem 0.375rem;
   border: 1px solid #b6c2cd;
-  border-radius: 4px;
-  font-size: 13px;
+  border-radius: 0.25rem;
+  font-size: 0.8125rem;
 }
 .filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: 0.625rem;
+  margin-bottom: 0.75rem;
 }
 .filters input {
   flex: 1;
-  min-width: 160px;
+  min-width: 10rem;
 }
 .filter-item {
-  width: 190px;
+  width: 11.875rem;
 }
 .filter-narrow {
-  width: 120px;
+  width: 7.5rem;
 }
 .section-title {
-  font-size: 15px;
-  margin: 18px 0 8px;
+  font-size: 0.9375rem;
+  margin: 1.125rem 0 0.5rem;
   color: #52606d;
 }
 .group-title {
-  font-size: 14px;
-  margin: 14px 0 4px;
+  font-size: 0.875rem;
+  margin: 0.875rem 0 0.25rem;
   color: #37424e;
 }
 .wrap {

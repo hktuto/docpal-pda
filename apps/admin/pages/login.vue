@@ -58,6 +58,6 @@ async function submit() {
 
 <style scoped>
 .login-lang {
-  margin-top: 14px;
+  margin-top: 0.875rem;
 }
 </style>

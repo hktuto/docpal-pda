@@ -158,14 +158,14 @@ function itemText(log: TransactionLogRow): string {
 
 <style scoped>
 .section-title {
-  font-size: 15px;
-  margin: 18px 0 8px;
+  font-size: 0.9375rem;
+  margin: 1.125rem 0 0.5rem;
   color: #52606d;
 }
 .search-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 0;
+  gap: 0.625rem;
+  padding: 0.5rem 0;
 }
 </style>

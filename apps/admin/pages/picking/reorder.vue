@@ -87,7 +87,7 @@ onMounted(load);
       <table class="data">
         <thead>
           <tr>
-            <th style="width: 90px">{{ $t("admin.pages.reorder.move") }}</th>
+            <th style="width: 5.625rem">{{ $t("admin.pages.reorder.move") }}</th>
             <th>{{ $t("admin.pages.pickingOrders.orderNo") }}</th>
             <th>{{ $t("admin.pages.pickingOrders.status") }}</th>
             <th>{{ $t("admin.pages.pickingOrders.customer") }}</th>
@@ -124,12 +124,12 @@ onMounted(load);
   background: #e7f6ec;
   border: 1px solid #9ed9b1;
   color: #1e6b3a;
-  border-radius: 4px;
-  padding: 8px 12px;
-  margin-bottom: 12px;
+  border-radius: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
 }
 .page-head > div {
   display: flex;
-  gap: 10px;
+  gap: 0.625rem;
 }
 </style>

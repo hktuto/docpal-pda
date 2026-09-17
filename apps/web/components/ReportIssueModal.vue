@@ -198,7 +198,7 @@ function onConfirm() {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   width: 100%;
-  max-width: 420px;
+  max-width: 26.25rem;
   max-height: 90vh;
   overflow-y: auto;
 }

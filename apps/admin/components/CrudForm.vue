@@ -257,7 +257,7 @@ function submit() {
 .json-input {
   width: 100%;
   font-family: ui-monospace, monospace;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .bool-input {
   width: auto;

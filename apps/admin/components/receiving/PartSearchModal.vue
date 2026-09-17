@@ -212,6 +212,6 @@ watch(
 
 <style scoped>
 .search-dialog {
-  width: 900px;
+  width: 56.25rem;
 }
 </style>

@@ -237,6 +237,27 @@ test("partNo: no match returns empty parts and lots", async () => {
   assert.deepEqual(r, { parts: [], lots: [] });
 });
 
+test("partNo: also matches wcl_item_no (substring with '/', full match)", async () => {
+  await reseed(client);
+  // Give one part a distinct supplier-style wcl_item_no (lots follow to keep
+  // the join), then search by a keyword no part_no contains.
+  await queryRun(client.db, sql`UPDATE parts SET wcl_item_no = 'KOA/RK73H-22K' WHERE part_no = 'RK73H1JTTD2202F'`);
+  await queryRun(client.db, sql`UPDATE inventory_lots SET wcl_item_no = 'KOA/RK73H-22K' WHERE part_no = 'RK73H1JTTD2202F'`);
+
+  let r = await searchStock(client.db, { partNo: "koa/" });
+  assert.equal(r.lots.length, 1);
+  assert.equal(r.lots[0].partNo, "RK73H1JTTD2202F");
+  assert.equal(r.lots[0].wclItemNo, "KOA/RK73H-22K");
+
+  r = await searchStock(client.db, { partNo: "KOA/RK73H-22K" }); // full match
+  assert.equal(r.lots.length, 1);
+  assert.equal(r.parts.length, 1);
+
+  // part_no matches still work identically
+  r = await searchStock(client.db, { partNo: "RK73H1JTTD2202F" });
+  assert.equal(r.lots.length, 1);
+});
+
 // --- shelfCode filter -----------------------------------------------------------
 
 test("shelfCode: any-of match", async () => {

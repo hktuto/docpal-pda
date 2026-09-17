@@ -112,19 +112,19 @@ async function print() {
 
 <style scoped>
 .print-items {
-  margin: 0 0 14px;
-  padding-left: 18px;
-  max-height: 140px;
+  margin: 0 0 0.875rem;
+  padding-left: 1.125rem;
+  max-height: 8.75rem;
   overflow-y: auto;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: #374151;
 }
 .success-banner {
-  padding: 8px 12px;
+  padding: 0.5rem 0.75rem;
   border: 1px solid #86c8a0;
-  border-radius: 6px;
+  border-radius: 0.375rem;
   background: #ecf9f1;
   color: #1e7a46;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 </style>

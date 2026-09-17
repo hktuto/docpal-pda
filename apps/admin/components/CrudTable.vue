@@ -322,14 +322,14 @@ onMounted(load);
 
 <style scoped>
 .filter-input {
-  width: 200px;
-  margin-left: 8px;
+  width: 12.5rem;
+  margin-left: 0.5rem;
 }
 .bulk-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
-  font-size: 13px;
+  gap: 0.75rem;
+  margin-bottom: 0.625rem;
+  font-size: 0.8125rem;
 }
 </style>

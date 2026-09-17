@@ -71,9 +71,9 @@ onMounted(async () => {
 
 <style scoped>
 .login-lang {
-  margin-top: 14px;
+  margin-top: 0.875rem;
 }
 .login-token-back {
-  margin-top: 14px;
+  margin-top: 0.875rem;
 }
 </style>

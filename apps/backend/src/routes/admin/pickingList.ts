@@ -10,8 +10,11 @@ import { queryAll, queryGet } from "../../db/query.js";
 // mirrors the receiving shipper, 2026-09-14-admin-receiving-shipper-download-design.md):
 // a flat one-row-per-allocation xlsx telling the picker, per item, where to
 // get the allocated stock (shelf / box / lot) or which receiving order it is
-// coming from (dock pick). Read-only — no in-request recompute; the detail
-// page has an explicit Reallocate action.
+// coming from (dock pick). Items sharing a part number are merged into ONE
+// block (summed qtys, allocation rows from all lines), and allocations from
+// the same location + date code + COO merge into one row with a summed qty.
+// Read-only — no in-request recompute; the detail page has an explicit
+// Reallocate action.
 
 interface OrderHeadRow {
   orderNo: string;
@@ -143,17 +146,55 @@ adminPickingListRoute.get("/picking-orders/:id/picking-list", async (c) => {
     "Alloc Qty",
   ]);
 
-  for (const [itemIdx, item] of items.entries()) {
-    const itemBase: (string | number)[] = [item.partNo, item.qty, item.allocatedQty, item.pickedQty];
+  // Merge items sharing a part number into one block (first-seen order):
+  // summed qty columns, allocation rows from all lines concatenated.
+  const groups: { partNo: string; qty: number; allocatedQty: number; pickedQty: number; itemIds: string[] }[] = [];
+  const groupByPart = new Map<string, (typeof groups)[number]>();
+  for (const item of items) {
+    let g = groupByPart.get(item.partNo);
+    if (!g) {
+      g = { partNo: item.partNo, qty: 0, allocatedQty: 0, pickedQty: 0, itemIds: [] };
+      groupByPart.set(item.partNo, g);
+      groups.push(g);
+    }
+    g.qty += item.qty;
+    g.allocatedQty += item.allocatedQty;
+    g.pickedQty += item.pickedQty;
+    g.itemIds.push(item.id);
+  }
+
+  // Within a part block, allocations from the same location + date code +
+  // COO merge into one row with a summed qty (same rule as the admin
+  // grouped items view): lot sources keyed by shelf+box/dateCode/coo,
+  // receiving sources by receiving order + carton + date code.
+  function allocKey(a: AllocRow): string {
+    if (a.lotId) {
+      return ["lot", a.shelfCode ?? "", a.boxId ?? "", a.dateCode ?? "", a.coo ?? ""].join("|");
+    }
+    return ["rec", a.receivingBatchNo ?? "", a.boxId ?? "", a.dateCode ?? ""].join("|");
+  }
+  function mergeAllocs(list: AllocRow[]): AllocRow[] {
+    const merged = new Map<string, AllocRow>();
+    for (const a of list) {
+      const key = allocKey(a);
+      const existing = merged.get(key);
+      if (existing) existing.qty += a.qty;
+      else merged.set(key, { ...a });
+    }
+    return [...merged.values()];
+  }
+
+  for (const [groupIdx, group] of groups.entries()) {
+    const groupBase: (string | number)[] = [group.partNo, group.qty, group.allocatedQty, group.pickedQty];
     const blankBase: (string | number)[] = ["", "", "", ""];
-    const allocs = allocsByItem.get(item.id) ?? [];
+    const allocs = mergeAllocs(group.itemIds.flatMap((itemId) => allocsByItem.get(itemId) ?? []));
     if (allocs.length > 0) {
       let allocSum = 0;
-      // Item columns only on the item's first row; continuation rows and the
+      // Item columns only on the group's first row; continuation rows and the
       // UNALLOCATED footer carry just the allocation info.
       let first = true;
       for (const a of allocs) {
-        const base = first ? itemBase : blankBase;
+        const base = first ? groupBase : blankBase;
         first = false;
         allocSum += a.qty;
         if (a.lotId) {
@@ -182,13 +223,13 @@ adminPickingListRoute.get("/picking-orders/:id/picking-list", async (c) => {
           ]);
         }
       }
-      if (item.qty > allocSum) {
-        aoa.push([...blankBase, "UNALLOCATED", "", "", "", "", "", "", item.qty - allocSum]);
+      if (group.qty > allocSum) {
+        aoa.push([...blankBase, "UNALLOCATED", "", "", "", "", "", "", group.qty - allocSum]);
       }
     } else {
-      aoa.push([...itemBase, "(no allocation)", "", "", "", "", "", "", ""]);
+      aoa.push([...groupBase, "(no allocation)", "", "", "", "", "", "", ""]);
     }
-    if (itemIdx < items.length - 1) aoa.push([]); // blank separator between item blocks
+    if (groupIdx < groups.length - 1) aoa.push([]); // blank separator between part blocks
   }
 
   const ws = XLSX.utils.aoa_to_sheet(aoa);

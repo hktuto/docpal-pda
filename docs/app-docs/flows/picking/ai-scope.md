@@ -156,8 +156,23 @@
   order-info block and one flat row per allocation (shelf / box / date code /
   lot / source org+sub-inventory / qty for lot sources, `Receiving {batchNo}`
   / `(dock)` for dock sources, `UNALLOCATED` shortfall rows, `(no allocation)`
-  for unallocated items). It never recomputes allocations — the operator uses
+  for unallocated items). Items sharing a part number are merged into ONE
+  block — summed Item/Allocated/Picked Qty columns, allocation rows from all
+  lines concatenated, one blank separator between part blocks. It never
+  recomputes allocations — the operator uses
   the explicit Re-allocate action first if the sheet might be stale.
+- Admin picking-detail items table view toggle: the items table has two
+  modes — "By line" (the original one row per order line, with the per-row
+  availability search + per-allocation remove actions) and "By part no"
+  (lines sharing the same item no `wclItemNo ?? partNo` merge into one row:
+  summed qty/allocated/picked, joined `line / shipment` labels; allocations
+  from the same location + date code + COO merge into one row with a summed
+  qty — lot sources keyed by shelf+box/dateCode/coo, receiving sources by
+  source order + carton + date code — rendered read-only without the remove
+  buttons; the modal and remove actions stay in By-line mode since they
+  target a specific line). Grouping is client-side in
+  `apps/admin/pages/picking-orders/[id].vue` (`groupedItems`,
+  `mergeAllocations` / `itemsViewRows`).
 - Admin order-field edits: the admin picking-order detail page inline-edits
   the delivery date, the ship-to (single-select dropdown over
   `GET /admin/countries` — shows the `country_list` name, stores the code),

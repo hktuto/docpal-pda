@@ -42,7 +42,7 @@ const hasSizing = computed(() => Object.keys(sizing.value).length > 0);
 function columnStyle(column: AnyColumn) {
   // User resize (persisted) wins; otherwise the def's initial `size`.
   const width = sizing.value[column.id] ?? column.columnDef.size;
-  return width === undefined ? undefined : { width: `${width}px`, minWidth: `${width}px` };
+  return width === undefined ? undefined : { width: `${width / 16}rem`, minWidth: `${width / 16}rem` };
 }
 
 const rootRef = ref<HTMLElement | null>(null);
@@ -354,8 +354,8 @@ const emptyColspan = computed(
 .table-toolbar {
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  margin-bottom: 6px;
+  gap: 0.5rem;
+  margin-bottom: 0.375rem;
 }
 .column-menu-wrap {
   position: relative;
@@ -363,24 +363,24 @@ const emptyColspan = computed(
 .column-menu {
   position: absolute;
   right: 0;
-  top: calc(100% + 4px);
+  top: calc(100% + 0.25rem);
   z-index: 20;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: 0 6px 18px rgba(15, 23, 32, 0.14);
-  padding: 8px 10px;
-  min-width: 180px;
+  padding: 0.5rem 0.625rem;
+  min-width: 11.25rem;
 }
 .column-menu-list {
-  max-height: 320px;
+  max-height: 20rem;
   overflow-y: auto;
 }
 .column-menu-item {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 2px;
+  gap: 0.25rem;
+  padding: 0.25rem 0.125rem;
   background: #fff;
 }
 .column-menu-item.sortable-ghost {
@@ -389,16 +389,16 @@ const emptyColspan = computed(
 .col-grip {
   cursor: grab;
   color: #9aa5b1;
-  font-size: 10px;
-  letter-spacing: -2px;
+  font-size: 0.625rem;
+  letter-spacing: -0.125rem;
   user-select: none;
 }
 .column-menu-label {
   flex: 1;
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -406,8 +406,8 @@ const emptyColspan = computed(
   border: none;
   background: none;
   cursor: pointer;
-  font-size: 9px;
-  padding: 2px 4px;
+  font-size: 0.5625rem;
+  padding: 0.125rem 0.25rem;
   color: #52606d;
 }
 .col-move:hover:not(:disabled) {
@@ -419,12 +419,12 @@ const emptyColspan = computed(
 }
 .column-menu-reset {
   display: block;
-  margin-top: 6px;
-  padding: 4px 2px 0;
+  margin-top: 0.375rem;
+  padding: 0.25rem 0.125rem 0;
   border-top: 1px solid #e6ebf0;
   width: 100%;
   text-align: left;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .sort-label {
   cursor: pointer;
@@ -440,7 +440,7 @@ const emptyColspan = computed(
   color: var(--brand-teal-dark);
 }
 .select-col {
-  width: 32px;
+  width: 2rem;
   text-align: center;
 }
 th {
@@ -462,15 +462,15 @@ th {
   color: var(--brand-teal-dark);
 }
 .sort-arrow {
-  font-size: 9px;
-  margin-left: 3px;
+  font-size: 0.5625rem;
+  margin-left: 0.1875rem;
 }
 .col-resizer {
   position: absolute;
   top: 0;
   right: 0;
   height: 100%;
-  width: 7px;
+  width: 0.4375rem;
   cursor: col-resize;
   touch-action: none;
   opacity: 0;

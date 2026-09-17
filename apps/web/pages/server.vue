@@ -61,7 +61,7 @@ function choose(url: string) {
 
 .server__box {
   width: 100%;
-  max-width: 380px;
+  max-width: 23.75rem;
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(255, 255, 255, 0.5);
   border-radius: 1.25rem;

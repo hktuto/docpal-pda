@@ -298,25 +298,25 @@ watch(
 
 <style scoped>
 .avail-dialog {
-  width: 900px;
+  width: 56.25rem;
 }
 .avail-filter {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-bottom: 10px;
-  font-size: 13px;
+  gap: 0.875rem;
+  margin-bottom: 0.625rem;
+  font-size: 0.8125rem;
   color: #52606d;
 }
 .avail-filter label {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
 }
 .avail-filter input[type="date"] {
-  padding: 4px 6px;
+  padding: 0.25rem 0.375rem;
   border: 1px solid #b6c2cd;
-  border-radius: 4px;
-  font-size: 13px;
+  border-radius: 0.25rem;
+  font-size: 0.8125rem;
 }
 </style>

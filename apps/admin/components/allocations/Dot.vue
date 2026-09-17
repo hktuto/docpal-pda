@@ -13,8 +13,8 @@ defineProps<{ source: "stock" | "receiving" }>();
 <style scoped>
 .alloc-dot {
   flex-shrink: 0;
-  width: 8px;
-  height: 8px;
+  width: 0.5rem;
+  height: 0.5rem;
   border-radius: 50%;
 }
 .dot-stock {

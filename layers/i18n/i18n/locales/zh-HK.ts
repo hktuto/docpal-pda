@@ -13,7 +13,8 @@ export default {
     measuring: "測量",
     measureBox: "測量箱",
     verify: "覆核",
-    stockSearch: "庫存查詢"
+    stockSearch: "庫存查詢",
+    settings: "設定"
   },
   actions: {
     scan: "掃描",
@@ -599,9 +600,19 @@ export default {
     goBack: "返回",
     home: "主頁",
     menu: "選單",
+    settings: "設定",
     resetDb: "重設本地資料庫",
     logout: "登出",
     resetConfirm: "重設所有本地資料？此操作無法復原。"
+  },
+  settings: {
+    textSize: "文字大小",
+    textSizeHint: "調整此裝置的文字大小，會套用至整個應用程式。",
+    currentValue: "{px} 像素",
+    preview: "預覽",
+    previewLabel: "範例",
+    smaller: "縮小",
+    larger: "放大"
   },
   languageSwitcher: {
     label: "語言",
@@ -931,9 +942,12 @@ export default {
       dialogTitle: "我的子庫篩選"
     },
     shelves: {
-      bulkEditSubinv: "編輯子庫（{count}）",
-      bulkEditTitle: "批量編輯子庫（{count} 個貨架）",
-      bulkEditHint: "所選子庫將會取代全部 {count} 個已選貨架的目前設定。全部不勾選代表改為共用貨架。"
+      bulkEdit: "批量編輯（{count}）",
+      bulkEditTitle: "批量編輯（{count} 個貨架）",
+      bulkEditHint: "所選子庫將會取代全部 {count} 個已選貨架的目前設定。全部不勾選代表改為共用貨架。",
+      bulkEditWarningToggle: "同時更新警告",
+      bulkEditWarningMixed: "目前設定不一 — 輸入以取代全部",
+      bulkEditWarningHint: "凡分配指向此貨架，即顯示 ⚠ 圖示。留空代表清除全部 {count} 個已選貨架的警告。"
     },
     print: {
       title: "列印標籤（{count}）",
@@ -1276,6 +1290,8 @@ export default {
         locationPairRequired: "請同時選擇 Org 和子庫（或兩者都清空）。",
         required: "需求",
         line: "行號 / 裝運",
+        itemsViewFlat: "按訂單行",
+        itemsViewGrouped: "按零件編號",
         allocated: "已分配",
         picked: "已揀",
         allocations: "分配",
@@ -1555,7 +1571,7 @@ export default {
         groupZone: "按區域",
         lotsCount: "{count} 批",
         partNo: "零件編號",
-        partNoPlaceholder: "零件編號關鍵字…",
+        partNoPlaceholder: "零件編號 / WCL 貨號關鍵字…",
         hint: "設定篩選條件（供應商、品牌、Org/子庫、區域/貨架、零件編號），然後點擊搜尋。",
         parts: "零件",
         lots: "批次",

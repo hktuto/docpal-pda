@@ -59,7 +59,14 @@ hover/tap title carries the warning text:
 ## Admin
 
 `apps/admin/utils/entities.ts` shelves entity gains a `warning` text field
-(label `admin.fields.shelfWarning`, all three locales).
+(label `admin.fields.shelfWarning`, all three locales). The shelves list's
+bulk-action button becomes a general **Batch edit** dialog
+(`apps/admin/components/ShelfBulkEditDialog.vue`, renamed from
+`ShelfBulkSubInventoryDialog.vue`): the sub-inventory picker keeps its
+replace-all semantics, and an opt-in "also update the warning" toggle PATCHes
+`warning` onto every selected shelf (empty text = clear). The toggle prefills
+only when all selected shelves already share the same warning; mixed values
+show a placeholder instead.
 
 ## Out of scope / future
 

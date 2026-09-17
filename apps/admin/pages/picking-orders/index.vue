@@ -298,24 +298,24 @@ const {
 <style scoped>
 .filters {
   display: flex;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: 0.625rem;
+  margin-bottom: 0.75rem;
 }
 .filters input {
   flex: 1;
 }
 .filter-type {
-  width: 180px;
+  width: 11.25rem;
 }
 .clickable {
   cursor: pointer;
   color: #0b5cab;
 }
 .alloc-done-banner {
-  margin-bottom: 12px;
-  padding: 9px 12px;
-  border-radius: 6px;
-  font-size: 14px;
+  margin-bottom: 0.75rem;
+  padding: 0.5625rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
   background: #e9f7ef;
   border: 1px solid #b5e2c8;
   color: #1e7a46;

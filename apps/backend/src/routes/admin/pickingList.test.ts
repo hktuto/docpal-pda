@@ -108,6 +108,70 @@ test("GET picking-list: 404 for an unknown picking order", async () => {
   assert.equal(res.status, 404);
 });
 
+test("GET picking-list: items sharing a part number merge into one block", async () => {
+  await reseed(client);
+  // Hermetic: the demo seed's picking orders would also draw on this stock.
+  await client.db.execute(sql`DELETE FROM picking_orders`);
+  await client.db.execute(sql`
+    INSERT INTO inventory_lots (id, part_no, shelf_code, box_id, date_code, lot_code, coo, cow, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
+    VALUES ('LOT-PL-G1', 'RK73H2ATTD1372F', 'A-04-05', 'BOX-PL-G1', '2601', 'LOT-G', 'HK', 'CN', 2, 'STORE1', 300, now(), now())
+  `);
+  const orderId = randomUUID();
+  await insertPickingOrder(client.db, orderId, {
+    order: { orderNo: "SO-PLIST-G1", customerCode: "ACME", orgId: 2, subInventoryCode: "STORE1" },
+    items: [
+      { partNo: "RK73H2ATTD1372F", qty: 100, lineNumber: 1 },
+      { partNo: "RK73H2BTTD1004F", qty: 50, lineNumber: 2 },
+      { partNo: "RK73H2ATTD1372F", qty: 150, lineNumber: 3 },
+    ],
+  });
+  await allocateAll(client.db);
+
+  const res = await req(`/admin/picking-orders/${orderId}/picking-list`);
+  assert.equal(res.status, 200);
+  const rows = sheetRows(await res.arrayBuffer());
+
+  // Two part blocks only: one blank separator between them.
+  const data = rows.slice(12);
+  const isBlank = (r: (string | number)[]) => r.every((cell) => cell === "");
+  assert.equal(data.filter(isBlank).length, 1);
+
+  // The shared part merges both lines: summed item columns on the first row.
+  // Both lines allocated from the SAME lot (same location + date code + COO),
+  // so the two allocation rows merge into ONE row with a summed qty.
+  const shared = itemBlockOf(data, "RK73H2ATTD1372F");
+  assert.deepEqual(shared, [
+    [
+      "RK73H2ATTD1372F", 250, 250, 0, "Shelf",
+      "A-04-05", "BOX-PL-G1", "2601", "LOT-G", "HK / CN",
+      "2 / STORE1", 250,
+    ],
+  ]);
+
+  // The other part is a regular single-line block.
+  assert.deepEqual(itemBlockOf(data, "RK73H2BTTD1004F"), [
+    [
+      "RK73H2BTTD1004F", 50, 0, 0, "(no allocation)",
+      "", "", "", "", "",
+      "", "",
+    ],
+  ]);
+
+  function itemBlockOf(dataRows: (string | number)[][], partNo: string) {
+    const i = dataRows.findIndex((r) => r[0] === partNo);
+    assert.notEqual(i, -1, `block for ${partNo}`);
+    const block = [dataRows[i]!];
+    while (
+      i + block.length < dataRows.length &&
+      dataRows[i + block.length]![0] === "" &&
+      !isBlank(dataRows[i + block.length]!)
+    ) {
+      block.push(dataRows[i + block.length]!);
+    }
+    return block;
+  }
+});
+
 test("GET picking-list: order-info block and flat allocation rows", async () => {
   await reseed(client);
   const orderId = await seedScenario();

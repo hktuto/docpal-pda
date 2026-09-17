@@ -163,50 +163,50 @@ onMounted(async () => {
 
 <style scoped>
 .scope-picker .hint {
-  margin: 0 0 10px;
-  font-size: 13px;
+  margin: 0 0 0.625rem;
+  font-size: 0.8125rem;
   color: #64748b;
 }
 
 .picker-toolbar {
   display: flex;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
 }
 
 .scope-groups {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  max-height: 320px;
+  gap: 0.75rem;
+  max-height: 20rem;
   overflow-y: auto;
   border: 1px solid #d8e1ea;
-  border-radius: 8px;
-  padding: 10px 12px;
+  border-radius: 0.5rem;
+  padding: 0.625rem 0.75rem;
 }
 
 .scope-org {
-  font-size: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: #64748b;
-  margin-bottom: 4px;
+  margin-bottom: 0.25rem;
 }
 
 .scope-group-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   cursor: pointer;
 }
 
 .scope-option {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 3px 0;
-  font-size: 14px;
+  gap: 0.5rem;
+  padding: 0.1875rem 0;
+  font-size: 0.875rem;
   cursor: pointer;
 }
 </style>

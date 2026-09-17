@@ -304,7 +304,7 @@ const pickLabels = computed(() =>
 .controls { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.5rem; }
 .search-input {
   flex: 1;
-  min-width: 220px;
+  min-width: 13.75rem;
   padding: 0.5rem 0.75rem;
   border: 1px solid #000;
   font: inherit;
@@ -353,7 +353,7 @@ h2 {
   letter-spacing: 0.05em;
   color: #555;
 }
-.label__qr { width: 120px; margin: 0 auto; }
+.label__qr { width: 7.5rem; margin: 0 auto; }
 .label--code .label__code {
   font-size: 1rem;
   font-weight: bold;
@@ -364,7 +364,7 @@ h2 {
 
 .label__partno { font-size: 1.05rem; font-weight: bold; }
 .label__part-body { display: flex; gap: 0.75rem; align-items: flex-start; }
-.label--part .label__qr { width: 110px; margin: 0; flex-shrink: 0; }
+.label--part .label__qr { width: 6.875rem; margin: 0; flex-shrink: 0; }
 .label__fields { font-size: 0.75rem; line-height: 1.5; }
 .label__qty { font-size: 1.6rem; font-weight: bold; color: #2563eb; line-height: 1.1; }
 .label__raw { font-size: 0.6rem; color: #666; word-break: break-all; line-height: 1.3; }

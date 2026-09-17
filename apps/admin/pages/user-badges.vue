@@ -297,15 +297,15 @@ onMounted(() => {
 
 <style scoped>
 .search-bar {
-  margin-bottom: 12px;
+  margin-bottom: 0.75rem;
 }
 .search-input {
-  width: 320px;
+  width: 20rem;
   max-width: 100%;
-  padding: 6px 10px;
+  padding: 0.375rem 0.625rem;
   border: 1px solid #b6c2cd;
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
 }
 
 .modal-overlay {
@@ -316,66 +316,66 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   z-index: 100;
-  padding: 20px;
+  padding: 1.25rem;
 }
 
 .modal-box {
   position: relative;
   background: #fff;
-  border-radius: 12px;
+  border-radius: 0.75rem;
   box-shadow: 0 16px 40px rgba(15, 23, 32, 0.25);
-  padding: 24px;
+  padding: 1.5rem;
   width: 100%;
-  max-width: 420px;
+  max-width: 26.25rem;
 }
 
 .modal-close {
   position: absolute;
-  top: 10px;
-  right: 14px;
+  top: 0.625rem;
+  right: 0.875rem;
   background: none;
   border: none;
-  font-size: 24px;
+  font-size: 1.5rem;
   line-height: 1;
   color: #64748b;
   cursor: pointer;
 }
 
 .modal-box h2 {
-  margin: 0 0 8px;
-  font-size: 18px;
+  margin: 0 0 0.5rem;
+  font-size: 1.125rem;
 }
 
 .hint {
-  margin: 0 0 16px;
-  font-size: 13px;
+  margin: 0 0 1rem;
+  font-size: 0.8125rem;
   color: #64748b;
 }
 
 .form-row {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  margin-bottom: 16px;
+  gap: 0.375rem;
+  margin-bottom: 1rem;
 }
 
 .form-row label {
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 600;
 }
 
 .form-row input {
-  padding: 8px 10px;
+  padding: 0.5rem 0.625rem;
   border: 1px solid #b6c2cd;
-  border-radius: 6px;
-  font-size: 14px;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
 }
 
 .modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  margin-top: 16px;
+  gap: 0.625rem;
+  margin-top: 1rem;
 }
 
 .badge-preview {
@@ -384,36 +384,36 @@ onMounted(() => {
 
 .badge-card {
   border: 1px solid #d8e1ea;
-  border-radius: 12px;
-  padding: 24px;
-  margin: 16px 0;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  margin: 1rem 0;
   background: #f8fafc;
 }
 
 .badge-name {
-  font-size: 20px;
+  font-size: 1.25rem;
   font-weight: 700;
-  margin-bottom: 4px;
+  margin-bottom: 0.25rem;
 }
 
 .badge-user {
-  font-size: 14px;
+  font-size: 0.875rem;
   color: #64748b;
-  margin-bottom: 16px;
+  margin-bottom: 1rem;
 }
 
 .badge-qr {
-  width: 240px;
-  height: 240px;
+  width: 15rem;
+  height: 15rem;
   image-rendering: pixelated;
 }
 
 .success-banner {
-  padding: 8px 12px;
+  padding: 0.5rem 0.75rem;
   border: 1px solid #86c8a0;
-  border-radius: 6px;
+  border-radius: 0.375rem;
   background: #ecf9f1;
   color: #1e7a46;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 </style>

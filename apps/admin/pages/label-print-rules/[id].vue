@@ -261,37 +261,37 @@ async function testMatch() {
 <style scoped>
 .edit-preview-grid {
   display: grid;
-  grid-template-columns: minmax(600px, 2fr) minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: minmax(37.5rem, 2fr) minmax(0, 1fr);
+  gap: 1rem;
   align-items: start;
 }
 .panel {
   background: #fff;
   border: 1px solid #dde3e9;
-  border-radius: 6px;
-  padding: 14px 18px;
+  border-radius: 0.375rem;
+  padding: 0.875rem 1.125rem;
 }
 .panel-title {
-  font-size: 15px;
-  margin: 0 0 6px;
+  font-size: 0.9375rem;
+  margin: 0 0 0.375rem;
 }
 .panel-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0.625rem;
   justify-content: flex-end;
-  margin-top: 12px;
+  margin-top: 0.75rem;
 }
 .preview-controls {
   display: flex;
-  gap: 8px;
-  margin: 10px 0;
+  gap: 0.5rem;
+  margin: 0.625rem 0;
 }
 .preview-controls input {
   flex: 1;
 }
 .preview-summary {
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .bool-input {
   width: auto;

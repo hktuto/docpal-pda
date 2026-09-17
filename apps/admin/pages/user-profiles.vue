@@ -191,7 +191,7 @@ onMounted(load);
 
 <style scoped>
 .explainer {
-  margin: 0 0 12px;
-  font-size: 13px;
+  margin: 0 0 0.75rem;
+  font-size: 0.8125rem;
 }
 </style>

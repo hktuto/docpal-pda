@@ -145,15 +145,15 @@ const {
 <style scoped>
 .head-actions {
   display: flex;
-  gap: 10px;
+  gap: 0.625rem;
 }
 .explainer {
-  margin: 0 0 12px;
+  margin: 0 0 0.75rem;
 }
 :deep(td.actions) {
   white-space: nowrap;
 }
 :deep(td.actions .btn + .btn) {
-  margin-left: 6px;
+  margin-left: 0.375rem;
 }
 </style>

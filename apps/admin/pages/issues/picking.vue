@@ -155,9 +155,9 @@ const {
 <style scoped>
 .head-actions {
   display: flex;
-  gap: 10px;
+  gap: 0.625rem;
 }
 .explainer {
-  margin: 0 0 12px;
+  margin: 0 0 0.75rem;
 }
 </style>

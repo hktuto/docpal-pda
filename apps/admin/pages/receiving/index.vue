@@ -150,8 +150,8 @@ const {
 <style scoped>
 .filters {
   display: flex;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: 0.625rem;
+  margin-bottom: 0.75rem;
 }
 .filters input {
   flex: 1;

@@ -87,7 +87,7 @@ onMounted(load);
 
 <style scoped>
 .scope-btn {
-  max-width: 240px;
+  max-width: 15rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

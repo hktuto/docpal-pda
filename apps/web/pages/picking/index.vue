@@ -303,7 +303,7 @@ useVisibleReload(refresh, ["/picking-orders"]);
   height: 2.75rem;
   flex-shrink: 0;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 0.5rem;
   background: var(--surface);
   color: var(--muted);
   cursor: pointer;
@@ -350,7 +350,7 @@ useVisibleReload(refresh, ["/picking-orders"]);
   font-size: 0.75rem;
   color: #92400e;
   background: #fef3c7;
-  border-radius: 4px;
+  border-radius: 0.25rem;
   padding: 0.1rem 0.4rem;
 }
 

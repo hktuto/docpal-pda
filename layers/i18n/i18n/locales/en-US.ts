@@ -13,7 +13,8 @@ export default {
     measuring: "Measuring",
     measureBox: "Measure Box",
     verify: "Verify",
-    stockSearch: "Stock Search"
+    stockSearch: "Stock Search",
+    settings: "Settings"
   },
   actions: {
     scan: "Scan",
@@ -599,9 +600,19 @@ export default {
     goBack: "Go back",
     home: "Home",
     menu: "Menu",
+    settings: "Settings",
     resetDb: "Reset local DB",
     logout: "Logout",
     resetConfirm: "Reset all local data? This cannot be undone."
+  },
+  settings: {
+    textSize: "Text size",
+    textSizeHint: "Adjust the text size for this device — it applies everywhere in the app.",
+    currentValue: "{px} px",
+    preview: "Preview",
+    previewLabel: "Sample",
+    smaller: "Smaller",
+    larger: "Larger"
   },
   languageSwitcher: {
     label: "Language",
@@ -931,9 +942,12 @@ export default {
       dialogTitle: "My sub-inventory filter"
     },
     shelves: {
-      bulkEditSubinv: "Edit sub-inventories ({count})",
-      bulkEditTitle: "Batch edit sub-inventories ({count} shelves)",
-      bulkEditHint: "The selected sub-inventories will REPLACE the current value on all {count} selected shelves. Leave everything unchecked to make them shared."
+      bulkEdit: "Batch edit ({count})",
+      bulkEditTitle: "Batch edit ({count} shelves)",
+      bulkEditHint: "The selected sub-inventories will REPLACE the current value on all {count} selected shelves. Leave everything unchecked to make them shared.",
+      bulkEditWarningToggle: "Also update the warning",
+      bulkEditWarningMixed: "Mixed values — enter to replace on all",
+      bulkEditWarningHint: "Shown as a ⚠ icon wherever an allocation points at the shelf. Leave empty to clear the warning on all {count} selected shelves."
     },
     print: {
       title: "Print labels ({count})",
@@ -1277,6 +1291,8 @@ export default {
         locationPairRequired: "Select both an org and a sub-inventory (or clear both).",
         required: "Required",
         line: "Line / Ship",
+        itemsViewFlat: "By line",
+        itemsViewGrouped: "By part no",
         allocated: "Allocated",
         picked: "Picked",
         allocations: "Allocations",
@@ -1558,7 +1574,7 @@ export default {
         groupZone: "By zone",
         lotsCount: "{count} lots",
         partNo: "Part no",
-        partNoPlaceholder: "Part no keyword…",
+        partNoPlaceholder: "Part no / WCL item no keyword…",
         hint: "Set filters (supplier, brand, org/sub-inventory, zone/shelf, part no), then press Search.",
         parts: "Parts",
         lots: "Lots",

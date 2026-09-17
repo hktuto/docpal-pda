@@ -223,7 +223,7 @@ function submit() {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   width: 100%;
-  max-width: 480px;
+  max-width: 30rem;
   max-height: 90vh;
   overflow-y: auto;
 }

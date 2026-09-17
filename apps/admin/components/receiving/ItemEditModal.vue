@@ -127,18 +127,18 @@ function applyDateCode(offsetWeeks: number) {
 <style scoped>
 .dc-row {
   display: flex;
-  gap: 8px;
+  gap: 0.5rem;
   align-items: center;
 }
 .dc-row input {
   flex: 1;
 }
 .summary {
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: #52606d;
-  margin-bottom: 10px;
+  margin-bottom: 0.625rem;
   display: grid;
-  gap: 4px;
+  gap: 0.25rem;
 }
 .summary .dt {
   font-weight: 600;
@@ -147,7 +147,7 @@ function applyDateCode(offsetWeeks: number) {
   color: #b91c1c;
 }
 .batch-parts {
-  max-height: 80px;
+  max-height: 5rem;
   overflow-y: auto;
   overflow-wrap: anywhere;
 }

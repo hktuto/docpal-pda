@@ -129,7 +129,6 @@ onBeforeUnmount(() => {
           <a
             v-if="docpalUrl"
             :href="docpalUrl"
-            target="_blank"
             rel="noopener"
             class="btn btn-small settings-link"
           >
@@ -154,13 +153,13 @@ onBeforeUnmount(() => {
 }
 
 .sidebar {
-  width: 230px;
+  width: 14.375rem;
   flex-shrink: 0;
   background: var(--brand-sidebar-bg);
   color: var(--brand-sidebar-text);
   display: flex;
   flex-direction: column;
-  padding: 14px 0;
+  padding: 0.875rem 0;
   position: sticky;
   top: 0;
   height: 100vh;
@@ -171,20 +170,20 @@ onBeforeUnmount(() => {
 .brand {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 0 18px 12px;
+  gap: 0.25rem;
+  padding: 0 1.125rem 0.75rem;
   border-bottom: 1px solid #d8e1ea;
-  margin-bottom: 8px;
+  margin-bottom: 0.5rem;
 }
 .brand:hover {
   text-decoration: none;
 }
 .brand-logo {
-  width: 132px;
+  width: 8.25rem;
   display: block;
 }
 .brand-sub {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -199,16 +198,16 @@ onBeforeUnmount(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   width: 100%;
   border: none;
   background: none;
   color: #64748b;
-  font-size: 13px;
+  font-size: 0.8125rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  padding: 8px 18px 4px;
+  padding: 0.5rem 1.125rem 0.25rem;
   cursor: pointer;
   background: var(--brand-hightlight-bg);
 }
@@ -218,7 +217,7 @@ onBeforeUnmount(() => {
 
 .caret {
   display: inline-block;
-  font-size: 10px;
+  font-size: 0.625rem;
   transition: transform 0.12s ease;
 }
 .caret.open {
@@ -228,14 +227,14 @@ onBeforeUnmount(() => {
 .nav-links {
   display: flex;
   flex-direction: column;
-  padding-block: 4px;
+  padding-block: 0.25rem;
 }
 .nav-links a {
   color: var(--brand-sidebar-text);
-  padding: 6px 6px;
-  margin: 1px 10px;
-  border-radius: 8px;
-  font-size: 14px;
+  padding: 0.375rem 0.375rem;
+  margin: 0.0625rem 0.625rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
 }
 .nav-links a:hover {
   color: var(--brand-teal-dark);
@@ -250,9 +249,9 @@ onBeforeUnmount(() => {
 
 .userbox {
   position: relative;
-  padding: 12px 18px 0;
+  padding: 0.75rem 1.125rem 0;
   border-top: 1px solid #d8e1ea;
-  font-size: 13px;
+  font-size: 0.8125rem;
 }
 .username {
   display: block;
@@ -260,7 +259,7 @@ onBeforeUnmount(() => {
   border: none;
   background: none;
   padding: 0;
-  font-size: 13px;
+  font-size: 0.8125rem;
   color: var(--brand-sidebar-text);
   text-align: left;
   overflow: hidden;
@@ -273,17 +272,17 @@ onBeforeUnmount(() => {
 }
 .user-popover {
   position: absolute;
-  bottom: calc(100% + 6px);
-  left: 10px;
-  width: 180px;
+  bottom: calc(100% + 0.375rem);
+  left: 0.625rem;
+  width: 11.25rem;
   background: #fff;
   border: 1px solid #d8e1ea;
-  border-radius: 8px;
+  border-radius: 0.5rem;
   box-shadow: 0 8px 24px rgba(15, 23, 32, 0.18);
-  padding: 12px;
+  padding: 0.75rem;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0.625rem;
 }
 .logout-btn {
   align-self: flex-start;
@@ -300,6 +299,6 @@ onBeforeUnmount(() => {
 .content {
   flex: 1;
   min-width: 0;
-  padding: 20px 24px 40px;
+  padding: 1.25rem 1.5rem 2.5rem;
 }
 </style>

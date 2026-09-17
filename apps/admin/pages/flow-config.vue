@@ -360,7 +360,7 @@ onMounted(load);
 
 .rule-group {
   border: 1px solid #dde4ea;
-  border-radius: 6px;
+  border-radius: 0.375rem;
   padding: 0.75rem;
   margin-bottom: 0.75rem;
 }
@@ -379,10 +379,10 @@ onMounted(load);
 /* match the global .form-row input look (main.css) — rule rows are inline,
    so they don't inherit it */
 .rule-row input {
-  padding: 7px 9px;
+  padding: 0.4375rem 0.5625rem;
   border: 1px solid #b6c2cd;
-  border-radius: 4px;
-  font-size: 14px;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
   font-family: inherit;
 }
 
@@ -411,7 +411,7 @@ onMounted(load);
 .warn-banner {
   background: #fff8e1;
   border: 1px solid #f0c36d;
-  border-radius: 6px;
+  border-radius: 0.375rem;
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
 }

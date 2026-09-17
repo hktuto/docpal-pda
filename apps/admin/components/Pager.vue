@@ -49,14 +49,14 @@ const pageSizeOptions = computed(() =>
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 8px 4px 0;
-  font-size: 13px;
+  gap: 0.75rem;
+  padding: 0.5rem 0.25rem 0;
+  font-size: 0.8125rem;
 }
 .pager-controls {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0.625rem;
 }
 .pager-size {
   width: auto;

@@ -20,8 +20,8 @@ import { navSections } from "~/utils/entities";
 
 <style scoped>
 .section-title {
-  font-size: 15px;
-  margin: 18px 0 4px;
+  font-size: 0.9375rem;
+  margin: 1.125rem 0 0.25rem;
   color: #52606d;
 }
 </style>

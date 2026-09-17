@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CountryRow, OrderLogsParams, OrderLogsPage, PickingOrderDetail, SubInventoryRow } from "~/utils/flowApi";
+import type { CountryRow, OrderLogsParams, OrderLogsPage, PickingItemRow, PickingOrderDetail, SubInventoryRow } from "~/utils/flowApi";
 import type { AdminColumnDef } from "~/composables/useAdminTable";
 import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 
@@ -85,6 +85,75 @@ const reportDismiss = useOverlayDismiss(() => (reportOpen.value = false));
 
 const totalQty = computed(() => (order.value?.items ?? []).reduce((sum, i) => sum + i.qty, 0));
 
+// Items table view modes: "flat" (one row per order line — the original) and
+// "grouped" (lines sharing the same item no (wclItemNo ?? partNo) merge into
+// one row with summed qtys; read-only — the per-line actions stay in flat
+// mode). In grouped mode allocations from the same location + date code +
+// COO merge into one row with a summed qty.
+type ItemsViewRow = PickingItemRow & { grouped?: boolean; lineLabel?: string };
+
+const itemsView = ref<"flat" | "grouped">("flat");
+
+function allocationGroupKey(a: PickingItemRow["allocations"][number]): string {
+  if (a.lot) {
+    // Lot source: location = shelf + box, plus date code and COO.
+    return ["lot", a.lot.shelfCode ?? "", a.lot.boxId ?? "", a.lot.dateCode ?? "", a.lot.coo ?? ""].join("|");
+  }
+  // Receiving source: the source order + carton box and its date code.
+  return ["rec", a.receivingOrderId ?? a.receiving?.orderId ?? "", a.boxId ?? "", a.receiving?.dateCode ?? ""].join("|");
+}
+
+function mergeAllocations(list: PickingItemRow["allocations"]): PickingItemRow["allocations"] {
+  const merged = new Map<string, PickingItemRow["allocations"][number]>();
+  for (const a of list) {
+    const key = allocationGroupKey(a);
+    const existing = merged.get(key);
+    if (existing) existing.qty += a.qty;
+    else merged.set(key, { ...a });
+  }
+  return [...merged.values()];
+}
+
+const groupedItems = computed<ItemsViewRow[]>(() => {
+  const groups = new Map<string, { row: ItemsViewRow; lines: Set<string> }>();
+  for (const item of order.value?.items ?? []) {
+    const key = item.wclItemNo ?? item.partNo;
+    let g = groups.get(key);
+    if (!g) {
+      g = {
+        row: {
+          ...item,
+          id: `group:${key}`,
+          grouped: true,
+          lineLabel: "",
+          qty: 0,
+          allocatedQty: 0,
+          pickedQty: 0,
+          allocations: [],
+          packages: [],
+        },
+        lines: new Set(),
+      };
+      groups.set(key, g);
+    }
+    g.row.qty += item.qty;
+    g.row.allocatedQty += item.allocatedQty;
+    g.row.pickedQty += item.pickedQty;
+    g.lines.add(`${item.lineNumber ?? "—"} / ${item.shipmentNumber ?? "—"}`);
+    g.row.allocations.push(...item.allocations);
+    g.row.packages.push(...item.packages);
+  }
+  for (const g of groups.values()) {
+    g.row.lineLabel = [...g.lines].join(", ");
+    g.row.allocations = mergeAllocations(g.row.allocations);
+  }
+  return [...groups.values()].map((g) => g.row);
+});
+
+const itemsViewRows = computed<ItemsViewRow[]>(() =>
+  itemsView.value === "grouped" ? groupedItems.value : (order.value?.items ?? [])
+);
+
 // Detail lists are small and were previously shown in full — no Pager, so
 // the tables get a generous default page size (TanStack still owns sorting).
 const itemsColumnDefs = computed<AdminColumnDef<PickingOrderDetail["items"][number]>[]>(() => [
@@ -97,7 +166,7 @@ const itemsColumnDefs = computed<AdminColumnDef<PickingOrderDetail["items"][numb
   {
     key: "line",
     label: t("admin.pages.pickingOrders.line"),
-    accessor: (item) => item.lineNumber ?? 0,
+    accessor: (item) => (item.grouped ? (item.lineLabel ?? "") : (item.lineNumber ?? 0)),
     size: 110,
   },
   { key: "qty", label: t("admin.pages.pickingOrders.required"), size: 90 },
@@ -117,12 +186,10 @@ const itemsColumnDefs = computed<AdminColumnDef<PickingOrderDetail["items"][numb
   },
 ]);
 
-const itemsRows = computed(() => order.value?.items ?? []);
-
 const { table: itemsTable, resetColumnState: resetItemsColumns } = useAdminTable({
   tableId: "picking-detail-items",
   columns: itemsColumnDefs,
-  rows: itemsRows,
+  rows: itemsViewRows,
   getRowId: (item) => item.id,
   defaultPageSize: 100,
 });
@@ -469,7 +536,7 @@ const {
 <template>
   <div>
     <div class="page-head">
-      <h1>{{ $t("admin.pages.pickingOrders.detailTitle", { orderNo: order?.orderNo ?? "" }) }}</h1>
+      <h1>{{ order?.orderNo ?? ""}}</h1>
       <div class="head-actions">
         <button class="btn" :disabled="downloadingPickingList" @click="downloadPickingList">
           {{ $t("admin.pages.pickingOrders.downloadPickingList") }}
@@ -575,12 +642,33 @@ const {
         </div>
       </template>
 
-      <h2 class="section-title">{{ $t("admin.pages.pickingOrders.items") }}</h2>
+      <h2 class="section-title">
+        {{ $t("admin.pages.pickingOrders.items") }}
+        <span class="view-toggle">
+          <button
+            type="button"
+            class="view-toggle-btn"
+            :class="{ active: itemsView === 'flat' }"
+            @click="itemsView = 'flat'"
+          >
+            {{ $t("admin.pages.pickingOrders.itemsViewFlat") }}
+          </button>
+          <button
+            type="button"
+            class="view-toggle-btn"
+            :class="{ active: itemsView === 'grouped' }"
+            @click="itemsView = 'grouped'"
+          >
+            {{ $t("admin.pages.pickingOrders.itemsViewGrouped") }}
+          </button>
+        </span>
+      </h2>
       <DataTable :table="itemsTable" :on-reset-columns="resetItemsColumns">
         <template #cell-partNo="{ row }">
           <span class="partno-cell">
             {{ row.wclItemNo ?? row.partNo }}
             <button
+              v-if="!row.grouped"
               class="icon-btn"
               :title="$t('admin.pages.pickingOrders.searchAvailability')"
               @click.stop="openAvailability(row)"
@@ -589,9 +677,13 @@ const {
             </button>
           </span>
         </template>
-        <template #cell-line="{ row }">{{ row.lineNumber ?? "—" }} / {{ row.shipmentNumber ?? "—" }}</template>
+        <template #cell-line="{ row }">
+          <template v-if="row.grouped">{{ row.lineLabel }}</template>
+          <template v-else>{{ row.lineNumber ?? "—" }} / {{ row.shipmentNumber ?? "—" }}</template>
+        </template>
         <template #cell-allocations="{ row }">
-          <template v-for="a in row.allocations" :key="a.id">
+          <template v-if="!row.grouped">
+            <template v-for="a in row.allocations" :key="a.id">
             <AllocationsStockAllocationRow
               v-if="a.lot"
               :qty="a.qty"
@@ -602,46 +694,7 @@ const {
               {{ allocationSource(a) }}
               <span v-if="a.lot.shelfWarning" class="shelf-warning" :title="a.lot.shelfWarning">⚠️</span>
               <template #tooltip>
-                <div v-if="a.lot.shelfWarning" class="alloc-tip-row">
-                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.warning") }}</span>
-                  <span>{{ a.lot.shelfWarning }}</span>
-                </div>
-                <div class="alloc-tip-row">
-                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.shelf") }}</span>
-                  <span>{{ a.lot.shelfCode ?? "—" }}</span>
-                </div>
-                <div class="alloc-tip-row">
-                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.box") }}</span>
-                  <span>{{ a.lot.boxId ?? "—" }}</span>
-                </div>
-                <div class="alloc-tip-row">
-                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.dateCode") }}</span>
-                  <span>{{ a.lot.dateCode ?? "—" }}</span>
-                </div>
-                <div class="alloc-tip-row">
-                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.lotCode") }}</span>
-                  <span>{{ a.lot.lotCode ?? "—" }}</span>
-                </div>
-                <div class="alloc-tip-row">
-                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.coo") }}</span>
-                  <span>{{ a.lot.coo ?? "—" }}</span>
-                </div>
-                <div class="alloc-tip-row">
-                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.cow") }}</span>
-                  <span>{{ a.lot.cow ?? "—" }}</span>
-                </div>
-                <div class="alloc-tip-row">
-                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.lotTotal") }}</span>
-                  <span>{{ a.lot.totalQty }}</span>
-                </div>
-                <div class="alloc-tip-row">
-                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.lotAllocated") }}</span>
-                  <span>{{ a.lot.allocatedQty }}</span>
-                </div>
-                <div class="alloc-tip-row">
-                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.lotAvailable") }}</span>
-                  <span>{{ a.lot.availableQty }}</span>
-                </div>
+                <AllocationsAllocationDetail :a="a" />
               </template>
             </AllocationsStockAllocationRow>
             <AllocationsReceivingAllocationRow
@@ -653,38 +706,25 @@ const {
             >
               {{ allocationSource(a) }}
               <template v-if="a.receiving" #tooltip>
-                <div class="alloc-tip-row">
-                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.receivingOrder") }}</span>
-                  <NuxtLink :to="`/receiving/${a.receiving.orderId}`">{{ a.receiving.batchNo }}</NuxtLink>
-                </div>
-                <div v-if="a.receiving.invoiceNo" class="alloc-tip-row">
-                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.invoice") }}</span>
-                  <span>{{ a.receiving.invoiceNo }}</span>
-                </div>
-                <div v-if="a.receiving.partNo" class="alloc-tip-row">
-                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.partNo") }}</span>
-                  <span>{{ a.receiving.partNo }}</span>
-                </div>
-                <div v-if="a.receiving.poNo" class="alloc-tip-row">
-                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.poNo") }}</span>
-                  <span>{{ a.receiving.poNo }}</span>
-                </div>
-                <div v-if="a.receiving.receivedQty != null" class="alloc-tip-row">
-                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.receivedQty") }}</span>
-                  <span>{{ a.receiving.receivedQty }}</span>
-                </div>
-                <div v-if="a.receiving.dateCode" class="alloc-tip-row">
-                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.dateCode") }}</span>
-                  <span>{{ a.receiving.dateCode }}</span>
-                </div>
-                <div v-if="a.boxId" class="alloc-tip-row">
-                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.ctnNo") }}</span>
-                  <span>{{ a.boxId }}</span>
-                </div>
+                <AllocationsAllocationDetail :a="a" />
               </template>
             </AllocationsReceivingAllocationRow>
           </template>
           <span v-if="row.allocations.length === 0" class="muted">—</span>
+          </template>
+          <template v-else>
+            <AllocationsTooltip v-for="a in row.allocations" :key="a.id">
+              <div class="alloc-readonly">
+                <AllocationsDot :source="a.lot ? 'stock' : 'receiving'" />
+                <span>{{ a.qty }} × {{ allocationSource(a) }}</span>
+                <span v-if="a.lot?.shelfWarning" class="shelf-warning" :title="a.lot.shelfWarning">⚠️</span>
+              </div>
+              <template v-if="a.lot || a.receiving" #popup>
+                <AllocationsAllocationDetail :a="a" />
+              </template>
+            </AllocationsTooltip>
+            <span v-if="row.allocations.length === 0" class="muted">—</span>
+          </template>
         </template>
         <template #cell-packages="{ row }">
           <div v-for="p in row.packages" :key="p.id">
@@ -786,56 +826,85 @@ const {
 <style scoped>
 .head-actions {
   display: flex;
-  gap: 10px;
+  gap: 0.625rem;
 }
 .section-title {
-  font-size: 15px;
-  margin: 18px 0 8px;
+  font-size: 0.9375rem;
+  margin: 1.125rem 0 0.5rem;
   color: #52606d;
+}
+.view-toggle {
+  margin-left: 0.625rem;
+  display: inline-flex;
+}
+.view-toggle-btn {
+  padding: 0.1875rem 0.625rem;
+  font-size: 0.75rem;
+  border: 1px solid #b6c2cd;
+  background: #fff;
+  color: #52606d;
+  cursor: pointer;
+}
+.view-toggle-btn:first-child {
+  border-radius: 0.25rem 0 0 0.25rem;
+}
+.view-toggle-btn:last-child {
+  border-radius: 0 0.25rem 0.25rem 0;
+  margin-left: -0.0625rem;
+}
+.view-toggle-btn.active {
+  background: #0b5cab;
+  border-color: #0b5cab;
+  color: #fff;
+}
+.alloc-readonly {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
 }
 .date-edit {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 .date-edit input {
-  padding: 5px 7px;
+  padding: 0.3125rem 0.4375rem;
   border: 1px solid #b6c2cd;
-  border-radius: 4px;
+  border-radius: 0.25rem;
 }
 .info-actions {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 8px;
-  margin-top: 8px;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
 }
 .ship-to-select {
-  min-width: 220px;
+  min-width: 13.75rem;
 }
 .location-edit {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
   flex-wrap: wrap;
 }
 .location-edit > * {
-  min-width: 140px;
+  min-width: 8.75rem;
 }
 .location-edit .btn,
 .location-edit .muted {
   min-width: 0;
 }
 .field-error {
-  margin-top: 4px;
-  font-size: 13px;
+  margin-top: 0.25rem;
+  font-size: 0.8125rem;
   color: #b3261e;
 }
 .alloc-done-banner {
-  margin-bottom: 12px;
-  padding: 9px 12px;
-  border-radius: 6px;
-  font-size: 14px;
+  margin-bottom: 0.75rem;
+  padding: 0.5625rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
   background: #e9f7ef;
   border: 1px solid #b5e2c8;
   color: #1e7a46;

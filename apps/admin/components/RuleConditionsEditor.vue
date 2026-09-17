@@ -119,7 +119,7 @@ function removeRow(index: number) {
 <style scoped>
 .cond-editor {
   border: 1px solid #dde4ea;
-  border-radius: 6px;
+  border-radius: 0.375rem;
   padding: 0.75rem;
 }
 
@@ -130,7 +130,7 @@ function removeRow(index: number) {
 }
 
 .seg-btn {
-  border-radius: 4px;
+  border-radius: 0.25rem;
 }
 
 .seg-active {
@@ -148,10 +148,10 @@ function removeRow(index: number) {
 
 .cond-row select,
 .cond-row input {
-  padding: 7px 9px;
+  padding: 0.4375rem 0.5625rem;
   border: 1px solid #b6c2cd;
-  border-radius: 4px;
-  font-size: 14px;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
   font-family: inherit;
 }
 

@@ -58,9 +58,10 @@ const DC_VALID = sql`il.date_code ~ '^[0-9]{4}$' AND left(il.date_code, 2)::int 
 // lots with onHandQty = Σ total_qty over the matching lots of that part.
 //
 // Filter semantics (all optional, ANDed):
-//   - partNo: case-insensitive substring on parts.part_no, normalized with
-//     the same normalizePartNo as scan matching (uppercase + all whitespace
-//     stripped) — the column side applies the identical transform in SQL.
+//   - partNo: case-insensitive substring on parts.part_no OR
+//     parts.wcl_item_no, normalized with the same normalizePartNo as scan
+//     matching (uppercase + all whitespace stripped) — the column side
+//     applies the identical transform in SQL.
 //   - shelfCode: any-of match on the lot's shelf_code.
 //   - zone: any-of match on the shelf's zone (shelves join; lots whose shelf
 //     has no zone never match).
@@ -204,7 +205,7 @@ export async function searchStock(db: AppDb, filters: StockSearchFilters): Promi
       LEFT JOIN shelves s ON s.code = il.shelf_code
       WHERE TRUE
       ${allowedOrgFilter(sql`il.org_id`)}
-      ${partNoNorm ? sql`AND strpos(regexp_replace(upper(p.part_no), '\\s', '', 'g'), ${partNoNorm}) > 0` : sql``}
+      ${partNoNorm ? sql`AND (strpos(regexp_replace(upper(p.part_no), '\\s', '', 'g'), ${partNoNorm}) > 0 OR strpos(regexp_replace(upper(p.wcl_item_no), '\\s', '', 'g'), ${partNoNorm}) > 0)` : sql``}
       ${filters.shelfCode?.length ? sql`AND il.shelf_code IN (${sql.join(filters.shelfCode.map((v) => sql`${v}`), sql`, `)})` : sql``}
       ${filters.zone?.length ? sql`AND s.zone IN (${sql.join(filters.zone.map((v) => sql`${v}`), sql`, `)})` : sql``}
       ${filters.brand?.length ? sql`AND p.brand IN (${sql.join(filters.brand.map((v) => sql`${v}`), sql`, `)})` : sql``}
