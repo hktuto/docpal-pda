@@ -186,7 +186,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | `/admin/*` master-data CRUD | `apps/backend/src/routes/admin/` |
 | `/admin/sub-inventory-share-groups` (share-group membership upsert/remove) | `apps/backend/src/routes/admin/subInventoryShareGroups.ts` |
 | `GET /admin/receiving-orders/:id/shipper` (shipper xlsx download; `?mode=finished` for actuals) | `apps/backend/src/routes/admin/receivingShipper.ts` |
-| `GET /admin/picking-orders` (unscoped list — ignores `allowedOrgIds` + user sub-inventory scope), `GET /admin/picking-orders/:id/picking-list` (picking-list xlsx download, read-only) | `apps/backend/src/routes/admin/pickingList.ts` |
+| `GET /admin/picking-orders` (unscoped list — ignores `allowedOrgIds` + user sub-inventory scope), `GET /admin/picking-orders/:id` (unscoped detail, same nested read as the PDA route), `GET /admin/picking-orders/:id/picking-list` (picking-list xlsx download, read-only) | `apps/backend/src/routes/admin/pickingList.ts` |
 | `GET /admin/user-profiles`, `PUT /admin/user-profiles/:username` (per-user sub-inventory scope; pre-provisioning allowed) | `apps/backend/src/routes/admin/userProfiles.ts` |
 | `POST /admin/allocation/run`, `POST /admin/picking-orders/:id/reallocate` (manual allocation triggers) | `apps/backend/src/routes/admin/allocation.ts` |
 | `DELETE /admin/picking-orders/:id/items/:itemId/allocations/:allocationId` (per-allocation remove, transient) | `apps/backend/src/routes/admin/allocation.ts` (`removePickingAllocation` in `apps/backend/src/db/allocate.ts`) |

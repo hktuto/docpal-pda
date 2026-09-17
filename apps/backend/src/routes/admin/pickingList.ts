@@ -4,7 +4,7 @@ import { inArray, sql } from "drizzle-orm";
 import * as XLSX from "xlsx";
 import { db } from "../../db.js";
 import { queryAll, queryGet } from "../../db/query.js";
-import { listPickingOrders } from "../../db/picking.js";
+import { listPickingOrders, getPickingOrderDetail } from "../../db/picking.js";
 
 // Admin picking-list download (spec
 // docs/superpowers/specs/2026-09-14-admin-picking-list-download-design.md;
@@ -68,6 +68,13 @@ adminPickingListRoute.get("/picking-orders", async (c) => {
     }),
     200
   );
+});
+
+// Admin picking-order detail: same nested read as GET /picking-orders/:id but
+// unscoped, so orders outside allowedOrgIds / the caller's user scope still
+// open in the admin console (the PDA detail stays scoped).
+adminPickingListRoute.get("/picking-orders/:id", async (c) => {
+  return c.json(await getPickingOrderDetail(db, c.req.param("id"), null, { unscoped: true }), 200);
 });
 
 adminPickingListRoute.get("/picking-orders/:id/picking-list", async (c) => {

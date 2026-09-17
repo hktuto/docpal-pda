@@ -477,7 +477,7 @@ export function useFlowApi() {
           `/admin/picking-orders${status ? `?status=${status}` : ""}`
         )
       ).rows,
-    getPickingOrder: (id: string) => api.get<PickingOrderDetail>(`/picking-orders/${id}`),
+    getPickingOrder: (id: string) => api.get<PickingOrderDetail>(`/admin/picking-orders/${id}`),
     reorderPickingOrders: (orderIds: string[]) =>
       api.post<{ reordered: number }>(`/picking-orders/reorder`, { orderIds }),
     // Manual allocation triggers — both await the recompute in the request.

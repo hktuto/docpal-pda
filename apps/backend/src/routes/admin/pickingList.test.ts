@@ -88,6 +88,28 @@ test("GET /admin/picking-orders: unscoped — allowedOrgIds and user scope do no
   assert.equal((await filteredRes.json()).rows.length, pendingCount);
 });
 
+// The admin detail is unscoped too: an order hidden by allowedOrgIds / user
+// scope still opens in the admin console.
+test("GET /admin/picking-orders/:id: unscoped — 200 where the PDA detail 404s", async () => {
+  await reseed(client);
+  const row = (await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT id FROM picking_orders LIMIT 1`
+  ))!;
+
+  const before = await req(`/admin/picking-orders/${row.id}`);
+  assert.equal(before.status, 200);
+  assert.equal((await before.json()).id, row.id);
+
+  _setAllowedOrgIdsForTests([99]);
+  assert.equal((await req(`/picking-orders/${row.id}`)).status, 404);
+  const adminRes = await req(`/admin/picking-orders/${row.id}`);
+  assert.equal(adminRes.status, 200);
+  assert.equal((await adminRes.json()).id, row.id);
+
+  assert.equal((await req(`/admin/picking-orders/${randomUUID()}`)).status, 404);
+});
+
 /** Sheet rows as a plain array-of-arrays (blank cells → ""). */
 function sheetRows(buf: ArrayBuffer): (string | number)[][] {
   const wb = XLSX.read(Buffer.from(buf));

@@ -803,11 +803,13 @@ interface AllocationQueryRow {
 
 /** Complete nested read: order + items (allocations, packages) + boxes.
  *  `scope` scopes the order to the user's sub-inventory pairs (out-of-scope
- *  → 404, same as allowedOrgIds). */
+ *  → 404, same as allowedOrgIds). `opts.unscoped` (admin console detail)
+ *  skips both org filters. */
 export async function getPickingOrderDetail(
   db: AppDb,
   orderId: string,
-  scope?: UserScopeEntry[] | null
+  scope?: UserScopeEntry[] | null,
+  opts?: { unscoped?: boolean }
 ): Promise<PickingOrderDetail> {
   const order = await queryGet<PickingOrderRow>(
     db,
@@ -829,8 +831,8 @@ export async function getPickingOrderDetail(
       LEFT JOIN users w ON w.id = po.working_by
       LEFT JOIN users ru ON ru.id = po.issue_reported_by
       WHERE po.id = ${orderId}
-      ${allowedOrgFilter(sql`po.org_id`)}
-      ${userScopeFilter(sql`po.org_id`, sql`po.sub_inventory_code`, scope)}
+      ${opts?.unscoped ? sql`` : allowedOrgFilter(sql`po.org_id`)}
+      ${opts?.unscoped ? sql`` : userScopeFilter(sql`po.org_id`, sql`po.sub_inventory_code`, scope)}
     `
   );
   if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
