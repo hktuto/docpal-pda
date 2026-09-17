@@ -26,6 +26,9 @@ afterEach(() => {
 
 test("picking orders: list + detail are scoped to allowedOrgIds", async () => {
   await reseed(client);
+  // Org visibility splits by picking_order_type (invoice orders get the
+  // allowedOrgIds filter; NULL/tn do not) — the demo orders carry no type.
+  await queryRun(client.db, sql`UPDATE picking_orders SET picking_order_type = 'invoice'`);
 
   const all = await listPickingOrders(client.db);
   assert.ok(all.rows.length > 0);

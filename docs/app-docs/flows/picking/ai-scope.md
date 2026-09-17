@@ -10,13 +10,13 @@
   (`apps/backend/src/db/user-scope.ts`), composes with `allowedOrgIds` by
   AND, reads only — mutations, allocation and SSE events unaffected (spec
   `docs/superpowers/specs/2026-09-11-user-subinventory-scope-design.md`).
-  Exception: the admin console list fetches `GET /admin/picking-orders`
-  (`apps/backend/src/routes/admin/pickingList.ts`, same filters/paging shape
-  as the PDA list) which is unscoped — it ignores both `allowedOrgIds` and
-  the caller's user scope (`listPickingOrders` `unscoped: true`), so admins
-  always see every order. The admin detail page likewise reads
-  `GET /admin/picking-orders/:id` (`getPickingOrderDetail`
-  `unscoped: true`) — out-of-scope orders 404 on the PDA but open in admin.
+  The predicate splits by `picking_order_type`
+  (`pickingOrderOrgFilter` in `apps/backend/src/db/picking.ts`): only
+  `invoice` orders get the allowedOrgIds + exact-pair scope filter; `tn`
+  (transfer) orders are visible when the order's `org_id = 143` and the
+  caller's scope includes ANY sub-inventory of org 143 (unscoped callers see
+  all org-143 transfers); orders with NULL type (freshly synced, no type
+  yet) are always visible.
 - List picking orders with a status filter and text search (both
   server-side, paged 50 at a time); multi-select batch issue reporting.
 - Show picking order detail as one nested read: order (incl. issue fields),

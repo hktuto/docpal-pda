@@ -6,7 +6,7 @@
 // Read-only: no in-request recompute. Dynamic app import so DATABASE_URL
 // points at the test DB first (same pattern as receivingShipper.test.ts).
 
-import { test, before, afterEach } from "node:test";
+import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
@@ -16,8 +16,6 @@ import { queryGet } from "../../db/query.js";
 import { confirmReceivingArrival } from "../../db/receiving.js";
 import { insertReceivingOrder, insertPickingOrder } from "../../db/test-fixtures.js";
 import { allocateAll } from "../../db/allocate.js";
-import { upsertUserScope } from "../../db/user-scope.js";
-import { _setAllowedOrgIdsForTests, _resetFlowConfigForTests } from "../../config.js";
 
 process.env.DATABASE_URL = TEST_DATABASE_URL;
 
@@ -42,73 +40,6 @@ function req(path: string, init?: RequestInit) {
     headers: { Authorization: `Bearer ${token}`, ...init?.headers },
   });
 }
-
-afterEach(async () => {
-  _resetFlowConfigForTests();
-  await upsertUserScope(client.db, "admin", []);
-});
-
-// --- GET /admin/picking-orders (unscoped list) ------------------------------
-
-// The admin list ignores both org-partition filters (allowedOrgIds and the
-// caller's user sub-inventory scope) that hide orders on the PDA list.
-test("GET /admin/picking-orders: unscoped — allowedOrgIds and user scope do not apply", async () => {
-  await reseed(client);
-  const count = (
-    await queryGet<{ n: number }>(client.db, sql`SELECT COUNT(*)::int AS n FROM picking_orders`)
-  )!.n;
-  assert.ok(count > 0);
-  // Stamp every order so the user-scope pair filter actually hides them
-  // (NULL sub-inventory stays visible).
-  await client.db.execute(
-    sql`UPDATE picking_orders SET org_id = 2, sub_inventory_code = 'STORE1'`
-  );
-
-  _setAllowedOrgIdsForTests([99]);
-  await upsertUserScope(client.db, "admin", [{ orgId: 2, code: "WSTORE1" }]);
-
-  const pdaRes = await req("/picking-orders");
-  assert.equal(pdaRes.status, 200);
-  assert.equal((await pdaRes.json()).rows.length, 0);
-
-  const adminRes = await req("/admin/picking-orders");
-  assert.equal(adminRes.status, 200);
-  const body = await adminRes.json();
-  assert.equal(body.rows.length, count);
-  assert.equal(body.total, count);
-
-  // Status filter still works on the unscoped list.
-  const pendingCount = (
-    await queryGet<{ n: number }>(
-      client.db,
-      sql`SELECT COUNT(*)::int AS n FROM picking_orders WHERE status = 'pending'`
-    )
-  )!.n;
-  const filteredRes = await req("/admin/picking-orders?status=pending");
-  assert.equal((await filteredRes.json()).rows.length, pendingCount);
-});
-
-// The admin detail is unscoped too: an order hidden by allowedOrgIds / user
-// scope still opens in the admin console.
-test("GET /admin/picking-orders/:id: unscoped — 200 where the PDA detail 404s", async () => {
-  await reseed(client);
-  const row = (await queryGet<{ id: string }>(
-    client.db,
-    sql`SELECT id FROM picking_orders LIMIT 1`
-  ))!;
-
-  const before = await req(`/admin/picking-orders/${row.id}`);
-  assert.equal(before.status, 200);
-  assert.equal((await before.json()).id, row.id);
-
-  _setAllowedOrgIdsForTests([99]);
-  assert.equal((await req(`/picking-orders/${row.id}`)).status, 404);
-  const adminRes = await req(`/admin/picking-orders/${row.id}`);
-  assert.equal(adminRes.status, 200);
-  assert.equal((await adminRes.json()).id, row.id);
-
-  assert.equal((await req(`/admin/picking-orders/${randomUUID()}`)).status, 404);
-});
 
 /** Sheet rows as a plain array-of-arrays (blank cells → ""). */
 function sheetRows(buf: ArrayBuffer): (string | number)[][] {

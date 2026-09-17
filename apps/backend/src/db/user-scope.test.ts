@@ -5,13 +5,16 @@
 // Route tests follow auth.test.ts: DATABASE_URL points at the test database
 // before src/index.ts is imported; logins go through the shared fake DocPal.
 
-import { test, before } from "node:test";
+import { test, before, afterEach } from "node:test";
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { setupTestDb, reseed, TEST_DATABASE_URL, type TestDb } from "./test-helper.js";
 import { queryAll, queryGet, queryRun } from "./query.js";
 import { getUserScope, upsertUserScope, userScopeFilter } from "./user-scope.js";
 import { listPickingOrders, getPickingOrderDetail } from "./picking.js";
+import { insertPickingOrder } from "./test-fixtures.js";
+import { _setAllowedOrgIdsForTests, _resetFlowConfigForTests } from "../config.js";
 
 process.env.DATABASE_URL = TEST_DATABASE_URL;
 
@@ -21,6 +24,10 @@ let app: (typeof import("../index.js"))["app"];
 before(async () => {
   client = await setupTestDb();
   ({ app } = await import("../index.js"));
+});
+
+afterEach(() => {
+  _resetFlowConfigForTests();
 });
 
 // --- helpers ---------------------------------------------------------------
@@ -113,7 +120,9 @@ test("userScopeFilter: NULL stays visible, pairs match (org_id, code) exactly", 
   assert.equal(await visible(WSTORE1), 1); // only the NULL-sub order
   assert.equal(await visible([]), total); // empty = unrestricted
 
-  // Same through the db module reads.
+  // Same through the db module reads (invoice-stamped: the picking org
+  // visibility rule only filters invoice orders — demo orders have no type).
+  await queryRun(client.db, sql`UPDATE picking_orders SET picking_order_type = 'invoice'`);
   assert.equal((await listPickingOrders(client.db, { scope: WSTORE1 })).rows.length, 1);
   const detail = await getPickingOrderDetail(client.db, orderId, WSTORE1);
   assert.equal(detail.id, orderId);
@@ -125,6 +134,9 @@ test("userScopeFilter: NULL stays visible, pairs match (org_id, code) exactly", 
 
 test("GET /picking-orders + /:id are scoped by the actor's profile", async () => {
   await reseed(client);
+  // The picking visibility rule only filters invoice orders — stamp the
+  // typeless demo orders as invoice to exercise it.
+  await queryRun(client.db, sql`UPDATE picking_orders SET picking_order_type = 'invoice'`);
   const token = await operatorToken();
 
   const baseline = (await (await authed(token, "/picking-orders")).json()).rows.length;
@@ -146,6 +158,58 @@ test("GET /picking-orders + /:id are scoped by the actor's profile", async () =>
   // Clearing the scope restores the full list.
   assert.equal((await putMyScope(token, [])).status, 200);
   assert.equal((await (await authed(token, "/picking-orders")).json()).rows.length, baseline);
+});
+
+// --- picking type-split visibility (invoice / tn / NULL) ---------------------
+
+// pickingOrderOrgFilter: invoice orders get allowedOrgIds + the exact
+// (org, sub) scope pairs; tn (transfer) orders are visible when org_id = 143
+// and the caller's scope includes ANY sub-inventory of org 143; NULL-typed
+// orders are always visible.
+test("picking visibility splits by picking_order_type (invoice / tn / NULL)", async () => {
+  await reseed(client);
+  _setAllowedOrgIdsForTests([]);
+  await queryRun(client.db, sql`DELETE FROM picking_orders`);
+
+  const mk = async (orderNo: string, type: string | null, orgId: number, sub: string) => {
+    const id = randomUUID();
+    await insertPickingOrder(client.db, id, {
+      order: { orderNo, orgId, subInventoryCode: sub },
+      items: [{ partNo: "RK73H2ATTD1372F", qty: 1 }],
+    });
+    await queryRun(client.db, sql`UPDATE picking_orders SET picking_order_type = ${type} WHERE id = ${id}`);
+    return id;
+  };
+  const invoiceIn = await mk("SO-VIS-INV-IN", "invoice", 2, "STORE1");
+  const invoiceOut = await mk("SO-VIS-INV-OUT", "invoice", 2, "WSTORE1");
+  const tn143 = await mk("SO-VIS-TN-143", "tn", 143, "store1");
+  const tnOtherOrg = await mk("SO-VIS-TN-2", "tn", 2, "STORE1");
+  const nullType = await mk("SO-VIS-NULL", null, 220, "THHK2");
+
+  const visible = async (scope?: { orgId: number; code: string }[] | null) =>
+    (await listPickingOrders(client.db, { scope })).rows.map((r) => r.id).sort();
+
+  // Invoice scope: exact pairs only; tn needs an org-143 pair the caller has.
+  assert.deepEqual(await visible(STORE1), [invoiceIn, nullType].sort());
+  assert.deepEqual(await visible([{ orgId: 143, code: "store1" }]), [nullType, tn143].sort());
+  // Any 143 pair counts — the caller need not hold the order's own store.
+  assert.deepEqual(await visible([{ orgId: 143, code: "OSWF (MCI)" }]), [nullType, tn143].sort());
+  // Unrestricted caller: all invoice orders, tn only from org 143.
+  assert.deepEqual(
+    await visible(null),
+    [invoiceIn, invoiceOut, nullType, tn143].sort()
+  );
+
+  // allowedOrgIds filters invoice orders only; tn and NULL bypass it.
+  _setAllowedOrgIdsForTests([99]);
+  assert.deepEqual(await visible(null), [nullType, tn143].sort());
+  _setAllowedOrgIdsForTests([]);
+
+  // Detail reads follow the same rule (404 = hidden).
+  await assert.rejects(getPickingOrderDetail(client.db, tn143, WSTORE1), /picking_order_not_found/);
+  assert.equal((await getPickingOrderDetail(client.db, tn143, [{ orgId: 143, code: "store1" }])).id, tn143);
+  assert.equal((await getPickingOrderDetail(client.db, nullType, WSTORE1)).id, nullType);
+  await assert.rejects(getPickingOrderDetail(client.db, tnOtherOrg, STORE1), /picking_order_not_found/);
 });
 
 // --- receiving routes ----------------------------------------------------------

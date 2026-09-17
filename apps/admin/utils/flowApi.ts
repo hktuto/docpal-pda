@@ -470,14 +470,13 @@ export function useFlowApi() {
     // Picking
     // The backend list endpoints return { rows, total } (limit/offset paging
     // added for the PDA); admin tables fetch the full list and page client-side.
-    // The admin list route is unscoped (ignores allowedOrgIds + user scope).
     listPickingOrders: async (status?: string) =>
       (
         await api.get<{ rows: PickingOrderRow[]; total: number }>(
-          `/admin/picking-orders${status ? `?status=${status}` : ""}`
+          `/picking-orders${status ? `?status=${status}` : ""}`
         )
       ).rows,
-    getPickingOrder: (id: string) => api.get<PickingOrderDetail>(`/admin/picking-orders/${id}`),
+    getPickingOrder: (id: string) => api.get<PickingOrderDetail>(`/picking-orders/${id}`),
     reorderPickingOrders: (orderIds: string[]) =>
       api.post<{ reordered: number }>(`/picking-orders/reorder`, { orderIds }),
     // Manual allocation triggers — both await the recompute in the request.

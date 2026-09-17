@@ -9,8 +9,29 @@ import { now } from "./now.js";
 import { emitEvent } from "./events.js";
 import { workLockExpiry } from "./allocate.js";
 import { isStepEnabled } from "../config.js";
-import { allowedOrgFilter } from "./org-filter.js";
-import { userScopeFilter, type UserScopeEntry } from "./user-scope.js";
+import { allowedOrgCondition } from "./org-filter.js";
+import { userScopeCondition, type UserScopeEntry } from "./user-scope.js";
+
+// Picking-order org visibility, split by picking_order_type:
+//   invoice → the flow config's allowedOrgIds AND the caller's exact
+//             (org_id, sub_inventory_code) scope pairs;
+//   tn      → org_id = TN_ORG_ID and (unscoped caller, or the caller's scope
+//             includes ANY sub-inventory of that org) — transfers belong to
+//             the org, not to one store;
+//   NULL    → unfiltered (freshly synced orders carry no type yet).
+// `AND (...)` fragment for interpolation after a WHERE.
+const TN_ORG_ID = 143;
+
+function pickingOrderOrgFilter(orgCol: SQL, subCol: SQL, typeCol: SQL, scope?: UserScopeEntry[] | null): SQL {
+  const invoiceConds = [allowedOrgCondition(orgCol), userScopeCondition(orgCol, subCol, scope)]
+    .filter((c): c is SQL => c !== undefined);
+  const invoice = invoiceConds.length
+    ? sql`(${typeCol} = 'invoice' AND ${sql.join(invoiceConds, sql` AND `)})`
+    : sql`${typeCol} = 'invoice'`;
+  const tnInScope = !scope || scope.length === 0 || scope.some((e) => e.orgId === TN_ORG_ID);
+  const tn = tnInScope ? sql`(${typeCol} = 'tn' AND ${orgCol} = ${TN_ORG_ID})` : sql`FALSE`;
+  return sql`AND (${typeCol} IS NULL OR ${invoice} OR ${tn})`;
+}
 
 // ---------------------------------------------------------------------------
 // Picking flow (ported from apps/api pickScan.ts + measure.ts + pickingIssues.ts,
@@ -526,15 +547,14 @@ export interface PickingOrderListRow {
  *  comma-separated lists; `search` is a case-insensitive substring on
  *  order_no/po_no/customer_code; `limit`/`offset` page the result (`total`
  *  counts all matches). Ordered by priority_seq (allocation order,
- *  admin-reorderable). Scoped to the flow config's allowedOrgIds when set;
- *  `opts.scope` additionally scopes to the user's sub-inventory pairs.
- *  `opts.unscoped` (admin console list) skips both org filters — all rows. */
+ *  admin-reorderable). Org visibility splits by picking_order_type —
+ *  see pickingOrderOrgFilter (invoice → allowedOrgIds + `opts.scope`,
+ *  tn → org 143 with any in-scope 143 store, NULL → unfiltered). */
 export async function listPickingOrders(
   db: AppDb,
   opts?: {
     status?: string; allocation?: string; search?: string; limit?: number; offset?: number;
     scope?: UserScopeEntry[] | null;
-    unscoped?: boolean;
   }
 ): Promise<{ rows: PickingOrderListRow[]; total: number }> {
   const statuses = (opts?.status ?? "").split(",").map((v) => v.trim()).filter(Boolean);
@@ -566,8 +586,7 @@ export async function listPickingOrders(
       ${statuses.length ? sql`AND po.status = ANY(ARRAY[${sql.join(statuses, sql`, `)}])` : sql``}
       ${allocations.length ? sql`AND po.allocation_status = ANY(ARRAY[${sql.join(allocations, sql`, `)}])` : sql``}
       ${search ? sql`AND (po.order_no ILIKE ${"%" + search + "%"} OR po.po_no ILIKE ${"%" + search + "%"} OR po.customer_code ILIKE ${"%" + search + "%"})` : sql``}
-      ${opts?.unscoped ? sql`` : allowedOrgFilter(sql`po.org_id`)}
-      ${opts?.unscoped ? sql`` : userScopeFilter(sql`po.org_id`, sql`po.sub_inventory_code`, opts?.scope)}
+      ${pickingOrderOrgFilter(sql`po.org_id`, sql`po.sub_inventory_code`, sql`po.picking_order_type`, opts?.scope)}
       GROUP BY po.id, w.display_name
       ORDER BY po.priority_seq ASC, po.delivery_date ASC NULLS LAST, po.order_no
       ${opts?.limit && opts.limit > 0 ? sql`LIMIT ${opts.limit} OFFSET ${opts.offset ?? 0}` : sql``}
@@ -802,14 +821,12 @@ interface AllocationQueryRow {
 }
 
 /** Complete nested read: order + items (allocations, packages) + boxes.
- *  `scope` scopes the order to the user's sub-inventory pairs (out-of-scope
- *  → 404, same as allowedOrgIds). `opts.unscoped` (admin console detail)
- *  skips both org filters. */
+ *  Org visibility splits by picking_order_type — see pickingOrderOrgFilter
+ *  (out-of-scope → 404, same as allowedOrgIds). */
 export async function getPickingOrderDetail(
   db: AppDb,
   orderId: string,
-  scope?: UserScopeEntry[] | null,
-  opts?: { unscoped?: boolean }
+  scope?: UserScopeEntry[] | null
 ): Promise<PickingOrderDetail> {
   const order = await queryGet<PickingOrderRow>(
     db,
@@ -831,8 +848,7 @@ export async function getPickingOrderDetail(
       LEFT JOIN users w ON w.id = po.working_by
       LEFT JOIN users ru ON ru.id = po.issue_reported_by
       WHERE po.id = ${orderId}
-      ${opts?.unscoped ? sql`` : allowedOrgFilter(sql`po.org_id`)}
-      ${opts?.unscoped ? sql`` : userScopeFilter(sql`po.org_id`, sql`po.sub_inventory_code`, scope)}
+      ${pickingOrderOrgFilter(sql`po.org_id`, sql`po.sub_inventory_code`, sql`po.picking_order_type`, scope)}
     `
   );
   if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
