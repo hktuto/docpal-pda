@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { boxLabelParams } from "~/utils/print";
+import { renderShelfBoxLabelPng } from "~/utils/print";
 import type { AdminColumnDef } from "~/composables/useAdminTable";
 
 const { t } = useI18n();
@@ -46,16 +46,16 @@ const total = computed(() => boxes.value.length);
 const selected = ref<Set<string>>(new Set());
 const selectedBoxes = computed(() => boxes.value.filter((b) => selected.value.has(b.id)));
 
-const printItems = ref<{ title: string; params: Record<string, unknown> }[] | null>(null);
+const printItems = ref<{ title: string; boxId: string }[] | null>(null);
 
 function printOne(b: any) {
-  printItems.value = [{ title: b.id.slice(0, 8), params: boxLabelParams(b) }];
+  printItems.value = [{ title: b.id.slice(0, 8), boxId: b.id }];
 }
 
 function printSelectedBoxes() {
   printItems.value = selectedBoxes.value.map((b) => ({
     title: b.id.slice(0, 8),
-    params: boxLabelParams(b),
+    boxId: b.id,
   }));
   selected.value = new Set();
 }
@@ -160,6 +160,23 @@ async function remove(row: any) {
   }
 }
 
+// Download the same label the print dialog produces (QR + box id + barcode)
+// as a PNG, without going through the print service.
+async function downloadLabel(row: any) {
+  error.value = "";
+  try {
+    const png = await renderShelfBoxLabelPng(row.id);
+    const url = URL.createObjectURL(png);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `box-label-${row.id}.png`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e: any) {
+    error.value = e instanceof Error ? e.message : String(e);
+  }
+}
+
 onMounted(load);
 </script>
 
@@ -191,6 +208,7 @@ onMounted(load);
       </template>
       <template #actions="{ row }">
         <button class="btn-link" @click="printOne(row)">{{ $t("admin.print.print") }}</button>
+        <button class="btn-link" @click="downloadLabel(row)">{{ $t("admin.print.downloadQr") }}</button>
         <button class="btn-link" @click="openEdit(row)">{{ $t("admin.common.edit") }}</button>
         <button class="btn-link" @click="remove(row)">{{ $t("admin.common.delete") }}</button>
       </template>
@@ -272,6 +290,6 @@ onMounted(load);
       </div>
     </div>
 
-    <PrintLabelsDialog v-if="printItems" :items="printItems" @close="printItems = null" />
+    <ShelfBoxPrintDialog v-if="printItems" :items="printItems" @close="printItems = null" />
   </div>
 </template>

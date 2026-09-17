@@ -4,6 +4,8 @@
  * the backend). The browser no longer talks to the print service directly.
  * Upstream API doc: docs/backend/print-service.md
  */
+import QRCode from "qrcode";
+import JsBarcode from "jsbarcode";
 export interface PrintFileOptions {
   printerName: string;
   copies?: number;
@@ -43,21 +45,64 @@ export function shelfLabelParams(code: string): Record<string, unknown> {
   };
 }
 
-/** katata-label params for one shelf-box label (QR = box id, as scanned by the PDA). */
-export function boxLabelParams(box: {
-  id: string;
-  shelfCode?: string | null;
-  totalQty?: number | null;
-}): Record<string, unknown> {
-  return {
-    deliveryName: "SHELF BOX",
-    itemNum: box.id,
-    sku: box.shelfCode ?? "",
-    qrcode: box.id,
-    qty: box.totalQty != null ? String(box.totalQty) : "",
-    cust: "",
-    makeIn: "",
-  };
+// Shelf-box label stock: 70 x 37 mm at 300 dpi. The layout is a QR code, then
+// the box id as text, then a Code 128 barcode — all carrying the same value
+// (the box id, which is what the PDA scans).
+const BOX_LABEL_W = 826;
+const BOX_LABEL_H = 437;
+
+/**
+ * Render one shelf-box label to a PNG blob for /print/files (same route as
+ * the user badges).
+ */
+export async function renderShelfBoxLabelPng(boxId: string): Promise<Blob> {
+  const canvas = document.createElement("canvas");
+  canvas.width = BOX_LABEL_W;
+  canvas.height = BOX_LABEL_H;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, BOX_LABEL_W, BOX_LABEL_H);
+
+  // QR code, centered at the top.
+  const qrSize = 200;
+  const qr = new Image();
+  qr.src = await QRCode.toDataURL(boxId, { width: qrSize, margin: 1, errorCorrectionLevel: "M" });
+  await qr.decode();
+  ctx.drawImage(qr, (BOX_LABEL_W - qrSize) / 2, 18, qrSize, qrSize);
+
+  // The label: the box id, centered below the QR.
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#0f1720";
+  ctx.font = "700 38px ui-monospace, SFMono-Regular, Menlo, monospace";
+  ctx.fillText(boxId, BOX_LABEL_W / 2, 272);
+
+  // Code 128 barcode of the same value, centered at the bottom.
+  const barcode = document.createElement("canvas");
+  JsBarcode(barcode, boxId, {
+    format: "CODE128",
+    displayValue: false,
+    margin: 0,
+    height: 84,
+    width: 2,
+  });
+  const maxW = BOX_LABEL_W - 48;
+  if (barcode.width > maxW) {
+    JsBarcode(barcode, boxId, {
+      format: "CODE128",
+      displayValue: false,
+      margin: 0,
+      height: 84,
+      width: (2 * maxW) / barcode.width,
+    });
+  }
+  ctx.drawImage(barcode, (BOX_LABEL_W - barcode.width) / 2, 298);
+
+  return await new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("canvas.toBlob returned null"))),
+      "image/png"
+    )
+  );
 }
 
 function apiBaseUrl(): string {

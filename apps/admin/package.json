@@ -10,6 +10,7 @@
   "dependencies": {
     "@tanstack/table-core": "9.2.4",
     "@tanstack/vue-table": "^9.2.4",
+    "jsbarcode": "^3.12.3",
     "nuxt": "^3.21.8",
     "qrcode": "^1.5.4",
     "vue-draggable-plus": "^0.6.1"
