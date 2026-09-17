@@ -78,6 +78,13 @@
       <ul v-if="allocatedLocations(pi).length" style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--muted);">
         <li v-for="loc in allocatedLocations(pi)" :key="loc.id">
           {{ loc.lot?.shelfCode || (loc.lot?.boxId ? $t('common.inBox', { id: loc.lot.boxId }) : $t('receiving.pickingTab.receivingArea')) }}
+          <span
+            v-if="loc.lot?.shelfWarning"
+            style="cursor: help;"
+            :title="loc.lot.shelfWarning"
+            role="img"
+            :aria-label="loc.lot.shelfWarning"
+          >⚠️</span>
           · {{ loc.lot?.dateCode || $t('common.stateNone') }} / {{ loc.lot?.lotCode || $t('common.stateNone') }} / {{ loc.lot?.coo || $t('common.stateNone') }} / {{ loc.lot?.cow || $t('common.stateNone') }}
           · {{ loc.qty }} {{ $t('common.pcs') }}
         </li>

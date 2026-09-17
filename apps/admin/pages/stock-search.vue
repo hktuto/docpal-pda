@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { StockSearchLot, StockSearchOptions, StockSearchPart, StockSearchResult } from "~/utils/flowApi";
+import type { StockSearchLot, StockSearchOptions, StockSearchPart, StockSearchResult, StockSearchSummary } from "~/utils/flowApi";
 import type { AdminColumnDef } from "~/composables/useAdminTable";
 import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 
@@ -19,7 +19,18 @@ const zone = ref<string[]>([]);
 const shelfCode = ref<string[]>([]);
 const partNo = ref("");
 
+// Date-code range (WWYY): native date pickers converted to WWYY codes, same
+// pattern as the picking availability modal (utils/dateCode.ts).
+const dcFrom = ref("");
+const dcTo = ref("");
+const dcFromDate = computed(() => (dcFrom.value ? new Date(`${dcFrom.value}T00:00:00`) : null));
+const dcToDate = computed(() => (dcTo.value ? new Date(`${dcTo.value}T00:00:00`) : null));
+const dcFromCode = computed(() => (dcFromDate.value ? dateToDateCode(dcFromDate.value) : ""));
+const dcToCode = computed(() => (dcToDate.value ? dateToDateCode(dcToDate.value) : ""));
+const dcActive = computed(() => !!dcFromDate.value || !!dcToDate.value);
+
 const result = ref<StockSearchResult | null>(null);
+const summary = ref<StockSearchSummary | null>(null);
 const searched = ref(false);
 const loading = ref(false);
 const error = ref("");
@@ -274,6 +285,15 @@ async function loadOptions() {
   }
 }
 
+// Overall (unfiltered) stock totals shown in the header cards.
+async function loadSummary() {
+  try {
+    summary.value = await flow.stockSearchSummary();
+  } catch {
+    summary.value = null;
+  }
+}
+
 async function search() {
   loading.value = true;
   error.value = "";
@@ -286,6 +306,8 @@ async function search() {
       zone: zone.value.length ? zone.value : undefined,
       shelfCode: shelfCode.value.length ? shelfCode.value : undefined,
       partNo: partNo.value.trim() || undefined,
+      dateCodeFrom: dcFromCode.value || undefined,
+      dateCodeTo: dcToCode.value || undefined,
     });
     searched.value = true;
     // Stock may have changed — refresh the dropdown option sets too.
@@ -300,6 +322,7 @@ async function search() {
 onMounted(() => {
   loadSuppliers();
   loadOptions();
+  loadSummary();
 });
 
 // Re-run the current search when stock levels change elsewhere. No-op until
@@ -310,6 +333,7 @@ const {
   refreshNow,
   dismiss,
 } = useChangeNotice(["allocation.computed", "put_away_task.completed"], async () => {
+  loadSummary();
   if (searched.value) await search();
 });
 </script>
@@ -318,6 +342,47 @@ const {
   <div>
     <div class="page-head">
       <h1>{{ $t("admin.pages.stockSearch.title") }}</h1>
+    </div>
+
+    <div v-if="summary" class="summary">
+      <div class="summary-card">
+        <span class="summary-label">{{ $t("admin.pages.stockSearch.summaryItems") }}</span>
+        <span class="summary-value">{{ summary.partCount.toLocaleString() }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">{{ $t("admin.pages.stockSearch.summaryOnHandQty") }}</span>
+        <span class="summary-value">{{ summary.totalQty.toLocaleString() }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">{{ $t("admin.pages.stockSearch.summaryAllocatedQty") }}</span>
+        <span class="summary-value">{{ summary.allocatedQty.toLocaleString() }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">{{ $t("admin.pages.stockSearch.summaryAvailableQty") }}</span>
+        <span class="summary-value">{{ summary.availableQty.toLocaleString() }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">{{ $t("admin.pages.stockSearch.summaryOutdatedItems", { years: summary.outdatedYears }) }}</span>
+        <span class="summary-value">{{ summary.outdatedPartCount.toLocaleString() }}</span>
+        <span class="summary-note">{{
+          $t("admin.pages.stockSearch.summaryOutdatedNote", {
+            lots: summary.outdatedLotCount.toLocaleString(),
+            qty: summary.outdatedQty.toLocaleString(),
+          })
+        }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">{{ $t("admin.pages.stockSearch.summaryLots") }}</span>
+        <span class="summary-value">{{ summary.lotCount.toLocaleString() }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">{{ $t("admin.pages.stockSearch.summaryShelves") }}</span>
+        <span class="summary-value">{{ summary.shelfCount.toLocaleString() }}</span>
+      </div>
+      <div class="summary-card">
+        <span class="summary-label">{{ $t("admin.pages.stockSearch.summaryLastUpdate") }}</span>
+        <span class="summary-value summary-date">{{ formatDateTime(summary.lastUpdateDate) }}</span>
+      </div>
     </div>
 
     <div class="filters">
@@ -368,6 +433,19 @@ const {
         :placeholder="$t('admin.pages.stockSearch.partNoPlaceholder')"
         @keyup.enter="search"
       />
+      <label class="dc-filter">
+        {{ $t("admin.pages.stockSearch.dateCodeFrom") }}
+        <input v-model="dcFrom" type="date" />
+        <span v-if="dcFromCode" class="muted">{{ dcFromCode }}</span>
+      </label>
+      <label class="dc-filter">
+        {{ $t("admin.pages.stockSearch.dateCodeTo") }}
+        <input v-model="dcTo" type="date" />
+        <span v-if="dcToCode" class="muted">{{ dcToCode }}</span>
+      </label>
+      <button v-if="dcActive" class="btn btn-small" @click="dcFrom = ''; dcTo = ''">
+        {{ $t("admin.pages.stockSearch.dateCodeClear") }}
+      </button>
       <SearchableSelect
         v-model="groupBy"
         :options="groupByOptions"
@@ -436,6 +514,56 @@ const {
 </template>
 
 <style scoped>
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 14px;
+  border: 1px solid #d9e2ec;
+  border-radius: 6px;
+  background: #f8fafc;
+  min-width: 110px;
+}
+.summary-label {
+  font-size: 11px;
+  color: #7b8794;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.summary-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #243b53;
+}
+.summary-date {
+  font-size: 13px;
+  font-weight: 500;
+  align-self: flex-end;
+  margin-top: auto;
+}
+.summary-note {
+  font-size: 11px;
+  color: #7b8794;
+}
+.dc-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #52606d;
+}
+.dc-filter input[type="date"] {
+  padding: 4px 6px;
+  border: 1px solid #b6c2cd;
+  border-radius: 4px;
+  font-size: 13px;
+}
 .filters {
   display: flex;
   flex-wrap: wrap;

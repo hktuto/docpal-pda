@@ -51,6 +51,13 @@
                 <span v-else-if="allocation.lot.shelfCode">{{ allocation.lot.shelfCode }}</span>
                 <span v-else-if="allocation.lot.boxId">{{ allocation.lot.boxId }}</span>
                 <span v-else>{{ $t('picking.itemsSection.receivingArea') }}</span>
+                <span
+                  v-if="allocation.lot.shelfWarning"
+                  class="shelf-warning"
+                  :title="allocation.lot.shelfWarning"
+                  role="img"
+                  :aria-label="allocation.lot.shelfWarning"
+                >⚠️</span>
               </DetailRow>
               <DetailRow :label="$t('picking.itemsSection.dateLotCooCow')">
                 {{ formatLotFields(allocation.lot) }}
@@ -220,6 +227,11 @@ function formatLotFields(source: { dateCode: string | null; lotCode: string | nu
 
 .package-info {
   font-size: 0.875rem;
+}
+
+.shelf-warning {
+  margin-left: 0.25rem;
+  cursor: help;
 }
 
 .package-actions {

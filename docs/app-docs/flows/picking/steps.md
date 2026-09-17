@@ -18,7 +18,7 @@ The list order is the priority order set by the office — work from the top.
 
 ## 3. Review allocated lines
 
-The detail page lists each picking item as a compact row: part, status badge, required / scanned quantities, and a boxed/required progress count at a glance. Tap a row to expand its required quantity and where the stock is allocated from (lot or receiving-area item), plus the package/box actions. For allocations against a receiving order, any recorded box IDs from the receiving invoice items are shown as a "Box IDs" remark so the operator knows which boxes to pick from.
+The detail page lists each picking item as a compact row: part, status badge, required / scanned quantities, and a boxed/required progress count at a glance. Tap a row to expand its required quantity and where the stock is allocated from (lot or receiving-area item), plus the package/box actions. For allocations against a receiving order, any recorded box IDs from the receiving invoice items are shown as a "Box IDs" remark so the operator knows which boxes to pick from. If the allocated shelf carries a warning (set by an admin on the shelf, e.g. outdated-stock shelves), a ⚠️ icon appears next to the shelf code — hover/long-press shows the warning text; the stock is still pickable.
 
 ## 4. Pick each line
 

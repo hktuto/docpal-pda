@@ -22,7 +22,11 @@ async function toggleActive(row: any) {
 <template>
   <div>
     <div v-if="error" class="error-banner">{{ error }}</div>
-    <CrudTable ref="table" :config="entities.labelPrintRules">
+    <CrudTable
+      ref="table"
+      :config="entities.labelPrintRules"
+      @row-dblclick="(row: any) => navigateTo(`/label-print-rules/${row.id}`)"
+    >
       <template #row-actions="{ row }">
         <NuxtLink :to="`/label-print-rules/${row.id}`" class="btn-link">{{ $t("admin.common.edit") }}</NuxtLink>
         <button class="btn-link" @click="toggleActive(row)">

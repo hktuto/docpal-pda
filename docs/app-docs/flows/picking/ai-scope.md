@@ -10,11 +10,25 @@
   (`apps/backend/src/db/user-scope.ts`), composes with `allowedOrgIds` by
   AND, reads only — mutations, allocation and SSE events unaffected (spec
   `docs/superpowers/specs/2026-09-11-user-subinventory-scope-design.md`).
+  Exception: the admin console list fetches `GET /admin/picking-orders`
+  (`apps/backend/src/routes/admin/pickingList.ts`, same filters/paging shape
+  as the PDA list) which is unscoped — it ignores both `allowedOrgIds` and
+  the caller's user scope (`listPickingOrders` `unscoped: true`), so admins
+  always see every order.
 - List picking orders with a status filter and text search (both
   server-side, paged 50 at a time); multi-select batch issue reporting.
 - Show picking order detail as one nested read: order (incl. issue fields),
   items → allocations (with lot or receiving-area
   source) and packages, plus the shipping boxes.
+- Shelf warnings: an allocation lot carries `shelfWarning` (`shelves.warning`
+  of the lot's shelf — admin-editable free text, e.g. outdated-stock shelves;
+  spec `docs/superpowers/specs/2026-09-17-shelf-warning-design.md`). Display
+  metadata only — the allocator is unaware of it and still picks the shelf.
+  Surfaces: ⚠️ icon next to the shelf code on the web detail
+  (`PickingItemsSection.vue`), ⚠️ markers in the scan page's
+  `allocationSources` hint (warning text in the tooltip via
+  `allocationWarnings`), and the admin picking-order detail allocation cell +
+  tooltip row.
 - Scan-to-pick ("checkout" scan session): one Scan button per picking order
   opens `/picking/scan/:id`. The hardware scanner is armed only on that page;
   each QR scan is validated client-side (part matches an order item, qty fits

@@ -38,6 +38,7 @@ const suggestShelfOptions = computed<SearchableSelectOption[]>(() => [
   { value: "off", label: t("admin.pages.flowConfig.suggestShelfOff") },
 ]);
 const allowedOrgIdsText = ref("");
+const outdatedStockYearsText = ref("2");
 const groups = ref<GroupDraft[]>([]);
 const fromOrgGroups = ref<FromOrgGroupDraft[]>([]);
 
@@ -63,6 +64,7 @@ async function load() {
     autoCreateTasks.value = state.value.config.putAway.autoCreateTasks;
     suggestShelf.value = state.value.config.putAway.suggestShelf;
     allowedOrgIdsText.value = state.value.config.allowedOrgIds.join(", ");
+    outdatedStockYearsText.value = String(state.value.config.outdatedStockYears);
     groups.value = state.value.config.receivingSubInventoryRules.map((g) => ({
       orgIdsText: g.orgIds.join(", "),
       defaultCode: g.default ?? "",
@@ -113,6 +115,11 @@ async function save() {
       error.value = t("admin.pages.flowConfig.allowedOrgIdsInvalid");
       return;
     }
+    const outdatedStockYears = Number(outdatedStockYearsText.value.trim());
+    if (!Number.isInteger(outdatedStockYears) || outdatedStockYears < 1) {
+      error.value = t("admin.pages.flowConfig.outdatedStockYearsInvalid");
+      return;
+    }
     const receivingSubInventoryRules: SubInventoryRuleGroupRow[] = [];
     for (const g of groups.value) {
       const orgIds = parseIntList(g.orgIdsText);
@@ -152,7 +159,7 @@ async function save() {
       autoCreateTasks: autoCreateTasks.value,
       suggestShelf: suggestShelf.value,
     };
-    state.value = await flow.saveFlowConfig({ steps, allowedOrgIds, receivingSubInventoryRules, pickingFromSubinventoryOrgs });
+    state.value = await flow.saveFlowConfig({ steps, allowedOrgIds, outdatedStockYears, receivingSubInventoryRules, pickingFromSubinventoryOrgs });
     saved.value = true;
   } catch (e: any) {
     error.value = e.message;
@@ -218,6 +225,15 @@ onMounted(load);
           <input id="fc-org-ids" v-model="allowedOrgIdsText" type="text" placeholder="2, 3" />
         </div>
         <p class="hint-text">{{ $t("admin.pages.flowConfig.allowedOrgIdsHint") }}</p>
+      </div>
+
+      <div class="card form-card">
+        <h2>{{ $t("admin.pages.flowConfig.stockSection") }}</h2>
+        <div class="form-row">
+          <label for="fc-outdated-years">{{ $t("admin.pages.flowConfig.outdatedStockYears") }}</label>
+          <input id="fc-outdated-years" v-model="outdatedStockYearsText" type="number" min="1" step="1" class="years-input" />
+        </div>
+        <p class="hint-text">{{ $t("admin.pages.flowConfig.outdatedStockYearsHint") }}</p>
       </div>
 
       <div class="card form-card">
@@ -336,6 +352,10 @@ onMounted(load);
   display: flex;
   align-items: center;
   gap: 0.75rem;
+}
+
+.years-input {
+  width: 5rem;
 }
 
 .rule-group {

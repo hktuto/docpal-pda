@@ -4,6 +4,10 @@ import type { AdminColumnDef } from "~/composables/useAdminTable";
 
 const props = defineProps<{ config: EntityConfig }>();
 
+// Forwarded from DataTable so pages can react to row double-click (e.g.
+// navigate to a detail page) without replacing the built-in actions column.
+const emit = defineEmits<{ (e: "row-dblclick", row: any): void }>();
+
 const { t } = useI18n();
 const api = useApi();
 const rows = ref<any[]>([]);
@@ -290,6 +294,7 @@ onMounted(load);
       :row-id="rowId"
       :loading="loading"
       :on-reset-columns="resetColumnState"
+      @row-dblclick="(row: any) => emit('row-dblclick', row)"
     >
       <template v-for="f in config.fields.filter((f) => f.format)" :key="f.key" #[`cell-${f.key}`]="{ value }">
         {{ f.format!(value) }}

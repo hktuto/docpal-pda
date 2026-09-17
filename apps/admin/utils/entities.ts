@@ -115,6 +115,9 @@ export const entities: Record<string, EntityConfig> = {
     fields: [
       { key: "code", label: "admin.fields.code", type: "text", required: true, readonlyOnEdit: true },
       { key: "zone", label: "admin.fields.zone", type: "text" },
+      // Advisory operator warning shown on allocations pointing at this shelf
+      // (empty = none). Spec 2026-09-17-shelf-warning-design.md.
+      { key: "warning", label: "admin.fields.shelfWarning", type: "text" },
       // Advisory sub-inventory affinity for put-away shelf suggestions,
       // org-scoped [{ orgId, code }] pairs (empty = shared).
       {

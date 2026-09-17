@@ -575,7 +575,12 @@ const {
               @remove="removeAllocation(row, a)"
             >
               {{ allocationSource(a) }}
+              <span v-if="a.lot.shelfWarning" class="shelf-warning" :title="a.lot.shelfWarning">⚠️</span>
               <template #tooltip>
+                <div v-if="a.lot.shelfWarning" class="alloc-tip-row">
+                  <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.warning") }}</span>
+                  <span>{{ a.lot.shelfWarning }}</span>
+                </div>
                 <div class="alloc-tip-row">
                   <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.shelf") }}</span>
                   <span>{{ a.lot.shelfCode ?? "—" }}</span>
@@ -802,5 +807,8 @@ const {
   background: #e9f7ef;
   border: 1px solid #b5e2c8;
   color: #1e7a46;
+}
+.shelf-warning {
+  cursor: help;
 }
 </style>

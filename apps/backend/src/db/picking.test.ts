@@ -307,6 +307,22 @@ test("detail: nested shape — order, items with allocations/packages, boxes; 40
   assert.equal(notFound.message, "picking_order_not_found");
 });
 
+test("detail: allocation lot carries the shelf warning (null when unset)", async () => {
+  await reseed(client);
+  const { orderId } = await seededOrderAllocated();
+
+  await client.db.execute(
+    sql`UPDATE shelves SET warning = 'Outdated stock — verify before picking' WHERE code = 'A-01-01'`
+  );
+
+  const detail = await getPickingOrderDetail(client.db, orderId);
+  const [item1, , item3] = detail.items;
+  assert.equal(item1.allocations[0].lot?.shelfCode, "A-01-01");
+  assert.equal(item1.allocations[0].lot?.shelfWarning, "Outdated stock — verify before picking");
+  assert.equal(item3.allocations[0].lot?.shelfCode, "A-01-02");
+  assert.equal(item3.allocations[0].lot?.shelfWarning, null);
+});
+
 // --- scan (lot source) -----------------------------------------------------------
 
 test("scan: lot source — package + batch snapshot, lot/allocation shrink, PICK ledger, recompute, transitions", async () => {

@@ -120,6 +120,11 @@ export const shelves = pgTable("shelves", {
   // Not enforced at scan time
   // (spec 2026-08-12-put-away-shelf-org-suggestion-design.md).
   subInventoryScopes: jsonb("sub_inventory_scopes"),
+  // Advisory operator warning shown wherever an allocation points at this
+  // shelf (e.g. outdated-stock shelves). NULL/empty = no warning; display
+  // metadata only — allocation still picks the shelf
+  // (spec 2026-09-17-shelf-warning-design.md).
+  warning: text("warning"),
   createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
 });

@@ -64,6 +64,7 @@ export const docpalGroupMapping: Record<string, string[]> = {
 //
 //   { "steps": { "picking": { "allocation": { "allowDockStock": false } } },
 //     "allowedOrgIds": [2, 3],
+//     "outdatedStockYears": 2,
 //     "receivingSubInventoryRules": [
 //       { "orgIds": [140, 143],
 //         "patterns": [ { "poNoPattern": "319*", "subInventoryCode": "SZHK2" } ],
@@ -179,6 +180,9 @@ export interface FlowConfig {
   putAway: PutAwayConfig;
   /** Org partitions this warehouse accepts; [] = all orgs (no filtering). */
   allowedOrgIds: number[];
+  /** Stock age threshold (years): a lot whose WWYY date code is older counts
+   *  as outdated in the admin stock-search summary. Default 2. */
+  outdatedStockYears: number;
   /** Receiving sub-inventory defaulting rule groups; [] = feature off. */
   receivingSubInventoryRules: SubInventoryRuleGroup[];
   /** Transfer-order from_subinventory → org conversion groups; [] = off. */
@@ -191,6 +195,7 @@ function defaultFlowConfig(): FlowConfig {
     pickingAllocation: { allowDockStock: true },
     putAway: { autoCreateTasks: false, suggestShelf: "existing-stock" },
     allowedOrgIds: [],
+    outdatedStockYears: 2,
     receivingSubInventoryRules: [],
     pickingFromSubinventoryOrgs: [],
   };
@@ -352,6 +357,13 @@ export function mergeFlowConfigJson(parsed: unknown): FlowConfig {
       cfg.allowedOrgIds = value as number[];
       continue;
     }
+    if (key === "outdatedStockYears") {
+      if (!Number.isInteger(value) || (value as number) < 1) {
+        throw new Error("[config] flow config.outdatedStockYears must be a positive integer");
+      }
+      cfg.outdatedStockYears = value as number;
+      continue;
+    }
     if (key === "receivingSubInventoryRules") {
       if (!Array.isArray(value)) {
         throw new Error("[config] flow config.receivingSubInventoryRules must be an array");
@@ -492,6 +504,11 @@ export function allowedOrgIds(): number[] {
   return flowConfig.allowedOrgIds;
 }
 
+/** Stock age threshold (years) for the outdated count in stock-search summary. */
+export function outdatedStockYears(): number {
+  return flowConfig.outdatedStockYears;
+}
+
 /** Confirm-arrival sub-inventory defaulting rule groups; [] = feature off. */
 export function receivingSubInventoryRules(): SubInventoryRuleGroup[] {
   return flowConfig.receivingSubInventoryRules;
@@ -534,6 +551,11 @@ export function _setPutAwayConfigForTests(putAway: Partial<PutAwayConfig>): void
 /** Test-only override for the accepted org partitions. */
 export function _setAllowedOrgIdsForTests(orgs: number[]): void {
   flowConfig.allowedOrgIds = orgs;
+}
+
+/** Test-only override for the outdated-stock age threshold. */
+export function _setOutdatedStockYearsForTests(years: number): void {
+  flowConfig.outdatedStockYears = years;
 }
 
 /** Test-only override for the receiving sub-inventory defaulting rules. */

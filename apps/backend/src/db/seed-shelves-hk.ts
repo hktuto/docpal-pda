@@ -164,7 +164,16 @@ const hkShelfZones: { zone: string | null; shelf: string[] }[] = [
   }
 ];
 
-/** Flattened { code, zone } rows ready to insert into the shelves table. */
-export const hkShelves: { code: string; zone: string | null }[] = hkShelfZones.flatMap(
-  (z) => z.shelf.map((code) => ({ code, zone: z.zone }))
+/** Flattened { code, zone, warning } rows ready to insert into the shelves
+ *  table. OL01–OL08 hold outdated stock — pickable, but operators get a
+ *  warning wherever an allocation points at them
+ *  (spec 2026-09-17-shelf-warning-design.md). */
+const OUTDATED_STOCK_WARNING = "Outdated stock — verify before picking";
+
+export const hkShelves: { code: string; zone: string | null; warning?: string }[] = hkShelfZones.flatMap(
+  (z) => z.shelf.map((code) => ({
+    code,
+    zone: z.zone,
+    ...(code.startsWith("OL") ? { warning: OUTDATED_STOCK_WARNING } : {}),
+  }))
 );

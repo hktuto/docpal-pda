@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { sql } from "drizzle-orm";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { queryGet, queryRun } from "./query.js";
-import { searchStock, stockSearchOptions } from "./stocksearch.js";
+import { searchStock, stockSearchOptions, stockSearchSummary } from "./stocksearch.js";
+import { _resetFlowConfigForTests, _setOutdatedStockYearsForTests } from "../config.js";
 
 let client: TestDb;
 
@@ -362,6 +363,107 @@ test("options: distinct brands/zones/shelves/locations present in stock", async 
     { code: "A-02-01", zone: "A" },
   ]);
   assert.deepEqual(opts.locations, [{ orgId: 2, subInventoryCode: "STORE1", description: "Store 1" }]);
+});
+
+// --- summary (overall totals) --------------------------------------------------
+
+test("summary: overall totals across all lots", async () => {
+  await reseed(client);
+  const s = await stockSearchSummary(client.db);
+
+  assert.equal(s.partCount, 6);
+  assert.equal(s.lotCount, 6);
+  assert.equal(s.totalQty, 3800); // 700 + 1000 + 500 + 200 + 1000 + 400
+  assert.equal(s.allocatedQty, 0);
+  assert.equal(s.availableQty, 3800);
+  assert.equal(s.shelfCount, 3); // A-01-01, A-01-02, A-02-01
+  assert.ok(s.lastUpdateDate);
+  assert.ok(!Number.isNaN(Date.parse(s.lastUpdateDate!)));
+});
+
+test("summary: outdated counts — seed codes are WWYY weeks of 2003/2004/2009, all over 2y old", async () => {
+  await reseed(client);
+  _setOutdatedStockYearsForTests(2);
+  try {
+    const s = await stockSearchSummary(client.db);
+    assert.equal(s.outdatedYears, 2);
+    assert.equal(s.outdatedPartCount, 6);
+    assert.equal(s.outdatedLotCount, 6);
+    assert.equal(s.outdatedQty, 3800);
+  } finally {
+    _resetFlowConfigForTests();
+  }
+});
+
+test("summary: a larger outdated threshold un-flags the seed stock", async () => {
+  await reseed(client);
+  _setOutdatedStockYearsForTests(30); // seed codes are 2003–2009 → newer than 30y
+  try {
+    const s = await stockSearchSummary(client.db);
+    assert.equal(s.outdatedYears, 30);
+    assert.equal(s.outdatedPartCount, 0);
+    assert.equal(s.outdatedLotCount, 0);
+    assert.equal(s.outdatedQty, 0);
+  } finally {
+    _resetFlowConfigForTests();
+  }
+});
+
+test("summary: lots with NULL/invalid date codes are never outdated", async () => {
+  await reseed(client);
+  _setOutdatedStockYearsForTests(2);
+  try {
+    await queryRun(client.db, sql`UPDATE inventory_lots SET date_code = NULL WHERE part_no = 'RK73H1JTTD2202F'`);
+    await queryRun(client.db, sql`UPDATE inventory_lots SET date_code = 'ABCD' WHERE part_no = 'RK73H1JTTD4702F'`);
+    const s = await stockSearchSummary(client.db);
+    assert.equal(s.outdatedLotCount, 4);
+    assert.equal(s.outdatedPartCount, 4);
+    assert.equal(s.outdatedQty, 700 + 1000 + 1000 + 400);
+  } finally {
+    _resetFlowConfigForTests();
+  }
+});
+
+// --- date-code range (WWYY ranked, not lexicographic) ---------------------------
+
+test("dateCode range: ranked WWYY bounds, swapped bounds normalized", async () => {
+  await reseed(client);
+
+  // seed codes (WWYY): 2603 = 2003w26 (2 lots), 2604 = 2004w26 (2 lots),
+  // 2609 = 2009w26 (2 lots)
+  let r = await searchStock(client.db, { dateCodeFrom: "2604", dateCodeTo: "2604" });
+  assert.deepEqual(r.lots.map((l) => l.partNo), ["RK73B1JTTD181G", "RK73H1JTTD4702F"]);
+
+  r = await searchStock(client.db, { dateCodeFrom: "2609", dateCodeTo: "2604" }); // swapped
+  assert.equal(r.lots.length, 4);
+  assert.ok(r.lots.every((l) => l.dateCode === "2604" || l.dateCode === "2609"));
+
+  // unbounded sides
+  r = await searchStock(client.db, { dateCodeTo: "2603" });
+  assert.deepEqual(r.lots.map((l) => l.partNo), ["RK73H1JTTD1002F", "RK73H1JTTD2202F"]);
+  r = await searchStock(client.db, { dateCodeFrom: "0127" }); // 2027w01 — nothing this new (codes window past-ward only beyond +1y)
+  assert.deepEqual(r, { parts: [], lots: [] });
+});
+
+test("dateCode range: ranking is chronological, not lexicographic", async () => {
+  await reseed(client);
+  // "5221" = 2021w52 (rank 202152) — as a string it sorts AFTER "0122"
+  // (2022w01, rank 202201), so a lexicographic compare would wrongly match.
+  await queryRun(client.db, sql`UPDATE inventory_lots SET date_code = '5221' WHERE part_no = 'RK73H1JTTD2202F'`);
+
+  const r = await searchStock(client.db, { dateCodeFrom: "0122" });
+  assert.ok(r.lots.every((l) => l.partNo !== "RK73H1JTTD2202F"));
+  assert.equal(r.lots.length, 0); // every seed lot is older than 2022w01
+});
+
+test("dateCode range: NULL/invalid date codes never match once a bound is set", async () => {
+  await reseed(client);
+  await queryRun(client.db, sql`UPDATE inventory_lots SET date_code = NULL WHERE part_no = 'RK73H1JTTD2202F'`);
+  await queryRun(client.db, sql`UPDATE inventory_lots SET date_code = 'ABCD' WHERE part_no = 'RK73H1JTTD4702F'`);
+
+  const r = await searchStock(client.db, { dateCodeFrom: "0100", dateCodeTo: "5326" });
+  assert.equal(r.lots.length, 4);
+  assert.ok(r.lots.every((l) => l.partNo !== "RK73H1JTTD2202F" && l.partNo !== "RK73H1JTTD4702F"));
 });
 
 // --- zero-qty lots ----------------------------------------------------------------

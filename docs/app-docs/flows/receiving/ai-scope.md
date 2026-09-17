@@ -57,6 +57,8 @@
   partNo/poNo/poLine in `metadata`).
 - Show the order's picking section (nested orders with items, allocations,
   packages, transition logs, and shipping boxes) on the detail's Picking tab.
+  Allocation lots carry `shelfWarning` (`shelves.warning`) — shown as a ⚠️
+  icon next to the shelf code when set.
   The tab (and its fetch) is hidden when flow config
   `picking.allocation.allowDockStock=false` — put-away is then a hard gate
   and receiving is decoupled from picking.

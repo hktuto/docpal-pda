@@ -84,6 +84,7 @@ location pair (org_id + sub_inventory_code) lives on `shelf_boxes` and
 | code | text NOT NULL UNIQUE | Shelf/location code |
 | zone | text | Zone within the warehouse |
 | sub_inventory_scopes | jsonb | Advisory put-away affinity as `[{ orgId, code }]` pairs (same shape as `user_profiles.sub_inventory_scopes`; codes repeat across orgs); NULL/empty = shared shelf |
+| warning | text | Advisory operator warning surfaced (⚠ icon) wherever an allocation points at this shelf — e.g. outdated-stock shelves (spec 2026-09-17-shelf-warning-design.md); NULL/empty = none; display metadata only, allocation still picks the shelf |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 

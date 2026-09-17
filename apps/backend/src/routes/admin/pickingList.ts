@@ -4,6 +4,7 @@ import { inArray, sql } from "drizzle-orm";
 import * as XLSX from "xlsx";
 import { db } from "../../db.js";
 import { queryAll, queryGet } from "../../db/query.js";
+import { listPickingOrders } from "../../db/picking.js";
 
 // Admin picking-list download (spec
 // docs/superpowers/specs/2026-09-14-admin-picking-list-download-design.md;
@@ -49,6 +50,25 @@ interface AllocRow {
 }
 
 export const adminPickingListRoute = new Hono();
+
+// Admin picking-orders list: same shape/filters as GET /picking-orders but
+// unscoped — the admin console sees every order regardless of the flow
+// config's allowedOrgIds and the caller's user sub-inventory scope.
+adminPickingListRoute.get("/picking-orders", async (c) => {
+  const limit = Number(c.req.query("limit"));
+  const offset = Number(c.req.query("offset"));
+  return c.json(
+    await listPickingOrders(db, {
+      status: c.req.query("status"),
+      allocation: c.req.query("allocation"),
+      search: c.req.query("search"),
+      limit: Number.isNaN(limit) ? undefined : limit,
+      offset: Number.isNaN(offset) ? undefined : offset,
+      unscoped: true,
+    }),
+    200
+  );
+});
 
 adminPickingListRoute.get("/picking-orders/:id/picking-list", async (c) => {
   const id = c.req.param("id");

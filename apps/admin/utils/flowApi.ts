@@ -50,6 +50,8 @@ export interface PickingItemRow {
     lot: {
       id: string;
       shelfCode: string | null;
+      /** shelves.warning for shelfCode — advisory operator warning. */
+      shelfWarning: string | null;
       boxId: string | null;
       dateCode: string | null;
       lotCode: string | null;
@@ -276,6 +278,22 @@ export interface StockSearchResult {
   lots: StockSearchLot[];
 }
 
+/** Overall (unfiltered) stock totals for the summary header. */
+export interface StockSearchSummary {
+  partCount: number;
+  lotCount: number;
+  totalQty: number;
+  allocatedQty: number;
+  availableQty: number;
+  shelfCount: number;
+  lastUpdateDate: string | null;
+  /** Outdated threshold in force (flow config outdatedStockYears). */
+  outdatedYears: number;
+  outdatedPartCount: number;
+  outdatedLotCount: number;
+  outdatedQty: number;
+}
+
 /** Distinct filter values present in the current stock (for dropdowns). */
 export interface StockSearchOptions {
   brands: string[];
@@ -394,6 +412,8 @@ export interface FlowConfigState {
     putAway: { autoCreateTasks: boolean; suggestShelf: "existing-stock" | "off" };
     /** Org partitions this warehouse accepts; [] = all orgs (no filtering). */
     allowedOrgIds: number[];
+    /** Stock age threshold (years) for the stock-search outdated count. */
+    outdatedStockYears: number;
     /** Confirm-arrival sub-inventory defaulting rule groups. */
     receivingSubInventoryRules: SubInventoryRuleGroupRow[];
     /** Transfer-order from_subinventory → org conversion groups. */
@@ -450,10 +470,11 @@ export function useFlowApi() {
     // Picking
     // The backend list endpoints return { rows, total } (limit/offset paging
     // added for the PDA); admin tables fetch the full list and page client-side.
+    // The admin list route is unscoped (ignores allowedOrgIds + user scope).
     listPickingOrders: async (status?: string) =>
       (
         await api.get<{ rows: PickingOrderRow[]; total: number }>(
-          `/picking-orders${status ? `?status=${status}` : ""}`
+          `/admin/picking-orders${status ? `?status=${status}` : ""}`
         )
       ).rows,
     getPickingOrder: (id: string) => api.get<PickingOrderDetail>(`/picking-orders/${id}`),
@@ -547,6 +568,8 @@ export function useFlowApi() {
       brand?: string[];
       orgId?: number[];
       subInventoryCode?: string[];
+      dateCodeFrom?: string;
+      dateCodeTo?: string;
     }) => {
       const qs = new URLSearchParams();
       for (const v of params.supplierCode ?? []) qs.append("supplierCode", v);
@@ -556,9 +579,12 @@ export function useFlowApi() {
       for (const v of params.brand ?? []) qs.append("brand", v);
       for (const v of params.orgId ?? []) qs.append("orgId", String(v));
       for (const v of params.subInventoryCode ?? []) qs.append("subInventoryCode", v);
+      if (params.dateCodeFrom) qs.set("dateCodeFrom", params.dateCodeFrom);
+      if (params.dateCodeTo) qs.set("dateCodeTo", params.dateCodeTo);
       return api.get<StockSearchResult>(`/stock-search?${qs}`);
     },
     stockSearchOptions: () => api.get<StockSearchOptions>("/stock-search/options"),
+    stockSearchSummary: () => api.get<StockSearchSummary>("/stock-search/summary"),
     // Part availability for the picking-detail modal (stock lots + open
     // receiving sources, all orgs/sub-inventories).
     getPartAvailability: (partNo: string, wclItemNo?: string | null) => {

@@ -209,6 +209,8 @@ export interface ReceivingPickingAllocation {
   qty: number;
   lot: {
     shelfCode: string | null;
+    /** shelves.warning for shelfCode — advisory operator warning. */
+    shelfWarning: string | null;
     boxId: string | null;
     dateCode: string | null;
     lotCode: string | null;
@@ -342,6 +344,8 @@ export interface PickingWorkLock {
 export interface PickingAllocationLot {
   id: string;
   shelfCode: string | null;
+  /** shelves.warning for shelfCode — advisory operator warning. */
+  shelfWarning: string | null;
   boxId: string | null;
   dateCode: string | null;
   lotCode: string | null;

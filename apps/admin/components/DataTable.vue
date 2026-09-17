@@ -22,7 +22,7 @@ const props = defineProps<{
   /** Share horizontal scroll position with other DataTables using the same key. */
   syncScrollKey?: string;
 }>();
-const emit = defineEmits<{ (e: "row-click", row: any): void }>();
+const emit = defineEmits<{ (e: "row-click", row: any): void; (e: "row-dblclick", row: any): void }>();
 const slots = useSlots();
 
 const wrapRef = ref<HTMLElement | null>(null);
@@ -32,7 +32,7 @@ useSyncedScroll(props.syncScrollKey, wrapRef);
 const selected = defineModel<Set<string>>("selected", { default: () => new Set<string>() });
 
 const instance = getCurrentInstance();
-const hasRowClick = computed(() => !!instance?.vnode.props?.onRowClick);
+const hasRowClick = computed(() => !!instance?.vnode.props?.onRowClick || !!instance?.vnode.props?.onRowDblclick);
 
 // Column widths stay auto until a column is resized (entry in columnSizing).
 const sizing = computed(() => props.table.atoms.columnSizing?.get() ?? {});
@@ -318,6 +318,7 @@ const emptyColspan = computed(
             :key="row.id"
             :class="{ clickable: hasRowClick }"
             @click="emit('row-click', row.original)"
+            @dblclick="emit('row-dblclick', row.original)"
           >
             <td v-if="selectable" class="select-col" @click.stop>
               <input

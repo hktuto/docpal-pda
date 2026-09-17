@@ -59,10 +59,12 @@ adminRoute.route(
       zone: optStr(b, "zone"),
       // [] collapses to null (shared shelf), same as user_profiles scopes.
       subInventoryScopes: optScopes(b),
+      warning: optStr(b, "warning"),
     }),
     update: (b) => ({
       ...(b.zone !== undefined && { zone: optStr(b, "zone") }),
       ...(b.subInventoryScopes !== undefined && { subInventoryScopes: optScopes(b) }),
+      ...(b.warning !== undefined && { warning: optStr(b, "warning") }),
       lastUpdateDate: new Date(),
     }),
   })

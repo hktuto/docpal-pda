@@ -34,7 +34,7 @@
             <span class="scan-session__part">
               <span class="scan-session__line">L{{ item.lineNumber ?? '—' }}/S{{ item.shipmentNumber ?? '—' }}</span>
               {{ item.wclItemNo ?? item.partNo }}
-              <span v-if="allocationSources(item)" class="scan-session__sources">
+              <span v-if="allocationSources(item)" class="scan-session__sources" :title="allocationWarnings(item) || undefined">
                 {{ allocationSources(item) }}
               </span>
             </span>
@@ -252,13 +252,27 @@ function allocationSources(item: PickingOrderDetail["items"][number]): string {
   return (item.allocations ?? [])
     .filter((a) => a.qty > 0)
     .map((a) => {
-      if (a.lot?.boxId) return `${a.lot.boxId}${a.lot.shelfCode ? ` @ ${a.lot.shelfCode}` : ""} ×${a.qty}`;
-      if (a.lot?.shelfCode) return `${a.lot.shelfCode} ×${a.qty}`;
+      const warn = a.lot?.shelfWarning ? " ⚠️" : "";
+      if (a.lot?.boxId) return `${a.lot.boxId}${a.lot.shelfCode ? ` @ ${a.lot.shelfCode}` : ""} ×${a.qty}${warn}`;
+      if (a.lot?.shelfCode) return `${a.lot.shelfCode} ×${a.qty}${warn}`;
       if (a.boxId) return `CTN ${a.boxId} ×${a.qty}`;
       return null;
     })
     .filter((s): s is string => !!s)
     .join(" · ");
+}
+
+/** Distinct shelf warnings across the item's open allocations — tooltip for
+ *  the ⚠️ markers in allocationSources. */
+function allocationWarnings(item: PickingOrderDetail["items"][number]): string {
+  return [
+    ...new Set(
+      (item.allocations ?? [])
+        .filter((a) => a.qty > 0)
+        .map((a) => a.lot?.shelfWarning)
+        .filter((w): w is string => !!w)
+    ),
+  ].join("\n");
 }
 
 async function load() {

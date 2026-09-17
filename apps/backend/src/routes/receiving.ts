@@ -420,6 +420,7 @@ interface PickingAllocationRow {
   receivingOrderId: string | null;
   boxId: string | null;
   shelfCode: string | null;
+  shelfWarning: string | null;
   lotBoxId: string | null;
   dateCode: string | null;
   lotCode: string | null;
@@ -516,9 +517,11 @@ receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
             a.receiving_order_id AS "receivingOrderId",
             rii.ctn_no AS "boxId",
             il.shelf_code AS "shelfCode", il.box_id AS "lotBoxId",
+            sh.warning AS "shelfWarning",
             il.date_code AS "dateCode", il.lot_code AS "lotCode", il.coo, il.cow
           FROM allocations a
           LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
+          LEFT JOIN shelves sh ON sh.code = il.shelf_code
           LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
           WHERE ${inArray(sql`a.picking_item_id`, itemIds)}
           ORDER BY a.created_date, a.id
@@ -618,6 +621,7 @@ receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
           lot: a.inventoryLotId
             ? {
                 shelfCode: a.shelfCode,
+                shelfWarning: a.shelfWarning,
                 boxId: a.lotBoxId,
                 dateCode: a.dateCode,
                 lotCode: a.lotCode,

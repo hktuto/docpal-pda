@@ -527,12 +527,14 @@ export interface PickingOrderListRow {
  *  order_no/po_no/customer_code; `limit`/`offset` page the result (`total`
  *  counts all matches). Ordered by priority_seq (allocation order,
  *  admin-reorderable). Scoped to the flow config's allowedOrgIds when set;
- *  `opts.scope` additionally scopes to the user's sub-inventory pairs. */
+ *  `opts.scope` additionally scopes to the user's sub-inventory pairs.
+ *  `opts.unscoped` (admin console list) skips both org filters — all rows. */
 export async function listPickingOrders(
   db: AppDb,
   opts?: {
     status?: string; allocation?: string; search?: string; limit?: number; offset?: number;
     scope?: UserScopeEntry[] | null;
+    unscoped?: boolean;
   }
 ): Promise<{ rows: PickingOrderListRow[]; total: number }> {
   const statuses = (opts?.status ?? "").split(",").map((v) => v.trim()).filter(Boolean);
@@ -564,8 +566,8 @@ export async function listPickingOrders(
       ${statuses.length ? sql`AND po.status = ANY(ARRAY[${sql.join(statuses, sql`, `)}])` : sql``}
       ${allocations.length ? sql`AND po.allocation_status = ANY(ARRAY[${sql.join(allocations, sql`, `)}])` : sql``}
       ${search ? sql`AND (po.order_no ILIKE ${"%" + search + "%"} OR po.po_no ILIKE ${"%" + search + "%"} OR po.customer_code ILIKE ${"%" + search + "%"})` : sql``}
-      ${allowedOrgFilter(sql`po.org_id`)}
-      ${userScopeFilter(sql`po.org_id`, sql`po.sub_inventory_code`, opts?.scope)}
+      ${opts?.unscoped ? sql`` : allowedOrgFilter(sql`po.org_id`)}
+      ${opts?.unscoped ? sql`` : userScopeFilter(sql`po.org_id`, sql`po.sub_inventory_code`, opts?.scope)}
       GROUP BY po.id, w.display_name
       ORDER BY po.priority_seq ASC, po.delivery_date ASC NULLS LAST, po.order_no
       ${opts?.limit && opts.limit > 0 ? sql`LIMIT ${opts.limit} OFFSET ${opts.offset ?? 0}` : sql``}
@@ -692,6 +694,9 @@ export interface PickingOrderRow {
 export interface PickingLotDetail {
   id: string;
   shelfCode: string | null;
+  /** shelves.warning for shelfCode — advisory operator warning, null when the
+   *  lot has no shelf or the shelf has no warning. */
+  shelfWarning: string | null;
   boxId: string | null;
   dateCode: string | null;
   lotCode: string | null;
@@ -778,6 +783,7 @@ interface AllocationQueryRow {
   boxId: string | null;
   lotId: string | null;
   lotShelfCode: string | null;
+  lotShelfWarning: string | null;
   lotBoxId: string | null;
   lotDateCode: string | null;
   lotLotCode: string | null;
@@ -855,6 +861,7 @@ export async function getPickingOrderDetail(
             a.receiving_order_id AS "receivingOrderId",
             rii.ctn_no AS "boxId",
             il.id AS "lotId", il.shelf_code AS "lotShelfCode", il.box_id AS "lotBoxId",
+            sh.warning AS "lotShelfWarning",
             il.date_code AS "lotDateCode", il.lot_code AS "lotLotCode",
             il.coo AS "lotCoo", il.cow AS "lotCow",
             il.total_qty AS "lotTotalQty", il.allocated_qty AS "lotAllocatedQty",
@@ -865,6 +872,7 @@ export async function getPickingOrderDetail(
             rii.received_qty AS "recvReceivedQty", rii.date_code AS "recvDateCode"
           FROM allocations a
           LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
+          LEFT JOIN shelves sh ON sh.code = il.shelf_code
           LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
           LEFT JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
           LEFT JOIN receiving_orders ro ON ro.id = COALESCE(a.receiving_order_id, ri.receiving_order_id)
@@ -920,6 +928,7 @@ export async function getPickingOrderDetail(
             ? {
                 id: a.lotId,
                 shelfCode: a.lotShelfCode,
+                shelfWarning: a.lotShelfWarning,
                 boxId: a.lotBoxId,
                 dateCode: a.lotDateCode,
                 lotCode: a.lotLotCode,
