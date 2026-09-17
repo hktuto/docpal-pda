@@ -99,6 +99,34 @@ test("PUT /admin/flow-config: validates, persists, applies at runtime", async ()
   }
 });
 
+test("PUT /admin/flow-config: dateCodeDisplayTemplate round-trips", async () => {
+  await reseed(client);
+  try {
+    // GET default
+    const get0 = await (await req("/admin/flow-config")).json();
+    assert.equal(get0.config.dateCodeDisplayTemplate, "[date_code][coo]");
+    // PUT a custom template
+    const payload = { dateCodeDisplayTemplate: "[date_code]-[coo]" };
+    const res = await req("/admin/flow-config", { method: "PUT", body: JSON.stringify(payload) });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.config.dateCodeDisplayTemplate, "[date_code]-[coo]");
+    const row = await queryGet<{ value: unknown }>(
+      client.db,
+      sql`SELECT value FROM warehouse_config WHERE key = 'flow'`
+    );
+    assert.deepEqual(row!.value, payload);
+    // runtime applied
+    const get = await (await req("/admin/flow-config")).json();
+    assert.equal(get.config.dateCodeDisplayTemplate, "[date_code]-[coo]");
+    // invalid template rejected
+    const bad = await req("/admin/flow-config", { method: "PUT", body: JSON.stringify({ dateCodeDisplayTemplate: "" }) });
+    assert.equal(bad.status, 400);
+  } finally {
+    _resetFlowConfigForTests();
+  }
+});
+
 test("PUT /admin/flow-config: receivingSubInventoryRules round-trips", async () => {
   await reseed(client);
   try {

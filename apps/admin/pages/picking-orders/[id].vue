@@ -7,6 +7,7 @@ const route = useRoute();
 const orderId = route.params.id as string;
 const flow = useFlowApi();
 const { t } = useI18n();
+const { format: formatDc } = useDateCodeDisplay();
 
 const order = ref<PickingOrderDetail | null>(null);
 // The audit-log table fetches itself; bump this key after mutations that
@@ -490,7 +491,7 @@ function allocationSource(a: PickingOrderDetail["items"][number]["allocations"][
     return t("admin.pages.pickingOrders.allocLot", {
       shelf: a.lot.shelfCode ?? "",
       box: a.lot.boxId ? ` / ${a.lot.boxId}` : "",
-      dc: a.lot.dateCode ?? "—",
+      dc: formatDc(a.lot) || "—",
     });
   if (a.receivingInvoiceItemId) return t("admin.pages.pickingOrders.allocReceivingBox", { box: a.boxId ?? "" });
   if (a.receivingOrderId) return t("admin.pages.pickingOrders.allocReceivingOrder");
@@ -728,7 +729,7 @@ const {
         </template>
         <template #cell-packages="{ row }">
           <div v-for="p in row.packages" :key="p.id">
-            {{ p.qty }} (dc {{ p.dateCode ?? "—"
+            {{ p.qty }} (dc {{ formatDc(p) || "—"
             }}{{ p.shippingBoxId ? `, ${$t("admin.pages.pickingOrders.boxed")}` : `, ${$t("admin.pages.pickingOrders.unboxed")}`
             }}{{ p.verified ? `, ${$t("admin.pages.pickingOrders.verified")}` : "" }})
           </div>

@@ -723,9 +723,13 @@ from `src/db.ts` after migrate+seed): a missing row is auto-created with `{}`
 (= defaults), an invalid value fails boot. Written by seed / SQL UPDATE —
 changes need a backend restart; the `FLOW_CONFIG` env var overrides the row
 when set. Intentionally no `sync_events` trigger: internal config, not synced
-out. Top-level keys: `steps` (per-step enablement + behavior flags) and
+out. Top-level keys: `steps` (per-step enablement + behavior flags),
 `allowedOrgIds` (integer array of accepted org partitions, [] = all — spec
-`docs/superpowers/specs/2026-09-01-flow-config-allowed-org-ids-design.md`).
+`docs/superpowers/specs/2026-09-01-flow-config-allowed-org-ids-design.md`),
+and `dateCodeDisplayTemplate` (admin display template joining a lot's
+`[date_code]`/`[lot_code]`/`[coo]`/`[cow]` — spec
+`docs/superpowers/specs/2026-09-17-date-code-display-template-design.md`,
+default `"[date_code][coo]"`).
 
 | Field | Type | Description |
 | --- | --- | --- |

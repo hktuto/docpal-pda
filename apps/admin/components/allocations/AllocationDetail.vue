@@ -6,6 +6,10 @@ import type { PickingItemRow } from "~/utils/flowApi";
 // detail on hover. Renders nothing for receiving-sourced allocations without
 // embedded receiving info (order-level dock sources).
 defineProps<{ a: PickingItemRow["allocations"][number] }>();
+
+// Date code line renders through the admin-configured display template
+// (e.g. "[date_code][coo]" → "3626cn"); the remaining rows stay raw fields.
+const { format: formatDc } = useDateCodeDisplay();
 </script>
 
 <template>
@@ -24,7 +28,7 @@ defineProps<{ a: PickingItemRow["allocations"][number] }>();
     </div>
     <div class="alloc-tip-row">
       <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.dateCode") }}</span>
-      <span>{{ a.lot.dateCode ?? "—" }}</span>
+      <span>{{ formatDc(a.lot) || "—" }}</span>
     </div>
     <div class="alloc-tip-row">
       <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.lotCode") }}</span>
@@ -74,7 +78,7 @@ defineProps<{ a: PickingItemRow["allocations"][number] }>();
     </div>
     <div v-if="a.receiving.dateCode" class="alloc-tip-row">
       <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.dateCode") }}</span>
-      <span>{{ a.receiving.dateCode }}</span>
+      <span>{{ formatDc(a.receiving) || "—" }}</span>
     </div>
     <div v-if="a.boxId" class="alloc-tip-row">
       <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.ctnNo") }}</span>

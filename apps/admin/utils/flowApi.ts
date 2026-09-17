@@ -418,6 +418,8 @@ export interface FlowConfigState {
     receivingSubInventoryRules: SubInventoryRuleGroupRow[];
     /** Transfer-order from_subinventory → org conversion groups. */
     pickingFromSubinventoryOrgs: FromSubinventoryOrgGroupRow[];
+    /** Display template for lot date code / lot code / COO / COW. */
+    dateCodeDisplayTemplate: string;
   };
   /** Raw warehouse_config row value (partial JSON as stored). */
   stored: Record<string, unknown>;

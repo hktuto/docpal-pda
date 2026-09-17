@@ -364,6 +364,13 @@ lists + details (detail 404s out of scope), stock search, put-away tasks +
 candidates, and the goods-verify queue hide rows with another (or NULL)
 `org_id`; the verify/measuring/shipping box queues and `allocateAll` are
 unaffected.
+The top-level `dateCodeDisplayTemplate: string` key (spec
+`2026-09-17-date-code-display-template-design.md`, default `"[date_code][coo]"`)
+is an admin-display-only policy: placeholders `[date_code]` `[lot_code]` `[coo]`
+`[cow]` render a lot's fields joined (empty field → empty, no dangling
+separator), applied client-side in the admin receiving order detail and
+picking order detail allocation cells; edited via the admin display-config
+page through `GET/PUT /admin/flow-config`.
 The shipping feed is per-box: the list reads closed, unshipped boxes — gated
 on the box's completed verify task when the verify step is enabled
 ("measured" ≡ closed). Shipping is a pure workflow transition (stock already

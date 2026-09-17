@@ -212,3 +212,19 @@ test("parseFlowConfig: pickingFromSubinventoryOrgs validation", () => {
     /duplicate from_subinventory "A"/
   );
 });
+
+test("parseFlowConfig: dateCodeDisplayTemplate merges over the default", () => {
+  assert.equal(parseFlowConfig(undefined).dateCodeDisplayTemplate, "[date_code][coo]");
+  assert.equal(parseFlowConfig("{}").dateCodeDisplayTemplate, "[date_code][coo]");
+  assert.equal(parseFlowConfig('{"dateCodeDisplayTemplate":"[date_code]"}').dateCodeDisplayTemplate, "[date_code]");
+  assert.equal(
+    parseFlowConfig('{"dateCodeDisplayTemplate":"DC:[date_code]-[coo]/[lot_code]"}').dateCodeDisplayTemplate,
+    "DC:[date_code]-[coo]/[lot_code]"
+  );
+});
+
+test("parseFlowConfig: dateCodeDisplayTemplate validation", () => {
+  assert.throws(() => parseFlowConfig('{"dateCodeDisplayTemplate":1}'), /dateCodeDisplayTemplate must be a non-empty string/);
+  assert.throws(() => parseFlowConfig('{"dateCodeDisplayTemplate":""}'), /dateCodeDisplayTemplate must be a non-empty string/);
+  assert.throws(() => parseFlowConfig('{"dateCodeDisplayTemplate":"   "}'), /dateCodeDisplayTemplate must be a non-empty string/);
+});

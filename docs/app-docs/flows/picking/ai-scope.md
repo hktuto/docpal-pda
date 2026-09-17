@@ -31,6 +31,13 @@
   `allocationSources` hint (warning text in the tooltip via
   `allocationWarnings`), and the admin picking-order detail allocation cell +
   tooltip row.
+- The admin picking-order detail renders lot date codes through the
+  flow-config `dateCodeDisplayTemplate` (default `[date_code][coo]` →
+  `3626cn`) in the allocation source cells (`dc:`), the packages cell, and
+  the `AllocationDetail` tooltip rows (spec
+  `docs/superpowers/specs/2026-09-17-date-code-display-template-design.md`,
+  formatter `apps/admin/utils/dateCodeDisplay.ts` via
+  `composables/useDateCodeDisplay.ts`); grouping/merge keys stay raw.
 - Scan-to-pick ("checkout" scan session): one Scan button per picking order
   opens `/picking/scan/:id`. The hardware scanner is armed only on that page;
   each QR scan is validated client-side (part matches an order item, qty fits

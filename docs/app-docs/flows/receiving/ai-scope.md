@@ -86,6 +86,11 @@
   `(order-level)` block. Completed (`clear`) orders get
   `?mode=finished` instead — same layout, slots from actual
   `picking_packages` (direct + lot-traced via `inventory_lot_sources`).
+- The item table's date-code column renders through the flow-config
+  `dateCodeDisplayTemplate` (default `[date_code][coo]` → `3626cn`; spec
+  `docs/superpowers/specs/2026-09-17-date-code-display-template-design.md`,
+  formatter `apps/admin/utils/dateCodeDisplay.ts` via
+  `composables/useDateCodeDisplay.ts`).
 - Admin receiving detail per-item actions (spec
   `docs/superpowers/specs/2026-09-15-admin-picking-item-actions-design.md`):
   a search icon on the part-no cell opens the part-search + allocate dialog

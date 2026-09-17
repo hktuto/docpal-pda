@@ -268,9 +268,6 @@ export const navSections: { title: string; links: { route: string; title: string
       { route: "/shelf-boxes", title: "admin.navLinks.shelfBoxes" },
       { route: "/sub-inventories", title: "admin.navLinks.subInventories" },
       { route: "/parts", title: "admin.navLinks.parts" },
-      { route: "/net-weight-formulas", title: "admin.navLinks.netWeight" },
-      { route: "/box-sizes", title: "admin.navLinks.boxSizes" },
-      { route: "/countries", title: "admin.navLinks.countries" },
       { route: "/stock-search", title: "admin.navLinks.stockSearch" },
     ],
   },
@@ -300,9 +297,18 @@ export const navSections: { title: string; links: { route: string; title: string
     title: "admin.nav.settings",
     links: [
       { route: "/flow-config", title: "admin.navLinks.flowConfig" },
+      { route: "/display-config", title: "admin.navLinks.displayConfig" },
       { route: "/app-download", title: "admin.navLinks.appDownload" },
       { route: "/user-badges", title: "admin.navLinks.userBadges" },
       { route: "/user-profiles", title: "admin.navLinks.userProfiles" },
+    ],
+  },
+  {
+    title: "admin.nav.dropdownPolicy",
+    links: [
+      { route: "/net-weight-formulas", title: "admin.navLinks.netWeight" },
+      { route: "/box-sizes", title: "admin.navLinks.boxSizes" },
+      { route: "/countries", title: "admin.navLinks.countries" },
       { route: "/label-print-rules", title: "admin.navLinks.labelPrintRules" },
     ],
   },

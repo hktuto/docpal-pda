@@ -70,5 +70,9 @@
   - list shipping order with filter and sort, multiple select to download shipper 7.3
     - detail shipping order
 - Settings
-  - flow config, app download, user badges, user scope
-  - Label Print Rules — CRUD rules mapping AND/OR conditions (org / sub-inventory / supplier / order no / customer) to a print template per label type (carton / item box / item), with priority and activate/deactivate
+  - flow config, display config (date-code display template), app download, user badges, user scope
+- Dropdown & Policy
+  - Net Weight Formulas (was under Warehouse)
+  - Box Sizes (was under Warehouse)
+  - Country List (was under Warehouse)
+  - Label Print Rules — CRUD rules mapping AND/OR conditions (org / sub-inventory / supplier / order no / customer) to a print template per label type (carton / item box / item), with priority and activate/deactivate (was under Settings)

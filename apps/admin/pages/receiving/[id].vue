@@ -7,6 +7,7 @@ const route = useRoute();
 const orderId = route.params.id as string;
 const flow = useFlowApi();
 const { t } = useI18n();
+const { format: formatDc } = useDateCodeDisplay();
 const apiBaseUrl = useRuntimeConfig().public.apiBaseUrl as string;
 
 const order = ref<ReceivingOrderDetail | null>(null);
@@ -172,7 +173,12 @@ const itemColumnDefs = computed<AdminColumnDef<ReceivingItemRow>[]>(() => [
   { key: "putAwayQty", label: t("admin.pages.receiving.putAway"), size: 90 },
   { key: "allocatedQty", label: t("admin.pages.receiving.allocated"), size: 90 },
   { key: "ctnNo", label: t("admin.pages.receiving.ctnNo"), size: 110 },
-  { key: "dateCode", label: t("admin.pages.receiving.dateCode"), size: 100 },
+  {
+    key: "dateCode",
+    label: t("admin.pages.receiving.dateCode"),
+    accessor: (it) => formatDc(it) || "—",
+    size: 100,
+  },
 ]);
 
 type GroupTable = ReturnType<typeof useAdminTable<ReceivingItemRow>>;

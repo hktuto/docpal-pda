@@ -70,7 +70,13 @@ export const docpalGroupMapping: Record<string, string[]> = {
 //         "patterns": [ { "poNoPattern": "319*", "subInventoryCode": "SZHK2" } ],
 //         "default": "STORE1" } ],
 //     "pickingFromSubinventoryOrgs": [
-//       { "orgId": 143, "fromSubinventories": ["SZHK2", "GZHK2"] } ] }
+//       { "orgId": 143, "fromSubinventories": ["SZHK2", "GZHK2"] } ]
+//     "dateCodeDisplayTemplate": "[date_code][coo]" }
+//
+// dateCodeDisplayTemplate (spec 2026-09-17-date-code-display-template-design.md):
+// free-form display template for lot date code / lot code / COO / COW in admin
+// receiving/picking detail screens; placeholders [date_code] [lot_code] [coo]
+// [cow], a placeholder with an empty field renders as "". Default "[date_code][coo]".
 //
 // allowedOrgIds (spec 2026-09-01-flow-config-allowed-org-ids-design.md):
 // org_id partitions this warehouse accepts; [] = all orgs (no filtering).
@@ -187,6 +193,9 @@ export interface FlowConfig {
   receivingSubInventoryRules: SubInventoryRuleGroup[];
   /** Transfer-order from_subinventory → org conversion groups; [] = off. */
   pickingFromSubinventoryOrgs: FromSubinventoryOrgGroup[];
+  /** Display template for lot date code + COO etc. in admin screens; placeholders
+   *  [date_code] [lot_code] [coo] [cow], empty field renders empty. */
+  dateCodeDisplayTemplate: string;
 }
 
 function defaultFlowConfig(): FlowConfig {
@@ -198,6 +207,7 @@ function defaultFlowConfig(): FlowConfig {
     outdatedStockYears: 2,
     receivingSubInventoryRules: [],
     pickingFromSubinventoryOrgs: [],
+    dateCodeDisplayTemplate: "[date_code][coo]",
   };
 }
 
@@ -388,6 +398,13 @@ export function mergeFlowConfigJson(parsed: unknown): FlowConfig {
       cfg.pickingFromSubinventoryOrgs = groups;
       continue;
     }
+    if (key === "dateCodeDisplayTemplate") {
+      if (typeof value !== "string" || value.trim() === "") {
+        throw new Error("[config] flow config.dateCodeDisplayTemplate must be a non-empty string");
+      }
+      cfg.dateCodeDisplayTemplate = value;
+      continue;
+    }
     if (key !== "steps") throw new Error(`[config] flow config: unknown key "${key}"`);
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
       throw new Error("[config] flow config.steps must be an object");
@@ -507,6 +524,12 @@ export function allowedOrgIds(): number[] {
 /** Stock age threshold (years) for the outdated count in stock-search summary. */
 export function outdatedStockYears(): number {
   return flowConfig.outdatedStockYears;
+}
+
+/** Display template for lot date code + COO in admin screens (spec
+ *  docs/superpowers/specs/2026-09-17-date-code-display-template-design.md). */
+export function dateCodeDisplayTemplate(): string {
+  return flowConfig.dateCodeDisplayTemplate;
 }
 
 /** Confirm-arrival sub-inventory defaulting rule groups; [] = feature off. */

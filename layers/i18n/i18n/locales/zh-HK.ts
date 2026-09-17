@@ -867,7 +867,8 @@ export default {
       receiving: "收貨",
       issues: "問題",
       shipping: "出貨",
-      settings: "設定"
+      settings: "設定",
+      dropdownPolicy: "選項及政策"
     },
     navLinks: {
       customerProfiles: "客戶資料",
@@ -889,6 +890,7 @@ export default {
       stockSearch: "庫存查詢",
       appDownload: "App 下載",
       flowConfig: "流程設定",
+      displayConfig: "日期代碼顯示",
       userBadges: "用戶證件",
       userProfiles: "用戶子庫範圍",
       labelPrintRules: "標籤列印規則"
@@ -1657,6 +1659,24 @@ export default {
         ruleTargetOrgId: "目標 Org ID",
         fromOrgsHint: "在分配計算時應用於帶有 additional_data.from_subinventory 的調撥揀貨項目：代碼命中分組後，位置匹配改用該分組的目標 Org ID，子庫存按上方收貨子庫存規則、以揀貨單的 PO 號在轉換後的 Org 下匹配（無規則命中時使用 from_subinventory 代碼本身）。代碼不在任何分組中的項目保持訂單原有位置。",
         fromOrgsInvalid: "每個分組都需要一個整數目標 Org ID 和至少一個 from_subinventory 代碼。",
+        saved: "已儲存。"
+      },
+      displayConfig: {
+        title: "日期代碼顯示",
+        envOverrideWarning: "後端目前使用 FLOW_CONFIG 環境變數覆蓋 — 在此儲存只會寫入資料庫，要移除該環境變數後才會生效。",
+        templateSection: "顯示模板",
+        template: "日期代碼顯示模板",
+        templateHint: "佔位符：[date_code] 日期代碼、[lot_code] Lot 編號、[coo] COO、[cow] COW。欄位為空時該佔位符顯示為空（不會留下多餘分隔符）；方括號以外的文字原樣顯示。套用位置：收貨單明細項目、執貨單明細的分配及箱件欄。",
+        templateInvalid: "模板必須是非空字串。",
+        previewSection: "預覽",
+        previewFull: "例子（日期代碼 3626、Lot L01、COO cn、COW tw）",
+        previewNoCoo: "例子（無 COO／COW）",
+        placeholderLabels: {
+          date_code: "日期代碼",
+          lot_code: "Lot 編號",
+          coo: "COO（產地）",
+          cow: "COW（保修地）"
+        },
         saved: "已儲存。"
       },
       labelPrintRules: {

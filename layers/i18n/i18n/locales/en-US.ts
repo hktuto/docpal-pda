@@ -867,7 +867,8 @@ export default {
       receiving: "Receiving",
       issues: "Issues",
       shipping: "Shipping",
-      settings: "Settings"
+      settings: "Settings",
+      dropdownPolicy: "Dropdown & Policy"
     },
     navLinks: {
       customerProfiles: "Customer Profiles",
@@ -889,6 +890,7 @@ export default {
       stockSearch: "Stock Search",
       appDownload: "App Download",
       flowConfig: "Flow Config",
+      displayConfig: "Date Code Display",
       userBadges: "User Badges",
       userProfiles: "User Scope",
       labelPrintRules: "Label Print Rules"
@@ -1660,6 +1662,24 @@ export default {
         ruleTargetOrgId: "Target org ID",
         fromOrgsHint: "Applied during allocation to transfer picking items carrying additional_data.from_subinventory: a code listed in a group switches location matching to that group's org ID, and the sub-inventory comes from the receiving sub-inventory rules above, evaluated with the picking order's PO number under the converted org (no rule match → the from_subinventory code itself). Items whose code is in no group keep the order's own location.",
         fromOrgsInvalid: "Every group needs an integer target org ID and at least one from_subinventory code.",
+        saved: "Saved."
+      },
+      displayConfig: {
+        title: "Date Code Display",
+        envOverrideWarning: "The FLOW_CONFIG environment override is active on the backend — saving here stores the row but does NOT change the running config until the override is removed.",
+        templateSection: "Display template",
+        template: "Date code display template",
+        templateHint: "Placeholders: [date_code] date code, [lot_code] lot code, [coo] COO, [cow] COW. A placeholder whose field is empty renders as empty (no dangling separator); text outside brackets shows literally. Applies to: receiving order detail items, picking order detail allocation and package cells.",
+        templateInvalid: "Template must be a non-empty string.",
+        previewSection: "Preview",
+        previewFull: "Sample (date code 3626, lot L01, COO cn, COW tw)",
+        previewNoCoo: "Sample (no COO / COW)",
+        placeholderLabels: {
+          date_code: "Date code",
+          lot_code: "Lot code",
+          coo: "COO (origin)",
+          cow: "COW (warranty)"
+        },
         saved: "Saved."
       },
       labelPrintRules: {
