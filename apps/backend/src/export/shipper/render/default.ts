@@ -92,12 +92,15 @@ export function makeShipperRenderer(options?: ShipperRendererOptions): Renderer<
           rows[height - 1][4 + i] = a.qty;
         });
       }
-      // The related-source breakdown keeps the old shelf cell's seat:
-      // column B for single-carton blocks; in merged blocks column B holds the
-      // part on every row, so it moves to the Total Qty column of the
-      // height-2 row (empty there — totals only land on the block's last row).
+      // The related-source breakdown sits at the TOP of the block: column B
+      // of the block's second row, free there whenever the block has header
+      // rows above the cartons (live blocks with slots: height = cartons + 2;
+      // single-carton no-slot blocks: carton on the last row of 3). Only a
+      // no-slot block with 2+ cartons fills every row with a carton (col B =
+      // part number) — there it falls back to col D of the height-2 row.
       if (relatedSources.length > 0) {
-        rows[height - 2][blockItems.length === 1 ? 1 : 3] = formatRelatedSources(relatedSources);
+        const atTop = perCarton || blockItems.length === 1;
+        rows[atTop ? 1 : height - 2][atTop ? 1 : 3] = formatRelatedSources(relatedSources);
       }
       if (totalBalance) {
         rows[height - 1][3] = totalBalance[0];

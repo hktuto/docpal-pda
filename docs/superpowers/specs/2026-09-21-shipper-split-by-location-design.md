@@ -125,7 +125,11 @@ they form their own section (see below), they are not dropped.
   `15000@HK01-A-01/BOX-9, 4000@dock/CTN123`, `40000@dock`). Box =
   `COALESCE(inventory_lots.box_id, receiving_invoice_items.ctn_no)`; the
   per-group aggregation sums per (shelf, box), sorted qty desc then shelf
-  then box. Applies to the single-section output too.
+  then box. Applies to the single-section output too. The cell sits at the
+  TOP of the group block — column B of the block's second row — whenever
+  that cell is free (live blocks with slots, and single-carton no-slot
+  blocks); a no-slot block with 2+ cartons fills every row with a carton,
+  so there it falls back to col D of row `height - 2`.
   **Exclusion:** allocations whose source traces back to THIS receiving
   order (own cartons / whole-order) are excluded — they are already
   visible as the block's slot columns. Stock lots stay even when

@@ -298,6 +298,77 @@ test("GET shipper: group header counts stock-sourced allocations on related orde
   assert.deepEqual(rows[16], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, "", 1000, "SO-PL-001", "SO-PL-002", ""]);
 });
 
+test("GET shipper: related cell falls back to col D of row height-2 in a no-slot multi-carton block", async () => {
+  await reseed(client);
+  await client.db.execute(sql`DELETE FROM picking_orders`);
+  // PART-X-1: two cartons, no allocations — every block row is a carton row,
+  // so the top seat (row 1 col B) is occupied by the part number. PART-Y-1
+  // (whole-order) makes SO-SEAT-1 a related order.
+  const orderId = await insertReceivingOrder(client.db, "PL-TEST-SEAT", {
+    order: { supplierCode: "DAITO", deliveryDate: "2026-09-21" },
+    invoices: [
+      {
+        invoiceNo: "INV-SEAT-01",
+        totalCtn: 2,
+        items: [
+          { partNo: "PART-X-1", lineQty: 100, ctnNo: "8001", orgId: 2, subInventoryCode: "STORE1" },
+          { partNo: "PART-X-1", lineQty: 100, ctnNo: "8002", orgId: 2, subInventoryCode: "STORE1" },
+          { partNo: "PART-Y-1", lineQty: 50, orgId: 2, subInventoryCode: "STORE1" },
+        ],
+      },
+    ],
+  });
+  const actorId = (
+    await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'operator'`)
+  )!.id;
+  await confirmReceivingArrival(client.db, orderId, actorId);
+
+  await insertPickingOrder(client.db, randomUUID(), {
+    order: { orderNo: "SO-SEAT-1", orgId: 2, subInventoryCode: "STORE1" },
+    items: [
+      { partNo: "PART-Y-1", qty: 30 },
+      { partNo: "PART-X-1", qty: 40 },
+    ],
+  });
+  const piY = await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT pi.id FROM picking_items pi JOIN picking_orders po ON po.id = pi.picking_order_id
+        WHERE po.order_no = 'SO-SEAT-1' AND pi.part_no = 'PART-Y-1'`
+  );
+  const piX = await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT pi.id FROM picking_items pi JOIN picking_orders po ON po.id = pi.picking_order_id
+        WHERE po.order_no = 'SO-SEAT-1' AND pi.part_no = 'PART-X-1'`
+  );
+  await client.db.execute(sql`
+    INSERT INTO allocations (id, picking_item_id, receiving_order_id, qty, created_date, last_update_date)
+    VALUES (${randomUUID()}, ${piY!.id}, ${orderId}, 30, now(), now())
+  `);
+  await client.db.execute(sql`
+    INSERT INTO inventory_lots (id, part_no, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
+    VALUES ('LOT-SEAT-01', 'PART-X-1', 'A-04-05', 'SEATBOX1', 2, 'STORE1', 100, now(), now())
+  `);
+  await client.db.execute(sql`
+    INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, created_date, last_update_date)
+    VALUES (${randomUUID()}, ${piX!.id}, 'LOT-SEAT-01', 40, now(), now())
+  `);
+
+  const res = await req(`/admin/receiving-orders/${orderId}/shipper`);
+  assert.equal(res.status, 200);
+  const rows = await sheetRows(await res.arrayBuffer());
+
+  assert.deepEqual(rows[4], ["Invoice / Ctn", "Part Number", "Qty", "Total Qty", "Customer", "Balance"]);
+  // PART-X-1 block (height 3, cartons bottom-aligned on rows 8-9): the
+  // related cell lands on the fallback seat — col D of row height-2 (abs row
+  // 8) — because row 1 col B already holds the part number.
+  assert.deepEqual(rows[7], ["", "", "", "", "", ""]);
+  assert.deepEqual(rows[8], ["INV-SEAT-01 8001", "PART-X-1", 100, "40@A-04-05/SEATBOX1", "", ""]);
+  assert.deepEqual(rows[9], ["INV-SEAT-01 8002", "PART-X-1", 100, 200, "", 200]);
+  // PART-Y-1: own whole-order source excluded from related; the closing
+  // block carries the slot.
+  assert.deepEqual(rows[16], ["(order-level)", "PART-Y-1", "", 50, 30, 20]);
+});
+
 test("GET shipper?mode=finished: slots come from actual picked packages", async () => {
   await reseed(client);
   const orderId = await seedScenario();
