@@ -187,8 +187,8 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | `POST /dev/reset`, `POST /dev/allocate` | `apps/backend/src/routes/dev.ts` |
 | `/admin/*` master-data CRUD | `apps/backend/src/routes/admin/` |
 | `/admin/sub-inventory-share-groups` (share-group membership upsert/remove) | `apps/backend/src/routes/admin/subInventoryShareGroups.ts` |
-| `GET /admin/receiving-orders/:id/shipper` (shipper xlsx download; `?mode=finished` for actuals) | `apps/backend/src/routes/admin/receivingShipper.ts` |
-| `GET /admin/picking-orders/:id/picking-list` (picking-list xlsx download, read-only) | `apps/backend/src/routes/admin/pickingList.ts` |
+| `GET /admin/receiving-orders/:id/shipper` (shipper xlsx download; `?mode=finished` for actuals) | `apps/backend/src/routes/admin/receivingShipper.ts` (HTTP only), data + layout in `apps/backend/src/export/shipper/` (`data.ts`, `model.ts`, `render/default.ts`) |
+| `GET /admin/picking-orders/:id/picking-list` (picking-list xlsx download, read-only) | `apps/backend/src/routes/admin/pickingList.ts` (HTTP only), data + layout in `apps/backend/src/export/picking-list/` (`data.ts`, `model.ts`, `render/default.ts`) |
 | `GET /admin/user-profiles`, `PUT /admin/user-profiles/:username` (per-user sub-inventory scope; pre-provisioning allowed) | `apps/backend/src/routes/admin/userProfiles.ts` |
 | `POST /admin/allocation/run`, `POST /admin/picking-orders/:id/reallocate` (manual allocation triggers) | `apps/backend/src/routes/admin/allocation.ts` |
 | `DELETE /admin/picking-orders/:id/items/:itemId/allocations/:allocationId` (per-allocation remove, transient) | `apps/backend/src/routes/admin/allocation.ts` (`removePickingAllocation` in `apps/backend/src/db/allocate.ts`) |

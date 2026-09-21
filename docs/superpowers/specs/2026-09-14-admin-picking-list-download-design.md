@@ -1,5 +1,7 @@
 # Admin picking-order detail: picking list download — design
 
+> Note (2026-09-21): the layout/xlsx code described here moved out of the route into `apps/backend/src/export/picking-list/` per 2026-09-21-admin-excel-export-renderer-separation-design.md.
+
 Date: 2026-09-14
 Status: implemented (no in-request recompute; placeholder download buttons removed)
 Mirrors: 2026-09-14-admin-receiving-shipper-download-design.md
