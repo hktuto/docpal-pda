@@ -228,3 +228,19 @@ test("parseFlowConfig: dateCodeDisplayTemplate validation", () => {
   assert.throws(() => parseFlowConfig('{"dateCodeDisplayTemplate":""}'), /dateCodeDisplayTemplate must be a non-empty string/);
   assert.throws(() => parseFlowConfig('{"dateCodeDisplayTemplate":"   "}'), /dateCodeDisplayTemplate must be a non-empty string/);
 });
+
+test("parseFlowConfig: receivingOrderNameTemplate merges over the default", () => {
+  assert.equal(parseFlowConfig(undefined).receivingOrderNameTemplate, "[batch_no]");
+  assert.equal(parseFlowConfig("{}").receivingOrderNameTemplate, "[batch_no]");
+  assert.equal(parseFlowConfig('{"receivingOrderNameTemplate":"[batch_no]"}').receivingOrderNameTemplate, "[batch_no]");
+  assert.equal(
+    parseFlowConfig('{"receivingOrderNameTemplate":"[invoice_no] [batch_no]"}').receivingOrderNameTemplate,
+    "[invoice_no] [batch_no]"
+  );
+});
+
+test("parseFlowConfig: receivingOrderNameTemplate validation", () => {
+  assert.throws(() => parseFlowConfig('{"receivingOrderNameTemplate":1}'), /receivingOrderNameTemplate must be a non-empty string/);
+  assert.throws(() => parseFlowConfig('{"receivingOrderNameTemplate":""}'), /receivingOrderNameTemplate must be a non-empty string/);
+  assert.throws(() => parseFlowConfig('{"receivingOrderNameTemplate":"   "}'), /receivingOrderNameTemplate must be a non-empty string/);
+});

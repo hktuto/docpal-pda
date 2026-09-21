@@ -142,6 +142,8 @@ export interface ConfirmArrivalResult {
 export interface ReceivingOrderRow {
   id: string;
   batchNo: string;
+  /** Order name per the warehouse's receivingOrderNameTemplate flow config. */
+  displayName?: string;
   status: string;
   deliveryDate: string | null;
   dateCode: string | null;
@@ -197,6 +199,8 @@ export interface ReceivingItemRow {
 export interface ReceivingOrderDetail {
   id: string;
   batchNo: string;
+  /** Order name per the warehouse's receivingOrderNameTemplate flow config. */
+  displayName?: string;
   status: string;
   deliveryDate: string | null;
   dateCode: string | null;
@@ -420,6 +424,8 @@ export interface FlowConfigState {
     pickingFromSubinventoryOrgs: FromSubinventoryOrgGroupRow[];
     /** Display template for lot date code / lot code / COO / COW. */
     dateCodeDisplayTemplate: string;
+    /** Display template for the receiving order name (list/detail titles). */
+    receivingOrderNameTemplate: string;
   };
   /** Raw warehouse_config row value (partial JSON as stored). */
   stored: Record<string, unknown>;

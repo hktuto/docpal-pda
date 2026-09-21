@@ -17,6 +17,8 @@ import { scheduleAllocateAll, allocateForReceivingOrder } from "../db/allocate.j
 import { actorFrom } from "../auth/middleware.js";
 import { allowedOrgFilter } from "../db/org-filter.js";
 import { getUserScope, receivingOrderScopeFilter, userScopeFilter } from "../db/user-scope.js";
+import { receivingOrderNameTemplate } from "../config.js";
+import { formatReceivingOrderName } from "../receivingOrderName.js";
 
 // Empty bodies parse as {} — after the auth migration several mutations no
 // longer carry any body fields (the actor comes from the token).
@@ -109,7 +111,29 @@ receivingRoute.get("/receiving-orders", async (c) => {
     `
   );
   const total = rows[0]?.total ?? 0;
-  return c.json({ rows: rows.map(({ total: _total, ...row }) => row), total }, 200);
+  const nameTemplate = receivingOrderNameTemplate();
+  return c.json(
+    {
+      rows: rows.map(({ total: _total, ...row }) => ({
+        ...row,
+        // Display name per the warehouse's receivingOrderNameTemplate flow
+        // config (spec 2026-09-21-receiving-order-name-template-design.md).
+        displayName: formatReceivingOrderName(
+          {
+            batchNo: row.batchNo,
+            invoiceNo: row.invoiceNos,
+            supplierCode: row.supplierCode,
+            supplierName: row.supplierName,
+            deliveryDate: row.deliveryDate,
+            dateCode: row.dateCode,
+          },
+          nameTemplate
+        ),
+      })),
+      total,
+    },
+    200
+  );
 });
 
 // ------------------------------------------------------------------
@@ -290,6 +314,17 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
     {
       id: order.id,
       batchNo: order.batchNo,
+      displayName: formatReceivingOrderName(
+        {
+          batchNo: order.batchNo,
+          invoiceNo: invoices.map((inv) => inv.invoiceNo).join(", ") || null,
+          supplierCode: order.supplierCode,
+          supplierName: order.supplierName,
+          deliveryDate: order.deliveryDate,
+          dateCode: order.dateCode,
+        },
+        receivingOrderNameTemplate()
+      ),
       status: order.status,
       deliveryDate: order.deliveryDate,
       dateCode: order.dateCode,

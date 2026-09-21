@@ -6,7 +6,7 @@
     <template v-else-if="order">
       <DetailHeader
         v-model="headerExpanded"
-        :title="order.batchNo"
+        :title="order.displayName || order.batchNo"
         :status="order.status"
         :badge-class="badgeClass(order.status)"
         :flush-top="route.meta.props?.noPadding"

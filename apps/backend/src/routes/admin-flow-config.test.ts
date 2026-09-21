@@ -127,6 +127,32 @@ test("PUT /admin/flow-config: dateCodeDisplayTemplate round-trips", async () => 
   }
 });
 
+test("PUT /admin/flow-config: receivingOrderNameTemplate round-trips", async () => {
+  await reseed(client);
+  try {
+    const get0 = await (await req("/admin/flow-config")).json();
+    assert.equal(get0.config.receivingOrderNameTemplate, "[batch_no]");
+    const payload = { receivingOrderNameTemplate: "[batch_no] · [invoice_no]" };
+    const res = await req("/admin/flow-config", { method: "PUT", body: JSON.stringify(payload) });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.config.receivingOrderNameTemplate, "[batch_no] · [invoice_no]");
+    const row = await queryGet<{ value: unknown }>(
+      client.db,
+      sql`SELECT value FROM warehouse_config WHERE key = 'flow'`
+    );
+    assert.deepEqual(row!.value, payload);
+    // runtime applied
+    const get = await (await req("/admin/flow-config")).json();
+    assert.equal(get.config.receivingOrderNameTemplate, "[batch_no] · [invoice_no]");
+    // invalid template rejected
+    const bad = await req("/admin/flow-config", { method: "PUT", body: JSON.stringify({ receivingOrderNameTemplate: "" }) });
+    assert.equal(bad.status, 400);
+  } finally {
+    _resetFlowConfigForTests();
+  }
+});
+
 test("PUT /admin/flow-config: receivingSubInventoryRules round-trips", async () => {
   await reseed(client);
   try {

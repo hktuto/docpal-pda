@@ -43,7 +43,7 @@
       >
         <div class="list-row__main">
           <div class="list-row__line1">
-            <span class="list-row__title">{{ ro.batchNo }}</span>
+            <span class="list-row__title">{{ ro.displayName || ro.batchNo }}</span>
           </div>
           <div class="list-row__meta">
             {{ ro.supplierName || $t('common.noSupplier') }}
@@ -101,7 +101,7 @@ const filters: { labelKey: string; value: ReceivingFilter }[] = [
   { labelKey: "status.receiving.clear", value: "clear" },
 ];
 
-const filter = ref<ReceivingFilter>("pending");
+const filter = ref<ReceivingFilter>("in_hand");
 const search = ref("");
 
 const PAGE_SIZE = 50;

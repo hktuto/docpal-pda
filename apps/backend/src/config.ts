@@ -71,12 +71,21 @@ export const docpalGroupMapping: Record<string, string[]> = {
 //         "default": "STORE1" } ],
 //     "pickingFromSubinventoryOrgs": [
 //       { "orgId": 143, "fromSubinventories": ["SZHK2", "GZHK2"] } ]
-//     "dateCodeDisplayTemplate": "[date_code][coo]" }
+//     "dateCodeDisplayTemplate": "[date_code][coo]",
+//     "receivingOrderNameTemplate": "[batch_no]" }
 //
 // dateCodeDisplayTemplate (spec 2026-09-17-date-code-display-template-design.md):
 // free-form display template for lot date code / lot code / COO / COW in admin
 // receiving/picking detail screens; placeholders [date_code] [lot_code] [coo]
 // [cow], a placeholder with an empty field renders as "". Default "[date_code][coo]".
+//
+// receivingOrderNameTemplate (spec 2026-09-21-receiving-order-name-template-design.md):
+// free-form display template for the receiving order NAME shown on the PDA and
+// in the admin receiving list/detail; placeholders [batch_no] [invoice_no]
+// [supplier_code] [supplier_name] [delivery_date] [date_code], an empty field
+// renders as "", an all-empty render falls back to batch_no. The backend
+// computes `displayName` on the receiving list/detail responses from this.
+// Default "[batch_no]" (= batch_no only, the pre-template behavior).
 //
 // allowedOrgIds (spec 2026-09-01-flow-config-allowed-org-ids-design.md):
 // org_id partitions this warehouse accepts; [] = all orgs (no filtering).
@@ -196,6 +205,10 @@ export interface FlowConfig {
   /** Display template for lot date code + COO etc. in admin screens; placeholders
    *  [date_code] [lot_code] [coo] [cow], empty field renders empty. */
   dateCodeDisplayTemplate: string;
+  /** Display template for the receiving order name on PDA + admin screens;
+   *  placeholders [batch_no] [invoice_no] [supplier_code] [supplier_name]
+   *  [delivery_date] [date_code]. Backend-computed `displayName`. */
+  receivingOrderNameTemplate: string;
 }
 
 function defaultFlowConfig(): FlowConfig {
@@ -208,6 +221,7 @@ function defaultFlowConfig(): FlowConfig {
     receivingSubInventoryRules: [],
     pickingFromSubinventoryOrgs: [],
     dateCodeDisplayTemplate: "[date_code][coo]",
+    receivingOrderNameTemplate: "[batch_no]",
   };
 }
 
@@ -405,6 +419,13 @@ export function mergeFlowConfigJson(parsed: unknown): FlowConfig {
       cfg.dateCodeDisplayTemplate = value;
       continue;
     }
+    if (key === "receivingOrderNameTemplate") {
+      if (typeof value !== "string" || value.trim() === "") {
+        throw new Error("[config] flow config.receivingOrderNameTemplate must be a non-empty string");
+      }
+      cfg.receivingOrderNameTemplate = value;
+      continue;
+    }
     if (key !== "steps") throw new Error(`[config] flow config: unknown key "${key}"`);
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
       throw new Error("[config] flow config.steps must be an object");
@@ -532,6 +553,12 @@ export function dateCodeDisplayTemplate(): string {
   return flowConfig.dateCodeDisplayTemplate;
 }
 
+/** Display template for the receiving order name on PDA + admin screens (spec
+ *  docs/superpowers/specs/2026-09-21-receiving-order-name-template-design.md). */
+export function receivingOrderNameTemplate(): string {
+  return flowConfig.receivingOrderNameTemplate;
+}
+
 /** Confirm-arrival sub-inventory defaulting rule groups; [] = feature off. */
 export function receivingSubInventoryRules(): SubInventoryRuleGroup[] {
   return flowConfig.receivingSubInventoryRules;
@@ -589,6 +616,11 @@ export function _setReceivingSubInventoryRulesForTests(rules: SubInventoryRuleGr
 /** Test-only override for the transfer-order from_subinventory → org groups. */
 export function _setPickingFromSubinventoryOrgsForTests(groups: FromSubinventoryOrgGroup[]): void {
   flowConfig.pickingFromSubinventoryOrgs = groups;
+}
+
+/** Test-only override for the receiving order name display template. */
+export function _setReceivingOrderNameTemplateForTests(template: string): void {
+  flowConfig.receivingOrderNameTemplate = template;
 }
 
 /** Test-only full reset to the built-in defaults (e.g. after loadFlowConfig tests). */

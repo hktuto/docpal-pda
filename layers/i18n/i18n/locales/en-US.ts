@@ -890,7 +890,7 @@ export default {
       stockSearch: "Stock Search",
       appDownload: "App Download",
       flowConfig: "Flow Config",
-      displayConfig: "Date Code Display",
+      displayConfig: "Display",
       userBadges: "User Badges",
       userProfiles: "User Scope",
       labelPrintRules: "Label Print Rules"
@@ -1665,7 +1665,7 @@ export default {
         saved: "Saved."
       },
       displayConfig: {
-        title: "Date Code Display",
+        title: "Display",
         envOverrideWarning: "The FLOW_CONFIG environment override is active on the backend — saving here stores the row but does NOT change the running config until the override is removed.",
         templateSection: "Display template",
         template: "Date code display template",
@@ -1679,6 +1679,19 @@ export default {
           lot_code: "Lot code",
           coo: "COO (origin)",
           cow: "COW (warranty)"
+        },
+        roTemplateSection: "Receiving order name template",
+        roTemplate: "Receiving order name template",
+        roTemplateHint: "Placeholders: [batch_no] batch no, [invoice_no] invoice no(s) (comma-joined), [supplier_code] supplier code, [supplier_name] supplier name, [delivery_date] delivery date (YYYY-MM-DD), [date_code] date code. A placeholder whose field is empty renders as empty; if the whole render is empty the batch no is used instead. Applies to: PDA receiving list and order header, admin receiving list and order detail title.",
+        roPreviewFull: "Sample (batch BATCH-20260921-01, invoices INV-100234 + INV-100235, supplier Supplier Ltd, delivery 2026-09-21, date code 3626)",
+        roPreviewFallback: "Sample (order with no invoice / supplier / date — batch-no fallback)",
+        roPlaceholderLabels: {
+          batch_no: "Batch no",
+          invoice_no: "Invoice no(s)",
+          supplier_code: "Supplier code",
+          supplier_name: "Supplier name",
+          delivery_date: "Delivery date",
+          date_code: "Date code"
         },
         saved: "Saved."
       },

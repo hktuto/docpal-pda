@@ -729,7 +729,11 @@ out. Top-level keys: `steps` (per-step enablement + behavior flags),
 and `dateCodeDisplayTemplate` (admin display template joining a lot's
 `[date_code]`/`[lot_code]`/`[coo]`/`[cow]` — spec
 `docs/superpowers/specs/2026-09-17-date-code-display-template-design.md`,
-default `"[date_code][coo]"`).
+default `"[date_code][coo]"`) and `receivingOrderNameTemplate` (receiving
+order display-name template rendered into `displayName` on the receiving
+list/detail responses — spec
+`docs/superpowers/specs/2026-09-21-receiving-order-name-template-design.md`,
+default `"[batch_no]"`).
 
 | Field | Type | Description |
 | --- | --- | --- |

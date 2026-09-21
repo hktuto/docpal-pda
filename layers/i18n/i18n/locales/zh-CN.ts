@@ -890,7 +890,7 @@ export default {
       stockSearch: "库存查询",
       appDownload: "应用下载",
       flowConfig: "流程设置",
-      displayConfig: "日期代码显示",
+      displayConfig: "显示设置",
       userBadges: "用户工牌",
       userProfiles: "用户子库范围",
       labelPrintRules: "标签打印规则"
@@ -1662,7 +1662,7 @@ export default {
         saved: "已保存。"
       },
       displayConfig: {
-        title: "日期代码显示",
+        title: "显示设置",
         envOverrideWarning: "后端当前使用 FLOW_CONFIG 环境变量覆盖 — 在此保存只会写入数据库，需移除该环境变量后才会生效。",
         templateSection: "显示模板",
         template: "日期代码显示模板",
@@ -1676,6 +1676,19 @@ export default {
           lot_code: "Lot 编号",
           coo: "COO（产地）",
           cow: "COW（保修地）"
+        },
+        roTemplateSection: "收货单名称模板",
+        roTemplate: "收货单名称模板",
+        roTemplateHint: "占位符：[batch_no] 批次号、[invoice_no] 发票号码（多张以逗号连接）、[supplier_code] 供应商代码、[supplier_name] 供应商名称、[delivery_date] 送货日期（YYYY-MM-DD）、[date_code] 日期代码。字段为空时该占位符显示为空；若整个结果显示为空，则改用批次号。套用位置：PDA 收货列表及订单标题、后台收货列表及订单明细标题。",
+        roPreviewFull: "例子（批次 BATCH-20260921-01、发票 INV-100234 + INV-100235、供应商 Supplier Ltd、送货 2026-09-21、日期代码 3626）",
+        roPreviewFallback: "例子（无发票／供应商／日期 — 回退显示批次号）",
+        roPlaceholderLabels: {
+          batch_no: "批次号",
+          invoice_no: "发票号码",
+          supplier_code: "供应商代码",
+          supplier_name: "供应商名称",
+          delivery_date: "送货日期",
+          date_code: "日期代码"
         },
         saved: "已保存。"
       },
