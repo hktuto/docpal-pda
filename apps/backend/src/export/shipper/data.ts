@@ -517,16 +517,24 @@ export async function loadShipperDocuments(
     if (i !== null) perSection[i]!.relatedAllocs.push(r);
   }
 
-  return sections.map((section, i) => ({
-    section: { orgId: section.orgId, subInventoryCode: section.subInventoryCode },
-    doc: buildShipperDocument(
-      d.head,
-      finished,
-      section.items,
-      d.itemAllocs,
-      perSection[i]!.orderAllocs,
-      perSection[i]!.packageAllocs,
-      perSection[i]!.relatedAllocs
-    ),
-  }));
+  return sections.map((section, i) => {
+    // Per-section Total Ctn: the cartons physically in this section (count of
+    // distinct non-null ctn_no) — invoice-level total_ctn can't be
+    // apportioned when one invoice spans sections. Carton-less sections show
+    // a blank rather than a misleading 0.
+    const ctns = new Set(section.items.map((it) => it.ctnNo).filter((c): c is string => c !== null));
+    const head = { ...d.head, totalCtn: ctns.size > 0 ? ctns.size : null };
+    return {
+      section: { orgId: section.orgId, subInventoryCode: section.subInventoryCode },
+      doc: buildShipperDocument(
+        head,
+        finished,
+        section.items,
+        d.itemAllocs,
+        perSection[i]!.orderAllocs,
+        perSection[i]!.packageAllocs,
+        perSection[i]!.relatedAllocs
+      ),
+    };
+  });
 }

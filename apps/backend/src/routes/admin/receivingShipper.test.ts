@@ -454,6 +454,9 @@ test("GET shipper split: two sections → zip of per-section xlsx, item-level sl
 
   const store1 = members[0]![1]!;
   assert.match(String(store1[0]![0]), /^Shipper — PL-TEST-SP1 \(DAITO\)/);
+  // Per-section Total Ctn: the invoice declares 2 cartons for the whole
+  // batch, but each section holds only its own one.
+  assert.equal(store1[2]![0], "Total Ctn: 1");
   assert.deepEqual(store1[4], ["Invoice / Ctn", "Part Number", "Qty", "Total Qty", "Customer", "Balance"]);
   // Single-carton block: related allocated (60, pair-matched to STORE1) sits
   // in column B of the order-ref row; the item row carries the slot.
@@ -463,6 +466,7 @@ test("GET shipper split: two sections → zip of per-section xlsx, item-level sl
   assert.equal(store1.length, 10);
 
   const wstore1 = members[1]![1]!;
+  assert.equal(wstore1[2]![0], "Total Ctn: 1");
   assert.deepEqual(wstore1[7], ["", "", "", "", "SO-SP-002", ""]);
   assert.deepEqual(wstore1[8], ["", 80, "", "", "SO-SP-002", ""]);
   assert.deepEqual(wstore1[9], ["INV-SP-01 9002", "PART-B-1", 200, 200, 80, 120]);
@@ -525,6 +529,9 @@ test("GET shipper split: whole-order slots attribute by the picking order's pair
   );
 
   const store1 = members[0]![1]!;
+  // Carton-less section (order-level only): blank Total Ctn, not 0 — the
+  // invoice-level total_ctn (1) can't be apportioned across sections.
+  assert.equal(store1[2]![0], "Total Ctn: ");
   assert.deepEqual(store1[4], ["Invoice / Ctn", "Part Number", "Qty", "Total Qty", "Customer", "Customer", "Balance"]);
   // Both whole-order slots land in STORE1 — SO-WO-1 by pair match, SO-WO-2
   // by fallback; the related cell (column B of the order-ref row) sums both.
@@ -536,6 +543,7 @@ test("GET shipper split: whole-order slots attribute by the picking order's pair
   assert.equal(store1.length, 13);
 
   const wstore1 = members[1]![1]!;
+  assert.equal(wstore1[2]![0], "Total Ctn: 1");
   assert.deepEqual(wstore1[4], ["Invoice / Ctn", "Part Number", "Qty", "Total Qty", "Balance"]);
   assert.deepEqual(wstore1[9], ["INV-SP2-01 9003", "PART-E-1", 50, 50, 50]);
   assert.equal(wstore1.length, 10);
@@ -571,7 +579,9 @@ test("GET shipper split: NULL sub-inventory items form the no-subinventory secti
     members.map(([name]) => name),
     ["shipper-PL-TEST-SP3-org2-STORE1.xlsx", "shipper-PL-TEST-SP3-org2-no-subinventory.xlsx"]
   );
+  assert.deepEqual(members[0]![1]![2]![0], "Total Ctn: 1");
   assert.deepEqual(members[0]![1]![9], ["INV-SP3-01 9006", "PART-S-1", 20, 20, 20]);
+  assert.deepEqual(members[1]![1]![2]![0], "Total Ctn: 1");
   assert.deepEqual(members[1]![1]![9], ["INV-SP3-01 9005", "PART-N-1", 10, 10, 10]);
 });
 

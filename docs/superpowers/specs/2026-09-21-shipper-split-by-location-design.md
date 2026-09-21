@@ -93,6 +93,15 @@ they form their own section (see below), they are not dropped.
   through `resolveRenderer("shipper", { supplierCode })` as today — the
   HCC variant applies per file automatically.
 
+- **Per-section Total Ctn.** The header `Total Ctn` is section-scoped:
+  the count of DISTINCT non-null `ctn_no` among the section's items (the
+  cartons physically in that section — invoice-level `total_ctn` can't be
+  apportioned when one invoice spans sections). A section with no
+  carton-numbered items renders blank (`null`), not a misleading 0. The
+  zero-items fallback document keeps the original whole-order invoice
+  sum. Per-group `Total Qty`/`Balance` were already section-scoped
+  (groups are built from the section's items).
+
 - **Slot attribution to sections:**
   - *Item-level allocations* (live) follow their item — the item sits in
     exactly one section.
