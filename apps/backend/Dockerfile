@@ -1,7 +1,7 @@
 # Backend production image. Build context: repo root
 #   docker build -f apps/backend/Dockerfile .
-FROM ghcr.io/pnpm/pnpm:12 AS build
-RUN pnpm runtime set node 24 -g
+FROM node:22-alpine AS build
+RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
 WORKDIR /repo
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
