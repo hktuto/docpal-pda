@@ -1,27 +1,60 @@
 <script setup lang="ts">
 import type { FlowConfigState } from "~/utils/flowApi";
 import { formatDateCodeDisplay } from "~/utils/dateCodeDisplay";
+import { formatReceivingOrderName } from "~/utils/receivingOrderName";
 
-// Date-code display template editor (spec
-// docs/superpowers/specs/2026-09-17-date-code-display-template-design.md):
-// configures the flow-config key dateCodeDisplayTemplate — how lot date code /
-// lot code / COO / COW render in the receiving and picking detail screens.
+// Display template editors (specs
+// docs/superpowers/specs/2026-09-17-date-code-display-template-design.md and
+// docs/superpowers/specs/2026-09-21-receiving-order-name-template-design.md):
+// - dateCodeDisplayTemplate — how lot date code / lot code / COO / COW render
+//   in the receiving and picking detail screens.
+// - receivingOrderNameTemplate — how the receiving order NAME renders on the
+//   PDA and in the admin receiving list/detail (backend-computed displayName).
 // Saves through the same /admin/flow-config endpoint; the backend PUT stores
-// the raw body as the whole row, so we merge our key over the stored JSON.
+// the raw body as the whole row, so we merge our keys over the stored JSON.
 
 const flow = useFlowApi();
 const { t } = useI18n();
 
 const PLACEHOLDERS = ["date_code", "lot_code", "coo", "cow"] as const;
+const RO_PLACEHOLDERS = [
+  "batch_no",
+  "invoice_no",
+  "supplier_code",
+  "supplier_name",
+  "delivery_date",
+  "date_code",
+] as const;
 
 // Preview samples: a full lot and one with no COO/COW (shows the empty-
 // placeholder behavior — no dangling separator).
 const SAMPLE_FULL = { dateCode: "3626", lotCode: "L01", coo: "cn", cow: "tw" };
 const SAMPLE_PARTIAL = { dateCode: "3626", lotCode: "L01", coo: null, cow: null };
 
+// Preview samples for the receiving order name: a full order and one with no
+// invoice (shows the batch-no fallback when the render would be empty).
+const RO_SAMPLE_FULL = {
+  batchNo: "BATCH-20260921-01",
+  invoiceNo: "INV-100234, INV-100235",
+  supplierCode: "SUP",
+  supplierName: "Supplier Ltd",
+  deliveryDate: "2026-09-21",
+  dateCode: "3626",
+};
+const RO_SAMPLE_NO_INVOICE = {
+  batchNo: "BATCH-20260921-01",
+  invoiceNo: null,
+  supplierCode: null,
+  supplierName: null,
+  deliveryDate: null,
+  dateCode: null,
+};
+
 const state = ref<FlowConfigState | null>(null);
 const templateText = ref("");
 const templateInput = ref<HTMLInputElement | null>(null);
+const roTemplateText = ref("");
+const roTemplateInput = ref<HTMLInputElement | null>(null);
 const loading = ref(true);
 const saving = ref(false);
 const error = ref("");
@@ -29,6 +62,8 @@ const saved = ref(false);
 
 const previewFull = computed(() => formatDateCodeDisplay(SAMPLE_FULL, templateText.value) || "—");
 const previewPartial = computed(() => formatDateCodeDisplay(SAMPLE_PARTIAL, templateText.value) || "—");
+const roPreviewFull = computed(() => formatReceivingOrderName(RO_SAMPLE_FULL, roTemplateText.value) || "—");
+const roPreviewFallback = computed(() => formatReceivingOrderName(RO_SAMPLE_NO_INVOICE, roTemplateText.value) || "—");
 
 async function load() {
   loading.value = true;
@@ -36,6 +71,7 @@ async function load() {
   try {
     state.value = await flow.getFlowConfig();
     templateText.value = state.value.config.dateCodeDisplayTemplate ?? "[date_code][coo]";
+    roTemplateText.value = state.value.config.receivingOrderNameTemplate ?? "[batch_no]";
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -43,16 +79,17 @@ async function load() {
   }
 }
 
-function insertPlaceholder(name: (typeof PLACEHOLDERS)[number]) {
+function insertPlaceholder(name: (typeof PLACEHOLDERS)[number] | (typeof RO_PLACEHOLDERS)[number], target: "lot" | "order") {
   const token = `[${name}]`;
-  const el = templateInput.value;
+  const textRef = target === "lot" ? templateText : roTemplateText;
+  const el = target === "lot" ? templateInput.value : roTemplateInput.value;
   if (!el) {
-    templateText.value += token;
+    textRef.value += token;
     return;
   }
-  const start = el.selectionStart ?? templateText.value.length;
+  const start = el.selectionStart ?? textRef.value.length;
   const end = el.selectionEnd ?? start;
-  templateText.value = templateText.value.slice(0, start) + token + templateText.value.slice(end);
+  textRef.value = textRef.value.slice(0, start) + token + textRef.value.slice(end);
   nextTick(() => {
     el.focus();
     el.setSelectionRange(start + token.length, start + token.length);
@@ -60,7 +97,7 @@ function insertPlaceholder(name: (typeof PLACEHOLDERS)[number]) {
 }
 
 async function save() {
-  if (templateText.value.trim() === "") {
+  if (templateText.value.trim() === "" || roTemplateText.value.trim() === "") {
     error.value = t("admin.pages.displayConfig.templateInvalid");
     return;
   }
@@ -71,6 +108,7 @@ async function save() {
     state.value = await flow.saveFlowConfig({
       ...(state.value?.stored ?? {}),
       dateCodeDisplayTemplate: templateText.value,
+      receivingOrderNameTemplate: roTemplateText.value,
     });
     saved.value = true;
   } catch (e: any) {
@@ -108,7 +146,7 @@ onMounted(load);
             type="button"
             class="btn chip"
             :title="$t(`admin.pages.displayConfig.placeholderLabels.${p}`)"
-            @click="insertPlaceholder(p)"
+            @click="insertPlaceholder(p, 'lot')"
           >
             [{{ p }}]
           </button>
@@ -123,6 +161,37 @@ onMounted(load);
         <div class="preview-row">
           <span class="preview-label">{{ $t("admin.pages.displayConfig.previewNoCoo") }}</span>
           <code class="preview-value">{{ previewPartial }}</code>
+        </div>
+      </div>
+
+      <div class="card form-card">
+        <h2>{{ $t("admin.pages.displayConfig.roTemplateSection") }}</h2>
+        <div class="form-row">
+          <label for="ro-template">{{ $t("admin.pages.displayConfig.roTemplate") }}</label>
+          <input id="ro-template" ref="roTemplateInput" v-model="roTemplateText" type="text" class="template-input" />
+        </div>
+        <div class="chip-row">
+          <button
+            v-for="p in RO_PLACEHOLDERS"
+            :key="p"
+            type="button"
+            class="btn chip"
+            :title="$t(`admin.pages.displayConfig.roPlaceholderLabels.${p}`)"
+            @click="insertPlaceholder(p, 'order')"
+          >
+            [{{ p }}]
+          </button>
+        </div>
+        <p class="hint-text">{{ $t("admin.pages.displayConfig.roTemplateHint") }}</p>
+
+        <h2>{{ $t("admin.pages.displayConfig.previewSection") }}</h2>
+        <div class="preview-row">
+          <span class="preview-label">{{ $t("admin.pages.displayConfig.roPreviewFull") }}</span>
+          <code class="preview-value">{{ roPreviewFull }}</code>
+        </div>
+        <div class="preview-row">
+          <span class="preview-label">{{ $t("admin.pages.displayConfig.roPreviewFallback") }}</span>
+          <code class="preview-value">{{ roPreviewFallback }}</code>
         </div>
       </div>
 

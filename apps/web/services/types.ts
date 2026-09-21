@@ -56,6 +56,8 @@ export interface PickingOrderListQuery {
 export interface ReceivingOrderListRow {
   id: string;
   batchNo: string;
+  /** Order name per the warehouse's receivingOrderNameTemplate flow config. */
+  displayName?: string;
   status: string;
   deliveryDate: string | null;
   dateCode: string | null;
@@ -84,6 +86,8 @@ export interface ReceivingOrderSupplier {
 export interface ReceivingOrderDetail {
   id: string;
   batchNo: string;
+  /** Order name per the warehouse's receivingOrderNameTemplate flow config. */
+  displayName?: string;
   status: string;
   deliveryDate: string | null;
   dateCode: string | null;

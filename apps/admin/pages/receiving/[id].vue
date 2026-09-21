@@ -574,7 +574,7 @@ const {
 <template>
   <div>
     <div class="page-head">
-      <h1>{{ $t("admin.pages.receiving.detailTitle", { batchNo: order?.batchNo ?? "" }) }}</h1>
+      <h1>{{ $t("admin.pages.receiving.detailTitle", { batchNo: order?.displayName ?? order?.batchNo ?? "" }) }}</h1>
       <div class="head-actions">
         <!-- <button class="btn" disabled :title="$t('admin.common.downloadPendingTitle')">
           {{ $t("admin.pages.receiving.downloadDeliveryOrderList") }}

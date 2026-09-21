@@ -31,7 +31,14 @@ const filtered = computed(() => {
 
 // accessors resolve the derived display values used for sorting.
 const columnDefs = computed<AdminColumnDef<ReceivingOrderRow>[]>(() => [
-  { key: "batchNo", label: t("admin.pages.receiving.batchNo"), size: 130 },
+  {
+    key: "batchNo",
+    label: t("admin.pages.receiving.batchNo"),
+    // Renders the configured display name (receivingOrderNameTemplate);
+    // search above and sorting still use the raw batch_no / invoice fields.
+    accessor: (r) => r.displayName ?? r.batchNo,
+    size: 200,
+  },
   { key: "status", label: t("admin.pages.receiving.status"), size: 160 },
   {
     key: "supplier",

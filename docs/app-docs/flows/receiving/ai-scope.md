@@ -91,6 +91,14 @@
   `docs/superpowers/specs/2026-09-17-date-code-display-template-design.md`,
   formatter `apps/admin/utils/dateCodeDisplay.ts` via
   `composables/useDateCodeDisplay.ts`).
+- The order NAME (PDA receiving list row title + detail header, admin receiving
+  list batch-no column + detail h1) renders the backend-computed `displayName`
+  from the flow-config `receivingOrderNameTemplate` (default `[batch_no]`;
+  placeholders `[batch_no]`/`[invoice_no]`/`[supplier_code]`/`[supplier_name]`/
+  `[delivery_date]`/`[date_code]`, all-empty falls back to batch_no; spec
+  `docs/superpowers/specs/2026-09-21-receiving-order-name-template-design.md`,
+  backend formatter `apps/backend/src/receivingOrderName.ts`). Clients fall
+  back to `batchNo` when `displayName` is absent (older backends).
 - Admin receiving detail per-item actions (spec
   `docs/superpowers/specs/2026-09-15-admin-picking-item-actions-design.md`):
   a search icon on the part-no cell opens the part-search + allocate dialog
