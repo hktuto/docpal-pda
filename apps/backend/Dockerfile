@@ -1,6 +1,6 @@
 # Backend production image. Build context: repo root
 #   docker build -f apps/backend/Dockerfile .
-FROM ghcr.io/pnpm/pnpm:10 AS build
+FROM ghcr.io/pnpm/pnpm:12 AS build
 RUN pnpm runtime set node 24 -g
 WORKDIR /repo
 
