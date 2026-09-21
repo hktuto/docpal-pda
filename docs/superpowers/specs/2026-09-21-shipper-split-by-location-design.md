@@ -1,7 +1,7 @@
 # Shipper split by location (org_id + sub_inventory_code) — design
 
 Date: 2026-09-21
-Status: proposed
+Status: implemented (revised same day: split is the only mode)
 Builds on: 2026-09-14-admin-receiving-shipper-download-design.md,
 2026-09-16-admin-receiving-shipper-related-allocated-design.md,
 2026-09-21-admin-excel-export-renderer-separation-design.md
@@ -24,17 +24,19 @@ is not used.
 
 ## Goals
 
-1. A split mode that emits **one xlsx per `(org_id, sub_inventory_code)`
-   group** of the order's invoice items, delivered as a single zip.
+1. Emit **one xlsx per `(org_id, sub_inventory_code)`
+   group** of the order's invoice items, delivered as a single zip when
+   more than one group exists.
 2. Allocation slots attributed to the correct section, including
    whole-order (no `ctn_no`) allocations.
-3. The existing combined download is byte-for-byte unchanged when split
-   is not requested; renderers (`default`, `hcc`) need no changes.
+3. Per-section sheet rows are byte-for-byte what the former combined
+   download showed for that section's items; renderers (`default`,
+   `hcc`) need no changes.
 
 ## Non-goals
 
 - Splitting by invoice, supplier, or shipper-office org_id.
-- Changing the combined (non-split) output, layout, or slot logic.
+- Changing the shipper layout or slot logic.
 - Splitting the picking-list export.
 - Editing `sub_inventory_code` from the admin UI (still not an editable
   field; `adminedits.ts` `RECEIVING_ITEM_FIELDS`).
@@ -58,18 +60,17 @@ they form their own section (see below), they are not dropped.
 
 ## Decisions
 
-- **Split key = item `(org_id, sub_inventory_code)`.** NULL
+- **Split is the only mode.** The route always splits by item
+  `(org_id, sub_inventory_code)`; there is no `?split=` query param and no
+  combined download (a stray `split` param is ignored). NULL
   `sub_inventory_code` is a real section labelled `(no sub-inventory)`;
   NULL `org_id` is impossible (NOT NULL, default 2).
 
-- **Opt-in via query param: `?split=location`.** Without it the route
-  behaves exactly as today (one combined xlsx). Admin UI gets separate
-  split buttons; the existing buttons keep the combined file.
-
 - **Output = zip of per-section xlsx files.** One section → the plain
-  xlsx is returned directly (no zip wrapper), so single-location orders
-  see no change beyond the file name suffix. Zip name:
-  `shipper-<batchNo>.zip` / `finished-shipper-<batchNo>.zip`; member
+  xlsx is returned directly under the renderer's own file name
+  (`shipper-<batchNo>.xlsx` / `finished-shipper-<batchNo>.xlsx`, no
+  section suffix), so single-location orders see no change at all. Zip
+  name: `shipper-<batchNo>.zip` / `finished-shipper-<batchNo>.zip`; member
   names: `shipper-<batchNo>-org<orgId>-<subInventoryCode>.xlsx` with
   filename-unsafe characters (`/\:*?"<>|` and whitespace runs) replaced
   by `-`, NULL → `no-subinventory`.
@@ -113,20 +114,19 @@ they form their own section (see below), they are not dropped.
     related allocations whose order pair matches the section (same
     fallback to the part's first section).
 
-- **Route stays HTTP-only**: parse `split`, call the loader, render each
+- **Route stays HTTP-only**: call the split loader, render each
   section, zip when >1, set `Content-Type: application/zip` and
-  `Content-Disposition` accordingly.
+  `Content-Disposition` accordingly. The CORS middleware exposes
+  `Content-Disposition` (`exposeHeaders` in `src/index.ts`) so the
+  cross-origin admin SPA can save the zip under its real name.
 
 ## Admin UI
 
 `apps/admin/pages/receiving/[id].vue`:
 
-- Two new buttons next to the existing shipper buttons, same status
-  gating (`in_hand` → live split, `clear` → finished split):
-  "Download shipper (split by location)" / finished equivalent; new i18n
-  keys in `layers/i18n/i18n/locales/{en-US,zh-CN,zh-HK}.ts`.
-- `downloadShipper` gains a `split` flag appending `&split=location`,
-  and the saved file name is taken from the response's
+- The existing shipper buttons are the only ones (split is the behavior);
+  same status gating (`in_hand` → live, `clear` → finished).
+- The saved file name is taken from the response's
   `Content-Disposition` header (falls back to the current hardcoded
   name) so the `.zip` extension survives.
 
@@ -135,7 +135,7 @@ they form their own section (see below), they are not dropped.
 `apps/backend/src/routes/admin/receivingShipper.test.ts` additions:
 
 1. Order with items in two `(org_id, sub_inventory_code)` pairs →
-   `?split=location` returns `application/zip` containing exactly two
+   `application/zip` containing exactly two
    xlsx members with the expected names; each member parses to the same
    rows the combined file would show for that section's items.
 2. Item-level allocations land only in their item's section file.
@@ -144,11 +144,12 @@ they form their own section (see below), they are not dropped.
    first section.
 4. NULL `sub_inventory_code` items form the `(no sub-inventory)`
    section.
-5. Single-section order → plain xlsx response (not zip), per-section
+5. Single-section order → plain xlsx response (not zip), renderer's own
    file name.
-6. `?mode=finished&split=location` — package slots attributed per
+6. `?mode=finished` — package slots attributed per
    section.
-7. Non-split request output unchanged (existing tests already pin this).
+7. Single-section sheet rows identical to the former combined output
+   (existing tests pin this).
 
 ## Documentation
 

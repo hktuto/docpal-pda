@@ -32,7 +32,7 @@ export const app = new Hono<{ Variables: AuthVariables }>();
 const corsOriginsEnv = process.env.CORS_ORIGINS?.trim();
 const origins = !corsOriginsEnv || corsOriginsEnv === "*" ? "*" : corsOriginsEnv.split(",");
 
-app.use("*", cors({ origin: origins, allowHeaders: ["Content-Type", "Last-Event-ID", "Authorization"] }));
+app.use("*", cors({ origin: origins, allowHeaders: ["Content-Type", "Last-Event-ID", "Authorization"], exposeHeaders: ["Content-Disposition"] }));
 // Everything below requires a bearer token except /health, POST /auth/login
 // and /dev/* (allowlist inside the middleware; GET /events also accepts
 // ?token= for EventSource clients).

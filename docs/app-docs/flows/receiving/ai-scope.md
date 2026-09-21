@@ -80,14 +80,13 @@
   showing the related-order allocated qty (Σ allocations of the part on the
   picking orders tracing back to this receiving order, any source; spec
   `docs/superpowers/specs/2026-09-16-admin-receiving-shipper-related-allocated-design.md`).
-  A split variant (`?split=location`, spec
-  `docs/superpowers/specs/2026-09-21-shipper-split-by-location-design.md`)
-  emits one xlsx per receiving-office `(org_id, sub_inventory_code)` section
-  of the order's items — a zip of per-section files when the order spans
-  more than one section, the plain per-section xlsx otherwise; whole-order /
-  package / related slots attribute by the picking order's pair, falling
-  back to the part's first section. Separate split buttons sit next to the
-  combined-download buttons with the same status gating.
+  The download always splits by receiving-office location (spec
+  `docs/superpowers/specs/2026-09-21-shipper-split-by-location-design.md`):
+  one xlsx per `(org_id, sub_inventory_code)` section of the order's
+  items — a zip of per-section files when the order spans more than one
+  section, the plain xlsx otherwise; whole-order / package / related
+  slots attribute by the picking order's pair, falling back to the
+  part's first section.
   The
   download is read-only; a separate Re-allocate button (`in_hand` only)
   awaits `POST /admin/receiving-orders/:id/reallocate` (same scoped core as

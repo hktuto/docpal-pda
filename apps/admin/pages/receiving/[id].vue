@@ -365,7 +365,7 @@ async function reallocate() {
 // actual picked qtys.
 const downloadingShipper = ref(false);
 
-async function downloadShipper(finished: boolean, split = false) {
+async function downloadShipper(finished: boolean) {
   if (!order.value || downloadingShipper.value) return;
   downloadingShipper.value = true;
   error.value = "";
@@ -373,7 +373,6 @@ async function downloadShipper(finished: boolean, split = false) {
     const token = localStorage.getItem("admin_token");
     const params = new URLSearchParams();
     if (finished) params.set("mode", "finished");
-    if (split) params.set("split", "location");
     const qs = params.toString();
     const res = await fetch(
       `${apiBaseUrl}/admin/receiving-orders/${orderId}/shipper${qs ? `?${qs}` : ""}`,
@@ -610,19 +609,9 @@ const {
           {{ $t("admin.pages.receiving.downloadShipper") }}
         </button>
         <button
-          v-if="order && (order.status === 'in_hand')"
-        class="btn" :disabled="downloadingShipper || !order" @click="downloadShipper(false, true)">
-          {{ $t("admin.pages.receiving.downloadShipperSplit") }}
-        </button>
-        <button
           v-if="order && (order.status === 'clear')"
         class="btn" :disabled="downloadingShipper || !order" @click="downloadShipper(true)">
           {{ $t("admin.pages.receiving.downloadFinishedShipper") }}
-        </button>
-        <button
-          v-if="order && (order.status === 'clear')"
-        class="btn" :disabled="downloadingShipper || !order" @click="downloadShipper(true, true)">
-          {{ $t("admin.pages.receiving.downloadFinishedShipperSplit") }}
         </button>
         <button
           v-if="order && order.status === 'in_hand'"

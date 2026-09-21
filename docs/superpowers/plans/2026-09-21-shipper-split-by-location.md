@@ -92,3 +92,13 @@ Spec: docs/superpowers/specs/2026-09-21-shipper-split-by-location-design.md
 ## Commit
 
 Single commit: `feat(backend,admin): split shipper download by org/sub-inventory location`.
+
+## Addendum (2026-09-21, follow-up change)
+
+- Split became the ONLY mode: the route no longer reads `split`, the
+  combined download and its buttons/i18n keys were removed, and a
+  single-section order returns the plain xlsx under the renderer's own
+  file name (no `-org<id>-<subInv>` suffix).
+- CORS fix: `exposeHeaders: ["Content-Disposition"]` in
+  `apps/backend/src/index.ts` — without it the cross-origin admin SPA
+  could not read the header and saved zips under an `.xlsx` name.

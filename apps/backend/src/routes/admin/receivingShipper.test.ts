@@ -388,10 +388,10 @@ test("GET shipper: HCC (supplier 23) renders the drawing-no first column; other 
   assert.deepEqual(ctrlRows[9], ["INV-CTRL-01 8001", "CTRL-PART-1", 100, 100, 100]);
 });
 
-// Split by location (spec 2026-09-21-shipper-split-by-location-design.md):
-// ?split=location emits one xlsx per receiving-office (org_id,
+// Split by location (spec 2026-09-21-shipper-split-by-location-design.md) is
+// the ONLY mode: the route emits one xlsx per receiving-office (org_id,
 // sub_inventory_code) section — a zip when the order spans >1 section, the
-// plain per-section xlsx when it spans exactly one.
+// plain xlsx under the renderer's file name when it spans exactly one.
 
 /** Zip member name → sheet rows, in member order. */
 function zipSheets(buf: ArrayBuffer): [string, (string | number)[][]][] {
@@ -437,11 +437,11 @@ async function seedSplitScenario(): Promise<string> {
   return orderId;
 }
 
-test("GET shipper?split=location: two sections → zip of per-section xlsx, item-level slots stay in their item's section", async () => {
+test("GET shipper split: two sections → zip of per-section xlsx, item-level slots stay in their item's section", async () => {
   await reseed(client);
   const orderId = await seedSplitScenario();
 
-  const res = await req(`/admin/receiving-orders/${orderId}/shipper?split=location`);
+  const res = await req(`/admin/receiving-orders/${orderId}/shipper`);
   assert.equal(res.status, 200);
   assert.equal(res.headers.get("Content-Type"), "application/zip");
   assert.match(res.headers.get("Content-Disposition") ?? "", /shipper-PL-TEST-SP1\.zip/);
@@ -469,7 +469,7 @@ test("GET shipper?split=location: two sections → zip of per-section xlsx, item
   assert.equal(wstore1.length, 10);
 });
 
-test("GET shipper?split=location: whole-order slots attribute by the picking order's pair, fallback to the part's first section", async () => {
+test("GET shipper split: whole-order slots attribute by the picking order's pair, fallback to the part's first section", async () => {
   await reseed(client);
   await client.db.execute(sql`DELETE FROM picking_orders`);
   const orderId = await insertReceivingOrder(client.db, "PL-TEST-SP2", {
@@ -514,7 +514,7 @@ test("GET shipper?split=location: whole-order slots attribute by the picking ord
     `);
   }
 
-  const res = await req(`/admin/receiving-orders/${orderId}/shipper?split=location`);
+  const res = await req(`/admin/receiving-orders/${orderId}/shipper`);
   assert.equal(res.status, 200);
   assert.equal(res.headers.get("Content-Type"), "application/zip");
 
@@ -541,7 +541,7 @@ test("GET shipper?split=location: whole-order slots attribute by the picking ord
   assert.equal(wstore1.length, 10);
 });
 
-test("GET shipper?split=location: NULL sub-inventory items form the no-subinventory section, ordered last", async () => {
+test("GET shipper split: NULL sub-inventory items form the no-subinventory section, ordered last", async () => {
   await reseed(client);
   await client.db.execute(sql`DELETE FROM picking_orders`);
   const orderId = await insertReceivingOrder(client.db, "PL-TEST-SP3", {
@@ -562,7 +562,7 @@ test("GET shipper?split=location: NULL sub-inventory items form the no-subinvent
   )!.id;
   await confirmReceivingArrival(client.db, orderId, actorId);
 
-  const res = await req(`/admin/receiving-orders/${orderId}/shipper?split=location`);
+  const res = await req(`/admin/receiving-orders/${orderId}/shipper`);
   assert.equal(res.status, 200);
   assert.equal(res.headers.get("Content-Type"), "application/zip");
 
@@ -575,17 +575,19 @@ test("GET shipper?split=location: NULL sub-inventory items form the no-subinvent
   assert.deepEqual(members[1]![1]![9], ["INV-SP3-01 9005", "PART-N-1", 10, 10, 10]);
 });
 
-test("GET shipper?split=location: single-section order returns the plain per-section xlsx, not a zip", async () => {
+test("GET shipper: single-section order returns the plain xlsx under the renderer file name, not a zip", async () => {
   await reseed(client);
   const orderId = await seedScenario();
 
-  const res = await req(`/admin/receiving-orders/${orderId}/shipper?split=location`);
+  const res = await req(`/admin/receiving-orders/${orderId}/shipper`);
   assert.equal(res.status, 200);
   assert.equal(
     res.headers.get("Content-Type"),
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
   );
-  assert.match(res.headers.get("Content-Disposition") ?? "", /shipper-PL-TEST-01-org2-STORE1\.xlsx/);
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  assert.match(disposition, /shipper-PL-TEST-01\.xlsx/);
+  assert.doesNotMatch(disposition, /org2/);
 
   // Same rows as the combined download.
   const rows = await sheetRows(await res.arrayBuffer());
@@ -594,7 +596,7 @@ test("GET shipper?split=location: single-section order returns the plain per-sec
   assert.equal(rows.length, 17);
 });
 
-test("GET shipper?mode=finished&split=location: package slots attribute per section", async () => {
+test("GET shipper?mode=finished split: package slots attribute per section", async () => {
   await reseed(client);
   const orderId = await seedSplitScenario();
 
@@ -631,7 +633,7 @@ test("GET shipper?mode=finished&split=location: package slots attribute per sect
   `);
   await client.db.execute(sql`UPDATE receiving_orders SET status = 'clear' WHERE id = ${orderId}`);
 
-  const res = await req(`/admin/receiving-orders/${orderId}/shipper?mode=finished&split=location`);
+  const res = await req(`/admin/receiving-orders/${orderId}/shipper?mode=finished`);
   assert.equal(res.status, 200);
   assert.equal(res.headers.get("Content-Type"), "application/zip");
   assert.match(res.headers.get("Content-Disposition") ?? "", /finished-shipper-PL-TEST-SP1\.zip/);
