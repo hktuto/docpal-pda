@@ -234,7 +234,10 @@
   `docs/superpowers/specs/2026-09-03-picking-from-subinventory-orgs-design.md`).
 - Allocation sources: shelf lots first, then in-hand receiving (dock) stock —
   a picking order can allocate straight off the receiving dock before
-  put-away (cross-dock). When the flow config (`warehouse_config` row
+  put-away (cross-dock). Shelf lots whose `shelf_code` is missing from
+  `shelves` (upstream sync can write them past the FK) are excluded as
+  sources and never counter-updated — any UPDATE on such a row fails the FK
+  check. When the flow config (`warehouse_config` row
   `"flow"`) sets
   `steps.picking.allocation.allowDockStock=false`, dock stock is skipped and
   only put-away lots allocate — put-away becomes a hard gate and uncovered

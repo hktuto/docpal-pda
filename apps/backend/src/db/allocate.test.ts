@@ -109,6 +109,28 @@ test("allocateAll: FIFO from shelf lots, updates lots + picking items", async ()
   );
 });
 
+test("allocateAll: lots with a shelf_code missing from shelves are skipped as sources", async () => {
+  await reseed(client);
+  await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${PO_22}`);
+  // Simulate an upstream-sync write that bypassed the shelf FK (replication
+  // role): LOT_18 — the only source for ITEM_23's part — points at a shelf
+  // that does not exist. Any UPDATE on that row fails the FK check, so the
+  // engine must skip it instead of dying.
+  await client.sql.unsafe(
+    `SET session_replication_role = replica;
+     UPDATE inventory_lots SET shelf_code = 'NO-SUCH-SHELF' WHERE id = '${LOT_18}';
+     RESET session_replication_role;`
+  );
+  const s = await allocateAll(client.db);
+  // The other two items still allocate; ITEM_23 is left unallocated and the
+  // run completes.
+  assert.equal(s.fullyAllocated, 2);
+  const orphans = await client.db.execute(sql`SELECT COUNT(*)::int AS n FROM allocations WHERE picking_item_id = ${ITEM_23}`);
+  assert.equal(Number((orphans[0] as any).n), 0);
+  const item = await client.db.execute(sql`SELECT allocated_qty FROM picking_items WHERE id = ${ITEM_23}`);
+  assert.equal(Number((item[0] as any).allocated_qty), 0);
+});
+
 test("allocateAll: pair-less demand is org-agnostic — lots in any org match by part_no", async () => {
   await reseed(client);
   await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${PO_22}`);
