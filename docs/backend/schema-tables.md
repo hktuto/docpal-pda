@@ -329,6 +329,14 @@ Packing-list line items.
 
 Note: indexes on `receiving_invoice_id` and `part_no`.
 
+## receiving_orders_review / receiving_invoices_review / receiving_invoice_items_review
+
+Remote-sync review mirrors of the receiving tables (`schema/receiving-review.ts`;
+remote DDL `demo.wms_*`, `wms_` prefix dropped here). Written by the external
+sync service for review, not by this app — columns match the corresponding
+receiving tables one-for-one (plus `drawing_no` text on the items table), with
+no FKs and no `sync_events` trigger.
+
 
 # Picking (`schema/picking.ts`)
 
