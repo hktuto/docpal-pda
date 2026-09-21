@@ -58,7 +58,10 @@
   task, wraps `components/MeasureBox.vue` (`mode="verify"`), and adds the
   reopen + complete actions.
 - `components/MeasureBox.vue` — box page body (package verify by scan,
-  measurements, close); the `mode: 'measuring' | 'verify'` prop selects the
+  measurements, close; box title, status badge, picking-order info and the
+  View picking order / Enter measurements actions registered into the app
+  header via `composables/usePageHeader.ts`); the
+  `mode: 'measuring' | 'verify'` prop selects the
   gating flag (`verifyVerified` in verify mode) and allows scanning closed
   boxes.
 - `composables/useFlowSteps.ts` — flow-step config state, loaded from

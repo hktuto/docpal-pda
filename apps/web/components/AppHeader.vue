@@ -29,7 +29,66 @@
       </svg>
     </NuxtLink>
 
-    <h1 class="app-header__title">{{ title }}</h1>
+    <div class="app-header__heading">
+      <h1 class="app-header__title">{{ title }}</h1>
+      <span
+        v-if="pageBadgeText"
+        class="badge app-header__badge"
+        :class="pageBadgeClass"
+      >{{ pageBadgeText }}</span>
+    </div>
+
+    <div v-if="hasPageMenu" ref="pageMenuRef" class="app-header__menu">
+      <button
+        type="button"
+        class="app-header__menu-toggle"
+        :aria-label="t('appHeader.pageMenu')"
+        :title="t('appHeader.pageMenu')"
+        :aria-expanded="pageMenuOpen"
+        @click="togglePageMenu"
+      >
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="5" cy="12" r="1.5"/>
+          <circle cx="12" cy="12" r="1.5"/>
+          <circle cx="19" cy="12" r="1.5"/>
+        </svg>
+      </button>
+      <div v-if="pageMenuOpen" class="app-header__menu-body">
+        <div
+          v-for="row in pageInfo"
+          :key="row.label"
+          class="app-header__menu-info"
+        >
+          <span class="app-header__menu-info-label">{{ row.label }}</span>
+          <span class="app-header__menu-info-value">{{ row.value }}</span>
+        </div>
+        <div
+          v-if="pageInfo.length && pageActions.length"
+          class="app-header__menu-divider"
+        />
+        <template v-for="action in pageActions" :key="action.key">
+          <NuxtLink
+            v-if="action.to"
+            :to="action.to"
+            class="app-header__menu-row"
+            :class="{ 'app-header__menu-row--danger': action.danger }"
+            @click="pageMenuOpen = false"
+          >
+            <span>{{ action.label }}</span>
+          </NuxtLink>
+          <button
+            v-else
+            type="button"
+            class="app-header__menu-row"
+            :class="{ 'app-header__menu-row--danger': action.danger }"
+            :disabled="action.disabled"
+            @click="runPageAction(action)"
+          >
+            <span>{{ action.label }}</span>
+          </button>
+        </template>
+      </div>
+    </div>
 
     <div ref="menuRef" class="app-header__menu">
       <button
@@ -38,7 +97,7 @@
         :aria-label="t('appHeader.menu')"
         :title="t('appHeader.menu')"
         :aria-expanded="menuOpen"
-        @click="menuOpen = !menuOpen"
+        @click="toggleMenu"
       >
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="6" r="1.5"/>
@@ -78,6 +137,8 @@
 </template>
 
 <script setup lang="ts">
+import type { PageHeaderAction } from "~/composables/usePageHeader";
+
 const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
@@ -86,21 +147,80 @@ const warehouse = useWarehouse();
 
 const menuOpen = ref(false);
 const menuRef = ref<HTMLElement | null>(null);
+const pageMenuOpen = ref(false);
+const pageMenuRef = ref<HTMLElement | null>(null);
 
 function closeMenuOnOutsideClick(event: MouseEvent) {
+  const target = event.target as Node;
   if (
     menuOpen.value &&
     menuRef.value &&
-    !menuRef.value.contains(event.target as Node)
+    !menuRef.value.contains(target)
   ) {
     menuOpen.value = false;
+  }
+  if (
+    pageMenuOpen.value &&
+    pageMenuRef.value &&
+    !pageMenuRef.value.contains(target)
+  ) {
+    pageMenuOpen.value = false;
   }
 }
 
 onMounted(() => document.addEventListener("click", closeMenuOnOutsideClick));
 onUnmounted(() => document.removeEventListener("click", closeMenuOnOutsideClick));
 
+function toggleMenu() {
+  menuOpen.value = !menuOpen.value;
+  pageMenuOpen.value = false;
+}
+
+function togglePageMenu() {
+  pageMenuOpen.value = !pageMenuOpen.value;
+  menuOpen.value = false;
+}
+
+// Whatever the mounted detail page registered — ignored once the route moves
+// on, so list pages keep the static meta title with no clearing dance.
+const { active: pageHeader } = usePageHeader();
+
+const pageTitle = computed(() => {
+  const value = pageHeader.value?.title;
+  return value !== undefined ? toValue(value) : undefined;
+});
+const pageBadgeText = computed(() => {
+  const value = pageHeader.value?.badgeText;
+  const resolved = value !== undefined ? toValue(value) : undefined;
+  return resolved || undefined;
+});
+const pageBadgeClass = computed(() => {
+  const value = pageHeader.value?.badgeClass;
+  return value !== undefined ? toValue(value) : undefined;
+});
+const pageInfo = computed(() => toValue(pageHeader.value?.info) ?? []);
+const pageActions = computed(() => toValue(pageHeader.value?.actions) ?? []);
+const hasPageMenu = computed(
+  () => pageInfo.value.length > 0 || pageActions.value.length > 0
+);
+
+async function runPageAction(action: PageHeaderAction) {
+  if (!action.onClick) return;
+  await action.onClick();
+  pageMenuOpen.value = false;
+}
+
+// Either menu left open would float over the next page — close on navigation.
+watch(
+  () => route.fullPath,
+  () => {
+    menuOpen.value = false;
+    pageMenuOpen.value = false;
+  }
+);
+
 const title = computed(() => {
+  if (pageTitle.value) return pageTitle.value;
   const metaTitle = route.meta.title as string | undefined;
   if (!metaTitle) return t("meta.warehouse");
   const translated = t(metaTitle);
@@ -138,6 +258,25 @@ async function resetDb() {
 </script>
 
 <style scoped>
+.app-header__heading {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.app-header__heading .app-header__title {
+  margin-right: 0;
+}
+
+.app-header__badge {
+  flex-shrink: 0;
+  font-size: 0.625rem;
+  padding: 0.12rem 0.4rem;
+  letter-spacing: 0.03em;
+}
+
 .app-header__menu {
   position: relative;
 }
@@ -191,11 +330,51 @@ async function resetDb() {
   color: var(--text);
   font-size: 0.875rem;
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
 }
 
 .app-header__menu-row:hover {
   background: var(--bg);
+}
+
+.app-header__menu-row:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.app-header__menu-row:disabled:hover {
+  background: transparent;
+}
+
+.app-header__menu-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.35rem 0.625rem;
+  font-size: 0.8125rem;
+  color: var(--text);
+}
+
+.app-header__menu-info-label {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.app-header__menu-info-value {
+  min-width: 0;
+  text-align: right;
+  word-break: break-word;
+}
+
+.app-header__menu-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 0.25rem 0;
 }
 
 .app-header__menu-row--danger {

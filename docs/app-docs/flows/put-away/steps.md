@@ -8,7 +8,7 @@ From the home screen, tap **Put-away**. The list shows orders/tasks waiting to b
 
 ## 2. Select a task
 
-Tap the task to open the detail page.
+Tap the task to open the detail page. The batch number and receiving status show in the app header; the horizontal-dots menu at the top right holds the supplier and delivery date.
 
 ## 3. Review available items
 

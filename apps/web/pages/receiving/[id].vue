@@ -4,48 +4,6 @@
     <EmptyState v-else-if="error" error>{{ $t('common.errorPrefix', { message: error }) }}</EmptyState>
 
     <template v-else-if="order">
-      <DetailHeader
-        v-model="headerExpanded"
-        :title="order.displayName || order.batchNo"
-        :status="order.status"
-        :badge-class="badgeClass(order.status)"
-        :flush-top="route.meta.props?.noPadding"
-        style="margin-bottom: 1.5rem;"
-      >
-        <template #actions>
-          <button
-            v-if="order.status === 'pending' || order.status === 'provisional_received'"
-            class="btn btn--small"
-            :disabled="confirming"
-            @click="confirmArrival"
-          >
-            <template v-if="confirming">
-              <InlineSpinner /> {{ $t('actions.confirming') }}
-            </template>
-            <template v-else>
-              {{ $t('receiving.detail.confirmArrived') }}
-            </template>
-          </button>
-          <NuxtLink
-            v-if="(order.status === 'in_hand' || order.status === 'provisional_received') && remainingItems > 0"
-            :to="`/put-away/${order.id}`"
-            class="btn btn--small"
-          >
-            {{ $t('actions.putAwayRemaining') }}
-          </NuxtLink>
-        </template>
-
-        <DetailRow :label="$t('receiving.detail.supplier')" :value="order.supplier?.name" />
-        <DetailRow :label="$t('goodsVerify.detail.dateCode')" :value="order.dateCode" />
-        <DetailRow :label="$t('receiving.detail.deliveryDate')" :value="order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : null" />
-
-        <DetailRow
-          v-if="order.status !== 'clear' && remainingItems > 0"
-          :label="$t('receiving.detail.remainingItems')"
-          :value="`${remainingItems} ${remainingItems === 1 ? $t('common.item') : $t('common.items')}`"
-        />
-      </DetailHeader>
-
       <ScanFab
         v-if="order.status === 'provisional_received'"
         :loading="scanning"
@@ -144,6 +102,7 @@ import { useWarehouse } from "~/composables/useWarehouse";
 import { useFlowSteps } from "~/composables/useFlowSteps";
 import { useToast } from "~/composables/useToast";
 import ReportIssueModal from "~/components/ReportIssueModal.vue";
+import type { PageHeaderAction } from "~/composables/usePageHeader";
 import { DisplayReceivingItem, DisplayReceivingOrder } from "~/components/receiving/types";
 import type {
   MismatchReason,
@@ -151,7 +110,7 @@ import type {
   ReceivingScanCandidate,
 } from "~/services/types";
 
-definePageMeta({ title: "meta.receivingDetail", props: { noPadding: true } });
+definePageMeta({ title: "meta.receivingDetail" });
 
 const { t } = useI18n();
 const errorMessage = useErrorMessage();
@@ -254,7 +213,6 @@ function setView(next: "receiving" | "picking") {
   view.value = next;
   router.replace({ query: { ...route.query, tab: next } });
 }
-const headerExpanded = ref(false);
 const expandedItems = ref<Set<string>>(new Set());
 const searchQuery = ref("");
 const creatingBox = ref<Record<string, boolean>>({});
@@ -315,6 +273,53 @@ const remainingItems = computed(() => {
     .flatMap((invoice) => invoice.items)
     // lineQty null = expected qty unknown upstream — treat as not fully put away.
     .filter((item) => item.lineQty === null || item.putAwayQty < item.lineQty).length;
+});
+
+// Title, status badge, header info rows and actions render in the AppHeader.
+usePageHeader({
+  title: () => (order.value ? order.value.displayName || order.value.batchNo : undefined),
+  badgeText: () => order.value?.status,
+  badgeClass: () => badgeClass(order.value?.status),
+  info: () => {
+    const o = order.value;
+    if (!o) return [];
+    const rows = [
+      { label: t("receiving.detail.supplier"), value: o.supplier?.name || t("common.noData") },
+      { label: t("goodsVerify.detail.dateCode"), value: o.dateCode || t("common.noData") },
+      {
+        label: t("receiving.detail.deliveryDate"),
+        value: o.deliveryDate ? new Date(o.deliveryDate).toLocaleDateString() : t("common.noData"),
+      },
+    ];
+    if (o.status !== "clear" && remainingItems.value > 0) {
+      rows.push({
+        label: t("receiving.detail.remainingItems"),
+        value: `${remainingItems.value} ${remainingItems.value === 1 ? t("common.item") : t("common.items")}`,
+      });
+    }
+    return rows;
+  },
+  actions: () => {
+    const o = order.value;
+    if (!o) return [];
+    const list: PageHeaderAction[] = [];
+    if (o.status === "pending" || o.status === "provisional_received") {
+      list.push({
+        key: "confirm-arrival",
+        label: confirming.value ? t("actions.confirming") : t("receiving.detail.confirmArrived"),
+        disabled: confirming.value,
+        onClick: confirmArrival,
+      });
+    }
+    if ((o.status === "in_hand" || o.status === "provisional_received") && remainingItems.value > 0) {
+      list.push({
+        key: "put-away-remaining",
+        label: t("actions.putAwayRemaining"),
+        to: `/put-away/${o.id}`,
+      });
+    }
+    return list;
+  },
 });
 
 async function load() {

@@ -8,13 +8,20 @@ These components are reused across multiple flows.
 
 `components/AppHeader.vue`
 
-Top header with back button, reset DB, logout, and language switcher.
+Top header with back button, reset DB, logout, and language switcher. On detail
+pages it also renders the page's dynamic title and status badge in the title
+bar, plus a dedicated page-action dropdown (horizontal-dots icon left of the
+⋯ kebab) holding the page's info rows and action buttons/links.
 
-## DetailHeader
+## usePageHeader
 
-`components/DetailHeader.vue`
+`composables/usePageHeader.ts`
 
-Page header for detail pages: title, status badge, and summary row.
+Composable (not a component) detail pages call in setup to register their
+title, status badge, info rows and actions into the AppHeader. Every field
+accepts a getter so the header stays live; the registration is keyed to the
+registering route and ignored after navigation. Replaces the retired
+`DetailHeader` card.
 
 ## DetailRow
 

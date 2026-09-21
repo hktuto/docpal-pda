@@ -600,6 +600,7 @@ export default {
     goBack: "Go back",
     home: "Home",
     menu: "Menu",
+    pageMenu: "Details & actions",
     settings: "Settings",
     resetDb: "Reset local DB",
     logout: "Logout",

@@ -43,7 +43,7 @@ import { useWarehouse } from "~/composables/useWarehouse";
 import { useToast } from "~/composables/useToast";
 import type { VerifyTaskDetail } from "~/services/types";
 
-definePageMeta({ title: "meta.measureBox", props: { noPadding: true } });
+definePageMeta({ title: "meta.measureBox" });
 
 const { t } = useI18n();
 useHead({ title: t('measuring.measureBox.title') });

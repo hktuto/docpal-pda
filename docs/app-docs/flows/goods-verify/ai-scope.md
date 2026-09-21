@@ -36,7 +36,9 @@
 - `pages/goods-verify/index.vue` — task queue: date picker, status filter
   chips, search.
 - `pages/goods-verify/[id].vue` — task detail: lot batch/location/qty rows,
-  box contents, verify form with countedQty + ADJUST consequence hint.
+  box contents, verify form with countedQty + ADJUST consequence hint; the
+  task title, status badge and summary rows render in the app header via
+  `composables/usePageHeader.ts`.
 - `services/adapters/backendWarehouse.ts` — `getGoodsVerifyTasks`,
   `getGoodsVerifyTask`, `verifyGoodsVerifyTask`.
 - `services/types.ts` — `GoodsVerifyTaskListRow`, `GoodsVerifyTaskFilters`,
