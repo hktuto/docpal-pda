@@ -19,7 +19,8 @@ export interface ShipperDocument {
 
 export interface ShipperGroup {
   partKey: string; // COALESCE(wcl_item_no, part_no)
-  blockItems: { invoiceCtn: string; qty: number }[]; // one per carton
+  // one per carton; raw components, the renderer picks/joins the first cell
+  blockItems: { invoiceNo: string | null; drawingNo: string | null; ctnNo: string | null; qty: number }[];
   slots: ShipperSlot[]; // live: merged per-item slots; finished: package slots
   relatedAllocated: number; // live mode only (0 in finished)
   totalQty: number;

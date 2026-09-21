@@ -17,7 +17,7 @@ import { HTTPException } from "hono/http-exception";
 import { sql } from "drizzle-orm";
 import type { AppDb } from "../../db.js";
 import { queryAll, queryGet } from "../../db/query.js";
-import type { ShipperDocument, ShipperSlot } from "./model.js";
+import type { ShipperDocument, ShipperGroup, ShipperSlot } from "./model.js";
 
 interface OrderHeadRow {
   batchNo: string;
@@ -31,6 +31,7 @@ interface OrderHeadRow {
 interface ItemRow {
   id: string;
   invoiceNo: string;
+  drawingNo: string | null;
   poNo: string | null;
   poLine: string | null;
   partKey: string;
@@ -93,6 +94,7 @@ export async function loadShipperDocument(
       SELECT
         rii.id,
         ri.invoice_no AS "invoiceNo",
+        rii.additional_data->>'drawing_no' AS "drawingNo",
         rii.po_no AS "poNo",
         rii.po_line AS "poLine",
         COALESCE(rii.wcl_item_no, rii.part_no) AS "partKey",
@@ -347,7 +349,7 @@ export async function loadShipperDocument(
     groups: groups.map((group) => {
       const totalQty = group.items.reduce((s, i) => s + i.receivedQty, 0);
 
-      const blockItems: { invoiceCtn: string; qty: number }[] = [];
+      const blockItems: ShipperGroup["blockItems"] = [];
       let mergedSlots: SlotAlloc[];
       let allocatedTotal: number;
 
@@ -369,7 +371,9 @@ export async function loadShipperDocument(
 
       for (const item of group.items) {
         blockItems.push({
-          invoiceCtn: [item.invoiceNo, item.ctnNo].filter(Boolean).join(" "),
+          invoiceNo: item.invoiceNo,
+          drawingNo: item.drawingNo,
+          ctnNo: item.ctnNo,
           qty: item.receivedQty,
         });
       }

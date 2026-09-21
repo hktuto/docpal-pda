@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { db } from "../../db.js";
 import { loadShipperDocument } from "../../export/shipper/data.js";
 import "../../export/shipper/render/default.js"; // registers the default renderer
+import "../../export/shipper/render/hcc.js"; // registers the supplier-23 (HCC) variant
 import { resolveRenderer } from "../../export/registry.js";
 import type { ShipperDocument } from "../../export/shipper/model.js";
 

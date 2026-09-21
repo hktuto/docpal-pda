@@ -321,3 +321,68 @@ test("GET shipper?mode=finished: slots come from actual picked packages", async 
 
   assert.equal(rows.length, 14);
 });
+
+
+test("GET shipper: HCC (supplier 23) renders the drawing-no first column; other suppliers keep Invoice / Ctn", async () => {
+  await reseed(client);
+  // Hermetic: the demo seed's picking orders would allocate against these
+  // receipts and add slot columns (same reason as seedScenario).
+  await client.db.execute(sql`DELETE FROM picking_orders`);
+  const actorId = (
+    await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'operator'`)
+  )!.id;
+  // receiving_orders.supplier_code FKs to suppliers.code — seed HCC.
+  await client.db.execute(
+    sql`INSERT INTO suppliers (id, code, name) VALUES (${randomUUID()}, '23', 'HCC') ON CONFLICT (code) DO NOTHING`
+  );
+
+  // HCC order: first column header/value switch to the drawing number
+  // (spec 2026-09-21-shipper-hcc-drawing-no-variant-design.md).
+  const hccOrderId = await insertReceivingOrder(client.db, "HCC-TEST-01", {
+    order: { supplierCode: "23", deliveryDate: "2026-09-21" },
+    invoices: [
+      {
+        invoiceNo: "INV-HCC-01",
+        totalCtn: 1,
+        items: [
+          { partNo: "HCC-PART-1", lineQty: 100, ctnNo: "7001", orgId: 2, subInventoryCode: "STORE1", additionalData: { drawing_no: "DRWG-9001" } },
+        ],
+      },
+    ],
+  });
+  await confirmReceivingArrival(client.db, hccOrderId, actorId);
+  // Non-HCC order in the same run: the default layout still applies
+  // (registry scoping — the HCC variant must not leak across suppliers).
+  const daitoOrderId = await insertReceivingOrder(client.db, "PL-TEST-HCC-CTRL", {
+    order: { supplierCode: "DAITO", deliveryDate: "2026-09-21" },
+    invoices: [
+      {
+        invoiceNo: "INV-CTRL-01",
+        totalCtn: 1,
+        items: [{ partNo: "CTRL-PART-1", lineQty: 100, ctnNo: "8001", orgId: 2, subInventoryCode: "STORE1" }],
+      },
+    ],
+  });
+  await confirmReceivingArrival(client.db, daitoOrderId, actorId);
+
+  const hccRes = await req(`/admin/receiving-orders/${hccOrderId}/shipper`);
+  assert.equal(hccRes.status, 200);
+  const hccRows = await sheetRows(await hccRes.arrayBuffer());
+
+  assert.match(String(hccRows[0]![0]), /^Shipper — HCC-TEST-01/);
+  // No allocations → zero Customer slots; the first header cell switches.
+  assert.deepEqual(hccRows[4], ["Drawing No / CTN", "Part Number", "Qty", "Total Qty", "Balance"]);
+  assert.deepEqual(hccRows[5], ["", "Shelf", "", "", ""]);
+  // Single-carton block: drawing_no + ctn_no on the item row, totals on the
+  // block's last row (no invoice_no anywhere — no fallback).
+  assert.deepEqual(hccRows[7], ["", "", "", "", ""]);
+  assert.deepEqual(hccRows[8], ["", "", "", "", ""]);
+  assert.deepEqual(hccRows[9], ["DRWG-9001 7001", "HCC-PART-1", 100, 100, 100]);
+  assert.equal(hccRows.length, 10);
+
+  const ctrlRes = await req(`/admin/receiving-orders/${daitoOrderId}/shipper`);
+  assert.equal(ctrlRes.status, 200);
+  const ctrlRows = await sheetRows(await ctrlRes.arrayBuffer());
+  assert.deepEqual(ctrlRows[4], ["Invoice / Ctn", "Part Number", "Qty", "Total Qty", "Balance"]);
+  assert.deepEqual(ctrlRows[9], ["INV-CTRL-01 8001", "CTRL-PART-1", 100, 100, 100]);
+});

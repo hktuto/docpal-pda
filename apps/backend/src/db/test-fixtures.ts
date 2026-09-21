@@ -31,6 +31,7 @@ export interface FixtureReceivingItem {
   cow?: string | null;
   orgId?: number | null;
   subInventoryCode?: string | null;
+  additionalData?: Record<string, unknown> | null;
 }
 
 export interface FixtureReceivingInvoice {
@@ -90,6 +91,7 @@ export async function insertReceivingOrder(
           cow: it.cow ?? null,
           orgId: it.orgId ?? 2,
           subInventoryCode: it.subInventoryCode ?? null,
+          additionalData: it.additionalData ?? null,
         });
       }
     }
