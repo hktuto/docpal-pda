@@ -4,44 +4,6 @@
     <EmptyState v-else-if="error" error>{{ $t('common.errorPrefix', { message: error }) }}</EmptyState>
 
     <template v-else-if="order">
-      <DetailHeader
-        v-model="headerExpanded"
-        :title="order.orderNo"
-        :status="headerStatus"
-        :badge-class="headerBadgeClass"
-        :flush-top="route.meta.props?.noPadding"
-        style="margin-bottom: 1.5rem;"
-      >
-        <template #actions>
-          <template v-if="order.status !== 'finished' && order.status !== 'issue' && !heldByOther">
-            <NuxtLink :to="`/picking/scan/${orderId}`" class="btn btn--small">
-              {{ $t('picking.detail.scan') }}
-            </NuxtLink>
-            <button
-              v-if="allItemsFullyBoxed"
-              class="btn btn--small"
-              :disabled="finishing"
-              @click="finish"
-            >
-              <template v-if="finishing">
-                <InlineSpinner /> {{ $t('actions.finishing') }}
-              </template>
-              <template v-else>
-                {{ $t('picking.detail.finishPicking') }}
-              </template>
-            </button>
-          </template>
-        </template>
-
-        <DetailRow :label="$t('picking.detail.customer')" :value="order.customerCode" />
-        <DetailRow :label="$t('picking.detail.deliveryDate')" :value="order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : null" />
-        <DetailRow :label="$t('picking.detail.poNo')" :value="order.poNo" />
-        <DetailRow :label="$t('picking.detail.shipTo')" :value="order.shipTo" />
-        <DetailRow v-if="order.orgId != null" :label="$t('picking.detail.org')" :value="`Org ${order.orgId}`" />
-        <DetailRow v-if="order.subInventoryCode" :label="$t('picking.detail.subInventory')" :value="order.subInventoryCode" />
-        <DetailRow v-if="order.workingByName" :label="$t('picking.detail.lockedBy')" :value="order.workingByName" />
-      </DetailHeader>
-
       <PickingIssueBanner v-if="order.status === 'issue'" :order="order" />
 
       <div v-if="heldByOther" class="work-lock-banner">
@@ -108,11 +70,12 @@ import { playScanError, playScanSuccess } from "~/utils/scanBeep";
 import PickingBoxesSection from "~/components/picking/PickingBoxesSection.vue";
 import PickingItemsSection from "~/components/picking/PickingItemsSection.vue";
 import PickingIssueBanner from "~/components/picking/PickingIssueBanner.vue";
+import type { PageHeaderAction } from "~/composables/usePageHeader";
 import type {
   PickingOrderDetail,
 } from "~/services/types";
 
-definePageMeta({ title: "meta.pickingDetail", props: { noPadding: true } });
+definePageMeta({ title: "meta.pickingDetail" });
 
 const route = useRoute();
 const orderId = route.params.id as string;
@@ -134,7 +97,6 @@ const cancellingBox = ref<Record<string, boolean>>({});
 const addingAll = ref<Record<string, boolean>>({});
 const finishing = ref(false);
 const claimingBox = ref(false);
-const headerExpanded = ref(false);
 const boxesExpanded = ref(false);
 const boxSelections = ref<Record<string, string>>({});
 
@@ -242,6 +204,46 @@ const unboxedCountForOrder = computed(() => {
   }, 0);
 });
 const anyAddingAll = computed(() => Object.values(addingAll.value).some(Boolean));
+
+// Title, status badge, header info rows and actions render in the AppHeader.
+usePageHeader({
+  title: () => order.value?.orderNo,
+  badgeText: () => (order.value ? headerStatus.value : undefined),
+  badgeClass: () => headerBadgeClass.value,
+  info: () => {
+    const o = order.value;
+    if (!o) return [];
+    const rows = [
+      { label: t("picking.detail.customer"), value: o.customerCode || t("common.noData") },
+      {
+        label: t("picking.detail.deliveryDate"),
+        value: o.deliveryDate ? new Date(o.deliveryDate).toLocaleDateString() : t("common.noData"),
+      },
+      { label: t("picking.detail.poNo"), value: o.poNo || t("common.noData") },
+      { label: t("picking.detail.shipTo"), value: o.shipTo || t("common.noData") },
+    ];
+    if (o.orgId != null) rows.push({ label: t("picking.detail.org"), value: `Org ${o.orgId}` });
+    if (o.subInventoryCode) rows.push({ label: t("picking.detail.subInventory"), value: o.subInventoryCode });
+    if (o.workingByName) rows.push({ label: t("picking.detail.lockedBy"), value: o.workingByName });
+    return rows;
+  },
+  actions: () => {
+    const o = order.value;
+    if (!o || o.status === "finished" || o.status === "issue" || heldByOther.value) return [];
+    const list: PageHeaderAction[] = [
+      { key: "scan", label: t("picking.detail.scan"), to: `/picking/scan/${orderId}` },
+    ];
+    if (allItemsFullyBoxed.value) {
+      list.push({
+        key: "finish",
+        label: finishing.value ? t("actions.finishing") : t("picking.detail.finishPicking"),
+        disabled: finishing.value,
+        onClick: finish,
+      });
+    }
+    return list;
+  },
+});
 
 async function load() {
   try {

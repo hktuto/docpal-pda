@@ -101,7 +101,8 @@
   `docs/superpowers/specs/2026-09-17-date-code-display-template-design.md`,
   formatter `apps/admin/utils/dateCodeDisplay.ts` via
   `composables/useDateCodeDisplay.ts`).
-- The order NAME (PDA receiving list row title + detail header, admin receiving
+- The order NAME (PDA receiving list row title + detail app-header title,
+  admin receiving
   list batch-no column + detail h1) renders the backend-computed `displayName`
   from the flow-config `receivingOrderNameTemplate` (default `[batch_no]`;
   placeholders `[batch_no]`/`[invoice_no]`/`[supplier_code]`/`[supplier_name]`/
@@ -142,8 +143,10 @@
 - `pages/receiving/index.vue` — list page (compact rows, sticky status
   filter + search, picking badge; server-side paging — 50-row pages with
   Load more, refresh button, debounced server-side search).
-- `pages/receiving/[id].vue` — detail page (items + picking tabs, confirm
-  arrival, scan entry points).
+- `pages/receiving/[id].vue` — detail page (items + picking tabs; title,
+  status badge, supplier/date-code info rows and the Confirm arrived / Put
+  away remaining actions are registered into the app header via
+  `composables/usePageHeader.ts`; scan entry points).
 - `components/receiving/ReceivingItemsTab.vue` — items sub-view: compact
   per-row-expand rows grouped by carton number (`ctnNo`, trailing "no
   carton" group; flat when no carton numbers exist), mismatch actions

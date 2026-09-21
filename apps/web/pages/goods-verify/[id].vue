@@ -4,31 +4,6 @@
     <p v-else-if="error" class="empty" style="color: var(--danger);">{{ $t('common.errorPrefix', { message: error }) }}</p>
 
     <template v-else-if="detail">
-      <DetailHeader
-        v-model="headerExpanded"
-        :title="detail.task.wclItemNo ?? detail.task.partNo"
-        :status="detail.task.status"
-        :label="statusLabel.goodsVerify(detail.task.status)"
-        :badge-class="badgeClass(detail.task.status)"
-        :flush-top="route.meta.props?.noPadding"
-        style="margin-bottom: 1.5rem;"
-      >
-        <DetailRow :label="$t('goodsVerify.detail.taskDate')" :value="detail.task.taskDate" />
-        <DetailRow :label="$t('goodsVerify.detail.shelf')" :value="detail.task.shelfCode || $t('common.noData')" />
-        <DetailRow :label="$t('goodsVerify.detail.box')" :value="detail.task.boxId || $t('common.noData')" />
-        <DetailRow :label="$t('goodsVerify.detail.expectedQty')" :value="detail.task.expectedQty" />
-        <DetailRow
-          v-if="detail.task.verifiedAt"
-          :label="$t('goodsVerify.detail.verifiedAt')"
-          :value="new Date(detail.task.verifiedAt).toLocaleString()"
-        />
-        <DetailRow
-          v-if="detail.task.verifiedBy"
-          :label="$t('goodsVerify.detail.verifiedBy')"
-          :value="detail.task.verifiedBy"
-        />
-      </DetailHeader>
-
       <h2 class="section-title">{{ $t('goodsVerify.detail.lot') }}</h2>
       <div class="card" style="margin-bottom: 1.5rem;">
         <DetailRow :label="$t('goodsVerify.detail.part')">
@@ -119,7 +94,7 @@ import { useWarehouse } from "~/composables/useWarehouse";
 import { badgeClass } from "~/composables/useStatusBadge";
 import type { GoodsVerifyTaskDetail } from "~/services/types";
 
-definePageMeta({ title: "meta.goodsVerifyDetail", props: { noPadding: true } });
+definePageMeta({ title: "meta.goodsVerifyDetail" });
 
 const { t } = useI18n();
 useHead({ title: t('goodsVerify.detail.title') });
@@ -135,9 +110,36 @@ const { showToast } = useToast();
 const pending = ref(true);
 const error = ref<string | null>(null);
 const detail = ref<GoodsVerifyTaskDetail | null>(null);
-const headerExpanded = ref(false);
 const countedInput = ref("");
 const verifying = ref(false);
+
+// Title, status badge and header info rows render in the AppHeader.
+usePageHeader({
+  title: () =>
+    detail.value ? detail.value.task.wclItemNo ?? detail.value.task.partNo : undefined,
+  badgeText: () => (detail.value ? statusLabel.goodsVerify(detail.value.task.status) : undefined),
+  badgeClass: () => badgeClass(detail.value?.task.status),
+  info: () => {
+    const d = detail.value;
+    if (!d) return [];
+    const rows = [
+      { label: t("goodsVerify.detail.taskDate"), value: d.task.taskDate || t("common.noData") },
+      { label: t("goodsVerify.detail.shelf"), value: d.task.shelfCode || t("common.noData") },
+      { label: t("goodsVerify.detail.box"), value: d.task.boxId || t("common.noData") },
+      { label: t("goodsVerify.detail.expectedQty"), value: String(d.task.expectedQty) },
+    ];
+    if (d.task.verifiedAt) {
+      rows.push({
+        label: t("goodsVerify.detail.verifiedAt"),
+        value: new Date(d.task.verifiedAt).toLocaleString(),
+      });
+    }
+    if (d.task.verifiedBy) {
+      rows.push({ label: t("goodsVerify.detail.verifiedBy"), value: d.task.verifiedBy });
+    }
+    return rows;
+  },
+});
 
 async function load() {
   try {

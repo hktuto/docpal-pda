@@ -12,7 +12,7 @@
 import MeasureBox from "~/components/MeasureBox.vue";
 import { useWarehouse } from "~/composables/useWarehouse";
 
-definePageMeta({ title: "meta.measureBox", props: { noPadding: true } });
+definePageMeta({ title: "meta.measureBox" });
 
 const { t } = useI18n();
 useHead({ title: t('measuring.measureBox.title') });

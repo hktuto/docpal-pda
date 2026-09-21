@@ -8,7 +8,7 @@ From the home screen, tap **Receiving**. The list shows receiving orders as comp
 
 ## 2. Select a receiving order
 
-Tap the order you want to receive. The detail page opens on the Receiving view.
+Tap the order you want to receive. The detail page opens on the Receiving view. The order name and status badge show in the app header; tap the horizontal-dots icon at the top right for the order details (supplier, date code, delivery date, remaining items) and the **Confirm arrived** / **Put away remaining** actions.
 
 ![Receiving detail](./assets/receiving-detail.png)
 

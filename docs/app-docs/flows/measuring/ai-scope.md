@@ -45,7 +45,9 @@
 
 - `pages/measuring/index.vue` — box list (open boxes with packages).
 - `pages/measuring/[boxId].vue` — the single box page, a thin wrapper over
-  `components/MeasureBox.vue` (package verify by scan, measurements, close)
+  `components/MeasureBox.vue` (package verify by scan, measurements, close;
+  box title/status/actions live in the app header via
+  `composables/usePageHeader.ts`)
   shared with the verify flow via its `mode: 'measuring' | 'verify'` prop
   (which per-package flag — `verified` vs `verifyVerified` — gates the scan).
 - `components/BoxMeasurementsModal.vue` — measurement entry (kg inputs,

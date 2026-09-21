@@ -4,34 +4,6 @@
     <EmptyState v-else-if="error" error>{{ $t('common.errorPrefix', { message: error }) }}</EmptyState>
 
     <template v-else-if="box">
-      <DetailHeader
-        v-model="headerExpanded"
-        :title="t('measuring.measureBox.boxTitle', { id: box.id })"
-        :status="box.status"
-        :label="boxStatusLabel.box(box.status)"
-        :flush-top="route.meta.props?.noPadding"
-        style="margin-bottom: 1.5rem;"
-      >
-        <template #actions>
-          <NuxtLink
-            v-if="box.pickingOrderId"
-            :to="`/picking/${box.pickingOrderId}`"
-            class="btn btn--small btn--ghost"
-          >
-            {{ $t('actions.viewPickingOrder') }}
-          </NuxtLink>
-          <button
-            v-if="box.status === 'open' && allVerified"
-            class="btn btn--small"
-            @click="measureOpen = true"
-          >
-            {{ $t('actions.enterMeasurements') }}
-          </button>
-        </template>
-
-        <DetailRow :label="$t('measuring.measureBox.pickingOrders')" :value="orderNosText" />
-      </DetailHeader>
-
       <div class="card" style="margin-bottom: 1.5rem;">
         <h3 style="margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--muted);">
           {{ $t('measuring.measureBox.packagesVerified', { verified: verifiedCount, total: packages.length }) }}
@@ -118,6 +90,7 @@ import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import BoxMeasurementsModal from "~/components/BoxMeasurementsModal.vue";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { runScanMatcher, useScanMatchers, type ScanTaskContext } from "~/composables/useScanMatchers";
+import type { PageHeaderAction } from "~/composables/usePageHeader";
 import type { MeasuringPackage } from "~/services/types";
 
 /** Normalized box view the pages hand in via `loadDetail` (measuring box
@@ -175,8 +148,6 @@ async function onRetake() {
   await openScan(scanTargetPackageId.value);
 }
 
-const route = useRoute();
-
 const { t } = useI18n();
 const boxStatusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
@@ -189,7 +160,6 @@ const error = ref<string | null>(null);
 const detail = ref<MeasureBoxDetail | null>(null);
 const scanTargetPackageId = ref<string | undefined>(undefined);
 const measureOpen = ref(false);
-const headerExpanded = ref(false);
 
 const {
   scan,
@@ -248,6 +218,38 @@ const allVerified = computed(
 const canScan = computed(
   () => !!box.value && (box.value.status === 'open' || props.mode === 'verify')
 );
+
+// Title, status badge, header info row and actions render in the AppHeader.
+usePageHeader({
+  title: () => (box.value ? t("measuring.measureBox.boxTitle", { id: box.value.id }) : undefined),
+  badgeText: () => (box.value ? boxStatusLabel.box(box.value.status) : undefined),
+  info: () =>
+    box.value
+      ? [{ label: t("measuring.measureBox.pickingOrders"), value: orderNosText.value }]
+      : [],
+  actions: () => {
+    const b = box.value;
+    if (!b) return [];
+    const list: PageHeaderAction[] = [];
+    if (b.pickingOrderId) {
+      list.push({
+        key: "view-picking-order",
+        label: t("actions.viewPickingOrder"),
+        to: `/picking/${b.pickingOrderId}`,
+      });
+    }
+    if (b.status === "open" && allVerified.value) {
+      list.push({
+        key: "enter-measurements",
+        label: t("actions.enterMeasurements"),
+        onClick: () => {
+          measureOpen.value = true;
+        },
+      });
+    }
+    return list;
+  },
+});
 
 const measurementInitialValues = computed(() => {
   const b = box.value;

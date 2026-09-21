@@ -279,7 +279,9 @@
   pages with Load more, refresh button, debounced server-side search and
   multi-status/allocation filters).
 - `pages/picking/[id].vue` — detail page (items/allocations/packages,
-  boxes, logs, finish; single Scan action → scan session).
+  boxes, logs; title, status badge, order info rows and the Scan / Finish
+  actions registered into the app header via
+  `composables/usePageHeader.ts` — Scan opens the scan session).
 - `pages/picking/scan/[id].vue` — scan-session ("checkout") page: armed
   hardware scanner, OCR capture button (single-record confirm form /
   multi-item table review before queueing), local queue table, Confirm

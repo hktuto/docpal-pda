@@ -4,18 +4,6 @@
     <EmptyState v-else-if="error" error>{{ $t('common.errorPrefix', { message: error }) }}</EmptyState>
 
     <template v-else-if="order">
-      <DetailHeader
-        v-model="headerExpanded"
-        :title="order.batchNo"
-        :status="headerStatus"
-        :badge-class="badgeClass(order.status)"
-        :flush-top="route.meta.props?.noPadding"
-        style="margin-bottom: 1.5rem;"
-      >
-        <DetailRow :label="$t('putAway.detail.supplier')" :value="order.supplier?.name" />
-        <DetailRow :label="$t('putAway.detail.deliveryDate')" :value="order.deliveryDate ? new Date(order.deliveryDate).toLocaleDateString() : null" />
-      </DetailHeader>
-
       <ShelfBoxesPanel
         v-model:boxes-expanded="boxesExpanded"
         v-model:expanded-item-boxes="expandedItemBoxes"
@@ -136,7 +124,7 @@ import type {
   ReceivingOrderDetail,
 } from "~/services/types";
 
-definePageMeta({ title: "meta.putAwayDetail", props: { noPadding: true } });
+definePageMeta({ title: "meta.putAwayDetail" });
 
 const { t } = useI18n();
 const errorMessage = useErrorMessage();
@@ -150,7 +138,6 @@ const orderId = route.params.id as string;
 // the plain receiving-order aggregate — same data plus per-item shelf hints.
 const taskId = (route.query.task as string) || null;
 
-const headerExpanded = ref(false);
 const boxesExpanded = ref(false);
 const newBoxDialogOpen = ref(false);
 const scanBoxDialogOpen = ref(false);
@@ -163,6 +150,24 @@ const statusLabel = useStatusLabel();
 const headerStatus = computed(() =>
   order.value ? statusLabel.receiving(order.value.status) : ""
 );
+
+// Title, status badge and header info rows render in the AppHeader.
+usePageHeader({
+  title: () => order.value?.batchNo,
+  badgeText: () => headerStatus.value || undefined,
+  badgeClass: () => badgeClass(order.value?.status),
+  info: () => {
+    const o = order.value;
+    if (!o) return [];
+    return [
+      { label: t("putAway.detail.supplier"), value: o.supplier?.name || t("common.noData") },
+      {
+        label: t("putAway.detail.deliveryDate"),
+        value: o.deliveryDate ? new Date(o.deliveryDate).toLocaleDateString() : t("common.noData"),
+      },
+    ];
+  },
+});
 
 const warehouse = useWarehouse();
 

@@ -40,7 +40,7 @@ Page and component locations mapped to source files.
 
 | Component | Source file |
 |-----------|-------------|
-| DetailHeader | `components/DetailHeader.vue` |
+| Detail page title/badge/actions registration | `composables/usePageHeader.ts` |
 | DetailRow | `components/DetailRow.vue` |
 | Status badge (inline) | `composables/useStatusBadge.ts` |
 | EmptyState | `components/EmptyState.vue` |

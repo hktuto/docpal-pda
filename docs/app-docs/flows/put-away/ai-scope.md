@@ -73,8 +73,9 @@
 
 - `pages/put-away/index.vue` — candidate list.
 - `pages/put-away/[id].vue` — detail page (expected items, lots, scans,
-  boxes; armed hardware scanner + camera OCR scan entry with
-  single-record form / multi-item table review).
+  boxes; title/status badge/supplier info registered into the app header via
+  `composables/usePageHeader.ts`; armed hardware scanner + camera OCR scan
+  entry with single-record form / multi-item table review).
 - `utils/putAwayScan.ts` — `findPutAwayTarget` first-fit item matching for
   hardware QR scans (tests in `tests/putAwayScan.test.ts`).
 - `components/ScanMultiItemModal.vue` — shared multi-item label table (also

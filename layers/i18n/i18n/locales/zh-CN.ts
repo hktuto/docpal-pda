@@ -600,6 +600,7 @@ export default {
     goBack: "返回",
     home: "首页",
     menu: "菜单",
+    pageMenu: "详情与操作",
     settings: "设置",
     resetDb: "重置本地数据库",
     logout: "退出登录",

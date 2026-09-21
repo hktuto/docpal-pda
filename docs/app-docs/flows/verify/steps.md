@@ -24,7 +24,7 @@ Every package in the box must be re-scanned in this pass — the task cannot com
 
 ## 5. Correct measurements if needed
 
-When every package in an open box is verified, the measurements form opens automatically (or tap **Enter measurements**). Box size, net/gross weight (kg — the net weight pre-fills from the part net-weight master), and destination country can be edited; then **Confirm box** closes the box again. See [Box measurements](../measuring/box-measurements.md).
+When every package in an open box is verified, the measurements form opens automatically (or tap **Enter measurements** in the header's page-action menu). Box size, net/gross weight (kg — the net weight pre-fills from the part net-weight master), and destination country can be edited; then **Confirm box** closes the box again. See [Box measurements](../measuring/box-measurements.md).
 
 ## 6. Complete the task
 
