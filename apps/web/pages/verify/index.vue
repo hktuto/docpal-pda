@@ -17,11 +17,10 @@
       >
         <div class="list-row__main">
           <div class="list-row__line1">
-            <span class="list-row__title">{{ task.shippingBoxId }}</span>
+            <span class="list-row__title">{{ formatRow("verify", "title", task) }}</span>
           </div>
-          <div class="list-row__meta">
-            {{ task.orderNos.join(', ') || $t('common.noData') }}
-            <template v-if="task.destinationCountry"> · {{ task.destinationCountry }}</template>
+          <div v-if="formatRow('verify', 'meta', task)" class="list-row__meta">
+            {{ formatRow("verify", "meta", task) }}
           </div>
         </div>
         <div class="list-row__aside">
@@ -49,6 +48,9 @@ const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const warehouse = useWarehouse();
+// Row title/meta come from the warehouse's pdaListTemplates flow config
+// (spec 2026-09-21-pda-list-row-templates-design.md).
+const { formatRow } = useListTemplates();
 const router = useRouter();
 const { showToast } = useToast();
 

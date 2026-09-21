@@ -500,9 +500,14 @@ export interface ReportPickingIssuesResult {
 export interface PutAwayCandidate {
   id: string;
   batchNo: string;
+  /** Order name per the warehouse's receivingOrderNameTemplate flow config. */
+  displayName?: string;
   status: string;
   supplierCode: string | null;
   supplierName: string | null;
+  invoiceNos?: string | null;
+  deliveryDate?: string | null;
+  dateCode?: string | null;
   orgId: number;
   subInventoryCode: string | null;
   receivedItems: number;
@@ -518,8 +523,13 @@ export interface PutAwayTaskListRow {
   status: string;
   receivingOrderId: string;
   batchNo: string;
+  /** Order name per the warehouse's receivingOrderNameTemplate flow config. */
+  displayName?: string;
   supplierCode: string | null;
   supplierName: string | null;
+  invoiceNos?: string | null;
+  deliveryDate?: string | null;
+  dateCode?: string | null;
   orgId: number;
   subInventoryCode: string | null;
   receivedItems: number;
@@ -757,6 +767,12 @@ export interface FlowConfig {
   /** Resolved steps.picking.allocation section: allowDockStock=false means
    *  only put-away stock allocates — receiving and picking are decoupled. */
   pickingAllocation: { allowDockStock: boolean };
+  /** Resolved pdaListTemplates section: per-list {title, meta} display
+   *  templates for the six PDA list pages. Optional — backends predating the
+   *  feature omit it and the defaults render. */
+  listTemplates?: Partial<
+    Record<"receiving" | "picking" | "put-away" | "goods-verify" | "verify" | "measuring", { title?: string; meta?: string }>
+  >;
   /** Org partitions this warehouse accepts ([] = all). Informational — the
    *  backend filters list/detail queries server-side. */
   allowedOrgIds: number[];

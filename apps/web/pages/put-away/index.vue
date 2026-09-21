@@ -17,10 +17,10 @@
         >
           <div class="list-row__main">
             <div class="list-row__line1">
-              <span class="list-row__title">{{ task.batchNo }}</span>
+              <span class="list-row__title">{{ formatRow("put-away", "title", task) }}</span>
             </div>
-            <div class="list-row__meta">
-              {{ task.supplierName || $t('common.noSupplier') }}
+            <div v-if="formatRow('put-away', 'meta', task)" class="list-row__meta">
+              {{ formatRow("put-away", "meta", task) }}
             </div>
           </div>
           <div class="list-row__aside">
@@ -42,10 +42,10 @@
         >
           <div class="list-row__main">
             <div class="list-row__line1">
-              <span class="list-row__title">{{ ro.batchNo }}</span>
+              <span class="list-row__title">{{ formatRow("put-away", "title", ro) }}</span>
             </div>
-            <div class="list-row__meta">
-              {{ ro.supplierName || $t('common.noSupplier') }}
+            <div v-if="formatRow('put-away', 'meta', ro)" class="list-row__meta">
+              {{ formatRow("put-away", "meta", ro) }}
             </div>
           </div>
           <div class="list-row__aside">
@@ -72,6 +72,10 @@ const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const warehouse = useWarehouse();
 const { putAwayConfig, loadFlowSteps } = useFlowSteps();
+// Row title/meta come from the warehouse's pdaListTemplates flow config
+// (spec 2026-09-21-pda-list-row-templates-design.md); tasks and candidates
+// share the put-away list config.
+const { formatRow } = useListTemplates();
 
 useHead({ title: t("putAway.title") });
 

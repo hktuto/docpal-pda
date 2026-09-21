@@ -244,3 +244,40 @@ test("parseFlowConfig: receivingOrderNameTemplate validation", () => {
   assert.throws(() => parseFlowConfig('{"receivingOrderNameTemplate":""}'), /receivingOrderNameTemplate must be a non-empty string/);
   assert.throws(() => parseFlowConfig('{"receivingOrderNameTemplate":"   "}'), /receivingOrderNameTemplate must be a non-empty string/);
 });
+
+test("parseFlowConfig: pdaListTemplates defaults", () => {
+  for (const raw of [undefined, "{}"]) {
+    const cfg = parseFlowConfig(raw);
+    assert.equal(cfg.pdaListTemplates.receiving.title, "[name]");
+    assert.equal(cfg.pdaListTemplates.receiving.meta, "[supplier_name] · [delivery_date]");
+    assert.equal(cfg.pdaListTemplates.picking.title, "[order_no]");
+    assert.equal(cfg.pdaListTemplates["put-away"].meta, "[supplier_name]");
+    assert.equal(cfg.pdaListTemplates["goods-verify"].title, "[wcl_item_no]");
+    assert.equal(cfg.pdaListTemplates.verify.title, "[shipping_box_id]");
+    assert.equal(cfg.pdaListTemplates.measuring.meta, "[order_nos]");
+  }
+});
+
+test("parseFlowConfig: pdaListTemplates merges per list/field over the defaults", () => {
+  const cfg = parseFlowConfig(
+    '{"pdaListTemplates":{"receiving":{"meta":"[invoice_no]"},"verify":{"title":"[shipping_box_id] ([destination_country])","meta":"[order_nos]"}}}'
+  );
+  // overridden field
+  assert.equal(cfg.pdaListTemplates.receiving.meta, "[invoice_no]");
+  // untouched field of a touched list keeps the default
+  assert.equal(cfg.pdaListTemplates.receiving.title, "[name]");
+  // fully replaced list
+  assert.equal(cfg.pdaListTemplates.verify.title, "[shipping_box_id] ([destination_country])");
+  // untouched list keeps the default
+  assert.equal(cfg.pdaListTemplates.picking.meta, "[customer_code] · [po_no]");
+});
+
+test("parseFlowConfig: pdaListTemplates validation", () => {
+  assert.throws(() => parseFlowConfig('{"pdaListTemplates":1}'), /pdaListTemplates must be an object/);
+  assert.throws(() => parseFlowConfig('{"pdaListTemplates":[]}'), /pdaListTemplates must be an object/);
+  assert.throws(() => parseFlowConfig('{"pdaListTemplates":{"stock-search":{"title":"x"}}}'), /unknown list key "stock-search"/);
+  assert.throws(() => parseFlowConfig('{"pdaListTemplates":{"receiving":"x"}}'), /receiving must be an object/);
+  assert.throws(() => parseFlowConfig('{"pdaListTemplates":{"receiving":{"header":"x"}}}'), /unknown key "header"/);
+  assert.throws(() => parseFlowConfig('{"pdaListTemplates":{"receiving":{"title":""}}}'), /receiving.title must be a non-empty string/);
+  assert.throws(() => parseFlowConfig('{"pdaListTemplates":{"receiving":{"meta":"  "}}}'), /receiving.meta must be a non-empty string/);
+});

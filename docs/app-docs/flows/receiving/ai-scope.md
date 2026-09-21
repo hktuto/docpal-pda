@@ -68,6 +68,9 @@
   details (date code / lot code / COO / COW / ctn no via
   `PATCH /admin/receiving-invoice-items/:id` — per-row edit modal or
   multi-select batch edit where blank fields keep each item's current value;
+  per-group header checkboxes select one invoice/group, and a Select-all
+  toggle next to the group-by selector selects every visible invoice's items
+  at once;
   `apps/admin/components/receiving/ItemEditModal.vue`), and download the
   shipper xlsx (`GET /admin/receiving-orders/:id/shipper`,
   `apps/backend/src/routes/admin/receivingShipper.ts`): receipts grouped
@@ -103,9 +106,10 @@
   `docs/superpowers/specs/2026-09-15-admin-picking-item-actions-design.md`):
   a search icon on the part-no cell opens the part-search + allocate dialog
   (`apps/admin/components/receiving/PartSearchModal.vue`): the part's open
-  picking demand (`GET /admin/part-demand`, split by
-  `components/receiving/PartDemandTables.vue` into rows matching the item's
-  org/sub-inventory vs all other demand) with a per-row qty input + Allocate
+  picking demand (`GET /admin/part-demand`, filtered by
+  `components/receiving/PartDemandTables.vue` to only the rows matching the
+  item's org/sub-inventory — allocating into other partitions from this
+  dialog is not allowed) with a per-row qty input + Allocate
   that pins a manual allocation sourced from this receiving item (capped by
   the item's received qty minus already-allocated/picked), plus a read-only
   related-stock table (`GET /admin/part-availability`, stock only);

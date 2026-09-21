@@ -17,10 +17,10 @@
       >
         <div class="list-row__main">
           <div class="list-row__line1">
-            <span class="list-row__title">{{ box.boxId }}</span>
+            <span class="list-row__title">{{ formatRow("measuring", "title", box) }}</span>
           </div>
-          <div class="list-row__meta">
-            {{ box.orderNos.join(', ') || $t('common.noData') }}
+          <div v-if="formatRow('measuring', 'meta', box)" class="list-row__meta">
+            {{ formatRow("measuring", "meta", box) }}
           </div>
         </div>
         <div class="list-row__aside">
@@ -48,6 +48,9 @@ const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const warehouse = useWarehouse();
+// Row title/meta come from the warehouse's pdaListTemplates flow config
+// (spec 2026-09-21-pda-list-row-templates-design.md).
+const { formatRow } = useListTemplates();
 const router = useRouter();
 const { showToast } = useToast();
 

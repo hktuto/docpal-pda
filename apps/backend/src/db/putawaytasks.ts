@@ -7,6 +7,8 @@ import { transactionLogs } from "./schema/index.js";
 import { emitEvent } from "./events.js";
 import { now } from "./now.js";
 import { getPutAwayAggregate, orderPair, type PutAwayAggregate } from "./putaway.js";
+import { receivingOrderNameTemplate } from "../config.js";
+import { formatReceivingOrderName } from "../receivingOrderName.js";
 import { allowedOrgFilter } from "./org-filter.js";
 
 // ---------------------------------------------------------------------------
@@ -65,8 +67,14 @@ export interface PutAwayTaskListRow {
   status: string;
   receivingOrderId: string;
   batchNo: string;
+  /** Order name per the receivingOrderNameTemplate flow config ([name] on the
+   *  put-away PDA list). */
+  displayName: string;
   supplierCode: string | null;
   supplierName: string | null;
+  invoiceNos: string | null;
+  deliveryDate: Date | null;
+  dateCode: string | null;
   orgId: number | null;
   subInventoryCode: string | null;
   receivedItems: number;
@@ -76,7 +84,7 @@ export interface PutAwayTaskListRow {
 
 /** Task queue, oldest truck first. Item counts use the candidates formula. */
 export async function listPutAwayTasks(db: AppDb, status?: string): Promise<PutAwayTaskListRow[]> {
-  return queryAll<PutAwayTaskListRow>(
+  const rows = await queryAll<Omit<PutAwayTaskListRow, "displayName">>(
     db,
     sql`
       SELECT
@@ -85,6 +93,9 @@ export async function listPutAwayTasks(db: AppDb, status?: string): Promise<PutA
         ro.batch_no AS "batchNo",
         s.code AS "supplierCode",
         s.name AS "supplierName",
+        string_agg(DISTINCT ri.invoice_no, ', ') AS "invoiceNos",
+        ro.delivery_date AS "deliveryDate",
+        ro.date_code AS "dateCode",
         t.org_id AS "orgId",
         t.sub_inventory_code AS "subInventoryCode",
         COUNT(rii.id) FILTER (WHERE rii.received_qty > 0)::int AS "receivedItems",
@@ -117,6 +128,21 @@ export async function listPutAwayTasks(db: AppDb, status?: string): Promise<PutA
       ORDER BY t.created_date ASC, t.id
     `
   );
+  const nameTemplate = receivingOrderNameTemplate();
+  return rows.map((row) => ({
+    ...row,
+    displayName: formatReceivingOrderName(
+      {
+        batchNo: row.batchNo,
+        invoiceNo: row.invoiceNos,
+        supplierCode: row.supplierCode,
+        supplierName: row.supplierName,
+        deliveryDate: row.deliveryDate,
+        dateCode: row.dateCode,
+      },
+      nameTemplate
+    ),
+  }));
 }
 
 export interface PutAwayTaskDetail extends PutAwayAggregate {

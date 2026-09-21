@@ -40,11 +40,10 @@
       >
         <div class="list-row__main">
           <div class="list-row__line1">
-            <span class="list-row__title">{{ task.wclItemNo ?? task.partNo }}</span>
+            <span class="list-row__title">{{ formatRow("goods-verify", "title", task) }}</span>
           </div>
-          <div class="list-row__meta">
-            {{ task.shelfCode || $t('common.noData') }}
-            · {{ task.boxId || $t('common.noData') }}
+          <div v-if="formatRow('goods-verify', 'meta', task)" class="list-row__meta">
+            {{ formatRow("goods-verify", "meta", task) }}
           </div>
         </div>
         <div class="list-row__aside">
@@ -75,6 +74,9 @@ useHead({ title: t('goodsVerify.title') });
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const warehouse = useWarehouse();
+// Row title/meta come from the warehouse's pdaListTemplates flow config
+// (spec 2026-09-21-pda-list-row-templates-design.md).
+const { formatRow } = useListTemplates();
 
 // UTC date — matches the backend's "today" (the DB session runs in UTC).
 const date = ref(new Date().toISOString().slice(0, 10));

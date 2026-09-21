@@ -2,9 +2,10 @@
 import type { PartAvailabilityStockRow, PartDemandRow, ReceivingItemRow } from "~/utils/flowApi";
 
 // Receiving-side part search + allocate dialog (replaces the row's separate
-// Allocate action): the part's open PICKING demand (matching/all split via
-// PartDemandTables, qty input + Allocate per row — pins a MANUAL allocation
-// sourced from this receiving item) plus related stock lots (read-only).
+// Allocate action): the part's open PICKING demand (only rows matching this
+// item's org/sub-inventory via PartDemandTables, qty input + Allocate per row
+// — pins a MANUAL allocation sourced from this receiving item) plus related
+// stock lots (read-only).
 const props = defineProps<{
   open: boolean;
   item: ReceivingItemRow | null;

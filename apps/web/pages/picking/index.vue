@@ -53,14 +53,14 @@
         />
         <NuxtLink :to="`/picking/${po.id}`" class="list-row__main">
           <div class="list-row__line1">
-            <span class="list-row__title">{{ po.orderNo }}</span>
+            <span class="list-row__title">{{ formatRow("picking", "title", po) }}</span>
             <span class="badge" :class="badgeClass(po.status)">{{ statusLabel.picking(po.status) }}</span>
             <span v-if="isSelectable(po.status)" class="badge" :class="badgeClass(po.allocationStatus)">
               {{ statusLabel.allocation(po.allocationStatus) }}
             </span>
           </div>
-          <div class="list-row__meta">
-            {{ [po.customerCode, po.poNo].filter(Boolean).join(' · ') || $t('common.noData') }}
+          <div v-if="formatRow('picking', 'meta', po)" class="list-row__meta">
+            {{ formatRow("picking", "meta", po) }}
           </div>
         </NuxtLink>
         <div class="list-row__aside">
@@ -129,6 +129,9 @@ const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const warehouse = useWarehouse();
+// Row title/meta come from the warehouse's pdaListTemplates flow config
+// (spec 2026-09-21-pda-list-row-templates-design.md).
+const { formatRow } = useListTemplates();
 
 useHead({ title: t("picking.title") });
 

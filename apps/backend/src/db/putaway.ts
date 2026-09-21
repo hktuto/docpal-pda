@@ -7,7 +7,8 @@ import { transactionLogs, inventoryTransactions } from "./schema/index.js";
 import { nextBoxId } from "./boxes.js";
 import { now } from "./now.js";
 import { completePutAwayTaskTx } from "./putawaytasks.js";
-import { putAwayConfig } from "../config.js";
+import { putAwayConfig, receivingOrderNameTemplate } from "../config.js";
+import { formatReceivingOrderName } from "../receivingOrderName.js";
 import { allowedOrgFilter } from "./org-filter.js";
 
 // ---------------------------------------------------------------------------
@@ -255,9 +256,15 @@ export async function tryMarkReceivingOrderClear(
 export interface PutAwayCandidateRow {
   id: string;
   batchNo: string;
+  /** Order name per the receivingOrderNameTemplate flow config ([name] on the
+   *  put-away PDA list). */
+  displayName: string;
   status: string;
   supplierCode: string | null;
   supplierName: string | null;
+  invoiceNos: string | null;
+  deliveryDate: Date | null;
+  dateCode: string | null;
   orgId: number | null;
   subInventoryCode: string | null;
   receivedItems: number;
@@ -266,7 +273,7 @@ export interface PutAwayCandidateRow {
 
 /** Receivable orders (in_hand / provisional_received) with per-order item counts. */
 export async function listPutAwayCandidates(db: AppDb): Promise<PutAwayCandidateRow[]> {
-  return queryAll<PutAwayCandidateRow>(
+  const rows = await queryAll<Omit<PutAwayCandidateRow, "displayName">>(
     db,
     sql`
       SELECT
@@ -275,6 +282,9 @@ export async function listPutAwayCandidates(db: AppDb): Promise<PutAwayCandidate
         ro.status,
         s.code AS "supplierCode",
         s.name AS "supplierName",
+        string_agg(DISTINCT ri.invoice_no, ', ') AS "invoiceNos",
+        ro.delivery_date AS "deliveryDate",
+        ro.date_code AS "dateCode",
         pair."orgId" AS "orgId",
         pair."subInventoryCode" AS "subInventoryCode",
         COUNT(rii.id) FILTER (WHERE rii.received_qty > 0)::int AS "receivedItems",
@@ -315,6 +325,21 @@ export async function listPutAwayCandidates(db: AppDb): Promise<PutAwayCandidate
       ORDER BY ro.created_date DESC
     `
   );
+  const nameTemplate = receivingOrderNameTemplate();
+  return rows.map((row) => ({
+    ...row,
+    displayName: formatReceivingOrderName(
+      {
+        batchNo: row.batchNo,
+        invoiceNo: row.invoiceNos,
+        supplierCode: row.supplierCode,
+        supplierName: row.supplierName,
+        deliveryDate: row.deliveryDate,
+        dateCode: row.dateCode,
+      },
+      nameTemplate
+    ),
+  }));
 }
 
 export interface PutAwayLotRow {

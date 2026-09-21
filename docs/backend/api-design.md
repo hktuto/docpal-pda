@@ -226,8 +226,8 @@ queue instead of the derived candidates list.
 
 | Endpoint | Description |
 |---|---|
-| `GET /put-away/candidates` | List of receivable orders with per-order received/unboxed counts. |
-| `GET /put-away-tasks?status=` | Task queue (task mode), oldest first: `{id, status, receivingOrderId, batchNo, supplierCode, supplierName, orgId, subInventoryCode, receivedItems, unboxedItems, createdDate}`. |
+| `GET /put-away/candidates` | List of receivable orders with per-order received/unboxed counts; rows also carry `displayName` (receivingOrderNameTemplate), `invoiceNos`, `deliveryDate`, `dateCode` for the PDA list-row templates. |
+| `GET /put-away-tasks?status=` | Task queue (task mode), oldest first: `{id, status, receivingOrderId, batchNo, displayName, supplierCode, supplierName, invoiceNos, deliveryDate, dateCode, orgId, subInventoryCode, receivedItems, unboxedItems, createdDate}`. `displayName` = the order name per the `receivingOrderNameTemplate` flow-config template. |
 | `GET /put-away-tasks/:id` | The per-order put-away aggregate + `{task}`; 404 `put_away_task_not_found`. |
 | `GET /receiving-orders/:id/put-away` | One aggregate: `{order, items[], lots[], scans[], boxes[{..., items[]}]}` for the put-away detail screen. `items[]` = the order's expected (receivable) invoice items `{id, partId, partNo, qty, receivedQty, pickedQty, putAwayQty, allocatedQty, remainingQty, dateCode, lotCode, coo, cow}` with `remainingQty = received − picked − put_away − allocated − staged` (the candidates-list formula), each carrying the advisory per-item `suggestedShelfCode`/`suggestedBoxId`/`suggestionReason` (existing-stock strategy unless `steps.put-away.suggestShelf=off`). |
 | `POST /receiving-orders/:id/put-away-scans` | `{actorId, raw|fields, qty}` → complete scan row (no fix-up query). |
@@ -381,6 +381,19 @@ a `displayName` field on the `GET /receiving-orders` rows and the
 the PDA receiving list/detail titles and the admin receiving list/detail
 render `displayName`, so a runtime `PUT /admin/flow-config` applies
 immediately.
+The top-level `pdaListTemplates` key (spec
+`2026-09-21-pda-list-row-templates-design.md`) sets per-PDA-list `{title,
+meta}` templates for the six PDA list pages (`receiving`, `picking`,
+`put-away`, `goods-verify`, `verify`, `measuring`); missing lists/fields keep
+the built-in defaults (= today's hardcoded rows). The resolved value is served
+on `GET /config` as `listTemplates` and applied client-side in the PDA
+(`apps/web/utils/listRowTemplate.ts` + `composables/useListTemplates.ts`):
+receiving and put-away `[name]` is the backend `displayName` (the put-away
+candidates/tasks queries carry it from the receiving order); an all-empty
+title falls back
+to the default title then the raw primary id, an all-empty meta hides the meta
+line ("empty" = no letters/digits in the render). Edited on the admin
+display-config page via `PUT /admin/flow-config`.
 The shipping feed is per-box: the list reads closed, unshipped boxes — gated
 on the box's completed verify task when the verify step is enabled
 ("measured" ≡ closed). Shipping is a pure workflow transition (stock already
@@ -394,7 +407,7 @@ Shipped boxes drop out of the feed; shipped orders stay visible via
 
 | Endpoint | Description |
 |---|---|
-| `GET /config` | `{flowSteps: Record<FlowStep, boolean>, pickingAllocation: {allowDockStock: boolean}, putAway: {autoCreateTasks: boolean, suggestShelf: "existing-stock"\|"off"}, allowedOrgIds: number[]}` — the resolved flow config (`warehouse_config` row `"flow"`, `FLOW_CONFIG` env override; legacy `FLOW_STEPS_DISABLED` maps onto `flowSteps` on top, deprecated). `pickingAllocation.allowDockStock=false` = put-away is a hard gate for allocation; `putAway` drives the put-away task mode + shelf suggestions; `allowedOrgIds` ([] = all orgs) scopes picking/receiving/stock/put-away/goods-verify queries to the listed org partitions server-side. |
+| `GET /config` | `{flowSteps: Record<FlowStep, boolean>, pickingAllocation: {allowDockStock: boolean}, putAway: {autoCreateTasks: boolean, suggestShelf: "existing-stock"\|"off"}, allowedOrgIds: number[], listTemplates: Record<PdaListKey, {title, meta}>}` — the resolved flow config (`warehouse_config` row `"flow"`, `FLOW_CONFIG` env override; legacy `FLOW_STEPS_DISABLED` maps onto `flowSteps` on top, deprecated). `pickingAllocation.allowDockStock=false` = put-away is a hard gate for allocation; `putAway` drives the put-away task mode + shelf suggestions; `allowedOrgIds` ([] = all orgs) scopes picking/receiving/stock/put-away/goods-verify queries to the listed org partitions server-side; `listTemplates` (spec `2026-09-21-pda-list-row-templates-design.md`) carries the per-PDA-list row display templates applied client-side. |
 | `GET /shipping-orders` | Box rows: `{boxId, orderNos[], shipTos[], destinationCountry, boxSize, grossWeight, netWeight, packageCount, closedAt}` — closed, unshipped boxes (verify-gated when the verify step is on). |
 | `GET /shipping-orders/:boxId` | Box detail: `{box{..., shippedAt, shippedBy}, packages[{..., partNo, wclItemNo, verified}], orders[{id, orderNo, status, shipTo, customerCode, poNo}]}` (404 `shipping_box_not_found`). |
 | `POST /shipping-orders/:boxId/ship` | `{actorId}` → `{id, status, shippedOrderIds}`. Re-checks the feed predicate (closed, unshipped, verify-gated; 409 `box_not_ready_to_ship` otherwise, including already-shipped boxes), stamps the box, derives order `shipped`, emits `shipping_box.shipped`. |

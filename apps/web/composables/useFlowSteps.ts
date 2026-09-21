@@ -52,6 +52,7 @@ async function loadFlowSteps(): Promise<void> {
       if (config.pickingAllocation) {
         pickingAllocation.value = { ...pickingAllocation.value, ...config.pickingAllocation };
       }
+      applyListTemplates(config.listTemplates);
     } catch {
       // Config unavailable (old backend, offline) — keep the defaults.
     } finally {

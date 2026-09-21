@@ -148,6 +148,23 @@ const groups = computed<ItemGroup[]>(() => {
     .map(([key, items]) => ({ key, invoice: null, items }));
 });
 
+// Select-all toggle spanning every visible group (respects the invoice
+// filter): checks all items of all invoices/groups at once, or clears them.
+const visibleItemIds = computed(() => groups.value.flatMap((g) => g.items.map((it) => it.id)));
+const allVisibleSelected = computed(
+  () => visibleItemIds.value.length > 0 && visibleItemIds.value.every((id) => selected.value.has(id))
+);
+
+function toggleSelectAll() {
+  const next = new Set(selected.value);
+  if (allVisibleSelected.value) {
+    for (const id of visibleItemIds.value) next.delete(id);
+  } else {
+    for (const id of visibleItemIds.value) next.add(id);
+  }
+  selected.value = next;
+}
+
 // One DataTable per group, each with its own useAdminTable instance (created
 // lazily and cached by group key). Sort/column state is per group table and
 // persists under `admin-table:receiving-detail-items-<groupKey>`; the
@@ -574,7 +591,7 @@ const {
 <template>
   <div>
     <div class="page-head">
-      <h1>{{ $t("admin.pages.receiving.detailTitle", { batchNo: order?.displayName ?? order?.batchNo ?? "" }) }}</h1>
+      <h1 class="page-title">{{ $t("admin.pages.receiving.detailTitle", { batchNo: order?.displayName ?? order?.batchNo ?? "" }) }}</h1>
       <div class="head-actions">
         <!-- <button class="btn" disabled :title="$t('admin.common.downloadPendingTitle')">
           {{ $t("admin.pages.receiving.downloadDeliveryOrderList") }}
@@ -650,6 +667,10 @@ const {
           :multiple="false"
           :show-all="false"
         />
+        <label class="select-all-toggle">
+          <input type="checkbox" :checked="allVisibleSelected" @change="toggleSelectAll" />
+          {{ $t("admin.pages.receiving.selectAll") }}
+        </label>
       </div>
 
       <div v-if="selected.size > 0" class="batch-bar">
@@ -843,6 +864,12 @@ const {
 </template>
 
 <style scoped>
+.page-title{
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+  flex: 1 0;
+}
 .head-actions {
   display: flex;
   gap: 0.625rem;
@@ -883,6 +910,13 @@ const {
   flex-wrap: wrap;
   gap: 0.625rem;
   padding: 0.5rem 0;
+}
+.select-all-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  cursor: pointer;
+  user-select: none;
 }
 :deep(td.actions) .btn {
   margin: 0 0.375rem 0.25rem 0;

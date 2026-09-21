@@ -153,6 +153,38 @@ test("PUT /admin/flow-config: receivingOrderNameTemplate round-trips", async () 
   }
 });
 
+test("PUT /admin/flow-config: pdaListTemplates round-trips and reaches GET /config", async () => {
+  await reseed(client);
+  try {
+    const get0 = await (await req("/admin/flow-config")).json();
+    assert.equal(get0.config.pdaListTemplates.receiving.title, "[name]");
+    const payload = { pdaListTemplates: { receiving: { meta: "[invoice_no] · [batch_no]" } } };
+    const res = await req("/admin/flow-config", { method: "PUT", body: JSON.stringify(payload) });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.equal(body.config.pdaListTemplates.receiving.meta, "[invoice_no] · [batch_no]");
+    // untouched field of a touched list keeps the default
+    assert.equal(body.config.pdaListTemplates.receiving.title, "[name]");
+    const row = await queryGet<{ value: unknown }>(
+      client.db,
+      sql`SELECT value FROM warehouse_config WHERE key = 'flow'`
+    );
+    assert.deepEqual(row!.value, payload);
+    // runtime applied: the PDA-facing GET /config resolves the new meta
+    const config = await (await req("/config")).json();
+    assert.equal(config.listTemplates.receiving.meta, "[invoice_no] · [batch_no]");
+    assert.equal(config.listTemplates.picking.title, "[order_no]");
+    // invalid shapes rejected
+    const bad = await req("/admin/flow-config", {
+      method: "PUT",
+      body: JSON.stringify({ pdaListTemplates: { "stock-search": { title: "x" } } }),
+    });
+    assert.equal(bad.status, 400);
+  } finally {
+    _resetFlowConfigForTests();
+  }
+});
+
 test("PUT /admin/flow-config: receivingSubInventoryRules round-trips", async () => {
   await reseed(client);
   try {

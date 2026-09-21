@@ -43,11 +43,10 @@
       >
         <div class="list-row__main">
           <div class="list-row__line1">
-            <span class="list-row__title">{{ ro.displayName || ro.batchNo }}</span>
+            <span class="list-row__title">{{ rowTitle(ro) }}</span>
           </div>
-          <div class="list-row__meta">
-            {{ ro.supplierName || $t('common.noSupplier') }}
-            · {{ ro.deliveryDate ? new Date(ro.deliveryDate).toLocaleDateString() : $t('common.noDate') }}
+          <div v-if="rowMeta(ro)" class="list-row__meta">
+            {{ rowMeta(ro) }}
           </div>
         </div>
         <div class="list-row__aside">
@@ -90,6 +89,11 @@ const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const warehouse = useWarehouse();
+// Row title/meta come from the warehouse's pdaListTemplates flow config
+// (spec 2026-09-21-pda-list-row-templates-design.md).
+const { formatRow } = useListTemplates();
+const rowTitle = (ro: ReceivingOrderListRow) => formatRow("receiving", "title", ro);
+const rowMeta = (ro: ReceivingOrderListRow) => formatRow("receiving", "meta", ro);
 
 useHead({ title: t("receiving.title") });
 

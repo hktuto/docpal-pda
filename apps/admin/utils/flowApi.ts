@@ -426,6 +426,8 @@ export interface FlowConfigState {
     dateCodeDisplayTemplate: string;
     /** Display template for the receiving order name (list/detail titles). */
     receivingOrderNameTemplate: string;
+    /** Per-PDA-list {title, meta} display templates (fully resolved). */
+    pdaListTemplates: Record<string, { title: string; meta: string }>;
   };
   /** Raw warehouse_config row value (partial JSON as stored). */
   stored: Record<string, unknown>;

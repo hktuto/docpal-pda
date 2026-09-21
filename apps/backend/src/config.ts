@@ -72,7 +72,8 @@ export const docpalGroupMapping: Record<string, string[]> = {
 //     "pickingFromSubinventoryOrgs": [
 //       { "orgId": 143, "fromSubinventories": ["SZHK2", "GZHK2"] } ]
 //     "dateCodeDisplayTemplate": "[date_code][coo]",
-//     "receivingOrderNameTemplate": "[batch_no]" }
+//     "receivingOrderNameTemplate": "[batch_no]",
+//     "pdaListTemplates": { "receiving": { "title": "[name]", "meta": "[supplier_name] · [delivery_date]" } } }
 //
 // dateCodeDisplayTemplate (spec 2026-09-17-date-code-display-template-design.md):
 // free-form display template for lot date code / lot code / COO / COW in admin
@@ -86,6 +87,12 @@ export const docpalGroupMapping: Record<string, string[]> = {
 // renders as "", an all-empty render falls back to batch_no. The backend
 // computes `displayName` on the receiving list/detail responses from this.
 // Default "[batch_no]" (= batch_no only, the pre-template behavior).
+//
+// pdaListTemplates (spec 2026-09-21-pda-list-row-templates-design.md):
+// per-PDA-list {title, meta} free-form templates for the six PDA list pages
+// (receiving, picking, put-away, goods-verify, verify, measuring); missing
+// lists/fields keep the built-in defaults (= today's hardcoded rows). Served
+// to the PDA via GET /config `listTemplates` and applied client-side.
 //
 // allowedOrgIds (spec 2026-09-01-flow-config-allowed-org-ids-design.md):
 // org_id partitions this warehouse accepts; [] = all orgs (no filtering).
@@ -189,6 +196,25 @@ export interface FromSubinventoryOrgGroup {
   fromSubinventories: string[];
 }
 
+/** PDA list pages whose rows get configurable title/meta templates (spec
+ *  2026-09-21-pda-list-row-templates-design.md). */
+export const PDA_LIST_KEYS = [
+  "receiving",
+  "picking",
+  "put-away",
+  "goods-verify",
+  "verify",
+  "measuring",
+] as const;
+export type PdaListKey = (typeof PDA_LIST_KEYS)[number];
+
+export interface PdaListTemplate {
+  title: string;
+  meta: string;
+}
+
+export type PdaListTemplates = Record<PdaListKey, PdaListTemplate>;
+
 export interface FlowConfig {
   steps: Record<FlowStep, { enabled: boolean }>;
   pickingAllocation: PickingAllocationConfig;
@@ -209,6 +235,20 @@ export interface FlowConfig {
    *  placeholders [batch_no] [invoice_no] [supplier_code] [supplier_name]
    *  [delivery_date] [date_code]. Backend-computed `displayName`. */
   receivingOrderNameTemplate: string;
+  /** Per-PDA-list {title, meta} display templates (fully resolved). */
+  pdaListTemplates: PdaListTemplates;
+}
+
+/** Built-in defaults — reproduce the PDA's hardcoded list rows. */
+export function defaultPdaListTemplates(): PdaListTemplates {
+  return {
+    receiving: { title: "[name]", meta: "[supplier_name] · [delivery_date]" },
+    picking: { title: "[order_no]", meta: "[customer_code] · [po_no]" },
+    "put-away": { title: "[batch_no]", meta: "[supplier_name]" },
+    "goods-verify": { title: "[wcl_item_no]", meta: "[shelf_code] · [box_id]" },
+    verify: { title: "[shipping_box_id]", meta: "[order_nos] · [destination_country]" },
+    measuring: { title: "[box_id]", meta: "[order_nos]" },
+  };
 }
 
 function defaultFlowConfig(): FlowConfig {
@@ -222,6 +262,7 @@ function defaultFlowConfig(): FlowConfig {
     pickingFromSubinventoryOrgs: [],
     dateCodeDisplayTemplate: "[date_code][coo]",
     receivingOrderNameTemplate: "[batch_no]",
+    pdaListTemplates: defaultPdaListTemplates(),
   };
 }
 
@@ -426,6 +467,30 @@ export function mergeFlowConfigJson(parsed: unknown): FlowConfig {
       cfg.receivingOrderNameTemplate = value;
       continue;
     }
+    if (key === "pdaListTemplates") {
+      if (typeof value !== "object" || value === null || Array.isArray(value)) {
+        throw new Error("[config] flow config.pdaListTemplates must be an object keyed by PDA list key");
+      }
+      for (const [listKey, listValue] of Object.entries(value as Record<string, unknown>)) {
+        const at = `flow config.pdaListTemplates.${listKey}`;
+        if (!(PDA_LIST_KEYS as readonly string[]).includes(listKey)) {
+          throw new Error(`[config] flow config.pdaListTemplates: unknown list key "${listKey}"`);
+        }
+        if (typeof listValue !== "object" || listValue === null || Array.isArray(listValue)) {
+          throw new Error(`[config] ${at} must be an object with optional title/meta strings`);
+        }
+        for (const [slot, slotValue] of Object.entries(listValue as Record<string, unknown>)) {
+          if (slot !== "title" && slot !== "meta") {
+            throw new Error(`[config] ${at}: unknown key "${slot}"`);
+          }
+          if (typeof slotValue !== "string" || slotValue.trim() === "") {
+            throw new Error(`[config] ${at}.${slot} must be a non-empty string`);
+          }
+          cfg.pdaListTemplates[listKey as PdaListKey][slot] = slotValue;
+        }
+      }
+      continue;
+    }
     if (key !== "steps") throw new Error(`[config] flow config: unknown key "${key}"`);
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
       throw new Error("[config] flow config.steps must be an object");
@@ -557,6 +622,12 @@ export function dateCodeDisplayTemplate(): string {
  *  docs/superpowers/specs/2026-09-21-receiving-order-name-template-design.md). */
 export function receivingOrderNameTemplate(): string {
   return flowConfig.receivingOrderNameTemplate;
+}
+
+/** Per-PDA-list {title, meta} display templates (spec
+ *  docs/superpowers/specs/2026-09-21-pda-list-row-templates-design.md). */
+export function pdaListTemplates(): PdaListTemplates {
+  return flowConfig.pdaListTemplates;
 }
 
 /** Confirm-arrival sub-inventory defaulting rule groups; [] = feature off. */
