@@ -102,14 +102,21 @@ they form their own section (see below), they are not dropped.
   sum. Per-group `Total Qty`/`Balance` were already section-scoped
   (groups are built from the section's items).
 
-- **Diagonal cascade slot layout (all blocks, live and finished).** Slot i
-  stacks vertically in its own column — customer / order ref / qty on block
-  rows i, i+1, i+2 — cascading diagonally from the block top; carton item
-  rows stay bottom-aligned. Block height = `max(items, slots) + 2` (no
-  slots → the original `max(items, 3)` shape). Merged slots are
-  concatenated per carton in carton order, so a slot's qty lands on/near
-  the row of the carton it was allocated from. The whole-order closing
-  block cascades the same way (height = slots + 2).
+- **Per-carton allocation rows (live mode).** Allocations are per carton
+  line (`allocations.receiving_invoice_item_id`), so each allocation gets
+  its own column, sequential across the block in carton-concatenation
+  order: the qty sits on its carton's row, the order ref directly above,
+  the customer two cells above. Block height = carton count + 2 when any
+  carton has slots (no slots → the original `max(items, 3)` shape);
+  cartons stay bottom-aligned. Finished mode (package slots can't pin to
+  cartons) and the whole-order closing block keep the pre-cascade overlay
+  (all customers / all refs / all qtys on the block's last three rows).
+  Supersedes the cascade decision below.
+
+- ~~**Diagonal cascade slot layout (all blocks, live and finished).**~~
+  SUPERSEDED (same day, against the user's hand-corrected file): the
+  diagonal cascade misread the mockup — live allocations pin to their
+  carton row, see the decision above.
 
 - **Related-allocated cell shows source locations.** The bare number
   becomes a breakdown of the related orders' allocated qty per source

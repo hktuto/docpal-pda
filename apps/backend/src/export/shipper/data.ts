@@ -275,8 +275,9 @@ async function loadShipperData(db: AppDb, id: string, finished: boolean): Promis
 // global column per picking order (each receipt's order set differs, so
 // global columns would sprawl). Every part group prints as one block:
 //   one row per carton: `invoice_no ctn_no` | part | qty
-//   slot i stacks vertically in its own column (customer / order ref /
-//   qty on rows i, i+1, i+2) — a diagonal cascade from the block top
+//   live mode: each allocation gets its own column with the qty on its
+//   carton's row (order ref above, customer two above); finished mode:
+//   the slot rows overlay the block's last three rows
 // Slot count = the widest block's merged slot count.
 function buildShipperDocument(
   head: OrderHeadRow,
@@ -427,6 +428,7 @@ function buildShipperDocument(
           drawingNo: item.drawingNo,
           ctnNo: item.ctnNo,
           qty: item.receivedQty,
+          slots: finished ? [] : allocsByItem.get(item.id) ?? [],
         });
       }
 

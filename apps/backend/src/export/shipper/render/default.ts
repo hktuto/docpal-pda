@@ -46,14 +46,16 @@ export function makeShipperRenderer(options?: ShipperRendererOptions): Renderer<
     }
 
     // Merged part block: every carton of the part is an item row
-    // (`invoice_no ctn_no` | part | qty), BOTTOM-aligned; slot i stacks
-    // vertically in its own column (customer / order ref / qty on rows
-    // i, i+1, i+2), so slots cascade diagonally from the block top. Merged
-    // slots are concatenated per carton in carton order (data.ts), so a
-    // slot's qty lands on/near the row of the carton it was allocated from.
-    // Blocks grow with slot overflow: height = max(items, slots) + 2 (no
-    // slots → the original max(items, 3) shape). `totalBalance` (totalQty,
-    // balance) lands on the block's last row.
+    // (`invoice_no ctn_no` | part | qty), BOTTOM-aligned.
+    //   live mode: allocations are per carton line — each allocation gets its
+    //     own column (sequential across the block, in carton order); the qty
+    //     sits on its carton's row, the order ref directly above, the
+    //     customer two cells above. Block height = cartons + 2 when any
+    //     carton has slots (no slots → the original max(items, 3) shape).
+    //   finished mode: package slots can't pin to carton rows, so they
+    //     overlay the block's last three rows (all customers / all refs /
+    //     all qtys), height max(items, 3).
+    // `totalBalance` (totalQty, balance) lands on the block's last row.
     function pushGroupBlock(
       partKey: string,
       blockItems: ShipperGroup["blockItems"],
@@ -61,10 +63,8 @@ export function makeShipperRenderer(options?: ShipperRendererOptions): Renderer<
       allocs: ShipperSlot[],
       totalBalance: [number, number] | null
     ) {
-      const height =
-        allocs.length === 0
-          ? Math.max(blockItems.length, 3)
-          : Math.max(blockItems.length, allocs.length) + 2;
+      const perCarton = !finished && blockItems.some((item) => item.slots.length > 0);
+      const height = perCarton ? blockItems.length + 2 : Math.max(blockItems.length, 3);
       const rows: (string | number)[][] = Array.from({ length: height }, () =>
         Array<string | number>(width).fill("")
       );
@@ -74,11 +74,24 @@ export function makeShipperRenderer(options?: ShipperRendererOptions): Renderer<
         row[1] = partKey;
         row[2] = item.qty;
       });
-      allocs.slice(0, slotCount).forEach((a, i) => {
-        rows[i][4 + i] = a.customer;
-        rows[i + 1][4 + i] = a.orderRef;
-        rows[i + 2][4 + i] = a.qty;
-      });
+      if (perCarton) {
+        let c = 0;
+        blockItems.forEach((item, j) => {
+          const r = height - blockItems.length + j;
+          for (const a of item.slots.slice(0, slotCount - c)) {
+            rows[r][4 + c] = a.qty;
+            rows[r - 1][4 + c] = a.orderRef;
+            rows[r - 2][4 + c] = a.customer;
+            c++;
+          }
+        });
+      } else {
+        allocs.slice(0, slotCount).forEach((a, i) => {
+          rows[height - 3][4 + i] = a.customer;
+          rows[height - 2][4 + i] = a.orderRef;
+          rows[height - 1][4 + i] = a.qty;
+        });
+      }
       // The related-source breakdown keeps the old shelf cell's seat:
       // column B for single-carton blocks; in merged blocks column B holds the
       // part on every row, so it moves to the Total Qty column of the
@@ -93,33 +106,26 @@ export function makeShipperRenderer(options?: ShipperRendererOptions): Renderer<
       aoa.push(...rows);
     }
 
-    // A standalone closing block for whole-order allocations that can't be
-    // pinned to a carton row — same diagonal cascade as the group blocks
-    // (height = slots + 2); the last row carries the `(order-level)` label,
-    // partKey and Total/Balance so it still adds up.
+    // A standalone 3-row block (customer names / order refs / one qty row) —
+    // used for whole-order allocations that can't be pinned to a carton row.
     function pushBlock(
       partKey: string,
       invoiceCtn: string,
       allocs: ShipperSlot[],
       totalBalance: [number, number] | null
     ) {
-      const height = allocs.length + 2;
-      const rows: (string | number)[][] = Array.from({ length: height }, () =>
-        Array<string | number>(width).fill("")
-      );
-      allocs.slice(0, slotCount).forEach((a, i) => {
-        rows[i][4 + i] = a.customer;
-        rows[i + 1][4 + i] = a.orderRef;
-        rows[i + 2][4 + i] = a.qty;
-      });
-      const last = rows[height - 1]!;
-      last[0] = invoiceCtn;
-      last[1] = partKey;
-      if (totalBalance) {
-        last[3] = totalBalance[0];
-        last[width - 1] = totalBalance[1];
-      }
-      aoa.push(...rows);
+      const pad = <T>(fn: (a: ShipperSlot) => T | ""): (T | "")[] =>
+        Array.from({ length: slotCount }, (_, i) => (allocs[i] ? fn(allocs[i]) : ""));
+      aoa.push(["", "", "", "", ...pad((a) => a.customer), ""]);
+      aoa.push(["", "", "", "", ...pad((a) => a.orderRef), ""]);
+      aoa.push([
+        invoiceCtn,
+        partKey,
+        "",
+        totalBalance ? totalBalance[0] : "",
+        ...pad((a) => a.qty),
+        totalBalance ? totalBalance[1] : "",
+      ]);
     }
 
     doc.groups.forEach((group, gi) => {
