@@ -23,6 +23,8 @@ New top-level key in the `warehouse_config` row `"flow"`:
   - `[invoice_no]` — the order's invoice numbers, comma-joined (`"INV-1, INV-2"`;
     same aggregation the list endpoint already returns as `invoiceNos`). Empty when
     the order has no invoices.
+  - `[invoice_no_first]` — only the first invoice number (short form for orders
+    with many invoices). Empty when the order has no invoices.
   - `[supplier_code]` — `receiving_orders.supplier_code`
   - `[supplier_name]` — joined `suppliers.name`
   - `[delivery_date]` — `delivery_date` rendered `YYYY-MM-DD`

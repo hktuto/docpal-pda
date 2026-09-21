@@ -374,7 +374,8 @@ page through `GET/PUT /admin/flow-config`.
 The top-level `receivingOrderNameTemplate: string` key (spec
 `2026-09-21-receiving-order-name-template-design.md`, default `"[batch_no]"`)
 sets the receiving order NAME: placeholders `[batch_no]` `[invoice_no]`
-(comma-joined invoice numbers) `[supplier_code]` `[supplier_name]`
+(comma-joined invoice numbers) `[invoice_no_first]` (first invoice only)
+`[supplier_code]` `[supplier_name]`
 `[delivery_date]` (YYYY-MM-DD) `[date_code]` are rendered by the backend into
 a `displayName` field on the `GET /receiving-orders` rows and the
 `GET /receiving-orders/:id` detail (all-empty render falls back to batch_no);

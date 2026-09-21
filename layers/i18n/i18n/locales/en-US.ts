@@ -1688,6 +1688,7 @@ export default {
         roPlaceholderLabels: {
           batch_no: "Batch no",
           invoice_no: "Invoice no(s)",
+          invoice_no_first: "First invoice no",
           supplier_code: "Supplier code",
           supplier_name: "Supplier name",
           delivery_date: "Delivery date",
@@ -1714,6 +1715,7 @@ export default {
           name: "Order name",
           batch_no: "Batch no",
           invoice_no: "Invoice no(s)",
+          invoice_no_first: "First invoice no",
           supplier_code: "Supplier code",
           supplier_name: "Supplier name",
           delivery_date: "Delivery date",

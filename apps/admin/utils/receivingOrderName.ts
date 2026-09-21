@@ -16,17 +16,22 @@ export interface ReceivingOrderNameFields {
 const PLACEHOLDERS: Record<string, keyof ReceivingOrderNameFields> = {
   batch_no: "batchNo",
   invoice_no: "invoiceNo",
+  invoice_no_first: "invoiceNo",
   supplier_code: "supplierCode",
   supplier_name: "supplierName",
   delivery_date: "deliveryDate",
   date_code: "dateCode",
 };
 
+/** Tokens rendering only the first value of a comma-joined field. */
+const FIRST_ONLY = new Set(["invoice_no_first"]);
+
 export function formatReceivingOrderName(fields: ReceivingOrderNameFields, template: string): string {
   const rendered = template.replace(/\[([^\]]*)\]/g, (whole, name: string) => {
     const key = PLACEHOLDERS[name];
     if (!key) return whole;
-    return fields[key] ?? "";
+    const value = fields[key] ?? "";
+    return FIRST_ONLY.has(name) ? value.split(", ")[0] : value;
   });
   return rendered.trim() === "" ? (fields.batchNo ?? "") : rendered;
 }

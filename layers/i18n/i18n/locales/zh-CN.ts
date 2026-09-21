@@ -1685,6 +1685,7 @@ export default {
         roPlaceholderLabels: {
           batch_no: "批次号",
           invoice_no: "发票号码",
+          invoice_no_first: "第一张发票号码",
           supplier_code: "供应商代码",
           supplier_name: "供应商名称",
           delivery_date: "送货日期",
@@ -1711,6 +1712,7 @@ export default {
           name: "订单名称",
           batch_no: "批次号",
           invoice_no: "发票号码",
+          invoice_no_first: "第一张发票号码",
           supplier_code: "供应商代码",
           supplier_name: "供应商名称",
           delivery_date: "送货日期",

@@ -32,6 +32,7 @@ const PLACEHOLDERS = ["date_code", "lot_code", "coo", "cow"] as const;
 const RO_PLACEHOLDERS = [
   "batch_no",
   "invoice_no",
+  "invoice_no_first",
   "supplier_code",
   "supplier_name",
   "delivery_date",

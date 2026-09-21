@@ -65,14 +65,16 @@ Derived from the list-row DTOs (`apps/web/services/types.ts`); the catalog in
 code is authoritative:
 
 - **receiving** — `name`, `batch_no`, `invoice_no` (comma-joined invoice
-  numbers), `supplier_code`, `supplier_name`, `delivery_date`, `date_code`,
+  numbers), `invoice_no_first` (only the first invoice number), `supplier_code`,
+  `supplier_name`, `delivery_date`, `date_code`,
   `status`, `org_id`, `invoice_count`, `item_count`, `remaining_items`,
   `pending_picking_orders`
 - **picking** — `order_no`, `status`, `allocation_status`, `customer_code`,
   `po_no`, `ship_to`, `delivery_date`, `item_count`, `total_qty`, `picked_qty`,
   `working_by_name`, `org_id`, `sub_inventory_code`
 - **put-away** — `name` (the receiving order's backend-computed `displayName`,
-  same as receiving), `batch_no`, `invoice_no`, `supplier_code`,
+  same as receiving), `batch_no`, `invoice_no`, `invoice_no_first`,
+  `supplier_code`,
   `supplier_name`, `delivery_date`, `date_code`, `status`, `org_id`,
   `sub_inventory_code`, `unboxed_items`, `received_items`
   (`received_items` only on task rows; candidates render it empty). One config

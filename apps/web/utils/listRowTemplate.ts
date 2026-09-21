@@ -49,6 +49,8 @@ export interface PdaListFieldSpec {
   field: string;
   /** date → YYYY-MM-DD; datetime → YYYY-MM-DD HH:mm (from an ISO string/Date). */
   kind?: "date" | "datetime";
+  /** true = render only the first value of a comma-joined string. */
+  first?: boolean;
 }
 
 /** snake_case token → row field, per list. The display-order keys double as
@@ -58,6 +60,7 @@ export const PDA_LIST_FIELDS: Record<PdaListKey, Record<string, PdaListFieldSpec
     name: { field: "displayName" },
     batch_no: { field: "batchNo" },
     invoice_no: { field: "invoiceNos" },
+    invoice_no_first: { field: "invoiceNos", first: true },
     supplier_code: { field: "supplierCode" },
     supplier_name: { field: "supplierName" },
     delivery_date: { field: "deliveryDate", kind: "date" },
@@ -88,6 +91,7 @@ export const PDA_LIST_FIELDS: Record<PdaListKey, Record<string, PdaListFieldSpec
     name: { field: "displayName" },
     batch_no: { field: "batchNo" },
     invoice_no: { field: "invoiceNos" },
+    invoice_no_first: { field: "invoiceNos", first: true },
     supplier_code: { field: "supplierCode" },
     supplier_name: { field: "supplierName" },
     delivery_date: { field: "deliveryDate", kind: "date" },
@@ -135,7 +139,8 @@ function formatValue(spec: PdaListFieldSpec, value: unknown): string {
     const iso = value instanceof Date ? value.toISOString() : String(value);
     return spec.kind === "date" ? iso.slice(0, 10) : iso.slice(0, 16).replace("T", " ");
   }
-  return String(value);
+  const text = String(value);
+  return spec.first ? text.split(", ")[0] : text;
 }
 
 /** Render one template against a row; unknown [tokens] stay literal. */

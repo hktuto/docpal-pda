@@ -51,6 +51,13 @@ test("formatReceivingOrderName: all-empty render falls back to batch_no", () => 
   assert.equal(formatReceivingOrderName({ batchNo: "B-1", invoiceNo: null }, "[invoice_no]"), "B-1");
 });
 
+test("formatReceivingOrderName: invoice_no_first renders only the first invoice", () => {
+  assert.equal(formatReceivingOrderName(FULL, "[invoice_no_first]"), "INV-1");
+  assert.equal(formatReceivingOrderName(FULL, "[batch_no] ([invoice_no_first])"), "BATCH-1 (INV-1)");
+  assert.equal(formatReceivingOrderName({ batchNo: "B-1", invoiceNo: "INV-9" }, "[invoice_no_first]"), "INV-9");
+  assert.equal(formatReceivingOrderName({ batchNo: "B-1", invoiceNo: null }, "[invoice_no_first]"), "B-1");
+});
+
 test("formatReceivingOrderName: unknown tokens stay literal", () => {
   assert.equal(formatReceivingOrderName(FULL, "[bogus]"), "[bogus]");
 });

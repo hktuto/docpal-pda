@@ -42,6 +42,12 @@ describe("formatListRowTemplate", () => {
     expect(formatListRowTemplate({ orderNos: ["A", "B"] }, "[order_nos]", "verify")).toBe("A, B");
   });
 
+  it("invoice_no_first renders only the first invoice", () => {
+    expect(formatListRowTemplate(RECEIVING_ROW, "[invoice_no_first]", "receiving")).toBe("INV-1");
+    expect(formatListRowTemplate({ invoiceNos: "INV-9" }, "[invoice_no_first]", "put-away")).toBe("INV-9");
+    expect(formatListRowTemplate({ invoiceNos: null }, "[invoice_no_first]", "receiving")).toBe("");
+  });
+
   it("datetime kind renders YYYY-MM-DD HH:mm", () => {
     expect(
       formatListRowTemplate({ verifiedAt: "2026-09-21T08:30:00.000Z" }, "[verified_at]", "goods-verify")
