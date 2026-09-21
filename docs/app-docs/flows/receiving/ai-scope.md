@@ -74,11 +74,14 @@
   `apps/admin/components/receiving/ItemEditModal.vue`), and download the
   shipper xlsx (`GET /admin/receiving-orders/:id/shipper`,
   `apps/backend/src/routes/admin/receivingShipper.ts`): receipts grouped
-  by part, each group one merged block (customer names / order_nos overlaid
-  on the block's last rows, one `invoice_no ctn_no` item row per carton)
+  by part, each group one merged block (one bottom-aligned
+  `invoice_no ctn_no` item row per carton; slot i cascades diagonally —
+  customer / order_no / qty on block rows i, i+1, i+2 of its own column)
   with per-block slots, per-group Total/Balance, and a group header cell
-  showing the related-order allocated qty (Σ allocations of the part on the
-  picking orders tracing back to this receiving order, any source; spec
+  showing the related-order allocated breakdown by source location
+  (`qty@shelf/box` entries, shelf-less sources render as `dock`; Σ
+  allocations of the part on the picking orders tracing back to this
+  receiving order; spec
   `docs/superpowers/specs/2026-09-16-admin-receiving-shipper-related-allocated-design.md`).
   The download always splits by receiving-office location (spec
   `docs/superpowers/specs/2026-09-21-shipper-split-by-location-design.md`):

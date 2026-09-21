@@ -37,20 +37,34 @@ export function makeShipperRenderer(options?: ShipperRendererOptions): Renderer<
 
     const width = 4 + slotCount + 1;
 
+    // `qty@shelf/box` entries joined ", " — shelf NULL renders as `dock`
+    // (receiving/dock sources), box omitted when NULL.
+    function formatRelatedSources(sources: ShipperGroup["relatedSources"]): string {
+      return sources
+        .map((s) => `${s.qty}@${s.shelfCode ?? "dock"}${s.boxId ? `/${s.boxId}` : ""}`)
+        .join(", ");
+    }
+
     // Merged part block: every carton of the part is an item row
-    // (`invoice_no ctn_no` | part | qty), and the slot rows (customer / order
-    // ref / slot qty) overlay the block's LAST THREE rows — spilling into
-    // standalone rows above the item rows when the group has fewer than 3
-    // cartons (1 carton → the original 3-row block). `totalBalance` (totalQty,
+    // (`invoice_no ctn_no` | part | qty), BOTTOM-aligned; slot i stacks
+    // vertically in its own column (customer / order ref / qty on rows
+    // i, i+1, i+2), so slots cascade diagonally from the block top. Merged
+    // slots are concatenated per carton in carton order (data.ts), so a
+    // slot's qty lands on/near the row of the carton it was allocated from.
+    // Blocks grow with slot overflow: height = max(items, slots) + 2 (no
+    // slots → the original max(items, 3) shape). `totalBalance` (totalQty,
     // balance) lands on the block's last row.
     function pushGroupBlock(
       partKey: string,
       blockItems: ShipperGroup["blockItems"],
-      relatedAllocated: number,
+      relatedSources: ShipperGroup["relatedSources"],
       allocs: ShipperSlot[],
       totalBalance: [number, number] | null
     ) {
-      const height = Math.max(blockItems.length, 3);
+      const height =
+        allocs.length === 0
+          ? Math.max(blockItems.length, 3)
+          : Math.max(blockItems.length, allocs.length) + 2;
       const rows: (string | number)[][] = Array.from({ length: height }, () =>
         Array<string | number>(width).fill("")
       );
@@ -61,15 +75,17 @@ export function makeShipperRenderer(options?: ShipperRendererOptions): Renderer<
         row[2] = item.qty;
       });
       allocs.slice(0, slotCount).forEach((a, i) => {
-        rows[height - 3][4 + i] = a.customer;
-        rows[height - 2][4 + i] = a.orderRef;
-        rows[height - 1][4 + i] = a.qty;
+        rows[i][4 + i] = a.customer;
+        rows[i + 1][4 + i] = a.orderRef;
+        rows[i + 2][4 + i] = a.qty;
       });
-      // The related-order allocated qty keeps the old shelf cell's seat:
+      // The related-source breakdown keeps the old shelf cell's seat:
       // column B for single-carton blocks; in merged blocks column B holds the
       // part on every row, so it moves to the Total Qty column of the
-      // order-ref row (empty there — totals only land on the block's last row).
-      if (relatedAllocated > 0) rows[height - 2][blockItems.length === 1 ? 1 : 3] = relatedAllocated;
+      // height-2 row (empty there — totals only land on the block's last row).
+      if (relatedSources.length > 0) {
+        rows[height - 2][blockItems.length === 1 ? 1 : 3] = formatRelatedSources(relatedSources);
+      }
       if (totalBalance) {
         rows[height - 1][3] = totalBalance[0];
         rows[height - 1][width - 1] = totalBalance[1];
@@ -77,33 +93,40 @@ export function makeShipperRenderer(options?: ShipperRendererOptions): Renderer<
       aoa.push(...rows);
     }
 
-    // A standalone 3-row block (customer names / order refs / one qty row) —
-    // used for whole-order allocations that can't be pinned to a carton row.
+    // A standalone closing block for whole-order allocations that can't be
+    // pinned to a carton row — same diagonal cascade as the group blocks
+    // (height = slots + 2); the last row carries the `(order-level)` label,
+    // partKey and Total/Balance so it still adds up.
     function pushBlock(
       partKey: string,
       invoiceCtn: string,
       allocs: ShipperSlot[],
       totalBalance: [number, number] | null
     ) {
-      const pad = <T>(fn: (a: ShipperSlot) => T | ""): (T | "")[] =>
-        Array.from({ length: slotCount }, (_, i) => (allocs[i] ? fn(allocs[i]) : ""));
-      aoa.push(["", "", "", "", ...pad((a) => a.customer), ""]);
-      aoa.push(["", "", "", "", ...pad((a) => a.orderRef), ""]);
-      aoa.push([
-        invoiceCtn,
-        partKey,
-        "",
-        totalBalance ? totalBalance[0] : "",
-        ...pad((a) => a.qty),
-        totalBalance ? totalBalance[1] : "",
-      ]);
+      const height = allocs.length + 2;
+      const rows: (string | number)[][] = Array.from({ length: height }, () =>
+        Array<string | number>(width).fill("")
+      );
+      allocs.slice(0, slotCount).forEach((a, i) => {
+        rows[i][4 + i] = a.customer;
+        rows[i + 1][4 + i] = a.orderRef;
+        rows[i + 2][4 + i] = a.qty;
+      });
+      const last = rows[height - 1]!;
+      last[0] = invoiceCtn;
+      last[1] = partKey;
+      if (totalBalance) {
+        last[3] = totalBalance[0];
+        last[width - 1] = totalBalance[1];
+      }
+      aoa.push(...rows);
     }
 
     doc.groups.forEach((group, gi) => {
       pushGroupBlock(
         group.partKey,
         group.blockItems,
-        group.relatedAllocated,
+        group.relatedSources,
         group.slots,
         // Live mode defers Total/Balance to the (order-level) closing block
         // when whole-order allocations exist; finished mode never has those.

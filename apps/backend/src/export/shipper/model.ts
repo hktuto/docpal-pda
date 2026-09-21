@@ -22,7 +22,9 @@ export interface ShipperGroup {
   // one per carton; raw components, the renderer picks/joins the first cell
   blockItems: { invoiceNo: string | null; drawingNo: string | null; ctnNo: string | null; qty: number }[];
   slots: ShipperSlot[]; // live: merged per-item slots; finished: package slots
-  relatedAllocated: number; // live mode only (0 in finished)
+  // live mode only (empty in finished): allocated qty on related orders per
+  // source location, sorted qty desc then shelf then box
+  relatedSources: { qty: number; shelfCode: string | null; boxId: string | null }[];
   totalQty: number;
   allocatedTotal: number;
   orderLevel: {

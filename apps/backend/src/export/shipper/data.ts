@@ -70,6 +70,10 @@ interface RelatedAllocRow {
   qty: number;
   orgId: number | null;
   subInventoryCode: string | null;
+  // Source location: shelf NULL for receiving/dock sources; the receiving
+  // item's ctn_no is its box (whole-order sources have neither).
+  shelfCode: string | null;
+  boxId: string | null;
 }
 
 function ymd(d: Date | null): string {
@@ -250,12 +254,16 @@ async function loadShipperData(db: AppDb, id: string, finished: boolean): Promis
           WHERE a.receiving_order_id = ${id} OR ri.receiving_order_id = ${id}
         )
         SELECT pi.part_no AS "demandPartNo", SUM(a.qty)::int AS qty,
-          po.org_id AS "orgId", po.sub_inventory_code AS "subInventoryCode"
+          po.org_id AS "orgId", po.sub_inventory_code AS "subInventoryCode",
+          il.shelf_code AS "shelfCode",
+          COALESCE(il.box_id, rii.ctn_no) AS "boxId"
         FROM allocations a
         JOIN picking_items pi ON pi.id = a.picking_item_id
         JOIN picking_orders po ON po.id = pi.picking_order_id
         JOIN related_orders ro ON ro.order_id = pi.picking_order_id
-        GROUP BY pi.part_no, po.org_id, po.sub_inventory_code
+        LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
+        LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
+        GROUP BY pi.part_no, po.org_id, po.sub_inventory_code, il.shelf_code, COALESCE(il.box_id, rii.ctn_no)
       `
     );
   }
@@ -267,8 +275,8 @@ async function loadShipperData(db: AppDb, id: string, finished: boolean): Promis
 // global column per picking order (each receipt's order set differs, so
 // global columns would sprawl). Every part group prints as one block:
 //   one row per carton: `invoice_no ctn_no` | part | qty
-//   customer names / order_nos / per-slot qtys overlaid on the
-//   block's last three rows (standalone rows above when fewer than 3)
+//   slot i stacks vertically in its own column (customer / order ref /
+//   qty on rows i, i+1, i+2) — a diagonal cascade from the block top
 // Slot count = the widest block's merged slot count.
 function buildShipperDocument(
   head: OrderHeadRow,
@@ -339,17 +347,29 @@ function buildShipperDocument(
   }
 
   // Related-order allocated qty per part group (same part-key rule as the
-  // whole-order slot matching above). Live mode only — finished mode has no
-  // group header cell.
-  const relatedAllocatedByGroup = new Map<string, number>();
+  // whole-order slot matching above), broken down by source location
+  // (shelf/box — spec 2026-09-21-shipper-split-by-location-design.md):
+  // summed per (shelf, box), sorted qty desc then shelf then box. Live mode
+  // only — finished mode has no group header cell.
+  const relatedSourcesByGroup = new Map<string, { qty: number; shelfCode: string | null; boxId: string | null }[]>();
   for (const group of groups) {
-    let sum = 0;
+    const byLocation = new Map<string, { qty: number; shelfCode: string | null; boxId: string | null }>();
     for (const r of relatedAllocs) {
-      if (group.items.some((i) => i.partNo === r.demandPartNo || i.wclItemNo === r.demandPartNo)) {
-        sum += r.qty;
-      }
+      if (!group.items.some((i) => i.partNo === r.demandPartNo || i.wclItemNo === r.demandPartNo)) continue;
+      const key = `${r.shelfCode ?? ""}::${r.boxId ?? ""}`;
+      const entry = byLocation.get(key);
+      if (entry) entry.qty += r.qty;
+      else byLocation.set(key, { qty: r.qty, shelfCode: r.shelfCode, boxId: r.boxId });
     }
-    relatedAllocatedByGroup.set(group.partKey, sum);
+    relatedSourcesByGroup.set(
+      group.partKey,
+      [...byLocation.values()].sort(
+        (a, b) =>
+          b.qty - a.qty ||
+          (a.shelfCode ?? "").localeCompare(b.shelfCode ?? "") ||
+          (a.boxId ?? "").localeCompare(b.boxId ?? "")
+      )
+    );
   }
 
   // Slot count = the widest block's slot count. Live mode: cartons of the
@@ -415,7 +435,7 @@ function buildShipperDocument(
         partKey: group.partKey,
         blockItems,
         slots,
-        relatedAllocated: finished ? 0 : relatedAllocatedByGroup.get(group.partKey) ?? 0,
+        relatedSources: finished ? [] : relatedSourcesByGroup.get(group.partKey) ?? [],
         totalQty,
         allocatedTotal,
         orderLevel: !finished && group.orderAllocs.length > 0 ? { slots: group.orderAllocs } : null,

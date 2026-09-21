@@ -102,6 +102,24 @@ they form their own section (see below), they are not dropped.
   sum. Per-group `Total Qty`/`Balance` were already section-scoped
   (groups are built from the section's items).
 
+- **Diagonal cascade slot layout (all blocks, live and finished).** Slot i
+  stacks vertically in its own column — customer / order ref / qty on block
+  rows i, i+1, i+2 — cascading diagonally from the block top; carton item
+  rows stay bottom-aligned. Block height = `max(items, slots) + 2` (no
+  slots → the original `max(items, 3)` shape). Merged slots are
+  concatenated per carton in carton order, so a slot's qty lands on/near
+  the row of the carton it was allocated from. The whole-order closing
+  block cascades the same way (height = slots + 2).
+
+- **Related-allocated cell shows source locations.** The bare number
+  becomes a breakdown of the related orders' allocated qty per source
+  location: `qty@shelf/box` entries joined `", "` — shelf NULL renders as
+  `dock` (receiving/dock sources), box omitted when NULL (e.g.
+  `15000@HK01-A-01/BOX-9, 4000@dock/CTN123`, `40000@dock`). Box =
+  `COALESCE(inventory_lots.box_id, receiving_invoice_items.ctn_no)`; the
+  per-group aggregation sums per (shelf, box), sorted qty desc then shelf
+  then box. Applies to the single-section output too.
+
 - **Slot attribution to sections:**
   - *Item-level allocations* (live) follow their item — the item sits in
     exactly one section.
