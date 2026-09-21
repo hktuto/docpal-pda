@@ -1,6 +1,7 @@
 import { Hono } from "hono";
+import { zipSync } from "fflate";
 import { db } from "../../db.js";
-import { loadShipperDocument } from "../../export/shipper/data.js";
+import { loadShipperDocument, loadShipperDocuments } from "../../export/shipper/data.js";
 import "../../export/shipper/render/default.js"; // registers the default renderer
 import "../../export/shipper/render/hcc.js"; // registers the supplier-23 (HCC) variant
 import { resolveRenderer } from "../../export/registry.js";
@@ -24,19 +25,60 @@ import type { ShipperDocument } from "../../export/shipper/model.js";
 // Data assembly and layout live in src/export/shipper/ (spec
 // 2026-09-21-admin-excel-export-renderer-separation-design.md); this route
 // is HTTP plumbing only.
+// ?split=location (spec
+// docs/superpowers/specs/2026-09-21-shipper-split-by-location-design.md):
+// one xlsx per receiving-office (org_id, sub_inventory_code) section of the
+// order's items — a single section returns the plain xlsx (per-section file
+// name), multiple sections return a zip of per-section files.
 
 export const adminReceivingShipperRoute = new Hono();
 
-adminReceivingShipperRoute.get("/receiving-orders/:id/shipper", async (c) => {
-  const finished = c.req.query("mode") === "finished";
-  const doc = await loadShipperDocument(db, c.req.param("id"), { finished });
-  const renderer = resolveRenderer<ShipperDocument>("shipper", { supplierCode: doc.head.supplierCode });
-  const { fileName, buffer } = renderer.render(doc);
+const XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+function attachment(buffer: Buffer | Uint8Array, fileName: string, contentType = XLSX_CONTENT_TYPE) {
   return new Response(new Uint8Array(buffer), {
     headers: {
-      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Type": contentType,
       "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`,
       "Content-Length": String(buffer.length),
     },
   });
+}
+
+adminReceivingShipperRoute.get("/receiving-orders/:id/shipper", async (c) => {
+  const finished = c.req.query("mode") === "finished";
+  const id = c.req.param("id");
+  if (c.req.query("split") !== "location") {
+    const doc = await loadShipperDocument(db, id, { finished });
+    const renderer = resolveRenderer<ShipperDocument>("shipper", { supplierCode: doc.head.supplierCode });
+    const { fileName, buffer } = renderer.render(doc);
+    return attachment(buffer, fileName);
+  }
+
+  const sections = await loadShipperDocuments(db, id, { finished });
+  if (sections.length === 0) {
+    const doc = await loadShipperDocument(db, id, { finished });
+    const renderer = resolveRenderer<ShipperDocument>("shipper", { supplierCode: doc.head.supplierCode });
+    const { fileName, buffer } = renderer.render(doc);
+    return attachment(buffer, fileName);
+  }
+
+  const prefix = finished ? "finished-shipper" : "shipper";
+  const batchNo = sections[0]!.doc.head.batchNo;
+  const sanitize = (s: string) => s.replace(/[/\\:*?"<>|\s]+/g, "-");
+  const files = sections.map(({ section, doc }) => {
+    const renderer = resolveRenderer<ShipperDocument>("shipper", { supplierCode: doc.head.supplierCode });
+    const { buffer } = renderer.render(doc);
+    const subInv = section.subInventoryCode === null ? "no-subinventory" : sanitize(section.subInventoryCode);
+    return { fileName: `${prefix}-${batchNo}-org${section.orgId}-${subInv}.xlsx`, buffer };
+  });
+
+  if (files.length === 1) return attachment(files[0]!.buffer, files[0]!.fileName);
+
+  // xlsx members are already deflate-compressed zip containers — store-level.
+  const zip = zipSync(
+    Object.fromEntries(files.map((f) => [f.fileName, new Uint8Array(f.buffer)])),
+    { level: 0 }
+  );
+  return attachment(zip, `${prefix}-${batchNo}.zip`, "application/zip");
 });

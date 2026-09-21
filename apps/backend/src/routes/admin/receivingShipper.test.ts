@@ -13,6 +13,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import * as XLSX from "xlsx";
+import { unzipSync } from "fflate";
 import { setupTestDb, reseed, TEST_DATABASE_URL, type TestDb } from "../../db/test-helper.js";
 import { queryAll, queryGet } from "../../db/query.js";
 import { confirmReceivingArrival } from "../../db/receiving.js";
@@ -385,4 +386,271 @@ test("GET shipper: HCC (supplier 23) renders the drawing-no first column; other 
   const ctrlRows = await sheetRows(await ctrlRes.arrayBuffer());
   assert.deepEqual(ctrlRows[4], ["Invoice / Ctn", "Part Number", "Qty", "Total Qty", "Balance"]);
   assert.deepEqual(ctrlRows[9], ["INV-CTRL-01 8001", "CTRL-PART-1", 100, 100, 100]);
+});
+
+// Split by location (spec 2026-09-21-shipper-split-by-location-design.md):
+// ?split=location emits one xlsx per receiving-office (org_id,
+// sub_inventory_code) section — a zip when the order spans >1 section, the
+// plain per-section xlsx when it spans exactly one.
+
+/** Zip member name → sheet rows, in member order. */
+function zipSheets(buf: ArrayBuffer): [string, (string | number)[][]][] {
+  return Object.entries(unzipSync(new Uint8Array(buf))).map(([name, data]) => {
+    const wb = XLSX.read(Buffer.from(data));
+    const ws = wb.Sheets[wb.SheetNames[0]!]!;
+    return [name, XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" })];
+  });
+}
+
+// Two-section live scenario: PART-A-1 (ctn 9001, STORE1) + PART-B-1
+// (ctn 9002, WSTORE1); SO-SP-001 (STORE1) draws 60 of PART-A-1, SO-SP-002
+// (WSTORE1) draws 80 of PART-B-1 (both item-level).
+async function seedSplitScenario(): Promise<string> {
+  await client.db.execute(sql`DELETE FROM picking_orders`);
+  const orderId = await insertReceivingOrder(client.db, "PL-TEST-SP1", {
+    order: { supplierCode: "DAITO", deliveryDate: "2026-09-21" },
+    invoices: [
+      {
+        invoiceNo: "INV-SP-01",
+        totalCtn: 2,
+        items: [
+          { partNo: "PART-A-1", poNo: "PO-A", poLine: "1", lineQty: 100, ctnNo: "9001", orgId: 2, subInventoryCode: "STORE1" },
+          { partNo: "PART-B-1", poNo: "PO-B", poLine: "1", lineQty: 200, ctnNo: "9002", orgId: 2, subInventoryCode: "WSTORE1" },
+        ],
+      },
+    ],
+  });
+  const actorId = (
+    await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'operator'`)
+  )!.id;
+  await confirmReceivingArrival(client.db, orderId, actorId);
+
+  await insertPickingOrder(client.db, randomUUID(), {
+    order: { orderNo: "SO-SP-001", customerCode: "ACME", orgId: 2, subInventoryCode: "STORE1" },
+    items: [{ partNo: "PART-A-1", qty: 60 }],
+  });
+  await insertPickingOrder(client.db, randomUUID(), {
+    order: { orderNo: "SO-SP-002", orgId: 2, subInventoryCode: "WSTORE1" },
+    items: [{ partNo: "PART-B-1", qty: 80 }],
+  });
+  await allocateAll(client.db);
+  return orderId;
+}
+
+test("GET shipper?split=location: two sections → zip of per-section xlsx, item-level slots stay in their item's section", async () => {
+  await reseed(client);
+  const orderId = await seedSplitScenario();
+
+  const res = await req(`/admin/receiving-orders/${orderId}/shipper?split=location`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("Content-Type"), "application/zip");
+  assert.match(res.headers.get("Content-Disposition") ?? "", /shipper-PL-TEST-SP1\.zip/);
+
+  const members = zipSheets(await res.arrayBuffer());
+  assert.deepEqual(
+    members.map(([name]) => name),
+    ["shipper-PL-TEST-SP1-org2-STORE1.xlsx", "shipper-PL-TEST-SP1-org2-WSTORE1.xlsx"]
+  );
+
+  const store1 = members[0]![1]!;
+  assert.match(String(store1[0]![0]), /^Shipper — PL-TEST-SP1 \(DAITO\)/);
+  assert.deepEqual(store1[4], ["Invoice / Ctn", "Part Number", "Qty", "Total Qty", "Customer", "Balance"]);
+  // Single-carton block: related allocated (60, pair-matched to STORE1) sits
+  // in column B of the order-ref row; the item row carries the slot.
+  assert.deepEqual(store1[7], ["", "", "", "", "ACME Electronics (HK)", ""]);
+  assert.deepEqual(store1[8], ["", 60, "", "", "SO-SP-001", ""]);
+  assert.deepEqual(store1[9], ["INV-SP-01 9001", "PART-A-1", 100, 100, 60, 40]);
+  assert.equal(store1.length, 10);
+
+  const wstore1 = members[1]![1]!;
+  assert.deepEqual(wstore1[7], ["", "", "", "", "SO-SP-002", ""]);
+  assert.deepEqual(wstore1[8], ["", 80, "", "", "SO-SP-002", ""]);
+  assert.deepEqual(wstore1[9], ["INV-SP-01 9002", "PART-B-1", 200, 200, 80, 120]);
+  assert.equal(wstore1.length, 10);
+});
+
+test("GET shipper?split=location: whole-order slots attribute by the picking order's pair, fallback to the part's first section", async () => {
+  await reseed(client);
+  await client.db.execute(sql`DELETE FROM picking_orders`);
+  const orderId = await insertReceivingOrder(client.db, "PL-TEST-SP2", {
+    order: { supplierCode: "DAITO", deliveryDate: "2026-09-21" },
+    invoices: [
+      {
+        invoiceNo: "INV-SP2-01",
+        totalCtn: 1,
+        items: [
+          { partNo: "PART-C-1", poNo: "PO-C", poLine: "1", lineQty: 300, orgId: 2, subInventoryCode: "STORE1" },
+          { partNo: "PART-E-1", poNo: "PO-E", poLine: "1", lineQty: 50, ctnNo: "9003", orgId: 2, subInventoryCode: "WSTORE1" },
+        ],
+      },
+    ],
+  });
+  const actorId = (
+    await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'operator'`)
+  )!.id;
+  await confirmReceivingArrival(client.db, orderId, actorId);
+
+  // SO-WO-1's pair (2, STORE1) matches PART-C-1's section; SO-WO-2's pair
+  // (140, STORE1) matches no section → falls back to the part's first
+  // section (STORE1). Inserted directly — deterministic, no allocateAll.
+  await insertPickingOrder(client.db, randomUUID(), {
+    order: { orderNo: "SO-WO-1", orgId: 2, subInventoryCode: "STORE1" },
+    items: [{ partNo: "PART-C-1", qty: 100 }],
+  });
+  await insertPickingOrder(client.db, randomUUID(), {
+    order: { orderNo: "SO-WO-2", orgId: 140, subInventoryCode: "STORE1" },
+    items: [{ partNo: "PART-C-1", qty: 50 }],
+  });
+  const pis = await queryAll<{ id: string; orderNo: string }>(
+    client.db,
+    sql`SELECT pi.id, po.order_no AS "orderNo" FROM picking_items pi
+        JOIN picking_orders po ON po.id = pi.picking_order_id
+        WHERE po.order_no IN ('SO-WO-1', 'SO-WO-2')`
+  );
+  for (const pi of pis) {
+    await client.db.execute(sql`
+      INSERT INTO allocations (id, picking_item_id, receiving_order_id, qty, created_date, last_update_date)
+      VALUES (${randomUUID()}, ${pi.id}, ${orderId}, ${pi.orderNo === "SO-WO-1" ? 100 : 50}, now(), now())
+    `);
+  }
+
+  const res = await req(`/admin/receiving-orders/${orderId}/shipper?split=location`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("Content-Type"), "application/zip");
+
+  const members = zipSheets(await res.arrayBuffer());
+  assert.deepEqual(
+    members.map(([name]) => name),
+    ["shipper-PL-TEST-SP2-org2-STORE1.xlsx", "shipper-PL-TEST-SP2-org2-WSTORE1.xlsx"]
+  );
+
+  const store1 = members[0]![1]!;
+  assert.deepEqual(store1[4], ["Invoice / Ctn", "Part Number", "Qty", "Total Qty", "Customer", "Customer", "Balance"]);
+  // Both whole-order slots land in STORE1 — SO-WO-1 by pair match, SO-WO-2
+  // by fallback; the related cell (column B of the order-ref row) sums both.
+  assert.deepEqual(store1[8], ["", 150, "", "", "", "", ""]);
+  assert.deepEqual(store1[9], ["INV-SP2-01", "PART-C-1", 300, "", "", "", ""]);
+  assert.deepEqual(store1[10], ["", "", "", "", "SO-WO-1", "SO-WO-2", ""]);
+  assert.deepEqual(store1[11], ["", "", "", "", "SO-WO-1", "SO-WO-2", ""]);
+  assert.deepEqual(store1[12], ["(order-level)", "PART-C-1", "", 300, 100, 50, 150]);
+  assert.equal(store1.length, 13);
+
+  const wstore1 = members[1]![1]!;
+  assert.deepEqual(wstore1[4], ["Invoice / Ctn", "Part Number", "Qty", "Total Qty", "Balance"]);
+  assert.deepEqual(wstore1[9], ["INV-SP2-01 9003", "PART-E-1", 50, 50, 50]);
+  assert.equal(wstore1.length, 10);
+});
+
+test("GET shipper?split=location: NULL sub-inventory items form the no-subinventory section, ordered last", async () => {
+  await reseed(client);
+  await client.db.execute(sql`DELETE FROM picking_orders`);
+  const orderId = await insertReceivingOrder(client.db, "PL-TEST-SP3", {
+    order: { supplierCode: "DAITO", deliveryDate: "2026-09-21" },
+    invoices: [
+      {
+        invoiceNo: "INV-SP3-01",
+        totalCtn: 2,
+        items: [
+          { partNo: "PART-N-1", lineQty: 10, ctnNo: "9005", orgId: 2, subInventoryCode: null },
+          { partNo: "PART-S-1", lineQty: 20, ctnNo: "9006", orgId: 2, subInventoryCode: "STORE1" },
+        ],
+      },
+    ],
+  });
+  const actorId = (
+    await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'operator'`)
+  )!.id;
+  await confirmReceivingArrival(client.db, orderId, actorId);
+
+  const res = await req(`/admin/receiving-orders/${orderId}/shipper?split=location`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("Content-Type"), "application/zip");
+
+  const members = zipSheets(await res.arrayBuffer());
+  assert.deepEqual(
+    members.map(([name]) => name),
+    ["shipper-PL-TEST-SP3-org2-STORE1.xlsx", "shipper-PL-TEST-SP3-org2-no-subinventory.xlsx"]
+  );
+  assert.deepEqual(members[0]![1]![9], ["INV-SP3-01 9006", "PART-S-1", 20, 20, 20]);
+  assert.deepEqual(members[1]![1]![9], ["INV-SP3-01 9005", "PART-N-1", 10, 10, 10]);
+});
+
+test("GET shipper?split=location: single-section order returns the plain per-section xlsx, not a zip", async () => {
+  await reseed(client);
+  const orderId = await seedScenario();
+
+  const res = await req(`/admin/receiving-orders/${orderId}/shipper?split=location`);
+  assert.equal(res.status, 200);
+  assert.equal(
+    res.headers.get("Content-Type"),
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  );
+  assert.match(res.headers.get("Content-Disposition") ?? "", /shipper-PL-TEST-01-org2-STORE1\.xlsx/);
+
+  // Same rows as the combined download.
+  const rows = await sheetRows(await res.arrayBuffer());
+  assert.deepEqual(rows[15], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, 2500, "SO-PL-001", "SO-PL-001", "SO-PL-002", ""]);
+  assert.deepEqual(rows[16], ["INV-PL-01 7002", "RK73H2ATTD1372F", 2000, 3000, 1000, 500, 1000, 500]);
+  assert.equal(rows.length, 17);
+});
+
+test("GET shipper?mode=finished&split=location: package slots attribute per section", async () => {
+  await reseed(client);
+  const orderId = await seedSplitScenario();
+
+  const items = await queryAll<{ id: string; ctnNo: string | null }>(
+    client.db,
+    sql`SELECT rii.id, rii.ctn_no AS "ctnNo"
+        FROM receiving_invoice_items rii
+        JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+        WHERE ri.receiving_order_id = ${orderId}`
+  );
+  const orders = await queryAll<{ id: string; orderNo: string }>(
+    client.db,
+    sql`SELECT id, order_no AS "orderNo" FROM picking_orders WHERE order_no IN ('SO-SP-001', 'SO-SP-002')`
+  );
+  const so1 = orders.find((o) => o.orderNo === "SO-SP-001")!;
+  const so2 = orders.find((o) => o.orderNo === "SO-SP-002")!;
+  const piA = (
+    await queryGet<{ id: string }>(
+      client.db,
+      sql`SELECT id FROM picking_items WHERE picking_order_id = ${so1.id} AND part_no = 'PART-A-1'`
+    )
+  )!;
+  const piB = (
+    await queryGet<{ id: string }>(
+      client.db,
+      sql`SELECT id FROM picking_items WHERE picking_order_id = ${so2.id} AND part_no = 'PART-B-1'`
+    )
+  )!;
+  await client.db.execute(sql`
+    INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, created_date, last_update_date)
+    VALUES
+      (${randomUUID()}, ${piA.id}, ${so1.id}, 'receiving_invoice_item', ${items.find((i) => i.ctnNo === "9001")!.id}, 40, now(), now()),
+      (${randomUUID()}, ${piB.id}, ${so2.id}, 'receiving_invoice_item', ${items.find((i) => i.ctnNo === "9002")!.id}, 70, now(), now())
+  `);
+  await client.db.execute(sql`UPDATE receiving_orders SET status = 'clear' WHERE id = ${orderId}`);
+
+  const res = await req(`/admin/receiving-orders/${orderId}/shipper?mode=finished&split=location`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("Content-Type"), "application/zip");
+  assert.match(res.headers.get("Content-Disposition") ?? "", /finished-shipper-PL-TEST-SP1\.zip/);
+
+  const members = zipSheets(await res.arrayBuffer());
+  assert.deepEqual(
+    members.map(([name]) => name),
+    ["finished-shipper-PL-TEST-SP1-org2-STORE1.xlsx", "finished-shipper-PL-TEST-SP1-org2-WSTORE1.xlsx"]
+  );
+
+  const store1 = members[0]![1]!;
+  assert.match(String(store1[0]![0]), /^Finished Shipper — PL-TEST-SP1 \(DAITO\)/);
+  assert.deepEqual(store1[4], ["Invoice / Ctn", "Part Number", "Qty", "Total Qty", "Customer", "Balance"]);
+  assert.deepEqual(store1[8], ["", "", "", "", "SO-SP-001", ""]);
+  assert.deepEqual(store1[9], ["INV-SP-01 9001", "PART-A-1", 100, 100, 40, 60]);
+  assert.equal(store1.length, 10);
+
+  const wstore1 = members[1]![1]!;
+  assert.deepEqual(wstore1[8], ["", "", "", "", "SO-SP-002", ""]);
+  assert.deepEqual(wstore1[9], ["INV-SP-01 9002", "PART-B-1", 200, 200, 70, 130]);
+  assert.equal(wstore1.length, 10);
 });

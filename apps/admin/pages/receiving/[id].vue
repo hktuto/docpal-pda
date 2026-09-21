@@ -365,14 +365,18 @@ async function reallocate() {
 // actual picked qtys.
 const downloadingShipper = ref(false);
 
-async function downloadShipper(finished: boolean) {
+async function downloadShipper(finished: boolean, split = false) {
   if (!order.value || downloadingShipper.value) return;
   downloadingShipper.value = true;
   error.value = "";
   try {
     const token = localStorage.getItem("admin_token");
+    const params = new URLSearchParams();
+    if (finished) params.set("mode", "finished");
+    if (split) params.set("split", "location");
+    const qs = params.toString();
     const res = await fetch(
-      `${apiBaseUrl}/admin/receiving-orders/${orderId}/shipper${finished ? "?mode=finished" : ""}`,
+      `${apiBaseUrl}/admin/receiving-orders/${orderId}/shipper${qs ? `?${qs}` : ""}`,
       {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       }
@@ -382,7 +386,11 @@ async function downloadShipper(finished: boolean) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${finished ? "finished-shipper" : "shipper"}-${order.value.batchNo}.xlsx`;
+    const disposition = res.headers.get("Content-Disposition") ?? "";
+    const match = disposition.match(/filename\*=UTF-8''([^;]+)/i) ?? disposition.match(/filename="?([^";]+)"?/i);
+    a.download = match
+      ? decodeURIComponent(match[1]!.trim())
+      : `${finished ? "finished-shipper" : "shipper"}-${order.value.batchNo}.xlsx`;
     a.click();
     URL.revokeObjectURL(url);
   } catch (e: any) {
@@ -602,9 +610,19 @@ const {
           {{ $t("admin.pages.receiving.downloadShipper") }}
         </button>
         <button
+          v-if="order && (order.status === 'in_hand')"
+        class="btn" :disabled="downloadingShipper || !order" @click="downloadShipper(false, true)">
+          {{ $t("admin.pages.receiving.downloadShipperSplit") }}
+        </button>
+        <button
           v-if="order && (order.status === 'clear')"
         class="btn" :disabled="downloadingShipper || !order" @click="downloadShipper(true)">
           {{ $t("admin.pages.receiving.downloadFinishedShipper") }}
+        </button>
+        <button
+          v-if="order && (order.status === 'clear')"
+        class="btn" :disabled="downloadingShipper || !order" @click="downloadShipper(true, true)">
+          {{ $t("admin.pages.receiving.downloadFinishedShipperSplit") }}
         </button>
         <button
           v-if="order && order.status === 'in_hand'"

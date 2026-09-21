@@ -12,6 +12,11 @@
 //   ?mode=finished: for a completed (`clear`) order — same layout, but slots
 //     come from `picking_packages` (what was actually packed), because live
 //     allocations are consumed/emptied once picking finishes.
+// Split by location (spec
+// docs/superpowers/specs/2026-09-21-shipper-split-by-location-design.md):
+// loadShipperDocuments returns one ShipperDocument per receiving-office
+// (org_id, sub_inventory_code) section of the order's items; slot attribution
+// for whole-order/package/related slots uses the picking order's pair.
 
 import { HTTPException } from "hono/http-exception";
 import { sql } from "drizzle-orm";
@@ -54,11 +59,17 @@ interface AllocRow {
   customerCode: string | null;
   customerLabel: string | null;
   qty: number;
+  // Picking order's stock partition — only selected where section attribution
+  // needs it (whole-order / package slots); absent on item-level rows.
+  orgId?: number | null;
+  subInventoryCode?: string | null;
 }
 
 interface RelatedAllocRow {
   demandPartNo: string;
   qty: number;
+  orgId: number | null;
+  subInventoryCode: string | null;
 }
 
 function ymd(d: Date | null): string {
@@ -66,11 +77,16 @@ function ymd(d: Date | null): string {
   return d.toISOString().slice(0, 10);
 }
 
-export async function loadShipperDocument(
-  db: AppDb,
-  id: string,
-  { finished }: { finished: boolean }
-): Promise<ShipperDocument> {
+interface ShipperData {
+  head: OrderHeadRow;
+  items: ItemRow[];
+  itemAllocs: AllocRow[];
+  orderAllocs: AllocRow[];
+  packageAllocs: AllocRow[];
+  relatedAllocs: RelatedAllocRow[];
+}
+
+async function loadShipperData(db: AppDb, id: string, finished: boolean): Promise<ShipperData> {
   const head = await queryGet<OrderHeadRow>(
     db,
     sql`
@@ -157,13 +173,14 @@ export async function loadShipperDocument(
           po.id AS "orderId", po.order_no AS "orderNo", po.po_no AS "poNo",
           po.priority_seq AS "prioritySeq",
           po.customer_code AS "customerCode", cp.label AS "customerLabel",
+          po.org_id AS "orgId", po.sub_inventory_code AS "subInventoryCode",
           SUM(src.qty)::int AS qty
         FROM src
         JOIN picking_items pi ON pi.id = src.picking_item_id
         JOIN picking_orders po ON po.id = pi.picking_order_id
         LEFT JOIN customer_profiles cp ON cp.customers ? po.customer_code
         WHERE src."partKey" IS NOT NULL
-        GROUP BY src."partKey", po.id, po.order_no, po.po_no, po.priority_seq, po.customer_code, cp.label
+        GROUP BY src."partKey", po.id, po.order_no, po.po_no, po.priority_seq, po.customer_code, cp.label, po.org_id, po.sub_inventory_code
       `
     );
   } else {
@@ -203,13 +220,14 @@ export async function loadShipperDocument(
           po.id AS "orderId", po.order_no AS "orderNo", po.po_no AS "poNo",
           po.priority_seq AS "prioritySeq",
           po.customer_code AS "customerCode", cp.label AS "customerLabel",
+          po.org_id AS "orgId", po.sub_inventory_code AS "subInventoryCode",
           SUM(a.qty)::int AS qty
         FROM allocations a
         JOIN picking_items pi ON pi.id = a.picking_item_id
         JOIN picking_orders po ON po.id = pi.picking_order_id
         LEFT JOIN customer_profiles cp ON cp.customers ? po.customer_code
         WHERE a.receiving_order_id = ${id} AND a.receiving_invoice_item_id IS NULL
-        GROUP BY pi.part_no, po.id, po.order_no, po.po_no, po.priority_seq, po.customer_code, cp.label
+        GROUP BY pi.part_no, po.id, po.order_no, po.po_no, po.priority_seq, po.customer_code, cp.label, po.org_id, po.sub_inventory_code
       `
     );
 
@@ -231,22 +249,36 @@ export async function loadShipperDocument(
           LEFT JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
           WHERE a.receiving_order_id = ${id} OR ri.receiving_order_id = ${id}
         )
-        SELECT pi.part_no AS "demandPartNo", SUM(a.qty)::int AS qty
+        SELECT pi.part_no AS "demandPartNo", SUM(a.qty)::int AS qty,
+          po.org_id AS "orgId", po.sub_inventory_code AS "subInventoryCode"
         FROM allocations a
         JOIN picking_items pi ON pi.id = a.picking_item_id
+        JOIN picking_orders po ON po.id = pi.picking_order_id
         JOIN related_orders ro ON ro.order_id = pi.picking_order_id
-        GROUP BY pi.part_no
+        GROUP BY pi.part_no, po.org_id, po.sub_inventory_code
       `
     );
   }
 
-  // Shipper block layout: allocation columns are PER-BLOCK slots, not a
-  // global column per picking order (each receipt's order set differs, so
-  // global columns would sprawl). Every part group prints as one block:
-  //   one row per carton: `invoice_no ctn_no` | part | qty
-  //   customer names / order_nos / per-slot qtys overlaid on the
-  //   block's last three rows (standalone rows above when fewer than 3)
-  // Slot count = the widest block's merged slot count.
+  return { head, items, itemAllocs, orderAllocs, packageAllocs, relatedAllocs };
+}
+
+// Shipper block layout: allocation columns are PER-BLOCK slots, not a
+// global column per picking order (each receipt's order set differs, so
+// global columns would sprawl). Every part group prints as one block:
+//   one row per carton: `invoice_no ctn_no` | part | qty
+//   customer names / order_nos / per-slot qtys overlaid on the
+//   block's last three rows (standalone rows above when fewer than 3)
+// Slot count = the widest block's merged slot count.
+function buildShipperDocument(
+  head: OrderHeadRow,
+  finished: boolean,
+  items: ItemRow[],
+  itemAllocs: AllocRow[],
+  orderAllocs: AllocRow[],
+  packageAllocs: AllocRow[],
+  relatedAllocs: RelatedAllocRow[]
+): ShipperDocument {
   interface SlotAlloc {
     customer: string; // customer name (fallback code / order_no)
     orderRef: string; // order_no (fallback po_no)
@@ -390,4 +422,111 @@ export async function loadShipperDocument(
       };
     }),
   };
+}
+
+export async function loadShipperDocument(
+  db: AppDb,
+  id: string,
+  { finished }: { finished: boolean }
+): Promise<ShipperDocument> {
+  const d = await loadShipperData(db, id, finished);
+  return buildShipperDocument(
+    d.head,
+    finished,
+    d.items,
+    d.itemAllocs,
+    d.orderAllocs,
+    d.packageAllocs,
+    d.relatedAllocs
+  );
+}
+
+export interface ShipperSectionDocument {
+  section: { orgId: number | null; subInventoryCode: string | null };
+  doc: ShipperDocument;
+}
+
+// Split-by-location assembly (spec
+// docs/superpowers/specs/2026-09-21-shipper-split-by-location-design.md):
+// one document per receiving-office (org_id, sub_inventory_code) section of
+// the order's items, sections ordered by orgId then subInventoryCode
+// (NULLS LAST). Item-level slots follow their item; whole-order / package /
+// related slots are attributed by the picking order's pair (case-insensitive
+// sub-inventory compare), falling back to the section holding the slot's
+// part group, first in section order.
+export async function loadShipperDocuments(
+  db: AppDb,
+  id: string,
+  { finished }: { finished: boolean }
+): Promise<ShipperSectionDocument[]> {
+  const d = await loadShipperData(db, id, finished);
+
+  interface Section {
+    orgId: number | null;
+    subInventoryCode: string | null;
+    items: ItemRow[];
+  }
+  const sectionByKey = new Map<string, Section>();
+  for (const item of d.items) {
+    const key = `${item.orgId}::${item.subInventoryCode?.toLowerCase() ?? ""}`;
+    let section = sectionByKey.get(key);
+    if (!section) {
+      section = { orgId: item.orgId, subInventoryCode: item.subInventoryCode, items: [] };
+      sectionByKey.set(key, section);
+    }
+    section.items.push(item);
+  }
+  const sections = [...sectionByKey.values()].sort(
+    (a, b) =>
+      (a.orgId ?? Number.MAX_SAFE_INTEGER) - (b.orgId ?? Number.MAX_SAFE_INTEGER) ||
+      (a.subInventoryCode ?? "￿").localeCompare(b.subInventoryCode ?? "￿")
+  );
+
+  const pairMatches = (a: AllocRow | RelatedAllocRow, s: Section) =>
+    a.orgId === s.orgId &&
+    (a.subInventoryCode ?? "").toLowerCase() === (s.subInventoryCode ?? "").toLowerCase();
+
+  // Candidate sections for a slot = those holding its part group (part-key
+  // rule), in section order; the picking-order pair wins, else the first.
+  function attribute(a: AllocRow | RelatedAllocRow, match: (i: ItemRow) => boolean): number | null {
+    const candidates: number[] = [];
+    sections.forEach((s, i) => {
+      if (s.items.some(match)) candidates.push(i);
+    });
+    if (candidates.length === 0) return null;
+    for (const i of candidates) if (pairMatches(a, sections[i]!)) return i;
+    return candidates[0]!;
+  }
+
+  const perSection: {
+    orderAllocs: AllocRow[];
+    packageAllocs: AllocRow[];
+    relatedAllocs: RelatedAllocRow[];
+  }[] = sections.map(() => ({ orderAllocs: [], packageAllocs: [], relatedAllocs: [] }));
+
+  for (const a of d.orderAllocs) {
+    const i = attribute(a, (it) => it.partNo === a.demandPartNo || it.wclItemNo === a.demandPartNo);
+    if (i !== null) perSection[i]!.orderAllocs.push(a);
+  }
+  for (const a of d.packageAllocs) {
+    const i = attribute(a, (it) => it.partKey === a.partKey);
+    if (i !== null) perSection[i]!.packageAllocs.push(a);
+  }
+  for (const r of d.relatedAllocs) {
+    const i = attribute(r, (it) => it.partNo === r.demandPartNo || it.wclItemNo === r.demandPartNo);
+    if (i !== null) perSection[i]!.relatedAllocs.push(r);
+  }
+
+  return sections.map((section, i) => ({
+    section: { orgId: section.orgId, subInventoryCode: section.subInventoryCode },
+    doc: buildShipperDocument(
+      d.head,
+      finished,
+      section.items,
+      d.itemAllocs,
+      perSection[i]!.orderAllocs,
+      perSection[i]!.packageAllocs,
+      perSection[i]!.relatedAllocs
+    ),
+  }));
 }
