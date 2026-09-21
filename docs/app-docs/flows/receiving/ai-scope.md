@@ -83,8 +83,11 @@
   showing the related-order allocated breakdown by source location
   (`qty@shelf/box` entries, shelf-less sources render as `dock`; Σ
   allocations of the part on the picking orders tracing back to this
-  receiving order; spec
-  `docs/superpowers/specs/2026-09-16-admin-receiving-shipper-related-allocated-design.md`).
+  receiving order, EXCLUDING sources tracing back to this receiving
+  order itself — those are already the block's slot columns; stock lots
+  stay even when lot-traced to this batch; spec
+  `docs/superpowers/specs/2026-09-16-admin-receiving-shipper-related-allocated-design.md`,
+  exclusion refined by the split spec).
   The download always splits by receiving-office location (spec
   `docs/superpowers/specs/2026-09-21-shipper-split-by-location-design.md`):
   one xlsx per `(org_id, sub_inventory_code)` section of the order's

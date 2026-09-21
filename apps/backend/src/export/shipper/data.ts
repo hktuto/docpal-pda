@@ -235,13 +235,18 @@ async function loadShipperData(db: AppDb, id: string, finished: boolean): Promis
       `
     );
 
-    // Related-order allocated qty per demand part (spec 2026-09-16): the
-    // group header cell shows how much of each part is already allocated to
-    // the picking orders this receiving order feeds. Related = the order has
+    // Related-order allocated qty per demand part (spec 2026-09-16, refined by
+    // 2026-09-21-shipper-split-by-location-design.md): the group header cell
+    // shows how much of each part is already allocated to the picking orders
+    // this receiving order feeds, from OTHER sources. Related = the order has
     // ≥1 allocation tracing back to this receiving order (item-level or
-    // whole-order); the sum counts every allocation of the part on those
-    // orders whatever its source (stock lot, this or another receiving
-    // order). Matched back to a part group via the allocate.ts part-key rule.
+    // whole-order); the breakdown counts allocations of the part on those
+    // orders EXCEPT sources tracing back to this receiving order itself
+    // (its own cartons / whole-order — already visible as the block's slot
+    // columns). Stock lots stay even when lot-traced to this batch via
+    // inventory_lot_sources (once shelved they are stock), as do dock
+    // sources from other receiving orders. Matched back to a part group via
+    // the allocate.ts part-key rule.
     relatedAllocs = await queryAll<RelatedAllocRow>(
       db,
       sql`
@@ -263,6 +268,9 @@ async function loadShipperData(db: AppDb, id: string, finished: boolean): Promis
         JOIN related_orders ro ON ro.order_id = pi.picking_order_id
         LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
         LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
+        LEFT JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+        WHERE a.receiving_order_id IS DISTINCT FROM ${id}
+          AND ri.receiving_order_id IS DISTINCT FROM ${id}
         GROUP BY pi.part_no, po.org_id, po.sub_inventory_code, il.shelf_code, COALESCE(il.box_id, rii.ctn_no)
       `
     );

@@ -129,13 +129,13 @@ test("GET shipper: merged part blocks with per-block order slots and balance", a
   assert.deepEqual(rows[6], ["", "", "", "", "", "", "", ""]); // blank row after the header
 
   // RK73H1JTTD3302F group first (alphabetical): the receipt has no item-level
-  // allocations; order-level covers 200 of 500. The group header cell shows
-  // the related-order allocated breakdown by source location: SO-PL-001 +
-  // SO-PL-002 are related (both draw on this order), and their allocations
-  // for this part sum to 200, all from the whole-order (dock) source. The
-  // whole-order block closes the group carrying Total/Balance.
+  // allocations; order-level covers 200 of 500. The group header cell is
+  // empty: SO-PL-001 + SO-PL-002 are related (both draw on this order), but
+  // their allocations for this part are all sourced from this order itself —
+  // excluded from the related-source breakdown (already visible as slots).
+  // The whole-order block closes the group carrying Total/Balance.
   assert.deepEqual(rows[7], ["", "", "", "", "", "", "", ""]); // customer names (none)
-  assert.deepEqual(rows[8], ["", "200@dock", "", "", "", "", "", ""]); // related sources + order refs
+  assert.deepEqual(rows[8], ["", "", "", "", "", "", "", ""]); // related sources (own-order sources excluded) + order refs
   assert.deepEqual(rows[9], ["INV-PL-01", "RK73H1JTTD3302F", 500, "", "", "", "", ""]);
   assert.deepEqual(rows[10], ["", "", "", "", "ACME Electronics (HK)", "", "", ""]);
   assert.deepEqual(rows[11], ["", "", "", "", "SO-PL-001", "", "", ""]);
@@ -147,11 +147,11 @@ test("GET shipper: merged part blocks with per-block order slots and balance", a
   // gets its own column: qty on its carton's row, order ref directly above,
   // customer two above. FIFO gives SO-PL-001 1000 from ctn 7001 + 500 from
   // ctn 7002; SO-PL-002 takes 1000 from ctn 7002, so SO-PL-001 occupies two
-  // slots. The related-source breakdown (ctn 7002: 500 + 1000 = 1500, ctn
-  // 7001: 1000) sits in the Total Qty column of the block's height-2 row.
+  // slots. The related-source cell is empty — every related allocation is
+  // sourced from this order's own cartons.
   assert.deepEqual(rows[14], ["", "", "", "", "ACME Electronics (HK)", "", "", ""]);
   assert.deepEqual(rows[15], ["", "", "", "", "SO-PL-001", "ACME Electronics (HK)", "SO-PL-002", ""]);
-  assert.deepEqual(rows[16], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, "1500@dock/7002, 1000@dock/7001", 1000, "SO-PL-001", "SO-PL-002", ""]);
+  assert.deepEqual(rows[16], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, "", 1000, "SO-PL-001", "SO-PL-002", ""]);
   assert.deepEqual(rows[17], ["INV-PL-01 7002", "RK73H2ATTD1372F", 2000, 3000, "", 500, 1000, 500]);
 
   assert.equal(rows.length, 18);
@@ -172,9 +172,9 @@ test("GET shipper: reflects current allocations — recompute happens on the rea
   assert.equal(resBefore.status, 200);
   const rowsBefore = await sheetRows(await resBefore.arrayBuffer());
   // Still 3 slots (SO-PL-001 ×2, SO-PL-002); SO-PL-003 absent, balance 500.
-  // The related-source cell still sums only SO-PL-001 + SO-PL-002.
+  // The related-source cell is empty (own-carton sources are excluded).
   assert.deepEqual(rowsBefore[4], ["Invoice / Ctn", "Part Number", "Qty", "Total Qty", "Customer", "Customer", "Customer", "Balance"]);
-  assert.deepEqual(rowsBefore[16], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, "1500@dock/7002, 1000@dock/7001", 1000, "SO-PL-001", "SO-PL-002", ""]);
+  assert.deepEqual(rowsBefore[16], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, "", 1000, "SO-PL-001", "SO-PL-002", ""]);
   assert.deepEqual(rowsBefore[17], ["INV-PL-01 7002", "RK73H2ATTD1372F", 2000, 3000, "", 500, 1000, 500]);
 
   // The separate re-allocate endpoint runs the scoped recompute…
@@ -193,7 +193,7 @@ test("GET shipper: reflects current allocations — recompute happens on the rea
   assert.deepEqual(rows[4], ["Invoice / Ctn", "Part Number", "Qty", "Total Qty", "Customer", "Customer", "Customer", "Customer", "Balance"]);
   assert.deepEqual(rows[14], ["", "", "", "", "ACME Electronics (HK)", "", "", "", ""]);
   assert.deepEqual(rows[15], ["", "", "", "", "SO-PL-001", "ACME Electronics (HK)", "SO-PL-002", "SO-PL-003", ""]);
-  assert.deepEqual(rows[16], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, "2000@dock/7002, 1000@dock/7001", 1000, "SO-PL-001", "SO-PL-002", "SO-PL-003", ""]);
+  assert.deepEqual(rows[16], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, "", 1000, "SO-PL-001", "SO-PL-002", "SO-PL-003", ""]);
   assert.deepEqual(rows[17], ["INV-PL-01 7002", "RK73H2ATTD1372F", 2000, 3000, "", 500, 1000, 500, 0]);
 });
 
@@ -241,16 +241,61 @@ test("GET shipper: group header counts stock-sourced allocations on related orde
     VALUES (${randomUUID()}, ${piH2Unrelated!.id}, 'LOT-UNREL-01', 800, now(), now())
   `);
 
+  // Positive cases on the same related order (SO-PL-001's RK73H1JTTD3302F):
+  // a dock source from ANOTHER receiving order's carton, and a stock lot that
+  // originally came from THIS batch via put-away (inventory_lot_sources) —
+  // once shelved it is stock, so it still shows.
+  const otherOrderId = await insertReceivingOrder(client.db, "PL-TEST-OTHER", {
+    order: { supplierCode: "DAITO", deliveryDate: "2026-09-08" },
+    invoices: [
+      {
+        invoiceNo: "INV-OTH-01",
+        totalCtn: 1,
+        items: [{ partNo: "RK73H1JTTD3302F", lineQty: 300, ctnNo: "0333", orgId: 2, subInventoryCode: "STORE1" }],
+      },
+    ],
+  });
+  const otherItem = await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT rii.id FROM receiving_invoice_items rii
+        JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+        WHERE ri.receiving_order_id = ${otherOrderId}`
+  );
+  await client.db.execute(sql`
+    INSERT INTO allocations (id, picking_item_id, receiving_invoice_item_id, qty, created_date, last_update_date)
+    VALUES (${randomUUID()}, ${piH1!.id}, ${otherItem!.id}, 120, now(), now())
+  `);
+  const ownNoCtnItem = await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT rii.id FROM receiving_invoice_items rii
+        JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+        WHERE ri.receiving_order_id = ${orderId} AND rii.ctn_no IS NULL`
+  );
+  await client.db.execute(sql`
+    INSERT INTO inventory_lots (id, part_no, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
+    VALUES ('LOT-TRC-01', 'RK73H1JTTD3302F', 'A-04-05', 'TRCBOX1', 2, 'STORE1', 500, now(), now())
+  `);
+  await client.db.execute(sql`
+    INSERT INTO inventory_lot_sources (id, inventory_lot_id, receiving_invoice_item_id, qty, created_date, last_update_date)
+    VALUES (${randomUUID()}, 'LOT-TRC-01', ${ownNoCtnItem!.id}, 500, now(), now())
+  `);
+  await client.db.execute(sql`
+    INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, created_date, last_update_date)
+    VALUES (${randomUUID()}, ${piH1!.id}, 'LOT-TRC-01', 80, now(), now())
+  `);
+
   const res = await req(`/admin/receiving-orders/${orderId}/shipper`);
   assert.equal(res.status, 200);
   const rows = await sheetRows(await res.arrayBuffer());
 
-  // RK73H1JTTD3302F: 200 order-level (dock source) + 50 stock (lot on shelf
-  // A-04-05, box RELBOX1) — the breakdown sorts qty desc.
-  assert.deepEqual(rows[8], ["", "200@dock, 50@A-04-05/RELBOX1", "", "", "", "", "", ""]);
-  // RK73H2ATTD1372F: still only the receiving-sourced 2500 — SO-PL-009's 800
-  // is not related.
-  assert.deepEqual(rows[16], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, "1500@dock/7002, 1000@dock/7001", 1000, "SO-PL-001", "SO-PL-002", ""]);
+  // RK73H1JTTD3302F: the own-order sources (200 whole-order + own cartons)
+  // are excluded — already visible as slot columns. Kept: 120 from another
+  // receiving order's carton (dock/0333), 80 from the lot traced back to
+  // this batch (stock semantics), 50 from the plain stock lot — qty desc.
+  assert.deepEqual(rows[8], ["", "120@dock/0333, 80@A-04-05/TRCBOX1, 50@A-04-05/RELBOX1", "", "", "", "", "", ""]);
+  // RK73H2ATTD1372F: own-carton sources excluded, SO-PL-009 is not related —
+  // the cell is empty.
+  assert.deepEqual(rows[16], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, "", 1000, "SO-PL-001", "SO-PL-002", ""]);
 });
 
 test("GET shipper?mode=finished: slots come from actual picked packages", async () => {
@@ -466,18 +511,18 @@ test("GET shipper split: two sections → zip of per-section xlsx, item-level sl
   // batch, but each section holds only its own one.
   assert.equal(store1[2]![0], "Total Ctn: 1");
   assert.deepEqual(store1[4], ["Invoice / Ctn", "Part Number", "Qty", "Total Qty", "Customer", "Balance"]);
-  // Single-carton block: the related-source breakdown (60 from dock carton
-  // 9001, pair-matched to STORE1) sits in column B of the order-ref row; the
-  // item row carries the slot.
+  // Single-carton block: the related-source cell is empty (the only related
+  // allocation is sourced from this order's own carton); the item row
+  // carries the slot.
   assert.deepEqual(store1[7], ["", "", "", "", "ACME Electronics (HK)", ""]);
-  assert.deepEqual(store1[8], ["", "60@dock/9001", "", "", "SO-SP-001", ""]);
+  assert.deepEqual(store1[8], ["", "", "", "", "SO-SP-001", ""]);
   assert.deepEqual(store1[9], ["INV-SP-01 9001", "PART-A-1", 100, 100, 60, 40]);
   assert.equal(store1.length, 10);
 
   const wstore1 = members[1]![1]!;
   assert.equal(wstore1[2]![0], "Total Ctn: 1");
   assert.deepEqual(wstore1[7], ["", "", "", "", "SO-SP-002", ""]);
-  assert.deepEqual(wstore1[8], ["", "80@dock/9002", "", "", "SO-SP-002", ""]);
+  assert.deepEqual(wstore1[8], ["", "", "", "", "SO-SP-002", ""]);
   assert.deepEqual(wstore1[9], ["INV-SP-01 9002", "PART-B-1", 200, 200, 80, 120]);
   assert.equal(wstore1.length, 10);
 });
@@ -543,9 +588,9 @@ test("GET shipper split: whole-order slots attribute by the picking order's pair
   assert.equal(store1[2]![0], "Total Ctn: ");
   assert.deepEqual(store1[4], ["Invoice / Ctn", "Part Number", "Qty", "Total Qty", "Customer", "Customer", "Balance"]);
   // Both whole-order slots land in STORE1 — SO-WO-1 by pair match, SO-WO-2
-  // by fallback; the related cell (column B of the order-ref row) sums both
-  // into a single dock entry, and the closing block keeps the 3-row overlay.
-  assert.deepEqual(store1[8], ["", "150@dock", "", "", "", "", ""]);
+  // by fallback; the related cell is empty (both are own-order sources —
+  // already visible as the closing block's slots).
+  assert.deepEqual(store1[8], ["", "", "", "", "", "", ""]);
   assert.deepEqual(store1[9], ["INV-SP2-01", "PART-C-1", 300, "", "", "", ""]);
   assert.deepEqual(store1[10], ["", "", "", "", "SO-WO-1", "SO-WO-2", ""]);
   assert.deepEqual(store1[11], ["", "", "", "", "SO-WO-1", "SO-WO-2", ""]);
@@ -611,7 +656,7 @@ test("GET shipper: single-section order returns the plain xlsx under the rendere
 
   // Same rows as the combined download.
   const rows = await sheetRows(await res.arrayBuffer());
-  assert.deepEqual(rows[16], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, "1500@dock/7002, 1000@dock/7001", 1000, "SO-PL-001", "SO-PL-002", ""]);
+  assert.deepEqual(rows[16], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, "", 1000, "SO-PL-001", "SO-PL-002", ""]);
   assert.deepEqual(rows[17], ["INV-PL-01 7002", "RK73H2ATTD1372F", 2000, 3000, "", 500, 1000, 500]);
   assert.equal(rows.length, 18);
 });

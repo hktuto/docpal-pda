@@ -126,6 +126,12 @@ they form their own section (see below), they are not dropped.
   `COALESCE(inventory_lots.box_id, receiving_invoice_items.ctn_no)`; the
   per-group aggregation sums per (shelf, box), sorted qty desc then shelf
   then box. Applies to the single-section output too.
+  **Exclusion:** allocations whose source traces back to THIS receiving
+  order (own cartons / whole-order) are excluded — they are already
+  visible as the block's slot columns. Stock lots stay even when
+  lot-traced to this batch via `inventory_lot_sources` (once shelved they
+  are stock), and dock sources from OTHER receiving orders stay. This
+  refines the 2026-09-16 "any source" semantics.
 
 - **Slot attribution to sections:**
   - *Item-level allocations* (live) follow their item — the item sits in
