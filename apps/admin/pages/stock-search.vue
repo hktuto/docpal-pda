@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { StockSearchLot, StockSearchOptions, StockSearchPart, StockSearchResult, StockSearchSummary } from "~/utils/flowApi";
+import type { StockSearchLot, StockSearchOptions, StockSearchParams, StockSearchResult, StockSearchSummary } from "~/utils/flowApi";
 import type { AdminColumnDef } from "~/composables/useAdminTable";
 import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 
@@ -35,7 +35,6 @@ const searched = ref(false);
 const loading = ref(false);
 const error = ref("");
 
-const partsRows = computed(() => result.value?.parts ?? []);
 const lotsRows = computed(() => result.value?.lots ?? []);
 
 // --- filter dropdown options (from /stock-search/options + /admin/suppliers) ---
@@ -135,23 +134,6 @@ const lotGroups = computed<LotGroup[]>(() => {
 
 // --- tables -------------------------------------------------------------------
 
-const partsColumnDefs = computed<AdminColumnDef<StockSearchPart>[]>(() => [
-  {
-    key: "wclItemNo",
-    label: t("admin.pages.stockSearch.wclItemNo"),
-    accessor: (p) => p.wclItemNo ?? p.partNo,
-    size: 140,
-  },
-  { key: "partNo", label: t("admin.pages.stockSearch.partNo"), size: 150 },
-  {
-    key: "description",
-    label: t("admin.pages.stockSearch.description"),
-    accessor: (p) => p.description ?? "",
-    size: 220,
-  },
-  { key: "onHandQty", label: t("admin.pages.stockSearch.onHandQty"), size: 90 },
-]);
-
 const lotsColumnDefs = computed<AdminColumnDef<StockSearchLot>[]>(() => [
   {
     key: "partNo",
@@ -207,14 +189,6 @@ const lotsColumnDefs = computed<AdminColumnDef<StockSearchLot>[]>(() => [
   { key: "availableQty", label: t("admin.pages.stockSearch.availableQty"), size: 100 },
 ]);
 
-const { table: partsTable, pagination: partsPagination, resetColumnState: resetPartsColumns } = useAdminTable({
-  tableId: "stock-search-parts",
-  columns: partsColumnDefs,
-  rows: partsRows,
-  defaultPageSize: 5,
-  getRowId: (p) => p.id,
-});
-
 const { table: lotsTable, pagination: lotsPagination, resetColumnState: resetLotsColumns } = useAdminTable({
   tableId: "stock-search-lots",
   columns: lotsColumnDefs,
@@ -244,18 +218,6 @@ function tableForGroup(key: string): GroupTable {
 }
 
 // Pager uses a 1-based page; the table uses a 0-based pageIndex.
-const partsPage = computed({
-  get: () => partsPagination.value.pageIndex + 1,
-  set: (v: number) => {
-    partsPagination.value = { ...partsPagination.value, pageIndex: v - 1 };
-  },
-});
-const partsPageSize = computed({
-  get: () => partsPagination.value.pageSize,
-  set: (v: number) => {
-    partsPagination.value = { pageIndex: 0, pageSize: v };
-  },
-});
 const lotsPage = computed({
   get: () => lotsPagination.value.pageIndex + 1,
   set: (v: number) => {
@@ -285,30 +247,36 @@ async function loadOptions() {
   }
 }
 
-// Overall (unfiltered) stock totals shown in the header cards.
-async function loadSummary() {
+// Summary header totals — follows the current search filters ({} = overall).
+async function loadSummary(params: StockSearchParams = {}) {
   try {
-    summary.value = await flow.stockSearchSummary();
+    summary.value = await flow.stockSearchSummary(params);
   } catch {
     summary.value = null;
   }
+}
+
+function currentFilters(): StockSearchParams {
+  return {
+    supplierCode: supplierCode.value.length ? supplierCode.value : undefined,
+    brand: brand.value.length ? brand.value : undefined,
+    orgId: orgId.value.length ? orgId.value.map(Number) : undefined,
+    subInventoryCode: subInventoryCode.value.length ? subInventoryCode.value : undefined,
+    zone: zone.value.length ? zone.value : undefined,
+    shelfCode: shelfCode.value.length ? shelfCode.value : undefined,
+    partNo: partNo.value.trim() || undefined,
+    dateCodeFrom: dcFromCode.value || undefined,
+    dateCodeTo: dcToCode.value || undefined,
+  };
 }
 
 async function search() {
   loading.value = true;
   error.value = "";
   try {
-    result.value = await flow.stockSearch({
-      supplierCode: supplierCode.value.length ? supplierCode.value : undefined,
-      brand: brand.value.length ? brand.value : undefined,
-      orgId: orgId.value.length ? orgId.value.map(Number) : undefined,
-      subInventoryCode: subInventoryCode.value.length ? subInventoryCode.value : undefined,
-      zone: zone.value.length ? zone.value : undefined,
-      shelfCode: shelfCode.value.length ? shelfCode.value : undefined,
-      partNo: partNo.value.trim() || undefined,
-      dateCodeFrom: dcFromCode.value || undefined,
-      dateCodeTo: dcToCode.value || undefined,
-    });
+    const filters = currentFilters();
+    const [res] = await Promise.all([flow.stockSearch(filters), loadSummary(filters)]);
+    result.value = res;
     searched.value = true;
     // Stock may have changed — refresh the dropdown option sets too.
     loadOptions();
@@ -333,8 +301,8 @@ const {
   refreshNow,
   dismiss,
 } = useChangeNotice(["allocation.computed", "put_away_task.completed"], async () => {
-  loadSummary();
   if (searched.value) await search();
+  else await loadSummary();
 });
 </script>
 
@@ -465,18 +433,6 @@ const {
     <p v-else-if="!searched" class="muted">{{ $t("admin.pages.stockSearch.hint") }}</p>
 
     <template v-else-if="result">
-      <h2 class="section-title">{{ $t("admin.pages.stockSearch.parts") }}</h2>
-      <DataTable
-        :table="partsTable"
-        :empty-text="$t('admin.pages.stockSearch.noParts')"
-        :on-reset-columns="resetPartsColumns"
-      >
-        <template #cell-description="{ row }">
-          <span class="wrap">{{ row.description ?? "—" }}</span>
-        </template>
-      </DataTable>
-      <Pager v-model:page="partsPage" v-model:page-size="partsPageSize" :total="partsRows.length" />
-
       <h2 class="section-title">{{ $t("admin.pages.stockSearch.lots") }}</h2>
       <template v-if="groupBy === 'none'">
         <DataTable

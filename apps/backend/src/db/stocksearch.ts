@@ -172,7 +172,10 @@ interface LotJoinRow extends StockSearchLotRow {
  * TS. Rows come back ordered by part_no, date_code NULLS LAST, shelf_code,
  * box_id — the same order drives both arrays.
  */
-export async function searchStock(db: AppDb, filters: StockSearchFilters): Promise<StockSearchResult> {
+/** Shared WHERE fragment for the lot search and the summary aggregate —
+ *  expects aliases `il` (inventory_lots), `p` (parts), `s` (shelves, LEFT
+ *  JOINed). All filters optional and ANDed. */
+function stockFilterClauses(filters: StockSearchFilters) {
   const partNoNorm = filters.partNo ? normalizePartNo(filters.partNo) : "";
   // Normalize the date-code range: ranks (year*100+week), swapped bounds
   // fixed up, invalid codes treated as unbounded.
@@ -180,6 +183,37 @@ export async function searchStock(db: AppDb, filters: StockSearchFilters): Promi
   const toRank = dateCodeRank(filters.dateCodeTo);
   const dcLo = fromRank !== null && toRank !== null ? Math.min(fromRank, toRank) : fromRank;
   const dcHi = fromRank !== null && toRank !== null ? Math.max(fromRank, toRank) : toRank;
+  return sql`
+    ${allowedOrgFilter(sql`il.org_id`)}
+    ${partNoNorm ? sql`AND (strpos(regexp_replace(upper(p.part_no), '\\s', '', 'g'), ${partNoNorm}) > 0 OR strpos(regexp_replace(upper(p.wcl_item_no), '\\s', '', 'g'), ${partNoNorm}) > 0)` : sql``}
+    ${filters.shelfCode?.length ? sql`AND il.shelf_code IN (${sql.join(filters.shelfCode.map((v) => sql`${v}`), sql`, `)})` : sql``}
+    ${filters.zone?.length ? sql`AND s.zone IN (${sql.join(filters.zone.map((v) => sql`${v}`), sql`, `)})` : sql``}
+    ${filters.brand?.length ? sql`AND p.brand IN (${sql.join(filters.brand.map((v) => sql`${v}`), sql`, `)})` : sql``}
+    ${filters.orgId?.length ? sql`AND il.org_id IN (${sql.join(filters.orgId.map((v) => sql`${v}`), sql`, `)})` : sql``}
+    ${filters.subInventoryCode?.length ? sql`AND il.sub_inventory_code IN (${sql.join(filters.subInventoryCode.map((v) => sql`${v}`), sql`, `)})` : sql``}
+    ${
+      dcLo !== null || dcHi !== null
+        ? sql`AND ${DC_VALID}
+          ${dcLo !== null ? sql`AND ${DC_RANK} >= ${dcLo}` : sql``}
+          ${dcHi !== null ? sql`AND ${DC_RANK} <= ${dcHi}` : sql``}`
+        : sql``
+    }
+    ${
+      filters.supplierCode?.length
+        ? sql`AND EXISTS (
+            SELECT 1
+            FROM inventory_lot_sources ils
+            JOIN receiving_invoice_items rii ON rii.id = ils.receiving_invoice_item_id
+            JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+            JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
+            WHERE ils.inventory_lot_id = il.id AND ro.supplier_code IN (${sql.join(filters.supplierCode.map((v) => sql`${v}`), sql`, `)})
+          )`
+        : sql``
+    }
+  `;
+}
+
+export async function searchStock(db: AppDb, filters: StockSearchFilters): Promise<StockSearchResult> {
   const rows = await queryAll<LotJoinRow>(
     db,
     sql`
@@ -204,32 +238,7 @@ export async function searchStock(db: AppDb, filters: StockSearchFilters): Promi
       JOIN parts p ON p.wcl_item_no = il.wcl_item_no
       LEFT JOIN shelves s ON s.code = il.shelf_code
       WHERE TRUE
-      ${allowedOrgFilter(sql`il.org_id`)}
-      ${partNoNorm ? sql`AND (strpos(regexp_replace(upper(p.part_no), '\\s', '', 'g'), ${partNoNorm}) > 0 OR strpos(regexp_replace(upper(p.wcl_item_no), '\\s', '', 'g'), ${partNoNorm}) > 0)` : sql``}
-      ${filters.shelfCode?.length ? sql`AND il.shelf_code IN (${sql.join(filters.shelfCode.map((v) => sql`${v}`), sql`, `)})` : sql``}
-      ${filters.zone?.length ? sql`AND s.zone IN (${sql.join(filters.zone.map((v) => sql`${v}`), sql`, `)})` : sql``}
-      ${filters.brand?.length ? sql`AND p.brand IN (${sql.join(filters.brand.map((v) => sql`${v}`), sql`, `)})` : sql``}
-      ${filters.orgId?.length ? sql`AND il.org_id IN (${sql.join(filters.orgId.map((v) => sql`${v}`), sql`, `)})` : sql``}
-      ${filters.subInventoryCode?.length ? sql`AND il.sub_inventory_code IN (${sql.join(filters.subInventoryCode.map((v) => sql`${v}`), sql`, `)})` : sql``}
-      ${
-        dcLo !== null || dcHi !== null
-          ? sql`AND ${DC_VALID}
-            ${dcLo !== null ? sql`AND ${DC_RANK} >= ${dcLo}` : sql``}
-            ${dcHi !== null ? sql`AND ${DC_RANK} <= ${dcHi}` : sql``}`
-          : sql``
-      }
-      ${
-        filters.supplierCode?.length
-          ? sql`AND EXISTS (
-              SELECT 1
-              FROM inventory_lot_sources ils
-              JOIN receiving_invoice_items rii ON rii.id = ils.receiving_invoice_item_id
-              JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-              JOIN receiving_orders ro ON ro.id = ri.receiving_order_id
-              WHERE ils.inventory_lot_id = il.id AND ro.supplier_code IN (${sql.join(filters.supplierCode.map((v) => sql`${v}`), sql`, `)})
-            )`
-          : sql``
-      }
+      ${stockFilterClauses(filters)}
       ORDER BY il.part_no, il.date_code NULLS LAST, il.shelf_code, il.box_id
     `
   );
@@ -252,13 +261,14 @@ export async function searchStock(db: AppDb, filters: StockSearchFilters): Promi
 }
 
 /**
- * Overall stock totals for the admin summary header: one aggregate over all
- * lots (no search filters), scoped by the same allowed-org filter as
- * searchStock. Sums are cast to int — pg returns SUM(int) as a bigint string.
+ * Stock totals for the admin summary header: one aggregate over the lots
+ * matching the given search filters ({} = overall), scoped by the same
+ * allowed-org filter as searchStock. Sums are cast to int — pg returns
+ * SUM(int) as a bigint string.
  * Outdated = lot WWYY date code older than the flow config's
  * outdatedStockYears (lots with NULL/invalid date codes never count).
  */
-export async function stockSearchSummary(db: AppDb): Promise<StockSearchSummary> {
+export async function stockSearchSummary(db: AppDb, filters: StockSearchFilters = {}): Promise<StockSearchSummary> {
   const years = outdatedStockYears();
   const thresholdRank = outdatedThresholdRank(years);
   const outdated = sql`${DC_VALID} AND ${DC_RANK} < ${thresholdRank}`;
@@ -289,8 +299,9 @@ export async function stockSearchSummary(db: AppDb): Promise<StockSearchSummary>
         COALESCE(SUM(il.total_qty) FILTER (WHERE ${outdated}), 0)::int AS "outdatedQty"
       FROM inventory_lots il
       JOIN parts p ON p.wcl_item_no = il.wcl_item_no
+      LEFT JOIN shelves s ON s.code = il.shelf_code
       WHERE TRUE
-      ${allowedOrgFilter(sql`il.org_id`)}
+      ${stockFilterClauses(filters)}
     `
   );
   return {

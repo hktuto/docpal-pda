@@ -284,7 +284,34 @@ export interface StockSearchResult {
   lots: StockSearchLot[];
 }
 
-/** Overall (unfiltered) stock totals for the summary header. */
+/** Filters shared by /stock-search and /stock-search/summary. */
+export interface StockSearchParams {
+  supplierCode?: string[];
+  partNo?: string;
+  shelfCode?: string[];
+  zone?: string[];
+  brand?: string[];
+  orgId?: number[];
+  subInventoryCode?: string[];
+  dateCodeFrom?: string;
+  dateCodeTo?: string;
+}
+
+function stockSearchQuery(params: StockSearchParams): string {
+  const qs = new URLSearchParams();
+  for (const v of params.supplierCode ?? []) qs.append("supplierCode", v);
+  if (params.partNo) qs.set("partNo", params.partNo);
+  for (const v of params.shelfCode ?? []) qs.append("shelfCode", v);
+  for (const v of params.zone ?? []) qs.append("zone", v);
+  for (const v of params.brand ?? []) qs.append("brand", v);
+  for (const v of params.orgId ?? []) qs.append("orgId", String(v));
+  for (const v of params.subInventoryCode ?? []) qs.append("subInventoryCode", v);
+  if (params.dateCodeFrom) qs.set("dateCodeFrom", params.dateCodeFrom);
+  if (params.dateCodeTo) qs.set("dateCodeTo", params.dateCodeTo);
+  return qs.toString();
+}
+
+/** Stock totals for the summary header (follows the search filters). */
 export interface StockSearchSummary {
   partCount: number;
   lotCount: number;
@@ -586,31 +613,12 @@ export function useFlowApi() {
 
     // Stock search (multi-value filters — each value appended as a repeated
     // query param; the backend treats them as any-of)
-    stockSearch: (params: {
-      supplierCode?: string[];
-      partNo?: string;
-      shelfCode?: string[];
-      zone?: string[];
-      brand?: string[];
-      orgId?: number[];
-      subInventoryCode?: string[];
-      dateCodeFrom?: string;
-      dateCodeTo?: string;
-    }) => {
-      const qs = new URLSearchParams();
-      for (const v of params.supplierCode ?? []) qs.append("supplierCode", v);
-      if (params.partNo) qs.set("partNo", params.partNo);
-      for (const v of params.shelfCode ?? []) qs.append("shelfCode", v);
-      for (const v of params.zone ?? []) qs.append("zone", v);
-      for (const v of params.brand ?? []) qs.append("brand", v);
-      for (const v of params.orgId ?? []) qs.append("orgId", String(v));
-      for (const v of params.subInventoryCode ?? []) qs.append("subInventoryCode", v);
-      if (params.dateCodeFrom) qs.set("dateCodeFrom", params.dateCodeFrom);
-      if (params.dateCodeTo) qs.set("dateCodeTo", params.dateCodeTo);
-      return api.get<StockSearchResult>(`/stock-search?${qs}`);
-    },
+    stockSearch: (params: StockSearchParams) =>
+      api.get<StockSearchResult>(`/stock-search?${stockSearchQuery(params)}`),
     stockSearchOptions: () => api.get<StockSearchOptions>("/stock-search/options"),
-    stockSearchSummary: () => api.get<StockSearchSummary>("/stock-search/summary"),
+    // Same filters as stockSearch ({} = overall totals).
+    stockSearchSummary: (params: StockSearchParams = {}) =>
+      api.get<StockSearchSummary>(`/stock-search/summary?${stockSearchQuery(params)}`),
     // Part availability for the picking-detail modal (stock lots + open
     // receiving sources, all orgs/sub-inventories).
     getPartAvailability: (partNo: string, wclItemNo?: string | null) => {
