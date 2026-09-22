@@ -297,6 +297,7 @@ function buildShipperDocument(
   relatedAllocs: RelatedAllocRow[]
 ): ShipperDocument {
   interface SlotAlloc {
+    orderId: string; // picking_orders.id — column identity (order_no is NOT unique)
     customer: string; // customer name (fallback code / order_no)
     orderRef: string; // order_no (fallback po_no)
     qty: number;
@@ -306,6 +307,7 @@ function buildShipperDocument(
 
   function toSlot(a: AllocRow): SlotAlloc {
     return {
+      orderId: a.orderId,
       customer: a.customerLabel ?? a.customerCode ?? a.orderNo,
       orderRef: a.orderNo || (a.poNo ?? ""),
       qty: a.qty,
@@ -391,9 +393,12 @@ function buildShipperDocument(
       slotCount = Math.max(slotCount, packageSlotsByPartKey.get(group.partKey)?.length ?? 0);
     } else {
       slotCount = Math.max(slotCount, group.orderAllocs.length);
-      let merged = 0;
-      for (const item of group.items) merged += allocsByItem.get(item.id)?.length ?? 0;
-      slotCount = Math.max(slotCount, merged);
+      // Live per-carton slots share one column per distinct picking order.
+      const orderIds = new Set<string>();
+      for (const item of group.items) {
+        for (const s of allocsByItem.get(item.id) ?? []) orderIds.add(s.orderId);
+      }
+      slotCount = Math.max(slotCount, orderIds.size);
     }
   }
 

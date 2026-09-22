@@ -75,10 +75,12 @@
   shipper xlsx (`GET /admin/receiving-orders/:id/shipper`,
   `apps/backend/src/routes/admin/receivingShipper.ts`): receipts grouped
   by part, each group one merged block (one bottom-aligned
-  `invoice_no ctn_no` item row per carton; live mode: each allocation
-  gets its own column with the qty on its carton's row, order ref above,
-  customer two above; finished mode overlays customers/refs/qtys on the
-  block's last three rows)
+  `invoice_no ctn_no` item row per carton; live mode: one slot column
+  per distinct picking order — all customers on the block's first row,
+  all order refs on the second, each carton's allocation qty in its
+  order's column on its own row, repeat same-order allocations summed;
+  finished mode overlays customers/refs/qtys on the block's last three
+  rows)
   with per-block slots, per-group Total/Balance, and a group header cell
   showing the related-order allocated breakdown by source location
   (`qty@shelf/box` entries, shelf-less sources render as `dock`; Σ

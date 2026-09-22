@@ -40,6 +40,7 @@ export interface ShipperGroup {
 }
 
 export interface ShipperSlot {
+  orderId: string; // picking_orders.id — column identity (order_no is NOT unique)
   customer: string; // label ?? code ?? order_no
   orderRef: string; // order_no || po_no
   qty: number;

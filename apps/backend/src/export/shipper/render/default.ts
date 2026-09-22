@@ -47,11 +47,13 @@ export function makeShipperRenderer(options?: ShipperRendererOptions): Renderer<
 
     // Merged part block: every carton of the part is an item row
     // (`invoice_no ctn_no` | part | qty), BOTTOM-aligned.
-    //   live mode: allocations are per carton line — each allocation gets its
-    //     own column (sequential across the block, in carton order); the qty
-    //     sits on its carton's row, the order ref directly above, the
-    //     customer two cells above. Block height = cartons + 2 when any
-    //     carton has slots (no slots → the original max(items, 3) shape).
+    //   live mode: one slot column per DISTINCT picking order (sorted by
+    //     prioritySeq then orderNo); all customers sit on the block's first
+    //     row, all order refs on the second, and each carton's allocation
+    //     qty lands in its order's column on its own row (repeat allocations
+    //     of one carton to the same order sum into one cell). Block height =
+    //     cartons + 2 when any carton has slots (no slots → the original
+    //     max(items, 3) shape).
     //   finished mode: package slots can't pin to carton rows, so they
     //     overlay the block's last three rows (all customers / all refs /
     //     all qtys), height max(items, 3).
@@ -75,14 +77,26 @@ export function makeShipperRenderer(options?: ShipperRendererOptions): Renderer<
         row[2] = item.qty;
       });
       if (perCarton) {
-        let c = 0;
+        // Column list: one per distinct order, first occurrence wins.
+        const ordered = blockItems
+          .flatMap((item) => item.slots)
+          .sort((x, y) => x.prioritySeq - y.prioritySeq || x.orderNo.localeCompare(y.orderNo));
+        const colIndex = new Map<string, number>();
+        for (const s of ordered) {
+          if (colIndex.has(s.orderId)) continue;
+          const k = colIndex.size;
+          if (k >= slotCount) break;
+          colIndex.set(s.orderId, k);
+          rows[0][4 + k] = s.customer;
+          rows[1][4 + k] = s.orderRef;
+        }
         blockItems.forEach((item, j) => {
           const r = height - blockItems.length + j;
-          for (const a of item.slots.slice(0, slotCount - c)) {
-            rows[r][4 + c] = a.qty;
-            rows[r - 1][4 + c] = a.orderRef;
-            rows[r - 2][4 + c] = a.customer;
-            c++;
+          for (const a of item.slots) {
+            const k = colIndex.get(a.orderId);
+            if (k === undefined) continue;
+            const cell = rows[r]![4 + k];
+            rows[r]![4 + k] = (typeof cell === "number" ? cell : 0) + a.qty;
           }
         });
       } else {

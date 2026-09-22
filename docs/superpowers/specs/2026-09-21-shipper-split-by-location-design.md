@@ -102,16 +102,28 @@ they form their own section (see below), they are not dropped.
   sum. Per-group `Total Qty`/`Balance` were already section-scoped
   (groups are built from the section's items).
 
+- **Order-matrix columns + consolidated header rows (live mode).** One
+  slot column per DISTINCT picking order (keyed by `picking_orders.id` —
+  `order_no` is NOT unique), ordered by (priority_seq, order_no), first
+  occurrence supplying customer/orderRef. All customers sit on the
+  block's first row and all order refs on the second (the two header rows
+  above the cartons); each carton's allocation qty lands in its order's
+  column on its own row, and repeat allocations of one carton to the same
+  order sum into one cell. `slotCount` = the widest live group's
+  distinct-order count (finished package slots and order-level
+  closing-block slots are already per-order distinct). Refines the
+  per-carton allocation-rows decision: per-carton qty placement stays;
+  only header placement and column identity change.
+
 - **Per-carton allocation rows (live mode).** Allocations are per carton
-  line (`allocations.receiving_invoice_item_id`), so each allocation gets
-  its own column, sequential across the block in carton-concatenation
-  order: the qty sits on its carton's row, the order ref directly above,
-  the customer two cells above. Block height = carton count + 2 when any
-  carton has slots (no slots → the original `max(items, 3)` shape);
-  cartons stay bottom-aligned. Finished mode (package slots can't pin to
-  cartons) and the whole-order closing block keep the pre-cascade overlay
-  (all customers / all refs / all qtys on the block's last three rows).
-  Supersedes the cascade decision below.
+  line (`allocations.receiving_invoice_item_id`): each carton's
+  allocation qty lands on its own row. Block height = carton count + 2
+  when any carton has slots (no slots → the original `max(items, 3)`
+  shape); cartons stay bottom-aligned. Finished mode (package slots can't
+  pin to cartons) and the whole-order closing block keep the
+  pre-cascade overlay (all customers / all refs / all qtys on the block's
+  last three rows). Column identity and header placement refined by the
+  order-matrix decision above. Supersedes the cascade decision below.
 
 - ~~**Diagonal cascade slot layout (all blocks, live and finished).**~~
   SUPERSEDED (same day, against the user's hand-corrected file): the
