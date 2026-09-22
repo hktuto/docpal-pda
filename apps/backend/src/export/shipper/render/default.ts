@@ -37,11 +37,11 @@ export function makeShipperRenderer(options?: ShipperRendererOptions): Renderer<
 
     const width = 4 + slotCount + 1;
 
-    // `qty@shelf/box` entries joined ", " — shelf NULL renders as `dock`
-    // (receiving/dock sources), box omitted when NULL.
+    // `[shelf]-[date_code]/[qty]` entries joined ", " — the dash is omitted
+    // when the lot has no date_code (shelf-stock sources only).
     function formatRelatedSources(sources: ShipperGroup["relatedSources"]): string {
       return sources
-        .map((s) => `${s.qty}@${s.shelfCode ?? "dock"}${s.boxId ? `/${s.boxId}` : ""}`)
+        .map((s) => `${s.shelfCode ?? ""}${s.dateCode ? `-${s.dateCode}` : ""}/${s.qty}`)
         .join(", ");
     }
 

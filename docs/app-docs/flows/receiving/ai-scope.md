@@ -82,21 +82,22 @@
   finished mode overlays customers/refs/qtys on the block's last three
   rows)
   with per-block slots, per-group Total/Balance, and a group header cell
-  showing the related-order allocated breakdown by source location
-  (`qty@shelf/box` entries, shelf-less sources render as `dock`; Σ
+  showing the related-order allocated breakdown by source lot
+  (`[shelf]-[date_code]/[qty]` entries, date_code omitted when NULL; Σ
   allocations of the part on the picking orders tracing back to this
-  receiving order, EXCLUDING sources tracing back to this receiving
-  order itself — those are already the block's slot columns; stock lots
-  stay even when lot-traced to this batch; spec
+  receiving order, SHELF STOCK only — receiving/dock sources are
+  excluded, which also covers the own-order exclusion since those are
+  already the block's slot columns; stock lots stay even when
+  lot-traced to this batch; spec
   `docs/superpowers/specs/2026-09-16-admin-receiving-shipper-related-allocated-design.md`,
-  exclusion refined by the split spec).
+  stock-only scope + format refined by the split spec).
   The download always splits by receiving-office location (spec
   `docs/superpowers/specs/2026-09-21-shipper-split-by-location-design.md`):
   one xlsx per `(org_id, sub_inventory_code)` section of the order's
   items — a zip of per-section files when the order spans more than one
-  section, the plain xlsx otherwise; whole-order / package / related
-  slots attribute by the picking order's pair, falling back to the
-  part's first section.
+  section, the plain xlsx otherwise; whole-order / package slots
+  attribute by the picking order's pair, related rows by the source
+  lot's own pair, both falling back to the part's first section.
   The
   download is read-only; a separate Re-allocate button (`in_hand` only)
   awaits `POST /admin/receiving-orders/:id/reallocate` (same scoped core as

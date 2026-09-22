@@ -130,24 +130,24 @@ they form their own section (see below), they are not dropped.
   diagonal cascade misread the mockup — live allocations pin to their
   carton row, see the decision above.
 
-- **Related-allocated cell shows source locations.** The bare number
-  becomes a breakdown of the related orders' allocated qty per source
-  location: `qty@shelf/box` entries joined `", "` — shelf NULL renders as
-  `dock` (receiving/dock sources), box omitted when NULL (e.g.
-  `15000@HK01-A-01/BOX-9, 4000@dock/CTN123`, `40000@dock`). Box =
-  `COALESCE(inventory_lots.box_id, receiving_invoice_items.ctn_no)`; the
-  per-group aggregation sums per (shelf, box), sorted qty desc then shelf
-  then box. Applies to the single-section output too. The cell sits at the
-  TOP of the group block — column B of the block's second row — whenever
-  that cell is free (live blocks with slots, and single-carton no-slot
-  blocks); a no-slot block with 2+ cartons fills every row with a carton,
-  so there it falls back to col D of row `height - 2`.
-  **Exclusion:** allocations whose source traces back to THIS receiving
-  order (own cartons / whole-order) are excluded — they are already
-  visible as the block's slot columns. Stock lots stay even when
-  lot-traced to this batch via `inventory_lot_sources` (once shelved they
-  are stock), and dock sources from OTHER receiving orders stay. This
-  refines the 2026-09-16 "any source" semantics.
+- **Related-allocated cell shows source locations — SHELF STOCK only.**
+  The bare number becomes a breakdown of the related orders' allocated
+  qty per source lot: `[shelf]-[date_code]/[qty]` entries joined `", "`
+  — date_code omitted (no dash) when NULL (e.g. `A-04-05-2436/50`,
+  `A-04-05/80`). The per-group aggregation sums per (shelf, date_code),
+  sorted qty desc then shelf then date_code. Applies to the
+  single-section output too. The cell sits at the TOP of the group block
+  — column B of the block's second row — whenever that cell is free
+  (live blocks with slots, and single-carton no-slot blocks); a no-slot
+  block with 2+ cartons fills every row with a carton, so there it falls
+  back to col D of row `height - 2`.
+  **Stock-only scope (refines this spec's earlier `qty@shelf/box`
+  format, which also listed dock sources):** the relatedAllocs query
+  inner-joins `inventory_lots`, so receiving/dock sources are excluded —
+  which also covers the own-order exclusion (its carton / whole-order
+  slots are already the block's slot columns). Stock lots stay even when
+  lot-traced to this batch via `inventory_lot_sources` (once shelved
+  they are stock). This refines the 2026-09-16 "any source" semantics.
 
 - **Slot attribution to sections:**
   - *Item-level allocations* (live) follow their item — the item sits in
@@ -165,10 +165,10 @@ they form their own section (see below), they are not dropped.
   - *Finished mode* (`picking_packages`): same rule — the query already
     joins `picking_orders`; gain the same two columns, attribute per
     section, same fallback.
-  - *Related-allocated qty* (live): the relatedAllocs query gains the
-    picking order's pair; each section's group header counts only
-    related allocations whose order pair matches the section (same
-    fallback to the part's first section).
+  - *Related-allocated qty* (live): the relatedAllocs query selects the
+    source LOT's `(org_id, sub_inventory_code)`; each section's group
+    header counts only related allocations whose lot pair matches the
+    section (same fallback to the part's first section).
 
 - **Route stays HTTP-only**: call the split loader, render each
   section, zip when >1, set `Content-Type: application/zip` and

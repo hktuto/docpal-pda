@@ -29,8 +29,8 @@ export interface ShipperGroup {
   }[];
   slots: ShipperSlot[]; // live: merged per-item slots; finished: package slots
   // live mode only (empty in finished): allocated qty on related orders per
-  // source location, sorted qty desc then shelf then box
-  relatedSources: { qty: number; shelfCode: string | null; boxId: string | null }[];
+  // source lot (shelf stock only), sorted qty desc then shelf then date_code
+  relatedSources: { qty: number; shelfCode: string | null; dateCode: string | null }[];
   totalQty: number;
   allocatedTotal: number;
   orderLevel: {

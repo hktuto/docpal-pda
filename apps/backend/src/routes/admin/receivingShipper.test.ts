@@ -213,8 +213,8 @@ test("GET shipper: group header counts stock-sourced allocations on related orde
   // Stock-sourced allocation on a RELATED order (SO-PL-001 also draws on this
   // receiving order): +50 for the RK73H1JTTD3302F group.
   await client.db.execute(sql`
-    INSERT INTO inventory_lots (id, part_no, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
-    VALUES ('LOT-REL-01', 'RK73H1JTTD3302F', 'A-04-05', 'RELBOX1', 2, 'STORE1', 200, now(), now())
+    INSERT INTO inventory_lots (id, part_no, date_code, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
+    VALUES ('LOT-REL-01', 'RK73H1JTTD3302F', '2436', 'A-04-05', 'RELBOX1', 2, 'STORE1', 200, now(), now())
   `);
   await client.db.execute(sql`
     INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, created_date, last_update_date)
@@ -242,9 +242,10 @@ test("GET shipper: group header counts stock-sourced allocations on related orde
   `);
 
   // Positive cases on the same related order (SO-PL-001's RK73H1JTTD3302F):
-  // a dock source from ANOTHER receiving order's carton, and a stock lot that
-  // originally came from THIS batch via put-away (inventory_lot_sources) —
-  // once shelved it is stock, so it still shows.
+  // a stock lot that originally came from THIS batch via put-away
+  // (inventory_lot_sources) — once shelved it is stock, so it still shows —
+  // and a dock source from ANOTHER receiving order's carton, which no longer
+  // renders (the breakdown lists shelf stock only).
   const otherOrderId = await insertReceivingOrder(client.db, "PL-TEST-OTHER", {
     order: { supplierCode: "DAITO", deliveryDate: "2026-09-08" },
     invoices: [
@@ -271,6 +272,7 @@ test("GET shipper: group header counts stock-sourced allocations on related orde
         JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
         WHERE ri.receiving_order_id = ${orderId} AND rii.ctn_no IS NULL`
   );
+  // No date_code → renders without the dash.
   await client.db.execute(sql`
     INSERT INTO inventory_lots (id, part_no, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
     VALUES ('LOT-TRC-01', 'RK73H1JTTD3302F', 'A-04-05', 'TRCBOX1', 2, 'STORE1', 500, now(), now())
@@ -288,11 +290,11 @@ test("GET shipper: group header counts stock-sourced allocations on related orde
   assert.equal(res.status, 200);
   const rows = await sheetRows(await res.arrayBuffer());
 
-  // RK73H1JTTD3302F: the own-order sources (200 whole-order + own cartons)
-  // are excluded — already visible as slot columns. Kept: 120 from another
-  // receiving order's carton (dock/0333), 80 from the lot traced back to
-  // this batch (stock semantics), 50 from the plain stock lot — qty desc.
-  assert.deepEqual(rows[8], ["", "120@dock/0333, 80@A-04-05/TRCBOX1, 50@A-04-05/RELBOX1", "", "", "", "", ""]);
+  // RK73H1JTTD3302F: only shelf stock shows — 80 from the lot traced back to
+  // this batch (no date_code → no dash) and 50 from the plain stock lot
+  // (date_code 2436), qty desc. Excluded: the 200 own-order whole-order
+  // source and the 120 dock carton from the other receiving order.
+  assert.deepEqual(rows[8], ["", "A-04-05/80, A-04-05-2436/50", "", "", "", "", ""]);
   // RK73H2ATTD1372F: own-carton sources excluded, SO-PL-009 is not related —
   // the cell is empty.
   assert.deepEqual(rows[16], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, "", 1000, "", ""]);
@@ -400,7 +402,7 @@ test("GET shipper: related cell falls back to col D of row height-2 in a no-slot
   // related cell lands on the fallback seat — col D of row height-2 (abs row
   // 8) — because row 1 col B already holds the part number.
   assert.deepEqual(rows[7], ["", "", "", "", "", ""]);
-  assert.deepEqual(rows[8], ["INV-SEAT-01 8001", "PART-X-1", 100, "40@A-04-05/SEATBOX1", "", ""]);
+  assert.deepEqual(rows[8], ["INV-SEAT-01 8001", "PART-X-1", 100, "A-04-05/40", "", ""]);
   assert.deepEqual(rows[9], ["INV-SEAT-01 8002", "PART-X-1", 100, 200, "", 200]);
   // PART-Y-1: own whole-order source excluded from related; the closing
   // block carries the slot.
@@ -603,6 +605,36 @@ test("GET shipper split: two sections → zip of per-section xlsx, item-level sl
   await reseed(client);
   const orderId = await seedSplitScenario();
 
+  // Related stock-sourced allocations, one per section — the related cell
+  // attributes by the source LOT's (org_id, sub_inventory_code), so each
+  // appears only in its own lot's section member.
+  const piA = await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT pi.id FROM picking_items pi JOIN picking_orders po ON po.id = pi.picking_order_id
+        WHERE po.order_no = 'SO-SP-001' AND pi.part_no = 'PART-A-1'`
+  );
+  const piB = await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT pi.id FROM picking_items pi JOIN picking_orders po ON po.id = pi.picking_order_id
+        WHERE po.order_no = 'SO-SP-002' AND pi.part_no = 'PART-B-1'`
+  );
+  await client.db.execute(sql`
+    INSERT INTO inventory_lots (id, part_no, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
+    VALUES ('LOT-SP-S1', 'PART-A-1', 'A-04-05', 'SPBOX1', 2, 'STORE1', 100, now(), now())
+  `);
+  await client.db.execute(sql`
+    INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, created_date, last_update_date)
+    VALUES (${randomUUID()}, ${piA!.id}, 'LOT-SP-S1', 25, now(), now())
+  `);
+  await client.db.execute(sql`
+    INSERT INTO inventory_lots (id, part_no, date_code, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
+    VALUES ('LOT-SP-W1', 'PART-B-1', '2510', 'A-04-05', 'SPBOX2', 2, 'WSTORE1', 100, now(), now())
+  `);
+  await client.db.execute(sql`
+    INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, created_date, last_update_date)
+    VALUES (${randomUUID()}, ${piB!.id}, 'LOT-SP-W1', 30, now(), now())
+  `);
+
   const res = await req(`/admin/receiving-orders/${orderId}/shipper`);
   assert.equal(res.status, 200);
   assert.equal(res.headers.get("Content-Type"), "application/zip");
@@ -620,18 +652,19 @@ test("GET shipper split: two sections → zip of per-section xlsx, item-level sl
   // batch, but each section holds only its own one.
   assert.equal(store1[2]![0], "Total Ctn: 1");
   assert.deepEqual(store1[4], ["Invoice / Ctn", "Part Number", "Qty", "Total Qty", "Customer", "Balance"]);
-  // Single-carton block: the related-source cell is empty (the only related
-  // allocation is sourced from this order's own carton); the item row
-  // carries the slot.
+  // Single-carton block: the related cell lists the stock-sourced
+  // allocation attributed by its lot's location (LOT-SP-S1 lives in
+  // STORE1; no date_code → no dash); the item row carries the carton slot.
   assert.deepEqual(store1[7], ["", "", "", "", "ACME Electronics (HK)", ""]);
-  assert.deepEqual(store1[8], ["", "", "", "", "SO-SP-001", ""]);
+  assert.deepEqual(store1[8], ["", "A-04-05/25", "", "", "SO-SP-001", ""]);
   assert.deepEqual(store1[9], ["INV-SP-01 9001", "PART-A-1", 100, 100, 60, 40]);
   assert.equal(store1.length, 10);
 
   const wstore1 = members[1]![1]!;
   assert.equal(wstore1[2]![0], "Total Ctn: 1");
   assert.deepEqual(wstore1[7], ["", "", "", "", "SO-SP-002", ""]);
-  assert.deepEqual(wstore1[8], ["", "", "", "", "SO-SP-002", ""]);
+  // LOT-SP-W1 (WSTORE1, date_code 2510) appears ONLY in this member.
+  assert.deepEqual(wstore1[8], ["", "A-04-05-2510/30", "", "", "SO-SP-002", ""]);
   assert.deepEqual(wstore1[9], ["INV-SP-01 9002", "PART-B-1", 200, 200, 80, 120]);
   assert.equal(wstore1.length, 10);
 });

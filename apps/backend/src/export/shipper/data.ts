@@ -68,12 +68,12 @@ interface AllocRow {
 interface RelatedAllocRow {
   demandPartNo: string;
   qty: number;
+  // The source LOT's own stock partition + shelf/date (shelf-stock sources
+  // only — receiving/dock allocations are excluded by the lot join).
   orgId: number | null;
   subInventoryCode: string | null;
-  // Source location: shelf NULL for receiving/dock sources; the receiving
-  // item's ctn_no is its box (whole-order sources have neither).
   shelfCode: string | null;
-  boxId: string | null;
+  dateCode: string | null;
 }
 
 function ymd(d: Date | null): string {
@@ -238,15 +238,13 @@ async function loadShipperData(db: AppDb, id: string, finished: boolean): Promis
     // Related-order allocated qty per demand part (spec 2026-09-16, refined by
     // 2026-09-21-shipper-split-by-location-design.md): the group header cell
     // shows how much of each part is already allocated to the picking orders
-    // this receiving order feeds, from OTHER sources. Related = the order has
-    // ≥1 allocation tracing back to this receiving order (item-level or
-    // whole-order); the breakdown counts allocations of the part on those
-    // orders EXCEPT sources tracing back to this receiving order itself
-    // (its own cartons / whole-order — already visible as the block's slot
-    // columns). Stock lots stay even when lot-traced to this batch via
-    // inventory_lot_sources (once shelved they are stock), as do dock
-    // sources from other receiving orders. Matched back to a part group via
-    // the allocate.ts part-key rule.
+    // this receiving order feeds, from SHELF STOCK only — receiving/dock
+    // sources are excluded (the lot join), which also covers the own-order
+    // exclusion (its carton / whole-order slots are already the block's
+    // columns). Lots stay even when lot-traced to this batch via
+    // inventory_lot_sources (once shelved they are stock). Section
+    // attribution uses the LOT's own (org_id, sub_inventory_code). Matched
+    // back to a part group via the allocate.ts part-key rule.
     relatedAllocs = await queryAll<RelatedAllocRow>(
       db,
       sql`
@@ -259,19 +257,13 @@ async function loadShipperData(db: AppDb, id: string, finished: boolean): Promis
           WHERE a.receiving_order_id = ${id} OR ri.receiving_order_id = ${id}
         )
         SELECT pi.part_no AS "demandPartNo", SUM(a.qty)::int AS qty,
-          po.org_id AS "orgId", po.sub_inventory_code AS "subInventoryCode",
-          il.shelf_code AS "shelfCode",
-          COALESCE(il.box_id, rii.ctn_no) AS "boxId"
+          il.org_id AS "orgId", il.sub_inventory_code AS "subInventoryCode",
+          il.shelf_code AS "shelfCode", il.date_code AS "dateCode"
         FROM allocations a
         JOIN picking_items pi ON pi.id = a.picking_item_id
-        JOIN picking_orders po ON po.id = pi.picking_order_id
         JOIN related_orders ro ON ro.order_id = pi.picking_order_id
-        LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
-        LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
-        LEFT JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-        WHERE a.receiving_order_id IS DISTINCT FROM ${id}
-          AND ri.receiving_order_id IS DISTINCT FROM ${id}
-        GROUP BY pi.part_no, po.org_id, po.sub_inventory_code, il.shelf_code, COALESCE(il.box_id, rii.ctn_no)
+        JOIN inventory_lots il ON il.id = a.inventory_lot_id
+        GROUP BY pi.part_no, il.org_id, il.sub_inventory_code, il.shelf_code, il.date_code
       `
     );
   }
@@ -358,19 +350,19 @@ function buildShipperDocument(
   }
 
   // Related-order allocated qty per part group (same part-key rule as the
-  // whole-order slot matching above), broken down by source location
-  // (shelf/box — spec 2026-09-21-shipper-split-by-location-design.md):
-  // summed per (shelf, box), sorted qty desc then shelf then box. Live mode
-  // only — finished mode has no group header cell.
-  const relatedSourcesByGroup = new Map<string, { qty: number; shelfCode: string | null; boxId: string | null }[]>();
+  // whole-order slot matching above), broken down by source lot
+  // (shelf/date — spec 2026-09-21-shipper-split-by-location-design.md):
+  // summed per (shelf, date_code), sorted qty desc then shelf then
+  // date_code. Live mode only — finished mode has no group header cell.
+  const relatedSourcesByGroup = new Map<string, { qty: number; shelfCode: string | null; dateCode: string | null }[]>();
   for (const group of groups) {
-    const byLocation = new Map<string, { qty: number; shelfCode: string | null; boxId: string | null }>();
+    const byLocation = new Map<string, { qty: number; shelfCode: string | null; dateCode: string | null }>();
     for (const r of relatedAllocs) {
       if (!group.items.some((i) => i.partNo === r.demandPartNo || i.wclItemNo === r.demandPartNo)) continue;
-      const key = `${r.shelfCode ?? ""}::${r.boxId ?? ""}`;
+      const key = `${r.shelfCode ?? ""}::${r.dateCode ?? ""}`;
       const entry = byLocation.get(key);
       if (entry) entry.qty += r.qty;
-      else byLocation.set(key, { qty: r.qty, shelfCode: r.shelfCode, boxId: r.boxId });
+      else byLocation.set(key, { qty: r.qty, shelfCode: r.shelfCode, dateCode: r.dateCode });
     }
     relatedSourcesByGroup.set(
       group.partKey,
@@ -378,7 +370,7 @@ function buildShipperDocument(
         (a, b) =>
           b.qty - a.qty ||
           (a.shelfCode ?? "").localeCompare(b.shelfCode ?? "") ||
-          (a.boxId ?? "").localeCompare(b.boxId ?? "")
+          (a.dateCode ?? "").localeCompare(b.dateCode ?? "")
       )
     );
   }
@@ -485,10 +477,11 @@ export interface ShipperSectionDocument {
 // docs/superpowers/specs/2026-09-21-shipper-split-by-location-design.md):
 // one document per receiving-office (org_id, sub_inventory_code) section of
 // the order's items, sections ordered by orgId then subInventoryCode
-// (NULLS LAST). Item-level slots follow their item; whole-order / package /
-// related slots are attributed by the picking order's pair (case-insensitive
-// sub-inventory compare), falling back to the section holding the slot's
-// part group, first in section order.
+// (NULLS LAST). Item-level slots follow their item; whole-order / package
+// slots are attributed by the picking order's pair, related stock rows by
+// the source lot's own pair (case-insensitive sub-inventory compare),
+// falling back to the section holding the slot's part group, first in
+// section order.
 export async function loadShipperDocuments(
   db: AppDb,
   id: string,
