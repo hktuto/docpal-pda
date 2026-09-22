@@ -191,6 +191,15 @@ const itemColumnDefs = computed<AdminColumnDef<ReceivingItemRow>[]>(() => [
   { key: "allocatedQty", label: t("admin.pages.receiving.allocated"), size: 90 },
   { key: "ctnNo", label: t("admin.pages.receiving.ctnNo"), size: 110 },
   {
+    key: "drawingNo",
+    label: t("admin.pages.receiving.drawingNo"),
+    accessor: (it) => {
+      const v = it.additionalData?.drawing_no;
+      return typeof v === "string" && v !== "" ? v : "—";
+    },
+    size: 120,
+  },
+  {
     key: "dateCode",
     label: t("admin.pages.receiving.dateCode"),
     accessor: (it) => formatDc(it) || "—",
@@ -521,6 +530,28 @@ async function removeItem(item: ReceivingItemRow) {
 
 onMounted(load);
 
+// "Override status" modal — single-order status change (shared with the
+// list page's batch action). Status changes write transaction logs, so bump
+// logsKey after a successful apply.
+const overrideOpen = ref(false);
+const overriding = ref(false);
+
+async function onOverrideStatus(payload: { status: string; reason: string }) {
+  if (!order.value || overriding.value) return;
+  overriding.value = true;
+  error.value = "";
+  try {
+    await flow.overrideReceivingOrderStatus(order.value.id, payload.status, payload.reason);
+    overrideOpen.value = false;
+    await load();
+    logsKey.value++;
+  } catch (e: any) {
+    error.value = e.message;
+  } finally {
+    overriding.value = false;
+  }
+}
+
 // Part search + allocate modal: the row's 🔍 icon opens it; shows the part's
 // open picking demand (matching/all tables with per-row Allocate) plus
 // related stock lots.
@@ -578,7 +609,7 @@ async function removeAllocation(row: ReceivingItemRow, a: ReceivingItemAllocatio
 // allocation runs). While the user is editing or has rows selected, show a
 // refresh banner instead of yanking the data out from under them.
 const changeBusy = computed(
-  () => editItems.value !== null || selected.value.size > 0 || availOpen.value
+  () => editItems.value !== null || selected.value.size > 0 || availOpen.value || overrideOpen.value
 );
 const {
   pending: changePending,
@@ -630,6 +661,9 @@ const {
           {{ confirmingArrival ? $t("admin.common.saving") : $t("admin.pages.receiving.confirmInHand") }}
         </button>
         <NuxtLink to="/receiving" class="btn">{{ $t("admin.common.back") }}</NuxtLink>
+        <button class="btn" :disabled="!order || overriding" @click="overrideOpen = true">
+          {{ $t("admin.pages.receiving.overrideStatus") }}
+        </button>
       </div>
     </div>
 
@@ -866,6 +900,14 @@ const {
       :context-org-id="availOrgId"
       @close="availOpen = false"
       @allocated="onSearchAllocated"
+    />
+
+    <ReceivingStatusOverrideModal
+      :open="overrideOpen"
+      :order-nos="order ? [order.displayName ?? order.batchNo] : []"
+      :current-statuses="order ? [order.status] : []"
+      @close="overrideOpen = false"
+      @apply="onOverrideStatus"
     />
   </div>
 </template>

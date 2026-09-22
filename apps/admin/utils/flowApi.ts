@@ -193,6 +193,8 @@ export interface ReceivingItemRow {
   allocations: ReceivingItemAllocation[];
   /** Passthrough jsonb from the upstream order sync (optional). */
   orderData?: Record<string, unknown> | null;
+  /** Item-level upstream extras jsonb (e.g. drawing_no). */
+  additionalData?: Record<string, unknown> | null;
   mismatch: { reason: string | null; mismatchQty: number | null; wrongPartNo: string | null; note: string | null } | null;
 }
 
@@ -538,6 +540,13 @@ export function useFlowApi() {
       api.post<ConfirmArrivalResult>(`/receiving-orders/${id}/confirm-arrival`, {}),
     updateReceivingDeliveryDate: (id: string, deliveryDate: string | null) =>
       api.patch(`/admin/receiving-orders/${id}`, { deliveryDate }),
+    // Admin status override: any of pending/provisional_received/in_hand/clear,
+    // no transition guards. changed=false when already the target.
+    overrideReceivingOrderStatus: (id: string, status: string, reason?: string) =>
+      api.patch<{ id: string; batchNo: string; status: string; previousStatus: string; changed: boolean }>(
+        `/admin/receiving-orders/${id}/status`,
+        { status, ...(reason?.trim() ? { reason: reason.trim() } : {}) }
+      ),
     updateReceivingItem: (
       id: string,
       fields: Partial<Record<"dateCode" | "lotCode" | "coo" | "cow" | "ctnNo", string | null>>
@@ -648,6 +657,27 @@ export function useFlowApi() {
       for (const id of ids) {
         try {
           await api.patch(`/admin/picking-orders/${id}/status`, {
+            status,
+            ...(reason?.trim() ? { reason: reason.trim() } : {}),
+          });
+        } catch (e: any) {
+          failed.push({ id, message: e?.message ?? String(e) });
+        }
+      }
+      if (failed.length > 0) {
+        const err = new Error(failed.map((f) => `${f.id}: ${f.message}`).join("; "));
+        (err as any).failed = failed;
+        throw err;
+      }
+    },
+    // Batch status override on the receiving order list: one PATCH per id
+    // (same overridePickingOrdersStatus contract — attempts every id, throws
+    // with `failed` listing the per-order failures on partial failure).
+    overrideReceivingOrdersStatus: async (ids: string[], status: string, reason?: string): Promise<void> => {
+      const failed: { id: string; message: string }[] = [];
+      for (const id of ids) {
+        try {
+          await api.patch(`/admin/receiving-orders/${id}/status`, {
             status,
             ...(reason?.trim() ? { reason: reason.trim() } : {}),
           });

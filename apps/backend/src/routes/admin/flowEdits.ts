@@ -4,6 +4,7 @@ import type { Context } from "hono";
 import { db } from "../../db.js";
 import { updatePickingDeliveryDate, updatePickingOrderFields, updateReceivingDeliveryDate, updateReceivingItemFields } from "../../db/adminedits.js";
 import { overridePickingOrderStatus } from "../../db/picking.js";
+import { overrideReceivingOrderStatus } from "../../db/receiving.js";
 import { scheduleAllocateAll } from "../../db/allocate.js";
 import { actorFrom } from "../../auth/middleware.js";
 
@@ -78,6 +79,30 @@ adminFlowEditsRoute.patch("/picking-orders/:id/status", async (c) => {
   if (reason !== undefined && reason !== null && typeof reason !== "string")
     throw new HTTPException(400, { message: "reason must be a string" });
   const result = await overridePickingOrderStatus(db, {
+    orderId: c.req.param("id"),
+    status: v.trim(),
+    reason: typeof reason === "string" ? reason : null,
+    actorId: actorFrom(c).id,
+  });
+  if (result.changed) scheduleAllocateAll(db, "admin_status_override");
+  return c.json(result, 200);
+});
+
+// Override a receiving order's status. Body { status, reason? } — any of
+// pending/provisional_received/in_hand/clear, no transition guards; a status
+// stamp only (items, ledger rows and allocations untouched). Entering
+// in_hand stamps arrived_at/arrived_by; moving back to
+// pending/provisional_received clears them. 400 invalid_status, 404
+// receiving_order_not_found. No-op (changed: false) when the status already
+// matches. On change the recompute is scheduled after commit.
+adminFlowEditsRoute.patch("/receiving-orders/:id/status", async (c) => {
+  const body = await readJson(c);
+  const v = body.status;
+  if (typeof v !== "string") throw new HTTPException(400, { message: "status must be a string" });
+  const reason = body.reason;
+  if (reason !== undefined && reason !== null && typeof reason !== "string")
+    throw new HTTPException(400, { message: "reason must be a string" });
+  const result = await overrideReceivingOrderStatus(db, {
     orderId: c.req.param("id"),
     status: v.trim(),
     reason: typeof reason === "string" ? reason : null,

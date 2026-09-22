@@ -10,6 +10,7 @@ const loading = ref(false);
 const error = ref("");
 const status = ref("");
 const search = ref("");
+const selected = ref<Set<string>>(new Set());
 
 const STATUSES = ["pending", "in_hand", "provisional_received", "clear"];
 
@@ -93,6 +94,7 @@ async function load() {
   error.value = "";
   try {
     rows.value = await flow.listReceivingOrders(status.value || undefined);
+    selected.value = new Set();
   } catch (e: any) {
     error.value = e.message;
   } finally {
@@ -103,20 +105,73 @@ async function load() {
 watch(status, load);
 onMounted(load);
 
+// Batch "Set status": one override per selected order (the API helper
+// attempts every id and lists per-order failures on `failed`, same as the
+// picking batch). The modal is shared with the detail page.
+const selectedIds = computed(() => [...selected.value]);
+const selectedRows = computed(() => rows.value.filter((r) => selected.value.has(r.id)));
+const overrideOpen = ref(false);
+const overriding = ref(false);
+
+async function onOverrideStatus(payload: { status: string; reason: string }) {
+  const ids = selectedIds.value;
+  if (ids.length === 0 || overriding.value) return;
+  overriding.value = true;
+  error.value = "";
+  try {
+    await flow.overrideReceivingOrdersStatus(ids, payload.status, payload.reason);
+    overrideOpen.value = false;
+    await load();
+  } catch (e: any) {
+    // Partial failure: failed lists the per-order failures.
+    const failed: { id: string; message: string }[] = e?.failed ?? [];
+    error.value =
+      failed.length > 0
+        ? t("admin.pages.receiving.overrideFailed", {
+            orders: failed.map((f) => {
+              const row = rows.value.find((r) => r.id === f.id);
+              return row ? (row.displayName ?? row.batchNo) : f.id;
+            }).join(", "),
+          })
+        : e.message;
+    await load();
+  } finally {
+    overriding.value = false;
+  }
+}
+
 // Reload when receiving data changes elsewhere (PDA scans, sync, confirms).
+// Busy while a selection is active (load() clears it): banner instead of
+// silent reload.
+const changeBusy = computed(() => selected.value.size > 0);
 const {
   pending: changePending,
   justUpdated: changeUpdated,
   refreshNow,
   dismiss,
-} = useChangeNotice(["receiving_order.upserted", "receiving_order.deleted", "allocation.finished"], load);
+} = useChangeNotice(["receiving_order.upserted", "receiving_order.deleted", "allocation.finished"], load, {
+  busy: changeBusy,
+});
 </script>
 
 <template>
   <div>
     <div class="page-head">
       <h1>{{ $t("admin.pages.receiving.title") }}</h1>
-      <button class="btn" :disabled="loading" @click="load">{{ $t("admin.common.refresh") }}</button>
+      <div class="head-actions">
+        <button class="btn" :disabled="loading" @click="load">{{ $t("admin.common.refresh") }}</button>
+        <button
+          class="btn"
+          :disabled="selectedIds.length === 0 || overriding"
+          @click="overrideOpen = true"
+        >
+          {{
+            selectedIds.length
+              ? $t("admin.pages.receiving.overrideStatusSelected", { n: selectedIds.length })
+              : $t("admin.pages.receiving.overrideStatus")
+          }}
+        </button>
+      </div>
     </div>
 
     <div class="filters">
@@ -137,11 +192,16 @@ const {
 
     <DataTable
       v-else
+      v-model:selected="selected"
       :table="table"
+      selectable
+      :row-id="(r: ReceivingOrderRow) => r.id"
       :empty-text="$t('admin.pages.receiving.none')"
       :on-reset-columns="resetColumnState"
-      @row-click="(r) => navigateTo(`/receiving/${r.id}`)"
     >
+      <template #cell-batchNo="{ row }">
+        <span class="clickable" @click="navigateTo(`/receiving/${row.id}`)">{{ row.displayName ?? row.batchNo }}</span>
+      </template>
       <template #cell-status="{ row }">{{ $t(`status.receiving.${row.status}`) }}</template>
       <template #cell-deliveryDate="{ row }">
         {{ row.deliveryDate ? formatDate(row.deliveryDate) : "—" }}
@@ -151,6 +211,13 @@ const {
       <template #cell-lastUpdateDate="{ row }">{{ formatDateTime(row.lastUpdateDate) }}</template>
     </DataTable>
     <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
+    <ReceivingStatusOverrideModal
+      :open="overrideOpen"
+      :order-nos="selectedRows.map((r) => r.displayName ?? r.batchNo)"
+      :current-statuses="selectedRows.map((r) => r.status)"
+      @close="overrideOpen = false"
+      @apply="onOverrideStatus"
+    />
   </div>
 </template>
 
@@ -162,5 +229,13 @@ const {
 }
 .filters input {
   flex: 1;
+}
+.head-actions {
+  display: flex;
+  gap: 0.625rem;
+}
+.clickable {
+  cursor: pointer;
+  color: #0b5cab;
 }
 </style>

@@ -139,6 +139,23 @@
   `DELETE /admin/picking-orders/:id/items/:itemId/allocations/:allocationId`;
   a hover tooltip on each row shows the target picking order (link to the
   admin picking-order detail), its status and the allocated qty.
+- Admin receiving-order status override (spec
+  `docs/superpowers/specs/2026-09-22-admin-receiving-status-override-design.md`):
+  `PATCH /admin/receiving-orders/:id/status` (`overrideReceivingOrderStatus`
+  in `apps/backend/src/db/receiving.ts`) — any of
+  pending/provisional_received/in_hand/clear, no transition guards; a status
+  stamp ONLY (received qty, dock ledger rows, allocations, and put-away
+  tasks are never touched); `arrived_at`/`arrived_by` are stamped when
+  entering `in_hand`, cleared when moving back below it, preserved on
+  `in_hand → clear`; same-status no-op; audit transition log
+  (`metadata.override`) + `receiving_order.upserted` SSE + background
+  `allocateAll` on change. UI: "Override status" on the admin receiving
+  detail and a batch "Override status (n)" over the multi-selectable admin
+  receiving list, both via the shared
+  `apps/admin/components/receiving/StatusOverrideModal.vue` (reopen/backward
+  warnings); `flow.overrideReceivingOrderStatus` /
+  `overrideReceivingOrdersStatus` (per-id loop, `failed` aggregation) in
+  `apps/admin/utils/flowApi.ts`.
 
 ## Out of scope
 
@@ -202,3 +219,4 @@
 - `docs/superpowers/specs/2026-09-02-receiving-subinventory-rules-design.md`
 - `docs/superpowers/specs/2026-09-14-admin-receiving-shipper-download-design.md`
 - `docs/superpowers/specs/2026-09-11-user-subinventory-scope-design.md`
+- `docs/superpowers/specs/2026-09-22-admin-receiving-status-override-design.md`

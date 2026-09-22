@@ -9,6 +9,7 @@ import { emitEvent } from "./events.js";
 import { normalizePartNo, parseQrRaw } from "./scanParse.js";
 import { createPutAwayTaskTx } from "./putawaytasks.js";
 import { isStepEnabled, putAwayConfig, receivingSubInventoryRules, type SubInventoryRuleGroup } from "../config.js";
+import { logTransition } from "./picking.js";
 
 // ---------------------------------------------------------------------------
 // Receiving flow mutations (concepts 4-5 in docs/backend/concepts.md).
@@ -866,5 +867,70 @@ export async function deleteReceivingInvoiceItem(
       data: { orderId: item.receivingOrderId, itemId: item.id, actorId: input.actorId },
     });
     return { id: item.id, receivingOrderId: item.receivingOrderId };
+  });
+}
+
+export const RECEIVING_ORDER_STATUSES = ["pending", "provisional_received", "in_hand", "clear"] as const;
+const ARRIVED_RECEIVING_STATUSES = new Set(["in_hand", "clear"]);
+
+/** Admin status override. Sets the status to any of the 4 values with no
+ *  transition guards; a status stamp only — items, received_qty, ledger rows,
+ *  allocations and put-away tasks are untouched. Entering `in_hand` stamps
+ *  arrived_at/arrived_by; moving back to pending/provisional_received clears
+ *  them; other transitions (in_hand → clear, pending ↔ provisional_received)
+ *  leave the stamps alone. No-op (changed: false, no audit/event) when the
+ *  status is already the target. The caller schedules the allocation
+ *  recompute after commit whenever `changed`. */
+export async function overrideReceivingOrderStatus(
+  db: AppDb,
+  input: { orderId: string; status: string; reason?: string | null; actorId: string }
+): Promise<{ id: string; batchNo: string; status: string; previousStatus: string; changed: boolean }> {
+  const status = input.status;
+  if (!(RECEIVING_ORDER_STATUSES as readonly string[]).includes(status)) {
+    throw new HTTPException(400, { message: "invalid_status" });
+  }
+  return db.transaction(async (tx) => {
+    const order = await queryGet<{ id: string; batchNo: string; status: string }>(
+      tx,
+      sql`SELECT id, batch_no AS "batchNo", status FROM receiving_orders WHERE id = ${input.orderId}`
+    );
+    if (!order) throw new HTTPException(404, { message: "receiving_order_not_found" });
+    if (order.status === status) {
+      return { id: order.id, batchNo: order.batchNo, status, previousStatus: order.status, changed: false };
+    }
+    await assertActor(tx, input.actorId);
+
+    const previousStatus = order.status;
+    const enteringInHand = status === "in_hand";
+    const leavingArrived = ARRIVED_RECEIVING_STATUSES.has(previousStatus) && !ARRIVED_RECEIVING_STATUSES.has(status);
+    const at = now();
+
+    // JS-side CASE operands (avoids boolean params in the SQL template).
+    const arrivedAtVal = enteringInHand ? sql`${at}` : leavingArrived ? sql`NULL` : sql`arrived_at`;
+    const arrivedByVal = enteringInHand ? sql`${input.actorId}` : leavingArrived ? sql`NULL` : sql`arrived_by`;
+    await queryRun(
+      tx,
+      sql`UPDATE receiving_orders
+          SET status = ${status},
+              arrived_at = ${arrivedAtVal},
+              arrived_by = ${arrivedByVal},
+              last_update_date = ${at}
+          WHERE id = ${order.id}`
+    );
+    const reason = input.reason?.trim() || null;
+    await logTransition(tx, {
+      entityType: "receiving_order",
+      entityId: order.id,
+      fromState: previousStatus,
+      toState: status,
+      actorId: input.actorId,
+      metadata: { override: true, ...(reason ? { reason } : {}) },
+    });
+    await emitEvent(tx, {
+      type: "receiving_order.upserted",
+      topics: ["/receiving-orders"],
+      data: { id: order.id, batchNo: order.batchNo, actorId: input.actorId },
+    });
+    return { id: order.id, batchNo: order.batchNo, status, previousStatus, changed: true };
   });
 }
