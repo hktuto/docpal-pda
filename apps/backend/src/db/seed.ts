@@ -370,7 +370,7 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
     );
   }
 
-  await db.insert(countryList).values(COUNTRIES.map((c, i) => ({ id: uid(100 + i), ...c })));
+  await db.insert(countryList).values(COUNTRIES.map((c, i) => ({ id: uid(100 + i), ...c, shortCode: c.code.slice(0, 1) })));
 
   await db.insert(boxSizeList).values(BOX_SIZES.map((code, i) => ({ id: uid(140 + i), code })));
 
@@ -547,7 +547,7 @@ async function seedReferenceOnly(db: AppDb): Promise<void> {
   // Flow config row — required for boot.
   await db.insert(warehouseConfig).values([{ key: "flow", value: HK_FLOW_CONFIG }]);
 
-  await db.insert(countryList).values(COUNTRIES.map((c, i) => ({ id: uid(100 + i), ...c })));
+  await db.insert(countryList).values(COUNTRIES.map((c, i) => ({ id: uid(100 + i), ...c, shortCode: c.code.slice(0, 1) })));
 
   await db.insert(boxSizeList).values(BOX_SIZES.map((code, i) => ({ id: uid(140 + i), code })));
 

@@ -16,12 +16,26 @@ const PLACEHOLDERS: Record<string, keyof DateCodeFields> = {
   lot_code: "lotCode",
   coo: "coo",
   cow: "cow",
+  coo_short: "coo",
+  cow_short: "cow",
 };
 
-export function formatDateCodeDisplay(fields: DateCodeFields, template: string): string {
+/** Tokens rendering the country_list.short_code lookup instead of the raw code. */
+const SHORT_CODE = new Set(["coo_short", "cow_short"]);
+
+// shortCodes maps a country code (any case) to its short char. A set field
+// with no matching short code falls back to the raw code so an unmapped
+// country never renders blank.
+export function formatDateCodeDisplay(
+  fields: DateCodeFields,
+  template: string,
+  shortCodes: Record<string, string> = {}
+): string {
   return template.replace(/\[([^\]]*)\]/g, (whole, name: string) => {
     const key = PLACEHOLDERS[name];
     if (!key) return whole;
-    return fields[key] ?? "";
+    const value = fields[key] ?? "";
+    if (!SHORT_CODE.has(name) || value === "") return value;
+    return shortCodes[value.toUpperCase()] || value;
   });
 }

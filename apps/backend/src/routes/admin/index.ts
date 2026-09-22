@@ -164,9 +164,10 @@ adminRoute.route(
   createCrudRouter({
     table: countryList,
     pk: countryList.code,
-    create: (b) => ({ id: optId(b), code: reqStr(b, "code"), name: reqStr(b, "name") }),
+    create: (b) => ({ id: optId(b), code: reqStr(b, "code"), name: reqStr(b, "name"), shortCode: optStr(b, "shortCode") }),
     update: (b) => ({
       ...(b.name !== undefined && { name: reqStr(b, "name") }),
+      ...(b.shortCode !== undefined && { shortCode: optStr(b, "shortCode") }),
     }),
   })
 );

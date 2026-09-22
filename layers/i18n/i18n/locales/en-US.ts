@@ -1023,6 +1023,7 @@ export default {
       subInventoryCodesHint: "Checked sub-inventories mark this shelf's put-away affinity. Leave everything unchecked for a shared shelf (suggested for all sub-inventories).",
       name: "Name",
       shortName: "Short name",
+      shortCode: "Short code",
       supplierCode: "Supplier code",
       brand: "Brand",
       partNo: "Part no",
@@ -1681,7 +1682,7 @@ export default {
         envOverrideWarning: "The FLOW_CONFIG environment override is active on the backend — saving here stores the row but does NOT change the running config until the override is removed.",
         templateSection: "Display template",
         template: "Date code display template",
-        templateHint: "Placeholders: [date_code] date code, [lot_code] lot code, [coo] COO, [cow] COW. A placeholder whose field is empty renders as empty (no dangling separator); text outside brackets shows literally. Applies to: receiving order detail items, picking order detail allocation and package cells.",
+        templateHint: "Placeholders: [date_code] date code, [lot_code] lot code, [coo] COO, [cow] COW, [coo_short] / [cow_short] COO / COW as the country's short code (set per country in Country List). A placeholder whose field is empty renders as empty (no dangling separator); text outside brackets shows literally. Applies to: receiving order detail items, picking order detail allocation and package cells.",
         templateInvalid: "Template must be a non-empty string.",
         previewSection: "Preview",
         previewFull: "Sample (date code 3626, lot L01, COO cn, COW tw)",
@@ -1690,7 +1691,9 @@ export default {
           date_code: "Date code",
           lot_code: "Lot code",
           coo: "COO (origin)",
-          cow: "COW (warranty)"
+          cow: "COW (warranty)",
+          coo_short: "COO short char",
+          cow_short: "COW short char"
         },
         roTemplateSection: "Receiving order name template",
         roTemplate: "Receiving order name template",

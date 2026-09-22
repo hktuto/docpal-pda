@@ -1023,6 +1023,7 @@ export default {
       subInventoryCodesHint: "勾選的子庫用於上架建議的貨架歸屬。全部不勾選代表共用貨架（所有子庫均可獲建議）。",
       name: "名稱",
       shortName: "簡稱",
+      shortCode: "短代碼",
       supplierCode: "供應商代碼",
       brand: "品牌",
       partNo: "零件編號",
@@ -1678,7 +1679,7 @@ export default {
         envOverrideWarning: "後端目前使用 FLOW_CONFIG 環境變數覆蓋 — 在此儲存只會寫入資料庫，要移除該環境變數後才會生效。",
         templateSection: "顯示模板",
         template: "日期代碼顯示模板",
-        templateHint: "佔位符：[date_code] 日期代碼、[lot_code] Lot 編號、[coo] COO、[cow] COW。欄位為空時該佔位符顯示為空（不會留下多餘分隔符）；方括號以外的文字原樣顯示。套用位置：收貨單明細項目、執貨單明細的分配及箱件欄。",
+        templateHint: "佔位符：[date_code] 日期代碼、[lot_code] Lot 編號、[coo] COO、[cow] COW、[coo_short]／[cow_short] COO／COW 短代碼（在國家列表中按國家設定）。欄位為空時該佔位符顯示為空（不會留下多餘分隔符）；方括號以外的文字原樣顯示。套用位置：收貨單明細項目、揀貨單明細的分配及箱件欄。",
         templateInvalid: "模板必須是非空字串。",
         previewSection: "預覽",
         previewFull: "例子（日期代碼 3626、Lot L01、COO cn、COW tw）",
@@ -1687,7 +1688,9 @@ export default {
           date_code: "日期代碼",
           lot_code: "Lot 編號",
           coo: "COO（產地）",
-          cow: "COW（保修地）"
+          cow: "COW（保修地）",
+          coo_short: "COO 短代碼",
+          cow_short: "COW 短代碼"
         },
         roTemplateSection: "收貨單名稱模板",
         roTemplate: "收貨單名稱模板",

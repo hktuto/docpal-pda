@@ -48,3 +48,10 @@ the row with the raw body). Live preview on the page shows a full sample lot
 - Excel downloads: picking-list xlsx `Date Code` column, and a new date-code column on the
   receiving shipper xlsx (which today has none).
 - No change to storage, scanning, or the supplier QR split.
+
+## Amendment 2026-09-22: COO/COW short-code placeholders
+
+`[coo_short]` / `[cow_short]` render the single char from the new
+`country_list.short_code` column (admin-editable on the Country List page,
+seeded/backfilled as the first letter of the ISO code; unmapped code falls
+back to the raw code). See `2026-09-22-coo-cow-short-code-design.md`.

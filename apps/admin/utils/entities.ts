@@ -181,6 +181,7 @@ export const entities: Record<string, EntityConfig> = {
     fields: [
       { key: "code", label: "admin.fields.code", type: "text", required: true, readonlyOnEdit: true },
       { key: "name", label: "admin.fields.name", type: "text", required: true },
+      { key: "shortCode", label: "admin.fields.shortCode", type: "text" },
     ],
   },
   "box-sizes": {

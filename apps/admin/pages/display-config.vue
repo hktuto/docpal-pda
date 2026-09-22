@@ -28,7 +28,7 @@ import {
 const flow = useFlowApi();
 const { t } = useI18n();
 
-const PLACEHOLDERS = ["date_code", "lot_code", "coo", "cow"] as const;
+const PLACEHOLDERS = ["date_code", "lot_code", "coo", "cow", "coo_short", "cow_short"] as const;
 const RO_PLACEHOLDERS = [
   "batch_no",
   "invoice_no",
@@ -43,6 +43,8 @@ const RO_PLACEHOLDERS = [
 // placeholder behavior — no dangling separator).
 const SAMPLE_FULL = { dateCode: "3626", lotCode: "L01", coo: "cn", cow: "tw" };
 const SAMPLE_PARTIAL = { dateCode: "3626", lotCode: "L01", coo: null, cow: null };
+// Sample country_list.short_code lookup for the [coo_short]/[cow_short] preview.
+const SAMPLE_SHORT_CODES = { CN: "C", TW: "T" };
 
 // Preview samples for the receiving order name: a full order and one with no
 // invoice (shows the batch-no fallback when the render would be empty).
@@ -185,8 +187,8 @@ const pdaPreviewMetaFull = computed(() => formatListRow(pdaList.value, "meta", P
 const pdaPreviewTitlePartial = computed(() => formatListRow(pdaList.value, "title", PDA_SAMPLE_PARTIAL[pdaList.value], pdaCurrentTemplates.value));
 const pdaPreviewMetaPartial = computed(() => formatListRow(pdaList.value, "meta", PDA_SAMPLE_PARTIAL[pdaList.value], pdaCurrentTemplates.value));
 
-const previewFull = computed(() => formatDateCodeDisplay(SAMPLE_FULL, templateText.value) || "—");
-const previewPartial = computed(() => formatDateCodeDisplay(SAMPLE_PARTIAL, templateText.value) || "—");
+const previewFull = computed(() => formatDateCodeDisplay(SAMPLE_FULL, templateText.value, SAMPLE_SHORT_CODES) || "—");
+const previewPartial = computed(() => formatDateCodeDisplay(SAMPLE_PARTIAL, templateText.value, SAMPLE_SHORT_CODES) || "—");
 const roPreviewFull = computed(() => formatReceivingOrderName(RO_SAMPLE_FULL, roTemplateText.value) || "—");
 const roPreviewFallback = computed(() => formatReceivingOrderName(RO_SAMPLE_NO_INVOICE, roTemplateText.value) || "—");
 

@@ -134,10 +134,13 @@ export const shelves = pgTable("shelves", {
 // ------------------------------------------------------------------
 
 // Country lookup: short code → display name (destination country, COO, etc.)
+// shortCode: warehouse-editable single char used by the date-code display
+// template's [coo_short]/[cow_short] placeholders (CN→C, JP→J).
 export const countryList = pgTable("country_list", {
   id: text("id").primaryKey(),
   code: text("code").notNull().unique(), // ISO 3166-1 alpha-2, e.g. HK, CN, JP
   name: text("name").notNull(),
+  shortCode: text("short_code"),
   createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
 });
