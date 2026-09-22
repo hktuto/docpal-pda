@@ -13,7 +13,8 @@
     "jsbarcode": "^3.12.3",
     "nuxt": "^3.21.8",
     "qrcode": "^1.5.4",
-    "vue-draggable-plus": "^0.6.1"
+    "vue-draggable-plus": "^0.6.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/qrcode": "^1.5.5",

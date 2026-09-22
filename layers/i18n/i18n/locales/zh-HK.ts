@@ -1614,7 +1614,8 @@ export default {
         summaryOutdatedNote: "{lots} 批 · {qty} 件",
         dateCodeFrom: "日期代碼由",
         dateCodeTo: "至",
-        dateCodeClear: "清除"
+        dateCodeClear: "清除",
+        exportExcel: "匯出 Excel"
       },
       appDownload: {
         title: "App 下載",

@@ -131,7 +131,12 @@ export interface StockSearchOptions {
   brands: string[];
   zones: string[];
   shelves: { code: string; zone: string | null }[];
-  locations: { orgId: number | null; subInventoryCode: string | null; description: string | null }[];
+  /** Filter values for the admin dropdowns: brands/zones/shelves are the
+   *  distinct values present in stock; locations are every org_info pair
+   *  within the allowed orgs (whether stocked or not), so the org/sub-inventory
+   *  filters can target locations that currently hold no stock. officeCode is
+   *  the org's org_info.office_code (the org dropdown label). */
+  locations: { orgId: number | null; subInventoryCode: string | null; description: string | null; officeCode: string | null }[];
 }
 
 export interface StockSearchResult {
@@ -320,9 +325,12 @@ export async function stockSearchSummary(db: AppDb, filters: StockSearchFilters 
 }
 
 /**
- * Distinct filter values present in the current stock, for the admin filter
- * dropdowns — options always reflect values that can actually match. Scoped
- * by the same allowed-org filter as searchStock.
+ * Filter values for the admin filter dropdowns. brands/zones/shelves are the
+ * distinct values present in the current stock (scoped by the same allowed-org
+ * filter as searchStock); locations come from org_info — every
+ * (org_id, secondary_inventory_name) pair within the allowed orgs, whether or
+ * not it holds stock — so the org/sub-inventory dropdowns always match the
+ * org_info master rather than whatever happens to be stocked.
  */
 export async function stockSearchOptions(db: AppDb): Promise<StockSearchOptions> {
   const brands = await queryAll<{ brand: string }>(
@@ -358,18 +366,18 @@ export async function stockSearchOptions(db: AppDb): Promise<StockSearchOptions>
       ORDER BY il.shelf_code
     `
   );
-  const locations = await queryAll<{ orgId: number | null; subInventoryCode: string | null; description: string | null }>(
+  const locations = await queryAll<{ orgId: number | null; subInventoryCode: string | null; description: string | null; officeCode: string | null }>(
     db,
     sql`
-      SELECT DISTINCT
-        il.org_id AS "orgId",
-        il.sub_inventory_code AS "subInventoryCode",
-        oi.subinv_description AS "description"
-      FROM inventory_lots il
-      LEFT JOIN org_info oi ON oi.org_id = il.org_id AND oi.secondary_inventory_name = il.sub_inventory_code
+      SELECT
+        oi.org_id AS "orgId",
+        oi.secondary_inventory_name AS "subInventoryCode",
+        oi.subinv_description AS "description",
+        oi.office_code AS "officeCode"
+      FROM org_info oi
       WHERE TRUE
-      ${allowedOrgFilter(sql`il.org_id`)}
-      ORDER BY il.org_id, il.sub_inventory_code
+      ${allowedOrgFilter(sql`oi.org_id`)}
+      ORDER BY oi.org_id, oi.secondary_inventory_name
     `
   );
   return {

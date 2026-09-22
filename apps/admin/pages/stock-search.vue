@@ -45,23 +45,36 @@ const supplierOptions = computed<SearchableSelectOption[]>(() =>
 const brandOptions = computed<SearchableSelectOption[]>(() =>
   (options.value?.brands ?? []).map((b) => ({ value: b, label: b }))
 );
-const orgOptions = computed<SearchableSelectOption[]>(() => {
-  const seen = new Set<number>();
+// org_id → dropdown label: org_info.office_code, falling back to the org id.
+const orgLabels = computed(() => {
+  const m = new Map<number, string>();
   for (const l of options.value?.locations ?? []) {
-    if (l.orgId !== null) seen.add(l.orgId);
+    if (l.orgId === null || m.has(l.orgId)) continue;
+    m.set(l.orgId, l.officeCode ?? String(l.orgId));
   }
-  return [...seen].sort((a, b) => a - b).map((o) => ({ value: String(o), label: String(o) }));
+  return m;
 });
+const orgOptions = computed<SearchableSelectOption[]>(() =>
+  [...orgLabels.value.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([o, label]) => ({ value: String(o), label }))
+);
+// Grouped by org (contiguous per backend ORDER BY org_id, code). The same
+// sub-inventory code can exist in several orgs — it appears once per org and
+// every occurrence shares the same checkbox state (the filter value is the
+// code alone).
 const subInventoryOptions = computed<SearchableSelectOption[]>(() => {
-  const byCode = new Map<string, string | null>();
+  const out: SearchableSelectOption[] = [];
   for (const l of options.value?.locations ?? []) {
-    if (!l.subInventoryCode) continue;
+    if (l.orgId === null || !l.subInventoryCode) continue;
     if (orgId.value.length && !orgId.value.includes(String(l.orgId))) continue;
-    if (!byCode.has(l.subInventoryCode)) byCode.set(l.subInventoryCode, l.description);
+    out.push({
+      value: l.subInventoryCode,
+      label: l.description ? `${l.subInventoryCode} — ${l.description}` : l.subInventoryCode,
+      group: orgLabels.value.get(l.orgId) ?? String(l.orgId),
+    });
   }
-  return [...byCode.entries()]
-    .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
-    .map(([code, desc]) => ({ value: code, label: desc ? `${code} — ${desc}` : code }));
+  return out;
 });
 const zoneOptions = computed<SearchableSelectOption[]>(() =>
   (options.value?.zones ?? []).map((z) => ({ value: z, label: z }))
@@ -287,6 +300,25 @@ async function search() {
   }
 }
 
+// Export the current search result (all lots, ignoring paging/grouping) as
+// .xlsx — same columns and labels as the lots table.
+async function exportExcel() {
+  if (!lotsRows.value.length) return;
+  const XLSX = await import("xlsx");
+  const cols = lotsColumnDefs.value;
+  const aoa = [
+    cols.map((c) => c.label),
+    ...lotsRows.value.map((l) =>
+      cols.map((c) => (c.accessor ? c.accessor(l) : (((l as Record<string, unknown>)[c.key] as string | number | null) ?? "")))
+    ),
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, t("admin.pages.stockSearch.lots"));
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  XLSX.writeFile(wb, `stock-search-${stamp}.xlsx`);
+}
+
 onMounted(() => {
   loadSuppliers();
   loadOptions();
@@ -425,6 +457,9 @@ const {
       <button class="btn btn-primary" :disabled="loading" @click="search">
         {{ $t("admin.common.search") }}
       </button>
+      <button class="btn" :disabled="loading || !lotsRows.length" @click="exportExcel">
+        {{ $t("admin.pages.stockSearch.exportExcel") }}
+      </button>
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
@@ -433,7 +468,7 @@ const {
     <p v-else-if="!searched" class="muted">{{ $t("admin.pages.stockSearch.hint") }}</p>
 
     <template v-else-if="result">
-      <h2 class="section-title">{{ $t("admin.pages.stockSearch.lots") }}</h2>
+      <h2 v-if="groupBy !== 'none'" class="section-title">{{ $t("admin.pages.stockSearch.lots") }}</h2>
       <template v-if="groupBy === 'none'">
         <DataTable
           :table="lotsTable"

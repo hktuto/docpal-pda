@@ -1617,7 +1617,8 @@ export default {
         summaryOutdatedNote: "{lots} lots · {qty} pcs",
         dateCodeFrom: "Date code from",
         dateCodeTo: "to",
-        dateCodeClear: "Clear"
+        dateCodeClear: "Clear",
+        exportExcel: "Export Excel"
       },
       appDownload: {
         title: "App Download",

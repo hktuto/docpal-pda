@@ -2,6 +2,9 @@
 export interface SearchableSelectOption {
   value: string;
   label: string;
+  /** Optional group label — options with the same group must be contiguous;
+   *  each run renders under a group header row. Omit for a flat list. */
+  group?: string;
 }
 
 // Searchable select dropdown with a type-to-filter search box.
@@ -60,6 +63,18 @@ const filtered = computed(() => {
   return props.options.filter(
     (o) => o.label.toLowerCase().includes(q) || o.value.toLowerCase().includes(q)
   );
+});
+
+// Contiguous runs of the same option.group, each rendered under a header row.
+const filteredGroups = computed<{ label: string | null; items: SearchableSelectOption[] }[]>(() => {
+  const groups: { label: string | null; items: SearchableSelectOption[] }[] = [];
+  for (const o of filtered.value) {
+    const label = o.group ?? null;
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) last.items.push(o);
+    else groups.push({ label, items: [o] });
+  }
+  return groups;
 });
 
 function toggle() {
@@ -123,22 +138,25 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocumentClick));
           {{ allLabel }}
           <span v-if="isAll" class="ssel-check">✓</span>
         </div>
-        <label
-          v-for="o in filtered"
-          :key="o.value"
-          class="ssel-item"
-          :class="{ selected: selectedSet.has(o.value) }"
-          @click="!multiple && pick(o.value)"
-        >
-          <input
-            v-if="multiple"
-            type="checkbox"
-            :checked="selectedSet.has(o.value)"
-            @change="pick(o.value)"
-          />
-          <span class="ssel-item-label">{{ o.label }}</span>
-          <span v-if="!multiple && selectedSet.has(o.value)" class="ssel-check">✓</span>
-        </label>
+        <template v-for="(g, gi) in filteredGroups" :key="gi">
+          <div v-if="g.label !== null" class="ssel-group">{{ g.label }}</div>
+          <label
+            v-for="o in g.items"
+            :key="o.value"
+            class="ssel-item"
+            :class="{ selected: selectedSet.has(o.value) }"
+            @click="!multiple && pick(o.value)"
+          >
+            <input
+              v-if="multiple"
+              type="checkbox"
+              :checked="selectedSet.has(o.value)"
+              @change="pick(o.value)"
+            />
+            <span class="ssel-item-label">{{ o.label }}</span>
+            <span v-if="!multiple && selectedSet.has(o.value)" class="ssel-check">✓</span>
+          </label>
+        </template>
         <div v-if="filtered.length === 0" class="ssel-item muted">{{ t("admin.common.noRecords") }}</div>
       </div>
     </div>
@@ -218,6 +236,14 @@ onBeforeUnmount(() => document.removeEventListener("click", onDocumentClick));
   white-space: nowrap;
   cursor: pointer;
   border-radius: 0.1875rem;
+}
+.ssel-group {
+  padding: 0.375rem 0.5rem 0.125rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #7b8794;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 .ssel-item:hover {
   background: #eef4f6;

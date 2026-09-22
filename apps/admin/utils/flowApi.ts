@@ -332,7 +332,7 @@ export interface StockSearchOptions {
   brands: string[];
   zones: string[];
   shelves: { code: string; zone: string | null }[];
-  locations: { orgId: number | null; subInventoryCode: string | null; description: string | null }[];
+  locations: { orgId: number | null; subInventoryCode: string | null; description: string | null; officeCode: string | null }[];
 }
 
 // ---- issues ----

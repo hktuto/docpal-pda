@@ -2,7 +2,7 @@ import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { sql } from "drizzle-orm";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
-import { queryGet, queryRun } from "./query.js";
+import { queryAll, queryGet, queryRun } from "./query.js";
 import { searchStock, stockSearchOptions, stockSearchSummary } from "./stocksearch.js";
 import { _resetFlowConfigForTests, _setOutdatedStockYearsForTests } from "../config.js";
 
@@ -372,7 +372,7 @@ test("orgId/subInventoryCode: any-of match on the lot's location pair", async ()
 
 // --- options (distinct filter values in stock) -------------------------------------
 
-test("options: distinct brands/zones/shelves/locations present in stock", async () => {
+test("options: distinct brands/zones/shelves in stock; locations = all org_info pairs", async () => {
   await reseed(client);
   const opts = await stockSearchOptions(client.db);
 
@@ -383,7 +383,16 @@ test("options: distinct brands/zones/shelves/locations present in stock", async 
     { code: "A-01-02", zone: "A" },
     { code: "A-02-01", zone: "A" },
   ]);
-  assert.deepEqual(opts.locations, [{ orgId: 2, subInventoryCode: "STORE1", description: "Store 1" }]);
+  // Every org_info pair (stocked or not — the seed's real sub-inventory
+  // master mostly holds no demo stock), same order as org_info sorted by
+  // (org_id, secondary_inventory_name).
+  const expected = await queryAll<{ orgId: number; subInventoryCode: string; description: string | null; officeCode: string | null }>(
+    client.db,
+    sql`SELECT org_id AS "orgId", secondary_inventory_name AS "subInventoryCode",
+               subinv_description AS "description", office_code AS "officeCode"
+        FROM org_info ORDER BY org_id, secondary_inventory_name`
+  );
+  assert.deepEqual(opts.locations, expected);
 });
 
 // --- summary (overall totals) --------------------------------------------------
