@@ -89,7 +89,7 @@ adminPartAvailabilityRoute.get("/part-demand", async (c) => {
       LEFT JOIN (
         SELECT picking_item_id, SUM(qty) AS qty FROM allocations GROUP BY picking_item_id
       ) alloc ON alloc.picking_item_id = pi.id
-      WHERE po.status IN ('pending', 'picking')
+      WHERE po.status IN ('pending', 'picking', 'allocated')
         AND (pi.part_no = ${partNo}
              OR (${wclItemNo} <> '' AND (
                   pi.part_no = ${wclItemNo}

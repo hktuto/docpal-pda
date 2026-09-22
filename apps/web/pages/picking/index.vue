@@ -150,6 +150,11 @@ const filterOpen = ref(false);
 const filterStatuses = ref<string[]>([]);
 const filterAllocation = ref<string[]>([]);
 
+// The PDA only ever shows confirmed work: statuses at/after `allocated`
+// (pending/skip/issue/shipped stay admin-only). An empty status filter
+// falls back to this set rather than "no filter".
+const PDA_VISIBLE_STATUSES = ["allocated", "picking", "finished"];
+
 const hasActiveFilter = computed(
   () => filterStatuses.value.length > 0 || filterAllocation.value.length > 0
 );
@@ -165,7 +170,7 @@ function onFilterApply(payload: { statuses: string[]; allocation: string[] }) {
 function listQuery(limit: number, offset: number): PickingOrderListQuery {
   const term = search.value.trim();
   return {
-    status: filterStatuses.value.length > 0 ? filterStatuses.value.join(",") : undefined,
+    status: (filterStatuses.value.length > 0 ? filterStatuses.value : PDA_VISIBLE_STATUSES).join(","),
     allocation: filterAllocation.value.length > 0 ? filterAllocation.value.join(",") : undefined,
     search: term || undefined,
     limit,

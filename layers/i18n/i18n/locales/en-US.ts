@@ -744,6 +744,8 @@ export default {
     },
     picking: {
       pending: "Pending",
+      allocated: "Allocated",
+      skip: "Skipped",
       picking: "Picking",
       finished: "Finished",
       issue: "Issue",

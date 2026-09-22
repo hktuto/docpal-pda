@@ -90,7 +90,7 @@ receivingRoute.get("/receiving-orders", async (c) => {
           JOIN allocations a ON a.picking_item_id = pi.id
           LEFT JOIN receiving_invoice_items rii2 ON rii2.id = a.receiving_invoice_item_id
           LEFT JOIN receiving_invoices inv2 ON inv2.id = rii2.receiving_invoice_id
-          WHERE po.status IN ('pending', 'picking')
+          WHERE po.status IN ('pending', 'picking', 'allocated')
             AND (a.receiving_order_id = ro.id OR inv2.receiving_order_id = ro.id)
         ) AS "pendingPickingOrders",
         ro.created_date AS "createdDate",

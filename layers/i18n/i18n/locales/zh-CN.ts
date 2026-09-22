@@ -744,6 +744,8 @@ export default {
     },
     picking: {
       pending: "待处理",
+      allocated: "已分配",
+      skip: "已跳过",
       picking: "拣货中",
       finished: "已完成",
       issue: "异常",

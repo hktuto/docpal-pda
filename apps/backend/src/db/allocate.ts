@@ -176,7 +176,7 @@ export interface AllocateSummary {
   perfectMatched: number;
 }
 
-async function loadDemands(dbOrTx: DbOrTx, partKeys?: string[]): Promise<DemandRow[]> {
+async function loadDemands(dbOrTx: DbOrTx, partKeys?: string[], includeOrderId?: string): Promise<DemandRow[]> {
   return queryAll<DemandRow>(
     dbOrTx,
     sql`SELECT pi.id AS "pickingItemId",
@@ -194,8 +194,11 @@ async function loadDemands(dbOrTx: DbOrTx, partKeys?: string[]): Promise<DemandR
           SELECT picking_item_id, SUM(qty)::int AS qty
           FROM picking_packages GROUP BY picking_item_id
         ) pkg ON pkg.picking_item_id = pi.id
-        WHERE po.status IN ('pending', 'picking')
-          AND (po.working_by IS NULL OR po.working_at IS NULL OR po.working_at < ${workLockExpiry()})
+        WHERE (
+            po.status IN ('pending', 'picking')
+            AND (po.working_by IS NULL OR po.working_at IS NULL OR po.working_at < ${workLockExpiry()})
+            ${includeOrderId ? sql`OR po.id = ${includeOrderId}` : sql``}
+          )
           AND pi.qty > COALESCE(pkg.qty, 0)
           ${partKeys && partKeys.length > 0 ? sql`AND ${inArray(sql`pi.part_no`, partKeys)}` : sql``}
         ORDER BY po.priority_seq, po.delivery_date NULLS LAST, po.order_no, pi.id`
@@ -329,7 +332,7 @@ async function refreshAllocationStatus(dbOrTx: DbOrTx): Promise<void> {
         SELECT picking_item_id, SUM(qty)::int AS qty
         FROM picking_packages GROUP BY picking_item_id
       ) pkg ON pkg.picking_item_id = pi.id
-      WHERE po2.status IN ('pending', 'picking')
+      WHERE po2.status IN ('pending', 'picking', 'allocated')
       GROUP BY po2.id
     ) agg
     WHERE po.id = agg.id
@@ -656,8 +659,10 @@ export async function allocateForReceivingOrder(db: AppDb, receivingOrderId: str
  * Scoped recompute for one picking order (admin Re-allocate): wipe/rebuild
  * every open demand sharing the order's part keys (parts never compete), in
  * global priority_seq order. 404 picking_order_not_found; 409 order_not_open
- * unless pending/picking; 409 lock_held when a PDA holds the order's work
- * lock (the recompute would skip it — the button must not pretend it ran).
+ * unless pending/picking/allocated; 409 lock_held when a PDA holds the order's
+ * work lock (the recompute would skip it — the button must not pretend it ran).
+ * An `allocated` order is force-included as a demand: this is the explicit
+ * repair path for a locked order whose rows went stale.
  */
 export async function allocateForPickingOrder(db: AppDb, pickingOrderId: string): Promise<ScopedAllocateResult> {
   const startedAt = Date.now();
@@ -676,7 +681,7 @@ export async function allocateForPickingOrder(db: AppDb, pickingOrderId: string)
         WHERE po.id = ${pickingOrderId}`
   );
   if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
-  if (order.status !== "pending" && order.status !== "picking") {
+  if (order.status !== "pending" && order.status !== "picking" && order.status !== "allocated") {
     throw new HTTPException(409, { message: "order_not_open" });
   }
   if (order.workingBy && order.workingAt && order.workingAt >= workLockExpiry()) {
@@ -692,7 +697,9 @@ export async function allocateForPickingOrder(db: AppDb, pickingOrderId: string)
       tx,
       sql`SELECT DISTINCT part_no AS "partKey" FROM picking_items WHERE picking_order_id = ${pickingOrderId}`
     );
-    return runScopedAllocation(tx, keyRows.map((r) => r.partKey), { scope: "picking-order", pickingOrderId }, startedAt);
+    return runScopedAllocation(tx, keyRows.map((r) => r.partKey), { scope: "picking-order", pickingOrderId }, startedAt, {
+      includeOrderId: pickingOrderId,
+    });
   });
 }
 
@@ -1044,7 +1051,8 @@ async function runScopedAllocation(
   tx: DbOrTx,
   partKeys: string[],
   scope: Record<string, unknown>,
-  startedAt: number
+  startedAt: number,
+  opts?: { includeOrderId?: string }
 ): Promise<ScopedAllocateResult> {
   const summary: AllocateSummary = {
     demands: 0,
@@ -1066,7 +1074,7 @@ async function runScopedAllocation(
     return { ...summary, partKeys, changed: false, durationMs: Date.now() - startedAt };
   }
 
-  const demands = await loadDemands(tx, partKeys);
+  const demands = await loadDemands(tx, partKeys, opts?.includeOrderId);
   summary.demands = demands.length;
 
   const allocationKey = (

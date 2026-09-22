@@ -628,7 +628,7 @@ export async function acquireWorkLock(db: AppDb, input: { orderId: string; actor
           FROM picking_orders WHERE id = ${input.orderId}`
     );
     if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
-    if (order.status !== "pending" && order.status !== "picking") {
+    if (order.status !== "pending" && order.status !== "picking" && order.status !== "allocated") {
       throw new HTTPException(409, { message: "picking_order_not_open" });
     }
     const expired = !order.workingBy || !order.workingAt || order.workingAt < workLockExpiry();
@@ -932,7 +932,9 @@ export async function getPickingOrderDetail(
   );
 
   const suggestedBox =
-    order.status === "pending" || order.status === "picking" ? await findSuggestedBox(db, order) : null;
+    order.status === "pending" || order.status === "picking" || order.status === "allocated"
+      ? await findSuggestedBox(db, order)
+      : null;
 
   return {
     ...order,
@@ -1213,12 +1215,12 @@ export async function scanPickingItem(
     }
     await tx.insert(inventoryTransactions).values(txnRows);
 
-    if (order.status === "pending") {
+    if (order.status === "pending" || order.status === "allocated") {
       await queryRun(tx, sql`UPDATE picking_orders SET status = 'picking', last_update_date = ${at} WHERE id = ${order.id}`);
       await logTransition(tx, {
         entityType: "picking_order",
         entityId: order.id,
-        fromState: "pending",
+        fromState: order.status,
         toState: "picking",
         actorId: input.actorId,
       });
@@ -1288,7 +1290,7 @@ export async function scanIntoShippingBox(
           SELECT picking_item_id, SUM(qty)::int AS qty
           FROM picking_packages GROUP BY picking_item_id
         ) pkg ON pkg.picking_item_id = pi.id
-        WHERE po.status IN ('pending', 'picking')
+        WHERE po.status IN ('pending', 'picking', 'allocated')
           AND (pi.part_no = ${barcode} OR p.wcl_item_no = ${barcode})
           AND pi.picked_qty < pi.qty
         ORDER BY a.created_date, a.id`
@@ -2125,7 +2127,7 @@ export async function reportPickingOrderIssues(
     const reportable: { entry: PickingIssueEntry; row: IssueOrderRow }[] = [];
     for (const id of ids) {
       const row = found.get(id);
-      if (row && (row.status === "pending" || row.status === "picking")) {
+      if (row && (row.status === "pending" || row.status === "picking" || row.status === "allocated")) {
         reportable.push({ entry: byOrder.get(id)!, row });
       }
     }
@@ -2226,8 +2228,11 @@ export async function resolvePickingOrderIssue(
   });
 }
 
-export const PICKING_ORDER_STATUSES = ["pending", "picking", "issue", "finished", "shipped"] as const;
-const OPEN_PICKING_STATUSES = new Set(["pending", "picking"]);
+export const PICKING_ORDER_STATUSES = ["pending", "allocated", "skip", "picking", "issue", "finished", "shipped"] as const;
+/** Statuses whose orders may hold allocation rows. The status override
+ *  releases allocations only when leaving this set (allocated→picking and
+ *  pending→allocated preserve them — the `allocated` lock is the point). */
+const ALLOCATION_HOLDING_STATUSES = new Set(["pending", "picking", "allocated"]);
 
 /** Admin status override (spec docs/superpowers/specs/2026-09-17-admin-picking-status-override-design.md).
  *  Sets the status to any of the 5 values with no transition guards. Side
@@ -2261,7 +2266,8 @@ export async function overridePickingOrderStatus(
     await assertActor(tx, input.actorId);
 
     const previousStatus = order.status;
-    const leavingOpen = OPEN_PICKING_STATUSES.has(previousStatus);
+    const leavingOpen =
+      ALLOCATION_HOLDING_STATUSES.has(previousStatus) && !ALLOCATION_HOLDING_STATUSES.has(status);
     const leavingShipped = previousStatus === "shipped";
     const enteringShipped = status === "shipped";
     const leavingIssue = previousStatus === "issue";

@@ -17,6 +17,23 @@
   caller's scope includes ANY sub-inventory of org 143 (unscoped callers see
   all transfers); orders with NULL type (freshly synced, no type
   yet) are always visible.
+- Order statuses `allocated` and `skip` (spec
+  `docs/superpowers/specs/2026-09-22-picking-allocated-skip-status-design.md`):
+  the full lifecycle is `pending → allocated → picking → finished → shipped`
+  with `issue`/`skip` as side states. `allocated` = an admin confirmed the
+  order's current allocations via the status override — the allocation engine
+  NEVER wipes/rebuilds the order's rows again (it is not in `loadDemands` at
+  all; the wipe sets derive from the demands, so both cores leave it
+  untouched). Partial allocations may be locked as-is; the repair path for a
+  stale lock is admin Re-allocate (`allocateForPickingOrder` accepts
+  `allocated` and force-includes the order as a demand). `skip` = never
+  allocatable, reference-only; entering it releases all allocations, and the
+  admin override back to `pending` (with reason) re-enters allocation. The
+  PDA picking list only shows `allocated`/`picking`/`finished` (client-side
+  default filter in `pages/picking/index.vue` — pending/skip/issue/shipped
+  stay admin-only). An `allocated` order is fully workable on the PDA: work
+  lock acquires, barcode lookup and suggested box include it, issue reporting
+  is allowed, and the first pick scan moves it to `picking`.
 - List picking orders with a status filter and text search (both
   server-side, paged 50 at a time); multi-select batch issue reporting.
 - Show picking order detail as one nested read: order (incl. issue fields),
@@ -119,7 +136,7 @@
   `docs/superpowers/specs/2026-09-14-admin-allocation-buttons-design.md`):
   "Allocate all" on the admin picking-order list page awaits the full
   `allocateAll` via `POST /admin/allocation/run`; "Re-allocate" on the admin
-  picking-order detail page (visible while pending/picking) awaits
+  picking-order detail page (visible while pending/picking/allocated) awaits
   `POST /admin/picking-orders/:id/reallocate` — a recompute scoped to that
   order's part keys (`allocateForPickingOrder`), which also rebuilds sibling
   orders sharing a part and 409s on a live work lock (`lock_held` with the
@@ -200,10 +217,13 @@
   "Set status" over the multi-selectable list page, both driving
   `PATCH /admin/picking-orders/:id/status` (`overridePickingOrderStatus` in
   `apps/backend/src/db/picking.ts`). The status can be set to any of
-  pending/picking/issue/finished/shipped with NO transition guards; a live
-  PDA work lock is force-cleared (the override "steals" it), leaving open
-  releases ALL the order's leftover allocations (incl. manual pins) with
-  RESERVE-release ledger rows and zeroes `picking_items.allocated_qty`,
+  pending/allocated/skip/picking/issue/finished/shipped with NO transition
+  guards; a live PDA work lock is force-cleared (the override "steals" it),
+  leaving an allocation-holding status (pending/picking/allocated) for a
+  non-holding one releases ALL the order's leftover allocations (incl.
+  manual pins) with RESERVE-release ledger rows and zeroes
+  `picking_items.allocated_qty` (moving between holding statuses — e.g.
+  `pending → allocated`, the lock action — preserves them),
   leaving `shipped` clears `shipped_at`/`shipped_by` (entering stamps them),
   leaving `issue` clears the issue fields. Same-status calls are no-ops
   (`changed: false`, no audit row). On change: one tx writes the status +
@@ -361,6 +381,7 @@
 - `docs/superpowers/specs/2026-07-23-picking-priority-allocation-design.md`
 - `docs/superpowers/specs/2026-07-29-whole-box-picking-claim-design.md`
 - `docs/superpowers/specs/2026-09-11-user-subinventory-scope-design.md`
+- `docs/superpowers/specs/2026-09-22-picking-allocated-skip-status-design.md`
 - `docs/superpowers/plans/2026-07-23-picking-priority-allocation.md`
 - `docs/superpowers/plans/2026-07-12-picking-execution.md`
 - `docs/superpowers/plans/2026-07-18-picking-scan-session.md`

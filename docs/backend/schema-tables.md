@@ -97,6 +97,7 @@ Country lookup: short code → display name (destination country, COO, etc.).
 | id | text PK | Row id (UUID v7) |
 | code | text NOT NULL UNIQUE | ISO 3166-1 alpha-2 code, e.g. HK, CN, JP |
 | name | text NOT NULL | Country display name |
+| short_code | text | Warehouse-editable single char used by the date-code display template's `[coo_short]`/`[cow_short]` placeholders (spec 2026-09-22-coo-cow-short-code-design.md); seeded/backfilled as the first letter of `code` (CN→C) |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
@@ -370,13 +371,16 @@ upstream database — the sync/dedup key is the caller-supplied UUID `id`
 | issue_reported_at | timestamp | When the issue was reported |
 | issue_reported_by | text FK → users(id) | User who reported the issue |
 | status | text NOT NULL DEFAULT 'pending' | Order status |
-| allocation_status | text NOT NULL DEFAULT 'unallocated' | Order-level allocation summary: `unallocated` / `partial` / `allocated` — recomputed at the end of every `allocateAll` tx for `pending`/`picking` orders from Σ `allocated_qty` vs Σ open (`qty` − Σ `picking_packages.qty`); `allocated` includes the fully-picked (Σ open = 0) edge; `issue`/`finished`/`shipped` keep their last value |
+| allocation_status | text NOT NULL DEFAULT 'unallocated' | Order-level allocation summary: `unallocated` / `partial` / `allocated` — recomputed at the end of every `allocateAll` tx for `pending`/`picking`/`allocated` orders from Σ `allocated_qty` vs Σ open (`qty` − Σ `picking_packages.qty`); `allocated` includes the fully-picked (Σ open = 0) edge; `skip`/`issue`/`finished`/`shipped` keep their last value |
 | shipped_at | timestamp | When the order was marked shipped |
 | shipped_by | text FK → users(id) | User who marked the order shipped |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
-Note: status values `pending` | `picking` | `issue` | `finished` | `shipped`;
+Note: status values `pending` | `allocated` | `skip` | `picking` | `issue` | `finished` | `shipped`
+(`allocated` = operator-confirmed allocation lock, excluded from recompute; `skip` = never
+allocatable, reference-only — spec
+`docs/superpowers/specs/2026-09-22-picking-allocated-skip-status-design.md`);
 index on `status`.
 
 ## picking_items

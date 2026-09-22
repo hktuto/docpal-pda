@@ -543,7 +543,7 @@ const {
           {{ $t("admin.pages.pickingOrders.downloadPickingList") }}
         </button>
         <button
-          v-if="order && (order.status === 'pending' || order.status === 'picking')"
+          v-if="order && (order.status === 'pending' || order.status === 'picking' || order.status === 'allocated')"
           class="btn"
           :disabled="reallocating"
           @click="reallocate"
@@ -551,7 +551,7 @@ const {
           {{ reallocating ? $t("admin.common.saving") : $t("admin.pages.pickingOrders.reallocate") }}
         </button>
         <button
-          v-if="order && (order.status === 'pending' || order.status === 'picking')"
+          v-if="order && (order.status === 'pending' || order.status === 'picking' || order.status === 'allocated')"
           class="btn"
           @click="openReportModal"
         >

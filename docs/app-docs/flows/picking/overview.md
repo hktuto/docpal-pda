@@ -8,7 +8,10 @@ Use the Picking flow when a picking order is ready and stock has been allocated.
 
 ## Concept
 
-1. The operator opens the Picking list.
+1. The operator opens the Picking list. Only confirmed work appears here —
+   orders an admin has marked `allocated`, plus orders already `picking` or
+   `finished` (pending/skipped/issue/shipped orders are managed in the admin
+   console).
 
    ![Picking list](./assets/picking-list.png)
 

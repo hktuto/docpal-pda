@@ -30,7 +30,7 @@ export const pickingOrders = pgTable(
     issueRemark: text("issue_remark"),
     issueReportedAt: timestamp("issue_reported_at", { mode: "date" }),
     issueReportedBy: text("issue_reported_by").references(() => users.id),
-    status: text("status").notNull().default("pending"), // pending | picking | issue | finished | shipped
+    status: text("status").notNull().default("pending"), // pending | allocated | skip | picking | issue | finished | shipped
     // Allocation coverage of the order's open items, maintained by allocateAll:
     // unallocated | partial | allocated (Σ allocated_qty vs Σ open qty).
     allocationStatus: text("allocation_status").notNull().default("unallocated"),

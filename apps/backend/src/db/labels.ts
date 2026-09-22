@@ -68,7 +68,7 @@ export async function getLabelsData(db: DbOrTx): Promise<LabelsData> {
     sql`SELECT DISTINCT pi.part_no AS "partNo", po.order_no AS "orderNo"
         FROM picking_items pi
         JOIN picking_orders po ON po.id = pi.picking_order_id
-        WHERE po.status IN ('pending', 'picking')
+        WHERE po.status IN ('pending', 'picking', 'allocated')
         ORDER BY po.order_no`
   );
   const refsByPart = new Map<string, string[]>();
@@ -233,7 +233,7 @@ export async function getLabelsData(db: DbOrTx): Promise<LabelsData> {
         LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
         LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
         LEFT JOIN parts p ON p.wcl_item_no = pi.part_no
-        WHERE po.status IN ('pending', 'picking') AND a.qty > 0
+        WHERE po.status IN ('pending', 'picking', 'allocated') AND a.qty > 0
         ORDER BY po.priority_seq, po.order_no, pi.line_number NULLS LAST, a.id`
   );
   const pickLabels: LabelsData["pickLabels"] = allocs.map((a) => ({

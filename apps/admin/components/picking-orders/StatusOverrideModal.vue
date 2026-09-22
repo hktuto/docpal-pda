@@ -21,8 +21,8 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 
-const STATUSES = ["pending", "picking", "finished", "issue", "shipped"];
-const OPEN_STATUSES = new Set(["pending", "picking"]);
+const STATUSES = ["pending", "allocated", "skip", "picking", "finished", "issue", "shipped"];
+const OPEN_STATUSES = new Set(["pending", "picking", "allocated"]);
 
 const statusOptions = computed<SearchableSelectOption[]>(() =>
   STATUSES.map((s) => ({ value: s, label: t(`status.picking.${s}`) }))

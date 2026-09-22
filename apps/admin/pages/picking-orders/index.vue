@@ -13,7 +13,7 @@ const orderTypes = ref<string[]>([]);
 const search = ref("");
 const selected = ref<Set<string>>(new Set());
 
-const STATUSES = ["pending", "picking", "finished", "issue", "shipped"];
+const STATUSES = ["pending", "allocated", "skip", "picking", "finished", "issue", "shipped"];
 const ORDER_TYPES = ["invoice", "tn"];
 
 const statusOptions = computed<SearchableSelectOption[]>(() =>

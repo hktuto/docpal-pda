@@ -186,7 +186,7 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   - `POST /picking-orders/report-issues` `{entries:[{pickingOrderId,
     reason, qty?, packSize?, note?, remark?}]}` → `{reported[], skipped[]}` —
     per-order issue fields + `issue` status + transition log; unknown ids and
-    non-pending/picking orders are skipped. Emits `picking_order.issue_reported`.
+    non-pending/picking/allocated orders are skipped. Emits `picking_order.issue_reported`.
   - `POST /picking-orders/:id/resolve-issue` `{resolutionNote?}` →
     `{id, orderNo, status}` — 409 `picking_order_no_open_issue` unless the order
     is in `issue`; returns it to `pending`, clears the `issue_*` columns,
