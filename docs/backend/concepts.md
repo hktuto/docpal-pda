@@ -116,6 +116,13 @@ Selection rules (confirmed with the business):
   as-is; spec
   `docs/superpowers/specs/2026-09-03-picking-from-subinventory-orgs-design.md`).
 - **FIFO** — oldest `date_code` first (NULLS LAST).
+- **Dangling shelves** — shelf-stock sources exclude lots whose `shelf_code`
+  is not in `shelves`: upstream sync writes business tables with the
+  replication role, which bypasses the `inventory_lots.shelf_code → shelves`
+  FK, and any later ordinary UPDATE on such a row fails the FK check. The
+  engine neither reads those lots as sources nor applies `allocated_qty`
+  counter updates to them (the counter UPDATE carries the same shelf-exists
+  guard).
 
 > Implementation: `apps/backend/src/db/allocate.ts` (`allocateAll`) — full
 > idempotent recompute (wipes and rebuilds open items' allocations with

@@ -233,6 +233,10 @@ async function loadLotSources(dbOrTx: DbOrTx, d: DemandRow): Promise<LotRow[]> {
                           WHERE sm_d.org_id = ${d.orgId} AND upper(sm_d.code) = upper(${d.subInventoryCode})
                             AND sm_s.org_id = il.org_id AND upper(sm_s.code) = upper(il.sub_inventory_code)))
           AND il.total_qty - il.allocated_qty > 0
+          -- Upstream sync can write lots whose shelf_code is not in shelves
+          -- (replication-role writes bypass the FK); any UPDATE on such a row
+          -- then fails the FK check, so exclude them from allocation sources.
+          AND (il.shelf_code IS NULL OR EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = il.shelf_code))
         ORDER BY il.date_code ASC NULLS LAST, il.id`
   );
 }
@@ -441,7 +445,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
     for (const [lotId, delta] of lotDelta) {
       if (delta === 0) continue;
       await tx.execute(
-        sql`UPDATE inventory_lots SET allocated_qty = allocated_qty + ${delta} WHERE id = ${lotId}`
+        sql`UPDATE inventory_lots il SET allocated_qty = allocated_qty + ${delta} WHERE il.id = ${lotId} AND (il.shelf_code IS NULL OR EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = il.shelf_code))`
       );
     }
     lotDelta.clear();
@@ -549,7 +553,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
     for (const [lotId, delta] of lotDelta) {
       if (delta === 0) continue;
       await tx.execute(
-        sql`UPDATE inventory_lots SET allocated_qty = allocated_qty + ${delta} WHERE id = ${lotId}`
+        sql`UPDATE inventory_lots il SET allocated_qty = allocated_qty + ${delta} WHERE il.id = ${lotId} AND (il.shelf_code IS NULL OR EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = il.shelf_code))`
       );
     }
     if (txnRows.length > 0) {
@@ -1142,7 +1146,7 @@ async function runScopedAllocation(
     // queries see availability net of the removed reservations.
     for (const [lotId, delta] of lotDelta) {
       if (delta === 0) continue;
-      await tx.execute(sql`UPDATE inventory_lots SET allocated_qty = allocated_qty + ${delta} WHERE id = ${lotId}`);
+      await tx.execute(sql`UPDATE inventory_lots il SET allocated_qty = allocated_qty + ${delta} WHERE il.id = ${lotId} AND (il.shelf_code IS NULL OR EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = il.shelf_code))`);
     }
     lotDelta.clear();
 
@@ -1237,7 +1241,7 @@ async function runScopedAllocation(
 
     for (const [lotId, delta] of lotDelta) {
       if (delta === 0) continue;
-      await tx.execute(sql`UPDATE inventory_lots SET allocated_qty = allocated_qty + ${delta} WHERE id = ${lotId}`);
+      await tx.execute(sql`UPDATE inventory_lots il SET allocated_qty = allocated_qty + ${delta} WHERE il.id = ${lotId} AND (il.shelf_code IS NULL OR EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = il.shelf_code))`);
     }
     if (txnRows.length > 0) {
       await tx.insert(inventoryTransactions).values(txnRows);
