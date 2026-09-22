@@ -2,7 +2,7 @@ import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { sql } from "drizzle-orm";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
-import { allocateAll, allocateForReceivingOrder, parseDateCodeRule, resolveDemandLocation, scheduleAllocateAll, type DemandRow } from "./allocate.js";
+import { allocateAll, allocateForPickingOrder, allocateForReceivingOrder, parseDateCodeRule, resolveDemandLocation, scheduleAllocateAll, type DemandRow } from "./allocate.js";
 import { confirmReceivingArrival } from "./receiving.js";
 import {
   _setPickingAllocationForTests,
@@ -407,10 +407,151 @@ test("allocateForReceivingOrder: scoped recompute touches only the order's part 
     0
   );
 
-  // idempotent re-run: same allocation set → changed = false
+  // idempotent re-run: the exact-fit lines (500==500, 800==800) are now
+  // pinned manual rows that survive the wipe, the auto rows rebuild to the
+  // same set → changed = false, and no new perfect-match pins are created
   const s2 = await allocateForReceivingOrder(client.db, receivingOrderId);
   assert.equal(s2.changed, false);
-  assert.equal(s2.allocationsCreated, s.allocationsCreated);
+  assert.equal(s2.perfectMatched, 0);
+});
+
+// --- perfect-match pre-pass (scoped runs only; spec
+// docs/superpowers/specs/2026-09-22-allocation-perfect-match-design.md) -------
+
+const PM_PART = "PERFECT-MATCH-PART";
+const PM_HI1_ORDER = "00000000-0000-4000-8000-000000000101";
+const PM_HI1_ITEM = "00000000-0000-4000-8000-000000000102";
+const PM_HI2_ORDER = "00000000-0000-4000-8000-000000000103";
+const PM_HI2_ITEM = "00000000-0000-4000-8000-000000000104";
+const PM_LO_ORDER = "00000000-0000-4000-8000-000000000105";
+const PM_LO_ITEM = "00000000-0000-4000-8000-000000000106";
+
+async function insertPickingDemand(
+  orderId: string,
+  itemId: string,
+  orderNo: string,
+  seq: number,
+  partNo: string,
+  qty: number,
+  lineId: number
+) {
+  await client.db.execute(sql`
+    INSERT INTO picking_orders (id, order_no, customer_code, org_id, sub_inventory_code, status, priority_seq, created_date, last_update_date)
+    VALUES (${orderId}, ${orderNo}, 'ACME', 2, 'STORE1', 'pending', ${seq}, now(), now())`);
+  await client.db.execute(sql`
+    INSERT INTO picking_items (id, picking_order_id, part_no, qty, line_id, line_number, shipment_number, created_date, last_update_date)
+    VALUES (${itemId}, ${orderId}, ${partNo}, ${qty}, ${lineId}, 1, 1, now(), now())`);
+}
+
+// 4 boxes × 2500 of PM_PART in receiving order 100003 (nothing else stocks
+// the part); demands 4000 (seq 1) / 6000 (seq 2) / exactly 10000 (seq 3).
+async function setupPerfectMatchWorld(): Promise<{ receivingOrderId: string }> {
+  await reseed(client);
+  const receivingOrderId = await idOf(sql`SELECT id FROM receiving_orders WHERE batch_no = '100003'`);
+  await client.db.execute(sql`DELETE FROM picking_orders`);
+  const invoiceId = await idOf(sql`SELECT id FROM receiving_invoices WHERE receiving_order_id = ${receivingOrderId}`);
+  for (let i = 1; i <= 4; i++) {
+    await client.db.execute(sql`
+      INSERT INTO receiving_invoice_items (id, receiving_invoice_id, part_no, wcl_item_no, po_no, po_line, line_qty, ctn_no, date_code, org_id, sub_inventory_code)
+      VALUES (${`00000000-0000-4000-8000-0000000002${String(i).padStart(2, "0")}`}, ${invoiceId}, ${PM_PART}, ${PM_PART}, 'PO-PM-1', ${String(i)}, 2500, ${`PM-B${i}`}, '2610', 2, 'STORE1')`);
+  }
+  await insertPickingDemand(PM_HI1_ORDER, PM_HI1_ITEM, "TEST-PM-HI1", 1, PM_PART, 4000, 9101);
+  await insertPickingDemand(PM_HI2_ORDER, PM_HI2_ITEM, "TEST-PM-HI2", 2, PM_PART, 6000, 9102);
+  await insertPickingDemand(PM_LO_ORDER, PM_LO_ITEM, "TEST-PM-LO", 3, PM_PART, 10000, 9103);
+  const operator = await client.db.execute(sql`SELECT id FROM users WHERE username = 'operator'`);
+  await confirmReceivingArrival(client.db, receivingOrderId, (operator[0] as any).id as string);
+  return { receivingOrderId };
+}
+
+test("runScopedAllocation: whole-order group match pins all boxes to the exact-fit demand", async () => {
+  const { receivingOrderId } = await setupPerfectMatchWorld();
+  const s = await allocateForReceivingOrder(client.db, receivingOrderId);
+  assert.equal(s.perfectMatched, 1);
+
+  // the exact-fit (lowest-priority) demand got all 4 boxes as pinned rows
+  const lo = await client.db.execute(
+    sql`SELECT qty, manual, receiving_invoice_item_id AS rii FROM allocations WHERE picking_item_id = ${PM_LO_ITEM}`
+  );
+  assert.equal(lo.length, 4);
+  assert.ok(lo.every((r: any) => r.manual === true && Number(r.qty) === 2500 && r.rii));
+  const loItem = await client.db.execute(sql`SELECT allocated_qty FROM picking_items WHERE id = ${PM_LO_ITEM}`);
+  assert.equal(Number((loItem[0] as any).allocated_qty), 10000);
+
+  // the higher-priority partial demands got nothing from the exact-fit source
+  for (const itemId of [PM_HI1_ITEM, PM_HI2_ITEM]) {
+    const n = await client.db.execute(sql`SELECT count(*)::int AS c FROM allocations WHERE picking_item_id = ${itemId}`);
+    assert.equal(Number((n[0] as any).c), 0);
+  }
+
+  // idempotent re-run: the pins already cover the demand → no new rows, no change
+  const s2 = await allocateForReceivingOrder(client.db, receivingOrderId);
+  assert.equal(s2.changed, false);
+  assert.equal(s2.allocationsCreated, 0);
+});
+
+test("perfect-match pins survive allocateAll", async () => {
+  const { receivingOrderId } = await setupPerfectMatchWorld();
+  await allocateForReceivingOrder(client.db, receivingOrderId);
+
+  // the full-fleet recompute preserves the pinned rows and cannot hand the
+  // pinned stock to the higher-priority demands
+  const s = await allocateAll(client.db);
+  assert.equal(s.perfectMatched, 0);
+  const lo = await client.db.execute(sql`SELECT qty, manual FROM allocations WHERE picking_item_id = ${PM_LO_ITEM}`);
+  assert.equal(lo.length, 4);
+  assert.ok(lo.every((r: any) => r.manual === true && Number(r.qty) === 2500));
+  for (const itemId of [PM_HI1_ITEM, PM_HI2_ITEM]) {
+    const n = await client.db.execute(sql`SELECT count(*)::int AS c FROM allocations WHERE picking_item_id = ${itemId}`);
+    assert.equal(Number((n[0] as any).c), 0);
+  }
+});
+
+test("runScopedAllocation: single-row lot match beats a higher-priority partial demand", async () => {
+  await reseed(client);
+  await client.db.execute(sql`DELETE FROM picking_orders`);
+  const ORDER_HI = "00000000-0000-4000-8000-000000000111";
+  const ITEM_HI = "00000000-0000-4000-8000-000000000112";
+  const ORDER_LO = "00000000-0000-4000-8000-000000000113";
+  const ITEM_LO = "00000000-0000-4000-8000-000000000114";
+  // LOT_18 holds exactly 1000 of RK73H1JTTD1002F
+  await insertPickingDemand(ORDER_HI, ITEM_HI, "TEST-PM-HI", 1, "RK73H1JTTD1002F", 600, 9201);
+  await insertPickingDemand(ORDER_LO, ITEM_LO, "TEST-PM-LO", 2, "RK73H1JTTD1002F", 1000, 9202);
+
+  const s = await allocateForPickingOrder(client.db, ORDER_LO);
+  assert.equal(s.perfectMatched, 1);
+  const lo = await client.db.execute(
+    sql`SELECT inventory_lot_id AS lot, qty, manual FROM allocations WHERE picking_item_id = ${ITEM_LO}`
+  );
+  assert.deepEqual(lo.map((r: any) => [r.lot, Number(r.qty), r.manual]), [[LOT_18, 1000, true]]);
+  const hi = await client.db.execute(sql`SELECT count(*)::int AS c FROM allocations WHERE picking_item_id = ${ITEM_HI}`);
+  assert.equal(Number((hi[0] as any).c), 0);
+  // the pin is counted in the lot's allocated_qty
+  const lot = await client.db.execute(sql`SELECT allocated_qty FROM inventory_lots WHERE id = ${LOT_18}`);
+  assert.equal(Number((lot[0] as any).allocated_qty), 1000);
+});
+
+test("runScopedAllocation: no exact match keeps the priority+FIFO split", async () => {
+  await reseed(client);
+  await client.db.execute(sql`DELETE FROM picking_orders`);
+  const ORDER_HI = "00000000-0000-4000-8000-000000000121";
+  const ITEM_HI = "00000000-0000-4000-8000-000000000122";
+  const ORDER_LO = "00000000-0000-4000-8000-000000000123";
+  const ITEM_LO = "00000000-0000-4000-8000-000000000124";
+  await insertPickingDemand(ORDER_HI, ITEM_HI, "TEST-PM-HI", 1, "RK73H1JTTD1002F", 400, 9301);
+  await insertPickingDemand(ORDER_LO, ITEM_LO, "TEST-PM-LO", 2, "RK73H1JTTD1002F", 600, 9302);
+
+  const s = await allocateForPickingOrder(client.db, ORDER_LO);
+  assert.equal(s.perfectMatched, 0);
+  const rows = await client.db.execute(
+    sql`SELECT picking_item_id AS item, qty, manual FROM allocations WHERE inventory_lot_id = ${LOT_18} ORDER BY qty`
+  );
+  assert.deepEqual(
+    rows.map((r: any) => [r.item, Number(r.qty), r.manual]),
+    [
+      [ITEM_HI, 400, false],
+      [ITEM_LO, 600, false],
+    ]
+  );
 });
 
 // --- allocation_status (maintained by allocateAll's aggregate refresh) ----------

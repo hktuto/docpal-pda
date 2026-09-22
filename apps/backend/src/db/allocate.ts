@@ -25,6 +25,14 @@ import { logTransition, recomputeLot, recomputePickingItem } from "./picking.js"
 // Rules (confirmed with the business):
 //   - Order: demands are allocated in picking_orders.priority_seq order
 //     (admin-reorderable via POST /picking-orders/reorder).
+//   - Perfect match (scoped runs only — spec
+//     docs/superpowers/specs/2026-09-22-allocation-perfect-match-design.md):
+//     before the priority loop, runScopedAllocation pins exact-fit
+//     (demand, source) pairs — a whole receiving order's boxes, or a single
+//     lot / box / order-level row whose available == the demand's remaining
+//     open qty — as MANUAL allocations, so priority never splits an
+//     exact-fit source and the pins survive every later wipe. allocateAll
+//     does not run this pass.
 //   - Location: the picking order's (org_id, sub_inventory_code) pair must
 //     match the source's pair — lots match on their own pair, receiving
 //     sources on the receiving ITEM's pair (receiving_invoice_items.org_id +
@@ -163,6 +171,9 @@ export interface AllocateSummary {
   allocationsRemoved: number;
   /** Receiving source rows skipped because the item's location pair is NULL. */
   skippedReceivingSources: number;
+  /** Demands that received an exact-fit pinned allocation in the scoped
+   *  perfect-match pre-pass (always 0 in allocateAll). */
+  perfectMatched: number;
 }
 
 async function loadDemands(dbOrTx: DbOrTx, partKeys?: string[]): Promise<DemandRow[]> {
@@ -336,6 +347,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
       allocationsCreated: 0,
       allocationsRemoved: 0,
       skippedReceivingSources: 0,
+      perfectMatched: 0,
     };
     const demands = await loadDemands(tx);
     summary.demands = demands.length;
@@ -604,9 +616,10 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
 //     order's part keys, with 404/409 guards before the tx.
 // allocateAll stays the background path for cross-part changes (order
 // create/cancel, priority reorder, picks, sync batches).
-// NOTE: runScopedAllocation mirrors allocateAll on purpose (the fleet-wide
-// engine was left untouched); keep the two in sync when the allocation rules
-// change.
+// NOTE: runScopedAllocation mirrors allocateAll's wipe/rebuild mechanics on
+// purpose — keep those in sync when the allocation rules change — but
+// deliberately diverges with the perfect-match pre-pass (file-header
+// comment); allocateAll is the simple priority+FIFO baseline.
 // ---------------------------------------------------------------------------
 
 export interface ScopedAllocateResult extends AllocateSummary {
@@ -1040,6 +1053,7 @@ async function runScopedAllocation(
     allocationsCreated: 0,
     allocationsRemoved: 0,
     skippedReceivingSources: 0,
+    perfectMatched: 0,
   };
 
   if (partKeys.length === 0) {
@@ -1067,6 +1081,9 @@ async function runScopedAllocation(
   const afterKeys: string[] = [];
   const txnRows: (typeof inventoryTransactions.$inferInsert)[] = [];
   const lotDelta = new Map<string, number>();
+  // Rows pinned by the perfect-match pre-pass (manual rows are excluded from
+  // the before/after keys, so they need their own change signal).
+  let perfectPinsCreated = 0;
 
   if (demands.length > 0) {
     const itemIds = demands.map((d) => d.pickingItemId);
@@ -1149,6 +1166,120 @@ async function runScopedAllocation(
       await tx.execute(sql`UPDATE inventory_lots il SET allocated_qty = allocated_qty + ${delta} WHERE il.id = ${lotId} AND (il.shelf_code IS NULL OR EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = il.shelf_code))`);
     }
     lotDelta.clear();
+
+    // ---- Perfect-match pre-pass (spec
+    // docs/superpowers/specs/2026-09-22-allocation-perfect-match-design.md) ----
+    // Scoped runs only: when a demand's remaining open qty EXACTLY equals a
+    // source's availability, pin that source to the demand with manual
+    // allocation rows — the priority+FIFO loop below (and every later
+    // allocateAll wipe) must not split an exact-fit source across
+    // higher-priority partial demands. Pass A (a whole receiving order's
+    // boxes == remaining) runs for all demands before pass B (a single row
+    // == remaining) so a big group match is not fragmented by a smaller
+    // single-row match from an earlier-priority demand. allocateAll does
+    // not run this pass.
+    const perfect: { d: DemandRow; remaining: number }[] = [];
+    for (const raw of demands) {
+      const d = resolveDemandLocation(raw);
+      const remaining = Math.max(0, d.openQty - (manualQtyByItem.get(d.pickingItemId) ?? 0));
+      if (remaining > 0) perfect.push({ d, remaining });
+    }
+
+    const pinPerfectMatch = async (
+      item: DemandRow,
+      pieces: { qty: number; lotId?: string; recv?: ReceivingRow }[]
+    ): Promise<void> => {
+      let pinned = 0;
+      for (const p of pieces) {
+        const id = newId();
+        await tx.insert(allocations).values({
+          id,
+          pickingItemId: item.pickingItemId,
+          inventoryLotId: p.lotId ?? null,
+          receivingInvoiceItemId: p.recv?.ctnNo ? p.recv.receivingInvoiceItemId : null,
+          receivingOrderId: p.recv && !p.recv.ctnNo ? p.recv.receivingOrderId : null,
+          qty: p.qty,
+          manual: true,
+        });
+        summary.allocationsCreated += 1;
+        perfectPinsCreated += 1;
+        pinned += p.qty;
+        if (p.lotId) {
+          // Apply immediately so later demands' loadLotSources see the
+          // reservation (receiving pins are netted by loadReceivingSources'
+          // manual-aware locked_* subqueries — both visible in the same tx).
+          await tx.execute(sql`UPDATE inventory_lots il SET allocated_qty = allocated_qty + ${p.qty} WHERE il.id = ${p.lotId} AND (il.shelf_code IS NULL OR EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = il.shelf_code))`);
+        }
+        txnRows.push({
+          id: newId(),
+          inventoryLotId: p.lotId ?? null,
+          partNo: item.partNo,
+          shelfCode: null,
+          boxId: p.recv?.ctnNo ?? null,
+          txnType: "RESERVE",
+          qtyType: "reserved",
+          qtyDelta: p.qty,
+          dateCode: p.recv?.dateCode ?? null,
+          referenceType: "allocation",
+          referenceId: id,
+          receivingInvoiceItemId: p.recv?.ctnNo ? p.recv.receivingInvoiceItemId : null,
+          txnReason: "recompute: perfect match",
+          txnAt: now(),
+        });
+      }
+      summary.perfectMatched += 1;
+      // Pre-subtract like existing manual pins: the main loop skips the
+      // item's source scans (remaining 0) and only refreshes its
+      // allocated_qty cache.
+      manualQtyByItem.set(item.pickingItemId, (manualQtyByItem.get(item.pickingItemId) ?? 0) + pinned);
+    };
+
+    // Pass A — group match: ALL box rows of one receiving order for the part
+    // sum exactly to the remaining open qty → pin every box of that order.
+    if (allowDockStock()) {
+      for (const item of perfect) {
+        const rows = await loadReceivingSources(tx, item.d);
+        // NULL-pair rows are excluded here without counting — the summary
+        // counter reflects the main loop's encounters only.
+        const groups = new Map<string, { sum: number; rows: ReceivingRow[] }>();
+        for (const r of rows) {
+          if (r.orgId === null || r.subInventoryCode === null || !r.ctnNo) continue;
+          const g = groups.get(r.receivingOrderId) ?? { sum: 0, rows: [] };
+          g.sum += r.available;
+          g.rows.push(r);
+          groups.set(r.receivingOrderId, g);
+        }
+        for (const g of groups.values()) {
+          if (g.sum === item.remaining) {
+            await pinPerfectMatch(item.d, g.rows.map((r) => ({ qty: r.available, recv: r })));
+            item.remaining = 0;
+            break;
+          }
+        }
+      }
+    }
+
+    // Pass B — single-row match: one lot / one box / one order-level pool
+    // row exactly equals the remaining open qty. Lots first (the main
+    // loop's source priority), then dock stock.
+    for (const item of perfect) {
+      if (item.remaining <= 0) continue;
+      const lots = await loadLotSources(tx, item.d);
+      const lotHit = lots.find((l) => l.available === item.remaining);
+      if (lotHit) {
+        await pinPerfectMatch(item.d, [{ qty: lotHit.available, lotId: lotHit.lotId }]);
+        item.remaining = 0;
+        continue;
+      }
+      if (allowDockStock()) {
+        const rows = await loadReceivingSources(tx, item.d);
+        const hit = rows.find((r) => r.orgId !== null && r.subInventoryCode !== null && r.available === item.remaining);
+        if (hit) {
+          await pinPerfectMatch(item.d, [{ qty: hit.available, recv: hit }]);
+          item.remaining = 0;
+        }
+      }
+    }
 
     const lotUsed = new Map<string, number>();
     const recvUsed = new Map<string, number>();
@@ -1260,7 +1391,7 @@ async function runScopedAllocation(
     }
   }
 
-  const changed = beforeKeys.slice().sort().join("\n") !== afterKeys.slice().sort().join("\n");
+  const changed = perfectPinsCreated > 0 || beforeKeys.slice().sort().join("\n") !== afterKeys.slice().sort().join("\n");
   if (changed) {
     await emitEvent(tx, {
       type: "allocation.computed",
@@ -1351,6 +1482,7 @@ export function scheduleAllocateAll(
           allocationsCreated: summary?.allocationsCreated ?? 0,
           allocationsRemoved: summary?.allocationsRemoved ?? 0,
           skippedReceivingSources: summary?.skippedReceivingSources ?? 0,
+          perfectMatched: summary?.perfectMatched ?? 0,
           finishedAt: new Date().toISOString(),
           durationMs: Date.now() - runStarted,
           trigger: after,

@@ -5,7 +5,7 @@ import { db } from "../../db.js";
 import { updatePickingDeliveryDate, updatePickingOrderFields, updateReceivingDeliveryDate, updateReceivingItemFields } from "../../db/adminedits.js";
 import { overridePickingOrderStatus } from "../../db/picking.js";
 import { overrideReceivingOrderStatus } from "../../db/receiving.js";
-import { scheduleAllocateAll } from "../../db/allocate.js";
+import { allocateForReceivingOrder, scheduleAllocateAll } from "../../db/allocate.js";
 import { actorFrom } from "../../auth/middleware.js";
 
 // Thin routes over db/adminedits.ts — admin console edits to flow data.
@@ -94,7 +94,10 @@ adminFlowEditsRoute.patch("/picking-orders/:id/status", async (c) => {
 // in_hand stamps arrived_at/arrived_by; moving back to
 // pending/provisional_received clears them. 400 invalid_status, 404
 // receiving_order_not_found. No-op (changed: false) when the status already
-// matches. On change the recompute is scheduled after commit.
+// matches. On change the recompute runs SCOPED to the order's part keys
+// (allocateForReceivingOrder — a status flip only adds/removes sources for
+// those parts, and the scoped core carries the perfect-match pre-pass);
+// on scoped failure it falls back to the background full recompute.
 adminFlowEditsRoute.patch("/receiving-orders/:id/status", async (c) => {
   const body = await readJson(c);
   const v = body.status;
@@ -108,7 +111,14 @@ adminFlowEditsRoute.patch("/receiving-orders/:id/status", async (c) => {
     reason: typeof reason === "string" ? reason : null,
     actorId: actorFrom(c).id,
   });
-  if (result.changed) scheduleAllocateAll(db, "admin_status_override");
+  if (result.changed) {
+    try {
+      await allocateForReceivingOrder(db, c.req.param("id"));
+    } catch (err) {
+      console.error("scoped allocation after receiving status override failed; falling back to background allocateAll", err);
+      scheduleAllocateAll(db, "admin_status_override");
+    }
+  }
   return c.json(result, 200);
 });
 

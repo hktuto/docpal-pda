@@ -183,8 +183,11 @@ test("GET shipper: reflects current allocations — recompute happens on the rea
   assert.equal(re.status, 200);
   assert.ok((await re.json()).allocation);
 
-  // …and the next download reflects it: the 500 balance of ctn 7002 goes to
-  // SO-PL-003 — a third distinct order column on ctn 7002's row, zero balance.
+  // …and the next download reflects it. The scoped recompute also runs the
+  // perfect-match pre-pass (spec 2026-09-22): ctn 7001 (1000) exactly fits
+  // SO-PL-002's 1000 and is PINNED to it, so SO-PL-001's 1500 now comes
+  // entirely from ctn 7002, and the remaining 500 of ctn 7002 goes to
+  // SO-PL-003 — a third distinct order column, zero balance.
   const res = await req(`/admin/receiving-orders/${orderId}/shipper`);
   assert.equal(res.status, 200);
 
@@ -193,8 +196,8 @@ test("GET shipper: reflects current allocations — recompute happens on the rea
   assert.deepEqual(rows[4], ["Invoice / Ctn", "Part Number", "Qty", "Total Qty", "Customer", "Customer", "Customer", "Balance"]);
   assert.deepEqual(rows[14], ["", "", "", "", "ACME Electronics (HK)", "SO-PL-002", "SO-PL-003", ""]);
   assert.deepEqual(rows[15], ["", "", "", "", "SO-PL-001", "SO-PL-002", "SO-PL-003", ""]);
-  assert.deepEqual(rows[16], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, "", 1000, "", "", ""]);
-  assert.deepEqual(rows[17], ["INV-PL-01 7002", "RK73H2ATTD1372F", 2000, 3000, 500, 1000, 500, 0]);
+  assert.deepEqual(rows[16], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, "", "", 1000, "", ""]);
+  assert.deepEqual(rows[17], ["INV-PL-01 7002", "RK73H2ATTD1372F", 2000, 3000, 1500, "", 500, 0]);
 });
 
 test("GET shipper: group header counts stock-sourced allocations on related orders, ignores unrelated orders", async () => {

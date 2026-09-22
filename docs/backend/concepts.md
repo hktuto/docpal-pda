@@ -116,6 +116,18 @@ Selection rules (confirmed with the business):
   as-is; spec
   `docs/superpowers/specs/2026-09-03-picking-from-subinventory-orgs-design.md`).
 - **FIFO** — oldest `date_code` first (NULLS LAST).
+- **Perfect match (scoped recomputes only, 2026-09-22)** — the scoped core
+  (`runScopedAllocation`: confirm-arrival, receiving/picking re-allocate,
+  receiving status override) runs a pre-pass before the priority loop: when
+  a demand's remaining open qty EXACTLY equals a source's availability —
+  all box rows of one receiving order summed, or a single lot / box /
+  order-level row — that source is pinned to the demand with
+  `allocations.manual = true` rows, so `priority_seq` never splits an
+  exact-fit source and the pins survive every later recompute (removable via
+  the admin remove-allocation action; ledger `txn_reason` = `"recompute:
+  perfect match"`). `allocateAll` (the background full recompute) does not
+  run this pass (spec
+  `docs/superpowers/specs/2026-09-22-allocation-perfect-match-design.md`).
 - **Dangling shelves** — shelf-stock sources exclude lots whose `shelf_code`
   is not in `shelves`: upstream sync writes business tables with the
   replication role, which bypasses the `inventory_lots.shelf_code → shelves`

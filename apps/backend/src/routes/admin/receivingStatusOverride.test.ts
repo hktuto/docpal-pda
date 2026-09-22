@@ -2,8 +2,10 @@
 // override of a receiving order's status to any of
 // pending/provisional_received/in_hand/clear — no transition guards, a status
 // stamp only (arrived_at/arrived_by follow the status), audit transition log,
-// receiving_order.upserted SSE event, and a background recompute scheduled on
-// change. Same auth/fixture pattern as pickingStatusOverride.test.ts.
+// receiving_order.upserted SSE event, and an awaited scoped allocation
+// recompute on change (allocateForReceivingOrder — spec
+// 2026-09-22-allocation-perfect-match-design.md). Same auth/fixture pattern
+// as pickingStatusOverride.test.ts.
 
 import { test, before, beforeEach } from "node:test";
 import assert from "node:assert/strict";
