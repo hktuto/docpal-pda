@@ -87,7 +87,7 @@ async function print() {
           :placeholder="$t('admin.print.printerPlaceholder')"
         />
         <datalist id="pl-printers">
-          <option v-for="p in printers" :key="p.alias || p.name" :label="p.alias || p.name" :value="p.service_id + '.' + p.name" />
+          <option v-for="p in printers" :key="p.alias || p.name" :label="p.alias || p.name" :value="p.serviceId + '.' + p.deviceKey" />
         </datalist>
       </div>
       <div class="form-row">

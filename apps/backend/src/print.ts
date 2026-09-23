@@ -49,8 +49,7 @@ async function callPrintService(path: string, init: RequestInit, timeoutMs: numb
 export async function listPrinters(): Promise<unknown> {
   const response = await callPrintService("/api/v1/usb/agent-printers", {}, READ_TIMEOUT_MS);
   const printers = (response as any[]).reduce((acc: any[], curr:any) => {
-    let service_id = curr.serviceId;
-    const all_printer_in_service = curr.printers.map((p: any) => ({ ...p, service_id }));
+    const all_printer_in_service = curr.printers.map((p: any) => ({ ...p, serviceId: curr.serviceId }));
     return acc.concat(all_printer_in_service);
   },[]);
   return printers;
