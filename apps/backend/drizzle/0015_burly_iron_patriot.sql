@@ -1,0 +1,1 @@
+ALTER TABLE "inventory_lots" ADD COLUMN "drawing_no" text;

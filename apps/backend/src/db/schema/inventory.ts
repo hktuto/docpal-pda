@@ -14,6 +14,7 @@ export const inventoryLots = pgTable(
     lotCode: text("lot_code"), // lot_no
     coo: text("coo"),
     cow: text("cow"),
+    drawingNo: text("drawing_no"),
     shelfCode: text("shelf_code").references(() => shelves.code),
     boxId: text("box_id"),
     // Dock stock is ledger-based (RECEIVE_TO_DOCK rows, qty_type 'dock'),
