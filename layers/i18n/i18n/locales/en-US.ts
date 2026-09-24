@@ -1392,6 +1392,7 @@ export default {
         searchPlaceholder: "Search batch no / supplier / invoice no",
         batchNo: "Batch No",
         status: "Status",
+        org: "Org",
         supplier: "Supplier",
         deliveryDate: "Delivery Date",
         invoices: "Invoices",

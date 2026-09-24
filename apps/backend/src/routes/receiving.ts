@@ -41,6 +41,8 @@ export interface ReceivingOrderListRow {
   supplierCode: string | null;
   supplierName: string | null;
   orgId: number;
+  /** Org office code from org_info (display form of orgId). */
+  orgCode: string | null;
   invoiceCount: number;
   invoiceNos: string | null;
   itemCount: number;
@@ -79,6 +81,11 @@ receivingRoute.get("/receiving-orders", async (c) => {
         s.code AS "supplierCode",
         s.name AS "supplierName",
         ro.org_id AS "orgId",
+        (
+          SELECT MAX(oi.office_code)
+          FROM org_info oi
+          WHERE oi.org_id = ro.org_id
+        ) AS "orgCode",
         COUNT(DISTINCT inv.id)::int AS "invoiceCount",
         string_agg(DISTINCT inv.invoice_no, ', ') AS "invoiceNos",
         COUNT(rii.id)::int AS "itemCount",

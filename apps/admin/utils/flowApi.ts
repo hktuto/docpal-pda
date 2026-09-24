@@ -150,6 +150,8 @@ export interface ReceivingOrderRow {
   supplierCode: string | null;
   supplierName: string | null;
   orgId: number;
+  /** Org office code from org_info (display form of orgId). */
+  orgCode: string | null;
   invoiceCount: number;
   invoiceNos: string | null;
   itemCount: number;

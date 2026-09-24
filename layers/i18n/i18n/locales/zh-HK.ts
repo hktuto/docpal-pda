@@ -1390,6 +1390,7 @@ export default {
         searchPlaceholder: "搜尋批次號 / 供應商 / 發票號",
         batchNo: "批次號",
         status: "狀態",
+        org: "辦公室",
         supplier: "供應商",
         deliveryDate: "交貨日期",
         invoices: "發票數",

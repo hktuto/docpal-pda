@@ -19,9 +19,11 @@ const statusOptions = computed<SearchableSelectOption[]>(() =>
 );
 
 const filtered = computed(() => {
+  // Orders with no invoices are hidden (upstream placeholders).
+  const base = rows.value.filter((r) => r.invoiceCount > 0);
   const q = search.value.trim().toLowerCase();
-  if (!q) return rows.value;
-  return rows.value.filter(
+  if (!q) return base;
+  return base.filter(
     (r) =>
       r.batchNo.toLowerCase().includes(q) ||
       (r.supplierCode ?? "").toLowerCase().includes(q) ||
@@ -41,6 +43,12 @@ const columnDefs = computed<AdminColumnDef<ReceivingOrderRow>[]>(() => [
     size: 200,
   },
   { key: "status", label: t("admin.pages.receiving.status"), size: 160 },
+  {
+    key: "orgCode",
+    label: t("admin.pages.receiving.org"),
+    accessor: (r) => r.orgCode ?? String(r.orgId),
+    size: 80,
+  },
   {
     key: "supplier",
     label: t("admin.pages.receiving.supplier"),
@@ -203,6 +211,7 @@ const {
         <span class="clickable" @click="navigateTo(`/receiving/${row.id}`)">{{ row.displayName ?? row.batchNo }}</span>
       </template>
       <template #cell-status="{ row }">{{ $t(`status.receiving.${row.status}`) }}</template>
+      <template #cell-orgCode="{ row }">{{ row.orgCode ?? row.orgId }}</template>
       <template #cell-deliveryDate="{ row }">
         {{ row.deliveryDate ? formatDate(row.deliveryDate) : "—" }}
       </template>
