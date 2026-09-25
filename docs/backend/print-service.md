@@ -9,7 +9,7 @@ Backend endpoints (all require the usual bearer token):
 
 | Endpoint | Proxies | Description |
 |---|---|---|
-| `GET /print/printers` | `GET /api/v1/printers` | Available system printer names (for the `printerName` picker). |
+| `GET /print/printers` | `GET /api/v1/usb/agent-printers` | Available printers, flattened across print services — each entry carries `serviceId` + `deviceKey` (for the printer picker). |
 | `POST /print/dynamic` | `POST /api/v1/templates/dynamic-print` | Print a template by `templateId` + `printingParams`; validates `templateId` / non-empty `printingParams`. |
 | `POST /print/files` | `POST /api/v1/print/files` | Direct file print — multipart upload or JSON forwarded verbatim. |
 | `GET /print/jobs/:jobId` | `GET /api/v1/print/jobs/{jobId}` | Status of one print job. |
@@ -36,7 +36,8 @@ The admin console calls these via `apps/admin/utils/print.ts` (`listPrinters`, `
 ```json
 {
   "filePath": "/opt/label-printing-center-linux-x64/runtime/previews/carton-a4-sheet-001/preview.png",
-  "printerName": "MYPRINTER",
+  "serviceId": "svc-xxx",
+  "deviceKey": "MYPRINTER",
   "copies": 1,
   "mode": "auto"
 }
@@ -47,7 +48,8 @@ The admin console calls these via `apps/admin/utils/print.ts` (`listPrinters`, `
 ```json
 {
   "pdfPath": "/opt/label-printing-center-linux-x64/runtime/previews/carton-a4-sheet-001/render.pdf",
-  "printerName": "MYPRINTER",
+  "serviceId": "svc-xxx",
+  "deviceKey": "MYPRINTER",
   "copies": 1,
   "mode": "auto",
   "additionalArgs": ["-o", "media=A4"]
@@ -59,7 +61,8 @@ The admin console calls these via `apps/admin/utils/print.ts` (`listPrinters`, `
 表单字段：
 
 - `file`: 要打印的 `pdf` 或图片文件
-- `printerName`: 打印机名称
+- `serviceId`: 打印服务 ID（来自 `GET /api/v1/usb/agent-printers`）
+- `deviceKey`: 打印机设备 key（同上；不再使用 `printerName`）
 - `copies`: 份数，可选，默认 `1`
 - `mode`: 打印模式，可选，默认 `auto`
 - `validateOnly`: 是否仅校验，可选
@@ -70,7 +73,8 @@ The admin console calls these via `apps/admin/utils/print.ts` (`listPrinters`, `
 ```bash
 curl -X POST "http://127.0.0.1:9003/api/v1/print/files" \
   -F "file=@./render.pdf" \
-  -F "printerName=MYPRINTER" \
+  -F "serviceId=svc-xxx" \
+  -F "deviceKey=MYPRINTER" \
   -F "copies=1" \
   -F "mode=auto"
 ```
@@ -79,6 +83,9 @@ curl -X POST "http://127.0.0.1:9003/api/v1/print/files" \
 
 - 用户证件打印（admin `/user-badges`）：把证件（姓名 + 用户名 + 登入 QR code）渲染成 PNG，用
   multipart 上传打印（经后端 `POST /print/files` 代理）。
+- 货架标签打印（admin `/shelves` 单行 Print）：前端把标签（QR + 货架编号 + zone）渲染成 PNG，
+  用 multipart 上传打印（`apps/admin/utils/print.ts` 的 `renderShelfLabelPng`）。
+- 库位盒标签打印（admin `/shelf-boxes`）：前端渲染盒标签 PNG（QR + 盒号 + Code 128 条码）后上传打印。
 
 ---
 
@@ -202,7 +209,7 @@ curl -X POST "http://127.0.0.1:9003/api/v1/print/files" \
 
 ## 辅助接口
 
-- `GET /api/v1/printers` — 系统打印机名称列表，供 `printerName` 下拉选择
+- `GET /api/v1/usb/agent-printers` — 打印机列表（按打印服务分组，每台打印机带 `serviceId` + `deviceKey`），供打印机下拉选择
 - `POST /api/v1/print/route-preview` — 打印路由预判。入参 `{ templateId, printerName, mode }`；返回重点字段 `canPrint`、`resolvedMode`、`riskLevel`（`none`/`medium`/`high`）、`summary`、`strategy.queueDriver`、`strategy.queuePort`
 - `POST /api/v1/render/preview` — 生成预览。入参 `{ templateId, outputMode: "png", params }`；返回 `previewImageUrl`、`output.imagePath`、`output.pdfPath`
 - `GET /api/v1/a4-templates/{templateId}/runtime` — A4 模板关联的 Label Template、`slotCount`、`requestExample`，适合前端动态生成 A4 打印入参

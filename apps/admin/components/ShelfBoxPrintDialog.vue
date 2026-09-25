@@ -1,15 +1,17 @@
 <script setup lang="ts">
-// Shelf-box label print dialog. Unlike PrintLabelsDialog (which sends params
-// to the katata-label template on the print service), the box label layout —
+// Shelf-box label print dialog. The box label layout —
 // QR code, then the box id as text, then a Code 128 barcode of the same value —
 // is rendered to a PNG here and printed via /print/files, the same route as
-// the user badges. One print job per label; each job is confirmed via
-// waitForPrintJob before reporting success.
+// the user badges and shelf labels. One print job per label; each job is
+// confirmed via waitForPrintJob before reporting success.
 import {
   listPrinters,
+  parsePrinterKey,
   printFile,
+  printerKey,
   renderShelfBoxLabelPng,
   waitForPrintJob,
+  type PrinterInfo,
 } from "~/utils/print";
 
 const props = defineProps<{
@@ -24,11 +26,15 @@ const dlg = useOverlayDismiss(() => {
 });
 
 const printerName = ref(import.meta.client ? (localStorage.getItem("label_printer") ?? "") : "");
-const printers = ref<string[]>([]);
+const printers = ref<PrinterInfo[]>([]);
 const copies = ref(1);
 const progress = ref("");
 const error = ref("");
 const done = ref(false);
+
+// Selected printer as "<serviceId>.<deviceKey>" (the picker value); free text
+// is not printable — /print/files needs the serviceId + deviceKey pair.
+const selectedPrinter = computed(() => parsePrinterKey(printerName.value.trim()));
 
 // Non-fatal: without the list the printer field stays free text.
 onMounted(async () => {
@@ -40,7 +46,7 @@ onMounted(async () => {
 });
 
 async function print() {
-  const printer = printerName.value.trim();
+  const printer = selectedPrinter.value;
   if (!printer || printing.value) return;
   printing.value = true;
   error.value = "";
@@ -50,12 +56,13 @@ async function print() {
       progress.value = `${i + 1} / ${props.items.length}`;
       const png = await renderShelfBoxLabelPng(item.boxId);
       const job = await printFile(png, `box-label-${item.boxId}.png`, {
-        printerName: printer,
+        serviceId: printer.serviceId,
+        deviceKey: printer.deviceKey,
         copies: Math.max(1, copies.value),
       });
       await waitForPrintJob(job.jobId);
     }
-    localStorage.setItem("label_printer", printer);
+    localStorage.setItem("label_printer", printerName.value.trim());
     done.value = true;
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e);
@@ -86,7 +93,7 @@ async function print() {
           :placeholder="$t('admin.print.printerPlaceholder')"
         />
         <datalist id="sb-printers">
-          <option v-for="p in printers" :key="p" :value="p" />
+          <option v-for="p in printers" :key="printerKey(p)" :label="p.alias || p.name" :value="printerKey(p)" />
         </datalist>
       </div>
       <div class="form-row">
@@ -101,7 +108,7 @@ async function print() {
         <button class="btn" :disabled="printing" @click="emit('close')">
           {{ $t("admin.common.close") }}
         </button>
-        <button class="btn btn-primary" :disabled="!printerName.trim() || printing" @click="print">
+        <button class="btn btn-primary" :disabled="!selectedPrinter || printing" @click="print">
           {{ printing ? $t("admin.print.printing", { progress }) : $t("admin.print.print") }}
         </button>
       </div>

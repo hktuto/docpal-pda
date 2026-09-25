@@ -1,19 +1,22 @@
 <script setup lang="ts">
-// Shared print dialog for template labels (shelf / shelf-box). Printer names
-// come from the backend print proxy (free text still allowed), the chosen
-// printer is remembered in localStorage. Printing goes through
-// dynamicPrint (one job per label), then each job is confirmed via
-// waitForPrintJob before reporting success.
+// Shared print dialog for client-rendered image labels (shelf labels). Each
+// item renders itself to a PNG here and is printed via /print/files — the same
+// route as the shelf-box labels and user badges — one print job per label,
+// each confirmed via waitForPrintJob before reporting success. The printer
+// picker lists the print service's agent printers; the chosen printer is
+// remembered in localStorage.
 import {
-  LABEL_TEMPLATE_ID,
-  dynamicPrint,
   listPrinters,
+  parsePrinterKey,
+  printFile,
+  printerKey,
   waitForPrintJob,
+  type PrinterInfo,
 } from "~/utils/print";
 
 const props = defineProps<{
   /** One entry per label; `title` is only shown in the dialog's summary list. */
-  items: { title: string; params: Record<string, unknown> }[];
+  items: { title: string; render: () => Promise<Blob>; filename: string }[];
 }>();
 const emit = defineEmits<{ close: [] }>();
 
@@ -23,11 +26,15 @@ const dlg = useOverlayDismiss(() => {
 });
 
 const printerName = ref(import.meta.client ? (localStorage.getItem("label_printer") ?? "") : "");
-const printers = ref<string[]>([]);
+const printers = ref<PrinterInfo[]>([]);
 const copies = ref(1);
 const progress = ref("");
 const error = ref("");
 const done = ref(false);
+
+// Selected printer as "<serviceId>.<deviceKey>" (the picker value); free text
+// is not printable — /print/files needs the serviceId + deviceKey pair.
+const selectedPrinter = computed(() => parsePrinterKey(printerName.value.trim()));
 
 // Non-fatal: without the list the printer field stays free text.
 onMounted(async () => {
@@ -39,24 +46,23 @@ onMounted(async () => {
 });
 
 async function print() {
-  const printer = printerName.value.trim();
+  const printer = selectedPrinter.value;
   if (!printer || printing.value) return;
   printing.value = true;
   error.value = "";
   done.value = false;
   try {
-    const res = await dynamicPrint({
-      templateId: LABEL_TEMPLATE_ID,
-      printingParams: props.items.map((i) => i.params),
-      printerName: printer,
-      copies: Math.max(1, copies.value),
-    });
-    const jobs = res.jobs ?? [];
-    for (const [i, job] of jobs.entries()) {
-      progress.value = `${i + 1} / ${jobs.length}`;
+    for (const [i, item] of props.items.entries()) {
+      progress.value = `${i + 1} / ${props.items.length}`;
+      const png = await item.render();
+      const job = await printFile(png, item.filename, {
+        serviceId: printer.serviceId,
+        deviceKey: printer.deviceKey,
+        copies: Math.max(1, copies.value),
+      });
       await waitForPrintJob(job.jobId);
     }
-    localStorage.setItem("label_printer", printer);
+    localStorage.setItem("label_printer", printerName.value.trim());
     done.value = true;
   } catch (e) {
     error.value = e instanceof Error ? e.message : String(e);
@@ -87,7 +93,7 @@ async function print() {
           :placeholder="$t('admin.print.printerPlaceholder')"
         />
         <datalist id="pl-printers">
-          <option v-for="p in printers" :key="p.alias || p.name" :label="p.alias || p.name" :value="p.serviceId + '.' + p.deviceKey" />
+          <option v-for="p in printers" :key="printerKey(p)" :label="p.alias || p.name" :value="printerKey(p)" />
         </datalist>
       </div>
       <div class="form-row">
@@ -102,7 +108,7 @@ async function print() {
         <button class="btn" :disabled="printing" @click="emit('close')">
           {{ $t("admin.common.close") }}
         </button>
-        <button class="btn btn-primary" :disabled="!printerName.trim() || printing" @click="print">
+        <button class="btn btn-primary" :disabled="!selectedPrinter || printing" @click="print">
           {{ printing ? $t("admin.print.printing", { progress }) : $t("admin.print.print") }}
         </button>
       </div>

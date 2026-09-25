@@ -1,197 +1,158 @@
 <script setup lang="ts">
-import QRCode from "qrcode";
+// Batch A4 shelf-label print: the selected shelves are laid out 3 x 4 per A4
+// page (QR + shelf code + zone per cell), each page rendered to a PNG here
+// and printed via /print/files — one print job per page, each confirmed via
+// waitForPrintJob before reporting success. The printer picker lists the
+// print service's agent printers; the chosen printer is remembered in
+// localStorage.
+import {
+  listPrinters,
+  parsePrinterKey,
+  printFile,
+  printerKey,
+  renderShelfBatchPagePng,
+  SHELF_BATCH_CELLS_PER_PAGE,
+  waitForPrintJob,
+  type PrinterInfo,
+} from "~/utils/print";
 
-// Batch A4 shelf-label sheet: selected shelves are laid out 3 x 4 per A4
-// page with padding; each cell shows the shelf QR, the shelf code, and the
-// zone (when set). Printing uses the browser print dialog (any A4 printer),
-// unlike the single-label PrintLabelsDialog which goes through the label
-// print service.
 const props = defineProps<{
   items: { code: string; zone?: string | null }[];
 }>();
 const emit = defineEmits<{ close: [] }>();
 
-const dlg = useOverlayDismiss(() => emit("close"));
-
-interface SheetCell {
-  code: string;
-  zone: string | null;
-  qr: string;
-}
-
-const CELLS_PER_PAGE = 12; // 3 columns x 4 rows
-const pages = ref<SheetCell[][]>([]);
-
-onMounted(async () => {
-  const cells = await Promise.all(
-    props.items.map(async (item) => ({
-      code: item.code,
-      zone: item.zone?.trim() || null,
-      qr: await QRCode.toDataURL(item.code, {
-        width: 512,
-        margin: 1,
-        errorCorrectionLevel: "M",
-      }),
-    }))
-  );
-  const chunked: SheetCell[][] = [];
-  for (let i = 0; i < cells.length; i += CELLS_PER_PAGE) {
-    chunked.push(cells.slice(i, i + CELLS_PER_PAGE));
-  }
-  pages.value = chunked;
-  document.body.classList.add("shelf-batch-printing");
+const printing = ref(false);
+const dlg = useOverlayDismiss(() => {
+  if (!printing.value) emit("close");
 });
 
-onBeforeUnmount(() => document.body.classList.remove("shelf-batch-printing"));
+const printerName = ref(import.meta.client ? (localStorage.getItem("label_printer") ?? "") : "");
+const printers = ref<PrinterInfo[]>([]);
+const copies = ref(1);
+const progress = ref("");
+const error = ref("");
+const done = ref(false);
 
-function printSheet() {
-  window.print();
+// Selected printer as "<serviceId>.<deviceKey>" (the picker value); free text
+// is not printable — /print/files needs the serviceId + deviceKey pair.
+const selectedPrinter = computed(() => parsePrinterKey(printerName.value.trim()));
+
+// One blob per A4 page; object URLs back the preview images.
+const pageBlobs: Blob[] = [];
+const previews = ref<string[]>([]);
+
+onMounted(async () => {
+  try {
+    printers.value = await listPrinters();
+  } catch {
+    printers.value = [];
+  }
+  for (let i = 0; i < props.items.length; i += SHELF_BATCH_CELLS_PER_PAGE) {
+    const png = await renderShelfBatchPagePng(props.items.slice(i, i + SHELF_BATCH_CELLS_PER_PAGE));
+    pageBlobs.push(png);
+    previews.value.push(URL.createObjectURL(png));
+  }
+});
+
+onBeforeUnmount(() => previews.value.forEach((u) => URL.revokeObjectURL(u)));
+
+async function print() {
+  const printer = selectedPrinter.value;
+  if (!printer || printing.value) return;
+  printing.value = true;
+  error.value = "";
+  done.value = false;
+  try {
+    for (const [i, png] of pageBlobs.entries()) {
+      progress.value = `${i + 1} / ${pageBlobs.length}`;
+      const job = await printFile(png, `shelf-labels-page-${i + 1}.png`, {
+        serviceId: printer.serviceId,
+        deviceKey: printer.deviceKey,
+        copies: Math.max(1, copies.value),
+      });
+      await waitForPrintJob(job.jobId);
+    }
+    localStorage.setItem("label_printer", printerName.value.trim());
+    done.value = true;
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    printing.value = false;
+    progress.value = "";
+  }
 }
 </script>
 
 <template>
-  <Teleport to="body">
-    <div class="shelf-batch-print-root">
-      <div class="shelf-batch-overlay" @mousedown="dlg.onMousedown" @click="dlg.onClick">
-        <div class="shelf-batch-chrome">
-          <h2>{{ $t("admin.print.batchTitle", { count: items.length }) }}</h2>
-          <div class="shelf-batch-actions">
-            <button class="btn" @click="emit('close')">{{ $t("admin.common.close") }}</button>
-            <button class="btn btn-primary" :disabled="!pages.length" @click="printSheet">
-              {{ $t("admin.print.print") }}
-            </button>
-          </div>
-        </div>
-        <div class="shelf-sheet-preview">
-          <div v-for="(page, pi) in pages" :key="pi" class="shelf-sheet-page">
-            <div v-for="cell in page" :key="cell.code" class="shelf-sheet-cell">
-              <img :src="cell.qr" :alt="cell.code" />
-              <div class="shelf-sheet-code">{{ cell.code }}</div>
-              <div v-if="cell.zone" class="shelf-sheet-zone">{{ cell.zone }}</div>
-            </div>
-          </div>
-        </div>
+  <div class="overlay" @mousedown="dlg.onMousedown" @click="dlg.onClick">
+    <div class="dialog shelf-batch-dialog">
+      <h2>{{ $t("admin.print.batchTitle", { count: items.length }) }}</h2>
+      <div class="shelf-sheet-preview">
+        <img v-for="(src, pi) in previews" :key="pi" :src="src" :alt="`page ${pi + 1}`" />
+      </div>
+      <div class="form-row">
+        <label for="sb-printer">{{ $t("admin.print.printer") }}</label>
+        <input
+          id="sb-printer"
+          v-model="printerName"
+          type="text"
+          list="sbp-printers"
+          autocomplete="off"
+          data-1p-ignore
+          data-lpignore="true"
+          :placeholder="$t('admin.print.printerPlaceholder')"
+        />
+        <datalist id="sbp-printers">
+          <option v-for="p in printers" :key="printerKey(p)" :label="p.alias || p.name" :value="printerKey(p)" />
+        </datalist>
+      </div>
+      <div class="form-row">
+        <label for="sbp-copies">{{ $t("admin.print.copies") }}</label>
+        <input id="sbp-copies" v-model.number="copies" type="number" min="1" />
+      </div>
+      <div v-if="error" class="error-banner">{{ error }}</div>
+      <div v-if="done" class="success-banner">
+        {{ $t("admin.print.success", { count: items.length }) }}
+      </div>
+      <div class="dialog-actions">
+        <button class="btn" :disabled="printing" @click="emit('close')">
+          {{ $t("admin.common.close") }}
+        </button>
+        <button class="btn btn-primary" :disabled="!selectedPrinter || !pageBlobs.length || printing" @click="print">
+          {{ printing ? $t("admin.print.printing", { progress }) : $t("admin.print.print") }}
+        </button>
       </div>
     </div>
-  </Teleport>
+  </div>
 </template>
 
 <style scoped>
-.shelf-batch-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 1.25rem;
-  background: rgba(0, 0, 0, 0.45);
-}
-.shelf-batch-chrome {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+.shelf-batch-dialog {
   width: min(47.5rem, 100%);
-  padding: 0.75rem 1rem;
-  background: #fff;
-  border-radius: 0.5rem;
-}
-.shelf-batch-chrome h2 {
-  margin: 0;
-  font-size: 1rem;
-}
-.shelf-batch-actions {
-  display: flex;
-  gap: 0.5rem;
 }
 .shelf-sheet-preview {
-  overflow: auto;
-  max-height: calc(100vh - 8.125rem);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 0.875rem;
   padding: 1rem;
+  max-height: 50vh;
+  overflow-y: auto;
   background: #e5e7eb;
-  border-radius: 0.5rem;
+  border-radius: 0.375rem;
 }
-.shelf-sheet-page {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: repeat(4, 1fr);
-  gap: 4mm;
-  width: 190mm; /* A4 minus 2 x 10mm page margin */
-  height: 277mm;
-  padding: 2mm;
+.shelf-sheet-preview img {
+  display: block;
+  width: 100%;
   background: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
-.shelf-sheet-page + .shelf-sheet-page {
-  margin-top: 1rem;
-}
-.shelf-sheet-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2mm;
-  padding: 4mm;
-  overflow: hidden;
-}
-.shelf-sheet-cell img {
-  width: 44mm;
-  height: 44mm;
-}
-.shelf-sheet-code {
-  font-size: 20pt;
-  font-weight: 700;
-  text-align: center;
-  word-break: break-all;
-}
-.shelf-sheet-zone {
-  font-size: 12pt;
-  color: #4b5563;
-  text-align: center;
-  word-break: break-all;
-}
-</style>
-
-<style>
-/* Print: hide the whole app (everything teleported under body except the
-   sheet root) and the dialog chrome, then flow the sheet pages normally so
-   multi-page selections paginate onto real A4 pages. */
-@page {
-  size: A4;
-  margin: 10mm;
-}
-@media print {
-  body.shelf-batch-printing > *:not(.shelf-batch-print-root) {
-    display: none !important;
-  }
-  body.shelf-batch-printing .shelf-batch-overlay {
-    position: static;
-    display: block;
-    padding: 0;
-    background: none;
-  }
-  body.shelf-batch-printing .shelf-batch-chrome {
-    display: none !important;
-  }
-  body.shelf-batch-printing .shelf-sheet-preview {
-    overflow: visible;
-    max-height: none;
-    padding: 0;
-    background: none;
-  }
-  body.shelf-batch-printing .shelf-sheet-page {
-    box-shadow: none;
-    break-after: page;
-    page-break-after: always;
-  }
-  body.shelf-batch-printing .shelf-sheet-page + .shelf-sheet-page {
-    margin-top: 0;
-  }
-  body.shelf-batch-printing .shelf-sheet-page:last-child {
-    break-after: auto;
-    page-break-after: auto;
-  }
+.success-banner {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #86c8a0;
+  border-radius: 0.375rem;
+  background: #ecf9f1;
+  color: #1e7a46;
+  font-size: 0.8125rem;
 }
 </style>

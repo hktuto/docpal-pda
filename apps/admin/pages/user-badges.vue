@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import QRCode from "qrcode";
-import { listPrinters, printFile, waitForPrintJob } from "~/utils/print";
+import { listPrinters, parsePrinterKey, printFile, printerKey, waitForPrintJob, type PrinterInfo } from "~/utils/print";
 import type { AdminColumnDef } from "~/composables/useAdminTable";
 
 interface User {
@@ -115,9 +115,13 @@ async function generateBadge() {
 }
 
 const printerName = ref(import.meta.client ? localStorage.getItem("badge_printer") ?? "" : "");
-const printers = ref<string[]>([]);
+const printers = ref<PrinterInfo[]>([]);
 const printing = ref(false);
 const printed = ref(false);
+
+// Selected printer as "<serviceId>.<deviceKey>" (the picker value); free text
+// is not printable — /print/files needs the serviceId + deviceKey pair.
+const selectedPrinter = computed(() => parsePrinterKey(printerName.value.trim()));
 
 // Printer names come from the print service via the backend proxy; failure is
 // non-fatal — the field stays a free-text input.
@@ -159,18 +163,21 @@ async function renderBadgePng(): Promise<Blob> {
 
 async function printBadge() {
   const u = selectedUser.value;
-  const printer = printerName.value.trim();
+  const printer = selectedPrinter.value;
   if (!u || !badgeQr.value || !printer || printing.value) return;
   printing.value = true;
   printed.value = false;
   badgeError.value = "";
   try {
     const png = await renderBadgePng();
-    const job = await printFile(png, `badge-${u.username}.png`, { printerName: printer });
+    const job = await printFile(png, `badge-${u.username}.png`, {
+      serviceId: printer.serviceId,
+      deviceKey: printer.deviceKey,
+    });
     // Submission accepted — now confirm the job actually printed.
     await waitForPrintJob(job.jobId);
     printed.value = true;
-    localStorage.setItem("badge_printer", printer);
+    localStorage.setItem("badge_printer", printerName.value.trim());
   } catch (e) {
     badgeError.value = e instanceof Error ? e.message : String(e);
   } finally {
@@ -274,7 +281,7 @@ onMounted(() => {
               :placeholder="$t('admin.userBadges.printerPlaceholder')"
             />
             <datalist id="badge-printers">
-              <option v-for="p in printers" :key="p" :value="p" />
+              <option v-for="p in printers" :key="printerKey(p)" :label="p.alias || p.name" :value="printerKey(p)" />
             </datalist>
           </div>
           <div v-if="badgeError" class="error-banner">{{ badgeError }}</div>
@@ -283,7 +290,7 @@ onMounted(() => {
             <button class="btn" @click="closeBadge">{{ $t("admin.common.close") }}</button>
             <button
               class="btn btn-primary"
-              :disabled="!printerName.trim() || printing"
+              :disabled="!selectedPrinter || printing"
               @click="printBadge"
             >
               {{ printing ? $t("admin.common.loading") : $t("admin.userBadges.print") }}

@@ -6,8 +6,17 @@
  */
 import QRCode from "qrcode";
 import JsBarcode from "jsbarcode";
+/** One printer as returned by the print service's agent-printers list. */
+export interface PrinterInfo {
+  serviceId: string;
+  deviceKey: string;
+  name?: string;
+  alias?: string;
+}
+
 export interface PrintFileOptions {
-  printerName: string;
+  serviceId: string;
+  deviceKey: string;
   copies?: number;
   mode?: string;
   validateOnly?: boolean;
@@ -29,20 +38,119 @@ export interface PrintJob {
   diagnostics?: string[];
 }
 
-/** Template used for shelf / shelf-box labels on the print service. */
-export const LABEL_TEMPLATE_ID = "katata-label";
+// Shelf label stock: 70 x 37 mm at 300 dpi (same stock as the shelf-box
+// labels). The layout is a QR code on the left, then "SHELF", the shelf code,
+// and the zone (when set) on the right — the code is what the PDA scans.
+const SHELF_LABEL_W = 826;
+const SHELF_LABEL_H = 437;
 
-/** katata-label params for one shelf code label (QR + human-readable code). */
-export function shelfLabelParams(code: string): Record<string, unknown> {
-  return {
-    deliveryName: "SHELF",
-    itemNum: code,
-    sku: code,
-    qrcode: code,
-    qty: "",
-    cust: "",
-    makeIn: "",
-  };
+/** Render one shelf label to a PNG blob for /print/files. */
+export async function renderShelfLabelPng(code: string, zone?: string | null): Promise<Blob> {
+  const canvas = document.createElement("canvas");
+  canvas.width = SHELF_LABEL_W;
+  canvas.height = SHELF_LABEL_H;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, SHELF_LABEL_W, SHELF_LABEL_H);
+
+  // QR code on the left, centered vertically.
+  const qrSize = 360;
+  const qr = new Image();
+  qr.src = await QRCode.toDataURL(code, { width: qrSize, margin: 1, errorCorrectionLevel: "M" });
+  await qr.decode();
+  ctx.drawImage(qr, 28, (SHELF_LABEL_H - qrSize) / 2, qrSize, qrSize);
+
+  // Text block on the right of the QR.
+  const textX = 416;
+  const textW = SHELF_LABEL_W - textX - 28;
+  const cx = textX + textW / 2;
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#64748b";
+  ctx.font = "700 28px ui-monospace, SFMono-Regular, Menlo, monospace";
+  ctx.fillText("SHELF", cx, 140, textW);
+  ctx.fillStyle = "#0f1720";
+  ctx.font = "700 56px ui-monospace, SFMono-Regular, Menlo, monospace";
+  ctx.fillText(code, cx, 224, textW);
+  const z = zone?.trim();
+  if (z) {
+    ctx.fillStyle = "#4b5563";
+    ctx.font = "32px ui-monospace, SFMono-Regular, Menlo, monospace";
+    ctx.fillText(z, cx, 304, textW);
+  }
+
+  return await new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("canvas.toBlob returned null"))),
+      "image/png"
+    )
+  );
+}
+
+// A4 batch sheet for multi-select shelf printing: 3 x 4 shelf labels per A4
+// page at 300 dpi (QR + shelf code + zone per cell, same content as the
+// single shelf label).
+const A4_PAGE_W = 2480;
+const A4_PAGE_H = 3508;
+const BATCH_COLS = 3;
+const BATCH_ROWS = 4;
+export const SHELF_BATCH_CELLS_PER_PAGE = BATCH_COLS * BATCH_ROWS;
+
+/** Render one A4 page of shelf labels to a PNG blob for /print/files. */
+export async function renderShelfBatchPagePng(
+  cells: { code: string; zone?: string | null }[]
+): Promise<Blob> {
+  const canvas = document.createElement("canvas");
+  canvas.width = A4_PAGE_W;
+  canvas.height = A4_PAGE_H;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, A4_PAGE_W, A4_PAGE_H);
+
+  const margin = 118; // 10mm page margin
+  const gap = 47; // 4mm between cells
+  const cellW = (A4_PAGE_W - 2 * margin - (BATCH_COLS - 1) * gap) / BATCH_COLS;
+  const cellH = (A4_PAGE_H - 2 * margin - (BATCH_ROWS - 1) * gap) / BATCH_ROWS;
+  const qrSize = 520; // ~44mm
+
+  for (const [i, cell] of cells.entries()) {
+    const col = i % BATCH_COLS;
+    const row = Math.floor(i / BATCH_COLS);
+    const x = margin + col * (cellW + gap);
+    const y = margin + row * (cellH + gap);
+    const cx = x + cellW / 2;
+
+    const qr = new Image();
+    qr.src = await QRCode.toDataURL(cell.code, {
+      width: qrSize,
+      margin: 1,
+      errorCorrectionLevel: "M",
+    });
+    await qr.decode();
+
+    // QR + code + optional zone, vertically centered as a stack in the cell.
+    const zone = cell.zone?.trim();
+    const stackH = qrSize + 110 + (zone ? 85 : 0);
+    let cy = y + (cellH - stackH) / 2;
+    ctx.drawImage(qr, cx - qrSize / 2, cy, qrSize, qrSize);
+    cy += qrSize + 65;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#0f1720";
+    ctx.font = "700 83px system-ui, sans-serif"; // ~20pt
+    ctx.fillText(cell.code, cx, cy, cellW - 40);
+    if (zone) {
+      ctx.fillStyle = "#4b5563";
+      ctx.font = "50px system-ui, sans-serif"; // ~12pt
+      ctx.fillText(zone, cx, cy + 80, cellW - 40);
+    }
+  }
+
+  return await new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("canvas.toBlob returned null"))),
+      "image/png"
+    )
+  );
 }
 
 // Shelf-box label stock: 70 x 37 mm at 300 dpi. The layout is a QR code, then
@@ -120,19 +228,32 @@ async function throwOnError(res: Response): Promise<void> {
   throw new Error(text || `Request failed (${res.status})`);
 }
 
-/** GET /print/printers — available system printer names. */
-export async function listPrinters(): Promise<string[]> {
+/** GET /print/printers — available printers (flattened across print services). */
+export async function listPrinters(): Promise<PrinterInfo[]> {
   const res = await fetch(`${apiBaseUrl()}/print/printers`, { headers: authHeaders() });
   await throwOnError(res);
   const data = await res.json();
-  return Array.isArray(data) ? data : ((data?.printers as string[] | undefined) ?? []);
+  return Array.isArray(data) ? data : [];
+}
+
+/** Composite picker value for one printer: "<serviceId>.<deviceKey>". */
+export function printerKey(p: PrinterInfo): string {
+  return `${p.serviceId}.${p.deviceKey}`;
+}
+
+/** Split a printerKey back into its parts; null when the value is not a picker selection. */
+export function parsePrinterKey(key: string): { serviceId: string; deviceKey: string } | null {
+  const i = key.indexOf(".");
+  if (i <= 0 || i === key.length - 1) return null;
+  return { serviceId: key.slice(0, i), deviceKey: key.slice(i + 1) };
 }
 
 /** POST /print/files (multipart upload). Returns the created job. */
 export async function printFile(file: Blob, filename: string, opts: PrintFileOptions): Promise<PrintJob> {
   const form = new FormData();
   form.append("file", file, filename);
-  form.append("printerName", opts.printerName);
+  form.append("serviceId", opts.serviceId);
+  form.append("deviceKey", opts.deviceKey);
   form.append("copies", String(opts.copies ?? 1));
   form.append("mode", opts.mode ?? "auto");
   if (opts.validateOnly) form.append("validateOnly", "true");

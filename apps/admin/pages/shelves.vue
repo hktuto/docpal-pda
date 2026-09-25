@@ -1,16 +1,23 @@
 <script setup lang="ts">
 import QRCode from "qrcode";
 import { entities } from "~/utils/entities";
-import { shelfLabelParams } from "~/utils/print";
+import { renderShelfLabelPng } from "~/utils/print";
 
-// Label printing: per-row Print button (row-actions slot) goes through the
-// label print service; multi-select Print selected (bulk-actions slot) opens
-// an A4 batch sheet (3 x 4 grid, browser print) instead.
-const printItems = ref<{ title: string; params: Record<string, unknown> }[] | null>(null);
+// Label printing: per-row Print button (row-actions slot) renders the label
+// to a PNG here and prints it via the print service's /print/files; multi-
+// select Print selected / Print all (bulk-actions slot) renders A4 batch
+// sheets (3 x 4 grid) to PNGs and prints them the same way.
+const printItems = ref<{ title: string; render: () => Promise<Blob>; filename: string }[] | null>(null);
 const batchPrintItems = ref<{ code: string; zone?: string | null }[] | null>(null);
 
 function printOne(row: any) {
-  printItems.value = [{ title: row.code, params: shelfLabelParams(row.code) }];
+  printItems.value = [
+    {
+      title: row.code,
+      render: () => renderShelfLabelPng(row.code, row.zone),
+      filename: `shelf-label-${row.code}.png`,
+    },
+  ];
 }
 
 function printSelected(rows: any[], clear: () => void) {

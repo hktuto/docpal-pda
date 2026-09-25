@@ -28,9 +28,17 @@ before(async () => {
     req.on("end", () => {
       lastRequest = { method: req.method!, url: req.url!, body };
       res.setHeader("Content-Type", "application/json");
-      if (req.url === "/api/v1/printers") {
-        res.end(respond(["Printer A", "Printer B"]));
-      } else if (req.url === "/api/v1/templates/dynamic-print") {
+      if (req.url === "/api/v1/usb/agent-printers") {
+        res.end(respond([
+          {
+            serviceId: "svc-1",
+            printers: [
+              { deviceKey: "dev-a", name: "Printer A", alias: "A" },
+              { deviceKey: "dev-b", name: "Printer B" },
+            ],
+          },
+        ]));
+      } else if (req.url === "/api/v1/templates/service-dynamic-print") {
         res.end(respond({ templateId: "katata-label", totalPages: 1, jobs: [{ jobId: "job-1", status: "success" }] }));
       } else if (req.url === "/api/v1/print/files") {
         res.end(respond({ jobId: "job-2", status: "success" }));
@@ -56,10 +64,13 @@ after(async () => {
   await new Promise((resolve) => upstream.close(resolve));
 });
 
-test("GET /print/printers passes the printer list through", async () => {
+test("GET /print/printers flattens the agent-printers list", async () => {
   const res = await app.request("/print/printers");
   assert.equal(res.status, 200);
-  assert.deepEqual(await res.json(), ["Printer A", "Printer B"]);
+  assert.deepEqual(await res.json(), [
+    { deviceKey: "dev-a", name: "Printer A", alias: "A", serviceId: "svc-1" },
+    { deviceKey: "dev-b", name: "Printer B", serviceId: "svc-1" },
+  ]);
 });
 
 test("POST /print/dynamic requires templateId and non-empty printingParams", async () => {
@@ -102,12 +113,14 @@ test("POST /print/dynamic forwards the body to the print service", async () => {
 test("POST /print/files forwards multipart uploads", async () => {
   const form = new FormData();
   form.append("file", new Blob(["png-bytes"], { type: "image/png" }), "badge.png");
-  form.append("printerName", "Printer A");
+  form.append("serviceId", "svc-1");
+  form.append("deviceKey", "dev-a");
   const res = await app.request("/print/files", { method: "POST", body: form });
   assert.equal(res.status, 200);
   const data = (await res.json()) as { jobId: string };
   assert.equal(data.jobId, "job-2");
   assert.match(lastRequest!.body, /png-bytes/);
+  assert.match(lastRequest!.body, /svc-1/);
 });
 
 test("GET /print/jobs/:jobId returns the upstream job", async () => {
