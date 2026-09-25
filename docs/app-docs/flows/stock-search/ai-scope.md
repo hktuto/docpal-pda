@@ -33,7 +33,11 @@
   `StockSearchLot`, `StockSearchResult`, `SupplierListRow`.
 - `apps/backend/src/routes/stocksearch.ts` +
   `apps/backend/src/db/stocksearch.ts` — `GET /stock-search`
-  (`supplierId?`, `partNo?`, `shelfCode?` → `{parts, lots}`).
+  (`supplierId?`, `partNo?`, `shelfCode?` → `{parts, lots}`; lot rows also
+  carry `drawingNo` from `inventory_lots.drawing_no`, filterable via
+  `drawingNo?`). Opt-in server paging (`?page=&pageSize=&sort=&dir=` →
+  `{rows, total}`) exists for the admin lots table; the PDA uses the legacy
+  un-paged `{parts, lots}` response (no `page` param).
 - `pages/index.vue` — home menu card.
 
 ## Known limitations

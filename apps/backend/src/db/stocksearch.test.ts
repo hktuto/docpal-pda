@@ -64,6 +64,7 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     lotCode: "L2604A",
     coo: "JP",
     cow: "JP",
+    drawingNo: null,
     shelfCode: "A-01-02",
     boxId: "BOX-H-20260701-0002",
     orgId: 2,
@@ -82,6 +83,7 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     lotCode: "L2603A",
     coo: "JP",
     cow: "JP",
+    drawingNo: null,
     shelfCode: "A-01-01",
     boxId: "BOX-H-20260701-0001",
     orgId: 2,
@@ -100,6 +102,7 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     lotCode: "L2603B",
     coo: "JP",
     cow: "JP",
+    drawingNo: null,
     shelfCode: "A-01-01",
     boxId: "BOX-H-20260701-0001",
     orgId: 2,
@@ -118,6 +121,7 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     lotCode: "L2604B",
     coo: "JP",
     cow: "JP",
+    drawingNo: null,
     shelfCode: "A-01-02",
     boxId: "BOX-H-20260701-0002",
     orgId: 2,
@@ -136,6 +140,7 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     lotCode: "L2609A",
     coo: "JP",
     cow: "JP",
+    drawingNo: null,
     shelfCode: "A-02-01",
     boxId: "BOX-H-20260701-0003",
     orgId: 2,
@@ -154,6 +159,7 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     lotCode: "L2609B",
     coo: "JP",
     cow: "JP",
+    drawingNo: null,
     shelfCode: "A-02-01",
     boxId: "BOX-H-20260701-0003",
     orgId: 2,
@@ -256,6 +262,61 @@ test("partNo: also matches wcl_item_no (substring with '/', full match)", async 
   // part_no matches still work identically
   r = await searchStock(client.db, { partNo: "RK73H1JTTD2202F" });
   assert.equal(r.lots.length, 1);
+});
+
+// --- drawingNo filter --------------------------------------------------------------
+
+test("drawingNo: case-insensitive substring on inventory_lots.drawing_no, whitespace-normalized", async () => {
+  await reseed(client);
+  await queryRun(client.db, sql`UPDATE inventory_lots SET drawing_no = 'DWG-1002 rev A' WHERE part_no = 'RK73H1JTTD1002F'`);
+
+  // lowercase substring
+  let r = await searchStock(client.db, { drawingNo: "dwg-1002" });
+  assert.equal(r.lots.length, 1);
+  assert.equal(r.lots[0].partNo, "RK73H1JTTD1002F");
+  assert.equal(r.lots[0].drawingNo, "DWG-1002 rev A");
+
+  // whitespace in the query is stripped (normalizePartNo), so a spaced
+  // fragment still matches the continuous drawing_no
+  r = await searchStock(client.db, { drawingNo: " dwg-1002 rev a " });
+  assert.equal(r.lots.length, 1);
+  assert.equal(r.lots[0].partNo, "RK73H1JTTD1002F");
+
+  // non-matching keyword → empty
+  r = await searchStock(client.db, { drawingNo: "NO-SUCH-DRAWING" });
+  assert.deepEqual(r, { parts: [], lots: [] });
+});
+
+// --- paging / sorting (opt-in { rows, total } mode) --------------------------------
+
+test("paging: LIMIT/OFFSET + total over the same filters; sort whitelist with default-order tiebreakers", async () => {
+  await reseed(client);
+
+  let p = await searchStock(client.db, {}, { page: 1, pageSize: 2 });
+  assert.equal(p.total, 6);
+  assert.equal(p.rows.length, 2);
+  assert.deepEqual(p.rows.map((l) => l.partNo), ["RK73B1JTTD181G", "RK73H1JTTD1002F"]);
+
+  p = await searchStock(client.db, {}, { page: 3, pageSize: 2 });
+  assert.equal(p.rows.length, 2);
+
+  // past the last page: no rows, total unchanged
+  p = await searchStock(client.db, {}, { page: 4, pageSize: 2 });
+  assert.equal(p.rows.length, 0);
+  assert.equal(p.total, 6);
+
+  // paged rows carry drawingNo (null in the seed)
+  const one = await searchStock(client.db, {}, { page: 1, pageSize: 1 });
+  assert.equal(one.rows[0].drawingNo, null);
+
+  // sort desc by totalQty; the 1000-tie breaks by part_no (1002F before 5602F)
+  p = await searchStock(client.db, {}, { page: 1, pageSize: 6, sort: "totalQty", dir: "desc" });
+  assert.deepEqual(p.rows.map((l) => l.totalQty), [1000, 1000, 700, 500, 400, 200]);
+  assert.deepEqual(p.rows.slice(0, 2).map((l) => l.partNo), ["RK73H1JTTD1002F", "RK73H1JTTD5602F"]);
+
+  // unknown sort key falls back to the default part_no order
+  p = await searchStock(client.db, {}, { page: 1, pageSize: 6, sort: "bogus" });
+  assert.deepEqual(p.rows.map((l) => l.partNo), ["RK73B1JTTD181G", "RK73H1JTTD1002F", "RK73H1JTTD2202F", "RK73H1JTTD4702F", "RK73H1JTTD5602F", "RK73H2ATTD2212F"]);
 });
 
 // --- shelfCode filter -----------------------------------------------------------

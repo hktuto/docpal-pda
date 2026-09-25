@@ -1594,6 +1594,8 @@ export default {
         lotsCount: "{count} lots",
         partNo: "Part no",
         partNoPlaceholder: "Part no / WCL item no keyword…",
+        drawingNo: "Drawing no",
+        drawingNoPlaceholder: "Drawing no keyword…",
         hint: "Set filters (supplier, brand, org/sub-inventory, zone/shelf, part no), then press Search.",
         lots: "Lots",
         wclItemNo: "WCL item no",

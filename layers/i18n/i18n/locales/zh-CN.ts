@@ -1591,6 +1591,8 @@ export default {
         lotsCount: "{count} 批",
         partNo: "零件编号",
         partNoPlaceholder: "零件编号 / WCL 货号关键字…",
+        drawingNo: "图纸编号",
+        drawingNoPlaceholder: "图纸编号关键字…",
         hint: "设置筛选条件（供应商、品牌、Org/子库、区域/货架、零件编号），然后点击搜索。",
         lots: "批次",
         wclItemNo: "WCL 货号",

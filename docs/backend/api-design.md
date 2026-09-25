@@ -456,7 +456,8 @@ returns the matching lots (part identity embedded), and the distinct `parts`
 list with `onHandQty = Σ total_qty` over those lots is stitched in TS. All
 filters optional and ANDed: `partNo` is a case-insensitive substring on
 `parts.part_no` **or** `parts.wcl_item_no`, normalized like scan matching
-(uppercase + whitespace stripped, both sides); `shelfCode`, `brand`
+(uppercase + whitespace stripped, both sides); `drawingNo` is the same
+normalized-substring match on `inventory_lots.drawing_no`; `shelfCode`, `brand`
 (parts.brand), `zone` (the shelf's zone via the shelves join), `orgId` and
 `subInventoryCode` are
 multi-value any-of filters (repeat the query param); `supplierCode` (also
@@ -470,7 +471,7 @@ NULLS LAST`, `shelf_code`, `box_id`.
 
 | Endpoint | Description |
 |---|---|
-| `GET /stock-search?supplierCode=&partNo=&shelfCode=&zone=&brand=&orgId=&subInventoryCode=&dateCodeFrom=&dateCodeTo=` | One call → `{parts[{id, partNo, wclItemNo, description, onHandQty}], lots[{partNo, wclItemNo, description, brand, dateCode, lotCode, coo, cow, shelfCode, zone, boxId, orgId, subInventoryCode, totalQty, allocatedQty, availableQty}]}`. Multi-value filters repeat the query param. `dateCodeFrom`/`dateCodeTo` are WWYY bounds ranked year*100+week (not lexicographic); lots with NULL/invalid date codes never match once a bound is set. |
+| `GET /stock-search?supplierCode=&partNo=&drawingNo=&shelfCode=&zone=&brand=&orgId=&subInventoryCode=&dateCodeFrom=&dateCodeTo=` | One call → `{parts[{id, partNo, wclItemNo, description, onHandQty}], lots[{partNo, wclItemNo, description, brand, dateCode, lotCode, coo, cow, drawingNo, shelfCode, zone, boxId, orgId, subInventoryCode, totalQty, allocatedQty, availableQty}]}` (`drawingNo` = `inventory_lots.drawing_no`). Multi-value filters repeat the query param. `drawingNo` is a normalized case-insensitive substring on `il.drawing_no` (same uppercase + whitespace-stripped semantics as `partNo`). `dateCodeFrom`/`dateCodeTo` are WWYY bounds ranked year*100+week (not lexicographic); lots with NULL/invalid date codes never match once a bound is set. **Opt-in paging:** adding `?page=` (1-based; optional `pageSize` default 50 max 200, `sort`, `dir=asc|desc`) switches the response to `{rows, total}` (lot rows only — no `parts` aggregate); `sort` is a key whitelist (the admin lots-table column keys: `partNo`, `description`, `brand`, `drawingNo`, `dateCode`, `lotCode`, `shelfCode`, `zone`, `boxId`, `orgSubInventory`, `totalQty`, `allocatedQty`, `availableQty`; unknown keys fall back to the default order, which is always appended as tiebreakers). Without `page` the legacy full `{parts, lots}` response is returned unchanged (the PDA uses that). |
 | `GET /stock-search/options` | Filter values for the dropdowns → `{brands[], zones[], shelves[{code, zone}], locations[{orgId, subInventoryCode, description, officeCode}]}`: brands/zones/shelves are distinct values present in the current stock; `locations` is every `org_info` pair within the allowed orgs (stocked or not), so the org/sub-inventory filters cover the full master — the admin org dropdown labels by `office_code` and groups the sub-inventory dropdown by org (same allowed-org scope). |
 | `GET /stock-search/summary` | Overall (unfiltered) totals for the admin summary header → `{partCount, lotCount, totalQty, allocatedQty, availableQty, shelfCount, lastUpdateDate, outdatedYears, outdatedPartCount, outdatedLotCount, outdatedQty}` — distinct parts in stock, Σ quantities, distinct shelves holding stock, the newest lot `last_update_date` (ISO string, null when empty), and outdated stats: lots whose WWYY date code is older than flow config `outdatedStockYears` (default 2) (same allowed-org scope). |
 

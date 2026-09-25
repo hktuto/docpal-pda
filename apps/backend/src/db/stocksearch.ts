@@ -62,6 +62,8 @@ const DC_VALID = sql`il.date_code ~ '^[0-9]{4}$' AND left(il.date_code, 2)::int 
 //     parts.wcl_item_no, normalized with the same normalizePartNo as scan
 //     matching (uppercase + all whitespace stripped) — the column side
 //     applies the identical transform in SQL.
+//   - drawingNo: same normalized-substring semantics as partNo, on
+//     inventory_lots.drawing_no.
 //   - shelfCode: any-of match on the lot's shelf_code.
 //   - zone: any-of match on the shelf's zone (shelves join; lots whose shelf
 //     has no zone never match).
@@ -78,11 +80,20 @@ const DC_VALID = sql`il.date_code ~ '^[0-9]{4}$' AND left(il.date_code, 2)::int 
 // total_qty filter (the >0 rule was only the suppliers-stats CTE and a
 // client-side "only with inventory" toggle), so it is mirrored here.
 // No actorId, no mutations, no allocateAll.
+//
+// Opt-in paging: searchStock(db, filters, { page, pageSize?, sort?, dir? })
+// with `page` defined returns `{ rows, total }` — LIMIT/OFFSET + COUNT over
+// the same FROM/WHERE, no `parts` aggregate (a whole-result aggregate the
+// admin doesn't use). Without `page` the legacy full `{ parts, lots }`
+// response is returned unchanged (the PDA consumes that shape). Sorting is a
+// key whitelist (LOT_SORTS); unknown/missing keys fall back to the default
+// order, which is always appended as tiebreakers for stable pagination.
 // ---------------------------------------------------------------------------
 
 export interface StockSearchFilters {
   supplierCode?: string[];
   partNo?: string;
+  drawingNo?: string;
   shelfCode?: string[];
   zone?: string[];
   brand?: string[];
@@ -114,6 +125,7 @@ export interface StockSearchLotRow {
   lotCode: string | null;
   coo: string | null;
   cow: string | null;
+  drawingNo: string | null;
   shelfCode: string | null;
   /** The shelf's zone (shelves join; null when the lot has no/unknown shelf). */
   zone: string | null;
@@ -142,6 +154,24 @@ export interface StockSearchOptions {
 export interface StockSearchResult {
   parts: StockSearchPartRow[];
   lots: StockSearchLotRow[];
+}
+
+/** Opt-in paging/sorting for searchStock. When `page` is defined the result
+ *  switches to StockSearchPage (`{ rows, total }`). */
+export interface StockSearchPaging {
+  page?: number;
+  pageSize?: number;
+  /** Sort key — whitelist in LOT_SORTS; unknown keys fall back to the
+   *  default order. */
+  sort?: string;
+  dir?: "asc" | "desc";
+}
+
+/** Paged lot rows (no `parts` — a whole-result aggregate the admin doesn't
+ *  use). */
+export interface StockSearchPage {
+  rows: StockSearchLotRow[];
+  total: number;
 }
 
 /** Overall (unfiltered) stock totals for the admin summary header. */
@@ -176,12 +206,146 @@ interface LotJoinRow extends StockSearchLotRow {
  * embedded), then the distinct `parts` list with on-hand sums is stitched in
  * TS. Rows come back ordered by part_no, date_code NULLS LAST, shelf_code,
  * box_id — the same order drives both arrays.
+ * With `paging.page` defined the response switches to `{ rows, total }`:
+ * the same lot rows (no partPk, no `parts` aggregate) with LIMIT/OFFSET +
+ * COUNT, optionally sorted by a LOT_SORTS key.
  */
+/** Shared FROM/WHERE fragment for the lot search, its count, and the summary
+ *  aggregate — expects aliases `il` (inventory_lots), `p` (parts), `s`
+ *  (shelves, LEFT JOINed). */
+function stockFromWhere(filters: StockSearchFilters) {
+  return sql`
+    FROM inventory_lots il
+    JOIN parts p ON p.wcl_item_no = il.wcl_item_no
+    LEFT JOIN shelves s ON s.code = il.shelf_code
+    WHERE TRUE
+    ${stockFilterClauses(filters)}
+  `;
+}
+
+/** Default row order — also the tiebreaker tail for stable pagination when a
+ *  sort key is active. */
+const DEFAULT_ORDER = sql`il.part_no, il.date_code NULLS LAST, il.shelf_code, il.box_id`;
+
+/** Sort key whitelist → SQL expression(s), each rendered `<expr> ASC|DESC
+ *  NULLS LAST` followed by the default order as tiebreakers. Keys are the
+ *  admin lots-table column keys. */
+const LOT_SORTS: Record<string, ReturnType<typeof sql>[]> = {
+  partNo: [sql`p.wcl_item_no`], // the admin column displays wclItemNo ?? partNo (wcl_item_no NOT NULL)
+  description: [sql`p.description`],
+  brand: [sql`p.brand`],
+  drawingNo: [sql`il.drawing_no`],
+  dateCode: [sql`il.date_code`],
+  lotCode: [sql`il.lot_code`],
+  shelfCode: [sql`il.shelf_code`],
+  zone: [sql`s.zone`],
+  boxId: [sql`il.box_id`],
+  orgSubInventory: [sql`il.org_id`, sql`il.sub_inventory_code`],
+  totalQty: [sql`il.total_qty`],
+  allocatedQty: [sql`il.allocated_qty`],
+  availableQty: [sql`il.available_qty`],
+};
+
+function stockOrderBy(paging?: StockSearchPaging) {
+  const exprs = paging?.sort ? LOT_SORTS[paging.sort] : undefined;
+  if (!exprs?.length) return sql`ORDER BY ${DEFAULT_ORDER}`;
+  const dir = paging!.dir === "desc" ? sql`DESC` : sql`ASC`;
+  return sql`ORDER BY ${sql.join(
+    exprs.map((e) => sql`${e} ${dir} NULLS LAST`),
+    sql`, `
+  )}, ${DEFAULT_ORDER}`;
+}
+
+export function searchStock(db: AppDb, filters: StockSearchFilters): Promise<StockSearchResult>;
+export function searchStock(db: AppDb, filters: StockSearchFilters, paging: StockSearchPaging & { page: number }): Promise<StockSearchPage>;
+export async function searchStock(
+  db: AppDb,
+  filters: StockSearchFilters,
+  paging?: StockSearchPaging
+): Promise<StockSearchResult | StockSearchPage> {
+  const fromWhere = stockFromWhere(filters);
+  if (paging?.page !== undefined) {
+    const page = Math.max(1, paging.page);
+    const pageSize = Math.min(200, Math.max(1, paging.pageSize ?? 50));
+    const [rows, count] = await Promise.all([
+      queryAll<StockSearchLotRow>(
+        db,
+        sql`
+          SELECT
+            il.part_no AS "partNo",
+            il.date_code AS "dateCode",
+            il.lot_code AS "lotCode",
+            il.coo, il.cow,
+            il.drawing_no AS "drawingNo",
+            il.shelf_code AS "shelfCode",
+            il.box_id AS "boxId",
+            il.org_id AS "orgId",
+            il.sub_inventory_code AS "subInventoryCode",
+            il.total_qty AS "totalQty",
+            il.allocated_qty AS "allocatedQty",
+            il.available_qty AS "availableQty",
+            p.wcl_item_no AS "wclItemNo",
+            p.description,
+            p.brand,
+            s.zone
+          ${fromWhere}
+          ${stockOrderBy(paging)}
+          LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}
+        `
+      ),
+      queryAll<{ total: number }>(db, sql`SELECT COUNT(*)::int AS total ${fromWhere}`),
+    ]);
+    return { rows, total: count[0]?.total ?? 0 };
+  }
+  const rows = await queryAll<LotJoinRow>(
+    db,
+    sql`
+      SELECT
+        il.part_no AS "partNo",
+        il.date_code AS "dateCode",
+        il.lot_code AS "lotCode",
+        il.coo, il.cow,
+        il.drawing_no AS "drawingNo",
+        il.shelf_code AS "shelfCode",
+        il.box_id AS "boxId",
+        il.org_id AS "orgId",
+        il.sub_inventory_code AS "subInventoryCode",
+        il.total_qty AS "totalQty",
+        il.allocated_qty AS "allocatedQty",
+        il.available_qty AS "availableQty",
+        p.id AS "partPk",
+        p.wcl_item_no AS "wclItemNo",
+        p.description,
+        p.brand,
+        s.zone
+      ${fromWhere}
+      ${stockOrderBy()}
+    `
+  );
+
+  const parts: StockSearchPartRow[] = [];
+  const partIndexById = new Map<string, number>();
+  const lots: StockSearchLotRow[] = [];
+  for (const row of rows) {
+    const { partPk, ...lot } = row;
+    lots.push(lot);
+    const idx = partIndexById.get(partPk);
+    if (idx === undefined) {
+      partIndexById.set(partPk, parts.length);
+      parts.push({ id: partPk, partNo: row.partNo, wclItemNo: row.wclItemNo, description: row.description, onHandQty: row.totalQty });
+    } else {
+      parts[idx].onHandQty += row.totalQty;
+    }
+  }
+  return { parts, lots };
+}
+
 /** Shared WHERE fragment for the lot search and the summary aggregate —
  *  expects aliases `il` (inventory_lots), `p` (parts), `s` (shelves, LEFT
  *  JOINed). All filters optional and ANDed. */
 function stockFilterClauses(filters: StockSearchFilters) {
   const partNoNorm = filters.partNo ? normalizePartNo(filters.partNo) : "";
+  const drawingNoNorm = filters.drawingNo ? normalizePartNo(filters.drawingNo) : "";
   // Normalize the date-code range: ranks (year*100+week), swapped bounds
   // fixed up, invalid codes treated as unbounded.
   const fromRank = dateCodeRank(filters.dateCodeFrom);
@@ -191,6 +355,7 @@ function stockFilterClauses(filters: StockSearchFilters) {
   return sql`
     ${allowedOrgFilter(sql`il.org_id`)}
     ${partNoNorm ? sql`AND (strpos(regexp_replace(upper(p.part_no), '\\s', '', 'g'), ${partNoNorm}) > 0 OR strpos(regexp_replace(upper(p.wcl_item_no), '\\s', '', 'g'), ${partNoNorm}) > 0)` : sql``}
+    ${drawingNoNorm ? sql`AND strpos(regexp_replace(upper(il.drawing_no), '\\s', '', 'g'), ${drawingNoNorm}) > 0` : sql``}
     ${filters.shelfCode?.length ? sql`AND il.shelf_code IN (${sql.join(filters.shelfCode.map((v) => sql`${v}`), sql`, `)})` : sql``}
     ${filters.zone?.length ? sql`AND s.zone IN (${sql.join(filters.zone.map((v) => sql`${v}`), sql`, `)})` : sql``}
     ${filters.brand?.length ? sql`AND p.brand IN (${sql.join(filters.brand.map((v) => sql`${v}`), sql`, `)})` : sql``}
@@ -216,53 +381,6 @@ function stockFilterClauses(filters: StockSearchFilters) {
         : sql``
     }
   `;
-}
-
-export async function searchStock(db: AppDb, filters: StockSearchFilters): Promise<StockSearchResult> {
-  const rows = await queryAll<LotJoinRow>(
-    db,
-    sql`
-      SELECT
-        il.part_no AS "partNo",
-        il.date_code AS "dateCode",
-        il.lot_code AS "lotCode",
-        il.coo, il.cow,
-        il.shelf_code AS "shelfCode",
-        il.box_id AS "boxId",
-        il.org_id AS "orgId",
-        il.sub_inventory_code AS "subInventoryCode",
-        il.total_qty AS "totalQty",
-        il.allocated_qty AS "allocatedQty",
-        il.available_qty AS "availableQty",
-        p.id AS "partPk",
-        p.wcl_item_no AS "wclItemNo",
-        p.description,
-        p.brand,
-        s.zone
-      FROM inventory_lots il
-      JOIN parts p ON p.wcl_item_no = il.wcl_item_no
-      LEFT JOIN shelves s ON s.code = il.shelf_code
-      WHERE TRUE
-      ${stockFilterClauses(filters)}
-      ORDER BY il.part_no, il.date_code NULLS LAST, il.shelf_code, il.box_id
-    `
-  );
-
-  const parts: StockSearchPartRow[] = [];
-  const partIndexById = new Map<string, number>();
-  const lots: StockSearchLotRow[] = [];
-  for (const row of rows) {
-    const { partPk, ...lot } = row;
-    lots.push(lot);
-    const idx = partIndexById.get(partPk);
-    if (idx === undefined) {
-      partIndexById.set(partPk, parts.length);
-      parts.push({ id: partPk, partNo: row.partNo, wclItemNo: row.wclItemNo, description: row.description, onHandQty: row.totalQty });
-    } else {
-      parts[idx].onHandQty += row.totalQty;
-    }
-  }
-  return { parts, lots };
 }
 
 /**

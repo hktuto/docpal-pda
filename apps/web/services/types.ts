@@ -879,6 +879,8 @@ export interface StockSearchLot {
   lotCode: string | null;
   coo: string | null;
   cow: string | null;
+  /** From inventory_lots.drawing_no. */
+  drawingNo: string | null;
   shelfCode: string | null;
   boxId: string | null;
   orgId: number | null;

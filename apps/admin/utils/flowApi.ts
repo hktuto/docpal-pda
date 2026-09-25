@@ -271,6 +271,7 @@ export interface StockSearchLot {
   lotCode: string | null;
   coo: string | null;
   cow: string | null;
+  drawingNo: string | null;
   shelfCode: string | null;
   zone: string | null;
   boxId: string | null;
@@ -290,6 +291,7 @@ export interface StockSearchResult {
 export interface StockSearchParams {
   supplierCode?: string[];
   partNo?: string;
+  drawingNo?: string;
   shelfCode?: string[];
   zone?: string[];
   brand?: string[];
@@ -299,10 +301,26 @@ export interface StockSearchParams {
   dateCodeTo?: string;
 }
 
-function stockSearchQuery(params: StockSearchParams): string {
+/** Opt-in server paging for /stock-search — any `page` switches the response
+ *  to StockSearchPage. `sort` is a lots-table column key (backend whitelist). */
+export interface StockSearchPageParams extends StockSearchParams {
+  page: number;
+  pageSize: number;
+  sort?: string;
+  dir?: "asc" | "desc";
+}
+
+/** Paged lot rows (no `parts` — a whole-result aggregate the admin doesn't use). */
+export interface StockSearchPage {
+  rows: StockSearchLot[];
+  total: number;
+}
+
+function stockSearchQuery(params: StockSearchParams & Partial<StockSearchPageParams>): string {
   const qs = new URLSearchParams();
   for (const v of params.supplierCode ?? []) qs.append("supplierCode", v);
   if (params.partNo) qs.set("partNo", params.partNo);
+  if (params.drawingNo) qs.set("drawingNo", params.drawingNo);
   for (const v of params.shelfCode ?? []) qs.append("shelfCode", v);
   for (const v of params.zone ?? []) qs.append("zone", v);
   for (const v of params.brand ?? []) qs.append("brand", v);
@@ -310,6 +328,10 @@ function stockSearchQuery(params: StockSearchParams): string {
   for (const v of params.subInventoryCode ?? []) qs.append("subInventoryCode", v);
   if (params.dateCodeFrom) qs.set("dateCodeFrom", params.dateCodeFrom);
   if (params.dateCodeTo) qs.set("dateCodeTo", params.dateCodeTo);
+  if (params.page !== undefined) qs.set("page", String(params.page));
+  if (params.pageSize !== undefined) qs.set("pageSize", String(params.pageSize));
+  if (params.sort) qs.set("sort", params.sort);
+  if (params.dir) qs.set("dir", params.dir);
   return qs.toString();
 }
 
@@ -617,6 +639,10 @@ export function useFlowApi() {
     // query param; the backend treats them as any-of)
     stockSearch: (params: StockSearchParams) =>
       api.get<StockSearchResult>(`/stock-search?${stockSearchQuery(params)}`),
+    // Opt-in server-paged variant ({ rows, total }) — the lots table in
+    // ungrouped mode; stockSearch (full) stays for group-by and Excel export.
+    stockSearchPage: (params: StockSearchPageParams) =>
+      api.get<StockSearchPage>(`/stock-search?${stockSearchQuery(params)}`),
     stockSearchOptions: () => api.get<StockSearchOptions>("/stock-search/options"),
     // Same filters as stockSearch ({} = overall totals).
     stockSearchSummary: (params: StockSearchParams = {}) =>

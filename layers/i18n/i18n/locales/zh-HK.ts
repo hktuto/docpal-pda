@@ -1591,6 +1591,8 @@ export default {
         lotsCount: "{count} 批",
         partNo: "零件編號",
         partNoPlaceholder: "零件編號 / WCL 貨號關鍵字…",
+        drawingNo: "圖紙編號",
+        drawingNoPlaceholder: "圖紙編號關鍵字…",
         hint: "設定篩選條件（供應商、品牌、Org/子庫、區域/貨架、零件編號），然後點擊搜尋。",
         lots: "批次",
         wclItemNo: "WCL 貨號",

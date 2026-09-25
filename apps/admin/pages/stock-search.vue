@@ -18,6 +18,7 @@ const subInventoryCode = ref<string[]>([]);
 const zone = ref<string[]>([]);
 const shelfCode = ref<string[]>([]);
 const partNo = ref("");
+const drawingNo = ref("");
 
 // Date-code range (WWYY): native date pickers converted to WWYY codes, same
 // pattern as the picking availability modal (utils/dateCode.ts).
@@ -35,7 +36,10 @@ const searched = ref(false);
 const loading = ref(false);
 const error = ref("");
 
-const lotsRows = computed(() => result.value?.lots ?? []);
+// Ungrouped mode is server-paged: lotsRows/lotsTotal come from the paged
+// endpoint; group-by mode keeps the legacy full fetch in `result`.
+const lotsRows = ref<StockSearchLot[]>([]);
+const lotsTotal = ref(0);
 
 // --- filter dropdown options (from /stock-search/options + /admin/suppliers) ---
 
@@ -134,7 +138,7 @@ const lotGroups = computed<LotGroup[]>(() => {
   const keyOf = (l: StockSearchLot) =>
     groupBy.value === "brand" ? l.brand : groupBy.value === "shelf" ? (l.shelfCode ?? "") : (l.zone ?? "");
   const buckets = new Map<string, StockSearchLot[]>();
-  for (const l of lotsRows.value) {
+  for (const l of result.value?.lots ?? []) {
     const k = keyOf(l);
     const arr = buckets.get(k);
     if (arr) arr.push(l);
@@ -174,6 +178,12 @@ const lotsColumnDefs = computed<AdminColumnDef<StockSearchLot>[]>(() => [
     size: 110,
   },
   {
+    key: "drawingNo",
+    label: t("admin.pages.stockSearch.drawingNo"),
+    accessor: (l) => l.drawingNo ?? "",
+    size: 110,
+  },
+  {
     key: "shelfCode",
     label: t("admin.pages.stockSearch.shelf"),
     accessor: (l) => l.shelfCode ?? "",
@@ -202,10 +212,16 @@ const lotsColumnDefs = computed<AdminColumnDef<StockSearchLot>[]>(() => [
   { key: "availableQty", label: t("admin.pages.stockSearch.availableQty"), size: 100 },
 ]);
 
-const { table: lotsTable, pagination: lotsPagination, resetColumnState: resetLotsColumns } = useAdminTable({
+const {
+  table: lotsTable,
+  sorting: lotsSorting,
+  pagination: lotsPagination,
+  resetColumnState: resetLotsColumns,
+} = useAdminTable({
   tableId: "stock-search-lots",
   columns: lotsColumnDefs,
   rows: lotsRows,
+  server: { total: lotsTotal },
 });
 
 // Grouped mode: one DataTable per group, lazily created and cached by group
@@ -278,19 +294,62 @@ function currentFilters(): StockSearchParams {
     zone: zone.value.length ? zone.value : undefined,
     shelfCode: shelfCode.value.length ? shelfCode.value : undefined,
     partNo: partNo.value.trim() || undefined,
+    drawingNo: drawingNo.value.trim() || undefined,
     dateCodeFrom: dcFromCode.value || undefined,
     dateCodeTo: dcToCode.value || undefined,
   };
 }
+
+// Sort params for the paged endpoint from the shared table sorting state.
+function sortParams(): { sort?: string; dir?: "asc" | "desc" } {
+  const sort = lotsSorting.value[0];
+  return sort ? { sort: sort.id, dir: sort.desc ? "desc" : "asc" } : {};
+}
+
+// Refetch the current server page with the current filters/sort. No-op
+// outside ungrouped mode (the sorting/page state is shared with the
+// client-side group tables).
+async function reloadPage() {
+  if (!searched.value || groupBy.value !== "none") return;
+  const res = await flow.stockSearchPage({
+    ...currentFilters(),
+    page: lotsPage.value,
+    pageSize: lotsPagination.value.pageSize,
+    ...sortParams(),
+  });
+  lotsRows.value = res.rows;
+  lotsTotal.value = res.total;
+}
+
+watch([lotsPage, lotsPageSize], reloadPage);
+watch(lotsSorting, () => {
+  if (!searched.value || groupBy.value !== "none") return;
+  if (lotsPage.value !== 1) lotsPage.value = 1; // the page watcher refetches
+  else reloadPage();
+});
+// Mode switch refetches in the right mode (server-paged vs full client-side).
+watch(groupBy, () => {
+  if (searched.value) search();
+});
 
 async function search() {
   loading.value = true;
   error.value = "";
   try {
     const filters = currentFilters();
-    const [res] = await Promise.all([flow.stockSearch(filters), loadSummary(filters)]);
-    result.value = res;
-    searched.value = true;
+    if (groupBy.value === "none") {
+      result.value = null;
+      await loadSummary(filters);
+      searched.value = true;
+      // Reset to page 1 — the page watcher refetches; when already on page 1,
+      // fetch directly.
+      if (lotsPage.value !== 1) lotsPage.value = 1;
+      else await reloadPage();
+    } else {
+      const [res] = await Promise.all([flow.stockSearch(filters), loadSummary(filters)]);
+      result.value = res;
+      searched.value = true;
+    }
     // Stock may have changed — refresh the dropdown option sets too.
     loadOptions();
   } catch (e: any) {
@@ -300,15 +359,19 @@ async function search() {
   }
 }
 
-// Export the current search result (all lots, ignoring paging/grouping) as
-// .xlsx — same columns and labels as the lots table.
+// Export ALL lots matching the current filters (ignoring paging/grouping) as
+// .xlsx — same columns and labels as the lots table. Group mode reuses the
+// full fetch already in `result`; server mode does a full fetch at export
+// time.
 async function exportExcel() {
-  if (!lotsRows.value.length) return;
+  if (!searched.value) return;
+  const lots = groupBy.value !== "none" ? (result.value?.lots ?? []) : (await flow.stockSearch(currentFilters())).lots;
+  if (!lots.length) return;
   const XLSX = await import("xlsx");
   const cols = lotsColumnDefs.value;
   const aoa = [
     cols.map((c) => c.label),
-    ...lotsRows.value.map((l) =>
+    ...lots.map((l) =>
       cols.map((c) => (c.accessor ? c.accessor(l) : (((l as Record<string, unknown>)[c.key] as string | number | null) ?? "")))
     ),
   ];
@@ -433,6 +496,11 @@ const {
         :placeholder="$t('admin.pages.stockSearch.partNoPlaceholder')"
         @keyup.enter="search"
       />
+      <input
+        v-model="drawingNo"
+        :placeholder="$t('admin.pages.stockSearch.drawingNoPlaceholder')"
+        @keyup.enter="search"
+      />
       <label class="dc-filter">
         {{ $t("admin.pages.stockSearch.dateCodeFrom") }}
         <input v-model="dcFrom" type="date" />
@@ -457,7 +525,7 @@ const {
       <button class="btn btn-primary" :disabled="loading" @click="search">
         {{ $t("admin.common.search") }}
       </button>
-      <button class="btn" :disabled="loading || !lotsRows.length" @click="exportExcel">
+      <button class="btn" :disabled="loading || !searched" @click="exportExcel">
         {{ $t("admin.pages.stockSearch.exportExcel") }}
       </button>
     </div>
@@ -467,7 +535,7 @@ const {
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
     <p v-else-if="!searched" class="muted">{{ $t("admin.pages.stockSearch.hint") }}</p>
 
-    <template v-else-if="result">
+    <template v-else-if="searched">
       <h2 v-if="groupBy !== 'none'" class="section-title">{{ $t("admin.pages.stockSearch.lots") }}</h2>
       <template v-if="groupBy === 'none'">
         <DataTable
@@ -479,7 +547,7 @@ const {
             <span class="wrap">{{ row.description ?? "—" }}</span>
           </template>
         </DataTable>
-        <Pager v-model:page="lotsPage" v-model:page-size="lotsPageSize" :total="lotsRows.length" />
+        <Pager v-model:page="lotsPage" v-model:page-size="lotsPageSize" :total="lotsTotal" />
       </template>
       <template v-else>
         <template v-for="g in lotGroups" :key="g.key">

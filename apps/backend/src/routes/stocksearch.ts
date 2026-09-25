@@ -18,6 +18,7 @@ function stockSearchFilters(c: Context): StockSearchFilters {
   return {
     supplierCode: c.req.queries("supplierCode"),
     partNo: c.req.query("partNo"),
+    drawingNo: c.req.query("drawingNo"),
     shelfCode: c.req.queries("shelfCode"),
     zone: c.req.queries("zone"),
     brand: c.req.queries("brand"),
@@ -30,8 +31,23 @@ function stockSearchFilters(c: Context): StockSearchFilters {
 
 // One aggregate stock-search read (replaces the old 3-call cascade:
 // suppliers → parts → lots). Read-only; all filters optional and ANDed.
+// Opt-in paging: ?page= (1-based, with optional pageSize/sort/dir) switches
+// the response to { rows, total }; without `page` the legacy full
+// { parts, lots } response is returned (the PDA consumes that shape).
 stockSearchRoute.get("/stock-search", async (c) => {
-  return c.json(await searchStock(db, stockSearchFilters(c)), 200);
+  const pageParam = c.req.query("page");
+  if (pageParam === undefined) return c.json(await searchStock(db, stockSearchFilters(c)), 200);
+  const rawDir = c.req.query("dir");
+  const dir = rawDir === "asc" || rawDir === "desc" ? rawDir : undefined;
+  return c.json(
+    await searchStock(db, stockSearchFilters(c), {
+      page: Math.max(1, Number(pageParam) || 1),
+      pageSize: Math.min(200, Math.max(1, Number(c.req.query("pageSize")) || 50)),
+      sort: c.req.query("sort"),
+      dir,
+    }),
+    200
+  );
 });
 
 // Distinct filter values present in the current stock (brands, zones,
