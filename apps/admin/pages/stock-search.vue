@@ -3,19 +3,17 @@ import type { StockSearchLot, StockSearchOptions, StockSearchParams, StockSearch
 import type { AdminColumnDef } from "~/composables/useAdminTable";
 import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 
-const api = useApi();
 const flow = useFlowApi();
 const { t } = useI18n();
 
-const suppliers = ref<{ id: string; code: string; name: string }[]>([]);
 const options = ref<StockSearchOptions | null>(null);
 
 // Filters (empty array = no filter / all).
-const supplierCode = ref<string[]>([]);
+// The supplier filter is hidden for now — inventory data carries no supplier
+// info at the moment (backend supplierCode param stays available).
 const brand = ref<string[]>([]);
 // Combined location filter: exact "orgId:subInventoryCode" pairs.
 const location = ref<string[]>([]);
-const zone = ref<string[]>([]);
 const shelfCode = ref<string[]>([]);
 const partNo = ref("");
 const drawingNo = ref("");
@@ -41,11 +39,8 @@ const error = ref("");
 const lotsRows = ref<StockSearchLot[]>([]);
 const lotsTotal = ref(0);
 
-// --- filter dropdown options (from /stock-search/options + /admin/suppliers) ---
+// --- filter dropdown options (from /stock-search/options) ---
 
-const supplierOptions = computed<SearchableSelectOption[]>(() =>
-  suppliers.value.map((s) => ({ value: s.code, label: `${s.code} — ${s.name}` }))
-);
 const brandOptions = computed<SearchableSelectOption[]>(() =>
   (options.value?.brands ?? []).map((b) => ({ value: b, label: b }))
 );
@@ -68,21 +63,9 @@ const locationOptions = computed<SearchableSelectOption[]>(() => {
   }
   return out;
 });
-const zoneOptions = computed<SearchableSelectOption[]>(() =>
-  (options.value?.zones ?? []).map((z) => ({ value: z, label: z }))
-);
 const shelfOptions = computed<SearchableSelectOption[]>(() =>
-  (options.value?.shelves ?? [])
-    .filter((s) => !zone.value.length || (s.zone !== null && zone.value.includes(s.zone)))
-    .map((s) => ({ value: s.code, label: s.zone ? `${s.code} — ${s.zone}` : s.code }))
+  (options.value?.shelves ?? []).map((s) => ({ value: s.code, label: s.zone ? `${s.code} — ${s.zone}` : s.code }))
 );
-
-// Prune shelf selections when the zone filter no longer contains them.
-watch(zone, () => {
-  const valid = new Set(shelfOptions.value.map((o) => o.value));
-  const next = shelfCode.value.filter((v) => valid.has(v));
-  if (next.length !== shelfCode.value.length) shelfCode.value = next;
-});
 
 // --- group-by (lots table): none / brand / shelf / zone ----------------------
 
@@ -243,14 +226,6 @@ const lotsPageSize = computed({
   },
 });
 
-async function loadSuppliers() {
-  try {
-    suppliers.value = await api.get("/admin/suppliers");
-  } catch {
-    suppliers.value = [];
-  }
-}
-
 async function loadOptions() {
   try {
     options.value = await flow.stockSearchOptions();
@@ -270,10 +245,8 @@ async function loadSummary(params: StockSearchParams = {}) {
 
 function currentFilters(): StockSearchParams {
   return {
-    supplierCode: supplierCode.value.length ? supplierCode.value : undefined,
     brand: brand.value.length ? brand.value : undefined,
     location: location.value.length ? location.value : undefined,
-    zone: zone.value.length ? zone.value : undefined,
     shelfCode: shelfCode.value.length ? shelfCode.value : undefined,
     partNo: partNo.value.trim() || undefined,
     drawingNo: drawingNo.value.trim() || undefined,
@@ -365,7 +338,6 @@ async function exportExcel() {
 }
 
 onMounted(() => {
-  loadSuppliers();
   loadOptions();
   loadSummary();
 });
@@ -432,13 +404,6 @@ const {
 
     <div class="filters">
       <SearchableSelect
-        v-model="supplierCode"
-        :options="supplierOptions"
-        :all-label="$t('admin.pages.stockSearch.allSuppliers')"
-        :aria-label="$t('admin.pages.stockSearch.supplier')"
-        class="filter-item"
-      />
-      <SearchableSelect
         v-model="brand"
         :options="brandOptions"
         :all-label="$t('admin.pages.stockSearch.allBrands')"
@@ -451,13 +416,6 @@ const {
         :all-label="$t('admin.pages.stockSearch.allLocations')"
         :aria-label="$t('admin.pages.stockSearch.location')"
         class="filter-item"
-      />
-      <SearchableSelect
-        v-model="zone"
-        :options="zoneOptions"
-        :all-label="$t('admin.pages.stockSearch.allZones')"
-        :aria-label="$t('admin.pages.stockSearch.zone')"
-        class="filter-item filter-narrow"
       />
       <SearchableSelect
         v-model="shelfCode"
