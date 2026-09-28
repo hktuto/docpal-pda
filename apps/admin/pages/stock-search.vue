@@ -13,8 +13,8 @@ const options = ref<StockSearchOptions | null>(null);
 // Filters (empty array = no filter / all).
 const supplierCode = ref<string[]>([]);
 const brand = ref<string[]>([]);
-const orgId = ref<string[]>([]);
-const subInventoryCode = ref<string[]>([]);
+// Combined location filter: exact "orgId:subInventoryCode" pairs.
+const location = ref<string[]>([]);
 const zone = ref<string[]>([]);
 const shelfCode = ref<string[]>([]);
 const partNo = ref("");
@@ -49,33 +49,21 @@ const supplierOptions = computed<SearchableSelectOption[]>(() =>
 const brandOptions = computed<SearchableSelectOption[]>(() =>
   (options.value?.brands ?? []).map((b) => ({ value: b, label: b }))
 );
-// org_id → dropdown label: org_info.office_code, falling back to the org id.
-const orgLabels = computed(() => {
-  const m = new Map<number, string>();
-  for (const l of options.value?.locations ?? []) {
-    if (l.orgId === null || m.has(l.orgId)) continue;
-    m.set(l.orgId, l.officeCode ?? String(l.orgId));
-  }
-  return m;
-});
-const orgOptions = computed<SearchableSelectOption[]>(() =>
-  [...orgLabels.value.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([o, label]) => ({ value: String(o), label }))
-);
-// Grouped by org (contiguous per backend ORDER BY org_id, code). The same
-// sub-inventory code can exist in several orgs — it appears once per org and
-// every occurrence shares the same checkbox state (the filter value is the
-// code alone).
-const subInventoryOptions = computed<SearchableSelectOption[]>(() => {
+// Combined location dropdown: one option per org_info (org, sub-inventory)
+// pair, grouped by org (org_info.office_code label, falling back to the org
+// id). The value is the exact "orgId:code" pair — the same sub-inventory
+// code can exist in several orgs, and the backend matches pairs, not the
+// code alone. The backend already limits locations to the caller's
+// user_profiles sub-inventory scope.
+const locationOptions = computed<SearchableSelectOption[]>(() => {
   const out: SearchableSelectOption[] = [];
   for (const l of options.value?.locations ?? []) {
     if (l.orgId === null || !l.subInventoryCode) continue;
-    if (orgId.value.length && !orgId.value.includes(String(l.orgId))) continue;
+    const orgLabel = l.officeCode ?? String(l.orgId);
     out.push({
-      value: l.subInventoryCode,
-      label: l.description ? `${l.subInventoryCode} — ${l.description}` : l.subInventoryCode,
-      group: orgLabels.value.get(l.orgId) ?? String(l.orgId),
+      value: `${l.orgId}:${l.subInventoryCode}`,
+      label: l.description ? `${orgLabel} / ${l.subInventoryCode} — ${l.description}` : `${orgLabel} / ${l.subInventoryCode}`,
+      group: orgLabel,
     });
   }
   return out;
@@ -89,12 +77,7 @@ const shelfOptions = computed<SearchableSelectOption[]>(() =>
     .map((s) => ({ value: s.code, label: s.zone ? `${s.code} — ${s.zone}` : s.code }))
 );
 
-// Prune dependent selections when the parent filter no longer contains them.
-watch(orgId, () => {
-  const valid = new Set(subInventoryOptions.value.map((o) => o.value));
-  const next = subInventoryCode.value.filter((v) => valid.has(v));
-  if (next.length !== subInventoryCode.value.length) subInventoryCode.value = next;
-});
+// Prune shelf selections when the zone filter no longer contains them.
 watch(zone, () => {
   const valid = new Set(shelfOptions.value.map((o) => o.value));
   const next = shelfCode.value.filter((v) => valid.has(v));
@@ -289,8 +272,7 @@ function currentFilters(): StockSearchParams {
   return {
     supplierCode: supplierCode.value.length ? supplierCode.value : undefined,
     brand: brand.value.length ? brand.value : undefined,
-    orgId: orgId.value.length ? orgId.value.map(Number) : undefined,
-    subInventoryCode: subInventoryCode.value.length ? subInventoryCode.value : undefined,
+    location: location.value.length ? location.value : undefined,
     zone: zone.value.length ? zone.value : undefined,
     shelfCode: shelfCode.value.length ? shelfCode.value : undefined,
     partNo: partNo.value.trim() || undefined,
@@ -464,17 +446,10 @@ const {
         class="filter-item"
       />
       <SearchableSelect
-        v-model="orgId"
-        :options="orgOptions"
-        :all-label="$t('admin.pages.stockSearch.allOrgs')"
-        :aria-label="$t('admin.pages.stockSearch.org')"
-        class="filter-item filter-narrow"
-      />
-      <SearchableSelect
-        v-model="subInventoryCode"
-        :options="subInventoryOptions"
-        :all-label="$t('admin.pages.stockSearch.allSubInventories')"
-        :aria-label="$t('admin.pages.stockSearch.subInventory')"
+        v-model="location"
+        :options="locationOptions"
+        :all-label="$t('admin.pages.stockSearch.allLocations')"
+        :aria-label="$t('admin.pages.stockSearch.location')"
         class="filter-item"
       />
       <SearchableSelect

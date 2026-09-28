@@ -3,6 +3,7 @@ import type { AppDb } from "../db.js";
 import { queryAll } from "./query.js";
 import { normalizePartNo } from "./scanParse.js";
 import { allowedOrgFilter } from "./org-filter.js";
+import { userScopeFilter, type UserScopeEntry } from "./user-scope.js";
 import { outdatedStockYears } from "../config.js";
 
 // ---------------------------------------------------------------------------
@@ -68,7 +69,10 @@ const DC_VALID = sql`il.date_code ~ '^[0-9]{4}$' AND left(il.date_code, 2)::int 
 //   - zone: any-of match on the shelf's zone (shelves join; lots whose shelf
 //     has no zone never match).
 //   - brand: any-of match on the part's brand (parts.brand).
-//   - orgId / subInventoryCode: any-of match on the lot's location pair.
+//   - orgId / subInventoryCode: any-of match on the lot's location pair
+//     (independent dimensions — kept for backwards compatibility).
+//   - location: any-of match on the EXACT (org_id, sub_inventory_code) pair
+//     (no cross-product) — the combined location dropdown's filter.
 //   - dateCodeFrom / dateCodeTo: WWYY date-code range, ranked as
 //     year*100+week (NOT lexicographic — "5221" < "0322" chronologically);
 //     lots with NULL/invalid date codes never match once a bound is set.
@@ -99,6 +103,9 @@ export interface StockSearchFilters {
   brand?: string[];
   orgId?: number[];
   subInventoryCode?: string[];
+  /** Exact (orgId, subInventoryCode) pairs, any-of — the combined location
+   *  dropdown filter (selecting (2,A)+(3,B) does NOT match (2,B)/(3,A)). */
+  location?: { orgId: number; code: string }[];
   /** WWYY date-code range bounds (either optional; swapped bounds are
    *  normalized). When a bound is set, lots with NULL/invalid date codes
    *  never match. */
@@ -362,6 +369,14 @@ function stockFilterClauses(filters: StockSearchFilters) {
     ${filters.orgId?.length ? sql`AND il.org_id IN (${sql.join(filters.orgId.map((v) => sql`${v}`), sql`, `)})` : sql``}
     ${filters.subInventoryCode?.length ? sql`AND il.sub_inventory_code IN (${sql.join(filters.subInventoryCode.map((v) => sql`${v}`), sql`, `)})` : sql``}
     ${
+      filters.location?.length
+        ? sql`AND (il.org_id, il.sub_inventory_code) IN (${sql.join(
+            filters.location.map((l) => sql`(${l.orgId}, ${l.code})`),
+            sql`, `
+          )})`
+        : sql``
+    }
+    ${
       dcLo !== null || dcHi !== null
         ? sql`AND ${DC_VALID}
           ${dcLo !== null ? sql`AND ${DC_RANK} >= ${dcLo}` : sql``}
@@ -447,10 +462,13 @@ export async function stockSearchSummary(db: AppDb, filters: StockSearchFilters 
  * distinct values present in the current stock (scoped by the same allowed-org
  * filter as searchStock); locations come from org_info — every
  * (org_id, secondary_inventory_name) pair within the allowed orgs, whether or
- * not it holds stock — so the org/sub-inventory dropdowns always match the
- * org_info master rather than whatever happens to be stocked.
+ * not it holds stock — so the location dropdown always matches the org_info
+ * master rather than whatever happens to be stocked. When the caller's
+ * user_profiles sub-inventory scope is given, locations are limited to the
+ * scoped pairs (null scope = unrestricted); the other option sets are not
+ * scope-filtered.
  */
-export async function stockSearchOptions(db: AppDb): Promise<StockSearchOptions> {
+export async function stockSearchOptions(db: AppDb, scope?: UserScopeEntry[] | null): Promise<StockSearchOptions> {
   const brands = await queryAll<{ brand: string }>(
     db,
     sql`
@@ -495,6 +513,7 @@ export async function stockSearchOptions(db: AppDb): Promise<StockSearchOptions>
       FROM org_info oi
       WHERE TRUE
       ${allowedOrgFilter(sql`oi.org_id`)}
+      ${userScopeFilter(sql`oi.org_id`, sql`oi.secondary_inventory_name`, scope)}
       ORDER BY oi.org_id, oi.secondary_inventory_name
     `
   );

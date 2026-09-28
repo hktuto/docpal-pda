@@ -139,7 +139,7 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Home / section cards | `/` | `apps/admin/pages/index.vue` |
 | Master-data CRUD lists | `/<entity>` | `apps/admin/pages/<entity>.vue` (thin wrappers over `components/CrudTable.vue` + `utils/entities.ts` configs) |
 | Supplier profile (QR scan template) editor | `/suppliers/:code` | `apps/admin/pages/suppliers/[code].vue` + `apps/admin/components/SupplierProfileEditor.vue` |
-| Stock search (read-only; multi-value supplier/brand/zone/shelf/org/sub-inventory + part-no filters, group by brand/shelf/zone) | `/stock-search` | `apps/admin/pages/stock-search.vue` |
+| Stock search (read-only; multi-value supplier/brand/location (exact org/sub-inventory pairs, scope-limited)/zone/shelf + part-no filters, group by brand/shelf/zone) | `/stock-search` | `apps/admin/pages/stock-search.vue` |
 | Sub-inventories (+ share-group manager dialog, filter/sort) | `/sub-inventories` | `apps/admin/pages/sub-inventories.vue` |
 | Shelf boxes list / detail | `/shelf-boxes`, `/shelf-boxes/:id` | `apps/admin/pages/shelf-boxes/index.vue`, `apps/admin/pages/shelf-boxes/[id].vue` |
 | Picking orders list / detail (delivery-date edit, picking-list xlsx download, per-item remove-allocation + availability search, status override — single on detail, batch multi-select on list, items table By-line / By-part-no view toggle) | `/picking-orders`, `/picking-orders/:id` | `apps/admin/pages/picking-orders/index.vue`, `apps/admin/pages/picking-orders/[id].vue`, `apps/admin/components/picking-orders/StatusOverrideModal.vue` |

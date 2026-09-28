@@ -431,6 +431,31 @@ test("orgId/subInventoryCode: any-of match on the lot's location pair", async ()
   assert.deepEqual(await searchStock(client.db, { orgId: [2], subInventoryCode: ["WSTORE1"] }), { parts: [], lots: [] });
 });
 
+test("location: exact (org, sub-inventory) pairs, no cross-product", async () => {
+  await reseed(client);
+  // A second stocked location: same part, org 5 / CHECKING (the 6 seed lots
+  // are all org 2 / STORE1).
+  await client.db.execute(sql`
+    INSERT INTO inventory_lots (id, part_no, wcl_item_no, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
+    VALUES ('LOT-LOC-PAIR-1', 'RK73B1JTTD181G', 'RK73B1JTTD181G', 'A-01-01', 'BOX-LOC-PAIR-1', 5, 'CHECKING', 100, now(), now())
+  `);
+
+  assert.equal((await searchStock(client.db, { location: [{ orgId: 2, code: "STORE1" }] })).lots.length, 6);
+  assert.equal((await searchStock(client.db, { location: [{ orgId: 5, code: "CHECKING" }] })).lots.length, 1);
+  assert.equal(
+    (await searchStock(client.db, { location: [{ orgId: 2, code: "STORE1" }, { orgId: 5, code: "CHECKING" }] })).lots.length,
+    7
+  );
+  // Cross pairs have no stock — a cross-product org × sub-inventory match
+  // would return rows here.
+  assert.deepEqual(await searchStock(client.db, { location: [{ orgId: 2, code: "CHECKING" }] }), { parts: [], lots: [] });
+  assert.deepEqual(await searchStock(client.db, { location: [{ orgId: 5, code: "STORE1" }] }), { parts: [], lots: [] });
+
+  // The summary follows the same filter.
+  assert.equal((await stockSearchSummary(client.db, { location: [{ orgId: 5, code: "CHECKING" }] })).lotCount, 1);
+  assert.equal((await stockSearchSummary(client.db, { location: [{ orgId: 2, code: "CHECKING" }] })).lotCount, 0);
+});
+
 // --- options (distinct filter values in stock) -------------------------------------
 
 test("options: distinct brands/zones/shelves in stock; locations = all org_info pairs", async () => {
@@ -454,6 +479,28 @@ test("options: distinct brands/zones/shelves in stock; locations = all org_info 
         FROM org_info ORDER BY org_id, secondary_inventory_name`
   );
   assert.deepEqual(opts.locations, expected);
+});
+
+test("options: a user sub-inventory scope limits only the locations list", async () => {
+  await reseed(client);
+  const all = await stockSearchOptions(client.db);
+
+  const scope = [{ orgId: 2, code: "STORE1" }];
+  const scoped = await stockSearchOptions(client.db, scope);
+  // NULL-coded org_info rows stay visible under a scope (same rule as the
+  // PDA list reads); every other row must be a scoped pair.
+  assert.deepEqual(
+    scoped.locations,
+    all.locations.filter((l) => l.subInventoryCode === null || (l.orgId === 2 && l.subInventoryCode === "STORE1"))
+  );
+  // brands/zones/shelves are not scope-filtered.
+  assert.deepEqual(scoped.brands, all.brands);
+  assert.deepEqual(scoped.zones, all.zones);
+  assert.deepEqual(scoped.shelves, all.shelves);
+
+  // null / empty scope = unrestricted.
+  assert.deepEqual((await stockSearchOptions(client.db, null)).locations, all.locations);
+  assert.deepEqual((await stockSearchOptions(client.db, [])).locations, all.locations);
 });
 
 // --- summary (overall totals) --------------------------------------------------

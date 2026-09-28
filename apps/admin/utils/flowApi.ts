@@ -295,8 +295,10 @@ export interface StockSearchParams {
   shelfCode?: string[];
   zone?: string[];
   brand?: string[];
-  orgId?: number[];
-  subInventoryCode?: string[];
+  /** Exact location pairs as "orgId:subInventoryCode" strings (the combined
+   *  location dropdown values) — matched as (org, sub-inventory) pairs, not
+   *  as independent org/sub-inventory dimensions. */
+  location?: string[];
   dateCodeFrom?: string;
   dateCodeTo?: string;
 }
@@ -324,8 +326,7 @@ function stockSearchQuery(params: StockSearchParams & Partial<StockSearchPagePar
   for (const v of params.shelfCode ?? []) qs.append("shelfCode", v);
   for (const v of params.zone ?? []) qs.append("zone", v);
   for (const v of params.brand ?? []) qs.append("brand", v);
-  for (const v of params.orgId ?? []) qs.append("orgId", String(v));
-  for (const v of params.subInventoryCode ?? []) qs.append("subInventoryCode", v);
+  for (const v of params.location ?? []) qs.append("location", v);
   if (params.dateCodeFrom) qs.set("dateCodeFrom", params.dateCodeFrom);
   if (params.dateCodeTo) qs.set("dateCodeTo", params.dateCodeTo);
   if (params.page !== undefined) qs.set("page", String(params.page));

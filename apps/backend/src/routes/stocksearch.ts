@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { db } from "../db.js";
+import { actorFrom } from "../auth/middleware.js";
+import { getUserScope } from "../db/user-scope.js";
 import { searchStock, stockSearchOptions, stockSearchSummary, type StockSearchFilters } from "../db/stocksearch.js";
 
 export const stockSearchRoute = new Hono();
@@ -8,13 +10,24 @@ export const stockSearchRoute = new Hono();
 // Shared filter parsing: partNo is a single case-insensitive substring; the
 // rest are multi-value (repeat the query param, any-of match): supplierCode
 // (lot sources → receiving order's supplier), shelfCode, zone, brand,
-// subInventoryCode, orgId (integer). dateCodeFrom/dateCodeTo are single WWYY
-// range bounds.
+// subInventoryCode, orgId (integer), location ("orgId:code" exact pairs).
+// dateCodeFrom/dateCodeTo are single WWYY range bounds.
 function stockSearchFilters(c: Context): StockSearchFilters {
   const orgIds = c.req
     .queries("orgId")
     ?.map((v) => Number(v))
     .filter((n) => Number.isFinite(n));
+  // "orgId:code" — split on the FIRST colon (codes never contain one, but be
+  // lenient); malformed entries are dropped.
+  const locations = c.req
+    .queries("location")
+    ?.map((v) => {
+      const i = v.indexOf(":");
+      const orgId = Number(v.slice(0, i));
+      const code = v.slice(i + 1);
+      return i > 0 && Number.isInteger(orgId) && code !== "" ? { orgId, code } : null;
+    })
+    .filter((l): l is { orgId: number; code: string } => l !== null);
   return {
     supplierCode: c.req.queries("supplierCode"),
     partNo: c.req.query("partNo"),
@@ -24,6 +37,7 @@ function stockSearchFilters(c: Context): StockSearchFilters {
     brand: c.req.queries("brand"),
     orgId: orgIds?.length ? orgIds : undefined,
     subInventoryCode: c.req.queries("subInventoryCode"),
+    location: locations?.length ? locations : undefined,
     dateCodeFrom: c.req.query("dateCodeFrom"),
     dateCodeTo: c.req.query("dateCodeTo"),
   };
@@ -52,8 +66,11 @@ stockSearchRoute.get("/stock-search", async (c) => {
 
 // Distinct filter values present in the current stock (brands, zones,
 // shelves, org/sub-inventory locations) for searchable filter dropdowns.
+// Locations are limited to the caller's user_profiles sub-inventory scope
+// (no scope row = unrestricted).
 stockSearchRoute.get("/stock-search/options", async (c) => {
-  return c.json(await stockSearchOptions(db), 200);
+  const scope = await getUserScope(db, actorFrom(c).username);
+  return c.json(await stockSearchOptions(db, scope), 200);
 });
 
 // Stock totals for the admin summary header — follows the same filters as
