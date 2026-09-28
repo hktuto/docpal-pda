@@ -114,6 +114,7 @@ export const entities: Record<string, EntityConfig> = {
     clientFilters: [{ key: "zone", label: "admin.fields.zone" }],
     fields: [
       { key: "code", label: "admin.fields.code", type: "text", required: true, readonlyOnEdit: true },
+      { key: "displayName", label: "admin.fields.shelfDisplayName", type: "text" },
       { key: "zone", label: "admin.fields.zone", type: "text" },
       // Advisory operator warning shown on allocations pointing at this shelf
       // (empty = none). Spec 2026-09-17-shelf-warning-design.md.

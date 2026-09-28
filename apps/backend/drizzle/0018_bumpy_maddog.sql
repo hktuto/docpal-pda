@@ -1,0 +1,1 @@
+ALTER TABLE "shelves" ADD COLUMN "display_name" text;

@@ -57,7 +57,7 @@ onMounted(async () => {
         </div>
         <div>
           <div class="dt">{{ $t("admin.pages.shelfBoxes.shelf") }}</div>
-          <div class="dd">{{ formatCell(box.shelfCode) }}</div>
+          <div class="dd">{{ formatShelf(box.shelfCode, box.shelfDisplayName) || "—" }}</div>
         </div>
         <div>
           <div class="dt">{{ $t("admin.pages.shelfBoxes.orgId") }}</div>

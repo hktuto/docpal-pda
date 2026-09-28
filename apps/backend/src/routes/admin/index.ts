@@ -56,6 +56,7 @@ adminRoute.route(
     create: (b) => ({
       id: optId(b),
       code: reqStr(b, "code"),
+      displayName: optStr(b, "displayName"),
       zone: optStr(b, "zone"),
       // [] collapses to null (shared shelf), same as user_profiles scopes.
       subInventoryScopes: optScopes(b),
@@ -63,6 +64,7 @@ adminRoute.route(
     }),
     update: (b) => ({
       ...(b.zone !== undefined && { zone: optStr(b, "zone") }),
+      ...(b.displayName !== undefined && { displayName: optStr(b, "displayName") }),
       ...(b.subInventoryScopes !== undefined && { subInventoryScopes: optScopes(b) }),
       ...(b.warning !== undefined && { warning: optStr(b, "warning") }),
       lastUpdateDate: new Date(),

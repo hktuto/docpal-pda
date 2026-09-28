@@ -46,6 +46,7 @@ shelfBoxesRoute.get("/", async (c) => {
     db,
     sql`SELECT sb.id,
                sb.shelf_code          AS "shelfCode",
+               s.display_name         AS "shelfDisplayName",
                sb.org_id              AS "orgId",
                sb.sub_inventory_code  AS "subInventoryCode",
                sb.status,
@@ -53,8 +54,9 @@ shelfBoxesRoute.get("/", async (c) => {
                COUNT(sbi.id)::int          AS "itemCount",
                COALESCE(SUM(sbi.qty), 0)::int AS "totalQty"
         FROM shelf_boxes sb
+        LEFT JOIN shelves s ON s.code = sb.shelf_code
         LEFT JOIN shelf_box_items sbi ON sbi.shelf_box_id = sb.id
-        GROUP BY sb.id
+        GROUP BY sb.id, s.display_name
         ORDER BY sb.created_date DESC`
   );
   return c.json(rows);
@@ -86,11 +88,13 @@ shelfBoxesRoute.get("/:id", async (c) => {
     db,
     sql`SELECT sb.id,
                sb.shelf_code          AS "shelfCode",
+               s.display_name         AS "shelfDisplayName",
                sb.org_id              AS "orgId",
                sb.sub_inventory_code  AS "subInventoryCode",
                sb.status,
                sb.created_date          AS "createdDate"
         FROM shelf_boxes sb
+        LEFT JOIN shelves s ON s.code = sb.shelf_code
         WHERE sb.id = ${id}`
   );
   if (!box) throw new HTTPException(404, { message: "not found" });

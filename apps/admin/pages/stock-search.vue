@@ -64,7 +64,10 @@ const locationOptions = computed<SearchableSelectOption[]>(() => {
   return out;
 });
 const shelfOptions = computed<SearchableSelectOption[]>(() =>
-  (options.value?.shelves ?? []).map((s) => ({ value: s.code, label: s.zone ? `${s.code} — ${s.zone}` : s.code }))
+  (options.value?.shelves ?? []).map((s) => {
+    const name = formatShelf(s.code, s.displayName);
+    return { value: s.code, label: s.zone ? `${name} — ${s.zone}` : name };
+  })
 );
 
 // --- group-by (lots table): none / brand / shelf / zone ----------------------
@@ -96,6 +99,7 @@ if (typeof localStorage !== "undefined") {
 
 interface LotGroup {
   key: string;
+  label: string;
   lots: StockSearchLot[];
 }
 
@@ -103,6 +107,8 @@ const lotGroups = computed<LotGroup[]>(() => {
   if (groupBy.value === "none") return [];
   const keyOf = (l: StockSearchLot) =>
     groupBy.value === "brand" ? l.brand : groupBy.value === "shelf" ? (l.shelfCode ?? "") : (l.zone ?? "");
+  const labelOf = (key: string, lots: StockSearchLot[]) =>
+    groupBy.value === "shelf" ? formatShelf(key, lots[0]?.shelfDisplayName) : key;
   const buckets = new Map<string, StockSearchLot[]>();
   for (const l of result.value?.lots ?? []) {
     const k = keyOf(l);
@@ -112,7 +118,7 @@ const lotGroups = computed<LotGroup[]>(() => {
   }
   return [...buckets.entries()]
     .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
-    .map(([key, lots]) => ({ key, lots }));
+    .map(([key, lots]) => ({ key, label: labelOf(key, lots), lots }));
 });
 
 // --- tables -------------------------------------------------------------------
@@ -152,7 +158,7 @@ const lotsColumnDefs = computed<AdminColumnDef<StockSearchLot>[]>(() => [
   {
     key: "shelfCode",
     label: t("admin.pages.stockSearch.shelf"),
-    accessor: (l) => l.shelfCode ?? "",
+    accessor: (l) => formatShelf(l.shelfCode, l.shelfDisplayName),
     size: 90,
   },
   {
@@ -485,7 +491,7 @@ const {
       <template v-else>
         <template v-for="g in lotGroups" :key="g.key">
           <h3 class="group-title">
-            {{ g.key || "—" }}
+            {{ g.label || "—" }}
             <span class="muted">— {{ $t("admin.pages.stockSearch.lotsCount", { count: g.lots.length }) }}</span>
           </h3>
           <DataTable

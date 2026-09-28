@@ -82,6 +82,7 @@ location pair (org_id + sub_inventory_code) lives on `shelf_boxes` and
 | --- | --- | --- |
 | id | text PK | Shelf id (UUID v7) |
 | code | text NOT NULL UNIQUE | Shelf/location code |
+| display_name | text | Presentation-only display alias shown in the admin console instead of `code` (fallback: `code`); `code` stays the scan/FK key |
 | zone | text | Zone within the warehouse |
 | sub_inventory_scopes | jsonb | Advisory put-away affinity as `[{ orgId, code }]` pairs (same shape as `user_profiles.sub_inventory_scopes`; codes repeat across orgs); NULL/empty = shared shelf |
 | warning | text | Advisory operator warning surfaced (⚠ icon) wherever an allocation points at this shelf — e.g. outdated-stock shelves (spec 2026-09-17-shelf-warning-design.md); NULL/empty = none; display metadata only, allocation still picks the shelf |

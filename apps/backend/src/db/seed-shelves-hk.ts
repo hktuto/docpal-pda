@@ -14,7 +14,7 @@ const hkShelfZones: { zone: string | null; shelf: string[] }[] = [
   }, {
     zone: "MCI Store",
     shelf: [
-      "MCI Store", "MM-A", "MM-B", "MM-C", "MM-D", "MM-E", "ML-D", "ML-E", "ML-F", "MK-L", "MK-M", "MK-F", "MK-K", "MK-N", "MK-O", "MK-P", "MK-Q",
+      "MMA", "MMB", "MMC", "MMD", "MME", "MLD", "MLE", "MLF", "MKL", "MKM", "MKF", "MKK", "MKN", "MKO", "MKP", "MKQ",
       "EG01", "EG02", "EG03", "EG04", "EG05", "EG06", "EG07", "EG08", "EG09", "EG10", "EG11", "EG12", "EG13", "EG14", "EG15", "EG16", "EG17", "EG18", "EG19", "EG20", "EG21", "EG22", "EG23", "EG24", "EG25", "EG26", "EG27", "EG28", "EG29", "EG30", "EG31", "EG32",
       // MF01 - MF16
       "MF01", "MF02", "MF03", "MF04", "MF05", "MF06", "MF07", "MF08", "MF09", "MF10", "MF11", "MF12", "MF13", "MF14", "MF15", "MF16",
@@ -29,7 +29,7 @@ const hkShelfZones: { zone: string | null; shelf: string[] }[] = [
   {
     zone: null,
     shelf: [
-      "MN-B", "MN-A",
+      "MNB", "MNA",
       // OL01 - OL08
       "OL01", "OL02", "OL03", "OL04", "OL05", "OL06", "OL07", "OL08"
     ]
@@ -143,7 +143,7 @@ const hkShelfZones: { zone: string | null; shelf: string[] }[] = [
       "GRF01", "GRF02", "GRF03", "GRF04", "GRF05", "GRF06",
     ]
   }, {
-    zone: "Hong Kong Store",
+    zone: "HK Store",
     shelf: [
       // E01-24
       "E01", "E02", "E03", "E04", "E05", "E06", "E07", "E08", "E09", "E10", "E11", "E12",
@@ -170,9 +170,22 @@ const hkShelfZones: { zone: string | null; shelf: string[] }[] = [
  *  (spec 2026-09-17-shelf-warning-design.md). */
 const OUTDATED_STOCK_WARNING = "Outdated stock — verify before picking";
 
-export const hkShelves: { code: string; zone: string | null; warning?: string }[] = hkShelfZones.flatMap(
+/** Default display name for a dashless shelf code: codes with a space stay
+ *  unchanged; codes with digits get a `-` at the first letter→digit boundary
+ *  (`EG01` → `EG-01`); digitless codes get a `-` before the last char
+ *  (`MMA` → `MM-A`). */
+export function shelfDisplayName(code: string): string {
+  if (code.includes(" ")) return code;
+  const digitIdx = code.search(/\d/);
+  if (digitIdx > 0) return `${code.slice(0, digitIdx)}-${code.slice(digitIdx)}`;
+  if (digitIdx === 0) return code;
+  return code.length > 1 ? `${code.slice(0, -1)}-${code.slice(-1)}` : code;
+}
+
+export const hkShelves: { code: string; displayName?: string; zone: string | null; warning?: string }[] = hkShelfZones.flatMap(
   (z) => z.shelf.map((code) => ({
     code,
+    displayName: shelfDisplayName(code),
     zone: z.zone,
     ...(code.startsWith("OL") ? { warning: OUTDATED_STOCK_WARNING } : {}),
   }))

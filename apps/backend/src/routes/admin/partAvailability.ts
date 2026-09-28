@@ -14,6 +14,7 @@ interface StockRow {
   orgId: number | null;
   subInventoryCode: string | null;
   shelfCode: string | null;
+  shelfDisplayName: string | null;
   boxId: string | null;
   partNo: string;
   wclItemNo: string | null;
@@ -115,6 +116,7 @@ adminPartAvailabilityRoute.get("/part-availability", async (c) => {
         il.org_id AS "orgId",
         il.sub_inventory_code AS "subInventoryCode",
         il.shelf_code AS "shelfCode",
+        s.display_name AS "shelfDisplayName",
         il.box_id AS "boxId",
         il.part_no AS "partNo",
         il.wcl_item_no AS "wclItemNo",
@@ -124,6 +126,7 @@ adminPartAvailabilityRoute.get("/part-availability", async (c) => {
         il.allocated_qty AS "allocatedQty",
         il.available_qty AS "availableQty"
       FROM inventory_lots il
+      LEFT JOIN shelves s ON s.code = il.shelf_code
       WHERE il.part_no = ${partNo} OR (${wclItemNo} <> '' AND il.wcl_item_no = ${wclItemNo})
       ORDER BY il.org_id, il.sub_inventory_code, il.shelf_code
     `

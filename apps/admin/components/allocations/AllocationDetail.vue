@@ -20,7 +20,7 @@ const { format: formatDc } = useDateCodeDisplay();
     </div>
     <div class="alloc-tip-row">
       <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.shelf") }}</span>
-      <span>{{ a.lot.shelfCode ?? "—" }}</span>
+      <span>{{ a.lot.shelfDisplayName ?? a.lot.shelfCode ?? "—" }}</span>
     </div>
     <div class="alloc-tip-row">
       <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.box") }}</span>

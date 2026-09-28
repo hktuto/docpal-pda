@@ -11,7 +11,7 @@ const error = ref("");
 
 const columnDefs = computed<AdminColumnDef<any>[]>(() => [
   { key: "id", label: t("admin.pages.shelfBoxes.id"), size: 100 },
-  { key: "shelfCode", label: t("admin.pages.shelfBoxes.shelf"), size: 110 },
+  { key: "shelfCode", label: t("admin.pages.shelfBoxes.shelf"), size: 110, accessor: (b) => formatShelf(b.shelfCode, b.shelfDisplayName) },
   { key: "orgId", label: t("admin.pages.shelfBoxes.orgId"), size: 80 },
   { key: "subInventoryCode", label: t("admin.pages.shelfBoxes.subInventory"), size: 120 },
   { key: "status", label: t("admin.pages.shelfBoxes.status"), size: 100 },

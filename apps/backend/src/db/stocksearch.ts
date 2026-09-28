@@ -134,6 +134,8 @@ export interface StockSearchLotRow {
   cow: string | null;
   drawingNo: string | null;
   shelfCode: string | null;
+  /** The shelf's display alias (shelves join; null when none). */
+  shelfDisplayName: string | null;
   /** The shelf's zone (shelves join; null when the lot has no/unknown shelf). */
   zone: string | null;
   boxId: string | null;
@@ -149,7 +151,7 @@ export interface StockSearchLotRow {
 export interface StockSearchOptions {
   brands: string[];
   zones: string[];
-  shelves: { code: string; zone: string | null }[];
+  shelves: { code: string; displayName: string | null; zone: string | null }[];
   /** Filter values for the admin dropdowns: brands/zones/shelves are the
    *  distinct values present in stock; locations are every org_info pair
    *  within the allowed orgs (whether stocked or not), so the org/sub-inventory
@@ -285,6 +287,7 @@ export async function searchStock(
             il.coo, il.cow,
             il.drawing_no AS "drawingNo",
             il.shelf_code AS "shelfCode",
+            s.display_name AS "shelfDisplayName",
             il.box_id AS "boxId",
             il.org_id AS "orgId",
             il.sub_inventory_code AS "subInventoryCode",
@@ -314,6 +317,7 @@ export async function searchStock(
         il.coo, il.cow,
         il.drawing_no AS "drawingNo",
         il.shelf_code AS "shelfCode",
+        s.display_name AS "shelfDisplayName",
         il.box_id AS "boxId",
         il.org_id AS "orgId",
         il.sub_inventory_code AS "subInventoryCode",
@@ -491,10 +495,10 @@ export async function stockSearchOptions(db: AppDb, scope?: UserScopeEntry[] | n
       ORDER BY s.zone
     `
   );
-  const shelves = await queryAll<{ code: string; zone: string | null }>(
+  const shelves = await queryAll<{ code: string; displayName: string | null; zone: string | null }>(
     db,
     sql`
-      SELECT DISTINCT il.shelf_code AS code, s.zone
+      SELECT DISTINCT il.shelf_code AS code, s.display_name AS "displayName", s.zone
       FROM inventory_lots il
       LEFT JOIN shelves s ON s.code = il.shelf_code
       WHERE il.shelf_code IS NOT NULL

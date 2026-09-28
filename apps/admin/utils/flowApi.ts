@@ -50,6 +50,8 @@ export interface PickingItemRow {
     lot: {
       id: string;
       shelfCode: string | null;
+      /** shelves.display_name for shelfCode — presentation-only alias. */
+      shelfDisplayName?: string | null;
       /** shelves.warning for shelfCode — advisory operator warning. */
       shelfWarning: string | null;
       boxId: string | null;
@@ -273,6 +275,7 @@ export interface StockSearchLot {
   cow: string | null;
   drawingNo: string | null;
   shelfCode: string | null;
+  shelfDisplayName?: string | null;
   zone: string | null;
   boxId: string | null;
   orgId: number | null;
@@ -356,7 +359,7 @@ export interface StockSearchSummary {
 export interface StockSearchOptions {
   brands: string[];
   zones: string[];
-  shelves: { code: string; zone: string | null }[];
+  shelves: { code: string; displayName?: string | null; zone: string | null }[];
   locations: { orgId: number | null; subInventoryCode: string | null; description: string | null; officeCode: string | null }[];
 }
 
@@ -384,6 +387,7 @@ export interface PartAvailabilityStockRow {
   orgId: number | null;
   subInventoryCode: string | null;
   shelfCode: string | null;
+  shelfDisplayName?: string | null;
   boxId: string | null;
   partNo: string;
   wclItemNo: string | null;

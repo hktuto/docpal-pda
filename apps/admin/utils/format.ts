@@ -1,6 +1,10 @@
 /** Table-cell display formatting shared by the CRUD and shelf-box views. */
 import { formatDate } from "./datePreferences";
 
+export function formatShelf(code: string | null | undefined, displayName?: string | null): string {
+  return displayName || code || "";
+}
+
 export function formatCell(value: unknown): string {
   if (value === null || value === undefined) return "—";
   if (typeof value === "boolean") return value ? "Yes" : "No";

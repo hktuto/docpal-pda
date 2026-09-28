@@ -32,7 +32,7 @@ import { realParts } from "./seed-real-data.js";
 import { builtinSupplierProfiles } from "./seed-supplier-profiles.js";
 import { realSubInventories } from "./seed-subinventories-data.js";
 import { realNetWeights } from "./seed-net-weight-data.js";
-import { hkShelves } from "./seed-shelves-hk.js";
+import { hkShelves, shelfDisplayName } from "./seed-shelves-hk.js";
 import {
   demoParts,
   demoReceivingOrders,
@@ -207,28 +207,28 @@ const BOX_SIZES = [
 // boxes and lots FK to these codes). The real HK layout in seed-shelves-hk.ts
 // is the default seed for a fresh non-demo database (seedReferenceOnly).
 const SHELVES = [
-  { code: "A-01-01", zone: "A" },
-  { code: "A-01-02", zone: "A" },
-  { code: "A-01-03", zone: "A" },
-  { code: "A-01-04", zone: "A" },
-  { code: "A-02-01", zone: "A" },
-  { code: "A-02-02", zone: "A" },
-  { code: "A-03-01", zone: "A" },
-  { code: "A-03-02", zone: "A" },
-  { code: "A-03-03", zone: "A" },
-  { code: "A-03-04", zone: "A" },
-  { code: "A-03-05", zone: "A" },
-  { code: "A-04-01", zone: "A" },
-  { code: "A-04-02", zone: "A" },
-  { code: "A-04-03", zone: "A" },
-  { code: "A-04-04", zone: "A" },
-  { code: "A-04-05", zone: "A", subInventoryScopes: [{ orgId: 2, code: "STORE1" }] },
-  { code: "GZ-01-01", zone: "GZ" },
-  { code: "GZ-01-02", zone: "GZ" },
-  { code: "SZ-01-01", zone: "SZ" },
-  { code: "SZ-01-02", zone: "SZ" },
-  { code: "W-01-01", zone: "W" },
-];
+  { code: "A0101", zone: "A" },
+  { code: "A0102", zone: "A" },
+  { code: "A0103", zone: "A" },
+  { code: "A0104", zone: "A" },
+  { code: "A0201", zone: "A" },
+  { code: "A0202", zone: "A" },
+  { code: "A0301", zone: "A" },
+  { code: "A0302", zone: "A" },
+  { code: "A0303", zone: "A" },
+  { code: "A0304", zone: "A" },
+  { code: "A0305", zone: "A" },
+  { code: "A0401", zone: "A" },
+  { code: "A0402", zone: "A" },
+  { code: "A0403", zone: "A" },
+  { code: "A0404", zone: "A" },
+  { code: "A0405", zone: "A", subInventoryScopes: [{ orgId: 2, code: "STORE1" }] },
+  { code: "GZ0101", zone: "GZ" },
+  { code: "GZ0102", zone: "GZ" },
+  { code: "SZ0101", zone: "SZ" },
+  { code: "SZ0102", zone: "SZ" },
+  { code: "W0101", zone: "W" },
+].map((s) => ({ ...s, displayName: shelfDisplayName(s.code) }));
 
 // Demo dataset (spec docs/superpowers/specs/2026-07-29-excel-demo-seed-design.md):
 // the order/stock world comes from new_seed/demo-scenario.xlsx via

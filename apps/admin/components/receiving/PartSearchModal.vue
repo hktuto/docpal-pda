@@ -192,7 +192,7 @@ watch(
             <tr v-for="s in stock" :key="s.lotId" :class="{ 'avail-match': highlight(s) }">
               <td>{{ s.orgId ?? "—" }}</td>
               <td>{{ s.subInventoryCode ?? "—" }}</td>
-              <td>{{ s.shelfCode ?? "—" }}</td>
+              <td>{{ s.shelfDisplayName ?? s.shelfCode ?? "—" }}</td>
               <td>{{ s.boxId ?? "—" }}</td>
               <td>{{ s.dateCode ?? "—" }}</td>
               <td>{{ s.lotCode ?? "—" }}</td>

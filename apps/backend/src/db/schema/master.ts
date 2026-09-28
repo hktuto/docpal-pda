@@ -112,6 +112,8 @@ export const parts = pgTable("parts", {
 export const shelves = pgTable("shelves", {
   id: text("id").primaryKey(),
   code: text("code").notNull().unique(),
+  // Presentation-only display alias (admin UI); `code` stays the scan/FK key.
+  displayName: text("display_name"),
   zone: text("zone"),
   // 货架偏好子库存列表 (advisory, org-scoped) — [{ orgId: number, code: string }]
   // pairs (same shape as user_profiles.sub_inventory_scopes), since

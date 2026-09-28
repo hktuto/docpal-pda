@@ -714,6 +714,8 @@ export interface PickingOrderRow {
 export interface PickingLotDetail {
   id: string;
   shelfCode: string | null;
+  /** shelves.display_name for shelfCode — presentation-only alias. */
+  shelfDisplayName: string | null;
   /** shelves.warning for shelfCode — advisory operator warning, null when the
    *  lot has no shelf or the shelf has no warning. */
   shelfWarning: string | null;
@@ -803,6 +805,7 @@ interface AllocationQueryRow {
   boxId: string | null;
   lotId: string | null;
   lotShelfCode: string | null;
+  lotShelfDisplayName: string | null;
   lotShelfWarning: string | null;
   lotBoxId: string | null;
   lotDateCode: string | null;
@@ -881,6 +884,7 @@ export async function getPickingOrderDetail(
             rii.ctn_no AS "boxId",
             il.id AS "lotId", il.shelf_code AS "lotShelfCode", il.box_id AS "lotBoxId",
             sh.warning AS "lotShelfWarning",
+            sh.display_name AS "lotShelfDisplayName",
             il.date_code AS "lotDateCode", il.lot_code AS "lotLotCode",
             il.coo AS "lotCoo", il.cow AS "lotCow",
             il.total_qty AS "lotTotalQty", il.allocated_qty AS "lotAllocatedQty",
@@ -949,6 +953,7 @@ export async function getPickingOrderDetail(
             ? {
                 id: a.lotId,
                 shelfCode: a.lotShelfCode,
+                shelfDisplayName: a.lotShelfDisplayName,
                 shelfWarning: a.lotShelfWarning,
                 boxId: a.lotBoxId,
                 dateCode: a.lotDateCode,

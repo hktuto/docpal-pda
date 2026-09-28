@@ -69,20 +69,20 @@ export const demoPickingItems = [
 ];
 
 export const demoShelfBoxes = [
-  { id: "BOX-H-20260701-0001", shelfCode: "A-01-01", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
-  { id: "BOX-H-20260701-0002", shelfCode: "A-01-02", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
-  { id: "BOX-H-20260701-0003", shelfCode: "A-02-01", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
-  { id: "BOX-H-20260701-0004", shelfCode: "A-02-02", orgId: 2, subInventoryCode: "STORE1", status: "open" },
-  { id: "BOX-H-20260701-0005", shelfCode: "A-03-01", orgId: 2, subInventoryCode: "STORE1", status: "open" },
-  { id: "BOX-H-20260701-0006", shelfCode: "A-03-02", orgId: 2, subInventoryCode: "STORE1", status: "open" },
-  { id: "BOX-H-20260701-0007", shelfCode: "A-03-03", orgId: 2, subInventoryCode: "STORE1", status: "open" },
-  { id: "BOX-H-20260701-0008", shelfCode: "A-03-04", orgId: 2, subInventoryCode: "STORE1", status: "open" },
-  { id: "BOX-H-20260701-0009", shelfCode: "A-03-05", orgId: 2, subInventoryCode: "STORE1", status: "open" },
-  { id: "BOX-H-20260701-0010", shelfCode: "A-04-01", orgId: 2, subInventoryCode: "STORE1", status: "open" },
-  { id: "BOX-H-20260701-0011", shelfCode: "A-04-02", orgId: 2, subInventoryCode: "STORE1", status: "open" },
-  { id: "BOX-H-20260701-0012", shelfCode: "A-04-03", orgId: 2, subInventoryCode: "STORE1", status: "open" },
-  { id: "BOX-H-20260701-0013", shelfCode: "A-04-04", orgId: 2, subInventoryCode: "STORE1", status: "open" },
-  { id: "BOX-H-20260701-0014", shelfCode: "A-04-05", orgId: 2, subInventoryCode: "STORE1", status: "open" }
+  { id: "BOX-H-20260701-0001", shelfCode: "A0101", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
+  { id: "BOX-H-20260701-0002", shelfCode: "A0102", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
+  { id: "BOX-H-20260701-0003", shelfCode: "A0201", orgId: 2, subInventoryCode: "STORE1", status: "closed" },
+  { id: "BOX-H-20260701-0004", shelfCode: "A0202", orgId: 2, subInventoryCode: "STORE1", status: "open" },
+  { id: "BOX-H-20260701-0005", shelfCode: "A0301", orgId: 2, subInventoryCode: "STORE1", status: "open" },
+  { id: "BOX-H-20260701-0006", shelfCode: "A0302", orgId: 2, subInventoryCode: "STORE1", status: "open" },
+  { id: "BOX-H-20260701-0007", shelfCode: "A0303", orgId: 2, subInventoryCode: "STORE1", status: "open" },
+  { id: "BOX-H-20260701-0008", shelfCode: "A0304", orgId: 2, subInventoryCode: "STORE1", status: "open" },
+  { id: "BOX-H-20260701-0009", shelfCode: "A0305", orgId: 2, subInventoryCode: "STORE1", status: "open" },
+  { id: "BOX-H-20260701-0010", shelfCode: "A0401", orgId: 2, subInventoryCode: "STORE1", status: "open" },
+  { id: "BOX-H-20260701-0011", shelfCode: "A0402", orgId: 2, subInventoryCode: "STORE1", status: "open" },
+  { id: "BOX-H-20260701-0012", shelfCode: "A0403", orgId: 2, subInventoryCode: "STORE1", status: "open" },
+  { id: "BOX-H-20260701-0013", shelfCode: "A0404", orgId: 2, subInventoryCode: "STORE1", status: "open" },
+  { id: "BOX-H-20260701-0014", shelfCode: "A0405", orgId: 2, subInventoryCode: "STORE1", status: "open" }
 ];
 
 export const demoShelfBoxItems = [
@@ -95,10 +95,10 @@ export const demoShelfBoxItems = [
 ];
 
 export const demoLots = [
-  { id: "00000000-0000-4000-9000-000000000044", partNo: "RK73H1JTTD1002F", dateCode: "2603", lotCode: "L2603A", coo: "JP", cow: "JP", shelfCode: "A-01-01", boxId: "BOX-H-20260701-0001", orgId: 2, subInventoryCode: "STORE1", totalQty: 1000 },
-  { id: "00000000-0000-4000-9000-000000000045", partNo: "RK73H1JTTD2202F", dateCode: "2603", lotCode: "L2603B", coo: "JP", cow: "JP", shelfCode: "A-01-01", boxId: "BOX-H-20260701-0001", orgId: 2, subInventoryCode: "STORE1", totalQty: 500 },
-  { id: "00000000-0000-4000-9000-000000000046", partNo: "RK73B1JTTD181G", dateCode: "2604", lotCode: "L2604A", coo: "JP", cow: "JP", shelfCode: "A-01-02", boxId: "BOX-H-20260701-0002", orgId: 2, subInventoryCode: "STORE1", totalQty: 700 },
-  { id: "00000000-0000-4000-9000-000000000047", partNo: "RK73H1JTTD4702F", dateCode: "2604", lotCode: "L2604B", coo: "JP", cow: "JP", shelfCode: "A-01-02", boxId: "BOX-H-20260701-0002", orgId: 2, subInventoryCode: "STORE1", totalQty: 200 },
-  { id: "00000000-0000-4000-9000-000000000048", partNo: "RK73H1JTTD5602F", dateCode: "2609", lotCode: "L2609A", coo: "JP", cow: "JP", shelfCode: "A-02-01", boxId: "BOX-H-20260701-0003", orgId: 2, subInventoryCode: "STORE1", totalQty: 1000 },
-  { id: "00000000-0000-4000-9000-000000000049", partNo: "RK73H2ATTD2212F", dateCode: "2609", lotCode: "L2609B", coo: "JP", cow: "JP", shelfCode: "A-02-01", boxId: "BOX-H-20260701-0003", orgId: 2, subInventoryCode: "STORE1", totalQty: 400 }
+  { id: "00000000-0000-4000-9000-000000000044", partNo: "RK73H1JTTD1002F", dateCode: "2603", lotCode: "L2603A", coo: "JP", cow: "JP", shelfCode: "A0101", boxId: "BOX-H-20260701-0001", orgId: 2, subInventoryCode: "STORE1", totalQty: 1000 },
+  { id: "00000000-0000-4000-9000-000000000045", partNo: "RK73H1JTTD2202F", dateCode: "2603", lotCode: "L2603B", coo: "JP", cow: "JP", shelfCode: "A0101", boxId: "BOX-H-20260701-0001", orgId: 2, subInventoryCode: "STORE1", totalQty: 500 },
+  { id: "00000000-0000-4000-9000-000000000046", partNo: "RK73B1JTTD181G", dateCode: "2604", lotCode: "L2604A", coo: "JP", cow: "JP", shelfCode: "A0102", boxId: "BOX-H-20260701-0002", orgId: 2, subInventoryCode: "STORE1", totalQty: 700 },
+  { id: "00000000-0000-4000-9000-000000000047", partNo: "RK73H1JTTD4702F", dateCode: "2604", lotCode: "L2604B", coo: "JP", cow: "JP", shelfCode: "A0102", boxId: "BOX-H-20260701-0002", orgId: 2, subInventoryCode: "STORE1", totalQty: 200 },
+  { id: "00000000-0000-4000-9000-000000000048", partNo: "RK73H1JTTD5602F", dateCode: "2609", lotCode: "L2609A", coo: "JP", cow: "JP", shelfCode: "A0201", boxId: "BOX-H-20260701-0003", orgId: 2, subInventoryCode: "STORE1", totalQty: 1000 },
+  { id: "00000000-0000-4000-9000-000000000049", partNo: "RK73H2ATTD2212F", dateCode: "2609", lotCode: "L2609B", coo: "JP", cow: "JP", shelfCode: "A0201", boxId: "BOX-H-20260701-0003", orgId: 2, subInventoryCode: "STORE1", totalQty: 400 }
 ];
