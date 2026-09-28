@@ -51,8 +51,9 @@ function reallocateBestEffort(after: string): void {
 
 export const pickingRoute = new Hono();
 
-// List with per-order item/qty counts. `?status=`/`?allocation=` accept
-// comma-separated lists; `?search=` + `?limit=`/`?offset=` page server-side.
+// List with per-order item/qty counts. `?status=`/`?allocation=`/`?type=`
+// accept comma-separated lists; `?search=` + `?limit=`/`?offset=` page
+// server-side; `?sort=`/`?dir=` sort by a whitelisted column key.
 pickingRoute.get("/picking-orders", async (c) => {
   const limit = Number(c.req.query("limit"));
   const offset = Number(c.req.query("offset"));
@@ -61,9 +62,12 @@ pickingRoute.get("/picking-orders", async (c) => {
     await listPickingOrders(db, {
       status: c.req.query("status"),
       allocation: c.req.query("allocation"),
+      type: c.req.query("type"),
       search: c.req.query("search"),
       limit: Number.isNaN(limit) ? undefined : limit,
       offset: Number.isNaN(offset) ? undefined : offset,
+      sort: c.req.query("sort"),
+      dir: c.req.query("dir") === "desc" ? "desc" : "asc",
       scope,
     }),
     200

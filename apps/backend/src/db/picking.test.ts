@@ -240,6 +240,53 @@ test("list: search matches order_no/po_no/customer_code case-insensitively", asy
   assert.equal(none.rows.length, 0);
 });
 
+test("list: search also matches ship_to", async () => {
+  await reseed(client);
+
+  const byShipTo = await listPickingOrders(client.db, { search: "electronics (hk)" });
+  assert.ok(byShipTo.total >= 1);
+  assert.ok(byShipTo.rows.every((r) => (r.shipTo ?? "").toLowerCase().includes("electronics (hk)")));
+});
+
+test("list: type filter matches picking_order_type (comma-separated list)", async () => {
+  await reseed(client);
+  const invoice = await insertPickingOrder("SO-LIST-INVOICE", "pending");
+  const tn = await insertPickingOrder("SO-LIST-TN", "pending");
+  await client.db.execute(sql`UPDATE picking_orders SET picking_order_type = 'invoice' WHERE id = ${invoice}`);
+  await client.db.execute(sql`UPDATE picking_orders SET picking_order_type = 'tn' WHERE id = ${tn}`);
+
+  const onlyInvoice = await listPickingOrders(client.db, { type: "invoice" });
+  assert.deepEqual(onlyInvoice.rows.map((r) => r.id), [invoice]);
+  assert.equal(onlyInvoice.total, 1);
+
+  const both = await listPickingOrders(client.db, { type: "invoice,tn" });
+  assert.equal(both.total, 2);
+  assert.ok(both.rows.every((r) => r.pickingOrderType === "invoice" || r.pickingOrderType === "tn"));
+
+  // No filter → the NULL-type seeded orders stay visible.
+  assert.equal((await listPickingOrders(client.db)).total, 7);
+});
+
+test("list: sort whitelist orders the window; unknown key falls back to the default order", async () => {
+  await reseed(client);
+
+  const asc = await listPickingOrders(client.db, { sort: "orderNo", dir: "asc" });
+  const orderNos = asc.rows.map((r) => r.orderNo);
+  assert.deepEqual(orderNos, [...orderNos].sort());
+
+  const desc = await listPickingOrders(client.db, { sort: "orderNo", dir: "desc" });
+  assert.deepEqual(desc.rows.map((r) => r.orderNo), [...orderNos].reverse());
+
+  // Sorting composes with paging.
+  const page = await listPickingOrders(client.db, { sort: "orderNo", dir: "asc", limit: 2 });
+  assert.deepEqual(page.rows.map((r) => r.orderNo), orderNos.slice(0, 2));
+  assert.equal(page.total, asc.total);
+
+  const fallback = await listPickingOrders(client.db, { sort: "no-such-column" });
+  const def = await listPickingOrders(client.db);
+  assert.deepEqual(fallback.rows.map((r) => r.id), def.rows.map((r) => r.id));
+});
+
 // --- detail ---------------------------------------------------------------------
 
 test("detail: nested shape — order, items with allocations/packages, boxes; 404", async () => {

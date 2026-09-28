@@ -24,23 +24,8 @@ const orderTypeOptions = computed<SearchableSelectOption[]>(() =>
   ORDER_TYPES.map((v) => ({ value: v, label: v }))
 );
 
-const filtered = computed(() => {
-  const q = search.value.trim().toLowerCase();
-  let list = rows.value;
-  if (orderTypes.value.length) {
-    list = list.filter((r) => r.pickingOrderType !== null && orderTypes.value.includes(r.pickingOrderType));
-  }
-  if (!q) return list;
-  return list.filter(
-    (r) =>
-      r.orderNo.toLowerCase().includes(q) ||
-      (r.customerCode ?? "").toLowerCase().includes(q) ||
-      (r.poNo ?? "").toLowerCase().includes(q) ||
-      (r.shipTo ?? "").toLowerCase().includes(q)
-  );
-});
-
-// accessors resolve the derived display values used for sorting.
+// accessors resolve the derived display values used for rendering (sorting is
+// server-side — `sort`/`dir` query params keyed by the column key).
 const columnDefs = computed<AdminColumnDef<PickingOrderRow>[]>(() => [
   { key: "orderNo", label: t("admin.pages.pickingOrders.orderNo"), size: 150 },
   { key: "status", label: t("admin.pages.pickingOrders.status"), size: 100 },
@@ -83,11 +68,16 @@ const columnDefs = computed<AdminColumnDef<PickingOrderRow>[]>(() => [
   { key: "lastUpdateDate", label: t("admin.fields.lastUpdateDate"), size: 170 },
 ]);
 
-const { table, pagination, resetColumnState } = useAdminTable({
+// Server mode: paging/sorting/filtering are driven by query-param reloads.
+const total = ref(0);
+
+const { table, sorting, pagination, resetColumnState } = useAdminTable({
   tableId: "picking-list",
   columns: columnDefs,
-  rows: filtered,
+  rows,
   getRowId: (r) => r.id,
+  server: { total },
+  defaultPageSize: 50,
 });
 
 // Pager uses a 1-based page; the table uses a 0-based pageIndex.
@@ -103,13 +93,38 @@ const pageSize = computed({
     pagination.value = { pageIndex: 0, pageSize: v };
   },
 });
-const total = computed(() => filtered.value.length);
+
+// URL query params keep filter/keyword/pagination across navigation (browser
+// back from a detail page restores the list as it was).
+useUrlQueryState({
+  status: { state: status, defaultValue: "" },
+  type: {
+    state: orderTypes,
+    defaultValue: [] as string[],
+    parse: (raw) => raw.split(",").filter(Boolean),
+    serialize: (v) => v.join(","),
+  },
+  q: { state: search, defaultValue: "" },
+  page: { state: page, defaultValue: 1, parse: parsePositiveInt(1) },
+  pageSize: { state: pageSize, defaultValue: 50, parse: parsePositiveInt(50) },
+});
 
 async function load() {
   loading.value = true;
   error.value = "";
   try {
-    rows.value = await flow.listPickingOrders(status.value || undefined);
+    const sort = sorting.value[0];
+    const res = await flow.listPickingOrders({
+      status: status.value || undefined,
+      type: orderTypes.value.length ? orderTypes.value : undefined,
+      search: search.value.trim() || undefined,
+      page: pagination.value.pageIndex + 1,
+      pageSize: pagination.value.pageSize,
+      sort: sort?.id,
+      dir: sort?.desc ? "desc" : "asc",
+    });
+    rows.value = res.rows;
+    total.value = res.total;
     selected.value = new Set();
   } catch (e: any) {
     error.value = e.message;
@@ -118,7 +133,28 @@ async function load() {
   }
 }
 
-watch(status, load);
+watch(pagination, load);
+
+// Filter/search/sort changes reload from page 1.
+function resetPageAndLoad() {
+  if (pagination.value.pageIndex !== 0) {
+    // The pagination watcher above performs the reload.
+    pagination.value = { ...pagination.value, pageIndex: 0 };
+  } else {
+    load();
+  }
+}
+
+watch(status, resetPageAndLoad);
+watch(orderTypes, resetPageAndLoad);
+watch(sorting, resetPageAndLoad);
+
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+watch(search, () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(resetPageAndLoad, 300);
+});
+
 onMounted(load);
 
 // "Allocate all": awaited full-fleet recompute. Work-locked orders (open on
@@ -262,6 +298,7 @@ const {
       :row-id="(r: PickingOrderRow) => r.id"
       :empty-text="$t('admin.pages.pickingOrders.none')"
       :on-reset-columns="resetColumnState"
+      @row-dblclick="(row: PickingOrderRow) => navigateTo(`/picking-orders/${row.id}`)"
     >
       <template #cell-orderNo="{ row }">
         <span class="clickable" @click="navigateTo(`/picking-orders/${row.id}`)">{{ row.orderNo }}</span>

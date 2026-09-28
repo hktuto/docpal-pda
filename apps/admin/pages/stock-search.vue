@@ -176,7 +176,7 @@ const lotsColumnDefs = computed<AdminColumnDef<StockSearchLot>[]>(() => [
   {
     key: "orgSubInventory",
     label: t("admin.pages.stockSearch.orgSubInventory"),
-    accessor: (l) => `${l.orgId ?? "—"} / ${l.subInventoryCode ?? "—"}`,
+    accessor: (l) => `${l.officeCode ?? l.orgId ?? "—"} / ${l.subInventoryCode ?? "—"}`,
     size: 130,
   },
   { key: "totalQty", label: t("admin.pages.stockSearch.totalQty"), size: 90 },

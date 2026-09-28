@@ -280,6 +280,8 @@ export interface StockSearchLot {
   boxId: string | null;
   orgId: number | null;
   subInventoryCode: string | null;
+  /** Org office code from org_info (display form of orgId). */
+  officeCode?: string | null;
   totalQty: number;
   allocatedQty: number;
   availableQty: number;
@@ -532,18 +534,48 @@ function logsQuery(p: OrderLogsParams): string {
   return `?${qs}`;
 }
 
+/** List filters/paging for /picking-orders and /receiving-orders (both return
+ *  { rows, total }; page/pageSize convert to limit/offset, omitted = full
+ *  list). `sort` is a backend-whitelisted column key. */
+export interface OrderListParams {
+  status?: string;
+  /** Picking only: order types, any-of (comma-joined for the wire). */
+  type?: string[];
+  search?: string;
+  /** Receiving only: hide orders with no invoices (upstream placeholders). */
+  hasInvoices?: boolean;
+  page?: number;
+  pageSize?: number;
+  sort?: string;
+  dir?: "asc" | "desc";
+}
+
+function orderListQuery(params: OrderListParams): string {
+  const qs = new URLSearchParams();
+  if (params.status) qs.set("status", params.status);
+  if (params.type?.length) qs.set("type", params.type.join(","));
+  if (params.search) qs.set("search", params.search);
+  if (params.hasInvoices) qs.set("hasInvoices", "1");
+  if (params.page !== undefined && params.pageSize !== undefined) {
+    qs.set("limit", String(params.pageSize));
+    qs.set("offset", String((Math.max(1, params.page) - 1) * params.pageSize));
+  }
+  if (params.sort) {
+    qs.set("sort", params.sort);
+    qs.set("dir", params.dir ?? "asc");
+  }
+  const s = qs.toString();
+  return s ? `?${s}` : "";
+}
+
 export function useFlowApi() {
   const api = useApi();
   return {
     // Picking
-    // The backend list endpoints return { rows, total } (limit/offset paging
-    // added for the PDA); admin tables fetch the full list and page client-side.
-    listPickingOrders: async (status?: string) =>
-      (
-        await api.get<{ rows: PickingOrderRow[]; total: number }>(
-          `/picking-orders${status ? `?status=${status}` : ""}`
-        )
-      ).rows,
+    // The backend list endpoints return { rows, total } — the admin tables
+    // page/sort/filter server-side; omit page/pageSize for the full list.
+    listPickingOrders: (params: OrderListParams = {}) =>
+      api.get<{ rows: PickingOrderRow[]; total: number }>(`/picking-orders${orderListQuery(params)}`),
     getPickingOrder: (id: string) => api.get<PickingOrderDetail>(`/picking-orders/${id}`),
     reorderPickingOrders: (orderIds: string[]) =>
       api.post<{ reordered: number }>(`/picking-orders/reorder`, { orderIds }),
@@ -583,12 +615,8 @@ export function useFlowApi() {
     listCountries: () => api.get<CountryRow[]>("/admin/countries"),
 
     // Receiving
-    listReceivingOrders: async (status?: string) =>
-      (
-        await api.get<{ rows: ReceivingOrderRow[]; total: number }>(
-          `/receiving-orders${status ? `?status=${status}` : ""}`
-        )
-      ).rows,
+    listReceivingOrders: (params: OrderListParams = {}) =>
+      api.get<{ rows: ReceivingOrderRow[]; total: number }>(`/receiving-orders${orderListQuery(params)}`),
     getReceivingOrder: (id: string) => api.get<ReceivingOrderDetail>(`/receiving-orders/${id}`),
     // confirm-arrival runs the scoped allocation recompute synchronously;
     // allocation is null when it fell back to the background full recompute.

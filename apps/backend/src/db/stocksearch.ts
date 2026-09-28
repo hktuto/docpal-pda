@@ -142,6 +142,9 @@ export interface StockSearchLotRow {
   /** Stamped from the shelf at put-away (the lot's location pair). */
   orgId: number | null;
   subInventoryCode: string | null;
+  /** The org's org_info.office_code (display form of orgId; null when the
+   *  pair has no org_info row). */
+  officeCode: string | null;
   totalQty: number;
   allocatedQty: number;
   availableQty: number;
@@ -221,12 +224,14 @@ interface LotJoinRow extends StockSearchLotRow {
  */
 /** Shared FROM/WHERE fragment for the lot search, its count, and the summary
  *  aggregate — expects aliases `il` (inventory_lots), `p` (parts), `s`
- *  (shelves, LEFT JOINed). */
+ *  (shelves, LEFT JOINed), `oi` (org_info, LEFT JOINed on the location
+ *  pair). */
 function stockFromWhere(filters: StockSearchFilters) {
   return sql`
     FROM inventory_lots il
     JOIN parts p ON p.wcl_item_no = il.wcl_item_no
     LEFT JOIN shelves s ON s.code = il.shelf_code
+    LEFT JOIN org_info oi ON oi.org_id = il.org_id AND oi.secondary_inventory_name = il.sub_inventory_code
     WHERE TRUE
     ${stockFilterClauses(filters)}
   `;
@@ -291,6 +296,7 @@ export async function searchStock(
             il.box_id AS "boxId",
             il.org_id AS "orgId",
             il.sub_inventory_code AS "subInventoryCode",
+            oi.office_code AS "officeCode",
             il.total_qty AS "totalQty",
             il.allocated_qty AS "allocatedQty",
             il.available_qty AS "availableQty",
@@ -321,6 +327,7 @@ export async function searchStock(
         il.box_id AS "boxId",
         il.org_id AS "orgId",
         il.sub_inventory_code AS "subInventoryCode",
+        oi.office_code AS "officeCode",
         il.total_qty AS "totalQty",
         il.allocated_qty AS "allocatedQty",
         il.available_qty AS "availableQty",

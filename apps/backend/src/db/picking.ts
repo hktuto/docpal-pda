@@ -543,23 +543,65 @@ export interface PickingOrderListRow {
   lastUpdateDate: Date;
 }
 
-/** List rows with per-order item/qty counts. `status`/`allocation` accept
- *  comma-separated lists; `search` is a case-insensitive substring on
- *  order_no/po_no/customer_code; `limit`/`offset` page the result (`total`
- *  counts all matches). Ordered by priority_seq (allocation order,
- *  admin-reorderable). Org visibility splits by picking_order_type —
- *  see pickingOrderOrgFilter (invoice → allowedOrgIds + `opts.scope`,
- *  tn → caller's scope has any org-143 store, order org ignored,
+/** List rows with per-order item/qty counts. `status`/`allocation`/`type`
+ *  accept comma-separated lists; `search` is a case-insensitive substring on
+ *  order_no/po_no/customer_code/ship_to; `limit`/`offset` page the result
+ *  (`total` counts all matches). Ordered by priority_seq (allocation order,
+ *  admin-reorderable) unless a PICKING_LIST_SORTS `sort` key is given — the
+ *  default order then becomes the tiebreaker tail. Org visibility splits by
+ *  picking_order_type — see pickingOrderOrgFilter (invoice → allowedOrgIds +
+ *  `opts.scope`, tn → caller's scope has any org-143 store, order org ignored,
  *  NULL → unfiltered). */
+/** Default row order — also the tiebreaker tail for stable pagination when a
+ *  sort key is active. */
+const PICKING_LIST_DEFAULT_ORDER = sql`po.priority_seq ASC, po.delivery_date ASC NULLS LAST, po.order_no`;
+
+/** Sort key whitelist → SQL expression(s), each rendered `<expr> ASC|DESC
+ *  NULLS LAST` followed by the default order as tiebreakers. Keys are the
+ *  admin picking-list column keys. */
+const PICKING_LIST_SORTS: Record<string, ReturnType<typeof sql>[]> = {
+  orderNo: [sql`po.order_no`],
+  status: [sql`po.status`],
+  pickingOrderType: [sql`po.picking_order_type`],
+  customerCode: [sql`po.customer_code`],
+  poNo: [sql`po.po_no`],
+  shipTo: [sql`po.ship_to`],
+  deliveryDate: [sql`po.delivery_date`],
+  itemCount: [sql`COUNT(pi.id)`],
+  pickedRatio: [sql`CASE WHEN SUM(pi.qty) > 0 THEN SUM(pi.picked_qty)::float8 / SUM(pi.qty) ELSE 0 END`],
+  allocation: [sql`CASE WHEN SUM(pi.qty) > 0 THEN SUM(pi.allocated_qty)::float8 / SUM(pi.qty) ELSE 0 END`],
+  workingByName: [sql`w.display_name`],
+  remark: [sql`po.remark`],
+  prioritySeq: [sql`po.priority_seq`],
+  createdDate: [sql`po.created_date`],
+  lastUpdateDate: [sql`po.last_update_date`],
+};
+
+function pickingListOrderBy(opts?: { sort?: string; dir?: "asc" | "desc" }) {
+  const exprs = opts?.sort ? PICKING_LIST_SORTS[opts.sort] : undefined;
+  if (!exprs?.length) return sql`ORDER BY ${PICKING_LIST_DEFAULT_ORDER}`;
+  const dir = opts!.dir === "desc" ? sql`DESC` : sql`ASC`;
+  return sql`ORDER BY ${sql.join(
+    exprs.map((e) => sql`${e} ${dir} NULLS LAST`),
+    sql`, `
+  )}, ${PICKING_LIST_DEFAULT_ORDER}`;
+}
+
 export async function listPickingOrders(
   db: AppDb,
   opts?: {
     status?: string; allocation?: string; search?: string; limit?: number; offset?: number;
+    /** Comma-separated picking_order_type values (e.g. "invoice,tn"). */
+    type?: string;
+    /** Sort key — whitelist in PICKING_LIST_SORTS; unknown keys fall back to
+     *  the default priority order. */
+    sort?: string; dir?: "asc" | "desc";
     scope?: UserScopeEntry[] | null;
   }
 ): Promise<{ rows: PickingOrderListRow[]; total: number }> {
   const statuses = (opts?.status ?? "").split(",").map((v) => v.trim()).filter(Boolean);
   const allocations = (opts?.allocation ?? "").split(",").map((v) => v.trim()).filter(Boolean);
+  const types = (opts?.type ?? "").split(",").map((v) => v.trim()).filter(Boolean);
   const search = opts?.search?.trim();
   const rows = await queryAll<PickingOrderListRow & { total: number }>(
     db,
@@ -586,10 +628,11 @@ export async function listPickingOrders(
       WHERE TRUE
       ${statuses.length ? sql`AND po.status = ANY(ARRAY[${sql.join(statuses, sql`, `)}])` : sql``}
       ${allocations.length ? sql`AND po.allocation_status = ANY(ARRAY[${sql.join(allocations, sql`, `)}])` : sql``}
-      ${search ? sql`AND (po.order_no ILIKE ${"%" + search + "%"} OR po.po_no ILIKE ${"%" + search + "%"} OR po.customer_code ILIKE ${"%" + search + "%"})` : sql``}
+      ${types.length ? sql`AND po.picking_order_type = ANY(ARRAY[${sql.join(types, sql`, `)}])` : sql``}
+      ${search ? sql`AND (po.order_no ILIKE ${"%" + search + "%"} OR po.po_no ILIKE ${"%" + search + "%"} OR po.customer_code ILIKE ${"%" + search + "%"} OR po.ship_to ILIKE ${"%" + search + "%"})` : sql``}
       ${pickingOrderOrgFilter(sql`po.org_id`, sql`po.sub_inventory_code`, sql`po.picking_order_type`, opts?.scope)}
       GROUP BY po.id, w.display_name
-      ORDER BY po.priority_seq ASC, po.delivery_date ASC NULLS LAST, po.order_no
+      ${pickingListOrderBy(opts)}
       ${opts?.limit && opts.limit > 0 ? sql`LIMIT ${opts.limit} OFFSET ${opts.offset ?? 0}` : sql``}
     `
   );

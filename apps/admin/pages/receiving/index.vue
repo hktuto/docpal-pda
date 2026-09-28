@@ -18,21 +18,8 @@ const statusOptions = computed<SearchableSelectOption[]>(() =>
   STATUSES.map((s) => ({ value: s, label: t(`status.receiving.${s}`) }))
 );
 
-const filtered = computed(() => {
-  // Orders with no invoices are hidden (upstream placeholders).
-  const base = rows.value.filter((r) => r.invoiceCount > 0);
-  const q = search.value.trim().toLowerCase();
-  if (!q) return base;
-  return base.filter(
-    (r) =>
-      r.batchNo.toLowerCase().includes(q) ||
-      (r.supplierCode ?? "").toLowerCase().includes(q) ||
-      (r.supplierName ?? "").toLowerCase().includes(q) ||
-      (r.invoiceNos ?? "").toLowerCase().includes(q)
-  );
-});
-
-// accessors resolve the derived display values used for sorting.
+// accessors resolve the derived display values used for rendering (sorting is
+// server-side — `sort`/`dir` query params keyed by the column key).
 const columnDefs = computed<AdminColumnDef<ReceivingOrderRow>[]>(() => [
   {
     key: "batchNo",
@@ -75,11 +62,16 @@ const columnDefs = computed<AdminColumnDef<ReceivingOrderRow>[]>(() => [
   { key: "lastUpdateDate", label: t("admin.fields.lastUpdateDate"), size: 170 },
 ]);
 
-const { table, pagination, resetColumnState } = useAdminTable({
+// Server mode: paging/sorting/filtering are driven by query-param reloads.
+const total = ref(0);
+
+const { table, sorting, pagination, resetColumnState } = useAdminTable({
   tableId: "receiving-list",
   columns: columnDefs,
-  rows: filtered,
+  rows,
   getRowId: (r) => r.id,
+  server: { total },
+  defaultPageSize: 50,
 });
 
 // Pager uses a 1-based page; the table uses a 0-based pageIndex.
@@ -95,13 +87,33 @@ const pageSize = computed({
     pagination.value = { pageIndex: 0, pageSize: v };
   },
 });
-const total = computed(() => filtered.value.length);
+
+// URL query params keep filter/keyword/pagination across navigation (browser
+// back from a detail page restores the list as it was).
+useUrlQueryState({
+  status: { state: status, defaultValue: "" },
+  q: { state: search, defaultValue: "" },
+  page: { state: page, defaultValue: 1, parse: parsePositiveInt(1) },
+  pageSize: { state: pageSize, defaultValue: 50, parse: parsePositiveInt(50) },
+});
 
 async function load() {
   loading.value = true;
   error.value = "";
   try {
-    rows.value = await flow.listReceivingOrders(status.value || undefined);
+    const sort = sorting.value[0];
+    const res = await flow.listReceivingOrders({
+      status: status.value || undefined,
+      search: search.value.trim() || undefined,
+      // Orders with no invoices are hidden (upstream placeholders).
+      hasInvoices: true,
+      page: pagination.value.pageIndex + 1,
+      pageSize: pagination.value.pageSize,
+      sort: sort?.id,
+      dir: sort?.desc ? "desc" : "asc",
+    });
+    rows.value = res.rows;
+    total.value = res.total;
     selected.value = new Set();
   } catch (e: any) {
     error.value = e.message;
@@ -110,7 +122,27 @@ async function load() {
   }
 }
 
-watch(status, load);
+watch(pagination, load);
+
+// Filter/search/sort changes reload from page 1.
+function resetPageAndLoad() {
+  if (pagination.value.pageIndex !== 0) {
+    // The pagination watcher above performs the reload.
+    pagination.value = { ...pagination.value, pageIndex: 0 };
+  } else {
+    load();
+  }
+}
+
+watch(status, resetPageAndLoad);
+watch(sorting, resetPageAndLoad);
+
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+watch(search, () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(resetPageAndLoad, 300);
+});
+
 onMounted(load);
 
 // Batch "Set status": one override per selected order (the API helper
@@ -206,6 +238,7 @@ const {
       :row-id="(r: ReceivingOrderRow) => r.id"
       :empty-text="$t('admin.pages.receiving.none')"
       :on-reset-columns="resetColumnState"
+      @row-dblclick="(row: ReceivingOrderRow) => navigateTo(`/receiving/${row.id}`)"
     >
       <template #cell-batchNo="{ row }">
         <span class="clickable" @click="navigateTo(`/receiving/${row.id}`)">{{ row.displayName ?? row.batchNo }}</span>

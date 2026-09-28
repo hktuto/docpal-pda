@@ -69,7 +69,7 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const orders = await flow.listPickingOrders("issue");
+    const { rows: orders } = await flow.listPickingOrders({ status: "issue" });
     rows.value = await Promise.all(
       orders.map(async (order) => ({ order, detail: await flow.getPickingOrder(order.id) }))
     );

@@ -54,18 +54,57 @@ export interface ReceivingOrderListRow {
 
 export const receivingRoute = new Hono();
 
+/** Default row order — also the tiebreaker tail for stable pagination when a
+ *  sort key is active. */
+const RECEIVING_LIST_DEFAULT_ORDER = sql`ro.created_date DESC, ro.id`;
+
+/** Sort key whitelist → SQL expression(s), each rendered `<expr> ASC|DESC
+ *  NULLS LAST` followed by the default order as tiebreakers. Keys are the
+ *  admin receiving-list column keys (aggregate/subquery columns sort by their
+ *  output alias). `batchNo` sorts by the raw batch_no — the configured
+ *  display name is a JS-side render, same as the column's client-side sort. */
+const RECEIVING_LIST_SORTS: Record<string, ReturnType<typeof sql>[]> = {
+  batchNo: [sql`ro.batch_no`],
+  status: [sql`ro.status`],
+  orgCode: [sql`"orgCode"`],
+  supplier: [sql`COALESCE(s.name, ro.supplier_code)`],
+  deliveryDate: [sql`ro.delivery_date`],
+  invoiceCount: [sql`"invoiceCount"`],
+  invoiceNos: [sql`"invoiceNos"`],
+  itemCount: [sql`"itemCount"`],
+  remainingItems: [sql`"remainingItems"`],
+  pendingPickingOrders: [sql`"pendingPickingOrders"`],
+  createdDate: [sql`ro.created_date`],
+  lastUpdateDate: [sql`ro.last_update_date`],
+};
+
+function receivingListOrderBy(sort?: string, dir?: string) {
+  const exprs = sort ? RECEIVING_LIST_SORTS[sort] : undefined;
+  if (!exprs?.length) return sql`ORDER BY ${RECEIVING_LIST_DEFAULT_ORDER}`;
+  const dirSql = dir === "desc" ? sql`DESC` : sql`ASC`;
+  return sql`ORDER BY ${sql.join(
+    exprs.map((e) => sql`${e} ${dirSql} NULLS LAST`),
+    sql`, `
+  )}, ${RECEIVING_LIST_DEFAULT_ORDER}`;
+}
+
 // List endpoint. `remainingItems` = invoice items not fully put away;
 // `pendingPickingOrders` = distinct open picking orders with allocations
 // pointing at this order (whole-order or via a boxed invoice item).
 // `?status=` is a pass-through filter (statuses evolve, no enum here);
-// `?search=` matches batch_no / supplier name / invoice no; `?limit=`/`?offset=` page.
+// `?search=` matches batch_no / supplier code / supplier name / invoice no;
+// `?hasInvoices=1` hides orders with no invoices (upstream placeholders);
+// `?limit=`/`?offset=` page; `?sort=`/`?dir=` sort by a whitelisted column key.
 receivingRoute.get("/receiving-orders", async (c) => {
   const status = c.req.query("status");
   const search = c.req.query("search")?.trim();
+  const hasInvoices = c.req.query("hasInvoices") === "1" || c.req.query("hasInvoices") === "true";
   const limitParam = Number(c.req.query("limit"));
   const offsetParam = Number(c.req.query("offset"));
   const limit = Number.isNaN(limitParam) ? undefined : limitParam;
   const offset = Number.isNaN(offsetParam) ? undefined : offsetParam;
+  const sort = c.req.query("sort");
+  const dir = c.req.query("dir");
   // Per-user scope applies at order level: an order stays visible when it
   // has no items, or any item unstamped/in scope; aggregates are unchanged.
   const scope = await getUserScope(db, actorFrom(c).username);
@@ -109,11 +148,12 @@ receivingRoute.get("/receiving-orders", async (c) => {
       LEFT JOIN receiving_invoice_items rii ON rii.receiving_invoice_id = inv.id
       WHERE TRUE
       ${status ? sql`AND ro.status = ${status}` : sql``}
-      ${search ? sql`AND (ro.batch_no ILIKE ${"%" + search + "%"} OR s.name ILIKE ${"%" + search + "%"} OR inv.invoice_no ILIKE ${"%" + search + "%"})` : sql``}
+      ${search ? sql`AND (ro.batch_no ILIKE ${"%" + search + "%"} OR s.code ILIKE ${"%" + search + "%"} OR s.name ILIKE ${"%" + search + "%"} OR inv.invoice_no ILIKE ${"%" + search + "%"})` : sql``}
       ${allowedOrgFilter(sql`ro.org_id`)}
       ${receivingOrderScopeFilter(sql`ro.id`, scope)}
       GROUP BY ro.id, s.id
-      ORDER BY ro.created_date DESC, ro.id
+      ${hasInvoices ? sql`HAVING COUNT(DISTINCT inv.id) > 0` : sql``}
+      ${receivingListOrderBy(sort, dir)}
       ${limit && limit > 0 ? sql`LIMIT ${limit} OFFSET ${offset ?? 0}` : sql``}
     `
   );

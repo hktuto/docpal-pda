@@ -15,7 +15,7 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const all = await flow.listPickingOrders();
+    const { rows: all } = await flow.listPickingOrders();
     rows.value = all.filter((r) => r.status === "pending" || r.status === "picking");
     dirty.value = false;
   } catch (e: any) {
