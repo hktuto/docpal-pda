@@ -1,8 +1,9 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, integer, boolean, timestamp, date, index, uniqueIndex, foreignKey } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, timestamp, date, index, uniqueIndex, foreignKey, check } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
 import { shelves, subInventories, users } from "./master.js";
 import { receivingInvoiceItems, receivingOrders } from "./receiving.js";
+import { internalTransferOrders } from "./internal-transfer.js";
 
 export const inventoryLots = pgTable(
   "inventory_lots",
@@ -129,19 +130,28 @@ export const goodsVerifyTasks = pgTable(
 // putaway.ts. The pair is derived from the order's items (uniform pair;
 // NULL when mixed — suggestion query convenience). No assignee/lock columns
 // in v1 (mirrors verify_tasks).
+// Also the move-to-stock target for finished internal transfer orders with no
+// delegated picking order (spec 2026-09-28-internal-transfer-order-design.md):
+// exactly one of receiving_order_id / internal_transfer_order_id is set.
 export const putAwayTasks = pgTable(
   "put_away_tasks",
   {
     id: text("id").primaryKey(),
-    receivingOrderId: text("receiving_order_id").notNull().references(() => receivingOrders.id, { onDelete: "cascade" }),
-    orgId: integer("org_id"), // 收货办公室, 2: HK
-    subInventoryCode: text("sub_inventory_code"), // 收货子库存
+    receivingOrderId: text("receiving_order_id").references(() => receivingOrders.id, { onDelete: "cascade" }),
+    internalTransferOrderId: text("internal_transfer_order_id").references(() => internalTransferOrders.id, { onDelete: "cascade" }),
+    orgId: integer("org_id"), // 收货/移入办公室, 2: HK
+    subInventoryCode: text("sub_inventory_code"), // 收货/移入子库存
     status: text("status").notNull().default("pending"), // pending | completed
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
   (t) => ({
+    sourceCheck: check(
+      "chk_put_away_tasks_source",
+      sql`num_nonnulls(receiving_order_id, internal_transfer_order_id) = 1`
+    ),
     receivingOrderUq: uniqueIndex("idx_put_away_tasks_receiving_order").on(t.receivingOrderId),
+    transferOrderUq: uniqueIndex("idx_put_away_tasks_transfer_order").on(t.internalTransferOrderId),
     statusIdx: index("idx_put_away_tasks_status").on(t.status),
   })
 );

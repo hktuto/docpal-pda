@@ -330,14 +330,6 @@ Packing-list line items.
 
 Note: indexes on `receiving_invoice_id` and `part_no`.
 
-## receiving_orders_review / receiving_invoices_review / receiving_invoice_items_review
-
-Remote-sync review mirrors of the receiving tables (`schema/receiving-review.ts`;
-remote DDL `demo.wms_*`, `wms_` prefix dropped here). Written by the external
-sync service for review, not by this app — columns match the corresponding
-receiving tables one-for-one (plus `drawing_no` text on the items table), with
-no FKs and no `sync_events` trigger.
-
 
 # Picking (`schema/picking.ts`)
 
@@ -589,15 +581,20 @@ source for manual mode.
 | Field | Type | Description |
 | --- | --- | --- |
 | id | text PK | Task id (UUID) |
-| receiving_order_id | text NOT NULL FK → receiving_orders(id) ON DELETE CASCADE | Order to put away |
+| receiving_order_id | text FK → receiving_orders(id) ON DELETE CASCADE | Receiving order to put away (NULL when the task is for a transfer) |
+| internal_transfer_order_id | text FK → internal_transfer_orders(id) ON DELETE CASCADE | Finished internal transfer order to move to stock (NULL when the task is for a receiving order) |
 | org_id | integer | Item-derived stock location pair (NULL when the order's items are mixed) |
 | sub_inventory_code | text | Item-derived stock location pair (NULL when the order's items are mixed) |
 | status | text NOT NULL DEFAULT 'pending' | `pending` \| `completed` |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
-Note: unique index on `receiving_order_id` (one task per order); index on
-`status`.
+Note: unique index on `receiving_order_id` (one task per order) and on
+`internal_transfer_order_id`; CHECK `num_nonnulls(receiving_order_id,
+internal_transfer_order_id) = 1` — exactly one source; index on `status`.
+The transfer variant is the move-to-stock target for finished internal
+transfer orders with no delegated picking order (spec
+`docs/superpowers/specs/2026-09-28-internal-transfer-order-design.md`).
 
 ## goods_verify_tasks
 
@@ -623,6 +620,102 @@ Put-away/verify is box-based (printed box label), so the task carries box_id.
 Note: status values `pending` | `verified` | `skipped`; unique index on
 `(task_date, inventory_lot_id)` (one task per lot per day); indexes on
 `(shelf_code, task_date)` and `status`.
+
+# Internal transfer (`schema/internal-transfer.ts`)
+
+Internal transfer orders (spec
+`docs/superpowers/specs/2026-09-28-internal-transfer-order-design.md`): stock
+moves WITHIN this warehouse — from one `(org_id, sub_inventory_code)`
+partition to another, usually physically shelf → shelf, re-stamping the lot's
+org/sub-inventory. They never ship. Distinct from the existing "transfer
+picking" (`picking_items.additional_data.from_subinventory` +
+`pickingFromSubinventoryOrgs`), which ships another warehouse's stock out.
+
+## internal_transfer_orders
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Caller-supplied UUID (sync dedup key, same as picking_orders) |
+| order_no | text NOT NULL | Upstream order number — NOT unique |
+| from_org_id | integer | Source office (composite FK `internal_transfer_orders_from_sub_inv_fk` → org_info(org_id, secondary_inventory_name) with from_sub_inventory_code) |
+| from_sub_inventory_code | text | Source sub-inventory |
+| to_org_id | integer | Destination office (composite FK `internal_transfer_orders_to_sub_inv_fk` → org_info) |
+| to_sub_inventory_code | text | Destination sub-inventory — defaults to the delegated picking order's pair when assigned |
+| picking_order_id | text FK → picking_orders(id) ON DELETE SET NULL | Delegated picking order — the ship-out order this transfer gathers stock for |
+| priority_seq | integer NOT NULL DEFAULT 0 | Allocation/list order shared with picking — lower first |
+| working_by | text FK → users(id) | PDA work-lock holder (10-min expiry from working_at) |
+| working_at | timestamp | Work-lock heartbeat |
+| issue_reason / issue_qty / issue_note / issue_remark | text / integer | Open shortage issue reported from the PDA |
+| issue_reported_at | timestamp | Issue report time |
+| issue_reported_by | text FK → users(id) | Issue reporter |
+| status | text NOT NULL DEFAULT 'pending' | `pending` \| `allocated` \| `picking` \| `issue` \| `finished` — picking model minus skip/shipped (never ships) |
+| allocation_status | text NOT NULL DEFAULT 'unallocated' | `unallocated` \| `partial` \| `allocated` — engine-maintained |
+| remark | text | Free-form remark |
+| additional_data | jsonb | Upstream passthrough (no fixed structure) |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
+
+Note: indexes on `status` and `picking_order_id`.
+
+## internal_transfer_items
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Item id (UUID) |
+| transfer_order_id | text NOT NULL FK → internal_transfer_orders(id) ON DELETE CASCADE | Parent order |
+| part_no | text NOT NULL | Part (plain text — no FK, parts.part_no is not unique) |
+| wcl_item_no | text | Business-key copy (parts.wcl_item_no) |
+| qty | integer NOT NULL | Requested move qty |
+| picked_qty | integer NOT NULL DEFAULT 0 | Scanned qty |
+| allocated_qty | integer NOT NULL DEFAULT 0 | Reserved qty |
+| line_id | bigint | Upstream order-line identity (sync passthrough, nullable) |
+| line_number | integer | Upstream line number |
+| status | text NOT NULL DEFAULT 'pending' | `pending` \| `picked` — backend-maintained from picked_qty vs qty |
+| additional_data | jsonb | Upstream passthrough |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
+
+Note: indexes on `transfer_order_id` and `part_no`.
+
+## internal_transfer_allocations
+
+Mirror of `allocations` for transfer demands — same three-source shape so the
+engine reuses its source-loading logic; sources are restricted to the order's
+`from_` pair by the engine.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Allocation id (UUID) |
+| transfer_item_id | text NOT NULL FK → internal_transfer_items(id) ON DELETE CASCADE | Demand item |
+| inventory_lot_id | text FK → inventory_lots(id) ON DELETE CASCADE | Shelf-lot source |
+| receiving_invoice_item_id | text FK → receiving_invoice_items(id) ON DELETE CASCADE | Receiving-line source |
+| receiving_order_id | text FK → receiving_orders(id) ON DELETE CASCADE | Whole-order source (line has no box_id) |
+| qty | integer NOT NULL | Allocated qty |
+| manual | boolean NOT NULL DEFAULT false | Admin-pinned row — survives wipe/rebuild, pre-subtracted from auto demand |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
+
+Note: CHECK `chk_internal_transfer_allocations_source` (≥ 1 source set);
+indexes on all four FKs.
+
+## internal_transfer_packages
+
+Physical pick records — mirror of `picking_packages` minus shipping.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Package id (UUID) |
+| transfer_item_id | text NOT NULL FK → internal_transfer_items(id) ON DELETE CASCADE | Picked item |
+| transfer_order_id | text NOT NULL FK → internal_transfer_orders(id) ON DELETE CASCADE | Parent order |
+| source_type | text NOT NULL | `receiving_invoice_item` \| `inventory_lot` |
+| source_id | text NOT NULL | Source row id |
+| qty | integer NOT NULL | Picked qty |
+| date_code / lot_code / coo / cow | text | Lot snapshot at pick time |
+| shelf_code | text FK → shelves(code) | Destination shelf — stamped at put-away |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
+
+Note: indexes on `transfer_item_id` and `transfer_order_id`.
 
 # Allocation (`schema/allocation.ts`)
 
