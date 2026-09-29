@@ -106,7 +106,7 @@ export async function renderShelfBatchPagePng(
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, A4_PAGE_W, A4_PAGE_H);
 
-  const margin = 118; // 10mm page margin
+  const margin = 0; // no page margin — printer handles its own printable area
   const gap = 47; // 4mm between cells
   const cellW = (A4_PAGE_W - 2 * margin - (BATCH_COLS - 1) * gap) / BATCH_COLS;
   const cellH = (A4_PAGE_H - 2 * margin - (BATCH_ROWS - 1) * gap) / BATCH_ROWS;

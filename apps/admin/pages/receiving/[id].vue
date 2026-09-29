@@ -132,7 +132,9 @@ interface ItemGroup {
 const groups = computed<ItemGroup[]>(() => {
   const invoices = filteredInvoices.value;
   if (groupBy.value === "invoice") {
-    return invoices.map((inv) => ({ key: inv.id, invoice: inv, items: inv.items }));
+    return [...invoices]
+      .sort((a, b) => a.invoiceNo.localeCompare(b.invoiceNo, undefined, { numeric: true }))
+      .map((inv) => ({ key: inv.id, invoice: inv, items: inv.items }));
   }
   const buckets = new Map<string, ReceivingItemRow[]>();
   for (const inv of invoices) {

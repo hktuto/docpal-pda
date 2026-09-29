@@ -44,6 +44,7 @@ const previews = ref<string[]>([]);
 onMounted(async () => {
   try {
     printers.value = await listPrinters();
+    console.log("printers", printers.value);
   } catch {
     printers.value = [];
   }
@@ -103,6 +104,7 @@ async function print() {
           :placeholder="$t('admin.print.printerPlaceholder')"
         />
         <datalist id="sbp-printers">
+
           <option v-for="p in printers" :key="printerKey(p)" :label="p.alias || p.name" :value="printerKey(p)" />
         </datalist>
       </div>
