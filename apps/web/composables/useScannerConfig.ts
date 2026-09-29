@@ -55,6 +55,60 @@ export function restoreScannerSymbologies(): void {
 }
 
 /**
+ * Union of the barcode-type whitelists of the supplier profiles covering the
+ * given brands (parts.brand). Returns null — no restriction — when the brand
+ * list is empty or ANY brand has no whitelisted profile (its labels'
+ * symbology is unknown, so restricting could block them).
+ */
+export function brandWhitelistUnion(
+  templates: { brands?: string[] | null; barcodeTypes?: string[] | null }[],
+  brands: string[]
+): string[] | null {
+  if (brands.length === 0) return null;
+  const enabled = new Set<string>();
+  for (const brand of brands) {
+    const whitelist = templates
+      .filter((t) => t.brands?.includes(brand))
+      .flatMap((t) => t.barcodeTypes ?? []);
+    if (whitelist.length === 0) return null;
+    for (const w of whitelist) enabled.add(w);
+  }
+  return enabled.size > 0 ? [...enabled] : null;
+}
+
+/**
+ * Restrict the hardware decoder to the union whitelist of the given brands
+ * (e.g. a picking order's item brands) while the calling screen is mounted.
+ * Unmounting after a restriction was applied restores the full symbology set.
+ */
+export function useBrandSymbologyScope(brands: Ref<string[]>) {
+  const warehouse = useWarehouse();
+  let applied = false;
+
+  async function applyFor(list: string[]): Promise<void> {
+    const whitelist = list.length
+      ? brandWhitelistUnion(await getCachedSupplierQrTemplates(warehouse), list)
+      : null;
+    if (whitelist) {
+      await ScannerConfig.setSymbologies({ enabled: whitelist });
+      applied = true;
+    } else if (applied) {
+      await ScannerConfig.restoreAll();
+      applied = false;
+    }
+  }
+
+  watch(brands, (list) => enqueue(() => applyFor(list)), { immediate: true });
+
+  onUnmounted(() => {
+    if (applied) {
+      applied = false;
+      enqueue(() => ScannerConfig.restoreAll());
+    }
+  });
+}
+
+/**
  * Restrict the hardware decoder to the supplier profile's barcode-type
  * whitelist while the calling screen is mounted. Suppliers without a
  * whitelist leave the device untouched; unmounting after a restriction was

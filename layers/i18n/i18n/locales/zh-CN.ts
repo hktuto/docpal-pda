@@ -1012,7 +1012,8 @@ export default {
       prev: "上一页",
       next: "下一页",
       pageOf: "第 {page} / {count} 页",
-      perPage: "{n} 条/页"
+      perPage: "{n} 条/页",
+      customPerPage: "自定义每页条数 (1–200)"
     },
     fields: {
       id: "ID",

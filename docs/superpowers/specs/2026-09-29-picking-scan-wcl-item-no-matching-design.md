@@ -66,6 +66,12 @@ picking scan page passes the order's brand set as `contextBrands` to `parseQrCap
 which tries brand-intersecting templates first and the rest after — a fallback, not a
 hard filter, so mixed-brand or unmapped-brand orders still parse.
 
+The picking scan page also applies the symbology whitelist by brand:
+`useBrandSymbologyScope(orderBrands)` restricts the hardware decoder to the union of the
+covering profiles' `barcode_types` (`brandWhitelistUnion` — e.g. a pure KOA order allows
+PDF417 only). Any brand without a whitelisted profile means no restriction, since that
+brand's label symbology is unknown; the full symbology set is restored on page leave.
+
 ### Migration
 
 A drizzle migration adds the column and carries data UPDATEs: supplier `32` (KOA) gets

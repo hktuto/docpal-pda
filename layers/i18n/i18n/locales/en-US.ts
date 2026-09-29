@@ -1012,7 +1012,8 @@ export default {
       prev: "Prev",
       next: "Next",
       pageOf: "Page {page} / {count}",
-      perPage: "{n} / page"
+      perPage: "{n} / page",
+      customPerPage: "Custom page size (1–200)"
     },
     fields: {
       id: "ID",

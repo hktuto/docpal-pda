@@ -131,6 +131,7 @@ import { useErrorMessage } from "~/composables/errorMessage";
 import { useWarehouse } from "~/composables/useWarehouse";
 import { usePickingWorkLock } from "~/composables/usePickingWorkLock";
 import { useHardwareScanner } from "~/composables/useHardwareScanner";
+import { useBrandSymbologyScope } from "~/composables/useScannerConfig";
 import { usePickingScanQueue } from "~/composables/usePickingScanQueue";
 import { captureLabel, ocrResultToInput, useLabelScan } from "~/composables/useLabelScan";
 import {
@@ -231,6 +232,9 @@ const orderPartNos = computed(() => orderItems.value.map((i) => i.partNo));
 const orderBrands = computed(() => [
   ...new Set(orderItems.value.map((i) => i.brand).filter((b): b is string => !!b)),
 ]);
+// Restrict the hardware decoder to the order brands' barcode-type whitelist
+// (e.g. KOA → PDF417) while this page is open; restored on leave.
+useBrandSymbologyScope(orderBrands);
 
 // OCR review state: a single parsed record opens the confirm form; a label
 // that parses into 2+ item rows opens the multi-item table instead.
