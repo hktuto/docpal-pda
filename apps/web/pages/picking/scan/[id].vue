@@ -226,6 +226,11 @@ function removeGroup(keys: string[]) {
   for (const key of keys) removeRow(key);
 }
 const orderPartNos = computed(() => orderItems.value.map((i) => i.partNo));
+// Distinct parts.brand values of the order's items — brand-scoped template
+// lookup tries these suppliers' QR templates first (rest as fallback).
+const orderBrands = computed(() => [
+  ...new Set(orderItems.value.map((i) => i.brand).filter((b): b is string => !!b)),
+]);
 
 // OCR review state: a single parsed record opens the confirm form; a label
 // that parses into 2+ item rows opens the multi-item table instead.
@@ -360,7 +365,7 @@ async function handleBoxPickScan(rawValue: string): Promise<boolean> {
     boxPickId.value = null;
     return queueCarton(rawValue);
   }
-  const parsedResult = await parseRawValue(rawValue);
+  const parsedResult = await parseRawValue(rawValue, undefined, orderBrands.value);
   if (!parsedResult.matched) {
     showToast(t("picking.scanSession.no_match"));
     return false;
@@ -384,7 +389,7 @@ async function handleBoxPickScan(rawValue: string): Promise<boolean> {
 /** Hardware/camera QR path: supplier label first, receiving carton second
  *  (auto-queue), shelf box/shelf barcode last (pick-from-box dialog). */
 async function handleQrOrBoxScan(rawValue: string): Promise<boolean> {
-  const parsedResult = await parseRawValue(rawValue);
+  const parsedResult = await parseRawValue(rawValue, undefined, orderBrands.value);
   if (parsedResult.matched) {
     return handleParsed(ocrResultToInput(parsedResult.parsed), rawValue, "qr");
   }

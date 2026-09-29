@@ -810,6 +810,7 @@ export interface PickingItemDetail {
   id: string;
   partNo: string;
   wclItemNo: string | null;
+  brand: string | null;
   qty: number;
   pickedQty: number;
   allocatedQty: number;
@@ -904,7 +905,7 @@ export async function getPickingOrderDetail(
     db,
     sql`
       SELECT
-        pi.id, pi.part_no AS "partNo", p.wcl_item_no AS "wclItemNo",
+        pi.id, pi.part_no AS "partNo", p.wcl_item_no AS "wclItemNo", p.brand,
         pi.qty, pi.picked_qty AS "pickedQty", pi.allocated_qty AS "allocatedQty",
         pi.line_id AS "lineId", pi.line_number AS "lineNumber",
         pi.shipment_number AS "shipmentNumber", pi.status

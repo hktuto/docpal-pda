@@ -1,5 +1,6 @@
 import { computed, ref, type Ref } from "vue";
 import { normalize, type OcrInput } from "~/composables/useMockOcr";
+import { normalizePartNo } from "~/utils/text";
 import type { PickingAllocation, PickingOrderDetail } from "~/services/types";
 
 export interface ScanQueueRow {
@@ -42,14 +43,28 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
       .reduce((sum, r) => sum + r.qty, 0);
   }
 
+  /**
+   * Space-insensitive part match: the label's part no (itemId) and WCL item
+   * no (wclItemNo group) are both accepted against the item's part_no /
+   * wcl_item_no, all compared with every whitespace stripped.
+   */
+  function partMatches(item: OrderItems[number], scanned: { partNo: string; wclItemNo?: string }): boolean {
+    const scannedKeys = [scanned.partNo, scanned.wclItemNo]
+      .filter((v): v is string => !!v)
+      .map((v) => normalizePartNo(v));
+    if (scannedKeys.length === 0) return false;
+    return [item.partNo, item.wclItemNo].some(
+      (v) => v != null && scannedKeys.includes(normalizePartNo(v))
+    );
+  }
+
   function findTarget(
-    partNo: string,
+    parsed: { partNo: string; wclItemNo?: string },
     qty: number,
     excludeKey?: string
   ): { item: OrderItems[number]; allocation: PickingAllocation } | null {
-    const wanted = normalize(partNo);
     for (const item of items.value) {
-      if (normalize(item.partNo) !== wanted) continue;
+      if (!partMatches(item, parsed)) continue;
       for (const allocation of item.allocations ?? []) {
         if (allocation.qty <= 0) continue;
         const remaining = allocation.qty - queuedQtyForAllocation(allocation.id, excludeKey);
@@ -67,12 +82,11 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
    * total remaining (minus queued) cannot cover the qty.
    */
   function findTargets(
-    partNo: string,
+    parsed: { partNo: string; wclItemNo?: string },
     qty: number
   ): { item: OrderItems[number]; portions: { allocation: PickingAllocation; qty: number }[] } | null {
-    const wanted = normalize(partNo);
     for (const item of items.value) {
-      if (normalize(item.partNo) !== wanted) continue;
+      if (!partMatches(item, parsed)) continue;
       const portions: { allocation: PickingAllocation; qty: number }[] = [];
       let remaining = qty;
       for (const allocation of item.allocations ?? []) {
@@ -100,7 +114,7 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
     if (!normalize(String(parsed.partNo ?? "")) || !Number.isInteger(qty) || qty <= 0) {
       return { ok: false, message: "invalid" };
     }
-    const target = findTargets(String(parsed.partNo), qty);
+    const target = findTargets({ partNo: String(parsed.partNo ?? ""), wclItemNo: parsed.wclItemNo }, qty);
     if (!target) return { ok: false, message: "no_match" };
 
     // One row per allocation portion; unshift in reverse so the first
@@ -202,7 +216,7 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
     if (!normalize(String(parsed.partNo ?? "")) || !Number.isInteger(qty) || qty <= 0) {
       return { ok: false, message: "invalid" };
     }
-    if (normalize(item.partNo) !== normalize(String(parsed.partNo))) {
+    if (!partMatches(item, { partNo: String(parsed.partNo ?? ""), wclItemNo: parsed.wclItemNo })) {
       return { ok: false, message: "no_match" };
     }
     if (qty > allocationRemaining(allocationId)) {
@@ -286,7 +300,7 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
   function reresolveQueued() {
     for (const row of rows.value) {
       if (row.status !== "queued") continue;
-      const target = findTarget(row.partNo, row.qty, row.key);
+      const target = findTarget({ partNo: row.partNo }, row.qty, row.key);
       if (target) {
         row.itemId = target.item.id;
         row.allocationId = target.allocation.id;

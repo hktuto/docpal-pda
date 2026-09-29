@@ -165,7 +165,8 @@ export function useLabelScan() {
 
   async function parseRawValue(
     rawValue: string,
-    supplierCode?: string
+    supplierCode?: string,
+    contextBrands?: string[]
   ): Promise<OcrParseResult> {
     const capture = buildRawCapture(rawValue);
     const barcodes = parseBarcodes(capture.barcodes);
@@ -176,6 +177,7 @@ export function useLabelScan() {
         supplierTemplates: suppliers,
         targets: [],
         contextSupplierCode: supplierCode,
+        contextBrands,
       });
     }
 
@@ -213,6 +215,7 @@ export function ocrResultToInput(parsed: ParsedFields): OcrInput {
     coo: parsed.coo ?? '',
     cow: parsed.cow ?? '',
     qty: parsed.qty ?? '',
+    wclItemNo: parsed.wclItemNo,
   };
 }
 

@@ -49,6 +49,7 @@ test("buildKoaLabelRaw round-trips through parseQrRaw with the seeded KOA templa
     coo: undefined,
     cow: undefined,
     serialNo: "900001",
+    wclItemNo: "KOA+RK73H1JTTD3302F",
   });
 
   // missing lot code still parses (template groups require 1+ chars)

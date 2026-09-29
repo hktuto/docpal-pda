@@ -52,6 +52,7 @@ interface ScanTemplateRow {
   qrTemplate: string | null;
   qtyEncoding: string | null;
   barcodeTypes: string[] | null;
+  brands: string[] | null;
 }
 
 /**
@@ -415,6 +416,7 @@ export function createBackendWarehouseService(
         qrcodeTemplate: row.qrTemplate ?? "",
         qrcodeQtyEncoding: row.qtyEncoding,
         barcodeTypes: row.barcodeTypes ?? null,
+        brands: row.brands ?? null,
       }));
     },
 

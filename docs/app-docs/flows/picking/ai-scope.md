@@ -60,7 +60,14 @@
   each QR scan is validated client-side (part matches an order item, qty fits
   the first allocation with enough remaining minus already-queued qty,
   duplicate raw QR rejected) and appended to a local queue table — no per-scan
-  confirm/review. Each item row shows where its remaining qty is allocated
+  confirm/review. QR parsing tries the order-brand-matching supplier
+  templates first (`supplier_profiles.brands` vs the items' `parts.brand`,
+  rest as fallback); part matching is space-insensitive and accepts both the
+  label's part no (`itemId`) and its WCL item no (template `wclItemNo` group,
+  e.g. KOA segment 7) against the item's `part_no`/`wcl_item_no`
+  (`normalizePartNo` in `apps/web/utils/text.ts`; spec
+  `docs/superpowers/specs/2026-09-29-picking-scan-wcl-item-no-matching-design.md`).
+  Each item row shows where its remaining qty is allocated
   from (`allocationSources` — `CTN <ctn>`, `<box> @ <shelf>`, or a bare shelf
   code) so the operator knows what/where to scan. A raw scan that matches no
   supplier QR template is treated as a location barcode, with two behaviors:

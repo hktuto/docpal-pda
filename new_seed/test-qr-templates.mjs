@@ -60,12 +60,14 @@ function parseQrRaw(raw, template, qtyEncoding) {
 const TEMPLATES = {
   // Restored from BVSDB RegPattern Id=161 (KOA, canonical 'Primary Key' row).
   // Same template as the seeded KOA profile: itemId = MPN field 1 (new-system
-  // convention), qty = field 3 with koa_zeros, lot = field 5, serial = field 6.
+  // convention), qty = field 3 with koa_zeros, lot = field 5, serial = field 6,
+  // wclItemNo = field 7 (WCL item no on newer reels; older reels carry a
+  // "KOA+<mpn>" marking there), trailing fields + optional ':' ignored.
   KOA: {
     qtyEncoding: "koa_zeros",
     qrType: "pdf417",
     template:
-      "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<fullName>.+)$",
+      "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
   },
   // Restored from RegPattern Id=165 (NCC) + Id=167 (NCC+KOA, identical layout)
   // + Id=195 (NCC_KTD, 10-char item code). Fixed-width ITF reel barcode.

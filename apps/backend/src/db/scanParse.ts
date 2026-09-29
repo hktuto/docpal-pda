@@ -17,6 +17,7 @@ export interface ParsedScanFields {
   coo?: string;
   cow?: string;
   serialNo?: string;
+  wclItemNo?: string;
 }
 
 /** Decode a KOA qty field: last digit is the trailing-zero count ("253" → 25000). */
@@ -45,10 +46,11 @@ export function encodeKoaQty(qty: number): string | undefined {
 
 /**
  * Build a raw label value matching the seeded KOA qr_template
- * ("^:(?<itemId>…):(?<subId>…):(?<qty>…):(?<ignore1>…):(?<lotCode>…):(?<serialNo>…):(?<fullName>.+)$"
+ * ("^:(?<itemId>…):(?<subId>…):(?<qty>…):(?<ignore1>…):(?<lotCode>…):(?<serialNo>…):(?<wclItemNo>…)(?::…)*:?$"
  * with koa_zeros qty encoding) — used to print scannable demo part labels.
- * Round-trips through parseQrRaw with that template. `fullName` defaults to
- * the "KOA+<partNo>" marking style seen on real reels.
+ * Round-trips through parseQrRaw with that template (the tail lands in the
+ * `wclItemNo` group). `fullName` defaults to the "KOA+<partNo>" marking style
+ * seen on older reels.
  */
 export function buildKoaLabelRaw(input: {
   partNo: string;
@@ -88,7 +90,7 @@ function getQrTemplateRegex(template: string): RegExp | null {
 /**
  * Apply a supplier QR template to a raw scan value. The template is a regex
  * with named groups: `itemId` (required), `qty`, `dateCode`, `lotCode`,
- * `coo`, `cow`, `serialNo`. Returns {} when there is no template, the regex
+ * `coo`, `cow`, `serialNo`, `wclItemNo`. Returns {} when there is no template, the regex
  * is invalid, or the raw value does not match. `qty` is decoded per
  * `qtyEncoding` ('koa_zeros' → decodeKoaQty; otherwise a plain positive
  * integer). Templates without a `serialNo` group simply yield no serial
@@ -125,5 +127,6 @@ export function parseQrRaw(
     coo: groups.coo ?? undefined,
     cow: groups.cow ?? undefined,
     serialNo: groups.serialNo ?? undefined,
+    wclItemNo: groups.wclItemNo ?? undefined,
   };
 }

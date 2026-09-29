@@ -81,13 +81,14 @@ test("parseQrRaw: seeded KOA template parses raw and decodes koa_zeros qty", asy
     sql`SELECT qr_template AS "qrTemplate", qty_encoding AS "qtyEncoding" FROM supplier_profiles WHERE supplier_code = 'KOA'`
   );
   assert.ok(profile?.qrTemplate);
-  // template: ^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<fullName>.+)$
+  // template: ^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$
   const parsed = parseQrRaw(":RK73H1JTTD1002F:S1:14:X:L2601A:602:KOA+RK73H1JTTD1002F", profile.qrTemplate, profile.qtyEncoding);
   assert.equal(parsed.partNo, "RK73H1JTTD1002F");
   assert.equal(parsed.qty, 10000); // "14" → 1 × 10^4
   assert.equal(parsed.lotCode, "L2601A");
   assert.equal(parsed.serialNo, "602"); // S-key serial from the serialNo group
   assert.equal(parsed.dateCode, undefined);
+  assert.equal(parsed.wclItemNo, "KOA+RK73H1JTTD1002F"); // old-style marking tail
 
   // Outer package label: empty subId segment must also match (subId [^:]*).
   const outer = parseQrRaw(":RK73H2ATTD2403F::253:M:63048349:S613:KOA*RK73H2ATTD 2403F", profile.qrTemplate, profile.qtyEncoding);
@@ -95,6 +96,29 @@ test("parseQrRaw: seeded KOA template parses raw and decodes koa_zeros qty", asy
   assert.equal(outer.qty, 25000); // "253" → 25 × 10^3
   assert.equal(outer.lotCode, "63048349");
   assert.equal(outer.serialNo, "S613");
+});
+
+test("parseQrRaw: KOA reel label carries the WCL item no in segment 7", async () => {
+  const profile = await queryGet<{ qrTemplate: string; qtyEncoding: string }>(
+    client.db,
+    sql`SELECT qr_template AS "qrTemplate", qty_encoding AS "qtyEncoding" FROM supplier_profiles WHERE supplier_code = 'KOA'`
+  );
+  assert.ok(profile?.qrTemplate);
+  // Real 2026 reel label (picking order ME2610-0006): segment 7 is the WCL
+  // item no; trailing segments and the absence of a trailing ':' are ignored.
+  const raw = ":SR732ERTTDR200F::153:K:19077387:S002:KOA/SR732ERTTDR200F:13FSJ564:01";
+  const parsed = parseQrRaw(raw, profile.qrTemplate, profile.qtyEncoding);
+  assert.equal(parsed.partNo, "SR732ERTTDR200F");
+  assert.equal(parsed.qty, 15000); // "153" → 15 × 10^3
+  assert.equal(parsed.lotCode, "19077387");
+  assert.equal(parsed.serialNo, "S002");
+  assert.equal(parsed.wclItemNo, "KOA/SR732ERTTDR200F");
+  // space-stripped, the wclItemNo equals the parts master wcl_item_no
+  assert.equal(normalizePartNo(parsed.wclItemNo!), normalizePartNo("KOA/SR732ERTTD R200F"));
+
+  // ...and with a trailing delimiter (some reels emit one)
+  const trailing = parseQrRaw(raw + ":", profile.qrTemplate, profile.qtyEncoding);
+  assert.equal(trailing.wclItemNo, "KOA/SR732ERTTDR200F");
 });
 
 test("parseQrRaw: apps-web KOA template variant (empty subId segment)", () => {

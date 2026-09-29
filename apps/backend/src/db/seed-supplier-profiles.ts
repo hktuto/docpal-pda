@@ -21,12 +21,18 @@ export interface BuiltinSupplierProfile {
   qrType?: string;
   qtyEncoding?: string;
   barcodeTypes?: string[];
+  /** parts.brand values this supplier covers — brand-scoped template lookup. */
+  brands?: string[];
   remark: string;
 }
 
 // KOA: colon-delimited PDF417 reel label, e.g.
+//   :SR732ERTTDR200F::153:K:19077387:S002:KOA/SR732ERTTDR200F:13FSJ564:01
 //   :RK73H1ETTP1001F::54:X:1114T232:S606:KOA+RK73H1ETTP 1001F::::
-const KOA_TEMPLATE = String.raw`^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<fullName>.+)$`;
+// Segment 7 is the WCL item no (newer reels; older reels carry a "KOA+<mpn>"
+// marking there instead — itemId stays the match key for those). Trailing
+// segments and an optional trailing delimiter are ignored.
+const KOA_TEMPLATE = String.raw`^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$`;
 
 // NCC (Chemi-Con): fixed-width ITF reel barcode, all digits.
 //   28-char: itemId(6) flag(3) lot(7) pack(3) qty(5) serial(4)
@@ -61,6 +67,7 @@ export const builtinSupplierProfiles: BuiltinSupplierProfile[] = [
     qrType: "pdf417",
     qtyEncoding: "koa_zeros",
     barcodeTypes: ["PDF417"],
+    brands: ["KOA"],
     remark:
       "Restored from BVSDB RegPattern Id=161 (WHHK), 2026-08-13 backup; folds Id=192 KOA_NOLOTNO / Id=193 KOA_NOTKEY. Verified vs 96 real ScannedItem raws.",
   },
@@ -69,12 +76,14 @@ export const builtinSupplierProfiles: BuiltinSupplierProfile[] = [
     qrTemplate: NCC_TEMPLATE,
     qrType: "itf",
     barcodeTypes: ["ITF25"],
+    brands: ["NCC"],
     remark:
       "Restored from BVSDB RegPattern Id=165 (WHHK), 2026-08-13 backup; folds Id=167 NCC+KOA and Id=195 NCC_KTD (32-char). itemId is the NCC numeric item code, not the MPN. Verified vs 122 real ScannedItem raws.",
   },
   {
     supplierCode: "19915", // NIDEC(H.K.)CO.,LIMITED (COPAL)
     qrTemplate: COPAL_TEMPLATE,
+    brands: ["COPAL", "NIDEC"],
     remark:
       "Restored from BVSDB RegPattern Id=156 (WHHK), 2026-08-13 backup. OHM-spec parts (resCode group) will not auto-match parts.part_no. Verified vs 53 real ScannedItem raws.",
   },
@@ -83,6 +92,7 @@ export const builtinSupplierProfiles: BuiltinSupplierProfile[] = [
     qrTemplate: SII_TEMPLATE,
     qrType: "qr",
     barcodeTypes: ["QR CODE"],
+    brands: ["SII"],
     remark:
       "Restored from BVSDB RegPattern Id=173 (WHHK), 2026-08-13 backup. SII renamed ABLIC — same template also attached to supplier 84915. Verified vs 114 real ScannedItem raws.",
   },
@@ -91,6 +101,7 @@ export const builtinSupplierProfiles: BuiltinSupplierProfile[] = [
     qrTemplate: SII_TEMPLATE,
     qrType: "qr",
     barcodeTypes: ["QR CODE"],
+    brands: ["ABLIC"],
     remark:
       "Restored from BVSDB RegPattern Id=173 (WHHK), 2026-08-13 backup — same template as supplier 70915 (SII renamed ABLIC). Verified vs 114 real ScannedItem raws.",
   },
@@ -99,6 +110,7 @@ export const builtinSupplierProfiles: BuiltinSupplierProfile[] = [
     qrTemplate: TE_TEMPLATE,
     qrType: "datamatrix",
     barcodeTypes: ["DATA MATRIX"],
+    brands: ["TE"],
     remark:
       "Restored from BVSDB RegPattern Id=194 (WHHK), 2026-08-13 backup. Photo-verified only (no BVSDB scans); parts master may carry prefixed numbers (AMP(1903415-1)).",
   },
@@ -107,6 +119,7 @@ export const builtinSupplierProfiles: BuiltinSupplierProfile[] = [
     qrTemplate: NDK_TEMPLATE,
     qrType: "qr",
     barcodeTypes: ["QR CODE"],
+    brands: ["NDK"],
     remark:
       "Restored from BVSDB RegPattern Id=170 NDK_16M (WHHK), 2026-08-13 backup. Photo-verified only; partial 1P values (STD-CSR-3) will not match composed parts.part_no.",
   },

@@ -23,6 +23,7 @@ export interface ParsedFields {
   dateCode?: string;
   lotCode?: string;
   cow?: string;
+  wclItemNo?: string;
 }
 
 /**
@@ -650,22 +651,32 @@ export interface ParseQrCaptureOptions {
   supplierTemplates: SupplierQrcodeTemplate[];
   targets?: string | string[];
   contextSupplierCode?: string;
+  /**
+   * Brands of the order being scanned (parts.brand per item). Templates whose
+   * `brands` intersect are tried first; the rest stay as a fallback so
+   * mixed-brand or unmapped-brand orders still parse.
+   */
+  contextBrands?: string[];
 }
 
 export function parseQrCapture(
   qrValue: string,
   options: ParseQrCaptureOptions
 ): OcrParseResult {
-  const { supplierTemplates, targets = [], contextSupplierCode } = options;
+  const { supplierTemplates, targets = [], contextSupplierCode, contextBrands } = options;
   const targetArray = Array.isArray(targets) ? targets : [targets];
   const normalizedQr = qrValue.trim();
 
-  const orderedTemplates = contextSupplierCode
-    ? [
-        ...supplierTemplates.filter((s) => s.code === contextSupplierCode),
-        ...supplierTemplates.filter((s) => s.code !== contextSupplierCode),
-      ]
-    : supplierTemplates;
+  const brandSet = contextBrands?.length ? new Set(contextBrands) : null;
+  const priority = (s: SupplierQrcodeTemplate): number => {
+    if (contextSupplierCode && s.code === contextSupplierCode) return 0;
+    if (brandSet && s.brands?.some((b) => brandSet.has(b))) return 1;
+    return 2;
+  };
+  const orderedTemplates =
+    contextSupplierCode || brandSet
+      ? [...supplierTemplates].sort((a, b) => priority(a) - priority(b))
+      : supplierTemplates;
 
   for (const supplier of orderedTemplates) {
     const regex = getQrTemplateRegex(supplier.qrcodeTemplate);
@@ -700,6 +711,7 @@ export function parseQrCapture(
         dateCode: groups.dateCode ?? undefined,
         coo: groups.coo ?? undefined,
         cow: groups.cow ?? undefined,
+        wclItemNo: groups.wclItemNo ?? undefined,
       },
       options: {
         itemIds: [normalizedItemId],

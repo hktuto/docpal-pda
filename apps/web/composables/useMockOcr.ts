@@ -8,6 +8,8 @@ export interface OcrInput {
   coo: string;
   cow: string;
   qty: number | "";
+  /** WCL item no captured by the supplier template (e.g. KOA segment 7). */
+  wclItemNo?: string;
 }
 
 /**

@@ -22,22 +22,24 @@ before(async () => {
 test("scan-templates: every supplier profile, ordered by supplier_code (null templates included)", async () => {
   await reseed(client);
 
-  // seed: the KOA and KOA+TCG profiles (serialNo group in the template)
+  // seed: the KOA and KOA+TCG profiles (serialNo + wclItemNo groups)
   let rows = await listScanTemplates(client.db);
   assert.deepEqual(rows, [
     {
       supplierCode: "KOA",
       qrTemplate:
-        "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<fullName>.+)$",
+        "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
       qtyEncoding: "koa_zeros",
       barcodeTypes: null,
+      brands: ["KOA"],
     },
     {
       supplierCode: "KOA+TCG",
       qrTemplate:
-        "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<fullName>.+)$",
+        "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
       qtyEncoding: "koa_zeros",
       barcodeTypes: null,
+      brands: ["KOA"],
     },
   ]);
 
@@ -51,7 +53,7 @@ test("scan-templates: every supplier profile, ordered by supplier_code (null tem
   );
   rows = await listScanTemplates(client.db);
   assert.equal(rows.length, 3);
-  assert.deepEqual(rows[0], { supplierCode: "ACME", qrTemplate: null, qtyEncoding: null, barcodeTypes: ["code128", "qr"] });
+  assert.deepEqual(rows[0], { supplierCode: "ACME", qrTemplate: null, qtyEncoding: null, barcodeTypes: ["code128", "qr"], brands: null });
   assert.equal(rows[1].supplierCode, "KOA");
   assert.equal(rows[2].supplierCode, "KOA+TCG");
 });
@@ -75,7 +77,7 @@ test("supplier_profiles: qr_template_config jsonb round-trips (seed + update)", 
       { role: "ignore" },
       { role: "lotCode" },
       { role: "serialNo" },
-      { role: "ignore" },
+      { role: "wclItemNo" },
     ],
   });
 

@@ -7,7 +7,7 @@ import type {
   PutAwayExpectedItem,
   MeasuringPackage,
 } from '~/services/types';
-import { rawCode } from '~/utils/text';
+import { rawCode, normalizePartNo } from '~/utils/text';
 
 export type ScanTask = 'picking' | 'put-away' | 'measuring';
 
@@ -102,10 +102,13 @@ export function useScanMatchers(): ScanMatchers {
       const user = currentUser.value;
       if (!user?.id) return error('operator_not_signed_in');
 
-      const scannedPartNo = normalize(parsed.partNo ?? '');
-      const expectedPartNo = normalize(pickingItem.partNo ?? '');
-      if (!scannedPartNo) return { type: 'none' };
-      if (scannedPartNo !== expectedPartNo) return error('scanned_part_does_not_match_allocation');
+      // Space-insensitive compare; the label's WCL item no is accepted too.
+      const scannedKeys = [parsed.partNo, parsed.wclItemNo]
+        .filter((v): v is string => !!v)
+        .map((v) => normalizePartNo(v));
+      if (scannedKeys.length === 0) return { type: 'none' };
+      const expectedPartNo = normalizePartNo(pickingItem.partNo ?? '');
+      if (!scannedKeys.includes(expectedPartNo)) return error('scanned_part_does_not_match_allocation');
 
       const qty = typeof parsed.qty === 'number' ? parsed.qty : Number(parsed.qty);
       if (!Number.isInteger(qty) || qty <= 0) return error('qty_must_be_positive_integer');
@@ -139,10 +142,14 @@ export function useScanMatchers(): ScanMatchers {
       if (!user?.id) return error('operator_not_signed_in');
       if (!receivingOrderId) return error('missing_receiving_order_id');
 
-      const scannedPartNo = normalize(parsed.partNo ?? '');
-      const expectedPartNo = normalize(receivingItem.partNo ?? '');
-      if (!scannedPartNo) return { type: 'none' };
-      if (scannedPartNo !== expectedPartNo) return error('scanned_part_does_not_match_item');
+      const scannedKeys = [parsed.partNo, parsed.wclItemNo]
+        .filter((v): v is string => !!v)
+        .map((v) => normalizePartNo(v));
+      if (scannedKeys.length === 0) return { type: 'none' };
+      const itemKeys = [receivingItem.partNo, receivingItem.wclItemNo]
+        .filter((v): v is string => !!v)
+        .map((v) => normalizePartNo(v));
+      if (!itemKeys.some((k) => scannedKeys.includes(k))) return error('scanned_part_does_not_match_item');
 
       const qty = typeof parsed.qty === 'number' ? parsed.qty : Number(parsed.qty);
       if (!Number.isInteger(qty) || qty <= 0) return error('qty_must_be_positive_integer');
@@ -183,8 +190,10 @@ export function useScanMatchers(): ScanMatchers {
     if (!user?.id) return error('operator_not_signed_in');
 
     try {
-      const partNo = normalize(parsed.partNo ?? '');
-      if (!partNo) return error('part_no_required');
+      const scannedKeys = [parsed.partNo, parsed.wclItemNo]
+        .filter((v): v is string => !!v)
+        .map((v) => normalizePartNo(v));
+      if (scannedKeys.length === 0) return error('part_no_required');
       const qty = typeof parsed.qty === 'number' ? parsed.qty : Number(parsed.qty);
       if (!Number.isInteger(qty) || qty <= 0) return error('qty_must_be_positive_integer');
 
@@ -201,7 +210,7 @@ export function useScanMatchers(): ScanMatchers {
       const matched = packages.find((pkg) => {
         if (alreadyDone(pkg)) return false;
         if (targetPackageId && pkg.id !== targetPackageId) return false;
-        if (normalize(pkg.partNo) !== partNo) return false;
+        if (!scannedKeys.includes(normalizePartNo(pkg.partNo ?? ''))) return false;
         const pkgDateCode = pkg.dateCode ? normalizeCode(pkg.dateCode) : '';
         if (dateCode && pkgDateCode && dateCode !== pkgDateCode) return false;
         const pkgLotCode = pkg.lotCode ? normalizeCode(pkg.lotCode) : '';

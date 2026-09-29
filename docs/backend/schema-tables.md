@@ -50,6 +50,8 @@ supplier rows.
 | qr_template_config | jsonb | Structured editor config (`{version, mode: delimited\|fixed\|advanced, delimiter, fields}`) the admin QR-template editor builds `qr_template` from; null = hand-written legacy template (editor opens in advanced mode) |
 | qr_type | text | Barcode symbology on the supplier's labels (e.g. QR Code, PDF417, Code 128, ISBN) — informational, unrelated to qr_template parsing |
 | qty_encoding | text | Qty decoding rule, e.g. 'koa_zeros' |
+| barcode_types | text[] | PDA hardware-scanner symbology whitelist; null = no restriction |
+| brands | text[] | parts.brand values this supplier covers — scan pages try brand-matching suppliers' templates first (fallback: all templates); null = unknown |
 | remark | text | Free-form remark for extension |
 | creation_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |

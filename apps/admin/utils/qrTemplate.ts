@@ -14,6 +14,7 @@ export type FieldRole =
   | "coo"
   | "cow"
   | "serialNo"
+  | "wclItemNo"
   | "ignore";
 
 export interface DelimitedField {
@@ -39,6 +40,7 @@ export const FIELD_ROLES: { value: FieldRole; label: string }[] = [
   { value: "coo", label: "Country of origin" },
   { value: "cow", label: "Country of warehousing" },
   { value: "serialNo", label: "Serial number" },
+  { value: "wclItemNo", label: "WCL item no" },
   { value: "ignore", label: "Ignore this piece" },
 ];
 

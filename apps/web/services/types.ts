@@ -22,6 +22,8 @@ export interface SupplierQrcodeTemplate {
    * scan context; null/empty = no restriction.
    */
   barcodeTypes?: string[] | null;
+  /** parts.brand values this supplier covers — brand-scoped template lookup. */
+  brands?: string[] | null;
 }
 
 // ------------------------------------------------------------------
@@ -388,6 +390,8 @@ export interface PickingItem {
   id: string;
   partNo: string;
   wclItemNo: string | null;
+  /** parts.brand of the item's part — drives brand-scoped template lookup. */
+  brand: string | null;
   qty: number;
   pickedQty: number;
   allocatedQty: number;

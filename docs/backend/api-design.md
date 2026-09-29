@@ -165,7 +165,7 @@ hardcodes templates.
 
 | Endpoint | Description |
 |---|---|
-| `GET /scan-templates` | → `[{supplierCode, qrTemplate, qtyEncoding}]`, every profile ordered by `supplier_code`; `qrTemplate` null when the supplier has none (clients filter). |
+| `GET /scan-templates` | → `[{supplierCode, qrTemplate, qtyEncoding, barcodeTypes, brands}]`, every profile ordered by `supplier_code`; `qrTemplate` null when the supplier has none (clients filter). `brands` = parts.brand values the supplier covers — clients try brand-matching templates first. |
 
 ## Label printing
 

@@ -282,6 +282,51 @@ describe("parseQrCapture", () => {
     expect(result.matched).toBe(false);
   });
 
+  it("captures the WCL item no from the template's wclItemNo group", () => {
+    const koaWclTemplate = {
+      code: "32",
+      qrcodeTemplate:
+        "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
+      qrcodeQtyEncoding: "koa_zeros" as const,
+      brands: ["KOA"],
+    };
+    const result = parseQrCapture(
+      ":SR732ERTTDR200F::153:K:19077387:S002:KOA/SR732ERTTDR200F:13FSJ564:01",
+      { supplierTemplates: [koaWclTemplate] }
+    );
+    expect(result.matched).toBe(true);
+    expect(result.parsed.itemId).toBe("SR732ERTTDR200F");
+    expect(result.parsed.qty).toBe(15000); // "153" → 15 × 10^3
+    expect(result.parsed.lotCode).toBe("19077387");
+    expect(result.parsed.wclItemNo).toBe("KOA/SR732ERTTDR200F");
+  });
+
+  it("prefers brand-matching templates when contextBrands is given", () => {
+    const genericTemplate = {
+      code: "GENERIC",
+      qrcodeTemplate: "^(?<itemId>.+)$",
+      qrcodeQtyEncoding: null,
+    };
+    const brandTemplate = {
+      code: "32",
+      qrcodeTemplate: "^ID:(?<itemId>[A-Z0-9]+)$",
+      qrcodeQtyEncoding: null,
+      brands: ["KOA"],
+    };
+
+    // generic is listed first and would win without brand context
+    const withoutBrands = parseQrCapture("ID:RK73B1JTTD181G", {
+      supplierTemplates: [genericTemplate, brandTemplate],
+    });
+    expect(withoutBrands.parsed.itemId).toBe("ID:RK73B1JTTD181G");
+
+    const withBrands = parseQrCapture("ID:RK73B1JTTD181G", {
+      supplierTemplates: [genericTemplate, brandTemplate],
+      contextBrands: ["KOA"],
+    });
+    expect(withBrands.parsed.itemId).toBe("RK73B1JTTD181G");
+  });
+
   it("falls back to generic part-number matching when no template matches", () => {
     const result = parseQrCapture("PART: RK73B1JTTD181G", {
       supplierTemplates: [koaTemplate],

@@ -331,10 +331,17 @@ export async function scanReceivingOrder(
           ORDER BY rii.po_no, rii.po_line, rii.id`
     );
 
-    const norm = partNo ? normalizePartNo(partNo) : null;
-    const matches = norm
+    // The label may carry the part as the bare MPN (itemId) and/or the WCL
+    // item no (wclItemNo group, e.g. KOA reel labels) — either may match an
+    // item's part_no or wcl_item_no. normalizePartNo strips all whitespace.
+    const norms = new Set(
+      [partNo, parsed.wclItemNo ?? null]
+        .filter((v): v is string => v !== null)
+        .map((v) => normalizePartNo(v))
+    );
+    const matches = norms.size
       ? items.filter((it) =>
-          [it.partNo, it.wclItemNo, it.partWclItemNo].some((v) => v !== null && normalizePartNo(v) === norm)
+          [it.partNo, it.wclItemNo, it.partWclItemNo].some((v) => v !== null && norms.has(normalizePartNo(v)))
         )
       : [];
     if (matches.length === 0) {

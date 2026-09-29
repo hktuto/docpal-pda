@@ -60,6 +60,55 @@ describe('usePickingScanQueue', () => {
     expect(q.rows.value[0].itemId).toBe('item-2');
   });
 
+  it('matches a space-stripped WCL item no from the QR (KOA reel label)', () => {
+    // Real case — picking order ME2610-0006: the item's part_no is the WCL
+    // item no with a brand prefix and an internal space; the QR carries the
+    // bare MPN (no match) and the WCL item no without spaces (match).
+    const items = [
+      {
+        id: 'item-koa',
+        partNo: 'KOA/SR732ERTTD R200F',
+        wclItemNo: 'KOA/SR732ERTTD R200F',
+        qty: 20000,
+        pickedQty: 0,
+        allocatedQty: 20000,
+        allocations: [
+          { id: 'alloc-koa', qty: 20000, lot: null, receivingInvoiceItemId: 'ri-k', receivingOrderId: 'ro-1', boxId: null },
+        ],
+        packages: [],
+        transitionLogs: [],
+      },
+    ] as unknown as Items;
+    const q = usePickingScanQueue(ref(items));
+    const res = q.addScan(
+      { partNo: 'SR732ERTTDR200F', wclItemNo: 'KOA/SR732ERTTDR200F', qty: 15000, dateCode: '', lotCode: '19077387', coo: '', cow: '' },
+      ':SR732ERTTDR200F::153:K:19077387:S002:KOA/SR732ERTTDR200F:13FSJ564:01',
+      'qr'
+    );
+    expect(res).toEqual({ ok: true });
+    expect(q.rows.value[0]).toMatchObject({ itemId: 'item-koa', allocationId: 'alloc-koa', qty: 15000 });
+  });
+
+  it('matches a space-stripped bare part no against a spaced master part no', () => {
+    const items = [
+      {
+        id: 'item-spaced',
+        partNo: 'SR732ERTTD R200F',
+        wclItemNo: null,
+        qty: 100,
+        pickedQty: 0,
+        allocatedQty: 100,
+        allocations: [
+          { id: 'alloc-spaced', qty: 100, lot: null, receivingInvoiceItemId: 'ri-s', receivingOrderId: 'ro-1', boxId: null },
+        ],
+        packages: [],
+        transitionLogs: [],
+      },
+    ] as unknown as Items;
+    const q = usePickingScanQueue(ref(items));
+    expect(q.addScan(qr('SR732ERTTDR200F', 100), ':C::1001:X:L:S:F', 'qr')).toEqual({ ok: true });
+  });
+
   it('accounts for already-queued qty when choosing an allocation', () => {
     const q = usePickingScanQueue(ref(makeItems()));
     expect(q.addScan(qr('RK73H1JTTD1002F', 2000), ':A::202:X:L:S:F', 'qr')).toEqual({ ok: true });
