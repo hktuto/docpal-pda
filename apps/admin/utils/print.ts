@@ -39,13 +39,18 @@ export interface PrintJob {
 }
 
 // Shelf label stock: 70 x 37 mm at 300 dpi (same stock as the shelf-box
-// labels). The layout is a QR code on the left, then "SHELF", the shelf code,
-// and the zone (when set) on the right — the code is what the PDA scans.
+// labels). The layout is a QR code on the left (encoding the shelf code, which
+// is what the PDA scans) and the shelf display name (falling back to the code)
+// plus the zone (when set) on the right.
 const SHELF_LABEL_W = 826;
 const SHELF_LABEL_H = 437;
 
 /** Render one shelf label to a PNG blob for /print/files. */
-export async function renderShelfLabelPng(code: string, zone?: string | null): Promise<Blob> {
+export async function renderShelfLabelPng(
+  code: string,
+  zone?: string | null,
+  displayName?: string | null
+): Promise<Blob> {
   const canvas = document.createElement("canvas");
   canvas.width = SHELF_LABEL_W;
   canvas.height = SHELF_LABEL_H;
@@ -60,22 +65,20 @@ export async function renderShelfLabelPng(code: string, zone?: string | null): P
   await qr.decode();
   ctx.drawImage(qr, 28, (SHELF_LABEL_H - qrSize) / 2, qrSize, qrSize);
 
-  // Text block on the right of the QR.
+  // Text block on the right of the QR: display name (code as fallback) big,
+  // zone below it.
   const textX = 416;
   const textW = SHELF_LABEL_W - textX - 28;
   const cx = textX + textW / 2;
   ctx.textAlign = "center";
-  ctx.fillStyle = "#64748b";
-  ctx.font = "700 28px ui-monospace, SFMono-Regular, Menlo, monospace";
-  ctx.fillText("SHELF", cx, 140, textW);
   ctx.fillStyle = "#0f1720";
-  ctx.font = "700 56px ui-monospace, SFMono-Regular, Menlo, monospace";
-  ctx.fillText(code, cx, 224, textW);
+  ctx.font = "700 112px ui-monospace, SFMono-Regular, Menlo, monospace";
+  ctx.fillText(displayName?.trim() || code, cx, 260, textW);
   const z = zone?.trim();
   if (z) {
     ctx.fillStyle = "#4b5563";
     ctx.font = "32px ui-monospace, SFMono-Regular, Menlo, monospace";
-    ctx.fillText(z, cx, 304, textW);
+    ctx.fillText(z, cx, 340, textW);
   }
 
   return await new Promise<Blob>((resolve, reject) =>
@@ -87,8 +90,8 @@ export async function renderShelfLabelPng(code: string, zone?: string | null): P
 }
 
 // A4 batch sheet for multi-select shelf printing: 3 x 8 shelf labels per A4
-// page at 300 dpi (QR on the left, shelf code + zone on the right per cell,
-// same content as the single shelf label).
+// page at 300 dpi (QR on the left, shelf display name + zone on the right per
+// cell, same content as the single shelf label).
 const A4_PAGE_W = 2480;
 const A4_PAGE_H = 3508;
 const BATCH_COLS = 3;
@@ -97,7 +100,7 @@ export const SHELF_BATCH_CELLS_PER_PAGE = BATCH_COLS * BATCH_ROWS;
 
 /** Render one A4 page of shelf labels to a PNG blob for /print/files. */
 export async function renderShelfBatchPagePng(
-  cells: { code: string; zone?: string | null }[]
+  cells: { code: string; zone?: string | null; displayName?: string | null }[]
 ): Promise<Blob> {
   const canvas = document.createElement("canvas");
   canvas.width = A4_PAGE_W;
@@ -111,7 +114,7 @@ export async function renderShelfBatchPagePng(
   const cellW = (A4_PAGE_W - 2 * margin - (BATCH_COLS - 1) * gap) / BATCH_COLS;
   const cellH = (A4_PAGE_H - 2 * margin - (BATCH_ROWS - 1) * gap) / BATCH_ROWS;
   // Cell content mirrors the single shelf label (70 x 37 mm design), scaled
-  // to the cell: QR on the left, "SHELF" + code + zone on the right.
+  // to the cell: QR on the left, display name + zone on the right.
   const s = cellW / 826;
 
   for (const [i, cell] of cells.entries()) {
@@ -137,17 +140,14 @@ export async function renderShelfBatchPagePng(
     const topPad = (cellH - 437 * s) / 2; // same vertical centering as the 70x37 design
     ctx.textAlign = "center";
     ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = "#64748b";
-    ctx.font = `700 ${Math.round(28 * s)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
-    ctx.fillText("SHELF", cx, y + topPad + 140 * s, textW);
     ctx.fillStyle = "#0f1720";
-    ctx.font = `700 ${Math.round(56 * s)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
-    ctx.fillText(cell.code, cx, y + topPad + 224 * s, textW);
+    ctx.font = `700 ${Math.round(112 * s)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+    ctx.fillText(cell.displayName?.trim() || cell.code, cx, y + topPad + 260 * s, textW);
     const zone = cell.zone?.trim();
     if (zone) {
       ctx.fillStyle = "#4b5563";
       ctx.font = `${Math.round(32 * s)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
-      ctx.fillText(zone, cx, y + topPad + 304 * s, textW);
+      ctx.fillText(zone, cx, y + topPad + 340 * s, textW);
     }
   }
 

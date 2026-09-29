@@ -1,10 +1,10 @@
 <script setup lang="ts">
 // Batch A4 shelf-label print: the selected shelves are laid out 3 x 8 per A4
-// page (QR left, shelf code + zone right per cell), each page rendered to a PNG here
-// and printed via /print/files — one print job per page, each confirmed via
-// waitForPrintJob before reporting success. The printer picker lists the
-// print service's agent printers; the chosen printer is remembered in
-// localStorage.
+// page (QR left, shelf display name + zone right per cell), each page rendered
+// to a PNG here and printed via /print/files — one print job per page, each
+// confirmed via waitForPrintJob before reporting success. The printer picker
+// lists the print service's agent printers; the chosen printer is remembered
+// in localStorage.
 import {
   listPrinters,
   parsePrinterKey,
@@ -17,7 +17,7 @@ import {
 } from "~/utils/print";
 
 const props = defineProps<{
-  items: { code: string; zone?: string | null }[];
+  items: { code: string; zone?: string | null; displayName?: string | null }[];
 }>();
 const emit = defineEmits<{ close: [] }>();
 
