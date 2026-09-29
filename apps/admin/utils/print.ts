@@ -86,13 +86,13 @@ export async function renderShelfLabelPng(code: string, zone?: string | null): P
   );
 }
 
-// A4 batch sheet for multi-select shelf printing: 3 x 4 shelf labels per A4
-// page at 300 dpi (QR + shelf code + zone per cell, same content as the
-// single shelf label).
+// A4 batch sheet for multi-select shelf printing: 3 x 8 shelf labels per A4
+// page at 300 dpi (QR on the left, shelf code + zone on the right per cell,
+// same content as the single shelf label).
 const A4_PAGE_W = 2480;
 const A4_PAGE_H = 3508;
 const BATCH_COLS = 3;
-const BATCH_ROWS = 4;
+const BATCH_ROWS = 8;
 export const SHELF_BATCH_CELLS_PER_PAGE = BATCH_COLS * BATCH_ROWS;
 
 /** Render one A4 page of shelf labels to a PNG blob for /print/files. */
@@ -110,38 +110,44 @@ export async function renderShelfBatchPagePng(
   const gap = 47; // 4mm between cells
   const cellW = (A4_PAGE_W - 2 * margin - (BATCH_COLS - 1) * gap) / BATCH_COLS;
   const cellH = (A4_PAGE_H - 2 * margin - (BATCH_ROWS - 1) * gap) / BATCH_ROWS;
-  const qrSize = 520; // ~44mm
+  // Cell content mirrors the single shelf label (70 x 37 mm design), scaled
+  // to the cell: QR on the left, "SHELF" + code + zone on the right.
+  const s = cellW / 826;
 
   for (const [i, cell] of cells.entries()) {
     const col = i % BATCH_COLS;
     const row = Math.floor(i / BATCH_COLS);
     const x = margin + col * (cellW + gap);
     const y = margin + row * (cellH + gap);
-    const cx = x + cellW / 2;
 
+    const qrSize = 360 * s;
     const qr = new Image();
     qr.src = await QRCode.toDataURL(cell.code, {
-      width: qrSize,
+      width: Math.round(qrSize * 2), // render sharp, draw scaled
       margin: 1,
       errorCorrectionLevel: "M",
     });
     await qr.decode();
 
-    // QR + code + optional zone, vertically centered as a stack in the cell.
-    const zone = cell.zone?.trim();
-    const stackH = qrSize + 110 + (zone ? 85 : 0);
-    let cy = y + (cellH - stackH) / 2;
-    ctx.drawImage(qr, cx - qrSize / 2, cy, qrSize, qrSize);
-    cy += qrSize + 65;
+    ctx.drawImage(qr, x + 28 * s, y + (cellH - qrSize) / 2, qrSize, qrSize);
+
+    const textX = x + 416 * s;
+    const textW = cellW - 416 * s - 28 * s;
+    const cx = textX + textW / 2;
+    const topPad = (cellH - 437 * s) / 2; // same vertical centering as the 70x37 design
     ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "#64748b";
+    ctx.font = `700 ${Math.round(28 * s)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+    ctx.fillText("SHELF", cx, y + topPad + 140 * s, textW);
     ctx.fillStyle = "#0f1720";
-    ctx.font = "700 83px system-ui, sans-serif"; // ~20pt
-    ctx.fillText(cell.code, cx, cy, cellW - 40);
+    ctx.font = `700 ${Math.round(56 * s)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+    ctx.fillText(cell.code, cx, y + topPad + 224 * s, textW);
+    const zone = cell.zone?.trim();
     if (zone) {
       ctx.fillStyle = "#4b5563";
-      ctx.font = "50px system-ui, sans-serif"; // ~12pt
-      ctx.fillText(zone, cx, cy + 80, cellW - 40);
+      ctx.font = `${Math.round(32 * s)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+      ctx.fillText(zone, cx, y + topPad + 304 * s, textW);
     }
   }
 
