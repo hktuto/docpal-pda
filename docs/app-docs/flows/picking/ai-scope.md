@@ -103,7 +103,8 @@
   batch-applies the queue sequentially via
   `POST /picking-items/:id/scan {allocationId, qty, ...batch overrides}`;
   failed rows stay in the list with their error. Launched from the picking
-  detail page or the receiving order's picking tab (`?from=receiving&ro=`).
+  detail page (the receiving order's picking tab is read-only and no longer
+  launches it).
 - Package and shipping-box operations: remove (undo-scan) / verify packages,
   create / cancel / close boxes, add/remove packages, add-all-unboxed;
   box sizes and weights in kilograms (decimals, 3 dp — see the measuring
@@ -122,9 +123,10 @@
   `boxId` (409 `box_id_exists` on duplicates — the id is the global PK);
   server-generated ids follow `BOX-S-<YYYYMMDD>-<seq>` (per-day
   seq, `nextBoxId` in `apps/backend/src/db/boxes.ts`).
-  The per-box Print button on the picking detail was removed (2026-07);
-  the receiving picking tab's Print button remains a placeholder — real
-  printing will be added backend-side later.
+  The per-box Print button on the picking detail was removed (2026-07), as
+  was the receiving picking tab's placeholder Print button — the receiving
+  picking tab is read-only info now; real printing will be added
+  backend-side later.
 - Finish a picking order manually, or automatically when the last package
   is boxed — finish just flips the order to `finished`; no next-step task is
   created (closing a box is the measuring completion, and the box's verify

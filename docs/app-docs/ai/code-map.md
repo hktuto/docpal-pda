@@ -22,7 +22,7 @@ Page and component locations mapped to source files.
 | Verify box | `/verify/:boxId` | `pages/verify/[boxId].vue` (resolves the box's task; wrapper over `components/MeasureBox.vue` + reopen/complete) |
 | Goods verify queue | `/goods-verify` | `pages/goods-verify/index.vue` |
 | Goods verify detail | `/goods-verify/:id` | `pages/goods-verify/[id].vue` |
-| Stock Search | `/stock-search` | `pages/stock-search/index.vue` |
+| Stock Search | `/stock-search` | `pages/stock-search/index.vue` (filters via `components/FilterChipGroup.vue` chip multi-selects) |
 | Print labels (boxes / shelves / cartons / parts) | `/print-labels` | `pages/print-labels.vue` (codes `components/labels/ScanCode.vue`, data `GET /labels-data`) |
 | Settings (global text size) | `/settings` | `pages/settings.vue` (sizing state `composables/useFontSize.ts`, applied at startup by `plugins/font-size.client.ts`, persisted per-device in `localStorage` key `warehouse-font-size`; all app CSS sizes in `rem` off the `html` base, default 24px — see `assets/css/main.scss`) |
 
@@ -45,6 +45,7 @@ Page and component locations mapped to source files.
 | Status badge (inline) | `composables/useStatusBadge.ts` |
 | EmptyState | `components/EmptyState.vue` |
 | ScanFab | `components/ScanFab.vue` |
+| FilterChipGroup (tap-to-toggle chip multi-select for filter panels; search box when > 8 options, grouped option headings, scrollable list) | `components/FilterChipGroup.vue` |
 | List rows (`.list-panel` / `.list-row` / `.list-toolbar` CSS, incl. expandable rows + group headers) | `assets/css/main.scss` |
 
 ## Modals

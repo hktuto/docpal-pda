@@ -56,9 +56,11 @@
   via `?page=&pageSize=&q=&sort=&dir=`; item-typed rows carry
   partNo/poNo/poLine in `metadata`).
 - Show the order's picking section (nested orders with items, allocations,
-  packages, transition logs, and shipping boxes) on the detail's Picking tab.
-  Allocation lots carry `shelfWarning` (`shelves.warning`) — shown as a ⚠️
-  icon next to the shelf code when set.
+  packages, and shipping boxes) on the detail's Picking tab — read-only info
+  (status, required/scanned/boxed per item, allocated lots, boxes); all
+  picking work (scan, box create/add/remove, undo scan) happens on the
+  picking order pages, never here. Allocation lots carry `shelfWarning`
+  (`shelves.warning`) — shown as a ⚠️ icon next to the shelf code when set.
   The tab (and its fetch) is hidden when flow config
   `picking.allocation.allowDockStock=false` — put-away is then a hard gate
   and receiving is decoupled from picking.
@@ -92,12 +94,19 @@
   `docs/superpowers/specs/2026-09-16-admin-receiving-shipper-related-allocated-design.md`,
   stock-only scope + format refined by the split spec).
   The download always splits by receiving-office location (spec
-  `docs/superpowers/specs/2026-09-21-shipper-split-by-location-design.md`):
-  one xlsx per `(org_id, sub_inventory_code)` section of the order's
-  items — a zip of per-section files when the order spans more than one
-  section, the plain xlsx otherwise; whole-order / package slots
-  attribute by the picking order's pair, related rows by the source
-  lot's own pair, both falling back to the part's first section.
+  `docs/superpowers/specs/2026-09-21-shipper-split-by-location-design.md`),
+  grouped by share group (spec
+  `docs/superpowers/specs/2026-09-30-shipper-group-by-share-group-design.md`):
+  one xlsx per section of the order's items — items whose
+  `(org_id, sub_inventory_code)` is a `sub_inventory_share_members` member
+  merge into one section keyed by the `share_group` string (mirroring
+  allocate.ts, case-insensitive code match), the section keeping the lowest
+  member pair for naming/ordering; ungrouped pairs and NULL
+  `sub_inventory_code` each stay their own section. A zip of per-section
+  files when the order spans more than one section, the plain xlsx
+  otherwise; whole-order / package slots attribute by the picking order's
+  pair, related rows by the source lot's own pair — both widened to
+  share-group equivalence and falling back to the part's first section.
   The
   download is read-only; a separate Re-allocate button (`in_hand` only)
   awaits `POST /admin/receiving-orders/:id/reallocate` (same scoped core as
@@ -179,7 +188,8 @@
   per-row-expand rows grouped by carton number (`ctnNo`, trailing "no
   carton" group; flat when no carton numbers exist), mismatch actions
   inside the expanded row.
-- `components/receiving/ReceivingPickingTab.vue` — picking sub-view.
+- `components/receiving/ReceivingPickingTab.vue` — read-only picking
+  sub-view (linked orders, allocations, boxes, packages).
 - `components/receiving/ReceivingScanReviewModal.vue` — candidate review
   dialog for scan 409s.
 - `components/receiving/ReceivingScanMultiItemModal.vue` — multi-item label
@@ -218,5 +228,6 @@
 - `docs/superpowers/specs/2026-07-27-admin-item-removal-and-audit-logs-design.md`
 - `docs/superpowers/specs/2026-09-02-receiving-subinventory-rules-design.md`
 - `docs/superpowers/specs/2026-09-14-admin-receiving-shipper-download-design.md`
+- `docs/superpowers/specs/2026-09-30-shipper-group-by-share-group-design.md`
 - `docs/superpowers/specs/2026-09-11-user-subinventory-scope-design.md`
 - `docs/superpowers/specs/2026-09-22-admin-receiving-status-override-design.md`

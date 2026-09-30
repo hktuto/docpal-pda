@@ -14,44 +14,6 @@ function jsonResponse(data: unknown, status = 200): Response {
   } as Response;
 }
 
-describe('createBackendWarehouseService', () => {
-  const fetchMock = vi.fn();
-
-  beforeEach(() => {
-    fetchMock.mockReset();
-    vi.stubGlobal('fetch', fetchMock);
-  });
-
-  it('resetDemoData POSTs /dev/reset against the configured base URL', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
-    const service = createBackendWarehouseService({ apiBaseUrl: BASE_URL });
-
-    await service.resetDemoData();
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith(
-      `${BASE_URL}/dev/reset`,
-      expect.objectContaining({ method: 'POST' })
-    );
-  });
-
-  it('resetDemoData propagates API errors', async () => {
-    fetchMock.mockResolvedValue({
-      ok: false,
-      status: 500,
-      text: async () => 'something exploded',
-      json: async () => {
-        throw new Error('no json');
-      },
-    } as unknown as Response);
-    const service = createBackendWarehouseService({ apiBaseUrl: BASE_URL });
-
-    await expect(service.resetDemoData()).rejects.toMatchObject({
-      status: 500,
-    });
-  });
-});
-
 describe('backendWarehouse receiving flow', () => {
   const fetchMock = vi.fn();
 
@@ -195,8 +157,8 @@ describe('backendWarehouse receiving flow', () => {
 
     expect(lastCall().url).toBe(`${BASE_URL}/scan-templates`);
     expect(templates).toEqual([
-      { code: 'KOA', qrcodeTemplate: '^.*$', qrcodeQtyEncoding: 'koa_zeros', barcodeTypes: ['QR CODE'] },
-      { code: 'DAITO', qrcodeTemplate: '', qrcodeQtyEncoding: null, barcodeTypes: null },
+      { code: 'KOA', qrcodeTemplate: '^.*$', qrcodeQtyEncoding: 'koa_zeros', barcodeTypes: ['QR CODE'], brands: null },
+      { code: 'DAITO', qrcodeTemplate: '', qrcodeQtyEncoding: null, barcodeTypes: null, brands: null },
     ]);
   });
 
@@ -1046,10 +1008,28 @@ describe('backendWarehouse stock search flow', () => {
     await service().searchStock({
       supplierCode: 'KOA',
       partNo: 'RK73',
-      shelfCode: 'A-01-01',
+      shelfCode: ['A-01-01', 'A-01-02'],
     });
     expect(lastCall().url).toBe(
-      `${BASE_URL}/stock-search?supplierCode=KOA&partNo=RK73&shelfCode=A-01-01`
+      `${BASE_URL}/stock-search?supplierCode=KOA&partNo=RK73&shelfCode=A-01-01&shelfCode=A-01-02`
+    );
+  });
+
+  it('searchStock sends drawingNo, date range and any-of filters as repeated params', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ parts: [], lots: [] }));
+
+    await service().searchStock({
+      drawingNo: 'DWG-1',
+      dateCodeFrom: '0126',
+      dateCodeTo: '5226',
+      brand: ['KOA', 'DAITO'],
+      zone: ['A'],
+      location: ['2:ACME-S1', '3:MAIN'],
+    });
+
+    expect(lastCall().url).toBe(
+      `${BASE_URL}/stock-search?drawingNo=DWG-1&zone=A&brand=KOA&brand=DAITO` +
+        `&location=2%3AACME-S1&location=3%3AMAIN&dateCodeFrom=0126&dateCodeTo=5226`
     );
   });
 
@@ -1097,7 +1077,7 @@ describe('backendWarehouse stock search flow', () => {
     };
     fetchMock.mockResolvedValue(jsonResponse(result));
 
-    const actual = await service().searchStock({ shelfCode: 'A-01-01' });
+    const actual = await service().searchStock({ shelfCode: ['A-01-01'] });
 
     expect(lastCall().url).toBe(`${BASE_URL}/stock-search?shelfCode=A-01-01`);
     expect(actual).toEqual(result);
@@ -1124,6 +1104,38 @@ describe('backendWarehouse stock search flow', () => {
     expect(lastCall().init.method).toBe('GET');
     expect(suppliers).toEqual(rows);
   });
+
+  it('searchStockPage appends page and pageSize after the filters', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ rows: [], total: 0 }));
+
+    await service().searchStockPage({ partNo: 'RK73', brand: ['KOA'] }, 2, 50);
+
+    expect(lastCall().url).toBe(`${BASE_URL}/stock-search?partNo=RK73&brand=KOA&page=2&pageSize=50`);
+  });
+
+  it('getStockSearchOptions reads the distinct filter values', async () => {
+    const options = {
+      brands: ['KOA'],
+      zones: ['A'],
+      shelves: [{ code: 'A-01-01', displayName: 'A-01-01', zone: 'A' }],
+      locations: [{ orgId: 2, subInventoryCode: 'ACME-S1', description: null, officeCode: 'HK' }],
+    };
+    fetchMock.mockResolvedValue(jsonResponse(options));
+
+    const actual = await service().getStockSearchOptions();
+
+    expect(lastCall().url).toBe(`${BASE_URL}/stock-search/options`);
+    expect(lastCall().init.method).toBe('GET');
+    expect(actual).toEqual(options);
+  });
+
+  it('getStockSearchSummary sends the same filters as searchStock', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ partCount: 1 }));
+
+    await service().getStockSearchSummary({ partNo: 'RK73', brand: ['KOA'] });
+
+    expect(lastCall().url).toBe(`${BASE_URL}/stock-search/summary?partNo=RK73&brand=KOA`);
+  });
 });
 
 describe('createWarehouseService', () => {
@@ -1135,14 +1147,14 @@ describe('createWarehouseService', () => {
   });
 
   it('wires the backend adapter without an adapter option', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+    fetchMock.mockResolvedValue(jsonResponse({ rows: [], total: 0 }));
     const service = createWarehouseService({ apiBaseUrl: BASE_URL });
 
-    await service.resetDemoData();
+    await service.getReceivingOrders('all');
 
     expect(fetchMock).toHaveBeenCalledWith(
-      `${BASE_URL}/dev/reset`,
-      expect.objectContaining({ method: 'POST' })
+      `${BASE_URL}/receiving-orders`,
+      expect.objectContaining({ method: 'GET' })
     );
   });
 });

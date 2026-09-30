@@ -37,7 +37,7 @@ function parseJsonObject(text: string): Record<string, unknown> | null {
 
 export type QueryParams = Record<
   string,
-  string | number | boolean | undefined | null
+  string | number | boolean | (string | number)[] | undefined | null
 >;
 
 export interface ApiClientOptions {
@@ -112,7 +112,12 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
     if (params) {
       const search = new URLSearchParams();
       for (const [key, value] of Object.entries(params)) {
-        if (value !== undefined && value !== null) {
+        if (value === undefined || value === null) continue;
+        // Multi-value filters (any-of IN) are sent as repeated params, e.g.
+        // ?brand=A&brand=B — the backend reads them with req.queries().
+        if (Array.isArray(value)) {
+          for (const item of value) search.append(key, String(item));
+        } else {
           search.append(key, String(value));
         }
       }

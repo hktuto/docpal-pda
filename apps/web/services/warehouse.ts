@@ -34,6 +34,9 @@ import type {
   GoodsVerifyTaskFilters,
   StockSearchFilters,
   StockSearchResult,
+  StockSearchPageResult,
+  StockSearchOptions,
+  StockSearchSummary,
   SupplierListRow,
   SupplierQrcodeTemplate,
   BoxSearchResult,
@@ -158,14 +161,23 @@ export interface WarehouseService {
   // Supplier QR templates for client-side label parsing (GET /scan-templates)
   getSupplierQrTemplates(): Promise<SupplierQrcodeTemplate[]>;
 
-  // Demo reset (dev only)
-  resetDemoData(): Promise<void>;
-
   // Stock search — one aggregate read (GET /stock-search) replaces the old
   // suppliers → parts → lots cascade; zero-qty lots come back by design.
-  // The admin suppliers CRUD read doubles as the filter dropdown list
-  // (same trick as getShelves).
+  // The filter set mirrors the admin console so both surfaces query the
+  // same way. The admin suppliers CRUD read doubles as the supplier filter
+  // dropdown (same trick as getShelves).
   searchStock(filters?: StockSearchFilters): Promise<StockSearchResult>;
+  /** Paged lot rows (`?page=&pageSize=`) for the mobile load-more list. */
+  searchStockPage(
+    filters: StockSearchFilters,
+    page: number,
+    pageSize: number
+  ): Promise<StockSearchPageResult>;
+  // Distinct filter values present in the current stock (brands, zones,
+  // shelves, locations) — locations are limited to the caller's user scope.
+  getStockSearchOptions(): Promise<StockSearchOptions>;
+  // Filtered totals (items / on-hand / available) for the summary strip.
+  getStockSearchSummary(filters?: StockSearchFilters): Promise<StockSearchSummary>;
   getSuppliers(): Promise<SupplierListRow[]>;
 
   // Box lookup for the /box QR page — searches both box tables by id

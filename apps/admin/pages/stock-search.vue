@@ -77,10 +77,10 @@ const GROUP_BY_STORAGE_KEY = "admin-group:stock-search";
 const groupBy = ref<GroupBy>("none");
 
 const groupByOptions = computed<SearchableSelectOption[]>(() => [
-  { value: "none", label: t("admin.pages.stockSearch.groupNone") },
-  { value: "brand", label: t("admin.pages.stockSearch.groupBrand") },
-  { value: "shelf", label: t("admin.pages.stockSearch.groupShelf") },
-  { value: "zone", label: t("admin.pages.stockSearch.groupZone") },
+  { value: "none", label: t("stockSearch.groupNone") },
+  { value: "brand", label: t("stockSearch.groupBrand") },
+  { value: "shelf", label: t("stockSearch.groupShelf") },
+  { value: "zone", label: t("stockSearch.groupZone") },
 ]);
 
 if (typeof localStorage !== "undefined") {
@@ -126,62 +126,74 @@ const lotGroups = computed<LotGroup[]>(() => {
 const lotsColumnDefs = computed<AdminColumnDef<StockSearchLot>[]>(() => [
   {
     key: "partNo",
-    label: t("admin.pages.stockSearch.partNo"),
+    label: t("stockSearch.partNo"),
     accessor: (l) => l.wclItemNo ?? l.partNo,
     size: 150,
   },
   {
     key: "description",
-    label: t("admin.pages.stockSearch.description"),
+    label: t("stockSearch.description"),
     accessor: (l) => l.description ?? "",
     size: 200,
   },
-  { key: "brand", label: t("admin.pages.stockSearch.brand"), size: 80 },
+  { key: "brand", label: t("stockSearch.brand"), size: 80 },
   {
     key: "dateCode",
-    label: t("admin.pages.stockSearch.dateCode"),
+    label: t("stockSearch.dateCode"),
     accessor: (l) => l.dateCode ?? "",
     size: 100,
   },
   {
     key: "lotCode",
-    label: t("admin.pages.stockSearch.lotCode"),
+    label: t("stockSearch.lotCode"),
     accessor: (l) => l.lotCode ?? "",
     size: 110,
   },
   {
     key: "drawingNo",
-    label: t("admin.pages.stockSearch.drawingNo"),
+    label: t("stockSearch.drawingNo"),
     accessor: (l) => l.drawingNo ?? "",
     size: 110,
   },
   {
+    key: "coo",
+    label: t("stockSearch.coo"),
+    accessor: (l) => l.coo ?? "",
+    size: 110,
+  },
+  {
+    key: "cow",
+    label: t("stockSearch.cow"),
+    accessor: (l) => l.cow ?? "",
+    size: 110,
+  },
+  {
     key: "shelfCode",
-    label: t("admin.pages.stockSearch.shelf"),
+    label: t("stockSearch.shelf"),
     accessor: (l) => formatShelf(l.shelfCode, l.shelfDisplayName),
     size: 90,
   },
   {
     key: "zone",
-    label: t("admin.pages.stockSearch.zone"),
+    label: t("stockSearch.zone"),
     accessor: (l) => l.zone ?? "",
     size: 70,
   },
   {
     key: "boxId",
-    label: t("admin.pages.stockSearch.box"),
+    label: t("stockSearch.box"),
     accessor: (l) => l.boxId ?? "",
     size: 100,
   },
   {
     key: "orgSubInventory",
-    label: t("admin.pages.stockSearch.orgSubInventory"),
+    label: t("stockSearch.orgSubInventory"),
     accessor: (l) => `${l.officeCode ?? l.orgId ?? "—"} / ${l.subInventoryCode ?? "—"}`,
     size: 130,
   },
-  { key: "totalQty", label: t("admin.pages.stockSearch.totalQty"), size: 90 },
-  { key: "allocatedQty", label: t("admin.pages.stockSearch.allocatedQty"), size: 100 },
-  { key: "availableQty", label: t("admin.pages.stockSearch.availableQty"), size: 100 },
+  { key: "totalQty", label: t("stockSearch.totalQty"), size: 90 },
+  { key: "allocatedQty", label: t("stockSearch.allocatedQty"), size: 100 },
+  { key: "availableQty", label: t("stockSearch.availableQty"), size: 100 },
 ]);
 
 const {
@@ -338,7 +350,7 @@ async function exportExcel() {
   ];
   const ws = XLSX.utils.aoa_to_sheet(aoa);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, t("admin.pages.stockSearch.lots"));
+  XLSX.utils.book_append_sheet(wb, ws, t("stockSearch.lots"));
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
   XLSX.writeFile(wb, `stock-search-${stamp}.xlsx`);
 }
@@ -364,46 +376,46 @@ const {
 <template>
   <div>
     <div class="page-head">
-      <h1>{{ $t("admin.pages.stockSearch.title") }}</h1>
+      <h1>{{ $t("stockSearch.title") }}</h1>
     </div>
 
     <div v-if="summary" class="summary">
       <div class="summary-card">
-        <span class="summary-label">{{ $t("admin.pages.stockSearch.summaryItems") }}</span>
+        <span class="summary-label">{{ $t("stockSearch.summaryItems") }}</span>
         <span class="summary-value">{{ summary.partCount.toLocaleString() }}</span>
       </div>
       <div class="summary-card">
-        <span class="summary-label">{{ $t("admin.pages.stockSearch.summaryOnHandQty") }}</span>
+        <span class="summary-label">{{ $t("stockSearch.summaryOnHandQty") }}</span>
         <span class="summary-value">{{ summary.totalQty.toLocaleString() }}</span>
       </div>
       <div class="summary-card">
-        <span class="summary-label">{{ $t("admin.pages.stockSearch.summaryAllocatedQty") }}</span>
+        <span class="summary-label">{{ $t("stockSearch.summaryAllocatedQty") }}</span>
         <span class="summary-value">{{ summary.allocatedQty.toLocaleString() }}</span>
       </div>
       <div class="summary-card">
-        <span class="summary-label">{{ $t("admin.pages.stockSearch.summaryAvailableQty") }}</span>
+        <span class="summary-label">{{ $t("stockSearch.summaryAvailableQty") }}</span>
         <span class="summary-value">{{ summary.availableQty.toLocaleString() }}</span>
       </div>
       <div class="summary-card">
-        <span class="summary-label">{{ $t("admin.pages.stockSearch.summaryOutdatedItems", { years: summary.outdatedYears }) }}</span>
+        <span class="summary-label">{{ $t("stockSearch.summaryOutdatedItems", { years: summary.outdatedYears }) }}</span>
         <span class="summary-value">{{ summary.outdatedPartCount.toLocaleString() }}</span>
         <span class="summary-note">{{
-          $t("admin.pages.stockSearch.summaryOutdatedNote", {
+          $t("stockSearch.summaryOutdatedNote", {
             lots: summary.outdatedLotCount.toLocaleString(),
             qty: summary.outdatedQty.toLocaleString(),
           })
         }}</span>
       </div>
       <div class="summary-card">
-        <span class="summary-label">{{ $t("admin.pages.stockSearch.summaryLots") }}</span>
+        <span class="summary-label">{{ $t("stockSearch.summaryLots") }}</span>
         <span class="summary-value">{{ summary.lotCount.toLocaleString() }}</span>
       </div>
       <div class="summary-card">
-        <span class="summary-label">{{ $t("admin.pages.stockSearch.summaryShelves") }}</span>
+        <span class="summary-label">{{ $t("stockSearch.summaryShelves") }}</span>
         <span class="summary-value">{{ summary.shelfCount.toLocaleString() }}</span>
       </div>
       <div class="summary-card">
-        <span class="summary-label">{{ $t("admin.pages.stockSearch.summaryLastUpdate") }}</span>
+        <span class="summary-label">{{ $t("stockSearch.summaryLastUpdate") }}</span>
         <span class="summary-value summary-date">{{ formatDateTime(summary.lastUpdateDate) }}</span>
       </div>
     </div>
@@ -412,52 +424,52 @@ const {
       <SearchableSelect
         v-model="brand"
         :options="brandOptions"
-        :all-label="$t('admin.pages.stockSearch.allBrands')"
-        :aria-label="$t('admin.pages.stockSearch.brand')"
+        :all-label="$t('stockSearch.allBrands')"
+        :aria-label="$t('stockSearch.brand')"
         class="filter-item"
       />
       <SearchableSelect
         v-model="location"
         :options="locationOptions"
-        :all-label="$t('admin.pages.stockSearch.allLocations')"
-        :aria-label="$t('admin.pages.stockSearch.location')"
+        :all-label="$t('stockSearch.allLocations')"
+        :aria-label="$t('stockSearch.location')"
         class="filter-item"
       />
       <SearchableSelect
         v-model="shelfCode"
         :options="shelfOptions"
-        :all-label="$t('admin.pages.stockSearch.allShelves')"
-        :aria-label="$t('admin.pages.stockSearch.shelf')"
+        :all-label="$t('stockSearch.allShelves')"
+        :aria-label="$t('stockSearch.shelf')"
         class="filter-item"
       />
       <input
         v-model="partNo"
-        :placeholder="$t('admin.pages.stockSearch.partNoPlaceholder')"
+        :placeholder="$t('stockSearch.partNoPlaceholder')"
         @keyup.enter="search"
       />
       <input
         v-model="drawingNo"
-        :placeholder="$t('admin.pages.stockSearch.drawingNoPlaceholder')"
+        :placeholder="$t('stockSearch.drawingNoPlaceholder')"
         @keyup.enter="search"
       />
       <label class="dc-filter">
-        {{ $t("admin.pages.stockSearch.dateCodeFrom") }}
+        {{ $t("stockSearch.dateCodeFrom") }}
         <input v-model="dcFrom" type="date" />
         <span v-if="dcFromCode" class="muted">{{ dcFromCode }}</span>
       </label>
       <label class="dc-filter">
-        {{ $t("admin.pages.stockSearch.dateCodeTo") }}
+        {{ $t("stockSearch.dateCodeTo") }}
         <input v-model="dcTo" type="date" />
         <span v-if="dcToCode" class="muted">{{ dcToCode }}</span>
       </label>
       <button v-if="dcActive" class="btn btn-small" @click="dcFrom = ''; dcTo = ''">
-        {{ $t("admin.pages.stockSearch.dateCodeClear") }}
+        {{ $t("stockSearch.dateCodeClear") }}
       </button>
       <SearchableSelect
         v-model="groupBy"
         :options="groupByOptions"
-        :all-label="$t('admin.pages.stockSearch.groupBy')"
-        :aria-label="$t('admin.pages.stockSearch.groupBy')"
+        :all-label="$t('stockSearch.groupBy')"
+        :aria-label="$t('stockSearch.groupBy')"
         :multiple="false"
         :show-all="false"
       />
@@ -465,21 +477,21 @@ const {
         {{ $t("admin.common.search") }}
       </button>
       <button class="btn" :disabled="loading || !searched" @click="exportExcel">
-        {{ $t("admin.pages.stockSearch.exportExcel") }}
+        {{ $t("stockSearch.exportExcel") }}
       </button>
     </div>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
     <ChangeNotice :pending="changePending" :just-updated="changeUpdated" @refresh="refreshNow" @dismiss="dismiss" />
     <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
-    <p v-else-if="!searched" class="muted">{{ $t("admin.pages.stockSearch.hint") }}</p>
+    <p v-else-if="!searched" class="muted">{{ $t("stockSearch.hint") }}</p>
 
     <template v-else-if="searched">
-      <h2 v-if="groupBy !== 'none'" class="section-title">{{ $t("admin.pages.stockSearch.lots") }}</h2>
+      <h2 v-if="groupBy !== 'none'" class="section-title">{{ $t("stockSearch.lots") }}</h2>
       <template v-if="groupBy === 'none'">
         <DataTable
           :table="lotsTable"
-          :empty-text="$t('admin.pages.stockSearch.noLots')"
+          :empty-text="$t('stockSearch.noLots')"
           :on-reset-columns="resetLotsColumns"
         >
           <template #cell-description="{ row }">
@@ -492,12 +504,12 @@ const {
         <template v-for="g in lotGroups" :key="g.key">
           <h3 class="group-title">
             {{ g.label || "—" }}
-            <span class="muted">— {{ $t("admin.pages.stockSearch.lotsCount", { count: g.lots.length }) }}</span>
+            <span class="muted">— {{ $t("stockSearch.lotsCount", { count: g.lots.length }) }}</span>
           </h3>
           <DataTable
             :table="tableForGroup(g.key).table"
             sync-scroll-key="stock-search-lots"
-            :empty-text="$t('admin.pages.stockSearch.noLots')"
+            :empty-text="$t('stockSearch.noLots')"
             :on-reset-columns="tableForGroup(g.key).resetColumnState"
           >
             <template #cell-description="{ row }">
@@ -505,7 +517,7 @@ const {
             </template>
           </DataTable>
         </template>
-        <p v-if="lotGroups.length === 0" class="muted">{{ $t("admin.pages.stockSearch.noLots") }}</p>
+        <p v-if="lotGroups.length === 0" class="muted">{{ $t("stockSearch.noLots") }}</p>
       </template>
     </template>
   </div>

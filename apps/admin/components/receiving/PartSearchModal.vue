@@ -179,13 +179,13 @@ watch(
             <tr>
               <th>{{ $t("admin.pages.shelfBoxes.orgId") }}</th>
               <th>{{ $t("admin.pages.shelfBoxes.subInventory") }}</th>
-              <th>{{ $t("admin.pages.stockSearch.shelf") }}</th>
-              <th>{{ $t("admin.pages.stockSearch.box") }}</th>
-              <th>{{ $t("admin.pages.stockSearch.dateCode") }}</th>
-              <th>{{ $t("admin.pages.stockSearch.lotCode") }}</th>
-              <th class="num">{{ $t("admin.pages.stockSearch.totalQty") }}</th>
-              <th class="num">{{ $t("admin.pages.stockSearch.allocatedQty") }}</th>
-              <th class="num">{{ $t("admin.pages.stockSearch.availableQty") }}</th>
+              <th>{{ $t("stockSearch.shelf") }}</th>
+              <th>{{ $t("stockSearch.box") }}</th>
+              <th>{{ $t("stockSearch.dateCode") }}</th>
+              <th>{{ $t("stockSearch.lotCode") }}</th>
+              <th class="num">{{ $t("stockSearch.totalQty") }}</th>
+              <th class="num">{{ $t("stockSearch.allocatedQty") }}</th>
+              <th class="num">{{ $t("stockSearch.availableQty") }}</th>
             </tr>
           </thead>
           <tbody>

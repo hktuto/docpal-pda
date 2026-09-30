@@ -36,20 +36,6 @@
         v-else
         :picking-orders="filteredPickingOrders"
         v-model:search-query="searchQuery"
-        v-model:expanded-items="expandedItems"
-        v-model:box-selections="boxSelections"
-        :creating-box="creatingBox"
-        :adding-package="addingPackage"
-        :removing-package="removingPackage"
-        :adding-all="addingAll"
-        :any-adding-all="anyAddingAll"
-        @create-box="createBox"
-        @scan="openPickingScan"
-        @print-box="printBox"
-        @add-all-to-box="addAllToBox"
-        @add-to-box="addToBox"
-        @remove-from-box="removeFromBox"
-        @remove-scanned-package="removeScannedPackageHandler"
       />
 
       <ReceivingScanReviewModal
@@ -213,13 +199,7 @@ function setView(next: "receiving" | "picking") {
   view.value = next;
   router.replace({ query: { ...route.query, tab: next } });
 }
-const expandedItems = ref<Set<string>>(new Set());
 const searchQuery = ref("");
-const creatingBox = ref<Record<string, boolean>>({});
-const addingPackage = ref<Record<string, boolean>>({});
-const removingPackage = ref<Record<string, boolean>>({});
-const addingAll = ref<Record<string, boolean>>({});
-const boxSelections = ref<Record<string, string>>({});
 const reportModalOpen = ref(false);
 const reportModalItem = ref<DisplayReceivingItem | null>(null);
 
@@ -264,9 +244,6 @@ const filteredPickingOrders = computed<ReceivingPickingOrder[]>(() => {
   });
 });
 
-const anyAddingAll = computed(() => Object.values(addingAll.value).some(Boolean));
-
-// Same definition as the backend list endpoint: invoice items not fully put away.
 const remainingItems = computed(() => {
   if (!order.value) return 0;
   return order.value.invoices
@@ -335,18 +312,6 @@ async function load() {
     ]);
     order.value = detail;
     pickingOrders.value = picking.pickingOrders;
-
-    const nextBoxSelections: Record<string, string> = {};
-    for (const po of picking.pickingOrders) {
-      for (const item of po.items) {
-        for (const pkg of item.packages) {
-          if (!pkg.shippingBoxId) {
-            nextBoxSelections[pkg.id] = boxSelections.value[pkg.id] ?? "";
-          }
-        }
-      }
-    }
-    boxSelections.value = nextBoxSelections;
   } catch (e: any) {
     error.value = errorMessage(e);
   } finally {
@@ -443,104 +408,6 @@ async function confirmArrival() {
     error.value = errorMessage(e);
   } finally {
     confirming.value = false;
-  }
-}
-
-function openPickingScan(pickingOrderId: string) {
-  router.push(`/picking/scan/${pickingOrderId}?from=receiving&ro=${orderId}`);
-}
-
-// Placeholder until backend-side printing lands.
-function printBox(_boxId: string) {
-  showToast(t("picking.detail.printComingSoon"));
-}
-
-async function createBox(pickingOrderId: string) {
-  creatingBox.value[pickingOrderId] = true;
-  try {
-    await warehouse.createShippingBoxForPickingOrder(pickingOrderId);
-
-    await load();
-  } catch (e: any) {
-    error.value = errorMessage(e);
-  } finally {
-    creatingBox.value[pickingOrderId] = false;
-  }
-}
-
-function findPackage(packageId: string) {
-  for (const po of pickingOrders.value) {
-    for (const item of po.items) {
-      const pkg = item.packages.find((p) => p.id === packageId);
-      if (pkg) return { pkg, pickingOrderId: po.id };
-    }
-  }
-  return null;
-}
-
-async function addAllToBox(boxId: string) {
-  if (anyAddingAll.value) return;
-
-  const po = pickingOrders.value.find((o) => o.boxes.some((b) => b.id === boxId));
-  if (!po) return;
-
-  const count = po.items
-    .flatMap((item) => item.packages)
-    .filter((p) => !p.shippingBoxId).length;
-  if (count === 0) return;
-
-  const confirmed = window.confirm(t("receiving.pickingTab.addAllConfirm", { count }));
-  if (!confirmed) return;
-
-  addingAll.value[boxId] = true;
-  error.value = null;
-  try {
-    await warehouse.addAllUnboxedPackagesToBox(boxId);
-    await load();
-  } catch (e: any) {
-    error.value = errorMessage(e);
-  } finally {
-    addingAll.value[boxId] = false;
-  }
-}
-
-async function addToBox(packageId: string) {
-  const boxId = boxSelections.value[packageId];
-  if (!boxId) return;
-  addingPackage.value[packageId] = true;
-  try {
-    await warehouse.addPackageToBox(packageId, boxId);
-    await load();
-  } catch (e: any) {
-    error.value = errorMessage(e);
-  } finally {
-    addingPackage.value[packageId] = false;
-  }
-}
-
-async function removeFromBox(packageId: string) {
-  const found = findPackage(packageId);
-  if (!found?.pkg.shippingBoxId) return;
-  removingPackage.value[packageId] = true;
-  try {
-    await warehouse.removePackageFromBox(found.pkg.shippingBoxId, packageId);
-    await load();
-  } catch (e: any) {
-    error.value = errorMessage(e);
-  } finally {
-    removingPackage.value[packageId] = false;
-  }
-}
-
-async function removeScannedPackageHandler(packageId: string) {
-  removingPackage.value[packageId] = true;
-  try {
-    await warehouse.removeScannedPackage(packageId);
-    await load();
-  } catch (e: any) {
-    error.value = errorMessage(e);
-  } finally {
-    removingPackage.value[packageId] = false;
   }
 }
 

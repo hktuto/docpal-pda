@@ -27,7 +27,7 @@ Confirmed items become receiving-area inventory lots that can be picked or put a
 
 ## 6. Switch to Picking view (optional)
 
-Tap **Picking** to see linked picking orders and use OCR-assisted picking to consume receiving-area stock directly.
+Tap **Picking** to see the linked picking orders — each order's status, required/scanned/boxed quantities, allocated lots, and boxes. The tab is read-only; to work on a picking order (scan, box, remove packages), open the picking order itself.
 
 ## Scanning labels (optional)
 

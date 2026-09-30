@@ -19,20 +19,6 @@
       <span class="badge" :class="badgeClass(po.status)">{{ statusLabel.picking(po.status) }}</span>
     </DetailRow>
 
-    <div v-if="po.status !== 'finished'" style="margin-top: 0.75rem; display: flex; gap: 0.5rem;">
-      <button class="btn btn--small" @click="emit('scan', po.id)">
-        {{ $t('receiving.pickingTab.scan') }}
-      </button>
-      <button class="btn btn--small" :disabled="creatingBox[po.id]" @click="emit('create-box', po.id)">
-        <template v-if="creatingBox[po.id]">
-          <InlineSpinner /> {{ $t('receiving.pickingTab.creating') }}
-        </template>
-        <template v-else>
-          {{ $t('receiving.pickingTab.createBox') }}
-        </template>
-      </button>
-    </div>
-
     <div v-if="po.boxes.length" style="margin-top: 0.75rem;">
       <h3 style="margin: 0 0 0.5rem; font-size: 0.875rem; color: var(--muted);">{{ $t('receiving.pickingTab.boxes') }}</h3>
       <div
@@ -42,22 +28,7 @@
         style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;"
       >
         <span style="font-size: 0.875rem; font-weight: 600;">{{ box.id }}</span>
-        <button class="btn btn--small" @click="emit('print-box', box.id)">
-          {{ $t('receiving.pickingTab.print') }}
-        </button>
-        <button
-          v-if="box.status === 'open'"
-          class="btn btn--small"
-          :disabled="anyAddingAll || addingAll[box.id] || !(unboxedCountByOrderId[po.id] > 0)"
-          @click="emit('add-all-to-box', box.id)"
-        >
-          <template v-if="addingAll[box.id]">
-            <InlineSpinner /> {{ $t('receiving.pickingTab.addAll') }}
-          </template>
-          <template v-else>
-            {{ $t('receiving.pickingTab.addAll') }}
-          </template>
-        </button>
+        <span class="badge" :class="badgeClass(box.status)">{{ statusLabel.box(box.status) }}</span>
       </div>
     </div>
 
@@ -107,74 +78,8 @@
               <template v-else>{{ $t('common.unboxed') }}</template>
             </span>
           </div>
-          <div v-if="!pkg.shippingBoxId" style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-            <select
-              :value="boxSelections[pkg.id]"
-              :disabled="addingPackage[pkg.id] || removingPackage[pkg.id]"
-              style="min-width: 8rem;"
-              @change="updateBoxSelection(pkg.id, ($event.target as HTMLSelectElement).value)"
-            >
-              <option value="">{{ $t('receiving.pickingTab.selectBox') }}</option>
-              <option v-for="box in openBoxesForOrder(po.id)" :key="box.id" :value="box.id">{{ box.id }}</option>
-            </select>
-            <button
-              class="btn btn--small"
-              :disabled="addingPackage[pkg.id] || removingPackage[pkg.id] || !boxSelections[pkg.id]"
-              @click="emit('add-to-box', pkg.id)"
-            >
-              <template v-if="addingPackage[pkg.id]">
-                <InlineSpinner /> {{ $t('receiving.pickingTab.adding') }}
-              </template>
-              <template v-else>
-                {{ $t('receiving.pickingTab.addToBox') }}
-              </template>
-            </button>
-            <button
-              class="btn btn--small btn--secondary"
-              :disabled="addingPackage[pkg.id] || removingPackage[pkg.id]"
-              @click="emit('remove-scanned-package', pkg.id)"
-            >
-              <template v-if="removingPackage[pkg.id]">
-                <InlineSpinner /> {{ $t('receiving.pickingTab.removingScanned') }}
-              </template>
-              <template v-else>
-                {{ $t('receiving.pickingTab.removeScanned') }}
-              </template>
-            </button>
-          </div>
-          <button
-            v-else-if="boxById(pkg.shippingBoxId)?.status === 'open'"
-            class="btn btn--small"
-            :disabled="removingPackage[pkg.id]"
-            @click="emit('remove-from-box', pkg.id)"
-          >
-            <template v-if="removingPackage[pkg.id]">
-              <InlineSpinner /> {{ $t('receiving.pickingTab.removing') }}
-            </template>
-            <template v-else>
-              {{ $t('receiving.pickingTab.removeFromBox') }}
-            </template>
-          </button>
         </div>
       </div>
-
-      <!-- <div style="margin-top: 0.5rem; display: flex; gap: 0.5rem; flex-wrap: wrap;">
-        <button class="btn btn--small" @click="toggleExpand(pi.id)">
-          {{ expandedItems.has(pi.id) ? $t('receiving.pickingTab.hideLogs') : $t('receiving.pickingTab.showLogs') }}
-          ({{ pi.transitionLogs.length }})
-        </button>
-
-        <div v-if="expandedItems.has(pi.id)" style="width: 100%; margin-top: 0.5rem;">
-          <p v-if="!pi.transitionLogs.length" class="card__meta">{{ $t('receiving.pickingTab.noLogs') }}</p>
-          <ul v-else style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--muted);">
-            <li v-for="(log, idx) in pi.transitionLogs" :key="idx" style="margin-bottom: 0.35rem;">
-              {{ new Date(log.createdDate).toLocaleString() }}
-              · {{ log.actorId || $t('common.actorSystem') }}
-              · {{ logStateLabel(log.fromState) }} → {{ logStateLabel(log.toState) }}
-            </li>
-          </ul>
-        </div>
-      </div> -->
     </div>
   </div>
 </template>
@@ -187,47 +92,16 @@ import type {
 } from "~/services/types";
 import { badgeClass } from "~/composables/useStatusBadge";
 
-const { t } = useI18n();
 const statusLabel = useStatusLabel();
-const logStateLabel = (code: string | null | undefined) =>
-  code ? t(`logStates.${code}`) : t("common.stateNone");
 
-const props = defineProps<{
+defineProps<{
   pickingOrders: ReceivingPickingOrder[];
-  boxSelections: Record<string, string>;
-  creatingBox: Record<string, boolean>;
-  addingPackage: Record<string, boolean>;
-  removingPackage: Record<string, boolean>;
-  addingAll: Record<string, boolean>;
-  anyAddingAll: boolean;
-  expandedItems: Set<string>;
   searchQuery: string;
 }>();
 
 const emit = defineEmits<{
   "update:searchQuery": [value: string];
-  "update:expandedItems": [value: Set<string>];
-  "update:boxSelections": [value: Record<string, string>];
-  "create-box": [pickingOrderId: string];
-  scan: [pickingOrderId: string];
-  "print-box": [boxId: string];
-  "add-all-to-box": [boxId: string];
-  "add-to-box": [packageId: string];
-  "remove-from-box": [packageId: string];
-  "remove-scanned-package": [packageId: string];
 }>();
-
-const unboxedCountByOrderId = computed(() => {
-  const counts: Record<string, number> = {};
-  for (const po of props.pickingOrders) {
-    let count = 0;
-    for (const item of po.items) {
-      count += item.packages.filter((p) => !p.shippingBoxId).length;
-    }
-    counts[po.id] = count;
-  }
-  return counts;
-});
 
 function scannedQty(item: ReceivingPickingItem): number {
   return item.packages.reduce((sum, p) => sum + p.qty, 0);
@@ -239,30 +113,5 @@ function boxedQty(item: ReceivingPickingItem): number {
 
 function allocatedLocations(item: ReceivingPickingItem): ReceivingPickingAllocation[] {
   return item.allocations.filter((a) => a.qty > 0);
-}
-
-function openBoxesForOrder(pickingOrderId: string) {
-  const po = props.pickingOrders.find((o) => o.id === pickingOrderId);
-  return (po?.boxes ?? []).filter((b) => b.status === "open");
-}
-
-function boxById(boxId: string | null | undefined) {
-  if (!boxId) return undefined;
-  for (const po of props.pickingOrders) {
-    const box = po.boxes.find((b) => b.id === boxId);
-    if (box) return box;
-  }
-  return undefined;
-}
-
-function updateBoxSelection(packageId: string, value: string) {
-  emit("update:boxSelections", { ...props.boxSelections, [packageId]: value });
-}
-
-function toggleExpand(itemId: string) {
-  const next = new Set(props.expandedItems);
-  if (next.has(itemId)) next.delete(itemId);
-  else next.add(itemId);
-  emit("update:expandedItems", next);
 }
 </script>

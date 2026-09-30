@@ -34,6 +34,9 @@ import type {
   GoodsVerifyTaskFilters,
   StockSearchFilters,
   StockSearchResult,
+  StockSearchPageResult,
+  StockSearchOptions,
+  StockSearchSummary,
   SupplierListRow,
   SupplierQrcodeTemplate,
   BoxSearchResult,
@@ -420,20 +423,64 @@ export function createBackendWarehouseService(
       }));
     },
 
-    // Demo reset (dev only) — the one method that works from step 1 on.
-    async resetDemoData(): Promise<void> {
-      await client.post("/dev/reset");
-    },
-
     // Stock search — one aggregate read; filters are optional ANDed query
-    // params. Zero-qty lots come back by design.
+    // params (arrays become repeated any-of params). Zero-qty lots come back
+    // by design.
     async searchStock(
       filters: StockSearchFilters = {}
     ): Promise<StockSearchResult> {
       return client.get("/stock-search", {
         supplierCode: filters.supplierCode,
         partNo: filters.partNo,
+        drawingNo: filters.drawingNo,
         shelfCode: filters.shelfCode,
+        zone: filters.zone,
+        brand: filters.brand,
+        location: filters.location,
+        dateCodeFrom: filters.dateCodeFrom,
+        dateCodeTo: filters.dateCodeTo,
+      });
+    },
+    // Paged lot rows for the mobile load-more list — same filters plus a
+    // 1-based page and page size.
+    async searchStockPage(
+      filters: StockSearchFilters,
+      page: number,
+      pageSize: number
+    ): Promise<StockSearchPageResult> {
+      return client.get("/stock-search", {
+        supplierCode: filters.supplierCode,
+        partNo: filters.partNo,
+        drawingNo: filters.drawingNo,
+        shelfCode: filters.shelfCode,
+        zone: filters.zone,
+        brand: filters.brand,
+        location: filters.location,
+        dateCodeFrom: filters.dateCodeFrom,
+        dateCodeTo: filters.dateCodeTo,
+        page,
+        pageSize,
+      });
+    },
+    // Distinct filter values in the current stock; locations are limited to
+    // the caller's user_profiles sub-inventory scope server-side.
+    async getStockSearchOptions(): Promise<StockSearchOptions> {
+      return client.get("/stock-search/options");
+    },
+    // Filtered totals for the summary strip — same filter set as searchStock.
+    async getStockSearchSummary(
+      filters: StockSearchFilters = {}
+    ): Promise<StockSearchSummary> {
+      return client.get("/stock-search/summary", {
+        supplierCode: filters.supplierCode,
+        partNo: filters.partNo,
+        drawingNo: filters.drawingNo,
+        shelfCode: filters.shelfCode,
+        zone: filters.zone,
+        brand: filters.brand,
+        location: filters.location,
+        dateCodeFrom: filters.dateCodeFrom,
+        dateCodeTo: filters.dateCodeTo,
       });
     },
     // The admin suppliers CRUD read doubles as the PDA supplier dropdown

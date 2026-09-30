@@ -24,7 +24,7 @@ Use the Receiving flow when a supplier shipment arrives at the warehouse.
 ## Views on the detail page
 
 - **Receiving view** — invoices and items.
-- **Picking view** — linked picking orders and the scan modal for OCR-assisted picking.
+- **Picking view** — linked picking orders (status, allocated lots, boxes, scanned packages) as read-only info; work on them happens on the picking order page.
 
 ## Related guides
 

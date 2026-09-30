@@ -860,12 +860,23 @@ export interface GoodsVerifyTaskDetail {
 // ------------------------------------------------------------------
 
 /** Query filters for GET /stock-search (all optional, ANDed; partNo is a
- *  normalized substring, shelfCode exact, supplierCode traces the lot back to
- *  its receiving order). */
+ *  normalized substring match over part_no / wcl_item_no). The array-valued
+ *  filters are any-of (IN) matches sent as repeated query params;
+ *  `location` entries are exact "orgId:subInventoryCode" pairs. supplierCode
+ *  traces the lot back to its receiving order (lot sources → invoices →
+ *  order); dateCodeFrom/To are WWYY range bounds. */
 export interface StockSearchFilters {
   supplierCode?: string;
   partNo?: string;
-  shelfCode?: string;
+  drawingNo?: string;
+  shelfCode?: string[];
+  zone?: string[];
+  brand?: string[];
+  /** Exact "orgId:subInventoryCode" pairs — matched as (org, sub-inventory)
+   *  pairs, not independent dimensions. */
+  location?: string[];
+  dateCodeFrom?: string;
+  dateCodeTo?: string;
 }
 
 export interface StockSearchPart {
@@ -879,6 +890,8 @@ export interface StockSearchPart {
 export interface StockSearchLot {
   partNo: string;
   wclItemNo: string | null;
+  description: string | null;
+  brand: string;
   dateCode: string | null;
   lotCode: string | null;
   coo: string | null;
@@ -886,9 +899,13 @@ export interface StockSearchLot {
   /** From inventory_lots.drawing_no. */
   drawingNo: string | null;
   shelfCode: string | null;
+  shelfDisplayName?: string | null;
+  zone: string | null;
   boxId: string | null;
   orgId: number | null;
   subInventoryCode: string | null;
+  /** Org office code from org_info (display form of orgId). */
+  officeCode?: string | null;
   totalQty: number;
   allocatedQty: number;
   availableQty: number;
@@ -897,6 +914,44 @@ export interface StockSearchLot {
 export interface StockSearchResult {
   parts: StockSearchPart[];
   lots: StockSearchLot[];
+}
+
+/** Paged variant of GET /stock-search (`?page=&pageSize=`) — flat lot rows
+ *  plus the total matching row count (1-based page). */
+export interface StockSearchPageResult {
+  rows: StockSearchLot[];
+  total: number;
+}
+
+/** Distinct filter values present in the current stock (GET
+ *  /stock-search/options). Locations are limited to the caller's
+ *  user_profiles sub-inventory scope (no scope row = unrestricted). */
+export interface StockSearchOptions {
+  brands: string[];
+  zones: string[];
+  shelves: { code: string; displayName?: string | null; zone: string | null }[];
+  locations: {
+    orgId: number | null;
+    subInventoryCode: string | null;
+    description: string | null;
+    officeCode: string | null;
+  }[];
+}
+
+/** GET /stock-search/summary — totals for the current filters ({} = overall). */
+export interface StockSearchSummary {
+  partCount: number;
+  lotCount: number;
+  totalQty: number;
+  allocatedQty: number;
+  availableQty: number;
+  shelfCount: number;
+  lastUpdateDate: string | null;
+  /** Outdated threshold in force (flow config outdatedStockYears). */
+  outdatedYears: number;
+  outdatedPartCount: number;
+  outdatedLotCount: number;
+  outdatedQty: number;
 }
 
 /** GET /admin/suppliers row (the admin CRUD read doubles as the PDA

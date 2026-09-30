@@ -92,7 +92,6 @@ docker compose -f docker-compose.prod.yml up -d --build
 ### Demo reset
 
 - **Backend:** `POST :3002/dev/reset` truncates the Postgres database and re-seeds it.
-- **Web:** the reset control in `components/AppHeader.vue` calls `warehouse.resetDemoData()` → `POST /dev/reset`.
 
 ### Native Android build / install on a connected device
 
