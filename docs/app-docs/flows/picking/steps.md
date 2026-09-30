@@ -18,7 +18,7 @@ The list order is the priority order set by the office — work from the top.
 
 ## 3. Review allocated lines
 
-The detail page lists each picking item as a compact row: part, status badge, required / scanned quantities, and a boxed/required progress count at a glance. Tap a row to expand its required quantity and where the stock is allocated from (lot or receiving-area item), plus the package/box actions. For allocations against a receiving order, any recorded box IDs from the receiving invoice items are shown as a "Box IDs" remark so the operator knows which boxes to pick from. If the allocated shelf carries a warning (set by an admin on the shelf, e.g. outdated-stock shelves), a ⚠️ icon appears next to the shelf code — hover/long-press shows the warning text; the stock is still pickable.
+The detail page lists each picking part as a compact row: part, status badge, and required / scanned quantities at a glance. Lines sharing the same part no are merged into one row by default (totals across the lines) — the **Merge part no** toggle next to the section title switches back to the per-line view. Tap a row to expand its required quantity and where the stock is allocated from (lot or receiving-area item), plus the package/box actions; in the merged view the contributing lines are listed as summary lines and the allocations and packages are aggregated across them (allocations fed by the same source are summed into one row). For allocations against a receiving order, any recorded box IDs from the receiving invoice items are shown as a "Box IDs" remark so the operator knows which boxes to pick from. If the allocated shelf carries a warning (set by an admin on the shelf, e.g. outdated-stock shelves), a ⚠️ icon appears next to the shelf code — hover/long-press shows the warning text; the stock is still pickable.
 
 ## 4. Pick each line
 
@@ -33,7 +33,7 @@ When everything the order still needs is exactly the contents of one shelf box, 
 
 ### Box / shelf / carton barcode scanning
 
-Each item row on the scan session page shows where its remaining qty is allocated from (e.g. `CTN C3001 ×500`, `BOX-H-20260701-0003 @ A-02-01 ×1000`) — go to that location and scan its barcode.
+Each item row on the scan session page shows where its remaining qty is allocated from (e.g. `CTN C3001 ×500`, `BOX-H-20260701-0003 @ A-02-01 ×1000`) — go to that location and scan its barcode. When the order has several lines of the same part, they appear as one merged row (totals across the lines), and a scanned package may span those lines: a label qty that exceeds one line but fits the part's total is split across the lines automatically.
 
 **Receiving carton** (known, sealed contents): scanning the carton barcode queues everything the order still needs from that carton in one go — no per-part scans. Re-scanning the same carton is rejected as a duplicate.
 

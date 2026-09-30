@@ -30,19 +30,19 @@
 
       <template v-else>
         <div class="card scan-session__progress">
-          <div v-for="item in order.items" :key="item.id" class="scan-session__progress-row">
+          <div v-for="group in partGroups" :key="group.key" class="scan-session__progress-row">
             <span class="scan-session__part">
-              <span class="scan-session__line">L{{ item.lineNumber ?? '—' }}/S{{ item.shipmentNumber ?? '—' }}</span>
-              {{ item.wclItemNo ?? item.partNo }}
-              <span v-if="allocationSources(item)" class="scan-session__sources" :title="allocationWarnings(item) || undefined">
-                {{ allocationSources(item) }}
+              <span class="scan-session__line">L{{ group.lines }}/S{{ group.shipments }}</span>
+              {{ group.partNo }}
+              <span v-if="group.sources" class="scan-session__sources" :title="group.warnings || undefined">
+                {{ group.sources }}
               </span>
             </span>
             <span class="scan-session__counts">
               {{ $t('picking.scanSession.progress', {
-                required: item.qty,
-                scanned: serverScannedQty(item),
-                queued: queuedQtyByItem[item.id] ?? 0,
+                required: group.required,
+                scanned: group.scanned,
+                queued: group.queued,
               }) }}
             </span>
           </div>
@@ -149,6 +149,7 @@ import PickingScanReviewModal from "~/components/picking/PickingScanReviewModal.
 import PickFromBoxDialog, { type PickFromBoxEntry } from "~/components/picking/PickFromBoxDialog.vue";
 import ScanMultiItemModal from "~/components/ScanMultiItemModal.vue";
 import { normalize, type OcrInput } from "~/composables/useMockOcr";
+import { normalizePartNo } from "~/utils/text";
 import type { PickingOrderDetail } from "~/services/types";
 
 definePageMeta({ title: "meta.pickingScan", props: { noPadding: true } });
@@ -176,9 +177,11 @@ const orderItems = computed(() => order.value?.items ?? []);
 const { rows, queuedQtyByItem, addScan, matchBoxAllocations, matchCartonAllocations, addCartonScan, allocationRemaining, addAllocationScan, removeRow, reresolveQueued, applyAll } = usePickingScanQueue(orderItems);
 const queuedCount = computed(() => rows.value.filter((r) => r.status === "queued").length);
 
-// The table aggregates scans of the same item + batch fields into one row
-// with the total qty — the queue itself stays one row per scan so Confirm
-// applies each label exactly as scanned.
+// The table aggregates scans of the same part + batch fields (lot/date/coo/
+// cow) into one row with the total qty — one label may span several order
+// lines of the same part, so portions carry different item ids. Display
+// only; the queue stays one row per portion so Confirm applies each label
+// exactly as scanned.
 interface DisplayRow {
   key: string;
   keys: string[];
@@ -195,7 +198,7 @@ interface DisplayRow {
 const displayRows = computed<DisplayRow[]>(() => {
   const groups = new Map<string, DisplayRow>();
   for (const row of rows.value) {
-    const gk = [row.itemId, row.lotCode ?? "", row.dateCode ?? "", row.coo ?? "", row.cow ?? ""].join("|");
+    const gk = [normalizePartNo(row.partNo), row.lotCode ?? "", row.dateCode ?? "", row.coo ?? "", row.cow ?? ""].join("|");
     const g = groups.get(gk);
     if (g) {
       g.keys.push(row.key);
@@ -210,7 +213,7 @@ const displayRows = computed<DisplayRow[]>(() => {
         key: row.key,
         keys: [row.key],
         partNo: row.partNo,
-        wclItemNo: orderItems.value.find((i) => i.id === row.itemId)?.wclItemNo ?? null,
+        wclItemNo: orderItems.value.find((i) => normalizePartNo(i.partNo) === normalizePartNo(row.partNo))?.wclItemNo ?? null,
         qty: row.qty,
         lotCode: row.lotCode,
         dateCode: row.dateCode,
@@ -254,11 +257,46 @@ function serverScannedQty(item: PickingOrderDetail["items"][number]): number {
   return (item.packages ?? []).reduce((sum, p) => sum + p.qty, 0);
 }
 
-/** Where this item's open qty is allocated from — the "what/where to scan"
- *  hint shown under each item: receiving carton (CTN), shelf box @ shelf, or
+type OrderItem = PickingOrderDetail["items"][number];
+
+/** Distinct non-null values joined for display (e.g. line numbers of merged
+ *  same-part lines); "—" when every value is null. */
+function joinDistinct(values: (number | string | null | undefined)[]): string {
+  const distinct = [...new Set(values.filter((v): v is number | string => v != null))];
+  return distinct.length ? distinct.join("·") : "—";
+}
+
+/** Progress rows: order lines merged by part — one row per part no with the
+ *  required/scanned/queued totals across its lines (a part often spans
+ *  several upstream lines, and one scanned package may cover more than one
+ *  of them). */
+const partGroups = computed(() => {
+  const groups = new Map<string, OrderItem[]>();
+  for (const item of orderItems.value) {
+    const key = normalizePartNo(item.partNo);
+    const g = groups.get(key);
+    if (g) g.push(item);
+    else groups.set(key, [item]);
+  }
+  return [...groups.entries()].map(([key, items]) => ({
+    key,
+    partNo: items[0].wclItemNo ?? items[0].partNo,
+    lines: joinDistinct(items.map((i) => i.lineNumber)),
+    shipments: joinDistinct(items.map((i) => i.shipmentNumber)),
+    required: items.reduce((sum, i) => sum + i.qty, 0),
+    scanned: items.reduce((sum, i) => sum + serverScannedQty(i), 0),
+    queued: items.reduce((sum, i) => sum + (queuedQtyByItem[i.id] ?? 0), 0),
+    sources: allocationSources(items),
+    warnings: allocationWarnings(items),
+  }));
+});
+
+/** Where these items' open qty is allocated from — the "what/where to scan"
+ *  hint shown under each part: receiving carton (CTN), shelf box @ shelf, or
  *  a bare shelf code for loose lots. */
-function allocationSources(item: PickingOrderDetail["items"][number]): string {
-  return (item.allocations ?? [])
+function allocationSources(items: OrderItem[]): string {
+  return items
+    .flatMap((item) => item.allocations ?? [])
     .filter((a) => a.qty > 0)
     .map((a) => {
       const warn = a.lot?.shelfWarning ? " ⚠️" : "";
@@ -271,12 +309,13 @@ function allocationSources(item: PickingOrderDetail["items"][number]): string {
     .join(" · ");
 }
 
-/** Distinct shelf warnings across the item's open allocations — tooltip for
+/** Distinct shelf warnings across the items' open allocations — tooltip for
  *  the ⚠️ markers in allocationSources. */
-function allocationWarnings(item: PickingOrderDetail["items"][number]): string {
+function allocationWarnings(items: OrderItem[]): string {
   return [
     ...new Set(
-      (item.allocations ?? [])
+      items
+        .flatMap((item) => item.allocations ?? [])
         .filter((a) => a.qty > 0)
         .map((a) => a.lot?.shelfWarning)
         .filter((w): w is string => !!w)

@@ -1,46 +1,69 @@
 <template>
-  <h2 class="section-title">{{ $t('picking.itemsSection.title') }}</h2>
+  <h2 class="section-title">
+    {{ $t('picking.itemsSection.title') }}
+    <button
+      type="button"
+      class="btn btn--small merge-toggle"
+      :class="{ 'merge-toggle--active': mergeByPart }"
+      :aria-pressed="mergeByPart"
+      @click="mergeByPart = !mergeByPart"
+    >
+      {{ $t('picking.itemsSection.mergePartNo') }}
+    </button>
+  </h2>
   <div class="list-panel">
     <div
-      v-for="item in items"
-      :key="item.id"
-      :data-item-id="item.id"
+      v-for="group in displayGroups"
+      :key="group.key"
+      :data-item-id="group.items[0].id"
       class="list-row list-row--expandable"
-      :class="{ 'list-row--done': item.pickedQty >= item.qty }"
+      :class="{ 'list-row--done': group.pickedQty >= group.qty }"
     >
-      <button type="button" class="list-row__main list-row__toggle" @click="toggle(item.id)">
+      <button type="button" class="list-row__main list-row__toggle" @click="toggle(group.key)">
         <div class="list-row__line1">
-          <span class="list-row__title">{{ (item.wclItemNo ?? item.partNo) || $t('common.noData') }}</span>
+          <span class="list-row__title">{{ group.title || $t('common.noData') }}</span>
           <span
             class="badge"
-            :class="badgeClass(item.pickedQty >= item.qty ? 'finished' : 'picking')"
+            :class="badgeClass(group.pickedQty >= group.qty ? 'finished' : 'picking')"
           >
-            {{ item.pickedQty >= item.qty ? statusLabel.picking('finished') : statusLabel.picking('picking') }}
+            {{ group.pickedQty >= group.qty ? statusLabel.picking('finished') : statusLabel.picking('picking') }}
           </span>
         </div>
         <div class="list-row__meta">
-          {{ $t('picking.itemsSection.requiredQty') }}: {{ item.qty }}
-          · {{ $t('picking.itemsSection.scannedQty') }}: {{ scannedQty(item) }}
+          {{ $t('picking.itemsSection.requiredQty') }}: {{ group.qty }}
+          · {{ $t('picking.itemsSection.scannedQty') }}: {{ group.scannedQty }}
         </div>
       </button>
-      <div class="list-row__aside">
+      <!-- <div class="list-row__aside">
         <span class="list-row__qty">{{ item.pickedQty }}/{{ item.qty }}</span>
-      </div>
+      </div> -->
       <svg
         class="list-row__chevron"
-        :class="{ 'list-row__chevron--open': expandedItems.has(item.id) }"
+        :class="{ 'list-row__chevron--open': expandedItems.has(group.key) }"
         viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
         stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
       ><path d="m9 18 6-6-6-6"/></svg>
 
-      <div v-if="expandedItems.has(item.id)" class="list-row__detail">
-        <DetailRow :label="$t('picking.itemsSection.line')" :value="`${item.lineNumber ?? '—'} (${$t('picking.itemsSection.shipment')} ${item.shipmentNumber ?? '—'})`" />
+      <div v-if="expandedItems.has(group.key)" class="list-row__detail">
+        <template v-if="group.items.length > 1">
+          <div v-for="item in group.items" :key="item.id" class="merged-line">
+            {{ $t('picking.itemsSection.line') }} {{ item.lineNumber ?? '—' }}
+            ({{ $t('picking.itemsSection.shipment') }} {{ item.shipmentNumber ?? '—' }})
+            · {{ $t('picking.itemsSection.requiredQty') }}: {{ item.qty }}
+            · {{ $t('picking.itemsSection.scannedQty') }}: {{ scannedQty(item) }}
+          </div>
+        </template>
+        <DetailRow
+          v-else
+          :label="$t('picking.itemsSection.line')"
+          :value="`${group.items[0].lineNumber ?? '—'} (${$t('picking.itemsSection.shipment')} ${group.items[0].shipmentNumber ?? '—'})`"
+        />
 
-        <div v-if="activeAllocations(item).length && actionable && item.pickedQty < item.qty" class="allocations">
+        <div v-if="group.allocations.length && actionable && group.pickedQty < group.qty" class="allocations">
           <h3 class="subsection-title">{{ $t('picking.itemsSection.allocations') }}</h3>
           <div
-            v-for="allocation in activeAllocations(item)"
-            :key="allocation.id"
+            v-for="allocation in group.allocations"
+            :key="allocation.key"
             class="lot"
           >
             <template v-if="allocation.lot">
@@ -77,10 +100,10 @@
           </div>
         </div>
 
-        <div v-if="unboxedPackages(item).length && actionable" class="unboxed-packages">
+        <div v-if="group.unboxed.length && actionable" class="unboxed-packages">
           <h3 class="subsection-title">{{ $t('picking.itemsSection.unboxedPackages') }}</h3>
           <div
-            v-for="pkg in unboxedPackages(item)"
+            v-for="pkg in group.unboxed"
             :key="pkg.id"
             class="lot package-row"
           >
@@ -108,10 +131,10 @@
           </div>
         </div>
 
-        <div v-if="boxedPackages(item).length && actionable" class="boxed-packages">
+        <div v-if="group.boxed.length && actionable" class="boxed-packages">
           <h3 class="boxed-title">{{ $t('picking.itemsSection.boxedPackages') }}</h3>
           <div
-            v-for="pkg in boxedPackages(item)"
+            v-for="pkg in group.boxed"
             :key="pkg.id"
             class="lot package-row"
           >
@@ -141,6 +164,7 @@
 <script setup lang="ts">
 import type { PickingOrderDetail } from "~/services/types";
 import { badgeClass } from "~/composables/useStatusBadge";
+import { normalizePartNo } from "~/utils/text";
 
 type PickingItem = PickingOrderDetail["items"][number];
 
@@ -163,6 +187,83 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const statusLabel = useStatusLabel();
+
+// Merge view (default): one row per part no, aggregating the quantities of
+// all order lines carrying that part (expanded detail still lists every
+// line). Toggleable per session — no persistence.
+const mergeByPart = ref(true);
+
+type PickingAllocation = NonNullable<PickingItem["allocations"]>[number];
+type PickingPackage = NonNullable<PickingItem["packages"]>[number];
+
+/** Display form of an allocation row: identical for a single line and for a
+ *  merged part group — merged rows carry the summed qty of every allocation
+ *  fed by the same source (same stock lot, or the same receiving
+ *  invoice item / receiving-order pool / carton). */
+interface MergedAllocation {
+  key: string;
+  lot: PickingAllocation["lot"];
+  boxId: string | null;
+  qty: number;
+}
+
+function mergeAllocations(allocations: PickingAllocation[]): MergedAllocation[] {
+  const groups = new Map<string, MergedAllocation>();
+  for (const a of allocations) {
+    if (a.qty <= 0) continue;
+    const key = a.lot
+      ? `lot:${a.lot.id}`
+      : `src:${a.receivingInvoiceItemId ?? ""}:${a.receivingOrderId ?? ""}:${a.boxId ?? ""}`;
+    const g = groups.get(key);
+    if (g) {
+      g.qty += a.qty;
+    } else {
+      groups.set(key, { key, lot: a.lot ?? null, boxId: a.boxId ?? null, qty: a.qty });
+    }
+  }
+  return [...groups.values()];
+}
+
+interface ItemGroup {
+  key: string;
+  title: string;
+  items: PickingItem[];
+  qty: number;
+  pickedQty: number;
+  scannedQty: number;
+  allocations: MergedAllocation[];
+  unboxed: PickingPackage[];
+  boxed: PickingPackage[];
+}
+
+function toGroup(key: string, items: PickingItem[]): ItemGroup {
+  const packages = items.flatMap((i) => i.packages ?? []);
+  return {
+    key,
+    title: (items[0].wclItemNo ?? items[0].partNo) || "",
+    items,
+    qty: items.reduce((sum, i) => sum + i.qty, 0),
+    pickedQty: items.reduce((sum, i) => sum + i.pickedQty, 0),
+    scannedQty: items.reduce((sum, i) => sum + scannedQty(i), 0),
+    allocations: mergeAllocations(items.flatMap((i) => i.allocations ?? [])),
+    unboxed: packages.filter((p) => !p.shippingBoxId),
+    boxed: packages.filter((p) => p.shippingBoxId),
+  };
+}
+
+const displayGroups = computed<ItemGroup[]>(() => {
+  if (!mergeByPart.value) {
+    return props.items.map((item) => toGroup(item.id, [item]));
+  }
+  const groups = new Map<string, PickingItem[]>();
+  for (const item of props.items) {
+    const key = normalizePartNo(item.partNo);
+    const g = groups.get(key);
+    if (g) g.push(item);
+    else groups.set(key, [item]);
+  }
+  return [...groups.entries()].map(([key, items]) => toGroup(key, items));
+});
 
 const expandedItems = ref<Set<string>>(new Set());
 
@@ -188,18 +289,6 @@ function scannedQty(item: PickingItem) {
   return (item.packages ?? []).reduce((sum, p) => sum + p.qty, 0);
 }
 
-function activeAllocations(item: PickingItem) {
-  return (item.allocations ?? []).filter((a) => a.qty > 0);
-}
-
-function unboxedPackages(item: PickingItem) {
-  return (item.packages ?? []).filter((p) => !p.shippingBoxId);
-}
-
-function boxedPackages(item: PickingItem) {
-  return (item.packages ?? []).filter((p) => p.shippingBoxId);
-}
-
 function updateBoxSelection(packageId: string, value: string) {
   emit("update:boxSelections", { ...props.boxSelections, [packageId]: value });
 }
@@ -211,6 +300,43 @@ function formatLotFields(source: { dateCode: string | null; lotCode: string | nu
 </script>
 
 <style scoped>
+.section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.merge-toggle {
+  font-weight: 400;
+  background: transparent;
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.merge-toggle:hover:not(:disabled) {
+  background: var(--primary-soft);
+  box-shadow: none;
+}
+
+.merge-toggle--active {
+  background: var(--primary);
+  color: #fff;
+}
+
+.merge-toggle--active:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.merged-line {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 0.35rem 0;
+  border-bottom: 1px dashed var(--muted-light, #e5e7eb);
+  margin-bottom: 0.35rem;
+}
+
 .allocations,
 .unboxed-packages,
 .boxed-packages {

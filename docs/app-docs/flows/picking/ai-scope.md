@@ -58,8 +58,9 @@
 - Scan-to-pick ("checkout" scan session): one Scan button per picking order
   opens `/picking/scan/:id`. The hardware scanner is armed only on that page;
   each QR scan is validated client-side (part matches an order item, qty fits
-  the first allocation with enough remaining minus already-queued qty,
-  duplicate raw QR rejected) and appended to a local queue table — no per-scan
+  the aggregated remaining of all same-part lines — consumed FIFO across
+  lines and their allocations, minus already-queued qty — duplicate raw QR
+  rejected) and appended to a local queue table — no per-scan
   confirm/review. QR parsing tries the order-brand-matching supplier
   templates first (`supplier_profiles.brands` vs the items' `parts.brand`,
   rest as fallback), and part matching is space-insensitive and accepts both the
@@ -70,8 +71,10 @@
   The page also restricts the hardware decoder to the order brands'
   `barcode_types` union (`useBrandSymbologyScope`; any unmapped brand = no
   restriction, full set restored on page leave).
-  Each item row shows where its remaining qty is allocated
-  from (`allocationSources` — `CTN <ctn>`, `<box> @ <shelf>`, or a bare shelf
+  Each progress row covers one part — same-part lines are merged with their
+  required/scanned/queued totals, joined line/shipment numbers, and the
+  concatenated allocation sources (`allocationSources` — `CTN <ctn>`,
+  `<box> @ <shelf>`, or a bare shelf
   code) so the operator knows what/where to scan. A raw scan that matches no
   supplier QR template is treated as a location barcode, with two behaviors:
   a **receiving carton** (`ctn_no` — `matchCartonAllocations`) auto-queues
@@ -91,9 +94,12 @@
   (`PickingScanReviewModal` — editable fields with OCR candidate chips),
   while a multi-item label (2+ rows via `extractMultiItemRows`) opens an
   editable table (`PickingScanMultiItemModal`) whose rows are added to the
-  queue row-by-row. The queue table aggregates scans of the same item +
-  batch fields (lot/date/coo/cow) into one row with the total qty — display
-  only; Confirm still applies each scan individually. Confirm
+  queue row-by-row. The queue table aggregates scans of the same part +
+  batch fields (lot/date/coo/cow) into one row with the total qty — a label
+  may legitimately span several same-part lines (e.g. 25000 against lines of
+  10000 + 20000); the queue keeps one row per (line, allocation) portion and
+  Confirm still applies each portion individually, so the backend's per-line
+  cap holds. Confirm
   batch-applies the queue sequentially via
   `POST /picking-items/:id/scan {allocationId, qty, ...batch overrides}`;
   failed rows stay in the list with their error. Launched from the picking
@@ -330,9 +336,13 @@
   refresh/keepalive release + `heldByOther` state (tests in
   `tests/usePickingWorkLock.test.ts`).
 - `components/picking/PickingItemsSection.vue` — items sub-view: compact
-  per-row-expand rows (status badge + required/scanned and boxed/total
-  progress at a glance; allocations and package/box actions inside the
-  expanded row),
+  per-row-expand rows (status badge + required/scanned at a glance;
+  allocations and package/box actions inside the expanded row). Rows are
+  merged by part no by default — same-part lines aggregate into one row
+  (totals; expanded detail lists every line as a summary and merges the
+  allocations, summing rows fed by the same source, plus the unboxed/boxed
+  package lists) and the **Merge part no** toggle (`mergeByPart`, session
+  state only) switches back to per-line,
   `components/picking/PickingBoxesSection.vue` (incl. the per-box
   **Scan item into box** cross-order toggle),
   `components/picking/PickingIssueBanner.vue` — detail sub-views.
@@ -392,6 +402,7 @@
 - `docs/superpowers/specs/2026-07-29-whole-box-picking-claim-design.md`
 - `docs/superpowers/specs/2026-09-11-user-subinventory-scope-design.md`
 - `docs/superpowers/specs/2026-09-22-picking-allocated-skip-status-design.md`
+- `docs/superpowers/specs/2026-09-30-picking-scan-cross-line-split-design.md`
 - `docs/superpowers/plans/2026-07-23-picking-priority-allocation.md`
 - `docs/superpowers/plans/2026-07-12-picking-execution.md`
 - `docs/superpowers/plans/2026-07-18-picking-scan-session.md`

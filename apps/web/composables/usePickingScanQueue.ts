@@ -27,8 +27,9 @@ let nextKey = 1;
  * Local scan queue for the picking scan-session ("checkout") page: scans are
  * validated client-side and queued, then batch-applied on Confirm.
  * Validation mirrors the old per-scan matcher: part must match an order item,
- * qty must fit the first allocation with enough remaining (minus what is
- * already queued against it), and the same raw QR value cannot be queued twice.
+ * qty must fit the aggregated remaining of all same-part lines (minus what is
+ * already queued against their allocations), and the same raw QR value cannot
+ * be queued twice.
  */
 export function usePickingScanQueue(items: Ref<OrderItems>) {
   const rows = ref<ScanQueueRow[]>([]);
@@ -76,27 +77,29 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
 
   /**
    * Like findTarget, but allows one label's qty to span several allocations
-   * of the same item (an order line is often allocated from more than one
-   * source, e.g. 50000 = 10000 + 40000). Consumes allocations FIFO and
-   * returns one portion per allocation touched, or null when the item's
-   * total remaining (minus queued) cannot cover the qty.
+   * and several order lines with the same part (an order line is often
+   * allocated from more than one source, and one part may appear on multiple
+   * lines, e.g. 10000 + 20000 — a 25000 package covers neither line alone).
+   * Consumes lines in list order and their allocations FIFO, net of queued
+   * qty, returning one portion per (line, allocation) touched, or null when
+   * the aggregated remaining of all same-part lines cannot cover the qty.
    */
   function findTargets(
     parsed: { partNo: string; wclItemNo?: string },
     qty: number
-  ): { item: OrderItems[number]; portions: { allocation: PickingAllocation; qty: number }[] } | null {
+  ): { item: OrderItems[number]; allocation: PickingAllocation; qty: number }[] | null {
+    const portions: { item: OrderItems[number]; allocation: PickingAllocation; qty: number }[] = [];
+    let remaining = qty;
     for (const item of items.value) {
       if (!partMatches(item, parsed)) continue;
-      const portions: { allocation: PickingAllocation; qty: number }[] = [];
-      let remaining = qty;
       for (const allocation of item.allocations ?? []) {
         if (allocation.qty <= 0) continue;
         const available = allocation.qty - queuedQtyForAllocation(allocation.id);
         if (available <= 0) continue;
         const take = Math.min(available, remaining);
-        portions.push({ allocation, qty: take });
+        portions.push({ item, allocation, qty: take });
         remaining -= take;
-        if (remaining === 0) return { item, portions };
+        if (remaining === 0) return portions;
       }
     }
     return null;
@@ -117,15 +120,15 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
     const target = findTargets({ partNo: String(parsed.partNo ?? ""), wclItemNo: parsed.wclItemNo }, qty);
     if (!target) return { ok: false, message: "no_match" };
 
-    // One row per allocation portion; unshift in reverse so the first
-    // portion ends up on top. Portions of one label share the raw value —
-    // the page's display table re-aggregates them into a single line.
-    for (const portion of [...target.portions].reverse()) {
+    // One row per (line, allocation) portion; unshift in reverse so the
+    // first portion ends up on top. Portions of one label share the raw
+    // value — the page's display table re-aggregates them into a single line.
+    for (const portion of [...target].reverse()) {
       rows.value.unshift({
         key: `row-${nextKey++}`,
-        itemId: target.item.id,
+        itemId: portion.item.id,
         allocationId: portion.allocation.id,
-        partNo: target.item.partNo,
+        partNo: portion.item.partNo,
         qty: portion.qty,
         dateCode: parsed.dateCode || null,
         lotCode: parsed.lotCode || null,

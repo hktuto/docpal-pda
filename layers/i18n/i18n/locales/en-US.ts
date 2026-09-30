@@ -306,7 +306,8 @@ export default {
       adding: "Adding…",
       remove: "Remove",
       removing: "Removing…",
-      scan: "Scan"
+      scan: "Scan",
+      mergePartNo: "Merge part no"
     },
     boxesSection: {
       title: "Boxes ({count})",

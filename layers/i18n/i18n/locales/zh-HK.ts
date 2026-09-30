@@ -306,7 +306,8 @@ export default {
       adding: "加入中…",
       remove: "移除",
       removing: "移除中…",
-      scan: "掃描"
+      scan: "掃描",
+      mergePartNo: "合併料號"
     },
     boxesSection: {
       title: "箱號 ({count})",

@@ -155,6 +155,31 @@ describe('usePickingScanQueue', () => {
     expect(q.rows.value[0]).toMatchObject({ itemId: 'item-2', allocationId: 'alloc-3', qty: 1000 });
   });
 
+  it('splits one label across multiple same-part lines', () => {
+    const items = ref(makeItems());
+    (items.value as any)[1].partNo = 'RK73H1JTTD1002F'; // lines of 3000 + 1000
+    const q = usePickingScanQueue(items);
+    // a 3500 package covers neither line alone; consumed FIFO: item-1's
+    // allocations first (2000 + 1000), then 500 from item-2
+    const res = q.addScan(qr('RK73H1JTTD1002F', 3500), ':A::352:X:L:S1:F', 'qr');
+    expect(res).toEqual({ ok: true });
+    expect(q.rows.value).toHaveLength(3);
+    expect(q.rows.value[0]).toMatchObject({ itemId: 'item-1', allocationId: 'alloc-1', qty: 2000 });
+    expect(q.rows.value[1]).toMatchObject({ itemId: 'item-1', allocationId: 'alloc-2', qty: 1000 });
+    expect(q.rows.value[2]).toMatchObject({ itemId: 'item-2', allocationId: 'alloc-3', qty: 500 });
+    expect(q.queuedQtyByItem.value).toEqual({ 'item-1': 3000, 'item-2': 500 });
+    // both portions share the raw value → rescanning the same label is a duplicate
+    expect(q.addScan(qr('RK73H1JTTD1002F', 3500), ':A::352:X:L:S1:F', 'qr')).toEqual({ ok: false, message: 'duplicate' });
+  });
+
+  it('rejects a qty beyond the total of all same-part lines', () => {
+    const items = ref(makeItems());
+    (items.value as any)[1].partNo = 'RK73H1JTTD1002F'; // total open = 4000
+    const q = usePickingScanQueue(items);
+    expect(q.addScan(qr('RK73H1JTTD1002F', 4001), ':A::401:X:L:S1:F', 'qr')).toEqual({ ok: false, message: 'no_match' });
+    expect(q.rows.value).toHaveLength(0);
+  });
+
   it('removeRow drops queued rows', () => {
     const q = usePickingScanQueue(ref(makeItems()));
     q.addScan(qr('RK73H1JTTD1002F', 1000), ':A::101:X:L:S:F', 'qr');
