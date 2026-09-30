@@ -91,7 +91,7 @@ async function getOrder(id: string) {
 async function seedAllocatedOrder(tag: string): Promise<string> {
   await client.db.execute(sql`
     INSERT INTO inventory_lots (id, part_no, shelf_code, box_id, date_code, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
-    VALUES (${"LOT-SO-" + tag}, ${"PART-" + tag}, 'A-01-01', ${"BOX-" + tag}, '2601', 2, 'STORE1', 200, now(), now())
+    VALUES (${"LOT-SO-" + tag}, ${"PART-" + tag}, 'A0101', ${"BOX-" + tag}, '2601', 2, 'STORE1', 200, now(), now())
   `);
   const orderId = randomUUID();
   await insertPickingOrder(client.db, orderId, {

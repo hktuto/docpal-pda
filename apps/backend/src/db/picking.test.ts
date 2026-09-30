@@ -323,7 +323,7 @@ test("detail: nested shape — order, items with allocations/packages, boxes; 40
   assert.equal(alloc.boxId, null);
   assert.equal(alloc.receiving, null);
   assert.ok(alloc.lot);
-  assert.equal(alloc.lot.shelfCode, "A-01-01");
+  assert.equal(alloc.lot.shelfCode, "A0101");
   assert.equal(alloc.lot.boxId, "BOX-H-20260701-0001");
   assert.equal(alloc.lot.dateCode, "2603");
   assert.equal(alloc.lot.lotCode, "L2603A");
@@ -334,13 +334,13 @@ test("detail: nested shape — order, items with allocations/packages, boxes; 40
   assert.equal(alloc.lot.availableQty, 0);
   assert.equal(item1.packages.length, 0);
 
-  // the 181G item allocates from the A-01-02 lot, which SO-DEMO-0002 also
+  // the 181G item allocates from the A0102 lot, which SO-DEMO-0002 also
   // draws on (300 + 400 = the full 700)
   assert.equal(item3.allocations.length, 1);
   const alloc3 = item3.allocations[0];
   assert.equal(alloc3.qty, 300);
   assert.ok(alloc3.lot);
-  assert.equal(alloc3.lot.shelfCode, "A-01-02");
+  assert.equal(alloc3.lot.shelfCode, "A0102");
   assert.equal(alloc3.lot.boxId, "BOX-H-20260701-0002");
   assert.equal(alloc3.lot.dateCode, "2604");
   assert.equal(alloc3.lot.lotCode, "L2604A");
@@ -359,14 +359,14 @@ test("detail: allocation lot carries the shelf warning (null when unset)", async
   const { orderId } = await seededOrderAllocated();
 
   await client.db.execute(
-    sql`UPDATE shelves SET warning = 'Outdated stock — verify before picking' WHERE code = 'A-01-01'`
+    sql`UPDATE shelves SET warning = 'Outdated stock — verify before picking' WHERE code = 'A0101'`
   );
 
   const detail = await getPickingOrderDetail(client.db, orderId);
   const [item1, , item3] = detail.items;
-  assert.equal(item1.allocations[0].lot?.shelfCode, "A-01-01");
+  assert.equal(item1.allocations[0].lot?.shelfCode, "A0101");
   assert.equal(item1.allocations[0].lot?.shelfWarning, "Outdated stock — verify before picking");
-  assert.equal(item3.allocations[0].lot?.shelfCode, "A-01-02");
+  assert.equal(item3.allocations[0].lot?.shelfCode, "A0102");
   assert.equal(item3.allocations[0].lot?.shelfWarning, null);
 });
 
@@ -451,7 +451,7 @@ test("scan: lot source — package + batch snapshot, lot/allocation shrink, PICK
   assert.equal(byType.get("on_hand")!.qtyDelta, -500);
   for (const t of txns) {
     assert.equal(t.lotId, lotId);
-    assert.equal(t.shelfCode, "A-01-01");
+    assert.equal(t.shelfCode, "A0101");
     assert.equal(t.boxId, "BOX-H-20260701-0001");
     assert.equal(t.referenceType, "picking_item");
     assert.equal(t.referenceId, itemId);
@@ -1427,7 +1427,7 @@ async function seedClaimWorld(): Promise<ClaimWorld> {
   const boxId = "BOX-H-TEST-CLAIM-1";
   await client.db.execute(
     sql`INSERT INTO shelf_boxes (id, shelf_code, org_id, sub_inventory_code, status, created_date, last_update_date)
-        VALUES (${boxId}, 'A-01-01', 2, 'STORE1', 'closed', now(), now())`
+        VALUES (${boxId}, 'A0101', 2, 'STORE1', 'closed', now(), now())`
   );
   const roId = randomUUID();
   const riId = randomUUID();
@@ -1458,7 +1458,7 @@ async function seedClaimWorld(): Promise<ClaimWorld> {
     await client.db.execute(
       sql`INSERT INTO inventory_lots (id, part_no, shelf_code, box_id, org_id, sub_inventory_code, total_qty,
                                      created_date, last_update_date)
-          VALUES (${lotId}, ${lines[i]!.partNo}, 'A-01-01', ${boxId}, 2, 'STORE1', ${qtys[i]}, now(), now())`
+          VALUES (${lotId}, ${lines[i]!.partNo}, 'A0101', ${boxId}, 2, 'STORE1', ${qtys[i]}, now(), now())`
     );
     await client.db.execute(
       sql`INSERT INTO inventory_lot_sources (id, inventory_lot_id, receiving_invoice_item_id, qty, created_date, last_update_date)

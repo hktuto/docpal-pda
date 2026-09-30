@@ -242,7 +242,7 @@ test("delete staged scan: mis-scan correction; boxed scan rejected", async () =>
 
   const r4702 = await itemIdOf(orderId, "RK73H1JTTD4702F"); // qty 3000
   const scan2 = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: r4702, qty: 100 });
-  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
+  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId });
   await assignScanToBox(client.db, { scanId: scan2.id, shelfBoxId: box.id, actorId });
   const boxed = await catchHttp(deleteStagedPutAwayScan(client.db, { scanId: scan2.id, actorId }));
   assert.equal(boxed.status, 409);
@@ -266,9 +266,9 @@ test("assign: materializes lot with shelf location, sources, put_away_qty, ledge
   const itemId = await itemIdOf(orderId, "RK73B1JTTD181G");
   const scan = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 2000 });
 
-  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
+  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId });
   assert.equal(box.status, "open");
-  assert.equal(box.shelfCode, "A-01-03");
+  assert.equal(box.shelfCode, "A0103");
 
   await assignScanToBox(client.db, { scanId: scan.id, shelfBoxId: box.id, actorId });
 
@@ -303,7 +303,7 @@ test("assign: materializes lot with shelf location, sources, put_away_qty, ledge
   );
   assert.ok(lot);
   assert.equal(lot.partNo, "RK73B1JTTD181G");
-  assert.equal(lot.shelfCode, "A-01-03");
+  assert.equal(lot.shelfCode, "A0103");
   assert.equal(lot.boxId, box.id);
   assert.equal(lot.dateCode, "2610");
   assert.equal(lot.coo, "JP");
@@ -353,7 +353,7 @@ test("assign: materializes lot with shelf location, sources, put_away_qty, ledge
   assert.equal(byType.get("on_hand")!.qtyDelta, 2000);
   for (const t of txns) {
     assert.equal(t.lotId, lot.id);
-    assert.equal(t.shelfCode, "A-01-03");
+    assert.equal(t.shelfCode, "A0103");
     assert.equal(t.boxId, box.id);
     assert.equal(t.referenceType, "shelf_box");
     assert.equal(t.referenceId, box.id);
@@ -369,7 +369,7 @@ test("assign: same part/batch/box merges into the same lot", async () => {
   const itemId = await itemIdOf(orderId, "RK73B1JTTD181G"); // qty 5000
   const scan1 = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 1000 });
   const scan2 = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 1500 });
-  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
+  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId });
 
   await assignScanToBox(client.db, { scanId: scan1.id, shelfBoxId: box.id, actorId });
   await assignScanToBox(client.db, { scanId: scan2.id, shelfBoxId: box.id, actorId });
@@ -399,7 +399,7 @@ test("assign guards: staging/box state/order mismatch/actor", async () => {
   const { orderId, actorId } = await daitoInHand();
   const itemId = await itemIdOf(orderId, "RK73B1JTTD181G");
   const scan = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 100 });
-  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
+  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId });
 
   const badActor = await catchHttp(assignScanToBox(client.db, { scanId: scan.id, shelfBoxId: box.id, actorId: randomUUID() }));
   assert.equal(badActor.status, 400);
@@ -422,7 +422,7 @@ test("assign guards: staging/box state/order mismatch/actor", async () => {
   // box of a different receiving order (the seeded KOA order)
   const koaBox = await createShelfBox(client.db, {
     receivingOrderId: await orderIdOf("100001"),
-    shelfCode: "A-01-04",
+    shelfCode: "A0104",
     actorId,
   });
   const wrongOrder = await catchHttp(assignScanToBox(client.db, { scanId: scan.id, shelfBoxId: koaBox.id, actorId }));
@@ -450,7 +450,7 @@ test("remove-from-box: reverses lot/sources/put_away_qty with reverse ledger row
   const itemId = await itemIdOf(orderId, "RK73B1JTTD181G");
   const scan1 = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 1000 });
   const scan2 = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 1500 });
-  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
+  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId });
   await assignScanToBox(client.db, { scanId: scan1.id, shelfBoxId: box.id, actorId });
   await assignScanToBox(client.db, { scanId: scan2.id, shelfBoxId: box.id, actorId });
   const lot = (await queryGet<{ id: string }>(client.db, sql`SELECT id FROM inventory_lots WHERE box_id = ${box.id}`))!;
@@ -496,7 +496,7 @@ test("remove-from-box: deletes the emptied lot (ledger rows not referencing it)"
   const { orderId, actorId } = await daitoInHand();
   const itemId = await itemIdOf(orderId, "RK73B1JTTD181G");
   const scan = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 2000 });
-  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
+  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId });
   await assignScanToBox(client.db, { scanId: scan.id, shelfBoxId: box.id, actorId });
   const lot = (await queryGet<{ id: string }>(client.db, sql`SELECT id FROM inventory_lots WHERE box_id = ${box.id}`))!;
 
@@ -539,7 +539,7 @@ test("remove-from-box: 409 when the lot has pick allocations", async () => {
   const { orderId, actorId } = await daitoInHand();
   const itemId = await itemIdOf(orderId, "RK73B1JTTD181G");
   const scan = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 2000 });
-  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
+  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId });
   await assignScanToBox(client.db, { scanId: scan.id, shelfBoxId: box.id, actorId });
   const lot = (await queryGet<{ id: string }>(client.db, sql`SELECT id FROM inventory_lots WHERE box_id = ${box.id}`))!;
 
@@ -582,7 +582,7 @@ test("add-all-unboxed: assigns every staging scan of the order", async () => {
   await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: item1, qty: 1000 });
   await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: item2, qty: 3000 });
 
-  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
+  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId });
   const result = await addAllUnboxedToBox(client.db, { shelfBoxId: box.id, actorId });
   assert.equal(result.count, 3);
 
@@ -618,7 +618,7 @@ test("close: guards + happy path + transition log", async () => {
   const { orderId, actorId } = await daitoInHand();
   const itemId = await itemIdOf(orderId, "RK73B1JTTD181G");
   const scan = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 100 });
-  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
+  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId });
 
   const empty = await catchHttp(closeShelfBox(client.db, { shelfBoxId: box.id, actorId }));
   assert.equal(empty.status, 409);
@@ -666,7 +666,7 @@ test("auto-clear: fully put-away order flips to clear (+ transition log)", async
   await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: item1, qty: 5000 });
   await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: item2, qty: 3000 });
 
-  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
+  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId });
   await addAllUnboxedToBox(client.db, { shelfBoxId: box.id, actorId });
 
   const order = await queryGet<{ status: string }>(
@@ -700,7 +700,7 @@ test("cancel: guards + hard delete + transition log", async () => {
   const { orderId, actorId } = await daitoInHand();
   const itemId = await itemIdOf(orderId, "RK73B1JTTD181G");
 
-  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
+  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId });
   await cancelShelfBox(client.db, { shelfBoxId: box.id, actorId });
   assert.equal(await queryGet(client.db, sql`SELECT id FROM shelf_boxes WHERE id = ${box.id}`), undefined);
   const cancelLog = await queryGet<{ fromState: string; toState: string }>(
@@ -716,7 +716,7 @@ test("cancel: guards + hard delete + transition log", async () => {
 
   // non-empty box
   const scan = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 100 });
-  const box2 = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-04", actorId });
+  const box2 = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0104", actorId });
   await assignScanToBox(client.db, { scanId: scan.id, shelfBoxId: box2.id, actorId });
   const notEmpty = await catchHttp(cancelShelfBox(client.db, { shelfBoxId: box2.id, actorId }));
   assert.equal(notEmpty.status, 409);
@@ -752,7 +752,7 @@ test("aggregate: order + lots + staging scans + boxes with items; 404", async ()
   await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: item1, qty: 500 });
   await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: item2, qty: 3000 });
 
-  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
+  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId });
   await assignScanToBox(client.db, { scanId: assigned.id, shelfBoxId: box.id, actorId });
 
   const agg = await getPutAwayAggregate(client.db, orderId);
@@ -778,7 +778,7 @@ test("aggregate: order + lots + staging scans + boxes with items; 404", async ()
   assert.equal(agg.lots.length, 1);
   const lot = agg.lots[0];
   assert.equal(lot.partNo, "RK73B1JTTD181G");
-  assert.equal(lot.shelfCode, "A-01-03");
+  assert.equal(lot.shelfCode, "A0103");
   assert.equal(lot.boxId, box.id);
   assert.equal(lot.dateCode, "2610");
   assert.equal(lot.orgId, 2);
@@ -799,7 +799,7 @@ test("aggregate: order + lots + staging scans + boxes with items; 404", async ()
 
   assert.equal(agg.boxes.length, 1);
   assert.equal(agg.boxes[0].id, box.id);
-  assert.equal(agg.boxes[0].shelfCode, "A-01-03");
+  assert.equal(agg.boxes[0].shelfCode, "A0103");
   assert.equal(agg.boxes[0].status, "open");
   assert.equal(agg.boxes[0].items.length, 1);
   const boxItem = agg.boxes[0].items[0];
@@ -822,27 +822,27 @@ test("create with scanned boxId: custom id, open-same-order reuse, conflicts", a
   // scanned physical box id replaces the server-generated id
   const box = await createShelfBox(client.db, {
     receivingOrderId: orderId,
-    shelfCode: "A-01-03",
+    shelfCode: "A0103",
     actorId,
     boxId: "PHYS-BOX-001",
   });
   assert.equal(box.id, "PHYS-BOX-001");
   assert.equal(box.status, "open");
-  assert.equal(box.shelfCode, "A-01-03");
+  assert.equal(box.shelfCode, "A0103");
 
   // re-scanning the same open box of this order returns it unchanged (shelf NOT moved)
   const again = await createShelfBox(client.db, {
     receivingOrderId: orderId,
-    shelfCode: "A-01-04",
+    shelfCode: "A0104",
     actorId,
     boxId: "PHYS-BOX-001",
   });
   assert.equal(again.id, "PHYS-BOX-001");
-  assert.equal(again.shelfCode, "A-01-03");
+  assert.equal(again.shelfCode, "A0103");
 
   // blank id → 400
   const blank = await catchHttp(
-    createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId, boxId: "   " })
+    createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId, boxId: "   " })
   );
   assert.equal(blank.status, 400);
   assert.equal(blank.message, "box_id_required");
@@ -850,12 +850,12 @@ test("create with scanned boxId: custom id, open-same-order reuse, conflicts", a
   // open box belonging to a different order → 409
   await createShelfBox(client.db, {
     receivingOrderId: await orderIdOf("100001"),
-    shelfCode: "A-01-04",
+    shelfCode: "A0104",
     actorId,
     boxId: "PHYS-BOX-002",
   });
   const otherOrder = await catchHttp(
-    createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId, boxId: "PHYS-BOX-002" })
+    createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId, boxId: "PHYS-BOX-002" })
   );
   assert.equal(otherOrder.status, 409);
   assert.equal(otherOrder.message, "box_id_already_exists");
@@ -863,11 +863,11 @@ test("create with scanned boxId: custom id, open-same-order reuse, conflicts", a
   // closed box id → 409
   const itemId = await itemIdOf(orderId, "RK73B1JTTD181G");
   const scan = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 100 });
-  await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId, boxId: "PHYS-BOX-003" });
+  await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId, boxId: "PHYS-BOX-003" });
   await assignScanToBox(client.db, { scanId: scan.id, shelfBoxId: "PHYS-BOX-003", actorId });
   await closeShelfBox(client.db, { shelfBoxId: "PHYS-BOX-003", actorId });
   const closed = await catchHttp(
-    createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId, boxId: "PHYS-BOX-003" })
+    createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId, boxId: "PHYS-BOX-003" })
   );
   assert.equal(closed.status, 409);
   assert.equal(closed.message, "box_id_already_exists");
@@ -879,7 +879,7 @@ test("scan with shelfBoxId: lands directly in the box (lot + ledger); guards rol
   await reseed(client);
   const { orderId, actorId } = await daitoInHand();
   const itemId = await itemIdOf(orderId, "RK73B1JTTD181G"); // qty 5000
-  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
+  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId });
 
   const scan = await recordPutAwayScan(client.db, orderId, {
     actorId,
@@ -906,7 +906,7 @@ test("scan with shelfBoxId: lands directly in the box (lot + ledger); guards rol
     client.db,
     sql`SELECT id, total_qty AS "totalQty", shelf_code AS "shelfCode" FROM inventory_lots WHERE box_id = ${box.id}`
   );
-  assert.equal(lot!.shelfCode, "A-01-03");
+  assert.equal(lot!.shelfCode, "A0103");
   assert.equal(lot!.totalQty, 2000);
   const src = await queryGet<{ qty: number }>(
     client.db,
@@ -944,7 +944,7 @@ test("scan with shelfBoxId: lands directly in the box (lot + ledger); guards rol
   // box of a different order → 409
   const koaBox = await createShelfBox(client.db, {
     receivingOrderId: await orderIdOf("100001"),
-    shelfCode: "A-01-04",
+    shelfCode: "A0104",
     actorId,
   });
   const wrongOrder = await catchHttp(
@@ -960,7 +960,7 @@ test("assign: lot takes the BOX's location pair, not the receiving order's", asy
   const itemId = await itemIdOf(orderId, "RK73B1JTTD181G");
   const scan = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 500 });
 
-  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
+  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId });
   // admin overrides the box's pair after creation (the box decides the stock
   // partition since 2026-07-23 — not the receiving order)
   await client.db.execute(

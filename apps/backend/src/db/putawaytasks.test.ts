@@ -144,7 +144,7 @@ test("full put-away clears the order and completes the task", async () => {
     const { orderId, actorId } = await daitoInHand();
     await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: await itemIdOf(orderId, "RK73B1JTTD181G"), qty: 5000 });
     await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: await itemIdOf(orderId, "RK73H1JTTD4702F"), qty: 3000 });
-    const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
+    const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId });
     await addAllUnboxedToBox(client.db, { shelfBoxId: box.id, actorId });
 
     const task = await taskOf(orderId);
@@ -163,7 +163,7 @@ test("partial put-away: task stays pending, unboxedItems decreases", async () =>
   try {
     const { orderId, actorId } = await daitoInHand();
     await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: await itemIdOf(orderId, "RK73B1JTTD181G"), qty: 5000 });
-    const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
+    const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId });
     await addAllUnboxedToBox(client.db, { shelfBoxId: box.id, actorId });
 
     const task = await taskOf(orderId);
@@ -183,9 +183,9 @@ test("detail: aggregate + suggestion ranking (box > stock > sub-inventory-shelf)
   try {
     const { orderId, actorId } = await daitoInHand();
     // put away only the 181G line → the fresh OPEN box holding it wins over
-    // the seed's older A-01-02 lot (both parts have seed history at A-01-02)
+    // the seed's older A0102 lot (both parts have seed history at A0102)
     await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: await itemIdOf(orderId, "RK73B1JTTD181G"), qty: 5000 });
-    const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
+    const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId });
     await addAllUnboxedToBox(client.db, { shelfBoxId: box.id, actorId });
 
     const task = await taskOf(orderId);
@@ -194,11 +194,11 @@ test("detail: aggregate + suggestion ranking (box > stock > sub-inventory-shelf)
     assert.equal(detail.task.status, "pending");
     const byPart = new Map(detail.items.map((it) => [it.partNo, it]));
     const g181 = byPart.get("RK73B1JTTD181G")!;
-    assert.equal(g181.suggestedShelfCode, "A-01-03"); // the box's shelf
+    assert.equal(g181.suggestedShelfCode, "A0103"); // the box's shelf
     assert.equal(g181.suggestedBoxId, box.id); // same part already in this open box
     assert.equal(g181.suggestionReason, "same-part-box");
     const f4702 = byPart.get("RK73H1JTTD4702F")!;
-    assert.equal(f4702.suggestedShelfCode, "A-01-02"); // seed history
+    assert.equal(f4702.suggestedShelfCode, "A0102"); // seed history
     assert.equal(f4702.suggestedBoxId, null);
     assert.equal(f4702.suggestionReason, "same-part-stock");
   } finally {
@@ -211,7 +211,7 @@ test("detail: sub-inventory-shelf fallback when the part has no stock history", 
   _setPutAwayConfigForTests({ autoCreateTasks: true });
   try {
     const actorId = await actorIdOf("operator");
-    // seed: A-04-05 is the only sub-inventory-tagged shelf (STORE1)
+    // seed: A0405 is the only sub-inventory-tagged shelf (STORE1)
     // brand-new part (no lots, no boxes anywhere)
     await client.db.execute(
       sql`INSERT INTO parts (id, brand, part_no, wcl_item_no) VALUES ('test-part-new-1', 'DAITO', 'ZZZ-NEW-PART-1', 'WCL/ZZZ-NEW-PART-1')`
@@ -234,7 +234,7 @@ test("detail: sub-inventory-shelf fallback when the part has no stock history", 
     const task = await taskOf(orderId);
     const detail = await getPutAwayTaskDetail(client.db, task!.id);
     assert.equal(detail.items.length, 1);
-    assert.equal(detail.items[0].suggestedShelfCode, "A-04-05"); // STORE1 shelf
+    assert.equal(detail.items[0].suggestedShelfCode, "A0405"); // STORE1 shelf
     assert.equal(detail.items[0].suggestedBoxId, null);
     assert.equal(detail.items[0].suggestionReason, "sub-inventory-shelf");
   } finally {
@@ -248,7 +248,7 @@ test("detail: suggestShelf=off suppresses the hint", async () => {
   try {
     const { orderId, actorId } = await daitoInHand();
     await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: await itemIdOf(orderId, "RK73B1JTTD181G"), qty: 5000 });
-    const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
+    const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId });
     await addAllUnboxedToBox(client.db, { shelfBoxId: box.id, actorId });
 
     const task = await taskOf(orderId);
@@ -279,7 +279,7 @@ test("aggregate (no task): plain put-away detail also carries shelf hints", asyn
   const agg = await getPutAwayAggregate(client.db, orderId);
   const byPart = new Map(agg.items.map((it) => [it.partNo, it]));
   const g181 = byPart.get("RK73B1JTTD181G")!;
-  assert.equal(g181.suggestedShelfCode, "A-01-02"); // seed history
+  assert.equal(g181.suggestedShelfCode, "A0102"); // seed history
   assert.equal(g181.suggestedBoxId, null);
   assert.equal(g181.suggestionReason, "same-part-stock");
 });

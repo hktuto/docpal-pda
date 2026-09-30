@@ -120,7 +120,7 @@ test("reallocate: rebuilds the order's part scope (same-part orders too, other p
   // recomputed yet, so allocations still point at the receiving carton.
   await client.db.execute(sql`
     INSERT INTO inventory_lots (id, part_no, date_code, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
-    VALUES ('LOT-REALLOC-1', 'REALLOC-P1', '2001', 'A-04-05', 'REALLOCBOX1', 2, 'STORE1', 700, now(), now())
+    VALUES ('LOT-REALLOC-1', 'REALLOC-P1', '2001', 'A0405', 'REALLOCBOX1', 2, 'STORE1', 700, now(), now())
   `);
 
   const res = await req(`/admin/picking-orders/${orderA}/reallocate`, { method: "POST" });
@@ -208,7 +208,7 @@ test("receiving-reallocate: rebuilds the order's part scope for an in-hand order
   // scoped recompute runs.
   await client.db.execute(sql`
     INSERT INTO inventory_lots (id, part_no, date_code, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
-    VALUES ('LOT-REALLOC-R1', 'REALLOC-P1', '2001', 'A-04-05', 'REALLOCRBX1', 2, 'STORE1', 700, now(), now())
+    VALUES ('LOT-REALLOC-R1', 'REALLOC-P1', '2001', 'A0405', 'REALLOCRBX1', 2, 'STORE1', 700, now(), now())
   `);
   assert.ok((await allocRows(orderA)).every((a) => a.receivingItemId !== null));
 
@@ -287,7 +287,7 @@ test("remove-allocation: releases only the removed row's lot reservation", async
   const { orderA } = await seedScenario();
   await client.db.execute(sql`
     INSERT INTO inventory_lots (id, part_no, date_code, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
-    VALUES ('LOT-REMOVE-1', 'REALLOC-P1', '2001', 'A-04-05', 'REMOVEBOX1', 2, 'STORE1', 700, now(), now())
+    VALUES ('LOT-REMOVE-1', 'REALLOC-P1', '2001', 'A0405', 'REMOVEBOX1', 2, 'STORE1', 700, now(), now())
   `);
   await allocateAll(client.db);
   // Shelf lots are allocated before dock receiving: orderA takes 600 and
@@ -365,7 +365,7 @@ test("remove-allocation: 409 lock_held when a PDA holds the order's work lock", 
 const insertLot = (id: string, partNo: string, qty: number) =>
   client.db.execute(sql`
     INSERT INTO inventory_lots (id, part_no, date_code, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
-    VALUES (${id}, ${partNo}, '2001', 'A-04-05', ${id + "-BOX"}, 2, 'STORE1', ${qty}, now(), now())
+    VALUES (${id}, ${partNo}, '2001', 'A0405', ${id + "-BOX"}, 2, 'STORE1', ${qty}, now(), now())
   `);
 
 // seedScenario's confirm-arrival already auto-allocates the orders; manual
@@ -547,7 +547,7 @@ test("part-availability: returns stock and receiving rows for the part", async (
   await seedScenario();
   await client.db.execute(sql`
     INSERT INTO inventory_lots (id, part_no, date_code, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
-    VALUES ('LOT-AVAIL-1', 'REALLOC-P1', '2001', 'A-04-05', 'AVAILBOX1', 2, 'STORE1', 50, now(), now())
+    VALUES ('LOT-AVAIL-1', 'REALLOC-P1', '2001', 'A0405', 'AVAILBOX1', 2, 'STORE1', 50, now(), now())
   `);
 
   const res = await req(`/admin/part-availability?partNo=REALLOC-P1`);

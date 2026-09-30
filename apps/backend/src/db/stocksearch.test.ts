@@ -65,7 +65,8 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     coo: "JP",
     cow: "JP",
     drawingNo: null,
-    shelfCode: "A-01-02",
+    shelfCode: "A0102",
+    shelfDisplayName: "A-0102",
     boxId: "BOX-H-20260701-0002",
     orgId: 2,
     subInventoryCode: "STORE1",
@@ -85,7 +86,8 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     coo: "JP",
     cow: "JP",
     drawingNo: null,
-    shelfCode: "A-01-01",
+    shelfCode: "A0101",
+    shelfDisplayName: "A-0101",
     boxId: "BOX-H-20260701-0001",
     orgId: 2,
     subInventoryCode: "STORE1",
@@ -105,7 +107,8 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     coo: "JP",
     cow: "JP",
     drawingNo: null,
-    shelfCode: "A-01-01",
+    shelfCode: "A0101",
+    shelfDisplayName: "A-0101",
     boxId: "BOX-H-20260701-0001",
     orgId: 2,
     subInventoryCode: "STORE1",
@@ -125,7 +128,8 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     coo: "JP",
     cow: "JP",
     drawingNo: null,
-    shelfCode: "A-01-02",
+    shelfCode: "A0102",
+    shelfDisplayName: "A-0102",
     boxId: "BOX-H-20260701-0002",
     orgId: 2,
     subInventoryCode: "STORE1",
@@ -145,7 +149,8 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     coo: "JP",
     cow: "JP",
     drawingNo: null,
-    shelfCode: "A-02-01",
+    shelfCode: "A0201",
+    shelfDisplayName: "A-0201",
     boxId: "BOX-H-20260701-0003",
     orgId: 2,
     subInventoryCode: "STORE1",
@@ -165,7 +170,8 @@ test("no filters: returns the seeded lots and parts with onHandQty sums", async 
     coo: "JP",
     cow: "JP",
     drawingNo: null,
-    shelfCode: "A-02-01",
+    shelfCode: "A0201",
+    shelfDisplayName: "A-0201",
     boxId: "BOX-H-20260701-0003",
     orgId: 2,
     subInventoryCode: "STORE1",
@@ -330,24 +336,24 @@ test("paging: LIMIT/OFFSET + total over the same filters; sort whitelist with de
 test("shelfCode: any-of match", async () => {
   await reseed(client);
 
-  let r = await searchStock(client.db, { shelfCode: ["A-01-01"] });
+  let r = await searchStock(client.db, { shelfCode: ["A0101"] });
   assert.equal(r.lots.length, 2);
-  assert.ok(r.lots.every((l) => l.shelfCode === "A-01-01"));
+  assert.ok(r.lots.every((l) => l.shelfCode === "A0101"));
   assert.deepEqual(r.parts.map((p) => p.partNo), ["RK73H1JTTD1002F", "RK73H1JTTD2202F"]);
   assert.equal(r.parts[0].onHandQty, 1000);
   assert.equal(r.parts[1].onHandQty, 500);
 
   // multi-value: union of both shelves
-  r = await searchStock(client.db, { shelfCode: ["A-01-01", "A-02-01"] });
+  r = await searchStock(client.db, { shelfCode: ["A0101", "A0201"] });
   assert.equal(r.lots.length, 4);
-  assert.ok(r.lots.every((l) => ["A-01-01", "A-02-01"].includes(l.shelfCode!)));
+  assert.ok(r.lots.every((l) => ["A0101", "A0201"].includes(l.shelfCode!)));
 
   // prefix is not a match — the filter is exact
   r = await searchStock(client.db, { shelfCode: ["A-01"] });
   assert.deepEqual(r, { parts: [], lots: [] });
 
   // a seeded shelf with no stock
-  r = await searchStock(client.db, { shelfCode: ["A-01-03"] });
+  r = await searchStock(client.db, { shelfCode: ["A0103"] });
   assert.deepEqual(r, { parts: [], lots: [] });
 });
 
@@ -372,14 +378,14 @@ test("combined: all provided filters must match (AND)", async () => {
   await reseed(client);
   await linkBoxLotsToKoaOrder();
 
-  const r = await searchStock(client.db, { partNo: "1002", shelfCode: ["A-01-01"], supplierCode: ["KOA"] });
+  const r = await searchStock(client.db, { partNo: "1002", shelfCode: ["A0101"], supplierCode: ["KOA"] });
   assert.equal(r.lots.length, 1);
-  assert.equal(r.lots[0].shelfCode, "A-01-01");
+  assert.equal(r.lots[0].shelfCode, "A0101");
   assert.deepEqual(r.parts.map((p) => p.partNo), ["RK73H1JTTD1002F"]);
   assert.equal(r.parts[0].onHandQty, 1000);
 
   // same supplier, but the part is on a different shelf → empty
-  const conflict = await searchStock(client.db, { partNo: "1002", shelfCode: ["A-01-02"], supplierCode: ["KOA"] });
+  const conflict = await searchStock(client.db, { partNo: "1002", shelfCode: ["A0102"], supplierCode: ["KOA"] });
   assert.deepEqual(conflict, { parts: [], lots: [] });
 });
 
@@ -443,7 +449,7 @@ test("location: exact (org, sub-inventory) pairs, no cross-product", async () =>
   // are all org 2 / STORE1).
   await client.db.execute(sql`
     INSERT INTO inventory_lots (id, part_no, wcl_item_no, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
-    VALUES ('LOT-LOC-PAIR-1', 'RK73B1JTTD181G', 'RK73B1JTTD181G', 'A-01-01', 'BOX-LOC-PAIR-1', 5, 'CHECKING', 100, now(), now())
+    VALUES ('LOT-LOC-PAIR-1', 'RK73B1JTTD181G', 'RK73B1JTTD181G', 'A0101', 'BOX-LOC-PAIR-1', 5, 'CHECKING', 100, now(), now())
   `);
 
   assert.equal((await searchStock(client.db, { location: [{ orgId: 2, code: "STORE1" }] })).lots.length, 6);
@@ -471,9 +477,9 @@ test("options: distinct brands/zones/shelves in stock; locations = all org_info 
   assert.deepEqual(opts.brands, ["KOA"]);
   assert.deepEqual(opts.zones, ["A"]);
   assert.deepEqual(opts.shelves, [
-    { code: "A-01-01", zone: "A" },
-    { code: "A-01-02", zone: "A" },
-    { code: "A-02-01", zone: "A" },
+    { code: "A0101", displayName: "A-0101", zone: "A" },
+    { code: "A0102", displayName: "A-0102", zone: "A" },
+    { code: "A0201", displayName: "A-0201", zone: "A" },
   ]);
   // Every org_info pair (stocked or not — the seed's real sub-inventory
   // master mostly holds no demo stock), same order as org_info sorted by
@@ -520,7 +526,7 @@ test("summary: overall totals across all lots", async () => {
   assert.equal(s.totalQty, 3800); // 700 + 1000 + 500 + 200 + 1000 + 400
   assert.equal(s.allocatedQty, 0);
   assert.equal(s.availableQty, 3800);
-  assert.equal(s.shelfCount, 3); // A-01-01, A-01-02, A-02-01
+  assert.equal(s.shelfCount, 3); // A0101, A0102, A0201
   assert.ok(s.lastUpdateDate);
   assert.ok(!Number.isNaN(Date.parse(s.lastUpdateDate!)));
 });

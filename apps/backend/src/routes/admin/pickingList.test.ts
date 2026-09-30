@@ -61,7 +61,7 @@ async function seedScenario(): Promise<string> {
 
   await client.db.execute(sql`
     INSERT INTO inventory_lots (id, part_no, shelf_code, box_id, date_code, lot_code, coo, cow, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
-    VALUES ('LOT-PL-01', 'RK73H2ATTD1372F', 'A-04-05', 'BOX-PL-1', '2601', 'LOT-X', 'HK', 'CN', 2, 'STORE1', 200, now(), now())
+    VALUES ('LOT-PL-01', 'RK73H2ATTD1372F', 'A0405', 'BOX-PL-1', '2601', 'LOT-X', 'HK', 'CN', 2, 'STORE1', 200, now(), now())
   `);
   await client.db.execute(sql`
     INSERT INTO inventory_lots (id, part_no, shelf_code, box_id, date_code, lot_code, coo, cow, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
@@ -114,7 +114,7 @@ test("GET picking-list: items sharing a part number merge into one block", async
   await client.db.execute(sql`DELETE FROM picking_orders`);
   await client.db.execute(sql`
     INSERT INTO inventory_lots (id, part_no, shelf_code, box_id, date_code, lot_code, coo, cow, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
-    VALUES ('LOT-PL-G1', 'RK73H2ATTD1372F', 'A-04-05', 'BOX-PL-G1', '2601', 'LOT-G', 'HK', 'CN', 2, 'STORE1', 300, now(), now())
+    VALUES ('LOT-PL-G1', 'RK73H2ATTD1372F', 'A0405', 'BOX-PL-G1', '2601', 'LOT-G', 'HK', 'CN', 2, 'STORE1', 300, now(), now())
   `);
   const orderId = randomUUID();
   await insertPickingOrder(client.db, orderId, {
@@ -143,7 +143,7 @@ test("GET picking-list: items sharing a part number merge into one block", async
   assert.deepEqual(shared, [
     [
       "RK73H2ATTD1372F", 250, 250, 0, "Shelf",
-      "A-04-05", "BOX-PL-G1", "2601", "LOT-G", "HK / CN",
+      "A0405", "BOX-PL-G1", "2601", "LOT-G", "HK / CN",
       "2 / STORE1", 250,
     ],
   ]);
@@ -235,7 +235,7 @@ test("GET picking-list: order-info block and flat allocation rows", async () => 
   assert.deepEqual(itemBlock("RK73H2ATTD1372F"), [
     [
       "RK73H2ATTD1372F", 300, 300, 0, "Shelf",
-      "A-04-05", "BOX-PL-1", "2601", "LOT-X", "HK / CN",
+      "A0405", "BOX-PL-1", "2601", "LOT-X", "HK / CN",
       "2 / STORE1", 200,
     ],
     [

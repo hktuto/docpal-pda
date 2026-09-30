@@ -82,11 +82,11 @@ test("shelf box ids: BOX-H-<date>-<seq>; staging and manual boxes share the dail
   );
   assert.match(staging!.id, /^BOX-H-\d{8}-0001$/);
 
-  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
+  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId });
   assert.match(box.id, /^BOX-H-\d{8}-0002$/);
 
   await cancelShelfBox(client.db, { shelfBoxId: box.id, actorId });
-  const box2 = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A-01-03", actorId });
+  const box2 = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId });
   assert.match(box2.id, /^BOX-H-\d{8}-0003$/);
 });
 
@@ -100,7 +100,7 @@ test("searchBoxes: finds both kinds by full id and seq substring, with kind + or
   const receivingOrderId = await receivingOrderIdOf("100001");
 
   const shipping = await createShippingBox(client.db, { pickingOrderId, actorId });
-  const shelf = await createShelfBox(client.db, { receivingOrderId, shelfCode: "A-01-03", actorId });
+  const shelf = await createShelfBox(client.db, { receivingOrderId, shelfCode: "A0103", actorId });
 
   // blank query → the latest boxes across both tables (the 14 seeded shelf
   // boxes plus the 2 just created, newest first)

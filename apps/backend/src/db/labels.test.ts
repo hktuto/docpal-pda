@@ -76,9 +76,9 @@ test("getLabelsData: shelf boxes, shelf codes, receiving orders and shelf lots",
   assert.deepEqual(box4.items, []);
 
   assert.deepEqual(data.shelfCodes, [
-    "A-01-01", "A-01-02", "A-02-01", "A-02-02",
-    "A-03-01", "A-03-02", "A-03-03", "A-03-04", "A-03-05",
-    "A-04-01", "A-04-02", "A-04-03", "A-04-04", "A-04-05",
+    "A0101", "A0102", "A0201", "A0202",
+    "A0301", "A0302", "A0303", "A0304", "A0305",
+    "A0401", "A0402", "A0403", "A0404", "A0405",
   ]);
 
   assert.deepEqual(
@@ -100,7 +100,7 @@ test("getLabelsData: shelf boxes, shelf codes, receiving orders and shelf lots",
   const lot = data.shelfLots.find((l) => l.partNo === "RK73H1JTTD5602F");
   assert.ok(lot);
   assert.equal(lot.boxId, "BOX-H-20260701-0003");
-  assert.equal(lot.shelfCode, "A-02-01");
+  assert.equal(lot.shelfCode, "A0201");
   assert.ok(lot.qrValue);
   assert.deepEqual(lot.pickingOrderRefs, ["SO-DEMO-0005"]);
 
@@ -127,7 +127,7 @@ test("getLabelsData: pickLabels — one label per allocation, exact split qty", 
       ["SO-DEMO-0002", 400],
     ]
   );
-  assert.equal(g181[0]!.source, "BOX-H-20260701-0002 @ A-01-02");
+  assert.equal(g181[0]!.source, "BOX-H-20260701-0002 @ A0102");
   assert.equal(g181[0]!.lotCode, "L2604A");
   assert.ok(g181.every((l) => l.qrValue));
 
@@ -135,6 +135,6 @@ test("getLabelsData: pickLabels — one label per allocation, exact split qty", 
   const d5602 = data.pickLabels.filter((l) => l.partNo === "RK73H1JTTD5602F");
   assert.deepEqual(
     d5602.map((l) => [l.orderNo, l.qty, l.source]),
-    [["SO-DEMO-0005", 1000, "BOX-H-20260701-0003 @ A-02-01"]]
+    [["SO-DEMO-0005", 1000, "BOX-H-20260701-0003 @ A0201"]]
   );
 });
