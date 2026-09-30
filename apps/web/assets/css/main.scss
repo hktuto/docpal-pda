@@ -540,7 +540,7 @@ input:focus {
   border-bottom: 1px solid var(--border);
 }
 .detail-row span:last-child {
-     font-size: 1.2rem;
+     font-size: 1rem;
 }
 
 .detail-row:last-child {
@@ -567,6 +567,21 @@ input:focus {
   }
   .detail-row:nth-child(even) {
     align-items: flex-end;
+  }
+}
+
+// Full-width stacked rows (part no on top, meta below) — e.g. the receiving
+// detail picking tab items.
+.lot--stacked {
+  flex-flow: column nowrap;
+  .detail-row {
+    width: 100%;
+  }
+  .detail-row:nth-child(even) {
+    align-items: flex-start;
+  }
+  .detail-row--meta span:last-child {
+    font-size: 0.8125rem;
   }
 }
 

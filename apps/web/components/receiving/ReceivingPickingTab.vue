@@ -32,9 +32,13 @@
       </div>
     </div>
 
-    <div v-for="pi in po.items" :key="pi.id" class="lot" style="margin-top: 0.75rem;">
+    <div v-for="pi in po.items" :key="pi.id" class="lot lot--stacked" style="margin-top: 0.75rem;">
       <DetailRow :label="$t('receiving.itemsTab.part')" :value="pi.wclItemNo ?? pi.partNo" />
-      <DetailRow :label="$t('receiving.pickingTab.requiredScannedBoxed')" :value="`${pi.qty} / ${scannedQty(pi)} / ${boxedQty(pi)}`" />
+      <DetailRow
+        class="detail-row--meta"
+        :label="$t('receiving.pickingTab.requiredScannedBoxed')"
+        :value="`${pi.qty} / ${scannedQty(pi)} / ${boxedQty(pi)}`"
+      />
       <DetailRow :label="$t('receiving.pickingTab.status')">
         <span
           class="badge"
@@ -49,6 +53,7 @@
       <ul v-if="allocatedLocations(pi).length" style="margin: 0; padding-left: 1.25rem; font-size: 0.875rem; color: var(--muted);">
         <li v-for="loc in allocatedLocations(pi)" :key="loc.id">
           {{ loc.lot?.shelfCode || (loc.lot?.boxId ? $t('common.inBox', { id: loc.lot.boxId }) : $t('receiving.pickingTab.receivingArea')) }}
+          <template v-if="loc.boxId"> · {{ $t('common.inBox', { id: loc.boxId }) }}</template>
           <span
             v-if="loc.lot?.shelfWarning"
             style="cursor: help;"
