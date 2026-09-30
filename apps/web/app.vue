@@ -3,6 +3,7 @@
     <NuxtPage />
   </NuxtLayout>
   <ServerDownOverlay />
+  <AppUpdate />
 </template>
 
 <script setup lang="ts">

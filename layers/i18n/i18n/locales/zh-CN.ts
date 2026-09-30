@@ -1,4 +1,9 @@
 export default {
+  appVersionUpdate: {
+    title: "发现新版本",
+    message: "应用有新版本可用，请重新加载以使用。",
+    button: "重新加载",
+  },
   meta: {
     warehouse: "仓库",
     receiving: "收货",

@@ -135,6 +135,8 @@ importers:
         specifier: ^3.3.7
         version: 3.3.7(typescript@6.0.3)
 
+  layers/app-update: {}
+
   layers/i18n:
     devDependencies:
       '@nuxtjs/i18n':

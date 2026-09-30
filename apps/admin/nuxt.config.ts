@@ -3,9 +3,6 @@ export default defineNuxtConfig({
   ssr: false,
   devtools: { enabled: false },
   compatibilityDate: "2024-06-30",
-  experimental: {
-    appManifest: false,
-  },
   app: {
     head: {
       title: "Warehouse Admin",
@@ -19,7 +16,7 @@ export default defineNuxtConfig({
   },
   css: ["~/assets/main.css"],
   // i18n comes from the shared layer (locales + LanguageSwitcher + persistence).
-  extends: ["../../layers/i18n"],
+  extends: ["../../layers/i18n", "../../layers/app-update"],
   $development: {
     hooks: {
       // Same Nuxt 3.21 + Vite 7 ssr:false dev-server workaround as apps/web:

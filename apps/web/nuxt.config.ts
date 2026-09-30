@@ -3,9 +3,6 @@ export default defineNuxtConfig({
   ssr: false,
   devtools: { enabled: false },
   compatibilityDate: "2024-06-30",
-  experimental: {
-    appManifest: false,
-  },
   app: {
     head: {
       title: "Warehouse PDA",
@@ -15,7 +12,7 @@ export default defineNuxtConfig({
   css: ["~/assets/css/main.scss"],
   // i18n config, locales, LanguageSwitcher, and locale persistence come from
   // the shared layer (also used by apps/admin).
-  extends: ["../../layers/i18n"],
+  extends: ["../../layers/i18n", "../../layers/app-update"],
   $development: {
     hooks: {
       // Workaround for Nuxt 3.21 + Vite 7 bug where `ssr: false` dev server

@@ -1,4 +1,9 @@
 export default {
+  appVersionUpdate: {
+    title: "New version available",
+    message: "A new version of the app is ready. Reload to use it.",
+    button: "Reload",
+  },
   meta: {
     warehouse: "Warehouse",
     receiving: "Receiving",

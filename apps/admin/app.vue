@@ -144,6 +144,7 @@ onBeforeUnmount(() => {
       <NuxtPage />
     </main>
   </div>
+  <AppUpdate />
 </template>
 
 <style scoped>
