@@ -217,7 +217,7 @@ test("GET shipper: group header counts stock-sourced allocations on related orde
   // receiving order): +50 for the RK73H1JTTD3302F group.
   await client.db.execute(sql`
     INSERT INTO inventory_lots (id, part_no, date_code, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
-    VALUES ('LOT-REL-01', 'RK73H1JTTD3302F', '2436', 'A-04-05', 'RELBOX1', 2, 'STORE1', 200, now(), now())
+    VALUES ('LOT-REL-01', 'RK73H1JTTD3302F', '2436', 'A0405', 'RELBOX1', 2, 'STORE1', 200, now(), now())
   `);
   await client.db.execute(sql`
     INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, created_date, last_update_date)
@@ -237,7 +237,7 @@ test("GET shipper: group header counts stock-sourced allocations on related orde
   );
   await client.db.execute(sql`
     INSERT INTO inventory_lots (id, part_no, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
-    VALUES ('LOT-UNREL-01', 'RK73H2ATTD1372F', 'A-04-05', 'UNRELBOX1', 2, 'STORE1', 800, now(), now())
+    VALUES ('LOT-UNREL-01', 'RK73H2ATTD1372F', 'A0405', 'UNRELBOX1', 2, 'STORE1', 800, now(), now())
   `);
   await client.db.execute(sql`
     INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, created_date, last_update_date)
@@ -278,7 +278,7 @@ test("GET shipper: group header counts stock-sourced allocations on related orde
   // No date_code → renders without the dash.
   await client.db.execute(sql`
     INSERT INTO inventory_lots (id, part_no, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
-    VALUES ('LOT-TRC-01', 'RK73H1JTTD3302F', 'A-04-05', 'TRCBOX1', 2, 'STORE1', 500, now(), now())
+    VALUES ('LOT-TRC-01', 'RK73H1JTTD3302F', 'A0405', 'TRCBOX1', 2, 'STORE1', 500, now(), now())
   `);
   await client.db.execute(sql`
     INSERT INTO inventory_lot_sources (id, inventory_lot_id, receiving_invoice_item_id, qty, created_date, last_update_date)
@@ -297,7 +297,7 @@ test("GET shipper: group header counts stock-sourced allocations on related orde
   // this batch (no date_code → no dash) and 50 from the plain stock lot
   // (date_code 2436), qty desc. Excluded: the 200 own-order whole-order
   // source and the 120 dock carton from the other receiving order.
-  assert.deepEqual(rows[8], ["", "A-04-05/80, A-04-05-2436/50", "", "", "", "", ""]);
+  assert.deepEqual(rows[8], ["", "A0405/80, A0405-2436/50", "", "", "", "", ""]);
   // RK73H2ATTD1372F: own-carton sources excluded, SO-PL-009 is not related —
   // the cell is empty.
   assert.deepEqual(rows[16], ["INV-PL-01 7001", "RK73H2ATTD1372F", 1000, "", 1000, "", ""]);
@@ -389,7 +389,7 @@ test("GET shipper: related cell falls back to col D of row height-2 in a no-slot
   `);
   await client.db.execute(sql`
     INSERT INTO inventory_lots (id, part_no, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
-    VALUES ('LOT-SEAT-01', 'PART-X-1', 'A-04-05', 'SEATBOX1', 2, 'STORE1', 100, now(), now())
+    VALUES ('LOT-SEAT-01', 'PART-X-1', 'A0405', 'SEATBOX1', 2, 'STORE1', 100, now(), now())
   `);
   await client.db.execute(sql`
     INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, created_date, last_update_date)
@@ -405,7 +405,7 @@ test("GET shipper: related cell falls back to col D of row height-2 in a no-slot
   // related cell lands on the fallback seat — col D of row height-2 (abs row
   // 8) — because row 1 col B already holds the part number.
   assert.deepEqual(rows[7], ["", "", "", "", "", ""]);
-  assert.deepEqual(rows[8], ["INV-SEAT-01 8001", "PART-X-1", 100, "A-04-05/40", "", ""]);
+  assert.deepEqual(rows[8], ["INV-SEAT-01 8001", "PART-X-1", 100, "A0405/40", "", ""]);
   assert.deepEqual(rows[9], ["INV-SEAT-01 8002", "PART-X-1", 100, 200, "", 200]);
   // PART-Y-1: own whole-order source excluded from related; the closing
   // block carries the slot.
@@ -445,7 +445,7 @@ test("GET shipper?mode=finished: slots come from actual picked packages", async 
   `);
   await client.db.execute(sql`
     INSERT INTO inventory_lots (id, part_no, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
-    VALUES ('LOT-FIN-01', 'RK73H1JTTD3302F', 'A-04-05', 'FINBOX1', 2, 'STORE1', 500, now(), now())
+    VALUES ('LOT-FIN-01', 'RK73H1JTTD3302F', 'A0405', 'FINBOX1', 2, 'STORE1', 500, now(), now())
   `);
   await client.db.execute(sql`
     INSERT INTO inventory_lot_sources (id, inventory_lot_id, receiving_invoice_item_id, qty, created_date, last_update_date)
@@ -572,8 +572,13 @@ function zipSheets(buf: ArrayBuffer): [string, (string | number)[][]][] {
 // Two-section live scenario: PART-A-1 (ctn 9001, STORE1) + PART-B-1
 // (ctn 9002, WSTORE1); SO-SP-001 (STORE1) draws 60 of PART-A-1, SO-SP-002
 // (WSTORE1) draws 80 of PART-B-1 (both item-level).
+// Ungroups the demo seed's STORE1+WSTORE1 share group "HK" (spec
+// 2026-09-30-shipper-group-by-share-group-design.md) so this scenario
+// exercises raw per-pair splitting; the grouping tests below keep the
+// seeded members.
 async function seedSplitScenario(): Promise<string> {
   await client.db.execute(sql`DELETE FROM picking_orders`);
+  await client.db.execute(sql`DELETE FROM sub_inventory_share_members`);
   const orderId = await insertReceivingOrder(client.db, "PL-TEST-SP1", {
     order: { supplierCode: "DAITO", deliveryDate: "2026-09-21" },
     invoices: [
@@ -623,7 +628,7 @@ test("GET shipper split: two sections → zip of per-section xlsx, item-level sl
   );
   await client.db.execute(sql`
     INSERT INTO inventory_lots (id, part_no, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
-    VALUES ('LOT-SP-S1', 'PART-A-1', 'A-04-05', 'SPBOX1', 2, 'STORE1', 100, now(), now())
+    VALUES ('LOT-SP-S1', 'PART-A-1', 'A0405', 'SPBOX1', 2, 'STORE1', 100, now(), now())
   `);
   await client.db.execute(sql`
     INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, created_date, last_update_date)
@@ -631,7 +636,7 @@ test("GET shipper split: two sections → zip of per-section xlsx, item-level sl
   `);
   await client.db.execute(sql`
     INSERT INTO inventory_lots (id, part_no, date_code, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
-    VALUES ('LOT-SP-W1', 'PART-B-1', '2510', 'A-04-05', 'SPBOX2', 2, 'WSTORE1', 100, now(), now())
+    VALUES ('LOT-SP-W1', 'PART-B-1', '2510', 'A0405', 'SPBOX2', 2, 'WSTORE1', 100, now(), now())
   `);
   await client.db.execute(sql`
     INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, created_date, last_update_date)
@@ -659,7 +664,7 @@ test("GET shipper split: two sections → zip of per-section xlsx, item-level sl
   // allocation attributed by its lot's location (LOT-SP-S1 lives in
   // STORE1; no date_code → no dash); the item row carries the carton slot.
   assert.deepEqual(store1[7], ["", "", "", "", "ACME Electronics (HK)", ""]);
-  assert.deepEqual(store1[8], ["", "A-04-05/25", "", "", "SO-SP-001", ""]);
+  assert.deepEqual(store1[8], ["", "A0405/25", "", "", "SO-SP-001", ""]);
   assert.deepEqual(store1[9], ["INV-SP-01 9001", "PART-A-1", 100, 100, 60, 40]);
   assert.equal(store1.length, 10);
 
@@ -667,7 +672,7 @@ test("GET shipper split: two sections → zip of per-section xlsx, item-level sl
   assert.equal(wstore1[2]![0], "Total Ctn: 1");
   assert.deepEqual(wstore1[7], ["", "", "", "", "SO-SP-002", ""]);
   // LOT-SP-W1 (WSTORE1, date_code 2510) appears ONLY in this member.
-  assert.deepEqual(wstore1[8], ["", "A-04-05-2510/30", "", "", "SO-SP-002", ""]);
+  assert.deepEqual(wstore1[8], ["", "A0405-2510/30", "", "", "SO-SP-002", ""]);
   assert.deepEqual(wstore1[9], ["INV-SP-01 9002", "PART-B-1", 200, 200, 80, 120]);
   assert.equal(wstore1.length, 10);
 });
@@ -675,6 +680,9 @@ test("GET shipper split: two sections → zip of per-section xlsx, item-level sl
 test("GET shipper split: whole-order slots attribute by the picking order's pair, fallback to the part's first section", async () => {
   await reseed(client);
   await client.db.execute(sql`DELETE FROM picking_orders`);
+  // Ungroup the demo seed's STORE1+WSTORE1 "HK" group (spec 2026-09-30) so
+  // the pair-match / fallback paths are exercised on raw pairs.
+  await client.db.execute(sql`DELETE FROM sub_inventory_share_members`);
   const orderId = await insertReceivingOrder(client.db, "PL-TEST-SP2", {
     order: { supplierCode: "DAITO", deliveryDate: "2026-09-21" },
     invoices: [
@@ -865,4 +873,309 @@ test("GET shipper?mode=finished split: package slots attribute per section", asy
   assert.deepEqual(wstore1[8], ["", "", "", "", "SO-SP-002", ""]);
   assert.deepEqual(wstore1[9], ["INV-SP-01 9002", "PART-B-1", 200, 200, 70, 130]);
   assert.equal(wstore1.length, 10);
+});
+
+
+// Grouping by share group (spec
+// 2026-09-30-shipper-group-by-share-group-design.md): items whose
+// (org_id, sub_inventory_code) belongs to a sub_inventory_share_members
+// group merge into ONE section keyed by the share_group string (mirroring
+// allocate.ts), the section keeping the lowest member pair (orgId asc,
+// code asc) for naming and ordering. Slot attribution (whole-order /
+// package / related-allocated) widens to share-group equivalence. These
+// tests keep the demo seed's "HK" group (org-2 STORE1 + WSTORE1); the
+// multi-group tests add an org-12 "BJ" group (BJMD1 + STAGING, both real
+// org_info rows).
+
+/** Insert the org-12 "BJ" share group used by the grouping tests below. */
+async function seedBjShareGroup() {
+  await client.db.execute(sql`
+    INSERT INTO sub_inventory_share_members (id, org_id, code, share_group, created_date, last_update_date)
+    VALUES
+      (${randomUUID()}, 12, 'BJMD1', 'BJ', now(), now()),
+      (${randomUUID()}, 12, 'STAGING', 'BJ', now(), now())
+  `);
+}
+
+/** First row whose col A contains `text`. */
+function findRow(rows: (string | number)[][], text: string): (string | number)[] {
+  return rows.find((r) => String(r[0]).includes(text))!;
+}
+
+test("GET shipper group: same share-group sub-inventories merge into one xlsx", async () => {
+  await reseed(client);
+  await client.db.execute(sql`DELETE FROM picking_orders`);
+  // Seeded "HK" group: STORE1 + WSTORE1.
+  const orderId = await insertReceivingOrder(client.db, "PL-TEST-SG1", {
+    order: { supplierCode: "DAITO", deliveryDate: "2026-09-30" },
+    invoices: [
+      {
+        invoiceNo: "INV-SG1-01",
+        totalCtn: 2,
+        items: [
+          { partNo: "PART-G-1", lineQty: 100, ctnNo: "9101", orgId: 2, subInventoryCode: "STORE1" },
+          { partNo: "PART-G-2", lineQty: 200, ctnNo: "9102", orgId: 2, subInventoryCode: "WSTORE1" },
+        ],
+      },
+    ],
+  });
+  const actorId = (
+    await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'operator'`)
+  )!.id;
+  await confirmReceivingArrival(client.db, orderId, actorId);
+
+  const res = await req(`/admin/receiving-orders/${orderId}/shipper`);
+  // Merged → ONE section → plain xlsx (ungrouped this would be a zip of 2).
+  assert.equal(res.status, 200);
+  assert.equal(
+    res.headers.get("Content-Type"),
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  );
+  assert.match(res.headers.get("Content-Disposition") ?? "", /shipper-PL-TEST-SG1\.xlsx/);
+
+  const rows = await sheetRows(await res.arrayBuffer());
+  // Per-section Total Ctn counts distinct cartons across the merge.
+  assert.equal(rows[2]![0], "Total Ctn: 2");
+  assert.deepEqual(findRow(rows, "9101"), ["INV-SG1-01 9101", "PART-G-1", 100, 100, 100]);
+  assert.deepEqual(findRow(rows, "9102"), ["INV-SG1-01 9102", "PART-G-2", 200, 200, 200]);
+});
+
+test("GET shipper group: distinct groups, ungrouped, and NULL sub-inventory each form their own ordered zip member", async () => {
+  await reseed(client);
+  await client.db.execute(sql`DELETE FROM picking_orders`);
+  await seedBjShareGroup();
+  const orderId = await insertReceivingOrder(client.db, "PL-TEST-SG2", {
+    order: { supplierCode: "DAITO", deliveryDate: "2026-09-30" },
+    invoices: [
+      {
+        invoiceNo: "INV-SG2-01",
+        totalCtn: 6,
+        items: [
+          { partNo: "PART-H-1", lineQty: 10, ctnNo: "9201", orgId: 2, subInventoryCode: "STORE1" },
+          { partNo: "PART-H-2", lineQty: 20, ctnNo: "9202", orgId: 2, subInventoryCode: "WSTORE1" },
+          { partNo: "PART-H-3", lineQty: 30, ctnNo: "9203", orgId: 12, subInventoryCode: "BJMD1" },
+          { partNo: "PART-H-4", lineQty: 40, ctnNo: "9204", orgId: 12, subInventoryCode: "STAGING" },
+          { partNo: "PART-H-5", lineQty: 50, ctnNo: "9205", orgId: 12, subInventoryCode: "DUMMY" },
+          { partNo: "PART-H-6", lineQty: 60, ctnNo: "9206", orgId: 2, subInventoryCode: null },
+        ],
+      },
+    ],
+  });
+  const actorId = (
+    await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'operator'`)
+  )!.id;
+  await confirmReceivingArrival(client.db, orderId, actorId);
+
+  const res = await req(`/admin/receiving-orders/${orderId}/shipper`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("Content-Type"), "application/zip");
+
+  const members = zipSheets(await res.arrayBuffer());
+  // Ordered by representative pair: orgId asc, then code, NULL code last
+  // WITHIN the same org.
+  assert.deepEqual(
+    members.map(([name]) => name),
+    [
+      "shipper-PL-TEST-SG2-org2-STORE1.xlsx",
+      "shipper-PL-TEST-SG2-org2-no-subinventory.xlsx",
+      "shipper-PL-TEST-SG2-org12-BJMD1.xlsx",
+      "shipper-PL-TEST-SG2-org12-DUMMY.xlsx",
+    ]
+  );
+
+  // HK member holds both group's cartons; BJ member holds both of its own.
+  const hk = members[0]![1]!;
+  assert.equal(hk[2]![0], "Total Ctn: 2");
+  assert.ok(findRow(hk, "9201"));
+  assert.ok(findRow(hk, "9202"));
+  const bj = members[2]![1]!;
+  assert.equal(bj[2]![0], "Total Ctn: 2");
+  assert.ok(findRow(bj, "9203"));
+  assert.ok(findRow(bj, "9204"));
+  assert.ok(findRow(members[3]![1]!, "9205"));
+  assert.ok(findRow(members[1]![1]!, "9206"));
+});
+
+test("GET shipper group: whole-order slot attributes by share-group sibling pair, not first-section fallback", async () => {
+  await reseed(client);
+  await client.db.execute(sql`DELETE FROM picking_orders`);
+  await seedBjShareGroup();
+  // PART-W-1 sits in BOTH sections: carton-less (2, STORE1, HK group) and
+  // ctn 9301 (12, BJMD1, BJ group). Sections sort (2,STORE1) first.
+  const orderId = await insertReceivingOrder(client.db, "PL-TEST-SG4", {
+    order: { supplierCode: "DAITO", deliveryDate: "2026-09-30" },
+    invoices: [
+      {
+        invoiceNo: "INV-SG4-01",
+        totalCtn: 1,
+        items: [
+          { partNo: "PART-W-1", poNo: "PO-W", poLine: "1", lineQty: 300, orgId: 2, subInventoryCode: "STORE1" },
+          { partNo: "PART-W-1", poNo: "PO-W2", poLine: "1", lineQty: 200, ctnNo: "9301", orgId: 12, subInventoryCode: "BJMD1" },
+        ],
+      },
+    ],
+  });
+  const actorId = (
+    await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'operator'`)
+  )!.id;
+  await confirmReceivingArrival(client.db, orderId, actorId);
+
+  // Picking order pair (12, STAGING) — a BJ sibling of BJMD1, matching NO
+  // section by raw pair. Order-level allocation against the whole order.
+  await insertPickingOrder(client.db, randomUUID(), {
+    order: { orderNo: "SO-SG-1", orgId: 12, subInventoryCode: "STAGING" },
+    items: [{ partNo: "PART-W-1", qty: 100 }],
+  });
+  const pi = await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT pi.id FROM picking_items pi JOIN picking_orders po ON po.id = pi.picking_order_id
+        WHERE po.order_no = 'SO-SG-1'`
+  );
+  await client.db.execute(sql`
+    INSERT INTO allocations (id, picking_item_id, receiving_order_id, qty, created_date, last_update_date)
+    VALUES (${randomUUID()}, ${pi!.id}, ${orderId}, 100, now(), now())
+  `);
+
+  const res = await req(`/admin/receiving-orders/${orderId}/shipper`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("Content-Type"), "application/zip");
+
+  const members = zipSheets(await res.arrayBuffer());
+  assert.deepEqual(
+    members.map(([name]) => name),
+    ["shipper-PL-TEST-SG4-org2-STORE1.xlsx", "shipper-PL-TEST-SG4-org12-BJMD1.xlsx"]
+  );
+
+  const store1 = members[0]![1]!;
+  // No slot here: the group-equivalence match puts SO-SG-1 in the BJMD1
+  // section (a raw-pair fallback would have landed it here, first section).
+  assert.equal(store1.some((r) => r.some((c) => String(c).includes("SO-SG-1"))), false);
+  assert.deepEqual(findRow(store1, "INV-SG4-01"), ["INV-SG4-01", "PART-W-1", 300, 300, 300]);
+
+  const bjmd1 = members[1]![1]!;
+  assert.ok(bjmd1.some((r) => r.some((c) => String(c).includes("SO-SG-1"))));
+  assert.deepEqual(findRow(bjmd1, "(order-level)"), ["(order-level)", "PART-W-1", "", 200, 100, 100]);
+});
+
+test("GET shipper group: related-allocated row attributes by the lot's share-group sibling pair", async () => {
+  await reseed(client);
+  await client.db.execute(sql`DELETE FROM picking_orders`);
+  await seedBjShareGroup();
+  // PART-R-2 sits in BOTH sections (ctn 9402 STORE1 / ctn 9403 BJMD1), so
+  // the related cell's section is decided by attribution, not fallback.
+  const orderId = await insertReceivingOrder(client.db, "PL-TEST-SG5", {
+    order: { supplierCode: "DAITO", deliveryDate: "2026-09-30" },
+    invoices: [
+      {
+        invoiceNo: "INV-SG5-01",
+        totalCtn: 3,
+        items: [
+          { partNo: "PART-R-1", lineQty: 100, ctnNo: "9401", orgId: 2, subInventoryCode: "STORE1" },
+          { partNo: "PART-R-2", lineQty: 100, ctnNo: "9402", orgId: 2, subInventoryCode: "STORE1" },
+          { partNo: "PART-R-2", lineQty: 200, ctnNo: "9403", orgId: 12, subInventoryCode: "BJMD1" },
+        ],
+      },
+    ],
+  });
+  const actorId = (
+    await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'operator'`)
+  )!.id;
+  await confirmReceivingArrival(client.db, orderId, actorId);
+
+  // SO-SG-2 (STORE1) draws PART-R-1 from this order's carton (relatedness)
+  // and PART-R-2 from shelf stock sitting in (12, STAGING) — a BJ sibling.
+  await insertPickingOrder(client.db, randomUUID(), {
+    order: { orderNo: "SO-SG-2", orgId: 2, subInventoryCode: "STORE1" },
+    items: [
+      { partNo: "PART-R-1", qty: 60 },
+      { partNo: "PART-R-2", qty: 30 },
+    ],
+  });
+  const pis = await queryAll<{ id: string; partNo: string }>(
+    client.db,
+    sql`SELECT pi.id, pi.part_no AS "partNo" FROM picking_items pi
+        JOIN picking_orders po ON po.id = pi.picking_order_id
+        WHERE po.order_no = 'SO-SG-2'`
+  );
+  const ctn9401 = await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT rii.id FROM receiving_invoice_items rii
+        JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+        WHERE ri.receiving_order_id = ${orderId} AND rii.ctn_no = '9401'`
+  );
+  await client.db.execute(sql`
+    INSERT INTO allocations (id, picking_item_id, receiving_invoice_item_id, qty, created_date, last_update_date)
+    VALUES (${randomUUID()}, ${pis.find((p) => p.partNo === "PART-R-1")!.id}, ${ctn9401!.id}, 60, now(), now())
+  `);
+  await client.db.execute(sql`
+    INSERT INTO inventory_lots (id, part_no, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
+    VALUES ('LOT-SG-01', 'PART-R-2', 'A0405', 'SGBOX1', 12, 'STAGING', 100, now(), now())
+  `);
+  await client.db.execute(sql`
+    INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, created_date, last_update_date)
+    VALUES (${randomUUID()}, ${pis.find((p) => p.partNo === "PART-R-2")!.id}, 'LOT-SG-01', 25, now(), now())
+  `);
+
+  const res = await req(`/admin/receiving-orders/${orderId}/shipper`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("Content-Type"), "application/zip");
+
+  const members = zipSheets(await res.arrayBuffer());
+  const store1 = members.find(([name]) => name.includes("org2-STORE1"))![1]!;
+  const bjmd1 = members.find(([name]) => name.includes("org12-BJMD1"))![1]!;
+
+  // The STAGING-sourced related row follows group BJ into the BJMD1 file
+  // only; a raw-pair fallback would have put it in the first section.
+  assert.equal(store1.some((r) => r.some((c) => String(c).includes("A0405/25"))), false);
+  assert.ok(bjmd1.some((r) => r[1] === "A0405/25"));
+  // PART-R-1's own carton slot stays with its item in the STORE1 file.
+  assert.ok(store1.some((r) => r.some((c) => String(c).includes("SO-SG-2"))));
+});
+
+test("GET shipper group: share-member code match is case-insensitive", async () => {
+  await reseed(client);
+  await client.db.execute(sql`DELETE FROM picking_orders`);
+  // Replace the seed's members with a differently-cased STORE1 member — the
+  // item code 'STORE1' must still resolve to group "HK" and merge with
+  // WSTORE1 into one section (case-SENSITIVE lookup would leave STORE1
+  // ungrouped → zip of two).
+  await client.db.execute(sql`DELETE FROM sub_inventory_share_members`);
+  await client.db.execute(sql`
+    INSERT INTO org_info (id, org_id, secondary_inventory_name, creation_date, last_update_date)
+    VALUES (${randomUUID()}, 2, 'Store1', now(), now())
+  `);
+  await client.db.execute(sql`
+    INSERT INTO sub_inventory_share_members (id, org_id, code, share_group, created_date, last_update_date)
+    VALUES
+      (${randomUUID()}, 2, 'Store1', 'HK', now(), now()),
+      (${randomUUID()}, 2, 'WSTORE1', 'HK', now(), now())
+  `);
+  const orderId = await insertReceivingOrder(client.db, "PL-TEST-SG6", {
+    order: { supplierCode: "DAITO", deliveryDate: "2026-09-30" },
+    invoices: [
+      {
+        invoiceNo: "INV-SG6-01",
+        totalCtn: 2,
+        items: [
+          { partNo: "PART-C-1", lineQty: 100, ctnNo: "9501", orgId: 2, subInventoryCode: "STORE1" },
+          { partNo: "PART-C-2", lineQty: 200, ctnNo: "9502", orgId: 2, subInventoryCode: "WSTORE1" },
+        ],
+      },
+    ],
+  });
+  const actorId = (
+    await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'operator'`)
+  )!.id;
+  await confirmReceivingArrival(client.db, orderId, actorId);
+
+  const res = await req(`/admin/receiving-orders/${orderId}/shipper`);
+  assert.equal(res.status, 200);
+  assert.equal(
+    res.headers.get("Content-Type"),
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  );
+  const rows = await sheetRows(await res.arrayBuffer());
+  assert.equal(rows[2]![0], "Total Ctn: 2");
+  assert.ok(findRow(rows, "9501"));
+  assert.ok(findRow(rows, "9502"));
 });

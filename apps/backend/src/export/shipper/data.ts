@@ -13,10 +13,16 @@
 //     come from `picking_packages` (what was actually packed), because live
 //     allocations are consumed/emptied once picking finishes.
 // Split by location (spec
-// docs/superpowers/specs/2026-09-21-shipper-split-by-location-design.md):
-// loadShipperDocuments returns one ShipperDocument per receiving-office
-// (org_id, sub_inventory_code) section of the order's items; slot attribution
-// for whole-order/package/related slots uses the picking order's pair.
+// docs/superpowers/specs/2026-09-21-shipper-split-by-location-design.md,
+// grouped by share group per
+// docs/superpowers/specs/2026-09-30-shipper-group-by-share-group-design.md):
+// loadShipperDocuments returns one ShipperDocument per section of the order's
+// items — items whose (org_id, sub_inventory_code) belongs to a
+// sub_inventory_share_members group merge into one section keyed by the
+// share_group string (mirroring allocate.ts), the section keeping the
+// representative member's pair for naming/ordering; slot attribution for
+// whole-order/package/related slots uses the picking order's pair, widened to
+// share-group equivalence.
 
 import { HTTPException } from "hono/http-exception";
 import { sql } from "drizzle-orm";
@@ -473,21 +479,39 @@ export interface ShipperSectionDocument {
   doc: ShipperDocument;
 }
 
-// Split-by-location assembly (spec
-// docs/superpowers/specs/2026-09-21-shipper-split-by-location-design.md):
-// one document per receiving-office (org_id, sub_inventory_code) section of
-// the order's items, sections ordered by orgId then subInventoryCode
-// (NULLS LAST). Item-level slots follow their item; whole-order / package
-// slots are attributed by the picking order's pair, related stock rows by
-// the source lot's own pair (case-insensitive sub-inventory compare),
-// falling back to the section holding the slot's part group, first in
-// section order.
+// Split-by-location assembly (specs
+// docs/superpowers/specs/2026-09-21-shipper-split-by-location-design.md +
+// 2026-09-30-shipper-group-by-share-group-design.md): one document per
+// section of the order's items. Sections are keyed by share group where the
+// item's (org_id, sub_inventory_code) is a sub_inventory_share_members
+// member (key = the share_group string, exactly mirroring allocate.ts;
+// code match case-insensitive), else by the raw pair. The section carries
+// the representative member's pair (first in section order) for file naming
+// and ordering (orgId then subInventoryCode, NULLS LAST). Item-level slots
+// follow their item; whole-order / package slots are attributed by the
+// picking order's pair, related stock rows by the source lot's own pair —
+// both widened to share-group equivalence (case-insensitive sub-inventory
+// compare), falling back to the section holding the slot's part group,
+// first in section order.
 export async function loadShipperDocuments(
   db: AppDb,
   id: string,
   { finished }: { finished: boolean }
 ): Promise<ShipperSectionDocument[]> {
   const d = await loadShipperData(db, id, finished);
+
+  // share_group lookup keyed by "${orgId}::${UPPER(code)}" — allocate.ts
+  // compares codes case-insensitively (upper()), so the same here.
+  const shareGroups = new Map<string, string>(
+    (
+      await queryAll<{ orgId: number; code: string; shareGroup: string }>(
+        db,
+        sql`SELECT org_id AS "orgId", upper(code) AS "code", share_group AS "shareGroup" FROM sub_inventory_share_members`
+      )
+    ).map((m) => [`${m.orgId}::${m.code}`, m.shareGroup])
+  );
+  const groupOf = (orgId: number | null, code: string | null): string | null =>
+    orgId === null || code === null ? null : (shareGroups.get(`${orgId}::${code.toUpperCase()}`) ?? null);
 
   interface Section {
     orgId: number | null;
@@ -496,7 +520,8 @@ export async function loadShipperDocuments(
   }
   const sectionByKey = new Map<string, Section>();
   for (const item of d.items) {
-    const key = `${item.orgId}::${item.subInventoryCode?.toLowerCase() ?? ""}`;
+    const group = groupOf(item.orgId, item.subInventoryCode);
+    const key = group !== null ? `group:${group}` : `${item.orgId}::${item.subInventoryCode?.toLowerCase() ?? ""}`;
     let section = sectionByKey.get(key);
     if (!section) {
       section = { orgId: item.orgId, subInventoryCode: item.subInventoryCode, items: [] };
@@ -504,15 +529,38 @@ export async function loadShipperDocuments(
     }
     section.items.push(item);
   }
-  const sections = [...sectionByKey.values()].sort(
+  const sections = [...sectionByKey.values()];
+  // Representative pair = the lowest member pair in section order (orgId
+  // asc, code asc, NULLS LAST) — drives file naming and section ordering.
+  // Item order inside the section is untouched (buildShipperDocument groups
+  // consecutive same-part rows in query order).
+  const byPair = (a: ItemRow, b: ItemRow) =>
+    (a.orgId ?? Number.MAX_SAFE_INTEGER) - (b.orgId ?? Number.MAX_SAFE_INTEGER) ||
+    (a.subInventoryCode ?? "￿").localeCompare(b.subInventoryCode ?? "￿");
+  for (const section of sections) {
+    const rep = section.items.reduce((min, i) => (byPair(i, min) < 0 ? i : min));
+    section.orgId = rep.orgId;
+    section.subInventoryCode = rep.subInventoryCode;
+  }
+  sections.sort(
     (a, b) =>
       (a.orgId ?? Number.MAX_SAFE_INTEGER) - (b.orgId ?? Number.MAX_SAFE_INTEGER) ||
       (a.subInventoryCode ?? "￿").localeCompare(b.subInventoryCode ?? "￿")
   );
 
-  const pairMatches = (a: AllocRow | RelatedAllocRow, s: Section) =>
-    a.orgId === s.orgId &&
-    (a.subInventoryCode ?? "").toLowerCase() === (s.subInventoryCode ?? "").toLowerCase();
+  const pairMatches = (a: AllocRow | RelatedAllocRow, s: Section) => {
+    if (
+      a.orgId === s.orgId &&
+      (a.subInventoryCode ?? "").toLowerCase() === (s.subInventoryCode ?? "").toLowerCase()
+    ) {
+      return true;
+    }
+    // Share-group equivalence: a slot whose pair is a sibling member of the
+    // section's group belongs to this section (allocate.ts would have
+    // matched the same source).
+    const aGroup = groupOf(a.orgId ?? null, a.subInventoryCode ?? null);
+    return aGroup !== null && aGroup === groupOf(s.orgId, s.subInventoryCode);
+  };
 
   // Candidate sections for a slot = those holding its part group (part-key
   // rule), in section order; the picking-order pair wins, else the first.
