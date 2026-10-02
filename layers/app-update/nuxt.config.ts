@@ -5,6 +5,6 @@
 export default defineNuxtConfig({
   experimental: {
     appManifest: true,
-    checkOutdatedBuildInterval: 300000,
+    checkOutdatedBuildInterval: 60_000,
   },
 });
