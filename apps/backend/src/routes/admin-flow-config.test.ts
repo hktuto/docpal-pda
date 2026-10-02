@@ -270,6 +270,31 @@ test("PUT /admin/flow-config: pickingFromSubinventoryOrgs round-trips", async ()
   }
 });
 
+test("PUT /admin/flow-config: pickingShelfScan round-trips and reaches GET /config", async () => {
+  await reseed(client);
+  try {
+    const get0 = await (await req("/admin/flow-config")).json();
+    assert.equal(get0.config.pickingShelfScan, "off"); // default
+    const payload = { pickingShelfScan: "require-any" };
+    const res = await req("/admin/flow-config", { method: "PUT", body: JSON.stringify(payload) });
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).config.pickingShelfScan, "require-any");
+    const row = await queryGet<{ value: unknown }>(
+      client.db,
+      sql`SELECT value FROM warehouse_config WHERE key = 'flow'`
+    );
+    assert.deepEqual(row!.value, payload);
+    // runtime applied: the PDA-facing GET /config resolves it
+    const config = await (await req("/config")).json();
+    assert.equal(config.pickingShelfScan, "require-any");
+    // invalid mode rejected
+    const bad = await req("/admin/flow-config", { method: "PUT", body: JSON.stringify({ pickingShelfScan: "sometimes" }) });
+    assert.equal(bad.status, 400);
+  } finally {
+    _resetFlowConfigForTests();
+  }
+});
+
 test("PUT /admin/flow-config: invalid JSON shapes → 400, row untouched", async () => {
   await reseed(client);
   try {

@@ -8,8 +8,8 @@ import { nextBoxId } from "./boxes.js";
 import { now } from "./now.js";
 import { emitEvent } from "./events.js";
 import { workLockExpiry } from "./allocate.js";
-import { isStepEnabled } from "../config.js";
-import { allowedOrgCondition } from "./org-filter.js";
+import { isStepEnabled, pickingShelfScan } from "../config.js";
+import { allowedOrgCondition, allowedOrgFilter } from "./org-filter.js";
 import { userScopeCondition, type UserScopeEntry } from "./user-scope.js";
 
 // Picking-order org visibility, split by picking_order_type:
@@ -132,10 +132,16 @@ async function markShelfBoxStockChanged(tx: DbOrTx, shelfBoxId: string): Promise
 interface OrderState {
   id: string;
   status: string;
+  orgId: number | null;
+  subInventoryCode: string | null;
 }
 
 async function loadOrderForWrite(tx: DbOrTx, orderId: string): Promise<OrderState> {
-  const order = await queryGet<OrderState>(tx, sql`SELECT id, status FROM picking_orders WHERE id = ${orderId}`);
+  const order = await queryGet<OrderState>(
+    tx,
+    sql`SELECT id, status, org_id AS "orgId", sub_inventory_code AS "subInventoryCode"
+        FROM picking_orders WHERE id = ${orderId}`
+  );
   if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
   return order;
 }
@@ -1054,6 +1060,11 @@ export interface ScanPickingItemInput {
    *  row this scan creates (all split portions share it) for verify re-scan
    *  label matching; NULL when absent (OCR path) → qty-match fallback. */
   barcode?: string | null;
+  /** Sticky shelf-scan context (flow config pickingShelfScan): the shelf/box
+   *  the operator last scanned. Ignored in mode "off"; required in the
+   *  "require-*" modes (409 shelf_scan_required when absent). */
+  shelfCode?: string | null;
+  boxId?: string | null;
 }
 
 interface AllocationRow {
@@ -1081,6 +1092,59 @@ interface PackagePortion extends Omit<SourceLine, "id"> {
   inventoryLotId: string | null;
   shelfCode: string | null;
   receivingInvoiceItemId: string | null;
+}
+
+/** The scanned shelf/box equals the lot's location: every provided field must
+ *  match (at least one is guaranteed present by the shelf_scan_required check). */
+function scannedLocationMatches(
+  input: { shelfCode?: string | null; boxId?: string | null },
+  lot: { shelfCode: string | null; boxId: string | null }
+): boolean {
+  if (input.boxId && lot.boxId !== input.boxId) return false;
+  if (input.shelfCode && lot.shelfCode !== input.shelfCode) return false;
+  return true;
+}
+
+/**
+ * require-any lot resolution (spec 2026-10-02-picking-shelf-scan-config-design.md):
+ * inventory_lots rows for the picking item's part at the scanned shelf/box,
+ * scoped to the order's org/sub-inventory (share members included, same as
+ * allocate.ts loadLotSources) and the flow config's allowedOrgIds; the label's
+ * batch fields (dateCode/lotCode) must match the lot when the label carries
+ * them; oldest date_code wins (FIFO). 409 no_stock_at_location when no
+ * candidate covers the scanned qty.
+ */
+async function resolveScannedShelfLot(
+  tx: DbOrTx,
+  item: { partNo: string },
+  order: OrderState,
+  input: ScanPickingItemInput
+): Promise<SourceLine & { shelfCode: string | null; totalQty: number }> {
+  const candidates = await queryAll<SourceLine & { shelfCode: string | null; totalQty: number }>(
+    tx,
+    sql`SELECT il.id, il.total_qty AS "totalQty", il.shelf_code AS "shelfCode", il.box_id AS "boxId",
+               il.date_code AS "dateCode", il.lot_code AS "lotCode", il.coo, il.cow
+        FROM inventory_lots il
+        WHERE (il.part_no = ${item.partNo} OR il.wcl_item_no = ${item.partNo})
+          AND ${input.boxId ? sql`il.box_id = ${input.boxId}` : sql`il.shelf_code = ${input.shelfCode}`}
+          AND (${order.orgId}::int IS NULL OR il.org_id = ${order.orgId})
+          AND (${order.subInventoryCode}::text IS NULL
+               OR upper(il.sub_inventory_code) = upper(${order.subInventoryCode})
+               OR EXISTS (SELECT 1 FROM sub_inventory_share_members sm_d
+                          JOIN sub_inventory_share_members sm_s ON sm_s.share_group = sm_d.share_group
+                          WHERE sm_d.org_id = ${order.orgId} AND upper(sm_d.code) = upper(${order.subInventoryCode})
+                            AND sm_s.org_id = il.org_id AND upper(sm_s.code) = upper(il.sub_inventory_code)))
+          ${allowedOrgFilter(sql`il.org_id`)}
+          AND (${input.dateCode ?? null}::text IS NULL OR il.date_code = ${input.dateCode ?? null})
+          AND (${input.lotCode ?? null}::text IS NULL OR il.lot_code = ${input.lotCode ?? null})
+          -- Same guard as allocate.ts: lots whose shelf is missing from
+          -- shelves fail the FK on UPDATE, so never source from them.
+          AND (il.shelf_code IS NULL OR EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = il.shelf_code))
+        ORDER BY il.date_code ASC NULLS LAST, il.id`
+  );
+  const lot = candidates.find((c) => c.totalQty >= input.qty);
+  if (!lot) throw new HTTPException(409, { message: "no_stock_at_location" });
+  return lot;
 }
 
 /**
@@ -1136,16 +1200,31 @@ export async function scanPickingItem(
       throw new HTTPException(409, { message: "scan_qty_exceeds_required" });
     }
 
+    // Picking shelf-scan mode (spec 2026-10-02-picking-shelf-scan-config-design.md):
+    // enforced on lot-sourced allocations below (receiving-area dock sources
+    // have no shelf lot to scan).
+    const shelfScanMode = pickingShelfScan();
+
     // Consume the source into package portions.
     const portions: PackagePortion[] = [];
     if (alloc.inventoryLotId) {
-      const lot = await queryGet<SourceLine & { shelfCode: string | null; totalQty: number }>(
+      let lot = await queryGet<SourceLine & { shelfCode: string | null; totalQty: number }>(
         tx,
         sql`SELECT id, total_qty AS "totalQty", shelf_code AS "shelfCode", box_id AS "boxId",
                    date_code AS "dateCode", lot_code AS "lotCode", coo, cow
             FROM inventory_lots WHERE id = ${alloc.inventoryLotId}`
       );
       if (!lot) throw new HTTPException(404, { message: "inventory_lot_not_found" });
+      if (shelfScanMode !== "off" && !input.shelfCode && !input.boxId) {
+        throw new HTTPException(409, { message: "shelf_scan_required" });
+      }
+      if (shelfScanMode === "require-match" && !scannedLocationMatches(input, lot)) {
+        throw new HTTPException(409, { message: "shelf_mismatch" });
+      }
+      if (shelfScanMode === "require-any" && !scannedLocationMatches(input, lot)) {
+        // Physical truth wins: deduct the actually-scanned shelf's lot.
+        lot = await resolveScannedShelfLot(tx, item, order, input);
+      }
       if (lot.totalQty < input.qty) throw new HTTPException(409, { message: "insufficient_lot_qty" });
       await queryRun(tx, sql`UPDATE inventory_lots SET total_qty = total_qty - ${input.qty} WHERE id = ${lot.id}`);
       if (lot.boxId) await markShelfBoxStockChanged(tx, lot.boxId);
@@ -1322,7 +1401,7 @@ export async function scanPickingItem(
  */
 export async function scanIntoShippingBox(
   db: AppDb,
-  input: { shippingBoxId: string; barcode: string; qty?: number; actorId: string }
+  input: { shippingBoxId: string; barcode: string; qty?: number; actorId: string; shelfCode?: string | null; boxId?: string | null }
 ): Promise<{ packageIds: string[] }> {
   const barcode = input.barcode.trim();
   if (barcode === "") throw new HTTPException(400, { message: "barcode_required" });
@@ -1360,6 +1439,8 @@ export async function scanIntoShippingBox(
     qty,
     shippingBoxId: input.shippingBoxId,
     barcode: input.barcode,
+    shelfCode: input.shelfCode ?? null,
+    boxId: input.boxId ?? null,
   });
 }
 

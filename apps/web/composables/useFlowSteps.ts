@@ -37,6 +37,11 @@ const pickingAllocation = ref<{ allowDockStock: boolean }>({
   allowDockStock: true,
 });
 
+// Resolved pickingShelfScan mode (GET /config pickingShelfScan). Default
+// "off" — pages behave as before until the first fetch resolves, and backends
+// predating the key omit it entirely.
+const pickingShelfScan = ref<"off" | "require-match" | "require-any">("off");
+
 let loading: Promise<void> | null = null;
 
 async function loadFlowSteps(): Promise<void> {
@@ -51,6 +56,9 @@ async function loadFlowSteps(): Promise<void> {
       }
       if (config.pickingAllocation) {
         pickingAllocation.value = { ...pickingAllocation.value, ...config.pickingAllocation };
+      }
+      if (config.pickingShelfScan) {
+        pickingShelfScan.value = config.pickingShelfScan;
       }
       applyListTemplates(config.listTemplates);
     } catch {
@@ -67,6 +75,7 @@ export function useFlowSteps() {
     flowSteps: readonly(steps),
     putAwayConfig: readonly(putAwayConfig),
     pickingAllocation: readonly(pickingAllocation),
+    pickingShelfScan: readonly(pickingShelfScan),
     loadFlowSteps,
   };
 }

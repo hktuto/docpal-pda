@@ -488,6 +488,8 @@ export interface FlowConfigState {
     receivingOrderNameTemplate: string;
     /** Per-PDA-list {title, meta} display templates (fully resolved). */
     pdaListTemplates: Record<string, { title: string; meta: string }>;
+    /** Picking shelf-scan mode ("off" | "require-match" | "require-any"). */
+    pickingShelfScan: "off" | "require-match" | "require-any";
   };
   /** Raw warehouse_config row value (partial JSON as stored). */
   stored: Record<string, unknown>;

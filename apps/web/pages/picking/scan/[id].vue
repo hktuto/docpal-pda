@@ -15,6 +15,16 @@
         {{ $t('picking.scanSession.heldBy', { name: heldByOther }) }}
       </div>
 
+      <div v-if="requireShelfScan && !completed" class="scan-session__shelf-bar">
+        <template v-if="pendingShelf">
+          <span class="scan-session__shelf-chip">
+            {{ $t('picking.scanSession.shelfContext', { shelf: pendingShelf.label }) }}
+            <button class="scan-session__shelf-clear" :aria-label="$t('picking.scanSession.shelfClear')" @click="pendingShelf = null">×</button>
+          </span>
+        </template>
+        <span v-else class="scan-session__shelf-hint">{{ $t('picking.scanSession.scanShelfFirst') }}</span>
+      </div>
+
       <div v-if="completed" class="card scan-session__done">
         <p class="scan-session__done-text">{{ $t('picking.scanSession.allApplied') }}</p>
         <p class="scan-session__done-hint">{{ $t('picking.scanSession.boxingHint') }}</p>
@@ -82,7 +92,7 @@
         </table>
 
         <footer class="scan-session__footer">
-          <button class="btn btn--small" :disabled="applying || ocrCapturing || !!heldByOther" @click="captureOcr">
+          <button class="btn btn--small" :disabled="applying || ocrCapturing || !!heldByOther || requireShelfScan" @click="captureOcr">
             <template v-if="ocrCapturing"><InlineSpinner /> {{ $t('picking.scanSession.ocrCapture') }}</template>
             <template v-else>{{ $t('picking.scanSession.ocrCapture') }}</template>
           </button>
@@ -174,7 +184,21 @@ const ocrCapturing = ref(false);
 const completed = ref(false);
 
 const orderItems = computed(() => order.value?.items ?? []);
-const { rows, addScan, matchBoxAllocations, matchCartonAllocations, addCartonScan, allocationRemaining, addAllocationScan, removeRow, reresolveQueued, applyAll } = usePickingScanQueue(orderItems);
+
+// Picking shelf-scan mode (flow config pickingShelfScan, spec
+// 2026-10-02-picking-shelf-scan-config-design.md): in the require-* modes one
+// sticky shelf scan sets the location context — the operator scans the shelf
+// once per location visit, then keeps scanning items there; the context is
+// replaced by the next shelf scan or cleared manually.
+const { pickingShelfScan: shelfScanMode } = useFlowSteps();
+const requireShelfScan = computed(() => shelfScanMode.value !== "off");
+const pendingShelf = ref<{ label: string; shelfCode: string | null; boxId: string | null } | null>(null);
+// require-match restricts allocation matching to the scanned location;
+// require-any matches any allocation (the backend resolves the physical lot).
+const queueShelfScope = computed(() =>
+  shelfScanMode.value === "require-match" ? pendingShelf.value : null
+);
+const { rows, addScan, matchBoxAllocations, matchCartonAllocations, addCartonScan, allocationRemaining, addAllocationScan, removeRow, reresolveQueued, applyAll } = usePickingScanQueue(orderItems, queueShelfScope);
 const queuedCount = computed(() => rows.value.filter((r) => r.status === "queued").length);
 
 // The table aggregates scans of the same part + batch fields (lot/date/coo/
@@ -332,13 +356,34 @@ async function load() {
 }
 
 function handleParsed(parsed: ReturnType<typeof ocrResultToInput>, raw: string, source: "qr" | "ocr"): boolean {
+  if (requireShelfScan.value && !pendingShelf.value) {
+    showToast(t("picking.scanSession.scanShelfFirst"));
+    return false;
+  }
   const result = addScan(parsed, raw, source);
   if (!result.ok) {
+    // In require-match a scoped no_match usually means the part is allocated
+    // elsewhere — the operator must move to the allocation's shelf.
+    if (result.message === "no_match" && shelfScanMode.value === "require-match" && pendingShelf.value) {
+      showToast(t("picking.scanSession.shelf_mismatch"));
+      return false;
+    }
     showToast(t(`picking.scanSession.${result.message}`));
     return false;
   }
   showToast(t("common.scanSuccess"));
   return true;
+}
+
+/** Set/replace the sticky shelf context from a scan that matched an
+ *  allocation's shelf box / shelf code. */
+function setPendingShelfFromMatch(rawValue: string) {
+  const lot = matchBoxAllocations(rawValue)[0]?.allocation.lot;
+  pendingShelf.value = {
+    label: rawValue.trim(),
+    shelfCode: lot?.shelfCode ?? null,
+    boxId: lot?.boxId ?? null,
+  };
 }
 
 // "Pick from box" flow: scanning a shelf box/shelf barcode opens a dialog
@@ -366,9 +411,18 @@ const boxPickEntries = computed<PickFromBoxEntry[]>(() => {
 
 function openBoxPick(rawValue: string): boolean {
   if (matchBoxAllocations(rawValue).length === 0) {
+    // require-any: an unmatched non-label scan is a shelf scan — the operator
+    // is at a shelf this order has no allocations on, which is allowed.
+    if (shelfScanMode.value === "require-any") {
+      pendingShelf.value = { label: rawValue.trim(), shelfCode: rawValue.trim(), boxId: null };
+      showToast(t("picking.scanSession.shelfContext", { shelf: rawValue.trim() }));
+      playScanSuccess();
+      return true;
+    }
     showToast(t("picking.scanSession.no_match"));
     return false;
   }
+  if (requireShelfScan.value) setPendingShelfFromMatch(rawValue);
   boxPickId.value = rawValue.trim();
   return true;
 }
@@ -399,6 +453,7 @@ function queueCarton(rawValue: string): boolean {
  * dialog); anything else must be a part label for one of the box's items. */
 async function handleBoxPickScan(rawValue: string): Promise<boolean> {
   if (matchBoxAllocations(rawValue).length > 0) {
+    if (requireShelfScan.value) setPendingShelfFromMatch(rawValue);
     boxPickId.value = rawValue.trim();
     return true;
   }
@@ -457,6 +512,12 @@ useHardwareScanner({
 });
 
 async function captureOcr() {
+  // OCR labels carry no shelf context — the require-* shelf-scan modes need
+  // hardware scans (mirrors OCR having no raw barcode for the label record).
+  if (requireShelfScan.value) {
+    showToast(t("picking.scanSession.ocrNotAllowed"));
+    return;
+  }
   ocrCapturing.value = true;
   try {
     const capture = await captureLabel();
@@ -595,6 +656,10 @@ async function confirm() {
           // Hardware-scan rows carry the raw label string so the backend can
           // record it on every portion; OCR rows have no scan string.
           barcode: row.source === "qr" ? row.raw : undefined,
+          // Sticky shelf-scan context (require-* modes): every scan POST
+          // carries the shelf/box the operator last scanned.
+          shelfCode: requireShelfScan.value ? pendingShelf.value?.shelfCode ?? undefined : undefined,
+          boxId: requireShelfScan.value ? pendingShelf.value?.boxId ?? undefined : undefined,
         });
       },
       errorMessage,
@@ -681,6 +746,37 @@ onUnmounted(() => window.removeEventListener("beforeunload", beforeUnload));
   font-size: 0.875rem;
   padding: 0.6rem 1rem;
   margin-bottom: 1rem;
+}
+
+.scan-session__shelf-bar {
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+.scan-session__shelf-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #dbeafe;
+  border: 1px solid #3b82f6;
+  border-radius: 9999px;
+  color: #1e40af;
+  font-weight: 600;
+  padding: 0.3rem 0.75rem;
+}
+
+.scan-session__shelf-clear {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.scan-session__shelf-hint {
+  color: #92400e;
 }
 
 .scan-session__progress-row {

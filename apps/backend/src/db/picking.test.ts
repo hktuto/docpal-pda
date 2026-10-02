@@ -7,6 +7,7 @@ import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { queryAll, queryGet } from "./query.js";
 import { allocateAll } from "./allocate.js";
 import { confirmReceivingArrival } from "./receiving.js";
+import { _setPickingShelfScanForTests } from "../config.js";
 import {
   acquireWorkLock,
   addAllUnboxedToShippingBox,
@@ -1748,4 +1749,162 @@ test("scan persists the raw label barcode on the package rows; absent → NULL",
     sql`SELECT label_barcode AS "labelBarcode" FROM picking_packages WHERE id = ${r3.packageIds[0]}`
   );
   assert.equal(stored3!.labelBarcode, "RK73H1JTTD2202F");
+});
+
+// --- pickingShelfScan flow-config modes --------------------------------------
+// (spec 2026-10-02-picking-shelf-scan-config-design.md)
+
+test("scan shelf-scan mode off: shelfCode/boxId fields are ignored", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await seededOrderAllocated();
+  const itemId = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
+  const alloc = await allocationOf(itemId);
+  _setPickingShelfScanForTests("off");
+  try {
+    const { packageIds } = await scanPickingItem(client.db, itemId, {
+      actorId,
+      allocationId: alloc.id,
+      qty: 100,
+      shelfCode: "NOPE-01",
+      boxId: "BOX-NOPE",
+    });
+    const pkg = await queryGet<{ sourceId: string }>(
+      client.db,
+      sql`SELECT source_id AS "sourceId" FROM picking_packages WHERE id = ${packageIds[0]}`
+    );
+    assert.equal(pkg!.sourceId, alloc.inventoryLotId);
+  } finally {
+    _setPickingShelfScanForTests("off");
+  }
+});
+
+test("scan shelf-scan mode require-match: required, mismatch 409, match passes", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await seededOrderAllocated();
+  const itemId = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
+  const alloc = await allocationOf(itemId);
+  _setPickingShelfScanForTests("require-match");
+  try {
+    const missing = await catchHttp(scanPickingItem(client.db, itemId, { actorId, allocationId: alloc.id, qty: 100 }));
+    assert.equal(missing.status, 409);
+    assert.equal(missing.message, "shelf_scan_required");
+
+    const wrong = await catchHttp(
+      scanPickingItem(client.db, itemId, { actorId, allocationId: alloc.id, qty: 100, shelfCode: "A0201" })
+    );
+    assert.equal(wrong.status, 409);
+    assert.equal(wrong.message, "shelf_mismatch");
+
+    // correct shelf → normal deduction from the allocation's lot
+    await scanPickingItem(client.db, itemId, { actorId, allocationId: alloc.id, qty: 100, shelfCode: "A0101" });
+    const lot = await queryGet<{ totalQty: number }>(
+      client.db,
+      sql`SELECT total_qty AS "totalQty" FROM inventory_lots WHERE id = ${alloc.inventoryLotId}`
+    );
+    assert.equal(lot!.totalQty, 900);
+    assert.equal((await allocationOf(itemId)).qty, 900);
+
+    // the lot's box id also matches (sticky box scan)
+    await scanPickingItem(client.db, itemId, { actorId, allocationId: alloc.id, qty: 100, boxId: "BOX-H-20260701-0001" });
+    assert.equal((await allocationOf(itemId)).qty, 800);
+  } finally {
+    _setPickingShelfScanForTests("off");
+  }
+});
+
+test("scan shelf-scan mode require-any: deducts the scanned shelf's lot; 409s", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await seededOrderAllocated();
+  const itemId = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
+  const alloc = await allocationOf(itemId);
+  // A second lot for the same part at a different shelf (the physical pick).
+  const otherLotId = randomUUID();
+  await client.db.execute(
+    sql`INSERT INTO inventory_lots (id, part_no, wcl_item_no, date_code, lot_code, coo, cow, shelf_code, org_id, sub_inventory_code, total_qty, allocated_qty, created_date, last_update_date)
+        VALUES (${otherLotId}, 'RK73H1JTTD1002F', 'RK73H1JTTD1002F', '2601', 'L2601X', 'JP', 'JP', 'A0102', 2, 'STORE1', 300, 0, now(), now())`
+  );
+  _setPickingShelfScanForTests("require-any");
+  try {
+    const missing = await catchHttp(scanPickingItem(client.db, itemId, { actorId, allocationId: alloc.id, qty: 100 }));
+    assert.equal(missing.status, 409);
+    assert.equal(missing.message, "shelf_scan_required");
+
+    // scanned shelf has no lot for the part → 409
+    const empty = await catchHttp(
+      scanPickingItem(client.db, itemId, { actorId, allocationId: alloc.id, qty: 100, shelfCode: "A0103" })
+    );
+    assert.equal(empty.status, 409);
+    assert.equal(empty.message, "no_stock_at_location");
+
+    // scanned shelf's lot is too small → 409
+    const tooSmall = await catchHttp(
+      scanPickingItem(client.db, itemId, { actorId, allocationId: alloc.id, qty: 400, shelfCode: "A0102" })
+    );
+    assert.equal(tooSmall.status, 409);
+    assert.equal(tooSmall.message, "no_stock_at_location");
+
+    // scanned shelf == the allocation's lot location → unchanged behavior
+    await scanPickingItem(client.db, itemId, { actorId, allocationId: alloc.id, qty: 100, shelfCode: "A0101" });
+    assert.equal((await allocationOf(itemId)).qty, 900);
+
+    // scanned shelf elsewhere → stock deducted from the scanned shelf's lot,
+    // package source + PICK ledger point at it, original allocation reduced
+    const { packageIds } = await scanPickingItem(client.db, itemId, {
+      actorId,
+      allocationId: alloc.id,
+      qty: 200,
+      shelfCode: "A0102",
+    });
+    const pkg = await queryGet<{ sourceType: string; sourceId: string; dateCode: string | null; lotCode: string | null }>(
+      client.db,
+      sql`SELECT source_type AS "sourceType", source_id AS "sourceId",
+                 date_code AS "dateCode", lot_code AS "lotCode"
+          FROM picking_packages WHERE id = ${packageIds[0]}`
+    );
+    assert.equal(pkg!.sourceType, "inventory_lot");
+    assert.equal(pkg!.sourceId, otherLotId);
+    assert.equal(pkg!.dateCode, "2601");
+    assert.equal(pkg!.lotCode, "L2601X");
+    const otherLot = await queryGet<{ totalQty: number }>(
+      client.db,
+      sql`SELECT total_qty AS "totalQty" FROM inventory_lots WHERE id = ${otherLotId}`
+    );
+    assert.equal(otherLot!.totalQty, 100);
+    const txns = await queryAll<{ qtyType: string; qtyDelta: number; lotId: string | null; shelfCode: string | null }>(
+      client.db,
+      sql`SELECT qty_type AS "qtyType", qty_delta AS "qtyDelta", inventory_lot_id AS "lotId", shelf_code AS "shelfCode"
+          FROM inventory_transactions WHERE txn_type = 'PICK' AND inventory_lot_id = ${otherLotId}`
+    );
+    assert.equal(txns.length, 2);
+    for (const t of txns) {
+      assert.equal(t.qtyDelta, -200);
+      assert.equal(t.shelfCode, "A0102");
+    }
+    // original allocation reduced; its lot untouched by this scan
+    assert.equal((await allocationOf(itemId)).qty, 700);
+    const origLot = await queryGet<{ totalQty: number; allocatedQty: number }>(
+      client.db,
+      sql`SELECT total_qty AS "totalQty", allocated_qty AS "allocatedQty" FROM inventory_lots WHERE id = ${alloc.inventoryLotId}`
+    );
+    assert.equal(origLot!.totalQty, 900); // only the A0101 scan above
+    assert.equal(origLot!.allocatedQty, 700);
+
+    // label batch fields must match the candidate lot when the label carries them
+    const batchMiss = await catchHttp(
+      scanPickingItem(client.db, itemId, { actorId, allocationId: alloc.id, qty: 50, shelfCode: "A0102", dateCode: "9999" })
+    );
+    assert.equal(batchMiss.status, 409);
+    assert.equal(batchMiss.message, "no_stock_at_location");
+    await scanPickingItem(client.db, itemId, {
+      actorId,
+      allocationId: alloc.id,
+      qty: 50,
+      shelfCode: "A0102",
+      dateCode: "2601",
+      lotCode: "L2601X",
+    });
+    assert.equal((await allocationOf(itemId)).qty, 650);
+  } finally {
+    _setPickingShelfScanForTests("off");
+  }
 });

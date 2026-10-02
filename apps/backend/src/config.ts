@@ -73,6 +73,7 @@ export const docpalGroupMapping: Record<string, string[]> = {
 //       { "orgId": 143, "fromSubinventories": ["SZHK2", "GZHK2"] } ]
 //     "dateCodeDisplayTemplate": "[date_code][coo]",
 //     "receivingOrderNameTemplate": "[batch_no]",
+//     "pickingShelfScan": "off",
 //     "pdaListTemplates": { "receiving": { "title": "[name]", "meta": "[supplier_name] · [delivery_date]" } } }
 //
 // dateCodeDisplayTemplate (spec 2026-09-17-date-code-display-template-design.md):
@@ -215,6 +216,17 @@ export interface PdaListTemplate {
 
 export type PdaListTemplates = Record<PdaListKey, PdaListTemplate>;
 
+/** Picking shelf-scan mode (spec
+ *  2026-10-02-picking-shelf-scan-config-design.md):
+ *  off           — today's behavior; deduction follows the allocation's lot.
+ *  require-match — a shelf/box scan is required first and must equal the
+ *                  allocation lot's location.
+ *  require-any   — shelf scan required, other shelves allowed; stock is
+ *                  deducted from the actually-scanned shelf's lot. */
+export type PickingShelfScanMode = "off" | "require-match" | "require-any";
+
+export const PICKING_SHELF_SCAN_MODES: readonly PickingShelfScanMode[] = ["off", "require-match", "require-any"];
+
 export interface FlowConfig {
   steps: Record<FlowStep, { enabled: boolean }>;
   pickingAllocation: PickingAllocationConfig;
@@ -237,6 +249,8 @@ export interface FlowConfig {
   receivingOrderNameTemplate: string;
   /** Per-PDA-list {title, meta} display templates (fully resolved). */
   pdaListTemplates: PdaListTemplates;
+  /** Picking shelf-scan mode; default "off". */
+  pickingShelfScan: PickingShelfScanMode;
 }
 
 /** Built-in defaults — reproduce the PDA's hardcoded list rows. */
@@ -263,6 +277,7 @@ function defaultFlowConfig(): FlowConfig {
     dateCodeDisplayTemplate: "[date_code][coo]",
     receivingOrderNameTemplate: "[batch_no]",
     pdaListTemplates: defaultPdaListTemplates(),
+    pickingShelfScan: "off",
   };
 }
 
@@ -491,6 +506,13 @@ export function mergeFlowConfigJson(parsed: unknown): FlowConfig {
       }
       continue;
     }
+    if (key === "pickingShelfScan") {
+      if (typeof value !== "string" || !(PICKING_SHELF_SCAN_MODES as readonly string[]).includes(value)) {
+        throw new Error('[config] flow config.pickingShelfScan must be "off", "require-match", or "require-any"');
+      }
+      cfg.pickingShelfScan = value as PickingShelfScanMode;
+      continue;
+    }
     if (key !== "steps") throw new Error(`[config] flow config: unknown key "${key}"`);
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
       throw new Error("[config] flow config.steps must be an object");
@@ -630,6 +652,12 @@ export function pdaListTemplates(): PdaListTemplates {
   return flowConfig.pdaListTemplates;
 }
 
+/** Picking shelf-scan mode (spec
+ *  docs/superpowers/specs/2026-10-02-picking-shelf-scan-config-design.md). */
+export function pickingShelfScan(): PickingShelfScanMode {
+  return flowConfig.pickingShelfScan;
+}
+
 /** Confirm-arrival sub-inventory defaulting rule groups; [] = feature off. */
 export function receivingSubInventoryRules(): SubInventoryRuleGroup[] {
   return flowConfig.receivingSubInventoryRules;
@@ -677,6 +705,11 @@ export function _setAllowedOrgIdsForTests(orgs: number[]): void {
 /** Test-only override for the outdated-stock age threshold. */
 export function _setOutdatedStockYearsForTests(years: number): void {
   flowConfig.outdatedStockYears = years;
+}
+
+/** Test-only override for the picking shelf-scan mode. */
+export function _setPickingShelfScanForTests(mode: PickingShelfScanMode): void {
+  flowConfig.pickingShelfScan = mode;
 }
 
 /** Test-only override for the receiving sub-inventory defaulting rules. */

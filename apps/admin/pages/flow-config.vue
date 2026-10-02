@@ -32,6 +32,13 @@ const stepEnabled = reactive<Record<string, boolean>>({});
 const allowDockStock = ref(true);
 const autoCreateTasks = ref(false);
 const suggestShelf = ref<"existing-stock" | "off">("existing-stock");
+const pickingShelfScan = ref<"off" | "require-match" | "require-any">("off");
+
+const pickingShelfScanOptions = computed<SearchableSelectOption[]>(() => [
+  { value: "off", label: t("admin.pages.flowConfig.pickingShelfScanModes.off") },
+  { value: "require-match", label: t("admin.pages.flowConfig.pickingShelfScanModes.require-match") },
+  { value: "require-any", label: t("admin.pages.flowConfig.pickingShelfScanModes.require-any") },
+]);
 
 const suggestShelfOptions = computed<SearchableSelectOption[]>(() => [
   { value: "existing-stock", label: t("admin.pages.flowConfig.suggestShelfOn") },
@@ -63,6 +70,7 @@ async function load() {
     allowDockStock.value = state.value.config.pickingAllocation.allowDockStock;
     autoCreateTasks.value = state.value.config.putAway.autoCreateTasks;
     suggestShelf.value = state.value.config.putAway.suggestShelf;
+    pickingShelfScan.value = state.value.config.pickingShelfScan ?? "off";
     allowedOrgIdsText.value = state.value.config.allowedOrgIds.join(", ");
     outdatedStockYearsText.value = String(state.value.config.outdatedStockYears);
     groups.value = state.value.config.receivingSubInventoryRules.map((g) => ({
@@ -159,7 +167,7 @@ async function save() {
       autoCreateTasks: autoCreateTasks.value,
       suggestShelf: suggestShelf.value,
     };
-    state.value = await flow.saveFlowConfig({ steps, allowedOrgIds, outdatedStockYears, receivingSubInventoryRules, pickingFromSubinventoryOrgs });
+    state.value = await flow.saveFlowConfig({ steps, allowedOrgIds, outdatedStockYears, receivingSubInventoryRules, pickingFromSubinventoryOrgs, pickingShelfScan: pickingShelfScan.value });
     saved.value = true;
   } catch (e: any) {
     error.value = e.message;
@@ -197,6 +205,18 @@ onMounted(load);
           <input v-model="allowDockStock" type="checkbox" />
           {{ $t("admin.pages.flowConfig.allowDockStock") }}
         </label>
+        <div class="form-row">
+          <label for="fc-shelf-scan">{{ $t("admin.pages.flowConfig.pickingShelfScan") }}</label>
+          <SearchableSelect
+            v-model="pickingShelfScan"
+            :options="pickingShelfScanOptions"
+            :all-label="$t('admin.pages.flowConfig.pickingShelfScan')"
+            :aria-label="$t('admin.pages.flowConfig.pickingShelfScan')"
+            :multiple="false"
+            :show-all="false"
+          />
+        </div>
+        <p class="hint-text">{{ $t("admin.pages.flowConfig.pickingShelfScanHint") }}</p>
       </div>
 
       <div class="card form-card">

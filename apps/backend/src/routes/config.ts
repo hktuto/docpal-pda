@@ -5,6 +5,7 @@ import {
   allowedOrgIds,
   isStepEnabled,
   pdaListTemplates,
+  pickingShelfScan,
   putAwayConfig,
   type FlowStep,
 } from "../config.js";
@@ -28,6 +29,7 @@ configRoute.get("/config", async (c) => {
       putAway: putAwayConfig(),
       allowedOrgIds: allowedOrgIds(),
       listTemplates: pdaListTemplates(),
+      pickingShelfScan: pickingShelfScan(),
     },
     200
   );

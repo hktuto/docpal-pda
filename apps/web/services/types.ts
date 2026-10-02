@@ -470,6 +470,10 @@ export interface ScanPickingItemInput {
   /** Raw scan string of the physical label (hardware scans only); stored on
    *  the created package rows for verify re-scan label matching. */
   barcode?: string | null;
+  /** Sticky shelf-scan context (flow config pickingShelfScan require-* modes):
+   *  the shelf/box the operator last scanned; sent with every item scan. */
+  shelfCode?: string | null;
+  boxId?: string | null;
 }
 
 /** PATCH /shipping-boxes/:id fields (weights in kg, decimals allowed). */
@@ -786,6 +790,9 @@ export interface FlowConfig {
   /** Org partitions this warehouse accepts ([] = all). Informational — the
    *  backend filters list/detail queries server-side. */
   allowedOrgIds: number[];
+  /** Picking shelf-scan mode ("off" | "require-match" | "require-any").
+   *  Optional — backends predating the feature omit it (= "off"). */
+  pickingShelfScan?: "off" | "require-match" | "require-any";
 }
 
 // ------------------------------------------------------------------

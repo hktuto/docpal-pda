@@ -110,6 +110,8 @@ pickingRoute.post("/picking-items/:id/scan", async (c) => {
     coo?: string;
     cow?: string;
     barcode?: string;
+    shelfCode?: string;
+    boxId?: string;
   }>(c);
   if (!body.allocationId) throw new HTTPException(400, { message: "allocationId is required" });
   const result = await scanPickingItem(db, c.req.param("id"), {
@@ -121,6 +123,8 @@ pickingRoute.post("/picking-items/:id/scan", async (c) => {
     coo: body.coo ?? null,
     cow: body.cow ?? null,
     barcode: body.barcode ?? null,
+    shelfCode: body.shelfCode ?? null,
+    boxId: body.boxId ?? null,
   });
   reallocateBestEffort("pick scan");
   return c.json(result, 201);
@@ -217,13 +221,15 @@ pickingRoute.post("/shipping-boxes/:id/add-all-unboxed", async (c) => {
 // picking item + allocation it could mean across ALL orders, pick it straight
 // into this box (404 no_matching_picking_item / 409 ambiguous_picking_item).
 pickingRoute.post("/shipping-boxes/:id/scan", async (c) => {
-  const body = await readJson<{ barcode?: string; qty?: number }>(c);
+  const body = await readJson<{ barcode?: string; qty?: number; shelfCode?: string; boxId?: string }>(c);
   if (!body.barcode) throw new HTTPException(400, { message: "barcode is required" });
   const result = await scanIntoShippingBox(db, {
     shippingBoxId: c.req.param("id"),
     barcode: body.barcode,
     qty: body.qty,
     actorId: actorFrom(c).id,
+    shelfCode: body.shelfCode ?? null,
+    boxId: body.boxId ?? null,
   });
   reallocateBestEffort("box scan");
   return c.json(result, 201);
