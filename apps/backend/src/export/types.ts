@@ -15,7 +15,7 @@ export interface RenderContext {
 }
 
 export interface Renderer<Doc> {
-  render(doc: Doc): { fileName: string; buffer: Buffer };
+  render(doc: Doc): Promise<{ fileName: string; buffer: Buffer }>;
 }
 
 export interface RendererScope {

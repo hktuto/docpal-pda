@@ -315,14 +315,17 @@
 
 ## Key files
 
-- `pages/picking/index.vue` — list page (compact rows, sticky search,
-  status filter, batch issue report dialog; server-side paging — 50-row
-  pages with Load more, refresh button, debounced server-side search and
-  multi-status/allocation filters).
+- `pages/picking/index.vue` — list page (compact rows grouped into
+  status sections — Picking / Allocated / Finished, each with a count;
+  all matching rows fetched at once, no paging; sticky search,
+  status filter, batch issue report dialog; refresh button, debounced
+  server-side search and multi-status/allocation filters).
 - `pages/picking/[id].vue` — detail page (items/allocations/packages,
-  boxes, logs; title, status badge, order info rows and the Scan / Finish
-  actions registered into the app header via
-  `composables/usePageHeader.ts` — Scan opens the scan session).
+  boxes, logs; title, status badge and order info rows plus the Finish
+  action registered into the app header via
+  `composables/usePageHeader.ts`; the Scan action is the `ScanFab`
+  floating button navigating to the scan session, shown only while the
+  order is actionable).
 - `pages/picking/scan/[id].vue` — scan-session ("checkout") page: armed
   hardware scanner, OCR capture button (single-record confirm form /
   multi-item table review before queueing), local queue table, Confirm
@@ -386,6 +389,11 @@
 - Typed input simulates scanning; the Android native
   `RectangleDetection.scanLabel()` path is used in some camera flows but
   not all.
+- The admin picking-list xlsx embeds an order-link QR
+  (`warehouse://picking/<id>`); scanning it on the PDA opens this order. It
+  must be scanned from a page without a symbology whitelist (home / picking
+  list) — the scan page restricts the decoder to the item brands' barcode
+  types, which may exclude QR.
 - Matching depends on normalized text and may require manual review.
 
 ## Related specs/plans
@@ -405,6 +413,7 @@
 - `docs/superpowers/specs/2026-09-11-user-subinventory-scope-design.md`
 - `docs/superpowers/specs/2026-09-22-picking-allocated-skip-status-design.md`
 - `docs/superpowers/specs/2026-09-30-picking-scan-cross-line-split-design.md`
+- `docs/superpowers/specs/2026-10-02-excel-order-barcode-scan-to-open-design.md`
 - `docs/superpowers/plans/2026-07-23-picking-priority-allocation.md`
 - `docs/superpowers/plans/2026-07-12-picking-execution.md`
 - `docs/superpowers/plans/2026-07-18-picking-scan-session.md`

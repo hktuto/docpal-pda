@@ -1,7 +1,9 @@
 import { onMounted, onUnmounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import type { PluginListenerHandle } from '@capacitor/core';
 import { ScannerBroadcast } from './useScannerBroadcast';
 import { playScanError, playScanSuccess } from '~/utils/scanBeep';
+import { resolveOrderScanRoute } from '~/utils/orderScanRoute';
 
 /** After a broadcast scan, consume wedge key echo for this long (ms). */
 const WEDGE_SUPPRESS_MS = 1500;
@@ -106,7 +108,14 @@ export function useHardwareScanner(options: UseHardwareScannerOptions) {
     const start = performance.now();
     let ok = true;
     try {
-      ok = (await options.onScan(value)) !== false;
+      // Order-link QR (admin shipper / picking-list Excel): navigate to the
+      // order and skip the page handler entirely.
+      const orderPath = resolveOrderScanRoute(value);
+      if (orderPath) {
+        await useRouter().push(orderPath);
+      } else {
+        ok = (await options.onScan(value)) !== false;
+      }
     } catch (e) {
       ok = false;
       console.error('[SCAN] onScan handler threw:', e);

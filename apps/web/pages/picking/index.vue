@@ -25,7 +25,7 @@
           class="filter-btn"
           :aria-label="$t('common.refresh')"
           :disabled="loading"
-          @click="refresh"
+          @click="load"
         >
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
         </button>
@@ -38,38 +38,40 @@
     <p v-else-if="rows.length === 0" class="empty">{{ $t('common.noPickingOrders') }}</p>
 
     <div v-else class="list-panel list-panel--clear-bulk-bar">
-      <div
-        v-for="po in rows"
-        :key="po.id"
-        class="list-row"
-        :class="{ 'list-row--disabled': !isSelectable(po.status) }"
-      >
-        <input
-          v-if="isSelectable(po.status)"
-          type="checkbox"
-          class="list-row__check"
-          :checked="selectedIds.has(po.id)"
-          @change="toggleSelection(po.id)"
-        />
-        <NuxtLink :to="`/picking/${po.id}`" class="list-row__main">
-          <div class="list-row__line1">
-            <span class="list-row__title">{{ formatRow("picking", "title", po) }}</span>
-            <span class="badge" :class="badgeClass(po.status)">{{ statusLabel.picking(po.status) }}</span>
-            <span v-if="isSelectable(po.status)" class="badge" :class="badgeClass(po.allocationStatus)">
-              {{ statusLabel.allocation(po.allocationStatus) }}
-            </span>
+      <template v-for="group in groupedRows" :key="group.status">
+        <h2 class="status-group__title">
+          {{ statusLabel.picking(group.status) }}
+          <span class="status-group__count">{{ group.rows.length }}</span>
+        </h2>
+        <div
+          v-for="po in group.rows"
+          :key="po.id"
+          class="list-row"
+          :class="{ 'list-row--disabled': !isSelectable(po.status) }"
+        >
+          <input
+            v-if="isSelectable(po.status)"
+            type="checkbox"
+            class="list-row__check"
+            :checked="selectedIds.has(po.id)"
+            @change="toggleSelection(po.id)"
+          />
+          <NuxtLink :to="`/picking/${po.id}`" class="list-row__main">
+            <div class="list-row__line1">
+              <span class="list-row__title">{{ formatRow("picking", "title", po) }}</span>
+            </div>
+            <div v-if="formatRow('picking', 'meta', po)" class="list-row__meta">
+              {{ formatRow("picking", "meta", po) }}
+            </div>
+          </NuxtLink>
+          <div class="list-row__aside">
+            <span>{{ po.deliveryDate ? new Date(po.deliveryDate).toLocaleDateString() : $t('common.noDate') }}</span>
+            <span v-if="po.workingByName" class="list-row__lock">{{ $t('picking.lockedBy', { name: po.workingByName }) }}</span>
+            <span>{{ $t('picking.shipTo', { destination: po.shipTo || $t('common.noData') }) }}</span>
           </div>
-          <div v-if="formatRow('picking', 'meta', po)" class="list-row__meta">
-            {{ formatRow("picking", "meta", po) }}
-          </div>
-        </NuxtLink>
-        <div class="list-row__aside">
-          <span>{{ po.deliveryDate ? new Date(po.deliveryDate).toLocaleDateString() : $t('common.noDate') }}</span>
-          <span v-if="po.workingByName" class="list-row__lock">{{ $t('picking.lockedBy', { name: po.workingByName }) }}</span>
-          <span>{{ $t('picking.shipTo', { destination: po.shipTo || $t('common.noData') }) }}</span>
+          <svg class="list-row__chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
         </div>
-        <svg class="list-row__chevron" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
-      </div>
+      </template>
     </div>
 
     <div
@@ -78,15 +80,6 @@
       :class="{ 'list-footer--clear-bulk-bar': hasSelection }"
     >
       <span class="list-footer__count">{{ $t('common.showingOf', { shown: rows.length, total }) }}</span>
-      <button
-        v-if="hasMore"
-        type="button"
-        class="btn btn--small"
-        :disabled="loading"
-        @click="load(false)"
-      >
-        {{ $t('common.loadMore') }}
-      </button>
     </div>
 
     <div v-if="hasSelection" class="bulk-actions">
@@ -114,7 +107,6 @@
 
 <script setup lang="ts">
 import { useVisibleReload } from "~/composables/useVisibleReload";
-import { badgeClass } from "~/composables/useStatusBadge";
 import { useWarehouse } from "~/composables/useWarehouse";
 import type {
   PickingOrderListRow,
@@ -136,7 +128,6 @@ const { formatRow } = useListTemplates();
 useHead({ title: t("picking.title") });
 
 const search = ref("");
-const PAGE_SIZE = 50;
 const rows = ref<PickingOrderListRow[]>([]);
 const total = ref(0);
 const loading = ref(true);
@@ -155,62 +146,58 @@ const filterAllocation = ref<string[]>([]);
 // falls back to this set rather than "no filter".
 const PDA_VISIBLE_STATUSES = ["allocated", "picking", "finished"];
 
+// The list renders as one section per status (all matching rows are fetched
+// so every section is complete); this is the section display order:
+// in-progress work first, then orders ready to pick, then completed.
+const STATUS_GROUP_ORDER = ["picking", "allocated", "finished"];
+
 const hasActiveFilter = computed(
   () => filterStatuses.value.length > 0 || filterAllocation.value.length > 0
 );
 
-const hasMore = computed(() => rows.value.length < total.value);
+const groupedRows = computed(() => {
+  const byStatus = new Map<string, PickingOrderListRow[]>();
+  for (const row of rows.value) {
+    const list = byStatus.get(row.status);
+    if (list) list.push(row);
+    else byStatus.set(row.status, [row]);
+  }
+  const rank = (status: string) => {
+    const index = STATUS_GROUP_ORDER.indexOf(status);
+    return index === -1 ? STATUS_GROUP_ORDER.length : index;
+  };
+  return [...byStatus.keys()]
+    .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
+    .map((status) => ({ status, rows: byStatus.get(status)! }));
+});
 
 function onFilterApply(payload: { statuses: string[]; allocation: string[] }) {
   filterStatuses.value = payload.statuses;
   filterAllocation.value = payload.allocation;
-  load(true);
+  load();
 }
 
-function listQuery(limit: number, offset: number): PickingOrderListQuery {
+function listQuery(): PickingOrderListQuery {
   const term = search.value.trim();
   return {
     status: (filterStatuses.value.length > 0 ? filterStatuses.value : PDA_VISIBLE_STATUSES).join(","),
     allocation: filterAllocation.value.length > 0 ? filterAllocation.value.join(",") : undefined,
     search: term || undefined,
-    limit,
-    offset,
   };
 }
 
-async function load(reset: boolean) {
+async function load() {
   loading.value = true;
   loadError.value = null;
   reportMessage.value = null;
   try {
-    const page = await warehouse.getPickingOrders(
-      listQuery(PAGE_SIZE, reset ? 0 : rows.value.length)
-    );
-    rows.value = reset ? page.rows : [...rows.value, ...page.rows];
-    total.value = page.total;
-  } catch (e) {
-    loadError.value = errorMessage(e);
-    if (reset) {
-      rows.value = [];
-      total.value = 0;
-    }
-  } finally {
-    loading.value = false;
-  }
-}
-
-async function refresh() {
-  loading.value = true;
-  loadError.value = null;
-  reportMessage.value = null;
-  try {
-    const page = await warehouse.getPickingOrders(
-      listQuery(Math.max(rows.value.length, PAGE_SIZE), 0)
-    );
+    const page = await warehouse.getPickingOrders(listQuery());
     rows.value = page.rows;
     total.value = page.total;
   } catch (e) {
     loadError.value = errorMessage(e);
+    rows.value = [];
+    total.value = 0;
   } finally {
     loading.value = false;
   }
@@ -219,7 +206,7 @@ async function refresh() {
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 watch(search, () => {
   if (searchTimer) clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => load(true), 300);
+  searchTimer = setTimeout(() => load(), 300);
 });
 onUnmounted(() => {
   if (searchTimer) clearTimeout(searchTimer);
@@ -274,7 +261,7 @@ async function onReportSaved(payload: {
     const result = await warehouse.reportPickingOrderIssues(entries);
     selectedIds.value = new Set();
     modalOpen.value = false;
-    await load(true);
+    await load();
     if (result.reported.length > 0) {
       reportMessage.value = t('picking.issueReportSummary', {
         reported: result.reported.length,
@@ -288,7 +275,7 @@ async function onReportSaved(payload: {
   }
 }
 
-useVisibleReload(refresh, ["/picking-orders"]);
+useVisibleReload(load, ["/picking-orders"]);
 </script>
 
 <style scoped>
@@ -335,6 +322,31 @@ useVisibleReload(refresh, ["/picking-orders"]);
 .filter-btn:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+.status-group__title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  margin: 0.9rem 0 0.35rem;
+}
+
+.status-group__title:first-child {
+  margin-top: 0.25rem;
+}
+
+.status-group__count {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.25rem;
 }
 
 .list-footer {

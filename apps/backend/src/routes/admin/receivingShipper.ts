@@ -54,22 +54,24 @@ adminReceivingShipperRoute.get("/receiving-orders/:id/shipper", async (c) => {
 
   const sections = await loadShipperDocuments(db, id, { finished });
   if (sections.length === 1) {
-    const { fileName, buffer } = render(sections[0]!.doc);
+    const { fileName, buffer } = await render(sections[0]!.doc);
     return attachment(buffer, fileName);
   }
   if (sections.length === 0) {
-    const { fileName, buffer } = render(await loadShipperDocument(db, id, { finished }));
+    const { fileName, buffer } = await render(await loadShipperDocument(db, id, { finished }));
     return attachment(buffer, fileName);
   }
 
   const prefix = finished ? "finished-shipper" : "shipper";
   const batchNo = sections[0]!.doc.head.batchNo;
   const sanitize = (s: string) => s.replace(/[/\\:*?"<>|\s]+/g, "-");
-  const files = sections.map(({ section, doc }) => {
-    const { buffer } = render(doc);
-    const subInv = section.subInventoryCode === null ? "no-subinventory" : sanitize(section.subInventoryCode);
-    return { fileName: `${prefix}-${batchNo}-org${section.orgId}-${subInv}.xlsx`, buffer };
-  });
+  const files = await Promise.all(
+    sections.map(async ({ section, doc }) => {
+      const { buffer } = await render(doc);
+      const subInv = section.subInventoryCode === null ? "no-subinventory" : sanitize(section.subInventoryCode);
+      return { fileName: `${prefix}-${batchNo}-org${section.orgId}-${subInv}.xlsx`, buffer };
+    })
+  );
 
   // xlsx members are already deflate-compressed zip containers — store-level.
   const zip = zipSync(

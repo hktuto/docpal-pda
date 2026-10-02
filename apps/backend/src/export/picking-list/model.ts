@@ -6,6 +6,7 @@
 
 export interface PickingListDocument {
   head: {
+    orderId: string; // picking_orders.id — QR order-link payload
     orderNo: string;
     poNo: string | null;
     customerCode: string | null;

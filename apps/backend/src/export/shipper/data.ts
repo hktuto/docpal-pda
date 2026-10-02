@@ -31,6 +31,7 @@ import { queryAll, queryGet } from "../../db/query.js";
 import type { ShipperDocument, ShipperGroup, ShipperSlot } from "./model.js";
 
 interface OrderHeadRow {
+  orderId: string;
   batchNo: string;
   status: string;
   deliveryDate: Date | null;
@@ -101,6 +102,7 @@ async function loadShipperData(db: AppDb, id: string, finished: boolean): Promis
     db,
     sql`
       SELECT
+        ro.id AS "orderId",
         ro.batch_no AS "batchNo",
         ro.status,
         ro.delivery_date AS "deliveryDate",
@@ -403,6 +405,7 @@ function buildShipperDocument(
   return {
     mode: finished ? "finished" : "live",
     head: {
+      orderId: head.orderId,
       batchNo: head.batchNo,
       supplierCode: head.supplierCode,
       supplierName: head.supplierName,

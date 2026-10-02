@@ -26,7 +26,7 @@ adminPickingListRoute.get("/picking-orders/:id/picking-list", async (c) => {
   const renderer = resolveRenderer<PickingListDocument>("picking-list", {
     customerCode: doc.head.customerCode,
   });
-  const { fileName, buffer } = renderer.render(doc);
+  const { fileName, buffer } = await renderer.render(doc);
   return new Response(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

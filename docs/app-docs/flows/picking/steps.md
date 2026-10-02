@@ -2,13 +2,13 @@
 
 ## 1. Open the picking list
 
-From the home screen, tap **Picking**. The list shows the picking orders released for work — those confirmed by the office (`allocated`) plus orders already being picked or finished — as compact rows with status and summary information; the search bar and filter button stay pinned at the top while scrolling. The list loads 50 orders at a time — tap **Load more** at the bottom for the next page, or the refresh button to reload. Search and filters apply to all orders, not just the loaded ones.
+From the home screen, tap **Picking**. The list shows the picking orders released for work — those confirmed by the office (`allocated`) plus orders already being picked or finished — as compact rows with status and summary information; the search bar and filter button stay pinned at the top while scrolling. The list is grouped into sections by status — **Picking** (in progress) first, then **Allocated** (ready to pick), then **Finished** — each with a count badge, and all matching orders are fetched at once (no paging). Tap the refresh button to reload. Search and filters apply to all orders.
 
 ![Picking list](./assets/picking-list.png)
 
 ## 2. Select a picking order
 
-Tap the order you want to work on. The detail page opens. The order number and status badge show in the app header; the horizontal-dots menu at the top right holds the order details (customer, delivery date, PO, ship-to, …) and the **Scan** / **Finish picking** actions.
+Tap the order you want to work on. The detail page opens. The order number and status badge show in the app header; the horizontal-dots menu at the top right holds the order details (customer, delivery date, PO, ship-to, …) and the **Finish picking** action. The round **Scan** floating button at the bottom right opens the scan session (hidden once the order is finished, in issue, or held by a coworker).
 
 Opening an order locks it to you: while your page is open, the system will not re-shuffle that order's allocations. The lock releases when you leave the page (or expires after 10 minutes if the app is closed). If a banner says the order is "being picked by" a coworker, the page is read-only — pick a different order or ask them to leave it.
 

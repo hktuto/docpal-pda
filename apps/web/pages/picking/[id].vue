@@ -24,6 +24,12 @@
         </button>
       </div>
 
+      <ScanFab
+        v-if="actionable"
+        :aria-label="$t('picking.detail.scan')"
+        @click="goScan"
+      />
+
       <PickingBoxesSection
         v-model:expanded="boxesExpanded"
         :boxes="order.boxes"
@@ -70,7 +76,7 @@ import { playScanError, playScanSuccess } from "~/utils/scanBeep";
 import PickingBoxesSection from "~/components/picking/PickingBoxesSection.vue";
 import PickingItemsSection from "~/components/picking/PickingItemsSection.vue";
 import PickingIssueBanner from "~/components/picking/PickingIssueBanner.vue";
-import type { PageHeaderAction } from "~/composables/usePageHeader";
+import ScanFab from "~/components/ScanFab.vue";
 import type {
   PickingOrderDetail,
 } from "~/services/types";
@@ -230,20 +236,22 @@ usePageHeader({
   actions: () => {
     const o = order.value;
     if (!o || o.status === "finished" || o.status === "issue" || heldByOther.value) return [];
-    const list: PageHeaderAction[] = [
-      { key: "scan", label: t("picking.detail.scan"), to: `/picking/scan/${orderId}` },
-    ];
-    if (allItemsFullyBoxed.value) {
-      list.push({
+    // Scan is the floating action button on the page; only finish stays here.
+    if (!allItemsFullyBoxed.value) return [];
+    return [
+      {
         key: "finish",
         label: finishing.value ? t("actions.finishing") : t("picking.detail.finishPicking"),
         disabled: finishing.value,
         onClick: finish,
-      });
-    }
-    return list;
+      },
+    ];
   },
 });
+
+function goScan() {
+  return navigateTo(`/picking/scan/${orderId}`);
+}
 
 async function load() {
   try {

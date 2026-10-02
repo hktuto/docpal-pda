@@ -55,7 +55,7 @@ const { locale, setLocale } = useI18n();
   cursor: pointer;
 }
 
-.language-switcher__option:hover {
+.language-switcher__option:hover:not(.language-switcher__option--active ) {
   background: var(--bg, #f0f0f0);
 }
 

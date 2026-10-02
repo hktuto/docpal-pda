@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import * as XLSX from "xlsx";
+import { unzipSync } from "fflate";
 import { setupTestDb, reseed, TEST_DATABASE_URL, type TestDb } from "../../db/test-helper.js";
 import { queryGet } from "../../db/query.js";
 import { confirmReceivingArrival } from "../../db/receiving.js";
@@ -59,6 +60,12 @@ async function seedScenario(): Promise<string> {
   // Hermetic: the demo seed's picking orders would also draw on this stock.
   await client.db.execute(sql`DELETE FROM picking_orders`);
 
+  // LOT-PL-02's shelf is outside the demo layout — the lot FK requires it.
+  await client.db.execute(sql`
+    INSERT INTO shelves (id, code, created_date, last_update_date)
+    VALUES ('SHELF-PL-02', 'W-01-01', now(), now())
+    ON CONFLICT (code) DO NOTHING
+  `);
   await client.db.execute(sql`
     INSERT INTO inventory_lots (id, part_no, shelf_code, box_id, date_code, lot_code, coo, cow, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
     VALUES ('LOT-PL-01', 'RK73H2ATTD1372F', 'A0405', 'BOX-PL-1', '2601', 'LOT-X', 'HK', 'CN', 2, 'STORE1', 200, now(), now())
@@ -67,7 +74,6 @@ async function seedScenario(): Promise<string> {
     INSERT INTO inventory_lots (id, part_no, shelf_code, box_id, date_code, lot_code, coo, cow, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
     VALUES ('LOT-PL-02', 'RK73H2ATTD1372F', 'W-01-01', 'BOX-PL-2', '2602', 'LOT-Y', 'HK', 'CN', 2, 'STORE1', 500, now(), now())
   `);
-
   await insertReceivingOrder(client.db, "PLIST-01", {
     order: { supplierCode: "DAITO", deliveryDate: "2026-09-14" },
     invoices: [
@@ -101,6 +107,24 @@ async function seedScenario(): Promise<string> {
   await client.db.execute(sql`UPDATE picking_orders SET remark = 'Handle with care' WHERE id = ${orderId}`);
   return orderId;
 }
+
+test("GET picking-list: embeds an order-link QR image and caption in the header", async () => {
+  await reseed(client);
+  // Hermetic, allocation-free: the QR header depends only on the order head.
+  await client.db.execute(sql`DELETE FROM picking_orders`);
+  const orderId = randomUUID();
+  await insertPickingOrder(client.db, orderId, {
+    order: { orderNo: "SO-PLIST-QR", customerCode: "ACME", orgId: 2, subInventoryCode: "STORE1" },
+    items: [{ partNo: "RK73H2ATTD1372F", qty: 10 }],
+  });
+
+  const res = await req(`/admin/picking-orders/${orderId}/picking-list`);
+  assert.equal(res.status, 200);
+  const buf = await res.arrayBuffer();
+  const entries = Object.keys(unzipSync(new Uint8Array(buf)));
+  assert.ok(entries.some((e) => e.startsWith("xl/media/")), "xlsx contains an embedded image");
+  assert.equal(sheetRows(buf)[10]![0], "Scan to open in PDA");
+});
 
 test("GET picking-list: 404 for an unknown picking order", async () => {
   await reseed(client);

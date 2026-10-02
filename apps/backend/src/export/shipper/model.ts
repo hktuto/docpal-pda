@@ -7,6 +7,7 @@
 export interface ShipperDocument {
   mode: "live" | "finished";
   head: {
+    orderId: string; // receiving_orders.id — QR order-link payload
     batchNo: string;
     supplierCode: string | null;
     supplierName: string | null;

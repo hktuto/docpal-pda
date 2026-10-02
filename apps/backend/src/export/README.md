@@ -7,15 +7,33 @@ layers (spec:
 ```
 export/
   registry.ts            # registerRenderer / resolveRenderer + fallback chain
+  orderLink.ts           # warehouse://<kind>/<id> payload + QR PNG (order barcode)
   shipper/
     data.ts              # SQL + grouping → ShipperDocument (no XLSX types)
     model.ts             # plain document types
-    render/default.ts    # ShipperDocument → xlsx buffer (self-registers)
+    render/default.ts    # ShipperDocument → xlsx buffer via ExcelJS (self-registers)
   picking-list/          # same shape
 ```
 
 Routes (`src/routes/admin/receivingShipper.ts`, `pickingList.ts`) are HTTP
 plumbing only: load the document, resolve a renderer, return the file.
+`Renderer.render` is async and both routes `await` it.
+
+## Order barcode (scan to open on the PDA)
+
+Every rendered xlsx embeds a QR code (80×80, top-right of the header) plus a
+"Scan to open in PDA" caption. The payload is `warehouse://receiving/<id>` /
+`warehouse://picking/<id>` (see `orderLink.ts`) — the order's UUID route key
+under a custom scheme, so no host is baked into the file. The PDA resolves
+the scan in `apps/web/utils/orderScanRoute.ts`, called from
+`useHardwareScanner`'s `deliver()` before the page handler: a match
+router-pushes `/receiving/<id>` / `/picking/<id>`; anything else flows to the
+page normally. Spec:
+`docs/superpowers/specs/2026-10-02-excel-order-barcode-scan-to-open-design.md`.
+
+The write step runs on **ExcelJS** (SheetJS cannot embed images) with the
+`qrcode` package for the PNG; the row/column layout is unchanged from the
+original SheetJS version.
 
 ## Adding a new layout (per supplier / customer / warehouse)
 

@@ -4,7 +4,7 @@ import { registerRenderer, resetRenderersForTest, resolveRenderer } from "./regi
 import type { Renderer } from "./types.js";
 
 function dummyRenderer(name: string): Renderer<unknown> {
-  return { render: () => ({ fileName: `${name}.xlsx`, buffer: Buffer.from(name) }) };
+  return { render: async () => ({ fileName: `${name}.xlsx`, buffer: Buffer.from(name) }) };
 }
 
 describe("export renderer registry", () => {

@@ -5,12 +5,16 @@
 // Exported as the factory makeShipperRenderer so config-style variants (see
 // render/hcc.ts) can change the first column's header + field without
 // forking the layout; the no-options default reproduces the original bytes.
+// The write step runs on ExcelJS (SheetJS cannot embed images) and stamps an
+// order-link QR in the header (spec
+// docs/superpowers/specs/2026-10-02-excel-order-barcode-scan-to-open-design.md).
 // The default self-registers as the "shipper" renderer at module load.
 
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import { registerRenderer } from "../../registry.js";
 import type { Renderer } from "../../types.js";
 import type { ShipperDocument, ShipperGroup, ShipperSlot } from "../model.js";
+import { orderLink, orderLinkQrPng } from "../../orderLink.js";
 
 export interface ShipperRendererOptions {
   firstColumnHeader?: string; // default "Invoice / Ctn"
@@ -21,7 +25,7 @@ export function makeShipperRenderer(options?: ShipperRendererOptions): Renderer<
   const firstColumnHeader = options?.firstColumnHeader ?? "Invoice / Ctn";
   const firstColumnField = options?.firstColumnField ?? "invoiceNo";
 
-  function render(doc: ShipperDocument): { fileName: string; buffer: Buffer } {
+  async function render(doc: ShipperDocument): Promise<{ fileName: string; buffer: Buffer }> {
     const { head, slotCount } = doc;
     const finished = doc.mode === "finished";
 
@@ -168,23 +172,41 @@ export function makeShipperRenderer(options?: ShipperRendererOptions): Renderer<
       if (gi < doc.groups.length - 1) aoa.push([]);
     });
 
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    for (const addr of Object.keys(ws)) {
-      if (addr.startsWith("!")) continue;
-      const cell = ws[addr];
-      if (cell.t === "n") cell.z = "#,##0";
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet(docTitle);
+    for (const row of aoa) {
+      ws.addRow(row).eachCell({ includeEmpty: false }, (cell) => {
+        if (typeof cell.value === "number") cell.numFmt = "#,##0";
+      });
     }
-    ws["!cols"] = [
-      { wch: 20 }, // first column (Invoice / Ctn or variant header)
-      { wch: 26 }, // Part Number
-      { wch: 10 }, // Qty
-      { wch: 10 }, // Total Qty
-      ...Array.from({ length: slotCount }, () => ({ wch: 18 })), // Customer / Order No slots
-      { wch: 10 }, // Balance
+    const colWidths = [
+      20, // first column (Invoice / Ctn or variant header)
+      26, // Part Number
+      10, // Qty
+      10, // Total Qty
+      ...Array.from({ length: slotCount }, () => 18), // Customer / Order No slots
+      10, // Balance
     ];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, docTitle);
-    const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+    colWidths.forEach((w, i) => {
+      ws.getColumn(i + 1).width = w;
+    });
+
+    // Order-link QR in the header's top-right corner + caption on the blank
+    // separator row (col A of row 4 is free in every layout). Scanning the QR
+    // on the PDA opens this receiving order.
+    const qrAnchorCol = width - 1; // last column
+    const qrId = wb.addImage({
+      base64: (await orderLinkQrPng(orderLink("receiving", head.orderId))).toString("base64"),
+      extension: "png",
+    });
+    ws.addImage(qrId, {
+      tl: { col: qrAnchorCol, row: 0 },
+      ext: { width: 80, height: 80 },
+      editAs: "oneCell",
+    });
+    ws.getCell(4, 1).value = "Scan to open in PDA";
+
+    const buf = Buffer.from(await wb.xlsx.writeBuffer());
 
     const fileName = finished ? `finished-shipper-${head.batchNo}.xlsx` : `shipper-${head.batchNo}.xlsx`;
     return { fileName, buffer: buf };

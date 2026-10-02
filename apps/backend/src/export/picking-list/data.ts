@@ -14,6 +14,7 @@ import { queryAll, queryGet } from "../../db/query.js";
 import type { PickingListAlloc, PickingListDocument } from "./model.js";
 
 interface OrderHeadRow {
+  orderId: string;
   orderNo: string;
   poNo: string | null;
   customerCode: string | null;
@@ -53,6 +54,7 @@ export async function loadPickingListDocument(db: AppDb, id: string): Promise<Pi
     db,
     sql`
       SELECT
+        po.id AS "orderId",
         po.order_no AS "orderNo",
         po.po_no AS "poNo",
         po.customer_code AS "customerCode",

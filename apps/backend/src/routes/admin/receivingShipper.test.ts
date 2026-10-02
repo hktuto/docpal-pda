@@ -96,6 +96,18 @@ async function seedScenario(): Promise<string> {
   return orderId;
 }
 
+test("GET shipper: embeds an order-link QR image and caption in the header", async () => {
+  await reseed(client);
+  const orderId = await seedScenario();
+
+  const res = await req(`/admin/receiving-orders/${orderId}/shipper`);
+  assert.equal(res.status, 200);
+  const buf = await res.arrayBuffer();
+  const entries = Object.keys(unzipSync(new Uint8Array(buf)));
+  assert.ok(entries.some((e) => e.startsWith("xl/media/")), "xlsx contains an embedded image");
+  assert.equal(sheetRows(buf)[3]![0], "Scan to open in PDA");
+});
+
 test("GET shipper: 404 for an unknown receiving order", async () => {
   await reseed(client);
   const res = await req(`/admin/receiving-orders/${randomUUID()}/shipper`);
