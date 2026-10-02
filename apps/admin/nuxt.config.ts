@@ -15,6 +15,12 @@ export default defineNuxtConfig({
     },
   },
   css: ["~/assets/main.css"],
+  experimental: {
+    // Same rationale as apps/web: the AppUpdate toast's outdated-build check
+    // polls once per interval after app start — the 1h default delays
+    // "reload to update" detection far too long.
+    checkOutdatedBuildInterval: 60_000,
+  },
   // i18n comes from the shared layer (locales + LanguageSwitcher + persistence).
   extends: ["../../layers/i18n", "../../layers/app-update"],
   $development: {

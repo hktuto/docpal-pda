@@ -10,6 +10,14 @@ export default defineNuxtConfig({
     },
   },
   css: ["~/assets/css/main.scss"],
+  experimental: {
+    // Nuxt's outdated-build check (which fires app:manifest:update → the
+    // AppUpdate toast) polls _nuxt/builds/latest.json only once per interval,
+    // and the FIRST poll runs one full interval after app start — the default
+    // 1h means a redeploy goes unnoticed for up to an hour on a PDA left
+    // open. 1 min keeps the banner timely.
+    checkOutdatedBuildInterval: 60_000,
+  },
   // i18n config, locales, LanguageSwitcher, and locale persistence come from
   // the shared layer (also used by apps/admin).
   extends: ["../../layers/i18n", "../../layers/app-update"],
