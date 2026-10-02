@@ -468,7 +468,9 @@ export default {
       grossWeight: "毛重",
       destinationCountry: "目的地國家/地區",
       scanHint: "掃描包裹 QR code 以核實。",
-      noMatch: "沒有與此標籤相符的未核實包裹。"
+      noMatch: "沒有與此標籤相符的未核實包裹。",
+      verifiedByLabel: "已按標籤核實 {count} 件",
+      alreadyVerifiedByLabel: "此標籤已核實（{count} 件）。"
     }
   },
   verify: {

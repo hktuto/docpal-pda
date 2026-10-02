@@ -467,6 +467,9 @@ export interface ScanPickingItemInput {
   lotCode?: string | null;
   coo?: string | null;
   cow?: string | null;
+  /** Raw scan string of the physical label (hardware scans only); stored on
+   *  the created package rows for verify re-scan label matching. */
+  barcode?: string | null;
 }
 
 /** PATCH /shipping-boxes/:id fields (weights in kg, decimals allowed). */
@@ -683,6 +686,9 @@ export interface MeasuringPackage {
   verified: boolean;
   /** Verify-step re-scan flag (set by verifyPackage during a pending verify task). */
   verifyVerified: boolean;
+  /** Raw scan string of the source label; NULL for legacy/OCR packages, which
+   *  fall back to exact-qty matching. */
+  labelBarcode?: string | null;
   partNo: string;
   wclItemNo: string | null;
 }

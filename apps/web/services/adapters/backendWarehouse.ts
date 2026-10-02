@@ -184,6 +184,7 @@ export function createBackendWarehouseService(
         lotCode: input.lotCode ?? undefined,
         coo: input.coo ?? undefined,
         cow: input.cow ?? undefined,
+        barcode: input.barcode ?? undefined,
       });
     },
     // Remove an unboxed, unverified package (reverses source + allocation).

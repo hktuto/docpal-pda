@@ -102,7 +102,14 @@
   cap holds. Confirm
   batch-applies the queue sequentially via
   `POST /picking-items/:id/scan {allocationId, qty, ...batch overrides}`;
-  failed rows stay in the list with their error. Launched from the picking
+  failed rows stay in the list with their error. Hardware-scan (QR) rows also
+  send the raw scan string as `barcode`, which the backend stores verbatim as
+  `picking_packages.label_barcode` on every portion row the scan creates —
+  that string is what lets verify/measuring re-scan the original label and
+  match all its split portions at once (OCR rows omit it → NULL → qty-match
+  fallback; spec
+  `docs/superpowers/specs/2026-10-02-picking-scan-label-record-design.md`).
+  Launched from the picking
   detail page (the receiving order's picking tab is read-only and no longer
   launches it).
 - Package and shipping-box operations: remove (undo-scan) / verify packages,
@@ -416,6 +423,7 @@
 - `docs/superpowers/specs/2026-09-11-user-subinventory-scope-design.md`
 - `docs/superpowers/specs/2026-09-22-picking-allocated-skip-status-design.md`
 - `docs/superpowers/specs/2026-09-30-picking-scan-cross-line-split-design.md`
+- `docs/superpowers/specs/2026-10-02-picking-scan-label-record-design.md`
 - `docs/superpowers/specs/2026-10-02-excel-order-barcode-scan-to-open-design.md`
 - `docs/superpowers/plans/2026-07-23-picking-priority-allocation.md`
 - `docs/superpowers/plans/2026-07-12-picking-execution.md`

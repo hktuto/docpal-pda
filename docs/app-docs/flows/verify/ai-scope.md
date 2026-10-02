@@ -32,6 +32,14 @@
   gating flag, and scanning works on **closed** boxes too (checking contents
   against the sealed box is the normal verify pass — `verifyPackage` sets
   `verify_verified` alongside `verified` so a reopened box can re-close).
+  Matching has two passes (spec
+  `docs/superpowers/specs/2026-10-02-picking-scan-label-record-design.md`):
+  first a **label pass** — a hardware re-scan whose raw string exactly equals
+  a package's stored `picking_packages.label_barcode` (recorded at pick time)
+  verifies EVERY portion of that physical label in the box in one shot
+  (all-verified → informational toast, not an error); no label hit falls
+  through to the exact-qty match, which covers legacy NULL rows and
+  OCR-created packages.
 - Complete the verify task once the box is closed and **every package has
   been re-scanned** (`verify_verified`) — 409 `packages_not_all_rescanned`
   otherwise; the page's complete button mirrors this guard. The box then
@@ -103,6 +111,7 @@
 ## Related specs/plans
 
 - `docs/superpowers/specs/2026-08-11-box-scoped-measuring-verify-design.md`
+- `docs/superpowers/specs/2026-10-02-picking-scan-label-record-design.md`
 - `docs/superpowers/specs/2026-07-28-verify-step-and-flow-step-config-design.md`
 - `docs/superpowers/specs/2026-07-28-measuring-verify-refinements-design.md`
 - `docs/backend/api-design.md` §Verify

@@ -126,6 +126,9 @@ export const pickingPackages = pgTable(
     lotCode: text("lot_code"),
     coo: text("coo"),
     cow: text("cow"),
+    // Raw scan string of the physical label this package (portion) came from;
+    // NULL for legacy rows and camera/OCR scans — those keep qty matching.
+    labelBarcode: text("label_barcode"),
     verified: boolean("verified").notNull().default(false),
     verifyVerified: boolean("verify_verified").notNull().default(false), // verify-step re-scan flag
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),

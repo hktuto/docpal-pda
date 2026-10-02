@@ -95,6 +95,8 @@ export interface VerifyPackageRow {
   cow: string | null;
   verified: boolean;
   verifyVerified: boolean;
+  /** Raw scan string of the source label (NULL = legacy/OCR → qty fallback). */
+  labelBarcode: string | null;
   partNo: string;
   wclItemNo: string | null;
 }
@@ -129,6 +131,7 @@ export async function getVerifyTaskDetail(db: AppDb, taskId: string): Promise<Ve
         pp.id, pp.qty,
         pp.date_code AS "dateCode", pp.lot_code AS "lotCode", pp.coo, pp.cow, pp.verified,
         pp.verify_verified AS "verifyVerified",
+        pp.label_barcode AS "labelBarcode",
         pi.part_no AS "partNo", p.wcl_item_no AS "wclItemNo",
         nwf.weight AS "formulaWeight", nwf.qty AS "formulaQty"
       FROM picking_packages pp

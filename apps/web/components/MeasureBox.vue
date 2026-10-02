@@ -309,12 +309,26 @@ useHardwareScanner({
     verifying.value = true;
     try {
       const parsedResult = await parseRawValue(rawValue);
-      const result = await runScanMatcher(scanContext.value, ocrResultToInput(parsedResult.parsed), matchers);
+      const result = await runScanMatcher(
+        { ...scanContext.value, rawLabel: rawValue },
+        ocrResultToInput(parsedResult.parsed),
+        matchers
+      );
       if (result.type === "single") {
         await result.apply();
         showToast(t("common.scanSuccess"));
         await onScanApplied();
         return true;
+      }
+      if (result.type === "label") {
+        await result.apply();
+        showToast(t("measuring.measureBox.verifiedByLabel", { count: result.packages.length }));
+        await onScanApplied();
+        return true;
+      }
+      if (result.type === "already-verified") {
+        showToast(t("measuring.measureBox.alreadyVerifiedByLabel", { count: result.count }));
+        return false;
       }
       if (result.type === "none") {
         showToast(t("measuring.measureBox.noMatch"));

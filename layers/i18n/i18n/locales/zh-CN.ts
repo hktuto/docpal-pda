@@ -468,7 +468,9 @@ export default {
       grossWeight: "毛重",
       destinationCountry: "目的国家/地区",
       scanHint: "扫描包裹二维码以核验。",
-      noMatch: "没有匹配该标签的未核验包裹。"
+      noMatch: "没有匹配该标签的未核验包裹。",
+      verifiedByLabel: "已按标签核验 {count} 件",
+      alreadyVerifiedByLabel: "该标签已核验（{count} 件）。"
     }
   },
   verify: {

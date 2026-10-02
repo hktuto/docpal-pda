@@ -1699,3 +1699,53 @@ test("scan-into-box: resolves the barcode across orders, boxes straight away; gu
   assert.equal(notOpen.status, 409);
   assert.equal(notOpen.message, "shipping_box_not_open");
 });
+
+// --- label barcode record ---------------------------------------------------
+
+test("scan persists the raw label barcode on the package rows; absent → NULL", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await seededOrderAllocated();
+
+  // item scan path: the barcode rides on the created package row
+  const itemId = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
+  const alloc = await allocationOf(itemId);
+  const { packageIds } = await scanPickingItem(client.db, itemId, {
+    actorId,
+    allocationId: alloc.id,
+    qty: 100,
+    barcode: "RAW-LABEL-1002F",
+  });
+  const stored = await queryGet<{ labelBarcode: string | null }>(
+    client.db,
+    sql`SELECT label_barcode AS "labelBarcode" FROM picking_packages WHERE id = ${packageIds[0]}`
+  );
+  assert.equal(stored!.labelBarcode, "RAW-LABEL-1002F");
+
+  // no barcode (OCR/legacy path) → NULL column → qty-match fallback
+  const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F");
+  const alloc2 = await allocationOf(item2);
+  const { packageIds: p2 } = await scanPickingItem(client.db, item2, {
+    actorId,
+    allocationId: alloc2.id,
+    qty: 50,
+  });
+  const stored2 = await queryGet<{ labelBarcode: string | null }>(
+    client.db,
+    sql`SELECT label_barcode AS "labelBarcode" FROM picking_packages WHERE id = ${p2[0]}`
+  );
+  assert.equal(stored2!.labelBarcode, null);
+
+  // scan-into-box path: the raw barcode is threaded through to the package
+  const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
+  const r3 = await scanIntoShippingBox(client.db, {
+    shippingBoxId: box.id,
+    barcode: "RK73H1JTTD2202F",
+    qty: 10,
+    actorId,
+  });
+  const stored3 = await queryGet<{ labelBarcode: string | null }>(
+    client.db,
+    sql`SELECT label_barcode AS "labelBarcode" FROM picking_packages WHERE id = ${r3.packageIds[0]}`
+  );
+  assert.equal(stored3!.labelBarcode, "RK73H1JTTD2202F");
+});

@@ -592,6 +592,9 @@ async function confirm() {
           lotCode: row.lotCode,
           coo: row.coo,
           cow: row.cow,
+          // Hardware-scan rows carry the raw label string so the backend can
+          // record it on every portion; OCR rows have no scan string.
+          barcode: row.source === "qr" ? row.raw : undefined,
         });
       },
       errorMessage,

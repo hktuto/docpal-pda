@@ -109,6 +109,7 @@ pickingRoute.post("/picking-items/:id/scan", async (c) => {
     lotCode?: string;
     coo?: string;
     cow?: string;
+    barcode?: string;
   }>(c);
   if (!body.allocationId) throw new HTTPException(400, { message: "allocationId is required" });
   const result = await scanPickingItem(db, c.req.param("id"), {
@@ -119,6 +120,7 @@ pickingRoute.post("/picking-items/:id/scan", async (c) => {
     lotCode: body.lotCode ?? null,
     coo: body.coo ?? null,
     cow: body.cow ?? null,
+    barcode: body.barcode ?? null,
   });
   reallocateBestEffort("pick scan");
   return c.json(result, 201);

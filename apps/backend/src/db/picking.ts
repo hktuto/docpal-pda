@@ -1050,6 +1050,10 @@ export interface ScanPickingItemInput {
   lotCode?: string | null;
   coo?: string | null;
   cow?: string | null;
+  /** Raw scan string of the physical label, stored verbatim on every package
+   *  row this scan creates (all split portions share it) for verify re-scan
+   *  label matching; NULL when absent (OCR path) → qty-match fallback. */
+  barcode?: string | null;
 }
 
 interface AllocationRow {
@@ -1235,9 +1239,9 @@ export async function scanPickingItem(
       await queryRun(
         tx,
         sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty,
-                                         shipping_box_id, date_code, lot_code, coo, cow, created_date, last_update_date)
+                                         shipping_box_id, date_code, lot_code, coo, cow, label_barcode, created_date, last_update_date)
             VALUES (${pid}, ${item.id}, ${item.pickingOrderId}, ${p.sourceType}, ${p.sourceId}, ${p.qty}, ${box?.id ?? null},
-                    ${dateCode}, ${lotCode}, ${coo}, ${cow}, ${at}, ${at})`
+                    ${dateCode}, ${lotCode}, ${coo}, ${cow}, ${input.barcode ?? null}, ${at}, ${at})`
       );
       packageIds.push(pid);
       const base = {
@@ -1355,6 +1359,7 @@ export async function scanIntoShippingBox(
     allocationId: target.allocationId,
     qty,
     shippingBoxId: input.shippingBoxId,
+    barcode: input.barcode,
   });
 }
 

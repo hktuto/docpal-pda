@@ -468,7 +468,9 @@ export default {
       grossWeight: "Gross weight",
       destinationCountry: "Destination country",
       scanHint: "Scan a package QR code to verify it.",
-      noMatch: "No unverified package matches this label."
+      noMatch: "No unverified package matches this label.",
+      verifiedByLabel: "{count} items verified by label",
+      alreadyVerifiedByLabel: "Label already verified ({count} items)."
     }
   },
   verify: {

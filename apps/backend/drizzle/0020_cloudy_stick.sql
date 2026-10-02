@@ -1,0 +1,1 @@
+ALTER TABLE "picking_packages" ADD COLUMN "label_barcode" text;
