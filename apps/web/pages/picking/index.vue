@@ -327,6 +327,7 @@ useVisibleReload(load, ["/picking-orders"]);
 .status-group__title {
   display: flex;
   align-items: center;
+  padding-left: 0.5rem;
   gap: 0.5rem;
   font-size: 0.8125rem;
   font-weight: 600;
@@ -338,6 +339,7 @@ useVisibleReload(load, ["/picking-orders"]);
 
 .status-group__title:first-child {
   margin-top: 0.25rem;
+
 }
 
 .status-group__count {
