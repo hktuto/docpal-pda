@@ -402,6 +402,10 @@ export default {
       collapseScans: "Hide pieces",
       suggestedShelf: "Suggested shelf",
       suggestedBox: "Suggested box (same part inside)",
+      gunScan: "Gun scan",
+      gunScanDisarm: "Cancel gun scan",
+      armedBadge: "Gun scan armed",
+      armedHint: "Scan labels for this item with the gun",
     }
   },
   goodsVerify: {

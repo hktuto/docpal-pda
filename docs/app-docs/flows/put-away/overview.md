@@ -24,6 +24,11 @@ Use the Put-away flow after receiving has created receiving-area inventory and t
    ![Put-away detail](./assets/put-away-detail.png)
 3. The app shows items available to move.
 4. The operator scans each physical piece of an item; scanned pieces accumulate under that item.
+
+   Scanning can be free-match (the hardware gun accepts any label that matches
+   an item on the order) or item-first: tapping **Gun scan** on an item arms it
+   so the next gun scans are validated strictly against that one item, until it
+   is disarmed or fully put away.
 5. The operator creates a shelf box on a selected shelf.
 6. The operator assigns whole scanned pieces to the shelf box.
 7. The operator closes the box when done; the inventory lot is updated with the new shelf location.

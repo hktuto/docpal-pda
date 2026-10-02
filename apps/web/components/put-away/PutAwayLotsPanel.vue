@@ -8,7 +8,12 @@
       :key="item.id"
       :data-item-id="item.id"
       class="card"
+      :class="{ 'card--armed': armedItemId === item.id }"
     >
+      <div v-if="armedItemId === item.id" class="armed-banner">
+        <span class="armed-badge">{{ $t('putAway.lotsPanel.armedBadge') }}</span>
+        <span class="armed-hint">{{ $t('putAway.lotsPanel.armedHint') }}</span>
+      </div>
       <DetailRow :label="$t('putAway.lotsPanel.part')">
         <span class="card__title">{{ (item.wclItemNo ?? item.partNo) || $t('common.noData') }}</span>
       </DetailRow>
@@ -35,6 +40,14 @@
           @click="emit('scan', item)"
         >
           {{ $t('putAway.lotsPanel.scan') }}
+        </button>
+        <button
+          class="btn btn--small"
+          :class="armedItemId === item.id ? '' : 'btn--ghost'"
+          :disabled="scanning"
+          @click="emit('arm-scan', item)"
+        >
+          {{ armedItemId === item.id ? $t('putAway.lotsPanel.gunScanDisarm') : $t('putAway.lotsPanel.gunScan') }}
         </button>
         <button
           class="btn btn--small btn--ghost"
@@ -116,12 +129,14 @@ interface Props {
   removingScan: Record<string, boolean>;
   boxSelections: Record<string, string>;
   expandedItems: Set<string>;
+  armedItemId: string | null;
 }
 
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
   scan: [item: PutAwayExpectedItem];
+  "arm-scan": [item: PutAwayExpectedItem];
   "add-to-box": [scanId: string];
   "remove-scan": [scanId: string];
   "update:boxSelections": [value: Record<string, string>];
@@ -179,6 +194,32 @@ function toggleExpand(itemId: string) {
 
 .shelf-hint {
   font-weight: 600;
+}
+
+.card--armed {
+  border: 2px solid var(--primary);
+}
+
+.armed-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.armed-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--primary);
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.375rem;
+}
+
+.armed-hint {
+  font-size: 0.8rem;
+  color: var(--muted);
 }
 
 .scans-list {

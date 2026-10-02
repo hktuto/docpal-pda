@@ -402,6 +402,10 @@ export default {
       collapseScans: "隐藏件",
       suggestedShelf: "建议货架",
       suggestedBox: "建议箱（内有相同物料）",
+      gunScan: "扫描枪扫码",
+      gunScanDisarm: "取消扫描枪",
+      armedBadge: "已启用扫描枪",
+      armedHint: "请用扫描枪扫描此物料的标签",
     }
   },
   goodsVerify: {

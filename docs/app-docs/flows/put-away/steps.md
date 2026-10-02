@@ -18,6 +18,8 @@ The detail shows receiving-area items waiting to be put away, with total, scanne
 
 For each item, tap **Scan piece** and scan a physical label. Each scan records one piece with its own quantity, date code, lot code, COO, and COW. Repeat until the scanned quantity reaches the item total.
 
+With the hardware gun you can also just scan — a label that matches an item on the order is accepted automatically (free-match). For tighter control, tap **Gun scan** on the item you are holding first: the card is highlighted with an "armed" badge, and every following gun scan is accepted only if it matches that item (part number and remaining quantity). The item stays armed for repeated scans; tap the button again (now labelled as cancel) to disarm, or tap **Gun scan** on another item to switch. The armed state clears itself once the item is fully put away.
+
 ## 5. Create a shelf box
 
 Tap **New box**, select a shelf, and confirm. The box appears in the shelf boxes panel.

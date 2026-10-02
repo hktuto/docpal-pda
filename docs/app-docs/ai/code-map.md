@@ -68,6 +68,7 @@ Page and component locations mapped to source files.
 |-----------|-------------|
 | Put-away lots panel | `components/put-away/PutAwayLotsPanel.vue` |
 | Shelf boxes panel | `components/put-away/ShelfBoxesPanel.vue` |
+| Hardware-scan item matching (free-match + armed item-first) | `utils/putAwayScan.ts` (`findPutAwayTarget`; armed state `armedItemId` in `pages/put-away/[id].vue`) |
 
 ## Picking
 

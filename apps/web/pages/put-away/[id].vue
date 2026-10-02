@@ -51,7 +51,9 @@
         :scanning="scanning"
         :adding-scan="addingScan"
         :removing-scan="removingScan"
+        :armed-item-id="armedItemId"
         @scan="openScan"
+        @arm-scan="toggleArmScan"
         @add-to-box="addScanToBox"
         @remove-scan="removeScanHandler"
       />
@@ -183,6 +185,9 @@ const cancellingBox = ref<Record<string, boolean>>({});
 
 const scanItem = ref<PutAwayExpectedItem | null>(null);
 const scrollTargetItemId = ref<string | null>(null);
+// Item-first hardware scan mode: while set, the next gun scan is validated
+// strictly against this item instead of free-matching across visible items.
+const armedItemId = ref<string | null>(null);
 const scans = ref<PutAwayScan[]>([]);
 const addingScan = ref<Record<string, boolean>>({});
 const removingScan = ref<Record<string, boolean>>({});
@@ -265,7 +270,14 @@ useHardwareScanner({
       );
       const parsed = ocrResultToInput(parsedResult.parsed);
       const qty = typeof parsed.qty === "number" ? parsed.qty : Number(parsed.qty);
-      const target = findPutAwayTarget(visibleItems.value, parsed.partNo, qty);
+      // Item-first (armed) mode: match strictly against the armed item only.
+      const target = armedItemId.value
+        ? findPutAwayTarget(
+            visibleItems.value.filter((i) => i.id === armedItemId.value),
+            parsed.partNo,
+            qty
+          )
+        : findPutAwayTarget(visibleItems.value, parsed.partNo, qty);
       if (!target) {
         showToast(t("errors.scanned_part_does_not_match_item"));
         return false;
@@ -292,6 +304,11 @@ useHardwareScanner({
     }
   },
 });
+
+// Tapping the armed item's button disarms; tapping another item re-arms.
+function toggleArmScan(item: PutAwayExpectedItem) {
+  armedItemId.value = armedItemId.value === item.id ? null : item.id;
+}
 
 async function addScanToBox(scanId: string) {
   const boxId = boxSelections.value[scanId];
@@ -369,6 +386,15 @@ async function load() {
       }
     }
     expandedItemBoxes.value = nextExpanded;
+
+    // Auto-disarm when the armed item has left the visible list (fully put
+    // away with no staged scans left).
+    if (
+      armedItemId.value &&
+      !visibleItems.value.some((i) => i.id === armedItemId.value)
+    ) {
+      armedItemId.value = null;
+    }
 
     if (scrollTargetItemId.value) {
       const targetId = scrollTargetItemId.value;

@@ -27,7 +27,16 @@
   validation against supplier QR templates). The hardware scanner is armed on
   the detail page: a QR/wedge scan parses via the supplier templates and
   applies immediately to the first visible item whose part matches and whose
-  `remainingQty` fits (`utils/putAwayScan.ts` `findPutAwayTarget`). The
+  `remainingQty` fits (`utils/putAwayScan.ts` `findPutAwayTarget`). Item-first
+  mode (opt-in): the per-item "Gun scan" button on `PutAwayLotsPanel.vue`
+  emits `arm-scan`; the page holds `armedItemId` (toggle to disarm, another
+  item re-arms) and the armed card shows a highlighted border + badge + hint.
+  Scanner routing precedence: scan-box dialog open → armed item (strict
+  `findPutAwayTarget` against that single item, same
+  `errors.scanned_part_does_not_match_item` toast on mismatch) → free-match.
+  A successful armed scan stays armed and records through the same
+  `recordPutAwayScan(...)` call with `activeBoxId` threaded; the armed state
+  auto-clears when a reload drops the item from `visibleItems`. The
   per-item camera OCR button opens a review step first: a single parsed
   record pops the `LabelScanReviewModal` confirm form
   (`confirmSingleMatch: true`); a multi-item (carton) label pops the shared
@@ -81,7 +90,8 @@
 - `components/ScanMultiItemModal.vue` — shared multi-item label table (also
   used by the picking scan session).
 - `components/put-away/PutAwayLotsPanel.vue` — expected items and scan
-  staging.
+  staging; per-item "Gun scan" button (`arm-scan` emit) + armed-card
+  styling driven by the `armedItemId` prop.
 - `components/put-away/ShelfBoxesPanel.vue` — shelf boxes and scan
   assignment; "Scan box" button, active-box highlight + "Set active" switch.
 - `components/put-away/ScanBoxDialog.vue` — scanned/typed box id + shelf
@@ -121,3 +131,4 @@
 - `docs/superpowers/specs/2026-07-06-put-away-scan-first-design.md`
 - `docs/superpowers/plans/2026-07-06-put-away-scan-first.md`
 - `docs/superpowers/specs/2026-07-20-put-away-scan-box-design.md`
+- `docs/superpowers/specs/2026-10-02-put-away-item-first-scan-design.md`
