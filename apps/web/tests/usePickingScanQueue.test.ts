@@ -347,41 +347,4 @@ describe('usePickingScanQueue', () => {
     expect(q.addAllocationScan('item-1', 'alloc-1', qr('RK73H1JTTD1002F', 1), ':A::1:X:L:S2:F', 'qr')).toEqual({ ok: false, message: 'qty_exceeds' });
     expect(q.addAllocationScan('item-1', 'alloc-1', qr('RK73H1JTTD1002F', 2000), ':A::202:X:L:S1:F', 'qr')).toEqual({ ok: false, message: 'duplicate' });
   });
-
-  // shelf scope (pickingShelfScan require-match): matching is restricted to
-  // allocations whose lot sits at the scanned shelf/box.
-  function makeTwoShelfItems(): Items {
-    const items = makeItems() as any;
-    items[0].allocations = [
-      {
-        id: 'alloc-1', qty: 2000, receivingInvoiceItemId: null, receivingOrderId: null, boxId: null,
-        lot: { id: 'lot-1', shelfCode: 'A-01-01', boxId: 'BOX-H-20260701-0001', dateCode: '2603', lotCode: 'L2603A', coo: 'JP', cow: 'JP', totalQty: 2000, allocatedQty: 2000, availableQty: 0 },
-      },
-      {
-        id: 'alloc-2', qty: 1000, receivingInvoiceItemId: null, receivingOrderId: null, boxId: null,
-        lot: { id: 'lot-2', shelfCode: 'B-03-02', boxId: null, dateCode: '2604', lotCode: 'L2604A', coo: 'JP', cow: 'JP', totalQty: 1000, allocatedQty: 1000, availableQty: 0 },
-      },
-    ];
-    return items as Items;
-  }
-
-  it('shelf scope filters matching to allocations at the scanned shelf', () => {
-    const scope = ref<{ shelfCode: string | null; boxId: string | null } | null>({ shelfCode: 'B-03-02', boxId: null });
-    const q = usePickingScanQueue(ref(makeTwoShelfItems()), scope as any);
-    // 1500 fits only alloc-1 (A-01-01), which is out of scope → no_match
-    expect(q.addScan(qr('RK73H1JTTD1002F', 1500), ':A::152:X:L:S:F', 'qr')).toEqual({ ok: false, message: 'no_match' });
-    // 1000 fits the in-scope alloc-2
-    expect(q.addScan(qr('RK73H1JTTD1002F', 1000), ':A::102:X:L:S:F', 'qr')).toEqual({ ok: true });
-    expect(q.rows.value[0]).toMatchObject({ allocationId: 'alloc-2', qty: 1000 });
-  });
-
-  it('shelf scope by box id matches the lot box; clearing the scope restores full matching', () => {
-    const scope = ref<{ shelfCode: string | null; boxId: string | null } | null>({ shelfCode: 'A-01-01', boxId: 'BOX-H-20260701-0001' });
-    const q = usePickingScanQueue(ref(makeTwoShelfItems()), scope as any);
-    expect(q.addScan(qr('RK73H1JTTD1002F', 1500), ':A::152:X:L:S:F', 'qr')).toEqual({ ok: true });
-    expect(q.rows.value[0]).toMatchObject({ allocationId: 'alloc-1', qty: 1500 });
-    // clearing the scope (operator cleared the chip) matches anywhere again
-    scope.value = null;
-    expect(q.addScan(qr('RK73H1JTTD1002F', 1000), ':A::102:X:L:S:F', 'qr')).toEqual({ ok: true });
-  });
 });

@@ -19,22 +19,6 @@ export interface ScanQueueRow {
   error: string | null;
 }
 
-/** Sticky shelf-scan context (flow config pickingShelfScan): the shelf/box
- *  the operator last scanned. In "require-match" mode the queue only targets
- *  allocations whose lot sits at this location. */
-export interface ShelfScope {
-  shelfCode: string | null;
-  boxId: string | null;
-}
-
-/** Does the allocation's lot sit at the scanned location? A box scan matches
- *  on boxId (its shelf is implied), a bare shelf scan on shelfCode. */
-export function allocationInShelfScope(a: PickingAllocation, scope: ShelfScope): boolean {
-  if (scope.boxId) return a.lot?.boxId === scope.boxId;
-  if (scope.shelfCode) return a.lot?.shelfCode === scope.shelfCode;
-  return true;
-}
-
 type OrderItems = PickingOrderDetail["items"];
 
 let nextKey = 1;
@@ -46,10 +30,8 @@ let nextKey = 1;
  * qty must fit the aggregated remaining of all same-part lines (minus what is
  * already queued against their allocations), and the same raw QR value cannot
  * be queued twice.
- * `shelfScope` (optional, require-match mode) restricts matching to
- * allocations at the scanned shelf/box.
  */
-export function usePickingScanQueue(items: Ref<OrderItems>, shelfScope?: Ref<ShelfScope | null>) {
+export function usePickingScanQueue(items: Ref<OrderItems>) {
   const rows = ref<ScanQueueRow[]>([]);
 
   const queuedRows = computed(() => rows.value.filter((r) => r.status !== "applied"));
@@ -82,12 +64,10 @@ export function usePickingScanQueue(items: Ref<OrderItems>, shelfScope?: Ref<She
     qty: number,
     excludeKey?: string
   ): { item: OrderItems[number]; allocation: PickingAllocation } | null {
-    const scope = shelfScope?.value ?? null;
     for (const item of items.value) {
       if (!partMatches(item, parsed)) continue;
       for (const allocation of item.allocations ?? []) {
         if (allocation.qty <= 0) continue;
-        if (scope && !allocationInShelfScope(allocation, scope)) continue;
         const remaining = allocation.qty - queuedQtyForAllocation(allocation.id, excludeKey);
         if (qty <= remaining) return { item, allocation };
       }
@@ -109,13 +89,11 @@ export function usePickingScanQueue(items: Ref<OrderItems>, shelfScope?: Ref<She
     qty: number
   ): { item: OrderItems[number]; allocation: PickingAllocation; qty: number }[] | null {
     const portions: { item: OrderItems[number]; allocation: PickingAllocation; qty: number }[] = [];
-    const scope = shelfScope?.value ?? null;
     let remaining = qty;
     for (const item of items.value) {
       if (!partMatches(item, parsed)) continue;
       for (const allocation of item.allocations ?? []) {
         if (allocation.qty <= 0) continue;
-        if (scope && !allocationInShelfScope(allocation, scope)) continue;
         const available = allocation.qty - queuedQtyForAllocation(allocation.id);
         if (available <= 0) continue;
         const take = Math.min(available, remaining);

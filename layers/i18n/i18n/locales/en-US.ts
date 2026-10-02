@@ -270,7 +270,7 @@ export default {
           scanShelfFirst: "Scan the shelf or box first",
           shelfContext: "Shelf: {shelf}",
           shelfClear: "Clear shelf",
-          shelf_mismatch: "This part is not allocated on the scanned shelf",
+          item_not_on_shelf: "This item has no stock on the scanned shelf",
           ocrNotAllowed: "OCR has no shelf context — use the scanner",
           invalid: "Could not read a valid part and quantity",
           reviewTitle: "Confirm scanned item",
@@ -667,7 +667,6 @@ export default {
     scanned_qty_exceeds_allocation: "Scanned quantity exceeds the allocated quantity",
     insufficient_lot_qty: "Insufficient lot quantity",
     shelf_scan_required: "Scan the shelf or box first",
-    shelf_mismatch: "The scanned shelf/box does not match the allocation's location",
     no_stock_at_location: "No stock of this part at the scanned location",
     receiving_source_qty_not_available: "Quantity no longer available on the receiving order",
     allocation_has_no_source: "Allocation has no source",
@@ -1653,11 +1652,11 @@ export default {
         pickingSection: "Picking allocation",
         allowDockStock: "Allow allocation from receiving dock stock (before put-away)",
         pickingShelfScan: "Shelf scan when picking",
-        pickingShelfScanHint: "require-match: the operator must scan the allocation's shelf/box before item labels; require-any: shelf scan required, other shelves allowed (stock is deducted from the scanned shelf).",
+        pickingShelfScanHint: "require-match: the operator must scan the shelf/box first and the item must have stock there (checked at scan time); require-any: shelf scan required, any item accepted (confirm fails when the part has no stock there). Both deduct from the scanned shelf.",
         pickingShelfScanModes: {
           off: "Off",
-          "require-match": "Require matching shelf",
-          "require-any": "Require shelf scan (any shelf)"
+          "require-match": "Require shelf scan (item must be in stock)",
+          "require-any": "Require shelf scan (any item)"
         },
         putAwaySection: "Put-away",
         autoCreateTasks: "Auto-create a put-away task when a receiving arrival is confirmed",

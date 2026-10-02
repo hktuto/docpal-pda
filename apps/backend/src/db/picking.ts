@@ -1148,6 +1148,47 @@ async function resolveScannedShelfLot(
 }
 
 /**
+ * Stock of a part at a shelf/box (GET /picking-shelf-stock) — the require-match
+ * scan-time presence check: the scanned part must have stock on the pending
+ * shelf before its label is accepted. Same part matching and org/sub-inventory
+ * scoping as resolveScannedShelfLot, without the label batch-field match;
+ * returns SUM(total_qty) over the matching lots (0 when none).
+ */
+export async function getPickingShelfStock(
+  db: AppDb,
+  params: {
+    partNo?: string;
+    wclItemNo?: string;
+    shelfCode?: string;
+    boxId?: string;
+    orgId?: number;
+    subInventoryCode?: string;
+  }
+): Promise<{ qty: number }> {
+  const partKeys = [params.partNo, params.wclItemNo].filter((v): v is string => !!v);
+  if (partKeys.length === 0) throw new HTTPException(400, { message: "part_no_required" });
+  if (!params.shelfCode && !params.boxId) throw new HTTPException(400, { message: "shelf_scan_required" });
+  const orgId = params.orgId ?? null;
+  const subInventoryCode = params.subInventoryCode ?? null;
+  const row = await queryGet<{ qty: number }>(
+    db,
+    sql`SELECT COALESCE(SUM(il.total_qty), 0)::int AS "qty"
+        FROM inventory_lots il
+        WHERE (${inArray(sql`il.part_no`, partKeys)} OR ${inArray(sql`il.wcl_item_no`, partKeys)})
+          AND ${params.boxId ? sql`il.box_id = ${params.boxId}` : sql`il.shelf_code = ${params.shelfCode}`}
+          AND (${orgId}::int IS NULL OR il.org_id = ${orgId})
+          AND (${subInventoryCode}::text IS NULL
+               OR upper(il.sub_inventory_code) = upper(${subInventoryCode})
+               OR EXISTS (SELECT 1 FROM sub_inventory_share_members sm_d
+                          JOIN sub_inventory_share_members sm_s ON sm_s.share_group = sm_d.share_group
+                          WHERE sm_d.org_id = ${orgId} AND upper(sm_d.code) = upper(${subInventoryCode})
+                            AND sm_s.org_id = il.org_id AND upper(sm_s.code) = upper(il.sub_inventory_code)))
+          ${allowedOrgFilter(sql`il.org_id`)}`
+  );
+  return { qty: row?.qty ?? 0 };
+}
+
+/**
  * Scan qty off an allocation into picking package(s). The allocation's source
  * is consumed per old `scanAllocation` semantics (lot total −qty / receiving
  * picked_qty +qty, allocation shrunk), the batch snapshot rides on the
@@ -1218,11 +1259,11 @@ export async function scanPickingItem(
       if (shelfScanMode !== "off" && !input.shelfCode && !input.boxId) {
         throw new HTTPException(409, { message: "shelf_scan_required" });
       }
-      if (shelfScanMode === "require-match" && !scannedLocationMatches(input, lot)) {
-        throw new HTTPException(409, { message: "shelf_mismatch" });
-      }
-      if (shelfScanMode === "require-any" && !scannedLocationMatches(input, lot)) {
-        // Physical truth wins: deduct the actually-scanned shelf's lot.
+      // Both require-* modes follow physical truth: when the scanned location
+      // differs from the allocation lot's, deduct the scanned shelf's lot
+      // (the require-match client pre-checks presence at scan time; the 409
+      // here is the safety net).
+      if (shelfScanMode !== "off" && !scannedLocationMatches(input, lot)) {
         lot = await resolveScannedShelfLot(tx, item, order, input);
       }
       if (lot.totalQty < input.qty) throw new HTTPException(409, { message: "insufficient_lot_qty" });

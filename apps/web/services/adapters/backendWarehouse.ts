@@ -14,6 +14,7 @@ import type {
   PickingOrderDetail,
   PickingWorkLock,
   ScanPickingItemInput,
+  PickingShelfStockQuery,
   ShippingBoxUpdateInput,
   ReportPickingIssueEntry,
   ReportPickingIssuesResult,
@@ -187,6 +188,17 @@ export function createBackendWarehouseService(
         barcode: input.barcode ?? undefined,
         shelfCode: input.shelfCode ?? undefined,
         boxId: input.boxId ?? undefined,
+      });
+    },
+    // require-match scan-time presence check (pickingShelfScan flow config).
+    async getPickingShelfStock(query: PickingShelfStockQuery): Promise<{ qty: number }> {
+      return client.get("/picking-shelf-stock", {
+        partNo: query.partNo,
+        wclItemNo: query.wclItemNo,
+        shelfCode: query.shelfCode,
+        boxId: query.boxId,
+        orgId: query.orgId ?? undefined,
+        subInventoryCode: query.subInventoryCode ?? undefined,
       });
     },
     // Remove an unboxed, unverified package (reverses source + allocation).

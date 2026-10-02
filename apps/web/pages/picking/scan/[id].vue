@@ -15,14 +15,20 @@
         {{ $t('picking.scanSession.heldBy', { name: heldByOther }) }}
       </div>
 
-      <div v-if="requireShelfScan && !completed" class="scan-session__shelf-bar">
+      <div
+        v-if="requireShelfScan && !completed"
+        class="scan-session__shelf-banner"
+        :class="{ 'scan-session__shelf-banner--empty': !pendingShelf }"
+      >
         <template v-if="pendingShelf">
-          <span class="scan-session__shelf-chip">
+          <span class="scan-session__shelf-banner-label">
             {{ $t('picking.scanSession.shelfContext', { shelf: pendingShelf.label }) }}
-            <button class="scan-session__shelf-clear" :aria-label="$t('picking.scanSession.shelfClear')" @click="pendingShelf = null">×</button>
           </span>
+          <button class="btn btn--small btn--secondary" @click="pendingShelf = null">
+            {{ $t('picking.scanSession.shelfClear') }}
+          </button>
         </template>
-        <span v-else class="scan-session__shelf-hint">{{ $t('picking.scanSession.scanShelfFirst') }}</span>
+        <span v-else>{{ $t('picking.scanSession.scanShelfFirst') }}</span>
       </div>
 
       <div v-if="completed" class="card scan-session__done">
@@ -160,6 +166,7 @@ import ScanMultiItemModal from "~/components/ScanMultiItemModal.vue";
 import { normalize, type OcrInput } from "~/composables/useMockOcr";
 import { normalizePartNo } from "~/utils/text";
 import { formatCompactQty } from "~/utils/formatNumber";
+import { createShelfStockChecker } from "~/utils/shelfStockCheck";
 import type { PickingOrderDetail } from "~/services/types";
 
 definePageMeta({ title: "meta.pickingScan", props: { noPadding: true } });
@@ -187,18 +194,18 @@ const orderItems = computed(() => order.value?.items ?? []);
 
 // Picking shelf-scan mode (flow config pickingShelfScan, spec
 // 2026-10-02-picking-shelf-scan-config-design.md): in the require-* modes one
-// sticky shelf scan sets the location context — the operator scans the shelf
-// once per location visit, then keeps scanning items there; the context is
-// replaced by the next shelf scan or cleared manually.
+// sticky shelf scan sets the location banner — the operator scans the shelf
+// once per location visit, then keeps scanning items there; the banner is
+// replaced by the next shelf scan or cleared manually. No pick-from-box
+// dialog opens on a shelf scan in these modes.
 const { pickingShelfScan: shelfScanMode } = useFlowSteps();
 const requireShelfScan = computed(() => shelfScanMode.value !== "off");
 const pendingShelf = ref<{ label: string; shelfCode: string | null; boxId: string | null } | null>(null);
-// require-match restricts allocation matching to the scanned location;
-// require-any matches any allocation (the backend resolves the physical lot).
-const queueShelfScope = computed(() =>
-  shelfScanMode.value === "require-match" ? pendingShelf.value : null
-);
-const { rows, addScan, matchBoxAllocations, matchCartonAllocations, addCartonScan, allocationRemaining, addAllocationScan, removeRow, reresolveQueued, applyAll } = usePickingScanQueue(orderItems, queueShelfScope);
+// require-match presence check: the scanned part must have stock on the
+// pending shelf (cached per location+part for the session; the backend's
+// no_stock_at_location 409 is the safety net when stock moves mid-session).
+const shelfStockChecker = createShelfStockChecker(async (q) => (await warehouse.getPickingShelfStock(q)).qty);
+const { rows, addScan, matchBoxAllocations, matchCartonAllocations, addCartonScan, allocationRemaining, addAllocationScan, removeRow, reresolveQueued, applyAll } = usePickingScanQueue(orderItems);
 const queuedCount = computed(() => rows.value.filter((r) => r.status === "queued").length);
 
 // The table aggregates scans of the same part + batch fields (lot/date/coo/
@@ -357,19 +364,30 @@ async function load() {
   }
 }
 
-function handleParsed(parsed: ReturnType<typeof ocrResultToInput>, raw: string, source: "qr" | "ocr"): boolean {
+async function handleParsed(parsed: ReturnType<typeof ocrResultToInput>, raw: string, source: "qr" | "ocr"): Promise<boolean> {
   if (requireShelfScan.value && !pendingShelf.value) {
     showToast(t("picking.scanSession.scanShelfFirst"));
     return false;
   }
-  const result = addScan(parsed, raw, source);
-  if (!result.ok) {
-    // In require-match a scoped no_match usually means the part is allocated
-    // elsewhere — the operator must move to the allocation's shelf.
-    if (result.message === "no_match" && shelfScanMode.value === "require-match" && pendingShelf.value) {
-      showToast(t("picking.scanSession.shelf_mismatch"));
+  // require-match scan-time presence check: the part must have stock on the
+  // pending shelf (item matching itself is the normal picking flow — the
+  // allocation candidates are NOT filtered by shelf).
+  if (shelfScanMode.value === "require-match" && pendingShelf.value) {
+    const stocked = await shelfStockChecker.hasStock({
+      partNo: String(parsed.partNo ?? ""),
+      wclItemNo: parsed.wclItemNo || undefined,
+      shelfCode: pendingShelf.value.shelfCode ?? undefined,
+      boxId: pendingShelf.value.boxId ?? undefined,
+      orgId: order.value?.orgId ?? undefined,
+      subInventoryCode: order.value?.subInventoryCode ?? undefined,
+    });
+    if (!stocked) {
+      showToast(t("picking.scanSession.item_not_on_shelf"));
       return false;
     }
+  }
+  const result = addScan(parsed, raw, source);
+  if (!result.ok) {
     showToast(t(`picking.scanSession.${result.message}`));
     return false;
   }
@@ -411,20 +429,31 @@ const boxPickEntries = computed<PickFromBoxEntry[]>(() => {
   }));
 });
 
+/** Shelf/box scan handling. In the require-* modes a shelf scan ONLY
+ *  sets/replaces the location banner (never opens the pick-from-box dialog);
+ *  in off mode it opens the dialog as a lookup shortcut. */
 function openBoxPick(rawValue: string): boolean {
-  if (matchBoxAllocations(rawValue).length === 0) {
-    // require-any: an unmatched non-label scan is a shelf scan — the operator
-    // is at a shelf this order has no allocations on, which is allowed.
-    if (shelfScanMode.value === "require-any") {
+  const matches = matchBoxAllocations(rawValue);
+  if (requireShelfScan.value) {
+    if (matches.length > 0) {
+      setPendingShelfFromMatch(rawValue);
+    } else if (shelfScanMode.value === "require-any") {
+      // require-any: an unmatched non-label scan is still a shelf scan — the
+      // operator is at a shelf this order has no allocations on, which is
+      // allowed; the confirm 409 (no_stock_at_location) is the guard.
       pendingShelf.value = { label: rawValue.trim(), shelfCode: rawValue.trim(), boxId: null };
-      showToast(t("picking.scanSession.shelfContext", { shelf: rawValue.trim() }));
-      playScanSuccess();
-      return true;
+    } else {
+      showToast(t("picking.scanSession.no_match"));
+      return false;
     }
+    showToast(t("picking.scanSession.shelfContext", { shelf: rawValue.trim() }));
+    playScanSuccess();
+    return true;
+  }
+  if (matches.length === 0) {
     showToast(t("picking.scanSession.no_match"));
     return false;
   }
-  if (requireShelfScan.value) setPendingShelfFromMatch(rawValue);
   boxPickId.value = rawValue.trim();
   return true;
 }
@@ -455,7 +484,6 @@ function queueCarton(rawValue: string): boolean {
  * dialog); anything else must be a part label for one of the box's items. */
 async function handleBoxPickScan(rawValue: string): Promise<boolean> {
   if (matchBoxAllocations(rawValue).length > 0) {
-    if (requireShelfScan.value) setPendingShelfFromMatch(rawValue);
     boxPickId.value = rawValue.trim();
     return true;
   }
@@ -572,7 +600,7 @@ async function captureOcr() {
 
 function onReviewConfirm(parsed: OcrInput) {
   if (!review.value) return;
-  handleParsed(parsed, review.value.raw, "ocr");
+  void handleParsed(parsed, review.value.raw, "ocr");
   reviewOpen.value = false;
   review.value = null;
 }
@@ -750,35 +778,29 @@ onUnmounted(() => window.removeEventListener("beforeunload", beforeUnload));
   margin-bottom: 1rem;
 }
 
-.scan-session__shelf-bar {
-  margin-bottom: 1rem;
-  font-size: 0.875rem;
-}
-
-.scan-session__shelf-chip {
-  display: inline-flex;
+.scan-session__shelf-banner {
+  display: flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: space-between;
+  gap: 1rem;
   background: #dbeafe;
   border: 1px solid #3b82f6;
-  border-radius: 9999px;
+  border-radius: 0.375rem;
   color: #1e40af;
-  font-weight: 600;
-  padding: 0.3rem 0.75rem;
-}
-
-.scan-session__shelf-clear {
-  border: none;
-  background: transparent;
-  color: inherit;
   font-size: 1rem;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
 }
 
-.scan-session__shelf-hint {
+.scan-session__shelf-banner--empty {
+  justify-content: center;
+  background: #fef3c7;
+  border-color: #f59e0b;
   color: #92400e;
+}
+
+.scan-session__shelf-banner-label {
+  font-weight: 700;
 }
 
 .scan-session__progress-row {

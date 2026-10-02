@@ -114,20 +114,24 @@
   Shelf-scan modes (flow config `pickingShelfScan`, spec
   `docs/superpowers/specs/2026-10-02-picking-shelf-scan-config-design.md`):
   `"off"` (default) = the behavior above. In `"require-match"` /
-  `"require-any"` one sticky shelf/box scan sets a clearable location context
-  (`pendingShelf` chip on the page — one scan per location visit, NOT one per
-  item); item-label scans are rejected with a "scan shelf first" toast while
-  it is empty, and every Confirm POST carries `shelfCode`/`boxId`. The backend
-  enforces the context on lot-sourced allocations (409
-  `shelf_scan_required`); require-match also requires the scanned location to
-  equal the allocation lot's (409 `shelf_mismatch`, and the queue's allocation
-  matching is pre-filtered to the scanned location client-side), while
-  require-any resolves the physically-scanned shelf's lot (order
-  org/sub-inventory scope, label batch fields must match, FIFO by date_code;
-  409 `no_stock_at_location`) and deducts/package-sources/ledgers that lot —
-  the original allocation is still reduced. OCR capture is disabled in the
-  require-* modes (an OCR label has no shelf context). Mode edited on the
-  admin flow-config page.
+  `"require-any"` one sticky shelf/box scan sets a location **banner above the
+  list** (current shelf/box + clear button — one scan per location visit, NOT
+  one per item, and NO pick-from-box dialog opens on a shelf scan in these
+  modes); item-label scans are rejected with a "scan shelf first" toast while
+  it is empty, and every Confirm POST carries `shelfCode`/`boxId`. Item
+  matching is the normal unfiltered picking flow in both modes — the
+  allocation candidates are NOT filtered by shelf. The backend enforces the
+  context on lot-sourced allocations (409 `shelf_scan_required`) and both
+  modes resolve+deduct the physically-scanned shelf's lot when it differs
+  from the allocation lot's (order org/sub-inventory scope, label batch
+  fields must match, FIFO by date_code; 409 `no_stock_at_location`) — package
+  source + PICK ledger point at that lot, the original allocation is still
+  reduced. The modes differ only in check strictness: require-match
+  pre-checks at scan time (cached `GET /picking-shelf-stock` — zero stock on
+  the pending shelf → "item not on this shelf" toast, scan dropped), while
+  require-any accepts the scan and lets the confirm 409 catch it. OCR capture
+  is disabled in the require-* modes (an OCR label has no shelf context).
+  Mode edited on the admin flow-config page.
   Launched from the picking
   detail page (the receiving order's picking tab is read-only and no longer
   launches it).

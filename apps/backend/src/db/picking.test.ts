@@ -18,6 +18,7 @@ import {
   createShippingBox,
   finishPickingOrder,
   getPickingOrderDetail,
+  getPickingShelfStock,
   listPickingOrderLogs,
   listPickingOrders,
   releaseWorkLock,
@@ -1778,24 +1779,32 @@ test("scan shelf-scan mode off: shelfCode/boxId fields are ignored", async () =>
   }
 });
 
-test("scan shelf-scan mode require-match: required, mismatch 409, match passes", async () => {
+test("scan shelf-scan mode require-match: required, resolves the scanned lot like require-any", async () => {
   await reseed(client);
   const { orderId, actorId } = await seededOrderAllocated();
   const itemId = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
   const alloc = await allocationOf(itemId);
+  // A second lot for the same part at a different shelf (the physical pick).
+  const otherLotId = randomUUID();
+  await client.db.execute(
+    sql`INSERT INTO inventory_lots (id, part_no, wcl_item_no, date_code, lot_code, coo, cow, shelf_code, org_id, sub_inventory_code, total_qty, allocated_qty, created_date, last_update_date)
+        VALUES (${otherLotId}, 'RK73H1JTTD1002F', 'RK73H1JTTD1002F', '2601', 'L2601X', 'JP', 'JP', 'A0102', 2, 'STORE1', 300, 0, now(), now())`
+  );
   _setPickingShelfScanForTests("require-match");
   try {
     const missing = await catchHttp(scanPickingItem(client.db, itemId, { actorId, allocationId: alloc.id, qty: 100 }));
     assert.equal(missing.status, 409);
     assert.equal(missing.message, "shelf_scan_required");
 
-    const wrong = await catchHttp(
-      scanPickingItem(client.db, itemId, { actorId, allocationId: alloc.id, qty: 100, shelfCode: "A0201" })
+    // no allocation-shelf comparison anymore: a part with no stock on the
+    // scanned shelf → 409 (the client pre-checks; this is the safety net)
+    const noStock = await catchHttp(
+      scanPickingItem(client.db, itemId, { actorId, allocationId: alloc.id, qty: 100, shelfCode: "A0103" })
     );
-    assert.equal(wrong.status, 409);
-    assert.equal(wrong.message, "shelf_mismatch");
+    assert.equal(noStock.status, 409);
+    assert.equal(noStock.message, "no_stock_at_location");
 
-    // correct shelf → normal deduction from the allocation's lot
+    // scanned shelf == the allocation's lot location → unchanged behavior
     await scanPickingItem(client.db, itemId, { actorId, allocationId: alloc.id, qty: 100, shelfCode: "A0101" });
     const lot = await queryGet<{ totalQty: number }>(
       client.db,
@@ -1804,12 +1813,54 @@ test("scan shelf-scan mode require-match: required, mismatch 409, match passes",
     assert.equal(lot!.totalQty, 900);
     assert.equal((await allocationOf(itemId)).qty, 900);
 
-    // the lot's box id also matches (sticky box scan)
-    await scanPickingItem(client.db, itemId, { actorId, allocationId: alloc.id, qty: 100, boxId: "BOX-H-20260701-0001" });
-    assert.equal((await allocationOf(itemId)).qty, 800);
+    // scanned shelf elsewhere → deducted there, exactly like require-any
+    const { packageIds } = await scanPickingItem(client.db, itemId, {
+      actorId,
+      allocationId: alloc.id,
+      qty: 200,
+      shelfCode: "A0102",
+    });
+    const pkg = await queryGet<{ sourceId: string }>(
+      client.db,
+      sql`SELECT source_id AS "sourceId" FROM picking_packages WHERE id = ${packageIds[0]}`
+    );
+    assert.equal(pkg!.sourceId, otherLotId);
+    const otherLot = await queryGet<{ totalQty: number }>(
+      client.db,
+      sql`SELECT total_qty AS "totalQty" FROM inventory_lots WHERE id = ${otherLotId}`
+    );
+    assert.equal(otherLot!.totalQty, 100);
+    assert.equal((await allocationOf(itemId)).qty, 700);
   } finally {
     _setPickingShelfScanForTests("off");
   }
+});
+
+test("getPickingShelfStock: stock of a part at a shelf/box with org scoping", async () => {
+  await reseed(client);
+  await seededOrderAllocated();
+  // the seeded lot: RK73H1JTTD1002F ×1000 at A0101 / BOX-H-20260701-0001 (org 2 / STORE1)
+  const byShelf = await getPickingShelfStock(client.db, { partNo: "RK73H1JTTD1002F", shelfCode: "A0101" });
+  assert.equal(byShelf.qty, 1000);
+  const byBox = await getPickingShelfStock(client.db, { wclItemNo: "RK73H1JTTD1002F", boxId: "BOX-H-20260701-0001" });
+  assert.equal(byBox.qty, 1000);
+  // scoped to the order's org/sub-inventory
+  const scoped = await getPickingShelfStock(client.db, {
+    partNo: "RK73H1JTTD1002F",
+    shelfCode: "A0101",
+    orgId: 2,
+    subInventoryCode: "STORE1",
+  });
+  assert.equal(scoped.qty, 1000);
+  // wrong location / wrong part / wrong org scope → 0
+  assert.equal((await getPickingShelfStock(client.db, { partNo: "RK73H1JTTD1002F", shelfCode: "A0103" })).qty, 0);
+  assert.equal((await getPickingShelfStock(client.db, { partNo: "NOPE-1", shelfCode: "A0101" })).qty, 0);
+  assert.equal((await getPickingShelfStock(client.db, { partNo: "RK73H1JTTD1002F", shelfCode: "A0101", orgId: 99 })).qty, 0);
+  // guards: no part / no location → 400
+  const noPart = await catchHttp(getPickingShelfStock(client.db, { shelfCode: "A0101" }));
+  assert.equal(noPart.status, 400);
+  const noLocation = await catchHttp(getPickingShelfStock(client.db, { partNo: "RK73H1JTTD1002F" }));
+  assert.equal(noLocation.status, 400);
 });
 
 test("scan shelf-scan mode require-any: deducts the scanned shelf's lot; 409s", async () => {

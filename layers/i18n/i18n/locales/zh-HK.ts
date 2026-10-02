@@ -270,7 +270,7 @@ export default {
           scanShelfFirst: "請先掃描貨架或箱號",
           shelfContext: "貨架：{shelf}",
           shelfClear: "清除貨架",
-          shelf_mismatch: "此零件並非分配於已掃描的貨架",
+          item_not_on_shelf: "此零件在已掃描的貨架上沒有存貨",
           ocrNotAllowed: "OCR 沒有貨架資料——請使用掃描器",
           invalid: "無法識別有效的料號和數量",
           reviewTitle: "確認掃描項目",
@@ -667,7 +667,6 @@ export default {
     scanned_qty_exceeds_allocation: "掃描數量超過分配數量",
     insufficient_lot_qty: "批次數量不足",
     shelf_scan_required: "請先掃描貨架或箱號",
-    shelf_mismatch: "已掃描的貨架/箱號與分配位置不符",
     no_stock_at_location: "已掃描位置沒有此零件的存貨",
     receiving_source_qty_not_available: "收貨單上的數量不再可用",
     allocation_has_no_source: "分配沒有來源",
@@ -1650,11 +1649,11 @@ export default {
         pickingSection: "執貨分配",
         allowDockStock: "允許分配收貨區存貨（上架前）",
         pickingShelfScan: "執貨時掃描貨架",
-        pickingShelfScanHint: "require-match：必須先掃描分配貨架/箱號才能掃描零件標籤；require-any：必須掃描貨架，但允許其他貨架（存貨從實際掃描的貨架扣減）。",
+        pickingShelfScanHint: "require-match：必須先掃描貨架/箱號，且零件在該貨架必須有存貨（掃描時檢查）；require-any：必須掃描貨架，接受任何零件（該貨架無存貨時確認會失敗）。兩者都從已掃描的貨架扣減存貨。",
         pickingShelfScanModes: {
           off: "關閉",
-          "require-match": "必須掃描分配貨架",
-          "require-any": "必須掃描貨架（任何貨架）"
+          "require-match": "必須掃描貨架（零件須有存貨）",
+          "require-any": "必須掃描貨架（任何零件）"
         },
         putAwaySection: "上架",
         autoCreateTasks: "確認收貨到達時自動建立上架任務",

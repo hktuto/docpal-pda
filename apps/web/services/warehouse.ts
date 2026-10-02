@@ -14,6 +14,7 @@ import type {
   PickingOrderDetail,
   PickingWorkLock,
   ScanPickingItemInput,
+  PickingShelfStockQuery,
   ShippingBoxUpdateInput,
   ReportPickingIssueEntry,
   ReportPickingIssuesResult,
@@ -70,6 +71,8 @@ export interface WarehouseService {
     itemId: string,
     input: ScanPickingItemInput
   ): Promise<{ packageIds: string[] }>;
+  // require-match scan-time presence check: stock of the part at the shelf.
+  getPickingShelfStock(query: PickingShelfStockQuery): Promise<{ qty: number }>;
   removeScannedPackage(packageId: string): Promise<void>;
   // Whole-box exact-match claim: reuse a shelf carton as the shipping box.
   claimShelfBox(orderId: string, shelfBoxId: string): Promise<{ shippingBoxId: string; packageIds: string[] }>;

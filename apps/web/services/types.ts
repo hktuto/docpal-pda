@@ -476,10 +476,22 @@ export interface ScanPickingItemInput {
   boxId?: string | null;
 }
 
+/** GET /picking-shelf-stock query — the require-match scan-time presence
+ *  check: stock of a part at the scanned shelf/box. orgId/subInventoryCode
+ *  come from the order detail and scope the lookup like the backend's
+ *  require-* lot resolver. */
+export interface PickingShelfStockQuery {
+  partNo?: string;
+  wclItemNo?: string;
+  shelfCode?: string;
+  boxId?: string;
+  orgId?: number | null;
+  subInventoryCode?: string | null;
+}
+
 /** PATCH /shipping-boxes/:id fields (weights in kg, decimals allowed). */
 export interface ShippingBoxUpdateInput {
-  boxSize?: string | null;
-  netWeightKg?: number | string | null;
+  boxSize?: string | null;  netWeightKg?: number | string | null;
   grossWeightKg?: number | string | null;
   destinationCountry?: string | null;
 }

@@ -12,6 +12,7 @@ import {
   createShippingBox,
   finishPickingOrder,
   getPickingOrderDetail,
+  getPickingShelfStock,
   listPickingOrders,
   releaseWorkLock,
   removePackageFromBox,
@@ -97,6 +98,26 @@ pickingRoute.post("/picking-orders/reorder", async (c) => {
 pickingRoute.get("/picking-orders/:id", async (c) => {
   const scope = await getUserScope(db, actorFrom(c).username);
   return c.json(await getPickingOrderDetail(db, c.req.param("id"), scope), 200);
+});
+
+// Shelf presence check (flow config pickingShelfScan require-match): stock of
+// a part at a shelf/box — the scan page calls it once per (shelf, part) and
+// rejects item labels with no stock on the pending shelf. Optional
+// orgId/subInventoryCode (from the order detail) scope the lookup like the
+// require-* lot resolver.
+pickingRoute.get("/picking-shelf-stock", async (c) => {
+  const orgId = Number(c.req.query("orgId"));
+  return c.json(
+    await getPickingShelfStock(db, {
+      partNo: c.req.query("partNo") || undefined,
+      wclItemNo: c.req.query("wclItemNo") || undefined,
+      shelfCode: c.req.query("shelfCode") || undefined,
+      boxId: c.req.query("boxId") || undefined,
+      orgId: Number.isInteger(orgId) ? orgId : undefined,
+      subInventoryCode: c.req.query("subInventoryCode") || undefined,
+    }),
+    200
+  );
 });
 
 // The one canonical scan-to-pick: consumes the allocation's source into

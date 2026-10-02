@@ -270,7 +270,7 @@ export default {
           scanShelfFirst: "请先扫描货架或箱号",
           shelfContext: "货架：{shelf}",
           shelfClear: "清除货架",
-          shelf_mismatch: "此零件并非分配于已扫描的货架",
+          item_not_on_shelf: "此零件在已扫描的货架上没有库存",
           ocrNotAllowed: "OCR 没有货架资料——请使用扫描器",
           invalid: "无法识别有效的料号和数量",
           reviewTitle: "确认扫描项目",
@@ -667,7 +667,6 @@ export default {
     scanned_qty_exceeds_allocation: "扫描数量超过分配数量",
     insufficient_lot_qty: "批次数量不足",
     shelf_scan_required: "请先扫描货架或箱号",
-    shelf_mismatch: "已扫描的货架/箱号与分配位置不符",
     no_stock_at_location: "已扫描位置没有此零件的库存",
     receiving_source_qty_not_available: "收货单上的数量不再可用",
     allocation_has_no_source: "分配没有来源",
@@ -1650,11 +1649,11 @@ export default {
         pickingSection: "拣货分配",
         allowDockStock: "允许分配收货区库存（上架前）",
         pickingShelfScan: "拣货时扫描货架",
-        pickingShelfScanHint: "require-match：必须先扫描分配货架/箱号才能扫描零件标签；require-any：必须扫描货架，但允许其他货架（库存从实际扫描的货架扣减）。",
+        pickingShelfScanHint: "require-match：必须先扫描货架/箱号，且零件在该货架必须有库存（扫描时检查）；require-any：必须扫描货架，接受任何零件（该货架无库存时确认会失败）。两者都从已扫描的货架扣减库存。",
         pickingShelfScanModes: {
           off: "关闭",
-          "require-match": "必须扫描分配货架",
-          "require-any": "必须扫描货架（任何货架）"
+          "require-match": "必须扫描货架（零件须有库存）",
+          "require-any": "必须扫描货架（任何零件）"
         },
         putAwaySection: "上架",
         autoCreateTasks: "确认收货到达时自动创建上架任务",
