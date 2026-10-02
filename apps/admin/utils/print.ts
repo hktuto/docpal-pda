@@ -5,7 +5,6 @@
  * Upstream API doc: docs/backend/print-service.md
  */
 import QRCode from "qrcode";
-import JsBarcode from "jsbarcode";
 /** One printer as returned by the print service's agent-printers list. */
 export interface PrinterInfo {
   serviceId: string;
@@ -38,50 +37,24 @@ export interface PrintJob {
   diagnostics?: string[];
 }
 
-// Shelf label stock: 70 x 37 mm at 300 dpi (same stock as the shelf-box
-// labels). The layout is a QR code on the left (encoding the shelf code, which
-// is what the PDA scans) and the shelf display name (falling back to the code)
-// plus the zone (when set) on the right.
-const SHELF_LABEL_W = 826;
-const SHELF_LABEL_H = 437;
+// Label stock: 70 x 37 mm at 300 dpi, shared by the shelf and shelf-box
+// labels. The layout is a QR code on the left (encoding the scannable code —
+// the shelf code or the box id, which is what the PDA scans) with a big text
+// line on the right and an optional smaller line below it.
+const LABEL_STOCK_W = 826;
+const LABEL_STOCK_H = 437;
 
-/** Render one shelf label to a PNG blob for /print/files. */
-export async function renderShelfLabelPng(
-  code: string,
-  zone?: string | null,
-  displayName?: string | null
-): Promise<Blob> {
-  const canvas = document.createElement("canvas");
-  canvas.width = SHELF_LABEL_W;
-  canvas.height = SHELF_LABEL_H;
-  const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, SHELF_LABEL_W, SHELF_LABEL_H);
+interface LabelCell {
+  /** Value encoded in the QR code (what the PDA scans). */
+  qr: string;
+  /** Big text line on the right of the QR. */
+  main: string;
+  /** Optional smaller line below the main text (e.g. the shelf zone). */
+  sub?: string | null;
+}
 
-  // QR code on the left, centered vertically.
-  const qrSize = 360;
-  const qr = new Image();
-  qr.src = await QRCode.toDataURL(code, { width: qrSize, margin: 1, errorCorrectionLevel: "M" });
-  await qr.decode();
-  ctx.drawImage(qr, 28, (SHELF_LABEL_H - qrSize) / 2, qrSize, qrSize);
-
-  // Text block on the right of the QR: display name (code as fallback) big,
-  // zone below it.
-  const textX = 416;
-  const textW = SHELF_LABEL_W - textX - 28;
-  const cx = textX + textW / 2;
-  ctx.textAlign = "center";
-  ctx.fillStyle = "#0f1720";
-  ctx.font = "700 112px ui-monospace, SFMono-Regular, Menlo, monospace";
-  ctx.fillText(displayName?.trim() || code, cx, 260, textW);
-  const z = zone?.trim();
-  if (z) {
-    ctx.fillStyle = "#4b5563";
-    ctx.font = "32px ui-monospace, SFMono-Regular, Menlo, monospace";
-    ctx.fillText(z, cx, 340, textW);
-  }
-
-  return await new Promise<Blob>((resolve, reject) =>
+function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise((resolve, reject) =>
     canvas.toBlob(
       (b) => (b ? resolve(b) : reject(new Error("canvas.toBlob returned null"))),
       "image/png"
@@ -89,19 +62,81 @@ export async function renderShelfLabelPng(
   );
 }
 
-// A4 batch sheet for multi-select shelf printing: 3 x 8 shelf labels per A4
-// page at 300 dpi (QR on the left, shelf display name + zone on the right per
-// cell, same content as the single shelf label).
+// Draw one label cell (the 70 x 37 mm design) at (x, y), scaled by `s`, into
+// an existing context. QR on the left, centered vertically; text block on the
+// right, vertically centered like the single-label design.
+async function drawLabelCell(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  s: number,
+  cell: LabelCell
+): Promise<void> {
+  const qrSize = 360 * s;
+  const qr = new Image();
+  qr.src = await QRCode.toDataURL(cell.qr, {
+    width: Math.max(1, Math.round(qrSize * 2)), // render sharp, draw scaled
+    margin: 1,
+    errorCorrectionLevel: "M",
+  });
+  await qr.decode();
+  ctx.drawImage(qr, x + 28 * s, y + (h - qrSize) / 2, qrSize, qrSize);
+
+  const textX = x + 416 * s;
+  const textW = w - 416 * s - 28 * s;
+  const cx = textX + textW / 2;
+  const topPad = (h - LABEL_STOCK_H * s) / 2;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = "#0f1720";
+  ctx.font = `700 ${Math.round(112 * s)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+  ctx.fillText(cell.main, cx, y + topPad + 260 * s, textW);
+  const sub = cell.sub?.trim();
+  if (sub) {
+    ctx.fillStyle = "#4b5563";
+    ctx.font = `${Math.round(32 * s)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+    ctx.fillText(sub, cx, y + topPad + 340 * s, textW);
+  }
+}
+
+/** Render one 70 x 37 mm label to a PNG blob for /print/files. */
+async function renderStockLabelPng(cell: LabelCell): Promise<Blob> {
+  const canvas = document.createElement("canvas");
+  canvas.width = LABEL_STOCK_W;
+  canvas.height = LABEL_STOCK_H;
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, LABEL_STOCK_W, LABEL_STOCK_H);
+  await drawLabelCell(ctx, 0, 0, LABEL_STOCK_W, LABEL_STOCK_H, 1, cell);
+  return canvasToPng(canvas);
+}
+
+/** Render one shelf label to a PNG blob for /print/files. */
+export function renderShelfLabelPng(
+  code: string,
+  zone?: string | null,
+  displayName?: string | null
+): Promise<Blob> {
+  return renderStockLabelPng({ qr: code, main: displayName?.trim() || code, sub: zone });
+}
+
+/** Render one shelf-box label to a PNG blob for /print/files. */
+export function renderShelfBoxLabelPng(boxId: string): Promise<Blob> {
+  return renderStockLabelPng({ qr: boxId, main: boxId });
+}
+
+// A4 batch sheet for multi-select label printing: 3 x 8 labels per A4 page at
+// 300 dpi (same cell content as the single labels, scaled to the grid).
 const A4_PAGE_W = 2480;
 const A4_PAGE_H = 3508;
 const BATCH_COLS = 3;
 const BATCH_ROWS = 8;
 export const SHELF_BATCH_CELLS_PER_PAGE = BATCH_COLS * BATCH_ROWS;
 
-/** Render one A4 page of shelf labels to a PNG blob for /print/files. */
-export async function renderShelfBatchPagePng(
-  cells: { code: string; zone?: string | null; displayName?: string | null }[]
-): Promise<Blob> {
+/** Render one A4 page of labels to a PNG blob for /print/files. */
+async function renderStockBatchPagePng(cells: LabelCell[]): Promise<Blob> {
   const canvas = document.createElement("canvas");
   canvas.width = A4_PAGE_W;
   canvas.height = A4_PAGE_H;
@@ -113,110 +148,31 @@ export async function renderShelfBatchPagePng(
   const gap = 47; // 4mm between cells
   const cellW = (A4_PAGE_W - 2 * margin - (BATCH_COLS - 1) * gap) / BATCH_COLS;
   const cellH = (A4_PAGE_H - 2 * margin - (BATCH_ROWS - 1) * gap) / BATCH_ROWS;
-  // Cell content mirrors the single shelf label (70 x 37 mm design), scaled
-  // to the cell: QR on the left, display name + zone on the right.
-  const s = cellW / 826;
+  const s = cellW / LABEL_STOCK_W;
 
   for (const [i, cell] of cells.entries()) {
     const col = i % BATCH_COLS;
     const row = Math.floor(i / BATCH_COLS);
     const x = margin + col * (cellW + gap);
     const y = margin + row * (cellH + gap);
-
-    const qrSize = 360 * s;
-    const qr = new Image();
-    qr.src = await QRCode.toDataURL(cell.code, {
-      width: Math.round(qrSize * 2), // render sharp, draw scaled
-      margin: 1,
-      errorCorrectionLevel: "M",
-    });
-    await qr.decode();
-
-    ctx.drawImage(qr, x + 28 * s, y + (cellH - qrSize) / 2, qrSize, qrSize);
-
-    const textX = x + 416 * s;
-    const textW = cellW - 416 * s - 28 * s;
-    const cx = textX + textW / 2;
-    const topPad = (cellH - 437 * s) / 2; // same vertical centering as the 70x37 design
-    ctx.textAlign = "center";
-    ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = "#0f1720";
-    ctx.font = `700 ${Math.round(112 * s)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
-    ctx.fillText(cell.displayName?.trim() || cell.code, cx, y + topPad + 260 * s, textW);
-    const zone = cell.zone?.trim();
-    if (zone) {
-      ctx.fillStyle = "#4b5563";
-      ctx.font = `${Math.round(32 * s)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
-      ctx.fillText(zone, cx, y + topPad + 340 * s, textW);
-    }
+    await drawLabelCell(ctx, x, y, cellW, cellH, s, cell);
   }
 
-  return await new Promise<Blob>((resolve, reject) =>
-    canvas.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error("canvas.toBlob returned null"))),
-      "image/png"
-    )
+  return canvasToPng(canvas);
+}
+
+/** Render one A4 page of shelf labels to a PNG blob for /print/files. */
+export function renderShelfBatchPagePng(
+  cells: { code: string; zone?: string | null; displayName?: string | null }[]
+): Promise<Blob> {
+  return renderStockBatchPagePng(
+    cells.map((c) => ({ qr: c.code, main: c.displayName?.trim() || c.code, sub: c.zone }))
   );
 }
 
-// Shelf-box label stock: 70 x 37 mm at 300 dpi. The layout is a QR code, then
-// the box id as text, then a Code 128 barcode — all carrying the same value
-// (the box id, which is what the PDA scans).
-const BOX_LABEL_W = 826;
-const BOX_LABEL_H = 437;
-
-/**
- * Render one shelf-box label to a PNG blob for /print/files (same route as
- * the user badges).
- */
-export async function renderShelfBoxLabelPng(boxId: string): Promise<Blob> {
-  const canvas = document.createElement("canvas");
-  canvas.width = BOX_LABEL_W;
-  canvas.height = BOX_LABEL_H;
-  const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, BOX_LABEL_W, BOX_LABEL_H);
-
-  // QR code, centered at the top.
-  const qrSize = 200;
-  const qr = new Image();
-  qr.src = await QRCode.toDataURL(boxId, { width: qrSize, margin: 1, errorCorrectionLevel: "M" });
-  await qr.decode();
-  ctx.drawImage(qr, (BOX_LABEL_W - qrSize) / 2, 18, qrSize, qrSize);
-
-  // The label: the box id, centered below the QR.
-  ctx.textAlign = "center";
-  ctx.fillStyle = "#0f1720";
-  ctx.font = "700 38px ui-monospace, SFMono-Regular, Menlo, monospace";
-  ctx.fillText(boxId, BOX_LABEL_W / 2, 272);
-
-  // Code 128 barcode of the same value, centered at the bottom.
-  const barcode = document.createElement("canvas");
-  JsBarcode(barcode, boxId, {
-    format: "CODE128",
-    displayValue: false,
-    margin: 0,
-    height: 84,
-    width: 2,
-  });
-  const maxW = BOX_LABEL_W - 48;
-  if (barcode.width > maxW) {
-    JsBarcode(barcode, boxId, {
-      format: "CODE128",
-      displayValue: false,
-      margin: 0,
-      height: 84,
-      width: (2 * maxW) / barcode.width,
-    });
-  }
-  ctx.drawImage(barcode, (BOX_LABEL_W - barcode.width) / 2, 298);
-
-  return await new Promise<Blob>((resolve, reject) =>
-    canvas.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error("canvas.toBlob returned null"))),
-      "image/png"
-    )
-  );
+/** Render one A4 page of shelf-box labels to a PNG blob for /print/files. */
+export function renderShelfBoxBatchPagePng(boxIds: string[]): Promise<Blob> {
+  return renderStockBatchPagePng(boxIds.map((id) => ({ qr: id, main: id })));
 }
 
 function apiBaseUrl(): string {

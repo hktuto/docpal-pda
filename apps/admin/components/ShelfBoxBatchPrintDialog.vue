@@ -1,22 +1,24 @@
 <script setup lang="ts">
-// Shelf-box label print dialog. The box label layout — QR code on the left
-// encoding the box id, box id text on the right (same layout as the shelf
-// labels) — is rendered to a PNG here and printed via /print/files, the same
-// route as the user badges and shelf labels. One print job per label; each
-// job is confirmed via waitForPrintJob before reporting success.
+// Batch A4 shelf-box label print: the selected box ids are laid out 3 x 8 per
+// A4 page (QR on the left encoding the box id, box id text on the right — the
+// same layout as the single box label and the shelf labels), each page
+// rendered to a PNG here and printed via /print/files — one print job per
+// page, each confirmed via waitForPrintJob before reporting success. The
+// printer picker lists the print service's agent printers; the chosen printer
+// is remembered in localStorage.
 import {
   listPrinters,
   parsePrinterKey,
   printFile,
   printerKey,
-  renderShelfBoxLabelPng,
+  renderShelfBoxBatchPagePng,
+  SHELF_BATCH_CELLS_PER_PAGE,
   waitForPrintJob,
   type PrinterInfo,
 } from "~/utils/print";
 
 const props = defineProps<{
-  /** One entry per label; `title` is only shown in the dialog's summary list. */
-  items: { title: string; boxId: string }[];
+  boxIds: string[];
 }>();
 const emit = defineEmits<{ close: [] }>();
 
@@ -36,14 +38,26 @@ const done = ref(false);
 // is not printable — /print/files needs the serviceId + deviceKey pair.
 const selectedPrinter = computed(() => parsePrinterKey(printerName.value.trim()));
 
-// Non-fatal: without the list the printer field stays free text.
+// One blob per A4 page; object URLs back the preview images.
+const pageBlobs: Blob[] = [];
+const previews = ref<string[]>([]);
+
 onMounted(async () => {
   try {
     printers.value = await listPrinters();
   } catch {
     printers.value = [];
   }
+  for (let i = 0; i < props.boxIds.length; i += SHELF_BATCH_CELLS_PER_PAGE) {
+    const png = await renderShelfBoxBatchPagePng(
+      props.boxIds.slice(i, i + SHELF_BATCH_CELLS_PER_PAGE)
+    );
+    pageBlobs.push(png);
+    previews.value.push(URL.createObjectURL(png));
+  }
 });
+
+onBeforeUnmount(() => previews.value.forEach((u) => URL.revokeObjectURL(u)));
 
 async function print() {
   const printer = selectedPrinter.value;
@@ -52,10 +66,9 @@ async function print() {
   error.value = "";
   done.value = false;
   try {
-    for (const [i, item] of props.items.entries()) {
-      progress.value = `${i + 1} / ${props.items.length}`;
-      const png = await renderShelfBoxLabelPng(item.boxId);
-      const job = await printFile(png, `box-label-${item.boxId}.png`, {
+    for (const [i, png] of pageBlobs.entries()) {
+      progress.value = `${i + 1} / ${pageBlobs.length}`;
+      const job = await printFile(png, `box-labels-page-${i + 1}.png`, {
         serviceId: printer.serviceId,
         deviceKey: printer.deviceKey,
         copies: Math.max(1, copies.value),
@@ -75,40 +88,40 @@ async function print() {
 
 <template>
   <div class="overlay" @mousedown="dlg.onMousedown" @click="dlg.onClick">
-    <div class="dialog">
-      <h2>{{ $t("admin.print.title", { count: items.length }) }}</h2>
-      <ul class="print-items">
-        <li v-for="(item, i) in items" :key="i">{{ item.title }}</li>
-      </ul>
+    <div class="dialog shelf-batch-dialog">
+      <h2>{{ $t("admin.print.batchTitle", { count: boxIds.length }) }}</h2>
+      <div class="shelf-sheet-preview">
+        <img v-for="(src, pi) in previews" :key="pi" :src="src" :alt="`page ${pi + 1}`" />
+      </div>
       <div class="form-row">
-        <label for="sb-printer">{{ $t("admin.print.printer") }}</label>
+        <label for="sbb-printer">{{ $t("admin.print.printer") }}</label>
         <input
-          id="sb-printer"
+          id="sbb-printer"
           v-model="printerName"
           type="text"
-          list="sb-printers"
+          list="sbbp-printers"
           autocomplete="off"
           data-1p-ignore
           data-lpignore="true"
           :placeholder="$t('admin.print.printerPlaceholder')"
         />
-        <datalist id="sb-printers">
+        <datalist id="sbbp-printers">
           <option v-for="p in printers" :key="printerKey(p)" :label="p.alias || p.name" :value="printerKey(p)" />
         </datalist>
       </div>
       <div class="form-row">
-        <label for="sb-copies">{{ $t("admin.print.copies") }}</label>
-        <input id="sb-copies" v-model.number="copies" type="number" min="1" />
+        <label for="sbbp-copies">{{ $t("admin.print.copies") }}</label>
+        <input id="sbbp-copies" v-model.number="copies" type="number" min="1" />
       </div>
       <div v-if="error" class="error-banner">{{ error }}</div>
       <div v-if="done" class="success-banner">
-        {{ $t("admin.print.success", { count: items.length }) }}
+        {{ $t("admin.print.success", { count: boxIds.length }) }}
       </div>
       <div class="dialog-actions">
         <button class="btn" :disabled="printing" @click="emit('close')">
           {{ $t("admin.common.close") }}
         </button>
-        <button class="btn btn-primary" :disabled="!selectedPrinter || printing" @click="print">
+        <button class="btn btn-primary" :disabled="!selectedPrinter || !pageBlobs.length || printing" @click="print">
           {{ printing ? $t("admin.print.printing", { progress }) : $t("admin.print.print") }}
         </button>
       </div>
@@ -117,13 +130,25 @@ async function print() {
 </template>
 
 <style scoped>
-.print-items {
-  margin: 0 0 0.875rem;
-  padding-left: 1.125rem;
-  max-height: 8.75rem;
+.shelf-batch-dialog {
+  width: min(47.5rem, 100%);
+}
+.shelf-sheet-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 0.875rem;
+  padding: 1rem;
+  max-height: 50vh;
   overflow-y: auto;
-  font-size: 0.8125rem;
-  color: #374151;
+  background: #e5e7eb;
+  border-radius: 0.375rem;
+}
+.shelf-sheet-preview img {
+  display: block;
+  width: 100%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 .success-banner {
   padding: 0.5rem 0.75rem;

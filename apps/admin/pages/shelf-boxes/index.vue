@@ -42,29 +42,40 @@ const pageSize = computed({
 });
 const total = computed(() => boxes.value.length);
 
-// Multi-select for label printing (checkbox column + "Print selected").
+// Multi-select for label printing (checkbox column + "Print selected" /
+// "Print all"): the single-label dialog prints one 70 x 37 mm label per box,
+// the batch dialog lays the same labels out 3 x 8 per A4 page.
 const selected = ref<Set<string>>(new Set());
 const selectedBoxes = computed(() => boxes.value.filter((b) => selected.value.has(b.id)));
 
 const printItems = ref<{ title: string; boxId: string }[] | null>(null);
+const batchBoxIds = ref<string[] | null>(null);
 
 function printOne(b: any) {
   printItems.value = [{ title: b.id.slice(0, 8), boxId: b.id }];
 }
 
 function printSelectedBoxes() {
-  printItems.value = selectedBoxes.value.map((b) => ({
-    title: b.id.slice(0, 8),
-    boxId: b.id,
-  }));
+  batchBoxIds.value = selectedBoxes.value.map((b) => b.id);
   selected.value = new Set();
+}
+
+function printAllBoxes() {
+  batchBoxIds.value = boxes.value.map((b) => b.id);
 }
 
 const statuses = ["open", "closed", "verified"];
 const statusOptions = statuses.map((s) => ({ value: s, label: s }));
 
 const showNew = ref(false);
-const newForm = reactive({ shelfCode: "", orgId: "", subInventoryCode: "", status: "open" });
+const newForm = reactive({
+  shelfCode: "",
+  orgId: "",
+  subInventoryCode: "",
+  status: "open",
+  qty: 1,
+  createAndPrint: false,
+});
 const newError = ref("");
 
 const editing = ref<any | null>(null);
@@ -93,6 +104,8 @@ function openNew() {
   newForm.orgId = "";
   newForm.subInventoryCode = "";
   newForm.status = "open";
+  newForm.qty = 1;
+  newForm.createAndPrint = false;
   newError.value = "";
   showNew.value = true;
 }
@@ -107,17 +120,38 @@ function pairBody(form: { orgId: string; subInventoryCode: string }, body: Recor
   if (form.subInventoryCode.trim() !== "") body.subInventoryCode = form.subInventoryCode.trim();
 }
 
+// Batch create: the backend generates one BOX-H-<date>-<seq> id per POST, so
+// creating N boxes is N sequential POSTs with the same field values. With
+// "create and print" on, the new box ids go straight into a print dialog
+// (single label for one box, A4 batch sheets for several).
 async function createBox() {
   newError.value = "";
+  const qty = Math.max(1, Math.floor(Number(newForm.qty) || 1));
+  const body: Record<string, unknown> = { status: newForm.status };
+  if (newForm.shelfCode.trim()) body.shelfCode = newForm.shelfCode.trim();
   try {
-    const body: Record<string, unknown> = { status: newForm.status };
-    if (newForm.shelfCode.trim()) body.shelfCode = newForm.shelfCode.trim();
     pairBody(newForm, body);
-    await api.post("/admin/shelf-boxes", body);
-    showNew.value = false;
-    await load();
   } catch (e: any) {
     newError.value = e.message;
+    return;
+  }
+  const created: string[] = [];
+  try {
+    for (let i = 0; i < qty; i++) {
+      const row = await api.post("/admin/shelf-boxes", body);
+      created.push(row.id);
+    }
+    showNew.value = false;
+    await load();
+    if (newForm.createAndPrint) {
+      if (created.length === 1) printItems.value = [{ title: created[0], boxId: created[0] }];
+      else batchBoxIds.value = created;
+    }
+  } catch (e: any) {
+    newError.value = created.length
+      ? t("admin.pages.shelfBoxes.createPartial", { count: created.length, message: e.message })
+      : e.message;
+    await load();
   }
 }
 
@@ -160,8 +194,9 @@ async function remove(row: any) {
   }
 }
 
-// Download the same label the print dialog produces (QR + box id + barcode)
-// as a PNG, without going through the print service.
+// Download the same label the print dialog produces (QR on the left encoding
+// the box id, box id text on the right) as a PNG, without going through the
+// print service.
 async function downloadLabel(row: any) {
   error.value = "";
   try {
@@ -185,6 +220,9 @@ onMounted(load);
     <div class="page-head">
       <h1>{{ $t("admin.pages.shelfBoxes.title") }}</h1>
       <div class="head-actions">
+        <button class="btn" :disabled="!boxes.length" @click="printAllBoxes">
+          {{ $t("admin.print.printAll", { count: boxes.length }) }}
+        </button>
         <button v-if="selected.size" class="btn btn-primary" @click="printSelectedBoxes">
           {{ $t("admin.print.printSelected", { count: selected.size }) }}
         </button>
@@ -243,6 +281,15 @@ onMounted(load);
               :show-all="false"
             />
           </div>
+          <div class="form-row">
+            <label for="nb-qty">{{ $t("admin.pages.shelfBoxes.qty") }}</label>
+            <input id="nb-qty" v-model.number="newForm.qty" type="number" min="1" step="1" />
+            <div class="hint">{{ $t("admin.pages.shelfBoxes.qtyHint") }}</div>
+          </div>
+          <div class="form-row">
+            <label for="nb-print">{{ $t("admin.pages.shelfBoxes.createAndPrint") }}</label>
+            <input id="nb-print" v-model="newForm.createAndPrint" type="checkbox" class="bool-input" />
+          </div>
           <div class="dialog-actions">
             <button type="button" class="btn" @click="showNew = false">{{ $t("admin.common.cancel") }}</button>
             <button type="submit" class="btn btn-primary">{{ $t("admin.common.create") }}</button>
@@ -291,5 +338,6 @@ onMounted(load);
     </div>
 
     <ShelfBoxPrintDialog v-if="printItems" :items="printItems" @close="printItems = null" />
+    <ShelfBoxBatchPrintDialog v-if="batchBoxIds" :box-ids="batchBoxIds" @close="batchBoxIds = null" />
   </div>
 </template>
