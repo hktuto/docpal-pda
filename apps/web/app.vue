@@ -12,6 +12,11 @@ import { Capacitor } from "@capacitor/core";
 
 const { start: startServerHealth } = useServerHealth();
 
+// Order-link QR scans (admin shipper / picking-list Excel) navigate globally,
+// from every page — including home and the order lists, which register no
+// page-level scanner composable.
+useOrderScanNav();
+
 // Backend reachability watchdog: drives the global maintenance overlay.
 // Skipped on native until a backend is chosen (first boot shows the /server
 // picker; pinging the fallback apiBaseUrl could raise a false overlay over it).

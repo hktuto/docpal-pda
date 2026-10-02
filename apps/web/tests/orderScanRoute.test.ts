@@ -6,12 +6,12 @@ describe('resolveOrderScanRoute', () => {
     expect(resolveOrderScanRoute('warehouse://receiving/abc-123')).toBe('/receiving/abc-123');
   });
 
-  it('resolves a picking order link', () => {
-    expect(resolveOrderScanRoute('warehouse://picking/def-456')).toBe('/picking/def-456');
+  it('resolves a picking order link to the scan session', () => {
+    expect(resolveOrderScanRoute('warehouse://picking/def-456')).toBe('/picking/scan/def-456');
   });
 
   it('trims surrounding whitespace from the scanned value', () => {
-    expect(resolveOrderScanRoute('  warehouse://picking/def-456\n')).toBe('/picking/def-456');
+    expect(resolveOrderScanRoute('  warehouse://picking/def-456\n')).toBe('/picking/scan/def-456');
   });
 
   it('returns null for a normal part / label scan', () => {

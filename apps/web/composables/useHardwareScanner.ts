@@ -1,5 +1,4 @@
 import { onMounted, onUnmounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
 import type { PluginListenerHandle } from '@capacitor/core';
 import { ScannerBroadcast } from './useScannerBroadcast';
 import { playScanError, playScanSuccess } from '~/utils/scanBeep';
@@ -107,21 +106,24 @@ export function useHardwareScanner(options: UseHardwareScannerOptions) {
     console.log(`[SCAN-TIME] ${source}:`, value);
     const start = performance.now();
     let ok = true;
+    // Order-link QR (admin shipper / picking-list Excel): the global
+    // useOrderScanNav listener (app.vue) navigates and beeps — skip the page
+    // handler (and the beep) so the link never lands in onScan as a bogus
+    // part scan.
+    let orderLink = false;
     try {
-      // Order-link QR (admin shipper / picking-list Excel): navigate to the
-      // order and skip the page handler entirely.
-      const orderPath = resolveOrderScanRoute(value);
-      if (orderPath) {
-        await useRouter().push(orderPath);
-      } else {
+      if (resolveOrderScanRoute(value) === null) {
         ok = (await options.onScan(value)) !== false;
+      } else {
+        orderLink = true;
       }
     } catch (e) {
       ok = false;
+      orderLink = false;
       console.error('[SCAN] onScan handler threw:', e);
     }
-    if (ok) playScanSuccess();
-    else playScanError();
+    if (ok && !orderLink) playScanSuccess();
+    else if (!ok) playScanError();
     console.log('[SCAN-TIME] onScan done in', (performance.now() - start).toFixed(1), 'ms');
   }
 

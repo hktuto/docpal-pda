@@ -390,10 +390,13 @@
   `RectangleDetection.scanLabel()` path is used in some camera flows but
   not all.
 - The admin picking-list xlsx embeds an order-link QR
-  (`warehouse://picking/<id>`); scanning it on the PDA opens this order. It
-  must be scanned from a page without a symbology whitelist (home / picking
-  list) — the scan page restricts the decoder to the item brands' barcode
-  types, which may exclude QR.
+  (`warehouse://picking/<id>`); scanning it on the PDA opens the order's
+  scan session directly (`/picking/scan/<id>`). Navigation is global —
+  `useOrderScanNav` mounted in `app.vue` handles it from every page; the
+  page-level `useHardwareScanner` only skips the value in its page handler.
+  It must be scanned from a page without a symbology whitelist (home /
+  picking list) — the scan page restricts the decoder to the item brands'
+  barcode types, which may exclude QR.
 - Matching depends on normalized text and may require manual review.
 
 ## Related specs/plans

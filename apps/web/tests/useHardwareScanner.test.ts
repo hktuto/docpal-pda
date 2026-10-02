@@ -20,11 +20,6 @@ vi.mock('../composables/useScannerBroadcast', () => ({
   ScannerBroadcast: { addListener: addListenerMock },
 }));
 
-const pushMock = vi.fn();
-vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: pushMock }),
-}));
-
 const { useHardwareScanner } = await import('../composables/useHardwareScanner');
 
 describe('useHardwareScanner', () => {
@@ -40,7 +35,6 @@ describe('useHardwareScanner', () => {
     registeredHandler = null;
     scanListeners.length = 0;
     addListenerMock.mockClear();
-    pushMock.mockClear();
     fakeWindow = {
       addEventListener: vi.fn((type: string, listener: EventListenerOrEventListenerObject) => {
         if (type === 'keydown' && typeof listener === 'function') {
@@ -116,19 +110,17 @@ describe('useHardwareScanner', () => {
     expect(handler).toHaveBeenCalledWith('BC123');
   });
 
-  it('navigates to the order and skips onScan when an order-link QR is scanned', async () => {
+  it('skips onScan when an order-link QR is scanned (global nav handles it)', async () => {
     useHardwareScanner({ onScan: handler });
     broadcast('warehouse://picking/abc-123');
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(pushMock).toHaveBeenCalledWith('/picking/abc-123');
     expect(handler).not.toHaveBeenCalled();
   });
 
-  it('passes non-order-link scans to onScan without navigating', async () => {
+  it('passes non-order-link scans to onScan', async () => {
     useHardwareScanner({ onScan: handler });
     broadcast('RK73H1JTTD1002F');
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(pushMock).not.toHaveBeenCalled();
     expect(handler).toHaveBeenCalledWith('RK73H1JTTD1002F');
   });
 

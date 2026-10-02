@@ -219,9 +219,10 @@
 - Allocation runs are best-effort: a failure never rolls back the committed
   write.
 - The admin shipper xlsx embeds an order-link QR (`warehouse://receiving/<id>`);
-  scanning it on the PDA opens this order. It must be scanned from a page
-  without a symbology whitelist (home / receiving list) — this page restricts
-  the decoder to the supplier's barcode types, which may exclude QR.
+  scanning it on the PDA opens this order (global `useOrderScanNav` in
+  `app.vue`). It must be scanned from a page without a symbology whitelist
+  (home / receiving list) — this page restricts the decoder to the supplier's
+  barcode types, which may exclude QR.
 
 ## Related specs/plans
 

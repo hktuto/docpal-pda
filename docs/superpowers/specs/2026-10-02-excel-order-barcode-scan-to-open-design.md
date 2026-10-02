@@ -39,24 +39,35 @@ order page.
 
 `utils/orderScanRoute.ts` — `resolveOrderScanRoute(value)` trims the scan,
 requires the `warehouse://` prefix, a kind of `receiving`/`picking`, and a
-single non-empty id path segment; returns `/receiving/<id>` / `/picking/<id>`
-or `null`.
+single non-empty id path segment. Picking links resolve to the scan
+session `/picking/scan/<id>` (it acquires the work lock on mount, so the
+operator lands straight on the scan screen); receiving links resolve to
+the order detail `/receiving/<id>`. Anything else returns `null`.
 
-`composables/useHardwareScanner.ts` — the interception lives in `deliver()`,
-before the page's `onScan` runs, so it covers every page and both scan
-transport paths (broadcast + keyboard wedge). On a match it
-`useRouter().push()`es and skips the page handler (success beep). Normal
-scans are unaffected — the prefix cannot collide with part numbers or label
-payloads.
+Navigation lives in a **global interceptor, `composables/useOrderScanNav.ts`,
+mounted once in `app.vue`**, so an order QR works from every page — home
+and the order lists register no page-level scanner composable. It listens
+on both transports: the scanner-broadcast event, and a keyboard-wedge
+buffer that only swallows keystrokes while they can still form an order
+link (normal typing and part scans pass through untouched). The router
+instance is captured in `app.vue`'s setup — resolving it at event time
+throws in Nuxt, which is why the first implementation silently did
+nothing. It skips navigation while a scan-fill input is focused (the
+scan becomes field text) and ignores redundant-navigation rejections.
+
+`composables/useHardwareScanner.ts` keeps only a **skip-guard** in
+`deliver()`: an order-link value never reaches the page's `onScan` (so it
+isn't rejected as a bogus part scan) and plays no beep — the global
+listener navigates and beeps once.
 
 ## Known limitation
 
 Pages that apply the scanner symbology whitelist (`useSupplierSymbologyScope`
 on receiving/put-away detail + stock-search, `useBrandSymbologyScope` on the
 picking scan page) restrict the hardware decoder to supplier barcode types;
-QR may be disabled there. Scan the order QR from the home page or the order
-list pages, which apply no restriction. Device-side limitation — no code
-change.
+QR may be disabled there. The global order-link interceptor skips navigation
+while a form input is focused, so scan the order QR from a neutral page
+(home, order lists). Device-side limitation — no code change.
 
 ## Out of scope
 
