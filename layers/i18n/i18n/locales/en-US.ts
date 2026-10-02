@@ -242,7 +242,7 @@ export default {
     scanSession: {
           title: "Scan — {orderNo}",
           back: "Back",
-          progress: "Required {required} · Scanned {scanned} · Queued {queued}",
+          progress: "Required {required} · Scanned {scanned}",
           emptyQueue: "No scans yet — scan a QR code or capture a label with OCR.",
           colPart: "Part",
           colQty: "Qty",

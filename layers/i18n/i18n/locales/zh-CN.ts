@@ -242,7 +242,7 @@ export default {
     scanSession: {
           title: "扫码 — {orderNo}",
           back: "返回",
-          progress: "需求 {required} · 已扫 {scanned} · 待确认 {queued}",
+          progress: "需求 {required} · 已扫 {scanned}",
           emptyQueue: "还没有扫描记录——请扫描二维码或用 OCR 拍照。",
           colPart: "料号",
           colQty: "数量",

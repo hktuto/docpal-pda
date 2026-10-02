@@ -332,9 +332,9 @@ function openSettings() {
 
 .app-header__menu-info {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 0.75rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
   padding: 0.35rem 0.625rem;
   font-size: 0.8125rem;
   color: var(--text);
@@ -350,7 +350,7 @@ function openSettings() {
 
 .app-header__menu-info-value {
   min-width: 0;
-  text-align: right;
+  text-align: left;
   word-break: break-word;
 }
 

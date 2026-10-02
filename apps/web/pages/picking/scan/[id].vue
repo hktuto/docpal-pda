@@ -40,9 +40,8 @@
             </span>
             <span class="scan-session__counts">
               {{ $t('picking.scanSession.progress', {
-                required: group.required,
-                scanned: group.scanned,
-                queued: group.queued,
+                required: formatCompactQty(group.required),
+                scanned: formatCompactQty(group.scanned),
               }) }}
             </span>
           </div>
@@ -150,6 +149,7 @@ import PickFromBoxDialog, { type PickFromBoxEntry } from "~/components/picking/P
 import ScanMultiItemModal from "~/components/ScanMultiItemModal.vue";
 import { normalize, type OcrInput } from "~/composables/useMockOcr";
 import { normalizePartNo } from "~/utils/text";
+import { formatCompactQty } from "~/utils/formatNumber";
 import type { PickingOrderDetail } from "~/services/types";
 
 definePageMeta({ title: "meta.pickingScan", props: { noPadding: true } });
@@ -174,7 +174,7 @@ const ocrCapturing = ref(false);
 const completed = ref(false);
 
 const orderItems = computed(() => order.value?.items ?? []);
-const { rows, queuedQtyByItem, addScan, matchBoxAllocations, matchCartonAllocations, addCartonScan, allocationRemaining, addAllocationScan, removeRow, reresolveQueued, applyAll } = usePickingScanQueue(orderItems);
+const { rows, addScan, matchBoxAllocations, matchCartonAllocations, addCartonScan, allocationRemaining, addAllocationScan, removeRow, reresolveQueued, applyAll } = usePickingScanQueue(orderItems);
 const queuedCount = computed(() => rows.value.filter((r) => r.status === "queued").length);
 
 // The table aggregates scans of the same part + batch fields (lot/date/coo/
@@ -267,9 +267,8 @@ function joinDistinct(values: (number | string | null | undefined)[]): string {
 }
 
 /** Progress rows: order lines merged by part — one row per part no with the
- *  required/scanned/queued totals across its lines (a part often spans
- *  several upstream lines, and one scanned package may cover more than one
- *  of them). */
+ *  required/scanned totals across its lines (a part often spans several
+ *  upstream lines, and one scanned package may cover more than one of them). */
 const partGroups = computed(() => {
   const groups = new Map<string, OrderItem[]>();
   for (const item of orderItems.value) {
@@ -285,7 +284,6 @@ const partGroups = computed(() => {
     shipments: joinDistinct(items.map((i) => i.shipmentNumber)),
     required: items.reduce((sum, i) => sum + i.qty, 0),
     scanned: items.reduce((sum, i) => sum + serverScannedQty(i), 0),
-    queued: items.reduce((sum, i) => sum + (queuedQtyByItem[i.id] ?? 0), 0),
     sources: allocationSources(items),
     warnings: allocationWarnings(items),
   }));

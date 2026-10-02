@@ -242,7 +242,7 @@ export default {
     scanSession: {
           title: "掃碼 — {orderNo}",
           back: "返回",
-          progress: "需求 {required} · 已掃 {scanned} · 待確認 {queued}",
+          progress: "需求 {required} · 已掃 {scanned}",
           emptyQueue: "尚未有掃描記錄——請掃描二維碼或用 OCR 拍攝標籤。",
           colPart: "料號",
           colQty: "數量",
