@@ -55,6 +55,20 @@ export function restoreScannerSymbologies(): void {
 }
 
 /**
+ * Warehouse shelf/box labels are QR codes. Screens that need shelf scans
+ * (picking scan session, put-away) always leave these symbologies enabled on
+ * the decoder — label CONTENT validation is software-side, so allowing the
+ * decoder to read QR does not weaken the supplier-label whitelist.
+ */
+export const SHELF_CODE_SYMBOLOGIES: readonly string[] = ["QR CODE"];
+
+/** Union a supplier whitelist with the shelf-code symbologies (null passes through). */
+export function withShelfSymbologies(whitelist: string[] | null): string[] | null {
+  if (!whitelist) return whitelist;
+  return [...new Set([...whitelist, ...SHELF_CODE_SYMBOLOGIES])];
+}
+
+/**
  * Union of the barcode-type whitelists of the supplier profiles covering the
  * given brands (parts.brand). Returns null — no restriction — when the brand
  * list is empty or ANY brand has no whitelisted profile (its labels'
@@ -80,15 +94,18 @@ export function brandWhitelistUnion(
  * Restrict the hardware decoder to the union whitelist of the given brands
  * (e.g. a picking order's item brands) while the calling screen is mounted.
  * Unmounting after a restriction was applied restores the full symbology set.
+ * `withShelfCodes` additionally keeps the shelf-code symbologies decodable
+ * (screens that must scan shelf/box QR labels).
  */
-export function useBrandSymbologyScope(brands: Ref<string[]>) {
+export function useBrandSymbologyScope(brands: Ref<string[]>, opts?: { withShelfCodes?: boolean }) {
   const warehouse = useWarehouse();
   let applied = false;
 
   async function applyFor(list: string[]): Promise<void> {
-    const whitelist = list.length
+    let whitelist = list.length
       ? brandWhitelistUnion(await getCachedSupplierQrTemplates(warehouse), list)
       : null;
+    if (whitelist && opts?.withShelfCodes) whitelist = withShelfSymbologies(whitelist);
     if (whitelist) {
       await ScannerConfig.setSymbologies({ enabled: whitelist });
       applied = true;
@@ -112,17 +129,22 @@ export function useBrandSymbologyScope(brands: Ref<string[]>) {
  * Restrict the hardware decoder to the supplier profile's barcode-type
  * whitelist while the calling screen is mounted. Suppliers without a
  * whitelist leave the device untouched; unmounting after a restriction was
- * applied restores the full symbology set.
+ * applied restores the full symbology set. `withShelfCodes` additionally
+ * keeps the shelf-code symbologies decodable (screens that must scan
+ * shelf/box QR labels).
  */
-export function useSupplierSymbologyScope(supplierCode: Ref<string | undefined>) {
+export function useSupplierSymbologyScope(supplierCode: Ref<string | undefined>, opts?: { withShelfCodes?: boolean }) {
   const warehouse = useWarehouse();
   let applied = false;
 
   async function applyFor(code: string | undefined): Promise<void> {
     const templates = await getCachedSupplierQrTemplates(warehouse);
-    const whitelist = code
+    let whitelist = code
       ? templates.find((t) => t.code === code)?.barcodeTypes
       : null;
+    if (whitelist && whitelist.length > 0 && opts?.withShelfCodes) {
+      whitelist = withShelfSymbologies(whitelist);
+    }
     if (whitelist && whitelist.length > 0) {
       await ScannerConfig.setSymbologies({ enabled: [...whitelist] });
       applied = true;

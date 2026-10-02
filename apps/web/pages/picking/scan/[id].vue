@@ -260,8 +260,10 @@ const orderBrands = computed(() => [
   ...new Set(orderItems.value.map((i) => i.brand).filter((b): b is string => !!b)),
 ]);
 // Restrict the hardware decoder to the order brands' barcode-type whitelist
-// (e.g. KOA → PDF417) while this page is open; restored on leave.
-useBrandSymbologyScope(orderBrands);
+// (e.g. KOA → PDF417) while this page is open; restored on leave. Shelf/box
+// QR labels stay decodable — the scan session matches them for the
+// pick-from-box dialog and the shelf-scan modes.
+useBrandSymbologyScope(orderBrands, { withShelfCodes: true });
 
 // OCR review state: a single parsed record opens the confirm form; a label
 // that parses into 2+ item rows opens the multi-item table instead.

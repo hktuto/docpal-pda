@@ -9,7 +9,7 @@ vi.mock('vue', () => ({
   onUnmounted: () => {},
 }));
 
-const { brandWhitelistUnion } = await import('~/composables/useScannerConfig');
+const { brandWhitelistUnion, withShelfSymbologies } = await import('~/composables/useScannerConfig');
 
 const templates = [
   { code: '32', brands: ['KOA'], barcodeTypes: ['PDF417'] },
@@ -40,5 +40,19 @@ describe('brandWhitelistUnion', () => {
 
   it('returns null for an empty brand list', () => {
     expect(brandWhitelistUnion(templates, [])).toBeNull();
+  });
+});
+
+describe('withShelfSymbologies', () => {
+  it('unions the shelf-code symbologies into a whitelist missing them', () => {
+    expect(withShelfSymbologies(['PDF417'])).toEqual(['PDF417', 'QR CODE']);
+  });
+
+  it('leaves a whitelist that already has them unchanged (deduped)', () => {
+    expect(withShelfSymbologies(['QR CODE'])).toEqual(['QR CODE']);
+  });
+
+  it('passes null (no restriction) through untouched', () => {
+    expect(withShelfSymbologies(null)).toBeNull();
   });
 });

@@ -42,8 +42,10 @@
   (`confirmSingleMatch: true`); a multi-item (carton) label pops the shared
   `ScanMultiItemModal` table and rows are applied one by one.
 - Scanner symbology whitelist: while the detail page is open, the hardware
-  decoder is restricted to the supplier profile's `barcode_types` (when set);
-  restored on page leave (`useSupplierSymbologyScope`, xcheng/Movfast only).
+  decoder is restricted to the supplier profile's `barcode_types` (when set),
+  but the shelf/box QR symbologies always stay enabled — shelf scanning is
+  core to this flow (`useSupplierSymbologyScope(..., { withShelfCodes: true })`,
+  xcheng/Movfast only); restored on page leave.
 - Assign staging scans into shelf boxes (one box per shelf), add-all-unboxed,
   remove-from-box, and remove scanned pieces.
 - Scan a physical box QR to create a box: the "Scan box" button opens a
