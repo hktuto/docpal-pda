@@ -1,4 +1,3 @@
-import { normalize, normalizeCode } from './useMockOcr';
 import { useAuth } from './useAuth';
 import { useWarehouse } from './useWarehouse';
 import { I18nError } from '~/composables/i18nError';
@@ -8,7 +7,7 @@ import type {
   MeasuringPackage,
 } from '~/services/types';
 import { rawCode, normalizePartNo } from '~/utils/text';
-import { matchLabelPackages } from '~/utils/measuringLabelMatch';
+import { matchAggregatePackages } from '~/utils/measuringAggregateMatch';
 
 export type ScanTask = 'picking' | 'put-away' | 'measuring';
 
@@ -27,7 +26,7 @@ export async function runScanMatcher(
       return m.matchPutAway(ctx.receivingOrderId, ctx.receivingItem, parsed, ctx.shelfBoxId);
     case 'measuring':
       if (!ctx.packages) return m.error('missing_box_packages');
-      return m.matchMeasuring(ctx.packages, ctx.targetPackageId, parsed, ctx.flow, ctx.rawLabel);
+      return m.matchMeasuring(ctx.packages, ctx.targetPackageId, parsed, ctx.flow);
     default:
       return m.error('unknown_scan_task');
   }
@@ -63,9 +62,6 @@ export interface ScanTaskContext {
   // measuring vs verify pass — decides which per-package flag skips a row
   // (`verified` in measuring, `verifyVerified` in verify); default 'measuring'
   flow?: 'measuring' | 'verify';
-  // measuring/verify: raw hardware-scan string, used by the label pass in
-  // matchMeasuring (camera/OCR scans have no raw string → qty match only)
-  rawLabel?: string;
   // when true, even a single match opens the review dialog instead of auto-applying
   confirmSingleMatch?: boolean;
 }
@@ -78,10 +74,8 @@ export interface ScanMatchRecord {
 export type ScanMatchResult =
   | { type: 'single'; record: unknown; apply: () => Promise<void> }
   | { type: 'multiple'; records: ScanMatchRecord[] }
-  // measuring/verify label pass: one raw label matched several portion rows —
-  // apply verifies them all (verifyPackage per package)
-  | { type: 'label'; packages: MeasuringPackage[]; apply: () => Promise<void> }
-  // measuring/verify label pass: every package carrying the label is verified
+  // measuring/verify: the scan matched packages that are already fully
+  // re-scanned (rescannedQty >= qty)
   | { type: 'already-verified'; count: number }
   | { type: 'none' }
   | { type: 'error'; message: string };
@@ -89,7 +83,7 @@ export type ScanMatchResult =
 export interface ScanMatchers {
   matchPicking(allocation: PickingAllocationRef, pickingItem: PickingItemRef, parsed: OcrInput): Promise<ScanMatchResult>;
   matchPutAway(receivingOrderId: string | undefined, receivingItem: PutAwayExpectedItem, parsed: OcrInput, shelfBoxId?: string | null): Promise<ScanMatchResult>;
-  matchMeasuring(packages: MeasuringPackage[], targetPackageId: string | undefined, parsed: OcrInput, flow?: 'measuring' | 'verify', rawLabel?: string): Promise<ScanMatchResult>;
+  matchMeasuring(packages: MeasuringPackage[], targetPackageId: string | undefined, parsed: OcrInput, flow?: 'measuring' | 'verify'): Promise<ScanMatchResult>;
   error(err: I18nError): ScanMatchResult;
   error(code: string, params?: Record<string, unknown>): ScanMatchResult;
 }
@@ -191,76 +185,49 @@ export function useScanMatchers(): ScanMatchers {
     }
   }
 
-  // Client-side match against the box's packages (consolidated measuring
-  // detail): a raw-scan label pass first (exact labelBarcode equality verifies
-  // every portion of the label at once), then the qty pass — part must agree,
-  // the label's batch fields constrain only when both sides carry a value,
-  // and qty must be exact. Apply = verifyPackage.
-  async function matchMeasuring(packages: MeasuringPackage[], targetPackageId: string | undefined, parsed: OcrInput, flow: 'measuring' | 'verify' = 'measuring', rawLabel?: string): Promise<ScanMatchResult> {
+  // Client-side aggregate match against the box's packages (2026-10-03
+  // design): totals per part + batch fields, not physical labels — the scan
+  // qty is credited FIFO across the matching packages (partial allowed).
+  // Apply = verifyPackage per credit.
+  async function matchMeasuring(packages: MeasuringPackage[], targetPackageId: string | undefined, parsed: OcrInput, flow: 'measuring' | 'verify' = 'measuring'): Promise<ScanMatchResult> {
     const user = currentUser.value;
     if (!user?.id) return error('operator_not_signed_in');
 
     try {
-      // The verify pass re-scans against the verify-specific flag; the
-      // measuring pass uses the shared `verified` flag.
-      const alreadyDone = (pkg: MeasuringPackage) =>
-        flow === 'verify' ? pkg.verifyVerified : pkg.verified;
-
-      // Label pass first: a hardware re-scan whose raw string exactly equals
-      // a stored labelBarcode verifies every portion of that physical label
-      // in one shot (portions can never qty-match individually). No label hit
-      // falls through to the exact-qty match below (legacy NULL rows, OCR).
-      const labelMatch = matchLabelPackages(packages, rawLabel, alreadyDone, targetPackageId);
-      if (labelMatch?.kind === 'already-verified') {
-        return { type: 'already-verified', count: labelMatch.count };
-      }
-      if (labelMatch?.kind === 'verify') {
-        const hits = labelMatch.packages;
-        return {
-          type: 'label',
-          packages: hits,
-          apply: async () => {
-            for (const pkg of hits) {
-              await warehouse.verifyPackage(pkg.id);
-            }
-          },
-        };
-      }
-
-      const scannedKeys = [parsed.partNo, parsed.wclItemNo]
-        .filter((v): v is string => !!v)
-        .map((v) => normalizePartNo(v));
-      if (scannedKeys.length === 0) return error('part_no_required');
       const qty = typeof parsed.qty === 'number' ? parsed.qty : Number(parsed.qty);
       if (!Number.isInteger(qty) || qty <= 0) return error('qty_must_be_positive_integer');
 
-      const dateCode = parsed.dateCode ? normalizeCode(parsed.dateCode) : '';
-      const lotCode = parsed.lotCode ? normalizeCode(parsed.lotCode) : '';
-      const coo = parsed.coo ? normalize(parsed.coo) : '';
-      const cow = parsed.cow ? normalize(parsed.cow) : '';
-
-      const matched = packages.find((pkg) => {
-        if (alreadyDone(pkg)) return false;
-        if (targetPackageId && pkg.id !== targetPackageId) return false;
-        if (!scannedKeys.includes(normalizePartNo(pkg.partNo ?? ''))) return false;
-        const pkgDateCode = pkg.dateCode ? normalizeCode(pkg.dateCode) : '';
-        if (dateCode && pkgDateCode && dateCode !== pkgDateCode) return false;
-        const pkgLotCode = pkg.lotCode ? normalizeCode(pkg.lotCode) : '';
-        if (lotCode && pkgLotCode && lotCode !== pkgLotCode) return false;
-        const pkgCoo = pkg.coo ? normalize(pkg.coo) : '';
-        if (coo && pkgCoo && coo !== pkgCoo) return false;
-        const pkgCow = pkg.cow ? normalize(pkg.cow) : '';
-        if (cow && pkgCow && cow !== pkgCow) return false;
-        return pkg.qty === qty;
-      });
-
-      if (!matched) return { type: 'none' };
+      const matched = matchAggregatePackages(
+        packages,
+        {
+          partNo: parsed.partNo,
+          wclItemNo: parsed.wclItemNo,
+          qty,
+          dateCode: parsed.dateCode ? String(parsed.dateCode) : undefined,
+          lotCode: parsed.lotCode ? String(parsed.lotCode) : undefined,
+          coo: parsed.coo ? String(parsed.coo) : undefined,
+          cow: parsed.cow ? String(parsed.cow) : undefined,
+        },
+        targetPackageId
+      );
+      if (matched === 'already-done') {
+        const count = packages.filter((pkg) => !targetPackageId || pkg.id === targetPackageId).length;
+        return { type: 'already-verified', count };
+      }
+      if (!matched) {
+        // A scan with no part at all parses to nothing — keep the old
+        // part_no_required error for that case.
+        if (!parsed.partNo && !parsed.wclItemNo) return error('part_no_required');
+        return { type: 'none' };
+      }
 
       return {
         type: 'single',
         record: matched,
         apply: async () => {
-          await warehouse.verifyPackage(matched.id);
+          for (const credit of matched.credits) {
+            await warehouse.verifyPackage(credit.packageId, credit.qty);
+          }
         },
       };
     } catch (e: any) {

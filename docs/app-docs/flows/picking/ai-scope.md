@@ -107,10 +107,16 @@
   failed rows stay in the list with their error. Hardware-scan (QR) rows also
   send the raw scan string as `barcode`, which the backend stores verbatim as
   `picking_packages.label_barcode` on every portion row the scan creates —
-  that string is what lets verify/measuring re-scan the original label and
-  match all its split portions at once (OCR rows omit it → NULL → qty-match
-  fallback; spec
+  since the 2026-10-03 aggregate-verify design this string is
+  traceability/display only (shown on the detail page's package rows) and no
+  longer drives verify matching (OCR rows omit it → NULL; spec
   `docs/superpowers/specs/2026-10-02-picking-scan-label-record-design.md`).
+  The scan-session completion card is **progress-based** (2026-10-03): a
+  computed that is true when the queue has no queued rows and every part
+  group has scannedQty ≥ requiredQty (scanned = Σ packages from the last
+  order fetch), independent of confirm failure history; the hardware onScan
+  wraps the async parse/presence-check so rejections surface as a toast
+  instead of a silently dropped scan.
   Shelf-scan modes (flow config `pickingShelfScan`, spec
   `docs/superpowers/specs/2026-10-02-picking-shelf-scan-config-design.md`):
   `"off"` (default) = the behavior above. In `"require-match"` /
@@ -371,8 +377,11 @@
   refresh/keepalive release + `heldByOther` state (tests in
   `tests/usePickingWorkLock.test.ts`).
 - `components/picking/PickingItemsSection.vue` — items sub-view: compact
-  per-row-expand rows (status badge + required/scanned at a glance;
-  allocations and package/box actions inside the expanded row). Rows are
+  per-row-expand rows (status badge + required/scanned at a glance).
+  Scanned packages are the primary truth inside the expanded row (qty +
+  batch fields + `labelBarcode` + box id, boxed and unboxed alike, with the
+  box actions); the allocations render in a collapsed "planned" `<details>`
+  subsection (plan, not truth). Rows are
   merged by part no by default — same-part lines aggregate into one row
   (totals; expanded detail lists every line as a summary and merges the
   allocations, summing rows fed by the same source, plus the unboxed/boxed
@@ -447,6 +456,7 @@
 - `docs/superpowers/specs/2026-09-22-picking-allocated-skip-status-design.md`
 - `docs/superpowers/specs/2026-09-30-picking-scan-cross-line-split-design.md`
 - `docs/superpowers/specs/2026-10-02-picking-scan-label-record-design.md`
+- `docs/superpowers/specs/2026-10-03-picking-scan-truth-and-aggregate-verify-design.md`
 - `docs/superpowers/specs/2026-10-02-excel-order-barcode-scan-to-open-design.md`
 - `docs/superpowers/plans/2026-07-23-picking-priority-allocation.md`
 - `docs/superpowers/plans/2026-07-12-picking-execution.md`

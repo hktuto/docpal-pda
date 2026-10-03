@@ -22,7 +22,10 @@
           <tbody>
             <tr v-for="pkg in packages" :key="pkg.id">
               <td>{{ pkg.wclItemNo ?? pkg.partNo }}</td>
-              <td>{{ pkg.qty }}</td>
+              <td>
+                {{ pkg.qty }}
+                <span v-if="partialQty(pkg) !== null" class="partial-qty">({{ partialQty(pkg) }})</span>
+              </td>
               <td>{{ pkg.dateCode || $t('common.noData') }} / {{ pkg.lotCode || $t('common.noData') }} / {{ pkg.coo || $t('common.noData') }} / {{ pkg.cow || $t('common.noData') }}</td>
               <td>
                 <span class="badge" :class="badgeClass(isVerified(pkg) ? 'verified' : 'pending')">
@@ -200,9 +203,15 @@ const orderNosText = computed(() =>
   props.orderNos?.length ? props.orderNos.join(", ") : t("common.noData")
 );
 
-// The verify pass re-scans every package against the verify-specific flag.
+// Completion is the aggregate re-scan counter (mode-agnostic): a package is
+// done when rescannedQty >= qty; a partial credit shows "rescanned/qty".
 function isVerified(pkg: MeasuringPackage) {
-  return props.mode === 'verify' ? pkg.verifyVerified : pkg.verified;
+  return (pkg.rescannedQty ?? 0) >= pkg.qty;
+}
+
+function partialQty(pkg: MeasuringPackage): string | null {
+  const rescanned = pkg.rescannedQty ?? 0;
+  return rescanned > 0 && rescanned < pkg.qty ? `${rescanned}/${pkg.qty}` : null;
 }
 
 const verifiedCount = computed(() => packages.value.filter(isVerified).length);
@@ -310,7 +319,7 @@ useHardwareScanner({
     try {
       const parsedResult = await parseRawValue(rawValue);
       const result = await runScanMatcher(
-        { ...scanContext.value, rawLabel: rawValue },
+        scanContext.value,
         ocrResultToInput(parsedResult.parsed),
         matchers
       );
@@ -320,14 +329,8 @@ useHardwareScanner({
         await onScanApplied();
         return true;
       }
-      if (result.type === "label") {
-        await result.apply();
-        showToast(t("measuring.measureBox.verifiedByLabel", { count: result.packages.length }));
-        await onScanApplied();
-        return true;
-      }
       if (result.type === "already-verified") {
-        showToast(t("measuring.measureBox.alreadyVerifiedByLabel", { count: result.count }));
+        showToast(t("measuring.measureBox.alreadyRescanned", { count: result.count }));
         return false;
       }
       if (result.type === "none") {
@@ -363,6 +366,11 @@ useHardwareScanner({
 
 .scan-hint {
   margin: 0 0 1.5rem;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.partial-qty {
   color: var(--muted);
   font-size: 0.8125rem;
 }

@@ -76,7 +76,7 @@ export interface WarehouseService {
   removeScannedPackage(packageId: string): Promise<void>;
   // Whole-box exact-match claim: reuse a shelf carton as the shipping box.
   claimShelfBox(orderId: string, shelfBoxId: string): Promise<{ shippingBoxId: string; packageIds: string[] }>;
-  verifyPackage(packageId: string): Promise<void>;
+  verifyPackage(packageId: string, qty?: number): Promise<void>;
   createShippingBoxForPickingOrder(pickingOrderId: string, boxId?: string): Promise<void>;
   updateShippingBox(id: string, fields: ShippingBoxUpdateInput): Promise<void>;
   addPackageToBox(packageId: string, boxId: string): Promise<void>;

@@ -89,13 +89,13 @@ const loadDetail = async () => {
   return { box: d.box, packages: d.packages };
 };
 
-// Mirrors the backend guard: the box closed AND every package re-scanned
-// (verify_verified) before the verify pass can complete.
+// Mirrors the backend guard: the box closed AND every package fully
+// re-scanned (rescannedQty >= qty) before the verify pass can complete.
 const canComplete = computed(() => {
   const d = detail.value;
   if (!d || d.task.status !== "pending") return false;
   if (d.box.status !== "closed" || !d.packages.length) return false;
-  return d.packages.every((p) => p.verifyVerified);
+  return d.packages.every((p) => (p.rescannedQty ?? 0) >= p.qty);
 });
 
 // Reopen a closed box so the worker can re-measure it during this verify

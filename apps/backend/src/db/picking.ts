@@ -807,6 +807,9 @@ export interface PickingPackageDetail {
   cow: string | null;
   verified: boolean;
   verifyVerified: boolean;
+  rescannedQty: number;
+  /** Raw scan string of the source label (traceability/display only). */
+  labelBarcode: string | null;
   shippingBoxId: string | null;
   sourceType: string;
   sourceId: string;
@@ -962,7 +965,9 @@ export async function getPickingOrderDetail(
           SELECT
             id, picking_item_id AS "pickingItemId", qty,
             date_code AS "dateCode", lot_code AS "lotCode", coo, cow,
-            verified, verify_verified AS "verifyVerified", shipping_box_id AS "shippingBoxId",
+            verified, verify_verified AS "verifyVerified",
+            rescanned_qty AS "rescannedQty", label_barcode AS "labelBarcode",
+            shipping_box_id AS "shippingBoxId",
             source_type AS "sourceType", source_id AS "sourceId"
           FROM picking_packages
           WHERE ${inArray(sql`picking_item_id`, itemIds)}
@@ -1795,15 +1800,17 @@ export async function removeScannedPackage(db: AppDb, input: { packageId: string
 }
 
 /**
- * Verify-scan a package. Branching on the package's box (box-scoped design):
+ * Verify-scan a package, crediting `input.qty` (default: the remaining
+ * unscanned qty) onto `rescanned_qty`, capped at the package qty. Branching
+ * on the package's box (box-scoped design):
  *  - box open (or box-less correction flow) → measuring-time scan; sets
- *    `verified`.
+ *    `verified` on first credit.
  *  - box closed AND a pending verify task exists for that box → verify-step
- *    re-scan; sets `verify_verified` AND `verified`.
+ *    re-scan; sets `verify_verified` AND `verified` on first credit.
  *  - box closed without a pending verify task → 409.
- * 409 `package_already_verified` only when the applicable flag is already set.
+ * 409 `package_already_verified` when the package is already fully rescanned.
  */
-export async function verifyPackage(db: AppDb, input: { packageId: string; actorId: string }): Promise<void> {
+export async function verifyPackage(db: AppDb, input: { packageId: string; actorId: string; qty?: number }): Promise<void> {
   return db.transaction(async (tx) => {
     const pkg = await queryGet<{
       id: string;
@@ -1811,28 +1818,37 @@ export async function verifyPackage(db: AppDb, input: { packageId: string; actor
       verified: boolean;
       verifyVerified: boolean;
       qty: number;
+      rescannedQty: number;
       pickingOrderId: string;
     }>(
       tx,
       sql`SELECT pp.id, pp.shipping_box_id AS "shippingBoxId", pp.verified,
-                 pp.verify_verified AS "verifyVerified", pp.qty,
+                 pp.verify_verified AS "verifyVerified", pp.qty, pp.rescanned_qty AS "rescannedQty",
                  pi.picking_order_id AS "pickingOrderId"
           FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id WHERE pp.id = ${input.packageId}`
     );
     if (!pkg) throw new HTTPException(404, { message: "package_not_found" });
     if (pkg.shippingBoxId === null) throw new HTTPException(409, { message: "package_not_in_box" });
     await assertActor(tx, input.actorId);
+    const remaining = pkg.qty - pkg.rescannedQty;
+    if (input.qty !== undefined && (!Number.isInteger(input.qty) || input.qty <= 0)) {
+      throw new HTTPException(400, { message: "qty_must_be_positive_integer" });
+    }
+    const applied = Math.min(input.qty ?? remaining, remaining);
     const box = await loadShippingBox(tx, pkg.shippingBoxId);
     if (box.status === "open") {
-      if (pkg.verified) throw new HTTPException(409, { message: "package_already_verified" });
-      await queryRun(tx, sql`UPDATE picking_packages SET verified = true, last_update_date = ${now()} WHERE id = ${pkg.id}`);
+      if (remaining <= 0) throw new HTTPException(409, { message: "package_already_verified" });
+      await queryRun(
+        tx,
+        sql`UPDATE picking_packages SET verified = true, rescanned_qty = rescanned_qty + ${applied}, last_update_date = ${now()} WHERE id = ${pkg.id}`
+      );
       await logTransition(tx, {
         entityType: "picking_package",
         entityId: pkg.id,
         fromState: "unverified",
         toState: "verified",
         actorId: input.actorId,
-        metadata: { qty: pkg.qty, box: box.id },
+        metadata: { qty: applied, box: box.id },
       });
       return;
     }
@@ -1841,10 +1857,10 @@ export async function verifyPackage(db: AppDb, input: { packageId: string; actor
       sql`SELECT id FROM verify_tasks WHERE shipping_box_id = ${box.id} AND status = 'pending'`
     );
     if (!verifyTask) throw new HTTPException(409, { message: "no_pending_measure_or_verify_task" });
-    if (pkg.verifyVerified) throw new HTTPException(409, { message: "package_already_verified" });
+    if (remaining <= 0) throw new HTTPException(409, { message: "package_already_verified" });
     await queryRun(
       tx,
-      sql`UPDATE picking_packages SET verified = true, verify_verified = true, last_update_date = ${now()} WHERE id = ${pkg.id}`
+      sql`UPDATE picking_packages SET verified = true, verify_verified = true, rescanned_qty = rescanned_qty + ${applied}, last_update_date = ${now()} WHERE id = ${pkg.id}`
     );
     await logTransition(tx, {
       entityType: "picking_package",
@@ -1852,7 +1868,7 @@ export async function verifyPackage(db: AppDb, input: { packageId: string; actor
       fromState: "verified",
       toState: "verify_verified",
       actorId: input.actorId,
-      metadata: { qty: pkg.qty, box: box.id },
+      metadata: { qty: applied, box: box.id },
     });
   });
 }
@@ -2120,7 +2136,7 @@ export async function cancelShippingBox(db: AppDb, input: { shippingBoxId: strin
 
 /**
  * Close a shipping box (ported from measure.ts): non-empty, all packages
- * verified, destination (box → order ship_to), box
+ * fully rescanned (rescanned_qty >= qty), destination (box → order ship_to), box
  * size, and positive weights with gross ≥ net are required. Stamps the
  * resolved destination, logs the transition, and runs the auto-finish check.
  * Closing IS the measuring completion (box-scoped design — no measuring task
@@ -2132,12 +2148,12 @@ export async function closeShippingBox(db: AppDb, input: { shippingBoxId: string
     const box = await loadShippingBox(tx, input.shippingBoxId);
     await assertActor(tx, input.actorId);
     if (box.status !== "open") throw new HTTPException(409, { message: "shipping_box_not_open" });
-    const pkgs = await queryAll<{ id: string; verified: boolean }>(
+    const pkgs = await queryAll<{ id: string; qty: number; rescannedQty: number }>(
       tx,
-      sql`SELECT id, verified FROM picking_packages WHERE shipping_box_id = ${box.id}`
+      sql`SELECT id, qty, rescanned_qty AS "rescannedQty" FROM picking_packages WHERE shipping_box_id = ${box.id}`
     );
     if (pkgs.length === 0) throw new HTTPException(409, { message: "cannot_close_empty_shipping_box" });
-    if (pkgs.some((p) => !p.verified)) throw new HTTPException(409, { message: "all_packages_must_be_verified" });
+    if (pkgs.some((p) => p.rescannedQty < p.qty)) throw new HTTPException(409, { message: "all_packages_must_be_verified" });
 
     let dest = box.destinationCountry;
     if (dest === null || dest.trim() === "") {
@@ -2168,13 +2184,18 @@ export async function closeShippingBox(db: AppDb, input: { shippingBoxId: string
       await maybeAutoFinishPickingOrder(tx, { pickingOrderId: box.pickingOrderId, actorId: input.actorId });
     }
     // Chain: box closed (measured) → the box's verify task (unless the verify
-    // step is off). The unique index keeps a re-close idempotent.
+    // step is off). The unique index keeps a re-close idempotent. The verify
+    // pass re-scans from zero — the rescanned credit is per-flow.
     if (isStepEnabled("verify")) {
       await queryRun(
         tx,
         sql`INSERT INTO verify_tasks (id, shipping_box_id, status, created_date)
             VALUES (${newId()}, ${box.id}, 'pending', ${now()})
             ON CONFLICT (shipping_box_id) DO NOTHING`
+      );
+      await queryRun(
+        tx,
+        sql`UPDATE picking_packages SET rescanned_qty = 0, last_update_date = ${now()} WHERE shipping_box_id = ${box.id}`
       );
     }
   });
@@ -2209,8 +2230,9 @@ export async function finishPickingOrder(
 /**
  * Reopen a closed shipping box during the verify step: THIS box must have a
  * pending verify task (reopen is a verify-step action only). The box goes
- * back to 'open' and its packages lose both verified flags so the worker
- * re-scans them before re-closing; the task stays pending.
+ * back to 'open' and its packages lose both verified flags and the rescanned
+ * credit so the worker re-scans them before re-closing; the task stays
+ * pending.
  */
 export async function reopenShippingBox(db: AppDb, input: { shippingBoxId: string; actorId: string }): Promise<void> {
   return db.transaction(async (tx) => {
@@ -2226,7 +2248,7 @@ export async function reopenShippingBox(db: AppDb, input: { shippingBoxId: strin
     await queryRun(tx, sql`UPDATE shipping_boxes SET status = 'open', last_update_date = ${now()} WHERE id = ${box.id}`);
     await queryRun(
       tx,
-      sql`UPDATE picking_packages SET verified = false, verify_verified = false, last_update_date = ${now()} WHERE shipping_box_id = ${box.id}`
+      sql`UPDATE picking_packages SET verified = false, verify_verified = false, rescanned_qty = 0, last_update_date = ${now()} WHERE shipping_box_id = ${box.id}`
     );
     await logTransition(tx, {
       entityType: "shipping_box",

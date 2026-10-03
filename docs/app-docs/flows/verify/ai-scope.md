@@ -17,7 +17,7 @@
   from the list before loading the detail.
 - Reopen a closed box (`POST /shipping-boxes/:id/reopen`) while its task is
   pending: box → `open`, its packages lose both verified flags
-  (`verified` + `verify_verified`) — verify is a
+  (`verified` + `verify_verified`) and the rescanned credit — verify is a
   full re-measure, not a read-only check. Reopen is a verify-step-only verb
   (409 `verify_task_not_pending` otherwise).
 - Per-box page (`/verify/:boxId`): the shared
@@ -26,24 +26,26 @@
   with `verifyPackage` by id; a closed box requires the box's pending verify
   task), measurements edited via `updateShippingBox` (kg) on the open box,
   then close.
-  The verify pass is a mandatory re-scan against the
-  `picking_packages.verify_verified` flag (migration 0004): the component's
-  `mode: 'verify'` prop and the matcher's `flow` context field switch the
-  gating flag, and scanning works on **closed** boxes too (checking contents
-  against the sealed box is the normal verify pass — `verifyPackage` sets
-  `verify_verified` alongside `verified` so a reopened box can re-close).
-  Matching has two passes (spec
-  `docs/superpowers/specs/2026-10-02-picking-scan-label-record-design.md`):
-  first a **label pass** — a hardware re-scan whose raw string exactly equals
-  a package's stored `picking_packages.label_barcode` (recorded at pick time)
-  verifies EVERY portion of that physical label in the box in one shot
-  (all-verified → informational toast, not an error); no label hit falls
-  through to the exact-qty match, which covers legacy NULL rows and
-  OCR-created packages.
-- Complete the verify task once the box is closed and **every package has
-  been re-scanned** (`verify_verified`) — 409 `packages_not_all_rescanned`
-  otherwise; the page's complete button mirrors this guard. The box then
-  appears in the admin shipping feed.
+  The verify pass is a mandatory re-scan tracked by the mode-agnostic
+  `picking_packages.rescanned_qty` counter (2026-10-03 aggregate design —
+  the close that spawns the verify task resets the credit to zero, so the
+  verify pass re-scans from scratch; `verified`/`verify_verified` flags are
+  still set per mode on first credit). Scanning works on **closed** boxes
+  too (checking contents against the sealed box is the normal verify pass).
+  Matching is **aggregate** (spec
+  `docs/superpowers/specs/2026-10-03-picking-scan-truth-and-aggregate-verify-design.md`):
+  totals per part + batch fields, not physical labels — a scan matches when
+  the part matches (batch fields constrain only when both sides carry a
+  value) and the scanned qty fits the matching packages' total remaining
+  (`utils/measuringAggregateMatch.ts`); the apply step credits it FIFO
+  across the packages, partial credits allowed (`POST /packages/:id/verify`
+  with `{qty}`, capped at the package qty; fully credited → 409
+  `package_already_verified`). `label_barcode` stays on the schema for
+  traceability/display but no longer drives matching.
+- Complete the verify task once the box is closed and **every package is
+  fully re-scanned** (`rescanned_qty >= qty`) — 409
+  `packages_not_all_rescanned` otherwise; the page's complete button mirrors
+  this guard. The box then appears in the admin shipping feed.
 - Flow-step config: `useFlowSteps` fetches `GET /config` once per login;
   `pages/index.vue` hides the tiles of disabled steps.
 
@@ -69,9 +71,9 @@
   measurements, close; box title, status badge, picking-order info and the
   View picking order / Enter measurements actions registered into the app
   header via `composables/usePageHeader.ts`); the
-  `mode: 'measuring' | 'verify'` prop selects the
-  gating flag (`verifyVerified` in verify mode) and allows scanning closed
-  boxes.
+  `mode: 'measuring' | 'verify'` prop selects the per-mode badge flag and
+  allows scanning closed boxes. Completion gating is the rescanned counter
+  (`rescannedQty >= qty` per package; partial credits show "rescanned/qty").
 - `composables/useFlowSteps.ts` — flow-step config state, loaded from
   `layouts/default.vue`'s session watch.
 - `services/adapters/backendWarehouse.ts` — `getVerifyTasks` /
@@ -84,9 +86,11 @@
   `packages_not_all_rescanned` until every package is re-scanned).
 - `apps/backend/src/db/picking.ts` — `closeShippingBox` spawns the box's
   pending verify task when the verify step is enabled (`ON CONFLICT DO
-  NOTHING`); `reopenShippingBox` (box-scoped: requires THIS box's pending
-  verify task, resets both verified flags); the `verifyPackage` closed-box
-  branch setting `verify_verified` (409 `no_pending_measure_or_verify_task`).
+  NOTHING`, and resets the packages' rescanned credit for the new pass);
+  `reopenShippingBox` (box-scoped: requires THIS box's pending
+  verify task, resets both verified flags + the credit); the `verifyPackage`
+  closed-box branch setting `verify_verified` (409
+  `no_pending_measure_or_verify_task`).
 - `apps/backend/src/config.ts` (flow config from the `warehouse_config` row
   `"flow"`, `isStepEnabled`) +
   `apps/backend/src/routes/config.ts` (`GET /config`).
@@ -112,6 +116,7 @@
 
 - `docs/superpowers/specs/2026-08-11-box-scoped-measuring-verify-design.md`
 - `docs/superpowers/specs/2026-10-02-picking-scan-label-record-design.md`
+- `docs/superpowers/specs/2026-10-03-picking-scan-truth-and-aggregate-verify-design.md`
 - `docs/superpowers/specs/2026-07-28-verify-step-and-flow-step-config-design.md`
 - `docs/superpowers/specs/2026-07-28-measuring-verify-refinements-design.md`
 - `docs/backend/api-design.md` §Verify

@@ -289,6 +289,8 @@ export default {
       dateLotCooCow: "日期 / 批次 / 產地 / 晶圓產地",
       status: "狀態",
       allocations: "分配",
+      planned: "計劃（分配）",
+      label: "標籤",
       location: "位置",
       source: "來源",
       receivingArea: "收貨區",
@@ -474,8 +476,7 @@ export default {
       destinationCountry: "目的地國家/地區",
       scanHint: "掃描包裹 QR code 以核實。",
       noMatch: "沒有與此標籤相符的未核實包裹。",
-      verifiedByLabel: "已按標籤核實 {count} 件",
-      alreadyVerifiedByLabel: "此標籤已核實（{count} 件）。"
+      alreadyRescanned: "已全部複核掃描（{count} 件）。"
     }
   },
   verify: {

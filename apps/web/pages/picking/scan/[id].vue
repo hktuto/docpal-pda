@@ -188,7 +188,6 @@ const error = ref<string | null>(null);
 const order = ref<PickingOrderDetail | null>(null);
 const applying = ref(false);
 const ocrCapturing = ref(false);
-const completed = ref(false);
 
 const orderItems = computed(() => order.value?.items ?? []);
 
@@ -321,6 +320,16 @@ const partGroups = computed(() => {
     warnings: allocationWarnings(items),
   }));
 });
+
+// Progress-based completion (2026-10-03 design): the queue is empty and
+// every part group is fully scanned (scanned = Σ packages from the last
+// order fetch) — independent of confirm failure history.
+const completed = computed(
+  () =>
+    partGroups.value.length > 0 &&
+    queuedCount.value === 0 &&
+    partGroups.value.every((g) => g.scanned >= g.required)
+);
 
 /** Where these items' open qty is allocated from — the "what/where to scan"
  *  hint shown under each part: receiving carton (CTN), shelf box @ shelf, or
@@ -536,8 +545,16 @@ useHardwareScanner({
     !!order.value,
   onScan: async (rawValue: string) => {
     if (!order.value) return false;
-    if (boxPickId.value) return handleBoxPickScan(rawValue);
-    return handleQrOrBoxScan(rawValue);
+    // handleParsed awaits the require-match presence fetch — surface its
+    // rejections as a toast instead of losing the scan silently.
+    try {
+      if (boxPickId.value) return await handleBoxPickScan(rawValue);
+      return await handleQrOrBoxScan(rawValue);
+    } catch (e) {
+      playScanError();
+      showToast(errorMessage(e));
+      return false;
+    }
   },
 });
 
@@ -705,9 +722,7 @@ async function confirm() {
         row.error = t("picking.scanSession.allocationChanged");
       }
     }
-    if (failed === 0) {
-      completed.value = true;
-    } else {
+    if (failed > 0) {
       showToast(t("picking.scanSession.partialFail", { count: failed }));
     }
   } finally {
@@ -721,7 +736,6 @@ function goBack() {
 }
 
 async function continueScanning() {
-  completed.value = false;
   pending.value = true;
   await load();
 }

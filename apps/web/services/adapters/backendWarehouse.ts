@@ -213,9 +213,10 @@ export function createBackendWarehouseService(
     ): Promise<{ shippingBoxId: string; packageIds: string[] }> {
       return client.post(`/picking-orders/${orderId}/claim-shelf-box`, { shelfBoxId });
     },
-    // Measuring-time package verification (boxed, open box, pending task).
-    async verifyPackage(packageId: string): Promise<void> {
-      await client.post(`/packages/${packageId}/verify`, {});
+    // Measuring/verify package re-scan: credits `qty` (default: the
+    // package's remaining) onto rescanned_qty.
+    async verifyPackage(packageId: string, qty?: number): Promise<void> {
+      await client.post(`/packages/${packageId}/verify`, qty === undefined ? {} : { qty });
     },
     async createShippingBoxForPickingOrder(
       pickingOrderId: string,

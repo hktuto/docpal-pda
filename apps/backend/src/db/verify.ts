@@ -95,7 +95,9 @@ export interface VerifyPackageRow {
   cow: string | null;
   verified: boolean;
   verifyVerified: boolean;
-  /** Raw scan string of the source label (NULL = legacy/OCR → qty fallback). */
+  /** Re-scan credit (mode-agnostic): completion when rescannedQty >= qty. */
+  rescannedQty: number;
+  /** Raw scan string of the source label (traceability/display only). */
   labelBarcode: string | null;
   partNo: string;
   wclItemNo: string | null;
@@ -131,6 +133,7 @@ export async function getVerifyTaskDetail(db: AppDb, taskId: string): Promise<Ve
         pp.id, pp.qty,
         pp.date_code AS "dateCode", pp.lot_code AS "lotCode", pp.coo, pp.cow, pp.verified,
         pp.verify_verified AS "verifyVerified",
+        pp.rescanned_qty AS "rescannedQty",
         pp.label_barcode AS "labelBarcode",
         pi.part_no AS "partNo", p.wcl_item_no AS "wclItemNo",
         nwf.weight AS "formulaWeight", nwf.qty AS "formulaQty"
@@ -176,8 +179,8 @@ function suggestedNetWeightKg(
 
 /**
  * Complete a box's verify task: the task must be pending, the box must be
- * closed, and every package in the box must have been re-scanned during the
- * verify step (`verify_verified`). Sets status 'completed' + transition log.
+ * closed, and every package in the box must be fully re-scanned
+ * (`rescanned_qty >= qty`). Sets status 'completed' + transition log.
  * No stock movement.
  */
 export async function completeVerifyTask(db: AppDb, input: { taskId: string; actorId: string }): Promise<void> {
@@ -198,7 +201,7 @@ export async function completeVerifyTask(db: AppDb, input: { taskId: string; act
 
     const notRescanned = await queryGet<{ id: string }>(
       tx,
-      sql`SELECT id FROM picking_packages WHERE shipping_box_id = ${task.shippingBoxId} AND NOT verify_verified LIMIT 1`
+      sql`SELECT id FROM picking_packages WHERE shipping_box_id = ${task.shippingBoxId} AND rescanned_qty < qty LIMIT 1`
     );
     if (notRescanned) throw new HTTPException(409, { message: "packages_not_all_rescanned" });
 

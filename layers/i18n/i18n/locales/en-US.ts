@@ -289,6 +289,8 @@ export default {
       dateLotCooCow: "Date / Lot / COO / COW",
       status: "Status",
       allocations: "Allocations",
+      planned: "Planned (allocations)",
+      label: "Label",
       location: "Location",
       source: "Source",
       receivingArea: "Receiving area",
@@ -474,8 +476,7 @@ export default {
       destinationCountry: "Destination country",
       scanHint: "Scan a package QR code to verify it.",
       noMatch: "No unverified package matches this label.",
-      verifiedByLabel: "{count} items verified by label",
-      alreadyVerifiedByLabel: "Label already verified ({count} items)."
+      alreadyRescanned: "Already fully rescanned ({count} items)."
     }
   },
   verify: {

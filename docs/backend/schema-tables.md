@@ -462,8 +462,10 @@ Picked units per source — the packing truth for what went into which box.
 | lot_code | text | Lot number of the picked stock |
 | coo | text | Country of origin |
 | cow | text | Country of wafer |
-| verified | boolean NOT NULL DEFAULT false | Package verified (measuring pass) |
-| verify_verified | boolean NOT NULL DEFAULT false | Package re-scanned during the verify pass (migration 0004; set with `verified` by `POST /packages/:id/verify` under a pending verify task, reset by box reopen; gates verify-task completion) |
+| verified | boolean NOT NULL DEFAULT false | Package verified (measuring pass; set on first re-scan credit) |
+| verify_verified | boolean NOT NULL DEFAULT false | Package re-scanned during the verify pass (migration 0004; set with `verified` by `POST /packages/:id/verify` under a pending verify task, reset by box reopen) |
+| rescanned_qty | integer NOT NULL DEFAULT 0 | Mode-agnostic re-scan credit (migration 0021) — completion is `rescanned_qty >= qty` (verify task completion + box close); reset to 0 when the close spawns the verify task and on box reopen; backfilled to `qty` where either verified flag was set |
+| label_barcode | text | Raw scan string of the source label (traceability/display only since 2026-10-03; NULL for legacy/OCR rows) |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 

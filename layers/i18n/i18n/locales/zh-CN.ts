@@ -289,6 +289,8 @@ export default {
       dateLotCooCow: "日期 / 批次 / 产地 / 晶圆产地",
       status: "状态",
       allocations: "分配",
+      planned: "计划（分配）",
+      label: "标签",
       location: "位置",
       source: "来源",
       receivingArea: "收货区",
@@ -474,8 +476,7 @@ export default {
       destinationCountry: "目的国家/地区",
       scanHint: "扫描包裹二维码以核验。",
       noMatch: "没有匹配该标签的未核验包裹。",
-      verifiedByLabel: "已按标签核验 {count} 件",
-      alreadyVerifiedByLabel: "该标签已核验（{count} 件）。"
+      alreadyRescanned: "已全部复核扫描（{count} 件）。"
     }
   },
   verify: {

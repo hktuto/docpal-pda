@@ -131,6 +131,9 @@ export const pickingPackages = pgTable(
     labelBarcode: text("label_barcode"),
     verified: boolean("verified").notNull().default(false),
     verifyVerified: boolean("verify_verified").notNull().default(false), // verify-step re-scan flag
+    // Aggregate re-scan truth (2026-10-03): credited qty from verify scans —
+    // completion when rescanned_qty >= qty; mode-agnostic (both flags ride along).
+    rescannedQty: integer("rescanned_qty").notNull().default(0),
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },

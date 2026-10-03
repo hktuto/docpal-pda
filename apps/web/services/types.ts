@@ -381,6 +381,9 @@ export interface PickingPackage {
   coo: string | null;
   cow: string | null;
   verified: boolean;
+  rescannedQty: number;
+  /** Raw scan string of the source label (traceability/display only). */
+  labelBarcode: string | null;
   shippingBoxId: string | null;
   sourceType: string;
   sourceId: string;
@@ -702,8 +705,9 @@ export interface MeasuringPackage {
   verified: boolean;
   /** Verify-step re-scan flag (set by verifyPackage during a pending verify task). */
   verifyVerified: boolean;
-  /** Raw scan string of the source label; NULL for legacy/OCR packages, which
-   *  fall back to exact-qty matching. */
+  /** Re-scan credit (mode-agnostic): completion when rescannedQty >= qty. */
+  rescannedQty: number;
+  /** Raw scan string of the source label (traceability/display only). */
   labelBarcode?: string | null;
   partNo: string;
   wclItemNo: string | null;

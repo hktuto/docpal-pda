@@ -287,6 +287,50 @@ test("verifyPackage: open box → verified only; closed box + pending task → b
   assert.equal(noTask.message, "no_pending_measure_or_verify_task");
 });
 
+// --- verifyPackage qty credits (aggregate re-scan) ---------------------------------------
+
+test("verifyPackage qty: partial credits accumulate, cap at qty, flags on first credit, default = remaining, completion needs full credit", async () => {
+  await reset();
+  const { actorId, boxId, packageIds, verifyTaskId } = await pendingVerifyTask();
+
+  const rescannedOf = async (id: string) =>
+    (await queryGet<{ rescannedQty: number; verified: boolean; verifyVerified: boolean }>(
+      client.db,
+      sql`SELECT rescanned_qty AS "rescannedQty", verified, verify_verified AS "verifyVerified" FROM picking_packages WHERE id = ${id}`
+    ))!;
+
+  // close resets the measuring-pass credit: the verify pass starts at zero
+  assert.equal((await rescannedOf(packageIds[0])).rescannedQty, 0);
+
+  const badQty = await catchHttp(verifyPackage(client.db, { packageId: packageIds[0], actorId, qty: 0 }));
+  assert.equal(badQty.status, 400);
+  assert.equal(badQty.message, "qty_must_be_positive_integer");
+
+  // partial credit (p1 qty 1000): flags set on first credit
+  await verifyPackage(client.db, { packageId: packageIds[0], actorId, qty: 400 });
+  assert.deepEqual(await rescannedOf(packageIds[0]), { rescannedQty: 400, verified: true, verifyVerified: true });
+
+  // partial credit is not enough for completion
+  await verifyPackage(client.db, { packageId: packageIds[1], actorId });
+  await verifyPackage(client.db, { packageId: packageIds[2], actorId });
+  const partial = await catchHttp(completeVerifyTask(client.db, { taskId: verifyTaskId, actorId }));
+  assert.equal(partial.status, 409);
+  assert.equal(partial.message, "packages_not_all_rescanned");
+
+  // accumulate, then an over-remaining credit is capped at the package qty
+  await verifyPackage(client.db, { packageId: packageIds[0], actorId, qty: 400 });
+  await verifyPackage(client.db, { packageId: packageIds[0], actorId, qty: 500 });
+  assert.equal((await rescannedOf(packageIds[0])).rescannedQty, 1000);
+
+  // fully rescanned → 409 (even though further scans are rejected)
+  const full = await catchHttp(verifyPackage(client.db, { packageId: packageIds[0], actorId }));
+  assert.equal(full.status, 409);
+  assert.equal(full.message, "package_already_verified");
+
+  await completeVerifyTask(client.db, { taskId: verifyTaskId, actorId });
+  assert.equal((await verifyTaskOf(boxId))!.status, "completed");
+});
+
 // --- reopen during verify --------------------------------------------------------------
 
 test("reopen: closed box → open + both package flags reset, task stays pending; re-verify + re-close + complete; no task duplication", async () => {

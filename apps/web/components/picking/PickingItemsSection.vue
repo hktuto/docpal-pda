@@ -59,8 +59,67 @@
           :value="`${group.items[0].lineNumber ?? '—'} (${$t('picking.itemsSection.shipment')} ${group.items[0].shipmentNumber ?? '—'})`"
         />
 
-        <div v-if="group.allocations.length && actionable && group.pickedQty < group.qty" class="allocations">
-          <h3 class="subsection-title">{{ $t('picking.itemsSection.allocations') }}</h3>
+        <div v-if="group.unboxed.length && actionable" class="unboxed-packages">
+          <h3 class="subsection-title">{{ $t('picking.itemsSection.unboxedPackages') }}</h3>
+          <div
+            v-for="pkg in group.unboxed"
+            :key="pkg.id"
+            class="lot package-row"
+          >
+            <span class="package-info">
+              {{ pkg.qty }} {{ $t('common.pcs') }} · {{ formatLotFields(pkg) }}
+              <span v-if="pkg.labelBarcode" class="package-label"> · {{ $t('picking.itemsSection.label') }}: {{ pkg.labelBarcode }}</span>
+            </span>
+            <div class="package-actions">
+              <select :value="boxSelections[pkg.id]" :disabled="adding[pkg.id]" class="box-select" @change="updateBoxSelection(pkg.id, ($event.target as HTMLSelectElement).value)">
+                <option value="">{{ $t('picking.itemsSection.selectBox') }}</option>
+                <option v-for="box in openBoxes" :key="box.id" :value="box.id">{{ box.id }}</option>
+              </select>
+              <button
+                class="btn btn--small"
+                :disabled="adding[pkg.id] || !boxSelections[pkg.id]"
+                @click="emit('add-to-box', pkg.id)"
+              >
+                <template v-if="adding[pkg.id]">
+                  <InlineSpinner /> {{ $t('picking.itemsSection.adding') }}
+                </template>
+                <template v-else>
+                  {{ $t('picking.itemsSection.addToBox') }}
+                </template>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="group.boxed.length && actionable" class="boxed-packages">
+          <h3 class="boxed-title">{{ $t('picking.itemsSection.boxedPackages') }}</h3>
+          <div
+            v-for="pkg in group.boxed"
+            :key="pkg.id"
+            class="lot package-row"
+          >
+            <span class="package-info">
+              {{ pkg.qty }} {{ $t('common.pcs') }} · {{ formatLotFields(pkg) }} · {{ pkg.shippingBoxId }}
+              <span v-if="pkg.labelBarcode" class="package-label"> · {{ $t('picking.itemsSection.label') }}: {{ pkg.labelBarcode }}</span>
+            </span>
+            <button
+              v-if="openBoxById[pkg.shippingBoxId!]?.status === 'open'"
+              class="btn btn--small"
+              :disabled="removing[pkg.id]"
+              @click="emit('remove-from-box', pkg.id)"
+            >
+              <template v-if="removing[pkg.id]">
+                <InlineSpinner /> {{ $t('picking.itemsSection.removing') }}
+              </template>
+              <template v-else>
+                {{ $t('picking.itemsSection.remove') }}
+              </template>
+            </button>
+          </div>
+        </div>
+
+        <details v-if="group.allocations.length && actionable && group.pickedQty < group.qty" class="planned">
+          <summary class="subsection-title planned__summary">{{ $t('picking.itemsSection.planned') }}</summary>
           <div
             v-for="allocation in group.allocations"
             :key="allocation.key"
@@ -98,64 +157,7 @@
               <DetailRow :label="$t('picking.itemsSection.allocatedQty')" :value="allocation.qty" />
             </template>
           </div>
-        </div>
-
-        <div v-if="group.unboxed.length && actionable" class="unboxed-packages">
-          <h3 class="subsection-title">{{ $t('picking.itemsSection.unboxedPackages') }}</h3>
-          <div
-            v-for="pkg in group.unboxed"
-            :key="pkg.id"
-            class="lot package-row"
-          >
-            <span class="package-info">
-              {{ pkg.qty }} {{ $t('common.pcs') }} · {{ formatLotFields(pkg) }}
-            </span>
-            <div class="package-actions">
-              <select :value="boxSelections[pkg.id]" :disabled="adding[pkg.id]" class="box-select" @change="updateBoxSelection(pkg.id, ($event.target as HTMLSelectElement).value)">
-                <option value="">{{ $t('picking.itemsSection.selectBox') }}</option>
-                <option v-for="box in openBoxes" :key="box.id" :value="box.id">{{ box.id }}</option>
-              </select>
-              <button
-                class="btn btn--small"
-                :disabled="adding[pkg.id] || !boxSelections[pkg.id]"
-                @click="emit('add-to-box', pkg.id)"
-              >
-                <template v-if="adding[pkg.id]">
-                  <InlineSpinner /> {{ $t('picking.itemsSection.adding') }}
-                </template>
-                <template v-else>
-                  {{ $t('picking.itemsSection.addToBox') }}
-                </template>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="group.boxed.length && actionable" class="boxed-packages">
-          <h3 class="boxed-title">{{ $t('picking.itemsSection.boxedPackages') }}</h3>
-          <div
-            v-for="pkg in group.boxed"
-            :key="pkg.id"
-            class="lot package-row"
-          >
-            <span class="package-info">
-              {{ pkg.qty }} {{ $t('common.pcs') }} · {{ pkg.shippingBoxId }}
-            </span>
-            <button
-              v-if="openBoxById[pkg.shippingBoxId!]?.status === 'open'"
-              class="btn btn--small"
-              :disabled="removing[pkg.id]"
-              @click="emit('remove-from-box', pkg.id)"
-            >
-              <template v-if="removing[pkg.id]">
-                <InlineSpinner /> {{ $t('picking.itemsSection.removing') }}
-              </template>
-              <template v-else>
-                {{ $t('picking.itemsSection.remove') }}
-              </template>
-            </button>
-          </div>
-        </div>
+        </details>
       </div>
     </div>
   </div>
@@ -339,8 +341,18 @@ function formatLotFields(source: { dateCode: string | null; lotCode: string | nu
 
 .allocations,
 .unboxed-packages,
-.boxed-packages {
+.boxed-packages,
+.planned {
   margin-top: 0.75rem;
+}
+
+.planned__summary {
+  cursor: pointer;
+}
+
+.package-label {
+  color: var(--muted);
+  word-break: break-all;
 }
 
 .package-row {

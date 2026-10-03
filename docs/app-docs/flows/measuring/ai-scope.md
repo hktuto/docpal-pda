@@ -15,9 +15,11 @@
   match, else a unique substring match.
 - Box page (`/measuring/:boxId`): packages shown as a table that listens to
   hardware/wedge QR scans — each scan is parsed with the supplier templates
-  (`parseRawValue`), matched client-side against the box's unverified
-  packages (`matchMeasuring` via `runScanMatcher`), and applied immediately
-  with `verifyPackage` by id. The camera/OCR flow (`useLabelScanReview` +
+  (`parseRawValue`), matched client-side **aggregate** against the box's
+  packages (totals per part + batch fields, qty ≤ the group's remaining
+  `rescanned_qty` credit, FIFO partial credits — `matchMeasuring` via
+  `runScanMatcher` + `utils/measuringAggregateMatch.ts`), and applied with
+  `verifyPackage` per credit. The camera/OCR flow (`useLabelScanReview` +
   per-row Scan buttons) remains as fallback.
 - Record box measurements (box size, net/gross weights in **kilograms** —
   decimals, 3 dp; destination country) via the shared picking verbs
@@ -29,10 +31,12 @@
   without a formula contribute 0; `null` when none have one) — and stays
   editable.
 - No manual complete button and no task: closing the box IS the measuring
-  completion (`closeShippingBox` guards non-empty, all packages verified,
+  completion (`closeShippingBox` guards non-empty, every package fully
+  rescanned `rescanned_qty >= qty`,
   destination, box size, positive weights gross ≥ net). When the verify step
   is enabled, closing also spawns the box's pending verify task in the same
-  transaction (see [Verify AI scope](../verify/ai-scope.md)).
+  transaction and resets the rescanned credit for the verify pass (see
+  [Verify AI scope](../verify/ai-scope.md)).
 
 ## Out of scope
 
@@ -49,13 +53,14 @@
   box title/status/actions live in the app header via
   `composables/usePageHeader.ts`)
   shared with the verify flow via its `mode: 'measuring' | 'verify'` prop
-  (which per-package flag — `verified` vs `verifyVerified` — gates the scan).
+  (which per-mode badge flag is shown; completion gating is the
+  `rescannedQty >= qty` counter in both modes).
 - `components/BoxMeasurementsModal.vue` — measurement entry (kg inputs,
   `suggestedNetWeightKg` pre-fill, single Confirm-box action).
 - `composables/useScanMatchers.ts` — client-side `matchMeasuring`
-  (read-only match against the box's packages; apply calls
-  `WarehouseService.verifyPackage`; the `flow` context field selects the
-  skip flag for the measuring vs verify pass).
+  (aggregate match against the box's packages via
+  `utils/measuringAggregateMatch.ts`; apply calls
+  `WarehouseService.verifyPackage` per FIFO credit).
 - `services/adapters/backendWarehouse.ts` — `getMeasuringBoxes` /
   `getMeasuringBox`; box mutations reuse the picking verbs.
 - `apps/backend/src/routes/measuring.ts` + `apps/backend/src/db/measuring.ts` —
@@ -82,6 +87,7 @@
 
 - `docs/backend/api-design.md` §Measuring
 - `docs/superpowers/specs/2026-08-11-box-scoped-measuring-verify-design.md`
+- `docs/superpowers/specs/2026-10-03-picking-scan-truth-and-aggregate-verify-design.md`
 - `docs/superpowers/specs/2026-07-28-measuring-verify-refinements-design.md`
 - `docs/superpowers/specs/2026-07-02-measuring-flow-design.md`
 - `docs/superpowers/specs/2026-07-03-boxes-section-redesign-design.md`

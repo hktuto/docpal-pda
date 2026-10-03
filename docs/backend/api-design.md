@@ -271,14 +271,14 @@ best-effort).
 | `POST /picking-orders/:id/claim-shelf-box` | `{shelfBoxId}` (actor from the token) → `{shippingBoxId, packageIds}`, 201. Whole-box exact-match claim (spec `docs/superpowers/specs/2026-07-29-whole-box-picking-claim-design.md`): the shelf box's current contents must exactly equal the order's full remaining open demand (409 `box_not_exact_match`) with no other order reserving any piece (409 `box_not_fully_available`). The carton is reused as the shipping box — created prefilled with `box_size`/`net_weight`/`gross_weight` summed from the source receiving lines' `additional_data` (g→kg via `weightUnit`, default kg), `source_shelf_box_id` recorded — with one boxed package per (item, lot) portion, the order's allocations released, and the auto-finish chain run like the scan path. |
 | `POST /picking-items/:id/scan` | `{actorId, allocationId|source, qty, raw?}` → `{packageIds}`. The one canonical scan-to-pick route; OCR/receiving-source picking folds in here (old `ocr-pick` path dies). |
 | `DELETE /packages/:id` | `{actorId}` → removes an unboxed (unverified) package. |
-| `POST /packages/:id/verify` | `{actorId}` — package must be boxed (409 `package_not_in_box`). Measuring pass: the box is **open**, sets `verified` (no task involved). Verify pass: the box is **closed** and must carry a pending verify task (409 `no_pending_measure_or_verify_task`), sets `verified` + `verify_verified` (409 `package_already_verified` per the applicable flag). |
+| `POST /packages/:id/verify` | `{qty?, actorId}` — package must be boxed (409 `package_not_in_box`). Credits `qty` (default: the package's remaining) onto `rescanned_qty`, capped at `qty` (400 `qty_must_be_positive_integer`; 409 `package_already_verified` when fully credited). Measuring pass: the box is **open**, sets `verified` on first credit (no task involved). Verify pass: the box is **closed** and must carry a pending verify task (409 `no_pending_measure_or_verify_task`), sets `verified` + `verify_verified` on first credit. |
 | `POST /picking-orders/:id/boxes` | `{actorId}` → box. |
 | `PATCH /shipping-boxes/:id` | `{boxSize?, netWeightKg?, grossWeightKg?, destinationCountry?, actorId}` (kilograms, one unit everywhere — decimals allowed, rounded to 3 dp; 400 `invalid_net_weight_kg` / `invalid_gross_weight_kg`). |
 | `POST /shipping-boxes/:id/packages {packageId, actorId}` · `DELETE /shipping-boxes/:id/packages/:packageId` | Box membership. Cross-order packing: any open picking order's unboxed package may be added to the box (the old 409 `different_picking_orders` guard is gone; `shipping_boxes.picking_order_id` stays as the informational "created for" order only). |
 | `POST /shipping-boxes/:id/scan` | `{barcode, qty?, actorId}` → `{packageIds}`, 201. Scan-to-box across orders: resolves the barcode to the one open picking item it could mean across **all** orders (part_no or `wcl_item_no` match on an item of a pending/picking/allocated order with open qty and a remaining allocation; 404 `no_matching_picking_item`, 409 `ambiguous_picking_item`), then picks it straight into this box via the scan path (default qty = the item's open qty capped by the allocation's remaining). |
 | `POST /shipping-boxes/:id/add-all-unboxed` | `{actorId}` → `{packed}`. Stays scoped to the box's creator order. |
-| `POST /shipping-boxes/:id/cancel` · `/close` | `{actorId}`. Close guards: non-empty, every package `verified`, destination (box → creator order's ship_to), box size, positive weights (gross ≥ net). Closing IS the measuring completion — and, when the verify step is enabled, spawns the box's pending verify task in the same tx (`ON CONFLICT DO NOTHING`, idempotent on re-close). |
-| `POST /shipping-boxes/:id/reopen` | `{actorId}` — verify-step re-measure, box-scoped: the box's own pending verify task is required (409 `verify_task_not_pending`); closed box → `open` + packages un-verified (both `verified` and `verify_verified`; 409 `shipping_box_not_closed`). |
+| `POST /shipping-boxes/:id/cancel` · `/close` | `{actorId}`. Close guards: non-empty, every package fully rescanned (`rescanned_qty >= qty`), destination (box → creator order's ship_to), box size, positive weights (gross ≥ net). Closing IS the measuring completion — and, when the verify step is enabled, spawns the box's pending verify task in the same tx (`ON CONFLICT DO NOTHING`, idempotent on re-close) and resets the packages' rescanned credit for the verify pass. |
+| `POST /shipping-boxes/:id/reopen` | `{actorId}` — verify-step re-measure, box-scoped: the box's own pending verify task is required (409 `verify_task_not_pending`); closed box → `open` + packages un-verified (both `verified` and `verify_verified`, and `rescanned_qty` reset; 409 `shipping_box_not_closed`). |
 | `POST /picking-orders/:id/finish` | `{actorId}` → `{id, status}` — flips the order to `finished` (409 `not_all_items_fully_boxed` until every item is fully picked/boxed). No next-step task is created anymore: closing a box is the measuring completion, and the box's verify task comes from `closeShippingBox`. |
 | `POST /picking-orders/report-issues` | `{actorId, entries: [{pickingOrderId, reason, qty?, packSize?, note?, remark?}]}` → `{reported[], skipped[]}`. Per-order entries — no `"; "`-joined remark hack. |
 
@@ -320,19 +320,22 @@ Verify tasks are keyed on the shipping box (`verify_tasks.shipping_box_id`,
 unique — one task per box), created by `closeShippingBox` when the verify
 step is enabled (`ON CONFLICT DO NOTHING` keeps a re-close idempotent).
 Verify is a second full re-scan pass over that one box: the worker re-scans
-every package (`verify_verified`; scanning works on the closed box — checking
+every package (`rescanned_qty` credit — reset to zero by the close that
+spawned the task; scanning works on the closed box — checking
 contents against the sealed box is the normal pass), then completes.
-Completion guards: pending task → box closed → every package re-scanned →
+Completion guards: pending task → box closed → every package fully
+re-scanned (`rescanned_qty >= qty`) →
 `completed` + transition log, no stock movement. Box re-work reuses the
 picking verbs, including the verify-only `POST /shipping-boxes/:id/reopen`
-(returns a closed box to `open` with its packages un-verified on both flags,
+(returns a closed box to `open` with its packages un-verified on both flags
+and the credit reset,
 requires the box's pending verify task).
 
 | Endpoint | Description |
 |---|---|
 | `GET /verify-tasks?status=` | List: `{taskId, status, shippingBoxId, boxStatus, orderNos[], destinationCountry, packageCount, verifyVerifiedCount, createdDate}`. |
 | `GET /verify-tasks/:id` | Detail: `{task{id, status, shippingBoxId, createdDate}, box{..., suggestedNetWeightKg}, packages[{..., partNo, wclItemNo, verified, verifyVerified}]}` (404 `verify_task_not_found`). Same per-box shape as the measuring detail. |
-| `POST /verify-tasks/:id/complete` | `{actorId}` — 404 `verify_task_not_found`, 409 `verify_task_not_pending`, 409 `shipping_box_not_closed`, 409 `packages_not_all_rescanned` until every package is re-scanned (`verify_verified`). |
+| `POST /verify-tasks/:id/complete` | `{actorId}` — 404 `verify_task_not_found`, 409 `verify_task_not_pending`, 409 `shipping_box_not_closed`, 409 `packages_not_all_rescanned` until every package is fully re-scanned (`rescanned_qty >= qty`). |
 
 ## Flow-step config + shipping feed
 
