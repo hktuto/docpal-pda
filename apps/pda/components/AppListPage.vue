@@ -11,6 +11,17 @@
         >
           {{ $t(opt.labelKey) }}
         </button>
+      </div>
+
+      <div class="search-row">
+        <input
+          :value="search"
+          class="search"
+          type="text"
+          :placeholder="searchPlaceholder ? $t(searchPlaceholder) : undefined"
+          @input="onSearchInput"
+        />
+        <slot name="toolbar-actions" />
         <button
           type="button"
           class="refresh-btn"
@@ -21,18 +32,11 @@
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
         </button>
       </div>
-
-      <input
-        :value="search"
-        class="search"
-        type="text"
-        :placeholder="searchPlaceholder ? $t(searchPlaceholder) : undefined"
-        @input="onSearchInput"
-      />
     </div>
 
     <p v-if="loading && empty" class="empty">{{ $t('common.loading') }}</p>
     <p v-else-if="error" class="empty" style="color: var(--danger);">{{ $t('common.errorPrefix', { message: error }) }}</p>
+    <p v-else-if="notice" class="empty" style="color: #92400e;">{{ notice }}</p>
     <p v-else-if="empty" class="empty">{{ emptyText ? $t(emptyText) : '' }}</p>
 
     <div v-else class="list-panel">
@@ -84,6 +88,8 @@ const props = defineProps<{
   /** Re-fetch keeping the loaded row count (visibility regain / SSE). */
   reload: () => void | Promise<void>;
   topics?: string[];
+  /** Warning-style message that replaces the list (e.g. issue-report summary). */
+  notice?: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -134,7 +140,17 @@ useVisibleReload(() => props.reload(), props.topics);
   background: var(--surface);
   color: var(--muted);
   cursor: pointer;
-  margin-left: auto;
+}
+
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.search-row .search {
+  flex: 1;
+  margin-bottom: 0;
 }
 
 .refresh-btn:disabled {

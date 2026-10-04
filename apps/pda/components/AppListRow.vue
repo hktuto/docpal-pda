@@ -1,7 +1,5 @@
 <template>
-  <component
-    :is="to ? NuxtLink : 'div'"
-    :to="to"
+  <div
     class="app-list-row"
     :class="{
       'app-list-row--expandable': expandable,
@@ -10,6 +8,8 @@
       'app-list-row--disabled': disabled,
     }"
   >
+    <slot name="leading" />
+
     <button
       v-if="expandable"
       type="button"
@@ -22,6 +22,13 @@
       </span>
       <span v-for="(line, i) in metaLines" :key="i" class="app-list-row__meta">{{ line }}</span>
     </button>
+    <NuxtLink v-else-if="to" :to="to" class="app-list-row__main">
+      <span class="app-list-row__line1">
+        <span class="app-list-row__title">{{ title }}</span>
+        <span v-if="chipText" class="badge app-list-row__chip" :class="chipClass">{{ chipText }}</span>
+      </span>
+      <span v-for="(line, i) in metaLines" :key="i" class="app-list-row__meta">{{ line }}</span>
+    </NuxtLink>
     <div v-else class="app-list-row__main">
       <div class="app-list-row__line1">
         <span class="app-list-row__title">{{ title }}</span>
@@ -40,19 +47,19 @@
     <div v-if="expandable && expanded" class="app-list-row__detail">
       <slot />
     </div>
-  </component>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { NuxtLink } from "#components";
-
 /**
  * Shared single-column list row (spec 2026-10-04 PDA app rewrite): the title
  * takes the full width and wraps to 2 lines; ONE small status chip sits
  * inline at the end of the title line (no right-hand aside column); up to 2
  * full-width meta lines; chevron on the right. `expandable` + the default
  * slot cover the detail-page variant (toggle button + expandable detail
- * block), `done`/`danger` paint the left border.
+ * block), `done`/`danger` paint the left border. The root is never an
+ * anchor — `to` turns only the main area into a NuxtLink, so the `leading`
+ * slot can hold interactive controls (e.g. selection checkboxes).
  */
 const props = defineProps<{
   title: string;
@@ -60,7 +67,7 @@ const props = defineProps<{
   meta?: (string | null | undefined)[];
   chipText?: string;
   chipClass?: string;
-  /** Navigation row (NuxtLink). Omit for a plain row. */
+  /** Navigation target for the main area. Omit for a plain row. */
   to?: string;
   expandable?: boolean;
   expanded?: boolean;
