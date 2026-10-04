@@ -1,6 +1,7 @@
 <template>
   <div>
-    <div class="list-toolbar">
+    <slot name="header" />
+    <div v-if="filters?.length || searchPlaceholder || hasActions" class="list-toolbar">
       <div v-if="filters?.length" class="filters">
         <button
           v-for="opt in filters"
@@ -15,10 +16,11 @@
 
       <div class="search-row">
         <input
+          v-if="searchPlaceholder"
           :value="search"
           class="search"
           type="text"
-          :placeholder="searchPlaceholder ? $t(searchPlaceholder) : undefined"
+          :placeholder="$t(searchPlaceholder)"
           @input="onSearchInput"
         />
         <slot name="toolbar-actions" />
@@ -43,7 +45,7 @@
       <slot />
     </div>
 
-    <div v-if="!empty" class="list-footer">
+    <div v-if="!empty && !hideFooter" class="list-footer">
       <span class="list-footer__count">{{ $t('common.showingOf', { shown, total }) }}</span>
       <button
         v-if="hasMore"
@@ -73,7 +75,8 @@ export interface AppListFilterOption {
  * immediate for filter-chip changes) and `load-more`.
  */
 const props = defineProps<{
-  search: string;
+  search?: string;
+  /** When set the search input renders; omit for lists without search. */
   searchPlaceholder?: string;
   filters?: AppListFilterOption[];
   filter?: string;
@@ -90,6 +93,9 @@ const props = defineProps<{
   topics?: string[];
   /** Warning-style message that replaces the list (e.g. issue-report summary). */
   notice?: string | null;
+  hideFooter?: boolean;
+  /** False = search stays client-side (no debounced `apply` on typing). */
+  applyOnSearch?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -100,10 +106,14 @@ const emit = defineEmits<{
   "load-more": [];
 }>();
 
+const slots = useSlots();
+const hasActions = computed(() => Boolean(slots["toolbar-actions"]));
+
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
 function onSearchInput(event: Event) {
   emit("update:search", (event.target as HTMLInputElement).value);
+  if (props.applyOnSearch === false) return;
   if (searchTimer) clearTimeout(searchTimer);
   searchTimer = setTimeout(() => emit("apply"), 300);
 }
