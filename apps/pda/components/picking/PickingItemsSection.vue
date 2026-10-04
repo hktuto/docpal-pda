@@ -30,8 +30,7 @@
           </span>
         </div>
         <div class="list-row__meta">
-          {{ $t('picking.itemsSection.requiredQty') }}: {{ group.qty }}
-          · {{ $t('picking.itemsSection.scannedQty') }}: {{ group.scannedQty }}
+          {{ groupMeta(group) }}
         </div>
       </button>
       <!-- <div class="list-row__aside">
@@ -126,7 +125,7 @@
             class="lot"
           >
             <template v-if="allocation.lot">
-              <DetailRow :label="$t('picking.itemsSection.location')">
+              <DetailRow v-if="showAllocLocation" :label="$t('picking.itemsSection.location')">
                 <span v-if="allocation.lot.shelfCode && allocation.lot.boxId">
                   {{ allocation.lot.shelfCode }} / {{ allocation.lot.boxId }}
                 </span>
@@ -141,20 +140,20 @@
                   :aria-label="allocation.lot.shelfWarning"
                 >⚠️</span>
               </DetailRow>
-              <DetailRow :label="$t('picking.itemsSection.dateLotCooCow')">
-                {{ formatLotFields(allocation.lot) }}
+              <DetailRow v-if="allocBatchLabel(allocation.lot)" :label="$t('picking.itemsSection.dateLotCooCow')">
+                {{ allocBatchLabel(allocation.lot) }}
               </DetailRow>
-              <DetailRow :label="$t('picking.itemsSection.allocatedQty')" :value="allocation.qty" />
+              <DetailRow v-if="showAllocQty" :label="$t('picking.itemsSection.allocatedQty')" :value="allocation.qty" />
             </template>
 
             <template v-else>
-              <DetailRow :label="$t('picking.itemsSection.source')">
+              <DetailRow v-if="showAllocSource" :label="$t('picking.itemsSection.source')">
                 {{ $t('picking.itemsSection.receivingArea') }}
                 <span v-if="allocation.boxId">
                   ({{ allocation.boxId }})
                 </span>
               </DetailRow>
-              <DetailRow :label="$t('picking.itemsSection.allocatedQty')" :value="allocation.qty" />
+              <DetailRow v-if="showAllocQty" :label="$t('picking.itemsSection.allocatedQty')" :value="allocation.qty" />
             </template>
           </div>
         </details>
@@ -167,6 +166,7 @@
 import type { PickingOrderDetail } from "~/services/types";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { normalizePartNo } from "~/utils/text";
+import { PICKING_GROUP_FIELDS, IDENTITY_DETAIL_FIELDS } from "~/utils/viewConfig";
 
 type PickingItem = PickingOrderDetail["items"][number];
 
@@ -189,6 +189,44 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const statusLabel = useStatusLabel();
+const { viewConfig } = useViewConfig();
+
+// Collapsed meta line + expanded allocation rows are driven by
+// pdaViewConfig.pickingDetail (spec 2026-10-04): itemFields pick the
+// group-level collapsed fields, expandedFields gate the per-allocation rows.
+const detailConfig = computed(() => viewConfig.value.pickingDetail);
+
+function groupMeta(group: ItemGroup): string {
+  const parts: string[] = [];
+  for (const field of detailConfig.value.itemFields) {
+    if (IDENTITY_DETAIL_FIELDS.has(field) || !PICKING_GROUP_FIELDS.has(field)) continue;
+    if (field === "qty") parts.push(`${t("picking.itemsSection.requiredQty")}: ${group.qty}`);
+    else if (field === "picked_qty") parts.push(`${t("picking.itemsSection.scannedQty")}: ${group.scannedQty}`);
+    else if (field === "allocated_qty") {
+      parts.push(`${t("picking.itemsSection.allocatedQty")}: ${group.allocations.reduce((s, a) => s + a.qty, 0)}`);
+    }
+  }
+  return parts.join(" · ");
+}
+
+const showAllocLocation = computed(() => {
+  const f = detailConfig.value.expandedFields;
+  return f.includes("shelf_code") || f.includes("box_id");
+});
+const showAllocQty = computed(() => detailConfig.value.expandedFields.includes("allocated_qty"));
+const showAllocSource = computed(() => detailConfig.value.expandedFields.includes("source"));
+
+// The date/lot/COO/COW batch row shows only the batch fields present in
+// expandedFields (all four by default); hidden when none are configured.
+function allocBatchLabel(lot: { dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null }): string {
+  const fields = detailConfig.value.expandedFields;
+  const parts: string[] = [];
+  if (fields.includes("date_code")) parts.push(lot.dateCode || t("common.noData"));
+  if (fields.includes("lot_code")) parts.push(lot.lotCode || t("common.noData"));
+  if (fields.includes("coo")) parts.push(lot.coo || t("common.noData"));
+  if (fields.includes("cow")) parts.push(lot.cow || t("common.noData"));
+  return parts.join(" / ");
+}
 
 // Merge view (default): one row per part no, aggregating the quantities of
 // all order lines carrying that part (expanded detail still lists every

@@ -20,10 +20,10 @@
       v-for="ro in rows"
       :key="ro.id"
       :to="`/receiving/${ro.id}`"
-      :title="rowTitle(ro)"
-      :meta="[rowMeta(ro), rowExtra(ro)]"
-      :chip-text="statusLabel.receiving(ro.status)"
-      :chip-class="badgeClass(ro.status)"
+      :title="rowView(ro).title"
+      :meta="rowMeta(ro)"
+      :chip-text="rowChip(ro)?.text"
+      :chip-class="rowChip(ro)?.cls"
     />
   </AppListPage>
 </template>
@@ -31,6 +31,7 @@
 <script setup lang="ts">
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useWarehouse } from "~/composables/useWarehouse";
+import { viewListChip, viewListRow } from "~/utils/viewConfig";
 import type { ReceivingFilter, ReceivingOrderListQuery, ReceivingOrderListRow } from "~/services/types";
 
 definePageMeta({ title: "meta.receiving" });
@@ -39,11 +40,19 @@ const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const warehouse = useWarehouse();
-// Row title/meta come from the warehouse's pdaListTemplates flow config
-// (spec 2026-09-21-pda-list-row-templates-design.md).
-const { formatRow } = useListTemplates();
-const rowTitle = (ro: ReceivingOrderListRow) => formatRow("receiving", "title", ro);
-const rowMeta = (ro: ReceivingOrderListRow) => formatRow("receiving", "meta", ro);
+// Row title/meta/chip come from the warehouse's pdaViewConfig flow config
+// (spec 2026-10-04-pda-app-rewrite-design.md); on a backend without the key
+// the legacy listTemplates + the extra meta line render instead.
+const { viewConfig, viewConfigLoaded, renderChip } = useViewConfig();
+const rowView = (ro: ReceivingOrderListRow) => viewListRow("receiving", ro, viewConfig.value);
+function rowMeta(ro: ReceivingOrderListRow): string[] {
+  const meta = rowView(ro).meta;
+  return viewConfigLoaded.value ? meta : [...meta, rowExtra(ro)];
+}
+function rowChip(ro: ReceivingOrderListRow) {
+  if (!viewConfigLoaded.value) return { text: statusLabel.receiving(ro.status), cls: badgeClass(ro.status) };
+  return renderChip(viewListChip("receiving", ro, viewConfig.value));
+}
 
 // The old two-column row showed remaining/pending counts as aside badges;
 // the single-column row carries them on the second meta line instead.

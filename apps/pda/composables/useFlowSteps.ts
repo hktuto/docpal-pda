@@ -1,4 +1,6 @@
 import type { FlowStep } from "~/services/types";
+import { applyListTemplates } from "~/composables/useListTemplates";
+import { applyLegacyListTemplates, applyViewConfig } from "~/composables/useViewConfig";
 
 /**
  * Flow-step config (backend warehouse_config row "flow" — FLOW_CONFIG env
@@ -60,7 +62,14 @@ async function loadFlowSteps(): Promise<void> {
       if (config.pickingShelfScan) {
         pickingShelfScan.value = config.pickingShelfScan;
       }
-      applyListTemplates(config.listTemplates);
+      if (config.viewConfig) {
+        applyViewConfig(config.viewConfig);
+      } else {
+        // Old backend: keep the legacy listTemplates path — list pages render
+        // from the mapped view-config lists with their pre-viewConfig extras.
+        applyListTemplates(config.listTemplates);
+        applyLegacyListTemplates(config.listTemplates);
+      }
     } catch {
       // Config unavailable (old backend, offline) — keep the defaults.
     } finally {

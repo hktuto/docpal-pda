@@ -40,10 +40,10 @@
           :key="po.id"
           :to="`/picking/${po.id}`"
           :disabled="!isSelectable(po.status)"
-          :title="formatRow('picking', 'title', po)"
-          :meta="[formatRow('picking', 'meta', po), rowExtra(po)]"
-          :chip-text="po.workingByName ? $t('picking.lockedBy', { name: po.workingByName }) : undefined"
-          chip-class="badge--pending"
+          :title="rowView(po).title"
+          :meta="rowMeta(po)"
+          :chip-text="rowChip(po)?.text"
+          :chip-class="rowChip(po)?.cls"
         >
           <template v-if="isSelectable(po.status)" #leading>
             <input
@@ -82,6 +82,7 @@
 
 <script setup lang="ts">
 import { useWarehouse } from "~/composables/useWarehouse";
+import { viewListChip, viewListRow } from "~/utils/viewConfig";
 import PickingFilterModal from "~/components/picking/PickingFilterModal.vue";
 import PickingIssueReportModal from "~/components/PickingIssueReportModal.vue";
 import type {
@@ -97,9 +98,23 @@ const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const warehouse = useWarehouse();
-// Row title/meta come from the warehouse's pdaListTemplates flow config
-// (spec 2026-09-21-pda-list-row-templates-design.md).
-const { formatRow } = useListTemplates();
+// Row title/meta/chip come from the warehouse's pdaViewConfig flow config
+// (spec 2026-10-04-pda-app-rewrite-design.md); on a backend without the key
+// the legacy listTemplates + the extra meta line + work-lock chip render.
+const { viewConfig, viewConfigLoaded, renderChip } = useViewConfig();
+const rowView = (po: PickingOrderListRow) => viewListRow("picking", po, viewConfig.value);
+function rowMeta(po: PickingOrderListRow): string[] {
+  const meta = rowView(po).meta;
+  return viewConfigLoaded.value ? meta : [...meta, rowExtra(po)];
+}
+function rowChip(po: PickingOrderListRow) {
+  if (!viewConfigLoaded.value) {
+    return po.workingByName
+      ? { text: t("picking.lockedBy", { name: po.workingByName }), cls: "badge--pending" }
+      : null;
+  }
+  return renderChip(viewListChip("picking", po, viewConfig.value));
+}
 
 useHead({ title: t("picking.title") });
 

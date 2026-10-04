@@ -57,9 +57,9 @@ import {
 } from "~/utils/receivingGrouping";
 
 // Receiving detail items with the group-by chip row (spec 2026-10-04):
-// Invoice (today's default, carton sub-groups inside) / Carton / Part no.
-// The chip choice is session-local; the admin default arrives with the
-// pdaViewConfig work in Phase 4.
+// Invoice / Carton / Part no. The default chip comes from
+// pdaViewConfig.receivingDetail.defaultGrouping; the worker's chip choice is
+// session-local.
 const props = defineProps<{
   order: DisplayReceivingOrder;
   saving: Record<string, boolean>;
@@ -79,7 +79,7 @@ const groupByOptions: { labelKey: string; value: ReceivingGroupBy }[] = [
   { labelKey: "receiving.itemsTab.groupByPartNo", value: "part-no" },
 ];
 
-const groupBy = ref<ReceivingGroupBy>("invoice");
+const groupBy = ref<ReceivingGroupBy>(useViewConfig().viewConfig.value.receivingDetail.defaultGrouping);
 const collapsedGroups = ref<Set<string>>(new Set());
 
 const groups = computed(() =>

@@ -18,10 +18,10 @@
       v-for="task in rows"
       :key="task.taskId"
       :to="`/verify/${task.shippingBoxId}`"
-      :title="formatRow('verify', 'title', task)"
-      :meta="[formatRow('verify', 'meta', task), $t('common.packagesVerified', { verified: task.verifyVerifiedCount, total: task.packageCount })]"
-      :chip-text="statusLabel.box(task.boxStatus)"
-      :chip-class="badgeClass(task.boxStatus)"
+      :title="rowView(task).title"
+      :meta="rowMeta(task)"
+      :chip-text="rowChip(task)?.text"
+      :chip-class="rowChip(task)?.cls"
     />
   </AppListPage>
 </template>
@@ -32,6 +32,7 @@ import { useWarehouse } from "~/composables/useWarehouse";
 import { useHardwareScanner } from "~/composables/useHardwareScanner";
 import { useToast } from "~/composables/useToast";
 import { badgeClass } from "~/composables/useStatusBadge";
+import { viewListChip, viewListRow } from "~/utils/viewConfig";
 import type { VerifyTaskListRow } from "~/services/types";
 
 definePageMeta({ title: "meta.verify" });
@@ -40,9 +41,21 @@ const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const warehouse = useWarehouse();
-// Row title/meta come from the warehouse's pdaListTemplates flow config
-// (spec 2026-09-21-pda-list-row-templates-design.md).
-const { formatRow } = useListTemplates();
+// Row title/meta/chip come from the warehouse's pdaViewConfig flow config
+// (spec 2026-10-04-pda-app-rewrite-design.md); on a backend without the key
+// the legacy listTemplates + the extra meta line render instead.
+const { viewConfig, viewConfigLoaded, renderChip } = useViewConfig();
+const rowView = (task: VerifyTaskListRow) => viewListRow("verify", task, viewConfig.value);
+function rowMeta(task: VerifyTaskListRow): string[] {
+  const meta = rowView(task).meta;
+  return viewConfigLoaded.value
+    ? meta
+    : [...meta, t("common.packagesVerified", { verified: task.verifyVerifiedCount, total: task.packageCount })];
+}
+function rowChip(task: VerifyTaskListRow) {
+  if (!viewConfigLoaded.value) return { text: statusLabel.box(task.boxStatus), cls: badgeClass(task.boxStatus) };
+  return renderChip(viewListChip("verify", task, viewConfig.value));
+}
 const router = useRouter();
 const { showToast } = useToast();
 

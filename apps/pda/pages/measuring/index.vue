@@ -18,10 +18,10 @@
       v-for="box in rows"
       :key="box.boxId"
       :to="`/measuring/${box.boxId}`"
-      :title="formatRow('measuring', 'title', box)"
-      :meta="[formatRow('measuring', 'meta', box), $t('common.packagesVerified', { verified: box.verifiedCount, total: box.packageCount })]"
-      :chip-text="statusLabel.box(box.status)"
-      :chip-class="badgeClass(box.status)"
+      :title="rowView(box).title"
+      :meta="rowMeta(box)"
+      :chip-text="rowChip(box)?.text"
+      :chip-class="rowChip(box)?.cls"
     />
   </AppListPage>
 </template>
@@ -32,6 +32,7 @@ import { useWarehouse } from "~/composables/useWarehouse";
 import { useHardwareScanner } from "~/composables/useHardwareScanner";
 import { useToast } from "~/composables/useToast";
 import { badgeClass } from "~/composables/useStatusBadge";
+import { viewListChip, viewListRow } from "~/utils/viewConfig";
 import type { MeasuringBoxListRow } from "~/services/types";
 
 definePageMeta({ title: "meta.measuring" });
@@ -40,9 +41,21 @@ const { t } = useI18n();
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const warehouse = useWarehouse();
-// Row title/meta come from the warehouse's pdaListTemplates flow config
-// (spec 2026-09-21-pda-list-row-templates-design.md).
-const { formatRow } = useListTemplates();
+// Row title/meta/chip come from the warehouse's pdaViewConfig flow config
+// (spec 2026-10-04-pda-app-rewrite-design.md); on a backend without the key
+// the legacy listTemplates + the extra meta line render instead.
+const { viewConfig, viewConfigLoaded, renderChip } = useViewConfig();
+const rowView = (box: MeasuringBoxListRow) => viewListRow("measuring", box, viewConfig.value);
+function rowMeta(box: MeasuringBoxListRow): string[] {
+  const meta = rowView(box).meta;
+  return viewConfigLoaded.value
+    ? meta
+    : [...meta, t("common.packagesVerified", { verified: box.verifiedCount, total: box.packageCount })];
+}
+function rowChip(box: MeasuringBoxListRow) {
+  if (!viewConfigLoaded.value) return { text: statusLabel.box(box.status), cls: badgeClass(box.status) };
+  return renderChip(viewListChip("measuring", box, viewConfig.value));
+}
 const router = useRouter();
 const { showToast } = useToast();
 

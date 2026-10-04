@@ -3,25 +3,17 @@
     expandable
     :expanded="expanded"
     :danger="Boolean(item.mismatch)"
-    :title="item.wclItemNo ?? item.partNo"
-    :meta="[`${$t('receiving.itemsTab.expected')}: ${item.lineQty ?? '—'} · ${item.poNo ?? '—'}/${item.poLine ?? '—'}`]"
+    :title="rowTitle"
+    :meta="rowMeta"
     :chip-text="locked ? $t('common.locked') : undefined"
     chip-class="badge--danger"
     @toggle="expanded = !expanded"
   >
-    <DetailRow :label="$t('receiving.itemsTab.expected')" :value="item.lineQty ?? '—'" />
-    <DetailRow :label="$t('receiving.itemsTab.boxId')" :value="item.ctnNo" />
-    <DetailRow :label="$t('receiving.itemsTab.poLine')" :value="`${item.poNo} / ${item.poLine}`" />
-    <DetailRow :label="$t('receiving.itemsTab.reserved')" :value="item.allocatedQty" />
-    <DetailRow :label="$t('receiving.itemsTab.picked')" :value="item.pickedQty" />
-    <DetailRow :label="$t('receiving.itemsTab.putAway')" :value="item.putAwayQty" />
     <DetailRow
-      :label="$t('receiving.itemsTab.available')"
-      :value="item.receivedQty - item.pickedQty - item.putAwayQty - item.allocatedQty"
-    />
-    <DetailRow
-      :label="$t('receiving.itemsTab.dateLotCooCow')"
-      :value="`${item.dateCode} / ${item.lotCode} / ${item.coo} / ${item.cow}`"
+      v-for="field in detailConfig.expandedFields"
+      :key="field"
+      :label="$t(`viewConfig.fields.${field}`)"
+      :value="receivingItemFieldValue(field, item)"
     />
 
     <div v-if="orderStatus !== 'clear'" style="margin-top: 0.75rem;">
@@ -85,10 +77,15 @@
 
 <script setup lang="ts">
 import { DisplayReceivingItem } from "./types";
+import {
+  IDENTITY_DETAIL_FIELDS,
+  receivingItemFieldValue,
+} from "~/utils/viewConfig";
 
 // One receiving item row (single-column AppListRow, expandable to the full
-// detail + mismatch actions). Extracted from ReceivingItemsTab so every
-// grouping mode renders the same row; the expanded state is row-local.
+// detail + mismatch actions). The collapsed meta line and the expanded field
+// rows are driven by pdaViewConfig.receivingDetail (spec 2026-10-04) —
+// config order/presence controls display; the expanded state is row-local.
 const props = defineProps<{
   item: DisplayReceivingItem;
   orderStatus: string;
@@ -102,8 +99,27 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+const { viewConfig } = useViewConfig();
 
 const expanded = ref(false);
+
+const detailConfig = computed(() => viewConfig.value.receivingDetail);
+
+// The identity field (wcl_item_no preferred, else part_no) is the title; the
+// remaining item fields form the collapsed meta line.
+const rowTitle = computed(() => {
+  const fields = detailConfig.value.itemFields;
+  if (fields.includes("part_no") && !fields.includes("wcl_item_no")) return props.item.partNo;
+  return props.item.wclItemNo ?? props.item.partNo;
+});
+
+const rowMeta = computed(() => {
+  const line = detailConfig.value.itemFields
+    .filter((f) => !IDENTITY_DETAIL_FIELDS.has(f))
+    .map((f) => `${t(`viewConfig.fields.${f}`)}: ${receivingItemFieldValue(f, props.item)}`)
+    .join(" · ");
+  return line ? [line] : [];
+});
 
 const locked = computed(() => props.item.pickedQty > 0 || props.item.putAwayQty > 0);
 

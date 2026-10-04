@@ -99,11 +99,11 @@
 
       <div v-for="group in partGroups" :key="group.key" class="part-item">
         <div class="part-item__header">
-          <strong>{{ group.wclItemNo ?? group.partNo }}</strong>
+          <strong>{{ rowView(group).title }}</strong>
           <span class="part-item__qty">{{ $t('stockSearch.onHand', { qty: group.onHandQty }) }}</span>
         </div>
 
-        <div v-if="groupMeta(group)" class="part-item__meta">{{ groupMeta(group) }}</div>
+        <div v-for="(line, i) in rowMeta(group)" :key="i" class="part-item__meta">{{ line }}</div>
 
         <ul class="part-item__lots">
           <li v-for="(lot, index) in group.lots" :key="index" class="lot-row">
@@ -137,6 +137,7 @@ import { useVisibleReload } from "~/composables/useVisibleReload";
 import { useErrorMessage } from "~/composables/errorMessage";
 import { useWarehouse } from "~/composables/useWarehouse";
 import { dateToDateCode } from "~/utils/dateCode";
+import { viewListRow } from "~/utils/viewConfig";
 import type {
   StockSearchFilters,
   StockSearchLot,
@@ -341,6 +342,20 @@ function groupMeta(group: { partNo: string; wclItemNo: string | null; descriptio
   ]
     .filter(Boolean)
     .join(" · ");
+}
+
+// Part-group title/meta come from the warehouse's pdaViewConfig flow config
+// (spec 2026-10-04-pda-app-rewrite-design.md); on a backend without the key
+// the previous hardcoded header/meta render instead.
+const { viewConfig, viewConfigLoaded } = useViewConfig();
+type PartGroup = (typeof partGroups.value)[number];
+const rowView = (group: PartGroup) => viewListRow("stock-search", group, viewConfig.value);
+function rowMeta(group: PartGroup): string[] {
+  if (!viewConfigLoaded.value) {
+    const legacy = groupMeta(group);
+    return legacy ? [legacy] : [];
+  }
+  return rowView(group).meta;
 }
 
 // Org (office) + sub-inventory + shelf + box; the API returns fields, the

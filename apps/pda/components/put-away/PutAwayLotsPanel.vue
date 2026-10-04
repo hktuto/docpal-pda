@@ -17,21 +17,23 @@
       <DetailRow :label="$t('putAway.lotsPanel.part')">
         <span class="card__title">{{ (item.wclItemNo ?? item.partNo) || $t('common.noData') }}</span>
       </DetailRow>
-      <DetailRow :label="$t('putAway.lotsPanel.dateLot')">
-        <span>{{ item.dateCode || $t('common.noData') }} / {{ item.lotCode || $t('common.noData') }}</span>
-      </DetailRow>
-      <DetailRow :label="$t('putAway.lotsPanel.cooCow')">
-        <span>{{ item.coo || $t('common.noData') }} / {{ item.cow || $t('common.noData') }}</span>
-      </DetailRow>
+      <DetailRow
+        v-for="field in visibleItemFields"
+        :key="field"
+        :label="$t(`viewConfig.fields.${field}`)"
+        :value="putAwayItemFieldValue(field, item)"
+      />
       <DetailRow :label="$t('putAway.lotsPanel.totalQty') +' / '+ $t('putAway.lotsPanel.scannedQty')  +' / '+ $t('putAway.lotsPanel.boxedQty')">
         <span>{{ item.lineQty ?? '—' }}</span> / <span>{{ scannedQty(item) || 0 }}</span> / <span>{{ item.putAwayQty }}</span>
       </DetailRow>
-      <DetailRow v-if="item.suggestedShelfCode" :label="$t('putAway.lotsPanel.suggestedShelf')">
-        <span class="shelf-hint">→ {{ item.suggestedShelfCode }}</span>
-      </DetailRow>
-      <DetailRow v-if="item.suggestedBoxId" :label="$t('putAway.lotsPanel.suggestedBox')">
-        <span class="shelf-hint">→ {{ item.suggestedBoxId }}</span>
-      </DetailRow>
+      <template v-if="expandedItems.has(item.id)">
+        <DetailRow
+          v-for="field in detailConfig.expandedFields"
+          :key="field"
+          :label="$t(`viewConfig.fields.${field}`)"
+          :value="putAwayItemFieldValue(field, item)"
+        />
+      </template>
 
       <div class="lot-actions">
         <button
@@ -118,6 +120,7 @@
 <script setup lang="ts">
 import InlineSpinner from "~/components/InlineSpinner.vue";
 import type { PutAwayExpectedItem, PutAwayScan, PutAwayBox } from "~/services/types";
+import { IDENTITY_DETAIL_FIELDS, putAwayItemFieldValue } from "~/utils/viewConfig";
 
 interface Props {
   items: PutAwayExpectedItem[];
@@ -133,6 +136,15 @@ interface Props {
 }
 
 const props = defineProps<Props>();
+
+// Card body rows + expanded-only rows are driven by pdaViewConfig.putAwayDetail
+// (spec 2026-10-04): itemFields render in the card body (identity fields stay
+// in the title row), expandedFields appear when the item is expanded.
+const { viewConfig } = useViewConfig();
+const detailConfig = computed(() => viewConfig.value.putAwayDetail);
+const visibleItemFields = computed(() =>
+  detailConfig.value.itemFields.filter((f) => !IDENTITY_DETAIL_FIELDS.has(f))
+);
 
 const emit = defineEmits<{
   scan: [item: PutAwayExpectedItem];

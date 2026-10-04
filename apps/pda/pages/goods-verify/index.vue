@@ -28,10 +28,10 @@
       v-for="task in rows"
       :key="task.id"
       :to="`/goods-verify/${task.id}`"
-      :title="formatRow('goods-verify', 'title', task)"
-      :meta="[formatRow('goods-verify', 'meta', task), rowExtra(task)]"
-      :chip-text="statusLabel.goodsVerify(task.status)"
-      :chip-class="badgeClass(task.status)"
+      :title="rowView(task).title"
+      :meta="rowMeta(task)"
+      :chip-text="rowChip(task)?.text"
+      :chip-class="rowChip(task)?.cls"
     />
   </AppListPage>
 </template>
@@ -40,6 +40,7 @@
 import { useWarehouse } from "~/composables/useWarehouse";
 import { useErrorMessage } from "~/composables/errorMessage";
 import { badgeClass } from "~/composables/useStatusBadge";
+import { viewListChip, viewListRow } from "~/utils/viewConfig";
 import type { GoodsVerifyTaskListRow } from "~/services/types";
 
 definePageMeta({ title: "meta.goodsVerify" });
@@ -50,9 +51,19 @@ useHead({ title: t('goodsVerify.title') });
 const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const warehouse = useWarehouse();
-// Row title/meta come from the warehouse's pdaListTemplates flow config
-// (spec 2026-09-21-pda-list-row-templates-design.md).
-const { formatRow } = useListTemplates();
+// Row title/meta/chip come from the warehouse's pdaViewConfig flow config
+// (spec 2026-10-04-pda-app-rewrite-design.md); on a backend without the key
+// the legacy listTemplates + the extra meta line render instead.
+const { viewConfig, viewConfigLoaded, renderChip } = useViewConfig();
+const rowView = (task: GoodsVerifyTaskListRow) => viewListRow("goods-verify", task, viewConfig.value);
+function rowMeta(task: GoodsVerifyTaskListRow): string[] {
+  const meta = rowView(task).meta;
+  return viewConfigLoaded.value ? meta : [...meta, rowExtra(task)];
+}
+function rowChip(task: GoodsVerifyTaskListRow) {
+  if (!viewConfigLoaded.value) return { text: statusLabel.goodsVerify(task.status), cls: badgeClass(task.status) };
+  return renderChip(viewListChip("goods-verify", task, viewConfig.value));
+}
 
 // UTC date — matches the backend's "today" (the DB session runs in UTC).
 const date = ref(new Date().toISOString().slice(0, 10));

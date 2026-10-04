@@ -17,6 +17,10 @@ export type PdaListKey =
   | "verify"
   | "measuring";
 
+/** List keys addressable by pdaViewConfig.lists — the six template lists plus
+ *  stock-search (spec 2026-10-04-pda-app-rewrite-design.md). */
+export type PdaViewListKey = PdaListKey | "stock-search";
+
 export const PDA_LIST_KEYS: PdaListKey[] = [
   "receiving",
   "picking",
@@ -54,8 +58,9 @@ export interface PdaListFieldSpec {
 }
 
 /** snake_case token → row field, per list. The display-order keys double as
- *  the admin editor's placeholder chips. */
-export const PDA_LIST_FIELDS: Record<PdaListKey, Record<string, PdaListFieldSpec>> = {
+ *  the admin editor's placeholder chips. Includes the view-config-only
+ *  stock-search list (spec 2026-10-04). */
+export const PDA_LIST_FIELDS: Record<PdaViewListKey, Record<string, PdaListFieldSpec>> = {
   receiving: {
     name: { field: "displayName" },
     batch_no: { field: "batchNo" },
@@ -128,6 +133,13 @@ export const PDA_LIST_FIELDS: Record<PdaListKey, Record<string, PdaListFieldSpec
     package_count: { field: "packageCount" },
     verified_count: { field: "verifiedCount" },
   },
+  // View-config only (no pdaListTemplates list): the stock-search part group.
+  "stock-search": {
+    wcl_item_no: { field: "wclItemNo" },
+    part_no: { field: "partNo" },
+    description: { field: "description" },
+    on_hand_qty: { field: "onHandQty" },
+  },
 };
 
 export type PdaListRow = Record<string, unknown>;
@@ -144,7 +156,7 @@ function formatValue(spec: PdaListFieldSpec, value: unknown): string {
 }
 
 /** Render one template against a row; unknown [tokens] stay literal. */
-export function formatListRowTemplate(fields: PdaListRow, template: string, listKey: PdaListKey): string {
+export function formatListRowTemplate(fields: PdaListRow, template: string, listKey: PdaViewListKey): string {
   const catalog = PDA_LIST_FIELDS[listKey];
   return template.replace(/\[([^\]]*)\]/g, (whole, name: string) => {
     const spec = catalog[name];
@@ -156,13 +168,13 @@ export function formatListRowTemplate(fields: PdaListRow, template: string, list
 /** True when the render carries no letter/digit — i.e. every placeholder was
  *  empty and only separators/literals like " · " remain. Drives the title
  *  fallback and the meta-line collapse. */
-function hasContent(rendered: string): boolean {
+export function hasListRowContent(rendered: string): boolean {
   return /[\p{L}\p{N}]/u.test(rendered);
 }
 
 /** Last-resort title when the (custom, then default) title template renders
  *  empty — a row never shows blank. */
-function primaryId(listKey: PdaListKey, fields: PdaListRow): string {
+export function primaryListRowId(listKey: PdaViewListKey, fields: PdaListRow): string {
   switch (listKey) {
     case "receiving":
       return String(fields.displayName ?? fields.batchNo ?? "");
@@ -176,6 +188,8 @@ function primaryId(listKey: PdaListKey, fields: PdaListRow): string {
       return String(fields.shippingBoxId ?? "");
     case "measuring":
       return String(fields.boxId ?? "");
+    case "stock-search":
+      return String(fields.wclItemNo ?? fields.partNo ?? "");
   }
 }
 
@@ -189,8 +203,8 @@ export function formatListRow(
   templates: PdaListTemplates = DEFAULT_PDA_LIST_TEMPLATES
 ): string {
   const rendered = formatListRowTemplate(fields, templates[listKey][slot], listKey);
-  if (slot === "meta") return hasContent(rendered) ? rendered : "";
-  if (hasContent(rendered)) return rendered;
+  if (slot === "meta") return hasListRowContent(rendered) ? rendered : "";
+  if (hasListRowContent(rendered)) return rendered;
   const fallback = formatListRowTemplate(fields, DEFAULT_PDA_LIST_TEMPLATES[listKey].title, listKey);
-  return hasContent(fallback) ? fallback : primaryId(listKey, fields);
+  return hasListRowContent(fallback) ? fallback : primaryListRowId(listKey, fields);
 }

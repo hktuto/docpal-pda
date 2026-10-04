@@ -488,6 +488,13 @@ export interface FlowConfigState {
     receivingOrderNameTemplate: string;
     /** Per-PDA-list {title, meta} display templates (fully resolved). */
     pdaListTemplates: Record<string, { title: string; meta: string }>;
+    /** PDA view config overrides as stored (validated partial). */
+    pdaViewConfig?: {
+      lists?: Record<string, { title?: string; meta?: string[]; chip?: string }>;
+      receivingDetail?: { defaultGrouping?: string; itemFields?: string[]; expandedFields?: string[] };
+      pickingDetail?: { itemFields?: string[]; expandedFields?: string[] };
+      putAwayDetail?: { itemFields?: string[]; expandedFields?: string[] };
+    };
     /** Picking shelf-scan mode ("off" | "require-match" | "require-any"). */
     pickingShelfScan: "off" | "require-match" | "require-any";
   };

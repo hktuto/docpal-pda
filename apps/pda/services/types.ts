@@ -809,6 +809,26 @@ export interface FlowConfig {
   /** Picking shelf-scan mode ("off" | "require-match" | "require-any").
    *  Optional — backends predating the feature omit it (= "off"). */
   pickingShelfScan?: "off" | "require-match" | "require-any";
+  /** Resolved pdaViewConfig (spec 2026-10-04-pda-app-rewrite-design.md):
+   *  per-list {title, meta[1-2], chip} + detail field lists. Optional —
+   *  backends predating the key omit it and the legacy listTemplates render
+   *  via the migration fallback. */
+  viewConfig?: PdaViewConfigDto;
+}
+
+/** GET /config viewConfig section (fully resolved server-side; the client
+ *  still merges defensively over its own defaults). */
+export interface PdaViewConfigDto {
+  lists?: Partial<
+    Record<string, { title?: string; meta?: string[]; chip?: string }>
+  >;
+  receivingDetail?: {
+    defaultGrouping?: string;
+    itemFields?: string[];
+    expandedFields?: string[];
+  };
+  pickingDetail?: { itemFields?: string[]; expandedFields?: string[] };
+  putAwayDetail?: { itemFields?: string[]; expandedFields?: string[] };
 }
 
 // ------------------------------------------------------------------

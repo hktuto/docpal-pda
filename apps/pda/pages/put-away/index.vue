@@ -22,10 +22,10 @@
         v-for="task in tasks"
         :key="task.id"
         :to="`/put-away/${task.receivingOrderId}?task=${task.id}`"
-        :title="formatRow('put-away', 'title', task)"
-        :meta="[formatRow('put-away', 'meta', task), $t('putAway.taskProgress', { unboxed: task.unboxedItems, received: task.receivedItems })]"
-        :chip-text="statusLabel.putAway(task.status)"
-        :chip-class="badgeClass(task.status)"
+        :title="rowView(task).title"
+        :meta="rowMeta(task, $t('putAway.taskProgress', { unboxed: task.unboxedItems, received: task.receivedItems }))"
+        :chip-text="rowChip(task)?.text"
+        :chip-class="rowChip(task)?.cls"
       />
     </template>
     <template v-else>
@@ -33,10 +33,10 @@
         v-for="ro in candidates"
         :key="ro.id"
         :to="`/put-away/${ro.id}`"
-        :title="formatRow('put-away', 'title', ro)"
-        :meta="[formatRow('put-away', 'meta', ro), $t('putAway.unboxedItems', { count: ro.unboxedItems })]"
-        :chip-text="statusLabel.receiving(ro.status)"
-        :chip-class="badgeClass(ro.status)"
+        :title="rowView(ro).title"
+        :meta="rowMeta(ro, $t('putAway.unboxedItems', { count: ro.unboxedItems }))"
+        :chip-text="rowChip(ro)?.text"
+        :chip-class="rowChip(ro)?.cls"
       />
     </template>
   </AppListPage>
@@ -45,6 +45,7 @@
 <script setup lang="ts">
 import { badgeClass } from "~/composables/useStatusBadge";
 import { useWarehouse } from "~/composables/useWarehouse";
+import { viewListChip, viewListRow } from "~/utils/viewConfig";
 import type { PutAwayCandidate, PutAwayTaskListRow } from "~/services/types";
 
 definePageMeta({ title: "meta.putAway" });
@@ -54,10 +55,29 @@ const statusLabel = useStatusLabel();
 const errorMessage = useErrorMessage();
 const warehouse = useWarehouse();
 const { putAwayConfig, loadFlowSteps } = useFlowSteps();
-// Row title/meta come from the warehouse's pdaListTemplates flow config
-// (spec 2026-09-21-pda-list-row-templates-design.md); tasks and candidates
-// share the put-away list config.
-const { formatRow } = useListTemplates();
+// Row title/meta/chip come from the warehouse's pdaViewConfig flow config
+// (spec 2026-10-04-pda-app-rewrite-design.md); tasks and candidates share the
+// put-away list config. On a backend without the key the legacy listTemplates
+// + the extra meta line render instead.
+const { viewConfig, viewConfigLoaded, renderChip } = useViewConfig();
+const rowView = (row: PutAwayCandidate | PutAwayTaskListRow) => viewListRow("put-away", row, viewConfig.value);
+function rowMeta(row: PutAwayCandidate | PutAwayTaskListRow, extraLine: string): string[] {
+  const meta = rowView(row).meta;
+  return viewConfigLoaded.value ? meta : [...meta, extraLine];
+}
+function rowChip(row: PutAwayCandidate | PutAwayTaskListRow) {
+  if (!viewConfigLoaded.value) {
+    return taskMode.value
+      ? { text: statusLabel.putAway(row.status), cls: badgeClass(row.status) }
+      : { text: statusLabel.receiving(row.status), cls: badgeClass(row.status) };
+  }
+  // Candidate rows carry receiving statuses, task rows put-away statuses.
+  return renderChip(
+    viewListChip("put-away", row, viewConfig.value, {
+      statusLabelFn: taskMode.value ? "putAway" : "receiving",
+    })
+  );
+}
 
 useHead({ title: t("putAway.title") });
 
