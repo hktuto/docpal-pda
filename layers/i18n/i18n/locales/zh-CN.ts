@@ -162,6 +162,11 @@ export default {
       cancelMismatch: "取消",
       boxId:"箱",
       noCarton: "无箱号",
+      groupBy: "分组",
+      groupByInvoice: "发票",
+      groupByCarton: "箱号",
+      groupByPartNo: "料号",
+      groupProgress: "已收 {received}/{total}",
       editIssue: "编辑问题",
       reportIssue: "上报问题",
       mismatch: {

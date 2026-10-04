@@ -1,8 +1,6 @@
 import { registerPlugin } from "@capacitor/core";
-
-// NOTE (Phase 1 port): useBrandSymbologyScope / useSupplierSymbologyScope are
-// intentionally not ported yet — they depend on useWarehouse + useLabelScan,
-// which arrive with the flow pages in a later phase.
+import { getCachedSupplierQrTemplates } from "~/composables/useLabelScan";
+import { useWarehouse } from "~/composables/useWarehouse";
 
 /**
  * Scanner-symbology control for xcheng/Movfast PDAs. The native
@@ -92,3 +90,76 @@ export function brandWhitelistUnion(
   return enabled.size > 0 ? [...enabled] : null;
 }
 
+/**
+ * Restrict the hardware decoder to the union whitelist of the given brands
+ * (e.g. a picking order's item brands) while the calling screen is mounted.
+ * Unmounting after a restriction was applied restores the full symbology set.
+ * `withShelfCodes` additionally keeps the shelf-code symbologies decodable
+ * (screens that must scan shelf/box QR labels).
+ */
+export function useBrandSymbologyScope(brands: Ref<string[]>, opts?: { withShelfCodes?: boolean }) {
+  const warehouse = useWarehouse();
+  let applied = false;
+
+  async function applyFor(list: string[]): Promise<void> {
+    let whitelist = list.length
+      ? brandWhitelistUnion(await getCachedSupplierQrTemplates(warehouse), list)
+      : null;
+    if (whitelist && opts?.withShelfCodes) whitelist = withShelfSymbologies(whitelist);
+    if (whitelist) {
+      await ScannerConfig.setSymbologies({ enabled: whitelist });
+      applied = true;
+    } else if (applied) {
+      await ScannerConfig.restoreAll();
+      applied = false;
+    }
+  }
+
+  watch(brands, (list) => enqueue(() => applyFor(list)), { immediate: true });
+
+  onUnmounted(() => {
+    if (applied) {
+      applied = false;
+      enqueue(() => ScannerConfig.restoreAll());
+    }
+  });
+}
+
+/**
+ * Restrict the hardware decoder to the supplier profile's barcode-type
+ * whitelist while the calling screen is mounted. Suppliers without a
+ * whitelist leave the device untouched; unmounting after a restriction was
+ * applied restores the full symbology set. `withShelfCodes` additionally
+ * keeps the shelf-code symbologies decodable (screens that must scan
+ * shelf/box QR labels).
+ */
+export function useSupplierSymbologyScope(supplierCode: Ref<string | undefined>, opts?: { withShelfCodes?: boolean }) {
+  const warehouse = useWarehouse();
+  let applied = false;
+
+  async function applyFor(code: string | undefined): Promise<void> {
+    const templates = await getCachedSupplierQrTemplates(warehouse);
+    let whitelist = code
+      ? templates.find((t) => t.code === code)?.barcodeTypes
+      : null;
+    if (whitelist && whitelist.length > 0 && opts?.withShelfCodes) {
+      whitelist = withShelfSymbologies(whitelist);
+    }
+    if (whitelist && whitelist.length > 0) {
+      await ScannerConfig.setSymbologies({ enabled: [...whitelist] });
+      applied = true;
+    } else if (applied) {
+      await ScannerConfig.restoreAll();
+      applied = false;
+    }
+  }
+
+  watch(supplierCode, (code) => enqueue(() => applyFor(code)), { immediate: true });
+
+  onUnmounted(() => {
+    if (applied) {
+      applied = false;
+      enqueue(() => ScannerConfig.restoreAll());
+    }
+  });
+}

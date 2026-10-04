@@ -9,7 +9,7 @@ const currentUser = { value: { id: 'u1' } as { id: string } | null };
 vi.stubGlobal('ref', <T>(value: T) => ({ value }));
 vi.stubGlobal('readonly', <T>(r: { value: T }) => r);
 vi.stubGlobal('useAuth', () => ({ currentUser }));
-vi.mock('~/services/flowConfig', () => ({ fetchFlowConfig: getFlowConfigMock }));
+vi.stubGlobal('useWarehouse', () => ({ getFlowConfig: getFlowConfigMock }));
 
 // The module keeps shared state at module level — re-import per test.
 async function freshUseFlowSteps() {

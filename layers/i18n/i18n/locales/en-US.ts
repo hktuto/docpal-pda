@@ -162,6 +162,11 @@ export default {
       cancelMismatch: "Cancel",
       boxId:"Box",
       noCarton: "No carton",
+      groupBy: "Group by",
+      groupByInvoice: "Invoice",
+      groupByCarton: "Carton",
+      groupByPartNo: "Part no",
+      groupProgress: "{received}/{total} received",
       editIssue: "Edit issue",
       reportIssue: "Report issue",
       mismatch: {

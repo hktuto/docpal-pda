@@ -592,3 +592,117 @@ input:focus {
 .card--danger {
   border-left: 4px solid var(--danger);
 }
+
+/* Single-column list row (PDA app rewrite, spec 2026-10-04) — replaces the
+   two-column .list-row layout: full-width title wrapping to 2 lines, one
+   inline status chip, up to 2 full-width meta lines. The old .list-row
+   classes stay until every flow page is ported. */
+.app-list-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-height: 3.75rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  color: var(--text);
+}
+
+.app-list-row:last-child {
+  border-bottom: none;
+}
+
+.app-list-row:active {
+  background: var(--primary-soft);
+}
+
+.app-list-row:hover {
+  text-decoration: none;
+}
+
+.app-list-row--disabled {
+  opacity: 0.55;
+}
+
+.app-list-row__main {
+  flex: 1;
+  min-width: 0;
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.app-list-row__line1 {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.app-list-row__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.app-list-row__chip {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  font-size: 0.625rem;
+  padding: 0.15rem 0.5rem;
+}
+
+.app-list-row__meta {
+  display: block;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-list-row__chevron {
+  flex-shrink: 0;
+  display: flex;
+  color: var(--muted);
+}
+
+.app-list-row__chevron--open {
+  transform: rotate(90deg);
+}
+
+.app-list-row--expandable {
+  flex-wrap: wrap;
+}
+
+.app-list-row__toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.app-list-row__detail {
+  flex-basis: 100%;
+  min-width: 0;
+  padding: 0.25rem 0;
+}
+
+.app-list-row--done {
+  border-left: 3px solid #16a34a;
+}
+
+.app-list-row--danger {
+  border-left: 3px solid var(--danger);
+}

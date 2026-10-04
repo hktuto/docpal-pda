@@ -1,5 +1,4 @@
 import type { FlowStep } from "~/services/types";
-import { fetchFlowConfig } from "~/services/flowConfig";
 
 /**
  * Flow-step config (backend warehouse_config row "flow" — FLOW_CONFIG env
@@ -50,7 +49,7 @@ async function loadFlowSteps(): Promise<void> {
   if (!useAuth().currentUser.value) return;
   loading ??= (async () => {
     try {
-      const config = await fetchFlowConfig();
+      const config = await useWarehouse().getFlowConfig();
       steps.value = { ...steps.value, ...config.flowSteps };
       if (config.putAway) {
         putAwayConfig.value = { ...putAwayConfig.value, ...config.putAway };
