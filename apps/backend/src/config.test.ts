@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { FLOW_STEPS, parseFlowConfig } from "./config.js";
+import { FLOW_STEPS, parseFlowConfig, mergeFlowConfigJson, applyFlowConfig, pdaViewConfig, _resetFlowConfigForTests } from "./config.js";
 
 // FLOW_CONFIG parsing/validation (spec 2026-08-10-flow-config-design.md).
 // Pure unit tests — no database.
@@ -280,4 +280,129 @@ test("parseFlowConfig: pdaListTemplates validation", () => {
   assert.throws(() => parseFlowConfig('{"pdaListTemplates":{"receiving":{"header":"x"}}}'), /unknown key "header"/);
   assert.throws(() => parseFlowConfig('{"pdaListTemplates":{"receiving":{"title":""}}}'), /receiving.title must be a non-empty string/);
   assert.throws(() => parseFlowConfig('{"pdaListTemplates":{"receiving":{"meta":"  "}}}'), /receiving.meta must be a non-empty string/);
+});
+
+test("parseFlowConfig: pdaViewConfig defaults", () => {
+  for (const raw of [undefined, "{}"]) {
+    const cfg = parseFlowConfig(raw);
+    assert.deepEqual(cfg.pdaViewConfig, {});
+  }
+});
+
+test("parseFlowConfig: pdaViewConfig stores a validated partial", () => {
+  const cfg = parseFlowConfig(
+    '{"pdaViewConfig":{"lists":{"receiving":{"meta":["[invoice_no]","[supplier_name]"],"chip":"remaining_items"},"stock-search":{"title":"[part_no]"}},"receivingDetail":{"defaultGrouping":"carton","itemFields":["wcl_item_no","box_id"]},"pickingDetail":{"expandedFields":["qty"]}}}'
+  );
+  assert.deepEqual(cfg.pdaViewConfig.lists?.receiving, { meta: ["[invoice_no]", "[supplier_name]"], chip: "remaining_items" });
+  assert.deepEqual(cfg.pdaViewConfig.lists?.["stock-search"], { title: "[part_no]" });
+  assert.deepEqual(cfg.pdaViewConfig.receivingDetail, { defaultGrouping: "carton", itemFields: ["wcl_item_no", "box_id"] });
+  assert.deepEqual(cfg.pdaViewConfig.pickingDetail, { expandedFields: ["qty"] });
+  assert.equal(cfg.pdaViewConfig.putAwayDetail, undefined);
+});
+
+test("parseFlowConfig: pdaViewConfig validation", () => {
+  assert.throws(() => parseFlowConfig('{"pdaViewConfig":1}'), /pdaViewConfig must be an object/);
+  assert.throws(() => parseFlowConfig('{"pdaViewConfig":{"bogus":{}}}'), /pdaViewConfig: unknown key "bogus"/);
+  assert.throws(() => parseFlowConfig('{"pdaViewConfig":{"lists":{"bogus-list":{"title":"x"}}}}'), /pdaViewConfig.lists: unknown list key "bogus-list"/);
+  assert.throws(() => parseFlowConfig('{"pdaViewConfig":{"lists":{"receiving":{"chip":"working_by_name"}}}}'), /receiving.chip must be one of/);
+  assert.throws(() => parseFlowConfig('{"pdaViewConfig":{"lists":{"stock-search":{"chip":"status"}}}}'), /stock-search.chip must be one of/);
+  assert.throws(() => parseFlowConfig('{"pdaViewConfig":{"lists":{"receiving":{"meta":[]}}}}'), /receiving.meta must be an array of 1-2/);
+  assert.throws(() => parseFlowConfig('{"pdaViewConfig":{"lists":{"receiving":{"meta":["a","b","c"]}}}}'), /receiving.meta must be an array of 1-2/);
+  assert.throws(() => parseFlowConfig('{"pdaViewConfig":{"lists":{"receiving":{"meta":["a","  "]}}}}'), /receiving.meta must be an array of 1-2/);
+  assert.throws(() => parseFlowConfig('{"pdaViewConfig":{"lists":{"receiving":{"meta":"[invoice_no]"}}}}'), /receiving.meta must be an array of 1-2/);
+  assert.throws(() => parseFlowConfig('{"pdaViewConfig":{"lists":{"receiving":{"header":"x"}}}}'), /receiving: unknown key "header"/);
+  assert.throws(() => parseFlowConfig('{"pdaViewConfig":{"pickingDetail":{"defaultGrouping":"invoice"}}}'), /pickingDetail: unknown key "defaultGrouping"/);
+  assert.throws(() => parseFlowConfig('{"pdaViewConfig":{"receivingDetail":{"defaultGrouping":"bogus"}}}'), /receivingDetail.defaultGrouping must be one of/);
+  assert.throws(() => parseFlowConfig('{"pdaViewConfig":{"receivingDetail":{"itemFields":["bogus"]}}}'), /receivingDetail.itemFields: unknown field "bogus"/);
+  assert.throws(() => parseFlowConfig('{"pdaViewConfig":{"pickingDetail":{"expandedFields":[]}}}'), /pickingDetail.expandedFields must be a non-empty array/);
+  assert.throws(() => parseFlowConfig('{"pdaViewConfig":{"putAwayDetail":{"itemFields":["expected_qty","shelf"]}}}'), /putAwayDetail.itemFields: unknown field "shelf"/);
+});
+
+test("pdaViewConfig accessor: resolution defaults", () => {
+  try {
+    applyFlowConfig(mergeFlowConfigJson({}));
+    const view = pdaViewConfig();
+    assert.deepEqual(view.lists.receiving, {
+      title: "[name]",
+      meta: ["[supplier_name] · [delivery_date]"],
+      chip: "status",
+    });
+    assert.deepEqual(view.lists.verify, {
+      title: "[shipping_box_id]",
+      meta: ["[order_nos] · [destination_country]"],
+      chip: "box_status",
+    });
+    assert.deepEqual(view.lists["stock-search"], { title: "[wcl_item_no]", meta: ["[part_no]"], chip: "none" });
+    assert.equal(view.receivingDetail.defaultGrouping, "invoice");
+    assert.deepEqual(view.pickingDetail.itemFields, ["wcl_item_no", "qty", "picked_qty"]);
+    assert.deepEqual(view.putAwayDetail.itemFields, ["wcl_item_no", "expected_qty", "remaining_qty"]);
+  } finally {
+    _resetFlowConfigForTests();
+  }
+});
+
+test("pdaViewConfig accessor: pdaViewConfig.lists override wins", () => {
+  try {
+    applyFlowConfig(mergeFlowConfigJson({
+      pdaViewConfig: { lists: { receiving: { meta: ["[invoice_no]"], chip: "none" } } },
+    }));
+    const view = pdaViewConfig();
+    assert.deepEqual(view.lists.receiving, { title: "[name]", meta: ["[invoice_no]"], chip: "none" });
+  } finally {
+    _resetFlowConfigForTests();
+  }
+});
+
+test("pdaViewConfig accessor: legacy pdaListTemplates customization migrates", () => {
+  try {
+    applyFlowConfig(mergeFlowConfigJson({
+      pdaListTemplates: { receiving: { meta: "[invoice_no]" } },
+    }));
+    const view = pdaViewConfig();
+    assert.deepEqual(view.lists.receiving, {
+      title: "[name]",
+      meta: ["[invoice_no]"],
+      chip: "status",
+    });
+    // untouched lists stay default
+    assert.equal(view.lists.picking.meta[0], "[customer_code] · [po_no]");
+  } finally {
+    _resetFlowConfigForTests();
+  }
+});
+
+test("pdaViewConfig accessor: pdaViewConfig.lists entry ignores the legacy key for that list", () => {
+  try {
+    applyFlowConfig(mergeFlowConfigJson({
+      pdaListTemplates: { receiving: { meta: "[invoice_no]" } },
+      pdaViewConfig: { lists: { receiving: { chip: "remaining_items" } } },
+    }));
+    const view = pdaViewConfig();
+    // partial new-key override: title/meta come from the defaults, not the legacy key
+    assert.deepEqual(view.lists.receiving, {
+      title: "[name]",
+      meta: ["[supplier_name] · [delivery_date]"],
+      chip: "remaining_items",
+    });
+  } finally {
+    _resetFlowConfigForTests();
+  }
+});
+
+test("pdaViewConfig accessor: detail overrides merge over defaults", () => {
+  try {
+    applyFlowConfig(mergeFlowConfigJson({
+      pdaViewConfig: {
+        receivingDetail: { defaultGrouping: "part-no" },
+        putAwayDetail: { itemFields: ["wcl_item_no", "suggested_shelf"] },
+      },
+    }));
+    const view = pdaViewConfig();
+    assert.equal(view.receivingDetail.defaultGrouping, "part-no");
+    assert.deepEqual(view.receivingDetail.itemFields, ["wcl_item_no", "expected_qty", "po_no", "po_line"]);
+    assert.deepEqual(view.putAwayDetail.itemFields, ["wcl_item_no", "suggested_shelf"]);
+    assert.deepEqual(view.pickingDetail.itemFields, ["wcl_item_no", "qty", "picked_qty"]);
+  } finally {
+    _resetFlowConfigForTests();
+  }
 });

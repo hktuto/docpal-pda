@@ -94,6 +94,16 @@ export const docpalGroupMapping: Record<string, string[]> = {
 // (receiving, picking, put-away, goods-verify, verify, measuring); missing
 // lists/fields keep the built-in defaults (= today's hardcoded rows). Served
 // to the PDA via GET /config `listTemplates` and applied client-side.
+// DEPRECATED by pdaViewConfig (still accepted; see below).
+//
+// pdaViewConfig (spec 2026-10-04-pda-app-rewrite-design.md): the PDA view
+// layout config — per-list {title, meta (1–2 lines), chip} templates (the six
+// lists above plus stock-search) and per-detail-page {itemFields,
+// expandedFields} allow-lists (receivingDetail also carries defaultGrouping).
+// Unknown list keys, chip fields, and detail fields are rejected at
+// validation. Served fully-resolved to the PDA via GET /config `viewConfig`.
+// Migration: a list with NO pdaViewConfig override still honors a customized
+// pdaListTemplates entry (old configs keep rendering their customization).
 //
 // allowedOrgIds (spec 2026-09-01-flow-config-allowed-org-ids-design.md):
 // org_id partitions this warehouse accepts; [] = all orgs (no filtering).
@@ -249,6 +259,10 @@ export interface FlowConfig {
   receivingOrderNameTemplate: string;
   /** Per-PDA-list {title, meta} display templates (fully resolved). */
   pdaListTemplates: PdaListTemplates;
+  /** PDA view-config overrides (validated partial, as stored). Absent list
+   *  entries fall back to pdaListTemplates customizations, then defaults —
+   *  see the pdaViewConfig() accessor. */
+  pdaViewConfig: PdaViewConfigOverrides;
   /** Picking shelf-scan mode; default "off". */
   pickingShelfScan: PickingShelfScanMode;
 }
@@ -265,6 +279,110 @@ export function defaultPdaListTemplates(): PdaListTemplates {
   };
 }
 
+/** PDA list pages addressable by pdaViewConfig.lists — the six pdaListTemplates
+ *  lists plus stock-search (spec 2026-10-04-pda-app-rewrite-design.md). */
+export const PDA_VIEW_LIST_KEYS = [...PDA_LIST_KEYS, "stock-search"] as const;
+export type PdaViewListKey = (typeof PDA_VIEW_LIST_KEYS)[number];
+
+/** Fully-resolved view config for one PDA list row. meta holds 1–2 templates. */
+export interface PdaListViewConfig {
+  title: string;
+  meta: string[];
+  chip: string;
+}
+
+export const PDA_DETAIL_GROUPINGS = ["invoice", "carton", "part-no"] as const;
+export type PdaDetailGrouping = (typeof PDA_DETAIL_GROUPINGS)[number];
+
+export interface PdaReceivingDetailViewConfig {
+  defaultGrouping: PdaDetailGrouping;
+  itemFields: string[];
+  expandedFields: string[];
+}
+
+export interface PdaDetailViewConfig {
+  itemFields: string[];
+  expandedFields: string[];
+}
+
+/** Fully resolved PDA view config (resolved onto GET /config as viewConfig). */
+export interface PdaViewConfig {
+  lists: Record<PdaViewListKey, PdaListViewConfig>;
+  receivingDetail: PdaReceivingDetailViewConfig;
+  pickingDetail: PdaDetailViewConfig;
+  putAwayDetail: PdaDetailViewConfig;
+}
+
+/** Validated partial as stored under the flow-config pdaViewConfig key. */
+export interface PdaViewConfigOverrides {
+  lists?: Partial<Record<PdaViewListKey, Partial<PdaListViewConfig>>>;
+  receivingDetail?: Partial<PdaReceivingDetailViewConfig>;
+  pickingDetail?: Partial<PdaDetailViewConfig>;
+  putAwayDetail?: Partial<PdaDetailViewConfig>;
+}
+
+/** Chip field catalog per list ("none" = no chip rendered). */
+export const PDA_LIST_CHIP_FIELDS: Record<PdaViewListKey, readonly string[]> = {
+  receiving: ["status", "remaining_items", "pending_picking_orders", "none"],
+  picking: ["status", "allocation_status", "working_by_name", "none"],
+  "put-away": ["status", "unboxed_items", "received_items", "none"],
+  "goods-verify": ["status", "verified_by", "none"],
+  verify: ["box_status", "package_count", "verify_verified_count", "none"],
+  measuring: ["status", "package_count", "verified_count", "none"],
+  "stock-search": ["none"],
+};
+
+/** Item/expanded field allow-lists per detail page. */
+export const PDA_DETAIL_FIELDS: Record<
+  "receivingDetail" | "pickingDetail" | "putAwayDetail",
+  readonly string[]
+> = {
+  receivingDetail: [
+    "wcl_item_no", "part_no", "expected_qty", "received_qty", "po_no", "po_line",
+    "box_id", "date_code", "lot_code", "coo", "cow",
+    "reserved_qty", "picked_qty", "put_away_qty", "available_qty",
+  ],
+  pickingDetail: [
+    "wcl_item_no", "part_no", "qty", "picked_qty", "allocated_qty", "status",
+    "shelf_code", "box_id", "date_code", "lot_code", "coo", "cow", "source",
+  ],
+  putAwayDetail: [
+    "wcl_item_no", "part_no", "expected_qty", "received_qty", "remaining_qty",
+    "po_no", "box_id", "date_code", "lot_code", "coo", "cow", "suggested_shelf",
+  ],
+};
+
+/** Built-in defaults — reproduce the PDA's current rendering. */
+export function defaultPdaViewConfig(): PdaViewConfig {
+  const listDefaults = defaultPdaListTemplates();
+  const lists = Object.fromEntries(
+    PDA_LIST_KEYS.map((key) => [
+      key,
+      { title: listDefaults[key].title, meta: [listDefaults[key].meta], chip: key === "verify" ? "box_status" : "status" },
+    ]),
+  ) as Record<PdaViewListKey, PdaListViewConfig>;
+  lists["stock-search"] = { title: "[wcl_item_no]", meta: ["[part_no]"], chip: "none" };
+  return {
+    lists,
+    receivingDetail: {
+      defaultGrouping: "invoice",
+      itemFields: ["wcl_item_no", "expected_qty", "po_no", "po_line"],
+      expandedFields: [
+        "expected_qty", "box_id", "po_line", "reserved_qty", "picked_qty",
+        "put_away_qty", "available_qty", "date_code", "lot_code", "coo", "cow",
+      ],
+    },
+    pickingDetail: {
+      itemFields: ["wcl_item_no", "qty", "picked_qty"],
+      expandedFields: ["allocated_qty", "shelf_code", "box_id", "date_code", "lot_code", "coo", "cow", "source"],
+    },
+    putAwayDetail: {
+      itemFields: ["wcl_item_no", "expected_qty", "remaining_qty"],
+      expandedFields: ["received_qty", "po_no", "box_id", "date_code", "lot_code", "coo", "cow", "suggested_shelf"],
+    },
+  };
+}
+
 function defaultFlowConfig(): FlowConfig {
   return {
     steps: Object.fromEntries(FLOW_STEPS.map((s) => [s, { enabled: true }])) as FlowConfig["steps"],
@@ -277,6 +395,7 @@ function defaultFlowConfig(): FlowConfig {
     dateCodeDisplayTemplate: "[date_code][coo]",
     receivingOrderNameTemplate: "[batch_no]",
     pdaListTemplates: defaultPdaListTemplates(),
+    pdaViewConfig: {},
     pickingShelfScan: "off",
   };
 }
@@ -421,6 +540,97 @@ function validateFromSubinventoryOrgGroup(rule: unknown, index: number): FromSub
   return { orgId: orgId as number, fromSubinventories: fromSubinventories as string[] };
 }
 
+/** Validate one flow-config pdaViewConfig value → PdaViewConfigOverrides. */
+function validatePdaViewConfig(value: unknown): PdaViewConfigOverrides {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("[config] flow config.pdaViewConfig must be an object");
+  }
+  const out: PdaViewConfigOverrides = {};
+  for (const [section, sectionValue] of Object.entries(value as Record<string, unknown>)) {
+    if (section === "lists") {
+      if (typeof sectionValue !== "object" || sectionValue === null || Array.isArray(sectionValue)) {
+        throw new Error("[config] flow config.pdaViewConfig.lists must be an object keyed by PDA list key");
+      }
+      const lists: NonNullable<PdaViewConfigOverrides["lists"]> = {};
+      for (const [listKey, listValue] of Object.entries(sectionValue as Record<string, unknown>)) {
+        const at = `flow config.pdaViewConfig.lists.${listKey}`;
+        if (!(PDA_VIEW_LIST_KEYS as readonly string[]).includes(listKey)) {
+          throw new Error(`[config] flow config.pdaViewConfig.lists: unknown list key "${listKey}"`);
+        }
+        if (typeof listValue !== "object" || listValue === null || Array.isArray(listValue)) {
+          throw new Error(`[config] ${at} must be an object with optional title/meta/chip`);
+        }
+        const list: Partial<PdaListViewConfig> = {};
+        for (const [slot, slotValue] of Object.entries(listValue as Record<string, unknown>)) {
+          if (slot === "title") {
+            if (typeof slotValue !== "string" || slotValue.trim() === "") {
+              throw new Error(`[config] ${at}.title must be a non-empty string`);
+            }
+            list.title = slotValue;
+          } else if (slot === "meta") {
+            if (!Array.isArray(slotValue) || slotValue.length < 1 || slotValue.length > 2 ||
+                slotValue.some((v) => typeof v !== "string" || v.trim() === "")) {
+              throw new Error(`[config] ${at}.meta must be an array of 1-2 non-empty strings`);
+            }
+            list.meta = slotValue as string[];
+          } else if (slot === "chip") {
+            const chips = PDA_LIST_CHIP_FIELDS[listKey as PdaViewListKey];
+            if (typeof slotValue !== "string" || !chips.includes(slotValue)) {
+              throw new Error(`[config] ${at}.chip must be one of: ${chips.join(", ")}`);
+            }
+            list.chip = slotValue;
+          } else {
+            throw new Error(`[config] ${at}: unknown key "${slot}"`);
+          }
+        }
+        lists[listKey as PdaViewListKey] = list;
+      }
+      out.lists = lists;
+      continue;
+    }
+    if (section === "receivingDetail" || section === "pickingDetail" || section === "putAwayDetail") {
+      if (typeof sectionValue !== "object" || sectionValue === null || Array.isArray(sectionValue)) {
+        throw new Error(`[config] flow config.pdaViewConfig.${section} must be an object`);
+      }
+      const at = `flow config.pdaViewConfig.${section}`;
+      const catalog = PDA_DETAIL_FIELDS[section];
+      const detail: {
+        defaultGrouping?: PdaDetailGrouping;
+        itemFields?: string[];
+        expandedFields?: string[];
+      } = {};
+      for (const [slot, slotValue] of Object.entries(sectionValue as Record<string, unknown>)) {
+        if (slot === "defaultGrouping") {
+          if (section !== "receivingDetail") {
+            throw new Error(`[config] ${at}: unknown key "defaultGrouping"`);
+          }
+          if (typeof slotValue !== "string" || !(PDA_DETAIL_GROUPINGS as readonly string[]).includes(slotValue)) {
+            throw new Error(`[config] ${at}.defaultGrouping must be one of: ${PDA_DETAIL_GROUPINGS.join(", ")}`);
+          }
+          detail.defaultGrouping = slotValue as PdaDetailGrouping;
+        } else if (slot === "itemFields" || slot === "expandedFields") {
+          if (!Array.isArray(slotValue) || slotValue.length === 0 ||
+              slotValue.some((v) => typeof v !== "string" || v.trim() === "")) {
+            throw new Error(`[config] ${at}.${slot} must be a non-empty array of non-empty strings`);
+          }
+          for (const field of slotValue as string[]) {
+            if (!catalog.includes(field)) {
+              throw new Error(`[config] ${at}.${slot}: unknown field "${field}"`);
+            }
+          }
+          detail[slot] = slotValue as string[];
+        } else {
+          throw new Error(`[config] ${at}: unknown key "${slot}"`);
+        }
+      }
+      out[section] = detail;
+      continue;
+    }
+    throw new Error(`[config] flow config.pdaViewConfig: unknown key "${section}"`);
+  }
+  return out;
+}
+
 /** Validate a partial flow-config JSON object and merge it over the defaults.
  *  Shared by the FLOW_CONFIG env path and the warehouse_config DB row. */
 export function mergeFlowConfigJson(parsed: unknown): FlowConfig {
@@ -511,6 +721,10 @@ export function mergeFlowConfigJson(parsed: unknown): FlowConfig {
         throw new Error('[config] flow config.pickingShelfScan must be "off", "require-match", or "require-any"');
       }
       cfg.pickingShelfScan = value as PickingShelfScanMode;
+      continue;
+    }
+    if (key === "pdaViewConfig") {
+      cfg.pdaViewConfig = validatePdaViewConfig(value);
       continue;
     }
     if (key !== "steps") throw new Error(`[config] flow config: unknown key "${key}"`);
@@ -650,6 +864,34 @@ export function receivingOrderNameTemplate(): string {
  *  docs/superpowers/specs/2026-09-21-pda-list-row-templates-design.md). */
 export function pdaListTemplates(): PdaListTemplates {
   return flowConfig.pdaListTemplates;
+}
+
+/** Fully-resolved PDA view config (spec
+ *  docs/superpowers/specs/2026-10-04-pda-app-rewrite-design.md). Resolution per
+ *  list: pdaViewConfig.lists override → legacy pdaListTemplates customization
+ *  (only when the whole list entry is absent) → built-in default. */
+export function pdaViewConfig(): PdaViewConfig {
+  const resolved = defaultPdaViewConfig();
+  const overrides = flowConfig.pdaViewConfig;
+  const listDefaults = defaultPdaListTemplates();
+  for (const key of PDA_VIEW_LIST_KEYS) {
+    const listOverride = overrides.lists?.[key];
+    if (listOverride) {
+      resolved.lists[key] = { ...resolved.lists[key], ...listOverride };
+      continue;
+    }
+    if ((PDA_LIST_KEYS as readonly string[]).includes(key)) {
+      const legacy = flowConfig.pdaListTemplates[key as PdaListKey];
+      const def = listDefaults[key as PdaListKey];
+      if (legacy.title !== def.title || legacy.meta !== def.meta) {
+        resolved.lists[key] = { ...resolved.lists[key], title: legacy.title, meta: [legacy.meta] };
+      }
+    }
+  }
+  resolved.receivingDetail = { ...resolved.receivingDetail, ...overrides.receivingDetail };
+  resolved.pickingDetail = { ...resolved.pickingDetail, ...overrides.pickingDetail };
+  resolved.putAwayDetail = { ...resolved.putAwayDetail, ...overrides.putAwayDetail };
+  return resolved;
 }
 
 /** Picking shelf-scan mode (spec

@@ -185,6 +185,91 @@ test("PUT /admin/flow-config: pdaListTemplates round-trips and reaches GET /conf
   }
 });
 
+test("PUT /admin/flow-config: pdaViewConfig round-trips and reaches GET /config", async () => {
+  await reseed(client);
+  try {
+    const get0 = await (await req("/admin/flow-config")).json();
+    assert.deepEqual(get0.config.pdaViewConfig, {});
+    const payload = {
+      pdaViewConfig: {
+        lists: {
+          receiving: { meta: ["[invoice_no] · [batch_no]", "[supplier_name]"], chip: "remaining_items" },
+          "stock-search": { title: "[part_no]" },
+        },
+        receivingDetail: { defaultGrouping: "carton", itemFields: ["wcl_item_no", "box_id"] },
+      },
+    };
+    const res = await req("/admin/flow-config", { method: "PUT", body: JSON.stringify(payload) });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.deepEqual(body.config.pdaViewConfig, payload.pdaViewConfig);
+    const row = await queryGet<{ value: unknown }>(
+      client.db,
+      sql`SELECT value FROM warehouse_config WHERE key = 'flow'`
+    );
+    assert.deepEqual(row!.value, payload);
+    // runtime applied: the PDA-facing GET /config resolves viewConfig
+    const config = await (await req("/config")).json();
+    assert.deepEqual(config.viewConfig.lists.receiving, {
+      title: "[name]",
+      meta: ["[invoice_no] · [batch_no]", "[supplier_name]"],
+      chip: "remaining_items",
+    });
+    assert.equal(config.viewConfig.lists["stock-search"].title, "[part_no]");
+    // untouched lists carry defaults
+    assert.deepEqual(config.viewConfig.lists.picking, {
+      title: "[order_no]",
+      meta: ["[customer_code] · [po_no]"],
+      chip: "status",
+    });
+    assert.equal(config.viewConfig.receivingDetail.defaultGrouping, "carton");
+    assert.deepEqual(config.viewConfig.receivingDetail.itemFields, ["wcl_item_no", "box_id"]);
+    assert.equal(config.viewConfig.pickingDetail.defaultGrouping, undefined);
+    // invalid shapes rejected
+    const bad = await req("/admin/flow-config", {
+      method: "PUT",
+      body: JSON.stringify({ pdaViewConfig: { receivingDetail: { itemFields: ["bogus"] } } }),
+    });
+    assert.equal(bad.status, 400);
+  } finally {
+    _resetFlowConfigForTests();
+  }
+});
+
+test("PUT /admin/flow-config: legacy pdaListTemplates customization migrates into viewConfig", async () => {
+  await reseed(client);
+  try {
+    const res = await req("/admin/flow-config", {
+      method: "PUT",
+      body: JSON.stringify({ pdaListTemplates: { receiving: { meta: "[invoice_no]" } } }),
+    });
+    assert.equal(res.status, 200);
+    const config = await (await req("/config")).json();
+    assert.deepEqual(config.viewConfig.lists.receiving, {
+      title: "[name]",
+      meta: ["[invoice_no]"],
+      chip: "status",
+    });
+    // a pdaViewConfig.lists entry wins over the legacy key for that list
+    const res2 = await req("/admin/flow-config", {
+      method: "PUT",
+      body: JSON.stringify({
+        pdaListTemplates: { receiving: { meta: "[invoice_no]" } },
+        pdaViewConfig: { lists: { receiving: { chip: "none" } } },
+      }),
+    });
+    assert.equal(res2.status, 200);
+    const config2 = await (await req("/config")).json();
+    assert.deepEqual(config2.viewConfig.lists.receiving, {
+      title: "[name]",
+      meta: ["[supplier_name] · [delivery_date]"],
+      chip: "none",
+    });
+  } finally {
+    _resetFlowConfigForTests();
+  }
+});
+
 test("PUT /admin/flow-config: receivingSubInventoryRules round-trips", async () => {
   await reseed(client);
   try {

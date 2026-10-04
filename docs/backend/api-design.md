@@ -401,6 +401,18 @@ title falls back
 to the default title then the raw primary id, an all-empty meta hides the meta
 line ("empty" = no letters/digits in the render). Edited on the admin
 display-config page via `PUT /admin/flow-config`.
+The top-level `pdaViewConfig` key (spec
+`2026-10-04-pda-app-rewrite-design.md`) is the new PDA app view config:
+`lists` covers the six list pages plus `stock-search` with per-list `{title,
+meta[1–2], chip}` (chip validated against that list's chip catalog), and
+`receivingDetail`/`pickingDetail`/`putAwayDetail` carry `itemFields` +
+`expandedFields` allow-lists (validated against per-page field catalogs) plus
+`defaultGrouping` (`invoice`/`carton`/`part-no`, receiving only). It
+supersedes the deprecated `pdaListTemplates`: when a list has no
+`pdaViewConfig.lists` entry, a customized legacy `pdaListTemplates` value
+migrates into the resolved view; otherwise defaults apply. The fully-resolved
+value is served on `GET /config` as `viewConfig`; edited via
+`PUT /admin/flow-config`.
 The shipping feed is per-box: the list reads closed, unshipped boxes — gated
 on the box's completed verify task when the verify step is enabled
 ("measured" ≡ closed). Shipping is a pure workflow transition (stock already
@@ -414,7 +426,7 @@ Shipped boxes drop out of the feed; shipped orders stay visible via
 
 | Endpoint | Description |
 |---|---|
-| `GET /config` | `{flowSteps: Record<FlowStep, boolean>, pickingAllocation: {allowDockStock: boolean}, putAway: {autoCreateTasks: boolean, suggestShelf: "existing-stock"\|"off"}, allowedOrgIds: number[], listTemplates: Record<PdaListKey, {title, meta}>}` — the resolved flow config (`warehouse_config` row `"flow"`, `FLOW_CONFIG` env override; legacy `FLOW_STEPS_DISABLED` maps onto `flowSteps` on top, deprecated). `pickingAllocation.allowDockStock=false` = put-away is a hard gate for allocation; `putAway` drives the put-away task mode + shelf suggestions; `allowedOrgIds` ([] = all orgs) scopes picking/receiving/stock/put-away/goods-verify queries to the listed org partitions server-side; `listTemplates` (spec `2026-09-21-pda-list-row-templates-design.md`) carries the per-PDA-list row display templates applied client-side. |
+| `GET /config` | `{flowSteps: Record<FlowStep, boolean>, pickingAllocation: {allowDockStock: boolean}, putAway: {autoCreateTasks: boolean, suggestShelf: "existing-stock"\|"off"}, allowedOrgIds: number[], listTemplates: Record<PdaListKey, {title, meta}>, viewConfig: PdaViewConfig}` — the resolved flow config (`warehouse_config` row `"flow"`, `FLOW_CONFIG` env override; legacy `FLOW_STEPS_DISABLED` maps onto `flowSteps` on top, deprecated). `pickingAllocation.allowDockStock=false` = put-away is a hard gate for allocation; `putAway` drives the put-away task mode + shelf suggestions; `allowedOrgIds` ([] = all orgs) scopes picking/receiving/stock/put-away/goods-verify queries to the listed org partitions server-side; `listTemplates` (spec `2026-09-21-pda-list-row-templates-design.md`, deprecated) carries the per-PDA-list row display templates applied client-side; `viewConfig` (spec `2026-10-04-pda-app-rewrite-design.md`) is the fully-resolved PDA view config (`lists` incl. stock-search `{title, meta[1–2], chip}` + receiving/picking/put-away detail field lists and receiving `defaultGrouping`; legacy `pdaListTemplates` customizations migrate in for lists without a `pdaViewConfig.lists` entry). |
 | `GET /shipping-orders` | Box rows: `{boxId, orderNos[], shipTos[], destinationCountry, boxSize, grossWeight, netWeight, packageCount, closedAt}` — closed, unshipped boxes (verify-gated when the verify step is on). |
 | `GET /shipping-orders/:boxId` | Box detail: `{box{..., shippedAt, shippedBy}, packages[{..., partNo, wclItemNo, verified}], orders[{id, orderNo, status, shipTo, customerCode, poNo}]}` (404 `shipping_box_not_found`). |
 | `POST /shipping-orders/:boxId/ship` | `{actorId}` → `{id, status, shippedOrderIds}`. Re-checks the feed predicate (closed, unshipped, verify-gated; 409 `box_not_ready_to_ship` otherwise, including already-shipped boxes), stamps the box, derives order `shipped`, emits `shipping_box.shipped`. |
@@ -491,9 +503,10 @@ into the warehouse backend.
 
 The backend exposes one integration surface for that service:
 
-1. **Outbound table-change feed** — `GET /sync-events?since=<id>&limit=<n>`
-   (`src/routes/sync-events.ts`) over the trigger-written `sync_events` table.
-   The external service polls this to learn what changed locally. Only writes
+1. **Outbound table-change feed** — the trigger-written `sync_events` table.
+   The external service reads it directly (the `GET /sync-events?since=`
+   poll endpoint was removed 2026-10) to learn what changed locally, using
+   the monotonic `id` as its resume cursor. Only writes
    committed by the backend's own `warehouse` role are recorded; the service's
    own `warehouse_sync` role writes are skipped, breaking the circular-event
    loop. See `docs/backend/event-catalog.md` for the full contract.
