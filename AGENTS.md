@@ -78,7 +78,7 @@ The web dev workflow needs TWO servers: `pnpm dev:backend` (:3002) and `pnpm --f
 
 ### Production docker stack
 
-`docker-compose.prod.yml` runs the full stack (db + backend + web + admin) as a separate compose project (`warehouse-prod`) so it coexists with the dev db on :5432. Per-app Dockerfiles in `apps/*/Dockerfile` (build context = repo root). Required env: `POSTGRES_PASSWORD`, `AUTH_SECRET`; optional: `CORS_ORIGINS`, `SYNC_DB_PASSWORD`, `FLOW_CONFIG`, `WAREHOUSE_SEED=off`, `WAREHOUSE_SEED_ORDERS=on`. Ports: web 3000, admin 80, backend 9002 (also exposes 3002 internally for local-LAN access); `DEV_ROUTES=off`. When `PRODUCTION_URL` is set, web/admin `NUXT_PUBLIC_API_BASE_URL` default to `${PRODUCTION_URL}:9002`. The backend mounts `apps/backend/public/apk` read-only so `pnpm build:apk` output is served without a rebuild.
+`docker-compose.prod.yml` runs the full stack (db + backend + pda + admin) as a separate compose project (`warehouse-prod`) so it coexists with the dev db on :5432. Per-app Dockerfiles in `apps/*/Dockerfile` (build context = repo root). Required env: `POSTGRES_PASSWORD`, `AUTH_SECRET`; optional: `CORS_ORIGINS`, `SYNC_DB_PASSWORD`, `FLOW_CONFIG`, `WAREHOUSE_SEED=off`, `WAREHOUSE_SEED_ORDERS=on`. Ports: pda 3000, admin 8080, backend 3002; `DEV_ROUTES=off`. When `PRODUCTION_URL` is set, pda/admin `NUXT_PUBLIC_API_BASE_URL` default to `${PRODUCTION_URL}:9002`. The backend mounts `apps/backend/public/apk` read-only so `pnpm build:apk` output is served without a rebuild.
 
 Use `scripts/deploy-prod.sh` (run on the server from the repo root) — it prompts for `PRODUCTION_URL` and `DOCPAL_URL`, preserves/generates `POSTGRES_PASSWORD`/`AUTH_SECRET` in the gitignored `.env`, then runs compose.
 

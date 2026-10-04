@@ -1,4 +1,4 @@
-# Production stack: db + backend + web (PDA) + admin console.
+# Production stack: db + backend + pda + admin console.
 # Separate compose project ("warehouse-prod") so it can coexist with the
 # dev-only docker-compose.yml (db on :5432) — containers/volumes don't clash.
 #
@@ -87,7 +87,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  web:
+  pda:
     env_file: ./.env
     build:
       context: .
