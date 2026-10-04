@@ -35,13 +35,11 @@ produce events. The backend must perform all its writes under the
 | created_date | timestamp | Commit time (UTC) |
 | last_update_date | timestamp | Same as created_date (rows are immutable) |
 
-## Polling API
+## Consuming the feed
 
-`GET /sync-events?since=<id>&limit=<n>` (JWT-authenticated like every other
-route; the sync service logs in via `POST /auth/login`).
-
-- `since` — return rows with `id > since` (default 0)
-- `limit` — page size (default 200, max 1000)
+The `GET /sync-events?since=<id>&limit=<n>` poll endpoint was removed
+2026-10. External consumers read the `sync_events` table directly, using the
+monotonic `id` as resume cursor (rows with `id > since`, oldest first).
 
 Response, oldest-first — the service stores the last seen `id` as its cursor:
 

@@ -1371,6 +1371,7 @@ export default {
         reallocateLocked: "訂單 {orderNo} 正由 {name} 操作中 — 請稍後再試。",
         overrideStatus: "覆寫狀態",
         overrideStatusSelected: "設定狀態（{n}）",
+        confirmAllocation: "確認分配",
         overrideModalTitleSingle: "覆寫狀態 — {orderNo}",
         overrideModalTitleBatch: "覆寫狀態 — {n} 張訂單",
         overrideTarget: "新狀態",

@@ -1371,6 +1371,7 @@ export default {
         reallocateLocked: "订单 {orderNo} 正由 {name} 操作中 — 请稍后再试。",
         overrideStatus: "覆盖状态",
         overrideStatusSelected: "设置状态（{n}）",
+        confirmAllocation: "确认分配",
         overrideModalTitleSingle: "覆盖状态 — {orderNo}",
         overrideModalTitleBatch: "覆盖状态 — {n} 张订单",
         overrideTarget: "新状态",

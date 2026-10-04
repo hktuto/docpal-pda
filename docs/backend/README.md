@@ -315,10 +315,10 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     semantics).
 - Upstream sync — the ingest HTTP API was retired 2026-08-18 and the
   ElectricSQL sync service was removed 2026-08-20. An external sync service
-  now replicates master data and orders into the backend, either by consuming
-  the outbound `GET /sync-events?since=` table-change feed
-  (`src/routes/sync-events.ts`, `src/db/sync-events.ts`) or by writing through
-  the reusable apply layer in `src/db/ingest.ts`. The apply transactions set
+  now replicates master data and orders into the backend, either by reading
+  the trigger-written `sync_events` table-change feed directly (the
+  `GET /sync-events?since=` poll endpoint was removed 2026-10) or by writing
+  through the reusable apply layer in `src/db/ingest.ts`. The apply transactions set
   `app.sync_events_off = 1` so upstream-originated writes do not echo back
   into `sync_events`. The `warehouse_sync` DB role (password from
   `SYNC_DB_PASSWORD`) is available for the service to write into the business
@@ -387,9 +387,9 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
   invalidate their local API cache.
   Authenticated like every other route, with one exception: as the only
   route where `?token=` is accepted (EventSource cannot set headers).
-- `GET /sync-events?since=<id>&limit=<n>` — JSON poll endpoint
-  (`src/routes/sync-events.ts`) over the `sync_events` table-change feed for
-  the external sync service. Rows are written by the `sync_events_notify()`
+- `sync_events` table-change feed for the external sync service (the
+  `GET /sync-events?since=` poll endpoint was removed 2026-10; the service
+  reads the table directly). Rows are written by the `sync_events_notify()`
   trigger on every business table (only for commits by the backend's own
   `warehouse` role — the sync service writes as `warehouse_sync` and is
   skipped, breaking the circular-event loop; seed/reset suppresses via

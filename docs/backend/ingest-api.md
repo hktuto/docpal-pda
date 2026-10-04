@@ -11,7 +11,8 @@ paths anymore.
 The ElectricSQL sync service that replaced it was removed on 2026-08-20.
 Upstream sync is now performed by an external service, which can either:
 
-- Consume the outbound table-change feed at `GET /sync-events?since=` to learn
+- Read the outbound table-change feed (`sync_events` table; the
+  `GET /sync-events?since=` poll endpoint was removed 2026-10) to learn
   what changed in the warehouse backend.
 - Write into the backend through the reusable apply layer in
   `apps/backend/src/db/ingest.ts` (`upsertPart`, `upsertSupplier`,

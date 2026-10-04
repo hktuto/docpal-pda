@@ -48,5 +48,8 @@ apps/web/android/app/*.keystore
 # SQL Server backups
 *.BAK
 
+# Local dev DB baseline snapshot (scripts/sql/reset-local-db-baseline.sh)
+scripts/sql/warehouse_backend_baseline.dump
+
 # Agent scratch space (pulled APKs, decompilers, decompiled sources)
 .kimi-code/tmp/

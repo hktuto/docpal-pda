@@ -18,7 +18,8 @@ export const appEvents = pgTable("app_events", {
 // docs/backend/event-catalog.md). Rows are written by the
 // sync_events_notify() trigger on every business table — only for changes
 // committed by the backend's own Postgres role — never by application code.
-// GET /sync-events?since= lets a service poll with id as its cursor.
+// The GET /sync-events poll endpoint was removed 2026-10; external consumers
+// read the table directly.
 export const syncEvents = pgTable("sync_events", {
   id: bigserial("id", { mode: "number" }).primaryKey(), // monotonic resume cursor
   eventType: text("event_type").notNull(), // <table>.<insert|update|delete>

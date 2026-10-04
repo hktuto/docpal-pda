@@ -470,6 +470,26 @@ async function resolveIssue() {
 const overrideOpen = ref(false);
 const overriding = ref(false);
 
+// "Confirm allocation": one-click shortcut for pending orders — stamps the
+// order `allocated` (the allocation lock) through the same status-override
+// endpoint, without opening the override dialog.
+const confirmingAllocation = ref(false);
+
+async function confirmAllocation() {
+  if (!order.value || confirmingAllocation.value) return;
+  confirmingAllocation.value = true;
+  error.value = "";
+  try {
+    await flow.overridePickingOrderStatus(orderId, "allocated", t("admin.pages.pickingOrders.confirmAllocation"));
+    await load();
+    logsKey.value++;
+  } catch (e: any) {
+    error.value = e.message;
+  } finally {
+    confirmingAllocation.value = false;
+  }
+}
+
 async function onOverrideStatus(payload: { status: string; reason: string }) {
   if (!order.value || overriding.value) return;
   overriding.value = true;
@@ -556,6 +576,14 @@ const {
           @click="openReportModal"
         >
           {{ $t("admin.pages.pickingOrders.reportIssue") }}
+        </button>
+        <button
+          v-if="order && order.status === 'pending'"
+          class="btn btn-primary"
+          :disabled="confirmingAllocation"
+          @click="confirmAllocation"
+        >
+          {{ confirmingAllocation ? $t("admin.common.saving") : $t("admin.pages.pickingOrders.confirmAllocation") }}
         </button>
         <button class="btn" @click="overrideOpen = true">
           {{ $t("admin.pages.pickingOrders.overrideStatus") }}

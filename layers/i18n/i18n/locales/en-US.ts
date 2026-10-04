@@ -1372,6 +1372,7 @@ export default {
         reallocateLocked: "Order {orderNo} is being worked on by {name} — try again later.",
         overrideStatus: "Override status",
         overrideStatusSelected: "Set status ({n})",
+        confirmAllocation: "Confirm allocation",
         overrideModalTitleSingle: "Override status — {orderNo}",
         overrideModalTitleBatch: "Override status — {n} orders",
         overrideTarget: "New status",

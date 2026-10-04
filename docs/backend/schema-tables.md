@@ -811,7 +811,7 @@ application code — and only for changes committed by the backend's own
 Postgres role (`warehouse`); writes by the sync service's `warehouse_sync`
 role (or any other account) are skipped to break the circular-event loop, and
 seed/reset paths suppress the trigger via `SET LOCAL app.sync_events_off = 1`.
-Polled via `GET /sync-events?since=<id>`.
+Read directly by the external sync service (the `GET /sync-events?since=<id>` poll endpoint was removed 2026-10).
 
 | Field | Type | Description |
 | --- | --- | --- |
