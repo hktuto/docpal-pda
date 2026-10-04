@@ -6,13 +6,15 @@ RUN corepack enable && corepack prepare pnpm@10.28.2 --activate
 WORKDIR /repo
 
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
-# Full workspace install: the app extends layers/i18n via a relative path and
-# the layer's own deps (@nuxtjs/i18n) must be present for the build.
+# Full workspace install: the app extends the shared layers via relative
+# paths and their own deps must be present for the build.
 COPY apps/pda/package.json apps/pda/
 COPY layers/i18n/package.json layers/i18n/
-RUN pnpm install --filter @warehouse/pda... --filter @warehouse/i18n-layer... --frozen-lockfile
+COPY layers/app-update/package.json layers/app-update/
+RUN pnpm install --filter @warehouse/pda... --filter @warehouse/i18n-layer... --filter @warehouse/app-update-layer... --frozen-lockfile
 
 COPY layers/i18n layers/i18n
+COPY layers/app-update layers/app-update
 COPY apps/pda apps/pda
 RUN pnpm --filter @warehouse/pda build
 

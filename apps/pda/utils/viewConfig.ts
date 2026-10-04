@@ -14,8 +14,6 @@ import {
   type PdaViewListKey,
 } from "./listRowTemplate";
 
-export type { PdaViewListKey };
-
 export const PDA_VIEW_LIST_KEYS: PdaViewListKey[] = [...PDA_LIST_KEYS, "stock-search"];
 
 export interface PdaListViewConfig {
