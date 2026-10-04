@@ -143,7 +143,7 @@ const INITIAL = {
     ["/print-labels page (live data from GET /labels-data)."],
     [""],
     ["BOX-H-20260701-0005..0014 are 10 empty pre-generated put-away boxes on"],
-    ["A0301..A0405 — print their labels with apps/web's"],
+    ["A0301..A0405 — print their labels with apps/pda's"],
     ["generate:box-shelf-labels-pdf script (box-shelf-labels.pdf)."],
     [""],
     ["receiving_items metadata columns boxSize/netWeight/grossWeight/weightUnit"],

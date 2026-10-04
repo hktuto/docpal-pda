@@ -1,7 +1,7 @@
 // QR-template editor model + regex generator.
 //
 // Storage stays a regex string (supplier_profiles.qr_template) — the runtime
-// source of truth consumed by the PDA parsers (apps/web parseOcrScan.ts,
+// source of truth consumed by the PDA parsers (apps/pda parseOcrScan.ts,
 // apps/backend scanParse.ts). This module builds that regex from the
 // structured config the editor writes to supplier_profiles.qr_template_config.
 // Spec: docs/superpowers/specs/2026-07-24-supplier-qr-template-editor-design.md
@@ -95,7 +95,7 @@ export function parseWithRegex(
 }
 
 /** KOA qty encoding: last digit = trailing-zero count ("253" → 25000).
- *  Copy of decodeKoaQty in apps/web/utils/parseOcrScan.ts for the preview. */
+ *  Copy of decodeKoaQty in apps/pda/utils/parseOcrScan.ts for the preview. */
 export function decodeKoaQty(qty: string): number | undefined {
   if (!/^\d+$/.test(qty) || qty.length < 2) return undefined;
   const zeros = Number(qty[qty.length - 1]);

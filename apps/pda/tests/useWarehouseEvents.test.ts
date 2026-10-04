@@ -7,7 +7,7 @@ vi.mock('~/composables/useToast', () => ({
   useToast: () => ({ showToast: showToastMock }),
 }));
 
-// vue is not a direct dependency of @warehouse/web (pnpm does not hoist it),
+// vue is not a direct dependency of @warehouse/pda (pnpm does not hoist it),
 // so mock it like tests/useHardwareScanner.test.ts does.
 vi.mock('vue', () => ({
   ref: (value: unknown) => ({ value }),

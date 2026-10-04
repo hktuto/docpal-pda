@@ -19,9 +19,9 @@ The scanner broadcast support must be in the installed APK (added
 ```bash
 # repo root, web dev server stopped
 export NUXT_PUBLIC_API_BASE_URL=http://<dev-machine-LAN-IP>:3001
-pnpm --filter @warehouse/web generate
-pnpm --filter @warehouse/web cap:sync
-cd apps/web/android
+pnpm --filter @warehouse/pda generate
+pnpm --filter @warehouse/pda cap:sync
+cd apps/pda/android
 export JAVA_HOME='/c/Program Files/Android/Android Studio/jbr'
 export PATH="$JAVA_HOME/bin:$PATH"
 ./gradlew :app:installDebug

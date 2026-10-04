@@ -426,7 +426,7 @@ async function actMismatch(item: ReceivingItemRow, action: "confirm" | "cancel")
 }
 
 // "Mark issue" modal: admin-side mismatch report (mirrors the PDA's
-// validation rules in apps/web/utils/mismatch.ts).
+// validation rules in apps/pda/utils/mismatch.ts).
 const MISMATCH_REASONS = [
   "not_found",
   "damaged",

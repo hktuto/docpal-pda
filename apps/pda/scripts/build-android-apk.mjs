@@ -61,21 +61,21 @@ console.log(`App URL (WebView + maintenance page): ${appUrl}`);
 // b. The web dev server pollutes .nuxt/dist/client with dev URLs — refuse to
 // generate while it is running.
 try {
-  await fetch('http://127.0.0.1:3103', { signal: AbortSignal.timeout(1500) });
-  console.error('The web dev server is running on :3103 — stop it before running this build (it pollutes .nuxt/dist/client with dev URLs).');
+  await fetch('http://127.0.0.1:3104', { signal: AbortSignal.timeout(1500) });
+  console.error('The web dev server is running on :3104 — stop it before running this build (it pollutes .nuxt/dist/client with dev URLs).');
   process.exit(1);
 } catch {
   // Connection refused / timeout: no dev server, good to go.
 }
 
 // c. Static web export.
-run('pnpm', ['--filter', '@warehouse/web', 'generate'], { cwd: repoRoot });
+run('pnpm', ['--filter', '@warehouse/pda', 'generate'], { cwd: repoRoot });
 
 // c2. The maintenance page is bundled into the APK and cannot read
 // capacitor.config at runtime — stamp the app URL in as its retry target
-// (the source file keeps the dev default http://localhost:3103).
+// (the source file keeps the dev default http://localhost:3104).
 const maintenanceFile = join(webDir, '.output/public/maintenance.html');
-const maintenanceMarker = "var DEFAULT_URL = 'http://localhost:3103';";
+const maintenanceMarker = "var DEFAULT_URL = 'http://localhost:3104';";
 const maintenance = readFileSync(maintenanceFile, 'utf8');
 if (!maintenance.includes(maintenanceMarker)) {
   console.error(`Default-URL marker not found in ${maintenanceFile} — update the marker or the page.`);

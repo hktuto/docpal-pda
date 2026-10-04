@@ -66,7 +66,7 @@
   rest as fallback), and part matching is space-insensitive and accepts both the
   label's part no (`itemId`) and its WCL item no (template `wclItemNo` group,
   e.g. KOA segment 7) against the item's `part_no`/`wcl_item_no`
-  (`normalizePartNo` in `apps/web/utils/text.ts`; spec
+  (`normalizePartNo` in `apps/pda/utils/text.ts`; spec
   `docs/superpowers/specs/2026-09-29-picking-scan-wcl-item-no-matching-design.md`).
   The page also restricts the hardware decoder to the order brands'
   `barcode_types` union (`useBrandSymbologyScope`; any unmapped brand = no

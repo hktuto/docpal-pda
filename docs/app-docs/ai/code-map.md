@@ -124,7 +124,7 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Review state wrapper | `composables/useLabelScanReview.ts` |
 | Client-side matchers (picking / put-away / measuring) | `composables/useScanMatchers.ts` |
 | Picking page work lock (acquire/refresh/release + held-by state) | `composables/usePickingWorkLock.ts` |
-| Scanner symbology scope (per-supplier whitelist apply/restore) | `composables/useScannerConfig.ts` + native `apps/web/android/.../ScannerConfigPlugin.java` |
+| Scanner symbology scope (per-supplier whitelist apply/restore) | `composables/useScannerConfig.ts` + native `apps/pda/android/.../ScannerConfigPlugin.java` |
 | OCR/QR parser and candidate extraction | `utils/parseOcrScan.ts` |
 | Mismatch form validation (pure) | `utils/mismatch.ts` |
 
@@ -160,7 +160,7 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Label print rules (template-selection rules CRUD + Activate/Deactivate; structured AND/OR conditions editor; detail-page edit with draft-condition match preview) | `/label-print-rules`, `/label-print-rules/:id` | `apps/admin/pages/label-print-rules/index.vue`, `apps/admin/pages/label-print-rules/[id].vue` (2fr/1fr edit form + match-preview panel over `POST /admin/label-print-rules/test-match`), `apps/admin/utils/entities.ts` (`entities.labelPrintRules`, `noEdit: true`), `apps/admin/components/RuleConditionsEditor.vue`; reusable CrudForm field types boolean/select/conditions in `apps/admin/components/CrudForm.vue` |
 | Date-code display template (admin policy for joining a lot's `[date_code]`/`[lot_code]`/`[coo]`/`[cow]` — default `[date_code][coo]` → `3626cn`; flow-config key `dateCodeDisplayTemplate`, edited with a live preview, saved via `PUT /admin/flow-config` merged over the stored row) | `/display-config` | `apps/admin/pages/display-config.vue`, `apps/admin/utils/dateCodeDisplay.ts` (formatter), `apps/admin/composables/useDateCodeDisplay.ts` (shared template fetch); applied in `pages/receiving/[id].vue` (item date-code column), `pages/picking-orders/[id].vue` (allocation `dc:` cells + packages cell), `components/allocations/AllocationDetail.vue` (tooltip date-code rows) |
 | Receiving order name template (flow-config key `receivingOrderNameTemplate`, default `[batch_no]`; backend renders `displayName` on the receiving list/detail responses; the receiving list batch-no column and detail h1 render `displayName`) | `/display-config` (editor; list: `/receiving`, detail: `/receiving/:id`) | `apps/admin/pages/display-config.vue` (second card + live preview), `apps/admin/utils/receivingOrderName.ts` (client preview formatter), `apps/admin/pages/receiving/index.vue` (batch-no column accessor), `apps/admin/pages/receiving/[id].vue` (h1); backend `apps/backend/src/receivingOrderName.ts` + `src/routes/receiving.ts` |
-| PDA list-row display templates (flow-config key `pdaListTemplates` — per-list `{title, meta}` for the six PDA list pages, served via `GET /config`; edited with a live preview) | `/display-config` | `apps/admin/pages/display-config.vue` (third card: list picker, title/meta inputs, placeholder chips, full + missing-fields preview), `apps/admin/utils/listRowTemplate.ts` (preview formatter, mirror of the PDA's); PDA side `apps/web/utils/listRowTemplate.ts`, `apps/web/composables/useListTemplates.ts`, `apps/web/pages/{receiving,picking,put-away,goods-verify,verify,measuring}/index.vue` |
+| PDA list-row display templates (flow-config key `pdaListTemplates` — per-list `{title, meta}` for the six PDA list pages, served via `GET /config`; edited with a live preview) | `/display-config` | `apps/admin/pages/display-config.vue` (third card: list picker, title/meta inputs, placeholder chips, full + missing-fields preview), `apps/admin/utils/listRowTemplate.ts` (preview formatter, mirror of the PDA's); PDA side `apps/pda/utils/listRowTemplate.ts`, `apps/pda/composables/useListTemplates.ts`, `apps/pda/pages/{receiving,picking,put-away,goods-verify,verify,measuring}/index.vue` |
 
 ## Warehouse backend (apps/backend)
 
@@ -187,7 +187,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | `GET /stock-search` | `apps/backend/src/routes/stocksearch.ts` |
 | `GET /scan-templates` | `apps/backend/src/routes/scantemplates.ts` |
 | Print proxy: `GET /print/printers`, `POST /print/dynamic`, `POST /print/files`, `GET /print/jobs/:jobId` | `apps/backend/src/routes/print.ts`, `apps/backend/src/print.ts` |
-| Upstream sync (outbound `GET /sync-events` feed; the external service writes the business tables directly) | `apps/backend/src/routes/sync-events.ts`, `apps/backend/src/db/sync-events.ts` |
+| Upstream sync (outbound `sync_events` table feed; the external service reads the table directly — the `GET /sync-events` endpoint was removed 2026-10 — and writes the business tables directly) | `apps/backend/src/db/schema/events.ts` |
 | `POST /dev/reset`, `POST /dev/allocate` | `apps/backend/src/routes/dev.ts` |
 | `/admin/*` master-data CRUD | `apps/backend/src/routes/admin/` |
 | `/admin/sub-inventory-share-groups` (share-group membership upsert/remove) | `apps/backend/src/routes/admin/subInventoryShareGroups.ts` |

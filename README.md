@@ -1,6 +1,6 @@
 # Warehouse Web Demo
 
-A Nuxt 3 proof-of-concept for the DocPal warehouse mobile/Android flows. The web (PDA) app is a thin client that talks to the `apps/backend` Hono + PostgreSQL API over HTTP (JWT-auth); it also ships as an Android app via Capacitor (`apps/web/android`). A desktop admin console (`apps/admin`) manages master data and orders through the same backend.
+A Nuxt 3 proof-of-concept for the DocPal warehouse mobile/Android flows. The web (PDA) app is a thin client that talks to the `apps/backend` Hono + PostgreSQL API over HTTP (JWT-auth); it also ships as an Android app via Capacitor (`apps/pda/android`). A desktop admin console (`apps/admin`) manages master data and orders through the same backend.
 
 ---
 
@@ -55,11 +55,11 @@ The demo models an event-driven warehouse with two overlapping workflows that sh
 
 ## Tech stack
 
-- **Web (PDA) app:** Nuxt 3 SPA (`ssr: false`), Vue 3, plain CSS — `apps/web`
-- **Mobile shell:** Capacitor (Android platform in `apps/web/android`)
+- **Web (PDA) app:** Nuxt 3 SPA (`ssr: false`), Vue 3, plain CSS — `apps/pda`
+- **Mobile shell:** Capacitor (Android platform in `apps/pda/android`)
 - **Backend:** Hono + Drizzle ORM + PostgreSQL (JWT auth, SSE event stream) — `apps/backend`, port `3002`
 - **Admin console:** Nuxt 3 SPA — `apps/admin`, port `3100`
-- **Data access:** the PDA app calls `WarehouseService`/`AuthService`, which speak HTTP to the backend through a single adapter layer (`apps/web/services/adapters/`); all business rules and data live server-side
+- **Data access:** the PDA app calls `WarehouseService`/`AuthService`, which speak HTTP to the backend through a single adapter layer (`apps/pda/services/adapters/`); all business rules and data live server-side
 - **i18n:** shared Nuxt layer `layers/i18n` (en-US / zh-CN / zh-HK) extended by both apps
 
 ---
@@ -202,7 +202,7 @@ The demo needs **two servers** (plus PostgreSQL):
 docker compose up -d            # shared local PostgreSQL
 pnpm install
 pnpm dev:backend                # backend API on :3002 (migrations + demo seed run automatically)
-pnpm --filter @warehouse/web dev   # PDA web app on :3000
+pnpm dev:pda                     # PDA web app on :3104
 pnpm dev:admin                  # optional: admin console on :3100
 ```
 
@@ -215,10 +215,10 @@ Then open the web URL and log in with one of the demo accounts:
 
 ### Scanning demo labels
 
-The Camera OCR demo needs `apps/web/public/ocr-labels.html` to be present in the build. It is a 7-step demo flow helper that guides you through receiving → picking → measuring → put-away → goods verify; scan labels only on the steps marked "Scan step". The old flat label catalog is preserved at `apps/web/public/ocr-labels-backup.html`. Display the page on a monitor or another device and point the Android camera at each label instead of printing physical labels. Open it at:
+The Camera OCR demo needs `apps/pda/public/ocr-labels.html` to be present in the build. It is a 7-step demo flow helper that guides you through receiving → picking → measuring → put-away → goods verify; scan labels only on the steps marked "Scan step". The old flat label catalog is preserved at `apps/pda/public/ocr-labels-backup.html`. Display the page on a monitor or another device and point the Android camera at each label instead of printing physical labels. Open it at:
 
 ```text
-http://<dev-server-ip>:3000/ocr-labels.html
+http://<dev-server-ip>:3104/ocr-labels.html
 ```
 
 The page loads [JsBarcode](https://github.com/lindell/JsBarcode) and [node-qrcode](https://github.com/soldair/node-qrcode) from a CDN to render real Code 128 barcodes and QR codes, so the display device needs internet access. See `docs/superpowers/specs/2026-07-04-ocr-labels-demo-flow-design.md` for full details.
@@ -237,7 +237,7 @@ The page loads [JsBarcode](https://github.com/lindell/JsBarcode) and [node-qrcod
 
 This is a pnpm monorepo:
 
-- `apps/web` — Nuxt 3 PDA client (+ Capacitor Android shell)
+- `apps/pda` — Nuxt 3 PDA client (+ Capacitor Android shell)
 - `apps/backend` — Hono + Drizzle + PostgreSQL API (schema in `src/db/schema/`)
 - `apps/admin` — Nuxt 3 desktop admin console
 - `layers/i18n` — shared i18n layer
@@ -253,4 +253,4 @@ See [AGENTS.md](./AGENTS.md) for the detailed layout, commands, and conventions,
 - **Shared PostgreSQL dataset.** Data persists across restarts and is shared by everyone on the same backend; use the reset control to start fresh. Migrations auto-apply on backend startup, and the demo dataset is seeded when the `users` table is empty.
 - **Allocation is greedy.** It fills shelved lots first, then receiving-area lots, in priority-seq order, without partial date-code relaxation or FIFO beyond the required date code filter.
 - **Scanning.** Camera/barcode capture is implemented via the native Android `RectangleDetection.scanLabel()` flow; on PDA hardware the scanner service's intent broadcast is received through the `ScannerBroadcast` Capacitor plugin, with a keyboard-wedge fallback for browsers and unconfigured devices. The parsing logic normalizes input and applies simple OCR-style substitutions (e.g. `O` → `0`) so the demo can simulate real scan errors.
-- **Tests.** Backend: `pnpm --filter @warehouse/backend test` (node:test, needs PostgreSQL). Web: `pnpm --filter @warehouse/web test` (vitest).
+- **Tests.** Backend: `pnpm --filter @warehouse/backend test` (node:test, needs PostgreSQL). Web: `pnpm --filter @warehouse/pda test` (vitest).

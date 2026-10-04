@@ -117,7 +117,7 @@ ${body}
 </body></html>
 `;
 
-const require = createRequire(path.resolve("apps/web/package.json"));
+const require = createRequire(path.resolve("apps/pda/package.json"));
 const { chromium } = require("playwright");
 const browser = await chromium.launch();
 

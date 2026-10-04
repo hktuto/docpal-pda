@@ -1,6 +1,6 @@
 // PDA list-row display templates (spec
 // docs/superpowers/specs/2026-09-21-pda-list-row-templates-design.md):
-// mirror copy of apps/web/utils/listRowTemplate.ts for the display-config
+// mirror copy of apps/pda/utils/listRowTemplate.ts for the display-config
 // live preview — the PDA app is the real consumer (list pages render rows
 // through these templates); keep the two files in sync.
 

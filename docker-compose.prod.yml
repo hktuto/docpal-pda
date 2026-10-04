@@ -91,7 +91,7 @@ services:
     env_file: ./.env
     build:
       context: .
-      dockerfile: apps/web/Dockerfile
+      dockerfile: apps/pda/Dockerfile
     environment:
       PORT: 3103
       # API origin as seen from the PDA browser/WebView (public runtime config,

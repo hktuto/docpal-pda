@@ -16,7 +16,7 @@ export default defineNuxtConfig({
   },
   css: ["~/assets/main.css"],
   experimental: {
-    // Same rationale as apps/web: the AppUpdate toast's outdated-build check
+    // Same rationale as apps/pda: the AppUpdate toast's outdated-build check
     // polls once per interval after app start — the 1h default delays
     // "reload to update" detection far too long.
     checkOutdatedBuildInterval: 60_000,
@@ -25,7 +25,7 @@ export default defineNuxtConfig({
   extends: ["../../layers/i18n", "../../layers/app-update"],
   $development: {
     hooks: {
-      // Same Nuxt 3.21 + Vite 7 ssr:false dev-server workaround as apps/web:
+      // Same Nuxt 3.21 + Vite 7 ssr:false dev-server workaround as apps/pda:
       // keep the client rollup input as a plain absolute string.
       "vite:extendConfig": (config, { isClient }) => {
         if (!isClient || !process.argv.includes("dev")) return;

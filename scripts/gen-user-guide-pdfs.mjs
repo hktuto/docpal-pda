@@ -3,7 +3,7 @@
 import path from "node:path";
 import { createRequire } from "node:module";
 
-const require = createRequire(path.resolve("apps/web/package.json"));
+const require = createRequire(path.resolve("apps/pda/package.json"));
 const { chromium } = require("playwright");
 
 const jobs = [

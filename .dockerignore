@@ -11,6 +11,6 @@ dist
 docs
 new_seed
 *.log
-apps/web/android
-apps/web/resources
+apps/pda/android
+apps/pda/resources
 docker-compose*.yml

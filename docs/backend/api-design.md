@@ -394,7 +394,7 @@ meta}` templates for the six PDA list pages (`receiving`, `picking`,
 `put-away`, `goods-verify`, `verify`, `measuring`); missing lists/fields keep
 the built-in defaults (= today's hardcoded rows). The resolved value is served
 on `GET /config` as `listTemplates` and applied client-side in the PDA
-(`apps/web/utils/listRowTemplate.ts` + `composables/useListTemplates.ts`):
+(`apps/pda/utils/listRowTemplate.ts` + `composables/useListTemplates.ts`):
 receiving and put-away `[name]` is the backend `displayName` (the put-away
 candidates/tasks queries carry it from the receiving order); an all-empty
 title falls back

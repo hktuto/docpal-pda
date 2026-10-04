@@ -1,4 +1,4 @@
-// Shared i18n layer for apps/web and apps/admin.
+// Shared i18n layer for apps/pda and apps/admin.
 // Locale files, vueI18n options, the LanguageSwitcher component, and the
 // locale-persistence plugin all live here; extending apps only need `extends`.
 // https://i18n.nuxtjs.org/docs/guide/layers

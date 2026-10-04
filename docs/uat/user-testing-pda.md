@@ -1,6 +1,6 @@
 # PDA 應用程式 — 用戶驗收測試（UAT）
 
-本文件是 Warehouse PDA 應用程式（`apps/web`，Android PDA 或瀏覽器）的用戶測試腳本，供測試人員逐項執行並記錄結果。管理後台的測試請參閱 [user-testing-admin.md](./user-testing-admin.md)。
+本文件是 Warehouse PDA 應用程式（`apps/pda`，Android PDA 或瀏覽器）的用戶測試腳本，供測試人員逐項執行並記錄結果。管理後台的測試請參閱 [user-testing-admin.md](./user-testing-admin.md)。
 
 功能細節可對照 [PDA 用戶指南](../app-docs/user-menu/index.md) 及各 [Flow 文件](../app-docs/flows/index.md)。
 

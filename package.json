@@ -4,17 +4,17 @@
   "type": "module",
   "scripts": {
     "dev": "pnpm -r --parallel dev",
-    "dev:web": "pnpm --filter @warehouse/web dev",
+    "dev:pda": "pnpm --filter @warehouse/pda dev",
     "dev:backend": "pnpm --filter @warehouse/backend dev",
     "dev:admin": "pnpm --filter @warehouse/admin dev",
-    "dev:proxy": "pnpm --filter @warehouse/web cap:android:proxy",
+    "dev:proxy": "pnpm --filter @warehouse/pda cap:android:proxy",
     "build": "pnpm -r build",
-    "generate": "pnpm --filter @warehouse/web generate",
+    "generate": "pnpm --filter @warehouse/pda generate",
     "test": "pnpm -r test",
-    "cap:sync": "pnpm --filter @warehouse/web cap:sync",
-    "cap:android": "pnpm --filter @warehouse/web cap:android",
-    "cap:android:dev": "pnpm --filter @warehouse/web cap:android:dev",
-    "build:apk": "node apps/web/scripts/build-android-apk.mjs"
+    "cap:sync": "pnpm --filter @warehouse/pda cap:sync",
+    "cap:android": "pnpm --filter @warehouse/pda cap:android",
+    "cap:android:dev": "pnpm --filter @warehouse/pda cap:android:dev",
+    "build:apk": "node apps/pda/scripts/build-android-apk.mjs"
   },
   "pnpm": {
     "onlyBuiltDependencies": []
