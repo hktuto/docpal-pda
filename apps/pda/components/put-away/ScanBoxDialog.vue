@@ -55,6 +55,8 @@ const props = defineProps<{
   modelValue: boolean;
   boxId: string;
   shelves: Shelf[];
+  /** Pre-selected shelf (e.g. set by scanning a shelf label on the page). */
+  initialShelfCode?: string | null;
   creating?: boolean;
 }>();
 
@@ -69,7 +71,7 @@ const selectedShelf = ref("");
 watch(
   () => props.modelValue,
   (open) => {
-    if (open) selectedShelf.value = "";
+    if (open) selectedShelf.value = props.initialShelfCode ?? "";
   },
   { immediate: true }
 );

@@ -158,6 +158,7 @@ export async function orderPair(tx: DbOrTx, receivingOrderId: string): Promise<{
 interface PutAwayItemRow {
   id: string;
   partNo: string;
+  wclItemNo: string | null;
   receivingOrderId: string;
   received: number;
   picked: number;
@@ -171,7 +172,7 @@ interface PutAwayItemRow {
 async function loadItemForPutAway(tx: DbOrTx, itemId: string): Promise<PutAwayItemRow> {
   const item = await queryGet<PutAwayItemRow>(
     tx,
-    sql`SELECT rii.id, rii.part_no AS "partNo", ri.receiving_order_id AS "receivingOrderId",
+    sql`SELECT rii.id, rii.part_no AS "partNo", rii.wcl_item_no AS "wclItemNo", ri.receiving_order_id AS "receivingOrderId",
                rii.received_qty AS "received", rii.picked_qty AS "picked", rii.put_away_qty AS "putAway",
                rii.date_code AS "dateCode", rii.lot_code AS "lotCode", rii.coo, rii.cow
         FROM receiving_invoice_items rii
@@ -222,7 +223,7 @@ export async function tryMarkReceivingOrderClear(
   if (!order || order.status !== "in_hand") return;
   const items = await queryAll<PutAwayItemRow>(
     tx,
-    sql`SELECT rii.id, rii.part_no AS "partNo", ri.receiving_order_id AS "receivingOrderId",
+    sql`SELECT rii.id, rii.part_no AS "partNo", rii.wcl_item_no AS "wclItemNo", ri.receiving_order_id AS "receivingOrderId",
                rii.received_qty AS "received", rii.picked_qty AS "picked", rii.put_away_qty AS "putAway",
                rii.date_code AS "dateCode", rii.lot_code AS "lotCode", rii.coo, rii.cow
         FROM receiving_invoice_items rii
@@ -409,6 +410,10 @@ export interface PutAwayAggregate {
   items: PutAwayExpectedItemRow[];
   lots: PutAwayLotRow[];
   scans: PutAwayScanRow[];
+  /** The order's open staging box (shelf_code IS NULL) holding its scans, when
+   *  one exists — lets the PDA recognize a scan of the staging box's own QR
+   *  label instead of treating it as an unknown box id. */
+  stagingBoxId: string | null;
   boxes: {
     id: string;
     shelfCode: string | null;
@@ -525,6 +530,22 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
     `
   );
 
+  const stagingBox = await queryGet<{ id: string }>(
+    db,
+    sql`
+      SELECT sb.id FROM shelf_boxes sb
+      WHERE sb.shelf_code IS NULL AND sb.status = 'open'
+        AND EXISTS (
+          SELECT 1 FROM shelf_box_items sbi
+          JOIN receiving_invoice_items rii ON rii.id = sbi.receiving_invoice_item_id
+          JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+          WHERE sbi.shelf_box_id = sb.id AND ri.receiving_order_id = ${orderId}
+        )
+      ORDER BY sb.created_date
+      LIMIT 1
+    `
+  );
+
   const boxes = await queryAll<{ id: string; shelfCode: string | null; status: string; createdDate: Date }>(
     db,
     sql`
@@ -573,6 +594,7 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
     items: itemsWithSuggestions,
     lots,
     scans,
+    stagingBoxId: stagingBox?.id ?? null,
     boxes: boxes.map((b) => ({
       ...b,
       items: boxItems
@@ -742,8 +764,8 @@ export async function recordPutAwayScan(
     const id = newId();
     await queryRun(
       tx,
-      sql`INSERT INTO shelf_box_items (id, shelf_box_id, receiving_invoice_item_id, part_no, qty, verified)
-          VALUES (${id}, ${stagingBoxId}, ${item.id}, ${item.partNo}, ${input.qty}, false)`
+      sql`INSERT INTO shelf_box_items (id, shelf_box_id, receiving_invoice_item_id, part_no, wcl_item_no, qty, verified)
+          VALUES (${id}, ${stagingBoxId}, ${item.id}, ${item.partNo}, ${item.wclItemNo}, ${input.qty}, false)`
     );
     // Active-box auto-put: assign the just-staged scan into the target box in
     // the same tx (guards/materialization/ledger/auto-clear reused; a guard
@@ -887,6 +909,16 @@ async function assignScanToBoxTx(
     )
   )!;
 
+  // The lot's wcl_item_no is the parts-master value (stock search joins
+  // parts ON p.wcl_item_no = il.wcl_item_no); fall back to the item's copy.
+  const partWclItemNo =
+    (
+      await queryGet<{ wclItemNo: string | null }>(
+        tx,
+        sql`SELECT wcl_item_no AS "wclItemNo" FROM parts WHERE part_no = ${item.partNo} LIMIT 1`
+      )
+    )?.wclItemNo ?? item.wclItemNo;
+
   // Lot lookup mirrors the unique index (part_no + batch attrs + shelf + box
   // + location pair); a match merges into the existing lot.
   const lot = await queryGet<{ id: string }>(
@@ -903,14 +935,20 @@ async function assignScanToBoxTx(
   let lotId: string;
   if (lot) {
     lotId = lot.id;
-    await queryRun(tx, sql`UPDATE inventory_lots SET total_qty = total_qty + ${scan.qty} WHERE id = ${lotId}`);
+    await queryRun(
+      tx,
+      sql`UPDATE inventory_lots
+          SET total_qty = total_qty + ${scan.qty},
+              wcl_item_no = COALESCE(wcl_item_no, ${partWclItemNo})
+          WHERE id = ${lotId}`
+    );
   } else {
     lotId = newId();
     await queryRun(
       tx,
-      sql`INSERT INTO inventory_lots (id, part_no, date_code, lot_code, coo, cow, shelf_code, box_id,
+      sql`INSERT INTO inventory_lots (id, part_no, wcl_item_no, date_code, lot_code, coo, cow, shelf_code, box_id,
                                      org_id, sub_inventory_code, total_qty, allocated_qty)
-          VALUES (${lotId}, ${item.partNo}, ${item.dateCode}, ${item.lotCode}, ${item.coo}, ${item.cow},
+          VALUES (${lotId}, ${item.partNo}, ${partWclItemNo}, ${item.dateCode}, ${item.lotCode}, ${item.coo}, ${item.cow},
                   ${box.shelfCode}, ${box.id},
                   ${boxPair.orgId}, ${boxPair.subInventoryCode},
                   ${scan.qty}, 0)`

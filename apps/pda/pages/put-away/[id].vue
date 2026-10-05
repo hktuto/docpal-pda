@@ -37,9 +37,15 @@
         v-model="scanBoxDialogOpen"
         v-model:box-id="scannedBoxId"
         :shelves="shelves"
+        :initial-shelf-code="selectedShelf"
         :creating="creating"
         @confirm="confirmScanBox"
       />
+
+      <div v-if="selectedShelf" class="shelf-banner">
+        <span>{{ $t("putAway.shelfBanner", { shelf: selectedShelf }) }}</span>
+        <button type="button" class="shelf-banner__clear" :aria-label="$t('putAway.shelfBannerClear')" @click="selectedShelf = null">×</button>
+      </div>
 
       <PutAwayLotsPanel
         v-model:box-selections="boxSelections"
@@ -105,7 +111,7 @@ import { useWarehouse } from "~/composables/useWarehouse";
 import { useToast } from "~/composables/useToast";
 import { scrollToItem } from "~/utils/scroll";
 import { rawCode } from "~/utils/text";
-import { findPutAwayTarget } from "~/utils/putAwayScan";
+import { findPutAwayTarget, classifyPutAwayScan } from "~/utils/putAwayScan";
 import {
   extractMultiItemRows,
   type ScanMultiRow,
@@ -147,6 +153,9 @@ const scannedBoxId = ref("");
 const expandedItemBoxes = ref<Set<string>>(new Set());
 // The box that currently receives auto-put scans (null = scans go to staging).
 const activeBoxId = ref<string | null>(null);
+// Sticky shelf context set by scanning a shelf QR label: pre-selects the shelf
+// in the box dialogs and lets an unknown BOX-* scan create the box directly.
+const selectedShelf = ref<string | null>(null);
 
 const statusLabel = useStatusLabel();
 const headerStatus = computed(() =>
@@ -179,6 +188,7 @@ const order = ref<ReceivingOrderDetail | null>(null);
 const items = ref<PutAwayExpectedItem[]>([]);
 const shelves = ref<Shelf[]>([]);
 const boxes = ref<PutAwayBox[]>([]);
+const stagingBoxId = ref<string | null>(null);
 const creating = ref(false);
 const closing = ref(false);
 const cancellingBox = ref<Record<string, boolean>>({});
@@ -263,6 +273,14 @@ useHardwareScanner({
       return;
     }
     if (!order.value) return false;
+    // Shelf / box QR labels short-circuit the supplier-label flow.
+    const scanClass = classifyPutAwayScan(rawValue, shelves.value, boxes.value, stagingBoxId.value);
+    if (scanClass.type === "shelf") {
+      selectedShelf.value = scanClass.code;
+      showToast(t("putAway.shelfSelected", { shelf: scanClass.code }));
+      return true;
+    }
+    if (scanClass.type === "box") return handleBoxScan(scanClass);
     scanning.value = true;
     try {
       const parsedResult = await parseRawValue(
@@ -313,6 +331,53 @@ useHardwareScanner({
 // Tapping the armed item's button disarms; tapping another item re-arms.
 function toggleArmScan(item: PutAwayExpectedItem) {
   armedItemId.value = armedItemId.value === item.id ? null : item.id;
+}
+
+// Box QR scan: an existing open box of the order becomes active; the order's
+// staging box switches scanning back to staging (clears the active box); an
+// unknown BOX-* id is created on the selected shelf (or via the scan-box
+// dialog when no shelf is selected).
+async function handleBoxScan(scanClass: {
+  boxId: string;
+  existing: PutAwayBox | null;
+  staging: boolean;
+}) {
+  const { boxId, existing, staging } = scanClass;
+  if (staging) {
+    activeBoxId.value = null;
+    showToast(t("putAway.stagingBoxSelected", { box: boxId }));
+    return true;
+  }
+  if (existing) {
+    if (existing.status !== "open") {
+      showToast(t("putAway.boxNotOpen", { box: boxId }));
+      return false;
+    }
+    activeBoxId.value = boxId;
+    showToast(t("putAway.boxActivated", { box: boxId }));
+    return true;
+  }
+  if (!selectedShelf.value) {
+    scannedBoxId.value = boxId;
+    scanBoxDialogOpen.value = true;
+    boxesExpanded.value = true;
+    return true;
+  }
+  error.value = null;
+  creating.value = true;
+  try {
+    const box = await warehouse.createShelfBox(orderId, selectedShelf.value, boxId);
+    activeBoxId.value = box.id;
+    showToast(t("putAway.boxCreatedAndActivated", { box: box.id }));
+    await load();
+    boxesExpanded.value = true;
+    return true;
+  } catch (e) {
+    showToast(errorMessage(e));
+    return false;
+  } finally {
+    creating.value = false;
+  }
 }
 
 async function addScanToBox(scanId: string) {
@@ -377,6 +442,7 @@ async function load() {
     const previousBoxIds = new Set(boxes.value.map((b) => b.id));
     boxes.value = detail.boxes;
     scans.value = detail.scans;
+    stagingBoxId.value = detail.stagingBoxId ?? null;
     // The active box is only valid while it is still open on this order.
     if (
       activeBoxId.value &&
@@ -416,6 +482,11 @@ async function load() {
 }
 
 function openNewBoxDialog() {
+  // A scanned shelf context short-circuits the shelf picker.
+  if (selectedShelf.value) {
+    createBoxFromDialog(selectedShelf.value);
+    return;
+  }
   newBoxDialogOpen.value = true;
   boxesExpanded.value = true;
 }
@@ -634,4 +705,25 @@ async function onRetake() {
 </script>
 
 <style scoped>
+.shelf-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-weight: 600;
+}
+
+.shelf-banner__clear {
+  background: transparent;
+  border: none;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--muted);
+  cursor: pointer;
+}
 </style>

@@ -373,6 +373,13 @@ export default {
       supplier: "Supplier",
       deliveryDate: "Delivery date"
     },
+    shelfBanner: "Shelf: {shelf}",
+    shelfBannerClear: "Clear shelf selection",
+    shelfSelected: "Shelf {shelf} selected",
+    boxActivated: "Box {box} is now active",
+    boxCreatedAndActivated: "Box {box} created and active",
+    boxNotOpen: "Box {box} is not open",
+    stagingBoxSelected: "Staging box {box} — scans go to staging",
     shelfBoxesPanel: {
       title: "Shelf boxes ({count})",
       newBox: "New box",

@@ -373,6 +373,13 @@ export default {
       supplier: "供應商",
       deliveryDate: "送貨日期"
     },
+    shelfBanner: "貨架：{shelf}",
+    shelfBannerClear: "清除貨架選擇",
+    shelfSelected: "已選擇貨架 {shelf}",
+    boxActivated: "箱號 {box} 已啟用",
+    boxCreatedAndActivated: "箱號 {box} 已建立並啟用",
+    boxNotOpen: "箱號 {box} 未開啟",
+    stagingBoxSelected: "暫存箱 {box} — 掃描將進入暫存區",
     shelfBoxesPanel: {
       title: "貨架箱號({count})",
       newBox: "新增箱號",

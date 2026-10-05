@@ -650,6 +650,9 @@ export interface PutAwayDetail {
   items: PutAwayExpectedItem[];
   lots: PutAwayLot[];
   scans: PutAwayScan[];
+  /** The order's open staging box id (null when nothing is staged yet) — the
+   *  put-away page recognizes a scan of this box's QR label as "use staging". */
+  stagingBoxId: string | null;
   boxes: PutAwayBox[];
 }
 
