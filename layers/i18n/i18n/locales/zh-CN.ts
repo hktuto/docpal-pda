@@ -320,7 +320,7 @@ export default {
       qty: "数量",
       cancelBox: "取消箱子",
       addAll: "全部加入",
-      addAllConfirm: "将 {count} 个未装箱包裹加入此箱？",
+      addAllConfirm: "将所有未装箱包裹加入此箱？",
       scanIntoBox: "扫描物料入箱",
       scanIntoBoxStop: "停止扫描",
       scanIntoBoxHint: "已启用——扫描任意拣货单的物料条码即可装入此箱。",
@@ -979,6 +979,7 @@ export default {
       appDownload: "应用下载",
       flowConfig: "流程设置",
       displayConfig: "显示设置",
+      pdaViewConfig: "PDA 视图",
       userBadges: "用户工牌",
       userProfiles: "用户子库范围",
       labelPrintRules: "标签打印规则"
@@ -1758,11 +1759,14 @@ export default {
           delivery_date: "送货日期",
           date_code: "日期代码"
         },
-        pdaSection: "PDA 视图",
-        pdaPage: "页面",
-        pdaListPages: "列表",
-        pdaDetailPages: "详情页",
-        pdaPages: {
+        saved: "已保存。"
+      },
+      pdaViewConfig: {
+        title: "PDA 视图",
+        envOverrideWarning: "后端当前使用 FLOW_CONFIG 环境变量覆盖 — 在此保存只会写入数据库，需移除该环境变量后才会生效。",
+        listPages: "列表",
+        detailPages: "详情页",
+        pages: {
           receiving: "收货",
           picking: "拣货",
           putAway: "上架",
@@ -1804,7 +1808,9 @@ export default {
         pdaDetailHint: "勾选的字段按显示顺序渲染——用箭头调整顺序。行字段组成折叠的项目行（WCL 货号／部件号固定为行标题）；展开字段在操作员展开项目时显示。两个列表都至少需要勾选一个字段。",
         moveUp: "上移",
         moveDown: "下移",
-        pdaHint: "占位符显示该行字段；字段为空时该占位符显示为空，方括号以外的文字原样显示。标题结果为空时改用默认标题（行不会显示空白）；副标题行结果为空时该行隐藏。日期显示 YYYY-MM-DD，时间戳显示 YYYY-MM-DD HH:mm；收货的 [name] 为上方收货单名称模板产生的订单名称。",
+        pdaHint: "占位符显示该行字段；字段为空时该占位符显示为空，方括号以外的文字原样显示。标题结果为空时改用默认标题（行不会显示空白）；副标题行结果为空时该行隐藏。日期显示 YYYY-MM-DD，时间戳显示 YYYY-MM-DD HH:mm；收货的 [name] 为显示设置页的收货单名称模板产生的订单名称。",
+        previewSection: "预览",
+        templateInvalid: "模板必须是非空字符串。",
         detailFieldLabels: {
           wcl_item_no: "WCL 货号",
           part_no: "部件号",

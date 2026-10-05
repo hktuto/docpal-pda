@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="picking-detail-page">
     <EmptyState v-if="pending">{{ $t('common.loading') }}</EmptyState>
     <EmptyState v-else-if="error" error>{{ $t('common.errorPrefix', { message: error }) }}</EmptyState>
 
@@ -328,9 +328,8 @@ async function cancelBox(boxId: string) {
 
 async function addAllToBox(boxId: string) {
   if (anyAddingAll.value) return;
-  const count = unboxedCountForOrder.value;
-  if (count === 0) return;
-  const confirmed = window.confirm(t("picking.boxesSection.addAllConfirm", { count }));
+  if (unboxedCountForOrder.value === 0) return;
+  const confirmed = window.confirm(t("picking.boxesSection.addAllConfirm"));
   if (!confirmed) return;
 
   addingAll.value[boxId] = true;
@@ -393,6 +392,11 @@ useVisibleReload(load);
 </script>
 
 <style scoped>
+/* Clearance so the fixed scan FAB never covers the last list item. */
+.picking-detail-page {
+  padding-bottom: 5rem;
+}
+
 .work-lock-banner {
   background: #fef3c7;
   border: 1px solid #f59e0b;

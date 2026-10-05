@@ -320,7 +320,7 @@ export default {
       qty: "數量",
       cancelBox: "取消箱號",
       addAll: "全部加入",
-      addAllConfirm: "將 {count} 個未裝箱包裹加入此箱？",
+      addAllConfirm: "將所有未裝箱包裹加入此箱？",
       scanIntoBox: "掃描物料入箱",
       scanIntoBoxStop: "停止掃描",
       scanIntoBoxHint: "已啟用——掃描任何揀貨單的物料條碼即可裝入此箱。",
@@ -979,6 +979,7 @@ export default {
       appDownload: "App 下載",
       flowConfig: "流程設定",
       displayConfig: "顯示設定",
+      pdaViewConfig: "PDA 視圖",
       userBadges: "用戶證件",
       userProfiles: "用戶子庫範圍",
       labelPrintRules: "標籤列印規則"
@@ -1758,11 +1759,14 @@ export default {
           delivery_date: "送貨日期",
           date_code: "日期代碼"
         },
-        pdaSection: "PDA 視圖",
-        pdaPage: "頁面",
-        pdaListPages: "列表",
-        pdaDetailPages: "詳情頁",
-        pdaPages: {
+        saved: "已儲存。"
+      },
+      pdaViewConfig: {
+        title: "PDA 視圖",
+        envOverrideWarning: "後端目前使用 FLOW_CONFIG 環境變數覆蓋 — 在此儲存只會寫入資料庫，要移除該環境變數後才會生效。",
+        listPages: "列表",
+        detailPages: "詳情頁",
+        pages: {
           receiving: "收貨",
           picking: "揀貨",
           putAway: "上架",
@@ -1804,7 +1808,9 @@ export default {
         pdaDetailHint: "勾選的欄位按顯示順序渲染——用箭頭調整順序。行欄位組成摺疊的項目行（WCL 貨號／部件號固定為行標題）；展開欄位在操作員展開項目時顯示。兩個列表都至少需要勾選一個欄位。",
         moveUp: "上移",
         moveDown: "下移",
-        pdaHint: "佔位符顯示該行欄位；欄位為空時該佔位符顯示為空，方括號以外的文字原樣顯示。標題結果為空時改用預設標題（行不會顯示空白）；副標題行結果為空時該行隱藏。日期顯示 YYYY-MM-DD，時間戳顯示 YYYY-MM-DD HH:mm；收貨的 [name] 為上方收貨單名稱模板產生的訂單名稱。",
+        pdaHint: "佔位符顯示該行欄位；欄位為空時該佔位符顯示為空，方括號以外的文字原樣顯示。標題結果為空時改用預設標題（行不會顯示空白）；副標題行結果為空時該行隱藏。日期顯示 YYYY-MM-DD，時間戳顯示 YYYY-MM-DD HH:mm；收貨的 [name] 為顯示設定頁的收貨單名稱模板產生的訂單名稱。",
+        previewSection: "預覽",
+        templateInvalid: "模板必須是非空字串。",
         detailFieldLabels: {
           wcl_item_no: "WCL 貨號",
           part_no: "部件號",

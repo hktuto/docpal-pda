@@ -70,7 +70,7 @@
   - list shipping order with filter and sort, multiple select to download shipper 7.3
     - detail shipping order
 - Settings
-  - flow config, display config (date-code display template), app download, user badges, user scope
+  - flow config, display config (date-code display template, receiving order name template), PDA view config (per-page PDA list/detail view editor), app download, user badges, user scope
 - Dropdown & Policy
   - Net Weight Formulas (was under Warehouse)
   - Box Sizes (was under Warehouse)

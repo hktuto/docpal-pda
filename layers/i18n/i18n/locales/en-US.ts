@@ -320,7 +320,7 @@ export default {
       qty: "Qty",
       cancelBox: "Cancel box",
       addAll: "Add all",
-      addAllConfirm: "Add {count} unboxed package(s) to this box?",
+      addAllConfirm: "Add all unboxed packages to this box?",
       scanIntoBox: "Scan item into box",
       scanIntoBoxStop: "Stop scanning",
       scanIntoBoxHint: "Armed — scan an item barcode from any order to pack it into this box.",
@@ -979,6 +979,7 @@ export default {
       appDownload: "App Download",
       flowConfig: "Flow Config",
       displayConfig: "Display",
+      pdaViewConfig: "PDA View",
       userBadges: "User Badges",
       userProfiles: "User Scope",
       labelPrintRules: "Label Print Rules"
@@ -1761,11 +1762,14 @@ export default {
           delivery_date: "Delivery date",
           date_code: "Date code"
         },
-        pdaSection: "PDA view",
-        pdaPage: "Page",
-        pdaListPages: "Lists",
-        pdaDetailPages: "Detail pages",
-        pdaPages: {
+        saved: "Saved."
+      },
+      pdaViewConfig: {
+        title: "PDA View",
+        envOverrideWarning: "The FLOW_CONFIG environment override is active on the backend — saving here stores the row but does NOT change the running config until the override is removed.",
+        listPages: "Lists",
+        detailPages: "Detail pages",
+        pages: {
           receiving: "Receiving",
           picking: "Picking",
           putAway: "Put-away",
@@ -1807,7 +1811,9 @@ export default {
         pdaDetailHint: "Checked fields render in the order shown — use the arrows to reorder. Row fields form the collapsed item row (WCL item no / part no is always the row title); expanded fields appear when the worker expands the item. Both lists need at least one field.",
         moveUp: "Move up",
         moveDown: "Move down",
-        pdaHint: "Placeholders render the row's fields; a placeholder whose field is empty renders as empty, and text outside brackets shows literally. If the title renders empty the default title is used instead (a row never shows blank); a meta line that renders empty is hidden. Dates render YYYY-MM-DD, timestamps YYYY-MM-DD HH:mm; the receiving [name] is the order name from the receiving order name template above.",
+        pdaHint: "Placeholders render the row's fields; a placeholder whose field is empty renders as empty, and text outside brackets shows literally. If the title renders empty the default title is used instead (a row never shows blank); a meta line that renders empty is hidden. Dates render YYYY-MM-DD, timestamps YYYY-MM-DD HH:mm; the receiving [name] is the order name from the receiving order name template on the Display page.",
+        previewSection: "Preview",
+        templateInvalid: "Template must be a non-empty string.",
         detailFieldLabels: {
           wcl_item_no: "WCL item no",
           part_no: "Part no",
