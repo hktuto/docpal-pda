@@ -104,13 +104,13 @@ export default {
     operatorFallback: "Operator",
     prompt: "What would you like to do?",
     menu: {
-      receiving: { title: "Receiving", desc: "Confirm arrivals and stock" },
-      picking: { title: "Picking", desc: "Scan, box, and finish orders" },
-      putAway: { title: "Put-away", desc: "Move stock to shelves" },
-      goodsVerify: { title: "Goods Verify", desc: "Count today's moved lots" },
-      measuring: { title: "Measuring", desc: "Weigh and pack boxes" },
-      verify: { title: "Verify", desc: "Re-check packed boxes" },
-      stockSearch: { title: "Stock Search", desc: "Search inventory by supplier, item or shelf" }
+      receiving: { title: "Receiving" },
+      picking: { title: "Picking" },
+      putAway: { title: "Put-away" },
+      goodsVerify: { title: "Goods Verify" },
+      measuring: { title: "Measuring" },
+      verify: { title: "Verify" },
+      stockSearch: { title: "Stock Search" }
     }
   },
   login: {

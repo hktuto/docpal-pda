@@ -104,13 +104,13 @@ export default {
     operatorFallback: "操作员",
     prompt: "请选择要执行的操作？",
     menu: {
-      receiving: { title: "收货", desc: "确认到货及库存" },
-      picking: { title: "拣货", desc: "扫描、装箱并完成订单" },
-      putAway: { title: "上架", desc: "将库存移至货架" },
-      goodsVerify: { title: "盘点", desc: "盘点当日异动批次" },
-      measuring: { title: "测量", desc: "称重并打包箱子" },
-      verify: { title: "复核", desc: "复查已打包的箱子" },
-      stockSearch: { title: "库存查询", desc: "按供应商、物料或货架查询库存" }
+      receiving: { title: "收货" },
+      picking: { title: "拣货" },
+      putAway: { title: "上架" },
+      goodsVerify: { title: "盘点" },
+      measuring: { title: "测量" },
+      verify: { title: "复核" },
+      stockSearch: { title: "库存查询" }
     }
   },
   login: {

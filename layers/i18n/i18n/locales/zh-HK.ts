@@ -104,13 +104,13 @@ export default {
     operatorFallback: "操作員",
     prompt: "請選擇要執行的操作？",
     menu: {
-      receiving: { title: "收貨", desc: "確認到貨及庫存" },
-      picking: { title: "揀貨", desc: "掃描、裝箱並完成訂單" },
-      putAway: { title: "上架", desc: "將庫存移至貨架" },
-      goodsVerify: { title: "查貨", desc: "盤點當日異動批次" },
-      measuring: { title: "測量", desc: "秤重並裝箱" },
-      verify: { title: "覆核", desc: "複查已包裝的箱號" },
-      stockSearch: { title: "庫存查詢", desc: "按供應商、物料或貨架查詢庫存" }
+      receiving: { title: "收貨" },
+      picking: { title: "揀貨" },
+      putAway: { title: "上架" },
+      goodsVerify: { title: "查貨" },
+      measuring: { title: "測量" },
+      verify: { title: "覆核" },
+      stockSearch: { title: "庫存查詢" }
     }
   },
   login: {

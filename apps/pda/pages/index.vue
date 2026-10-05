@@ -15,19 +15,6 @@
           </svg>
         </div>
         <p class="menu-card__title">{{ $t('home.menu.receiving.title') }}</p>
-        <p class="menu-card__meta">{{ $t('home.menu.receiving.desc') }}</p>
-      </NuxtLink>
-
-      <NuxtLink v-if="flowSteps.picking" to="/picking" class="menu-card">
-        <div class="menu-card__icon menu-card__icon--picking">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M5 21v-6"/>
-            <path d="M12 21V9"/>
-            <path d="M19 21V3"/>
-          </svg>
-        </div>
-        <p class="menu-card__title">{{ $t('home.menu.picking.title') }}</p>
-        <p class="menu-card__meta">{{ $t('home.menu.picking.desc') }}</p>
       </NuxtLink>
 
       <NuxtLink v-if="flowSteps['put-away']" to="/put-away" class="menu-card">
@@ -39,19 +26,21 @@
           </svg>
         </div>
         <p class="menu-card__title">{{ $t('home.menu.putAway.title') }}</p>
-        <p class="menu-card__meta">{{ $t('home.menu.putAway.desc') }}</p>
       </NuxtLink>
 
-      <NuxtLink v-if="flowSteps['goods-verify']" to="/goods-verify" class="menu-card">
-        <div class="menu-card__icon menu-card__icon--verify">
+      <NuxtLink v-if="flowSteps.picking" to="/picking" class="menu-card">
+        <div class="menu-card__icon menu-card__icon--picking">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>
-            <path d="m9 12 2 2 4-4"/>
+            <path d="M5 21v-6"/>
+            <path d="M12 21V9"/>
+            <path d="M19 21V3"/>
           </svg>
         </div>
-        <p class="menu-card__title">{{ $t('home.menu.goodsVerify.title') }}</p>
-        <p class="menu-card__meta">{{ $t('home.menu.goodsVerify.desc') }}</p>
+        <p class="menu-card__title">{{ $t('home.menu.picking.title') }}</p>
       </NuxtLink>
+
+
+
 
       <NuxtLink v-if="flowSteps.measuring" to="/measuring" class="menu-card">
         <div class="menu-card__icon menu-card__icon--measuring">
@@ -62,7 +51,6 @@
           </svg>
         </div>
         <p class="menu-card__title">{{ $t('home.menu.measuring.title') }}</p>
-        <p class="menu-card__meta">{{ $t('home.menu.measuring.desc') }}</p>
       </NuxtLink>
 
       <NuxtLink v-if="flowSteps.verify" to="/verify" class="menu-card">
@@ -74,7 +62,17 @@
           </svg>
         </div>
         <p class="menu-card__title">{{ $t('home.menu.verify.title') }}</p>
-        <p class="menu-card__meta">{{ $t('home.menu.verify.desc') }}</p>
+      </NuxtLink>
+
+
+      <NuxtLink v-if="flowSteps['goods-verify']" to="/goods-verify" class="menu-card">
+        <div class="menu-card__icon menu-card__icon--verify">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>
+            <path d="m9 12 2 2 4-4"/>
+          </svg>
+        </div>
+        <p class="menu-card__title">{{ $t('home.menu.goodsVerify.title') }}</p>
       </NuxtLink>
 
       <NuxtLink v-if="flowSteps['stock-search']" to="/stock-search" class="menu-card">
@@ -87,7 +85,6 @@
           </svg>
         </div>
         <p class="menu-card__title">{{ $t('home.menu.stockSearch.title') }}</p>
-        <p class="menu-card__meta">{{ $t('home.menu.stockSearch.desc') }}</p>
       </NuxtLink>
 
     </div>
@@ -160,7 +157,7 @@ const { flowSteps } = useFlowSteps();
   align-items: center;
   justify-content: center;
   border-radius: 0.6rem;
-  margin-bottom: 0.875rem;
+  margin-bottom: 0.3rem;
   color: white;
 }
 
@@ -178,16 +175,9 @@ const { flowSteps } = useFlowSteps();
 .menu-card__icon--stock-search { background: linear-gradient(135deg, #ec4899, #db2777); }
 
 .menu-card__title {
-  margin: 0 0 0.25rem;
+  margin: 0;
   font-size: 1rem;
   font-weight: 700;
   color: var(--text);
-}
-
-.menu-card__meta {
-  margin: 0;
-  font-size: 0.8125rem;
-  color: var(--muted);
-  line-height: 1.35;
 }
 </style>

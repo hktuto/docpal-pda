@@ -28,6 +28,22 @@ watch(
   },
   { immediate: true }
 );
+
+// Config changes (admin flow-config / display settings) reach the PDA two
+// ways: the config.updated SSE event, and a refetch whenever the app returns
+// to the foreground (covers a dropped event stream). Without these the config
+// was only fetched at login and list pages kept rendering stale settings.
+onMounted(() => {
+  const unsubscribe = events.subscribe(["/config"], () => void loadFlowSteps());
+  const onVisible = () => {
+    if (document.visibilityState === "visible" && currentUser.value) void loadFlowSteps();
+  };
+  document.addEventListener("visibilitychange", onVisible);
+  onUnmounted(() => {
+    unsubscribe();
+    document.removeEventListener("visibilitychange", onVisible);
+  });
+});
 </script>
 
 <style scoped>

@@ -191,10 +191,13 @@ describe('useWarehouseEvents', () => {
     expect(MockEventSource.instances).toHaveLength(3);
   });
 
-  it('shows a toast with a navigation action for toastable event types', () => {
+  it('shows a toast with a navigation action for toastable event types when a mounted page matches', () => {
     const events = useWarehouseEvents();
     events.connect();
     const source = MockEventSource.instances[0];
+
+    const unsubscribePicking = events.subscribe(['/picking-orders'], () => {});
+    const unsubscribeGoodsVerify = events.subscribe(['/goods-verify-tasks'], () => {});
 
     source.emit(
       'allocation.computed',
@@ -215,6 +218,33 @@ describe('useWarehouseEvents', () => {
     expect(showToastMock).toHaveBeenLastCalledWith('event_goods_verify_tasks_created', {
       action: { label: 'view', to: '/goods-verify' },
     });
+
+    unsubscribePicking();
+    unsubscribeGoodsVerify();
+  });
+
+  it('shows no toast when no mounted page subscribes to the event topics', () => {
+    const events = useWarehouseEvents();
+    events.connect();
+    const source = MockEventSource.instances[0];
+
+    // A mounted page on unrelated topics must not trigger the toast either.
+    const unsubscribe = events.subscribe(['/receiving-orders'], () => {});
+
+    source.emit(
+      'allocation.computed',
+      makeEvent(3, 'allocation.computed', ['/picking-orders']),
+      '3'
+    );
+    source.emit(
+      'goods_verify.tasks_created',
+      makeEvent(4, 'goods_verify.tasks_created', ['/goods-verify-tasks'], { count: 2 }),
+      '4'
+    );
+
+    expect(showToastMock).not.toHaveBeenCalled();
+
+    unsubscribe();
   });
 
   it('shows no toast for non-toastable types', () => {

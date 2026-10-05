@@ -99,6 +99,25 @@ test("PUT /admin/flow-config: validates, persists, applies at runtime", async ()
   }
 });
 
+test("PUT /admin/flow-config: emits config.updated on /config for PDA refetch", async () => {
+  await reseed(client);
+  try {
+    const res = await req("/admin/flow-config", {
+      method: "PUT",
+      body: JSON.stringify({ pdaViewConfig: { lists: { picking: { chip: "working_by_name" } } } }),
+    });
+    assert.equal(res.status, 200);
+    const evt = await queryGet<{ topics: string[] }>(
+      client.db,
+      sql`SELECT topics FROM app_events WHERE type = 'config.updated' ORDER BY id DESC LIMIT 1`
+    );
+    assert.ok(evt, "config.updated event row exists");
+    assert.deepEqual(evt!.topics, ["/config"]);
+  } finally {
+    _resetFlowConfigForTests();
+  }
+});
+
 test("PUT /admin/flow-config: dateCodeDisplayTemplate round-trips", async () => {
   await reseed(client);
   try {

@@ -164,4 +164,8 @@ The pre-existing `app_events` outbox (`GET /events` SSE stream, 13 business
 event types such as `picking_order.created`, `allocation.computed`) stays as
 is — it exists for PDA/admin cache invalidation, carries business-level
 meaning, and is pruned after 3 days. The sync table above is row-level, not
-business-level, and is the contract for the sync service.
+business-level, and is the contract for the sync service. (Also on this
+stream: `config.updated` with topics `["/config"]`, emitted by
+`PUT /admin/flow-config` when the save is applied at runtime — PDA clients
+refetch `GET /config` on it so display/flow settings propagate without
+re-login.)

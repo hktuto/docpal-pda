@@ -10,7 +10,10 @@ import { useToast } from "~/composables/useToast";
  * Module-level singleton (same pattern as useToast): one EventSource for the
  * whole app, a persisted `wms-events-last-id` cursor used for the manual
  * reconnect loop (never the browser's Last-Event-ID auto-reconnect), topic
- * subscribers for mounted pages, and toasts for "new work" events.
+ * subscribers for mounted pages, and toasts for "new work" events. A toast
+ * shows only when the event's topics match a mounted page's subscription —
+ * i.e. the current page's content actually changed because of the event —
+ * instead of toasting for every background event.
  */
 
 export interface WarehouseEvent {
@@ -27,6 +30,7 @@ export type WarehouseEventCallback = (event: WarehouseEvent) => void;
 // ignored: no listener is registered for them.
 const KNOWN_EVENT_TYPES = [
   "allocation.computed",
+  "config.updated",
   "picking_order.created",
   "picking_order.updated",
   "shipping_box.shipped",
@@ -35,6 +39,8 @@ const KNOWN_EVENT_TYPES = [
 ] as const;
 
 // Only "new work" events toast; the rest are subscriber notification only.
+// The toast is additionally gated on a mounted-page subscription match (see
+// handleEvent) so it only appears when the event changed the current page.
 const TOASTS: Record<string, { key: string; to: string }> = {
   "allocation.computed": { key: "event_allocation_computed", to: "/picking" },
   "picking_order.created": { key: "event_picking_order_created", to: "/picking" },
@@ -85,13 +91,15 @@ function handleEvent(type: string, raw: MessageEvent): void {
     return; // malformed frame — ignore
   }
   const topics = Array.isArray(event.topics) ? event.topics : [];
+  let currentPageAffected = false;
   for (const sub of [...subscribers]) {
     if (sub.topics.some((t) => topics.includes(t))) {
+      currentPageAffected = true;
       sub.cb(event);
     }
   }
   const toast = TOASTS[type];
-  if (toast) {
+  if (toast && currentPageAffected) {
     const i18n = useNuxtApp().$i18n;
     useToast().showToast(i18n.t(toast.key, event.data ?? {}), {
       action: { label: i18n.t("view"), to: toast.to },

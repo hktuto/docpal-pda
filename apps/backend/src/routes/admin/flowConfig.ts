@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { db } from "../../db.js";
 import { warehouseConfig } from "../../db/schema/config.js";
 import { FLOW_CONFIG_KEY, mergeFlowConfigJson, applyFlowConfig } from "../../config.js";
+import { emitEvent } from "../../db/events.js";
 import { now } from "../../db/now.js";
 
 // Flow config editing (spec 2026-08-12-admin-flow-config-design.md): the
@@ -50,7 +51,12 @@ adminFlowConfigRoute.put("/", async (c) => {
       set: { value: body as Record<string, unknown>, lastUpdateDate: now() },
     });
   const envOverride = Boolean(process.env.FLOW_CONFIG);
-  if (!envOverride) applyFlowConfig(cfg);
+  if (!envOverride) {
+    applyFlowConfig(cfg);
+    // Notify PDA clients so they refetch GET /config (view config, flow
+    // steps, shelf-scan mode) instead of waiting for the next login.
+    await emitEvent(db, { type: "config.updated", topics: ["/config"] });
+  }
   // Return the saved config (not the runtime one) so the form keeps what the
   // user just saved even when the env override blocked the runtime apply.
   return c.json({ config: cfg, stored: body, envOverride, applied: !envOverride });
