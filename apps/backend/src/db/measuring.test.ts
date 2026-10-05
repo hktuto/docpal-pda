@@ -177,6 +177,39 @@ test("detail: box fields + packages with part identity + suggestedNetWeightKg; 4
   assert.equal(notFound.message, "shipping_box_not_found");
 });
 
+test("detail: package part identity is the scanned label part, falling back to the item part (2026-10-05)", async () => {
+  await reset();
+  const actorId = await actorIdOf();
+  await allocateAll(client.db);
+  const orderId = await pickingOrderIdOf("SO-DEMO-0001");
+  const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
+  const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F");
+  // the label's own part text — differs in form from picking_items.part_no
+  const { packageIds } = await scanPickingItem(client.db, item1, {
+    actorId,
+    allocationId: await allocationIdOf(item1),
+    qty: 1000,
+    scannedPartNo: "SUP-99",
+    scannedWclItemNo: "RK73 H1J",
+  });
+  await scanPickingItem(client.db, item2, {
+    actorId,
+    allocationId: await allocationIdOf(item2),
+    qty: 500,
+  });
+  const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
+  await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
+
+  const detail = await getMeasuringBoxDetail(client.db, box.id);
+  const byId = new Map(detail.packages.map((p) => [p.id, p]));
+  const scanned = byId.get(packageIds[0])!;
+  assert.equal(scanned.partNo, "SUP-99");
+  assert.equal(scanned.wclItemNo, "RK73 H1J");
+  const legacy = detail.packages.find((p) => p.id !== packageIds[0])!;
+  assert.equal(legacy.partNo, "RK73H1JTTD2202F");
+  assert.equal(legacy.wclItemNo, "RK73H1JTTD2202F");
+});
+
 test("detail: suggested net weight is null when no package has a formula row", async () => {
   await reset();
   const actorId = await actorIdOf();

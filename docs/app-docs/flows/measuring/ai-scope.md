@@ -12,7 +12,12 @@
   box and its packages with part identity and the `verified`/`verifyVerified`
   flags embedded, plus `suggestedNetWeightKg` per box. Scanning a box QR/id
   on the list page (`useHardwareScanner`) opens that box directly — exact id
-  match, else a unique substring match.
+  match, else a unique substring match. The package `partNo`/`wclItemNo` are
+  the **scanned label's** part keys (recorded on `picking_packages` at pick
+  scan time, spec
+  `docs/superpowers/specs/2026-10-05-measuring-scanned-part-truth-design.md`),
+  falling back to the picking item's part for legacy rows — so the operator
+  re-scans the same physical item they picked, not the allocated part.
 - Box page (`/measuring/:boxId`): packages shown as a table that listens to
   hardware/wedge QR scans — each scan is parsed with the supplier templates
   (`parseRawValue`), matched client-side **aggregate** against the box's
@@ -88,6 +93,7 @@
 - `docs/backend/api-design.md` §Measuring
 - `docs/superpowers/specs/2026-08-11-box-scoped-measuring-verify-design.md`
 - `docs/superpowers/specs/2026-10-03-picking-scan-truth-and-aggregate-verify-design.md`
+- `docs/superpowers/specs/2026-10-05-measuring-scanned-part-truth-design.md`
 - `docs/superpowers/specs/2026-07-28-measuring-verify-refinements-design.md`
 - `docs/superpowers/specs/2026-07-02-measuring-flow-design.md`
 - `docs/superpowers/specs/2026-07-03-boxes-section-redesign-design.md`

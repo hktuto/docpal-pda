@@ -19,9 +19,11 @@ export function packageRemaining(pkg: MeasuringPackage): number {
 }
 
 /**
- * Aggregate verify/measuring match (2026-10-03 design): totals per part +
- * batch fields, not physical labels. A scan matches when the part matches
- * (space-insensitive; the label's WCL item no is accepted too), every batch
+ * Aggregate verify/measuring match (2026-10-03 design, 2026-10-05 scan-truth
+ * part identity): totals per part + batch fields, not physical labels. A scan
+ * matches when the scanned part matches the package's part OR WCL item no
+ * (space-insensitive; pkg.partNo is the scanned label part when recorded,
+ * falling back to the picking item's part for legacy rows), every batch
  * field agrees wherever BOTH sides carry a value, and the scanned qty fits
  * the group's total remaining. The credit plan walks the matching packages
  * FIFO, taking partial credits as needed.
@@ -45,7 +47,10 @@ export function matchAggregatePackages(
 
   const eligible = packages.filter((pkg) => {
     if (targetPackageId && pkg.id !== targetPackageId) return false;
-    if (!scannedKeys.includes(normalizePartNo(pkg.partNo ?? ''))) return false;
+    const pkgKeys = [pkg.partNo, pkg.wclItemNo]
+      .filter((v): v is string => !!v)
+      .map((v) => normalizePartNo(v));
+    if (!scannedKeys.some((k) => pkgKeys.includes(k))) return false;
     const pkgDateCode = pkg.dateCode ? normalizeCode(pkg.dateCode) : '';
     if (dateCode && pkgDateCode && dateCode !== pkgDateCode) return false;
     const pkgLotCode = pkg.lotCode ? normalizeCode(pkg.lotCode) : '';

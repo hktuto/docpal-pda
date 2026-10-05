@@ -1752,6 +1752,61 @@ test("scan persists the raw label barcode on the package rows; absent → NULL",
   assert.equal(stored3!.labelBarcode, "RK73H1JTTD2202F");
 });
 
+// --- scanned part identity (2026-10-05 measuring scan-truth) -------------------
+
+test("scan persists the scanned part keys on the package rows; absent → NULL", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await seededOrderAllocated();
+
+  // item scan path: the label's own part text (may differ in form from the
+  // picking item's part_no — e.g. it matched via the wclItemNo group)
+  const itemId = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
+  const alloc = await allocationOf(itemId);
+  const { packageIds } = await scanPickingItem(client.db, itemId, {
+    actorId,
+    allocationId: alloc.id,
+    qty: 100,
+    scannedPartNo: "SUP-99",
+    scannedWclItemNo: "RK73 H1J",
+  });
+  const stored = await queryGet<{ scannedPartNo: string | null; scannedWclItemNo: string | null }>(
+    client.db,
+    sql`SELECT scanned_part_no AS "scannedPartNo", scanned_wcl_item_no AS "scannedWclItemNo"
+        FROM picking_packages WHERE id = ${packageIds[0]}`
+  );
+  assert.deepEqual(stored, { scannedPartNo: "SUP-99", scannedWclItemNo: "RK73 H1J" });
+
+  // no scanned keys (legacy/OCR path) → NULL columns → consumers fall back to
+  // the picking item's part
+  const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F");
+  const alloc2 = await allocationOf(item2);
+  const { packageIds: p2 } = await scanPickingItem(client.db, item2, {
+    actorId,
+    allocationId: alloc2.id,
+    qty: 50,
+  });
+  const stored2 = await queryGet<{ scannedPartNo: string | null; scannedWclItemNo: string | null }>(
+    client.db,
+    sql`SELECT scanned_part_no AS "scannedPartNo", scanned_wcl_item_no AS "scannedWclItemNo"
+        FROM picking_packages WHERE id = ${p2[0]}`
+  );
+  assert.deepEqual(stored2, { scannedPartNo: null, scannedWclItemNo: null });
+
+  // scan-into-box path: the barcode itself is the scanned part key
+  const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
+  const r3 = await scanIntoShippingBox(client.db, {
+    shippingBoxId: box.id,
+    barcode: "RK73H1JTTD2202F",
+    qty: 10,
+    actorId,
+  });
+  const stored3 = await queryGet<{ scannedPartNo: string | null }>(
+    client.db,
+    sql`SELECT scanned_part_no AS "scannedPartNo" FROM picking_packages WHERE id = ${r3.packageIds[0]}`
+  );
+  assert.equal(stored3!.scannedPartNo, "RK73H1JTTD2202F");
+});
+
 // --- pickingShelfScan flow-config modes --------------------------------------
 // (spec 2026-10-02-picking-shelf-scan-config-design.md)
 

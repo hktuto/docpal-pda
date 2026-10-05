@@ -475,6 +475,11 @@ export interface ScanPickingItemInput {
   /** Raw scan string of the physical label (hardware scans only); stored on
    *  the created package rows for verify re-scan label matching. */
   barcode?: string | null;
+  /** Scanned part identity: the label's itemId / wclItemNo groups as scanned,
+   *  stored on the package rows so measuring/verify show + match the scanned
+   *  part rather than the picking item's (allocated) part. */
+  scannedPartNo?: string | null;
+  scannedWclItemNo?: string | null;
   /** Sticky shelf-scan context (flow config pickingShelfScan require-* modes):
    *  the shelf/box the operator last scanned; sent with every item scan. */
   shelfCode?: string | null;
@@ -696,7 +701,9 @@ export interface MeasuringBoxListRow {
   createdDate: string;
 }
 
-/** Package row inside a measuring box (part identity embedded). */
+/** Package row inside a measuring box. partNo/wclItemNo are the SCANNED label
+ *  identity when the pick scan recorded it (2026-10-05), falling back to the
+ *  picking item's part for legacy rows. */
 export interface MeasuringPackage {
   id: string;
   qty: number;

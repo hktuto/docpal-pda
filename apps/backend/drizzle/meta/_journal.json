@@ -162,6 +162,13 @@
       "when": 1791170510767,
       "tag": "0022_melted_shotgun",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791180780234,
+      "tag": "0023_empty_star_brand",
+      "breakpoints": true
     }
   ]
 }

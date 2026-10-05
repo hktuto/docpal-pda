@@ -110,6 +110,23 @@ describe("matchAggregatePackages", () => {
     expect(matchAggregatePackages(packages, { partNo: "RK73H1J", qty: 1000 })).not.toBeNull();
   });
 
+  it("2026-10-05: matches the package's scanned part OR its WCL item no", () => {
+    // The pick scan recorded the label's own part text (supplier part "SUP-99")
+    // and WCL group — a measuring re-scan of the same label must match even
+    // though neither key equals the picking item's part_no.
+    const packages = [pkg("a", 1000, { partNo: "SUP-99", wclItemNo: "RK73H1J" })];
+    expect(matchAggregatePackages(packages, { partNo: "SUP-99", qty: 1000 })).toEqual({
+      qty: 1000,
+      credits: [{ packageId: "a", qty: 1000 }],
+    });
+    expect(matchAggregatePackages(packages, { wclItemNo: "RK73H1J", qty: 1000 })).toEqual({
+      qty: 1000,
+      credits: [{ packageId: "a", qty: 1000 }],
+    });
+    expect(matchAggregatePackages(packages, { partNo: "RK73H1J", qty: 1000 })).not.toBeNull();
+    expect(matchAggregatePackages(packages, { partNo: "OTHER", qty: 1000 })).toBeNull();
+  });
+
   it("returns null for a different part or a scan without any part key", () => {
     const packages = [pkg("a", 1000)];
     expect(matchAggregatePackages(packages, { partNo: "OTHER", qty: 1000 })).toBeNull();

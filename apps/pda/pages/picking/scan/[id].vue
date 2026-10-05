@@ -732,6 +732,11 @@ async function confirm() {
           // Hardware-scan rows carry the raw label string so the backend can
           // record it on every portion; OCR rows have no scan string.
           barcode: row.source === "qr" ? row.raw : undefined,
+          // The label's part keys as scanned — the backend stores them on the
+          // package so measuring/verify show + match the scanned part, not
+          // the allocated item's part.
+          scannedPartNo: row.scannedPartNo,
+          scannedWclItemNo: row.scannedWclItemNo ?? undefined,
           // Sticky shelf-scan context (require-* modes): every scan POST
           // carries the shelf/box the operator last scanned.
           shelfCode: requireShelfScan.value ? pendingShelf.value?.shelfCode ?? undefined : undefined,

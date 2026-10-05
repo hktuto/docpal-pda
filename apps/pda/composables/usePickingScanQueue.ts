@@ -8,6 +8,11 @@ export interface ScanQueueRow {
   itemId: string;
   allocationId: string;
   partNo: string;
+  /** The label's part keys as scanned (before normalization to the item's
+   *  part) — sent to the backend so measuring/verify show + match the scanned
+   *  part, not the allocated item's part. */
+  scannedPartNo: string;
+  scannedWclItemNo: string | null;
   qty: number;
   dateCode: string | null;
   lotCode: string | null;
@@ -129,6 +134,8 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
         itemId: portion.item.id,
         allocationId: portion.allocation.id,
         partNo: portion.item.partNo,
+        scannedPartNo: String(parsed.partNo ?? ""),
+        scannedWclItemNo: parsed.wclItemNo ?? null,
         qty: portion.qty,
         dateCode: parsed.dateCode || null,
         lotCode: parsed.lotCode || null,
@@ -230,6 +237,8 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
       itemId: item.id,
       allocationId: allocation.id,
       partNo: item.partNo,
+      scannedPartNo: String(parsed.partNo ?? ""),
+      scannedWclItemNo: parsed.wclItemNo ?? null,
       qty,
       dateCode: parsed.dateCode || null,
       lotCode: parsed.lotCode || null,
@@ -266,6 +275,10 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
         itemId: item.id,
         allocationId: allocation.id,
         partNo: item.partNo,
+        // A carton scan carries no parsed label part — record the item's own
+        // keys as the scanned identity.
+        scannedPartNo: item.partNo,
+        scannedWclItemNo: item.wclItemNo ?? null,
         qty: take,
         dateCode: allocation.lot?.dateCode ?? null,
         lotCode: allocation.lot?.lotCode ?? null,

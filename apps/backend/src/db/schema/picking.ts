@@ -129,6 +129,12 @@ export const pickingPackages = pgTable(
     // Raw scan string of the physical label this package (portion) came from;
     // NULL for legacy rows and camera/OCR scans — those keep qty matching.
     labelBarcode: text("label_barcode"),
+    // Scanned part identity (2026-10-05 measuring scan-truth): the label's
+    // itemId / wclItemNo groups as scanned, verbatim. NULL for legacy rows and
+    // paths without a parsed label — consumers fall back to the picking item's
+    // part (measuring/verify detail + aggregate matcher).
+    scannedPartNo: text("scanned_part_no"),
+    scannedWclItemNo: text("scanned_wcl_item_no"),
     verified: boolean("verified").notNull().default(false),
     verifyVerified: boolean("verify_verified").notNull().default(false), // verify-step re-scan flag
     // Aggregate re-scan truth (2026-10-03): credited qty from verify scans —

@@ -269,7 +269,9 @@ useHardwareScanner({
         rawValue,
         order.value.supplier?.code ?? undefined
       );
+      console.log("parsedResult", parsedResult)
       const parsed = ocrResultToInput(parsedResult.parsed);
+      console.log("parsed", parsed)
       const qty = typeof parsed.qty === "number" ? parsed.qty : Number(parsed.qty);
       // Item-first (armed) mode: match strictly against the armed item only.
       const target = armedItemId.value
@@ -279,6 +281,7 @@ useHardwareScanner({
             qty
           )
         : findPutAwayTarget(visibleItems.value, parsed.partNo, qty);
+      console.log("target", target)
       if (!target) {
         showToast(t("errors.scanned_part_does_not_match_item"));
         return false;

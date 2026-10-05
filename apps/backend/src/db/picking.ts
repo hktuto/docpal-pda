@@ -1065,6 +1065,12 @@ export interface ScanPickingItemInput {
    *  row this scan creates (all split portions share it) for verify re-scan
    *  label matching; NULL when absent (OCR path) → qty-match fallback. */
   barcode?: string | null;
+  /** Scanned part identity (2026-10-05): the label's itemId / wclItemNo groups
+   *  as scanned, stored verbatim on every package row so measuring/verify show
+   *  and match the scanned part, not the picking item's part. NULL → the item
+   *  part stays the displayed/matched identity (legacy behavior). */
+  scannedPartNo?: string | null;
+  scannedWclItemNo?: string | null;
   /** Sticky shelf-scan context (flow config pickingShelfScan): the shelf/box
    *  the operator last scanned. Ignored in mode "off"; required in the
    *  "require-*" modes (409 shelf_scan_required when absent). */
@@ -1364,9 +1370,11 @@ export async function scanPickingItem(
       await queryRun(
         tx,
         sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty,
-                                         shipping_box_id, date_code, lot_code, coo, cow, label_barcode, created_date, last_update_date)
+                                         shipping_box_id, date_code, lot_code, coo, cow, label_barcode,
+                                         scanned_part_no, scanned_wcl_item_no, created_date, last_update_date)
             VALUES (${pid}, ${item.id}, ${item.pickingOrderId}, ${p.sourceType}, ${p.sourceId}, ${p.qty}, ${box?.id ?? null},
-                    ${dateCode}, ${lotCode}, ${coo}, ${cow}, ${input.barcode ?? null}, ${at}, ${at})`
+                    ${dateCode}, ${lotCode}, ${coo}, ${cow}, ${input.barcode ?? null},
+                    ${input.scannedPartNo ?? null}, ${input.scannedWclItemNo ?? null}, ${at}, ${at})`
       );
       packageIds.push(pid);
       const base = {
@@ -1485,6 +1493,9 @@ export async function scanIntoShippingBox(
     qty,
     shippingBoxId: input.shippingBoxId,
     barcode: input.barcode,
+    // The barcode itself is the scanned part key (it matched part_no or
+    // wcl_item_no verbatim) — record it as the package's scanned identity.
+    scannedPartNo: barcode,
     shelfCode: input.shelfCode ?? null,
     boxId: input.boxId ?? null,
   });

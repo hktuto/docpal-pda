@@ -135,7 +135,8 @@ export async function getVerifyTaskDetail(db: AppDb, taskId: string): Promise<Ve
         pp.verify_verified AS "verifyVerified",
         pp.rescanned_qty AS "rescannedQty",
         pp.label_barcode AS "labelBarcode",
-        pi.part_no AS "partNo", p.wcl_item_no AS "wclItemNo",
+        COALESCE(pp.scanned_part_no, pi.part_no) AS "partNo",
+        COALESCE(pp.scanned_wcl_item_no, p.wcl_item_no) AS "wclItemNo",
         nwf.weight AS "formulaWeight", nwf.qty AS "formulaQty"
       FROM picking_packages pp
       JOIN picking_items pi ON pi.id = pp.picking_item_id
