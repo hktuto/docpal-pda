@@ -22,8 +22,8 @@ FROM node:22-alpine
 WORKDIR /app
 COPY --from=build /repo/apps/pda/.output .
 ENV NODE_ENV=production \
-    PORT=3103
+    PORT=3000
 # apiBaseUrl is public runtime config — override at container start with
 # NUXT_PUBLIC_API_BASE_URL (no rebuild needed).
-EXPOSE 3103
+EXPOSE 3000
 CMD ["node", "server/index.mjs"]
