@@ -90,11 +90,11 @@ export const builtinSupplierProfiles: BuiltinSupplierProfile[] = [
   {
     supplierCode: "20", // iC HAUS GMBH INTEGRIERTE SCHALTKREISE
     qrTemplate: ICHAUS_TEMPLATE,
-    qrType: "qr",
-    barcodeTypes: ["QR CODE"],
+    qrType: "datamatrix",
+    barcodeTypes: ["DATA MATRIX"],
     brands: ["ICHAUS"],
     remark:
-      "Created 2026-10 from an iC-Haus Versandetikett JSON QR sample. itemId = IANR (bare MPN = parts.part_no), wclItemNo = CANR (ICHAUS/<mpn> = parts.wcl_item_no), DC = WWYY date code, Q = qty, COO = country of origin.",
+      "Created 2026-10 from an iC-Haus Versandetikett JSON Data Matrix sample. itemId = IANR (bare MPN = parts.part_no), wclItemNo = CANR (ICHAUS/<mpn> = parts.wcl_item_no), DC = WWYY date code, Q = qty, COO = country of origin.",
   },
   {
     supplierCode: "23", // HONGKONG CHEMI-CON LTD (NCC)

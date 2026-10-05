@@ -74,8 +74,8 @@ VALUES
   (
     '00000000-0000-7000-8000-000000009008', '20', NULL,
     $re$^\{(?=.*"CANR"\s*:\s*"(?<wclItemNo>[^"]+)")(?=.*"IANR"\s*:\s*"(?<itemId>[^"]+)")(?=.*"Q"\s*:\s*"(?<qty>\d+)")(?=.*"DC"\s*:\s*"(?<dateCode>\d{4})")(?=.*"COO"\s*:\s*"(?<coo>[^"]+)").*\}$$re$,
-    NULL, 'qr', NULL, NULL, ARRAY['QR CODE'], ARRAY['ICHAUS'],
-    'Created 2026-10 from an iC-Haus Versandetikett JSON QR sample. itemId = IANR (bare MPN = parts.part_no), wclItemNo = CANR (ICHAUS/<mpn> = parts.wcl_item_no), DC = WWYY date code, Q = qty, COO = country of origin.'
+    NULL, 'datamatrix', NULL, NULL, ARRAY['DATA MATRIX'], ARRAY['ICHAUS'],
+    'Created 2026-10 from an iC-Haus Versandetikett JSON Data Matrix sample. itemId = IANR (bare MPN = parts.part_no), wclItemNo = CANR (ICHAUS/<mpn> = parts.wcl_item_no), DC = WWYY date code, Q = qty, COO = country of origin.'
   ),
 
   -- NCC (supplier 23, HONGKONG CHEMI-CON LTD): fixed-width ITF reel barcode,

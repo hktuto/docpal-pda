@@ -41,8 +41,10 @@ const sizing = computed(() => props.table.atoms.columnSizing?.get() ?? {});
 const hasSizing = computed(() => Object.keys(sizing.value).length > 0);
 function columnStyle(column: AnyColumn) {
   // User resize (persisted) wins; otherwise the def's initial `size`.
+  // Sizes are measured in px — keep px units: converting to rem assumes a
+  // 16px root font size and inflates columns when the browser's root differs.
   const width = sizing.value[column.id] ?? column.columnDef.size;
-  return width === undefined ? undefined : { width: `${width / 16}rem`, minWidth: `${width / 16}rem` };
+  return width === undefined ? undefined : { width: `${width}px`, minWidth: `${width}px` };
 }
 
 const rootRef = ref<HTMLElement | null>(null);
