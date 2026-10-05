@@ -278,9 +278,10 @@ useHardwareScanner({
         ? findPutAwayTarget(
             visibleItems.value.filter((i) => i.id === armedItemId.value),
             parsed.partNo,
-            qty
+            qty,
+            parsed.wclItemNo
           )
-        : findPutAwayTarget(visibleItems.value, parsed.partNo, qty);
+        : findPutAwayTarget(visibleItems.value, parsed.partNo, qty, parsed.wclItemNo);
       console.log("target", target)
       if (!target) {
         showToast(t("errors.scanned_part_does_not_match_item"));
