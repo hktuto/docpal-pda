@@ -11,7 +11,7 @@ const tsTemplates = [...ts.matchAll(/String\.raw`([\s\S]*?)`/g)].map((m) => m[1]
 
 console.log(`sql templates: ${sqlTemplates.length}, ts templates: ${tsTemplates.length}`);
 const sqlSet = new Set(sqlTemplates);
-let ok = sqlTemplates.length === 7 && tsTemplates.length === 6;
+let ok = sqlTemplates.length === 8 && tsTemplates.length === 7;
 for (const t of tsTemplates) {
   if (!sqlSet.has(t)) {
     ok = false;

@@ -1,6 +1,7 @@
 import type { SupplierQrcodeTemplate } from "~/services/types";
 
 const QTY_ENCODING_KOA_ZEROS = "koa_zeros";
+const DATE_CODE_ENCODING_KOA_MONTH_COUNTER = "koa_month_counter";
 const qrTemplateRegexCache = new Map<string, RegExp | null>();
 
 /** A single barcode or QR code returned by the native scanner. */
@@ -625,6 +626,26 @@ export function decodeKoaQty(encoded: string): number | undefined {
   return result;
 }
 
+/**
+ * Decode a KOA date-code field (template segment 5, e.g. "1723L789",
+ * "1114T232", "19077387") to the system's WWYY date code. Take the leading
+ * digit run's first 4 digits: the last 2 are the week, the first 2 are a
+ * month counter (1–99) that increments monthly with 17 = 2026-07
+ * (16 = 2026-06, 18 = 2026-08, …); the counter's month resolves the year.
+ * "1723L789" → week 23, counter 17 → 2026 → "2326".
+ * Keep in sync with apps/backend/src/db/scanParse.ts decodeKoaDateCode.
+ */
+export function decodeKoaDateCode(raw: string): string | undefined {
+  const digits = raw.match(/^\d+/)?.[0];
+  if (!digits || digits.length < 4) return undefined;
+  const counter = Number(digits.slice(0, 2));
+  const week = Number(digits.slice(2, 4));
+  if (counter < 1 || counter > 99 || week < 1 || week > 53) return undefined;
+  const totalMonths = 2026 * 12 + 6 + (counter - 17); // 0-based month index, 2026-07 = counter 17
+  const year = Math.floor(totalMonths / 12);
+  return `${digits.slice(2, 4)}${String(year % 100).padStart(2, "0")}`;
+}
+
 function getQrTemplateRegex(template: string): RegExp | null {
   if (qrTemplateRegexCache.has(template)) {
     return qrTemplateRegexCache.get(template)!;
@@ -702,13 +723,18 @@ export function parseQrCapture(
       }
     }
 
+    let dateCode: string | undefined = groups.dateCode ?? undefined;
+    if (dateCode && supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_KOA_MONTH_COUNTER) {
+      dateCode = decodeKoaDateCode(dateCode);
+    }
+
     return {
       matched: true,
       parsed: {
         itemId: normalizedItemId,
         qty,
         lotCode: groups.lotCode ?? undefined,
-        dateCode: groups.dateCode ?? undefined,
+        dateCode,
         coo: groups.coo ?? undefined,
         cow: groups.cow ?? undefined,
         wclItemNo: groups.wclItemNo ?? undefined,
@@ -717,7 +743,7 @@ export function parseQrCapture(
         itemIds: [normalizedItemId],
         qtys: qty !== undefined ? [qty] : [],
         lotCodes: groups.lotCode ? [groups.lotCode] : [],
-        dateCodes: groups.dateCode ? [groups.dateCode] : [],
+        dateCodes: dateCode ? [dateCode] : [],
         coos: groups.coo ? [groups.coo] : [],
         cows: groups.cow ? [groups.cow] : [],
       },

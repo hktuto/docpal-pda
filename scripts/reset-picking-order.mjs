@@ -26,6 +26,12 @@
 // After it runs the order is immediately pickable again on the PDA (status
 // `allocated` with full allocations). No backend re-allocation needed.
 //
+// Packages whose source rows no longer exist (e.g. a UAT nightly inventory
+// reset deleted the lots / receiving rows) can't have their stock restored;
+// they are skipped with a warning, and the order falls back to `pending`
+// (unless --status is given) so a Re-allocate rebuilds its allocations from
+// current stock.
+//
 // The `postgres` driver is resolved from apps/backend (same version the
 // backend runs), so run this from anywhere in the repo.
 
@@ -40,7 +46,8 @@ const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run");
 const keepAudit = args.includes("--keep-audit");
 const statusIdx = args.indexOf("--status");
-const targetStatus = statusIdx >= 0 ? args[statusIdx + 1] : "allocated";
+const statusExplicit = statusIdx >= 0;
+const targetStatus = statusExplicit ? args[statusIdx + 1] : "allocated";
 const positionalArgs = [];
 for (let i = 0; i < args.length; i++) {
   if (args[i] === "--status") i++; // skip the flag's value
@@ -120,6 +127,7 @@ async function preview(order) {
 }
 
 async function reset(order) {
+  let finalStatus = targetStatus;
   await sql.begin(async (tx) => {
     const items = await tx`
       SELECT id, part_no, qty FROM picking_items WHERE picking_order_id = ${order.id}
@@ -136,29 +144,40 @@ async function reset(order) {
       ORDER BY created_date DESC, id DESC
     `;
     const boxIds = new Set();
-    let restoredLots = 0, restoredReceiving = 0;
+    let restoredLots = 0, restoredReceiving = 0, missingSources = 0;
     for (const pkg of pkgs) {
       if (pkg.shipping_box_id) boxIds.add(pkg.shipping_box_id);
       if (pkg.source_type === "inventory_lot") {
         const lot = await tx`
           SELECT id, box_id AS "boxId" FROM inventory_lots WHERE id = ${pkg.source_id}
         `;
-        if (lot.length === 0) throw new Error(`package ${pkg.id}: lot ${pkg.source_id} not found`);
-        await tx`UPDATE inventory_lots SET total_qty = total_qty + ${pkg.qty}, last_update_date = now() WHERE id = ${lot[0].id}`;
-        if (lot[0].boxId) {
-          await tx`UPDATE shelf_box_items SET verified = false, verified_at = NULL WHERE shelf_box_id = ${lot[0].boxId}`;
-          await tx`UPDATE shelf_boxes SET status = 'closed', last_update_date = now() WHERE id = ${lot[0].boxId} AND status = 'verified'`;
+        if (lot.length === 0) {
+          // The lot is gone (e.g. UAT nightly inventory reset) — nothing to
+          // restore and no lot-backed allocation can point at it, so the
+          // order will need a re-allocate after this reset.
+          console.warn(`  ! package ${pkg.id}: lot ${pkg.source_id} no longer exists — skipping stock restore`);
+          missingSources++;
+        } else {
+          await tx`UPDATE inventory_lots SET total_qty = total_qty + ${pkg.qty}, last_update_date = now() WHERE id = ${lot[0].id}`;
+          if (lot[0].boxId) {
+            await tx`UPDATE shelf_box_items SET verified = false, verified_at = NULL WHERE shelf_box_id = ${lot[0].boxId}`;
+            await tx`UPDATE shelf_boxes SET status = 'closed', last_update_date = now() WHERE id = ${lot[0].boxId} AND status = 'verified'`;
+          }
+          await bumpAllocation(tx, pkg.picking_item_id, pkg.qty, { inventoryLotId: lot[0].id });
+          restoredLots += pkg.qty;
         }
-        await bumpAllocation(tx, pkg.picking_item_id, pkg.qty, { inventoryLotId: lot[0].id });
-        restoredLots += pkg.qty;
       } else if (pkg.source_type === "receiving_invoice_item") {
         const rii = await tx`
           UPDATE receiving_invoice_items SET picked_qty = picked_qty - ${pkg.qty}, last_update_date = now()
           WHERE id = ${pkg.source_id} RETURNING id
         `;
-        if (rii.length === 0) throw new Error(`package ${pkg.id}: receiving_invoice_item ${pkg.source_id} not found`);
-        await bumpAllocation(tx, pkg.picking_item_id, pkg.qty, { receivingInvoiceItemId: pkg.source_id });
-        restoredReceiving += pkg.qty;
+        if (rii.length === 0) {
+          console.warn(`  ! package ${pkg.id}: receiving_invoice_item ${pkg.source_id} no longer exists — skipping picked_qty unwind`);
+          missingSources++;
+        } else {
+          await bumpAllocation(tx, pkg.picking_item_id, pkg.qty, { receivingInvoiceItemId: pkg.source_id });
+          restoredReceiving += pkg.qty;
+        }
       } else if (pkg.source_type === "receiving_order") {
         // FIFO unwind, newest picked lines first (mirror removeScannedPackage).
         const lines = await tx`
@@ -175,9 +194,13 @@ async function reset(order) {
           await tx`UPDATE receiving_invoice_items SET picked_qty = picked_qty - ${give}, last_update_date = now() WHERE id = ${line.id}`;
           left -= give;
         }
-        if (left > 0) throw new Error(`package ${pkg.id}: receiving source ${pkg.source_id} cannot unwind ${left} pcs`);
-        await bumpAllocation(tx, pkg.picking_item_id, pkg.qty, { receivingOrderId: pkg.source_id });
-        restoredReceiving += pkg.qty;
+        if (left > 0) {
+          console.warn(`  ! package ${pkg.id}: receiving source ${pkg.source_id} cannot unwind ${left} pcs (source rows gone) — skipping`);
+          missingSources++;
+        } else {
+          await bumpAllocation(tx, pkg.picking_item_id, pkg.qty, { receivingOrderId: pkg.source_id });
+          restoredReceiving += pkg.qty;
+        }
       } else {
         throw new Error(`package ${pkg.id}: unknown source_type "${pkg.source_type}"`);
       }
@@ -224,9 +247,15 @@ async function reset(order) {
     `;
     const allocStatus =
       sums[0].alloc <= 0 ? "unallocated" : sums[0].alloc >= sums[0].open ? "allocated" : "partial";
+    // Packages whose source rows are gone leave the order under-allocated.
+    // An `allocated` order is excluded from the allocation engine, so unless
+    // the caller pinned a status, drop to `pending` and let allocation rebuild.
+    finalStatus = missingSources > 0 && !statusExplicit ? "pending" : targetStatus;
+    if (missingSources > 0)
+      console.warn(`  ! ${missingSources} package source(s) no longer exist — order goes to "${finalStatus}"; run Re-allocate (admin) to rebuild its allocations from current stock.`);
     const upd = await tx`
       UPDATE picking_orders
-      SET status = ${targetStatus}, allocation_status = ${allocStatus},
+      SET status = ${finalStatus}, allocation_status = ${allocStatus},
           working_by = NULL, working_at = NULL,
           issue_reason = NULL, issue_qty = NULL, issue_pack_size = NULL,
           issue_note = NULL, issue_remark = NULL, issue_reported_at = NULL, issue_reported_by = NULL,
@@ -264,12 +293,12 @@ async function reset(order) {
     console.log("Done:");
     console.log(`  packages un-scanned/deleted:    ${pkgs.length} (lots +${restoredLots}, receiving −${restoredReceiving} picked)`);
     console.log(`  empty shipping boxes deleted:   ${deletedBoxes}`);
-    console.log(`  order → ${targetStatus} (${allocStatus})`);
+    console.log(`  order → ${finalStatus} (${allocStatus})`);
     if (!keepAudit)
       console.log(`  audit rows deleted:             ${delLogs.count} logs + ${delItxn.count} inventory_transactions`);
   });
 
-  console.log(`\nOrder ${order.id} is ready to re-test — status "${targetStatus}" with restored allocations.`);
+  console.log(`\nOrder ${order.id} is ready to re-test — status "${finalStatus}".`);
 }
 
 /** Find-or-create the allocation for (picking item, source) and add qty back. */

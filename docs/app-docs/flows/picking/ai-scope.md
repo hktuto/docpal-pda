@@ -136,7 +136,13 @@
   pre-checks at scan time (cached `GET /picking-shelf-stock` — zero stock on
   the pending shelf → "item not on this shelf" toast, scan dropped), while
   require-any accepts the scan and lets the confirm 409 catch it. OCR capture
-  is disabled in the require-* modes (an OCR label has no shelf context).
+  in the require-* modes needs the sticky shelf context first — the button
+  stays disabled until a shelf/box scan sets the banner (the context is sent
+  with every Confirm POST); one confirmed OCR record queues exactly like one
+  hardware scan. When the queued scans cover every part group's remaining
+  required qty (server scanned + queued ≥ required for all), the page plays a
+  rising two-tone cue and prompts once to confirm/save immediately
+  (`orderMatched` watch → `window.confirm` → `confirm()`).
   Mode edited on the admin flow-config page.
   Launched from the picking
   detail page (the receiving order's picking tab is read-only and no longer

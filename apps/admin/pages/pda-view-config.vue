@@ -14,8 +14,8 @@ import {
   viewListRow,
   type PdaDetailPageKey,
   type PdaViewConfig,
-  type PdaViewListKey,
 } from "~/utils/viewConfig";
+import { type PdaViewListKey } from '~/utils/listRowTemplate'
 
 // PDA view editor (spec docs/superpowers/specs/2026-10-04-pda-app-rewrite-design.md):
 // the pdaViewConfig flow-config key — per-page PDA view config: list rows
@@ -245,7 +245,7 @@ async function load() {
     state.value = await flow.getFlowConfig();
     // Pre-fill from the stored pdaViewConfig overrides, with the legacy
     // pdaListTemplates migration fallback per list (mirrors the backend).
-    pdaView.value = resolvePdaViewConfig(state.value.config.pdaViewConfig, state.value.config.pdaListTemplates);
+    pdaView.value = resolvePdaViewConfig(state.value.config.pdaViewConfig as any, state.value.config.pdaListTemplates);
   } catch (e: any) {
     error.value = e.message;
   } finally {

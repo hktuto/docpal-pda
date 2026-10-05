@@ -148,8 +148,8 @@ describe('backendWarehouse receiving flow', () => {
   it('getSupplierQrTemplates maps the scan-templates DTO to the client shape', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse([
-        { supplierCode: 'KOA', qrTemplate: '^.*$', qtyEncoding: 'koa_zeros', barcodeTypes: ['QR CODE'] },
-        { supplierCode: 'DAITO', qrTemplate: null, qtyEncoding: null, barcodeTypes: null },
+        { supplierCode: 'KOA', qrTemplate: '^.*$', qtyEncoding: 'koa_zeros', dateCodeEncoding: 'koa_month_counter', barcodeTypes: ['QR CODE'] },
+        { supplierCode: 'DAITO', qrTemplate: null, qtyEncoding: null, dateCodeEncoding: null, barcodeTypes: null },
       ])
     );
 
@@ -157,8 +157,8 @@ describe('backendWarehouse receiving flow', () => {
 
     expect(lastCall().url).toBe(`${BASE_URL}/scan-templates`);
     expect(templates).toEqual([
-      { code: 'KOA', qrcodeTemplate: '^.*$', qrcodeQtyEncoding: 'koa_zeros', barcodeTypes: ['QR CODE'], brands: null },
-      { code: 'DAITO', qrcodeTemplate: '', qrcodeQtyEncoding: null, barcodeTypes: null, brands: null },
+      { code: 'KOA', qrcodeTemplate: '^.*$', qrcodeQtyEncoding: 'koa_zeros', qrcodeDateCodeEncoding: 'koa_month_counter', barcodeTypes: ['QR CODE'], brands: null },
+      { code: 'DAITO', qrcodeTemplate: '', qrcodeQtyEncoding: null, qrcodeDateCodeEncoding: null, barcodeTypes: null, brands: null },
     ]);
   });
 

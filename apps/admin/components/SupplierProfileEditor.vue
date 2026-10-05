@@ -3,6 +3,7 @@ import {
   buildRegex,
   parseWithRegex,
   decodeKoaQty,
+  decodeKoaDateCode,
   detectMode,
   FIELD_ROLES,
   type QrTemplateConfig,
@@ -48,6 +49,11 @@ const qtyEncoding = ref(props.profile?.qtyEncoding ?? "");
 const qtyEncodingOptions = computed(() => [
   { value: "", label: t("admin.pages.supplierProfile.qtyPlain") },
   { value: "koa_zeros", label: t("admin.pages.supplierProfile.qtyKoa") },
+]);
+const dateCodeEncoding = ref(props.profile?.dateCodeEncoding ?? "");
+const dateCodeEncodingOptions = computed(() => [
+  { value: "", label: t("admin.pages.supplierProfile.dateCodePlain") },
+  { value: "koa_month_counter", label: t("admin.pages.supplierProfile.dateCodeKoa") },
 ]);
 
 // ---- template builder ----
@@ -173,19 +179,28 @@ function displayQty(raw: string | undefined): string {
   return raw;
 }
 
+function displayDateCode(raw: string | undefined): string {
+  if (raw === undefined) return "";
+  if (dateCodeEncoding.value === "koa_month_counter") {
+    const decoded = decodeKoaDateCode(raw);
+    return decoded !== undefined ? `${decoded} (${t("admin.pages.supplierProfile.koaFormat")})` : raw;
+  }
+  return raw;
+}
+
 const previewRows = computed(() => {
   const p = parsedSample.value;
   if (!p) return [];
   const rows: { label: string; value: string }[] = [];
-  const push = (labelKey: string, v: string | undefined, isQty = false) => {
+  const push = (labelKey: string, v: string | undefined, display: (raw: string | undefined) => string = (r) => r ?? "") => {
     if (v !== undefined) {
-      rows.push({ label: t(`admin.pages.supplierProfile.preview.${labelKey}`), value: isQty ? displayQty(v) : v });
+      rows.push({ label: t(`admin.pages.supplierProfile.preview.${labelKey}`), value: display(v) });
     }
   };
   push("itemId", p.itemId);
-  push("qty", p.qty, true);
+  push("qty", p.qty, displayQty);
   push("lotCode", p.lotCode);
-  push("dateCode", p.dateCode);
+  push("dateCode", p.dateCode, displayDateCode);
   push("coo", p.coo);
   push("cow", p.cow);
   push("serialNo", p.serialNo);
@@ -236,6 +251,7 @@ function save() {
     remark: remark.value,
     qrType: qrType.value,
     qtyEncoding: qtyEncoding.value,
+    dateCodeEncoding: dateCodeEncoding.value,
     qrTemplate: regex.value,
     qrTemplateConfig: config.value,
   });
@@ -276,6 +292,17 @@ function save() {
           :options="qtyEncodingOptions"
           :all-label="$t('admin.pages.supplierProfile.qtyPlain')"
           :aria-label="$t('admin.pages.supplierProfile.qtyFormat')"
+          :multiple="false"
+          :show-all="false"
+        />
+      </div>
+      <div class="form-row">
+        <label for="qt-dc">{{ $t("admin.pages.supplierProfile.dateCodeFormat") }}</label>
+        <SearchableSelect
+          v-model="dateCodeEncoding"
+          :options="dateCodeEncodingOptions"
+          :all-label="$t('admin.pages.supplierProfile.dateCodePlain')"
+          :aria-label="$t('admin.pages.supplierProfile.dateCodeFormat')"
           :multiple="false"
           :show-all="false"
         />

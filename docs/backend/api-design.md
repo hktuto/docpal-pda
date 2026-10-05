@@ -165,7 +165,7 @@ hardcodes templates.
 
 | Endpoint | Description |
 |---|---|
-| `GET /scan-templates` | → `[{supplierCode, qrTemplate, qtyEncoding, barcodeTypes, brands}]`, every profile ordered by `supplier_code`; `qrTemplate` null when the supplier has none (clients filter). `brands` = parts.brand values the supplier covers — clients try brand-matching templates first. |
+| `GET /scan-templates` | → `[{supplierCode, qrTemplate, qtyEncoding, dateCodeEncoding, barcodeTypes, brands}]`, every profile ordered by `supplier_code`; `qrTemplate` null when the supplier has none (clients filter). `brands` = parts.brand values the supplier covers — clients try brand-matching templates first. `dateCodeEncoding` (e.g. `koa_month_counter`) decodes the template's dateCode group. |
 
 ## Label printing
 

@@ -12,19 +12,21 @@ export interface ScanTemplateRow {
   supplierCode: string;
   qrTemplate: string | null;
   qtyEncoding: string | null;
+  dateCodeEncoding: string | null;
   barcodeTypes: string[] | null;
   brands: string[] | null;
 }
 
 /**
- * Every supplier profile's QR template + qty encoding, ordered by supplier
- * code. Profiles without a template (null qr_template) are included — clients
- * filter them out when parsing.
+ * Every supplier profile's QR template + qty/date-code encodings, ordered by
+ * supplier code. Profiles without a template (null qr_template) are included
+ * — clients filter them out when parsing.
  */
 export async function listScanTemplates(db: AppDb): Promise<ScanTemplateRow[]> {
   return queryAll<ScanTemplateRow>(
     db,
-    sql`SELECT supplier_code AS "supplierCode", qr_template AS "qrTemplate", qty_encoding AS "qtyEncoding", barcode_types AS "barcodeTypes", brands
+    sql`SELECT supplier_code AS "supplierCode", qr_template AS "qrTemplate", qty_encoding AS "qtyEncoding",
+               date_code_encoding AS "dateCodeEncoding", barcode_types AS "barcodeTypes", brands
         FROM supplier_profiles ORDER BY supplier_code`
   );
 }

@@ -83,6 +83,9 @@ export const supplierProfiles = pgTable("supplier_profiles", {
   qrTemplateConfig: jsonb("qr_template_config"),
   qrType: text("qr_type"), // qrcode type, e.g. isbn, ban 14, ban 16
   qtyEncoding: text("qty_encoding"), // qty decoding rule, e.g. 'koa_zeros'
+  // dateCode decoding rule applied to the template's dateCode group, e.g.
+  // 'koa_month_counter' (KOA lot field "1723L789" → WWYY "2326")
+  dateCodeEncoding: text("date_code_encoding"),
   barcodeTypes: text("barcode_types").array(), // allowed barcode types whitelist; null = no restriction
   // parts.brand values this supplier covers — scan pages try this supplier's QR
   // template first when the order's items carry a matching brand; null = unknown

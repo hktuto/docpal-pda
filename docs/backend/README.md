@@ -56,7 +56,8 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     RECEIVE_TO_DOCK ledger rows, a transition log, then a best-effort
     `allocateAll` (concepts 4-5).
   - `POST /receiving-orders/:id/scan` `{raw?, partNo?, qty, ...}` —
-    QR-template parse (supplier profile, `koa_zeros` qty decoding) → match
+    QR-template parse (supplier profile, `koa_zeros` qty decoding,
+    `koa_month_counter` date-code decoding) → match
     against the order's items; single match auto-applies a partial receipt
     (`received_qty += qty`, order → `provisional_received`, ledger row);
     zero/multiple matches → 409 `{message, candidates}`. A parsed/explicit
@@ -69,9 +70,9 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     `transaction_logs` rows per step.
 - Scan support (`apps/backend/src/routes/scantemplates.ts`):
   - `GET /scan-templates` — public read: `[{supplierCode, qrTemplate,
-    qtyEncoding}]` for every supplier profile (null templates included,
-    clients filter), ordered by supplier code. For client-side label
-    validation on picking / put-away / measuring scans.
+    qtyEncoding, dateCodeEncoding}]` for every supplier profile (null
+    templates included, clients filter), ordered by supplier code. For
+    client-side label validation on picking / put-away / measuring scans.
 - Put-away flow (`apps/backend/src/routes/putaway.ts`):
   - `GET /put-away-tasks?status=` — the task queue when flow config
     `steps.put-away.autoCreateTasks` is on: one `pending` task per receiving

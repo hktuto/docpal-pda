@@ -20,6 +20,8 @@ export interface BuiltinSupplierProfile {
   qrTemplate: string;
   qrType?: string;
   qtyEncoding?: string;
+  /** dateCode-group decoding rule, e.g. 'koa_month_counter'. */
+  dateCodeEncoding?: string;
   barcodeTypes?: string[];
   /** parts.brand values this supplier covers — brand-scoped template lookup. */
   brands?: string[];
@@ -29,10 +31,13 @@ export interface BuiltinSupplierProfile {
 // KOA: colon-delimited PDF417 reel label, e.g.
 //   :SR732ERTTDR200F::153:K:19077387:S002:KOA/SR732ERTTDR200F:13FSJ564:01
 //   :RK73H1ETTP1001F::54:X:1114T232:S606:KOA+RK73H1ETTP 1001F::::
-// Segment 7 is the WCL item no (newer reels; older reels carry a "KOA+<mpn>"
-// marking there instead — itemId stays the match key for those). Trailing
-// segments and an optional trailing delimiter are ignored.
-const KOA_TEMPLATE = String.raw`^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$`;
+// Segment 5 is a date code (NOT a lot code — corrected 2026-10): leading
+// digits' first 4 = month counter + week, decoded by dateCodeEncoding
+// 'koa_month_counter' ("1723L789" → WWYY "2326"; 17 = 2026-07, increments
+// monthly). Segment 7 is the WCL item no (newer reels; older reels carry a
+// "KOA+<mpn>" marking there instead — itemId stays the match key for those).
+// Trailing segments and an optional trailing delimiter are ignored.
+const KOA_TEMPLATE = String.raw`^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<dateCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$`;
 
 // NCC (Chemi-Con): fixed-width ITF reel barcode, all digits.
 //   28-char: itemId(6) flag(3) lot(7) pack(3) qty(5) serial(4)
@@ -60,16 +65,36 @@ const TE_TEMPLATE = String.raw`^\[\)>\x1e06\x1dLT(?<serialNo>[^\x1d\x1e\x04]+)\x
 //   [)>RS06 GS PWEL-EXS00A-CS16279 GS 1TL5101564 GS Q9000 GS 1PEXS00A-CS16279 RS EOT
 const NDK_TEMPLATE = String.raw`^\[\)>\x1e06\x1dP(?<custPn>[^\x1d\x1e\x04]+)\x1d1T(?<serialNo>[^\x1d\x1e\x04]+)\x1dQ(?<qty>\d+)\x1d1P(?<itemId>[^\x1d\x1e\x04]+)[\x1e\x04]*$`;
 
+// iC-Haus: JSON "Versandetikett" QR, e.g.
+//   {"type":"Versandetikett","version":"1","AC":"IRZ4248_6","VI":"<keine>","DC":"2337","Q":"10",
+//    "ID":"50788","VID":"1","C":"WELTM","CANR":"ICHAUS/IC-RZ4248 OQFN38-7X5",
+//    "IANR":"iC-RZ4248 oQFN38-7x5","CONR":"339084940.3","COO":"DE","LTS":"20260929-4"}
+// Lookahead groups so JSON key order doesn't matter. IANR is the bare MPN
+// (= parts.part_no, case/space-insensitive) and stays the itemId match key;
+// CANR is the "ICHAUS/<mpn>" form (= parts.wcl_item_no). DC is a WWYY date
+// code, Q the qty, COO the country of origin.
+const ICHAUS_TEMPLATE = String.raw`^\{(?=.*"CANR"\s*:\s*"(?<wclItemNo>[^"]+)")(?=.*"IANR"\s*:\s*"(?<itemId>[^"]+)")(?=.*"Q"\s*:\s*"(?<qty>\d+)")(?=.*"DC"\s*:\s*"(?<dateCode>\d{4})")(?=.*"COO"\s*:\s*"(?<coo>[^"]+)").*\}$`;
+
 export const builtinSupplierProfiles: BuiltinSupplierProfile[] = [
   {
     supplierCode: "32", // KOA ELECTRONICS (HK) LTD
     qrTemplate: KOA_TEMPLATE,
     qrType: "pdf417",
     qtyEncoding: "koa_zeros",
+    dateCodeEncoding: "koa_month_counter",
     barcodeTypes: ["PDF417"],
     brands: ["KOA"],
     remark:
-      "Restored from BVSDB RegPattern Id=161 (WHHK), 2026-08-13 backup; folds Id=192 KOA_NOLOTNO / Id=193 KOA_NOTKEY. Verified vs 96 real ScannedItem raws.",
+      "Restored from BVSDB RegPattern Id=161 (WHHK), 2026-08-13 backup; folds Id=192 KOA_NOLOTNO / Id=193 KOA_NOTKEY. Segment 5 re-mapped lotCode → dateCode 2026-10 (month counter + week, 'koa_month_counter'). Verified vs 96 real ScannedItem raws.",
+  },
+  {
+    supplierCode: "20", // iC HAUS GMBH INTEGRIERTE SCHALTKREISE
+    qrTemplate: ICHAUS_TEMPLATE,
+    qrType: "qr",
+    barcodeTypes: ["QR CODE"],
+    brands: ["ICHAUS"],
+    remark:
+      "Created 2026-10 from an iC-Haus Versandetikett JSON QR sample. itemId = IANR (bare MPN = parts.part_no), wclItemNo = CANR (ICHAUS/<mpn> = parts.wcl_item_no), DC = WWYY date code, Q = qty, COO = country of origin.",
   },
   {
     supplierCode: "23", // HONGKONG CHEMI-CON LTD (NCC)

@@ -98,7 +98,7 @@
         </table>
 
         <footer class="scan-session__footer">
-          <button class="btn btn--small" :disabled="applying || ocrCapturing || !!heldByOther || requireShelfScan" @click="captureOcr">
+          <button class="btn btn--small" :disabled="applying || ocrCapturing || !!heldByOther || (requireShelfScan && !pendingShelf)" @click="captureOcr">
             <template v-if="ocrCapturing"><InlineSpinner /> {{ $t('picking.scanSession.ocrCapture') }}</template>
             <template v-else>{{ $t('picking.scanSession.ocrCapture') }}</template>
           </button>
@@ -157,7 +157,7 @@ import {
   type ScanMultiRow,
   type ScanMultiRowResult,
 } from "~/utils/parseOcrScan";
-import { playScanError, playScanSuccess } from "~/utils/scanBeep";
+import { playScanComplete, playScanError, playScanSuccess } from "~/utils/scanBeep";
 import EmptyState from "~/components/EmptyState.vue";
 import InlineSpinner from "~/components/InlineSpinner.vue";
 import PickingScanReviewModal from "~/components/picking/PickingScanReviewModal.vue";
@@ -330,6 +330,34 @@ const completed = computed(
     queuedCount.value === 0 &&
     partGroups.value.every((g) => g.scanned >= g.required)
 );
+
+// Queued (not yet confirmed) qty per part group key.
+const queuedQtyByPart = computed(() => {
+  const map: Record<string, number> = {};
+  for (const row of rows.value) {
+    if (row.status !== "queued") continue;
+    const key = normalizePartNo(row.partNo);
+    map[key] = (map[key] ?? 0) + row.qty;
+  }
+  return map;
+});
+
+// The queued scans cover what the server has not confirmed yet — every part
+// group's required qty is matched. On the transition into this state play a
+// success cue and offer to confirm right away (one prompt per transition;
+// removing a row and re-matching re-arms it).
+const orderMatched = computed(
+  () =>
+    partGroups.value.length > 0 &&
+    queuedCount.value > 0 &&
+    partGroups.value.every((g) => g.scanned + (queuedQtyByPart.value[g.key] ?? 0) >= g.required)
+);
+
+watch(orderMatched, (matched) => {
+  if (!matched || applying.value || heldByOther.value) return;
+  playScanComplete();
+  if (window.confirm(t("picking.scanSession.matchConfirm"))) void confirm();
+});
 
 /** Where these items' open qty is allocated from — the "what/where to scan"
  *  hint shown under each part: receiving carton (CTN), shelf box @ shelf, or
@@ -559,10 +587,11 @@ useHardwareScanner({
 });
 
 async function captureOcr() {
-  // OCR labels carry no shelf context — the require-* shelf-scan modes need
-  // hardware scans (mirrors OCR having no raw barcode for the label record).
-  if (requireShelfScan.value) {
-    showToast(t("picking.scanSession.ocrNotAllowed"));
+  // In the require-* shelf-scan modes an OCR scan needs the sticky shelf
+  // context (sent with every scan POST at confirm) — capture only after a
+  // shelf/box scan; one confirmed OCR record queues exactly like one scan.
+  if (requireShelfScan.value && !pendingShelf.value) {
+    showToast(t("picking.scanSession.scanShelfFirst"));
     return;
   }
   ocrCapturing.value = true;

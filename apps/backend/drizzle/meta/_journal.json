@@ -155,6 +155,13 @@
       "when": 1790988855243,
       "tag": "0021_wide_power_pack",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1791170510767,
+      "tag": "0022_melted_shotgun",
+      "breakpoints": true
     }
   ]
 }

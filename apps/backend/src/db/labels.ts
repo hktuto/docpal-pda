@@ -91,10 +91,11 @@ export async function getLabelsData(db: DbOrTx): Promise<LabelsData> {
     supplierCode: string | null,
     partNo: string,
     qty: number,
-    lotCode: string | null
+    lotCode: string | null,
+    dateCode: string | null
   ): string | null => {
     if (!supplierCode || !hasTemplate.get(supplierCode)) return null;
-    return buildKoaLabelRaw({ partNo, qty, lotCode, serialNo: nextSerial() }) ?? null;
+    return buildKoaLabelRaw({ partNo, qty, lotCode, dateCode, serialNo: nextSerial() }) ?? null;
   };
 
   const boxes = await queryAll<{
@@ -151,7 +152,7 @@ export async function getLabelsData(db: DbOrTx): Promise<LabelsData> {
     dateCode: l.dateCode,
     boxId: l.boxId,
     shelfCode: l.shelfCode,
-    qrValue: partLabel(l.brand, l.partNo, l.qty, l.lotCode),
+    qrValue: partLabel(l.brand, l.partNo, l.qty, l.lotCode, l.dateCode),
     pickingOrderRefs: refs(l.partNo),
   }));
 
@@ -204,7 +205,7 @@ export async function getLabelsData(db: DbOrTx): Promise<LabelsData> {
       poLine: r.poLine,
       lotCode: r.lotCode,
       dateCode: r.dateCode,
-      qrValue: r.qty === null ? null : partLabel(r.supplierCode, r.partNo, r.qty, r.lotCode),
+      qrValue: r.qty === null ? null : partLabel(r.supplierCode, r.partNo, r.qty, r.lotCode, r.dateCode),
       pickingOrderRefs: refs(r.partNo),
     });
   }
@@ -247,7 +248,7 @@ export async function getLabelsData(db: DbOrTx): Promise<LabelsData> {
       : a.boxId
         ? `${a.boxId}${a.shelfCode ? ` @ ${a.shelfCode}` : ""}`
         : (a.shelfCode ?? "receiving"),
-    qrValue: partLabel(a.brand, a.partNo, a.qty, a.lotCode),
+    qrValue: partLabel(a.brand, a.partNo, a.qty, a.lotCode, a.dateCode),
     pickingOrderRefs: [a.orderNo],
   }));
 

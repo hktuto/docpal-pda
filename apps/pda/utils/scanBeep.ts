@@ -41,3 +41,9 @@ export function playScanError(): void {
   playTone(400, 140);
   playTone(400, 140, 190);
 }
+
+/** Rising two-tone — the order's required qty is fully scanned. */
+export function playScanComplete(): void {
+  playTone(1800, 90);
+  playTone(2600, 160, 120);
+}

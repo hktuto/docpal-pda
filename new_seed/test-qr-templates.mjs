@@ -27,7 +27,18 @@ function decodeKoaQty(encoded) {
 function normalizePartNo(value) {
   return value.toUpperCase().replace(/\s+/g, "");
 }
-function parseQrRaw(raw, template, qtyEncoding) {
+// Keep in sync with decodeKoaDateCode in apps/backend/src/db/scanParse.ts.
+function decodeKoaDateCode(raw) {
+  const digits = raw.match(/^\d+/)?.[0];
+  if (!digits || digits.length < 4) return undefined;
+  const counter = Number(digits.slice(0, 2));
+  const week = Number(digits.slice(2, 4));
+  if (counter < 1 || counter > 99 || week < 1 || week > 53) return undefined;
+  const totalMonths = 2026 * 12 + 6 + (counter - 17); // 0-based month index, 2026-07 = counter 17
+  const year = Math.floor(totalMonths / 12);
+  return `${digits.slice(2, 4)}${String(year % 100).padStart(2, "0")}`;
+}
+function parseQrRaw(raw, template, qtyEncoding, dateCodeEncoding) {
   if (!template) return {};
   let regex;
   try {
@@ -46,10 +57,12 @@ function parseQrRaw(raw, template, qtyEncoding) {
       if (Number.isInteger(n) && n > 0) qty = n;
     }
   }
+  let dateCode = groups.dateCode ?? undefined;
+  if (dateCode && dateCodeEncoding === "koa_month_counter") dateCode = decodeKoaDateCode(dateCode);
   return {
     partNo: normalizePartNo(groups.itemId),
     qty,
-    dateCode: groups.dateCode ?? undefined,
+    dateCode,
     lotCode: groups.lotCode ?? undefined,
     serialNo: groups.serialNo ?? undefined,
     __groups: groups,
@@ -60,14 +73,17 @@ function parseQrRaw(raw, template, qtyEncoding) {
 const TEMPLATES = {
   // Restored from BVSDB RegPattern Id=161 (KOA, canonical 'Primary Key' row).
   // Same template as the seeded KOA profile: itemId = MPN field 1 (new-system
-  // convention), qty = field 3 with koa_zeros, lot = field 5, serial = field 6,
-  // wclItemNo = field 7 (WCL item no on newer reels; older reels carry a
-  // "KOA+<mpn>" marking there), trailing fields + optional ':' ignored.
+  // convention), qty = field 3 with koa_zeros, dateCode = field 5 with
+  // koa_month_counter (month counter + week, re-mapped from lotCode 2026-10),
+  // serial = field 6, wclItemNo = field 7 (WCL item no on newer reels; older
+  // reels carry a "KOA+<mpn>" marking there), trailing fields + optional ':'
+  // ignored.
   KOA: {
     qtyEncoding: "koa_zeros",
+    dateCodeEncoding: "koa_month_counter",
     qrType: "pdf417",
     template:
-      "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
+      "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<dateCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
   },
   // Restored from RegPattern Id=165 (NCC) + Id=167 (NCC+KOA, identical layout)
   // + Id=195 (NCC_KTD, 10-char item code). Fixed-width ITF reel barcode.
@@ -148,7 +164,7 @@ function report(supplier, rows, check) {
     const key = `${row.raw}¦${row.partNum}¦${row.qty}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    const parsed = parseQrRaw(row.raw, t.template, t.qtyEncoding);
+    const parsed = parseQrRaw(row.raw, t.template, t.qtyEncoding, t.dateCodeEncoding);
     const err = check(row, parsed);
     if (err === null) ok++;
     else if (err.startsWith("WARN")) warns.push({ row, parsed, err });
@@ -166,7 +182,7 @@ function report(supplier, rows, check) {
   let shown = 0;
   for (const row of rows) {
     if (shown >= 3) break;
-    const parsed = parseQrRaw(row.raw, t.template, t.qtyEncoding);
+    const parsed = parseQrRaw(row.raw, t.template, t.qtyEncoding, t.dateCodeEncoding);
     if (!check(row, parsed)) {
       console.log(`  ok ex: ${JSON.stringify(row.raw.slice(0, 60))} -> partNo=${parsed.partNo} qty=${parsed.qty} lot=${parsed.lotCode} serial=${parsed.serialNo} date=${parsed.dateCode}`);
       shown++;

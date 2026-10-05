@@ -32,30 +32,32 @@ test("encodeKoaQty is the inverse of decodeKoaQty", () => {
 });
 
 test("buildKoaLabelRaw round-trips through parseQrRaw with the seeded KOA template", async () => {
-  const profile = await queryGet<{ qrTemplate: string; qtyEncoding: string }>(
+  const profile = await queryGet<{ qrTemplate: string; qtyEncoding: string; dateCodeEncoding: string }>(
     client.db,
-    sql`SELECT qr_template AS "qrTemplate", qty_encoding AS "qtyEncoding" FROM supplier_profiles WHERE supplier_code = 'KOA'`
+    sql`SELECT qr_template AS "qrTemplate", qty_encoding AS "qtyEncoding", date_code_encoding AS "dateCodeEncoding" FROM supplier_profiles WHERE supplier_code = 'KOA'`
   );
   assert.ok(profile?.qrTemplate);
 
-  const raw = buildKoaLabelRaw({ partNo: "RK73H1JTTD3302F", qty: 500, lotCode: "L2609C", serialNo: "900001" });
+  // a WWYY date code is re-encoded into the KOA raw form (counter + week)
+  const raw = buildKoaLabelRaw({ partNo: "RK73H1JTTD3302F", qty: 500, dateCode: "0926", serialNo: "900001" });
   assert.ok(raw);
-  const parsed = parseQrRaw(raw, profile.qrTemplate, profile.qtyEncoding);
+  assert.ok(raw!.includes(":1209:"), `raw carries the re-encoded date segment: ${raw}`);
+  const parsed = parseQrRaw(raw, profile.qrTemplate, profile.qtyEncoding, profile.dateCodeEncoding);
   assert.deepEqual(parsed, {
     partNo: "RK73H1JTTD3302F",
     qty: 500,
-    dateCode: undefined,
-    lotCode: "L2609C",
+    dateCode: "0926",
+    lotCode: undefined,
     coo: undefined,
     cow: undefined,
     serialNo: "900001",
     wclItemNo: "KOA+RK73H1JTTD3302F",
   });
 
-  // missing lot code still parses (template groups require 1+ chars)
+  // missing date code still parses (template groups require 1+ chars)
   const noLot = buildKoaLabelRaw({ partNo: "RK73H1JTTD3302F", qty: 500, lotCode: null, serialNo: "900002" });
   assert.ok(noLot);
-  assert.equal(parseQrRaw(noLot!, profile.qrTemplate, profile.qtyEncoding).qty, 500);
+  assert.equal(parseQrRaw(noLot!, profile.qrTemplate, profile.qtyEncoding, profile.dateCodeEncoding).qty, 500);
 });
 
 // --- getLabelsData ----------------------------------------------------------

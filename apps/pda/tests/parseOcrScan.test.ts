@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { decodeKoaQty, extractMultiItemRows, parseAndIdentify, parseQrCapture } from '../utils/parseOcrScan';
+import { decodeKoaDateCode, decodeKoaQty, extractMultiItemRows, parseAndIdentify, parseQrCapture } from '../utils/parseOcrScan';
 
 describe('parseAndIdentify', () => {
   it('matches a part number from a barcode value', () => {
@@ -252,6 +252,23 @@ describe("decodeKoaQty", () => {
   });
 });
 
+describe("decodeKoaDateCode", () => {
+  it("decodes month counter + week to WWYY (counter 17 = 2026-07)", () => {
+    expect(decodeKoaDateCode("1723L789")).toBe("2326"); // counter 17 → 2026, week 23
+    expect(decodeKoaDateCode("1114T232")).toBe("1426"); // counter 11 → 2026-01, week 14
+    expect(decodeKoaDateCode("19077387")).toBe("0726"); // counter 19 → 2026-09, week 07
+    expect(decodeKoaDateCode("2352")).toBe("5227"); // counter 23 → 2027-01, week 52
+  });
+
+  it("rejects undecodable values", () => {
+    expect(decodeKoaDateCode("L2601A")).toBeUndefined(); // no leading digits
+    expect(decodeKoaDateCode("123")).toBeUndefined(); // fewer than 4 digits
+    expect(decodeKoaDateCode("1700X")).toBeUndefined(); // week 00
+    expect(decodeKoaDateCode("1754X")).toBeUndefined(); // week 54
+    expect(decodeKoaDateCode("0023X")).toBeUndefined(); // counter 00
+  });
+});
+
 describe("parseQrCapture", () => {
   const koaTemplate = {
     code: "KOA",
@@ -286,8 +303,9 @@ describe("parseQrCapture", () => {
     const koaWclTemplate = {
       code: "32",
       qrcodeTemplate:
-        "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
+        "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<dateCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
       qrcodeQtyEncoding: "koa_zeros" as const,
+      qrcodeDateCodeEncoding: "koa_month_counter" as const,
       brands: ["KOA"],
     };
     const result = parseQrCapture(
@@ -297,8 +315,29 @@ describe("parseQrCapture", () => {
     expect(result.matched).toBe(true);
     expect(result.parsed.itemId).toBe("SR732ERTTDR200F");
     expect(result.parsed.qty).toBe(15000); // "153" → 15 × 10^3
-    expect(result.parsed.lotCode).toBe("19077387");
+    expect(result.parsed.dateCode).toBe("0726"); // "19077387" → counter 19 → 2026-09, week 07
+    expect(result.parsed.lotCode).toBeUndefined();
     expect(result.parsed.wclItemNo).toBe("KOA/SR732ERTTDR200F");
+  });
+
+  it("parses an iC-Haus JSON Versandetikett QR (key-order independent)", () => {
+    const ichausTemplate = {
+      code: "20",
+      qrcodeTemplate:
+        '^\\{(?=.*"CANR"\\s*:\\s*"(?<wclItemNo>[^"]+)")(?=.*"IANR"\\s*:\\s*"(?<itemId>[^"]+)")(?=.*"Q"\\s*:\\s*"(?<qty>\\d+)")(?=.*"DC"\\s*:\\s*"(?<dateCode>\\d{4})")(?=.*"COO"\\s*:\\s*"(?<coo>[^"]+)").*\\}$',
+      qrcodeQtyEncoding: null,
+      brands: ["ICHAUS"],
+    };
+    const result = parseQrCapture(
+      '{"type":"Versandetikett","version":"1","AC":"IRZ4248_6","VI":"<keine>","DC":"2337","Q":"10","ID":"50788","VID":"1","C":"WELTM","CANR":"ICHAUS/IC-RZ4248 OQFN38-7X5","IANR":"iC-RZ4248 oQFN38-7x5","CONR":"339084940.3","COO":"DE","LTS":"20260929-4"}',
+      { supplierTemplates: [ichausTemplate] }
+    );
+    expect(result.matched).toBe(true);
+    expect(result.parsed.itemId).toBe("IC-RZ4248OQFN38-7X5"); // IANR, space-collapsed
+    expect(result.parsed.qty).toBe(10);
+    expect(result.parsed.dateCode).toBe("2337");
+    expect(result.parsed.coo).toBe("DE");
+    expect(result.parsed.wclItemNo).toBe("ICHAUS/IC-RZ4248 OQFN38-7X5"); // = parts.wcl_item_no
   });
 
   it("prefers brand-matching templates when contextBrands is given", () => {

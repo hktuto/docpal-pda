@@ -292,10 +292,12 @@ export async function scanReceivingOrder(
       dateCode: string | null;
       qrTemplate: string | null;
       qtyEncoding: string | null;
+      dateCodeEncoding: string | null;
     }>(
       tx,
       sql`SELECT ro.id, ro.status, ro.date_code AS "dateCode",
-                 sp.qr_template AS "qrTemplate", sp.qty_encoding AS "qtyEncoding"
+                 sp.qr_template AS "qrTemplate", sp.qty_encoding AS "qtyEncoding",
+                 sp.date_code_encoding AS "dateCodeEncoding"
           FROM receiving_orders ro
           LEFT JOIN suppliers s ON s.code = ro.supplier_code
           LEFT JOIN supplier_profiles sp ON sp.supplier_code = s.code
@@ -309,7 +311,7 @@ export async function scanReceivingOrder(
     if (!actor) throw new HTTPException(400, { message: "actor_not_found" });
 
     // Server-side parse (QR template only); explicit body fields win.
-    const parsed = input.raw ? parseQrRaw(input.raw, ro.qrTemplate, ro.qtyEncoding) : {};
+    const parsed = input.raw ? parseQrRaw(input.raw, ro.qrTemplate, ro.qtyEncoding, ro.dateCodeEncoding) : {};
     const partNo = input.partNo ?? parsed.partNo ?? null;
     const qty = input.qty ?? parsed.qty ?? null;
     const serialNo = input.serialNo ?? parsed.serialNo ?? null;

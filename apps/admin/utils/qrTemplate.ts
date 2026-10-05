@@ -104,6 +104,21 @@ export function decodeKoaQty(qty: string): number | undefined {
   return base * 10 ** zeros;
 }
 
+/** KOA date-code encoding ('koa_month_counter'): leading digits' first 4 =
+ *  month counter + week; counter 17 = 2026-07, increments monthly.
+ *  "1723L789" → WWYY "2326".
+ *  Copy of decodeKoaDateCode in apps/pda/utils/parseOcrScan.ts for the preview. */
+export function decodeKoaDateCode(raw: string): string | undefined {
+  const digits = raw.match(/^\d+/)?.[0];
+  if (!digits || digits.length < 4) return undefined;
+  const counter = Number(digits.slice(0, 2));
+  const week = Number(digits.slice(2, 4));
+  if (counter < 1 || counter > 99 || week < 1 || week > 53) return undefined;
+  const totalMonths = 2026 * 12 + 6 + (counter - 17); // 0-based month index, 2026-07 = counter 17
+  const year = Math.floor(totalMonths / 12);
+  return `${digits.slice(2, 4)}${String(year % 100).padStart(2, "0")}`;
+}
+
 /** Editor entry point: stored config if present and recognized, else advanced
  *  mode over the raw (possibly legacy hand-written) regex. */
 export function detectMode(profile: {

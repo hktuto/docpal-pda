@@ -16,6 +16,8 @@ export interface SupplierQrcodeTemplate {
   code: string;
   qrcodeTemplate: string;
   qrcodeQtyEncoding: string | null;
+  /** dateCode-group decoding rule, e.g. 'koa_month_counter'; null = raw value. */
+  qrcodeDateCodeEncoding?: string | null;
   /**
    * Barcode-type whitelist (scanner symbology display names). Non-empty =
    * restrict the hardware decoder to these types while in this supplier's

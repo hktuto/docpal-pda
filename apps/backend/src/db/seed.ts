@@ -311,7 +311,8 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
 
   // structured config for the admin QR-template editor (delimited ":" —
   // leading empty piece is an Ignore; generates a matching-equivalent regex
-  // for the classic 8-segment label — segment 7 is the WCL item no)
+  // for the classic 8-segment label — segment 5 is the date code (month
+  // counter + week), segment 7 is the WCL item no)
   const koaQrTemplateConfig = {
     version: 1,
     mode: "delimited",
@@ -322,7 +323,7 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
       { role: "ignore" },
       { role: "qty" },
       { role: "ignore" },
-      { role: "lotCode" },
+      { role: "dateCode" },
       { role: "serialNo" },
       { role: "wclItemNo" },
     ],
@@ -332,18 +333,20 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
     {
       id: uid(25),
       supplierCode: "KOA",
-      qrTemplate: "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
+      qrTemplate: "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<dateCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
       qrTemplateConfig: koaQrTemplateConfig,
       qtyEncoding: "koa_zeros",
+      dateCodeEncoding: "koa_month_counter",
       brands: ["KOA"],
     },
     // same KOA label format for the real-data supplier
     {
       id: uid(29),
       supplierCode: "KOA+TCG",
-      qrTemplate: "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
+      qrTemplate: "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<dateCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
       qrTemplateConfig: koaQrTemplateConfig,
       qtyEncoding: "koa_zeros",
+      dateCodeEncoding: "koa_month_counter",
       brands: ["KOA"],
     },
   ]);

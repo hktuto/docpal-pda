@@ -5,7 +5,8 @@ import { inArray, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { queryAll, queryGet } from "./query.js";
-import { decodeKoaQty, normalizePartNo, parseQrRaw } from "./scanParse.js";
+import { decodeKoaDateCode, decodeKoaQty, normalizePartNo, parseQrRaw } from "./scanParse.js";
+import { builtinSupplierProfiles } from "./seed-supplier-profiles.js";
 import { _setReceivingSubInventoryRulesForTests } from "../config.js";
 import {
   cancelReceivingItemMismatch,
@@ -75,50 +76,87 @@ test("normalizePartNo: uppercase + collapse whitespace", () => {
   assert.equal(normalizePartNo("  RK73H1JTTD4702F "), "RK73H1JTTD4702F");
 });
 
+test("decodeKoaDateCode: month counter + week → WWYY (counter 17 = 2026-07)", () => {
+  assert.equal(decodeKoaDateCode("1723L789"), "2326"); // counter 17 → 2026, week 23
+  assert.equal(decodeKoaDateCode("1114T232"), "1426"); // counter 11 → 2026-01, week 14
+  assert.equal(decodeKoaDateCode("19077387"), "0726"); // counter 19 → 2026-09, week 07
+  assert.equal(decodeKoaDateCode("1623"), "2326"); // counter 16 → 2026-06
+  assert.equal(decodeKoaDateCode("1823"), "2326"); // counter 18 → 2026-08
+  assert.equal(decodeKoaDateCode("2352"), "5227"); // counter 23 → 2027-01, week 52
+  // invalid
+  assert.equal(decodeKoaDateCode("L2601A"), undefined); // no leading digits
+  assert.equal(decodeKoaDateCode("123"), undefined); // fewer than 4 digits
+  assert.equal(decodeKoaDateCode("1700X"), undefined); // week 00
+  assert.equal(decodeKoaDateCode("1754X"), undefined); // week 54
+  assert.equal(decodeKoaDateCode("0023X"), undefined); // counter 00
+});
+
 test("parseQrRaw: seeded KOA template parses raw and decodes koa_zeros qty", async () => {
-  const profile = await queryGet<{ qrTemplate: string; qtyEncoding: string }>(
+  const profile = await queryGet<{ qrTemplate: string; qtyEncoding: string; dateCodeEncoding: string }>(
     client.db,
-    sql`SELECT qr_template AS "qrTemplate", qty_encoding AS "qtyEncoding" FROM supplier_profiles WHERE supplier_code = 'KOA'`
+    sql`SELECT qr_template AS "qrTemplate", qty_encoding AS "qtyEncoding", date_code_encoding AS "dateCodeEncoding" FROM supplier_profiles WHERE supplier_code = 'KOA'`
   );
   assert.ok(profile?.qrTemplate);
-  // template: ^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$
-  const parsed = parseQrRaw(":RK73H1JTTD1002F:S1:14:X:L2601A:602:KOA+RK73H1JTTD1002F", profile.qrTemplate, profile.qtyEncoding);
+  // template: ^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<dateCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$
+  const parsed = parseQrRaw(":RK73H1JTTD1002F:S1:14:X:L2601A:602:KOA+RK73H1JTTD1002F", profile.qrTemplate, profile.qtyEncoding, profile.dateCodeEncoding);
   assert.equal(parsed.partNo, "RK73H1JTTD1002F");
   assert.equal(parsed.qty, 10000); // "14" → 1 × 10^4
-  assert.equal(parsed.lotCode, "L2601A");
   assert.equal(parsed.serialNo, "602"); // S-key serial from the serialNo group
+  // segment 5 "L2601A" has no leading digits → no decodable date code
   assert.equal(parsed.dateCode, undefined);
+  assert.equal(parsed.lotCode, undefined);
   assert.equal(parsed.wclItemNo, "KOA+RK73H1JTTD1002F"); // old-style marking tail
 
   // Outer package label: empty subId segment must also match (subId [^:]*).
-  const outer = parseQrRaw(":RK73H2ATTD2403F::253:M:63048349:S613:KOA*RK73H2ATTD 2403F", profile.qrTemplate, profile.qtyEncoding);
+  const outer = parseQrRaw(":RK73H2ATTD2403F::253:M:63048349:S613:KOA*RK73H2ATTD 2403F", profile.qrTemplate, profile.qtyEncoding, profile.dateCodeEncoding);
   assert.equal(outer.partNo, "RK73H2ATTD2403F");
   assert.equal(outer.qty, 25000); // "253" → 25 × 10^3
-  assert.equal(outer.lotCode, "63048349");
+  assert.equal(outer.dateCode, "0430"); // "63048349" → counter 63 → 2030-04, week 04
   assert.equal(outer.serialNo, "S613");
+
+  // user's example: month counter + week date code
+  const dc = parseQrRaw(":RK73H1JTTD1002F::14:X:1723L789:602:KOA+RK73H1JTTD1002F", profile.qrTemplate, profile.qtyEncoding, profile.dateCodeEncoding);
+  assert.equal(dc.dateCode, "2326"); // counter 17 → 2026-07, week 23
 });
 
 test("parseQrRaw: KOA reel label carries the WCL item no in segment 7", async () => {
-  const profile = await queryGet<{ qrTemplate: string; qtyEncoding: string }>(
+  const profile = await queryGet<{ qrTemplate: string; qtyEncoding: string; dateCodeEncoding: string }>(
     client.db,
-    sql`SELECT qr_template AS "qrTemplate", qty_encoding AS "qtyEncoding" FROM supplier_profiles WHERE supplier_code = 'KOA'`
+    sql`SELECT qr_template AS "qrTemplate", qty_encoding AS "qtyEncoding", date_code_encoding AS "dateCodeEncoding" FROM supplier_profiles WHERE supplier_code = 'KOA'`
   );
   assert.ok(profile?.qrTemplate);
   // Real 2026 reel label (picking order ME2610-0006): segment 7 is the WCL
   // item no; trailing segments and the absence of a trailing ':' are ignored.
   const raw = ":SR732ERTTDR200F::153:K:19077387:S002:KOA/SR732ERTTDR200F:13FSJ564:01";
-  const parsed = parseQrRaw(raw, profile.qrTemplate, profile.qtyEncoding);
+  const parsed = parseQrRaw(raw, profile.qrTemplate, profile.qtyEncoding, profile.dateCodeEncoding);
   assert.equal(parsed.partNo, "SR732ERTTDR200F");
   assert.equal(parsed.qty, 15000); // "153" → 15 × 10^3
-  assert.equal(parsed.lotCode, "19077387");
+  assert.equal(parsed.dateCode, "0726"); // "19077387" → counter 19 → 2026-09, week 07
+  assert.equal(parsed.lotCode, undefined);
   assert.equal(parsed.serialNo, "S002");
   assert.equal(parsed.wclItemNo, "KOA/SR732ERTTDR200F");
   // space-stripped, the wclItemNo equals the parts master wcl_item_no
   assert.equal(normalizePartNo(parsed.wclItemNo!), normalizePartNo("KOA/SR732ERTTD R200F"));
 
   // ...and with a trailing delimiter (some reels emit one)
-  const trailing = parseQrRaw(raw + ":", profile.qrTemplate, profile.qtyEncoding);
+  const trailing = parseQrRaw(raw + ":", profile.qrTemplate, profile.qtyEncoding, profile.dateCodeEncoding);
   assert.equal(trailing.wclItemNo, "KOA/SR732ERTTDR200F");
+});
+
+test("parseQrRaw: iC-Haus builtin template parses the Versandetikett JSON QR", () => {
+  const profile = builtinSupplierProfiles.find((p) => p.supplierCode === "20");
+  assert.ok(profile?.qrTemplate);
+  const raw =
+    '{"type":"Versandetikett","version":"1","AC":"IRZ4248_6","VI":"<keine>","DC":"2337","Q":"10","ID":"50788","VID":"1","C":"WELTM","CANR":"ICHAUS/IC-RZ4248 OQFN38-7X5","IANR":"iC-RZ4248 oQFN38-7x5","CONR":"339084940.3","COO":"DE","LTS":"20260929-4"}';
+  const parsed = parseQrRaw(raw, profile.qrTemplate, profile.qtyEncoding, profile.dateCodeEncoding);
+  assert.equal(parsed.partNo, "IC-RZ4248OQFN38-7X5"); // IANR — matches parts.part_no space-insensitively
+  assert.equal(parsed.qty, 10);
+  assert.equal(parsed.dateCode, "2337"); // DC passed through raw (no date-code encoding)
+  assert.equal(parsed.coo, "DE");
+  assert.equal(parsed.wclItemNo, "ICHAUS/IC-RZ4248 OQFN38-7X5"); // CANR = parts.wcl_item_no
+  // key order doesn't matter (lookahead groups)
+  const reordered = parseQrRaw('{"COO":"DE","Q":"10","DC":"2337","IANR":"iC-RZ4248 oQFN38-7x5","CANR":"ICHAUS/IC-RZ4248 OQFN38-7X5"}', profile.qrTemplate, null);
+  assert.equal(reordered.partNo, "IC-RZ4248OQFN38-7X5");
 });
 
 test("parseQrRaw: apps-web KOA template variant (empty subId segment)", () => {
@@ -153,13 +191,13 @@ test("parseQrRaw: admin editor config builds a matching-equivalent KOA regex", a
   const inner = parseQrRaw(":RK73H1JTTD1002F:S1:14:X:L2601A:602:KOA+RK73H1JTTD1002F", regex, "koa_zeros");
   assert.equal(inner.partNo, "RK73H1JTTD1002F");
   assert.equal(inner.qty, 10000);
-  assert.equal(inner.lotCode, "L2601A");
+  assert.equal(inner.dateCode, "L2601A"); // raw passthrough without a date-code encoding
   assert.equal(inner.serialNo, "602");
   // outer label with an empty subId piece must match too
   const outer = parseQrRaw(":RK73H2ATTD2403F::253:M:63048349:S613:KOA*RK73H2ATTD 2403F", regex, "koa_zeros");
   assert.equal(outer.partNo, "RK73H2ATTD2403F");
   assert.equal(outer.qty, 25000);
-  assert.equal(outer.lotCode, "63048349");
+  assert.equal(outer.dateCode, "63048349");
 });
 
 test("parseQrRaw: no template / no match / invalid regex → {}", () => {
@@ -278,8 +316,10 @@ test("scan: raw QR template parse applies receipt (KOA order)", async () => {
         FROM inventory_transactions
         WHERE receiving_invoice_item_id = ${item.id} AND txn_type = 'RECEIVE_TO_DOCK'`
   );
-  // dateCode falls back to the seeded item's date_code (the KOA template has no dateCode group)
-  assert.deepEqual([txn!.qtyDelta, txn!.lotCode, txn!.dateCode], [1500, "L2601A", "2605"]);
+  // the KOA template's segment 5 is a date code, not a lot code — lotCode
+  // falls back to the seeded item's lot_code; "L2601A" has no leading digits
+  // so no date code decodes either, and dateCode falls back to the item's
+  assert.deepEqual([txn!.qtyDelta, txn!.lotCode, txn!.dateCode], [1500, "L2605A", "2605"]);
 
   // explicit fields override parsed ones (part + qty from the body win; an
   // explicit serialNo also overrides the parsed one — the raw's 602 was

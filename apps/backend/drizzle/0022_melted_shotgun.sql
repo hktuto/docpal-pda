@@ -1,0 +1,1 @@
+ALTER TABLE "supplier_profiles" ADD COLUMN "date_code_encoding" text;
