@@ -340,6 +340,7 @@ describe("parseQrCapture", () => {
     expect(result.parsed.coo).toBe("DE");
     expect(result.parsed.wclItemNo).toBe("ICHAUS/IC-RZ4248 OQFN38-7X5"); // = parts.wcl_item_no
     expect(result.parsed.serialNo).toBe("20260929-4"); // LTS — put-away duplicate check
+    expect(result.parsed.lotCode).toBe("IRZ4248_6"); // AC = lot code
   });
 
   it("prefers brand-matching templates when contextBrands is given", () => {
