@@ -1465,7 +1465,15 @@ export default {
         availabilityDateCodeClear: "Clear",
         availabilityLineQty: "Line qty",
         availabilityAllocate: "Allocate",
-        availabilityOpenDemand: "Open demand: {qty}"
+        availabilityOpenDemand: "Open demand: {qty}",
+        availabilitySortBy: "Sort:",
+        availabilitySortDateCode: "Date code (available qty)",
+        availabilitySortAvailableQty: "Available qty",
+        availabilitySortShelf: "Shelf",
+        availabilityLocation: "Shelf-Date-COO-COW",
+        availabilityOverride: "Override",
+        availabilityOverrideConfirm: "This qty exceeds the lot's available stock and will remove other orders' allocations here. Override anyway?",
+        availabilityOverrideInsufficient: "Not enough allocatable qty to override — the rest is manually pinned or held by an order in progress."
       },
       allocationTip: {
         shelf: "Shelf",

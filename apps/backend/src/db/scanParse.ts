@@ -7,6 +7,7 @@
 
 const QTY_ENCODING_KOA_ZEROS = "koa_zeros";
 export const DATE_CODE_ENCODING_KOA_MONTH_COUNTER = "koa_month_counter";
+export const DATE_CODE_ENCODING_YYWW = "yyww";
 const qrTemplateRegexCache = new Map<string, RegExp | null>();
 
 /** Fields extracted from a raw scan by a supplier QR template. */
@@ -108,6 +109,19 @@ export function encodeKoaDateCodeRaw(dateCode: string | null | undefined): strin
   return `${String(counter).padStart(2, "0")}${week}`;
 }
 
+/**
+ * Decode a YYWW date-code field (iC-Haus DC, e.g. "2337" = year 2023 week 37)
+ * to the system's WWYY date code by swapping the digit pairs ("2337" →
+ * "3723"). Returns undefined for non-4-digit input or an invalid week.
+ * Keep in sync with apps/pda/utils/parseOcrScan.ts decodeYywwDateCode.
+ */
+export function decodeYywwDateCode(raw: string): string | undefined {
+  if (!/^\d{4}$/.test(raw)) return undefined;
+  const week = Number(raw.slice(2, 4));
+  if (week < 1 || week > 53) return undefined;
+  return `${raw.slice(2, 4)}${raw.slice(0, 2)}`;
+}
+
 /** Part-number comparison key: uppercase with all whitespace collapsed out. */
 export function normalizePartNo(value: string): string {
   return value.toUpperCase().replace(/\s+/g, "");
@@ -136,7 +150,8 @@ function getQrTemplateRegex(template: string): RegExp | null {
  * is invalid, or the raw value does not match. `qty` is decoded per
  * `qtyEncoding` ('koa_zeros' → decodeKoaQty; otherwise a plain positive
  * integer); `dateCode` is decoded per `dateCodeEncoding`
- * ('koa_month_counter' → decodeKoaDateCode; otherwise passed through raw).
+ * ('koa_month_counter' → decodeKoaDateCode, 'yyww' → decodeYywwDateCode;
+ * otherwise passed through raw).
  * Templates without a `serialNo` group simply yield no serial
  * (older templates, other suppliers) — unknown groups are ignored.
  */
@@ -167,6 +182,8 @@ export function parseQrRaw(
   let dateCode: string | undefined = groups.dateCode ?? undefined;
   if (dateCode && dateCodeEncoding === DATE_CODE_ENCODING_KOA_MONTH_COUNTER) {
     dateCode = decodeKoaDateCode(dateCode);
+  } else if (dateCode && dateCodeEncoding === DATE_CODE_ENCODING_YYWW) {
+    dateCode = decodeYywwDateCode(dateCode);
   }
 
   return {

@@ -26,6 +26,9 @@ const stock = ref<PartAvailabilityStockRow[]>([]);
 const loading = ref(false);
 const error = ref("");
 const dismiss = useOverlayDismiss(() => emit("close"));
+// Stock-table sort (shared options/ordering with the picking-side modal).
+const stockSort = ref<StockSortKey>("date-code");
+const sortedStock = computed(() => sortStockRows(stock.value, stockSort.value));
 
 // Per-demand-row qty inputs, busy flags, and qty allocated this session.
 const qtyInputs = ref<Record<string, number>>({});
@@ -105,6 +108,7 @@ watch(
     demand.value = [];
     stock.value = [];
     error.value = "";
+    stockSort.value = "date-code";
     qtyInputs.value = {};
     allocating.value = {};
     sessionUsed.value = {};
@@ -174,6 +178,16 @@ watch(
         </ReceivingPartDemandTables>
 
         <h3 class="avail-section">{{ $t("admin.pages.receiving.searchStock") }}</h3>
+        <div class="avail-filter">
+          <label class="avail-sort">
+            {{ $t("admin.pages.pickingOrders.availabilitySortBy") }}
+            <select v-model="stockSort">
+              <option v-for="o in STOCK_SORT_OPTIONS" :key="o.value" :value="o.value">
+                {{ $t(o.labelKey) }}
+              </option>
+            </select>
+          </label>
+        </div>
         <table v-if="stock.length > 0" class="avail-table">
           <thead>
             <tr>
@@ -181,6 +195,7 @@ watch(
               <th>{{ $t("admin.pages.shelfBoxes.subInventory") }}</th>
               <th>{{ $t("stockSearch.shelf") }}</th>
               <th>{{ $t("stockSearch.box") }}</th>
+              <th>{{ $t("admin.pages.pickingOrders.availabilityLocation") }}</th>
               <th>{{ $t("stockSearch.dateCode") }}</th>
               <th>{{ $t("stockSearch.lotCode") }}</th>
               <th class="num">{{ $t("stockSearch.totalQty") }}</th>
@@ -189,11 +204,12 @@ watch(
             </tr>
           </thead>
           <tbody>
-            <tr v-for="s in stock" :key="s.lotId" :class="{ 'avail-match': highlight(s) }">
+            <tr v-for="s in sortedStock" :key="s.lotId" :class="{ 'avail-match': highlight(s) }">
               <td>{{ s.orgId ?? "—" }}</td>
               <td>{{ s.subInventoryCode ?? "—" }}</td>
               <td>{{ s.shelfDisplayName ?? s.shelfCode ?? "—" }}</td>
               <td>{{ s.boxId ?? "—" }}</td>
+              <td>{{ formatStockLocation(s) }}</td>
               <td>{{ s.dateCode ?? "—" }}</td>
               <td>{{ s.lotCode ?? "—" }}</td>
               <td class="num">{{ s.totalQty }}</td>
@@ -214,5 +230,27 @@ watch(
 <style scoped>
 .search-dialog {
   width: 56.25rem;
+}
+.avail-filter {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.625rem;
+  font-size: 0.8125rem;
+  color: #52606d;
+}
+.avail-filter label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+.avail-filter select {
+  padding: 0.25rem 0.375rem;
+  border: 1px solid #b6c2cd;
+  border-radius: 0.25rem;
+  font-size: 0.8125rem;
+  background: #fff;
+}
+.avail-sort {
+  margin-left: auto;
 }
 </style>

@@ -169,6 +169,13 @@
       "when": 1791180780234,
       "tag": "0023_empty_star_brand",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791266581982,
+      "tag": "0024_even_victor_mancha",
+      "breakpoints": true
     }
   ]
 }

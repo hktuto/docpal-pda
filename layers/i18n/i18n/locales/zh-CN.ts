@@ -1464,7 +1464,15 @@ export default {
         availabilityDateCodeClear: "清除",
         availabilityLineQty: "行数量",
         availabilityAllocate: "分配",
-        availabilityOpenDemand: "待分配需求：{qty}"
+        availabilityOpenDemand: "待分配需求：{qty}",
+        availabilitySortBy: "排序：",
+        availabilitySortDateCode: "日期代码（可用数量）",
+        availabilitySortAvailableQty: "可用数量",
+        availabilitySortShelf: "货架",
+        availabilityLocation: "货架-日期-COO-COW",
+        availabilityOverride: "覆写分配",
+        availabilityOverrideConfirm: "此数量超出该批次的可用库存，将会移除其他订单在这里的分配。确定要覆写？",
+        availabilityOverrideInsufficient: "可覆写的数量不足——其余分配为手动锁定，或其他订单正在作业中。"
       },
       allocationTip: {
         shelf: "货架",

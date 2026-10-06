@@ -2,6 +2,7 @@ import type { SupplierQrcodeTemplate } from "~/services/types";
 
 const QTY_ENCODING_KOA_ZEROS = "koa_zeros";
 const DATE_CODE_ENCODING_KOA_MONTH_COUNTER = "koa_month_counter";
+const DATE_CODE_ENCODING_YYWW = "yyww";
 const qrTemplateRegexCache = new Map<string, RegExp | null>();
 
 /** A single barcode or QR code returned by the native scanner. */
@@ -25,6 +26,8 @@ export interface ParsedFields {
   lotCode?: string;
   cow?: string;
   wclItemNo?: string;
+  /** Supplier-template serial (e.g. iC-Haus ID) — put-away duplicate check. */
+  serialNo?: string;
 }
 
 /**
@@ -646,6 +649,19 @@ export function decodeKoaDateCode(raw: string): string | undefined {
   return `${digits.slice(2, 4)}${String(year % 100).padStart(2, "0")}`;
 }
 
+/**
+ * Decode a YYWW date-code field (iC-Haus DC, e.g. "2337" = year 2023 week 37)
+ * to the system's WWYY date code by swapping the digit pairs ("2337" →
+ * "3723"). Returns undefined for non-4-digit input or an invalid week.
+ * Keep in sync with apps/backend/src/db/scanParse.ts decodeYywwDateCode.
+ */
+export function decodeYywwDateCode(raw: string): string | undefined {
+  if (!/^\d{4}$/.test(raw)) return undefined;
+  const week = Number(raw.slice(2, 4));
+  if (week < 1 || week > 53) return undefined;
+  return `${raw.slice(2, 4)}${raw.slice(0, 2)}`;
+}
+
 function getQrTemplateRegex(template: string): RegExp | null {
   if (qrTemplateRegexCache.has(template)) {
     return qrTemplateRegexCache.get(template)!;
@@ -726,6 +742,8 @@ export function parseQrCapture(
     let dateCode: string | undefined = groups.dateCode ?? undefined;
     if (dateCode && supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_KOA_MONTH_COUNTER) {
       dateCode = decodeKoaDateCode(dateCode);
+    } else if (dateCode && supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_YYWW) {
+      dateCode = decodeYywwDateCode(dateCode);
     }
 
     return {
@@ -738,6 +756,7 @@ export function parseQrCapture(
         coo: groups.coo ?? undefined,
         cow: groups.cow ?? undefined,
         wclItemNo: groups.wclItemNo ?? undefined,
+        serialNo: groups.serialNo ?? undefined,
       },
       options: {
         itemIds: [normalizedItemId],

@@ -80,3 +80,23 @@ export function putAwayGroupFieldValue(field: string, group: PutAwayItemGroup): 
   ];
   return distinct.length ? distinct.join(" / ") : "—";
 }
+
+/** The group's shelf suggestion for the collapsed meta line: distinct member
+ *  shelf codes joined, with the box id appended when a single suggestion
+ *  carries one (a box suggestion only makes sense unambiguously). Null when
+ *  no member has a suggestion — the meta segment is then omitted. */
+export function putAwayGroupSuggestion(group: PutAwayItemGroup): string | null {
+  const shelves = [
+    ...new Set(
+      group.items
+        .map((i) => i.suggestedShelfCode)
+        .filter((v): v is string => !!v)
+    ),
+  ];
+  if (shelves.length === 0) return null;
+  const withBox = group.items.filter((i) => i.suggestedShelfCode && i.suggestedBoxId);
+  if (shelves.length === 1 && withBox.length > 0) {
+    return `${shelves[0]} / ${withBox[0].suggestedBoxId}`;
+  }
+  return shelves.join(" / ");
+}

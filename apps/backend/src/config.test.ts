@@ -335,7 +335,7 @@ test("pdaViewConfig accessor: resolution defaults", () => {
     assert.deepEqual(view.lists["stock-search"], { title: "[wcl_item_no]", meta: ["[part_no]"], chip: "none" });
     assert.equal(view.receivingDetail.defaultGrouping, "invoice");
     assert.deepEqual(view.pickingDetail.itemFields, ["wcl_item_no", "qty", "picked_qty"]);
-    assert.deepEqual(view.putAwayDetail.itemFields, ["wcl_item_no", "expected_qty", "remaining_qty"]);
+    assert.deepEqual(view.putAwayDetail.itemFields, ["wcl_item_no", "expected_qty", "remaining_qty", "suggested_shelf"]);
   } finally {
     _resetFlowConfigForTests();
   }

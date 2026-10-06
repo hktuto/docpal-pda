@@ -17,6 +17,7 @@ import { queryAll, queryGet } from "../../db/query.js";
 import { confirmReceivingArrival } from "../../db/receiving.js";
 import { insertReceivingOrder, insertPickingOrder } from "../../db/test-fixtures.js";
 import { allocateAll } from "../../db/allocate.js";
+import { recomputeLot, recomputePickingItem } from "../../db/picking.js";
 
 process.env.DATABASE_URL = TEST_DATABASE_URL;
 
@@ -540,14 +541,190 @@ test("manual-allocate: validation and guard errors", async () => {
   assert.equal((await post({ qty: 1, inventoryLotId: "LOT-MAN-3" })).status, 409); // lock_held
 });
 
+// --- POST .../allocations with override: true (reclaim from other orders) ---
+
+// seedScenario (orderA demand 600, orderB 400, REALLOC-P1 receiving 1000) + a
+// shelf lot; allocateAll gives orderA the lot first (shelf before dock), B the
+// receiving carton. Dropping orderB's rows leaves orderA holding the
+// fully-reserved lot — the greyed-out case the override button unlocks.
+async function seedStealScenario(lotId: string, lotQty: number) {
+  const { orderA, orderB } = await seedScenario();
+  await clearAllocations();
+  await insertLot(lotId, "REALLOC-P1", lotQty);
+  await allocateAll(client.db);
+  const itemB = await itemIdOf(orderB);
+  await client.db.execute(sql`DELETE FROM allocations WHERE picking_item_id = ${itemB}`);
+  await client.db.execute(sql`UPDATE picking_items SET allocated_qty = 0 WHERE id = ${itemB}`);
+  return { orderA, orderB };
+}
+
+test("manual-allocate override: steals the shortfall from another order's auto allocation", async () => {
+  await reseed(client);
+  // Lot 500: orderA takes 500 from the lot (+100 dock); orderB's 400 sit on
+  // the dock carton. B pins 400 on the lot — 400 above its availability.
+  const { orderA, orderB } = await seedStealScenario("LOT-OVR-1", 500);
+  const itemA = await itemIdOf(orderA);
+  const itemB = await itemIdOf(orderB);
+
+  const res = await req(`/admin/picking-orders/${orderB}/items/${itemB}/allocations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ qty: 400, inventoryLotId: "LOT-OVR-1", override: true }),
+  });
+  assert.equal(res.status, 200);
+
+  // orderA's auto row is partially reclaimed (500 → 100).
+  const aRows = await queryAll<{ qty: number; manual: boolean }>(
+    client.db,
+    sql`SELECT a.qty, a.manual FROM allocations a
+        JOIN picking_items pi ON pi.id = a.picking_item_id
+        WHERE pi.picking_order_id = ${orderA} AND a.inventory_lot_id = 'LOT-OVR-1'`
+  );
+  assert.equal(aRows.reduce((s, r) => s + r.qty, 0), 100);
+  assert.ok(aRows.every((r) => !r.manual));
+  const bRows = await queryAll<{ qty: number; manual: boolean }>(
+    client.db,
+    sql`SELECT a.qty, a.manual FROM allocations a
+        JOIN picking_items pi ON pi.id = a.picking_item_id
+        WHERE pi.picking_order_id = ${orderB} AND a.inventory_lot_id = 'LOT-OVR-1'`
+  );
+  assert.equal(bRows.length, 1);
+  assert.equal(bRows[0].qty, 400);
+  assert.equal(bRows[0].manual, true);
+
+  const lot = await queryGet<{ allocatedQty: number }>(
+    client.db,
+    sql`SELECT allocated_qty AS "allocatedQty" FROM inventory_lots WHERE id = 'LOT-OVR-1'`
+  );
+  assert.equal(lot!.allocatedQty, 500);
+  // orderA: 100 lot + 100 dock = 200 allocated of its 600 open.
+  const itemAState = await queryGet<{ allocatedQty: number }>(
+    client.db,
+    sql`SELECT allocated_qty AS "allocatedQty" FROM picking_items WHERE id = ${itemA}`
+  );
+  assert.equal(itemAState!.allocatedQty, 200);
+
+  // Victim-side audit + release ledger.
+  const audit = await queryGet<{ metadata: { action?: string; qty?: number; thiefOrderId?: string } }>(
+    client.db,
+    sql`SELECT metadata FROM transaction_logs
+        WHERE entity_type = 'picking_order' AND entity_id = ${orderA}
+          AND metadata->>'action' = 'allocation_stolen'`
+  );
+  assert.ok(audit);
+  assert.equal(audit!.metadata.qty, 400);
+  assert.equal(audit!.metadata.thiefOrderId, orderB);
+  const ledger = await queryGet<{ qtyDelta: number; txnReason: string }>(
+    client.db,
+    sql`SELECT qty_delta AS "qtyDelta", txn_reason AS "txnReason" FROM inventory_transactions
+        WHERE txn_reason = 'admin: override steal' AND qty_delta = -400`
+  );
+  assert.ok(ledger);
+});
+
+test("manual-allocate override: a fully-covered victim row is deleted outright", async () => {
+  await reseed(client);
+  const { orderA, orderB } = await seedScenario();
+  await clearAllocations();
+  await insertLot("LOT-OVR-F", "REALLOC-P1", 60);
+  const itemA = await itemIdOf(orderA);
+  const itemB = await itemIdOf(orderB);
+  // Craft a small auto allocation on orderB's item directly (the engine would
+  // never create one this small here) so the steal consumes the whole row.
+  await client.db.execute(sql`
+    INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, manual, created_date, last_update_date)
+    VALUES ('ALLOC-VIC-RAW', ${itemB}, 'LOT-OVR-F', 60, false, now(), now())
+  `);
+  await recomputeLot(client.db, "LOT-OVR-F");
+  await recomputePickingItem(client.db, itemB);
+
+  const res = await req(`/admin/picking-orders/${orderA}/items/${itemA}/allocations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ qty: 60, inventoryLotId: "LOT-OVR-F", override: true }),
+  });
+  assert.equal(res.status, 200);
+
+  const raw = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM allocations WHERE id = 'ALLOC-VIC-RAW'`);
+  assert.ok(!raw);
+  const pin = await queryGet<{ qty: number; manual: boolean }>(
+    client.db,
+    sql`SELECT qty, manual FROM allocations WHERE picking_item_id = ${itemA} AND inventory_lot_id = 'LOT-OVR-F'`
+  );
+  assert.ok(pin);
+  assert.equal(pin!.qty, 60);
+  assert.equal(pin!.manual, true);
+});
+
+test("manual-allocate override: manual pins are never stolen (409 insufficient_available)", async () => {
+  await reseed(client);
+  const { orderA, orderB } = await seedStealScenario("LOT-OVR-2", 600);
+  const itemA = await itemIdOf(orderA);
+  const itemB = await itemIdOf(orderB);
+  // Reset the lot completely so orderA's hold is purely a manual pin.
+  await client.db.execute(sql`DELETE FROM allocations WHERE picking_item_id = ${itemA}`);
+  await client.db.execute(sql`UPDATE picking_items SET allocated_qty = 0 WHERE id = ${itemA}`);
+  await client.db.execute(sql`UPDATE inventory_lots SET allocated_qty = 0 WHERE id = 'LOT-OVR-2'`);
+
+  // orderA's 600 on the lot is a manual pin now.
+  const pin = await req(`/admin/picking-orders/${orderA}/items/${itemA}/allocations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ qty: 600, inventoryLotId: "LOT-OVR-2" }),
+  });
+  assert.equal(pin.status, 200);
+
+  const res = await req(`/admin/picking-orders/${orderB}/items/${itemB}/allocations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ qty: 100, inventoryLotId: "LOT-OVR-2", override: true }),
+  });
+  assert.equal(res.status, 409);
+  assert.match(await res.text(), /insufficient_available/);
+
+  const aRows = await queryAll<{ qty: number; manual: boolean }>(
+    client.db,
+    sql`SELECT a.qty, a.manual FROM allocations a
+        JOIN picking_items pi ON pi.id = a.picking_item_id
+        WHERE pi.picking_order_id = ${orderA} AND a.inventory_lot_id = 'LOT-OVR-2'`
+  );
+  assert.equal(aRows.reduce((s, r) => s + r.qty, 0), 600);
+  assert.ok(aRows.every((r) => r.manual));
+});
+
+test("manual-allocate override: skips a locked victim order and 409s on the leftover shortfall", async () => {
+  await reseed(client);
+  const { orderA, orderB } = await seedStealScenario("LOT-OVR-3", 500);
+  const itemB = await itemIdOf(orderB);
+  const operator = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'operator'`);
+  await client.db.execute(
+    sql`UPDATE picking_orders SET working_by = ${operator!.id}, working_at = now() WHERE id = ${orderA}`
+  );
+
+  const res = await req(`/admin/picking-orders/${orderB}/items/${itemB}/allocations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ qty: 400, inventoryLotId: "LOT-OVR-3", override: true }),
+  });
+  assert.equal(res.status, 409);
+  assert.match(await res.text(), /insufficient_available/);
+
+  // Nothing was stolen and no allocation was pinned.
+  const lot = await queryGet<{ allocatedQty: number }>(
+    client.db,
+    sql`SELECT allocated_qty AS "allocatedQty" FROM inventory_lots WHERE id = 'LOT-OVR-3'`
+  );
+  assert.equal(lot!.allocatedQty, 500);
+});
+
 // --- GET /admin/part-availability ------------------------------------------
 
 test("part-availability: returns stock and receiving rows for the part", async () => {
   await reseed(client);
   await seedScenario();
   await client.db.execute(sql`
-    INSERT INTO inventory_lots (id, part_no, date_code, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
-    VALUES ('LOT-AVAIL-1', 'REALLOC-P1', '2001', 'A0405', 'AVAILBOX1', 2, 'STORE1', 50, now(), now())
+    INSERT INTO inventory_lots (id, part_no, date_code, shelf_code, box_id, org_id, sub_inventory_code, coo, cow, total_qty, created_date, last_update_date)
+    VALUES ('LOT-AVAIL-1', 'REALLOC-P1', '2001', 'A0405', 'AVAILBOX1', 2, 'STORE1', 'JP', 'CN', 50, now(), now())
   `);
 
   const res = await req(`/admin/part-availability?partNo=REALLOC-P1`);
@@ -557,6 +734,8 @@ test("part-availability: returns stock and receiving rows for the part", async (
   assert.equal(body.stock[0].lotId, "LOT-AVAIL-1");
   assert.equal(body.stock[0].totalQty, 50);
   assert.equal(body.stock[0].availableQty, 50);
+  assert.equal(body.stock[0].coo, "JP");
+  assert.equal(body.stock[0].cow, "CN");
   assert.equal(body.receiving.length, 1);
   assert.equal(body.receiving[0].batchNo, "RA-TEST-01");
   assert.equal(body.receiving[0].ctnNo, "9001");

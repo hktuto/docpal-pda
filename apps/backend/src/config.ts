@@ -377,8 +377,8 @@ export function defaultPdaViewConfig(): PdaViewConfig {
       expandedFields: ["allocated_qty", "shelf_code", "box_id", "date_code", "lot_code", "coo", "cow", "source"],
     },
     putAwayDetail: {
-      itemFields: ["wcl_item_no", "expected_qty", "remaining_qty"],
-      expandedFields: ["received_qty", "po_no", "box_id", "date_code", "lot_code", "coo", "cow", "suggested_shelf"],
+      itemFields: ["wcl_item_no", "expected_qty", "remaining_qty", "suggested_shelf"],
+      expandedFields: ["received_qty", "po_no", "box_id", "date_code", "lot_code", "coo", "cow"],
     },
   };
 }

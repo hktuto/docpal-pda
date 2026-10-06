@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
-import { queryAll, queryGet } from "./query.js";
+import { queryAll, queryGet, queryRun } from "./query.js";
 import { confirmReceivingArrival } from "./receiving.js";
 import { insertReceivingOrder } from "./test-fixtures.js";
 import {
@@ -219,6 +219,45 @@ test("scan: staging insert creates staging box + backfills batch attrs; guards",
   );
   assert.equal(badQty.status, 400);
   assert.equal(badQty.message, "qty_must_be_positive_integer");
+});
+
+test("scan: serialNo dedups per order (409 label_already_scanned); delete frees it", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await daitoInHand();
+  const itemId = await itemIdOf(orderId, "RK73B1JTTD181G"); // qty 5000
+
+  const scan = await recordPutAwayScan(client.db, orderId, {
+    actorId,
+    receivingInvoiceItemId: itemId,
+    qty: 100,
+    serialNo: "50788",
+  });
+  const stored = await queryGet<{ serialNo: string | null }>(
+    client.db,
+    sql`SELECT serial_no AS "serialNo" FROM shelf_box_items WHERE id = ${scan.id}`
+  );
+  assert.equal(stored!.serialNo, "50788");
+
+  // repeat serial on the same order → 409 before the qty guard
+  const dup = await catchHttp(
+    recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 100, serialNo: "50788" })
+  );
+  assert.equal(dup.status, 409);
+  assert.equal(dup.message, "label_already_scanned");
+
+  // a different serial still scans; no serial at all is unaffected
+  await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 100, serialNo: "50789" });
+  await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 100 });
+
+  // the same serial on ANOTHER order is a different label — not a duplicate
+  const otherOrderId = await orderIdOf("100001");
+  const otherItemId = await itemIdOf(otherOrderId, "RK73H1JTTD1002F");
+  await queryRun(client.db, sql`UPDATE receiving_invoice_items SET received_qty = 1000 WHERE id = ${otherItemId}`);
+  await recordPutAwayScan(client.db, otherOrderId, { actorId, receivingInvoiceItemId: otherItemId, qty: 100, serialNo: "50788" });
+
+  // deleting the scan frees the serial for a genuine re-scan
+  await deleteStagedPutAwayScan(client.db, { scanId: scan.id, actorId });
+  await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 100, serialNo: "50788" });
 });
 
 test("delete staged scan: mis-scan correction; boxed scan rejected", async () => {

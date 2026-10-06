@@ -324,8 +324,9 @@ describe("parseQrCapture", () => {
     const ichausTemplate = {
       code: "20",
       qrcodeTemplate:
-        '^\\{(?=.*"CANR"\\s*:\\s*"(?<wclItemNo>[^"]+)")(?=.*"IANR"\\s*:\\s*"(?<itemId>[^"]+)")(?=.*"Q"\\s*:\\s*"(?<qty>\\d+)")(?=.*"DC"\\s*:\\s*"(?<dateCode>\\d{4})")(?=.*"COO"\\s*:\\s*"(?<coo>[^"]+)").*\\}$',
+        '^\\{(?=.*"CANR"\\s*:\\s*"(?<wclItemNo>[^"]+)")(?=.*"IANR"\\s*:\\s*"(?<itemId>[^"]+)")(?=.*"Q"\\s*:\\s*"(?<qty>\\d+)")(?=.*"DC"\\s*:\\s*"(?<dateCode>\\d{4})")(?=.*"COO"\\s*:\\s*"(?<coo>[^"]+)")(?=.*"ID"\\s*:\\s*"(?<serialNo>[^"]+)").*\\}$',
       qrcodeQtyEncoding: null,
+      qrcodeDateCodeEncoding: "yyww" as const,
       brands: ["ICHAUS"],
     };
     const result = parseQrCapture(
@@ -335,9 +336,10 @@ describe("parseQrCapture", () => {
     expect(result.matched).toBe(true);
     expect(result.parsed.itemId).toBe("IC-RZ4248OQFN38-7X5"); // IANR, space-collapsed
     expect(result.parsed.qty).toBe(10);
-    expect(result.parsed.dateCode).toBe("2337");
+    expect(result.parsed.dateCode).toBe("3723"); // DC "2337" is YYWW → WWYY "3723"
     expect(result.parsed.coo).toBe("DE");
     expect(result.parsed.wclItemNo).toBe("ICHAUS/IC-RZ4248 OQFN38-7X5"); // = parts.wcl_item_no
+    expect(result.parsed.serialNo).toBe("50788"); // ID — put-away duplicate check
   });
 
   it("prefers brand-matching templates when contextBrands is given", () => {

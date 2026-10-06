@@ -216,6 +216,7 @@ export function ocrResultToInput(parsed: ParsedFields): OcrInput {
     cow: parsed.cow ?? '',
     qty: parsed.qty ?? '',
     wclItemNo: parsed.wclItemNo,
+    serialNo: parsed.serialNo,
   };
 }
 

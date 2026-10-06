@@ -37,6 +37,9 @@ const data = ref<PartAvailability | null>(null);
 const loading = ref(false);
 const error = ref("");
 const dismiss = useOverlayDismiss(() => emit("close"));
+// Stock-table sort (shared options/ordering with the receiving-side modal).
+const stockSort = ref<StockSortKey>("date-code");
+const sortedStock = computed(() => sortStockRows(filteredStock.value, stockSort.value));
 // Per-source-row qty inputs, busy flags, and qty allocated this session
 // (keys: `s:<lotId>` / `r:<receivingInvoiceItemId>`).
 const qtyInputs = ref<Record<string, number>>({});
@@ -84,14 +87,46 @@ function canAllocate(key: string, left: number): boolean {
   return Number.isInteger(q) && q >= 1 && q <= allocCap(left) && !allocating.value[key];
 }
 
-async function allocate(key: string, base: number, source: { inventoryLotId: string } | { receivingInvoiceItemId: string }) {
+// Override: qty above the lot's available qty reclaims allocations from other
+// orders (backend `override: true`). Physically capped by the lot's total.
+function overrideCap(totalQty: number): number {
+  return Math.max(0, Math.min(totalQty, remaining.value));
+}
+function needsOverride(key: string, left: number): boolean {
+  const q = qtyInputs.value[key];
+  return Number.isInteger(q) && q >= 1 && q > left;
+}
+function canOverride(key: string, left: number, totalQty: number, allocatedQty: number): boolean {
+  const q = qtyInputs.value[key];
+  return (
+    Number.isInteger(q) &&
+    q >= 1 &&
+    q > left &&
+    q <= overrideCap(totalQty) &&
+    allocatedQty > 0 &&
+    !allocating.value[key]
+  );
+}
+
+async function allocate(
+  key: string,
+  base: number,
+  source: { inventoryLotId: string } | { receivingInvoiceItemId: string },
+  opts: { override?: boolean; totalQty?: number; allocatedQty?: number } = {}
+) {
   const item = props.pickingItem;
-  if (!item || !props.pickingOrderId || !canAllocate(key, sourceLeft(key, base))) return;
+  if (!item || !props.pickingOrderId) return;
+  const left = sourceLeft(key, base);
+  const ok = opts.override
+    ? canOverride(key, left, opts.totalQty ?? 0, opts.allocatedQty ?? 0)
+    : canAllocate(key, left);
+  if (!ok) return;
+  if (opts.override && !window.confirm(t("admin.pages.pickingOrders.availabilityOverrideConfirm"))) return;
   const qty = qtyInputs.value[key];
   allocating.value = { ...allocating.value, [key]: true };
   error.value = "";
   try {
-    await flow.addManualPickingAllocation(props.pickingOrderId, item.id, { qty, ...source });
+    await flow.addManualPickingAllocation(props.pickingOrderId, item.id, { qty, ...source, override: opts.override });
     done.value = { ...done.value, [key]: (done.value[key] ?? 0) + qty };
     // Suggest the next qty from the refreshed cap.
     qtyInputs.value = { ...qtyInputs.value, [key]: allocCap(sourceLeft(key, base)) };
@@ -112,6 +147,10 @@ async function allocate(key: string, base: number, source: { inventoryLotId: str
     } catch {
       // not JSON — fall through to the raw message
     }
+    if (!handled && /insufficient_available/.test(e.message)) {
+      error.value = t("admin.pages.pickingOrders.availabilityOverrideInsufficient");
+      handled = true;
+    }
     if (!handled) error.value = e.message;
   } finally {
     allocating.value = { ...allocating.value, [key]: false };
@@ -129,6 +168,7 @@ watch(
     allocating.value = {};
     dcFrom.value = "";
     dcTo.value = "";
+    stockSort.value = "date-code";
     loading.value = true;
     try {
       data.value = await flow.getPartAvailability(props.partNo, props.wclItemNo);
@@ -176,6 +216,14 @@ watch(
         <button v-if="dcActive" class="btn btn-small" @click="dcFrom = ''; dcTo = ''">
           {{ $t("admin.pages.pickingOrders.availabilityDateCodeClear") }}
         </button>
+        <label class="avail-sort">
+          {{ $t("admin.pages.pickingOrders.availabilitySortBy") }}
+          <select v-model="stockSort">
+            <option v-for="o in STOCK_SORT_OPTIONS" :key="o.value" :value="o.value">
+              {{ $t(o.labelKey) }}
+            </option>
+          </select>
+        </label>
       </div>
       <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
       <template v-else-if="data">
@@ -187,6 +235,7 @@ watch(
               <th>{{ $t("admin.pages.shelfBoxes.subInventory") }}</th>
               <th>{{ $t("stockSearch.shelf") }}</th>
               <th>{{ $t("stockSearch.box") }}</th>
+              <th>{{ $t("admin.pages.pickingOrders.availabilityLocation") }}</th>
               <th>{{ $t("stockSearch.dateCode") }}</th>
               <th>{{ $t("stockSearch.lotCode") }}</th>
               <th class="num">{{ $t("stockSearch.totalQty") }}</th>
@@ -196,11 +245,12 @@ watch(
             </tr>
           </thead>
           <tbody>
-            <tr v-for="s in filteredStock" :key="s.lotId" :class="{ 'avail-match': highlight(s) }">
+            <tr v-for="s in sortedStock" :key="s.lotId" :class="{ 'avail-match': highlight(s) }">
               <td>{{ s.orgId ?? "—" }}</td>
               <td>{{ s.subInventoryCode ?? "—" }}</td>
               <td>{{ s.shelfDisplayName ?? s.shelfCode ?? "—" }}</td>
               <td>{{ s.boxId ?? "—" }}</td>
+              <td>{{ formatStockLocation(s) }}</td>
               <td>{{ s.dateCode ?? "—" }}</td>
               <td>{{ s.lotCode ?? "—" }}</td>
               <td class="num">{{ s.totalQty }}</td>
@@ -214,9 +264,18 @@ watch(
                     min="1"
                     :max="allocCap(sourceLeft(`s:${s.lotId}`, s.availableQty))"
                     class="avail-qty"
-                    :disabled="allocCap(sourceLeft(`s:${s.lotId}`, s.availableQty)) <= 0"
+                    :disabled="allocCap(sourceLeft(`s:${s.lotId}`, s.availableQty)) <= 0 && !(s.allocatedQty > 0 && remaining > 0)"
                   />
                   <button
+                    v-if="needsOverride(`s:${s.lotId}`, sourceLeft(`s:${s.lotId}`, s.availableQty))"
+                    class="btn btn-small btn-danger"
+                    :disabled="!canOverride(`s:${s.lotId}`, sourceLeft(`s:${s.lotId}`, s.availableQty), s.totalQty, s.allocatedQty)"
+                    @click="allocate(`s:${s.lotId}`, s.availableQty, { inventoryLotId: s.lotId }, { override: true, totalQty: s.totalQty, allocatedQty: s.allocatedQty })"
+                  >
+                    {{ allocating[`s:${s.lotId}`] ? $t("admin.common.saving") : $t("admin.pages.pickingOrders.availabilityOverride") }}
+                  </button>
+                  <button
+                    v-else
                     class="btn btn-small btn-primary"
                     :disabled="!canAllocate(`s:${s.lotId}`, sourceLeft(`s:${s.lotId}`, s.availableQty))"
                     @click="allocate(`s:${s.lotId}`, s.availableQty, { inventoryLotId: s.lotId })"
@@ -318,5 +377,15 @@ watch(
   border: 1px solid #b6c2cd;
   border-radius: 0.25rem;
   font-size: 0.8125rem;
+}
+.avail-filter select {
+  padding: 0.25rem 0.375rem;
+  border: 1px solid #b6c2cd;
+  border-radius: 0.25rem;
+  font-size: 0.8125rem;
+  background: #fff;
+}
+.avail-sort {
+  margin-left: auto;
 }
 </style>

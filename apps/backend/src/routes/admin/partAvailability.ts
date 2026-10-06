@@ -20,6 +20,8 @@ interface StockRow {
   wclItemNo: string | null;
   dateCode: string | null;
   lotCode: string | null;
+  coo: string | null;
+  cow: string | null;
   totalQty: number;
   allocatedQty: number;
   availableQty: number;
@@ -122,6 +124,8 @@ adminPartAvailabilityRoute.get("/part-availability", async (c) => {
         il.wcl_item_no AS "wclItemNo",
         il.date_code AS "dateCode",
         il.lot_code AS "lotCode",
+        il.coo,
+        il.cow,
         il.total_qty AS "totalQty",
         il.allocated_qty AS "allocatedQty",
         il.available_qty AS "availableQty"

@@ -9,22 +9,19 @@
         <button type="button" class="shelf-banner__clear" :aria-label="$t('putAway.shelfBannerClear')" @click="selectedShelf = null">×</button>
       </div>
 
-      <PutAwayPendingPanel
-        :scans="scans"
-        :shelf-code="selectedShelf"
-        :adding-scan="addingScan"
-        :removing-scan="removingScan"
-        @add-to-shelf="addPendingToShelf"
-        @remove-scan="removeScanHandler"
-      />
-
       <PutAwayLotsPanel
         v-model:expanded-items="expandedItems"
         :groups="groups"
+        :scans="scans"
+        :shelf-code="selectedShelf"
         :scanning="scanning"
+        :adding-scan="addingScan"
+        :removing-scan="removingScan"
         :armed-item-id="armedItemId"
         @scan="openScan"
         @arm-scan="toggleArmScan"
+        @add-to-shelf="addPendingToShelf"
+        @remove-scan="removeScanHandler"
       />
     </template>
 
@@ -88,7 +85,7 @@ import { playScanError, playScanSuccess } from "~/utils/scanBeep";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import ScanMultiItemModal from "~/components/ScanMultiItemModal.vue";
 import PutAwayLotsPanel from "~/components/put-away/PutAwayLotsPanel.vue";
-import PutAwayPendingPanel from "~/components/put-away/PutAwayPendingPanel.vue";
+import { viewListRow } from "~/utils/viewConfig";
 import type {
   PutAwayExpectedItem,
   PutAwayScan,
@@ -121,9 +118,26 @@ const headerStatus = computed(() =>
   order.value ? statusLabel.receiving(order.value.status) : ""
 );
 
-// Title, status badge and header info rows render in the AppHeader.
+// Title, status badge and header info rows render in the AppHeader. The
+// title follows the put-away list's pdaViewConfig title template (same as
+// the list rows — [batch_no] by default, [name] = the backend displayName).
 usePageHeader({
-  title: () => order.value?.batchNo,
+  title: () => {
+    const o = order.value;
+    if (!o) return undefined;
+    const row = {
+      displayName: o.displayName,
+      batchNo: o.batchNo,
+      status: o.status,
+      deliveryDate: o.deliveryDate,
+      dateCode: o.dateCode,
+      orgId: o.orgId,
+      supplierCode: o.supplier?.code ?? null,
+      supplierName: o.supplier?.name ?? null,
+      invoiceNos: o.invoices.map((i) => i.invoiceNo).join(","),
+    };
+    return viewListRow("put-away", row, viewConfig.value).title || o.displayName || o.batchNo;
+  },
   badgeText: () => headerStatus.value || undefined,
   badgeClass: () => badgeClass(order.value?.status),
   info: () => {
@@ -140,6 +154,7 @@ usePageHeader({
 });
 
 const warehouse = useWarehouse();
+const { viewConfig } = useViewConfig();
 
 const pending = ref(true);
 const error = ref<string | null>(null);
@@ -269,7 +284,7 @@ useHardwareScanner({
         rawCode(parsed.coo),
         rawCode(parsed.cow),
       ];
-      for (const portion of portions) {
+      for (const [portionIdx, portion] of portions.entries()) {
         await warehouse.recordPutAwayScan(
           orderId,
           portion.item.id,
@@ -278,7 +293,10 @@ useHardwareScanner({
           batch[1],
           batch[2],
           batch[3],
-          selectedShelf.value
+          selectedShelf.value,
+          // The label's serial rides on the first split portion only — one
+          // physical label split across lines must not trip its own dedup.
+          portionIdx === 0 ? rawCode(parsed.serialNo) : null
         );
       }
       showToast(t("common.scanSuccess"));

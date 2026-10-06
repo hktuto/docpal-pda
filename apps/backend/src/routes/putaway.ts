@@ -66,7 +66,8 @@ putawayRoute.get("/receiving-orders/:id/put-away", async (c) => {
 });
 
 // Record one staging scan (staging-box insert + batch-attr backfill on the
-// item). 409 scanned_qty_exceeds_remaining when over the remaining qty. With
+// item). 409 scanned_qty_exceeds_remaining when over the remaining qty; 409
+// label_already_scanned when `serialNo` repeats on the order. With
 // `shelfBoxId` or `shelfCode` the scan is committed straight onto the shelf
 // in the same tx (lot + ledger included); `shelfCode` finds-or-creates the
 // order's invisible box on that shelf (spec 2026-10-06).
@@ -80,6 +81,7 @@ putawayRoute.post("/receiving-orders/:id/put-away-scans", async (c) => {
     cow?: string;
     shelfBoxId?: string;
     shelfCode?: string;
+    serialNo?: string;
   }>(c);
   if (!body.receivingInvoiceItemId) {
     throw new HTTPException(400, { message: "receivingInvoiceItemId is required" });
@@ -94,6 +96,7 @@ putawayRoute.post("/receiving-orders/:id/put-away-scans", async (c) => {
     cow: body.cow ?? null,
     shelfBoxId: body.shelfBoxId ?? null,
     shelfCode: body.shelfCode ?? null,
+    serialNo: body.serialNo ?? null,
   });
   // A scan straight onto a shelf moves stock (dock → on_hand): re-run allocation.
   if (body.shelfBoxId || body.shelfCode) reallocateBestEffort("put-away scan-to-shelf");

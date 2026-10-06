@@ -33,10 +33,10 @@
   `POST /receiving-orders/:id/put-away-commit`, which assigns every pending
   scan onto the shelf in ONE backend tx (the order's box there is
   found-or-created invisibly; `shelfCode` on `put-away-scans` does the same
-  per scan). `PutAwayPendingPanel.vue` lists pending scans grouped by part
-  (qty summed, batch fields shown) with per-row **Add to shelf** (commits
-  just that row via `put-away-commit` with `scanIds`) and **Remove**
-  (hard-delete, mis-scan correction). A `BOX-*` scan is rejected with an
+  per scan). Pending scans live inside each item's expanded detail (under the
+  matching invoice line) with per-row **Add to shelf** (enabled with a shelf
+  selected; commits just that row via `put-away-commit` with `scanIds`) and
+  **Remove** (hard-delete, mis-scan correction). A `BOX-*` scan is rejected with an
   informational toast — boxes are not used in this flow. The detail list is
   grouped by part number — all visible invoice lines of one part render as a
   single card with summed qty (`utils/putAwayGroups.ts`
@@ -111,12 +111,16 @@
 - `components/ScanMultiItemModal.vue` — shared multi-item label table (also
   used by the picking scan session).
 - `components/put-away/PutAwayLotsPanel.vue` — expected items as part-group
-  cards (summed qty, distinct-joined batch fields) with per-member-line
-  detail when expanded; per-card "Gun scan" button (`arm-scan` emit) +
-  armed-card styling driven by the group-key `armedItemId` prop.
-- `components/put-away/PutAwayPendingPanel.vue` — pending (uncommitted)
-  scans grouped by part with per-row **Add to shelf** (enabled with a shelf
-  selected) and **Remove** (mis-scan correction).
+  cards built on the shared `AppListRow` (same config-driven design as the
+  receiving/picking detail rows): identity field = title, collapsed meta =
+  the configured `putAwayDetail.itemFields` ("Label: value" segments, empty
+  omitted — `suggested_shelf` renders the group suggestion) + a
+  Total/Scanned/Put-away progress line, expanded = the configured
+  `expandedFields` + member lines + the line's pending scans (per-row
+  Add-to-shelf / Remove); per-card "Gun scan" button (`arm-scan` emit) +
+  armed-card styling driven by the group-key `armedItemId` prop. The detail
+  page's app-header title renders through the put-away list's title
+  template (`viewListRow("put-away", …)`), same as the list rows.
 - `composables/useScanMatchers.ts` — client-side `matchPutAway` validation
   against the reviewed card's part-group member lines (aggregate remaining);
   apply splits FIFO into `WarehouseService.recordPutAwayScan` calls per line,
@@ -145,8 +149,12 @@
   support splitting a single scanned piece across multiple shelves.
 - Moving committed stock between shelves is not supported (reverse + re-scan
   instead).
-- Put-away scans do not yet dedup by serial (the `receiving_scan_labels`
-  table built for receiving-scan dedup can be reused for this later).
+- Put-away scans dedup by supplier serial only when the label carries one
+  (e.g. iC-Haus ID → `serialNo` template group → `shelf_box_items.serial_no`):
+  a repeat serial on the same receiving order is rejected with 409
+  `label_already_scanned` (mirrors the receiving S-key check; deleting the
+  scan frees the serial). Labels without a serial group are not deduped —
+  the camera-OCR and multi-item paths do not pass a serial either.
 
 ## Related specs/plans
 

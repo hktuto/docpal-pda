@@ -5,7 +5,7 @@ import { inArray, sql } from "drizzle-orm";
 import { HTTPException } from "hono/http-exception";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { queryAll, queryGet } from "./query.js";
-import { decodeKoaDateCode, decodeKoaQty, normalizePartNo, parseQrRaw } from "./scanParse.js";
+import { decodeKoaDateCode, decodeKoaQty, decodeYywwDateCode, normalizePartNo, parseQrRaw } from "./scanParse.js";
 import { builtinSupplierProfiles } from "./seed-supplier-profiles.js";
 import { _setReceivingSubInventoryRulesForTests } from "../config.js";
 import {
@@ -91,6 +91,18 @@ test("decodeKoaDateCode: month counter + week → WWYY (counter 17 = 2026-07)", 
   assert.equal(decodeKoaDateCode("0023X"), undefined); // counter 00
 });
 
+test("decodeYywwDateCode: YYWW → WWYY pair swap (iC-Haus DC)", () => {
+  assert.equal(decodeYywwDateCode("2337"), "3723"); // 2023 week 37
+  assert.equal(decodeYywwDateCode("2631"), "3126"); // 2026 week 31
+  assert.equal(decodeYywwDateCode("2601"), "0126"); // week 01
+  // invalid
+  assert.equal(decodeYywwDateCode("237"), undefined); // fewer than 4 digits
+  assert.equal(decodeYywwDateCode("23370"), undefined); // more than 4 digits
+  assert.equal(decodeYywwDateCode("2300"), undefined); // week 00
+  assert.equal(decodeYywwDateCode("2354"), undefined); // week 54
+  assert.equal(decodeYywwDateCode("ABCD"), undefined); // non-digits
+});
+
 test("parseQrRaw: seeded KOA template parses raw and decodes koa_zeros qty", async () => {
   const profile = await queryGet<{ qrTemplate: string; qtyEncoding: string; dateCodeEncoding: string }>(
     client.db,
@@ -151,9 +163,10 @@ test("parseQrRaw: iC-Haus builtin template parses the Versandetikett JSON QR", (
   const parsed = parseQrRaw(raw, profile.qrTemplate, profile.qtyEncoding, profile.dateCodeEncoding);
   assert.equal(parsed.partNo, "IC-RZ4248OQFN38-7X5"); // IANR — matches parts.part_no space-insensitively
   assert.equal(parsed.qty, 10);
-  assert.equal(parsed.dateCode, "2337"); // DC passed through raw (no date-code encoding)
+  assert.equal(parsed.dateCode, "3723"); // DC "2337" is YYWW — decoded to WWYY via 'yyww'
   assert.equal(parsed.coo, "DE");
   assert.equal(parsed.wclItemNo, "ICHAUS/IC-RZ4248 OQFN38-7X5"); // CANR = parts.wcl_item_no
+  assert.equal(parsed.serialNo, "50788"); // ID — put-away duplicate check
   // key order doesn't matter (lookahead groups)
   const reordered = parseQrRaw('{"COO":"DE","Q":"10","DC":"2337","IANR":"iC-RZ4248 oQFN38-7x5","CANR":"ICHAUS/IC-RZ4248 OQFN38-7X5"}', profile.qrTemplate, null);
   assert.equal(reordered.partNo, "IC-RZ4248OQFN38-7X5");

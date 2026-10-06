@@ -14,35 +14,71 @@
         <span class="armed-badge">{{ $t('putAway.lotsPanel.armedBadge') }}</span>
         <span class="armed-hint">{{ $t('putAway.lotsPanel.armedHint') }}</span>
       </div>
-      <DetailRow :label="$t('putAway.lotsPanel.part')">
-        <span class="card__title">{{ (group.wclItemNo ?? group.partNo) || $t('common.noData') }}</span>
-      </DetailRow>
-      <DetailRow
-        v-for="field in visibleItemFields"
-        :key="field"
-        :label="$t(`viewConfig.fields.${field}`)"
-        :value="putAwayGroupFieldValue(field, group)"
-      />
-      <DetailRow :label="$t('putAway.lotsPanel.totalQty') +' / '+ $t('putAway.lotsPanel.scannedQty')  +' / '+ $t('putAway.lotsPanel.boxedQty')">
-        <span>{{ group.lineQty ?? '—' }}</span> / <span>{{ group.putAwayQty + group.stagedQty }}</span> / <span>{{ group.putAwayQty }}</span>
-      </DetailRow>
-      <template v-if="expandedItems.has(group.key)">
+
+      <AppListRow
+        :expandable="isExpandable(group)"
+        :expanded="expandedItems.has(group.key)"
+        :title="groupTitle(group)"
+        :meta="[fieldsMeta(group), progressMeta(group)]"
+        @toggle="toggleExpand(group.key)"
+      >
         <DetailRow
           v-for="field in detailConfig.expandedFields"
           :key="field"
           :label="$t(`viewConfig.fields.${field}`)"
           :value="putAwayGroupFieldValue(field, group)"
         />
-        <div v-if="group.items.length > 1" class="member-lines">
-          <div v-for="line in group.items" :key="line.id" class="member-line">
+        <div v-for="line in group.items" :key="line.id" class="line-detail">
+          <div v-if="group.items.length > 1" class="member-line">
             <span class="member-line__part">{{ line.partNo }}</span>
             <span>{{ $t('viewConfig.fields.remaining_qty') }}: {{ line.remainingQty }}</span>
             <span class="member-line__batch">
               {{ putAwayItemFieldValue('date_code', line) }} / {{ putAwayItemFieldValue('lot_code', line) }} / {{ putAwayItemFieldValue('coo', line) }} / {{ putAwayItemFieldValue('cow', line) }}
             </span>
           </div>
+          <div v-if="!scansByItem[line.id]?.length && group.items.length === 1" class="empty">
+            {{ $t('putAway.lotsPanel.noScans') }}
+          </div>
+          <div
+            v-for="scan in scansByItem[line.id]"
+            :key="scan.id"
+            class="scan-row"
+          >
+            <div class="scan-info">
+              <span>{{ scan.qty }} {{ $t('common.pcs') }}</span>
+              <span class="scan-meta">
+                {{ scan.dateCode || $t('common.stateNone') }} / {{ scan.lotCode || $t('common.stateNone') }} / {{ scan.coo || $t('common.stateNone') }} / {{ scan.cow || $t('common.stateNone') }}
+              </span>
+            </div>
+            <div class="scan-actions">
+              <button
+                class="btn btn--small"
+                :disabled="!shelfCode || addingScan[scan.id] || removingScan[scan.id]"
+                @click="emit('add-to-shelf', scan.id)"
+              >
+                <template v-if="addingScan[scan.id]">
+                  <InlineSpinner /> {{ $t('putAway.pendingPanel.addingToShelf') }}
+                </template>
+                <template v-else>
+                  {{ $t('putAway.pendingPanel.addToShelf') }}
+                </template>
+              </button>
+              <button
+                class="btn btn--small btn--secondary"
+                :disabled="addingScan[scan.id] || removingScan[scan.id]"
+                @click="emit('remove-scan', scan.id)"
+              >
+                <template v-if="removingScan[scan.id]">
+                  <InlineSpinner /> {{ $t('putAway.lotsPanel.removingScan') }}
+                </template>
+                <template v-else>
+                  {{ $t('putAway.lotsPanel.removeScan') }}
+                </template>
+              </button>
+            </div>
+          </div>
         </div>
-      </template>
+      </AppListRow>
 
       <div class="lot-actions">
         <button
@@ -60,50 +96,108 @@
         >
           {{ armedItemId === group.key ? $t('putAway.lotsPanel.gunScanDisarm') : $t('putAway.lotsPanel.gunScan') }}
         </button>
-        <button
-          v-if="group.items.length > 1 || detailConfig.expandedFields.length"
-          class="btn btn--small btn--ghost"
-          @click="toggleExpand(group.key)"
-        >
-          {{ expandedItems.has(group.key) ? $t('putAway.lotsPanel.collapseScans') : $t('putAway.lotsPanel.expandScans') }}
-        </button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import AppListRow from "~/components/AppListRow.vue";
+import InlineSpinner from "~/components/InlineSpinner.vue";
 import { IDENTITY_DETAIL_FIELDS, putAwayItemFieldValue } from "~/utils/viewConfig";
 import {
   putAwayGroupFieldValue,
+  putAwayGroupSuggestion,
   type PutAwayItemGroup,
 } from "~/utils/putAwayGroups";
+import type { PutAwayScan } from "~/services/types";
 
 interface Props {
   groups: PutAwayItemGroup[];
+  /** Pending (not yet shelved) scans — listed inside each item's expanded
+   *  detail, under the matching invoice line. */
+  scans: PutAwayScan[];
+  /** Selected shelf: enables the per-scan "Add to shelf" action. */
+  shelfCode: string | null;
   scanning: boolean;
+  addingScan: Record<string, boolean>;
+  removingScan: Record<string, boolean>;
   expandedItems: Set<string>;
   armedItemId: string | null;
 }
 
 const props = defineProps<Props>();
 
-// Card body rows + expanded-only rows are driven by pdaViewConfig.putAwayDetail
-// (spec 2026-10-04): itemFields render in the card body (identity fields stay
-// in the title row), expandedFields appear when the card is expanded. Cards
-// are part GROUPS (spec 2026-10-05): qty fields sum, batch fields join.
-// Pending scans live in PutAwayPendingPanel (spec 2026-10-06) — not here.
+// The card follows the same pdaViewConfig-driven design as the receiving /
+// picking detail rows (spec 2026-10-04): the identity field is the title,
+// the collapsed meta line renders the configured itemFields ("Label: value"
+// segments, empty values omitted — `suggested_shelf` renders the group
+// suggestion) + a Total/Scanned/Put-away progress line, the expanded block
+// renders the configured expandedFields, the member lines of multi-line
+// part groups, and the group's pending scans. Cards are part GROUPS
+// (spec 2026-10-05): qty fields sum, batch fields join.
+const { t } = useI18n();
 const { viewConfig } = useViewConfig();
 const detailConfig = computed(() => viewConfig.value.putAwayDetail);
-const visibleItemFields = computed(() =>
-  detailConfig.value.itemFields.filter((f) => !IDENTITY_DETAIL_FIELDS.has(f))
-);
 
 const emit = defineEmits<{
   scan: [group: PutAwayItemGroup];
   "arm-scan": [group: PutAwayItemGroup];
+  "add-to-shelf": [scanId: string];
+  "remove-scan": [scanId: string];
   "update:expandedItems": [value: Set<string>];
 }>();
+
+const scansByItem = computed(() => {
+  const map: Record<string, PutAwayScan[]> = {};
+  for (const scan of props.scans) {
+    if (!scan.receivingInvoiceItemId) continue;
+    if (!map[scan.receivingInvoiceItemId]) map[scan.receivingInvoiceItemId] = [];
+    map[scan.receivingInvoiceItemId].push(scan);
+  }
+  return map;
+});
+
+function isExpandable(group: PutAwayItemGroup): boolean {
+  return (
+    detailConfig.value.expandedFields.length > 0 ||
+    group.items.length > 1 ||
+    group.stagedQty > 0
+  );
+}
+
+function groupTitle(group: PutAwayItemGroup): string {
+  const fields = detailConfig.value.itemFields;
+  if (fields.includes("part_no") && !fields.includes("wcl_item_no")) return group.partNo;
+  return (group.wclItemNo ?? group.partNo) || t("common.noData");
+}
+
+// Collapsed meta line 1: the configured item fields. suggested_shelf gets
+// the dedicated group suggestion (distinct shelves, single box appended).
+function fieldsMeta(group: PutAwayItemGroup): string {
+  const segments: string[] = [];
+  for (const field of detailConfig.value.itemFields) {
+    if (IDENTITY_DETAIL_FIELDS.has(field)) continue;
+    if (field === "suggested_shelf") {
+      const suggestion = putAwayGroupSuggestion(group);
+      if (suggestion) segments.push(`${t("viewConfig.fields.suggested_shelf")}: ${suggestion}`);
+      continue;
+    }
+    const value = putAwayGroupFieldValue(field, group);
+    if (value === "—") continue;
+    segments.push(`${t(`viewConfig.fields.${field}`)}: ${value}`);
+  }
+  return segments.join(" · ");
+}
+
+// Collapsed meta line 2: the put-away progress triplet.
+function progressMeta(group: PutAwayItemGroup): string {
+  return [
+    `${t("putAway.lotsPanel.totalQty")}: ${group.lineQty ?? "—"}`,
+    `${t("putAway.lotsPanel.scannedQty")}: ${group.putAwayQty + group.stagedQty}`,
+    `${t("putAway.lotsPanel.boxedQty")}: ${group.putAwayQty}`,
+  ].join(" · ");
+}
 
 function toggleExpand(groupKey: string) {
   const next = new Set(props.expandedItems);
@@ -159,10 +253,16 @@ function toggleExpand(groupKey: string) {
   color: var(--muted);
 }
 
-.member-lines {
+.line-detail {
   margin-top: 0.5rem;
   padding-top: 0.5rem;
   border-top: 1px solid var(--border);
+}
+
+.line-detail:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
 }
 
 .member-line {
@@ -172,11 +272,6 @@ function toggleExpand(groupKey: string) {
   padding: 0.375rem 0;
   font-size: 0.875rem;
   font-weight: 600;
-  border-bottom: 1px solid var(--border);
-}
-
-.member-line:last-child {
-  border-bottom: none;
 }
 
 .member-line__part {
@@ -186,5 +281,41 @@ function toggleExpand(groupKey: string) {
 .member-line__batch {
   color: var(--muted);
   font-weight: 400;
+}
+
+.scan-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.scan-row:last-child {
+  border-bottom: none;
+}
+
+.scan-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  align-items: center;
+}
+
+.scan-meta {
+  color: var(--muted);
+}
+
+.scan-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.empty {
+  margin: 0.25rem 0;
+  font-size: 0.875rem;
 }
 </style>

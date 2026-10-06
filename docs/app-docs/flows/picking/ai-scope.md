@@ -224,11 +224,21 @@
   part-no cell has a search icon opening a modal over
   `GET /admin/part-availability?partNo=&wclItemNo=` listing every stock lot
   and receiving order containing the part across ALL org/sub-inventory
-  locations (rows matching the order's pair are highlighted). The modal
-  also pins MANUAL allocations: each row has a qty input + Allocate button
+  locations (rows matching the order's pair are highlighted). The stock table
+  has a client-side sort dropdown (date code asc + available-qty tiebreak by
+  default, or available qty / shelf — `apps/admin/utils/partStock.ts` shared
+  with the receiving-side modal) and a combined `shelf - date code - coo -
+  cow` column. The modal also pins MANUAL allocations: each row has a qty
+  input + Allocate button
   (`POST /admin/picking-orders/:id/items/:itemId/allocations`, any
   location, capped by source availability and the item's open demand —
-  409 `insufficient_available` / `over_allocation`). Manual rows
+  409 `insufficient_available` / `over_allocation`); when the entered qty
+  exceeds a lot's availability the button becomes 覆寫分配 and posts
+  `override: true` — the backend reclaims the shortfall from OTHER items'
+  non-manual allocations on that lot (oldest first; locked victim orders
+  skipped, manual pins never stolen — spec
+  `docs/superpowers/specs/2026-10-06-admin-availability-dialog-improvements-design.md`).
+  Manual rows
   (`allocations.manual = true`) are pinned: `allocateAll` /
   `runScopedAllocation` never wipe them and subtract their qty from the
   item's auto-allocation demand.

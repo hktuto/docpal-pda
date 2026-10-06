@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { classifyPutAwayScan, findPutAwayTarget, findPutAwayTargets } from "../utils/putAwayScan";
-import { groupPutAwayItems, putAwayGroupFieldValue } from "../utils/putAwayGroups";
+import { groupPutAwayItems, putAwayGroupFieldValue, putAwayGroupSuggestion } from "../utils/putAwayGroups";
 import type { PutAwayExpectedItem } from "../services/types";
 
 function item(partNo: string, remainingQty: number, id = partNo): PutAwayExpectedItem {
@@ -154,6 +154,22 @@ describe("groupPutAwayItems", () => {
     expect(putAwayGroupFieldValue("date_code", group)).toBe("2630");
     expect(putAwayGroupFieldValue("lot_code", group)).toBe("L1");
     expect(putAwayGroupFieldValue("coo", group)).toBe("—");
+  });
+
+  it("group suggestion joins distinct shelves and appends one box", () => {
+    const noSuggestion = groupPutAwayItems([fullItem("ABC123")], {});
+    expect(putAwayGroupSuggestion(noSuggestion[0])).toBeNull();
+
+    const single = groupPutAwayItems([
+      fullItem("ABC123", { suggestedShelfCode: "A0102", suggestedBoxId: "BOX-H-1" }),
+    ], {});
+    expect(putAwayGroupSuggestion(single[0])).toBe("A0102 / BOX-H-1");
+
+    const multi = groupPutAwayItems([
+      fullItem("ABC123", { suggestedShelfCode: "A0102", suggestedBoxId: "BOX-H-1" }),
+      fullItem("ABC123", { suggestedShelfCode: "A0103" }),
+    ], {});
+    expect(putAwayGroupSuggestion(multi[0])).toBe("A0102 / A0103");
   });
 });
 

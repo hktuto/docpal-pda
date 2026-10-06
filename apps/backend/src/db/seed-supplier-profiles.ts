@@ -71,9 +71,10 @@ const NDK_TEMPLATE = String.raw`^\[\)>\x1e06\x1dP(?<custPn>[^\x1d\x1e\x04]+)\x1d
 //    "IANR":"iC-RZ4248 oQFN38-7x5","CONR":"339084940.3","COO":"DE","LTS":"20260929-4"}
 // Lookahead groups so JSON key order doesn't matter. IANR is the bare MPN
 // (= parts.part_no, case/space-insensitive) and stays the itemId match key;
-// CANR is the "ICHAUS/<mpn>" form (= parts.wcl_item_no). DC is a WWYY date
-// code, Q the qty, COO the country of origin.
-const ICHAUS_TEMPLATE = String.raw`^\{(?=.*"CANR"\s*:\s*"(?<wclItemNo>[^"]+)")(?=.*"IANR"\s*:\s*"(?<itemId>[^"]+)")(?=.*"Q"\s*:\s*"(?<qty>\d+)")(?=.*"DC"\s*:\s*"(?<dateCode>\d{4})")(?=.*"COO"\s*:\s*"(?<coo>[^"]+)").*\}$`;
+// CANR is the "ICHAUS/<mpn>" form (= parts.wcl_item_no). DC is a YYWW date
+// code (decoded to WWYY via the 'yyww' dateCodeEncoding), Q the qty, ID the
+// per-item unique serial (duplicate-scan check), COO the country of origin.
+const ICHAUS_TEMPLATE = String.raw`^\{(?=.*"CANR"\s*:\s*"(?<wclItemNo>[^"]+)")(?=.*"IANR"\s*:\s*"(?<itemId>[^"]+)")(?=.*"Q"\s*:\s*"(?<qty>\d+)")(?=.*"DC"\s*:\s*"(?<dateCode>\d{4})")(?=.*"COO"\s*:\s*"(?<coo>[^"]+)")(?=.*"ID"\s*:\s*"(?<serialNo>[^"]+)").*\}$`;
 
 export const builtinSupplierProfiles: BuiltinSupplierProfile[] = [
   {
@@ -91,10 +92,11 @@ export const builtinSupplierProfiles: BuiltinSupplierProfile[] = [
     supplierCode: "20", // iC HAUS GMBH INTEGRIERTE SCHALTKREISE
     qrTemplate: ICHAUS_TEMPLATE,
     qrType: "datamatrix",
+    dateCodeEncoding: "yyww",
     barcodeTypes: ["DATA MATRIX"],
     brands: ["ICHAUS"],
     remark:
-      "Created 2026-10 from an iC-Haus Versandetikett JSON Data Matrix sample. itemId = IANR (bare MPN = parts.part_no), wclItemNo = CANR (ICHAUS/<mpn> = parts.wcl_item_no), DC = WWYY date code, Q = qty, COO = country of origin.",
+      "Created 2026-10 from an iC-Haus Versandetikett JSON Data Matrix sample. itemId = IANR (bare MPN = parts.part_no), wclItemNo = CANR (ICHAUS/<mpn> = parts.wcl_item_no), DC = YYWW date code (decoded to WWYY via 'yyww' encoding), Q = qty, ID = per-item unique serial (put-away duplicate check), COO = country of origin.",
   },
   {
     supplierCode: "23", // HONGKONG CHEMI-CON LTD (NCC)

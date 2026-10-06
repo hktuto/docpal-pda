@@ -395,6 +395,8 @@ export interface PartAvailabilityStockRow {
   wclItemNo: string | null;
   dateCode: string | null;
   lotCode: string | null;
+  coo: string | null;
+  cow: string | null;
   totalQty: number;
   allocatedQty: number;
   availableQty: number;
@@ -601,7 +603,7 @@ export function useFlowApi() {
     addManualPickingAllocation: (
       orderId: string,
       itemId: string,
-      body: { qty: number; inventoryLotId?: string; receivingInvoiceItemId?: string }
+      body: { qty: number; inventoryLotId?: string; receivingInvoiceItemId?: string; override?: boolean }
     ) =>
       api.post<{ allocationId: string; qty: number }>(
         `/admin/picking-orders/${orderId}/items/${itemId}/allocations`,

@@ -769,6 +769,10 @@ export interface RecordPutAwayScanInput {
    *  the order's box there is found-or-created invisibly. Mutually exclusive
    *  with `shelfBoxId`; null/absent = stay pending in staging. */
   shelfCode?: string | null;
+  /** Supplier-label serial (e.g. iC-Haus ID): unique per item in the order —
+   *  a repeat serial on the same receiving order is a double-scan of the same
+   *  physical label and rejected with 409 label_already_scanned. */
+  serialNo?: string | null;
 }
 
 /**
@@ -798,6 +802,22 @@ export async function recordPutAwayScan(
     if (!Number.isInteger(input.qty) || input.qty <= 0) {
       throw new HTTPException(400, { message: "qty_must_be_positive_integer" });
     }
+    // Serial dedup pre-check (mirrors the receiving S-key check): a serial
+    // already scanned on this order is a double-scan of the same physical
+    // label — reject before the qty guard so the operator gets the specific
+    // error. Deleting the scan frees the serial again.
+    const serialNo = input.serialNo?.trim() || null;
+    if (serialNo) {
+      const dup = await queryGet<{ id: string }>(
+        tx,
+        sql`SELECT sbi.id FROM shelf_box_items sbi
+            JOIN receiving_invoice_items rii ON rii.id = sbi.receiving_invoice_item_id
+            JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+            WHERE ri.receiving_order_id = ${orderId} AND sbi.serial_no = ${serialNo}
+            LIMIT 1`
+      );
+      if (dup) throw new HTTPException(409, { message: "label_already_scanned" });
+    }
     const remaining = await remainingAfterStaged(tx, item);
     if (input.qty > remaining) throw new HTTPException(409, { message: "scanned_qty_exceeds_remaining" });
 
@@ -815,8 +835,8 @@ export async function recordPutAwayScan(
     const id = newId();
     await queryRun(
       tx,
-      sql`INSERT INTO shelf_box_items (id, shelf_box_id, receiving_invoice_item_id, part_no, wcl_item_no, qty, verified)
-          VALUES (${id}, ${stagingBoxId}, ${item.id}, ${item.partNo}, ${item.wclItemNo}, ${input.qty}, false)`
+      sql`INSERT INTO shelf_box_items (id, shelf_box_id, receiving_invoice_item_id, part_no, wcl_item_no, qty, verified, serial_no)
+          VALUES (${id}, ${stagingBoxId}, ${item.id}, ${item.partNo}, ${item.wclItemNo}, ${input.qty}, false, ${serialNo})`
     );
     // Auto-put: with a shelfCode the order's box on that shelf is found-or-
     // created invisibly (shelf-direct flow); with shelfBoxId the caller names

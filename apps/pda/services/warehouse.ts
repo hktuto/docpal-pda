@@ -123,7 +123,10 @@ export interface WarehouseService {
     lotCode: string | null,
     coo: string | null,
     cow: string | null,
-    shelfCode?: string | null
+    shelfCode?: string | null,
+    /** Supplier-template serial (e.g. iC-Haus ID); the backend rejects a
+     *  repeat serial on the same order with 409 label_already_scanned. */
+    serialNo?: string | null
   ): Promise<PutAwayScan>;
   // Commit pending scans onto a shelf in one tx (all of them, or just the
   // given scanIds for the pending list's per-row "Add to shelf").

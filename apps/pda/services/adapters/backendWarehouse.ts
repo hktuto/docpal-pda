@@ -317,7 +317,8 @@ export function createBackendWarehouseService(
       lotCode: string | null,
       coo: string | null,
       cow: string | null,
-      shelfCode?: string | null
+      shelfCode?: string | null,
+      serialNo?: string | null
     ): Promise<PutAwayScan> {
       return client.post(`/receiving-orders/${receivingOrderId}/put-away-scans`, {
         receivingInvoiceItemId,
@@ -327,6 +328,7 @@ export function createBackendWarehouseService(
         coo: coo ?? undefined,
         cow: cow ?? undefined,
         shelfCode: shelfCode ?? undefined,
+        serialNo: serialNo ?? undefined,
       });
     },
 

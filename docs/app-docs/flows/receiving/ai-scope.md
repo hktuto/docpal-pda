@@ -140,7 +140,9 @@
   dialog is not allowed) with a per-row qty input + Allocate
   that pins a manual allocation sourced from this receiving item (capped by
   the item's received qty minus already-allocated/picked), plus a read-only
-  related-stock table (`GET /admin/part-availability`, stock only);
+  related-stock table (`GET /admin/part-availability`, stock only) with the
+  shared sort dropdown + combined `shelf - date code - coo - cow` column
+  (`apps/admin/utils/partStock.ts`);
   `GET /receiving-orders/:id` embeds each item's `orgId`/`subInventoryCode`
   and `allocations` (qty, manual flag, picking order no/status), rendered in
   the allocated-qty cell (shared `apps/admin/components/allocations/`

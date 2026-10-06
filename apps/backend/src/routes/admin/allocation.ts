@@ -48,16 +48,23 @@ adminAllocationRoute.post("/receiving-orders/:id/reallocate", async (c) => {
 
 // "Allocate" in the availability modal: pin a manual allocation of `qty`
 // against one stock lot or receiving invoice item (any location). Body
-// `{qty, inventoryLotId?} | {qty, receivingInvoiceItemId?}`. 400 invalid_qty
-// / source_required, 404 *_not_found, 409 lock_held / insufficient_available
-// / over_allocation. No order-status check.
+// `{qty, inventoryLotId?, override?} | {qty, receivingInvoiceItemId?, override?}`.
+// 400 invalid_qty / source_required, 404 *_not_found, 409 lock_held /
+// insufficient_available / over_allocation. No order-status check. With
+// `override: true` the shortfall above the source's availability is reclaimed
+// from other orders' non-manual allocations on that source.
 adminAllocationRoute.post("/picking-orders/:id/items/:itemId/allocations", async (c) => {
-  const body = await c.req.json<{ qty?: number; inventoryLotId?: string; receivingInvoiceItemId?: string }>();
+  const body = await c.req.json<{ qty?: number; inventoryLotId?: string; receivingInvoiceItemId?: string; override?: boolean }>();
   const result = await addManualPickingAllocation(
     db,
     c.req.param("id"),
     c.req.param("itemId"),
-    { qty: Number(body.qty), inventoryLotId: body.inventoryLotId, receivingInvoiceItemId: body.receivingInvoiceItemId },
+    {
+      qty: Number(body.qty),
+      inventoryLotId: body.inventoryLotId,
+      receivingInvoiceItemId: body.receivingInvoiceItemId,
+      override: body.override === true,
+    },
     actorFrom(c).id
   );
   return c.json(result);

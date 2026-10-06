@@ -848,6 +848,14 @@ export async function removePickingAllocation(
  * allocations would exceed the item's open qty = qty − Σ packages).
  * No order-status check, matching the remove action.
  *
+ * With `override: true` a qty above the source's availability is allowed: the
+ * shortfall is reclaimed inside the same tx from OTHER picking items'
+ * non-manual allocations on that source (oldest first; victims whose order
+ * holds a live work lock are skipped, manual pins are never stolen). Each
+ * stolen row gets a RESERVE-release ledger row, an audit log + SSE event on
+ * the VICTIM order. The victim's demand stays uncovered until the next
+ * recompute — same semantics as the admin remove-allocation action.
+ *
  * The row is created with manual = true: allocateAll / runScopedAllocation
  * preserve pinned rows and only auto-allocate the remaining open demand.
  */
@@ -855,7 +863,7 @@ export async function addManualPickingAllocation(
   db: AppDb,
   pickingOrderId: string,
   pickingItemId: string,
-  input: { qty: number; inventoryLotId?: string; receivingInvoiceItemId?: string },
+  input: { qty: number; inventoryLotId?: string; receivingInvoiceItemId?: string; override?: boolean },
   actorId: string
 ): Promise<{ allocationId: string; qty: number }> {
   const qty = input.qty;
@@ -957,7 +965,124 @@ export async function addManualPickingAllocation(
       source = { ...recv, shelfCode: null };
     }
     if (qty > source.available) {
-      throw new HTTPException(409, { message: "insufficient_available" });
+      if (!input.override) {
+        throw new HTTPException(409, { message: "insufficient_available" });
+      }
+      // Reclaim the shortfall from OTHER items' non-manual allocations on this
+      // source, oldest first. Locked victim orders are skipped (the PDA's open
+      // scan session scans against those rows); manual pins are never stolen.
+      let shortfall = qty - source.available;
+      const victims = await queryAll<{
+        id: string;
+        qty: number;
+        victimItemId: string;
+        victimOrderId: string;
+        victimOrderStatus: string;
+        workingBy: string | null;
+        workingAt: Date | null;
+        partNo: string;
+        dateCode: string | null;
+        lotCode: string | null;
+        coo: string | null;
+        cow: string | null;
+        shelfCode: string | null;
+        boxId: string | null;
+      }>(
+        tx,
+        sql`SELECT a.id, a.qty,
+                   pi.id AS "victimItemId",
+                   po.id AS "victimOrderId",
+                   po.status AS "victimOrderStatus",
+                   po.working_by AS "workingBy",
+                   po.working_at AS "workingAt",
+                   COALESCE(il.part_no, rii.part_no, pi.part_no) AS "partNo",
+                   COALESCE(il.date_code, rii.date_code) AS "dateCode",
+                   COALESCE(il.lot_code, rii.lot_code) AS "lotCode",
+                   COALESCE(il.coo, rii.coo) AS "coo",
+                   COALESCE(il.cow, rii.cow) AS "cow",
+                   il.shelf_code AS "shelfCode",
+                   COALESCE(il.box_id, rii.ctn_no) AS "boxId"
+            FROM allocations a
+            JOIN picking_items pi ON pi.id = a.picking_item_id
+            JOIN picking_orders po ON po.id = pi.picking_order_id
+            LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
+            LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
+            WHERE a.manual = false
+              AND a.picking_item_id <> ${pickingItemId}
+              AND (a.inventory_lot_id = ${input.inventoryLotId ?? null}
+               OR a.receiving_invoice_item_id = ${input.receivingInvoiceItemId ?? null})
+            ORDER BY a.created_date ASC`
+      );
+      for (const v of victims) {
+        if (shortfall <= 0) break;
+        if (v.qty <= 0) continue;
+        if (v.workingBy && v.workingAt && v.workingAt >= workLockExpiry()) continue;
+        const take = Math.min(v.qty, shortfall);
+        if (take === v.qty) {
+          await tx.execute(sql`DELETE FROM allocations WHERE id = ${v.id}`);
+        } else {
+          await tx.execute(sql`UPDATE allocations SET qty = qty - ${take} WHERE id = ${v.id}`);
+        }
+        shortfall -= take;
+
+        await tx.insert(inventoryTransactions).values({
+          id: newId(),
+          inventoryLotId: input.inventoryLotId ?? null,
+          partNo: v.partNo,
+          shelfCode: v.shelfCode,
+          boxId: v.boxId,
+          txnType: "RESERVE",
+          qtyType: "reserved",
+          qtyDelta: -take,
+          dateCode: v.dateCode,
+          lotCode: v.lotCode,
+          coo: v.coo,
+          cow: v.cow,
+          referenceType: "allocation",
+          referenceId: v.id,
+          receivingInvoiceItemId: input.receivingInvoiceItemId ?? null,
+          txnReason: "admin: override steal",
+          txnAt: now(),
+        });
+
+        await recomputePickingItem(tx, v.victimItemId);
+
+        await logTransition(tx, {
+          entityType: "picking_order",
+          entityId: v.victimOrderId,
+          fromState: v.victimOrderStatus,
+          toState: v.victimOrderStatus,
+          actorId,
+          metadata: {
+            action: "allocation_stolen",
+            allocationId: v.id,
+            itemId: v.victimItemId,
+            partNo: v.partNo,
+            qty: take,
+            thiefOrderId: pickingOrderId,
+            thiefItemId: pickingItemId,
+          },
+        });
+
+        await emitEvent(tx, {
+          type: "allocation.computed",
+          topics: ["/picking-orders"],
+          data: {
+            scope: "picking-order-item",
+            pickingOrderId: v.victimOrderId,
+            pickingItemId: v.victimItemId,
+            allocationId: v.id,
+            action: "stolen",
+            qty: take,
+          },
+        });
+      }
+      if (shortfall > 0) {
+        throw new HTTPException(409, { message: "insufficient_available" });
+      }
+      if (input.inventoryLotId) {
+        await recomputeLot(tx, input.inventoryLotId);
+      }
     }
 
     // Total allocated for the item must not exceed its open qty.

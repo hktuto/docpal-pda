@@ -1,0 +1,1 @@
+ALTER TABLE "shelf_box_items" ADD COLUMN "serial_no" text;
