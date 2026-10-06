@@ -23,7 +23,6 @@ import type {
   PutAwayScan,
   PutAwayTaskDetail,
   PutAwayTaskListRow,
-  ShelfBox,
   Shelf,
   MeasuringBoxListRow,
   MeasuringBoxDetail,
@@ -318,7 +317,7 @@ export function createBackendWarehouseService(
       lotCode: string | null,
       coo: string | null,
       cow: string | null,
-      shelfBoxId?: string | null
+      shelfCode?: string | null
     ): Promise<PutAwayScan> {
       return client.post(`/receiving-orders/${receivingOrderId}/put-away-scans`, {
         receivingInvoiceItemId,
@@ -327,49 +326,27 @@ export function createBackendWarehouseService(
         lotCode: lotCode ?? undefined,
         coo: coo ?? undefined,
         cow: cow ?? undefined,
-        shelfBoxId: shelfBoxId ?? undefined,
+        shelfCode: shelfCode ?? undefined,
       });
     },
-    async assignPutAwayScanToBox(
-      scanId: string,
-      boxId: string
-    ): Promise<void> {
-      await client.post(`/shelf-boxes/${boxId}/scans`, { scanId });
-    },
-    async addAllUnboxedScansToBox(boxId: string): Promise<number> {
-      const result = await client.post<{ count: number }>(
-        `/shelf-boxes/${boxId}/add-all-unboxed`,
-        {}
-      );
-      return result.count;
-    },
-    async removePutAwayScanFromBox(
-      scanId: string,
-      boxId: string
-    ): Promise<void> {
-      await client.del(`/shelf-boxes/${boxId}/scans/${scanId}`);
-    },
-    // Hard-delete a staged scan (mis-scan correction); boxed scans go through
-    // removePutAwayScanFromBox instead (backend: 409 scan_not_in_staging_box).
-    async removePutAwayScannedPiece(scanId: string): Promise<void> {
-      await client.del(`/put-away-scans/${scanId}`);
-    },
-    async createShelfBox(
+
+    // Shelf-direct commit (spec 2026-10-06): assign every pending scan of the
+    // order onto the shelf in one tx — optionally restricted to those scanIds
+    // (the pending list's per-row "Add to shelf").
+    async commitPutAwayToShelf(
       receivingOrderId: string,
       shelfCode: string,
-      boxId?: string
-    ): Promise<ShelfBox> {
-      return client.post("/shelf-boxes", {
-        receivingOrderId,
+      scanIds?: string[]
+    ): Promise<{ count: number; qty: number }> {
+      return client.post(`/receiving-orders/${receivingOrderId}/put-away-commit`, {
         shelfCode,
-        boxId: boxId ?? undefined,
+        scanIds: scanIds ?? undefined,
       });
     },
-    async closeShelfBox(id: string): Promise<void> {
-      await client.post(`/shelf-boxes/${id}/close`, {});
-    },
-    async cancelShelfBox(id: string): Promise<void> {
-      await client.del(`/shelf-boxes/${id}`);
+    // Hard-delete a pending scan (mis-scan correction; committed scans are
+    // reversed backend-side via the shelf-box endpoints).
+    async removePutAwayScannedPiece(scanId: string): Promise<void> {
+      await client.del(`/put-away-scans/${scanId}`);
     },
 
     // Measuring — box-scoped reads (no tasks): the list is the open boxes

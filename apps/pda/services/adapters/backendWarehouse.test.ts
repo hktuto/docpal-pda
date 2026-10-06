@@ -351,29 +351,21 @@ describe('backendWarehouse put-away flow', () => {
     });
   });
 
-  it('assignPutAwayScanToBox POSTs the scan id to the box scans route', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+  it('commitPutAwayToShelf POSTs shelfCode (+ optional scanIds) to the commit route', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ count: 2, qty: 2100 }));
 
-    await service().assignPutAwayScanToBox('scan1', 'SBOX-0002');
+    const result = await service().commitPutAwayToShelf('ro1', 'A-01-02');
 
-    expect(lastCall().url).toBe(`${BASE_URL}/shelf-boxes/SBOX-0002/scans`);
+    expect(lastCall().url).toBe(`${BASE_URL}/receiving-orders/ro1/put-away-commit`);
     expect(lastCall().init.method).toBe('POST');
-    expect(JSON.parse(lastCall().init.body as string)).toEqual({
-      scanId: 'scan1',
-    });
+    expect(JSON.parse(lastCall().init.body as string)).toEqual({ shelfCode: 'A-01-02' });
+    expect(result).toEqual({ count: 2, qty: 2100 });
+
+    await service().commitPutAwayToShelf('ro1', 'A-01-02', ['scan1']);
+    expect(JSON.parse(lastCall().init.body as string)).toEqual({ shelfCode: 'A-01-02', scanIds: ['scan1'] });
   });
 
-  it('removePutAwayScanFromBox DELETEs the scan membership without a body', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
-
-    await service().removePutAwayScanFromBox('scan1', 'SBOX-0002');
-
-    expect(lastCall().url).toBe(`${BASE_URL}/shelf-boxes/SBOX-0002/scans/scan1`);
-    expect(lastCall().init.method).toBe('DELETE');
-    expect(lastCall().init.body).toBeUndefined();
-  });
-
-  it('removePutAwayScannedPiece DELETEs the staged scan without a body', async () => {
+  it('removePutAwayScannedPiece DELETEs the pending scan without a body', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
 
     await service().removePutAwayScannedPiece('scan1');
@@ -383,36 +375,10 @@ describe('backendWarehouse put-away flow', () => {
     expect(lastCall().init.body).toBeUndefined();
   });
 
-  it('addAllUnboxedScansToBox returns the count', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ count: 3 }));
-
-    const count = await service().addAllUnboxedScansToBox('SBOX-0002');
-
-    expect(lastCall().url).toBe(`${BASE_URL}/shelf-boxes/SBOX-0002/add-all-unboxed`);
-    expect(JSON.parse(lastCall().init.body as string)).toEqual({});
-    expect(count).toBe(3);
-  });
-
-  it('createShelfBox POSTs receivingOrderId + shelfCode', async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse({ id: 'SBOX-0003', receivingOrderId: 'ro1', shelfCode: 'A-01-02', status: 'open' }, 201)
-    );
-
-    const box = await service().createShelfBox('ro1', 'A-01-02');
-
-    expect(lastCall().url).toBe(`${BASE_URL}/shelf-boxes`);
-    expect(lastCall().init.method).toBe('POST');
-    expect(JSON.parse(lastCall().init.body as string)).toEqual({
-      receivingOrderId: 'ro1',
-      shelfCode: 'A-01-02',
-    });
-    expect(box.id).toBe('SBOX-0003');
-  });
-
-  it('recordPutAwayScan includes shelfBoxId when scanning straight into a box', async () => {
+  it('recordPutAwayScan includes shelfCode when committing straight onto a shelf', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ id: 'scan1' }, 201));
 
-    await service().recordPutAwayScan('ro1', 'rii1', 25, '2610', 'L1', 'JP', 'TW', 'SBOX-0002');
+    await service().recordPutAwayScan('ro1', 'rii1', 25, '2610', 'L1', 'JP', 'TW', 'A-01-02');
 
     expect(JSON.parse(lastCall().init.body as string)).toEqual({
       receivingInvoiceItemId: 'rii1',
@@ -421,37 +387,8 @@ describe('backendWarehouse put-away flow', () => {
       lotCode: 'L1',
       coo: 'JP',
       cow: 'TW',
-      shelfBoxId: 'SBOX-0002',
-    });
-  });
-
-  it('createShelfBox includes boxId when given (scanned physical box)', async () => {
-    fetchMock.mockResolvedValue(
-      jsonResponse({ id: 'PHYS-BOX-001', receivingOrderId: 'ro1', shelfCode: 'A-01-02', status: 'open' }, 201)
-    );
-
-    const box = await service().createShelfBox('ro1', 'A-01-02', 'PHYS-BOX-001');
-
-    expect(JSON.parse(lastCall().init.body as string)).toEqual({
-      receivingOrderId: 'ro1',
       shelfCode: 'A-01-02',
-      boxId: 'PHYS-BOX-001',
     });
-    expect(box.id).toBe('PHYS-BOX-001');
-  });
-
-  it('closeShelfBox POSTs the close verb; cancelShelfBox DELETEs without a body', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
-
-    await service().closeShelfBox('SBOX-0002');
-    expect(lastCall().url).toBe(`${BASE_URL}/shelf-boxes/SBOX-0002/close`);
-    expect(lastCall().init.method).toBe('POST');
-    expect(JSON.parse(lastCall().init.body as string)).toEqual({});
-
-    await service().cancelShelfBox('SBOX-0002');
-    expect(lastCall().url).toBe(`${BASE_URL}/shelf-boxes/SBOX-0002`);
-    expect(lastCall().init.method).toBe('DELETE');
-    expect(lastCall().init.body).toBeUndefined();
   });
 
 });

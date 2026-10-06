@@ -23,7 +23,6 @@ import type {
   PutAwayScan,
   PutAwayTaskDetail,
   PutAwayTaskListRow,
-  ShelfBox,
   Shelf,
   MeasuringBoxListRow,
   MeasuringBoxDetail,
@@ -113,6 +112,9 @@ export interface WarehouseService {
   listPutAwayTasks(status?: string): Promise<PutAwayTaskListRow[]>;
   getPutAwayTaskDetail(id: string): Promise<PutAwayTaskDetail>;
   getShelves(): Promise<Shelf[]>;
+  // Scans with a shelfCode commit straight onto that shelf in the same tx
+  // (the order's invisible box there is found-or-created backend-side — spec
+  // 2026-10-06); without one the scan waits in the pending (staging) list.
   recordPutAwayScan(
     receivingOrderId: string,
     receivingInvoiceItemId: string,
@@ -121,15 +123,16 @@ export interface WarehouseService {
     lotCode: string | null,
     coo: string | null,
     cow: string | null,
-    shelfBoxId?: string | null
+    shelfCode?: string | null
   ): Promise<PutAwayScan>;
-  assignPutAwayScanToBox(scanId: string, boxId: string): Promise<void>;
-  addAllUnboxedScansToBox(boxId: string): Promise<number>;
-  removePutAwayScanFromBox(scanId: string, boxId: string): Promise<void>;
+  // Commit pending scans onto a shelf in one tx (all of them, or just the
+  // given scanIds for the pending list's per-row "Add to shelf").
+  commitPutAwayToShelf(
+    receivingOrderId: string,
+    shelfCode: string,
+    scanIds?: string[]
+  ): Promise<{ count: number; qty: number }>;
   removePutAwayScannedPiece(scanId: string): Promise<void>;
-  createShelfBox(receivingOrderId: string, shelfCode: string, boxId?: string): Promise<ShelfBox>;
-  closeShelfBox(id: string): Promise<void>;
-  cancelShelfBox(id: string): Promise<void>;
 
   // Measuring — box-scoped (no tasks): the list is the open boxes with
   // ≥1 package (any order); the detail is one box plus its packages. Box

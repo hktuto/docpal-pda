@@ -67,7 +67,7 @@ Page and component locations mapped to source files.
 | Component | Source file |
 |-----------|-------------|
 | Put-away lots panel (part-group cards) | `components/put-away/PutAwayLotsPanel.vue` |
-| Shelf boxes panel | `components/put-away/ShelfBoxesPanel.vue` |
+| Put-away pending panel (uncommitted scans, per-row add-to-shelf / remove) | `components/put-away/PutAwayPendingPanel.vue` |
 | Part-group model (summed display rows) | `utils/putAwayGroups.ts` (`groupPutAwayItems`, `putAwayGroupFieldValue`) |
 | Hardware-scan item matching (free-match + armed group-first, FIFO split across same-part lines) | `utils/putAwayScan.ts` (`findPutAwayTargets`; armed state `armedItemId` = group key in `pages/put-away/[id].vue`) |
 

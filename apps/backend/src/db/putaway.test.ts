@@ -12,6 +12,7 @@ import {
   assignScanToBox,
   cancelShelfBox,
   closeShelfBox,
+  commitPendingScansToShelf,
   createShelfBox,
   deleteStagedPutAwayScan,
   getPutAwayAggregate,
@@ -975,4 +976,145 @@ test("assign: lot takes the BOX's location pair, not the receiving order's", asy
   );
   assert.equal(lot!.orgId, 220);
   assert.equal(lot!.subInventoryCode, "THHK2");
+});
+
+// --- shelf-direct flow (spec 2026-10-06) --------------------------------------
+
+test("shelf-direct: scan with shelfCode materializes the lot and reuses one box per order+shelf", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await daitoInHand();
+  const itemId = await itemIdOf(orderId, "RK73B1JTTD181G");
+
+  const scan1 = await recordPutAwayScan(client.db, orderId, {
+    actorId, receivingInvoiceItemId: itemId, qty: 2000, shelfCode: "A0103",
+  });
+
+  // lot materialized straight away, keyed to the auto-created shelf box
+  // (scope to this shelf — the demo seed already carries lots of this part
+  // elsewhere)
+  const lot = await queryGet<{ shelfCode: string; boxId: string; totalQty: number; orgId: number | null; subInventoryCode: string | null }>(
+    client.db,
+    sql`SELECT shelf_code AS "shelfCode", box_id AS "boxId", total_qty AS "totalQty",
+               org_id AS "orgId", sub_inventory_code AS "subInventoryCode"
+        FROM inventory_lots WHERE part_no = 'RK73B1JTTD181G' AND shelf_code = 'A0103'`
+  );
+  assert.ok(lot);
+  assert.equal(lot.shelfCode, "A0103");
+  assert.equal(lot.totalQty, 2000);
+  assert.equal(lot.orgId, 2);
+  assert.equal(lot.subInventoryCode, "STORE1");
+
+  const moved1 = await queryGet<{ boxId: string }>(
+    client.db, sql`SELECT shelf_box_id AS "boxId" FROM shelf_box_items WHERE id = ${scan1.id}`
+  );
+  assert.equal(moved1!.boxId, lot.boxId);
+
+  // second scan onto the SAME shelf lands in the SAME box, merges the lot
+  await recordPutAwayScan(client.db, orderId, {
+    actorId, receivingInvoiceItemId: itemId, qty: 500, shelfCode: "A0103",
+  });
+  const boxes = await queryAll<{ id: string }>(
+    client.db,
+    sql`SELECT sb.id FROM shelf_boxes sb WHERE sb.shelf_code = 'A0103' AND sb.status = 'open'
+        AND EXISTS (
+          SELECT 1 FROM shelf_box_items sbi
+          JOIN receiving_invoice_items rii ON rii.id = sbi.receiving_invoice_item_id
+          JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+          WHERE sbi.shelf_box_id = sb.id AND ri.receiving_order_id = ${orderId}
+        )`
+  );
+  assert.equal(boxes.length, 1);
+  assert.equal(boxes[0].id, lot.boxId);
+  // lot row count stays 1 (same part+batch+shelf+box key), qty merged
+  const lotCount = await queryGet<{ c: number }>(
+    client.db, sql`SELECT COUNT(*)::int AS c FROM inventory_lots WHERE part_no = 'RK73B1JTTD181G' AND shelf_code = 'A0103'`
+  );
+  assert.equal(lotCount!.c, 1);
+  const lotAfter = await queryGet<{ totalQty: number }>(
+    client.db, sql`SELECT total_qty AS "totalQty" FROM inventory_lots WHERE part_no = 'RK73B1JTTD181G' AND shelf_code = 'A0103'`
+  );
+  assert.equal(lotAfter!.totalQty, 2500);
+});
+
+test("shelf-direct: shelfCode + shelfBoxId together is a 400; unknown shelf is a 404", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await daitoInHand();
+  const itemId = await itemIdOf(orderId, "RK73B1JTTD181G");
+  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0104", actorId });
+
+  const both = await catchHttp(
+    recordPutAwayScan(client.db, orderId, {
+      actorId, receivingInvoiceItemId: itemId, qty: 10, shelfCode: "A0103", shelfBoxId: box.id,
+    })
+  );
+  assert.equal(both.status, 400);
+  assert.equal(both.message, "both_shelf_box_and_shelf_code");
+
+  const unknown = await catchHttp(
+    recordPutAwayScan(client.db, orderId, {
+      actorId, receivingInvoiceItemId: itemId, qty: 10, shelfCode: "NO-SUCH-SHELF",
+    })
+  );
+  assert.equal(unknown.status, 404);
+  assert.equal(unknown.message, "shelf_not_found");
+});
+
+test("commit: assigns every pending scan to the shelf in one tx, adopting an existing empty box", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await daitoInHand();
+  const box = await createShelfBox(client.db, { receivingOrderId: orderId, shelfCode: "A0103", actorId });
+  const itemId = await itemIdOf(orderId, "RK73B1JTTD181G");
+  const r4702 = await itemIdOf(orderId, "RK73H1JTTD4702F");
+
+  const s1 = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 2000 });
+  const s2 = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: r4702, qty: 100 });
+
+  const result = await commitPendingScansToShelf(client.db, orderId, { actorId, shelfCode: "A0103" });
+  assert.deepEqual(result, { count: 2, qty: 2100 });
+
+  for (const s of [s1, s2]) {
+    const row = await queryGet<{ boxId: string }>(
+      client.db, sql`SELECT shelf_box_id AS "boxId" FROM shelf_box_items WHERE id = ${s.id}`
+    );
+    assert.equal(row!.boxId, box.id); // adopted the empty box, no new one
+  }
+  // nothing left pending
+  const pending = await queryAll<{ id: string }>(
+    client.db,
+    sql`SELECT sbi.id FROM shelf_box_items sbi
+        JOIN shelf_boxes sb ON sb.id = sbi.shelf_box_id
+        JOIN receiving_invoice_items rii ON rii.id = sbi.receiving_invoice_item_id
+        JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+        WHERE sb.shelf_code IS NULL AND sb.status = 'open' AND ri.receiving_order_id = ${orderId}`
+  );
+  assert.equal(pending.length, 0);
+
+  // committing again is a valid no-op
+  const again = await commitPendingScansToShelf(client.db, orderId, { actorId, shelfCode: "A0103" });
+  assert.deepEqual(again, { count: 0, qty: 0 });
+});
+
+test("commit: scanIds restricts the commit to those pending rows", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await daitoInHand();
+  const itemId = await itemIdOf(orderId, "RK73B1JTTD181G");
+  const r4702 = await itemIdOf(orderId, "RK73H1JTTD4702F");
+
+  const s1 = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 2000 });
+  const s2 = await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: r4702, qty: 100 });
+
+  const partial = await commitPendingScansToShelf(client.db, orderId, {
+    actorId, shelfCode: "A0103", scanIds: [s2.id],
+  });
+  assert.deepEqual(partial, { count: 1, qty: 100 });
+
+  const s1Row = await queryGet<{ shelfCode: string | null }>(
+    client.db,
+    sql`SELECT sb.shelf_code AS "shelfCode" FROM shelf_box_items sbi JOIN shelf_boxes sb ON sb.id = sbi.shelf_box_id
+        WHERE sbi.id = ${s1.id}`
+  );
+  assert.equal(s1Row!.shelfCode, null); // still pending
+
+  const rest = await commitPendingScansToShelf(client.db, orderId, { actorId, shelfCode: "A0103" });
+  assert.deepEqual(rest, { count: 1, qty: 2000 });
 });

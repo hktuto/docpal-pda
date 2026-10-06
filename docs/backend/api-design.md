@@ -207,6 +207,7 @@ upstream message. `POST /print/dynamic` validates `templateId` + non-empty
 Implemented: `GET /put-away/candidates`,
 `GET /receiving-orders/:id/put-away`,
 `POST /receiving-orders/:id/put-away-scans`, `DELETE /put-away-scans/:scanId`,
+`POST /receiving-orders/:id/put-away-commit`,
 `POST /shelf-boxes`,
 `DELETE /shelf-boxes/:id`, `POST /shelf-boxes/:id/scans`,
 `DELETE /shelf-boxes/:id/scans/:scanId`,
@@ -217,7 +218,16 @@ assign materializes the inventory lot stamped with the shelf's
 warehouse/section/sub-inventory + `inventory_lot_sources` + `put_away_qty` and
 writes two PUT_AWAY ledger rows (dock −qty / on_hand +qty), remove reverses,
 assign/remove/add-all run `allocateAll` best-effort, in-hand orders auto-clear
-when nothing remains). Task mode (spec
+when nothing remains). Shelf-direct flow (spec
+`docs/superpowers/specs/2026-10-06-put-away-shelf-direct-design.md`): the PDA
+no longer names boxes — `put-away-scans` accepts `shelfCode` (mutually
+exclusive with `shelfBoxId`, 400 `both_shelf_box_and_shelf_code`) and commits
+straight onto that shelf, the order's box there found-or-created invisibly
+(`ensureOrderShelfBoxTx`: reuse the open box holding this order's items →
+adopt an empty open box on the shelf → create, order pair); the new
+`put-away-commit` assigns every pending scan of the order (optionally
+`scanIds`-filtered) onto the shelf in ONE transaction, returning `{count,
+qty}` (`count: 0` = valid empty result). Task mode (spec
 `docs/superpowers/specs/2026-08-10-put-away-tasks-design.md`): when flow
 config `steps.put-away.autoCreateTasks` is on, confirming an arrival
 creates a `put_away_tasks` row (one per order, `pending`, unique per order) in
@@ -230,11 +240,12 @@ queue instead of the derived candidates list.
 | `GET /put-away-tasks?status=` | Task queue (task mode), oldest first: `{id, status, receivingOrderId, batchNo, displayName, supplierCode, supplierName, invoiceNos, deliveryDate, dateCode, orgId, subInventoryCode, receivedItems, unboxedItems, createdDate}`. `displayName` = the order name per the `receivingOrderNameTemplate` flow-config template. |
 | `GET /put-away-tasks/:id` | The per-order put-away aggregate + `{task}`; 404 `put_away_task_not_found`. |
 | `GET /receiving-orders/:id/put-away` | One aggregate: `{order, items[], lots[], scans[], boxes[{..., items[]}]}` for the put-away detail screen. `items[]` = the order's expected (receivable) invoice items `{id, partId, partNo, qty, receivedQty, pickedQty, putAwayQty, allocatedQty, remainingQty, dateCode, lotCode, coo, cow}` with `remainingQty = received − picked − put_away − allocated − staged` (the candidates-list formula), each carrying the advisory per-item `suggestedShelfCode`/`suggestedBoxId`/`suggestionReason` (existing-stock strategy unless `steps.put-away.suggestShelf=off`). |
-| `POST /receiving-orders/:id/put-away-scans` | `{actorId, raw|fields, qty}` → complete scan row (no fix-up query). |
+| `POST /receiving-orders/:id/put-away-scans` | `{actorId, receivingInvoiceItemId, qty, dateCode?, lotCode?, coo?, cow?, shelfBoxId?|shelfCode?}` → complete scan row (no fix-up query). With `shelfCode`/`shelfBoxId` the scan commits straight onto the shelf/box in the same tx (lot + ledger); without it the scan stays pending (staging). 409 `scanned_qty_exceeds_remaining` when over the remaining qty. |
+| `POST /receiving-orders/:id/put-away-commit` | `{shelfCode, scanIds?}` → assign every pending scan of the order (or just the given `scanIds`) onto the shelf in one tx → `{count, qty}`; `count: 0` is a valid empty result. Schedules `allocateAll` when `count > 0`. |
 | `DELETE /put-away-scans/:scanId` | `{actorId}` → hard-delete a staged scan (mis-scan correction); 409 `scan_not_in_staging_box` for boxed scans (use remove-from-box). |
-| `POST /shelf-boxes` | `{receivingOrderId, shelfCode?, actorId}` → box. |
-| `POST /shelf-boxes/:id/scans {scanId, actorId}` · `DELETE /shelf-boxes/:id/scans/:scanId` | Assign / remove one scan. |
-| `POST /shelf-boxes/:id/add-all-unboxed` | `{actorId}` → `{count}`. |
+| `POST /shelf-boxes` | `{receivingOrderId, shelfCode?, actorId}` → box. Kept for admin/debug — the shelf-direct PDA flow no longer calls it (boxes are found-or-created invisibly via `shelfCode`). |
+| `POST /shelf-boxes/:id/scans {scanId, actorId}` · `DELETE /shelf-boxes/:id/scans/:scanId` | Assign / remove one scan (admin/debug; also the reversal path for committed stock). |
+| `POST /shelf-boxes/:id/add-all-unboxed` | `{actorId}` → `{count}`. (Admin/debug — the PDA commits via `put-away-commit`.) |
 | `POST /shelf-boxes/:id/close` · `DELETE /shelf-boxes/:id` | Close / cancel (cancel body `{actorId}`). |
 
 Changes vs old: one aggregate read replaces the 3-call stitch; uniform

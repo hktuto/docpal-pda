@@ -33,6 +33,15 @@
           :label="$t(`viewConfig.fields.${field}`)"
           :value="putAwayGroupFieldValue(field, group)"
         />
+        <div v-if="group.items.length > 1" class="member-lines">
+          <div v-for="line in group.items" :key="line.id" class="member-line">
+            <span class="member-line__part">{{ line.partNo }}</span>
+            <span>{{ $t('viewConfig.fields.remaining_qty') }}: {{ line.remainingQty }}</span>
+            <span class="member-line__batch">
+              {{ putAwayItemFieldValue('date_code', line) }} / {{ putAwayItemFieldValue('lot_code', line) }} / {{ putAwayItemFieldValue('coo', line) }} / {{ putAwayItemFieldValue('cow', line) }}
+            </span>
+          </div>
+        </div>
       </template>
 
       <div class="lot-actions">
@@ -52,87 +61,19 @@
           {{ armedItemId === group.key ? $t('putAway.lotsPanel.gunScanDisarm') : $t('putAway.lotsPanel.gunScan') }}
         </button>
         <button
+          v-if="group.items.length > 1 || detailConfig.expandedFields.length"
           class="btn btn--small btn--ghost"
           @click="toggleExpand(group.key)"
         >
           {{ expandedItems.has(group.key) ? $t('putAway.lotsPanel.collapseScans') : $t('putAway.lotsPanel.expandScans') }}
         </button>
       </div>
-
-      <div v-if="expandedItems.has(group.key)" class="scans-list">
-        <template v-for="line in group.items" :key="line.id">
-          <div v-if="group.items.length > 1" class="member-line">
-            <span class="member-line__part">{{ line.partNo }}</span>
-            <span>{{ $t('viewConfig.fields.remaining_qty') }}: {{ line.remainingQty }}</span>
-            <span class="member-line__batch">
-              {{ putAwayItemFieldValue('date_code', line) }} / {{ putAwayItemFieldValue('lot_code', line) }} / {{ putAwayItemFieldValue('coo', line) }} / {{ putAwayItemFieldValue('cow', line) }}
-            </span>
-          </div>
-          <p v-if="!scansByItem[line.id]?.length" class="empty">
-            {{ $t('putAway.lotsPanel.noScans') }}
-          </p>
-          <div
-            v-for="scan in scansByItem[line.id]"
-            :key="scan.id"
-            class="scan-row"
-          >
-            <div class="scan-info">
-              <span>{{ scan.qty }} {{ $t('common.pcs') }}</span>
-              <span class="scan-meta">
-                {{ scan.dateCode || $t('common.stateNone') }} / {{ scan.lotCode || $t('common.stateNone') }} / {{ scan.coo || $t('common.stateNone') }} / {{ scan.cow || $t('common.stateNone') }}
-              </span>
-              <span class="scan-box scan-box--unboxed">{{ $t('common.unboxed') }}</span>
-            </div>
-            <div class="scan-actions">
-              <select
-                :value="boxSelections[scan.id]"
-                :disabled="addingScan[scan.id] || removingScan[scan.id]"
-                @change="updateBoxSelection(scan.id, ($event.target as HTMLSelectElement).value)"
-              >
-                <option value="">{{ $t('putAway.lotsPanel.selectBox') }}</option>
-                <option v-for="box in openBoxes" :key="box.id" :value="box.id">
-                  {{ box.id }} · {{ box.shelfCode || $t('common.noData') }}
-                </option>
-              </select>
-              <button
-                class="btn btn--small"
-                :disabled="addingScan[scan.id] || removingScan[scan.id] || !boxSelections[scan.id]"
-                @click="emit('add-to-box', scan.id)"
-              >
-                <template v-if="addingScan[scan.id]">
-                  <InlineSpinner /> {{ $t('putAway.lotsPanel.addingToBox') }}
-                </template>
-                <template v-else>
-                  {{ $t('putAway.lotsPanel.addToBox') }}
-                </template>
-              </button>
-              <button
-                class="btn btn--small btn--secondary"
-                :disabled="addingScan[scan.id] || removingScan[scan.id]"
-                @click="emit('remove-scan', scan.id)"
-              >
-                <template v-if="removingScan[scan.id]">
-                  <InlineSpinner /> {{ $t('putAway.lotsPanel.removingScan') }}
-                </template>
-                <template v-else>
-                  {{ $t('putAway.lotsPanel.removeScan') }}
-                </template>
-              </button>
-            </div>
-          </div>
-        </template>
-      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import InlineSpinner from "~/components/InlineSpinner.vue";
-import type { PutAwayScan, PutAwayBox } from "~/services/types";
-import {
-  IDENTITY_DETAIL_FIELDS,
-  putAwayItemFieldValue,
-} from "~/utils/viewConfig";
+import { IDENTITY_DETAIL_FIELDS, putAwayItemFieldValue } from "~/utils/viewConfig";
 import {
   putAwayGroupFieldValue,
   type PutAwayItemGroup,
@@ -140,12 +81,7 @@ import {
 
 interface Props {
   groups: PutAwayItemGroup[];
-  scans: PutAwayScan[];
-  boxes: PutAwayBox[];
   scanning: boolean;
-  addingScan: Record<string, boolean>;
-  removingScan: Record<string, boolean>;
-  boxSelections: Record<string, string>;
   expandedItems: Set<string>;
   armedItemId: string | null;
 }
@@ -154,8 +90,9 @@ const props = defineProps<Props>();
 
 // Card body rows + expanded-only rows are driven by pdaViewConfig.putAwayDetail
 // (spec 2026-10-04): itemFields render in the card body (identity fields stay
-// in the title row), expandedFields appear when the item is expanded. Cards
+// in the title row), expandedFields appear when the card is expanded. Cards
 // are part GROUPS (spec 2026-10-05): qty fields sum, batch fields join.
+// Pending scans live in PutAwayPendingPanel (spec 2026-10-06) — not here.
 const { viewConfig } = useViewConfig();
 const detailConfig = computed(() => viewConfig.value.putAwayDetail);
 const visibleItemFields = computed(() =>
@@ -165,27 +102,8 @@ const visibleItemFields = computed(() =>
 const emit = defineEmits<{
   scan: [group: PutAwayItemGroup];
   "arm-scan": [group: PutAwayItemGroup];
-  "add-to-box": [scanId: string];
-  "remove-scan": [scanId: string];
-  "update:boxSelections": [value: Record<string, string>];
   "update:expandedItems": [value: Set<string>];
 }>();
-
-const openBoxes = computed(() => props.boxes.filter((b) => b.status === "open"));
-
-const scansByItem = computed(() => {
-  const map: Record<string, PutAwayScan[]> = {};
-  for (const scan of props.scans) {
-    if (!scan.receivingInvoiceItemId) continue;
-    if (!map[scan.receivingInvoiceItemId]) map[scan.receivingInvoiceItemId] = [];
-    map[scan.receivingInvoiceItemId].push(scan);
-  }
-  return map;
-});
-
-function updateBoxSelection(scanId: string, value: string) {
-  emit("update:boxSelections", { ...props.boxSelections, [scanId]: value });
-}
 
 function toggleExpand(groupKey: string) {
   const next = new Set(props.expandedItems);
@@ -215,10 +133,6 @@ function toggleExpand(groupKey: string) {
   flex-wrap: wrap;
 }
 
-.shelf-hint {
-  font-weight: 600;
-}
-
 .card--armed {
   border: 2px solid var(--primary);
 }
@@ -245,6 +159,12 @@ function toggleExpand(groupKey: string) {
   color: var(--muted);
 }
 
+.member-lines {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
 .member-line {
   display: flex;
   flex-wrap: wrap;
@@ -255,6 +175,10 @@ function toggleExpand(groupKey: string) {
   border-bottom: 1px solid var(--border);
 }
 
+.member-line:last-child {
+  border-bottom: none;
+}
+
 .member-line__part {
   font-weight: 600;
 }
@@ -262,55 +186,5 @@ function toggleExpand(groupKey: string) {
 .member-line__batch {
   color: var(--muted);
   font-weight: 400;
-}
-
-.scans-list {
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--border);
-}
-
-.scan-row {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid var(--border);
-}
-
-.scan-row:last-child {
-  border-bottom: none;
-}
-
-.scan-info {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  align-items: center;
-}
-
-.scan-meta {
-  color: var(--muted);
-}
-
-.scan-box {
-  font-size: 0.75rem;
-  color: var(--muted);
-}
-
-.scan-box--unboxed {
-  color: var(--warning);
-}
-
-.scan-actions {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.scan-actions select {
-  min-width: 8rem;
 }
 </style>

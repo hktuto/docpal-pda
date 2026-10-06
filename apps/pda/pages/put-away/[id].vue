@@ -4,63 +4,27 @@
     <EmptyState v-else-if="error" error>{{ $t('common.errorPrefix', { message: error }) }}</EmptyState>
 
     <template v-else-if="order">
-      <ShelfBoxesPanel
-        v-model:boxes-expanded="boxesExpanded"
-        v-model:expanded-item-boxes="expandedItemBoxes"
-        :boxes="boxes"
-        :shelves="shelves"
-        :actionable="order.status !== 'clear'"
-        :creating="creating"
-        :closing="closing"
-        :cancelling-box="cancellingBox"
-        :adding-all="addingAll"
-        :any-adding-all="anyAddingAll"
-        :unboxed-count="unboxedCountForOrder"
-        :removing-item="removingScan"
-        :active-box-id="activeBoxId"
-        @new-box="openNewBoxDialog"
-        @scan-box="openScanBoxDialog"
-        @set-active="setActiveBox"
-        @close-box="closeBox"
-        @cancel-box="cancelBox"
-        @add-all-to-box="addAllToBox"
-        @remove-from-box="removeScanFromBoxHandler"
-      />
-
-      <SelectShelfDialog
-        v-model="newBoxDialogOpen"
-        :shelves="shelves"
-        @selected="createBoxFromDialog"
-      />
-
-      <ScanBoxDialog
-        v-model="scanBoxDialogOpen"
-        v-model:box-id="scannedBoxId"
-        :shelves="shelves"
-        :initial-shelf-code="selectedShelf"
-        :creating="creating"
-        @confirm="confirmScanBox"
-      />
-
       <div v-if="selectedShelf" class="shelf-banner">
         <span>{{ $t("putAway.shelfBanner", { shelf: selectedShelf }) }}</span>
         <button type="button" class="shelf-banner__clear" :aria-label="$t('putAway.shelfBannerClear')" @click="selectedShelf = null">×</button>
       </div>
 
-      <PutAwayLotsPanel
-        v-model:box-selections="boxSelections"
-        v-model:expanded-items="expandedItems"
-        :groups="groups"
+      <PutAwayPendingPanel
         :scans="scans"
-        :boxes="boxes"
-        :scanning="scanning"
+        :shelf-code="selectedShelf"
         :adding-scan="addingScan"
         :removing-scan="removingScan"
+        @add-to-shelf="addPendingToShelf"
+        @remove-scan="removeScanHandler"
+      />
+
+      <PutAwayLotsPanel
+        v-model:expanded-items="expandedItems"
+        :groups="groups"
+        :scanning="scanning"
         :armed-item-id="armedItemId"
         @scan="openScan"
         @arm-scan="toggleArmScan"
-        @add-to-box="addScanToBox"
-        @remove-scan="removeScanHandler"
       />
     </template>
 
@@ -85,7 +49,7 @@
       :options="review.options"
       :match-result="review.matchResult"
       :mode="review.capture.imagePath ? 'review' : 'manual'"
-      :context="{ task: 'put-away', receivingOrderId: orderId, receivingItem: scanItem ?? undefined, putAwayItems: scanGroup?.items, shelfBoxId: activeBoxId }"
+      :context="{ task: 'put-away', receivingOrderId: orderId, receivingItem: scanItem ?? undefined, putAwayItems: scanGroup?.items, shelfCode: selectedShelf }"
       @applied="onApplied"
       @retake="onRetake"
     />
@@ -110,7 +74,7 @@ import { useWarehouse } from "~/composables/useWarehouse";
 import { useToast } from "~/composables/useToast";
 import { scrollToItem } from "~/utils/scroll";
 import { rawCode } from "~/utils/text";
-import { findPutAwayTargets, classifyPutAwayScan } from "~/utils/putAwayScan";
+import { findPutAwayTargets } from "~/utils/putAwayScan";
 import {
   groupPutAwayItems,
   type PutAwayItemGroup,
@@ -123,14 +87,11 @@ import {
 import { playScanError, playScanSuccess } from "~/utils/scanBeep";
 import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import ScanMultiItemModal from "~/components/ScanMultiItemModal.vue";
-import SelectShelfDialog from "~/components/SelectShelfDialog.vue";
-import ScanBoxDialog from "~/components/put-away/ScanBoxDialog.vue";
-import ShelfBoxesPanel from "~/components/put-away/ShelfBoxesPanel.vue";
 import PutAwayLotsPanel from "~/components/put-away/PutAwayLotsPanel.vue";
+import PutAwayPendingPanel from "~/components/put-away/PutAwayPendingPanel.vue";
 import type {
   PutAwayExpectedItem,
   PutAwayScan,
-  PutAwayBox,
   Shelf,
   ReceivingOrderDetail,
 } from "~/services/types";
@@ -149,15 +110,10 @@ const orderId = route.params.id as string;
 // the plain receiving-order aggregate — same data plus per-item shelf hints.
 const taskId = (route.query.task as string) || null;
 
-const boxesExpanded = ref(false);
-const newBoxDialogOpen = ref(false);
-const scanBoxDialogOpen = ref(false);
-const scannedBoxId = ref("");
-const expandedItemBoxes = ref<Set<string>>(new Set());
-// The box that currently receives auto-put scans (null = scans go to staging).
-const activeBoxId = ref<string | null>(null);
-// Sticky shelf context set by scanning a shelf QR label: pre-selects the shelf
-// in the box dialogs and lets an unknown BOX-* scan create the box directly.
+const expandedItems = ref<Set<string>>(new Set());
+// Sticky shelf context (spec 2026-10-06 shelf-direct flow): while set, every
+// scan commits straight onto this shelf; clear (×) to scan into the pending
+// list instead.
 const selectedShelf = ref<string | null>(null);
 
 const statusLabel = useStatusLabel();
@@ -190,11 +146,8 @@ const error = ref<string | null>(null);
 const order = ref<ReceivingOrderDetail | null>(null);
 const items = ref<PutAwayExpectedItem[]>([]);
 const shelves = ref<Shelf[]>([]);
-const boxes = ref<PutAwayBox[]>([]);
-const stagingBoxId = ref<string | null>(null);
-const creating = ref(false);
-const closing = ref(false);
-const cancellingBox = ref<Record<string, boolean>>({});
+// scans[] are the order's PENDING pieces (never committed to a shelf yet).
+const scans = ref<PutAwayScan[]>([]);
 
 const scanItem = ref<PutAwayExpectedItem | null>(null);
 // The group card the OCR review was opened from — its member lines ride in
@@ -205,20 +158,14 @@ const scrollTargetGroupKey = ref<string | null>(null);
 // strictly against this part group's lines instead of free-matching across
 // all visible items. Holds the group key (normalized part no).
 const armedItemId = ref<string | null>(null);
-const scans = ref<PutAwayScan[]>([]);
 const addingScan = ref<Record<string, boolean>>({});
 const removingScan = ref<Record<string, boolean>>({});
-const boxSelections = ref<Record<string, string>>({});
-const expandedItems = ref<Set<string>>(new Set());
-const addingAll = ref<Record<string, boolean>>({});
+const committingAll = ref(false);
 
 // Restrict the hardware decoder to the supplier's barcode-type whitelist
 // while this order is open (no-op when the profile has none). Shelf/box QR
 // labels stay decodable — put-away requires shelf scans.
 useSupplierSymbologyScope(computed(() => order.value?.supplier?.code ?? undefined), { withShelfCodes: true });
-
-// scans[] are the staging rows (never boxed), so they are all unboxed.
-const unboxedCountForOrder = computed(() => scans.value.length);
 
 const stagedQtyByItem = computed(() => {
   const map: Record<string, number> = {};
@@ -231,7 +178,7 @@ const stagedQtyByItem = computed(() => {
 });
 
 // Same visibility rule as the old lots list: items with anything left to put
-// away, or with scans still sitting in the staging box.
+// away, or with scans still pending.
 const visibleItems = computed(() =>
   items.value.filter(
     (item) =>
@@ -253,10 +200,6 @@ const armedGroupItems = computed(() => {
   );
 });
 
-const anyAddingAll = computed(() =>
-  Object.values(addingAll.value).some(Boolean)
-);
-
 const { processCapture, parseRawValue } = useLabelScan();
 const scanning = ref(false);
 const review = ref<LabelScanResult | null>(null);
@@ -276,41 +219,36 @@ async function onApplied() {
   await load();
 }
 
-// Hardware / wedge QR scans: parse via the supplier QR templates, match the
-// part against the order's visible items, and apply immediately (no review).
-// While the scan-box dialog is open the scan is the box id instead; with an
-// active box set the scan is assigned straight into it.
+// Hardware / wedge QR scans (spec 2026-10-06 shelf-direct flow): a shelf QR
+// selects the shelf (and offers to commit the pending list); a BOX-* id is
+// not used in this flow; anything else is a supplier item label — parse,
+// match, and record (committed to the selected shelf, or pending when none).
 useHardwareScanner({
   enabled: () =>
     !!order.value &&
     order.value.status !== "clear" &&
     !scanning.value &&
     !reviewOpen.value &&
-    !multiOpen.value &&
-    (scanBoxDialogOpen.value || !newBoxDialogOpen.value),
+    !multiOpen.value,
   onScan: async (rawValue: string) => {
-    if (scanBoxDialogOpen.value) {
-      scannedBoxId.value = rawValue.trim();
-      return;
-    }
     if (!order.value) return false;
-    // Shelf / box QR labels short-circuit the supplier-label flow.
-    const scanClass = classifyPutAwayScan(rawValue, shelves.value, boxes.value, stagingBoxId.value);
-    if (scanClass.type === "shelf") {
-      selectedShelf.value = scanClass.code;
-      showToast(t("putAway.shelfSelected", { shelf: scanClass.code }));
+    const value = rawValue.trim();
+    const shelf = shelves.value.find((s) => s.code.toUpperCase() === value.toUpperCase());
+    if (shelf) {
+      await selectShelf(shelf.code);
       return true;
     }
-    if (scanClass.type === "box") return handleBoxScan(scanClass);
+    if (/^box-/i.test(value)) {
+      showToast(t("putAway.boxScanIgnored"));
+      return false;
+    }
     scanning.value = true;
     try {
       const parsedResult = await parseRawValue(
-        rawValue,
+        value,
         order.value.supplier?.code ?? undefined
       );
-      console.log("parsedResult", parsedResult)
       const parsed = ocrResultToInput(parsedResult.parsed);
-      console.log("parsed", parsed)
       const qty = typeof parsed.qty === "number" ? parsed.qty : Number(parsed.qty);
       // Item-first (armed) mode: match strictly against the armed part
       // group's lines. One label's qty may span several same-part lines —
@@ -340,7 +278,7 @@ useHardwareScanner({
           batch[1],
           batch[2],
           batch[3],
-          activeBoxId.value
+          selectedShelf.value
         );
       }
       showToast(t("common.scanSuccess"));
@@ -359,87 +297,62 @@ useHardwareScanner({
   },
 });
 
-// Tapping the armed group's button disarms; tapping another group re-arms.
-function toggleArmScan(group: PutAwayItemGroup) {
-  armedItemId.value = armedItemId.value === group.key ? null : group.key;
+// Shelf scan: select the shelf (banner), then — when pieces are pending —
+// offer to commit them all onto it in one go.
+async function selectShelf(code: string) {
+  selectedShelf.value = code;
+  showToast(t("putAway.shelfSelected", { shelf: code }));
+  if (scans.value.length === 0) return;
+  const total = scans.value.reduce((sum, s) => sum + s.qty, 0);
+  const confirmed = window.confirm(
+    t("putAway.pendingPanel.commitPrompt", { count: total, shelf: code })
+  );
+  if (!confirmed) return;
+  await commitPendingToShelf(code);
 }
 
-// Box QR scan: an existing open box of the order becomes active; the order's
-// staging box switches scanning back to staging (clears the active box); an
-// unknown BOX-* id is created on the selected shelf (or via the scan-box
-// dialog when no shelf is selected).
-async function handleBoxScan(scanClass: {
-  boxId: string;
-  existing: PutAwayBox | null;
-  staging: boolean;
-}) {
-  const { boxId, existing, staging } = scanClass;
-  if (staging) {
-    activeBoxId.value = null;
-    showToast(t("putAway.stagingBoxSelected", { box: boxId }));
-    return true;
-  }
-  if (existing) {
-    if (existing.status !== "open") {
-      showToast(t("putAway.boxNotOpen", { box: boxId }));
-      return false;
-    }
-    activeBoxId.value = boxId;
-    showToast(t("putAway.boxActivated", { box: boxId }));
-    return true;
-  }
-  if (!selectedShelf.value) {
-    scannedBoxId.value = boxId;
-    scanBoxDialogOpen.value = true;
-    boxesExpanded.value = true;
-    return true;
-  }
+// Commit pending scans onto a shelf (all of them, or the given scanIds for
+// the pending list's per-row "Add to shelf") — one tx backend-side.
+async function commitPendingToShelf(code: string, scanIds?: string[]) {
+  if (committingAll.value) return;
+  committingAll.value = true;
   error.value = null;
-  creating.value = true;
   try {
-    const box = await warehouse.createShelfBox(orderId, selectedShelf.value, boxId);
-    activeBoxId.value = box.id;
-    showToast(t("putAway.boxCreatedAndActivated", { box: box.id }));
+    const result = await warehouse.commitPutAwayToShelf(orderId, code, scanIds);
+    if (result.count === 0) {
+      showToast(t("putAway.pendingPanel.commitEmpty"));
+    } else {
+      showToast(t("putAway.pendingPanel.commitDone", { count: result.qty, shelf: code }));
+    }
     await load();
-    boxesExpanded.value = true;
-    return true;
   } catch (e) {
     showToast(errorMessage(e));
-    return false;
   } finally {
-    creating.value = false;
+    committingAll.value = false;
   }
 }
 
-async function addScanToBox(scanId: string) {
-  const boxId = boxSelections.value[scanId];
-  if (!boxId) return;
+async function addPendingToShelf(scanId: string) {
+  if (!selectedShelf.value) return;
   addingScan.value[scanId] = true;
   error.value = null;
   try {
-    await warehouse.assignPutAwayScanToBox(scanId, boxId);
+    await warehouse.commitPutAwayToShelf(orderId, selectedShelf.value, [scanId]);
+    showToast(t("common.scanSuccess"));
     await load();
   } catch (e) {
-    error.value = errorMessage(e);
+    showToast(errorMessage(e));
   } finally {
     addingScan.value[scanId] = false;
   }
 }
 
-async function removeScanFromBoxHandler(boxId: string, scanId: string) {
-  removingScan.value[scanId] = true;
-  error.value = null;
-  try {
-    await warehouse.removePutAwayScanFromBox(scanId, boxId);
-    await load();
-  } catch (e) {
-    error.value = errorMessage(e);
-  } finally {
-    removingScan.value[scanId] = false;
-  }
+// Tapping the armed group's button disarms; tapping another group re-arms.
+function toggleArmScan(group: PutAwayItemGroup) {
+  armedItemId.value = armedItemId.value === group.key ? null : group.key;
 }
 
-// Hard-delete a staged scan (mis-scan correction).
+// Hard-delete a pending scan (mis-scan correction).
 async function removeScanHandler(scanId: string) {
   removingScan.value[scanId] = true;
   error.value = null;
@@ -469,28 +382,10 @@ async function load() {
     order.value = orderData;
     items.value = detail.items;
     shelves.value = shelvesData;
-
-    const previousBoxIds = new Set(boxes.value.map((b) => b.id));
-    boxes.value = detail.boxes;
     scans.value = detail.scans;
-    stagingBoxId.value = detail.stagingBoxId ?? null;
-    // The active box is only valid while it is still open on this order.
-    if (
-      activeBoxId.value &&
-      !detail.boxes.some((b) => b.id === activeBoxId.value && b.status === "open")
-    ) {
-      activeBoxId.value = null;
-    }
-    const nextExpanded = new Set(expandedItemBoxes.value);
-    for (const b of detail.boxes) {
-      if (b.status === "open" && !previousBoxIds.has(b.id)) {
-        nextExpanded.add(b.id);
-      }
-    }
-    expandedItemBoxes.value = nextExpanded;
 
     // Auto-disarm when the armed group has left the visible list (fully put
-    // away with no staged scans left).
+    // away with no pending scans left).
     if (
       armedItemId.value &&
       !groups.value.some((g) => g.key === armedItemId.value)
@@ -509,101 +404,6 @@ async function load() {
     scrollTargetGroupKey.value = null;
   } finally {
     pending.value = false;
-  }
-}
-
-function openNewBoxDialog() {
-  // A scanned shelf context short-circuits the shelf picker.
-  if (selectedShelf.value) {
-    createBoxFromDialog(selectedShelf.value);
-    return;
-  }
-  newBoxDialogOpen.value = true;
-  boxesExpanded.value = true;
-}
-
-function openScanBoxDialog() {
-  scannedBoxId.value = "";
-  scanBoxDialogOpen.value = true;
-  boxesExpanded.value = true;
-}
-
-async function confirmScanBox(boxId: string, shelfCode: string) {
-  error.value = null;
-  creating.value = true;
-  try {
-    const box = await warehouse.createShelfBox(orderId, shelfCode, boxId);
-    activeBoxId.value = box.id;
-    await load();
-    boxesExpanded.value = true;
-  } catch (e) {
-    error.value = errorMessage(e);
-  } finally {
-    creating.value = false;
-  }
-}
-
-function setActiveBox(boxId: string) {
-  activeBoxId.value = boxId;
-}
-
-async function createBoxFromDialog(shelfCode: string) {
-  error.value = null;
-  creating.value = true;
-  try {
-    const box = await warehouse.createShelfBox(orderId, shelfCode);
-    activeBoxId.value = box.id;
-    await load();
-    boxesExpanded.value = true;
-  } catch (e) {
-    error.value = errorMessage(e);
-  } finally {
-    creating.value = false;
-  }
-}
-
-async function closeBox(boxId: string) {
-  error.value = null;
-  closing.value = true;
-  try {
-    await warehouse.closeShelfBox(boxId);
-    await load();
-  } catch (e) {
-    error.value = errorMessage(e);
-  } finally {
-    closing.value = false;
-  }
-}
-
-async function cancelBox(boxId: string) {
-  error.value = null;
-  cancellingBox.value[boxId] = true;
-  try {
-    await warehouse.cancelShelfBox(boxId);
-    await load();
-  } catch (e) {
-    error.value = errorMessage(e);
-  } finally {
-    cancellingBox.value[boxId] = false;
-  }
-}
-
-async function addAllToBox(boxId: string) {
-  if (anyAddingAll.value) return;
-  const count = unboxedCountForOrder.value;
-  if (count === 0) return;
-  const confirmed = window.confirm(t('putAway.shelfBoxesPanel.addAllConfirm', { count }));
-  if (!confirmed) return;
-
-  addingAll.value[boxId] = true;
-  error.value = null;
-  try {
-    await warehouse.addAllUnboxedScansToBox(boxId);
-    await load();
-  } catch (e) {
-    error.value = errorMessage(e);
-  } finally {
-    addingAll.value[boxId] = false;
   }
 }
 
@@ -640,7 +440,7 @@ async function openScan(group: PutAwayItemGroup) {
       putAwayItems: group.items,
       targets: group.partNo ? [group.partNo] : [],
       confirmSingleMatch: true,
-      shelfBoxId: activeBoxId.value,
+      shelfCode: selectedShelf.value,
     });
     if (result.status === "review") {
       playScanSuccess();
@@ -688,7 +488,7 @@ async function onApplyMulti(entries: { row: ScanMultiRow; index: number }[]) {
       }
       try {
         for (const portion of portions) {
-          await warehouse.recordPutAwayScan(orderId, portion.item.id, portion.qty, null, null, null, null, activeBoxId.value);
+          await warehouse.recordPutAwayScan(orderId, portion.item.id, portion.qty, null, null, null, null, selectedShelf.value);
         }
         results.push({ index, ok: true });
         anyOk = true;

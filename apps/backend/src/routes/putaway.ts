@@ -7,6 +7,7 @@ import {
   assignScanToBox,
   cancelShelfBox,
   closeShelfBox,
+  commitPendingScansToShelf,
   createShelfBox,
   getPutAwayAggregate,
   listPutAwayCandidates,
@@ -65,7 +66,10 @@ putawayRoute.get("/receiving-orders/:id/put-away", async (c) => {
 });
 
 // Record one staging scan (staging-box insert + batch-attr backfill on the
-// item). 409 scanned_qty_exceeds_remaining when over the remaining qty.
+// item). 409 scanned_qty_exceeds_remaining when over the remaining qty. With
+// `shelfBoxId` or `shelfCode` the scan is committed straight onto the shelf
+// in the same tx (lot + ledger included); `shelfCode` finds-or-creates the
+// order's invisible box on that shelf (spec 2026-10-06).
 putawayRoute.post("/receiving-orders/:id/put-away-scans", async (c) => {
   const body = await readJson<{
     receivingInvoiceItemId?: string;
@@ -75,6 +79,7 @@ putawayRoute.post("/receiving-orders/:id/put-away-scans", async (c) => {
     coo?: string;
     cow?: string;
     shelfBoxId?: string;
+    shelfCode?: string;
   }>(c);
   if (!body.receivingInvoiceItemId) {
     throw new HTTPException(400, { message: "receivingInvoiceItemId is required" });
@@ -88,10 +93,26 @@ putawayRoute.post("/receiving-orders/:id/put-away-scans", async (c) => {
     coo: body.coo ?? null,
     cow: body.cow ?? null,
     shelfBoxId: body.shelfBoxId ?? null,
+    shelfCode: body.shelfCode ?? null,
   });
-  // A scan straight into a box moves stock (dock → on_hand): re-run allocation.
-  if (body.shelfBoxId) reallocateBestEffort("put-away scan-to-box");
+  // A scan straight onto a shelf moves stock (dock → on_hand): re-run allocation.
+  if (body.shelfBoxId || body.shelfCode) reallocateBestEffort("put-away scan-to-shelf");
   return c.json(row, 201);
+});
+
+// Shelf-direct commit (spec 2026-10-06): assign every pending scan of the
+// order onto the shelf in one tx (optionally restricted by scanIds for the
+// pending list's per-row "Add to shelf"). {count: 0} is a valid empty result.
+putawayRoute.post("/receiving-orders/:id/put-away-commit", async (c) => {
+  const body = await readJson<{ shelfCode?: string; scanIds?: string[] }>(c);
+  if (!body.shelfCode) throw new HTTPException(400, { message: "shelfCode is required" });
+  const result = await commitPendingScansToShelf(db, c.req.param("id"), {
+    actorId: actorFrom(c).id,
+    shelfCode: body.shelfCode,
+    scanIds: Array.isArray(body.scanIds) ? body.scanIds : undefined,
+  });
+  if (result.count > 0) reallocateBestEffort("put-away commit-to-shelf");
+  return c.json(result, 200);
 });
 
 // Create a real (non-staging) shelf box for an order. Optional boxId = scanned

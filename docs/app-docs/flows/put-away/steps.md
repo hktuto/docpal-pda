@@ -15,7 +15,7 @@ Tap the task to open the detail page. The batch number and receiving status show
 The detail shows receiving-area items waiting to be put away, grouped by part
 number — if the order carries the same part on several lines (for example
 300 + 20000), they appear as **one card with the combined total**, with total,
-scanned, and boxed quantities. Expand the card (the **expand** button) to see
+scanned, and put-away quantities. Expand the card (the **expand** button) to see
 the individual lines with their own remaining quantities and batch values.
 
 ## 4. Scan physical pieces
@@ -28,24 +28,25 @@ quantity across those lines automatically.
 
 With the hardware gun you can also just scan — a label that matches an item on the order is accepted automatically (free-match). For tighter control, tap **Gun scan** on the item you are holding first: the card is highlighted with an "armed" badge, and every following gun scan is accepted only if it matches that item (part number and remaining quantity). The item stays armed for repeated scans; tap the button again (now labelled as cancel) to disarm, or tap **Gun scan** on another item to switch. The armed state clears itself once the item is fully put away.
 
-## 5. Create a shelf box
+Scans made before a shelf is chosen wait in the **pending list** (grouped by
+part, with each piece's quantity and batch values). From there a mis-scan can
+be deleted with **Remove**.
 
-Tap **New box**, select a shelf, and confirm. The box appears in the shelf boxes panel.
+## 5. Scan the shelf
 
-Alternatively, tap **Scan box** and scan the QR code on a physical box (or type the box id), select a shelf, and confirm. The box is created with that physical box id.
+Scan the barcode of the shelf where the goods belong. If pieces are pending,
+the app asks **"Put N pcs to shelf X?"** — confirming puts them all onto that
+shelf at once. A banner shows the selected shelf; tap × to clear it and go
+back to pending mode.
 
-You can also drive everything with the hardware gun:
+## 6. Keep scanning (optional)
 
-- **Scan a shelf barcode** — the shelf becomes the selected destination; a banner above the item list shows it (tap × to clear). The box dialogs pre-select this shelf.
-- **Scan an existing box QR** — that box becomes the active box. Scanning the order's staging box switches scanning back to the staging list.
-- **Scan an unknown `BOX-*` id** — with a shelf selected, the box is created on that shelf immediately; without one, the scan-box dialog opens with the id filled in so you can pick a shelf.
+While a shelf is selected, every scan goes **straight onto that shelf** — no
+further confirmation needed. Switch shelves at any time by scanning another
+shelf barcode; the pending list (if any) is offered to the new shelf.
 
-The created box becomes the **active box** (highlighted, with an "Active" badge). While an active box is set, every piece you scan — hardware scan, camera OCR, or multi-item label — goes straight into that box, skipping the staging list. Tap **Set active** on another open box to switch the target. Closing or cancelling the active box clears the active state and scans go back to the staging list.
+## 7. Finish
 
-## 6. Assign pieces to boxes
-
-Under each item, select an open box from the dropdown next to an unboxed scan and tap **Add to box**. You can also remove a scan or remove a piece from a box while the box is still open. (Scans made while an active box is set land in that box directly and skip this step.)
-
-## 7. Close the box
-
-Tap **Close box** when the box contains all the pieces you want to store. The inventory lot is updated with the shelf location.
+When every piece is put away, the order/task completes itself — no close
+step. The inventory lots now carry the shelf location and the stock is
+available to picking.

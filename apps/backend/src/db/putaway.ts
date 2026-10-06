@@ -136,6 +136,50 @@ async function ensureStagingBox(tx: DbOrTx, receivingOrderId: string): Promise<s
   return id;
 }
 
+/** Find-or-create the order's shelf box on a shelf (the shelf-direct flow's
+ *  invisible box — spec 2026-10-06): the open box on this shelf holding this
+ *  order's items → reuse; any empty open box on the shelf → adopt (refresh
+ *  its pair from the order); else create (order pair, open transition log
+ *  with {order} metadata so boxOrderId resolves while empty). */
+async function ensureOrderShelfBoxTx(tx: DbOrTx, receivingOrderId: string, shelfCode: string): Promise<string> {
+  const shelf = await queryGet<{ code: string }>(tx, sql`SELECT code FROM shelves WHERE code = ${shelfCode}`);
+  if (!shelf) throw new HTTPException(404, { message: "shelf_not_found" });
+  const pair = await orderPair(tx, receivingOrderId);
+  const existing = await queryGet<{ id: string }>(
+    tx,
+    sql`SELECT sb.id FROM shelf_boxes sb
+        WHERE sb.shelf_code = ${shelfCode} AND sb.status = 'open'
+          AND (
+            EXISTS (
+              SELECT 1 FROM shelf_box_items sbi
+              JOIN receiving_invoice_items rii ON rii.id = sbi.receiving_invoice_item_id
+              JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+              WHERE sbi.shelf_box_id = sb.id AND ri.receiving_order_id = ${receivingOrderId}
+            )
+            OR NOT EXISTS (SELECT 1 FROM shelf_box_items sbi WHERE sbi.shelf_box_id = sb.id)
+          )
+        ORDER BY sb.created_date
+        LIMIT 1`
+  );
+  if (existing) {
+    // An adopted empty box takes this order's pair (informational only; lots
+    // are stamped from the box at assign time).
+    await queryRun(
+      tx,
+      sql`UPDATE shelf_boxes SET org_id = ${pair.orgId}, sub_inventory_code = ${pair.subInventoryCode} WHERE id = ${existing.id}`
+    );
+    return existing.id;
+  }
+  const id = await nextBoxId(tx, "H");
+  await queryRun(
+    tx,
+    sql`INSERT INTO shelf_boxes (id, shelf_code, org_id, sub_inventory_code, status, created_date)
+        VALUES (${id}, ${shelfCode}, ${pair.orgId}, ${pair.subInventoryCode}, 'open', ${now()})`
+  );
+  await logShelfBox(tx, id, null, "open", null, { order: receivingOrderId, shelf: shelfCode });
+  return id;
+}
+
 /**
  * The receiving order's stock location pair, derived from its items
  * (receiving_invoice_items.org_id + sub_inventory_code — order-level
@@ -721,6 +765,10 @@ export interface RecordPutAwayScanInput {
   /** When set, the scan is assigned straight into this open shelf box in the
    *  same tx (active-box auto-put) instead of staying in staging. */
   shelfBoxId?: string | null;
+  /** Shelf-direct flow (spec 2026-10-06): commit straight onto this shelf —
+   *  the order's box there is found-or-created invisibly. Mutually exclusive
+   *  with `shelfBoxId`; null/absent = stay pending in staging. */
+  shelfCode?: string | null;
 }
 
 /**
@@ -739,6 +787,9 @@ export async function recordPutAwayScan(
   return db.transaction(async (tx) => {
     const order = await queryGet<{ id: string }>(tx, sql`SELECT id FROM receiving_orders WHERE id = ${orderId}`);
     if (!order) throw new HTTPException(404, { message: "receiving_order_not_found" });
+    if (input.shelfBoxId && input.shelfCode) {
+      throw new HTTPException(400, { message: "both_shelf_box_and_shelf_code" });
+    }
     await assertActor(tx, input.actorId);
     const item = await loadItemForPutAway(tx, input.receivingInvoiceItemId);
     if (item.receivingOrderId !== orderId) {
@@ -767,11 +818,16 @@ export async function recordPutAwayScan(
       sql`INSERT INTO shelf_box_items (id, shelf_box_id, receiving_invoice_item_id, part_no, wcl_item_no, qty, verified)
           VALUES (${id}, ${stagingBoxId}, ${item.id}, ${item.partNo}, ${item.wclItemNo}, ${input.qty}, false)`
     );
-    // Active-box auto-put: assign the just-staged scan into the target box in
-    // the same tx (guards/materialization/ledger/auto-clear reused; a guard
-    // failure rolls back the staging insert too).
-    if (input.shelfBoxId) {
-      await assignScanToBoxTx(tx, { scanId: id, shelfBoxId: input.shelfBoxId, actorId: input.actorId });
+    // Auto-put: with a shelfCode the order's box on that shelf is found-or-
+    // created invisibly (shelf-direct flow); with shelfBoxId the caller names
+    // the box (legacy/admin). Either way the assign runs in the same tx
+    // (guards/materialization/ledger/auto-clear reused; a guard failure rolls
+    // back the staging insert too).
+    const targetBoxId = input.shelfCode
+      ? await ensureOrderShelfBoxTx(tx, orderId, input.shelfCode)
+      : (input.shelfBoxId ?? null);
+    if (targetBoxId) {
+      await assignScanToBoxTx(tx, { scanId: id, shelfBoxId: targetBoxId, actorId: input.actorId });
     }
     const row = await queryGet<PutAwayScanRow>(
       tx,
@@ -1016,6 +1072,48 @@ export async function assignScanToBox(
   return db.transaction(async (tx) => {
     await assertActor(tx, input.actorId);
     await assignScanToBoxTx(tx, input);
+  });
+}
+
+/**
+ * Shelf-direct commit (spec 2026-10-06): assign every pending (staging) scan
+ * of the order onto the shelf in ONE transaction — the order's box there is
+ * found-or-created invisibly. `scanIds` (when given) restricts the commit to
+ * those staging rows (the pending list's per-row "Add to shelf"). Returns
+ * {count, qty}; count 0 is a valid empty result (e.g. a concurrent device
+ * committed first), not an error. A mid-loop guard failure (e.g.
+ * lot_has_pick_allocations) rolls the whole commit back.
+ */
+export async function commitPendingScansToShelf(
+  db: AppDb,
+  orderId: string,
+  input: { actorId: string; shelfCode: string; scanIds?: string[] }
+): Promise<{ count: number; qty: number }> {
+  return db.transaction(async (tx) => {
+    const order = await queryGet<{ id: string }>(tx, sql`SELECT id FROM receiving_orders WHERE id = ${orderId}`);
+    if (!order) throw new HTTPException(404, { message: "receiving_order_not_found" });
+    await assertActor(tx, input.actorId);
+    const boxId = await ensureOrderShelfBoxTx(tx, orderId, input.shelfCode);
+    let scans = await queryAll<{ id: string; qty: number }>(
+      tx,
+      sql`SELECT sbi.id, sbi.qty
+          FROM shelf_box_items sbi
+          JOIN shelf_boxes sb ON sb.id = sbi.shelf_box_id
+          JOIN receiving_invoice_items rii ON rii.id = sbi.receiving_invoice_item_id
+          JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+          WHERE sb.shelf_code IS NULL AND sb.status = 'open'
+            AND ri.receiving_order_id = ${orderId}`
+    );
+    if (input.scanIds?.length) {
+      const allow = new Set(input.scanIds);
+      scans = scans.filter((s) => allow.has(s.id));
+    }
+    let qty = 0;
+    for (const scan of scans) {
+      await assignScanToBoxTx(tx, { scanId: scan.id, shelfBoxId: boxId, actorId: input.actorId });
+      qty += scan.qty;
+    }
+    return { count: scans.length, qty };
   });
 }
 

@@ -23,15 +23,28 @@
   `steps.put-away.suggestShelf=off` suppresses it; advisory only, computed
   at read time, never stored), materialized inventory lots, staging scans,
   and the non-staging shelf boxes with their item rows.
-- Scan physical pieces into the order's staging box (client-side label
-  validation against supplier QR templates). The detail list is grouped by
-  part number — all visible invoice lines of one part render as a single card
-  with summed qty (`utils/putAwayGroups.ts` `groupPutAwayItems`, spec
-  `2026-10-05-put-away-part-grouping-design`); expanding the card lists the
-  member lines with their per-line remaining + batch values and their scans.
-  One label's qty may span several same-part lines (a 20300 package against
-  300 + 20000 lines): every write path splits the qty FIFO across the group's
-  lines into one `recordPutAwayScan` per line
+- Scan physical pieces (client-side label validation against supplier QR
+  templates). **Shelf-direct flow (spec
+  `2026-10-06-put-away-shelf-direct-design.md`)** — the operator never sees a
+  box. Commit rule: a scan commits onto the selected shelf iff one is
+  selected (banner with × to deselect); otherwise it waits in the pending
+  list. A shelf QR scan selects the shelf and — when pieces are pending —
+  prompts "Put N pcs to shelf X?": confirming calls
+  `POST /receiving-orders/:id/put-away-commit`, which assigns every pending
+  scan onto the shelf in ONE backend tx (the order's box there is
+  found-or-created invisibly; `shelfCode` on `put-away-scans` does the same
+  per scan). `PutAwayPendingPanel.vue` lists pending scans grouped by part
+  (qty summed, batch fields shown) with per-row **Add to shelf** (commits
+  just that row via `put-away-commit` with `scanIds`) and **Remove**
+  (hard-delete, mis-scan correction). A `BOX-*` scan is rejected with an
+  informational toast — boxes are not used in this flow. The detail list is
+  grouped by part number — all visible invoice lines of one part render as a
+  single card with summed qty (`utils/putAwayGroups.ts`
+  `groupPutAwayItems`, spec `2026-10-05-put-away-part-grouping-design`);
+  expanding the card lists the member lines with their per-line remaining +
+  batch values. One label's qty may span several same-part lines (a 20300
+  package against 300 + 20000 lines): every write path splits the qty FIFO
+  across the group's lines into one `recordPutAwayScan` per line
   (`utils/putAwayScan.ts` `findPutAwayTargets`) — hardware gun scan, OCR
   review apply (`matchPutAway` takes the group's member lines via the review
   context's `putAwayItems`), and the multi-item table. The hardware scanner
@@ -40,49 +53,32 @@
   "Gun scan" button on `PutAwayLotsPanel.vue` emits `arm-scan`; the page
   holds `armedItemId` as the armed part GROUP's key (toggle to disarm,
   another card re-arms) and the armed card shows a highlighted border + badge
-  + hint.
-  Scanner routing precedence: scan-box dialog open → shelf/box QR labels
-  (`utils/putAwayScan.ts` `classifyPutAwayScan`, checked before supplier-label
-  parsing: exact shelf-code match → sticky `selectedShelf` shown in a banner
-  and pre-selected in the box dialogs; an order's placed box id → becomes the
-  active box; the order's staging box id (`stagingBoxId` on the aggregate —
-  the open `shelf_code IS NULL` box holding the order's scans) → clears the
-  active box so scans return to staging; an unknown `BOX-*`-prefixed id →
-  created directly on the selected shelf, or opens the scan-box dialog with
-  the id prefilled when no shelf is selected) → armed group (strict
+  + hint. Scanner routing: shelf QR (exact shelf-code match, sticky
+  `selectedShelf`) → `BOX-*` (toast) → armed group (strict
   `findPutAwayTargets` against that group's lines only, same
   `errors.scanned_part_does_not_match_item` toast on mismatch) → free-match.
-  A successful armed scan stays armed and records through the same
-  `recordPutAwayScan(...)` calls with `activeBoxId` threaded; the armed state
-  auto-clears when a reload drops the group from `groups`. The
-  per-card camera OCR button opens a review step first: a single parsed
-  record pops the `LabelScanReviewModal` confirm form
-  (`confirmSingleMatch: true`); a multi-item (carton) label pops the shared
-  `ScanMultiItemModal` table and rows are applied one by one.
+  A successful armed scan stays armed; the armed state auto-clears when a
+  reload drops the group from `groups`. The per-card camera OCR button opens
+  a review step first: a single parsed record pops the
+  `LabelScanReviewModal` confirm form (`confirmSingleMatch: true`); a
+  multi-item (carton) label pops the shared `ScanMultiItemModal` table and
+  rows are applied one by one. All write paths thread the selected shelf
+  (`shelfCode`) so reviewed scans follow the same commit rule as gun scans.
 - Scanner symbology whitelist: while the detail page is open, the hardware
   decoder is restricted to the supplier profile's `barcode_types` (when set),
   but the shelf/box QR symbologies always stay enabled — shelf scanning is
   core to this flow (`useSupplierSymbologyScope(..., { withShelfCodes: true })`,
   xcheng/Movfast only); restored on page leave.
-- Assign staging scans into shelf boxes (one box per shelf), add-all-unboxed,
-  remove-from-box, and remove scanned pieces.
-- Scan a physical box QR to create a box: the "Scan box" button opens a
-  dialog with the scanned (or manually typed) box id + a shelf dropdown; the
-  backend uses that id for the box (an existing open box of the same order is
-  reused, any other duplicate is a 409 `box_id_already_exists`). The
-  created/scanned box becomes the **active box** (highlighted, switchable via
-  a "Set active" button per open box); while an active box is set, every part
-  scan — hardware scan, OCR review apply, multi-item apply — is assigned
-  straight into it (`POST /receiving-orders/:id/put-away-scans` with
-  `shelfBoxId`, one tx: staging insert + assign + lot materialization)
-  instead of going to staging.
-- Create / close / cancel shelf boxes; closing materializes inventory lots
-  and auto-clears the receiving order when its last piece is boxed. Shelf box
-  ids are server-generated as `BOX-H-<warehouse>-<YYYYMMDD>-<seq>` (per-day
-  seq, `nextBoxId` in `apps/backend/src/db/boxes.ts`) unless a physical box id
-  was scanned.
-- Select a destination shelf (the `/admin/shelves` CRUD read doubles as the
-  shelf list).
+- Boxes exist in the data model but are invisible to the operator: every
+  commit lands in a `shelf_boxes` row found-or-created per (order, shelf)
+  (`ensureOrderShelfBoxTx` — reuse the open box holding the order's items →
+  adopt an empty open box on the shelf → create with the order's pair), so
+  `inventory_lots`, `inventory_lot_sources`, the PUT_AWAY ledger, allocation
+  sources, stock search, and the sync feed keep their exact box-era shape.
+  The old operator-facing box UI (box list, scan-box dialog, active box,
+  close/cancel, per-scan box dropdowns, staging-box QR) is removed.
+- Select a destination shelf by scanning its QR code (the shelf list comes
+  from the `/admin/shelves` CRUD read).
 
 ## Out of scope
 
@@ -101,10 +97,10 @@
 ## Key files
 
 - `pages/put-away/index.vue` — candidate list.
-- `pages/put-away/[id].vue` — detail page (expected items, lots, scans,
-  boxes; title/status badge/supplier info registered into the app header via
-  `composables/usePageHeader.ts`; armed hardware scanner + camera OCR scan
-  entry with single-record form / multi-item table review).
+- `pages/put-away/[id].vue` — detail page (shelf banner, pending panel,
+  part-group item cards; title/status badge/supplier info registered into the
+  app header via `composables/usePageHeader.ts`; armed hardware scanner +
+  camera OCR scan entry with single-record form / multi-item table review).
 - `utils/putAwayScan.ts` — `findPutAwayTargets` FIFO split of one scan's qty
   across same-part lines (plus the legacy single-line `findPutAwayTarget`)
   and `classifyPutAwayScan` shelf/box/item scan routing (tests in
@@ -115,26 +111,28 @@
 - `components/ScanMultiItemModal.vue` — shared multi-item label table (also
   used by the picking scan session).
 - `components/put-away/PutAwayLotsPanel.vue` — expected items as part-group
-  cards (summed qty, distinct-joined batch fields) with per-member-line scans
-  when expanded; per-card "Gun scan" button (`arm-scan` emit) + armed-card
-  styling driven by the group-key `armedItemId` prop.
-- `components/put-away/ShelfBoxesPanel.vue` — shelf boxes and scan
-  assignment; "Scan box" button, active-box highlight + "Set active" switch.
-- `components/put-away/ScanBoxDialog.vue` — scanned/typed box id + shelf
-  selection for scan-to-create-box.
-- `components/SelectShelfDialog.vue` — shelf selection UI.
+  cards (summed qty, distinct-joined batch fields) with per-member-line
+  detail when expanded; per-card "Gun scan" button (`arm-scan` emit) +
+  armed-card styling driven by the group-key `armedItemId` prop.
+- `components/put-away/PutAwayPendingPanel.vue` — pending (uncommitted)
+  scans grouped by part with per-row **Add to shelf** (enabled with a shelf
+  selected) and **Remove** (mis-scan correction).
 - `composables/useScanMatchers.ts` — client-side `matchPutAway` validation
   against the reviewed card's part-group member lines (aggregate remaining);
-  apply splits FIFO into `WarehouseService.recordPutAwayScan` calls per line
-  (with `shelfBoxId` when an active box is set).
-- `services/adapters/backendWarehouse.ts` — put-away + shelf-box methods.
+  apply splits FIFO into `WarehouseService.recordPutAwayScan` calls per line,
+  threading the selected shelf (`shelfCode`) so reviewed scans follow the
+  same commit rule as gun scans.
+- `services/adapters/backendWarehouse.ts` — put-away methods
+  (`recordPutAwayScan` with `shelfCode`, `commitPutAwayToShelf`,
+  `removePutAwayScannedPiece`).
 - `apps/backend/src/routes/putaway.ts` + `apps/backend/src/db/putaway.ts` —
   `GET /put-away/candidates`, `GET /receiving-orders/:id/put-away`,
-  `POST /receiving-orders/:id/put-away-scans` (optional `shelfBoxId` =
-  scan straight into a box), `DELETE
-  /put-away-scans/:scanId`, `/shelf-boxes*` lifecycle (lot materialization
-  + receiving-order auto-clear; `POST /shelf-boxes` takes an optional `boxId`
-  for scanned physical boxes).
+  `POST /receiving-orders/:id/put-away-scans` (optional `shelfCode`/`shelfBoxId`
+  = commit straight onto the shelf/box in one tx),
+  `POST /receiving-orders/:id/put-away-commit` (all/selected pending scans
+  onto a shelf in one tx), `DELETE /put-away-scans/:scanId`,
+  `/shelf-boxes*` lifecycle kept for admin/debug (lot materialization +
+  receiving-order auto-clear; reversal path for committed stock).
 - `apps/backend/src/db/putawaytasks.ts` — task mode: `createPutAwayTaskTx`
   (called from `confirmReceivingArrival` when `autoCreateTasks` is on),
   `completePutAwayTaskTx` (called from `tryMarkReceivingOrderClear`),
@@ -144,7 +142,9 @@
 
 - Shelf selection is manual; no validation of shelf capacity or restrictions.
 - Scanned pieces are tracked per receiving invoice item. The app does not
-  support splitting a single scanned piece across multiple boxes.
+  support splitting a single scanned piece across multiple shelves.
+- Moving committed stock between shelves is not supported (reverse + re-scan
+  instead).
 - Put-away scans do not yet dedup by serial (the `receiving_scan_labels`
   table built for receiving-scan dedup can be reused for this later).
 
@@ -161,3 +161,4 @@
 - `docs/superpowers/specs/2026-10-02-put-away-item-first-scan-design.md`
 - `docs/superpowers/specs/2026-10-05-put-away-scan-box-shelf-design.md`
 - `docs/superpowers/specs/2026-10-05-put-away-part-grouping-design.md`
+- `docs/superpowers/specs/2026-10-06-put-away-shelf-direct-design.md`

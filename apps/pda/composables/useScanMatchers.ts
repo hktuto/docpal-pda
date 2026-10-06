@@ -26,7 +26,7 @@ export async function runScanMatcher(
       if (!ctx.receivingItem) return m.error('missing_receiving_item');
       // Grouped put-away detail (spec 2026-10-05): the review context carries
       // all same-part lines so one label's qty can span them FIFO.
-      return m.matchPutAway(ctx.receivingOrderId, ctx.putAwayItems ?? [ctx.receivingItem], parsed, ctx.shelfBoxId);
+      return m.matchPutAway(ctx.receivingOrderId, ctx.putAwayItems ?? [ctx.receivingItem], parsed, ctx.shelfCode);
     case 'measuring':
       if (!ctx.packages) return m.error('missing_box_packages');
       return m.matchMeasuring(ctx.packages, ctx.targetPackageId, parsed, ctx.flow);
@@ -59,8 +59,9 @@ export interface ScanTaskContext {
   // put-away part group: all same-part member lines of the reviewed card —
   // one label's qty may span them (spec 2026-10-05)
   putAwayItems?: PutAwayExpectedItem[];
-  // put-away active box: scans are assigned straight into this open shelf box
-  shelfBoxId?: string | null;
+  // put-away selected shelf: scans commit straight onto this shelf (spec
+  // 2026-10-06); unset = the scan waits in the pending list
+  shelfCode?: string | null;
   // measuring (the box's packages from the consolidated task detail —
   // matching runs client-side, then verifyPackage by id)
   packages?: MeasuringPackage[];
@@ -88,7 +89,7 @@ export type ScanMatchResult =
 
 export interface ScanMatchers {
   matchPicking(allocation: PickingAllocationRef, pickingItem: PickingItemRef, parsed: OcrInput): Promise<ScanMatchResult>;
-  matchPutAway(receivingOrderId: string | undefined, putAwayItems: PutAwayExpectedItem[], parsed: OcrInput, shelfBoxId?: string | null): Promise<ScanMatchResult>;
+  matchPutAway(receivingOrderId: string | undefined, putAwayItems: PutAwayExpectedItem[], parsed: OcrInput, shelfCode?: string | null): Promise<ScanMatchResult>;
   matchMeasuring(packages: MeasuringPackage[], targetPackageId: string | undefined, parsed: OcrInput, flow?: 'measuring' | 'verify'): Promise<ScanMatchResult>;
   error(err: I18nError): ScanMatchResult;
   error(code: string, params?: Record<string, unknown>): ScanMatchResult;
@@ -145,7 +146,7 @@ export function useScanMatchers(): ScanMatchers {
     }
   }
 
-  async function matchPutAway(receivingOrderId: string | undefined, putAwayItems: PutAwayExpectedItem[], parsed: OcrInput, shelfBoxId?: string | null): Promise<ScanMatchResult> {
+  async function matchPutAway(receivingOrderId: string | undefined, putAwayItems: PutAwayExpectedItem[], parsed: OcrInput, shelfCode?: string | null): Promise<ScanMatchResult> {
     try {
       const user = currentUser.value;
       if (!user?.id) return error('operator_not_signed_in');
@@ -188,7 +189,7 @@ export function useScanMatchers(): ScanMatchers {
               lotCode,
               coo,
               cow,
-              shelfBoxId ?? null
+              shelfCode ?? null
             );
           }
         },
