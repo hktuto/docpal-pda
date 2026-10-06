@@ -734,6 +734,26 @@ export interface OrderLogsParams {
 export interface OrderLogsPage {
   rows: TransactionLogRow[];
   total: number;
+  /** Put-away ledger entries for the order's items (spec 2026-10-06 admin
+   *  audit-trail enrichment): item → shelf/box → actor. Present only on the
+   *  paged response shape. */
+  putAway?: ReceivingPutAwayRow[];
+}
+
+/** One put-away movement of an order's item onto a shelf (ledger-derived;
+ *  qty_type 'on_hand' row only — the dock −qty pair row is omitted). */
+export interface ReceivingPutAwayRow {
+  id: string;
+  itemId: string;
+  partNo: string;
+  wclItemNo: string | null;
+  qty: number;
+  shelfCode: string | null;
+  boxId: string | null;
+  lotId: string | null;
+  actorId: string | null;
+  actorName: string | null;
+  createdDate: Date;
 }
 
 const LOG_SORTS: Record<string, SQL> = {
@@ -779,7 +799,23 @@ export async function listReceivingOrderLogs(
   if (params?.page !== undefined) {
     const page = Math.max(1, params.page);
     const pageSize = Math.min(200, Math.max(1, params.pageSize ?? 50));
-    const [rows, count] = await Promise.all([
+    const putAwayQuery = queryAll<ReceivingPutAwayRow>(
+      db,
+      sql`SELECT it.id, it.receiving_invoice_item_id AS "itemId",
+                   rii.part_no AS "partNo", rii.wcl_item_no AS "wclItemNo",
+                   it.qty_delta AS "qty", it.shelf_code AS "shelfCode",
+                   it.box_id AS "boxId", it.inventory_lot_id AS "lotId",
+                   it.actor_id AS "actorId", u2.display_name AS "actorName",
+                   it.txn_at AS "createdDate"
+            FROM inventory_transactions it
+            JOIN receiving_invoice_items rii ON rii.id = it.receiving_invoice_item_id
+            JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+            LEFT JOIN users u2 ON u2.id = it.actor_id
+            WHERE ri.receiving_order_id = ${orderId}
+              AND it.txn_type = 'PUT_AWAY' AND it.qty_type = 'on_hand'
+            ORDER BY it.txn_at ASC, it.id ASC`
+    );
+    const [rows, count, putAway] = await Promise.all([
       queryAll<TransactionLogRow>(
         db,
         sql`SELECT tl.id, tl.entity_type AS "entityType", tl.entity_id AS "entityId",
@@ -789,8 +825,9 @@ export async function listReceivingOrderLogs(
             ${from} ${orderBy} LIMIT ${pageSize} OFFSET ${(page - 1) * pageSize}`
       ),
       queryGet<{ total: number }>(db, sql`SELECT COUNT(*)::int AS total ${from}`),
+      putAwayQuery,
     ]);
-    return { rows, total: count?.total ?? 0 };
+    return { rows, total: count?.total ?? 0, putAway };
   }
   return queryAll<TransactionLogRow>(
     db,

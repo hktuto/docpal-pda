@@ -265,6 +265,8 @@ export interface StockSearchPart {
 }
 
 export interface StockSearchLot {
+  /** Lot PK for the history drill-down (/admin/inventory-lots/:id/history). */
+  lotId: string;
   partNo: string;
   wclItemNo: string | null;
   description: string | null;
@@ -530,9 +532,85 @@ export interface OrderLogsParams {
   dir: "asc" | "desc";
 }
 
+export interface ReceivingPutAwayLogRow {
+  id: string;
+  itemId: string;
+  partNo: string;
+  wclItemNo: string | null;
+  qty: number;
+  shelfCode: string | null;
+  boxId: string | null;
+  lotId: string | null;
+  actorId: string | null;
+  actorName: string | null;
+  createdDate: string;
+}
+
 export interface OrderLogsPage {
   rows: TransactionLogRow[];
   total: number;
+  /** Receiving orders only: the order's put-away ledger entries
+   *  (item → shelf/box → actor), oldest first. */
+  putAway?: ReceivingPutAwayLogRow[];
+}
+
+// ---- lot history (stock-search drill-down) ----
+
+export interface LotHistorySummary {
+  id: string;
+  partNo: string;
+  wclItemNo: string | null;
+  dateCode: string | null;
+  lotCode: string | null;
+  coo: string | null;
+  cow: string | null;
+  shelfCode: string | null;
+  boxId: string | null;
+  orgId: number | null;
+  subInventoryCode: string | null;
+  totalQty: number;
+  allocatedQty: number;
+  createdDate: string;
+}
+
+export interface LotHistorySource {
+  receivingInvoiceItemId: string;
+  receivingOrderId: string;
+  batchNo: string;
+  partNo: string;
+  qty: number;
+  createdDate: string;
+}
+
+export interface LotHistoryMovement {
+  id: string;
+  txnType: string;
+  qtyType: string;
+  qtyDelta: number;
+  shelfCode: string | null;
+  boxId: string | null;
+  dateCode: string | null;
+  lotCode: string | null;
+  coo: string | null;
+  cow: string | null;
+  referenceType: string | null;
+  referenceId: string | null;
+  receivingInvoiceItemId: string | null;
+  actorId: string | null;
+  actorName: string | null;
+  txnReason: string | null;
+  metadata: Record<string, unknown>;
+  txnAt: string;
+  pickingOrderId: string | null;
+  pickingOrderNo: string | null;
+  shippingBoxId: string | null;
+  receivingBatchNo: string | null;
+}
+
+export interface LotHistory {
+  lot: LotHistorySummary;
+  sources: LotHistorySource[];
+  movements: LotHistoryMovement[];
 }
 
 function logsQuery(p: OrderLogsParams): string {
@@ -678,6 +756,7 @@ export function useFlowApi() {
       api.get<OrderLogsPage>(`/admin/receiving-orders/${orderId}/logs${logsQuery(params)}`),
     listPickingOrderLogs: (orderId: string, params: OrderLogsParams) =>
       api.get<OrderLogsPage>(`/admin/picking-orders/${orderId}/logs${logsQuery(params)}`),
+    listLotHistory: (lotId: string) => api.get<LotHistory>(`/admin/inventory-lots/${lotId}/history`),
 
     // Stock search (multi-value filters — each value appended as a repeated
     // query param; the backend treats them as any-of)

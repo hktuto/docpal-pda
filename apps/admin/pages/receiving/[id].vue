@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { OrderLogsParams, OrderLogsPage, ReceivingItemAllocation, ReceivingOrderDetail, ReceivingItemRow } from "~/utils/flowApi";
+import type { OrderLogsParams, OrderLogsPage, ReceivingItemAllocation, ReceivingOrderDetail, ReceivingItemRow, ReceivingPutAwayLogRow } from "~/utils/flowApi";
 import type { AdminColumnDef } from "~/composables/useAdminTable";
 import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 
@@ -14,7 +14,14 @@ const order = ref<ReceivingOrderDetail | null>(null);
 // The audit-log table fetches itself; bump this key after mutations that
 // write logs so it reloads.
 const logsKey = ref(0);
-const fetchLogs = (p: OrderLogsParams): Promise<OrderLogsPage> => flow.listReceivingOrderLogs(orderId, p);
+// Put-away ledger entries ride along on the paged logs response; captured here
+// for the put-away sub-table below the transition log.
+const putAwayLogs = ref<ReceivingPutAwayLogRow[]>([]);
+const fetchLogs = async (p: OrderLogsParams): Promise<OrderLogsPage> => {
+  const res = await flow.listReceivingOrderLogs(orderId, p);
+  putAwayLogs.value = res.putAway ?? [];
+  return res;
+};
 const loading = ref(true);
 const error = ref("");
 
@@ -841,6 +848,31 @@ const {
         {{ $t("admin.pages.receiving.noInvoicesMatch") }}
       </p>
 
+      <h2 class="section-title">{{ $t("admin.pages.auditLog.putAwayTitle") }}</h2>
+      <table v-if="putAwayLogs.length > 0" class="putaway-table">
+        <thead>
+          <tr>
+            <th>{{ $t("admin.pages.auditLog.time") }}</th>
+            <th>{{ $t("stockSearch.partNo") }}</th>
+            <th class="num">{{ $t("admin.pages.issues.qty") }}</th>
+            <th>{{ $t("stockSearch.shelf") }}</th>
+            <th>{{ $t("stockSearch.box") }}</th>
+            <th>{{ $t("admin.pages.auditLog.actor") }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="p in putAwayLogs" :key="p.id">
+            <td>{{ formatDateTime(p.createdDate) }}</td>
+            <td>{{ p.wclItemNo ?? p.partNo }}</td>
+            <td class="num">{{ p.qty }}</td>
+            <td>{{ p.shelfCode ?? "—" }}</td>
+            <td>{{ p.boxId ?? "—" }}</td>
+            <td>{{ p.actorName ?? p.actorId ?? "—" }}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-else class="muted">{{ $t("admin.pages.auditLog.putAwayEmpty") }}</p>
+
       <AuditLogTable :fetch-logs="fetchLogs" :refresh-key="logsKey" />
     </template>
 
@@ -929,6 +961,24 @@ const {
   font-size: 0.9375rem;
   margin: 1.125rem 0 0.5rem;
   color: #52606d;
+}
+.putaway-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+.putaway-table th,
+.putaway-table td {
+  padding: 0.3125rem 0.5rem;
+  border-bottom: 1px solid #e4e7eb;
+  text-align: left;
+  white-space: nowrap;
+}
+.putaway-table th {
+  background: #f5f7fa;
+}
+.putaway-table .num {
+  text-align: right;
 }
 .batch-bar {
   display: flex;

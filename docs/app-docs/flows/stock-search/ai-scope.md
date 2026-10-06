@@ -36,6 +36,11 @@
 - Server-paged `{rows,total}` sort controls, group-by, and export/print
   (admin-console features; the PDA uses the default row order with
   load-more paging).
+- Lot history / audit drill-down (admin console only): the 🕒 action on each
+  `apps/admin/pages/stock-search.vue` lot row opens
+  `GET /admin/inventory-lots/:id/history` (origin receiving lines + the lot's
+  ledger movements with actor/shelf/box/picking-order/shipping-box); lot rows
+  carry `lotId` for it.
 
 ## Key files
 

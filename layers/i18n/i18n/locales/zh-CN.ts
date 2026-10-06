@@ -900,6 +900,32 @@ export default {
     onHand: "现货：{qty}",
     lotQty: "可用 {available} / 共 {total}",
   },
+  lotHistory: {
+    title: "批次历史",
+    open: "批次历史",
+    location: "位置",
+    dock: "(暂存区)",
+    qty: "数量",
+    origin: "来源（收货）",
+    noSources: "暂无收货来源记录。",
+    movements: "出入记录",
+    noMovements: "暂无出入流水记录。",
+    time: "时间",
+    actor: "操作者",
+    type: "类型",
+    target: "去向",
+    reason: "原因",
+    system: "系统",
+    txn: {
+      receive_to_dock: "收货（暂存）",
+      put_away: "上架",
+      reserve: "预留",
+      pick: "拣货",
+      adjust: "调整",
+      expected_create: "预期",
+      ship_confirm: "出货",
+    },
+  },
   logStates: {
     pending: "待处理",
     in_hand: "已收货",
@@ -1625,7 +1651,9 @@ export default {
         item: "料号",
         details: "详情",
         empty: "暂无记录。",
-        searchPlaceholder: "搜索记录…"
+        searchPlaceholder: "搜索记录…",
+        putAwayTitle: "上架记录",
+        putAwayEmpty: "暂无上架记录。"
       },
       issues: {
         receivingTitle: "收货差异",

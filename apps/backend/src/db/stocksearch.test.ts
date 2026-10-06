@@ -43,7 +43,11 @@ async function linkBoxLotsToKoaOrder(): Promise<void> {
 
 test("no filters: returns the seeded lots and parts with onHandQty sums", async () => {
   await reseed(client);
-  const { parts, lots } = await searchStock(client.db, {});
+  const { parts, lots: rawLots } = await searchStock(client.db, {});
+  // lotId is the lot PK (surfaced for the admin lot-history drill-down);
+  // strip it from the deep-equals below and assert its shape once.
+  assert.ok(rawLots.every((l) => typeof l.lotId === "string" && l.lotId.length > 0));
+  const lots = rawLots.map(({ lotId: _lotId, ...rest }) => rest);
 
   assert.equal(lots.length, 6);
   // ordered by part_no: ...181G, ...1002F, ...2202F, ...4702F, ...5602F, ...2212F

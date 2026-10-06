@@ -3,6 +3,7 @@ import { db } from "../../db.js";
 import { actorFrom } from "../../auth/middleware.js";
 import { deleteReceivingInvoiceItem, listReceivingMismatches, listReceivingOrderLogs, type OrderLogsParams } from "../../db/receiving.js";
 import { listPickingOrderLogs } from "../../db/picking.js";
+import { listLotHistory } from "../../db/lotHistory.js";
 
 // Admin issues console: cross-order views over flow-reported issues.
 // Confirm/cancel of a listed mismatch reuse the existing flow routes
@@ -47,6 +48,13 @@ adminIssuesRoute.get("/picking-orders/:id/logs", async (c) => {
   const params = logParams(c);
   if (params.page === undefined && !params.q) return c.json(await listPickingOrderLogs(db, c.req.param("id")));
   return c.json(await listPickingOrderLogs(db, c.req.param("id"), params));
+});
+
+// Full audit history for one inventory lot: ledger movements (with actor and
+// resolved picking order / shipping box references) plus the origin receiving
+// lines. 404 lot_not_found (spec 2026-10-06 admin audit-trail enrichment).
+adminIssuesRoute.get("/inventory-lots/:id/history", async (c) => {
+  return c.json(await listLotHistory(db, c.req.param("id")));
 });
 
 // Remove a wrong/unwanted receiving invoice item (409 item_work_started once

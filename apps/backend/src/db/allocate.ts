@@ -812,6 +812,7 @@ export async function removePickingAllocation(
       referenceType: "allocation",
       referenceId: existing.id,
       receivingInvoiceItemId: existing.receivingInvoiceItemId,
+      actorId,
       txnReason: "admin: remove allocation",
       txnAt: now(),
     });
@@ -1041,6 +1042,7 @@ export async function addManualPickingAllocation(
           referenceType: "allocation",
           referenceId: v.id,
           receivingInvoiceItemId: input.receivingInvoiceItemId ?? null,
+          actorId,
           txnReason: "admin: override steal",
           txnAt: now(),
         });
@@ -1135,6 +1137,7 @@ export async function addManualPickingAllocation(
       referenceType: "allocation",
       referenceId: allocationId,
       receivingInvoiceItemId: input.receivingInvoiceItemId ?? null,
+      actorId,
       txnReason: "admin: manual allocation",
       txnAt: now(),
     });

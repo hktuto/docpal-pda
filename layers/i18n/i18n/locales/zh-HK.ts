@@ -900,6 +900,32 @@ export default {
     onHand: "現貨：{qty}",
     lotQty: "可用 {available} / 共 {total}",
   },
+  lotHistory: {
+    title: "批次歷史",
+    open: "批次歷史",
+    location: "位置",
+    dock: "(暫存區)",
+    qty: "數量",
+    origin: "來源（收貨）",
+    noSources: "暫無收貨來源記錄。",
+    movements: "出入記錄",
+    noMovements: "暫無出入流水記錄。",
+    time: "時間",
+    actor: "操作者",
+    type: "類型",
+    target: "去向",
+    reason: "原因",
+    system: "系統",
+    txn: {
+      receive_to_dock: "收貨（暫存）",
+      put_away: "上架",
+      reserve: "預留",
+      pick: "揀貨",
+      adjust: "調整",
+      expected_create: "預期",
+      ship_confirm: "出貨",
+    },
+  },
   logStates: {
     pending: "待處理",
     in_hand: "已收貨",
@@ -1625,7 +1651,9 @@ export default {
         item: "料號",
         details: "詳情",
         empty: "暫無記錄。",
-        searchPlaceholder: "搜尋記錄…"
+        searchPlaceholder: "搜尋記錄…",
+        putAwayTitle: "上架記錄",
+        putAwayEmpty: "暫無上架記錄。"
       },
       issues: {
         receivingTitle: "收貨差異",

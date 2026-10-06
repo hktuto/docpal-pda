@@ -39,6 +39,14 @@ const error = ref("");
 const lotsRows = ref<StockSearchLot[]>([]);
 const lotsTotal = ref(0);
 
+// Lot-history drill-down (ledger + origin), one modal at a time.
+const historyOpen = ref(false);
+const historyLotId = ref<string | null>(null);
+function openLotHistory(lot: StockSearchLot) {
+  historyLotId.value = lot.lotId;
+  historyOpen.value = true;
+}
+
 // --- filter dropdown options (from /stock-search/options) ---
 
 const brandOptions = computed<SearchableSelectOption[]>(() =>
@@ -494,6 +502,12 @@ const {
           :empty-text="$t('stockSearch.noLots')"
           :on-reset-columns="resetLotsColumns"
         >
+          <template #cell-partNo="{ row }">
+            <span class="part-cell">
+              {{ row.wclItemNo ?? row.partNo }}
+              <button class="btn-icon" :title="$t('lotHistory.open')" @click="openLotHistory(row)">🕒</button>
+            </span>
+          </template>
           <template #cell-description="{ row }">
             <span class="wrap">{{ row.description ?? "—" }}</span>
           </template>
@@ -512,6 +526,12 @@ const {
             :empty-text="$t('stockSearch.noLots')"
             :on-reset-columns="tableForGroup(g.key).resetColumnState"
           >
+            <template #cell-partNo="{ row }">
+              <span class="part-cell">
+                {{ row.wclItemNo ?? row.partNo }}
+                <button class="btn-icon" :title="$t('lotHistory.open')" @click="openLotHistory(row)">🕒</button>
+              </span>
+            </template>
             <template #cell-description="{ row }">
               <span class="wrap">{{ row.description ?? "—" }}</span>
             </template>
@@ -520,6 +540,8 @@ const {
         <p v-if="lotGroups.length === 0" class="muted">{{ $t("stockSearch.noLots") }}</p>
       </template>
     </template>
+
+    <StockSearchLotHistoryModal :open="historyOpen" :lot-id="historyLotId" @close="historyOpen = false" />
   </div>
 </template>
 
@@ -602,5 +624,22 @@ const {
 }
 .wrap {
   white-space: normal;
+}
+.part-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.btn-icon {
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 0 0.125rem;
+  font-size: 0.8125rem;
+  line-height: 1;
+  opacity: 0.7;
+}
+.btn-icon:hover {
+  opacity: 1;
 }
 </style>

@@ -54,7 +54,10 @@
   the order's `transaction_logs` audit trail
   (`GET /admin/receiving-orders/:id/logs`, server-paged/searchable/sortable
   via `?page=&pageSize=&q=&sort=&dir=`; item-typed rows carry
-  partNo/poNo/poLine in `metadata`).
+  partNo/poNo/poLine in `metadata`). The receiving page's audit section also
+  renders a Put-away sub-table from the paged response's `putAway[]` — the
+  order's PUT_AWAY ledger rows (item → qty → shelf/box → lot → actor) that
+  the transition log doesn't cover.
 - Show the order's picking section (nested orders with items, allocations,
   packages, and shipping boxes) on the detail's Picking tab — read-only info
   (status, required/scanned/boxed per item, allocated lots, boxes); all

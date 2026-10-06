@@ -803,6 +803,16 @@ Note: CHECK `chk_inventory_transactions_qty_type` constrains `qty_type` to
 txn_at)`, `(inventory_lot_id, txn_at)`, `(part_no, txn_at)`, `txn_type`,
 `(reference_type, reference_id)`, and `receiving_invoice_item_id`.
 
+Read API (admin, 2026-10-06): `GET /admin/inventory-lots/:id/history` exposes
+one lot's ledger rows (oldest first, actor names + resolved picking
+order/shipping box/receiving batch references) plus its
+`inventory_lot_sources` origins; `GET /admin/receiving-orders/:id/logs`
+embeds the order's PUT_AWAY rows as `putAway[]`. Admin action rows
+(`txn_reason` `admin: remove allocation` / `admin: override steal` /
+`admin: manual allocation`) carry `actor_id`; recompute-engine rows
+(`recompute: *`) legitimately have none (background job). Spec
+`docs/superpowers/specs/2026-10-06-admin-audit-trail-enrichment-design.md`.
+
 ## sync_events
 
 Table-change feed for external sync services (full contract + event

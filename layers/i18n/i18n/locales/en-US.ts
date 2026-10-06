@@ -900,6 +900,32 @@ export default {
     onHand: "On hand: {qty}",
     lotQty: "{available} / {total}",
   },
+  lotHistory: {
+    title: "Lot History",
+    open: "Lot history",
+    location: "Location",
+    dock: "(dock)",
+    qty: "Qty",
+    origin: "Origin (receiving)",
+    noSources: "No receiving sources recorded.",
+    movements: "Movements",
+    noMovements: "No ledger movements recorded.",
+    time: "Time",
+    actor: "Actor",
+    type: "Type",
+    target: "Target",
+    reason: "Reason",
+    system: "System",
+    txn: {
+      receive_to_dock: "Receive (dock)",
+      put_away: "Put-away",
+      reserve: "Reserve",
+      pick: "Pick",
+      adjust: "Adjust",
+      expected_create: "Expected",
+      ship_confirm: "Ship",
+    },
+  },
   logStates: {
     pending: "Pending",
     in_hand: "In hand",
@@ -1628,7 +1654,9 @@ export default {
         item: "Item",
         details: "Details",
         empty: "No log entries.",
-        searchPlaceholder: "Search logs…"
+        searchPlaceholder: "Search logs…",
+        putAwayTitle: "Put-away",
+        putAwayEmpty: "No put-away movements recorded."
       },
       issues: {
         receivingTitle: "Receiving Mismatches",

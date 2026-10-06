@@ -122,6 +122,9 @@ export interface StockSearchPartRow {
 }
 
 export interface StockSearchLotRow {
+  /** The lot PK — internal UUID, surfaced so the admin lot-history
+   *  drill-down can fetch /admin/inventory-lots/:id/history. */
+  lotId: string;
   partNo: string;
   /** The part's WCL item no (via the parts join) — primary display key. */
   wclItemNo: string | null;
@@ -286,6 +289,7 @@ export async function searchStock(
         db,
         sql`
           SELECT
+            il.id AS "lotId",
             il.part_no AS "partNo",
             il.date_code AS "dateCode",
             il.lot_code AS "lotCode",
@@ -317,6 +321,7 @@ export async function searchStock(
     db,
     sql`
       SELECT
+        il.id AS "lotId",
         il.part_no AS "partNo",
         il.date_code AS "dateCode",
         il.lot_code AS "lotCode",
