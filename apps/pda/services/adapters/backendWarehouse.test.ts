@@ -375,6 +375,16 @@ describe('backendWarehouse put-away flow', () => {
     expect(lastCall().init.body).toBeUndefined();
   });
 
+  it('removePutAwayScanFromShelf DELETEs the committed scan from its box', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
+
+    await service().removePutAwayScanFromShelf('scan1', 'SBOX-0002');
+
+    expect(lastCall().url).toBe(`${BASE_URL}/shelf-boxes/SBOX-0002/scans/scan1`);
+    expect(lastCall().init.method).toBe('DELETE');
+    expect(lastCall().init.body).toBeUndefined();
+  });
+
   it('recordPutAwayScan includes shelfCode when committing straight onto a shelf', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ id: 'scan1' }, 201));
 

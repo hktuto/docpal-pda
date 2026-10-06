@@ -22,6 +22,7 @@
         @arm-scan="toggleArmScan"
         @add-to-shelf="addPendingToShelf"
         @remove-scan="removeScanHandler"
+        @remove-from-shelf="removeScanFromShelfHandler"
       />
     </template>
 
@@ -185,7 +186,7 @@ useSupplierSymbologyScope(computed(() => order.value?.supplier?.code ?? undefine
 const stagedQtyByItem = computed(() => {
   const map: Record<string, number> = {};
   for (const scan of scans.value) {
-    if (!scan.receivingInvoiceItemId) continue;
+    if (!scan.receivingInvoiceItemId || scan.shelfCode) continue;
     map[scan.receivingInvoiceItemId] =
       (map[scan.receivingInvoiceItemId] ?? 0) + scan.qty;
   }
@@ -381,6 +382,37 @@ async function removeScanHandler(scanId: string) {
     error.value = errorMessage(e);
   } finally {
     removingScan.value[scanId] = false;
+  }
+}
+
+// Reverse a committed scan — the stock leaves the shelf (lot + ledger
+// reversal backend-side). Confirmed because it moves real stock; the backend
+// rejects with 409 lot_has_pick_allocations when the lot feeds pick
+// allocations.
+async function removeScanFromShelfHandler(scan: PutAwayScan) {
+  if (!scan.boxId) return;
+  const confirmed = window.confirm(
+    t("putAway.lotsPanel.removeFromShelfConfirm", {
+      qty: scan.qty,
+      shelf: scan.shelfCode ?? "",
+    })
+  );
+  if (!confirmed) return;
+  removingScan.value[scan.id] = true;
+  error.value = null;
+  try {
+    await warehouse.removePutAwayScanFromShelf(scan.id, scan.boxId);
+    showToast(
+      t("putAway.lotsPanel.removedFromShelf", {
+        qty: scan.qty,
+        shelf: scan.shelfCode ?? "",
+      })
+    );
+    await load();
+  } catch (e) {
+    showToast(errorMessage(e));
+  } finally {
+    removingScan.value[scan.id] = false;
   }
 }
 

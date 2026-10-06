@@ -827,12 +827,20 @@ test("aggregate: order + lots + staging scans + boxes with items; 404", async ()
   assert.equal(lot.allocatedQty, 0);
   assert.equal(lot.availableQty, 2000);
 
-  // the two unassigned scans stay in staging
-  assert.equal(agg.scans.length, 2);
+  // scans[] carries ALL of the order's scans: the two pending ones first
+  // (shelfCode NULL), then the committed one with its shelf + box.
+  assert.equal(agg.scans.length, 3);
   assert.deepEqual(
-    agg.scans.map((s) => s.qty).sort((a, b) => a - b),
-    [500, 3000]
+    agg.scans.map((s) => s.qty),
+    [500, 3000, 2000]
   );
+  const [pending1, pending2, shelved] = agg.scans;
+  assert.equal(pending1.shelfCode, null);
+  assert.equal(pending1.boxId, null);
+  assert.equal(pending2.shelfCode, null);
+  assert.equal(shelved.shelfCode, "A0103");
+  assert.equal(shelved.boxId, box.id);
+  assert.equal(shelved.receivingInvoiceItemId, item1);
   for (const s of agg.scans) {
     assert.ok(s.id && s.receivingInvoiceItemId && s.partNo);
   }

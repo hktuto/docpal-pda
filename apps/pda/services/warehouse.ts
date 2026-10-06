@@ -124,7 +124,7 @@ export interface WarehouseService {
     coo: string | null,
     cow: string | null,
     shelfCode?: string | null,
-    /** Supplier-template serial (e.g. iC-Haus ID); the backend rejects a
+    /** Supplier-template serial (e.g. iC-Haus LTS); the backend rejects a
      *  repeat serial on the same order with 409 label_already_scanned. */
     serialNo?: string | null
   ): Promise<PutAwayScan>;
@@ -136,6 +136,9 @@ export interface WarehouseService {
     scanIds?: string[]
   ): Promise<{ count: number; qty: number }>;
   removePutAwayScannedPiece(scanId: string): Promise<void>;
+  /** Reverse a committed scan: the stock leaves the shelf (lot + ledger
+   *  reversal); 409 lot_has_pick_allocations when the lot feeds picks. */
+  removePutAwayScanFromShelf(scanId: string, boxId: string): Promise<void>;
 
   // Measuring — box-scoped (no tasks): the list is the open boxes with
   // ≥1 package (any order); the detail is one box plus its packages. Box

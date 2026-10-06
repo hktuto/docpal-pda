@@ -88,7 +88,7 @@ export const shelfBoxItems = pgTable(
     partNo: text("part_no").notNull(), // plain text (no FK — parts.part_no is not unique)
     wclItemNo: text("wcl_item_no"),
     qty: integer("qty").notNull(),
-    // supplier-label serial (e.g. iC-Haus ID) — put-away dedups per receiving
+    // supplier-label serial (e.g. iC-Haus LTS) — put-away dedups per receiving
     // order on it when present (409 label_already_scanned on a repeat scan)
     serialNo: text("serial_no"),
     verified: boolean("verified").default(false),

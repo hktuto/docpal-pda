@@ -26,7 +26,7 @@ export interface ParsedFields {
   lotCode?: string;
   cow?: string;
   wclItemNo?: string;
-  /** Supplier-template serial (e.g. iC-Haus ID) — put-away duplicate check. */
+  /** Supplier-template serial (e.g. iC-Haus LTS) — put-away duplicate check. */
   serialNo?: string;
 }
 

@@ -41,7 +41,7 @@
 --     increments monthly).
 --   * iC-Haus (20) added: JSON Versandetikett QR (lookahead groups, key-order
 --     independent); IANR = parts.part_no, CANR = parts.wcl_item_no. DC is a
---     YYWW date code (date_code_encoding 'yyww' swaps to WWYY); ID captured
+--     YYWW date code (date_code_encoding 'yyww' swaps to WWYY); LTS captured
 --     as serialNo for the put-away duplicate-scan check (2026-10-06).
 -- ---------------------------------------------------------------------------
 
@@ -72,13 +72,13 @@ VALUES
   -- Lookahead groups so JSON key order doesn't matter. itemId = IANR (bare
   -- MPN = parts.part_no, case/space-insensitive), wclItemNo = CANR
   -- ("ICHAUS/<mpn>" = parts.wcl_item_no), dateCode = DC (YYWW, decoded to
-  -- WWYY by date_code_encoding 'yyww'), qty = Q, serialNo = ID (per-item
+  -- WWYY by date_code_encoding 'yyww'), qty = Q, serialNo = LTS (per-item
   -- unique in the order; put-away duplicate-scan check), coo = COO.
   (
     '00000000-0000-7000-8000-000000009008', '20', NULL,
-    $re$^\{(?=.*"CANR"\s*:\s*"(?<wclItemNo>[^"]+)")(?=.*"IANR"\s*:\s*"(?<itemId>[^"]+)")(?=.*"Q"\s*:\s*"(?<qty>\d+)")(?=.*"DC"\s*:\s*"(?<dateCode>\d{4})")(?=.*"COO"\s*:\s*"(?<coo>[^"]+)")(?=.*"ID"\s*:\s*"(?<serialNo>[^"]+)").*\}$$re$,
+    $re$^\{(?=.*"CANR"\s*:\s*"(?<wclItemNo>[^"]+)")(?=.*"IANR"\s*:\s*"(?<itemId>[^"]+)")(?=.*"Q"\s*:\s*"(?<qty>\d+)")(?=.*"DC"\s*:\s*"(?<dateCode>\d{4})")(?=.*"COO"\s*:\s*"(?<coo>[^"]+)")(?=.*"LTS"\s*:\s*"(?<serialNo>[^"]+)").*\}$$re$,
     NULL, 'datamatrix', NULL, 'yyww', ARRAY['DATA MATRIX'], ARRAY['ICHAUS'],
-    'Created 2026-10 from an iC-Haus Versandetikett JSON Data Matrix sample. itemId = IANR (bare MPN = parts.part_no), wclItemNo = CANR (ICHAUS/<mpn> = parts.wcl_item_no), DC = YYWW date code (decoded to WWYY via yyww encoding), Q = qty, ID = per-item unique serial (put-away duplicate check), COO = country of origin.'
+    'Created 2026-10 from an iC-Haus Versandetikett JSON Data Matrix sample. itemId = IANR (bare MPN = parts.part_no), wclItemNo = CANR (ICHAUS/<mpn> = parts.wcl_item_no), DC = YYWW date code (decoded to WWYY via yyww encoding), Q = qty, LTS = per-item unique serial (put-away duplicate check), COO = country of origin.'
   ),
 
   -- NCC (supplier 23, HONGKONG CHEMI-CON LTD): fixed-width ITF reel barcode,

@@ -350,6 +350,11 @@ export function createBackendWarehouseService(
     async removePutAwayScannedPiece(scanId: string): Promise<void> {
       await client.del(`/put-away-scans/${scanId}`);
     },
+    // Reverse a committed scan: stock leaves the shelf (lot + ledger
+    // reversal, one tx backend-side).
+    async removePutAwayScanFromShelf(scanId: string, boxId: string): Promise<void> {
+      await client.del(`/shelf-boxes/${boxId}/scans/${scanId}`);
+    },
 
     // Measuring — box-scoped reads (no tasks): the list is the open boxes
     // with ≥1 package, the detail one box plus its packages. Box

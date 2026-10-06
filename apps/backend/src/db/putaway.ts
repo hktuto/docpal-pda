@@ -414,6 +414,10 @@ export interface PutAwayScanRow {
   lotCode: string | null;
   coo: string | null;
   cow: string | null;
+  /** The shelf the scan is committed to; NULL = still pending (staging). */
+  shelfCode: string | null;
+  /** The (invisible) shelf box holding the committed scan; NULL when pending. */
+  boxId: string | null;
 }
 
 export interface PutAwayBoxItemRow {
@@ -472,7 +476,8 @@ export interface PutAwayAggregate {
  * items (receivable list with remaining = received − picked − put away −
  * allocated − staged, the candidates-list formula), each with an advisory
  * shelf/box suggestion, lots materialized from this order (via
- * inventory_lot_sources), scans still in the staging box, and the
+ * inventory_lot_sources), ALL scans of the order (pending scans carry
+ * shelfCode NULL; committed scans carry their shelf + box), and the
  * non-staging boxes with their item rows.
  */
 export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<PutAwayAggregate> {
@@ -564,13 +569,15 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
       SELECT
         sbi.id, sbi.receiving_invoice_item_id AS "receivingInvoiceItemId",
         sbi.part_no AS "partNo", COALESCE(sbi.wcl_item_no, rii.wcl_item_no) AS "wclItemNo", sbi.qty,
-        rii.date_code AS "dateCode", rii.lot_code AS "lotCode", rii.coo, rii.cow
+        rii.date_code AS "dateCode", rii.lot_code AS "lotCode", rii.coo, rii.cow,
+        sb.shelf_code AS "shelfCode",
+        CASE WHEN sb.shelf_code IS NULL THEN NULL ELSE sb.id END AS "boxId"
       FROM shelf_box_items sbi
       JOIN shelf_boxes sb ON sb.id = sbi.shelf_box_id
       JOIN receiving_invoice_items rii ON rii.id = sbi.receiving_invoice_item_id
       JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
-      WHERE ri.receiving_order_id = ${orderId} AND sb.shelf_code IS NULL
-      ORDER BY sbi.id
+      WHERE ri.receiving_order_id = ${orderId}
+      ORDER BY (sb.shelf_code IS NOT NULL), sbi.id
     `
   );
 
@@ -769,7 +776,7 @@ export interface RecordPutAwayScanInput {
    *  the order's box there is found-or-created invisibly. Mutually exclusive
    *  with `shelfBoxId`; null/absent = stay pending in staging. */
   shelfCode?: string | null;
-  /** Supplier-label serial (e.g. iC-Haus ID): unique per item in the order —
+  /** Supplier-label serial (e.g. iC-Haus LTS): unique per item in the order —
    *  a repeat serial on the same receiving order is a double-scan of the same
    *  physical label and rejected with 409 label_already_scanned. */
   serialNo?: string | null;
@@ -853,7 +860,8 @@ export async function recordPutAwayScan(
       tx,
       sql`SELECT sbi.id, sbi.receiving_invoice_item_id AS "receivingInvoiceItemId",
                  sbi.part_no AS "partNo", sbi.qty,
-                 rii.date_code AS "dateCode", rii.lot_code AS "lotCode", rii.coo, rii.cow
+                 rii.date_code AS "dateCode", rii.lot_code AS "lotCode", rii.coo, rii.cow,
+                 NULL AS "shelfCode", NULL AS "boxId"
           FROM shelf_box_items sbi
           JOIN receiving_invoice_items rii ON rii.id = sbi.receiving_invoice_item_id
           WHERE sbi.id = ${id}`

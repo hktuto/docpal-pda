@@ -625,6 +625,10 @@ export interface PutAwayScan {
   lotCode: string | null;
   coo: string | null;
   cow: string | null;
+  /** The shelf the scan is committed to; null = still pending (staging). */
+  shelfCode: string | null;
+  /** The (invisible) shelf box holding the committed scan; null when pending. */
+  boxId: string | null;
 }
 
 export interface PutAwayBoxItem {

@@ -166,10 +166,11 @@ test("parseQrRaw: iC-Haus builtin template parses the Versandetikett JSON QR", (
   assert.equal(parsed.dateCode, "3723"); // DC "2337" is YYWW — decoded to WWYY via 'yyww'
   assert.equal(parsed.coo, "DE");
   assert.equal(parsed.wclItemNo, "ICHAUS/IC-RZ4248 OQFN38-7X5"); // CANR = parts.wcl_item_no
-  assert.equal(parsed.serialNo, "50788"); // ID — put-away duplicate check
+  assert.equal(parsed.serialNo, "20260929-4"); // LTS — put-away duplicate check
   // key order doesn't matter (lookahead groups)
-  const reordered = parseQrRaw('{"COO":"DE","Q":"10","DC":"2337","IANR":"iC-RZ4248 oQFN38-7x5","CANR":"ICHAUS/IC-RZ4248 OQFN38-7X5"}', profile.qrTemplate, null);
+  const reordered = parseQrRaw('{"COO":"DE","Q":"10","DC":"2337","LTS":"20260929-4","IANR":"iC-RZ4248 oQFN38-7x5","CANR":"ICHAUS/IC-RZ4248 OQFN38-7X5"}', profile.qrTemplate, null);
   assert.equal(reordered.partNo, "IC-RZ4248OQFN38-7X5");
+  assert.equal(reordered.serialNo, "20260929-4");
 });
 
 test("parseQrRaw: apps-web KOA template variant (empty subId segment)", () => {

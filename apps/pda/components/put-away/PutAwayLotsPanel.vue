@@ -43,36 +43,55 @@
             v-for="scan in scansByItem[line.id]"
             :key="scan.id"
             class="scan-row"
+            :class="{ 'scan-row--shelved': !!scan.shelfCode }"
           >
             <div class="scan-info">
               <span>{{ scan.qty }} {{ $t('common.pcs') }}</span>
               <span class="scan-meta">
                 {{ scan.dateCode || $t('common.stateNone') }} / {{ scan.lotCode || $t('common.stateNone') }} / {{ scan.coo || $t('common.stateNone') }} / {{ scan.cow || $t('common.stateNone') }}
               </span>
+              <span v-if="scan.shelfCode" class="scan-shelf">
+                {{ scan.shelfCode }}<template v-if="scan.boxId"> / {{ scan.boxId }}</template>
+              </span>
             </div>
             <div class="scan-actions">
+              <template v-if="!scan.shelfCode">
+                <button
+                  class="btn btn--small"
+                  :disabled="!shelfCode || addingScan[scan.id] || removingScan[scan.id]"
+                  @click="emit('add-to-shelf', scan.id)"
+                >
+                  <template v-if="addingScan[scan.id]">
+                    <InlineSpinner /> {{ $t('putAway.pendingPanel.addingToShelf') }}
+                  </template>
+                  <template v-else>
+                    {{ $t('putAway.pendingPanel.addToShelf') }}
+                  </template>
+                </button>
+                <button
+                  class="btn btn--small btn--secondary"
+                  :disabled="addingScan[scan.id] || removingScan[scan.id]"
+                  @click="emit('remove-scan', scan.id)"
+                >
+                  <template v-if="removingScan[scan.id]">
+                    <InlineSpinner /> {{ $t('putAway.lotsPanel.removingScan') }}
+                  </template>
+                  <template v-else>
+                    {{ $t('putAway.lotsPanel.removeScan') }}
+                  </template>
+                </button>
+              </template>
               <button
-                class="btn btn--small"
-                :disabled="!shelfCode || addingScan[scan.id] || removingScan[scan.id]"
-                @click="emit('add-to-shelf', scan.id)"
-              >
-                <template v-if="addingScan[scan.id]">
-                  <InlineSpinner /> {{ $t('putAway.pendingPanel.addingToShelf') }}
-                </template>
-                <template v-else>
-                  {{ $t('putAway.pendingPanel.addToShelf') }}
-                </template>
-              </button>
-              <button
+                v-else
                 class="btn btn--small btn--secondary"
-                :disabled="addingScan[scan.id] || removingScan[scan.id]"
-                @click="emit('remove-scan', scan.id)"
+                :disabled="removingScan[scan.id]"
+                @click="emit('remove-from-shelf', scan)"
               >
                 <template v-if="removingScan[scan.id]">
-                  <InlineSpinner /> {{ $t('putAway.lotsPanel.removingScan') }}
+                  <InlineSpinner /> {{ $t('putAway.lotsPanel.removingFromShelf') }}
                 </template>
                 <template v-else>
-                  {{ $t('putAway.lotsPanel.removeScan') }}
+                  {{ $t('putAway.lotsPanel.removeFromShelf') }}
                 </template>
               </button>
             </div>
@@ -145,6 +164,7 @@ const emit = defineEmits<{
   "arm-scan": [group: PutAwayItemGroup];
   "add-to-shelf": [scanId: string];
   "remove-scan": [scanId: string];
+  "remove-from-shelf": [scan: PutAwayScan];
   "update:expandedItems": [value: Set<string>];
 }>();
 
@@ -289,6 +309,16 @@ function toggleExpand(groupKey: string) {
   gap: 0.5rem;
   padding: 0.5rem 0;
   border-bottom: 1px solid var(--border);
+}
+
+.scan-row--shelved {
+  opacity: 0.85;
+}
+
+.scan-shelf {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--primary);
 }
 
 .scan-row:last-child {

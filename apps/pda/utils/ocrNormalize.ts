@@ -11,7 +11,7 @@ export interface OcrInput {
   qty: number | "";
   /** WCL item no captured by the supplier template (e.g. KOA segment 7). */
   wclItemNo?: string;
-  /** Supplier-template serial (e.g. iC-Haus ID) — put-away duplicate check. */
+  /** Supplier-template serial (e.g. iC-Haus LTS) — put-away duplicate check. */
   serialNo?: string;
 }
 

@@ -33,10 +33,16 @@
   `POST /receiving-orders/:id/put-away-commit`, which assigns every pending
   scan onto the shelf in ONE backend tx (the order's box there is
   found-or-created invisibly; `shelfCode` on `put-away-scans` does the same
-  per scan). Pending scans live inside each item's expanded detail (under the
-  matching invoice line) with per-row **Add to shelf** (enabled with a shelf
-  selected; commits just that row via `put-away-commit` with `scanIds`) and
-  **Remove** (hard-delete, mis-scan correction). A `BOX-*` scan is rejected with an
+  Pending scans live inside each item's expanded detail (under the matching
+  invoice line) alongside the **committed scans** (the aggregate's `scans[]`
+  carries every scan of the order — pending ones have `shelfCode: null`,
+  committed ones carry their shelf + box): pending rows offer **Add to
+  shelf** (enabled with a shelf selected; commits just that row via
+  `put-away-commit` with `scanIds`) and **Remove** (hard-delete, mis-scan
+  correction); committed rows show their shelf/box and offer **Remove from
+  shelf** (`DELETE /shelf-boxes/:boxId/scans/:scanId` — reverses the lot +
+  ledger, moving the qty back to pending; 409 `lot_has_pick_allocations` when
+  the lot feeds pick allocations). A `BOX-*` scan is rejected with an
   informational toast — boxes are not used in this flow. The detail list is
   grouped by part number — all visible invoice lines of one part render as a
   single card with summed qty (`utils/putAwayGroups.ts`
@@ -150,7 +156,7 @@
 - Moving committed stock between shelves is not supported (reverse + re-scan
   instead).
 - Put-away scans dedup by supplier serial only when the label carries one
-  (e.g. iC-Haus ID → `serialNo` template group → `shelf_box_items.serial_no`):
+  (e.g. iC-Haus LTS → `serialNo` template group → `shelf_box_items.serial_no`):
   a repeat serial on the same receiving order is rejected with 409
   `label_already_scanned` (mirrors the receiving S-key check; deleting the
   scan frees the serial). Labels without a serial group are not deduped —

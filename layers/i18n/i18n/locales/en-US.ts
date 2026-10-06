@@ -435,6 +435,10 @@ export default {
       gunScanDisarm: "Cancel gun scan",
       armedBadge: "Gun scan armed",
       armedHint: "Scan labels for this item with the gun",
+      removeFromShelf: "Remove from shelf",
+      removingFromShelf: "Removing…",
+      removeFromShelfConfirm: "Remove {qty} pcs from shelf {shelf}? The stock leaves the shelf.",
+      removedFromShelf: "Removed {qty} pcs from {shelf}",
     }
   },
   goodsVerify: {

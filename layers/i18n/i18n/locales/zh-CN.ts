@@ -435,6 +435,10 @@ export default {
       gunScanDisarm: "取消扫描枪",
       armedBadge: "已启用扫描枪",
       armedHint: "请用扫描枪扫描此物料的标签",
+      removeFromShelf: "从货架移除",
+      removingFromShelf: "移除中…",
+      removeFromShelfConfirm: "将 {qty} 件从货架 {shelf} 移除？库存将离开货架。",
+      removedFromShelf: "已从 {shelf} 移除 {qty} 件",
     }
   },
   goodsVerify: {
