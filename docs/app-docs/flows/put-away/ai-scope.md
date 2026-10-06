@@ -24,20 +24,38 @@
   at read time, never stored), materialized inventory lots, staging scans,
   and the non-staging shelf boxes with their item rows.
 - Scan physical pieces into the order's staging box (client-side label
-  validation against supplier QR templates). The hardware scanner is armed on
-  the detail page: a QR/wedge scan parses via the supplier templates and
-  applies immediately to the first visible item whose part matches and whose
-  `remainingQty` fits (`utils/putAwayScan.ts` `findPutAwayTarget`). Item-first
-  mode (opt-in): the per-item "Gun scan" button on `PutAwayLotsPanel.vue`
-  emits `arm-scan`; the page holds `armedItemId` (toggle to disarm, another
-  item re-arms) and the armed card shows a highlighted border + badge + hint.
-  Scanner routing precedence: scan-box dialog open → armed item (strict
-  `findPutAwayTarget` against that single item, same
+  validation against supplier QR templates). The detail list is grouped by
+  part number — all visible invoice lines of one part render as a single card
+  with summed qty (`utils/putAwayGroups.ts` `groupPutAwayItems`, spec
+  `2026-10-05-put-away-part-grouping-design`); expanding the card lists the
+  member lines with their per-line remaining + batch values and their scans.
+  One label's qty may span several same-part lines (a 20300 package against
+  300 + 20000 lines): every write path splits the qty FIFO across the group's
+  lines into one `recordPutAwayScan` per line
+  (`utils/putAwayScan.ts` `findPutAwayTargets`) — hardware gun scan, OCR
+  review apply (`matchPutAway` takes the group's member lines via the review
+  context's `putAwayItems`), and the multi-item table. The hardware scanner
+  is armed on the detail page: a QR/wedge scan parses via the supplier
+  templates and applies immediately. Item-first mode (opt-in): the per-card
+  "Gun scan" button on `PutAwayLotsPanel.vue` emits `arm-scan`; the page
+  holds `armedItemId` as the armed part GROUP's key (toggle to disarm,
+  another card re-arms) and the armed card shows a highlighted border + badge
+  + hint.
+  Scanner routing precedence: scan-box dialog open → shelf/box QR labels
+  (`utils/putAwayScan.ts` `classifyPutAwayScan`, checked before supplier-label
+  parsing: exact shelf-code match → sticky `selectedShelf` shown in a banner
+  and pre-selected in the box dialogs; an order's placed box id → becomes the
+  active box; the order's staging box id (`stagingBoxId` on the aggregate —
+  the open `shelf_code IS NULL` box holding the order's scans) → clears the
+  active box so scans return to staging; an unknown `BOX-*`-prefixed id →
+  created directly on the selected shelf, or opens the scan-box dialog with
+  the id prefilled when no shelf is selected) → armed group (strict
+  `findPutAwayTargets` against that group's lines only, same
   `errors.scanned_part_does_not_match_item` toast on mismatch) → free-match.
   A successful armed scan stays armed and records through the same
-  `recordPutAwayScan(...)` call with `activeBoxId` threaded; the armed state
-  auto-clears when a reload drops the item from `visibleItems`. The
-  per-item camera OCR button opens a review step first: a single parsed
+  `recordPutAwayScan(...)` calls with `activeBoxId` threaded; the armed state
+  auto-clears when a reload drops the group from `groups`. The
+  per-card camera OCR button opens a review step first: a single parsed
   record pops the `LabelScanReviewModal` confirm form
   (`confirmSingleMatch: true`); a multi-item (carton) label pops the shared
   `ScanMultiItemModal` table and rows are applied one by one.
@@ -87,21 +105,28 @@
   boxes; title/status badge/supplier info registered into the app header via
   `composables/usePageHeader.ts`; armed hardware scanner + camera OCR scan
   entry with single-record form / multi-item table review).
-- `utils/putAwayScan.ts` — `findPutAwayTarget` first-fit item matching for
-  hardware QR scans (tests in `tests/putAwayScan.test.ts`).
+- `utils/putAwayScan.ts` — `findPutAwayTargets` FIFO split of one scan's qty
+  across same-part lines (plus the legacy single-line `findPutAwayTarget`)
+  and `classifyPutAwayScan` shelf/box/item scan routing (tests in
+  `tests/putAwayScan.test.ts`).
+- `utils/putAwayGroups.ts` — part-group display model for the detail page:
+  `groupPutAwayItems` (summed qty per part, staged qty folded in) and
+  `putAwayGroupFieldValue` (qty fields summed, batch fields distinct-joined).
 - `components/ScanMultiItemModal.vue` — shared multi-item label table (also
   used by the picking scan session).
-- `components/put-away/PutAwayLotsPanel.vue` — expected items and scan
-  staging; per-item "Gun scan" button (`arm-scan` emit) + armed-card
-  styling driven by the `armedItemId` prop.
+- `components/put-away/PutAwayLotsPanel.vue` — expected items as part-group
+  cards (summed qty, distinct-joined batch fields) with per-member-line scans
+  when expanded; per-card "Gun scan" button (`arm-scan` emit) + armed-card
+  styling driven by the group-key `armedItemId` prop.
 - `components/put-away/ShelfBoxesPanel.vue` — shelf boxes and scan
   assignment; "Scan box" button, active-box highlight + "Set active" switch.
 - `components/put-away/ScanBoxDialog.vue` — scanned/typed box id + shelf
   selection for scan-to-create-box.
 - `components/SelectShelfDialog.vue` — shelf selection UI.
-- `composables/useScanMatchers.ts` — client-side `matchPutAway` validation;
-  apply calls `WarehouseService.recordPutAwayScan` (with `shelfBoxId` when an
-  active box is set).
+- `composables/useScanMatchers.ts` — client-side `matchPutAway` validation
+  against the reviewed card's part-group member lines (aggregate remaining);
+  apply splits FIFO into `WarehouseService.recordPutAwayScan` calls per line
+  (with `shelfBoxId` when an active box is set).
 - `services/adapters/backendWarehouse.ts` — put-away + shelf-box methods.
 - `apps/backend/src/routes/putaway.ts` + `apps/backend/src/db/putaway.ts` —
   `GET /put-away/candidates`, `GET /receiving-orders/:id/put-away`,
@@ -134,3 +159,5 @@
 - `docs/superpowers/plans/2026-07-06-put-away-scan-first.md`
 - `docs/superpowers/specs/2026-07-20-put-away-scan-box-design.md`
 - `docs/superpowers/specs/2026-10-02-put-away-item-first-scan-design.md`
+- `docs/superpowers/specs/2026-10-05-put-away-scan-box-shelf-design.md`
+- `docs/superpowers/specs/2026-10-05-put-away-part-grouping-design.md`

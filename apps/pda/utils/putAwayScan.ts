@@ -61,3 +61,39 @@ export function findPutAwayTarget(
   }
   return null;
 }
+
+/**
+ * Like findPutAwayTarget, but allows one label's qty to span several order
+ * lines with the same part (the same part may sit on multiple invoice
+ * lines, e.g. 300 + 20000 — a 20300 package covers neither line alone).
+ * Consumes lines in list order, each capped at its remainingQty, returning
+ * one portion per line touched, or null when the aggregated remaining of
+ * all matching lines cannot cover the qty. Every portion is written as its
+ * own per-line scan so the backend's per-line guards stay intact.
+ */
+export function findPutAwayTargets(
+  items: PutAwayExpectedItem[],
+  partNo: string,
+  qty: number,
+  wclItemNo?: string
+): { item: PutAwayExpectedItem; qty: number }[] | null {
+  const scannedKeys = [partNo, wclItemNo]
+    .filter((v): v is string => !!v)
+    .map((v) => normalizePartNo(v));
+  if (scannedKeys.length === 0 || !Number.isInteger(qty) || qty <= 0) return null;
+  const portions: { item: PutAwayExpectedItem; qty: number }[] = [];
+  let remaining = qty;
+  for (const item of items) {
+    const itemKeys = [item.partNo, item.wclItemNo]
+      .filter((v): v is string => !!v)
+      .map((v) => normalizePartNo(v));
+    if (!itemKeys.some((k) => scannedKeys.includes(k))) continue;
+    const available = item.remainingQty ?? 0;
+    if (available <= 0) continue;
+    const take = Math.min(available, remaining);
+    portions.push({ item, qty: take });
+    remaining -= take;
+    if (remaining === 0) return portions;
+  }
+  return null;
+}

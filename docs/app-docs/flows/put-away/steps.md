@@ -12,11 +12,19 @@ Tap the task to open the detail page. The batch number and receiving status show
 
 ## 3. Review available items
 
-The detail shows receiving-area items waiting to be put away, with total, scanned, and boxed quantities.
+The detail shows receiving-area items waiting to be put away, grouped by part
+number — if the order carries the same part on several lines (for example
+300 + 20000), they appear as **one card with the combined total**, with total,
+scanned, and boxed quantities. Expand the card (the **expand** button) to see
+the individual lines with their own remaining quantities and batch values.
 
 ## 4. Scan physical pieces
 
 For each item, tap **Scan piece** and scan a physical label. Each scan records one piece with its own quantity, date code, lot code, COO, and COW. Repeat until the scanned quantity reaches the item total.
+
+If the label's quantity spans several lines of the same part (one physical
+package covering a 300 + 20000 split), just scan it — the app distributes the
+quantity across those lines automatically.
 
 With the hardware gun you can also just scan — a label that matches an item on the order is accepted automatically (free-match). For tighter control, tap **Gun scan** on the item you are holding first: the card is highlighted with an "armed" badge, and every following gun scan is accepted only if it matches that item (part number and remaining quantity). The item stays armed for repeated scans; tap the button again (now labelled as cancel) to disarm, or tap **Gun scan** on another item to switch. The armed state clears itself once the item is fully put away.
 
@@ -25,6 +33,12 @@ With the hardware gun you can also just scan — a label that matches an item on
 Tap **New box**, select a shelf, and confirm. The box appears in the shelf boxes panel.
 
 Alternatively, tap **Scan box** and scan the QR code on a physical box (or type the box id), select a shelf, and confirm. The box is created with that physical box id.
+
+You can also drive everything with the hardware gun:
+
+- **Scan a shelf barcode** — the shelf becomes the selected destination; a banner above the item list shows it (tap × to clear). The box dialogs pre-select this shelf.
+- **Scan an existing box QR** — that box becomes the active box. Scanning the order's staging box switches scanning back to the staging list.
+- **Scan an unknown `BOX-*` id** — with a shelf selected, the box is created on that shelf immediately; without one, the scan-box dialog opens with the id filled in so you can pick a shelf.
 
 The created box becomes the **active box** (highlighted, with an "Active" badge). While an active box is set, every piece you scan — hardware scan, camera OCR, or multi-item label — goes straight into that box, skipping the staging list. Tap **Set active** on another open box to switch the target. Closing or cancelling the active box clears the active state and scans go back to the staging list.
 

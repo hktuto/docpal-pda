@@ -7,6 +7,7 @@ import type {
   MeasuringPackage,
 } from '~/services/types';
 import { rawCode, normalizePartNo } from '~/utils/text';
+import { findPutAwayTargets } from '~/utils/putAwayScan';
 import { matchAggregatePackages } from '~/utils/measuringAggregateMatch';
 
 export type ScanTask = 'picking' | 'put-away' | 'measuring';
@@ -23,7 +24,9 @@ export async function runScanMatcher(
       return m.matchPicking(ctx.allocation, ctx.pickingItem, parsed);
     case 'put-away':
       if (!ctx.receivingItem) return m.error('missing_receiving_item');
-      return m.matchPutAway(ctx.receivingOrderId, ctx.receivingItem, parsed, ctx.shelfBoxId);
+      // Grouped put-away detail (spec 2026-10-05): the review context carries
+      // all same-part lines so one label's qty can span them FIFO.
+      return m.matchPutAway(ctx.receivingOrderId, ctx.putAwayItems ?? [ctx.receivingItem], parsed, ctx.shelfBoxId);
     case 'measuring':
       if (!ctx.packages) return m.error('missing_box_packages');
       return m.matchMeasuring(ctx.packages, ctx.targetPackageId, parsed, ctx.flow);
@@ -53,6 +56,9 @@ export interface ScanTaskContext {
   // put-away
   receivingOrderId?: string;
   receivingItem?: PutAwayExpectedItem;
+  // put-away part group: all same-part member lines of the reviewed card —
+  // one label's qty may span them (spec 2026-10-05)
+  putAwayItems?: PutAwayExpectedItem[];
   // put-away active box: scans are assigned straight into this open shelf box
   shelfBoxId?: string | null;
   // measuring (the box's packages from the consolidated task detail —
@@ -82,7 +88,7 @@ export type ScanMatchResult =
 
 export interface ScanMatchers {
   matchPicking(allocation: PickingAllocationRef, pickingItem: PickingItemRef, parsed: OcrInput): Promise<ScanMatchResult>;
-  matchPutAway(receivingOrderId: string | undefined, receivingItem: PutAwayExpectedItem, parsed: OcrInput, shelfBoxId?: string | null): Promise<ScanMatchResult>;
+  matchPutAway(receivingOrderId: string | undefined, putAwayItems: PutAwayExpectedItem[], parsed: OcrInput, shelfBoxId?: string | null): Promise<ScanMatchResult>;
   matchMeasuring(packages: MeasuringPackage[], targetPackageId: string | undefined, parsed: OcrInput, flow?: 'measuring' | 'verify'): Promise<ScanMatchResult>;
   error(err: I18nError): ScanMatchResult;
   error(code: string, params?: Record<string, unknown>): ScanMatchResult;
@@ -139,7 +145,7 @@ export function useScanMatchers(): ScanMatchers {
     }
   }
 
-  async function matchPutAway(receivingOrderId: string | undefined, receivingItem: PutAwayExpectedItem, parsed: OcrInput, shelfBoxId?: string | null): Promise<ScanMatchResult> {
+  async function matchPutAway(receivingOrderId: string | undefined, putAwayItems: PutAwayExpectedItem[], parsed: OcrInput, shelfBoxId?: string | null): Promise<ScanMatchResult> {
     try {
       const user = currentUser.value;
       if (!user?.id) return error('operator_not_signed_in');
@@ -149,15 +155,20 @@ export function useScanMatchers(): ScanMatchers {
         .filter((v): v is string => !!v)
         .map((v) => normalizePartNo(v));
       if (scannedKeys.length === 0) return { type: 'none' };
-      const itemKeys = [receivingItem.partNo, receivingItem.wclItemNo]
-        .filter((v): v is string => !!v)
-        .map((v) => normalizePartNo(v));
-      if (!itemKeys.some((k) => scannedKeys.includes(k))) return error('scanned_part_does_not_match_item');
+      // Same-part group: the label matches when ANY member line's part keys
+      // match; the qty may span several lines, split FIFO per line.
+      const items = putAwayItems.filter((item) =>
+        [item.partNo, item.wclItemNo]
+          .filter((v): v is string => !!v)
+          .map((v) => normalizePartNo(v))
+          .some((k) => scannedKeys.includes(k))
+      );
+      if (items.length === 0) return error('scanned_part_does_not_match_item');
 
       const qty = typeof parsed.qty === 'number' ? parsed.qty : Number(parsed.qty);
       if (!Number.isInteger(qty) || qty <= 0) return error('qty_must_be_positive_integer');
-      if (!receivingItem?.id) return error('invalid_receiving_item');
-      if (qty > (receivingItem.remainingQty ?? 0)) return error('quantity_exceeds_available');
+      const portions = findPutAwayTargets(items, String(parsed.partNo ?? ''), qty, parsed.wclItemNo);
+      if (!portions) return error('quantity_exceeds_available');
 
       const dateCode = rawCode(parsed.dateCode);
       const lotCode = rawCode(parsed.lotCode);
@@ -166,18 +177,20 @@ export function useScanMatchers(): ScanMatchers {
 
       return {
         type: 'single',
-        record: receivingItem,
+        record: items[0],
         apply: async () => {
-          await warehouse.recordPutAwayScan(
-            receivingOrderId,
-            receivingItem.id,
-            qty,
-            dateCode,
-            lotCode,
-            coo,
-            cow,
-            shelfBoxId ?? null
-          );
+          for (const portion of portions) {
+            await warehouse.recordPutAwayScan(
+              receivingOrderId,
+              portion.item.id,
+              portion.qty,
+              dateCode,
+              lotCode,
+              coo,
+              cow,
+              shelfBoxId ?? null
+            );
+          }
         },
       };
     } catch (e: any) {

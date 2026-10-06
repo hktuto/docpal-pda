@@ -50,8 +50,7 @@
       <PutAwayLotsPanel
         v-model:box-selections="boxSelections"
         v-model:expanded-items="expandedItems"
-        :items="visibleItems"
-        :staged-qty-by-item="stagedQtyByItem"
+        :groups="groups"
         :scans="scans"
         :boxes="boxes"
         :scanning="scanning"
@@ -86,7 +85,7 @@
       :options="review.options"
       :match-result="review.matchResult"
       :mode="review.capture.imagePath ? 'review' : 'manual'"
-      :context="{ task: 'put-away', receivingOrderId: orderId, receivingItem: scanItem ?? undefined, shelfBoxId: activeBoxId }"
+      :context="{ task: 'put-away', receivingOrderId: orderId, receivingItem: scanItem ?? undefined, putAwayItems: scanGroup?.items, shelfBoxId: activeBoxId }"
       @applied="onApplied"
       @retake="onRetake"
     />
@@ -111,7 +110,11 @@ import { useWarehouse } from "~/composables/useWarehouse";
 import { useToast } from "~/composables/useToast";
 import { scrollToItem } from "~/utils/scroll";
 import { rawCode } from "~/utils/text";
-import { findPutAwayTarget, classifyPutAwayScan } from "~/utils/putAwayScan";
+import { findPutAwayTargets, classifyPutAwayScan } from "~/utils/putAwayScan";
+import {
+  groupPutAwayItems,
+  type PutAwayItemGroup,
+} from "~/utils/putAwayGroups";
 import {
   extractMultiItemRows,
   type ScanMultiRow,
@@ -194,9 +197,13 @@ const closing = ref(false);
 const cancellingBox = ref<Record<string, boolean>>({});
 
 const scanItem = ref<PutAwayExpectedItem | null>(null);
-const scrollTargetItemId = ref<string | null>(null);
+// The group card the OCR review was opened from — its member lines ride in
+// the review context so one label's qty can span them (spec 2026-10-05).
+const scanGroup = ref<PutAwayItemGroup | null>(null);
+const scrollTargetGroupKey = ref<string | null>(null);
 // Item-first hardware scan mode: while set, the next gun scan is validated
-// strictly against this item instead of free-matching across visible items.
+// strictly against this part group's lines instead of free-matching across
+// all visible items. Holds the group key (normalized part no).
 const armedItemId = ref<string | null>(null);
 const scans = ref<PutAwayScan[]>([]);
 const addingScan = ref<Record<string, boolean>>({});
@@ -231,6 +238,20 @@ const visibleItems = computed(() =>
       item.remainingQty > 0 || (stagedQtyByItem.value[item.id] ?? 0) > 0
   )
 );
+
+// Display grouping: one card per part, summed qty (spec 2026-10-05). Writes
+// stay per receiving line — scans are split FIFO across the group's lines.
+const groups = computed(() =>
+  groupPutAwayItems(visibleItems.value, stagedQtyByItem.value)
+);
+
+const armedGroupItems = computed(() => {
+  if (!armedItemId.value) return visibleItems.value;
+  return (
+    groups.value.find((g) => g.key === armedItemId.value)?.items ??
+    visibleItems.value
+  );
+});
 
 const anyAddingAll = computed(() =>
   Object.values(addingAll.value).some(Boolean)
@@ -291,32 +312,42 @@ useHardwareScanner({
       const parsed = ocrResultToInput(parsedResult.parsed);
       console.log("parsed", parsed)
       const qty = typeof parsed.qty === "number" ? parsed.qty : Number(parsed.qty);
-      // Item-first (armed) mode: match strictly against the armed item only.
-      const target = armedItemId.value
-        ? findPutAwayTarget(
-            visibleItems.value.filter((i) => i.id === armedItemId.value),
-            parsed.partNo,
-            qty,
-            parsed.wclItemNo
-          )
-        : findPutAwayTarget(visibleItems.value, parsed.partNo, qty, parsed.wclItemNo);
-      console.log("target", target)
-      if (!target) {
+      // Item-first (armed) mode: match strictly against the armed part
+      // group's lines. One label's qty may span several same-part lines —
+      // the scan is split FIFO into one write per line.
+      const portions = findPutAwayTargets(
+        armedGroupItems.value,
+        parsed.partNo,
+        qty,
+        parsed.wclItemNo
+      );
+      if (!portions) {
         showToast(t("errors.scanned_part_does_not_match_item"));
         return false;
       }
-      await warehouse.recordPutAwayScan(
-        orderId,
-        target.id,
-        qty,
+      const batch = [
         rawCode(parsed.dateCode),
         rawCode(parsed.lotCode),
         rawCode(parsed.coo),
         rawCode(parsed.cow),
-        activeBoxId.value
-      );
+      ];
+      for (const portion of portions) {
+        await warehouse.recordPutAwayScan(
+          orderId,
+          portion.item.id,
+          portion.qty,
+          batch[0],
+          batch[1],
+          batch[2],
+          batch[3],
+          activeBoxId.value
+        );
+      }
       showToast(t("common.scanSuccess"));
-      scrollTargetItemId.value = target.id;
+      const hitGroup = groups.value.find((g) =>
+        g.items.some((i) => i.id === portions[0].item.id)
+      );
+      scrollTargetGroupKey.value = hitGroup?.key ?? null;
       await load();
       return true;
     } catch (e) {
@@ -328,9 +359,9 @@ useHardwareScanner({
   },
 });
 
-// Tapping the armed item's button disarms; tapping another item re-arms.
-function toggleArmScan(item: PutAwayExpectedItem) {
-  armedItemId.value = armedItemId.value === item.id ? null : item.id;
+// Tapping the armed group's button disarms; tapping another group re-arms.
+function toggleArmScan(group: PutAwayItemGroup) {
+  armedItemId.value = armedItemId.value === group.key ? null : group.key;
 }
 
 // Box QR scan: an existing open box of the order becomes active; the order's
@@ -458,24 +489,24 @@ async function load() {
     }
     expandedItemBoxes.value = nextExpanded;
 
-    // Auto-disarm when the armed item has left the visible list (fully put
+    // Auto-disarm when the armed group has left the visible list (fully put
     // away with no staged scans left).
     if (
       armedItemId.value &&
-      !visibleItems.value.some((i) => i.id === armedItemId.value)
+      !groups.value.some((g) => g.key === armedItemId.value)
     ) {
       armedItemId.value = null;
     }
 
-    if (scrollTargetItemId.value) {
-      const targetId = scrollTargetItemId.value;
-      scrollTargetItemId.value = null;
+    if (scrollTargetGroupKey.value) {
+      const targetKey = scrollTargetGroupKey.value;
+      scrollTargetGroupKey.value = null;
       await nextTick();
-      scrollToItem({ itemId: targetId });
+      scrollToItem({ itemId: targetKey });
     }
   } catch (e) {
     error.value = errorMessage(e);
-    scrollTargetItemId.value = null;
+    scrollTargetGroupKey.value = null;
   } finally {
     pending.value = false;
   }
@@ -576,15 +607,16 @@ async function addAllToBox(boxId: string) {
   }
 }
 
-async function openScan(item: PutAwayExpectedItem) {
+async function openScan(group: PutAwayItemGroup) {
   error.value = null;
-  scrollTargetItemId.value = item.id;
-  scanItem.value = item;
+  scrollTargetGroupKey.value = group.key;
+  scanItem.value = group.items[0];
+  scanGroup.value = group;
   scanning.value = true;
   try {
     const capture = await captureLabel();
     if (!capture) {
-      scrollTargetItemId.value = null;
+      scrollTargetGroupKey.value = null;
       return;
     }
     // A label whose items table lists several parts parses into 2+ rows
@@ -604,8 +636,9 @@ async function openScan(item: PutAwayExpectedItem) {
     const result = await processCapture(capture, {
       task: "put-away",
       receivingOrderId: orderId,
-      receivingItem: item,
-      targets: item.partNo ? [item.partNo] : [],
+      receivingItem: group.items[0],
+      putAwayItems: group.items,
+      targets: group.partNo ? [group.partNo] : [],
       confirmSingleMatch: true,
       shelfBoxId: activeBoxId.value,
     });
@@ -614,7 +647,7 @@ async function openScan(item: PutAwayExpectedItem) {
       review.value = result;
       reviewOpen.value = true;
     } else {
-      scrollTargetItemId.value = null;
+      scrollTargetGroupKey.value = null;
       if (result.status === "error") {
         playScanError();
         showToast(result.message);
@@ -623,7 +656,7 @@ async function openScan(item: PutAwayExpectedItem) {
       }
     }
   } catch (e) {
-    scrollTargetItemId.value = null;
+    scrollTargetGroupKey.value = null;
     playScanError();
     showToast(errorMessage(e));
   } finally {
@@ -644,8 +677,8 @@ async function onApplyMulti(entries: { row: ScanMultiRow; index: number }[]) {
     let anyOk = false;
     for (const { row, index } of entries) {
       const qty = row.qty ?? 0;
-      const target = findPutAwayTarget(visibleItems.value, row.partNo, qty);
-      if (!target) {
+      const portions = findPutAwayTargets(visibleItems.value, row.partNo, qty);
+      if (!portions) {
         results.push({
           index,
           ok: false,
@@ -654,7 +687,9 @@ async function onApplyMulti(entries: { row: ScanMultiRow; index: number }[]) {
         continue;
       }
       try {
-        await warehouse.recordPutAwayScan(orderId, target.id, qty, null, null, null, null, activeBoxId.value);
+        for (const portion of portions) {
+          await warehouse.recordPutAwayScan(orderId, portion.item.id, portion.qty, null, null, null, null, activeBoxId.value);
+        }
         results.push({ index, ok: true });
         anyOk = true;
       } catch (e) {
@@ -695,12 +730,12 @@ function onMultiRowRemoved(index: number) {
 
 async function onRetake() {
   reviewOpen.value = false;
-  const item = scanItem.value;
-  if (!item) {
+  const group = scanGroup.value;
+  if (!group) {
     error.value = errorMessage(new I18nError("no_scan_item_to_retake"));
     return;
   }
-  await openScan(item);
+  await openScan(group);
 }
 </script>
 
