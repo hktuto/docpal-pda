@@ -1095,7 +1095,10 @@ export default {
       bulkEditHint: "所选子库将会取代全部 {count} 个已选货架的当前设置。全部不勾选代表改为共用货架。",
       bulkEditWarningToggle: "同时更新警告",
       bulkEditWarningMixed: "当前设置不一 — 输入以取代全部",
-      bulkEditWarningHint: "凡分配指向此货架，即显示 ⚠ 图标。留空代表清除全部 {count} 个已选货架的警告。"
+      bulkEditWarningHint: "凡分配指向此货架，即显示 ⚠ 图标。留空代表清除全部 {count} 个已选货架的警告。",
+      bulkEditZoneToggle: "同时更新区域",
+      bulkEditZoneMixed: "当前设置不一 — 输入以取代全部",
+      bulkEditZoneHint: "留空代表清除全部 {count} 个已选货架的区域。"
     },
     print: {
       title: "打印标签（{count}）",

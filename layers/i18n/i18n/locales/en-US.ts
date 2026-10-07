@@ -1095,7 +1095,10 @@ export default {
       bulkEditHint: "The selected sub-inventories will REPLACE the current value on all {count} selected shelves. Leave everything unchecked to make them shared.",
       bulkEditWarningToggle: "Also update the warning",
       bulkEditWarningMixed: "Mixed values — enter to replace on all",
-      bulkEditWarningHint: "Shown as a ⚠ icon wherever an allocation points at the shelf. Leave empty to clear the warning on all {count} selected shelves."
+      bulkEditWarningHint: "Shown as a ⚠ icon wherever an allocation points at the shelf. Leave empty to clear the warning on all {count} selected shelves.",
+      bulkEditZoneToggle: "Also update the zone",
+      bulkEditZoneMixed: "Mixed values — enter to replace on all",
+      bulkEditZoneHint: "Leave empty to clear the zone on all {count} selected shelves."
     },
     print: {
       title: "Print labels ({count})",

@@ -10,6 +10,7 @@ interface ShelfRow {
   code: string;
   subInventoryScopes?: SubInventoryScope[] | null;
   warning?: string | null;
+  zone?: string | null;
 }
 
 const props = defineProps<{
@@ -48,6 +49,13 @@ const changeWarning = ref(commonWarning != null);
 const warningText = ref(commonWarning ?? "");
 const warningMixed = commonWarning === undefined;
 
+// Zone: same pattern as warning — untouched unless the toggle is on.
+const zones = props.shelves.map((s) => s.zone ?? null);
+const commonZone = zones.every((z) => z === zones[0]) ? zones[0] : undefined;
+const changeZone = ref(commonZone != null);
+const zoneText = ref(commonZone ?? "");
+const zoneMixed = commonZone === undefined;
+
 const saving = ref(false);
 const saveError = ref("");
 
@@ -57,6 +65,7 @@ async function save() {
   const payload = {
     subInventoryScopes: scopes.value.length > 0 ? scopes.value : null,
     ...(changeWarning.value ? { warning: warningText.value.trim() || null } : {}),
+    ...(changeZone.value ? { zone: zoneText.value.trim() || null } : {}),
   };
   try {
     await Promise.all(props.shelves.map((s) => api.patch(`/admin/shelves/${s.code}`, payload)));
@@ -93,6 +102,23 @@ async function save() {
             :placeholder="warningMixed ? $t('admin.shelves.bulkEditWarningMixed') : $t('admin.fields.shelfWarning')"
           />
           <p class="hint">{{ $t("admin.shelves.bulkEditWarningHint", { count: shelves.length }) }}</p>
+        </template>
+      </div>
+
+      <div class="warning-section">
+        <label class="warning-toggle">
+          <input v-model="changeZone" type="checkbox" :disabled="saving" />
+          {{ $t("admin.shelves.bulkEditZoneToggle") }}
+        </label>
+        <template v-if="changeZone">
+          <input
+            v-model="zoneText"
+            type="text"
+            class="warning-input"
+            :disabled="saving"
+            :placeholder="zoneMixed ? $t('admin.shelves.bulkEditZoneMixed') : $t('admin.fields.zone')"
+          />
+          <p class="hint">{{ $t("admin.shelves.bulkEditZoneHint", { count: shelves.length }) }}</p>
         </template>
       </div>
 
