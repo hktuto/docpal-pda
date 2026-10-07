@@ -867,10 +867,10 @@ export async function recordPutAwayScan(
     await queryRun(
       tx,
       sql`UPDATE receiving_invoice_items
-          SET date_code = COALESCE(${input.dateCode ?? null}, date_code),
-              lot_code = COALESCE(${input.lotCode ?? null}, lot_code),
-              coo = COALESCE(${input.coo ?? null}, coo),
-              cow = COALESCE(${input.cow ?? null}, cow)
+          SET date_code = COALESCE(date_code, ${input.dateCode ?? null}),
+              lot_code = COALESCE(lot_code, ${input.lotCode ?? null}),
+              coo = COALESCE(coo, ${input.coo ?? null}),
+              cow = COALESCE(cow, ${input.cow ?? null})
           WHERE id = ${item.id}`
     );
 

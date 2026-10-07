@@ -1395,10 +1395,10 @@ export async function scanPickingItem(
     const txnRows: (typeof inventoryTransactions.$inferInsert)[] = [];
     for (const p of portions) {
       const pid = newId();
-      const dateCode = input.dateCode ?? p.dateCode;
-      const lotCode = input.lotCode ?? p.lotCode;
-      const coo = input.coo ?? p.coo;
-      const cow = input.cow ?? p.cow;
+      const dateCode = p.dateCode ?? input.dateCode;
+      const lotCode = p.lotCode ?? input.lotCode;
+      const coo = p.coo ?? input.coo;
+      const cow = p.cow ?? input.cow;
       await queryRun(
         tx,
         sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty,
