@@ -83,6 +83,7 @@ export const ALL_TABLES = [
   "sync_events",
   "app_events",
   "warehouse_config",
+  "outdated_scan_warnings",
   "inventory_transactions",
   "transaction_logs",
   "goods_verify_tasks",

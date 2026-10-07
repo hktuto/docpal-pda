@@ -41,6 +41,8 @@ Each item row on the scan session page shows where its remaining qty is allocate
 
 Apply the queued scans with **Confirm** as usual.
 
+**Outdated date code alert:** if a scanned label's date code is older than the supplier's outdated limit, the scan still applies but an alert pops up naming the supplier, the date code and the limit, and the order gets a warning chip on the list and detail pages. Keep working — an admin has been notified. The order cannot be finished while such warnings are unresolved.
+
 ### Scan item into box (cross-order)
 
 The boxes section of the detail page has a **Scan item into box** toggle per open box. With it armed, scanning a part barcode picks that item straight into the box — even when the item belongs to a *different* picking order (a box may hold packages from several orders). The system resolves the barcode across all open orders; if nothing matches or more than one order's item could match, a message explains why nothing was added. Scanning another box's toggle switches the armed box.
@@ -52,3 +54,5 @@ If the quantity is wrong, the item is damaged, or stock cannot be found, use the
 ## 6. Finish the order
 
 When all lines are fully picked, the order status changes to finished and the order's packed boxes move on to measuring. No task is created at finish anymore — closing a box is the measuring completion, and each closed box gets its own verify task when the verify step is enabled.
+
+If the order has unresolved outdated date-code warnings (warning chip on the order), the order does not finish — the auto-finish is skipped and the manual **Finish picking** action shows a message with the number of unresolved warnings. Ask an admin to resolve the order's warnings (admin console → Issues → Outdated warnings); the order finishes automatically once they are resolved.

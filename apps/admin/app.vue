@@ -112,6 +112,7 @@ onBeforeUnmount(() => {
               :class="{ 'router-link-active': isActive(l.route) }"
             >
               {{ $t(l.title) }}
+              <OutdatedWarningsBadge v-if="l.route === '/outdated-warnings'" />
             </NuxtLink>
           </div>
         </div>

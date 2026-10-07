@@ -530,7 +530,8 @@ onMounted(() => {
     .catch(() => {});
 });
 
-// Reload when the order changes elsewhere (PDA picks, issue reports, allocation).
+// Reload when the order changes elsewhere (PDA picks, issue reports,
+// allocation, outdated-warning create/resolve).
 // Busy while a modal is open: banner instead of a silent reload.
 const changeBusy = computed(() => reportOpen.value || availOpen.value || overrideOpen.value);
 const {
@@ -545,6 +546,8 @@ const {
     "picking_order.deleted",
     "picking.reordered",
     "allocation.computed",
+    "outdated.warning.created",
+    "outdated.warning.resolved",
   ],
   async () => {
     await load();
@@ -558,6 +561,7 @@ const {
   <div>
     <div class="page-head">
       <h1>{{ order?.orderNo ?? ""}}</h1>
+      <OutdatedWarningChip class="head-chip" :count="order?.outdatedWarningCount ?? 0" order-kind="picking" />
       <div class="head-actions">
         <button class="btn" :disabled="downloadingPickingList" @click="downloadPickingList">
           {{ $t("admin.pages.pickingOrders.downloadPickingList") }}
@@ -853,6 +857,10 @@ const {
 </template>
 
 <style scoped>
+.head-chip {
+  margin-right: auto;
+  margin-left: 0.75rem;
+}
 .head-actions {
   display: flex;
   gap: 0.625rem;

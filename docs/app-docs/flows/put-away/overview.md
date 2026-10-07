@@ -43,6 +43,13 @@ Use the Put-away flow after receiving has created receiving-area inventory and t
 7. When every piece is put away the order clears itself; the inventory lots
    carry the new shelf location.
 
+**Outdated date-code warnings:** if a scanned label's date code is older than
+the supplier's outdated limit (set per supplier in the admin console), the
+scan still succeeds but the app shows an alert and flags the order with a
+warning chip. Put-away itself is not blocked — but the order does not clear
+itself while such warnings are unresolved, until an admin resolves them in
+the admin console.
+
 ## Related guides
 
 - [Step-by-step operator guide](./steps.md)

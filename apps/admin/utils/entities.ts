@@ -289,6 +289,7 @@ export const navSections: { title: string; links: { route: string; title: string
     links: [
       { route: "/issues/receiving", title: "admin.navLinks.receivingIssues" },
       { route: "/issues/picking", title: "admin.navLinks.pickingIssues" },
+      { route: "/outdated-warnings", title: "admin.navLinks.outdatedWarnings" },
     ],
   },
   {

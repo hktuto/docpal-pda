@@ -5,6 +5,7 @@
       <slot />
     </main>
     <ToastHost />
+    <OutdatedWarningDialog />
   </div>
 </template>
 

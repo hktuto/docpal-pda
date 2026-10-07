@@ -2,8 +2,19 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createBackendWarehouseService } from './backendWarehouse';
 import { createWarehouseService } from '../warehouse';
 import { ApiError } from '../apiClient';
+import { setOutdatedWarningHandler } from '../scanWarningBus';
+import type { OutdatedScanWarning } from '../types';
 
 const BASE_URL = 'http://backend.test';
+
+const OUTDATED: OutdatedScanWarning = { supplierCode: 'KOA', dateCode: '3724', limitMonths: 12 };
+
+/** Capture warnings the adapter pushes onto the scan-warning bus. */
+function captureWarnings(): OutdatedScanWarning[] {
+  const captured: OutdatedScanWarning[] = [];
+  setOutdatedWarningHandler((w) => captured.push(w));
+  return captured;
+}
 
 function jsonResponse(data: unknown, status = 200): Response {
   return {
@@ -401,6 +412,27 @@ describe('backendWarehouse put-away flow', () => {
     });
   });
 
+  it('recordPutAwayScan returns the outdated warning and pushes the alert', async () => {
+    const captured = captureWarnings();
+    fetchMock.mockResolvedValue(jsonResponse({ id: 'scan1', outdatedWarning: OUTDATED }, 201));
+
+    const result = await service().recordPutAwayScan('ro1', 'rii1', 25, '3724', null, null, null);
+
+    expect(result.id).toBe('scan1');
+    expect(result.outdatedWarning).toEqual(OUTDATED);
+    expect(captured).toEqual([OUTDATED]);
+  });
+
+  it('recordPutAwayScan pushes no alert when the warning is null', async () => {
+    const captured = captureWarnings();
+    fetchMock.mockResolvedValue(jsonResponse({ id: 'scan1', outdatedWarning: null }, 201));
+
+    const result = await service().recordPutAwayScan('ro1', 'rii1', 25, '2610', null, null, null);
+
+    expect(result.outdatedWarning).toBeNull();
+    expect(captured).toEqual([]);
+  });
+
 });
 
 describe('backendWarehouse picking flow', () => {
@@ -517,6 +549,30 @@ describe('backendWarehouse picking flow', () => {
     });
   });
 
+  it('scanPickingItem returns the outdated warning and pushes it to the alert bus', async () => {
+    const captured = captureWarnings();
+    fetchMock.mockResolvedValue(jsonResponse({ packageIds: ['pkg1'], outdatedWarning: OUTDATED }, 201));
+
+    const result = await service().scanPickingItem('pi1', {
+      allocationId: 'a1',
+      qty: 10,
+      dateCode: '3724',
+    });
+
+    expect(result.outdatedWarning).toEqual(OUTDATED);
+    expect(captured).toEqual([OUTDATED]);
+  });
+
+  it('scanPickingItem pushes no alert when the warning is null', async () => {
+    const captured = captureWarnings();
+    fetchMock.mockResolvedValue(jsonResponse({ packageIds: ['pkg1'], outdatedWarning: null }, 201));
+
+    const result = await service().scanPickingItem('pi1', { allocationId: 'a1', qty: 10 });
+
+    expect(result.outdatedWarning).toBeNull();
+    expect(captured).toEqual([]);
+  });
+
   it('verifyPackage POSTs /packages/:id/verify', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
 
@@ -573,6 +629,17 @@ describe('backendWarehouse picking flow', () => {
 
     await service().scanIntoShippingBox('box1', { barcode: 'ABC-123', qty: 500 });
     expect(JSON.parse(lastCall().init.body as string)).toEqual({ barcode: 'ABC-123', qty: 500 });
+  });
+
+  it('scanIntoShippingBox sends the parsed dateCode and pushes the outdated alert', async () => {
+    const captured = captureWarnings();
+    fetchMock.mockResolvedValue(jsonResponse({ packageIds: ['pkg1'], outdatedWarning: OUTDATED }, 201));
+
+    const result = await service().scanIntoShippingBox('box1', { barcode: 'ABC-123', dateCode: '3724' });
+
+    expect(JSON.parse(lastCall().init.body as string)).toEqual({ barcode: 'ABC-123', dateCode: '3724' });
+    expect(result.outdatedWarning).toEqual(OUTDATED);
+    expect(captured).toEqual([OUTDATED]);
   });
 
   it('finishPickingOrder POSTs the finish verb and returns the order status', async () => {

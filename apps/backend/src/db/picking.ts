@@ -11,6 +11,13 @@ import { workLockExpiry } from "./allocate.js";
 import { isStepEnabled, pickingShelfScan } from "../config.js";
 import { allowedOrgCondition, allowedOrgFilter } from "./org-filter.js";
 import { userScopeCondition, type UserScopeEntry } from "./user-scope.js";
+import {
+  assertNoUnresolvedOutdatedWarnings,
+  checkPartScanOutdated,
+  recordOutdatedWarning,
+  unresolvedOutdatedWarningCount,
+  type OutdatedWarningInfo,
+} from "./outdated.js";
 
 // Picking-order org visibility, split by picking_order_type:
 //   invoice → the flow config's allowedOrgIds AND the caller's exact
@@ -248,6 +255,9 @@ async function unassignPackageFromBoxTx(tx: DbOrTx, packageId: string): Promise<
  * picked_qty is fresh in this tx. No next-step task is created anymore
  * (box-scoped design): closing a box is the measuring completion, and the
  * box's verify task is spawned by closeShippingBox.
+ * Held (returns false, order stays 'picking') while the order has unresolved
+ * outdated-scan warnings — an admin resolve-order re-runs this check via
+ * retryAutoFinishPickingOrder (spec 2026-10-07).
  */
 async function maybeAutoFinishPickingOrder(
   tx: DbOrTx,
@@ -262,6 +272,7 @@ async function maybeAutoFinishPickingOrder(
   );
   if (items.length === 0) return false;
   if (!items.every((i) => i.pickedQty >= i.qty)) return false;
+  if ((await unresolvedOutdatedWarningCount(tx, "picking", order.id)) > 0) return false;
 
   await queryRun(tx, sql`UPDATE picking_orders SET status = 'finished', working_by = NULL, working_at = NULL, last_update_date = ${now()} WHERE id = ${order.id}`);
   await logTransition(tx, {
@@ -272,6 +283,19 @@ async function maybeAutoFinishPickingOrder(
     actorId: a.actorId,
   });
   return true;
+}
+
+/**
+ * Post-resolution re-check (spec 2026-10-07): after an admin resolves the
+ * order's outdated warnings, finish the order when every item is fully picked
+ * (the auto-finish was held while warnings were unresolved). Returns true when
+ * the order finished.
+ */
+export async function retryAutoFinishPickingOrder(
+  db: AppDb,
+  input: { pickingOrderId: string; actorId: string | null }
+): Promise<boolean> {
+  return db.transaction((tx) => maybeAutoFinishPickingOrder(tx, { pickingOrderId: input.pickingOrderId, actorId: input.actorId }));
 }
 
 // ---------------------------------------------------------------------------
@@ -545,6 +569,8 @@ export interface PickingOrderListRow {
   totalQty: number;
   pickedQty: number;
   allocatedQty: number;
+  /** Unresolved outdated-scan warnings (spec 2026-10-07); 0 = none. */
+  outdatedWarningCount: number;
   createdDate: Date;
   lastUpdateDate: Date;
 }
@@ -625,6 +651,8 @@ export async function listPickingOrders(
         COALESCE(SUM(pi.qty), 0)::int AS "totalQty",
         COALESCE(SUM(pi.picked_qty), 0)::int AS "pickedQty",
         COALESCE(SUM(pi.allocated_qty), 0)::int AS "allocatedQty",
+        (SELECT COUNT(*)::int FROM outdated_scan_warnings osw
+         WHERE osw.order_kind = 'picking' AND osw.order_id = po.id AND osw.resolved_at IS NULL) AS "outdatedWarningCount",
         po.created_date AS "createdDate",
         po.last_update_date AS "lastUpdateDate",
         COUNT(*) OVER ()::int AS "total"
@@ -756,6 +784,8 @@ export interface PickingOrderRow {
   issueReportedAt: Date | null;
   issueReportedBy: string | null;
   issueReportedByName: string | null;
+  /** Unresolved outdated-scan warnings (spec 2026-10-07); 0 = none. */
+  outdatedWarningCount: number;
   createdDate: Date;
   lastUpdateDate: Date;
 }
@@ -900,6 +930,8 @@ export async function getPickingOrderDetail(
         po.issue_note AS "issueNote", po.issue_remark AS "issueRemark",
         po.issue_reported_at AS "issueReportedAt", po.issue_reported_by AS "issueReportedBy",
         ru.display_name AS "issueReportedByName",
+        (SELECT COUNT(*)::int FROM outdated_scan_warnings osw
+         WHERE osw.order_kind = 'picking' AND osw.order_id = po.id AND osw.resolved_at IS NULL) AS "outdatedWarningCount",
         po.created_date AS "createdDate", po.last_update_date AS "lastUpdateDate"
       FROM picking_orders po
       LEFT JOIN users w ON w.id = po.working_by
@@ -1213,7 +1245,7 @@ export async function scanPickingItem(
   db: AppDb,
   pickingItemId: string,
   input: ScanPickingItemInput
-): Promise<{ packageIds: string[] }> {
+): Promise<{ packageIds: string[]; outdatedWarning: OutdatedWarningInfo | null }> {
   return db.transaction(async (tx) => {
     const item = await queryGet<{ id: string; pickingOrderId: string; partNo: string; qty: number; packagedQty: number }>(
       tx,
@@ -1401,6 +1433,29 @@ export async function scanPickingItem(
     }
     await tx.insert(inventoryTransactions).values(txnRows);
 
+    // Supplier outdated date-code check (spec 2026-10-07): the scan succeeds
+    // regardless — a hit records the warning row in this tx (so a rolled-back
+    // scan leaves no warning) and rides on the response for the PDA alert.
+    // The label's own date code is checked; no date code on the scan = no
+    // check. Supplier = the profile whose brands cover the item part's brand.
+    let outdatedWarning: OutdatedWarningInfo | null = null;
+    const outdatedHit = await checkPartScanOutdated(tx, { partNo: item.partNo, dateCode: input.dateCode });
+    if (outdatedHit) {
+      outdatedWarning = await recordOutdatedWarning(tx, {
+        orderKind: "picking",
+        orderId: item.pickingOrderId,
+        orderItemId: item.id,
+        packageId: packageIds[0] ?? null,
+        supplierCode: outdatedHit.supplierCode,
+        wclItemNo: outdatedHit.wclItemNo,
+        partNo: outdatedHit.partNo,
+        dateCode: outdatedHit.dateCode,
+        limitMonths: outdatedHit.limitMonths,
+        qty: input.qty,
+        scannedBy: input.actorId,
+      });
+    }
+
     if (order.status === "pending" || order.status === "allocated") {
       await queryRun(tx, sql`UPDATE picking_orders SET status = 'picking', last_update_date = ${at} WHERE id = ${order.id}`);
       await logTransition(tx, {
@@ -1438,7 +1493,7 @@ export async function scanPickingItem(
 
     await recomputePickingItem(tx, item.id);
     await maybeAutoFinishPickingOrder(tx, { pickingOrderId: item.pickingOrderId, actorId: input.actorId });
-    return { packageIds };
+    return { packageIds, outdatedWarning };
   });
 }
 
@@ -1455,8 +1510,8 @@ export async function scanPickingItem(
  */
 export async function scanIntoShippingBox(
   db: AppDb,
-  input: { shippingBoxId: string; barcode: string; qty?: number; actorId: string; shelfCode?: string | null; boxId?: string | null }
-): Promise<{ packageIds: string[] }> {
+  input: { shippingBoxId: string; barcode: string; qty?: number; actorId: string; shelfCode?: string | null; boxId?: string | null; dateCode?: string | null }
+): Promise<{ packageIds: string[]; outdatedWarning: OutdatedWarningInfo | null }> {
   const barcode = input.barcode.trim();
   if (barcode === "") throw new HTTPException(400, { message: "barcode_required" });
   const rows = await queryAll<{
@@ -1498,6 +1553,9 @@ export async function scanIntoShippingBox(
     scannedPartNo: barcode,
     shelfCode: input.shelfCode ?? null,
     boxId: input.boxId ?? null,
+    // The parsed label date code, when the caller decoded one — drives the
+    // supplier outdated-scan warning (spec 2026-10-07).
+    dateCode: input.dateCode ?? null,
   });
 }
 
@@ -2215,6 +2273,8 @@ export async function closeShippingBox(db: AppDb, input: { shippingBoxId: string
 /**
  * Explicit finish: all items fully picked (boxed) → order 'finished'. No task
  * is created (box-scoped design) — returns the finished order's id + status.
+ * Blocked with 409 unresolved_outdated_warnings while the order has
+ * unresolved outdated-scan warnings (spec 2026-10-07).
  */
 export async function finishPickingOrder(
   db: AppDb,
@@ -2224,6 +2284,7 @@ export async function finishPickingOrder(
     const order = await loadOrderForWrite(tx, input.pickingOrderId);
     assertOrderWritable(order);
     await assertActor(tx, input.actorId);
+    await assertNoUnresolvedOutdatedWarnings(tx, "picking", order.id);
     const items = await queryAll<{ qty: number; pickedQty: number }>(
       tx,
       sql`SELECT qty, picked_qty AS "pickedQty" FROM picking_items WHERE picking_order_id = ${order.id}`

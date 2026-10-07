@@ -20,7 +20,6 @@ import type {
   ReportPickingIssuesResult,
   PutAwayCandidate,
   PutAwayDetail,
-  PutAwayScan,
   PutAwayTaskDetail,
   PutAwayTaskListRow,
   Shelf,
@@ -42,9 +41,13 @@ import type {
   SupplierQrcodeTemplate,
   BoxSearchResult,
   LabelsData,
+  ScanPickingItemResult,
+  ScanIntoShippingBoxResult,
+  PutAwayScanResult,
 } from "../types";
 import type { WarehouseService } from "../warehouse";
 import { createApiClient } from "../apiClient";
+import { emitOutdatedWarning } from "../scanWarningBus";
 
 export interface CreateBackendWarehouseServiceOptions {
   apiBaseUrl?: string;
@@ -178,8 +181,8 @@ export function createBackendWarehouseService(
     async scanPickingItem(
       itemId: string,
       input: ScanPickingItemInput
-    ): Promise<{ packageIds: string[] }> {
-      return client.post(`/picking-items/${itemId}/scan`, {
+    ): Promise<ScanPickingItemResult> {
+      const result = await client.post<ScanPickingItemResult>(`/picking-items/${itemId}/scan`, {
         allocationId: input.allocationId,
         qty: input.qty,
         dateCode: input.dateCode ?? undefined,
@@ -192,6 +195,10 @@ export function createBackendWarehouseService(
         shelfCode: input.shelfCode ?? undefined,
         boxId: input.boxId ?? undefined,
       });
+      // Supplier outdated date-code warning (spec 2026-10-07): the scan
+      // succeeded — the alert dialog pops while scanning continues.
+      emitOutdatedWarning(result.outdatedWarning);
+      return result;
     },
     // require-match scan-time presence check (pickingShelfScan flow config).
     async getPickingShelfStock(query: PickingShelfStockQuery): Promise<{ qty: number }> {
@@ -258,15 +265,19 @@ export function createBackendWarehouseService(
     // Cross-order packing: resolve the barcode to an open picking item +
     // allocation across all orders and pick it straight into this box
     // (404 no_matching_picking_item / 409 ambiguous_picking_item /
-    // shipping_box_not_open).
+    // shipping_box_not_open). The label's parsed date code rides along so the
+    // backend's outdated date-code check can warn on this path too.
     async scanIntoShippingBox(
       shippingBoxId: string,
-      input: { barcode: string; qty?: number }
-    ): Promise<{ packageIds: string[] }> {
-      return client.post(`/shipping-boxes/${shippingBoxId}/scan`, {
+      input: { barcode: string; qty?: number; dateCode?: string | null }
+    ): Promise<ScanIntoShippingBoxResult> {
+      const result = await client.post<ScanIntoShippingBoxResult>(`/shipping-boxes/${shippingBoxId}/scan`, {
         barcode: input.barcode,
         qty: input.qty ?? undefined,
+        dateCode: input.dateCode ?? undefined,
       });
+      emitOutdatedWarning(result.outdatedWarning);
+      return result;
     },
     // Explicit finish: all items fully boxed → order finished. Boxing the
     // last package also auto-finishes (no task is created either way).
@@ -320,8 +331,8 @@ export function createBackendWarehouseService(
       cow: string | null,
       shelfCode?: string | null,
       serialNo?: string | null
-    ): Promise<PutAwayScan> {
-      return client.post(`/receiving-orders/${receivingOrderId}/put-away-scans`, {
+    ): Promise<PutAwayScanResult> {
+      const result = await client.post<PutAwayScanResult>(`/receiving-orders/${receivingOrderId}/put-away-scans`, {
         receivingInvoiceItemId,
         qty,
         dateCode: dateCode ?? undefined,
@@ -331,6 +342,8 @@ export function createBackendWarehouseService(
         shelfCode: shelfCode ?? undefined,
         serialNo: serialNo ?? undefined,
       });
+      emitOutdatedWarning(result.outdatedWarning);
+      return result;
     },
 
     // Shelf-direct commit (spec 2026-10-06): assign every pending scan of the

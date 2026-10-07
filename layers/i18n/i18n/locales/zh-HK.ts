@@ -537,6 +537,12 @@ export default {
     multiAdd: "加入 {count} 個項目",
     multiRemove: "移除該行"
   },
+  outdatedWarning: {
+    title: "日期碼過期",
+    message: "日期碼 {dateCode} 已過期 — 供應商 {supplierCode} 的期限為 {limitMonths} 個月。已通知管理員；在解決前該訂單無法完成。",
+    confirm: "知道了",
+    chip: "⚠ 過期（{count}）"
+  },
   labelScanReviewModal: {
     titleManual: "手動輸入",
     titleReview: "複核掃描",
@@ -757,7 +763,8 @@ export default {
     counted_qty_must_be_non_negative_integer: "實點數量必須為非負整數",
     shelf_box_not_closed: "貨架箱號尚未關閉",
     invalid_date: "日期無效",
-    network_error: "網絡錯誤，請檢查連接後重試。"
+    network_error: "網絡錯誤，請檢查連接後重試。",
+    unresolved_outdated_warnings: "此訂單有 {count} 條未解決的日期碼過期警告 — 請先聯絡管理員解決，再完成訂單。"
   },
   status: {
     receiving: {
@@ -1029,7 +1036,8 @@ export default {
       pdaViewConfig: "PDA 視圖",
       userBadges: "用戶證件",
       userProfiles: "用戶子庫範圍",
-      labelPrintRules: "標籤列印規則"
+      labelPrintRules: "標籤列印規則",
+      outdatedWarnings: "過期日期碼警告"
     },
     auth: {
       logout: "登出",
@@ -1268,6 +1276,10 @@ export default {
         dateCodeFormat: "日期代碼格式",
         dateCodePlain: "原值",
         dateCodeKoa: "KOA 格式 — 月份計數 + 週數（例如 1723L789 → 2326）",
+        outdatedLimitMonths: "過期期限（月）",
+        outdatedLimitPlaceholder: "12",
+        outdatedLimitHint: "揀貨／上架掃描時，日期碼早於此月數的標籤會產生過期警告。留空表示不檢查。",
+        outdatedLimitInvalid: "請輸入正整數月數，或留空表示不檢查。",
         scanTemplate: "掃描模板",
         sampleScan: "掃描範例",
         samplePlaceholder: "掃描或貼上此供應商的真實標籤，例如 :RK73H1JTTD1002F:S1:14:X:L2601A:602:NAME",
@@ -1327,6 +1339,36 @@ export default {
           noMatch: "與模板不符。",
           pieceCount: "此掃描有 {n} 段，但模板預期 {m} 段。"
         }
+      },
+      outdatedWarnings: {
+        title: "過期日期碼警告",
+        chip: "過期警告：{count}",
+        allStates: "全部狀態",
+        statePending: "待處理",
+        stateResolved: "已處理",
+        allKinds: "全部流程",
+        kindPicking: "揀貨",
+        kindPutaway: "上架",
+        allSuppliers: "全部供應商",
+        flow: "流程",
+        order: "訂單",
+        part: "零件",
+        supplier: "供應商",
+        dateCode: "日期碼",
+        limit: "期限（月）",
+        qty: "數量",
+        scannedBy: "掃描者",
+        scannedAt: "掃描時間",
+        state: "狀態",
+        resolution: "處理結果",
+        none: "沒有過期警告。",
+        resolveOrder: "處理訂單",
+        resolveTitle: "處理過期警告 — {orderNo}",
+        resolveHint: "此操作會處理此訂單全部 {count} 個未處理警告；被擱置的訂單將會完成。",
+        note: "備註",
+        notePlaceholder: "處理備註（可留空）…",
+        resolveSubmit: "處理",
+        resolvedDone: "已處理 {orderNo} 的 {count} 個警告。"
       },
       subInventories: {
         title: "子庫",

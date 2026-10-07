@@ -286,6 +286,11 @@ input:focus {
   color: #991b1b;
 }
 
+.badge--warning {
+  background: var(--warning-soft);
+  color: #92400e;
+}
+
 .empty {
   padding: 2rem;
   text-align: center;

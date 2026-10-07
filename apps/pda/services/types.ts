@@ -305,6 +305,36 @@ export interface OcrParsedFields {
 }
 
 // ------------------------------------------------------------------
+// Supplier outdated date-code scan warnings (spec
+// docs/superpowers/specs/2026-10-07-supplier-outdated-datecode-warning-design.md).
+// Picking / put-away scans succeed even when the label's date code is older
+// than the supplier's limit — the response then carries this payload and the
+// PDA shows a dismissible alert; the order's completion is blocked until an
+// admin resolves its warnings (the count rides on the order list/detail).
+// ------------------------------------------------------------------
+
+export interface OutdatedScanWarning {
+  supplierCode: string;
+  dateCode: string;
+  limitMonths: number;
+}
+
+/** POST /picking-items/:id/scan response. */
+export interface ScanPickingItemResult {
+  packageIds: string[];
+  /** Non-null when the scanned date code is older than the supplier's limit. */
+  outdatedWarning: OutdatedScanWarning | null;
+}
+
+/** POST /shipping-boxes/:id/scan response — same shape as the item scan. */
+export type ScanIntoShippingBoxResult = ScanPickingItemResult;
+
+/** POST /receiving-orders/:id/put-away-scans response. */
+export type PutAwayScanResult = PutAwayScan & {
+  outdatedWarning: OutdatedScanWarning | null;
+};
+
+// ------------------------------------------------------------------
 // Picking — DTOs matching apps/backend (:3002), see
 // docs/backend/api-design.md §Picking. All reads are nested (no client
 // joins); statuses are plain strings (pending | picking | finished |
@@ -342,6 +372,8 @@ export interface PickingOrderListRow {
   pickedQty: number;
   allocationStatus: string;
   allocatedQty: number;
+  /** Unresolved outdated-scan warnings on the order (spec 2026-10-07). */
+  outdatedWarningCount: number;
 }
 
 export interface PickingWorkLock {
@@ -459,6 +491,8 @@ export interface PickingOrderDetail {
   issueReportedBy: string | null;
   createdDate: string;
   lastUpdateDate: string;
+  /** Unresolved outdated-scan warnings on the order (spec 2026-10-07). */
+  outdatedWarningCount: number;
   items: PickingItem[];
   boxes: PickingBox[];
   suggestedBox: SuggestedShelfBox | null;
@@ -545,6 +579,8 @@ export interface PutAwayCandidate {
   subInventoryCode: string | null;
   receivedItems: number;
   unboxedItems: number;
+  /** Unresolved outdated-scan warnings on the order (spec 2026-10-07). */
+  outdatedWarningCount: number;
 }
 
 /** GET /put-away-tasks?status= row — the auto-created put-away work queue
@@ -651,6 +687,8 @@ export interface PutAwayBox {
 
 export interface PutAwayDetail {
   order: { id: string; batchNo: string; status: string };
+  /** Unresolved outdated-scan warnings on the order (spec 2026-10-07). */
+  outdatedWarningCount: number;
   items: PutAwayExpectedItem[];
   lots: PutAwayLot[];
   scans: PutAwayScan[];

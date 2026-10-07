@@ -10,6 +10,12 @@ import { completePutAwayTaskTx } from "./putawaytasks.js";
 import { putAwayConfig, receivingOrderNameTemplate } from "../config.js";
 import { formatReceivingOrderName } from "../receivingOrderName.js";
 import { allowedOrgFilter } from "./org-filter.js";
+import {
+  checkOutdatedDateCode,
+  recordOutdatedWarning,
+  unresolvedOutdatedWarningCount,
+  type OutdatedWarningInfo,
+} from "./outdated.js";
 
 // ---------------------------------------------------------------------------
 // Put-away flow — staging-box model (ported from apps/api putAway.ts).
@@ -255,6 +261,9 @@ async function markBoxStockChanged(tx: DbOrTx, shelfBoxId: string): Promise<void
 /**
  * Auto-clear: an in_hand order with nothing left to put away or pick (every
  * item's remaining ≤ 0) moves to 'clear' + a transition log.
+ * Held (no transition, no task completion) while the order has unresolved
+ * outdated-scan warnings — an admin resolve-order re-runs this check via
+ * retryReceivingOrderClear (spec 2026-10-07).
  */
 export async function tryMarkReceivingOrderClear(
   tx: DbOrTx,
@@ -265,6 +274,7 @@ export async function tryMarkReceivingOrderClear(
     sql`SELECT id, status FROM receiving_orders WHERE id = ${input.receivingOrderId}`
   );
   if (!order || order.status !== "in_hand") return;
+  if ((await unresolvedOutdatedWarningCount(tx, "putaway", order.id)) > 0) return;
   const items = await queryAll<PutAwayItemRow>(
     tx,
     sql`SELECT rii.id, rii.part_no AS "partNo", rii.wcl_item_no AS "wclItemNo", ri.receiving_order_id AS "receivingOrderId",
@@ -294,6 +304,18 @@ export async function tryMarkReceivingOrderClear(
   await completePutAwayTaskTx(tx, { receivingOrderId: order.id, actorId: input.actorId });
 }
 
+/**
+ * Post-resolution re-check (spec 2026-10-07): after an admin resolves the
+ * order's outdated warnings, run the auto-clear check again (it was held
+ * while warnings were unresolved).
+ */
+export async function retryReceivingOrderClear(
+  db: AppDb,
+  input: { receivingOrderId: string; actorId: string | null }
+): Promise<void> {
+  return db.transaction((tx) => tryMarkReceivingOrderClear(tx, input));
+}
+
 // ---------------------------------------------------------------------------
 // Reads (called by the routes; kept here so tests can exercise them).
 // ---------------------------------------------------------------------------
@@ -314,6 +336,8 @@ export interface PutAwayCandidateRow {
   subInventoryCode: string | null;
   receivedItems: number;
   unboxedItems: number;
+  /** Unresolved outdated-scan warnings (spec 2026-10-07); 0 = none. */
+  outdatedWarningCount: number;
 }
 
 /** Receivable orders (in_hand / provisional_received) with per-order item counts. */
@@ -335,7 +359,9 @@ export async function listPutAwayCandidates(db: AppDb): Promise<PutAwayCandidate
         COUNT(rii.id) FILTER (WHERE rii.received_qty > 0)::int AS "receivedItems",
         COUNT(rii.id) FILTER (WHERE
           rii.received_qty - rii.picked_qty - rii.put_away_qty
-            - COALESCE(alloc.qty, 0) - COALESCE(staged.qty, 0) > 0)::int AS "unboxedItems"
+            - COALESCE(alloc.qty, 0) - COALESCE(staged.qty, 0) > 0)::int AS "unboxedItems",
+        (SELECT COUNT(*)::int FROM outdated_scan_warnings osw
+         WHERE osw.order_kind = 'putaway' AND osw.order_id = ro.id AND osw.resolved_at IS NULL) AS "outdatedWarningCount"
       FROM receiving_orders ro
       LEFT JOIN suppliers s ON s.code = ro.supplier_code
       JOIN receiving_invoices ri ON ri.receiving_order_id = ro.id
@@ -455,6 +481,8 @@ export interface PutAwayExpectedItemRow {
 
 export interface PutAwayAggregate {
   order: { id: string; batchNo: string; status: string };
+  /** Unresolved outdated-scan warnings on the order (spec 2026-10-07); 0 = none. */
+  outdatedWarningCount: number;
   items: PutAwayExpectedItemRow[];
   lots: PutAwayLotRow[];
   scans: PutAwayScanRow[];
@@ -481,10 +509,12 @@ export interface PutAwayAggregate {
  * non-staging boxes with their item rows.
  */
 export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<PutAwayAggregate> {
-  const order = await queryGet<{ id: string; batchNo: string; status: string }>(
+  const order = await queryGet<{ id: string; batchNo: string; status: string; outdatedWarningCount: number }>(
     db,
-    sql`SELECT id, batch_no AS "batchNo", status
-        FROM receiving_orders WHERE id = ${orderId}`
+    sql`SELECT id, batch_no AS "batchNo", status,
+               (SELECT COUNT(*)::int FROM outdated_scan_warnings osw
+                WHERE osw.order_kind = 'putaway' AND osw.order_id = ro.id AND osw.resolved_at IS NULL) AS "outdatedWarningCount"
+        FROM receiving_orders ro WHERE id = ${orderId}`
   );
   if (!order) throw new HTTPException(404, { message: "receiving_order_not_found" });
 
@@ -642,6 +672,7 @@ export async function getPutAwayAggregate(db: AppDb, orderId: string): Promise<P
 
   return {
     order: { id: order.id, batchNo: order.batchNo, status: order.status },
+    outdatedWarningCount: order.outdatedWarningCount,
     items: itemsWithSuggestions,
     lots,
     scans,
@@ -796,9 +827,12 @@ export async function recordPutAwayScan(
   db: AppDb,
   orderId: string,
   input: RecordPutAwayScanInput
-): Promise<PutAwayScanRow> {
+): Promise<PutAwayScanRow & { outdatedWarning: OutdatedWarningInfo | null }> {
   return db.transaction(async (tx) => {
-    const order = await queryGet<{ id: string }>(tx, sql`SELECT id FROM receiving_orders WHERE id = ${orderId}`);
+    const order = await queryGet<{ id: string; supplierCode: string | null }>(
+      tx,
+      sql`SELECT id, supplier_code AS "supplierCode" FROM receiving_orders WHERE id = ${orderId}`
+    );
     if (!order) throw new HTTPException(404, { message: "receiving_order_not_found" });
     if (input.shelfBoxId && input.shelfCode) {
       throw new HTTPException(400, { message: "both_shelf_box_and_shelf_code" });
@@ -858,6 +892,29 @@ export async function recordPutAwayScan(
     if (targetBoxId) {
       await assignScanToBoxTx(tx, { scanId: id, shelfBoxId: targetBoxId, actorId: input.actorId });
     }
+
+    // Supplier outdated date-code check (spec 2026-10-07): the scan succeeds
+    // regardless — a hit records the warning row in this tx and rides on the
+    // response for the PDA alert. Supplier = the receiving order's
+    // supplier_code; the label's own date code is checked (none = no check).
+    let outdatedWarning: OutdatedWarningInfo | null = null;
+    const outdatedHit = await checkOutdatedDateCode(tx, { supplierCode: order.supplierCode, dateCode: input.dateCode });
+    if (outdatedHit) {
+      outdatedWarning = await recordOutdatedWarning(tx, {
+        orderKind: "putaway",
+        orderId: order.id,
+        orderItemId: item.id,
+        packageId: id,
+        supplierCode: order.supplierCode!,
+        wclItemNo: item.wclItemNo,
+        partNo: item.partNo,
+        dateCode: input.dateCode!,
+        limitMonths: outdatedHit.limitMonths,
+        qty: input.qty,
+        scannedBy: input.actorId,
+      });
+    }
+
     const row = await queryGet<PutAwayScanRow>(
       tx,
       sql`SELECT sbi.id, sbi.receiving_invoice_item_id AS "receivingInvoiceItemId",
@@ -868,7 +925,7 @@ export async function recordPutAwayScan(
           JOIN receiving_invoice_items rii ON rii.id = sbi.receiving_invoice_item_id
           WHERE sbi.id = ${id}`
     );
-    return row!;
+    return { ...row!, outdatedWarning };
   });
 }
 
@@ -1112,7 +1169,9 @@ export async function assignScanToBox(
  * those staging rows (the pending list's per-row "Add to shelf"). Returns
  * {count, qty}; count 0 is a valid empty result (e.g. a concurrent device
  * committed first), not an error. A mid-loop guard failure (e.g.
- * lot_has_pick_allocations) rolls the whole commit back.
+ * lot_has_pick_allocations) rolls the whole commit back. Unresolved outdated-
+ * scan warnings do NOT block the commit — they hold the order's transition to
+ * 'clear' instead (tryMarkReceivingOrderClear, spec 2026-10-07).
  */
 export async function commitPendingScansToShelf(
   db: AppDb,

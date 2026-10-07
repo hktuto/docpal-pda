@@ -90,6 +90,9 @@ export const supplierProfiles = pgTable("supplier_profiles", {
   // parts.brand values this supplier covers — scan pages try this supplier's QR
   // template first when the order's items carry a matching brand; null = unknown
   brands: text("brands").array(),
+  // Max acceptable label date-code age in months for picking/put-away scans;
+  // null = no outdated check (spec 2026-10-07-supplier-outdated-datecode-warning-design.md)
+  outdatedLimitMonths: integer("outdated_limit_months"),
   remark: text("remark"), // other remark for extension
   creationDate: timestamp("creation_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),

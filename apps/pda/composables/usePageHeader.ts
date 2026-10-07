@@ -20,6 +20,9 @@ export interface PageHeaderConfig {
   title?: MaybeRefOrGetter<string | undefined>;
   badgeText?: MaybeRefOrGetter<string | undefined>;
   badgeClass?: MaybeRefOrGetter<string | undefined>;
+  /** Optional second badge (amber) next to the status badge — e.g. the
+   *  unresolved outdated-scan warning count (spec 2026-10-07). */
+  warningText?: MaybeRefOrGetter<string | undefined>;
   info?: MaybeRefOrGetter<PageHeaderInfoRow[]>;
   actions?: MaybeRefOrGetter<PageHeaderAction[]>;
 }

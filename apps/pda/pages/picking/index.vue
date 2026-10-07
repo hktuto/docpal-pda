@@ -44,6 +44,7 @@
           :meta="rowMeta(po)"
           :chip-text="rowChip(po)?.text"
           :chip-class="rowChip(po)?.cls"
+          :warn-text="po.outdatedWarningCount > 0 ? $t('outdatedWarning.chip', { count: po.outdatedWarningCount }) : undefined"
         >
           <template v-if="isSelectable(po.status)" #leading>
             <input

@@ -37,6 +37,7 @@
         :meta="rowMeta(ro, $t('putAway.unboxedItems', { count: ro.unboxedItems }))"
         :chip-text="rowChip(ro)?.text"
         :chip-class="rowChip(ro)?.cls"
+        :warn-text="ro.outdatedWarningCount > 0 ? $t('outdatedWarning.chip', { count: ro.outdatedWarningCount }) : undefined"
       />
     </template>
   </AppListPage>

@@ -237,11 +237,26 @@ function tableForGroup(key: string): GroupTable {
   return inst;
 }
 
+// Outdated date-code scan warnings (spec 2026-10-07): the receiving detail
+// response carries no count, so the chip derives it from the unresolved
+// putaway warnings for this order.
+const outdatedWarningCount = ref(0);
+
+async function loadOutdatedWarningCount() {
+  try {
+    const warnings = await flow.listOutdatedWarnings({ resolved: false, orderKind: "putaway" });
+    outdatedWarningCount.value = warnings.filter((w) => w.orderId === orderId).length;
+  } catch {
+    // best-effort chip — the order itself still loads
+  }
+}
+
 async function load() {
   loading.value = true;
   error.value = "";
   try {
-    order.value = await flow.getReceivingOrder(orderId);
+    const [detail] = await Promise.all([flow.getReceivingOrder(orderId), loadOutdatedWarningCount()]);
+    order.value = detail;
     deliveryDate.value = order.value.deliveryDate ? order.value.deliveryDate.slice(0, 10) : "";
     selected.value = new Set();
   } catch (e: any) {
@@ -615,8 +630,9 @@ async function removeAllocation(row: ReceivingItemRow, a: ReceivingItemAllocatio
 }
 
 // Reload when this order's data changes elsewhere (PDA scans, sync,
-// allocation runs). While the user is editing or has rows selected, show a
-// refresh banner instead of yanking the data out from under them.
+// allocation runs, outdated-warning create/resolve). While the user is
+// editing or has rows selected, show a refresh banner instead of yanking the
+// data out from under them.
 const changeBusy = computed(
   () => editItems.value !== null || selected.value.size > 0 || availOpen.value || overrideOpen.value
 );
@@ -626,7 +642,13 @@ const {
   refreshNow,
   dismiss,
 } = useChangeNotice(
-  ["receiving_order.upserted", "receiving_order.item_removed", "allocation.finished"],
+  [
+    "receiving_order.upserted",
+    "receiving_order.item_removed",
+    "allocation.finished",
+    "outdated.warning.created",
+    "outdated.warning.resolved",
+  ],
   async () => {
     await load();
     logsKey.value++;
@@ -639,6 +661,7 @@ const {
   <div>
     <div class="page-head">
       <h1 class="page-title">{{ $t("admin.pages.receiving.detailTitle", { batchNo: order?.displayName ?? order?.batchNo ?? "" }) }}</h1>
+      <OutdatedWarningChip class="head-chip" :count="outdatedWarningCount" order-kind="putaway" />
       <div class="head-actions">
         <!-- <button class="btn" disabled :title="$t('admin.common.downloadPendingTitle')">
           {{ $t("admin.pages.receiving.downloadDeliveryOrderList") }}
@@ -952,6 +975,10 @@ const {
   white-space: nowrap;
   overflow: hidden;
   flex: 1 0;
+}
+.head-chip {
+  margin: 0 0.75rem;
+  flex-shrink: 0;
 }
 .head-actions {
   display: flex;

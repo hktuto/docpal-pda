@@ -30,6 +30,7 @@ import { adminPartAvailabilityRoute } from "./partAvailability.js";
 import { adminUserProfilesRoute } from "./userProfiles.js";
 import { adminLabelPrintRulesRoute } from "./labelPrintRules.js";
 import { adminCustomerProfilesRoute } from "./customerProfiles.js";
+import { adminOutdatedWarningsRoute } from "./outdatedWarnings.js";
 import { parseScopeEntries, type UserScopeEntry } from "../../db/user-scope.js";
 
 // Optional id on create: use the client's when given, else generate one.
@@ -106,6 +107,9 @@ adminRoute.route(
       qtyEncoding: optStr(b, "qtyEncoding"),
       dateCodeEncoding: optStr(b, "dateCodeEncoding"),
       barcodeTypes: optStrArray(b, "barcodeTypes"),
+      // Outdated date-code limit in months (2026-10-07 spec): default 12 on
+      // create when absent; explicit null clears (no check).
+      outdatedLimitMonths: b.outdatedLimitMonths === undefined ? 12 : optInt(b, "outdatedLimitMonths"),
       remark: optStr(b, "remark"),
     }),
     update: (b) => ({
@@ -117,6 +121,7 @@ adminRoute.route(
       ...(b.qtyEncoding !== undefined && { qtyEncoding: optStr(b, "qtyEncoding") }),
       ...(b.dateCodeEncoding !== undefined && { dateCodeEncoding: optStr(b, "dateCodeEncoding") }),
       ...(b.barcodeTypes !== undefined && { barcodeTypes: optStrArray(b, "barcodeTypes") }),
+      ...(b.outdatedLimitMonths !== undefined && { outdatedLimitMonths: optInt(b, "outdatedLimitMonths") }),
       ...(b.remark !== undefined && { remark: optStr(b, "remark") }),
       lastUpdateDate: new Date(),
     }),
@@ -313,6 +318,10 @@ adminRoute.route("/", adminAllocationRoute);
 
 // Part availability lookup (stock + receiving rows for a part).
 adminRoute.route("/", adminPartAvailabilityRoute);
+
+// Outdated date-code scan warnings: admin list + whole-order resolution
+// (spec 2026-10-07-supplier-outdated-datecode-warning-design.md).
+adminRoute.route("/", adminOutdatedWarningsRoute);
 
 // Per-user sub-inventory scope profiles (spec
 // 2026-09-11-user-subinventory-scope-design.md).

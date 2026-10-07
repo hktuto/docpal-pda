@@ -26,6 +26,8 @@ export interface PickingOrderRow {
   pickedQty: number;
   allocationStatus: string;
   allocatedQty: number;
+  /** Unresolved outdated date-code scan warnings on this order. */
+  outdatedWarningCount: number;
   createdDate: string;
   lastUpdateDate: string;
 }
@@ -382,6 +384,37 @@ export interface MismatchListRow {
   mismatchQty: number | null;
   wrongPartNo: string | null;
   note: string | null;
+}
+
+// ---- outdated date-code scan warnings (spec 2026-10-07) ----
+
+export interface OutdatedWarningRow {
+  id: string;
+  orderKind: "picking" | "putaway";
+  orderId: string;
+  orderNo: string | null;
+  orderItemId: string | null;
+  packageId: string | null;
+  supplierCode: string;
+  supplierName: string | null;
+  wclItemNo: string | null;
+  partNo: string | null;
+  dateCode: string;
+  limitMonths: number;
+  qty: number | null;
+  scannedBy: string;
+  scannedByName: string | null;
+  scannedAt: string;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
+  resolvedByName: string | null;
+  resolutionNote: string | null;
+}
+
+export interface OutdatedWarningListParams {
+  /** Absent = all. */
+  resolved?: boolean;
+  orderKind?: "picking" | "putaway";
 }
 
 // ---- part availability (stock lots + open receiving sources for a part) ----
@@ -744,6 +777,23 @@ export function useFlowApi() {
       body: { reason: string; mismatchQty?: number; wrongPartNo?: string; note?: string }
     ) => api.post(`/receiving-invoice-items/${itemId}/mismatch`, body),
     removeReceivingItem: (itemId: string) => api.del(`/admin/receiving-invoice-items/${itemId}`),
+
+    // Outdated date-code scan warnings (spec 2026-10-07): the list is newest
+    // first; resolution is whole-order (stamps every unresolved row, completes
+    // a held order) and returns how many rows were stamped.
+    listOutdatedWarnings: (params: OutdatedWarningListParams = {}) => {
+      const qs = new URLSearchParams();
+      if (params.resolved !== undefined) qs.set("resolved", String(params.resolved));
+      if (params.orderKind) qs.set("orderKind", params.orderKind);
+      const s = qs.toString();
+      return api.get<OutdatedWarningRow[]>(`/admin/outdated-warnings${s ? `?${s}` : ""}`);
+    },
+    resolveOrderOutdatedWarnings: (orderKind: "picking" | "putaway", orderId: string, note?: string) =>
+      api.post<{ resolved: number }>(`/admin/outdated-warnings/resolve-order`, {
+        orderKind,
+        orderId,
+        ...(note?.trim() ? { note: note.trim() } : {}),
+      }),
 
     // Flow config (warehouse_config row "flow"; applies at runtime on save
     // unless the FLOW_CONFIG env override is active)

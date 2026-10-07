@@ -98,6 +98,27 @@
   close/cancel, per-scan box dropdowns, staging-box QR) is removed.
 - Select a destination shelf by scanning its QR code (the shelf list comes
   from the `/admin/shelves` CRUD read).
+- Supplier outdated date-code scan warnings (spec
+  `docs/superpowers/specs/2026-10-07-supplier-outdated-datecode-warning-design.md`):
+  when a put-away scan's label date code is older than the receiving order
+  supplier's `supplier_profiles.outdated_limit_months` (NULL = no check),
+  the scan still succeeds but records an `outdated_scan_warnings` row inside
+  the scan tx and the `POST /receiving-orders/:id/put-away-scans` response
+  carries `outdatedWarning: {supplierCode, dateCode, limitMonths}` — the
+  detail page shows the dismissible `components/OutdatedWarningDialog.vue`
+  alert and scanning continues. The put-away commit is NOT blocked; instead
+  the auto-clear (`tryMarkReceivingOrderClear`, which also completes the
+  put-away task) is held while the order has unresolved warnings — the order
+  stays `in_hand`. `GET /put-away/candidates`, `GET /put-away-tasks` and the
+  `GET /receiving-orders/:id/put-away` aggregate carry
+  `outdatedWarningCount` (unresolved) → warning chip when > 0. An admin
+  resolves the whole order's warnings
+  (`POST /admin/outdated-warnings/resolve-order`), which also re-runs the
+  held auto-clear (`retryReceivingOrderClear`) so the order clears on
+  resolution. SSE: `outdated.warning.created` /
+  `outdated.warning.resolved` (topics `/admin/outdated-warnings` +
+  `/receiving-orders`). Backend module: `apps/backend/src/db/outdated.ts`
+  (shared with the picking flow).
 
 ## Out of scope
 
@@ -129,6 +150,8 @@
   `putAwayGroupFieldValue` (qty fields summed, batch fields distinct-joined).
 - `components/ScanMultiItemModal.vue` — shared multi-item label table (also
   used by the picking scan session).
+- `components/OutdatedWarningDialog.vue` — dismissible outdated date-code
+  alert shown when a scan response carries `outdatedWarning`.
 - `components/put-away/PutAwayLotsPanel.vue` — expected items as part-group
   cards built on the shared `AppListRow` (same config-driven design as the
   receiving/picking detail rows): identity field = title, collapsed meta =
@@ -189,3 +212,4 @@
 - `docs/superpowers/specs/2026-10-05-put-away-scan-box-shelf-design.md`
 - `docs/superpowers/specs/2026-10-05-put-away-part-grouping-design.md`
 - `docs/superpowers/specs/2026-10-06-put-away-shelf-direct-design.md`
+- `docs/superpowers/specs/2026-10-07-supplier-outdated-datecode-warning-design.md`

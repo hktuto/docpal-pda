@@ -23,6 +23,8 @@ Use the Picking flow when a picking order is ready and stock has been allocated.
 5. Optional: the operator can scan a supplier label to auto-match and apply a pick (OCR-assisted picking).
 6. When all lines are picked, the picking order is finished — the packed boxes move on to measuring.
 
+**Outdated date-code warnings:** if a scanned label's date code is older than the supplier's outdated limit (set per supplier in the admin console), the scan still succeeds but the app shows an alert and flags the order with a warning chip. The order cannot finish (auto-finish is held and the manual **Finish** action is refused) until an admin resolves the order's warnings in the admin console.
+
 ## Related guides
 
 - [Step-by-step operator guide](./steps.md)

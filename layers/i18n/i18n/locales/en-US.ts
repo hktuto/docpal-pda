@@ -537,6 +537,12 @@ export default {
     multiAdd: "Add {count} items",
     multiRemove: "Remove row"
   },
+  outdatedWarning: {
+    title: "Outdated date code",
+    message: "Outdated date code {dateCode} — supplier {supplierCode} limit is {limitMonths} months. Admin has been notified; the order cannot be completed until resolved.",
+    confirm: "OK",
+    chip: "⚠ Outdated ({count})"
+  },
   labelScanReviewModal: {
     titleManual: "Manual entry",
     titleReview: "Review scan",
@@ -757,7 +763,8 @@ export default {
     counted_qty_must_be_non_negative_integer: "Counted qty must be a non-negative integer",
     shelf_box_not_closed: "The shelf box is not closed",
     invalid_date: "Invalid date",
-    network_error: "Network error. Please check your connection and try again."
+    network_error: "Network error. Please check your connection and try again.",
+    unresolved_outdated_warnings: "This order has {count} unresolved outdated date-code warning(s) — ask an admin to resolve them before finishing."
   },
   status: {
     receiving: {
@@ -1029,7 +1036,8 @@ export default {
       pdaViewConfig: "PDA View",
       userBadges: "User Badges",
       userProfiles: "User Scope",
-      labelPrintRules: "Label Print Rules"
+      labelPrintRules: "Label Print Rules",
+      outdatedWarnings: "Outdated Warnings"
     },
     auth: {
       logout: "Logout",
@@ -1268,6 +1276,10 @@ export default {
         dateCodeFormat: "Date code format",
         dateCodePlain: "Plain value",
         dateCodeKoa: "KOA style — month counter + week (e.g. 1723L789 → 2326)",
+        outdatedLimitMonths: "Outdated limit (months)",
+        outdatedLimitPlaceholder: "12",
+        outdatedLimitHint: "Picking / put-away scans with a date code older than this many months raise an outdated warning. Leave empty for no check.",
+        outdatedLimitInvalid: "Enter a positive whole number of months, or leave empty for no check.",
         scanTemplate: "Scan template",
         sampleScan: "Sample scan",
         samplePlaceholder: "Scan or paste a real label from this supplier, e.g. :RK73H1JTTD1002F:S1:14:X:L2601A:602:NAME",
@@ -1327,6 +1339,36 @@ export default {
           noMatch: "Does not match the template.",
           pieceCount: "This scan has {n} pieces but the template expects {m}."
         }
+      },
+      outdatedWarnings: {
+        title: "Outdated Warnings",
+        chip: "Outdated warnings: {count}",
+        allStates: "All states",
+        statePending: "Pending",
+        stateResolved: "Resolved",
+        allKinds: "All flows",
+        kindPicking: "Picking",
+        kindPutaway: "Put-away",
+        allSuppliers: "All suppliers",
+        flow: "Flow",
+        order: "Order",
+        part: "Part",
+        supplier: "Supplier",
+        dateCode: "Date code",
+        limit: "Limit (months)",
+        qty: "Qty",
+        scannedBy: "Scanned by",
+        scannedAt: "Scanned at",
+        state: "State",
+        resolution: "Resolution",
+        none: "No outdated warnings.",
+        resolveOrder: "Resolve order",
+        resolveTitle: "Resolve outdated warnings — {orderNo}",
+        resolveHint: "This resolves all {count} unresolved warning(s) on the order; an order held at completion will complete.",
+        note: "Note",
+        notePlaceholder: "Optional resolution note…",
+        resolveSubmit: "Resolve",
+        resolvedDone: "Resolved {count} warning(s) on {orderNo}."
       },
       subInventories: {
         title: "Sub-inventories",

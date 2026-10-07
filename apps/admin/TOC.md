@@ -9,6 +9,7 @@
 2. Supplier Profile Management
  2.1 QRCode Setting
  2.2 DateCode Format
+ 2.3 Outdated Limit (months)
  
 3. WMS Management
  3.1 Shelves Location
@@ -44,7 +45,7 @@
   - Profile list (CRUD profiles, assign member customers, jsonb rule)
 - Supplier Management
   - list of supplier with filter and sort
-    - detail of supplier (2.1 2.2)
+    - detail of supplier (2.1 2.2 2.3)
 - Warehouse Management
   - shelves list ( create)
     - detail shelf (print qrcode, list box inside) (3.1)
@@ -69,6 +70,9 @@
 - Shipping Management
   - list shipping order with filter and sort, multiple select to download shipper 7.3
     - detail shipping order
+- Issues
+  - receiving issues, picking issues
+  - Outdated warnings — supplier date-code scan warnings from picking / put-away scans, whole-order resolution with note; pending-count badge in nav; warning chip links from the picking / receiving order detail pages
 - Settings
   - flow config, display config (date-code display template, receiving order name template), PDA view config (per-page PDA list/detail view editor), app download, user badges, user scope
 - Dropdown & Policy

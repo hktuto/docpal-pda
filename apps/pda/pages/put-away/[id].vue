@@ -119,6 +119,10 @@ const headerStatus = computed(() =>
   order.value ? statusLabel.receiving(order.value.status) : ""
 );
 
+// Unresolved outdated-scan warnings on the order (spec 2026-10-07) — from the
+// put-away aggregate (task detail embeds the same aggregate).
+const outdatedWarningCount = ref(0);
+
 // Title, status badge and header info rows render in the AppHeader. The
 // title follows the put-away list's pdaViewConfig title template (same as
 // the list rows — [batch_no] by default, [name] = the backend displayName).
@@ -141,6 +145,10 @@ usePageHeader({
   },
   badgeText: () => headerStatus.value || undefined,
   badgeClass: () => badgeClass(order.value?.status),
+  warningText: () =>
+    outdatedWarningCount.value > 0
+      ? t("outdatedWarning.chip", { count: outdatedWarningCount.value })
+      : undefined,
   info: () => {
     const o = order.value;
     if (!o) return [];
@@ -433,6 +441,7 @@ async function load() {
     items.value = detail.items;
     shelves.value = shelvesData;
     scans.value = detail.scans;
+    outdatedWarningCount.value = detail.outdatedWarningCount;
 
     // Auto-disarm when the armed group has left the visible list (fully put
     // away with no pending scans left).

@@ -53,6 +53,7 @@ supplier rows.
 | date_code_encoding | text | dateCode-group decoding rule, e.g. 'koa_month_counter' (KOA month counter + week → WWYY); null = raw value |
 | barcode_types | text[] | PDA hardware-scanner symbology whitelist; null = no restriction |
 | brands | text[] | parts.brand values this supplier covers — scan pages try brand-matching suppliers' templates first (fallback: all templates); null = unknown |
+| outdated_limit_months | integer | Per-supplier outdated date-code limit in months (spec 2026-10-07): a picking/put-away scan whose label WWYY is older warns (row in `outdated_scan_warnings` + completion held). NULL = no check; create defaults to 12; existing rows backfilled to 12 (migration 0025); admin PATCH with explicit null clears |
 | remark | text | Free-form remark for extension |
 | creation_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
@@ -890,3 +891,43 @@ printing flow; nothing evaluates these rules yet). Managed via
 | remark | text | Optional note |
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
+
+# Outdated scan warnings (`schema/outdated.ts`)
+
+## outdated_scan_warnings
+
+One row per picking / put-away scan whose label date code (WWYY, post
+`date_code_encoding` decode) was older than the supplier's
+`supplier_profiles.outdated_limit_months` (2026-10-07,
+`docs/superpowers/specs/2026-10-07-supplier-outdated-datecode-warning-design.md`).
+The scan still succeeds; the row is written inside the scan transaction (a
+rolled-back scan leaves no warning) and blocks order completion — picking
+auto-finish held + explicit finish 409 `unresolved_outdated_warnings`,
+receiving auto-clear held — until an admin resolves the whole order's rows
+(`POST /admin/outdated-warnings/resolve-order`), which re-runs the held
+completion. `resolved_at IS NULL` = unresolved; the per-order unresolved
+count rides list/detail reads as `outdatedWarningCount`. No `sync_events`
+trigger — PDA-local, admin-resolved state.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Warning id (UUID v7) |
+| order_kind | text NOT NULL | `'picking'` \| `'putaway'` |
+| order_id | text NOT NULL | Picking order id / receiving order id (no FK — the target differs per kind) |
+| order_item_id | text | Picking item id / receiving invoice item id |
+| package_id | text | The created `picking_packages` / `shelf_box_items` row id |
+| supplier_code | text NOT NULL | Supplier from the matched profile (plain text, display key) |
+| wcl_item_no | text | Business key of the part |
+| part_no | text | Display part number |
+| date_code | text NOT NULL | The scanned WWYY (post decode) |
+| limit_months | integer NOT NULL | Supplier limit snapshot at scan time |
+| qty | integer | Scanned quantity |
+| scanned_by | text NOT NULL | Actor id from the JWT |
+| scanned_at | timestamp NOT NULL | Scan time (UTC) |
+| resolved_at | timestamp | Resolution time; NULL = unresolved |
+| resolved_by | text | Admin actor id |
+| resolution_note | text | Optional note stamped on every resolved row of the order |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
+
+Note: index `idx_outdated_scan_warnings_order` on `(order_kind, order_id)`.

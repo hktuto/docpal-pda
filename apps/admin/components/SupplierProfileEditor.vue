@@ -55,6 +55,22 @@ const dateCodeEncodingOptions = computed(() => [
   { value: "", label: t("admin.pages.supplierProfile.dateCodePlain") },
   { value: "koa_month_counter", label: t("admin.pages.supplierProfile.dateCodeKoa") },
 ]);
+// Outdated date-code limit (months; spec 2026-10-07): empty = NULL = no
+// check. New profiles default to 12 (the backend default when absent).
+const outdatedLimitInput = ref(
+  props.profile ? (props.profile.outdatedLimitMonths != null ? String(props.profile.outdatedLimitMonths) : "") : "12"
+);
+const outdatedLimitMonths = computed<number | null>(() => {
+  const raw = outdatedLimitInput.value.trim();
+  if (raw === "") return null;
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : null;
+});
+const outdatedLimitError = computed(() =>
+  outdatedLimitInput.value.trim() !== "" && outdatedLimitMonths.value === null
+    ? t("admin.pages.supplierProfile.outdatedLimitInvalid")
+    : ""
+);
 
 // ---- template builder ----
 type Mode = "delimited" | "fixed" | "advanced";
@@ -236,7 +252,7 @@ const testLines = computed<TestLine[]>(() => {
 });
 const failedTests = computed(() => testLines.value.filter((t) => !t.ok).length);
 
-const canSave = computed(() => !structureError.value && !sampleError.value && failedTests.value === 0);
+const canSave = computed(() => !structureError.value && !sampleError.value && failedTests.value === 0 && !outdatedLimitError.value);
 
 function rebuildFromSample() {
   mode.value = "delimited";
@@ -252,6 +268,7 @@ function save() {
     qrType: qrType.value,
     qtyEncoding: qtyEncoding.value,
     dateCodeEncoding: dateCodeEncoding.value,
+    outdatedLimitMonths: outdatedLimitMonths.value,
     qrTemplate: regex.value,
     qrTemplateConfig: config.value,
   });
@@ -306,6 +323,20 @@ function save() {
           :multiple="false"
           :show-all="false"
         />
+      </div>
+      <div class="form-row">
+        <label for="qt-outdated">{{ $t("admin.pages.supplierProfile.outdatedLimitMonths") }}</label>
+        <input
+          id="qt-outdated"
+          v-model="outdatedLimitInput"
+          type="number"
+          min="1"
+          step="1"
+          class="outdated-limit"
+          :placeholder="$t('admin.pages.supplierProfile.outdatedLimitPlaceholder')"
+        />
+        <div class="hint">{{ $t("admin.pages.supplierProfile.outdatedLimitHint") }}</div>
+        <div v-if="outdatedLimitError" class="error-banner">{{ outdatedLimitError }}</div>
       </div>
       <div class="form-row">
         <label for="qt-remark">{{ $t("admin.fields.remark") }}</label>
@@ -496,6 +527,9 @@ function save() {
 .form-row .chip .ssel {
   width: auto;
   min-width: 8.75rem;
+}
+.outdated-limit {
+  width: 6.25rem;
 }
 h3 {
   margin: 0.25rem 0 0.625rem;

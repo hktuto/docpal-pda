@@ -20,9 +20,11 @@ import type {
   ReportPickingIssuesResult,
   PutAwayCandidate,
   PutAwayDetail,
-  PutAwayScan,
   PutAwayTaskDetail,
   PutAwayTaskListRow,
+  PutAwayScanResult,
+  ScanPickingItemResult,
+  ScanIntoShippingBoxResult,
   Shelf,
   MeasuringBoxListRow,
   MeasuringBoxDetail,
@@ -70,7 +72,7 @@ export interface WarehouseService {
   scanPickingItem(
     itemId: string,
     input: ScanPickingItemInput
-  ): Promise<{ packageIds: string[] }>;
+  ): Promise<ScanPickingItemResult>;
   // require-match scan-time presence check: stock of the part at the shelf.
   getPickingShelfStock(query: PickingShelfStockQuery): Promise<{ qty: number }>;
   removeScannedPackage(packageId: string): Promise<void>;
@@ -86,10 +88,12 @@ export interface WarehouseService {
   closeShippingBox(id: string): Promise<void>;
   // Cross-order packing: scan ANY order's item barcode straight into this
   // open box (404 no_matching_picking_item / 409 ambiguous_picking_item).
+  // dateCode = the label's parsed date code (drives the backend's outdated
+  // date-code warning on this path).
   scanIntoShippingBox(
     shippingBoxId: string,
-    input: { barcode: string; qty?: number }
-  ): Promise<{ packageIds: string[] }>;
+    input: { barcode: string; qty?: number; dateCode?: string | null }
+  ): Promise<ScanIntoShippingBoxResult>;
   // Explicit finish: all items fully boxed → order finished. Boxing the
   // last package also auto-finishes (no task is created either way).
   finishPickingOrder(id: string): Promise<{ id: string; status: string }>;
@@ -128,7 +132,7 @@ export interface WarehouseService {
     /** Supplier-template serial (e.g. iC-Haus LTS); the backend rejects a
      *  repeat serial on the same order with 409 label_already_scanned. */
     serialNo?: string | null
-  ): Promise<PutAwayScan>;
+  ): Promise<PutAwayScanResult>;
   // Commit pending scans onto a shelf in one tx (all of them, or just the
   // given scanIds for the pending list's per-row "Add to shelf").
   commitPutAwayToShelf(

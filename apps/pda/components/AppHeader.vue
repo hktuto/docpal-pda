@@ -36,6 +36,10 @@
         class="badge app-header__badge"
         :class="pageBadgeClass"
       >{{ pageBadgeText }}</span>
+      <span
+        v-if="pageWarningText"
+        class="badge badge--warning app-header__badge"
+      >{{ pageWarningText }}</span>
     </div>
 
     <div v-if="hasPageMenu" ref="pageMenuRef" class="app-header__menu">
@@ -189,6 +193,11 @@ const pageBadgeText = computed(() => {
 const pageBadgeClass = computed(() => {
   const value = pageHeader.value?.badgeClass;
   return value !== undefined ? toValue(value) : undefined;
+});
+const pageWarningText = computed(() => {
+  const value = pageHeader.value?.warningText;
+  const resolved = value !== undefined ? toValue(value) : undefined;
+  return resolved || undefined;
 });
 const pageInfo = computed(() => toValue(pageHeader.value?.info) ?? []);
 const pageActions = computed(() => toValue(pageHeader.value?.actions) ?? []);

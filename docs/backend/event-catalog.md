@@ -151,6 +151,7 @@ API call touching N rows produces N events).
 | `app_events` | SSE UI-notification outbox; internal plumbing, not business data |
 | `transaction_logs` | Audit log — derivable; would double-report every mutation |
 | `inventory_transactions` | Stock ledger — derivable; would double-report every stock move |
+| `outdated_scan_warnings` | PDA-local scan warnings (spec 2026-10-07) — admin-local state, not synced upstream |
 
 (Seed/reset paths (`db:seed`, `POST /dev/reset`) set
 `SET LOCAL app.sync_events_off = 1` so demo reseeding does not flood the
@@ -168,4 +169,12 @@ business-level, and is the contract for the sync service. (Also on this
 stream: `config.updated` with topics `["/config"]`, emitted by
 `PUT /admin/flow-config` when the save is applied at runtime — PDA clients
 refetch `GET /config` on it so display/flow settings propagate without
-re-login.)
+re-login. And the outdated date-code scan warnings, spec
+`docs/superpowers/specs/2026-10-07-supplier-outdated-datecode-warning-design.md`:
+`outdated.warning.created` — emitted inside the picking/put-away scan
+transaction that recorded the warning, data `{id, orderKind, orderId,
+supplierCode, dateCode, limitMonths}`; and `outdated.warning.resolved` —
+emitted by `POST /admin/outdated-warnings/resolve-order` when it resolved
+anything, data `{orderKind, orderId, resolved, actorId}`. Both carry topics
+`["/admin/outdated-warnings", "/picking-orders"]` for picking warnings /
+`["/admin/outdated-warnings", "/receiving-orders"]` for put-away warnings.)

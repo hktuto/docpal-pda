@@ -173,6 +173,32 @@
   is boxed — finish just flips the order to `finished`; no next-step task is
   created (closing a box is the measuring completion, and the box's verify
   task is spawned by `closeShippingBox`).
+- Supplier outdated date-code scan warnings (spec
+  `docs/superpowers/specs/2026-10-07-supplier-outdated-datecode-warning-design.md`):
+  when a scan's label date code (WWYY, post decode) is older than the
+  supplier's `supplier_profiles.outdated_limit_months` (NULL = no check),
+  the scan still succeeds but records an `outdated_scan_warnings` row inside
+  the scan tx and the response carries
+  `outdatedWarning: {supplierCode, dateCode, limitMonths}` — the scan page
+  shows a dismissible alert dialog (`components/OutdatedWarningDialog.vue`,
+  supplier + date code + limit) and scanning continues; the supplier is
+  resolved from the part's `parts.brand` ∈ `supplier_profiles.brands`
+  (`checkPartScanOutdated` in `apps/backend/src/db/outdated.ts`; the
+  `shipping-boxes/:id/scan` path takes an optional `dateCode` body field
+  because the barcode alone lacks the decoded date code). Order completion
+  is blocked while the order has unresolved warnings: the auto-finish
+  (`maybeAutoFinishPickingOrder`) holds — the order stays `picking` — and an
+  explicit `POST /picking-orders/:id/finish` 409s
+  `unresolved_outdated_warnings` with a JSON body `{error, count}` (the PDA
+  toasts it with the count); the put-away commit is NOT blocked — the
+  receiving auto-clear is held instead (see the put-away flow). The picking
+  list rows + detail carry `outdatedWarningCount` (unresolved) → warning
+  chip when > 0. An admin resolves the whole order's warnings
+  (`POST /admin/outdated-warnings/resolve-order`), which also re-runs the
+  held auto-finish (`retryAutoFinishPickingOrder`) so the order finishes on
+  resolution; admin status overrides are NOT blocked. SSE:
+  `outdated.warning.created` / `outdated.warning.resolved` (topics
+  `/admin/outdated-warnings` + `/picking-orders`).
 - Per-order issue reporting (`POST /picking-orders/report-issues`). An issued
   order is frozen (scan/unpack 409, excluded from `allocateAll`) until an
   admin resolves it — `POST /picking-orders/:id/resolve-issue` returns it to
@@ -409,6 +435,9 @@
 - `components/PickingIssueReportModal.vue` — batch issue report dialog.
 - `composables/useLabelScan.ts` + `utils/parseOcrScan.ts` — label parsing
   (QR templates from `GET /scan-templates`, OCR fallback).
+- `components/OutdatedWarningDialog.vue` — dismissible outdated date-code
+  alert shown when a scan response carries `outdatedWarning` (picking scan
+  page + put-away detail page).
 - `composables/useScanMatchers.ts` — client-side matchers for put-away and
   measuring (`matchPicking` remains but picking no longer routes through it —
   the scan session validates in `usePickingScanQueue` instead).
@@ -422,6 +451,15 @@
   (→ `{id, status}`, no task), `POST /picking-orders/report-issues`,
   `POST /picking-orders/:id/resolve-issue`,
   `POST`/`DELETE /picking-orders/:id/work-lock`, `POST /picking-orders/reorder`.
+- `apps/backend/src/db/outdated.ts` — supplier outdated date-code warnings:
+  `checkPartScanOutdated` (brand→profile lookup + WWYY age check),
+  `recordOutdatedWarning` (in-tx insert + `outdated.warning.created`),
+  `unresolvedOutdatedWarningCount`, `assertNoUnresolvedOutdatedWarnings`
+  (finish 409), `resolveOrderOutdatedWarnings`, `listOutdatedWarnings`;
+  shared WWYY rank helpers in `apps/backend/src/db/dateCode.ts`; admin
+  routes in `apps/backend/src/routes/admin/outdatedWarnings.ts`
+  (`GET /admin/outdated-warnings`, `POST /admin/outdated-warnings/resolve-order`
+  — also re-runs `retryAutoFinishPickingOrder` / `retryReceivingOrderClear`).
 - `apps/backend/src/db/allocate.ts` — allocation engine: demands in
   `priority_seq` order, skips work-locked orders, open qty = `qty − Σ
   picking_packages`.
@@ -474,6 +512,7 @@
 - `docs/superpowers/specs/2026-10-02-picking-scan-label-record-design.md`
 - `docs/superpowers/specs/2026-10-03-picking-scan-truth-and-aggregate-verify-design.md`
 - `docs/superpowers/specs/2026-10-02-excel-order-barcode-scan-to-open-design.md`
+- `docs/superpowers/specs/2026-10-07-supplier-outdated-datecode-warning-design.md`
 - `docs/superpowers/plans/2026-07-23-picking-priority-allocation.md`
 - `docs/superpowers/plans/2026-07-12-picking-execution.md`
 - `docs/superpowers/plans/2026-07-18-picking-scan-session.md`

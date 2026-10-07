@@ -19,6 +19,7 @@
       <span class="app-list-row__line1">
         <span class="app-list-row__title">{{ title }}</span>
         <span v-if="chipText" class="badge app-list-row__chip" :class="chipClass">{{ chipText }}</span>
+        <span v-if="warnText" class="badge badge--warning app-list-row__chip">{{ warnText }}</span>
       </span>
       <span v-for="(line, i) in metaLines" :key="i" class="app-list-row__meta">{{ line }}</span>
     </button>
@@ -26,6 +27,7 @@
       <span class="app-list-row__line1">
         <span class="app-list-row__title">{{ title }}</span>
         <span v-if="chipText" class="badge app-list-row__chip" :class="chipClass">{{ chipText }}</span>
+        <span v-if="warnText" class="badge badge--warning app-list-row__chip">{{ warnText }}</span>
       </span>
       <span v-for="(line, i) in metaLines" :key="i" class="app-list-row__meta">{{ line }}</span>
     </NuxtLink>
@@ -33,6 +35,7 @@
       <div class="app-list-row__line1">
         <span class="app-list-row__title">{{ title }}</span>
         <span v-if="chipText" class="badge app-list-row__chip" :class="chipClass">{{ chipText }}</span>
+        <span v-if="warnText" class="badge badge--warning app-list-row__chip">{{ warnText }}</span>
       </div>
       <div v-for="(line, i) in metaLines" :key="i" class="app-list-row__meta">{{ line }}</div>
     </div>
@@ -67,6 +70,9 @@ const props = defineProps<{
   meta?: (string | null | undefined)[];
   chipText?: string;
   chipClass?: string;
+  /** Optional second chip (amber) for advisory warnings, e.g. the unresolved
+   *  outdated-scan warning count (spec 2026-10-07). */
+  warnText?: string;
   /** Navigation target for the main area. Omit for a plain row. */
   to?: string;
   expandable?: boolean;

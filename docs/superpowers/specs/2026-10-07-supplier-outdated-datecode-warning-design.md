@@ -1,6 +1,6 @@
 # Supplier Outdated Date-Code Scan Warning — Design
 
-Status: draft (2026-10-07)
+Status: implemented (2026-10-07)
 
 ## Problem
 
@@ -20,9 +20,20 @@ the label's date code is older than the supplier's limit:
 2. The PDA shows an alert naming the supplier, date code, and limit.
 3. The backend records a warning row and notifies the admin console (SSE).
 4. The order shows a warning badge (PDA list/detail + admin list/detail).
-5. Task completion is blocked until an admin resolves the order's warnings:
-   - `POST /picking-orders/:id/finish` → 409 `unresolved_outdated_warnings`
-   - `POST /receiving-orders/:id/put-away-commit` → 409 `unresolved_outdated_warnings`
+5. Order **completion** is blocked until an admin resolves the order's
+   warnings — the scans and the put-away commit themselves stay unblocked
+   (operators keep working):
+   - Picking: the auto-finish (`maybeAutoFinishPickingOrder`) holds — the
+     order stays `picking` — and an explicit
+     `POST /picking-orders/:id/finish` → 409 `unresolved_outdated_warnings`
+     with a JSON body `{"error":"unresolved_outdated_warnings","count":N}`.
+   - Put-away: `POST /receiving-orders/:id/put-away-commit` is NOT blocked;
+     instead the auto-clear (`tryMarkReceivingOrderClear`) holds the `clear`
+     transition (and the put-away task completion it performs).
+   - `POST /admin/outdated-warnings/resolve-order` re-runs the held
+     completion when it resolved anything (picking:
+     `retryAutoFinishPickingOrder`; put-away: `retryReceivingOrderClear`),
+     so the order finishes/clears on resolution.
 
 Scope decisions (confirmed with requester):
 
@@ -92,10 +103,12 @@ New module, called from the scan paths:
 ### Call sites
 
 - `scanPickingItem` (`src/db/picking.ts`) — after the package is created,
-  inside the same tx. Supplier identity = the supplier profile whose QR
-  template/brand matched the scan (the scan flow already resolves this for
-  template matching; the matched profile's `supplierCode` is threaded into the
-  check). Same for the `shipping-boxes/:id/scan` path.
+  inside the same tx. Supplier identity = the supplier profile whose
+  `brands` array contains the part's `parts.brand` (`checkPartScanOutdated`
+  in `src/db/outdated.ts` — same lookup style as the brand whitelist). Same
+  for the `shipping-boxes/:id/scan` path, which gains an optional `dateCode`
+  body field so that path can warn (the box scan resolves the part
+  cross-order from the barcode, which does not carry the decoded date code).
 - Put-away scan (`src/routes/putaway.ts` → `src/db/putaway.ts`,
   `POST /receiving-orders/:id/put-away-scans`) — same pattern; the receiving
   order's supplier is known directly (`supplier_code` on the order).
@@ -110,17 +123,31 @@ Scan endpoints stay 2xx. The response gains:
 "outdatedWarning": { "supplierCode": "...", "dateCode": "3724", "limitMonths": 12 }
 ```
 
-(absent/null when clean). The PDA shows a dismissible alert dialog:
+(absent/null when clean) on `POST /picking-items/:id/scan`,
+`POST /shipping-boxes/:id/scan`, and
+`POST /receiving-orders/:id/put-away-scans`. The PDA shows a dismissible
+alert dialog (`components/OutdatedWarningDialog.vue`):
 "Outdated date code WWYY — supplier limit N months. Admin has been notified."
 and scanning continues.
 
 ## Blocking completion
 
-- `finishPickingOrder` and the put-away commit domain function query
-  unresolved warning count for the order first; `> 0` →
-  `HTTPException(409, "unresolved_outdated_warnings")` with the count in the
-  error body so the PDA can render "N unresolved outdated warnings — ask an
-  admin to resolve".
+Blocking happens at the **order-completion points**, not per commit:
+
+- `finishPickingOrder` queries the unresolved warning count first; `> 0` →
+  `HTTPException(409)` with JSON body
+  `{"error":"unresolved_outdated_warnings","count":N}` so the PDA can render
+  "N unresolved outdated warnings — ask an admin to resolve".
+- `maybeAutoFinishPickingOrder` (the auto-finish when the last package is
+  boxed / whole-box claimed) is held while unresolved warnings exist — it
+  returns false and the order stays `picking`.
+- Put-away: `POST /receiving-orders/:id/put-away-commit` is NOT blocked;
+  instead `tryMarkReceivingOrderClear` holds the `clear` transition (and the
+  put-away task completion) while unresolved warnings exist.
+- `POST /admin/outdated-warnings/resolve-order` re-runs the held completion
+  when it resolved anything: `retryAutoFinishPickingOrder` for picking,
+  `retryReceivingOrderClear` for put-away — the order finishes/clears on
+  resolution.
 - Admin order status overrides (`PATCH /admin/picking-orders/:id/status`) are
   NOT blocked — admins are the resolution authority.
 
@@ -129,18 +156,28 @@ and scanning continues.
 - `GET /picking-orders` rows + `GET /picking-orders/:id`: add
   `outdatedWarningCount` (unresolved). PDA picking list/detail show a warning
   chip when > 0; admin picking list/detail show the same.
-- Put-away list/detail (receiving orders): same field; warning chip on the
-  PDA put-away list and admin receiving detail.
+- Put-away: `GET /put-away/candidates` rows and the
+  `GET /receiving-orders/:id/put-away` aggregate (+ `GET /put-away-tasks`
+  rows) carry the same `outdatedWarningCount`; warning chip on the PDA
+  put-away list/detail and the admin receiving detail.
 - No change to allocation, statuses, or list filtering.
 
 ## Admin API + console
 
 - `GET /admin/outdated-warnings?resolved=false&orderKind=` — list with order
-  no, part, supplier, date code, scanned by/at.
+  no, part, supplier, date code, scanned by/at (rows:
+  `{id, orderKind, orderId, orderNo, orderItemId, packageId, supplierCode,
+  supplierName, wclItemNo, partNo, dateCode, limitMonths, qty, scannedBy,
+  scannedByName, scannedAt, resolvedAt, resolvedBy, resolvedByName,
+  resolutionNote}`; `resolved`/`orderKind` validated, absent = all).
 - `POST /admin/outdated-warnings/resolve-order`
   `{orderKind, orderId, note}` — stamps `resolved_at/resolved_by/
   resolution_note` on all unresolved rows for the order (tx), emits
-  `outdated.warning.resolved`. Whole-order resolution per decision.
+  `outdated.warning.resolved`, and when it resolved anything re-runs the
+  held completion (`retryAutoFinishPickingOrder` /
+  `retryReceivingOrderClear`) so the order finishes/clears on resolution.
+  Whole-order resolution per decision; idempotent (`{resolved: 0}` when
+  nothing is pending).
 - Admin console: new "Outdated warnings" page (pending count badge in nav),
   reachable from the picking/receiving detail warning chip; resolve dialog
   with note field. Subscribes to the SSE topic for live updates.
@@ -163,7 +200,9 @@ Both added to `docs/backend/event-catalog.md`.
   the same dialog.
 - Picking + put-away list rows and detail headers: warning chip when
   `outdatedWarningCount > 0`.
-- Finish / commit 409 handling: show the server message.
+- Finish 409 `unresolved_outdated_warnings` handling: show the server
+  message (toast with the count). Put-away commit is not blocked — the held
+  auto-clear simply completes later, on resolution.
 
 ## Tests
 
@@ -173,8 +212,8 @@ Both added to `docs/backend/event-catalog.md`.
   - picking scan with outdated label → 201 + `outdatedWarning` + warning row
     + SSE event; clean label → no field.
   - put-away scan same.
-  - finish / put-away-commit blocked with 409 while unresolved; succeeds
-    after `resolve-order`.
+  - finish 409s while unresolved; auto-finish held; put-away auto-clear held;
+    the held completion re-runs after `resolve-order` (order finishes/clears).
   - resolve-order stamps all rows + emits event; idempotent on re-resolve.
 - PDA (vitest): warning dialog rendering from a scan response; list chip.
 

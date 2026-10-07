@@ -71,8 +71,10 @@ import { useErrorMessage } from "~/composables/errorMessage";
 import { useWarehouse } from "~/composables/useWarehouse";
 import { usePickingWorkLock } from "~/composables/usePickingWorkLock";
 import { useHardwareScanner } from "~/composables/useHardwareScanner";
-import { useLabelScan, captureLabel, captureRawLabelValue } from "~/composables/useLabelScan";
+import { useLabelScan, captureLabel, captureRawLabelValue, ocrResultToInput } from "~/composables/useLabelScan";
 import { playScanError, playScanSuccess } from "~/utils/scanBeep";
+import { rawCode } from "~/utils/text";
+import { ApiError } from "~/services/apiClient";
 import PickingBoxesSection from "~/components/picking/PickingBoxesSection.vue";
 import PickingItemsSection from "~/components/picking/PickingItemsSection.vue";
 import PickingIssueBanner from "~/components/picking/PickingIssueBanner.vue";
@@ -123,7 +125,17 @@ async function scanIntoBox(boxId: string, barcode: string): Promise<boolean> {
   if (scanningIntoBox.value) return false;
   scanningIntoBox.value = true;
   try {
-    await warehouse.scanIntoShippingBox(boxId, { barcode });
+    // The backend's outdated date-code check needs the label's parsed date
+    // code — best-effort supplier-template parse (the barcode may belong to
+    // another order, so a parse miss just sends no dateCode).
+    let dateCode: string | undefined;
+    try {
+      const parsedResult = await parseRawValue(barcode);
+      if (parsedResult.matched) {
+        dateCode = rawCode(ocrResultToInput(parsedResult.parsed).dateCode) ?? undefined;
+      }
+    } catch { /* parsing is best-effort — the scan still goes through */ }
+    await warehouse.scanIntoShippingBox(boxId, { barcode, dateCode });
     await load();
     showToast(t("picking.boxesSection.scanIntoBoxSuccess", { box: boxId }));
     return true;
@@ -216,6 +228,10 @@ usePageHeader({
   title: () => order.value?.orderNo,
   badgeText: () => (order.value ? headerStatus.value : undefined),
   badgeClass: () => headerBadgeClass.value,
+  warningText: () =>
+    order.value && order.value.outdatedWarningCount > 0
+      ? t("outdatedWarning.chip", { count: order.value.outdatedWarningCount })
+      : undefined,
   info: () => {
     const o = order.value;
     if (!o) return [];
@@ -382,7 +398,19 @@ async function finish() {
     await warehouse.finishPickingOrder(orderId);
     await load();
   } catch (e) {
-    error.value = errorMessage(e);
+    // 409 unresolved_outdated_warnings (spec 2026-10-07): the order stays
+    // open — toast the count and reload so the header warning chip shows.
+    if (
+      e instanceof ApiError &&
+      e.status === 409 &&
+      e.body?.error === "unresolved_outdated_warnings"
+    ) {
+      const count = typeof e.body.count === "number" ? e.body.count : 0;
+      showToast(t("errors.unresolved_outdated_warnings", { count }));
+      await load();
+    } else {
+      error.value = errorMessage(e);
+    }
   } finally {
     finishing.value = false;
   }

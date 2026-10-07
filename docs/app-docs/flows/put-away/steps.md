@@ -28,6 +28,12 @@ If the label's quantity spans several lines of the same part (one physical
 package covering a 300 + 20000 split), just scan it — the app distributes the
 quantity across those lines automatically.
 
+**Outdated date code alert:** if a scanned label's date code is older than the
+supplier's outdated limit, the scan is still recorded but an alert pops up
+naming the supplier, the date code and the limit, and the order gets a warning
+chip on the list and detail pages. Keep working — an admin has been notified;
+the order just won't clear itself until the warnings are resolved.
+
 With the hardware gun you can also just scan — a label that matches an item on the order is accepted automatically (free-match). For tighter control, tap **Gun scan** on the item you are holding first: the card is highlighted with an "armed" badge, and every following gun scan is accepted only if it matches that item (part number and remaining quantity). The item stays armed for repeated scans; tap the button again (now labelled as cancel) to disarm, or tap **Gun scan** on another item to switch. The armed state clears itself once the item is fully put away.
 
 Scans made before a shelf is chosen wait in the **pending list** (grouped by
@@ -52,3 +58,8 @@ shelf barcode; the pending list (if any) is offered to the new shelf.
 When every piece is put away, the order/task completes itself — no close
 step. The inventory lots now carry the shelf location and the stock is
 available to picking.
+
+Exception: while the order has unresolved outdated date-code warnings (warning
+chip on the order), the auto-clear is held — everything is on the shelves, but
+the order/task stays open until an admin resolves the warnings (admin console
+→ Issues → Outdated warnings); it then clears automatically.
