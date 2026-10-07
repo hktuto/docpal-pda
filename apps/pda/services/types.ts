@@ -1028,6 +1028,16 @@ export interface SupplierListRow {
   shortName: string | null;
 }
 
+/** GET /admin/countries row (the admin CRUD read doubles as the PDA country
+ *  dropdown list — same trick as the supplier/shelf lists). code = ISO 3166-1
+ *  alpha-2; shortCode = single char for the date-code display template. */
+export interface CountryRow {
+  id: string;
+  code: string;
+  name: string;
+  shortCode: string | null;
+}
+
 /** GET /boxes?q= row — one box from either box table (shipping or shelf),
  *  matched by id substring; orderNo is the owning order's number when set. */
 export interface BoxSearchResult {

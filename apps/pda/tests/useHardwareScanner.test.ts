@@ -20,7 +20,7 @@ vi.mock('../composables/useScannerBroadcast', () => ({
   ScannerBroadcast: { addListener: addListenerMock },
 }));
 
-const { useHardwareScanner } = await import('../composables/useHardwareScanner');
+const { useHardwareScanner, simulateScan } = await import('../composables/useHardwareScanner');
 
 describe('useHardwareScanner', () => {
   let handler: ReturnType<typeof vi.fn>;
@@ -222,5 +222,32 @@ describe('useHardwareScanner', () => {
     keydown('Enter');
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(handler).toHaveBeenCalledWith('AB');
+  });
+
+  describe('simulateScan', () => {
+    it('routes a simulated scan through the page onScan handler', async () => {
+      useHardwareScanner({ onScan: handler });
+      expect(await simulateScan('SIM123')).toBe(true);
+      expect(handler).toHaveBeenCalledWith('SIM123');
+    });
+
+    it('honours the page enabled guard', async () => {
+      useHardwareScanner({ onScan: handler, enabled: () => false });
+      expect(await simulateScan('SIM123')).toBe(false);
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    it('targets the most recently mounted instance', async () => {
+      useHardwareScanner({ onScan: vi.fn() });
+      useHardwareScanner({ onScan: handler });
+      expect(await simulateScan('SIM123')).toBe(true);
+      expect(handler).toHaveBeenCalledWith('SIM123');
+    });
+
+    it('skips onScan for order-link QR values', async () => {
+      useHardwareScanner({ onScan: handler });
+      expect(await simulateScan('warehouse://picking/abc-123')).toBe(true);
+      expect(handler).not.toHaveBeenCalled();
+    });
   });
 });

@@ -221,6 +221,36 @@ test("scan: staging insert creates staging box + backfills batch attrs; guards",
   assert.equal(badQty.message, "qty_must_be_positive_integer");
 });
 
+test("scan: provided batch attrs overwrite the item's; null keeps them", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await daitoInHand();
+  const itemId = await itemIdOf(orderId, "RK73B1JTTD181G"); // dateCode 2610, coo/cow JP
+
+  // A corrected scan overwrites the values stamped on the item.
+  await recordPutAwayScan(client.db, orderId, {
+    actorId,
+    receivingInvoiceItemId: itemId,
+    qty: 100,
+    dateCode: "2611",
+    lotCode: "L-9",
+    coo: "CN",
+    cow: "TW",
+  });
+  const item = await queryGet<{ dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null }>(
+    client.db,
+    sql`SELECT date_code AS "dateCode", lot_code AS "lotCode", coo, cow FROM receiving_invoice_items WHERE id = ${itemId}`
+  );
+  assert.deepEqual(item, { dateCode: "2611", lotCode: "L-9", coo: "CN", cow: "TW" });
+
+  // A scan without batch fields leaves the stamped values intact.
+  await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 100 });
+  const item2 = await queryGet<{ dateCode: string | null; lotCode: string | null; coo: string | null; cow: string | null }>(
+    client.db,
+    sql`SELECT date_code AS "dateCode", lot_code AS "lotCode", coo, cow FROM receiving_invoice_items WHERE id = ${itemId}`
+  );
+  assert.deepEqual(item2, { dateCode: "2611", lotCode: "L-9", coo: "CN", cow: "TW" });
+});
+
 test("scan: serialNo dedups per order (409 label_already_scanned); delete frees it", async () => {
   await reseed(client);
   const { orderId, actorId } = await daitoInHand();

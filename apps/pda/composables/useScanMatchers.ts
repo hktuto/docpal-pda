@@ -24,8 +24,9 @@ export async function runScanMatcher(
       return m.matchPicking(ctx.allocation, ctx.pickingItem, parsed);
     case 'put-away':
       if (!ctx.receivingItem) return m.error('missing_receiving_item');
-      // Grouped put-away detail (spec 2026-10-05): the review context carries
-      // all same-part lines so one label's qty can span them FIFO.
+      // The review context carries all visible order lines so a corrected
+      // part number can match any line; one label's qty spans the matching
+      // part's lines FIFO (spec 2026-10-05).
       return m.matchPutAway(ctx.receivingOrderId, ctx.putAwayItems ?? [ctx.receivingItem], parsed, ctx.shelfCode);
     case 'measuring':
       if (!ctx.packages) return m.error('missing_box_packages');
@@ -56,8 +57,10 @@ export interface ScanTaskContext {
   // put-away
   receivingOrderId?: string;
   receivingItem?: PutAwayExpectedItem;
-  // put-away part group: all same-part member lines of the reviewed card —
-  // one label's qty may span them (spec 2026-10-05)
+  // put-away part match pool: the visible order lines the label may match —
+  // the label's qty may span several same-part lines FIFO (spec
+  // 2026-10-05); carrying all visible lines lets the review form's part-no
+  // select re-match a corrected part (spec 2026-10-07)
   putAwayItems?: PutAwayExpectedItem[];
   // put-away selected shelf: scans commit straight onto this shelf (spec
   // 2026-10-06); unset = the scan waits in the pending list

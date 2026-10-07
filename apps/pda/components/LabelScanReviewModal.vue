@@ -25,12 +25,10 @@
         <form class="form" @submit.prevent="findMatch">
           <label class="field">
             <span>{{ $t('labelScanReviewModal.partNo') }}</span>
-            <input @focus="selectAll" v-model="editable.partNo" type="text" :placeholder="$t('labelScanReviewModal.placeholderPartNo')" />
-            <CandidateChips
-              v-model="editable.partNo"
-              :candidates="partNoCandidates"
-              :label="$t('labelScanReviewModal.partNo')"
-            />
+            <select v-model="editable.partNo">
+              <option value="">{{ $t('labelScanReviewModal.placeholderPartNo') }}</option>
+              <option v-for="opt in partNoOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.dateCode') }}</span>
@@ -52,21 +50,11 @@
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.coo') }}</span>
-            <input @focus="selectAll" v-model="editable.coo" type="text" :placeholder="$t('labelScanReviewModal.placeholderCoo')" />
-            <CandidateChips
-              v-model="editable.coo"
-              :candidates="cooCandidates"
-              :label="$t('labelScanReviewModal.coo')"
-            />
+            <CountrySelect v-model="editable.coo" :candidates="cooCandidates" :placeholder="$t('labelScanReviewModal.placeholderCoo')" />
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.cow') }}</span>
-            <input @focus="selectAll" v-model="editable.cow" type="text" :placeholder="$t('labelScanReviewModal.placeholderCow')" />
-            <CandidateChips
-              v-model="editable.cow"
-              :candidates="cowCandidates"
-              :label="$t('labelScanReviewModal.cow')"
-            />
+            <CountrySelect v-model="editable.cow" :candidates="cowCandidates" :placeholder="$t('labelScanReviewModal.placeholderCow')" />
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.qty') }}</span>
@@ -192,7 +180,9 @@ const emit = defineEmits<{
 }>();
 
 const localMatchResult = ref<ScanMatchResult>(props.matchResult);
-const editable = ref<OcrInput>({ ...props.parsed });
+// COO/COW default to empty — the operator picks explicitly from the country
+// dropdown; the OCR-parsed values stay available there as extra options.
+const editable = ref<OcrInput>({ ...props.parsed, coo: '', cow: '' });
 
 const partNoCandidates = computed(() => props.options.itemIds);
 const dateCodeCandidates = computed(() => props.options.dateCodes);
@@ -200,6 +190,28 @@ const lotCodeCandidates = computed(() => props.options.lotCodes);
 const cooCandidates = computed(() => props.options.coos);
 const cowCandidates = computed(() => props.options.cows);
 const qtyCandidates = computed(() => props.options.qtys.map(String));
+
+// Part-no select: the possible scan targets come from the parent context
+// (receiving order items for put-away, the box's packages for measuring); the
+// parsed value / OCR candidates not in that list stay as raw extra options.
+const partNoOptions = computed(() => {
+  const ctx = props.context;
+  let parts: string[] = [];
+  if (ctx.task === 'put-away') {
+    parts = (ctx.putAwayItems ?? (ctx.receivingItem ? [ctx.receivingItem] : [])).map((i) => i.partNo);
+  } else if (ctx.task === 'measuring') {
+    parts = (ctx.packages ?? []).map((p) => p.partNo);
+  } else if (ctx.task === 'picking' && ctx.pickingItem) {
+    parts = [ctx.pickingItem.partNo];
+  }
+  const values = [...new Set(parts.filter(Boolean))];
+  const extras = [...new Set(
+    [editable.value.partNo, ...partNoCandidates.value]
+      .map((v) => (v == null ? '' : String(v).trim()))
+      .filter((v) => v !== '' && !values.includes(v))
+  )];
+  return [...values, ...extras].map((v) => ({ value: v, label: v }));
+});
 
 const qtyChipValue = computed({
   get: () => String(editable.value.qty),
@@ -223,7 +235,7 @@ const imageSrc = computed(() => {
 });
 
 watch(() => props.matchResult, (v) => { localMatchResult.value = v; });
-watch(() => props.parsed, (v) => { editable.value = { ...v }; });
+watch(() => props.parsed, (v) => { editable.value = { ...v, coo: '', cow: '' }; });
 
 async function findMatch() {
   matching.value = true;
@@ -242,7 +254,14 @@ async function applyRecord(item: { record: unknown; apply: () => Promise<void> }
   applying.value = true;
   applyError.value = null;
   try {
-    await item.apply();
+    // Re-match against the edited fields first — the passed-in match was built
+    // from the original OCR parse, so applying it directly would discard edits.
+    const fresh = await runScanMatcher(props.context, editable.value, matchers);
+    if (fresh.type !== 'single') {
+      localMatchResult.value = fresh;
+      return;
+    }
+    await fresh.apply();
     // Refresh the match result so remainingQty reflects the just-applied scan.
     await findMatch();
     emit('applied');
@@ -377,6 +396,7 @@ function formatRecord(record: unknown): string {
 }
 
 .field input,
+.field select,
 .field textarea {
   padding: 0.5rem;
   border: 1px solid var(--border);

@@ -114,6 +114,7 @@
         :model-value="reviewOpen"
         :parsed="review.parsed"
         :options="review.options"
+        :part-nos="orderPartNos"
         @update:model-value="onReviewClosed"
         @confirm="onReviewConfirm"
         @retake="onReviewRetake"

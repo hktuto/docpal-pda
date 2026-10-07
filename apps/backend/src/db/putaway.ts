@@ -783,8 +783,10 @@ export interface RecordPutAwayScanInput {
 }
 
 /**
- * Record one staging scan: backfills NULL batch attributes on the invoice
- * item (the RII row is the batch source of truth) and inserts a
+ * Record one staging scan: stamps the invoice item's batch attributes with
+ * the scan's values when provided (later scans can correct earlier ones; a
+ * null field keeps the current value — the RII row is the batch source of
+ * truth) and inserts a
  * shelf_box_items row into the order's staging box. Guarded by the remaining
  * qty (received − picked − put away − allocated − staged). With `shelfBoxId`
  * the scan is immediately assigned into that open box in the same tx
@@ -831,10 +833,10 @@ export async function recordPutAwayScan(
     await queryRun(
       tx,
       sql`UPDATE receiving_invoice_items
-          SET date_code = COALESCE(date_code, ${input.dateCode ?? null}),
-              lot_code = COALESCE(lot_code, ${input.lotCode ?? null}),
-              coo = COALESCE(coo, ${input.coo ?? null}),
-              cow = COALESCE(cow, ${input.cow ?? null})
+          SET date_code = COALESCE(${input.dateCode ?? null}, date_code),
+              lot_code = COALESCE(${input.lotCode ?? null}, lot_code),
+              coo = COALESCE(${input.coo ?? null}, coo),
+              cow = COALESCE(${input.cow ?? null}, cow)
           WHERE id = ${item.id}`
     );
 

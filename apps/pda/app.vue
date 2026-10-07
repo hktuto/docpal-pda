@@ -4,6 +4,7 @@
   </NuxtLayout>
   <ServerDownOverlay />
   <AppUpdate />
+  <LazyDevScanSimulator v-if="devOnly" />
 </template>
 
 <script setup lang="ts">
@@ -11,6 +12,9 @@ import { App } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
 
 const { start: startServerHealth } = useServerHealth();
+
+// Dev-only scan simulator overlay (components/DevScanSimulator.vue).
+const devOnly = import.meta.dev;
 
 // Order-link QR scans (admin shipper / picking-list Excel) navigate globally,
 // from every page — including home and the order lists, which register no

@@ -39,6 +39,28 @@ function isInputElement(target: EventTarget | null): boolean {
   return Boolean(el.isContentEditable);
 }
 
+interface ActiveScannerInstance {
+  deliver: (value: string) => Promise<void>;
+  enabled?: () => boolean;
+}
+
+// Dev scan simulator target: the most recently mounted useHardwareScanner
+// instance. simulateScan routes through the same deliver() path as hardware
+// scans (page enabled guard, beeps, order-link QR interception).
+let activeInstance: ActiveScannerInstance | null = null;
+
+/**
+ * Deliver a simulated scan string to the currently active page scanner.
+ * Returns false when no scanner is mounted or the page's guard is disabled.
+ */
+export async function simulateScan(value: string): Promise<boolean> {
+  const instance = activeInstance;
+  if (!instance) return false;
+  if (instance.enabled && !instance.enabled()) return false;
+  await instance.deliver(value);
+  return true;
+}
+
 /**
  * Fill the focused element with a scanned value. Only elements marked with
  * the `data-scan-fill` attribute opt in — without that guard a trigger pull
@@ -180,7 +202,13 @@ export function useHardwareScanner(options: UseHardwareScannerOptions) {
     buffer.value += event.key;
   }
 
+  const registration: ActiveScannerInstance = {
+    deliver: (value: string) => deliver('simulated scan', value),
+    enabled: options.enabled,
+  };
+
   onMounted(() => {
+    activeInstance = registration;
     window.addEventListener('keydown', onKeydown, { capture: true });
     void ScannerBroadcast.addListener('scan', (data) => {
       void onBroadcastScan(data.value);
@@ -192,6 +220,7 @@ export function useHardwareScanner(options: UseHardwareScannerOptions) {
 
   onUnmounted(() => {
     unmounted = true;
+    if (activeInstance === registration) activeInstance = null;
     window.removeEventListener('keydown', onKeydown, { capture: true });
     clearIdleTimer();
     if (broadcastHandle) {

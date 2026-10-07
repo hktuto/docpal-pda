@@ -47,7 +47,7 @@
       :options="review.options"
       :match-result="review.matchResult"
       :mode="review.capture.imagePath ? 'review' : 'manual'"
-      :context="{ task: 'put-away', receivingOrderId: orderId, receivingItem: scanItem ?? undefined, putAwayItems: scanGroup?.items, shelfCode: selectedShelf }"
+      :context="{ task: 'put-away', receivingOrderId: orderId, receivingItem: scanItem ?? undefined, putAwayItems: visibleItems, shelfCode: selectedShelf }"
       @applied="onApplied"
       @retake="onRetake"
     />
@@ -482,12 +482,14 @@ async function openScan(group: PutAwayItemGroup) {
       playScanSuccess();
       return;
     }
-    // Single record: always pop the confirm form (confirmSingleMatch).
+    // Single record: always pop the confirm form (confirmSingleMatch). The
+    // match pool is all visible items so the operator can correct a misread
+    // part number to any line on the order in the review form.
     const result = await processCapture(capture, {
       task: "put-away",
       receivingOrderId: orderId,
       receivingItem: group.items[0],
-      putAwayItems: group.items,
+      putAwayItems: visibleItems.value,
       targets: group.partNo ? [group.partNo] : [],
       confirmSingleMatch: true,
       shelfCode: selectedShelf.value,

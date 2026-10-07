@@ -1052,6 +1052,20 @@ describe('backendWarehouse stock search flow', () => {
     expect(suppliers).toEqual(rows);
   });
 
+  it('getCountries reads the admin countries list for the COO/COW dropdown', async () => {
+    const rows = [
+      { id: 'c1', code: 'CN', name: 'China', shortCode: 'C' },
+      { id: 'c2', code: 'JP', name: 'Japan', shortCode: 'J' },
+    ];
+    fetchMock.mockResolvedValue(jsonResponse(rows));
+
+    const countries = await service().getCountries();
+
+    expect(lastCall().url).toBe(`${BASE_URL}/admin/countries`);
+    expect(lastCall().init.method).toBe('GET');
+    expect(countries).toEqual(rows);
+  });
+
   it('searchStockPage appends page and pageSize after the filters', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ rows: [], total: 0 }));
 

@@ -52,8 +52,10 @@
   package against 300 + 20000 lines): every write path splits the qty FIFO
   across the group's lines into one `recordPutAwayScan` per line
   (`utils/putAwayScan.ts` `findPutAwayTargets`) — hardware gun scan, OCR
-  review apply (`matchPutAway` takes the group's member lines via the review
-  context's `putAwayItems`), and the multi-item table. The hardware scanner
+  review apply (`matchPutAway` matches against the review context's
+  `putAwayItems` = all visible order lines, so a part number corrected in
+  the review form can re-match any line; an unchanged part still spans only
+  its own group's lines), and the multi-item table. The hardware scanner
   is armed on the detail page: a QR/wedge scan parses via the supplier
   templates and applies immediately. Item-first mode (opt-in): the per-card
   "Gun scan" button on `PutAwayLotsPanel.vue` emits `arm-scan`; the page
@@ -70,6 +72,17 @@
   multi-item (carton) label pops the shared `ScanMultiItemModal` table and
   rows are applied one by one. All write paths thread the selected shelf
   (`shelfCode`) so reviewed scans follow the same commit rule as gun scans.
+  The review form's Apply re-matches the EDITED fields before writing (spec
+  `2026-10-07-label-scan-review-edits-and-country-dropdown-design`), and
+  `recordPutAwayScan` lets a supplied batch value overwrite the one stamped
+  on the invoice item (null keeps it). Part no in the form is a select over
+  the order's visible lines (the review context's `putAwayItems` carries ALL
+  visible lines so a corrected part re-matches; matching still splits FIFO
+  over the selected part's lines only). COO/COW are country dropdowns
+  (`CountrySelect` over the `country_list` master via `useCountryList` →
+  `GET /admin/countries`, value = ISO code, names localized client-side via
+  the `countryLabels` locale map) and default to EMPTY — the operator picks
+  explicitly; OCR-parsed values stay as raw extra options.
 - Scanner symbology whitelist: while the detail page is open, the hardware
   decoder is restricted to the supplier profile's `barcode_types` (when set),
   but the shelf/box QR symbologies always stay enabled — shelf scanning is

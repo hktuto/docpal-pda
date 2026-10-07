@@ -22,6 +22,8 @@ the individual lines with their own remaining quantities and batch values.
 
 For each item, tap **Scan piece** and scan a physical label. Each scan records one piece with its own quantity, date code, lot code, COO, and COW. Repeat until the scanned quantity reaches the item total.
 
+A camera (OCR) scan opens a review form first: check and correct the parsed values — what you see in the form is what gets saved when you tap **Apply**. Part number is picked from the order's lines (a misread part can be corrected to any line on the order). COO and COW start empty and are picked from a country dropdown; a scanned value that is not in the list stays selectable as-is.
+
 If the label's quantity spans several lines of the same part (one physical
 package covering a 300 + 20000 split), just scan it — the app distributes the
 quantity across those lines automatically.

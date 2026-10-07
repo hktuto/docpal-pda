@@ -33,7 +33,8 @@ Typical label fields:
 
 - The demo normalizes common OCR errors (for example, `O` → `0`).
 - If the input does not match exactly one record, the operator must review or correct it.
-- When the scanner detects more than one possible value for a field (for example, multiple date codes or countries of origin), the review modal shows the alternatives as a row of chips below the input. Tap a chip to switch the field to that value.
+- When the scanner detects more than one possible value for a field (for example, multiple date codes), the review modal shows the alternatives as a row of chips below the input. Tap a chip to switch the field to that value. Part number and COO/COW are dropdowns instead of free text: part number lists the parent document's possible scan targets (the order's lines / the box's packages), COO/COW list the `country_list` master with localized display names and start empty; values scanned outside those lists stay selectable as-is.
+- Edits made in the review form always take effect on **Apply** — the app re-matches the edited values before writing, so there is no need to tap **Find Match** first. On the backend, a supplied batch value overwrites the one stamped on the receiving invoice item (an empty field keeps the current value).
 - Empty `dateCode`, `lotCode`, `coo`, or `cow` values on a receiving invoice item or on an already-created package are treated as wildcards. The matcher only checks fields that actually contain a value, so a label that supplies extra codes still matches as long as the populated fields agree.
 
 ## Browser testing

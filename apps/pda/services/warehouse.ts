@@ -38,6 +38,7 @@ import type {
   StockSearchOptions,
   StockSearchSummary,
   SupplierListRow,
+  CountryRow,
   SupplierQrcodeTemplate,
   BoxSearchResult,
   LabelsData,
@@ -191,6 +192,8 @@ export interface WarehouseService {
   // Filtered totals (items / on-hand / available) for the summary strip.
   getStockSearchSummary(filters?: StockSearchFilters): Promise<StockSearchSummary>;
   getSuppliers(): Promise<SupplierListRow[]>;
+  // Country list for the COO/COW dropdowns (admin CRUD read, code = ISO alpha-2).
+  getCountries(): Promise<CountryRow[]>;
 
   // Box lookup for the /box QR page — searches both box tables by id
   // substring (a bare daily seq like "0007" matches).

@@ -119,10 +119,12 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Review modal (picking / put-away / measuring) | `components/LabelScanReviewModal.vue` |
 | Review modal (receiving candidates) | `components/receiving/ReceivingScanReviewModal.vue` |
 | Candidate chips UI | `components/CandidateChips.vue` |
+| COO/COW country dropdown (country_list master) | `components/CountrySelect.vue` |
 | Scan orchestration | `composables/useLabelScan.ts` |
 | Receiving scan submission (server-side match, 409 → review) | `composables/useReceivingScan.ts` |
 | Review state wrapper | `composables/useLabelScanReview.ts` |
 | Client-side matchers (picking / put-away / measuring) | `composables/useScanMatchers.ts` |
+| Country list cache for the review modal's COO/COW dropdowns (`GET /admin/countries`) | `composables/useCountryList.ts` |
 | Picking page work lock (acquire/refresh/release + held-by state) | `composables/usePickingWorkLock.ts` |
 | Scanner symbology scope (per-supplier whitelist apply/restore) | `composables/useScannerConfig.ts` + native `apps/pda/android/.../ScannerConfigPlugin.java` |
 | OCR/QR parser and candidate extraction | `utils/parseOcrScan.ts` |

@@ -38,6 +38,7 @@ import type {
   StockSearchOptions,
   StockSearchSummary,
   SupplierListRow,
+  CountryRow,
   SupplierQrcodeTemplate,
   BoxSearchResult,
   LabelsData,
@@ -491,6 +492,10 @@ export function createBackendWarehouseService(
     // (same trick as getShelves).
     async getSuppliers(): Promise<SupplierListRow[]> {
       return client.get("/admin/suppliers");
+    },
+    // The admin countries CRUD read doubles as the PDA COO/COW dropdown.
+    async getCountries(): Promise<CountryRow[]> {
+      return client.get("/admin/countries");
     },
 
     // Box lookup for the /box QR page (shipping + shelf boxes, id substring).

@@ -20,12 +20,10 @@
         <form class="form" @submit.prevent="confirm">
           <label class="field">
             <span>{{ $t('labelScanReviewModal.partNo') }}</span>
-            <input @focus="selectAll" v-model="editable.partNo" type="text" :placeholder="$t('labelScanReviewModal.placeholderPartNo')" />
-            <CandidateChips
-              v-model="editable.partNo"
-              :candidates="options.itemIds"
-              :label="$t('labelScanReviewModal.partNo')"
-            />
+            <select v-model="editable.partNo">
+              <option value="">{{ $t('labelScanReviewModal.placeholderPartNo') }}</option>
+              <option v-for="opt in partNoOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.qty') }}</span>
@@ -56,21 +54,11 @@
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.coo') }}</span>
-            <input @focus="selectAll" v-model="editable.coo" type="text" :placeholder="$t('labelScanReviewModal.placeholderCoo')" />
-            <CandidateChips
-              v-model="editable.coo"
-              :candidates="options.coos"
-              :label="$t('labelScanReviewModal.coo')"
-            />
+            <CountrySelect v-model="editable.coo" :candidates="options.coos" :placeholder="$t('labelScanReviewModal.placeholderCoo')" />
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.cow') }}</span>
-            <input @focus="selectAll" v-model="editable.cow" type="text" :placeholder="$t('labelScanReviewModal.placeholderCow')" />
-            <CandidateChips
-              v-model="editable.cow"
-              :candidates="options.cows"
-              :label="$t('labelScanReviewModal.cow')"
-            />
+            <CountrySelect v-model="editable.cow" :candidates="options.cows" :placeholder="$t('labelScanReviewModal.placeholderCow')" />
           </label>
         </form>
 
@@ -92,6 +80,7 @@
 
 <script setup lang="ts">
 import CandidateChips from "~/components/CandidateChips.vue";
+import CountrySelect from "~/components/CountrySelect.vue";
 import type { OcrInput } from "~/utils/ocrNormalize";
 import type { CandidateOptions } from "~/utils/parseOcrScan";
 
@@ -99,6 +88,8 @@ const props = defineProps<{
   modelValue: boolean;
   parsed: OcrInput;
   options: CandidateOptions;
+  /** The picking order's part numbers — the possible scan targets. */
+  partNos: string[];
 }>();
 
 const emit = defineEmits<{
@@ -107,14 +98,28 @@ const emit = defineEmits<{
   (e: "retake"): void;
 }>();
 
-const editable = ref<OcrInput>({ ...props.parsed });
+// COO/COW default to empty — the operator picks explicitly from the country
+// dropdown; the OCR-parsed values stay available there as extra options.
+const editable = ref<OcrInput>({ ...props.parsed, coo: "", cow: "" });
 
 watch(
   () => props.parsed,
   (v) => {
-    editable.value = { ...v };
+    editable.value = { ...v, coo: "", cow: "" };
   }
 );
+
+// Part-no select: the order's parts plus the parsed value / OCR candidates
+// that are not on the order (kept as raw extras so nothing is blanked).
+const partNoOptions = computed(() => {
+  const values = [...new Set(props.partNos.filter(Boolean))];
+  const extras = [...new Set(
+    [editable.value.partNo, ...props.options.itemIds]
+      .map((v) => (v == null ? "" : String(v).trim()))
+      .filter((v) => v !== "" && !values.includes(v))
+  )];
+  return [...values, ...extras].map((v) => ({ value: v, label: v }));
+});
 
 const qtyChipValue = computed({
   get: () => String(editable.value.qty),
@@ -222,7 +227,8 @@ function selectAll(event: FocusEvent) {
   color: var(--muted);
 }
 
-.field input {
+.field input,
+.field select {
   padding: 0.5rem;
   border: 1px solid var(--border);
   border-radius: var(--radius);
