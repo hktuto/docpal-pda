@@ -1070,7 +1070,9 @@ export default {
       printerName: "打印機名稱",
       printerPlaceholder: "例如 MYPRINTER",
       print: "列印證件",
-      printSuccess: "證件已傳送到打印機。"
+      printSuccess: "證件已傳送到打印機。",
+      createBadgeHint: "輸入用戶名和密碼，為任意用戶生成登入 QR code 證件。",
+      usernamePlaceholder: "輸入用戶名"
     },
     scopePicker: {
       hint: "勾選的子庫會限制該用戶在收貨及揀貨清單中看到的資料。全部不勾選即不設限制（用戶可看到所有子庫）。",

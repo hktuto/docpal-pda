@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import QRCode from "qrcode";
-import { listPrinters, parsePrinterKey, printFile, printerKey, waitForPrintJob, type PrinterInfo } from "~/utils/print";
+import { listPrinters, parsePrinterKey, printFile, printerKey, waitForPrintJob, A4_PAGE_W, A4_PAGE_H, type PrinterInfo } from "~/utils/print";
 import type { AdminColumnDef } from "~/composables/useAdminTable";
 
 interface User {
@@ -80,6 +80,11 @@ const badgeQr = ref<string | null>(null);
 const badgeError = ref("");
 const generating = ref(false);
 
+// Create-badge modal state (free-text username + password → QR → print)
+const showCreateModal = ref(false);
+const newUsername = ref("");
+const newPassword = ref("");
+
 function startBadge(u: User) {
   selectedUser.value = u;
   password.value = "";
@@ -94,6 +99,44 @@ function closeBadge() {
   badgeQr.value = null;
   badgeError.value = "";
   printed.value = false;
+}
+
+function openCreateModal() {
+  newUsername.value = "";
+  newPassword.value = "";
+  showCreateModal.value = true;
+}
+
+function closeCreateModal() {
+  showCreateModal.value = false;
+  newUsername.value = "";
+  newPassword.value = "";
+}
+
+async function createBadgeFromInput() {
+  if (!newUsername.value.trim() || !newPassword.value) return;
+  const u: User = {
+    id: "custom",
+    username: newUsername.value.trim(),
+    displayName: newUsername.value.trim(),
+    groupCodes: [],
+  };
+  selectedUser.value = u;
+  password.value = newPassword.value;
+  generating.value = true;
+  badgeError.value = "";
+  try {
+    const value = `${u.username}:${newPassword.value}`;
+    badgeQr.value = await QRCode.toDataURL(value, {
+      width: 240,
+      margin: 2,
+      errorCorrectionLevel: "M",
+    });
+  } catch (e) {
+    badgeError.value = e instanceof Error ? e.message : String(e);
+  } finally {
+    generating.value = false;
+  }
 }
 
 async function generateBadge() {
@@ -137,11 +180,23 @@ async function loadPrinters() {
 async function renderBadgePng(): Promise<Blob> {
   const u = selectedUser.value!;
   const canvas = document.createElement("canvas");
-  canvas.width = 400;
-  canvas.height = 420;
+  canvas.width = A4_PAGE_W;
+  canvas.height = A4_PAGE_H;
   const ctx = canvas.getContext("2d")!;
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Badge design is 400×420 — scale 3× and center on the A4 page.
+  const scale = 3;
+  const badgeW = 400 * scale;
+  const badgeH = 420 * scale;
+  const offsetX = (A4_PAGE_W - badgeW) / 2;
+  const offsetY = (A4_PAGE_H - badgeH) / 2;
+
+  ctx.save();
+  ctx.translate(offsetX, offsetY);
+  ctx.scale(scale, scale);
+
   ctx.textAlign = "center";
   ctx.fillStyle = "#0f1720";
   ctx.font = "700 28px sans-serif";
@@ -153,6 +208,9 @@ async function renderBadgePng(): Promise<Blob> {
   img.src = badgeQr.value!;
   await img.decode();
   ctx.drawImage(img, 80, 120, 240, 240);
+
+  ctx.restore();
+
   return await new Promise<Blob>((resolve, reject) =>
     canvas.toBlob(
       (b) => (b ? resolve(b) : reject(new Error("canvas.toBlob returned null"))),
@@ -195,9 +253,14 @@ onMounted(() => {
   <div>
     <div class="page-head">
       <h1>{{ $t("admin.userBadges.title") }}</h1>
-      <button class="btn" :disabled="loading" @click="load">
-        {{ $t("admin.common.refresh") }}
-      </button>
+      <div class="page-actions">
+        <button class="btn" @click="openCreateModal">
+          {{ $t("admin.userBadges.createBadge") }}
+        </button>
+        <button class="btn" :disabled="loading" @click="load">
+          {{ $t("admin.common.refresh") }}
+        </button>
+      </div>
     </div>
 
     <div class="search-bar">
@@ -299,10 +362,101 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- Create-badge modal: free-text username + password → QR → preview → print -->
+    <div v-if="showCreateModal" class="modal-overlay" @click.self="closeCreateModal">
+      <div class="modal-box">
+        <button class="modal-close" @click="closeCreateModal">×</button>
+
+        <div v-if="!badgeQr">
+          <h2>{{ $t("admin.userBadges.createBadge") }}</h2>
+          <p class="hint">{{ $t("admin.userBadges.createBadgeHint") }}</p>
+          <div class="form-row">
+            <label for="create-username">{{ $t("admin.userBadges.username") }}</label>
+            <input
+              id="create-username"
+              v-model="newUsername"
+              type="text"
+              autocomplete="off"
+              data-1p-ignore
+              data-lpignore="true"
+              :placeholder="$t('admin.userBadges.usernamePlaceholder')"
+              @keydown.enter="createBadgeFromInput"
+            />
+          </div>
+          <div class="form-row">
+            <label for="create-password">{{ $t("admin.auth.password") }}</label>
+            <input
+              id="create-password"
+              v-model="newPassword"
+              type="password"
+              autocomplete="new-password"
+              data-1p-ignore
+              data-lpignore="true"
+              :placeholder="$t('admin.userBadges.passwordPlaceholder')"
+              @keydown.enter="createBadgeFromInput"
+            />
+          </div>
+          <div v-if="badgeError" class="error-banner">{{ badgeError }}</div>
+          <div class="modal-actions">
+            <button class="btn" @click="closeCreateModal">{{ $t("admin.common.cancel") }}</button>
+            <button
+              class="btn btn-primary"
+              :disabled="!newUsername.trim() || !newPassword || generating"
+              @click="createBadgeFromInput"
+            >
+              {{ generating ? $t("admin.common.loading") : $t("admin.userBadges.generate") }}
+            </button>
+          </div>
+        </div>
+
+        <div v-else class="badge-preview">
+          <h2>{{ $t("admin.userBadges.badgeTitle") }}</h2>
+          <div class="badge-card">
+            <div class="badge-name">{{ selectedUser?.displayName || selectedUser?.username }}</div>
+            <div class="badge-user">{{ selectedUser?.username }}</div>
+            <img :src="badgeQr" :alt="$t('admin.userBadges.qrAlt')" class="badge-qr" />
+          </div>
+          <div class="form-row">
+            <label for="create-badge-printer">{{ $t("admin.userBadges.printerName") }}</label>
+            <input
+              id="create-badge-printer"
+              v-model="printerName"
+              type="text"
+              list="create-badge-printers"
+              autocomplete="off"
+              data-1p-ignore
+              data-lpignore="true"
+              :placeholder="$t('admin.userBadges.printerPlaceholder')"
+            />
+            <datalist id="create-badge-printers">
+              <option v-for="p in printers" :key="printerKey(p)" :label="p.alias || p.name" :value="printerKey(p)" />
+            </datalist>
+          </div>
+          <div v-if="badgeError" class="error-banner">{{ badgeError }}</div>
+          <div v-if="printed" class="success-banner">{{ $t("admin.userBadges.printSuccess") }}</div>
+          <div class="modal-actions">
+            <button class="btn" @click="closeCreateModal">{{ $t("admin.common.close") }}</button>
+            <button
+              class="btn btn-primary"
+              :disabled="!selectedPrinter || printing"
+              @click="printBadge"
+            >
+              {{ printing ? $t("admin.common.loading") : $t("admin.userBadges.print") }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped>
+.page-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
 .search-bar {
   margin-bottom: 0.75rem;
 }

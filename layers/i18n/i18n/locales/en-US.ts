@@ -1070,7 +1070,9 @@ export default {
       printerName: "Printer name",
       printerPlaceholder: "e.g. MYPRINTER",
       print: "Print badge",
-      printSuccess: "Badge sent to the printer."
+      printSuccess: "Badge sent to the printer.",
+      createBadgeHint: "Enter a username and password to generate a login QR code badge for any user.",
+      usernamePlaceholder: "Enter username"
     },
     scopePicker: {
       hint: "Checked sub-inventories limit what the user sees on receiving and picking lists. Leave everything unchecked for no restriction (the user sees all sub-inventories).",

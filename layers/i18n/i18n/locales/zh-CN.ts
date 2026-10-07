@@ -1070,7 +1070,9 @@ export default {
       printerName: "打印机名称",
       printerPlaceholder: "例如 MYPRINTER",
       print: "打印工牌",
-      printSuccess: "工牌已发送到打印机。"
+      printSuccess: "工牌已发送到打印机。",
+      createBadgeHint: "输入用户名和密码，为任意用户生成登录二维码工牌。",
+      usernamePlaceholder: "输入用户名"
     },
     scopePicker: {
       hint: "勾选的子库会限制该用户在收货及拣货列表中看到的数据。全部不勾选即不设限制（用户可看到所有子库）。",

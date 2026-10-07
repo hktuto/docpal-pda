@@ -129,8 +129,8 @@ export function renderShelfBoxLabelPng(boxId: string): Promise<Blob> {
 
 // A4 batch sheet for multi-select label printing: 3 x 8 labels per A4 page at
 // 300 dpi (same cell content as the single labels, scaled to the grid).
-const A4_PAGE_W = 2480;
-const A4_PAGE_H = 3508;
+export const A4_PAGE_W = 2480;
+export const A4_PAGE_H = 3508;
 const BATCH_COLS = 3;
 const BATCH_ROWS = 8;
 export const SHELF_BATCH_CELLS_PER_PAGE = BATCH_COLS * BATCH_ROWS;
