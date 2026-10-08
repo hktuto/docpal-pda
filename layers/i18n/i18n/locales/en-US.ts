@@ -1036,6 +1036,7 @@ export default {
       receiving: "Receiving",
       issues: "Issues",
       shipping: "Shipping",
+      adHocPutAway: "Ad-hoc Put-away",
       settings: "Settings",
       dropdownPolicy: "Dropdown & Policy"
     },
@@ -1064,7 +1065,8 @@ export default {
       userBadges: "User Badges",
       userProfiles: "User Scope",
       labelPrintRules: "Label Print Rules",
-      outdatedWarnings: "Outdated Warnings"
+      outdatedWarnings: "Outdated Warnings",
+      adHocPutAways: "Ad-Hoc Put-Aways"
     },
     auth: {
       logout: "Logout",
@@ -1401,6 +1403,34 @@ export default {
         notePlaceholder: "Optional resolution note…",
         resolveSubmit: "Resolve",
         resolvedDone: "Resolved {count} warning(s) on {orderNo}."
+      },
+      adHocPutAways: {
+        title: "Ad-Hoc Put-Aways",
+        id: "ID",
+        supplier: "Supplier",
+        shelf: "Shelf",
+        org: "Org",
+        subInventory: "Sub-Inventory",
+        itemCount: "Items",
+        totalQty: "Total Qty",
+        actor: "Actor",
+        created: "Created",
+        filterSupplier: "All suppliers",
+        filterShelf: "All shelves",
+        filterFrom: "From",
+        filterTo: "To",
+        noResults: "No ad-hoc put-away batches found.",
+        detailTitle: "Ad-Hoc Put-Away — {id}",
+        backToList: "Back to list",
+        items: "Items",
+        partNo: "Part No",
+        wclItemNo: "WCL Item No",
+        qty: "Qty",
+        dateCode: "Date Code",
+        lotCode: "Lot Code",
+        coo: "COO",
+        cow: "COW",
+        serialNo: "Serial No"
       },
       subInventories: {
         title: "Sub-inventories",

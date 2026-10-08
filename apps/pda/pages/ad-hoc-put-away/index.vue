@@ -174,7 +174,7 @@ definePageMeta({ title: "meta.adHocPutAway" });
 
 const { t } = useI18n();
 const warehouse = useWarehouse();
-const toast = useToast();
+const { showToast } = useToast();
 const errorMessage = useErrorMessage();
 
 const loading = ref(true);
@@ -228,7 +228,7 @@ async function handleHardwareScan(code: string) {
   const shelf = shelves.value.find((s) => s.code === code);
   if (shelf) {
     selectedShelf.value = code;
-    toast.info(t("adHocPutAway.shelfSelected", { shelf: code }));
+    showToast(t("adHocPutAway.shelfSelected", { shelf: code }));
     return;
   }
 
@@ -254,7 +254,7 @@ async function handleHardwareScan(code: string) {
     playScanSuccess();
   } else {
     playScanError();
-    toast.error(t("adHocPutAway.scanError"));
+    showToast(t("adHocPutAway.scanError"));
   }
 }
 
@@ -282,7 +282,7 @@ async function openScan() {
     playScanSuccess();
   } else {
     playScanError();
-    toast.error(t("adHocPutAway.scanError"));
+    showToast(t("adHocPutAway.scanError"));
   }
 }
 
@@ -327,7 +327,7 @@ function applyBatch() {
   }
   batchDateCode.value = "";
   batchLotCode.value = "";
-  toast.success(t("adHocPutAway.batchApplied"));
+  showToast(t("adHocPutAway.batchApplied"));
 }
 
 async function confirmCommit() {
@@ -348,7 +348,7 @@ async function confirmCommit() {
   // Validate all items have location
   const missingLoc = items.value.find((i) => !i.orgId || !i.subInventoryCode);
   if (missingLoc) {
-    toast.error(t("adHocPutAway.locationRequired"));
+    showToast(t("adHocPutAway.locationRequired"));
     return;
   }
 
@@ -359,12 +359,12 @@ async function confirmCommit() {
       shelfCode: selectedShelf.value,
       items: items.value,
     });
-    toast.success(t("adHocPutAway.success", { count: items.value.length, shelf: selectedShelf.value }));
+    showToast(t("adHocPutAway.success", { count: items.value.length, shelf: selectedShelf.value }));
     items.value = [];
     selectedShelf.value = "";
   } catch (err) {
     const msg = err instanceof I18nError ? err.message : (err instanceof Error ? err.message : "unknown error");
-    toast.error(t("adHocPutAway.commitError", { message: msg }));
+    showToast(t("adHocPutAway.commitError", { message: msg }));
   } finally {
     committing.value = false;
   }

@@ -31,6 +31,7 @@ import { adminUserProfilesRoute } from "./userProfiles.js";
 import { adminLabelPrintRulesRoute } from "./labelPrintRules.js";
 import { adminCustomerProfilesRoute } from "./customerProfiles.js";
 import { adminOutdatedWarningsRoute } from "./outdatedWarnings.js";
+import { adHocPutAwayRoute } from "./adHocPutAway.js";
 import { parseScopeEntries, type UserScopeEntry } from "../../db/user-scope.js";
 
 // Optional id on create: use the client's when given, else generate one.
@@ -326,6 +327,9 @@ adminRoute.route("/", adminOutdatedWarningsRoute);
 // Per-user sub-inventory scope profiles (spec
 // 2026-09-11-user-subinventory-scope-design.md).
 adminRoute.route("/user-profiles", adminUserProfilesRoute);
+
+// Ad-hoc put-away batches (read-only admin view).
+adminRoute.route("/ad-hoc-put-aways", adHocPutAwayRoute);
 
 // DocPal console link for the admin user popover — null when DOCPAL_URL is
 // not configured (login itself requires it, so real deployments always have it).

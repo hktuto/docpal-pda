@@ -73,6 +73,8 @@
 - Issues
   - receiving issues, picking issues
   - Outdated warnings — supplier date-code scan warnings from picking / put-away scans, whole-order resolution with note; pending-count badge in nav; warning chip links from the picking / receiving order detail pages
+- Ad-hoc Put-Aways
+  - read-only list of ad-hoc put-away batches (supplier, shelf, date range filters) with detail view showing full item list
 - Settings
   - flow config, display config (date-code display template, receiving order name template), PDA view config (per-page PDA list/detail view editor), app download, user badges, user scope
 - Dropdown & Policy

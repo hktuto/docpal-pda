@@ -296,6 +296,15 @@ ledger rows (`ADJUST` / `on_hand` / positive delta), insert an
 | `GET /ad-hoc-put-away/locations` | Valid `(org_id, sub_inventory_code)` pairs from `org_info` for the PDA location selector. Response: `{locations: [{orgId, subInventoryCode}]}`. |
 | `POST /ad-hoc-put-away` | `{supplierCode, shelfCode, items[{partNo, wclItemNo, qty, dateCode, lotCode, coo, cow, serialNo, orgId, subInventoryCode}]}` → `{id, itemCount, totalQty, shelfCode}`, 201. 404 `shelf_not_found` / `part_not_found`; 400 on empty items or invalid fields. Schedules `allocateAll` on success. |
 
+### Admin — ad-hoc put-away view
+
+Read-only admin console endpoints (spec `2026-10-08-ad-hoc-put-away-admin-design.md`).
+
+| Endpoint | Description |
+|---|---|
+| `GET /admin/ad-hoc-put-aways` | List batches with pagination + filters. Query: `page`, `pageSize`, `supplierCode`, `shelfCode`, `from`, `to`. Response: `{rows: [{id, supplierCode, shelfCode, orgId, subInventoryCode, totalQty, itemCount, actorId, createdDate}], total}`. |
+| `GET /admin/ad-hoc-put-aways/:id` | Batch detail with full item list. Response: same fields as a list row plus `items: [{partNo, wclItemNo, qty, dateCode, lotCode, coo, cow, serialNo}]`. 404 if not found. |
+
 ## Picking
 
 Implemented: `GET /picking-orders`, `GET /picking-orders/:id`,

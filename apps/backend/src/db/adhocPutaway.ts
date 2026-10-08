@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, sql, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql, or, type SQL } from "drizzle-orm";
 import type { AppDb } from "../db.js";
 import { adHocPutAways } from "./schema/adhocPutaway.js";
 import { inventoryLots } from "./schema/inventory.js";
@@ -265,3 +265,116 @@ export async function listAdHocPutAwayLocations(
 
 // Re-export for route scheduling
 export { scheduleAllocateAll };
+
+// ---------------------------------------------------------------------------
+// Admin read-only queries
+// ---------------------------------------------------------------------------
+
+export interface AdHocPutAwayListRow {
+  id: string;
+  supplierCode: string;
+  shelfCode: string;
+  orgId: number;
+  subInventoryCode: string;
+  totalQty: number;
+  itemCount: number;
+  actorId: string;
+  createdDate: string;
+}
+
+export interface AdHocPutAwayDetail extends AdHocPutAwayListRow {
+  items: Array<{
+    partNo: string;
+    wclItemNo: string | null;
+    qty: number;
+    dateCode: string | null;
+    lotCode: string | null;
+    coo: string | null;
+    cow: string | null;
+    serialNo: string | null;
+  }>;
+}
+
+/**
+ * List ad-hoc put-away batches with optional filters. Used by the admin
+ * console. Returns rows + total count for pagination.
+ */
+export async function listAdHocPutAways(
+  db: AppDb,
+  opts: {
+    page?: number;
+    pageSize?: number;
+    supplierCode?: string;
+    shelfCode?: string;
+    from?: string;
+    to?: string;
+  } = {}
+): Promise<{ rows: AdHocPutAwayListRow[]; total: number }> {
+  const { page = 1, pageSize = 20, supplierCode, shelfCode, from, to } = opts;
+  const conditions: SQL[] = [];
+  if (supplierCode) conditions.push(eq(adHocPutAways.supplierCode, supplierCode));
+  if (shelfCode) conditions.push(eq(adHocPutAways.shelfCode, shelfCode));
+  if (from) conditions.push(sql`${adHocPutAways.createdDate} >= ${from}`);
+  if (to) conditions.push(sql`${adHocPutAways.createdDate} <= ${to}`);
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const rows = await db
+    .select({
+      id: adHocPutAways.id,
+      supplierCode: adHocPutAways.supplierCode,
+      shelfCode: adHocPutAways.shelfCode,
+      orgId: adHocPutAways.orgId,
+      subInventoryCode: adHocPutAways.subInventoryCode,
+      totalQty: adHocPutAways.totalQty,
+      itemCount: adHocPutAways.itemCount,
+      actorId: adHocPutAways.actorId,
+      createdDate: adHocPutAways.createdDate,
+    })
+    .from(adHocPutAways)
+    .where(where)
+    .orderBy(desc(adHocPutAways.createdDate))
+    .limit(pageSize)
+    .offset((page - 1) * pageSize);
+
+  const countRow = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(adHocPutAways)
+    .where(where);
+
+  return {
+    rows: rows.map((r) => ({ ...r, createdDate: r.createdDate.toISOString() })),
+    total: countRow[0]?.count ?? 0,
+  };
+}
+
+/**
+ * Get a single ad-hoc put-away batch with its items. Used by the admin
+ * detail page.
+ */
+export async function getAdHocPutAwayDetail(
+  db: AppDb,
+  id: string
+): Promise<AdHocPutAwayDetail | null> {
+  const row = await db
+    .select({
+      id: adHocPutAways.id,
+      supplierCode: adHocPutAways.supplierCode,
+      shelfCode: adHocPutAways.shelfCode,
+      orgId: adHocPutAways.orgId,
+      subInventoryCode: adHocPutAways.subInventoryCode,
+      totalQty: adHocPutAways.totalQty,
+      itemCount: adHocPutAways.itemCount,
+      actorId: adHocPutAways.actorId,
+      createdDate: adHocPutAways.createdDate,
+      items: adHocPutAways.items,
+    })
+    .from(adHocPutAways)
+    .where(eq(adHocPutAways.id, id))
+    .limit(1);
+  if (!row.length) return null;
+  return {
+    ...row[0],
+    createdDate: row[0].createdDate.toISOString(),
+    items: row[0].items as AdHocPutAwayDetail["items"],
+  };
+}

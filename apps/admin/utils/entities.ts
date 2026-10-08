@@ -297,6 +297,10 @@ export const navSections: { title: string; links: { route: string; title: string
     links: [{ route: "/shipping", title: "admin.navLinks.shippingOrders" }],
   },
   {
+    title: "admin.nav.adHocPutAway",
+    links: [{ route: "/ad-hoc-put-aways", title: "admin.navLinks.adHocPutAways" }],
+  },
+  {
     title: "admin.nav.settings",
     links: [
       { route: "/flow-config", title: "admin.navLinks.flowConfig" },

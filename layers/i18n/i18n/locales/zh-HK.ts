@@ -1036,6 +1036,7 @@ export default {
       receiving: "收貨",
       issues: "問題",
       shipping: "出貨",
+      adHocPutAway: "臨時上架",
       settings: "設定",
       dropdownPolicy: "選項及政策"
     },
@@ -1064,7 +1065,8 @@ export default {
       userBadges: "用戶證件",
       userProfiles: "用戶子庫範圍",
       labelPrintRules: "標籤列印規則",
-      outdatedWarnings: "過期日期碼警告"
+      outdatedWarnings: "過期日期碼警告",
+      adHocPutAways: "臨時上架"
     },
     auth: {
       logout: "登出",
@@ -1401,6 +1403,34 @@ export default {
         notePlaceholder: "處理備註（可留空）…",
         resolveSubmit: "處理",
         resolvedDone: "已處理 {orderNo} 的 {count} 個警告。"
+      },
+      adHocPutAways: {
+        title: "臨時上架",
+        id: "ID",
+        supplier: "供應商",
+        shelf: "貨架",
+        org: "Org",
+        subInventory: "子庫",
+        itemCount: "明細數",
+        totalQty: "總數量",
+        actor: "操作人",
+        created: "建立時間",
+        filterSupplier: "全部供應商",
+        filterShelf: "全部貨架",
+        filterFrom: "從",
+        filterTo: "至",
+        noResults: "未找到臨時上架批次。",
+        detailTitle: "臨時上架 — {id}",
+        backToList: "返回列表",
+        items: "明細",
+        partNo: "零件號",
+        wclItemNo: "WCL 物料號",
+        qty: "數量",
+        dateCode: "日期碼",
+        lotCode: "批次號",
+        coo: "原產地",
+        cow: "原產國",
+        serialNo: "序號"
       },
       subInventories: {
         title: "子庫",

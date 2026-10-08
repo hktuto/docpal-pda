@@ -44,6 +44,9 @@ import type {
   SupplierQrcodeTemplate,
   BoxSearchResult,
   LabelsData,
+  AdHocPutAwayItem,
+  AdHocPutAwayResult,
+  AdHocPutAwayLocation,
 } from "./types";
 import { createBackendWarehouseService } from "./adapters/backendWarehouse";
 
