@@ -1,1 +1,1 @@
-ALTER TABLE "inventory_lots" ADD COLUMN "drawing_no" text;
+ALTER TABLE "inventory_lots" ADD COLUMN IF NOT EXISTS "drawing_no" text;
