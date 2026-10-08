@@ -3,6 +3,21 @@ import { normalize, type OcrInput } from "~/utils/ocrNormalize";
 import { normalizePartNo } from "~/utils/text";
 import type { PickingAllocation, PickingOrderDetail } from "~/services/types";
 
+/** Check scanned COO/COW against the target's. When the target has a value,
+ *  the scan must match (case-insensitive). When the target has no value, the
+ *  scan is not constrained. Returns an error message key on mismatch, or null. */
+function checkBatchAttr(
+  kind: "coo" | "cow",
+  targetValue: string | null | undefined,
+  scannedValue: string | null | undefined
+): string | null {
+  const target = (targetValue ?? "").trim();
+  const scanned = (scannedValue ?? "").trim();
+  if (!target || !scanned) return null;
+  if (target.toUpperCase() === scanned.toUpperCase()) return null;
+  return kind === "coo" ? "coo_mismatch" : "cow_mismatch";
+}
+
 export interface ScanQueueRow {
   key: string;
   itemId: string;
@@ -114,7 +129,7 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
     parsed: OcrInput,
     raw: string,
     source: ScanQueueRow["source"]
-  ): { ok: boolean; message?: "duplicate" | "invalid" | "no_match" } {
+  ): { ok: boolean; message?: string } {
     if (rows.value.some((r) => r.status === "queued" && r.raw === raw)) {
       return { ok: false, message: "duplicate" };
     }
@@ -124,6 +139,14 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
     }
     const target = findTargets({ partNo: String(parsed.partNo ?? ""), wclItemNo: parsed.wclItemNo }, qty);
     if (!target) return { ok: false, message: "no_match" };
+
+    // COO/COW check: when the allocation source has a value, the scan must match.
+    for (const portion of target) {
+      const cooErr = checkBatchAttr("coo", portion.allocation.lot?.coo, parsed.coo);
+      if (cooErr) return { ok: false, message: cooErr };
+      const cowErr = checkBatchAttr("cow", portion.allocation.lot?.cow, parsed.cow);
+      if (cowErr) return { ok: false, message: cowErr };
+    }
 
     // One row per (line, allocation) portion; unshift in reverse so the
     // first portion ends up on top. Portions of one label share the raw
@@ -215,7 +238,7 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
     parsed: OcrInput,
     raw: string,
     source: ScanQueueRow["source"]
-  ): { ok: boolean; message?: "duplicate" | "invalid" | "no_match" | "qty_exceeds" } {
+  ): { ok: boolean; message?: string } {
     if (rows.value.some((r) => r.status === "queued" && r.raw === raw)) {
       return { ok: false, message: "duplicate" };
     }
@@ -232,6 +255,11 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
     if (qty > allocationRemaining(allocationId)) {
       return { ok: false, message: "qty_exceeds" };
     }
+    // COO/COW check: when the allocation source has a value, the scan must match.
+    const cooErr = checkBatchAttr("coo", allocation.lot?.coo, parsed.coo);
+    if (cooErr) return { ok: false, message: cooErr };
+    const cowErr = checkBatchAttr("cow", allocation.lot?.cow, parsed.cow);
+    if (cowErr) return { ok: false, message: cowErr };
     rows.value.unshift({
       key: `row-${nextKey++}`,
       itemId: item.id,

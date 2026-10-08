@@ -226,6 +226,20 @@ const armedGroupItems = computed(() => {
 
 const { processCapture, parseRawValue } = useLabelScan();
 const scanning = ref(false);
+
+/** Check scanned COO/COW against the target's. When the target has a value,
+ *  the scan must match (case-insensitive). Returns an error key or null. */
+function checkBatchAttr(
+  kind: "coo" | "cow",
+  targetValue: string | null | undefined,
+  scannedValue: string | null | undefined
+): string | null {
+  const target = (targetValue ?? "").trim();
+  const scanned = (scannedValue ?? "").trim();
+  if (!target || !scanned) return null;
+  if (target.toUpperCase() === scanned.toUpperCase()) return null;
+  return `errors.${kind}_mismatch`;
+}
 const review = ref<LabelScanResult | null>(null);
 const reviewOpen = ref(false);
 
@@ -286,6 +300,19 @@ useHardwareScanner({
       if (!portions) {
         showToast(t("errors.scanned_part_does_not_match_item"));
         return false;
+      }
+      // COO/COW check: when the receiving item has a value, the scan must match.
+      for (const portion of portions) {
+        const cooErr = checkBatchAttr("coo", portion.item.coo, parsed.coo);
+        if (cooErr) {
+          showToast(t(cooErr, { scanned: parsed.coo, expected: portion.item.coo }));
+          return false;
+        }
+        const cowErr = checkBatchAttr("cow", portion.item.cow, parsed.cow);
+        if (cowErr) {
+          showToast(t(cowErr, { scanned: parsed.cow, expected: portion.item.cow }));
+          return false;
+        }
       }
       const batch = [
         rawCode(parsed.dateCode),

@@ -19,6 +19,7 @@ export default {
     measureBox: "测量箱子",
     verify: "复核",
     stockSearch: "库存查询",
+    adHocPutAway: "临时上架",
     settings: "设置"
   },
   actions: {
@@ -110,7 +111,8 @@ export default {
       goodsVerify: { title: "盘点" },
       measuring: { title: "测量" },
       verify: { title: "复核" },
-      stockSearch: { title: "库存查询" }
+      stockSearch: { title: "库存查询" },
+      adHocPutAway: { title: "临时上架" }
     }
   },
   login: {
@@ -266,6 +268,8 @@ export default {
           duplicate: "该标签已在列表中",
           no_match: "该标签没有匹配的项目/分配",
           qty_exceeds: "标签数量超过该箱所需数量",
+          coo_mismatch: "扫描 COO（{scanned}）与目标（{expected}）不匹配",
+          cow_mismatch: "扫描 COW（{scanned}）与目标（{expected}）不匹配",
           part_not_in_box: "此物品不在该箱内",
           cartonQueued: "纸箱 {carton}：已加入 {count} 项，共 {qty} 件",
           boxPickTitle: "从 {box} 拣货",
@@ -440,6 +444,27 @@ export default {
       removeFromShelfConfirm: "将 {qty} 件从货架 {shelf} 移除？库存将离开货架。",
       removedFromShelf: "已从 {shelf} 移除 {qty} 件",
     }
+  },
+  adHocPutAway: {
+    supplier: "供应商",
+    supplierPlaceholder: "选择供应商",
+    location: "位置",
+    locationPlaceholder: "选择位置",
+    shelf: "货架",
+    shelfPlaceholder: "选择货架",
+    scan: "扫描",
+    itemCount: "{count} 项，{qty} 件",
+    items: "明细",
+    dateCode: "日期代码",
+    lotCode: "批次代码",
+    applyBatch: "应用到全部",
+    batchApplied: "已应用到全部",
+    confirm: "将 {count} 项（{qty} 件）放到货架 {shelf}？",
+    success: "已将 {count} 项放到 {shelf}",
+    commitError: "错误：{message}",
+    scanError: "无法解析扫描",
+    shelfSelected: "已选择货架 {shelf}",
+    locationRequired: "请为所有明细选择位置",
   },
   goodsVerify: {
     title: "盘点",
@@ -673,6 +698,8 @@ export default {
     missing_receiving_item: "缺少收货项",
     missing_box_packages: "缺少箱子包裹",
     scanned_part_does_not_match_item: "扫描料号与物品不匹配",
+    coo_mismatch: "扫描 COO（{scanned}）与目标（{expected}）不匹配",
+    cow_mismatch: "扫描 COW（{scanned}）与目标（{expected}）不匹配",
     unhandled_mismatch_reason: "未处理的异常原因：{reason}",
     unhandled_issue_reason: "未处理的问题原因",
     not_found_mismatch_cannot_include_qty: "not_found 异常不能包含数量",

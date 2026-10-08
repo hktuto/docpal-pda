@@ -39,6 +39,8 @@ export async function runScanMatcher(
 interface PickingAllocationRef {
   id: string;
   qty: number;
+  coo?: string | null;
+  cow?: string | null;
 }
 
 interface PickingItemRef {
@@ -110,6 +112,27 @@ export function useScanMatchers(): ScanMatchers {
     return { type: 'error', message: t(`errors.${arg}`, params ?? {}) };
   }
 
+  /**
+   * Check scanned COO/COW against the target's. When the target has a value,
+   * the scan must match (case-insensitive). When the target has no value, the
+   * scan is not constrained. Returns an error code + params on mismatch, or
+   * null when the scan is acceptable.
+   */
+  function checkBatchAttr(
+    kind: 'coo' | 'cow',
+    targetValue: string | null | undefined,
+    scannedValue: string | null | undefined
+  ): { code: string; params: Record<string, string> } | null {
+    const target = (targetValue ?? '').trim();
+    const scanned = (scannedValue ?? '').trim();
+    if (!target || !scanned) return null;
+    if (target.toUpperCase() === scanned.toUpperCase()) return null;
+    return {
+      code: kind === 'coo' ? 'coo_mismatch' : 'cow_mismatch',
+      params: { scanned, expected: target },
+    };
+  }
+
   async function matchPicking(allocation: PickingAllocationRef, pickingItem: PickingItemRef, parsed: OcrInput): Promise<ScanMatchResult> {
     try {
       const user = currentUser.value;
@@ -122,6 +145,12 @@ export function useScanMatchers(): ScanMatchers {
       if (scannedKeys.length === 0) return { type: 'none' };
       const expectedPartNo = normalizePartNo(pickingItem.partNo ?? '');
       if (!scannedKeys.includes(expectedPartNo)) return error('scanned_part_does_not_match_allocation');
+
+      // COO/COW check: when the allocation source has a value, the scan must match.
+      const cooCheck = checkBatchAttr('coo', allocation.coo, parsed.coo);
+      if (cooCheck) return error(cooCheck.code, cooCheck.params);
+      const cowCheck = checkBatchAttr('cow', allocation.cow, parsed.cow);
+      if (cowCheck) return error(cowCheck.code, cowCheck.params);
 
       const qty = typeof parsed.qty === 'number' ? parsed.qty : Number(parsed.qty);
       if (!Number.isInteger(qty) || qty <= 0) return error('qty_must_be_positive_integer');
@@ -168,6 +197,14 @@ export function useScanMatchers(): ScanMatchers {
           .some((k) => scannedKeys.includes(k))
       );
       if (items.length === 0) return error('scanned_part_does_not_match_item');
+
+      // COO/COW check: when the receiving item has a value, the scan must match.
+      for (const item of items) {
+        const cooCheck = checkBatchAttr('coo', item.coo, parsed.coo);
+        if (cooCheck) return error(cooCheck.code, cooCheck.params);
+        const cowCheck = checkBatchAttr('cow', item.cow, parsed.cow);
+        if (cowCheck) return error(cowCheck.code, cowCheck.params);
+      }
 
       const qty = typeof parsed.qty === 'number' ? parsed.qty : Number(parsed.qty);
       if (!Number.isInteger(qty) || qty <= 0) return error('qty_must_be_positive_integer');

@@ -19,6 +19,7 @@ export default {
     measureBox: "Measure Box",
     verify: "Verify",
     stockSearch: "Stock Search",
+    adHocPutAway: "Ad-hoc Put-away",
     settings: "Settings"
   },
   actions: {
@@ -110,7 +111,8 @@ export default {
       goodsVerify: { title: "Goods Verify" },
       measuring: { title: "Measuring" },
       verify: { title: "Verify" },
-      stockSearch: { title: "Stock Search" }
+      stockSearch: { title: "Stock Search" },
+      adHocPutAway: { title: "Ad-hoc Put-away" }
     }
   },
   login: {
@@ -266,6 +268,8 @@ export default {
           duplicate: "This label is already in the list",
           no_match: "No matching item/allocation for this label",
           qty_exceeds: "Label qty exceeds what this box still needs",
+          coo_mismatch: "Scanned COO ({scanned}) does not match target ({expected})",
+          cow_mismatch: "Scanned COW ({scanned}) does not match target ({expected})",
           part_not_in_box: "This part is not in the scanned box",
           cartonQueued: "Carton {carton}: {count} item(s) queued, {qty} pcs",
           boxPickTitle: "Pick from {box}",
@@ -440,6 +444,27 @@ export default {
       removeFromShelfConfirm: "Remove {qty} pcs from shelf {shelf}? The stock leaves the shelf.",
       removedFromShelf: "Removed {qty} pcs from {shelf}",
     }
+  },
+  adHocPutAway: {
+    supplier: "Supplier",
+    supplierPlaceholder: "Select a supplier",
+    location: "Location",
+    locationPlaceholder: "Select a location",
+    shelf: "Shelf",
+    shelfPlaceholder: "Select a shelf",
+    scan: "Scan",
+    itemCount: "{count} items, {qty} pcs",
+    items: "Items",
+    dateCode: "Date code",
+    lotCode: "Lot code",
+    applyBatch: "Apply to all",
+    batchApplied: "Batch applied",
+    confirm: "Put {count} items ({qty} pcs) to shelf {shelf}?",
+    success: "Put {count} items to {shelf}",
+    commitError: "Error: {message}",
+    scanError: "Could not parse scan",
+    shelfSelected: "Shelf {shelf} selected",
+    locationRequired: "Please select a location for all items",
   },
   goodsVerify: {
     title: "Goods Verify",
@@ -673,6 +698,8 @@ export default {
     missing_receiving_item: "Missing receiving item",
     missing_box_packages: "Missing box packages",
     scanned_part_does_not_match_item: "Scanned part does not match item",
+    coo_mismatch: "Scanned COO ({scanned}) does not match target ({expected})",
+    cow_mismatch: "Scanned COW ({scanned}) does not match target ({expected})",
     unhandled_mismatch_reason: "Unhandled mismatch reason: {reason}",
     unhandled_issue_reason: "Unhandled issue reason.",
     not_found_mismatch_cannot_include_qty: "not_found mismatch cannot include a quantity",
