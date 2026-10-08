@@ -92,6 +92,16 @@ Or manually after filling `.env` (copied from `.env.example`):
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
+### Multi-warehouse instances (HK, SZ, …)
+
+One standalone instance per warehouse — separate backend process + separate database, no `warehouse_code` column (stock partitions by `org_id` + `sub_inventory_code`). To add a warehouse (SZ is the first):
+
+1. Create `apps/backend/src/db/seed-shelves-<wh>.ts` mirroring `seed-shelves-hk.ts` (zone groups → flattened `shelves` rows, reusing `shelfDisplayName`); fill in the real layout.
+2. In `src/db/seed.ts`: import the new rows, add a `<WH>_FLOW_CONFIG` const (partial JSON merged over `defaultFlowConfig()` — set `allowedOrgIds` to the warehouse's org ids, `[]` = all orgs), and extend the `WAREHOUSE_CODE` selector in `seedReferenceOnly()` (`isSz` pattern) to seed them.
+3. Deploy the new instance with its own `DATABASE_URL` and `WAREHOUSE_CODE=<wh>` (e.g. SZ: `WAREHOUSE_CODE=sz`). Tune the flow config afterwards via `GET/PUT /admin/flow-config`.
+
+Today: HK = default (`HK_FLOW_CONFIG` + `seed-shelves-hk.ts`), SZ = `WAREHOUSE_CODE=sz` (`SZ_FLOW_CONFIG` + `seed-shelves-sz.ts`).
+
 ### Demo reset
 
 - **Backend:** `POST :3002/dev/reset` truncates the Postgres database and re-seeds it.

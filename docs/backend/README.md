@@ -405,18 +405,22 @@ pnpm dev:admin     # admin console on :3100 (login: admin / DocPalAdmin2026!)
 ```
 
 Config (`.env`): `DATABASE_URL` (default database `warehouse_backend` on the
-shared local Postgres), `PORT`, `WAREHOUSE_CODE` (instance warehouse default,
-`HK1`), `CORS_ORIGINS`, `FLOW_CONFIG` (optional flow config JSON override —
+shared local Postgres), `PORT`, `WAREHOUSE_CODE` (instance warehouse selector:
+unset/`HK1` seeds the HK shelf layout + `HK_FLOW_CONFIG`; `sz` seeds
+`seed-shelves-sz.ts` + `SZ_FLOW_CONFIG` — one instance per warehouse, so the
+SZ instance runs with its own `DATABASE_URL` and `WAREHOUSE_CODE=sz`),
+`CORS_ORIGINS`, `FLOW_CONFIG` (optional flow config JSON override —
 step enablement + `steps.picking.allocation.allowDockStock`, served as
 `GET /config`; the primary source is the seeded `warehouse_config` row
 `"flow"`, and the deprecated `FLOW_STEPS_DISABLED` comma-separated step keys
 still apply when unset),
 `WAREHOUSE_SEED=off` to disable auto-seed, `WAREHOUSE_SEED_DEMO=1` to seed the
 full demo world (users/masters/demo orders — needed for local dev login). The
-default boot seed is reference data + shelves only — including the HK
+default boot seed is reference data + shelves only — including the
 warehouse flow config (`HK_FLOW_CONFIG` in `apps/backend/src/db/seed.ts` —
 all steps on, put-away `suggestShelf: "existing-stock"`, `allowedOrgIds`,
-receiving sub-inventory rules, transfer picking from-sub-inventory groups).
+receiving sub-inventory rules, transfer picking from-sub-inventory groups;
+`WAREHOUSE_CODE=sz` seeds `SZ_FLOW_CONFIG` + the SZ shelf layout instead).
 Masters (parts, suppliers, org_info, customer profiles), orders, and users
 arrive via upstream sync / DocPal auth.
 

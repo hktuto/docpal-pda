@@ -33,6 +33,7 @@ import { builtinSupplierProfiles } from "./seed-supplier-profiles.js";
 import { realSubInventories } from "./seed-subinventories-data.js";
 import { realNetWeights } from "./seed-net-weight-data.js";
 import { hkShelves, shelfDisplayName } from "./seed-shelves-hk.js";
+import { szShelves } from "./seed-shelves-sz.js";
 import {
   demoParts,
   demoReceivingOrders,
@@ -550,16 +551,42 @@ const HK_FLOW_CONFIG = {
   ],
 };
 
+// Default flow config for the SZ warehouse (WAREHOUSE_CODE=sz): same step
+// enablement as HK, but no org scoping (allowedOrgIds: [] = all orgs) and no
+// sub-inventory rules — tune via /admin/flow-config once the SZ org ids are
+// known. Partial JSON: merged over defaultFlowConfig() at boot.
+const SZ_FLOW_CONFIG = {
+  steps: {
+    verify: { enabled: true },
+    picking: { enabled: true, allocation: { allowDockStock: true } },
+    "put-away": { enabled: true, suggestShelf: "existing-stock", autoCreateTasks: false },
+    measuring: { enabled: true },
+    receiving: { enabled: true },
+    "goods-verify": { enabled: true },
+    "stock-search": { enabled: true },
+  },
+  allowedOrgIds: [],
+  receivingSubInventoryRules: [],
+  pickingFromSubinventoryOrgs: [],
+};
+
 async function seedReferenceOnly(db: AppDb): Promise<void> {
+  // One instance per warehouse: WAREHOUSE_CODE picks the shelf layout +
+  // default flow config (default HK; WAREHOUSE_CODE=sz seeds the SZ layout
+  // from seed-shelves-sz.ts).
+  const isSz = (process.env.WAREHOUSE_CODE ?? "").toLowerCase() === "sz";
+
   // Flow config row — required for boot.
-  await db.insert(warehouseConfig).values([{ key: "flow", value: HK_FLOW_CONFIG }]);
+  await db.insert(warehouseConfig).values([{ key: "flow", value: isSz ? SZ_FLOW_CONFIG : HK_FLOW_CONFIG }]);
 
   await db.insert(countryList).values(COUNTRIES.map((c, i) => ({ id: uid(100 + i), ...c, shortCode: c.code.slice(0, 1) })));
 
   await db.insert(boxSizeList).values(BOX_SIZES.map((code, i) => ({ id: uid(140 + i), code })));
 
-  // Default shelf layout: the real HK warehouse layout (seed-shelves-hk.ts).
-  await db.insert(shelves).values(hkShelves.map((s, i) => ({ id: uid(200 + i), ...s })));
+  // Shelf layout: the real warehouse layout for this instance (HK default,
+  // SZ when WAREHOUSE_CODE=sz).
+  const shelfRows = isSz ? szShelves : hkShelves;
+  await db.insert(shelves).values(shelfRows.map((s, i) => ({ id: uid(200 + i), ...s })));
 
   // Supplier QR label templates restored from the retired BVS system (see
   // scripts/sql/restore-supplier-profiles-whhk.sql). FK-safe: only codes that
