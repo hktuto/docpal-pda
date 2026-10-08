@@ -205,6 +205,17 @@ export interface WarehouseService {
 
   // Printable-label data for the /print-labels page (GET /labels-data).
   getLabelsData(): Promise<LabelsData>;
+
+  // Ad-hoc put-away (spec 2026-10-07-ad-hoc-put-away-design.md) — items
+  // with no receiving order put away directly to a shelf. The PDA holds the
+  // in-progress scan list in local state; the backend only sees the confirmed
+  // batch.
+  getAdHocPutAwayLocations(): Promise<AdHocPutAwayLocation[]>;
+  commitAdHocPutAway(input: {
+    supplierCode: string;
+    shelfCode: string;
+    items: AdHocPutAwayItem[];
+  }): Promise<AdHocPutAwayResult>;
 }
 
 export interface CreateWarehouseServiceOptions {

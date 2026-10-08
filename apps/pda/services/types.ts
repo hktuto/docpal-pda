@@ -840,7 +840,8 @@ export type FlowStep =
   | "goods-verify"
   | "measuring"
   | "verify"
-  | "stock-search";
+  | "stock-search"
+  | "ad-hoc-put-away";
 
 export interface FlowConfig {
   flowSteps: Record<FlowStep, boolean>;
@@ -1134,4 +1135,38 @@ export interface LabelsData {
     /** CTN <ctn_no> / <box> @ <shelf> / <shelf> / "receiving" display hint. */
     source: string;
   })[];
+}
+
+// ------------------------------------------------------------------
+// Ad-hoc put-away — DTOs matching apps/backend (:3002), see
+// docs/backend/api-design.md §Ad-hoc put-away. Items with no receiving
+// order (old store stock, write-out returns) put away directly to a shelf.
+// ------------------------------------------------------------------
+
+/** One scanned item in an ad-hoc put-away batch. */
+export interface AdHocPutAwayItem {
+  partNo: string;
+  wclItemNo: string | null;
+  qty: number;
+  dateCode: string | null;
+  lotCode: string | null;
+  coo: string | null;
+  cow: string | null;
+  serialNo: string | null;
+  orgId: number;
+  subInventoryCode: string;
+}
+
+/** POST /ad-hoc-put-away response. */
+export interface AdHocPutAwayResult {
+  id: string;
+  itemCount: number;
+  totalQty: number;
+  shelfCode: string;
+}
+
+/** One valid (org_id, sub_inventory_code) pair for the location selector. */
+export interface AdHocPutAwayLocation {
+  orgId: number;
+  subInventoryCode: string;
 }

@@ -9,3 +9,4 @@ export * from "./events.js";
 export * from "./config.js";
 export * from "./label-print.js";
 export * from "./outdated.js";
+export * from "./adhocPutaway.js";

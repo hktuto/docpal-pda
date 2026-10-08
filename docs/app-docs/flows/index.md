@@ -11,6 +11,7 @@ The app supports these warehouse flows. Each flow has an overview, a step-by-ste
 | [Verify](./verify/overview.md) | Second re-scan check of closed shipping boxes before shipping. | `/verify` | [Steps](./verify/steps.md) | [Scope](./verify/ai-scope.md) |
 | [Goods Verify](./goods-verify/overview.md) | Verify goods at appropriate process points. | `/goods-verify` | [Steps](./goods-verify/steps.md) | [Scope](./goods-verify/ai-scope.md) |
 | [Stock Search](./stock-search/overview.md) | Search inventory by supplier or item and see locations. | `/stock-search` | [Overview](./stock-search/overview.md) | [Scope](./stock-search/ai-scope.md) |
+| [Ad-hoc Put-away](./ad-hoc-put-away/overview.md) | Put away items with no receiving order (old store stock, write-out returns). | `/ad-hoc-put-away` | [Steps](./ad-hoc-put-away/steps.md) | [Scope](./ad-hoc-put-away/ai-scope.md) |
 
 ## Common actions across flows
 

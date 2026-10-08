@@ -277,6 +277,25 @@ Changes vs old: one aggregate read replaces the 3-call stitch; uniform
 materializes inventory lots (concept: lot + `inventory_lot_sources` +
 `inventory_transactions` PUT_AWAY rows).
 
+## Ad-hoc put-away
+
+Implemented: `GET /ad-hoc-put-away/locations`,
+`POST /ad-hoc-put-away` (see
+`apps/backend/src/routes/adhocPutaway.ts` + `src/db/adhocPutaway.ts`;
+items with no receiving order — old store stock, write-out returns — put
+away directly to a shelf in one confirmation. The PDA holds the in-progress
+scan list in local state; the backend only sees the confirmed batch. Single
+transaction: validate shelf + parts, find-or-create `inventory_lots` rows
+(keyed by `part_no + shelf_code + date_code + lot_code + coo + cow + org_id
++ sub_inventory_code`), increment `total_qty`, write `inventory_transactions`
+ledger rows (`ADJUST` / `on_hand` / positive delta), insert an
+`ad_hoc_put_aways` audit row. Schedules `allocateAll` in the background.
+
+| Endpoint | Description |
+|---|---|
+| `GET /ad-hoc-put-away/locations` | Valid `(org_id, sub_inventory_code)` pairs from `org_info` for the PDA location selector. Response: `{locations: [{orgId, subInventoryCode}]}`. |
+| `POST /ad-hoc-put-away` | `{supplierCode, shelfCode, items[{partNo, wclItemNo, qty, dateCode, lotCode, coo, cow, serialNo, orgId, subInventoryCode}]}` → `{id, itemCount, totalQty, shelfCode}`, 201. 404 `shelf_not_found` / `part_not_found`; 400 on empty items or invalid fields. Schedules `allocateAll` on success. |
+
 ## Picking
 
 Implemented: `GET /picking-orders`, `GET /picking-orders/:id`,

@@ -23,6 +23,7 @@ Page and component locations mapped to source files.
 | Goods verify queue | `/goods-verify` | `pages/goods-verify/index.vue` |
 | Goods verify detail | `/goods-verify/:id` | `pages/goods-verify/[id].vue` |
 | Stock Search | `/stock-search` | `pages/stock-search/index.vue` (filters via `components/FilterChipGroup.vue` chip multi-selects) |
+| Ad-hoc Put-away | `/ad-hoc-put-away` | `pages/ad-hoc-put-away/index.vue` (supplier selection, scan, review list, location/shelf selection, confirm) |
 | Print labels (boxes / shelves / cartons / parts) | `/print-labels` | `pages/print-labels.vue` (codes `components/labels/ScanCode.vue`, data `GET /labels-data`) |
 | Settings (global text size) | `/settings` | `pages/settings.vue` (sizing state `composables/useFontSize.ts`, applied at startup by `plugins/font-size.client.ts`, persisted per-device in `localStorage` key `warehouse-font-size`; all app CSS sizes in `rem` off the `html` base, default 24px — see `assets/css/main.scss`) |
 

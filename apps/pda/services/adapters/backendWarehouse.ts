@@ -44,6 +44,9 @@ import type {
   ScanPickingItemResult,
   ScanIntoShippingBoxResult,
   PutAwayScanResult,
+  AdHocPutAwayItem,
+  AdHocPutAwayResult,
+  AdHocPutAwayLocation,
 } from "../types";
 import type { WarehouseService } from "../warehouse";
 import { createApiClient } from "../apiClient";
@@ -520,6 +523,21 @@ export function createBackendWarehouseService(
     // bypassed so a just-received / just-put-away world shows up immediately.
     async getLabelsData(): Promise<LabelsData> {
       return client.get("/labels-data", { t: Date.now() });
+    },
+
+    // Ad-hoc put-away (spec 2026-10-07-ad-hoc-put-away-design.md)
+    async getAdHocPutAwayLocations(): Promise<AdHocPutAwayLocation[]> {
+      const result = await client.get<{ locations: AdHocPutAwayLocation[] }>(
+        "/ad-hoc-put-away/locations"
+      );
+      return result.locations;
+    },
+    async commitAdHocPutAway(input: {
+      supplierCode: string;
+      shelfCode: string;
+      items: AdHocPutAwayItem[];
+    }): Promise<AdHocPutAwayResult> {
+      return client.post("/ad-hoc-put-away", input);
     },
   };
 }
