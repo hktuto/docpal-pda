@@ -154,22 +154,7 @@
         </button>
       </section>
 
-      <!-- Scan review modal -->
-      <LabelScanReviewModal
-        v-if="review?.status === 'review'"
-        v-model="reviewOpen"
-        :image-path="review.capture.imagePath"
-        :text="review.capture.text"
-        :barcodes="review.capture.barcodes"
-        :parsed="review.parsed"
-        :options="review.options"
-        :match-result="review.matchResult"
-        :mode="review.capture.imagePath ? 'review' : 'manual'"
-        :context="{ task: 'ad-hoc-put-away', supplierCode: selectedSupplier }"
-        @applied="onApplied"
-        @retake="onRetake"
-      />
-    </template>
+      </template>
   </div>
 </template>
 
@@ -178,15 +163,11 @@ import { computed, ref } from "vue";
 import { useWarehouse } from "~/composables/useWarehouse";
 import { useToast } from "~/composables/useToast";
 import { useHardwareScanner } from "~/composables/useHardwareScanner";
-import {
-  useLabelScan,
-  type LabelScanResult,
-} from "~/composables/useLabelScan";
 import { useSupplierSymbologyScope } from "~/composables/useScannerConfig";
 import { I18nError } from "~/composables/i18nError";
 import { parseQrCapture, parseAndIdentify } from "~/utils/parseOcrScan";
+import { captureLabel, getCachedSupplierQrTemplates } from "~/composables/useLabelScan";
 import { playScanError, playScanSuccess } from "~/utils/scanBeep";
-import LabelScanReviewModal from "~/components/LabelScanReviewModal.vue";
 import type { AdHocPutAwayItem, Shelf, SupplierListRow } from "~/services/types";
 
 definePageMeta({ title: "meta.adHocPutAway" });
@@ -208,21 +189,14 @@ const items = ref<AdHocPutAwayItem[]>([]);
 const batchDateCode = ref("");
 const batchLotCode = ref("");
 const committing = ref(false);
-const reviewOpen = ref(false);
 
-// Scanner setup
-const { startScanning, stopScanning } = useHardwareScanner({
+// Scanner setup — useHardwareScanner manages its own lifecycle
+useHardwareScanner({
   onScan: handleHardwareScan,
 });
 
 // Supplier symbology scope — watches selectedSupplier internally
 useSupplierSymbologyScope(selectedSupplier, { withShelfCodes: true });
-
-// Label scan (OCR)
-const { review, openScan, onApplied, onRetake } = useLabelScan({
-  context: { task: "ad-hoc-put-away", supplierCode: selectedSupplier.value },
-  onCapture: handleCapture,
-});
 
 const totalQty = computed(() => items.value.reduce((sum, i) => sum + i.qty, 0));
 
@@ -249,7 +223,7 @@ async function load() {
 load();
 
 // Hardware scan handler
-function handleHardwareScan(code: string) {
+async function handleHardwareScan(code: string) {
   // Check if it's a shelf code
   const shelf = shelves.value.find((s) => s.code === code);
   if (shelf) {
@@ -258,18 +232,22 @@ function handleHardwareScan(code: string) {
     return;
   }
 
-  // Parse as item label
-  const parsed = parseQrCapture(code, selectedSupplier.value);
-  if (parsed) {
+  // Parse as item label via supplier QR template
+  const templates = await getCachedSupplierQrTemplates(warehouse);
+  const result = parseQrCapture(code, {
+    supplierTemplates: templates,
+    contextSupplierCode: selectedSupplier.value,
+  });
+  if (result.matched) {
     addItem({
-      partNo: parsed.partNo,
-      wclItemNo: parsed.wclItemNo || null,
-      qty: parsed.qty || 1,
-      dateCode: parsed.dateCode || null,
-      lotCode: parsed.lotCode || null,
-      coo: parsed.coo || null,
-      cow: parsed.cow || null,
-      serialNo: parsed.serialNo || null,
+      partNo: result.parsed.itemId ?? "",
+      wclItemNo: result.parsed.wclItemNo ?? null,
+      qty: result.parsed.qty ?? 1,
+      dateCode: result.parsed.dateCode ?? null,
+      lotCode: result.parsed.lotCode ?? null,
+      coo: result.parsed.coo ?? null,
+      cow: result.parsed.cow ?? null,
+      serialNo: result.parsed.serialNo ?? null,
       orgId: 0,
       subInventoryCode: "",
     });
@@ -281,21 +259,30 @@ function handleHardwareScan(code: string) {
 }
 
 // OCR capture handler
-async function handleCapture(result: LabelScanResult) {
-  const parsed = parseAndIdentify(result.text, result.barcodes);
-  if (parsed) {
+async function openScan() {
+  const capture = await captureLabel();
+  if (!capture) return;
+  const result = parseAndIdentify(
+    { text: capture.text, barcodes: JSON.parse(capture.barcodes || "[]") },
+    []
+  );
+  if (result.matched) {
     addItem({
-      partNo: parsed.partNo,
-      wclItemNo: null,
-      qty: parsed.qty || 1,
-      dateCode: parsed.dateCode || null,
-      lotCode: parsed.lotCode || null,
-      coo: parsed.coo || null,
-      cow: parsed.cow || null,
-      serialNo: null,
+      partNo: result.parsed.itemId ?? "",
+      wclItemNo: result.parsed.wclItemNo ?? null,
+      qty: result.parsed.qty ?? 1,
+      dateCode: result.parsed.dateCode ?? null,
+      lotCode: result.parsed.lotCode ?? null,
+      coo: result.parsed.coo ?? null,
+      cow: result.parsed.cow ?? null,
+      serialNo: result.parsed.serialNo ?? null,
       orgId: 0,
       subInventoryCode: "",
     });
+    playScanSuccess();
+  } else {
+    playScanError();
+    toast.error(t("adHocPutAway.scanError"));
   }
 }
 
