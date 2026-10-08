@@ -1,1 +1,1 @@
-ALTER TABLE "shelves" ADD COLUMN "warning" text;
+ALTER TABLE "shelves" ADD COLUMN IF NOT EXISTS "warning" text;

@@ -1,1 +1,1 @@
-ALTER TABLE "shelf_box_items" ADD COLUMN "serial_no" text;
+ALTER TABLE "shelf_box_items" ADD COLUMN IF NOT EXISTS "serial_no" text;

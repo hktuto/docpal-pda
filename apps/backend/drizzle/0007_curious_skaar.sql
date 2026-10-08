@@ -1,4 +1,4 @@
-ALTER TABLE "shelves" ADD COLUMN "sub_inventory_scopes" jsonb;
+ALTER TABLE "shelves" ADD COLUMN IF NOT EXISTS "sub_inventory_scopes" jsonb;
 --> statement-breakpoint
 -- Backfill: expand each legacy code to every org that has it, preserving the
 -- old org-agnostic matching semantics (codes repeat across orgs in org_info).

@@ -1,1 +1,1 @@
-ALTER TABLE "picking_packages" ADD COLUMN "label_barcode" text;
+ALTER TABLE "picking_packages" ADD COLUMN IF NOT EXISTS "label_barcode" text;

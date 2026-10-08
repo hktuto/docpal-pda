@@ -1,1 +1,1 @@
-ALTER TABLE "supplier_profiles" ADD COLUMN "date_code_encoding" text;
+ALTER TABLE "supplier_profiles" ADD COLUMN IF NOT EXISTS "date_code_encoding" text;

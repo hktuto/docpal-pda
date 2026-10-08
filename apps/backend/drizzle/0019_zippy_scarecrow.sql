@@ -1,4 +1,4 @@
-ALTER TABLE "supplier_profiles" ADD COLUMN "brands" text[];
+ALTER TABLE "supplier_profiles" ADD COLUMN IF NOT EXISTS "brands" text[];
 
 -- KOA (supplier 32): segment 7 is the WCL item no — capture it as wclItemNo,
 -- tolerate trailing segments + an optional trailing delimiter.

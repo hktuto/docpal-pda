@@ -1,1 +1,1 @@
-ALTER TABLE "allocations" ADD COLUMN "manual" boolean DEFAULT false NOT NULL;
+ALTER TABLE "allocations" ADD COLUMN IF NOT EXISTS "manual" boolean DEFAULT false NOT NULL;

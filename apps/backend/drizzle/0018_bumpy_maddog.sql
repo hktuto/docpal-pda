@@ -1,1 +1,1 @@
-ALTER TABLE "shelves" ADD COLUMN "display_name" text;
+ALTER TABLE "shelves" ADD COLUMN IF NOT EXISTS "display_name" text;

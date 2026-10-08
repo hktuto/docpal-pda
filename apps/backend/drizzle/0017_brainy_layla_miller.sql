@@ -69,7 +69,7 @@ CREATE TABLE "internal_transfer_packages" (
 );
 --> statement-breakpoint
 ALTER TABLE "put_away_tasks" ALTER COLUMN "receiving_order_id" DROP NOT NULL;--> statement-breakpoint
-ALTER TABLE "put_away_tasks" ADD COLUMN "internal_transfer_order_id" text;--> statement-breakpoint
+ALTER TABLE "put_away_tasks" ADD COLUMN IF NOT EXISTS "internal_transfer_order_id" text;--> statement-breakpoint
 ALTER TABLE "internal_transfer_allocations" ADD CONSTRAINT "internal_transfer_allocations_transfer_item_id_internal_transfer_items_id_fk" FOREIGN KEY ("transfer_item_id") REFERENCES "public"."internal_transfer_items"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "internal_transfer_allocations" ADD CONSTRAINT "internal_transfer_allocations_inventory_lot_id_inventory_lots_id_fk" FOREIGN KEY ("inventory_lot_id") REFERENCES "public"."inventory_lots"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "internal_transfer_allocations" ADD CONSTRAINT "internal_transfer_allocations_receiving_invoice_item_id_receiving_invoice_items_id_fk" FOREIGN KEY ("receiving_invoice_item_id") REFERENCES "public"."receiving_invoice_items"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

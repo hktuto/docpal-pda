@@ -1,1 +1,1 @@
-ALTER TABLE "supplier_profiles" ADD COLUMN "barcode_types" text[];
+ALTER TABLE "supplier_profiles" ADD COLUMN IF NOT EXISTS "barcode_types" text[];

@@ -19,7 +19,7 @@ CREATE TABLE "outdated_scan_warnings" (
 	"last_update_date" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "supplier_profiles" ADD COLUMN "outdated_limit_months" integer;--> statement-breakpoint
+ALTER TABLE "supplier_profiles" ADD COLUMN IF NOT EXISTS "outdated_limit_months" integer;--> statement-breakpoint
 -- Backfill: existing profiles opt into the outdated check at the default 12
 -- months (admins clear the field to NULL to opt a supplier out).
 UPDATE "supplier_profiles" SET "outdated_limit_months" = 12 WHERE "outdated_limit_months" IS NULL;--> statement-breakpoint
