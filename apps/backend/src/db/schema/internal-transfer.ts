@@ -43,6 +43,7 @@ export const internalTransferOrders = pgTable(
     // unallocated | partial | allocated (Σ allocated_qty vs Σ open qty).
     allocationStatus: text("allocation_status").notNull().default("unallocated"),
     remark: text("remark"),
+    customerName: text("customer_name"),
     additionalData: jsonb("additional_data"), // 上游额外字段透传（无固定结构）
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
@@ -69,6 +70,7 @@ export const internalTransferItems = pgTable(
     lineId: bigint("line_id", { mode: "number" }),
     lineNumber: integer("line_number"),
     status: text("status").notNull().default("pending"), // pending | picked — backend-maintained from picked_qty vs qty
+    poNo: text("po_no"),
     additionalData: jsonb("additional_data"), // 上游额外字段透传（无固定结构）
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
