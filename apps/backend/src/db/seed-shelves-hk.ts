@@ -170,12 +170,20 @@ const hkShelfZones: { zone: string | null; shelf: string[] }[] = [
  *  (spec 2026-09-17-shelf-warning-design.md). */
 const OUTDATED_STOCK_WARNING = "Outdated stock — verify before picking";
 
+/** Region prefixes: shelf codes start with a 2-letter region (GZ/SH/SZ/BJ/HK)
+ *  when the region's shelf range is addressed directly; split the display name
+ *  after the region (`GZE05` → `GZ-E05`). */
+const SHELF_REGION_PREFIXES = ["GZ", "SH", "SZ", "BJ", "HK"];
+
 /** Default display name for a dashless shelf code: codes with a space stay
- *  unchanged; codes with digits get a `-` at the first letter→digit boundary
- *  (`EG01` → `EG-01`); digitless codes get a `-` before the last char
- *  (`MMA` → `MM-A`). */
+ *  unchanged; region-prefixed codes get a `-` after the region
+ *  (`GZE05` → `GZ-E05`); other codes with digits get a `-` at the first
+ *  letter→digit boundary (`EG01` → `EG-01`); digitless codes get a `-`
+ *  before the last char (`MMA` → `MM-A`). */
 export function shelfDisplayName(code: string): string {
   if (code.includes(" ")) return code;
+  const region = SHELF_REGION_PREFIXES.find((r) => code.startsWith(r));
+  if (region) return `${region}-${code.slice(region.length)}`;
   const digitIdx = code.search(/\d/);
   if (digitIdx > 0) return `${code.slice(0, digitIdx)}-${code.slice(digitIdx)}`;
   if (digitIdx === 0) return code;
