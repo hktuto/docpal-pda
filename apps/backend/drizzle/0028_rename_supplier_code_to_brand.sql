@@ -1,0 +1,1 @@
+ALTER TABLE "ad_hoc_put_aways" RENAME COLUMN "supplier_code" TO "brand";--> statement-breakpoint

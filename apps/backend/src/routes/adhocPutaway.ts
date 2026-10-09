@@ -5,6 +5,7 @@ import { db } from "../db.js";
 import {
   commitAdHocPutAway,
   listAdHocPutAwayLocations,
+  listAdHocPutAwayBrands,
   scheduleAllocateAll,
 } from "../db/adhocPutaway.js";
 import { actorFrom } from "../auth/middleware.js";
@@ -26,10 +27,15 @@ adHocPutAwayRoute.get("/ad-hoc-put-away/locations", async (c) => {
   return c.json(await listAdHocPutAwayLocations(db), 200);
 });
 
+// Distinct brand values from parts for the PDA brand dropdown.
+adHocPutAwayRoute.get("/ad-hoc-put-away/brands", async (c) => {
+  return c.json(await listAdHocPutAwayBrands(db), 200);
+});
+
 // Commit an ad-hoc put-away batch (spec 2026-10-07-ad-hoc-put-away-design.md).
 adHocPutAwayRoute.post("/ad-hoc-put-away", async (c) => {
   const body = await readJson<{
-    supplierCode?: string;
+    brand?: string;
     shelfCode?: string;
     items?: Array<{
       partNo?: string;
@@ -45,8 +51,8 @@ adHocPutAwayRoute.post("/ad-hoc-put-away", async (c) => {
     }>;
   }>(c);
 
-  if (!body.supplierCode) {
-    throw new HTTPException(400, { message: "supplierCode is required" });
+  if (!body.brand) {
+    throw new HTTPException(400, { message: "brand is required" });
   }
   if (!body.shelfCode) {
     throw new HTTPException(400, { message: "shelfCode is required" });
@@ -73,7 +79,7 @@ adHocPutAwayRoute.post("/ad-hoc-put-away", async (c) => {
 
   try {
     const result = await commitAdHocPutAway(db, {
-      supplierCode: body.supplierCode,
+      brand: body.brand,
       shelfCode: body.shelfCode,
       items: body.items.map((i) => ({
         partNo: i.partNo!,

@@ -532,8 +532,14 @@ export function createBackendWarehouseService(
       );
       return result.locations;
     },
+    async getAdHocPutAwayBrands(): Promise<string[]> {
+      const result = await client.get<{ brands: string[] }>(
+        "/ad-hoc-put-away/brands"
+      );
+      return result.brands;
+    },
     async commitAdHocPutAway(input: {
-      supplierCode: string;
+      brand: string;
       shelfCode: string;
       items: AdHocPutAwayItem[];
     }): Promise<AdHocPutAwayResult> {

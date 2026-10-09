@@ -11,7 +11,7 @@ import { eq } from "drizzle-orm";
 
 // Ad-hoc put-away tests (spec 2026-10-07-ad-hoc-put-away-design.md).
 
-const TEST_SUPPLIER_CODE = "SUP-TEST-001";
+const TEST_BRAND = "TEST";
 const TEST_SHELF_CODE = "A-01-01";
 const TEST_PART_NO = "PART-TEST-001";
 const TEST_ORG_ID = 2;
@@ -76,7 +76,7 @@ test("ad-hoc put-away", async () => {
 
   await test("commits a single item: creates lot + ledger + audit row", async () => {
     const result = await commitAdHocPutAway(db, {
-      supplierCode: TEST_SUPPLIER_CODE,
+      brand: TEST_BRAND,
       shelfCode: TEST_SHELF_CODE,
       items: [{
         partNo: TEST_PART_NO,
@@ -120,7 +120,7 @@ test("ad-hoc put-away", async () => {
 
   await test("merges items with same part+shelf+batch into one lot", async () => {
     const result = await commitAdHocPutAway(db, {
-      supplierCode: TEST_SUPPLIER_CODE,
+      brand: TEST_BRAND,
       shelfCode: TEST_SHELF_CODE,
       items: [
         {
@@ -162,7 +162,7 @@ test("ad-hoc put-away", async () => {
 
   await test("creates separate lots for different batch attributes", async () => {
     const result = await commitAdHocPutAway(db, {
-      supplierCode: TEST_SUPPLIER_CODE,
+      brand: TEST_BRAND,
       shelfCode: TEST_SHELF_CODE,
       items: [
         {
@@ -203,7 +203,7 @@ test("ad-hoc put-away", async () => {
   await test("throws on unknown part", async () => {
     await assert.rejects(
       commitAdHocPutAway(db, {
-        supplierCode: TEST_SUPPLIER_CODE,
+        brand: TEST_BRAND,
         shelfCode: TEST_SHELF_CODE,
         items: [{
           partNo: "NONEXISTENT-PART",
@@ -226,7 +226,7 @@ test("ad-hoc put-away", async () => {
   await test("throws on unknown shelf", async () => {
     await assert.rejects(
       commitAdHocPutAway(db, {
-        supplierCode: TEST_SUPPLIER_CODE,
+        brand: TEST_BRAND,
         shelfCode: "NONEXISTENT-SHELF",
         items: [{
           partNo: TEST_PART_NO,

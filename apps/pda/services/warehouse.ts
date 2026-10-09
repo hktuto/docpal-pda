@@ -214,8 +214,9 @@ export interface WarehouseService {
   // in-progress scan list in local state; the backend only sees the confirmed
   // batch.
   getAdHocPutAwayLocations(): Promise<AdHocPutAwayLocation[]>;
+  getAdHocPutAwayBrands(): Promise<string[]>;
   commitAdHocPutAway(input: {
-    supplierCode: string;
+    brand: string;
     shelfCode: string;
     items: AdHocPutAwayItem[];
   }): Promise<AdHocPutAwayResult>;

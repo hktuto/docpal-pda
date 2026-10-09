@@ -446,8 +446,8 @@ export default {
     }
   },
   adHocPutAway: {
-    supplier: "Supplier",
-    supplierPlaceholder: "Select a supplier",
+    brand: "Brand",
+    brandPlaceholder: "Select a brand",
     location: "Location",
     locationPlaceholder: "Select a location",
     shelf: "Shelf",

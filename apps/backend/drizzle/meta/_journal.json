@@ -197,6 +197,13 @@
       "when": 1791434113782,
       "tag": "0027_vengeful_golden_guardian",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1791525037996,
+      "tag": "0028_rename_supplier_code_to_brand",
+      "breakpoints": true
     }
   ]
 }

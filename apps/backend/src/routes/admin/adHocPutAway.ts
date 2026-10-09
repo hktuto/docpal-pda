@@ -13,7 +13,7 @@ export const adHocPutAwayRoute = new Hono();
 adHocPutAwayRoute.get("/", async (c) => {
   const page = Math.max(1, Number(c.req.query("page")) || 1);
   const pageSize = Math.min(100, Math.max(1, Number(c.req.query("pageSize")) || 20));
-  const supplierCode = c.req.query("supplierCode")?.trim() || undefined;
+  const brand = c.req.query("brand")?.trim() || undefined;
   const shelfCode = c.req.query("shelfCode")?.trim() || undefined;
   const from = c.req.query("from")?.trim() || undefined;
   const to = c.req.query("to")?.trim() || undefined;
@@ -21,7 +21,7 @@ adHocPutAwayRoute.get("/", async (c) => {
   const result = await listAdHocPutAways(db, {
     page,
     pageSize,
-    supplierCode,
+    supplierCode: brand,
     shelfCode,
     from,
     to,

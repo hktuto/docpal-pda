@@ -12,7 +12,7 @@ export const adHocPutAways = pgTable(
   "ad_hoc_put_aways",
   {
     id: text("id").primaryKey(),
-    supplierCode: text("supplier_code").notNull(),
+    brand: text("brand").notNull(),
     shelfCode: text("shelf_code").notNull().references(() => shelves.code),
     orgId: integer("org_id").notNull(),
     subInventoryCode: text("sub_inventory_code").notNull(),

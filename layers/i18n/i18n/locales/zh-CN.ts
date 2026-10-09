@@ -446,8 +446,8 @@ export default {
     }
   },
   adHocPutAway: {
-    supplier: "供应商",
-    supplierPlaceholder: "选择供应商",
+    brand: "品牌",
+    brandPlaceholder: "选择品牌",
     location: "位置",
     locationPlaceholder: "选择位置",
     shelf: "货架",

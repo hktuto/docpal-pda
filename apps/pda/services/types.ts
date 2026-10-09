@@ -1170,3 +1170,8 @@ export interface AdHocPutAwayLocation {
   orgId: number;
   subInventoryCode: string;
 }
+
+/** GET /ad-hoc-put-away/brands response. */
+export interface AdHocPutAwayBrandsResult {
+  brands: string[];
+}

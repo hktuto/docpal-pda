@@ -4,18 +4,18 @@
     <EmptyState v-else-if="error" error>{{ $t('common.errorPrefix', { message: error }) }}</EmptyState>
 
     <template v-else>
-      <!-- Supplier selection -->
+      <!-- Brand selection -->
       <section class="section">
-        <label class="section__label" for="supplier-select">{{ $t('adHocPutAway.supplier') }}</label>
+        <label class="section__label" for="brand-select">{{ $t('adHocPutAway.brand') }}</label>
         <select
-          id="supplier-select"
-          v-model="selectedSupplier"
+          id="brand-select"
+          v-model="selectedBrand"
           class="section__select"
           :disabled="committing"
         >
-          <option value="">{{ $t('adHocPutAway.supplierPlaceholder') }}</option>
-          <option v-for="s in suppliers" :key="s.code" :value="s.code">
-            {{ s.name || s.code }}
+          <option value="">{{ $t('adHocPutAway.brandPlaceholder') }}</option>
+          <option v-for="b in brands" :key="b" :value="b">
+            {{ b }}
           </option>
         </select>
       </section>
@@ -57,12 +57,12 @@
       </section>
 
       <!-- Scan section -->
-      <section v-if="selectedSupplier" class="section">
+      <section v-if="selectedBrand" class="section">
         <div class="scan-row">
           <button
             type="button"
             class="btn btn--primary"
-            :disabled="!selectedSupplier || committing"
+            :disabled="!selectedBrand || committing"
             @click="openScan"
           >
             {{ $t('adHocPutAway.scan') }}
@@ -163,12 +163,12 @@ import { computed, ref } from "vue";
 import { useWarehouse } from "~/composables/useWarehouse";
 import { useToast } from "~/composables/useToast";
 import { useHardwareScanner } from "~/composables/useHardwareScanner";
-import { useSupplierSymbologyScope } from "~/composables/useScannerConfig";
+import { useBrandSymbologyScope } from "~/composables/useScannerConfig";
 import { I18nError } from "~/composables/i18nError";
 import { parseQrCapture, parseAndIdentify } from "~/utils/parseOcrScan";
 import { captureLabel, getCachedSupplierQrTemplates } from "~/composables/useLabelScan";
 import { playScanError, playScanSuccess } from "~/utils/scanBeep";
-import type { AdHocPutAwayItem, Shelf, SupplierListRow } from "~/services/types";
+import type { AdHocPutAwayItem, Shelf } from "~/services/types";
 
 definePageMeta({ title: "meta.adHocPutAway" });
 
@@ -179,10 +179,10 @@ const errorMessage = useErrorMessage();
 
 const loading = ref(true);
 const error = ref<string | null>(null);
-const suppliers = ref<SupplierListRow[]>([]);
+const brands = ref<string[]>([]);
 const shelves = ref<Shelf[]>([]);
 const locations = ref<{ orgId: number; subInventoryCode: string }[]>([]);
-const selectedSupplier = ref("");
+const selectedBrand = ref("");
 const selectedLocation = ref("");
 const selectedShelf = ref("");
 const items = ref<AdHocPutAwayItem[]>([]);
@@ -195,8 +195,9 @@ useHardwareScanner({
   onScan: handleHardwareScan,
 });
 
-// Supplier symbology scope — watches selectedSupplier internally
-useSupplierSymbologyScope(selectedSupplier, { withShelfCodes: true });
+// Brand symbology scope — watches selectedBrand internally
+const brandList = computed(() => (selectedBrand.value ? [selectedBrand.value] : []));
+useBrandSymbologyScope(brandList, { withShelfCodes: true });
 
 const totalQty = computed(() => items.value.reduce((sum, i) => sum + i.qty, 0));
 
@@ -205,12 +206,12 @@ async function load() {
   try {
     loading.value = true;
     error.value = null;
-    const [sups, shs, locs] = await Promise.all([
-      warehouse.getSuppliers(),
+    const [brandsList, shs, locs] = await Promise.all([
+      warehouse.getAdHocPutAwayBrands(),
       warehouse.getShelves(),
       warehouse.getAdHocPutAwayLocations(),
     ]);
-    suppliers.value = sups;
+    brands.value = brandsList;
     shelves.value = shs;
     locations.value = locs;
   } catch (err) {
@@ -236,7 +237,7 @@ async function handleHardwareScan(code: string) {
   const templates = await getCachedSupplierQrTemplates(warehouse);
   const result = parseQrCapture(code, {
     supplierTemplates: templates,
-    contextSupplierCode: selectedSupplier.value,
+    contextBrands: [selectedBrand.value],
   });
   if (result.matched) {
     addItem({
@@ -331,7 +332,7 @@ function applyBatch() {
 }
 
 async function confirmCommit() {
-  if (!selectedSupplier.value || !selectedShelf.value || !items.value.length) return;
+  if (!selectedBrand.value || !selectedShelf.value || !items.value.length) return;
 
   // Apply location to items that don't have one
   const loc = selectedLocation.value;
@@ -355,7 +356,7 @@ async function confirmCommit() {
   try {
     committing.value = true;
     await warehouse.commitAdHocPutAway({
-      supplierCode: selectedSupplier.value,
+      brand: selectedBrand.value,
       shelfCode: selectedShelf.value,
       items: items.value,
     });

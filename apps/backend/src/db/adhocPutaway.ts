@@ -7,6 +7,7 @@ import { shelves, parts, subInventories } from "./schema/master.js";
 import { newId } from "./id.js";
 import { now } from "./now.js";
 import { scheduleAllocateAll } from "./allocate.js";
+import { allowedOrgCondition, allowedOrgFilter } from "./org-filter.js";
 
 // Ad-hoc put-away domain logic (spec 2026-10-07-ad-hoc-put-away-design.md).
 // Commits scanned items (no receiving order) directly to a shelf in one
@@ -28,7 +29,7 @@ export interface AdHocPutAwayItemInput {
 }
 
 export interface AdHocPutAwayInput {
-  supplierCode: string;
+  brand: string;
   shelfCode: string;
   items: AdHocPutAwayItemInput[];
   actorId: string;
@@ -78,7 +79,7 @@ export async function commitAdHocPutAway(
   db: AppDb,
   input: AdHocPutAwayInput
 ): Promise<AdHocPutAwayResult> {
-  const { supplierCode, shelfCode, items, actorId } = input;
+  const { brand, shelfCode, items, actorId } = input;
 
   if (!items.length) {
     throw new Error("ad-hoc put-away requires at least one item");
@@ -195,7 +196,7 @@ export async function commitAdHocPutAway(
 
     await tx.insert(adHocPutAways).values({
       id: batchId,
-      supplierCode,
+      brand,
       shelfCode,
       orgId: items[0].orgId,
       subInventoryCode: items[0].subInventoryCode,
@@ -237,7 +238,7 @@ export async function commitAdHocPutAway(
 
 /**
  * Return valid (org_id, sub_inventory_code) pairs from org_info for the
- * PDA location selector.
+ * PDA location selector. Limited to allowedOrgIds from warehouse_config.
  */
 export async function listAdHocPutAwayLocations(
   db: AppDb
@@ -248,6 +249,7 @@ export async function listAdHocPutAwayLocations(
       subInventoryCode: subInventories.secondaryInventoryName,
     })
     .from(subInventories)
+    .where(allowedOrgCondition(sql`${subInventories.orgId}`))
     .orderBy(subInventories.orgId, subInventories.secondaryInventoryName);
 
   // Deduplicate (org_info may have multiple rows per pair)
@@ -263,6 +265,19 @@ export async function listAdHocPutAwayLocations(
   return { locations };
 }
 
+/**
+ * Return distinct brand values from parts for the PDA brand dropdown.
+ */
+export async function listAdHocPutAwayBrands(
+  db: AppDb
+): Promise<{ brands: string[] }> {
+  const rows = await db
+    .selectDistinct({ brand: parts.brand })
+    .from(parts)
+    .orderBy(parts.brand);
+  return { brands: rows.map((r) => r.brand) };
+}
+
 // Re-export for route scheduling
 export { scheduleAllocateAll };
 
@@ -272,7 +287,7 @@ export { scheduleAllocateAll };
 
 export interface AdHocPutAwayListRow {
   id: string;
-  supplierCode: string;
+  brand: string;
   shelfCode: string;
   orgId: number;
   subInventoryCode: string;
@@ -304,7 +319,7 @@ export async function listAdHocPutAways(
   opts: {
     page?: number;
     pageSize?: number;
-    supplierCode?: string;
+    supplierCode?: string; // brand filter (legacy param name)
     shelfCode?: string;
     from?: string;
     to?: string;
@@ -312,7 +327,7 @@ export async function listAdHocPutAways(
 ): Promise<{ rows: AdHocPutAwayListRow[]; total: number }> {
   const { page = 1, pageSize = 20, supplierCode, shelfCode, from, to } = opts;
   const conditions: SQL[] = [];
-  if (supplierCode) conditions.push(eq(adHocPutAways.supplierCode, supplierCode));
+  if (supplierCode) conditions.push(eq(adHocPutAways.brand, supplierCode));
   if (shelfCode) conditions.push(eq(adHocPutAways.shelfCode, shelfCode));
   if (from) conditions.push(sql`${adHocPutAways.createdDate} >= ${from}`);
   if (to) conditions.push(sql`${adHocPutAways.createdDate} <= ${to}`);
@@ -321,7 +336,7 @@ export async function listAdHocPutAways(
   const rows = await db
     .select({
       id: adHocPutAways.id,
-      supplierCode: adHocPutAways.supplierCode,
+      brand: adHocPutAways.brand,
       shelfCode: adHocPutAways.shelfCode,
       orgId: adHocPutAways.orgId,
       subInventoryCode: adHocPutAways.subInventoryCode,
@@ -358,7 +373,7 @@ export async function getAdHocPutAwayDetail(
   const row = await db
     .select({
       id: adHocPutAways.id,
-      supplierCode: adHocPutAways.supplierCode,
+      brand: adHocPutAways.brand,
       shelfCode: adHocPutAways.shelfCode,
       orgId: adHocPutAways.orgId,
       subInventoryCode: adHocPutAways.subInventoryCode,
