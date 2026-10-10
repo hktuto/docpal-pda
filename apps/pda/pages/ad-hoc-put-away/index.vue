@@ -7,71 +7,55 @@
       <!-- Brand selection -->
       <section class="section">
         <label class="section__label" for="brand-select">{{ $t('adHocPutAway.brand') }}</label>
-        <select
+        <SearchableSelect
           id="brand-select"
           v-model="selectedBrand"
-          class="section__select"
+          :options="brands.map((b) => ({ value: b, label: b }))"
+          :all-label="$t('adHocPutAway.brandPlaceholder')"
+          :aria-label="$t('adHocPutAway.brand')"
           :disabled="committing"
-        >
-          <option value="">{{ $t('adHocPutAway.brandPlaceholder') }}</option>
-          <option v-for="b in brands" :key="b" :value="b">
-            {{ b }}
-          </option>
-        </select>
+        />
       </section>
 
       <!-- Location selector -->
       <section class="section">
         <label class="section__label" for="location-select">{{ $t('adHocPutAway.location') }}</label>
-        <select
+        <SearchableSelect
           id="location-select"
           v-model="selectedLocation"
-          class="section__select"
+          :options="locations.map((loc) => ({
+            value: `${loc.orgId}:${loc.subInventoryCode}`,
+            label: `${loc.orgId} / ${loc.subInventoryCode}`,
+          }))"
+          :all-label="$t('adHocPutAway.locationPlaceholder')"
+          :aria-label="$t('adHocPutAway.location')"
           :disabled="committing"
-        >
-          <option value="">{{ $t('adHocPutAway.locationPlaceholder') }}</option>
-          <option
-            v-for="loc in locations"
-            :key="`${loc.orgId}:${loc.subInventoryCode}`"
-            :value="`${loc.orgId}:${loc.subInventoryCode}`"
-          >
-            {{ loc.orgId }} / {{ loc.subInventoryCode }}
-          </option>
-        </select>
+        />
       </section>
 
-      <!-- Shelf selection -->
-      <section class="section">
-        <label class="section__label" for="shelf-select">{{ $t('adHocPutAway.shelf') }}</label>
-        <select
-          id="shelf-select"
-          v-model="selectedShelf"
-          class="section__select"
-          :disabled="committing"
-        >
-          <option value="">{{ $t('adHocPutAway.shelfPlaceholder') }}</option>
-          <option v-for="s in shelves" :key="s.code" :value="s.code">
-            {{ s.code }}
-          </option>
-        </select>
-      </section>
-
-      <!-- Scan section -->
-      <section v-if="selectedBrand" class="section">
-        <div class="scan-row">
+      <!-- Shelf banner (scan-only selection) -->
+      <section v-if="selectedShelf" class="section">
+        <div class="shelf-banner">
+          <span class="shelf-banner__label">{{ $t('adHocPutAway.shelf') }}</span>
+          <span class="shelf-banner__code">{{ selectedShelf }}</span>
           <button
             type="button"
-            class="btn btn--primary"
-            :disabled="!selectedBrand || committing"
-            @click="openScan"
+            class="shelf-banner__clear"
+            :disabled="committing"
+            :aria-label="$t('adHocPutAway.shelfClear')"
+            @click="selectedShelf = ''"
           >
-            {{ $t('adHocPutAway.scan') }}
+            ✕
           </button>
-          <span v-if="items.length" class="scan-count">
-            {{ $t('adHocPutAway.itemCount', { count: items.length, qty: totalQty }) }}
-          </span>
         </div>
       </section>
+
+      <!-- Scan FAB -->
+      <ScanFab
+        v-if="selectedBrand"
+        :disabled="!selectedBrand || committing"
+        @click="openScan"
+      />
 
       <!-- Item list -->
       <section v-if="items.length" class="section">
@@ -168,6 +152,8 @@ import { I18nError } from "~/composables/i18nError";
 import { parseQrCapture, parseAndIdentify } from "~/utils/parseOcrScan";
 import { captureLabel, getCachedSupplierQrTemplates } from "~/composables/useLabelScan";
 import { playScanError, playScanSuccess } from "~/utils/scanBeep";
+import SearchableSelect from "~/components/SearchableSelect.vue";
+import ScanFab from "~/components/ScanFab.vue";
 import type { AdHocPutAwayItem, Shelf } from "~/services/types";
 
 definePageMeta({ title: "meta.adHocPutAway" });
@@ -189,6 +175,7 @@ const items = ref<AdHocPutAwayItem[]>([]);
 const batchDateCode = ref("");
 const batchLotCode = ref("");
 const committing = ref(false);
+const seenSerialNos = ref<Set<string>>(new Set());
 
 // Scanner setup — useHardwareScanner manages its own lifecycle
 useHardwareScanner({
@@ -263,10 +250,22 @@ async function handleHardwareScan(code: string) {
 async function openScan() {
   const capture = await captureLabel();
   if (!capture) return;
-  const result = parseAndIdentify(
-    { text: capture.text, barcodes: JSON.parse(capture.barcodes || "[]") },
-    []
-  );
+  const barcodes = JSON.parse(capture.barcodes || "[]");
+  const templates = await getCachedSupplierQrTemplates(warehouse);
+
+  // Use supplier QR template parsing for QR-only captures (same as normal
+  // put-away); fall back to generic text parsing for non-QR captures.
+  const isQrOnly = barcodes.length === 1 && barcodes[0].format === "4" && !capture.imagePath;
+  const result = isQrOnly
+    ? parseQrCapture(barcodes[0].value, {
+        supplierTemplates: templates,
+        contextBrands: [selectedBrand.value],
+      })
+    : parseAndIdentify(
+        { text: capture.text, barcodes },
+        []
+      );
+
   if (result.matched) {
     addItem({
       partNo: result.parsed.itemId ?? "",
@@ -288,6 +287,15 @@ async function openScan() {
 }
 
 function addItem(item: AdHocPutAwayItem) {
+  // Reject duplicate serial numbers within the current batch
+  if (item.serialNo && seenSerialNos.value.has(item.serialNo)) {
+    playScanError();
+    showToast(t("adHocPutAway.duplicateSerial", { serialNo: item.serialNo }));
+    return;
+  }
+  if (item.serialNo) {
+    seenSerialNos.value.add(item.serialNo);
+  }
   // Apply current location if set
   if (selectedLocation.value) {
     const [orgId, subInventoryCode] = selectedLocation.value.split(":");
@@ -317,7 +325,10 @@ function getWeekNumber(date: Date): number {
 }
 
 function removeItem(idx: number) {
-  items.value.splice(idx, 1);
+  const [removed] = items.value.splice(idx, 1);
+  if (removed?.serialNo) {
+    seenSerialNos.value.delete(removed.serialNo);
+  }
 }
 
 function applyBatch() {
@@ -362,6 +373,7 @@ async function confirmCommit() {
     });
     showToast(t("adHocPutAway.success", { count: items.value.length, shelf: selectedShelf.value }));
     items.value = [];
+    seenSerialNos.value.clear();
     selectedShelf.value = "";
   } catch (err) {
     const msg = err instanceof I18nError ? err.message : (err instanceof Error ? err.message : "unknown error");
@@ -393,6 +405,52 @@ async function confirmCommit() {
   font-size: 1rem;
   background: var(--surface);
   color: var(--text);
+}
+
+.shelf-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--primary);
+  color: white;
+  border-radius: var(--radius);
+  font-size: 0.9375rem;
+}
+
+.shelf-banner__label {
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.shelf-banner__code {
+  font-weight: 700;
+  font-size: 1rem;
+  flex: 1;
+}
+
+.shelf-banner__clear {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  font-size: 0.875rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.shelf-banner__clear:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.shelf-banner__clear:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .section__header {

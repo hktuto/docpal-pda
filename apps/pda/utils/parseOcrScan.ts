@@ -714,21 +714,19 @@ export function parseQrCapture(
     contextSupplierCode || brandSet
       ? [...supplierTemplates].sort((a, b) => priority(a) - priority(b))
       : supplierTemplates;
-
   for (const supplier of orderedTemplates) {
     const regex = getQrTemplateRegex(supplier.qrcodeTemplate);
     if (!regex) continue;
 
     const groups = extractNamedGroups(regex, normalizedQr);
     if (!groups || !groups.itemId) continue;
-
+    console.log("groups", groups)
     const normalizedItemId = collapseSpaces(groups.itemId.toUpperCase());
     const itemMatch =
       targetArray.length === 0 ||
       targetArray.some((t) => collapseSpaces(t.toUpperCase()) === normalizedItemId);
 
     if (!itemMatch) continue;
-
     let qty: number | undefined;
     if (groups.qty) {
       if (supplier.qrcodeQtyEncoding === QTY_ENCODING_KOA_ZEROS) {

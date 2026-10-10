@@ -94,7 +94,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 ### Multi-warehouse instances (HK, SZ, …)
 
-One standalone instance per warehouse — separate backend process + separate database, no `warehouse_code` column (stock partitions by `org_id` + `sub_inventory_code`). To add a warehouse (SZ is the first):
+One standalone instance per warehouse — separate backend process + separate database, no `warehouse_code` column (stock partitions by `org_id` + `sub_inventory_code`). Warehouse-exclusive differences are **configurable, never git branches** — design spec: `docs/superpowers/specs/2026-10-09-multi-warehouse-configurable-design.md`. To add a warehouse (SZ is the first):
 
 1. Create `apps/backend/src/db/seed-shelves-<wh>.ts` mirroring `seed-shelves-hk.ts` (zone groups → flattened `shelves` rows, reusing `shelfDisplayName`); fill in the real layout.
 2. In `src/db/seed.ts`: import the new rows, add a `<WH>_FLOW_CONFIG` const (partial JSON merged over `defaultFlowConfig()` — set `allowedOrgIds` to the warehouse's org ids, `[]` = all orgs), and extend the `WAREHOUSE_CODE` selector in `seedReferenceOnly()` (`isSz` pattern) to seed them.

@@ -32,6 +32,7 @@ import { adminLabelPrintRulesRoute } from "./labelPrintRules.js";
 import { adminCustomerProfilesRoute } from "./customerProfiles.js";
 import { adminOutdatedWarningsRoute } from "./outdatedWarnings.js";
 import { adHocPutAwayRoute } from "./adHocPutAway.js";
+import { adminTestPickingOrderRoute } from "./testPickingOrder.js";
 import { parseScopeEntries, type UserScopeEntry } from "../../db/user-scope.js";
 
 // Optional id on create: use the client's when given, else generate one.
@@ -330,6 +331,9 @@ adminRoute.route("/user-profiles", adminUserProfilesRoute);
 
 // Ad-hoc put-away batches (read-only admin view).
 adminRoute.route("/ad-hoc-put-aways", adHocPutAwayRoute);
+
+// Test picking order creator (create / export / delete test orders).
+adminRoute.route("/", adminTestPickingOrderRoute);
 
 // DocPal console link for the admin user popover — null when DOCPAL_URL is
 // not configured (login itself requires it, so real deployments always have it).

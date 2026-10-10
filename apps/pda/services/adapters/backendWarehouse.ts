@@ -98,6 +98,13 @@ export function createBackendWarehouseService(
 ): WarehouseService {
   const client = createApiClient({ baseUrl: options.apiBaseUrl ?? "" });
 
+  // Simple in-memory caches for dropdown data that rarely changes. These
+  // persist for the lifetime of the service instance (i.e. the app session),
+  // avoiding redundant fetches when users navigate back to the page.
+  let shelvesCache: Shelf[] | null = null;
+  let adHocPutAwayBrandsCache: string[] | null = null;
+  let adHocPutAwayLocationsCache: AdHocPutAwayLocation[] | null = null;
+
   return {
     // Receiving
     async getReceivingOrders(
@@ -320,9 +327,12 @@ export function createBackendWarehouseService(
     async getPutAwayTaskDetail(id: string): Promise<PutAwayTaskDetail> {
       return client.get(`/put-away-tasks/${id}`);
     },
-    // The admin CRUD read doubles as the PDA shelf list.
+    // The admin CRUD read doubles as the PDA shelf list. Cached in-memory
+    // for the app session — shelf layouts change rarely.
     async getShelves(): Promise<Shelf[]> {
-      return client.get("/admin/shelves");
+      if (shelvesCache) return shelvesCache;
+      shelvesCache = await client.get("/admin/shelves");
+      return shelvesCache;
     },
     async recordPutAwayScan(
       receivingOrderId: string,
@@ -526,17 +536,23 @@ export function createBackendWarehouseService(
     },
 
     // Ad-hoc put-away (spec 2026-10-07-ad-hoc-put-away-design.md)
+    // Both dropdowns are cached in-memory for the app session — the lists
+    // change only when an admin edits sub-inventories or parts.
     async getAdHocPutAwayLocations(): Promise<AdHocPutAwayLocation[]> {
+      if (adHocPutAwayLocationsCache) return adHocPutAwayLocationsCache;
       const result = await client.get<{ locations: AdHocPutAwayLocation[] }>(
         "/ad-hoc-put-away/locations"
       );
-      return result.locations;
+      adHocPutAwayLocationsCache = result.locations;
+      return adHocPutAwayLocationsCache;
     },
     async getAdHocPutAwayBrands(): Promise<string[]> {
+      if (adHocPutAwayBrandsCache) return adHocPutAwayBrandsCache;
       const result = await client.get<{ brands: string[] }>(
         "/ad-hoc-put-away/brands"
       );
-      return result.brands;
+      adHocPutAwayBrandsCache = result.brands;
+      return adHocPutAwayBrandsCache;
     },
     async commitAdHocPutAway(input: {
       brand: string;

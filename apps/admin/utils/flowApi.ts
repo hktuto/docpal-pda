@@ -107,6 +107,36 @@ export interface SubInventoryRow {
   officeCode: string | null;
 }
 
+/** Test picking order creation payload (POST /admin/picking-orders/test-create). */
+export interface TestPickingOrderCreate {
+  orderNo: string;
+  customerCode?: string;
+  orgId: number;
+  subInventoryCode: string;
+  shipTo?: string;
+  poNo?: string;
+  deliveryDate?: string;
+  prioritySeq?: number;
+  pickingOrderType?: string;
+  remark?: string;
+  items: { partNo: string; qty: number; lineNumber?: number }[];
+}
+
+/** Exported test picking order template (GET /admin/picking-orders/:id/export). */
+export interface TestPickingOrderTemplate {
+  orderNo: string;
+  customerCode: string | null;
+  orgId: number;
+  subInventoryCode: string;
+  shipTo: string | null;
+  poNo: string | null;
+  deliveryDate: string | null;
+  prioritySeq: number;
+  pickingOrderType: string | null;
+  remark: string | null;
+  items: { partNo: string; qty: number; lineNumber: number | null }[];
+}
+
 /** country_list row from GET /admin/countries (ship-to picker: show name, store code). */
 export interface CountryRow {
   id: string;
@@ -735,6 +765,17 @@ export function useFlowApi() {
       ),
     listSubInventories: () => api.get<SubInventoryRow[]>("/admin/sub-inventories"),
     listCountries: () => api.get<CountryRow[]>("/admin/countries"),
+
+    // Test picking order creator
+    createTestPickingOrder: (body: TestPickingOrderCreate) =>
+      api.post<{ id: string; orderNo: string; items: { id: string; partNo: string; qty: number; lineNumber: number | null }[] }>(
+        "/admin/picking-orders/test-create",
+        body
+      ),
+    exportTestPickingOrder: (id: string) =>
+      api.get<TestPickingOrderTemplate>(`/admin/picking-orders/${id}/export`),
+    deleteTestPickingOrder: (id: string) =>
+      api.del<{ deleted: boolean; id: string }>(`/admin/picking-orders/${id}/test`),
 
     // Receiving
     listReceivingOrders: (params: OrderListParams = {}) =>
