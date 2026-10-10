@@ -1070,6 +1070,7 @@ export default {
       userBadges: "用户工牌",
       userProfiles: "用户子库范围",
       labelPrintRules: "标签打印规则",
+      inventoryLabels: "库存标签",
       outdatedWarnings: "过期日期码警告",
       adHocPutAways: "临时上架"
     },
@@ -1227,7 +1228,11 @@ export default {
       priority: "优先级",
       active: "启用",
       conditions: "条件",
-      combinator: "组合方式"
+      combinator: "组合方式",
+      orgId: "Org ID",
+      subInventoryCode: "子库存代码",
+      sortOrder: "排序",
+      isActive: "是否启用"
     },
     entities: {
       shelves: { title: "货架" },
@@ -1237,6 +1242,7 @@ export default {
       boxSizes: { title: "箱型" },
       netWeightFormulas: { title: "净重公式" },
       labelPrintRules: { title: "标签打印规则" },
+      inventoryLabels: { title: "库存标签" },
       customerProfiles: { title: "客户资料配置" }
     },
     pages: {

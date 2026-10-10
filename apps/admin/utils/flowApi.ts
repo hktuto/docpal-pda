@@ -396,7 +396,7 @@ export interface StockSearchOptions {
   brands: string[];
   zones: string[];
   shelves: { code: string; displayName?: string | null; zone: string | null }[];
-  locations: { orgId: number | null; subInventoryCode: string | null; description: string | null; officeCode: string | null }[];
+  locations: { orgId: number | null; subInventoryCode: string | null; description: string | null; officeCode: string | null; label: string | null }[];
 }
 
 // ---- issues ----

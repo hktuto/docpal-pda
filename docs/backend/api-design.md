@@ -116,6 +116,21 @@ CRUD over the `label_print_rules` table; `conditions` is a JSON object
 | `DELETE /admin/label-print-rules/:id` | — → `{deleted: 1}` / 404 | |
 | `POST /admin/label-print-rules/test-match` | `{conditions, keyword?, limit?}` → `{rows: [{id, orderNo, poNo, customerCode, orgId, subInventoryCode, pickingOrderType, status}], total}` | evaluates DRAFT conditions against `picking_orders` for the edit-page match preview (`testLabelPrintRuleMatch` in `src/db/labelPrint.ts`); `keyword` ILIKEs `order_no`/`po_no`; rows ordered by `priority_seq`, `limit` default 50 cap 200, `total` = count of all matches; `supplier` condition = EXISTS over `picking_items` JOIN `parts` on `wcl_item_no` (ANY item's brand matches); 400 on invalid conditions |
 
+### Admin: inventory labels
+
+Per-warehouse sub-inventory display labels (spec
+`docs/superpowers/specs/2026-10-10-inventory-labels-design.md`). Standard CRUD
+over the `inventory_labels` table. Each warehouse is a separate
+instance/database, so no `warehouse_id` column.
+
+| Endpoint | Body → Response | Note |
+|---|---|---|
+| `GET /admin/inventory-labels` | — → `[label]` | sorted `sort_order` asc, then `org_id` asc, then `sub_inventory_code` asc |
+| `GET /admin/inventory-labels/:id` | — → label / 404 | |
+| `POST /admin/inventory-labels` | `{orgId, subInventoryCode, label, sortOrder?, isActive?, remark?}` → label | `sortOrder` default 0, `isActive` default true |
+| `PATCH /admin/inventory-labels/:id` | partial label → label / 404 | |
+| `DELETE /admin/inventory-labels/:id` | — → `{deleted: 1}` / 404 | |
+
 JWT bearer (HS256, `hono/jwt`, secret from `AUTH_SECRET`, 12 h TTL) required on
 all routes except `/health`, `POST /auth/login`, `POST /auth/login-token`, and
 `/dev/*`; `GET /events`

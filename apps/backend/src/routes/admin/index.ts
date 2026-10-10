@@ -12,6 +12,7 @@ import {
   customerAccounts,
   netWeightFormula,
   labelPrintRules,
+  inventoryLabels,
 } from "../../db/schema/index.js";
 import { createCrudRouter, reqStr, optStr, reqInt, reqNum, optInt, optStrArray, optJson, optBool, reqBool, reqLabelType, reqConditions } from "./crud.js";
 import { docpalBaseUrl } from "../../config.js";
@@ -295,6 +296,36 @@ adminRoute.route(
 
 // Match preview for draft rule conditions (POST /test-match).
 adminRoute.route("/label-print-rules", adminLabelPrintRulesRoute);
+
+// Inventory labels: per-warehouse sub-inventory display labels (spec
+// 2026-10-10-inventory-labels-design). Admin maps a label to each
+// (org_id, sub_inventory_code) pair, with sort order and an active flag.
+adminRoute.route(
+  "/inventory-labels",
+  createCrudRouter({
+    table: inventoryLabels,
+    pk: inventoryLabels.id,
+    orderBy: sql`${inventoryLabels.sortOrder} ASC, ${inventoryLabels.orgId} ASC, ${inventoryLabels.subInventoryCode} ASC`,
+    create: (b) => ({
+      id: optId(b),
+      orgId: reqInt(b, "orgId"),
+      subInventoryCode: reqStr(b, "subInventoryCode"),
+      label: reqStr(b, "label"),
+      sortOrder: optInt(b, "sortOrder") ?? 0,
+      isActive: optBool(b, "isActive") ?? true,
+      remark: optStr(b, "remark"),
+    }),
+    update: (b) => ({
+      ...(b.orgId !== undefined && { orgId: reqInt(b, "orgId") }),
+      ...(b.subInventoryCode !== undefined && { subInventoryCode: reqStr(b, "subInventoryCode") }),
+      ...(b.label !== undefined && { label: reqStr(b, "label") }),
+      ...(b.sortOrder !== undefined && { sortOrder: optInt(b, "sortOrder") ?? 0 }),
+      ...(b.isActive !== undefined && { isActive: reqBool(b, "isActive") }),
+      ...(b.remark !== undefined && { remark: optStr(b, "remark") }),
+      lastUpdateDate: new Date(),
+    }),
+  })
+);
 
 // Flow config editing (warehouse_config row "flow", applied at runtime).
 adminRoute.route("/flow-config", adminFlowConfigRoute);

@@ -1070,6 +1070,7 @@ export default {
       userBadges: "User Badges",
       userProfiles: "User Scope",
       labelPrintRules: "Label Print Rules",
+      inventoryLabels: "Inventory Labels",
       outdatedWarnings: "Outdated Warnings",
       adHocPutAways: "Ad-Hoc Put-Aways"
     },
@@ -1227,7 +1228,11 @@ export default {
       priority: "Priority",
       active: "Active",
       conditions: "Conditions",
-      combinator: "Combinator"
+      combinator: "Combinator",
+      orgId: "Org ID",
+      subInventoryCode: "Sub-inventory code",
+      sortOrder: "Sort order",
+      isActive: "Is active"
     },
     entities: {
       shelves: { title: "Shelves" },
@@ -1237,7 +1242,8 @@ export default {
       countries: { title: "Countries" },
       boxSizes: { title: "Box Sizes" },
       netWeightFormulas: { title: "Net-weight Formulas" },
-      labelPrintRules: { title: "Label Print Rules" }
+      labelPrintRules: { title: "Label Print Rules" },
+      inventoryLabels: { title: "Inventory Labels" }
     },
     pages: {
       userProfiles: {

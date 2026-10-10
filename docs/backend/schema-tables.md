@@ -892,6 +892,29 @@ printing flow; nothing evaluates these rules yet). Managed via
 | created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
+# Inventory labels (`schema/inventory-labels.ts`)
+
+## inventory_labels
+
+Per-warehouse presentation labels for sub-inventories (2026-10-10,
+`docs/superpowers/specs/2026-10-10-inventory-labels-design.md`).
+Admin-local config — each warehouse is a separate instance/database, so no
+`warehouse_id` column. Maps a user-visible `label` to each
+`(org_id, sub_inventory_code)` pair with a `sort_order` (PDA display order)
+and `is_active` (PDA visibility). Managed via `/admin/inventory-labels` CRUD.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Label id (UUID v7) |
+| org_id | integer NOT NULL | Office id — composite FK with `sub_inventory_code` → `org_info(org_id, secondary_inventory_name)` |
+| sub_inventory_code | text NOT NULL | Sub-inventory code (same FK) |
+| label | text NOT NULL | User-visible display name |
+| sort_order | integer NOT NULL DEFAULT 0 | PDA display order |
+| is_active | boolean NOT NULL DEFAULT true | Controls PDA visibility |
+| remark | text | Optional note |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
+
 # Outdated scan warnings (`schema/outdated.ts`)
 
 ## outdated_scan_warnings

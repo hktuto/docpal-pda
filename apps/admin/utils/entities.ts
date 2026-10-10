@@ -247,6 +247,25 @@ export const entities: Record<string, EntityConfig> = {
       { key: "lastUpdateDate", label: "admin.fields.lastUpdateDate" },
     ],
   },
+  "inventory-labels": {
+    path: "inventory-labels",
+    title: "admin.entities.inventoryLabels.title",
+    pk: "id",
+    clientSearch: true,
+    clientFilters: [{ key: "orgId", label: "admin.fields.orgId" }],
+    fields: [
+      { key: "orgId", label: "admin.fields.orgId", type: "number", required: true },
+      { key: "subInventoryCode", label: "admin.fields.subInventoryCode", type: "text", required: true },
+      { key: "label", label: "admin.fields.label", type: "text", required: true },
+      { key: "sortOrder", label: "admin.fields.sortOrder", type: "number" },
+      { key: "isActive", label: "admin.fields.isActive", type: "boolean", format: formatActive, defaultValue: true },
+      { key: "remark", label: "admin.fields.remark", type: "text" },
+    ],
+    extraColumns: [
+      { key: "createdDate", label: "admin.fields.createdDate" },
+      { key: "lastUpdateDate", label: "admin.fields.lastUpdateDate" },
+    ],
+  },
 };
 
 /** Top-nav grouping per the admin TOC (apps/admin/TOC.md).
@@ -269,6 +288,7 @@ export const navSections: { title: string; links: { route: string; title: string
       { route: "/shelves", title: "admin.navLinks.shelves" },
       { route: "/shelf-boxes", title: "admin.navLinks.shelfBoxes" },
       { route: "/sub-inventories", title: "admin.navLinks.subInventories" },
+      { route: "/inventory-labels", title: "admin.navLinks.inventoryLabels" },
       { route: "/parts", title: "admin.navLinks.parts" },
       { route: "/stock-search", title: "admin.navLinks.stockSearch" },
     ],

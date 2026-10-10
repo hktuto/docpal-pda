@@ -488,11 +488,14 @@ test("options: distinct brands/zones/shelves in stock; locations = all org_info 
   // Every org_info pair (stocked or not — the seed's real sub-inventory
   // master mostly holds no demo stock), same order as org_info sorted by
   // (org_id, secondary_inventory_name).
-  const expected = await queryAll<{ orgId: number; subInventoryCode: string; description: string | null; officeCode: string | null }>(
+  const expected = await queryAll<{ orgId: number; subInventoryCode: string; description: string | null; officeCode: string | null; label: string | null }>(
     client.db,
-    sql`SELECT org_id AS "orgId", secondary_inventory_name AS "subInventoryCode",
-               subinv_description AS "description", office_code AS "officeCode"
-        FROM org_info ORDER BY org_id, secondary_inventory_name`
+    sql`SELECT oi.org_id AS "orgId", oi.secondary_inventory_name AS "subInventoryCode",
+               oi.subinv_description AS "description", oi.office_code AS "officeCode",
+               il.label AS "label"
+        FROM org_info oi
+        LEFT JOIN inventory_labels il ON il.org_id = oi.org_id AND il.sub_inventory_code = oi.secondary_inventory_name AND il.is_active = true
+        ORDER BY oi.org_id, oi.secondary_inventory_name`
   );
   assert.deepEqual(opts.locations, expected);
 });

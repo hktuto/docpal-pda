@@ -486,15 +486,17 @@ export async function stockSearchOptions(db: AppDb, scope?: UserScopeEntry[] | n
       ORDER BY il.shelf_code
     `
   );
-  const locations = await queryAll<{ orgId: number | null; subInventoryCode: string | null; description: string | null; officeCode: string | null }>(
+  const locations = await queryAll<{ orgId: number | null; subInventoryCode: string | null; description: string | null; officeCode: string | null; label: string | null }>(
     db,
     sql`
       SELECT
         oi.org_id AS "orgId",
         oi.secondary_inventory_name AS "subInventoryCode",
         oi.subinv_description AS "description",
-        oi.office_code AS "officeCode"
+        oi.office_code AS "officeCode",
+        il.label AS "label"
       FROM org_info oi
+      LEFT JOIN inventory_labels il ON il.org_id = oi.org_id AND il.sub_inventory_code = oi.secondary_inventory_name AND il.is_active = true
       WHERE TRUE
       ${allowedOrgFilter(sql`oi.org_id`)}
       ${userScopeFilter(sql`oi.org_id`, sql`oi.secondary_inventory_name`, scope)}

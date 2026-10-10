@@ -1070,6 +1070,7 @@ export default {
       userBadges: "用戶證件",
       userProfiles: "用戶子庫範圍",
       labelPrintRules: "標籤列印規則",
+      inventoryLabels: "庫存標籤",
       outdatedWarnings: "過期日期碼警告",
       adHocPutAways: "臨時上架"
     },
@@ -1227,7 +1228,11 @@ export default {
       priority: "優先級",
       active: "啟用",
       conditions: "條件",
-      combinator: "組合方式"
+      combinator: "組合方式",
+      orgId: "Org ID",
+      subInventoryCode: "子庫存代碼",
+      sortOrder: "排序",
+      isActive: "是否啟用"
     },
     entities: {
       shelves: { title: "貨架" },
@@ -1237,6 +1242,7 @@ export default {
       boxSizes: { title: "箱型" },
       netWeightFormulas: { title: "淨重公式" },
       labelPrintRules: { title: "標籤列印規則" },
+      inventoryLabels: { title: "庫存標籤" },
       customerProfiles: { title: "客戶資料配置" }
     },
     pages: {

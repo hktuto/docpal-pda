@@ -25,7 +25,7 @@
           v-model="selectedLocation"
           :options="locations.map((loc) => ({
             value: `${loc.orgId}:${loc.subInventoryCode}`,
-            label: `${loc.orgId} / ${loc.subInventoryCode}`,
+            label: loc.label ?? `${loc.orgId} / ${loc.subInventoryCode}`,
           }))"
           :all-label="$t('adHocPutAway.locationPlaceholder')"
           :aria-label="$t('adHocPutAway.location')"

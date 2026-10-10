@@ -4,6 +4,7 @@ import { adHocPutAways } from "./schema/adhocPutaway.js";
 import { inventoryLots } from "./schema/inventory.js";
 import { inventoryTransactions } from "./schema/audit.js";
 import { shelves, parts, subInventories } from "./schema/master.js";
+import { inventoryLabels } from "./schema/inventory-labels.js";
 import { newId } from "./id.js";
 import { now } from "./now.js";
 import { scheduleAllocateAll } from "./allocate.js";
@@ -242,24 +243,33 @@ export async function commitAdHocPutAway(
  */
 export async function listAdHocPutAwayLocations(
   db: AppDb
-): Promise<{ locations: { orgId: number; subInventoryCode: string }[] }> {
+): Promise<{ locations: { orgId: number; subInventoryCode: string; label: string | null }[] }> {
   const rows = await db
     .select({
       orgId: subInventories.orgId,
       subInventoryCode: subInventories.secondaryInventoryName,
+      label: inventoryLabels.label,
     })
     .from(subInventories)
+    .leftJoin(
+      inventoryLabels,
+      and(
+        eq(inventoryLabels.orgId, subInventories.orgId),
+        eq(inventoryLabels.subInventoryCode, subInventories.secondaryInventoryName),
+        eq(inventoryLabels.isActive, true)
+      )
+    )
     .where(allowedOrgCondition(sql`${subInventories.orgId}`))
     .orderBy(subInventories.orgId, subInventories.secondaryInventoryName);
 
   // Deduplicate (org_info may have multiple rows per pair)
   const seen = new Set<string>();
-  const locations: { orgId: number; subInventoryCode: string }[] = [];
+  const locations: { orgId: number; subInventoryCode: string; label: string | null }[] = [];
   for (const row of rows) {
     const key = `${row.orgId}:${row.subInventoryCode}`;
     if (!seen.has(key)) {
       seen.add(key);
-      locations.push({ orgId: row.orgId, subInventoryCode: row.subInventoryCode });
+      locations.push({ orgId: row.orgId, subInventoryCode: row.subInventoryCode, label: row.label ?? null });
     }
   }
   return { locations };

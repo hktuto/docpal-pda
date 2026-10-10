@@ -63,9 +63,10 @@ const locationOptions = computed<SearchableSelectOption[]>(() => {
   for (const l of options.value?.locations ?? []) {
     if (l.orgId === null || !l.subInventoryCode) continue;
     const orgLabel = l.officeCode ?? String(l.orgId);
+    const display = l.label ?? (l.description ? `${orgLabel} / ${l.subInventoryCode} — ${l.description}` : `${orgLabel} / ${l.subInventoryCode}`);
     out.push({
       value: `${l.orgId}:${l.subInventoryCode}`,
-      label: l.description ? `${orgLabel} / ${l.subInventoryCode} — ${l.description}` : `${orgLabel} / ${l.subInventoryCode}`,
+      label: display,
       group: orgLabel,
     });
   }

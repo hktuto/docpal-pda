@@ -251,5 +251,6 @@ test("ad-hoc put-away", async () => {
     assert.ok(result.locations.length > 0);
     assert.ok("orgId" in result.locations[0]);
     assert.ok("subInventoryCode" in result.locations[0]);
+    assert.ok("label" in result.locations[0]);
   });
 });
