@@ -48,10 +48,11 @@ async function callPrintService(path: string, init: RequestInit, timeoutMs: numb
 /** GET /api/v1/printers — available system printers. */
 export async function listPrinters(): Promise<unknown> {
   const response = await callPrintService("/api/v1/usb/agent-printers", {}, READ_TIMEOUT_MS);
+
   const printers = (response as any[]).reduce((acc: any[], curr:any) => {
     const all_printer_in_service = curr.printers.filter((p: any) => p.isActive).map((p: any) => ({ ...p, serviceId: curr.serviceId }));
     return acc.concat(all_printer_in_service);
-  },[]);
+  }, []);
   return printers;
 }
 

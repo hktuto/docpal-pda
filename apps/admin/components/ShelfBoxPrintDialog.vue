@@ -13,6 +13,9 @@ import {
   waitForPrintJob,
   type PrinterInfo,
 } from "~/utils/print";
+import { useWarehouseLabelLayout } from "~/composables/useWarehouseLabelLayout";
+
+const { layout: labelLayout } = useWarehouseLabelLayout();
 
 const props = defineProps<{
   /** One entry per label; `title` is only shown in the dialog's summary list. */
@@ -54,7 +57,7 @@ async function print() {
   try {
     for (const [i, item] of props.items.entries()) {
       progress.value = `${i + 1} / ${props.items.length}`;
-      const png = await renderShelfBoxLabelPng(item.boxId);
+      const png = await renderShelfBoxLabelPng(item.boxId, labelLayout.value);
       const job = await printFile(png, `box-label-${item.boxId}.png`, {
         serviceId: printer.serviceId,
         deviceKey: printer.deviceKey,

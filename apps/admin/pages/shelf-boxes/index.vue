@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { renderShelfBoxLabelPng } from "~/utils/print";
 import type { AdminColumnDef } from "~/composables/useAdminTable";
+import { useWarehouseLabelLayout } from "~/composables/useWarehouseLabelLayout";
+
+const { layout: labelLayout } = useWarehouseLabelLayout();
 
 const { t } = useI18n();
 const api = useApi();
@@ -200,7 +203,7 @@ async function remove(row: any) {
 async function downloadLabel(row: any) {
   error.value = "";
   try {
-    const png = await renderShelfBoxLabelPng(row.id);
+    const png = await renderShelfBoxLabelPng(row.id, labelLayout.value);
     const url = URL.createObjectURL(png);
     const a = document.createElement("a");
     a.href = url;

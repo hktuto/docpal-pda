@@ -21,6 +21,9 @@ export const configRoute = new Hono();
 // allowedOrgIds is informational — org filtering happens server-side.
 // listTemplates carries the resolved per-list {title, meta} display templates
 // (spec 2026-09-21-pda-list-row-templates-design.md), applied client-side.
+// warehouseCode is the instance's warehouse selector (WAREHOUSE_CODE env) —
+// the admin console uses it to pick warehouse-specific layouts (e.g. shelf
+// label borders).
 configRoute.get("/config", async (c) => {
   const flowSteps = Object.fromEntries(FLOW_STEPS.map((s) => [s, isStepEnabled(s)])) as Record<FlowStep, boolean>;
   return c.json(
@@ -32,6 +35,7 @@ configRoute.get("/config", async (c) => {
       listTemplates: pdaListTemplates(),
       viewConfig: pdaViewConfig(),
       pickingShelfScan: pickingShelfScan(),
+      warehouseCode: (process.env.WAREHOUSE_CODE ?? "").toLowerCase(),
     },
     200
   );

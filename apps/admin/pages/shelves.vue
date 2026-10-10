@@ -2,6 +2,9 @@
 import QRCode from "qrcode";
 import { entities } from "~/utils/entities";
 import { renderShelfLabelPng } from "~/utils/print";
+import { useWarehouseLabelLayout } from "~/composables/useWarehouseLabelLayout";
+
+const { layout: labelLayout } = useWarehouseLabelLayout();
 
 // Label printing: per-row Print button (row-actions slot) renders the label
 // to a PNG here and prints it via the print service's /print/files; multi-
@@ -15,7 +18,7 @@ function printOne(row: any) {
   printItems.value = [
     {
       title: row.displayName || row.code,
-      render: () => renderShelfLabelPng(row.code, row.zone, row.displayName),
+      render: () => renderShelfLabelPng(row.code, row.zone, row.displayName, labelLayout.value),
       filename: `shelf-label-${row.code}.png`,
     },
   ];

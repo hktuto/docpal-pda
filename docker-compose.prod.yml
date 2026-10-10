@@ -57,6 +57,9 @@ services:
       # database (master data + shelf stock only); set WAREHOUSE_SEED_ORDERS=on
       # to include the demo orders.
       WAREHOUSE_SEED_ORDERS: ${WAREHOUSE_SEED_ORDERS:-off}
+      # Warehouse selector: unset/HK1 seeds the HK shelf layout + flow config;
+      # set "sz" for the SZ warehouse (separate instance + separate database).
+      WAREHOUSE_CODE: ${WAREHOUSE_CODE:-HK1}
       # Optional: delegate login to the DocPal API (e.g.
       # https://uat.docpal.weltronics.com/api). When set, local passwords are
       # ignored — DocPal verifies credentials and local users are

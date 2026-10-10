@@ -15,6 +15,9 @@ import {
   waitForPrintJob,
   type PrinterInfo,
 } from "~/utils/print";
+import { useWarehouseLabelLayout } from "~/composables/useWarehouseLabelLayout";
+
+const { layout: labelLayout } = useWarehouseLabelLayout();
 
 const props = defineProps<{
   items: { code: string; zone?: string | null; displayName?: string | null }[];
@@ -49,7 +52,7 @@ onMounted(async () => {
     printers.value = [];
   }
   for (let i = 0; i < props.items.length; i += SHELF_BATCH_CELLS_PER_PAGE) {
-    const png = await renderShelfBatchPagePng(props.items.slice(i, i + SHELF_BATCH_CELLS_PER_PAGE));
+    const png = await renderShelfBatchPagePng(props.items.slice(i, i + SHELF_BATCH_CELLS_PER_PAGE), labelLayout.value);
     pageBlobs.push(png);
     previews.value.push(URL.createObjectURL(png));
   }
@@ -103,6 +106,7 @@ async function print() {
           data-lpignore="true"
           :placeholder="$t('admin.print.printerPlaceholder')"
         />
+        {{printers}}
         <datalist id="sbp-printers">
 
           <option v-for="p in printers" :key="printerKey(p)" :label="p.alias || p.name" :value="printerKey(p)" />

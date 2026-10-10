@@ -53,6 +53,11 @@ interface LabelCell {
   sub?: string | null;
 }
 
+interface LabelLayout {
+  /** Draw a light border around the label for easy cutting (SZ warehouse). */
+  border?: boolean;
+}
+
 function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) =>
     canvas.toBlob(
@@ -72,7 +77,8 @@ async function drawLabelCell(
   w: number,
   h: number,
   s: number,
-  cell: LabelCell
+  cell: LabelCell,
+  layout: LabelLayout
 ): Promise<void> {
   const qrSize = 360 * s;
   const qr = new Image();
@@ -99,17 +105,23 @@ async function drawLabelCell(
     ctx.font = `${Math.round(32 * s)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
     ctx.fillText(sub, cx, y + topPad + 340 * s, textW);
   }
+
+  if (layout.border) {
+    ctx.strokeStyle = "#d1d5db";
+    ctx.lineWidth = Math.max(1, Math.round(2 * s));
+    ctx.strokeRect(x + ctx.lineWidth / 2, y + ctx.lineWidth / 2, w - ctx.lineWidth, h - ctx.lineWidth);
+  }
 }
 
 /** Render one 70 x 37 mm label to a PNG blob for /print/files. */
-async function renderStockLabelPng(cell: LabelCell): Promise<Blob> {
+async function renderStockLabelPng(cell: LabelCell, layout: LabelLayout): Promise<Blob> {
   const canvas = document.createElement("canvas");
   canvas.width = LABEL_STOCK_W;
   canvas.height = LABEL_STOCK_H;
   const ctx = canvas.getContext("2d")!;
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, LABEL_STOCK_W, LABEL_STOCK_H);
-  await drawLabelCell(ctx, 0, 0, LABEL_STOCK_W, LABEL_STOCK_H, 1, cell);
+  await drawLabelCell(ctx, 0, 0, LABEL_STOCK_W, LABEL_STOCK_H, 1, cell, layout);
   return canvasToPng(canvas);
 }
 
@@ -117,14 +129,15 @@ async function renderStockLabelPng(cell: LabelCell): Promise<Blob> {
 export function renderShelfLabelPng(
   code: string,
   zone?: string | null,
-  displayName?: string | null
+  displayName?: string | null,
+  layout?: LabelLayout
 ): Promise<Blob> {
-  return renderStockLabelPng({ qr: code, main: displayName?.trim() || code, sub: zone });
+  return renderStockLabelPng({ qr: code, main: displayName?.trim() || code, sub: zone }, layout ?? {});
 }
 
 /** Render one shelf-box label to a PNG blob for /print/files. */
-export function renderShelfBoxLabelPng(boxId: string): Promise<Blob> {
-  return renderStockLabelPng({ qr: boxId, main: boxId });
+export function renderShelfBoxLabelPng(boxId: string, layout?: LabelLayout): Promise<Blob> {
+  return renderStockLabelPng({ qr: boxId, main: boxId }, layout ?? {});
 }
 
 // A4 batch sheet for multi-select label printing: 3 x 8 labels per A4 page at
@@ -136,7 +149,7 @@ const BATCH_ROWS = 8;
 export const SHELF_BATCH_CELLS_PER_PAGE = BATCH_COLS * BATCH_ROWS;
 
 /** Render one A4 page of labels to a PNG blob for /print/files. */
-async function renderStockBatchPagePng(cells: LabelCell[]): Promise<Blob> {
+async function renderStockBatchPagePng(cells: LabelCell[], layout: LabelLayout): Promise<Blob> {
   const canvas = document.createElement("canvas");
   canvas.width = A4_PAGE_W;
   canvas.height = A4_PAGE_H;
@@ -155,7 +168,7 @@ async function renderStockBatchPagePng(cells: LabelCell[]): Promise<Blob> {
     const row = Math.floor(i / BATCH_COLS);
     const x = margin + col * (cellW + gap);
     const y = margin + row * (cellH + gap);
-    await drawLabelCell(ctx, x, y, cellW, cellH, s, cell);
+    await drawLabelCell(ctx, x, y, cellW, cellH, s, cell, layout);
   }
 
   return canvasToPng(canvas);
@@ -163,16 +176,18 @@ async function renderStockBatchPagePng(cells: LabelCell[]): Promise<Blob> {
 
 /** Render one A4 page of shelf labels to a PNG blob for /print/files. */
 export function renderShelfBatchPagePng(
-  cells: { code: string; zone?: string | null; displayName?: string | null }[]
+  cells: { code: string; zone?: string | null; displayName?: string | null }[],
+  layout?: LabelLayout
 ): Promise<Blob> {
   return renderStockBatchPagePng(
-    cells.map((c) => ({ qr: c.code, main: c.displayName?.trim() || c.code, sub: c.zone }))
+    cells.map((c) => ({ qr: c.code, main: c.displayName?.trim() || c.code, sub: c.zone })),
+    layout ?? {}
   );
 }
 
 /** Render one A4 page of shelf-box labels to a PNG blob for /print/files. */
-export function renderShelfBoxBatchPagePng(boxIds: string[]): Promise<Blob> {
-  return renderStockBatchPagePng(boxIds.map((id) => ({ qr: id, main: id })));
+export function renderShelfBoxBatchPagePng(boxIds: string[], layout?: LabelLayout): Promise<Blob> {
+  return renderStockBatchPagePng(boxIds.map((id) => ({ qr: id, main: id })), layout ?? {});
 }
 
 function apiBaseUrl(): string {
@@ -193,6 +208,7 @@ async function throwOnError(res: Response): Promise<void> {
 /** GET /print/printers — available printers (flattened across print services). */
 export async function listPrinters(): Promise<PrinterInfo[]> {
   const res = await fetch(`${apiBaseUrl()}/print/printers`, { headers: authHeaders() });
+  console.log("res", res)
   await throwOnError(res);
   const data = await res.json();
   return Array.isArray(data) ? data : [];

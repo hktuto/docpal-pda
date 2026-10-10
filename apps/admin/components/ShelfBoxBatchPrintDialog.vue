@@ -16,6 +16,9 @@ import {
   waitForPrintJob,
   type PrinterInfo,
 } from "~/utils/print";
+import { useWarehouseLabelLayout } from "~/composables/useWarehouseLabelLayout";
+
+const { layout: labelLayout } = useWarehouseLabelLayout();
 
 const props = defineProps<{
   boxIds: string[];
@@ -50,7 +53,8 @@ onMounted(async () => {
   }
   for (let i = 0; i < props.boxIds.length; i += SHELF_BATCH_CELLS_PER_PAGE) {
     const png = await renderShelfBoxBatchPagePng(
-      props.boxIds.slice(i, i + SHELF_BATCH_CELLS_PER_PAGE)
+      props.boxIds.slice(i, i + SHELF_BATCH_CELLS_PER_PAGE),
+      labelLayout.value
     );
     pageBlobs.push(png);
     previews.value.push(URL.createObjectURL(png));
