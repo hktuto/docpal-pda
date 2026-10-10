@@ -35,12 +35,14 @@ async function load() {
   loading.value = true;
   loadError.value = "";
   try {
-    const [labelRows, locRows] = await Promise.all([
+    const [labelRows, locRows, cfg] = await Promise.all([
       api.get<LabelRow[]>("/admin/inventory-labels"),
       api.get<LocationOption[]>("/admin/sub-inventories"),
+      api.get<{ allowedOrgIds: number[] }>("/config"),
     ]);
     labels.value = labelRows;
-    locationOptions.value = locRows;
+    const allowed = cfg.allowedOrgIds ?? [];
+    locationOptions.value = allowed.length ? locRows.filter((r) => allowed.includes(r.orgId)) : locRows;
   } catch (e: any) {
     loadError.value = e?.message ?? String(e);
   } finally {

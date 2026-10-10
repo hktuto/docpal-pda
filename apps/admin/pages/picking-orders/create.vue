@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
-import type { SubInventoryRow, TestPickingOrderCreate, TestPickingOrderTemplate } from "~/utils/flowApi";
+import type {
+  CustomerAccountRow,
+  InventoryLabelRow,
+  PickingOrderItemDraft,
+  TestPickingOrderCreate,
+  TestPickingOrderTemplate,
+} from "~/utils/flowApi";
 
 const flow = useFlowApi();
 const { t } = useI18n();
@@ -8,7 +14,10 @@ const router = useRouter();
 
 // ---- Order header form state ----
 const orderNo = ref("");
-const customerCode = ref("");
+const customerCode = ref(""); // customer_accounts.party_name (dropdown)
+// Combined inventory-label location ("orgId:subInventoryCode") — the form's
+// single source for the org + sub-inventory pair sent to the API.
+const locationKey = ref("");
 const orgId = ref<number | null>(null);
 const subInventoryCode = ref("");
 const shipTo = ref("");
@@ -18,73 +27,82 @@ const pickingOrderType = ref("");
 const prioritySeq = ref(0);
 const remark = ref("");
 
-// ---- Items ----
-interface ItemRow {
-  partNo: string;
-  qty: number | null;
-  lineNumber: number | null;
-}
-const items = ref<ItemRow[]>([{ partNo: "", qty: null, lineNumber: 1 }]);
+// ---- Dropdown sources ----
+const customerAccounts = ref<CustomerAccountRow[]>([]);
+const inventoryLabels = ref<InventoryLabelRow[]>([]);
 
-function addItem() {
-  items.value.push({ partNo: "", qty: null, lineNumber: items.value.length + 1 });
+const customerOptions = computed<SearchableSelectOption[]>(() =>
+  customerAccounts.value.map((c) => ({
+    value: c.partyName,
+    label: `${c.partyName} (${c.accountNumber})`,
+  }))
+);
+
+const locationOptions = computed<SearchableSelectOption[]>(() => {
+  const opts = inventoryLabels.value
+    .filter((l) => l.isActive)
+    .sort(
+      (a, b) =>
+        a.orgId - b.orgId || a.sortOrder - b.sortOrder || a.subInventoryCode.localeCompare(b.subInventoryCode)
+    )
+    .map((l) => ({
+      value: `${l.orgId}:${l.subInventoryCode}`,
+      label:
+        l.label === l.subInventoryCode
+          ? `${l.orgId} · ${l.subInventoryCode}`
+          : `${l.orgId} · ${l.subInventoryCode} — ${l.label}`,
+    }));
+  // Fallback for a pair missing from inventory_labels (e.g. imported JSON).
+  const key = locationKey.value;
+  if (key && !opts.some((o) => o.value === key)) opts.unshift({ value: key, label: key });
+  return opts;
+});
+
+watch(locationKey, (key) => {
+  const sep = key.indexOf(":");
+  if (sep === -1) {
+    orgId.value = null;
+    subInventoryCode.value = "";
+    return;
+  }
+  const org = Number(key.slice(0, sep));
+  orgId.value = Number.isFinite(org) && key.slice(0, sep) !== "" ? org : null;
+  subInventoryCode.value = key.slice(sep + 1);
+});
+
+// ---- Items (managed by the add/edit dialog — the table starts empty) ----
+const items = ref<PickingOrderItemDraft[]>([]);
+
+const itemDialogOpen = ref(false);
+const editingIndex = ref<number | null>(null);
+
+const editingItem = computed(() =>
+  editingIndex.value === null ? null : (items.value[editingIndex.value] ?? null)
+);
+
+function openAddItem() {
+  editingIndex.value = null;
+  itemDialogOpen.value = true;
 }
+
+function openEditItem(index: number) {
+  editingIndex.value = index;
+  itemDialogOpen.value = true;
+}
+
+function closeItemDialog() {
+  itemDialogOpen.value = false;
+  editingIndex.value = null;
+}
+
+function saveItem(item: PickingOrderItemDraft) {
+  if (editingIndex.value === null) items.value.push(item);
+  else items.value[editingIndex.value] = item;
+  closeItemDialog();
+}
+
 function removeItem(index: number) {
   items.value.splice(index, 1);
-  // Re-number remaining items
-  items.value.forEach((item, i) => {
-    if (item.lineNumber === null) item.lineNumber = i + 1;
-  });
-}
-
-// ---- Sub-inventory options (org → sub-inventory pairing) ----
-const subInventories = ref<SubInventoryRow[]>([]);
-
-const orgOptions = computed<SearchableSelectOption[]>(() => {
-  const seen = new Set<number>();
-  for (const r of subInventories.value) seen.add(r.orgId);
-  return [...seen].sort((a, b) => a - b).map((o) => ({ value: String(o), label: String(o) }));
-});
-
-const subInventoryOptions = computed<SearchableSelectOption[]>(() => {
-  if (orgId.value === null) return [];
-  return subInventories.value
-    .filter((r) => r.orgId === orgId.value)
-    .map((r) => ({
-      value: r.secondaryInventoryName,
-      label: r.subinvDescription ? `${r.secondaryInventoryName} — ${r.subinvDescription}` : r.secondaryInventoryName,
-    }));
-});
-
-watch(orgId, () => {
-  // Reset sub-inventory when org changes
-  if (subInventoryCode.value && !subInventoryOptions.value.some((o) => o.value === subInventoryCode.value)) {
-    subInventoryCode.value = "";
-  }
-});
-
-// ---- Parts search ----
-const partSearchQuery = ref("");
-const partSearchOptions = ref<SearchableSelectOption[]>([]);
-let partSearchTimer: ReturnType<typeof setTimeout> | null = null;
-
-function searchParts(query: string) {
-  if (partSearchTimer) clearTimeout(partSearchTimer);
-  partSearchTimer = setTimeout(async () => {
-    if (!query.trim()) {
-      partSearchOptions.value = [];
-      return;
-    }
-    try {
-      const res = await flow.stockSearchPage({ partNo: query, page: 1, pageSize: 20 });
-      partSearchOptions.value = res.rows.map((lot) => ({
-        value: lot.partNo,
-        label: lot.wclItemNo ? `${lot.partNo} (${lot.wclItemNo})` : lot.partNo,
-      }));
-    } catch {
-      partSearchOptions.value = [];
-    }
-  }, 200);
 }
 
 // ---- Form validation ----
@@ -92,8 +110,8 @@ const formError = ref("");
 
 function validate(): string {
   if (!orderNo.value.trim()) return t("admin.pages.createTestOrder.errors.orderNoRequired");
-  if (orgId.value === null) return t("admin.pages.createTestOrder.errors.orgRequired");
-  if (!subInventoryCode.value) return t("admin.pages.createTestOrder.errors.subInventoryRequired");
+  if (orgId.value === null || !subInventoryCode.value)
+    return t("admin.pages.createTestOrder.errors.locationRequired");
   if (items.value.length === 0) return t("admin.pages.createTestOrder.errors.atLeastOneItem");
   for (const [i, item] of items.value.entries()) {
     if (!item.partNo.trim()) return t("admin.pages.createTestOrder.errors.partNoRequired", { index: i + 1 });
@@ -194,6 +212,7 @@ async function importJson(event: Event) {
     // Fill the form
     orderNo.value = template.orderNo;
     customerCode.value = template.customerCode ?? "";
+    locationKey.value = `${template.orgId}:${template.subInventoryCode}`;
     orgId.value = template.orgId;
     subInventoryCode.value = template.subInventoryCode;
     shipTo.value = template.shipTo ?? "";
@@ -204,14 +223,12 @@ async function importJson(event: Event) {
     remark.value = template.remark ?? "";
     items.value = template.items.map((item, i) => ({
       partNo: item.partNo,
+      wclItemNo: null,
+      brand: null,
+      description: null,
       qty: item.qty,
       lineNumber: item.lineNumber ?? i + 1,
     }));
-
-    // Ensure sub-inventory options are loaded for the org
-    if (subInventories.value.length === 0) {
-      subInventories.value = await flow.listSubInventories();
-    }
   } catch (err: any) {
     importError.value = err?.message ?? "Failed to parse template JSON";
   } finally {
@@ -219,9 +236,11 @@ async function importJson(event: Event) {
   }
 }
 
-// ---- Load sub-inventories on mount ----
+// ---- Load dropdown sources on mount ----
 onMounted(async () => {
-  subInventories.value = await flow.listSubInventories();
+  const [customers, labels] = await Promise.all([flow.listCustomerAccounts(), flow.listInventoryLabels()]);
+  customerAccounts.value = customers;
+  inventoryLabels.value = labels;
 });
 </script>
 
@@ -261,22 +280,20 @@ onMounted(async () => {
         </div>
         <div class="form-field">
           <label>{{ t("admin.pages.createTestOrder.customerCode") }}</label>
-          <input v-model="customerCode" type="text" />
-        </div>
-        <div class="form-field">
-          <label>{{ t("admin.pages.createTestOrder.orgId") }} *</label>
           <SearchableSelect
-            v-model="orgId"
-            :options="orgOptions"
-            :placeholder="t('admin.pages.createTestOrder.selectOrg')"
+            v-model="customerCode"
+            :options="customerOptions"
+            :multiple="false"
+            :all-label="t('admin.pages.createTestOrder.selectCustomer')"
           />
         </div>
         <div class="form-field">
-          <label>{{ t("admin.pages.createTestOrder.subInventoryCode") }} *</label>
+          <label>{{ t("admin.pages.createTestOrder.location") }} *</label>
           <SearchableSelect
-            v-model="subInventoryCode"
-            :options="subInventoryOptions"
-            :placeholder="t('admin.pages.createTestOrder.selectSubInventory')"
+            v-model="locationKey"
+            :options="locationOptions"
+            :multiple="false"
+            :all-label="t('admin.pages.createTestOrder.selectLocation')"
           />
         </div>
         <div class="form-field">
@@ -299,7 +316,8 @@ onMounted(async () => {
               { value: 'invoice', label: 'invoice' },
               { value: 'tn', label: 'tn' },
             ]"
-            :placeholder="t('admin.pages.createTestOrder.selectType')"
+            :multiple="false"
+            :all-label="t('admin.pages.createTestOrder.selectType')"
           />
         </div>
         <div class="form-field">
@@ -308,7 +326,7 @@ onMounted(async () => {
         </div>
         <div class="form-field form-field-full">
           <label>{{ t("admin.pages.createTestOrder.remark") }}</label>
-          <input v-model="remark" type="text" />
+          <textarea v-model="remark" rows="3" />
         </div>
       </div>
     </section>
@@ -317,7 +335,7 @@ onMounted(async () => {
     <section class="form-section">
       <div class="section-header">
         <h2>{{ t("admin.pages.createTestOrder.items") }}</h2>
-        <button class="btn btn-secondary btn-sm" @click="addItem">
+        <button class="btn btn-secondary btn-sm" @click="openAddItem">
           + {{ t("admin.pages.createTestOrder.addItem") }}
         </button>
       </div>
@@ -329,29 +347,33 @@ onMounted(async () => {
           <span class="col-qty">{{ t("admin.pages.createTestOrder.qty") }} *</span>
           <span class="col-actions"></span>
         </div>
+        <div v-if="items.length === 0" class="items-empty">
+          {{ t("admin.pages.createTestOrder.noItems") }}
+        </div>
         <div v-for="(item, index) in items" :key="index" class="items-row">
-          <span class="col-line">
-            <input v-model.number="item.lineNumber" type="number" min="1" />
-          </span>
+          <span class="col-line">{{ item.lineNumber ?? index + 1 }}</span>
           <span class="col-part">
-            <SearchableSelect
-              v-model="item.partNo"
-              :options="partSearchOptions"
-              :placeholder="t('admin.pages.createTestOrder.searchPart')"
-              @update:search="searchParts"
-            />
+            {{ item.partNo }}<span v-if="item.wclItemNo"> ({{ item.wclItemNo }})</span>
           </span>
-          <span class="col-qty">
-            <input v-model.number="item.qty" type="number" min="1" />
-          </span>
-          <span class="col-actions">
-            <button class="btn btn-danger btn-sm" @click="removeItem(index)" :disabled="items.length === 1">
-              ×
+          <span class="col-qty">{{ item.qty }}</span>
+          <span class="col-actions actions-cell">
+            <button class="btn btn-secondary btn-sm" @click="openEditItem(index)">
+              {{ t("admin.common.edit") }}
             </button>
+            <button class="btn btn-danger btn-sm" @click="removeItem(index)">×</button>
           </span>
         </div>
       </div>
     </section>
+
+    <!-- Add / edit item dialog -->
+    <PickingOrdersItemFormModal
+      :open="itemDialogOpen"
+      :item="editingItem"
+      :next-line-number="items.length + 1"
+      @close="closeItemDialog"
+      @save="saveItem"
+    />
 
     <!-- Error + Submit -->
     <div v-if="formError" class="alert alert-error">{{ formError }}</div>
@@ -442,11 +464,17 @@ onMounted(async () => {
 }
 
 .form-field input,
-.form-field select {
+.form-field select,
+.form-field textarea {
   padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 4px;
   font-size: 14px;
+  font-family: inherit;
+}
+
+.form-field textarea {
+  resize: vertical;
 }
 
 .items-table {
@@ -458,7 +486,7 @@ onMounted(async () => {
 .items-header,
 .items-row {
   display: grid;
-  grid-template-columns: 80px 1fr 120px 60px;
+  grid-template-columns: 60px 1fr 90px 130px;
   gap: 8px;
   align-items: center;
 }
@@ -471,13 +499,19 @@ onMounted(async () => {
   padding: 0 4px;
 }
 
-.items-row input,
-.items-row select {
-  width: 100%;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
+.items-empty {
+  padding: 16px;
+  text-align: center;
   font-size: 14px;
+  color: var(--text-secondary);
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+}
+
+.actions-cell {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
 }
 
 .col-actions {
