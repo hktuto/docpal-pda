@@ -11,5 +11,4 @@ CREATE TABLE "inventory_labels" (
 	CONSTRAINT "inventory_labels_org_subinv_unique" UNIQUE("org_id","sub_inventory_code")
 );
 --> statement-breakpoint
-ALTER TABLE "ad_hoc_put_aways" RENAME COLUMN "supplier_code" TO "brand";--> statement-breakpoint
 ALTER TABLE "inventory_labels" ADD CONSTRAINT "inventory_labels_sub_inv_fk" FOREIGN KEY ("org_id","sub_inventory_code") REFERENCES "public"."org_info"("org_id","secondary_inventory_name") ON DELETE no action ON UPDATE no action;

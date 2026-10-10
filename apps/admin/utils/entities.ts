@@ -2,7 +2,7 @@ export interface EntityField {
   key: string;
   /** i18n key (under admin.fields.*) resolved by CrudTable/CrudForm via $t. */
   label: string;
-  type: "text" | "number" | "password" | "multiSelect" | "subInventoryPicker" | "json" | "boolean" | "select" | "conditions";
+  type: "text" | "number" | "password" | "multiSelect" | "subInventoryPicker" | "json" | "boolean" | "select" | "conditions" | "subInventorySelect";
   /**
    * multiSelect only: where the option list comes from.
    * "customerAccounts" = party names from GET /admin/customer-accounts.
@@ -252,10 +252,8 @@ export const entities: Record<string, EntityConfig> = {
     title: "admin.entities.inventoryLabels.title",
     pk: "id",
     clientSearch: true,
-    clientFilters: [{ key: "orgId", label: "admin.fields.orgId" }],
     fields: [
-      { key: "orgId", label: "admin.fields.orgId", type: "number", required: true },
-      { key: "subInventoryCode", label: "admin.fields.subInventoryCode", type: "text", required: true },
+      { key: "subInventory", label: "admin.fields.subInventoryCode", type: "subInventorySelect", required: true },
       { key: "label", label: "admin.fields.label", type: "text", required: true },
       { key: "sortOrder", label: "admin.fields.sortOrder", type: "number" },
       { key: "isActive", label: "admin.fields.isActive", type: "boolean", format: formatActive, defaultValue: true },

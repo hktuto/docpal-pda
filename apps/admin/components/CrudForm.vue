@@ -24,6 +24,8 @@ const localError = ref("");
 
 // multiSelect option lists (per optionsSource). Loaded once on mount.
 const customerAccountOptions = ref<{ value: string; label: string }[]>([]);
+// subInventorySelect options: all sub-inventories from /admin/sub-inventories.
+const subInventorySelectOptions = ref<{ value: string; label: string }[]>([]);
 
 onMounted(async () => {
   if (props.fields.some((f) => f.optionsSource === "customerAccounts")) {
@@ -36,6 +38,21 @@ onMounted(async () => {
       customerAccountOptions.value = [];
     }
   }
+  if (props.fields.some((f) => f.type === "subInventorySelect")) {
+    try {
+      const rows = await api.get<{ orgId: number; secondaryInventoryName: string; subinvDescription: string | null; officeCode: string | null }[]>("/admin/sub-inventories");
+      subInventorySelectOptions.value = rows
+        .map((r) => ({
+          value: `${r.orgId}:${r.secondaryInventoryName}`,
+          label: r.subinvDescription
+            ? `${r.officeCode ?? r.orgId} / ${r.secondaryInventoryName} — ${r.subinvDescription}`
+            : `${r.officeCode ?? r.orgId} / ${r.secondaryInventoryName}`,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label));
+    } catch {
+      subInventorySelectOptions.value = [];
+    }
+  }
 });
 
 function optionsFor(f: EntityField): { value: string; label: string }[] {
@@ -45,6 +62,7 @@ function optionsFor(f: EntityField): { value: string; label: string }[] {
 
 /** select fields: static options; labels starting with "admin." are i18n keys. */
 function selectOptionsFor(f: EntityField): { value: string; label: string }[] {
+  if (f.type === "subInventorySelect") return subInventorySelectOptions.value;
   return (f.options ?? []).map((o) => ({
     value: o.value,
     label: o.label.startsWith("admin.") ? t(o.label) : o.label,
@@ -76,7 +94,11 @@ watch(
             ? Array.isArray(v)
               ? v // [{ orgId, code }] pairs, passed through verbatim
               : []
-          : f.type === "boolean"
+            : f.type === "subInventorySelect"
+              ? val?.orgId != null && val?.subInventoryCode
+                ? `${val.orgId}:${val.subInventoryCode}`
+                : ""
+              : f.type === "boolean"
             ? val
               ? !!v
               : !!f.defaultValue
@@ -131,6 +153,28 @@ function submit() {
         return;
       }
       payload[f.key] = { combinator: c!.combinator, conditions: rows };
+      continue;
+    }
+    if (f.type === "subInventorySelect") {
+      const raw = String(form[f.key] ?? "").trim();
+      if (raw === "") {
+        if (f.required) {
+          localError.value = t("admin.common.required", { label: t(f.label) });
+          return;
+        }
+        payload.orgId = null;
+        payload.subInventoryCode = null;
+        continue;
+      }
+      const idx = raw.indexOf(":");
+      const orgId = Number(raw.slice(0, idx));
+      const code = raw.slice(idx + 1);
+      if (idx <= 0 || !Number.isInteger(orgId) || !code) {
+        localError.value = t("admin.common.mustBeNumber", { label: t(f.label) });
+        return;
+      }
+      payload.orgId = orgId;
+      payload.subInventoryCode = code;
       continue;
     }
     if (f.type === "multiSelect" || f.type === "subInventoryPicker") {
@@ -205,7 +249,7 @@ function submit() {
             :disabled="disabled(f)"
           />
           <SearchableSelect
-            v-else-if="f.type === 'select'"
+            v-else-if="f.type === 'select' || f.type === 'subInventorySelect'"
             v-model="form[f.key] as string"
             :options="selectOptionsFor(f)"
             :all-label="$t(f.label)"

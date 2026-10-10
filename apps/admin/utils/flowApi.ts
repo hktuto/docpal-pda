@@ -122,6 +122,46 @@ export interface TestPickingOrderCreate {
   items: { partNo: string; qty: number; lineNumber?: number }[];
 }
 
+/** customer_accounts row (GET /admin/customer-accounts) — dropdown source for customer_code. */
+export interface CustomerAccountRow {
+  custAccountId: number;
+  partyId: number;
+  partyName: string;
+  partyType: string;
+  accountNumber: string;
+  accountStatus: string;
+}
+
+/** inventory_labels row (GET /admin/inventory-labels) — org/sub-inventory picker source. */
+export interface InventoryLabelRow {
+  id: string;
+  orgId: number;
+  subInventoryCode: string;
+  label: string;
+  sortOrder: number;
+  isActive: boolean;
+  remark: string | null;
+}
+
+/** parts master row (GET /admin/parts — server-paged). */
+export interface PartMasterRow {
+  id: string;
+  brand: string;
+  partNo: string;
+  wclItemNo: string;
+  description: string | null;
+}
+
+/** Draft line item on the test-order create page (managed by the item dialog). */
+export interface PickingOrderItemDraft {
+  partNo: string;
+  wclItemNo: string | null;
+  brand: string | null;
+  description: string | null;
+  qty: number | null;
+  lineNumber: number | null;
+}
+
 /** Exported test picking order template (GET /admin/picking-orders/:id/export). */
 export interface TestPickingOrderTemplate {
   orderNo: string;
@@ -766,7 +806,16 @@ export function useFlowApi() {
     listSubInventories: () => api.get<SubInventoryRow[]>("/admin/sub-inventories"),
     listCountries: () => api.get<CountryRow[]>("/admin/countries"),
 
-    // Test picking order creator
+    // Test picking order creator — dropdown sources (customer accounts,
+    // inventory labels) + parts master search for the item dialog.
+    listCustomerAccounts: () => api.get<CustomerAccountRow[]>("/admin/customer-accounts"),
+    listInventoryLabels: () => api.get<InventoryLabelRow[]>("/admin/inventory-labels"),
+    searchParts: (params: { q?: string; brand?: string; pageSize?: number }) => {
+      const qs = new URLSearchParams({ page: "1", pageSize: String(params.pageSize ?? 20) });
+      if (params.q?.trim()) qs.set("q", params.q.trim());
+      if (params.brand?.trim()) qs.set("brand", params.brand.trim());
+      return api.get<{ rows: PartMasterRow[]; total: number }>(`/admin/parts?${qs}`);
+    },
     createTestPickingOrder: (body: TestPickingOrderCreate) =>
       api.post<{ id: string; orderNo: string; items: { id: string; partNo: string; qty: number; lineNumber: number | null }[] }>(
         "/admin/picking-orders/test-create",

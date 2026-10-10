@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { newId } from "../../db/id.js";
 import { and, asc, eq, or, ilike, sql, type SQL } from "drizzle-orm";
 import { db } from "../../db.js";
@@ -300,30 +301,54 @@ adminRoute.route("/label-print-rules", adminLabelPrintRulesRoute);
 // Inventory labels: per-warehouse sub-inventory display labels (spec
 // 2026-10-10-inventory-labels-design). Admin maps a label to each
 // (org_id, sub_inventory_code) pair, with sort order and an active flag.
+// The form sends a single `subInventory` field ("orgId:code") that is
+// parsed into orgId + subInventoryCode here.
+function parseSubInventory(body: Record<string, unknown>): { orgId: number; subInventoryCode: string } {
+  const raw = body.subInventory;
+  if (typeof raw !== "string" || raw.trim() === "") {
+    throw new HTTPException(400, { message: "subInventory is required" });
+  }
+  const idx = raw.indexOf(":");
+  const orgId = Number(raw.slice(0, idx));
+  const code = raw.slice(idx + 1);
+  if (idx <= 0 || !Number.isInteger(orgId) || !code) {
+    throw new HTTPException(400, { message: "subInventory must be orgId:code" });
+  }
+  return { orgId, subInventoryCode: code };
+}
+
 adminRoute.route(
   "/inventory-labels",
   createCrudRouter({
     table: inventoryLabels,
     pk: inventoryLabels.id,
     orderBy: sql`${inventoryLabels.sortOrder} ASC, ${inventoryLabels.orgId} ASC, ${inventoryLabels.subInventoryCode} ASC`,
-    create: (b) => ({
-      id: optId(b),
-      orgId: reqInt(b, "orgId"),
-      subInventoryCode: reqStr(b, "subInventoryCode"),
-      label: reqStr(b, "label"),
-      sortOrder: optInt(b, "sortOrder") ?? 0,
-      isActive: optBool(b, "isActive") ?? true,
-      remark: optStr(b, "remark"),
-    }),
-    update: (b) => ({
-      ...(b.orgId !== undefined && { orgId: reqInt(b, "orgId") }),
-      ...(b.subInventoryCode !== undefined && { subInventoryCode: reqStr(b, "subInventoryCode") }),
-      ...(b.label !== undefined && { label: reqStr(b, "label") }),
-      ...(b.sortOrder !== undefined && { sortOrder: optInt(b, "sortOrder") ?? 0 }),
-      ...(b.isActive !== undefined && { isActive: reqBool(b, "isActive") }),
-      ...(b.remark !== undefined && { remark: optStr(b, "remark") }),
-      lastUpdateDate: new Date(),
-    }),
+    create: (b) => {
+      const { orgId, subInventoryCode } = parseSubInventory(b);
+      return {
+        id: optId(b),
+        orgId,
+        subInventoryCode,
+        label: reqStr(b, "label"),
+        sortOrder: optInt(b, "sortOrder") ?? 0,
+        isActive: optBool(b, "isActive") ?? true,
+        remark: optStr(b, "remark"),
+      };
+    },
+    update: (b) => {
+      const set: Record<string, unknown> = {};
+      if (b.subInventory !== undefined) {
+        const { orgId, subInventoryCode } = parseSubInventory(b);
+        set.orgId = orgId;
+        set.subInventoryCode = subInventoryCode;
+      }
+      if (b.label !== undefined) set.label = reqStr(b, "label");
+      if (b.sortOrder !== undefined) set.sortOrder = optInt(b, "sortOrder") ?? 0;
+      if (b.isActive !== undefined) set.isActive = reqBool(b, "isActive");
+      if (b.remark !== undefined) set.remark = optStr(b, "remark");
+      set.lastUpdateDate = new Date();
+      return set;
+    },
   })
 );
 
