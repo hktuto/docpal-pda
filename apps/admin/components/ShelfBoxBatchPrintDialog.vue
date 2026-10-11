@@ -99,19 +99,15 @@ async function print() {
       </div>
       <div class="form-row">
         <label for="sbb-printer">{{ $t("admin.print.printer") }}</label>
-        <input
+        <SearchableSelect
           id="sbb-printer"
           v-model="printerName"
-          type="text"
-          list="sbbp-printers"
-          autocomplete="off"
-          data-1p-ignore
-          data-lpignore="true"
-          :placeholder="$t('admin.print.printerPlaceholder')"
+          :options="printers.map((p) => ({ value: printerKey(p), label: p.alias || p.name }))"
+          :all-label="$t('admin.print.printerPlaceholder')"
+          :aria-label="$t('admin.print.printer')"
+          :multiple="false"
+          :show-all="false"
         />
-        <datalist id="sbbp-printers">
-          <option v-for="p in printers" :key="printerKey(p)" :label="p.alias || p.name" :value="printerKey(p)" />
-        </datalist>
       </div>
       <div class="form-row">
         <label for="sbbp-copies">{{ $t("admin.print.copies") }}</label>

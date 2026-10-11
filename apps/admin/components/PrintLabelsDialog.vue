@@ -36,7 +36,8 @@ const done = ref(false);
 // is not printable — /print/files needs the serviceId + deviceKey pair.
 const selectedPrinter = computed(() => parsePrinterKey(printerName.value.trim()));
 
-// Non-fatal: without the list the printer field stays free text.
+// Non-fatal: without the list the picker stays empty (a remembered printer
+// key still shows, falling back to its raw value).
 onMounted(async () => {
   try {
     printers.value = await listPrinters();
@@ -82,19 +83,15 @@ async function print() {
       </ul>
       <div class="form-row">
         <label for="pl-printer">{{ $t("admin.print.printer") }}</label>
-        <input
+        <SearchableSelect
           id="pl-printer"
           v-model="printerName"
-          type="text"
-          list="pl-printers"
-          autocomplete="off"
-          data-1p-ignore
-          data-lpignore="true"
-          :placeholder="$t('admin.print.printerPlaceholder')"
+          :options="printers.map((p) => ({ value: printerKey(p), label: p.alias || p.name }))"
+          :all-label="$t('admin.print.printerPlaceholder')"
+          :aria-label="$t('admin.print.printer')"
+          :multiple="false"
+          :show-all="false"
         />
-        <datalist id="pl-printers">
-          <option v-for="p in printers" :key="printerKey(p)" :label="p.alias || p.name" :value="printerKey(p)" />
-        </datalist>
       </div>
       <div class="form-row">
         <label for="pl-copies">{{ $t("admin.print.copies") }}</label>
