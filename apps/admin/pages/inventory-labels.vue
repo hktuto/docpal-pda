@@ -17,6 +17,7 @@ interface LabelRow {
 
 interface LocationOption {
   orgId: number;
+  label: string;
   secondaryInventoryName: string;
   subinvDescription: string | null;
   officeCode: string | null;
@@ -64,7 +65,7 @@ function startEdit(row: LabelRow) {
   showForm.value = true;
 }
 
-async function onSave(payload: { orgId: number; subInventoryCode: string; label: string; sortOrder: number; isActive: boolean; remark: string | null }) {
+async function onSave(payload: { subInventory: string; label: string; sortOrder: number; isActive: boolean; remark: string | null }) {
   saving.value = true;
   saveError.value = "";
   try {

@@ -15,7 +15,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  save: [payload: { orgId: number; subInventoryCode: string; label: string; sortOrder: number; isActive: boolean; remark: string | null }];
+  save: [payload: { subInventory: string; label: string; sortOrder: number; isActive: boolean; remark: string | null }];
   cancel: [];
 }>();
 
@@ -74,6 +74,7 @@ const editing = computed(() => props.initial !== null);
 
 function submit() {
   localError.value = "";
+  console.log("selectedLocation", selectedLocation.value)
   if (!selectedLocation.value) {
     localError.value = t("admin.common.required", { label: t("admin.fields.subInventoryCode") });
     return;
@@ -82,16 +83,8 @@ function submit() {
     localError.value = t("admin.common.required", { label: t("admin.fields.label") });
     return;
   }
-  const idx = selectedLocation.value.indexOf(":");
-  const orgId = Number(selectedLocation.value.slice(0, idx));
-  const subInventoryCode = selectedLocation.value.slice(idx + 1);
-  if (!Number.isInteger(orgId) || !subInventoryCode) {
-    localError.value = t("admin.common.mustBeNumber", { label: t("admin.fields.subInventoryCode") });
-    return;
-  }
   emit("save", {
-    orgId,
-    subInventoryCode,
+    subInventory: selectedLocation.value,
     label: label.value.trim(),
     sortOrder: Number(sortOrder.value) || 0,
     isActive: isActive.value,
