@@ -9,6 +9,7 @@ import { newId } from "./id.js";
 import { now } from "./now.js";
 import { scheduleAllocateAll } from "./allocate.js";
 import { allowedOrgCondition, allowedOrgFilter } from "./org-filter.js";
+import { normalizePartNo } from "./scanParse.js";
 
 // Ad-hoc put-away domain logic (spec 2026-10-07-ad-hoc-put-away-design.md).
 // Commits scanned items (no receiving order) directly to a shelf in one
@@ -96,16 +97,27 @@ export async function commitAdHocPutAway(
       throw new Error(`shelf_not_found:${shelfCode}`);
     }
 
-    // 2. Validate each item's part exists
-    const partNos = [...new Set(items.map((i) => i.partNo))];
-    const existingParts = await tx
-      .select({ partNo: parts.partNo })
-      .from(parts)
-      .where(inArray(parts.partNo, partNos));
-    const existingPartSet = new Set(existingParts.map((p) => p.partNo));
+    // 2. Validate each item's part exists — normalize scanned part numbers
+    // (strip spaces, uppercase) and match against both part_no and
+    // wcl_item_no. QR labels often print part numbers without the spaces
+    // the master carries, or only carry one of the two keys.
+    const allParts = await tx
+      .select({ partNo: parts.partNo, wclItemNo: parts.wclItemNo })
+      .from(parts);
+    const normalizedMap = new Map<string, { partNo: string; wclItemNo: string }>();
+    for (const p of allParts) {
+      normalizedMap.set(normalizePartNo(p.partNo), { partNo: p.partNo, wclItemNo: p.wclItemNo });
+      normalizedMap.set(normalizePartNo(p.wclItemNo), { partNo: p.partNo, wclItemNo: p.wclItemNo });
+    }
     for (const item of items) {
-      if (!existingPartSet.has(item.partNo)) {
+      const match = normalizedMap.get(normalizePartNo(item.partNo));
+      if (!match) {
         throw new Error(`part_not_found:${item.partNo}`);
+      }
+      // Backfill canonical part_no and wcl_item_no from the master
+      item.partNo = match.partNo;
+      if (!item.wclItemNo) {
+        item.wclItemNo = match.wclItemNo;
       }
     }
 
