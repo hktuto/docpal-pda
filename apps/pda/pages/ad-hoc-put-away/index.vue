@@ -60,7 +60,7 @@
       <!-- Item list -->
       <section v-if="items.length" class="section">
         <div class="section__header">
-          <h3 class="section__title">{{ $t('adHocPutAway.items') }}</h3>
+          <h4 class="section__title">{{ $t('adHocPutAway.items') }}</h4>
           <div class="batch-actions">
             <input
               v-model="batchDateCode"
@@ -82,7 +82,8 @@
               :disabled="committing"
               @click="applyBatch"
             >
-              {{ $t('adHocPutAway.applyBatch') }}
+              Y
+              <!-- {{ $t('adHocPutAway.applyBatch') }} -->
             </button>
           </div>
         </div>
