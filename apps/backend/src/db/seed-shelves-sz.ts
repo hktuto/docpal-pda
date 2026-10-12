@@ -60,44 +60,44 @@ const szShelfZones: { zone: string | null; shelf: string[] }[] = [
     zone: "GZA",
     shelf: [
       // GZA##A (5)
-      ...letterRange("GZA01", "A", "E"),
+      ...numRange("GZA", 1, 5, 2).map((n) => `${n}A`),
       // GZA##B (5)
-      ...letterRange("GZA01", "A", "E"),
+      ...numRange("GZA", 1, 5, 2).map((n) => `${n}B`),
       // GZA##C (5)
-      ...letterRange("GZA01", "A", "E"),
+      ...numRange("GZA", 1, 5, 2).map((n) => `${n}C`),
       // GZA##D (5)
-      ...letterRange("GZA01", "A", "E"),
+      ...numRange("GZA", 1, 5, 2).map((n) => `${n}D`),
       // GZA##E (5)
-      ...letterRange("GZA01", "A", "E"),
+      ...numRange("GZA", 1, 5, 2).map((n) => `${n}E`),
       // GZA##F (5)
-      ...letterRange("GZA01", "A", "E"),
+      ...numRange("GZA", 1, 5, 2).map((n) => `${n}F`),
       // GZA##G (5)
-      ...letterRange("GZA01", "A", "E"),
+      ...numRange("GZA", 1, 5, 2).map((n) => `${n}G`),
       // GZA##H (5)
-      ...letterRange("GZA01", "A", "E"),
+      ...numRange("GZA", 1, 5, 2).map((n) => `${n}H`),
       // GZA##I (5)
-      ...letterRange("GZA01", "A", "E"),
+      ...numRange("GZA", 1, 5, 2).map((n) => `${n}I`),
       // GZA##J (5)
-      ...letterRange("GZA01", "A", "E"),
+      ...numRange("GZA", 1, 5, 2).map((n) => `${n}J`),
       // GZA##K (4)
       "GZA01K", "GZA03K", "GZA04K", "GZA05K",
       // GZA##L (5)
-      ...letterRange("GZA01", "A", "E"),
+      ...numRange("GZA", 1, 5, 2).map((n) => `${n}L`),
       // GZA##M (5)
-      ...letterRange("GZA01", "A", "E"),
+      ...numRange("GZA", 1, 5, 2).map((n) => `${n}M`),
       // GZA##N (5)
-      ...letterRange("GZA01", "A", "E"),
+      ...numRange("GZA", 1, 5, 2).map((n) => `${n}N`),
       // GZA##O (5)
-      ...letterRange("GZA01", "A", "E"),
+      ...numRange("GZA", 1, 5, 2).map((n) => `${n}O`),
       // GZA##P (5)
-      ...letterRange("GZA01", "A", "E"),
+      ...numRange("GZA", 1, 5, 2).map((n) => `${n}P`),
     ],
   },
   {
     zone: "GZB",
     shelf: [
       // GZB##A (8)
-      ...letterRange("GZB01", "A", "H"),
+      ...numRange("GZB", 1, 8, 2).map((n) => `${n}A`),
       // GZB##B (1)
       "GZB07B",
       // GZB##C (1)
@@ -116,14 +116,14 @@ const szShelfZones: { zone: string | null; shelf: string[] }[] = [
     zone: "GZC",
     shelf: [
       // GZC##A (8)
-      ...letterRange("GZC01", "A", "H"),
+      ...numRange("GZC", 1, 8, 2).map((n) => `${n}A`),
     ],
   },
   {
     zone: "GZD",
     shelf: [
       // GZD##A (3)
-      ...letterRange("GZD01", "A", "C"),
+      ...numRange("GZD", 1, 3, 2).map((n) => `${n}A`),
       // GZD##B (2)
       "GZD02B", "GZD03B",
       // GZD##C (2)
@@ -265,16 +265,16 @@ const szShelfZones: { zone: string | null; shelf: string[] }[] = [
     zone: "SZA",
     shelf: [
       // SZA##A (11)
-      ...letterRange("SZA01", "A", "K"),
+      ...numRange("SZA", 1, 11, 2).map((n) => `${n}A`),
       // SZA##B (11)
-      ...letterRange("SZA01", "A", "K"),
+      ...numRange("SZA", 1, 11, 2).map((n) => `${n}B`),
       // SZA##C (11)
-      ...letterRange("SZA01", "A", "K"),
+      ...numRange("SZA", 1, 11, 2).map((n) => `${n}C`),
       // SZA##D (10)
       "SZA01D", "SZA02D", "SZA03D", "SZA04D", "SZA05D", "SZA07D", "SZA08D", "SZA09D",
       "SZA10D", "SZA11D",
       // SZA##E (11)
-      ...letterRange("SZA01", "A", "K"),
+      ...numRange("SZA", 1, 11, 2).map((n) => `${n}E`),
       // SZA##F (9)
       "SZA01F", "SZA02F", "SZA03F", "SZA04F", "SZA07F", "SZA08F", "SZA09F", "SZA10F",
       "SZA11F",
@@ -282,7 +282,7 @@ const szShelfZones: { zone: string | null; shelf: string[] }[] = [
       "SZA01G", "SZA02G", "SZA03G", "SZA04G", "SZA06G", "SZA07G", "SZA08G", "SZA09G",
       "SZA10G", "SZA11G",
       // SZA##H (10)
-      ...letterRange("SZA01", "A", "J"),
+      ...numRange("SZA", 1, 10, 2).map((n) => `${n}H`),
       // SZA##I (6)
       "SZA01I", "SZA02I", "SZA03I", "SZA05I", "SZA07I", "SZA10I",
       // SZA##J (5)
@@ -292,13 +292,13 @@ const szShelfZones: { zone: string | null; shelf: string[] }[] = [
       // SZA##L (5)
       "SZA01L", "SZA02L", "SZA03L", "SZA06L", "SZA07L",
       // SZA##M (7)
-      ...letterRange("SZA01", "A", "G"),
+      ...numRange("SZA", 1, 7, 2).map((n) => `${n}M`),
       // SZA##N (4)
       "SZA01N", "SZA02N", "SZA03N", "SZA07N",
       // SZA##O (4)
       "SZA01O", "SZA02O", "SZA05O", "SZA07O",
       // SZA##P (7)
-      ...letterRange("SZA01", "A", "G"),
+      ...numRange("SZA", 1, 7, 2).map((n) => `${n}P`),
     ],
   },
   {

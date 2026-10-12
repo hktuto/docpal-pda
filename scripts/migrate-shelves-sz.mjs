@@ -69,6 +69,39 @@ try {
     const [{ count }] = await sql`SELECT COUNT(*)::int as count FROM shelves`;
     console.log(`Current shelves in database: ${count}`);
 
+    // Dynamically find all tables with FK references to shelves
+    const fkTables = await sql`
+      SELECT DISTINCT
+        tc.table_name AS table_name,
+        kcu.column_name AS column_name
+      FROM information_schema.table_constraints AS tc
+      JOIN information_schema.key_column_usage AS kcu
+        ON tc.constraint_name = kcu.constraint_name
+      JOIN information_schema.constraint_column_usage AS ccu
+        ON ccu.constraint_name = tc.constraint_name
+      WHERE tc.constraint_type = 'FOREIGN KEY'
+        AND ccu.table_name = 'shelves'
+    `;
+
+    console.log(`Found ${fkTables.length} tables with FK to shelves:`);
+    for (const { table_name, column_name } of fkTables) {
+      try {
+        const [{ count }] = await sql`SELECT COUNT(*)::int as count FROM ${sql(table_name)} WHERE ${sql(column_name)} IS NOT NULL`;
+        if (count > 0) {
+          // For inventory_lots, set to NULL (don't delete inventory!)
+          if (table_name === "inventory_lots") {
+            await sql`UPDATE ${sql(table_name)} SET ${sql(column_name)} = NULL WHERE ${sql(column_name)} IS NOT NULL`;
+            console.log(`  Nulled ${column_name} on ${count} rows in ${table_name}`);
+          } else {
+            await sql`DELETE FROM ${sql(table_name)} WHERE ${sql(column_name)} IS NOT NULL`;
+            console.log(`  Cleared ${count} rows from ${table_name}`);
+          }
+        }
+      } catch (e) {
+        console.log(`  Could not clear ${table_name}: ${e.message}`);
+      }
+    }
+
     // Delete all existing shelves
     await sql`DELETE FROM shelves`;
     console.log("Cleared existing shelves");

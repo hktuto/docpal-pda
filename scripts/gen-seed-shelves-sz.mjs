@@ -192,7 +192,9 @@ function tryRange(codes) {
   const end = nums[nums.length - 1];
 
   if (suffix) {
-    return `letterRange("${prefix}${String(start).padStart(pad, "0")}", "A", "${String.fromCharCode(64 + codes.length)}")`;
+    // letterRange generates base+letter for each letter in range — but we need
+    // prefix+num+suffix for each num in range. Use numRange + map instead.
+    return `numRange("${prefix}", ${start}, ${end}, ${pad}).map((n) => \`\${n}${suffix}\`)`;
   }
   return `numRange("${prefix}", ${start}, ${end}, ${pad})`;
 }
