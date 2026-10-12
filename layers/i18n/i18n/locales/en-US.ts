@@ -1139,6 +1139,12 @@ export default {
       title: "Print labels ({count})",
       printer: "Printer",
       printerPlaceholder: "Select or type a printer…",
+      size: "Label size",
+      sizes: {
+        small: "Small (53 × 9 mm)",
+        medium: "Medium (68 × 35 mm)",
+        big: "Big (104 × 35 mm)"
+      },
       copies: "Copies",
       print: "Print",
       downloadQr: "Download label",

@@ -37,23 +37,70 @@ export interface PrintJob {
   diagnostics?: string[];
 }
 
-// Label stock: 70 x 37 mm at 300 dpi, shared by the shelf and shelf-box
-// labels. The layout is a QR code on the left (encoding the scannable code —
-// the shelf code or the box id, which is what the PDA scans) with a big text
-// line on the right and an optional smaller line below it.
-const LABEL_STOCK_W = 826;
-const LABEL_STOCK_H = 437;
+// Label stock sizes for the shelf and shelf-box labels, in physical mm. The
+// canvas is rendered at 300 dpi from the mm size and the chosen size is picked
+// per job in the print dialogs. "medium" (68 x 35 mm) is the long-standing
+// default. Layout per size: a big text line (left-aligned) with an optional
+// smaller line below it on the left, and a QR code on the right (encoding the
+// scannable code — the shelf code or the box id, which is what the PDA
+// scans), all derived from the label's own pixel size.
+export type LabelSizeId = "small" | "medium" | "big";
+
+export interface LabelSize {
+  id: LabelSizeId;
+  /** Physical label width in mm. */
+  widthMm: number;
+  /** Physical label height in mm. */
+  heightMm: number;
+}
+
+export const LABEL_SIZES: LabelSize[] = [
+  { id: "small", widthMm: 53, heightMm: 9 },
+  { id: "medium", widthMm: 68, heightMm: 35 },
+  { id: "big", widthMm: 104, heightMm: 35 },
+];
+
+export const DEFAULT_LABEL_SIZE: LabelSizeId = "medium";
+
+const LABEL_DPI = 300;
+const MM_PER_INCH = 25.4;
+
+/** Resolve a size id (unknown values fall back to the default). */
+export function labelSize(id?: string): LabelSize {
+  return LABEL_SIZES.find((s) => s.id === id) ?? LABEL_SIZES.find((s) => s.id === DEFAULT_LABEL_SIZE)!;
+}
+
+/** Canvas pixel size of one label at 300 dpi. */
+export function labelSizePx(id?: string): { w: number; h: number } {
+  const size = labelSize(id);
+  return {
+    w: Math.round((size.widthMm * LABEL_DPI) / MM_PER_INCH),
+    h: Math.round((size.heightMm * LABEL_DPI) / MM_PER_INCH),
+  };
+}
+
+/** Last size picked in any print dialog (invalid values fall back to the default). */
+export function loadLabelSize(): LabelSizeId {
+  if (!import.meta.client) return DEFAULT_LABEL_SIZE;
+  const raw = localStorage.getItem("label_size");
+  return LABEL_SIZES.some((s) => s.id === raw) ? (raw as LabelSizeId) : DEFAULT_LABEL_SIZE;
+}
+
+/** Remember the size picked in the print dialogs (`label_size` key). */
+export function saveLabelSize(id: LabelSizeId): void {
+  if (import.meta.client) localStorage.setItem("label_size", id);
+}
 
 interface LabelCell {
   /** Value encoded in the QR code (what the PDA scans). */
   qr: string;
-  /** Big text line on the right of the QR. */
+  /** Big text line on the left of the QR (left-aligned). */
   main: string;
   /** Optional smaller line below the main text (e.g. the shelf zone). */
   sub?: string | null;
 }
 
-interface LabelLayout {
+export interface LabelLayout {
   /** Draw a light border around the label for easy cutting (SZ warehouse). */
   border?: boolean;
 }
@@ -67,20 +114,21 @@ function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
   );
 }
 
-// Draw one label cell (the 70 x 37 mm design) at (x, y), scaled by `s`, into
-// an existing context. QR on the left, centered vertically; text block on the
-// right, vertically centered like the single-label design.
+// Draw one label cell at (x, y) into an existing context. The layout is
+// derived from the cell's own pixel size (any of the LABEL_SIZES at 300 dpi):
+// main text (fill-shrunk to the available width) and an optional sub line
+// left-aligned on the left, QR sized from the label height on the right.
 async function drawLabelCell(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
   w: number,
   h: number,
-  s: number,
   cell: LabelCell,
   layout: LabelLayout
 ): Promise<void> {
-  const qrSize = 360 * s;
+  const pad = Math.max(4, Math.round(h * 0.064));
+  const qrSize = Math.round(Math.min(h * 0.824, h - 2 * pad, w * 0.5));
   const qr = new Image();
   qr.src = await QRCode.toDataURL(cell.qr, {
     width: Math.max(1, Math.round(qrSize * 2)), // render sharp, draw scaled
@@ -88,40 +136,42 @@ async function drawLabelCell(
     errorCorrectionLevel: "M",
   });
   await qr.decode();
-  ctx.drawImage(qr, x + 28 * s, y + (h - qrSize) / 2, qrSize, qrSize);
+  ctx.drawImage(qr, x + w - pad - qrSize, y + (h - qrSize) / 2, qrSize, qrSize);
 
-  const textX = x + 416 * s;
-  const textW = w - 416 * s - 28 * s;
-  const cx = textX + textW / 2;
-  const topPad = (h - LABEL_STOCK_H * s) / 2;
-  ctx.textAlign = "center";
+  const textX = x + pad;
+  const textW = Math.max(1, x + w - pad - qrSize - pad - textX);
+  ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = "#0f1720";
-  ctx.font = `700 ${Math.round(112 * s)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
-  ctx.fillText(cell.main, cx, y + topPad + 260 * s, textW);
+  // Main text: proportional to the label height, but capped by the label width
+  // so wide labels get bigger text and short strips stay legible.
+  const mainFont = Math.round(Math.max(h * 0.256, Math.min(h * 0.5, w * 0.1)));
+  ctx.font = `700 ${mainFont}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+  ctx.fillText(cell.main, textX, y + h * 0.595, textW);
   const sub = cell.sub?.trim();
   if (sub) {
     ctx.fillStyle = "#4b5563";
-    ctx.font = `${Math.round(32 * s)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
-    ctx.fillText(sub, cx, y + topPad + 340 * s, textW);
+    ctx.font = `${Math.round(mainFont * 0.286)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+    ctx.fillText(sub, textX, y + h * 0.8, textW);
   }
 
   if (layout.border) {
     ctx.strokeStyle = "#d1d5db";
-    ctx.lineWidth = Math.max(1, Math.round(2 * s));
+    ctx.lineWidth = Math.max(1, Math.round((2 * h) / 437));
     ctx.strokeRect(x + ctx.lineWidth / 2, y + ctx.lineWidth / 2, w - ctx.lineWidth, h - ctx.lineWidth);
   }
 }
 
-/** Render one 70 x 37 mm label to a PNG blob for /print/files. */
-async function renderStockLabelPng(cell: LabelCell, layout: LabelLayout): Promise<Blob> {
+/** Render one label (any LABEL_SIZES entry) to a PNG blob for /print/files. */
+async function renderStockLabelPng(cell: LabelCell, layout: LabelLayout, size?: string): Promise<Blob> {
+  const { w, h } = labelSizePx(size);
   const canvas = document.createElement("canvas");
-  canvas.width = LABEL_STOCK_W;
-  canvas.height = LABEL_STOCK_H;
+  canvas.width = w;
+  canvas.height = h;
   const ctx = canvas.getContext("2d")!;
   ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, LABEL_STOCK_W, LABEL_STOCK_H);
-  await drawLabelCell(ctx, 0, 0, LABEL_STOCK_W, LABEL_STOCK_H, 1, cell, layout);
+  ctx.fillRect(0, 0, w, h);
+  await drawLabelCell(ctx, 0, 0, w, h, cell, layout);
   return canvasToPng(canvas);
 }
 
@@ -130,26 +180,62 @@ export function renderShelfLabelPng(
   code: string,
   zone?: string | null,
   displayName?: string | null,
-  layout?: LabelLayout
+  layout?: LabelLayout,
+  size?: LabelSizeId
 ): Promise<Blob> {
-  return renderStockLabelPng({ qr: code, main: displayName?.trim() || code, sub: zone }, layout ?? {});
+  return renderStockLabelPng({ qr: code, main: displayName?.trim() || code, sub: zone }, layout ?? {}, size);
 }
 
 /** Render one shelf-box label to a PNG blob for /print/files. */
-export function renderShelfBoxLabelPng(boxId: string, layout?: LabelLayout): Promise<Blob> {
-  return renderStockLabelPng({ qr: boxId, main: boxId }, layout ?? {});
+export function renderShelfBoxLabelPng(boxId: string, layout?: LabelLayout, size?: LabelSizeId): Promise<Blob> {
+  return renderStockLabelPng({ qr: boxId, main: boxId }, layout ?? {}, size);
 }
 
-// A4 batch sheet for multi-select label printing: 3 x 8 labels per A4 page at
-// 300 dpi (same cell content as the single labels, scaled to the grid).
+// A4 batch sheet for multi-select label printing at 300 dpi. The grid depends
+// on the chosen label size: cells keep the label's physical aspect ratio and
+// as many columns/rows as fit the page (same cell content as the single
+// labels, laid out per grid cell).
 export const A4_PAGE_W = 2480;
 export const A4_PAGE_H = 3508;
-const BATCH_COLS = 3;
-const BATCH_ROWS = 8;
-export const SHELF_BATCH_CELLS_PER_PAGE = BATCH_COLS * BATCH_ROWS;
+const BATCH_MIN_GAP = 24; // never tighter than ~2mm between cells
+const BATCH_MAX_GAP = 47; // 4mm between cells when there is room
+
+export interface LabelBatchGrid {
+  cols: number;
+  rows: number;
+  cellW: number;
+  cellH: number;
+  gap: number;
+}
+
+/** Compute the A4 grid for one label size (centered, uniform gap). */
+export function shelfBatchGrid(sizeId?: LabelSizeId): LabelBatchGrid {
+  const px = labelSizePx(sizeId);
+  const fit = (available: number, cell: number) =>
+    Math.max(1, Math.floor((available + BATCH_MIN_GAP) / (cell + BATCH_MIN_GAP)));
+  const cols = fit(A4_PAGE_W, px.w);
+  const rows = fit(A4_PAGE_H, px.h);
+  // The uniform gap must satisfy both axes (cols*w + (cols-1)*gap <= pageW,
+  // same for rows/height), so it is capped by the tighter of the two.
+  const gapW = Math.floor((A4_PAGE_W - cols * px.w) / Math.max(1, cols - 1));
+  const gapH = Math.floor((A4_PAGE_H - rows * px.h) / Math.max(1, rows - 1));
+  const gap = Math.min(BATCH_MAX_GAP, Math.max(BATCH_MIN_GAP, Math.min(gapW, gapH)));
+  return { cols, rows, cellW: px.w, cellH: px.h, gap };
+}
+
+/** How many labels of this size fit on one A4 page. */
+export function shelfBatchCellsPerPage(sizeId?: LabelSizeId): number {
+  const g = shelfBatchGrid(sizeId);
+  return g.cols * g.rows;
+}
 
 /** Render one A4 page of labels to a PNG blob for /print/files. */
-async function renderStockBatchPagePng(cells: LabelCell[], layout: LabelLayout): Promise<Blob> {
+async function renderStockBatchPagePng(
+  cells: LabelCell[],
+  layout: LabelLayout,
+  sizeId?: LabelSizeId
+): Promise<Blob> {
+  const grid = shelfBatchGrid(sizeId);
   const canvas = document.createElement("canvas");
   canvas.width = A4_PAGE_W;
   canvas.height = A4_PAGE_H;
@@ -157,18 +243,17 @@ async function renderStockBatchPagePng(cells: LabelCell[], layout: LabelLayout):
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, A4_PAGE_W, A4_PAGE_H);
 
-  const margin = 0; // no page margin — printer handles its own printable area
-  const gap = 47; // 4mm between cells
-  const cellW = (A4_PAGE_W - 2 * margin - (BATCH_COLS - 1) * gap) / BATCH_COLS;
-  const cellH = (A4_PAGE_H - 2 * margin - (BATCH_ROWS - 1) * gap) / BATCH_ROWS;
-  const s = cellW / LABEL_STOCK_W;
+  const { cols, rows, cellW, cellH, gap } = grid;
+  // Center the grid — the leftover space is split evenly on both sides.
+  const offsetX = Math.round((A4_PAGE_W - (cols * cellW + (cols - 1) * gap)) / 2);
+  const offsetY = Math.round((A4_PAGE_H - (rows * cellH + (rows - 1) * gap)) / 2);
 
   for (const [i, cell] of cells.entries()) {
-    const col = i % BATCH_COLS;
-    const row = Math.floor(i / BATCH_COLS);
-    const x = margin + col * (cellW + gap);
-    const y = margin + row * (cellH + gap);
-    await drawLabelCell(ctx, x, y, cellW, cellH, s, cell, layout);
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const x = offsetX + col * (cellW + gap);
+    const y = offsetY + row * (cellH + gap);
+    await drawLabelCell(ctx, x, y, cellW, cellH, cell, layout);
   }
 
   return canvasToPng(canvas);
@@ -177,17 +262,23 @@ async function renderStockBatchPagePng(cells: LabelCell[], layout: LabelLayout):
 /** Render one A4 page of shelf labels to a PNG blob for /print/files. */
 export function renderShelfBatchPagePng(
   cells: { code: string; zone?: string | null; displayName?: string | null }[],
-  layout?: LabelLayout
+  layout?: LabelLayout,
+  size?: LabelSizeId
 ): Promise<Blob> {
   return renderStockBatchPagePng(
     cells.map((c) => ({ qr: c.code, main: c.displayName?.trim() || c.code, sub: c.zone })),
-    layout ?? {}
+    layout ?? {},
+    size
   );
 }
 
 /** Render one A4 page of shelf-box labels to a PNG blob for /print/files. */
-export function renderShelfBoxBatchPagePng(boxIds: string[], layout?: LabelLayout): Promise<Blob> {
-  return renderStockBatchPagePng(boxIds.map((id) => ({ qr: id, main: id })), layout ?? {});
+export function renderShelfBoxBatchPagePng(
+  boxIds: string[],
+  layout?: LabelLayout,
+  size?: LabelSizeId
+): Promise<Blob> {
+  return renderStockBatchPagePng(boxIds.map((id) => ({ qr: id, main: id })), layout ?? {}, size);
 }
 
 function apiBaseUrl(): string {

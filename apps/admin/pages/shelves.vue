@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import QRCode from "qrcode";
 import { entities } from "~/utils/entities";
-import { renderShelfLabelPng } from "~/utils/print";
+import { renderShelfLabelPng, type LabelSizeId } from "~/utils/print";
 import { useWarehouseLabelLayout } from "~/composables/useWarehouseLabelLayout";
 
 const { layout: labelLayout } = useWarehouseLabelLayout();
@@ -9,16 +9,19 @@ const { layout: labelLayout } = useWarehouseLabelLayout();
 // Label printing: per-row Print button (row-actions slot) renders the label
 // to a PNG here and prints it via the print service's /print/files; multi-
 // select Print selected / Print all (bulk-actions slot) renders A4 batch
-// sheets (3 x 8 grid) to PNGs and prints them the same way. Both show the
-// shelf display name (code as fallback); the QR still encodes the code.
-const printItems = ref<{ title: string; render: () => Promise<Blob>; filename: string }[] | null>(null);
+// sheets (grid per the chosen label size) to PNGs and prints them the same
+// way. Both show the shelf display name (code as fallback); the QR still
+// encodes the code.
+const printItems = ref<{ title: string; render: (size: LabelSizeId) => Promise<Blob>; filename: string }[] | null>(
+  null
+);
 const batchPrintItems = ref<{ code: string; zone?: string | null; displayName?: string | null }[] | null>(null);
 
 function printOne(row: any) {
   printItems.value = [
     {
       title: row.displayName || row.code,
-      render: () => renderShelfLabelPng(row.code, row.zone, row.displayName, labelLayout.value),
+      render: (size) => renderShelfLabelPng(row.code, row.zone, row.displayName, labelLayout.value, size),
       filename: `shelf-label-${row.code}.png`,
     },
   ];

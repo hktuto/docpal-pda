@@ -6,19 +6,26 @@
 // picker lists the print service's agent printers; the chosen printer is
 // remembered in localStorage.
 import {
+  LABEL_SIZES,
   listPrinters,
   parsePrinterKey,
   printFile,
   printerKey,
   waitForPrintJob,
+  type LabelSizeId,
   type PrinterInfo,
 } from "~/utils/print";
 
 const props = defineProps<{
   /** One entry per label; `title` is only shown in the dialog's summary list. */
-  items: { title: string; render: () => Promise<Blob>; filename: string }[];
+  items: { title: string; render: (size: LabelSizeId) => Promise<Blob>; filename: string }[];
 }>();
 const emit = defineEmits<{ close: [] }>();
+
+const { t } = useI18n();
+// Label size (53 x 9 / 68 x 35 / 104 x 35 mm), remembered across dialogs.
+const size = useLabelSize();
+const sizeOptions = LABEL_SIZES.map((s) => ({ value: s.id, label: t(`admin.print.sizes.${s.id}`) }));
 
 const printing = ref(false);
 const dlg = useOverlayDismiss(() => {
@@ -55,7 +62,7 @@ async function print() {
   try {
     for (const [i, item] of props.items.entries()) {
       progress.value = `${i + 1} / ${props.items.length}`;
-      const png = await item.render();
+      const png = await item.render(size.value);
       const job = await printFile(png, item.filename, {
         serviceId: printer.serviceId,
         deviceKey: printer.deviceKey,
@@ -92,6 +99,12 @@ async function print() {
           :multiple="false"
           :show-all="false"
         />
+      </div>
+      <div class="form-row">
+        <label for="pl-size">{{ $t("admin.print.size") }}</label>
+        <select id="pl-size" v-model="size">
+          <option v-for="opt in sizeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        </select>
       </div>
       <div class="form-row">
         <label for="pl-copies">{{ $t("admin.print.copies") }}</label>

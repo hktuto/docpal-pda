@@ -1139,6 +1139,12 @@ export default {
       title: "列印標籤（{count}）",
       printer: "打印機",
       printerPlaceholder: "選擇或輸入打印機…",
+      size: "標籤尺寸",
+      sizes: {
+        small: "小（53 × 9 mm）",
+        medium: "中（68 × 35 mm）",
+        big: "大（104 × 35 mm）"
+      },
       copies: "份數",
       print: "列印",
       downloadQr: "下載標籤",

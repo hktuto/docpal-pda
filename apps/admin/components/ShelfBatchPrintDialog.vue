@@ -1,23 +1,30 @@
 <script setup lang="ts">
-// Batch A4 shelf-label print: the selected shelves are laid out 3 x 8 per A4
-// page (QR left, shelf display name + zone right per cell), each page rendered
-// to a PNG here and printed via /print/files — one print job per page, each
-// confirmed via waitForPrintJob before reporting success. The printer picker
-// lists the print service's agent printers; the chosen printer is remembered
-// in localStorage.
+// Batch A4 shelf-label print: the selected shelves are laid out per A4 page
+// (grid depends on the chosen label size; shelf display name + zone
+// left-aligned on the left, QR right per cell), each page rendered to a PNG
+// here and printed via /print/files — one print job per page, each confirmed
+// via waitForPrintJob before reporting success. The printer picker lists the
+// print service's agent printers; the chosen printer is remembered in
+// localStorage.
 import {
+  LABEL_SIZES,
   listPrinters,
   parsePrinterKey,
   printFile,
   printerKey,
   renderShelfBatchPagePng,
-  SHELF_BATCH_CELLS_PER_PAGE,
+  shelfBatchCellsPerPage,
   waitForPrintJob,
   type PrinterInfo,
 } from "~/utils/print";
 import { useWarehouseLabelLayout } from "~/composables/useWarehouseLabelLayout";
 
 const { layout: labelLayout } = useWarehouseLabelLayout();
+const { t } = useI18n();
+// Label size (53 x 9 / 68 x 35 / 104 x 35 mm), remembered across dialogs;
+// picking another size re-lays-out (and re-renders) the A4 pages below.
+const size = useLabelSize();
+const sizeOptions = LABEL_SIZES.map((s) => ({ value: s.id, label: t(`admin.print.sizes.${s.id}`) }));
 
 const props = defineProps<{
   items: { code: string; zone?: string | null; displayName?: string | null }[];
@@ -40,23 +47,45 @@ const done = ref(false);
 // is not printable — /print/files needs the serviceId + deviceKey pair.
 const selectedPrinter = computed(() => parsePrinterKey(printerName.value.trim()));
 
-// One blob per A4 page; object URLs back the preview images.
-const pageBlobs: Blob[] = [];
+// One blob per A4 page; object URLs back the preview images. Re-rendered on
+// every size change; `renderSeq` drops stale renders that finish late.
+const pageBlobs = ref<Blob[]>([]);
 const previews = ref<string[]>([]);
+let renderSeq = 0;
+
+async function renderPages() {
+  const seq = ++renderSeq;
+  const perPage = shelfBatchCellsPerPage(size.value);
+  const blobs: Blob[] = [];
+  const urls: string[] = [];
+  for (let i = 0; i < props.items.length; i += perPage) {
+    const png = await renderShelfBatchPagePng(props.items.slice(i, i + perPage), labelLayout.value, size.value);
+    blobs.push(png);
+    urls.push(URL.createObjectURL(png));
+  }
+  if (seq !== renderSeq) {
+    // A newer size won the race — discard this render's URLs.
+    urls.forEach((u) => URL.revokeObjectURL(u));
+    return;
+  }
+  previews.value.forEach((u) => URL.revokeObjectURL(u));
+  pageBlobs.value = blobs;
+  previews.value = urls;
+}
 
 onMounted(async () => {
   try {
     printers.value = await listPrinters();
-    console.log("printers", printers.value);
   } catch {
     printers.value = [];
   }
-  for (let i = 0; i < props.items.length; i += SHELF_BATCH_CELLS_PER_PAGE) {
-    const png = await renderShelfBatchPagePng(props.items.slice(i, i + SHELF_BATCH_CELLS_PER_PAGE), labelLayout.value);
-    pageBlobs.push(png);
-    previews.value.push(URL.createObjectURL(png));
-  }
+  await renderPages();
 });
+
+watch(size, () => renderPages());
+// The warehouse layout (SZ border) resolves from /config after mount —
+// re-render so the preview reflects it.
+watch(labelLayout, () => renderPages(), { deep: true });
 
 onBeforeUnmount(() => previews.value.forEach((u) => URL.revokeObjectURL(u)));
 
@@ -67,8 +96,8 @@ async function print() {
   error.value = "";
   done.value = false;
   try {
-    for (const [i, png] of pageBlobs.entries()) {
-      progress.value = `${i + 1} / ${pageBlobs.length}`;
+    for (const [i, png] of pageBlobs.value.entries()) {
+      progress.value = `${i + 1} / ${pageBlobs.value.length}`;
       const job = await printFile(png, `shelf-labels-page-${i + 1}.png`, {
         serviceId: printer.serviceId,
         deviceKey: printer.deviceKey,
@@ -105,6 +134,12 @@ async function print() {
           :multiple="false"
           :show-all="false"
         />
+      </div>
+      <div class="form-row">
+        <label for="sbp-size">{{ $t("admin.print.size") }}</label>
+        <select id="sbp-size" v-model="size">
+          <option v-for="opt in sizeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        </select>
       </div>
       <div class="form-row">
         <label for="sbp-copies">{{ $t("admin.print.copies") }}</label>

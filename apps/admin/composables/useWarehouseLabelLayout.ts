@@ -12,7 +12,12 @@ export function useWarehouseLabelLayout() {
 
   onMounted(async () => {
     try {
-      const res = await fetch(`${config.public.apiBaseUrl}/config`);
+      // /config sits behind the auth middleware — send the admin JWT like
+      // every other admin request (a bare fetch gets a silent 401).
+      const token = import.meta.client ? localStorage.getItem("admin_token") : null;
+      const res = await fetch(`${config.public.apiBaseUrl}/config`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (res.ok) {
         const data = await res.json();
         if (data.warehouseCode === "sz") {

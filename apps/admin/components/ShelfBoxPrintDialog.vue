@@ -1,10 +1,12 @@
 <script setup lang="ts">
-// Shelf-box label print dialog. The box label layout — QR code on the left
-// encoding the box id, box id text on the right (same layout as the shelf
-// labels) — is rendered to a PNG here and printed via /print/files, the same
-// route as the user badges and shelf labels. One print job per label; each
-// job is confirmed via waitForPrintJob before reporting success.
+// Shelf-box label print dialog. The box label layout — box id text
+// left-aligned on the left, QR code on the right encoding the box id (same
+// layout as the shelf labels) — is rendered to a PNG here and printed via
+// /print/files, the same route as the user badges and shelf labels. One print
+// job per label; each job is confirmed via waitForPrintJob before reporting
+// success.
 import {
+  LABEL_SIZES,
   listPrinters,
   parsePrinterKey,
   printFile,
@@ -16,6 +18,10 @@ import {
 import { useWarehouseLabelLayout } from "~/composables/useWarehouseLabelLayout";
 
 const { layout: labelLayout } = useWarehouseLabelLayout();
+const { t } = useI18n();
+// Label size (53 x 9 / 68 x 35 / 104 x 35 mm), remembered across dialogs.
+const size = useLabelSize();
+const sizeOptions = LABEL_SIZES.map((s) => ({ value: s.id, label: t(`admin.print.sizes.${s.id}`) }));
 
 const props = defineProps<{
   /** One entry per label; `title` is only shown in the dialog's summary list. */
@@ -57,7 +63,7 @@ async function print() {
   try {
     for (const [i, item] of props.items.entries()) {
       progress.value = `${i + 1} / ${props.items.length}`;
-      const png = await renderShelfBoxLabelPng(item.boxId, labelLayout.value);
+      const png = await renderShelfBoxLabelPng(item.boxId, labelLayout.value, size.value);
       const job = await printFile(png, `box-label-${item.boxId}.png`, {
         serviceId: printer.serviceId,
         deviceKey: printer.deviceKey,
@@ -94,6 +100,12 @@ async function print() {
           :multiple="false"
           :show-all="false"
         />
+      </div>
+      <div class="form-row">
+        <label for="sb-size">{{ $t("admin.print.size") }}</label>
+        <select id="sb-size" v-model="size">
+          <option v-for="opt in sizeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+        </select>
       </div>
       <div class="form-row">
         <label for="sb-copies">{{ $t("admin.print.copies") }}</label>
