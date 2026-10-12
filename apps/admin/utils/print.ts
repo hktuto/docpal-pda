@@ -40,10 +40,9 @@ export interface PrintJob {
 // Label stock sizes for the shelf and shelf-box labels, in physical mm. The
 // canvas is rendered at 300 dpi from the mm size and the chosen size is picked
 // per job in the print dialogs. "medium" (68 x 35 mm) is the long-standing
-// default. Layout per size: a big text line (left-aligned) with an optional
-// smaller line below it on the left, and a QR code on the right (encoding the
-// scannable code — the shelf code or the box id, which is what the PDA
-// scans), all derived from the label's own pixel size.
+// default. Layout per size: a big left-aligned text line (the shelf code or
+// box id) on the left and a QR code on the right (encoding the same scannable
+// code — what the PDA scans), all derived from the label's own pixel size.
 export type LabelSizeId = "small" | "medium" | "big";
 
 export interface LabelSize {
@@ -96,8 +95,6 @@ interface LabelCell {
   qr: string;
   /** Big text line on the left of the QR (left-aligned). */
   main: string;
-  /** Optional smaller line below the main text (e.g. the shelf zone). */
-  sub?: string | null;
 }
 
 export interface LabelLayout {
@@ -116,8 +113,10 @@ function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
 
 // Draw one label cell at (x, y) into an existing context. The layout is
 // derived from the cell's own pixel size (any of the LABEL_SIZES at 300 dpi):
-// main text (fill-shrunk to the available width) and an optional sub line
-// left-aligned on the left, QR sized from the label height on the right.
+// one big left-aligned text line (the shelf code / box id) on the left, QR on
+// the right. Short strips (small) keep a height-filling QR and size the text
+// off the label height; tall labels (medium/big) cap the QR at half the
+// height so the text gets the remaining width.
 async function drawLabelCell(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -128,7 +127,8 @@ async function drawLabelCell(
   layout: LabelLayout
 ): Promise<void> {
   const pad = Math.max(4, Math.round(h * 0.064));
-  const qrSize = Math.round(Math.min(h * 0.824, h - 2 * pad, w * 0.5));
+  const tall = h / w > 0.25; // medium/big (35 mm tall) vs the small strip
+  const qrSize = Math.round(Math.min(tall ? h * 0.5 : h * 0.824, h - 2 * pad, w * 0.5));
   const qr = new Image();
   qr.src = await QRCode.toDataURL(cell.qr, {
     width: Math.max(1, Math.round(qrSize * 2)), // render sharp, draw scaled
@@ -143,17 +143,15 @@ async function drawLabelCell(
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = "#0f1720";
-  // Main text: proportional to the label height, but capped by the label width
-  // so wide labels get bigger text and short strips stay legible.
-  const mainFont = Math.round(Math.max(h * 0.256, Math.min(h * 0.5, w * 0.1)));
+  // Main text: tall labels fit ~7 monospace chars (shelf codes) in the text
+  // width, capped at 40% of the label height; short strips stay height-driven.
+  // fillText's maxWidth squeezes anything longer (e.g. long display names).
+  const mainFont = Math.round(
+    tall ? Math.min(h * 0.4, textW / 4.5) : Math.max(h * 0.256, Math.min(h * 0.5, w * 0.1))
+  );
   ctx.font = `700 ${mainFont}px ui-monospace, SFMono-Regular, Menlo, monospace`;
-  ctx.fillText(cell.main, textX, y + h * 0.595, textW);
-  const sub = cell.sub?.trim();
-  if (sub) {
-    ctx.fillStyle = "#4b5563";
-    ctx.font = `${Math.round(mainFont * 0.286)}px ui-monospace, SFMono-Regular, Menlo, monospace`;
-    ctx.fillText(sub, textX, y + h * 0.8, textW);
-  }
+  // Vertically center the single line (cap height ≈ 0.72em).
+  ctx.fillText(cell.main, textX, y + h / 2 + mainFont * 0.36, textW);
 
   if (layout.border) {
     ctx.strokeStyle = "#d1d5db";
@@ -178,12 +176,11 @@ async function renderStockLabelPng(cell: LabelCell, layout: LabelLayout, size?: 
 /** Render one shelf label to a PNG blob for /print/files. */
 export function renderShelfLabelPng(
   code: string,
-  zone?: string | null,
   displayName?: string | null,
   layout?: LabelLayout,
   size?: LabelSizeId
 ): Promise<Blob> {
-  return renderStockLabelPng({ qr: code, main: displayName?.trim() || code, sub: zone }, layout ?? {}, size);
+  return renderStockLabelPng({ qr: code, main: displayName?.trim() || code }, layout ?? {}, size);
 }
 
 /** Render one shelf-box label to a PNG blob for /print/files. */
@@ -261,12 +258,12 @@ async function renderStockBatchPagePng(
 
 /** Render one A4 page of shelf labels to a PNG blob for /print/files. */
 export function renderShelfBatchPagePng(
-  cells: { code: string; zone?: string | null; displayName?: string | null }[],
+  cells: { code: string; displayName?: string | null }[],
   layout?: LabelLayout,
   size?: LabelSizeId
 ): Promise<Blob> {
   return renderStockBatchPagePng(
-    cells.map((c) => ({ qr: c.code, main: c.displayName?.trim() || c.code, sub: c.zone })),
+    cells.map((c) => ({ qr: c.code, main: c.displayName?.trim() || c.code })),
     layout ?? {},
     size
   );

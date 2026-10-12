@@ -1,11 +1,10 @@
 <script setup lang="ts">
 // Batch A4 shelf-label print: the selected shelves are laid out per A4 page
-// (grid depends on the chosen label size; shelf display name + zone
-// left-aligned on the left, QR right per cell), each page rendered to a PNG
-// here and printed via /print/files — one print job per page, each confirmed
-// via waitForPrintJob before reporting success. The printer picker lists the
-// print service's agent printers; the chosen printer is remembered in
-// localStorage.
+// (grid depends on the chosen label size; shelf display name left-aligned on
+// the left, QR right per cell), each page rendered to a PNG here and printed
+// via /print/files — one print job per page, each confirmed via waitForPrintJob
+// before reporting success. The printer picker lists the print service's
+// agent printers; the chosen printer is remembered in localStorage.
 import {
   LABEL_SIZES,
   listPrinters,
@@ -27,7 +26,7 @@ const size = useLabelSize();
 const sizeOptions = LABEL_SIZES.map((s) => ({ value: s.id, label: t(`admin.print.sizes.${s.id}`) }));
 
 const props = defineProps<{
-  items: { code: string; zone?: string | null; displayName?: string | null }[];
+  items: { code: string; displayName?: string | null }[];
 }>();
 const emit = defineEmits<{ close: [] }>();
 

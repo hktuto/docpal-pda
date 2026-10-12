@@ -15,25 +15,25 @@ const { layout: labelLayout } = useWarehouseLabelLayout();
 const printItems = ref<{ title: string; render: (size: LabelSizeId) => Promise<Blob>; filename: string }[] | null>(
   null
 );
-const batchPrintItems = ref<{ code: string; zone?: string | null; displayName?: string | null }[] | null>(null);
+const batchPrintItems = ref<{ code: string; displayName?: string | null }[] | null>(null);
 
 function printOne(row: any) {
   printItems.value = [
     {
       title: row.displayName || row.code,
-      render: (size) => renderShelfLabelPng(row.code, row.zone, row.displayName, labelLayout.value, size),
+      render: (size) => renderShelfLabelPng(row.code, row.displayName, labelLayout.value, size),
       filename: `shelf-label-${row.code}.png`,
     },
   ];
 }
 
 function printSelected(rows: any[], clear: () => void) {
-  batchPrintItems.value = rows.map((r) => ({ code: r.code, zone: r.zone, displayName: r.displayName }));
+  batchPrintItems.value = rows.map((r) => ({ code: r.code, displayName: r.displayName }));
   clear();
 }
 
 function printAll(rows: any[]) {
-  batchPrintItems.value = rows.map((r) => ({ code: r.code, zone: r.zone, displayName: r.displayName }));
+  batchPrintItems.value = rows.map((r) => ({ code: r.code, displayName: r.displayName }));
 }
 
 // Download the shelf label as a PNG with the same layout as the A4 batch
