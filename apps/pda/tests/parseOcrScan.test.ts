@@ -253,18 +253,18 @@ describe("decodeKoaQty", () => {
 });
 
 describe("decodeKoaDateCode", () => {
-  it("decodes month counter + week to WWYY (counter 17 = 2026-07)", () => {
-    expect(decodeKoaDateCode("1723L789")).toBe("2326"); // counter 17 → 2026, week 23
-    expect(decodeKoaDateCode("1114T232")).toBe("1426"); // counter 11 → 2026-01, week 14
-    expect(decodeKoaDateCode("19077387")).toBe("0726"); // counter 19 → 2026-09, week 07
-    expect(decodeKoaDateCode("2352")).toBe("5227"); // counter 23 → 2027-01, week 52
+  it("decodes month counter + day to WWYY (counter 17 = 2026-07)", () => {
+    expect(decodeKoaDateCode("1625H713")).toBe("2626"); // counter 16 → 2026-06, day 25 → 2026-06-25 → week 26
+    expect(decodeKoaDateCode("1723L789")).toBe("3026"); // counter 17 → 2026-07, day 23 → 2026-07-23 → week 30
+    expect(decodeKoaDateCode("1114T232")).toBe("0326"); // counter 11 → 2026-01, day 14 → 2026-01-14 → week 3
+    expect(decodeKoaDateCode("19077387")).toBe("3726"); // counter 19 → 2026-09, day 07 → 2026-09-07 → week 37
   });
 
   it("rejects undecodable values", () => {
     expect(decodeKoaDateCode("L2601A")).toBeUndefined(); // no leading digits
     expect(decodeKoaDateCode("123")).toBeUndefined(); // fewer than 4 digits
-    expect(decodeKoaDateCode("1700X")).toBeUndefined(); // week 00
-    expect(decodeKoaDateCode("1754X")).toBeUndefined(); // week 54
+    expect(decodeKoaDateCode("1700X")).toBeUndefined(); // day 00
+    expect(decodeKoaDateCode("1732X")).toBeUndefined(); // day 32
     expect(decodeKoaDateCode("0023X")).toBeUndefined(); // counter 00
   });
 });
@@ -303,7 +303,7 @@ describe("parseQrCapture", () => {
     const koaWclTemplate = {
       code: "32",
       qrcodeTemplate:
-        "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<dateCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
+        "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
       qrcodeQtyEncoding: "koa_zeros" as const,
       qrcodeDateCodeEncoding: "koa_month_counter" as const,
       brands: ["KOA"],
@@ -315,8 +315,8 @@ describe("parseQrCapture", () => {
     expect(result.matched).toBe(true);
     expect(result.parsed.itemId).toBe("SR732ERTTDR200F");
     expect(result.parsed.qty).toBe(15000); // "153" → 15 × 10^3
-    expect(result.parsed.dateCode).toBe("0726"); // "19077387" → counter 19 → 2026-09, week 07
-    expect(result.parsed.lotCode).toBeUndefined();
+    expect(result.parsed.dateCode).toBe("3726"); // "19077387" → counter 19 → 2026-09, day 07 → 2026-09-07 → ISO week 37
+    expect(result.parsed.lotCode).toBe("19077387");
     expect(result.parsed.wclItemNo).toBe("KOA/SR732ERTTDR200F");
   });
 

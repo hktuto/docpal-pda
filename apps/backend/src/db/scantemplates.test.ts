@@ -22,13 +22,13 @@ before(async () => {
 test("scan-templates: every supplier profile, ordered by supplier_code (null templates included)", async () => {
   await reseed(client);
 
-  // seed: the KOA and KOA+TCG profiles (dateCode + serialNo + wclItemNo groups)
+  // seed: the KOA and KOA+TCG profiles (lotCode + serialNo + wclItemNo groups)
   let rows = await listScanTemplates(client.db);
   assert.deepEqual(rows, [
     {
       supplierCode: "KOA",
       qrTemplate:
-        "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<dateCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
+        "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
       qtyEncoding: "koa_zeros",
       dateCodeEncoding: "koa_month_counter",
       barcodeTypes: null,
@@ -37,7 +37,7 @@ test("scan-templates: every supplier profile, ordered by supplier_code (null tem
     {
       supplierCode: "KOA+TCG",
       qrTemplate:
-        "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<dateCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
+        "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
       qtyEncoding: "koa_zeros",
       dateCodeEncoding: "koa_month_counter",
       barcodeTypes: null,
@@ -77,7 +77,7 @@ test("supplier_profiles: qr_template_config jsonb round-trips (seed + update)", 
       { role: "ignore" },
       { role: "qty" },
       { role: "ignore" },
-      { role: "dateCode" },
+      { role: "lotCode" },
       { role: "serialNo" },
       { role: "wclItemNo" },
     ],

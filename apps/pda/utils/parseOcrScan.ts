@@ -629,24 +629,48 @@ export function decodeKoaQty(encoded: string): number | undefined {
   return result;
 }
 
+/** ISO-8601 week number for a Date. */
+function getIsoWeek(date: Date): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+}
+
+/** ISO-8601 year for a Date (may differ from calendar year at year boundaries). */
+function getIsoYear(date: Date): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  return d.getUTCFullYear();
+}
+
 /**
- * Decode a KOA date-code field (template segment 5, e.g. "1723L789",
- * "1114T232", "19077387") to the system's WWYY date code. Take the leading
- * digit run's first 4 digits: the last 2 are the week, the first 2 are a
- * month counter (1–99) that increments monthly with 17 = 2026-07
- * (16 = 2026-06, 18 = 2026-08, …); the counter's month resolves the year.
- * "1723L789" → week 23, counter 17 → 2026 → "2326".
+ * Decode a KOA date-code field (template segment 5, e.g. "1625H713",
+ * "1723L789", "1114T232") to the system's WWYY date code. Take the leading
+ * digit run's first 4 digits: the first 2 are a month counter (1–99) that
+ * increments monthly with 17 = 2026-07 (16 = 2026-06, 18 = 2026-08, …);
+ * the last 2 are the day of month. Resolve counter → year-month, add the day
+ * to get a calendar date, then convert to ISO week. "1625H713" → counter 16
+ * (2026-06) + day 25 → 2026-06-25 → ISO week 26 → "2626".
  * Keep in sync with apps/backend/src/db/scanParse.ts decodeKoaDateCode.
  */
 export function decodeKoaDateCode(raw: string): string | undefined {
   const digits = raw.match(/^\d+/)?.[0];
   if (!digits || digits.length < 4) return undefined;
   const counter = Number(digits.slice(0, 2));
-  const week = Number(digits.slice(2, 4));
-  if (counter < 1 || counter > 99 || week < 1 || week > 53) return undefined;
-  const totalMonths = 2026 * 12 + 6 + (counter - 17); // 0-based month index, 2026-07 = counter 17
+  const day = Number(digits.slice(2, 4));
+  if (counter < 1 || counter > 99 || day < 1 || day > 31) return undefined;
+  const totalMonths = 2026 * 12 + 6 + (counter - 17);
   const year = Math.floor(totalMonths / 12);
-  return `${digits.slice(2, 4)}${String(year % 100).padStart(2, "0")}`;
+  const month = totalMonths % 12;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  if (day > daysInMonth) return undefined;
+  const date = new Date(year, month, day);
+  const week = getIsoWeek(date);
+  const isoYear = getIsoYear(date);
+  return `${String(week).padStart(2, "0")}${String(isoYear % 100).padStart(2, "0")}`;
 }
 
 /**
@@ -737,11 +761,15 @@ export function parseQrCapture(
       }
     }
 
-    let dateCode: string | undefined = groups.dateCode ?? undefined;
-    if (dateCode && supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_KOA_MONTH_COUNTER) {
-      dateCode = decodeKoaDateCode(dateCode);
-    } else if (dateCode && supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_YYWW) {
-      dateCode = decodeYywwDateCode(dateCode);
+    // KOA: segment 5 is the raw lot code (e.g. "1625H713"); the WWYY date code
+    // is derived from it via koa_month_counter. Older templates may still name
+    // the same segment dateCode — treat that as the lot code too.
+    const rawLotCode = groups.lotCode ?? groups.dateCode ?? undefined;
+    let dateCode: string | undefined = undefined;
+    if (rawLotCode && supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_KOA_MONTH_COUNTER) {
+      dateCode = decodeKoaDateCode(rawLotCode);
+    } else if (rawLotCode && supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_YYWW) {
+      dateCode = decodeYywwDateCode(rawLotCode);
     }
 
     return {
@@ -749,7 +777,7 @@ export function parseQrCapture(
       parsed: {
         itemId: normalizedItemId,
         qty,
-        lotCode: groups.lotCode ?? undefined,
+        lotCode: rawLotCode,
         dateCode,
         coo: groups.coo ?? undefined,
         cow: groups.cow ?? undefined,
@@ -759,7 +787,7 @@ export function parseQrCapture(
       options: {
         itemIds: [normalizedItemId],
         qtys: qty !== undefined ? [qty] : [],
-        lotCodes: groups.lotCode ? [groups.lotCode] : [],
+        lotCodes: rawLotCode ? [rawLotCode] : [],
         dateCodes: dateCode ? [dateCode] : [],
         coos: groups.coo ? [groups.coo] : [],
         cows: groups.cow ? [groups.cow] : [],
