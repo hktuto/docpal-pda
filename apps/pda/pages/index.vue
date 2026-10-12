@@ -99,6 +99,18 @@
         <p class="menu-card__title">{{ $t('home.menu.adHocPutAway.title') }}</p>
       </NuxtLink>
 
+      <NuxtLink v-if="flowSteps['shelf-exchange']" to="/shelf-exchange" class="menu-card">
+        <div class="menu-card__icon menu-card__icon--shelf-exchange">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 3 4 7l4 4"/>
+            <path d="M4 7h16"/>
+            <path d="m16 21 4-4-4-4"/>
+            <path d="M20 17H4"/>
+          </svg>
+        </div>
+        <p class="menu-card__title">{{ $t('home.menu.shelfExchange.title') }}</p>
+      </NuxtLink>
+
     </div>
   </div>
 </template>
@@ -186,6 +198,7 @@ const { flowSteps } = useFlowSteps();
 .menu-card__icon--verify2 { background: linear-gradient(135deg, #06b6d4, #0891b2); }
 .menu-card__icon--stock-search { background: linear-gradient(135deg, #ec4899, #db2777); }
 .menu-card__icon--adhoc-putaway { background: linear-gradient(135deg, #f97316, #ea580c); }
+.menu-card__icon--shelf-exchange { background: linear-gradient(135deg, #0d9488, #0f766e); }
 
 .menu-card__title {
   margin: 0;

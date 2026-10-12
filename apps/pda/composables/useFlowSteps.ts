@@ -23,6 +23,7 @@ const steps = ref<Record<FlowStep, boolean>>({
   verify: true,
   "stock-search": true,
   "ad-hoc-put-away": true,
+  "shelf-exchange": true,
 });
 
 // Resolved steps.put-away config (GET /config putAway). Defaults = manual

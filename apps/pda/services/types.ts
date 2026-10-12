@@ -841,7 +841,8 @@ export type FlowStep =
   | "measuring"
   | "verify"
   | "stock-search"
-  | "ad-hoc-put-away";
+  | "ad-hoc-put-away"
+  | "shelf-exchange";
 
 export interface FlowConfig {
   flowSteps: Record<FlowStep, boolean>;
@@ -1175,4 +1176,36 @@ export interface AdHocPutAwayLocation {
 /** GET /ad-hoc-put-away/brands response. */
 export interface AdHocPutAwayBrandsResult {
   brands: string[];
+}
+
+// ------------------------------------------------------------------
+// Shelf exchange — DTOs matching apps/backend (:3002), see
+// docs/backend/api-design.md §Shelf exchange. Move stock from one shelf
+// to another: scan source shelf → item label (qty from the label) →
+// target shelf → confirm.
+// ------------------------------------------------------------------
+
+/** POST /shelf-exchange/preview response — the resolved source lot. */
+export interface ShelfExchangePreview {
+  lotId: string;
+  partNo: string;
+  wclItemNo: string | null;
+  dateCode: string | null;
+  lotCode: string | null;
+  coo: string | null;
+  cow: string | null;
+  totalQty: number;
+  availableQty: number;
+  qty: number;
+}
+
+/** POST /shelf-exchange response. */
+export interface ShelfExchangeResult {
+  id: string;
+  sourceShelfCode: string;
+  targetShelfCode: string;
+  partNo: string;
+  qty: number;
+  sourceRemaining: number;
+  targetTotal: number;
 }

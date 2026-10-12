@@ -954,3 +954,37 @@ trigger — PDA-local, admin-resolved state.
 | last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
 
 Note: index `idx_outdated_scan_warnings_order` on `(order_kind, order_id)`.
+
+# Shelf exchange (`schema/shelfExchange.ts`)
+
+## shelf_exchanges
+
+One row per confirmed shelf→shelf stock move (2026-10-12,
+`docs/superpowers/specs/2026-10-12-shelf-exchange-design.md`). Audit
+visibility only — the authoritative stock record lives in `inventory_lots`
+(the qty moves between the source and target lots) + `inventory_transactions`
+(two `MOVE` ledger rows per move). No `sync_events` trigger — the moved
+stock is already synced via the lot/ledger writes. Future admin history UI
+reads this table (out of scope in the initial spec).
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Exchange id (UUID v7) |
+| source_shelf_code | text NOT NULL | Shelf the stock left (FK → `shelves.code`) |
+| target_shelf_code | text NOT NULL | Shelf the stock went to (FK → `shelves.code`) |
+| source_lot_id | text NOT NULL | Lot decremented (FK → `inventory_lots.id`) |
+| target_lot_id | text NOT NULL | Lot incremented — find-or-create merge target (FK → `inventory_lots.id`) |
+| part_no | text NOT NULL | Plain text (no FK — `parts.part_no` is not unique) |
+| wcl_item_no | text | Business key of the part |
+| qty | integer NOT NULL | Moved quantity |
+| date_code | text | Label snapshot at scan time |
+| lot_code | text | Label snapshot at scan time |
+| coo | text | Label snapshot at scan time |
+| cow | text | Label snapshot at scan time |
+| org_id | integer | Copied from the source lot |
+| sub_inventory_code | text | Copied from the source lot |
+| actor_id | text NOT NULL | Actor id from the JWT |
+| created_date | timestamp NOT NULL DEFAULT now() | Move time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
+
+Note: indexes on `source_shelf_code`, `target_shelf_code`, `part_no`, `actor_id`, and `created_date`.

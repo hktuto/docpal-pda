@@ -47,6 +47,8 @@ import type {
   AdHocPutAwayItem,
   AdHocPutAwayResult,
   AdHocPutAwayLocation,
+  ShelfExchangePreview,
+  ShelfExchangeResult,
 } from "./types";
 import { createBackendWarehouseService } from "./adapters/backendWarehouse";
 
@@ -220,6 +222,27 @@ export interface WarehouseService {
     shelfCode: string;
     items: AdHocPutAwayItem[];
   }): Promise<AdHocPutAwayResult>;
+
+  // Shelf exchange (spec 2026-10-12-shelf-exchange-design.md) — move stock
+  // from one shelf to another: scan source shelf → item label (qty from the
+  // label) → target shelf → confirm. preview resolves + validates the source
+  // lot right after the item scan; commit performs the move atomically.
+  previewShelfExchange(input: {
+    sourceShelfCode: string;
+    partNo?: string;
+    wclItemNo?: string | null;
+    qty: number;
+    dateCode?: string | null;
+    lotCode?: string | null;
+    coo?: string | null;
+    cow?: string | null;
+  }): Promise<ShelfExchangePreview>;
+  commitShelfExchange(input: {
+    sourceShelfCode: string;
+    targetShelfCode: string;
+    lotId: string;
+    qty: number;
+  }): Promise<ShelfExchangeResult>;
 }
 
 export interface CreateWarehouseServiceOptions {

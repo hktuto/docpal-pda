@@ -20,6 +20,7 @@ export default {
     verify: "Verify",
     stockSearch: "Stock Search",
     adHocPutAway: "Ad-hoc Put-away",
+    shelfExchange: "Shelf Exchange",
     settings: "Settings"
   },
   actions: {
@@ -112,7 +113,8 @@ export default {
       measuring: { title: "Measuring" },
       verify: { title: "Verify" },
       stockSearch: { title: "Stock Search" },
-      adHocPutAway: { title: "Ad-hoc Put-away" }
+      adHocPutAway: { title: "Ad-hoc Put-away" },
+      shelfExchange: { title: "Shelf Exchange" }
     }
   },
   login: {
@@ -469,6 +471,48 @@ export default {
     shelfClear: "Clear shelf",
     shelfSelected: "Shelf {shelf} selected",
     locationRequired: "Please select a location for all items",
+  },
+  shelfExchange: {
+    stepSource: "Scan the source shelf QR code",
+    stepItem: "Scan the item label in the shelf (qty comes from the label)",
+    stepTarget: "Scan the target shelf QR code",
+    sourceShelf: "Source shelf",
+    targetShelf: "Target shelf",
+    matchedItem: "Matched item",
+    clear: "Clear",
+    sourceSelected: "Source shelf {shelf} selected",
+    itemMatched: "Matched {partNo} on the source shelf",
+    moveDone: "Moved {qty} pcs of {partNo} to {shelf}",
+    fields: {
+      partNo: "Part",
+      wclItemNo: "WCL item no",
+      dateCode: "Date code",
+      lotCode: "Lot code",
+      coo: "COO",
+      cow: "COW",
+      qty: "Qty to move",
+      available: "Available",
+    },
+    confirm: {
+      title: "Confirm shelf exchange",
+      partNo: "Part",
+      wclItemNo: "WCL item no",
+      dateCode: "Date code",
+      lotCode: "Lot code",
+      coo: "COO",
+      cow: "COW",
+      qty: "Qty",
+      confirm: "Move",
+      committing: "Moving…",
+    },
+    errors: {
+      scanSourceFirst: "Scan the source shelf first",
+      scanParse: "Could not parse the label",
+      same_shelf: "Target shelf must differ from the source shelf",
+      shelf_not_found: "Shelf not found",
+      no_stock_at_location: "No matching stock on that shelf",
+      insufficient_available_qty: "Not enough unallocated stock on that shelf",
+    },
   },
   goodsVerify: {
     title: "Goods Verify",
@@ -1918,7 +1962,8 @@ export default {
           "goods-verify": "Goods Verify",
           measuring: "Measuring",
           verify: "Verify",
-          "stock-search": "Stock Search"
+          "stock-search": "Stock Search",
+          "shelf-exchange": "Shelf Exchange"
         },
         pickingSection: "Picking allocation",
         allowDockStock: "Allow allocation from receiving dock stock (before put-away)",

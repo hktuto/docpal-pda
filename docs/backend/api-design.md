@@ -320,6 +320,31 @@ Read-only admin console endpoints (spec `2026-10-08-ad-hoc-put-away-admin-design
 | `GET /admin/ad-hoc-put-aways` | List batches with pagination + filters. Query: `page`, `pageSize`, `supplierCode`, `shelfCode`, `from`, `to`. Response: `{rows: [{id, supplierCode, shelfCode, orgId, subInventoryCode, totalQty, itemCount, actorId, createdDate}], total}`. |
 | `GET /admin/ad-hoc-put-aways/:id` | Batch detail with full item list. Response: same fields as a list row plus `items: [{partNo, wclItemNo, qty, dateCode, lotCode, coo, cow, serialNo}]`. 404 if not found. |
 
+## Shelf exchange
+
+Implemented: `POST /shelf-exchange/preview`, `POST /shelf-exchange` (see
+`apps/backend/src/routes/shelfExchange.ts` + `src/db/shelfExchange.ts`;
+spec `2026-10-12-shelf-exchange-design.md`). Scan-driven shelf→shelf stock
+move on the PDA: scan source shelf → item label (qty comes from the label,
+no manual entry) → target shelf → confirm. Preview resolves the lot on the
+source shelf (space-insensitive part-key match over `itemId`/`wclItemNo`,
+label batch fields must match, FIFO by `date_code`, capped at available =
+`total_qty − allocated_qty`) so mismatches surface before the target scan.
+Commit re-validates in a tx (`FOR UPDATE` on the source lot), decrements the
+source lot (deleted at zero), find-or-creates the target lot on the unique
+lot index key (`part_no + date_code + coo + cow + shelf_code + box_id NULL +
+org_id + sub_inventory_code` — merged lot keeps the target's `lot_code`),
+writes two `MOVE` `inventory_transactions` rows (−qty source, +qty target,
+`reference_type: "shelf_exchange"`) plus a `shelf_exchanges` audit row.
+The lot keeps its org/sub-inventory pair; any existing shelf is a valid
+target. Allocated stock is not movable (409 `insufficient_available_qty`).
+Schedules `allocateAll` in the background.
+
+| Endpoint | Description |
+|---|---|
+| `POST /shelf-exchange/preview` | `{sourceShelfCode, partNo?, wclItemNo?, qty, dateCode?, lotCode?, coo?, cow?}` → `{lotId, partNo, wclItemNo, dateCode, lotCode, coo, cow, totalQty, availableQty, qty}`, 200. 404 `shelf_not_found`; 409 `no_stock_at_location` (no lot on the source shelf matches the label); 409 `insufficient_available_qty` (matched lot's available < label qty). |
+| `POST /shelf-exchange` | `{sourceShelfCode, targetShelfCode, lotId, qty}` → `{id, sourceShelfCode, targetShelfCode, partNo, qty, sourceRemaining, targetTotal}`, 201. 400 `same_shelf`; 404 `shelf_not_found` (either shelf); 409 `no_stock_at_location` / `insufficient_available_qty` (re-validated under lock). Schedules `allocateAll` on success. |
+
 ## Picking
 
 Implemented: `GET /picking-orders`, `GET /picking-orders/:id`,

@@ -20,6 +20,7 @@ export default {
     verify: "覆核",
     stockSearch: "庫存查詢",
     adHocPutAway: "臨時上架",
+    shelfExchange: "貨架調撥",
     settings: "設定"
   },
   actions: {
@@ -112,7 +113,8 @@ export default {
       measuring: { title: "測量" },
       verify: { title: "覆核" },
       stockSearch: { title: "庫存查詢" },
-      adHocPutAway: { title: "臨時上架" }
+      adHocPutAway: { title: "臨時上架" },
+      shelfExchange: { title: "貨架調撥" }
     }
   },
   login: {
@@ -469,6 +471,48 @@ export default {
     shelfClear: "清除貨架",
     shelfSelected: "已選擇貨架 {shelf}",
     locationRequired: "請為所有項目選擇位置",
+  },
+  shelfExchange: {
+    stepSource: "掃描源貨架二維碼",
+    stepItem: "掃描貨架上的商品標籤（數量來自標籤）",
+    stepTarget: "掃描目標貨架二維碼",
+    sourceShelf: "源貨架",
+    targetShelf: "目標貨架",
+    matchedItem: "匹配的商品",
+    clear: "清除",
+    sourceSelected: "已選擇源貨架 {shelf}",
+    itemMatched: "已在源貨架匹配 {partNo}",
+    moveDone: "已將 {qty} 件 {partNo} 移動到 {shelf}",
+    fields: {
+      partNo: "料號",
+      wclItemNo: "WCL 料號",
+      dateCode: "日期碼",
+      lotCode: "批次號",
+      coo: "原產地",
+      cow: "原產國",
+      qty: "移動數量",
+      available: "可用數量",
+    },
+    confirm: {
+      title: "確認貨架調撥",
+      partNo: "料號",
+      wclItemNo: "WCL 料號",
+      dateCode: "日期碼",
+      lotCode: "批次號",
+      coo: "原產地",
+      cow: "原產國",
+      qty: "數量",
+      confirm: "移動",
+      committing: "移動中…",
+    },
+    errors: {
+      scanSourceFirst: "請先掃描源貨架",
+      scanParse: "無法解析標籤",
+      same_shelf: "目標貨架不能與源貨架相同",
+      shelf_not_found: "貨架不存在",
+      no_stock_at_location: "該貨架上沒有匹配的庫存",
+      insufficient_available_qty: "該貨架上未分配庫存不足",
+    },
   },
   goodsVerify: {
     title: "查貨",
@@ -1915,7 +1959,8 @@ export default {
           "goods-verify": "查貨",
           measuring: "度箱",
           verify: "覆核",
-          "stock-search": "庫存查詢"
+          "stock-search": "庫存查詢",
+          "shelf-exchange": "貨架調撥"
         },
         pickingSection: "執貨分配",
         allowDockStock: "允許分配收貨區存貨（上架前）",

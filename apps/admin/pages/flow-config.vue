@@ -9,7 +9,7 @@ import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 const flow = useFlowApi();
 const { t } = useI18n();
 
-const STEPS = ["receiving", "put-away", "picking", "goods-verify", "measuring", "verify", "stock-search"] as const;
+const STEPS = ["receiving", "put-away", "picking", "goods-verify", "measuring", "verify", "stock-search", "shelf-exchange"] as const;
 
 interface PatternDraft {
   poNoPattern: string;

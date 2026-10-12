@@ -47,6 +47,8 @@ import type {
   AdHocPutAwayItem,
   AdHocPutAwayResult,
   AdHocPutAwayLocation,
+  ShelfExchangePreview,
+  ShelfExchangeResult,
 } from "../types";
 import type { WarehouseService } from "../warehouse";
 import { createApiClient } from "../apiClient";
@@ -560,6 +562,28 @@ export function createBackendWarehouseService(
       items: AdHocPutAwayItem[];
     }): Promise<AdHocPutAwayResult> {
       return client.post("/ad-hoc-put-away", input);
+    },
+    // Shelf exchange (spec 2026-10-12-shelf-exchange-design.md): preview
+    // resolves the source lot for a scanned label; commit moves the qty.
+    async previewShelfExchange(input: {
+      sourceShelfCode: string;
+      partNo?: string;
+      wclItemNo?: string | null;
+      qty: number;
+      dateCode?: string | null;
+      lotCode?: string | null;
+      coo?: string | null;
+      cow?: string | null;
+    }): Promise<ShelfExchangePreview> {
+      return client.post("/shelf-exchange/preview", input);
+    },
+    async commitShelfExchange(input: {
+      sourceShelfCode: string;
+      targetShelfCode: string;
+      lotId: string;
+      qty: number;
+    }): Promise<ShelfExchangeResult> {
+      return client.post("/shelf-exchange", input);
     },
   };
 }
