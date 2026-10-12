@@ -954,6 +954,7 @@ const {
     <ReceivingPartSearchModal
       :open="availOpen"
       :item="availItem"
+      :receiving-order-id="String(orderId)"
       :context-org-id="availOrgId"
       @close="availOpen = false"
       @allocated="onSearchAllocated"

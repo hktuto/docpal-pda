@@ -315,7 +315,7 @@ async function loadReceivingSources(dbOrTx: DbOrTx, d: DemandRow): Promise<Recei
  * fully-scanned order has no demand rows but must read 'allocated').
  * last_update_date only bumps where the value actually changes.
  */
-async function refreshAllocationStatus(dbOrTx: DbOrTx): Promise<void> {
+export async function refreshAllocationStatus(dbOrTx: DbOrTx): Promise<void> {
   await dbOrTx.execute(sql`
     UPDATE picking_orders po
     SET allocation_status = agg.new_status, last_update_date = now()
@@ -839,6 +839,156 @@ export async function removePickingAllocation(
 }
 
 /**
+ * Reclaim `shortfall` qty from OTHER picking items' non-manual allocations on
+ * one source (a stock lot or a receiving invoice item), oldest first. Victims
+ * whose order holds a live PDA work lock are skipped — the operator's open scan
+ * session scans against those rows — and manual pins are never stolen. Each
+ * stolen row gets a RESERVE-release ledger row, a `allocation_stolen` audit
+ * entry and an `allocation.computed` event on the victim order.
+ *
+ * With `override: false` any shortfall is refused outright (409
+ * `insufficient_available`); the caller decides when overriding is allowed.
+ * Throws 409 `insufficient_available` if the shortfall cannot be covered in
+ * full, so the caller's transaction rolls back.
+ *
+ * Shared by the single-row `addManualPickingAllocation` and the batch
+ * admin allocate form (`pickingAllocateForm.ts`).
+ */
+export async function stealAllocationsOnSource(
+  tx: DbOrTx,
+  input: {
+    inventoryLotId: string | null;
+    receivingInvoiceItemId: string | null;
+    shortfall: number;
+    override: boolean;
+    thiefOrderId: string;
+    thiefItemId: string;
+    actorId: string;
+  }
+): Promise<void> {
+  if (input.shortfall <= 0) return;
+  if (!input.override) {
+    throw new HTTPException(409, { message: "insufficient_available" });
+  }
+  const pickingOrderId = input.thiefOrderId;
+  const pickingItemId = input.thiefItemId;
+  const actorId = input.actorId;
+  let shortfall = input.shortfall;
+    const victims = await queryAll<{
+      id: string;
+      qty: number;
+      victimItemId: string;
+      victimOrderId: string;
+      victimOrderStatus: string;
+      workingBy: string | null;
+      workingAt: Date | null;
+      partNo: string;
+      dateCode: string | null;
+      lotCode: string | null;
+      coo: string | null;
+      cow: string | null;
+      shelfCode: string | null;
+      boxId: string | null;
+    }>(
+      tx,
+      sql`SELECT a.id, a.qty,
+                 pi.id AS "victimItemId",
+                 po.id AS "victimOrderId",
+                 po.status AS "victimOrderStatus",
+                 po.working_by AS "workingBy",
+                 po.working_at AS "workingAt",
+                 COALESCE(il.part_no, rii.part_no, pi.part_no) AS "partNo",
+                 COALESCE(il.date_code, rii.date_code) AS "dateCode",
+                 COALESCE(il.lot_code, rii.lot_code) AS "lotCode",
+                 COALESCE(il.coo, rii.coo) AS "coo",
+                 COALESCE(il.cow, rii.cow) AS "cow",
+                 il.shelf_code AS "shelfCode",
+                 COALESCE(il.box_id, rii.ctn_no) AS "boxId"
+          FROM allocations a
+          JOIN picking_items pi ON pi.id = a.picking_item_id
+          JOIN picking_orders po ON po.id = pi.picking_order_id
+          LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
+          LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
+          WHERE a.manual = false
+            AND a.picking_item_id <> ${pickingItemId}
+            AND (a.inventory_lot_id = ${input.inventoryLotId ?? null}
+             OR a.receiving_invoice_item_id = ${input.receivingInvoiceItemId ?? null})
+          ORDER BY a.created_date ASC`
+    );
+    for (const v of victims) {
+      if (shortfall <= 0) break;
+      if (v.qty <= 0) continue;
+      if (v.workingBy && v.workingAt && v.workingAt >= workLockExpiry()) continue;
+      const take = Math.min(v.qty, shortfall);
+      if (take === v.qty) {
+        await tx.execute(sql`DELETE FROM allocations WHERE id = ${v.id}`);
+      } else {
+        await tx.execute(sql`UPDATE allocations SET qty = qty - ${take} WHERE id = ${v.id}`);
+      }
+      shortfall -= take;
+
+      await tx.insert(inventoryTransactions).values({
+        id: newId(),
+        inventoryLotId: input.inventoryLotId ?? null,
+        partNo: v.partNo,
+        shelfCode: v.shelfCode,
+        boxId: v.boxId,
+        txnType: "RESERVE",
+        qtyType: "reserved",
+        qtyDelta: -take,
+        dateCode: v.dateCode,
+        lotCode: v.lotCode,
+        coo: v.coo,
+        cow: v.cow,
+        referenceType: "allocation",
+        referenceId: v.id,
+        receivingInvoiceItemId: input.receivingInvoiceItemId ?? null,
+        actorId,
+        txnReason: "admin: override steal",
+        txnAt: now(),
+      });
+
+      await recomputePickingItem(tx, v.victimItemId);
+
+      await logTransition(tx, {
+        entityType: "picking_order",
+        entityId: v.victimOrderId,
+        fromState: v.victimOrderStatus,
+        toState: v.victimOrderStatus,
+        actorId,
+        metadata: {
+          action: "allocation_stolen",
+          allocationId: v.id,
+          itemId: v.victimItemId,
+          partNo: v.partNo,
+          qty: take,
+          thiefOrderId: pickingOrderId,
+          thiefItemId: pickingItemId,
+        },
+      });
+
+      await emitEvent(tx, {
+        type: "allocation.computed",
+        topics: ["/picking-orders"],
+        data: {
+          scope: "picking-order-item",
+          pickingOrderId: v.victimOrderId,
+          pickingItemId: v.victimItemId,
+          allocationId: v.id,
+          action: "stolen",
+          qty: take,
+        },
+      });
+    }
+    if (shortfall > 0) {
+      throw new HTTPException(409, { message: "insufficient_available" });
+    }
+    if (input.inventoryLotId) {
+      await recomputeLot(tx, input.inventoryLotId);
+    }
+}
+
+/**
  * Admin "manual allocation" (availability modal Allocate): pin one allocation
  * row for a picking item against a specific stock lot or receiving invoice
  * item, in ANY location (admins may override the engine's location pairing).
@@ -966,125 +1116,15 @@ export async function addManualPickingAllocation(
       source = { ...recv, shelfCode: null };
     }
     if (qty > source.available) {
-      if (!input.override) {
-        throw new HTTPException(409, { message: "insufficient_available" });
-      }
-      // Reclaim the shortfall from OTHER items' non-manual allocations on this
-      // source, oldest first. Locked victim orders are skipped (the PDA's open
-      // scan session scans against those rows); manual pins are never stolen.
-      let shortfall = qty - source.available;
-      const victims = await queryAll<{
-        id: string;
-        qty: number;
-        victimItemId: string;
-        victimOrderId: string;
-        victimOrderStatus: string;
-        workingBy: string | null;
-        workingAt: Date | null;
-        partNo: string;
-        dateCode: string | null;
-        lotCode: string | null;
-        coo: string | null;
-        cow: string | null;
-        shelfCode: string | null;
-        boxId: string | null;
-      }>(
-        tx,
-        sql`SELECT a.id, a.qty,
-                   pi.id AS "victimItemId",
-                   po.id AS "victimOrderId",
-                   po.status AS "victimOrderStatus",
-                   po.working_by AS "workingBy",
-                   po.working_at AS "workingAt",
-                   COALESCE(il.part_no, rii.part_no, pi.part_no) AS "partNo",
-                   COALESCE(il.date_code, rii.date_code) AS "dateCode",
-                   COALESCE(il.lot_code, rii.lot_code) AS "lotCode",
-                   COALESCE(il.coo, rii.coo) AS "coo",
-                   COALESCE(il.cow, rii.cow) AS "cow",
-                   il.shelf_code AS "shelfCode",
-                   COALESCE(il.box_id, rii.ctn_no) AS "boxId"
-            FROM allocations a
-            JOIN picking_items pi ON pi.id = a.picking_item_id
-            JOIN picking_orders po ON po.id = pi.picking_order_id
-            LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
-            LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
-            WHERE a.manual = false
-              AND a.picking_item_id <> ${pickingItemId}
-              AND (a.inventory_lot_id = ${input.inventoryLotId ?? null}
-               OR a.receiving_invoice_item_id = ${input.receivingInvoiceItemId ?? null})
-            ORDER BY a.created_date ASC`
-      );
-      for (const v of victims) {
-        if (shortfall <= 0) break;
-        if (v.qty <= 0) continue;
-        if (v.workingBy && v.workingAt && v.workingAt >= workLockExpiry()) continue;
-        const take = Math.min(v.qty, shortfall);
-        if (take === v.qty) {
-          await tx.execute(sql`DELETE FROM allocations WHERE id = ${v.id}`);
-        } else {
-          await tx.execute(sql`UPDATE allocations SET qty = qty - ${take} WHERE id = ${v.id}`);
-        }
-        shortfall -= take;
-
-        await tx.insert(inventoryTransactions).values({
-          id: newId(),
-          inventoryLotId: input.inventoryLotId ?? null,
-          partNo: v.partNo,
-          shelfCode: v.shelfCode,
-          boxId: v.boxId,
-          txnType: "RESERVE",
-          qtyType: "reserved",
-          qtyDelta: -take,
-          dateCode: v.dateCode,
-          lotCode: v.lotCode,
-          coo: v.coo,
-          cow: v.cow,
-          referenceType: "allocation",
-          referenceId: v.id,
-          receivingInvoiceItemId: input.receivingInvoiceItemId ?? null,
-          actorId,
-          txnReason: "admin: override steal",
-          txnAt: now(),
-        });
-
-        await recomputePickingItem(tx, v.victimItemId);
-
-        await logTransition(tx, {
-          entityType: "picking_order",
-          entityId: v.victimOrderId,
-          fromState: v.victimOrderStatus,
-          toState: v.victimOrderStatus,
-          actorId,
-          metadata: {
-            action: "allocation_stolen",
-            allocationId: v.id,
-            itemId: v.victimItemId,
-            partNo: v.partNo,
-            qty: take,
-            thiefOrderId: pickingOrderId,
-            thiefItemId: pickingItemId,
-          },
-        });
-
-        await emitEvent(tx, {
-          type: "allocation.computed",
-          topics: ["/picking-orders"],
-          data: {
-            scope: "picking-order-item",
-            pickingOrderId: v.victimOrderId,
-            pickingItemId: v.victimItemId,
-            allocationId: v.id,
-            action: "stolen",
-            qty: take,
-          },
-        });
-      }
-      if (shortfall > 0) {
-        throw new HTTPException(409, { message: "insufficient_available" });
-      }
-      if (input.inventoryLotId) {
-        await recomputeLot(tx, input.inventoryLotId);
-      }
+      await stealAllocationsOnSource(tx, {
+        inventoryLotId: input.inventoryLotId ?? null,
+        receivingInvoiceItemId: input.receivingInvoiceItemId ?? null,
+        shortfall: qty - source.available,
+        override: input.override === true,
+        thiefOrderId: pickingOrderId,
+        thiefItemId: pickingItemId,
+        actorId,
+      });
     }
 
     // Total allocated for the item must not exceed its open qty.

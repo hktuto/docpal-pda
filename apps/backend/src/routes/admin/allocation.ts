@@ -5,6 +5,8 @@ import { db } from "../../db.js";
 import { queryGet } from "../../db/query.js";
 import { allocateAll, allocateForPickingOrder, allocateForReceivingOrder, addManualPickingAllocation, removePickingAllocation } from "../../db/allocate.js";
 import { actorFrom } from "../../auth/middleware.js";
+import { reallocateReceivingItemDemand } from "../../db/receivingReallocate.js";
+import { allocatePickingItemFromSources, type AllocateFormRow } from "../../db/pickingAllocateForm.js";
 
 // Manual allocation triggers for the admin console (spec
 // docs/superpowers/specs/2026-09-14-admin-allocation-buttons-design.md).
@@ -65,6 +67,59 @@ adminAllocationRoute.post("/picking-orders/:id/items/:itemId/allocations", async
       receivingInvoiceItemId: body.receivingInvoiceItemId,
       override: body.override === true,
     },
+    actorFrom(c).id
+  );
+  return c.json(result);
+});
+
+// "Confirm" on the availability modal: apply EVERY row of the picking-item
+// allocate form in one all-or-nothing transaction. Body
+// `{rows: [{inventoryLotId? | receivingInvoiceItemId?, qty, override?}]}`
+// where each `qty` is the DESIRED FINAL total from that source (0 releases
+// it); sources absent from the body keep their current value (the dialog
+// filters rows by date code and location match, so an invisible source must
+// never be released). 400 invalid_qty / source_required / duplicate_source,
+// 404 *_not_found, 409 lock_held / over_allocation / allocate_rejected
+// (per-row `key` = `l:<lotId>` | `r:<receivingItemId>`, reasons:
+// insufficient_available). `override: true` on a row reclaims the shortfall
+// above the source's availability from other orders' non-manual allocations.
+adminAllocationRoute.post("/picking-orders/:id/items/:itemId/allocate-form", async (c) => {
+  const body = await c.req.json<{ rows?: AllocateFormRow[] }>();
+  const rows = (body.rows ?? []).map((r) => ({
+    inventoryLotId: r.inventoryLotId ?? null,
+    receivingInvoiceItemId: r.receivingInvoiceItemId ?? null,
+    qty: Number(r.qty),
+    override: r.override === true,
+  }));
+  const result = await allocatePickingItemFromSources(
+    db,
+    c.req.param("id"),
+    c.req.param("itemId"),
+    rows,
+    actorFrom(c).id
+  );
+  return c.json(result);
+});
+
+// "Re-allocate this item" form in the receiving-detail search dialog:
+// redistribute the receiving item's dock stock across open picking demand in
+// one all-or-nothing transaction. Body `{rows: [{pickingItemId, qty}]}` where
+// each `qty` is the DESIRED FINAL total from this receiving item (0 releases
+// the row); rows absent from the body keep their current value.
+// 400 invalid_qty / duplicate_picking_item, 404 receiving_invoice_item_not_found,
+// 409 reallocate_rejected (per-row reasons: order_not_open / lock_held /
+// over_allocation / picking_item_not_found) / insufficient_available.
+adminAllocationRoute.post("/receiving-orders/:id/items/:itemId/reallocate-demand", async (c) => {
+  const body = await c.req.json<{ rows?: { pickingItemId?: string; qty?: number }[] }>();
+  const rows = (body.rows ?? []).map((r) => ({
+    pickingItemId: String(r.pickingItemId ?? ""),
+    qty: Number(r.qty),
+  }));
+  const result = await reallocateReceivingItemDemand(
+    db,
+    c.req.param("id"),
+    c.req.param("itemId"),
+    rows,
     actorFrom(c).id
   );
   return c.json(result);

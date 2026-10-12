@@ -1,14 +1,23 @@
 <script setup lang="ts">
 import type { PartAvailabilityStockRow, PartDemandRow, ReceivingItemRow } from "~/utils/flowApi";
 
-// Receiving-side part search + allocate dialog (replaces the row's separate
-// Allocate action): the part's open PICKING demand (only rows matching this
-// item's org/sub-inventory via PartDemandTables, qty input + Allocate per row
-// — pins a MANUAL allocation sourced from this receiving item) plus related
-// stock lots (read-only).
+// Receiving-side part search dialog: redistribute ONE receiving item's dock
+// stock across the part's open picking demand.
+//
+// This is a final-state form (spec
+// docs/superpowers/specs/2026-10-12-admin-receiving-reallocate-form-design.md):
+// every row states the total this receiving item should hold on that picking
+// item afterwards, and the whole set is committed in one all-or-nothing call.
+// Releasing before allocating is what lets an admin move qty onto a row that
+// is already fully allocated — the per-item over-allocation guard can never be
+// hit, because we only add to a row that has room below its own requirement.
+//
+// The related-stock table below is unchanged (read-only context).
 const props = defineProps<{
   open: boolean;
   item: ReceivingItemRow | null;
+  /** Owning receiving order — the re-allocation route is keyed on it. */
+  receivingOrderId: string;
   /** Fallback org when the item carries none (pre-arrival). */
   contextOrgId?: number | null;
 }>();
@@ -24,67 +33,81 @@ const { t } = useI18n();
 const demand = ref<PartDemandRow[]>([]);
 const stock = ref<PartAvailabilityStockRow[]>([]);
 const loading = ref(false);
+const saving = ref(false);
 const error = ref("");
 const dismiss = useOverlayDismiss(() => emit("close"));
 // Stock-table sort (shared options/ordering with the picking-side modal).
 const stockSort = ref<StockSortKey>("date-code");
 const sortedStock = computed(() => sortStockRows(stock.value, stockSort.value));
 
-// Per-demand-row qty inputs, busy flags, and qty allocated this session.
-const qtyInputs = ref<Record<string, number>>({});
-const allocating = ref<Record<string, boolean>>({});
-const sessionUsed = ref<Record<string, number>>({});
-const sessionTotal = ref(0);
+// Desired final totals per picking item. Unset = "keep what it is now".
+const plan = ref<Record<string, number>>({});
 
 const orgId = computed(() => props.item?.orgId ?? props.contextOrgId ?? null);
 const subInventory = computed(() => props.item?.subInventoryCode ?? null);
 
-// Remaining qty this receiving item can still source (received − picked −
-// allocated − allocated this session).
-const receivingLeft = computed(() => {
+/** The pool this form redistributes: received − picked. */
+const poolSize = computed(() => {
   const row = props.item;
-  if (!row) return 0;
-  return Math.max(0, row.receivedQty - row.pickedQty - row.allocatedQty - sessionTotal.value);
+  return row ? row.receivedQty - row.pickedQty : 0;
 });
+/** Currently distributed across the listed rows. */
+const heldTotal = computed(() => demand.value.reduce((sum, d) => sum + (d.matched ? d.fromItemQty : 0), 0));
 
-function demandLeft(d: PartDemandRow): number {
-  return Math.max(0, d.remainingQty - (sessionUsed.value[d.pickingItemId] ?? 0));
+function planned(d: PartDemandRow): number {
+  const v = plan.value[d.pickingItemId];
+  return v === undefined ? d.fromItemQty : v;
 }
-function demandCap(d: PartDemandRow): number {
-  return Math.max(0, Math.min(demandLeft(d), receivingLeft.value));
+function plannedTotal(): number {
+  return demand.value.reduce((sum, d) => sum + (d.matched ? planned(d) : 0), 0);
 }
-function canAllocate(d: PartDemandRow): boolean {
-  const q = qtyInputs.value[d.pickingItemId];
-  return Number.isInteger(q) && q >= 1 && q <= demandCap(d) && !allocating.value[d.pickingItemId];
+function rowCap(d: PartDemandRow): number {
+  return Math.max(0, d.qty - d.pickedQty);
+}
+const formInvalid = computed(
+  () => plannedTotal() > poolSize.value || demand.value.some((d) => d.matched && !d.locked && planned(d) > rowCap(d))
+);
+const formDirty = computed(() => demand.value.some((d) => d.matched && !d.locked && planned(d) !== d.fromItemQty));
+/** A live work lock would reject the whole batch, so say so up front. */
+const hasLocked = computed(() => demand.value.some((d) => d.matched && d.locked));
+const canSubmit = computed(() => !formInvalid.value && formDirty.value && !hasLocked.value && !saving.value);
+
+function highlight(row: { orgId: number | null; subInventoryCode: string | null }): boolean {
+  return row.orgId === orgId.value && row.subInventoryCode === subInventory.value;
 }
 
-async function allocate(d: PartDemandRow) {
+function rowReasonLabel(reason: string): string {
+  return t(`admin.pages.receiving.reallocReasons.${reason}`);
+}
+
+async function submit() {
   const row = props.item;
-  if (!row || !canAllocate(d)) return;
-  const qty = qtyInputs.value[d.pickingItemId];
-  allocating.value = { ...allocating.value, [d.pickingItemId]: true };
+  if (!row || !canSubmit.value) return;
+  saving.value = true;
   error.value = "";
   try {
-    await flow.addManualPickingAllocation(d.pickingOrderId, d.pickingItemId, {
-      qty,
-      receivingInvoiceItemId: row.id,
-    });
-    sessionTotal.value += qty;
-    sessionUsed.value = { ...sessionUsed.value, [d.pickingItemId]: (sessionUsed.value[d.pickingItemId] ?? 0) + qty };
-    // Suggest the next qty from the refreshed cap.
-    qtyInputs.value = { ...qtyInputs.value, [d.pickingItemId]: demandCap(d) };
+    // Send every listed row so the form is unambiguous: rows the admin left
+    // alone are sent at their current value and change to a no-op server-side.
+    const rows = demand.value
+      .filter((d) => d.matched && !d.locked)
+      .map((d) => ({ pickingItemId: d.pickingItemId, qty: planned(d) }));
+    await flow.reallocateReceivingItemDemand(props.receivingOrderId, row.id, rows);
     emit("allocated");
+    emit("close");
   } catch (e: any) {
-    // 409 lock_held carries a JSON body ({error, holderId, holderName}) —
-    // the api client throws the raw body text as the message.
+    // 409s carry a JSON body the api client throws verbatim: per-row reasons
+    // for a rejected batch, or planned/available totals for an oversubscribed
+    // pool. Anything else falls back to the raw message.
     let handled = false;
     try {
       const body = JSON.parse(e.message);
-      if (body?.error === "lock_held") {
-        error.value = t("admin.pages.pickingOrders.reallocateLocked", {
-          orderNo: d.orderNo,
-          name: body.holderName ?? body.holderId,
-        });
+      if (body?.error === "reallocate_rejected" && Array.isArray(body.rows)) {
+        error.value = body.rows
+          .map((r: { orderNo: string; reason: string }) => `${r.orderNo}: ${rowReasonLabel(r.reason)}`)
+          .join(" · ");
+        handled = true;
+      } else if (body?.error === "insufficient_available") {
+        error.value = t("admin.pages.receiving.reallocPoolOver");
         handled = true;
       }
     } catch {
@@ -92,12 +115,8 @@ async function allocate(d: PartDemandRow) {
     }
     if (!handled) error.value = e.message;
   } finally {
-    allocating.value = { ...allocating.value, [d.pickingItemId]: false };
+    saving.value = false;
   }
-}
-
-function highlight(row: { orgId: number | null; subInventoryCode: string | null }): boolean {
-  return row.orgId === orgId.value && row.subInventoryCode === subInventory.value;
 }
 
 watch(
@@ -109,22 +128,24 @@ watch(
     stock.value = [];
     error.value = "";
     stockSort.value = "date-code";
-    qtyInputs.value = {};
-    allocating.value = {};
-    sessionUsed.value = {};
-    sessionTotal.value = 0;
+    plan.value = {};
+    saving.value = false;
     loading.value = true;
     try {
+      const ctx = {
+        orgId: orgId.value,
+        subInventoryCode: subInventory.value,
+        fromReceivingItemId: row.id,
+      };
       const [demandRes, availRes] = await Promise.all([
-        flow.getPartDemand(row.partNo, row.wclItemNo),
-        flow.getPartAvailability(row.partNo, row.wclItemNo),
+        flow.getPartDemand(row.partNo, row.wclItemNo, ctx),
+        flow.getPartAvailability(row.partNo, row.wclItemNo, ctx),
       ]);
+      // Stock: only lots the allocation engine could use for this item's
+      // partition (same org + same sub-inventory, or a share-group sibling).
+      // Demand rows are filtered by PartDemandTables (same rule).
       demand.value = demandRes.demand;
-      stock.value = availRes.stock;
-      // Prefill each row's qty input with the largest sensible amount.
-      const inputs: Record<string, number> = {};
-      for (const d of demandRes.demand) inputs[d.pickingItemId] = demandCap(d);
-      qtyInputs.value = inputs;
+      stock.value = availRes.stock.filter((s) => s.matched);
     } catch (e: any) {
       error.value = e.message;
     } finally {
@@ -143,39 +164,19 @@ watch(
           org: orgId ?? "—",
           subInventory: subInventory ?? "—",
         }) }}
-        · {{ $t("admin.pages.receiving.demandAllocatable", { qty: receivingLeft }) }}
+        · {{ $t("admin.pages.receiving.reallocPool", { held: heldTotal, available: poolSize }) }}
       </div>
       <div v-if="error" class="error-banner">{{ error }}</div>
       <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>
       <template v-else>
         <h3 class="avail-section">{{ $t("admin.pages.receiving.searchDemand") }}</h3>
         <ReceivingPartDemandTables
+          v-model="plan"
           :rows="demand"
           :context-org-id="orgId"
           :context-sub-inventory="subInventory"
-          :session-used="sessionUsed"
-          allocatable
-        >
-          <template #allocate="{ row: d }">
-            <span class="alloc-cell">
-              <input
-                v-model.number="qtyInputs[d.pickingItemId]"
-                type="number"
-                min="1"
-                :max="demandCap(d)"
-                class="avail-qty"
-                :disabled="demandCap(d) <= 0"
-              />
-              <button
-                class="btn btn-small btn-primary"
-                :disabled="!canAllocate(d)"
-                @click="allocate(d)"
-              >
-                {{ allocating[d.pickingItemId] ? $t("admin.common.saving") : $t("admin.pages.receiving.allocate") }}
-              </button>
-            </span>
-          </template>
-        </ReceivingPartDemandTables>
+          :available="poolSize"
+        />
 
         <h3 class="avail-section">{{ $t("admin.pages.receiving.searchStock") }}</h3>
         <div class="avail-filter">
@@ -222,6 +223,9 @@ watch(
       </template>
       <div class="dialog-actions">
         <button class="btn" @click="emit('close')">{{ $t("admin.common.cancel") }}</button>
+        <button v-if="!loading" class="btn btn-primary" :disabled="!canSubmit" @click="submit">
+          {{ saving ? $t("admin.common.saving") : $t("admin.pages.receiving.reallocSubmit") }}
+        </button>
       </div>
     </div>
   </div>

@@ -18,6 +18,7 @@ import { confirmReceivingArrival } from "../../db/receiving.js";
 import { insertReceivingOrder, insertPickingOrder } from "../../db/test-fixtures.js";
 import { allocateAll } from "../../db/allocate.js";
 import { recomputeLot, recomputePickingItem } from "../../db/picking.js";
+import { _setPickingAllocationForTests } from "../../config.js";
 
 process.env.DATABASE_URL = TEST_DATABASE_URL;
 
@@ -47,6 +48,7 @@ interface Scenario {
   orderA: string; // picking order ids
   orderB: string;
   orderC: string;
+  receivingOrderId: string;
 }
 
 // Hermetic scenario on parts the demo seed never uses:
@@ -89,7 +91,7 @@ async function seedScenario(): Promise<Scenario> {
     items: [{ partNo: "REALLOC-P2", qty: 100 }],
   });
   await allocateAll(client.db);
-  return { orderA, orderB, orderC };
+  return { orderA, orderB, orderC, receivingOrderId };
 }
 
 const allocRows = (orderId: string) =>
@@ -742,12 +744,55 @@ test("part-availability: returns stock and receiving rows for the part", async (
   assert.equal(body.receiving[0].lineQty, 1000);
 });
 
+test("part-availability: `matched` flags the order's location and its share group", async () => {
+  await reseed(client);
+  await seedScenario();
+  await client.db.execute(sql`
+    INSERT INTO inventory_lots (id, part_no, date_code, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
+    VALUES ('LOT-MATCH-1', 'REALLOC-P1', '2001', 'A0405', 'MBOX1', 2, 'STORE1', 10, now(), now()),
+           ('LOT-MATCH-2', 'REALLOC-P1', '2001', 'A0405', 'MBOX2', 2, 'WSTORE1', 10, now(), now()),
+           ('LOT-MATCH-3', 'REALLOC-P1', '2001', 'A0405', 'MBOX3', 2, 'ZTE', 10, now(), now()),
+           ('LOT-MATCH-4', 'REALLOC-P1', '2001', 'A0405', 'MBOX4', 7, 'STORE1', 10, now(), now())
+  `);
+
+  const body = await (await req(`/admin/part-availability?partNo=REALLOC-P1&orgId=2&subInventoryCode=STORE1`)).json();
+  const byLot = Object.fromEntries(body.stock.map((s: any) => [s.lotId, s.matched]));
+  // STORE1 itself and WSTORE1 (same "HK" share group, org 2) match;
+  // another org-2 sub-inventory and STORE1 under org 7 do not.
+  assert.equal(byLot["LOT-MATCH-1"], true);
+  assert.equal(byLot["LOT-MATCH-2"], true);
+  assert.equal(byLot["LOT-MATCH-3"], false);
+  assert.equal(byLot["LOT-MATCH-4"], false);
+  // The receiving line is stamped org 2 / STORE1 → matches too.
+  assert.equal(body.receiving.every((r: any) => r.matched), true);
+
+  // No context → nothing is cut (every row is "applicable").
+  const all = await (await req(`/admin/part-availability?partNo=REALLOC-P1`)).json();
+  assert.equal(all.stock.every((s: any) => s.matched), true);
+});
+
+test("part-availability: no receiving rows when dock-stock allocation is off", async () => {
+  await reseed(client);
+  await seedScenario();
+  _setPickingAllocationForTests({ allowDockStock: false });
+  try {
+    const res = await req(`/admin/part-availability?partNo=REALLOC-P1&orgId=2&subInventoryCode=STORE1`);
+    const body = await res.json();
+    assert.equal(body.dockStockAllowed, false);
+    assert.deepEqual(body.receiving, []);
+  } finally {
+    _setPickingAllocationForTests({ allowDockStock: true });
+  }
+});
+
 test("part-availability: empty arrays for an unknown part; 400 without partNo", async () => {
   await reseed(client);
   const res = await req(`/admin/part-availability?partNo=NO-SUCH-PART`);
   assert.equal(res.status, 200);
   const body = await res.json();
-  assert.deepEqual(body, { stock: [], receiving: [] });
+  assert.deepEqual(body.stock, []);
+  assert.deepEqual(body.receiving, []);
+  assert.equal(body.dockStockAllowed, true);
 
   const res400 = await req(`/admin/part-availability`);
   assert.equal(res400.status, 400);
@@ -771,6 +816,12 @@ test("part-demand: lists open picking items with remaining uncovered qty", async
   assert.equal(rowA.remainingQty, 600);
   assert.equal(rowB.remainingQty, 400);
   assert.ok(rowA.pickingItemId);
+  // Both orders sit in org 2 / STORE1 — the demand context they are read with.
+  assert.equal(body.demand.every((d: any) => d.matched), true);
+  const scoped = await (
+    await req(`/admin/part-demand?partNo=REALLOC-P1&orgId=7&subInventoryCode=STORE1`)
+  ).json();
+  assert.equal(scoped.demand.every((d: any) => d.matched === false), true);
 
   // Pin 200 to orderA's item — the demand list reflects it immediately.
   const pin = await req(`/admin/picking-orders/${orderA}/items/${rowA.pickingItemId}/allocations`, {
@@ -797,4 +848,493 @@ test("part-demand: lists open picking items with remaining uncovered qty", async
 
   const res400 = await req(`/admin/part-demand`);
   assert.equal(res400.status, 400);
+});
+
+// --- POST /admin/receiving-orders/:id/items/:itemId/reallocate-demand -------
+// Final-state redistribution of one receiving item's dock stock across open
+// picking demand (spec 2026-10-12-admin-receiving-reallocate-form-design.md):
+// release the rows that shrink first, then grow the rows that grow, in one
+// all-or-nothing transaction.
+
+/** Per-order allocation ROW count (not qty) — one row per order, never two. */
+const rowsFromItem = async (itemId: string) => {
+  const rows = await queryAll<{ orderNo: string; n: number }>(
+    client.db,
+    sql`SELECT po.order_no AS "orderNo", COUNT(*)::int AS n
+        FROM allocations a
+        JOIN picking_items pi ON pi.id = a.picking_item_id
+        JOIN picking_orders po ON po.id = pi.picking_order_id
+        WHERE a.receiving_invoice_item_id = ${itemId}
+        GROUP BY po.order_no ORDER BY po.order_no`
+  );
+  return Object.fromEntries(rows.map((r) => [r.orderNo, r.n]));
+};
+
+const reallocItemId = async (receivingOrderId: string) =>
+  (await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT rii.id FROM receiving_invoice_items rii
+        JOIN receiving_invoices ri ON ri.id = rii.receiving_invoice_id
+        WHERE ri.receiving_order_id = ${receivingOrderId} AND rii.part_no = 'REALLOC-P1'`
+  ))!.id;
+
+const postRealloc = (receivingOrderId: string, itemId: string, rows: { pickingItemId: string; qty: number }[]) =>
+  req(`/admin/receiving-orders/${receivingOrderId}/items/${itemId}/reallocate-demand`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rows }),
+  });
+
+/** Holdings of `itemId` on each picking item, straight from allocations. */
+const fromItem = async (itemId: string) => {
+  const rows = await queryAll<{ orderNo: string; qty: number }>(
+    client.db,
+    sql`SELECT po.order_no AS "orderNo", SUM(a.qty)::int AS qty
+        FROM allocations a
+        JOIN picking_items pi ON pi.id = a.picking_item_id
+        JOIN picking_orders po ON po.id = pi.picking_order_id
+        WHERE a.receiving_invoice_item_id = ${itemId}
+        GROUP BY po.order_no ORDER BY po.order_no`
+  );
+  return Object.fromEntries(rows.map((r) => [r.orderNo, r.qty]));
+};
+
+/**
+ * seedScenario receives 1000 of REALLOC-P1 and creates SO-RA-001 (600, priority
+ * 1) + SO-RA-002 (400, priority 2). We add SO-RA-003 (200, priority 3) so the
+ * form has three rows totalling 1200 of demand against a 1000 pool — enough
+ * headroom to prove the form can place the pool differently from the engine's
+ * greedy priority fill.
+ */
+async function reallocFixture() {
+  await reseed(client);
+  const { orderA, orderB, receivingOrderId } = await seedScenario();
+  const orderC = randomUUID();
+  await insertPickingOrder(client.db, orderC, {
+    order: { orderNo: "SO-RA-003", orgId: 2, subInventoryCode: "STORE1" },
+    items: [{ partNo: "REALLOC-P1", qty: 200 }],
+  });
+  await clearAllocations();
+  return {
+    orderA,
+    orderB,
+    receivingOrderId,
+    itemId: await reallocItemId(receivingOrderId),
+    itemA: await itemIdOf(orderA),
+    itemB: await itemIdOf(orderB),
+    itemC: await itemIdOf(orderC),
+  };
+}
+
+test("reallocate-demand: places the pool differently from the engine's priority fill", async () => {
+  const { receivingOrderId, itemId, itemA, itemB, itemC } = await reallocFixture();
+
+  // The engine's greedy fill would give priority-1 SO-RA-001 its full 600.
+  // The admin places the whole 1000 pool as 400/400/200 instead, and it sticks:
+  // a manual pin is preserved by the wipe/rebuild and nothing is left over for
+  // the engine to re-distribute.
+  const res = await postRealloc(receivingOrderId, itemId, [
+    { pickingItemId: itemA, qty: 400 },
+    { pickingItemId: itemB, qty: 400 },
+    { pickingItemId: itemC, qty: 200 },
+  ]);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.available, 1000); // receivedQty - pickedQty
+  assert.equal(body.fromItemQty, 1000);
+  assert.equal(body.changed.length, 3);
+
+  assert.deepEqual(await fromItem(itemId), { "SO-RA-001": 400, "SO-RA-002": 400, "SO-RA-003": 200 });
+  const item = await queryGet<{ qty: number }>(
+    client.db,
+    sql`SELECT allocated_qty AS qty FROM picking_items WHERE id = ${itemA}`
+  );
+  assert.equal(item!.qty, 400);
+});
+
+test("reallocate-demand: raising an already-allocated row above its old remaining", async () => {
+  const { receivingOrderId, itemId, itemA, itemB, itemC } = await reallocFixture();
+
+  // SO-RA-001 is fully allocated by the engine — the case the old per-row form
+  // could not act on (its input was capped at remainingQty and disabled at 0).
+  await postRealloc(receivingOrderId, itemId, [
+    { pickingItemId: itemA, qty: 600 },
+    { pickingItemId: itemB, qty: 400 },
+  ]);
+  assert.deepEqual(await fromItem(itemId), { "SO-RA-001": 600, "SO-RA-002": 400 });
+
+  // Take 200 from SO-RA-001 (down to its 400) and give it to SO-RA-003, which
+  // only the admin can satisfy that way: the engine's priority order would
+  // never hand SO-RA-003 stock while SO-RA-001 is short.
+  const res = await postRealloc(receivingOrderId, itemId, [
+    { pickingItemId: itemA, qty: 400 },
+    { pickingItemId: itemB, qty: 400 },
+    { pickingItemId: itemC, qty: 200 },
+  ]);
+  assert.equal(res.status, 200);
+  assert.deepEqual(await fromItem(itemId), { "SO-RA-001": 400, "SO-RA-002": 400, "SO-RA-003": 200 });
+});
+
+test("reallocate-demand: raising a row amends its allocation line instead of adding one", async () => {
+  const { receivingOrderId, itemId, itemA, itemB, itemC } = await reallocFixture();
+  await postRealloc(receivingOrderId, itemId, [
+    { pickingItemId: itemA, qty: 400 },
+    { pickingItemId: itemB, qty: 400 },
+    { pickingItemId: itemC, qty: 200 },
+  ]);
+  assert.deepEqual(await rowsFromItem(itemId), { "SO-RA-001": 1, "SO-RA-002": 1, "SO-RA-003": 1 });
+
+  // Raise SO-RA-001 by 200, taking 200 off SO-RA-003. Each order must still be
+  // exactly ONE allocation line — a duplicate row would render as a second
+  // line in the per-allocation list on the receiving/picking detail pages.
+  await postRealloc(receivingOrderId, itemId, [
+    { pickingItemId: itemA, qty: 600 },
+    { pickingItemId: itemB, qty: 400 },
+    { pickingItemId: itemC, qty: 0 },
+  ]);
+  assert.deepEqual(await fromItem(itemId), { "SO-RA-001": 600, "SO-RA-002": 400 });
+  assert.deepEqual(await rowsFromItem(itemId), { "SO-RA-001": 1, "SO-RA-002": 1 });
+
+  // Move again — still one line per order, every time.
+  await postRealloc(receivingOrderId, itemId, [
+    { pickingItemId: itemA, qty: 600 },
+    { pickingItemId: itemB, qty: 200 },
+    { pickingItemId: itemC, qty: 200 },
+  ]);
+  assert.deepEqual(await fromItem(itemId), { "SO-RA-001": 600, "SO-RA-002": 200, "SO-RA-003": 200 });
+  assert.deepEqual(await rowsFromItem(itemId), { "SO-RA-001": 1, "SO-RA-002": 1, "SO-RA-003": 1 });
+
+  // Every surviving row is a pin, so a recompute keeps them.
+  const nonManual = await queryAll<{ n: number }>(
+    client.db,
+    sql`SELECT COUNT(*)::int AS n FROM allocations WHERE receiving_invoice_item_id = ${itemId} AND manual = false`
+  );
+  assert.equal(nonManual[0].n, 0);
+});
+
+test("reallocate-demand: leaving qty unplaced lets the engine redistribute it", async () => {
+  const { receivingOrderId, itemId, itemA, itemB } = await reallocFixture();
+
+  // Only 400 of the 1000 pool is placed. SO-RA-001 still has uncovered demand,
+  // so the post-commit recompute hands it the 600 that was left over — this is
+  // why the form's real power is placing the whole pool, not starving a row.
+  const res = await postRealloc(receivingOrderId, itemId, [{ pickingItemId: itemB, qty: 400 }]);
+  assert.equal(res.status, 200);
+  const after = await fromItem(itemId);
+  assert.equal(after["SO-RA-002"], 400);
+  assert.equal(after["SO-RA-001"], 600);
+});
+
+test("reallocate-demand: qty 0 releases the row entirely", async () => {
+  const { receivingOrderId, itemId, itemA, itemB, itemC } = await reallocFixture();
+  await postRealloc(receivingOrderId, itemId, [
+    { pickingItemId: itemA, qty: 400 },
+    { pickingItemId: itemB, qty: 400 },
+    { pickingItemId: itemC, qty: 200 },
+  ]);
+
+  // Release SO-RA-003 and give its 200 to SO-RA-001 — still the whole pool, so
+  // the result holds after the recompute.
+  await postRealloc(receivingOrderId, itemId, [
+    { pickingItemId: itemA, qty: 600 },
+    { pickingItemId: itemB, qty: 400 },
+    { pickingItemId: itemC, qty: 0 },
+  ]);
+  assert.deepEqual(await fromItem(itemId), { "SO-RA-001": 600, "SO-RA-002": 400 });
+  const ledger = await queryAll<{ qtyDelta: number }>(
+    client.db,
+    sql`SELECT qty_delta AS "qtyDelta" FROM inventory_transactions
+        WHERE receiving_invoice_item_id = ${itemId} AND txn_reason = 'admin: reallocate'
+        ORDER BY txn_at, id`
+  );
+  // 200 released from SO-RA-003 and 200 taken by SO-RA-001 — both signed.
+  assert.ok(ledger.some((l) => l.qtyDelta === -200), "release row");
+  assert.ok(ledger.some((l) => l.qtyDelta === 200), "add row");
+});
+
+test("reallocate-demand: rejecting the pool changes nothing (all-or-nothing)", async () => {
+  const { receivingOrderId, itemId, itemA, itemB, itemC } = await reallocFixture();
+  // Deterministic setup: place the whole pool so the recompute can't shift it.
+  await postRealloc(receivingOrderId, itemId, [
+    { pickingItemId: itemA, qty: 600 },
+    { pickingItemId: itemB, qty: 400 },
+    { pickingItemId: itemC, qty: 0 },
+  ]);
+
+  // 600 + 400 + 200 = 1200 > the item's 1000.
+  const res = await postRealloc(receivingOrderId, itemId, [
+    { pickingItemId: itemA, qty: 600 },
+    { pickingItemId: itemB, qty: 400 },
+    { pickingItemId: itemC, qty: 200 },
+  ]);
+  assert.equal(res.status, 409);
+  const body = JSON.parse(await res.text());
+  assert.equal(body.error, "insufficient_available");
+  assert.equal(body.plannedTotal, 1200);
+  assert.equal(body.available, 1000);
+  // Nothing moved — not even the valid rows in the same batch.
+  assert.deepEqual(await fromItem(itemId), { "SO-RA-001": 600, "SO-RA-002": 400 });
+});
+
+test("reallocate-demand: a row over its own requirement rejects the whole batch", async () => {
+  const { receivingOrderId, itemId, itemA, itemB } = await reallocFixture();
+
+  // SO-RA-001 only needs 600.
+  const res = await postRealloc(receivingOrderId, itemId, [
+    { pickingItemId: itemA, qty: 601 },
+    { pickingItemId: itemB, qty: 100 },
+  ]);
+  assert.equal(res.status, 409);
+  const body = JSON.parse(await res.text());
+  assert.equal(body.error, "reallocate_rejected");
+  assert.deepEqual(body.rows, [{ pickingItemId: itemA, orderNo: "SO-RA-001", reason: "over_allocation" }]);
+  assert.deepEqual(await fromItem(itemId), {});
+});
+
+test("reallocate-demand: a work-locked order rejects the whole batch with per-row reasons", async () => {
+  const { orderB, receivingOrderId, itemId, itemA, itemB } = await reallocFixture();
+  await req(`/picking-orders/${orderB}/work-lock`, { method: "POST" });
+
+  const res = await postRealloc(receivingOrderId, itemId, [
+    { pickingItemId: itemA, qty: 200 },
+    { pickingItemId: itemB, qty: 200 },
+  ]);
+  assert.equal(res.status, 409);
+  const body = JSON.parse(await res.text());
+  assert.equal(body.error, "reallocate_rejected");
+  assert.deepEqual(body.rows, [{ pickingItemId: itemB, orderNo: "SO-RA-002", reason: "lock_held" }]);
+
+  // The unlocked row in the same batch did not commit.
+  assert.deepEqual(await fromItem(itemId), {});
+
+  // part-demand surfaces the lock so the form can grey the row up front.
+  const demand = await (
+    await req(`/admin/part-demand?partNo=REALLOC-P1&fromReceivingItemId=${itemId}`)
+  ).json();
+  const rowB = demand.demand.find((d: any) => d.pickingItemId === itemB);
+  assert.equal(rowB.locked, true);
+  assert.ok(rowB.workingByName);
+});
+
+test("reallocate-demand: untouched rows keep their qty and still consume the pool", async () => {
+  const { receivingOrderId, itemId, itemA, itemB, itemC } = await reallocFixture();
+  // Deterministic setup: the whole 1000 pool placed on two rows.
+  await postRealloc(receivingOrderId, itemId, [
+    { pickingItemId: itemA, qty: 600 },
+    { pickingItemId: itemB, qty: 400 },
+    { pickingItemId: itemC, qty: 0 },
+  ]);
+  assert.deepEqual(await fromItem(itemId), { "SO-RA-001": 600, "SO-RA-002": 400 });
+
+  // A call naming ONLY SO-RA-003: if the untouched rows were ignored the pool
+  // would look empty and this would succeed. They are counted, so it is 1100
+  // against 1000 and the whole batch is refused.
+  const res = await postRealloc(receivingOrderId, itemId, [{ pickingItemId: itemC, qty: 100 }]);
+  assert.equal(res.status, 409);
+  assert.equal(JSON.parse(await res.text()).error, "insufficient_available");
+  assert.deepEqual(await fromItem(itemId), { "SO-RA-001": 600, "SO-RA-002": 400 });
+});
+
+test("reallocate-demand: 404 for an item that isn't on the order, 400 for a bad qty", async () => {
+  const { receivingOrderId, itemId, itemA } = await reallocFixture();
+  const other = await req(`/admin/receiving-orders/${randomUUID()}/items/${itemA}/reallocate-demand`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rows: [{ pickingItemId: itemA, qty: 10 }] }),
+  });
+  assert.equal(other.status, 404);
+
+  const bad = await postRealloc(receivingOrderId, itemId, [{ pickingItemId: itemA, qty: -1 }]);
+  assert.equal(bad.status, 400);
+  const dup = await postRealloc(receivingOrderId, itemId, [
+    { pickingItemId: itemA, qty: 10 },
+    { pickingItemId: itemA, qty: 20 },
+  ]);
+  assert.equal(dup.status, 400);
+});
+
+// --- POST .../allocate-form: ONE Confirm for the whole availability form ---
+
+const postForm = (orderId: string, itemId: string, rows: unknown[]) =>
+  req(`/admin/picking-orders/${orderId}/items/${itemId}/allocate-form`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rows }),
+  });
+
+/** Allocation rows for one picking item: one line per source, never two. */
+const formRows = (itemId: string) =>
+  queryAll<{ lotId: string | null; qty: number; manual: boolean }>(
+    client.db,
+    sql`SELECT inventory_lot_id AS "lotId", qty, manual FROM allocations
+        WHERE picking_item_id = ${itemId} ORDER BY inventory_lot_id`
+  );
+
+const lotAllocated = async (lotId: string) =>
+  (await queryGet<{ qty: number }>(
+    client.db,
+    sql`SELECT allocated_qty AS qty FROM inventory_lots WHERE id = ${lotId}`
+  ))!.qty;
+
+test("allocate-form: applies every row at once and amends rather than duplicates", async () => {
+  await reseed(client);
+  const { orderA } = await seedScenario();
+  await clearAllocations();
+  await insertLot("LOT-FORM-1", "REALLOC-P1", 1000);
+  await insertLot("LOT-FORM-2", "REALLOC-P1", 1000);
+  const itemId = await itemIdOf(orderA);
+
+  const split = await postForm(orderA, itemId, [
+    { inventoryLotId: "LOT-FORM-1", qty: 300 },
+    { inventoryLotId: "LOT-FORM-2", qty: 300 },
+  ]);
+  assert.equal(split.status, 200);
+  assert.equal((await formRows(itemId)).reduce((s, r) => s + r.qty, 0), 600);
+  assert.equal(await lotAllocated("LOT-FORM-1"), 300);
+  assert.equal(await lotAllocated("LOT-FORM-2"), 300);
+
+  // Move everything onto LOT-FORM-1: grown in place, never a second line.
+  const move = await postForm(orderA, itemId, [
+    { inventoryLotId: "LOT-FORM-1", qty: 600 },
+    { inventoryLotId: "LOT-FORM-2", qty: 0 },
+  ]);
+  assert.equal(move.status, 200);
+  const after = await formRows(itemId);
+  assert.deepEqual(
+    after.map((r) => [r.lotId, r.qty]),
+    [["LOT-FORM-1", 600]]
+  );
+  assert.equal(await lotAllocated("LOT-FORM-1"), 600);
+  assert.equal(await lotAllocated("LOT-FORM-2"), 0);
+  // Every surviving row is a pin, so a recompute keeps it.
+  assert.ok(after.every((r) => r.manual));
+});
+
+test("allocate-form: rows left out of the payload keep their current qty", async () => {
+  await reseed(client);
+  const { orderA } = await seedScenario();
+  await clearAllocations();
+  await insertLot("LOT-FORM-3", "REALLOC-P1", 1000);
+  await insertLot("LOT-FORM-4", "REALLOC-P1", 1000);
+  const itemId = await itemIdOf(orderA);
+
+  assert.equal((await postForm(orderA, itemId, [{ inventoryLotId: "LOT-FORM-3", qty: 250 }])).status, 200);
+  assert.equal((await postForm(orderA, itemId, [{ inventoryLotId: "LOT-FORM-4", qty: 150 }])).status, 200);
+  assert.deepEqual(
+    (await formRows(itemId)).map((r) => [r.lotId, r.qty]),
+    [["LOT-FORM-3", 250], ["LOT-FORM-4", 150]]
+  );
+
+  // The date-code / match filters can hide a source — they must never release it.
+  assert.equal((await postForm(orderA, itemId, [])).status, 200);
+  assert.equal((await formRows(itemId)).reduce((s, r) => s + r.qty, 0), 400);
+});
+
+test("allocate-form: a rejected row rolls the whole batch back", async () => {
+  await reseed(client);
+  const { orderA } = await seedScenario();
+  await clearAllocations();
+  await insertLot("LOT-FORM-5", "REALLOC-P1", 1000);
+  await insertLot("LOT-FORM-6", "REALLOC-P1", 1000);
+  const itemId = await itemIdOf(orderA);
+
+  // 600 is the item's whole open qty; the extra 1 invalidates the batch, so
+  // the 600 that was valid must NOT be applied either.
+  const over = await postForm(orderA, itemId, [
+    { inventoryLotId: "LOT-FORM-5", qty: 600 },
+    { inventoryLotId: "LOT-FORM-6", qty: 1 },
+  ]);
+  assert.equal(over.status, 409);
+  const body = await over.json();
+  assert.equal(body.error, "over_allocation");
+  assert.equal(body.openQty, 600);
+  assert.equal(await lotAllocated("LOT-FORM-5"), 0);
+  assert.equal(await lotAllocated("LOT-FORM-6"), 0);
+  assert.equal((await formRows(itemId)).length, 0);
+});
+
+test("allocate-form: validation and per-row rejection reasons", async () => {
+  await reseed(client);
+  const { orderA } = await seedScenario();
+  await clearAllocations();
+  await insertLot("LOT-FORM-7", "REALLOC-P1", 1000);
+  await insertLot("LOT-FORM-8", "REALLOC-P1", 100); // short source
+  const itemId = await itemIdOf(orderA);
+
+  assert.equal((await postForm(orderA, itemId, [{ qty: 10 }])).status, 400); // source_required
+  assert.equal(
+    (
+      await postForm(orderA, itemId, [
+        { inventoryLotId: "LOT-FORM-7", receivingInvoiceItemId: "x", qty: 10 },
+      ])
+    ).status,
+    400
+  );
+  assert.equal((await postForm(orderA, itemId, [{ inventoryLotId: "LOT-FORM-7", qty: -1 }])).status, 400);
+  assert.equal(
+    (
+      await postForm(orderA, itemId, [
+        { inventoryLotId: "LOT-FORM-7", qty: 1 },
+        { inventoryLotId: "LOT-FORM-7", qty: 2 },
+      ])
+    ).status,
+    400
+  ); // duplicate_source
+  assert.equal((await postForm(orderA, itemId, [{ inventoryLotId: "NO-SUCH-LOT", qty: 1 }])).status, 404);
+
+  // A row past its source's availability, without override, rejects the batch
+  // with a key the form can hang on the offending row.
+  const rejected = await postForm(orderA, itemId, [
+    { inventoryLotId: "LOT-FORM-7", qty: 100 },
+    { inventoryLotId: "LOT-FORM-8", qty: 500 },
+  ]);
+  assert.equal(rejected.status, 409);
+  const body = await rejected.json();
+  assert.equal(body.error, "allocate_rejected");
+  assert.deepEqual(body.rows, [{ key: "l:LOT-FORM-8", reason: "insufficient_available" }]);
+  assert.equal((await formRows(itemId)).length, 0);
+});
+
+test("allocate-form: an override row reclaims other orders' stock in the same call", async () => {
+  await reseed(client);
+  const { orderA, orderB } = await seedStealScenario("LOT-FORM-9", 500);
+  const itemB = await itemIdOf(orderB);
+
+  const res = await postForm(orderB, itemB, [
+    { inventoryLotId: "LOT-FORM-9", qty: 400, override: true },
+  ]);
+  assert.equal(res.status, 200);
+
+  assert.deepEqual(
+    (await formRows(itemB)).map((r) => [r.lotId, r.qty, r.manual]),
+    [["LOT-FORM-9", 400, true]]
+  );
+  const aRows = await queryAll<{ qty: number }>(
+    client.db,
+    sql`SELECT a.qty FROM allocations a
+        JOIN picking_items pi ON pi.id = a.picking_item_id
+        WHERE pi.picking_order_id = ${orderA} AND a.inventory_lot_id = 'LOT-FORM-9'`
+  );
+  assert.equal(aRows.reduce((s, r) => s + r.qty, 0), 100);
+  assert.equal(await lotAllocated("LOT-FORM-9"), 500);
+});
+
+test("allocate-form: 404 for an unknown order or item, 409 when a PDA holds the lock", async () => {
+  await reseed(client);
+  const { orderA } = await seedScenario();
+  await clearAllocations();
+  await insertLot("LOT-FORM-10", "REALLOC-P1", 1000);
+  const itemId = await itemIdOf(orderA);
+  const row = [{ inventoryLotId: "LOT-FORM-10", qty: 1 }];
+
+  assert.equal((await postForm(randomUUID(), itemId, row)).status, 404);
+  assert.equal((await postForm(orderA, randomUUID(), row)).status, 404);
+
+  const operator = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'operator'`);
+  await client.db.execute(
+    sql`UPDATE picking_orders SET working_by = ${operator!.id}, working_at = now() WHERE id = ${orderA}`
+  );
+  const locked = await postForm(orderA, itemId, row);
+  assert.equal(locked.status, 409);
+  assert.match(await locked.text(), /lock_held/);
 });

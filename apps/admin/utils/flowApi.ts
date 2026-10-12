@@ -505,6 +505,8 @@ export interface PartAvailabilityStockRow {
   totalQty: number;
   allocatedQty: number;
   availableQty: number;
+  /** Satisfies the requested org / sub-inventory context (incl. share-group siblings). */
+  matched: boolean;
 }
 
 export interface PartAvailabilityReceivingRow {
@@ -522,11 +524,14 @@ export interface PartAvailabilityReceivingRow {
   subInventoryCode: string | null;
   ctnNo: string | null;
   dateCode: string | null;
+  matched: boolean;
 }
 
 export interface PartAvailability {
   stock: PartAvailabilityStockRow[];
+  /** Empty when the warehouse config disallows allocation from receiving dock stock. */
   receiving: PartAvailabilityReceivingRow[];
+  dockStockAllowed: boolean;
 }
 
 // ---- part demand (open picking items needing a part) ----
@@ -544,10 +549,53 @@ export interface PartDemandRow {
   pickedQty: number;
   allocatedQty: number;
   remainingQty: number;
+  matched: boolean;
+  /** Qty this row holds from the `fromReceivingItemId` context (re-allocate form). */
+  fromItemQty: number;
+  /** The order is open on a PDA — the re-allocate form rejects the whole batch. */
+  locked: boolean;
+  workingByName: string | null;
 }
 
 export interface PartDemand {
   demand: PartDemandRow[];
+}
+
+// ---- picking-item allocate form -----------------------------------------
+
+/** Desired FINAL total from one source for the picking item (0 releases it). */
+export interface AllocateFormInput {
+  inventoryLotId?: string | null;
+  receivingInvoiceItemId?: string | null;
+  qty: number;
+  /** Pin above the source's availability, reclaiming the shortfall. */
+  override?: boolean;
+}
+
+export interface AllocateFormResult {
+  pickingItemId: string;
+  /** qty − Σ packages: the ceiling Σ allocations may not pass. */
+  openQty: number;
+  /** Σ allocations for the item after the change. */
+  allocated: number;
+  changed: { key: string; inventoryLotId: string | null; receivingInvoiceItemId: string | null; from: number; to: number }[];
+}
+
+// ---- receiving item re-allocation form -------------------------------------
+
+/** Desired FINAL totals per picking item (0 releases the row). */
+export interface ReallocateDemandInput {
+  pickingItemId: string;
+  qty: number;
+}
+
+export interface ReallocateDemandResult {
+  itemId: string;
+  /** The pool size (receivedQty - pickedQty). */
+  available: number;
+  /** Σ holdings across every row after the change. */
+  fromItemQty: number;
+  changed: { pickingItemId: string; orderNo: string; from: number; to: number }[];
 }
 
 // ---- flow config (warehouse_config row "flow") ----
@@ -790,6 +838,13 @@ export function useFlowApi() {
         `/admin/picking-orders/${orderId}/items/${itemId}/allocations`,
         body
       ),
+    // One Confirm for the whole availability modal: every row of the
+    // picking-item allocate form in a single all-or-nothing call. Each `qty`
+    // is the DESIRED FINAL total from that source; sources omitted keep their
+    // current value. 409 allocate_rejected carries per-row `key`
+    // (`l:<lotId>` / `r:<receivingItemId>`) + reason.
+    allocatePickingItemFromSources: (orderId: string, itemId: string, rows: AllocateFormInput[]) =>
+      api.post<AllocateFormResult>(`/admin/picking-orders/${orderId}/items/${itemId}/allocate-form`, { rows }),
     // Order info edit: delivery date, ship-to (country code) and/or the
     // ship-from location pair (orgId + subInventoryCode, set together; both
     // null clears the pair) — one PATCH for the whole info section.
@@ -911,20 +966,46 @@ export function useFlowApi() {
     stockSearchSummary: (params: StockSearchParams = {}) =>
       api.get<StockSearchSummary>(`/stock-search/summary?${stockSearchQuery(params)}`),
     // Part availability for the picking-detail modal (stock lots + open
-    // receiving sources, all orgs/sub-inventories).
-    getPartAvailability: (partNo: string, wclItemNo?: string | null) => {
+    // receiving sources, all orgs/sub-inventories). The optional context pair
+    // makes every row carry a `matched` flag (same org + same sub-inventory or
+    // a sibling in the same share group) so the modal can hide the rest.
+    getPartAvailability: (
+      partNo: string,
+      wclItemNo?: string | null,
+      ctx?: { orgId?: number | null; subInventoryCode?: string | null }
+    ) => {
       const qs = new URLSearchParams();
       qs.set("partNo", partNo);
       if (wclItemNo) qs.set("wclItemNo", wclItemNo);
+      if (ctx?.orgId != null) qs.set("orgId", String(ctx.orgId));
+      if (ctx?.subInventoryCode) qs.set("subInventoryCode", ctx.subInventoryCode);
       return api.get<PartAvailability>(`/admin/part-availability?${qs}`);
     },
     // Open picking-order demand for a part (uncovered remaining qty > 0).
-    getPartDemand: (partNo: string, wclItemNo?: string | null) => {
+    // Same optional context pair / `matched` flag as getPartAvailability.
+    getPartDemand: (
+      partNo: string,
+      wclItemNo?: string | null,
+      ctx?: { orgId?: number | null; subInventoryCode?: string | null; fromReceivingItemId?: string | null }
+    ) => {
       const qs = new URLSearchParams();
       qs.set("partNo", partNo);
       if (wclItemNo) qs.set("wclItemNo", wclItemNo);
+      if (ctx?.orgId != null) qs.set("orgId", String(ctx.orgId));
+      if (ctx?.subInventoryCode) qs.set("subInventoryCode", ctx.subInventoryCode);
+      if (ctx?.fromReceivingItemId) qs.set("fromReceivingItemId", ctx.fromReceivingItemId);
       return api.get<PartDemand>(`/admin/part-demand?${qs}`);
     },
+    // Redistribute one receiving item's dock stock across open picking demand
+    // in a single all-or-nothing call. `rows[].qty` is the desired FINAL total
+    // from this receiving item (0 releases the row); rows omitted from the
+    // body keep their current value. 409 reallocate_rejected carries a per-row
+    // `rows: [{pickingItemId, orderNo, reason}]` body.
+    reallocateReceivingItemDemand: (receivingOrderId: string, itemId: string, rows: ReallocateDemandInput[]) =>
+      api.post<ReallocateDemandResult>(
+        `/admin/receiving-orders/${receivingOrderId}/items/${itemId}/reallocate-demand`,
+        { rows }
+      ),
 
     // Shipping (per-box — closed, unshipped boxes ready to ship)
     listShippingBoxes: () => api.get<ShippingBoxRow[]>("/shipping-orders"),

@@ -248,22 +248,36 @@
   fixed positioning (`allocations/Tooltip.vue`) because DataTable cells clip
   overflow; and the
   part-no cell has a search icon opening a modal over
-  `GET /admin/part-availability?partNo=&wclItemNo=` listing every stock lot
-  and receiving order containing the part across ALL org/sub-inventory
-  locations (rows matching the order's pair are highlighted). The stock table
+  `GET /admin/part-availability?partNo=&wclItemNo=&orgId=&subInventoryCode=`
+  listing every stock lot and receiving order containing the part across ALL
+  org/sub-inventory locations. Rows the allocation engine could not use for
+  this order are hidden: the modal keeps only rows the backend flags
+  `matched` (same org, and the same sub-inventory or a sibling in the same
+  share group); rows matching the order's exact pair are highlighted. The
+  "Receiving sources" table is hidden entirely when the warehouse config
+  disallows allocation from receiving dock stock (`dockStockAllowed`). The stock table
   has a client-side sort dropdown (date code asc + available-qty tiebreak by
   default, or available qty / shelf — `apps/admin/utils/partStock.ts` shared
   with the receiving-side modal) and a combined `shelf - date code - coo -
-  cow` column. The modal also pins MANUAL allocations: each row has a qty
-  input + Allocate button
-  (`POST /admin/picking-orders/:id/items/:itemId/allocations`, any
-  location, capped by source availability and the item's open demand —
-  409 `insufficient_available` / `over_allocation`); when the entered qty
-  exceeds a lot's availability the button becomes 覆寫分配 and posts
-  `override: true` — the backend reclaims the shortfall from OTHER items'
-  non-manual allocations on that lot (oldest first; locked victim orders
-  skipped, manual pins never stolen — spec
+  cow` column. The modal is a final-state FORM: each row's qty input states
+  the TOTAL this picking item should hold from that source afterwards, and
+  ONE 確認分配 button at the bottom (next to 取消) applies every row at once
+  (`POST /admin/picking-orders/:id/items/:itemId/allocate-form`,
+  `apps/backend/src/db/pickingAllocateForm.ts`) in a single all-or-nothing
+  transaction — releases run before growth, and the item's over-allocation
+  guard is checked once against the final total. Row inputs are never
+  disabled; an impossible value (over the source's max, or over the item's
+  open demand) is flagged inline and blocks the Confirm. Sources left out of
+  the payload keep their current qty, so the date-code / `matched` filters
+  can never silently release stock the admin cannot see. Growing a row
+  amends its existing allocation line rather than adding a second one. A row
+  whose growth exceeds the source's availability is flagged and, when
+  confirmed, posts `override: true` — the backend reclaims the shortfall from
+  OTHER items' non-manual allocations on that source (oldest first; locked
+  victim orders skipped, manual pins never stolen — spec
   `docs/superpowers/specs/2026-10-06-admin-availability-dialog-improvements-design.md`).
+  The older single-row `POST .../items/:itemId/allocations` route still
+  exists for the same thing one row at a time.
   Manual rows
   (`allocations.manual = true`) are pinned: `allocateAll` /
   `runScopedAllocation` never wipe them and subtract their qty from the

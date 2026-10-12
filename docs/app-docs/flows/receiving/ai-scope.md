@@ -137,13 +137,27 @@
   `docs/superpowers/specs/2026-09-15-admin-picking-item-actions-design.md`):
   a search icon on the part-no cell opens the part-search + allocate dialog
   (`apps/admin/components/receiving/PartSearchModal.vue`): the part's open
-  picking demand (`GET /admin/part-demand`, filtered by
-  `components/receiving/PartDemandTables.vue` to only the rows matching the
-  item's org/sub-inventory — allocating into other partitions from this
-  dialog is not allowed) with a per-row qty input + Allocate
-  that pins a manual allocation sourced from this receiving item (capped by
-  the item's received qty minus already-allocated/picked), plus a read-only
-  related-stock table (`GET /admin/part-availability`, stock only) with the
+  **re-allocation form** (spec
+  `docs/superpowers/specs/2026-10-12-admin-receiving-reallocate-form-design.md`):
+  the dialog is a final-state form, not a per-row allocate. Each input is the
+  **desired total this item should hold on that picking order** (0 releases it),
+  and one "Confirm re-allocation" button posts the whole set to
+  `POST /admin/receiving-orders/:id/items/:itemId/reallocate-demand`
+  (`reallocateReceivingItemDemand` in `apps/backend/src/db/receivingReallocate.ts`).
+  Releasing the shrinking rows before growing the others is what lets an admin
+  raise a row the engine had already fully allocated — the per-item
+  over-allocation guard can never be hit. All-or-nothing: any invalid row
+  (work-locked, not open, over its own requirement) rejects the batch with
+  per-row reasons. Rows are filtered to the `matched` flag — the allocation
+  engine's location rule: the item's org plus the same sub-inventory or a
+  share-group sibling — and rows whose order is open on a PDA are read-only
+  and badged (`locked`/`workingByName` from `GET /admin/part-demand`). Inputs
+  are never disabled; over-subscribing the pool or a row's own requirement
+  warns inline. **The form moves stock, it does not withhold it**: manual pins
+  survive the recompute but the engine hands any unplaced pool back out by
+  priority, so to take qty from an order you must place it on another order in
+  the same submit. A read-only related-stock table (`GET /admin/part-availability`
+  stock only, likewise filtered to the `matched` rows) sits below it with the
   shared sort dropdown + combined `shelf - date code - coo - cow` column
   (`apps/admin/utils/partStock.ts`);
   `GET /receiving-orders/:id` embeds each item's `orgId`/`subInventoryCode`
