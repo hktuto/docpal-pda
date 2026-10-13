@@ -28,7 +28,7 @@ test("scan-templates: every supplier profile, ordered by supplier_code (null tem
     {
       supplierCode: "KOA",
       qrTemplate:
-        "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
+        "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]*):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
       qtyEncoding: "koa_zeros",
       dateCodeEncoding: "koa_month_counter",
       barcodeTypes: null,
@@ -37,7 +37,7 @@ test("scan-templates: every supplier profile, ordered by supplier_code (null tem
     {
       supplierCode: "KOA+TCG",
       qrTemplate:
-        "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
+        "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]*):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
       qtyEncoding: "koa_zeros",
       dateCodeEncoding: "koa_month_counter",
       barcodeTypes: null,

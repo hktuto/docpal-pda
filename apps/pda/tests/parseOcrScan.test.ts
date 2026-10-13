@@ -303,7 +303,7 @@ describe("parseQrCapture", () => {
     const koaWclTemplate = {
       code: "32",
       qrcodeTemplate:
-        "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
+        "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]*):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
       qrcodeQtyEncoding: "koa_zeros" as const,
       qrcodeDateCodeEncoding: "koa_month_counter" as const,
       brands: ["KOA"],
@@ -318,6 +318,28 @@ describe("parseQrCapture", () => {
     expect(result.parsed.dateCode).toBe("3726"); // "19077387" → counter 19 → 2026-09, day 07 → 2026-09-07 → ISO week 37
     expect(result.parsed.lotCode).toBe("19077387");
     expect(result.parsed.wclItemNo).toBe("KOA/SR732ERTTDR200F");
+  });
+
+  it("matches KOA label with empty lotCode segment", () => {
+    const koaWclTemplate = {
+      code: "32",
+      qrcodeTemplate:
+        "^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]*):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$",
+      qrcodeQtyEncoding: "koa_zeros" as const,
+      qrcodeDateCodeEncoding: "koa_month_counter" as const,
+      brands: ["KOA"],
+    };
+    const result = parseQrCapture(
+      ":RK73H1ETTP1001F::54:X::S606:KOA+RK73H1ETTP 1001F",
+      { supplierTemplates: [koaWclTemplate] }
+    );
+    expect(result.matched).toBe(true);
+    expect(result.parsed.itemId).toBe("RK73H1ETTP1001F");
+    expect(result.parsed.qty).toBe(50000); // "54" → 5 × 10^4
+    expect(result.parsed.lotCode).toBeUndefined(); // empty segment → undefined
+    expect(result.parsed.dateCode).toBeUndefined();
+    expect(result.parsed.serialNo).toBe("S606");
+    expect(result.parsed.wclItemNo).toBe("KOA+RK73H1ETTP 1001F");
   });
 
   it("parses an iC-Haus JSON Versandetikett QR (key-order independent)", () => {

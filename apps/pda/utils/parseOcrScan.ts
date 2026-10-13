@@ -764,7 +764,8 @@ export function parseQrCapture(
     // KOA: segment 5 is the raw lot code (e.g. "1625H713"); the WWYY date code
     // is derived from it via koa_month_counter. Older templates may still name
     // the same segment dateCode — treat that as the lot code too.
-    const rawLotCode = groups.lotCode ?? groups.dateCode ?? undefined;
+    // Empty segment (::) yields "" — normalize to undefined.
+    const rawLotCode = (groups.lotCode || groups.dateCode) ?? undefined;
     let dateCode: string | undefined = undefined;
     if (rawLotCode && supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_KOA_MONTH_COUNTER) {
       dateCode = decodeKoaDateCode(rawLotCode);

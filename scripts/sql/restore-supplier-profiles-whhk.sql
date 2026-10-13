@@ -56,13 +56,13 @@ VALUES
   -- reels carry a "KOA+<mpn>" marking there — itemId stays the match key).
   -- Trailing fields and an optional trailing ':' are ignored.
   -- qty = field 3, koa_zeros ("54" -> 50000).
-  -- lotCode = field 5 (raw preserved), koa_month_counter derives WWYY dateCode
-  -- ("1625H713" -> "2526"; first 4 leading digits = month counter + week,
-  -- counter 17 = 2026-07).
+  -- lotCode = field 5 (optional, raw preserved), koa_month_counter derives
+  -- WWYY dateCode ("1625H713" -> "2626"; first 4 leading digits = month
+  -- counter + day).
   -- Verified: 96/96 real scans.
   (
     '00000000-0000-7000-8000-000000009001', '32', NULL,
-    $re$^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$$re$,
+    $re$^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]*):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$$re$,
     NULL, 'pdf417', 'koa_zeros', 'koa_month_counter', ARRAY['PDF417'], ARRAY['KOA'],
     'Restored from BVSDB RegPattern Id=161 (WHHK), 2026-08-13 backup; folds Id=192 KOA_NOLOTNO / Id=193 KOA_NOTKEY (same layout, fewer captured fields). Identical to the seeded KOA demo template. Field 7 captured as wclItemNo (2026-09-29); field 5 captured as lotCode (raw preserved) with koa_month_counter deriving the WWYY dateCode (2026-10). Verified vs 96 real ScannedItem raws.'
   ),

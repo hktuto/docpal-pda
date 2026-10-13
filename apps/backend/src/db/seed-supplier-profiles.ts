@@ -31,13 +31,15 @@ export interface BuiltinSupplierProfile {
 // KOA: colon-delimited PDF417 reel label, e.g.
 //   :SR732ERTTDR200F::153:K:19077387:S002:KOA/SR732ERTTDR200F:13FSJ564:01
 //   :RK73H1ETTP1001F::54:X:1114T232:S606:KOA+RK73H1ETTP 1001F::::
-// Segment 5 is the lot code: leading digits' first 4 = month counter + week,
-// decoded by dateCodeEncoding 'koa_month_counter' ("1625H713" → WWYY "2526";
+//   :RK73H1ETTP1001F::54:X::S606:KOA+RK73H1ETTP 1001F          (no lot code)
+// Segment 5 is the lot code (optional — some labels leave it empty):
+// leading digits' first 4 = month counter + week, decoded by
+// dateCodeEncoding 'koa_month_counter' ("1625H713" → WWYY "2626";
 // counter 17 = 2026-07, increments monthly). The raw value is preserved as
 // lotCode. Segment 7 is the WCL item no (newer reels; older reels carry a
 // "KOA+<mpn>" marking there instead — itemId stays the match key for those).
 // Trailing segments and an optional trailing delimiter are ignored.
-const KOA_TEMPLATE = String.raw`^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$`;
+const KOA_TEMPLATE = String.raw`^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]*):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$`;
 
 // NCC (Chemi-Con): fixed-width ITF reel barcode, all digits.
 //   28-char: itemId(6) flag(3) lot(7) pack(3) qty(5) serial(4)
