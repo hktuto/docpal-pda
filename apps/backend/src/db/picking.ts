@@ -629,6 +629,8 @@ export async function listPickingOrders(
      *  the default priority order. */
     sort?: string; dir?: "asc" | "desc";
     scope?: UserScopeEntry[] | null;
+    /** Delivery-date range bounds (YYYY-MM-DD, both inclusive). */
+    deliveryDateFrom?: string; deliveryDateTo?: string;
   }
 ): Promise<{ rows: PickingOrderListRow[]; total: number }> {
   const statuses = (opts?.status ?? "").split(",").map((v) => v.trim()).filter(Boolean);
@@ -664,6 +666,8 @@ export async function listPickingOrders(
       ${allocations.length ? sql`AND po.allocation_status = ANY(ARRAY[${sql.join(allocations, sql`, `)}])` : sql``}
       ${types.length ? sql`AND po.picking_order_type = ANY(ARRAY[${sql.join(types, sql`, `)}])` : sql``}
       ${search ? sql`AND (po.order_no ILIKE ${"%" + search + "%"} OR po.po_no ILIKE ${"%" + search + "%"} OR po.customer_code ILIKE ${"%" + search + "%"} OR po.ship_to ILIKE ${"%" + search + "%"})` : sql``}
+      ${opts?.deliveryDateFrom ? sql`AND po.delivery_date >= ${opts.deliveryDateFrom}` : sql``}
+      ${opts?.deliveryDateTo ? sql`AND po.delivery_date < (${opts.deliveryDateTo}::date + 1)` : sql``}
       ${pickingOrderOrgFilter(sql`po.org_id`, sql`po.sub_inventory_code`, sql`po.picking_order_type`, opts?.scope)}
       GROUP BY po.id, w.display_name
       ${pickingListOrderBy(opts)}

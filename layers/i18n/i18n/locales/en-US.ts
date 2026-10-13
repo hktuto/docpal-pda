@@ -1568,6 +1568,8 @@ export default {
         poNo: "PO No",
         shipTo: "Ship To",
         deliveryDate: "Delivery Date",
+        deliveryDateFrom: "Delivery from",
+        deliveryDateTo: "Delivery to",
         items: "Items",
         pickedTotal: "Picked / Total",
         allocation: "Allocation",

@@ -11,6 +11,8 @@ const error = ref("");
 const status = ref("");
 const orderTypes = ref<string[]>([]);
 const search = ref("");
+const deliveryDateFrom = ref("");
+const deliveryDateTo = ref("");
 const selected = ref<Set<string>>(new Set());
 
 const STATUSES = ["pending", "allocated", "skip", "picking", "finished", "issue", "shipped"];
@@ -105,6 +107,8 @@ useUrlQueryState({
     serialize: (v) => v.join(","),
   },
   q: { state: search, defaultValue: "" },
+  deliveryDateFrom: { state: deliveryDateFrom, defaultValue: "" },
+  deliveryDateTo: { state: deliveryDateTo, defaultValue: "" },
   page: { state: page, defaultValue: 1, parse: parsePositiveInt(1) },
   pageSize: { state: pageSize, defaultValue: 50, parse: parsePositiveInt(50) },
 });
@@ -118,6 +122,8 @@ async function load() {
       status: status.value || undefined,
       type: orderTypes.value.length ? orderTypes.value : undefined,
       search: search.value.trim() || undefined,
+      deliveryDateFrom: deliveryDateFrom.value || undefined,
+      deliveryDateTo: deliveryDateTo.value || undefined,
       page: pagination.value.pageIndex + 1,
       pageSize: pagination.value.pageSize,
       sort: sort?.id,
@@ -147,6 +153,8 @@ function resetPageAndLoad() {
 
 watch(status, resetPageAndLoad);
 watch(orderTypes, resetPageAndLoad);
+watch(deliveryDateFrom, resetPageAndLoad);
+watch(deliveryDateTo, resetPageAndLoad);
 watch(sorting, resetPageAndLoad);
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
@@ -279,6 +287,14 @@ const {
         :aria-label="$t('admin.pages.pickingOrders.type')"
         class="filter-type"
       />
+      <label class="filter-date">
+        <span>{{ $t("admin.pages.pickingOrders.deliveryDateFrom") }}</span>
+        <input v-model="deliveryDateFrom" type="date" />
+      </label>
+      <label class="filter-date">
+        <span>{{ $t("admin.pages.pickingOrders.deliveryDateTo") }}</span>
+        <input v-model="deliveryDateTo" type="date" />
+      </label>
       <input v-model="search" :placeholder="$t('admin.pages.pickingOrders.searchPlaceholder')" />
       <UserScopeFilterButton @saved="load" />
     </div>
@@ -337,6 +353,20 @@ const {
   display: flex;
   gap: 0.625rem;
   margin-bottom: 0.75rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.filter-date {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+}
+.filter-date input {
+  padding: 0.375rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.875rem;
 }
 .filters input {
   flex: 1;

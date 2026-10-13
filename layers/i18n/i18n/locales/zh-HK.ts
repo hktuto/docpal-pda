@@ -1567,6 +1567,8 @@ export default {
         poNo: "PO 號",
         shipTo: "收貨地",
         deliveryDate: "交貨日期",
+        deliveryDateFrom: "交貨日期由",
+        deliveryDateTo: "交貨日期至",
         items: "明細數",
         pickedTotal: "已揀 / 總數",
         allocation: "分配狀態",

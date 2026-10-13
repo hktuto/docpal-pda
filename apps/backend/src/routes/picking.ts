@@ -69,6 +69,8 @@ pickingRoute.get("/picking-orders", async (c) => {
       offset: Number.isNaN(offset) ? undefined : offset,
       sort: c.req.query("sort"),
       dir: c.req.query("dir") === "desc" ? "desc" : "asc",
+      deliveryDateFrom: c.req.query("deliveryDateFrom"),
+      deliveryDateTo: c.req.query("deliveryDateTo"),
       scope,
     }),
     200

@@ -788,6 +788,9 @@ export interface OrderListParams {
   pageSize?: number;
   sort?: string;
   dir?: "asc" | "desc";
+  /** Picking only: delivery-date range bounds (YYYY-MM-DD, inclusive). */
+  deliveryDateFrom?: string;
+  deliveryDateTo?: string;
 }
 
 function orderListQuery(params: OrderListParams): string {
@@ -796,6 +799,8 @@ function orderListQuery(params: OrderListParams): string {
   if (params.type?.length) qs.set("type", params.type.join(","));
   if (params.search) qs.set("search", params.search);
   if (params.hasInvoices) qs.set("hasInvoices", "1");
+  if (params.deliveryDateFrom) qs.set("deliveryDateFrom", params.deliveryDateFrom);
+  if (params.deliveryDateTo) qs.set("deliveryDateTo", params.deliveryDateTo);
   if (params.page !== undefined && params.pageSize !== undefined) {
     qs.set("limit", String(params.pageSize));
     qs.set("offset", String((Math.max(1, params.page) - 1) * params.pageSize));
