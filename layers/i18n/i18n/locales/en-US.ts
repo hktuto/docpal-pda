@@ -1189,6 +1189,7 @@ export default {
         medium: "Medium (68 × 35 mm)",
         big: "Big (104 × 35 mm)"
       },
+      scale: "Print scale (%)",
       copies: "Copies",
       print: "Print",
       downloadQr: "Download label",

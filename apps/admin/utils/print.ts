@@ -51,15 +51,46 @@ export interface LabelSize {
   widthMm: number;
   /** Physical label height in mm. */
   heightMm: number;
+  /** Rendered-size multiplier over the physical stock (1.05 = drawn 5%
+   * larger). medium carries 1.05: operators reported it printing too small
+   * on the label printers, so it is pre-enlarged — the printed result lands
+   * at the true physical size. */
+  renderScale?: number;
 }
 
 export const LABEL_SIZES: LabelSize[] = [
   { id: "small", widthMm: 53, heightMm: 9 },
-  { id: "medium", widthMm: 68, heightMm: 35 },
+  { id: "medium", widthMm: 68, heightMm: 35, renderScale: 1.05 },
   { id: "big", widthMm: 104, heightMm: 35 },
 ];
 
 export const DEFAULT_LABEL_SIZE: LabelSizeId = "medium";
+
+// A4 batch print scale factor (percent). Printers auto-fit the sheet into
+// their printable area and typically shrink it a little; rendering the grid
+// larger than 100% pre-compensates so the printed label ends up at its true
+// physical size (e.g. 105 prints the cells 5% bigger).
+export const LABEL_PRINT_SCALE_MIN = 50;
+export const LABEL_PRINT_SCALE_MAX = 200;
+export const DEFAULT_LABEL_PRINT_SCALE = 100;
+
+/** Clamp a print-scale value (invalid input falls back to the default). */
+export function labelPrintScale(v?: number | string): number {
+  const n = typeof v === "string" ? Number.parseFloat(v) : v;
+  if (typeof n !== "number" || !Number.isFinite(n)) return DEFAULT_LABEL_PRINT_SCALE;
+  return Math.min(LABEL_PRINT_SCALE_MAX, Math.max(LABEL_PRINT_SCALE_MIN, Math.round(n)));
+}
+
+/** Last A4 print scale picked in the batch dialogs (invalid values fall back). */
+export function loadLabelPrintScale(): number {
+  if (!import.meta.client) return DEFAULT_LABEL_PRINT_SCALE;
+  return labelPrintScale(localStorage.getItem("label_print_scale"));
+}
+
+/** Remember the A4 print scale picked in the batch dialogs. */
+export function saveLabelPrintScale(scale: number): void {
+  if (import.meta.client) localStorage.setItem("label_print_scale", String(labelPrintScale(scale)));
+}
 
 const LABEL_DPI = 300;
 const MM_PER_INCH = 25.4;
@@ -69,12 +100,13 @@ export function labelSize(id?: string): LabelSize {
   return LABEL_SIZES.find((s) => s.id === id) ?? LABEL_SIZES.find((s) => s.id === DEFAULT_LABEL_SIZE)!;
 }
 
-/** Canvas pixel size of one label at 300 dpi. */
+/** Canvas pixel size of one label at 300 dpi (after the size's renderScale). */
 export function labelSizePx(id?: string): { w: number; h: number } {
   const size = labelSize(id);
+  const f = size.renderScale ?? 1;
   return {
-    w: Math.round((size.widthMm * LABEL_DPI) / MM_PER_INCH),
-    h: Math.round((size.heightMm * LABEL_DPI) / MM_PER_INCH),
+    w: Math.round((size.widthMm * LABEL_DPI * f) / MM_PER_INCH),
+    h: Math.round((size.heightMm * LABEL_DPI * f) / MM_PER_INCH),
   };
 }
 
@@ -205,9 +237,14 @@ export interface LabelBatchGrid {
   gap: number;
 }
 
-/** Compute the A4 grid for one label size (centered, uniform gap). */
-export function shelfBatchGrid(sizeId?: LabelSizeId): LabelBatchGrid {
-  const px = labelSizePx(sizeId);
+/** Compute the A4 grid for one label size (centered, uniform gap). Cells are
+ * drawn `scale`% larger than the physical label so the printed result lands
+ * at true size after the printer's own auto-fit shrink; bigger cells simply
+ * mean fewer columns/rows per page. */
+export function shelfBatchGrid(sizeId?: LabelSizeId, scale: number = DEFAULT_LABEL_PRINT_SCALE): LabelBatchGrid {
+  const base = labelSizePx(sizeId);
+  const f = labelPrintScale(scale) / 100;
+  const px = { w: Math.max(1, Math.round(base.w * f)), h: Math.max(1, Math.round(base.h * f)) };
   const fit = (available: number, cell: number) =>
     Math.max(1, Math.floor((available + BATCH_MIN_GAP) / (cell + BATCH_MIN_GAP)));
   const cols = fit(A4_PAGE_W, px.w);
@@ -220,9 +257,9 @@ export function shelfBatchGrid(sizeId?: LabelSizeId): LabelBatchGrid {
   return { cols, rows, cellW: px.w, cellH: px.h, gap };
 }
 
-/** How many labels of this size fit on one A4 page. */
-export function shelfBatchCellsPerPage(sizeId?: LabelSizeId): number {
-  const g = shelfBatchGrid(sizeId);
+/** How many labels of this size fit on one A4 page at the given scale. */
+export function shelfBatchCellsPerPage(sizeId?: LabelSizeId, scale: number = DEFAULT_LABEL_PRINT_SCALE): number {
+  const g = shelfBatchGrid(sizeId, scale);
   return g.cols * g.rows;
 }
 
@@ -230,9 +267,10 @@ export function shelfBatchCellsPerPage(sizeId?: LabelSizeId): number {
 async function renderStockBatchPagePng(
   cells: LabelCell[],
   layout: LabelLayout,
-  sizeId?: LabelSizeId
+  sizeId?: LabelSizeId,
+  scale: number = DEFAULT_LABEL_PRINT_SCALE
 ): Promise<Blob> {
-  const grid = shelfBatchGrid(sizeId);
+  const grid = shelfBatchGrid(sizeId, scale);
   const canvas = document.createElement("canvas");
   canvas.width = A4_PAGE_W;
   canvas.height = A4_PAGE_H;
@@ -260,12 +298,14 @@ async function renderStockBatchPagePng(
 export function renderShelfBatchPagePng(
   cells: { code: string; displayName?: string | null }[],
   layout?: LabelLayout,
-  size?: LabelSizeId
+  size?: LabelSizeId,
+  scale: number = DEFAULT_LABEL_PRINT_SCALE
 ): Promise<Blob> {
   return renderStockBatchPagePng(
     cells.map((c) => ({ qr: c.code, main: c.displayName?.trim() || c.code })),
     layout ?? {},
-    size
+    size,
+    scale
   );
 }
 
@@ -273,9 +313,10 @@ export function renderShelfBatchPagePng(
 export function renderShelfBoxBatchPagePng(
   boxIds: string[],
   layout?: LabelLayout,
-  size?: LabelSizeId
+  size?: LabelSizeId,
+  scale: number = DEFAULT_LABEL_PRINT_SCALE
 ): Promise<Blob> {
-  return renderStockBatchPagePng(boxIds.map((id) => ({ qr: id, main: id })), layout ?? {}, size);
+  return renderStockBatchPagePng(boxIds.map((id) => ({ qr: id, main: id })), layout ?? {}, size, scale);
 }
 
 function apiBaseUrl(): string {

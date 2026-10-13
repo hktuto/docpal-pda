@@ -1189,6 +1189,7 @@ export default {
         medium: "中（68 × 35 mm）",
         big: "大（104 × 35 mm）"
       },
+      scale: "列印縮放（%）",
       copies: "份數",
       print: "列印",
       downloadQr: "下載標籤",

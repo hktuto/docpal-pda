@@ -26,6 +26,9 @@ const { t } = useI18n();
 // picking another size re-lays-out (and re-renders) the A4 pages below.
 const size = useLabelSize();
 const sizeOptions = LABEL_SIZES.map((s) => ({ value: s.id, label: t(`admin.print.sizes.${s.id}`) }));
+// Print scale factor (%): compensates for the printer's auto-fit shrink so
+// the printed label comes out at its true physical size. Also remembered.
+const scale = useLabelPrintScale();
 
 const props = defineProps<{
   boxIds: string[];
@@ -56,11 +59,16 @@ let renderSeq = 0;
 
 async function renderPages() {
   const seq = ++renderSeq;
-  const perPage = shelfBatchCellsPerPage(size.value);
+  const perPage = shelfBatchCellsPerPage(size.value, scale.value);
   const blobs: Blob[] = [];
   const urls: string[] = [];
   for (let i = 0; i < props.boxIds.length; i += perPage) {
-    const png = await renderShelfBoxBatchPagePng(props.boxIds.slice(i, i + perPage), labelLayout.value, size.value);
+    const png = await renderShelfBoxBatchPagePng(
+      props.boxIds.slice(i, i + perPage),
+      labelLayout.value,
+      size.value,
+      scale.value
+    );
     blobs.push(png);
     urls.push(URL.createObjectURL(png));
   }
@@ -84,6 +92,7 @@ onMounted(async () => {
 });
 
 watch(size, () => renderPages());
+watch(scale, () => renderPages());
 // The warehouse layout (SZ border) resolves from /config after mount —
 // re-render so the preview reflects it.
 watch(labelLayout, () => renderPages(), { deep: true });
@@ -141,6 +150,19 @@ async function print() {
         <select id="sbbp-size" v-model="size">
           <option v-for="opt in sizeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
         </select>
+      </div>
+      <div class="form-row">
+        <label for="sbbp-scale">{{ $t("admin.print.scale") }}</label>
+        <!-- Committed on change (blur/Enter), not per keystroke: each commit re-renders every A4 page. -->
+        <input
+          id="sbbp-scale"
+          type="number"
+          min="50"
+          max="200"
+          step="1"
+          :value="scale"
+          @change="scale = labelPrintScale(($event.target as HTMLInputElement).value)"
+        />
       </div>
       <div class="form-row">
         <label for="sbbp-copies">{{ $t("admin.print.copies") }}</label>
