@@ -22,7 +22,7 @@ import { useWarehouseLabelLayout } from "~/composables/useWarehouseLabelLayout";
 
 const { layout: labelLayout } = useWarehouseLabelLayout();
 const { t } = useI18n();
-// Label size (53 x 9 / 68 x 35 / 104 x 35 mm), remembered across dialogs;
+// Label size (53 x 16 / 68 x 35 / 104 x 35 mm), remembered across dialogs;
 // picking another size re-lays-out (and re-renders) the A4 pages below.
 const size = useLabelSize();
 const sizeOptions = LABEL_SIZES.map((s) => ({ value: s.id, label: t(`admin.print.sizes.${s.id}`) }));

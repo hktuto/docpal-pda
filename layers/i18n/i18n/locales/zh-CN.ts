@@ -1185,7 +1185,7 @@ export default {
       printerPlaceholder: "选择或输入打印机…",
       size: "标签尺寸",
       sizes: {
-        small: "小（53 × 9 mm）",
+        small: "小（53 × 16 mm）",
         medium: "中（68 × 35 mm）",
         big: "大（104 × 35 mm）"
       },

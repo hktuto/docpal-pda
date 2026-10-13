@@ -59,7 +59,7 @@ export interface LabelSize {
 }
 
 export const LABEL_SIZES: LabelSize[] = [
-  { id: "small", widthMm: 53, heightMm: 9 },
+  { id: "small", widthMm: 53, heightMm: 16 },
   { id: "medium", widthMm: 68, heightMm: 35, renderScale: 1.05 },
   { id: "big", widthMm: 104, heightMm: 35 },
 ];
@@ -94,9 +94,12 @@ export function saveLabelPrintScale(scale: number): void {
 
 const LABEL_DPI = 300;
 const MM_PER_INCH = 25.4;
-// The big (104 x 35 mm) label draws its text line 30% larger — operators
-// asked for a bolder shelf code on the wide label.
-const BIG_TEXT_SCALE = 1.3;
+// Every label draws its text line 30% larger than the base fit — operators
+// asked for a bolder shelf code on the printed labels.
+const LABEL_TEXT_SCALE = 1.3;
+// Trim border (SZ warehouse only): a fixed 3px line on every size —
+// thinner lines (1-2px) can drop out entirely on the label printers.
+const LABEL_BORDER_PX = 3;
 
 /** Resolve a size id (unknown values fall back to the default). */
 export function labelSize(id?: string): LabelSize {
@@ -133,7 +136,7 @@ interface LabelCell {
 }
 
 export interface LabelLayout {
-  /** Draw a light border around the label for easy cutting (SZ warehouse). */
+  /** Draw a 3px border around the label for easy cutting (SZ warehouse). */
   border?: boolean;
 }
 
@@ -149,10 +152,10 @@ function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
 // Draw one label cell at (x, y) into an existing context. The layout is
 // derived from the cell's own pixel size (any of the LABEL_SIZES at 300 dpi):
 // one big left-aligned text line (the shelf code / box id) on the left, QR on
-// the right. Short strips (small) keep a height-filling QR and size the text
-// off the label height; tall labels (medium/big) cap the QR at half the
-// height so the text gets the remaining width. `sizeId` lets the big size
-// draw its text extra-large (BIG_TEXT_SCALE).
+// the right. The wide strip (small) keeps a height-filling QR and sizes the
+// text off the label height and text width; tall labels (medium/big) cap the
+// QR at half the height so the text gets the remaining width. The text line
+// is drawn LABEL_TEXT_SCALE (130%) larger than the base fit on every size.
 async function drawLabelCell(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -160,11 +163,15 @@ async function drawLabelCell(
   w: number,
   h: number,
   cell: LabelCell,
-  layout: LabelLayout,
-  sizeId?: LabelSizeId
+  layout: LabelLayout
 ): Promise<void> {
-  const pad = Math.max(4, Math.round(h * 0.064));
-  const tall = h / w > 0.25; // medium/big (35 mm tall) vs the small strip
+  const pad = Math.max(4, Math.round(h * 0.064)); // vertical margin (all sizes)
+  // Wide strip (small 53x16 ≈ 0.30) vs tall labels (big 0.34, medium 0.51):
+  // only medium/big cap the QR at half the height.
+  const tall = h / w > 0.32;
+  // Horizontal margin: the short strip hugs the label edges otherwise, so it
+  // gets a ~2mm side margin (tall labels keep the symmetric pad).
+  const padX = tall ? pad : Math.max(pad, Math.round((2 * LABEL_DPI) / MM_PER_INCH));
   const qrSize = Math.round(Math.min(tall ? h * 0.5 : h * 0.824, h - 2 * pad, w * 0.5));
   const qr = new Image();
   qr.src = await QRCode.toDataURL(cell.qr, {
@@ -173,28 +180,30 @@ async function drawLabelCell(
     errorCorrectionLevel: "M",
   });
   await qr.decode();
-  ctx.drawImage(qr, x + w - pad - qrSize, y + (h - qrSize) / 2, qrSize, qrSize);
+  ctx.drawImage(qr, x + w - padX - qrSize, y + (h - qrSize) / 2, qrSize, qrSize);
 
-  const textX = x + pad;
-  const textW = Math.max(1, x + w - pad - qrSize - pad - textX);
+  const textX = x + padX;
+  const textW = Math.max(1, x + w - padX - qrSize - padX - textX);
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = "#0f1720";
-  // Main text: tall labels fit ~7 monospace chars (shelf codes) in the text
-  // width, capped at 40% of the label height; short strips stay height-driven.
-  // fillText's maxWidth squeezes anything longer than the text area.
+  // Main text: sized off the label height and the text width — the height
+  // cap grows with the taller small strip, the textW term keeps a ~7-char
+  // shelf code inside the text area. fillText's maxWidth then squeezes
+  // anything longer than the text area.
   const baseFont = tall
     ? Math.min(h * 0.4, textW / 4.5)
-    : Math.max(h * 0.256, Math.min(h * 0.5, w * 0.1));
-  const mainFont = Math.round(baseFont * (sizeId === "big" ? BIG_TEXT_SCALE : 1));
+    : Math.max(h * 0.256, Math.min(h * 0.5, textW / 4.5));
+  const mainFont = Math.round(baseFont * LABEL_TEXT_SCALE);
   ctx.font = `700 ${mainFont}px ui-monospace, SFMono-Regular, Menlo, monospace`;
   // Vertically center the single line (cap height ≈ 0.72em).
   ctx.fillText(cell.main, textX, y + h / 2 + mainFont * 0.36, textW);
 
   if (layout.border) {
+    const bw = LABEL_BORDER_PX; // 3px — 1px lines can be ignored by the printer
     ctx.strokeStyle = "#d1d5db";
-    ctx.lineWidth = Math.max(1, Math.round((2 * h) / 437));
-    ctx.strokeRect(x + ctx.lineWidth / 2, y + ctx.lineWidth / 2, w - ctx.lineWidth, h - ctx.lineWidth);
+    ctx.lineWidth = bw;
+    ctx.strokeRect(x + bw / 2, y + bw / 2, w - bw, h - bw);
   }
 }
 
@@ -207,7 +216,7 @@ async function renderStockLabelPng(cell: LabelCell, layout: LabelLayout, size?: 
   const ctx = canvas.getContext("2d")!;
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, w, h);
-  await drawLabelCell(ctx, 0, 0, w, h, cell, layout, labelSize(size).id);
+  await drawLabelCell(ctx, 0, 0, w, h, cell, layout);
   return canvasToPng(canvas);
 }
 
@@ -293,7 +302,7 @@ async function renderStockBatchPagePng(
     const row = Math.floor(i / cols);
     const x = offsetX + col * (cellW + gap);
     const y = offsetY + row * (cellH + gap);
-    await drawLabelCell(ctx, x, y, cellW, cellH, cell, layout, sizeId);
+    await drawLabelCell(ctx, x, y, cellW, cellH, cell, layout);
   }
 
   return canvasToPng(canvas);

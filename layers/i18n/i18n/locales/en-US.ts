@@ -1185,7 +1185,7 @@ export default {
       printerPlaceholder: "Select or type a printer…",
       size: "Label size",
       sizes: {
-        small: "Small (53 × 9 mm)",
+        small: "Small (53 × 16 mm)",
         medium: "Medium (68 × 35 mm)",
         big: "Big (104 × 35 mm)"
       },

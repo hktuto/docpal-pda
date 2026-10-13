@@ -47,7 +47,7 @@ const total = computed(() => boxes.value.length);
 
 // Multi-select for label printing (checkbox column + "Print selected" /
 // "Print all"): the single-label dialog prints one label per box at the
-// chosen size (53 x 9 / 68 x 35 / 104 x 35 mm), the batch dialog lays the
+// chosen size (53 x 16 / 68 x 35 / 104 x 35 mm), the batch dialog lays the
 // same labels out on A4 pages in a size-dependent grid.
 const selected = ref<Set<string>>(new Set());
 const selectedBoxes = computed(() => boxes.value.filter((b) => selected.value.has(b.id)));
