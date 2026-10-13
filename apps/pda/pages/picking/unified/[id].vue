@@ -1,0 +1,808 @@
+<template>
+  <div class="unified-page">
+    <EmptyState v-if="pending">{{ $t('common.loading') }}</EmptyState>
+    <EmptyState v-else-if="error" error>{{ $t('common.errorPrefix', { message: error }) }}</EmptyState>
+
+    <template v-else-if="order">
+      <PickingIssueBanner v-if="order.status === 'issue'" :order="order" />
+
+      <div v-if="heldByOther" class="work-lock-banner">
+        {{ $t('picking.detail.heldBy', { name: heldByOther }) }}
+      </div>
+
+      <div v-if="order.suggestedBox && actionable" class="box-match-banner">
+        <span>
+          {{ $t('picking.detail.boxMatchHint', { box: order.suggestedBox.id }) }}<template v-if="order.suggestedBox.shelfCode"> ({{ order.suggestedBox.shelfCode }})</template>
+        </span>
+        <button class="btn btn--small" :disabled="claimingBox" @click="claimBox">
+          <template v-if="claimingBox">
+            <InlineSpinner /> {{ $t('picking.detail.claimingBox') }}
+          </template>
+          <template v-else>
+            {{ $t('picking.detail.useWholeBox') }}
+          </template>
+        </button>
+      </div>
+
+      <div
+        v-if="requireShelfScan && !completed"
+        class="shelf-banner"
+        :class="{ 'shelf-banner--empty': !pendingShelf }"
+      >
+        <template v-if="pendingShelf">
+          <span class="shelf-banner-label">
+            {{ $t('picking.scanSession.shelfContext', { shelf: pendingShelf.label }) }}
+          </span>
+          <button class="btn btn--small btn--secondary" @click="session.clearPendingShelf">
+            {{ $t('picking.scanSession.shelfClear') }}
+          </button>
+        </template>
+        <span v-else>{{ $t('picking.scanSession.scanShelfFirst') }}</span>
+      </div>
+
+      <PickingUnifiedItems
+        :items="order.items ?? []"
+        :queue-rows="rows"
+        :actionable="actionable"
+        :box-selections="boxSelections"
+        :adding="adding"
+        :removing="removing"
+        :open-boxes="openBoxes"
+        :collapsed-style="collapsedStyle"
+        @toggle="toggleGroup"
+        @remove-queue="session.removeGroup"
+        @add-to-box="addToBox"
+        @remove-from-box="removeFromBox"
+        @update:box-selections="updateBoxSelections"
+      />
+
+      <PickingBoxesSection
+        v-model:expanded="boxesExpanded"
+        :boxes="order.boxes"
+        :actionable="actionable"
+        :creating-box="creatingBox"
+        :scanning-box="false"
+        :cancelling-box="cancellingBox"
+        :adding-all="addingAll"
+        :any-adding-all="anyAddingAll"
+        :unboxed-count="unboxedCountForOrder"
+        :scan-into-box-id="scanIntoBoxId"
+        :scanning-into-box="scanningIntoBox"
+        @create-box="createBox"
+        @cancel-box="cancelBox"
+        @add-all-to-box="addAllToBox"
+        @toggle-scan-into-box="toggleScanIntoBox"
+      />
+
+      <footer v-if="actionable" class="unified-footer">
+        <button class="btn btn--small" :disabled="applying || ocrCapturing || !!heldByOther || (requireShelfScan && !pendingShelf)" @click="captureOcr">
+          <template v-if="ocrCapturing"><InlineSpinner /> {{ $t('picking.scanSession.ocrCapture') }}</template>
+          <template v-else>{{ $t('picking.scanSession.ocrCapture') }}</template>
+        </button>
+        <button class="btn" :disabled="applying || queuedCount === 0 || !!heldByOther" @click="confirm">
+          <template v-if="applying"><InlineSpinner /> {{ $t('picking.scanSession.confirming') }}</template>
+          <template v-else>{{ $t('picking.scanSession.confirm', { count: queuedCount }) }}</template>
+        </button>
+      </footer>
+
+      <PickingScanReviewModal
+        v-if="review"
+        :model-value="reviewOpen"
+        :parsed="review.parsed"
+        :options="review.options"
+        :part-nos="orderPartNos"
+        @update:model-value="onReviewClosed"
+        @confirm="onReviewConfirm"
+        @retake="onReviewRetake"
+      />
+
+      <ScanMultiItemModal
+        v-if="multiReview"
+        :model-value="multiOpen"
+        :rows="multiReview.rows"
+        :part-nos="orderPartNos"
+        :results="multiResults"
+        @update:model-value="onMultiClosed"
+        @apply="onApplyMulti"
+        @remove="onMultiRowRemoved"
+      />
+
+      <PickFromBoxDialog
+        v-if="boxPickId"
+        :box-id="boxPickId"
+        :entries="boxPickEntries"
+        @close="session.closeBoxPick"
+      />
+    </template>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { useToast } from "~/composables/useToast";
+import { useVisibleReload } from "~/composables/useVisibleReload";
+import { useErrorMessage } from "~/composables/errorMessage";
+import { useWarehouse } from "~/composables/useWarehouse";
+import { usePickingWorkLock } from "~/composables/usePickingWorkLock";
+import { useHardwareScanner } from "~/composables/useHardwareScanner";
+import { useBrandSymbologyScope } from "~/composables/useScannerConfig";
+import { usePickingScanSession } from "~/composables/usePickingScanSession";
+import { useViewConfig } from "~/composables/useViewConfig";
+import { useFlowSteps } from "~/composables/useFlowSteps";
+import { captureLabel, ocrResultToInput, useLabelScan } from "~/composables/useLabelScan";
+import { badgeClass } from "~/composables/useStatusBadge";
+import {
+  extractMultiItemRows,
+  parseAndIdentify,
+  type CandidateOptions,
+  type OcrBarcode,
+  type ScanMultiRow,
+  type ScanMultiRowResult,
+} from "~/utils/parseOcrScan";
+import { playScanComplete, playScanError, playScanSuccess } from "~/utils/scanBeep";
+import { rawCode } from "~/utils/text";
+import { ApiError } from "~/services/apiClient";
+import EmptyState from "~/components/EmptyState.vue";
+import InlineSpinner from "~/components/InlineSpinner.vue";
+import PickingBoxesSection from "~/components/picking/PickingBoxesSection.vue";
+import PickingIssueBanner from "~/components/picking/PickingIssueBanner.vue";
+import PickingScanReviewModal from "~/components/picking/PickingScanReviewModal.vue";
+import PickFromBoxDialog from "~/components/picking/PickFromBoxDialog.vue";
+import PickingUnifiedItems from "~/components/picking/PickingUnifiedItems.vue";
+import ScanMultiItemModal from "~/components/ScanMultiItemModal.vue";
+import type { OcrInput } from "~/utils/ocrNormalize";
+import type { PickingOrderDetail } from "~/services/types";
+import type { ScanSessionResult } from "~/composables/usePickingScanSession";
+
+definePageMeta({ title: "meta.pickingDetail" });
+
+const route = useRoute();
+const orderId = route.params.id as string;
+const warehouse = useWarehouse();
+const { heldByOther } = usePickingWorkLock(orderId);
+const { t } = useI18n();
+const statusLabel = useStatusLabel();
+const errorMessage = useErrorMessage();
+const { showToast } = useToast();
+const { pickingShelfScan: shelfScanMode } = useFlowSteps();
+const { viewConfig } = useViewConfig();
+const { parseRawValue } = useLabelScan();
+
+useHead({ title: t("picking.detail.title") });
+
+const pending = ref(true);
+const error = ref<string | null>(null);
+const order = ref<PickingOrderDetail | null>(null);
+const adding = ref<Record<string, boolean>>({});
+const removing = ref<Record<string, boolean>>({});
+const creatingBox = ref(false);
+const cancellingBox = ref<Record<string, boolean>>({});
+const addingAll = ref<Record<string, boolean>>({});
+const finishing = ref(false);
+const claimingBox = ref(false);
+const boxesExpanded = ref(false);
+const boxSelections = ref<Record<string, string>>({});
+const ocrCapturing = ref(false);
+const scanIntoBoxId = ref<string | null>(null);
+const scanningIntoBox = ref(false);
+
+// OCR review state: a single parsed record opens the confirm form; a label
+// that parses into 2+ item rows opens the multi-item table instead.
+const review = ref<{ parsed: OcrInput; options: CandidateOptions; raw: string } | null>(null);
+const reviewOpen = ref(false);
+const multiReview = ref<{ rows: ScanMultiRow[]; raw: string } | null>(null);
+const multiOpen = ref(false);
+const multiResults = ref<ScanMultiRowResult[] | null>(null);
+
+// The scan session (queue, sticky shelf context, pick-from-box dialog,
+// carton auto-queue, confirm) — spec
+// docs/superpowers/specs/2026-10-12-picking-unified-detail-scan-design.md.
+const session = usePickingScanSession({
+  orderItems: computed(() => order.value?.items ?? []),
+  scope: computed(() => ({
+    orgId: order.value?.orgId ?? undefined,
+    subInventoryCode: order.value?.subInventoryCode ?? undefined,
+  })),
+  shelfMode: shelfScanMode,
+  shelfStockFn: async (q) => (await warehouse.getPickingShelfStock(q)).qty,
+});
+const {
+  rows,
+  queuedCount,
+  pendingShelf,
+  boxPickId,
+  boxPickEntries,
+  completed,
+  orderMatched,
+  requireShelfScan,
+  applying,
+} = session;
+
+const orderItems = computed(() => order.value?.items ?? []);
+const orderPartNos = computed(() => orderItems.value.map((i) => i.partNo));
+const expandedItems = ref(new Set<string>());
+
+function toggleGroup(groupKey: string) {
+  const next = new Set(expandedItems.value);
+  if (next.has(groupKey)) {
+    next.delete(groupKey);
+  } else {
+    next.add(groupKey);
+  }
+  expandedItems.value = next;
+}
+
+function updateBoxSelections(value: Record<string, string>) {
+  boxSelections.value = value;
+}
+
+// Restrict the hardware decoder to the order brands' barcode-type whitelist
+// (e.g. KOA → PDF417) while this page is open; restored on leave. Shelf/box
+// QR labels stay decodable — every scan path on this page matches them.
+useBrandSymbologyScope(session.orderBrands, { withShelfCodes: true });
+
+// Collapsed-row format (spec §5): the new allocations chips by default, the
+// old itemFields-driven meta line when the admin configured "fields".
+const collapsedStyle = computed(() => viewConfig.value.pickingDetail.collapsedStyle ?? "allocations");
+
+// Cross-order packing: with a box armed ("scan into box"), item barcode
+// scans from ANY order pick straight into that box (404
+// no_matching_picking_item / 409 ambiguous_picking_item surface as toasts).
+function toggleScanIntoBox(boxId: string) {
+  scanIntoBoxId.value = scanIntoBoxId.value === boxId ? null : boxId;
+}
+
+async function scanIntoBox(boxId: string, barcode: string): Promise<boolean> {
+  if (scanningIntoBox.value) return false;
+  scanningIntoBox.value = true;
+  try {
+    // The backend's outdated date-code check needs the label's parsed date
+    // code — best-effort supplier-template parse (the barcode may belong to
+    // another order, so a parse miss just sends no dateCode).
+    let dateCode: string | undefined;
+    try {
+      const parsedResult = await parseRawValue(barcode);
+      if (parsedResult.matched) {
+        dateCode = rawCode(ocrResultToInput(parsedResult.parsed).dateCode) ?? undefined;
+      }
+    } catch { /* parsing is best-effort — the scan still goes through */ }
+    await warehouse.scanIntoShippingBox(boxId, { barcode, dateCode });
+    await load();
+    showToast(t("picking.boxesSection.scanIntoBoxSuccess", { box: boxId }));
+    return true;
+  } catch (e) {
+    showToast(errorMessage(e));
+    return false;
+  } finally {
+    scanningIntoBox.value = false;
+  }
+}
+
+// The scan router: the armed "scan into box" takes every scan, then the
+// pick-from-box dialog, then the scan-session routing (label → carton →
+// shelf/box). Success kinds map to toasts here; the composable owns logic.
+async function deliverScan(rawValue: string): Promise<boolean> {
+  if (!order.value) return false;
+  try {
+    if (scanIntoBoxId.value) {
+      return await scanIntoBox(scanIntoBoxId.value, rawValue);
+    }
+    const result: ScanSessionResult = boxPickId.value
+      ? await session.handleBoxPickScan(rawValue)
+      : await session.handleQrOrBoxScan(rawValue);
+    if (!result.ok) {
+      playScanError();
+      showToast(t(`picking.scanSession.${result.message}`));
+      return false;
+    }
+    playScanSuccess();
+    if (result.kind === "queued") {
+      showToast(t("common.scanSuccess"));
+    } else if (result.kind === "carton") {
+      showToast(
+        t("picking.scanSession.cartonQueued", {
+          carton: rawValue.trim(),
+          count: result.count ?? 0,
+          qty: result.qty ?? 0,
+        })
+      );
+    } else if (result.kind === "shelf") {
+      showToast(t("picking.scanSession.shelfContext", { shelf: rawValue.trim() }));
+    }
+    return true;
+  } catch (e) {
+    playScanError();
+    showToast(errorMessage(e));
+    return false;
+  }
+}
+
+useHardwareScanner({
+  enabled: () =>
+    !applying.value &&
+    !ocrCapturing.value &&
+    !completed.value &&
+    !reviewOpen.value &&
+    !multiOpen.value &&
+    !heldByOther.value &&
+    !!order.value,
+  onScan: async (rawValue: string) => await deliverScan(rawValue),
+});
+
+async function captureOcr() {
+  // In the require-* shelf-scan modes an OCR scan needs the sticky shelf
+  // context (sent with every scan POST at confirm) — capture only after a
+  // shelf/box scan; one confirmed OCR record queues exactly like one scan.
+  if (requireShelfScan.value && !pendingShelf.value) {
+    showToast(t("picking.scanSession.scanShelfFirst"));
+    return;
+  }
+  ocrCapturing.value = true;
+  try {
+    const capture = await captureLabel();
+    if (!capture) return;
+    let barcodes: OcrBarcode[] = [];
+    try {
+      const parsed = JSON.parse(capture.barcodes);
+      if (Array.isArray(parsed)) barcodes = parsed;
+    } catch { /* ignore malformed barcode JSON */ }
+    // Mirror useLabelScan.processCapture: QR-only captures (e.g. the browser
+    // prompt fallback) go through the supplier-template QR parser; real
+    // camera captures go through OCR text parsing.
+    if (!capture.imagePath && barcodes.length === 1 && barcodes[0].format === "4") {
+      // deliverScan owns the beeps + toasts for this path.
+      await deliverScan(barcodes[0].value);
+      return;
+    }
+    const targets = orderPartNos.value;
+    // A label whose items table lists several parts parses into 2+ rows:
+    // open the multi-item table so the operator can edit every row.
+    const multiRows = extractMultiItemRows(capture.text, targets);
+    if (multiRows.length >= 2) {
+      multiReview.value = {
+        rows: multiRows.map((r) => ({ partNo: r.partNo, qty: r.qty ?? null })),
+        raw: capture.text,
+      };
+      multiResults.value = null;
+      multiOpen.value = true;
+      playScanSuccess();
+      return;
+    }
+    // Single record: pop the confirm form with the OCR candidates as chips.
+    const parsedResult = parseAndIdentify({ text: capture.text, barcodes }, targets);
+    review.value = {
+      parsed: ocrResultToInput(parsedResult.parsed),
+      options: parsedResult.options,
+      raw: capture.text,
+    };
+    reviewOpen.value = true;
+    playScanSuccess();
+  } catch (e) {
+    playScanError();
+    showToast(errorMessage(e));
+  } finally {
+    ocrCapturing.value = false;
+  }
+}
+
+async function onReviewConfirm(parsed: OcrInput) {
+  if (!review.value) return;
+  const result = await session.handleParsed(parsed, review.value.raw, "ocr");
+  reviewOpen.value = false;
+  review.value = null;
+  if (result.ok) showToast(t("common.scanSuccess"));
+  else showToast(t(`picking.scanSession.${result.message}`));
+}
+
+function onReviewRetake() {
+  reviewOpen.value = false;
+  review.value = null;
+  captureOcr();
+}
+
+function onReviewClosed(v: boolean) {
+  reviewOpen.value = v;
+  if (!v) review.value = null;
+}
+
+async function onApplyMulti(entries: { row: ScanMultiRow; index: number }[]) {
+  if (!multiReview.value) return;
+  const raw = multiReview.value.raw;
+  const results: ScanMultiRowResult[] = [];
+  for (const { row, index } of entries) {
+    // Suffix the raw per part so the queue's duplicate-raw guard treats each
+    // row of one multi-item label as a distinct scan.
+    const result = await session.handleParsed(
+      {
+        partNo: row.partNo,
+        qty: row.qty ?? "",
+        dateCode: "",
+        lotCode: "",
+        coo: "",
+        cow: "",
+      },
+      `${raw} [${row.partNo}]`,
+      "ocr"
+    );
+    results.push({
+      index,
+      ok: result.ok,
+      message: result.ok ? undefined : t(`picking.scanSession.${result.message}`),
+    });
+  }
+  // Merge with earlier results (replacing by index) so locked rows stay marked.
+  const merged = new Map<number, ScanMultiRowResult>();
+  for (const r of multiResults.value ?? []) merged.set(r.index, r);
+  for (const r of results) merged.set(r.index, r);
+  multiResults.value = [...merged.values()];
+  if (multiResults.value.every((r) => r.ok)) {
+    multiOpen.value = false;
+    multiReview.value = null;
+    multiResults.value = null;
+    showToast(t("common.scanSuccess"));
+  }
+}
+
+function onMultiClosed(v: boolean) {
+  multiOpen.value = v;
+  if (!v) {
+    multiReview.value = null;
+    multiResults.value = null;
+  }
+}
+
+/** A removed row shifts later row indices — keep stored results aligned. */
+function onMultiRowRemoved(index: number) {
+  multiResults.value = (multiResults.value ?? [])
+    .filter((r) => r.index !== index)
+    .map((r) => (r.index > index ? { ...r, index: r.index - 1 } : r));
+}
+
+// The queued scans cover what the server has not confirmed yet — every part's
+// required qty is matched. On the transition into this state play a success
+// cue and offer to confirm right away (one prompt per transition; removing a
+// row and re-matching re-arms it).
+watch(orderMatched, (matched) => {
+  if (!matched || applying.value || heldByOther.value) return;
+  playScanComplete();
+  if (window.confirm(t("picking.scanSession.matchConfirm"))) void confirm();
+});
+
+async function confirm() {
+  const failed = await session.confirm(
+    async (row) => {
+      await warehouse.scanPickingItem(row.itemId, {
+        allocationId: row.allocationId,
+        qty: row.qty,
+        dateCode: row.dateCode,
+        lotCode: row.lotCode,
+        coo: row.coo,
+        cow: row.cow,
+        // Hardware-scan rows carry the raw label string so the backend can
+        // record it on every portion; OCR rows have no scan string.
+        barcode: row.source === "qr" ? row.raw : undefined,
+        // The label's part keys as scanned — the backend stores them on the
+        // package so measuring/verify show + match the scanned part, not
+        // the allocated item's part.
+        scannedPartNo: row.scannedPartNo,
+        scannedWclItemNo: row.scannedWclItemNo ?? undefined,
+        // Sticky shelf-scan context (require-* modes): every scan POST
+        // carries the shelf/box the operator last scanned.
+        shelfCode: requireShelfScan.value ? pendingShelf.value?.shelfCode ?? undefined : undefined,
+        boxId: requireShelfScan.value ? pendingShelf.value?.boxId ?? undefined : undefined,
+      });
+    },
+    errorMessage,
+    async () => {
+      // The backend rebuilds allocation rows (new ids) after every applied
+      // scan — refetch and re-resolve the remaining queued rows.
+      order.value = await warehouse.getPickingOrder(orderId);
+      session.reresolveQueued();
+    }
+  );
+  for (const row of rows.value) {
+    if (row.error === "allocationChanged") {
+      row.error = t("picking.scanSession.allocationChanged");
+    }
+  }
+  if (failed > 0) {
+    showToast(t("picking.scanSession.partialFail", { count: failed }));
+  }
+}
+
+const allItemsFullyBoxed = computed(
+  () => order.value?.items?.every((i) => i.pickedQty >= i.qty) ?? false
+);
+const headerBadgeClass = computed(() => badgeClass(order.value?.status));
+const headerStatus = computed(() => statusLabel.picking(order.value?.status ?? ""));
+const openBoxes = computed(() =>
+  (order.value?.boxes ?? []).filter((b) => b.status === "open")
+);
+const actionable = computed(
+  () =>
+    order.value?.status !== "finished" &&
+    order.value?.status !== "issue" &&
+    !heldByOther.value
+);
+const unboxedCountForOrder = computed(() => {
+  return (order.value?.items ?? []).reduce((sum, item) => {
+    const unboxed = (item.packages ?? []).filter((p) => !p.shippingBoxId);
+    return sum + unboxed.length;
+  }, 0);
+});
+const anyAddingAll = computed(() => Object.values(addingAll.value).some(Boolean));
+
+// Title, status badge, header info rows and actions render in the AppHeader.
+usePageHeader({
+  title: () => order.value?.orderNo,
+  badgeText: () => (order.value ? headerStatus.value : undefined),
+  badgeClass: () => headerBadgeClass.value,
+  warningText: () =>
+    order.value && order.value.outdatedWarningCount > 0
+      ? t("outdatedWarning.chip", { count: order.value.outdatedWarningCount })
+      : undefined,
+  info: () => {
+    const o = order.value;
+    if (!o) return [];
+    const rows = [
+      { label: t("picking.detail.customer"), value: o.customerCode || t("common.noData") },
+      {
+        label: t("picking.detail.deliveryDate"),
+        value: o.deliveryDate ? new Date(o.deliveryDate).toLocaleDateString() : t("common.noData"),
+      },
+      { label: t("picking.detail.poNo"), value: o.poNo || t("common.noData") },
+      { label: t("picking.detail.shipTo"), value: o.shipTo || t("common.noData") },
+    ];
+    if (o.orgId != null) rows.push({ label: t("picking.detail.org"), value: `Org ${o.orgId}` });
+    if (o.subInventoryCode) rows.push({ label: t("picking.detail.subInventory"), value: o.subInventoryCode });
+    if (o.workingByName) rows.push({ label: t("picking.detail.lockedBy"), value: o.workingByName });
+    return rows;
+  },
+  actions: () => {
+    const o = order.value;
+    if (!o || o.status === "finished" || o.status === "issue" || heldByOther.value) return [];
+    if (!allItemsFullyBoxed.value) return [];
+    return [
+      {
+        key: "finish",
+        label: finishing.value ? t("actions.finishing") : t("picking.detail.finishPicking"),
+        disabled: finishing.value,
+        onClick: finish,
+      },
+    ];
+  },
+});
+
+async function load() {
+  try {
+    order.value = await warehouse.getPickingOrder(orderId);
+    // An armed scan-into box that left the open state (closed/cancelled
+    // elsewhere) disarms itself.
+    if (
+      scanIntoBoxId.value &&
+      !order.value.boxes.some((b) => b.id === scanIntoBoxId.value && b.status === "open")
+    ) {
+      scanIntoBoxId.value = null;
+    }
+    const nextBoxSelections: Record<string, string> = {};
+    for (const item of order.value.items) {
+      for (const pkg of item.packages ?? []) {
+        if (!pkg.shippingBoxId) {
+          nextBoxSelections[pkg.id] = boxSelections.value[pkg.id] ?? "";
+        }
+      }
+    }
+    boxSelections.value = nextBoxSelections;
+  } catch (e) {
+    error.value = errorMessage(e);
+  } finally {
+    pending.value = false;
+  }
+}
+
+async function createBox() {
+  creatingBox.value = true;
+  boxesExpanded.value = true;
+  try {
+    await warehouse.createShippingBoxForPickingOrder(orderId);
+    await load();
+  } catch (e) {
+    error.value = errorMessage(e);
+  } finally {
+    creatingBox.value = false;
+  }
+}
+
+// Whole-box exact-match claim: the hinted shelf carton becomes this order's
+// (prefilled) shipping box with everything already packed.
+async function claimBox() {
+  const box = order.value?.suggestedBox;
+  if (!box || claimingBox.value) return;
+  const confirmed = window.confirm(t("picking.detail.useWholeBoxConfirm", { box: box.id }));
+  if (!confirmed) return;
+  claimingBox.value = true;
+  try {
+    const result = await warehouse.claimShelfBox(orderId, box.id);
+    boxesExpanded.value = true;
+    await load();
+    showToast(t("picking.detail.boxMatchClaimed", { box: result.shippingBoxId }));
+  } catch (e) {
+    showToast(errorMessage(e));
+  } finally {
+    claimingBox.value = false;
+  }
+}
+
+async function cancelBox(boxId: string) {
+  cancellingBox.value[boxId] = true;
+  try {
+    await warehouse.cancelShippingBox(boxId);
+    await load();
+  } catch (e) {
+    error.value = errorMessage(e);
+  } finally {
+    cancellingBox.value[boxId] = false;
+  }
+}
+
+async function addAllToBox(boxId: string) {
+  if (anyAddingAll.value) return;
+  if (unboxedCountForOrder.value === 0) return;
+  const confirmed = window.confirm(t("picking.boxesSection.addAllConfirm"));
+  if (!confirmed) return;
+  addingAll.value[boxId] = true;
+  error.value = null;
+  try {
+    await warehouse.addAllUnboxedPackagesToBox(boxId);
+    await load();
+  } catch (e) {
+    error.value = errorMessage(e);
+  } finally {
+    addingAll.value[boxId] = false;
+  }
+}
+
+async function addToBox(packageId: string) {
+  const boxId = boxSelections.value[packageId];
+  if (!boxId) return;
+  adding.value[packageId] = true;
+  try {
+    await warehouse.addPackageToBox(packageId, boxId);
+    await load();
+  } catch (e) {
+    error.value = errorMessage(e);
+  } finally {
+    adding.value[packageId] = false;
+  }
+}
+
+async function removeFromBox(packageId: string) {
+  const pkg = order.value?.items
+    .flatMap((i) => i.packages ?? [])
+    .find((p) => p.id === packageId);
+  if (!pkg?.shippingBoxId) return;
+  removing.value[packageId] = true;
+  try {
+    await warehouse.removePackageFromBox(pkg.shippingBoxId, packageId);
+    await load();
+  } catch (e) {
+    error.value = errorMessage(e);
+  } finally {
+    removing.value[packageId] = false;
+  }
+}
+
+async function finish() {
+  finishing.value = true;
+  try {
+    // Finish only flips the order — measuring follows the boxes, not the
+    // order, so there is nothing else to kick off here.
+    await warehouse.finishPickingOrder(orderId);
+    await load();
+  } catch (e) {
+    // 409 unresolved_outdated_warnings (spec 2026-10-07): the order stays
+    // open — toast the count and reload so the header warning chip shows.
+    if (
+      e instanceof ApiError &&
+      e.status === 409 &&
+      e.body?.error === "unresolved_outdated_warnings"
+    ) {
+      const count = typeof e.body.count === "number" ? e.body.count : 0;
+      showToast(t("errors.unresolved_outdated_warnings", { count }));
+      await load();
+    } else {
+      error.value = errorMessage(e);
+    }
+  } finally {
+    finishing.value = false;
+  }
+}
+
+useVisibleReload(load);
+
+// Unconfirmed queued scans are lost on leave — warn (same as the old scan
+// page); a single page now, so this only fires on real navigation.
+onBeforeRouteLeave(() => {
+  if (queuedCount.value > 0 && !applying.value) {
+    return window.confirm(t("picking.scanSession.leaveWarning"));
+  }
+});
+
+function beforeUnload(e: BeforeUnloadEvent) {
+  if (queuedCount.value > 0) e.preventDefault();
+}
+
+onMounted(() => {
+  window.addEventListener("beforeunload", beforeUnload);
+});
+onUnmounted(() => window.removeEventListener("beforeunload", beforeUnload));
+</script>
+
+<style scoped>
+/* Clearance so the fixed footer never covers the last list row. */
+.unified-page {
+  padding-bottom: 4.5rem;
+}
+
+.work-lock-banner {
+  background: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 0.375rem;
+  color: #92400e;
+  font-size: 0.875rem;
+  padding: 0.6rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.box-match-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: #ecfdf5;
+  border: 1px solid #10b981;
+  border-radius: 0.375rem;
+  color: #065f46;
+  font-size: 0.875rem;
+  padding: 0.6rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.shelf-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: #dbeafe;
+  border: 1px solid #3b82f6;
+  border-radius: 0.375rem;
+  color: #1e40af;
+  font-size: 1rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.shelf-banner--empty {
+  justify-content: center;
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #92400e;
+}
+
+.shelf-banner-label {
+  font-weight: 700;
+}
+
+.unified-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg, #f3f4f6);
+  border-top: 1px solid var(--muted-light, #e5e7eb);
+  z-index: 50;
+}
+</style>

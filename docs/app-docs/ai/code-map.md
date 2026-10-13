@@ -12,6 +12,7 @@ Page and component locations mapped to source files.
 | Picking list | `/picking` | `pages/picking/index.vue` |
 | Picking detail | `/picking/:id` | `pages/picking/[id].vue` or equivalent |
 | Picking scan session ("checkout") | `/picking/scan/:id` | `pages/picking/scan/[id].vue` |
+| Picking unified detail + scan (evaluation build; what the picking list currently opens) | `/picking/unified/:id` | `pages/picking/unified/[id].vue` |
 | Receiving list | `/receiving` | `pages/receiving/index.vue` |
 | Receiving detail | `/receiving/:id` | `pages/receiving/[id].vue` or equivalent |
 | Put-away list | `/put-away` | `pages/put-away/index.vue` |
@@ -80,6 +81,9 @@ Page and component locations mapped to source files.
 | Items section | `components/picking/PickingItemsSection.vue` |
 | Boxes section | `components/picking/PickingBoxesSection.vue` |
 | Issue banner | `components/picking/PickingIssueBanner.vue` |
+| Unified items list (evaluation — collapsed progress/allocation-chip rows, expanded pending/box/line/allocation views) | `components/picking/PickingUnifiedItems.vue` |
+| Unified scan-session routing (queue, sticky shelf context, pick-from-box, carton auto-queue, confirm with re-resolve) | `composables/usePickingScanSession.ts` |
+| Unified collapsed-row format + pending aggregation (pure, unit-tested) | `utils/pickingUnifiedItems.ts` (`unifiedCollapsedMeta`, `allocationChipLabel`, `pendingScanGroups`) |
 
 ## Measuring / Verify
 

@@ -289,6 +289,10 @@ export default {
           addToQueue: "加入列表",
           heldBy: "此订单正由 {name} 拣货——无法扫描"
         },
+    unified: {
+      pendingTitle: "待确认扫描（未提交）",
+      pending: "待确认"
+    },
     itemsSection: {
       title: "明细",
       part: "料号",
@@ -2110,6 +2114,11 @@ export default {
           invoice: "发票",
           carton: "箱",
           "part-no": "部件号"
+        },
+        pdaCollapsedStyle: "折叠行样式",
+        pdaCollapsedStyleOptions: {
+          allocations: "分配（需求 + 来源）",
+          fields: "配置的行字段"
         },
         pdaRowFields: "行字段（折叠）",
         pdaExpandedFields: "展开字段",

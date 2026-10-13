@@ -242,10 +242,10 @@ usePageHeader({
         value: o.deliveryDate ? new Date(o.deliveryDate).toLocaleDateString() : t("common.noData"),
       },
       { label: t("picking.detail.poNo"), value: o.poNo || t("common.noData") },
-      { label: t("picking.detail.shipTo"), value: o.shipTo || t("common.noData") },
+      // { label: t("picking.detail.shipTo"), value: o.shipTo || t("common.noData") },
     ];
-    if (o.orgId != null) rows.push({ label: t("picking.detail.org"), value: `Org ${o.orgId}` });
-    if (o.subInventoryCode) rows.push({ label: t("picking.detail.subInventory"), value: o.subInventoryCode });
+    // if (o.orgId != null) rows.push({ label: t("picking.detail.org"), value: `Org ${o.orgId}` });
+    // if (o.subInventoryCode) rows.push({ label: t("picking.detail.subInventory"), value: o.subInventoryCode });
     if (o.workingByName) rows.push({ label: t("picking.detail.lockedBy"), value: o.workingByName });
     return rows;
   },

@@ -158,6 +158,7 @@ import type { AddressInfo } from "node:net";
 
 const fakeState = {
   password: "good-pass",
+  firstName: "Doc",
   lastName: "Pal",
   groups: [
     { groupId: "WMS_Admin_Group_(HK)", groupName: "WMS Admin Group (HK)" },
@@ -196,7 +197,7 @@ function startFakeDocpal(): Promise<{ server: Server; url: string }> {
         data: {
           username: username.charAt(0).toUpperCase() + username.slice(1),
           userId: username,
-          firstName: "Doc",
+          firstName: fakeState.firstName,
           lastName: fakeState.lastName,
           aclUserDetail: { groups: fakeState.groups },
         },
@@ -243,6 +244,28 @@ test("docpal login: happy path provisions the local user and maps groups to loca
   const me = await app.request("/auth/me", { headers: { Authorization: `Bearer ${body.token}` } });
   assert.equal(me.status, 200);
   assert.equal((await me.json()).username, "chris");
+});
+
+test("docpal login: Chinese names render surname-first", async (t) => {
+  const { server, url } = await startFakeDocpal();
+  t.after(() => server.close());
+  process.env.DOCPAL_URL = url;
+  t.after(() => { process.env.DOCPAL_URL = FAKE_DOCPAL_URL; });
+  fakeState.firstName = "大文";
+  fakeState.lastName = "陳";
+  t.after(() => { fakeState.firstName = "Doc"; fakeState.lastName = "Pal"; });
+  await reseed(client);
+
+  const res = await login("chan", "good-pass");
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.user.displayName, "陳大文");
+
+  // Mixed CJK + latin keeps the space but still orders surname-first.
+  fakeState.firstName = "Man";
+  fakeState.lastName = "陳";
+  const second = await (await login("chan2", "good-pass")).json();
+  assert.equal(second.user.displayName, "陳 Man");
 });
 
 test("docpal login: second login keeps the id, refreshes name, replaces groups", async (t) => {

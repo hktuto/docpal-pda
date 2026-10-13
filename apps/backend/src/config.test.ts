@@ -316,6 +316,13 @@ test("parseFlowConfig: pdaViewConfig validation", () => {
   assert.throws(() => parseFlowConfig('{"pdaViewConfig":{"receivingDetail":{"itemFields":["bogus"]}}}'), /receivingDetail.itemFields: unknown field "bogus"/);
   assert.throws(() => parseFlowConfig('{"pdaViewConfig":{"pickingDetail":{"expandedFields":[]}}}'), /pickingDetail.expandedFields must be a non-empty array/);
   assert.throws(() => parseFlowConfig('{"pdaViewConfig":{"putAwayDetail":{"itemFields":["expected_qty","shelf"]}}}'), /putAwayDetail.itemFields: unknown field "shelf"/);
+  assert.throws(() => parseFlowConfig('{"pdaViewConfig":{"pickingDetail":{"collapsedStyle":"bogus"}}}'), /pickingDetail.collapsedStyle must be one of/);
+  assert.throws(() => parseFlowConfig('{"pdaViewConfig":{"receivingDetail":{"collapsedStyle":"fields"}}}'), /receivingDetail: unknown key "collapsedStyle"/);
+});
+
+test("parseFlowConfig: pdaViewConfig pickingDetail collapsedStyle", () => {
+  const cfg = parseFlowConfig('{"pdaViewConfig":{"pickingDetail":{"collapsedStyle":"fields"}}}');
+  assert.deepEqual(cfg.pdaViewConfig.pickingDetail, { collapsedStyle: "fields" });
 });
 
 test("pdaViewConfig accessor: resolution defaults", () => {
@@ -334,6 +341,7 @@ test("pdaViewConfig accessor: resolution defaults", () => {
     });
     assert.deepEqual(view.lists["stock-search"], { title: "[wcl_item_no]", meta: ["[part_no]"], chip: "none" });
     assert.equal(view.receivingDetail.defaultGrouping, "invoice");
+    assert.equal(view.pickingDetail.collapsedStyle, "allocations");
     assert.deepEqual(view.pickingDetail.itemFields, ["wcl_item_no", "qty", "picked_qty"]);
     assert.deepEqual(view.putAwayDetail.itemFields, ["wcl_item_no", "expected_qty", "remaining_qty", "suggested_shelf"]);
   } finally {

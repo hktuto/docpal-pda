@@ -92,6 +92,15 @@ describe('usePickingWorkLock', () => {
     expect(releaseMock).not.toHaveBeenCalled();
   });
 
+  it('keeps the lock when moving to the unified detail page of the same order', async () => {
+    const lock = mount();
+    await vi.advanceTimersByTimeAsync(0);
+
+    currentRoute.value.path = '/picking/unified/ORDER-1';
+    unmount();
+    expect(releaseMock).not.toHaveBeenCalled();
+  });
+
   it('releases on pagehide (app close)', async () => {
     const lock = mount();
     await vi.advanceTimersByTimeAsync(0);

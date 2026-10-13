@@ -33,7 +33,13 @@ export interface PdaReceivingDetailViewConfig {
   expandedFields: string[];
 }
 
+/** Collapsed-row format for the picking detail unified list: "allocations" =
+ *  required qty + per-allocation source chips; "fields" = the itemFields-driven
+ *  meta line. Mirrors PdaDetailCollapsedStyle in apps/backend/src/config.ts. */
+export type PdaDetailCollapsedStyle = "allocations" | "fields";
+
 export interface PdaDetailViewConfig {
+  collapsedStyle?: PdaDetailCollapsedStyle;
   itemFields: string[];
   expandedFields: string[];
 }
@@ -100,6 +106,7 @@ export const DEFAULT_PDA_VIEW_CONFIG: PdaViewConfig = {
     ],
   },
   pickingDetail: {
+    collapsedStyle: "allocations",
     itemFields: ["wcl_item_no", "qty", "picked_qty"],
     expandedFields: ["allocated_qty", "shelf_code", "box_id", "date_code", "lot_code", "coo", "cow", "source"],
   },

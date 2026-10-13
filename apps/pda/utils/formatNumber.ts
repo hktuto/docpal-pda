@@ -15,3 +15,8 @@ export function formatCompactQty(n: number): string {
   }
   return String(n);
 }
+
+/** Uppercase-suffix variant for the picking unified list (3K / 1.4M / 2B). */
+export function formatCompactQtyUpper(n: number): string {
+  return formatCompactQty(n).replace(/[kMB]$/, (s) => s.toUpperCase());
+}

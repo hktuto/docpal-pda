@@ -289,6 +289,10 @@ export default {
           addToQueue: "加入清單",
           heldBy: "此訂單正由 {name} 揀貨——無法掃描"
         },
+    unified: {
+      pendingTitle: "待確認掃描（未提交）",
+      pending: "待確認"
+    },
     itemsSection: {
       title: "項目",
       part: "料號",
@@ -2110,6 +2114,11 @@ export default {
           invoice: "發票",
           carton: "箱",
           "part-no": "部件號"
+        },
+        pdaCollapsedStyle: "摺疊行樣式",
+        pdaCollapsedStyleOptions: {
+          allocations: "分配（需求 + 來源）",
+          fields: "設定的行欄位"
         },
         pdaRowFields: "行欄位（摺疊）",
         pdaExpandedFields: "展開欄位",

@@ -38,7 +38,7 @@
         <AppListRow
           v-for="po in group.rows"
           :key="po.id"
-          :to="`/picking/${po.id}`"
+          :to="`/picking/unified/${po.id}`"
           :disabled="!isSelectable(po.status)"
           :title="rowView(po).title"
           :meta="rowMeta(po)"

@@ -62,9 +62,16 @@ export function usePickingWorkLock(orderId: string) {
     }
     window.removeEventListener("pagehide", onPageHide);
     // During router navigation currentRoute already points at the target —
-    // keep the lock when moving between this order's pages (detail ⇄ scan).
+    // keep the lock when moving between this order's pages (detail ⇄ scan ⇄
+    // unified detail).
     const target = router.currentRoute.value.path;
-    if (target === `/picking/${orderId}` || target === `/picking/scan/${orderId}`) return;
+    if (
+      target === `/picking/${orderId}` ||
+      target === `/picking/scan/${orderId}` ||
+      target === `/picking/unified/${orderId}`
+    ) {
+      return;
+    }
     release();
   });
 

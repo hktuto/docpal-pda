@@ -392,6 +392,23 @@
   `inventory_lot_sources`; order-level receiving sources record no line and
   stay manual). COALESCE only — operator edits are never clobbered. This is
   what carries a picked carton's `additional_data` into measuring.
+- Unified detail + scan page (evaluation build, spec
+  `docs/superpowers/specs/2026-10-12-picking-unified-detail-scan-design.md`):
+  `pages/picking/unified/[id].vue` merges the detail and the scan session
+  into one route — a single item list (collapsed rows with inline progress +
+  allocation chips, expanded rows with pending scans, box assignment, line
+  breakdown and planned allocations), the Boxes section below the list, a
+  sticky OCR + Confirm footer, and all scan routing (label → carton →
+  shelf/box, armed scan-into-box, pick-from-box) driven by
+  `composables/usePickingScanSession.ts` (the scan-session mechanics
+  extracted from the old scan page). The picking list row,
+  `utils/orderScanRoute.ts` and the work-lock keep-lock check currently
+  resolve to `/picking/unified/:id`; `pages/picking/[id].vue` and
+  `pages/picking/scan/[id].vue` stay untouched until the Stage-2 swap
+  (spec §8). The collapsed-row line 2 format is selected by
+  `pdaViewConfig.pickingDetail.collapsedStyle` (`allocations` — the new
+  chips format, default — or `fields` — the old itemFields meta line),
+  validated only on `pickingDetail`.
 
 ## Out of scope
 
@@ -422,6 +439,25 @@
   hardware scanner, OCR capture button (single-record confirm form /
   multi-item table review before queueing), local queue table, Confirm
   batch-apply, leave guard.
+- `pages/picking/unified/[id].vue` — evaluation unified page: header via
+  `usePageHeader` (title/badge/info rows/Finish), issue + work-lock +
+  whole-box + shelf-context banners, the scan router (`deliverScan` — armed
+  scan-into-box → pick-from-box → session routing, kinds mapped to
+  beeps/toasts), OCR capture (QR passthrough / multi-item table / single
+  review form), confirm with `allocation_changed` re-resolve +
+  `unresolved_outdated_warnings` handling, `orderMatched` success cue with
+  one-prompt-per-transition auto-confirm, leave guard.
+- `components/picking/PickingUnifiedItems.vue` — the single item list:
+  one row per part no (same-part lines merged), collapsed meta line +
+  expanded pending/line-breakdown/unboxed/boxed/planned-allocation views;
+  collapsed fields and allocation rows gated by `pdaViewConfig.pickingDetail`.
+- `composables/usePickingScanSession.ts` — extracted scan-session state +
+  routing (batch queue, sticky shelf context + require-match stock probe,
+  pick-from-box dialog, carton auto-queue, confirm-with-re-resolve;
+  tests in `tests/usePickingScanSession.test.ts`).
+- `utils/pickingUnifiedItems.ts` — pure collapsed-row format + pending
+  aggregation (`unifiedCollapsedMeta`, `allocationChipLabel`,
+  `pendingScanGroups`; tests in `tests/pickingUnifiedItems.test.ts`).
 - `components/picking/PickingScanReviewModal.vue` — single-record OCR
   confirm form (editable fields + candidate chips, retake).
 - `components/ScanMultiItemModal.vue` — shared multi-item OCR label
@@ -498,11 +534,13 @@
   not all.
 - The admin picking-list xlsx embeds an order-link QR
   (`warehouse://picking/<id>`); scanning it on the PDA opens the order's
-  scan session directly (`/picking/scan/<id>`). Navigation is global —
+  unified page directly (`/picking/unified/<id>` during the evaluation
+  build — `utils/orderScanRoute.ts` points back at the detail page after
+  the Stage-2 swap). Navigation is global —
   `useOrderScanNav` mounted in `app.vue` handles it from every page; the
   page-level `useHardwareScanner` only skips the value in its page handler.
   It must be scanned from a page without a symbology whitelist (home /
-  picking list) — the scan page restricts the decoder to the item brands'
+  picking list) — the unified page restricts the decoder to the item brands'
   barcode types, which may exclude QR.
 - Matching depends on normalized text and may require manual review.
 
@@ -517,6 +555,7 @@
 - `docs/superpowers/specs/2026-07-03-package-level-picking-design.md`
 - `docs/superpowers/specs/2026-07-10-allocation-box-remark-design.md`
 - `docs/superpowers/specs/2026-07-18-picking-scan-session-design.md`
+- `docs/superpowers/specs/2026-10-12-picking-unified-detail-scan-design.md`
 - `docs/superpowers/specs/2026-07-19-box-label-print-preprinted-id-design.md`
 - `docs/superpowers/specs/2026-07-23-picking-priority-allocation-design.md`
 - `docs/superpowers/specs/2026-07-29-whole-box-picking-claim-design.md`

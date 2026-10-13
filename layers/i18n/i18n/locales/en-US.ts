@@ -289,6 +289,10 @@ export default {
           addToQueue: "Add to list",
           heldBy: "This order is being picked by {name} — scanning disabled"
         },
+    unified: {
+      pendingTitle: "Pending scans (unconfirmed)",
+      pending: "pending"
+    },
     itemsSection: {
       title: "Items",
       part: "Part",
@@ -2113,6 +2117,11 @@ export default {
           invoice: "Invoice",
           carton: "Carton",
           "part-no": "Part no"
+        },
+        pdaCollapsedStyle: "Collapsed row style",
+        pdaCollapsedStyleOptions: {
+          allocations: "Allocations (required + sources)",
+          fields: "Configured row fields"
         },
         pdaRowFields: "Row fields (collapsed)",
         pdaExpandedFields: "Expanded fields",

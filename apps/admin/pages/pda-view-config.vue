@@ -431,6 +431,14 @@ onMounted(load);
           </select>
         </div>
 
+        <div v-if="detailPage === 'pickingDetail'" class="form-row">
+          <label for="pda-collapsed-style">{{ $t("admin.pages.pdaViewConfig.pdaCollapsedStyle") }}</label>
+          <select id="pda-collapsed-style" v-model="pdaView.pickingDetail.collapsedStyle" class="pda-list-select">
+            <option value="allocations">{{ $t("admin.pages.pdaViewConfig.pdaCollapsedStyleOptions.allocations") }}</option>
+            <option value="fields">{{ $t("admin.pages.pdaViewConfig.pdaCollapsedStyleOptions.fields") }}</option>
+          </select>
+        </div>
+
         <div class="field-editor">
           <div class="field-editor__col">
             <h3>{{ $t("admin.pages.pdaViewConfig.pdaRowFields") }}</h3>

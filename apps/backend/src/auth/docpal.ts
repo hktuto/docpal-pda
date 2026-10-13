@@ -11,6 +11,21 @@ export interface DocpalUser {
   groups: { id: string; name: string }[];
 }
 
+const CJK_RE = /[㐀-䶿一-鿿]/;
+const CJK_ONLY_RE = /^[㐀-䶿一-鿿]+$/;
+
+/** Join DocPal's firstName/lastName. Chinese names render surname-first
+ *  (lastName firstName, no space when both parts are pure CJK); anything
+ *  else keeps the western firstName lastName order. */
+function joinDisplayName(firstName: unknown, lastName: unknown): string {
+  const parts = [firstName, lastName].filter((p): p is string => typeof p === "string" && p.length > 0);
+  if (parts.length === 2 && (CJK_RE.test(parts[0]) || CJK_RE.test(parts[1]))) {
+    const sep = CJK_ONLY_RE.test(parts[0]) && CJK_ONLY_RE.test(parts[1]) ? "" : " ";
+    return [parts[1], parts[0]].join(sep);
+  }
+  return parts.join(" ");
+}
+
 /** Login/profile failure. `status` is what /auth/login should answer: 401 for
  *  bad credentials, 502 for provider unreachable/misbehaving. */
 export class DocpalAuthError extends Error {
@@ -135,9 +150,7 @@ export async function docpalGetUser(accessToken: string): Promise<DocpalUser> {
     (typeof data.username === "string" && data.username) ||
     "";
   if (!username) throw new DocpalAuthError(502, "DocPal profile has no username");
-  const name = [data.firstName, data.lastName]
-    .filter((p): p is string => typeof p === "string" && p.length > 0)
-    .join(" ");
+  const name = joinDisplayName(data.firstName, data.lastName);
   const rawGroups = data.aclUserDetail?.groups;
   const groups = (Array.isArray(rawGroups) ? rawGroups : [])
     .filter((g): g is { groupId: string; groupName?: unknown } => typeof g?.groupId === "string" && g.groupId.length > 0)

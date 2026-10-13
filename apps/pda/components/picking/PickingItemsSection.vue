@@ -22,12 +22,12 @@
       <button type="button" class="list-row__main list-row__toggle" @click="toggle(group.key)">
         <div class="list-row__line1">
           <span class="list-row__title">{{ group.title || $t('common.noData') }}</span>
-          <span
+          <!-- <span
             class="badge"
             :class="badgeClass(group.pickedQty >= group.qty ? 'finished' : 'picking')"
           >
             {{ group.pickedQty >= group.qty ? statusLabel.picking('finished') : statusLabel.picking('picking') }}
-          </span>
+          </span> -->
         </div>
         <div class="list-row__meta">
           {{ groupMeta(group) }}

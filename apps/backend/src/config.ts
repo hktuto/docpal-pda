@@ -302,7 +302,13 @@ export interface PdaReceivingDetailViewConfig {
   expandedFields: string[];
 }
 
+/** Collapsed-row format for detail pages that support it (picking detail
+ *  today): "allocations" = required qty + per-allocation source chips;
+ *  "fields" = the itemFields-driven meta line. */
+export type PdaDetailCollapsedStyle = "allocations" | "fields";
+
 export interface PdaDetailViewConfig {
+  collapsedStyle?: PdaDetailCollapsedStyle;
   itemFields: string[];
   expandedFields: string[];
 }
@@ -375,6 +381,7 @@ export function defaultPdaViewConfig(): PdaViewConfig {
       ],
     },
     pickingDetail: {
+      collapsedStyle: "allocations",
       itemFields: ["wcl_item_no", "qty", "picked_qty"],
       expandedFields: ["allocated_qty", "shelf_code", "box_id", "date_code", "lot_code", "coo", "cow", "source"],
     },
@@ -598,6 +605,7 @@ function validatePdaViewConfig(value: unknown): PdaViewConfigOverrides {
       const catalog = PDA_DETAIL_FIELDS[section];
       const detail: {
         defaultGrouping?: PdaDetailGrouping;
+        collapsedStyle?: PdaDetailCollapsedStyle;
         itemFields?: string[];
         expandedFields?: string[];
       } = {};
@@ -610,6 +618,14 @@ function validatePdaViewConfig(value: unknown): PdaViewConfigOverrides {
             throw new Error(`[config] ${at}.defaultGrouping must be one of: ${PDA_DETAIL_GROUPINGS.join(", ")}`);
           }
           detail.defaultGrouping = slotValue as PdaDetailGrouping;
+        } else if (slot === "collapsedStyle") {
+          if (section !== "pickingDetail") {
+            throw new Error(`[config] ${at}: unknown key "collapsedStyle"`);
+          }
+          if (slotValue !== "allocations" && slotValue !== "fields") {
+            throw new Error(`[config] ${at}.collapsedStyle must be one of: allocations, fields`);
+          }
+          detail.collapsedStyle = slotValue;
         } else if (slot === "itemFields" || slot === "expandedFields") {
           if (!Array.isArray(slotValue) || slotValue.length === 0 ||
               slotValue.some((v) => typeof v !== "string" || v.trim() === "")) {

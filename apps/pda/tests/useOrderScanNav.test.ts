@@ -80,11 +80,11 @@ describe('useOrderScanNav', () => {
     expect(addListenerMock).toHaveBeenCalledWith('scan', expect.any(Function));
   });
 
-  it('navigates to the picking scan session on a broadcast order-link scan', async () => {
+  it('navigates to the picking unified detail page on a broadcast order-link scan', async () => {
     useOrderScanNav();
     broadcast('warehouse://picking/abc-123');
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(pushMock).toHaveBeenCalledWith('/picking/scan/abc-123');
+    expect(pushMock).toHaveBeenCalledWith('/picking/unified/abc-123');
     expect(beeps).toEqual(['success']);
   });
 
@@ -108,7 +108,7 @@ describe('useOrderScanNav', () => {
     for (const ch of 'warehouse://picking/abc-123') keydown(ch);
     const enter = keydown('Enter');
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(pushMock).toHaveBeenCalledWith('/picking/scan/abc-123');
+    expect(pushMock).toHaveBeenCalledWith('/picking/unified/abc-123');
     expect(enter.preventDefault).toHaveBeenCalled();
   });
 

@@ -4,8 +4,8 @@
 // The QR payload is `warehouse://receiving/<id>` / `warehouse://picking/<id>`
 // built by the backend (apps/backend/src/export/orderLink.ts) — a custom
 // scheme so no host/IP configuration is needed in the Excel file.
-// Picking links land on the scan session directly (it acquires the work
-// lock on mount); receiving links land on the order detail.
+// Picking links land on the unified detail page directly (it acquires the
+// work lock on mount); receiving links land on the order detail.
 
 export const ORDER_SCAN_PREFIX = 'warehouse://';
 
@@ -23,5 +23,5 @@ export function resolveOrderScanRoute(value: string): string | null {
   const kind = rest.slice(0, slash);
   const id = rest.slice(slash + 1);
   if ((kind !== 'receiving' && kind !== 'picking') || !id || id.includes('/')) return null;
-  return kind === 'picking' ? `/picking/scan/${id}` : `/receiving/${id}`;
+  return kind === 'picking' ? `/picking/unified/${id}` : `/receiving/${id}`;
 }
