@@ -97,6 +97,12 @@ const MM_PER_INCH = 25.4;
 // Every label draws its text line 30% larger than the base fit — operators
 // asked for a bolder shelf code on the printed labels.
 const LABEL_TEXT_SCALE = 1.3;
+// Label text font: bundled with the app (@fontsource/roboto-mono via the
+// nuxt.config css list) so every machine rasterizes the exact same glyphs —
+// canvas resolves the OS monospace stack per computer (SF Mono / Consolas /
+// DejaVu…) and silently falls back when a face is missing. The system stack
+// stays behind it as a last-resort fallback if the webfont ever fails.
+const LABEL_FONT_FAMILY = '"Roboto Mono", ui-monospace, SFMono-Regular, Menlo, monospace';
 // Trim border (SZ warehouse only): a fixed 3px line on every size —
 // thinner lines (1-2px) can drop out entirely on the label printers.
 const LABEL_BORDER_PX = 3;
@@ -149,6 +155,21 @@ function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
   );
 }
 
+// Force-load the bundled label font before the first canvas draw:
+// ctx.fillText silently rasterizes a fallback face if the webfont is still
+// in flight (that is exactly how the labels ended up looking different per
+// machine). Cached after the first call; an unavailable webfont degrades to
+// the system monospace stack instead of failing the render.
+let labelTextFontReady: Promise<void> | null = null;
+function ensureLabelTextFont(): Promise<void> {
+  if (!import.meta.client || typeof document === "undefined" || !document.fonts) return Promise.resolve();
+  labelTextFontReady ??= document.fonts
+    .load('900 100px "Roboto Mono"') // Roboto Mono tops out at 700 — this is its heaviest face
+    .then(() => undefined)
+    .catch(() => undefined);
+  return labelTextFontReady;
+}
+
 // Draw one label cell at (x, y) into an existing context. The layout is
 // derived from the cell's own pixel size (any of the LABEL_SIZES at 300 dpi):
 // one big left-aligned text line (the shelf code / box id) on the left, QR on
@@ -195,7 +216,8 @@ async function drawLabelCell(
     ? Math.min(h * 0.4, textW / 4.5)
     : Math.max(h * 0.256, Math.min(h * 0.5, textW / 4.5));
   const mainFont = Math.round(baseFont * LABEL_TEXT_SCALE);
-  ctx.font = `700 ${mainFont}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+  await ensureLabelTextFont();
+  ctx.font = `900 ${mainFont}px ${LABEL_FONT_FAMILY}`;
   // Vertically center the single line (cap height ≈ 0.72em).
   ctx.fillText(cell.main, textX, y + h / 2 + mainFont * 0.36, textW);
 

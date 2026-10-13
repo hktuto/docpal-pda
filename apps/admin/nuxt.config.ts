@@ -14,7 +14,11 @@ export default defineNuxtConfig({
       ],
     },
   },
-  css: ["~/assets/main.css"],
+  // Bundled label font (@fontsource/roboto-mono, latin 700 only): the canvas
+  // label renderer needs the exact same face on every machine — the OS
+  // monospace stack (ui-monospace -> SF Mono / Consolas / DejaVu…) differs per
+  // computer and silently changes the printed labels.
+  css: ["~/assets/main.css", "@fontsource/roboto-mono/latin-700.css"],
   experimental: {
     // Same rationale as apps/pda: the AppUpdate toast's outdated-build check
     // polls once per interval after app start — the 1h default delays
