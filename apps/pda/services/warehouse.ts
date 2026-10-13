@@ -94,10 +94,18 @@ export interface WarehouseService {
   // Cross-order packing: scan ANY order's item barcode straight into this
   // open box (404 no_matching_picking_item / 409 ambiguous_picking_item).
   // dateCode = the label's parsed date code (drives the backend's outdated
-  // date-code warning on this path).
+  // date-code warning on this path). shelfCode/boxId = the sticky shelf-scan
+  // context for the pickingShelfScan require-* modes — required by the
+  // backend when the barcode resolves to a lot-sourced allocation.
   scanIntoShippingBox(
     shippingBoxId: string,
-    input: { barcode: string; qty?: number; dateCode?: string | null }
+    input: {
+      barcode: string;
+      qty?: number;
+      dateCode?: string | null;
+      shelfCode?: string | null;
+      boxId?: string | null;
+    }
   ): Promise<ScanIntoShippingBoxResult>;
   // Explicit finish: all items fully boxed → order finished. Boxing the
   // last package also auto-finishes (no task is created either way).

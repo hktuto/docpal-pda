@@ -103,6 +103,10 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
    * Consumes lines in list order and their allocations FIFO, net of queued
    * qty, returning one portion per (line, allocation) touched, or null when
    * the aggregated remaining of all same-part lines cannot cover the qty.
+   *
+   * Exported so the scan session can preview WHICH sources a label would hit
+   * before queueing it — the sticky shelf scan is required only for
+   * lot-sourced portions (receiving-area dock sources have no shelf).
    */
   function findTargets(
     parsed: { partNo: string; wclItemNo?: string },
@@ -382,5 +386,5 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
     return rows.value.filter((r) => r.status === "failed").length;
   }
 
-  return { rows, queuedRows, queuedQtyByItem, addScan, matchBoxAllocations, matchCartonAllocations, addCartonScan, allocationRemaining, addAllocationScan, removeRow, reresolveQueued, applyAll };
+  return { rows, queuedRows, queuedQtyByItem, addScan, findTargets, matchBoxAllocations, matchCartonAllocations, addCartonScan, allocationRemaining, addAllocationScan, removeRow, reresolveQueued, applyAll };
 }

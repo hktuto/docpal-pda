@@ -507,6 +507,8 @@ export interface PartAvailabilityStockRow {
   availableQty: number;
   /** Satisfies the requested org / sub-inventory context (incl. share-group siblings). */
   matched: boolean;
+  /** False when shelf_code is missing from shelves — new pins are rejected (409 shelf_not_found). */
+  shelfKnown: boolean;
 }
 
 export interface PartAvailabilityReceivingRow {

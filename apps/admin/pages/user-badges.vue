@@ -199,7 +199,7 @@ async function renderBadgePng(): Promise<Blob> {
 
   ctx.textAlign = "center";
   ctx.fillStyle = "#0f1720";
-  ctx.font = "700 28px sans-serif";
+  ctx.font = "900 28px sans-serif";
   ctx.fillText(u.displayName || u.username, 200, 56);
   ctx.fillStyle = "#64748b";
   ctx.font = "18px sans-serif";

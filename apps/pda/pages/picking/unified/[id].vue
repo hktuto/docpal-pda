@@ -25,7 +25,7 @@
       </div>
 
       <div
-        v-if="requireShelfScan && !completed"
+        v-if="requireShelfScan && !completed && (pendingShelf || shelfWorkRemaining)"
         class="shelf-banner"
         :class="{ 'shelf-banner--empty': !pendingShelf }"
       >
@@ -47,12 +47,13 @@
         :box-selections="boxSelections"
         :adding="adding"
         :removing="removing"
+        :removing-scans="removingScans"
         :open-boxes="openBoxes"
         :collapsed-style="collapsedStyle"
-        @toggle="toggleGroup"
         @remove-queue="session.removeGroup"
         @add-to-box="addToBox"
         @remove-from-box="removeFromBox"
+        @remove-scan="removeScan"
         @update:box-selections="updateBoxSelections"
       />
 
@@ -75,7 +76,7 @@
       />
 
       <footer v-if="actionable" class="unified-footer">
-        <button class="btn btn--small" :disabled="applying || ocrCapturing || !!heldByOther || (requireShelfScan && !pendingShelf)" @click="captureOcr">
+        <button class="btn btn--small" :disabled="applying || ocrCapturing || !!heldByOther" @click="captureOcr">
           <template v-if="ocrCapturing"><InlineSpinner /> {{ $t('picking.scanSession.ocrCapture') }}</template>
           <template v-else>{{ $t('picking.scanSession.ocrCapture') }}</template>
         </button>
@@ -174,6 +175,7 @@ const error = ref<string | null>(null);
 const order = ref<PickingOrderDetail | null>(null);
 const adding = ref<Record<string, boolean>>({});
 const removing = ref<Record<string, boolean>>({});
+const removingScans = ref<Record<string, boolean>>({});
 const creatingBox = ref(false);
 const cancellingBox = ref<Record<string, boolean>>({});
 const addingAll = ref<Record<string, boolean>>({});
@@ -214,22 +216,12 @@ const {
   completed,
   orderMatched,
   requireShelfScan,
+  shelfWorkRemaining,
   applying,
 } = session;
 
 const orderItems = computed(() => order.value?.items ?? []);
 const orderPartNos = computed(() => orderItems.value.map((i) => i.partNo));
-const expandedItems = ref(new Set<string>());
-
-function toggleGroup(groupKey: string) {
-  const next = new Set(expandedItems.value);
-  if (next.has(groupKey)) {
-    next.delete(groupKey);
-  } else {
-    next.add(groupKey);
-  }
-  expandedItems.value = next;
-}
 
 function updateBoxSelections(value: Record<string, string>) {
   boxSelections.value = value;
@@ -265,7 +257,15 @@ async function scanIntoBox(boxId: string, barcode: string): Promise<boolean> {
         dateCode = rawCode(ocrResultToInput(parsedResult.parsed).dateCode) ?? undefined;
       }
     } catch { /* parsing is best-effort — the scan still goes through */ }
-    await warehouse.scanIntoShippingBox(boxId, { barcode, dateCode });
+    // require-* modes: forward the sticky shelf context — the backend needs
+    // it when the barcode resolves to a lot-sourced allocation (409
+    // shelf_scan_required); dock targets ignore it.
+    await warehouse.scanIntoShippingBox(boxId, {
+      barcode,
+      dateCode,
+      shelfCode: requireShelfScan.value ? pendingShelf.value?.shelfCode ?? undefined : undefined,
+      boxId: requireShelfScan.value ? pendingShelf.value?.boxId ?? undefined : undefined,
+    });
     await load();
     showToast(t("picking.boxesSection.scanIntoBoxSuccess", { box: boxId }));
     return true;
@@ -329,13 +329,9 @@ useHardwareScanner({
 });
 
 async function captureOcr() {
-  // In the require-* shelf-scan modes an OCR scan needs the sticky shelf
-  // context (sent with every scan POST at confirm) — capture only after a
-  // shelf/box scan; one confirmed OCR record queues exactly like one scan.
-  if (requireShelfScan.value && !pendingShelf.value) {
-    showToast(t("picking.scanSession.scanShelfFirst"));
-    return;
-  }
+  // The shelf gate is per-scan (handleParsed checks the matched sources) — a
+  // dock/receiving-carton label needs no shelf scan, so capture is never
+  // pre-blocked; a lot-sourced match is rejected after the review confirm.
   ocrCapturing.value = true;
   try {
     const capture = await captureLabel();
@@ -688,6 +684,27 @@ async function removeFromBox(packageId: string) {
     error.value = errorMessage(e);
   } finally {
     removing.value[packageId] = false;
+  }
+}
+
+/** Undo a confirmed scan (mis-scan correction): the backend reverses the
+ *  PICK ledger + returns the stock + reopens the allocation — so confirm
+ *  first, like put-away's committed-scan removal. 409 package_already_in_box
+ *  / package_already_verified keep boxed/verified packages safe. */
+async function removeScan(packageId: string) {
+  const pkg = order.value?.items
+    .flatMap((i) => i.packages ?? [])
+    .find((p) => p.id === packageId);
+  if (!pkg || pkg.shippingBoxId) return;
+  if (!window.confirm(t("picking.itemsSection.removeScanConfirm", { qty: pkg.qty }))) return;
+  removingScans.value[packageId] = true;
+  try {
+    await warehouse.removeScannedPackage(packageId);
+    await load();
+  } catch (e) {
+    error.value = errorMessage(e);
+  } finally {
+    removingScans.value[packageId] = false;
   }
 }
 

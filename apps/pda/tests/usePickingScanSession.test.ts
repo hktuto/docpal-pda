@@ -68,15 +68,39 @@ const label = (partNo: string, qty: number | string, over: Record<string, unknow
   parsed: { itemId: partNo, qty, dateCode: '', lotCode: '', coo: '', cow: '', wclItemNo: null, serialNo: null, ...over },
 });
 
-function setup(mode: 'off' | 'require-match' | 'require-any', shelfStockFn?: (q: PickingShelfStockQuery) => Promise<number>) {
-  const items = ref(makeItems());
+/** Dock-only order: every allocation is a receiving-area source (no lot) —
+ *  these never require a shelf scan, even in the require-* modes. */
+function makeDockItems(): Items {
+  return [
+    {
+      id: 'item-9',
+      partNo: 'PART-9',
+      wclItemNo: null,
+      brand: null,
+      qty: 500,
+      pickedQty: 0,
+      allocatedQty: 500,
+      allocations: [
+        { id: 'alloc-9', qty: 500, lot: null, receivingInvoiceItemId: 'ri-9', receivingOrderId: 'ro-9', boxId: 'CTN-9' },
+      ],
+      packages: [],
+    },
+  ] as unknown as Items;
+}
+
+function setup(
+  mode: 'off' | 'require-match' | 'require-any',
+  shelfStockFn?: (q: PickingShelfStockQuery) => Promise<number>,
+  items?: Items
+) {
+  const itemsRef = ref(items ?? makeItems());
   const session = usePickingScanSession({
-    orderItems: items,
+    orderItems: itemsRef,
     scope: ref({ orgId: 2, subInventoryCode: 'STORE1' }),
     shelfMode: ref(mode),
     shelfStockFn: shelfStockFn ?? (async () => 100),
   });
-  return { items, session };
+  return { items: itemsRef, session };
 }
 
 describe('usePickingScanSession', () => {
@@ -202,6 +226,58 @@ describe('usePickingScanSession', () => {
     await session.handleQrOrBoxScan('SZA01');
     expect(session.pendingShelf.value).toMatchObject({ shelfCode: 'SZA01', boxId: null });
     expect(session.rows.value).toHaveLength(0);
+  });
+
+  it('require-match queues a dock-sourced label with no shelf scan at all', async () => {
+    const { session } = setup('require-match', undefined, makeDockItems());
+    parseRawValue.mockResolvedValue(label('PART-9', 500));
+    const r = await session.handleQrOrBoxScan(':A::9:X:L:S:F');
+    expect(r).toMatchObject({ ok: true, kind: 'queued' });
+    expect(session.rows.value[0]).toMatchObject({ allocationId: 'alloc-9', qty: 500 });
+    expect(session.pendingShelf.value).toBeNull();
+    expect(session.shelfWorkRemaining.value).toBe(false);
+  });
+
+  it('require-any gates the lot portion of a label, then lets the dock remainder through', async () => {
+    const { session } = setup('require-any');
+    // PART-1/1000 fits the lot allocation first → shelf scan required
+    parseRawValue.mockResolvedValue(label('PART-1', 1000));
+    expect(await session.handleQrOrBoxScan(':A::1:X:L:S:F')).toEqual({ ok: false, message: 'scanShelfFirst' });
+    expect(session.rows.value).toHaveLength(0);
+
+    // with the sticky shelf set, the lot allocation queues…
+    parseRawValue.mockResolvedValue({ matched: false, parsed: {} });
+    await session.handleQrOrBoxScan('SZA01');
+    parseRawValue.mockResolvedValue(label('PART-1', 1000));
+    expect(await session.handleQrOrBoxScan(':A::2:X:L:S:F')).toMatchObject({ ok: true, kind: 'queued' });
+    expect(session.rows.value[0]).toMatchObject({ allocationId: 'alloc-1' });
+
+    // …and once the lot is covered, the next label fits only the receiving
+    // allocation — no shelf context needed anymore.
+    session.clearPendingShelf();
+    parseRawValue.mockResolvedValue(label('PART-1', 1000));
+    expect(await session.handleQrOrBoxScan(':A::3:X:L:S:F')).toMatchObject({ ok: true, kind: 'queued' });
+    expect(session.rows.value[0]).toMatchObject({ allocationId: 'alloc-2' });
+    expect(session.pendingShelf.value).toBeNull();
+  });
+
+  it('require-match skips the shelf-stock pre-check for a dock-sourced label', async () => {
+    const shelfStockFn = vi.fn(async () => 100);
+    const { session } = setup('require-match', shelfStockFn, makeDockItems());
+    parseRawValue.mockResolvedValue(label('PART-9', 500));
+    expect(await session.handleQrOrBoxScan(':A::9:X:L:S:F')).toMatchObject({ ok: true, kind: 'queued' });
+    expect(shelfStockFn).not.toHaveBeenCalled();
+  });
+
+  it('shelfWorkRemaining reflects remaining lot-sourced work only', async () => {
+    const { session } = setup('off');
+    expect(session.shelfWorkRemaining.value).toBe(true);
+    parseRawValue.mockResolvedValue(label('PART-1', 1000));
+    await session.handleQrOrBoxScan(':A::1:X:L:S:F');
+    parseRawValue.mockResolvedValue(label('PART-2', 1000));
+    await session.handleQrOrBoxScan(':A::2:X:L:S:F');
+    // both lot allocations are fully queued; only the dock allocation remains
+    expect(session.shelfWorkRemaining.value).toBe(false);
   });
 
   it('completed is true only with an empty queue and every item fully scanned', () => {

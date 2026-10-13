@@ -13,6 +13,7 @@ const t = (key: string) => key;
 
 const lot = (over: Partial<NonNullable<UnifiedAllocation['lot']>> = {}) => ({
   lotCode: null,
+  shelfCode: null,
   dateCode: null,
   coo: null,
   cow: null,
@@ -123,6 +124,12 @@ describe('allocationChipLabel', () => {
       allocationChipLabel(alloc({ lot: lot({ lotCode: 'SZA01', dateCode: '2626', coo: 'CN', cow: 'CN' }) }), t)
     ).toBe('SZA01-2626-CN-CN');
     expect(allocationChipLabel(alloc({ lot: lot({ lotCode: 'L1' }) }), t)).toBe('L1');
+  });
+
+  it('includes the shelf code after the lot code when present', () => {
+    expect(
+      allocationChipLabel(alloc({ lot: lot({ lotCode: 'SZA01', shelfCode: 'A-01', dateCode: '2626' }) }), t)
+    ).toBe('SZA01-A-01-2626');
   });
 
   it('renders carton sources as CTN <boxId>', () => {

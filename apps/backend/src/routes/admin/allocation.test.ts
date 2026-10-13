@@ -1338,3 +1338,86 @@ test("allocate-form: 404 for an unknown order or item, 409 when a PDA holds the 
   assert.equal(locked.status, 409);
   assert.match(await locked.text(), /lock_held/);
 });
+
+// --- Shelf-FK orphan lots ---------------------------------------------------
+// Upstream sync writes inventory_lots past the shelves FK (replication-role
+// writes), so a lot can point at a shelf code the layout table doesn't know.
+// The engine excludes such lots; the admin manual-allocate paths must reject
+// new pins on them instead of crashing on the inventory_transactions shelf FK.
+
+// Mirror the replication-role write: SET LOCAL bypasses the FK inside the tx.
+const insertOrphanLot = (id: string, partNo: string, qty: number) =>
+  client.db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL session_replication_role = 'replica'`);
+    await tx.execute(sql`
+      INSERT INTO inventory_lots (id, part_no, date_code, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
+      VALUES (${id}, ${partNo}, '2001', 'NOSUCHSHELF', ${id + "-BOX"}, 2, 'STORE1', ${qty}, now(), now())
+    `);
+  });
+
+test("allocate-form: a lot on an unknown shelf rejects with shelf_not_found, batch rolls back", async () => {
+  await reseed(client);
+  const { orderA } = await seedScenario();
+  await clearAllocations();
+  await insertOrphanLot("LOT-ORPHAN-1", "REALLOC-P1", 1000);
+  await insertLot("LOT-FORM-11", "REALLOC-P1", 1000);
+  const itemId = await itemIdOf(orderA);
+
+  const res = await postForm(orderA, itemId, [
+    { inventoryLotId: "LOT-ORPHAN-1", qty: 100 },
+    { inventoryLotId: "LOT-FORM-11", qty: 100 },
+  ]);
+  assert.equal(res.status, 409);
+  const body = await res.json();
+  assert.equal(body.error, "allocate_rejected");
+  assert.deepEqual(body.rows, [{ key: "l:LOT-ORPHAN-1", reason: "shelf_not_found" }]);
+  // The valid row goes down with the batch (all-or-nothing).
+  assert.equal((await formRows(itemId)).length, 0);
+  assert.equal(await lotAllocated("LOT-FORM-11"), 0);
+
+  // The availability lookup flags the row so the dialog can warn about it.
+  const avail = await (await req(`/admin/part-availability?partNo=REALLOC-P1`)).json();
+  assert.equal(avail.stock.find((s: { lotId: string }) => s.lotId === "LOT-ORPHAN-1").shelfKnown, false);
+  assert.equal(avail.stock.find((s: { lotId: string }) => s.lotId === "LOT-FORM-11").shelfKnown, true);
+});
+
+test("manual-allocate: 409 shelf_not_found for a lot on an unknown shelf", async () => {
+  await reseed(client);
+  const { orderA } = await seedScenario();
+  await clearAllocations();
+  await insertOrphanLot("LOT-ORPHAN-2", "REALLOC-P1", 1000);
+  const itemId = await itemIdOf(orderA);
+
+  const res = await req(`/admin/picking-orders/${orderA}/items/${itemId}/allocations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ qty: 100, inventoryLotId: "LOT-ORPHAN-2" }),
+  });
+  assert.equal(res.status, 409);
+  assert.match(await res.text(), /shelf_not_found/);
+  assert.equal((await formRows(itemId)).length, 0);
+});
+
+test("remove-allocation: a legacy pin on an orphan-shelf lot releases with a NULL-shelf ledger row", async () => {
+  await reseed(client);
+  const { orderA } = await seedScenario();
+  await clearAllocations();
+  await insertOrphanLot("LOT-ORPHAN-3", "REALLOC-P1", 1000);
+  const itemId = await itemIdOf(orderA);
+  // A pin created before the guard existed.
+  await client.db.execute(sql`
+    INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, manual, created_date, last_update_date)
+    VALUES ('ALLOC-ORPHAN-1', ${itemId}, 'LOT-ORPHAN-3', 100, true, now(), now())
+  `);
+
+  const res = await req(`/admin/picking-orders/${orderA}/items/${itemId}/allocations/ALLOC-ORPHAN-1`, { method: "DELETE" });
+  assert.equal(res.status, 200);
+
+  const txn = await queryGet<{ shelfCode: string | null; qtyDelta: number }>(
+    client.db,
+    sql`SELECT shelf_code AS "shelfCode", qty_delta AS "qtyDelta" FROM inventory_transactions
+        WHERE reference_id = 'ALLOC-ORPHAN-1' ORDER BY created_date DESC LIMIT 1`
+  );
+  assert.equal(txn!.shelfCode, null);
+  assert.equal(txn!.qtyDelta, -100);
+});

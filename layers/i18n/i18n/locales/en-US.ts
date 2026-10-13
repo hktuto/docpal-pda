@@ -317,6 +317,9 @@ export default {
       adding: "Adding…",
       remove: "Remove",
       removing: "Removing…",
+      removeScan: "Remove scan",
+      removingScan: "Removing…",
+      removeScanConfirm: "Remove this scan ({qty} pcs)? The scanned stock is returned.",
       scan: "Scan",
       mergePartNo: "Merge part no"
     },
@@ -1681,12 +1684,14 @@ export default {
         availabilitySubmit: "Confirm allocation",
         availabilityRowCap: "Over this source's maximum ({max})",
         availabilityWillReclaim: "Will reclaim {qty} from other orders",
+        availabilityShelfUnknown: "Shelf not in the warehouse layout — add it on the Shelves page first",
         availabilityOverOpen: "Over this order's open demand by {qty}",
         availabilityOverAllocation: "Over allocation: {allocated} requested but only {openQty} is open",
         availabilityRowRejected: "{row}: {reason}",
         availabilityReasons: {
           insufficient_available: "not enough available",
-          over_allocation: "over the order's open demand"
+          over_allocation: "over the order's open demand",
+          shelf_not_found: "shelf not in the warehouse layout"
         },
       },
       allocationTip: {

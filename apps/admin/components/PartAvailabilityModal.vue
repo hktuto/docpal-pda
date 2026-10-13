@@ -358,7 +358,10 @@ watch(
                   class="avail-qty"
                   @input="setPlan(`s:${s.lotId}`, Number(($event.target as HTMLInputElement).value))"
                 />
-                <div v-if="planned(`s:${s.lotId}`) > stockCap(s)" class="warn-text">
+                <div v-if="!s.shelfKnown" class="warn-text">
+                  {{ $t("admin.pages.pickingOrders.availabilityShelfUnknown") }}
+                </div>
+                <div v-else-if="planned(`s:${s.lotId}`) > stockCap(s)" class="warn-text">
                   {{ $t("admin.pages.pickingOrders.availabilityRowCap", { max: stockCap(s) }) }}
                 </div>
                 <div v-else-if="needsOverride(s)" class="warn-text">

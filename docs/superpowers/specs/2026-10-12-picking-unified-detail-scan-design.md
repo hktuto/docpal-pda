@@ -68,9 +68,10 @@ Sections top → bottom (all overlays render at page level):
      from the detail page.
    - Shelf-scan banner — in `pickingShelfScan` require-* modes: shows the
      sticky shelf context (`pendingShelf.label`) with a clear button, or the
-     amber "scan shelf first" state when no shelf is pending. Renders on this
-     page exactly as on the scan page today; item-label scans and OCR capture
-     are gated on it.
+     amber "scan shelf first" state while shelf-sourced work remains
+     (`shelfWorkRemaining`) and no shelf is pending. Label scans and OCR are
+     gated per matched source (§7.2), so a dock-only order shows no banner at
+     all.
 3. **Unified item list** — new component `components/picking/PickingUnifiedItems.vue`
    (§5).
 4. **Boxes section** — existing `components/picking/PickingBoxesSection.vue`
@@ -78,11 +79,10 @@ Sections top → bottom (all overlays render at page level):
    add-all-unboxed, scan-into-box arm). Moved below the list: scan first, box
    after.
 5. **Sticky footer** (actionable orders only):
-   - Left: OCR capture button (spinner while capturing; disabled in require-*
-     modes without a pending shelf).
+   - Left: OCR capture button (spinner while capturing; never pre-blocked —
+     the shelf gate runs per scanned source after the review, §7.2).
    - Right: **Confirm (N)** — disabled while applying, when the queue is
-     empty, when held by another worker, or in require-* modes without a
-     pending shelf. Mirrors the scan page's footer.
+     empty, or when held by another worker. Mirrors the scan page's footer.
    - Hidden entirely for finished/issue/held orders (`actionable` false).
 
 ## 5. Unified item list (`PickingUnifiedItems.vue`)
@@ -130,7 +130,12 @@ WCL-12345
   Remove button (removes all keys of the aggregated group). Failed rows stay
   until removed (backend 409s and `allocation_changed` re-resolve behave as
   today).
-- **Confirmed packages** — unboxed (box `<select>` + Add to box) and boxed
+- **Confirmed packages** — unboxed (box `<select>` + Add to box, plus a new
+  **Remove scan** action: `window.confirm` → `DELETE /picking-packages/:id`
+  (`warehouse.removeScannedPackage`), which reverses the PICK ledger,
+  returns the stock and reopens the allocation — the mis-scan correction;
+  the backend keeps boxed/verified packages out with 409
+  `package_already_in_box` / `package_already_verified`) and boxed
   (box chip + Remove, only from open boxes) — today's markup and behavior,
   including the `labelBarcode` display.
 - **Line breakdown** — when a part spans several order lines: per-line
@@ -175,11 +180,21 @@ lives in the page via a new composable `composables/usePickingScanSession.ts`
 Scan routing — one page-level `useHardwareScanner`:
 
 1. Armed scan-into-box takes every scan (cross-order packing; auto-disarms
-   when the box leaves the open state on reload) — unchanged.
-2. Supplier-label match → queue (`addScan`), gated as today: require-*
-   modes need a pending shelf; `require-match` does the shelf-stock pre-check
-   (`createShelfStockChecker` over `GET /picking-shelf-stock`); OCR capture
-   needs the same shelf context.
+   when the box leaves the open state on reload) — unchanged; in require-*
+   modes it forwards the sticky shelf/box context (`shelfCode`/`boxId` on
+   `POST /shipping-boxes/:id/scan`), which the backend needs only when the
+   barcode resolves to a lot-sourced allocation.
+2. Supplier-label match → queue (`addScan`), gated **per matched source**
+   (amendment 2026-10-13): `handleParsed` previews the match
+   (`findTargets`) and requires the sticky shelf context only when a matched
+   allocation is lot-sourced (`allocation.lot != null` ⇔ the backend's
+   `inventoryLotId` branch — receiving-area/dock sources have no shelf, so a
+   carton-picked order never asks for a shelf scan). `require-match` runs the
+   shelf-stock pre-check (`createShelfStockChecker` over
+   `GET /picking-shelf-stock`) only for those lot-sourced matches; OCR
+   capture is never pre-blocked — the same gate runs after the review
+   confirm. The banner follows suit: hidden while only dock work remains
+   (`shelfWorkRemaining`).
 3. Receiving-carton match → auto-queue everything the order still needs from
    the carton (`addCartonScan`).
 4. Shelf/box barcode: require-* modes set/replace the sticky shelf context
@@ -228,7 +243,9 @@ All must keep working, verified in the evaluation build:
 - Batch queue + Confirm with allocation re-resolve (spec
   2026-10-03-picking-scan-truth-and-aggregate-verify-design.md).
 - Shelf-scan modes off / require-match / require-any: sticky banner,
-  shelf-first gating of scans + OCR, scan-time stock pre-check, confirm-time
+  shelf-first gating of scans + OCR (per source: lot-sourced matches only —
+  dock/receiving-carton matches queue with no shelf), scan-time stock
+  pre-check, confirm-time
   `shelfCode`/`boxId` submission (spec
   2026-10-02-picking-shelf-scan-config-design.md).
 - Pick-from-box dialog + carton auto-queue (off mode).

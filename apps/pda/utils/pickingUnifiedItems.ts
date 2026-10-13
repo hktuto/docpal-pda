@@ -17,6 +17,7 @@ type PickingItem = PickingOrderDetail["items"][number];
 export interface UnifiedAllocation {
   lot: {
     lotCode: string | null;
+    shelfCode: string | null;
     dateCode: string | null;
     coo: string | null;
     cow: string | null;
@@ -69,16 +70,17 @@ export function unifiedCollapsedMeta(args: UnifiedCollapsedMetaArgs, t: Translat
   const parts = [progress.join(" ")];
   if (args.actionable && args.scannedQty < args.qty && args.allocations.length > 0) {
     const chips = args.allocations.map((a) => `${formatCompactQtyUpper(a.qty)} ${allocationChipLabel(a, t)}`);
+    console.log("chips", chips, args.allocations)
     parts.push(`${formatCompactQtyUpper(args.qty)}(${chips.join(", ")})`);
   }
   return parts.join(" · ");
 }
 
-/** Allocation chip suffix: `lot-date-coo-cow` (empties skipped), the carton
+/** Allocation chip suffix: `lot-shelf-date-coo-cow` (empties skipped), the carton
  *  id for receiving-carton sources, or the receiving-area label. */
 export function allocationChipLabel(a: UnifiedAllocation, t: TranslateFn): string {
   if (a.lot) {
-    return [a.lot.lotCode, a.lot.dateCode, a.lot.coo, a.lot.cow]
+    return [a.lot.lotCode, a.lot.shelfCode, a.lot.dateCode, a.lot.coo, a.lot.cow]
       .filter((v): v is string => !!v && v.trim() !== "")
       .join("-");
   }

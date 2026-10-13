@@ -76,6 +76,10 @@ interface ResolvedRow {
   override: boolean;
   available: number;
   current: number;
+  /** False when the lot's shelf_code is missing from shelves (upstream sync
+   *  can write such rows past the FK) — growth is rejected, and ledger rows
+   *  must not carry the code (inventory_transactions has the same FK). */
+  shelfKnown: boolean;
   /** Ledger fields for the source, reused for the RESERVE rows. */
   partNo: string;
   dateCode: string | null;
@@ -155,11 +159,13 @@ export async function allocatePickingItemFromSources(
         shelfCode: string | null;
         boxId: string | null;
         available: number;
+        shelfKnown: boolean;
       }>(
         tx,
         sql`SELECT id, part_no AS "partNo", date_code AS "dateCode", lot_code AS "lotCode",
                    coo, cow, shelf_code AS "shelfCode", box_id AS "boxId",
-                   (total_qty - allocated_qty) AS "available"
+                   (total_qty - allocated_qty) AS "available",
+                   (shelf_code IS NULL OR EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = inventory_lots.shelf_code)) AS "shelfKnown"
             FROM inventory_lots WHERE id IN (${sql.join(lotIds, sql`, `)})`
       );
       if (found.length !== lotIds.length) throw new HTTPException(404, { message: "inventory_lot_not_found" });
@@ -169,12 +175,15 @@ export async function allocatePickingItemFromSources(
           inventoryLotId: l.id,
           receivingInvoiceItemId: null,
           available: l.available,
+          shelfKnown: l.shelfKnown,
           partNo: l.partNo,
           dateCode: l.dateCode,
           lotCode: l.lotCode,
           coo: l.coo,
           cow: l.cow,
-          shelfCode: l.shelfCode,
+          // Never hand an unknown shelf code to the ledger — the insert would
+          // violate the shelves FK and roll the whole form back with a 500.
+          shelfCode: l.shelfKnown ? l.shelfCode : null,
           boxId: l.boxId,
         });
       }
@@ -213,6 +222,7 @@ export async function allocatePickingItemFromSources(
           inventoryLotId: null,
           receivingInvoiceItemId: r.id,
           available: r.available,
+          shelfKnown: true,
           partNo: r.partNo,
           dateCode: r.dateCode,
           lotCode: r.lotCode,
@@ -287,6 +297,14 @@ export async function allocatePickingItemFromSources(
     for (const r of resolved) {
       const delta = r.qty - r.current;
       if (delta <= 0) continue;
+      // Growing onto a shelf the layout table doesn't know would strand the
+      // pin: the scan-time lot resolution excludes such lots, and the PICK
+      // ledger insert would violate the shelf FK. Same rule the engine's
+      // shelf-FK orphan exclusion applies.
+      if (r.kind === "lot" && !r.shelfKnown) {
+        errors.push({ key: r.key, reason: "shelf_not_found" });
+        continue;
+      }
       const shortfall = delta - r.available;
       if (shortfall <= 0) continue;
       if (!r.override) {

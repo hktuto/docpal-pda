@@ -7,7 +7,7 @@
       class="list-row list-row--expandable"
       :class="{ 'list-row--done': group.scannedQty >= group.qty }"
     >
-      <button type="button" class="list-row__main list-row__toggle" @click="emit('toggle', group.key)">
+      <button type="button" class="list-row__main list-row__toggle" @click="toggle(group.key)">
         <div class="list-row__line1">
           <span class="list-row__title">{{ group.title || $t('common.noData') }}</span>
         </div>
@@ -82,6 +82,19 @@
                 </template>
                 <template v-else>
                   {{ $t('picking.itemsSection.addToBox') }}
+                </template>
+              </button>
+              <button
+                type="button"
+                class="btn btn--small btn--secondary"
+                :disabled="removingScans[pkg.id]"
+                @click="emit('remove-scan', pkg.id)"
+              >
+                <template v-if="removingScans[pkg.id]">
+                  <InlineSpinner /> {{ $t('picking.itemsSection.removingScan') }}
+                </template>
+                <template v-else>
+                  {{ $t('picking.itemsSection.removeScan') }}
                 </template>
               </button>
             </div>
@@ -184,15 +197,17 @@ const props = defineProps<{
   boxSelections: Record<string, string>;
   adding: Record<string, boolean>;
   removing: Record<string, boolean>;
+  /** Per-package spinner for the remove-scan (undo confirmed scan) action. */
+  removingScans: Record<string, boolean>;
   openBoxes: PickingOrderDetail["boxes"];
   collapsedStyle: PdaDetailCollapsedStyle;
 }>();
 
 const emit = defineEmits<{
-  "toggle": [groupKey: string];
   "remove-queue": [keys: string[]];
   "add-to-box": [packageId: string];
   "remove-from-box": [packageId: string];
+  "remove-scan": [packageId: string];
   "update:boxSelections": [value: Record<string, string>];
 }>();
 

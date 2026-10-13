@@ -256,6 +256,26 @@ The steal itself is the shared `stealAllocationsOnSource` helper, extracted
 from `addManualPickingAllocation` so both paths keep identical victim
 selection, ledger rows, victim-order audit entries and SSE events.
 
+## Shelf-FK orphan lots (added 2026-10-13)
+
+Upstream sync writes `inventory_lots` past the shelves FK (replication-role
+writes), so a lot can carry a `shelf_code` the layout table doesn't know. The
+engine already excludes such lots from its sources; the manual-allocate paths
+now apply the same rule instead of crashing on the identical FK on
+`inventory_transactions`:
+
+- **Growth is rejected**: an allocate-form row (or single-row Allocate) that
+  grows onto an orphan-shelf lot fails with a per-row `shelf_not_found`
+  reason (409 `allocate_rejected` / 409 `shelf_not_found`). The remedy is to
+  add the shelf on the admin Shelves page, after which the lot is allocatable
+  everywhere.
+- **Releases never crash**: RESERVE ledger rows written by the release side
+  (allocate-form release rows, remove-allocation, the wipe/rebuild reversals,
+  override steals) null the shelf code when it isn't in `shelves` — a legacy
+  pin on an orphan lot stays removable.
+- `GET /admin/part-availability` stock rows carry `shelfKnown` so the dialog
+  can flag such lots before the admin types a qty.
+
 ## Known limits (same family as the section above)
 
 - **It moves stock, it does not withhold it.** Releasing a row leaves the freed
@@ -279,4 +299,8 @@ selection, ledger rows, victim-order audit entries and SSE events.
 - 400 `source_required` / `duplicate_source` / `invalid_qty`, 404 unknown
   source, 409 `allocate_rejected` with the offending row's `l:<lotId>` key.
 - an override row reclaims the other order's allocation inside the same call.
+- an orphan-shelf lot (shelf_code missing from `shelves`, inserted via
+  `SET LOCAL session_replication_role = 'replica'`) rejects with per-row
+  `shelf_not_found` and rolls the batch back; single-row Allocate 409s the
+  same way; removing a legacy pin on one writes a NULL-shelf ledger row.
 - 404 unknown order / item, 409 `lock_held`.

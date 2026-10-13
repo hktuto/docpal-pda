@@ -62,7 +62,7 @@ async function downloadQr(row: any) {
   ctx.textBaseline = "middle";
   const textY = 30 + qrSize + 90;
   ctx.fillStyle = "#000000";
-  ctx.font = "700 112px system-ui, sans-serif";
+  ctx.font = "900 112px system-ui, sans-serif";
   ctx.fillText(row.displayName || row.code, W / 2, textY, W - 40);
   const zone = row.zone?.trim();
   if (zone) {

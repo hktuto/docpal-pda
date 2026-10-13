@@ -278,6 +278,13 @@
   `docs/superpowers/specs/2026-10-06-admin-availability-dialog-improvements-design.md`).
   The older single-row `POST .../items/:itemId/allocations` route still
   exists for the same thing one row at a time.
+  Lots whose `shelf_code` is missing from `shelves` (upstream sync can write
+  them past the FK) cannot take new pins: both routes reject growth with
+  409 `shelf_not_found` (per-row in the form's `allocate_rejected`), the
+  modal flags such rows via the stock row's `shelfKnown` flag, and release-
+  side ledger writes (form releases, remove-allocation, wipe/rebuild
+  reversals, override steals) null the shelf code so a legacy pin stays
+  removable.
   Manual rows
   (`allocations.manual = true`) are pinned: `allocateAll` /
   `runScopedAllocation` never wipe them and subtract their qty from the
@@ -452,8 +459,10 @@
   expanded pending/line-breakdown/unboxed/boxed/planned-allocation views;
   collapsed fields and allocation rows gated by `pdaViewConfig.pickingDetail`.
 - `composables/usePickingScanSession.ts` — extracted scan-session state +
-  routing (batch queue, sticky shelf context + require-match stock probe,
-  pick-from-box dialog, carton auto-queue, confirm-with-re-resolve;
+  routing (batch queue, sticky shelf context + require-match stock probe —
+  gated per matched source: only lot-sourced matches need the shelf, so
+  dock/receiving-carton picks queue without one —, pick-from-box dialog,
+  carton auto-queue, confirm-with-re-resolve;
   tests in `tests/usePickingScanSession.test.ts`).
 - `utils/pickingUnifiedItems.ts` — pure collapsed-row format + pending
   aggregation (`unifiedCollapsedMeta`, `allocationChipLabel`,

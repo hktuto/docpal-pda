@@ -281,12 +281,20 @@ export function createBackendWarehouseService(
     // backend's outdated date-code check can warn on this path too.
     async scanIntoShippingBox(
       shippingBoxId: string,
-      input: { barcode: string; qty?: number; dateCode?: string | null }
+      input: {
+        barcode: string;
+        qty?: number;
+        dateCode?: string | null;
+        shelfCode?: string | null;
+        boxId?: string | null;
+      }
     ): Promise<ScanIntoShippingBoxResult> {
       const result = await client.post<ScanIntoShippingBoxResult>(`/shipping-boxes/${shippingBoxId}/scan`, {
         barcode: input.barcode,
         qty: input.qty ?? undefined,
         dateCode: input.dateCode ?? undefined,
+        shelfCode: input.shelfCode ?? undefined,
+        boxId: input.boxId ?? undefined,
       });
       emitOutdatedWarning(result.outdatedWarning);
       return result;

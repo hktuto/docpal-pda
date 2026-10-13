@@ -20,8 +20,11 @@
           :value="search"
           class="search"
           type="text"
+          enterkeyhint="search"
           :placeholder="$t(searchPlaceholder)"
           @input="onSearchInput"
+          @keydown.enter="onSearchCommit"
+          @blur="onSearchCommit"
         />
         <slot name="toolbar-actions" />
         <button
@@ -71,8 +74,8 @@ export interface AppListFilterOption {
  * (filter chips + refresh + search), loading/error/empty states, 50-row
  * load-more footer, and useVisibleReload wiring (mount / visibility regain /
  * SSE topics). Pages own the fetch logic; they rebuild the query from
- * `search`/`filter` and reload on `apply` (debounced for search input,
- * immediate for filter-chip changes) and `load-more`.
+ * `search`/`filter` and reload on `apply` (search commits on Enter/blur —
+ * not per keystroke — filter-chip changes apply immediately) and `load-more`.
  */
 const props = defineProps<{
   search?: string;
@@ -94,14 +97,14 @@ const props = defineProps<{
   /** Warning-style message that replaces the list (e.g. issue-report summary). */
   notice?: string | null;
   hideFooter?: boolean;
-  /** False = search stays client-side (no debounced `apply` on typing). */
+  /** False = search stays client-side (no `apply` on search commit). */
   applyOnSearch?: boolean;
 }>();
 
 const emit = defineEmits<{
   "update:search": [value: string];
   "update:filter": [value: string];
-  /** Search (debounced) or filter (immediate) changed — reset and reload. */
+  /** Search committed (Enter/blur) or filter changed — reset and reload. */
   apply: [];
   "load-more": [];
 }>();
@@ -109,23 +112,31 @@ const emit = defineEmits<{
 const slots = useSlots();
 const hasActions = computed(() => Boolean(slots["toolbar-actions"]));
 
-let searchTimer: ReturnType<typeof setTimeout> | null = null;
+// The search keyword applies on Enter or blur, not per keystroke: PDA
+// operators type/scan a full reference and then commit, and per-keystroke
+// reloads waste requests on the device. `lastAppliedSearch` skips a redundant
+// reload when the value has not changed since the last apply.
+let lastAppliedSearch = props.search ?? "";
 
 function onSearchInput(event: Event) {
   emit("update:search", (event.target as HTMLInputElement).value);
+}
+
+function onSearchCommit() {
   if (props.applyOnSearch === false) return;
-  if (searchTimer) clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => emit("apply"), 300);
+  const value = props.search ?? "";
+  if (value === lastAppliedSearch) return;
+  lastAppliedSearch = value;
+  emit("apply");
 }
 
 watch(
   () => props.filter,
-  () => emit("apply")
+  () => {
+    lastAppliedSearch = props.search ?? "";
+    emit("apply");
+  }
 );
-
-onUnmounted(() => {
-  if (searchTimer) clearTimeout(searchTimer);
-});
 
 useVisibleReload(() => props.reload(), props.topics);
 </script>

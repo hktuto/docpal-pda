@@ -380,6 +380,9 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
       coo: string | null;
       cow: string | null;
       shelfCode: string | null;
+      /** False when the lot's shelf_code is missing from shelves (upstream
+       *  sync wrote it past the FK) — ledger rows must not carry the code. */
+      shelfKnown: boolean;
       boxId: string | null;
     }>(
       tx,
@@ -392,6 +395,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
                  COALESCE(il.coo, rii.coo) AS "coo",
                  COALESCE(il.cow, rii.cow) AS "cow",
                  il.shelf_code AS "shelfCode",
+                 (il.shelf_code IS NULL OR EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = il.shelf_code)) AS "shelfKnown",
                  COALESCE(il.box_id, rii.ctn_no) AS "boxId"
           FROM allocations a
           JOIN picking_items pi ON pi.id = a.picking_item_id
@@ -433,7 +437,7 @@ export async function allocateAll(db: AppDb): Promise<AllocateSummary> {
         id: newId(),
         inventoryLotId: a.inventoryLotId,
         partNo: a.partNo,
-        shelfCode: a.shelfCode,
+        shelfCode: a.shelfKnown ? a.shelfCode : null,
         boxId: a.boxId,
         txnType: "RESERVE",
         qtyType: "reserved",
@@ -769,6 +773,7 @@ export async function removePickingAllocation(
       coo: string | null;
       cow: string | null;
       shelfCode: string | null;
+      shelfKnown: boolean;
       boxId: string | null;
     }>(
       tx,
@@ -780,6 +785,7 @@ export async function removePickingAllocation(
                  COALESCE(il.coo, rii.coo) AS "coo",
                  COALESCE(il.cow, rii.cow) AS "cow",
                  il.shelf_code AS "shelfCode",
+                 (il.shelf_code IS NULL OR EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = il.shelf_code)) AS "shelfKnown",
                  COALESCE(il.box_id, rii.ctn_no) AS "boxId"
           FROM allocations a
           JOIN picking_items pi ON pi.id = a.picking_item_id
@@ -800,7 +806,7 @@ export async function removePickingAllocation(
       id: newId(),
       inventoryLotId: existing.inventoryLotId,
       partNo: existing.partNo,
-      shelfCode: existing.shelfCode,
+      shelfCode: existing.shelfKnown ? existing.shelfCode : null,
       boxId: existing.boxId,
       txnType: "RESERVE",
       qtyType: "reserved",
@@ -888,6 +894,7 @@ export async function stealAllocationsOnSource(
       coo: string | null;
       cow: string | null;
       shelfCode: string | null;
+      shelfKnown: boolean;
       boxId: string | null;
     }>(
       tx,
@@ -903,6 +910,7 @@ export async function stealAllocationsOnSource(
                  COALESCE(il.coo, rii.coo) AS "coo",
                  COALESCE(il.cow, rii.cow) AS "cow",
                  il.shelf_code AS "shelfCode",
+                 (il.shelf_code IS NULL OR EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = il.shelf_code)) AS "shelfKnown",
                  COALESCE(il.box_id, rii.ctn_no) AS "boxId"
           FROM allocations a
           JOIN picking_items pi ON pi.id = a.picking_item_id
@@ -931,7 +939,7 @@ export async function stealAllocationsOnSource(
         id: newId(),
         inventoryLotId: input.inventoryLotId ?? null,
         partNo: v.partNo,
-        shelfCode: v.shelfCode,
+        shelfCode: v.shelfKnown ? v.shelfCode : null,
         boxId: v.boxId,
         txnType: "RESERVE",
         qtyType: "reserved",
@@ -994,10 +1002,11 @@ export async function stealAllocationsOnSource(
  * item, in ANY location (admins may override the engine's location pairing).
  * Guards: 404 picking_order_not_found / picking_item_not_found /
  * inventory_lot_not_found / receiving_invoice_item_not_found; 409 lock_held
- * (same rationale as remove); 400 invalid_qty / source_required; 409
- * insufficient_available (source can't cover qty) / over_allocation (Σ
- * allocations would exceed the item's open qty = qty − Σ packages).
- * No order-status check, matching the remove action.
+ * (same rationale as remove) / shelf_not_found (the lot's shelf_code is
+ * missing from `shelves` — it can't take pins); 400 invalid_qty /
+ * source_required; 409 insufficient_available (source can't cover qty) /
+ * over_allocation (Σ allocations would exceed the item's open qty = qty − Σ
+ * packages). No order-status check, matching the remove action.
  *
  * With `override: true` a qty above the source's availability is allowed: the
  * shortfall is reclaimed inside the same tx from OTHER picking items'
@@ -1080,14 +1089,21 @@ export async function addManualPickingAllocation(
         shelfCode: string | null;
         boxId: string | null;
         available: number;
+        shelfKnown: boolean;
       }>(
         tx,
         sql`SELECT id, part_no AS "partNo", date_code AS "dateCode", lot_code AS "lotCode",
                    coo, cow, shelf_code AS "shelfCode", box_id AS "boxId",
-                   (total_qty - allocated_qty) AS "available"
+                   (total_qty - allocated_qty) AS "available",
+                   (shelf_code IS NULL OR EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = inventory_lots.shelf_code)) AS "shelfKnown"
             FROM inventory_lots WHERE id = ${input.inventoryLotId!}`
       );
       if (!lot) throw new HTTPException(404, { message: "inventory_lot_not_found" });
+      // A lot whose shelf_code is missing from shelves (upstream sync wrote it
+      // past the FK) can't take pins: the scan-time lot resolution excludes
+      // it, and the ledger inserts would violate the shelf FK — same rule as
+      // the engine's shelf-FK orphan exclusion.
+      if (!lot.shelfKnown) throw new HTTPException(409, { message: "shelf_not_found" });
       source = lot;
     } else {
       const recv = await queryGet<{
@@ -1277,6 +1293,9 @@ async function runScopedAllocation(
       coo: string | null;
       cow: string | null;
       shelfCode: string | null;
+      /** False when the lot's shelf_code is missing from shelves (upstream
+       *  sync wrote it past the FK) — ledger rows must not carry the code. */
+      shelfKnown: boolean;
       boxId: string | null;
     }>(
       tx,
@@ -1289,6 +1308,7 @@ async function runScopedAllocation(
                  COALESCE(il.coo, rii.coo) AS "coo",
                  COALESCE(il.cow, rii.cow) AS "cow",
                  il.shelf_code AS "shelfCode",
+                 (il.shelf_code IS NULL OR EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = il.shelf_code)) AS "shelfKnown",
                  COALESCE(il.box_id, rii.ctn_no) AS "boxId"
           FROM allocations a
           JOIN picking_items pi ON pi.id = a.picking_item_id
@@ -1318,7 +1338,7 @@ async function runScopedAllocation(
         id: newId(),
         inventoryLotId: a.inventoryLotId,
         partNo: a.partNo,
-        shelfCode: a.shelfCode,
+        shelfCode: a.shelfKnown ? a.shelfCode : null,
         boxId: a.boxId,
         txnType: "RESERVE",
         qtyType: "reserved",

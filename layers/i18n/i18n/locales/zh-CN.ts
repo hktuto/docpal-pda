@@ -317,6 +317,9 @@ export default {
       adding: "添加中…",
       remove: "移除",
       removing: "移除中…",
+      removeScan: "移除扫描",
+      removingScan: "移除中…",
+      removeScanConfirm: "移除该扫描（{qty} 件）？已扫描的库存将退回。",
       scan: "扫描",
       mergePartNo: "合并料号"
     },
@@ -1680,12 +1683,14 @@ export default {
         availabilitySubmit: "确认分配",
         availabilityRowCap: "超出该来源上限（{max}）",
         availabilityWillReclaim: "将从其他订单回收 {qty}",
+        availabilityShelfUnknown: "货架不在仓库布局中——请先在货架页面新增",
         availabilityOverOpen: "超出本单待分配需求 {qty}",
         availabilityOverAllocation: "分配超额：申请 {allocated}，可分配上限 {openQty}",
         availabilityRowRejected: "{row}：{reason}",
         availabilityReasons: {
           insufficient_available: "可用库存不足",
-          over_allocation: "超出订单待分配需求"
+          over_allocation: "超出订单待分配需求",
+          shelf_not_found: "货架不在仓库布局中"
         },
       },
       allocationTip: {

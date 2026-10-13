@@ -52,6 +52,7 @@ adminAllocationRoute.post("/receiving-orders/:id/reallocate", async (c) => {
 // against one stock lot or receiving invoice item (any location). Body
 // `{qty, inventoryLotId?, override?} | {qty, receivingInvoiceItemId?, override?}`.
 // 400 invalid_qty / source_required, 404 *_not_found, 409 lock_held /
+// shelf_not_found (the lot's shelf_code is missing from `shelves`) /
 // insufficient_available / over_allocation. No order-status check. With
 // `override: true` the shortfall above the source's availability is reclaimed
 // from other orders' non-manual allocations on that source.
@@ -81,8 +82,10 @@ adminAllocationRoute.post("/picking-orders/:id/items/:itemId/allocations", async
 // never be released). 400 invalid_qty / source_required / duplicate_source,
 // 404 *_not_found, 409 lock_held / over_allocation / allocate_rejected
 // (per-row `key` = `l:<lotId>` | `r:<receivingItemId>`, reasons:
-// insufficient_available). `override: true` on a row reclaims the shortfall
-// above the source's availability from other orders' non-manual allocations.
+// insufficient_available, shelf_not_found — a lot whose shelf_code is missing
+// from `shelves` cannot take new pins). `override: true` on a row reclaims
+// the shortfall above the source's availability from other orders'
+// non-manual allocations.
 adminAllocationRoute.post("/picking-orders/:id/items/:itemId/allocate-form", async (c) => {
   const body = await c.req.json<{ rows?: AllocateFormRow[] }>();
   const rows = (body.rows ?? []).map((r) => ({

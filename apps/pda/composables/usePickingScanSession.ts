@@ -44,6 +44,7 @@ export function usePickingScanSession(options: PickingScanSessionOptions) {
   const {
     rows,
     addScan,
+    findTargets,
     matchBoxAllocations,
     matchCartonAllocations,
     addCartonScan,
@@ -111,27 +112,39 @@ export function usePickingScanSession(options: PickingScanSessionOptions) {
     for (const key of keys) removeRow(key);
   }
 
-  /** Queue one parsed label record (QR or OCR), with the shelf-mode guards:
-   *  require-* modes need a pending shelf; require-match does the shelf-stock
-   *  pre-check (the backend's no_stock_at_location 409 is the safety net). */
+  /** Queue one parsed label record (QR or OCR). The sticky shelf context is
+   *  required ONLY when the scan's matched allocations include a lot-sourced
+   *  one — receiving-area (dock / receiving-carton) sources have no shelf to
+   *  scan (the backend enforces shelf_scan_required inside the inventory-lot
+   *  branch only, `scanPickingItem`). require-match additionally pre-checks
+   *  the pending shelf's stock for lot-sourced matches (the backend's
+   *  no_stock_at_location 409 is the safety net). */
   async function handleParsed(
     parsed: OcrInput,
     raw: string,
     source: ScanQueueRow["source"]
   ): Promise<ScanSessionResult> {
-    if (requireShelfScan.value && !pendingShelf.value) {
-      return { ok: false, message: "scanShelfFirst" };
-    }
-    if (shelfMode.value === "require-match" && pendingShelf.value) {
-      const stocked = await shelfStockChecker.hasStock({
-        partNo: String(parsed.partNo ?? ""),
-        wclItemNo: parsed.wclItemNo || undefined,
-        shelfCode: pendingShelf.value.shelfCode ?? undefined,
-        boxId: pendingShelf.value.boxId ?? undefined,
-        orgId: scope.value.orgId,
-        subInventoryCode: scope.value.subInventoryCode,
-      });
-      if (!stocked) return { ok: false, message: "item_not_on_shelf" };
+    if (requireShelfScan.value) {
+      const qty = typeof parsed.qty === "number" ? parsed.qty : Number(parsed.qty);
+      const targets = findTargets(
+        { partNo: String(parsed.partNo ?? ""), wclItemNo: parsed.wclItemNo },
+        qty
+      );
+      const needsShelf = !!targets?.some((p) => p.allocation.lot != null);
+      if (needsShelf) {
+        if (!pendingShelf.value) return { ok: false, message: "scanShelfFirst" };
+        if (shelfMode.value === "require-match") {
+          const stocked = await shelfStockChecker.hasStock({
+            partNo: String(parsed.partNo ?? ""),
+            wclItemNo: parsed.wclItemNo || undefined,
+            shelfCode: pendingShelf.value.shelfCode ?? undefined,
+            boxId: pendingShelf.value.boxId ?? undefined,
+            orgId: scope.value.orgId,
+            subInventoryCode: scope.value.subInventoryCode,
+          });
+          if (!stocked) return { ok: false, message: "item_not_on_shelf" };
+        }
+      }
     }
     const result = addScan(parsed, raw, source);
     return result.ok ? { ok: true, kind: "queued" } : { ok: false, message: result.message };
@@ -232,6 +245,17 @@ export function usePickingScanSession(options: PickingScanSessionOptions) {
     return items.every((i) => scannedQtyOf(i) + (queuedQtyByItem.value[i.id] ?? 0) >= i.qty);
   });
 
+  // Remaining shelf/box (lot-sourced) pick work: the sticky shelf scan and
+  // its banner only apply while this is true — dock/receiving-carton
+  // allocations have no shelf, so a dock-only order never asks for one.
+  const shelfWorkRemaining = computed(() =>
+    orderItems.value.some(
+      (i) =>
+        scannedQtyOf(i) < i.qty &&
+        (i.allocations ?? []).some((a) => a.lot != null && allocationRemaining(a.id) > 0)
+    )
+  );
+
   /** Apply every queued row sequentially via `scanFn` (the page's
    *  scanPickingItem wrapper, including the sticky shelf context). After each
    *  successful apply the order refetches and the queue re-resolves (the
@@ -263,6 +287,7 @@ export function usePickingScanSession(options: PickingScanSessionOptions) {
     orderBrands,
     completed,
     orderMatched,
+    shelfWorkRemaining,
     setPendingShelfFromMatch,
     clearPendingShelf,
     closeBoxPick,

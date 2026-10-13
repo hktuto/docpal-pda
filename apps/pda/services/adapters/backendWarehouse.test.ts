@@ -642,6 +642,16 @@ describe('backendWarehouse picking flow', () => {
     expect(captured).toEqual([OUTDATED]);
   });
 
+  it('scanIntoShippingBox forwards the sticky shelf context (pickingShelfScan require-* modes)', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ packageIds: ['pkg1'] }, 201));
+
+    await service().scanIntoShippingBox('box1', { barcode: 'ABC-123', shelfCode: 'A-01', boxId: null });
+    expect(JSON.parse(lastCall().init.body as string)).toEqual({ barcode: 'ABC-123', shelfCode: 'A-01' });
+
+    await service().scanIntoShippingBox('box1', { barcode: 'ABC-123', shelfCode: null, boxId: 'BOX-H-1' });
+    expect(JSON.parse(lastCall().init.body as string)).toEqual({ barcode: 'ABC-123', boxId: 'BOX-H-1' });
+  });
+
   it('finishPickingOrder POSTs the finish verb and returns the order status', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ id: 'po1', status: 'finished' }));
 

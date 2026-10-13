@@ -35,6 +35,9 @@ interface StockRow {
   availableQty: number;
   /** Row satisfies the requested org / sub-inventory context (see header). */
   matched: boolean;
+  /** False when shelf_code is missing from shelves (upstream sync wrote the
+   *  lot past the FK) — the allocate endpoints reject new pins on it. */
+  shelfKnown: boolean;
 }
 
 interface ReceivingRow {
@@ -194,6 +197,7 @@ adminPartAvailabilityRoute.get("/part-availability", async (c) => {
         il.total_qty AS "totalQty",
         il.allocated_qty AS "allocatedQty",
         il.available_qty AS "availableQty",
+        (il.shelf_code IS NULL OR s.code IS NOT NULL) AS "shelfKnown",
         ${locationMatches(ctx, sql`il.org_id`, sql`il.sub_inventory_code`)} AS "matched"
       FROM inventory_lots il
       LEFT JOIN shelves s ON s.code = il.shelf_code

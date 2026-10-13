@@ -24,7 +24,7 @@ Tap a row to expand it. From top to bottom the expanded row shows:
 
 - **Pending scans** — every scan queued on this part but not yet confirmed, each with a **Remove** button; a scan that failed stays listed with its error message.
 - **Line breakdown** (merged rows only) — the required and scanned quantity of each contributing order line.
-- **Unboxed packages** — each picked-but-unpacked package with a box selector and **Add to box**.
+- **Unboxed packages** — each picked-but-unpacked package with a box selector and **Add to box**, plus a **Remove scan** button (asks for confirmation) that undoes a mis-scan: the scanned stock is returned, the allocation reopens, and the item can be scanned again. Boxed or verified packages cannot be removed this way — take them out of the box first.
 - **Boxed packages** — each packed package with its box id and a **Remove** button (while that box is still open).
 - **Planned allocations** (behind a collapsible summary, shown while the part is not fully picked) — where the remaining stock is allocated from: location, batch (date / lot / COO / COW) and allocated quantity. For allocations against a receiving order the recorded box id appears with the source so you know which boxes to pick from. If the allocated shelf carries a warning (set by an admin on the shelf, e.g. outdated-stock shelves), a ⚠️ icon appears next to the shelf code — hover/long-press shows the warning text; the stock is still pickable.
 
@@ -50,7 +50,7 @@ Each item row shows where its remaining qty is allocated from (the collapsed lin
 
 **Shelf box / shelf code** (loose stock): a **Pick from box** dialog opens listing what the order still needs from that box/shelf. Keep scanning the part labels inside the box — each scan queues that item against the box's allocation (a part that isn't in the box, or a label qty beyond what the box still needs, is rejected with a message). Scanning another box/shelf barcode switches the dialog to it.
 
-**Shelf scan required first:** when the warehouse is configured to require a shelf scan before picking, a banner at the top of the page shows the current location — scan the shelf/box barcode to set it (it stays until you scan another one or tap clear) and part-label scans are rejected until it is set.
+**Shelf scan required first:** when the warehouse is configured to require a shelf scan before picking, a banner at the top of the page shows the current location — scan the shelf/box barcode to set it (it stays until you scan another one or tap clear). Part-label scans that would be picked from a shelf or box lot are rejected until it is set; labels that match only receiving-carton (docked) stock queue with no shelf scan at all, and the banner disappears once no shelf-sourced picking remains.
 
 Apply the queued scans with **Confirm** as usual.
 
