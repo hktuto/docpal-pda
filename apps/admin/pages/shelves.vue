@@ -10,30 +10,30 @@ const { layout: labelLayout } = useWarehouseLabelLayout();
 // to a PNG here and prints it via the print service's /print/files; multi-
 // select Print selected / Print all (bulk-actions slot) renders A4 batch
 // sheets (grid per the chosen label size) to PNGs and prints them the same
-// way. Both show the shelf display name (code as fallback); the QR still
-// encodes the code.
+// way. The label itself shows the shelf code (the QR encodes the same code);
+// only the dialog's item title uses the display name.
 const printItems = ref<{ title: string; render: (size: LabelSizeId) => Promise<Blob>; filename: string }[] | null>(
   null
 );
-const batchPrintItems = ref<{ code: string; displayName?: string | null }[] | null>(null);
+const batchPrintItems = ref<string[] | null>(null);
 
 function printOne(row: any) {
   printItems.value = [
     {
       title: row.displayName || row.code,
-      render: (size) => renderShelfLabelPng(row.code, row.displayName, labelLayout.value, size),
+      render: (size) => renderShelfLabelPng(row.code, labelLayout.value, size),
       filename: `shelf-label-${row.code}.png`,
     },
   ];
 }
 
 function printSelected(rows: any[], clear: () => void) {
-  batchPrintItems.value = rows.map((r) => ({ code: r.code, displayName: r.displayName }));
+  batchPrintItems.value = rows.map((r) => r.code);
   clear();
 }
 
 function printAll(rows: any[]) {
-  batchPrintItems.value = rows.map((r) => ({ code: r.code, displayName: r.displayName }));
+  batchPrintItems.value = rows.map((r) => r.code);
 }
 
 // Download the shelf label as a PNG with the same layout as the A4 batch
@@ -113,7 +113,7 @@ async function onBulkEditSaved() {
     <PrintLabelsDialog v-if="printItems" :items="printItems" @close="printItems = null" />
     <ShelfBatchPrintDialog
       v-if="batchPrintItems"
-      :items="batchPrintItems"
+      :codes="batchPrintItems"
       @close="batchPrintItems = null"
     />
     <ShelfBulkEditDialog

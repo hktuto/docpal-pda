@@ -94,6 +94,9 @@ export function saveLabelPrintScale(scale: number): void {
 
 const LABEL_DPI = 300;
 const MM_PER_INCH = 25.4;
+// The big (104 x 35 mm) label draws its text line 30% larger — operators
+// asked for a bolder shelf code on the wide label.
+const BIG_TEXT_SCALE = 1.3;
 
 /** Resolve a size id (unknown values fall back to the default). */
 export function labelSize(id?: string): LabelSize {
@@ -148,7 +151,8 @@ function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
 // one big left-aligned text line (the shelf code / box id) on the left, QR on
 // the right. Short strips (small) keep a height-filling QR and size the text
 // off the label height; tall labels (medium/big) cap the QR at half the
-// height so the text gets the remaining width.
+// height so the text gets the remaining width. `sizeId` lets the big size
+// draw its text extra-large (BIG_TEXT_SCALE).
 async function drawLabelCell(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -156,7 +160,8 @@ async function drawLabelCell(
   w: number,
   h: number,
   cell: LabelCell,
-  layout: LabelLayout
+  layout: LabelLayout,
+  sizeId?: LabelSizeId
 ): Promise<void> {
   const pad = Math.max(4, Math.round(h * 0.064));
   const tall = h / w > 0.25; // medium/big (35 mm tall) vs the small strip
@@ -177,10 +182,11 @@ async function drawLabelCell(
   ctx.fillStyle = "#0f1720";
   // Main text: tall labels fit ~7 monospace chars (shelf codes) in the text
   // width, capped at 40% of the label height; short strips stay height-driven.
-  // fillText's maxWidth squeezes anything longer (e.g. long display names).
-  const mainFont = Math.round(
-    tall ? Math.min(h * 0.4, textW / 4.5) : Math.max(h * 0.256, Math.min(h * 0.5, w * 0.1))
-  );
+  // fillText's maxWidth squeezes anything longer than the text area.
+  const baseFont = tall
+    ? Math.min(h * 0.4, textW / 4.5)
+    : Math.max(h * 0.256, Math.min(h * 0.5, w * 0.1));
+  const mainFont = Math.round(baseFont * (sizeId === "big" ? BIG_TEXT_SCALE : 1));
   ctx.font = `700 ${mainFont}px ui-monospace, SFMono-Regular, Menlo, monospace`;
   // Vertically center the single line (cap height ≈ 0.72em).
   ctx.fillText(cell.main, textX, y + h / 2 + mainFont * 0.36, textW);
@@ -201,18 +207,17 @@ async function renderStockLabelPng(cell: LabelCell, layout: LabelLayout, size?: 
   const ctx = canvas.getContext("2d")!;
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, w, h);
-  await drawLabelCell(ctx, 0, 0, w, h, cell, layout);
+  await drawLabelCell(ctx, 0, 0, w, h, cell, layout, labelSize(size).id);
   return canvasToPng(canvas);
 }
 
 /** Render one shelf label to a PNG blob for /print/files. */
 export function renderShelfLabelPng(
   code: string,
-  displayName?: string | null,
   layout?: LabelLayout,
   size?: LabelSizeId
 ): Promise<Blob> {
-  return renderStockLabelPng({ qr: code, main: displayName?.trim() || code }, layout ?? {}, size);
+  return renderStockLabelPng({ qr: code, main: code }, layout ?? {}, size);
 }
 
 /** Render one shelf-box label to a PNG blob for /print/files. */
@@ -288,7 +293,7 @@ async function renderStockBatchPagePng(
     const row = Math.floor(i / cols);
     const x = offsetX + col * (cellW + gap);
     const y = offsetY + row * (cellH + gap);
-    await drawLabelCell(ctx, x, y, cellW, cellH, cell, layout);
+    await drawLabelCell(ctx, x, y, cellW, cellH, cell, layout, sizeId);
   }
 
   return canvasToPng(canvas);
@@ -296,13 +301,13 @@ async function renderStockBatchPagePng(
 
 /** Render one A4 page of shelf labels to a PNG blob for /print/files. */
 export function renderShelfBatchPagePng(
-  cells: { code: string; displayName?: string | null }[],
+  codes: string[],
   layout?: LabelLayout,
   size?: LabelSizeId,
   scale: number = DEFAULT_LABEL_PRINT_SCALE
 ): Promise<Blob> {
   return renderStockBatchPagePng(
-    cells.map((c) => ({ qr: c.code, main: c.displayName?.trim() || c.code })),
+    codes.map((code) => ({ qr: code, main: code })),
     layout ?? {},
     size,
     scale

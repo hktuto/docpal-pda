@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Batch A4 shelf-label print: the selected shelves are laid out per A4 page
-// (grid depends on the chosen label size; shelf display name left-aligned on
-// the left, QR right per cell), each page rendered to a PNG here and printed
+// (grid depends on the chosen label size; shelf code left-aligned on the
+// left, QR right per cell), each page rendered to a PNG here and printed
 // via /print/files — one print job per page, each confirmed via waitForPrintJob
 // before reporting success. The printer picker lists the print service's
 // agent printers; the chosen printer is remembered in localStorage.
@@ -29,7 +29,7 @@ const sizeOptions = LABEL_SIZES.map((s) => ({ value: s.id, label: t(`admin.print
 const scale = useLabelPrintScale();
 
 const props = defineProps<{
-  items: { code: string; displayName?: string | null }[];
+  codes: string[];
 }>();
 const emit = defineEmits<{ close: [] }>();
 
@@ -60,9 +60,9 @@ async function renderPages() {
   const perPage = shelfBatchCellsPerPage(size.value, scale.value);
   const blobs: Blob[] = [];
   const urls: string[] = [];
-  for (let i = 0; i < props.items.length; i += perPage) {
+  for (let i = 0; i < props.codes.length; i += perPage) {
     const png = await renderShelfBatchPagePng(
-      props.items.slice(i, i + perPage),
+      props.codes.slice(i, i + perPage),
       labelLayout.value,
       size.value,
       scale.value
@@ -127,7 +127,7 @@ async function print() {
 <template>
   <div class="overlay" @mousedown="dlg.onMousedown" @click="dlg.onClick">
     <div class="dialog shelf-batch-dialog">
-      <h2>{{ $t("admin.print.batchTitle", { count: items.length }) }}</h2>
+      <h2>{{ $t("admin.print.batchTitle", { count: codes.length }) }}</h2>
       <div class="shelf-sheet-preview">
         <img v-for="(src, pi) in previews" :key="pi" :src="src" :alt="`page ${pi + 1}`" />
       </div>
@@ -168,7 +168,7 @@ async function print() {
       </div>
       <div v-if="error" class="error-banner">{{ error }}</div>
       <div v-if="done" class="success-banner">
-        {{ $t("admin.print.success", { count: items.length }) }}
+        {{ $t("admin.print.success", { count: codes.length }) }}
       </div>
       <div class="dialog-actions">
         <button class="btn" :disabled="printing" @click="emit('close')">
