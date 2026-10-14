@@ -23,7 +23,7 @@ const props = defineProps<{
 const emit = defineEmits<{ close: [] }>();
 
 const { t } = useI18n();
-// Label size (53 x 16 / 68 x 35 / 104 x 35 mm), remembered across dialogs.
+// Label size (53 x 16 / 68 x 35 / 104 x 35 / 104 x 40 mm), remembered across dialogs.
 const size = useLabelSize();
 const sizeOptions = LABEL_SIZES.map((s) => ({ value: s.id, label: t(`admin.print.sizes.${s.id}`) }));
 

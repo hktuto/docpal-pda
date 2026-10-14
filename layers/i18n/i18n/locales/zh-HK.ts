@@ -1197,7 +1197,8 @@ export default {
       sizes: {
         small: "小（53 × 16 mm）",
         medium: "中（68 × 35 mm）",
-        big: "大（104 × 35 mm）"
+        big: "大（104 × 35 mm）",
+        xl: "特大（104 × 40 mm）"
       },
       scale: "列印縮放（%）",
       copies: "份數",

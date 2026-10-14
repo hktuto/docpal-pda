@@ -43,7 +43,7 @@ export interface PrintJob {
 // default. Layout per size: a big left-aligned text line (the shelf code or
 // box id) on the left and a QR code on the right (encoding the same scannable
 // code — what the PDA scans), all derived from the label's own pixel size.
-export type LabelSizeId = "small" | "medium" | "big";
+export type LabelSizeId = "small" | "medium" | "big" | "xl";
 
 export interface LabelSize {
   id: LabelSizeId;
@@ -52,16 +52,24 @@ export interface LabelSize {
   /** Physical label height in mm. */
   heightMm: number;
   /** Rendered-size multiplier over the physical stock (1.05 = drawn 5%
-   * larger). medium carries 1.05: operators reported it printing too small
-   * on the label printers, so it is pre-enlarged — the printed result lands
-   * at the true physical size. */
+   * larger). Every size carries 1.05: label printers auto-fit/shrink the
+   * output, so drawing 5% larger makes the printed result land at the true
+   * physical size. */
   renderScale?: number;
+  /** Fixed padding on all four sides, in true physical mm (drawn ×
+   * renderScale so it survives the printer shrink). Sizes without it derive
+   * the padding from the cell. */
+  paddingMm?: number;
+  /** Minimum QR side in true physical mm (drawn × renderScale). Sizes
+   * without it derive the QR size from the label height. */
+  qrMinMm?: number;
 }
 
 export const LABEL_SIZES: LabelSize[] = [
-  { id: "small", widthMm: 53, heightMm: 16 },
+  { id: "small", widthMm: 53, heightMm: 16, renderScale: 1.05 },
   { id: "medium", widthMm: 68, heightMm: 35, renderScale: 1.05 },
-  { id: "big", widthMm: 104, heightMm: 35 },
+  { id: "big", widthMm: 104, heightMm: 35, renderScale: 1.05 },
+  { id: "xl", widthMm: 104, heightMm: 40, renderScale: 1.05, paddingMm: 5, qrMinMm: 30 },
 ];
 
 export const DEFAULT_LABEL_SIZE: LabelSizeId = "medium";
@@ -174,9 +182,10 @@ function ensureLabelTextFont(): Promise<void> {
 // derived from the cell's own pixel size (any of the LABEL_SIZES at 300 dpi):
 // one big left-aligned text line (the shelf code / box id) on the left, QR on
 // the right. The wide strip (small) keeps a height-filling QR and sizes the
-// text off the label height and text width; tall labels (medium/big) cap the
-// QR at half the height so the text gets the remaining width. The text line
-// is drawn LABEL_TEXT_SCALE (130%) larger than the base fit on every size.
+// text off the label height and text width; tall labels (medium/big/xl) cap
+// the QR at half the height so the text gets the remaining width — unless the
+// size pins its own padding/QR minimum (xl: 5mm padding, >=30mm QR). The text
+// line is drawn LABEL_TEXT_SCALE (130%) larger than the base fit on every size.
 async function drawLabelCell(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -184,16 +193,25 @@ async function drawLabelCell(
   w: number,
   h: number,
   cell: LabelCell,
-  layout: LabelLayout
+  layout: LabelLayout,
+  size?: LabelSize
 ): Promise<void> {
-  const pad = Math.max(4, Math.round(h * 0.064)); // vertical margin (all sizes)
-  // Wide strip (small 53x16 ≈ 0.30) vs tall labels (big 0.34, medium 0.51):
-  // only medium/big cap the QR at half the height.
+  // mm -> px on this canvas: physical mm scaled by the size's renderScale, so
+  // a 5mm padding / 30mm QR still measures that on the printed label after
+  // the printer's own ~5% shrink.
+  const rs = size?.renderScale ?? 1;
+  const mm = (v: number) => Math.round((v * LABEL_DPI * rs) / MM_PER_INCH);
+  // Wide strip (small 53x16 ≈ 0.30) vs tall labels (big 0.34, xl 0.38,
+  // medium 0.51): only tall labels cap the QR at half the height.
   const tall = h / w > 0.32;
-  // Horizontal margin: the short strip hugs the label edges otherwise, so it
-  // gets a ~2mm side margin (tall labels keep the symmetric pad).
-  const padX = tall ? pad : Math.max(pad, Math.round((2 * LABEL_DPI) / MM_PER_INCH));
-  const qrSize = Math.round(Math.min(tall ? h * 0.5 : h * 0.824, h - 2 * pad, w * 0.5));
+  // Padding: sizes with explicit paddingMm (xl: 5mm all around) use it on
+  // every side; otherwise a height-derived pad, plus a ~2mm side margin for
+  // the strip (which would otherwise hug the label edge).
+  const pad = size?.paddingMm ? mm(size.paddingMm) : Math.max(4, Math.round(h * 0.064));
+  const padX = size?.paddingMm ? pad : tall ? pad : Math.max(pad, mm(2));
+  let qrSize = Math.round(Math.min(tall ? h * 0.5 : h * 0.824, h - 2 * pad, w * 0.5));
+  // Explicit minimum QR (xl: >=30mm printed), clamped to the padded box.
+  if (size?.qrMinMm) qrSize = Math.max(qrSize, Math.min(mm(size.qrMinMm), h - 2 * pad, w - 2 * padX));
   const qr = new Image();
   qr.src = await QRCode.toDataURL(cell.qr, {
     width: Math.max(1, Math.round(qrSize * 2)), // render sharp, draw scaled
@@ -238,7 +256,7 @@ async function renderStockLabelPng(cell: LabelCell, layout: LabelLayout, size?: 
   const ctx = canvas.getContext("2d")!;
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, w, h);
-  await drawLabelCell(ctx, 0, 0, w, h, cell, layout);
+  await drawLabelCell(ctx, 0, 0, w, h, cell, layout, labelSize(size));
   return canvasToPng(canvas);
 }
 
@@ -324,7 +342,7 @@ async function renderStockBatchPagePng(
     const row = Math.floor(i / cols);
     const x = offsetX + col * (cellW + gap);
     const y = offsetY + row * (cellH + gap);
-    await drawLabelCell(ctx, x, y, cellW, cellH, cell, layout);
+    await drawLabelCell(ctx, x, y, cellW, cellH, cell, layout, labelSize(sizeId));
   }
 
   return canvasToPng(canvas);
