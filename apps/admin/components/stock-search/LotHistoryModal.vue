@@ -58,6 +58,7 @@ watch(
 <template>
   <div v-if="open" class="overlay" @mousedown="dismiss.onMousedown" @click="dismiss.onClick">
     <div class="dialog lot-history-dialog">
+      <button type="button" class="dialog-close" @click="emit('close')" aria-label="Close">&times;</button>
       <h2>{{ $t("lotHistory.title") }}</h2>
       <div v-if="error" class="error-banner">{{ error }}</div>
       <div v-if="loading" class="loading">{{ $t("admin.common.loading") }}</div>

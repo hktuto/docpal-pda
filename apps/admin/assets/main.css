@@ -355,6 +355,7 @@ td.actions {
   z-index: 100;
 }
 .dialog {
+  position: relative;
   background: #fff;
   border-radius: 0.5rem;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
@@ -363,6 +364,28 @@ td.actions {
   max-height: calc(100vh - 7.5rem);
   overflow-y: auto;
   padding: 1.25rem 1.375rem;
+}
+.dialog-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: #6b7280;
+  cursor: pointer;
+  border-radius: 0.25rem;
+  padding: 0;
+}
+.dialog-close:hover {
+  background: #f3f4f6;
+  color: #111827;
 }
 .dialog h2 {
   margin: 0 0 0.875rem;

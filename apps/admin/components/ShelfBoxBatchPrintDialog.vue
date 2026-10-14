@@ -129,6 +129,7 @@ async function print() {
 <template>
   <div class="overlay" @mousedown="dlg.onMousedown" @click="dlg.onClick">
     <div class="dialog shelf-batch-dialog">
+      <button type="button" class="dialog-close" @click="emit('close')" aria-label="Close">&times;</button>
       <h2>{{ $t("admin.print.batchTitle", { count: boxIds.length }) }}</h2>
       <div class="shelf-sheet-preview">
         <img v-for="(src, pi) in previews" :key="pi" :src="src" :alt="`page ${pi + 1}`" />

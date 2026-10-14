@@ -266,6 +266,7 @@ const {
 
     <div v-if="resolveRow" class="overlay" @mousedown="resolveDismiss.onMousedown" @click="resolveDismiss.onClick">
       <div class="dialog">
+        <button type="button" class="dialog-close" @click="resolveRow = null" aria-label="Close">&times;</button>
         <h2>
           {{ $t("admin.pages.outdatedWarnings.resolveTitle", { orderNo: resolveRow.orderNo ?? resolveRow.orderId }) }}
         </h2>

@@ -68,6 +68,7 @@ function applyDateCode(offsetWeeks: number) {
 <template>
   <div class="overlay" @mousedown="dismiss.onMousedown" @click="dismiss.onClick">
     <div class="dialog">
+      <button type="button" class="dialog-close" @click="emit('close')" aria-label="Close">&times;</button>
       <h2 v-if="single">{{ $t("admin.pages.receiving.editModalTitleSingle", { partNo: single.wclItemNo ?? single.partNo }) }}</h2>
       <h2 v-else>{{ $t("admin.pages.receiving.editModalTitleBatch", { count: items.length }) }}</h2>
 

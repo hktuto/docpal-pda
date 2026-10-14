@@ -225,6 +225,7 @@ function submit() {
 <template>
   <div class="overlay" @mousedown="onMousedown" @click="onClick">
     <div class="dialog">
+      <button type="button" class="dialog-close" @click="emit('cancel')" aria-label="Close">&times;</button>
       <h2>{{ title }}</h2>
       <div v-if="localError || serverError" class="error-banner">{{ localError || serverError }}</div>
       <form @submit.prevent="submit">

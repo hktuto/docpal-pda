@@ -175,6 +175,7 @@ onMounted(load);
 
     <div v-if="editingUser" class="overlay" @mousedown="onMousedown" @click="onClick">
       <div class="dialog">
+        <button type="button" class="dialog-close" @click="closeEdit" aria-label="Close">&times;</button>
         <h2>{{ $t("admin.pages.userProfiles.dialogTitle", { user: editingUser.username }) }}</h2>
         <div v-if="saveError" class="error-banner">{{ saveError }}</div>
         <SubInventoryScopePicker v-model="draftScopes" />

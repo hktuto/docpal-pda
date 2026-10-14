@@ -72,6 +72,7 @@ onMounted(load);
 
   <div v-if="open" class="overlay" @mousedown="onMousedown" @click="onClick">
     <div class="dialog">
+      <button type="button" class="dialog-close" @click="close" aria-label="Close">&times;</button>
       <h2>{{ $t("admin.scopeFilter.dialogTitle") }}</h2>
       <div v-if="error" class="error-banner">{{ error }}</div>
       <SubInventoryScopePicker v-model="draft" />

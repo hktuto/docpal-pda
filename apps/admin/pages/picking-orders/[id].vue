@@ -826,6 +826,7 @@ const {
       @click="reportDismiss.onClick"
     >
       <div class="dialog">
+        <button type="button" class="dialog-close" @click="reportOpen = false" aria-label="Close">&times;</button>
         <h2>{{ $t("admin.pages.pickingOrders.reportModalTitle", { orderNo: order?.orderNo ?? "" }) }}</h2>
         <div v-if="reportError" class="error-banner">{{ reportError }}</div>
         <form @submit.prevent="submitReport">

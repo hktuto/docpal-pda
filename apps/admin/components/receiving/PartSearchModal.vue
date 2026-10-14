@@ -174,6 +174,7 @@ watch(
 <template>
   <div v-if="open && item" class="overlay" @mousedown="dismiss.onMousedown" @click="dismiss.onClick">
     <div class="dialog search-dialog">
+      <button type="button" class="dialog-close" @click="emit('close')" aria-label="Close">&times;</button>
       <h2>{{ $t("admin.pages.receiving.searchTitle", { partNo: item.wclItemNo ?? item.partNo }) }}</h2>
       <div class="muted avail-context">
         {{ $t("admin.pages.receiving.searchContext", {

@@ -396,6 +396,7 @@ onMounted(load);
 
     <div v-if="showNew" class="overlay" @mousedown="newDlg.onMousedown" @click="newDlg.onClick">
       <div class="dialog">
+        <button type="button" class="dialog-close" @click="showNew = false" aria-label="Close">&times;</button>
         <h2>{{ $t("admin.pages.subInventories.newTitle") }}</h2>
         <div v-if="newError" class="error-banner">{{ newError }}</div>
         <form @submit.prevent="createGroup">
@@ -434,6 +435,7 @@ onMounted(load);
 
     <div v-if="editing" class="overlay" @mousedown="editDlg.onMousedown" @click="editDlg.onClick">
       <div class="dialog">
+        <button type="button" class="dialog-close" @click="editing = null" aria-label="Close">&times;</button>
         <h2>{{ $t("admin.pages.subInventories.editTitle", { id: `${editing.orgId} / ${editing.secondaryInventoryName}` }) }}</h2>
         <div v-if="editError" class="error-banner">{{ editError }}</div>
         <form @submit.prevent="saveEdit">
@@ -463,6 +465,7 @@ onMounted(load);
 
     <div v-if="showShareMgr" class="overlay" @mousedown="shareMgrDlg.onMousedown" @click="shareMgrDlg.onClick">
       <div class="dialog share-mgr-dialog">
+        <button type="button" class="dialog-close" @click="showShareMgr = false" aria-label="Close">&times;</button>
         <h2>{{ $t("admin.pages.subInventories.shareManager.title") }}</h2>
         <div v-if="shareMgrError" class="error-banner">{{ shareMgrError }}</div>
         <div class="share-mgr-body">

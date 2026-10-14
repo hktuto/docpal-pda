@@ -329,6 +329,7 @@ watch(
 <template>
   <div v-if="open" class="overlay" @mousedown="dismiss.onMousedown" @click="dismiss.onClick">
     <div class="dialog avail-dialog">
+      <button type="button" class="dialog-close" @click="emit('close')" aria-label="Close">&times;</button>
       <h2>{{ $t("admin.pages.pickingOrders.availabilityTitle", { partNo }) }}</h2>
       <div class="muted avail-context">
         {{ $t("admin.pages.pickingOrders.availabilityContext", {

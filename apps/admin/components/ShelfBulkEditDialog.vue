@@ -82,6 +82,7 @@ async function save() {
 <template>
   <div class="overlay" @mousedown="onMousedown" @click="onClick">
     <div class="dialog">
+      <button type="button" class="dialog-close" @click="emit('close')" aria-label="Close">&times;</button>
       <h2>{{ $t("admin.shelves.bulkEditTitle", { count: shelves.length }) }}</h2>
       <div v-if="saveError" class="error-banner">{{ saveError }}</div>
 

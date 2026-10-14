@@ -157,6 +157,7 @@ function submit() {
 <template>
   <div v-if="open" class="overlay" @mousedown="dismiss.onMousedown" @click="dismiss.onClick">
     <div class="dialog item-dialog">
+      <button type="button" class="dialog-close" @click="emit('close')" aria-label="Close">&times;</button>
       <h2>
         {{ item ? $t("admin.pages.createTestOrder.editItemTitle") : $t("admin.pages.createTestOrder.addItemTitle") }}
       </h2>

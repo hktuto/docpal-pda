@@ -906,6 +906,7 @@ const {
       @click="issueDismiss.onClick"
     >
       <div class="dialog">
+        <button type="button" class="dialog-close" @click="issueItem = null" aria-label="Close">&times;</button>
         <h2>{{ $t("admin.pages.receiving.issueModalTitle", { partNo: issueItem.partNo }) }}</h2>
         <div v-if="issueError" class="error-banner">{{ issueError }}</div>
         <form @submit.prevent="submitIssue">

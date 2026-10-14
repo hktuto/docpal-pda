@@ -84,6 +84,7 @@ async function print() {
 <template>
   <div class="overlay" @mousedown="dlg.onMousedown" @click="dlg.onClick">
     <div class="dialog">
+      <button type="button" class="dialog-close" @click="emit('close')" aria-label="Close">&times;</button>
       <h2>{{ $t("admin.print.title", { count: items.length }) }}</h2>
       <ul class="print-items">
         <li v-for="(item, i) in items" :key="i">{{ item.title }}</li>
