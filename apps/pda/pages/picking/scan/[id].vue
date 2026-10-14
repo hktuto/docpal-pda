@@ -426,7 +426,7 @@ async function handleParsed(parsed: ReturnType<typeof ocrResultToInput>, raw: st
   }
   const result = addScan(parsed, raw, source);
   if (!result.ok) {
-    showToast(t(`picking.scanSession.${result.message}`));
+    showToast(t(`picking.scanSession.${result.message}`, result.params ?? {}));
     return false;
   }
   showToast(t("common.scanSuccess"));
@@ -503,7 +503,7 @@ function queueCarton(rawValue: string): boolean {
   if (matches.length === 0) return false;
   const result = addCartonScan(matches, rawValue.trim());
   if (!result.ok) {
-    showToast(t(`picking.scanSession.${result.message}`));
+    showToast(t(`picking.scanSession.${result.message}`, result.params ?? {}));
     return true;
   }
   showToast(
@@ -543,7 +543,7 @@ async function handleBoxPickScan(rawValue: string): Promise<boolean> {
   }
   const result = addAllocationScan(entry.itemId, entry.allocationId, parsed, rawValue, "qr");
   if (!result.ok) {
-    showToast(t(`picking.scanSession.${result.message}`));
+    showToast(t(`picking.scanSession.${result.message}`, result.params ?? {}));
     return false;
   }
   showToast(t("common.scanSuccess"));
@@ -685,7 +685,7 @@ function onApplyMulti(entries: { row: ScanMultiRow; index: number }[]) {
     results.push({
       index,
       ok: result.ok,
-      message: result.ok ? undefined : t(`picking.scanSession.${result.message}`),
+      message: result.ok ? undefined : t(`picking.scanSession.${result.message}`, result.params ?? {}),
     });
   }
   // Merge with earlier results (replacing by index) so locked rows stay marked.
@@ -738,6 +738,13 @@ async function confirm() {
           // the allocated item's part.
           scannedPartNo: row.scannedPartNo,
           scannedWclItemNo: row.scannedWclItemNo ?? undefined,
+          // The label's batch fields as scanned (2026-10-14) — stored on the
+          // package so verify/measuring re-scans compare against the physical
+          // label, not the source snapshot.
+          scannedDateCode: row.scannedDateCode ?? undefined,
+          scannedLotCode: row.scannedLotCode ?? undefined,
+          scannedCoo: row.scannedCoo ?? undefined,
+          scannedCow: row.scannedCow ?? undefined,
           // Sticky shelf-scan context (require-* modes): every scan POST
           // carries the shelf/box the operator last scanned.
           shelfCode: requireShelfScan.value ? pendingShelf.value?.shelfCode ?? undefined : undefined,

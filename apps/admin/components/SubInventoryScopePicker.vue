@@ -148,7 +148,7 @@ onMounted(async () => {
       <div class="scope-groups">
         <div v-for="g in groups" :key="g.orgId" class="scope-group">
           <label class="scope-org scope-group-toggle">
-            <input type="checkbox" :checked="isGroupChecked(g)" :disabled="disabled" @change="toggleGroup(g)" />
+            <input type="checkbox" :checked="isGroupChecked(g)" style="width:auto" :disabled="disabled" @change="toggleGroup(g)" />
             <span>{{ g.office ?? $t("admin.scopePicker.orgFallback", { orgId: g.orgId }) }}</span>
           </label>
           <label v-for="r in g.items" :key="r.secondaryInventoryName" class="scope-option">
@@ -161,7 +161,7 @@ onMounted(async () => {
   </div>
 </template>
 
-<style scoped>
+<style lang="scss" scoped>
 .scope-picker .hint {
   margin: 0 0 0.625rem;
   font-size: 0.8125rem;
@@ -208,5 +208,8 @@ onMounted(async () => {
   padding: 0.1875rem 0;
   font-size: 0.875rem;
   cursor: pointer;
+  input {
+    width: auto;
+  }
 }
 </style>

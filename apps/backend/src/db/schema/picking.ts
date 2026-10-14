@@ -135,6 +135,14 @@ export const pickingPackages = pgTable(
     // part (measuring/verify detail + aggregate matcher).
     scannedPartNo: text("scanned_part_no"),
     scannedWclItemNo: text("scanned_wcl_item_no"),
+    // Pick-time scanned batch fields (2026-10-14): the label's parsed
+    // date/lot/coo/cow as scanned, verbatim. Verify/measuring re-scans compare
+    // against THESE (falling back to the source snapshot for legacy NULL rows)
+    // so matching is anchored to the physical label, not upstream stock data.
+    scannedDateCode: text("scanned_date_code"),
+    scannedLotCode: text("scanned_lot_code"),
+    scannedCoo: text("scanned_coo"),
+    scannedCow: text("scanned_cow"),
     verified: boolean("verified").notNull().default(false),
     verifyVerified: boolean("verify_verified").notNull().default(false), // verify-step re-scan flag
     // Aggregate re-scan truth (2026-10-03): credited qty from verify scans —

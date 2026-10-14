@@ -141,4 +141,32 @@ describe("matchAggregatePackages", () => {
     });
     expect(matchAggregatePackages(packages, { partNo: "PART-1", qty: 1500 }, "b")).toBeNull();
   });
+
+  it("2026-10-14: anchors batch fields to the pick-time scanned values when present", () => {
+    // Source snapshot says lot 1806L801 / WWYY 3726 (upstream vocabulary) but
+    // the pick scan recorded the label's own segment 5 "1625H713" — the
+    // re-scan of the same label must match against the SCANNED value.
+    const packages = [
+      pkg("a", 1000, {
+        dateCode: "3726",
+        lotCode: "1806L801",
+        scannedDateCode: "3726",
+        scannedLotCode: "1625H713",
+      }),
+    ];
+    expect(
+      matchAggregatePackages(packages, { partNo: "PART-1", qty: 1000, lotCode: "1625H713" })
+    ).toEqual({ qty: 1000, credits: [{ packageId: "a", qty: 1000 }] });
+    // the upstream lot code must no longer reject the same-label re-scan
+    expect(
+      matchAggregatePackages(packages, { partNo: "PART-1", qty: 1000, lotCode: "1806L801" })
+    ).toBeNull();
+    // scanned coo wins over the source snapshot too
+    const withCoo = [pkg("b", 1000, { coo: "JP", scannedCoo: "PH" })];
+    expect(matchAggregatePackages(withCoo, { partNo: "PART-1", qty: 1000, coo: "PH" })).toEqual({
+      qty: 1000,
+      credits: [{ packageId: "b", qty: 1000 }],
+    });
+    expect(matchAggregatePackages(withCoo, { partNo: "PART-1", qty: 1000, coo: "JP" })).toBeNull();
+  });
 });

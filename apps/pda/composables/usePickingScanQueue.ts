@@ -1,21 +1,73 @@
 import { computed, ref, type Ref } from "vue";
-import { normalize, type OcrInput } from "~/utils/ocrNormalize";
+import { normalize, normalizeCode, type OcrInput } from "~/utils/ocrNormalize";
 import { normalizePartNo } from "~/utils/text";
+import { compareWwyyDateCodes } from "~/utils/wwyyDateCode";
 import type { PickingAllocation, PickingOrderDetail } from "~/services/types";
+
+/** A rejected scan: the scanSession i18n key + interpolation params. */
+export interface ScanRejection {
+  message: string;
+  params?: Record<string, string>;
+}
 
 /** Check scanned COO/COW against the target's. When the target has a value,
  *  the scan must match (case-insensitive). When the target has no value, the
- *  scan is not constrained. Returns an error message key on mismatch, or null. */
+ *  scan is not constrained. Returns a rejection on mismatch, or null. */
 function checkBatchAttr(
   kind: "coo" | "cow",
   targetValue: string | null | undefined,
   scannedValue: string | null | undefined
-): string | null {
+): ScanRejection | null {
   const target = (targetValue ?? "").trim();
   const scanned = (scannedValue ?? "").trim();
   if (!target || !scanned) return null;
   if (target.toUpperCase() === scanned.toUpperCase()) return null;
-  return kind === "coo" ? "coo_mismatch" : "cow_mismatch";
+  return {
+    message: kind === "coo" ? "coo_mismatch" : "cow_mismatch",
+    params: { scanned, expected: target },
+  };
+}
+
+/** Scanned date code vs the source's: must be equal or EARLIER (WWYY compare,
+ *  spec 2026-10-14) — a reel older than stock records say is tolerable, a
+ *  newer one means the wrong reel. Unparseable codes on either side never
+ *  reject so an unknown label format never blocks the scan. */
+function checkDateCode(
+  targetValue: string | null | undefined,
+  scannedValue: string | null | undefined
+): ScanRejection | null {
+  const target = (targetValue ?? "").trim();
+  const scanned = (scannedValue ?? "").trim();
+  if (!target || !scanned) return null;
+  if (compareWwyyDateCodes(scanned, target) === "later") {
+    return { message: "date_code_newer", params: { scanned, expected: target } };
+  }
+  return null;
+}
+
+/** Lot code is a HARD match whenever the source carries one (spec 2026-10-14):
+ *  the scanned label must carry the same lot code (OCR-substitution tolerant).
+ *  A missing or different scanned lot code is rejected — including upstream
+ *  vocabulary mismatches (label segment vs lot record), which the warehouse
+ *  wants surfaced at pick time. Sources without a lot code are not checked. */
+function checkLotCode(
+  targetValue: string | null | undefined,
+  scannedValue: string | null | undefined
+): ScanRejection | null {
+  const target = normalizeCode(targetValue ?? "");
+  if (!target) return null;
+  const scannedRaw = (scannedValue ?? "").trim();
+  const scanned = normalizeCode(scannedRaw);
+  if (!scanned || scanned !== target) {
+    return { message: "lot_code_mismatch", params: { scanned: scannedRaw || "—", expected: target } };
+  }
+  return null;
+}
+
+/** The source's date code for a portion: the inventory lot's, falling back to
+ *  the receiving-area line's (the DTO exposes no lot code/COO/COW there). */
+function sourceDateCode(allocation: PickingAllocation): string | null {
+  return allocation.lot?.dateCode ?? allocation.receiving?.dateCode ?? null;
 }
 
 export interface ScanQueueRow {
@@ -33,6 +85,13 @@ export interface ScanQueueRow {
   lotCode: string | null;
   coo: string | null;
   cow: string | null;
+  /** The label's batch fields as scanned (2026-10-14) — stored on the package
+   *  as scanned_date_code/lot_code/coo/cow so verify re-scans compare against
+   *  the physical label. NULL for whole-carton rows (no label scanned). */
+  scannedDateCode: string | null;
+  scannedLotCode: string | null;
+  scannedCoo: string | null;
+  scannedCow: string | null;
   raw: string;
   source: "qr" | "ocr";
   status: "queued" | "applied" | "failed";
@@ -133,7 +192,7 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
     parsed: OcrInput,
     raw: string,
     source: ScanQueueRow["source"]
-  ): { ok: boolean; message?: string } {
+  ): { ok: boolean; message?: string; params?: Record<string, string> } {
     if (rows.value.some((r) => r.status === "queued" && r.raw === raw)) {
       return { ok: false, message: "duplicate" };
     }
@@ -144,12 +203,18 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
     const target = findTargets({ partNo: String(parsed.partNo ?? ""), wclItemNo: parsed.wclItemNo }, qty);
     if (!target) return { ok: false, message: "no_match" };
 
-    // COO/COW check: when the allocation source has a value, the scan must match.
+    // Batch-field checks (2026-10-14): COO/COW exact when the source carries
+    // them; date code equal-or-earlier; lot code hard match when the source
+    // has one.
     for (const portion of target) {
       const cooErr = checkBatchAttr("coo", portion.allocation.lot?.coo, parsed.coo);
-      if (cooErr) return { ok: false, message: cooErr };
+      if (cooErr) return { ok: false, ...cooErr };
       const cowErr = checkBatchAttr("cow", portion.allocation.lot?.cow, parsed.cow);
-      if (cowErr) return { ok: false, message: cowErr };
+      if (cowErr) return { ok: false, ...cowErr };
+      const dateErr = checkDateCode(sourceDateCode(portion.allocation), parsed.dateCode);
+      if (dateErr) return { ok: false, ...dateErr };
+      const lotErr = checkLotCode(portion.allocation.lot?.lotCode ?? null, parsed.lotCode);
+      if (lotErr) return { ok: false, ...lotErr };
     }
 
     // One row per (line, allocation) portion; unshift in reverse so the
@@ -168,6 +233,10 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
         lotCode: parsed.lotCode || null,
         coo: parsed.coo || null,
         cow: parsed.cow || null,
+        scannedDateCode: parsed.dateCode || null,
+        scannedLotCode: parsed.lotCode || null,
+        scannedCoo: parsed.coo || null,
+        scannedCow: parsed.cow || null,
         raw,
         source,
         status: "queued",
@@ -242,7 +311,7 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
     parsed: OcrInput,
     raw: string,
     source: ScanQueueRow["source"]
-  ): { ok: boolean; message?: string } {
+  ): { ok: boolean; message?: string; params?: Record<string, string> } {
     if (rows.value.some((r) => r.status === "queued" && r.raw === raw)) {
       return { ok: false, message: "duplicate" };
     }
@@ -259,11 +328,15 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
     if (qty > allocationRemaining(allocationId)) {
       return { ok: false, message: "qty_exceeds" };
     }
-    // COO/COW check: when the allocation source has a value, the scan must match.
+    // Batch-field checks (2026-10-14) — same rules as addScan.
     const cooErr = checkBatchAttr("coo", allocation.lot?.coo, parsed.coo);
-    if (cooErr) return { ok: false, message: cooErr };
+    if (cooErr) return { ok: false, ...cooErr };
     const cowErr = checkBatchAttr("cow", allocation.lot?.cow, parsed.cow);
-    if (cowErr) return { ok: false, message: cowErr };
+    if (cowErr) return { ok: false, ...cowErr };
+    const dateErr = checkDateCode(sourceDateCode(allocation), parsed.dateCode);
+    if (dateErr) return { ok: false, ...dateErr };
+    const lotErr = checkLotCode(allocation.lot?.lotCode ?? null, parsed.lotCode);
+    if (lotErr) return { ok: false, ...lotErr };
     rows.value.unshift({
       key: `row-${nextKey++}`,
       itemId: item.id,
@@ -276,6 +349,10 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
       lotCode: parsed.lotCode || null,
       coo: parsed.coo || null,
       cow: parsed.cow || null,
+      scannedDateCode: parsed.dateCode || null,
+      scannedLotCode: parsed.lotCode || null,
+      scannedCoo: parsed.coo || null,
+      scannedCow: parsed.cow || null,
       raw,
       source,
       status: "queued",
@@ -316,6 +393,11 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
         lotCode: allocation.lot?.lotCode ?? null,
         coo: allocation.lot?.coo ?? null,
         cow: allocation.lot?.cow ?? null,
+        // A carton scan carries no parsed label — nothing was scanned verbatim.
+        scannedDateCode: null,
+        scannedLotCode: null,
+        scannedCoo: null,
+        scannedCow: null,
         raw,
         source: "qr",
         status: "queued",
@@ -360,7 +442,10 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
   }
 
   /**
-   * Apply queued rows sequentially. Each row is marked applied/failed; applied
+   * Apply queued rows sequentially, draining until none remain. Each batch is
+   * a snapshot, so rows queued WHILE a drain is running (the unified page
+   * auto-applies on every scan) are picked up by the next batch instead of
+   * shifting the live iteration. Each row is marked applied/failed; applied
    * rows are dropped from the queue, failed rows stay with their error.
    * `afterApply` runs after each successful apply — pass a refetch +
    * `reresolveQueued` so later rows get fresh allocation ids.
@@ -371,18 +456,24 @@ export function usePickingScanQueue(items: Ref<OrderItems>) {
     errorMessage: (e: unknown) => string,
     afterApply?: () => Promise<void>
   ): Promise<number> {
-    for (const row of rows.value) {
-      if (row.status !== "queued") continue;
-      try {
-        await scanFn(row);
-        row.status = "applied";
-        if (afterApply) await afterApply();
-      } catch (e) {
-        row.status = "failed";
-        row.error = errorMessage(e);
+    for (;;) {
+      const batch = rows.value.filter((r) => r.status === "queued");
+      if (batch.length === 0) break;
+      for (const row of batch) {
+        // afterApply re-resolves later rows — one marked failed mid-batch
+        // (allocation_changed) must not be applied.
+        if (row.status !== "queued") continue;
+        try {
+          await scanFn(row);
+          row.status = "applied";
+          if (afterApply) await afterApply();
+        } catch (e) {
+          row.status = "failed";
+          row.error = errorMessage(e);
+        }
       }
+      rows.value = rows.value.filter((r) => r.status !== "applied");
     }
-    rows.value = rows.value.filter((r) => r.status !== "applied");
     return rows.value.filter((r) => r.status === "failed").length;
   }
 

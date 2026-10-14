@@ -17,7 +17,11 @@
   scan time, spec
   `docs/superpowers/specs/2026-10-05-measuring-scanned-part-truth-design.md`),
   falling back to the picking item's part for legacy rows — so the operator
-  re-scans the same physical item they picked, not the allocated part.
+  re-scans the same physical item they picked, not the allocated part. Since
+  2026-10-14 the batch fields anchor to the pick-time scanned values on each
+  package (`scannedDateCode`/`scannedLotCode`/`scannedCoo`/`scannedCow`,
+  falling back to the stored source snapshot for legacy rows — spec
+  `docs/superpowers/specs/2026-10-14-picking-scan-batch-validation-design.md`).
 - Box page (`/measuring/:boxId`): packages shown as a table that listens to
   hardware/wedge QR scans — each scan is parsed with the supplier templates
   (`parseRawValue`), matched client-side **aggregate** against the box's
@@ -93,6 +97,7 @@
 - `docs/backend/api-design.md` §Measuring
 - `docs/superpowers/specs/2026-08-11-box-scoped-measuring-verify-design.md`
 - `docs/superpowers/specs/2026-10-03-picking-scan-truth-and-aggregate-verify-design.md`
+- `docs/superpowers/specs/2026-10-14-picking-scan-batch-validation-design.md`
 - `docs/superpowers/specs/2026-10-05-measuring-scanned-part-truth-design.md`
 - `docs/superpowers/specs/2026-07-28-measuring-verify-refinements-design.md`
 - `docs/superpowers/specs/2026-07-02-measuring-flow-design.md`

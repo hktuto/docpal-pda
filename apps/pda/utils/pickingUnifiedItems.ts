@@ -70,7 +70,7 @@ export function unifiedCollapsedMeta(args: UnifiedCollapsedMetaArgs, t: Translat
   const parts = [progress.join(" ")];
   if (args.actionable && args.scannedQty < args.qty && args.allocations.length > 0) {
     const chips = args.allocations.map((a) => `${formatCompactQtyUpper(a.qty)} ${allocationChipLabel(a, t)}`);
-    console.log("chips", chips, args.allocations)
+
     parts.push(`${formatCompactQtyUpper(args.qty)}(${chips.join(", ")})`);
   }
   return parts.join(" · ");

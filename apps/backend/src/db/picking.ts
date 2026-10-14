@@ -1107,6 +1107,16 @@ export interface ScanPickingItemInput {
    *  part stays the displayed/matched identity (legacy behavior). */
   scannedPartNo?: string | null;
   scannedWclItemNo?: string | null;
+  /** Pick-time scanned batch fields (2026-10-14): the label's parsed
+   *  date/lot/coo/cow as scanned, stored verbatim on every package row so
+   *  verify/measuring re-scans compare against the physical label, not the
+   *  source snapshot. NULL for paths without a parsed label (whole-carton
+   *  queues, shipping-box scans) → consumers fall back to the stored source
+   *  values (legacy behavior). */
+  scannedDateCode?: string | null;
+  scannedLotCode?: string | null;
+  scannedCoo?: string | null;
+  scannedCow?: string | null;
   /** Sticky shelf-scan context (flow config pickingShelfScan): the shelf/box
    *  the operator last scanned. Ignored in mode "off"; required in the
    *  "require-*" modes (409 shelf_scan_required when absent). */
@@ -1403,14 +1413,25 @@ export async function scanPickingItem(
       const lotCode = p.lotCode ?? input.lotCode;
       const coo = p.coo ?? input.coo;
       const cow = p.cow ?? input.cow;
+      // Empty scanned fields normalize to NULL — the scanned_* columns mean
+      // "the label carried this value" and NULL drives the verify/measuring
+      // fallback to the stored source snapshot (legacy behavior).
+      const scannedDateCode = input.scannedDateCode?.trim() ? input.scannedDateCode : null;
+      const scannedLotCode = input.scannedLotCode?.trim() ? input.scannedLotCode : null;
+      const scannedCoo = input.scannedCoo?.trim() ? input.scannedCoo : null;
+      const scannedCow = input.scannedCow?.trim() ? input.scannedCow : null;
       await queryRun(
         tx,
         sql`INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty,
                                          shipping_box_id, date_code, lot_code, coo, cow, label_barcode,
-                                         scanned_part_no, scanned_wcl_item_no, created_date, last_update_date)
+                                         scanned_part_no, scanned_wcl_item_no,
+                                         scanned_date_code, scanned_lot_code, scanned_coo, scanned_cow,
+                                         created_date, last_update_date)
             VALUES (${pid}, ${item.id}, ${item.pickingOrderId}, ${p.sourceType}, ${p.sourceId}, ${p.qty}, ${box?.id ?? null},
                     ${dateCode}, ${lotCode}, ${coo}, ${cow}, ${input.barcode ?? null},
-                    ${input.scannedPartNo ?? null}, ${input.scannedWclItemNo ?? null}, ${at}, ${at})`
+                    ${input.scannedPartNo ?? null}, ${input.scannedWclItemNo ?? null},
+                    ${scannedDateCode}, ${scannedLotCode},
+                    ${scannedCoo}, ${scannedCow}, ${at}, ${at})`
       );
       packageIds.push(pid);
       const base = {

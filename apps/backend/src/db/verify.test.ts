@@ -179,6 +179,56 @@ test("detail: task + box + packages (part identity, both flags); 404", async () 
   assert.equal(notFound.message, "verify_task_not_found");
 });
 
+test("detail: pick-time scanned batch fields (2026-10-14) are stored and exposed; legacy rows are NULL", async () => {
+  await reset();
+  const actorId = await actorIdOf();
+  await allocateAll(client.db);
+  const orderId = await pickingOrderIdOf("SO-DEMO-0001");
+  const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
+  const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F");
+  const p1 = (
+    await scanPickingItem(client.db, item1, {
+      actorId,
+      allocationId: await allocationIdOf(item1),
+      qty: 1000,
+      scannedDateCode: "2526",
+      scannedLotCode: "1625H713",
+      scannedCoo: "JP",
+      scannedCow: "",
+    })
+  ).packageIds[0];
+  const p2 = (
+    await scanPickingItem(client.db, item2, { actorId, allocationId: await allocationIdOf(item2), qty: 500 })
+  ).packageIds[0];
+
+  // stored verbatim next to the source snapshot
+  const row = await queryGet<{ scannedDateCode: string | null; scannedLotCode: string | null }>(
+    client.db,
+    sql`SELECT scanned_date_code AS "scannedDateCode", scanned_lot_code AS "scannedLotCode"
+        FROM picking_packages WHERE id = ${p1}`
+  );
+  assert.deepEqual(row, { scannedDateCode: "2526", scannedLotCode: "1625H713" });
+
+  const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
+  await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
+  for (const packageId of [p1, p2]) {
+    await verifyPackage(client.db, { packageId, actorId });
+  }
+  await updateShippingBox(client.db, box.id, { actorId, boxSize: "26 X 20 X 20", netWeightKg: 0.5, grossWeightKg: 0.8 });
+  await closeShippingBox(client.db, { shippingBoxId: box.id, actorId });
+  const vt = (await verifyTaskOf(box.id))!;
+
+  const detail = await getVerifyTaskDetail(client.db, vt.id);
+  const pkg1 = detail.packages.find((p) => p.id === p1)!;
+  assert.equal(pkg1.scannedDateCode, "2526");
+  assert.equal(pkg1.scannedLotCode, "1625H713");
+  assert.equal(pkg1.scannedCoo, "JP");
+  assert.equal(pkg1.scannedCow, null);
+  const pkg2 = detail.packages.find((p) => p.id === p2)!;
+  assert.equal(pkg2.scannedDateCode, null); // legacy row → consumer falls back to the snapshot
+  assert.equal(pkg2.scannedLotCode, null);
+});
+
 // --- complete guards + happy path ------------------------------------------------
 
 test("complete: happy path + guards (404, actor, not pending, re-scan required)", async () => {

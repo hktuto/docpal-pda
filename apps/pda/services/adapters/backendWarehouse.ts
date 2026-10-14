@@ -204,6 +204,10 @@ export function createBackendWarehouseService(
         barcode: input.barcode ?? undefined,
         scannedPartNo: input.scannedPartNo ?? undefined,
         scannedWclItemNo: input.scannedWclItemNo ?? undefined,
+        scannedDateCode: input.scannedDateCode ?? undefined,
+        scannedLotCode: input.scannedLotCode ?? undefined,
+        scannedCoo: input.scannedCoo ?? undefined,
+        scannedCow: input.scannedCow ?? undefined,
         shelfCode: input.shelfCode ?? undefined,
         boxId: input.boxId ?? undefined,
       });

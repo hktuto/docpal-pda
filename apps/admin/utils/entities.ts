@@ -289,6 +289,7 @@ export const navSections: { title: string; links: { route: string; title: string
       { route: "/inventory-labels", title: "admin.navLinks.inventoryLabels" },
       { route: "/parts", title: "admin.navLinks.parts" },
       { route: "/stock-search", title: "admin.navLinks.stockSearch" },
+      { route: "/item-ledger", title: "admin.navLinks.itemLedger" },
     ],
   },
   {

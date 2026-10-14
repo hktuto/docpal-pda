@@ -870,6 +870,10 @@ export async function stealAllocationsOnSource(
     override: boolean;
     thiefOrderId: string;
     thiefItemId: string;
+    /** Additional picking items whose rows are never stolen (the grouped
+     *  allocate form excludes the whole part group — their holdings on the
+     *  source are netted by the form's own distribution). */
+    excludeItemIds?: string[];
     actorId: string;
   }
 ): Promise<void> {
@@ -920,6 +924,9 @@ export async function stealAllocationsOnSource(
           LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
           WHERE a.manual = false
             AND a.picking_item_id <> ${pickingItemId}
+            ${input.excludeItemIds?.length
+              ? sql`AND NOT (a.picking_item_id IN (${sql.join(input.excludeItemIds, sql`, `)}))`
+              : sql``}
             AND (a.inventory_lot_id = ${input.inventoryLotId ?? null}
              OR a.receiving_invoice_item_id = ${input.receivingInvoiceItemId ?? null})
           ORDER BY a.created_date ASC`

@@ -65,7 +65,7 @@ function makeItems(): Items {
 
 const label = (partNo: string, qty: number | string, over: Record<string, unknown> = {}) => ({
   matched: true,
-  parsed: { itemId: partNo, qty, dateCode: '', lotCode: '', coo: '', cow: '', wclItemNo: null, serialNo: null, ...over },
+  parsed: { itemId: partNo, qty, dateCode: '', lotCode: 'L01', coo: '', cow: '', wclItemNo: null, serialNo: null, ...over },
 });
 
 /** Dock-only order: every allocation is a receiving-area source (no lot) —
@@ -274,7 +274,7 @@ describe('usePickingScanSession', () => {
     expect(session.shelfWorkRemaining.value).toBe(true);
     parseRawValue.mockResolvedValue(label('PART-1', 1000));
     await session.handleQrOrBoxScan(':A::1:X:L:S:F');
-    parseRawValue.mockResolvedValue(label('PART-2', 1000));
+    parseRawValue.mockResolvedValue(label('PART-2', 1000, { lotCode: 'L02' }));
     await session.handleQrOrBoxScan(':A::2:X:L:S:F');
     // both lot allocations are fully queued; only the dock allocation remains
     expect(session.shelfWorkRemaining.value).toBe(false);

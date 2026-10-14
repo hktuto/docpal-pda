@@ -80,10 +80,6 @@
           <template v-if="ocrCapturing"><InlineSpinner /> {{ $t('picking.scanSession.ocrCapture') }}</template>
           <template v-else>{{ $t('picking.scanSession.ocrCapture') }}</template>
         </button>
-        <button class="btn" :disabled="applying || queuedCount === 0 || !!heldByOther" @click="confirm">
-          <template v-if="applying"><InlineSpinner /> {{ $t('picking.scanSession.confirming') }}</template>
-          <template v-else>{{ $t('picking.scanSession.confirm', { count: queuedCount }) }}</template>
-        </button>
       </footer>
 
       <PickingScanReviewModal
@@ -195,9 +191,13 @@ const multiReview = ref<{ rows: ScanMultiRow[]; raw: string } | null>(null);
 const multiOpen = ref(false);
 const multiResults = ref<ScanMultiRowResult[] | null>(null);
 
-// The scan session (queue, sticky shelf context, pick-from-box dialog,
-// carton auto-queue, confirm) — spec
-// docs/superpowers/specs/2026-10-12-picking-unified-detail-scan-design.md.
+// The scan session (queue as a transient in-flight buffer, sticky shelf
+// context, pick-from-box dialog, carton auto-queue) — spec
+// docs/superpowers/specs/2026-10-12-picking-unified-detail-scan-design.md,
+// auto-apply amendment
+// docs/superpowers/specs/2026-10-14-picking-unified-scan-auto-apply-design.md:
+// every queued scan is applied immediately (the queuedCount watch below), so
+// there is no Confirm button; a mis-scan is undone via Remove scan.
 const session = usePickingScanSession({
   orderItems: computed(() => order.value?.items ?? []),
   scope: computed(() => ({
@@ -214,7 +214,6 @@ const {
   boxPickId,
   boxPickEntries,
   completed,
-  orderMatched,
   requireShelfScan,
   shelfWorkRemaining,
   applying,
@@ -283,6 +282,7 @@ async function scanIntoBox(boxId: string, barcode: string): Promise<boolean> {
 async function deliverScan(rawValue: string): Promise<boolean> {
   if (!order.value) return false;
   try {
+    console.log("boxPickId", boxPickId.value)
     if (scanIntoBoxId.value) {
       return await scanIntoBox(scanIntoBoxId.value, rawValue);
     }
@@ -317,8 +317,9 @@ async function deliverScan(rawValue: string): Promise<boolean> {
 }
 
 useHardwareScanner({
+  // No `!applying` gate: scans arriving while a drain is running still queue
+  // (the drain loop picks them up) — dropping them would lose operator scans.
   enabled: () =>
-    !applying.value &&
     !ocrCapturing.value &&
     !completed.value &&
     !reviewOpen.value &&
@@ -453,14 +454,18 @@ function onMultiRowRemoved(index: number) {
     .map((r) => (r.index > index ? { ...r, index: r.index - 1 } : r));
 }
 
-// The queued scans cover what the server has not confirmed yet — every part's
-// required qty is matched. On the transition into this state play a success
-// cue and offer to confirm right away (one prompt per transition; removing a
-// row and re-matching re-arms it).
-watch(orderMatched, (matched) => {
-  if (!matched || applying.value || heldByOther.value) return;
-  playScanComplete();
-  if (window.confirm(t("picking.scanSession.matchConfirm"))) void confirm();
+// Auto-apply: every queued scan is sent right away (no Confirm button).
+// session.confirm no-ops while a drain is running, and the drain loop picks
+// up rows queued mid-drain — so rapid successive scans all apply exactly once.
+watch(queuedCount, (count) => {
+  if (count > 0) void confirm();
+});
+
+// Completion cue: the queue has drained and every item's packages cover its
+// required qty (spec 2026-10-03 progress-based completion). One cue per
+// transition; finishing stays manual (header action) / backend auto-finish.
+watch(completed, (done) => {
+  if (done) playScanComplete();
 });
 
 async function confirm() {
@@ -496,7 +501,7 @@ async function confirm() {
     }
   );
   for (const row of rows.value) {
-    if (row.error === "allocationChanged") {
+    if (row.error === "allocation_changed") {
       row.error = t("picking.scanSession.allocationChanged");
     }
   }
@@ -736,10 +741,11 @@ async function finish() {
 
 useVisibleReload(load);
 
-// Unconfirmed queued scans are lost on leave — warn (same as the old scan
-// page); a single page now, so this only fires on real navigation.
+// Scans queue and auto-apply in a drain — leaving mid-drain abandons the
+// not-yet-sent rows, so warn whenever anything is still queued (in-flight
+// applies included).
 onBeforeRouteLeave(() => {
-  if (queuedCount.value > 0 && !applying.value) {
+  if (queuedCount.value > 0) {
     return window.confirm(t("picking.scanSession.leaveWarning"));
   }
 });

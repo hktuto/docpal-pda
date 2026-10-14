@@ -6,7 +6,7 @@ import { queryGet } from "../../db/query.js";
 import { allocateAll, allocateForPickingOrder, allocateForReceivingOrder, addManualPickingAllocation, removePickingAllocation, transferPickingAllocation } from "../../db/allocate.js";
 import { actorFrom } from "../../auth/middleware.js";
 import { reallocateReceivingItemDemand } from "../../db/receivingReallocate.js";
-import { allocatePickingItemFromSources, type AllocateFormRow } from "../../db/pickingAllocateForm.js";
+import { allocatePickingItemFromSources, allocatePickingGroupFromSources, type AllocateFormRow } from "../../db/pickingAllocateForm.js";
 
 // Manual allocation triggers for the admin console (spec
 // docs/superpowers/specs/2026-09-14-admin-allocation-buttons-design.md).
@@ -98,6 +98,34 @@ adminAllocationRoute.post("/picking-orders/:id/items/:itemId/allocate-form", asy
     db,
     c.req.param("id"),
     c.req.param("itemId"),
+    rows,
+    actorFrom(c).id
+  );
+  return c.json(result);
+});
+
+// "Confirm" on the availability modal opened from the GROUPED items view
+// (spec docs/superpowers/specs/2026-10-14-admin-picking-group-allocate-design.md):
+// the same final-state form as allocate-form, but each `qty` is the desired
+// final GROUP total from that source for every line sharing `partNo` on this
+// order — the backend splits it across the lines (growth fills lines in line
+// order up to each line's headroom, shrink releases from the last line
+// backwards). Body `{partNo, rows: [{inventoryLotId? | receivingInvoiceItemId?,
+// qty, override?}]}`; same validation and error codes as allocate-form, with
+// over_allocation / openQty reported as group sums and 404
+// picking_item_not_found when no line carries the part.
+adminAllocationRoute.post("/picking-orders/:id/allocate-group", async (c) => {
+  const body = await c.req.json<{ partNo?: string; rows?: AllocateFormRow[] }>();
+  const rows = (body.rows ?? []).map((r) => ({
+    inventoryLotId: r.inventoryLotId ?? null,
+    receivingInvoiceItemId: r.receivingInvoiceItemId ?? null,
+    qty: Number(r.qty),
+    override: r.override === true,
+  }));
+  const result = await allocatePickingGroupFromSources(
+    db,
+    c.req.param("id"),
+    String(body.partNo ?? ""),
     rows,
     actorFrom(c).id
   );

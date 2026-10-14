@@ -615,6 +615,24 @@ export interface AllocateFormResult {
   changed: { key: string; inventoryLotId: string | null; receivingInvoiceItemId: string | null; from: number; to: number }[];
 }
 
+/** Grouped allocate-form result: the per-source group totals split per line. */
+export interface AllocateGroupResult {
+  partNo: string;
+  itemIds: string[];
+  /** Σ (qty − Σ packages) over the group. */
+  openQty: number;
+  /** Σ allocations over the group after the change. */
+  allocated: number;
+  changed: {
+    key: string;
+    pickingItemId: string;
+    inventoryLotId: string | null;
+    receivingInvoiceItemId: string | null;
+    from: number;
+    to: number;
+  }[];
+}
+
 // ---- receiving item re-allocation form -------------------------------------
 
 /** Desired FINAL totals per picking item (0 releases the row). */
@@ -942,6 +960,12 @@ export function useFlowApi() {
     // (`l:<lotId>` / `r:<receivingItemId>`) + reason.
     allocatePickingItemFromSources: (orderId: string, itemId: string, rows: AllocateFormInput[]) =>
       api.post<AllocateFormResult>(`/admin/picking-orders/${orderId}/items/${itemId}/allocate-form`, { rows }),
+    // The same final-state form opened from the GROUPED items view: each `qty`
+    // is the desired final GROUP total from that source for every line sharing
+    // `partNo`; the backend splits it across the lines (growth in line order,
+    // shrink from the last line backwards). Same error codes as allocate-form.
+    allocatePickingGroupFromSources: (orderId: string, partNo: string, rows: AllocateFormInput[]) =>
+      api.post<AllocateGroupResult>(`/admin/picking-orders/${orderId}/allocate-group`, { partNo, rows }),
     // Order info edit: delivery date, ship-to (country code) and/or the
     // ship-from location pair (orgId + subInventoryCode, set together; both
     // null clears the pair) — one PATCH for the whole info section.
@@ -1116,6 +1140,15 @@ export function useFlowApi() {
         `/admin/picking-orders/${orderId}/items/${itemId}/allocations/transfer`,
         qty === undefined ? { allocationId } : { allocationId, qty }
       ),
+    // Item ledger (item-ledger page): current stock lots + totals and the
+    // part's in/out movement history (dock + on_hand rows, newest first).
+    // partNo or wclItemNo may be blank, not both.
+    getPartLedger: (partNo: string, wclItemNo?: string | null) => {
+      const qs = new URLSearchParams();
+      if (partNo) qs.set("partNo", partNo);
+      if (wclItemNo) qs.set("wclItemNo", wclItemNo);
+      return api.get<PartLedger>(`/admin/part-ledger?${qs}`);
+    },
     // Redistribute one receiving item's dock stock across open picking demand
     // in a single all-or-nothing call. `rows[].qty` is the desired FINAL total
     // from this receiving item (0 releases the row); rows omitted from the

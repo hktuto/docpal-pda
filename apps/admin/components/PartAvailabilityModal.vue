@@ -10,6 +10,10 @@ import type { PartAvailability, PartAvailabilityReceivingRow, PartAvailabilitySt
 // hold from that source afterwards, and ONE Confirm at the bottom applies
 // every row in a single all-or-nothing call. Row inputs are never disabled —
 // an impossible value is flagged inline and blocks the Confirm instead.
+// With pickingGroup instead (the grouped items view of the picking order
+// detail) the same form applies to EVERY line sharing the part_no: each row
+// states the group's final total from that source and the backend splits it
+// across the lines (spec 2026-10-14-admin-picking-group-allocate-design.md).
 // Without them the modal is read-only.
 const props = defineProps<{
   open: boolean;
@@ -22,6 +26,18 @@ const props = defineProps<{
   pickingOrderId?: string;
   pickingItem?: {
     id: string;
+    qty: number;
+    pickedQty: number;
+    allocations: {
+      qty: number;
+      receivingInvoiceItemId: string | null;
+      lot: { id: string } | null;
+    }[];
+  } | null;
+  /** Grouped-mode target: summed qtys + the member lines' allocations. */
+  pickingGroup?: {
+    partNo: string;
+    wclItemNo?: string | null;
     qty: number;
     pickedQty: number;
     allocations: {
@@ -74,10 +90,11 @@ const filteredReceiving = computed(() =>
 // Receiving dock stock is not allocatable when the flow config turns it off.
 const showReceiving = computed(() => data.value?.dockStockAllowed === true);
 
-const allocatable = computed(() => !!props.pickingOrderId && !!props.pickingItem);
+const allocatable = computed(() => !!props.pickingOrderId && (!!props.pickingItem || !!props.pickingGroup));
 
-// Transfer target for the allocated-qty breakdown: rows of this order itself
-// never get actions from the breakdown.
+// Transfer target for the allocated-qty breakdown: only the single-item mode
+// pins onto one picking item; the grouped form has no single target (Remove
+// only there). Rows of this order itself never get actions from the breakdown.
 const transferTarget = computed(() =>
   props.pickingOrderId && props.pickingItem
     ? { orderId: props.pickingOrderId, itemId: props.pickingItem.id }
@@ -99,11 +116,14 @@ async function onAllocationsChanged() {
   emit("allocated");
 }
 
+// The form's target: the single item, or the part group's summed stand-in.
+const target = computed(() => props.pickingItem ?? props.pickingGroup ?? null);
+
 // What this item holds TODAY, per source — the form's baseline. Derived from
 // the item's own allocation rows so no extra round-trip is needed.
 const currentBySource = computed<Record<string, number>>(() => {
   const out: Record<string, number> = {};
-  for (const a of props.pickingItem?.allocations ?? []) {
+  for (const a of target.value?.allocations ?? []) {
     const key = a.lot?.id ? `s:${a.lot.id}` : a.receivingInvoiceItemId ? `r:${a.receivingInvoiceItemId}` : "";
     if (key) out[key] = (out[key] ?? 0) + a.qty;
   }
@@ -127,7 +147,7 @@ const sentReceiving = computed(() => (showReceiving.value ? filteredReceiving.va
 
 /** qty − picked − Σ allocations: how much more this item may reserve. */
 const headroom = computed(() => {
-  const item = props.pickingItem;
+  const item = target.value;
   if (!item) return 0;
   const held = item.allocations.reduce((s, a) => s + a.qty, 0);
   return Math.max(0, item.qty - item.pickedQty - held);
@@ -204,7 +224,8 @@ function reasonLabel(reason: string): string {
 async function submit() {
   const orderId = props.pickingOrderId;
   const item = props.pickingItem;
-  if (!orderId || !item || !canSubmit.value) return;
+  const group = props.pickingGroup;
+  if (!orderId || (!item && !group) || !canSubmit.value) return;
   // One confirmation covers every row that reclaims stock from other orders.
   if (overridingRows.value.length > 0) {
     const qty = overridingRows.value.reduce((s, r) => s + (stockDelta(r) - r.availableQty), 0);
@@ -230,7 +251,11 @@ async function submit() {
         qty: planned(`r:${r.receivingInvoiceItemId}`),
       })),
     ];
-    await flow.allocatePickingItemFromSources(orderId, item.id, rows);
+    if (group) {
+      await flow.allocatePickingGroupFromSources(orderId, group.partNo, rows);
+    } else {
+      await flow.allocatePickingItemFromSources(orderId, item!.id, rows);
+    }
     emit("allocated");
     emit("close");
   } catch (e: any) {
@@ -316,6 +341,9 @@ watch(
       </div>
       <p v-if="allocatable" class="hint-text">
         {{ $t("admin.pages.pickingOrders.availabilityHint") }}
+      </p>
+      <p v-if="pickingGroup" class="hint-text">
+        {{ $t("admin.pages.pickingOrders.availabilityGroupHint", { partNo: pickingGroup.partNo }) }}
       </p>
       <div v-if="error" class="error-banner">{{ error }}</div>
       <div class="avail-filter">

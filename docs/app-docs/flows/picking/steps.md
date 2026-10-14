@@ -22,7 +22,7 @@ The page lists the order's parts as one row per part number — order lines shar
 
 Tap a row to expand it. From top to bottom the expanded row shows:
 
-- **Pending scans** — every scan queued on this part but not yet confirmed, each with a **Remove** button; a scan that failed stays listed with its error message.
+- **Pending scans** — scans being applied right now, plus any scan that failed to apply (stays listed with its error message and a **Remove** button).
 - **Line breakdown** (merged rows only) — the required and scanned quantity of each contributing order line.
 - **Unboxed packages** — each picked-but-unpacked package with a box selector and **Add to box**, plus a **Remove scan** button (asks for confirmation) that undoes a mis-scan: the scanned stock is returned, the allocation reopens, and the item can be scanned again. Boxed or verified packages cannot be removed this way — take them out of the box first.
 - **Boxed packages** — each packed package with its box id and a **Remove** button (while that box is still open).
@@ -32,11 +32,11 @@ The order's boxes are listed in the **Boxes** section below the item list.
 
 ## 4. Pick each line
 
-The hardware scanner is live whenever the order is open — aim and scan. The **OCR / camera** button in the sticky footer at the bottom captures a label photo instead (a single-record label opens the usual confirm form with candidate chips; a label whose table lists several parts opens the multi-row table). Scans are **queued first, not sent**: each successful part-label scan adds a row to that part's **Pending scans** list, the collapsed line updates (`+N pending`), and the **Confirm** button in the footer shows how many scans are waiting. Tap **Confirm** to send them:
+The hardware scanner is live whenever the order is open — aim and scan. The **OCR / camera** button in the sticky footer at the bottom captures a label photo instead (a single-record label opens the usual confirm form with candidate chips; a label whose table lists several parts opens the multi-row table). Each successful scan is **recorded immediately** — there is no Confirm button: the picked quantity is recorded, the allocation is reduced or removed, and the new package appears under the part's **Unboxed packages**:
 
-- The picked quantity is recorded and the allocation is reduced or removed.
-- The app re-resolves what is still left to pick after each confirm — the office's allocations may shift between scans.
-- A scan that fails at confirm time stays listed on the part's expanded row with its error message — **Remove** it (or fix the cause) and confirm the rest.
+- The app re-resolves what is still left to pick after each scan — the office's allocations may shift between scans.
+- A scan that fails to apply stays listed in the part's **Pending scans** section with its error message — **Remove** it (or fix the cause) and scan again.
+- Scanned the wrong label? Use **Remove scan** on the package (in the part's expanded row) to undo it — the stock is returned and the item can be scanned again.
 
 ### Whole-box shortcut
 
@@ -52,7 +52,7 @@ Each item row shows where its remaining qty is allocated from (the collapsed lin
 
 **Shelf scan required first:** when the warehouse is configured to require a shelf scan before picking, a banner at the top of the page shows the current location — scan the shelf/box barcode to set it (it stays until you scan another one or tap clear). Part-label scans that would be picked from a shelf or box lot are rejected until it is set; labels that match only receiving-carton (docked) stock queue with no shelf scan at all, and the banner disappears once no shelf-sourced picking remains.
 
-Apply the queued scans with **Confirm** as usual.
+Carton and box picks are recorded immediately, just like label scans.
 
 **Outdated date code alert:** if a scanned label's date code is older than the supplier's outdated limit, the scan still applies but an alert pops up naming the supplier, the date code and the limit, and the order gets a warning chip on the list and detail pages. Keep working — an admin has been notified. The order cannot be finished while such warnings are unresolved.
 

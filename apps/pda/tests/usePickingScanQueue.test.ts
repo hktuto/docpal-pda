@@ -240,6 +240,24 @@ describe('usePickingScanQueue', () => {
     expect(q.rows.value).toHaveLength(0);
   });
 
+  it('applyAll drains rows queued while it is running', async () => {
+    const q = usePickingScanQueue(ref(makeItems()));
+    q.addScan(qr('RK73H1JTTD1002F', 1000), ':A::101:X:L:S1:F', 'qr');
+    const applied: string[] = [];
+    const failed = await q.applyAll(async (row) => {
+      applied.push(row.key);
+      if (applied.length === 1) {
+        // a new scan arrives mid-drain (unified page auto-apply) — the same
+        // run must pick it up, exactly once
+        q.addScan(qr('RK73H1JTTD1002F', 500), ':A::51:X:L:S3:F', 'qr');
+      }
+    }, (e) => String(e));
+    expect(failed).toBe(0);
+    expect(applied).toHaveLength(2);
+    expect(new Set(applied).size).toBe(2);
+    expect(q.rows.value).toHaveLength(0);
+  });
+
   it('reresolveQueued does not count the row against itself when ids are unchanged', () => {
     const items = ref(makeItems());
     const q = usePickingScanQueue(items);
@@ -267,13 +285,13 @@ describe('usePickingScanQueue', () => {
     items[0].allocations = [
       {
         id: 'alloc-1', qty: 2000, receivingInvoiceItemId: null, receivingOrderId: null, boxId: null,
-        lot: { id: 'lot-1', shelfCode: 'A-01-01', boxId: 'BOX-H-20260701-0001', dateCode: '2603', lotCode: 'L2603A', coo: 'JP', cow: 'JP', totalQty: 2000, allocatedQty: 2000, availableQty: 0 },
+        lot: { id: 'lot-1', shelfCode: 'A-01-01', boxId: 'BOX-H-20260701-0001', dateCode: '2603', lotCode: 'L2607', coo: 'JP', cow: 'JP', totalQty: 2000, allocatedQty: 2000, availableQty: 0 },
       },
     ];
     items[1].allocations = [
       {
         id: 'alloc-3', qty: 1000, receivingInvoiceItemId: null, receivingOrderId: null, boxId: null,
-        lot: { id: 'lot-2', shelfCode: 'A-01-01', boxId: 'BOX-H-20260701-0001', dateCode: '2603', lotCode: 'L2603B', coo: 'JP', cow: 'JP', totalQty: 1000, allocatedQty: 1000, availableQty: 0 },
+        lot: { id: 'lot-2', shelfCode: 'A-01-01', boxId: 'BOX-H-20260701-0001', dateCode: '2603', lotCode: 'L2607', coo: 'JP', cow: 'JP', totalQty: 1000, allocatedQty: 1000, availableQty: 0 },
       },
     ];
     return items as Items;
@@ -346,5 +364,82 @@ describe('usePickingScanQueue', () => {
     expect(q.addAllocationScan('item-1', 'alloc-1', qr('RK73H1JTTD1002F', 2000), ':A::202:X:L:S1:F', 'qr')).toEqual({ ok: true });
     expect(q.addAllocationScan('item-1', 'alloc-1', qr('RK73H1JTTD1002F', 1), ':A::1:X:L:S2:F', 'qr')).toEqual({ ok: false, message: 'qty_exceeds' });
     expect(q.addAllocationScan('item-1', 'alloc-1', qr('RK73H1JTTD1002F', 2000), ':A::202:X:L:S1:F', 'qr')).toEqual({ ok: false, message: 'duplicate' });
+  });
+
+  // --- 2026-10-14 batch-field validation (spec 2026-10-14) -----------------
+
+  const qrFull = (partNo: string, qty: number, fields: { dateCode?: string; lotCode?: string; coo?: string; cow?: string }) =>
+    ({ partNo, qty, dateCode: '', lotCode: '', coo: '', cow: '', ...fields });
+
+  it('records the scanned batch fields on queued rows (NULL for carton scans)', () => {
+    const q = usePickingScanQueue(ref(makeShelfItems()));
+    q.addAllocationScan('item-1', 'alloc-1', qrFull('RK73H1JTTD1002F', 100, { dateCode: '0926', lotCode: 'L2607', coo: 'jp' }), ':A::102:X:L:S:F', 'qr');
+    expect(q.rows.value[0]).toMatchObject({
+      scannedDateCode: '0926',
+      scannedLotCode: 'L2607',
+      scannedCoo: 'jp',
+      scannedCow: null,
+    });
+    const items = makeItems() as any;
+    items[0].allocations[0].boxId = 'C1001';
+    const q2 = usePickingScanQueue(ref(items as Items));
+    q2.addCartonScan(q2.matchCartonAllocations('C1001'), 'C1001');
+    expect(q2.rows.value[0]).toMatchObject({
+      scannedDateCode: null,
+      scannedLotCode: null,
+      scannedCoo: null,
+      scannedCow: null,
+    });
+  });
+
+  it('hard-rejects a lot code that differs from the source lot (2026-10-14)', () => {
+    const q = usePickingScanQueue(ref(makeShelfItems()));
+    // source lot carries L2607 — a different label lot code is rejected
+    expect(q.addAllocationScan('item-1', 'alloc-1', qrFull('RK73H1JTTD1002F', 100, { lotCode: 'L9999' }), ':A::102:X:L:S1:F', 'qr'))
+      .toEqual({ ok: false, message: 'lot_code_mismatch', params: { scanned: 'L9999', expected: '12607' } });
+    // a label without a lot code cannot confirm the reel either
+    const missing = q.addAllocationScan('item-1', 'alloc-1', qrFull('RK73H1JTTD1002F', 100, {}), ':A::102:X:L:S2:F', 'qr');
+    expect(missing).toMatchObject({ ok: false, message: 'lot_code_mismatch' });
+    expect(missing.params?.scanned).toBe('—');
+    // OCR-substitution tolerant: "I" reads as "1" on both sides
+    expect(q.addAllocationScan('item-1', 'alloc-1', qrFull('RK73H1JTTD1002F', 100, { lotCode: 'I2607' }), ':A::102:X:L:S3:F', 'qr')).toEqual({ ok: true });
+    expect(q.rows.value).toHaveLength(1);
+  });
+
+  it('accepts the date code when equal or earlier than the source, rejects newer', () => {
+    const q = usePickingScanQueue(ref(makeShelfItems()));
+    const items = makeShelfItems() as any;
+    items[0].allocations[0].lot.dateCode = '2626'; // WWYY = week 26 of 2026
+    const q2 = usePickingScanQueue(ref(items as Items));
+    const okScan = (dateCode: string) => qrFull('RK73H1JTTD1002F', 100, { dateCode, lotCode: 'L2607' });
+    expect(q2.addAllocationScan('item-1', 'alloc-1', okScan('2626'), ':A::102:X:L:S1:F', 'qr')).toEqual({ ok: true });
+    expect(q2.addAllocationScan('item-1', 'alloc-1', okScan('2526'), ':A::102:X:L:S2:F', 'qr')).toEqual({ ok: true });
+    expect(q2.addAllocationScan('item-1', 'alloc-1', okScan('5225'), ':A::102:X:L:S3:F', 'qr')).toEqual({ ok: true }); // year boundary: w52 2025 < w26 2026
+    const newer = q2.addAllocationScan('item-1', 'alloc-1', okScan('0127'), ':A::102:X:L:S4:F', 'qr');
+    expect(newer).toEqual({ ok: false, message: 'date_code_newer', params: { scanned: '0127', expected: '2626' } });
+    // unparseable label format never blocks
+    expect(q2.addAllocationScan('item-1', 'alloc-1', okScan('26-27'), ':A::102:X:L:S5:F', 'qr')).toEqual({ ok: true });
+    expect(q2.rows.value).toHaveLength(4);
+  });
+
+  it('checks the date code against receiving-area sources too', () => {
+    const items = makeItems() as any;
+    items[0].allocations[0].receiving = { orderId: 'ro-1', batchNo: 'B1', invoiceNo: 'INV1', partNo: 'RK73H1JTTD1002F', poNo: 'PO1', receivedQty: 2000, dateCode: '2626' };
+    const q = usePickingScanQueue(ref(items as Items));
+    expect(q.addScan(qrFull('RK73H1JTTD1002F', 100, { dateCode: '2726' }), ':A::102:X:L:S1:F', 'qr'))
+      .toEqual({ ok: false, message: 'date_code_newer', params: { scanned: '2726', expected: '2626' } });
+    expect(q.addScan(qrFull('RK73H1JTTD1002F', 100, { dateCode: '2626' }), ':A::102:X:L:S2:F', 'qr')).toEqual({ ok: true });
+  });
+
+  it('addScan applies the same batch checks to every portion of a spanning label', () => {
+    const items = makeShelfItems() as any;
+    items[1].partNo = 'RK73H1JTTD1002F'; // one part across two lines → a label can span both
+    // second lot carries a different lot code — the spanning label must be rejected
+    items[1].allocations[0].lot.lotCode = 'L8888';
+    const q = usePickingScanQueue(ref(items as Items));
+    // item-1 (2000) + item-2 (1000) = 3000; the label covers both, item-2's lot mismatches
+    expect(q.addScan(qr('RK73H1JTTD1002F', 3000), ':A::302:X:L:S1:F', 'qr'))
+      .toMatchObject({ ok: false, message: 'lot_code_mismatch' });
+    expect(q.rows.value).toHaveLength(0);
   });
 });

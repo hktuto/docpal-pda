@@ -135,6 +135,10 @@ pickingRoute.post("/picking-items/:id/scan", async (c) => {
     barcode?: string;
     scannedPartNo?: string;
     scannedWclItemNo?: string;
+    scannedDateCode?: string;
+    scannedLotCode?: string;
+    scannedCoo?: string;
+    scannedCow?: string;
     shelfCode?: string;
     boxId?: string;
   }>(c);
@@ -150,6 +154,10 @@ pickingRoute.post("/picking-items/:id/scan", async (c) => {
     barcode: body.barcode ?? null,
     scannedPartNo: body.scannedPartNo ?? null,
     scannedWclItemNo: body.scannedWclItemNo ?? null,
+    scannedDateCode: body.scannedDateCode ?? null,
+    scannedLotCode: body.scannedLotCode ?? null,
+    scannedCoo: body.scannedCoo ?? null,
+    scannedCow: body.scannedCow ?? null,
     shelfCode: body.shelfCode ?? null,
     boxId: body.boxId ?? null,
   });

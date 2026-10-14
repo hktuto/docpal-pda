@@ -1422,6 +1422,244 @@ test("remove-allocation: a legacy pin on an orphan-shelf lot releases with a NUL
   assert.equal(txn!.qtyDelta, -100);
 });
 
+// --- POST /admin/picking-orders/:id/allocate-group ---------------------------
+// The availability modal opened from the GROUPED items view: each row's qty is
+// the desired final GROUP total from that source for every line sharing the
+// part_no (spec 2026-10-14-admin-picking-group-allocate-design.md). Growth
+// fills the lines in line order, shrink releases from the last line backwards.
+
+const postGroup = (orderId: string, partNo: string, rows: unknown[]) =>
+  req(`/admin/picking-orders/${orderId}/allocate-group`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ partNo, rows }),
+  });
+
+/** Per-line allocation rows for one part on one order, in line order. */
+const groupRows = (orderId: string, partNo: string) =>
+  queryAll<{ lineNumber: number | null; lotId: string | null; qty: number; manual: boolean }>(
+    client.db,
+    sql`SELECT pi.line_number AS "lineNumber", a.inventory_lot_id AS "lotId", a.qty, a.manual
+        FROM allocations a
+        JOIN picking_items pi ON pi.id = a.picking_item_id
+        WHERE pi.picking_order_id = ${orderId} AND pi.part_no = ${partNo}
+        ORDER BY pi.line_number ASC NULLS LAST, a.inventory_lot_id`
+  );
+
+// One order whose three lines share REALLOC-P1: 200 / 300 / 100 (total 600).
+async function groupFixture() {
+  await reseed(client);
+  await seedScenario();
+  await clearAllocations();
+  const orderId = randomUUID();
+  await insertPickingOrder(client.db, orderId, {
+    order: { orderNo: "SO-GRP-001", orgId: 2, subInventoryCode: "STORE1" },
+    items: [
+      { partNo: "REALLOC-P1", qty: 200, lineNumber: 1 },
+      { partNo: "REALLOC-P1", qty: 300, lineNumber: 2 },
+      { partNo: "REALLOC-P1", qty: 100, lineNumber: 3 },
+    ],
+  });
+  return { orderId };
+}
+
+test("allocate-group: growth fills the lines in line order", async () => {
+  const { orderId } = await groupFixture();
+  await insertLot("LOT-GRP-1", "REALLOC-P1", 1000);
+
+  const res = await postGroup(orderId, "REALLOC-P1", [{ inventoryLotId: "LOT-GRP-1", qty: 400 }]);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.itemIds.length, 3);
+  assert.equal(body.openQty, 600);
+  assert.equal(body.allocated, 400);
+
+  // 400 fills line 1 (200) then line 2 (200 of its 300); line 3 stays empty.
+  const rows = await groupRows(orderId, "REALLOC-P1");
+  assert.deepEqual(
+    rows.map((r) => [r.lineNumber, r.lotId, r.qty, r.manual]),
+    [
+      [1, "LOT-GRP-1", 200, true],
+      [2, "LOT-GRP-1", 200, true],
+    ]
+  );
+  assert.equal(await lotAllocated("LOT-GRP-1"), 400);
+
+  const audit = await queryGet<{ metadata: { action?: string; partNo?: string } }>(
+    client.db,
+    sql`SELECT metadata FROM transaction_logs
+        WHERE entity_type = 'picking_order' AND entity_id = ${orderId}
+          AND metadata->>'action' = 'allocate_group'`
+  );
+  assert.ok(audit);
+  assert.equal(audit!.metadata.partNo, "REALLOC-P1");
+});
+
+test("allocate-group: shrink releases from the last line backwards", async () => {
+  const { orderId } = await groupFixture();
+  await insertLot("LOT-GRP-2", "REALLOC-P1", 1000);
+  assert.equal((await postGroup(orderId, "REALLOC-P1", [{ inventoryLotId: "LOT-GRP-2", qty: 400 }])).status, 200);
+
+  // Down to 250: line 3 is empty, so line 2 gives back 150; line 1 is untouched.
+  const res = await postGroup(orderId, "REALLOC-P1", [{ inventoryLotId: "LOT-GRP-2", qty: 250 }]);
+  assert.equal(res.status, 200);
+  assert.deepEqual(
+    (await groupRows(orderId, "REALLOC-P1")).map((r) => [r.lineNumber, r.qty]),
+    [
+      [1, 200],
+      [2, 50],
+    ]
+  );
+
+  // Zero releases the group from the source entirely.
+  assert.equal((await postGroup(orderId, "REALLOC-P1", [{ inventoryLotId: "LOT-GRP-2", qty: 0 }])).status, 200);
+  assert.equal((await groupRows(orderId, "REALLOC-P1")).length, 0);
+  assert.equal(await lotAllocated("LOT-GRP-2"), 0);
+});
+
+test("allocate-group: unmentioned sources keep their qty", async () => {
+  const { orderId } = await groupFixture();
+  await insertLot("LOT-GRP-3", "REALLOC-P1", 1000);
+  await insertLot("LOT-GRP-4", "REALLOC-P1", 1000);
+  assert.equal((await postGroup(orderId, "REALLOC-P1", [{ inventoryLotId: "LOT-GRP-3", qty: 200 }])).status, 200);
+
+  // The date-code / match filters can hide a source — it must survive a submit
+  // that never mentions it.
+  const res = await postGroup(orderId, "REALLOC-P1", [{ inventoryLotId: "LOT-GRP-4", qty: 100 }]);
+  assert.equal(res.status, 200);
+  assert.deepEqual(
+    (await groupRows(orderId, "REALLOC-P1")).map((r) => [r.lineNumber, r.lotId, r.qty]),
+    [
+      [1, "LOT-GRP-3", 200],
+      [2, "LOT-GRP-4", 100],
+    ]
+  );
+});
+
+test("allocate-group: over-allocation rejects with group sums and rolls back", async () => {
+  const { orderId } = await groupFixture();
+  await insertLot("LOT-GRP-5", "REALLOC-P1", 1000);
+  await insertLot("LOT-GRP-6", "REALLOC-P1", 1000);
+
+  // 600 is the group's whole open qty; the extra 1 invalidates the batch.
+  const res = await postGroup(orderId, "REALLOC-P1", [
+    { inventoryLotId: "LOT-GRP-5", qty: 600 },
+    { inventoryLotId: "LOT-GRP-6", qty: 1 },
+  ]);
+  assert.equal(res.status, 409);
+  const body = await res.json();
+  assert.equal(body.error, "over_allocation");
+  assert.equal(body.openQty, 600);
+  assert.equal(body.allocated, 601);
+  assert.equal((await groupRows(orderId, "REALLOC-P1")).length, 0);
+  assert.equal(await lotAllocated("LOT-GRP-5"), 0);
+});
+
+test("allocate-group: a line's picked packages still cap its headroom", async () => {
+  const { orderId } = await groupFixture();
+  await insertLot("LOT-GRP-7", "REALLOC-P1", 1000);
+  const line1 = await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT id FROM picking_items WHERE picking_order_id = ${orderId} AND line_number = 1`
+  );
+  // 150 of line 1's 200 is already packed — only 50 of headroom remains.
+  await client.db.execute(sql`
+    INSERT INTO picking_packages (id, picking_item_id, picking_order_id, source_type, source_id, qty, created_date, last_update_date)
+    VALUES ('PKG-GRP-1', ${line1!.id}, ${orderId}, 'inventory_lot', 'LOT-GRP-7', 150, now(), now())
+  `);
+
+  // 450 = 50 + 300 + 100: line 1 caps at its remaining 50, the rest flows on.
+  const res = await postGroup(orderId, "REALLOC-P1", [{ inventoryLotId: "LOT-GRP-7", qty: 450 }]);
+  assert.equal(res.status, 200);
+  assert.deepEqual(
+    (await groupRows(orderId, "REALLOC-P1")).map((r) => [r.lineNumber, r.qty]),
+    [
+      [1, 50],
+      [2, 300],
+      [3, 100],
+    ]
+  );
+
+  // One more piece than the open 450 is an over-allocation.
+  const over = await postGroup(orderId, "REALLOC-P1", [{ inventoryLotId: "LOT-GRP-7", qty: 451 }]);
+  assert.equal(over.status, 409);
+  assert.equal((await over.json()).error, "over_allocation");
+});
+
+test("allocate-group: 404 when no line carries the part; 409 lock_held", async () => {
+  const { orderId } = await groupFixture();
+  await insertLot("LOT-GRP-8", "REALLOC-P1", 1000);
+
+  const noPart = await postGroup(orderId, "NO-SUCH-PART", [{ inventoryLotId: "LOT-GRP-8", qty: 1 }]);
+  assert.equal(noPart.status, 404);
+  assert.match(await noPart.text(), /picking_item_not_found/);
+
+  const operator = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'operator'`);
+  await client.db.execute(
+    sql`UPDATE picking_orders SET working_by = ${operator!.id}, working_at = now() WHERE id = ${orderId}`
+  );
+  const locked = await postGroup(orderId, "REALLOC-P1", [{ inventoryLotId: "LOT-GRP-8", qty: 1 }]);
+  assert.equal(locked.status, 409);
+  assert.match(await locked.text(), /lock_held/);
+});
+
+test("allocate-group: override reclaims from other orders but never from the group itself", async () => {
+  await reseed(client);
+  // orderA (600) auto-holds the whole 500 lot after allocateAll; the group's
+  // own REALLOC-P1 lines must not be treated as steal victims.
+  const { orderA } = await seedScenario();
+  await clearAllocations();
+  await insertLot("LOT-GRP-9", "REALLOC-P1", 500);
+  await allocateAll(client.db);
+  const orderId = randomUUID();
+  await insertPickingOrder(client.db, orderId, {
+    order: { orderNo: "SO-GRP-002", orgId: 2, subInventoryCode: "STORE1" },
+    items: [
+      { partNo: "REALLOC-P1", qty: 100, lineNumber: 1 },
+      { partNo: "REALLOC-P1", qty: 100, lineNumber: 2 },
+    ],
+  });
+  await clearAllocations(); // wipe engine rows again (group order included)
+  // Give orderA back its 500 auto hold and pin 50 on the group's line 1.
+  await client.db.execute(sql`
+    INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, manual, created_date, last_update_date)
+    SELECT 'ALLOC-GRP-A', id, 'LOT-GRP-9', 500, false, now(), now() FROM picking_items
+    WHERE picking_order_id = ${orderA}
+  `);
+  await recomputeLot(client.db, "LOT-GRP-9");
+  const line1 = await queryGet<{ id: string }>(
+    client.db,
+    sql`SELECT id FROM picking_items WHERE picking_order_id = ${orderId} AND line_number = 1`
+  );
+  await client.db.execute(sql`
+    INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, manual, created_date, last_update_date)
+    VALUES ('ALLOC-GRP-L1', ${line1!.id}, 'LOT-GRP-9', 50, false, now(), now())
+  `);
+  await recomputeLot(client.db, "LOT-GRP-9");
+
+  // Group total 150 = current 50 + 100 growth. The lot is oversubscribed
+  // (500 orderA + 50 group = 550 on a 500 lot → availability −50), so the
+  // shortfall is 150 — reclaimed from orderA, never from the group's own 50.
+  // Growth fills line 1 first: headroom there is 50 (100 qty − 50 held), so
+  // the 100 delta lands 50 on line 1 (final 100) and 50 on line 2.
+  const res = await postGroup(orderId, "REALLOC-P1", [{ inventoryLotId: "LOT-GRP-9", qty: 150, override: true }]);
+  assert.equal(res.status, 200);
+  assert.deepEqual(
+    (await groupRows(orderId, "REALLOC-P1")).map((r) => [r.lineNumber, r.qty, r.manual]),
+    [
+      [1, 100, true],
+      [2, 50, true],
+    ]
+  );
+  const victim = await queryGet<{ qty: number }>(
+    client.db,
+    sql`SELECT qty FROM allocations WHERE id = 'ALLOC-GRP-A'`
+  );
+  assert.equal(victim!.qty, 350);
+  assert.equal(await lotAllocated("LOT-GRP-9"), 500);
+});
+
+
 // --- GET /admin/part-allocations --------------------------------------------
 // Per-order breakdown of every allocation row holding a part (spec
 // 2026-10-14-admin-cross-order-allocation-control-design.md).

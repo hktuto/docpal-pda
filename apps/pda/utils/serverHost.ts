@@ -18,11 +18,11 @@ export interface ServerHostOption {
 }
 
 export const SERVER_HOSTS: ServerHostOption[] = [
-  { id: "hk", url: "https://mobile-wms-admin.wclsolution.com:9002" },
+  { id: "hk", url: "https://wclwms-hk.docpal.com.hk:9002" },
   { id: "sz", url: "https://wclwms-sz.docpal.com.hk:9002" },
-  { id: "sh", url: "http://192.168.5.116:9002" },
-  { id: "gz", url: "http://192.168.5.116:9002" },
-  { id: "bj", url: "http://192.168.5.116:9002" },
+  { id: "sh", url: "https://wclwms-sh.docpal.com.hk:9002" },
+  { id: "gz", url: "https://wclwms-gz.docpal.com.hk:9002" },
+  { id: "bj", url: "https://wclwms-bj.docpal.com.hk:9002" },
 ];
 
 const LOCAL_DEV_HOST: ServerHostOption = { id: "local", url: "http://127.0.0.1:3002" };

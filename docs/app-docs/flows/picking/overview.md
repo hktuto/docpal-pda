@@ -24,14 +24,14 @@ Use the Picking flow when a picking order is ready and stock has been allocated.
    ![Picking detail](./assets/picking-detail.png)
 3. The page shows the order's parts as a single list. Each collapsed row
    carries the part name with its progress inline — scanned / required
-   quantity, any queued-but-unconfirmed scans, and where the remaining stock
+   quantity, any scans being applied, and where the remaining stock
    is allocated from (lot or receiving area). Tapping a row expands it to
-   show the queued scans, box assignment for each package, the line breakdown
-   and the planned allocations. The order's boxes are listed below the item
-   list.
-4. The operator picks each line by scanning — the sticky footer holds the
-   OCR/camera button and the **Confirm** button that applies the queued scans
-   — or by expanding a row and assigning packages to boxes by hand.
+   show the in-flight/failed scans, box assignment for each package, the line
+   breakdown and the planned allocations. The order's boxes are listed below
+   the item list.
+4. The operator picks each line by scanning — every scan is recorded
+   immediately (no Confirm step; the sticky footer holds the OCR/camera
+   button) — or by expanding a row and assigning packages to boxes by hand.
 5. Optional: the operator can scan a supplier label to auto-match and apply a pick (OCR-assisted picking).
 6. When all lines are picked, the picking order is finished — the packed boxes move on to measuring.
 

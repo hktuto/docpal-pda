@@ -57,6 +57,13 @@ export interface MeasuringPackageRow {
   rescannedQty: number;
   /** Raw scan string of the source label (traceability/display only). */
   labelBarcode: string | null;
+  /** Pick-time scanned batch fields (2026-10-14) — the re-scan comparison
+   *  anchor; NULL on legacy rows → consumers fall back to the source snapshot
+   *  (dateCode/lotCode/coo/cow above). */
+  scannedDateCode: string | null;
+  scannedLotCode: string | null;
+  scannedCoo: string | null;
+  scannedCow: string | null;
   partNo: string;
   wclItemNo: string | null;
 }
@@ -96,6 +103,8 @@ export async function getMeasuringBoxDetail(db: AppDb, boxId: string): Promise<M
         pp.verify_verified AS "verifyVerified",
         pp.rescanned_qty AS "rescannedQty",
         pp.label_barcode AS "labelBarcode",
+        pp.scanned_date_code AS "scannedDateCode", pp.scanned_lot_code AS "scannedLotCode",
+        pp.scanned_coo AS "scannedCoo", pp.scanned_cow AS "scannedCow",
         COALESCE(pp.scanned_part_no, pi.part_no) AS "partNo",
         COALESCE(pp.scanned_wcl_item_no, p.wcl_item_no) AS "wclItemNo",
         nwf.weight AS "formulaWeight", nwf.qty AS "formulaQty"

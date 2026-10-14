@@ -88,10 +88,19 @@ const totalQty = computed(() => (order.value?.items ?? []).reduce((sum, i) => su
 
 // Items table view modes: "flat" (one row per order line — the original) and
 // "grouped" (lines sharing the same item no (wclItemNo ?? partNo) merge into
-// one row with summed qtys; read-only — the per-line actions stay in flat
-// mode). In grouped mode allocations from the same location + date code +
-// COO merge into one row with a summed qty.
-type ItemsViewRow = PickingItemRow & { grouped?: boolean; lineLabel?: string };
+// one row with summed qtys; the 🔍 availability modal opens on the whole part
+// group — one Confirm re-allocates every line at once — while the per-line
+// allocation remove buttons stay in flat mode). In grouped mode allocations
+// from the same location + date code + COO merge into one row with a summed
+// qty.
+type ItemsViewRow = PickingItemRow & {
+  grouped?: boolean;
+  lineLabel?: string;
+  /** Grouped rows only: the member lines' UNMERGED allocation rows — the
+   *  availability modal's per-source baseline (the merged display rows lose
+   *  the lot/receiving-item id mapping). */
+  groupAllocations?: PickingItemRow["allocations"];
+};
 
 const itemsView = ref<"flat" | "grouped">("flat");
 
@@ -132,6 +141,7 @@ const groupedItems = computed<ItemsViewRow[]>(() => {
           pickedQty: 0,
           allocations: [],
           packages: [],
+          groupAllocations: [],
         },
         lines: new Set(),
       };
@@ -142,6 +152,7 @@ const groupedItems = computed<ItemsViewRow[]>(() => {
     g.row.pickedQty += item.pickedQty;
     g.lines.add(`${item.lineNumber ?? "—"} / ${item.shipmentNumber ?? "—"}`);
     g.row.allocations.push(...item.allocations);
+    g.row.groupAllocations!.push(...item.allocations);
     g.row.packages.push(...item.packages);
   }
   for (const g of groups.values()) {
@@ -408,14 +419,36 @@ async function removeAllocation(
 // order and bump the audit logs.
 const availOpen = ref(false);
 const availItem = ref<PickingOrderDetail["items"][number] | null>(null);
+// Set instead of availItem when the modal is opened from a GROUPED row: the
+// form then works on the whole part group (summed qtys + the member lines'
+// unmerged allocations) and submits to allocate-group.
+const availGroup = ref<{
+  partNo: string;
+  wclItemNo: string | null;
+  qty: number;
+  pickedQty: number;
+  allocations: PickingItemRow["allocations"];
+} | null>(null);
 
 async function onAllocated() {
   await load();
   logsKey.value++;
 }
 
-function openAvailability(item: PickingOrderDetail["items"][number]) {
-  availItem.value = item;
+function openAvailability(item: ItemsViewRow) {
+  if (item.grouped) {
+    availItem.value = null;
+    availGroup.value = {
+      partNo: item.partNo,
+      wclItemNo: item.wclItemNo ?? null,
+      qty: item.qty,
+      pickedQty: item.pickedQty,
+      allocations: item.groupAllocations ?? [],
+    };
+  } else {
+    availGroup.value = null;
+    availItem.value = item;
+  }
   availOpen.value = true;
 }
 
@@ -701,7 +734,6 @@ const {
           <span class="partno-cell">
             {{ row.wclItemNo ?? row.partNo }}
             <button
-              v-if="!row.grouped"
               class="icon-btn"
               :title="$t('admin.pages.pickingOrders.searchAvailability')"
               @click.stop="openAvailability(row)"
@@ -836,13 +868,14 @@ const {
     </div>
     <PartAvailabilityModal
       :open="availOpen"
-      :part-no="availItem?.partNo ?? ''"
-      :wcl-item-no="availItem?.wclItemNo ?? null"
+      :part-no="availItem?.partNo ?? availGroup?.partNo ?? ''"
+      :wcl-item-no="availItem?.wclItemNo ?? availGroup?.wclItemNo ?? null"
       :context-org-id="order?.orgId ?? null"
       :context-sub-inventory="order?.subInventoryCode ?? null"
       :order-no="order?.orderNo ?? null"
       :picking-order-id="orderId"
       :picking-item="availItem"
+      :picking-group="availGroup"
       @close="availOpen = false"
       @allocated="onAllocated"
     />

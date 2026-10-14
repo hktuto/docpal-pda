@@ -114,6 +114,20 @@
   traceability/display only (shown on the detail page's package rows) and no
   longer drives verify matching (OCR rows omit it → NULL; spec
   `docs/superpowers/specs/2026-10-02-picking-scan-label-record-design.md`).
+  Since 2026-10-14 every queued label scan is also **batch-validated against
+  its allocation source** and the label's parsed batch fields are stored on
+  the package: COO/COW must match when the source carries them, the date code
+  must be equal or earlier than the source's (parsed WWYY compare via
+  `utils/wwyyDateCode.ts` — codes in another on-label convention are skipped,
+  never mis-rejected), and the lot code is a hard match whenever the source
+  has one (rejects with `lot_code_mismatch`, including the label-vs-upstream
+  vocabulary mismatch). The scanned values ride the Confirm POST as
+  `scannedDateCode/scannedLotCode/scannedCoo/scannedCow` and land on
+  `picking_packages.scanned_*`, which the verify/measuring re-scan match
+  anchors to (spec
+  `docs/superpowers/specs/2026-10-14-picking-scan-batch-validation-design.md`).
+  Whole-carton scans carry no parsed label → `scanned_*` stay NULL and the
+  re-scan falls back to the stored source snapshot.
   The scan-session completion card is **progress-based** (2026-10-03): a
   computed that is true when the queue has no queued rows and every part
   group has scannedQty ≥ requiredQty (scanned = Σ packages from the last
@@ -281,6 +295,20 @@
   `docs/superpowers/specs/2026-10-06-admin-availability-dialog-improvements-design.md`).
   The older single-row `POST .../items/:itemId/allocations` route still
   exists for the same thing one row at a time.
+  In the GROUPED items view (lines merged by `wclItemNo ?? partNo`) the same
+  🔍 icon opens the same modal scoped to the whole part group (spec
+  `docs/superpowers/specs/2026-10-14-admin-picking-group-allocate-design.md`):
+  each row's qty states the final GROUP total from that source and one
+  Confirm posts `POST /admin/picking-orders/:id/allocate-group`
+  (`allocatePickingGroupFromSources` in the same module), which splits each
+  source total into per-line allocation rows — growth fills the group's lines
+  in line order up to each line's remaining headroom (`qty − Σ packages −
+  already-planned finals`), shrink releases from the last line backwards —
+  with the same all-or-nothing validation (group-sum `over_allocation`,
+  per-row `allocate_rejected`, `lock_held`) and `manual = true` pins.
+  Override steals never take the group's own lines
+  (`stealAllocationsOnSource`'s `excludeItemIds`). The per-allocation remove
+  buttons stay flat-mode-only.
   Lots whose `shelf_code` is missing from `shelves` (upstream sync can write
   them past the FK) cannot take new pins: both routes reject growth with
   409 `shelf_not_found` (per-row in the form's `allocate_rejected`), the
@@ -408,10 +436,15 @@
   into one route — a single item list (collapsed rows with inline progress +
   allocation chips, expanded rows with pending scans, box assignment, line
   breakdown and planned allocations), the Boxes section below the list, a
-  sticky OCR + Confirm footer, and all scan routing (label → carton →
-  shelf/box, armed scan-into-box, pick-from-box) driven by
+  sticky OCR footer (NO Confirm button), and all scan routing (label →
+  carton → shelf/box, armed scan-into-box, pick-from-box) driven by
   `composables/usePickingScanSession.ts` (the scan-session mechanics
-  extracted from the old scan page). The picking list row,
+  extracted from the old scan page). Scans auto-apply (amendment spec
+  `docs/superpowers/specs/2026-10-14-picking-unified-scan-auto-apply-design.md`):
+  a `watch(queuedCount)` drains the queue via `session.confirm` on every scan
+  — `usePickingScanQueue.applyAll` loops over snapshot batches so scans
+  arriving mid-drain apply exactly once, and the scanner is not gated on
+  `applying`; undo a mis-scan via the package's Remove scan. The picking list row,
   `utils/orderScanRoute.ts` and the work-lock keep-lock check currently
   resolve to `/picking/unified/:id`; `pages/picking/[id].vue` and
   `pages/picking/scan/[id].vue` stay untouched until the Stage-2 swap
@@ -436,7 +469,8 @@
 
 - `pages/picking/index.vue` — list page (compact rows grouped into
   status sections — Picking / Allocated / Finished, each with a count;
-  all matching rows fetched at once, no paging; sticky search,
+  paged 50 at a time with the AppListPage load-more footer; default status
+  filter allocated+picking, finished via the filter modal; sticky search,
   status filter, batch issue report dialog; refresh button, debounced
   server-side search and multi-status/allocation filters).
 - `pages/picking/[id].vue` — detail page (items/allocations/packages,
@@ -454,9 +488,9 @@
   whole-box + shelf-context banners, the scan router (`deliverScan` — armed
   scan-into-box → pick-from-box → session routing, kinds mapped to
   beeps/toasts), OCR capture (QR passthrough / multi-item table / single
-  review form), confirm with `allocation_changed` re-resolve +
-  `unresolved_outdated_warnings` handling, `orderMatched` success cue with
-  one-prompt-per-transition auto-confirm, leave guard.
+  review form), auto-apply drain (`watch(queuedCount)` → `confirm()`) with
+  `allocation_changed` re-resolve + `unresolved_outdated_warnings` handling,
+  `completed` success cue, leave guard.
 - `components/picking/PickingUnifiedItems.vue` — the single item list:
   one row per part no (same-part lines merged), collapsed meta line +
   expanded pending/line-breakdown/unboxed/boxed/planned-allocation views;
@@ -568,6 +602,7 @@
 - `docs/superpowers/specs/2026-07-10-allocation-box-remark-design.md`
 - `docs/superpowers/specs/2026-07-18-picking-scan-session-design.md`
 - `docs/superpowers/specs/2026-10-12-picking-unified-detail-scan-design.md`
+- `docs/superpowers/specs/2026-10-14-picking-scan-batch-validation-design.md`
 - `docs/superpowers/specs/2026-07-19-box-label-print-preprinted-id-design.md`
 - `docs/superpowers/specs/2026-07-23-picking-priority-allocation-design.md`
 - `docs/superpowers/specs/2026-07-29-whole-box-picking-claim-design.md`

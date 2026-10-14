@@ -33,9 +33,11 @@ export interface PickingScanSessionOptions {
 /**
  * Picking scan-session state + routing (spec
  * docs/superpowers/specs/2026-10-12-picking-unified-detail-scan-design.md):
- * the client-side batch queue, sticky shelf-scan context, pick-from-box
- * dialog, carton auto-queue and confirm-with-re-resolve — the mechanics of
+ * the client-side scan queue, sticky shelf-scan context, pick-from-box
+ * dialog, carton auto-queue and apply-with-re-resolve — the mechanics of
  * the old scan page, framework-free so the page owns all toasts/beeps/modals.
+ * The unified page drains the queue automatically on every scan (auto-apply
+ * amendment 2026-10-14); the old scan page batch-applies on Confirm.
  */
 export function usePickingScanSession(options: PickingScanSessionOptions) {
   const { orderItems, scope, shelfMode, shelfStockFn } = options;
@@ -257,9 +259,11 @@ export function usePickingScanSession(options: PickingScanSessionOptions) {
   );
 
   /** Apply every queued row sequentially via `scanFn` (the page's
-   *  scanPickingItem wrapper, including the sticky shelf context). After each
-   *  successful apply the order refetches and the queue re-resolves (the
-   *  backend rebuilds allocation ids). Returns the number of failed rows. */
+   *  scanPickingItem wrapper, including the sticky shelf context), draining
+   *  rows queued mid-apply too. After each successful apply the order
+   *  refetches and the queue re-resolves (the backend rebuilds allocation
+   *  ids). No-op while a drain is running. Returns the failed-row count of
+   *  the final state. */
   async function confirm(
     scanFn: (row: ScanQueueRow) => Promise<void>,
     errorMessage: (e: unknown) => string,

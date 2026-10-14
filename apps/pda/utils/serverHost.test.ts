@@ -31,10 +31,11 @@ beforeEach(() => {
 describe('SERVER_HOSTS', () => {
   it('lists the five regional backend API URLs in order', () => {
     expect(SERVER_HOSTS.map((h) => h.id)).toEqual(['hk', 'sz', 'sh', 'gz', 'bj']);
-    expect(SERVER_HOSTS[0].url).toBe('https://mobile-wms.wclsolution.com:9002'); // hk
-    for (const host of SERVER_HOSTS.slice(1)) {
-      expect(host.url).toBe('http://192.168.5.116:9002');
-    }
+    expect(SERVER_HOSTS[0].url).toBe('https://wclwms-hk.docpal.com.hk:9002'); // hk
+    expect(SERVER_HOSTS[1].url).toBe('https://wclwms-sz.docpal.com.hk:9002'); // sz
+    expect(SERVER_HOSTS[2].url).toBe('https://wclwms-sh.docpal.com.hk:9002'); // sh
+    expect(SERVER_HOSTS[3].url).toBe('https://wclwms-gz.docpal.com.hk:9002'); // gz
+    expect(SERVER_HOSTS[4].url).toBe('https://wclwms-bj.docpal.com.hk:9002'); // bj
   });
 
   it('is the production option list (no local entry outside dev)', () => {

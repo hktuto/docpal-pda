@@ -514,6 +514,13 @@ export interface ScanPickingItemInput {
    *  part rather than the picking item's (allocated) part. */
   scannedPartNo?: string | null;
   scannedWclItemNo?: string | null;
+  /** The label's batch fields as scanned (2026-10-14) — stored verbatim on the
+   *  package rows (scanned_date_code/lot_code/coo/cow) so verify re-scans
+   *  compare against the physical label instead of the source snapshot. */
+  scannedDateCode?: string | null;
+  scannedLotCode?: string | null;
+  scannedCoo?: string | null;
+  scannedCow?: string | null;
   /** Sticky shelf-scan context (flow config pickingShelfScan require-* modes):
    *  the shelf/box the operator last scanned; sent with every item scan. */
   shelfCode?: string | null;
@@ -763,6 +770,13 @@ export interface MeasuringPackage {
   rescannedQty: number;
   /** Raw scan string of the source label (traceability/display only). */
   labelBarcode?: string | null;
+  /** Pick-time scanned batch fields (2026-10-14) — the aggregate re-scan
+   *  match anchors to these when present (same physical label), falling back
+   *  to the stored source snapshot (dateCode/lotCode/coo/cow) for legacy rows. */
+  scannedDateCode?: string | null;
+  scannedLotCode?: string | null;
+  scannedCoo?: string | null;
+  scannedCow?: string | null;
   partNo: string;
   wclItemNo: string | null;
 }

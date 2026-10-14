@@ -40,7 +40,14 @@
   (`utils/measuringAggregateMatch.ts`); the apply step credits it FIFO
   across the packages, partial credits allowed (`POST /packages/:id/verify`
   with `{qty}`, capped at the package qty; fully credited → 409
-  `package_already_verified`). `label_barcode` stays on the schema for
+  `package_already_verified`). Since 2026-10-14 the batch fields anchor to
+  the pick-time scanned values carried on each package
+  (`scannedDateCode`/`scannedLotCode`/`scannedCoo`/`scannedCow` from
+  `picking_packages.scanned_*`, falling back to the stored source snapshot
+  for legacy rows) — the re-scan is judged against the physical label that
+  was picked, not upstream lot data (spec
+  `docs/superpowers/specs/2026-10-14-picking-scan-batch-validation-design.md`).
+  `label_barcode` stays on the schema for
   traceability/display but no longer drives matching.
 - Complete the verify task once the box is closed and **every package is
   fully re-scanned** (`rescanned_qty >= qty`) — 409
@@ -117,6 +124,7 @@
 - `docs/superpowers/specs/2026-08-11-box-scoped-measuring-verify-design.md`
 - `docs/superpowers/specs/2026-10-02-picking-scan-label-record-design.md`
 - `docs/superpowers/specs/2026-10-03-picking-scan-truth-and-aggregate-verify-design.md`
+- `docs/superpowers/specs/2026-10-14-picking-scan-batch-validation-design.md`
 - `docs/superpowers/specs/2026-07-28-verify-step-and-flow-step-config-design.md`
 - `docs/superpowers/specs/2026-07-28-measuring-verify-refinements-design.md`
 - `docs/backend/api-design.md` §Verify

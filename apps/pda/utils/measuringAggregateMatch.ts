@@ -20,13 +20,17 @@ export function packageRemaining(pkg: MeasuringPackage): number {
 
 /**
  * Aggregate verify/measuring match (2026-10-03 design, 2026-10-05 scan-truth
- * part identity): totals per part + batch fields, not physical labels. A scan
- * matches when the scanned part matches the package's part OR WCL item no
- * (space-insensitive; pkg.partNo is the scanned label part when recorded,
- * falling back to the picking item's part for legacy rows), every batch
- * field agrees wherever BOTH sides carry a value, and the scanned qty fits
- * the group's total remaining. The credit plan walks the matching packages
- * FIFO, taking partial credits as needed.
+ * part identity, 2026-10-14 scanned-batch anchor): totals per part + batch
+ * fields, not physical labels. A scan matches when the scanned part matches
+ * the package's part OR WCL item no (space-insensitive; pkg.partNo is the
+ * scanned label part when recorded, falling back to the picking item's part
+ * for legacy rows), every batch field agrees wherever BOTH sides carry a
+ * value, and the scanned qty fits the group's total remaining. Batch fields
+ * anchor to the pick-time SCANNED values when the package carries them (same
+ * physical label), falling back to the stored source snapshot for legacy rows
+ * — upstream lot data and label vocabularies can differ, so the re-scan is
+ * judged against what was actually scanned at pick time. The credit plan
+ * walks the matching packages FIFO, taking partial credits as needed.
  * Returns 'already-done' when matching packages exist but are fully
  * credited, null when nothing matches or the qty exceeds the remaining.
  */
@@ -51,13 +55,15 @@ export function matchAggregatePackages(
       .filter((v): v is string => !!v)
       .map((v) => normalizePartNo(v));
     if (!scannedKeys.some((k) => pkgKeys.includes(k))) return false;
-    const pkgDateCode = pkg.dateCode ? normalizeCode(pkg.dateCode) : '';
+    // Batch anchor: the pick-time scanned value when present, else the stored
+    // source snapshot (legacy rows).
+    const pkgDateCode = (pkg.scannedDateCode ?? pkg.dateCode) ? normalizeCode(pkg.scannedDateCode ?? pkg.dateCode ?? "") : "";
     if (dateCode && pkgDateCode && dateCode !== pkgDateCode) return false;
-    const pkgLotCode = pkg.lotCode ? normalizeCode(pkg.lotCode) : '';
+    const pkgLotCode = (pkg.scannedLotCode ?? pkg.lotCode) ? normalizeCode(pkg.scannedLotCode ?? pkg.lotCode ?? "") : "";
     if (lotCode && pkgLotCode && lotCode !== pkgLotCode) return false;
-    const pkgCoo = pkg.coo ? normalize(pkg.coo) : '';
+    const pkgCoo = (pkg.scannedCoo ?? pkg.coo) ? normalize(pkg.scannedCoo ?? pkg.coo ?? "") : "";
     if (coo && pkgCoo && coo !== pkgCoo) return false;
-    const pkgCow = pkg.cow ? normalize(pkg.cow) : '';
+    const pkgCow = (pkg.scannedCow ?? pkg.cow) ? normalize(pkg.scannedCow ?? pkg.cow ?? "") : "";
     if (cow && pkgCow && cow !== pkgCow) return false;
     return true;
   });
