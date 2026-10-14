@@ -126,12 +126,10 @@ function applySearch() {
   const value = props.search ?? "";
   if (value === lastAppliedSearch) return;
   lastAppliedSearch = value;
-  console.log("apply emits")
   emit("apply");
 }
 
 function onSearchInput(event: Event) {
-  console.log("onSearchInput", event)
   emit("update:search", (event.target as HTMLInputElement).value);
   if (searchDebounce) clearTimeout(searchDebounce);
   searchDebounce = setTimeout(() => {
