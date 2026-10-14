@@ -2,7 +2,7 @@
 
 ## 1. Open the picking list
 
-From the home screen, tap **Picking**. The list shows the picking orders released for work — those confirmed by the office (`allocated`) plus orders already being picked or finished — as compact rows with status and summary information; the search bar and filter button stay pinned at the top while scrolling. The list is grouped into sections by status — **Picking** (in progress) first, then **Allocated** (ready to pick), then **Finished** — each with a count badge, and all matching orders are fetched at once (no paging). Tap the refresh button to reload. Search and filters apply to all orders.
+From the home screen, tap **Picking**. The list shows the picking orders released for work — those confirmed by the office (`allocated`) plus orders already being picked — as compact rows with status and summary information; the search bar and filter button stay pinned at the top while scrolling (finished orders appear when you tick **Finished** in the filter). The list is grouped into sections by status — **Picking** (in progress) first, then **Allocated** (ready to pick), then **Finished** — each with a count badge, and loads 50 orders at a time — tap **Load more** at the bottom for the next page, or the refresh button to reload. Search and filters apply to all orders, not just the loaded ones.
 
 ![Picking list](./assets/picking-list.png)
 

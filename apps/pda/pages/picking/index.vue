@@ -10,10 +10,12 @@
       empty-text="common.noPickingOrders"
       :shown="rows.length"
       :total="total"
-      :has-more="false"
-      :reload="load"
+      :has-more="hasMore"
+      :reload="refresh"
       :topics="['/picking-orders']"
-      @apply="load"
+      :applyOnSearch="true"
+      @apply="load(true)"
+      @load-more="load(false)"
     >
       <template #toolbar-actions>
         <button
@@ -135,11 +137,13 @@ const filterAllocation = ref<string[]>([]);
 
 // The PDA only ever shows confirmed work: statuses at/after `allocated`
 // (pending/skip/issue/shipped stay admin-only). An empty status filter
-// falls back to this set rather than "no filter".
-const PDA_VISIBLE_STATUSES = ["allocated", "picking", "finished"];
+// falls back to this default set — in-progress and ready-to-pick orders;
+// `finished` stays reachable by ticking it in the filter modal.
+const DEFAULT_STATUSES = ["allocated", "picking"];
 
-// The list renders as one section per status (all matching rows are fetched
-// so every section is complete); this is the section display order:
+// The list renders as one section per status, paged 50 rows at a time with
+// the shared load-more footer (a section can be partial until every page is
+// loaded); this is the section display order:
 // in-progress work first, then orders ready to pick, then completed.
 const STATUS_GROUP_ORDER = ["picking", "allocated", "finished"];
 
@@ -173,30 +177,57 @@ function rowExtra(po: PickingOrderListRow): string {
 function onFilterApply(payload: { statuses: string[]; allocation: string[] }) {
   filterStatuses.value = payload.statuses;
   filterAllocation.value = payload.allocation;
-  load();
+  load(true);
 }
 
-function listQuery(): PickingOrderListQuery {
+const PAGE_SIZE = 50;
+const hasMore = computed(() => rows.value.length < total.value);
+
+function listQuery(limit: number, offset: number): PickingOrderListQuery {
   const term = search.value.trim();
   return {
-    status: (filterStatuses.value.length > 0 ? filterStatuses.value : PDA_VISIBLE_STATUSES).join(","),
+    status: (filterStatuses.value.length > 0 ? filterStatuses.value : DEFAULT_STATUSES).join(","),
     allocation: filterAllocation.value.length > 0 ? filterAllocation.value.join(",") : undefined,
     search: term || undefined,
+    limit,
+    offset,
   };
 }
 
-async function load() {
+async function load(reset: boolean) {
   loading.value = true;
   loadError.value = null;
   reportMessage.value = null;
   try {
-    const page = await warehouse.getPickingOrders(listQuery());
+    const page = await warehouse.getPickingOrders(
+      listQuery(PAGE_SIZE, reset ? 0 : rows.value.length)
+    );
+    rows.value = reset ? page.rows : [...rows.value, ...page.rows];
+    total.value = page.total;
+  } catch (e) {
+    loadError.value = errorMessage(e);
+    if (reset) {
+      rows.value = [];
+      total.value = 0;
+    }
+  } finally {
+    loading.value = false;
+  }
+}
+
+// Visibility regain / SSE: re-fetch the already-loaded window in one shot so
+// the loaded row count (and every section) survives.
+async function refresh() {
+  loading.value = true;
+  loadError.value = null;
+  try {
+    const page = await warehouse.getPickingOrders(
+      listQuery(Math.max(rows.value.length, PAGE_SIZE), 0)
+    );
     rows.value = page.rows;
     total.value = page.total;
   } catch (e) {
     loadError.value = errorMessage(e);
-    rows.value = [];
-    total.value = 0;
   } finally {
     loading.value = false;
   }
@@ -251,7 +282,7 @@ async function onReportSaved(payload: {
     const result = await warehouse.reportPickingOrderIssues(entries);
     selectedIds.value = new Set();
     modalOpen.value = false;
-    await load();
+    await refresh();
     if (result.reported.length > 0) {
       reportMessage.value = t('picking.issueReportSummary', {
         reported: result.reported.length,

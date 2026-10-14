@@ -29,6 +29,7 @@ import { adminReceivingShipperRoute } from "./receivingShipper.js";
 import { adminPickingListRoute } from "./pickingList.js";
 import { adminAllocationRoute } from "./allocation.js";
 import { adminPartAvailabilityRoute } from "./partAvailability.js";
+import { adminPartLedgerRoute } from "./partLedger.js";
 import { adminUserProfilesRoute } from "./userProfiles.js";
 import { adminLabelPrintRulesRoute } from "./labelPrintRules.js";
 import { adminCustomerProfilesRoute } from "./customerProfiles.js";
@@ -376,6 +377,9 @@ adminRoute.route("/", adminAllocationRoute);
 
 // Part availability lookup (stock + receiving rows for a part).
 adminRoute.route("/", adminPartAvailabilityRoute);
+
+// Item ledger (per-part current stock + in/out movement history).
+adminRoute.route("/", adminPartLedgerRoute);
 
 // Outdated date-code scan warnings: admin list + whole-order resolution
 // (spec 2026-10-07-supplier-outdated-datecode-warning-design.md).

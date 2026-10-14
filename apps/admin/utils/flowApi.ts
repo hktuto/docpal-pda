@@ -766,6 +766,64 @@ export interface LotHistory {
   movements: LotHistoryMovement[];
 }
 
+// ---- item ledger (item-ledger page: per-part stock + in/out history) ----
+
+export interface PartLedgerPart {
+  partNo: string;
+  wclItemNo: string;
+  description: string | null;
+  brand: string;
+}
+
+export interface PartLedgerStockRow {
+  lotId: string;
+  orgId: number | null;
+  subInventoryCode: string | null;
+  shelfCode: string | null;
+  shelfDisplayName: string | null;
+  boxId: string | null;
+  partNo: string;
+  wclItemNo: string | null;
+  dateCode: string | null;
+  lotCode: string | null;
+  coo: string | null;
+  cow: string | null;
+  totalQty: number;
+  allocatedQty: number;
+  availableQty: number;
+}
+
+export interface PartLedgerTransaction {
+  id: string;
+  txnType: string;
+  qtyType: string;
+  qtyDelta: number;
+  shelfCode: string | null;
+  shelfDisplayName: string | null;
+  boxId: string | null;
+  dateCode: string | null;
+  lotCode: string | null;
+  coo: string | null;
+  cow: string | null;
+  referenceType: string | null;
+  referenceId: string | null;
+  actorName: string | null;
+  txnReason: string | null;
+  txnAt: string;
+  pickingOrderId: string | null;
+  pickingOrderNo: string | null;
+  receivingOrderId: string | null;
+  receivingBatchNo: string | null;
+}
+
+export interface PartLedger {
+  part: PartLedgerPart | null;
+  stock: PartLedgerStockRow[];
+  totals: { totalQty: number; allocatedQty: number; availableQty: number };
+  /** Newest first, capped at 1000 rows server-side. */
+  transactions: PartLedgerTransaction[];
+}
+
 function logsQuery(p: OrderLogsParams): string {
   const qs = new URLSearchParams();
   qs.set("page", String(p.page));
@@ -1002,6 +1060,15 @@ export function useFlowApi() {
       if (ctx?.subInventoryCode) qs.set("subInventoryCode", ctx.subInventoryCode);
       if (ctx?.fromReceivingItemId) qs.set("fromReceivingItemId", ctx.fromReceivingItemId);
       return api.get<PartDemand>(`/admin/part-demand?${qs}`);
+    },
+    // Item ledger (item-ledger page): current stock lots + totals and the
+    // part's in/out movement history (dock + on_hand rows, newest first).
+    // partNo or wclItemNo may be blank, not both.
+    getPartLedger: (partNo: string, wclItemNo?: string | null) => {
+      const qs = new URLSearchParams();
+      if (partNo) qs.set("partNo", partNo);
+      if (wclItemNo) qs.set("wclItemNo", wclItemNo);
+      return api.get<PartLedger>(`/admin/part-ledger?${qs}`);
     },
     // Redistribute one receiving item's dock stock across open picking demand
     // in a single all-or-nothing call. `rows[].qty` is the desired FINAL total

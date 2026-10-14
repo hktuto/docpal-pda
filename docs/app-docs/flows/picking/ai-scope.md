@@ -29,13 +29,16 @@
   `allocated` and force-includes the order as a demand). `skip` = never
   allocatable, reference-only; entering it releases all allocations, and the
   admin override back to `pending` (with reason) re-enters allocation. The
-  PDA picking list only shows `allocated`/`picking`/`finished` (client-side
-  default filter in `pages/picking/index.vue` — pending/skip/issue/shipped
-  stay admin-only). An `allocated` order is fully workable on the PDA: work
+  PDA picking list defaults to `allocated`/`picking` (client-side default
+  filter in `pages/picking/index.vue` — `finished` is reachable by ticking it
+  in the filter modal; pending/skip/issue/shipped stay admin-only). An
+  `allocated` order is fully workable on the PDA: work
   lock acquires, barcode lookup and suggested box include it, issue reporting
   is allowed, and the first pick scan moves it to `picking`.
 - List picking orders with a status filter and text search (both
-  server-side, paged 50 at a time); multi-select batch issue reporting.
+  server-side, paged 50 at a time via the shared AppListPage load-more
+  footer — `load(reset)`/`refresh()` in `pages/picking/index.vue`, same
+  pattern as the receiving list); multi-select batch issue reporting.
 - Show picking order detail as one nested read: order (incl. issue fields),
   items → allocations (with lot or receiving-area
   source) and packages, plus the shipping boxes.

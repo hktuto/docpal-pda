@@ -74,8 +74,9 @@ export interface AppListFilterOption {
  * (filter chips + refresh + search), loading/error/empty states, 50-row
  * load-more footer, and useVisibleReload wiring (mount / visibility regain /
  * SSE topics). Pages own the fetch logic; they rebuild the query from
- * `search`/`filter` and reload on `apply` (search commits on Enter/blur —
- * not per keystroke — filter-chip changes apply immediately) and `load-more`.
+ * `search`/`filter` and reload on `apply` (search applies debounced while
+ * typing and immediately on Enter/blur; filter-chip changes apply
+ * immediately) and `load-more`.
  */
 const props = defineProps<{
   search?: string;
@@ -112,23 +113,44 @@ const emit = defineEmits<{
 const slots = useSlots();
 const hasActions = computed(() => Boolean(slots["toolbar-actions"]));
 
-// The search keyword applies on Enter or blur, not per keystroke: PDA
-// operators type/scan a full reference and then commit, and per-keystroke
-// reloads waste requests on the device. `lastAppliedSearch` skips a redundant
-// reload when the value has not changed since the last apply.
+// The search keyword applies as the operator types (debounced), and
+// immediately on Enter/blur — blur alone proved unreliable on devices
+// (dismissing the keyboard does not always blur the input).
+// `lastAppliedSearch` skips a redundant reload when the value has not changed
+// since the last apply.
 let lastAppliedSearch = props.search ?? "";
+let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 
-function onSearchInput(event: Event) {
-  emit("update:search", (event.target as HTMLInputElement).value);
-}
-
-function onSearchCommit() {
+function applySearch() {
   if (props.applyOnSearch === false) return;
   const value = props.search ?? "";
   if (value === lastAppliedSearch) return;
   lastAppliedSearch = value;
+  console.log("apply emits")
   emit("apply");
 }
+
+function onSearchInput(event: Event) {
+  console.log("onSearchInput", event)
+  emit("update:search", (event.target as HTMLInputElement).value);
+  if (searchDebounce) clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(() => {
+    searchDebounce = null;
+    applySearch();
+  }, 400);
+}
+
+function onSearchCommit() {
+  if (searchDebounce) {
+    clearTimeout(searchDebounce);
+    searchDebounce = null;
+  }
+  applySearch();
+}
+
+onBeforeUnmount(() => {
+  if (searchDebounce) clearTimeout(searchDebounce);
+});
 
 watch(
   () => props.filter,
