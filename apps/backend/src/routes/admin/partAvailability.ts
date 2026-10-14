@@ -1,10 +1,11 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { sql, type SQL } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { db } from "../../db.js";
 import { queryAll } from "../../db/query.js";
 import { allowDockStock } from "../../config.js";
 import { workLockExpiry } from "../../db/allocate.js";
+import { locationMatches, type LocationMatchContext } from "../../db/locationMatch.js";
 
 // Admin part-availability lookup: every stock location (inventory_lots) and
 // every receiving line (any status) holding a part, matched exactly by
@@ -81,37 +82,12 @@ interface DemandRow {
 
 export const adminPartAvailabilityRoute = new Hono();
 
-interface MatchContext {
-  orgId: number | null;
-  subInventoryCode: string | null;
-}
-
 // The dialog's context partition. A missing/blank value means "no context".
-function readMatchContext(c: { req: { query: (k: string) => string | undefined } }): MatchContext {
+function readMatchContext(c: { req: { query: (k: string) => string | undefined } }): LocationMatchContext {
   const rawOrg = c.req.query("orgId")?.trim() ?? "";
   const orgId = rawOrg === "" ? null : Number(rawOrg);
   const subInventoryCode = c.req.query("subInventoryCode")?.trim() || null;
   return { orgId: orgId !== null && Number.isInteger(orgId) ? orgId : null, subInventoryCode };
-}
-
-// Mirrors the allocation engine's location rule (loadLotSources /
-// loadReceivingSources): same org, and either the same sub-inventory or a
-// sibling in the same share group.
-function locationMatches(ctx: MatchContext, orgCol: SQL, subCol: SQL): SQL {
-  return sql`(
-    (${ctx.orgId}::int IS NULL OR ${orgCol} = ${ctx.orgId})
-    AND (
-      ${ctx.subInventoryCode}::text IS NULL
-      OR upper(${subCol}) = upper(${ctx.subInventoryCode})
-      OR EXISTS (
-        SELECT 1
-        FROM sub_inventory_share_members sm_d
-        JOIN sub_inventory_share_members sm_s ON sm_s.share_group = sm_d.share_group
-        WHERE sm_d.org_id = ${ctx.orgId} AND upper(sm_d.code) = upper(${ctx.subInventoryCode})
-          AND sm_s.org_id = ${orgCol} AND upper(sm_s.code) = upper(${subCol})
-      )
-    )
-  )`;
 }
 
 // Reverse lookup for the receiving-detail Allocate modal: open picking items
@@ -239,4 +215,94 @@ adminPartAvailabilityRoute.get("/part-availability", async (c) => {
     : [];
 
   return c.json({ stock, receiving, dockStockAllowed: dockStock });
+});
+
+interface AllocationBreakdownRow {
+  allocationId: string;
+  pickingOrderId: string;
+  orderNo: string;
+  orderStatus: string;
+  pickingItemId: string;
+  partNo: string;
+  wclItemNo: string | null;
+  qty: number;
+  manual: boolean;
+  sourceType: "lot" | "receiving-item" | "receiving-order";
+  inventoryLotId: string | null;
+  receivingInvoiceItemId: string | null;
+  receivingOrderId: string | null;
+  orgId: number | null;
+  subInventoryCode: string | null;
+  shelfCode: string | null;
+  shelfDisplayName: string | null;
+  boxId: string | null;
+  dateCode: string | null;
+  lotCode: string | null;
+  locked: boolean;
+  workingByName: string | null;
+}
+
+// Per-order breakdown of every allocation row holding a part (spec
+// docs/superpowers/specs/2026-10-14-admin-cross-order-allocation-control-design.md):
+// the availability dialogs' "allocated" counter lists WHICH orders hold the
+// stock, so an admin can transfer or remove a specific row in place. Same part
+// matching as part-availability; all picking orders and statuses are included;
+// `locked`/`workingByName` reuse the part-demand work-lock rule.
+adminPartAvailabilityRoute.get("/part-allocations", async (c) => {
+  const partNo = c.req.query("partNo")?.trim() ?? "";
+  if (partNo === "") throw new HTTPException(400, { message: "part_no_required" });
+  const wclItemNo = c.req.query("wclItemNo")?.trim() ?? "";
+
+  const allocations = await queryAll<AllocationBreakdownRow>(
+    db,
+    sql`
+      SELECT
+        a.id AS "allocationId",
+        po.id AS "pickingOrderId",
+        po.order_no AS "orderNo",
+        po.status AS "orderStatus",
+        pi.id AS "pickingItemId",
+        COALESCE(il.part_no, rii.part_no, pi.part_no) AS "partNo",
+        COALESCE(il.wcl_item_no, rii.wcl_item_no) AS "wclItemNo",
+        a.qty,
+        a.manual,
+        CASE
+          WHEN a.inventory_lot_id IS NOT NULL THEN 'lot'
+          WHEN a.receiving_invoice_item_id IS NOT NULL THEN 'receiving-item'
+          ELSE 'receiving-order'
+        END AS "sourceType",
+        a.inventory_lot_id AS "inventoryLotId",
+        a.receiving_invoice_item_id AS "receivingInvoiceItemId",
+        a.receiving_order_id AS "receivingOrderId",
+        COALESCE(il.org_id, rii.org_id,
+          (SELECT rii2.org_id FROM receiving_invoice_items rii2
+           JOIN receiving_invoices ri2 ON ri2.id = rii2.receiving_invoice_id
+           WHERE ri2.receiving_order_id = a.receiving_order_id
+           ORDER BY rii2.created_date LIMIT 1)) AS "orgId",
+        COALESCE(il.sub_inventory_code, rii.sub_inventory_code,
+          (SELECT rii2.sub_inventory_code FROM receiving_invoice_items rii2
+           JOIN receiving_invoices ri2 ON ri2.id = rii2.receiving_invoice_id
+           WHERE ri2.receiving_order_id = a.receiving_order_id
+           ORDER BY rii2.created_date LIMIT 1)) AS "subInventoryCode",
+        il.shelf_code AS "shelfCode",
+        s.display_name AS "shelfDisplayName",
+        COALESCE(il.box_id, rii.ctn_no) AS "boxId",
+        COALESCE(il.date_code, rii.date_code) AS "dateCode",
+        COALESCE(il.lot_code, rii.lot_code) AS "lotCode",
+        (po.working_by IS NOT NULL AND po.working_at >= ${workLockExpiry()}) AS "locked",
+        u.display_name AS "workingByName"
+      FROM allocations a
+      JOIN picking_items pi ON pi.id = a.picking_item_id
+      JOIN picking_orders po ON po.id = pi.picking_order_id
+      LEFT JOIN users u ON u.id = po.working_by
+      LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
+      LEFT JOIN shelves s ON s.code = il.shelf_code
+      LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
+      WHERE COALESCE(il.part_no, rii.part_no, pi.part_no) = ${partNo}
+         OR (${wclItemNo} <> '' AND COALESCE(il.wcl_item_no, rii.wcl_item_no) = ${wclItemNo})
+      ORDER BY po.priority_seq, po.order_no, a.created_date
+    `
+  );
+
+  return c.json({ allocations });
 });

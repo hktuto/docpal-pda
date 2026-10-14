@@ -1692,6 +1692,15 @@ export default {
           over_allocation: "超出訂單待分配需求",
           shelf_not_found: "貨架不在倉庫佈局中"
         },
+        allocBreakdownTitle: "{n} 個訂單佔用此庫存",
+        allocBreakdownThisOrder: "目前訂單",
+        allocBreakdownManual: "手動固定",
+        allocBreakdownTransfer: "轉給本訂單",
+        allocBreakdownTransferQty: "要轉給本訂單的數量（最多 {max}）：",
+        allocBreakdownInvalidQty: "請輸入 1 到 {max} 之間的整數。",
+        allocBreakdownRemove: "移除",
+        allocBreakdownRemoveConfirm: "移除訂單 {orderNo} 上 {qty} × {partNo} 的分配？\n\n釋放的數量將回到庫存池 — 下次分配重算可能會按優先級將其分配給其他訂單。",
+        allocBreakdownLockedUnknown: "未知用戶",
       },
       allocationTip: {
         shelf: "貨架",

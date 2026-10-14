@@ -9,6 +9,7 @@ import { now } from "./now.js";
 import { allowDockStock, pickingFromSubinventoryOrgs, receivingSubInventoryRules } from "../config.js";
 import { matchSubInventoryRule } from "./receiving.js";
 import { logTransition, recomputeLot, recomputePickingItem } from "./picking.js";
+import { locationMatches } from "./locationMatch.js";
 
 // ---------------------------------------------------------------------------
 // Allocation engine (concepts 5-6 in docs/backend/concepts.md).
@@ -1224,6 +1225,328 @@ export async function addManualPickingAllocation(
     });
 
     return { allocationId, qty };
+  });
+}
+
+export interface TransferAllocationResult {
+  pickingItemId: string;
+  /** The TARGET allocation row — amended or newly inserted, always manual. */
+  allocationId: string;
+  qty: number;
+}
+
+/**
+ * Admin cross-order transfer (spec
+ * docs/superpowers/specs/2026-10-14-admin-cross-order-allocation-control-design.md):
+ * move `qty` (default: the whole row) from ANOTHER picking item's allocation
+ * onto this item as a MANUAL pin, in one transaction. Unlike a bare remove —
+ * which returns stock to the pool where the next allocateAll re-grabs it by
+ * priority — the transfer pins the qty on the target in the same commit, so
+ * the admin's intent survives every later wipe/rebuild.
+ *
+ * Validation, all before any write: 404 picking_order_not_found /
+ * picking_item_not_found / allocation_not_found; 409 same_item (the source
+ * row already belongs to the target item); 409 lock_held with holder info on
+ * EITHER the source or the target order (a PDA is scanning against those
+ * rows); 400 invalid_qty (not a positive integer ≤ the source row's qty);
+ * 409 location_mismatch (the source's org/sub-inventory must match the target
+ * order's partition under the engine's locationMatches rule, share-group
+ * siblings included — a demand without a partition is org-agnostic and
+ * matches any source); 409 over_allocation (Σ target allocations on the same
+ * source + qty would pass the item's open qty = qty − Σ packages). No
+ * order-status check, matching remove / manual-pin. Manual source rows are
+ * transferable — the transfer IS an explicit admin decision.
+ *
+ * Apply: shrink-or-delete the source row with a RESERVE-release ledger row
+ * ("admin: transfer out", shelf nulled when missing from shelves — same rule
+ * as every release-side ledger write), recomputeLot, recomputePickingItem on
+ * the source item and an allocation_transferred_out audit on the source
+ * order; amend-or-insert ONE manual row on the target item (one picking item
+ * + one source = one allocation line) with a RESERVE ledger row ("admin:
+ * transfer in"), recomputePickingItem on the target and an
+ * allocation_transferred_in audit on the target order. No scheduleAllocateAll
+ * — the source item's residual demand is left for the next engine run, same
+ * as the remove action.
+ */
+export async function transferPickingAllocation(
+  db: AppDb,
+  pickingOrderId: string,
+  pickingItemId: string,
+  input: { allocationId: string; qty?: number },
+  actorId: string
+): Promise<TransferAllocationResult> {
+  const order = await queryGet<{
+    id: string;
+    status: string;
+    orgId: number | null;
+    subInventoryCode: string | null;
+    workingBy: string | null;
+    workingAt: Date | null;
+    holderName: string | null;
+  }>(
+    db,
+    sql`SELECT po.id, po.status, po.org_id AS "orgId", po.sub_inventory_code AS "subInventoryCode",
+               po.working_by AS "workingBy", po.working_at AS "workingAt",
+               u.display_name AS "holderName"
+        FROM picking_orders po
+        LEFT JOIN users u ON u.id = po.working_by
+        WHERE po.id = ${pickingOrderId}`
+  );
+  if (!order) throw new HTTPException(404, { message: "picking_order_not_found" });
+
+  const item = await queryGet<{ id: string; partNo: string }>(
+    db,
+    sql`SELECT id, part_no AS "partNo" FROM picking_items WHERE id = ${pickingItemId} AND picking_order_id = ${pickingOrderId}`
+  );
+  if (!item) throw new HTTPException(404, { message: "picking_item_not_found" });
+
+  return db.transaction(async (tx) => {
+    const source = await queryGet<{
+      id: string;
+      sourceItemId: string;
+      qty: number;
+      manual: boolean;
+      inventoryLotId: string | null;
+      receivingInvoiceItemId: string | null;
+      receivingOrderId: string | null;
+      partNo: string;
+      dateCode: string | null;
+      lotCode: string | null;
+      coo: string | null;
+      cow: string | null;
+      shelfCode: string | null;
+      shelfKnown: boolean;
+      boxId: string | null;
+      sourceOrderId: string;
+      sourceOrderStatus: string;
+      sourceWorkingBy: string | null;
+      sourceWorkingAt: Date | null;
+      sourceHolderName: string | null;
+      locationMatched: boolean;
+    }>(
+      tx,
+      sql`SELECT a.id, a.picking_item_id AS "sourceItemId", a.qty, a.manual,
+                 a.inventory_lot_id AS "inventoryLotId",
+                 a.receiving_invoice_item_id AS "receivingInvoiceItemId",
+                 a.receiving_order_id AS "receivingOrderId",
+                 COALESCE(il.part_no, rii.part_no, spi.part_no) AS "partNo",
+                 COALESCE(il.date_code, rii.date_code) AS "dateCode",
+                 COALESCE(il.lot_code, rii.lot_code) AS "lotCode",
+                 COALESCE(il.coo, rii.coo) AS "coo",
+                 COALESCE(il.cow, rii.cow) AS "cow",
+                 il.shelf_code AS "shelfCode",
+                 (il.shelf_code IS NULL OR EXISTS (SELECT 1 FROM shelves sh WHERE sh.code = il.shelf_code)) AS "shelfKnown",
+                 COALESCE(il.box_id, rii.ctn_no) AS "boxId",
+                 spo.id AS "sourceOrderId",
+                 spo.status AS "sourceOrderStatus",
+                 spo.working_by AS "sourceWorkingBy",
+                 spo.working_at AS "sourceWorkingAt",
+                 su.display_name AS "sourceHolderName",
+                 ${locationMatches(
+                   { orgId: order.orgId, subInventoryCode: order.subInventoryCode },
+                   sql`COALESCE(il.org_id, rii.org_id)`,
+                   sql`COALESCE(il.sub_inventory_code, rii.sub_inventory_code)`
+                 )} AS "locationMatched"
+          FROM allocations a
+          JOIN picking_items spi ON spi.id = a.picking_item_id
+          JOIN picking_orders spo ON spo.id = spi.picking_order_id
+          LEFT JOIN users su ON su.id = spo.working_by
+          LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
+          LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
+          WHERE a.id = ${input.allocationId}`
+    );
+    if (!source) throw new HTTPException(404, { message: "allocation_not_found" });
+    if (source.sourceItemId === pickingItemId) {
+      throw new HTTPException(409, { message: "same_item" });
+    }
+    if (source.sourceWorkingBy && source.sourceWorkingAt && source.sourceWorkingAt >= workLockExpiry()) {
+      throw new HTTPException(409, {
+        res: new Response(
+          JSON.stringify({ error: "lock_held", holderId: source.sourceWorkingBy, holderName: source.sourceHolderName }),
+          { status: 409, headers: { "content-type": "application/json" } }
+        ),
+      });
+    }
+    if (order.workingBy && order.workingAt && order.workingAt >= workLockExpiry()) {
+      throw new HTTPException(409, {
+        res: new Response(
+          JSON.stringify({ error: "lock_held", holderId: order.workingBy, holderName: order.holderName }),
+          { status: 409, headers: { "content-type": "application/json" } }
+        ),
+      });
+    }
+
+    const qty = input.qty ?? source.qty;
+    if (!Number.isInteger(qty) || qty <= 0 || qty > source.qty) {
+      throw new HTTPException(400, { message: "invalid_qty" });
+    }
+    if (!source.locationMatched) {
+      throw new HTTPException(409, { message: "location_mismatch" });
+    }
+
+    // One picking item + one source = one allocation line: amend the target's
+    // existing row on this source (if any) rather than inserting a second.
+    const srcCond = source.inventoryLotId
+      ? sql`inventory_lot_id = ${source.inventoryLotId}`
+      : source.receivingInvoiceItemId
+        ? sql`receiving_invoice_item_id = ${source.receivingInvoiceItemId}`
+        : sql`receiving_order_id = ${source.receivingOrderId}`;
+    const targetRow = await queryGet<{ id: string; qty: number }>(
+      tx,
+      sql`SELECT id, qty FROM allocations
+          WHERE picking_item_id = ${pickingItemId} AND ${srcCond}
+          ORDER BY manual DESC, created_date ASC
+          LIMIT 1`
+    );
+    const open = await queryGet<{ openQty: number }>(
+      tx,
+      sql`SELECT (pi.qty - COALESCE(pkg.qty, 0)) AS "openQty"
+          FROM picking_items pi
+          LEFT JOIN (
+            SELECT picking_item_id, SUM(qty)::int AS qty FROM picking_packages GROUP BY picking_item_id
+          ) pkg ON pkg.picking_item_id = pi.id
+          WHERE pi.id = ${pickingItemId}`
+    );
+    if ((targetRow?.qty ?? 0) + qty > open!.openQty) {
+      throw new HTTPException(409, { message: "over_allocation" });
+    }
+
+    // --- source side: shrink-or-delete + release ledger + audit -----------
+    if (qty === source.qty) {
+      await tx.execute(sql`DELETE FROM allocations WHERE id = ${source.id}`);
+    } else {
+      await tx.execute(
+        sql`UPDATE allocations SET qty = qty - ${qty}, last_update_date = ${now()} WHERE id = ${source.id}`
+      );
+    }
+
+    // --- target side: amend-or-insert one manual pin ----------------------
+    let targetAllocationId: string;
+    let targetBefore: number;
+    if (targetRow) {
+      targetAllocationId = targetRow.id;
+      targetBefore = targetRow.qty;
+      await tx.execute(
+        sql`UPDATE allocations SET qty = qty + ${qty}, manual = true, last_update_date = ${now()}
+            WHERE id = ${targetAllocationId}`
+      );
+    } else {
+      targetAllocationId = newId();
+      targetBefore = 0;
+      await tx.insert(allocations).values({
+        id: targetAllocationId,
+        pickingItemId,
+        inventoryLotId: source.inventoryLotId,
+        receivingInvoiceItemId: source.receivingInvoiceItemId,
+        receivingOrderId: source.receivingOrderId,
+        qty,
+        manual: true,
+      });
+    }
+
+    if (source.inventoryLotId) {
+      await recomputeLot(tx, source.inventoryLotId);
+    }
+    await recomputePickingItem(tx, source.sourceItemId);
+    await recomputePickingItem(tx, pickingItemId);
+
+    // Release-side ledger row: never hand an unknown shelf code to the ledger
+    // (the shelves FK would roll the whole transfer back).
+    await tx.insert(inventoryTransactions).values({
+      id: newId(),
+      inventoryLotId: source.inventoryLotId,
+      partNo: source.partNo,
+      shelfCode: source.shelfKnown ? source.shelfCode : null,
+      boxId: source.boxId,
+      txnType: "RESERVE",
+      qtyType: "reserved",
+      qtyDelta: -qty,
+      dateCode: source.dateCode,
+      lotCode: source.lotCode,
+      coo: source.coo,
+      cow: source.cow,
+      referenceType: "allocation",
+      referenceId: source.id,
+      receivingInvoiceItemId: source.receivingInvoiceItemId,
+      actorId,
+      txnReason: "admin: transfer out",
+      txnAt: now(),
+    });
+    await tx.insert(inventoryTransactions).values({
+      id: newId(),
+      inventoryLotId: source.inventoryLotId,
+      partNo: source.partNo,
+      shelfCode: source.shelfKnown ? source.shelfCode : null,
+      boxId: source.boxId,
+      txnType: "RESERVE",
+      qtyType: "reserved",
+      qtyDelta: qty,
+      dateCode: source.dateCode,
+      lotCode: source.lotCode,
+      coo: source.coo,
+      cow: source.cow,
+      referenceType: "allocation",
+      referenceId: targetAllocationId,
+      receivingInvoiceItemId: source.receivingInvoiceItemId,
+      actorId,
+      txnReason: "admin: transfer in",
+      txnAt: now(),
+    });
+
+    await refreshAllocationStatus(tx);
+
+    await logTransition(tx, {
+      entityType: "picking_order",
+      entityId: source.sourceOrderId,
+      fromState: source.sourceOrderStatus,
+      toState: source.sourceOrderStatus,
+      actorId,
+      metadata: {
+        action: "allocation_transferred_out",
+        allocationId: source.id,
+        itemId: source.sourceItemId,
+        partNo: source.partNo,
+        qty,
+        beforeQty: source.qty,
+        afterQty: source.qty - qty,
+        targetOrderId: pickingOrderId,
+        targetItemId: pickingItemId,
+      },
+    });
+    await logTransition(tx, {
+      entityType: "picking_order",
+      entityId: pickingOrderId,
+      fromState: order.status,
+      toState: order.status,
+      actorId,
+      metadata: {
+        action: "allocation_transferred_in",
+        allocationId: targetAllocationId,
+        itemId: pickingItemId,
+        partNo: item.partNo,
+        qty,
+        beforeQty: targetBefore,
+        afterQty: targetBefore + qty,
+        sourceOrderId: source.sourceOrderId,
+        sourceItemId: source.sourceItemId,
+      },
+    });
+
+    await emitEvent(tx, {
+      type: "allocation.computed",
+      topics: ["/picking-orders"],
+      data: {
+        scope: "picking-order-item",
+        pickingOrderId,
+        pickingItemId,
+        allocationId: targetAllocationId,
+        action: "transferred",
+        qty,
+        sourceOrderId: source.sourceOrderId,
+      },
+    });
+
+    return { pickingItemId, allocationId: targetAllocationId, qty };
   });
 }
 

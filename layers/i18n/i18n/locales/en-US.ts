@@ -1693,6 +1693,15 @@ export default {
           over_allocation: "over the order's open demand",
           shelf_not_found: "shelf not in the warehouse layout"
         },
+        allocBreakdownTitle: "{n} orders hold this stock",
+        allocBreakdownThisOrder: "this order",
+        allocBreakdownManual: "Manual pin",
+        allocBreakdownTransfer: "Transfer here",
+        allocBreakdownTransferQty: "Qty to transfer to this order (max {max}):",
+        allocBreakdownInvalidQty: "Enter a whole qty between 1 and {max}.",
+        allocBreakdownRemove: "Remove",
+        allocBreakdownRemoveConfirm: "Remove this allocation of {qty} × {partNo} on order {orderNo}?\n\nThe freed qty returns to the pool — the next allocation recompute may re-allocate it to another order by priority.",
+        allocBreakdownLockedUnknown: "unknown user",
       },
       allocationTip: {
         shelf: "Shelf",

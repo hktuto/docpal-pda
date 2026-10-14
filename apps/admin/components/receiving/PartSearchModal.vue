@@ -119,6 +119,35 @@ async function submit() {
   }
 }
 
+async function loadData() {
+  const row = props.item;
+  if (!row) return;
+  const ctx = {
+    orgId: orgId.value,
+    subInventoryCode: subInventory.value,
+    fromReceivingItemId: row.id,
+  };
+  const [demandRes, availRes] = await Promise.all([
+    flow.getPartDemand(row.partNo, row.wclItemNo, ctx),
+    flow.getPartAvailability(row.partNo, row.wclItemNo, ctx),
+  ]);
+  // Stock: only lots the allocation engine could use for this item's
+  // partition (same org + same sub-inventory, or a share-group sibling).
+  // Demand rows are filtered by PartDemandTables (same rule).
+  demand.value = demandRes.demand;
+  stock.value = availRes.stock.filter((s) => s.matched);
+}
+
+// A remove from the allocated-qty breakdown succeeded: refresh both tables
+// (the freed qty shows up in the stock rows and the demand form).
+async function onAllocationsChanged() {
+  try {
+    await loadData();
+  } catch (e: any) {
+    error.value = e.message;
+  }
+}
+
 watch(
   () => props.open,
   async (isOpen) => {
@@ -132,20 +161,7 @@ watch(
     saving.value = false;
     loading.value = true;
     try {
-      const ctx = {
-        orgId: orgId.value,
-        subInventoryCode: subInventory.value,
-        fromReceivingItemId: row.id,
-      };
-      const [demandRes, availRes] = await Promise.all([
-        flow.getPartDemand(row.partNo, row.wclItemNo, ctx),
-        flow.getPartAvailability(row.partNo, row.wclItemNo, ctx),
-      ]);
-      // Stock: only lots the allocation engine could use for this item's
-      // partition (same org + same sub-inventory, or a share-group sibling).
-      // Demand rows are filtered by PartDemandTables (same rule).
-      demand.value = demandRes.demand;
-      stock.value = availRes.stock.filter((s) => s.matched);
+      await loadData();
     } catch (e: any) {
       error.value = e.message;
     } finally {
@@ -214,7 +230,15 @@ watch(
               <td>{{ s.dateCode ?? "—" }}</td>
               <td>{{ s.lotCode ?? "—" }}</td>
               <td class="num">{{ s.totalQty }}</td>
-              <td class="num">{{ s.allocatedQty }}</td>
+              <td class="num">
+                <AllocationBreakdown
+                  :part-no="s.partNo"
+                  :wcl-item-no="s.wclItemNo"
+                  :allocated-qty="s.allocatedQty"
+                  :transfer-target="null"
+                  @changed="onAllocationsChanged"
+                />
+              </td>
               <td class="num">{{ s.availableQty }}</td>
             </tr>
           </tbody>

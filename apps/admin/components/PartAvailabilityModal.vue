@@ -76,6 +76,29 @@ const showReceiving = computed(() => data.value?.dockStockAllowed === true);
 
 const allocatable = computed(() => !!props.pickingOrderId && !!props.pickingItem);
 
+// Transfer target for the allocated-qty breakdown: rows of this order itself
+// never get actions from the breakdown.
+const transferTarget = computed(() =>
+  props.pickingOrderId && props.pickingItem
+    ? { orderId: props.pickingOrderId, itemId: props.pickingItem.id }
+    : null
+);
+
+// A transfer/remove from the breakdown succeeded: re-fetch the availability
+// rows and ask the page to reload the order — the form's baseline is the
+// picking item's own allocation rows, which only the page's data carries.
+async function onAllocationsChanged() {
+  try {
+    data.value = await flow.getPartAvailability(props.partNo, props.wclItemNo, {
+      orgId: props.contextOrgId ?? null,
+      subInventoryCode: props.contextSubInventory ?? null,
+    });
+  } catch (e: any) {
+    error.value = e.message;
+  }
+  emit("allocated");
+}
+
 // What this item holds TODAY, per source — the form's baseline. Derived from
 // the item's own allocation rows so no extra round-trip is needed.
 const currentBySource = computed<Record<string, number>>(() => {
@@ -347,7 +370,16 @@ watch(
               <td>{{ s.dateCode ?? "—" }}</td>
               <td>{{ s.lotCode ?? "—" }}</td>
               <td class="num">{{ s.totalQty }}</td>
-              <td class="num">{{ s.allocatedQty }}</td>
+              <td class="num">
+                <AllocationBreakdown
+                  :part-no="s.partNo"
+                  :wcl-item-no="s.wclItemNo"
+                  :allocated-qty="s.allocatedQty"
+                  :current-order-id="pickingOrderId ?? null"
+                  :transfer-target="transferTarget"
+                  @changed="onAllocationsChanged"
+                />
+              </td>
               <td class="num">{{ s.availableQty }}</td>
               <td v-if="allocatable" class="num">
                 <input

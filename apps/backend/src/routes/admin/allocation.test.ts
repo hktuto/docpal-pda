@@ -1421,3 +1421,352 @@ test("remove-allocation: a legacy pin on an orphan-shelf lot releases with a NUL
   assert.equal(txn!.shelfCode, null);
   assert.equal(txn!.qtyDelta, -100);
 });
+
+// --- GET /admin/part-allocations --------------------------------------------
+// Per-order breakdown of every allocation row holding a part (spec
+// 2026-10-14-admin-cross-order-allocation-control-design.md).
+
+const eventsOfType = async (type: string) =>
+  queryAll<{ id: number; topics: string[]; data: any }>(
+    client.db,
+    sql`SELECT id, topics, data FROM app_events WHERE type = ${type} ORDER BY id`
+  );
+
+test("part-allocations: per-order breakdown with manual, source location and locked flags", async () => {
+  await reseed(client);
+  const { orderA, orderB, orderC, receivingOrderId } = await seedScenario();
+  const itemA = await itemIdOf(orderA);
+  await clearAllocations();
+  // 600 = exactly orderA's demand: A takes the lot (200 pin + 400 auto), B the
+  // receiving carton, C an order-level receiving pin (REALLOC-P2 has no ctn).
+  await insertLot("LOT-PA-1", "REALLOC-P1", 600);
+  const pin = await req(`/admin/picking-orders/${orderA}/items/${itemA}/allocations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ qty: 200, inventoryLotId: "LOT-PA-1" }),
+  });
+  assert.equal(pin.status, 200);
+  const run = await req(`/admin/allocation/run`, { method: "POST" });
+  assert.equal(run.status, 200);
+
+  const res = await req(`/admin/part-allocations?partNo=REALLOC-P1`);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.allocations.length, 3);
+  const row = body.allocations.find((r: any) => r.manual);
+  assert.equal(row.allocationId, (await pin.json()).allocationId);
+  assert.equal(row.pickingOrderId, orderA);
+  assert.equal(row.orderNo, "SO-RA-001");
+  assert.equal(row.orderStatus, "pending");
+  assert.equal(row.pickingItemId, itemA);
+  assert.equal(row.partNo, "REALLOC-P1");
+  assert.equal(row.qty, 200);
+  assert.equal(row.sourceType, "lot");
+  assert.equal(row.inventoryLotId, "LOT-PA-1");
+  assert.equal(row.receivingInvoiceItemId, null);
+  assert.equal(row.orgId, 2);
+  assert.equal(row.subInventoryCode, "STORE1");
+  assert.equal(row.shelfCode, "A0405");
+  assert.ok(row.shelfDisplayName);
+  assert.equal(row.locked, false);
+  assert.equal(row.workingByName, null);
+
+  // The receiving-item source: NULL lot location, ctn as boxId.
+  const rowB = body.allocations.find((r: any) => r.pickingOrderId === orderB);
+  assert.equal(rowB.sourceType, "receiving-item");
+  assert.equal(rowB.shelfCode, null);
+  assert.equal(rowB.boxId, "9001");
+  assert.equal(rowB.orgId, 2);
+  assert.equal(rowB.subInventoryCode, "STORE1");
+  assert.equal(rowB.locked, false);
+
+  // Order-level receiving source (no ctn on the REALLOC-P2 line).
+  const resP2 = await req(`/admin/part-allocations?partNo=REALLOC-P2`);
+  const rowsP2 = (await resP2.json()).allocations;
+  assert.equal(rowsP2.length, 1);
+  assert.equal(rowsP2[0].sourceType, "receiving-order");
+  assert.equal(rowsP2[0].receivingOrderId, receivingOrderId);
+  assert.equal(rowsP2[0].pickingOrderId, orderC);
+  assert.equal(rowsP2[0].orgId, 2);
+  assert.equal(rowsP2[0].subInventoryCode, "STORE1");
+
+  // Lock orderB → the row reports locked + the holder's display name.
+  const operator = await queryGet<{ id: string; displayName: string }>(
+    client.db,
+    sql`SELECT id, display_name AS "displayName" FROM users WHERE username = 'operator'`
+  );
+  await client.db.execute(
+    sql`UPDATE picking_orders SET working_by = ${operator!.id}, working_at = now() WHERE id = ${orderB}`
+  );
+  const res3 = await req(`/admin/part-allocations?partNo=REALLOC-P1`);
+  const rowBLocked = (await res3.json()).allocations.find((r: any) => r.pickingOrderId === orderB);
+  assert.equal(rowBLocked.locked, true);
+  assert.equal(rowBLocked.workingByName, operator!.displayName);
+
+  const res400 = await req(`/admin/part-allocations`);
+  assert.equal(res400.status, 400);
+  assert.match(await res400.text(), /part_no_required/);
+});
+
+// --- POST /admin/picking-orders/:id/items/:itemId/allocations/transfer ------
+
+const pinLot = async (orderId: string, itemId: string, lotId: string, qty: number) => {
+  const res = await req(`/admin/picking-orders/${orderId}/items/${itemId}/allocations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ qty, inventoryLotId: lotId }),
+  });
+  assert.equal(res.status, 200);
+  return (await res.json()) as { allocationId: string };
+};
+
+const postTransfer = (orderId: string, itemId: string, body: unknown) =>
+  req(`/admin/picking-orders/${orderId}/items/${itemId}/allocations/transfer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+test("transfer: full qty moves a manual source pin onto the target and survives allocateAll", async () => {
+  await reseed(client);
+  const { orderA, orderB } = await seedScenario();
+  await clearAllocations();
+  await insertLot("LOT-TF-1", "REALLOC-P1", 1000);
+  const itemA = await itemIdOf(orderA);
+  const itemB = await itemIdOf(orderB);
+  const { allocationId: sourceAllocId } = await pinLot(orderB, itemB, "LOT-TF-1", 300);
+
+  const eventsBefore = await eventsOfType("allocation.computed");
+  const res = await postTransfer(orderA, itemA, { allocationId: sourceAllocId });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.pickingItemId, itemA);
+  assert.equal(body.qty, 300);
+  assert.ok(body.allocationId);
+
+  // Source row deleted outright; the target row is one manual pin.
+  assert.ok(!(await queryGet(client.db, sql`SELECT id FROM allocations WHERE id = ${sourceAllocId}`)));
+  const target = await queryGet<{ qty: number; manual: boolean }>(
+    client.db,
+    sql`SELECT qty, manual FROM allocations WHERE id = ${body.allocationId}`
+  );
+  assert.ok(target);
+  assert.equal(target!.qty, 300);
+  assert.equal(target!.manual, true);
+  const lot = await queryGet<{ allocatedQty: number }>(
+    client.db,
+    sql`SELECT allocated_qty AS "allocatedQty" FROM inventory_lots WHERE id = 'LOT-TF-1'`
+  );
+  assert.equal(lot!.allocatedQty, 300);
+
+  // RESERVE ledger rows on both sides with the new txn reasons.
+  const out = await queryGet<{ qtyDelta: number; referenceId: string }>(
+    client.db,
+    sql`SELECT qty_delta AS "qtyDelta", reference_id AS "referenceId" FROM inventory_transactions
+        WHERE txn_reason = 'admin: transfer out' AND qty_delta = -300`
+  );
+  assert.ok(out);
+  assert.equal(out!.referenceId, sourceAllocId);
+  const inn = await queryGet<{ qtyDelta: number; referenceId: string }>(
+    client.db,
+    sql`SELECT qty_delta AS "qtyDelta", reference_id AS "referenceId" FROM inventory_transactions
+        WHERE txn_reason = 'admin: transfer in' AND qty_delta = 300`
+  );
+  assert.ok(inn);
+  assert.equal(inn!.referenceId, body.allocationId);
+
+  // Audit entries on BOTH orders with before/after qtys.
+  const outAudit = await queryGet<{ metadata: Record<string, unknown> }>(
+    client.db,
+    sql`SELECT metadata FROM transaction_logs
+        WHERE entity_type = 'picking_order' AND entity_id = ${orderB}
+          AND metadata->>'action' = 'allocation_transferred_out'`
+  );
+  assert.ok(outAudit);
+  assert.equal(outAudit!.metadata.qty, 300);
+  assert.equal(outAudit!.metadata.beforeQty, 300);
+  assert.equal(outAudit!.metadata.afterQty, 0);
+  assert.equal(outAudit!.metadata.targetOrderId, orderA);
+  const inAudit = await queryGet<{ metadata: Record<string, unknown> }>(
+    client.db,
+    sql`SELECT metadata FROM transaction_logs
+        WHERE entity_type = 'picking_order' AND entity_id = ${orderA}
+          AND metadata->>'action' = 'allocation_transferred_in'`
+  );
+  assert.ok(inAudit);
+  assert.equal(inAudit!.metadata.qty, 300);
+  assert.equal(inAudit!.metadata.beforeQty, 0);
+  assert.equal(inAudit!.metadata.afterQty, 300);
+
+  // One allocation.computed SSE event on /picking-orders.
+  const eventsAfter = await eventsOfType("allocation.computed");
+  assert.equal(eventsAfter.length, eventsBefore.length + 1);
+  assert.deepEqual(eventsAfter[eventsAfter.length - 1]!.topics, ["/picking-orders"]);
+  assert.equal(eventsAfter[eventsAfter.length - 1]!.data.action, "transferred");
+
+  // The pin survives a full wipe/rebuild: orderA gets 300 more auto, orderB
+  // its 400 — the lot is exactly covered (300 pin + 300 auto + 400 auto).
+  const run = await req(`/admin/allocation/run`, { method: "POST" });
+  assert.equal(run.status, 200);
+  const pinAfter = await queryGet<{ qty: number }>(
+    client.db,
+    sql`SELECT qty FROM allocations WHERE id = ${body.allocationId} AND manual`
+  );
+  assert.ok(pinAfter);
+  assert.equal(pinAfter!.qty, 300);
+  const lotAfter = await queryGet<{ allocatedQty: number }>(
+    client.db,
+    sql`SELECT allocated_qty AS "allocatedQty" FROM inventory_lots WHERE id = 'LOT-TF-1'`
+  );
+  assert.equal(lotAfter!.allocatedQty, 1000);
+});
+
+test("transfer: partial qty shrinks the source and amends the target's row on the same source", async () => {
+  await reseed(client);
+  const { orderA, orderB } = await seedScenario();
+  await clearAllocations();
+  await insertLot("LOT-TF-2", "REALLOC-P1", 1000);
+  const itemA = await itemIdOf(orderA);
+  const itemB = await itemIdOf(orderB);
+  const { allocationId: targetRow } = await pinLot(orderA, itemA, "LOT-TF-2", 100);
+  const { allocationId: sourceAllocId } = await pinLot(orderB, itemB, "LOT-TF-2", 200);
+
+  const res = await postTransfer(orderA, itemA, { allocationId: sourceAllocId, qty: 50 });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  // Amended, not inserted: same allocation id, one line per (item, source).
+  assert.equal(body.allocationId, targetRow);
+  const target = await queryGet<{ qty: number; manual: boolean }>(
+    client.db,
+    sql`SELECT qty, manual FROM allocations WHERE id = ${targetRow}`
+  );
+  assert.equal(target!.qty, 150);
+  assert.equal(target!.manual, true);
+  const source = await queryGet<{ qty: number; manual: boolean }>(
+    client.db,
+    sql`SELECT qty, manual FROM allocations WHERE id = ${sourceAllocId}`
+  );
+  assert.ok(source);
+  assert.equal(source!.qty, 150);
+  const rowCount = await queryGet<{ n: number }>(
+    client.db,
+    sql`SELECT count(*)::int AS n FROM allocations WHERE picking_item_id = ${itemA} AND inventory_lot_id = 'LOT-TF-2'`
+  );
+  assert.equal(rowCount!.n, 1);
+  // The transfer moves qty between rows, not off the lot: 150 + 150.
+  assert.equal(await lotAllocated("LOT-TF-2"), 300);
+  const out = await queryGet(
+    client.db,
+    sql`SELECT id FROM inventory_transactions WHERE txn_reason = 'admin: transfer out' AND qty_delta = -50`
+  );
+  assert.ok(out);
+  const inn = await queryGet(
+    client.db,
+    sql`SELECT id FROM inventory_transactions WHERE txn_reason = 'admin: transfer in' AND qty_delta = 50`
+  );
+  assert.ok(inn);
+});
+
+test("transfer: 404 unknown order / item / allocation and 409 same_item", async () => {
+  await reseed(client);
+  const { orderA, orderB } = await seedScenario();
+  const itemA = await itemIdOf(orderA);
+  const allocB = (await allocRows(orderB))[0]!;
+  const allocA = (await allocRows(orderA))[0]!;
+
+  const res1 = await postTransfer(randomUUID(), randomUUID(), { allocationId: allocB.id });
+  assert.equal(res1.status, 404);
+  assert.match(await res1.text(), /picking_order_not_found/);
+
+  const res2 = await postTransfer(orderA, randomUUID(), { allocationId: allocB.id });
+  assert.equal(res2.status, 404);
+  assert.match(await res2.text(), /picking_item_not_found/);
+
+  const res3 = await postTransfer(orderA, itemA, { allocationId: randomUUID() });
+  assert.equal(res3.status, 404);
+  assert.match(await res3.text(), /allocation_not_found/);
+
+  // The allocation already belongs to the target item.
+  const res4 = await postTransfer(orderA, itemA, { allocationId: allocA.id });
+  assert.equal(res4.status, 409);
+  assert.match(await res4.text(), /same_item/);
+});
+
+test("transfer: 409 lock_held on a live work lock of either order; nothing changed", async () => {
+  await reseed(client);
+  const { orderA, orderB } = await seedScenario();
+  await clearAllocations();
+  await insertLot("LOT-TF-L", "REALLOC-P1", 1000);
+  const itemA = await itemIdOf(orderA);
+  const itemB = await itemIdOf(orderB);
+  const { allocationId: sourceAllocId } = await pinLot(orderB, itemB, "LOT-TF-L", 300);
+  const operator = await queryGet<{ id: string }>(client.db, sql`SELECT id FROM users WHERE username = 'operator'`);
+
+  // Live lock on the SOURCE order.
+  await client.db.execute(
+    sql`UPDATE picking_orders SET working_by = ${operator!.id}, working_at = now() WHERE id = ${orderB}`
+  );
+  const res1 = await postTransfer(orderA, itemA, { allocationId: sourceAllocId });
+  assert.equal(res1.status, 409);
+  const body1 = await res1.json();
+  assert.equal(body1.error, "lock_held");
+  assert.equal(body1.holderId, operator!.id);
+  assert.ok(
+    await queryGet(client.db, sql`SELECT id FROM allocations WHERE id = ${sourceAllocId}`)
+  );
+
+  // Move the lock to the TARGET order.
+  await client.db.execute(
+    sql`UPDATE picking_orders SET working_by = NULL, working_at = NULL WHERE id = ${orderB}`
+  );
+  await client.db.execute(
+    sql`UPDATE picking_orders SET working_by = ${operator!.id}, working_at = now() WHERE id = ${orderA}`
+  );
+  const res2 = await postTransfer(orderA, itemA, { allocationId: sourceAllocId });
+  assert.equal(res2.status, 409);
+  assert.match(await res2.text(), /lock_held/);
+  assert.ok(await queryGet(client.db, sql`SELECT id FROM allocations WHERE id = ${sourceAllocId}`));
+  const targetRows = await queryGet<{ n: number }>(
+    client.db,
+    sql`SELECT count(*)::int AS n FROM allocations WHERE picking_item_id = ${itemA}`
+  );
+  assert.equal(targetRows!.n, 0);
+});
+
+test("transfer: 400 invalid_qty, 409 over_allocation and location_mismatch", async () => {
+  await reseed(client);
+  const { orderA, orderB } = await seedScenario();
+  await clearAllocations();
+  await insertLot("LOT-TF-V", "REALLOC-P1", 1000);
+  const itemA = await itemIdOf(orderA);
+  const itemB = await itemIdOf(orderB);
+  const { allocationId: sourceAllocId } = await pinLot(orderB, itemB, "LOT-TF-V", 300);
+
+  assert.equal((await postTransfer(orderA, itemA, { allocationId: sourceAllocId, qty: 0 })).status, 400);
+  assert.equal((await postTransfer(orderA, itemA, { allocationId: sourceAllocId, qty: -5 })).status, 400);
+  const above = await postTransfer(orderA, itemA, { allocationId: sourceAllocId, qty: 301 });
+  assert.equal(above.status, 400);
+  assert.match(await above.text(), /invalid_qty/);
+
+  // Fill orderA to its full open qty (600), then the transfer over-allocates.
+  await pinLot(orderA, itemA, "LOT-TF-V", 600);
+  const over = await postTransfer(orderA, itemA, { allocationId: sourceAllocId, qty: 100 });
+  assert.equal(over.status, 409);
+  assert.match(await over.text(), /over_allocation/);
+
+  // Source outside the target order's partition (org 7 — sub-inventory is
+  // irrelevant once the org differs).
+  await client.db.execute(sql`
+    INSERT INTO inventory_lots (id, part_no, date_code, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
+    VALUES ('LOT-TF-LM', 'REALLOC-P1', '2001', 'A0405', 'TFLMBOX', 7, 'STORE1', 100, now(), now())
+  `);
+  await client.db.execute(sql`
+    INSERT INTO allocations (id, picking_item_id, inventory_lot_id, qty, manual, created_date, last_update_date)
+    VALUES ('ALLOC-TF-LM', ${itemB}, 'LOT-TF-LM', 50, true, now(), now())
+  `);
+  await recomputeLot(client.db, "LOT-TF-LM");
+  await recomputePickingItem(client.db, itemB);
+  const lm = await postTransfer(orderA, itemA, { allocationId: "ALLOC-TF-LM" });
+  assert.equal(lm.status, 409);
+  assert.match(await lm.text(), /location_mismatch/);
+});

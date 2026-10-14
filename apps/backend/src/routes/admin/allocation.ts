@@ -3,7 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { sql } from "drizzle-orm";
 import { db } from "../../db.js";
 import { queryGet } from "../../db/query.js";
-import { allocateAll, allocateForPickingOrder, allocateForReceivingOrder, addManualPickingAllocation, removePickingAllocation } from "../../db/allocate.js";
+import { allocateAll, allocateForPickingOrder, allocateForReceivingOrder, addManualPickingAllocation, removePickingAllocation, transferPickingAllocation } from "../../db/allocate.js";
 import { actorFrom } from "../../auth/middleware.js";
 import { reallocateReceivingItemDemand } from "../../db/receivingReallocate.js";
 import { allocatePickingItemFromSources, type AllocateFormRow } from "../../db/pickingAllocateForm.js";
@@ -123,6 +123,28 @@ adminAllocationRoute.post("/receiving-orders/:id/items/:itemId/reallocate-demand
     c.req.param("id"),
     c.req.param("itemId"),
     rows,
+    actorFrom(c).id
+  );
+  return c.json(result);
+});
+
+// "Transfer to this order" in the availability modal: move qty from ANOTHER
+// order's allocation onto this item as a manual pin (spec
+// docs/superpowers/specs/2026-10-14-admin-cross-order-allocation-control-design.md).
+// Body `{allocationId, qty?}` — qty defaults to the source row's full qty.
+// 404 picking_order_not_found / picking_item_not_found / allocation_not_found,
+// 409 same_item / lock_held (either order, holder info included) /
+// location_mismatch (source outside the order's org/sub-inventory partition) /
+// over_allocation, 400 invalid_qty. No order-status check; no recompute is
+// scheduled — the destination pin survives every wipe/rebuild and the source
+// item's residual demand is left for the next engine run.
+adminAllocationRoute.post("/picking-orders/:id/items/:itemId/allocations/transfer", async (c) => {
+  const body = await c.req.json<{ allocationId?: string; qty?: number }>();
+  const result = await transferPickingAllocation(
+    db,
+    c.req.param("id"),
+    c.req.param("itemId"),
+    { allocationId: String(body.allocationId ?? ""), qty: body.qty === undefined ? undefined : Number(body.qty) },
     actorFrom(c).id
   );
   return c.json(result);

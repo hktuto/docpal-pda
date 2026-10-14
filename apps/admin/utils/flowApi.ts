@@ -563,6 +563,38 @@ export interface PartDemand {
   demand: PartDemandRow[];
 }
 
+// ---- part allocations (per-order breakdown of a part's allocation rows) ----
+
+export interface PartAllocationRow {
+  allocationId: string;
+  pickingOrderId: string;
+  orderNo: string;
+  orderStatus: string;
+  pickingItemId: string;
+  partNo: string;
+  wclItemNo: string | null;
+  qty: number;
+  manual: boolean;
+  sourceType: "lot" | "receiving-item" | "receiving-order";
+  inventoryLotId: string | null;
+  receivingInvoiceItemId: string | null;
+  receivingOrderId: string | null;
+  orgId: number | null;
+  subInventoryCode: string | null;
+  shelfCode: string | null;
+  shelfDisplayName?: string | null;
+  boxId: string | null;
+  dateCode: string | null;
+  lotCode: string | null;
+  /** The holding order is open on a PDA — transfer/remove is rejected (409 lock_held). */
+  locked: boolean;
+  workingByName: string | null;
+}
+
+export interface PartAllocations {
+  allocations: PartAllocationRow[];
+}
+
 // ---- picking-item allocate form -----------------------------------------
 
 /** Desired FINAL total from one source for the picking item (0 releases it). */
@@ -1061,15 +1093,29 @@ export function useFlowApi() {
       if (ctx?.fromReceivingItemId) qs.set("fromReceivingItemId", ctx.fromReceivingItemId);
       return api.get<PartDemand>(`/admin/part-demand?${qs}`);
     },
-    // Item ledger (item-ledger page): current stock lots + totals and the
-    // part's in/out movement history (dock + on_hand rows, newest first).
-    // partNo or wclItemNo may be blank, not both.
-    getPartLedger: (partNo: string, wclItemNo?: string | null) => {
+    // Per-order breakdown of every allocation row holding a part (spec
+    // docs/superpowers/specs/2026-10-14-admin-cross-order-allocation-control-design.md):
+    // the availability dialogs' "allocated" counter expands to this list so an
+    // admin can transfer or remove a specific order's row in place.
+    getPartAllocations: (partNo: string, wclItemNo?: string | null) => {
       const qs = new URLSearchParams();
-      if (partNo) qs.set("partNo", partNo);
+      qs.set("partNo", partNo);
       if (wclItemNo) qs.set("wclItemNo", wclItemNo);
-      return api.get<PartLedger>(`/admin/part-ledger?${qs}`);
+      return api.get<PartAllocations>(`/admin/part-allocations?${qs}`);
     },
+    // Move qty (default: the whole row) from another order's allocation onto
+    // this picking item as a manual pin. 404 *_not_found / 409 same_item /
+    // lock_held / location_mismatch / over_allocation / 400 invalid_qty.
+    transferPickingAllocation: (
+      orderId: string,
+      itemId: string,
+      allocationId: string,
+      qty?: number
+    ) =>
+      api.post<{ pickingItemId: string; allocationId: string; qty: number }>(
+        `/admin/picking-orders/${orderId}/items/${itemId}/allocations/transfer`,
+        qty === undefined ? { allocationId } : { allocationId, qty }
+      ),
     // Redistribute one receiving item's dock stock across open picking demand
     // in a single all-or-nothing call. `rows[].qty` is the desired FINAL total
     // from this receiving item (0 releases the row); rows omitted from the
