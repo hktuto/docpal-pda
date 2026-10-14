@@ -80,7 +80,8 @@ const TXN_LIMIT = 1000;
 export async function getPartLedger(db: AppDb, partNo: string, wclItemNo: string): Promise<PartLedger> {
   if (partNo === "" && wclItemNo === "") throw new HTTPException(400, { message: "part_no_required" });
 
-  const part = await queryGet<PartLedgerPart>(
+  const part =
+    (await queryGet<PartLedgerPart>(
     db,
     sql`SELECT p.part_no AS "partNo", p.wcl_item_no AS "wclItemNo", p.description, p.brand
         FROM parts p
@@ -88,7 +89,7 @@ export async function getPartLedger(db: AppDb, partNo: string, wclItemNo: string
            OR (${partNo} <> '' AND p.part_no = ${partNo})
         ORDER BY CASE WHEN ${wclItemNo} <> '' AND p.wcl_item_no = ${wclItemNo} THEN 0 ELSE 1 END
         LIMIT 1`
-  );
+    )) ?? null;
 
   const stock = await queryAll<PartLedgerStockRow>(
     db,
