@@ -5,6 +5,7 @@
  * Upstream API doc: docs/backend/print-service.md
  */
 import QRCode from "qrcode";
+import { ref } from "vue";
 /** One printer as returned by the print service's agent-printers list. */
 export interface PrinterInfo {
   serviceId: string;
@@ -39,11 +40,12 @@ export interface PrintJob {
 
 // Label stock sizes for the shelf and shelf-box labels, in physical mm. The
 // canvas is rendered at 300 dpi from the mm size and the chosen size is picked
-// per job in the print dialogs. "medium" (68 x 35 mm) is the long-standing
-// default. Layout per size: a big left-aligned text line (the shelf code or
-// box id) on the left and a QR code on the right (encoding the same scannable
-// code — what the PDA scans), all derived from the label's own pixel size.
-export type LabelSizeId = "small" | "medium" | "big" | "xl";
+// per job in the print dialogs. Layout per size: a big left-aligned text line
+// (the shelf code or box id) on the left and a QR code on the right (encoding
+// the same scannable code — what the PDA scans), all derived from the label's
+// own pixel size. The catalog is per-warehouse (SZ vs HK, picked from the
+// backend's warehouseCode in GET /config) — see LABEL_SIZES_BY_WAREHOUSE.
+export type LabelSizeId = "small" | "medium" | "big" | "xl" | "a4-24";
 
 export interface LabelSize {
   id: LabelSizeId;
@@ -67,14 +69,45 @@ export interface LabelSize {
    * the text area, so this lets a size keep (or grow) its code size at the
    * cost of more condensation on long codes. */
   fontScale?: number;
+  /** Die-cut full-bleed tiling: the batch grid lays this size out as an
+   * exact cols × rows tiling of the whole A4 sheet — no gaps, anchored at
+   * the sheet origin, print scale ignored — so cells land on the pre-cut
+   * positions. Sizes without it use the centered gap grid. */
+  flushGrid?: { cols: number; rows: number };
 }
 
-export const LABEL_SIZES: LabelSize[] = [
+// SZ warehouse: the loose-label stock sizes, drawn 5% larger to compensate
+// the label printers' auto-fit shrink. "medium" (68 x 35 mm) is the
+// long-standing default.
+const SZ_LABEL_SIZES: LabelSize[] = [
   { id: "small", widthMm: 53, heightMm: 16, renderScale: 1.05 },
   { id: "medium", widthMm: 68, heightMm: 35, renderScale: 1.05 },
   { id: "big", widthMm: 104, heightMm: 35, renderScale: 1.05, paddingMm: 1, qrMinMm: 33, fontScale: 1.1 },
   { id: "xl", widthMm: 104, heightMm: 40, renderScale: 1.05, paddingMm: 1, qrMinMm: 38, fontScale: 1.1 },
 ];
+
+// HK warehouse: pre-cut A4 sticker sheet — 24 labels tiled 3 × 8 over the
+// whole sheet (70 x 37.125 mm slots), no render-scale compensation: the die
+// positions are fixed, so the drawn content must stay inside each slot.
+const HK_LABEL_SIZES: LabelSize[] = [
+  { id: "a4-24", widthMm: 70, heightMm: 37.125, flushGrid: { cols: 3, rows: 8 } },
+];
+
+/** Per-warehouse catalog keyed by the backend's warehouseCode ("" = default HK instance). */
+const LABEL_SIZES_BY_WAREHOUSE: Record<string, LabelSize[]> = {
+  "": HK_LABEL_SIZES,
+  hk: HK_LABEL_SIZES,
+  sz: SZ_LABEL_SIZES,
+};
+
+/** Active size catalog — set from GET /config by useWarehouseLabelLayout.
+ * Starts as SZ's list so the pre-split behavior holds until the fetch lands. */
+export const activeLabelSizes = ref<LabelSize[]>(SZ_LABEL_SIZES);
+
+/** Point the print helpers/dialogs at a warehouse's catalog (from /config). */
+export function setWarehouseLabelSizes(warehouseCode: string): void {
+  activeLabelSizes.value = LABEL_SIZES_BY_WAREHOUSE[warehouseCode.toLowerCase()] ?? SZ_LABEL_SIZES;
+}
 
 export const DEFAULT_LABEL_SIZE: LabelSizeId = "medium";
 
@@ -119,9 +152,18 @@ const LABEL_FONT_FAMILY = '"Roboto Mono", ui-monospace, SFMono-Regular, Menlo, m
 // thinner lines (1-2px) can drop out entirely on the label printers.
 const LABEL_BORDER_PX = 3;
 
-/** Resolve a size id (unknown values fall back to the default). */
+/** Default size id of the active catalog (medium on SZ; HK's only entry elsewhere). */
+export function defaultLabelSizeId(): LabelSizeId {
+  const sizes = activeLabelSizes.value;
+  return sizes.some((s) => s.id === DEFAULT_LABEL_SIZE) ? DEFAULT_LABEL_SIZE : sizes[0].id;
+}
+
+/** Resolve a size id against the active catalog (unknown values fall back to its default). */
 export function labelSize(id?: string): LabelSize {
-  return LABEL_SIZES.find((s) => s.id === id) ?? LABEL_SIZES.find((s) => s.id === DEFAULT_LABEL_SIZE)!;
+  const sizes = activeLabelSizes.value;
+  return (
+    sizes.find((s) => s.id === id) ?? sizes.find((s) => s.id === DEFAULT_LABEL_SIZE) ?? sizes[0]
+  );
 }
 
 /** Canvas pixel size of one label at 300 dpi (after the size's renderScale). */
@@ -134,11 +176,11 @@ export function labelSizePx(id?: string): { w: number; h: number } {
   };
 }
 
-/** Last size picked in any print dialog (invalid values fall back to the default). */
+/** Last size picked in any print dialog (invalid for the active catalog → its default). */
 export function loadLabelSize(): LabelSizeId {
-  if (!import.meta.client) return DEFAULT_LABEL_SIZE;
+  if (!import.meta.client) return defaultLabelSizeId();
   const raw = localStorage.getItem("label_size");
-  return LABEL_SIZES.some((s) => s.id === raw) ? (raw as LabelSizeId) : DEFAULT_LABEL_SIZE;
+  return activeLabelSizes.value.some((s) => s.id === raw) ? (raw as LabelSizeId) : defaultLabelSizeId();
 }
 
 /** Remember the size picked in the print dialogs (`label_size` key). */
@@ -183,7 +225,7 @@ function ensureLabelTextFont(): Promise<void> {
 }
 
 // Draw one label cell at (x, y) into an existing context. The layout is
-// derived from the cell's own pixel size (any of the LABEL_SIZES at 300 dpi):
+// derived from the cell's own pixel size (any active-catalog size at 300 dpi):
 // one big left-aligned text line (the shelf code / box id) on the left, QR on
 // the right. The wide strip (small) keeps a height-filling QR and sizes the
 // text off the label height and text width; tall labels (medium/big/xl) cap
@@ -254,7 +296,7 @@ async function drawLabelCell(
   }
 }
 
-/** Render one label (any LABEL_SIZES entry) to a PNG blob for /print/files. */
+/** Render one label (any active-catalog size) to a PNG blob for /print/files. */
 async function renderStockLabelPng(cell: LabelCell, layout: LabelLayout, size?: string): Promise<Blob> {
   const { w, h } = labelSizePx(size);
   const canvas = document.createElement("canvas");
@@ -296,13 +338,23 @@ export interface LabelBatchGrid {
   cellW: number;
   cellH: number;
   gap: number;
+  /** Die-cut full-bleed tiling: cells are anchored at the sheet origin (no centering). */
+  flush?: boolean;
 }
 
-/** Compute the A4 grid for one label size (centered, uniform gap). Cells are
- * drawn `scale`% larger than the physical label so the printed result lands
- * at true size after the printer's own auto-fit shrink; bigger cells simply
- * mean fewer columns/rows per page. */
+/** Compute the A4 grid for one label size. Gap sizes: cells keep the label's
+ * physical aspect ratio with as many columns/rows as fit, centered with a
+ * uniform gap; cells are drawn `scale`% larger than the physical label so the
+ * printed result lands at true size after the printer's own auto-fit shrink.
+ * Die-cut sizes (flushGrid) instead tile the sheet exactly: no gaps, anchored
+ * at the origin, print scale ignored — the pre-cut positions are fixed. */
 export function shelfBatchGrid(sizeId?: LabelSizeId, scale: number = DEFAULT_LABEL_PRINT_SCALE): LabelBatchGrid {
+  const size = labelSize(sizeId);
+  if (size.flushGrid) {
+    const { cols, rows } = size.flushGrid;
+    // Floor keeps every cell strictly inside its die slot (70 x 37.125 mm).
+    return { cols, rows, cellW: Math.floor(A4_PAGE_W / cols), cellH: Math.floor(A4_PAGE_H / rows), gap: 0, flush: true };
+  }
   const base = labelSizePx(sizeId);
   const f = labelPrintScale(scale) / 100;
   const px = { w: Math.max(1, Math.round(base.w * f)), h: Math.max(1, Math.round(base.h * f)) };
@@ -341,8 +393,9 @@ async function renderStockBatchPagePng(
 
   const { cols, rows, cellW, cellH, gap } = grid;
   // Center the grid — the leftover space is split evenly on both sides.
-  const offsetX = Math.round((A4_PAGE_W - (cols * cellW + (cols - 1) * gap)) / 2);
-  const offsetY = Math.round((A4_PAGE_H - (rows * cellH + (rows - 1) * gap)) / 2);
+  // Die-cut tilings (flush) anchor at the sheet origin instead: no padding.
+  const offsetX = grid.flush ? 0 : Math.round((A4_PAGE_W - (cols * cellW + (cols - 1) * gap)) / 2);
+  const offsetY = grid.flush ? 0 : Math.round((A4_PAGE_H - (rows * cellH + (rows - 1) * gap)) / 2);
 
   for (const [i, cell] of cells.entries()) {
     const col = i % cols;

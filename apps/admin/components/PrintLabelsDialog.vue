@@ -6,7 +6,7 @@
 // picker lists the print service's agent printers; the chosen printer is
 // remembered in localStorage.
 import {
-  LABEL_SIZES,
+  activeLabelSizes,
   listPrinters,
   parsePrinterKey,
   printFile,
@@ -15,6 +15,7 @@ import {
   type LabelSizeId,
   type PrinterInfo,
 } from "~/utils/print";
+import { useWarehouseLabelLayout } from "~/composables/useWarehouseLabelLayout";
 
 const props = defineProps<{
   /** One entry per label; `title` is only shown in the dialog's summary list. */
@@ -22,10 +23,18 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ close: [] }>();
 
+// Loads the warehouse /config so the size dropdown below shows this
+// instance's catalog (SZ's four stock sizes vs HK's die-cut 24-up sheet);
+// the layout itself is applied by the host's render callbacks.
+useWarehouseLabelLayout();
+
 const { t } = useI18n();
-// Label size (53 x 16 / 68 x 35 / 104 x 35 / 104 x 40 mm), remembered across dialogs.
+// Label size — per-warehouse catalog (SZ: 53 x 16 / 68 x 35 / 104 x 35 /
+// 104 x 40 mm; HK: the die-cut 24-up A4 sheet), remembered across dialogs.
 const size = useLabelSize();
-const sizeOptions = LABEL_SIZES.map((s) => ({ value: s.id, label: t(`admin.print.sizes.${s.id}`) }));
+const sizeOptions = computed(() =>
+  activeLabelSizes.value.map((s) => ({ value: s.id, label: t(`admin.print.sizes.${s.id}`) }))
+);
 
 const printing = ref(false);
 const dlg = useOverlayDismiss(() => {

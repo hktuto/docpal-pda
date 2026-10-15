@@ -6,7 +6,7 @@
 // job per label; each job is confirmed via waitForPrintJob before reporting
 // success.
 import {
-  LABEL_SIZES,
+  activeLabelSizes,
   listPrinters,
   parsePrinterKey,
   printFile,
@@ -19,9 +19,12 @@ import { useWarehouseLabelLayout } from "~/composables/useWarehouseLabelLayout";
 
 const { layout: labelLayout } = useWarehouseLabelLayout();
 const { t } = useI18n();
-// Label size (53 x 16 / 68 x 35 / 104 x 35 / 104 x 40 mm), remembered across dialogs.
+// Label size — per-warehouse catalog (SZ: 53 x 16 / 68 x 35 / 104 x 35 /
+// 104 x 40 mm; HK: the die-cut 24-up A4 sheet), remembered across dialogs.
 const size = useLabelSize();
-const sizeOptions = LABEL_SIZES.map((s) => ({ value: s.id, label: t(`admin.print.sizes.${s.id}`) }));
+const sizeOptions = computed(() =>
+  activeLabelSizes.value.map((s) => ({ value: s.id, label: t(`admin.print.sizes.${s.id}`) }))
+);
 
 const props = defineProps<{
   /** One entry per label; `title` is only shown in the dialog's summary list. */

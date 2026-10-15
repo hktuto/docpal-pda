@@ -1,0 +1,20 @@
+{
+  "receivedOffice": "", // 收貨辦事處
+  "supplier":"", // 供應商:
+  "receiptNo":"", //發票號碼
+  "invoiceNo": "", // 編號:
+  "receivedDate":"", //收貨日期:
+  "items":[
+    {
+      "orderNo":"", //訂單號
+      "cartonNo":"", //箱数
+      "partNo":"", //型號
+      "dateCode":"", //摘要(D/C)
+      "qty": "", //數量(PCS)
+      "weight":"", //重量（KG)
+      "office":"", //辦事處
+      "poNo":"", //发货项
+      "remark":"" //備註
+    }
+  ],
+}

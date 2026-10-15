@@ -1198,7 +1198,8 @@ export default {
         small: "Small (53 × 16 mm)",
         medium: "Medium (68 × 35 mm)",
         big: "Big (104 × 35 mm)",
-        xl: "Extra large (104 × 40 mm)"
+        xl: "Extra large (104 × 40 mm)",
+        "a4-24": "A4 sheet (70 × 37.1 mm, 24/page)"
       },
       scale: "Print scale (%)",
       copies: "Copies",

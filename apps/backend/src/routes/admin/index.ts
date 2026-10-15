@@ -55,7 +55,11 @@ function optScopes(body: Record<string, unknown>): UserScopeEntry[] | null {
 
 export const adminRoute = new Hono();
 
-adminRoute.post("/shelves/batch-import", async (c) => shelfBatchImportRoute.fetch(c.req, c.env));
+// Mounted with .route() like every other sub-router below — calling
+// `shelfBatchImportRoute.fetch(c.req, ...)` hands the sub-app the ORIGINAL
+// full path (/admin/shelves/batch-import) while it only routes "/", so every
+// request fell through to its 404.
+adminRoute.route("/shelves/batch-import", shelfBatchImportRoute);
 adminRoute.route(
   "/shelves",
   createCrudRouter({

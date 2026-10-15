@@ -8,7 +8,8 @@
 // print service's agent printers; the chosen printer is remembered in
 // localStorage.
 import {
-  LABEL_SIZES,
+  activeLabelSizes,
+  labelSize,
   listPrinters,
   parsePrinterKey,
   printFile,
@@ -22,10 +23,16 @@ import { useWarehouseLabelLayout } from "~/composables/useWarehouseLabelLayout";
 
 const { layout: labelLayout } = useWarehouseLabelLayout();
 const { t } = useI18n();
-// Label size (53 x 16 / 68 x 35 / 104 x 35 / 104 x 40 mm), remembered across dialogs;
+// Label size — per-warehouse catalog (SZ: 53 x 16 / 68 x 35 / 104 x 35 /
+// 104 x 40 mm; HK: the die-cut 24-up A4 sheet), remembered across dialogs;
 // picking another size re-lays-out (and re-renders) the A4 pages below.
 const size = useLabelSize();
-const sizeOptions = LABEL_SIZES.map((s) => ({ value: s.id, label: t(`admin.print.sizes.${s.id}`) }));
+const sizeOptions = computed(() =>
+  activeLabelSizes.value.map((s) => ({ value: s.id, label: t(`admin.print.sizes.${s.id}`) }))
+);
+// Die-cut sizes tile the sheet exactly — the print scale can't apply, so
+// the control is hidden for them (it would break the pre-cut alignment).
+const isFlushGrid = computed(() => !!labelSize(size.value).flushGrid);
 // Print scale factor (%): compensates for the printer's auto-fit shrink so
 // the printed label comes out at its true physical size. Also remembered.
 const scale = useLabelPrintScale();
@@ -152,7 +159,7 @@ async function print() {
           <option v-for="opt in sizeOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
         </select>
       </div>
-      <div class="form-row">
+      <div v-if="!isFlushGrid" class="form-row">
         <label for="sbbp-scale">{{ $t("admin.print.scale") }}</label>
         <!-- Committed on change (blur/Enter), not per keystroke: each commit re-renders every A4 page. -->
         <input

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "../../db.js";
 import { shelves } from "../../db/schema/index.js";
 import { newId } from "../../db/id.js";
@@ -46,7 +46,12 @@ shelfBatchImportRoute.post("/", async (c) => {
     const zone = row.zone != null ? String(row.zone).trim() || null : null;
     const warning = row.warning != null ? String(row.warning).trim() || null : null;
 
-    let subInventoryScopes: { orgId: number; code: string }[] | null = null;
+    // Absent must stay undefined, NOT collapse to null: the Excel import only
+    // includes this key when the sheet has a sub-inventory column (spec
+    // 2026-10-15 § "only include fields present in the input"), and an explicit
+    // null is how a row says "clear it". Defaulting to null would write null
+    // on every row that omitted the column and wipe the shelf's scopes.
+    let subInventoryScopes: { orgId: number; code: string }[] | null | undefined = undefined;
     if (row.subInventoryScopes !== undefined) {
       const entries = parseScopeEntries(row.subInventoryScopes);
       subInventoryScopes = entries.length > 0 ? entries : null;
@@ -92,6 +97,3 @@ shelfBatchImportRoute.post("/", async (c) => {
 
   return c.json({ created, updated, skipped: errors.length, errors });
 });
-
-// Local import to avoid circular dep — eq is from drizzle-orm
-import { eq } from "drizzle-orm";

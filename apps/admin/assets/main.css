@@ -215,6 +215,15 @@ td.actions {
   margin-bottom: 0.75rem;
   white-space: pre-wrap;
 }
+.success-banner {
+  background: #ecf9f1;
+  border: 1px solid #86c8a0;
+  color: #1e7a46;
+  border-radius: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 0.75rem;
+  white-space: pre-wrap;
+}
 .loading {
   color: #52606d;
   padding: 0.75rem 0;
