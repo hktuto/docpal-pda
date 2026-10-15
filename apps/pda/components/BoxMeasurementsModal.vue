@@ -35,14 +35,6 @@
             <input v-model="form.grossWeight" type="number" step="0.001" min="0" inputmode="decimal" :placeholder="$t('boxMeasurementsModal.placeholderGrossWeight')" :disabled="isBusy" />
           </label>
 
-          <label class="field">
-            <span>{{ $t('boxMeasurementsModal.destinationCountry') }} <span class="required">{{ $t('boxMeasurementsModal.required') }}</span></span>
-            <select v-model="form.destinationCountry" :disabled="isBusy">
-              <option value="">{{ $t('boxMeasurementsModal.placeholderCountry') }}</option>
-              <option v-for="country in countryOptions" :key="country" :value="country">{{ countryName(country) }}</option>
-            </select>
-          </label>
-
           <p v-if="errorText" class="error">{{ errorText }}</p>
 
           <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem;">
@@ -58,16 +50,10 @@
 
 <script setup lang="ts">
 import { useWarehouse } from "~/composables/useWarehouse";
-import { boxSizeOptions, countryOptions } from "~/constants/pocOptions";
+import { boxSizeOptions } from "~/constants/pocOptions";
 
-const { t } = useI18n();
 const getErrorMessage = useErrorMessage();
 const warehouse = useWarehouse();
-
-const countryLabels = computed(() => t('countryLabels') as unknown as Record<string, string>);
-function countryName(value: string) {
-  return countryLabels.value[value] ?? value;
-}
 
 // A prefilled box size (e.g. from the source carton's metadata) is often not
 // one of the master options — show it as an extra option so the select
@@ -83,14 +69,12 @@ interface MeasurementForm {
   boxSize: string;
   netWeight: string;
   grossWeight: string;
-  destinationCountry: string;
 }
 
 const props = defineProps<{
   modelValue: boolean;
   boxId: string;
   initialValues?: Partial<MeasurementForm>;
-  defaultDestinationCountry?: string | null;
   /** Auto-calculated net weight (kg) from the net-weight formula master — pre-fills the net field when empty. */
   suggestedNetWeightKg?: number | null;
 }>();
@@ -104,7 +88,6 @@ const defaultForm: MeasurementForm = {
   boxSize: "",
   netWeight: "",
   grossWeight: "",
-  destinationCountry: "",
 };
 
 const form = ref<MeasurementForm>({ ...defaultForm });
@@ -117,7 +100,6 @@ const isBusy = computed(() => confirming.value);
 
 const isValid = computed(() => {
   if (!form.value.boxSize) return false;
-  if (!form.value.destinationCountry) return false;
   // Backend weights are kilograms; decimals allowed, closing requires > 0.
   const net = Number(form.value.netWeight);
   const gross = Number(form.value.grossWeight);
@@ -140,10 +122,6 @@ watch(
           initialNet ||
           (props.suggestedNetWeightKg != null ? props.suggestedNetWeightKg.toString() : ""),
         grossWeight: props.initialValues?.grossWeight ?? "",
-        destinationCountry:
-          props.initialValues?.destinationCountry ??
-          props.defaultDestinationCountry ??
-          "",
       };
     }
   },
@@ -174,7 +152,6 @@ async function onConfirm() {
       boxSize: form.value.boxSize,
       netWeightKg: Number(form.value.netWeight),
       grossWeightKg: Number(form.value.grossWeight),
-      destinationCountry: form.value.destinationCountry,
     });
     await warehouse.closeShippingBox(props.boxId);
     emit("finished");

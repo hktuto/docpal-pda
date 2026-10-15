@@ -80,7 +80,12 @@ const dcActive = computed(() => !!dcFromDate.value || !!dcToDate.value);
 // + same sub-inventory, or a sibling in the same share group (backend
 // `matched`). With no context partition every row matches, so nothing is cut.
 const applicableStock = computed(() => (data.value?.stock ?? []).filter((s) => s.matched));
-const applicableReceiving = computed(() => (data.value?.receiving ?? []).filter((r) => r.matched));
+// Only in-hand receiving orders count as allocatable dock stock — pending or
+// cleared orders are hidden. Hidden rows are never submitted, so an allocation
+// the item already holds from such an order is left untouched server-side.
+const applicableReceiving = computed(() =>
+  (data.value?.receiving ?? []).filter((r) => r.matched && r.status === "in_hand")
+);
 const filteredStock = computed(() =>
   applicableStock.value.filter((s) => dateCodeInRange(s.dateCode, dcFromDate.value, dcToDate.value))
 );

@@ -271,8 +271,11 @@
   this order are hidden: the modal keeps only rows the backend flags
   `matched` (same org, and the same sub-inventory or a sibling in the same
   share group); rows matching the order's exact pair are highlighted. The
-  "Receiving sources" table is hidden entirely when the warehouse config
-  disallows allocation from receiving dock stock (`dockStockAllowed`). The stock table
+  "Receiving sources" table lists only `in_hand` receiving orders —
+  pending / `provisional_received` / clear rows are hidden (they are never
+  submitted, so any allocation the item already holds from them is left
+  untouched server-side) — and the whole table is hidden when the warehouse
+  config disallows allocation from receiving dock stock (`dockStockAllowed`). The stock table
   has a client-side sort dropdown (date code asc + available-qty tiebreak by
   default, or available qty / shelf — `apps/admin/utils/partStock.ts` shared
   with the receiving-side modal) and a combined `shelf - date code - coo -

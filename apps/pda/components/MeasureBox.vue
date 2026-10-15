@@ -267,7 +267,6 @@ const measurementInitialValues = computed(() => {
     boxSize: b.boxSize ?? "",
     netWeight: b.netWeight?.toString() ?? "",
     grossWeight: b.grossWeight?.toString() ?? "",
-    destinationCountry: b.destinationCountry ?? "",
   };
 });
 
