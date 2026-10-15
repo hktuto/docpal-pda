@@ -1,0 +1,7 @@
+{
+  "hk": { "domain": "wclwms-hk.docpal.com.hk", "appName": "HK Warehouse" },
+  "sz": { "domain": "wclwms-sz.docpal.com.hk", "appName": "SZ Warehouse" },
+  "gz": { "domain": "wclwms-gz.docpal.com.hk", "appName": "GZ Warehouse" },
+  "sh": { "domain": "wclwms-sh.docpal.com.hk", "appName": "SH Warehouse" },
+  "bj": { "domain": "wclwms-sz.docpal.com.hk", "appName": "BJ Warehouse" }
+}

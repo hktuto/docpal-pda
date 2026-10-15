@@ -2031,6 +2031,7 @@ export default {
       },
       appDownload: {
         title: "App Download",
+        region: "Region",
         version: "Version",
         builtAt: "Built at",
         webUrl: "Web URL",

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
 import { createReadStream } from "node:fs";
-import { stat, readFile } from "node:fs/promises";
+import { stat, readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
@@ -18,18 +18,32 @@ interface ApkVersionInfo {
   webUrl?: string;
   builtAt?: string;
   fileName?: string;
+  region?: string;
 }
 
-// Resolve the published APK (version.json + the file it names), or null when
-// not published yet.
-async function readPublishedApk(): Promise<{ info: ApkVersionInfo; apkPath: string; sizeBytes: number } | null> {
+// List all published regions by scanning version-{region}.json files.
+async function listPublishedRegions(): Promise<string[]> {
+  try {
+    const files = await readdir(apkDir);
+    return files
+      .filter((f) => f.startsWith("version-") && f.endsWith(".json"))
+      .map((f) => f.replace(/^version-/, "").replace(/\.json$/, ""))
+      .sort();
+  } catch {
+    return [];
+  }
+}
+
+// Resolve the published APK for a region (version-{region}.json + the file
+// it names), or null when not published yet.
+async function readPublishedApk(region: string): Promise<{ info: ApkVersionInfo; apkPath: string; sizeBytes: number } | null> {
   let info: ApkVersionInfo;
   try {
-    info = JSON.parse(await readFile(join(apkDir, "version.json"), "utf8")) as ApkVersionInfo;
+    info = JSON.parse(await readFile(join(apkDir, `version-${region}.json`), "utf8")) as ApkVersionInfo;
   } catch {
     return null;
   }
-  const apkPath = join(apkDir, info.fileName || "warehouse-pda.apk");
+  const apkPath = join(apkDir, info.fileName || `warehouse-pda-${region}.apk`);
   try {
     const st = await stat(apkPath);
     return { info, apkPath, sizeBytes: st.size };
@@ -44,20 +58,28 @@ function apkNotAvailable(): never {
 
 export const adminAppDownloadRoute = new Hono();
 
+// List all published regions.
+adminAppDownloadRoute.get("/app-download/regions", async (c) => {
+  const regions = await listPublishedRegions();
+  return c.json({ regions });
+});
+
 // Metadata for the admin /app-download page (version.json fields + sizeBytes).
 adminAppDownloadRoute.get("/app-download", async (c) => {
-  const published = await readPublishedApk();
+  const region = c.req.query("region") || "hk";
+  const published = await readPublishedApk(region);
   if (!published) apkNotAvailable();
   return c.json({ ...published.info, sizeBytes: published.sizeBytes });
 });
 
 // The APK itself, streamed as an attachment.
 adminAppDownloadRoute.get("/app-download/file", async (c) => {
-  const published = await readPublishedApk();
+  const region = c.req.query("region") || "hk";
+  const published = await readPublishedApk(region);
   if (!published) apkNotAvailable();
   const downloadName = published.info.versionName
     ? `warehouse-pda-${published.info.versionName}.apk`
-    : "warehouse-pda.apk";
+    : `warehouse-pda-${region}.apk`;
   const body = Readable.toWeb(createReadStream(published.apkPath)) as ReadableStream;
   return new Response(body, {
     headers: {

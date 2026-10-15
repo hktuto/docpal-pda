@@ -16,7 +16,7 @@ const serverUrl = envUrl === 'off' ? undefined : (envUrl ?? 'http://127.0.0.1:31
 
 const config: CapacitorConfig = {
   appId: 'com.docpal.warehousedemo',
-  appName: 'SZ Warehouse',
+  appName: 'HK Warehouse',
   webDir: '.output/public',
   server: {
     // http scheme so LAN http:// API calls are not blocked as mixed content.

@@ -5,23 +5,31 @@ import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 
 // Production release APK build: generates the web assets, points the WebView
-// at the one fixed web host (PRODUCTION_URL from the root .env + the web
-// container port :3000) via capacitor server.url — the Capacitor bridge is
+// at the one fixed web host via capacitor server.url — the Capacitor bridge is
 // injected for exactly that origin, so hardware scanning and the other native
 // plugins keep working while web content still updates with every deploy.
-// The /server picker inside the app only chooses which BACKEND API the app
-// calls; it never navigates the WebView. The app URL is also stamped into the
-// bundled maintenance page as its retry target, the APK is signed (keystore
+// The /server picker inside the app only chooses which BACKEND the app
+// calls; it never navigates the WebView. The app URL is also stamped into
+// the bundled maintenance page as its retry target, the APK is signed (keystore
 // auto-generated on first run), and the APK plus a version.json are published
 // into apps/backend/public/apk/ for the admin download page.
+//
+// Multi-region: set APK_REGION (hk|sz|gz|sh|bj) to select the target region.
+// The region determines the backend domain, app name, and output file name.
+// Output: warehouse-pda-{region}.apk + version-{region}.json
+//
 // Usage:
-//   pnpm build:apk
+//   pnpm build:apk                          # builds the default region (hk)
+//   APK_REGION=gz pnpm build:apk            # builds the GZ region
+//   APK_REGION=sz APK_WEB_URL=https://custom:9000 pnpm build:apk  # override URL
 
 const webDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = resolve(webDir, '../..');
 const androidDir = join(webDir, 'android');
 const gradleFile = join(androidDir, 'app/build.gradle');
+const stringsFile = join(androidDir, 'app/src/main/res/values/strings.xml');
 const apkOutDir = join(repoRoot, 'apps/backend/public/apk');
+const regionsFile = join(import.meta.dirname, 'regions.json');
 
 function run(cmd, args, options = {}) {
   const result = spawnSync(cmd, args, { stdio: 'inherit', shell: true, ...options });
@@ -31,35 +39,43 @@ function run(cmd, args, options = {}) {
   }
 }
 
-// a. PRODUCTION_URL from the root .env (scheme + host; schemeless hosts default to https://).
-// Optional env APK_WEB_URL overrides the full WebView URL, e.g. when the
-// hosted PDA runs on a non-default port: https://host:9000.
-const envFile = join(repoRoot, '.env');
-let productionUrl;
-if (process.env.APK_WEB_URL) {
-  productionUrl = process.env.APK_WEB_URL;
-} else if (existsSync(envFile)) {
-  for (const line of readFileSync(envFile, 'utf8').split(/\r?\n/)) {
-    const match = line.match(/^\s*PRODUCTION_URL\s*=\s*(.+?)\s*$/);
-    if (match && !line.trimStart().startsWith('#')) {
-      productionUrl = match[1];
-      break;
-    }
-  }
-}
-if (!productionUrl) {
-  console.error('PRODUCTION_URL is not set in the root .env — set it to the production host (e.g. mobile-wms-admin.wclsolution.com), or pass APK_WEB_URL.');
+// a. Resolve region config from regions.json.
+const regions = JSON.parse(readFileSync(regionsFile, 'utf8'));
+const region = process.env.APK_REGION || 'hk';
+const regionConfig = regions[region];
+if (!regionConfig) {
+  console.error(`Unknown APK_REGION "${region}" — valid regions: ${Object.keys(regions).join(', ')}`);
   process.exit(1);
 }
-const webUrl = /^https?:\/\//.test(productionUrl) ? productionUrl : `https://${productionUrl}`;
-// The app the WebView loads: PRODUCTION_URL is scheme + host (no port) by
-// default, served on :3000 in docker-compose.prod.yml. APK_WEB_URL overrides
-// this for custom ports.
-const appUrl = process.env.APK_WEB_URL || `${webUrl}:3000`;
+console.log(`Region: ${region.toUpperCase()} (${regionConfig.appName})`);
+
+// b. Resolve the WebView URL. APK_WEB_URL overrides the full URL; otherwise
+//    build from the region domain on port 9000.
+const appUrl = process.env.APK_WEB_URL || `https://${regionConfig.domain}:9000`;
 console.log(`App URL (WebView + maintenance page): ${appUrl}`);
 
-// b. The web dev server pollutes .nuxt/dist/client with dev URLs — refuse to
-// generate while it is running.
+// c. Patch the app name in capacitor.config.ts and strings.xml.
+const capacitorConfigPath = join(webDir, 'capacitor.config.ts');
+const capacitorConfig = readFileSync(capacitorConfigPath, 'utf8');
+const patchedCapacitor = capacitorConfig.replace(
+  /appName:\s*['"]([^'"]+)['"]/,
+  `appName: '${regionConfig.appName}'`,
+);
+if (patchedCapacitor === capacitorConfig) {
+  console.error(`appName not found in ${capacitorConfigPath} — cannot patch.`);
+  process.exit(1);
+}
+writeFileSync(capacitorConfigPath, patchedCapacitor);
+
+const stringsXml = readFileSync(stringsFile, 'utf8');
+const patchedStrings = stringsXml
+  .replace(/<string name="app_name">[^<]+<\/string>/, `<string name="app_name">${regionConfig.appName}</string>`)
+  .replace(/<string name="title_activity_main">[^<]+<\/string>/, `<string name="title_activity_main">${regionConfig.appName}</string>`);
+writeFileSync(stringsFile, patchedStrings);
+console.log(`App name patched: ${regionConfig.appName}`);
+
+// d. The web dev server pollutes .nuxt/dist/client with dev URLs — refuse to
+//    generate while it is running.
 try {
   await fetch('http://127.0.0.1:3104', { signal: AbortSignal.timeout(1500) });
   console.error('The web dev server is running on :3104 — stop it before running this build (it pollutes .nuxt/dist/client with dev URLs).');
@@ -68,10 +84,10 @@ try {
   // Connection refused / timeout: no dev server, good to go.
 }
 
-// c. Static web export.
+// e. Static web export.
 run('pnpm', ['--filter', '@warehouse/pda', 'generate'], { cwd: repoRoot });
 
-// c2. The maintenance page is bundled into the APK and cannot read
+// e2. The maintenance page is bundled into the APK and cannot read
 // capacitor.config at runtime — stamp the app URL in as its retry target
 // (the source file keeps the dev default http://localhost:3104).
 const maintenanceFile = join(webDir, '.output/public/maintenance.html');
@@ -84,7 +100,7 @@ if (!maintenance.includes(maintenanceMarker)) {
 writeFileSync(maintenanceFile, maintenance.replace(maintenanceMarker, `var DEFAULT_URL = '${appUrl}';`));
 console.log(`Maintenance page default URL: ${appUrl}`);
 
-// d. Auto-increment versionCode so Android treats the new APK as an update.
+// f. Auto-increment versionCode so Android treats the new APK as an update.
 const gradle = readFileSync(gradleFile, 'utf8');
 const codeMatch = gradle.match(/versionCode (\d+)/);
 const nameMatch = gradle.match(/versionName "([^"]+)"/);
@@ -97,7 +113,7 @@ const versionName = nameMatch ? nameMatch[1] : '1.0';
 writeFileSync(gradleFile, gradle.replace(/versionCode \d+/, `versionCode ${versionCode}`));
 console.log(`Version: ${versionName} (versionCode ${versionCode})`);
 
-// e. Signing: generate a keystore + keystore.properties on first run. Keep
+// g. Signing: generate a keystore + keystore.properties on first run. Keep
 // both — Android only installs an update when the signature matches.
 const keystorePropsPath = join(androidDir, 'keystore.properties');
 if (!existsSync(keystorePropsPath)) {
@@ -126,14 +142,14 @@ if (!existsSync(keystorePropsPath)) {
   console.log('Keep keystore.properties and the keystore safe — re-installs need the same signature.');
 }
 
-// f. Sync the generated assets into the native project with server.url set to
+// h. Sync the generated assets into the native project with server.url set to
 // the fixed web host (CAPACITOR_SERVER_URL → server.url, capacitor.config.ts).
 // The WebView boots directly from the hosted app, so the Capacitor bridge is
 // injected on that origin and the native plugins (hardware scanning) work;
 // the /server picker only switches the backend API base URL at runtime.
 run('pnpm', ['exec', 'cap', 'sync', 'android'], { cwd: webDir, env: { ...process.env, CAPACITOR_SERVER_URL: appUrl } });
 
-// g. Assemble the signed release APK.
+// i. Assemble the signed release APK.
 const androidStudioJbr = 'C:/Program Files/Android/Android Studio/jbr';
 const javaHome = process.env.JAVA_HOME || (existsSync(androidStudioJbr) ? androidStudioJbr : undefined);
 const gradlew = process.platform === 'win32' ? 'gradlew.bat' : './gradlew';
@@ -142,19 +158,21 @@ run(gradlew, ['assembleRelease'], {
   env: { ...process.env, ...(javaHome ? { JAVA_HOME: javaHome } : {}) },
 });
 
-// h. Publish the APK + version.json for the backend's admin download route.
+// j. Publish the APK + version.json for the backend's admin download route.
+const apkFileName = `warehouse-pda-${region}.apk`;
+const versionFileName = `version-${region}.json`;
 const apkSource = join(androidDir, 'app/build/outputs/apk/release/app-release.apk');
 if (!existsSync(apkSource)) {
   console.error(`APK not found at ${apkSource}`);
   process.exit(1);
 }
 mkdirSync(apkOutDir, { recursive: true });
-const apkTarget = join(apkOutDir, 'warehouse-pda.apk');
+const apkTarget = join(apkOutDir, apkFileName);
 copyFileSync(apkSource, apkTarget);
 writeFileSync(
-  join(apkOutDir, 'version.json'),
+  join(apkOutDir, versionFileName),
   JSON.stringify(
-    { versionName, versionCode, webUrl: appUrl, builtAt: new Date().toISOString(), fileName: 'warehouse-pda.apk' },
+    { versionName, versionCode, webUrl: appUrl, builtAt: new Date().toISOString(), fileName: apkFileName, region },
     null,
     2,
   ) + '\n',

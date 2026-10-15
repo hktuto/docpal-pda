@@ -2028,6 +2028,7 @@ export default {
       },
       appDownload: {
         title: "应用下载",
+        region: "区域",
         version: "版本",
         builtAt: "构建时间",
         webUrl: "网址",
