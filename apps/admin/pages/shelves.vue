@@ -227,10 +227,14 @@ async function onImportFile(e: Event) {
 <template>
   <div>
     <div v-if="importResult" class="success-banner">
-      Import complete: {{ importResult.created }} created, {{ importResult.updated }} updated,
-      {{ importResult.skipped }} skipped.
+      <button class="banner-close" @click="importResult = null">&times;</button>
+      <span>Import complete: {{ importResult.created }} created, {{ importResult.updated }} updated,
+      {{ importResult.skipped }} skipped.</span>
     </div>
-    <div v-if="importError" class="error-banner">{{ importError }}</div>
+    <div v-if="importError" class="error-banner">
+      <button class="banner-close" @click="importError = ''">&times;</button>
+      <span>{{ importError }}</span>
+    </div>
     <CrudTable ref="table" :config="entities.shelves">
       <template #head-actions="{ rows }">
         <button class="btn" :disabled="!rows.length" @click="printAll(rows)">

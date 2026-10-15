@@ -206,23 +206,39 @@ td.actions {
 }
 
 /* ---- messages ---- */
-.error-banner {
-  background: #fdecea;
-  border: 1px solid #f5b7b1;
-  color: #922b21;
+.error-banner,
+.success-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
   border-radius: 0.25rem;
   padding: 0.5rem 0.75rem;
   margin-bottom: 0.75rem;
   white-space: pre-wrap;
 }
+.error-banner {
+  background: #fdecea;
+  border: 1px solid #f5b7b1;
+  color: #922b21;
+}
 .success-banner {
   background: #ecf9f1;
   border: 1px solid #86c8a0;
   color: #1e7a46;
-  border-radius: 0.25rem;
-  padding: 0.5rem 0.75rem;
-  margin-bottom: 0.75rem;
-  white-space: pre-wrap;
+}
+.banner-close {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 1.125rem;
+  line-height: 1;
+  padding: 0;
+  opacity: 0.6;
+  flex-shrink: 0;
+}
+.banner-close:hover {
+  opacity: 1;
 }
 .loading {
   color: #52606d;
