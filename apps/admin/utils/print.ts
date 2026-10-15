@@ -63,13 +63,17 @@ export interface LabelSize {
   /** Minimum QR side in true physical mm (drawn × renderScale). Sizes
    * without it derive the QR size from the label height. */
   qrMinMm?: number;
+  /** Extra font multiplier on top of LABEL_TEXT_SCALE — a big QR shrinks
+   * the text area, so this lets a size keep (or grow) its code size at the
+   * cost of more condensation on long codes. */
+  fontScale?: number;
 }
 
 export const LABEL_SIZES: LabelSize[] = [
   { id: "small", widthMm: 53, heightMm: 16, renderScale: 1.05 },
   { id: "medium", widthMm: 68, heightMm: 35, renderScale: 1.05 },
   { id: "big", widthMm: 104, heightMm: 35, renderScale: 1.05 },
-  { id: "xl", widthMm: 104, heightMm: 40, renderScale: 1.05, paddingMm: 2, qrMinMm: 34 },
+  { id: "xl", widthMm: 104, heightMm: 40, renderScale: 1.05, paddingMm: 1, qrMinMm: 38, fontScale: 1.1 },
 ];
 
 export const DEFAULT_LABEL_SIZE: LabelSizeId = "medium";
@@ -184,8 +188,9 @@ function ensureLabelTextFont(): Promise<void> {
 // the right. The wide strip (small) keeps a height-filling QR and sizes the
 // text off the label height and text width; tall labels (medium/big/xl) cap
 // the QR at half the height so the text gets the remaining width — unless the
-// size pins its own padding/QR minimum (xl: 2mm padding, >=34mm QR). The text
-// line is drawn LABEL_TEXT_SCALE (130%) larger than the base fit on every size.
+// size pins its own padding/QR minimum/font scale (xl: 1mm padding, >=38mm
+// QR, fontScale 1.1). The text line is drawn LABEL_TEXT_SCALE (130%) larger
+// than the base fit on every size, times the size's fontScale.
 async function drawLabelCell(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -197,20 +202,20 @@ async function drawLabelCell(
   size?: LabelSize
 ): Promise<void> {
   // mm -> px on this canvas: physical mm scaled by the size's renderScale, so
-  // a 2mm padding / 34mm QR still measures that on the printed label after
+  // a 1mm padding / 38mm QR still measures that on the printed label after
   // the printer's own ~5% shrink.
   const rs = size?.renderScale ?? 1;
   const mm = (v: number) => Math.round((v * LABEL_DPI * rs) / MM_PER_INCH);
   // Wide strip (small 53x16 ≈ 0.30) vs tall labels (big 0.34, xl 0.38,
   // medium 0.51): only tall labels cap the QR at half the height.
   const tall = h / w > 0.32;
-  // Padding: sizes with explicit paddingMm (xl: 2mm all around) use it on
+  // Padding: sizes with explicit paddingMm (xl: 1mm all around) use it on
   // every side; otherwise a height-derived pad, plus a ~2mm side margin for
   // the strip (which would otherwise hug the label edge).
   const pad = size?.paddingMm ? mm(size.paddingMm) : Math.max(4, Math.round(h * 0.064));
   const padX = size?.paddingMm ? pad : tall ? pad : Math.max(pad, mm(2));
   let qrSize = Math.round(Math.min(tall ? h * 0.5 : h * 0.824, h - 2 * pad, w * 0.5));
-  // Explicit minimum QR (xl: >=34mm printed), clamped to the padded box.
+  // Explicit minimum QR (xl: >=38mm printed), clamped to the padded box.
   if (size?.qrMinMm) qrSize = Math.max(qrSize, Math.min(mm(size.qrMinMm), h - 2 * pad, w - 2 * padX));
   const qr = new Image();
   qr.src = await QRCode.toDataURL(cell.qr, {
@@ -229,11 +234,12 @@ async function drawLabelCell(
   // Main text: sized off the label height and the text width — the height
   // cap grows with the taller small strip, the textW term keeps a ~7-char
   // shelf code inside the text area. fillText's maxWidth then squeezes
-  // anything longer than the text area.
+  // anything longer than the text area. The size's fontScale (xl: 1.1)
+  // enlarges the line further, trading condensation for a bigger code.
   const baseFont = tall
     ? Math.min(h * 0.4, textW / 4.5)
     : Math.max(h * 0.256, Math.min(h * 0.5, textW / 4.5));
-  const mainFont = Math.round(baseFont * LABEL_TEXT_SCALE);
+  const mainFont = Math.round(baseFont * LABEL_TEXT_SCALE * (size?.fontScale ?? 1));
   await ensureLabelTextFont();
   ctx.font = `900 ${mainFont}px ${LABEL_FONT_FAMILY}`;
   // Vertically center the single line (cap height ≈ 0.72em).
