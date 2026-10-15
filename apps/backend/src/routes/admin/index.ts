@@ -27,6 +27,7 @@ import { adminAppDownloadRoute } from "./appDownload.js";
 import { adminFlowConfigRoute } from "./flowConfig.js";
 import { adminReceivingShipperRoute } from "./receivingShipper.js";
 import { adminPickingListRoute } from "./pickingList.js";
+import { shelfBatchImportRoute } from "./shelfBatchImport.js";
 import { adminAllocationRoute } from "./allocation.js";
 import { adminPartAvailabilityRoute } from "./partAvailability.js";
 import { adminPartLedgerRoute } from "./partLedger.js";
@@ -54,6 +55,7 @@ function optScopes(body: Record<string, unknown>): UserScopeEntry[] | null {
 
 export const adminRoute = new Hono();
 
+adminRoute.post("/shelves/batch-import", async (c) => shelfBatchImportRoute.fetch(c.req, c.env));
 adminRoute.route(
   "/shelves",
   createCrudRouter({
