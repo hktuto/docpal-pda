@@ -128,6 +128,15 @@ the row's part (cached per part for the dialog session) and lists, per
 allocation: order no (link to the order), status badge, qty, 📌 for manual
 pins, work-lock holder badge when locked.
 
+**Per-lot scoping (2026-10-15 fix):** the endpoint returns every allocation
+of the *part* — same `part_no`/`wcl_item_no` on other lots (different
+shelf/box/date code) included — because that is what the cross-order view
+needs. The host tables render one row per `inventory_lots` row, so the
+shared `AllocationBreakdown` component (`apps/admin/components/AllocationBreakdown.vue`)
+takes the stock row's `lotId` and keeps only rows with
+`sourceType: "lot"` + `inventoryLotId === lotId`. Without this filter the
+popover listed same-part allocations sitting on other lots.
+
 Row actions:
 
 - **Transfer to this order** — posts the transfer endpoint; disabled for

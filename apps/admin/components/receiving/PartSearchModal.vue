@@ -236,6 +236,7 @@ watch(
                   :part-no="s.partNo"
                   :wcl-item-no="s.wclItemNo"
                   :allocated-qty="s.allocatedQty"
+                  :lot-id="s.lotId"
                   :transfer-target="null"
                   @changed="onAllocationsChanged"
                 />

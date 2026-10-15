@@ -404,6 +404,7 @@ watch(
                   :part-no="s.partNo"
                   :wcl-item-no="s.wclItemNo"
                   :allocated-qty="s.allocatedQty"
+                  :lot-id="s.lotId"
                   :current-order-id="pickingOrderId ?? null"
                   :transfer-target="transferTarget"
                   @changed="onAllocationsChanged"

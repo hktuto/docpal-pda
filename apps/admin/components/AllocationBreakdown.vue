@@ -13,6 +13,12 @@ const cache = new Map<string, Promise<PartAllocationRow[]>>();
 // lists WHICH picking orders hold a lot's allocations so an admin can act on
 // a specific row in place instead of hunting down the other order.
 //
+// The host tables render one row per inventory_lots row, so the breakdown is
+// scoped to THAT LOT: the endpoint returns every allocation of the part
+// (same part_no / wcl_item_no on other lots included) and this component
+// keeps only the rows sourced from `lotId` — otherwise the popover would
+// list allocations sitting on different shelves/date codes of the same part.
+//
 // Picking availability modal: Transfer here (onto this order's item) + Remove.
 // Receiving PartSearchModal: Remove only — its allocate job is the demand
 // form; there is no single "current picking item" to transfer onto.
@@ -22,6 +28,8 @@ const props = defineProps<{
   partNo: string;
   wclItemNo?: string | null;
   allocatedQty: number;
+  /** The stock row's lot — only allocations sourced from this lot are listed. */
+  lotId: string;
   /** The host dialog's own picking order — its rows get no actions. */
   currentOrderId?: string | null;
   /** Transfer target (single picking item). Absent → Remove only. */
@@ -42,6 +50,12 @@ const rows = ref<PartAllocationRow[]>([]);
 const error = ref("");
 const busy = ref("");
 let loaded = false;
+
+// Only allocations sourced from this stock row's lot — the fetch is per part,
+// so same-part allocations on other lots/shelves/date codes must be dropped.
+const filteredRows = computed(() =>
+  rows.value.filter((r) => r.sourceType === "lot" && r.inventoryLotId === props.lotId)
+);
 
 const cacheKey = () => `${props.partNo}|${props.wclItemNo ?? ""}`;
 
@@ -169,11 +183,11 @@ async function remove(r: PartAllocationRow) {
       <div v-else-if="loading" class="muted">{{ $t("admin.common.loading") }}</div>
       <template v-else>
         <div class="ab-head muted">
-          {{ $t("admin.pages.pickingOrders.allocBreakdownTitle", { n: rows.length }) }}
+          {{ $t("admin.pages.pickingOrders.allocBreakdownTitle", { n: filteredRows.length }) }}
         </div>
         <table class="ab-table">
           <tbody>
-            <tr v-for="r in rows" :key="r.allocationId">
+            <tr v-for="r in filteredRows" :key="r.allocationId">
               <td class="ab-order">
                 <NuxtLink :to="`/picking-orders/${r.pickingOrderId}`" class="ab-link">{{ r.orderNo }}</NuxtLink>
                 <span v-if="isOwnRow(r)" class="muted"> ({{ $t("admin.pages.pickingOrders.allocBreakdownThisOrder") }})</span>
