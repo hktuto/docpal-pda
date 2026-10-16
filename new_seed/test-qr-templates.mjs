@@ -24,8 +24,13 @@ function decodeKoaQty(encoded) {
   if (!Number.isFinite(result) || !Number.isInteger(result) || result <= 0) return undefined;
   return result;
 }
+// Keep in sync with normalizePartNo in apps/backend/src/db/scanParse.ts
+// (uppercase, whitespace stripped, TE "AMP(...)" / "TE-AMP(...)" wrapper
+// unwrapped — labels carry the bare PN, the parts master wraps it).
 function normalizePartNo(value) {
-  return value.toUpperCase().replace(/\s+/g, "");
+  const collapsed = value.toUpperCase().replace(/\s+/g, "");
+  const wrapped = /^(?:TE-)?AMP\((.+)\)$/.exec(collapsed);
+  return wrapped ? wrapped[1] : collapsed;
 }
 // Keep in sync with decodeKoaDateCode in apps/backend/src/db/scanParse.ts.
 function decodeKoaDateCode(raw) {
@@ -244,6 +249,9 @@ const tePhotoRaws = [
   { partNum: "2071369-3", qty: 1000, raw: `[)>${RS}06${GS}LT3S088906789174${GS}PN2071369-3${GS}RVA${GS}QT1000${GS}PO${GS}BT20026 1F${GS}BX3${GS}DC20035${RS}${EOT}` },
   { partNum: "41802-5", qty: 16000, raw: `[)>${RS}06${GS}LT3S0852E3190343${GS}PN41802-5${GS}RVA${GS}QT16000${GS}PO200233619614${GS}BT26094D4${GS}BX18${GS}DC26094${RS}${EOT}` },
   { partNum: "60-0252-011-P00", qty: 100, raw: `[)>${RS}06${GS}LT3S060610985580${GS}PN60-0252-011-P00${GS}RVA1${GS}QT100${GS}PO200229576738${GS}BT51598134${GS}BX813${GS}DC24162${RS}${EOT}` },
+  // First real scanner capture (2026-10-16): same layout, but the label ends
+  // right after DC — no trailing RS/EOT.
+  { partNum: "170213-1", qty: 15000, raw: `[)>${RS}06${GS}LT3S0852E9358710${GS}PN170213-1${GS}RVT${GS}QT15000${GS}PO200234511429${GS}BT26276D${GS}BX1${GS}DC26276` },
 ];
 report("TE", tePhotoRaws, (row, p) => {
   if (!p.partNo) return "no match";

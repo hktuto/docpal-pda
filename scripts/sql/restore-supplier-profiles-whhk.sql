@@ -151,14 +151,14 @@ VALUES
   -- serialNo = LT (lot trace no), dateCode = DC (YYWWD).
   -- No WHHK scans exist in BVSDB for TE — verified against 5 raws decoded
   -- from label photos (docs/Supplier Sample Documents/TE -MCI/TE-01..05).
-  -- NOTE: TE part numbers in the parts master may carry prefixes
-  -- (e.g. 'AMP(1903415-1)') that the PN value does not — matching must be
-  -- confirmed against real receiving lines.
+  -- The parts master stores the PN wrapped as AMP(<pn>) (legacy TE-AMP(<pn>))
+  -- while labels carry the bare PN — normalizePartNo unwraps the wrapper so
+  -- scans match (2026-10-16).
   (
     '00000000-0000-7000-8000-000000009005', '15915', NULL,
     $re$^\[\)>\x1e06\x1dLT(?<serialNo>[^\x1d\x1e\x04]+)\x1dPN(?<itemId>[^\x1d\x1e\x04]+)\x1dRV[^\x1d]*\x1dQT(?<qty>\d+)\x1dPO[^\x1d]*\x1dBT(?<lotCode>[^\x1d\x1e\x04]+)\x1dBX[^\x1d]+\x1dDC(?<dateCode>[^\x1d\x1e\x04]+)[\x1e\x04]*$$re$,
     NULL, 'datamatrix', NULL, NULL, ARRAY['DATA MATRIX'], ARRAY['TE'],
-    'Restored from BVSDB RegPattern Id=194 (WHHK), 2026-08-13 backup. No TE scans in BVSDB — template verified against 5 DataMatrix raws decoded from label photos TE-01..05 (MH10.8.2: LT/PN/RV/QT/PO/BT/BX/DC). Parts master may store prefixed numbers (AMP(1903415-1)) — confirm matching on real receiving lines.'
+    'Restored from BVSDB RegPattern Id=194 (WHHK), 2026-08-13 backup. No TE scans in BVSDB — template verified against 5 DataMatrix raws decoded from label photos TE-01..05 (MH10.8.2: LT/PN/RV/QT/PO/BT/BX/DC). Parts master stores the PN wrapped as AMP(<pn>) (legacy TE-AMP(<pn>)) while labels carry the bare PN — normalizePartNo unwraps the wrapper so scans match (2026-10-16).'
   ),
 
   -- NDK (supplier 69915, NDK ELECTRONICS (HK) LTD.): MH10.8.2 QR on the

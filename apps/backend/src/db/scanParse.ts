@@ -163,9 +163,14 @@ export function decodeYywwDateCode(raw: string): string | undefined {
   return `${raw.slice(2, 4)}${raw.slice(0, 2)}`;
 }
 
-/** Part-number comparison key: uppercase with all whitespace collapsed out. */
+/** Part-number comparison key: uppercase with all whitespace collapsed out.
+ *  TE Connectivity: the parts master wraps the bare label PN in "AMP(...)"
+ *  (legacy rows "TE-AMP(...)") — unwrap the wrapper so a scanned bare PN
+ *  matches, e.g. scanned "640385-8" == stored "AMP(640385-8)". */
 export function normalizePartNo(value: string): string {
-  return value.toUpperCase().replace(/\s+/g, "");
+  const collapsed = value.toUpperCase().replace(/\s+/g, "");
+  const wrapped = /^(?:TE-)?AMP\((.+)\)$/.exec(collapsed);
+  return wrapped ? wrapped[1] : collapsed;
 }
 
 function getQrTemplateRegex(template: string): RegExp | null {

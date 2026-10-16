@@ -142,7 +142,7 @@ export const builtinSupplierProfiles: BuiltinSupplierProfile[] = [
     barcodeTypes: ["DATA MATRIX"],
     brands: ["TE"],
     remark:
-      "Restored from BVSDB RegPattern Id=194 (WHHK), 2026-08-13 backup. Photo-verified only (no BVSDB scans); parts master may carry prefixed numbers (AMP(1903415-1)).",
+      "Restored from BVSDB RegPattern Id=194 (WHHK), 2026-08-13 backup. Photo-verified only (no BVSDB scans). Parts master stores the PN wrapped as AMP(<pn>) (legacy TE-AMP(<pn>)) while labels carry the bare PN — normalizePartNo unwraps the wrapper so scans match (2026-10-16).",
   },
   {
     supplierCode: "69915", // NDK ELECTRONICS (HK) LTD.

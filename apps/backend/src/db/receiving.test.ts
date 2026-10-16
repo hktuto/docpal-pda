@@ -76,6 +76,17 @@ test("normalizePartNo: uppercase + collapse whitespace", () => {
   assert.equal(normalizePartNo("  RK73H1JTTD4702F "), "RK73H1JTTD4702F");
 });
 
+test("normalizePartNo: TE AMP() wrapper unwrapped to the bare PN", () => {
+  // TE labels carry the bare PN; the parts master stores it wrapped.
+  assert.equal(normalizePartNo("AMP(640385-8)"), "640385-8");
+  assert.equal(normalizePartNo("amp( 640385-8 )"), "640385-8");
+  assert.equal(normalizePartNo("TE-AMP(640385-8)"), "640385-8");
+  assert.equal(normalizePartNo("640385-8"), "640385-8");
+  // Non-wrapper values pass through untouched (incl. parens mid-string).
+  assert.equal(normalizePartNo("S-5743NBH1A-M3T4U"), "S-5743NBH1A-M3T4U");
+  assert.equal(normalizePartNo("AMP(640385-8)-1"), "AMP(640385-8)-1");
+});
+
 test("decodeKoaDateCode: month counter + week → WWYY (counter 17 = 2026-07)", () => {
   assert.equal(decodeKoaDateCode("1723L789"), "2326"); // counter 17 → 2026, week 23
   assert.equal(decodeKoaDateCode("1114T232"), "1426"); // counter 11 → 2026-01, week 14
