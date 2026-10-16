@@ -2012,6 +2012,28 @@ test("getPickingShelfStock: stock of a part at a shelf/box with org scoping", as
   assert.equal(noPart.status, 400);
   const noLocation = await catchHttp(getPickingShelfStock(client.db, { partNo: "RK73H1JTTD1002F" }));
   assert.equal(noLocation.status, 400);
+  assert.equal(noLocation.message, "shelf_scan_required");
+});
+
+test("getPickingShelfStock: unwraps the TE AMP(...)/TE-AMP(...) wrapper on both sides", async () => {
+  await reseed(client);
+  await seededOrderAllocated();
+  // Real-world TE rows (see parts master): the bare label PN is wrapped in
+  // the parts master — part_no 'AMP(170213-1)', wcl_item_no 'TE-AMP(170213-1)'.
+  await client.db.execute(
+    sql`INSERT INTO inventory_lots (id, part_no, wcl_item_no, date_code, lot_code, coo, cow, shelf_code, org_id, sub_inventory_code, total_qty, allocated_qty, created_date, last_update_date)
+        VALUES (${randomUUID()}, 'AMP(170213-1)', 'TE-AMP(170213-1)', '3826', ' ', 'CN', '', 'A0101', 2, 'STORE1', 30000, 0, now(), now())`
+  );
+  // the bare scanned PN (what the label carries) must find the wrapped lot
+  assert.equal((await getPickingShelfStock(client.db, { partNo: "170213-1", shelfCode: "A0101" })).qty, 30000);
+  assert.equal((await getPickingShelfStock(client.db, { wclItemNo: "170213-1", shelfCode: "A0101" })).qty, 30000);
+  // wrapped keys still match (literal path), whitespace-insensitive unwrap too
+  assert.equal((await getPickingShelfStock(client.db, { partNo: "TE-AMP(170213-1)", shelfCode: "A0101" })).qty, 30000);
+  assert.equal((await getPickingShelfStock(client.db, { partNo: "AMP(170213-1)", shelfCode: "A0101" })).qty, 30000);
+  assert.equal((await getPickingShelfStock(client.db, { partNo: "TE-AMP( 170213-1 )", shelfCode: "A0101" })).qty, 30000);
+  // org scope still applies
+  assert.equal((await getPickingShelfStock(client.db, { partNo: "170213-1", shelfCode: "A0101", orgId: 99 })).qty, 0);
+  assert.equal((await getPickingShelfStock(client.db, { partNo: "170213-1", shelfCode: "A0102" })).qty, 0);
 });
 
 test("scan shelf-scan mode require-any: deducts the scanned shelf's lot; 409s", async () => {

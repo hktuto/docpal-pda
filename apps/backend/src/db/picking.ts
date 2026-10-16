@@ -11,6 +11,7 @@ import { workLockExpiry } from "./allocate.js";
 import { isStepEnabled, pickingShelfScan } from "../config.js";
 import { allowedOrgCondition, allowedOrgFilter } from "./org-filter.js";
 import { userScopeCondition, type UserScopeEntry } from "./user-scope.js";
+import { normalizePartNo } from "./scanParse.js";
 import {
   assertNoUnresolvedOutdatedWarnings,
   checkPartScanOutdated,
@@ -1181,7 +1182,11 @@ async function resolveScannedShelfLot(
  * scan-time presence check: the scanned part must have stock on the pending
  * shelf before its label is accepted. Same part matching and org/sub-inventory
  * scoping as resolveScannedShelfLot, without the label batch-field match;
- * returns SUM(total_qty) over the matching lots (0 when none).
+ * returns SUM(total_qty) over the matching lots (0 when none). Part matching
+ * mirrors normalizePartNo (scanParse.ts): whitespace-insensitive, and the
+ * TE Connectivity "AMP(...)" / "TE-AMP(...)" wrapper is unwrapped on BOTH
+ * sides — labels carry the bare PN while parts master rows are wrapped, so a
+ * literal match would report 0 for wrapped parts.
  */
 export async function getPickingShelfStock(
   db: AppDb,
@@ -1197,13 +1202,20 @@ export async function getPickingShelfStock(
   const partKeys = [params.partNo, params.wclItemNo].filter((v): v is string => !!v);
   if (partKeys.length === 0) throw new HTTPException(400, { message: "part_no_required" });
   if (!params.shelfCode && !params.boxId) throw new HTTPException(400, { message: "shelf_scan_required" });
+  // Unwrapped copy of every key (bare PN for wrapped TE parts) — the SQL
+  // unwraps the stored columns the same way before comparing.
+  const unwrappedKeys = [...new Set(partKeys.map((k) => normalizePartNo(k)))];
+  const unwrappedCol = (col: SQL) =>
+    sql`regexp_replace(upper(regexp_replace(${col}, '\\s', '', 'g')), '^(TE-)?AMP\\((.+)\\)$', '\\2')`;
   const orgId = params.orgId ?? null;
   const subInventoryCode = params.subInventoryCode ?? null;
   const row = await queryGet<{ qty: number }>(
     db,
     sql`SELECT COALESCE(SUM(il.total_qty), 0)::int AS "qty"
         FROM inventory_lots il
-        WHERE (${inArray(sql`il.part_no`, partKeys)} OR ${inArray(sql`il.wcl_item_no`, partKeys)})
+        WHERE (${inArray(sql`il.part_no`, partKeys)} OR ${inArray(sql`il.wcl_item_no`, partKeys)}
+               OR ${inArray(unwrappedCol(sql`il.part_no`), unwrappedKeys)}
+               OR ${inArray(unwrappedCol(sql`il.wcl_item_no`), unwrappedKeys)})
           AND ${params.boxId ? sql`il.box_id = ${params.boxId}` : sql`il.shelf_code = ${params.shelfCode}`}
           AND (${orgId}::int IS NULL OR il.org_id = ${orgId})
           AND (${subInventoryCode}::text IS NULL
