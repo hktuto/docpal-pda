@@ -23,7 +23,6 @@ import {
   finishPickingOrder,
   getPickingOrderDetail,
   listPickingOrders,
-  retryAutoFinishPickingOrder,
   scanIntoShippingBox,
   scanPickingItem,
 } from "./picking.js";
@@ -328,7 +327,7 @@ test("picking finish: 409 unresolved_outdated_warnings while unresolved; succeed
   assert.equal(badKind.message, "invalid_order_kind");
 });
 
-test("picking auto-finish: held while a warning is unresolved; resolve + re-check finishes", async () => {
+test("picking manual finish: held while a warning is unresolved; resolve + explicit finish succeeds", async () => {
   await reseed(client);
   await allocateAll(client.db);
   const actorId = await actorIdOf();
@@ -346,18 +345,22 @@ test("picking auto-finish: held while a warning is unresolved; resolve + re-chec
     await scanPickingItem(client.db, itemId, { actorId, allocationId: await allocationIdOf(itemId), qty, dateCode });
   }
 
-  // boxing the last package normally auto-finishes the order — the
-  // unresolved warning holds it in 'picking'
+  // boxing everything never finishes the order — it stays in 'picking'
   const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
   await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
   const held = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM picking_orders WHERE id = ${orderId}`);
   assert.equal(held!.status, "picking");
 
-  // resolution itself doesn't finish the order; the route-layer re-check does
+  // explicit finish is blocked while the warning is unresolved
+  const blocked = await catchHttp(finishPickingOrder(client.db, { pickingOrderId: orderId, actorId }));
+  assert.equal(blocked.status, 409);
+  assert.deepEqual(await blocked.getResponse().json(), { error: "unresolved_outdated_warnings", count: 1 });
+
+  // resolution itself doesn't finish the order; explicit finish does
   await resolveOrderOutdatedWarnings(client.db, { orderKind: "picking", orderId, actorId });
   assert.equal((await queryGet<{ status: string }>(client.db, sql`SELECT status FROM picking_orders WHERE id = ${orderId}`))!.status, "picking");
-  assert.equal(await retryAutoFinishPickingOrder(client.db, { pickingOrderId: orderId, actorId }), true);
-  assert.equal((await queryGet<{ status: string }>(client.db, sql`SELECT status FROM picking_orders WHERE id = ${orderId}`))!.status, "finished");
+  const done = await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
+  assert.deepEqual(done, { id: orderId, status: "finished" });
 });
 
 // --- put-away scan ----------------------------------------------------------------

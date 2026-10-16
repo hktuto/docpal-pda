@@ -10,6 +10,7 @@ import {
   addAllUnboxedToShippingBox,
   closeShippingBox,
   createShippingBox,
+  finishPickingOrder,
   reopenShippingBox,
   scanPickingItem,
   updateShippingBox,
@@ -76,9 +77,9 @@ interface ClosedBoxFixture {
 
 /**
  * The seeded pending order (SO-DEMO-0001) driven through pack + measure:
- * allocate → scan all three items in full → box all (auto-finish) → verify,
- * measure, close. Closing IS the measuring completion; with the verify step
- * enabled it spawns the box's pending verify task.
+ * allocate → scan all three items in full → box all → explicit finish →
+ * verify, measure, close. Closing IS the measuring completion; with the
+ * verify step enabled it spawns the box's pending verify task.
  */
 async function closedBox(): Promise<ClosedBoxFixture> {
   const actorId = await actorIdOf();
@@ -91,7 +92,8 @@ async function closedBox(): Promise<ClosedBoxFixture> {
   const p2 = (await scanPickingItem(client.db, item2, { actorId, allocationId: await allocationIdOf(item2), qty: 500 })).packageIds[0];
   const p3 = (await scanPickingItem(client.db, item3, { actorId, allocationId: await allocationIdOf(item3), qty: 300 })).packageIds[0];
   const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
-  await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId }); // auto-finishes
+  await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
+  await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId }); // boxing never finishes — explicit finish does
   for (const packageId of [p1, p2, p3]) {
     await verifyPackage(client.db, { packageId, actorId }); // open box → verified
   }

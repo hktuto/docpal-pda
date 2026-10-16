@@ -15,8 +15,9 @@ import { dateCodeRank, outdatedThresholdRankMonths } from "./dateCode.js";
 // supplier profile's outdated_limit_months, the scan STILL succeeds and an
 // outdated_scan_warnings row is recorded inside the same transaction; order
 // completion is blocked until an admin resolves the whole order's warnings —
-// explicit picking finish 409s, picking auto-finish and the receiving order's
-// auto-clear are held (the resolve-order route re-runs them). No profile /
+// the explicit picking finish 409s while unresolved (boxing itself never
+// finishes an order since 2026-10-16) and the receiving order's auto-clear is
+// held (the resolve-order route re-runs it). No profile /
 // NULL limit / unparseable date code = no check (silently pass).
 // ---------------------------------------------------------------------------
 

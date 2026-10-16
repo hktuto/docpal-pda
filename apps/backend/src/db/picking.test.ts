@@ -480,7 +480,7 @@ test("scan: lot source — package + batch snapshot, lot/allocation shrink, PICK
   assert.equal(itemLog!.toState, "scanned");
   assert.equal(itemLog!.metadata.qty, 500);
 
-  // explicit batch-attr overrides win over the source snapshot
+  // the source's batch attrs win over provided overrides (7202aac9)
   const scan2 = await scanPickingItem(client.db, itemId, {
     actorId,
     allocationId: alloc.id,
@@ -492,9 +492,9 @@ test("scan: lot source — package + batch snapshot, lot/allocation shrink, PICK
     client.db,
     sql`SELECT lot_code AS "lotCode", coo, date_code AS "dateCode" FROM picking_packages WHERE id = ${scan2.packageIds[0]}`
   );
-  assert.equal(pkg2!.lotCode, "L-OVR");
-  assert.equal(pkg2!.coo, "CN");
-  assert.equal(pkg2!.dateCode, "2603"); // untouched fields still snapshot the source
+  assert.equal(pkg2!.lotCode, "L2603A");
+  assert.equal(pkg2!.coo, "JP");
+  assert.equal(pkg2!.dateCode, "2603");
 });
 
 test("scan guards: over-allocation, over-required, ownership, actor, qty, order status", async () => {
@@ -724,9 +724,94 @@ test("boxes: membership add/remove, cancel; cross-order add allowed (box-scoped 
   assert.equal(gone.message, "shipping_box_not_found");
 });
 
-// --- close flow + auto-finish ---------------------------------------------------------
+// --- one COO per box (spec 2026-10-16) ------------------------------------------------
 
-test("close flow: add-all-unboxed auto-finishes; verify → measure → close cascade", async () => {
+test("boxes: one COO per box — addPackageToBox rejects a conflicting COO (409 box_coo_mismatch)", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await seededOrderAllocated();
+  const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F"); // qty 1000, seeded lot coo 'JP'
+  const scan = async (qty: number) =>
+    (await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty })).packageIds[0];
+  const setCoo = (packageId: string, coo: string | null) =>
+    client.db.execute(sql`UPDATE picking_packages SET coo = ${coo} WHERE id = ${packageId}`);
+
+  const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
+  const pJp = await scan(100);
+  await addPackageToBox(client.db, { shippingBoxId: box.id, packageId: pJp, actorId }); // coo 'JP'
+
+  // a different non-null COO conflicts with the box's COO set
+  const pCn = await scan(100);
+  await setCoo(pCn, "CN");
+  const mismatch = await catchHttp(addPackageToBox(client.db, { shippingBoxId: box.id, packageId: pCn, actorId }));
+  assert.equal(mismatch.status, 409);
+  assert.equal(mismatch.message, "box_coo_mismatch");
+
+  // a NULL COO never conflicts
+  const pNull = await scan(100);
+  await setCoo(pNull, null);
+  await addPackageToBox(client.db, { shippingBoxId: box.id, packageId: pNull, actorId });
+
+  // the same COO joins fine
+  const pJp2 = await scan(100);
+  await addPackageToBox(client.db, { shippingBoxId: box.id, packageId: pJp2, actorId });
+  const count = await queryGet<{ c: number }>(
+    client.db,
+    sql`SELECT COUNT(*)::int AS c FROM picking_packages WHERE shipping_box_id = ${box.id}`
+  );
+  assert.equal(count!.c, 3);
+});
+
+test("boxes: one COO per box — scanIntoShippingBox rejects a conflicting COO", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await seededOrderAllocated();
+  const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
+  const item2 = await pickingItemIdOf(orderId, "RK73H1JTTD2202F");
+
+  const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
+  const p1 = (await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 100 })).packageIds[0];
+  await addPackageToBox(client.db, { shippingBoxId: box.id, packageId: p1, actorId }); // coo 'JP'
+
+  // the scanned item's package snapshots the source lot's COO — make it 'CN'
+  const alloc2 = await allocationOf(item2);
+  await client.db.execute(sql`UPDATE inventory_lots SET coo = 'CN' WHERE id = ${alloc2.inventoryLotId}`);
+  const mismatch = await catchHttp(scanIntoShippingBox(client.db, { shippingBoxId: box.id, barcode: "RK73H1JTTD2202F", qty: 100, actorId }));
+  assert.equal(mismatch.status, 409);
+  assert.equal(mismatch.message, "box_coo_mismatch");
+
+  // nothing was packed: no package row and the lot/allocation are untouched
+  const pkgCount = await queryGet<{ c: number }>(
+    client.db,
+    sql`SELECT COUNT(*)::int AS c FROM picking_packages WHERE picking_item_id = ${item2}`
+  );
+  assert.equal(pkgCount!.c, 0);
+
+  // a matching COO scans straight in
+  await client.db.execute(sql`UPDATE inventory_lots SET coo = 'JP' WHERE id = ${alloc2.inventoryLotId}`);
+  const r = await scanIntoShippingBox(client.db, { shippingBoxId: box.id, barcode: "RK73H1JTTD2202F", qty: 100, actorId });
+  assert.equal(r.packageIds.length, 1);
+});
+
+test("boxes: add-all-unboxed is exempt from the one-COO-per-box guard (mixed COO packs)", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await seededOrderAllocated();
+  const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
+  const p1 = (await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 100 })).packageIds[0];
+  const p2 = (await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 100 })).packageIds[0];
+  await client.db.execute(sql`UPDATE picking_packages SET coo = 'CN' WHERE id = ${p2}`);
+
+  const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
+  const { packed } = await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
+  assert.equal(packed, 2);
+  const coos = await queryGet<{ c: number }>(
+    client.db,
+    sql`SELECT COUNT(DISTINCT coo)::int AS c FROM picking_packages WHERE shipping_box_id = ${box.id}`
+  );
+  assert.equal(coos!.c, 2);
+});
+
+// --- close flow + manual finish ---------------------------------------------------------
+
+test("close flow: add-all-unboxed does not finish; explicit finish → verify → measure → close cascade", async () => {
   await reseed(client);
   const { orderId, actorId } = await seededOrderAllocated();
   const item1 = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
@@ -744,8 +829,12 @@ test("close flow: add-all-unboxed auto-finishes; verify → measure → close ca
   const { packed } = await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
   assert.equal(packed, 3);
 
-  // last package boxed → order auto-finished; no task rows are created at
-  // finish anymore (verify tasks are spawned per box at close time)
+  // boxing never finishes the order anymore (2026-10-16) — explicit finish does
+  const picking = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM picking_orders WHERE id = ${orderId}`);
+  assert.equal(picking!.status, "picking");
+  await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
+  // no task rows are created at finish (verify tasks are spawned per box at
+  // close time)
   const order = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM picking_orders WHERE id = ${orderId}`);
   assert.equal(order!.status, "finished");
   const tasks = await queryAll<{ id: string; status: string }>(
@@ -849,7 +938,8 @@ test("finish: explicit finish + guards (unfinished, empty, already finished)", a
   await scanPickingItem(client.db, item2, { actorId, allocationId: (await allocationOf(item2)).id, qty: 500 });
   await scanPickingItem(client.db, item3, { actorId, allocationId: (await allocationOf(item3)).id, qty: 300 });
   const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
-  await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId }); // auto-finishes here
+  await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
+  await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
 
   const already = await catchHttp(finishPickingOrder(client.db, { pickingOrderId: orderId, actorId }));
   assert.equal(already.status, 409);
@@ -1347,8 +1437,8 @@ test("picking order logs: order + item/package/box rows with actor name, newest 
 
   assert.deepEqual(await listPickingOrderLogs(client.db, orderId), []);
 
-  // full flow: box → scan all items in full → box everything (auto-finish)
-  // → verify one package
+  // full flow: box → scan all items in full → box everything → explicit
+  // finish → verify one package
   const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
   const p1 = (
     await scanPickingItem(client.db, item1, { actorId, allocationId: (await allocationOf(item1)).id, qty: 1000 })
@@ -1356,6 +1446,7 @@ test("picking order logs: order + item/package/box rows with actor name, newest 
   await scanPickingItem(client.db, item2, { actorId, allocationId: (await allocationOf(item2)).id, qty: 500 });
   await scanPickingItem(client.db, item3, { actorId, allocationId: (await allocationOf(item3)).id, qty: 300 });
   await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
+  await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
   await verifyPackage(client.db, { packageId: p1, actorId });
 
   // logs can share a millisecond — make the order deterministic
@@ -1520,8 +1611,9 @@ test("claim-shelf-box: detail hints the exact-match box, claim reuses the carton
     assert.ok(lotIds.includes(p.sourceId));
   }
 
-  // lots emptied, allocations gone, order auto-finished (no task rows — the
-  // box's verify task is only spawned when the box closes)
+  // lots emptied, allocations gone; boxing never finishes the order anymore —
+  // explicit finish does (no task rows — the box's verify task is only
+  // spawned when the box closes)
   for (const lotId of lotIds) {
     const lot = await queryGet<{ totalQty: number; allocatedQty: number }>(
       client.db,
@@ -1536,6 +1628,10 @@ test("claim-shelf-box: detail hints the exact-match box, claim reuses the carton
         WHERE pi.picking_order_id = ${orderId}`
   );
   assert.equal(allocCount!.c, 0);
+
+  const notFinished = await getPickingOrderDetail(client.db, orderId);
+  assert.notEqual(notFinished.status, "finished"); // boxing never finishes the order
+  await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId });
 
   const after = await getPickingOrderDetail(client.db, orderId);
   assert.equal(after.status, "finished");

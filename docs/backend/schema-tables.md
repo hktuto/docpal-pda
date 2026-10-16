@@ -336,6 +336,136 @@ Packing-list line items.
 Note: indexes on `receiving_invoice_id` and `part_no`.
 
 
+# Customer receiving CN (`schema/receivingCn.ts`)
+
+Customer receiving (CN) tables (spec
+`docs/superpowers/specs/2026-10-16-customer-receiving-upload-design.md`) — a
+parallel world to the standard receiving flow: the receiving trio mirrors
+`receiving_orders` / `receiving_invoices` / `receiving_invoice_items` and is
+written by the external upstream-sync service from the DocPal workflow output
+(not by this backend — it reads them for finalization + the dedicated CN
+put-away flow). Never joined with the standard `receiving_orders` chain.
+
+## receiving_orders_cn
+
+CN receiving order (收貨確認及付款通知書) — `batch_no` = the CN 編號 (the
+finalize cron matches on it).
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Order id |
+| batch_no | text NOT NULL | CN 編號 |
+| delivery_date | timestamp | Delivery date |
+| org_id | integer NOT NULL DEFAULT 2 | Receiving office, 2 = HK |
+| date_code | text | Batch-level date code |
+| status | text NOT NULL DEFAULT 'pending' | `pending` \| `in_hand` \| `clear` |
+| arrived_at | timestamp | Arrival time (stamped by the finalize cron) |
+| arrived_by | text FK → users(id) | User who confirmed arrival |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
+
+Note: indexes on `batch_no` and `status`.
+
+## receiving_invoices_cn
+
+CN invoice header inside a CN receiving order.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Invoice id |
+| receiving_order_id | text NOT NULL FK → receiving_orders_cn(id) ON DELETE CASCADE | Parent CN receiving order |
+| invoice_no | text NOT NULL | Invoice number |
+| total_qty | integer | Total component quantity |
+| total_ctn | integer | Total carton count |
+| delivery_date | timestamp | Ship-out date |
+| org_id | integer NOT NULL DEFAULT 2 | Office |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
+
+## receiving_invoice_items_cn
+
+CN invoice line items.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Line id |
+| receiving_invoice_id | text NOT NULL FK → receiving_invoices_cn(id) ON DELETE CASCADE | Parent invoice |
+| part_no | text NOT NULL | Part (plain text — no FK, parts.part_no is not unique) |
+| wcl_item_no | text | WCL Part No |
+| po_no | text | Purchase order number |
+| po_line | text | Purchase order line |
+| line_qty | integer | Expected quantity per the document |
+| received_qty | integer NOT NULL DEFAULT 0 | Quantity received |
+| picked_qty | integer NOT NULL DEFAULT 0 | Quantity picked from this line |
+| put_away_qty | integer NOT NULL DEFAULT 0 | Quantity put away |
+| ctn_no | text | Carton number |
+| date_code | text | Line date code |
+| lot_code | text | Lot number |
+| coo | text | Country of origin |
+| cow | text | Country of wafer |
+| drawing_no | text | Drawing number |
+| org_id | integer NOT NULL DEFAULT 2 | Receiving office |
+| sub_inventory_code | text | Sub-inventory (with org_id a composite FK → org_info(secondary_inventory_name)) |
+| reported_mismatch | integer NOT NULL DEFAULT 0 | A mismatch was reported on this line |
+| mismatch_reason | text | Mismatch reason |
+| mismatch_qty | integer | Mismatched quantity |
+| wrong_part_no | text | Wrong part number actually received |
+| mismatch_note | text | Free-form mismatch note |
+| additional_data | jsonb NULL | Free-form per-line extension data |
+| order_data | jsonb NULL | Upstream `order_data` passthrough |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
+
+Note: indexes on `receiving_invoice_id` and `part_no`.
+
+## put_away_tasks_cn
+
+Dedicated CN put-away task (does NOT touch `put_away_tasks`): one per CN
+receiving order, created by the finalize cron when the DocPal workflow
+completes, completed when every item is fully put away. The
+`org_id`/`sub_inventory_code` pair is derived from the order's items (the
+uniform item pair; NULL when mixed).
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Task id |
+| receiving_order_cn_id | text NOT NULL FK → receiving_orders_cn(id) ON DELETE CASCADE | CN receiving order to put away |
+| org_id | integer | Item-derived stock location pair (NULL when mixed) |
+| sub_inventory_code | text | Item-derived stock location pair (NULL when mixed) |
+| status | text NOT NULL DEFAULT 'pending' | `pending` \| `completed` |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
+
+Note: unique index on `receiving_order_cn_id` (one task per order — makes the
+finalize insert idempotent); index on `status`; composite FK on
+`(org_id, sub_inventory_code)` → org_info.
+
+## receiving_cn_workflows
+
+CN upload tracking — one row per DocPal workflow kick (phase `excel` today,
+`pdf` in phase 2). The status cron (`src/jobs/receivingCnSync.ts`) polls
+`workflow_running` rows against DocPal and finalizes the CN order on
+completion.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| id | text PK | Workflow-tracking id |
+| phase | text NOT NULL | `excel` \| `pdf` |
+| invoice_no | text | CN 編號 = the order's batch_no (finalize matches on it) |
+| supplier | text | Supplier name from the upload |
+| filename | text | Uploaded file name |
+| docpal_document_id | text | DocPal document id (file upload) |
+| docpal_process_id | text | DocPal workflow process id |
+| docpal_business_key | text | DocPal workflow business key |
+| status | text NOT NULL DEFAULT 'workflow_running' | `workflow_running` \| `completed` \| `failed` \| `cancelled` |
+| payload | jsonb NOT NULL | The verified `excel_result_data` |
+| error | text | Terminal failure detail |
+| created_by | text NOT NULL | Uploading admin user |
+| created_date | timestamp NOT NULL DEFAULT now() | Creation time (UTC) |
+| last_update_date | timestamp NOT NULL DEFAULT now() | Last update time (UTC) |
+
+Note: indexes on `status` and `docpal_process_id`.
+
 # Picking (`schema/picking.ts`)
 
 ## picking_orders
@@ -924,11 +1054,12 @@ One row per picking / put-away scan whose label date code (WWYY, post
 `supplier_profiles.outdated_limit_months` (2026-10-07,
 `docs/superpowers/specs/2026-10-07-supplier-outdated-datecode-warning-design.md`).
 The scan still succeeds; the row is written inside the scan transaction (a
-rolled-back scan leaves no warning) and blocks order completion — picking
-auto-finish held + explicit finish 409 `unresolved_outdated_warnings`,
-receiving auto-clear held — until an admin resolves the whole order's rows
+rolled-back scan leaves no warning) and blocks order completion — the
+explicit picking finish 409s `unresolved_outdated_warnings` (boxing never
+finishes an order since 2026-10-16), receiving auto-clear held — until an
+admin resolves the whole order's rows
 (`POST /admin/outdated-warnings/resolve-order`), which re-runs the held
-completion. `resolved_at IS NULL` = unresolved; the per-order unresolved
+receiving clear. `resolved_at IS NULL` = unresolved; the per-order unresolved
 count rides list/detail reads as `outdatedWarningCount`. No `sync_events`
 trigger — PDA-local, admin-resolved state.
 

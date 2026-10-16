@@ -10,6 +10,7 @@ import {
   addAllUnboxedToShippingBox,
   closeShippingBox,
   createShippingBox,
+  finishPickingOrder,
   scanPickingItem,
   updateShippingBox,
   verifyPackage,
@@ -88,7 +89,8 @@ async function finishedOrder(): Promise<FinishedFixture> {
   const p2 = (await scanPickingItem(client.db, item2, { actorId, allocationId: await allocationIdOf(item2), qty: 500 })).packageIds[0];
   const p3 = (await scanPickingItem(client.db, item3, { actorId, allocationId: await allocationIdOf(item3), qty: 300 })).packageIds[0];
   const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
-  await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId }); // auto-finishes
+  await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
+  await finishPickingOrder(client.db, { pickingOrderId: orderId, actorId }); // boxing never finishes — explicit finish does
   return { orderId, actorId, boxId: box.id, packageIds: [p1, p2, p3] };
 }
 

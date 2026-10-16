@@ -15,7 +15,6 @@ import {
   assertNoUnresolvedOutdatedWarnings,
   checkPartScanOutdated,
   recordOutdatedWarning,
-  unresolvedOutdatedWarningCount,
   type OutdatedWarningInfo,
 } from "./outdated.js";
 
@@ -60,8 +59,10 @@ function pickingOrderOrgFilter(orgCol: SQL, subCol: SQL, typeCol: SQL, scope?: U
 // consumed allocation / on_hand −qty for the stock leaving); removing a
 // package reverses the source, the allocation, and the ledger rows.
 // picking_items.picked_qty tracks BOXED packages only (old recomputePickingItem
-// semantics), so an order auto-finishes when its last package is boxed. The
-// caller schedules the allocation recompute after scan/remove commits.
+// semantics). Boxing NEVER finishes an order (2026-10-16): the operator
+// confirms via the explicit Finish action (finishPickingOrder) after reviewing
+// the boxes. The caller schedules the allocation recompute after scan/remove
+// commits.
 //
 // Box-scoped measuring/verify (2026-08-11 design): no measuring task exists —
 // closing a box IS the measuring completion; close spawns the box's verify
@@ -250,52 +251,22 @@ async function unassignPackageFromBoxTx(tx: DbOrTx, packageId: string): Promise<
   await recomputePickingItem(tx, pkg.pickingItemId);
 }
 
-/**
- * Finish the order when every item is fully picked (boxed). Call only after
- * picked_qty is fresh in this tx. No next-step task is created anymore
- * (box-scoped design): closing a box is the measuring completion, and the
- * box's verify task is spawned by closeShippingBox.
- * Held (returns false, order stays 'picking') while the order has unresolved
- * outdated-scan warnings — an admin resolve-order re-runs this check via
- * retryAutoFinishPickingOrder (spec 2026-10-07).
- */
-async function maybeAutoFinishPickingOrder(
-  tx: DbOrTx,
-  a: { pickingOrderId: string; actorId: string | null }
-): Promise<boolean> {
-  const order = await queryGet<OrderState>(tx, sql`SELECT id, status FROM picking_orders WHERE id = ${a.pickingOrderId}`);
-  if (!order) return false;
-  if (order.status !== "pending" && order.status !== "picking") return false;
-  const items = await queryAll<{ qty: number; pickedQty: number }>(
+/** One COO per box (spec 2026-10-16): a box should hold items of a single
+ *  country of origin. Rejects (409 box_coo_mismatch) when the box already has
+ *  packages with a non-null COO set and the incoming COO (non-null) is not in
+ *  it. A null incoming COO (label carried none) never conflicts. Bulk paths
+ *  (add-all, whole-box claim) are exempt — the PDA flags mixed boxes instead. */
+async function assertBoxCooCompatible(tx: DbOrTx, boxId: string, incomingCoo: string | null): Promise<void> {
+  const coo = incomingCoo?.trim() ? incomingCoo.trim() : null;
+  if (!coo) return;
+  const boxCoos = await queryAll<{ coo: string }>(
     tx,
-    sql`SELECT qty, picked_qty AS "pickedQty" FROM picking_items WHERE picking_order_id = ${order.id}`
+    sql`SELECT DISTINCT coo FROM picking_packages WHERE shipping_box_id = ${boxId} AND coo IS NOT NULL AND coo <> ''`
   );
-  if (items.length === 0) return false;
-  if (!items.every((i) => i.pickedQty >= i.qty)) return false;
-  if ((await unresolvedOutdatedWarningCount(tx, "picking", order.id)) > 0) return false;
-
-  await queryRun(tx, sql`UPDATE picking_orders SET status = 'finished', working_by = NULL, working_at = NULL, last_update_date = ${now()} WHERE id = ${order.id}`);
-  await logTransition(tx, {
-    entityType: "picking_order",
-    entityId: order.id,
-    fromState: order.status,
-    toState: "finished",
-    actorId: a.actorId,
-  });
-  return true;
-}
-
-/**
- * Post-resolution re-check (spec 2026-10-07): after an admin resolves the
- * order's outdated warnings, finish the order when every item is fully picked
- * (the auto-finish was held while warnings were unresolved). Returns true when
- * the order finished.
- */
-export async function retryAutoFinishPickingOrder(
-  db: AppDb,
-  input: { pickingOrderId: string; actorId: string | null }
-): Promise<boolean> {
-  return db.transaction((tx) => maybeAutoFinishPickingOrder(tx, { pickingOrderId: input.pickingOrderId, actorId: input.actorId }));
+  if (boxCoos.length === 0) return;
+  if (!boxCoos.some((r) => r.coo === coo)) {
+    throw new HTTPException(409, { message: "box_coo_mismatch" });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -306,8 +277,9 @@ export async function retryAutoFinishPickingOrder(
 // order's full remaining open demand, the operator can claim the whole box in
 // one action: the carton is reused as the shipping box (prefilled with the
 // box size / net / gross weight from the source receiving lines'
-// additional_data), all packages are created boxed, the order's allocations
-// are released, and the order auto-finishes like the scan path.
+// additional_data), all packages are created boxed, and the order's
+// allocations are released. Boxing never finishes the order (2026-10-16) —
+// the operator confirms with the explicit Finish action.
 // ---------------------------------------------------------------------------
 
 export interface ShelfBoxMatch {
@@ -1402,6 +1374,14 @@ export async function scanPickingItem(
 
     await reduceAllocation(tx, alloc.id, input.qty);
 
+    // One COO per box (spec 2026-10-16): scan-into-box packs straight into the
+    // box, so reject a COO the box does not already hold before consuming.
+    if (box) {
+      for (const coo of new Set(portions.map((p) => p.coo ?? input.coo ?? null))) {
+        await assertBoxCooCompatible(tx, box.id, coo);
+      }
+    }
+
     // Package rows (batch snapshot = source attrs, explicit body fields win) +
     // two PICK ledger rows per portion (reserved −qty / on_hand −qty).
     const at = now();
@@ -1517,7 +1497,6 @@ export async function scanPickingItem(
     }
 
     await recomputePickingItem(tx, item.id);
-    await maybeAutoFinishPickingOrder(tx, { pickingOrderId: item.pickingOrderId, actorId: input.actorId });
     return { packageIds, outdatedWarning };
   });
 }
@@ -1592,7 +1571,8 @@ export async function scanIntoShippingBox(
  * receiving lines' additional_data, source_shelf_box_id recorded), one boxed
  * package per (item, lot) portion, the order's allocations are released
  * (work-locked orders are skipped by allocateAll, so the tx cleans up
- * itself), and the auto-finish chain runs like the scan path.
+ * itself). Boxing never finishes the order (2026-10-16) — the operator
+ * confirms with the explicit Finish action after reviewing the boxes.
  */
 export async function claimShelfBox(
   db: AppDb,
@@ -1767,7 +1747,6 @@ export async function claimShelfBox(
 
     await markShelfBoxStockChanged(tx, box.id);
     for (const i of openItems) await recomputePickingItem(tx, i.id);
-    await maybeAutoFinishPickingOrder(tx, { pickingOrderId: order.id, actorId: input.actorId });
     return { shippingBoxId, packageIds };
   });
 }
@@ -2099,17 +2078,19 @@ export async function updateShippingBox(
   });
 }
 
-/** Add one unboxed package into an open box (+ auto-finish check). Any open
- *  order's package may join any open box (cross-order packing). */
+/** Add one unboxed package into an open box. Any open order's package may
+ *  join any open box (cross-order packing). One COO per box (spec
+ *  2026-10-16): a package whose COO differs from the box's existing non-null
+ *  COO set is rejected (409 box_coo_mismatch). Boxing never finishes the order. */
 export async function addPackageToBox(
   db: AppDb,
   input: { shippingBoxId: string; packageId: string; actorId: string }
 ): Promise<void> {
   return db.transaction(async (tx) => {
-    const pkg = await queryGet<{ id: string; pickingItemId: string; pickingOrderId: string; shippingBoxId: string | null; qty: number; partNo: string }>(
+    const pkg = await queryGet<{ id: string; pickingItemId: string; pickingOrderId: string; shippingBoxId: string | null; qty: number; partNo: string; coo: string | null }>(
       tx,
       sql`SELECT pp.id, pp.picking_item_id AS "pickingItemId", pi.picking_order_id AS "pickingOrderId",
-                 pp.shipping_box_id AS "shippingBoxId", pp.qty, pi.part_no AS "partNo"
+                 pp.shipping_box_id AS "shippingBoxId", pp.qty, pi.part_no AS "partNo", pp.coo
           FROM picking_packages pp JOIN picking_items pi ON pi.id = pp.picking_item_id WHERE pp.id = ${input.packageId}`
     );
     if (!pkg) throw new HTTPException(404, { message: "package_not_found" });
@@ -2119,6 +2100,7 @@ export async function addPackageToBox(
     if (box.status !== "open") throw new HTTPException(409, { message: "shipping_box_not_open" });
     const order = await loadOrderForWrite(tx, pkg.pickingOrderId);
     assertOrderWritable(order);
+    await assertBoxCooCompatible(tx, box.id, pkg.coo);
 
     await assignPackageToBoxTx(tx, pkg.id, box.id);
     await prefillShippingBoxFromSources(tx, box.id);
@@ -2130,11 +2112,13 @@ export async function addPackageToBox(
       actorId: input.actorId,
       metadata: { qty: pkg.qty, box: box.id, partNo: pkg.partNo },
     });
-    await maybeAutoFinishPickingOrder(tx, { pickingOrderId: pkg.pickingOrderId, actorId: input.actorId });
   });
 }
 
-/** Add every unboxed package of the box's order into the box → {packed}. */
+/** Add every unboxed package of the box's order into the box → {packed}.
+ *  Deliberately exempt from the one-COO-per-box check (spec 2026-10-16): the
+ *  operator packs everything in one action and the PDA flags a mixed-COO box
+ *  with a warning chip instead of blocking. Never finishes the order. */
 export async function addAllUnboxedToShippingBox(
   db: AppDb,
   input: { shippingBoxId: string; actorId: string }
@@ -2164,7 +2148,6 @@ export async function addAllUnboxedToShippingBox(
       });
     }
     await prefillShippingBoxFromSources(tx, box.id);
-    await maybeAutoFinishPickingOrder(tx, { pickingOrderId: order.id, actorId: input.actorId });
     return { packed: packages.length };
   });
 }
@@ -2232,7 +2215,8 @@ export async function cancelShippingBox(db: AppDb, input: { shippingBoxId: strin
  * Close a shipping box (ported from measure.ts): non-empty, all packages
  * fully rescanned (rescanned_qty >= qty), destination (box → order ship_to), box
  * size, and positive weights with gross ≥ net are required. Stamps the
- * resolved destination, logs the transition, and runs the auto-finish check.
+ * resolved destination and logs the transition. Closing never finishes the
+ * order (2026-10-16) — finishing is the operator's explicit Finish action.
  * Closing IS the measuring completion (box-scoped design — no measuring task
  * exists); when the verify step is enabled, closing spawns the box's pending
  * verify task (idempotent ON CONFLICT DO NOTHING).
@@ -2274,9 +2258,6 @@ export async function closeShippingBox(db: AppDb, input: { shippingBoxId: string
       toState: "closed",
       actorId: input.actorId,
     });
-    if (box.pickingOrderId) {
-      await maybeAutoFinishPickingOrder(tx, { pickingOrderId: box.pickingOrderId, actorId: input.actorId });
-    }
     // Chain: box closed (measured) → the box's verify task (unless the verify
     // step is off). The unique index keeps a re-close idempotent. The verify
     // pass re-scans from zero — the rescanned credit is per-flow.
@@ -2296,10 +2277,12 @@ export async function closeShippingBox(db: AppDb, input: { shippingBoxId: string
 }
 
 /**
- * Explicit finish: all items fully picked (boxed) → order 'finished'. No task
- * is created (box-scoped design) — returns the finished order's id + status.
- * Blocked with 409 unresolved_outdated_warnings while the order has
- * unresolved outdated-scan warnings (spec 2026-10-07).
+ * Explicit finish (the ONLY way an order finishes since 2026-10-16 — boxing
+ * never auto-finishes): all items fully picked (boxed) → order 'finished',
+ * work lock released. No task is created (box-scoped design) — returns the
+ * finished order's id + status. Blocked with 409
+ * unresolved_outdated_warnings while the order has unresolved outdated-scan
+ * warnings (spec 2026-10-07).
  */
 export async function finishPickingOrder(
   db: AppDb,
@@ -2310,6 +2293,9 @@ export async function finishPickingOrder(
     assertOrderWritable(order);
     await assertActor(tx, input.actorId);
     await assertNoUnresolvedOutdatedWarnings(tx, "picking", order.id);
+    if (order.status !== "pending" && order.status !== "picking" && order.status !== "allocated") {
+      throw new HTTPException(409, { message: "picking_order_could_not_be_finished" });
+    }
     const items = await queryAll<{ qty: number; pickedQty: number }>(
       tx,
       sql`SELECT qty, picked_qty AS "pickedQty" FROM picking_items WHERE picking_order_id = ${order.id}`
@@ -2318,8 +2304,14 @@ export async function finishPickingOrder(
     if (!items.every((i) => i.pickedQty >= i.qty)) {
       throw new HTTPException(409, { message: "not_all_items_fully_boxed" });
     }
-    const done = await maybeAutoFinishPickingOrder(tx, { pickingOrderId: order.id, actorId: input.actorId });
-    if (!done) throw new HTTPException(409, { message: "picking_order_could_not_be_finished" });
+    await queryRun(tx, sql`UPDATE picking_orders SET status = 'finished', working_by = NULL, working_at = NULL, last_update_date = ${now()} WHERE id = ${order.id}`);
+    await logTransition(tx, {
+      entityType: "picking_order",
+      entityId: order.id,
+      fromState: order.status,
+      toState: "finished",
+      actorId: input.actorId,
+    });
     return { id: order.id, status: "finished" };
   });
 }
@@ -2719,7 +2711,7 @@ function logsQueryParts(params: OrderLogsParams | undefined, scope: SQL) {
   const q = params?.q?.trim();
   const like = `%${(q ?? "").replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
   const where = q
-    ? sql`${scope} AND (u.display_name ILIKE ${like} OR tl.from_state ILIKE ${like} OR tl.to_state ILIKE ${like} OR tl.entity_type ILIKE ${like} OR tl.metadata::text ILIKE ${like})`
+    ? sql`(${scope}) AND (u.display_name ILIKE ${like} OR tl.from_state ILIKE ${like} OR tl.to_state ILIKE ${like} OR tl.entity_type ILIKE ${like} OR tl.metadata::text ILIKE ${like})`
     : scope;
   const col = LOG_SORTS[params?.sort ?? ""] ?? LOG_SORTS.createdDate;
   const dir = params?.dir === "asc" ? sql`ASC` : sql`DESC`;

@@ -132,8 +132,9 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     reused as the shipping box, prefilled with box size/net/gross weight from
     the source receiving lines' `additional_data`
     (`{boxSize, netWeight, grossWeight, weightUnit}` — g→kg, default kg),
-    `source_shelf_box_id` recorded; packages are created boxed, the order's
-    allocations released, and the order auto-finishes like the scan path.
+    `source_shelf_box_id` recorded; packages are created boxed and the order's
+    allocations released. Boxing never finishes the order (2026-10-16) — the
+    operator confirms with the explicit finish after reviewing the boxes.
   - `POST /picking-items/:id/scan` `{allocationId, qty, dateCode?,
     lotCode?, coo?, cow?}` → `{packageIds}` — the one canonical scan-to-pick:
     consumes the allocation's source (lot `total_qty`/`allocated_qty` −qty,
@@ -164,8 +165,11 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     be added (the old `different_picking_orders` guard is gone;
     `shipping_boxes.picking_order_id` stays as the informational creator
     order; `add-all-unboxed` stays creator-order-scoped). `picked_qty` tracks
-    boxed packages, so boxing the last package auto-finishes the order — no
-    next-step task is created (box-scoped design).
+    boxed packages — boxing NEVER finishes the order since 2026-10-16 (the
+    explicit `POST /picking-orders/:id/finish` is the only finisher; one COO
+    per box — 409 `box_coo_mismatch` on a mismatched non-null COO,
+    `add-all-unboxed` exempt so mixed-COO boxes get a PDA warning chip
+    instead) — no next-step task is created (box-scoped design).
   - `POST /shipping-boxes/:id/scan` `{barcode, qty?}` → `{packageIds}`, 201 —
     scan-to-box across orders: resolves the barcode to the one open picking
     item it could mean across ALL orders (404 `no_matching_picking_item`,

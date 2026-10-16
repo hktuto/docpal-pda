@@ -339,7 +339,11 @@ export default {
       scanIntoBox: "掃描物料入箱",
       scanIntoBoxStop: "停止掃描",
       scanIntoBoxHint: "已啟用——掃描任何揀貨單的物料條碼即可裝入此箱。",
-      scanIntoBoxSuccess: "已裝入箱號 {box}"
+      scanIntoBoxSuccess: "已裝入箱號 {box}",
+      contents: "箱內明細",
+      moveOut: "移出",
+      movingOut: "移出中…",
+      mixedCoo: "COO 混箱：{coos}"
     },
     issueBanner: {
       issueReason: "問題原因",
@@ -848,7 +852,8 @@ export default {
     shelf_box_not_closed: "貨架箱號尚未關閉",
     invalid_date: "日期無效",
     network_error: "網絡錯誤，請檢查連接後重試。",
-    unresolved_outdated_warnings: "此訂單有 {count} 條未解決的日期碼過期警告 — 請先聯絡管理員解決，再完成訂單。"
+    unresolved_outdated_warnings: "此訂單有 {count} 條未解決的日期碼過期警告 — 請先聯絡管理員解決，再完成訂單。",
+    box_coo_mismatch: "箱內已有產地（COO）為 {coos} 的貨品 — 請將相同產地的貨品裝入同一箱。"
   },
   status: {
     receiving: {
@@ -1112,6 +1117,7 @@ export default {
       reorder: "排序",
       createTestOrder: "建立測試揀貨單",
       receivingOrders: "收貨單",
+      receivingCn: "客戶收貨上傳",
       receivingIssues: "收貨問題",
       pickingIssues: "揀貨問題",
       shippingOrders: "出貨箱",
@@ -1125,6 +1131,7 @@ export default {
       userProfiles: "用戶子庫範圍",
       labelPrintRules: "標籤列印規則",
       inventoryLabels: "庫存標籤",
+      dateCodePeriods: "日期碼週期",
       outdatedWarnings: "過期日期碼警告",
       adHocPutAways: "臨時上架"
     },
@@ -1295,7 +1302,14 @@ export default {
       orgId: "Org ID",
       subInventoryCode: "子庫存代碼",
       sortOrder: "排序",
-      isActive: "是否啟用"
+      isActive: "是否啟用",
+      encoding: "編碼",
+      encodingHint: "這些週期適用的供應商日期碼編碼，例如 koa_month_counter。",
+      direction: "方向",
+      counterFrom: "計數起值",
+      counterTo: "計數終值",
+      periodStart: "週期起始",
+      periodStartHint: "起始月份的第一日，YYYY-MM-DD（例如 2025-12-01）。"
     },
     entities: {
       shelves: { title: "貨架" },
@@ -1306,6 +1320,7 @@ export default {
       netWeightFormulas: { title: "淨重公式" },
       labelPrintRules: { title: "標籤列印規則" },
       inventoryLabels: { title: "庫存標籤" },
+      dateCodePeriods: { title: "日期碼計數週期" },
       customerProfiles: { title: "客戶資料配置" }
     },
     pages: {
@@ -1823,6 +1838,62 @@ export default {
           createFailed: "建立測試訂單失敗。"
         }
       },
+      receivingCn: {
+        title: "客戶收貨上傳",
+        newUpload: "新增上傳",
+        newTitle: "新增客戶收貨上傳",
+        invoiceNo: "編號",
+        supplier: "供應商",
+        phase: "階段",
+        status: "狀態",
+        businessKey: "DocPal 流程鍵",
+        filename: "檔案",
+        createdBy: "建立人",
+        itemCount: "明細數",
+        sheetTotals: "合計",
+        none: "暫無上傳記錄。",
+        statuses: {
+          workflow_running: "流程進行中",
+          completed: "已完成",
+          failed: "失敗",
+          cancelled: "已取消"
+        },
+        phases: {
+          excel: "Excel",
+          pdf: "PDF"
+        },
+        stepUpload: "選擇檔案",
+        stepVerify: "核對資料",
+        stepSubmit: "送出",
+        uploadHint: "選擇客戶收貨確認 Excel（.xls / .xlsx），系統會在瀏覽器內解讀內容。",
+        pickFile: "選擇 Excel 檔案",
+        noSheet: "檔案內找不到工作表。",
+        noItems: "解析不到任何收貨明細 — 請確認檔案格式正確。",
+        proceedToSubmit: "前往送出",
+        submitHint: "將上傳原始檔案 {filename}（{count} 行明細）並啟動 DocPal 流程。",
+        submit: "確認送出",
+        submitting: "送出中…",
+        submitFailed: "送出失敗",
+        addItem: "新增明細",
+        editItemTitle: "編輯明細 — {orderNo}",
+        totalsMismatch: "合計不符：目前明細 Σ 箱數/數量 = {carton}/{qty}，工作表合計 = {sheet}。請核對後再送出。",
+        fields: {
+          receivedOffice: "收貨辦事處",
+          supplier: "供應商",
+          invoiceNo: "編號",
+          receiptNo: "發票號碼",
+          receivedDate: "收貨日期",
+          orderNo: "訂單號",
+          cartonNo: "箱数",
+          partNo: "型號",
+          dateCode: "摘要(D/C)",
+          qty: "數量(PCS)",
+          weight: "重量（KG)",
+          office: "辦事處",
+          poNo: "发货项",
+          remark: "備註"
+        }
+      },
       receiving: {
         title: "收貨單",
         searchPlaceholder: "搜尋批次號 / 供應商 / 發票號",
@@ -2298,6 +2369,12 @@ export default {
         colLocation: "Org / 子庫",
         colType: "類型",
         colStatus: "狀態"
+      },
+      dateCodePeriods: {
+        directions: {
+          forward: "遞增（計數隨月份增加）",
+          backward: "遞減（計數隨月份減少）"
+        }
       }
     }
   }

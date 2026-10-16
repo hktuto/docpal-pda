@@ -33,6 +33,7 @@
       <PickingBoxesSection
         v-model:expanded="boxesExpanded"
         :boxes="order.boxes"
+        :box-contents="boxContents"
         :actionable="actionable"
         :creating-box="creatingBox"
         :scanning-box="scanningBox"
@@ -40,6 +41,7 @@
         :adding-all="addingAll"
         :any-adding-all="anyAddingAll"
         :unboxed-count="unboxedCountForOrder"
+        :removing="removing"
         :scan-into-box-id="scanIntoBoxId"
         :scanning-into-box="scanningIntoBox"
         @create-box="createBox"
@@ -47,7 +49,19 @@
         @cancel-box="cancelBox"
         @add-all-to-box="addAllToBox"
         @toggle-scan-into-box="toggleScanIntoBox"
+        @remove-from-box="removeFromBox"
       />
+
+      <footer v-if="allItemsFullyBoxed && actionable" class="finish-footer">
+        <button class="btn finish-footer__btn" :disabled="finishing" @click="finish">
+          <template v-if="finishing">
+            <InlineSpinner /> {{ $t('actions.finishing') }}
+          </template>
+          <template v-else>
+            {{ $t('picking.detail.finishPicking') }}
+          </template>
+        </button>
+      </footer>
 
       <PickingItemsSection
         v-model:box-selections="boxSelections"
@@ -75,7 +89,7 @@ import { useLabelScan, captureLabel, captureRawLabelValue, ocrResultToInput } fr
 import { playScanError, playScanSuccess } from "~/utils/scanBeep";
 import { rawCode } from "~/utils/text";
 import { ApiError } from "~/services/apiClient";
-import PickingBoxesSection from "~/components/picking/PickingBoxesSection.vue";
+import PickingBoxesSection, { type BoxContentEntry } from "~/components/picking/PickingBoxesSection.vue";
 import PickingItemsSection from "~/components/picking/PickingItemsSection.vue";
 import PickingIssueBanner from "~/components/picking/PickingIssueBanner.vue";
 import ScanFab from "~/components/ScanFab.vue";
@@ -140,7 +154,11 @@ async function scanIntoBox(boxId: string, barcode: string): Promise<boolean> {
     showToast(t("picking.boxesSection.scanIntoBoxSuccess", { box: boxId }));
     return true;
   } catch (e) {
-    showToast(errorMessage(e));
+    if (e instanceof ApiError && e.status === 409 && e.body?.message === "box_coo_mismatch") {
+      showToast(t("errors.box_coo_mismatch", { coos: boxCoos(boxId).join(" / ") }));
+    } else {
+      showToast(errorMessage(e));
+    }
     return false;
   } finally {
     scanningIntoBox.value = false;
@@ -222,6 +240,43 @@ const unboxedCountForOrder = computed(() => {
   }, 0);
 });
 const anyAddingAll = computed(() => Object.values(addingAll.value).some(Boolean));
+
+// The boxes' contents derived from the order's packages (picking_packages is
+// the boxing truth) — feeds each box card's expandable contents list, the
+// mixed-COO warning chip, and the client-side one-COO-per-box guard.
+const boxContents = computed<Record<string, BoxContentEntry[]>>(() => {
+  const map: Record<string, BoxContentEntry[]> = {};
+  for (const item of order.value?.items ?? []) {
+    const partLabel = item.wclItemNo ?? item.partNo;
+    for (const pkg of item.packages ?? []) {
+      if (!pkg.shippingBoxId) continue;
+      (map[pkg.shippingBoxId] ??= []).push({
+        packageId: pkg.id,
+        partLabel,
+        qty: pkg.qty,
+        dateCode: pkg.dateCode,
+        lotCode: pkg.lotCode,
+        coo: pkg.coo,
+        cow: pkg.cow,
+      });
+    }
+  }
+  return map;
+});
+
+/** Distinct non-null COOs currently in a box. */
+function boxCoos(boxId: string): string[] {
+  return [...new Set((boxContents.value[boxId] ?? []).map((e) => e.coo).filter((c): c is string => !!c))];
+}
+
+/** One COO per box (spec 2026-10-16): true when packing a package with a
+ *  non-null COO into a box that already holds other non-null COOs. */
+function cooConflict(boxId: string, coo: string | null): boolean {
+  const c = coo?.trim() ? coo.trim() : null;
+  if (!c) return false;
+  const coos = boxCoos(boxId);
+  return coos.length > 0 && !coos.includes(c);
+}
 
 // Title, status badge, header info rows and actions render in the AppHeader.
 usePageHeader({
@@ -363,12 +418,25 @@ async function addAllToBox(boxId: string) {
 async function addToBox(packageId: string) {
   const boxId = boxSelections.value[packageId];
   if (!boxId) return;
+  // One COO per box (spec 2026-10-16) — client-side guard for a friendly
+  // message; the backend's 409 box_coo_mismatch is the cross-order safety net.
+  const pkg = order.value?.items
+    .flatMap((i) => i.packages ?? [])
+    .find((p) => p.id === packageId);
+  if (pkg && cooConflict(boxId, pkg.coo)) {
+    showToast(t("errors.box_coo_mismatch", { coos: boxCoos(boxId).join(" / ") }));
+    return;
+  }
   adding.value[packageId] = true;
   try {
     await warehouse.addPackageToBox(packageId, boxId);
     await load();
   } catch (e) {
-    error.value = errorMessage(e);
+    if (e instanceof ApiError && e.status === 409 && e.body?.message === "box_coo_mismatch") {
+      showToast(t("errors.box_coo_mismatch", { coos: boxCoos(boxId).join(" / ") }));
+    } else {
+      error.value = errorMessage(e);
+    }
   } finally {
     adding.value[packageId] = false;
   }
@@ -448,4 +516,21 @@ useVisibleReload(load);
   padding: 0.6rem 1rem;
   margin-bottom: 1rem;
 }
+
+/* Sticky Finish confirmation (2026-10-16): boxing no longer auto-finishes —
+   the operator confirms here once every item is fully boxed. */
+.finish-footer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  padding: 0.75rem 0;
+  background: var(--bg, #f3f4f6);
+  margin-bottom: 1rem;
+}
+
+.finish-footer__btn {
+  min-width: 12rem;
+}
+
 </style>

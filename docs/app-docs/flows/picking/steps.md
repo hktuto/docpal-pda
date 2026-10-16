@@ -40,7 +40,7 @@ The hardware scanner is live whenever the order is open — aim and scan. The **
 
 ### Whole-box shortcut
 
-When everything the order still needs is exactly the contents of one shelf box, a green banner appears at the top of the page naming that box. Tap **Use whole box**, confirm, and the box is claimed as-is: it becomes the order's shipping box with everything already packed (its received size and weights are pre-filled), and the order finishes automatically — no item-by-item scanning. If no banner shows, pick the lines normally.
+When everything the order still needs is exactly the contents of one shelf box, a green banner appears at the top of the page naming that box. Tap **Use whole box**, confirm, and the box is claimed as-is: it becomes the order's shipping box with everything already packed (its received size and weights are pre-filled) — no item-by-item scanning. The order is NOT finished yet: confirm it with the **Finish** button when you are done (see step 6). If no banner shows, pick the lines normally.
 
 ### Box / shelf / carton barcode scanning
 
@@ -60,12 +60,16 @@ Carton and box picks are recorded immediately, just like label scans.
 
 The **Boxes** section below the item list has a **Scan item into box** toggle per open box. With it armed, scanning a part barcode picks that item straight into the box — even when the item belongs to a *different* picking order (a box may hold packages from several orders). The system resolves the barcode across all open orders; if nothing matches or more than one order's item could match, a message explains why nothing was added. Scanning another box's toggle switches the armed box.
 
+**One COO per box:** a box should hold items of a single country of origin. Adding an item whose COO differs from what is already in the box is rejected with a message (an item without a COO is always allowed). **Add all** is the exception — it packs everything at once; if the result mixes COOs, the box card shows a ⚠ **Mixed COO** chip listing the origins.
+
+**Box contents:** each box card can be expanded (**Show contents**) to list what is inside — part, quantity, date code, lot code, COO and COW — with a **Move out** button per line to take an item back out of the box (open boxes only).
+
 ## 5. Handle issues
 
 If the quantity is wrong, the item is damaged, or stock cannot be found, use the issue-reporting flow. See [Issue reporting](./issue-reporting.md).
 
 ## 6. Finish the order
 
-When all lines are fully picked, the order status changes to finished and the order's packed boxes move on to measuring. No task is created at finish anymore — closing a box is the measuring completion, and each closed box gets its own verify task when the verify step is enabled.
+Boxing items does **not** finish the order by itself — when every line is fully picked and packed, a **Finish picking** button appears at the bottom of the page (and in the header). Tap it to confirm the task is complete: the order turns finished and its packed boxes move on to measuring. No task is created at finish — closing a box is the measuring completion, and each closed box gets its own verify task when the verify step is enabled.
 
-If the order has unresolved outdated date-code warnings (warning chip on the order), the order does not finish — the auto-finish is skipped and the manual **Finish picking** action shows a message with the number of unresolved warnings. Ask an admin to resolve the order's warnings (admin console → Issues → Outdated warnings); the order finishes automatically once they are resolved.
+If the order has unresolved outdated date-code warnings (warning chip on the order), the **Finish picking** action is refused with the number of unresolved warnings. Ask an admin to resolve the order's warnings (admin console → Issues → Outdated warnings), then press **Finish picking** again.

@@ -174,6 +174,7 @@ adapter, and `apps/web/db/` were removed in the 2026-07 migration.
 | Date-code display template (admin policy for joining a lot's `[date_code]`/`[lot_code]`/`[coo]`/`[cow]` — default `[date_code][coo]` → `3626cn`; flow-config key `dateCodeDisplayTemplate`, edited with a live preview, saved via `PUT /admin/flow-config` merged over the stored row) | `/display-config` | `apps/admin/pages/display-config.vue`, `apps/admin/utils/dateCodeDisplay.ts` (formatter), `apps/admin/composables/useDateCodeDisplay.ts` (shared template fetch); applied in `pages/receiving/[id].vue` (item date-code column), `pages/picking-orders/[id].vue` (allocation `dc:` cells + packages cell), `components/allocations/AllocationDetail.vue` (tooltip date-code rows) |
 | Receiving order name template (flow-config key `receivingOrderNameTemplate`, default `[batch_no]`; backend renders `displayName` on the receiving list/detail responses; the receiving list batch-no column and detail h1 render `displayName`) | `/display-config` (editor; list: `/receiving`, detail: `/receiving/:id`) | `apps/admin/pages/display-config.vue` (second card + live preview), `apps/admin/utils/receivingOrderName.ts` (client preview formatter), `apps/admin/pages/receiving/index.vue` (batch-no column accessor), `apps/admin/pages/receiving/[id].vue` (h1); backend `apps/backend/src/receivingOrderName.ts` + `src/routes/receiving.ts` |
 | PDA list-row display templates (flow-config key `pdaListTemplates` — per-list `{title, meta}` for the six PDA list pages, served via `GET /config`; edited with a live preview) | `/pda-view-config` | `apps/admin/pages/pda-view-config.vue` (one section per PDA list/detail page: title/meta inputs, placeholder chips, full + missing-fields preview, single shared save), `apps/admin/utils/listRowTemplate.ts` (preview formatter, mirror of the PDA's); PDA side `apps/pda/utils/listRowTemplate.ts`, `apps/pda/composables/useListTemplates.ts`, `apps/pda/pages/{receiving,picking,put-away,goods-verify,verify,measuring}/index.vue` |
+| Customer receiving order upload (CN; tracking list + upload → verify/edit → submit wizard over a customer receiving Excel, posted to DocPal) | `/receiving-cn`, `/receiving-cn/new` | `apps/admin/pages/receiving-cn/index.vue`, `apps/admin/pages/receiving-cn/new.vue`, `apps/admin/utils/cnReceivingExcel.ts` (AOA parser), `apps/admin/components/receiving-cn/CnItemEditModal.vue`, wrappers in `apps/admin/utils/flowApi.ts` |
 
 ## Warehouse backend (apps/backend)
 
@@ -192,13 +193,14 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | `GET /picking-orders`, `GET /picking-orders/:id`, `POST /picking-orders/:id/finish`, `POST /picking-orders/report-issues` | `apps/backend/src/routes/picking.ts` |
 | `POST /picking-items/:id/scan`, `/packages/:id*` verbs, `/shipping-boxes/:id*` lifecycle | `apps/backend/src/routes/picking.ts` |
 | `GET /put-away/candidates`, `GET /put-away-tasks`, `GET /put-away-tasks/:id`, `POST /receiving-orders/:id/put-away-scans`, `DELETE /put-away-scans/:scanId`, `/shelf-boxes*` lifecycle (create / cancel / assign-scan / remove-scan / add-all-unboxed / close) | `apps/backend/src/routes/putaway.ts` |
+| `GET /put-away-cn/tasks`, `GET /put-away-cn/tasks/:id`, `POST /put-away-cn/tasks/:id/complete` (CN put-away variant — 404 unless flow-config `cnReceiving` is true) | `apps/backend/src/routes/putawayCn.ts` |
 | `GET /measuring-boxes`, `GET /measuring-boxes/:id` | `apps/backend/src/routes/measuring.ts` |
 | `GET /verify-tasks`, `GET /verify-tasks/:id`, `POST /verify-tasks/:id/complete` | `apps/backend/src/routes/verify.ts` |
 | `GET /shipping-orders`, `GET /shipping-orders/:boxId`, `POST /shipping-orders/:boxId/ship` | `apps/backend/src/routes/shipping.ts` |
 | `GET /config` (flow config from the `warehouse_config` row `"flow"`, `FLOW_CONFIG` env override, deprecated `FLOW_STEPS_DISABLED` fallback) | `apps/backend/src/routes/config.ts` |
 | `POST /goods-verify-tasks/generate`, `GET /goods-verify-tasks`, `GET /goods-verify-tasks/:id`, `POST /goods-verify-tasks/:id/verify` | `apps/backend/src/routes/goodsverify.ts` |
 | `GET /stock-search` | `apps/backend/src/routes/stocksearch.ts` |
-| `GET /scan-templates` | `apps/backend/src/routes/scantemplates.ts` |
+| `GET /scan-templates`, `GET /date-code-periods` | `apps/backend/src/routes/scantemplates.ts` |
 | Print proxy: `GET /print/printers`, `POST /print/dynamic`, `POST /print/files`, `GET /print/jobs/:jobId` | `apps/backend/src/routes/print.ts`, `apps/backend/src/print.ts` |
 | Upstream sync (outbound `sync_events` table feed; the external service reads the table directly — the `GET /sync-events` endpoint was removed 2026-10 — and writes the business tables directly) | `apps/backend/src/db/schema/events.ts` |
 | `POST /dev/reset`, `POST /dev/allocate` | `apps/backend/src/routes/dev.ts` |
@@ -219,9 +221,10 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | `GET /admin/part-ledger?partNo=&wclItemNo=` (item ledger: part info + current stock lots + totals + in/out movement history — dock + on_hand ledger rows only, newest first, capped 1000; receiving batch resolved via the receiving_order reference or the row's `receiving_invoice_item_id`) | `apps/backend/src/routes/admin/partLedger.ts`, `apps/backend/src/db/partLedger.ts` |
 | `POST /admin/receiving-orders/:id/items/:itemId/reallocate-demand` (all-or-nothing redistribution of one receiving item's dock stock; `qty` = desired final total) | `apps/backend/src/db/receivingReallocate.ts` + `apps/backend/src/routes/admin/allocation.ts` |
 | `/admin/label-print-rules` CRUD (picking label-template selection rules; list sorted priority asc) + `POST /admin/label-print-rules/test-match` (draft-condition preview over picking_orders) | `apps/backend/src/routes/admin/index.ts`, `apps/backend/src/routes/admin/labelPrintRules.ts`, `apps/backend/src/db/labelPrint.ts` (evaluator), `apps/backend/src/db/schema/label-print.ts` |
-| `GET /admin/outdated-warnings?resolved=&orderKind=`, `POST /admin/outdated-warnings/resolve-order` (whole-order resolution + re-run of the held picking auto-finish / receiving auto-clear) | `apps/backend/src/routes/admin/outdatedWarnings.ts`, `apps/backend/src/db/outdated.ts`, `apps/backend/src/db/schema/outdated.ts` |
+| `GET /admin/outdated-warnings?resolved=&orderKind=`, `POST /admin/outdated-warnings/resolve-order` (whole-order resolution + re-run of the held receiving auto-clear) | `apps/backend/src/routes/admin/outdatedWarnings.ts`, `apps/backend/src/db/outdated.ts`, `apps/backend/src/db/schema/outdated.ts` |
 | `GET /admin/ad-hoc-put-aways` (paged list + filters), `GET /admin/ad-hoc-put-aways/:id` (batch detail with items) | `apps/backend/src/routes/admin/adHocPutAway.ts`, `apps/backend/src/db/adhocPutaway.ts` (`listAdHocPutAways` + `getAdHocPutAwayDetail`) |
 | `POST /shelf-exchange/preview` (resolve the source-shelf lot for a scanned label), `POST /shelf-exchange` (commit the move) | `apps/backend/src/routes/shelfExchange.ts`, `apps/backend/src/db/shelfExchange.ts` (`previewShelfExchange` + `commitShelfExchange`) |
+| `GET /admin/receiving-cn?status=&page=&pageSize=`, `GET /admin/receiving-cn/:id`, `POST /admin/receiving-cn/excel` (CN customer receiving upload: DocPal file upload + workflow kick + tracking row) | `apps/backend/src/routes/admin/receivingCn.ts`, `apps/backend/src/db/receivingCn.ts` (`validateCnPayload` / `createCnUpload` / `listCnWorkflows` / `getCnWorkflow` / `finalizeCnOrder` / `markCnWorkflowTerminal`), `apps/backend/src/docpalWorkflow.ts` (DocPal workflow client), `apps/backend/src/jobs/receivingCnSync.ts` (status cron), `apps/backend/src/db/schema/receivingCn.ts` |
 
 ### Domain modules
 
@@ -232,6 +235,7 @@ Hono routes in `apps/backend/src/routes/` over tx-wrapped domain modules in
 | Picking execution (scan, packages, boxes, finish, issues) | `apps/backend/src/db/picking.ts` |
 | Put-away (scans, shelf boxes, lot materialization, auto-clear) | `apps/backend/src/db/putaway.ts` |
 | Put-away tasks (create/complete hooks, queue list, detail + shelf suggestion) | `apps/backend/src/db/putawaytasks.ts` |
+| CN put-away (`put_away_tasks_cn` queue list/detail, `completeCnPutAwayTx` — on-hand lot upserts + PUT_AWAY `on_hand` ledger rows, `reference_type 'receiving_order_cn'`) | `apps/backend/src/db/putawayCn.ts` |
 | Measuring (box reads — open boxes with packages + per-box `suggestedNetWeightKg`; no tasks — closing a box is the completion) | `apps/backend/src/db/measuring.ts` |
 | Verify (box-keyed task reads, completion with the `packages_not_all_rescanned` re-scan guard) | `apps/backend/src/db/verify.ts` |
 | Shipping feed (per-box list/detail + ship, derives order `shipped`) | `apps/backend/src/db/shipping.ts` |

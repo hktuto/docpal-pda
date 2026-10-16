@@ -91,14 +91,15 @@ Supplier outdated date-code warnings (spec
 a picking / put-away scan whose label WWYY is older than the supplier's
 `supplier_profiles.outdated_limit_months` still succeeds, records an
 `outdated_scan_warnings` row, and returns `outdatedWarning` on the scan
-response; order completion is blocked (picking auto-finish held + explicit
-finish 409 `unresolved_outdated_warnings`; receiving auto-clear held) until
-an admin resolves the order's warnings here.
+response; order completion is blocked (the explicit picking finish 409s
+`unresolved_outdated_warnings` — boxing never finishes an order since
+2026-10-16, spec `docs/superpowers/specs/2026-10-16-picking-boxing-manual-finish-coo-design.md`;
+receiving auto-clear held) until an admin resolves the order's warnings here.
 
 | Endpoint | Body → Response | Note |
 |---|---|---|
 | `GET /admin/outdated-warnings?resolved=&orderKind=` | — → `[{id, orderKind, orderId, orderNo, orderItemId, packageId, supplierCode, supplierName, wclItemNo, partNo, dateCode, limitMonths, qty, scannedBy, scannedByName, scannedAt, resolvedAt, resolvedBy, resolvedByName, resolutionNote}]` | newest first; `orderNo` = the picking order's `order_no` / receiving order's `batch_no`; `resolved=true|false` (absent = all) and `orderKind=picking|putaway` filters, 400 `invalid_resolved_param` / `invalid_order_kind` otherwise |
-| `POST /admin/outdated-warnings/resolve-order` | `{orderKind, orderId, note?}` → `{resolved: n}` | whole-order resolution: stamps `resolved_at/resolved_by/resolution_note` on every unresolved row of the order (one tx) + `outdated.warning.resolved` SSE event. Idempotent — `{resolved: 0}` when nothing is pending (no event). When `n > 0` the route also re-runs the held completion: picking → `retryAutoFinishPickingOrder` (the order finishes when fully picked), put-away → `retryReceivingOrderClear` (the order clears + its put-away task completes). 400 `invalid_order_kind` / `actor_not_found` |
+| `POST /admin/outdated-warnings/resolve-order` | `{orderKind, orderId, note?}` → `{resolved: n}` | whole-order resolution: stamps `resolved_at/resolved_by/resolution_note` on every unresolved row of the order (one tx) + `outdated.warning.resolved` SSE event. Idempotent — `{resolved: 0}` when nothing is pending (no event). When `n > 0` the route also re-runs the held receiving auto-clear (`retryReceivingOrderClear` — the order clears + its put-away task completes); picking has no auto-finish since 2026-10-16 — after resolving, the operator's explicit finish succeeds. 400 `invalid_order_kind` / `actor_not_found` |
 
 ### Admin: label print rules
 
@@ -134,6 +135,33 @@ instance/database, so no `warehouse_id` column.
 | `POST /admin/inventory-labels` | `{orgId, subInventoryCode, label, sortOrder?, isActive?, remark?}` → label | `sortOrder` default 0, `isActive` default true |
 | `PATCH /admin/inventory-labels/:id` | partial label → label / 404 | |
 | `DELETE /admin/inventory-labels/:id` | — → `{deleted: 1}` / 404 | |
+
+### Admin: customer receiving upload (CN)
+
+Customer receiving order upload for CN warehouses (spec
+`docs/superpowers/specs/2026-10-16-customer-receiving-upload-design.md`): the
+admin uploads a customer receiving Excel (收貨確認及付款通知書), the console
+parses/verifies it client-side, and the backend forwards the original file +
+verified JSON to DocPal — file upload (document id), then a DocPal workflow
+kick (`src/docpalWorkflow.ts`, Bearer `DOCPAL_WORKFLOW_TOKEN`, upstream
+failure → 502 `docpal_workflow: ...`; kick-start failure after the upload
+deletes the attachment). One tracking row per upload in
+`receiving_cn_workflows`; a status cron (`src/jobs/receivingCnSync.ts`,
+kill-switch `RECEIVING_CN_SYNC=off`, interval `RECEIVING_CN_SYNC_INTERVAL_SEC`
+default 120) polls `workflow_running` rows and, on workflow completion,
+`finalizeCnOrder` reads the `receiving_orders_cn` trio (written by the
+external upstream-sync service, matched by `batch_no` = the CN 編號), flips
+the order `in_hand` + stamps `arrived_at`, and creates the dedicated CN
+put-away task (idempotent via the unique index on
+`put_away_tasks_cn.receiving_order_cn_id`) + `receiving_cn.completed` SSE on
+`/admin/receiving-cn`. Phase 2 (PDF + OCR) is not implemented —
+`getOcrResult` throws and there are no `/pdf` routes.
+
+| Endpoint | Body → Response | Note |
+|---|---|---|
+| `GET /admin/receiving-cn?status=&page=&pageSize=` | — → `{rows, total}` | tracking list, newest first; `status` filter is repeatable (any-of), `page` default 1 / `pageSize` default 20 |
+| `GET /admin/receiving-cn/:id` | — → tracking row incl. the verified `payload` items / 404 | |
+| `POST /admin/receiving-cn/excel` | multipart `file` + `data` (JSON string of the verified payload) → 201 `{id}` | DocPal file upload + workflow kick + tracking row (`createCnUpload` in `src/db/receivingCn.ts`); payload validation: header strings, non-empty `items`, each item `partNo`/`orderNo` non-empty + positive-integer `qty` — 400 `file_required` / `invalid_payload`, 500 `docpal_workflow_token_not_configured`, 502 `docpal_workflow: ...` |
 
 JWT bearer (HS256, `hono/jwt`, secret from `AUTH_SECRET`, 12 h TTL) required on
 all routes except `/health`, `POST /auth/login`, `POST /auth/login-token`, and
@@ -296,6 +324,28 @@ Changes vs old: one aggregate read replaces the 3-call stitch; uniform
 materializes inventory lots (concept: lot + `inventory_lot_sources` +
 `inventory_transactions` PUT_AWAY rows).
 
+### CN put-away (`cnReceiving` flow-config flag)
+
+Customer-receiving (CN) put-away variant (spec
+`docs/superpowers/specs/2026-10-16-customer-receiving-upload-design.md`; see
+`apps/backend/src/routes/putawayCn.ts` + `src/db/putawayCn.ts`): parallel
+endpoints over the dedicated `put_away_tasks_cn` table (created by the CN
+finalize cron, never the standard arrival confirm). Invisible unless the
+top-level `cnReceiving` flow-config key is true — every route 404s
+`not_found` when off (a warehouse runs one flow or the other). Completion
+writes a single PUT_AWAY `on_hand` ledger row per item (no dock row — no
+RECEIVE_TO_DOCK ledger in the CN path, accepted v1 difference) and no
+`inventory_lot_sources` row (the CN item id lives in the ledger metadata,
+`reference_type 'receiving_order_cn'`); fully putting the order away flips it
+`clear` and the route schedules `allocateAll` after commit — CN stock only
+appears in allocation once put-away completes.
+
+| Endpoint | Description |
+|---|---|
+| `GET /put-away-cn/tasks?status=` | CN task queue (oldest first), `?status=` filters. 404 when `cnReceiving` is off. |
+| `GET /put-away-cn/tasks/:id` | CN task detail: order + expected items (remaining qty + shelf suggestions) + the on-hand lots this order's put-away created. 404 `put_away_task_cn_not_found` / when off. |
+| `POST /put-away-cn/tasks/:id/complete` | `{items: [{itemId, qty, shelfCode, boxId?}]}` → `{taskCompleted}` — per-item `put_away_qty` updates + on-hand lot upserts + PUT_AWAY `on_hand` ledger rows in one tx; the task completes when every item is fully put away. 404 when off. |
+
 ## Ad-hoc put-away
 
 Implemented: `GET /ad-hoc-put-away/locations`,
@@ -366,27 +416,30 @@ Implemented: `GET /picking-orders`, `GET /picking-orders/:id`,
 allocation's source — lot `total_qty`/`allocated_qty`, receiving
 `picked_qty`, or FIFO distribution across an order-level receiving source —
 into `picking_packages` + two PICK ledger rows (reserved −qty / on_hand −qty)
-per portion, removal reverses; `picked_qty` tracks boxed packages so the last
-box add auto-finishes the order — no next-step task is created (box-scoped
-design; see "Measuring"/"Verify" below); scan/removal run `allocateAll`
-best-effort).
+per portion, removal reverses; `picked_qty` tracks boxed packages — boxing
+NEVER finishes the order since 2026-10-16 (the operator's explicit
+`POST /picking-orders/:id/finish` is the only finisher; one COO per box:
+add-to-box / scan-into-box reject a mismatched non-null COO with 409
+`box_coo_mismatch`, add-all is exempt and the PDA flags mixed-COO boxes) —
+no next-step task is created (box-scoped design; see "Measuring"/"Verify"
+below); scan/removal run `allocateAll` best-effort).
 
 | Endpoint | Description |
 |---|---|
 | `GET /picking-orders?status=&allocation=&type=&search=&limit=&offset=&sort=&dir=` | Paged list → `{rows, total}`. Rows: `{id, refNo, status, allocationStatus, allocatedQty, poNo, shipTo, customerCode, destinationCountry, deliveryDate, warehouseCode, warehouseSectionCode, subInventoryCode, itemCount, totalQty, pickedQty, outdatedWarningCount}`. `allocationStatus` is the persisted order-level summary (`unallocated`/`partial`/`allocated`, recomputed by `allocateAll`); `allocatedQty` = Σ item `allocated_qty`; `outdatedWarningCount` = unresolved `outdated_scan_warnings` rows on the order (see §Admin: outdated warnings). `?status=`, `?allocation=` and `?type=` accept comma-separated lists (`?status=shipped` still works); `type` filters `picking_order_type` (e.g. `invoice,tn`); `search` = case-insensitive substring on `orderNo`/`poNo`/`customerCode`/`shipTo`; `limit`/`offset` page the result (omit `limit` for all rows); `total` = full match count. `sort` is a whitelist of the admin picking-list column keys (`orderNo`, `status`, `pickingOrderType`, `customerCode`, `poNo`, `shipTo`, `deliveryDate`, `itemCount`, `pickedRatio`, `allocation`, `workingByName`, `remark`, `prioritySeq`, `createdDate`, `lastUpdateDate`) with `dir` `asc`/`desc`; unknown keys fall back to the default priority order, which is also the tiebreaker tail. Per-user sub-inventory scope (see §Auth): when the caller has a scope set, only orders whose `(org_id, sub_inventory_code)` pair is in scope (or NULL sub-inventory) are returned. |
 | `GET /picking-orders/:id` | Nested detail: `{order..., outdatedWarningCount, items[{..., allocations[{..., lot|receivingItem, boxId}], packages[]}], boxes[{..., packageCount}], suggestedBox}`. No parallel arrays. Allocation `lot` carries `shelfWarning` (`shelves.warning` of the lot's shelf, null when none) — advisory ⚠ for operators (spec 2026-09-17-shelf-warning-design.md). `outdatedWarningCount` = unresolved outdated date-code scan warnings on the order (spec 2026-10-07). Per-user scope: 404 when the order's `(org_id, sub_inventory_code)` pair is out of the caller's scope. `suggestedBox` (null when none or the order is not active) is the whole-box claim hint: a fully-claimable shelf box whose current `inventory_lots` contents exactly equal the order's remaining demand `{id, shelfCode, orgId, subInventoryCode, contents[{partNo, qty}]}`. |
-| `POST /picking-orders/:id/claim-shelf-box` | `{shelfBoxId}` (actor from the token) → `{shippingBoxId, packageIds}`, 201. Whole-box exact-match claim (spec `docs/superpowers/specs/2026-07-29-whole-box-picking-claim-design.md`): the shelf box's current contents must exactly equal the order's full remaining open demand (409 `box_not_exact_match`) with no other order reserving any piece (409 `box_not_fully_available`). The carton is reused as the shipping box — created prefilled with `box_size`/`net_weight`/`gross_weight` summed from the source receiving lines' `additional_data` (g→kg via `weightUnit`, default kg), `source_shelf_box_id` recorded — with one boxed package per (item, lot) portion, the order's allocations released, and the auto-finish chain run like the scan path. |
+| `POST /picking-orders/:id/claim-shelf-box` | `{shelfBoxId}` (actor from the token) → `{shippingBoxId, packageIds}`, 201. Whole-box exact-match claim (spec `docs/superpowers/specs/2026-07-29-whole-box-picking-claim-design.md`): the shelf box's current contents must exactly equal the order's full remaining open demand (409 `box_not_exact_match`) with no other order reserving any piece (409 `box_not_fully_available`). The carton is reused as the shipping box — created prefilled with `box_size`/`net_weight`/`gross_weight` summed from the source receiving lines' `additional_data` (g→kg via `weightUnit`, default kg), `source_shelf_box_id` recorded — with one boxed package per (item, lot) portion and the order's allocations released. Boxing never finishes the order (2026-10-16) — the operator confirms with the explicit finish. |
 | `POST /picking-items/:id/scan` | `{actorId, allocationId|source, qty, raw?}` → `{packageIds, outdatedWarning}`. The one canonical scan-to-pick route; OCR/receiving-source picking folds in here (old `ocr-pick` path dies). `outdatedWarning` = `{supplierCode, dateCode, limitMonths} | null` — set when the scanned label's date code is older than the supplier's `outdated_limit_months` (the scan still succeeds and a warning row is recorded; spec 2026-10-07, see §Admin: outdated warnings). |
 | `DELETE /packages/:id` | `{actorId}` → removes an unboxed (unverified) package. |
 | `POST /packages/:id/verify` | `{qty?, actorId}` — package must be boxed (409 `package_not_in_box`). Credits `qty` (default: the package's remaining) onto `rescanned_qty`, capped at `qty` (400 `qty_must_be_positive_integer`; 409 `package_already_verified` when fully credited). Measuring pass: the box is **open**, sets `verified` on first credit (no task involved). Verify pass: the box is **closed** and must carry a pending verify task (409 `no_pending_measure_or_verify_task`), sets `verified` + `verify_verified` on first credit. |
 | `POST /picking-orders/:id/boxes` | `{actorId}` → box. |
 | `PATCH /shipping-boxes/:id` | `{boxSize?, netWeightKg?, grossWeightKg?, destinationCountry?, actorId}` (kilograms, one unit everywhere — decimals allowed, rounded to 3 dp; 400 `invalid_net_weight_kg` / `invalid_gross_weight_kg`). |
-| `POST /shipping-boxes/:id/packages {packageId, actorId}` · `DELETE /shipping-boxes/:id/packages/:packageId` | Box membership. Cross-order packing: any open picking order's unboxed package may be added to the box (the old 409 `different_picking_orders` guard is gone; `shipping_boxes.picking_order_id` stays as the informational "created for" order only). |
+| `POST /shipping-boxes/:id/packages {packageId, actorId}` · `DELETE /shipping-boxes/:id/packages/:packageId` | Box membership. Cross-order packing: any open picking order's unboxed package may be added to the box (the old 409 `different_picking_orders` guard is gone; `shipping_boxes.picking_order_id` stays as the informational "created for" order only). One COO per box (2026-10-16): adding a package whose non-null COO differs from the box's existing non-null COO set is rejected with 409 `box_coo_mismatch`; a null COO never conflicts. |
 | `POST /shipping-boxes/:id/scan` | `{barcode, qty?, dateCode?, actorId}` → `{packageIds, outdatedWarning}`, 201. Scan-to-box across orders: resolves the barcode to the one open picking item it could mean across **all** orders (part_no or `wcl_item_no` match on an item of a pending/picking/allocated order with open qty and a remaining allocation; 404 `no_matching_picking_item`, 409 `ambiguous_picking_item`), then picks it straight into this box via the scan path (default qty = the item's open qty capped by the allocation's remaining). The optional `dateCode` (the label's decoded WWYY) feeds the outdated date-code check — same `outdatedWarning` response field as `POST /picking-items/:id/scan`. |
 | `POST /shipping-boxes/:id/add-all-unboxed` | `{actorId}` → `{packed}`. Stays scoped to the box's creator order. |
 | `POST /shipping-boxes/:id/cancel` · `/close` | `{actorId}`. Close guards: non-empty, every package fully rescanned (`rescanned_qty >= qty`), destination (box → creator order's ship_to), box size, positive weights (gross ≥ net). Closing IS the measuring completion — and, when the verify step is enabled, spawns the box's pending verify task in the same tx (`ON CONFLICT DO NOTHING`, idempotent on re-close) and resets the packages' rescanned credit for the verify pass. |
 | `POST /shipping-boxes/:id/reopen` | `{actorId}` — verify-step re-measure, box-scoped: the box's own pending verify task is required (409 `verify_task_not_pending`); closed box → `open` + packages un-verified (both `verified` and `verify_verified`, and `rescanned_qty` reset; 409 `shipping_box_not_closed`). |
-| `POST /picking-orders/:id/finish` | `{actorId}` → `{id, status}` — flips the order to `finished` (409 `not_all_items_fully_boxed` until every item is fully picked/boxed). 409 `unresolved_outdated_warnings` with a JSON body `{"error":"unresolved_outdated_warnings","count":N}` while the order has unresolved outdated date-code scan warnings (spec 2026-10-07); the auto-finish (`maybeAutoFinishPickingOrder`, run when the last package is boxed / whole-box claimed) is HELD the same way — the order stays `picking` until an admin resolves the warnings (the resolve-order route re-runs it). No next-step task is created anymore: closing a box is the measuring completion, and the box's verify task comes from `closeShippingBox`. |
+| `POST /picking-orders/:id/finish` | `{actorId}` → `{id, status}` — the ONLY way an order finishes since 2026-10-16 (boxing/claim/close never auto-finish): flips the order to `finished` from pending/picking/allocated (409 `picking_order_could_not_be_finished` from other writable states), releasing the work lock; 409 `not_all_items_fully_boxed` until every item is fully picked/boxed. 409 `unresolved_outdated_warnings` with a JSON body `{"error":"unresolved_outdated_warnings","count":N}` while the order has unresolved outdated date-code scan warnings (spec 2026-10-07) — after an admin resolves the warnings the operator re-runs this finish. No next-step task is created: closing a box is the measuring completion, and the box's verify task comes from `closeShippingBox`. |
 | `POST /picking-orders/report-issues` | `{actorId, entries: [{pickingOrderId, reason, qty?, packSize?, note?, remark?}]}` → `{reported[], skipped[]}`. Per-order entries — no `"; "`-joined remark hack. |
 
 Changes vs old: flat-by-id mutations only (nested twins die); polymorphic
@@ -520,6 +573,12 @@ supersedes the deprecated `pdaListTemplates`: when a list has no
 migrates into the resolved view; otherwise defaults apply. The fully-resolved
 value is served on `GET /config` as `viewConfig`; edited via
 `PUT /admin/flow-config`.
+The top-level `cnReceiving: boolean` key (spec
+`2026-10-16-customer-receiving-upload-design.md`, default false) switches a
+CN warehouse to the customer-receiving world: the PDA put-away flow reads the
+dedicated CN tables via the `/put-away-cn/*` routes (404 while off — a
+warehouse runs one flow or the other); edited via
+`GET/PUT /admin/flow-config`.
 The shipping feed is per-box: the list reads closed, unshipped boxes — gated
 on the box's completed verify task when the verify step is enabled
 ("measured" ≡ closed). Shipping is a pure workflow transition (stock already
@@ -533,7 +592,7 @@ Shipped boxes drop out of the feed; shipped orders stay visible via
 
 | Endpoint | Description |
 |---|---|
-| `GET /config` | `{flowSteps: Record<FlowStep, boolean>, pickingAllocation: {allowDockStock: boolean}, putAway: {autoCreateTasks: boolean, suggestShelf: "existing-stock"\|"off"}, allowedOrgIds: number[], listTemplates: Record<PdaListKey, {title, meta}>, viewConfig: PdaViewConfig}` — the resolved flow config (`warehouse_config` row `"flow"`, `FLOW_CONFIG` env override; legacy `FLOW_STEPS_DISABLED` maps onto `flowSteps` on top, deprecated). `pickingAllocation.allowDockStock=false` = put-away is a hard gate for allocation; `putAway` drives the put-away task mode + shelf suggestions; `allowedOrgIds` ([] = all orgs) scopes picking/receiving/stock/put-away/goods-verify queries to the listed org partitions server-side; `listTemplates` (spec `2026-09-21-pda-list-row-templates-design.md`, deprecated) carries the per-PDA-list row display templates applied client-side; `viewConfig` (spec `2026-10-04-pda-app-rewrite-design.md`) is the fully-resolved PDA view config (`lists` incl. stock-search `{title, meta[1–2], chip}` + receiving/picking/put-away detail field lists and receiving `defaultGrouping`; legacy `pdaListTemplates` customizations migrate in for lists without a `pdaViewConfig.lists` entry). |
+| `GET /config` | `{flowSteps: Record<FlowStep, boolean>, pickingAllocation: {allowDockStock: boolean}, putAway: {autoCreateTasks: boolean, suggestShelf: "existing-stock"\|"off"}, allowedOrgIds: number[], cnReceiving: boolean, listTemplates: Record<PdaListKey, {title, meta}>, viewConfig: PdaViewConfig}` — the resolved flow config (`warehouse_config` row `"flow"`, `FLOW_CONFIG` env override; legacy `FLOW_STEPS_DISABLED` maps onto `flowSteps` on top, deprecated). `pickingAllocation.allowDockStock=false` = put-away is a hard gate for allocation; `putAway` drives the put-away task mode + shelf suggestions; `allowedOrgIds` ([] = all orgs) scopes picking/receiving/stock/put-away/goods-verify queries to the listed org partitions server-side; `cnReceiving` (spec `2026-10-16-customer-receiving-upload-design.md`, default false) switches the PDA put-away flow to the dedicated CN tables (the `/put-away-cn/*` routes 404 while off); `listTemplates` (spec `2026-09-21-pda-list-row-templates-design.md`, deprecated) carries the per-PDA-list row display templates applied client-side; `viewConfig` (spec `2026-10-04-pda-app-rewrite-design.md`) is the fully-resolved PDA view config (`lists` incl. stock-search `{title, meta[1–2], chip}` + receiving/picking/put-away detail field lists and receiving `defaultGrouping`; legacy `pdaListTemplates` customizations migrate in for lists without a `pdaViewConfig.lists` entry). |
 | `GET /shipping-orders` | Box rows: `{boxId, orderNos[], shipTos[], destinationCountry, boxSize, grossWeight, netWeight, packageCount, closedAt}` — closed, unshipped boxes (verify-gated when the verify step is on). |
 | `GET /shipping-orders/:boxId` | Box detail: `{box{..., shippedAt, shippedBy}, packages[{..., partNo, wclItemNo, verified}], orders[{id, orderNo, status, shipTo, customerCode, poNo}]}` (404 `shipping_box_not_found`). |
 | `POST /shipping-orders/:boxId/ship` | `{actorId}` → `{id, status, shippedOrderIds}`. Re-checks the feed predicate (closed, unshipped, verify-gated; 409 `box_not_ready_to_ship` otherwise, including already-shipped boxes), stamps the box, derives order `shipped`, emits `shipping_box.shipped`. |

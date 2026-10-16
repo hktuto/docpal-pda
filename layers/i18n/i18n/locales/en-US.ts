@@ -339,7 +339,11 @@ export default {
       scanIntoBox: "Scan item into box",
       scanIntoBoxStop: "Stop scanning",
       scanIntoBoxHint: "Armed — scan an item barcode from any order to pack it into this box.",
-      scanIntoBoxSuccess: "Packed into box {box}"
+      scanIntoBoxSuccess: "Packed into box {box}",
+      contents: "Contents",
+      moveOut: "Move out",
+      movingOut: "Moving out…",
+      mixedCoo: "Mixed COO: {coos}"
     },
     issueBanner: {
       issueReason: "Issue reason",
@@ -848,7 +852,8 @@ export default {
     shelf_box_not_closed: "The shelf box is not closed",
     invalid_date: "Invalid date",
     network_error: "Network error. Please check your connection and try again.",
-    unresolved_outdated_warnings: "This order has {count} unresolved outdated date-code warning(s) — ask an admin to resolve them before finishing."
+    unresolved_outdated_warnings: "This order has {count} unresolved outdated date-code warning(s) — ask an admin to resolve them before finishing.",
+    box_coo_mismatch: "This box already holds items with COO {coos} — pack items with the same COO in one box."
   },
   status: {
     receiving: {
@@ -1112,6 +1117,7 @@ export default {
       reorder: "Reorder",
       createTestOrder: "Create Test Order",
       receivingOrders: "Receiving Orders",
+      receivingCn: "Customer Receiving Upload",
       receivingIssues: "Receiving Issues",
       pickingIssues: "Picking Issues",
       shippingOrders: "Shipping Boxes",
@@ -1125,6 +1131,7 @@ export default {
       userProfiles: "User Scope",
       labelPrintRules: "Label Print Rules",
       inventoryLabels: "Inventory Labels",
+      dateCodePeriods: "Date Code Periods",
       outdatedWarnings: "Outdated Warnings",
       adHocPutAways: "Ad-Hoc Put-Aways"
     },
@@ -1295,7 +1302,14 @@ export default {
       orgId: "Org ID",
       subInventoryCode: "Sub-inventory code",
       sortOrder: "Sort order",
-      isActive: "Is active"
+      isActive: "Is active",
+      encoding: "Encoding",
+      encodingHint: "The supplier profile date-code encoding these periods apply to, e.g. koa_month_counter.",
+      direction: "Direction",
+      counterFrom: "Counter from",
+      counterTo: "Counter to",
+      periodStart: "Period start",
+      periodStartHint: "First of the anchor month, YYYY-MM-DD (e.g. 2025-12-01)."
     },
     entities: {
       shelves: { title: "Shelves" },
@@ -1306,7 +1320,8 @@ export default {
       boxSizes: { title: "Box Sizes" },
       netWeightFormulas: { title: "Net-weight Formulas" },
       labelPrintRules: { title: "Label Print Rules" },
-      inventoryLabels: { title: "Inventory Labels" }
+      inventoryLabels: { title: "Inventory Labels" },
+      dateCodePeriods: { title: "Date Code Counter Periods" }
     },
     pages: {
       userProfiles: {
@@ -1825,6 +1840,62 @@ export default {
           createFailed: "Failed to create test order."
         }
       },
+      receivingCn: {
+        title: "Customer Receiving Upload",
+        newUpload: "New Upload",
+        newTitle: "New Customer Receiving Upload",
+        invoiceNo: "Ref No.",
+        supplier: "Supplier",
+        phase: "Phase",
+        status: "Status",
+        businessKey: "DocPal Business Key",
+        filename: "File",
+        createdBy: "Created By",
+        itemCount: "Items",
+        sheetTotals: "Sheet Totals",
+        none: "No uploads yet.",
+        statuses: {
+          workflow_running: "Workflow Running",
+          completed: "Completed",
+          failed: "Failed",
+          cancelled: "Cancelled"
+        },
+        phases: {
+          excel: "Excel",
+          pdf: "PDF"
+        },
+        stepUpload: "Pick File",
+        stepVerify: "Verify",
+        stepSubmit: "Submit",
+        uploadHint: "Pick the customer receiving confirmation Excel (.xls / .xlsx) — it is decoded in your browser.",
+        pickFile: "Pick Excel File",
+        noSheet: "The file contains no worksheet.",
+        noItems: "No receiving items could be parsed — check the file format.",
+        proceedToSubmit: "Proceed to Submit",
+        submitHint: "This uploads the original file {filename} ({count} items) and starts the DocPal workflow.",
+        submit: "Submit",
+        submitting: "Submitting…",
+        submitFailed: "Submit failed",
+        addItem: "Add Item",
+        editItemTitle: "Edit Item — {orderNo}",
+        totalsMismatch: "Totals mismatch: current items Σ cartons/qty = {carton}/{qty}, sheet totals = {sheet}. Please verify before submitting.",
+        fields: {
+          receivedOffice: "Receiving Office",
+          supplier: "Supplier",
+          invoiceNo: "Ref No.",
+          receiptNo: "Invoice No.",
+          receivedDate: "Receiving Date",
+          orderNo: "Order No.",
+          cartonNo: "Cartons",
+          partNo: "Part No.",
+          dateCode: "Date Code",
+          qty: "Qty (PCS)",
+          weight: "Weight (KG)",
+          office: "Office",
+          poNo: "PO No.",
+          remark: "Remark"
+        }
+      },
       receiving: {
         title: "Receiving Orders",
         searchPlaceholder: "Search batch no / supplier / invoice no",
@@ -2301,6 +2372,12 @@ export default {
         colLocation: "Org / Sub-inv",
         colType: "Type",
         colStatus: "Status"
+      },
+      dateCodePeriods: {
+        directions: {
+          forward: "Forward (counter increases with month)",
+          backward: "Backward (counter decreases with month)"
+        }
       }
     }
   }

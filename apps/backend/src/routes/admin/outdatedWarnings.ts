@@ -4,7 +4,6 @@ import type { Context } from "hono";
 import { db } from "../../db.js";
 import { actorFrom } from "../../auth/middleware.js";
 import { listOutdatedWarnings, resolveOrderOutdatedWarnings } from "../../db/outdated.js";
-import { retryAutoFinishPickingOrder } from "../../db/picking.js";
 import { retryReceivingOrderClear } from "../../db/putaway.js";
 
 // Supplier outdated date-code scan warnings (spec
@@ -48,9 +47,10 @@ adminOutdatedWarningsRoute.get("/outdated-warnings", async (c) => {
 // Whole-order resolution: stamp every unresolved warning of the order with
 // resolved_at/resolved_by/resolution_note (tx) + outdated.warning.resolved
 // event. Idempotent — { resolved: 0 } when nothing is pending. A resolution
-// that clears pending warnings completes a held order: the picking auto-
-// finish / receiving auto-clear check is re-run from here (route layer —
-// outdated.ts must not import the flow modules).
+// that clears pending warnings releases the receiving order's held auto-clear
+// (re-run here — outdated.ts must not import the flow modules). Picking has
+// no auto-finish to re-run since 2026-10-16: after resolving, the operator's
+// explicit finish (previously 409 unresolved_outdated_warnings) succeeds.
 adminOutdatedWarningsRoute.post("/outdated-warnings/resolve-order", async (c) => {
   const body = await readJson<{ orderKind?: string; orderId?: string; note?: string }>(c);
   if (!body.orderKind) throw new HTTPException(400, { message: "orderKind is required" });
@@ -62,12 +62,8 @@ adminOutdatedWarningsRoute.post("/outdated-warnings/resolve-order", async (c) =>
     note: body.note ?? null,
     actorId,
   });
-  if (result.resolved > 0) {
-    if (body.orderKind === "picking") {
-      await retryAutoFinishPickingOrder(db, { pickingOrderId: body.orderId, actorId });
-    } else {
-      await retryReceivingOrderClear(db, { receivingOrderId: body.orderId, actorId });
-    }
+  if (result.resolved > 0 && body.orderKind === "putaway") {
+    await retryReceivingOrderClear(db, { receivingOrderId: body.orderId, actorId });
   }
   return c.json(result, 200);
 });

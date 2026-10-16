@@ -173,7 +173,18 @@
   /shipping-boxes/:id/scan`) resolves a scanned part barcode across ALL open
   orders (404 `no_matching_picking_item`, 409 `ambiguous_picking_item`) and
   picks it straight into the box — `shipping_boxes.picking_order_id` stays
-  as the informational creator order only.
+  as the informational creator order only. One COO per box (2026-10-16):
+  add-to-box / scan-into-box reject a package whose non-null COO differs
+  from the box's existing non-null COO set (409 `box_coo_mismatch`; null COO
+  never conflicts); add-all-unboxed is exempt — the box card then shows a ⚠
+  Mixed-COO chip listing the distinct COOs. Each box card has a per-box
+  expandable **Contents** list (part, qty, date/lot/COO/COW per package)
+  with a **Move out** button on open boxes
+  (`DELETE /shipping-boxes/:id/packages/:packageId`).
+  Boxing NEVER finishes the order (2026-10-16): the order stays `picking`
+  until the operator presses the explicit **Finish** button (header action +
+  sticky footer button when every item is fully boxed;
+  `POST /picking-orders/:id/finish`).
 - Box labels + pre-printed box ids: on the picking detail page the
   hardware scanner is armed for box ids — a scan that does not match a
   supplier QR template creates an open box with that scanned (pre-printed)
@@ -203,17 +214,17 @@
   (`checkPartScanOutdated` in `apps/backend/src/db/outdated.ts`; the
   `shipping-boxes/:id/scan` path takes an optional `dateCode` body field
   because the barcode alone lacks the decoded date code). Order completion
-  is blocked while the order has unresolved warnings: the auto-finish
-  (`maybeAutoFinishPickingOrder`) holds — the order stays `picking` — and an
-  explicit `POST /picking-orders/:id/finish` 409s
-  `unresolved_outdated_warnings` with a JSON body `{error, count}` (the PDA
-  toasts it with the count); the put-away commit is NOT blocked — the
-  receiving auto-clear is held instead (see the put-away flow). The picking
+  is blocked while the order has unresolved warnings: the explicit
+  `POST /picking-orders/:id/finish` 409s `unresolved_outdated_warnings`
+  with a JSON body `{error, count}` (the PDA toasts it with the count) — and
+  since 2026-10-16 that explicit finish is the ONLY finisher (boxing never
+  auto-finishes); the put-away commit is NOT blocked — the receiving
+  auto-clear is held instead (see the put-away flow). The picking
   list rows + detail carry `outdatedWarningCount` (unresolved) → warning
   chip when > 0. An admin resolves the whole order's warnings
   (`POST /admin/outdated-warnings/resolve-order`), which also re-runs the
-  held auto-finish (`retryAutoFinishPickingOrder`) so the order finishes on
-  resolution; admin status overrides are NOT blocked. SSE:
+  held receiving auto-clear; the operator then presses Finish again.
+  Admin status overrides are NOT blocked. SSE:
   `outdated.warning.created` / `outdated.warning.resolved` (topics
   `/admin/outdated-warnings` + `/picking-orders`).
 - Per-order issue reporting (`POST /picking-orders/report-issues`). An issued
@@ -424,8 +435,9 @@
   source receiving lines' `additional_data` (`{boxSize, netWeight,
   grossWeight, weightUnit}`, g→kg, default kg), one boxed package per
   (item, lot) portion, the order's allocations released, `source_shelf_box_id`
-  recorded on the shipping box, and the order auto-finishes like the scan
-  path (409 `box_not_exact_match` / `box_not_fully_available`).
+  recorded on the shipping box. Boxing never finishes the order (2026-10-16)
+  — the operator confirms with the explicit finish (409 `box_not_exact_match`
+  / `box_not_fully_available`).
 - Shipping-box prefill on the pack path: when a package lands in a shipping
   box (`addPackageToBox` / `add-all-unboxed`), the box's still-NULL box
   size/net/gross are filled from the receiving lines behind the box's
@@ -558,7 +570,7 @@
   shared WWYY rank helpers in `apps/backend/src/db/dateCode.ts`; admin
   routes in `apps/backend/src/routes/admin/outdatedWarnings.ts`
   (`GET /admin/outdated-warnings`, `POST /admin/outdated-warnings/resolve-order`
-  — also re-runs `retryAutoFinishPickingOrder` / `retryReceivingOrderClear`).
+  — also re-runs the held receiving auto-clear `retryReceivingOrderClear`).
 - `apps/backend/src/db/allocate.ts` — allocation engine: demands in
   `priority_seq` order, skips work-locked orders, open qty = `qty − Σ
   picking_packages`.
