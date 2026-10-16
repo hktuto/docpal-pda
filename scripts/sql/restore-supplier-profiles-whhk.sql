@@ -156,9 +156,9 @@ VALUES
   -- scans match (2026-10-16).
   (
     '00000000-0000-7000-8000-000000009005', '15915', NULL,
-    $re$^\[\)>\x1e06\x1dLT(?<serialNo>[^\x1d\x1e\x04]+)\x1dPN(?<itemId>[^\x1d\x1e\x04]+)\x1dRV[^\x1d]*\x1dQT(?<qty>\d+)\x1dPO[^\x1d]*\x1dBT(?<lotCode>[^\x1d\x1e\x04]+)\x1dBX[^\x1d]+\x1dDC(?<dateCode>[^\x1d\x1e\x04]+)[\x1e\x04]*$$re$,
+    $re$^\[\)>[\x1d\x1e\xA0]?06[\x1d\xA0]LT(?<serialNo>[^\x1d\xA0\x1e\x04]+)[\x1d\xA0]PN(?<itemId>[^\x1d\xA0\x1e\x04]+)[\x1d\xA0]RV[^\x1d\xA0]*[\x1d\xA0]QT(?<qty>\d+)[\x1d\xA0]PO[^\x1d\xA0]*[\x1d\xA0]BT(?<lotCode>[^\x1d\xA0\x1e\x04]+)[\x1d\xA0]BX[^\x1d\xA0]+[\x1d\xA0]DC(?<dateCode>[^\x1d\xA0\x1e\x04]+)[\x1e\x04]*$$re$,
     NULL, 'datamatrix', NULL, NULL, ARRAY['DATA MATRIX'], ARRAY['TE'],
-    'Restored from BVSDB RegPattern Id=194 (WHHK), 2026-08-13 backup. No TE scans in BVSDB — template verified against 5 DataMatrix raws decoded from label photos TE-01..05 (MH10.8.2: LT/PN/RV/QT/PO/BT/BX/DC). Parts master stores the PN wrapped as AMP(<pn>) (legacy TE-AMP(<pn>)) while labels carry the bare PN — normalizePartNo unwraps the wrapper so scans match (2026-10-16).'
+    'Restored from BVSDB RegPattern Id=194 (WHHK), 2026-08-13 backup. No TE scans in BVSDB — template verified against 5 DataMatrix raws decoded from label photos TE-01..05 (MH10.8.2: LT/PN/RV/QT/PO/BT/BX/DC). Separators accept GS or NBSP (\xA0) since some decoder pipelines sanitize GS into a non-breaking space and drop the RS (2026-10-16). Parts master stores the PN wrapped as AMP(<pn>) (legacy TE-AMP(<pn>)) while labels carry the bare PN — normalizePartNo unwraps the wrapper so scans match (2026-10-16).'
   ),
 
   -- NDK (supplier 69915, NDK ELECTRONICS (HK) LTD.): MH10.8.2 QR on the

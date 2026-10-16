@@ -154,11 +154,13 @@ const TEMPLATES = {
   },
   // Restored from RegPattern Id=194 (TE). MH10.8.2 DataMatrix
   // (verified by decoding label photos TE-01..05): LT/PN/RV/QT/PO/BT/BX/DC.
+  // Separators accept GS or NBSP (\xA0) — decoder pipelines that sanitize the
+  // GS control char emit NBSP instead (and may drop the RS after "[)>").
   TE: {
     qtyEncoding: null,
     qrType: "datamatrix",
     template:
-      "^\\[\\)>\\x1e06\\x1dLT(?<serialNo>[^\\x1d\\x1e\\x04]+)\\x1dPN(?<itemId>[^\\x1d\\x1e\\x04]+)\\x1dRV[^\\x1d]*\\x1dQT(?<qty>\\d+)\\x1dPO[^\\x1d]*\\x1dBT(?<lotCode>[^\\x1d\\x1e\\x04]+)\\x1dBX[^\\x1d]+\\x1dDC(?<dateCode>[^\\x1d\\x1e\\x04]+)[\\x1e\\x04]*$",
+      "^\\[\\)>[\\x1d\\x1e\\xA0]?06[\\x1d\\xA0]LT(?<serialNo>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1d\\xA0]PN(?<itemId>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1d\\xA0]RV[^\\x1d\\xA0]*[\\x1d\\xA0]QT(?<qty>\\d+)[\\x1d\\xA0]PO[^\\x1d\\xA0]*[\\x1d\\xA0]BT(?<lotCode>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1d\\xA0]BX[^\\x1d\\xA0]+[\\x1d\\xA0]DC(?<dateCode>[^\\x1d\\xA0\\x1e\\x04]+)[\\x1e\\x04]*$",
   },
   // Restored from RegPattern Id=170 (NDK_16M) — modern MH10.8.2 QR verified by
   // decoding label photos NDK-01/02: P=cust PN, 1T=control no, Q=qty, 1P=NDK P/N.
@@ -284,6 +286,9 @@ const tePhotoRaws = [
   // First real scanner capture (2026-10-16): same layout, but the label ends
   // right after DC — no trailing RS/EOT.
   { partNum: "170213-1", qty: 15000, raw: `[)>${RS}06${GS}LT3S0852E9358710${GS}PN170213-1${GS}RVT${GS}QT15000${GS}PO200234511429${GS}BT26276D${GS}BX1${GS}DC26276` },
+  // Real capture where the pipeline sanitized GS → NBSP (\xA0) and dropped
+  // the RS after "[)>"; lot code is the single char "0".
+  { partNum: "5172070-1", qty: 720, raw: "[)>\xA006\xA0LT3SILJP00C4QSKH\xA0PN5172070-1\xA0RVA\xA0QT720\xA0PO2736213160\xA0BT0\xA0BX1\xA0DC26292" },
 ];
 report("TE", tePhotoRaws, (row, p) => {
   if (!p.partNo) return "no match";
