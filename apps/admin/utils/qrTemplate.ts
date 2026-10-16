@@ -104,19 +104,70 @@ export function decodeKoaQty(qty: string): number | undefined {
   return base * 10 ** zeros;
 }
 
-/** KOA date-code encoding ('koa_month_counter'): leading digits' first 4 =
- *  month counter + week; counter 17 = 2026-07, increments monthly.
- *  "1723L789" → WWYY "2326".
- *  Copy of decodeKoaDateCode in apps/pda/utils/parseOcrScan.ts for the preview. */
-export function decodeKoaDateCode(raw: string): string | undefined {
+/** One counter→month period from the date_code_counter_periods table
+ *  (GET /date-code-periods). periodStart is "YYYY-MM-DD" (first of month). */
+export interface DateCodePeriod {
+  encoding?: string; // 'koa_month_counter' on backend rows; omitted on fallbacks
+  direction: "forward" | "backward";
+  counterFrom: number;
+  counterTo: number;
+  periodStart: string;
+}
+
+/** Fallback periods used when the table is empty/unreachable — KOA's counter
+ *  rolls 10→99 and restarts; one row per 90-month cycle (keep in sync with the
+ *  backend seed in apps/backend/src/db/seed.ts). A counter rotation is a new
+ *  row, never an edit. */
+export const DEFAULT_DATE_CODE_PERIODS: DateCodePeriod[] = [
+  { direction: "forward", counterFrom: 10, counterTo: 99, periodStart: "2010-12-01" },
+  { direction: "forward", counterFrom: 10, counterTo: 99, periodStart: "2018-06-01" },
+  { direction: "forward", counterFrom: 10, counterTo: 99, periodStart: "2025-12-01" },
+];
+
+function isoWeekYear(date: Date): { week: number; year: number } {
+  const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = d.getUTCDay() || 7; // Mon=1 … Sun=7
+  d.setUTCDate(d.getUTCDate() + 4 - day); // Thursday of this ISO week
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return { week, year: d.getUTCFullYear() };
+}
+
+/** KOA date-code encoding ('koa_month_counter'): leading digit run (>= 4
+ *  digits) = 2-digit month counter + 2-digit DAY of month. The counter maps
+ *  to a month through the configured periods (see DateCodePeriod); the result
+ *  is rendered as WWYY = ISO-8601 week + ISO week-year of that date. */
+export function decodeKoaDateCode(
+  raw: string,
+  periods: DateCodePeriod[] = DEFAULT_DATE_CODE_PERIODS,
+  referenceDate: Date = new Date()
+): string | undefined {
   const digits = raw.match(/^\d+/)?.[0];
   if (!digits || digits.length < 4) return undefined;
   const counter = Number(digits.slice(0, 2));
-  const week = Number(digits.slice(2, 4));
-  if (counter < 1 || counter > 99 || week < 1 || week > 53) return undefined;
-  const totalMonths = 2026 * 12 + 6 + (counter - 17); // 0-based month index, 2026-07 = counter 17
-  const year = Math.floor(totalMonths / 12);
-  return `${digits.slice(2, 4)}${String(year % 100).padStart(2, "0")}`;
+  const day = Number(digits.slice(2, 4));
+  if (day < 1 || day > 31) return undefined;
+  const refMonth = referenceDate.getUTCFullYear() * 12 + referenceDate.getUTCMonth(); // 0-based month index
+  const candidates: number[] = [];
+  for (const p of periods) {
+    if (p.encoding !== undefined && p.encoding !== "koa_month_counter") continue;
+    const lo = Math.min(p.counterFrom, p.counterTo);
+    const hi = Math.max(p.counterFrom, p.counterTo);
+    if (counter < lo || counter > hi) continue;
+    const m = p.periodStart.match(/^(\d{4})-(\d{2})-\d{2}$/);
+    if (!m) continue;
+    const offset = p.direction === "forward" ? counter - p.counterFrom : p.counterFrom - counter;
+    candidates.push(Number(m[1]) * 12 + (Number(m[2]) - 1) + offset);
+  }
+  if (candidates.length === 0) return undefined;
+  const past = candidates.filter((c) => c <= refMonth);
+  const picked = past.length > 0 ? Math.max(...past) : Math.min(...candidates);
+  const year = Math.floor(picked / 12);
+  const month = picked % 12; // 0-based
+  const monthLength = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  if (day > monthLength) return undefined;
+  const { week, year: isoYear } = isoWeekYear(new Date(Date.UTC(year, month, day)));
+  return `${String(week).padStart(2, "0")}${String(isoYear % 100).padStart(2, "0")}`;
 }
 
 /** Editor entry point: stored config if present and recognized, else advanced

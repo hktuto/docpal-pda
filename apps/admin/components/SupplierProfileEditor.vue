@@ -8,6 +8,7 @@ import {
   FIELD_ROLES,
   type QrTemplateConfig,
   type FieldRole,
+  type DateCodePeriod,
 } from "~/utils/qrTemplate";
 
 // QR-template editor for one supplier profile. Builds supplier_profiles.qr_template
@@ -55,6 +56,18 @@ const dateCodeEncodingOptions = computed(() => [
   { value: "", label: t("admin.pages.supplierProfile.dateCodePlain") },
   { value: "koa_month_counter", label: t("admin.pages.supplierProfile.dateCodeKoa") },
 ]);
+// Counter→month periods for the koa_month_counter preview decode; falls back
+// to DEFAULT_DATE_CODE_PERIODS in qrTemplate.ts when unavailable.
+const koaPeriods = ref<DateCodePeriod[] | undefined>(undefined);
+onMounted(async () => {
+  try {
+    const res = await useApi().get("/date-code-periods");
+    const rows = Array.isArray(res) ? res : res?.rows;
+    if (Array.isArray(rows) && rows.length > 0) koaPeriods.value = rows;
+  } catch {
+    // keep defaults
+  }
+});
 // Outdated date-code limit (months; spec 2026-10-07): empty = NULL = no
 // check. New profiles default to 12 (the backend default when absent).
 const outdatedLimitInput = ref(
@@ -198,7 +211,7 @@ function displayQty(raw: string | undefined): string {
 function displayDateCode(raw: string | undefined): string {
   if (raw === undefined) return "";
   if (dateCodeEncoding.value === "koa_month_counter") {
-    const decoded = decodeKoaDateCode(raw);
+    const decoded = decodeKoaDateCode(raw, koaPeriods.value);
     return decoded !== undefined ? `${decoded} (${t("admin.pages.supplierProfile.koaFormat")})` : raw;
   }
   return raw;

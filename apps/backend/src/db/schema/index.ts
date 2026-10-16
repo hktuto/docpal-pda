@@ -1,5 +1,6 @@
 export * from "./master.js";
 export * from "./receiving.js";
+export * from "./receivingCn.js";
 export * from "./picking.js";
 export * from "./inventory.js";
 export * from "./internal-transfer.js";

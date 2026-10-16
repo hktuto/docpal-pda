@@ -41,6 +41,30 @@
   decoder is restricted to the supplier profile's `barcode_types` (when set),
   so other symbologies on multi-barcode labels don't decode at all; restored
   on page leave (`useSupplierSymbologyScope`, xcheng/Movfast devices only).
+- Customer receiving order upload (CN warehouses; spec
+  `docs/superpowers/specs/2026-10-16-customer-receiving-upload-design.md`) —
+  a separate admin-side world, not the PDA receiving flow: the admin uploads
+  a customer receiving Excel (收貨確認及付款通知書) on
+  `apps/admin/pages/receiving-cn/new.vue` (parsed client-side by
+  `apps/admin/utils/cnReceivingExcel.ts`, verified/edited in the wizard,
+  submitted multipart to `POST /admin/receiving-cn/excel`), the backend
+  forwards file + verified JSON to DocPal
+  (`apps/backend/src/docpalWorkflow.ts` — one configured
+  `DOCPAL_WORKFLOW_TOKEN` for all workflow/file calls, the real admin sent as
+  the workflow creator) and tracks the workflow in `receiving_cn_workflows`
+  (list `GET /admin/receiving-cn`, tracking page
+  `apps/admin/pages/receiving-cn/index.vue`). A status cron
+  (`apps/backend/src/jobs/receivingCnSync.ts`, kill-switch
+  `RECEIVING_CN_SYNC=off`) polls running workflows; on completion it reads
+  the `receiving_orders_cn` / `receiving_invoices_cn` /
+  `receiving_invoice_items_cn` trio — written by the external upstream-sync
+  service, matched by `batch_no` = the CN 編號 — flips the order `in_hand` +
+  stamps `arrived_at`, and creates the dedicated CN put-away task
+  (`put_away_tasks_cn`, unique per order = idempotent). Warehouses on this
+  flow (flow-config `cnReceiving`) do not use the standard receiving flow;
+  CN stock only becomes allocatable after CN put-away completes (no dock
+  ledger). Phase 2 (PDF + OCR) is not implemented (`getOcrResult` throws, no
+  `/pdf` routes or UI branch).
 - Report, edit, confirm, and cancel receiving item mismatches — **item-keyed**
   (every call addresses the receiving invoice item id; the mismatch is a set
   of flat columns on the item, no separate table, no status/reporter).
@@ -229,6 +253,16 @@
   ingest route and the ElectricSQL consumer).
 - `apps/backend/src/db/allocate.ts` — `allocateAll` runs best-effort after
   confirm-arrival and other stock-changing commits.
+- `apps/backend/src/routes/admin/receivingCn.ts` +
+  `apps/backend/src/db/receivingCn.ts` + `apps/backend/src/docpalWorkflow.ts`
+  + `apps/backend/src/jobs/receivingCnSync.ts` — CN customer receiving
+  upload: tracking list/detail, Excel upload → DocPal workflow kick, status
+  cron + finalize; schema `apps/backend/src/db/schema/receivingCn.ts`.
+- `apps/admin/pages/receiving-cn/index.vue` +
+  `apps/admin/pages/receiving-cn/new.vue` +
+  `apps/admin/utils/cnReceivingExcel.ts` +
+  `apps/admin/components/receiving-cn/CnItemEditModal.vue` — admin CN
+  tracking list and the upload → verify/edit → submit wizard.
 
 ## Known limitations
 
@@ -256,3 +290,4 @@
 - `docs/superpowers/specs/2026-09-11-user-subinventory-scope-design.md`
 - `docs/superpowers/specs/2026-09-22-admin-receiving-status-override-design.md`
 - `docs/superpowers/specs/2026-10-02-excel-order-barcode-scan-to-open-design.md`
+- `docs/superpowers/specs/2026-10-16-customer-receiving-upload-design.md`

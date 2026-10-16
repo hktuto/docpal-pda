@@ -247,6 +247,45 @@ export const entities: Record<string, EntityConfig> = {
       { key: "lastUpdateDate", label: "admin.fields.lastUpdateDate" },
     ],
   },
+  dateCodePeriods: {
+    path: "date-code-periods",
+    title: "admin.entities.dateCodePeriods.title",
+    pk: "id",
+    clientSearch: true,
+    clientFilters: [{ key: "direction", label: "admin.fields.direction" }],
+    fields: [
+      {
+        key: "encoding",
+        label: "admin.fields.encoding",
+        type: "text",
+        required: true,
+        hint: "admin.fields.encodingHint",
+      },
+      {
+        key: "direction",
+        label: "admin.fields.direction",
+        type: "select",
+        required: true,
+        options: [
+          { value: "forward", label: "admin.pages.dateCodePeriods.directions.forward" },
+          { value: "backward", label: "admin.pages.dateCodePeriods.directions.backward" },
+        ],
+      },
+      { key: "counterFrom", label: "admin.fields.counterFrom", type: "number", required: true },
+      { key: "counterTo", label: "admin.fields.counterTo", type: "number", required: true },
+      {
+        key: "periodStart",
+        label: "admin.fields.periodStart",
+        type: "text",
+        required: true,
+        hint: "admin.fields.periodStartHint",
+      },
+    ],
+    extraColumns: [
+      { key: "createdDate", label: "admin.fields.createdDate" },
+      { key: "lastUpdateDate", label: "admin.fields.lastUpdateDate" },
+    ],
+  },
   "inventory-labels": {
     path: "inventory-labels",
     title: "admin.entities.inventoryLabels.title",
@@ -278,7 +317,10 @@ export const navSections: { title: string; links: { route: string; title: string
   },
   {
     title: "admin.nav.supplier",
-    links: [{ route: "/suppliers", title: "admin.navLinks.suppliers" }],
+    links: [
+      { route: "/suppliers", title: "admin.navLinks.suppliers" },
+      { route: "/date-code-periods", title: "admin.navLinks.dateCodePeriods" },
+    ],
   },
   {
     title: "admin.nav.warehouse",
@@ -302,7 +344,10 @@ export const navSections: { title: string; links: { route: string; title: string
   },
   {
     title: "admin.nav.receiving",
-    links: [{ route: "/receiving", title: "admin.navLinks.receivingOrders" }],
+    links: [
+      { route: "/receiving", title: "admin.navLinks.receivingOrders" },
+      { route: "/receiving-cn", title: "admin.navLinks.receivingCn" },
+    ],
   },
   {
     title: "admin.nav.issues",

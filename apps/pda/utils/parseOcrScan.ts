@@ -646,28 +646,89 @@ function getIsoYear(date: Date): number {
   return d.getUTCFullYear();
 }
 
+/** A month-counter period row (date_code_counter_periods). A counter value
+ *  may belong to several periods (rotation era) — the decoder picks the
+ *  latest candidate not in the future relative to the scan date.
+ *  Keep in sync with apps/backend/src/db/scanParse.ts DateCodePeriod. */
+export interface DateCodePeriod {
+  encoding: string;
+  direction: "forward" | "backward";
+  counterFrom: number;
+  counterTo: number;
+  periodStart: string; // YYYY-MM-DD, always the first of a month
+}
+
+/** Built-in fallback periods (used when no fetched rows are at hand — unit
+ *  tests, offline parsing); request paths pass the rows from
+ *  GET /date-code-periods. The rolling counter 10→99 restarts every 90
+ *  months, one row per cycle (anchors: 10 = 2025-12 … 99 = 2033-05; previous
+ *  cycles 10 = 2018-06 … 99 = 2025-11 and 10 = 2010-12 … 99 = 2018-05); a
+ *  rotation inserts the next cycle row. Keep in sync with
+ *  apps/backend/src/db/scanParse.ts DEFAULT_KOA_PERIODS and the
+ *  date_code_counter_periods seed rows. */
+export const DEFAULT_KOA_PERIODS: DateCodePeriod[] = [
+  { encoding: "koa_month_counter", direction: "forward", counterFrom: 10, counterTo: 99, periodStart: "2010-12-01" },
+  { encoding: "koa_month_counter", direction: "forward", counterFrom: 10, counterTo: 99, periodStart: "2018-06-01" },
+  { encoding: "koa_month_counter", direction: "forward", counterFrom: 10, counterTo: 99, periodStart: "2025-12-01" },
+];
+
+/** First-of-month Date `months` away from (year, month0 = 0-based). */
+function monthAt(year: number, month0: number, months: number): Date {
+  const total = year * 12 + month0 + months;
+  return new Date(Math.floor(total / 12), ((total % 12) + 12) % 12, 1);
+}
+
+function parsePeriodStart(periodStart: string): { year: number; month0: number } | undefined {
+  const m = /^(\d{4})-(\d{2})-\d{2}$/.exec(periodStart);
+  if (!m) return undefined;
+  return { year: Number(m[1]), month0: Number(m[2]) - 1 };
+}
+
 /**
  * Decode a KOA date-code field (template segment 5, e.g. "1625H713",
- * "1723L789", "1114T232") to the system's WWYY date code. Take the leading
- * digit run's first 4 digits: the first 2 are a month counter (1–99) that
- * increments monthly with 17 = 2026-07 (16 = 2026-06, 18 = 2026-08, …);
- * the last 2 are the day of month. Resolve counter → year-month, add the day
- * to get a calendar date, then convert to ISO week. "1625H713" → counter 16
- * (2026-06) + day 25 → 2026-06-25 → ISO week 26 → "2626".
+ * "5420Q156") to the system's WWYY date code. Take the leading digit run's
+ * first 4 digits: the first 2 are a month counter mapped to a year/month
+ * through the date_code_counter_periods rows (the rolling counter 10→99
+ * restarts every 90 months — one forward row per cycle, e.g. 10 = 2025-12
+ * … 99 = 2033-05); the last 2 are the day of month. A counter covered by
+ * several cycle rows yields one candidate month per row — the latest one
+ * not in the future relative to `referenceDate` (default: today) wins,
+ * falling back to the earliest candidate when all are in the future. The raw
+ * value stays the lot code.
  * Keep in sync with apps/backend/src/db/scanParse.ts decodeKoaDateCode.
  */
-export function decodeKoaDateCode(raw: string): string | undefined {
+export function decodeKoaDateCode(
+  raw: string,
+  periods: DateCodePeriod[] = DEFAULT_KOA_PERIODS,
+  referenceDate: Date = new Date()
+): string | undefined {
   const digits = raw.match(/^\d+/)?.[0];
   if (!digits || digits.length < 4) return undefined;
   const counter = Number(digits.slice(0, 2));
   const day = Number(digits.slice(2, 4));
-  if (counter < 1 || counter > 99 || day < 1 || day > 31) return undefined;
-  const totalMonths = 2026 * 12 + 6 + (counter - 17);
-  const year = Math.floor(totalMonths / 12);
-  const month = totalMonths % 12;
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  if (day < 1 || day > 31) return undefined;
+
+  const candidates: Date[] = [];
+  for (const p of periods) {
+    if (p.encoding !== DATE_CODE_ENCODING_KOA_MONTH_COUNTER) continue;
+    const lo = Math.min(p.counterFrom, p.counterTo);
+    const hi = Math.max(p.counterFrom, p.counterTo);
+    if (counter < lo || counter > hi) continue;
+    const start = parsePeriodStart(p.periodStart);
+    if (!start) continue;
+    const offset = p.direction === "forward" ? counter - p.counterFrom : p.counterFrom - counter;
+    candidates.push(monthAt(start.year, start.month0, offset));
+  }
+  if (candidates.length === 0) return undefined;
+
+  const ref = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1);
+  const pastOrPresent = candidates.filter((d) => d <= ref);
+  const picked = pastOrPresent.length
+    ? new Date(Math.max(...pastOrPresent.map((d) => d.getTime())))
+    : new Date(Math.min(...candidates.map((d) => d.getTime())));
+  const daysInMonth = new Date(picked.getFullYear(), picked.getMonth() + 1, 0).getDate();
   if (day > daysInMonth) return undefined;
-  const date = new Date(year, month, day);
+  const date = new Date(picked.getFullYear(), picked.getMonth(), day);
   const week = getIsoWeek(date);
   const isoYear = getIsoYear(date);
   return `${String(week).padStart(2, "0")}${String(isoYear % 100).padStart(2, "0")}`;
@@ -718,13 +779,16 @@ export interface ParseQrCaptureOptions {
    * mixed-brand or unmapped-brand orders still parse.
    */
   contextBrands?: string[];
+  /** Month-counter periods for koa_month_counter date-code decoding
+   *  (GET /date-code-periods rows); defaults to DEFAULT_KOA_PERIODS. */
+  dateCodePeriods?: DateCodePeriod[];
 }
 
 export function parseQrCapture(
   qrValue: string,
   options: ParseQrCaptureOptions
 ): OcrParseResult {
-  const { supplierTemplates, targets = [], contextSupplierCode, contextBrands } = options;
+  const { supplierTemplates, targets = [], contextSupplierCode, contextBrands, dateCodePeriods } = options;
   const targetArray = Array.isArray(targets) ? targets : [targets];
   const normalizedQr = qrValue.trim();
 
@@ -763,14 +827,19 @@ export function parseQrCapture(
 
     // KOA: segment 5 is the raw lot code (e.g. "1625H713"); the WWYY date code
     // is derived from it via koa_month_counter. Older templates may still name
-    // the same segment dateCode — treat that as the lot code too.
-    // Empty segment (::) yields "" — normalize to undefined.
+    // the same segment dateCode — treat that as the lot code too. When both
+    // groups exist (iC-Haus: AC = lot, DC = date), the date decodes from the
+    // dateCode group. Without a date-code encoding the dateCode group passes
+    // through raw. Empty segment (::) yields "" — normalize to undefined.
     const rawLotCode = (groups.lotCode || groups.dateCode) ?? undefined;
-    let dateCode: string | undefined = undefined;
-    if (rawLotCode && supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_KOA_MONTH_COUNTER) {
-      dateCode = decodeKoaDateCode(rawLotCode);
-    } else if (rawLotCode && supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_YYWW) {
-      dateCode = decodeYywwDateCode(rawLotCode);
+    const rawDateCode = groups.dateCode || undefined;
+    let dateCode: string | undefined;
+    if (supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_KOA_MONTH_COUNTER) {
+      dateCode = rawLotCode ? decodeKoaDateCode(rawLotCode, dateCodePeriods) : undefined;
+    } else if (supplier.qrcodeDateCodeEncoding === DATE_CODE_ENCODING_YYWW) {
+      dateCode = rawDateCode ? decodeYywwDateCode(rawDateCode) : undefined;
+    } else {
+      dateCode = rawDateCode;
     }
 
     return {

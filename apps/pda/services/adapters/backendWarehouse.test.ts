@@ -173,6 +173,24 @@ describe('backendWarehouse receiving flow', () => {
     ]);
   });
 
+  it('getDateCodePeriods maps the date-code-periods DTO to the client shape', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse([
+        { encoding: 'koa_month_counter', direction: 'forward', counterFrom: 10, counterTo: 94, periodStart: '2025-12-01' },
+        { encoding: 'koa_month_counter', direction: 'backward', counterFrom: 99, counterTo: 71, periodStart: '2025-11-01' },
+      ])
+    );
+
+    const periods = await service().getDateCodePeriods();
+
+    expect(lastCall().url).toBe(`${BASE_URL}/date-code-periods`);
+    expect(lastCall().init.method).toBe('GET');
+    expect(periods).toEqual([
+      { encoding: 'koa_month_counter', direction: 'forward', counterFrom: 10, counterTo: 94, periodStart: '2025-12-01' },
+      { encoding: 'koa_month_counter', direction: 'backward', counterFrom: 99, counterTo: 71, periodStart: '2025-11-01' },
+    ]);
+  });
+
   it('maps the shipping-box / package mutations used by the receiving picking tab', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ ok: true }));
 

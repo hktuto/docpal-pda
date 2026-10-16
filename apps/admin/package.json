@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "nuxt dev --port 3100",
     "build": "nuxt build",
+    "test": "vitest run",
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
@@ -19,6 +20,7 @@
   "devDependencies": {
     "@types/qrcode": "^1.5.5",
     "typescript": "^6.0.3",
+    "vitest": "^4.1.9",
     "vue-tsc": "^3.3.7"
   }
 }

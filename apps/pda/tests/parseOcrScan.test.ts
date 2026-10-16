@@ -253,19 +253,41 @@ describe("decodeKoaQty", () => {
 });
 
 describe("decodeKoaDateCode", () => {
-  it("decodes month counter + day to WWYY (counter 17 = 2026-07)", () => {
-    expect(decodeKoaDateCode("1625H713")).toBe("2626"); // counter 16 → 2026-06, day 25 → 2026-06-25 → week 26
-    expect(decodeKoaDateCode("1723L789")).toBe("3026"); // counter 17 → 2026-07, day 23 → 2026-07-23 → week 30
-    expect(decodeKoaDateCode("1114T232")).toBe("0326"); // counter 11 → 2026-01, day 14 → 2026-01-14 → week 3
-    expect(decodeKoaDateCode("19077387")).toBe("3726"); // counter 19 → 2026-09, day 07 → 2026-09-07 → week 37
+  // Mirrors apps/backend/src/db/scanParse.ts decodeKoaDateCode with the
+  // DEFAULT_KOA_PERIODS rows (three forward cycles, counter 10→99 per
+  // 90-month cycle); always pass an explicit referenceDate.
+  const REF_2026_10 = new Date(Date.UTC(2026, 9, 16));
+  const REF_2026_08 = new Date(Date.UTC(2026, 7, 15));
+
+  it("decodes month counter + day to WWYY via the default periods (10 = 2025-12 in the latest cycle)", () => {
+    expect(decodeKoaDateCode("1625H713", undefined, REF_2026_08)).toBe("2626"); // counter 16 → 2026-06, day 25 → week 26
+    expect(decodeKoaDateCode("1723L789", undefined, REF_2026_08)).toBe("3026"); // counter 17 → 2026-07, day 23 → week 30
+    expect(decodeKoaDateCode("1114T232", undefined, REF_2026_08)).toBe("0326"); // counter 11 → 2026-01, day 14 → week 3
+    expect(decodeKoaDateCode("19077387", undefined, REF_2026_10)).toBe("3726"); // counter 19 → 2026-09, day 07 → week 37
+  });
+
+  it("resolves a counter covered by several cycles to the latest candidate not in the future", () => {
+    // counter 54 candidates 2014-08 / 2022-02 / 2029-08 → 2022-02-20 (Sunday) → week 07 of 2022
+    expect(decodeKoaDateCode("5420Q156", undefined, REF_2026_10)).toBe("0722");
+    // same counter, day 21 (Monday) → week 08 of 2022
+    expect(decodeKoaDateCode("5421Q156", undefined, REF_2026_10)).toBe("0822");
+    // same counter with a reference date past 2029-08 → 2029-08-01 → week 31 of 2029
+    expect(decodeKoaDateCode("5401", undefined, new Date(Date.UTC(2030, 0, 1)))).toBe("3129");
+    // counter 99 candidates 2018-05 / 2025-11 / 2033-05 → 2025-11-15 (Saturday) → week 46 of 2025
+    expect(decodeKoaDateCode("9915", undefined, REF_2026_08)).toBe("4625");
+    // counter 70 candidates 2015-12 / 2023-06 / 2030-12 → 2023-06-12 → week 24 of 2023
+    expect(decodeKoaDateCode("7012", undefined, REF_2026_08)).toBe("2423");
   });
 
   it("rejects undecodable values", () => {
-    expect(decodeKoaDateCode("L2601A")).toBeUndefined(); // no leading digits
-    expect(decodeKoaDateCode("123")).toBeUndefined(); // fewer than 4 digits
-    expect(decodeKoaDateCode("1700X")).toBeUndefined(); // day 00
-    expect(decodeKoaDateCode("1732X")).toBeUndefined(); // day 32
-    expect(decodeKoaDateCode("0023X")).toBeUndefined(); // counter 00
+    expect(decodeKoaDateCode("L2601A", undefined, REF_2026_08)).toBeUndefined(); // no leading digits
+    expect(decodeKoaDateCode("123", undefined, REF_2026_08)).toBeUndefined(); // fewer than 4 digits
+    expect(decodeKoaDateCode("1700X", undefined, REF_2026_08)).toBeUndefined(); // day 00
+    expect(decodeKoaDateCode("1732X", undefined, REF_2026_08)).toBeUndefined(); // day 32
+    expect(decodeKoaDateCode("2352", undefined, REF_2026_08)).toBeUndefined(); // day 52
+    expect(decodeKoaDateCode("0023X", undefined, REF_2026_08)).toBeUndefined(); // counter 00 — outside 10..99
+    expect(decodeKoaDateCode("0523X", undefined, REF_2026_08)).toBeUndefined(); // counter 05 — outside 10..99
+    expect(decodeKoaDateCode("5429", undefined, REF_2026_10)).toBeUndefined(); // day 29 > 28 days in 2022-02
   });
 });
 
@@ -346,7 +368,7 @@ describe("parseQrCapture", () => {
     const ichausTemplate = {
       code: "20",
       qrcodeTemplate:
-        '^\\{(?=.*"CANR"\\s*:\\s*"(?<wclItemNo>[^"]+)")(?=.*"IANR"\\s*:\\s*"(?<itemId>[^"]+)")(?=.*"Q"\\s*:\\s*"(?<qty>\\d+)")(?=.*"DC"\\s*:\\s*"(?<dateCode>\\d{4})")(?=.*"COO"\\s*:\\s*"(?<coo>[^"]+)")(?=.*"ID"\\s*:\\s*"(?<serialNo>[^"]+)").*\\}$',
+        '^\\{(?=.*"CANR"\\s*:\\s*"(?<wclItemNo>[^"]+)")(?=.*"IANR"\\s*:\\s*"(?<itemId>[^"]+)")(?=.*"Q"\\s*:\\s*"(?<qty>\\d+)")(?=.*"DC"\\s*:\\s*"(?<dateCode>\\d{4})")(?=.*"COO"\\s*:\\s*"(?<coo>[^"]+)")(?=.*"LTS"\\s*:\\s*"(?<serialNo>[^"]+)")(?=.*"AC"\\s*:\\s*"(?<lotCode>[^"]+)").*\\}$',
       qrcodeQtyEncoding: null,
       qrcodeDateCodeEncoding: "yyww" as const,
       brands: ["ICHAUS"],

@@ -10,6 +10,19 @@
   pending task per receiving order, auto-created in the arrival-confirm tx,
   completed by the auto-clear. The task detail (`GET /put-away-tasks/:id`) is
   the same per-order aggregate plus the task row.
+- CN variant (flow config `cnReceiving`, spec
+  `docs/superpowers/specs/2026-10-16-customer-receiving-upload-design.md`):
+  CN warehouses work a dedicated CN task queue instead — `GET
+  /put-away-cn/tasks(/:id)` + `POST /put-away-cn/tasks/:id/complete`
+  (`apps/backend/src/routes/putawayCn.ts` + `src/db/putawayCn.ts`, every
+  route 404s while the flag is off). Tasks live in `put_away_tasks_cn`
+  (created by the CN finalize cron, one per CN receiving order); completion
+  writes per-item `put_away_qty` updates + a single PUT_AWAY `on_hand` ledger
+  row (no dock row — the CN path has no RECEIVE_TO_DOCK ledger) with no
+  `inventory_lot_sources` row (the CN item id lives in the ledger metadata,
+  `reference_type 'receiving_order_cn'`); a full put-away flips the order
+  `clear` and schedules `allocateAll`, so CN stock only appears in allocation
+  after put-away completes.
 - Show the put-away detail as **one aggregate read**
   (`GET /receiving-orders/:id/put-away`): expected invoice items (with
   remaining qty and a per-item shelf/box suggestion —
@@ -183,6 +196,11 @@
   (called from `confirmReceivingArrival` when `autoCreateTasks` is on),
   `completePutAwayTaskTx` (called from `tryMarkReceivingOrderClear`),
   `listPutAwayTasks`, `getPutAwayTaskDetail` (+ shelf suggestion).
+- `apps/backend/src/routes/putawayCn.ts` + `apps/backend/src/db/putawayCn.ts`
+  — CN put-away variant (`cnReceiving` flag): `GET /put-away-cn/tasks(/:id)`,
+  `POST /put-away-cn/tasks/:id/complete` (`completeCnPutAwayTx` — on-hand lot
+  upserts + PUT_AWAY `on_hand` ledger rows, `reference_type
+  'receiving_order_cn'`).
 
 ## Known limitations
 
@@ -213,3 +231,4 @@
 - `docs/superpowers/specs/2026-10-05-put-away-part-grouping-design.md`
 - `docs/superpowers/specs/2026-10-06-put-away-shelf-direct-design.md`
 - `docs/superpowers/specs/2026-10-07-supplier-outdated-datecode-warning-design.md`
+- `docs/superpowers/specs/2026-10-16-customer-receiving-upload-design.md`

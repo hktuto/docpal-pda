@@ -8,6 +8,7 @@
 import { sql } from "drizzle-orm";
 import { queryAll, type DbOrTx } from "./query.js";
 import { buildKoaLabelRaw } from "./scanParse.js";
+import { listDateCodePeriods } from "./dateCodePeriods.js";
 
 export interface LabelPartRow {
   partNo: string;
@@ -85,6 +86,9 @@ export async function getLabelsData(db: DbOrTx): Promise<LabelsData> {
   );
   const hasTemplate = new Map(templateRows.map((r) => [r.supplierCode, r.hasTemplate]));
 
+  // Counter periods for the KOA date-code encode (rolling 10→99 cycles).
+  const dateCodePeriods = await listDateCodePeriods(db);
+
   let serial = 900001;
   const nextSerial = () => String(serial++);
   const partLabel = (
@@ -95,7 +99,7 @@ export async function getLabelsData(db: DbOrTx): Promise<LabelsData> {
     dateCode: string | null
   ): string | null => {
     if (!supplierCode || !hasTemplate.get(supplierCode)) return null;
-    return buildKoaLabelRaw({ partNo, qty, lotCode, dateCode, serialNo: nextSerial() }) ?? null;
+    return buildKoaLabelRaw({ partNo, qty, lotCode, dateCode, serialNo: nextSerial(), dateCodePeriods }) ?? null;
   };
 
   const boxes = await queryAll<{

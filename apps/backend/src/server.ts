@@ -4,6 +4,7 @@ import { app } from "./index.js";
 import { db } from "./db.js";
 import { pruneEvents } from "./db/events.js";
 import { startGoodsVerifyDayEndCron } from "./jobs/goodsVerifyDayEnd.js";
+import { startReceivingCnSyncCron } from "./jobs/receivingCnSync.js";
 import { docpalBaseUrl } from "./config.js";
 import { logDocpalConnectivity } from "./auth/docpal.js";
 const port = Number(process.env.PORT ?? 3002);
@@ -28,3 +29,7 @@ void pruneEvents(db).catch((err) => console.error("pruneEvents at boot failed", 
 // Nightly goods-verify day-end generation at local 00:00 (GOODS_VERIFY_CRON=off
 // to disable).
 startGoodsVerifyDayEndCron(db);
+
+// CN receiving workflow-status polling (RECEIVING_CN_SYNC=off to disable;
+// RECEIVING_CN_SYNC_INTERVAL_SEC sets the interval, default 120 s).
+startReceivingCnSyncCron(db);

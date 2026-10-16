@@ -87,19 +87,32 @@ test("normalizePartNo: TE AMP() wrapper unwrapped to the bare PN", () => {
   assert.equal(normalizePartNo("AMP(640385-8)-1"), "AMP(640385-8)-1");
 });
 
-test("decodeKoaDateCode: month counter + week → WWYY (counter 17 = 2026-07)", () => {
-  assert.equal(decodeKoaDateCode("1723L789"), "2326"); // counter 17 → 2026, week 23
-  assert.equal(decodeKoaDateCode("1114T232"), "1426"); // counter 11 → 2026-01, week 14
-  assert.equal(decodeKoaDateCode("19077387"), "0726"); // counter 19 → 2026-09, week 07
-  assert.equal(decodeKoaDateCode("1623"), "2326"); // counter 16 → 2026-06
-  assert.equal(decodeKoaDateCode("1823"), "2326"); // counter 18 → 2026-08
-  assert.equal(decodeKoaDateCode("2352"), "5227"); // counter 23 → 2027-01, week 52
+test("decodeKoaDateCode: rolling month counter + day → ISO week WWYY", () => {
+  // KOA's counter rolls 10→99 per 90-month cycle (three seeded period rows);
+  // the latest candidate not in the future of the reference date wins.
+  const ref = new Date(2026, 9, 16); // 2026-10-16
+  assert.equal(decodeKoaDateCode("1723L789", undefined, ref), "3026"); // counter 17 → 2026-07 (current cycle), day 23 → 2026-07-23 → ISO week 30
+  assert.equal(decodeKoaDateCode("1114T232", undefined, ref), "0326"); // counter 11 → 2026-01, day 14 → 2026-01-14 → ISO week 03
+  assert.equal(decodeKoaDateCode("19077387", undefined, ref), "3726"); // counter 19 → 2026-09, day 07 → 2026-09-07 → ISO week 37
+  assert.equal(decodeKoaDateCode("1623", undefined, ref), "2626"); // counter 16 → 2026-06, day 23 → 2026-06-23 → ISO week 26
+  assert.equal(decodeKoaDateCode("1823", undefined, ref), "3426"); // counter 18 → 2026-08, day 23 → 2026-08-23 → ISO week 34
+  // counter 54 appears in all three cycles (2015-02 / 2022-02 / 2029-08) —
+  // the not-in-future rule picks 2022-02
+  assert.equal(decodeKoaDateCode("5420Q156", undefined, ref), "0722"); // day 20 → 2022-02-20 (Sunday) → ISO week 07
+  assert.equal(decodeKoaDateCode("5421Q156", undefined, ref), "0822"); // day 21 → 2022-02-21 (Monday) → ISO week 08
+  // counter 99: cycles end 2018-05 / 2025-11 / 2033-05 → 2025-11
+  assert.equal(decodeKoaDateCode("9915X", undefined, ref), "4625"); // 2025-11-15 → ISO week 46
+  // a reference date past 2029-08 moves counter 54 into the current cycle
+  assert.equal(decodeKoaDateCode("5401", undefined, new Date(2030, 0, 1)), "3129"); // 2029-08-01 → ISO week 31
   // invalid
-  assert.equal(decodeKoaDateCode("L2601A"), undefined); // no leading digits
-  assert.equal(decodeKoaDateCode("123"), undefined); // fewer than 4 digits
-  assert.equal(decodeKoaDateCode("1700X"), undefined); // week 00
-  assert.equal(decodeKoaDateCode("1754X"), undefined); // week 54
-  assert.equal(decodeKoaDateCode("0023X"), undefined); // counter 00
+  assert.equal(decodeKoaDateCode("2352", undefined, ref), undefined); // day 52
+  assert.equal(decodeKoaDateCode("L2601A", undefined, ref), undefined); // no leading digits
+  assert.equal(decodeKoaDateCode("123", undefined, ref), undefined); // fewer than 4 digits
+  assert.equal(decodeKoaDateCode("1700X", undefined, ref), undefined); // day 00
+  assert.equal(decodeKoaDateCode("1732X", undefined, ref), undefined); // day 32
+  assert.equal(decodeKoaDateCode("5429", undefined, ref), undefined); // day 29 > 28 in 2022-02
+  assert.equal(decodeKoaDateCode("0023X", undefined, ref), undefined); // counter 00 in no period
+  assert.equal(decodeKoaDateCode("0523X", undefined, ref), undefined); // counter 05 in no period
 });
 
 test("decodeYywwDateCode: YYWW → WWYY pair swap (iC-Haus DC)", () => {
@@ -120,26 +133,28 @@ test("parseQrRaw: seeded KOA template parses raw and decodes koa_zeros qty", asy
     sql`SELECT qr_template AS "qrTemplate", qty_encoding AS "qtyEncoding", date_code_encoding AS "dateCodeEncoding" FROM supplier_profiles WHERE supplier_code = 'KOA'`
   );
   assert.ok(profile?.qrTemplate);
-  // template: ^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<dateCode>[^:]+):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$
+  // template: ^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]*):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$
   const parsed = parseQrRaw(":RK73H1JTTD1002F:S1:14:X:L2601A:602:KOA+RK73H1JTTD1002F", profile.qrTemplate, profile.qtyEncoding, profile.dateCodeEncoding);
   assert.equal(parsed.partNo, "RK73H1JTTD1002F");
   assert.equal(parsed.qty, 10000); // "14" → 1 × 10^4
   assert.equal(parsed.serialNo, "602"); // S-key serial from the serialNo group
-  // segment 5 "L2601A" has no leading digits → no decodable date code
+  // segment 5 "L2601A" has no leading digits → no decodable date code, but the
+  // raw value is preserved as the lot code
   assert.equal(parsed.dateCode, undefined);
-  assert.equal(parsed.lotCode, undefined);
+  assert.equal(parsed.lotCode, "L2601A");
   assert.equal(parsed.wclItemNo, "KOA+RK73H1JTTD1002F"); // old-style marking tail
 
   // Outer package label: empty subId segment must also match (subId [^:]*).
   const outer = parseQrRaw(":RK73H2ATTD2403F::253:M:63048349:S613:KOA*RK73H2ATTD 2403F", profile.qrTemplate, profile.qtyEncoding, profile.dateCodeEncoding);
   assert.equal(outer.partNo, "RK73H2ATTD2403F");
   assert.equal(outer.qty, 25000); // "253" → 25 × 10^3
-  assert.equal(outer.dateCode, "0430"); // "63048349" → counter 63 → 2030-04, week 04
+  assert.equal(outer.dateCode, "4422"); // "63048349" → counter 63 → cycles 2015-05/2022-11/2030-05 → 2022-11, day 04 → 2022-11-04 → ISO week 44
+  assert.equal(outer.lotCode, "63048349");
   assert.equal(outer.serialNo, "S613");
 
-  // user's example: month counter + week date code
+  // user's example: month counter + day date code
   const dc = parseQrRaw(":RK73H1JTTD1002F::14:X:1723L789:602:KOA+RK73H1JTTD1002F", profile.qrTemplate, profile.qtyEncoding, profile.dateCodeEncoding);
-  assert.equal(dc.dateCode, "2326"); // counter 17 → 2026-07, week 23
+  assert.equal(dc.dateCode, "3026"); // counter 17 → 2026-07, day 23 → 2026-07-23 → ISO week 30
 });
 
 test("parseQrRaw: KOA reel label carries the WCL item no in segment 7", async () => {
@@ -154,8 +169,8 @@ test("parseQrRaw: KOA reel label carries the WCL item no in segment 7", async ()
   const parsed = parseQrRaw(raw, profile.qrTemplate, profile.qtyEncoding, profile.dateCodeEncoding);
   assert.equal(parsed.partNo, "SR732ERTTDR200F");
   assert.equal(parsed.qty, 15000); // "153" → 15 × 10^3
-  assert.equal(parsed.dateCode, "0726"); // "19077387" → counter 19 → 2026-09, week 07
-  assert.equal(parsed.lotCode, undefined);
+  assert.equal(parsed.dateCode, "3726"); // "19077387" → counter 19 → 2026-09, day 07 → 2026-09-07 → ISO week 37
+  assert.equal(parsed.lotCode, "19077387");
   assert.equal(parsed.serialNo, "S002");
   assert.equal(parsed.wclItemNo, "KOA/SR732ERTTDR200F");
   // space-stripped, the wclItemNo equals the parts master wcl_item_no
@@ -217,13 +232,13 @@ test("parseQrRaw: admin editor config builds a matching-equivalent KOA regex", a
   const inner = parseQrRaw(":RK73H1JTTD1002F:S1:14:X:L2601A:602:KOA+RK73H1JTTD1002F", regex, "koa_zeros");
   assert.equal(inner.partNo, "RK73H1JTTD1002F");
   assert.equal(inner.qty, 10000);
-  assert.equal(inner.dateCode, "L2601A"); // raw passthrough without a date-code encoding
+  assert.equal(inner.lotCode, "L2601A"); // segment 5 role is lotCode in the seeded config
   assert.equal(inner.serialNo, "602");
   // outer label with an empty subId piece must match too
   const outer = parseQrRaw(":RK73H2ATTD2403F::253:M:63048349:S613:KOA*RK73H2ATTD 2403F", regex, "koa_zeros");
   assert.equal(outer.partNo, "RK73H2ATTD2403F");
   assert.equal(outer.qty, 25000);
-  assert.equal(outer.dateCode, "63048349");
+  assert.equal(outer.lotCode, "63048349");
 });
 
 test("parseQrRaw: no template / no match / invalid regex → {}", () => {
@@ -342,10 +357,10 @@ test("scan: raw QR template parse applies receipt (KOA order)", async () => {
         FROM inventory_transactions
         WHERE receiving_invoice_item_id = ${item.id} AND txn_type = 'RECEIVE_TO_DOCK'`
   );
-  // the KOA template's segment 5 is a date code, not a lot code — lotCode
-  // falls back to the seeded item's lot_code; "L2601A" has no leading digits
-  // so no date code decodes either, and dateCode falls back to the item's
-  assert.deepEqual([txn!.qtyDelta, txn!.lotCode, txn!.dateCode], [1500, "L2605A", "2605"]);
+  // the KOA template's segment 5 is preserved as the lot code ("L2601A" wins
+  // over the seeded item's lot_code); it has no leading digits so no date code
+  // decodes, and dateCode falls back to the item's
+  assert.deepEqual([txn!.qtyDelta, txn!.lotCode, txn!.dateCode], [1500, "L2601A", "2605"]);
 
   // explicit fields override parsed ones (part + qty from the body win; an
   // explicit serialNo also overrides the parsed one — the raw's 602 was

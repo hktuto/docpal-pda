@@ -39,6 +39,7 @@ import type {
   SupplierListRow,
   CountryRow,
   SupplierQrcodeTemplate,
+  DateCodePeriod,
   BoxSearchResult,
   LabelsData,
   ScanPickingItemResult,
@@ -66,6 +67,15 @@ interface ScanTemplateRow {
   dateCodeEncoding: string | null;
   barcodeTypes: string[] | null;
   brands: string[] | null;
+}
+
+/** Backend date-code-periods row (GET /date-code-periods). */
+interface DateCodePeriodRow {
+  encoding: string;
+  direction: "forward" | "backward";
+  counterFrom: number;
+  counterTo: number;
+  periodStart: string;
 }
 
 /**
@@ -465,6 +475,18 @@ export function createBackendWarehouseService(
         qrcodeDateCodeEncoding: row.dateCodeEncoding,
         barcodeTypes: row.barcodeTypes ?? null,
         brands: row.brands ?? null,
+      }));
+    },
+
+    // Month-counter date-code periods for koa_month_counter label decoding
+    async getDateCodePeriods(): Promise<DateCodePeriod[]> {
+      const rows = await client.get<DateCodePeriodRow[]>("/date-code-periods");
+      return rows.map((row) => ({
+        encoding: row.encoding,
+        direction: row.direction,
+        counterFrom: row.counterFrom,
+        counterTo: row.counterTo,
+        periodStart: row.periodStart,
       }));
     },
 

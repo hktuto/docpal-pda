@@ -33,15 +33,47 @@ function normalizePartNo(value) {
   return wrapped ? wrapped[1] : collapsed;
 }
 // Keep in sync with decodeKoaDateCode in apps/backend/src/db/scanParse.ts.
+// Rolling month counter 10→99, one date_code_counter_periods row per 90-month
+// cycle (seeded three cycles); latest candidate month not in the future of
+// the reference date wins. digits 3-4 are the DAY of month.
+const KOA_PERIODS = [
+  { encoding: "koa_month_counter", direction: "forward", counterFrom: 10, counterTo: 99, periodStart: "2010-12-01" },
+  { encoding: "koa_month_counter", direction: "forward", counterFrom: 10, counterTo: 99, periodStart: "2018-06-01" },
+  { encoding: "koa_month_counter", direction: "forward", counterFrom: 10, counterTo: 99, periodStart: "2025-12-01" },
+];
 function decodeKoaDateCode(raw) {
   const digits = raw.match(/^\d+/)?.[0];
   if (!digits || digits.length < 4) return undefined;
   const counter = Number(digits.slice(0, 2));
-  const week = Number(digits.slice(2, 4));
-  if (counter < 1 || counter > 99 || week < 1 || week > 53) return undefined;
-  const totalMonths = 2026 * 12 + 6 + (counter - 17); // 0-based month index, 2026-07 = counter 17
-  const year = Math.floor(totalMonths / 12);
-  return `${digits.slice(2, 4)}${String(year % 100).padStart(2, "0")}`;
+  const day = Number(digits.slice(2, 4));
+  if (day < 1 || day > 31) return undefined;
+  const now = new Date();
+  const ref = now.getFullYear() * 12 + now.getMonth();
+  const candidates = [];
+  for (const p of KOA_PERIODS) {
+    const lo = Math.min(p.counterFrom, p.counterTo);
+    const hi = Math.max(p.counterFrom, p.counterTo);
+    if (counter < lo || counter > hi) continue;
+    const offset = p.direction === "forward" ? counter - p.counterFrom : p.counterFrom - counter;
+    const m = p.periodStart.match(/^(\d{4})-(\d{2})-\d{2}$/);
+    if (!m) continue;
+    candidates.push(Number(m[1]) * 12 + (Number(m[2]) - 1) + offset);
+  }
+  if (candidates.length === 0) return undefined;
+  const past = candidates.filter((c) => c <= ref);
+  const picked = past.length > 0 ? Math.max(...past) : Math.min(...candidates);
+  const year = Math.floor(picked / 12);
+  const month = picked % 12;
+  const monthLength = new Date(year, month + 1, 0).getDate();
+  if (day > monthLength) return undefined;
+  const d = new Date(year, month, day);
+  // ISO-8601 week + ISO week-year → WWYY
+  const dd = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dow = dd.getUTCDay() || 7;
+  dd.setUTCDate(dd.getUTCDate() + 4 - dow);
+  const jan1 = new Date(Date.UTC(dd.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((dd.getTime() - jan1.getTime()) / 86400000 + 1) / 7);
+  return `${String(week).padStart(2, "0")}${String(dd.getUTCFullYear() % 100).padStart(2, "0")}`;
 }
 function parseQrRaw(raw, template, qtyEncoding, dateCodeEncoding) {
   if (!template) return {};

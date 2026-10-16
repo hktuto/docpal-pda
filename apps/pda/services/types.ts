@@ -28,6 +28,10 @@ export interface SupplierQrcodeTemplate {
   brands?: string[] | null;
 }
 
+/** Month-counter date-code period row (GET /date-code-periods) — the
+ *  canonical type + decode live in utils/parseOcrScan.ts. */
+export type { DateCodePeriod } from "~/utils/parseOcrScan";
+
 // ------------------------------------------------------------------
 // Receiving — DTOs matching apps/backend (:3002), see
 // docs/backend/api-design.md §Receiving. All reads are nested; statuses

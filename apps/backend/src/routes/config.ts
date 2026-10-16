@@ -3,6 +3,7 @@ import {
   FLOW_STEPS,
   allowDockStock,
   allowedOrgIds,
+  cnReceiving,
   isStepEnabled,
   pdaListTemplates,
   pdaViewConfig,
@@ -35,6 +36,7 @@ configRoute.get("/config", async (c) => {
       listTemplates: pdaListTemplates(),
       viewConfig: pdaViewConfig(),
       pickingShelfScan: pickingShelfScan(),
+      cnReceiving: cnReceiving(),
       warehouseCode: (process.env.WAREHOUSE_CODE ?? "").toLowerCase(),
     },
     200

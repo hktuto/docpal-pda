@@ -44,6 +44,41 @@ export function printApiBaseUrl(): string {
   return process.env.PRINT_API_BASE_URL?.trim().replace(/\/+$/, "") || "http://localhost:9003";
 }
 
+// ---------------------------------------------------------------------------
+// DocPal workflow client (spec
+// docs/superpowers/specs/2026-10-16-customer-receiving-upload-design.md).
+// One static service token authorizes the workflow/file APIs (DocPal confirmed
+// the workflow API does not verify it, nor start_user_id — the real logged-in
+// admin is sent as creator variables instead). Read at call time so tests can
+// point the client at a stub server.
+// ---------------------------------------------------------------------------
+
+/** Bearer token for the DocPal workflow/file APIs; unset → 500 docpal_workflow_token_not_configured. */
+export function docpalWorkflowToken(): string | undefined {
+  return process.env.DOCPAL_WORKFLOW_TOKEN?.trim() || undefined;
+}
+
+/** DocPal workflow definition id for the CN receiving Excel upload (per environment). */
+export function docpalCnExcelWorkflowId(): string | undefined {
+  return process.env.DOCPAL_CN_EXCEL_WORKFLOW_ID?.trim() || undefined;
+}
+
+/** DocPal workflow definition id for the CN receiving PDF upload (phase 2). */
+export function docpalCnPdfWorkflowId(): string | undefined {
+  return process.env.DOCPAL_CN_PDF_WORKFLOW_ID?.trim() || undefined;
+}
+
+/** Env kill-switch for the CN receiving workflow-status cron (RECEIVING_CN_SYNC=off). */
+export function receivingCnSyncDisabled(): boolean {
+  return process.env.RECEIVING_CN_SYNC === "off";
+}
+
+/** Cron poll interval for the CN receiving workflow status (seconds, default 120). */
+export function receivingCnSyncIntervalSec(): number {
+  const n = Number(process.env.RECEIVING_CN_SYNC_INTERVAL_SEC ?? 120);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 120;
+}
+
 // DocPal groupId → local group codes. DocPal has 1 group = 1 role and the
 // role carries the permissions (UAT credentials sheet): the API only returns
 // groups, so permissions are enforced through this mapping:
@@ -267,6 +302,10 @@ export interface FlowConfig {
   pdaViewConfig: PdaViewConfigOverrides;
   /** Picking shelf-scan mode; default "off". */
   pickingShelfScan: PickingShelfScanMode;
+  /** CN receiving flow (spec 2026-10-16-customer-receiving-upload-design.md):
+   *  when true, the PDA put-away flow reads CN tasks (put_away_tasks_cn);
+   *  a warehouse runs either the standard or the CN flow. Default false. */
+  cnReceiving: boolean;
 }
 
 /** Built-in defaults — reproduce the PDA's hardcoded list rows. */
@@ -406,6 +445,7 @@ function defaultFlowConfig(): FlowConfig {
     pdaListTemplates: defaultPdaListTemplates(),
     pdaViewConfig: {},
     pickingShelfScan: "off",
+    cnReceiving: false,
   };
 }
 
@@ -741,6 +781,13 @@ export function mergeFlowConfigJson(parsed: unknown): FlowConfig {
       cfg.pickingShelfScan = value as PickingShelfScanMode;
       continue;
     }
+    if (key === "cnReceiving") {
+      if (typeof value !== "boolean") {
+        throw new Error("[config] flow config.cnReceiving must be a boolean");
+      }
+      cfg.cnReceiving = value;
+      continue;
+    }
     if (key === "pdaViewConfig") {
       cfg.pdaViewConfig = validatePdaViewConfig(value);
       continue;
@@ -918,6 +965,11 @@ export function pickingShelfScan(): PickingShelfScanMode {
   return flowConfig.pickingShelfScan;
 }
 
+/** CN receiving flow flag (spec 2026-10-16-customer-receiving-upload-design.md). */
+export function cnReceiving(): boolean {
+  return flowConfig.cnReceiving;
+}
+
 /** Confirm-arrival sub-inventory defaulting rule groups; [] = feature off. */
 export function receivingSubInventoryRules(): SubInventoryRuleGroup[] {
   return flowConfig.receivingSubInventoryRules;
@@ -970,6 +1022,11 @@ export function _setOutdatedStockYearsForTests(years: number): void {
 /** Test-only override for the picking shelf-scan mode. */
 export function _setPickingShelfScanForTests(mode: PickingShelfScanMode): void {
   flowConfig.pickingShelfScan = mode;
+}
+
+/** Test-only override for the CN receiving flow flag. */
+export function _setCnReceivingForTests(value: boolean): void {
+  flowConfig.cnReceiving = value;
 }
 
 /** Test-only override for the receiving sub-inventory defaulting rules. */

@@ -11,7 +11,7 @@ import { useWarehouse } from '~/composables/useWarehouse';
 import { parseAndIdentify, parseQrCapture, type CandidateOptions, type OcrParseResult, type RawOcrCapture, type OcrBarcode, type ParsedFields } from '~/utils/parseOcrScan';
 import { playScanError, playScanSuccess } from '~/utils/scanBeep';
 import type { OcrInput } from '~/utils/ocrNormalize';
-import type { SupplierQrcodeTemplate } from '~/services/types';
+import type { SupplierQrcodeTemplate, DateCodePeriod } from '~/services/types';
 import type { WarehouseService } from '~/services/warehouse';
 
 let supplierTemplateCache: SupplierQrcodeTemplate[] | null = null;
@@ -29,6 +29,23 @@ export async function getCachedSupplierQrTemplates(
     });
   }
   return supplierTemplateCachePromise;
+}
+
+let dateCodePeriodCache: DateCodePeriod[] | null = null;
+let dateCodePeriodCachePromise: Promise<DateCodePeriod[]> | null = null;
+
+/** Shared cache of the /date-code-periods list (month-counter decoding periods). */
+export async function getCachedDateCodePeriods(
+  warehouse: WarehouseService
+): Promise<DateCodePeriod[]> {
+  if (dateCodePeriodCache) return dateCodePeriodCache;
+  if (!dateCodePeriodCachePromise) {
+    dateCodePeriodCachePromise = warehouse.getDateCodePeriods().then((periods) => {
+      dateCodePeriodCache = periods;
+      return periods;
+    });
+  }
+  return dateCodePeriodCachePromise;
 }
 
 function parseBarcodes(barcodesJson: string): RawOcrCapture['barcodes'] {
@@ -121,12 +138,14 @@ export function useLabelScan() {
       console.log('[SCAN-TIME] fetching supplier QR templates...');
       const t1 = performance.now();
       const suppliers = await getCachedSupplierQrTemplates(warehouse);
+      const dateCodePeriods = await getCachedDateCodePeriods(warehouse);
       console.log('[SCAN-TIME] getSupplierQrTemplates', (performance.now() - t1).toFixed(1), 'ms');
       const t2 = performance.now();
       parsedResult = parseQrCapture(qrValue, {
         supplierTemplates: suppliers,
         targets: context.targets ?? [],
         contextSupplierCode: context.supplierCode,
+        dateCodePeriods,
       });
       console.log('[SCAN-TIME] parseQrCapture', (performance.now() - t2).toFixed(1), 'ms');
     } else {
@@ -173,11 +192,13 @@ export function useLabelScan() {
 
     if (isQrOnlyCapture(capture, barcodes)) {
       const suppliers = await getCachedSupplierQrTemplates(warehouse);
+      const dateCodePeriods = await getCachedDateCodePeriods(warehouse);
       return parseQrCapture(rawValue, {
         supplierTemplates: suppliers,
         targets: [],
         contextSupplierCode: supplierCode,
         contextBrands,
+        dateCodePeriods,
       });
     }
 

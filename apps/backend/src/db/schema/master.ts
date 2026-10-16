@@ -1,4 +1,4 @@
-import { pgTable, foreignKey, index, unique, uniqueIndex, text, varchar, bigint, integer, real, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, foreignKey, index, unique, uniqueIndex, text, varchar, bigint, integer, real, timestamp, date, jsonb } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { now } from "../now.js";
 
@@ -152,6 +152,26 @@ export const countryList = pgTable("country_list", {
   code: text("code").notNull().unique(), // ISO 3166-1 alpha-2, e.g. HK, CN, JP
   name: text("name").notNull(),
   shortCode: text("short_code"),
+  createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+  lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
+});
+
+// Label date-code month-counter periods (spec
+// docs/superpowers/specs/2026-10-16-koa-date-code-periods-design.md). A
+// supplier label encoding like 'koa_month_counter' maps a 2-digit month
+// counter to a year/month via one or more period rows; a counter value can
+// appear in several periods (rotation era), and the decoder picks the latest
+// candidate not in the future relative to the scan date. Managing a counter
+// rotation = inserting a new row here (admin CRUD) — never a code change.
+// period_start is the first-of-month date that counter_from represents;
+// direction 'backward' rows have counter_from > counter_to.
+export const dateCodeCounterPeriods = pgTable("date_code_counter_periods", {
+  id: text("id").primaryKey(),
+  encoding: text("encoding").notNull(), // date-code encoding rule, e.g. 'koa_month_counter'
+  direction: text("direction").notNull(), // 'forward' (+1 month per counter step) | 'backward' (−1)
+  counterFrom: integer("counter_from").notNull(), // first counter of the run (inclusive)
+  counterTo: integer("counter_to").notNull(), // last counter of the run (inclusive)
+  periodStart: date("period_start").notNull(), // YYYY-MM-DD, day must be 01
   createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
 });

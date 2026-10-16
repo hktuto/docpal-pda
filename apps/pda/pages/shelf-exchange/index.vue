@@ -108,7 +108,7 @@ import { useBrandSymbologyScope } from "~/composables/useScannerConfig";
 import { useVisibleReload } from "~/composables/useVisibleReload";
 import { I18nError } from "~/composables/i18nError";
 import { parseQrCapture, parseAndIdentify } from "~/utils/parseOcrScan";
-import { captureLabel, getCachedSupplierQrTemplates } from "~/composables/useLabelScan";
+import { captureLabel, getCachedSupplierQrTemplates, getCachedDateCodePeriods } from "~/composables/useLabelScan";
 import { playScanError, playScanSuccess } from "~/utils/scanBeep";
 import ScanFab from "~/components/ScanFab.vue";
 import ShelfExchangeConfirmModal from "~/components/ShelfExchangeConfirmModal.vue";
@@ -203,7 +203,8 @@ async function handleHardwareScan(code: string) {
   }
 
   const templates = await getCachedSupplierQrTemplates(warehouse);
-  const result = parseQrCapture(code, { supplierTemplates: templates });
+  const dateCodePeriods = await getCachedDateCodePeriods(warehouse);
+  const result = parseQrCapture(code, { supplierTemplates: templates, dateCodePeriods });
   if (!result.matched) {
     showToast(t("shelfExchange.errors.scanParse"));
     return false;
@@ -231,10 +232,11 @@ async function openScan() {
   if (!capture) return;
   const barcodes = JSON.parse(capture.barcodes || "[]");
   const templates = await getCachedSupplierQrTemplates(warehouse);
+  const dateCodePeriods = await getCachedDateCodePeriods(warehouse);
 
   const isQrOnly = barcodes.length === 1 && barcodes[0].format === "4" && !capture.imagePath;
   const result = isQrOnly
-    ? parseQrCapture(barcodes[0].value, { supplierTemplates: templates })
+    ? parseQrCapture(barcodes[0].value, { supplierTemplates: templates, dateCodePeriods })
     : parseAndIdentify({ text: capture.text, barcodes }, []);
 
   if (!result.matched) {

@@ -151,7 +151,7 @@ import { useHardwareScanner } from "~/composables/useHardwareScanner";
 import { useBrandSymbologyScope } from "~/composables/useScannerConfig";
 import { I18nError } from "~/composables/i18nError";
 import { parseQrCapture, parseAndIdentify } from "~/utils/parseOcrScan";
-import { captureLabel, getCachedSupplierQrTemplates } from "~/composables/useLabelScan";
+import { captureLabel, getCachedSupplierQrTemplates, getCachedDateCodePeriods } from "~/composables/useLabelScan";
 import { playScanError, playScanSuccess } from "~/utils/scanBeep";
 import SearchableSelect from "~/components/SearchableSelect.vue";
 import ScanFab from "~/components/ScanFab.vue";
@@ -223,9 +223,11 @@ async function handleHardwareScan(code: string) {
 
   // Parse as item label via supplier QR template
   const templates = await getCachedSupplierQrTemplates(warehouse);
+  const dateCodePeriods = await getCachedDateCodePeriods(warehouse);
   const result = parseQrCapture(code, {
     supplierTemplates: templates,
     contextBrands: [selectedBrand.value],
+    dateCodePeriods,
   });
   if (result.matched) {
     addItem({
@@ -253,6 +255,7 @@ async function openScan() {
   if (!capture) return;
   const barcodes = JSON.parse(capture.barcodes || "[]");
   const templates = await getCachedSupplierQrTemplates(warehouse);
+  const dateCodePeriods = await getCachedDateCodePeriods(warehouse);
 
   // Use supplier QR template parsing for QR-only captures (same as normal
   // put-away); fall back to generic text parsing for non-QR captures.
@@ -261,6 +264,7 @@ async function openScan() {
     ? parseQrCapture(barcodes[0].value, {
         supplierTemplates: templates,
         contextBrands: [selectedBrand.value],
+        dateCodePeriods,
       })
     : parseAndIdentify(
         { text: capture.text, barcodes },

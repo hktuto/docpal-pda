@@ -10,6 +10,7 @@ import {
   parts,
   countryList,
   boxSizeList,
+  dateCodeCounterPeriods,
   customerAccounts,
   netWeightFormula,
   labelPrintRules,
@@ -37,6 +38,7 @@ import { adminCustomerProfilesRoute } from "./customerProfiles.js";
 import { adminOutdatedWarningsRoute } from "./outdatedWarnings.js";
 import { adHocPutAwayRoute } from "./adHocPutAway.js";
 import { adminTestPickingOrderRoute } from "./testPickingOrder.js";
+import { adminReceivingCnRoute } from "./receivingCn.js";
 import { parseScopeEntries, type UserScopeEntry } from "../../db/user-scope.js";
 
 // Optional id on create: use the client's when given, else generate one.
@@ -201,6 +203,53 @@ adminRoute.route(
     update: (b) => ({
       ...(b.description !== undefined && { description: optStr(b, "description") }),
     }),
+  })
+);
+
+// Label date-code month-counter periods (KOA rolling 10→99 counter; one row
+// per 90-month cycle — a counter rotation is a new row, not a code change).
+// periodStart is the YYYY-MM-DD the counterFrom value represents.
+const DIRECTIONS = new Set(["forward", "backward"]);
+adminRoute.route(
+  "/date-code-periods",
+  createCrudRouter({
+    table: dateCodeCounterPeriods,
+    pk: dateCodeCounterPeriods.id,
+    create: (b) => {
+      const direction = reqStr(b, "direction");
+      if (!DIRECTIONS.has(direction)) throw new HTTPException(400, { message: "direction must be one of forward|backward" });
+      const periodStart = reqStr(b, "periodStart");
+      if (!/^\d{4}-\d{2}-01$/.test(periodStart)) {
+        throw new HTTPException(400, { message: "periodStart must be a YYYY-MM-01 date" });
+      }
+      return {
+        id: optId(b),
+        encoding: reqStr(b, "encoding"),
+        direction,
+        counterFrom: reqInt(b, "counterFrom"),
+        counterTo: reqInt(b, "counterTo"),
+        periodStart,
+      };
+    },
+    update: (b) => {
+      const out: Record<string, unknown> = {};
+      if (b.encoding !== undefined) out.encoding = reqStr(b, "encoding");
+      if (b.direction !== undefined) {
+        const direction = reqStr(b, "direction");
+        if (!DIRECTIONS.has(direction)) throw new HTTPException(400, { message: "direction must be one of forward|backward" });
+        out.direction = direction;
+      }
+      if (b.counterFrom !== undefined) out.counterFrom = reqInt(b, "counterFrom");
+      if (b.counterTo !== undefined) out.counterTo = reqInt(b, "counterTo");
+      if (b.periodStart !== undefined) {
+        const periodStart = reqStr(b, "periodStart");
+        if (!/^\d{4}-\d{2}-01$/.test(periodStart)) {
+          throw new HTTPException(400, { message: "periodStart must be a YYYY-MM-01 date" });
+        }
+        out.periodStart = periodStart;
+      }
+      return out;
+    },
   })
 );
 
@@ -400,6 +449,10 @@ adminRoute.route("/ad-hoc-put-aways", adHocPutAwayRoute);
 
 // Test picking order creator (create / export / delete test orders).
 adminRoute.route("/", adminTestPickingOrderRoute);
+
+// Customer receiving (CN) upload tracking + Excel upload (spec
+// 2026-10-16-customer-receiving-upload-design.md).
+adminRoute.route("/", adminReceivingCnRoute);
 
 // DocPal console link for the admin user popover — null when DOCPAL_URL is
 // not configured (login itself requires it, so real deployments always have it).

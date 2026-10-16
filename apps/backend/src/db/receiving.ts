@@ -7,6 +7,7 @@ import { transactionLogs, inventoryTransactions, receivingScanLabels } from "./s
 import { now } from "./now.js";
 import { emitEvent } from "./events.js";
 import { normalizePartNo, parseQrRaw } from "./scanParse.js";
+import { listDateCodePeriods } from "./dateCodePeriods.js";
 import { createPutAwayTaskTx } from "./putawaytasks.js";
 import { isStepEnabled, putAwayConfig, receivingSubInventoryRules, type SubInventoryRuleGroup } from "../config.js";
 import { logTransition } from "./picking.js";
@@ -310,8 +311,14 @@ export async function scanReceivingOrder(
     const actor = await queryGet<{ id: string }>(tx, sql`SELECT id FROM users WHERE id = ${input.actorId}`);
     if (!actor) throw new HTTPException(400, { message: "actor_not_found" });
 
-    // Server-side parse (QR template only); explicit body fields win.
-    const parsed = input.raw ? parseQrRaw(input.raw, ro.qrTemplate, ro.qtyEncoding, ro.dateCodeEncoding) : {};
+    // Server-side parse (QR template only); explicit body fields win. The
+    // KOA month-counter decode needs the counter-period rows (rolling
+    // 10→99 cycles) from the DB.
+    const dateCodePeriods =
+      ro.dateCodeEncoding === "koa_month_counter" ? await listDateCodePeriods(tx) : undefined;
+    const parsed = input.raw
+      ? parseQrRaw(input.raw, ro.qrTemplate, ro.qtyEncoding, ro.dateCodeEncoding, dateCodePeriods)
+      : {};
     const partNo = input.partNo ?? parsed.partNo ?? null;
     const qty = input.qty ?? parsed.qty ?? null;
     const serialNo = input.serialNo ?? parsed.serialNo ?? null;
@@ -768,7 +775,7 @@ function logsQueryParts(params: OrderLogsParams | undefined, scope: SQL) {
   const q = params?.q?.trim();
   const like = `%${(q ?? "").replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
   const where = q
-    ? sql`${scope} AND (u.display_name ILIKE ${like} OR tl.from_state ILIKE ${like} OR tl.to_state ILIKE ${like} OR tl.entity_type ILIKE ${like} OR tl.metadata::text ILIKE ${like})`
+    ? sql`(${scope}) AND (u.display_name ILIKE ${like} OR tl.from_state ILIKE ${like} OR tl.to_state ILIKE ${like} OR tl.entity_type ILIKE ${like} OR tl.metadata::text ILIKE ${like})`
     : scope;
   const col = LOG_SORTS[params?.sort ?? ""] ?? LOG_SORTS.createdDate;
   const dir = params?.dir === "asc" ? sql`ASC` : sql`DESC`;

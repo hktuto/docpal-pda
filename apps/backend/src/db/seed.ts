@@ -14,6 +14,7 @@ import {
   shelves,
   countryList,
   boxSizeList,
+  dateCodeCounterPeriods,
   netWeightFormula,
   customerProfiles,
   subInventories,
@@ -103,6 +104,11 @@ export const ALL_TABLES = [
   "receiving_invoice_items",
   "receiving_invoices",
   "receiving_orders",
+  "receiving_cn_workflows",
+  "receiving_invoice_items_cn",
+  "receiving_invoices_cn",
+  "receiving_orders_cn",
+  "put_away_tasks_cn",
   "net_weight_formula",
   "shelves",
   "sub_inventory_share_members",
@@ -111,6 +117,7 @@ export const ALL_TABLES = [
   "customer_profiles",
   "box_size_list",
   "country_list",
+  "date_code_counter_periods",
   "parts",
   "supplier_profiles",
   "suppliers",
@@ -204,6 +211,23 @@ const BOX_SIZES = [
   "58.5 X 20 X 20",
   "63 X 16 X 12",
 ];
+
+// KOA label month-counter periods (spec
+// docs/superpowers/specs/2026-10-16-koa-date-code-periods-design.md): the
+// counter rolls 10→99 and restarts — one row per 90-month cycle. Current
+// cycle 10 = 2025/12 … 99 = 2033/05; previous 10 = 2018/06 … 99 = 2025/11;
+// oldest seeded 10 = 2010/12 … 99 = 2018/05 (user-confirmed anchors). A
+// counter rotation is handled by inserting the next cycle's row, not by
+// editing these.
+const KOA_COUNTER_PERIODS = [
+  { encoding: "koa_month_counter", direction: "forward", counterFrom: 10, counterTo: 99, periodStart: "2010-12-01" },
+  { encoding: "koa_month_counter", direction: "forward", counterFrom: 10, counterTo: 99, periodStart: "2018-06-01" },
+  { encoding: "koa_month_counter", direction: "forward", counterFrom: 10, counterTo: 99, periodStart: "2025-12-01" },
+];
+
+function seedKoaCounterPeriods(db: AppDb): void | Promise<unknown> {
+  return db.insert(dateCodeCounterPeriods).values(KOA_COUNTER_PERIODS.map((p) => ({ id: newId(), ...p })));
+}
 
 // Demo warehouse shelf layout (used by seedAll — the demo scenario's shelf
 // boxes and lots FK to these codes). The real HK layout in seed-shelves-hk.ts
@@ -381,6 +405,8 @@ async function seedAll(db: AppDb, opts?: { stockBoxes?: boolean; bulkParts?: boo
   await db.insert(countryList).values(COUNTRIES.map((c, i) => ({ id: uid(100 + i), ...c, shortCode: c.code.slice(0, 1) })));
 
   await db.insert(boxSizeList).values(BOX_SIZES.map((code, i) => ({ id: uid(140 + i), code })));
+
+  await seedKoaCounterPeriods(db);
 
   await db.insert(customerProfiles).values([
     { id: uid(180), code: "ACME", label: "ACME Electronics (HK)", remark: "requires segregated storage", customers: ["ACME"] },
@@ -582,6 +608,8 @@ async function seedReferenceOnly(db: AppDb): Promise<void> {
   await db.insert(countryList).values(COUNTRIES.map((c, i) => ({ id: uid(100 + i), ...c, shortCode: c.code.slice(0, 1) })));
 
   await db.insert(boxSizeList).values(BOX_SIZES.map((code, i) => ({ id: uid(140 + i), code })));
+
+  await seedKoaCounterPeriods(db);
 
   // Shelf layout: the real warehouse layout for this instance (HK default,
   // SZ when WAREHOUSE_CODE=sz).

@@ -42,6 +42,7 @@ import type {
   SupplierListRow,
   CountryRow,
   SupplierQrcodeTemplate,
+  DateCodePeriod,
   BoxSearchResult,
   LabelsData,
   AdHocPutAwayItem,
@@ -190,6 +191,10 @@ export interface WarehouseService {
 
   // Supplier QR templates for client-side label parsing (GET /scan-templates)
   getSupplierQrTemplates(): Promise<SupplierQrcodeTemplate[]>;
+
+  // Month-counter date-code periods for koa_month_counter label decoding
+  // (GET /date-code-periods)
+  getDateCodePeriods(): Promise<DateCodePeriod[]>;
 
   // Stock search — one aggregate read (GET /stock-search) replaces the old
   // suppliers → parts → lots cascade; zero-qty lots come back by design.

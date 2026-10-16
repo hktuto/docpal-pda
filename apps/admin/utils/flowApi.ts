@@ -713,6 +713,71 @@ export interface FlowConfigState {
   applied?: boolean;
 }
 
+// ---- customer receiving (CN) workflow uploads (spec 2026-10-16) ----
+
+/** receiving_cn_workflows row (one customer-receiving upload tracking entry). */
+export interface CnWorkflowRow {
+  id: string;
+  phase: "excel" | "pdf";
+  /** CN 編號 — becomes the receiving order batch_no on finalization. */
+  invoiceNo: string;
+  supplier: string;
+  filename: string;
+  docpalDocumentId: string | null;
+  docpalProcessId: string | null;
+  docpalBusinessKey: string | null;
+  status: "workflow_running" | "completed" | "failed" | "cancelled";
+  error: string | null;
+  createdBy: string;
+  createdDate: string;
+  lastUpdateDate: string;
+}
+
+export interface CnWorkflowListParams {
+  status?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+function cnWorkflowQuery(params: CnWorkflowListParams): string {
+  const qs = new URLSearchParams();
+  if (params.status) qs.set("status", params.status);
+  if (params.page !== undefined) qs.set("page", String(params.page));
+  if (params.pageSize !== undefined) qs.set("pageSize", String(params.pageSize));
+  const s = qs.toString();
+  return s ? `?${s}` : "";
+}
+
+// Multipart upload helpers (the JSON api client can't send FormData) — same
+// pattern as utils/print.ts: own fetch with the admin token from localStorage.
+function cnApiBaseUrl(): string {
+  return (useRuntimeConfig().public.apiBaseUrl as string).replace(/\/+$/, "");
+}
+
+function cnAuthHeaders(): Record<string, string> {
+  const token = import.meta.client ? localStorage.getItem("admin_token") : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+/** POST /admin/receiving-cn/excel — original file + the verified payload JSON
+ *  (field `data`). 400 invalid_payload / file_required; 502 docpal_workflow: …;
+ *  500 docpal_workflow_token_not_configured. Returns the created workflow row. */
+export async function submitCnExcelUpload(file: File, data: unknown): Promise<CnWorkflowRow> {
+  const form = new FormData();
+  form.append("file", file, file.name);
+  form.append("data", JSON.stringify(data));
+  const res = await fetch(`${cnApiBaseUrl()}/admin/receiving-cn/excel`, {
+    method: "POST",
+    headers: cnAuthHeaders(),
+    body: form,
+  });
+  if (!res.ok) {
+    const text = (await res.text()).trim();
+    throw new Error(text || `Request failed (${res.status})`);
+  }
+  return (await res.json()) as CnWorkflowRow;
+}
+
 // ---- audit logs (transaction_logs rows for an order + its child entities) ----
 
 export interface TransactionLogRow {
@@ -1023,6 +1088,11 @@ export function useFlowApi() {
       id: string,
       fields: Partial<Record<"dateCode" | "lotCode" | "coo" | "cow" | "ctnNo", string | null>>
     ) => api.patch(`/admin/receiving-invoice-items/${id}`, fields),
+
+    // Customer receiving (CN) workflow upload tracking (admin only).
+    listCnWorkflows: (params: CnWorkflowListParams = {}) =>
+      api.get<{ rows: CnWorkflowRow[]; total: number }>(`/admin/receiving-cn${cnWorkflowQuery(params)}`),
+    getCnWorkflow: (id: string) => api.get<CnWorkflowRow>(`/admin/receiving-cn/${id}`),
 
     // Issues (actor comes from the JWT — the backend ignores any body actorId)
     listReceivingMismatches: () => api.get<MismatchListRow[]>("/admin/receiving-mismatches"),
