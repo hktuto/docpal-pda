@@ -9,7 +9,6 @@ import {
   listGoodsVerifyTasks,
   verifyGoodsVerifyTask,
 } from "../db/goodsverify.js";
-import { scheduleAllocateAll } from "../db/allocate.js";
 import { actorFrom } from "../auth/middleware.js";
 
 // Empty bodies parse as {} — after the auth migration the actor comes from
@@ -24,19 +23,12 @@ async function readJson<T>(c: Context): Promise<T> {
   }
 }
 
-// An ADJUST changes available_qty → recalculate allocations after commit,
-// scheduled in the background, never rolled back into the verify response
-// (concept 5).
-function reallocateBestEffort(after: string): void {
-  scheduleAllocateAll(db, after);
-}
-
 export const goodsVerifyRoute = new Hono();
 
-// Day-end generation (concept 7): one pending task per lot moved in
-// inventory_transactions that day; idempotent via the (task_date,
-// inventory_lot_id) unique index. System job — body may be empty (date
-// defaults to the DB server's CURRENT_DATE).
+// Day-end generation (redesigned): one pending task per shelf with net
+// on-hand movement that day; idempotent via the (task_date, shelf_code)
+// unique index. System job — body may be empty (date defaults to the DB
+// server's CURRENT_DATE).
 goodsVerifyRoute.post("/goods-verify-tasks/generate", async (c) => {
   const body = await readJson<{ date?: string }>(c);
   return c.json(await generateGoodsVerifyTasks(db, { date: body.date, actorId: actorFrom(c).id }), 200);
@@ -54,21 +46,17 @@ goodsVerifyRoute.get("/goods-verify-tasks", async (c) => {
   );
 });
 
-// Task + lot (batch + location fields) + the shelf box with its items.
+// Task with its full movement summary.
 goodsVerifyRoute.get("/goods-verify-tasks/:id", async (c) => {
   return c.json(await getGoodsVerifyTaskDetail(db, c.req.param("id")), 200);
 });
 
-// Verify a pending task: stamps verified_by/at (+ transition log), closes out
-// the box when the task has one, and on a count mismatch corrects the lot and
-// writes the ADJUST ledger row → schedules the allocation recompute after commit.
+// Verify a pending task — pure confirmation. Stamps verified_by/at
+// (+ transition log). No countedQty, no adjustment.
 goodsVerifyRoute.post("/goods-verify-tasks/:id/verify", async (c) => {
-  const body = await readJson<{ countedQty?: number }>(c);
-  const { adjusted } = await verifyGoodsVerifyTask(db, {
+  await verifyGoodsVerifyTask(db, {
     taskId: c.req.param("id"),
     actorId: actorFrom(c).id,
-    countedQty: body.countedQty,
   });
-  if (adjusted) reallocateBestEffort("goods-verify adjust");
   return c.json(await getGoodsVerifyTaskRow(db, c.req.param("id")), 200);
 });

@@ -81,10 +81,8 @@ const rawRows = ref<GoodsVerifyTaskListRow[]>([]);
 const loading = ref(true);
 const loadError = ref<string | null>(null);
 
-// The old aside carried expected qty / verified time; the single-column row
-// puts them on the second meta line.
 function rowExtra(task: GoodsVerifyTaskListRow): string {
-  const parts = [t("goodsVerify.expectedQty", { qty: task.expectedQty })];
+  const parts = [t("goodsVerify.movementsCount", { count: task.movementsCount })];
   if (task.verifiedAt) parts.push(new Date(task.verifiedAt).toLocaleString());
   return parts.join(" · ");
 }

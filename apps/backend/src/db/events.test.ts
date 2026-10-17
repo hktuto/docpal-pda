@@ -70,7 +70,13 @@ test("allocateAll: emits one allocation.computed on change, none on an idempoten
 
 test("generateGoodsVerifyTasks: emits goods_verify.tasks_created with date + count, silent on re-run", async () => {
   await reseed(client);
-  await allocateAll(client.db); // RESERVE ledger rows = today's movement on the seed lots
+  // an on-hand movement today = a shelf with net movement (reserved-only
+  // allocation rows never generate tasks)
+  await client.db.execute(
+    sql`INSERT INTO inventory_transactions (id, inventory_lot_id, part_no, shelf_code, box_id, txn_type, qty_type, qty_delta, txn_at, created_date)
+        SELECT gen_random_uuid()::text, id, part_no, shelf_code, box_id, 'PICK', 'on_hand', -100, now(), now()
+        FROM inventory_lots WHERE shelf_code IS NOT NULL LIMIT 1`
+  );
   const r1 = await generateGoodsVerifyTasks(client.db, {});
   assert.ok(r1.created > 0);
   const rows = await eventsOfType("goods_verify.tasks_created");

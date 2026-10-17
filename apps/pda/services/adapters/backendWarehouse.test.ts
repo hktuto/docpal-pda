@@ -1009,14 +1009,12 @@ describe('backendWarehouse goods verify flow', () => {
     expect(result.status).toBe('verified');
   });
 
-  it('verifyGoodsVerifyTask includes countedQty when given', async () => {
+  it('verifyGoodsVerifyTask sends empty body (pure confirmation)', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ id: 'gvt1', status: 'verified' }));
 
-    await service().verifyGoodsVerifyTask('gvt1', 480);
+    await service().verifyGoodsVerifyTask('gvt1');
 
-    expect(JSON.parse(lastCall().init.body as string)).toEqual({
-      countedQty: 480,
-    });
+    expect(JSON.parse(lastCall().init.body as string)).toEqual({});
   });
 });
 

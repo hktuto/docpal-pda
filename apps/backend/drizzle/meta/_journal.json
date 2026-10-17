@@ -232,6 +232,13 @@
       "when": 1792133603312,
       "tag": "0033_perpetual_beast",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792209595661,
+      "tag": "0034_striped_natasha_romanoff",
+      "breakpoints": true
     }
   ]
 }

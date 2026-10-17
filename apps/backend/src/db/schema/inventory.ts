@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, integer, boolean, timestamp, date, index, uniqueIndex, foreignKey, check } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, timestamp, date, jsonb, index, uniqueIndex, foreignKey, check } from "drizzle-orm/pg-core";
 import { now } from "../now.js";
 import { shelves, subInventories, users } from "./master.js";
 import { receivingInvoiceItems, receivingOrders } from "./receiving.js";
@@ -101,19 +101,24 @@ export const shelfBoxItems = pgTable(
   })
 );
 
-// Daily goods-verify tasks (concept 7): generated at day end from
-// inventory_transactions — one task per inventory lot with movement that day.
-// Put-away/verify is box-based (printed box label), so the task carries box_id.
+// Daily goods-verify tasks (concept 7, redesigned 2026-10-17): generated at
+// day end from inventory_transactions — one task per SHELF with net on-hand
+// movement that day. The `movements` jsonb carries the per-part summary:
+// [{ partNo, wclItemNo, description, qtyChange, currentTotal }]. Only parts
+// with a non-zero net delta are included. Verify is a pure confirmation
+// (no countedQty, no adjustment). Idempotent via (task_date, shelf_code).
 export const goodsVerifyTasks = pgTable(
   "goods_verify_tasks",
   {
     id: text("id").primaryKey(),
     taskDate: date("task_date", { mode: "date" }).notNull(), // the day being counted
-    inventoryLotId: text("inventory_lot_id").notNull().references(() => inventoryLots.id),
-    shelfCode: text("shelf_code").references(() => shelves.code),
-    boxId: text("box_id"), // box-based verify (put-away is per box)
-    partNo: text("part_no").notNull(), // plain text (no FK — parts.part_no is not unique)
-    expectedQty: integer("expected_qty").notNull(), // stock snapshot at generation time
+    inventoryLotId: text("inventory_lot_id"), // legacy, nullable after redesign
+    shelfCode: text("shelf_code").references(() => shelves.code).notNull(),
+    boxId: text("box_id"), // legacy, nullable after redesign
+    partNo: text("part_no"), // legacy, nullable after redesign
+    expectedQty: integer("expected_qty"), // legacy, nullable after redesign
+    // Per-part movement summary: [{ partNo, wclItemNo, description, qtyChange, currentTotal }]
+    movements: jsonb("movements"),
     status: text("status").notNull().default("pending"), // pending | verified | skipped
     verifiedBy: text("verified_by").references(() => users.id),
     verifiedAt: timestamp("verified_at", { mode: "date" }),
@@ -121,8 +126,7 @@ export const goodsVerifyTasks = pgTable(
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
   (t) => ({
-    lotDayUq: uniqueIndex("goods_verify_tasks_lot_day_unique").on(t.taskDate, t.inventoryLotId),
-    shelfDayIdx: index("idx_goods_verify_tasks_shelf").on(t.shelfCode, t.taskDate),
+    shelfDayUq: uniqueIndex("goods_verify_tasks_shelf_day_unique").on(t.taskDate, t.shelfCode),
     statusIdx: index("idx_goods_verify_tasks_status").on(t.status),
   })
 );

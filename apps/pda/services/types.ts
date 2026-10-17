@@ -907,25 +907,34 @@ export interface PdaViewConfigDto {
 
 // ------------------------------------------------------------------
 // Goods verify — DTOs matching apps/backend (:3002), see
-// docs/backend/api-design.md §Goods verify (task-based, concept 7).
-// Day-end generation creates one pending task per lot moved that day
-// (idempotent per task_date + lot); the queue is the work list and
-// verify is one call per task — an optional countedQty corrects the
-// lot's total_qty and writes an ADJUST ledger row server-side.
+// docs/backend/api-design.md §Goods verify (redesigned 2026-10-17 —
+// shelf summary). Day-end generation creates one pending task per shelf
+// with net on-hand movement that day (idempotent per task_date + shelf_code).
+// The `movements` array carries the per-part summary. Verify is a pure
+// confirmation — no countedQty, no adjustment.
 // Statuses are plain strings (pending | verified | skipped).
 // ------------------------------------------------------------------
+
+/** One part's movement summary within a shelf task. */
+export interface GoodsVerifyMovement {
+  partNo: string;
+  wclItemNo: string | null;
+  description: string | null;
+  /** Net on-hand quantity change this day (+/-). */
+  qtyChange: number;
+  /** Current total on-hand quantity across all lots for this part on this shelf. */
+  currentTotal: number;
+}
 
 /** GET /goods-verify-tasks row (also the verify response shape). */
 export interface GoodsVerifyTaskListRow {
   id: string;
   /** YYYY-MM-DD. */
   taskDate: string;
-  shelfCode: string | null;
-  boxId: string | null;
-  partNo: string;
-  wclItemNo: string | null;
-  expectedQty: number;
+  shelfCode: string;
   status: string;
+  movements: GoodsVerifyMovement[];
+  movementsCount: number;
   verifiedBy: string | null;
   verifiedAt: string | null;
 }
@@ -938,39 +947,11 @@ export interface GoodsVerifyTaskFilters {
   shelfCode?: string;
 }
 
-export interface GoodsVerifyBoxItem {
-  id: string;
-  partNo: string;
-  wclItemNo: string | null;
-  qty: number;
-  verified: boolean | null;
-  verifiedAt: string | null;
-}
-
-/** GET /goods-verify-tasks/:id — task + lot (batch + location + qtys;
- *  the lot's org derives from its shelf) + the shelf box with its items
- *  (null when the task has no box or the id is a legacy non-shelf-box id). */
+/** GET /goods-verify-tasks/:id — task with its full movement summary. */
 export interface GoodsVerifyTaskDetail {
   task: GoodsVerifyTaskListRow & {
-    inventoryLotId: string;
-    description: string | null;
     createdDate: string;
   };
-  lot: {
-    id: string;
-    dateCode: string | null;
-    lotCode: string | null;
-    coo: string | null;
-    cow: string | null;
-    shelfCode: string | null;
-    boxId: string | null;
-    totalQty: number;
-    allocatedQty: number;
-    availableQty: number;
-    orgId: number | null;
-    subInventoryCode: string | null;
-  };
-  box: { id: string; status: string; items: GoodsVerifyBoxItem[] } | null;
 }
 
 // ------------------------------------------------------------------
