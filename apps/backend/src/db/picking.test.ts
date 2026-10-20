@@ -2036,6 +2036,27 @@ test("getPickingShelfStock: unwraps the TE AMP(...)/TE-AMP(...) wrapper on both 
   assert.equal((await getPickingShelfStock(client.db, { partNo: "170213-1", shelfCode: "A0102" })).qty, 0);
 });
 
+test("closeShippingBox: destination is optional — closes with NULL when neither box nor order ship_to has one", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await seededOrderAllocated();
+  const itemId = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
+  const alloc = await allocationOf(itemId);
+  // The measuring form dropped the destination field (2026-10-20): a box with
+  // no destination on an order without ship_to must still close.
+  await client.db.execute(sql`UPDATE picking_orders SET ship_to = NULL WHERE id = ${orderId}`);
+  const pkgId = (await scanPickingItem(client.db, itemId, { actorId, allocationId: alloc.id, qty: 100 })).packageIds[0];
+  const box = await createShippingBox(client.db, { pickingOrderId: orderId, actorId });
+  await addPackageToBox(client.db, { shippingBoxId: box.id, packageId: pkgId, actorId });
+  await verifyPackage(client.db, { packageId: pkgId, actorId });
+  await updateShippingBox(client.db, box.id, { actorId, boxSize: "26 X 20 X 20", netWeightKg: 0.5, grossWeightKg: 0.8 });
+  await closeShippingBox(client.db, { shippingBoxId: box.id, actorId });
+  const closed = await queryGet<{ status: string; destinationCountry: string | null }>(
+    client.db,
+    sql`SELECT status, destination_country AS "destinationCountry" FROM shipping_boxes WHERE id = ${box.id}`
+  );
+  assert.deepEqual(closed, { status: "closed", destinationCountry: null });
+});
+
 test("transfer (tn) item: shelf probe + scanned-shelf resolution use the from_subinventory source scope", async () => {
   await reseed(client);
   const { orderId, actorId } = await seededOrderAllocated();

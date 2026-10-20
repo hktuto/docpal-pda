@@ -31,6 +31,15 @@
             </select>
           </label>
           <label class="field">
+            <span>{{ $t('labelScanReviewModal.qty') }}</span>
+            <input @focus="selectAll" v-model.number="editable.qty" type="number" min="1" :placeholder="$t('labelScanReviewModal.placeholderQty')" />
+            <CandidateChips
+              v-model="qtyChipValue"
+              :candidates="qtyCandidates"
+              :label="$t('labelScanReviewModal.qty')"
+            />
+          </label>
+          <label class="field">
             <span>{{ $t('labelScanReviewModal.dateCode') }}</span>
             <input @focus="selectAll" v-model="editable.dateCode" type="text" :placeholder="$t('labelScanReviewModal.placeholderDateCode')" />
             <CandidateChips
@@ -55,15 +64,6 @@
           <label class="field">
             <span>{{ $t('labelScanReviewModal.cow') }}</span>
             <CountrySelect v-model="editable.cow" :candidates="cowCandidates" :placeholder="$t('labelScanReviewModal.placeholderCow')" :empty-label="$t('labelScanReviewModal.noCow')" />
-          </label>
-          <label class="field">
-            <span>{{ $t('labelScanReviewModal.qty') }}</span>
-            <input @focus="selectAll" v-model.number="editable.qty" type="number" min="1" :placeholder="$t('labelScanReviewModal.placeholderQty')" />
-            <CandidateChips
-              v-model="qtyChipValue"
-              :candidates="qtyCandidates"
-              :label="$t('labelScanReviewModal.qty')"
-            />
           </label>
         </form>
 

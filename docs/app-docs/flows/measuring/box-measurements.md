@@ -13,8 +13,10 @@ complete step exists.
   adjust it if the scale disagrees.
 - **Gross weight** — total weight of the packed box, in **kilograms** (must
   be at least the net weight).
-- **Destination country** — falls back to the box's creator order's ship-to
-  when left unset.
+
+There is no destination field: when the box carries a destination (edited on
+the admin side) or the creator order has a ship-to, that value is stamped on
+close; otherwise the box closes with no destination.
 
 ## How to enter
 

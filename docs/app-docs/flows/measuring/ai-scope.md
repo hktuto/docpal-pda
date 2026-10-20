@@ -31,7 +31,7 @@
   `verifyPackage` per credit. The camera/OCR flow (`useLabelScanReview` +
   per-row Scan buttons) remains as fallback.
 - Record box measurements (box size, net/gross weights in **kilograms** —
-  decimals, 3 dp; destination country) via the shared picking verbs
+  decimals, 3 dp) via the shared picking verbs
   (`updateShippingBox` with `netWeightKg`/`grossWeightKg`), then close the
   box. The measurements modal is a single **Confirm box** action (update +
   close); the net weight is pre-filled from the box's `suggestedNetWeightKg`
@@ -42,7 +42,9 @@
 - No manual complete button and no task: closing the box IS the measuring
   completion (`closeShippingBox` guards non-empty, every package fully
   rescanned `rescanned_qty >= qty`,
-  destination, box size, positive weights gross ≥ net). When the verify step
+  box size, positive weights gross ≥ net; the destination is optional — the
+  box's own destination else the order's ship-to is stamped when present,
+  NULL otherwise). When the verify step
   is enabled, closing also spawns the box's pending verify task in the same
   transaction and resets the rescanned credit for the verify pass (see
   [Verify AI scope](../verify/ai-scope.md)).

@@ -2298,9 +2298,12 @@ export async function cancelShippingBox(db: AppDb, input: { shippingBoxId: strin
 
 /**
  * Close a shipping box (ported from measure.ts): non-empty, all packages
- * fully rescanned (rescanned_qty >= qty), destination (box → order ship_to), box
- * size, and positive weights with gross ≥ net are required. Stamps the
- * resolved destination and logs the transition. Closing never finishes the
+ * fully rescanned (rescanned_qty >= qty), box size, and positive weights with
+ * gross ≥ net are required. The destination is optional since the measuring
+ * form dropped the field (2026-10-20): the resolved value (box destination,
+ * else the order's ship_to) is stamped when one exists, and the box closes
+ * with a NULL destination otherwise. Stamps the resolved destination and
+ * logs the transition. Closing never finishes the
  * order (2026-10-16) — finishing is the operator's explicit Finish action.
  * Closing IS the measuring completion (box-scoped design — no measuring task
  * exists); when the verify step is enabled, closing spawns the box's pending
@@ -2326,7 +2329,8 @@ export async function closeShippingBox(db: AppDb, input: { shippingBoxId: string
       );
       dest = order?.st ?? null;
     }
-    if (dest === null || dest.trim() === "") throw new HTTPException(409, { message: "destination_required" });
+    // Destination is optional (measuring form dropped the field): stamp the
+    // resolved value when one exists, close with NULL otherwise.
     if (box.boxSize === null || box.boxSize.trim() === "") throw new HTTPException(409, { message: "box_size_required" });
     if (box.netWeight === null || box.grossWeight === null) throw new HTTPException(409, { message: "weights_required" });
     if (box.netWeight <= 0 || box.grossWeight <= 0) throw new HTTPException(409, { message: "weights_must_be_positive" });
