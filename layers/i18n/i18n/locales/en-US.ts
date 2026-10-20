@@ -634,6 +634,8 @@ export default {
     placeholderLotCode: "L240603",
     placeholderCoo: "MY",
     placeholderCow: "USA",
+    noCoo: "No COO (empty)",
+    noCow: "No COW (empty)",
     placeholderQty: "400",
     matchSingle: "1 match found",
     matchMultiple: "Multiple matches found. Choose one.",

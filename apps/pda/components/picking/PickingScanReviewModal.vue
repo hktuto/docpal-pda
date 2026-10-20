@@ -54,11 +54,11 @@
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.coo') }}</span>
-            <CountrySelect v-model="editable.coo" :candidates="options.coos" :placeholder="$t('labelScanReviewModal.placeholderCoo')" />
+            <CountrySelect v-model="editable.coo" :candidates="options.coos" :placeholder="$t('labelScanReviewModal.placeholderCoo')" :empty-label="$t('labelScanReviewModal.noCoo')" />
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.cow') }}</span>
-            <CountrySelect v-model="editable.cow" :candidates="options.cows" :placeholder="$t('labelScanReviewModal.placeholderCow')" />
+            <CountrySelect v-model="editable.cow" :candidates="options.cows" :placeholder="$t('labelScanReviewModal.placeholderCow')" :empty-label="$t('labelScanReviewModal.noCow')" />
           </label>
         </form>
 

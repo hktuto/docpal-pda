@@ -634,6 +634,8 @@ export default {
     placeholderLotCode: "L240603",
     placeholderCoo: "MY",
     placeholderCow: "USA",
+    noCoo: "无产地（留空）",
+    noCow: "无晶圆产地（留空）",
     placeholderQty: "400",
     matchSingle: "找到 1 条匹配",
     matchMultiple: "找到多条匹配，请选择一条。",

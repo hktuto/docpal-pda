@@ -50,11 +50,11 @@
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.coo') }}</span>
-            <CountrySelect v-model="editable.coo" :candidates="cooCandidates" :placeholder="$t('labelScanReviewModal.placeholderCoo')" />
+            <CountrySelect v-model="editable.coo" :candidates="cooCandidates" :placeholder="$t('labelScanReviewModal.placeholderCoo')" :empty-label="$t('labelScanReviewModal.noCoo')" />
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.cow') }}</span>
-            <CountrySelect v-model="editable.cow" :candidates="cowCandidates" :placeholder="$t('labelScanReviewModal.placeholderCow')" />
+            <CountrySelect v-model="editable.cow" :candidates="cowCandidates" :placeholder="$t('labelScanReviewModal.placeholderCow')" :empty-label="$t('labelScanReviewModal.noCow')" />
           </label>
           <label class="field">
             <span>{{ $t('labelScanReviewModal.qty') }}</span>
