@@ -7,7 +7,7 @@ const { t } = useI18n();
 const visible = ref(false);
 
 const nuxtApp = useNuxtApp();
-nuxtApp.hooks.hookOnce("app:manifest:update", () => {
+nuxtApp.hooks.hook("app:manifest:update", () => {
   setTimeout(() => {
     visible.value = true;
   }, 1000);
