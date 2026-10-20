@@ -206,6 +206,7 @@ const session = usePickingScanSession({
   scope: computed(() => ({
     orgId: order.value?.orgId ?? undefined,
     subInventoryCode: order.value?.subInventoryCode ?? undefined,
+    orderId: order.value?.id ?? undefined,
   })),
   shelfMode: shelfScanMode,
   shelfStockFn: async (q) => (await warehouse.getPickingShelfStock(q)).qty,

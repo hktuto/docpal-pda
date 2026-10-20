@@ -7,7 +7,7 @@ import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { queryAll, queryGet } from "./query.js";
 import { allocateAll } from "./allocate.js";
 import { confirmReceivingArrival } from "./receiving.js";
-import { _setPickingShelfScanForTests } from "../config.js";
+import { _setPickingShelfScanForTests, _setPickingFromSubinventoryOrgsForTests, _setReceivingSubInventoryRulesForTests } from "../config.js";
 import {
   acquireWorkLock,
   addAllUnboxedToShippingBox,
@@ -2034,6 +2034,68 @@ test("getPickingShelfStock: unwraps the TE AMP(...)/TE-AMP(...) wrapper on both 
   // org scope still applies
   assert.equal((await getPickingShelfStock(client.db, { partNo: "170213-1", shelfCode: "A0101", orgId: 99 })).qty, 0);
   assert.equal((await getPickingShelfStock(client.db, { partNo: "170213-1", shelfCode: "A0102" })).qty, 0);
+});
+
+test("transfer (tn) item: shelf probe + scanned-shelf resolution use the from_subinventory source scope", async () => {
+  await reseed(client);
+  const { orderId, actorId } = await seededOrderAllocated();
+  const itemId = await pickingItemIdOf(orderId, "RK73H1JTTD1002F");
+  const alloc = await allocationOf(itemId);
+  // Make it a transfer order: the order's pair is the DESTINATION (no stock
+  // there); the seeded lot ×1000 sits at A0101 in the from_subinventory's org.
+  await client.db.execute(sql`UPDATE picking_orders SET org_id = 14, sub_inventory_code = 'GZSZ' WHERE id = ${orderId}`);
+  await client.db.execute(
+    sql`UPDATE picking_items SET additional_data = '{"from_subinventory":"STORE1","to_subinventory":"GZSZ","order_no":"319-DEMO"}'::jsonb WHERE id = ${itemId}`
+  );
+  // A second lot at another shelf in the from location (the physical pick).
+  const otherLotId = randomUUID();
+  await client.db.execute(
+    sql`INSERT INTO inventory_lots (id, part_no, wcl_item_no, date_code, lot_code, coo, cow, shelf_code, org_id, sub_inventory_code, total_qty, allocated_qty, created_date, last_update_date)
+        VALUES (${otherLotId}, 'RK73H1JTTD1002F', 'RK73H1JTTD1002F', '2601', 'L2601X', 'JP', 'JP', 'A0102', 2, 'STORE1', 300, 0, now(), now())`
+  );
+  _setPickingFromSubinventoryOrgsForTests([{ orgId: 2, fromSubinventories: ["STORE1"] }]);
+  _setReceivingSubInventoryRulesForTests([]);
+  try {
+    // Destination-scoped probe (the legacy client scope) sees no stock…
+    assert.equal(
+      (await getPickingShelfStock(client.db, { partNo: "RK73H1JTTD1002F", shelfCode: "A0101", orgId: 14, subInventoryCode: "GZSZ" })).qty,
+      0
+    );
+    // …but the order-scoped probe converts to the from location and finds it.
+    assert.equal((await getPickingShelfStock(client.db, { partNo: "RK73H1JTTD1002F", shelfCode: "A0101", orderId })).qty, 1000);
+    assert.equal((await getPickingShelfStock(client.db, { partNo: "RK73H1JTTD1002F", shelfCode: "A0102", orderId })).qty, 300);
+
+    // Confirm-time resolution deducts the scanned shelf's lot in the from
+    // location instead of 409 no_stock_at_location.
+    _setPickingShelfScanForTests("require-match");
+    const { packageIds } = await scanPickingItem(client.db, itemId, {
+      actorId,
+      allocationId: alloc.id,
+      qty: 200,
+      shelfCode: "A0102",
+    });
+    const pkg = await queryGet<{ sourceId: string }>(
+      client.db,
+      sql`SELECT source_id AS "sourceId" FROM picking_packages WHERE id = ${packageIds[0]}`
+    );
+    assert.equal(pkg!.sourceId, otherLotId);
+    const otherLot = await queryGet<{ totalQty: number }>(
+      client.db,
+      sql`SELECT total_qty AS "totalQty" FROM inventory_lots WHERE id = ${otherLotId}`
+    );
+    assert.equal(otherLot!.totalQty, 100);
+
+    // A shelf with no stock anywhere still 409s (the conversion does not leak).
+    const noStock = await catchHttp(
+      scanPickingItem(client.db, itemId, { actorId, allocationId: alloc.id, qty: 100, shelfCode: "A0103" })
+    );
+    assert.equal(noStock.status, 409);
+    assert.equal(noStock.message, "no_stock_at_location");
+  } finally {
+    _setPickingFromSubinventoryOrgsForTests([]);
+    _setReceivingSubInventoryRulesForTests([]);
+    _setPickingShelfScanForTests("off");
+  }
 });
 
 test("scan shelf-scan mode require-any: deducts the scanned shelf's lot; 409s", async () => {

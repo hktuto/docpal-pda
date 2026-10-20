@@ -22,8 +22,10 @@ export interface ScanSessionResult {
 export interface PickingScanSessionOptions {
   /** Live ref of the order's items (the queue validates against these). */
   orderItems: Ref<PickingOrderDetail["items"]>;
-  /** Order-level org/sub-inventory scope for the shelf-stock probe. */
-  scope: Ref<{ orgId?: number; subInventoryCode?: string }>;
+  /** Order-level org/sub-inventory scope for the shelf-stock probe. orderId
+   *  lets the backend resolve the scope server-side (transfer orders convert
+   *  to the from_subinventory source location). */
+  scope: Ref<{ orgId?: number; subInventoryCode?: string; orderId?: string }>;
   /** Resolved pickingShelfScan mode (useFlowSteps). */
   shelfMode: Ref<PickingShelfScanMode>;
   /** Backend shelf-stock probe (warehouse.getPickingShelfStock → qty). */
@@ -143,6 +145,7 @@ export function usePickingScanSession(options: PickingScanSessionOptions) {
             boxId: pendingShelf.value.boxId ?? undefined,
             orgId: scope.value.orgId,
             subInventoryCode: scope.value.subInventoryCode,
+            orderId: scope.value.orderId,
           });
           if (!stocked) return { ok: false, message: "item_not_on_shelf" };
         }

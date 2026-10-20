@@ -418,6 +418,7 @@ async function handleParsed(parsed: ReturnType<typeof ocrResultToInput>, raw: st
       boxId: pendingShelf.value.boxId ?? undefined,
       orgId: order.value?.orgId ?? undefined,
       subInventoryCode: order.value?.subInventoryCode ?? undefined,
+      orderId: order.value?.id ?? undefined,
     });
     if (!stocked) {
       showToast(t("picking.scanSession.item_not_on_shelf"));

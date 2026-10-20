@@ -8,10 +8,11 @@ import { nextBoxId } from "./boxes.js";
 import { now } from "./now.js";
 import { emitEvent } from "./events.js";
 import { workLockExpiry } from "./allocate.js";
-import { isStepEnabled, pickingShelfScan } from "../config.js";
+import { isStepEnabled, pickingFromSubinventoryOrgs, pickingShelfScan, receivingSubInventoryRules } from "../config.js";
 import { allowedOrgCondition, allowedOrgFilter } from "./org-filter.js";
 import { userScopeCondition, type UserScopeEntry } from "./user-scope.js";
 import { normalizePartNo } from "./scanParse.js";
+import { matchSubInventoryRule } from "./receiving.js";
 import {
   assertNoUnresolvedOutdatedWarnings,
   checkPartScanOutdated,
@@ -158,6 +159,41 @@ async function loadOrderForWrite(tx: DbOrTx, orderId: string): Promise<OrderStat
 function assertOrderWritable(order: OrderState): void {
   if (order.status === "issue") throw new HTTPException(409, { message: "picking_order_has_open_issue" });
   if (order.status === "finished") throw new HTTPException(409, { message: "picking_order_already_finished" });
+}
+
+/** Effective source scope for a picking item's shelf checks, transfer-aware.
+ *  For transfer items (additional_data.from_subinventory — spec
+ *  2026-09-03-picking-from-subinventory-orgs-design.md) the order's pair is
+ *  the DESTINATION and the stock physically sits in the FROM location; the
+ *  allocator converts the demand scope accordingly (allocate.ts
+ *  resolveDemandLocation). The require-match shelf probe and the scanned-shelf
+ *  lot resolution must convert the same way — scoped to the destination pair
+ *  they see no stock and every scan of a transfer order reads
+ *  "no stock at location". Falls back to the order's pair for non-transfer
+ *  items, unconfigured groups, and missing config. */
+async function resolveItemSourceScope(
+  dbOrTx: DbOrTx,
+  pickingItemId: string,
+  order: OrderState
+): Promise<{ orgId: number | null; subInventoryCode: string | null }> {
+  const fallback = { orgId: order.orgId, subInventoryCode: order.subInventoryCode };
+  const groups = pickingFromSubinventoryOrgs();
+  if (groups.length === 0) return fallback;
+  const row = await queryGet<{ fromSubinventory: string | null; orderNo: string | null; itemPoNo: string | null }>(
+    dbOrTx,
+    sql`SELECT additional_data ->> 'from_subinventory' AS "fromSubinventory",
+               additional_data ->> 'order_no' AS "orderNo",
+               additional_data ->> 'po_no' AS "itemPoNo"
+        FROM picking_items WHERE id = ${pickingItemId}`
+  );
+  if (!row?.fromSubinventory) return fallback;
+  const group = groups.find((g) => g.fromSubinventories.includes(row.fromSubinventory!));
+  if (!group) return fallback;
+  const ruleRef = row.orderNo?.trim() || row.itemPoNo?.trim() || null;
+  return {
+    orgId: group.orgId,
+    subInventoryCode: matchSubInventoryRule(group.orgId, ruleRef, receivingSubInventoryRules()) ?? row.fromSubinventory,
+  };
 }
 
 interface ShippingBoxRow {
@@ -1138,18 +1174,22 @@ function scannedLocationMatches(
 /**
  * require-any lot resolution (spec 2026-10-02-picking-shelf-scan-config-design.md):
  * inventory_lots rows for the picking item's part at the scanned shelf/box,
- * scoped to the order's org/sub-inventory (share members included, same as
- * allocate.ts loadLotSources) and the flow config's allowedOrgIds; the label's
- * batch fields (dateCode/lotCode) must match the lot when the label carries
- * them; oldest date_code wins (FIFO). 409 no_stock_at_location when no
- * candidate covers the scanned qty.
+ * scoped to the item's effective source location (the order's org/sub-inventory
+ * widened by share members — converted to the from_subinventory location for
+ * transfer items, same as allocate.ts loadLotSources) and the flow config's
+ * allowedOrgIds; the label's batch fields (dateCode/lotCode) must match the
+ * lot when the label carries them; oldest date_code wins (FIFO).
+ * 409 no_stock_at_location when no candidate covers the scanned qty.
  */
 async function resolveScannedShelfLot(
   tx: DbOrTx,
-  item: { partNo: string },
+  item: { id: string; partNo: string },
   order: OrderState,
   input: ScanPickingItemInput
 ): Promise<SourceLine & { shelfCode: string | null; totalQty: number }> {
+  // Transfer items pick from the from_subinventory's org, not the order's
+  // destination pair — same conversion the allocator applies.
+  const scope = await resolveItemSourceScope(tx, item.id, order);
   const candidates = await queryAll<SourceLine & { shelfCode: string | null; totalQty: number }>(
     tx,
     sql`SELECT il.id, il.total_qty AS "totalQty", il.shelf_code AS "shelfCode", il.box_id AS "boxId",
@@ -1157,12 +1197,12 @@ async function resolveScannedShelfLot(
         FROM inventory_lots il
         WHERE (il.part_no = ${item.partNo} OR il.wcl_item_no = ${item.partNo})
           AND ${input.boxId ? sql`il.box_id = ${input.boxId}` : sql`il.shelf_code = ${input.shelfCode}`}
-          AND (${order.orgId}::int IS NULL OR il.org_id = ${order.orgId})
-          AND (${order.subInventoryCode}::text IS NULL
-               OR upper(il.sub_inventory_code) = upper(${order.subInventoryCode})
+          AND (${scope.orgId}::int IS NULL OR il.org_id = ${scope.orgId})
+          AND (${scope.subInventoryCode}::text IS NULL
+               OR upper(il.sub_inventory_code) = upper(${scope.subInventoryCode})
                OR EXISTS (SELECT 1 FROM sub_inventory_share_members sm_d
                           JOIN sub_inventory_share_members sm_s ON sm_s.share_group = sm_d.share_group
-                          WHERE sm_d.org_id = ${order.orgId} AND upper(sm_d.code) = upper(${order.subInventoryCode})
+                          WHERE sm_d.org_id = ${scope.orgId} AND upper(sm_d.code) = upper(${scope.subInventoryCode})
                             AND sm_s.org_id = il.org_id AND upper(sm_s.code) = upper(il.sub_inventory_code)))
           ${allowedOrgFilter(sql`il.org_id`)}
           AND (${input.dateCode ?? null}::text IS NULL OR il.date_code = ${input.dateCode ?? null})
@@ -1197,6 +1237,11 @@ export async function getPickingShelfStock(
     boxId?: string;
     orgId?: number;
     subInventoryCode?: string;
+    /** Picking order being scanned: when present, the org/sub-inventory scope
+     *  is resolved server-side from the order + the matching item (transfer
+     *  orders convert to the from_subinventory source location) instead of
+     *  trusting the caller's pair. */
+    orderId?: string;
   }
 ): Promise<{ qty: number }> {
   const partKeys = [params.partNo, params.wclItemNo].filter((v): v is string => !!v);
@@ -1207,8 +1252,36 @@ export async function getPickingShelfStock(
   const unwrappedKeys = [...new Set(partKeys.map((k) => normalizePartNo(k)))];
   const unwrappedCol = (col: SQL) =>
     sql`regexp_replace(upper(regexp_replace(${col}, '\\s', '', 'g')), '^(TE-)?AMP\\((.+)\\)$', '\\2')`;
-  const orgId = params.orgId ?? null;
-  const subInventoryCode = params.subInventoryCode ?? null;
+  let orgId = params.orgId ?? null;
+  let subInventoryCode = params.subInventoryCode ?? null;
+  if (params.orderId) {
+    // The scanned label's bare PN may differ from the item's WCL key — find
+    // the order's item by any of its part keys, then use the same source
+    // scope the allocator would (transfer-aware).
+    const order = await queryGet<OrderState>(
+      db,
+      sql`SELECT id, status, org_id AS "orgId", sub_inventory_code AS "subInventoryCode"
+          FROM picking_orders WHERE id = ${params.orderId}`
+    );
+    const item = order
+      ? await queryGet<{ id: string }>(
+          db,
+          sql`SELECT pi.id FROM picking_items pi
+                JOIN parts p ON p.wcl_item_no = pi.part_no
+              WHERE pi.picking_order_id = ${order.id}
+                AND (${inArray(sql`pi.part_no`, partKeys)}
+                     OR ${inArray(sql`p.part_no`, partKeys)}
+                     OR ${inArray(sql`p.wcl_item_no`, partKeys)})
+              ORDER BY pi.created_date, pi.id
+              LIMIT 1`
+        )
+      : null;
+    if (order && item) {
+      const scope = await resolveItemSourceScope(db, item.id, order);
+      orgId = scope.orgId;
+      subInventoryCode = scope.subInventoryCode;
+    }
+  }
   const row = await queryGet<{ qty: number }>(
     db,
     sql`SELECT COALESCE(SUM(il.total_qty), 0)::int AS "qty"

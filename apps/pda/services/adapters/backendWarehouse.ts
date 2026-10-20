@@ -235,6 +235,7 @@ export function createBackendWarehouseService(
         boxId: query.boxId,
         orgId: query.orgId ?? undefined,
         subInventoryCode: query.subInventoryCode ?? undefined,
+        orderId: query.orderId,
       });
     },
     // Remove an unboxed, unverified package (reverses source + allocation).

@@ -110,9 +110,9 @@ pickingRoute.get("/picking-orders/:id", async (c) => {
 
 // Shelf presence check (flow config pickingShelfScan require-match): stock of
 // a part at a shelf/box — the scan page calls it once per (shelf, part) and
-// rejects item labels with no stock on the pending shelf. Optional
-// orgId/subInventoryCode (from the order detail) scope the lookup like the
-// require-* lot resolver.
+// rejects item labels with no stock on the pending shelf. Optional orderId
+// scopes the lookup server-side from the order + item (transfer-aware);
+// orgId/subInventoryCode are the legacy client-supplied scope.
 pickingRoute.get("/picking-shelf-stock", async (c) => {
   const orgId = Number(c.req.query("orgId"));
   return c.json(
@@ -123,6 +123,7 @@ pickingRoute.get("/picking-shelf-stock", async (c) => {
       boxId: c.req.query("boxId") || undefined,
       orgId: Number.isInteger(orgId) ? orgId : undefined,
       subInventoryCode: c.req.query("subInventoryCode") || undefined,
+      orderId: c.req.query("orderId") || undefined,
     }),
     200
   );

@@ -146,11 +146,15 @@
   allocation candidates are NOT filtered by shelf. The backend enforces the
   context on lot-sourced allocations (409 `shelf_scan_required`) and both
   modes resolve+deduct the physically-scanned shelf's lot when it differs
-  from the allocation lot's (order org/sub-inventory scope, label batch
-  fields must match, FIFO by date_code; 409 `no_stock_at_location`) — package
+  from the allocation lot's (the item's effective source scope — order
+  org/sub-inventory widened by share members, converted to the
+  `from_subinventory` source location for transfer (`tn`) items exactly like
+  the allocator does; label batch fields must match, FIFO by date_code; 409
+  `no_stock_at_location`) — package
   source + PICK ledger point at that lot, the original allocation is still
   reduced. The modes differ only in check strictness: require-match
-  pre-checks at scan time (cached `GET /picking-shelf-stock` — zero stock on
+  pre-checks at scan time (cached `GET /picking-shelf-stock` with the order
+  id — the backend resolves the scope server-side; zero stock on
   the pending shelf → "item not on this shelf" toast, scan dropped), while
   require-any accepts the scan and lets the confirm 409 catch it. OCR capture
   in the require-* modes needs the sticky shelf context first — the button

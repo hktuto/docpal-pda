@@ -542,6 +542,10 @@ export interface PickingShelfStockQuery {
   boxId?: string;
   orgId?: number | null;
   subInventoryCode?: string | null;
+  /** Picking order being scanned — the backend resolves the org/sub-inventory
+   *  scope server-side from the order + item (transfer orders convert to the
+   *  from_subinventory source location). */
+  orderId?: string;
 }
 
 /** PATCH /shipping-boxes/:id fields (weights in kg, decimals allowed). */
