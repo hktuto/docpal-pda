@@ -43,9 +43,15 @@ async function readJson<T>(c: Context): Promise<T> {
   }
 }
 
-// Source-availability-changing mutations (scan / package removal) recalculate
-// allocations after commit — scheduled in the background, never rolled back
-// into the mutation response.
+// Priority/status-changing mutations (admin reorder / issue resolve)
+// recalculate allocations after commit — scheduled in the background, never
+// rolled back into the mutation response. Pick scans and package removal
+// deliberately do NOT: a pick consumes exactly what its allocation reserved
+// (reduceAllocation shrinks the row in the same tx, and scans are capped at
+// the allocation qty), so the fleet-wide invariant is preserved without a
+// rebuild — the old per-scan allocateAll only reshuffled priorities at the
+// cost of a multi-second full-fleet transaction blocking every concurrent
+// scan/finish on the same rows.
 function reallocateBestEffort(after: string): void {
   scheduleAllocateAll(db, after);
 }
@@ -161,14 +167,14 @@ pickingRoute.post("/picking-items/:id/scan", async (c) => {
     shelfCode: body.shelfCode ?? null,
     boxId: body.boxId ?? null,
   });
-  reallocateBestEffort("pick scan");
+  // No allocation recompute: the pick consumed exactly what the allocation
+  // reserved (see reallocateBestEffort's comment).
   return c.json(result, 201);
 });
 
 // Remove an unboxed, unverified package (reverses source + allocation + ledger).
 pickingRoute.delete("/packages/:id", async (c) => {
   await removeScannedPackage(db, { packageId: c.req.param("id"), actorId: actorFrom(c).id });
-  reallocateBestEffort("package removal");
   return c.json({ ok: true }, 200);
 });
 
@@ -182,7 +188,9 @@ pickingRoute.post("/picking-orders/:id/claim-shelf-box", async (c) => {
     shelfBoxId: body.shelfBoxId,
     actorId: actorFrom(c).id,
   });
-  reallocateBestEffort("whole-box claim");
+  // The claim guard (box_not_fully_available) guarantees no other order
+  // reserves these lots, and the order's own allocations are released
+  // in-tx — no fleet recompute needed.
   return c.json(result, 201);
 });
 
@@ -269,7 +277,7 @@ pickingRoute.post("/shipping-boxes/:id/scan", async (c) => {
     boxId: body.boxId ?? null,
     dateCode: body.dateCode ?? null,
   });
-  reallocateBestEffort("box scan");
+  // Same as the pick scan: consumes only what the allocation reserved.
   return c.json(result, 201);
 });
 

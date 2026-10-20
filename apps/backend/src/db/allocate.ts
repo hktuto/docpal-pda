@@ -1945,6 +1945,7 @@ async function runScopedAllocation(
 
 let allocateActive = false;
 let allocateQueued = false;
+const allocateWaiters: ((last: AllocationRunStatus["lastRun"]) => void)[] = [];
 
 // In-memory status of the background runner, exposed via GET
 // /allocation/status so UIs can show a global "allocation running" indicator
@@ -2022,6 +2023,30 @@ export function scheduleAllocateAll(
     runState.startedAt = null;
     // a trigger that landed between the last loop check and clearing the flag
     // would otherwise be lost
-    if (allocateQueued) scheduleAllocateAll(db, after, run);
+    if (allocateQueued) {
+      scheduleAllocateAll(db, after, run);
+    } else {
+      // Settled: flush awaitAllocateAll waiters with the last run's summary.
+      const waiters = allocateWaiters.splice(0);
+      for (const waiter of waiters) waiter(runState.lastRun);
+    }
   })();
+}
+
+/**
+ * Like scheduleAllocateAll, but the returned promise resolves once the
+ * serialized runner has gone idle (this trigger AND every trigger that
+ * arrived mid-run have been applied) — with the last run's summary. Request
+ * paths that must report the settled fleet (the admin manual run) use this so
+ * they cannot interleave with a background run: two concurrent allocateAll
+ * passes each wipe and rebuild, which used to leave duplicate allocation rows.
+ */
+export function awaitAllocateAll(
+  db: AppDb,
+  after: string
+): Promise<AllocationRunStatus["lastRun"]> {
+  return new Promise((resolve) => {
+    allocateWaiters.push(resolve);
+    scheduleAllocateAll(db, after);
+  });
 }

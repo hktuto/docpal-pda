@@ -3,7 +3,7 @@ import { HTTPException } from "hono/http-exception";
 import { sql } from "drizzle-orm";
 import { db } from "../../db.js";
 import { queryGet } from "../../db/query.js";
-import { allocateAll, allocateForPickingOrder, allocateForReceivingOrder, addManualPickingAllocation, removePickingAllocation, transferPickingAllocation } from "../../db/allocate.js";
+import { allocateForPickingOrder, allocateForReceivingOrder, addManualPickingAllocation, removePickingAllocation, transferPickingAllocation, awaitAllocateAll } from "../../db/allocate.js";
 import { actorFrom } from "../../auth/middleware.js";
 import { reallocateReceivingItemDemand } from "../../db/receivingReallocate.js";
 import { allocatePickingItemFromSources, allocatePickingGroupFromSources, type AllocateFormRow } from "../../db/pickingAllocateForm.js";
@@ -19,8 +19,12 @@ import { allocatePickingItemFromSources, allocatePickingGroupFromSources, type A
 export const adminAllocationRoute = new Hono();
 
 // "Allocate all" on the picking order list: full-fleet recompute.
+// Routed through the serialized background runner (awaited until it goes
+// idle) rather than calling allocateAll directly: a direct call could
+// interleave with a run scheduled by a concurrent mutation, and two
+// concurrent wipe/rebuild passes used to leave duplicate allocation rows.
 adminAllocationRoute.post("/allocation/run", async (c) => {
-  const summary = await allocateAll(db);
+  const summary = await awaitAllocateAll(db, "admin run");
   return c.json(summary);
 });
 

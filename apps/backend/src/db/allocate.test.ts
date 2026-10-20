@@ -2,7 +2,7 @@ import { test, before } from "node:test";
 import assert from "node:assert/strict";
 import { sql } from "drizzle-orm";
 import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
-import { allocateAll, allocateForPickingOrder, allocateForReceivingOrder, parseDateCodeRule, resolveDemandLocation, scheduleAllocateAll, type DemandRow } from "./allocate.js";
+import { allocateAll, allocateForPickingOrder, allocateForReceivingOrder, awaitAllocateAll, parseDateCodeRule, resolveDemandLocation, scheduleAllocateAll, type DemandRow } from "./allocate.js";
 import { confirmReceivingArrival } from "./receiving.js";
 import {
   _setPickingAllocationForTests,
@@ -718,6 +718,30 @@ test("scheduleAllocateAll: one run at a time, triggers during a run coalesce int
   scheduleAllocateAll(client.db, "test", run);
   while (calls < 3 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 5));
   assert.equal(calls, 3);
+});
+
+test("awaitAllocateAll: resolves with the last run summary once the runner settles (coalesced triggers included)", async () => {
+  let calls = 0;
+  let resolveFirst!: () => void;
+  const firstGate = new Promise<void>((r) => (resolveFirst = r));
+  const run = async () => {
+    calls++;
+    if (calls === 1) await firstGate;
+  };
+
+  const settled = awaitAllocateAll(client.db, "test-await");
+  scheduleAllocateAll(client.db, "test-await", run);
+  scheduleAllocateAll(client.db, "test-await", run);
+  const deadline = Date.now() + 5000;
+  while (calls < 1 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 5));
+  assert.equal(calls, 1);
+
+  resolveFirst();
+  const lastRun = await settled;
+  // the mid-run trigger coalesced into a follow-up pass before settling
+  assert.equal(calls, 2);
+  assert.ok(lastRun);
+  assert.equal(lastRun.trigger, "test-await");
 });
 
 // --- transfer orders: additional_data.from_subinventory conversion ---------
