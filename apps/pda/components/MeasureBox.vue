@@ -318,7 +318,7 @@ useHardwareScanner({
     try {
       const parsedResult = await parseRawValue(rawValue);
       const result = await runScanMatcher(
-        scanContext.value,
+        { ...scanContext.value, rawLabel: rawValue },
         ocrResultToInput(parsedResult.parsed),
         matchers
       );

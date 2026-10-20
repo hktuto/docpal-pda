@@ -127,7 +127,7 @@ export function useLabelScan() {
 
   async function processCapture(
     capture: LabelScanCapture,
-    context: ScanTaskContext
+    contextInput: ScanTaskContext
   ): Promise<LabelScanResult> {
     const t0 = performance.now();
     const barcodes = parseBarcodes(capture.barcodes);
@@ -143,8 +143,8 @@ export function useLabelScan() {
       const t2 = performance.now();
       parsedResult = parseQrCapture(qrValue, {
         supplierTemplates: suppliers,
-        targets: context.targets ?? [],
-        contextSupplierCode: context.supplierCode,
+        targets: contextInput.targets ?? [],
+        contextSupplierCode: contextInput.supplierCode,
         dateCodePeriods,
       });
       console.log('[SCAN-TIME] parseQrCapture', (performance.now() - t2).toFixed(1), 'ms');
@@ -152,12 +152,16 @@ export function useLabelScan() {
       const t1 = performance.now();
       parsedResult = parseAndIdentify(
         { text: capture.text, barcodes },
-        context.targets ?? []
+        contextInput.targets ?? []
       );
       console.log('[SCAN-TIME] parseAndIdentify', (performance.now() - t1).toFixed(1), 'ms');
     }
 
     const parsed = ocrResultToInput(parsedResult.parsed);
+
+    // The raw label string rides along for measuring/verify matching: a
+    // package's stored labelBarcode is the same-label proof for legacy rows.
+    const context: ScanTaskContext = { ...contextInput, rawLabel: captureRawLabelValue(capture) };
 
     const t3 = performance.now();
     const matchResult = await runScanMatcher(context, parsed, matchers);

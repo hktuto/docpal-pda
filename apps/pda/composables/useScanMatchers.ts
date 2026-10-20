@@ -30,7 +30,7 @@ export async function runScanMatcher(
       return m.matchPutAway(ctx.receivingOrderId, ctx.putAwayItems ?? [ctx.receivingItem], parsed, ctx.shelfCode);
     case 'measuring':
       if (!ctx.packages) return m.error('missing_box_packages');
-      return m.matchMeasuring(ctx.packages, ctx.targetPackageId, parsed, ctx.flow);
+      return m.matchMeasuring(ctx.packages, ctx.targetPackageId, parsed, ctx.flow, ctx.rawLabel);
     default:
       return m.error('unknown_scan_task');
   }
@@ -71,6 +71,9 @@ export interface ScanTaskContext {
   // matching runs client-side, then verifyPackage by id)
   packages?: MeasuringPackage[];
   targetPackageId?: string;
+  /** Raw scan string (measuring/verify): proves same-label re-scans for
+   *  legacy packages whose parsed scanned_* fields were never stored. */
+  rawLabel?: string;
   // measuring vs verify pass — decides which per-package flag skips a row
   // (`verified` in measuring, `verifyVerified` in verify); default 'measuring'
   flow?: 'measuring' | 'verify';
@@ -95,7 +98,7 @@ export type ScanMatchResult =
 export interface ScanMatchers {
   matchPicking(allocation: PickingAllocationRef, pickingItem: PickingItemRef, parsed: OcrInput): Promise<ScanMatchResult>;
   matchPutAway(receivingOrderId: string | undefined, putAwayItems: PutAwayExpectedItem[], parsed: OcrInput, shelfCode?: string | null): Promise<ScanMatchResult>;
-  matchMeasuring(packages: MeasuringPackage[], targetPackageId: string | undefined, parsed: OcrInput, flow?: 'measuring' | 'verify'): Promise<ScanMatchResult>;
+  matchMeasuring(packages: MeasuringPackage[], targetPackageId: string | undefined, parsed: OcrInput, flow?: 'measuring' | 'verify', rawLabel?: string): Promise<ScanMatchResult>;
   error(err: I18nError): ScanMatchResult;
   error(code: string, params?: Record<string, unknown>): ScanMatchResult;
 }
@@ -243,7 +246,7 @@ export function useScanMatchers(): ScanMatchers {
   // design): totals per part + batch fields, not physical labels — the scan
   // qty is credited FIFO across the matching packages (partial allowed).
   // Apply = verifyPackage per credit.
-  async function matchMeasuring(packages: MeasuringPackage[], targetPackageId: string | undefined, parsed: OcrInput, flow: 'measuring' | 'verify' = 'measuring'): Promise<ScanMatchResult> {
+  async function matchMeasuring(packages: MeasuringPackage[], targetPackageId: string | undefined, parsed: OcrInput, flow: 'measuring' | 'verify' = 'measuring', rawLabel?: string): Promise<ScanMatchResult> {
     const user = currentUser.value;
     if (!user?.id) return error('operator_not_signed_in');
 
@@ -262,7 +265,8 @@ export function useScanMatchers(): ScanMatchers {
           coo: parsed.coo ? String(parsed.coo) : undefined,
           cow: parsed.cow ? String(parsed.cow) : undefined,
         },
-        targetPackageId
+        targetPackageId,
+        rawLabel
       );
       if (matched === 'already-done') {
         const count = packages.filter((pkg) => !targetPackageId || pkg.id === targetPackageId).length;

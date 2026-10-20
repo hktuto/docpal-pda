@@ -33,11 +33,28 @@ export function packageRemaining(pkg: MeasuringPackage): number {
  * walks the matching packages FIFO, taking partial credits as needed.
  * Returns 'already-done' when matching packages exist but are fully
  * credited, null when nothing matches or the qty exceeds the remaining.
+ *
+ * Raw-label fallback: scans created between 2026-10-05 and 2026-10-14 stored
+ * only `labelBarcode` (the raw pick-time string) without the parsed batch
+ * fields, and the snapshot fallback above demonstrably rejects those labels
+ * (upstream WWYY ≠ label-derived WWYY). When the field comparison finds no
+ * match and the caller passes the scan's raw label string, a package whose
+ * stored `labelBarcode` equals it verbatim IS the same physical label —
+ * accept it regardless of parsed fields.
  */
 export function matchAggregatePackages(
   packages: MeasuringPackage[],
-  scan: { partNo?: string; wclItemNo?: string; qty: number },
-  targetPackageId?: string
+  scan: {
+    partNo?: string;
+    wclItemNo?: string;
+    qty: number;
+    dateCode?: string;
+    lotCode?: string;
+    coo?: string;
+    cow?: string;
+  },
+  targetPackageId?: string,
+  rawLabel?: string
 ): AggregateMatch | 'already-done' | null {
   const scannedKeys = [scan.partNo, scan.wclItemNo]
     .filter((v): v is string => !!v)
@@ -67,9 +84,47 @@ export function matchAggregatePackages(
     if (cow && pkgCow && cow !== pkgCow) return false;
     return true;
   });
-  if (eligible.length === 0) return null;
+  if (eligible.length === 0) {
+    // No package matches the parsed fields at all — try the raw-label proof
+    // before giving up.
+    const raw = rawLabel?.trim();
+    if (raw) {
+      const byRawLabel = packages.filter(
+        (pkg) =>
+          (!targetPackageId || pkg.id === targetPackageId) &&
+          !!pkg.labelBarcode &&
+          pkg.labelBarcode.trim() === raw
+      );
+      if (byRawLabel.length > 0) return creditPackages(byRawLabel, scan.qty);
+    }
+    return null;
+  }
 
-  let left = scan.qty;
+  const fieldMatch = creditPackages(eligible, scan.qty);
+  if (fieldMatch !== null) return fieldMatch;
+  // The parsed-field comparison matched nothing creditable (nothing eligible,
+  // all fully credited is 'already-done' above, or the qty exceeds the
+  // remaining) — the same physical label is provable by the raw pick-time
+  // scan string when the caller provides it.
+  const raw = rawLabel?.trim();
+  if (raw) {
+    const byRawLabel = packages.filter(
+      (pkg) =>
+        (!targetPackageId || pkg.id === targetPackageId) &&
+        !!pkg.labelBarcode &&
+        pkg.labelBarcode.trim() === raw
+    );
+    if (byRawLabel.length > 0) return creditPackages(byRawLabel, scan.qty);
+  }
+  return fieldMatch;
+}
+
+/** FIFO credit plan across the given packages (partial allowed). */
+function creditPackages(
+  eligible: MeasuringPackage[],
+  qty: number
+): AggregateMatch | 'already-done' | null {
+  let left = qty;
   const credits: AggregateCredit[] = [];
   for (const pkg of eligible) {
     if (left <= 0) break;
@@ -80,8 +135,8 @@ export function matchAggregatePackages(
     }
   }
   if (credits.length === 0) return 'already-done';
-  if (left > 0) return null; // scanned qty exceeds the group's remaining
-  return { qty: scan.qty, credits };
+  if (left > 0) return null;
+  return { qty, credits };
 }
 
 // Batch fields of the scan, normalized with the same rules the old exact-qty
