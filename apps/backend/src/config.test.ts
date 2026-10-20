@@ -1,14 +1,29 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { FLOW_STEPS, parseFlowConfig, mergeFlowConfigJson, applyFlowConfig, pdaViewConfig, _resetFlowConfigForTests } from "./config.js";
+import { FLOW_STEPS, parseFlowConfig, mergeFlowConfigJson, applyFlowConfig, cnReceiving, pdaViewConfig, _resetFlowConfigForTests } from "./config.js";
 
 // FLOW_CONFIG parsing/validation (spec 2026-08-10-flow-config-design.md).
 // Pure unit tests — no database.
 
 test("parseFlowConfig: unset → defaults (all steps enabled, dock stock allowed)", () => {
   const cfg = parseFlowConfig(undefined);
-  for (const step of FLOW_STEPS) assert.equal(cfg.steps[step].enabled, true, step);
+  for (const step of FLOW_STEPS) {
+    if (step === "receiving-cn") continue; // opt-in CN receiving flow — default disabled
+    assert.equal(cfg.steps[step].enabled, true, step);
+  }
   assert.equal(cfg.pickingAllocation.allowDockStock, true);
+});
+
+test("parseFlowConfig: receiving-cn defaults to disabled; enabling the step resolves cnReceiving()", () => {
+  assert.equal(parseFlowConfig(undefined).steps["receiving-cn"].enabled, false);
+  assert.equal(cnReceiving(), false);
+  // A CN warehouse disables standard receiving and enables receiving-cn.
+  applyFlowConfig(
+    parseFlowConfig('{"steps":{"receiving":{"enabled":false},"receiving-cn":{"enabled":true}}}')
+  );
+  assert.equal(cnReceiving(), true);
+  _resetFlowConfigForTests();
+  assert.equal(cnReceiving(), false);
 });
 
 test("parseFlowConfig: empty object → defaults", () => {

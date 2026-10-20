@@ -853,6 +853,7 @@ export interface VerifyTaskDetail {
 
 export type FlowStep =
   | "receiving"
+  | "receiving-cn"
   | "put-away"
   | "picking"
   | "goods-verify"

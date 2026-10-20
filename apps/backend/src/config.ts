@@ -165,10 +165,11 @@ export const docpalGroupMapping: Record<string, string[]> = {
 //   1. FLOW_CONFIG env var (JSON) — always wins when set (tests, Vercel)
 //   2. warehouse_config row key "flow" (seeded per warehouse; a missing row
 //      is created with {} = defaults)
-// Unset everywhere = defaults (every step enabled, dock stock allocatable =
-// current cross-dock behavior). Changes need a backend restart (the PDA
-// fetches GET /config once after login). `measuring`/`verify` change the
-// picking finish chain, `goods-verify` gates the day-end job,
+// Unset everywhere = defaults (every step enabled except the opt-in
+// `receiving-cn` CN-receiving step, dock stock allocatable = current
+// cross-dock behavior). Changes need a backend restart (the PDA fetches
+// GET /config once after login). `measuring`/`verify` change the picking
+// finish chain, `goods-verify` gates the day-end job,
 // picking.allocation.allowDockStock=false makes put-away a hard gate for
 // allocation; the rest only hide PDA home tiles.
 //
@@ -181,6 +182,7 @@ export const docpalGroupMapping: Record<string, string[]> = {
 
 export const FLOW_STEPS = [
   "receiving",
+  "receiving-cn",
   "put-away",
   "picking",
   "goods-verify",
@@ -302,10 +304,6 @@ export interface FlowConfig {
   pdaViewConfig: PdaViewConfigOverrides;
   /** Picking shelf-scan mode; default "off". */
   pickingShelfScan: PickingShelfScanMode;
-  /** CN receiving flow (spec 2026-10-16-customer-receiving-upload-design.md):
-   *  when true, the PDA put-away flow reads CN tasks (put_away_tasks_cn);
-   *  a warehouse runs either the standard or the CN flow. Default false. */
-  cnReceiving: boolean;
 }
 
 /** Built-in defaults — reproduce the PDA's hardcoded list rows. */
@@ -432,8 +430,13 @@ export function defaultPdaViewConfig(): PdaViewConfig {
 }
 
 function defaultFlowConfig(): FlowConfig {
+  const steps = Object.fromEntries(FLOW_STEPS.map((s) => [s, { enabled: true }])) as FlowConfig["steps"];
+  // CN receiving (spec 2026-10-16-customer-receiving-upload-design.md) is the
+  // alternative receiving flow: off unless a warehouse enables the step
+  // (disabling standard `receiving`). Every other step defaults to enabled.
+  steps["receiving-cn"] = { enabled: false };
   return {
-    steps: Object.fromEntries(FLOW_STEPS.map((s) => [s, { enabled: true }])) as FlowConfig["steps"],
+    steps,
     pickingAllocation: { allowDockStock: true },
     putAway: { autoCreateTasks: false, suggestShelf: "existing-stock" },
     allowedOrgIds: [],
@@ -445,7 +448,6 @@ function defaultFlowConfig(): FlowConfig {
     pdaListTemplates: defaultPdaListTemplates(),
     pdaViewConfig: {},
     pickingShelfScan: "off",
-    cnReceiving: false,
   };
 }
 
@@ -781,13 +783,6 @@ export function mergeFlowConfigJson(parsed: unknown): FlowConfig {
       cfg.pickingShelfScan = value as PickingShelfScanMode;
       continue;
     }
-    if (key === "cnReceiving") {
-      if (typeof value !== "boolean") {
-        throw new Error("[config] flow config.cnReceiving must be a boolean");
-      }
-      cfg.cnReceiving = value;
-      continue;
-    }
     if (key === "pdaViewConfig") {
       cfg.pdaViewConfig = validatePdaViewConfig(value);
       continue;
@@ -965,9 +960,11 @@ export function pickingShelfScan(): PickingShelfScanMode {
   return flowConfig.pickingShelfScan;
 }
 
-/** CN receiving flow flag (spec 2026-10-16-customer-receiving-upload-design.md). */
+/** CN receiving flow flag (spec 2026-10-16-customer-receiving-upload-design.md):
+ *  backed by the `receiving-cn` flow step — a warehouse disables the standard
+ *  `receiving` step and enables `receiving-cn`. Exposed on GET /config. */
 export function cnReceiving(): boolean {
-  return flowConfig.cnReceiving;
+  return flowConfig.steps["receiving-cn"].enabled;
 }
 
 /** Confirm-arrival sub-inventory defaulting rule groups; [] = feature off. */
@@ -1026,7 +1023,7 @@ export function _setPickingShelfScanForTests(mode: PickingShelfScanMode): void {
 
 /** Test-only override for the CN receiving flow flag. */
 export function _setCnReceivingForTests(value: boolean): void {
-  flowConfig.cnReceiving = value;
+  flowConfig.steps["receiving-cn"].enabled = value;
 }
 
 /** Test-only override for the receiving sub-inventory defaulting rules. */

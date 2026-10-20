@@ -2103,6 +2103,7 @@ export default {
         stepsSection: "Flow steps (enabled steps appear on the PDA home menu)",
         steps: {
           receiving: "Receiving",
+          "receiving-cn": "Customer Receiving (CN)",
           "put-away": "Put-away",
           picking: "Picking",
           "goods-verify": "Goods Verify",
@@ -2111,6 +2112,7 @@ export default {
           "stock-search": "Stock Search",
           "shelf-exchange": "Shelf Exchange"
         },
+        receivingCnStepHint: "Customer Receiving (CN) replaces the standard receiving flow. When on, the PDA put-away reads CN tasks; warehouses using CN receiving should also disable the standard Receiving step.",
         pickingSection: "Picking allocation",
         allowDockStock: "Allow allocation from receiving dock stock (before put-away)",
         pickingShelfScan: "Shelf scan when picking",

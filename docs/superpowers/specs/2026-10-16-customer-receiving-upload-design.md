@@ -72,9 +72,9 @@ Self-rescheduling `setTimeout` loop (pattern: `jobs/goodsVerifyDayEnd.ts`; `unre
 
 Payload validation: header fields are strings; `items` non-empty; each item needs `partNo`/`orderNo` non-empty, `qty` positive-integer-like. 400 `invalid_payload` otherwise.
 
-### PDA CN put-away variant (`cnReceiving` flow-config flag)
+### PDA CN put-away variant (`receiving-cn` flow step)
 
-New top-level boolean `cnReceiving` (default false) on the `warehouse_config` "flow" row. When true, the PDA put-away list/detail read CN tasks instead of standard tasks (a warehouse runs one flow or the other).
+New `receiving-cn` flow step (default **disabled**) on the `warehouse_config` "flow" row — CN warehouses disable the standard `receiving` step and enable `receiving-cn` (a warehouse runs one flow or the other). The step backs the `cnReceiving` boolean exposed on `GET /config`; when true, the PDA put-away list/detail read CN tasks instead of standard tasks.
 
 - `src/db/putawayCn.ts`: `listCnPutAwayTasks`, `getCnPutAwayTaskDetail` (from `put_away_tasks_cn` + `receiving_invoice_items_cn`, grouping mirroring the standard candidates query), `completeCnPutAwayTx` (per-item `put_away_qty` updates + `inventory_transactions` PUT_AWAY rows `qty_type: 'on_hand'` creating stock lots + task completion check + `transaction_logs` + SSE on `/put-away-tasks`).
 - Separate route paths for isolation: `GET /put-away-cn/tasks`, `GET /put-away-cn/tasks/:id`, `POST /put-away-cn/tasks/:id/complete`.

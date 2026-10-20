@@ -9,7 +9,13 @@ import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
 const flow = useFlowApi();
 const { t } = useI18n();
 
-const STEPS = ["receiving", "put-away", "picking", "goods-verify", "measuring", "verify", "stock-search", "shelf-exchange"] as const;
+const STEPS = ["receiving", "receiving-cn", "put-away", "picking", "goods-verify", "measuring", "verify", "stock-search", "shelf-exchange"] as const;
+
+/** Steps that default to OFF (missing config row → disabled until an admin
+ *  enables them). Everything else defaults to ON. */
+const STEP_DEFAULTS_ENABLED: Record<string, boolean> = {
+  "receiving-cn": false,
+};
 
 interface PatternDraft {
   poNoPattern: string;
@@ -66,7 +72,7 @@ async function load() {
   error.value = "";
   try {
     state.value = await flow.getFlowConfig();
-    for (const s of STEPS) stepEnabled[s] = state.value.config.steps[s]?.enabled ?? true;
+    for (const s of STEPS) stepEnabled[s] = state.value.config.steps[s]?.enabled ?? STEP_DEFAULTS_ENABLED[s] ?? true;
     allowDockStock.value = state.value.config.pickingAllocation.allowDockStock;
     autoCreateTasks.value = state.value.config.putAway.autoCreateTasks;
     suggestShelf.value = state.value.config.putAway.suggestShelf;
@@ -197,6 +203,7 @@ onMounted(load);
           <input v-model="stepEnabled[s]" type="checkbox" />
           {{ $t(`admin.pages.flowConfig.steps.${s}`) }}
         </label>
+        <p class="hint-text">{{ $t("admin.pages.flowConfig.receivingCnStepHint") }}</p>
       </div>
 
       <div class="card form-card">

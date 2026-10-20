@@ -16,6 +16,7 @@ import { applyLegacyListTemplates, applyViewConfig } from "~/composables/useView
  */
 const steps = ref<Record<FlowStep, boolean>>({
   receiving: true,
+  "receiving-cn": false, // opt-in CN flow — backend default disabled, no home tile
   "put-away": true,
   picking: true,
   "goods-verify": true,

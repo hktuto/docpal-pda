@@ -2100,6 +2100,7 @@ export default {
         stepsSection: "流程步骤（启用的步骤会显示在 PDA 主菜单）",
         steps: {
           receiving: "收货",
+          "receiving-cn": "客户收货 (CN)",
           "put-away": "上架",
           picking: "拣货",
           "goods-verify": "盘点",
@@ -2108,6 +2109,7 @@ export default {
           "stock-search": "库存查询",
           "shelf-exchange": "货架调拨"
         },
+        receivingCnStepHint: "客户收货 (CN) 取代标准收货流程。启用后 PDA 上架会读取 CN 任务；使用 CN 收货的仓库请同时停用标准「收货」步骤。",
         pickingSection: "拣货分配",
         allowDockStock: "允许分配收货区库存（上架前）",
         pickingShelfScan: "拣货时扫描货架",

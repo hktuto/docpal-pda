@@ -324,15 +324,17 @@ Changes vs old: one aggregate read replaces the 3-call stitch; uniform
 materializes inventory lots (concept: lot + `inventory_lot_sources` +
 `inventory_transactions` PUT_AWAY rows).
 
-### CN put-away (`cnReceiving` flow-config flag)
+### CN put-away (`receiving-cn` flow step)
 
 Customer-receiving (CN) put-away variant (spec
 `docs/superpowers/specs/2026-10-16-customer-receiving-upload-design.md`; see
 `apps/backend/src/routes/putawayCn.ts` + `src/db/putawayCn.ts`): parallel
 endpoints over the dedicated `put_away_tasks_cn` table (created by the CN
 finalize cron, never the standard arrival confirm). Invisible unless the
-top-level `cnReceiving` flow-config key is true — every route 404s
-`not_found` when off (a warehouse runs one flow or the other). Completion
+`receiving-cn` flow step is enabled (CN warehouses disable the standard
+`receiving` step) — every route 404s `not_found` when off (a warehouse runs
+one flow or the other); the step backs the `cnReceiving` boolean on
+`GET /config`. Completion
 writes a single PUT_AWAY `on_hand` ledger row per item (no dock row — no
 RECEIVE_TO_DOCK ledger in the CN path, accepted v1 difference) and no
 `inventory_lot_sources` row (the CN item id lives in the ledger metadata,
@@ -577,7 +579,9 @@ The top-level `cnReceiving: boolean` key (spec
 `2026-10-16-customer-receiving-upload-design.md`, default false) switches a
 CN warehouse to the customer-receiving world: the PDA put-away flow reads the
 dedicated CN tables via the `/put-away-cn/*` routes (404 while off — a
-warehouse runs one flow or the other); edited via
+warehouse runs one flow or the other). It is backed by the `receiving-cn`
+flow step (default disabled; a CN warehouse disables the standard `receiving`
+step and enables `receiving-cn`) and edited via
 `GET/PUT /admin/flow-config`.
 The shipping feed is per-box: the list reads closed, unshipped boxes — gated
 on the box's completed verify task when the verify step is enabled
