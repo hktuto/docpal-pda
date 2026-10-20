@@ -554,7 +554,8 @@ export default {
   },
   measuring: {
     title: "測量",
-    hint: "待測量的已開啟箱號。",
+    hint: "按揀貨單分組的待測量箱號（揀貨已完成）。",
+    orderGroup: "揀貨單 {orderNo}",
     boxNotFound: "列表中找不到與「{id}」相符的箱號。",
     measureBox: {
       title: "測量箱號",

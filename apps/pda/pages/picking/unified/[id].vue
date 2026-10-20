@@ -83,6 +83,17 @@
           <template v-if="ocrCapturing"><InlineSpinner /> {{ $t('picking.scanSession.ocrCapture') }}</template>
           <template v-else>{{ $t('picking.scanSession.ocrCapture') }}</template>
         </button>
+        <!-- Complete Picking: prominent bottom confirmation (2026-10-20) —
+             appears the moment every item is picked into a box. -->
+        <button
+          v-if="allItemsFullyBoxed"
+          class="btn unified-footer__finish"
+          :disabled="finishing"
+          @click="finish"
+        >
+          <template v-if="finishing"><InlineSpinner /> {{ $t('actions.finishing') }}</template>
+          <template v-else>{{ $t('picking.detail.finishPicking') }}</template>
+        </button>
       </footer>
 
       <PickingScanReviewModal
@@ -471,7 +482,8 @@ watch(queuedCount, (count) => {
 
 // Completion cue: the queue has drained and every item's packages cover its
 // required qty (spec 2026-10-03 progress-based completion). One cue per
-// transition; finishing stays manual (header action) / backend auto-finish.
+// transition; finishing stays manual — the bottom-bar Complete Picking
+// button once every item is boxed.
 watch(completed, (done) => {
   if (done) playScanComplete();
 });
@@ -602,19 +614,6 @@ usePageHeader({
     if (o.subInventoryCode) rows.push({ label: t("picking.detail.subInventory"), value: o.subInventoryCode });
     if (o.workingByName) rows.push({ label: t("picking.detail.lockedBy"), value: o.workingByName });
     return rows;
-  },
-  actions: () => {
-    const o = order.value;
-    if (!o || o.status === "finished" || o.status === "issue" || heldByOther.value) return [];
-    if (!allItemsFullyBoxed.value) return [];
-    return [
-      {
-        key: "finish",
-        label: finishing.value ? t("actions.finishing") : t("picking.detail.finishPicking"),
-        disabled: finishing.value,
-        onClick: finish,
-      },
-    ];
   },
 });
 
@@ -885,5 +884,9 @@ onUnmounted(() => window.removeEventListener("beforeunload", beforeUnload));
   background: var(--bg, #f3f4f6);
   border-top: 1px solid var(--muted-light, #e5e7eb);
   z-index: 50;
+}
+
+.unified-footer__finish {
+  min-width: 10rem;
 }
 </style>

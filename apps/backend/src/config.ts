@@ -58,6 +58,11 @@ export function docpalWorkflowToken(): string | undefined {
   return process.env.DOCPAL_WORKFLOW_TOKEN?.trim() || undefined;
 }
 
+/** X-Tenant-ID header required by the DocPal workflow API; "demo" on UAT. */
+export function docpalTenantId(): string {
+  return process.env.DOCPAL_TENANT_ID?.trim() || "demo";
+}
+
 /** DocPal workflow definition id for the CN receiving Excel upload (per environment). */
 export function docpalCnExcelWorkflowId(): string | undefined {
   return process.env.DOCPAL_CN_EXCEL_WORKFLOW_ID?.trim() || undefined;

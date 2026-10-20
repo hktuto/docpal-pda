@@ -750,7 +750,7 @@ export interface Shelf {
 // IS the measuring completion. Weights are kilograms (decimals).
 // ------------------------------------------------------------------
 
-/** GET /measuring-boxes row — open boxes with ≥1 package. */
+/** GET /measuring-boxes row — an open box with ≥1 package. */
 export interface MeasuringBoxListRow {
   boxId: string;
   status: string;
@@ -759,6 +759,15 @@ export interface MeasuringBoxListRow {
   packageCount: number;
   verifiedCount: number;
   createdDate: string;
+}
+
+/** GET /measuring-boxes group — boxes whose picking orders are ALL
+ *  picking-complete (finished/shipped), grouped by picking order. A
+ *  cross-order box appears under each of its orders. */
+export interface MeasuringOrderGroup {
+  orderId: string;
+  orderNo: string;
+  boxes: MeasuringBoxListRow[];
 }
 
 /** Package row inside a measuring box. partNo/wclItemNo are the SCANNED label

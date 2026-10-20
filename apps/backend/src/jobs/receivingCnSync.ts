@@ -58,6 +58,9 @@ export async function runReceivingCnSyncOnce(db: AppDb): Promise<void> {
   for (const row of rows) {
     try {
       const process = await getProcess(row.docpalProcessId!);
+      // Verification log: shows the raw process payload the cron sees, so the
+      // state mapping can be checked against live DocPal responses.
+      console.log(`[receiving-cn] getProcess ${row.docpalProcessId}:`);
       const stateType =
         typeof process.state?.type === "string" ? process.state.type : undefined;
       const terminal = mapTerminalState(stateType);

@@ -554,7 +554,8 @@ export default {
   },
   measuring: {
     title: "Measuring",
-    hint: "Open boxes ready for measuring.",
+    hint: "Boxes of picking-completed orders, grouped by picking order.",
+    orderGroup: "Picking order {orderNo}",
     boxNotFound: "No box in the list matches \"{id}\".",
     measureBox: {
       title: "Measure Box",

@@ -7,7 +7,7 @@
 // variables instead).
 
 import { HTTPException } from "hono/http-exception";
-import { docpalBaseUrl, docpalWorkflowToken } from "./config.js";
+import { docpalBaseUrl, docpalTenantId, docpalWorkflowToken } from "./config.js";
 
 const TIMEOUT_MS = 30_000;
 
@@ -38,7 +38,8 @@ async function readBody(res: Response): Promise<unknown> {
 function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
   const token = docpalWorkflowToken();
   if (!token) throw new HTTPException(500, { message: "docpal_workflow_token_not_configured" });
-  return { Authorization: `Bearer ${token}`, ...extra };
+  // X-Tenant-ID is required by the DocPal workflow API (per tenant; "demo" on UAT).
+  return { Authorization: `Bearer ${token}`, "X-Tenant-ID": docpalTenantId(), ...extra };
 }
 
 async function callDocpal(path: string, init: RequestInit, timeoutMs = TIMEOUT_MS): Promise<unknown> {
@@ -106,7 +107,7 @@ export async function startProcess(
     "/oniflow/api/v1/processes",
     {
       method: "POST",
-      headers: authHeaders({ "Content-Type": "application/json" }),
+      headers: authHeaders({ "Content-Type": "application/json" , "X-Tenant-ID": "demo"}),
       body: JSON.stringify({ start_user_id: variables.start_user_id, definition_id: definitionId, variables }),
     }
   );
@@ -116,11 +117,12 @@ export async function startProcess(
   return data as StartedProcess;
 }
 
-/** GET /oniflow/api/v1/processes/:id — process status for the cron. Tolerates
- *  DocPal's {code,result,data} envelope. */
+/** GET /oniflow/api/v1/processes/instance/:id — process status for the cron
+ *  (route confirmed by the DocPal team). Tolerates DocPal's
+ *  {code,result,data} envelope. */
 export async function getProcess(processId: string): Promise<{ state?: { type?: string } } & Record<string, unknown>> {
   const data = await callDocpal(
-    `/oniflow/api/v1/processes/${encodeURIComponent(processId)}`,
+    `/oniflow/api/v1/processes/instance/${encodeURIComponent(processId)}`,
     { method: "GET", headers: authHeaders() }
   );
   if (typeof data !== "object" || data === null) {

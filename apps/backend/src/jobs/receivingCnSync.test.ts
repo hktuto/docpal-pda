@@ -81,6 +81,9 @@ test("cron: completed process finalizes the CN order (in_hand + put-away task) a
   await withFake(async () => {
     await runReceivingCnSyncOnce(client.db);
 
+    // Status is polled via the confirmed instance route.
+    assert.ok(requests.some((r) => r.method === "GET" && r.url === "/oniflow/api/v1/processes/instance/proc-1"));
+
     const order = await queryGet<{ status: string; arrivedAt: Date | null }>(
       client.db,
       sql`SELECT status, arrived_at AS "arrivedAt" FROM receiving_orders_cn WHERE id = ${orderId}`

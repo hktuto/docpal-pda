@@ -2,10 +2,10 @@
   <AppListPage
     :loading="loading"
     :error="loadError"
-    :empty="rows.length === 0"
+    :empty="groups.length === 0"
     empty-text="common.noPendingMeasuringTasks"
-    :shown="rows.length"
-    :total="rows.length"
+    :shown="allBoxes.length"
+    :total="allBoxes.length"
     :has-more="false"
     hide-footer
     :reload="load"
@@ -14,15 +14,18 @@
       <p class="page-hint">{{ $t('measuring.hint') }}</p>
     </template>
 
-    <AppListRow
-      v-for="box in rows"
-      :key="box.boxId"
-      :to="`/measuring/${box.boxId}`"
-      :title="rowView(box).title"
-      :meta="rowMeta(box)"
-      :chip-text="rowChip(box)?.text"
-      :chip-class="rowChip(box)?.cls"
-    />
+    <template v-for="group in groups" :key="group.orderId">
+      <h2 class="order-group__heading">{{ $t('measuring.orderGroup', { orderNo: group.orderNo }) }}</h2>
+      <AppListRow
+        v-for="box in group.boxes"
+        :key="`${group.orderId}:${box.boxId}`"
+        :to="`/measuring/${box.boxId}`"
+        :title="rowView(box).title"
+        :meta="rowMeta(box)"
+        :chip-text="rowChip(box)?.text"
+        :chip-class="rowChip(box)?.cls"
+      />
+    </template>
   </AppListPage>
 </template>
 
@@ -33,7 +36,7 @@ import { useHardwareScanner } from "~/composables/useHardwareScanner";
 import { useToast } from "~/composables/useToast";
 import { badgeClass } from "~/composables/useStatusBadge";
 import { viewListChip, viewListRow } from "~/utils/viewConfig";
-import type { MeasuringBoxListRow } from "~/services/types";
+import type { MeasuringBoxListRow, MeasuringOrderGroup } from "~/services/types";
 
 definePageMeta({ title: "meta.measuring" });
 
@@ -61,7 +64,7 @@ const { showToast } = useToast();
 
 useHead({ title: t('measuring.title') });
 
-const rawRows = ref<MeasuringBoxListRow[]>([]);
+const rawGroups = ref<MeasuringOrderGroup[]>([]);
 const loading = ref(true);
 const loadError = ref<string | null>(null);
 
@@ -69,24 +72,26 @@ async function load() {
   loading.value = true;
   loadError.value = null;
   try {
-    // The list is already the work queue: open boxes with ≥1 package.
-    rawRows.value = await warehouse.getMeasuringBoxes();
+    // The list is the post-picking work queue: open boxes whose picking
+    // orders are ALL finished, grouped by picking order.
+    rawGroups.value = await warehouse.getMeasuringBoxes();
   } catch (e: unknown) {
     loadError.value = errorMessage(e);
-    rawRows.value = [];
+    rawGroups.value = [];
   } finally {
     loading.value = false;
   }
 }
 
-const rows = computed(() => rawRows.value);
+const groups = computed(() => rawGroups.value);
+const allBoxes = computed(() => groups.value.flatMap((g) => g.boxes));
 
 // Scanning a box QR (or typing its id on the wedge) opens that box directly.
 // Exact id wins; otherwise a unique substring match (e.g. the daily seq).
 useHardwareScanner({
-  enabled: () => rows.value.length > 0,
+  enabled: () => allBoxes.value.length > 0,
   onScan: (rawValue) => {
-    const boxes = rows.value;
+    const boxes = allBoxes.value;
     const q = rawValue.trim().toLowerCase();
     if (!q) return false;
     const exact = boxes.find((b) => b.boxId.toLowerCase() === q);
@@ -106,5 +111,17 @@ useHardwareScanner({
   margin: -0.25rem 0 1rem;
   color: var(--muted);
   font-size: 0.875rem;
+}
+
+.order-group__heading {
+  margin: 0 0 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.03em;
+}
+
+.order-group__heading:not(:first-child) {
+  margin-top: 1rem;
 }
 </style>

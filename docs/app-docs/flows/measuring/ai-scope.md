@@ -2,12 +2,18 @@
 
 ## In scope
 
-- List the open shipping boxes that contain packages (box-scoped — no
-  measuring task exists; spec
-  `docs/superpowers/specs/2026-08-11-box-scoped-measuring-verify-design.md`).
-  List rows carry server-computed counts: `packageCount` / `verifiedCount`
-  plus the aggregated `orderNos[]` (a box may hold packages from several
-  picking orders — cross-order packing).
+- List the open shipping boxes that contain packages **whose picking orders
+  are all picking-complete** (`finished`/`shipped` — the order's explicit
+  Finish on the picking detail page), grouped by picking order (box-scoped —
+  no measuring task exists; specs
+  `docs/superpowers/specs/2026-08-11-box-scoped-measuring-verify-design.md`,
+  `docs/superpowers/specs/2026-10-20-measuring-post-picking-list-design.md`).
+  A box packed before its order is confirmed (or holding a cross-order
+  package of an unfinished order) stays off the list until every related
+  order is finished. List rows carry server-computed counts: `packageCount` /
+  `verifiedCount` plus the aggregated `orderNos[]` (a box may hold packages
+  from several picking orders — cross-order packing); a cross-order box
+  appears under each of its orders' groups.
 - Box detail as **one consolidated read** (`GET /measuring-boxes/:id`): the
   box and its packages with part identity and the `verified`/`verifyVerified`
   flags embedded, plus `suggestedNetWeightKg` per box. Scanning a box QR/id
@@ -58,7 +64,8 @@
 
 ## Key files
 
-- `pages/measuring/index.vue` — box list (open boxes with packages).
+- `pages/measuring/index.vue` — box list (open boxes of picking-completed
+  orders, grouped by picking order; `MeasuringOrderGroup[]`).
 - `pages/measuring/[boxId].vue` — the single box page, a thin wrapper over
   `components/MeasureBox.vue` (package verify by scan, measurements, close;
   box title/status/actions live in the app header via
@@ -75,7 +82,8 @@
 - `services/adapters/backendWarehouse.ts` — `getMeasuringBoxes` /
   `getMeasuringBox`; box mutations reuse the picking verbs.
 - `apps/backend/src/routes/measuring.ts` + `apps/backend/src/db/measuring.ts` —
-  `GET /measuring-boxes`, `GET /measuring-boxes/:id` (computes
+  `GET /measuring-boxes` (post-picking filter + per-order grouping),
+  `GET /measuring-boxes/:id` (computes
   `suggestedNetWeightKg` from `net_weight_formula`). Box mutations live with
   picking (`/packages/:id/verify`, `PATCH /shipping-boxes/:id`,
   `/shipping-boxes/:id/close`).
@@ -97,6 +105,7 @@
 ## Related specs/plans
 
 - `docs/backend/api-design.md` §Measuring
+- `docs/superpowers/specs/2026-10-20-measuring-post-picking-list-design.md`
 - `docs/superpowers/specs/2026-08-11-box-scoped-measuring-verify-design.md`
 - `docs/superpowers/specs/2026-10-03-picking-scan-truth-and-aggregate-verify-design.md`
 - `docs/superpowers/specs/2026-10-14-picking-scan-batch-validation-design.md`

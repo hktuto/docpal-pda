@@ -25,6 +25,7 @@ import type {
   Shelf,
   MeasuringBoxListRow,
   MeasuringBoxDetail,
+  MeasuringOrderGroup,
   VerifyTaskListRow,
   VerifyTaskDetail,
   FlowConfig,
@@ -408,12 +409,13 @@ export function createBackendWarehouseService(
       await client.del(`/shelf-boxes/${boxId}/scans/${scanId}`);
     },
 
-    // Measuring — box-scoped reads (no tasks): the list is the open boxes
-    // with ≥1 package, the detail one box plus its packages. Box
-    // measurement reuses the shared picking verbs above (verifyPackage /
-    // updateShippingBox / closeShippingBox); scanned labels are matched
-    // to packages client-side from the box detail.
-    async getMeasuringBoxes(): Promise<MeasuringBoxListRow[]> {
+    // Measuring — box-scoped reads (no tasks): open boxes with ≥1 package
+    // whose picking orders are all picking-complete, grouped by picking
+    // order; the detail one box plus its packages. Box measurement reuses
+    // the shared picking verbs above (verifyPackage / updateShippingBox /
+    // closeShippingBox); scanned labels are matched to packages client-side
+    // from the box detail.
+    async getMeasuringBoxes(): Promise<MeasuringOrderGroup[]> {
       return client.get("/measuring-boxes");
     },
     async getMeasuringBox(boxId: string): Promise<MeasuringBoxDetail> {

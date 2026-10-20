@@ -115,6 +115,38 @@ function isBlankRow(row: unknown[]): boolean {
   return row.every((c) => text(c) === "");
 }
 
+/** One merged-cell range, in `XLSX.utils.sheet_to_json` AOA coordinates
+ *  (identical to a worksheet's `!merges` entry). */
+export interface AoaMergeRange {
+  s: { r: number; c: number };
+  e: { r: number; c: number };
+}
+
+/**
+ * Fill merged cells down/across their range (a copy — the input AOA is not
+ * mutated). Excel only carries the value in a merge's top-left cell; the
+ * customer receiving sheet merges the poNo (发货项) column across an item
+ * group, so every row in the range shares it. Only empty cells are filled —
+ * real values are never overwritten, and files without merges are untouched.
+ */
+export function fillMergedCells(aoa: unknown[][], merges: AoaMergeRange[] | undefined | null): unknown[][] {
+  const filled = aoa.map((row) => [...row]);
+  for (const m of merges ?? []) {
+    if (!m || m.e.r < m.s.r || m.e.c < m.s.c) continue;
+    const value = filled[m.s.r]?.[m.s.c];
+    if (text(value) === "") continue;
+    for (let r = m.s.r; r <= m.e.r; r++) {
+      for (let c = m.s.c; c <= m.e.c; c++) {
+        if (text(filled[r]?.[c]) === "") {
+          if (!filled[r]) filled[r] = [];
+          filled[r][c] = value;
+        }
+      }
+    }
+  }
+  return filled;
+}
+
 function toNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   const n = Number(text(value).replace(/,/g, ""));
@@ -195,7 +227,11 @@ export function parseCnReceivingAoa(aoa: unknown[][]): CnReceivingParseResult {
         // wire and poNo can exceed 2^53 as a number.
         item[field] = String(row[c] ?? "").trim();
       }
-      if (any) items.push(item);
+      // A row counts as an item only when one of its key fields is present —
+      // a separator row that happens to sit inside a merged poNo range (its
+      // empty cells filled by fillMergedCells) must not become an item.
+      const hasKeyField = text(item.orderNo) !== "" || text(item.partNo) !== "" || text(item.qty) !== "";
+      if (any && hasKeyField) items.push(item);
     }
   }
 

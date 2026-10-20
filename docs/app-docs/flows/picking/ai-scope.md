@@ -186,8 +186,9 @@
   with a **Move out** button on open boxes
   (`DELETE /shipping-boxes/:id/packages/:packageId`).
   Boxing NEVER finishes the order (2026-10-16): the order stays `picking`
-  until the operator presses the explicit **Finish** button (header action +
-  sticky footer button when every item is fully boxed;
+  until the operator presses the explicit **Finish** button — a bottom-bar
+  button that appears the moment every item is fully boxed (2026-10-20: the
+  finish action lives ONLY in that bottom bar, not the header menu;
   `POST /picking-orders/:id/finish`).
 - Box labels + pre-printed box ids: on the picking detail page the
   hardware scanner is armed for box ids — a scan that does not match a
@@ -493,23 +494,25 @@
   status filter, batch issue report dialog; refresh button, debounced
   server-side search and multi-status/allocation filters).
 - `pages/picking/[id].vue` — detail page (items/allocations/packages,
-  boxes, logs; title, status badge and order info rows plus the Finish
-  action registered into the app header via
+  boxes, logs; title, status badge and order info rows in the app header via
   `composables/usePageHeader.ts`; the Scan action is the `ScanFab`
   floating button navigating to the scan session, shown only while the
-  order is actionable).
+  order is actionable; the Finish button is the sticky bottom-bar
+  confirmation shown once every item is fully boxed).
 - `pages/picking/scan/[id].vue` — scan-session ("checkout") page: armed
   hardware scanner, OCR capture button (single-record confirm form /
   multi-item table review before queueing), local queue table, Confirm
   batch-apply, leave guard.
 - `pages/picking/unified/[id].vue` — evaluation unified page: header via
-  `usePageHeader` (title/badge/info rows/Finish), issue + work-lock +
+  `usePageHeader` (title/badge/info rows), issue + work-lock +
   whole-box + shelf-context banners, the scan router (`deliverScan` — armed
   scan-into-box → pick-from-box → session routing, kinds mapped to
   beeps/toasts), OCR capture (QR passthrough / multi-item table / single
   review form), auto-apply drain (`watch(queuedCount)` → `confirm()`) with
   `allocation_changed` re-resolve + `unresolved_outdated_warnings` handling,
-  `completed` success cue, leave guard.
+  `completed` success cue, leave guard. The **Finish picking** button lives
+  in the fixed bottom bar (`unified-footer`) next to the OCR button and
+  appears the moment every item is picked into a box.
 - `components/picking/PickingUnifiedItems.vue` — the single item list:
   one row per part no (same-part lines merged), collapsed meta line +
   expanded pending/line-breakdown/unboxed/boxed/planned-allocation views;

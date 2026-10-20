@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { parseCnReceivingAoa } from "~/utils/cnReceivingExcel";
+import { parseCnReceivingAoa, fillMergedCells } from "~/utils/cnReceivingExcel";
 
 const require = createRequire(import.meta.url);
 
@@ -14,12 +14,31 @@ const FIXTURE = path.resolve(
   "../../../../supporting_doc/cn_receiving/TE20261010-2.xls"
 );
 
+// Real sheet whose poNo (发货项) column is merged across item groups
+// (rows 8-41, 42-43, 44-45 1-based in Excel; the value lives only in the
+// top-left cell of each merged range).
+const MERGED_FIXTURE = path.resolve(
+  fileURLToPath(import.meta.url),
+  "../../../../supporting_doc/cn_receiving/TE20261012-1.xls"
+);
+
 function fixtureAoa(): unknown[][] {
   const XLSX = require("xlsx");
   const buf = readFileSync(FIXTURE);
   const wb = XLSX.read(buf);
   const ws = wb.Sheets[wb.SheetNames[0]];
   return XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+}
+
+function fixtureAoaWithMerges(file: string): { aoa: unknown[][]; merges: { s: { r: number; c: number }; e: { r: number; c: number } }[] } {
+  const XLSX = require("xlsx");
+  const buf = readFileSync(file);
+  const wb = XLSX.read(buf);
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  return {
+    aoa: XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" }),
+    merges: (ws["!merges"] ?? []) as { s: { r: number; c: number }; e: { r: number; c: number } }[],
+  };
 }
 
 describe("parseCnReceivingAoa — TE20261010-2.xls", () => {
@@ -67,7 +86,69 @@ describe("parseCnReceivingAoa — TE20261010-2.xls", () => {
   });
 });
 
+describe("parseCnReceivingAoa — TE20261012-1.xls (merged poNo column)", () => {
+  const { aoa, merges } = fixtureAoaWithMerges(MERGED_FIXTURE);
+  const result = parseCnReceivingAoa(fillMergedCells(aoa, merges));
+
+  it("parses the header fields", () => {
+    expect(result.supplier).toBe("TE");
+    expect(result.invoiceNo).toBe("TE20261012-1");
+    expect(result.receivedDate).toBe("2026-10-12");
+  });
+
+  it("fills the merged poNo down every row of each range", () => {
+    expect(result.items).toHaveLength(39);
+    // Merge rows 8-41 (Excel 1-based) → poNo 43102642 on all 34 items.
+    expect(result.items[0].poNo).toBe("43102642");
+    expect(result.items[1].poNo).toBe("43102642");
+    expect(result.items[33].poNo).toBe("43102642");
+    // Standalone rows after the merges keep their own poNo.
+    expect(result.items[34].orderNo).toBe("329064689T1");
+    expect(result.items[34].poNo).toBe("43102643");
+    expect(result.items[36].orderNo).toBe("329064686T1");
+    expect(result.items[36].poNo).toBe("43112757");
+    expect(result.items[38].orderNo).toBe("329063890T3");
+    expect(result.items[38].poNo).toBe("43102644");
+  });
+
+  it("sums item totals and reads the 合计 row", () => {
+    expect(result.totals).toEqual({ carton: 114, qty: 2565220 });
+    expect(result.sheetTotals).toEqual({ carton: 114, qty: 2565220 });
+  });
+
+  it("does NOT forward-fill poNo when merges are not applied", () => {
+    const plain = parseCnReceivingAoa(aoa);
+    expect(plain.items[1].poNo).toBe("");
+  });
+});
+
+describe("fillMergedCells", () => {
+  it("fills only empty cells inside the range and never overwrites values", () => {
+    const aoa = [
+      ["A", "X"],
+      ["B", ""],
+      ["C", "keep"],
+    ];
+    const filled = fillMergedCells(aoa, [{ s: { r: 0, c: 1 }, e: { r: 2, c: 1 } }]);
+    expect(filled).toEqual([
+      ["A", "X"],
+      ["B", "X"],
+      ["C", "keep"],
+    ]);
+    // Input untouched.
+    expect(aoa[1][1]).toBe("");
+  });
+
+  it("is a no-op without merges", () => {
+    const aoa = [["A", ""], ["B", ""]];
+    expect(fillMergedCells(aoa, undefined)).toEqual(aoa);
+    expect(fillMergedCells(aoa, [])).toEqual(aoa);
+  });
+});
+
 describe("parseCnReceivingAoa — synthetic edge cases", () => {
+
+
   it("handles a minimal sheet with string dates and no 合计 row", () => {
     const aoa = [
       ["收貨確認及付款通知書"],

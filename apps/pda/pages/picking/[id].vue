@@ -304,20 +304,6 @@ usePageHeader({
     if (o.workingByName) rows.push({ label: t("picking.detail.lockedBy"), value: o.workingByName });
     return rows;
   },
-  actions: () => {
-    const o = order.value;
-    if (!o || o.status === "finished" || o.status === "issue" || heldByOther.value) return [];
-    // Scan is the floating action button on the page; only finish stays here.
-    if (!allItemsFullyBoxed.value) return [];
-    return [
-      {
-        key: "finish",
-        label: finishing.value ? t("actions.finishing") : t("picking.detail.finishPicking"),
-        disabled: finishing.value,
-        onClick: finish,
-      },
-    ];
-  },
 });
 
 function goScan() {

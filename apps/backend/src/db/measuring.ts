@@ -11,6 +11,10 @@ import { queryAll, queryGet } from "./query.js";
 // POST /packages/:id/verify, POST /shipping-boxes/:id/close). A box may hold
 // packages from several picking orders (cross-order packing) — order numbers
 // are aggregated per box.
+// 2026-10-20: the work list is a POST-PICKING queue — a box appears only once
+// every picking order it holds packages for is picking-complete (the order's
+// explicit Finish → status finished/shipped), and the response is grouped by
+// picking order (a cross-order box appears under each of its orders).
 // ---------------------------------------------------------------------------
 
 export interface MeasuringBoxListRow {
@@ -22,9 +26,16 @@ export interface MeasuringBoxListRow {
   createdDate: Date;
 }
 
-/** Open boxes with at least one package (the measuring work list). */
-export async function listMeasuringBoxes(db: AppDb): Promise<MeasuringBoxListRow[]> {
-  return queryAll<MeasuringBoxListRow>(
+export interface MeasuringOrderGroup {
+  orderId: string;
+  orderNo: string;
+  boxes: MeasuringBoxListRow[];
+}
+
+/** Open boxes with at least one package whose orders are all picking-complete,
+ *  grouped by picking order. */
+export async function listMeasuringBoxes(db: AppDb): Promise<MeasuringOrderGroup[]> {
+  const boxes = await queryAll<MeasuringBoxListRow>(
     db,
     sql`
       SELECT
@@ -38,10 +49,47 @@ export async function listMeasuringBoxes(db: AppDb): Promise<MeasuringBoxListRow
       JOIN picking_items pi ON pi.id = pp.picking_item_id
       JOIN picking_orders po ON po.id = pi.picking_order_id
       WHERE sb.status = 'open'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM picking_packages pp2
+          JOIN picking_items pi2 ON pi2.id = pp2.picking_item_id
+          JOIN picking_orders po2 ON po2.id = pi2.picking_order_id
+          WHERE pp2.shipping_box_id = sb.id
+            AND po2.status NOT IN ('finished', 'shipped')
+        )
       GROUP BY sb.id
       ORDER BY sb.created_date DESC, sb.id DESC
     `
   );
+  if (boxes.length === 0) return [];
+
+  const memberships = await queryAll<{ orderId: string; orderNo: string; boxId: string }>(
+    db,
+    sql`
+      SELECT DISTINCT po.id AS "orderId", po.order_no AS "orderNo", pp.shipping_box_id AS "boxId"
+      FROM picking_packages pp
+      JOIN picking_items pi ON pi.id = pp.picking_item_id
+      JOIN picking_orders po ON po.id = pi.picking_order_id
+      WHERE pp.shipping_box_id = ANY(ARRAY[${sql.join(boxes.map((b) => sql`${b.boxId}`), sql`, `)}])
+      ORDER BY po.order_no
+    `
+  );
+
+  const byBoxId = new Map(boxes.map((b) => [b.boxId, b]));
+  const groups = new Map<string, MeasuringOrderGroup>();
+  for (const m of memberships) {
+    const box = byBoxId.get(m.boxId);
+    if (!box) continue;
+    const group = groups.get(m.orderId) ?? { orderId: m.orderId, orderNo: m.orderNo, boxes: [] };
+    group.boxes.push(box);
+    groups.set(m.orderId, group);
+  }
+  // Newest work first: groups by their latest box, then by order no.
+  return [...groups.values()].sort((a, b) => {
+    const latest = (g: MeasuringOrderGroup) =>
+      Math.max(...g.boxes.map((box) => new Date(box.createdDate).getTime()));
+    return latest(b) - latest(a) || a.orderNo.localeCompare(b.orderNo);
+  });
 }
 
 export interface MeasuringPackageRow {

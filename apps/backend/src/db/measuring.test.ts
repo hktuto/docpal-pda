@@ -8,9 +8,11 @@ import { queryGet } from "./query.js";
 import { allocateAll } from "./allocate.js";
 import {
   addAllUnboxedToShippingBox,
+  addPackageToBox,
   closeShippingBox,
   createShippingBox,
   finishPickingOrder,
+  removePackageFromBox,
   scanPickingItem,
   updateShippingBox,
   verifyPackage,
@@ -113,9 +115,11 @@ test("list: open boxes with packages only; orderNos/packageCount/verifiedCount; 
   const emptyOrderId = await pickingOrderIdOf("SO-DEMO-0002");
   await createShippingBox(client.db, { pickingOrderId: emptyOrderId, actorId });
 
-  const rows = await listMeasuringBoxes(client.db);
-  assert.equal(rows.length, 1);
-  const row = rows[0];
+  const groups = await listMeasuringBoxes(client.db);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].orderNo, "SO-DEMO-0001");
+  assert.equal(groups[0].boxes.length, 1);
+  const row = groups[0].boxes[0];
   assert.equal(row.boxId, boxId);
   assert.equal(row.status, "open");
   assert.deepEqual(row.orderNos, ["SO-DEMO-0001"]);
@@ -125,10 +129,54 @@ test("list: open boxes with packages only; orderNos/packageCount/verifiedCount; 
 
   await verifyPackage(client.db, { packageId: packageIds[0], actorId });
   await verifyPackage(client.db, { packageId: packageIds[1], actorId });
-  assert.equal((await listMeasuringBoxes(client.db))[0].verifiedCount, 2);
+  assert.equal((await listMeasuringBoxes(client.db))[0].boxes[0].verifiedCount, 2);
 
   await closeTheBox(boxId, actorId, [packageIds[2]]); // the first two are already verified
   assert.equal((await listMeasuringBoxes(client.db)).length, 0);
+});
+
+test("list: a box appears only once ALL its orders are picking-complete; grouped per order", async () => {
+  await reset();
+  const actorId = await actorIdOf();
+  await allocateAll(client.db);
+
+  // Order 1 fully picked + boxed but NOT finished → hidden from measuring.
+  const order1 = await pickingOrderIdOf("SO-DEMO-0001");
+  const item1 = await pickingItemIdOf(order1, "RK73H1JTTD1002F");
+  const item2 = await pickingItemIdOf(order1, "RK73H1JTTD2202F");
+  const item3 = await pickingItemIdOf(order1, "RK73B1JTTD181G");
+  await scanPickingItem(client.db, item1, { actorId, allocationId: await allocationIdOf(item1), qty: 1000 });
+  await scanPickingItem(client.db, item2, { actorId, allocationId: await allocationIdOf(item2), qty: 500 });
+  await scanPickingItem(client.db, item3, { actorId, allocationId: await allocationIdOf(item3), qty: 300 });
+  const box = await createShippingBox(client.db, { pickingOrderId: order1, actorId });
+  await addAllUnboxedToShippingBox(client.db, { shippingBoxId: box.id, actorId });
+  assert.equal((await listMeasuringBoxes(client.db)).length, 0);
+
+  // Cross-order packing: a package of order 2 (stock-short, never finished
+  // here) joins order 1's box. The box still hides once order 1 is finished —
+  // order 2's picking is not confirmed.
+  const order2 = await pickingOrderIdOf("SO-DEMO-0002");
+  const alloc2 = await queryGet<{ id: string; qty: number; itemId: string }>(
+    client.db,
+    sql`SELECT a.id, a.qty, a.picking_item_id AS "itemId" FROM allocations a
+        WHERE a.picking_item_id IN (SELECT id FROM picking_items WHERE picking_order_id = ${order2}) AND a.qty > 0
+        ORDER BY a.qty DESC LIMIT 1`
+  );
+  const p2 = (await scanPickingItem(client.db, alloc2!.itemId, { actorId, allocationId: alloc2!.id, qty: alloc2!.qty })).packageIds[0];
+  await addPackageToBox(client.db, { shippingBoxId: box.id, packageId: p2, actorId });
+  await finishPickingOrder(client.db, { pickingOrderId: order1, actorId });
+  assert.equal((await listMeasuringBoxes(client.db)).length, 0);
+
+  // Un-pack the foreign package again → finishing order 1 alone is enough:
+  // one group (SO-DEMO-0001) with the box, orderNos back to order 1 only.
+  await removePackageFromBox(client.db, { shippingBoxId: box.id, packageId: p2, actorId });
+  const groups = await listMeasuringBoxes(client.db);
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].orderNo, "SO-DEMO-0001");
+  assert.equal(groups[0].boxes.length, 1);
+  assert.equal(groups[0].boxes[0].boxId, box.id);
+  assert.equal(groups[0].boxes[0].packageCount, 3);
+  assert.deepEqual(groups[0].boxes[0].orderNos, ["SO-DEMO-0001"]);
 });
 
 // --- detail --------------------------------------------------------------------

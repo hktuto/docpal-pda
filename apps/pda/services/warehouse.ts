@@ -28,6 +28,7 @@ import type {
   Shelf,
   MeasuringBoxListRow,
   MeasuringBoxDetail,
+  MeasuringOrderGroup,
   VerifyTaskListRow,
   VerifyTaskDetail,
   FlowConfig,
@@ -160,11 +161,12 @@ export interface WarehouseService {
   removePutAwayScanFromShelf(scanId: string, boxId: string): Promise<void>;
 
   // Measuring — box-scoped (no tasks): the list is the open boxes with
-  // ≥1 package (any order); the detail is one box plus its packages. Box
-  // measurement reuses the shared picking verbs above (verifyPackage /
-  // updateShippingBox / closeShippingBox) — closing IS completion.
-  // Scanned labels are matched to packages client-side.
-  getMeasuringBoxes(): Promise<MeasuringBoxListRow[]>;
+  // ≥1 package whose picking orders are ALL picking-complete (the order's
+  // explicit Finish), grouped by picking order; the detail is one box plus
+  // its packages. Box measurement reuses the shared picking verbs above
+  // (verifyPackage / updateShippingBox / closeShippingBox) — closing IS
+  // completion. Scanned labels are matched to packages client-side.
+  getMeasuringBoxes(): Promise<MeasuringOrderGroup[]>;
   getMeasuringBox(boxId: string): Promise<MeasuringBoxDetail>;
 
   // Verify — the second measuring pass, one task per shipping box

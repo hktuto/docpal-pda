@@ -119,7 +119,7 @@ export const receivingCnWorkflows = pgTable(
     docpalProcessId: text("docpal_process_id"),
     docpalBusinessKey: text("docpal_business_key"),
     status: text("status").notNull().default("workflow_running"), // workflow_running | completed | failed | cancelled
-    payload: jsonb("payload").notNull(), // the verified excel_result_data
+    payload: jsonb("payload").notNull(), // the verified payload object (sent to DocPal as excel_result_data: [payload])
     error: text("error"),
     createdBy: text("created_by").notNull(),
     createdDate: timestamp("created_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),

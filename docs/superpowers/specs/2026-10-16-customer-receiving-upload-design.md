@@ -25,7 +25,7 @@ New file `apps/backend/src/db/schema/receivingCn.ts` (Drizzle; `newId()`, `now()
 - `receiving_invoices_cn` — `id`, `receiving_order_id` (FK cascade), `invoice_no`, `total_qty`, `total_ctn`, `delivery_date`, `org_id`, timestamps.
 - `receiving_invoice_items_cn` — `id`, `receiving_invoice_id` (FK cascade), `part_no`, `wcl_item_no`, `po_no`, `po_line`, `line_qty`, `received_qty` (0), `picked_qty` (0), `put_away_qty` (0), `ctn_no`, `date_code`, `lot_code`, `coo`, `cow`, `org_id`, `sub_inventory_code`, mismatch fields, `additional_data`/`order_data` jsonb, timestamps, `drawing_no`.
 - `put_away_tasks_cn` — dedicated CN put-away task (does NOT touch `put_away_tasks`): `id`, `receiving_order_cn_id` (text, NOT NULL, UNIQUE, FK → `receiving_orders_cn.id` cascade), `org_id`, `sub_inventory_code` (uniform-pair derivation from the order's items, NULL when mixed), `status` (`pending | completed`, default `pending`), timestamps.
-- `receiving_cn_workflows` — upload tracking: `id`, `phase` (`excel | pdf`), `invoice_no` (CN 編號 = `batch_no`), `supplier`, `filename`, `docpal_document_id`, `docpal_process_id`, `docpal_business_key`, `status` (`workflow_running | completed | failed | cancelled`, default `workflow_running`), `payload` jsonb (the verified `excel_result_data`), `error`, `created_by`, timestamps.
+- `receiving_cn_workflows` — upload tracking: `id`, `phase` (`excel | pdf`), `invoice_no` (CN 編號 = `batch_no`), `supplier`, `filename`, `docpal_document_id`, `docpal_process_id`, `docpal_business_key`, `status` (`workflow_running | completed | failed | cancelled`, default `workflow_running`), `payload` jsonb (the verified payload object, sent to DocPal as `excel_result_data: [payload]`), `error`, `created_by`, timestamps.
 
 **Assumption (open integration point):** the external upstream-sync service writes `receiving_orders_cn` / `receiving_invoices_cn` / `receiving_invoice_items_cn` from the DocPal workflow output, the same way it writes masters/orders today. Our backend treats them as read-only input for finalization/put-away, matched by `batch_no` = the CN 編號 from the verified payload.
 
@@ -37,18 +37,18 @@ New file `apps/backend/src/db/schema/receivingCn.ts` (Drizzle; `newId()`, `now()
 
 ### DocPal workflow client (`src/docpalWorkflow.ts`)
 
-Mirrors `src/print.ts` error handling (timeout via `AbortSignal`, upstream failure → `HTTPException(502, "docpal_workflow: ...")`). All calls send `Authorization: Bearer <DOCPAL_WORKFLOW_TOKEN>`:
+Mirrors `src/print.ts` error handling (timeout via `AbortSignal`, upstream failure → `HTTPException(502, "docpal_workflow: ...")`). All calls send `Authorization: Bearer <DOCPAL_WORKFLOW_TOKEN>` and `X-Tenant-ID: <DOCPAL_TENANT_ID>` (defaults to `demo` — required by the DocPal workflow API):
 
 - `uploadWorkflowFile(filename, mime, bytes, title)` → `POST /api/docpal/workflow/upload/file` (multipart `FormData`: `document`, `nonPermission`, `file`) → returns `data` (document id = `data.id`).
 - `deleteWorkflowAttachment(documentId)` → `DELETE /api/docpal/workflow/task/attachment?attachmentId=...`.
 - `startProcess(definitionId, variables)` → `POST /oniflow/api/v1/processes` → returns `data` (process id, business key).
-- `getProcess(processId)` → `GET /oniflow/api/v1/processes/:id` (exact status route to confirm; used by the cron).
+- `getProcess(processId)` → `GET /oniflow/api/v1/processes/instance/:id` (route confirmed by the DocPal team; used by the cron).
 - `getOcrResult(documentId)` — phase 2 placeholder (DocPal OCR-result endpoint TBC).
 
 ### Upload flow (`src/db/receivingCn.ts` — `createCnUpload`)
 
 1. `uploadWorkflowFile` → document id.
-2. Build `variables`: `excelFiles: [entry shaped from the upload response]` + `excel_result_data: <verified payload>`; `start_user_id` / `__system__user_creator_id` / `__system__user_creator_name` = the actual admin user (from the JWT actor + users row).
+2. Build `variables`: `excelFiles: [entry shaped from the upload response]` + `excel_result_data: [<verified payload>]` (an **array** with the single payload object — the workflow contract); `start_user_id` / `__system__user_creator_id` / `__system__user_creator_name` = the actual admin user (from the JWT actor + users row).
 3. `startProcess(docpalCnExcelWorkflowId(), variables)` → process id + business key.
 4. One tx: insert `receiving_cn_workflows` + `transaction_logs` (`entityType: "receiving_cn_workflow"`, uploaded→workflow_running).
 5. If step 3 fails after step 1 succeeded: `deleteWorkflowAttachment`, then 502.

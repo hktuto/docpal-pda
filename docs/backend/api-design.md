@@ -457,14 +457,17 @@ Implemented: `GET /measuring-boxes`, `GET /measuring-boxes/:id` (see
 contents, every package `verified`, a destination, a box size and positive
 weights (gross ≥ net) — closing *is* the measuring completion, so no pending
 measuring task exists. The measuring work list is therefore the open shipping
-boxes that contain packages; a box may hold packages from several picking
-orders (cross-order packing), so order numbers are aggregated per box. Box
-measurement itself reuses the picking routes: `PATCH /shipping-boxes/:id`,
+boxes that contain packages **whose picking orders are all picking-complete**
+(status `finished`/`shipped` — the order's explicit Finish, spec
+`docs/superpowers/specs/2026-10-20-measuring-post-picking-list-design.md`);
+a box may hold packages from several picking orders (cross-order packing), so
+order numbers are aggregated per box and the list is grouped by picking order.
+Box measurement itself reuses the picking routes: `PATCH /shipping-boxes/:id`,
 `POST /packages/:id/verify`, `POST /shipping-boxes/:id/close`.
 
 | Endpoint | Description |
 |---|---|
-| `GET /measuring-boxes` | The work list: open boxes with at least one package, newest first — `{boxId, status, orderNos[], packageCount, verifiedCount, createdDate}`. |
+| `GET /measuring-boxes` | The work list, grouped by picking order (a cross-order box appears under each of its orders), newest box first — `[{orderId, orderNo, boxes: [{boxId, status, orderNos[], packageCount, verifiedCount, createdDate}]}]`. Only open boxes with at least one package whose every related picking order is `finished`/`shipped`. |
 | `GET /measuring-boxes/:id` | Box detail: `{boxId, pickingOrderId, status, boxSize, grossWeight, netWeight, destinationCountry, shippedAt, createdDate, suggestedNetWeightKg, packages[{..., partNo, wclItemNo, verified, verifyVerified}]}` (404 `shipping_box_not_found`). `suggestedNetWeightKg` = Σ over the box's packages of `(formula.weight / formula.qty) × pkg.qty` grams from `net_weight_formula`, in kg (3 dp; parts without a formula contribute 0, `null` when none have one). |
 
 Changes vs old: `GET /measuring-tasks*` and

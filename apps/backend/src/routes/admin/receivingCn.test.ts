@@ -26,7 +26,7 @@ const EXCEL_WORKFLOW_ID = "cn-excel-def-1";
 interface FakeWorkflowState {
   startFails: boolean;
   processState: string;
-  requests: { method: string; url: string; body: string }[];
+  requests: { method: string; url: string; body: string; headers: Record<string, unknown> }[];
 }
 
 let fake: FakeWorkflowState;
@@ -43,7 +43,7 @@ function startFakeWorkflowServer(): Promise<string> {
     let raw = "";
     req.on("data", (c) => (raw += c));
     req.on("end", () => {
-      fake.requests.push({ method: req.method ?? "", url: req.url ?? "", body: raw });
+      fake.requests.push({ method: req.method ?? "", url: req.url ?? "", body: raw, headers: req.headers as Record<string, unknown> });
       const url = req.url ?? "";
       if (req.method === "POST" && url === "/api/docpal/workflow/upload/file") {
         return json(200, { code: 200, result: true, data: { id: "doc-1", name: "TE20261010-2.xls" } });
@@ -246,14 +246,21 @@ test("excel upload: upload + kick → 201 tracking row with real creator + docpa
     assert.equal(startBody.variables.start_user_id, "admin");
     assert.equal(startBody.variables.__system__user_creator_id, "admin");
     assert.equal(startBody.variables.__system__user_creator_name, "Demo Admin");
-    assert.equal(startBody.variables.excel_result_data.invoiceNo, "TE20261010-2");
+    assert.ok(Array.isArray(startBody.variables.excel_result_data));
+    assert.equal(startBody.variables.excel_result_data.length, 1);
+    assert.equal(startBody.variables.excel_result_data[0].invoiceNo, "TE20261010-2");
     assert.equal(startBody.variables.excelFiles[0].id, "doc-1");
     assert.equal(startBody.variables.excelFiles[0].extension, "xls");
     assert.equal(startBody.variables.excelFiles[0].mime_type, "application/vnd.ms-excel");
     assert.equal(startBody.variables.excelFiles[0].response.data.fileContentExtension, "xls");
-    // Bearer service token on both the upload and the kick.
+    // Bearer service token + X-Tenant-ID on both the upload and the kick.
     const uploadReq = fake.requests.find((r) => r.method === "POST" && r.url === "/api/docpal/workflow/upload/file");
     assert.match(String(uploadReq?.body), /fake-xls-bytes/);
+    assert.equal(uploadReq?.headers.authorization, `Bearer ${WORKFLOW_TOKEN}`);
+    assert.equal(uploadReq?.headers["x-tenant-id"], "demo");
+    const startReqHeaders = fake.requests.find((r) => r.method === "POST" && r.url === "/oniflow/api/v1/processes")?.headers;
+    assert.equal(startReqHeaders?.authorization, `Bearer ${WORKFLOW_TOKEN}`);
+    assert.equal(startReqHeaders?.["x-tenant-id"], "demo");
 
     const logs = await queryAll<{ toState: string }>(
       client.db,

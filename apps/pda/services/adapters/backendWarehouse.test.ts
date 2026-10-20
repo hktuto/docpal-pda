@@ -3,7 +3,7 @@ import { createBackendWarehouseService } from './backendWarehouse';
 import { createWarehouseService } from '../warehouse';
 import { ApiError } from '../apiClient';
 import { setOutdatedWarningHandler } from '../scanWarningBus';
-import type { OutdatedScanWarning } from '../types';
+import type { MeasuringOrderGroup, OutdatedScanWarning } from '../types';
 
 const BASE_URL = 'http://backend.test';
 
@@ -731,24 +731,30 @@ describe('backendWarehouse measuring flow', () => {
     return { url: url as string, init: init as RequestInit };
   }
 
-  it('getMeasuringBoxes GETs the open-boxes list verbatim', async () => {
-    const rows = [
+  it('getMeasuringBoxes GETs the picking-order-grouped list verbatim', async () => {
+    const groups: MeasuringOrderGroup[] = [
       {
-        boxId: 'box1',
-        status: 'open',
-        orderNos: ['SO-2026-0001', 'SO-2026-0002'],
-        packageCount: 3,
-        verifiedCount: 1,
-        createdDate: '2026-08-11T10:00:00.000Z',
+        orderId: 'po1',
+        orderNo: 'SO-2026-0001',
+        boxes: [
+          {
+            boxId: 'box1',
+            status: 'open',
+            orderNos: ['SO-2026-0001', 'SO-2026-0002'],
+            packageCount: 3,
+            verifiedCount: 1,
+            createdDate: '2026-08-11T10:00:00.000Z',
+          },
+        ],
       },
     ];
-    fetchMock.mockResolvedValue(jsonResponse(rows));
+    fetchMock.mockResolvedValue(jsonResponse(groups));
 
     const result = await service().getMeasuringBoxes();
 
     expect(lastCall().url).toBe(`${BASE_URL}/measuring-boxes`);
     expect(lastCall().init.method).toBe('GET');
-    expect(result).toEqual(rows);
+    expect(result).toEqual(groups);
   });
 
   it('getMeasuringBox GETs the box detail with its packages', async () => {

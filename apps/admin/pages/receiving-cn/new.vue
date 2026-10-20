@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import type { AdminColumnDef } from "~/composables/useAdminTable";
 import {
+  fillMergedCells,
   parseCnReceivingAoa,
+  type AoaMergeRange,
   type CnReceivingItem,
   type CnReceivingParseResult,
 } from "~/utils/cnReceivingExcel";
@@ -51,7 +53,10 @@ async function onFilePicked(e: Event) {
     const ws = wb.Sheets[wb.SheetNames[0]];
     if (!ws) throw new Error(t("admin.pages.receivingCn.noSheet"));
     const aoa = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
-    const result = parseCnReceivingAoa(aoa as unknown[][]);
+    // Merged cells (e.g. the poNo 发货项 column spanning an item group) carry
+    // their value only in the top-left cell — fill the range before parsing.
+    const merged = fillMergedCells(aoa as unknown[][], (ws["!merges"] as AoaMergeRange[] | undefined) ?? []);
+    const result = parseCnReceivingAoa(merged);
     if (result.items.length === 0) {
       throw new Error(t("admin.pages.receivingCn.noItems"));
     }

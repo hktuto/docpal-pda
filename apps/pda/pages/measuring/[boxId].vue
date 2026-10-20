@@ -45,8 +45,8 @@ const loadDetail = async () => {
 const orderNos = ref<string[]>([]);
 onMounted(async () => {
   try {
-    const boxes = await warehouse.getMeasuringBoxes();
-    orderNos.value = boxes.find((b) => b.boxId === boxId)?.orderNos ?? [];
+    const groups = await warehouse.getMeasuringBoxes();
+    orderNos.value = groups.flatMap((g) => g.boxes).find((b) => b.boxId === boxId)?.orderNos ?? [];
   } catch {
     // Header hint only — the box detail still loads.
   }

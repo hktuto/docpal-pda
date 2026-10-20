@@ -4,7 +4,8 @@ import { getMeasuringBoxDetail, listMeasuringBoxes } from "../db/measuring.js";
 
 export const measuringRoute = new Hono();
 
-// Measuring work list (box-scoped): open boxes that contain packages.
+// Measuring work list (box-scoped): open boxes that contain packages whose
+// picking orders are all picking-complete, grouped by picking order.
 measuringRoute.get("/measuring-boxes", async (c) => {
   return c.json(await listMeasuringBoxes(db), 200);
 });
