@@ -18,7 +18,7 @@ import { confirmReceivingArrival } from "../../db/receiving.js";
 import { insertReceivingOrder, insertPickingOrder } from "../../db/test-fixtures.js";
 import { allocateAll } from "../../db/allocate.js";
 import { recomputeLot, recomputePickingItem } from "../../db/picking.js";
-import { _setPickingAllocationForTests } from "../../config.js";
+import { _setPickingAllocationForTests, _setPickingFromSubinventoryOrgsForTests, _setReceivingSubInventoryRulesForTests, _resetFlowConfigForTests } from "../../config.js";
 
 process.env.DATABASE_URL = TEST_DATABASE_URL;
 
@@ -769,6 +769,57 @@ test("part-availability: `matched` flags the order's location and its share grou
   // No context → nothing is cut (every row is "applicable").
   const all = await (await req(`/admin/part-availability?partNo=REALLOC-P1`)).json();
   assert.equal(all.stock.every((s: any) => s.matched), true);
+});
+
+test("part-availability: pickingItemId resolves a tn line's source partition (from_subinventory), not the order's", async () => {
+  await reseed(client);
+  const { orderA } = await seedScenario();
+  const itemA = await itemIdOf(orderA);
+  // Transfer line: the order's pair (org 2/STORE1) is the DESTINATION; stock
+  // comes FROM WSTORE1, which the flow config converts to org 143/GZHK2.
+  await client.db.execute(sql`
+    UPDATE picking_orders SET picking_order_type = 'tn' WHERE id = ${orderA}
+  `);
+  await client.db.execute(sql`
+    UPDATE picking_items SET additional_data = '{"from_subinventory":"WSTORE1","order_no":"319001"}'::jsonb
+    WHERE id = ${itemA}
+  `);
+  await client.db.execute(sql`
+    INSERT INTO org_info (id, org_id, secondary_inventory_name, creation_date, last_update_date)
+    VALUES ('ORGINFO-TN-SRC', 143, 'GZHK2', now(), now())
+    ON CONFLICT (org_id, secondary_inventory_name) DO NOTHING
+  `);
+  await client.db.execute(sql`
+    INSERT INTO inventory_lots (id, part_no, date_code, shelf_code, box_id, org_id, sub_inventory_code, total_qty, created_date, last_update_date)
+    VALUES ('LOT-TN-SRC', 'REALLOC-P1', '2001', 'A0405', 'TNSRCBOX', 143, 'GZHK2', 10, now(), now()),
+           ('LOT-TN-DST', 'REALLOC-P1', '2001', 'A0405', 'TNDSTBOX', 2, 'STORE1', 10, now(), now())
+  `);
+  _setPickingFromSubinventoryOrgsForTests([{ orgId: 143, fromSubinventories: ["WSTORE1"] }]);
+  _setReceivingSubInventoryRulesForTests([
+    { orgIds: [143], patterns: [{ poNoPattern: "319*", subInventoryCode: "GZHK2" }], default: "GZHK2" },
+  ]);
+  try {
+    const body = await (await req(`/admin/part-availability?partNo=REALLOC-P1&pickingItemId=${itemA}`)).json();
+    // The server-resolved context is the transfer SOURCE partition…
+    assert.deepEqual(body.context, { orgId: 143, subInventoryCode: "GZHK2" });
+    // …so the from_subinventory stock matches and the order's own
+    // destination pair (shelf lot AND the receiving line on it) does not.
+    const byLot = Object.fromEntries(body.stock.map((s: any) => [s.lotId, s.matched]));
+    assert.equal(byLot["LOT-TN-SRC"], true);
+    assert.equal(byLot["LOT-TN-DST"], false);
+    assert.equal(body.receiving.every((r: any) => r.matched === false), true);
+
+    // Without pickingItemId the caller-passed context still applies unchanged.
+    const explicit = await (
+      await req(`/admin/part-availability?partNo=REALLOC-P1&orgId=2&subInventoryCode=STORE1`)
+    ).json();
+    assert.equal(explicit.context, null);
+    const explicitByLot = Object.fromEntries(explicit.stock.map((s: any) => [s.lotId, s.matched]));
+    assert.equal(explicitByLot["LOT-TN-DST"], true);
+    assert.equal(explicitByLot["LOT-TN-SRC"], false);
+  } finally {
+    _resetFlowConfigForTests();
+  }
 });
 
 test("part-availability: no receiving rows when dock-stock allocation is off", async () => {

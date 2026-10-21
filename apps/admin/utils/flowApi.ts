@@ -543,6 +543,10 @@ export interface PartAvailability {
   /** Empty when the warehouse config disallows allocation from receiving dock stock. */
   receiving: PartAvailabilityReceivingRow[];
   dockStockAllowed: boolean;
+  /** Server-resolved dialog context when `pickingItemIds` were passed: the
+   *  transfer-source partition for tn lines, the order pair otherwise. Null
+   *  when the caller-passed context applies. */
+  context: { orgId: number | null; subInventoryCode: string | null } | null;
 }
 
 // ---- part demand (open picking items needing a part) ----
@@ -1263,16 +1267,25 @@ export function useFlowApi() {
     // receiving sources, all orgs/sub-inventories). The optional context pair
     // makes every row carry a `matched` flag (same org + same sub-inventory or
     // a sibling in the same share group) so the modal can hide the rest.
+    // `pickingItemIds` lets the backend resolve the context itself — a
+    // transfer (tn) line searches its additional_data.from_subinventory
+    // source partition, not the order's destination pair — and the response
+    // echoes the resolved pair as `context`.
     getPartAvailability: (
       partNo: string,
       wclItemNo?: string | null,
-      ctx?: { orgId?: number | null; subInventoryCode?: string | null }
+      ctx?: {
+        orgId?: number | null;
+        subInventoryCode?: string | null;
+        pickingItemIds?: string[] | null;
+      }
     ) => {
       const qs = new URLSearchParams();
       qs.set("partNo", partNo);
       if (wclItemNo) qs.set("wclItemNo", wclItemNo);
       if (ctx?.orgId != null) qs.set("orgId", String(ctx.orgId));
       if (ctx?.subInventoryCode) qs.set("subInventoryCode", ctx.subInventoryCode);
+      for (const id of ctx?.pickingItemIds ?? []) qs.append("pickingItemId", id);
       return api.get<PartAvailability>(`/admin/part-availability?${qs}`);
     },
     // Open picking-order demand for a part (uncovered remaining qty > 0).

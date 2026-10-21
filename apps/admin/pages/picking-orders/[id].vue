@@ -419,6 +419,10 @@ async function removeAllocation(
 // order and bump the audit logs.
 const availOpen = ref(false);
 const availItem = ref<PickingOrderDetail["items"][number] | null>(null);
+// Target picking item ids for the availability lookup: the single item, or
+// every member line of a group. The backend resolves the search partition
+// from these (a tn line searches its from_subinventory source partition).
+const availItemIds = ref<string[]>([]);
 // Set instead of availItem when the modal is opened from a GROUPED row: the
 // form then works on the whole part group (summed qtys + the member lines'
 // unmerged allocations) and submits to allocate-group.
@@ -438,6 +442,10 @@ async function onAllocated() {
 function openAvailability(item: ItemsViewRow) {
   if (item.grouped) {
     availItem.value = null;
+    const key = item.wclItemNo ?? item.partNo;
+    availItemIds.value = (order.value?.items ?? [])
+      .filter((i) => (i.wclItemNo ?? i.partNo) === key)
+      .map((i) => i.id);
     availGroup.value = {
       partNo: item.partNo,
       wclItemNo: item.wclItemNo ?? null,
@@ -448,6 +456,7 @@ function openAvailability(item: ItemsViewRow) {
   } else {
     availGroup.value = null;
     availItem.value = item;
+    availItemIds.value = [item.id];
   }
   availOpen.value = true;
 }
@@ -876,6 +885,7 @@ const {
       :wcl-item-no="availItem?.wclItemNo ?? availGroup?.wclItemNo ?? null"
       :context-org-id="order?.orgId ?? null"
       :context-sub-inventory="order?.subInventoryCode ?? null"
+      :picking-item-ids="availItemIds"
       :order-no="order?.orderNo ?? null"
       :picking-order-id="orderId"
       :picking-item="availItem"

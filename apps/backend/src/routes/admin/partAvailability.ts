@@ -1,10 +1,10 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import { db } from "../../db.js";
 import { queryAll } from "../../db/query.js";
 import { allowDockStock, outdatedStockYears } from "../../config.js";
-import { workLockExpiry } from "../../db/allocate.js";
+import { resolveDemandLocation, workLockExpiry, type DemandRow as AllocateDemandRow } from "../../db/allocate.js";
 import { dateCodeRank, isOutdatedRank, outdatedThresholdRank } from "../../db/dateCode.js";
 import { locationMatches, type LocationMatchContext } from "../../db/locationMatch.js";
 
@@ -18,6 +18,11 @@ import { locationMatches, type LocationMatchContext } from "../../db/locationMat
 // same sub-inventory or a sibling in the same `sub_inventory_share_members`
 // group), so the dialogs can hide non-applicable rows while the exact-match
 // highlight still tells the two cases apart.
+// `/part-availability` additionally accepts repeated `pickingItemId` params:
+// the context is then resolved server-side per item via the engine's
+// transfer conversion (resolveDemandLocation — a tn line searches its
+// from_subinventory source partition, not the order's destination pair) and
+// echoed back as `context` for the dialog's highlight/display.
 
 interface StockRow {
   lotId: string;
@@ -91,6 +96,44 @@ function readMatchContext(c: { req: { query: (k: string) => string | undefined }
   return { orgId: orgId !== null && Number.isInteger(orgId) ? orgId : null, subInventoryCode };
 }
 
+// Dialog-context resolution for picking-item-backed lookups (the picking
+// detail's availability modal passes the target item ids). Transfer lines
+// (additional_data.from_subinventory — the order's pair is the DESTINATION)
+// must search the converted SOURCE partition: the same resolveDemandLocation
+// the allocation engine uses, so the rows the dialog highlights/hides are
+// exactly the rows the engine can allocate. Every item must resolve to the
+// same pair; a mixed group (or no resolvable item) returns null and the
+// caller-passed context applies, matching the pre-transfer behavior.
+async function resolvePickingItemContext(pickingItemIds: string[]): Promise<LocationMatchContext | null> {
+  if (pickingItemIds.length === 0) return null;
+  const items = await queryAll<AllocateDemandRow>(
+    db,
+    sql`SELECT pi.id AS "pickingItemId",
+               pi.part_no AS "partNo",
+               (pi.qty - COALESCE(pkg.qty, 0)) AS "openQty",
+               po.customer_code AS "customerCode",
+               po.org_id AS "orgId",
+               po.sub_inventory_code AS "subInventoryCode",
+               pi.additional_data ->> 'order_no' AS "orderNo",
+               pi.additional_data ->> 'po_no' AS "itemPoNo",
+               pi.additional_data ->> 'from_subinventory' AS "fromSubinventory"
+        FROM picking_items pi
+        JOIN picking_orders po ON po.id = pi.picking_order_id
+        LEFT JOIN (
+          SELECT picking_item_id, SUM(qty)::int AS qty
+          FROM picking_packages GROUP BY picking_item_id
+        ) pkg ON pkg.picking_item_id = pi.id
+        WHERE ${inArray(sql`pi.id`, pickingItemIds)}`
+  );
+  if (items.length === 0) return null;
+  const resolved = items.map(resolveDemandLocation);
+  const first = resolved[0];
+  const same = resolved.every(
+    (d) => d.orgId === first.orgId && d.subInventoryCode === first.subInventoryCode
+  );
+  return same ? { orgId: first.orgId, subInventoryCode: first.subInventoryCode } : null;
+}
+
 // Reverse lookup for the receiving-detail Allocate modal: open picking items
 // (pending/picking orders) needing a part, with the remaining uncovered qty.
 adminPartAvailabilityRoute.get("/part-demand", async (c) => {
@@ -153,7 +196,9 @@ adminPartAvailabilityRoute.get("/part-availability", async (c) => {
   const partNo = c.req.query("partNo")?.trim() ?? "";
   if (partNo === "") throw new HTTPException(400, { message: "part_no_required" });
   const wclItemNo = c.req.query("wclItemNo")?.trim() ?? "";
-  const ctx = readMatchContext(c);
+  const itemIds = (c.req.queries("pickingItemId") ?? []).map((s) => s.trim()).filter(Boolean);
+  const itemCtx = await resolvePickingItemContext(itemIds);
+  const ctx = itemCtx ?? readMatchContext(c);
 
   const stock = await queryAll<StockRow>(
     db,
@@ -215,7 +260,7 @@ adminPartAvailabilityRoute.get("/part-availability", async (c) => {
       )
     : [];
 
-  return c.json({ stock, receiving, dockStockAllowed: dockStock });
+  return c.json({ stock, receiving, dockStockAllowed: dockStock, context: itemCtx });
 });
 
 interface AllocationBreakdownRow {

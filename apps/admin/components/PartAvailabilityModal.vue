@@ -21,6 +21,10 @@ const props = defineProps<{
   wclItemNo?: string | null;
   contextOrgId?: number | null;
   contextSubInventory?: string | null;
+  /** Target picking item(s): the backend resolves the search partition
+   *  itself (a tn line searches its from_subinventory source partition, not
+   *  the order's destination pair) and echoes it back as `data.context`. */
+  pickingItemIds?: string[] | null;
   /** Order no used in the lock_held error message. */
   orderNo?: string | null;
   pickingOrderId?: string;
@@ -68,6 +72,17 @@ const sortedStock = computed(() => sortStockRows(filteredStock.value, stockSort.
 // Unset = "keep what it is now".
 const plan = ref<Record<string, number>>({});
 
+// Effective search partition: the server-resolved context when item ids were
+// passed (transfer lines resolve to their source partition), else the
+// caller-passed order pair. Drives both the header line and row highlights.
+const effContext = computed(() => {
+  const rc = data.value?.context;
+  return {
+    orgId: rc ? rc.orgId : (props.contextOrgId ?? null),
+    subInventoryCode: rc ? rc.subInventoryCode : (props.contextSubInventory ?? null),
+  };
+});
+
 // Date-code (WWYY) range filter: native calendar pickers, converted to WWYY.
 const dcFrom = ref("");
 const dcTo = ref("");
@@ -114,6 +129,7 @@ async function onAllocationsChanged() {
     data.value = await flow.getPartAvailability(props.partNo, props.wclItemNo, {
       orgId: props.contextOrgId ?? null,
       subInventoryCode: props.contextSubInventory ?? null,
+      pickingItemIds: props.pickingItemIds ?? null,
     });
   } catch (e: any) {
     error.value = e.message;
@@ -204,7 +220,7 @@ const overridingRows = computed(() => sentStock.value.filter(needsOverride));
 const canSubmit = computed(() => allocatable.value && !formInvalid.value && formDirty.value && !saving.value);
 
 function highlight(row: { orgId: number | null; subInventoryCode: string | null }): boolean {
-  return row.orgId === (props.contextOrgId ?? null) && row.subInventoryCode === (props.contextSubInventory ?? null);
+  return row.orgId === effContext.value.orgId && row.subInventoryCode === effContext.value.subInventoryCode;
 }
 
 /** Human label for an error row key, used in the rejected-batch banner. */
@@ -321,6 +337,7 @@ watch(
       data.value = await flow.getPartAvailability(props.partNo, props.wclItemNo, {
         orgId: props.contextOrgId ?? null,
         subInventoryCode: props.contextSubInventory ?? null,
+        pickingItemIds: props.pickingItemIds ?? null,
       });
     } catch (e: any) {
       error.value = e.message;
@@ -338,8 +355,8 @@ watch(
       <h2>{{ $t("admin.pages.pickingOrders.availabilityTitle", { partNo }) }}</h2>
       <div class="muted avail-context">
         {{ $t("admin.pages.pickingOrders.availabilityContext", {
-          org: contextOrgId ?? "—",
-          subInventory: contextSubInventory ?? "—",
+          org: effContext.orgId ?? "—",
+          subInventory: effContext.subInventoryCode ?? "—",
         }) }}
         <template v-if="allocatable">
           · {{ $t("admin.pages.pickingOrders.availabilityOpenDemand", { qty: remaining }) }}
