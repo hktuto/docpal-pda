@@ -4,7 +4,12 @@
 // fixed-layout mode, which would clip a cell-local absolutely positioned
 // popup. Default slot = trigger content; "popup" slot = tooltip content.
 // A short hide delay lets the pointer cross into the popup (e.g. to click a
-// link) without it closing.
+// link) without it closing. The `side` prop controls placement: "auto"
+// (default) opens beside the trigger (right first, flipping left), "right"/
+// "left" force a side, "vertical" keeps the old below/above behavior.
+const props = withDefaults(defineProps<{ side?: "auto" | "right" | "left" | "vertical" }>(), {
+  side: "auto",
+});
 const open = ref(false);
 const style = ref({ left: "0px", top: "0px" });
 const popEl = ref<HTMLElement | null>(null);
@@ -24,10 +29,32 @@ function position() {
   if (!triggerEl || !popEl.value) return;
   const r = triggerEl.getBoundingClientRect();
   const p = popEl.value;
+  const gap = 6;
+  const margin = 8;
+  // Horizontal placement: right of the trigger, flipping left when it would
+  // overflow the viewport; falls back to below/above when neither side fits.
+  if (props.side !== "vertical") {
+    const spaceRight = window.innerWidth - r.right - gap - margin;
+    const spaceLeft = r.left - gap - margin;
+    let left: number | null = null;
+    if ((props.side === "right" || props.side === "auto") && p.offsetWidth <= spaceRight) {
+      left = r.right + gap;
+    } else if ((props.side === "left" || props.side === "auto") && p.offsetWidth <= spaceLeft) {
+      left = r.left - p.offsetWidth - gap;
+    } else if (props.side === "right" || props.side === "left") {
+      // Forced side with no room: clamp to the viewport edge.
+      left = Math.max(margin, Math.min(r.right + gap, window.innerWidth - p.offsetWidth - margin));
+    }
+    if (left !== null) {
+      const top = Math.max(margin, Math.min(r.top, window.innerHeight - p.offsetHeight - margin));
+      style.value = { left: `${left}px`, top: `${top}px` };
+      return;
+    }
+  }
   // Prefer below the trigger; flip above when it would overflow the viewport.
-  let top = r.bottom + 6;
-  if (top + p.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - p.offsetHeight - 6);
-  const left = Math.min(r.left, Math.max(8, window.innerWidth - p.offsetWidth - 8));
+  let top = r.bottom + gap;
+  if (top + p.offsetHeight > window.innerHeight - margin) top = Math.max(margin, r.top - p.offsetHeight - gap);
+  const left = Math.min(r.left, Math.max(margin, window.innerWidth - p.offsetWidth - margin));
   style.value = { left: `${left}px`, top: `${top}px` };
 }
 
