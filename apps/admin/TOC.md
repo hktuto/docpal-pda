@@ -70,7 +70,7 @@
 - Receving Management
   - list receiving order with filter and sort
     - detail receiving order ( edit item details — date code / lot code / COO / COW / ctn no, single or batch, download shipper / finished shipper, and delivery order list ) 7.2, 7.3
-  - Customer Receiving Upload (CN) — upload the customer receiving Excel (收貨確認及付款通知書); the app decodes it in-browser for verify/edit, submits the original file + verified JSON to a DocPal workflow, and tracks workflow status per upload (list with status filter, SSE refresh)
+  - Customer Receiving Upload (CN) — upload the customer receiving Excel (收貨確認及付款通知書); the app decodes it in-browser for verify/edit, submits the original file + verified JSON to a DocPal workflow, and tracks workflow status per upload. The /receiving-cn page lists the synced CN receiving orders (with still-processing uploads merged on top as pending rows), drill into an order for invoices/items/put-away task status; the upload wizard lives at /receiving-cn/new.
 - Shipping Management
   - list shipping order with filter and sort, multiple select to download shipper 7.3
     - detail shipping order

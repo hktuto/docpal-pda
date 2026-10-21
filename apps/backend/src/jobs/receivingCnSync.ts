@@ -49,7 +49,7 @@ export async function runReceivingCnSyncOnce(db: AppDb): Promise<void> {
     db,
     sql`SELECT id, phase, invoice_no AS "invoiceNo", supplier, filename,
                docpal_document_id AS "docpalDocumentId", docpal_process_id AS "docpalProcessId",
-               docpal_business_key AS "docpalBusinessKey", status, payload, error,
+               docpal_business_key AS "docpalBusinessKey", batch_no AS "batchNo", status, payload, error,
                created_by AS "createdBy", created_date AS "createdDate", last_update_date AS "lastUpdateDate"
         FROM receiving_cn_workflows
         WHERE status = 'workflow_running' AND docpal_process_id IS NOT NULL

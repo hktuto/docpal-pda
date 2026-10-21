@@ -118,6 +118,11 @@ export const receivingCnWorkflows = pgTable(
     docpalDocumentId: text("docpal_document_id"),
     docpalProcessId: text("docpal_process_id"),
     docpalBusinessKey: text("docpal_business_key"),
+    /** Generated correlation key (CN-YYYYMMDD-XXXXXX) — travels inside the
+     *  workflow payload; the upstream sync stamps it onto the CN order's
+     *  batch_no so the admin list can join order ↔ workflow. NULL on rows
+     *  predating the column (those match by invoice_no). */
+    batchNo: text("batch_no"),
     status: text("status").notNull().default("workflow_running"), // workflow_running | completed | failed | cancelled
     payload: jsonb("payload").notNull(), // the verified payload object (sent to DocPal as excel_result_data: [payload])
     error: text("error"),

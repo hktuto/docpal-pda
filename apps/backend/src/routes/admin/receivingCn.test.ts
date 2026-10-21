@@ -221,12 +221,13 @@ test("excel upload: upload + kick → 201 tracking row with real creator + docpa
       docpalDocumentId: string;
       docpalProcessId: string;
       docpalBusinessKey: string;
+      batchNo: string;
       createdBy: string;
     }>(
       client.db,
       sql`SELECT phase, status, invoice_no AS "invoiceNo", supplier, filename,
                  docpal_document_id AS "docpalDocumentId", docpal_process_id AS "docpalProcessId",
-                 docpal_business_key AS "docpalBusinessKey", created_by AS "createdBy"
+                 docpal_business_key AS "docpalBusinessKey", batch_no AS "batchNo", created_by AS "createdBy"
           FROM receiving_cn_workflows WHERE id = ${id}`
     );
     assert.equal(row!.phase, "excel");
@@ -236,6 +237,7 @@ test("excel upload: upload + kick → 201 tracking row with real creator + docpa
     assert.equal(row!.docpalDocumentId, "doc-1");
     assert.equal(row!.docpalProcessId, "proc-1");
     assert.equal(row!.docpalBusinessKey, "bk-1");
+    assert.match(row!.batchNo, /^CN-\d{8}-[A-Z2-9]{6}$/);
     assert.equal(row!.createdBy, "admin"); // the real logged-in admin, not the service token user
 
     // The workflow kick carried the upload entry, the verified payload, and
@@ -251,6 +253,7 @@ test("excel upload: upload + kick → 201 tracking row with real creator + docpa
     assert.ok(Array.isArray(startBody.variables.excel_result_data));
     assert.equal(startBody.variables.excel_result_data.length, 1);
     assert.equal(startBody.variables.excel_result_data[0].invoiceNo, "TE20261010-2");
+    assert.equal(startBody.variables.excel_result_data[0].batchNo, row!.batchNo);
     // Swapped wire contract: poNo carries the 訂單號, orderNo the (blank) 发货項.
     assert.equal(startBody.variables.excel_result_data[0].items[0].poNo, "329062100T3");
     assert.equal(startBody.variables.excel_result_data[0].items[0].orderNo, "");
@@ -343,4 +346,151 @@ test("detail: unknown id → 404 receiving_cn_workflow_not_found", async () => {
   });
   assert.equal(res.status, 404);
   assert.match(await res.text(), /receiving_cn_workflow_not_found/);
+});
+
+// --- order-centric list / detail ------------------------------------------------------
+
+/** Simulate the upstream sync writing a CN order (stamped with the workflow's
+ *  generated batch_no) + its invoice/item world. */
+async function seedCnOrderByBatch(batchNo: string, opts: { withTask?: boolean } = {}): Promise<string> {
+  const orderId = `cn-order-${batchNo}`;
+  await client.db.execute(
+    sql`INSERT INTO receiving_orders_cn (id, batch_no, status, delivery_date, org_id, arrived_at, arrived_by)
+        VALUES (${orderId}, ${batchNo}, 'in_hand', '2026-10-10', 2, now(), (SELECT id FROM users WHERE username = 'operator'))`
+  );
+  await client.db.execute(
+    sql`INSERT INTO receiving_invoices_cn (id, receiving_order_id, invoice_no, total_qty, total_ctn, org_id)
+        VALUES (${`cn-inv-${batchNo}`}, ${orderId}, 'INV-CN-1', 100, 2, 2)`
+  );
+  await client.db.execute(
+    sql`INSERT INTO receiving_invoice_items_cn (id, receiving_invoice_id, part_no, wcl_item_no, po_no, line_qty, received_qty, date_code, org_id, sub_inventory_code)
+        VALUES (${`cn-item-${batchNo}`}, ${`cn-inv-${batchNo}`}, 'RK73B1JTTD181G', 'WCL/181G', 'PO-1', 100, 100, '2641', 2, 'STORE1')`
+  );
+  if (opts.withTask) {
+    await client.db.execute(
+      sql`INSERT INTO put_away_tasks_cn (id, receiving_order_cn_id, org_id, sub_inventory_code, status)
+          VALUES (${`cn-task-${batchNo}`}, ${orderId}, 2, 'STORE1', 'pending')`
+    );
+  }
+  return orderId;
+}
+
+test("orders list: synced order row (kind order) + unmatched workflow in pending; no duplicates", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  let orderBatchNo = "";
+  await withWorkflowFake(async () => {
+    await postExcel(token, uploadForm(VALID_PAYLOAD));
+    orderBatchNo = (
+      await queryGet<{ batchNo: string }>(client.db, sql`SELECT batch_no AS "batchNo" FROM receiving_cn_workflows ORDER BY created_date DESC LIMIT 1`)
+    )!.batchNo;
+    // The upstream sync writes the order stamped with that batch_no.
+    await seedCnOrderByBatch(orderBatchNo, { withTask: true });
+    // Second upload whose order hasn't synced → pending placeholder.
+    await postExcel(token, uploadForm({ ...VALID_PAYLOAD, invoiceNo: "TE20261010-3" }));
+  });
+
+  const res = await app.request("/admin/receiving-cn/orders", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as {
+    rows: {
+      kind: string;
+      batchNo: string;
+      invoiceNo: string;
+      supplier: string;
+      status: string;
+      putAwayStatus: string | null;
+      docpalBusinessKey: string | null;
+    }[];
+    total: number;
+    pending: {
+      kind: string;
+      batchNo: string;
+      invoiceNo: string;
+      status: string;
+      error: string | null;
+      docpalBusinessKey: string | null;
+    }[];
+  };
+  assert.equal(body.total, 1);
+  assert.equal(body.rows.length, 1);
+  assert.equal(body.rows[0].kind, "order");
+  assert.equal(body.rows[0].batchNo, orderBatchNo);
+  assert.equal(body.rows[0].invoiceNo, "TE20261010-2"); // from the matched workflow
+  assert.equal(body.rows[0].supplier, "TE");
+  assert.equal(body.rows[0].status, "in_hand");
+  assert.equal(body.rows[0].putAwayStatus, "pending");
+  assert.equal(body.rows[0].docpalBusinessKey, "bk-1");
+
+  assert.equal(body.pending.length, 1);
+  assert.equal(body.pending[0].kind, "pending");
+  assert.equal(body.pending[0].status, "processing");
+  assert.equal(body.pending[0].invoiceNo, "TE20261010-3");
+  assert.match(body.pending[0].batchNo, /^CN-\d{8}-[A-Z2-9]{6}$/);
+  assert.notEqual(body.pending[0].batchNo, orderBatchNo);
+});
+
+test("orders list: legacy workflow (no batch_no) matched to its order via invoice_no fallback", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  await seedCnOrderByBatch("TE-LEGACY-1");
+  await client.db.execute(
+    sql`INSERT INTO receiving_cn_workflows (id, phase, invoice_no, supplier, filename, docpal_document_id, docpal_process_id, docpal_business_key, status, payload, created_by)
+        VALUES ('wf-legacy', 'excel', 'TE-LEGACY-1', 'TE', 'TE.xls', 'doc-9', 'proc-9', 'bk-9', 'workflow_running', '{}'::jsonb, 'admin')`
+  );
+  const res = await app.request("/admin/receiving-cn/orders", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const body = (await res.json()) as {
+    rows: { batchNo: string; invoiceNo: string; docpalBusinessKey: string | null }[];
+    total: number;
+    pending: { batchNo: string }[];
+  };
+  assert.equal(body.total, 1);
+  assert.equal(body.rows[0].batchNo, "TE-LEGACY-1"); // fallback key = invoice_no
+  assert.equal(body.rows[0].invoiceNo, "TE-LEGACY-1");
+  assert.equal(body.rows[0].docpalBusinessKey, "bk-9");
+  assert.equal(body.pending.length, 0); // matched — not pending
+});
+
+test("orders detail: order + invoices + items (invoiceNo per item) + putAway", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  await seedCnOrderByBatch("TE-DETAIL-1", { withTask: true });
+  const res = await app.request("/admin/receiving-cn/orders/TE-DETAIL-1", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as {
+    order: { id: string; batchNo: string; status: string; orgId: number; arrivedAt: string | null };
+    invoices: { id: string; invoiceNo: string; totalQty: number }[];
+    items: { id: string; receivingInvoiceId: string; invoiceNo: string; partNo: string; receivedQty: number; putAwayQty: number; orgId: number; subInventoryCode: string }[];
+    putAway: { id: string; status: string } | null;
+  };
+  assert.equal(body.order.batchNo, "TE-DETAIL-1");
+  assert.equal(body.order.status, "in_hand");
+  assert.equal(body.order.orgId, 2);
+  assert.ok(body.order.arrivedAt);
+  assert.equal(body.invoices.length, 1);
+  assert.equal(body.invoices[0].invoiceNo, "INV-CN-1");
+  assert.equal(body.invoices[0].totalQty, 100);
+  assert.equal(body.items.length, 1);
+  assert.equal(body.items[0].invoiceNo, "INV-CN-1"); // invoice no carried on the item
+  assert.equal(body.items[0].partNo, "RK73B1JTTD181G");
+  assert.equal(body.items[0].receivedQty, 100);
+  assert.equal(body.items[0].subInventoryCode, "STORE1");
+  assert.ok(body.putAway);
+  assert.equal(body.putAway!.status, "pending");
+});
+
+test("orders detail: unknown batchNo → 404 receiving_cn_order_not_found", async () => {
+  await reseed(client);
+  const token = await login("admin", "DocPalAdmin2026!");
+  const res = await app.request("/admin/receiving-cn/orders/NO-SUCH-BATCH", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  assert.equal(res.status, 404);
+  assert.match(await res.text(), /receiving_cn_order_not_found/);
 });

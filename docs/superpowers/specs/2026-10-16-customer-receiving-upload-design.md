@@ -25,7 +25,7 @@ New file `apps/backend/src/db/schema/receivingCn.ts` (Drizzle; `newId()`, `now()
 - `receiving_invoices_cn` — `id`, `receiving_order_id` (FK cascade), `invoice_no`, `total_qty`, `total_ctn`, `delivery_date`, `org_id`, timestamps.
 - `receiving_invoice_items_cn` — `id`, `receiving_invoice_id` (FK cascade), `part_no`, `wcl_item_no`, `po_no`, `po_line`, `line_qty`, `received_qty` (0), `picked_qty` (0), `put_away_qty` (0), `ctn_no`, `date_code`, `lot_code`, `coo`, `cow`, `org_id`, `sub_inventory_code`, mismatch fields, `additional_data`/`order_data` jsonb, timestamps, `drawing_no`.
 - `put_away_tasks_cn` — dedicated CN put-away task (does NOT touch `put_away_tasks`): `id`, `receiving_order_cn_id` (text, NOT NULL, UNIQUE, FK → `receiving_orders_cn.id` cascade), `org_id`, `sub_inventory_code` (uniform-pair derivation from the order's items, NULL when mixed), `status` (`pending | completed`, default `pending`), timestamps.
-- `receiving_cn_workflows` — upload tracking: `id`, `phase` (`excel | pdf`), `invoice_no` (CN 編號 = `batch_no`), `supplier`, `filename`, `docpal_document_id`, `docpal_process_id`, `docpal_business_key`, `status` (`workflow_running | completed | failed | cancelled`, default `workflow_running`), `payload` jsonb (the verified payload object, sent to DocPal as `excel_result_data: [payload]`), `error`, `created_by`, timestamps.
+- `receiving_cn_workflows` — upload tracking: `id`, `phase` (`excel | pdf`), `batch_no` (generated correlation key `CN-<YYYYMMDD>-<6 alnum>`, injected into the DocPal payload; NULL on rows predating the column), `invoice_no` (CN 編號), `supplier`, `filename`, `docpal_document_id`, `docpal_process_id`, `docpal_business_key`, `status` (`workflow_running | completed | failed | cancelled`, default `workflow_running`), `payload` jsonb (the verified payload object, sent to DocPal as `excel_result_data: [payload + batchNo]`), `error`, `created_by`, timestamps.
 
 **Assumption (open integration point):** the external upstream-sync service writes `receiving_orders_cn` / `receiving_invoices_cn` / `receiving_invoice_items_cn` from the DocPal workflow output, the same way it writes masters/orders today. Our backend treats them as read-only input for finalization/put-away, matched by `batch_no` = the CN 編號 from the verified payload.
 
@@ -59,13 +59,19 @@ Self-rescheduling `setTimeout` loop (pattern: `jobs/goodsVerifyDayEnd.ts`; `unre
 
 ### Finalize (`src/db/receivingCn.ts` — `finalizeCnOrder`, idempotent via the unique index on `put_away_tasks_cn.receiving_order_cn_id`)
 
-1. Read `receiving_orders_cn` (+ invoices/items) by `batch_no = workflow.invoice_no`; if the upstream sync hasn't written them yet, log and retry on the next poll.
+1. Read `receiving_orders_cn` (+ invoices/items) by `batch_no = workflow.batchNo` — the generated correlation key (see below); workflows predating the column (NULL `batch_no`) fall back to the legacy `workflow.invoice_no` match. If the upstream sync hasn't written the order yet, return false so the cron retries on the next poll.
 2. Tx: order `status → 'in_hand'`, stamp `arrived_at`; insert `put_away_tasks_cn` (org/sub-inventory uniform-pair derivation); `transaction_logs` rows; workflow `status = 'completed'`; SSE `emitEvent` `receiving_cn.completed` on topic `/admin/receiving-cn`.
 3. No allocation schedule here — allocation only sees stock once put-away completes and writes on-hand lots.
+
+### batch_no correlation
+
+`createCnUpload` generates a batch no per upload — `CN-<YYYYMMDD>-<6 random uppercase alphanumerics>` (`node:crypto`) — stored in the new `receiving_cn_workflows.batch_no` column AND injected into the DocPal variables as `excel_result_data: [{ ...payload, batchNo }]` (the stored `payload` jsonb keeps the verified client data without it). The upstream sync stamps the same value onto the CN order's `receiving_orders_cn.batch_no`, so the order-centric admin list and the finalize match don't depend on the sheet's 編號 (`invoice_no`) being unique.
 
 ### Admin routes (`src/routes/admin/receivingCn.ts`, mounted in `src/routes/admin/index.ts`, admin JWT only)
 
 - `GET /admin/receiving-cn` — list, status filter + server paging.
+- `GET /admin/receiving-cn/orders` — order-centric list: paged `receiving_orders_cn` rows (newest first; put-away task status + matched workflow's `docpalBusinessKey`/invoice/supplier joined on `batch_no`, legacy fallback `invoice_no`) plus `pending` placeholders — workflows (any status) whose correlation key matches no order yet, newest first, not paged; pending rows carry `status: "processing"`.
+- `GET /admin/receiving-cn/orders/:batchNo` — one CN order: order + invoices + items (each item carries its invoice's `invoiceNo`) + the put-away task; 404 `receiving_cn_order_not_found` (a pending-only workflow has no order yet).
 - `GET /admin/receiving-cn/:id` — detail incl. payload items.
 - `POST /admin/receiving-cn/excel` — multipart (`file` + `data` JSON string) → validate payload → `createCnUpload(phase: "excel")`.
 - `POST /admin/receiving-cn/pdf/ocr` / `POST /admin/receiving-cn/pdf` — **phase 2** (blocked on the DocPal OCR-result endpoint).

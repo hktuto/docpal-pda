@@ -31,7 +31,7 @@ const infoSaved = ref(false);
 
 const countries = ref<CountryRow[]>([]);
 const countryOptions = computed<SearchableSelectOption[]>(() =>
-  [...countries.value].sort((a, b) => a.name.localeCompare(b.name)).map((c) => ({ value: c.code, label: c.name }))
+  [...countries.value].sort((a, b) => a.name.localeCompare(b.name, undefined,  { sensitivity: 'base' })).map((c) => ({ value: c.code, label: c.name }))
 );
 
 const subInventories = ref<SubInventoryRow[]>([]);

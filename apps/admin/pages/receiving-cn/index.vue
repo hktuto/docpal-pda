@@ -1,45 +1,43 @@
 <script setup lang="ts">
-import type { CnWorkflowRow } from "~/utils/flowApi";
+import type { CnOrderRow, CnPendingRow } from "~/utils/flowApi";
 import type { AdminColumnDef } from "~/composables/useAdminTable";
-import type { SearchableSelectOption } from "~/components/SearchableSelect.vue";
+
+// CN receiving orders (synced receiving_orders_cn rows), with uploads whose
+// DocPal workflow is still running merged on top as non-clickable pending
+// rows. Order rows drill into /receiving-cn/:batchNo.
+
+type CnMergedRow = CnOrderRow | CnPendingRow;
 
 const flow = useFlowApi();
 const { t } = useI18n();
-const rows = ref<CnWorkflowRow[]>([]);
+const rows = ref<CnMergedRow[]>([]);
 const loading = ref(false);
 const error = ref("");
-const status = ref("");
 
-const STATUSES = ["workflow_running", "completed", "failed", "cancelled"];
-
-const statusOptions = computed<SearchableSelectOption[]>(() =>
-  STATUSES.map((s) => ({ value: s, label: t(`admin.pages.receivingCn.statuses.${s}`) }))
-);
-
-const columnDefs = computed<AdminColumnDef<CnWorkflowRow>[]>(() => [
+const columnDefs = computed<AdminColumnDef<CnMergedRow>[]>(() => [
+  { key: "batchNo", label: t("admin.pages.receivingCn.batchNo"), size: 160 },
   { key: "invoiceNo", label: t("admin.pages.receivingCn.invoiceNo"), size: 160 },
   { key: "supplier", label: t("admin.pages.receivingCn.supplier"), size: 140 },
-  { key: "phase", label: t("admin.pages.receivingCn.phase"), size: 90 },
-  { key: "status", label: t("admin.pages.receivingCn.status"), size: 150 },
   {
-    key: "docpalBusinessKey",
-    label: t("admin.pages.receivingCn.businessKey"),
-    accessor: (r) => r.docpalBusinessKey ?? "",
-    size: 180,
+    key: "deliveryDate",
+    label: t("admin.pages.receivingCn.deliveryDate"),
+    accessor: (r) => (r.kind === "order" ? r.deliveryDate : null),
+    size: 120,
   },
-  { key: "filename", label: t("admin.pages.receivingCn.filename"), size: 200 },
-  { key: "createdBy", label: t("admin.pages.receivingCn.createdBy"), size: 120 },
+  { key: "status", label: t("admin.pages.receivingCn.status"), size: 130 },
+  { key: "putAwayStatus", label: t("admin.pages.receivingCn.putAwayStatus"), size: 110 },
   { key: "createdDate", label: t("admin.fields.createdDate"), size: 170 },
 ]);
 
-// Server mode: paging/filtering are driven by query-param reloads.
+// Server mode: paging is driven by query-param reloads. `total` counts order
+// rows only — pending rows are merged in extra.
 const total = ref(0);
 
 const { table, pagination, resetColumnState } = useAdminTable({
-  tableId: "receiving-cn",
+  tableId: "receiving-cn-orders",
   columns: columnDefs,
   rows,
-  getRowId: (r) => r.id,
+  getRowId: (r) => (r.kind === "order" ? `o:${r.batchNo}` : `p:${r.batchNo}`),
   server: { total },
   defaultPageSize: 50,
 });
@@ -58,9 +56,8 @@ const pageSize = computed({
   },
 });
 
-// URL query params keep filter/pagination across navigation.
+// URL query params keep pagination across navigation.
 useUrlQueryState({
-  status: { state: status, defaultValue: "" },
   page: { state: page, defaultValue: 1, parse: parsePositiveInt(1) },
   pageSize: { state: pageSize, defaultValue: 50, parse: parsePositiveInt(50) },
 });
@@ -69,12 +66,11 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    const res = await flow.listCnWorkflows({
-      status: status.value || undefined,
+    const res = await flow.listCnOrders({
       page: pagination.value.pageIndex + 1,
       pageSize: pagination.value.pageSize,
     });
-    rows.value = res.rows;
+    rows.value = [...res.pending, ...res.rows];
     total.value = res.total;
   } catch (e: any) {
     error.value = e.message;
@@ -84,21 +80,10 @@ async function load() {
 }
 
 watch(pagination, load);
-
-// Filter changes reload from page 1.
-function resetPageAndLoad() {
-  if (pagination.value.pageIndex !== 0) {
-    pagination.value = { ...pagination.value, pageIndex: 0 };
-  } else {
-    load();
-  }
-}
-
-watch(status, resetPageAndLoad);
-
 onMounted(load);
 
-// Reload when a workflow the cron tracks reaches a terminal state (SSE).
+// Reload when a workflow the cron tracks reaches a terminal state (SSE) —
+// the completed upload flips from a pending row into an order row.
 const {
   pending: changePending,
   justUpdated: changeUpdated,
@@ -106,12 +91,18 @@ const {
   dismiss,
 } = useChangeNotice(["receiving_cn.completed", "receiving_cn.failed", "receiving_cn.cancelled"], load);
 
-function statusClass(s: string): string {
+function orderStatusClass(s: string): string {
   return {
-    workflow_running: "chip chip-info",
+    pending: "chip chip-muted",
+    in_hand: "chip chip-info",
+    clear: "chip chip-ok",
+  }[s] ?? "chip";
+}
+
+function putAwayStatusClass(s: string): string {
+  return {
+    pending: "chip chip-info",
     completed: "chip chip-ok",
-    failed: "chip chip-err",
-    cancelled: "chip chip-muted",
   }[s] ?? "chip";
 }
 </script>
@@ -128,15 +119,9 @@ function statusClass(s: string): string {
       </div>
     </div>
 
-    <div class="filters">
-      <SearchableSelect
-        v-model="status"
-        :options="statusOptions"
-        :all-label="$t('admin.common.allStatuses')"
-        :aria-label="$t('admin.pages.receivingCn.status')"
-        :multiple="false"
-      />
-    </div>
+    <p v-if="rows.some((r) => r.kind === 'pending')" class="hint-text">
+      {{ $t("admin.pages.receivingCn.pendingHint") }}
+    </p>
 
     <div v-if="error" class="error-banner">{{ error }}</div>
     <ChangeNotice :pending="changePending" :just-updated="changeUpdated" @refresh="refreshNow" @dismiss="dismiss" />
@@ -148,30 +133,63 @@ function statusClass(s: string): string {
       :empty-text="$t('admin.pages.receivingCn.none')"
       :on-reset-columns="resetColumnState"
     >
-      <template #cell-invoiceNo="{ row }">{{ row.invoiceNo }}</template>
-      <template #cell-supplier="{ row }">{{ row.supplier || "—" }}</template>
-      <template #cell-phase="{ row }">{{ $t(`admin.pages.receivingCn.phases.${row.phase}`) }}</template>
-      <template #cell-status="{ row }">
-        <span :class="statusClass(row.status)">{{ $t(`admin.pages.receivingCn.statuses.${row.status}`) }}</span>
+      <template #cell-batchNo="{ row }">
+        <span
+          v-if="row.kind === 'order'"
+          class="clickable"
+          @click="navigateTo(`/receiving-cn/${encodeURIComponent(row.batchNo)}`)"
+        >{{ row.batchNo }}</span>
+        <span v-else class="pending-batch">{{ row.batchNo }}</span>
       </template>
-      <template #cell-docpalBusinessKey="{ row }">{{ row.docpalBusinessKey ?? "—" }}</template>
-      <template #cell-filename="{ row }">{{ row.filename }}</template>
-      <template #cell-createdBy="{ row }">{{ row.createdBy }}</template>
-      <template #cell-createdDate="{ row }">{{ formatDateTime(row.createdDate) }}</template>
+      <template #cell-invoiceNo="{ row }">
+        <span :class="{ 'pending-text': row.kind === 'pending' }">{{ row.invoiceNo }}</span>
+      </template>
+      <template #cell-supplier="{ row }">
+        <span :class="{ 'pending-text': row.kind === 'pending' }">{{ row.supplier || "—" }}</span>
+      </template>
+      <template #cell-deliveryDate="{ row }">
+        <span :class="{ 'pending-text': row.kind === 'pending' }">
+          {{ row.kind === "order" && row.deliveryDate ? formatDate(row.deliveryDate) : "—" }}
+        </span>
+      </template>
+      <template #cell-status="{ row }">
+        <span v-if="row.kind === 'pending'" class="chip chip-processing">
+          {{ $t("admin.pages.receivingCn.statuses.processing") }}
+        </span>
+        <span v-else :class="orderStatusClass(row.status)">{{ $t(`status.receiving.${row.status}`) }}</span>
+      </template>
+      <template #cell-putAwayStatus="{ row }">
+        <span v-if="row.kind === 'pending'" class="pending-text">—</span>
+        <span v-else-if="row.putAwayStatus" :class="putAwayStatusClass(row.putAwayStatus)">
+          {{ $t(`status.putAway.${row.putAwayStatus}`) }}
+        </span>
+        <span v-else>—</span>
+      </template>
+      <template #cell-createdDate="{ row }">
+        <span :class="{ 'pending-text': row.kind === 'pending' }">{{ formatDateTime(row.createdDate) }}</span>
+      </template>
     </DataTable>
     <Pager v-model:page="page" v-model:page-size="pageSize" :total="total" />
   </div>
 </template>
 
 <style scoped>
-.filters {
-  display: flex;
-  gap: 0.625rem;
-  margin-bottom: 0.75rem;
-}
 .head-actions {
   display: flex;
   gap: 0.625rem;
+}
+.hint-text {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--muted, #666);
+}
+.clickable {
+  cursor: pointer;
+  color: #0b5cab;
+}
+.pending-batch,
+.pending-text {
+  color: #9aa5b1;
 }
 .chip {
   display: inline-block;
@@ -188,12 +206,12 @@ function statusClass(s: string): string {
   background: #dcfce7;
   color: #15803d;
 }
-.chip-err {
-  background: #fee2e2;
-  color: #b91c1c;
-}
 .chip-muted {
   background: #e5e7eb;
   color: #52606d;
+}
+.chip-processing {
+  background: #fef3c7;
+  color: #b45309;
 }
 </style>

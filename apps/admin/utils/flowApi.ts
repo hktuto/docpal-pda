@@ -790,6 +790,84 @@ export async function submitCnExcelUpload(file: File, data: unknown): Promise<Cn
   return (await res.json()) as CnWorkflowRow;
 }
 
+// ---- customer receiving (CN) orders (synced receiving_orders_cn rows) ----
+
+/** Finalized CN receiving order row (kind "order"). */
+export interface CnOrderRow {
+  kind: "order";
+  /** receiving_orders_cn.batch_no — the CN 編號; also the detail route param. */
+  batchNo: string;
+  invoiceNo: string;
+  supplier: string;
+  /** receiving_orders_cn.status (pending | in_hand | clear). */
+  status: string;
+  deliveryDate: string | null;
+  arrivedAt: string | null;
+  arrivedBy: string | null;
+  /** put_away_tasks_cn.status, null when no task exists yet. */
+  putAwayStatus: "pending" | "completed" | null;
+  docpalBusinessKey: string | null;
+  createdDate: string;
+}
+
+/** Upload whose DocPal workflow is still running — merged above the order
+ *  rows in the list; never clickable, no detail page (kind "pending"). */
+export interface CnPendingRow {
+  kind: "pending";
+  batchNo: string;
+  invoiceNo: string;
+  supplier: string;
+  status: "processing";
+  error: string | null;
+  docpalBusinessKey: string | null;
+  createdDate: string;
+}
+
+export interface CnOrderListResult {
+  rows: CnOrderRow[];
+  /** Order rows only — pending rows are extra and don't count toward paging. */
+  total: number;
+  pending: CnPendingRow[];
+}
+
+/** receiving_invoice_items_cn row on the order detail. */
+export interface CnOrderItemRow {
+  id: string;
+  receivingInvoiceId: string;
+  invoiceNo: string;
+  partNo: string;
+  wclItemNo: string | null;
+  poNo: string | null;
+  poLine: string | null;
+  lineQty: number | null;
+  receivedQty: number;
+  putAwayQty: number;
+  ctnNo: string | null;
+  dateCode: string | null;
+  lotCode: string | null;
+  coo: string | null;
+  cow: string | null;
+  orgId: number | null;
+  subInventoryCode: string | null;
+}
+
+export interface CnOrderDetail {
+  order: {
+    id: string;
+    batchNo: string;
+    status: string;
+    deliveryDate: string | null;
+    arrivedAt: string | null;
+    arrivedBy: string | null;
+    orgId: number;
+    dateCode: string | null;
+    createdDate: string;
+  };
+  invoices: { id: string; invoiceNo: string; totalQty: number | null; totalCtn: number | null; deliveryDate: string | null }[];
+  items: CnOrderItemRow[];
+  putAway: { id: string; status: string } | null;
+}
+
 // ---- audit logs (transaction_logs rows for an order + its child entities) ----
 
 export interface TransactionLogRow {
@@ -1105,6 +1183,19 @@ export function useFlowApi() {
     listCnWorkflows: (params: CnWorkflowListParams = {}) =>
       api.get<{ rows: CnWorkflowRow[]; total: number }>(`/admin/receiving-cn${cnWorkflowQuery(params)}`),
     getCnWorkflow: (id: string) => api.get<CnWorkflowRow>(`/admin/receiving-cn/${id}`),
+
+    // Customer receiving (CN) orders — the synced receiving_orders_cn world.
+    // The list merges still-running workflow uploads (pending[]) above the
+    // paged order rows; total counts order rows only.
+    listCnOrders: (params: { page?: number; pageSize?: number } = {}) => {
+      const qs = new URLSearchParams();
+      if (params.page !== undefined) qs.set("page", String(params.page));
+      if (params.pageSize !== undefined) qs.set("pageSize", String(params.pageSize));
+      const s = qs.toString();
+      return api.get<CnOrderListResult>(`/admin/receiving-cn/orders${s ? `?${s}` : ""}`);
+    },
+    getCnOrder: (batchNo: string) =>
+      api.get<CnOrderDetail>(`/admin/receiving-cn/orders/${encodeURIComponent(batchNo)}`),
 
     // Issues (actor comes from the JWT — the backend ignores any body actorId)
     listReceivingMismatches: () => api.get<MismatchListRow[]>("/admin/receiving-mismatches"),

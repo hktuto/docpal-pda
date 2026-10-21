@@ -29,7 +29,7 @@ const shareGroups = ref<Record<string, string>>({});
 const shareError = ref("");
 
 const groupNames = computed(() =>
-  [...new Set(Object.values(shareGroups.value))].sort((a, b) => a.localeCompare(b))
+  [...new Set(Object.values(shareGroups.value))].sort((a, b) => a.localeCompare(b,  undefined, { numeric: true, sensitivity: 'base'  }))
 );
 
 // Client-side keyword filter; TanStack owns sorting + paging.
@@ -155,7 +155,7 @@ const mgrGroups = computed(() => {
   }
   for (const d of draftGroups.value) if (!map.has(d)) map.set(d, []);
   return [...map.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
+    .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base'  }))
     .map(([name, members]) => ({ name, members: members.sort() }));
 });
 

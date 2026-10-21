@@ -6,7 +6,9 @@ import { queryGet } from "../../db/query.js";
 import { sql } from "drizzle-orm";
 import {
   createCnUpload,
+  getCnOrderDetail,
   getCnWorkflow,
+  listCnOrders,
   listCnWorkflows,
   validateCnPayload,
 } from "../../db/receivingCn.js";
@@ -33,6 +35,27 @@ adminReceivingCnRoute.get("/receiving-cn", async (c) => {
     }),
     200
   );
+});
+
+// Order-centric list: paged receiving_orders_cn rows + "pending" placeholders
+// for workflows whose order hasn't synced yet → {rows, total, pending}.
+// Registered BEFORE /receiving-cn/:id — Hono's param route would otherwise
+// capture the literal "orders".
+adminReceivingCnRoute.get("/receiving-cn/orders", async (c) => {
+  return c.json(
+    await listCnOrders(db, {
+      page: Number(c.req.query("page") ?? 1),
+      pageSize: Number(c.req.query("pageSize") ?? 20),
+    }),
+    200
+  );
+});
+
+// One CN order by batch_no: order + invoices + items (invoice no on each
+// item) + the put-away task. 404 receiving_cn_order_not_found — a pending-only
+// workflow has no order yet (the list chip carries its status).
+adminReceivingCnRoute.get("/receiving-cn/orders/:batchNo", async (c) => {
+  return c.json(await getCnOrderDetail(db, c.req.param("batchNo")), 200);
 });
 
 // One tracking row incl. the verified payload items.

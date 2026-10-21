@@ -729,8 +729,13 @@ test("awaitAllocateAll: resolves with the last run summary once the runner settl
     if (calls === 1) await firstGate;
   };
 
-  const settled = awaitAllocateAll(client.db, "test-await");
+  // Order matters: the runner executes the FIRST trigger's run fn for every
+  // pass (coalesced triggers only queue a follow-up). The custom gated run
+  // must therefore be scheduled before awaitAllocateAll's own default-run
+  // trigger, or the first pass would run allocateAll and `calls` would never
+  // move.
   scheduleAllocateAll(client.db, "test-await", run);
+  const settled = awaitAllocateAll(client.db, "test-await");
   scheduleAllocateAll(client.db, "test-await", run);
   const deadline = Date.now() + 5000;
   while (calls < 1 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 5));

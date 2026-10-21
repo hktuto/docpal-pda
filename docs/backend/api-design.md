@@ -150,7 +150,10 @@ deletes the attachment). One tracking row per upload in
 kill-switch `RECEIVING_CN_SYNC=off`, interval `RECEIVING_CN_SYNC_INTERVAL_SEC`
 default 120) polls `workflow_running` rows and, on workflow completion,
 `finalizeCnOrder` reads the `receiving_orders_cn` trio (written by the
-external upstream-sync service, matched by `batch_no` = the CN 編號), flips
+external upstream-sync service, matched by the workflow's generated
+`batch_no` — `CN-<YYYYMMDD>-<6 alnum>`, injected into the DocPal
+`excel_result_data` payload; legacy rows without one fall back to the CN 編號
+`invoice_no`), flips
 the order `in_hand` + stamps `arrived_at`, and creates the dedicated CN
 put-away task (idempotent via the unique index on
 `put_away_tasks_cn.receiving_order_cn_id`) + `receiving_cn.completed` SSE on
@@ -160,8 +163,10 @@ put-away task (idempotent via the unique index on
 | Endpoint | Body → Response | Note |
 |---|---|---|
 | `GET /admin/receiving-cn?status=&page=&pageSize=` | — → `{rows, total}` | tracking list, newest first; `status` filter is repeatable (any-of), `page` default 1 / `pageSize` default 20 |
+| `GET /admin/receiving-cn/orders?page=&pageSize=` | — → `{rows, total, pending}` | order-centric list: paged `receiving_orders_cn` rows newest first (kind `order`; put-away task status + the matched workflow's `docpalBusinessKey`/`invoiceNo`/`supplier` joined on the generated `batch_no`, legacy fallback `invoice_no`), plus `pending` placeholders — workflows (any status) whose correlation key matches no order yet, newest first, not paged, `status: "processing"` |
+| `GET /admin/receiving-cn/orders/:batchNo` | — → `{order, invoices, items, putAway}` / 404 | one CN order by `batch_no`: items carry their invoice's `invoiceNo`; 404 `receiving_cn_order_not_found` (a pending-only workflow has no order) |
 | `GET /admin/receiving-cn/:id` | — → tracking row incl. the verified `payload` items / 404 | |
-| `POST /admin/receiving-cn/excel` | multipart `file` + `data` (JSON string of the verified payload) → 201 `{id}` | DocPal file upload + workflow kick + tracking row (`createCnUpload` in `src/db/receivingCn.ts`); payload validation: header strings, non-empty `items`, each item `partNo`/`orderNo` non-empty + positive-integer `qty` — 400 `file_required` / `invalid_payload`, 500 `docpal_workflow_token_not_configured`, 502 `docpal_workflow: ...` |
+| `POST /admin/receiving-cn/excel` | multipart `file` + `data` (JSON string of the verified payload) → 201 `{id}` | DocPal file upload + workflow kick + tracking row (`createCnUpload` in `src/db/receivingCn.ts`) with a generated `batch_no` (column + inside the sent `excel_result_data[0].batchNo`); payload validation: header strings, non-empty `items`, each item `partNo`/`poNo` non-empty + positive-integer `qty` — 400 `file_required` / `invalid_payload`, 500 `docpal_workflow_token_not_configured`, 502 `docpal_workflow: ...` |
 
 JWT bearer (HS256, `hono/jwt`, secret from `AUTH_SECRET`, 12 h TTL) required on
 all routes except `/health`, `POST /auth/login`, `POST /auth/login-token`, and

@@ -140,7 +140,7 @@ const groups = computed<ItemGroup[]>(() => {
   const invoices = filteredInvoices.value;
   if (groupBy.value === "invoice") {
     return [...invoices]
-      .sort((a, b) => a.invoiceNo.localeCompare(b.invoiceNo, undefined, { numeric: true }))
+      .sort((a, b) => a.invoiceNo.localeCompare(b.invoiceNo, undefined, { numeric: true, sensitivity: 'base'  }))
       .map((inv) => ({ key: inv.id, invoice: inv, items: inv.items }));
   }
   const buckets = new Map<string, ReceivingItemRow[]>();
@@ -153,7 +153,7 @@ const groups = computed<ItemGroup[]>(() => {
     }
   }
   return [...buckets.entries()]
-    .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
+    .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base'  }))
     .map(([key, items]) => ({ key, invoice: null, items }));
 });
 

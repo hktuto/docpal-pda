@@ -126,7 +126,7 @@ const lotGroups = computed<LotGroup[]>(() => {
     else buckets.set(k, [l]);
   }
   return [...buckets.entries()]
-    .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
+    .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base'  }))
     .map(([key, lots]) => ({ key, label: labelOf(key, lots), lots }));
 });
 

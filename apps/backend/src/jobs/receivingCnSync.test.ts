@@ -49,10 +49,10 @@ async function seedCnOrder(batchNo: string): Promise<string> {
   return orderId;
 }
 
-async function seedWorkflow(id: string, invoiceNo: string, processId = "proc-1"): Promise<void> {
+async function seedWorkflow(id: string, invoiceNo: string, processId = "proc-1", batchNo: string | null = null): Promise<void> {
   await client.db.execute(
-    sql`INSERT INTO receiving_cn_workflows (id, phase, invoice_no, supplier, filename, docpal_document_id, docpal_process_id, docpal_business_key, status, payload, created_by)
-        VALUES (${id}, 'excel', ${invoiceNo}, 'TE', 'TE.xls', 'doc-1', ${processId}, 'bk-1', 'workflow_running', '{}'::jsonb, 'operator')`
+    sql`INSERT INTO receiving_cn_workflows (id, phase, invoice_no, supplier, filename, docpal_document_id, docpal_process_id, docpal_business_key, batch_no, status, payload, created_by)
+        VALUES (${id}, 'excel', ${invoiceNo}, 'TE', 'TE.xls', 'doc-1', ${processId}, 'bk-1', ${batchNo}, 'workflow_running', '{}'::jsonb, 'operator')`
   );
 }
 
@@ -157,5 +157,35 @@ test("cron: running process → no change", async () => {
     await runReceivingCnSyncOnce(client.db);
     const wf = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM receiving_cn_workflows WHERE id = 'wf-5'`);
     assert.equal(wf!.status, "workflow_running");
+  });
+});
+
+test("cron: completed process finalizes the order matched by the generated batch_no (invoice_no differs)", async () => {
+  await reseed(client);
+  const orderId = await seedCnOrder("CN-20261010-ABC123");
+  await seedWorkflow("wf-6", "TE20261010-2", "proc-6", "CN-20261010-ABC123"); // batch_no wins over invoice_no
+  processStates = { "proc-6": "completed" };
+
+  await withFake(async () => {
+    await runReceivingCnSyncOnce(client.db);
+    const order = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM receiving_orders_cn WHERE id = ${orderId}`);
+    assert.equal(order!.status, "in_hand");
+    const wf = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM receiving_cn_workflows WHERE id = 'wf-6'`);
+    assert.equal(wf!.status, "completed");
+  });
+});
+
+test("cron: legacy workflow without batch_no still finalizes via invoice_no fallback", async () => {
+  await reseed(client);
+  const orderId = await seedCnOrder("TE-LEGACY-FALLBACK");
+  await seedWorkflow("wf-7", "TE-LEGACY-FALLBACK", "proc-7"); // batch_no NULL
+  processStates = { "proc-7": "completed" };
+
+  await withFake(async () => {
+    await runReceivingCnSyncOnce(client.db);
+    const order = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM receiving_orders_cn WHERE id = ${orderId}`);
+    assert.equal(order!.status, "in_hand");
+    const wf = await queryGet<{ status: string }>(client.db, sql`SELECT status FROM receiving_cn_workflows WHERE id = 'wf-7'`);
+    assert.equal(wf!.status, "completed");
   });
 });
