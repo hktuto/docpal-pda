@@ -175,8 +175,9 @@ export async function createCnUpload(db: AppDb, input: CreateCnUploadInput): Pro
         },
       },
     ],
-    excel_result_data: [{ ...input.payload, batchNo }],
+    excel_result_data: [{ ...input.payload }],
     start_user_id: input.actor.username,
+    batch_no:batchNo,
     __system__user_creator_id: input.actor.username,
     __system__user_creator_name: input.actor.displayName,
   };
