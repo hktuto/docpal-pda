@@ -642,11 +642,11 @@ input:focus {
   align-items: flex-start;
   gap: 0.1rem;
   min-width: 0;
-  flex-flow: column;
+  flex-flow: row wrap;
 }
 
 .app-list-row__title {
-  flex: 1;
+  flex: 1 0 auto;
   min-width: 0;
   font-size: 1rem;
   font-weight: 700;
@@ -671,7 +671,7 @@ input:focus {
   font-size: 0.8125rem;
   color: var(--muted);
   margin-top: 0.15rem;
-  white-space: nowrap;
+  white-space: break-spaces;
   overflow: hidden;
   text-overflow: ellipsis;
 }
