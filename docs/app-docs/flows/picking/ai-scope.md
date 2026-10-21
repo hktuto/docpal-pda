@@ -51,6 +51,20 @@
   `allocationSources` hint (warning text in the tooltip via
   `allocationWarnings`), and the admin picking-order detail allocation cell +
   tooltip row.
+- Allocation outdated-stock warning (spec
+  `docs/superpowers/specs/2026-10-20-allocation-outdated-stock-warning-design.md`):
+  each allocation row carries `outdated: boolean` — the source's WWYY date
+  code (lot date code, or the dock invoice-item date code for receiving-area
+  sources) is valid and ranks older than the flow-config `outdatedStockYears`
+  threshold (default 2, the stock-search outdated-count key). Warning-only —
+  no scan hook, no allocation/pick change, no finish blocking. Surfaces: ⚠️
+  stock-age warning on the date/lot row of `PickingUnifiedItems.vue` +
+  `PickingItemsSection.vue` (OR-merged across client-side lot merging), list
+  `hasOutdatedAllocations` → warn-text chip in `pages/picking/index.vue` (ORed
+  with the scan-warning chip), admin picking-detail allocation cell +
+  `AllocationDetail` tooltip + `AllocationBreakdown`. Distinct from the
+  supplier scan warnings below (`outdated_scan_warnings`) — that feature
+  blocks finish, this one never blocks anything.
 - The admin picking-order detail renders lot date codes through the
   flow-config `dateCodeDisplayTemplate` (default `[date_code][coo]` →
   `3626cn`) in the allocation source cells (`dc:`), the packages cell, and

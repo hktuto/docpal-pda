@@ -29,6 +29,7 @@ const { format: formatDc } = useDateCodeDisplay();
     <div class="alloc-tip-row">
       <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.dateCode") }}</span>
       <span>{{ formatDc(a.lot) || "—" }}</span>
+      <span v-if="a.outdated" style="cursor: help;" :title="$t('stockAgeWarning.tooltip')">⚠️</span>
     </div>
     <div class="alloc-tip-row">
       <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.lotCode") }}</span>
@@ -79,6 +80,7 @@ const { format: formatDc } = useDateCodeDisplay();
     <div v-if="a.receiving.dateCode" class="alloc-tip-row">
       <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.dateCode") }}</span>
       <span>{{ formatDc(a.receiving) || "—" }}</span>
+      <span v-if="a.outdated" style="cursor: help;" :title="$t('stockAgeWarning.tooltip')">⚠️</span>
     </div>
     <div v-if="a.boxId" class="alloc-tip-row">
       <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.ctnNo") }}</span>

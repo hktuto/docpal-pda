@@ -37,6 +37,8 @@ Use the Picking flow when a picking order is ready and stock has been allocated.
 
 **Outdated date-code warnings:** if a scanned label's date code is older than the supplier's outdated limit (set per supplier in the admin console), the scan still succeeds but the app shows an alert and flags the order with a warning chip. The order cannot finish — the manual **Finish** action is refused — until an admin resolves the order's warnings in the admin console; the operator then presses Finish again.
 
+**Stock-age flags on planned allocations:** separately, a planned allocation whose source date code is older than the warehouse's outdated-stock threshold (flow config, default 2 years) shows a ⚠️ warning on the date/lot row. This is display-only — picking and finishing are not affected (unlike the supplier warnings above).
+
 ## Related guides
 
 - [Step-by-step operator guide](./steps.md)

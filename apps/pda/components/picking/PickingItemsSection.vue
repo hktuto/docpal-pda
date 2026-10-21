@@ -142,6 +142,13 @@
               </DetailRow>
               <DetailRow v-if="allocBatchLabel(allocation.lot)" :label="$t('picking.itemsSection.dateLotCooCow')">
                 {{ allocBatchLabel(allocation.lot) }}
+                <span
+                  v-if="allocation.outdated"
+                  class="shelf-warning"
+                  :title="$t('stockAgeWarning.tooltip')"
+                  role="img"
+                  :aria-label="$t('stockAgeWarning.tooltip')"
+                >⚠️</span>
               </DetailRow>
               <DetailRow v-if="showAllocQty" :label="$t('picking.itemsSection.allocatedQty')" :value="allocation.qty" />
             </template>
@@ -245,6 +252,7 @@ interface MergedAllocation {
   lot: PickingAllocation["lot"];
   boxId: string | null;
   qty: number;
+  outdated: boolean;
 }
 
 function mergeAllocations(allocations: PickingAllocation[]): MergedAllocation[] {
@@ -257,8 +265,9 @@ function mergeAllocations(allocations: PickingAllocation[]): MergedAllocation[] 
     const g = groups.get(key);
     if (g) {
       g.qty += a.qty;
+      g.outdated = g.outdated || a.outdated;
     } else {
-      groups.set(key, { key, lot: a.lot ?? null, boxId: a.boxId ?? null, qty: a.qty });
+      groups.set(key, { key, lot: a.lot ?? null, boxId: a.boxId ?? null, qty: a.qty, outdated: a.outdated });
     }
   }
   return [...groups.values()];

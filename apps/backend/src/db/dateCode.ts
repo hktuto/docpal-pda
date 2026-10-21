@@ -39,6 +39,12 @@ export function outdatedThresholdRank(years: number, ref: Date = new Date()): nu
   return dateCodeRank(dateToDateCode(d))!;
 }
 
+/** True when `rank` (dateCodeRank of a code) is valid and below the outdated
+ *  threshold rank; null ranks never flag. */
+export function isOutdatedRank(rank: number | null, thresholdRank: number): boolean {
+  return rank !== null && rank < thresholdRank;
+}
+
 /** Rank of the WWYY code exactly `months` before ref — the per-supplier
  *  outdated threshold (a scanned code ranking below it is outdated). */
 export function outdatedThresholdRankMonths(months: number, ref: Date = new Date()): number {

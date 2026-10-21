@@ -614,6 +614,10 @@ export default {
     confirm: "OK",
     chip: "⚠ Outdated ({count})"
   },
+  stockAgeWarning: {
+    tooltip: "Date code too old (beyond the stock age limit)",
+    chip: "⚠ Old date code"
+  },
   labelScanReviewModal: {
     titleManual: "Manual entry",
     titleReview: "Review scan",

@@ -88,6 +88,12 @@
   picking work (scan, box create/add/remove, undo scan) happens on the
   picking order pages, never here. Allocation lots carry `shelfWarning`
   (`shelves.warning`) — shown as a ⚠️ icon next to the shelf code when set.
+  Allocation rows also carry `outdated` — the source WWYY date code ranks
+  older than the flow-config `outdatedStockYears` threshold (default 2) —
+  shown as a ⚠️ stock-age warning on the date/lot row; warning-only, no
+  blocking (spec
+  `docs/superpowers/specs/2026-10-20-allocation-outdated-stock-warning-design.md`,
+  distinct from the supplier scan warnings in `outdated_scan_warnings`).
   The tab (and its fetch) is hidden when flow config
   `picking.allocation.allowDockStock=false` — put-away is then a hard gate
   and receiving is decoupled from picking.

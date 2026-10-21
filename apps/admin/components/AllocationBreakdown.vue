@@ -195,6 +195,7 @@ async function remove(r: PartAllocationRow) {
               <td>{{ $t(`status.picking.${r.orderStatus}`) }}</td>
               <td class="num">{{ r.qty }}</td>
               <td class="ab-flags">
+                <span v-if="r.outdated" style="cursor: help;" :title="$t('stockAgeWarning.tooltip')">⚠️</span>
                 <span v-if="r.manual" :title="$t('admin.pages.pickingOrders.allocBreakdownManual')">📌</span>
                 <span v-if="r.locked" class="ab-lock">
                   🔒 {{ r.workingByName ?? $t("admin.pages.pickingOrders.allocBreakdownLockedUnknown") }}

@@ -758,6 +758,7 @@ const {
             >
               {{ allocationSource(a) }}
               <span v-if="a.lot.shelfWarning" class="shelf-warning" :title="a.lot.shelfWarning">⚠️</span>
+              <span v-if="a.outdated" class="shelf-warning" :title="$t('stockAgeWarning.tooltip')">⚠️</span>
               <template #tooltip>
                 <AllocationsAllocationDetail :a="a" />
               </template>
@@ -770,6 +771,7 @@ const {
               @remove="removeAllocation(row, a)"
             >
               {{ allocationSource(a) }}
+              <span v-if="a.outdated" class="shelf-warning" :title="$t('stockAgeWarning.tooltip')">⚠️</span>
               <template v-if="a.receiving" #tooltip>
                 <AllocationsAllocationDetail :a="a" />
               </template>
@@ -783,6 +785,7 @@ const {
                 <AllocationsDot :source="a.lot ? 'stock' : 'receiving'" />
                 <span>{{ a.qty }} × {{ allocationSource(a) }}</span>
                 <span v-if="a.lot?.shelfWarning" class="shelf-warning" :title="a.lot.shelfWarning">⚠️</span>
+                <span v-if="a.outdated" class="shelf-warning" :title="$t('stockAgeWarning.tooltip')">⚠️</span>
               </div>
               <template v-if="a.lot || a.receiving" #popup>
                 <AllocationsAllocationDetail :a="a" />

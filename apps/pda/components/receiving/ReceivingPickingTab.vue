@@ -61,6 +61,14 @@
             role="img"
             :aria-label="loc.lot.shelfWarning"
           >⚠️</span>
+          <template v-if="loc.outdated">
+            <span
+              style="cursor: help;"
+              :title="$t('stockAgeWarning.tooltip')"
+              role="img"
+              :aria-label="$t('stockAgeWarning.tooltip')"
+            >⚠️</span>
+          </template>
           · {{ loc.lot?.dateCode || $t('common.stateNone') }} / {{ loc.lot?.lotCode || $t('common.stateNone') }} / {{ loc.lot?.coo || $t('common.stateNone') }} / {{ loc.lot?.cow || $t('common.stateNone') }}
           · {{ loc.qty }} {{ $t('common.pcs') }}
         </li>

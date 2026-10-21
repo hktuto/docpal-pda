@@ -3,8 +3,9 @@ import { HTTPException } from "hono/http-exception";
 import { sql } from "drizzle-orm";
 import { db } from "../../db.js";
 import { queryAll } from "../../db/query.js";
-import { allowDockStock } from "../../config.js";
+import { allowDockStock, outdatedStockYears } from "../../config.js";
 import { workLockExpiry } from "../../db/allocate.js";
+import { dateCodeRank, isOutdatedRank, outdatedThresholdRank } from "../../db/dateCode.js";
 import { locationMatches, type LocationMatchContext } from "../../db/locationMatch.js";
 
 // Admin part-availability lookup: every stock location (inventory_lots) and
@@ -237,6 +238,9 @@ interface AllocationBreakdownRow {
   shelfDisplayName: string | null;
   boxId: string | null;
   dateCode: string | null;
+  /** Source date code is valid WWYY older than the flow-config
+   *  outdatedStockYears threshold (spec 2026-10-20). */
+  outdated: boolean;
   lotCode: string | null;
   locked: boolean;
   workingByName: string | null;
@@ -304,5 +308,11 @@ adminPartAvailabilityRoute.get("/part-allocations", async (c) => {
     `
   );
 
-  return c.json({ allocations });
+  const outdatedRank = outdatedThresholdRank(outdatedStockYears());
+  return c.json({
+    allocations: allocations.map((a) => ({
+      ...a,
+      outdated: isOutdatedRank(dateCodeRank(a.dateCode), outdatedRank),
+    })),
+  });
 });

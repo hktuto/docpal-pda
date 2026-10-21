@@ -8,7 +8,8 @@ import { nextBoxId } from "./boxes.js";
 import { now } from "./now.js";
 import { emitEvent } from "./events.js";
 import { workLockExpiry } from "./allocate.js";
-import { isStepEnabled, pickingFromSubinventoryOrgs, pickingShelfScan, receivingSubInventoryRules } from "../config.js";
+import { isStepEnabled, outdatedStockYears, pickingFromSubinventoryOrgs, pickingShelfScan, receivingSubInventoryRules } from "../config.js";
+import { dateCodeRank, outdatedThresholdRank } from "./dateCode.js";
 import { allowedOrgCondition, allowedOrgFilter } from "./org-filter.js";
 import { userScopeCondition, type UserScopeEntry } from "./user-scope.js";
 import { normalizePartNo } from "./scanParse.js";
@@ -580,6 +581,9 @@ export interface PickingOrderListRow {
   allocatedQty: number;
   /** Unresolved outdated-scan warnings (spec 2026-10-07); 0 = none. */
   outdatedWarningCount: number;
+  /** Any qty > 0 allocation whose source date code (WWYY) is older than the
+   *  flow-config outdatedStockYears threshold (spec 2026-10-20). */
+  hasOutdatedAllocations: boolean;
   createdDate: Date;
   lastUpdateDate: Date;
 }
@@ -664,6 +668,16 @@ export async function listPickingOrders(
         COALESCE(SUM(pi.allocated_qty), 0)::int AS "allocatedQty",
         (SELECT COUNT(*)::int FROM outdated_scan_warnings osw
          WHERE osw.order_kind = 'picking' AND osw.order_id = po.id AND osw.resolved_at IS NULL) AS "outdatedWarningCount",
+        EXISTS (
+          SELECT 1 FROM allocations a
+          JOIN picking_items pi2 ON pi2.id = a.picking_item_id
+          LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
+          LEFT JOIN receiving_invoice_items rii ON rii.id = a.receiving_invoice_item_id
+          WHERE pi2.picking_order_id = po.id AND a.qty > 0
+            AND COALESCE(il.date_code, rii.date_code) ~ '^[0-9]{4}$'
+            AND left(COALESCE(il.date_code, rii.date_code), 2)::int BETWEEN 1 AND 53
+            AND ((2000 + right(COALESCE(il.date_code, rii.date_code), 2)::int) - CASE WHEN 2000 + right(COALESCE(il.date_code, rii.date_code), 2)::int > EXTRACT(YEAR FROM now())::int + 1 THEN 100 ELSE 0 END) * 100 + left(COALESCE(il.date_code, rii.date_code), 2)::int < ${outdatedThresholdRank(outdatedStockYears())}
+        ) AS "hasOutdatedAllocations",
         po.created_date AS "createdDate",
         po.last_update_date AS "lastUpdateDate",
         COUNT(*) OVER ()::int AS "total"
@@ -839,6 +853,10 @@ export interface PickingAllocationDetail {
     receivedQty: number | null;
     dateCode: string | null;
   } | null;
+  /** Source date code (WWYY, coalesced lot → receiving item) is older than the
+   *  flow-config outdatedStockYears threshold (spec 2026-10-20); invalid/null
+   *  codes are never flagged. */
+  outdated: boolean;
 }
 
 export interface PickingPackageDetail {
@@ -890,6 +908,14 @@ export interface PickingOrderDetail extends PickingOrderRow {
   /** Whole-box claim hint: a fully-claimable shelf box whose current contents
    *  exactly equal the order's remaining demand (null when none / not active). */
   suggestedBox: ShelfBoxMatch | null;
+}
+
+/** True when an allocation source date code (coalesced lot → receiving item
+ *  WWYY) is valid and older than the flow-config outdatedStockYears threshold
+ *  (spec 2026-10-20); invalid/null codes are never flagged. */
+function isOutdatedSource(dateCode: string | null): boolean {
+  const rank = dateCodeRank(dateCode);
+  return rank !== null && rank < outdatedThresholdRank(outdatedStockYears());
 }
 
 interface AllocationQueryRow {
@@ -1079,6 +1105,7 @@ export async function getPickingOrderDetail(
                 dateCode: a.recvDateCode,
               }
             : null,
+          outdated: isOutdatedSource(a.lotDateCode ?? a.recvDateCode),
         })),
       packages: packages
         .filter((p) => p.pickingItemId === i.id)

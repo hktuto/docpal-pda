@@ -46,7 +46,7 @@
           :meta="rowMeta(po)"
           :chip-text="rowChip(po)?.text"
           :chip-class="rowChip(po)?.cls"
-          :warn-text="po.outdatedWarningCount > 0 ? $t('outdatedWarning.chip', { count: po.outdatedWarningCount }) : undefined"
+          :warn-text="rowWarnText(po)"
         >
           <template v-if="isSelectable(po.status)" #leading>
             <input
@@ -117,6 +117,19 @@ function rowChip(po: PickingOrderListRow) {
       : null;
   }
   return renderChip(viewListChip("picking", po, viewConfig.value));
+}
+
+// Supplier scan-warning chip (outdatedWarning) and the allocation stock-age
+// warning (stockAgeWarning) share the single warn span, joined when both apply.
+function rowWarnText(po: PickingOrderListRow): string | undefined {
+  const parts: string[] = [];
+  if (po.outdatedWarningCount > 0) {
+    parts.push(t("outdatedWarning.chip", { count: po.outdatedWarningCount }));
+  }
+  if (po.hasOutdatedAllocations) {
+    parts.push(t("stockAgeWarning.chip"));
+  }
+  return parts.length ? parts.join(" · ") : undefined;
 }
 
 useHead({ title: t("picking.title") });

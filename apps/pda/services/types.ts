@@ -232,6 +232,9 @@ export interface ReceivingPickingAllocation {
   receivingInvoiceItemId: string | null;
   receivingOrderId: string | null;
   boxId: string | null;
+  /** Source date code (WWYY) older than the outdatedStockYears threshold
+   *  (spec 2026-10-20). */
+  outdated: boolean;
 }
 
 export interface ReceivingPickingPackage {
@@ -378,6 +381,9 @@ export interface PickingOrderListRow {
   allocatedQty: number;
   /** Unresolved outdated-scan warnings on the order (spec 2026-10-07). */
   outdatedWarningCount: number;
+  /** Any allocation whose source date code is older than the outdated-stock
+   *  threshold (spec 2026-10-20). */
+  hasOutdatedAllocations: boolean;
 }
 
 export interface PickingWorkLock {
@@ -409,6 +415,9 @@ export interface PickingAllocation {
   receivingInvoiceItemId: string | null;
   receivingOrderId: string | null;
   boxId: string | null;
+  /** Source date code (WWYY) older than the outdatedStockYears threshold
+   *  (spec 2026-10-20). */
+  outdated: boolean;
 }
 
 export interface PickingPackage {

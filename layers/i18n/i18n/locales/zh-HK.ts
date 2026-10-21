@@ -614,6 +614,10 @@ export default {
     confirm: "知道了",
     chip: "⚠ 過期（{count}）"
   },
+  stockAgeWarning: {
+    tooltip: "日期碼過舊（超出庫存年期上限）",
+    chip: "⚠ 舊日期碼"
+  },
   labelScanReviewModal: {
     titleManual: "手動輸入",
     titleReview: "複核掃描",

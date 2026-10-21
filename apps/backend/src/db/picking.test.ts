@@ -7,7 +7,8 @@ import { setupTestDb, reseed, type TestDb } from "./test-helper.js";
 import { queryAll, queryGet } from "./query.js";
 import { allocateAll } from "./allocate.js";
 import { confirmReceivingArrival } from "./receiving.js";
-import { _setPickingShelfScanForTests, _setPickingFromSubinventoryOrgsForTests, _setReceivingSubInventoryRulesForTests } from "../config.js";
+import { _setPickingShelfScanForTests, _setPickingFromSubinventoryOrgsForTests, _setReceivingSubInventoryRulesForTests, _setOutdatedStockYearsForTests, _resetFlowConfigForTests } from "../config.js";
+import { dateToDateCode } from "./dateCode.js";
 import {
   acquireWorkLock,
   addAllUnboxedToShippingBox,
@@ -370,6 +371,63 @@ test("detail: allocation lot carries the shelf warning (null when unset)", async
   assert.equal(item1.allocations[0].lot?.shelfWarning, "Outdated stock — verify before picking");
   assert.equal(item3.allocations[0].lot?.shelfCode, "A0102");
   assert.equal(item3.allocations[0].lot?.shelfWarning, null);
+});
+
+// --- outdated allocation flag (spec 2026-10-20) ---------------------------------
+
+test("detail: allocation outdated flag — old WWYY true, fresh/invalid/null false", async () => {
+  await reseed(client);
+  const { orderId } = await seededOrderAllocated();
+
+  // seed lots carry 2003/2004 WWYY codes → outdated at the default 2y threshold
+  let detail = await getPickingOrderDetail(client.db, orderId);
+  const item181G = (d: typeof detail) => d.items.find((i) => i.partNo === "RK73B1JTTD181G")!;
+  assert.equal(detail.items[0].allocations[0].outdated, true);
+
+  // fresh WWYY → not outdated
+  await client.db.execute(
+    sql`UPDATE inventory_lots SET date_code = ${dateToDateCode(new Date())} WHERE shelf_code = 'A0101'`
+  );
+  detail = await getPickingOrderDetail(client.db, orderId);
+  assert.equal(detail.items[0].allocations[0].outdated, false);
+  assert.equal(item181G(detail).allocations[0].outdated, true); // A0102 still 2004
+
+  // invalid code → never flagged
+  await client.db.execute(sql`UPDATE inventory_lots SET date_code = 'ABCD' WHERE shelf_code = 'A0102'`);
+  detail = await getPickingOrderDetail(client.db, orderId);
+  assert.equal(item181G(detail).allocations[0].outdated, false);
+
+  // NULL code → never flagged
+  await client.db.execute(sql`UPDATE inventory_lots SET date_code = NULL WHERE shelf_code = 'A0102'`);
+  detail = await getPickingOrderDetail(client.db, orderId);
+  assert.equal(item181G(detail).allocations[0].outdated, false);
+});
+
+test("list: hasOutdatedAllocations follows the source date code and threshold config", async () => {
+  await reseed(client);
+  const { orderId } = await seededOrderAllocated();
+  // keep the demo world hermetic: drop the other seeded picking order
+  await client.db.execute(sql`DELETE FROM picking_orders WHERE id <> ${orderId}`);
+
+  // seed lots carry 2003/2004 WWYY codes → outdated at the default 2y threshold
+  let rows = (await listPickingOrders(client.db)).rows;
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].hasOutdatedAllocations, true);
+
+  // fresh codes everywhere → false
+  await client.db.execute(sql`UPDATE inventory_lots SET date_code = ${dateToDateCode(new Date())}`);
+  rows = (await listPickingOrders(client.db)).rows;
+  assert.equal(rows[0].hasOutdatedAllocations, false);
+
+  // config sensitivity: a 30y threshold un-flags even the 2003/2004 seed codes
+  await client.db.execute(sql`UPDATE inventory_lots SET date_code = '2603'`);
+  _setOutdatedStockYearsForTests(30);
+  try {
+    rows = (await listPickingOrders(client.db)).rows;
+    assert.equal(rows[0].hasOutdatedAllocations, false);
+  } finally {
+    _resetFlowConfigForTests();
+  }
 });
 
 // --- scan (lot source) -----------------------------------------------------------

@@ -817,6 +817,7 @@ const {
             >
               {{ a.orderNo }}
               <span v-if="a.manual" class="manual-badge">{{ $t("admin.pages.receiving.manualBadge") }}</span>
+              <span v-if="a.outdated" class="shelf-warning" :title="$t('stockAgeWarning.tooltip')">⚠️</span>
               <template #tooltip>
                 <div class="alloc-tip-row">
                   <span class="alloc-tip-label">{{ $t("admin.pages.allocationTip.pickingOrder") }}</span>
@@ -1084,5 +1085,8 @@ const {
   background: #eef2f7;
   border: 1px solid #d5dee7;
   color: #52606d;
+}
+.shelf-warning {
+  cursor: help;
 }
 </style>

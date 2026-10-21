@@ -28,6 +28,9 @@ export interface PickingOrderRow {
   allocatedQty: number;
   /** Unresolved outdated date-code scan warnings on this order. */
   outdatedWarningCount: number;
+  /** Any allocation whose source date code is older than the outdated-stock
+   *  threshold (spec 2026-10-20). */
+  hasOutdatedAllocations: boolean;
   createdDate: string;
   lastUpdateDate: string;
 }
@@ -74,11 +77,14 @@ export interface PickingItemRow {
       receivedQty: number | null;
       dateCode: string | null;
     } | null;
+    /** Source date code (WWYY) older than the outdatedStockYears threshold
+     *  (spec 2026-10-20). */
+    outdated: boolean;
   }[];
   packages: { id: string; qty: number; dateCode: string | null; lotCode: string | null; verified: boolean; verifyVerified: boolean; shippingBoxId: string | null }[];
 }
 
-export interface PickingOrderDetail extends Omit<PickingOrderRow, "itemCount" | "totalQty" | "pickedQty" | "prioritySeq" | "workingBy" | "workingByName"> {
+export interface PickingOrderDetail extends Omit<PickingOrderRow, "itemCount" | "totalQty" | "pickedQty" | "prioritySeq" | "workingBy" | "workingByName" | "hasOutdatedAllocations"> {
   issueReason: string | null;
   issueQty: number | null;
   issuePackSize: number | null;
@@ -243,6 +249,9 @@ export interface ReceivingItemAllocation {
   pickingOrderId: string;
   orderNo: string;
   orderStatus: string;
+  /** Source date code (WWYY) older than the outdatedStockYears threshold
+   *  (spec 2026-10-20). */
+  outdated: boolean;
 }
 
 export interface ReceivingItemRow {
@@ -586,6 +595,9 @@ export interface PartAllocationRow {
   boxId: string | null;
   dateCode: string | null;
   lotCode: string | null;
+  /** Source date code (WWYY) older than the outdatedStockYears threshold
+   *  (spec 2026-10-20). */
+  outdated: boolean;
   /** The holding order is open on a PDA — transfer/remove is rejected (409 lock_held). */
   locked: boolean;
   workingByName: string | null;

@@ -17,8 +17,9 @@ import { scheduleAllocateAll, allocateForReceivingOrder } from "../db/allocate.j
 import { actorFrom } from "../auth/middleware.js";
 import { allowedOrgFilter } from "../db/org-filter.js";
 import { getUserScope, receivingOrderScopeFilter, userScopeFilter } from "../db/user-scope.js";
-import { receivingOrderNameTemplate } from "../config.js";
+import { receivingOrderNameTemplate, outdatedStockYears } from "../config.js";
 import { formatReceivingOrderName } from "../receivingOrderName.js";
+import { dateCodeRank, outdatedThresholdRank } from "../db/dateCode.js";
 
 // Empty bodies parse as {} — after the auth migration several mutations no
 // longer carry any body fields (the actor comes from the token).
@@ -252,6 +253,14 @@ interface ItemRow {
   partDescription: string | null;
 }
 
+// True when an allocation source date code (WWYY, coalesced lot → receiving
+// invoice item) is valid and older than the flow-config outdatedStockYears
+// threshold (spec 2026-10-20); invalid/null codes are never flagged.
+function isOutdatedAllocationSource(dateCode: string | null): boolean {
+  const rank = dateCodeRank(dateCode);
+  return rank !== null && rank < outdatedThresholdRank(outdatedStockYears());
+}
+
 // Complete nested read: order + supplier (with profile) + invoices + items,
 // each item embedding its part, allocation total, and active mismatch.
 receivingRoute.get("/receiving-orders/:id", async (c) => {
@@ -341,6 +350,7 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
         pickingOrderId: string;
         orderNo: string;
         orderStatus: string;
+        lotDateCode: string | null;
       }>(
         db,
         sql`
@@ -348,10 +358,12 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
             a.id, a.receiving_invoice_item_id AS "receivingInvoiceItemId",
             a.qty, a.manual,
             pi.id AS "pickingItemId",
-            po.id AS "pickingOrderId", po.order_no AS "orderNo", po.status AS "orderStatus"
+            po.id AS "pickingOrderId", po.order_no AS "orderNo", po.status AS "orderStatus",
+            il.date_code AS "lotDateCode"
           FROM allocations a
           JOIN picking_items pi ON pi.id = a.picking_item_id
           JOIN picking_orders po ON po.id = pi.picking_order_id
+          LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
           WHERE ${inArray(sql`a.receiving_invoice_item_id`, itemIds)}
           ORDER BY po.order_no, a.id
         `
@@ -429,6 +441,7 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
                 pickingOrderId: a.pickingOrderId,
                 orderNo: a.orderNo,
                 orderStatus: a.orderStatus,
+                outdated: isOutdatedAllocationSource(a.lotDateCode ?? i.dateCode),
               })),
             part: {
               id: i.partPk,
@@ -505,6 +518,7 @@ interface PickingAllocationRow {
   shelfWarning: string | null;
   lotBoxId: string | null;
   dateCode: string | null;
+  recvDateCode: string | null;
   lotCode: string | null;
   coo: string | null;
   cow: string | null;
@@ -600,7 +614,8 @@ receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
             rii.ctn_no AS "boxId",
             il.shelf_code AS "shelfCode", il.box_id AS "lotBoxId",
             sh.warning AS "shelfWarning",
-            il.date_code AS "dateCode", il.lot_code AS "lotCode", il.coo, il.cow
+            il.date_code AS "dateCode", rii.date_code AS "recvDateCode",
+            il.lot_code AS "lotCode", il.coo, il.cow
           FROM allocations a
           LEFT JOIN inventory_lots il ON il.id = a.inventory_lot_id
           LEFT JOIN shelves sh ON sh.code = il.shelf_code
@@ -714,6 +729,7 @@ receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
           receivingInvoiceItemId: a.receivingInvoiceItemId,
           receivingOrderId: a.receivingOrderId,
           boxId: a.boxId,
+          outdated: isOutdatedAllocationSource(a.dateCode ?? a.recvDateCode),
         })),
       packages: packages
         .filter((p) => p.pickingItemId === r.itemId)
