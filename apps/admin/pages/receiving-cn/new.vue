@@ -191,7 +191,11 @@ async function submit() {
       receiptNo: header.value.receiptNo.trim(),
       invoiceNo: header.value.invoiceNo.trim(),
       receivedDate: header.value.receivedDate,
-      items: items.value.map(({ uid: _uid, ...item }) => item),
+      // Wire contract (DocPal workflow template): the submitted keys are
+      // swapped relative to the sheet/UI — the 訂單號 cell value is sent as
+      // `poNo` and the 发货项 cell value as `orderNo`. The UI above stays
+      // labeled/parsed as the sheet presents it.
+      items: items.value.map(({ uid: _uid, orderNo, poNo, ...rest }) => ({ ...rest, orderNo: poNo, poNo: orderNo })),
     };
     await submitCnExcelUpload(file.value, payload);
     await navigateTo("/receiving-cn");

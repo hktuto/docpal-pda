@@ -70,7 +70,9 @@ Self-rescheduling `setTimeout` loop (pattern: `jobs/goodsVerifyDayEnd.ts`; `unre
 - `POST /admin/receiving-cn/excel` — multipart (`file` + `data` JSON string) → validate payload → `createCnUpload(phase: "excel")`.
 - `POST /admin/receiving-cn/pdf/ocr` / `POST /admin/receiving-cn/pdf` — **phase 2** (blocked on the DocPal OCR-result endpoint).
 
-Payload validation: header fields are strings; `items` non-empty; each item needs `partNo`/`orderNo` non-empty, `qty` positive-integer-like. 400 `invalid_payload` otherwise.
+Payload validation: header fields are strings; `items` non-empty; each item needs `partNo`/`poNo` non-empty, `qty` positive-integer-like. 400 `invalid_payload` otherwise.
+
+**Swapped wire contract:** the verify/edit UI parses and displays the sheet as printed (訂單號 column → `orderNo` field, 发货项 column → `poNo` field), but the JSON submitted to the backend swaps the two values to match the DocPal workflow template — `poNo` carries the sheet's 訂單號 (required, always present) and `orderNo` carries the 发货項 value (may legitimately be blank). The swap happens at submit time in `pages/receiving-cn/new.vue`; the backend validates and forwards the wire keys unchanged.
 
 ### PDA CN put-away variant (`receiving-cn` flow step)
 

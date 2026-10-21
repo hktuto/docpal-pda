@@ -103,12 +103,14 @@ export async function startProcess(
   definitionId: string,
   variables: Record<string, unknown>
 ): Promise<StartedProcess> {
+  const body = JSON.stringify({ start_user_id: variables.start_user_id, definition_id: definitionId, variables })
+
   const data = await callDocpal(
     "/oniflow/api/v1/processes",
     {
       method: "POST",
       headers: authHeaders({ "Content-Type": "application/json" , "X-Tenant-ID": "demo"}),
-      body: JSON.stringify({ start_user_id: variables.start_user_id, definition_id: definitionId, variables }),
+      body
     }
   );
   if (typeof data !== "object" || data === null || typeof (data as { id?: unknown }).id !== "string") {

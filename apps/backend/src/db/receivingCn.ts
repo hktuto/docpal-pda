@@ -25,6 +25,7 @@ import { docpalCnExcelWorkflowId, docpalCnPdfWorkflowId } from "../config.js";
 // ---------------------------------------------------------------------------
 
 export interface CnUploadItem {
+  /** Wire contract: the sheet's 发货項 value (may be blank). */
   orderNo: string;
   cartonNo?: string;
   partNo: string;
@@ -32,6 +33,7 @@ export interface CnUploadItem {
   qty: number;
   weight?: string;
   office?: string;
+  /** Wire contract: the sheet's 訂單號 value (required). */
   poNo?: string;
   remark?: string;
 }
@@ -82,8 +84,11 @@ export function validateCnPayload(raw: unknown): CnUploadPayload {
     }
     const partNo = typeof rawItem.partNo === "string" ? rawItem.partNo.trim() : "";
     const orderNo = typeof rawItem.orderNo === "string" ? rawItem.orderNo.trim() : "";
-    if (!partNo || !orderNo) {
-      throw new HTTPException(400, { message: `invalid_payload: items[${i}] needs non-empty partNo and orderNo` });
+    // Wire contract (swapped vs the sheet/UI): `poNo` carries the sheet's
+    // 訂單號 (always present) and `orderNo` the 发货項 value (may be blank).
+    const poNo = typeof rawItem.poNo === "string" ? rawItem.poNo.trim() : "";
+    if (!partNo || !poNo) {
+      throw new HTTPException(400, { message: `invalid_payload: items[${i}] needs non-empty partNo and poNo` });
     }
     const qty = typeof rawItem.qty === "number" ? rawItem.qty : Number(rawItem.qty);
     if (!Number.isInteger(qty) || qty <= 0) {

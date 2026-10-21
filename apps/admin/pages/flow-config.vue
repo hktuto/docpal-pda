@@ -175,6 +175,8 @@ async function save() {
     };
     state.value = await flow.saveFlowConfig({ steps, allowedOrgIds, outdatedStockYears, receivingSubInventoryRules, pickingFromSubinventoryOrgs, pickingShelfScan: pickingShelfScan.value });
     saved.value = true;
+    // Nav visibility (e.g. the CN receiving link) follows the saved steps.
+    await loadFlowSteps(useApi());
   } catch (e: any) {
     error.value = e.message;
   } finally {

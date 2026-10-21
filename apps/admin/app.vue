@@ -37,6 +37,25 @@ watch(() => route.path, ensureDatePrefs);
 onMounted(refreshUser);
 onMounted(ensureDatePrefs);
 
+// Flow-step-driven nav visibility (e.g. the CN receiving link only appears
+// when the backend's `receiving-cn` step is enabled). Load once a token
+// exists, like the date prefs above.
+const { steps: flowSteps, load: loadFlowSteps } = useFlowSteps();
+let flowStepsLoaded = false;
+function ensureFlowSteps() {
+  if (!import.meta.client || flowStepsLoaded) return;
+  if (!localStorage.getItem("admin_token")) return;
+  flowStepsLoaded = true;
+  loadFlowSteps(useApi());
+}
+watch(() => route.path, ensureFlowSteps);
+onMounted(ensureFlowSteps);
+
+function navLinkVisible(linkRoute: string): boolean {
+  if (linkRoute === "/receiving-cn") return flowSteps.value["receiving-cn"] === true;
+  return true;
+}
+
 const isLogin = computed(() => route.path === "/login");
 
 // 2-level sidebar: section (expand/collapse) → page links. The section
@@ -106,7 +125,7 @@ onBeforeUnmount(() => {
           </button>
           <div v-show="!isCollapsed(s.title, s.links)" class="nav-links">
             <NuxtLink
-              v-for="l in s.links"
+              v-for="l in s.links.filter((link) => navLinkVisible(link.route))"
               :key="l.route"
               :to="l.route"
               :class="{ 'router-link-active': isActive(l.route) }"

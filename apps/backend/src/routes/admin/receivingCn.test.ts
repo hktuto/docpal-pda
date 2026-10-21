@@ -103,14 +103,16 @@ const VALID_PAYLOAD = {
   receivedDate: "2026-10-10",
   items: [
     {
-      orderNo: "7004951243",
+      // Wire contract (swapped vs the sheet): orderNo carries the 发货項
+      // value (blank is fine), poNo carries the 訂單號 (required).
+      orderNo: "",
       cartonNo: "1",
       partNo: "iC-HAUS-001",
       dateCode: "2641",
       qty: "500",
       weight: "1.5",
       office: "2",
-      poNo: "7004951243",
+      poNo: "329062100T3",
       remark: "",
     },
   ],
@@ -173,7 +175,7 @@ test("excel upload: payload shape errors → 400 invalid_payload", async () => {
   const cases: unknown[] = [
     { ...VALID_PAYLOAD, items: [] },
     { ...VALID_PAYLOAD, items: [{ ...VALID_PAYLOAD.items[0], partNo: "" }] },
-    { ...VALID_PAYLOAD, items: [{ ...VALID_PAYLOAD.items[0], orderNo: undefined }] },
+    { ...VALID_PAYLOAD, items: [{ ...VALID_PAYLOAD.items[0], poNo: undefined }] },
     { ...VALID_PAYLOAD, items: [{ ...VALID_PAYLOAD.items[0], qty: 0 }] },
     { ...VALID_PAYLOAD, items: [{ ...VALID_PAYLOAD.items[0], qty: "abc" }] },
     { ...VALID_PAYLOAD, items: [{ ...VALID_PAYLOAD.items[0], qty: 1.5 }] },
@@ -249,6 +251,9 @@ test("excel upload: upload + kick → 201 tracking row with real creator + docpa
     assert.ok(Array.isArray(startBody.variables.excel_result_data));
     assert.equal(startBody.variables.excel_result_data.length, 1);
     assert.equal(startBody.variables.excel_result_data[0].invoiceNo, "TE20261010-2");
+    // Swapped wire contract: poNo carries the 訂單號, orderNo the (blank) 发货項.
+    assert.equal(startBody.variables.excel_result_data[0].items[0].poNo, "329062100T3");
+    assert.equal(startBody.variables.excel_result_data[0].items[0].orderNo, "");
     assert.equal(startBody.variables.excelFiles[0].id, "doc-1");
     assert.equal(startBody.variables.excelFiles[0].extension, "xls");
     assert.equal(startBody.variables.excelFiles[0].mime_type, "application/vnd.ms-excel");
