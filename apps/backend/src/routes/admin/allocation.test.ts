@@ -742,6 +742,8 @@ test("part-availability: returns stock and receiving rows for the part", async (
   assert.equal(body.receiving[0].batchNo, "RA-TEST-01");
   assert.equal(body.receiving[0].ctnNo, "9001");
   assert.equal(body.receiving[0].lineQty, 1000);
+  // orderA (600) + orderB (400) both draw on this ctn → fully reserved.
+  assert.equal(body.receiving[0].allocatedQty, 1000);
 });
 
 test("part-availability: `matched` flags the order's location and its share group", async () => {

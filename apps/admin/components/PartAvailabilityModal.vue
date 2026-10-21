@@ -471,6 +471,7 @@ watch(
                 <th class="num">{{ $t("admin.pages.pickingOrders.availabilityLineQty") }}</th>
                 <th class="num">{{ $t("admin.pages.receiving.received") }}</th>
                 <th class="num">{{ $t("admin.pages.receiving.putAway") }}</th>
+                <th class="num">{{ $t("stockSearch.allocatedQty") }}</th>
                 <th>{{ $t("admin.pages.shelfBoxes.orgId") }}</th>
                 <th>{{ $t("admin.pages.shelfBoxes.subInventory") }}</th>
                 <th>{{ $t("admin.pages.receiving.ctnNo") }}</th>
@@ -491,6 +492,17 @@ watch(
                 <td class="num">{{ r.lineQty ?? "—" }}</td>
                 <td class="num">{{ r.receivedQty }}</td>
                 <td class="num">{{ r.putAwayQty }}</td>
+                <td class="num">
+                  <AllocationBreakdown
+                    :part-no="partNo"
+                    :wcl-item-no="wclItemNo"
+                    :allocated-qty="r.allocatedQty"
+                    :receiving-invoice-item-id="r.receivingInvoiceItemId"
+                    :current-order-id="pickingOrderId ?? null"
+                    :transfer-target="transferTarget"
+                    @changed="onAllocationsChanged"
+                  />
+                </td>
                 <td>{{ r.orgId ?? "—" }}</td>
                 <td>{{ r.subInventoryCode ?? "—" }}</td>
                 <td>{{ r.ctnNo ?? "—" }}</td>

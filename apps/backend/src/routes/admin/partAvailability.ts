@@ -58,6 +58,8 @@ interface ReceivingRow {
   receivedQty: number;
   putAwayQty: number;
   pickedQty: number;
+  /** Qty of this line reserved by picking allocations (item-level rows). */
+  allocatedQty: number;
   orgId: number;
   subInventoryCode: string | null;
   ctnNo: string | null;
@@ -246,6 +248,10 @@ adminPartAvailabilityRoute.get("/part-availability", async (c) => {
             rii.received_qty AS "receivedQty",
             rii.put_away_qty AS "putAwayQty",
             rii.picked_qty AS "pickedQty",
+            COALESCE((
+              SELECT SUM(a.qty) FROM allocations a
+              WHERE a.receiving_invoice_item_id = rii.id
+            ), 0)::int AS "allocatedQty",
             rii.org_id AS "orgId",
             rii.sub_inventory_code AS "subInventoryCode",
             rii.ctn_no AS "ctnNo",

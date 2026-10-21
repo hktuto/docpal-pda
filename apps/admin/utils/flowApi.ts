@@ -531,6 +531,8 @@ export interface PartAvailabilityReceivingRow {
   receivedQty: number;
   putAwayQty: number;
   pickedQty: number;
+  /** Qty of this line reserved by picking allocations (item-level rows). */
+  allocatedQty: number;
   orgId: number | null;
   subInventoryCode: string | null;
   ctnNo: string | null;

@@ -10,14 +10,16 @@ const cache = new Map<string, Promise<PartAllocationRow[]>>();
 <script setup lang="ts">
 // Expandable "allocated qty" breakdown for the availability dialogs (spec
 // docs/superpowers/specs/2026-10-14-admin-cross-order-allocation-control-design.md):
-// lists WHICH picking orders hold a lot's allocations so an admin can act on
-// a specific row in place instead of hunting down the other order.
+// lists WHICH picking orders hold a source's allocations so an admin can act
+// on a specific row in place instead of hunting down the other order.
 //
-// The host tables render one row per inventory_lots row, so the breakdown is
-// scoped to THAT LOT: the endpoint returns every allocation of the part
-// (same part_no / wcl_item_no on other lots included) and this component
-// keeps only the rows sourced from `lotId` — otherwise the popover would
-// list allocations sitting on different shelves/date codes of the same part.
+// The host tables render one row per source (an inventory_lots row in the
+// stock table, a receiving_invoice_items row in the receiving table), so the
+// breakdown is scoped to THAT SOURCE: the endpoint returns every allocation
+// of the part (same part_no / wcl_item_no on other sources included) and this
+// component keeps only the rows sourced from `lotId` /
+// `receivingInvoiceItemId` — otherwise the popover would list allocations
+// sitting on different shelves/date codes/boxes of the same part.
 //
 // Picking availability modal: Transfer here (onto this order's item) + Remove.
 // Receiving PartSearchModal: Remove only — its allocate job is the demand
@@ -28,8 +30,10 @@ const props = defineProps<{
   partNo: string;
   wclItemNo?: string | null;
   allocatedQty: number;
-  /** The stock row's lot — only allocations sourced from this lot are listed. */
-  lotId: string;
+  /** Stock-row source: only allocations from this lot are listed. */
+  lotId?: string | null;
+  /** Receiving-row source: only allocations from this receiving line. */
+  receivingInvoiceItemId?: string | null;
   /** The host dialog's own picking order — its rows get no actions. */
   currentOrderId?: string | null;
   /** Transfer target (single picking item). Absent → Remove only. */
@@ -51,10 +55,14 @@ const error = ref("");
 const busy = ref("");
 let loaded = false;
 
-// Only allocations sourced from this stock row's lot — the fetch is per part,
-// so same-part allocations on other lots/shelves/date codes must be dropped.
+// Only allocations sourced from this row's source — the fetch is per part,
+// so same-part allocations on other lots/shelves/receiving lines are dropped.
 const filteredRows = computed(() =>
-  rows.value.filter((r) => r.sourceType === "lot" && r.inventoryLotId === props.lotId)
+  props.receivingInvoiceItemId
+    ? rows.value.filter(
+        (r) => r.sourceType === "receiving-item" && r.receivingInvoiceItemId === props.receivingInvoiceItemId
+      )
+    : rows.value.filter((r) => r.sourceType === "lot" && r.inventoryLotId === props.lotId)
 );
 
 const cacheKey = () => `${props.partNo}|${props.wclItemNo ?? ""}`;
