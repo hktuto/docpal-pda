@@ -992,7 +992,7 @@ export async function getPickingOrderDetail(
       FROM picking_items pi
       JOIN parts p ON p.wcl_item_no = pi.part_no
       WHERE pi.picking_order_id = ${orderId}
-      ORDER BY pi.created_date, pi.id
+      ORDER BY pi.part_no ASC, pi.created_date, pi.id
     `
   );
   const itemIds = items.map((i) => i.id);

@@ -332,7 +332,7 @@ receivingRoute.get("/receiving-orders/:id", async (c) => {
       JOIN parts p ON p.wcl_item_no = rii.wcl_item_no
       WHERE inv.receiving_order_id = ${id}
       ${userScopeFilter(sql`rii.org_id`, sql`rii.sub_inventory_code`, scope)}
-      ORDER BY rii.po_no, rii.po_line, rii.id
+      ORDER BY rii.wcl_item_no ASC, rii.part_no ASC, rii.po_no, rii.po_line, rii.id
     `
   );
 

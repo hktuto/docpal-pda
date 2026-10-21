@@ -305,7 +305,9 @@ test("detail: nested shape — order, items with allocations/packages, boxes; 40
   assert.equal(detail.boxes.length, 0);
 
   assert.equal(detail.items.length, 3);
-  const [item1, item2, item3] = detail.items;
+  const item1 = detail.items.find((i) => i.partNo === "RK73H1JTTD1002F")!;
+  const item2 = detail.items.find((i) => i.partNo === "RK73H1JTTD2202F")!;
+  const item3 = detail.items.find((i) => i.partNo === "RK73B1JTTD181G")!;
   assert.equal(item1.partNo, "RK73H1JTTD1002F");
   assert.equal(item1.wclItemNo, "RK73H1JTTD1002F");
   assert.equal(item1.qty, 1000);
@@ -366,7 +368,8 @@ test("detail: allocation lot carries the shelf warning (null when unset)", async
   );
 
   const detail = await getPickingOrderDetail(client.db, orderId);
-  const [item1, , item3] = detail.items;
+  const item1 = detail.items.find((i) => i.partNo === "RK73H1JTTD1002F")!;
+  const item3 = detail.items.find((i) => i.partNo === "RK73B1JTTD181G")!;
   assert.equal(item1.allocations[0].lot?.shelfCode, "A0101");
   assert.equal(item1.allocations[0].lot?.shelfWarning, "Outdated stock — verify before picking");
   assert.equal(item3.allocations[0].lot?.shelfCode, "A0102");
@@ -381,15 +384,16 @@ test("detail: allocation outdated flag — old WWYY true, fresh/invalid/null fal
 
   // seed lots carry 2003/2004 WWYY codes → outdated at the default 2y threshold
   let detail = await getPickingOrderDetail(client.db, orderId);
+  const item1002F = (d: typeof detail) => d.items.find((i) => i.partNo === "RK73H1JTTD1002F")!;
   const item181G = (d: typeof detail) => d.items.find((i) => i.partNo === "RK73B1JTTD181G")!;
-  assert.equal(detail.items[0].allocations[0].outdated, true);
+  assert.equal(item1002F(detail).allocations[0].outdated, true);
 
   // fresh WWYY → not outdated
   await client.db.execute(
     sql`UPDATE inventory_lots SET date_code = ${dateToDateCode(new Date())} WHERE shelf_code = 'A0101'`
   );
   detail = await getPickingOrderDetail(client.db, orderId);
-  assert.equal(detail.items[0].allocations[0].outdated, false);
+  assert.equal(item1002F(detail).allocations[0].outdated, false);
   assert.equal(item181G(detail).allocations[0].outdated, true); // A0102 still 2004
 
   // invalid code → never flagged
@@ -964,9 +968,9 @@ test("close flow: add-all-unboxed does not finish; explicit finish → verify �
   assert.equal(detail.boxes[0].status, "closed");
   assert.equal(detail.boxes[0].boxSize, "26 X 20 X 20");
   assert.equal(detail.boxes[0].packageCount, 3);
-  assert.equal(detail.items[0].pickedQty, 1000);
-  assert.equal(detail.items[1].pickedQty, 500);
-  assert.equal(detail.items[2].pickedQty, 300);
+  assert.equal(detail.items.find((i) => i.partNo === "RK73H1JTTD1002F")!.pickedQty, 1000);
+  assert.equal(detail.items.find((i) => i.partNo === "RK73H1JTTD2202F")!.pickedQty, 500);
+  assert.equal(detail.items.find((i) => i.partNo === "RK73B1JTTD181G")!.pickedQty, 300);
 
   const again = await catchHttp(closeShippingBox(client.db, { shippingBoxId: box.id, actorId }));
   assert.equal(again.status, 409);
