@@ -640,8 +640,9 @@ input:focus {
 .app-list-row__line1 {
   display: flex;
   align-items: flex-start;
-  gap: 0.4rem;
+  gap: 0.1rem;
   min-width: 0;
+  flex-flow: column;
 }
 
 .app-list-row__title {
