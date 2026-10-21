@@ -34,9 +34,11 @@
   remove, per-row ✓/✗ status) and applying loops one explicit
   `{partNo, qty}` scan per row (raw is not resent, so serial dedup never
   trips on the second row; succeeded rows are locked out of retries).
-- S-key serial dedup: a parsed `serialNo` (KOA S-key) is recorded per order
-  in `receiving_scan_labels`; a repeat serial is rejected with
-  `409 label_already_scanned`. Scans without a serial skip dedup.
+- S-key serial dedup: a parsed `serialNo` (KOA S-key) is recorded per order +
+  part in `receiving_scan_labels`; a repeat serial of the same part is
+  rejected with `409 label_already_scanned` (KOA reel labels reuse segment-6
+  serial values across parts of one delivery, so the key is part-scoped).
+  Scans without a serial skip dedup.
 - Scanner symbology whitelist: while the detail page is open, the hardware
   decoder is restricted to the supplier profile's `barcode_types` (when set),
   so other symbologies on multi-barcode labels don't decode at all; restored

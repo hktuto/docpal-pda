@@ -39,6 +39,10 @@ export interface BuiltinSupplierProfile {
 // lotCode. Segment 7 is the WCL item no (newer reels; older reels carry a
 // "KOA+<mpn>" marking there instead — itemId stays the match key for those).
 // Trailing segments and an optional trailing delimiter are ignored.
+// Segment 6 (serialNo) is captured for the duplicate-scan check but is NOT
+// globally unique per label: one delivery reuses values across parts
+// (observed 2026-10-21: 133J and 563J reels both "S603"), so the put-away/
+// receiving serial dedup is scoped to (order, part), not the whole order.
 const KOA_TEMPLATE = String.raw`^:(?<itemId>[^:]+):(?<subId>[^:]*):(?<qty>[^:]+):(?<ignore1>[^:]+):(?<lotCode>[^:]*):(?<serialNo>[^:]+):(?<wclItemNo>[^:]+)(?::[^:]*)*:?$`;
 
 // NCC (Chemi-Con): fixed-width ITF reel barcode, all digits.

@@ -81,14 +81,23 @@ export const receivingInvoiceItems = pgTable(
 
 // Scanned-label dedup for receiving scans (S-key serial from the supplier QR
 // template): one row per successfully scanned label that carried a serial;
-// the unique index on (receiving_order_id, serial_no) rejects double-scanning
-// the same physical label (409 label_already_scanned).
+// the unique index on (receiving_order_id, part_no, serial_no) rejects
+// double-scanning the same physical label of the same part (409
+// label_already_scanned). Serials are compared within a part only — KOA reel
+// labels reuse segment-6 values across different parts of one delivery
+// (observed 2026-10-21), so an order-wide key false-rejects different labels.
 export const receivingScanLabels = pgTable(
   "receiving_scan_labels",
   {
     id: text("id").primaryKey(),
     receivingOrderId: text("receiving_order_id").notNull().references(() => receivingOrders.id, { onDelete: "cascade" }),
     receivingInvoiceItemId: text("receiving_invoice_item_id").notNull().references(() => receivingInvoiceItems.id, { onDelete: "cascade" }),
+    // Written on every insert by current code. Left nullable (no NOT NULL) so
+    // a not-yet-redeployed backend's inserts — which omit the column — keep
+    // working against the migrated DB; the part-scoped unique index simply
+    // doesn't dedup NULL-part rows (only old code can create them, and its
+    // order-wide pre-check still guards those).
+    partNo: text("part_no"),
     serialNo: text("serial_no").notNull(),
     qty: integer("qty").notNull(),
     scannedBy: text("scanned_by").references(() => users.id),
@@ -97,6 +106,6 @@ export const receivingScanLabels = pgTable(
     lastUpdateDate: timestamp("last_update_date", { mode: "date" }).notNull().defaultNow().$defaultFn(now),
   },
   (t) => ({
-    orderSerialUq: uniqueIndex("idx_receiving_scan_labels_order_serial").on(t.receivingOrderId, t.serialNo),
+    orderPartSerialUq: uniqueIndex("idx_receiving_scan_labels_order_part_serial").on(t.receivingOrderId, t.partNo, t.serialNo),
   })
 );

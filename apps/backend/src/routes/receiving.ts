@@ -763,8 +763,8 @@ receivingRoute.get("/receiving-orders/:id/picking", async (c) => {
 // override parsed ones), matches against the order's items, and auto-applies
 // the partial receipt on a single match (order pending → provisional_received,
 // RECEIVE_TO_DOCK ledger row). A parsed/explicit `serialNo` (S-key) is
-// deduped per order via receiving_scan_labels — a repeat → 409
-// label_already_scanned. Zero/multiple matches → 409 {message, candidates}.
+// deduped per part per order via receiving_scan_labels — a repeat of the same
+// part's serial → 409 label_already_scanned. Zero/multiple matches → 409 {message, candidates}.
 // Then recalculates allocations — best-effort, after commit.
 receivingRoute.post("/receiving-orders/:id/scan", async (c) => {
   const body = await readJson<{

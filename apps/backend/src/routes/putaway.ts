@@ -67,7 +67,8 @@ putawayRoute.get("/receiving-orders/:id/put-away", async (c) => {
 
 // Record one staging scan (staging-box insert + batch-attr backfill on the
 // item). 409 scanned_qty_exceeds_remaining when over the remaining qty; 409
-// label_already_scanned when `serialNo` repeats on the order. With
+// label_already_scanned when the same part's `serialNo` repeats on the order.
+// With
 // `shelfBoxId` or `shelfCode` the scan is committed straight onto the shelf
 // in the same tx (lot + ledger included); `shelfCode` finds-or-creates the
 // order's invisible box on that shelf (spec 2026-10-06).

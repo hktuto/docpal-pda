@@ -485,6 +485,43 @@ test("scan: serial dedup — repeat serial on the same order → 409 label_alrea
   assert.equal(after!.receivedQty, 1500);
 });
 
+test("scan: same serial on a DIFFERENT part of the same order is allowed", async () => {
+  await reseed(client);
+  const actorId = await actorIdOf("operator");
+  const orderId = await orderIdOf("100001"); // KOA order (has a serialNo template)
+
+  // first label: RK73H1JTTD1002F with serial 602
+  await scanReceivingOrder(client.db, orderId, {
+    actorId,
+    raw: ":RK73H1JTTD1002F:S1:152:X:L2601A:602:KOA+RK73H1JTTD1002F",
+  });
+
+  // a different part carrying the same serial value is a different physical
+  // label (KOA reel labels reuse segment-6 values across parts of one
+  // delivery) — allowed, and both dedup rows are recorded
+  const other = await scanReceivingOrder(client.db, orderId, {
+    actorId,
+    partNo: "RK73B1JTTD181G",
+    qty: 100,
+    serialNo: "602",
+  });
+  assert.equal(other.receivedQty, 100);
+  assert.equal(other.serialNo, "602");
+
+  const count = await queryGet<{ c: number }>(
+    client.db,
+    sql`SELECT COUNT(*)::int AS c FROM receiving_scan_labels WHERE receiving_order_id = ${orderId} AND serial_no = '602'`
+  );
+  assert.equal(count!.c, 2);
+
+  // ...but repeating the serial on the same part is still rejected
+  const dup = await catchHttp(
+    scanReceivingOrder(client.db, orderId, { actorId, partNo: "RK73B1JTTD181G", qty: 100, serialNo: "602" })
+  );
+  assert.equal(dup.status, 409);
+  assert.equal(dup.message, "label_already_scanned");
+});
+
 test("scan: same serial on a DIFFERENT order is allowed", async () => {
   await reseed(client);
   const actorId = await actorIdOf("operator");

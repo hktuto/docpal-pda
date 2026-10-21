@@ -362,15 +362,19 @@ export async function scanReceivingOrder(
 
     const item = matches[0];
 
-    // S-key dedup pre-check: a serial already scanned on this order is a
-    // double-scan of the same physical label — reject before the qty guard so
-    // the operator gets the specific error (a repeat serial often also
-    // exceeds the remaining qty).
+    // S-key dedup pre-check: a serial already scanned for this same part on
+    // this order is a double-scan of the same physical label — reject before
+    // the qty guard so the operator gets the specific error (a repeat serial
+    // often also exceeds the remaining qty). Scoped to the part: KOA reel
+    // labels reuse segment-6 values across parts of one delivery, so an
+    // order-wide check false-rejects different physical labels.
     if (serialNo) {
       const dup = await queryGet<{ id: string }>(
         tx,
-        sql`SELECT id FROM receiving_scan_labels
-            WHERE receiving_order_id = ${orderId} AND serial_no = ${serialNo}`
+        sql`SELECT rsl.id FROM receiving_scan_labels rsl
+            JOIN receiving_invoice_items rii ON rii.id = rsl.receiving_invoice_item_id
+            WHERE rsl.receiving_order_id = ${orderId} AND rii.part_no = ${item.partNo} AND rsl.serial_no = ${serialNo}
+            LIMIT 1`
       );
       if (dup) throw new HTTPException(409, { message: "label_already_scanned" });
     }
@@ -427,6 +431,7 @@ export async function scanReceivingOrder(
         id: newId(),
         receivingOrderId: orderId,
         receivingInvoiceItemId: item.id,
+        partNo: item.partNo,
         serialNo,
         qty,
         scannedBy: input.actorId,

@@ -208,8 +208,8 @@ Implemented: `GET /receiving-orders`, `GET /receiving-orders/:id`,
 fallback, scan applies QR-template-parsed partial receipts moving the order to
 `provisional_received`, both write RECEIVE_TO_DOCK ledger rows + transition
 logs and run `allocateAll` best-effort; scans carrying a serial (`serialNo`
-template group or explicit body field) are deduped per order via
-`receiving_scan_labels` — a repeat is 409 `label_already_scanned`).
+template group or explicit body field) are deduped per order + part via
+`receiving_scan_labels` — a repeat of the same part's serial is 409 `label_already_scanned`).
 
 | Endpoint | Description |
 |---|---|
@@ -217,7 +217,7 @@ template group or explicit body field) are deduped per order via
 | `GET /receiving-orders/:id` | Detail: `{order..., displayName (order name per the `receivingOrderNameTemplate` flow-config template, §Flow config), supplier{...profile fields}, invoices[{..., items[{..., part, allocatedQty, mismatch}]}]}` — nested; `allocatedQty` embedded per item (no `allocated_by_item` map). Per-user scope: 404 when the order is out of the caller's scope; the returned items are additionally filtered to NULL/in-scope `sub_inventory_code`. |
 | `GET /receiving-orders/:id/picking` | Picking section: `pickingOrders[{id, refNo, status, shipTo, customerCode, items[{id, partId, partNo, qty, pickedQty, allocatedQty, requiredDateCode, allocations[{id, qty, lot{shelfCode, shelfWarning, boxId, dateCode, lotCode, coo, cow}, receivingInvoiceItemId, boxId}], packages[{id, qty, dateCode, lotCode, verified, shippingBoxId}], transitionLogs[{fromState, toState, actorId, createdDate}]}], boxes[{id, status, boxSize, grossWeight, netWeight}]}]`. `lot.shelfWarning` = `shelves.warning` of the lot's shelf (null when none). |
 | `POST /receiving-orders/:id/confirm-arrival` | `{actorId}` → order with `status: "in_hand"` + `allocation` (scoped recompute summary `{demands, fullyAllocated, partiallyAllocated, allocationsCreated, allocationsRemoved, skippedReceivingSources, partKeys, changed, durationMs}`, or `null` when it fell back to the background full recompute); applies receipt, writes txns, then awaits `allocateForReceivingOrder` (same rules as `allocateAll`, restricted to the order's part keys — parts never compete, so other parts are provably untouched). |
-| `POST /receiving-orders/:id/scan` | `{actorId, raw}` (or parsed fields, incl. `serialNo`) → server-side parse/match/apply; single match auto-applies, else candidates. A parsed/explicit `serialNo` (S-key) is recorded in `receiving_scan_labels` (unique per order) — a repeat serial → 409 `label_already_scanned`; scans without a serial skip dedup. Supersedes `scan-candidates` (client no longer mirrors matching logic). |
+| `POST /receiving-orders/:id/scan` | `{actorId, raw}` (or parsed fields, incl. `serialNo`) → server-side parse/match/apply; single match auto-applies, else candidates. A parsed/explicit `serialNo` (S-key) is recorded in `receiving_scan_labels` (unique per order + part) — a repeat serial for the same part → 409 `label_already_scanned`; scans without a serial skip dedup. Supersedes `scan-candidates` (client no longer mirrors matching logic). |
 | `GET /receiving-invoice-items/:id/mismatch` | Active mismatch or `null` (item-keyed, on the new flat mismatch columns). |
 | `POST /receiving-invoice-items/:id/mismatch` | `{actorId, reason, mismatchQty?, wrongPartNo?, note?}` → item. |
 | `PATCH /receiving-invoice-items/:id/mismatch` | Edit pending mismatch. |

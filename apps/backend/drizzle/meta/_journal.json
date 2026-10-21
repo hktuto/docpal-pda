@@ -246,6 +246,20 @@
       "when": 1792546355145,
       "tag": "0035_great_toad",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1792569260676,
+      "tag": "0036_mighty_rumiko_fujikawa",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1792569593975,
+      "tag": "0037_gifted_mad_thinker",
+      "breakpoints": true
     }
   ]
 }

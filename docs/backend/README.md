@@ -62,8 +62,8 @@ system; the current production demo (`apps/api` + `apps/web`) is documented in
     (`received_qty += qty`, order → `provisional_received`, ledger row);
     zero/multiple matches → 409 `{message, candidates}`. A parsed/explicit
     `serialNo` (the KOA S-key) is recorded in `receiving_scan_labels`
-    (unique per order) — a repeat serial → 409 `label_already_scanned`;
-    scans without a serial skip dedup.
+    (unique per order + part) — a repeat serial for the same part → 409
+    `label_already_scanned`; scans without a serial skip dedup.
   - `GET|POST|PATCH /receiving-invoice-items/:id/mismatch`,
     `POST /receiving-invoice-items/:id/mismatch/confirm|cancel` — mismatch
     lifecycle on the flat item columns (report/edit/confirm/cancel), with
@@ -446,9 +446,12 @@ arrive via upstream sync / DocPal auth.
   inner) is a serial key, unique for every label in an order. Implemented:
   the seeded KOA template group is now `(?<serialNo>…)`, `scanParse.ts`
   surfaces `serialNo`, and the `receiving_scan_labels` table (migration
-  0012, unique on receiving order + serial, recording item/qty/actor/
-  scanned_at) backs the dedup — `POST /receiving-orders/:id/scan` rejects a
-  repeat serial with `409 label_already_scanned`; scans without a serial
+  0012, recording item/qty/actor/scanned_at; migrations 0036/0037 scope
+  the dedup key to order + part with a nullable `part_no` — KOA reel labels
+  reuse segment-6 serial values across different parts of one delivery,
+  observed 2026-10-21) backs the dedup — `POST /receiving-orders/:id/scan`
+  rejects a repeat serial of the same part with `409 label_already_scanned`;
+  scans without a serial
   skip dedup. The same table can be reused for put-away scan dedup later.
 - **Allocation ids are unstable between scan and boxing:** post-scan
   `allocateAll` rebuilds a picking item's allocation rows until its packages

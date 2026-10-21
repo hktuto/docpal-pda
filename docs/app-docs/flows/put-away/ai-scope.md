@@ -211,10 +211,14 @@
   instead).
 - Put-away scans dedup by supplier serial only when the label carries one
   (e.g. iC-Haus LTS → `serialNo` template group → `shelf_box_items.serial_no`):
-  a repeat serial on the same receiving order is rejected with 409
-  `label_already_scanned` (mirrors the receiving S-key check; deleting the
-  scan frees the serial). Labels without a serial group are not deduped —
-  the camera-OCR and multi-item paths do not pass a serial either.
+  a repeat serial of the same part on the same receiving order is rejected
+  with 409 `label_already_scanned` (mirrors the receiving S-key check;
+  deleting the scan frees the serial). The dedup is part-scoped — KOA reel
+  labels reuse segment-6 serial values across parts of one delivery (observed
+  2026-10-21: 133J and 563J reels both "S603"), so an order-wide check
+  false-rejects different physical labels. Labels without a serial group are
+  not deduped — the camera-OCR and multi-item paths do not pass a serial
+  either.
 
 ## Related specs/plans
 

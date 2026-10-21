@@ -251,7 +251,7 @@ test("scan: provided batch attrs fill nulls only; stamped values win", async () 
   assert.deepEqual(item2, { dateCode: "2610", lotCode: "L-9", coo: "JP", cow: "JP" });
 });
 
-test("scan: serialNo dedups per order (409 label_already_scanned); delete frees it", async () => {
+test("scan: serialNo dedups per order+part (409 label_already_scanned); delete frees it", async () => {
   await reseed(client);
   const { orderId, actorId } = await daitoInHand();
   const itemId = await itemIdOf(orderId, "RK73B1JTTD181G"); // qty 5000
@@ -268,12 +268,18 @@ test("scan: serialNo dedups per order (409 label_already_scanned); delete frees 
   );
   assert.equal(stored!.serialNo, "50788");
 
-  // repeat serial on the same order → 409 before the qty guard
+  // repeat serial on the same order+part → 409 before the qty guard
   const dup = await catchHttp(
     recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 100, serialNo: "50788" })
   );
   assert.equal(dup.status, 409);
   assert.equal(dup.message, "label_already_scanned");
+
+  // the same serial for a DIFFERENT part on the same order is a different
+  // physical label (KOA reel labels reuse segment-6 values across parts of
+  // one delivery) — allowed
+  const otherPartItemId = await itemIdOf(orderId, "RK73H1JTTD4702F"); // qty 3000
+  await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: otherPartItemId, qty: 100, serialNo: "50788" });
 
   // a different serial still scans; no serial at all is unaffected
   await recordPutAwayScan(client.db, orderId, { actorId, receivingInvoiceItemId: itemId, qty: 100, serialNo: "50789" });
